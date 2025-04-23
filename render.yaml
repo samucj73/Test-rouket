@@ -1,9 +1,9 @@
 services:
   - type: web
-    name: roleta-trader
+    name: roleta-trader-app
+    runtime: python
+    buildCommand: |
+      apt-get update && apt-get install -y tesseract-ocr
+      pip install -r requirements.txt
+    startCommand: streamlit run app.py --server.port=$PORT
     env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: streamlit run app.py --server.port 10000
-    envVars:
-      - key: PYTHON_VERSION
-        value: 3.10
