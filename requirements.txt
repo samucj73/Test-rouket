@@ -1,0 +1,6 @@
+streamlit
+pytesseract
+pandas
+matplotlib
+fpdf
+Pillow
