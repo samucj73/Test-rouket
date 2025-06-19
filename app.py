@@ -8,10 +8,12 @@ from collections import Counter
 import xgboost as xgb
 from sklearn.preprocessing import LabelEncoder
 
+# --- Configurações
 HISTORICO_PATH = "historico_coluna.json"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
+# --- Funções de utilidade
 def fetch_latest_result():
     try:
         response = requests.get(API_URL, headers=HEADERS, timeout=10)
@@ -38,13 +40,14 @@ def construir_features(janela):
     features = []
     for n in janela:
         features.extend([
-            n % 2,  # par/impar
-            1 if 1 <= n <= 12 else 2 if 13 <= n <= 24 else 3 if 25 <= n <= 36 else 0,  # grupo
-            n % 3,  # resto da divisão por 3
-            int(str(n)[-1])  # terminal
+            n % 2,
+            1 if 1 <= n <= 12 else 2 if 13 <= n <= 24 else 3 if 25 <= n <= 36 else 0,
+            n % 3,
+            int(str(n)[-1])
         ])
     return features
 
+# --- Modelo IA para coluna
 class ModeloColunaIA:
     def __init__(self, janela=15):
         self.modelo = None
@@ -77,10 +80,11 @@ class ModeloColunaIA:
         coluna_predita = self.encoder.inverse_transform([np.argmax(proba)])[0]
         return coluna_predita
 
+# --- Interface Streamlit
 st.set_page_config(page_title="IA de Coluna - Roleta", layout="centered")
 st.title("🎯 Previsão de Coluna da Roleta")
 
-# Sessões
+# --- Sessões
 if "historico" not in st.session_state:
     st.session_state.historico = json.load(open(HISTORICO_PATH)) if os.path.exists(HISTORICO_PATH) else []
 if "modelo_coluna" not in st.session_state:
@@ -90,10 +94,9 @@ if "colunas_acertadas" not in st.session_state:
 if "coluna_prevista" not in st.session_state:
     st.session_state.coluna_prevista = 0
 
-# Entrada manual
+# --- Inserção Manual
 st.subheader("✍️ Inserir até 100 Sorteios Manualmente")
 input_numbers = st.text_area("Digite os números separados por espaço:", height=100)
-
 if st.button("Adicionar Sorteios Manuais"):
     try:
         nums = [int(n) for n in input_numbers.split() if n.isdigit() and 0 <= int(n) <= 36]
@@ -102,10 +105,7 @@ if st.button("Adicionar Sorteios Manuais"):
         else:
             inseridos = 0
             for numero in nums:
-                entrada = {
-                    "number": numero,
-                    "timestamp": f"manual_{len(st.session_state.historico)}"
-                }
+                entrada = {"number": numero, "timestamp": f"manual_{len(st.session_state.historico)}"}
                 st.session_state.historico.append(entrada)
                 inseridos += 1
             salvar_resultado_em_arquivo(st.session_state.historico)
@@ -113,7 +113,10 @@ if st.button("Adicionar Sorteios Manuais"):
     except:
         st.error("Erro ao processar os números inseridos.")
 
-# Verificar novo sorteio
+# --- Captura de novo sorteio da API
+def atualizar_interface():
+    st.experimental_rerun()
+
 resultado = fetch_latest_result()
 ultimo = st.session_state.historico[-1]["timestamp"] if st.session_state.historico else None
 
@@ -124,15 +127,15 @@ if resultado and resultado["timestamp"] != ultimo:
     if get_coluna(resultado["number"]) == st.session_state.coluna_prevista:
         st.session_state.colunas_acertadas += 1
         st.toast("✅ Acertou a coluna!")
-    st.experimental_rerun()
+    atualizar_interface()
     st.stop()
 
-# Treinamento e previsão
+# --- Treinamento e previsão
 st.session_state.modelo_coluna.treinar(st.session_state.historico)
 coluna = st.session_state.modelo_coluna.prever(st.session_state.historico)
 st.session_state.coluna_prevista = coluna
 
-# Interface
+# --- Interface principal
 st.subheader("🔁 Últimos 10 Números")
 st.write(" ".join(str(h["number"]) for h in st.session_state.historico[-10:]))
 
