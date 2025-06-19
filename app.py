@@ -125,6 +125,7 @@ if resultado and resultado["timestamp"] != ultimo:
         st.session_state.colunas_acertadas += 1
         st.toast("✅ Acertou a coluna!")
     st.experimental_rerun()
+    st.stop()
 
 # Treinamento e previsão
 st.session_state.modelo_coluna.treinar(st.session_state.historico)
