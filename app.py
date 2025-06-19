@@ -113,7 +113,7 @@ if st.button("Adicionar Sorteios Manuais"):
         st.error("Erro ao processar os números inseridos.")
 
 # Autoatualização
-st_autorefresh(interval=40000, key="refresh_coluna")
+st_autorefresh(interval=10000, key="refresh_coluna")
 
 # Captura
 resultado = fetch_latest_result()
