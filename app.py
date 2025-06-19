@@ -31,18 +31,9 @@ def fetch_latest_result():
 def get_coluna(n):
     return (n - 1) % 3 + 1 if n != 0 else 0
 
-def salvar_resultado_em_arquivo(novo, caminho=HISTORICO_PATH):
-    historico = []
-    if os.path.exists(caminho):
-        with open(caminho, "r") as f:
-            try:
-                historico = json.load(f)
-            except:
-                pass
-    if novo["timestamp"] not in [h["timestamp"] for h in historico]:
-        historico.append(novo)
-        with open(caminho, "w") as f:
-            json.dump(historico, f, indent=2)
+def salvar_resultado_em_arquivo(novo_historico, caminho=HISTORICO_PATH):
+    with open(caminho, "w") as f:
+        json.dump(novo_historico, f, indent=2)
 
 def construir_features(janela):
     features = []
@@ -88,9 +79,6 @@ class ModeloColunaIA:
 st.set_page_config(page_title="IA de Coluna - Roleta", layout="centered")
 st.title("🎯 Previsão de Coluna da Roleta")
 
-# Autoatualização
-st_autorefresh(interval=40000, key="refresh_coluna")
-
 # Sessões
 if "historico" not in st.session_state:
     st.session_state.historico = json.load(open(HISTORICO_PATH)) if os.path.exists(HISTORICO_PATH) else []
@@ -101,16 +89,40 @@ if "colunas_acertadas" not in st.session_state:
 if "coluna_prevista" not in st.session_state:
     st.session_state.coluna_prevista = 0
 
+# Entrada manual
+st.subheader("✍️ Inserir até 100 Sorteios Manualmente")
+input_numbers = st.text_area("Digite os números separados por espaço:", height=100)
+
+if st.button("Adicionar Sorteios Manuais"):
+    try:
+        nums = [int(n) for n in input_numbers.split() if n.isdigit() and 0 <= int(n) <= 36]
+        if len(nums) > 100:
+            st.warning("Você só pode inserir até 100 números.")
+        else:
+            inseridos = 0
+            for numero in nums:
+                entrada = {
+                    "number": numero,
+                    "timestamp": f"manual_{len(st.session_state.historico)}"
+                }
+                st.session_state.historico.append(entrada)
+                inseridos += 1
+            salvar_resultado_em_arquivo(st.session_state.historico)
+            st.success(f"{inseridos} números adicionados.")
+    except:
+        st.error("Erro ao processar os números inseridos.")
+
+# Autoatualização
+st_autorefresh(interval=40000, key="refresh_coluna")
+
 # Captura
 resultado = fetch_latest_result()
 ultimo = st.session_state.historico[-1]["timestamp"] if st.session_state.historico else None
 
 if resultado and resultado["timestamp"] != ultimo:
     st.session_state.historico.append(resultado)
-    salvar_resultado_em_arquivo(resultado)
+    salvar_resultado_em_arquivo(st.session_state.historico)
     st.toast(f"🎲 Novo número: {resultado['number']}")
-    
-    # Verificação de acerto
     if get_coluna(resultado["number"]) == st.session_state.coluna_prevista:
         st.session_state.colunas_acertadas += 1
         st.toast("✅ Acertou a coluna!")
