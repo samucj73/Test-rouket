@@ -5,7 +5,7 @@ import requests
 import logging
 import numpy as np
 from collections import Counter
-import xgboost as xgb
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder
 from streamlit_autorefresh import st_autorefresh
 
@@ -35,17 +35,6 @@ def salvar_resultado_em_arquivo(novo_historico, caminho=HISTORICO_PATH):
     with open(caminho, "w") as f:
         json.dump(novo_historico, f, indent=2)
 
-def construir_features(janela):
-    features = []
-    for i, n in enumerate(janela):
-        features.extend([
-            n % 2,
-            1 if 1 <= n <= 12 else 2 if 13 <= n <= 24 else 3 if 25 <= n <= 36 else 0,  # grupo
-            n % 3,
-            int(str(n)[-1]),  # terminal
-        ])
-    return features
-
 class ModeloColunaIA:
     def __init__(self, janela=15):
         self.modelo = None
@@ -53,31 +42,66 @@ class ModeloColunaIA:
         self.encoder = LabelEncoder()
         self.treinado = False
 
+    def construir_features_avancadas(self, janela_numeros):
+        features = []
+        anteriores = janela_numeros[:-1]
+        atual = janela_numeros[-1]
+
+        for n in janela_numeros:
+            grupo = 1 if 1 <= n <= 12 else 2 if 13 <= n <= 24 else 3 if 25 <= n <= 36 else 0
+            features.extend([
+                n % 2,
+                grupo,
+                n % 3,
+                int(str(n)[-1]),
+            ])
+        
+        if len(anteriores) > 0:
+            ultimo = anteriores[-1]
+            features.append(int(atual == ultimo))  # repetição
+            features.append(abs(atual - ultimo))   # variação
+        else:
+            features.extend([0, 0])
+
+        freq = Counter(anteriores)
+        features.append(freq[atual])  # frequência do número
+        col_freq = Counter(get_coluna(n) for n in anteriores)
+        features.append(col_freq[get_coluna(atual)])  # frequência da coluna
+
+        return features
+
     def treinar(self, historico):
         numeros = [h["number"] for h in historico if h["number"] is not None and 0 <= h["number"] <= 36]
         X, y = [], []
         for i in range(self.janela, len(numeros) - 1):
-            entrada = construir_features(numeros[i - self.janela:i])
+            janela_n = numeros[i - self.janela:i + 1]
             saida = get_coluna(numeros[i])
-            X.append(entrada)
-            y.append(saida)
+            if saida != 0:
+                entrada = self.construir_features_avancadas(janela_n)
+                X.append(entrada)
+                y.append(saida)
+
         if X:
+            X = np.array(X, dtype=np.float32)
             y_enc = self.encoder.fit_transform(y)
-            self.modelo = xgb.XGBClassifier(n_estimators=100, use_label_encoder=False, eval_metric="mlogloss")
-            self.modelo.fit(np.array(X), y_enc)
+            self.modelo = RandomForestClassifier(n_estimators=200, max_depth=10, random_state=42)
+            self.modelo.fit(X, y_enc)
             self.treinado = True
+            st.write(f"✅ Modelo treinado com {len(X)} entradas.")
 
     def prever(self, historico):
         if not self.treinado: return None
         numeros = [h["number"] for h in historico if h["number"] is not None and 0 <= h["number"] <= 36]
-        if len(numeros) < self.janela: return None
-        entrada = construir_features(numeros[-self.janela:])
+        if len(numeros) < self.janela + 1: return None
+        janela_n = numeros[-(self.janela + 1):]
+        entrada = self.construir_features_avancadas(janela_n)
         proba = self.modelo.predict_proba([entrada])[0]
         coluna_predita = self.encoder.inverse_transform([np.argmax(proba)])[0]
         return coluna_predita
 
+# Interface Streamlit
 st.set_page_config(page_title="IA de Coluna - Roleta", layout="centered")
-st.title("🎯 Previsão de Coluna da Roleta")
+st.title("🎯 Previsão de Coluna da Roleta (IA Aprimorada)")
 
 # Sessões
 if "historico" not in st.session_state:
