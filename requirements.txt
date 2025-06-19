@@ -3,3 +3,4 @@ xgboost
 scikit-learn
 numpy
 requests
+streamlit-autorefresh
