@@ -87,7 +87,7 @@ st.set_page_config(page_title="IA de Coluna - Roleta", layout="centered")
 st.title("🎯 Previsão de Coluna da Roleta")
 
 # --- Autorefresh a cada 40 segundos
-count = st_autorefresh(interval=40000, key="auto_refresh")
+st_autorefresh(interval=40000, key="auto_refresh")
 
 # --- Sessões
 if "historico" not in st.session_state:
@@ -136,7 +136,7 @@ if resultado and resultado["timestamp"] != ultimo:
     if get_coluna(resultado["number"]) == st.session_state.coluna_prevista:
         st.session_state.colunas_acertadas += 1
         st.toast("✅ Acertou a coluna!")
-    st.stop()  # interrompe para atualizar a interface e processar novo estado
+    st.stop()  # Atualiza e interrompe execução
 
 # --- Treinamento e previsão
 st.session_state.modelo_coluna.treinar(st.session_state.historico)
@@ -145,10 +145,14 @@ st.session_state.coluna_prevista = coluna
 
 # --- Exibição
 st.subheader("🔁 Últimos 10 Números")
-st.write(" ".join(str(h["number"]) for h in st.session_state.historico[-10:]))
+ultimos = [h["number"] for h in st.session_state.historico[-10:] if h.get("number") is not None]
+if ultimos:
+    st.write("🎲 " + " ".join(str(n) for n in ultimos))
+else:
+    st.info("Ainda sem números registrados.")
 
 st.subheader("🔮 Coluna Prevista")
-if coluna:
+if coluna is not None:
     st.success(f"🧱 Coluna provável: {coluna}")
 else:
     st.warning("Aguardando mais dados para prever.")
