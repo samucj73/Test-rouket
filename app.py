@@ -79,22 +79,31 @@ class ModeloColunaIA:
         proba = self.modelo.predict_proba([entrada])[0]
         coluna_predita = self.encoder.inverse_transform([np.argmax(proba)])[0]
         return coluna_predita
-# --- Interface
+
+
+# --- Interface Streamlit ---
 st.set_page_config(page_title="IA de Coluna - Roleta", layout="centered")
 st.title("🎯 Previsão de Coluna da Roleta")
 
-# --- Reinicialização segura
-if "reiniciar" in st.session_state and st.session_state.reiniciar:
-    st.session_state.reiniciar = False
+# --- Reinicialização segura com gatilho
+if st.session_state.get("triggered", False):
+    st.session_state.triggered = False
     st.experimental_rerun()
 
 # --- Sessões
 if "historico" not in st.session_state:
-    st.session_state.historico = json.load(open(HISTORICO_PATH)) if os.path.exists(HISTORICO_PATH) else []
+    if os.path.exists(HISTORICO_PATH):
+        with open(HISTORICO_PATH, "r") as f:
+            st.session_state.historico = json.load(f)
+    else:
+        st.session_state.historico = []
+
 if "modelo_coluna" not in st.session_state:
     st.session_state.modelo_coluna = ModeloColunaIA()
+
 if "colunas_acertadas" not in st.session_state:
     st.session_state.colunas_acertadas = 0
+
 if "coluna_prevista" not in st.session_state:
     st.session_state.coluna_prevista = 0
 
@@ -117,7 +126,7 @@ if st.button("Adicionar Sorteios Manuais"):
     except:
         st.error("Erro ao processar os números inseridos.")
 
-# --- Novo sorteio
+# --- Captura novo sorteio
 resultado = fetch_latest_result()
 ultimo = st.session_state.historico[-1]["timestamp"] if st.session_state.historico else None
 
@@ -128,10 +137,10 @@ if resultado and resultado["timestamp"] != ultimo:
     if get_coluna(resultado["number"]) == st.session_state.coluna_prevista:
         st.session_state.colunas_acertadas += 1
         st.toast("✅ Acertou a coluna!")
-    st.session_state.reiniciar = True
+    st.session_state.triggered = True
     st.stop()
 
-# --- IA
+# --- Treinamento e previsão
 st.session_state.modelo_coluna.treinar(st.session_state.historico)
 coluna = st.session_state.modelo_coluna.prever(st.session_state.historico)
 st.session_state.coluna_prevista = coluna
