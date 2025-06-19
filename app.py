@@ -5,14 +5,16 @@ import requests
 import logging
 import numpy as np
 from collections import Counter
+from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.preprocessing import LabelEncoder
-from xgboost import XGBClassifier
 from streamlit_autorefresh import st_autorefresh
 
+# --- Configurações ---
 HISTORICO_PATH = "historico_coluna_duzia.json"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
+# --- Funções auxiliares ---
 def fetch_latest_result():
     try:
         response = requests.get(API_URL, headers=HEADERS, timeout=10)
@@ -46,7 +48,8 @@ def salvar_resultado_em_arquivo(historico, caminho=HISTORICO_PATH):
     with open(caminho, "w") as f:
         json.dump(historico, f, indent=2)
 
-class ModeloIAOtimizada:
+# --- Classe de IA usando HistGradientBoosting ---
+class ModeloIAHistGB:
     def __init__(self, tipo="coluna", janela=15):
         self.tipo = tipo
         self.janela = janela
@@ -55,75 +58,67 @@ class ModeloIAOtimizada:
         self.treinado = False
 
     def construir_features(self, numeros):
-        features = []
         ultimos = numeros[-self.janela:]
         atual = ultimos[-1]
         anteriores = ultimos[:-1]
+        features = [
+            atual % 2,
+            int(str(atual)[-1]),
+            atual % 3,
+            abs(atual - anteriores[-1]) if anteriores else 0,
+            int(atual == anteriores[-1]) if anteriores else 0,
+            1 if atual > anteriores[-1] else -1 if atual < anteriores[-1] else 0,
+        ]
 
-        # Features comuns
-        features.append(atual % 2)  # par/ímpar
-        features.append(int(str(atual)[-1]))  # terminal
-        features.append(atual % 3)  # módulo 3
-        features.append(abs(atual - anteriores[-1]) if anteriores else 0)  # variação
-        features.append(int(atual == anteriores[-1]) if anteriores else 0)  # repetição
-        features.append(1 if atual > anteriores[-1] else -1 if atual < anteriores[-1] else 0)  # tendência
-
-        # Frequência em janela recente
         freq_range = numeros[-20:] if len(numeros) >= 20 else numeros
-        if self.tipo == "coluna":
-            grupo = get_coluna(atual)
-            freq = Counter(get_coluna(n) for n in freq_range)
-        else:
-            grupo = get_duzia(atual)
-            freq = Counter(get_duzia(n) for n in freq_range)
-
-        features.append(freq.get(grupo, 0))  # frequência da coluna ou dúzia
-        features.append(grupo)  # grupo atual
-        features.append(grupo == (get_coluna(anteriores[-1]) if self.tipo == "coluna" else get_duzia(anteriores[-1])))  # repetição grupo
+        grupo = get_coluna(atual) if self.tipo == "coluna" else get_duzia(atual)
+        freq = Counter(get_coluna(n) if self.tipo == "coluna" else get_duzia(n) for n in freq_range)
+        features.append(freq.get(grupo, 0))
+        features.append(grupo)
+        features.append(1 if anteriores and grupo == (get_coluna(anteriores[-1]) if self.tipo == "coluna" else get_duzia(anteriores[-1])) else 0)
 
         return features
 
     def treinar(self, historico):
-        numeros = [h["number"] for h in historico if h["number"] is not None and 0 <= h["number"] <= 36]
+        numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
         X, y = [], []
         for i in range(self.janela, len(numeros) - 1):
             janela = numeros[i - self.janela:i + 1]
-            alvo = get_coluna(numeros[i]) if self.tipo == "coluna" else get_duzia(numeros[i])
-            if alvo is not None:
+            target = get_coluna(numeros[i]) if self.tipo == "coluna" else get_duzia(numeros[i])
+            if target is not None:
                 X.append(self.construir_features(janela))
-                y.append(alvo)
+                y.append(target)
         if X:
-            y_enc = self.encoder.fit_transform(y)
-            self.modelo = XGBClassifier(n_estimators=200, max_depth=5, learning_rate=0.1, use_label_encoder=False, eval_metric="mlogloss")
-            self.modelo.fit(np.array(X), y_enc)
+            X = np.array(X, dtype=np.float32)
+            y = self.encoder.fit_transform(y)
+            self.modelo = HistGradientBoostingClassifier(max_iter=200, max_depth=5, random_state=42)
+            self.modelo.fit(X, y)
             self.treinado = True
 
     def prever(self, historico):
         if not self.treinado:
             return None
-        numeros = [h["number"] for h in historico if h["number"] is not None and 0 <= h["number"] <= 36]
+        numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
         if len(numeros) < self.janela + 1:
             return None
         janela = numeros[-(self.janela + 1):]
-        entrada = self.construir_features(janela)
-        proba = self.modelo.predict_proba([entrada])[0]
-        confianca = max(proba)
-        if confianca >= 0.4:
-            classe = self.encoder.inverse_transform([np.argmax(proba)])[0]
-            return classe
+        entrada = np.array([self.construir_features(janela)], dtype=np.float32)
+        proba = self.modelo.predict_proba(entrada)[0]
+        if max(proba) >= 0.4:
+            return self.encoder.inverse_transform([np.argmax(proba)])[0]
         return None
 
 # --- Streamlit App ---
-st.set_page_config(page_title="IA de Roleta Otimizada", layout="centered")
-st.title("🎯 IA Otimizada: Coluna + Dúzia (com Zero)")
+st.set_page_config(page_title="IA Roleta (HistGB)", layout="centered")
+st.title("🎯 IA Roleta com HistGradientBoosting")
 
 # Sessões
 if "historico" not in st.session_state:
     st.session_state.historico = json.load(open(HISTORICO_PATH)) if os.path.exists(HISTORICO_PATH) else []
 if "modelo_coluna" not in st.session_state:
-    st.session_state.modelo_coluna = ModeloIAOtimizada("coluna")
+    st.session_state.modelo_coluna = ModeloIAHistGB("coluna")
 if "modelo_duzia" not in st.session_state:
-    st.session_state.modelo_duzia = ModeloIAOtimizada("duzia")
+    st.session_state.modelo_duzia = ModeloIAHistGB("duzia")
 if "colunas_acertadas" not in st.session_state:
     st.session_state.colunas_acertadas = 0
 if "duzias_acertadas" not in st.session_state:
@@ -150,9 +145,9 @@ if st.button("Adicionar Sorteios Manuais"):
         st.error("Erro ao processar os números.")
 
 # Atualização automática
-st_autorefresh(interval=10000, key="refresh_otimizado")
+st_autorefresh(interval=10000, key="refresh_histgb")
 
-# Captura de novo sorteio
+# Captura automática
 resultado = fetch_latest_result()
 ultimo = st.session_state.historico[-1]["timestamp"] if st.session_state.historico else None
 if resultado and resultado["timestamp"] != ultimo:
@@ -170,25 +165,22 @@ if resultado and resultado["timestamp"] != ultimo:
 st.session_state.modelo_coluna.treinar(st.session_state.historico)
 st.session_state.modelo_duzia.treinar(st.session_state.historico)
 
-coluna = st.session_state.modelo_coluna.prever(st.session_state.historico)
-duzia = st.session_state.modelo_duzia.prever(st.session_state.historico)
+st.session_state.coluna_prevista = st.session_state.modelo_coluna.prever(st.session_state.historico)
+st.session_state.duzia_prevista = st.session_state.modelo_duzia.prever(st.session_state.historico)
 
-st.session_state.coluna_prevista = coluna
-st.session_state.duzia_prevista = duzia
-
-# Exibição
+# Interface
 st.subheader("🔁 Últimos 10 Números")
 st.write(" ".join(str(h["number"]) for h in st.session_state.historico[-10:]))
 
 st.subheader("🔮 Previsões")
-if coluna:
-    st.success(f"🧱 Coluna provável: {coluna}")
-if duzia == 0:
+if st.session_state.coluna_prevista:
+    st.success(f"🧱 Coluna provável: {st.session_state.coluna_prevista}")
+if st.session_state.duzia_prevista == 0:
     st.warning("🟢 Zero pode aparecer!")
-elif duzia:
-    st.info(f"🎯 Dúzia provável: {duzia}ª")
+elif st.session_state.duzia_prevista:
+    st.info(f"🎯 Dúzia provável: {st.session_state.duzia_prevista}ª")
 
-st.subheader("📊 Desempenho da IA")
+st.subheader("📊 Desempenho")
 total = len(st.session_state.historico) - st.session_state.modelo_coluna.janela
 if total > 0:
     taxa_c = st.session_state.colunas_acertadas / total * 100
@@ -196,4 +188,4 @@ if total > 0:
     st.success(f"✅ Acertos de coluna: {st.session_state.colunas_acertadas} / {total} ({taxa_c:.2f}%)")
     st.success(f"✅ Acertos de dúzia: {st.session_state.duzias_acertadas} / {total} ({taxa_d:.2f}%)")
 else:
-    st.info("🔎 Aguardando mais dados para calcular acertos.")
+    st.info("🔎 Aguardando mais dados para avaliar desempenho.")
