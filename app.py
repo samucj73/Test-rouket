@@ -7,7 +7,6 @@ import numpy as np
 from collections import Counter
 import xgboost as xgb
 from sklearn.preprocessing import LabelEncoder
-from streamlit_autorefresh import st_autorefresh
 
 HISTORICO_PATH = "historico_coluna.json"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
@@ -31,18 +30,18 @@ def fetch_latest_result():
 def get_coluna(n):
     return (n - 1) % 3 + 1 if n != 0 else 0
 
-def salvar_resultado_em_arquivo(novo_historico, caminho=HISTORICO_PATH):
+def salvar_resultado_em_arquivo(historico, caminho=HISTORICO_PATH):
     with open(caminho, "w") as f:
-        json.dump(novo_historico, f, indent=2)
+        json.dump(historico, f, indent=2)
 
 def construir_features(janela):
     features = []
-    for i, n in enumerate(janela):
+    for n in janela:
         features.extend([
-            n % 2,
+            n % 2,  # par/impar
             1 if 1 <= n <= 12 else 2 if 13 <= n <= 24 else 3 if 25 <= n <= 36 else 0,  # grupo
-            n % 3,
-            int(str(n)[-1]),  # terminal
+            n % 3,  # resto da divisão por 3
+            int(str(n)[-1])  # terminal
         ])
     return features
 
@@ -68,9 +67,11 @@ class ModeloColunaIA:
             self.treinado = True
 
     def prever(self, historico):
-        if not self.treinado: return None
+        if not self.treinado:
+            return None
         numeros = [h["number"] for h in historico if h["number"] is not None and 0 <= h["number"] <= 36]
-        if len(numeros) < self.janela: return None
+        if len(numeros) < self.janela:
+            return None
         entrada = construir_features(numeros[-self.janela:])
         proba = self.modelo.predict_proba([entrada])[0]
         coluna_predita = self.encoder.inverse_transform([np.argmax(proba)])[0]
@@ -112,10 +113,7 @@ if st.button("Adicionar Sorteios Manuais"):
     except:
         st.error("Erro ao processar os números inseridos.")
 
-# Autoatualização
-st_autorefresh(interval=40000, key="refresh_coluna")
-
-# Captura
+# Verificar novo sorteio
 resultado = fetch_latest_result()
 ultimo = st.session_state.historico[-1]["timestamp"] if st.session_state.historico else None
 
@@ -126,6 +124,7 @@ if resultado and resultado["timestamp"] != ultimo:
     if get_coluna(resultado["number"]) == st.session_state.coluna_prevista:
         st.session_state.colunas_acertadas += 1
         st.toast("✅ Acertou a coluna!")
+    st.experimental_rerun()
 
 # Treinamento e previsão
 st.session_state.modelo_coluna.treinar(st.session_state.historico)
