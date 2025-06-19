@@ -47,6 +47,7 @@ class ModeloColunaIA:
         anteriores = janela_numeros[:-1]
         atual = janela_numeros[-1]
 
+        # Features básicas
         for n in janela_numeros:
             grupo = 1 if 1 <= n <= 12 else 2 if 13 <= n <= 24 else 3 if 25 <= n <= 36 else 0
             features.extend([
@@ -55,18 +56,33 @@ class ModeloColunaIA:
                 n % 3,
                 int(str(n)[-1]),
             ])
-        
-        if len(anteriores) > 0:
+
+        # Features derivadas de coluna e padrão
+        col_anteriores = [get_coluna(n) for n in anteriores if n != 0]
+        col_atual = get_coluna(atual)
+
+        if anteriores:
             ultimo = anteriores[-1]
             features.append(int(atual == ultimo))  # repetição
             features.append(abs(atual - ultimo))   # variação
         else:
             features.extend([0, 0])
 
-        freq = Counter(anteriores)
-        features.append(freq[atual])  # frequência do número
-        col_freq = Counter(get_coluna(n) for n in anteriores)
-        features.append(col_freq[get_coluna(atual)])  # frequência da coluna
+        freq_num = Counter(anteriores)
+        freq_col = Counter(col_anteriores)
+        terminal_freq = Counter(int(str(n)[-1]) for n in anteriores)
+
+        features.append(freq_num[atual])               # frequência do número
+        features.append(freq_col[col_atual])           # frequência da coluna
+        features.append(freq_col.get(col_atual, 0))    # coluna quente
+        features.append(terminal_freq[int(str(atual)[-1])])  # terminal frequência
+
+        if len(col_anteriores) >= 5:
+            features.append(col_anteriores[-1])        # coluna anterior
+            moda_5 = Counter(col_anteriores[-5:]).most_common(1)[0][0]
+            features.append(moda_5)                    # moda últimos 5
+        else:
+            features.extend([0, 0])
 
         return features
 
@@ -84,7 +100,12 @@ class ModeloColunaIA:
         if X:
             X = np.array(X, dtype=np.float32)
             y_enc = self.encoder.fit_transform(y)
-            self.modelo = RandomForestClassifier(n_estimators=200, max_depth=10, random_state=42)
+            self.modelo = RandomForestClassifier(
+                n_estimators=300,
+                max_depth=15,
+                min_samples_leaf=2,
+                random_state=42
+            )
             self.modelo.fit(X, y_enc)
             self.treinado = True
             st.write(f"✅ Modelo treinado com {len(X)} entradas.")
@@ -99,9 +120,15 @@ class ModeloColunaIA:
         coluna_predita = self.encoder.inverse_transform([np.argmax(proba)])[0]
         return coluna_predita
 
+    def coluna_quente(self, historico, ultimos=10):
+        numeros = [h["number"] for h in historico if h["number"] is not None and 1 <= h["number"] <= 36]
+        colunas = [get_coluna(n) for n in numeros[-ultimos:]]
+        if not colunas: return None
+        return Counter(colunas).most_common(1)[0][0]
+
 # Interface Streamlit
-st.set_page_config(page_title="IA de Coluna - Roleta", layout="centered")
-st.title("🎯 Previsão de Coluna da Roleta (IA Aprimorada)")
+st.set_page_config(page_title="IA de Coluna Avançada", layout="centered")
+st.title("🎯 IA Avançada de Previsão de Coluna - Roleta")
 
 # Sessões
 if "historico" not in st.session_state:
@@ -112,6 +139,8 @@ if "colunas_acertadas" not in st.session_state:
     st.session_state.colunas_acertadas = 0
 if "coluna_prevista" not in st.session_state:
     st.session_state.coluna_prevista = 0
+if "coluna_quente" not in st.session_state:
+    st.session_state.coluna_quente = 0
 
 # Entrada manual
 st.subheader("✍️ Inserir até 100 Sorteios Manualmente")
@@ -139,7 +168,7 @@ if st.button("Adicionar Sorteios Manuais"):
 # Autoatualização
 st_autorefresh(interval=10000, key="refresh_coluna")
 
-# Captura
+# Captura de novo sorteio
 resultado = fetch_latest_result()
 ultimo = st.session_state.historico[-1]["timestamp"] if st.session_state.historico else None
 
@@ -154,7 +183,10 @@ if resultado and resultado["timestamp"] != ultimo:
 # Treinamento e previsão
 st.session_state.modelo_coluna.treinar(st.session_state.historico)
 coluna = st.session_state.modelo_coluna.prever(st.session_state.historico)
+coluna_quente = st.session_state.modelo_coluna.coluna_quente(st.session_state.historico)
+
 st.session_state.coluna_prevista = coluna
+st.session_state.coluna_quente = coluna_quente
 
 # Interface
 st.subheader("🔁 Últimos 10 Números")
@@ -162,7 +194,10 @@ st.write(" ".join(str(h["number"]) for h in st.session_state.historico[-10:]))
 
 st.subheader("🔮 Coluna Prevista")
 if coluna:
-    st.success(f"🧱 Coluna provável: {coluna}")
+    st.success(f"🧠 IA prevê: Coluna {coluna}")
+    st.info(f"🔥 Coluna quente (últimos 10): {coluna_quente}")
+    if coluna == coluna_quente:
+        st.success("🧠🔥 Alta confiança: IA e padrão quente apontam para a mesma coluna!")
 else:
     st.warning("Aguardando mais dados para prever.")
 
