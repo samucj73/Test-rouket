@@ -1,128 +1,139 @@
 import streamlit as st
-import pandas as pd
-import pytesseract
-from PIL import Image
-import matplotlib.pyplot as plt
-from fpdf import FPDF
-import tempfile
+import json
 import os
+import requests
+import logging
+import numpy as np
+from collections import Counter
+import xgboost as xgb
+from sklearn.preprocessing import LabelEncoder
+from streamlit_autorefresh import st_autorefresh
 
-# Layout visual estilo trader
-st.set_page_config(page_title="Modo Trader - Roleta", layout="wide")
-st.markdown("""
-    <style>
-    body { background-color: #0f1117; color: #ffffff; }
-    .main { background-color: #0f1117; }
-    h1, h2, h3, h4 { color: #f1c40f; }
-    .stButton>button {
-        background-color: #f1c40f;
-        color: black;
-        border-radius: 8px;
-        padding: 0.5em 1em;
-        font-weight: bold;
-    }
-    .stDownloadButton>button {
-        background-color: #27ae60;
-        color: white;
-        border-radius: 8px;
-        font-weight: bold;
-    }
-    .css-1v0mbdj, .css-1cpxqw2 {
-        background-color: #1f2233;
-        padding: 10px;
-        border-radius: 10px;
-    }
-    </style>
-""", unsafe_allow_html=True)
+HISTORICO_PATH = "historico_coluna.json"
+API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
+HEADERS = {"User-Agent": "Mozilla/5.0"}
 
-st.markdown("<h1 style='text-align: center;'>Painel Modo Trader - Roleta</h1>", unsafe_allow_html=True)
+def fetch_latest_result():
+    try:
+        response = requests.get(API_URL, headers=HEADERS, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        game_data = data.get("data", {})
+        result = game_data.get("result", {})
+        outcome = result.get("outcome", {})
+        number = outcome.get("number")
+        timestamp = game_data.get("startedAt")
+        return {"number": number, "timestamp": timestamp}
+    except Exception as e:
+        logging.error(f"Erro ao buscar resultado: {e}")
+        return None
 
-# 1. Banca
-st.markdown("### 1. Configuração da Banca")
-banca = st.number_input("Insira o valor da banca inicial (R$):", min_value=0.0, step=1.0)
+def get_coluna(n):
+    return (n - 1) % 3 + 1 if n != 0 else 0
 
-# 2. Upload da imagem com resultados da roleta
-st.markdown("### 2. Enviar imagem com os números sorteados")
-imagem = st.file_uploader("Envie uma imagem com os 100 últimos números da roleta:", type=["png", "jpg", "jpeg"])
+def salvar_resultado_em_arquivo(novo, caminho=HISTORICO_PATH):
+    historico = []
+    if os.path.exists(caminho):
+        with open(caminho, "r") as f:
+            try:
+                historico = json.load(f)
+            except:
+                pass
+    if novo["timestamp"] not in [h["timestamp"] for h in historico]:
+        historico.append(novo)
+        with open(caminho, "w") as f:
+            json.dump(historico, f, indent=2)
 
-numeros = []
+def construir_features(janela):
+    features = []
+    for i, n in enumerate(janela):
+        features.extend([
+            n % 2,
+            1 if 1 <= n <= 12 else 2 if 13 <= n <= 24 else 3 if 25 <= n <= 36 else 0,  # grupo
+            n % 3,
+            int(str(n)[-1]),  # terminal
+        ])
+    return features
 
-if imagem:
-    img = Image.open(imagem)
-    texto = pytesseract.image_to_string(img)
-    numeros_extraidos = [int(s) for s in texto.split() if s.isdigit()]
-    numeros = numeros_extraidos[:100]
-    st.success(f"Números extraídos (primeiros 100): {numeros}")
+class ModeloColunaIA:
+    def __init__(self, janela=15):
+        self.modelo = None
+        self.janela = janela
+        self.encoder = LabelEncoder()
+        self.treinado = False
 
-# 3. Análise estatística
-if numeros:
-    st.markdown("### 3. Análise Estatística")
-    df = pd.Series(numeros)
-    st.write("Frequência dos números:")
-    st.bar_chart(df.value_counts().sort_index())
+    def treinar(self, historico):
+        numeros = [h["number"] for h in historico if h["number"] is not None and 0 <= h["number"] <= 36]
+        X, y = [], []
+        for i in range(self.janela, len(numeros) - 1):
+            entrada = construir_features(numeros[i - self.janela:i])
+            saida = get_coluna(numeros[i])
+            X.append(entrada)
+            y.append(saida)
+        if X:
+            y_enc = self.encoder.fit_transform(y)
+            self.modelo = xgb.XGBClassifier(n_estimators=100, use_label_encoder=False, eval_metric="mlogloss")
+            self.modelo.fit(np.array(X), y_enc)
+            self.treinado = True
 
-    st.write(f"**Média:** {df.mean():.2f}")
-    st.write(f"**Moda:** {df.mode().values}")
-    st.write(f"**Mediana:** {df.median()}")
-    st.write(f"**Desvio padrão:** {df.std():.2f()}")
+    def prever(self, historico):
+        if not self.treinado: return None
+        numeros = [h["number"] for h in historico if h["number"] is not None and 0 <= h["number"] <= 36]
+        if len(numeros) < self.janela: return None
+        entrada = construir_features(numeros[-self.janela:])
+        proba = self.modelo.predict_proba([entrada])[0]
+        coluna_predita = self.encoder.inverse_transform([np.argmax(proba)])[0]
+        return coluna_predita
 
-    st.write(f"**Números pares:** {sum(n % 2 == 0 for n in numeros)}")
-    st.write(f"**Números ímpares:** {sum(n % 2 != 0 for n in numeros)}")
+st.set_page_config(page_title="IA de Coluna - Roleta", layout="centered")
+st.title("🎯 Previsão de Coluna da Roleta")
 
-# 4. Previsão com IA simples
-    st.markdown("### 4. Previsão Inteligente dos Próximos Números")
-    def prever_proximos_numeros(numeros, qtd=10):
-        freq = pd.Series(numeros).value_counts()
-        quentes = freq.head(10).index.tolist()
-        frios = freq.tail(10).index.tolist()
+# Autoatualização
+st_autorefresh(interval=40000, key="refresh_coluna")
 
-        sugestao = []
-        while len(sugestao) < qtd:
-            for n in quentes + frios:
-                if n not in sugestao:
-                    sugestao.append(n)
-                if len(sugestao) >= qtd:
-                    break
-        return sugestao
+# Sessões
+if "historico" not in st.session_state:
+    st.session_state.historico = json.load(open(HISTORICO_PATH)) if os.path.exists(HISTORICO_PATH) else []
+if "modelo_coluna" not in st.session_state:
+    st.session_state.modelo_coluna = ModeloColunaIA()
+if "colunas_acertadas" not in st.session_state:
+    st.session_state.colunas_acertadas = 0
+if "coluna_prevista" not in st.session_state:
+    st.session_state.coluna_prevista = 0
 
-    sugestao_numeros = prever_proximos_numeros(numeros)
-    st.success(f"Números sugeridos: {sugestao_numeros}")
+# Captura
+resultado = fetch_latest_result()
+ultimo = st.session_state.historico[-1]["timestamp"] if st.session_state.historico else None
 
-# 5. Relatório PDF
-    st.markdown("### 5. Gerar Relatório PDF")
+if resultado and resultado["timestamp"] != ultimo:
+    st.session_state.historico.append(resultado)
+    salvar_resultado_em_arquivo(resultado)
+    st.toast(f"🎲 Novo número: {resultado['number']}")
+    
+    # Verificação de acerto
+    if get_coluna(resultado["number"]) == st.session_state.coluna_prevista:
+        st.session_state.colunas_acertadas += 1
+        st.toast("✅ Acertou a coluna!")
 
-    def gerar_pdf(numeros, sugestao):
-        freq = pd.Series(numeros).value_counts().sort_index()
+# Treinamento e previsão
+st.session_state.modelo_coluna.treinar(st.session_state.historico)
+coluna = st.session_state.modelo_coluna.prever(st.session_state.historico)
+st.session_state.coluna_prevista = coluna
 
-        fig, ax = plt.subplots()
-        freq.plot(kind='bar', ax=ax)
-        ax.set_title('Frequência dos Números')
-        ax.set_xlabel('Número')
-        ax.set_ylabel('Ocorrências')
+# Interface
+st.subheader("🔁 Últimos 10 Números")
+st.write(" ".join(str(h["number"]) for h in st.session_state.historico[-10:]))
 
-        temp_chart = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-        fig.savefig(temp_chart.name)
-        plt.close()
+st.subheader("🔮 Coluna Prevista")
+if coluna:
+    st.success(f"🧱 Coluna provável: {coluna}")
+else:
+    st.warning("Aguardando mais dados para prever.")
 
-        pdf = FPDF()
-        pdf.add_page()
-        pdf.set_font("Arial", size=12)
-        pdf.cell(200, 10, txt="Análise da Roleta - Modo Trader", ln=True, align="C")
-
-        pdf.ln(10)
-        pdf.multi_cell(0, 10, f"Banca inicial: R$ {banca}")
-        pdf.multi_cell(0, 10, f"Números extraídos: {numeros}")
-        pdf.multi_cell(0, 10, f"Números sugeridos (IA): {sugestao}")
-
-        pdf.image(temp_chart.name, x=10, y=None, w=180)
-
-        temp_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-        pdf.output(temp_pdf.name)
-
-        os.unlink(temp_chart.name)
-        return temp_pdf.name
-
-    if st.button("Gerar PDF"):
-        caminho_pdf = gerar_pdf(numeros, sugestao_numeros)
-        with open(caminho_pdf, "rb") as file:
-            st.download_button("Baixar Relatório PDF", file, file_name="relatorio_roleta.pdf", mime="application/pdf")
+st.subheader("📊 Desempenho")
+total = len(st.session_state.historico) - st.session_state.modelo_coluna.janela
+if total > 0:
+    taxa = st.session_state.colunas_acertadas / total * 100
+    st.info(f"✅ Acertos de coluna: {st.session_state.colunas_acertadas} / {total} ({taxa:.2f}%)")
+else:
+    st.info("🔎 Acertos serão exibidos após mais sorteios.")
