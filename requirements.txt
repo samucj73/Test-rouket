@@ -1,6 +1,5 @@
 streamlit
-pytesseract
-pandas
-matplotlib
-fpdf
-Pillow
+xgboost
+scikit-learn
+numpy
+requests
