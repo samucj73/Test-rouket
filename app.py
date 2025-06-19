@@ -85,14 +85,6 @@ class ModeloColunaIA:
 st.set_page_config(page_title="IA de Coluna - Roleta", layout="centered")
 st.title("🎯 Previsão de Coluna da Roleta")
 
-# --- Controle seguro de reinicialização ---
-if "triggered" not in st.session_state:
-    st.session_state["triggered"] = False
-
-if st.session_state["triggered"]:
-    st.session_state["triggered"] = False
-    st.experimental_rerun()
-
 # --- Sessões
 if "historico" not in st.session_state:
     if os.path.exists(HISTORICO_PATH):
@@ -140,8 +132,7 @@ if resultado and resultado["timestamp"] != ultimo:
     if get_coluna(resultado["number"]) == st.session_state.coluna_prevista:
         st.session_state.colunas_acertadas += 1
         st.toast("✅ Acertou a coluna!")
-    st.session_state["triggered"] = True
-    st.stop()
+    st.stop()  # interrompe para atualizar a interface e processar novo estado
 
 # --- Treinamento e previsão
 st.session_state.modelo_coluna.treinar(st.session_state.historico)
