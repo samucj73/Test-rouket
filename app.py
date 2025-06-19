@@ -7,6 +7,7 @@ import numpy as np
 from collections import Counter
 import xgboost as xgb
 from sklearn.preprocessing import LabelEncoder
+from streamlit_autorefresh import st_autorefresh
 
 # --- Configurações
 HISTORICO_PATH = "historico_coluna.json"
@@ -85,6 +86,9 @@ class ModeloColunaIA:
 st.set_page_config(page_title="IA de Coluna - Roleta", layout="centered")
 st.title("🎯 Previsão de Coluna da Roleta")
 
+# --- Autorefresh a cada 40 segundos
+count = st_autorefresh(interval=40000, key="auto_refresh")
+
 # --- Sessões
 if "historico" not in st.session_state:
     if os.path.exists(HISTORICO_PATH):
@@ -121,7 +125,7 @@ if st.button("Adicionar Sorteios Manuais"):
     except:
         st.error("Erro ao processar os números inseridos.")
 
-# --- Captura novo sorteio
+# --- Captura novo sorteio automaticamente
 resultado = fetch_latest_result()
 ultimo = st.session_state.historico[-1]["timestamp"] if st.session_state.historico else None
 
