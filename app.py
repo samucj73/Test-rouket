@@ -13,7 +13,7 @@ HISTORICO_PATH = "historico_coluna.json"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
-# --- Funções de utilidade
+# --- Funções utilitárias
 def fetch_latest_result():
     try:
         response = requests.get(API_URL, headers=HEADERS, timeout=10)
@@ -47,7 +47,7 @@ def construir_features(janela):
         ])
     return features
 
-# --- Modelo IA para coluna
+# --- Modelo IA
 class ModeloColunaIA:
     def __init__(self, janela=15):
         self.modelo = None
@@ -79,10 +79,14 @@ class ModeloColunaIA:
         proba = self.modelo.predict_proba([entrada])[0]
         coluna_predita = self.encoder.inverse_transform([np.argmax(proba)])[0]
         return coluna_predita
-
-# --- Interface Streamlit
+# --- Interface
 st.set_page_config(page_title="IA de Coluna - Roleta", layout="centered")
 st.title("🎯 Previsão de Coluna da Roleta")
+
+# --- Reinicialização segura
+if "reiniciar" in st.session_state and st.session_state.reiniciar:
+    st.session_state.reiniciar = False
+    st.experimental_rerun()
 
 # --- Sessões
 if "historico" not in st.session_state:
@@ -94,7 +98,7 @@ if "colunas_acertadas" not in st.session_state:
 if "coluna_prevista" not in st.session_state:
     st.session_state.coluna_prevista = 0
 
-# --- Inserção Manual
+# --- Inserção manual
 st.subheader("✍️ Inserir até 100 Sorteios Manualmente")
 input_numbers = st.text_area("Digite os números separados por espaço:", height=100)
 if st.button("Adicionar Sorteios Manuais"):
@@ -113,10 +117,7 @@ if st.button("Adicionar Sorteios Manuais"):
     except:
         st.error("Erro ao processar os números inseridos.")
 
-# --- Captura de novo sorteio da API
-def atualizar_interface():
-    st.experimental_rerun()
-
+# --- Novo sorteio
 resultado = fetch_latest_result()
 ultimo = st.session_state.historico[-1]["timestamp"] if st.session_state.historico else None
 
@@ -127,15 +128,15 @@ if resultado and resultado["timestamp"] != ultimo:
     if get_coluna(resultado["number"]) == st.session_state.coluna_prevista:
         st.session_state.colunas_acertadas += 1
         st.toast("✅ Acertou a coluna!")
-    atualizar_interface()
+    st.session_state.reiniciar = True
     st.stop()
 
-# --- Treinamento e previsão
+# --- IA
 st.session_state.modelo_coluna.treinar(st.session_state.historico)
 coluna = st.session_state.modelo_coluna.prever(st.session_state.historico)
 st.session_state.coluna_prevista = coluna
 
-# --- Interface principal
+# --- Exibição
 st.subheader("🔁 Últimos 10 Números")
 st.write(" ".join(str(h["number"]) for h in st.session_state.historico[-10:]))
 
