@@ -9,12 +9,10 @@ from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.preprocessing import LabelEncoder
 from streamlit_autorefresh import st_autorefresh
 
-# --- Configurações ---
 HISTORICO_PATH = "historico_coluna_duzia.json"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
-# --- Funções auxiliares ---
 def fetch_latest_result():
     try:
         response = requests.get(API_URL, headers=HEADERS, timeout=10)
@@ -48,9 +46,14 @@ def salvar_resultado_em_arquivo(historico, caminho=HISTORICO_PATH):
     with open(caminho, "w") as f:
         json.dump(historico, f, indent=2)
 
-# --- Classe de IA usando HistGradientBoosting ---
+def grupo_mais_frequente(numeros, tipo="coluna", n=30):
+    grupo_func = get_coluna if tipo == "coluna" else get_duzia
+    grupos = [grupo_func(x) for x in numeros[-n:] if x > 0]
+    return Counter(grupos).most_common(1)[0][0] if grupos else None
+
+# --- Modelo IA com mais features ---
 class ModeloIAHistGB:
-    def __init__(self, tipo="coluna", janela=15):
+    def __init__(self, tipo="coluna", janela=20):
         self.tipo = tipo
         self.janela = janela
         self.modelo = None
@@ -61,6 +64,9 @@ class ModeloIAHistGB:
         ultimos = numeros[-self.janela:]
         atual = ultimos[-1]
         anteriores = ultimos[:-1]
+
+        grupo = get_coluna(atual) if self.tipo == "coluna" else get_duzia(atual)
+
         features = [
             atual % 2,
             int(str(atual)[-1]),
@@ -68,14 +74,16 @@ class ModeloIAHistGB:
             abs(atual - anteriores[-1]) if anteriores else 0,
             int(atual == anteriores[-1]) if anteriores else 0,
             1 if atual > anteriores[-1] else -1 if atual < anteriores[-1] else 0,
+            sum(1 for x in anteriores[-3:] if grupo == (get_coluna(x) if self.tipo == "coluna" else get_duzia(x))),
+            Counter(numeros[-30:]).get(atual, 0),  # Frequência absoluta
+            int(atual in [n for n, _ in Counter(numeros[-30:]).most_common(5)]),  # Número quente
+            int(np.mean(anteriores) < atual),
+            int(atual == 0),
+            grupo,
         ]
 
-        freq_range = numeros[-20:] if len(numeros) >= 20 else numeros
-        grupo = get_coluna(atual) if self.tipo == "coluna" else get_duzia(atual)
-        freq = Counter(get_coluna(n) if self.tipo == "coluna" else get_duzia(n) for n in freq_range)
+        freq = Counter(get_coluna(n) if self.tipo == "coluna" else get_duzia(n) for n in numeros[-20:])
         features.append(freq.get(grupo, 0))
-        features.append(grupo)
-        features.append(1 if anteriores and grupo == (get_coluna(anteriores[-1]) if self.tipo == "coluna" else get_duzia(anteriores[-1])) else 0)
 
         return features
 
@@ -109,10 +117,9 @@ class ModeloIAHistGB:
         return None
 
 # --- Streamlit App ---
-st.set_page_config(page_title="IA Roleta (HistGB)", layout="centered")
-st.title("🎯 IA Roleta com HistGradientBoosting")
+st.set_page_config(page_title="IA Roleta (Coluna e Dúzia)", layout="centered")
+st.title("🎯 IA Roleta XXXtreme — Coluna & Dúzia (Melhorada)")
 
-# Sessões
 if "historico" not in st.session_state:
     st.session_state.historico = json.load(open(HISTORICO_PATH)) if os.path.exists(HISTORICO_PATH) else []
 if "modelo_coluna" not in st.session_state:
@@ -128,10 +135,9 @@ if "coluna_prevista" not in st.session_state:
 if "duzia_prevista" not in st.session_state:
     st.session_state.duzia_prevista = None
 
-# Entrada manual
-st.subheader("✍️ Inserir até 100 Sorteios Manualmente")
-entrada = st.text_area("Digite os números separados por espaço:", height=100)
-if st.button("Adicionar Sorteios Manuais"):
+st.subheader("✍️ Inserir Sorteios Manualmente")
+entrada = st.text_area("Digite os números (até 100, separados por espaço):", height=100)
+if st.button("Adicionar Sorteios"):
     try:
         numeros = [int(n) for n in entrada.split() if n.isdigit() and 0 <= int(n) <= 36]
         if len(numeros) > 100:
@@ -168,17 +174,28 @@ st.session_state.modelo_duzia.treinar(st.session_state.historico)
 st.session_state.coluna_prevista = st.session_state.modelo_coluna.prever(st.session_state.historico)
 st.session_state.duzia_prevista = st.session_state.modelo_duzia.prever(st.session_state.historico)
 
+numeros = [h["number"] for h in st.session_state.historico if 0 <= h["number"] <= 36]
+coluna_quente = grupo_mais_frequente(numeros, "coluna", 30)
+duzia_quente = grupo_mais_frequente(numeros, "duzia", 30)
+
 # Interface
 st.subheader("🔁 Últimos 10 Números")
 st.write(" ".join(str(h["number"]) for h in st.session_state.historico[-10:]))
 
 st.subheader("🔮 Previsões")
 if st.session_state.coluna_prevista:
-    st.success(f"🧱 Coluna provável: {st.session_state.coluna_prevista}")
+    if st.session_state.coluna_prevista == coluna_quente:
+        st.success(f"🔥 Alta confiança: Coluna {st.session_state.coluna_prevista} (concordância com coluna quente)")
+    else:
+        st.info(f"🧱 Coluna provável: {st.session_state.coluna_prevista} | Quente: {coluna_quente}")
+
 if st.session_state.duzia_prevista == 0:
     st.warning("🟢 Zero pode aparecer!")
 elif st.session_state.duzia_prevista:
-    st.info(f"🎯 Dúzia provável: {st.session_state.duzia_prevista}ª")
+    if st.session_state.duzia_prevista == duzia_quente:
+        st.success(f"🔥 Alta confiança: Dúzia {st.session_state.duzia_prevista} (concordância com quente)")
+    else:
+        st.info(f"🎯 Dúzia provável: {st.session_state.duzia_prevista} | Quente: {duzia_quente}")
 
 st.subheader("📊 Desempenho")
 total = len(st.session_state.historico) - st.session_state.modelo_coluna.janela
