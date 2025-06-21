@@ -182,6 +182,13 @@ duzia_quente = grupo_mais_frequente(numeros, "duzia", 30)
 st.subheader("🔁 Últimos 10 Números")
 st.write(" ".join(str(h["number"]) for h in st.session_state.historico[-10:]))
 
+import streamlit as st
+
+with open("historico_coluna_duzia.json", "r") as f:
+    conteudo = f.read()
+
+st.download_button("📥 Baixar histórico", data=conteudo, file_name="historico_coluna_duzia.json")
+
 st.subheader("🔮 Previsões")
 if st.session_state.coluna_prevista:
     if st.session_state.coluna_prevista == coluna_quente:
