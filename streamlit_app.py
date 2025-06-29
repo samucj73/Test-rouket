@@ -11,7 +11,6 @@ import joblib
 from streamlit_autorefresh import st_autorefresh
 
 HISTORICO_PATH = "historico_coluna_duzia.json"
-MODELO_PATH = "modelo_duzia.pkl"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
@@ -49,6 +48,35 @@ def salvar_resultado_em_arquivo(historico, caminho=HISTORICO_PATH):
 def grupo_mais_frequente(numeros, tipo="duzia", n=30):
     grupos = [get_duzia(x) for x in numeros[-n:] if x > 0]
     return Counter(grupos).most_common(1)[0][0] if grupos else None
+
+# Estratégias adicionais
+def estrategia_duzia_quente(historico, janela=30):
+    numeros = [h["number"] for h in historico[-janela:] if h["number"] > 0]
+    duzias = [get_duzia(n) for n in numeros]
+    mais_comum = Counter(duzias).most_common(1)
+    return mais_comum[0][0] if mais_comum else None
+
+def estrategia_tendencia(historico):
+    numeros = [h["number"] for h in historico if h["number"] > 0]
+    if len(numeros) < 5:
+        return None
+    ultimos = numeros[-5:]
+    dif = np.mean(np.diff(ultimos))
+    if dif > 0:
+        return min(get_duzia(ultimos[-1]) + 1, 3)
+    elif dif < 0:
+        return max(get_duzia(ultimos[-1]) - 1, 1)
+    else:
+        return get_duzia(ultimos[-1])
+
+def estrategia_alternancia(historico, limite=2):
+    numeros = [h["number"] for h in historico if h["number"] > 0]
+    if len(numeros) < limite + 1:
+        return None
+    duzias = [get_duzia(n) for n in numeros[-(limite + 1):]]
+    if duzias.count(duzias[-1]) >= limite:
+        return [d for d in [1, 2, 3] if d != duzias[-1]][0]
+    return duzias[-1]
 
 # Modelo IA
 class ModeloIAHistGB:
@@ -183,9 +211,20 @@ if resultado and resultado["timestamp"] != ultimo:
         st.session_state.duzias_acertadas += 1
         st.toast("✅ Acertou a dúzia!")
 
-# Treinar e prever
+# Treinar IA
 st.session_state.modelo_duzia.treinar(st.session_state.historico)
-st.session_state.duzia_prevista = st.session_state.modelo_duzia.prever(st.session_state.historico)
+
+# Estratégias
+prev_ia = st.session_state.modelo_duzia.prever(st.session_state.historico)
+prev_quente = estrategia_duzia_quente(st.session_state.historico)
+prev_tendencia = estrategia_tendencia(st.session_state.historico)
+prev_alternancia = estrategia_alternancia(st.session_state.historico)
+
+# Votação
+candidatos = [prev_ia, prev_quente, prev_tendencia, prev_alternancia]
+votacao = Counter(candidatos)
+mais_votado, votos = votacao.most_common(1)[0]
+st.session_state.duzia_prevista = mais_votado
 
 # Interface
 st.subheader("🔁 Últimos 10 Números")
@@ -196,14 +235,11 @@ with open(HISTORICO_PATH, "r") as f:
 st.download_button("📥 Baixar histórico", data=conteudo, file_name="historico_coluna_duzia.json")
 
 st.subheader("🔮 Previsão de Dúzia")
-duzia_quente = grupo_mais_frequente([h["number"] for h in st.session_state.historico], "duzia", 30)
-if st.session_state.duzia_prevista == 0:
-    st.warning("🟢 Zero pode aparecer!")
-elif st.session_state.duzia_prevista:
-    if st.session_state.duzia_prevista == duzia_quente:
-        st.success(f"🔥 Alta confiança: Dúzia {st.session_state.duzia_prevista} (concordância com quente)")
-    else:
-        st.info(f"🎯 Dúzia provável: {st.session_state.duzia_prevista} | Quente: {duzia_quente}")
+st.write(f"🧠 IA: {prev_ia}")
+st.write(f"🔥 Quente: {prev_quente}")
+st.write(f"📈 Tendência: {prev_tendencia}")
+st.write(f"🔁 Alternância: {prev_alternancia}")
+st.success(f"🎯 Previsão final (votação): Dúzia {mais_votado}")
 
 st.subheader("📊 Desempenho")
 total = len(st.session_state.historico) - st.session_state.modelo_duzia.janela
