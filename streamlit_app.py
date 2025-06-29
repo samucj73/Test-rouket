@@ -45,12 +45,12 @@ def salvar_resultado_em_arquivo(historico, caminho=HISTORICO_PATH):
     with open(caminho, "w") as f:
         json.dump(historico, f, indent=2)
 
-def grupo_mais_frequente(numeros, tipo="duzia", n=30):
+def grupo_mais_frequente(numeros, tipo="duzia", n=130):
     grupos = [get_duzia(x) for x in numeros[-n:] if x > 0]
     return Counter(grupos).most_common(1)[0][0] if grupos else None
 
 # Estratégias adicionais
-def estrategia_duzia_quente(historico, janela=30):
+def estrategia_duzia_quente(historico, janela=130):
     numeros = [h["number"] for h in historico[-janela:] if h["number"] > 0]
     duzias = [get_duzia(n) for n in numeros]
     mais_comum = Counter(duzias).most_common(1)
@@ -97,7 +97,7 @@ class ModeloIAHistGB:
 
         grupo = safe_get_duzia(atual)
         freq_20 = Counter(safe_get_duzia(n) for n in numeros[-20:])
-        freq_50 = Counter(safe_get_duzia(n) for n in numeros[-50:]) if len(numeros) >= 50 else freq_20
+        freq_50 = Counter(safe_get_duzia(n) for n in numeros[-50:]) if len(numeros) >= 150 else freq_20
         total_50 = sum(freq_50.values()) or 1
 
         lag1 = safe_get_duzia(anteriores[-1]) if len(anteriores) >= 1 else -1
