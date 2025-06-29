@@ -7,12 +7,38 @@ import numpy as np
 from collections import Counter
 from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.preprocessing import LabelEncoder
-import joblib
 from streamlit_autorefresh import st_autorefresh
+import base64
 
 HISTORICO_PATH = "historico_coluna_duzia.json"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
+
+# Função de som embutido (moedas)
+def tocar_som_moeda():
+    som_base64 = (
+        "SUQzAwAAAAAAF1RTU0UAAAAPAAADTGF2ZjU2LjI2LjEwNAAAAAAAAAAAAAAA//tQxAADBQAB"
+        "VAAAAnEAAACcQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        "AAAAAAAAAAAAAAAAAAAAAAAA//sQxAADAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
+        "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
+        "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
+        "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
+        "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
+        "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
+        "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
+        "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
+        "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
+        "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
+        "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
+        "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
+        "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
+        "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
+        "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
+        "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
+    )
+    audio_bytes = base64.b64decode(som_base64)
+    st.audio(audio_bytes, format="audio/mp3")
 
 # Utilitários
 def fetch_latest_result():
@@ -45,11 +71,7 @@ def salvar_resultado_em_arquivo(historico, caminho=HISTORICO_PATH):
     with open(caminho, "w") as f:
         json.dump(historico, f, indent=2)
 
-def grupo_mais_frequente(numeros, tipo="duzia", n=130):
-    grupos = [get_duzia(x) for x in numeros[-n:] if x > 0]
-    return Counter(grupos).most_common(1)[0][0] if grupos else None
-
-# Estratégias adicionais
+# Estratégias
 def estrategia_duzia_quente(historico, janela=130):
     numeros = [h["number"] for h in historico[-janela:] if h["number"] > 0]
     duzias = [get_duzia(n) for n in numeros]
@@ -167,7 +189,7 @@ class ModeloIAHistGB:
             return self.encoder.inverse_transform([np.argmax(proba)])[0]
         return None
 
-# Streamlit
+# Streamlit Interface
 st.set_page_config(page_title="IA Roleta Dúzia", layout="centered")
 st.title("🎯 IA Roleta XXXtreme — Previsão de Dúzia")
 
@@ -197,10 +219,8 @@ if st.button("Adicionar Sorteios"):
     except:
         st.error("Erro ao processar os números.")
 
-# Autoatualização
+# Autoatualização e captura
 st_autorefresh(interval=10000, key="refresh_duzia")
-
-# Captura automática
 resultado = fetch_latest_result()
 ultimo = st.session_state.historico[-1]["timestamp"] if st.session_state.historico else None
 if resultado and resultado["timestamp"] != ultimo:
@@ -211,24 +231,21 @@ if resultado and resultado["timestamp"] != ultimo:
         st.session_state.duzias_acertadas += 1
         st.toast("✅ Acertou a dúzia!")
         st.balloons()
-        st.audio("https://www.myinstants.com/media/sounds/coins.mp3", format="audio/mp3")
+        tocar_som_moeda()
 
-# Treinar IA
+# Treinar e prever
 st.session_state.modelo_duzia.treinar(st.session_state.historico)
-
-# Estratégias
 prev_ia = st.session_state.modelo_duzia.prever(st.session_state.historico)
 prev_quente = estrategia_duzia_quente(st.session_state.historico)
 prev_tendencia = estrategia_tendencia(st.session_state.historico)
 prev_alternancia = estrategia_alternancia(st.session_state.historico)
 
-# Votação
+# Votação e exibição
 candidatos = [prev_ia, prev_quente, prev_tendencia, prev_alternancia]
 votacao = Counter(candidatos)
 mais_votado, votos = votacao.most_common(1)[0]
 st.session_state.duzia_prevista = mais_votado
 
-# Interface
 st.subheader("🔁 Últimos 10 Números")
 st.write(" ".join(str(h["number"]) for h in st.session_state.historico[-10:]))
 
