@@ -53,7 +53,7 @@ def grupo_mais_frequente(numeros, tipo="coluna", n=30):
 
 # --- Modelo IA com mais features ---
 class ModeloIAHistGB:
-    def __init__(self, tipo="coluna", janela=20):
+    def __init__(self, tipo="coluna", janela=120):
         self.tipo = tipo
         self.janela = janela
         self.modelo = None
