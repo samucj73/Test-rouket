@@ -210,6 +210,8 @@ if resultado and resultado["timestamp"] != ultimo:
     if get_duzia(resultado["number"]) == st.session_state.duzia_prevista:
         st.session_state.duzias_acertadas += 1
         st.toast("✅ Acertou a dúzia!")
+        st.balloons()
+        st.audio("https://www.myinstants.com/media/sounds/coins.mp3", format="audio/mp3")
 
 # Treinar IA
 st.session_state.modelo_duzia.treinar(st.session_state.historico)
