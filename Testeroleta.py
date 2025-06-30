@@ -15,6 +15,23 @@ HISTORICO_PATH = "historico_coluna_duzia.json"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
+
+
+def fetch_latest_result():
+    try:
+        response = requests.get(API_URL, headers=HEADERS, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        game_data = data.get("data", {})
+        result = game_data.get("result", {})
+        outcome = result.get("outcome", {})
+        number = outcome.get("number")
+        timestamp = game_data.get("startedAt")
+        return {"number": number, "timestamp": timestamp}
+    except Exception as e:
+        logging.error(f"Erro ao buscar resultado: {e}")
+        return None
+
 def tocar_som_moeda():
     som_base64 = (
         "SUQzAwAAAAAAF1RTU0UAAAAPAAADTGF2ZjU2LjI2LjEwNAAAAAAAAAAAAAAA//tQxAADBQAB"
@@ -33,32 +50,15 @@ def tocar_som_moeda():
         "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
         "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
         "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
-        "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
     )
-    audio_bytes = base64.b64decode(som_base64)
     st.markdown(
-        f\"\"\"
+        f"""
         <audio autoplay>
             <source src="data:audio/mp3;base64,{som_base64}" type="audio/mp3">
         </audio>
-        \"\"\",
+        """,
         unsafe_allow_html=True,
     )
-
-def fetch_latest_result():
-    try:
-        response = requests.get(API_URL, headers=HEADERS, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-        game_data = data.get("data", {})
-        result = game_data.get("result", {})
-        outcome = result.get("outcome", {})
-        number = outcome.get("number")
-        timestamp = game_data.get("startedAt")
-        return {"number": number, "timestamp": timestamp}
-    except Exception as e:
-        logging.error(f"Erro ao buscar resultado: {e}")
-        return None
 
 def get_duzia(n):
     if n == 0:
