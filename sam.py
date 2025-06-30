@@ -46,7 +46,7 @@ def tocar_som_moeda():
 
 def fetch_latest_result():
     try:
-        response = requests.get(API_URL, headers=HEADERS, timeout=10)
+        response = requests.get(API_URL, headers=HEADERS, timeout=5)
         response.raise_for_status()
         data = response.json()
         game_data = data.get("data", {})
@@ -233,7 +233,7 @@ if st.button("Adicionar Sorteios"):
         st.error(f"Erro ao adicionar números: {e}")
 
 # Atualização automática
-st_autorefresh(interval=10000, key="refresh_duzia")
+st_autorefresh(interval=3000, key="refresh_duzia")
 resultado = fetch_latest_result()
 ultimo = st.session_state.historico[-1]["timestamp"] if st.session_state.historico else None
 
