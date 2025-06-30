@@ -36,6 +36,7 @@ def tocar_som_moeda():
         "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
         "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
         "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
+        "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
     )
     audio_bytes = base64.b64decode(som_base64)
     st.audio(audio_bytes, format="audio/mp3")
@@ -231,6 +232,8 @@ if st.button("Adicionar Sorteios"):
             salvar_resultado_em_arquivo(st.session_state.historico)
             st.success(f"{len(numeros)} números adicionados.")
             tentar_treinar()  # treino só após adicionar
+    except Exception as e:
+        st.error(f"Erro ao adicionar números: {e}")
 
 # Autoatualização e captura
 st_autorefresh(interval=10000, key="refresh_duzia")
