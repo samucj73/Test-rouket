@@ -14,37 +14,6 @@ HISTORICO_PATH = "historico_coluna_duzia.json"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
-def tocar_som_moeda():
-    som_base64 = (
-        "SUQzAwAAAAAAF1RTU0UAAAAPAAADTGF2ZjU2LjI2LjEwNAAAAAAAAAAAAAAA//tQxAADBQAB"
-        "VAAAAnEAAACcQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-        "AAAAAAAAAAAAAAAAAAAAAAAA//sQxAADAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
-        "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
-        "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
-        "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
-        "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
-        "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
-        "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
-    )
-    audio_bytes = base64.b64decode(som_base64)
-    st.audio(audio_bytes, format="audio/mp3")
-
-def fetch_latest_result():
-    try:
-        response = requests.get(API_URL, headers=HEADERS, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-        game_data = data.get("data", {})
-        result = game_data.get("result", {})
-        outcome = result.get("outcome", {})
-        number = outcome.get("number")
-        timestamp = game_data.get("startedAt")
-        return {"number": number, "timestamp": timestamp}
-    except Exception as e:
-        logging.error(f"Erro ao buscar resultado: {e}")
-        return None
-
 def get_duzia(n):
     if n == 0:
         return 0
@@ -140,7 +109,6 @@ class ModeloIAHistGB:
         rel_freq_grupo = densidade_50 / total_50
         repete_duzia = int(grupo == safe_get_duzia(anteriores[-1])) if anteriores else 0
 
-        # ==== Novas features ====
         dist_ultimo_zero = next((i for i, n in enumerate(reversed(numeros)) if n == 0), len(numeros))
         mudanca_duzia = int(safe_get_duzia(atual) != safe_get_duzia(val1)) if len(anteriores) >= 1 else 0
 
@@ -228,6 +196,7 @@ class ModeloIAHistGB:
         return None
 
 # Interface
+
 st.set_page_config(page_title="IA Roleta Dúzia", layout="centered")
 st.title("🎯 IA Roleta XXXtreme — Previsão de Dúzia")
 
@@ -269,7 +238,7 @@ if st.button("Adicionar Sorteios"):
     except:
         st.error("Erro ao processar os números.")
 
-# Atualizar modelo
+# Atualizar modelo com novos parâmetros
 st.session_state.modelo_duzia = ModeloIAHistGB(janela=janela_ia, confianca_min=confianca_min)
 st.session_state.modelo_duzia.treinar(st.session_state.historico)
 
@@ -279,3 +248,79 @@ prev_quente = estrategia_duzia_quente(st.session_state.historico)
 prev_tendencia = estrategia_tendencia(st.session_state.historico)
 prev_alternancia = estrategia_alternancia(st.session_state.historico)
 prev_ausente = estrategia_duzia_ausente(st.session_state.historico)
+
+# Votação ponderada
+from collections import Counter
+votacao = Counter()
+if prev_ia is not None:
+    votacao[prev_ia] += pesos["ia"]
+if prev_quente is not None:
+    votacao[prev_quente] += pesos["quente"]
+if prev_tendencia is not None:
+    votacao[prev_tendencia] += pesos["tendencia"]
+if prev_alternancia is not None:
+    votacao[prev_alternancia] += pesos["alternancia"]
+if prev_ausente is not None:
+    votacao[prev_ausente] += pesos["ausente"]
+
+mais_votado = None
+if votacao:
+    mais_votado = votacao.most_common(1)[0][0]
+st.session_state.duzia_prevista = mais_votado
+
+# Atualização automática e captura do último resultado da API
+resultado = None
+try:
+    response = requests.get(API_URL, headers=HEADERS, timeout=10)
+    response.raise_for_status()
+    data = response.json()
+    game_data = data.get("data", {})
+    result = game_data.get("result", {})
+    outcome = result.get("outcome", {})
+    numero_atual = outcome.get("number")
+    timestamp_atual = game_data.get("startedAt")
+    resultado = {"number": numero_atual, "timestamp": timestamp_atual}
+except Exception as e:
+    logging.error(f"Erro ao buscar resultado: {e}")
+
+ultimo_timestamp = st.session_state.historico[-1]["timestamp"] if st.session_state.historico else None
+
+if resultado and resultado["timestamp"] != ultimo_timestamp:
+    st.toast(f"🎲 Novo número: {resultado['number']}")
+    if get_duzia(resultado["number"]) == st.session_state.duzia_prevista:
+        st.session_state.duzias_acertadas += 1
+        st.toast("✅ Acertou a dúzia!")
+        st.balloons()
+        # Aqui você pode chamar a função tocar_som_moeda() se desejar
+    st.session_state.historico.append(resultado)
+    salvar_resultado_em_arquivo(st.session_state.historico)
+
+# Exibição dos últimos resultados
+st.subheader("🔁 Últimos 10 Números")
+st.write(" ".join(str(h["number"]) for h in st.session_state.historico[-10:]))
+
+if os.path.exists(HISTORICO_PATH):
+    with open(HISTORICO_PATH, "r") as f:
+        conteudo = f.read()
+    st.download_button("📥 Baixar histórico", data=conteudo, file_name="historico_coluna_duzia.json")
+
+# Previsões
+st.subheader("🔮 Previsão de Dúzia")
+st.write(f"🧠 IA: {prev_ia}")
+st.write(f"🔥 Quente: {prev_quente}")
+st.write(f"📈 Tendência: {prev_tendencia}")
+st.write(f"🔁 Alternância: {prev_alternancia}")
+st.write(f"⏳ Dúzia Ausente: {prev_ausente}")
+st.success(f"🎯 Previsão final (votação): Dúzia {mais_votado}")
+
+# Desempenho
+st.subheader("📊 Desempenho")
+total = len(st.session_state.historico) - st.session_state.modelo_duzia.janela
+if total > 0:
+    taxa_d = st.session_state.duzias_acertadas / total * 100
+    st.success(f"✅ Acertos de dúzia: {st.session_state.duzias_acertadas} / {total} ({taxa_d:.2f}%)")
+else:
+    st.info("🔎 Aguardando mais dados para avaliar desempenho.")
+
+# Auto atualização a cada 10 segundos
+st_autorefresh(interval=10000, key="refresh_duzia")
