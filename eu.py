@@ -87,9 +87,7 @@ def estrategia_alternancia(historico, limite=2):
     if duzias.count(duzias[-1]) >= limite:
         return [d for d in [1, 2, 3] if d != duzias[-1]][0]
     return duzias[-1]
-
-
-   def construir_features(self, numeros):
+def construir_features(self, numeros):
     ultimos = numeros[-self.janela:]
     atual = ultimos[-1]
     anteriores = ultimos[:-1]
