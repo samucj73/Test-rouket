@@ -224,7 +224,7 @@ pesos = {
 
 # Entrada manual
 st.subheader("✍️ Inserir Sorteios Manualmente")
-entrada = st.text_area("Digite os números (até 100, separados por espaço):", height=100)
+entrada = st.text_area("Digite os números (até 300, separados por espaço):", height=300)
 if st.button("Adicionar Sorteios"):
     try:
         numeros = [int(n) for n in entrada.split() if n.isdigit() and 0 <= int(n) <= 36]
