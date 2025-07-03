@@ -228,8 +228,8 @@ entrada = st.text_area("Digite os números (até 300, separados por espaço):", 
 if st.button("Adicionar Sorteios"):
     try:
         numeros = [int(n) for n in entrada.split() if n.isdigit() and 0 <= int(n) <= 36]
-        if len(numeros) > 100:
-            st.warning("Limite de 100 números.")
+        if len(numeros) > 300:
+            st.warning("Limite de 300 números.")
         else:
             for n in numeros:
                 st.session_state.historico.append({"number": n, "timestamp": f"manual_{len(st.session_state.historico)}"})
