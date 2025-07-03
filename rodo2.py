@@ -7,6 +7,7 @@ import numpy as np
 from collections import Counter
 from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.preprocessing import LabelEncoder
+from sklearn.utils import resample
 from streamlit_autorefresh import st_autorefresh
 
 HISTORICO_PATH = "historico_coluna_duzia.json"
@@ -44,7 +45,8 @@ def estrategia_tendencia(historico):
         return min(get_duzia(ultimos[-1]) + 1, 3)
     elif dif < 0:
         return max(get_duzia(ultimos[-1]) - 1, 1)
-    return get_duzia(ultimos[-1])
+    else:
+        return get_duzia(ultimos[-1])
 
 def estrategia_alternancia(historico, limite=2):
     numeros = [h["number"] for h in historico if h["number"] > 0]
@@ -65,15 +67,27 @@ def estrategia_duzia_ausente(historico, janela=150):
     menos_frequente = sorted(contagem.items(), key=lambda x: x[1])[0][0]
     return menos_frequente
 
-def estrategia_maior_alternancia(historico):
-    numeros = [h["number"] for h in historico if h["number"] > 0]
-    if len(numeros) < 6:
+def estrategia_maior_alternancia(historico, janela=30):
+    numeros = [h["number"] for h in historico[-janela:] if h["number"] > 0]
+    duzias = [get_duzia(n) for n in numeros]
+    alternancias = [abs(duzias[i] - duzias[i-1]) for i in range(1, len(duzias))]
+    if not alternancias:
         return None
-    duzias = [get_duzia(n) for n in numeros[-6:]]
-    alternancia = [abs(duzias[i] - duzias[i - 1]) for i in range(1, len(duzias))]
-    if sum(alternancia) >= 4:
-        return [d for d in [1, 2, 3] if d != duzias[-1]][0]
-    return duzias[-1]
+    return get_duzia(numeros[-1]) if alternancias[-1] > 0 else None
+
+def balancear_amostras(X, y):
+    X = np.array(X)
+    y = np.array(y)
+    classes = np.unique(y)
+    max_len = max([np.sum(y == c) for c in classes])
+    X_bal, y_bal = [], []
+    for c in classes:
+        X_c = X[y == c]
+        y_c = y[y == c]
+        X_res, y_res = resample(X_c, y_c, replace=True, n_samples=max_len, random_state=42)
+        X_bal.append(X_res)
+        y_bal.append(y_res)
+    return np.concatenate(X_bal), np.concatenate(y_bal)
 
 class ModeloIAHistGB:
     def __init__(self, janela=250, confianca_min=0.4):
@@ -82,6 +96,7 @@ class ModeloIAHistGB:
         self.modelo = None
         self.encoder = LabelEncoder()
         self.treinado = False
+        self.ultima_confianca = 0.0
 
     def construir_features(self, numeros):
         ultimos = numeros[-self.janela:]
@@ -186,7 +201,13 @@ class ModeloIAHistGB:
             return
         X = np.array(X, dtype=np.float32)
         y = self.encoder.fit_transform(np.array(y))
-        self.modelo = HistGradientBoostingClassifier(max_iter=200, max_depth=7, random_state=42)
+        X, y = balancear_amostras(X, y)
+        self.modelo = HistGradientBoostingClassifier(
+            max_iter=300,
+            max_depth=10,
+            learning_rate=0.05,
+            random_state=42
+        )
         self.modelo.fit(X, y)
         self.treinado = True
 
@@ -199,15 +220,16 @@ class ModeloIAHistGB:
         janela = numeros[-(self.janela + 1):]
         entrada = np.array([self.construir_features(janela)], dtype=np.float32)
         proba = self.modelo.predict_proba(entrada)[0]
-        if max(proba) >= self.confianca_min:
+        self.ultima_confianca = max(proba)
+        if self.ultima_confianca >= self.confianca_min:
             return self.encoder.inverse_transform([np.argmax(proba)])[0]
         return None
 
-  # Interface Streamlit
+# ⬇️ Interface Streamlit ⬇️
 st.set_page_config(page_title="IA Roleta Dúzia", layout="centered")
 st.title("🎯 IA Roleta XXXtreme — Previsão de Dúzia")
 
-# Inicialização de estados
+# Estado
 if "historico" not in st.session_state:
     st.session_state.historico = json.load(open(HISTORICO_PATH)) if os.path.exists(HISTORICO_PATH) else []
 if "modelo_duzia" not in st.session_state:
@@ -221,16 +243,32 @@ if "acertos_estrategias" not in st.session_state:
         "ia": 0, "quente": 0, "tendencia": 0, "alternancia": 0, "ausente": 0, "maior_alt": 0
     }
 
-# Configurações via sidebar
+# Sidebar de configuração
 st.sidebar.header("⚙️ Configurações")
 janela_ia = st.sidebar.slider("Tamanho da janela IA", 50, 300, 250, step=10)
 confianca_min = st.sidebar.slider("Confiança mínima da IA", 0.1, 0.9, 0.4, step=0.05)
 
-# Atualiza e treina modelo
+# Entrada manual
+st.subheader("✍️ Inserir Sorteios Manualmente")
+entrada = st.text_area("Digite os números (até 300, separados por espaço):", height=300)
+if st.button("Adicionar Sorteios"):
+    try:
+        numeros = [int(n) for n in entrada.split() if n.isdigit() and 0 <= int(n) <= 36]
+        if len(numeros) > 300:
+            st.warning("Limite de 300 números.")
+        else:
+            for n in numeros:
+                st.session_state.historico.append({"number": n, "timestamp": f"manual_{len(st.session_state.historico)}"})
+            salvar_resultado_em_arquivo(st.session_state.historico)
+            st.success(f"{len(numeros)} números adicionados.")
+    except:
+        st.error("Erro ao processar os números.")
+
+# Treinar IA com novos parâmetros
 st.session_state.modelo_duzia = ModeloIAHistGB(janela=janela_ia, confianca_min=confianca_min)
 st.session_state.modelo_duzia.treinar(st.session_state.historico)
 
-# Obter previsões de cada estratégia
+# Estratégias
 prev_ia = st.session_state.modelo_duzia.prever(st.session_state.historico)
 prev_quente = estrategia_duzia_quente(st.session_state.historico)
 prev_tendencia = estrategia_tendencia(st.session_state.historico)
@@ -238,40 +276,19 @@ prev_alternancia = estrategia_alternancia(st.session_state.historico)
 prev_ausente = estrategia_duzia_ausente(st.session_state.historico)
 prev_maior_alt = estrategia_maior_alternancia(st.session_state.historico)
 
-# Votação com base nas 3 estratégias mais assertivas
-desempenhos = st.session_state.acertos_estrategias
-top_3 = sorted(desempenhos.items(), key=lambda x: x[1], reverse=True)[:3]
-estrategias_top = [nome for nome, _ in top_3]
-
-previsoes = {
-    "ia": prev_ia,
-    "quente": prev_quente,
-    "tendencia": prev_tendencia,
-    "alternancia": prev_alternancia,
-    "ausente": prev_ausente,
-    "maior_alt": prev_maior_alt
-}
-
-votacao_reduzida = Counter()
-for nome in estrategias_top:
-    if previsoes[nome] is not None:
-        votacao_reduzida[previsoes[nome]] += 1
-
-mais_votado = votacao_reduzida.most_common(1)[0][0] if votacao_reduzida else None
+# ✅ Previsão final: apenas três estratégias
+votacao = Counter()
+if prev_quente is not None:
+    votacao[prev_quente] += 1
+if prev_tendencia is not None:
+    votacao[prev_tendencia] += 1
+if prev_alternancia is not None:
+    votacao[prev_alternancia] += 1
+mais_votado = votacao.most_common(1)[0][0] if votacao else None
 st.session_state.duzia_prevista = mais_votado
 
-# Exibir previsões
-st.subheader("🔮 Previsões Individuais")
-st.write(f"🧠 IA: {prev_ia}")
-st.write(f"🔥 Quente: {prev_quente}")
-st.write(f"📈 Tendência: {prev_tendencia}")
-st.write(f"🔁 Alternância: {prev_alternancia}")
-st.write(f"⏳ Dúzia Ausente: {prev_ausente}")
-st.write(f"🎲 Maior Alternância: {prev_maior_alt}")
-
-st.success(f"🎯 Previsão Final: Dúzia {mais_votado} (baseada nas 3 estratégias mais eficazes: {', '.join(estrategias_top)})")
-
-# Atualiza histórico com resultado real da API
+# Captura da API
+resultado = None
 try:
     response = requests.get(API_URL, headers=HEADERS, timeout=10)
     response.raise_for_status()
@@ -283,30 +300,38 @@ try:
     timestamp_atual = game_data.get("startedAt")
     resultado = {"number": numero_atual, "timestamp": timestamp_atual}
 except Exception as e:
-    resultado = None
     logging.error(f"Erro ao buscar resultado: {e}")
 
 ultimo_timestamp = st.session_state.historico[-1]["timestamp"] if st.session_state.historico else None
 
-# Adiciona novo resultado
+# Verificar se novo número chegou
 if resultado and resultado["timestamp"] != ultimo_timestamp:
     st.toast(f"🎲 Novo número: {resultado['number']}")
     duzia_real = get_duzia(resultado["number"])
-    duzia_prev = st.session_state.duzia_prevista
-    if duzia_real == duzia_prev:
+
+    # Acertos por estratégia
+    if duzia_real == prev_ia:
+        st.session_state.acertos_estrategias["ia"] += 1
+    if duzia_real == prev_quente:
+        st.session_state.acertos_estrategias["quente"] += 1
+    if duzia_real == prev_tendencia:
+        st.session_state.acertos_estrategias["tendencia"] += 1
+    if duzia_real == prev_alternancia:
+        st.session_state.acertos_estrategias["alternancia"] += 1
+    if duzia_real == prev_ausente:
+        st.session_state.acertos_estrategias["ausente"] += 1
+    if duzia_real == prev_maior_alt:
+        st.session_state.acertos_estrategias["maior_alt"] += 1
+
+    if duzia_real == st.session_state.duzia_prevista:
         st.session_state.duzias_acertadas += 1
         st.toast("✅ Acertou a dúzia!")
         st.balloons()
 
-    # Atualizar contadores de acerto por estratégia
-    for nome, prev in previsoes.items():
-        if prev == duzia_real:
-            st.session_state.acertos_estrategias[nome] += 1
-
     st.session_state.historico.append(resultado)
     salvar_resultado_em_arquivo(st.session_state.historico)
 
-# Mostrar últimos números e performance
+# Exibição dos últimos números
 st.subheader("🔁 Últimos 10 Números")
 st.write(" ".join(str(h["number"]) for h in st.session_state.historico[-10:]))
 
@@ -316,14 +341,32 @@ if os.path.exists(HISTORICO_PATH):
         conteudo = f.read()
     st.download_button("📥 Baixar histórico", data=conteudo, file_name="historico_coluna_duzia.json")
 
-# Desempenho
-st.subheader("📊 Desempenho")
+# Previsões exibidas (mas só quente/tendência/alternância definem a final)
+st.subheader("🔮 Previsões de Dúzia")
+st.write(f"🧠 IA: {prev_ia} (Confiança: {st.session_state.modelo_duzia.ultima_confianca:.2f})")
+st.write(f"🔥 Quente: {prev_quente}")
+st.write(f"📈 Tendência: {prev_tendencia}")
+st.write(f"🔁 Alternância: {prev_alternancia}")
+st.write(f"⏳ Dúzia Ausente: {prev_ausente}")
+st.write(f"⚡ Alternância Maior: {prev_maior_alt}")
+
+# Previsão final baseada só nas 3 principais
+st.success(f"🎯 Previsão final (votação entre 3 estratégias): Dúzia {mais_votado}")
+
+# Desempenho geral
+st.subheader("📊 Desempenho Geral")
 total = len(st.session_state.historico) - st.session_state.modelo_duzia.janela
 if total > 0:
-    taxa_d = st.session_state.duzias_acertadas / total * 100
-    st.success(f"✅ Acertos de dúzia: {st.session_state.duzias_acertadas} / {total} ({taxa_d:.2f}%)")
+    taxa_geral = st.session_state.duzias_acertadas / total * 100
+    st.success(f"✅ Acertos da Previsão Final: {st.session_state.duzias_acertadas} / {total} ({taxa_geral:.2f}%)")
 else:
     st.info("🔎 Aguardando mais dados para avaliar desempenho.")
 
-# Auto atualização
+# Acertos por estratégia
+st.subheader("📌 Acertos por Estratégia")
+for nome, acertos in st.session_state.acertos_estrategias.items():
+    taxa = acertos / total * 100 if total > 0 else 0
+    st.write(f"✔️ {nome.capitalize()}: {acertos} ({taxa:.1f}%)")
+
+# Atualização automática
 st_autorefresh(interval=10000, key="refresh_duzia")
