@@ -349,7 +349,8 @@ class ModeloAltoBaixoZero:
         )
         self.modelo.fit(X, y)
         self.treinado = True
-        def prever(self, historico):
+
+    def prever(self, historico):
         if not self.treinado:
             return None
         numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
@@ -362,6 +363,7 @@ class ModeloAltoBaixoZero:
         if self.ultima_confianca >= self.confianca_min:
             return self.encoder.inverse_transform([np.argmax(proba)])[0]
         return None
+        
 
 # ⬇️ Interface Streamlit ⬇️
 st.set_page_config(page_title="IA Roleta Dúzia & Baixo/Alto/Zero", layout="centered")
