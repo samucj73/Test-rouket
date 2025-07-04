@@ -348,9 +348,8 @@ class ModeloAltoBaixoZero:
             random_state=42
         )
         self.modelo.fit(X, y)
-                self.treinado = True
-
-    def prever(self, historico):
+        self.treinado = True
+        def prever(self, historico):
         if not self.treinado:
             return None
         numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
