@@ -236,7 +236,7 @@ class ModeloIAHistGB:
             return self.encoder.inverse_transform([np.argmax(proba)])[0]
         return None
 
-  class ModeloAltoBaixoZero:
+class ModeloAltoBaixoZero:
     def __init__(self, janela=250, confianca_min=0.4):
         self.janela = janela
         self.confianca_min = confianca_min
@@ -351,6 +351,7 @@ class ModeloIAHistGB:
             return self.encoder.inverse_transform([np.argmax(proba)])[0]
         return None
 
+  
     # Cabeçalho
 st.set_page_config(page_title="🎲 IA Roleta XXXtreme", layout="centered")
 st.title("🎰 IA Roleta XXXtreme")
