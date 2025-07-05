@@ -63,6 +63,10 @@ def balancear_amostras(X, y):
         X_bal.append(X_res); y_bal.append(y_res)
     return np.concatenate(X_bal), np.concatenate(y_bal)
 
+from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier, VotingClassifier
+from sklearn.calibration import CalibratedClassifierCV
+from sklearn.model_selection import TimeSeriesSplit, RandomizedSearchCV
+
 class ModeloIAHistGB:
     def __init__(self, janela=250, confianca_min=0.4):
         self.janela = janela
@@ -71,34 +75,112 @@ class ModeloIAHistGB:
         self.encoder = LabelEncoder()
         self.treinado = False
         self.ultima_confianca = 0.0
+        self.historico_confs = []
 
     def construir_features(self, numeros):
         ultimos = numeros[-self.janela:]
         atual = ultimos[-1]
         anteriores = ultimos[:-1]
-        def safe_get_duzia(n): return -1 if n == 0 else get_duzia(n)
+
+        def safe_get_duzia(n):
+            return -1 if n == 0 else get_duzia(n)
+
         grupo = safe_get_duzia(atual)
         freq_20 = Counter(safe_get_duzia(n) for n in numeros[-20:])
         freq_50 = Counter(safe_get_duzia(n) for n in numeros[-50:]) if len(numeros) >= 150 else freq_20
         total_50 = sum(freq_50.values()) or 1
+
         lag1 = safe_get_duzia(anteriores[-1]) if len(anteriores) >= 1 else -1
+        lag2 = safe_get_duzia(anteriores[-2]) if len(anteriores) >= 2 else -1
+        lag3 = safe_get_duzia(anteriores[-3]) if len(anteriores) >= 3 else -1
+
         val1 = anteriores[-1] if len(anteriores) >= 1 else 0
+        val2 = anteriores[-2] if len(anteriores) >= 2 else 0
+        val3 = anteriores[-3] if len(anteriores) >= 3 else 0
+
         tendencia = 0
         if len(anteriores) >= 3:
             diffs = np.diff(anteriores[-3:])
             tendencia = int(np.mean(diffs) > 0) - int(np.mean(diffs) < 0)
+
         zeros_50 = numeros[-50:].count(0)
         porc_zeros = zeros_50 / 50
+
         densidade_20 = freq_20.get(grupo, 0)
         densidade_50 = freq_50.get(grupo, 0)
         rel_freq_grupo = densidade_50 / total_50
+        repete_duzia = int(grupo == safe_get_duzia(anteriores[-1])) if anteriores else 0
+
         dist_ultimo_zero = next((i for i, n in enumerate(reversed(numeros)) if n == 0), len(numeros))
+        mudanca_duzia = int(safe_get_duzia(atual) != safe_get_duzia(val1)) if len(anteriores) >= 1 else 0
+
+        repeticoes_duzia = 0
+        for n in reversed(anteriores):
+            if safe_get_duzia(n) == grupo:
+                repeticoes_duzia += 1
+            else:
+                break
+
+        ultimos_10 = [n for n in numeros[-10:] if n > 0]
+        quente_10 = Counter(safe_get_duzia(n) for n in ultimos_10).most_common(1)
+        duzia_quente_10 = quente_10[0][0] if quente_10 else -1
+
+        repetiu_numero = int(atual == val1) if len(anteriores) >= 1 else 0
+        vizinho = int(abs(atual - val1) <= 2) if len(anteriores) >= 1 else 0
+
+        if atual in range(1, 10): quadrante_roleta = 0
+        elif atual in range(10, 19): quadrante_roleta = 1
+        elif atual in range(19, 28): quadrante_roleta = 2
+        elif atual in range(28, 37): quadrante_roleta = 3
+        else: quadrante_roleta = -1
+
+        top5_freq = [n for n, _ in Counter(numeros).most_common(5)]
+        numero_frequente = int(atual in top5_freq)
+
+        grupos_seis = [range(1,7), range(7,13), range(13,19), range(19,25), range(25,31), range(31,37)]
+        densidade_por_faixa = [sum(1 for n in numeros[-20:] if n in faixa) for faixa in grupos_seis]
+
+        reversao_tendencia = 0
+        if len(anteriores) >= 4:
+            diffs1 = np.mean(np.diff(anteriores[-4:-1]))
+            diffs2 = atual - val1
+            reversao_tendencia = int((diffs1 > 0 and diffs2 < 0) or (diffs1 < 0 and diffs2 > 0))
+
+        coluna_atual = get_duzia(atual)
+        coluna_anterior = get_duzia(val1) if val1 else -1
+        subida_coluna = int(coluna_atual == coluna_anterior + 1) if coluna_anterior > 0 else 0
+        descida_coluna = int(coluna_atual == coluna_anterior - 1) if coluna_anterior > 0 else 0
+        repeticao_ou_vizinho = int((atual == val1) or (abs(atual - val1) == 1)) if val1 else 0
+
+        # Novas features humanas
+        par = int(atual % 2 == 0)
+        vermelhos = {1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36}
+        cor = int(atual in vermelhos)
+
         return [
-            atual % 2, atual % 3,
-            abs(atual - val1), int(atual == val1),
+            atual % 2, atual % 3, int(str(atual)[-1]),
+            abs(atual - val1) if anteriores else 0,
+            int(atual == val1) if anteriores else 0,
             1 if atual > val1 else -1 if atual < val1 else 0,
-            grupo, densidade_20, densidade_50, rel_freq_grupo,
-            tendencia, lag1, val1, porc_zeros, dist_ultimo_zero
+            sum(1 for x in anteriores[-3:] if grupo == safe_get_duzia(x)),
+            Counter(numeros[-30:]).get(atual, 0),
+            int(atual in [n for n, _ in Counter(numeros[-30:]).most_common(5)]),
+            int(np.mean(anteriores) < atual),
+            int(atual == 0),
+            grupo,
+            densidade_20, densidade_50, rel_freq_grupo,
+            repete_duzia, tendencia, lag1, lag2, lag3,
+            val1, val2, val3, porc_zeros,
+            dist_ultimo_zero, mudanca_duzia, repeticoes_duzia,
+            duzia_quente_10, repetiu_numero, vizinho,
+            quadrante_roleta, numero_frequente,
+            *densidade_por_faixa,
+            reversao_tendencia,
+            subida_coluna,
+            descida_coluna,
+            repeticao_ou_vizinho,
+            par,
+            cor
         ]
 
     def treinar(self, historico):
@@ -110,82 +192,240 @@ class ModeloIAHistGB:
             if target is not None:
                 X.append(self.construir_features(janela))
                 y.append(target)
-        if not X: return
+        if not X:
+            return
         X = np.array(X, dtype=np.float32)
         y = self.encoder.fit_transform(np.array(y))
         X, y = balancear_amostras(X, y)
-        self.modelo = HistGradientBoostingClassifier(max_iter=300, max_depth=10, learning_rate=0.05, random_state=42)
-        self.modelo.fit(X, y)
+
+        gb = HistGradientBoostingClassifier(
+            early_stopping=True,
+            validation_fraction=0.2,
+            n_iter_no_change=10,
+            random_state=42
+        )
+        calibrated_gb = CalibratedClassifierCV(gb, cv=3)
+        rf = RandomForestClassifier(n_estimators=100, random_state=42)
+
+        ensemble = VotingClassifier(
+            estimators=[('gb', calibrated_gb), ('rf', rf)],
+            voting='soft'
+        )
+
+        tscv = TimeSeriesSplit(n_splits=5)
+        param_dist = {
+            'gb__base_estimator__max_depth': [5, 10, 15],
+            'gb__base_estimator__learning_rate': [0.01, 0.05, 0.1],
+            'rf__n_estimators': [50, 100, 200]
+        }
+
+        search = RandomizedSearchCV(
+            ensemble,
+            param_distributions=param_dist,
+            n_iter=10,
+            cv=tscv,
+            scoring='accuracy',
+            random_state=42,
+            n_jobs=-1
+        )
+        search.fit(X, y)
+
+        self.modelo = search.best_estimator_
         self.treinado = True
 
+    def ajustar_threshold(self):
+        if len(self.historico_confs) < 30:
+            return self.confianca_min
+        return np.percentile(self.historico_confs, 70)
+
     def prever(self, historico):
-        if not self.treinado: return None
+        if not self.treinado:
+            return None
         numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
-        if len(numeros) < self.janela + 1: return None
+        if len(numeros) < self.janela + 1:
+            return None
         janela = numeros[-(self.janela + 1):]
         entrada = np.array([self.construir_features(janela)], dtype=np.float32)
         proba = self.modelo.predict_proba(entrada)[0]
         self.ultima_confianca = max(proba)
-        if self.ultima_confianca >= self.confianca_min:
+        self.historico_confs.append(self.ultima_confianca)
+        if self.ultima_confianca >= self.ajustar_threshold():
             return self.encoder.inverse_transform([np.argmax(proba)])[0]
         return None
 
+from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier, VotingClassifier
+from sklearn.calibration import CalibratedClassifierCV
+from sklearn.model_selection import TimeSeriesSplit, RandomizedSearchCV
+
 class ModeloAltoBaixoZero:
-    def __init__(self, janela=100, confianca_min=0.4):
+    def __init__(self, janela=250, confianca_min=0.4):
         self.janela = janela
         self.confianca_min = confianca_min
         self.modelo = None
         self.encoder = LabelEncoder()
         self.treinado = False
         self.ultima_confianca = 0.0
+        self.historico_confs = []
 
-    def _mapear_target(self, n):
-        if n == 0: return "zero"
-        elif 1 <= n <= 18: return "baixo"
-        elif 19 <= n <= 36: return "alto"
-        return None
+    def construir_features(self, numeros):
+        ultimos = numeros[-self.janela:]
+        atual = ultimos[-1]
+        anteriores = ultimos[:-1]
 
-    def _features(self, janela):
-        atual = janela[-1]
-        anteriores = janela[:-1]
-        freq = Counter(janela)
+        def safe_get_baz(n):
+            return -1 if n == 0 else get_baixo_alto_zero(n)
+
+        grupo = safe_get_baz(atual)
+        freq_20 = Counter(safe_get_baz(n) for n in numeros[-20:])
+        freq_50 = Counter(safe_get_baz(n) for n in numeros[-50:]) if len(numeros) >= 150 else freq_20
+        total_50 = sum(freq_50.values()) or 1
+
+        lag1 = safe_get_baz(anteriores[-1]) if len(anteriores) >= 1 else -1
+        lag2 = safe_get_baz(anteriores[-2]) if len(anteriores) >= 2 else -1
+        lag3 = safe_get_baz(anteriores[-3]) if len(anteriores) >= 3 else -1
+
+        val1 = anteriores[-1] if len(anteriores) >= 1 else 0
+        val2 = anteriores[-2] if len(anteriores) >= 2 else 0
+        val3 = anteriores[-3] if len(anteriores) >= 3 else 0
+
+        tendencia = 0
+        if len(anteriores) >= 3:
+            diffs = np.diff(anteriores[-3:])
+            tendencia = int(np.mean(diffs) > 0) - int(np.mean(diffs) < 0)
+
+        zeros_50 = numeros[-50:].count(0)
+        porc_zeros = zeros_50 / 50
+
+        densidade_20 = freq_20.get(grupo, 0)
+        densidade_50 = freq_50.get(grupo, 0)
+        rel_freq_grupo = densidade_50 / total_50
+        repete_baz = int(grupo == safe_get_baz(anteriores[-1])) if anteriores else 0
+
+        dist_ultimo_zero = next((i for i, n in enumerate(reversed(numeros)) if n == 0), len(numeros))
+        mudanca_baz = int(safe_get_baz(atual) != safe_get_baz(val1)) if len(anteriores) >= 1 else 0
+
+        repeticoes_baz = 0
+        for n in reversed(anteriores):
+            if safe_get_baz(n) == grupo:
+                repeticoes_baz += 1
+            else:
+                break
+
+        ultimos_10 = [n for n in numeros[-10:] if n > 0]
+        quente_10 = Counter(safe_get_baz(n) for n in ultimos_10).most_common(1)
+        baz_quente_10 = quente_10[0][0] if quente_10 else -1
+
+        repetiu_numero = int(atual == val1) if len(anteriores) >= 1 else 0
+        vizinho = int(abs(atual - val1) <= 2) if len(anteriores) >= 1 else 0
+
+        reversao_tendencia = 0
+        if len(anteriores) >= 4:
+            diffs1 = np.mean(np.diff(anteriores[-4:-1]))
+            diffs2 = atual - val1
+            reversao_tendencia = int((diffs1 > 0 and diffs2 < 0) or (diffs1 < 0 and diffs2 > 0))
+
+        coluna_atual = get_duzia(atual)
+        coluna_anterior = get_duzia(val1) if val1 else -1
+        subida_coluna = int(coluna_atual == coluna_anterior + 1) if coluna_anterior > 0 else 0
+        descida_coluna = int(coluna_atual == coluna_anterior - 1) if coluna_anterior > 0 else 0
+        repeticao_ou_vizinho = int((atual == val1) or (abs(atual - val1) == 1)) if val1 else 0
+
+        par = int(atual % 2 == 0)
+        vermelhos = {1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36}
+        cor = int(atual in vermelhos)
+
         return [
-            atual % 2,
-            int(atual in [n for n, _ in freq.most_common(5)]),
-            sum(1 for x in anteriores[-5:] if x <= 18) / 5,
-            sum(1 for x in anteriores[-5:] if x > 18) / 5,
-            anteriores[-1] if len(anteriores) >= 1 else 0
+            atual % 2, atual % 3, int(str(atual)[-1]),
+            abs(atual - val1) if anteriores else 0,
+            int(atual == val1) if anteriores else 0,
+            1 if atual > val1 else -1 if atual < val1 else 0,
+            sum(1 for x in anteriores[-3:] if grupo == safe_get_baz(x)),
+            Counter(numeros[-30:]).get(atual, 0),
+            int(atual in [n for n, _ in Counter(numeros[-30:]).most_common(5)]),
+            int(np.mean(anteriores) < atual),
+            int(atual == 0),
+            grupo,
+            densidade_20, densidade_50, rel_freq_grupo,
+            repete_baz, tendencia, lag1, lag2, lag3,
+            val1, val2, val3, porc_zeros,
+            dist_ultimo_zero, mudanca_baz, repeticoes_baz,
+            baz_quente_10, repetiu_numero, vizinho,
+            reversao_tendencia,
+            subida_coluna,
+            descida_coluna,
+            repeticao_ou_vizinho,
+            par,
+            cor
         ]
 
     def treinar(self, historico):
         numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
-        if len(numeros) < self.janela + 10: return
         X, y = [], []
         for i in range(self.janela, len(numeros) - 1):
-            jan = numeros[i - self.janela:i + 1]
-            target = self._mapear_target(numeros[i])
-            if target:
-                X.append(self._features(jan))
+            janela = numeros[i - self.janela:i + 1]
+            target = get_baixo_alto_zero(numeros[i])
+            if target is not None:
+                X.append(self.construir_features(janela))
                 y.append(target)
-        if not X: return
+        if not X:
+            return
         X = np.array(X, dtype=np.float32)
         y = self.encoder.fit_transform(np.array(y))
-        X, y = resample(X, y, random_state=42)
-        self.modelo = HistGradientBoostingClassifier(max_iter=250, learning_rate=0.07, random_state=42)
-        self.modelo.fit(X, y)
+        X, y = balancear_amostras(X, y)
+
+        gb = HistGradientBoostingClassifier(early_stopping=True, validation_fraction=0.2, n_iter_no_change=10, random_state=42)
+        calibrated_gb = CalibratedClassifierCV(gb, cv=3)
+        rf = RandomForestClassifier(n_estimators=100, random_state=42)
+
+        ensemble = VotingClassifier(
+            estimators=[('gb', calibrated_gb), ('rf', rf)],
+            voting='soft'
+        )
+
+        tscv = TimeSeriesSplit(n_splits=5)
+        param_dist = {
+            'gb__base_estimator__max_depth': [5, 10, 15],
+            'gb__base_estimator__learning_rate': [0.01, 0.05, 0.1],
+            'rf__n_estimators': [50, 100, 200]
+        }
+
+        search = RandomizedSearchCV(
+            ensemble,
+            param_distributions=param_dist,
+            n_iter=10,
+            cv=tscv,
+            scoring='accuracy',
+            random_state=42,
+            n_jobs=-1
+        )
+        search.fit(X, y)
+
+        self.modelo = search.best_estimator_
         self.treinado = True
 
+    def ajustar_threshold(self):
+        if len(self.historico_confs) < 30:
+            return self.confianca_min
+        return np.percentile(self.historico_confs, 70)
+
     def prever(self, historico):
-        if not self.treinado: return None
+        if not self.treinado:
+            return None
         numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
-        if len(numeros) < self.janela + 1: return None
+        if len(numeros) < self.janela + 1:
+            return None
         janela = numeros[-(self.janela + 1):]
-        entrada = np.array([self._features(janela)], dtype=np.float32)
+        entrada = np.array([self.construir_features(janela)], dtype=np.float32)
         proba = self.modelo.predict_proba(entrada)[0]
         self.ultima_confianca = max(proba)
-        if self.ultima_confianca >= self.confianca_min:
+        self.historico_confs.append(self.ultima_confianca)
+        if self.ultima_confianca >= self.ajustar_threshold():
             return self.encoder.inverse_transform([np.argmax(proba)])[0]
         return None
+
+
+
+
 
   # 🔧 Interface Streamlit
 st.set_page_config(page_title="IA Roleta", layout="centered")
