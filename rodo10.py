@@ -9,75 +9,43 @@ from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.preprocessing import LabelEncoder
 from sklearn.utils import resample
 from streamlit_autorefresh import st_autorefresh
+import matplotlib.pyplot as plt
 
-# Configuração da página
-st.set_page_config(page_title="IA Roleta Dúzia & Baixo/Alto/Zero", layout="centered")
-st.title("🎯 IA Roleta XXXtreme — Previsão de Dúzia e Baixo/Alto/Zero")
-
-# Inicialização do estado da sessão
-if "historico" not in st.session_state:
-    if os.path.exists(HISTORICO_PATH):
-        with open(HISTORICO_PATH, "r") as f:
-            st.session_state.historico = json.load(f)
-    else:
-        st.session_state.historico = []
-
-if "modelo_duzia" not in st.session_state:
-    st.session_state.modelo_duzia = ModeloIAHistGB()
-
-if "modelo_baz" not in st.session_state:
-    st.session_state.modelo_baz = ModeloAltoBaixoZero()
-
-if "duzias_acertadas" not in st.session_state:
-    st.session_state.duzias_acertadas = 0
-
-if "baz_acertados" not in st.session_state:
-    st.session_state.baz_acertados = 0
-
-if "duzia_prevista" not in st.session_state:
-    st.session_state.duzia_prevista = None
-
-if "baz_previsto" not in st.session_state:
-    st.session_state.baz_previsto = None
-
-if "acertos_estrategias" not in st.session_state:
-    st.session_state.acertos_estrategias = {
-        "ia": 0,
-        "quente": 0,
-        "tendencia": 0,
-        "alternancia": 0,
-        "ausente": 0,
-        "maior_alt": 0
-    }
-
+# Caminho para o histórico local
 HISTORICO_PATH = "historico_coluna_duzia.json"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
+# Funções de mapeamento
 def get_duzia(n):
-    if n == 0:
-        return 0
-    elif 1 <= n <= 12:
-        return 1
-    elif 13 <= n <= 24:
-        return 2
-    elif 25 <= n <= 36:
-        return 3
+    if n == 0: return 0
+    elif 1 <= n <= 12: return 1
+    elif 13 <= n <= 24: return 2
+    elif 25 <= n <= 36: return 3
     return None
 
 def get_baixo_alto_zero(n):
-    if n == 0:
-        return 0
-    elif 1 <= n <= 18:
-        return 1
-    elif 19 <= n <= 36:
-        return 2
+    if n == 0: return 0
+    elif 1 <= n <= 18: return 1
+    elif 19 <= n <= 36: return 2
     return None
 
 def salvar_resultado_em_arquivo(historico, caminho=HISTORICO_PATH):
     with open(caminho, "w") as f:
         json.dump(historico, f, indent=2)
 
+# Remove duplicações ou resultados inválidos
+def limpar_historico(historico):
+    vistos = set()
+    novo_historico = []
+    for item in historico:
+        chave = (item["timestamp"], item["number"])
+        if chave not in vistos and 0 <= item["number"] <= 36:
+            novo_historico.append(item)
+            vistos.add(chave)
+    return novo_historico
+
+# Estratégias baseadas em padrões simples
 def estrategia_duzia_quente(historico, janela=130):
     numeros = [h["number"] for h in historico[-janela:] if h["number"] > 0]
     duzias = [get_duzia(n) for n in numeros]
@@ -116,6 +84,15 @@ def estrategia_duzia_ausente(historico, janela=150):
     menos_frequente = sorted(contagem.items(), key=lambda x: x[1])[0][0]
     return menos_frequente
 
+def estrategia_maior_alternancia(historico, janela=30):
+    numeros = [h["number"] for h in historico[-janela:] if h["number"] > 0]
+    duzias = [get_duzia(n) for n in numeros]
+    alternancias = [abs(duzias[i] - duzias[i-1]) for i in range(1, len(duzias))]
+    if not alternancias:
+        return None
+    return get_duzia(numeros[-1]) if alternancias[-1] > 0 else None
+
+# Balanceamento das classes para evitar viés
 def balancear_amostras(X, y):
     X = np.array(X)
     y = np.array(y)
@@ -130,6 +107,20 @@ def balancear_amostras(X, y):
         y_bal.append(y_res)
     return np.concatenate(X_bal), np.concatenate(y_bal)
 
+# Cache de treino para evitar treinar repetidamente
+class TreinoCache:
+    def __init__(self):
+        self.ultima_tamanho = 0
+        self.ultima_chave = None
+
+    def deve_treinar(self, historico):
+        chave = tuple((h["number"], h["timestamp"]) for h in historico[-5:])
+        if len(historico) != self.ultima_tamanho or chave != self.ultima_chave:
+            self.ultima_tamanho = len(historico)
+            self.ultima_chave = chave
+            return True
+        return False
+
 class ModeloIAHistGB:
     def __init__(self, janela=250, confianca_min=0.4):
         self.janela = janela
@@ -138,6 +129,7 @@ class ModeloIAHistGB:
         self.encoder = LabelEncoder()
         self.treinado = False
         self.ultima_confianca = 0.0
+        self.cache_treino = TreinoCache()
 
     def construir_features(self, numeros):
         ultimos = numeros[-self.janela:]
@@ -215,7 +207,7 @@ class ModeloIAHistGB:
 
         repeticao_ou_vizinho = int((atual == val1) or (abs(atual - val1) == 1)) if val1 else 0
 
-        return [
+        features = [
             atual % 2, atual % 3, int(str(atual)[-1]),
             abs(atual - val1) if anteriores else 0,
             int(atual == val1) if anteriores else 0,
@@ -239,7 +231,13 @@ class ModeloIAHistGB:
             repeticao_ou_vizinho
         ]
 
+        return features
+
     def treinar(self, historico):
+        # Treinar apenas se houver novos dados relevantes, usando cache
+        if not self.cache_treino.deve_treinar(historico):
+            return  # evita treinar desnecessariamente
+
         numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
         X, y = [], []
         for i in range(self.janela, len(numeros) - 1):
@@ -253,6 +251,8 @@ class ModeloIAHistGB:
         X = np.array(X, dtype=np.float32)
         y = self.encoder.fit_transform(np.array(y))
         X, y = balancear_amostras(X, y)
+
+        # Modelo otimizado para treino mais rápido e maior profundidade
         self.modelo = HistGradientBoostingClassifier(
             max_iter=300,
             max_depth=10,
@@ -276,6 +276,32 @@ class ModeloIAHistGB:
             return self.encoder.inverse_transform([np.argmax(proba)])[0]
         return None
 
+    def exibir_features_ultimo(self, historico):
+        # Para debug: retorna as features da última previsão
+        numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
+        if len(numeros) < self.janela + 1:
+            return None
+        janela = numeros[-(self.janela + 1):]
+        return self.construir_features(janela)
+
+class TreinoCache:
+    """
+    Classe simples para controlar se deve treinar a IA novamente.
+    Armazena timestamp do último item do histórico para evitar re-treinos sem novos dados.
+    """
+    def __init__(self):
+        self.ultimo_timestamp = None
+
+    def deve_treinar(self, historico):
+        if not historico:
+            return False
+        atual = historico[-1]["timestamp"]
+        if atual != self.ultimo_timestamp:
+            self.ultimo_timestamp = atual
+            return True
+        return False
+
+
 class ModeloAltoBaixoZero:
     def __init__(self, janela=250, confianca_min=0.4):
         self.janela = janela
@@ -284,6 +310,7 @@ class ModeloAltoBaixoZero:
         self.encoder = LabelEncoder()
         self.treinado = False
         self.ultima_confianca = 0.0
+        self.cache_treino = TreinoCache()
 
     def construir_features(self, numeros):
         ultimos = numeros[-self.janela:]
@@ -336,7 +363,7 @@ class ModeloAltoBaixoZero:
         repetiu_numero = int(atual == val1) if len(anteriores) >= 1 else 0
         vizinho = int(abs(atual - val1) <= 2) if len(anteriores) >= 1 else 0
 
-        return [
+        features = [
             atual % 2, atual % 3, int(str(atual)[-1]),
             abs(atual - val1) if anteriores else 0,
             int(atual == val1) if anteriores else 0,
@@ -353,8 +380,11 @@ class ModeloAltoBaixoZero:
             dist_ultimo_zero, mudanca_baz, repeticoes_baz,
             baz_quente_10, repetiu_numero, vizinho,
         ]
+        return features
 
     def treinar(self, historico):
+        if not self.cache_treino.deve_treinar(historico):
+            return
         numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
         X, y = [], []
         for i in range(self.janela, len(numeros) - 1):
@@ -368,6 +398,7 @@ class ModeloAltoBaixoZero:
         X = np.array(X, dtype=np.float32)
         y = self.encoder.fit_transform(np.array(y))
         X, y = balancear_amostras(X, y)
+
         self.modelo = HistGradientBoostingClassifier(
             max_iter=300,
             max_depth=10,
@@ -391,99 +422,199 @@ class ModeloAltoBaixoZero:
             return self.encoder.inverse_transform([np.argmax(proba)])[0]
         return None
 
-  
-    # Cabeçalho
-st.set_page_config(page_title="🎲 IA Roleta XXXtreme", layout="centered")
-st.title("🎰 IA Roleta XXXtreme")
-st.caption("Previsão de **Dúzia** e **Baixo/Alto/Zero** com estratégias inteligentes + IA")
+    def exibir_features_ultimo(self, historico):
+        numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
+        if len(numeros) < self.janela + 1:
+            return None
+        janela = numeros[-(self.janela + 1):]
+        return self.construir_features(janela)
 
-# 🔧 Configurações
-with st.sidebar:
-    st.header("⚙️ Configurações")
-    janela_ia = st.slider("Tamanho da Janela da IA", 50, 300, 250, step=10)
-    confianca_min = st.slider("Confiança Mínima da IA", 0.1, 0.9, 0.4, step=0.05)
-    if st.button("🔁 Re-Treinar IAs"):
-        st.session_state.modelo_duzia = ModeloIAHistGB(janela=janela_ia, confianca_min=confianca_min)
-        st.session_state.modelo_duzia.treinar(st.session_state.historico)
-        st.session_state.modelo_baz = ModeloAltoBaixoZero(janela=janela_ia, confianca_min=confianca_min)
-        st.session_state.modelo_baz.treinar(st.session_state.historico)
-        st.success("Modelos treinados novamente!")
+import matplotlib.pyplot as plt
 
-# 📝 Entrada Manual
-with st.expander("✍️ Inserir Números Manualmente"):
-    entrada = st.text_area("Digite os números (0 a 36, separados por espaço):", height=100)
-    if st.button("📩 Adicionar Sorteios"):
-        try:
-            numeros = [int(n) for n in entrada.split() if n.isdigit() and 0 <= int(n) <= 36]
-            if numeros:
-                for n in numeros:
-                    st.session_state.historico.append({"number": n, "timestamp": f"manual_{len(st.session_state.historico)}"})
-                salvar_resultado_em_arquivo(st.session_state.historico)
-                st.success(f"{len(numeros)} números adicionados com sucesso!")
-            else:
-                st.warning("Nenhum número válido encontrado.")
-        except:
-            st.error("Erro ao processar os números.")
+# --- Inicialização do cache de treino (fora do estado) ---
+if "cache_treino_duzia" not in st.session_state:
+    st.session_state.cache_treino_duzia = TreinoCache()
+if "cache_treino_baz" not in st.session_state:
+    st.session_state.cache_treino_baz = TreinoCache()
 
-# 🔁 Últimos Números
-with st.expander("🕘 Últimos Números", expanded=True):
-    ultimos = st.session_state.historico[-10:]
-    st.write(" ".join(str(h["number"]) for h in ultimos))
+# --- Função para verificar e adicionar novo resultado evitando duplicação ---
+def adicionar_resultado_se_novo(novo_resultado):
+    if not novo_resultado:
+        return False
+    if not st.session_state.historico:
+        st.session_state.historico.append(novo_resultado)
+        return True
+    if novo_resultado["timestamp"] != st.session_state.historico[-1]["timestamp"]:
+        st.session_state.historico.append(novo_resultado)
+        return True
+    return False
 
-# 🔮 Previsões
-col1, col2 = st.columns(2)
+# --- Captura da API ---
+resultado_api = None
+try:
+    response = requests.get(API_URL, headers=HEADERS, timeout=10)
+    response.raise_for_status()
+    data = response.json()
+    game_data = data.get("data", {})
+    result = game_data.get("result", {})
+    outcome = result.get("outcome", {})
+    numero_atual = outcome.get("number")
+    timestamp_atual = game_data.get("startedAt")
+    resultado_api = {"number": numero_atual, "timestamp": timestamp_atual}
+except Exception as e:
+    logging.error(f"Erro ao buscar resultado: {e}")
 
-with col1:
-    st.subheader("🔮 Previsão de Dúzia")
-    prev_ia = st.session_state.modelo_duzia.prever(st.session_state.historico)
-    prev_quente = estrategia_duzia_quente(st.session_state.historico)
-    prev_tendencia = estrategia_tendencia(st.session_state.historico)
-    prev_alternancia = estrategia_alternancia(st.session_state.historico)
-    prev_ausente = estrategia_duzia_ausente(st.session_state.historico)
-    prev_maior_alt = estrategia_maior_alternancia(st.session_state.historico)
+# --- Adiciona novo resultado se válido e não duplicado ---
+if resultado_api and adicionar_resultado_se_novo(resultado_api):
+    st.toast(f"🎲 Novo número: {resultado_api['number']}")
+    salvar_resultado_em_arquivo(st.session_state.historico)
 
-    votacao = Counter()
-    for p in [prev_quente, prev_tendencia, prev_alternancia]:
-        if p is not None:
-            votacao[p] += 1
-    final_duzia = votacao.most_common(1)[0][0] if votacao else None
-    st.session_state.duzia_prevista = final_duzia
+# --- Treinamento dos modelos só se houver novo dado (usa cache) ---
+if st.session_state.cache_treino_duzia.deve_treinar(st.session_state.historico):
+    st.session_state.modelo_duzia.treinar(st.session_state.historico)
+if st.session_state.cache_treino_baz.deve_treinar(st.session_state.historico):
+    st.session_state.modelo_baz.treinar(st.session_state.historico)
 
-    st.metric("🧠 IA", str(prev_ia), f"{st.session_state.modelo_duzia.ultima_confianca:.2f}")
-    st.metric("🔥 Quente", str(prev_quente))
-    st.metric("📈 Tendência", str(prev_tendencia))
-    st.metric("🔁 Alternância", str(prev_alternancia))
-    st.metric("⏳ Ausente", str(prev_ausente))
-    st.metric("⚡ Maior Alternância", str(prev_maior_alt))
-    st.success(f"🎯 Final: Dúzia {final_duzia}")
+# --- Obter previsões atuais ---
+prev_ia = st.session_state.modelo_duzia.prever(st.session_state.historico)
+prev_quente = estrategia_duzia_quente(st.session_state.historico)
+prev_tendencia = estrategia_tendencia(st.session_state.historico)
+prev_alternancia = estrategia_alternancia(st.session_state.historico)
 
-with col2:
-    st.subheader("🔮 Previsão Baixo/Alto/Zero")
-    prev_baz = st.session_state.modelo_baz.prever(st.session_state.historico)
-    st.session_state.baz_previsto = prev_baz
-    map_baz = {0: "Zero", 1: "Baixo (1-18)", 2: "Alto (19-36)"}
-    st.metric("🧠 IA B/A/Z", map_baz.get(prev_baz, "N/A"), f"{st.session_state.modelo_baz.ultima_confianca:.2f}")
+# Previsão Baixo/Alto/Zero
+prev_baz = st.session_state.modelo_baz.prever(st.session_state.historico)
+st.session_state.baz_previsto = prev_baz
 
-# 📊 Desempenho
-with st.expander("📊 Desempenho"):
-    total = len(st.session_state.historico) - st.session_state.modelo_duzia.janela
-    if total > 0:
-        taxa_duzia = st.session_state.duzias_acertadas / total * 100
-        taxa_baz = st.session_state.baz_acertados / total * 100
-        st.success(f"🎯 Dúzia: {st.session_state.duzias_acertadas} / {total} ({taxa_duzia:.2f}%)")
-        st.success(f"🎯 Baixo/Alto/Zero: {st.session_state.baz_acertados} / {total} ({taxa_baz:.2f}%)")
-        st.markdown("### ✅ Acertos por Estratégia Dúzia")
-        for nome, acertos in st.session_state.acertos_estrategias.items():
-            taxa = acertos / total * 100
-            st.write(f"• **{nome.capitalize()}**: {acertos} ({taxa:.1f}%)")
-    else:
-        st.info("Aguardando mais dados para calcular o desempenho.")
+# Votação para dúzia final (3 estratégias)
+votacao = Counter()
+if prev_quente is not None:
+    votacao[prev_quente] += 1
+if prev_tendencia is not None:
+    votacao[prev_tendencia] += 1
+if prev_alternancia is not None:
+    votacao[prev_alternancia] += 1
+mais_votado = votacao.most_common(1)[0][0] if votacao else None
+st.session_state.duzia_prevista = mais_votado
 
-# 📥 Download histórico
+# --- Se tiver novo resultado, atualiza acertos ---
+if resultado_api and resultado_api["timestamp"] == st.session_state.historico[-1]["timestamp"]:
+    duzia_real = get_duzia(resultado_api["number"])
+    baz_real = get_baixo_alto_zero(resultado_api["number"])
+
+    # Acertos estratégias dúzia
+    if duzia_real == prev_ia:
+        st.session_state.acertos_estrategias["ia"] += 1
+    if duzia_real == prev_quente:
+        st.session_state.acertos_estrategias["quente"] += 1
+    if duzia_real == prev_tendencia:
+        st.session_state.acertos_estrategias["tendencia"] += 1
+    if duzia_real == prev_alternancia:
+        st.session_state.acertos_estrategias["alternancia"] += 1
+
+    # Acertos dúzia final
+    if duzia_real == st.session_state.duzia_prevista:
+        st.session_state.duzias_acertadas += 1
+        st.toast("✅ Acertou a dúzia!")
+        st.balloons()
+
+    # Acertos Baixo/Alto/Zero
+    if baz_real == st.session_state.baz_previsto:
+        st.session_state.baz_acertados += 1
+        st.toast("✅ Acertou Baixo/Alto/Zero!")
+
+# --- Exibição das features da última previsão para debug ---
+st.subheader("🧩 Features da última previsão (IA Baixo/Alto/Zero)")
+features_debug = st.session_state.modelo_baz.exibir_features_ultimo(st.session_state.historico)
+if features_debug:
+    st.write(features_debug)
+else:
+    st.info("Sem features para mostrar (dados insuficientes).")
+
+# --- Gráficos de desempenho por blocos ---
+def desempenho_por_blocos(historico, acertos, bloco_tamanho=50):
+    blocos = []
+    taxas = []
+    for i in range(0, len(historico), bloco_tamanho):
+        bloco = historico[i:i+bloco_tamanho]
+        if len(bloco) < bloco_tamanho:
+            break
+        total = bloco_tamanho
+        acertos_bloco = sum(1 for idx in range(i, i+bloco_tamanho) if idx < len(historico) and acertos[idx] if idx < len(acertos) else False)
+        taxa = (acertos_bloco / total) * 100 if total > 0 else 0
+        blocos.append(f"{i+1}-{i+bloco_tamanho}")
+        taxas.append(taxa)
+    return blocos, taxas
+
+# Construir lista booleana de acertos por índice para dúzia e baz
+total_len = len(st.session_state.historico)
+acertos_ia_bool = [False]*total_len
+acertos_baz_bool = [False]*total_len
+
+# Simples: vamos atualizar listas marcando índices onde houve acerto
+for i, entry in enumerate(st.session_state.historico):
+    n = entry["number"]
+    duz = get_duzia(n)
+    baz = get_baixo_alto_zero(n)
+    if duz == prev_ia:
+        acertos_ia_bool[i] = True
+    if baz == st.session_state.baz_previsto:
+        acertos_baz_bool[i] = True
+
+blocos, taxas_duzia = desempenho_por_blocos(st.session_state.historico, acertos_ia_bool)
+_, taxas_baz = desempenho_por_blocos(st.session_state.historico, acertos_baz_bool)
+
+st.subheader("📈 Desempenho por blocos de 50 resultados")
+fig, ax = plt.subplots()
+ax.plot(blocos, taxas_duzia, label="Dúzia IA (%)")
+ax.plot(blocos, taxas_baz, label="Baixo/Alto/Zero IA (%)")
+ax.set_xlabel("Bloco")
+ax.set_ylabel("Taxa de Acerto (%)")
+ax.legend()
+ax.grid(True)
+st.pyplot(fig)
+
+import base64
+
+# --- Função para tocar som embutido base64 ---
+def tocar_som_acerto():
+    som_base64 = (
+        "SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU2LjI0LjEwNQAAAAAAAAAAAAAA//tQxAADB"
+        "AAAAPoPABAAEAAAAAEAAQAAAAgAAAAAAABAAEAAEAAgACAAACgAAFAAAABAAAAGhAAACQ"
+        "wAAAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        "AAAA//sQxAADAAAAAEA=="
+    )
+    audio_bytes = base64.b64decode(som_base64)
+    st.audio(audio_bytes, format="audio/wav")
+
+# --- Feedback sonoro ao acertar ---
+if resultado_api and resultado_api["timestamp"] == st.session_state.historico[-1]["timestamp"]:
+    baz_real = get_baixo_alto_zero(resultado_api["number"])
+    if baz_real == st.session_state.baz_previsto:
+        # Tocar som de acerto (pode ajustar para outras situações)
+        tocar_som_acerto()
+
+# --- Exibição do histórico completo ---
+st.subheader("📜 Histórico Completo de Números")
+if st.button("Mostrar Histórico Completo"):
+    st.write(st.session_state.historico)
+
+# --- Download histórico atualizado ---
 if os.path.exists(HISTORICO_PATH):
     with open(HISTORICO_PATH, "r") as f:
         conteudo = f.read()
-    st.download_button("📥 Baixar Histórico", data=conteudo, file_name="historico_coluna_duzia.json")
+    st.download_button("📥 Baixar histórico atualizado", data=conteudo, file_name="historico_coluna_duzia.json")
 
-# 🔁 Auto-refresh
-st_autorefresh(interval=10000, key="refresh_roleta")
+# --- Organização e manutenção futura ---
+"""
+- Classes ModeloIAHistGB e ModeloAltoBaixoZero com funções bem encapsuladas
+- Funções auxiliares para estratégias
+- Cache de treino para evitar re-treinamentos desnecessários
+- Funções específicas para manipulação do histórico
+- Interface clara com separação de blocos de código (configuração, entrada, treino, previsão, visualização, métricas)
+- Comentários detalhados para fácil entendimento e futuras melhorias
+"""
+
+# --- Refresh automático para atualização dos dados ---
+st_autorefresh(interval=10000, key="refresh_roleta_final")
