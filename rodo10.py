@@ -10,6 +10,46 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.utils import resample
 from streamlit_autorefresh import st_autorefresh
 
+# Configuração da página
+st.set_page_config(page_title="IA Roleta Dúzia & Baixo/Alto/Zero", layout="centered")
+st.title("🎯 IA Roleta XXXtreme — Previsão de Dúzia e Baixo/Alto/Zero")
+
+# Inicialização do estado da sessão
+if "historico" not in st.session_state:
+    if os.path.exists(HISTORICO_PATH):
+        with open(HISTORICO_PATH, "r") as f:
+            st.session_state.historico = json.load(f)
+    else:
+        st.session_state.historico = []
+
+if "modelo_duzia" not in st.session_state:
+    st.session_state.modelo_duzia = ModeloIAHistGB()
+
+if "modelo_baz" not in st.session_state:
+    st.session_state.modelo_baz = ModeloAltoBaixoZero()
+
+if "duzias_acertadas" not in st.session_state:
+    st.session_state.duzias_acertadas = 0
+
+if "baz_acertados" not in st.session_state:
+    st.session_state.baz_acertados = 0
+
+if "duzia_prevista" not in st.session_state:
+    st.session_state.duzia_prevista = None
+
+if "baz_previsto" not in st.session_state:
+    st.session_state.baz_previsto = None
+
+if "acertos_estrategias" not in st.session_state:
+    st.session_state.acertos_estrategias = {
+        "ia": 0,
+        "quente": 0,
+        "tendencia": 0,
+        "alternancia": 0,
+        "ausente": 0,
+        "maior_alt": 0
+    }
+
 HISTORICO_PATH = "historico_coluna_duzia.json"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
