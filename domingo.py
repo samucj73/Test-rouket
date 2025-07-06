@@ -200,7 +200,7 @@ class ModeloIAHistGB:
         X, y = balancear_amostras(X, y)
 
         gb = HistGradientBoostingClassifier(early_stopping=True, validation_fraction=0.2, n_iter_no_change=10, random_state=42)
-        calibrated_gb = CalibratedClassifierCV(gb, cv=3)
+        calibrated_gb = CalibratedClassifierCV(gb, cv=8)
         rf = RandomForestClassifier(n_estimators=100, random_state=42)
 
         ensemble = VotingClassifier(
@@ -450,7 +450,7 @@ if "acertos_gerais" not in st.session_state:
 
 # ⚙️ Configurações
 st.sidebar.header("⚙️ Configurações IA")
-janela_ia = st.sidebar.slider("Janela IA Dúzia", 10, 500, 250, step=10)
+janela_ia = st.sidebar.slider("Janela IA Dúzia", 80, 500, 250, step=10)
 confianca_min = st.sidebar.slider("Confiança mínima IA", 0.1, 0.9, 0.4, step=0.05)
 
 # 🧠 Treinar IA
@@ -519,7 +519,7 @@ if resultado_api and resultado_api["timestamp"] != ultimo_timestamp:
 
 # ✍️ Entrada manual
 st.subheader("✍️ Inserir Números Manualmente")
-entrada = st.text_area("Números entre 0-36 separados por espaço:", height=100)
+entrada = st.text_area("Números entre 0-36 separados por espaço:", height=300)
 if st.button("Adicionar Sorteios"):
     try:
         nums = [int(n) for n in entrada.split() if n.isdigit() and 0 <= int(n) <= 36]
@@ -574,12 +574,7 @@ col1, col2 = st.columns(2)
 col1.metric("🔝 Estratégia", melhor_estrategia.upper())
 col2.metric("🎯 Previsão", f"{melhor_valor}", f"{confianca:.2f}" if melhor_estrategia in ["ia", "altobx"] else "")
 
-# 🔍 Expandir para ver todas as estratégias
-with st.expander("🔎 Ver todas as previsões"):
-    st.write(f"🧠 IA Dúzia: {prev_ia} (confiança: {st.session_state.modelo_duzia.ultima_confianca:.2f})")
-    st.write(f"🎯 Final por votação (quente/tendência/alternância): Dúzia {st.session_state.duzia_prevista}")
-    st.write(f"🔥 Quente: {prev_quente} | 📈 Tendência: {prev_tendencia} | 🔁 Alternância: {prev_alternancia}")
-    st.write(f"⚖️ IA Alto/Baixo/Zero: {prev_altobx} (confiança: {st.session_state.modelo_altobx.ultima_confianca:.2f})")
+
 
 # 🔍 Expandir para ver todas as estratégias
 with st.expander("🔎 Ver todas as previsões"):
