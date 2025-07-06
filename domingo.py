@@ -380,112 +380,8 @@ class ModeloAltoBaixoZero:
         self.historico_confs.append(self.ultima_confianca)
         if self.ultima_confianca >= self.ajustar_threshold():
             return self.encoder.inverse_transform([np.argmax(proba)])[0]
-        return AttributeError: This app has encountered an error. The original error message is redacted to prevent data leaks. Full error details have been recorded in the logs (if you're on Streamlit Cloud, click on 'Manage app' in the lower right of your app).
-Traceback:
-File "/mount/src/test-rouket/domingo.py", line 498, in <module> # 🔧 Interface Streamlit
-st.set_page_config(page_title="IA Roleta", layout="centered")
-st.title("🎯 IA Roleta — Previsão de Dúzia e Alto/Baixo/Zero")
-
-# 🔁 Estados iniciais
-if "historico" not in st.session_state:
-    st.session_state.historico = json.load(open(HISTORICO_PATH)) if os.path.exists(HISTORICO_PATH) else []
-
-if "modelo_duzia" not in st.session_state:
-    st.session_state.modelo_duzia = ModeloIAHistGB()
-
-if "modelo_altobx" not in st.session_state:
-    st.session_state.modelo_altobx = ModeloAltoBaixoZero()
-
-if "duzias_acertadas" not in st.session_state:
-    st.session_state.duzias_acertadas = 0
-
-if "acertos_gerais" not in st.session_state:
-    st.session_state.acertos_gerais = {
-        "ia": 0, "quente": 0, "tendencia": 0, "alternancia": 0, "altobx": 0
-    }
-
-# ⚙️ Configurações
-st.sidebar.header("⚙️ Configurações IA")
-janela_ia = st.sidebar.slider("Janela IA Dúzia", 80, 500, 250, step=10)
-confianca_min = st.sidebar.slider("Confiança mínima IA", 0.1, 0.9, 0.4, step=0.05)
-
-# 🧠 Treinar IA
-st.session_state.modelo_duzia = ModeloIAHistGB(janela=janela_ia, confianca_min=confianca_min)
-st.session_state.modelo_duzia.treinar(st.session_state.historico)
-
-st.session_state.modelo_altobx = ModeloAltoBaixoZero(janela=janela_ia, confianca_min=confianca_min)
-st.session_state.modelo_altobx.treinar(st.session_state.historico)
-
-# 🔮 Previsões
-prev_ia = st.session_state.modelo_duzia.prever(st.session_state.historico)
-prev_altobx = st.session_state.modelo_altobx.prever(st.session_state.historico)
-prev_quente = estrategia_duzia_quente(st.session_state.historico)
-prev_tendencia = estrategia_tendencia(st.session_state.historico)
-prev_alternancia = estrategia_alternancia(st.session_state.historico)
-
-# 🧮 Votação (entre estratégias humanas)
-votacao = Counter()
-for pred in [prev_quente, prev_tendencia, prev_alternancia]:
-    if pred is not None:
-        votacao[pred] += 1
-mais_votado = votacao.most_common(1)[0][0] if votacao else None
-st.session_state.duzia_prevista = mais_votado
-
-# 🛰️ Buscar novo número da API
-try:
-    response = requests.get(API_URL, headers=HEADERS, timeout=10)
-    data = response.json()
-    resultado_api = {
-        "number": data.get("data", {}).get("result", {}).get("outcome", {}).get("number"),
-        "timestamp": data.get("data", {}).get("startedAt")
-    }
-except Exception as e:
-    resultado_api = None
-    logging.warning(f"Erro na API: {e}")
-
-# ✅ Novo número detectado
-ultimo_timestamp = st.session_state.historico[-1]["timestamp"] if st.session_state.historico else None
-
-if resultado_api and resultado_api["timestamp"] != ultimo_timestamp:
-    novo_num = resultado_api["number"]
-    st.toast(f"🎲 Novo número: {novo_num}")
-    duzia_real = get_duzia(novo_num)
-
-    # ✔️ Verificar acertos
-    if duzia_real == prev_ia:
-        st.session_state.acertos_gerais["ia"] += 1
-    if duzia_real == prev_quente:
-        st.session_state.acertos_gerais["quente"] += 1
-    if duzia_real == prev_tendencia:
-        st.session_state.acertos_gerais["tendencia"] += 1
-    if duzia_real == prev_alternancia:
-        st.session_state.acertos_gerais["alternancia"] += 1
-
-    faixa_real = "zero" if novo_num == 0 else "baixo" if novo_num <= 18 else "alto"
-    if faixa_real == prev_altobx:
-        st.session_state.acertos_gerais["altobx"] += 1
-
-    if duzia_real == st.session_state.duzia_prevista:
-        st.session_state.duzias_acertadas += 1
-        st.balloons()
-        st.audio(som_moedas_base64, format="audio/mp3", autoplay=True)
-
-    st.session_state.historico.append(resultado_api)
-    salvar_resultado_em_arquivo(st.session_state.historico)
-
-# ✍️ Entrada manual
-st.subheader("✍️ Inserir Números Manualmente")
-entrada = st.text_area("Números entre 0-36 separados por espaço:", height=300)
-if st.button("Adicionar Sorteios"):
-    try:
-        nums = [int(n) for n in entrada.split() if n.isdigit() and 0 <= int(n) <= 36]
-        for n in nums:
-            st.session_state.historico.append({"number": n, "timestamp": f"manual_{len(st.session_state.historico)}"})
-        salvar_resultado_em_arquivo(st.session_state.historico)
-        st.success(f"{len(nums)} números adicionados.")
-    except:
-        st.error("Erro ao processar Traceback:
-File "/mount/src/test-rouket/domingo.py", line 498, in <module> # 🔧 Interface Streamlit
+        return 
+# 🔧 Interface Streamlit
 st.set_page_config(page_title="IA Roleta", layout="centered")
 st.title("🎯 IA Roleta — Previsão de Dúzia e Alto/Baixo/Zero")
 
@@ -589,39 +485,28 @@ if st.button("Adicionar Sorteios"):
     except:
         st.error("Erro ao processar entrada.")
 
+# 🔢 Últimos números
 st.subheader("🔢 Últimos 10 Números")
-
-# Verifica se histórico existe e tem elementos
-if "historico" in st.session_state and len(st.session_state.historico) > 0:
+if st.session_state.historico:
     ultimos = [str(h.get("number", "?")) for h in st.session_state.historico[-10:]]
     st.write(" ".join(ultimos))
 else:
-    st.write("Histórico ainda não carregado.")
+    st.info("Histórico ainda não carregado.")
 
-
-
-  
-
-# # 📊 Desempenho geral
+# 📊 Desempenho geral
 st.subheader("📊 Desempenho")
-
-# Proteção contra erro se 'janela' não estiver acessível
 try:
     janela = st.session_state.modelo_duzia.janela
 except Exception:
     janela = 0
-
-# Evita valores negativos
 total = max(len(st.session_state.historico) - janela, 0)
-
 if total > 0:
     taxa = st.session_state.duzias_acertadas / total * 100
     st.metric("✅ Acertos da Previsão Final", f"{st.session_state.duzias_acertadas} / {total}", f"{taxa:.1f}%")
 else:
     st.info("⏳ Aguarde mais dados para estatísticas.")
 
-# 📌 Mostrar só a MELHOR previsão (a mais assertiva até agora)
-# 📌 Mostrar só a MELHOR previsão (com maior confiança/probabilidade atual)
+# 🎯 Melhor previsão
 confiancas = {
     "ia": st.session_state.modelo_duzia.ultima_confianca if prev_ia is not None else 0,
     "altobx": st.session_state.modelo_altobx.ultima_confianca if prev_altobx is not None else 0,
@@ -629,30 +514,22 @@ confiancas = {
     "tendencia": 0.7 if prev_tendencia is not None else 0,
     "alternancia": 0.7 if prev_alternancia is not None else 0,
 }
-
 melhor_estrategia = max(confiancas, key=lambda k: confiancas[k])
-melhor_valor = None
-confianca = confiancas[melhor_estrategia]
-
-if melhor_estrategia == "ia":
-    melhor_valor = prev_ia
-elif melhor_estrategia == "altobx":
-    melhor_valor = prev_altobx
-elif melhor_estrategia == "quente":
-    melhor_valor = prev_quente
-elif melhor_estrategia == "tendencia":
-    melhor_valor = prev_tendencia
-elif melhor_estrategia == "alternancia":
-    melhor_valor = prev_alternancia
+melhor_valor = {
+    "ia": prev_ia,
+    "altobx": prev_altobx,
+    "quente": prev_quente,
+    "tendencia": prev_tendencia,
+    "alternancia": prev_alternancia
+}[melhor_estrategia]
+conf = confiancas[melhor_estrategia]
 
 st.subheader("🎯 Melhor Previsão Agora")
 col1, col2 = st.columns(2)
 col1.metric("🔝 Estratégia", melhor_estrategia.upper())
-col2.metric("🎯 Previsão", f"{melhor_valor}", f"{confianca:.2f}" if melhor_estrategia in ["ia", "altobx"] else "")
+col2.metric("🎯 Previsão", str(melhor_valor), f"{conf:.2f}" if melhor_estrategia in ["ia", "altobx"] else "")
 
-
-
-# 🔍 Expandir para ver todas as estratégias
+# 🔎 Expandir para ver todas as estratégias
 with st.expander("🔎 Ver todas as previsões"):
     st.write(f"🧠 IA Dúzia: {prev_ia} (confiança: {st.session_state.modelo_duzia.ultima_confianca:.2f})")
     st.write(f"🎯 Final por votação (quente/tendência/alternância): Dúzia {st.session_state.duzia_prevista}")
@@ -672,66 +549,3 @@ if os.path.exists(HISTORICO_PATH):
 
 # 🔄 Auto refresh
 st_autorefresh(interval=10000, key="refresh")
-
- 📊 Desempenho geral
-st.subheader("📊 Desempenho")
-total = len(st.session_state.historico) - st.session_state.modelo_duzia.janela
-if total > 0:
-    taxa = st.session_state.duzias_acertadas / total * 100
-    st.metric("✅ Acertos da Previsão Final", f"{st.session_state.duzias_acertadas} / {total}", f"{taxa:.1f}%")
-else:
-    st.info("⏳ Aguarde mais dados para estatísticas.")
-
-# 📌 Mostrar só a MELHOR previsão (a mais assertiva até agora)
-# 📌 Mostrar só a MELHOR previsão (com maior confiança/probabilidade atual)
-confiancas = {
-    "ia": st.session_state.modelo_duzia.ultima_confianca if prev_ia is not None else 0,
-    "altobx": st.session_state.modelo_altobx.ultima_confianca if prev_altobx is not None else 0,
-    "quente": 0.7 if prev_quente is not None else 0,
-    "tendencia": 0.7 if prev_tendencia is not None else 0,
-    "alternancia": 0.7 if prev_alternancia is not None else 0,
-}
-
-melhor_estrategia = max(confiancas, key=lambda k: confiancas[k])
-melhor_valor = None
-confianca = confiancas[melhor_estrategia]
-
-if melhor_estrategia == "ia":
-    melhor_valor = prev_ia
-elif melhor_estrategia == "altobx":
-    melhor_valor = prev_altobx
-elif melhor_estrategia == "quente":
-    melhor_valor = prev_quente
-elif melhor_estrategia == "tendencia":
-    melhor_valor = prev_tendencia
-elif melhor_estrategia == "alternancia":
-    melhor_valor = prev_alternancia
-
-st.subheader("🎯 Melhor Previsão Agora")
-col1, col2 = st.columns(2)
-col1.metric("🔝 Estratégia", melhor_estrategia.upper())
-col2.metric("🎯 Previsão", f"{melhor_valor}", f"{confianca:.2f}" if melhor_estrategia in ["ia", "altobx"] else "")
-
-
-
-# 🔍 Expandir para ver todas as estratégias
-with st.expander("🔎 Ver todas as previsões"):
-    st.write(f"🧠 IA Dúzia: {prev_ia} (confiança: {st.session_state.modelo_duzia.ultima_confianca:.2f})")
-    st.write(f"🎯 Final por votação (quente/tendência/alternância): Dúzia {st.session_state.duzia_prevista}")
-    st.write(f"🔥 Quente: {prev_quente} | 📈 Tendência: {prev_tendencia} | 🔁 Alternância: {prev_alternancia}")
-    st.write(f"⚖️ IA Alto/Baixo/Zero: {prev_altobx} (confiança: {st.session_state.modelo_altobx.ultima_confianca:.2f})")
-
-# 📌 Expandir para acertos por estratégia
-with st.expander("📌 Acertos por Estratégia"):
-    for nome, acertos in st.session_state.acertos_gerais.items():
-        pct = acertos / total * 100 if total > 0 else 0
-        st.write(f"✔️ {nome.upper()}: {acertos} acertos ({pct:.1f}%)")
-
-# ⬇️ Download histórico
-if os.path.exists(HISTORICO_PATH):
-    with open(HISTORICO_PATH) as f:
-        st.download_button("📥 Baixar Histórico", f.read(), file_name="historico_coluna_duzia.json")
-
-# 🔄 Auto refresh
-st_autorefresh(interval=10000, key="refresh")
-
