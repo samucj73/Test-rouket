@@ -495,11 +495,13 @@ if st.button("Adicionar Sorteios"):
 st.subheader("🔢 Últimos 10 Números")
 
 # Verifica se histórico existe e tem elementos
-if "historico" in st.session_state and len(st.session_state.historico) > 0:
-    ultimos = [str(h.get("number", "?")) for h in st.session_state.historico[-10:]]
+historico = st.session_state.get("historico", [])
+
+if len(historico) > 0:
+    ultimos = [str(h.get("number", "?")) for h in historico[-10:]]
     st.write(" ".join(ultimos))
 else:
-    st.write("Histórico ainda não carregado.")
+    st.write("Histórico não disponível.")
 
   
 
