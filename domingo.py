@@ -13,10 +13,6 @@ from sklearn.calibration import CalibratedClassifierCV
 from sklearn.model_selection import TimeSeriesSplit, RandomizedSearchCV
 from streamlit_autorefresh import st_autorefresh
 
-# Inicialização segura do modelo IA no session_state
-if "modelo_duzia" not in st.session_state:
-    st.session_state.modelo_duzia = ModeloIAHistGB()
-
 # 🔊 Som de moedas embutido
 som_moedas_base64 = "data:audio/mp3;base64,//uQxAA..."
 
@@ -191,33 +187,20 @@ class ModeloIAHistGB:
     def treinar(self, historico):
         numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
         X, y = [], []
-
         for i in range(self.janela, len(numeros) - 1):
             janela = numeros[i - self.janela:i + 1]
             target = get_duzia(numeros[i])
             if target is not None:
                 X.append(self.construir_features(janela))
                 y.append(target)
-
-        if not X or len(set(y)) < 2:
-            print("❌ Dados insuficientes ou apenas uma classe em y.")
+        if not X:
             return
-
         X = np.array(X, dtype=np.float32)
         y = self.encoder.fit_transform(np.array(y))
         X, y = balancear_amostras(X, y)
 
-        if len(X) < 10:
-            print("❌ Muito poucos dados após balanceamento. Treinamento cancelado.")
-            return
-
-        gb = HistGradientBoostingClassifier(
-            early_stopping=True,
-            validation_fraction=0.2,
-            n_iter_no_change=10,
-            random_state=42
-        )
-        calibrated_gb = CalibratedClassifierCV(gb, cv=min(3, len(X)))
+        gb = HistGradientBoostingClassifier(early_stopping=True, validation_fraction=0.2, n_iter_no_change=10, random_state=42)
+        calibrated_gb = CalibratedClassifierCV(gb, cv=3)
         rf = RandomForestClassifier(n_estimators=100, random_state=42)
 
         ensemble = VotingClassifier(
@@ -225,35 +208,26 @@ class ModeloIAHistGB:
             voting='soft'
         )
 
-        n_splits = min(3, len(X) // 5)
-        if n_splits < 2:
-            print("❌ Dados insuficientes para validação cruzada com TimeSeriesSplit.")
-            return
-
-        tscv = TimeSeriesSplit(n_splits=n_splits)
+        tscv = TimeSeriesSplit(n_splits=5)
         param_dist = {
-            'gb__base_estimator__max_depth': [5, 10],
-            'gb__base_estimator__learning_rate': [0.01, 0.05],
-            'rf__n_estimators': [50, 100]
+            'gb__base_estimator__max_depth': [5, 10, 15],
+            'gb__base_estimator__learning_rate': [0.01, 0.05, 0.1],
+            'rf__n_estimators': [50, 100, 200]
         }
 
-        try:
-            search = RandomizedSearchCV(
-                ensemble,
-                param_distributions=param_dist,
-                n_iter=5,
-                cv=tscv,
-                scoring='accuracy',
-                random_state=42,
-                n_jobs=-1
-            )
-            search.fit(X, y)
-            self.modelo = search.best_estimator_
-            self.treinado = True
-            print("✅ Treinamento concluído com sucesso.")
-        except Exception as e:
-            print(f"❌ Erro no treinamento: {e}")
-            self.treinado = False
+        search = RandomizedSearchCV(
+            ensemble,
+            param_distributions=param_dist,
+            n_iter=10,
+            cv=tscv,
+            scoring='accuracy',
+            random_state=42,
+            n_jobs=-1
+        )
+        search.fit(X, y)
+
+        self.modelo = search.best_estimator_
+        self.treinado = True
 
     def ajustar_threshold(self):
         if len(self.historico_confs) < 30:
@@ -275,8 +249,17 @@ class ModeloIAHistGB:
             return self.encoder.inverse_transform([np.argmax(proba)])[0]
         return None
 
+def get_baixo_alto_zero(n):
+    if n == 0:
+        return "zero"
+    elif 1 <= n <= 18:
+        return "baixo"
+    elif 19 <= n <= 36:
+        return "alto"
+    return None
+
 class ModeloAltoBaixoZero:
-    def __init__(self, janela=100, confianca_min=0.4):
+    def __init__(self, janela=250, confianca_min=0.4):
         self.janela = janela
         self.confianca_min = confianca_min
         self.modelo = None
@@ -290,77 +273,136 @@ class ModeloAltoBaixoZero:
         atual = ultimos[-1]
         anteriores = ultimos[:-1]
 
+        def safe_get_baz(n):
+            return -1 if n == 0 else get_baixo_alto_zero(n)
+
+        grupo = safe_get_baz(atual)
+        freq_20 = Counter(safe_get_baz(n) for n in numeros[-20:])
+        freq_50 = Counter(safe_get_baz(n) for n in numeros[-50:]) if len(numeros) >= 150 else freq_20
+        total_50 = sum(freq_50.values()) or 1
+
+        lag1 = safe_get_baz(anteriores[-1]) if len(anteriores) >= 1 else -1
+        lag2 = safe_get_baz(anteriores[-2]) if len(anteriores) >= 2 else -1
+        lag3 = safe_get_baz(anteriores[-3]) if len(anteriores) >= 3 else -1
+
         val1 = anteriores[-1] if len(anteriores) >= 1 else 0
         val2 = anteriores[-2] if len(anteriores) >= 2 else 0
         val3 = anteriores[-3] if len(anteriores) >= 3 else 0
 
-        media_ultimos = np.mean(anteriores) if anteriores else 0
         tendencia = 0
         if len(anteriores) >= 3:
             diffs = np.diff(anteriores[-3:])
             tendencia = int(np.mean(diffs) > 0) - int(np.mean(diffs) < 0)
 
-        ultimos_10 = [n for n in numeros[-10:] if n > 0]
-        quente_10 = Counter(ultimos_10).most_common(1)
-        mais_frequente = quente_10[0][0] if quente_10 else 0
+        zeros_50 = numeros[-50:].count(0)
+        porc_zeros = zeros_50 / 50
 
-        repetiu = int(atual == val1)
-        vizinho = int(abs(atual - val1) <= 2)
+        densidade_20 = freq_20.get(grupo, 0)
+        densidade_50 = freq_50.get(grupo, 0)
+        rel_freq_grupo = densidade_50 / total_50
+        repete_baz = int(grupo == safe_get_baz(anteriores[-1])) if anteriores else 0
+
+        dist_ultimo_zero = next((i for i, n in enumerate(reversed(numeros)) if n == 0), len(numeros))
+        mudanca_baz = int(safe_get_baz(atual) != safe_get_baz(val1)) if len(anteriores) >= 1 else 0
+
+        repeticoes_baz = 0
+        for n in reversed(anteriores):
+            if safe_get_baz(n) == grupo:
+                repeticoes_baz += 1
+            else:
+                break
+
+        ultimos_10 = [n for n in numeros[-10:] if n > 0]
+        quente_10 = Counter(safe_get_baz(n) for n in ultimos_10).most_common(1)
+        baz_quente_10 = quente_10[0][0] if quente_10 else -1
+
+        repetiu_numero = int(atual == val1) if len(anteriores) >= 1 else 0
+        vizinho = int(abs(atual - val1) <= 2) if len(anteriores) >= 1 else 0
+
+        reversao_tendencia = 0
+        if len(anteriores) >= 4:
+            diffs1 = np.mean(np.diff(anteriores[-4:-1]))
+            diffs2 = atual - val1
+            reversao_tendencia = int((diffs1 > 0 and diffs2 < 0) or (diffs1 < 0 and diffs2 > 0))
+
+        coluna_atual = get_duzia(atual)
+        coluna_anterior = get_duzia(val1) if val1 else -1
+        subida_coluna = int(coluna_atual == coluna_anterior + 1) if coluna_anterior > 0 else 0
+        descida_coluna = int(coluna_atual == coluna_anterior - 1) if coluna_anterior > 0 else 0
+        repeticao_ou_vizinho = int((atual == val1) or (abs(atual - val1) == 1)) if val1 else 0
+
         par = int(atual % 2 == 0)
-        cor = int(atual in {1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36})
+        vermelhos = {1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36}
+        cor = int(atual in vermelhos)
 
         return [
-            atual,
-            val1, val2, val3,
-            abs(atual - val1),
-            int(atual > media_ultimos),
-            tendencia,
-            repetiu,
-            vizinho,
+            atual % 2, atual % 3, int(str(atual)[-1]),
+            abs(atual - val1) if anteriores else 0,
+            int(atual == val1) if anteriores else 0,
+            1 if atual > val1 else -1 if atual < val1 else 0,
+            sum(1 for x in anteriores[-3:] if grupo == safe_get_baz(x)),
+            Counter(numeros[-30:]).get(atual, 0),
+            int(atual in [n for n, _ in Counter(numeros[-30:]).most_common(5)]),
+            int(np.mean(anteriores) < atual),
+            int(atual == 0),
+            grupo,
+            densidade_20, densidade_50, rel_freq_grupo,
+            repete_baz, tendencia, lag1, lag2, lag3,
+            val1, val2, val3, porc_zeros,
+            dist_ultimo_zero, mudanca_baz, repeticoes_baz,
+            baz_quente_10, repetiu_numero, vizinho,
+            reversao_tendencia,
+            subida_coluna,
+            descida_coluna,
+            repeticao_ou_vizinho,
             par,
-            cor,
-            mais_frequente
+            cor
         ]
 
     def treinar(self, historico):
         numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
         X, y = [], []
-
         for i in range(self.janela, len(numeros) - 1):
             janela = numeros[i - self.janela:i + 1]
             target = get_baixo_alto_zero(numeros[i])
-            if target:
+            if target is not None:
                 X.append(self.construir_features(janela))
                 y.append(target)
-
-        if not X or len(set(y)) < 2:
-            print("❌ Dados insuficientes ou apenas uma classe.")
+        if not X:
             return
-
         X = np.array(X, dtype=np.float32)
         y = self.encoder.fit_transform(np.array(y))
         X, y = balancear_amostras(X, y)
 
-        if len(X) < 10:
-            print("❌ Muito poucos dados após balanceamento.")
-            return
+        gb = HistGradientBoostingClassifier(early_stopping=True, validation_fraction=0.2, n_iter_no_change=10, random_state=42)
+        calibrated_gb = CalibratedClassifierCV(gb, cv=3)
+        rf = RandomForestClassifier(n_estimators=100, random_state=42)
 
-        try:
-            modelo = HistGradientBoostingClassifier(
-                early_stopping=True,
-                validation_fraction=0.2,
-                n_iter_no_change=10,
-                max_iter=100,
-                max_depth=6,
-                random_state=42
-            )
-            modelo.fit(X, y)
-            self.modelo = modelo
-            self.treinado = True
-            print("✅ Modelo Baixo/Alto/Zero treinado com sucesso.")
-        except Exception as e:
-            print(f"❌ Erro no treinamento B/A/Z: {e}")
-            self.treinado = False
+        ensemble = VotingClassifier(
+            estimators=[('gb', calibrated_gb), ('rf', rf)],
+            voting='soft'
+        )
+
+        tscv = TimeSeriesSplit(n_splits=5)
+        param_dist = {
+            'gb__base_estimator__max_depth': [5, 10, 15],
+            'gb__base_estimator__learning_rate': [0.01, 0.05, 0.1],
+            'rf__n_estimators': [50, 100, 200]
+        }
+
+        search = RandomizedSearchCV(
+            ensemble,
+            param_distributions=param_dist,
+            n_iter=10,
+            cv=tscv,
+            scoring='accuracy',
+            random_state=42,
+            n_jobs=-1
+        )
+        search.fit(X, y)
+
+        self.modelo = search.best_estimator_
+        self.treinado = True
 
     def ajustar_threshold(self):
         if len(self.historico_confs) < 30:
@@ -380,12 +422,8 @@ class ModeloAltoBaixoZero:
         self.historico_confs.append(self.ultima_confianca)
         if self.ultima_confianca >= self.ajustar_threshold():
             return self.encoder.inverse_transform([np.argmax(proba)])[0]
-        return 
+        return None
 
-# Constantes
-HISTORICO_PATH = "historico_coluna_duzia.json"
-API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelight/rounds/current"
-HEADERS = {"User-Agent": "IA-Roleta"}
 # 🔧 Interface Streamlit
 st.set_page_config(page_title="IA Roleta", layout="centered")
 st.title("🎯 IA Roleta — Previsão de Dúzia e Alto/Baixo/Zero")
@@ -410,7 +448,7 @@ if "acertos_gerais" not in st.session_state:
 
 # ⚙️ Configurações
 st.sidebar.header("⚙️ Configurações IA")
-janela_ia = st.sidebar.slider("Janela IA Dúzia", 80, 500, 250, step=10)
+janela_ia = st.sidebar.slider("Janela IA Dúzia", 50, 300, 250, step=10)
 confianca_min = st.sidebar.slider("Confiança mínima IA", 0.1, 0.9, 0.4, step=0.05)
 
 # 🧠 Treinar IA
@@ -479,7 +517,7 @@ if resultado_api and resultado_api["timestamp"] != ultimo_timestamp:
 
 # ✍️ Entrada manual
 st.subheader("✍️ Inserir Números Manualmente")
-entrada = st.text_area("Números entre 0-36 separados por espaço:", height=300)
+entrada = st.text_area("Números entre 0-36 separados por espaço:", height=100)
 if st.button("Adicionar Sorteios"):
     try:
         nums = [int(n) for n in entrada.split() if n.isdigit() and 0 <= int(n) <= 36]
@@ -490,51 +528,59 @@ if st.button("Adicionar Sorteios"):
     except:
         st.error("Erro ao processar entrada.")
 
-# 🔢 Últimos números
-st.subheader("🔢 Últimos 10 Números")
-if st.session_state.historico:
-    ultimos = [str(h.get("number", "?")) for h in st.session_state.historico[-10:]]
-    st.write(" ".join(ultimos))
-else:
-    st.info("Histórico ainda não carregado.")
-
 # 📊 Desempenho geral
 st.subheader("📊 Desempenho")
-try:
-    janela = st.session_state.modelo_duzia.janela
-except Exception:
-    janela = 0
-total = max(len(st.session_state.historico) - janela, 0)
+total = len(st.session_state.historico) - st.session_state.modelo_duzia.janela
 if total > 0:
     taxa = st.session_state.duzias_acertadas / total * 100
     st.metric("✅ Acertos da Previsão Final", f"{st.session_state.duzias_acertadas} / {total}", f"{taxa:.1f}%")
 else:
     st.info("⏳ Aguarde mais dados para estatísticas.")
 
-# 🎯 Melhor previsão
+# 📌 Melhor estratégia por confiança atual
 confiancas = {
-    "ia": st.session_state.modelo_duzia.ultima_confianca if prev_ia is not None else 0,
-    "altobx": st.session_state.modelo_altobx.ultima_confianca if prev_altobx is not None else 0,
-    "quente": 0.7 if prev_quente is not None else 0,
-    "tendencia": 0.7 if prev_tendencia is not None else 0,
-    "alternancia": 0.7 if prev_alternancia is not None else 0,
+    "ia": st.session_state.modelo_duzia.ultima_confianca,
+    "altobx": st.session_state.modelo_altobx.ultima_confianca,
 }
-melhor_estrategia = max(confiancas, key=lambda k: confiancas[k])
-melhor_valor = {
-    "ia": prev_ia,
-    "altobx": prev_altobx,
-    "quente": prev_quente,
-    "tendencia": prev_tendencia,
-    "alternancia": prev_alternancia
-}[melhor_estrategia]
-conf = confiancas[melhor_estrategia]
+melhor_confianca = max(confiancas.items(), key=lambda x: x[1])
+melhor_conf_nome, melhor_conf_val = melhor_confianca
 
-st.subheader("🎯 Melhor Previsão Agora")
+if melhor_conf_nome == "ia":
+    valor_conf = prev_ia
+elif melhor_conf_nome == "altobx":
+    valor_conf = prev_altobx
+
+# 📌 Melhor estratégia por acertos acumulados
+acertos = st.session_state.acertos_gerais
+melhor_acerto_nome = max(acertos, key=lambda k: acertos[k])
+melhor_acerto_val = None
+conf_acerto = 0.0
+
+if melhor_acerto_nome == "ia":
+    melhor_acerto_val = prev_ia
+    conf_acerto = st.session_state.modelo_duzia.ultima_confianca
+elif melhor_acerto_nome == "altobx":
+    melhor_acerto_val = prev_altobx
+    conf_acerto = st.session_state.modelo_altobx.ultima_confianca
+elif melhor_acerto_nome == "quente":
+    melhor_acerto_val = prev_quente
+elif melhor_acerto_nome == "tendencia":
+    melhor_acerto_val = prev_tendencia
+elif melhor_acerto_nome == "alternancia":
+    melhor_acerto_val = prev_alternancia
+
+# 🎯 Exibição das 2 melhores estratégias
+st.subheader("🎯 Melhores Estratégias Agora")
+
 col1, col2 = st.columns(2)
-col1.metric("🔝 Estratégia", melhor_estrategia.upper())
-col2.metric("🎯 Previsão", str(melhor_valor), f"{conf:.2f}" if melhor_estrategia in ["ia", "altobx"] else "")
 
-# 🔎 Expandir para ver todas as estratégias
+with col1:
+    st.metric("🚀 Mais Confiável Agora", f"{melhor_conf_nome.upper()} ➜ {valor_conf}", f"{melhor_conf_val:.2f}")
+
+with col2:
+    st.metric("🏆 Mais Assertiva Até Agora", f"{melhor_acerto_nome.upper()} ➜ {melhor_acerto_val}", f"{conf_acerto:.2f}" if conf_acerto else "")
+
+# 🔍 Expandir para ver todas as previsões
 with st.expander("🔎 Ver todas as previsões"):
     st.write(f"🧠 IA Dúzia: {prev_ia} (confiança: {st.session_state.modelo_duzia.ultima_confianca:.2f})")
     st.write(f"🎯 Final por votação (quente/tendência/alternância): Dúzia {st.session_state.duzia_prevista}")
@@ -546,11 +592,3 @@ with st.expander("📌 Acertos por Estratégia"):
     for nome, acertos in st.session_state.acertos_gerais.items():
         pct = acertos / total * 100 if total > 0 else 0
         st.write(f"✔️ {nome.upper()}: {acertos} acertos ({pct:.1f}%)")
-
-# ⬇️ Download histórico
-if os.path.exists(HISTORICO_PATH):
-    with open(HISTORICO_PATH) as f:
-        st.download_button("📥 Baixar Histórico", f.read(), file_name="historico_coluna_duzia.json")
-
-# 🔄 Auto refresh
-st_autorefresh(interval=10000, key="refresh")
