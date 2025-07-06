@@ -13,6 +13,10 @@ from sklearn.calibration import CalibratedClassifierCV
 from sklearn.model_selection import TimeSeriesSplit, RandomizedSearchCV
 from streamlit_autorefresh import st_autorefresh
 
+# Inicialização segura do modelo IA no session_state
+if "modelo_duzia" not in st.session_state:
+    st.session_state.modelo_duzia = ModeloIAHistGB()
+
 # 🔊 Som de moedas embutido
 som_moedas_base64 = "data:audio/mp3;base64,//uQxAA..."
 
