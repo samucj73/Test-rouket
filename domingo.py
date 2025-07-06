@@ -200,7 +200,7 @@ class ModeloIAHistGB:
         X, y = balancear_amostras(X, y)
 
         gb = HistGradientBoostingClassifier(early_stopping=True, validation_fraction=0.2, n_iter_no_change=10, random_state=42)
-        calibrated_gb = CalibratedClassifierCV(gb, cv=8)
+        calibrated_gb = CalibratedClassifierCV(gb, cv=5)
         rf = RandomForestClassifier(n_estimators=100, random_state=42)
 
         ensemble = VotingClassifier(
