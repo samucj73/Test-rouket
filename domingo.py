@@ -381,6 +381,11 @@ class ModeloAltoBaixoZero:
         if self.ultima_confianca >= self.ajustar_threshold():
             return self.encoder.inverse_transform([np.argmax(proba)])[0]
         return 
+
+# Constantes
+HISTORICO_PATH = "historico_coluna_duzia.json"
+API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelight/rounds/current"
+HEADERS = {"User-Agent": "IA-Roleta"}
 # 🔧 Interface Streamlit
 st.set_page_config(page_title="IA Roleta", layout="centered")
 st.title("🎯 IA Roleta — Previsão de Dúzia e Alto/Baixo/Zero")
