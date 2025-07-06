@@ -184,23 +184,31 @@ class ModeloIAHistGB:
             cor
         ]
 
-    def treinar(self, historico):
+        def treinar(self, historico):
         numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
         X, y = [], []
+
         for i in range(self.janela, len(numeros) - 1):
             janela = numeros[i - self.janela:i + 1]
             target = get_duzia(numeros[i])
             if target is not None:
                 X.append(self.construir_features(janela))
                 y.append(target)
-        if not X:
+
+        if not X or len(set(y)) < 2:
+            print("❌ Dados insuficientes ou apenas uma classe em y.")
             return
+
         X = np.array(X, dtype=np.float32)
         y = self.encoder.fit_transform(np.array(y))
         X, y = balancear_amostras(X, y)
 
+        if len(X) < 10:
+            print("❌ Muito poucos dados após balanceamento. Treinamento cancelado.")
+            return
+
         gb = HistGradientBoostingClassifier(early_stopping=True, validation_fraction=0.2, n_iter_no_change=10, random_state=42)
-        calibrated_gb = CalibratedClassifierCV(gb, cv=5)
+        calibrated_gb = CalibratedClassifierCV(gb, cv=min(3, len(X)))
         rf = RandomForestClassifier(n_estimators=100, random_state=42)
 
         ensemble = VotingClassifier(
@@ -208,26 +216,38 @@ class ModeloIAHistGB:
             voting='soft'
         )
 
-        tscv = TimeSeriesSplit(n_splits=3)
+        n_splits = min(3, len(X) // 5)  # segura para séries temporais
+        if n_splits < 2:
+            print("❌ Dados insuficientes para validação cruzada com TimeSeriesSplit.")
+            return
+
+        tscv = TimeSeriesSplit(n_splits=n_splits)
         param_dist = {
-            'gb__base_estimator__max_depth': [5, 10, 15],
-            'gb__base_estimator__learning_rate': [0.01, 0.05, 0.1],
-            'rf__n_estimators': [50, 100, 200]
+            'gb__base_estimator__max_depth': [5, 10],
+            'gb__base_estimator__learning_rate': [0.01, 0.05],
+            'rf__n_estimators': [50, 100]
         }
 
-        search = RandomizedSearchCV(
-            ensemble,
-            param_distributions=param_dist,
-            n_iter=10,
-            cv=tscv,
-            scoring='accuracy',
-            random_state=42,
-            n_jobs=-1
-        )
-        search.fit(X, y)
+        try:
+            search = RandomizedSearchCV(
+                ensemble,
+                param_distributions=param_dist,
+                n_iter=5,
+                cv=tscv,
+                scoring='accuracy',
+                random_state=42,
+                n_jobs=-1
+            )
+            search.fit(X, y)
+            self.modelo = search.best_estimator_
+            self.treinado = True
+            print("✅ Treinamento concluído com sucesso.")
 
-        self.modelo = search.best_estimator_
-        self.treinado = True
+        except Exception as e:
+            print(f"❌ Erro no treinamento: {e}")
+            self.treinado = False
+
+    
 
     def ajustar_threshold(self):
         if len(self.historico_confs) < 30:
@@ -361,23 +381,31 @@ class ModeloAltoBaixoZero:
             cor
         ]
 
-    def treinar(self, historico):
+        def treinar(self, historico):
         numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
         X, y = [], []
+
         for i in range(self.janela, len(numeros) - 1):
             janela = numeros[i - self.janela:i + 1]
             target = get_baixo_alto_zero(numeros[i])
             if target is not None:
                 X.append(self.construir_features(janela))
                 y.append(target)
-        if not X:
+
+        if not X or len(set(y)) < 2:
+            print("❌ Dados insuficientes ou apenas uma classe em y.")
             return
+
         X = np.array(X, dtype=np.float32)
         y = self.encoder.fit_transform(np.array(y))
         X, y = balancear_amostras(X, y)
 
+        if len(X) < 10:
+            print("❌ Muito poucos dados após balanceamento. Treinamento cancelado.")
+            return
+
         gb = HistGradientBoostingClassifier(early_stopping=True, validation_fraction=0.2, n_iter_no_change=10, random_state=42)
-        calibrated_gb = CalibratedClassifierCV(gb, cv=3)
+        calibrated_gb = CalibratedClassifierCV(gb, cv=min(3, len(X)))
         rf = RandomForestClassifier(n_estimators=100, random_state=42)
 
         ensemble = VotingClassifier(
@@ -385,26 +413,38 @@ class ModeloAltoBaixoZero:
             voting='soft'
         )
 
-        tscv = TimeSeriesSplit(n_splits=5)
+        n_splits = min(3, len(X) // 5)
+        if n_splits < 2:
+            print("❌ Dados insuficientes para validação cruzada com TimeSeriesSplit.")
+            return
+
+        tscv = TimeSeriesSplit(n_splits=n_splits)
         param_dist = {
-            'gb__base_estimator__max_depth': [5, 10, 15],
-            'gb__base_estimator__learning_rate': [0.01, 0.05, 0.1],
-            'rf__n_estimators': [50, 100, 200]
+            'gb__base_estimator__max_depth': [5, 10],
+            'gb__base_estimator__learning_rate': [0.01, 0.05],
+            'rf__n_estimators': [50, 100]
         }
 
-        search = RandomizedSearchCV(
-            ensemble,
-            param_distributions=param_dist,
-            n_iter=10,
-            cv=tscv,
-            scoring='accuracy',
-            random_state=42,
-            n_jobs=-1
-        )
-        search.fit(X, y)
+        try:
+            search = RandomizedSearchCV(
+                ensemble,
+                param_distributions=param_dist,
+                n_iter=5,
+                cv=tscv,
+                scoring='accuracy',
+                random_state=42,
+                n_jobs=-1
+            )
+            search.fit(X, y)
+            self.modelo = search.best_estimator_
+            self.treinado = True
+            print("✅ Treinamento de Alto/Baixo/Zero concluído com sucesso.")
 
-        self.modelo = search.best_estimator_
-        self.treinado = True
+        except Exception as e:
+            print(f"❌ Erro no treinamento de Alto/Baixo/Zero: {e}")
+            self.treinado = False
+
+    
 
     def ajustar_threshold(self):
         if len(self.historico_confs) < 30:
