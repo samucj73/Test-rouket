@@ -185,8 +185,8 @@ class ModeloIAHistGB:
         ]
 
         def treinar(self, historico):
-        numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
-        X, y = [], []
+            numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
+            X, y = [], []
 
         for i in range(self.janela, len(numeros) - 1):
             janela = numeros[i - self.janela:i + 1]
