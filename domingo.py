@@ -545,17 +545,23 @@ else:
     st.info("⏳ Aguarde mais dados para estatísticas.")
 
 # 📌 Mostrar só a MELHOR previsão (a mais assertiva até agora)
-acertos = st.session_state.acertos_gerais
-melhor_estrategia = max(acertos, key=lambda k: acertos[k])
+# 📌 Mostrar só a MELHOR previsão (com maior confiança/probabilidade atual)
+confiancas = {
+    "ia": st.session_state.modelo_duzia.ultima_confianca if prev_ia is not None else 0,
+    "altobx": st.session_state.modelo_altobx.ultima_confianca if prev_altobx is not None else 0,
+    "quente": 0.7 if prev_quente is not None else 0,
+    "tendencia": 0.7 if prev_tendencia is not None else 0,
+    "alternancia": 0.7 if prev_alternancia is not None else 0,
+}
+
+melhor_estrategia = max(confiancas, key=lambda k: confiancas[k])
 melhor_valor = None
-confianca = 0.0
+confianca = confiancas[melhor_estrategia]
 
 if melhor_estrategia == "ia":
     melhor_valor = prev_ia
-    confianca = st.session_state.modelo_duzia.ultima_confianca
 elif melhor_estrategia == "altobx":
     melhor_valor = prev_altobx
-    confianca = st.session_state.modelo_altobx.ultima_confianca
 elif melhor_estrategia == "quente":
     melhor_valor = prev_quente
 elif melhor_estrategia == "tendencia":
@@ -566,7 +572,14 @@ elif melhor_estrategia == "alternancia":
 st.subheader("🎯 Melhor Previsão Agora")
 col1, col2 = st.columns(2)
 col1.metric("🔝 Estratégia", melhor_estrategia.upper())
-col2.metric("🎯 Previsão", f"{melhor_valor}", f"{confianca:.2f}" if confianca else "")
+col2.metric("🎯 Previsão", f"{melhor_valor}", f"{confianca:.2f}" if melhor_estrategia in ["ia", "altobx"] else "")
+
+# 🔍 Expandir para ver todas as estratégias
+with st.expander("🔎 Ver todas as previsões"):
+    st.write(f"🧠 IA Dúzia: {prev_ia} (confiança: {st.session_state.modelo_duzia.ultima_confianca:.2f})")
+    st.write(f"🎯 Final por votação (quente/tendência/alternância): Dúzia {st.session_state.duzia_prevista}")
+    st.write(f"🔥 Quente: {prev_quente} | 📈 Tendência: {prev_tendencia} | 🔁 Alternância: {prev_alternancia}")
+    st.write(f"⚖️ IA Alto/Baixo/Zero: {prev_altobx} (confiança: {st.session_state.modelo_altobx.ultima_confianca:.2f})")
 
 # 🔍 Expandir para ver todas as estratégias
 with st.expander("🔎 Ver todas as previsões"):
