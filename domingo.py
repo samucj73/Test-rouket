@@ -450,7 +450,7 @@ if "acertos_gerais" not in st.session_state:
 
 # ⚙️ Configurações
 st.sidebar.header("⚙️ Configurações IA")
-janela_ia = st.sidebar.slider("Janela IA Dúzia", 50, 300, 250, step=10)
+janela_ia = st.sidebar.slider("Janela IA Dúzia", 10, 500, 250, step=10)
 confianca_min = st.sidebar.slider("Confiança mínima IA", 0.1, 0.9, 0.4, step=0.05)
 
 # 🧠 Treinar IA
