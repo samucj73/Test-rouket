@@ -208,7 +208,7 @@ class ModeloIAHistGB:
             voting='soft'
         )
 
-        tscv = TimeSeriesSplit(n_splits=5)
+        tscv = TimeSeriesSplit(n_splits=3)
         param_dist = {
             'gb__base_estimator__max_depth': [5, 10, 15],
             'gb__base_estimator__learning_rate': [0.01, 0.05, 0.1],
