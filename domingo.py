@@ -248,8 +248,8 @@ class ModeloIAHistGB:
         if self.ultima_confianca >= self.ajustar_threshold():
             return self.encoder.inverse_transform([np.argmax(proba)])[0]
         return None
-
-  def get_baixo_alto_zero(n):
+        # 🔢 Função para classificar como Baixo, Alto ou Zero
+def get_baixo_alto_zero(n):
     if n == 0:
         return "zero"
     elif 1 <= n <= 18:
@@ -257,6 +257,8 @@ class ModeloIAHistGB:
     elif 19 <= n <= 36:
         return "alto"
     return None
+
+  
 
 class ModeloAltoBaixoZero:
     def __init__(self, janela=250, confianca_min=0.4):
