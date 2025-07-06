@@ -184,9 +184,9 @@ class ModeloIAHistGB:
             cor
         ]
 
-        def treinar(self, historico):
-            numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
-            X, y = [], []
+    def treinar(self, historico):
+        numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
+        X, y = [], []
 
         for i in range(self.janela, len(numeros) - 1):
             janela = numeros[i - self.janela:i + 1]
@@ -207,204 +207,12 @@ class ModeloIAHistGB:
             print("❌ Muito poucos dados após balanceamento. Treinamento cancelado.")
             return
 
-        gb = HistGradientBoostingClassifier(early_stopping=True, validation_fraction=0.2, n_iter_no_change=10, random_state=42)
-        calibrated_gb = CalibratedClassifierCV(gb, cv=min(3, len(X)))
-        rf = RandomForestClassifier(n_estimators=100, random_state=42)
-
-        ensemble = VotingClassifier(
-            estimators=[('gb', calibrated_gb), ('rf', rf)],
-            voting='soft'
+        gb = HistGradientBoostingClassifier(
+            early_stopping=True,
+            validation_fraction=0.2,
+            n_iter_no_change=10,
+            random_state=42
         )
-
-        n_splits = min(3, len(X) // 5)  # segura para séries temporais
-        if n_splits < 2:
-            print("❌ Dados insuficientes para validação cruzada com TimeSeriesSplit.")
-            return
-
-        tscv = TimeSeriesSplit(n_splits=n_splits)
-        param_dist = {
-            'gb__base_estimator__max_depth': [5, 10],
-            'gb__base_estimator__learning_rate': [0.01, 0.05],
-            'rf__n_estimators': [50, 100]
-        }
-
-        try:
-            search = RandomizedSearchCV(
-                ensemble,
-                param_distributions=param_dist,
-                n_iter=5,
-                cv=tscv,
-                scoring='accuracy',
-                random_state=42,
-                n_jobs=-1
-            )
-            search.fit(X, y)
-            self.modelo = search.best_estimator_
-            self.treinado = True
-            print("✅ Treinamento concluído com sucesso.")
-
-        except Exception as e:
-            print(f"❌ Erro no treinamento: {e}")
-            self.treinado = False
-
-    
-
-    def ajustar_threshold(self):
-        if len(self.historico_confs) < 30:
-            return self.confianca_min
-        return np.percentile(self.historico_confs, 70)
-
-    def prever(self, historico):
-        if not self.treinado:
-            return None
-        numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
-        if len(numeros) < self.janela + 1:
-            return None
-        janela = numeros[-(self.janela + 1):]
-        entrada = np.array([self.construir_features(janela)], dtype=np.float32)
-        proba = self.modelo.predict_proba(entrada)[0]
-        self.ultima_confianca = max(proba)
-        self.historico_confs.append(self.ultima_confianca)
-        if self.ultima_confianca >= self.ajustar_threshold():
-            return self.encoder.inverse_transform([np.argmax(proba)])[0]
-        return None
-        # 🔢 Função para classificar como Baixo, Alto ou Zero
-def get_baixo_alto_zero(n):
-    if n == 0:
-        return "zero"
-    elif 1 <= n <= 18:
-        return "baixo"
-    elif 19 <= n <= 36:
-        return "alto"
-    return None
-
-  
-
-class ModeloAltoBaixoZero:
-    def __init__(self, janela=250, confianca_min=0.4):
-        self.janela = janela
-        self.confianca_min = confianca_min
-        self.modelo = None
-        self.encoder = LabelEncoder()
-        self.treinado = False
-        self.ultima_confianca = 0.0
-        self.historico_confs = []
-
-    def construir_features(self, numeros):
-        ultimos = numeros[-self.janela:]
-        atual = ultimos[-1]
-        anteriores = ultimos[:-1]
-
-        def safe_get_baz(n):
-            return -1 if n == 0 else get_baixo_alto_zero(n)
-
-        grupo = safe_get_baz(atual)
-        freq_20 = Counter(safe_get_baz(n) for n in numeros[-20:])
-        freq_50 = Counter(safe_get_baz(n) for n in numeros[-50:]) if len(numeros) >= 150 else freq_20
-        total_50 = sum(freq_50.values()) or 1
-
-        lag1 = safe_get_baz(anteriores[-1]) if len(anteriores) >= 1 else -1
-        lag2 = safe_get_baz(anteriores[-2]) if len(anteriores) >= 2 else -1
-        lag3 = safe_get_baz(anteriores[-3]) if len(anteriores) >= 3 else -1
-
-        val1 = anteriores[-1] if len(anteriores) >= 1 else 0
-        val2 = anteriores[-2] if len(anteriores) >= 2 else 0
-        val3 = anteriores[-3] if len(anteriores) >= 3 else 0
-
-        tendencia = 0
-        if len(anteriores) >= 3:
-            diffs = np.diff(anteriores[-3:])
-            tendencia = int(np.mean(diffs) > 0) - int(np.mean(diffs) < 0)
-
-        zeros_50 = numeros[-50:].count(0)
-        porc_zeros = zeros_50 / 50
-
-        densidade_20 = freq_20.get(grupo, 0)
-        densidade_50 = freq_50.get(grupo, 0)
-        rel_freq_grupo = densidade_50 / total_50
-        repete_baz = int(grupo == safe_get_baz(anteriores[-1])) if anteriores else 0
-
-        dist_ultimo_zero = next((i for i, n in enumerate(reversed(numeros)) if n == 0), len(numeros))
-        mudanca_baz = int(safe_get_baz(atual) != safe_get_baz(val1)) if len(anteriores) >= 1 else 0
-
-        repeticoes_baz = 0
-        for n in reversed(anteriores):
-            if safe_get_baz(n) == grupo:
-                repeticoes_baz += 1
-            else:
-                break
-
-        ultimos_10 = [n for n in numeros[-10:] if n > 0]
-        quente_10 = Counter(safe_get_baz(n) for n in ultimos_10).most_common(1)
-        baz_quente_10 = quente_10[0][0] if quente_10 else -1
-
-        repetiu_numero = int(atual == val1) if len(anteriores) >= 1 else 0
-        vizinho = int(abs(atual - val1) <= 2) if len(anteriores) >= 1 else 0
-
-        reversao_tendencia = 0
-        if len(anteriores) >= 4:
-            diffs1 = np.mean(np.diff(anteriores[-4:-1]))
-            diffs2 = atual - val1
-            reversao_tendencia = int((diffs1 > 0 and diffs2 < 0) or (diffs1 < 0 and diffs2 > 0))
-
-        coluna_atual = get_duzia(atual)
-        coluna_anterior = get_duzia(val1) if val1 else -1
-        subida_coluna = int(coluna_atual == coluna_anterior + 1) if coluna_anterior > 0 else 0
-        descida_coluna = int(coluna_atual == coluna_anterior - 1) if coluna_anterior > 0 else 0
-        repeticao_ou_vizinho = int((atual == val1) or (abs(atual - val1) == 1)) if val1 else 0
-
-        par = int(atual % 2 == 0)
-        vermelhos = {1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36}
-        cor = int(atual in vermelhos)
-
-        return [
-            atual % 2, atual % 3, int(str(atual)[-1]),
-            abs(atual - val1) if anteriores else 0,
-            int(atual == val1) if anteriores else 0,
-            1 if atual > val1 else -1 if atual < val1 else 0,
-            sum(1 for x in anteriores[-3:] if grupo == safe_get_baz(x)),
-            Counter(numeros[-30:]).get(atual, 0),
-            int(atual in [n for n, _ in Counter(numeros[-30:]).most_common(5)]),
-            int(np.mean(anteriores) < atual),
-            int(atual == 0),
-            grupo,
-            densidade_20, densidade_50, rel_freq_grupo,
-            repete_baz, tendencia, lag1, lag2, lag3,
-            val1, val2, val3, porc_zeros,
-            dist_ultimo_zero, mudanca_baz, repeticoes_baz,
-            baz_quente_10, repetiu_numero, vizinho,
-            reversao_tendencia,
-            subida_coluna,
-            descida_coluna,
-            repeticao_ou_vizinho,
-            par,
-            cor
-        ]
-
-        def treinar(self, historico):
-            numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
-            X, y = [], []
-
-        for i in range(self.janela, len(numeros) - 1):
-            janela = numeros[i - self.janela:i + 1]
-            target = get_baixo_alto_zero(numeros[i])
-            if target is not None:
-                X.append(self.construir_features(janela))
-                y.append(target)
-
-        if not X or len(set(y)) < 2:
-            print("❌ Dados insuficientes ou apenas uma classe em y.")
-            return
-
-        X = np.array(X, dtype=np.float32)
-        y = self.encoder.fit_transform(np.array(y))
-        X, y = balancear_amostras(X, y)
-
-        if len(X) < 10:
-            print("❌ Muito poucos dados após balanceamento. Treinamento cancelado.")
-            return
-
-        gb = HistGradientBoostingClassifier(early_stopping=True, validation_fraction=0.2, n_iter_no_change=10, random_state=42)
         calibrated_gb = CalibratedClassifierCV(gb, cv=min(3, len(X)))
         rf = RandomForestClassifier(n_estimators=100, random_state=42)
 
@@ -438,13 +246,10 @@ class ModeloAltoBaixoZero:
             search.fit(X, y)
             self.modelo = search.best_estimator_
             self.treinado = True
-            print("✅ Treinamento de Alto/Baixo/Zero concluído com sucesso.")
-
+            print("✅ Treinamento concluído com sucesso.")
         except Exception as e:
-            print(f"❌ Erro no treinamento de Alto/Baixo/Zero: {e}")
+            print(f"❌ Erro no treinamento: {e}")
             self.treinado = False
-
-    
 
     def ajustar_threshold(self):
         if len(self.historico_confs) < 30:
@@ -465,6 +270,119 @@ class ModeloAltoBaixoZero:
         if self.ultima_confianca >= self.ajustar_threshold():
             return self.encoder.inverse_transform([np.argmax(proba)])[0]
         return None
+
+class ModeloAltoBaixoZero:
+    def __init__(self, janela=100, confianca_min=0.4):
+        self.janela = janela
+        self.confianca_min = confianca_min
+        self.modelo = None
+        self.encoder = LabelEncoder()
+        self.treinado = False
+        self.ultima_confianca = 0.0
+        self.historico_confs = []
+
+    def construir_features(self, numeros):
+        ultimos = numeros[-self.janela:]
+        atual = ultimos[-1]
+        anteriores = ultimos[:-1]
+
+        val1 = anteriores[-1] if len(anteriores) >= 1 else 0
+        val2 = anteriores[-2] if len(anteriores) >= 2 else 0
+        val3 = anteriores[-3] if len(anteriores) >= 3 else 0
+
+        media_ultimos = np.mean(anteriores) if anteriores else 0
+        tendencia = 0
+        if len(anteriores) >= 3:
+            diffs = np.diff(anteriores[-3:])
+            tendencia = int(np.mean(diffs) > 0) - int(np.mean(diffs) < 0)
+
+        ultimos_10 = [n for n in numeros[-10:] if n > 0]
+        quente_10 = Counter(ultimos_10).most_common(1)
+        mais_frequente = quente_10[0][0] if quente_10 else 0
+
+        repetiu = int(atual == val1)
+        vizinho = int(abs(atual - val1) <= 2)
+        par = int(atual % 2 == 0)
+        cor = int(atual in {1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36})
+
+        return [
+            atual,
+            val1, val2, val3,
+            abs(atual - val1),
+            int(atual > media_ultimos),
+            tendencia,
+            repetiu,
+            vizinho,
+            par,
+            cor,
+            mais_frequente
+        ]
+
+    def treinar(self, historico):
+        numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
+        X, y = [], []
+
+        for i in range(self.janela, len(numeros) - 1):
+            janela = numeros[i - self.janela:i + 1]
+            target = get_baixo_alto_zero(numeros[i])
+            if target:
+                X.append(self.construir_features(janela))
+                y.append(target)
+
+        if not X or len(set(y)) < 2:
+            print("❌ Dados insuficientes ou apenas uma classe.")
+            return
+
+        X = np.array(X, dtype=np.float32)
+        y = self.encoder.fit_transform(np.array(y))
+        X, y = balancear_amostras(X, y)
+
+        if len(X) < 10:
+            print("❌ Muito poucos dados após balanceamento.")
+            return
+
+        try:
+            modelo = HistGradientBoostingClassifier(
+                early_stopping=True,
+                validation_fraction=0.2,
+                n_iter_no_change=10,
+                max_iter=100,
+                max_depth=6,
+                random_state=42
+            )
+            modelo.fit(X, y)
+            self.modelo = modelo
+            self.treinado = True
+            print("✅ Modelo Baixo/Alto/Zero treinado com sucesso.")
+        except Exception as e:
+            print(f"❌ Erro no treinamento B/A/Z: {e}")
+            self.treinado = False
+
+    def ajustar_threshold(self):
+        if len(self.historico_confs) < 30:
+            return self.confianca_min
+        return np.percentile(self.historico_confs, 70)
+
+    def prever(self, historico):
+        if not self.treinado:
+            return None
+        numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
+        if len(numeros) < self.janela + 1:
+            return None
+        janela = numeros[-(self.janela + 1):]
+        entrada = np.array([self.construir_features(janela)], dtype=np.float32)
+        proba = self.modelo.predict_proba(entrada)[0]
+        self.ultima_confianca = max(proba)
+        self.historico_confs.append(self.ultima_confianca)
+        if self.ultima_confianca >= self.ajustar_threshold():
+            return self.encoder.inverse_transform([np.argmax(proba)])[0]
+        return None
+
+
+
+  
+
+
 
   # 🔧 Interface Streamlit
 st.set_page_config(page_title="IA Roleta", layout="centered")
