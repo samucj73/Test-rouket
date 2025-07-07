@@ -13,6 +13,11 @@ from sklearn.calibration import CalibratedClassifierCV
 from sklearn.model_selection import TimeSeriesSplit, RandomizedSearchCV
 from streamlit_autorefresh import st_autorefresh
 
+if "acertos_gerais" not in st.session_state:
+    st.session_state.acertos_gerais = {
+        "ia": 0, "quente": 0, "tendencia": 0, "alternancia": 0, "altobx": 0
+    }
+
 # 🔊 Som de moedas embutido
 som_moedas_base64 = "data:audio/mp3;base64,//uQxAA..."
 
