@@ -363,8 +363,7 @@ class ModeloAltoBaixoZero:
             par,
             cor
         ]
-
-   def treinar(self, historico):
+def treinar(self, historico):
        numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
        X, y = [], []
 
