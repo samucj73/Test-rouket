@@ -3,6 +3,7 @@ import json
 import os
 import requests
 import numpy as np
+import logging
 from collections import Counter
 from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.preprocessing import LabelEncoder
@@ -14,22 +15,6 @@ HISTORICO_PATH = "historico_coluna_duzia.json"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
-def buscar_numero_api():
-    try:
-        response = requests.get(API_URL, headers=HEADERS, timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-            numero = int(data.get("winningNumber", -1))
-            if 0 <= numero <= 36:
-                ultimo = st.session_state.historico[-1]["number"] if st.session_state.historico else None
-                if numero != ultimo:
-                    st.session_state.historico.append({"number": numero, "timestamp": data.get("timestamp", "api")})
-                    salvar_resultado_em_arquivo(st.session_state.historico)
-                    st.toast(f"🎲 Novo número: {numero}")
-    except Exception as e:
-        st.warning(f"Erro ao buscar número da API: {e}")
-
-# Funções utilitárias
 def get_duzia(n):
     if n == 0: return 0
     if 1 <= n <= 12: return 1
@@ -60,28 +45,6 @@ def balancear_amostras(X, y):
         X_bal.append(X_res)
         y_bal.append(y_res)
     return np.concatenate(X_bal), np.concatenate(y_bal)
-
-# Inicializa o estado da sessão
-if "historico" not in st.session_state:
-    if os.path.exists(HISTORICO_PATH):
-        with open(HISTORICO_PATH, "r") as f:
-            st.session_state.historico = json.load(f)
-    else:
-        st.session_state.historico = []
-
-if "duzias_acertadas" not in st.session_state:
-    st.session_state.duzias_acertadas = 0
-if "baz_acertados" not in st.session_state:
-    st.session_state.baz_acertados = 0
-if "acertos_estrategias" not in st.session_state:
-    st.session_state.acertos_estrategias = {
-        "ia": 0,
-        "quente": 0,
-        "tendencia": 0,
-        "alternancia": 0,
-        "ausente": 0,
-        "maior_alt": 0
-    }
 
 def estrategia_duzia_quente(historico, janela=130):
     numeros = [h["number"] for h in historico[-janela:] if h["number"] > 0]
@@ -122,14 +85,40 @@ def estrategia_duzia_ausente(historico, janela=150):
     return menos_frequente
 
 def estrategia_maior_alternancia(historico):
-    """Retorna a dúzia oposta à anterior (para detectar alternância forte)."""
     numeros = [h["number"] for h in historico if h["number"] > 0]
-    if len(numeros) < 2:
+    if len(numeros) < 4:
         return None
-    duzias = [get_duzia(n) for n in numeros[-2:]]
-    if duzias[0] != duzias[1]:
-        return [d for d in [1, 2, 3] if d != duzias[1]][0]
-    return duzias[1]
+    duzias = [get_duzia(n) for n in numeros]
+    alt = 0
+    max_alt = 0
+    melhor = duzias[-1]
+    for i in range(1, len(duzias)):
+        if duzias[i] != duzias[i - 1]:
+            alt += 1
+            if alt > max_alt:
+                max_alt = alt
+                melhor = duzias[i]
+        else:
+            alt = 0
+    return melhor
+
+def buscar_numero_api():
+    try:
+        response = requests.get(API_URL, headers=HEADERS, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            numero = data.get("data", {}).get("result", {}).get("outcome", {}).get("number", -1)
+            timestamp = data.get("data", {}).get("startedAt", "api")
+
+            if isinstance(numero, int) and 0 <= numero <= 36:
+                ultimo = st.session_state.historico[-1]["number"] if st.session_state.historico else None
+                if numero != ultimo:
+                    st.session_state.historico.append({"number": numero, "timestamp": timestamp})
+                    salvar_resultado_em_arquivo(st.session_state.historico)
+                    st.toast(f"🎲 Novo número: {numero}")
+    except Exception as e:
+        st.warning(f"Erro ao buscar número da API: {e}")
+
 class ModeloIAHistGB:
     def __init__(self, janela=250, confianca_min=0.4):
         self.janela = janela
@@ -171,10 +160,10 @@ class ModeloIAHistGB:
         densidade_20 = freq_20.get(grupo, 0)
         densidade_50 = freq_50.get(grupo, 0)
         rel_freq_grupo = densidade_50 / total_50
-        repete_duzia = int(grupo == safe_get_duzia(anteriores[-1])) if anteriores else 0
+        repete_duzia = int(grupo == safe_get_duzia(val1)) if anteriores else 0
 
         dist_ultimo_zero = next((i for i, n in enumerate(reversed(numeros)) if n == 0), len(numeros))
-        mudanca_duzia = int(safe_get_duzia(atual) != safe_get_duzia(val1)) if len(anteriores) >= 1 else 0
+        mudanca_duzia = int(grupo != safe_get_duzia(val1)) if anteriores else 0
 
         repeticoes_duzia = 0
         for n in reversed(anteriores):
@@ -187,8 +176,8 @@ class ModeloIAHistGB:
         quente_10 = Counter(safe_get_duzia(n) for n in ultimos_10).most_common(1)
         duzia_quente_10 = quente_10[0][0] if quente_10 else -1
 
-        repetiu_numero = int(atual == val1) if len(anteriores) >= 1 else 0
-        vizinho = int(abs(atual - val1) <= 2) if len(anteriores) >= 1 else 0
+        repetiu_numero = int(atual == val1) if anteriores else 0
+        vizinho = int(abs(atual - val1) <= 2) if anteriores else 0
 
         if atual in range(1, 10): quadrante_roleta = 0
         elif atual in range(10, 19): quadrante_roleta = 1
@@ -213,12 +202,11 @@ class ModeloIAHistGB:
         subida_coluna = int(coluna_atual == coluna_anterior + 1) if coluna_anterior > 0 else 0
         descida_coluna = int(coluna_atual == coluna_anterior - 1) if coluna_anterior > 0 else 0
 
-        repeticao_ou_vizinho = int((atual == val1) or (abs(atual - val1) == 1)) if val1 else 0
+        repeticao_ou_vizinho = int((atual == val1) or (abs(atual - val1) == 1)) if anteriores else 0
 
         return [
             atual % 2, atual % 3, int(str(atual)[-1]),
-            abs(atual - val1) if anteriores else 0,
-            int(atual == val1) if anteriores else 0,
+            abs(atual - val1), int(atual == val1),
             1 if atual > val1 else -1 if atual < val1 else 0,
             sum(1 for x in anteriores[-3:] if grupo == safe_get_duzia(x)),
             Counter(numeros[-30:]).get(atual, 0),
@@ -317,10 +305,10 @@ class ModeloAltoBaixoZero:
         densidade_20 = freq_20.get(grupo, 0)
         densidade_50 = freq_50.get(grupo, 0)
         rel_freq_grupo = densidade_50 / total_50
-        repete_baz = int(grupo == safe_get_baz(anteriores[-1])) if anteriores else 0
+        repete_baz = int(grupo == safe_get_baz(val1)) if anteriores else 0
 
         dist_ultimo_zero = next((i for i, n in enumerate(reversed(numeros)) if n == 0), len(numeros))
-        mudanca_baz = int(safe_get_baz(atual) != safe_get_baz(val1)) if len(anteriores) >= 1 else 0
+        mudanca_baz = int(grupo != safe_get_baz(val1)) if anteriores else 0
 
         repeticoes_baz = 0
         for n in reversed(anteriores):
@@ -333,13 +321,12 @@ class ModeloAltoBaixoZero:
         quente_10 = Counter(safe_get_baz(n) for n in ultimos_10).most_common(1)
         baz_quente_10 = quente_10[0][0] if quente_10 else -1
 
-        repetiu_numero = int(atual == val1) if len(anteriores) >= 1 else 0
-        vizinho = int(abs(atual - val1) <= 2) if len(anteriores) >= 1 else 0
+        repetiu_numero = int(atual == val1) if anteriores else 0
+        vizinho = int(abs(atual - val1) <= 2) if anteriores else 0
 
         return [
             atual % 2, atual % 3, int(str(atual)[-1]),
-            abs(atual - val1) if anteriores else 0,
-            int(atual == val1) if anteriores else 0,
+            abs(atual - val1), int(atual == val1),
             1 if atual > val1 else -1 if atual < val1 else 0,
             sum(1 for x in anteriores[-3:] if grupo == safe_get_baz(x)),
             Counter(numeros[-30:]).get(atual, 0),
@@ -391,100 +378,12 @@ class ModeloAltoBaixoZero:
             return self.encoder.inverse_transform([np.argmax(proba)])[0]
         return None
 
-import streamlit as st
-import json
-import os
-import numpy as np
-from collections import Counter
-from streamlit_autorefresh import st_autorefresh
-
-HISTORICO_PATH = "historico_coluna_duzia.json"
-
-def salvar_resultado_em_arquivo(historico, caminho=HISTORICO_PATH):
-    with open(caminho, "w") as f:
-        json.dump(historico, f, indent=2)
-
-def estrategia_maior_alternancia(historico):
-    numeros = [h["number"] for h in historico if h["number"] > 0]
-    if len(numeros) < 4:
-        return None
-    duzias = [get_duzia(n) for n in numeros]
-    alt = 0
-    max_alt = 0
-    melhor = duzias[-1]
-    for i in range(1, len(duzias)):
-        if duzias[i] != duzias[i - 1]:
-            alt += 1
-            if alt > max_alt:
-                max_alt = alt
-                melhor = duzias[i]
-        else:
-            alt = 0
-    return melhor
-
 # Configuração da página
 st.set_page_config(page_title="🎲 IA Roleta XXXtreme", layout="centered")
 st.title("🎰 IA Roleta XXXtreme")
 st.caption("Previsão de **Dúzia** e **Baixo/Alto/Zero** com estratégias inteligentes + IA")
 
-# Inicialização do estado da sessão
-if "historico" not in st.session_state:
-    if os.path.exists(HISTORICO_PATH):
-        with open(HISTORICO_PATH, "r") as f:
-            st.session_state.historico = json.load(f)
-    else:
-        st.session_state.historico = []
-
-if "modelo_duzia" not in st.session_state:
-    st.session_state.modelo_duzia = ModeloIAHistGB()
-
-if "modelo_baz" not in st.session_state:
-    st.session_state.modelo_baz = ModeloAltoBaixoZero()
-
-if "duzias_acertadas" not in st.session_state:
-    st.session_state.duzias_acertadas = 0
-
-if "baz_acertados" not in st.session_state:
-    st.session_state.baz_acertados = 0
-
-if "duzia_prevista" not in st.session_state:
-    st.session_state.duzia_prevista = None
-
-if "baz_previsto" not in st.session_state:
-    st.session_state.baz_previsto = None
-
-if "acertos_estrategias" not in st.session_state:
-    st.session_state.acertos_estrategias = {
-        "ia": 0,
-        "quente": 0,
-        "tendencia": 0,
-        "alternancia": 0,
-        "ausente": 0,
-        "maior_alt": 0
-    }
-
-# 🛰️ Buscar novo número da API
-try:
-    response = requests.get(API_URL, headers=HEADERS, timeout=10)
-    data = response.json()
-    resultado_api = {
-        "number": data.get("data", {}).get("result", {}).get("outcome", {}).get("number"),
-        "timestamp": data.get("data", {}).get("startedAt")
-    }
-except Exception as e:
-    resultado_api = None
-    logging.warning(f"Erro na API: {e}")
-
-# ✅ Novo número detectado
-ultimo_timestamp = st.session_state.historico[-1]["timestamp"] if st.session_state.historico else None
-
-if resultado_api and resultado_api["timestamp"] != ultimo_timestamp:
-    novo_num = resultado_api["number"]
-    st.toast(f"🎲 Novo número: {novo_num}")
-    duzia_real = get_duzia(novo_num)
-
-
-# 🔧 Configurações
+# 🔧 Configurações do usuário (sidebar)
 with st.sidebar:
     st.header("⚙️ Configurações")
     janela_ia = st.slider("Tamanho da Janela da IA", 50, 300, 250, step=10)
@@ -496,13 +395,15 @@ with st.sidebar:
         st.session_state.modelo_baz.treinar(st.session_state.historico)
         st.success("Modelos treinados novamente!")
 
-# 🔁 Últimos sorteios
-st.subheader("🔢 Últimos 10 Números")
-ultimos = [str(h["number"]) for h in st.session_state.historico[-10:]]
-st.write(" ".join(ultimos))
+# 🛰️ Buscar novo número da API
+buscar_numero_api()
 
+# 🔢 Exibir últimos números
+with st.expander("🕘 Últimos Números", expanded=True):
+    ultimos = [str(h["number"]) for h in st.session_state.historico[-10:]]
+    st.code(" | ".join(ultimos), language="text")
 
-# 📝 Entrada Manual
+# ✍️ Entrada manual de resultados
 with st.expander("✍️ Inserir Números Manualmente"):
     entrada = st.text_area("Digite os números (0 a 36, separados por espaço):", height=100)
     if st.button("📩 Adicionar Sorteios"):
@@ -510,23 +411,23 @@ with st.expander("✍️ Inserir Números Manualmente"):
             numeros = [int(n) for n in entrada.split() if n.isdigit() and 0 <= int(n) <= 36]
             if numeros:
                 for n in numeros:
-                    st.session_state.historico.append({"number": n, "timestamp": f"manual_{len(st.session_state.historico)}"})
+                    st.session_state.historico.append({
+                        "number": n,
+                        "timestamp": f"manual_{len(st.session_state.historico)}"
+                    })
                 salvar_resultado_em_arquivo(st.session_state.historico)
                 st.success(f"{len(numeros)} números adicionados com sucesso!")
             else:
                 st.warning("Nenhum número válido encontrado.")
-        except:
-            st.error("Erro ao processar os números.")
-
-with st.expander("🕘 Últimos Números", expanded=True):
-    ultimos = [str(h["number"]) for h in st.session_state.historico[-10:]]
-    st.code(" | ".join(ultimos), language="text")
+        except Exception as e:
+            st.error(f"Erro ao processar os números: {e}")
 
 # 🔮 Previsões
 col1, col2 = st.columns(2)
 
 with col1:
     st.subheader("🔮 Previsão de Dúzia")
+
     prev_ia = st.session_state.modelo_duzia.prever(st.session_state.historico)
     prev_quente = estrategia_duzia_quente(st.session_state.historico)
     prev_tendencia = estrategia_tendencia(st.session_state.historico)
@@ -534,6 +435,7 @@ with col1:
     prev_ausente = estrategia_duzia_ausente(st.session_state.historico)
     prev_maior_alt = estrategia_maior_alternancia(st.session_state.historico)
 
+    # Votação entre estratégias para escolher a melhor
     votacao = Counter()
     for p in [prev_quente, prev_tendencia, prev_alternancia]:
         if p is not None:
@@ -547,7 +449,9 @@ with col1:
     st.metric("🔁 Alternância", str(prev_alternancia))
     st.metric("⏳ Ausente", str(prev_ausente))
     st.metric("⚡ Maior Alternância", str(prev_maior_alt))
-    st.success(f"🎯 Final: Dúzia {final_duzia}")
+
+    if final_duzia:
+        st.success(f"🎯 Final: Dúzia {final_duzia}")
 
 with col2:
     st.subheader("🔮 Previsão Baixo/Alto/Zero")
@@ -564,6 +468,7 @@ with st.expander("📊 Desempenho"):
         taxa_baz = st.session_state.baz_acertados / total * 100
         st.success(f"🎯 Dúzia: {st.session_state.duzias_acertadas} / {total} ({taxa_duzia:.2f}%)")
         st.success(f"🎯 Baixo/Alto/Zero: {st.session_state.baz_acertados} / {total} ({taxa_baz:.2f}%)")
+        
         st.markdown("### ✅ Acertos por Estratégia Dúzia")
         for nome, acertos in st.session_state.acertos_estrategias.items():
             taxa = acertos / total * 100
@@ -571,12 +476,12 @@ with st.expander("📊 Desempenho"):
     else:
         st.info("Aguardando mais dados para calcular o desempenho.")
 
-# 📥 Download histórico
+# 📥 Download do histórico
 if os.path.exists(HISTORICO_PATH):
     with open(HISTORICO_PATH, "r") as f:
         conteudo = f.read()
     st.download_button("📥 Baixar Histórico", data=conteudo, file_name="historico_coluna_duzia.json")
 
-# 🔁 Auto-refresh
+# 🔁 Auto-refresh a cada 10s
 st_autorefresh(interval=10000, key="refresh_roleta")
-buscar_numero_api()
+
