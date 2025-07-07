@@ -534,6 +534,10 @@ if len(st.session_state.historico) >= 2:
         st.session_state.duzias_acertadas += 1
         st.toast("✅ Acertou a DÚZIA!")
 
+    for nome, previsao in estrategias.items():
+        if previsao == duzia_real:
+            st.session_state.acertos_estrategias[nome] += 1
+
     # Baixo/Alto/Zero
     baz_real = get_baixo_alto_zero(numero_atual)
     baz_previsto = st.session_state.get("baz_previsto")
@@ -566,9 +570,7 @@ with st.expander("🔢 Números Mais Prováveis (IA)", expanded=True):
         "maior_alt": estrategia_maior_alternancia(st.session_state.historico[:-1]),
     }
 
-    for nome, previsao in estrategias.items():
-        if previsao == duzia_real:
-            st.session_state.acertos_estrategias[nome] += 1
+    
 
 # 🔢 Exibir últimos números
 with st.expander("🕘 Últimos Números", expanded=True):
