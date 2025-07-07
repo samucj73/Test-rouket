@@ -375,7 +375,7 @@ for i in range(self.janela, len(numeros) - 1):
 
     if not X or len(set(y)) < 2:
         print("❌ Dados insuficientes ou apenas uma classe em y.")
-        return
+       # return
 
     X = np.array(X, dtype=np.float32)
     y = self.encoder.fit_transform(np.array(y))
@@ -383,7 +383,7 @@ for i in range(self.janela, len(numeros) - 1):
 
     if len(X) < 10:
         print("❌ Muito poucos dados após balanceamento. Treinamento cancelado.")
-        return
+     #   return
 
     # Modelos
     gb = HistGradientBoostingClassifier(
