@@ -23,23 +23,7 @@ if "historico" not in st.session_state:
     else:
         st.session_state.historico = []
 
-# Inicialização dos modelos IA
 
-# Modelo IA de Dúzia
-if "modelo_duzia" not in st.session_state:
-    st.session_state.modelo_duzia = ModeloIAHistGB(janela=250, confianca_min=0.4)
-    if len(st.session_state.historico) >= 260:
-        st.session_state.modelo_duzia.treinar(st.session_state.historico)
-    else:
-        st.warning("Aguardando mais dados para treinar a IA de Dúzia...")
-
-# Modelo IA de Baixo/Alto/Zero (se estiver usando)
-if "modelo_baz" not in st.session_state:
-    st.session_state.modelo_baz = ModeloAltoBaixoZero(janela=250, confianca_min=0.4)
-    if len(st.session_state.historico) >= 260:
-        st.session_state.modelo_baz.treinar(st.session_state.historico)
-    else:
-        st.warning("Aguardando mais dados para treinar a IA Baixo/Alto/Zero...")
 
 if "duzias_acertadas" not in st.session_state:
     st.session_state.duzias_acertadas = 0
@@ -421,6 +405,24 @@ class ModeloAltoBaixoZero:
         if self.ultima_confianca >= self.confianca_min:
             return self.encoder.inverse_transform([np.argmax(proba)])[0]
         return None
+
+# Inicialização dos modelos IA
+
+# Modelo IA de Dúzia
+if "modelo_duzia" not in st.session_state:
+    st.session_state.modelo_duzia = ModeloIAHistGB(janela=250, confianca_min=0.4)
+    if len(st.session_state.historico) >= 260:
+        st.session_state.modelo_duzia.treinar(st.session_state.historico)
+    else:
+        st.warning("Aguardando mais dados para treinar a IA de Dúzia...")
+
+# Modelo IA de Baixo/Alto/Zero (se estiver usando)
+if "modelo_baz" not in st.session_state:
+    st.session_state.modelo_baz = ModeloAltoBaixoZero(janela=250, confianca_min=0.4)
+    if len(st.session_state.historico) >= 260:
+        st.session_state.modelo_baz.treinar(st.session_state.historico)
+    else:
+        st.warning("Aguardando mais dados para treinar a IA Baixo/Alto/Zero...")
 
 # Configuração da página
 st.set_page_config(page_title="🎲 IA Roleta XXXtreme", layout="centered")
