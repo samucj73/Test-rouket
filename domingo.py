@@ -375,7 +375,7 @@ class ModeloAltoBaixoZero:
 
     if len(X) < 10:
         print("❌ Muito poucos dados após balanceamento. Treinamento cancelado.")
-        return
+      #  return
 
     self.modelo.fit(X, y)
     self.treinado = True
