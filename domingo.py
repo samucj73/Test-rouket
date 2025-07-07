@@ -367,7 +367,7 @@ class ModeloAltoBaixoZero:
 
     if not X or len(set(y)) < 2:
         print("❌ Dados insuficientes ou apenas uma classe em y.")
-        return
+       # return
 
     X = np.array(X, dtype=np.float32)
     y = self.encoder.fit_transform(np.array(y))
