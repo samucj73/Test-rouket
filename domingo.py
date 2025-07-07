@@ -188,40 +188,41 @@ class ModeloIAHistGB:
             par,
             cor
         ]
+        class ModeloIAHistGB:
+    def __init__(self, janela=100, confianca_min=0.5):
+        self.janela = janela
+        self.confianca_min = confianca_min
+        self.modelo = HistGradientBoostingClassifier()
+        self.encoder = LabelEncoder()
+        self.treinado = False
 
     def treinar(self, historico):
-    numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
-    X, y = [], []
+        numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
+        X, y = [], []
 
-    for i in range(self.janela, len(numeros) - 1):
-        janela = numeros[i - self.janela:i + 1]
-        target = get_duzia(numeros[i])
-        if target is not None:
-            X.append(self.construir_features(janela))
-            y.append(target)
+        for i in range(self.janela, len(numeros) - 1):
+            janela = numeros[i - self.janela:i + 1]
+            target = get_duzia(numeros[i])
+            if target is not None:
+                X.append(self.construir_features(janela))
+                y.append(target)
 
-    if not X or len(set(y)) < 2:
-        print("❌ Dados insuficientes ou apenas uma classe em y.")
-        return
+        if not X or len(set(y)) < 2:
+            print("❌ Dados insuficientes ou apenas uma classe em y.")
+            return
 
-    X = np.array(X, dtype=np.float32)
-    y = self.encoder.fit_transform(np.array(y))
-    X, y = balancear_amostras(X, y)
+        X = np.array(X, dtype=np.float32)
+        y = self.encoder.fit_transform(np.array(y))
+        X, y = balancear_amostras(X, y)
 
-    if len(X) < 10:
-        print("❌ Muito poucos dados após balanceamento. Treinamento cancelado.")
-        return
+        if len(X) < 10:
+            print("❌ Muito poucos dados após balanceamento. Treinamento cancelado.")
+            return
 
-    self.modelo.fit(X, y)
-    self.treinado = True
+        self.modelo.fit(X, y)
+        self.treinado = True
 
-    X = np.array(X, dtype=np.float32)
-    y = self.encoder.fit_transform(np.array(y))
-    X, y = balancear_amostras(X, y)
-
-    if len(X) < 10:
-        print("❌ Muito poucos dados após balanceamento. Treinamento cancelado.")
-        # return
+    
 
     # Modelos
     gb = HistGradientBoostingClassifier(
