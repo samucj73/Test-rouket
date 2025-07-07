@@ -190,49 +190,49 @@ class ModeloIAHistGB:
         ]
 
     def treinar(self, historico):
-        numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
-        X, y = [], []
-        for i in range(self.janela, len(numeros) - 1):
-            janela = numeros[i - self.janela:i + 1]
-            target = get_duzia(numeros[i])
-            if target is not None:
-                X.append(self.construir_features(janela))
-                y.append(target)
-        if not X:
-            return
-        X = np.array(X, dtype=np.float32)
-        y = self.encoder.fit_transform(np.array(y))
-        X, y = balancear_amostras(X, y)
+    numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
+    X, y = [], []
 
-        gb = HistGradientBoostingClassifier(early_stopping=True, validation_fraction=0.2, n_iter_no_change=10, random_state=42)
-        calibrated_gb = CalibratedClassifierCV(gb, cv=3)
-        rf = RandomForestClassifier(n_estimators=100, random_state=42)
+    for i in range(self.janela, len(numeros) - 1):
+        janela = numeros[i - self.janela:i + 1]
+        target = get_duzia(numeros[i])
+        if target is not None:
+            X.append(self.construir_features(janela))
+            y.append(target)
 
-        ensemble = VotingClassifier(
-            estimators=[('gb', calibrated_gb), ('rf', rf)],
-            voting='soft'
-        )
+    if not X or len(set(y)) < 2:
+        print("❌ Dados insuficientes ou apenas uma classe em y.")
+        return
 
-        tscv = TimeSeriesSplit(n_splits=5)
-        param_dist = {
-            'gb__base_estimator__max_depth': [5, 10, 15],
-            'gb__base_estimator__learning_rate': [0.01, 0.05, 0.1],
-            'rf__n_estimators': [50, 100, 200]
-        }
+    X = np.array(X, dtype=np.float32)
+    y = self.encoder.fit_transform(np.array(y))
+    X, y = balancear_amostras(X, y)
 
-        search = RandomizedSearchCV(
-            ensemble,
-            param_distributions=param_dist,
-            n_iter=10,
-            cv=tscv,
-            scoring='accuracy',
-            random_state=42,
-            n_jobs=-1
-        )
-        search.fit(X, y)
+    if len(X) < 10:
+        print("❌ Muito poucos dados após balanceamento. Treinamento cancelado.")
+        return
 
-        self.modelo = search.best_estimator_
-        self.treinado = True
+    # Modelos
+    gb = HistGradientBoostingClassifier(
+        early_stopping=True,
+        validation_fraction=0.2,
+        n_iter_no_change=10,
+        max_depth=6,
+        learning_rate=0.05,
+        random_state=42
+    )
+    calibrated_gb = CalibratedClassifierCV(gb, cv=3)
+    rf = RandomForestClassifier(n_estimators=100, random_state=42)
+
+    # Ensemble
+    self.modelo = VotingClassifier(
+        estimators=[('gb', calibrated_gb), ('rf', rf)],
+        voting='soft'
+    )
+
+    self.modelo.fit(X, y)
+    self.treinado = True
+    print("✅ Treinamento da IA (dúzia) concluído.")
 
     def ajustar_threshold(self):
         if len(self.historico_confs) < 30:
@@ -364,50 +364,50 @@ class ModeloAltoBaixoZero:
             cor
         ]
 
-    def treinar(self, historico):
-        numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
-        X, y = [], []
-        for i in range(self.janela, len(numeros) - 1):
-            janela = numeros[i - self.janela:i + 1]
-            target = get_baixo_alto_zero(numeros[i])
-            if target is not None:
-                X.append(self.construir_features(janela))
-                y.append(target)
-        if not X:
-            return
-        X = np.array(X, dtype=np.float32)
-        y = self.encoder.fit_transform(np.array(y))
-        X, y = balancear_amostras(X, y)
+   def treinar(self, historico):
+    numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
+    X, y = [], []
 
-        gb = HistGradientBoostingClassifier(early_stopping=True, validation_fraction=0.2, n_iter_no_change=10, random_state=42)
-        calibrated_gb = CalibratedClassifierCV(gb, cv=3)
-        rf = RandomForestClassifier(n_estimators=100, random_state=42)
+    for i in range(self.janela, len(numeros) - 1):
+        janela = numeros[i - self.janela:i + 1]
+        target = get_baixo_alto_zero(numeros[i])
+        if target is not None:
+            X.append(self.construir_features(janela))
+            y.append(target)
 
-        ensemble = VotingClassifier(
-            estimators=[('gb', calibrated_gb), ('rf', rf)],
-            voting='soft'
-        )
+    if not X or len(set(y)) < 2:
+        print("❌ Dados insuficientes ou apenas uma classe em y.")
+        return
 
-        tscv = TimeSeriesSplit(n_splits=5)
-        param_dist = {
-            'gb__base_estimator__max_depth': [5, 10, 15],
-            'gb__base_estimator__learning_rate': [0.01, 0.05, 0.1],
-            'rf__n_estimators': [50, 100, 200]
-        }
+    X = np.array(X, dtype=np.float32)
+    y = self.encoder.fit_transform(np.array(y))
+    X, y = balancear_amostras(X, y)
 
-        search = RandomizedSearchCV(
-            ensemble,
-            param_distributions=param_dist,
-            n_iter=10,
-            cv=tscv,
-            scoring='accuracy',
-            random_state=42,
-            n_jobs=-1
-        )
-        search.fit(X, y)
+    if len(X) < 10:
+        print("❌ Muito poucos dados após balanceamento. Treinamento cancelado.")
+        return
 
-        self.modelo = search.best_estimator_
-        self.treinado = True
+    # Modelos
+    gb = HistGradientBoostingClassifier(
+        early_stopping=True,
+        validation_fraction=0.2,
+        n_iter_no_change=10,
+        max_depth=6,
+        learning_rate=0.05,
+        random_state=42
+    )
+    calibrated_gb = CalibratedClassifierCV(gb, cv=3)
+    rf = RandomForestClassifier(n_estimators=100, random_state=42)
+
+    # Ensemble
+    self.modelo = VotingClassifier(
+        estimators=[('gb', calibrated_gb), ('rf', rf)],
+        voting='soft'
+    )
+
+    self.modelo.fit(X, y)
+    self.treinado = True
+    print("✅ Treinamento da IA (baixo/alto/zero) concluído.")
 
     def ajustar_threshold(self):
         if len(self.historico_confs) < 30:
