@@ -496,6 +496,12 @@ with st.sidebar:
         st.session_state.modelo_baz.treinar(st.session_state.historico)
         st.success("Modelos treinados novamente!")
 
+# 🔁 Últimos sorteios
+st.subheader("🔢 Últimos 10 Números")
+ultimos = [str(h["number"]) for h in st.session_state.historico[-10:]]
+st.write(" ".join(ultimos))
+
+
 # 📝 Entrada Manual
 with st.expander("✍️ Inserir Números Manualmente"):
     entrada = st.text_area("Digite os números (0 a 36, separados por espaço):", height=100)
