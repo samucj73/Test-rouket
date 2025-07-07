@@ -406,39 +406,64 @@ class ModeloAltoBaixoZero:
             return self.encoder.inverse_transform([np.argmax(proba)])[0]
         return None
 
-class ModeloTopNumeros:
-    def __init__(self, janela=250, confianca_min=0.02):
+class ModeloTopNumerosMelhorado:
+    def __init__(self, janela=250, confianca_min=0.1):
         self.janela = janela
         self.confianca_min = confianca_min
         self.modelo = None
+        self.encoder = LabelEncoder()
         self.treinado = False
-        self.ultima_proba = []
+        self.importancias = []
 
     def construir_features(self, numeros):
-        ultimos = numeros[-self.janela:]
+        if len(numeros) < self.janela + 1:
+            return None
+
+        ultimos = numeros[-(self.janela + 1):]
         atual = ultimos[-1]
         anteriores = ultimos[:-1]
 
-        val1 = anteriores[-1] if len(anteriores) >= 1 else 0
-        val2 = anteriores[-2] if len(anteriores) >= 2 else 0
-        val3 = anteriores[-3] if len(anteriores) >= 3 else 0
+        freq_20 = Counter(anteriores[-20:])
+        freq_50 = Counter(anteriores[-50:])
+        freq_100 = Counter(anteriores[-100:])
 
-        tendencia = 0
-        if len(anteriores) >= 3:
-            diffs = np.diff(anteriores[-3:])
-            tendencia = int(np.mean(diffs) > 0) - int(np.mean(diffs) < 0)
+        total_100 = sum(freq_100.values()) or 1
 
-        dist_ultimo_zero = next((i for i, n in enumerate(reversed(numeros)) if n == 0), len(numeros))
+        # Features básicas
+        lag1 = anteriores[-1]
+        lag2 = anteriores[-2] if len(anteriores) >= 2 else -1
+        lag3 = anteriores[-3] if len(anteriores) >= 3 else -1
+
+        diff_lag = atual - lag1 if lag1 != -1 else 0
+        tendencia = int(np.mean(np.diff(anteriores[-5:])) > 0) if len(anteriores) >= 5 else 0
+
+        def get_coluna(n):
+            if n == 0: return 0
+            elif n % 3 == 1: return 1
+            elif n % 3 == 2: return 2
+            else: return 3
+
+        def get_cor(n):
+            vermelhos = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]
+            return 1 if n in vermelhos else 0 if n != 0 else -1
+
+        coluna = get_coluna(atual)
+        cor = get_cor(atual)
+
+        posicoes = [i for i, n in enumerate(reversed(anteriores)) if n == atual]
+        dist_ultima_ocorrencia = posicoes[0] if posicoes else len(anteriores)
+
+        top5_freq = [n for n, _ in freq_50.most_common(5)]
+        numero_quente = int(atual in top5_freq)
 
         return [
-            atual % 2,
-            atual % 3,
-            abs(atual - val1),
-            int(atual == val1),
-            tendencia,
-            val1, val2, val3,
-            dist_ultimo_zero,
-            int(np.mean(anteriores) < atual)
+            atual, atual % 2, atual % 3, int(str(atual)[-1]),
+            freq_20.get(atual, 0), freq_50.get(atual, 0), freq_100.get(atual, 0),
+            freq_100.get(atual, 0) / total_100,
+            lag1, lag2, lag3,
+            diff_lag, tendencia,
+            coluna, get_duzia(atual), get_baixo_alto_zero(atual),
+            cor, dist_ultima_ocorrencia, numero_quente
         ]
 
     def treinar(self, historico):
@@ -447,21 +472,29 @@ class ModeloTopNumeros:
         for i in range(self.janela, len(numeros) - 1):
             janela = numeros[i - self.janela:i + 1]
             target = numeros[i]
-            X.append(self.construir_features(janela))
-            y.append(target)
+            feat = self.construir_features(janela)
+            if feat is not None and target is not None:
+                X.append(feat)
+                y.append(target)
         if not X:
             return
         X = np.array(X, dtype=np.float32)
         y = np.array(y)
-        X, y = balancear_amostras(X, y)
+        self.encoder.fit(y)
+        y_enc = self.encoder.transform(y)
+
+        # Balancear amostras para todas as classes (números)
+        X_bal, y_bal = balancear_amostras(X, y_enc)
+
         self.modelo = HistGradientBoostingClassifier(
-            max_iter=300,
-            max_depth=10,
-            learning_rate=0.05,
+            max_iter=500,
+            max_depth=12,
+            learning_rate=0.03,
             random_state=42
         )
-        self.modelo.fit(X, y)
+        self.modelo.fit(X_bal, y_bal)
         self.treinado = True
+        self.importancias = self.modelo.feature_importances_
 
     def prever_top_n(self, historico, n=4):
         if not self.treinado:
@@ -470,11 +503,21 @@ class ModeloTopNumeros:
         if len(numeros) < self.janela + 1:
             return []
         janela = numeros[-(self.janela + 1):]
-        entrada = np.array([self.construir_features(janela)], dtype=np.float32)
+        entrada = self.construir_features(janela)
+        if entrada is None:
+            return []
+        entrada = np.array([entrada], dtype=np.float32)
         proba = self.modelo.predict_proba(entrada)[0]
-        self.ultima_proba = proba
-        indices_top = np.argsort(proba)[::-1][:n]
-        return indices_top.tolist()
+        idx_sorted = np.argsort(proba)[::-1]
+        top_indices = idx_sorted[:n]
+        top_numeros = self.encoder.inverse_transform(top_indices)
+        top_probs = proba[top_indices]
+        resultados = list(zip(top_numeros, top_probs))
+        # Filtra só os que têm probabilidade >= confianca_min (se quiser)
+        resultados_filtrados = [r for r in resultados if r[1] >= self.confianca_min]
+        return resultados_filtrados if resultados_filtrados else resultados[:n]
+
+
 
 # Inicialização dos modelos IA
 
