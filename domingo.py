@@ -210,7 +210,7 @@ class ModeloIAHistGB:
 
     if len(X) < 10:
         print("❌ Muito poucos dados após balanceamento. Treinamento cancelado.")
-        return
+        # return
 
     # Modelos
     gb = HistGradientBoostingClassifier(
