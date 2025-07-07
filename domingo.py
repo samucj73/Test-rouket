@@ -539,7 +539,7 @@ if "modelo_baz" not in st.session_state:
 
 # Modelo IA de Top 4 Números
 if "modelo_top4" not in st.session_state:
-    st.session_state.modelo_top4 = ModeloTopNumeros(janela=250)
+    st.session_state.modelo_top4 = ModeloTopNumerosMelhorado(janela=250)
     if len(st.session_state.historico) >= 260:
         st.session_state.modelo_top4.treinar(st.session_state.historico)
     else:
