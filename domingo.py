@@ -354,9 +354,9 @@ class ModeloAltoBaixoZero:
             cor
         ]
 def treinar(self, historico):
-       numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
-       X, y = [], []
-for i in range(self.janela, len(numeros) - 1):
+    numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
+    X, y = [], []
+    for i in range(self.janela, len(numeros) - 1):
     janela = numeros[i - self.janela:i + 1]
     target = get_baixo_alto_zero(numeros[i])
     if target is not None:
