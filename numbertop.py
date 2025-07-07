@@ -154,7 +154,7 @@ with st.sidebar:
         st.session_state.modelo_top4.treinar(st.session_state.historico)
         st.success("IA re-treinada com sucesso!")
 
-# 🔁 Inicializar histórico e modelo
+# Inicializa histórico e modelo
 if "historico" not in st.session_state:
     st.session_state.historico = carregar_historico()
 
@@ -163,29 +163,44 @@ if "modelo_top4" not in st.session_state:
     if len(st.session_state.historico) >= 260:
         st.session_state.modelo_top4.treinar(st.session_state.historico)
 
-# 🔄 Buscar novo número da API
+# Inicializa contador de acertos
+if "acertos_top4" not in st.session_state:
+    st.session_state.acertos_top4 = 0
+
+# 🔁 Captura automática via API
 def buscar_novo_numero():
     try:
         r = requests.get(API_URL, headers=HEADERS, timeout=10)
         if r.status_code == 200:
             data = r.json()
-            numero = int(data["data"]["result"]["outcome"]["number"])
-            timestamp = data["data"]["settledAt"]
-            if all(h["timestamp"] != timestamp for h in st.session_state.historico):
-                st.session_state.historico.append({"number": numero, "timestamp": timestamp})
-                salvar_resultado_em_arquivo(st.session_state.historico)
+            numero = data.get("data", {}).get("result", {}).get("outcome", {}).get("number")
+            timestamp = data.get("data", {}).get("startedAt")
+            if numero is not None and timestamp:
+                if all(h["timestamp"] != timestamp for h in st.session_state.historico):
+                    st.session_state.historico.append({"number": numero, "timestamp": timestamp})
+                    salvar_resultado_em_arquivo(st.session_state.historico)
+
+                    # Verifica acerto com previsão anterior
+                    top4_anteriores = st.session_state.get("ultimos_top4", [])
+                    if numero in top4_anteriores:
+                        st.session_state.acertos_top4 += 1
+
+                    # Re-treinar a cada 5 novos dados
+                    if len(st.session_state.historico) % 5 == 0:
+                        st.session_state.modelo_top4.treinar(st.session_state.historico)
     except Exception as e:
         st.warning(f"Erro na API: {e}")
 
 buscar_novo_numero()
 
-# ✅ Função segura de checagem e rerun
+# 🔁 Verifica se houve novo número e rerun controlado
 def checar_e_rerun():
     tam_ant = st.session_state.get("tam_hist", 0)
     tam_novo = len(st.session_state.historico)
     if tam_novo > tam_ant:
         st.session_state["tam_hist"] = tam_novo
-        st.experimental_rerun()
+        st.experimental_set_query_params(refresh="true")
+        st.stop()
 
 checar_e_rerun()
 
@@ -206,6 +221,7 @@ with st.expander("✍️ Inserir Números Manualmente"):
 # 🎯 Previsão
 if st.session_state.modelo_top4.treinado:
     top4 = st.session_state.modelo_top4.prever_top_n(st.session_state.historico)
+    st.session_state.ultimos_top4 = [n for n, _ in top4]
     st.subheader("🎯 Próximos Números Prováveis")
     if top4:
         for n, p in top4:
@@ -214,6 +230,15 @@ if st.session_state.modelo_top4.treinado:
         st.info("Aguardando mais dados para prever.")
 else:
     st.info("IA ainda não treinada.")
+
+# 📊 Desempenho
+with st.expander("📊 Desempenho"):
+    total = len(st.session_state.historico) - st.session_state.modelo_top4.janela
+    if total > 0:
+        taxa = st.session_state.acertos_top4 / total * 100
+        st.success(f"🎯 Acertos Top 4: {st.session_state.acertos_top4} / {total} ({taxa:.2f}%)")
+    else:
+        st.info("Aguardando dados suficientes.")
 
 # 📜 Últimos números
 with st.expander("📜 Últimos Números"):
