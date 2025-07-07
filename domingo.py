@@ -463,6 +463,27 @@ if "acertos_estrategias" not in st.session_state:
         "maior_alt": 0
     }
 
+# 🛰️ Buscar novo número da API
+try:
+    response = requests.get(API_URL, headers=HEADERS, timeout=10)
+    data = response.json()
+    resultado_api = {
+        "number": data.get("data", {}).get("result", {}).get("outcome", {}).get("number"),
+        "timestamp": data.get("data", {}).get("startedAt")
+    }
+except Exception as e:
+    resultado_api = None
+    logging.warning(f"Erro na API: {e}")
+
+# ✅ Novo número detectado
+ultimo_timestamp = st.session_state.historico[-1]["timestamp"] if st.session_state.historico else None
+
+if resultado_api and resultado_api["timestamp"] != ultimo_timestamp:
+    novo_num = resultado_api["number"]
+    st.toast(f"🎲 Novo número: {novo_num}")
+    duzia_real = get_duzia(novo_num)
+
+
 # 🔧 Configurações
 with st.sidebar:
     st.header("⚙️ Configurações")
