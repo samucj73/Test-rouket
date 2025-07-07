@@ -23,22 +23,6 @@ if "historico" not in st.session_state:
     else:
         st.session_state.historico = []
 
-if "duzias_acertadas" not in st.session_state:
-    st.session_state.duzias_acertadas = 0
-
-if "baz_acertados" not in st.session_state:
-    st.session_state.baz_acertados = 0
-
-if "acertos_estrategias" not in st.session_state:
-    st.session_state.acertos_estrategias = {
-        "ia": 0,
-        "quente": 0,
-        "tendencia": 0,
-        "alternancia": 0,
-        "ausente": 0,
-        "maior_alt": 0
-    }
-
 # Inicialização dos modelos IA
 
 # Modelo IA de Dúzia
@@ -56,6 +40,24 @@ if "modelo_baz" not in st.session_state:
         st.session_state.modelo_baz.treinar(st.session_state.historico)
     else:
         st.warning("Aguardando mais dados para treinar a IA Baixo/Alto/Zero...")
+
+if "duzias_acertadas" not in st.session_state:
+    st.session_state.duzias_acertadas = 0
+
+if "baz_acertados" not in st.session_state:
+    st.session_state.baz_acertados = 0
+
+if "acertos_estrategias" not in st.session_state:
+    st.session_state.acertos_estrategias = {
+        "ia": 0,
+        "quente": 0,
+        "tendencia": 0,
+        "alternancia": 0,
+        "ausente": 0,
+        "maior_alt": 0
+    }
+
+
 
 def get_duzia(n):
     if n == 0: return 0
