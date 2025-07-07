@@ -444,6 +444,39 @@ with st.sidebar:
 # 🛰️ Buscar novo número da API
 buscar_numero_api()
 
+# ✅ Verificar se houve acerto nas previsões anteriores
+if len(st.session_state.historico) >= 2:
+    numero_atual = st.session_state.historico[-1]["number"]
+    numero_anterior = st.session_state.historico[-2]["number"]
+
+    # Dúzia
+    duzia_real = get_duzia(numero_atual)
+    duzia_prevista = st.session_state.get("duzia_prevista")
+    if duzia_real is not None and duzia_prevista == duzia_real:
+        st.session_state.duzias_acertadas += 1
+        st.toast("✅ Acertou a DÚZIA!")
+
+    # Baixo/Alto/Zero
+    baz_real = get_baixo_alto_zero(numero_atual)
+    baz_previsto = st.session_state.get("baz_previsto")
+    if baz_real is not None and baz_previsto == baz_real:
+        st.session_state.baz_acertados += 1
+        st.toast("✅ Acertou Baixo/Alto/Zero!")
+
+    # Estratégias
+    estrategias = {
+        "ia": st.session_state.modelo_duzia.prever(st.session_state.historico[:-1]),
+        "quente": estrategia_duzia_quente(st.session_state.historico[:-1]),
+        "tendencia": estrategia_tendencia(st.session_state.historico[:-1]),
+        "alternancia": estrategia_alternancia(st.session_state.historico[:-1]),
+        "ausente": estrategia_duzia_ausente(st.session_state.historico[:-1]),
+        "maior_alt": estrategia_maior_alternancia(st.session_state.historico[:-1]),
+    }
+
+    for nome, previsao in estrategias.items():
+        if previsao == duzia_real:
+            st.session_state.acertos_estrategias[nome] += 1
+
 # 🔢 Exibir últimos números
 with st.expander("🕘 Últimos Números", expanded=True):
     ultimos = [str(h["number"]) for h in st.session_state.historico[-10:]]
