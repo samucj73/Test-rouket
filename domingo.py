@@ -188,10 +188,10 @@ class ModeloIAHistGB:
             par,
             cor
         ]
-class ModeloIAHistGB:
-    def __init__(self, janela=100, confianca_min=0.5):
-        self.janela = janela
-        self.confianca_min = confianca_min
+        class ModeloIAHistGB:
+            def __init__(self, janela=100, confianca_min=0.5):
+                self.janela = janela
+                self.confianca_min = confianca_min
         self.modelo = HistGradientBoostingClassifier()
         self.encoder = LabelEncoder()
         self.treinado = False
