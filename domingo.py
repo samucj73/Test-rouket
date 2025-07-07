@@ -529,5 +529,5 @@ if os.path.exists(HISTORICO_PATH):
     st.download_button("📥 Baixar Histórico", data=conteudo, file_name="historico_coluna_duzia.json")
 
 # 🔁 Auto-refresh a cada 10s
-st_autorefresh(interval=10000, key="refresh_roleta")
+st_autorefresh(interval=5000, key="refresh_roleta")
 
