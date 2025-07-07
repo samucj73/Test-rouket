@@ -353,19 +353,21 @@ class ModeloAltoBaixoZero:
             par,
             cor
         ]
-def treinar(self, historico):
+
+    def treinar(self, historico):
     numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
     X, y = [], []
+
     for i in range(self.janela, len(numeros) - 1):
-    janela = numeros[i - self.janela:i + 1]
-    target = get_baixo_alto_zero(numeros[i])
-    if target is not None:
-        X.append(self.construir_features(janela))
-        y.append(target)
+        janela = numeros[i - self.janela:i + 1]
+        target = get_baixo_alto_zero(numeros[i])
+        if target is not None:
+            X.append(self.construir_features(janela))
+            y.append(target)
 
     if not X or len(set(y)) < 2:
         print("❌ Dados insuficientes ou apenas uma classe em y.")
-       # return
+        return
 
     X = np.array(X, dtype=np.float32)
     y = self.encoder.fit_transform(np.array(y))
@@ -373,7 +375,11 @@ def treinar(self, historico):
 
     if len(X) < 10:
         print("❌ Muito poucos dados após balanceamento. Treinamento cancelado.")
-     #   return
+        return
+
+    self.modelo.fit(X, y)
+    self.treinado = True
+
 
     # Modelos
     gb = HistGradientBoostingClassifier(
