@@ -188,13 +188,26 @@ class ModeloIAHistGB:
             par,
             cor
         ]
-        class ModeloIAHistGB:
+class ModeloIAHistGB:
     def __init__(self, janela=100, confianca_min=0.5):
         self.janela = janela
         self.confianca_min = confianca_min
         self.modelo = HistGradientBoostingClassifier()
         self.encoder = LabelEncoder()
         self.treinado = False
+
+    def construir_features(self, janela):
+        features = []
+        ultimos = janela[-self.janela:]
+
+        # Exemplo de features simples (você pode expandir com mais de 40 depois)
+        media = np.mean(ultimos)
+        desvio = np.std(ultimos)
+        zeros = ultimos.count(0)
+        ult = ultimos[-1]
+
+        features.extend([media, desvio, zeros, ult])
+        return features
 
     def treinar(self, historico):
         numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
@@ -213,6 +226,8 @@ class ModeloIAHistGB:
 
         X = np.array(X, dtype=np.float32)
         y = self.encoder.fit_transform(np.array(y))
+
+        # Função externa para balancear classes
         X, y = balancear_amostras(X, y)
 
         if len(X) < 10:
@@ -222,58 +237,21 @@ class ModeloIAHistGB:
         self.modelo.fit(X, y)
         self.treinado = True
 
-    
-
-    # Modelos
-    gb = HistGradientBoostingClassifier(
-        early_stopping=True,
-        validation_fraction=0.2,
-        n_iter_no_change=10,
-        max_depth=6,
-        learning_rate=0.05,
-        random_state=42
-    )
-    calibrated_gb = CalibratedClassifierCV(gb, cv=3)
-    rf = RandomForestClassifier(n_estimators=100, random_state=42)
-
-    # Ensemble
-    self.modelo = VotingClassifier(
-        estimators=[('gb', calibrated_gb), ('rf', rf)],
-        voting='soft'
-    )
-
-    self.modelo.fit(X, y)
-    self.treinado = True
-    print("✅ Treinamento da IA (dúzia) concluído.")
-
-    def ajustar_threshold(self):
-        if len(self.historico_confs) < 30:
-            return self.confianca_min
-        return np.percentile(self.historico_confs, 70)
-
-    def prever(self, historico):
+    def prever(self, janela):
         if not self.treinado:
             return None
-        numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
-        if len(numeros) < self.janela + 1:
-            return None
-        janela = numeros[-(self.janela + 1):]
-        entrada = np.array([self.construir_features(janela)], dtype=np.float32)
-        proba = self.modelo.predict_proba(entrada)[0]
-        self.ultima_confianca = max(proba)
-        self.historico_confs.append(self.ultima_confianca)
-        if self.ultima_confianca >= self.ajustar_threshold():
-            return self.encoder.inverse_transform([np.argmax(proba)])[0]
-        return None
 
-def get_baixo_alto_zero(n):
-    if n == 0:
-        return "zero"
-    elif 1 <= n <= 18:
-        return "baixo"
-    elif 19 <= n <= 36:
-        return "alto"
-    return None
+        features = self.construir_features(janela)
+        X = np.array([features], dtype=np.float32)
+        probs = self.modelo.predict_proba(X)[0]
+        pred = self.modelo.predict(X)[0]
+        conf = max(probs)
+
+        if conf < self.confianca_min:
+            return None
+
+        return self.encoder.inverse_transform([pred])[0], conf
+        
 
 class ModeloAltoBaixoZero:
     def __init__(self, janela=250, confianca_min=0.4):
