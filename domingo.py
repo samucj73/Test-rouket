@@ -190,8 +190,8 @@ class ModeloIAHistGB:
         ]
 
     def treinar(self, historico):
-        numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
-        X, y = [], []
+    numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
+    X, y = [], []
 
     for i in range(self.janela, len(numeros) - 1):
         janela = numeros[i - self.janela:i + 1]
@@ -202,7 +202,18 @@ class ModeloIAHistGB:
 
     if not X or len(set(y)) < 2:
         print("❌ Dados insuficientes ou apenas uma classe em y.")
-        # return
+        return
+
+    X = np.array(X, dtype=np.float32)
+    y = self.encoder.fit_transform(np.array(y))
+    X, y = balancear_amostras(X, y)
+
+    if len(X) < 10:
+        print("❌ Muito poucos dados após balanceamento. Treinamento cancelado.")
+        return
+
+    self.modelo.fit(X, y)
+    self.treinado = True
 
     X = np.array(X, dtype=np.float32)
     y = self.encoder.fit_transform(np.array(y))
