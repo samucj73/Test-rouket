@@ -369,9 +369,9 @@ def treinar(self, historico):
 for i in range(self.janela, len(numeros) - 1):
     janela = numeros[i - self.janela:i + 1]
     target = get_baixo_alto_zero(numeros[i])
-        if target is not None:
-            X.append(self.construir_features(janela))
-            y.append(target)
+    if target is not None:
+        X.append(self.construir_features(janela))
+        y.append(target)
 
     if not X or len(set(y)) < 2:
         print("❌ Dados insuficientes ou apenas uma classe em y.")
