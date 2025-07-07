@@ -14,6 +14,21 @@ HISTORICO_PATH = "historico_coluna_duzia.json"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
+def buscar_numero_api():
+    try:
+        response = requests.get(API_URL, headers=HEADERS, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            numero = int(data.get("winningNumber", -1))
+            if 0 <= numero <= 36:
+                ultimo = st.session_state.historico[-1]["number"] if st.session_state.historico else None
+                if numero != ultimo:
+                    st.session_state.historico.append({"number": numero, "timestamp": data.get("timestamp", "api")})
+                    salvar_resultado_em_arquivo(st.session_state.historico)
+                    st.toast(f"🎲 Novo número: {numero}")
+    except Exception as e:
+        st.warning(f"Erro ao buscar número da API: {e}")
+
 # Funções utilitárias
 def get_duzia(n):
     if n == 0: return 0
@@ -538,3 +553,4 @@ if os.path.exists(HISTORICO_PATH):
 
 # 🔁 Auto-refresh
 st_autorefresh(interval=10000, key="refresh_roleta")
+buscar_numero_api()
