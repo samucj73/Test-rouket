@@ -406,6 +406,76 @@ class ModeloAltoBaixoZero:
             return self.encoder.inverse_transform([np.argmax(proba)])[0]
         return None
 
+class ModeloTopNumeros:
+    def __init__(self, janela=250, confianca_min=0.02):
+        self.janela = janela
+        self.confianca_min = confianca_min
+        self.modelo = None
+        self.treinado = False
+        self.ultima_proba = []
+
+    def construir_features(self, numeros):
+        ultimos = numeros[-self.janela:]
+        atual = ultimos[-1]
+        anteriores = ultimos[:-1]
+
+        val1 = anteriores[-1] if len(anteriores) >= 1 else 0
+        val2 = anteriores[-2] if len(anteriores) >= 2 else 0
+        val3 = anteriores[-3] if len(anteriores) >= 3 else 0
+
+        tendencia = 0
+        if len(anteriores) >= 3:
+            diffs = np.diff(anteriores[-3:])
+            tendencia = int(np.mean(diffs) > 0) - int(np.mean(diffs) < 0)
+
+        dist_ultimo_zero = next((i for i, n in enumerate(reversed(numeros)) if n == 0), len(numeros))
+
+        return [
+            atual % 2,
+            atual % 3,
+            abs(atual - val1),
+            int(atual == val1),
+            tendencia,
+            val1, val2, val3,
+            dist_ultimo_zero,
+            int(np.mean(anteriores) < atual)
+        ]
+
+    def treinar(self, historico):
+        numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
+        X, y = [], []
+        for i in range(self.janela, len(numeros) - 1):
+            janela = numeros[i - self.janela:i + 1]
+            target = numeros[i]
+            X.append(self.construir_features(janela))
+            y.append(target)
+        if not X:
+            return
+        X = np.array(X, dtype=np.float32)
+        y = np.array(y)
+        X, y = balancear_amostras(X, y)
+        self.modelo = HistGradientBoostingClassifier(
+            max_iter=300,
+            max_depth=10,
+            learning_rate=0.05,
+            random_state=42
+        )
+        self.modelo.fit(X, y)
+        self.treinado = True
+
+    def prever_top_n(self, historico, n=4):
+        if not self.treinado:
+            return []
+        numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
+        if len(numeros) < self.janela + 1:
+            return []
+        janela = numeros[-(self.janela + 1):]
+        entrada = np.array([self.construir_features(janela)], dtype=np.float32)
+        proba = self.modelo.predict_proba(entrada)[0]
+        self.ultima_proba = proba
+        indices_top = np.argsort(proba)[::-1][:n]
+        return indices_top.tolist()
+
 # Inicialização dos modelos IA
 
 # Modelo IA de Dúzia
@@ -423,6 +493,14 @@ if "modelo_baz" not in st.session_state:
         st.session_state.modelo_baz.treinar(st.session_state.historico)
     else:
         st.warning("Aguardando mais dados para treinar a IA Baixo/Alto/Zero...")
+
+# Modelo IA de Top 4 Números
+if "modelo_top4" not in st.session_state:
+    st.session_state.modelo_top4 = ModeloTopNumeros(janela=250)
+    if len(st.session_state.historico) >= 260:
+        st.session_state.modelo_top4.treinar(st.session_state.historico)
+    else:
+        st.warning("Aguardando mais dados para treinar a IA de Números...")
 
 # Configuração da página
 st.set_page_config(page_title="🎲 IA Roleta XXXtreme", layout="centered")
@@ -462,6 +540,21 @@ if len(st.session_state.historico) >= 2:
     if baz_real is not None and baz_previsto == baz_real:
         st.session_state.baz_acertados += 1
         st.toast("✅ Acertou Baixo/Alto/Zero!")
+
+    # 🎯 Top 4 números prováveis
+with st.expander("🔢 Números Mais Prováveis (IA)", expanded=True):
+    top4 = st.session_state.modelo_top4.prever_top_n(st.session_state.historico)
+    if top4:
+        st.markdown("🎯 **Top 4 Números Prováveis:**")
+        st.code(" | ".join(map(str, top4)))
+        
+        # Exibir as probabilidades (opcional)
+        st.markdown("📊 **Probabilidades:**")
+        for i in top4:
+            prob = st.session_state.modelo_top4.ultima_proba[i]
+            st.write(f"Número {i}: {prob:.2%}")
+    else:
+        st.info("Aguardando mais dados para prever os números.")
 
     # Estratégias
     estrategias = {
