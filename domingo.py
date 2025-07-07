@@ -491,10 +491,9 @@ with st.expander("✍️ Inserir Números Manualmente"):
         except:
             st.error("Erro ao processar os números.")
 
-# 🔁 Últimos Números
 with st.expander("🕘 Últimos Números", expanded=True):
-    ultimos = st.session_state.historico[-10:]
-    st.write(" ".join(str(h["number"]) for h in ultimos))
+    ultimos = [str(h["number"]) for h in st.session_state.historico[-10:]]
+    st.code(" | ".join(ultimos), language="text")
 
 # 🔮 Previsões
 col1, col2 = st.columns(2)
