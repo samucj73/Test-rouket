@@ -577,6 +577,15 @@ if len(st.session_state.historico) >= 2:
         st.session_state.duzias_acertadas += 1
         st.toast("✅ Acertou a DÚZIA!")
 
+    estrategias = {
+    "ia": prev_ia,
+    "quente": prev_quente,
+    "tendencia": prev_tendencia,
+    "alternancia": prev_alternancia,
+    "ausente": prev_ausente,
+    "maior_alt": prev_maior_alt
+}
+
     for nome, previsao in estrategias.items():
         if previsao == duzia_real:
             st.session_state.acertos_estrategias[nome] += 1
