@@ -15,6 +15,30 @@ HISTORICO_PATH = "historico_coluna_duzia.json"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
+# --- Inicialização do estado da sessão ---
+if "historico" not in st.session_state:
+    if os.path.exists(HISTORICO_PATH):
+        with open(HISTORICO_PATH, "r") as f:
+            st.session_state.historico = json.load(f)
+    else:
+        st.session_state.historico = []
+
+if "duzias_acertadas" not in st.session_state:
+    st.session_state.duzias_acertadas = 0
+
+if "baz_acertados" not in st.session_state:
+    st.session_state.baz_acertados = 0
+
+if "acertos_estrategias" not in st.session_state:
+    st.session_state.acertos_estrategias = {
+        "ia": 0,
+        "quente": 0,
+        "tendencia": 0,
+        "alternancia": 0,
+        "ausente": 0,
+        "maior_alt": 0
+    }
+
 def get_duzia(n):
     if n == 0: return 0
     if 1 <= n <= 12: return 1
