@@ -309,10 +309,7 @@ if st.session_state.modelo_top4.treinado:
             with col:
                 st.markdown(f"<h1 style='text-align:center; color:#ff4b4b'>{n}</h1>", unsafe_allow_html=True)
                 st.markdown(f"<p style='text-align:center'>{p:.2%}</p>", unsafe_allow_html=True) 
-        
-                
-
-        # Enviar alerta apenas se a previsão mudou
+         # Enviar alerta apenas se a previsão mudou
         top4_numeros_atuais = [n for n, _ in top4]
         if top4_numeros_atuais != st.session_state.ultima_mensagem_enviada_top4:
             st.session_state.ultima_mensagem_enviada_top4 = top4_numeros_atuais
