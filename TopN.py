@@ -1,3 +1,4 @@
+# ... [Importações e configuração iniciais]
 import streamlit as st
 import requests
 import json
@@ -9,15 +10,13 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.utils import resample
 from streamlit_autorefresh import st_autorefresh
 
-# 📌 Configurações
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 HISTORICO_PATH = "historico_numeros_top4.json"
 
-# 🔁 Atualização automática a cada 30 segundos
 st_autorefresh(interval=30 * 1000, limit=None, key="refresh")
 
-# 🚦 Funções utilitárias
+# Funções utilitárias
 def get_duzia(n):
     if n == 0: return None
     elif 1 <= n <= 12: return 1
@@ -47,7 +46,7 @@ def carregar_historico():
             return json.load(f)
     return []
 
-# 📈 Modelo IA dos 4 números mais prováveis
+# Modelo IA
 class ModeloTopNumerosMelhorado:
     def __init__(self, janela=250, confianca_min=0.1):
         self.janela = janela
@@ -125,53 +124,47 @@ class ModeloTopNumerosMelhorado:
         self.treinado = True
         self.importancias = self.modelo.feature_importances_
 
-def prever_top_n(self, historico, n=4):
-    if not self.treinado:
-        return []
-    numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
-    if len(numeros) < self.janela + 1:
-        return []
-    janela = numeros[-(self.janela + 1):]
-    entrada = self.construir_features(janela)
-    if entrada is None or self.modelo is None:
-        return []
+    def prever_top_n(self, historico, n=4):
+        if not self.treinado:
+            return []
+        numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
+        if len(numeros) < self.janela + 1:
+            return []
+        janela = numeros[-(self.janela + 1):]
+        entrada = self.construir_features(janela)
+        if entrada is None or self.modelo is None:
+            return []
+        entrada = np.array([entrada], dtype=np.float32)
+        if entrada.shape[1] != self.modelo.n_features_in_:
+            st.warning("Número de features inconsistente.")
+            return []
+        try:
+            proba = self.modelo.predict_proba(entrada)[0]
+            self.ultima_proba = proba
+            idx_sorted = np.argsort(proba)[::-1]
+            top_indices = idx_sorted[:n]
+            top_numeros = self.encoder.inverse_transform(top_indices)
+            top_probs = proba[top_indices]
+            return list(zip(top_numeros, top_probs))
+        except Exception as e:
+            st.error(f"Erro na previsão: {e}")
+            return []
 
-    entrada = np.array([entrada], dtype=np.float32)
-
-    # Verifica se o número de features bate com o modelo
-    if entrada.shape[1] != self.modelo.n_features_in_:
-        st.warning(f"Número de features inconsistente: esperado {self.modelo.n_features_in_}, recebido {entrada.shape[1]}")
-        return []
-
-    try:
-        proba = self.modelo.predict_proba(entrada)[0]
-        self.ultima_proba = proba
-        idx_sorted = np.argsort(proba)[::-1]
-        top_indices = idx_sorted[:n]
-        top_numeros = self.encoder.inverse_transform(top_indices)
-        top_probs = proba[top_indices]
-        return list(zip(top_numeros, top_probs))
-    except Exception as e:
-        st.error(f"Erro ao prever: {e}")
-        return []
-
-    
-
-# 🧠 Interface Streamlit
+# 🔧 Inicialização
 st.set_page_config(page_title="🎯 IA Números Prováveis", layout="centered")
 st.title("🔮 IA - Top 4 Números Prováveis")
 
-# ⚙️ Configurações
+# Sidebar
 with st.sidebar:
-    st.header("⚙️ IA - Parâmetros")
+    st.header("⚙️ Configurações da IA")
     janela_ia = st.slider("Janela de Treinamento", 50, 300, 250, step=10)
     confianca_min = st.slider("Confiança Mínima", 0.05, 1.0, 0.1, step=0.05)
-    if st.button("🔁 Re-treinar IA"):
+    if st.button("🔁 Re-treinar"):
         st.session_state.modelo_top4 = ModeloTopNumerosMelhorado(janela=janela_ia, confianca_min=confianca_min)
         st.session_state.modelo_top4.treinar(st.session_state.historico)
-        st.success("IA re-treinada com sucesso!")
+        st.success("IA re-treinada!")
 
-# 🔁 Inicialização de estado
+# Estado
 if "historico" not in st.session_state:
     st.session_state.historico = carregar_historico()
 if "modelo_top4" not in st.session_state:
@@ -181,7 +174,7 @@ if "modelo_top4" not in st.session_state:
 if "acertos_top4" not in st.session_state:
     st.session_state.acertos_top4 = 0
 
-# 🔄 Captura automática via API
+# API
 def buscar_novo_numero():
     try:
         r = requests.get(API_URL, headers=HEADERS, timeout=10)
@@ -193,13 +186,10 @@ def buscar_novo_numero():
                 if all(h["timestamp"] != timestamp for h in st.session_state.historico):
                     st.session_state.historico.append({"number": numero, "timestamp": timestamp})
                     salvar_resultado_em_arquivo(st.session_state.historico)
-
-                    # Verifica acerto
-                    top4_anteriores = st.session_state.get("ultimos_top4", [])
-                    if numero in top4_anteriores:
+                    # Verificar acerto
+                    top4 = st.session_state.get("ultimos_top4", [])
+                    if numero in top4:
                         st.session_state.acertos_top4 += 1
-
-                    # Re-treina a cada 5 entradas
                     if len(st.session_state.historico) % 5 == 0:
                         st.session_state.modelo_top4.treinar(st.session_state.historico)
     except Exception as e:
@@ -207,49 +197,44 @@ def buscar_novo_numero():
 
 buscar_novo_numero()
 
-# ✍️ Inserção manual
-with st.expander("✍️ Inserir Manualmente"):
+# Inserção manual
+with st.expander("✍️ Inserção Manual"):
     entrada = st.text_area("Digite números (0 a 36):", height=100)
     if st.button("➕ Adicionar"):
         try:
-            numeros = [int(n) for n in entrada.split() if n.isdigit() and 0 <= int(n) <= 36]
-            if numeros:
-                for n in numeros:
-                    st.session_state.historico.append({"number": n, "timestamp": f"manual_{len(st.session_state.historico)}"})
-                salvar_resultado_em_arquivo(st.session_state.historico)
-                st.success(f"{len(numeros)} adicionados.")
+            numeros = [int(n) for n in entrada.split() if 0 <= int(n) <= 36]
+            for n in numeros:
+                st.session_state.historico.append({"number": n, "timestamp": f"manual_{len(st.session_state.historico)}"})
+            salvar_resultado_em_arquivo(st.session_state.historico)
+            st.success(f"{len(numeros)} números adicionados.")
         except Exception as e:
             st.error(f"Erro: {e}")
 
-# 🎯 Previsão
+# Previsão
 if st.session_state.modelo_top4.treinado:
     top4 = st.session_state.modelo_top4.prever_top_n(st.session_state.historico)
     st.session_state.ultimos_top4 = [n for n, _ in top4]
     st.subheader("🎯 Números Prováveis (Top 4)")
-    if top4:
-        for n, p in top4:
-            st.metric(f"Número {n}", f"{p:.2%}")
-    else:
-        st.info("Aguardando dados suficientes.")
+    for n, p in top4:
+        st.metric(f"Número {n}", f"{p:.2%}")
 else:
     st.info("IA ainda não treinada.")
 
-# 📊 Desempenho
+# Desempenho
 with st.expander("📊 Desempenho"):
     total = len(st.session_state.historico) - st.session_state.modelo_top4.janela
     if total > 0:
         taxa = st.session_state.acertos_top4 / total * 100
-        st.success(f"🎯 Acertos Top 4: {st.session_state.acertos_top4} / {total} ({taxa:.2f}%)")
+        st.success(f"🎯 Acertos: {st.session_state.acertos_top4} / {total} ({taxa:.2f}%)")
     else:
-        st.info("Aguardando mais dados para avaliar.")
+        st.info("Aguardando mais dados.")
 
-# 📜 Últimos números
+# Últimos números
 with st.expander("📜 Últimos Números"):
     ultimos = [str(h["number"]) for h in st.session_state.historico[-20:]]
     st.code(" | ".join(ultimos), language="text")
 
-# 📥 Download
+# Baixar histórico
 if os.path.exists(HISTORICO_PATH):
     with open(HISTORICO_PATH, "r") as f:
-        conteudo = f.read()
-    st.download_button("📥 Baixar Histórico", data=conteudo, file_name="historico_numeros_top4.json")
+        st.download_button("📥 Baixar Histórico", data=f.read(), file_name="historico_numeros_top4.json")
