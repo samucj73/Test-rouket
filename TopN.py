@@ -125,17 +125,25 @@ class ModeloTopNumerosMelhorado:
         self.treinado = True
         self.importancias = self.modelo.feature_importances_
 
-    def prever_top_n(self, historico, n=4):
-        if not self.treinado:
-            return []
-        numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
-        if len(numeros) < self.janela + 1:
-            return []
-        janela = numeros[-(self.janela + 1):]
-        entrada = self.construir_features(janela)
-        if entrada is None:
-            return []
-        entrada = np.array([entrada], dtype=np.float32)
+def prever_top_n(self, historico, n=4):
+    if not self.treinado:
+        return []
+    numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
+    if len(numeros) < self.janela + 1:
+        return []
+    janela = numeros[-(self.janela + 1):]
+    entrada = self.construir_features(janela)
+    if entrada is None or self.modelo is None:
+        return []
+
+    entrada = np.array([entrada], dtype=np.float32)
+
+    # Verifica se o número de features bate com o modelo
+    if entrada.shape[1] != self.modelo.n_features_in_:
+        st.warning(f"Número de features inconsistente: esperado {self.modelo.n_features_in_}, recebido {entrada.shape[1]}")
+        return []
+
+    try:
         proba = self.modelo.predict_proba(entrada)[0]
         self.ultima_proba = proba
         idx_sorted = np.argsort(proba)[::-1]
@@ -143,6 +151,11 @@ class ModeloTopNumerosMelhorado:
         top_numeros = self.encoder.inverse_transform(top_indices)
         top_probs = proba[top_indices]
         return list(zip(top_numeros, top_probs))
+    except Exception as e:
+        st.error(f"Erro ao prever: {e}")
+        return []
+
+    
 
 # 🧠 Interface Streamlit
 st.set_page_config(page_title="🎯 IA Números Prováveis", layout="centered")
