@@ -20,6 +20,7 @@ LIMIAR_ALERTA = 0.20  # 20%
 st_autorefresh(interval=30_000, limit=None, key="refresh")
 
 # 🧠 Classe IA
+
 class ModeloTopNumerosMelhorado:
     def __init__(self, janela=250, confianca_min=0.1):
         self.janela = janela
@@ -32,13 +33,23 @@ class ModeloTopNumerosMelhorado:
     def construir_features(self, numeros):
         if len(numeros) < self.janela + 1:
             return None
+
         ultimos = numeros[-(self.janela + 1):]
         atual = ultimos[-1]
         anteriores = ultimos[:-1]
-        freq_20 = Counter(anteriores[-20:])
-        freq_50 = Counter(anteriores[-50:])
-        freq_100 = Counter(anteriores[-100:])
-        total_100 = sum(freq_100.values()) or 1
+
+        # Frequência em várias janelas
+        def freq(n, jan): return anteriores[-jan:].count(n) if len(anteriores) >= jan else 0
+
+        freq_10 = freq(atual, 10)
+        freq_20 = freq(atual, 20)
+        freq_30 = freq(atual, 30)
+        freq_50 = freq(atual, 50)
+        freq_100 = freq(atual, 100)
+
+        total_100 = max(1, len(anteriores[-100:]))
+        rel_freq = freq_100 / total_100
+
         lag1 = anteriores[-1]
         lag2 = anteriores[-2] if len(anteriores) >= 2 else -1
         lag3 = anteriores[-3] if len(anteriores) >= 3 else -1
@@ -49,27 +60,57 @@ class ModeloTopNumerosMelhorado:
             if n == 0: return 0
             elif n % 3 == 1: return 1
             elif n % 3 == 2: return 2
-            else: return 3
+            return 3
 
         def get_cor(n):
             vermelhos = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]
             return 1 if n in vermelhos else 0 if n != 0 else -1
 
+        def get_duzia(n):
+            if n == 0: return 0
+            elif 1 <= n <= 12: return 1
+            elif 13 <= n <= 24: return 2
+            return 3
+
         coluna = get_coluna(atual)
         cor = get_cor(atual)
+        duzia = get_duzia(atual)
+
+        coluna_anterior = get_coluna(lag1) if lag1 != -1 else 0
+        duzia_anterior = get_duzia(lag1) if lag1 != -1 else 0
+        reversao_coluna = int(coluna != coluna_anterior)
+        reversao_duzia = int(duzia != duzia_anterior)
+
+        # Distância desde a última ocorrência
         posicoes = [i for i, n in enumerate(reversed(anteriores)) if n == atual]
         dist_ultima_ocorrencia = posicoes[0] if posicoes else len(anteriores)
-        top5_freq = [n for n, _ in freq_50.most_common(5)]
+
+        # Quente, repetido, vizinho
+        top5_freq = [n for n, _ in Counter(anteriores[-50:]).most_common(5)]
         numero_quente = int(atual in top5_freq)
+        repetido = int(atual == lag1)
+        vizinho = int(abs(atual - lag1) == 1 if lag1 != -1 else 0)
+
+        ultimos_10 = anteriores[-10:]
+        media_ultimos = np.mean(ultimos_10) if ultimos_10 else 0
+        mediana_ultimos = np.median(ultimos_10) if ultimos_10 else 0
+        std_ultimos = np.std(ultimos_10) if ultimos_10 else 0
 
         return [
             atual, atual % 2, atual % 3, int(str(atual)[-1]),
-            freq_20.get(atual, 0), freq_50.get(atual, 0), freq_100.get(atual, 0),
-            freq_100.get(atual, 0) / total_100,
+            freq_10, freq_20, freq_30, freq_50, freq_100,
+            rel_freq,
             lag1, lag2, lag3,
             diff_lag, tendencia,
-            coluna, get_duzia(atual),
-            cor, dist_ultima_ocorrencia, numero_quente
+            coluna, duzia, cor,
+            coluna_anterior, duzia_anterior,
+            reversao_coluna, reversao_duzia,
+            dist_ultima_ocorrencia,
+            numero_quente, repetido, vizinho,
+            media_ultimos, mediana_ultimos, std_ultimos,
+            int(atual < 12), int(12 <= atual <= 24), int(atual > 24),
+            int(atual in range(1, 19)), int(atual in range(19, 37)),  # baixo, alto
+            int(atual == 0)
         ]
 
     def treinar(self, historico):
@@ -85,7 +126,7 @@ class ModeloTopNumerosMelhorado:
         X = np.array(X, dtype=np.float32)
         y_enc = self.encoder.fit_transform(y)
         Xb, yb = balancear_amostras(X, y_enc)
-        self.modelo = HistGradientBoostingClassifier(max_iter=500, max_depth=12, learning_rate=0.03)
+        self.modelo = HistGradientBoostingClassifier(max_iter=700, max_depth=14, learning_rate=0.03)
         self.modelo.fit(Xb, yb)
         self.treinado = True
 
@@ -111,6 +152,7 @@ class ModeloTopNumerosMelhorado:
         top_numeros = self.encoder.inverse_transform(top_indices)
         top_probs = proba[top_indices]
         return list(zip(top_numeros, top_probs))
+
 
 # 📦 Utilitários
 def get_duzia(n):
