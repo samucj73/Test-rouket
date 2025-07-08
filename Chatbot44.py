@@ -303,23 +303,24 @@ if st.session_state.modelo_top4.treinado:
     top4 = st.session_state.modelo_top4.prever_top_n(st.session_state.historico)
     st.session_state.ultimos_top4 = [n for n, _ in top4]
     st.subheader("🎯 Números Prováveis (Top 4)")
-    if top4:
-       col1, col2, col3, col4 = st.columns(4)
-       for col, (n, p) in zip([col1, col2, col3, col4], top4):
+        if top4:
+        col1, col2, col3, col4 = st.columns(4)
+        for col, (n, p) in zip([col1, col2, col3, col4], top4):
             with col:
                 st.markdown(f"<h1 style='text-align:center; color:#ff4b4b'>{n}</h1>", unsafe_allow_html=True)
-                st.markdown(f"<p style='text-align:center'>{p:.2%}</p>", unsafe_allow_html=True) 
-         # Enviar alerta apenas se a previsão mudou
+                st.markdown(f"<p style='text-align:center'>{p:.2%}</p>", unsafe_allow_html=True)
+
+        # Enviar alerta apenas se a previsão mudou
         top4_numeros_atuais = [n for n, _ in top4]
         if top4_numeros_atuais != st.session_state.ultima_mensagem_enviada_top4:
             st.session_state.ultima_mensagem_enviada_top4 = top4_numeros_atuais
             linhas_alerta = [f"🎯 {n} com {p:.1%}" for n, p in top4]
             mensagem = "🚨 PREVISÃO TOP 4 NÚMEROS:\n" + "\n".join(linhas_alerta)
             agora = time.time()
-            # evita alertas Telegram muito frequentes (ex: 5 minutos)
             if agora - st.session_state.ultimo_alerta_telegram > 300:
                 enviar_alerta_telegram(mensagem)
                 st.session_state.ultimo_alerta_telegram = agora
+       
     else:
         st.info("Aguardando dados suficientes.")
 else:
