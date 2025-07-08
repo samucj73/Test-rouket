@@ -303,7 +303,7 @@ if st.session_state.modelo_top4.treinado:
     top4 = st.session_state.modelo_top4.prever_top_n(st.session_state.historico)
     st.session_state.ultimos_top4 = [n for n, _ in top4]
     st.subheader("🎯 Números Prováveis (Top 4)")
-        if top4:
+    if top4:
         col1, col2, col3, col4 = st.columns(4)
         for col, (n, p) in zip([col1, col2, col3, col4], top4):
             with col:
