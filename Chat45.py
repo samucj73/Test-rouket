@@ -422,12 +422,11 @@ if incluir_abz:
     st.subheader("⚡ Previsão Alto / Baixo / Zero (ABZ)")
     ab_range = {"alto": "19–36", "baixo": "1–18", "zero": "0"}
 
-    abz_pred = st.session_state.get("ultima_previsao_abz", None)
+    abz_label, abz_conf = "", 0.0
+    abz_pred = st.session_state.get("ultima_previsao_abz")
 
-    if isinstance(abz_pred, tuple):
+    if isinstance(abz_pred, (tuple, list)) and len(abz_pred) == 2:
         abz_label, abz_conf = abz_pred
-    else:
-        abz_label, abz_conf = "", 0.0
 
     if abz_label:
         st.markdown(
@@ -438,6 +437,7 @@ if incluir_abz:
         )
     else:
         st.info("⚠️ Aguardando dados suficientes para previsão ABZ.")
+
 
 
 
