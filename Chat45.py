@@ -371,6 +371,8 @@ with st.sidebar:
 
 # ---------- Previsão após captura de novo número ----------
 if st.session_state.novo_numero_capturado:
+    st.session_state.novo_numero_capturado = False
+    
     # Previsão Top 4
     if st.session_state.modelo_top4.treinado:
         top4 = st.session_state.modelo_top4.prever_top_n(st.session_state.historico)
@@ -382,14 +384,26 @@ if st.session_state.novo_numero_capturado:
             enviar_alerta_telegram("🎯 Top 4 Números: " + " ".join(str(n) for n in top4_numeros))
 
     # Previsão ABZ
-    if incluir_abz and st.session_state.modelo_abz.treinado:
-        pred_abz = st.session_state.modelo_abz.prever(st.session_state.historico)
-        st.session_state.ultima_previsao_abz = pred_abz
-        if pred_abz != st.session_state.ultima_mensagem_enviada_abz:
-            st.session_state.ultima_mensagem_enviada_abz = pred_abz
-            enviar_alerta_telegram(f"⚡ Previsão ABZ: {pred_abz}")
 
-    st.session_state.novo_numero_capturado = False
+# Previsão ABZ
+if incluir_abz and st.session_state.modelo_abz.treinado:
+    pred_abz = st.session_state.modelo_abz.prever(st.session_state.historico)
+
+    # Garante que seja sempre uma tupla (label, confiança)
+    if isinstance(pred_abz, tuple):
+        abz_label, abz_conf = pred_abz
+    else:
+        abz_label, abz_conf = pred_abz, 0.0
+        pred_abz = (abz_label, abz_conf)
+
+    st.session_state.ultima_previsao_abz = pred_abz
+
+    if abz_label != st.session_state.ultima_mensagem_enviada_abz:
+        st.session_state.ultima_mensagem_enviada_abz = abz_label
+        enviar_alerta_telegram(f"⚡ Previsão ABZ: {abz_label} ({abz_conf:.2%})")
+    
+
+    
 
 # ---------- Exibição Top 4 ----------
 st.subheader("🎯 Números Prováveis (Top 4)")
@@ -408,16 +422,23 @@ if incluir_abz:
     st.subheader("⚡ Previsão Alto / Baixo / Zero (ABZ)")
     ab_range = {"alto": "19–36", "baixo": "1–18", "zero": "0"}
 
-    abz_pred = st.session_state.get("ultima_previsao_abz", ("", 0.0))
-    abz_str, _ = abz_pred
+    abz_pred = st.session_state.get("ultima_previsao_abz", None)
 
-    if abz_str:
+    if isinstance(abz_pred, tuple):
+        abz_label, abz_conf = abz_pred
+    else:
+        abz_label, abz_conf = "", 0.0
+
+    if abz_label:
         st.markdown(
-            f"<h2 style='text-align:center; color:#008000'>{abz_str.title()} ({ab_range.get(abz_str, '')})</h2>",
+            f"<h2 style='text-align:center; color:#008000'>{abz_label.title()} "
+            f"({ab_range.get(abz_label, '')})</h2>"
+            f"<p style='text-align:center'>Confiança: {abz_conf:.2%}</p>",
             unsafe_allow_html=True
         )
     else:
         st.info("⚠️ Aguardando dados suficientes para previsão ABZ.")
+
 
 
 # ---------- Desempenho ----------
