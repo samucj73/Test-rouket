@@ -169,7 +169,6 @@ def enviar_alerta_telegram(mensagem):
         requests.post(url, data=data, timeout=10)
     except Exception as e:
         st.warning(f"Erro ao enviar alerta: {e}")
-
 def buscar_novo_numero():
     try:
         r = requests.get(API_URL, headers=HEADERS, timeout=10)
@@ -181,13 +180,26 @@ def buscar_novo_numero():
                 if all(h["timestamp"] != timestamp for h in st.session_state.historico):
                     st.session_state.historico.append({"number": numero, "timestamp": timestamp})
                     salvar_resultado_em_arquivo(st.session_state.historico)
+
                     top4_ant = st.session_state.get("ultimos_top4", [])
                     if numero in top4_ant:
                         st.session_state.acertos_top4 += 1
-                    if len(st.session_state.historico) % 5 == 0:
+
+                    # ✅ Re-treina se houver novos dados
+                    if "ultimo_treino" not in st.session_state:
+                        st.session_state.ultimo_treino = 0
+
+                    if len(st.session_state.historico) > st.session_state.ultimo_treino:
                         st.session_state.modelo_top4.treinar(st.session_state.historico)
+                        st.session_state.ultimo_treino = len(st.session_state.historico)
+
     except Exception as e:
         st.warning(f"Erro na API: {e}")
+
+
+        
+
+
         st.set_page_config(page_title="🎯 IA Números Prováveis", layout="centered")
 st_autorefresh(interval=30_000, limit=None, key="refresh")
 st.title("🔮 IA - Top 4 Números Prováveis")
