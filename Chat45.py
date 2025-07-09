@@ -17,7 +17,7 @@ TELEGRAM_CHAT_ID = "5121457416"
 
 # --- Modelo Top 4 Números ---
 class ModeloTopNumerosMelhorado:
-    def __init__(self, janela=250, confianca_min=0.1):
+    def __init__(self, janela=100, confianca_min=0.1):
         self.janela = janela
         self.confianca_min = confianca_min
         self.modelo = None
@@ -136,7 +136,7 @@ class ModeloTopNumerosMelhorado:
 
 # --- Modelo Alto/Baixo/Zero ---
 class ModeloAltoBaixoZero:
-    def __init__(self, janela=250):
+    def __init__(self, janela=100):
         self.janela = janela
         self.modelo = None
         self.encoder = LabelEncoder()
