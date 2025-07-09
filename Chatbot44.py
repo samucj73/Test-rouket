@@ -201,7 +201,7 @@ def buscar_novo_numero():
 
 
         st.set_page_config(page_title="🎯 IA Números Prováveis", layout="centered")
-st_autorefresh(interval=30_000, limit=None, key="refresh")
+st_autorefresh(interval=5_000, limit=None, key="refresh")
 st.title("🔮 IA - Top 4 Números Prováveis")
 
 # 🔧 Configurações no Sidebar
