@@ -13,8 +13,8 @@ from streamlit_autorefresh import st_autorefresh
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 HISTORICO_PATH = "historico_numeros_top4.json"
-TELEGRAM_TOKEN = "SEU_TOKEN"
-TELEGRAM_CHAT_ID = "SEU_CHAT_ID"
+TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
+TELEGRAM_CHAT_ID = "5121457416"
 
 class ModeloTopNumerosMelhorado:
     def __init__(self, janela=250, confianca_min=0.1):
