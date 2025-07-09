@@ -261,11 +261,13 @@ if st.session_state.modelo_top4.treinado:
                 st.markdown(f"<p style='text-align:center'>{p:.2%}</p>", unsafe_allow_html=True)
 
         # Envia alerta Telegram se previsão mudou
-        top4_numeros_atuais = [n for n, _ in top4]
-        if top4_numeros_atuais != st.session_state.ultima_mensagem_enviada_top4:
-            st.session_state.ultima_mensagem_enviada_top4 = top4_numeros_atuais
-            mensagem = "🚨 PREVISÃO TOP 4 NÚMEROS:\n" + "\n".join([f"🎯 {n} com {p:.1%}" for n, p in top4])
-            enviar_alerta_telegram(mensagem)
+    # Envia alerta Telegram se previsão mudou
+top4_numeros_atuais = [n for n, _ in top4]
+if top4_numeros_atuais != st.session_state.ultima_mensagem_enviada_top4:
+    st.session_state.ultima_mensagem_enviada_top4 = top4_numeros_atuais
+    mensagem = " ".join(str(n) for n in top4_numeros_atuais)
+    enviar_alerta_telegram(mensagem)
+        
     else:
         st.info("Aguardando dados suficientes.")
 else:
