@@ -224,7 +224,7 @@ with st.expander("✍️ Inserir Manualmente"):
         except:
             st.error("Erro na entrada.")
 
-# 🎯 Previsão após novo número
+# 🎯 Previsão após novo número (corrigido)
 if st.session_state.novo_numero_capturado:
     if st.session_state.modelo_top4.treinado:
         top4 = st.session_state.modelo_top4.prever_top_n(st.session_state.historico)
@@ -238,9 +238,11 @@ if st.session_state.novo_numero_capturado:
                     st.markdown(f"<h1 style='text-align:center; color:#ff4b4b'>{n}</h1>", unsafe_allow_html=True)
                     st.markdown(f"<p style='text-align:center'>{p:.2%}</p>", unsafe_allow_html=True)
 
-            if top4 != st.session_state.ultima_mensagem_enviada_top4:
-                st.session_state.ultima_mensagem_enviada_top4 = [n for n, _ in top4]
-                enviar_alerta_telegram(" ".join(str(n) for n, _ in top4))
+            top4_numeros = [n for n, _ in top4]
+            if top4_numeros != st.session_state.ultima_mensagem_enviada_top4:
+                st.session_state.ultima_mensagem_enviada_top4 = top4_numeros
+                enviar_alerta_telegram(" ".join(str(n) for n in top4_numeros))
+
     st.session_state.novo_numero_capturado = False
 
 # 📊 Desempenho
