@@ -25,54 +25,69 @@ class ModeloTopNumerosMelhorado:
         self.treinado = False
         self.ultima_proba = []
 
-    def construir_features(self, numeros):
-        if len(numeros) < self.janela + 1:
+    def construir_features(self, numeros, modo_treinamento=True):
+        if len(numeros) < self.janela + (1 if modo_treinamento else 0):
             return None
-        anteriores = numeros[:-1]
-        atual = numeros[-1]
-        def freq(n, jan): return anteriores[-jan:].count(n) if len(anteriores) >= jan else 0
-        freq_10 = freq(atual, 10)
-        freq_20 = freq(atual, 20)
-        freq_30 = freq(atual, 30)
-        freq_50 = freq(atual, 50)
-        freq_100 = freq(atual, 100)
-        total_100 = max(1, len(anteriores[-100:]))
-        rel_freq = freq_100 / total_100
-        lag1 = anteriores[-1]
-        lag2 = anteriores[-2] if len(anteriores) >= 2 else -1
-        lag3 = anteriores[-3] if len(anteriores) >= 3 else -1
-        diff_lag = atual - lag1 if lag1 != -1 else 0
-        tendencia = int(np.mean(np.diff(anteriores[-5:])) > 0) if len(anteriores) >= 5 else 0
+
+        anteriores = numeros[:-1] if modo_treinamento else numeros
+        atual = numeros[-1] if modo_treinamento else None
+
         def get_coluna(n): return 0 if n == 0 else (1 if n % 3 == 1 else (2 if n % 3 == 2 else 3))
         def get_cor(n): return 1 if n in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36] else 0 if n != 0 else -1
         def get_duzia(n): return 0 if n == 0 else (1 if n <= 12 else 2 if n <= 24 else 3)
-        coluna = get_coluna(atual)
-        cor = get_cor(atual)
-        duzia = get_duzia(atual)
-        coluna_anterior = get_coluna(lag1) if lag1 != -1 else 0
-        duzia_anterior = get_duzia(lag1) if lag1 != -1 else 0
-        reversao_coluna = int(coluna != coluna_anterior)
-        reversao_duzia = int(duzia != duzia_anterior)
-        posicoes = [i for i, n in enumerate(reversed(anteriores)) if n == atual]
-        dist_ultima_ocorrencia = posicoes[0] if posicoes else len(anteriores)
-        top5_freq = [n for n, _ in Counter(anteriores[-50:]).most_common(5)]
-        numero_quente = int(atual in top5_freq)
-        repetido = int(atual == lag1)
-        vizinho = int(abs(atual - lag1) == 1 if lag1 != -1 else 0)
+
+        freq_10 = freq_20 = freq_30 = freq_50 = freq_100 = rel_freq = diff_lag = 0
+        coluna = duzia = cor = coluna_anterior = duzia_anterior = reversao_coluna = reversao_duzia = 0
+        dist_ultima_ocorrencia = numero_quente = repetido = vizinho = 0
+        classe_baixa = classe_media = classe_alta = classe_baixo18 = classe_alto18 = classe_zero = 0
+
+        if modo_treinamento:
+            freq_10 = anteriores[-10:].count(atual)
+            freq_20 = anteriores[-20:].count(atual)
+            freq_30 = anteriores[-30:].count(atual)
+            freq_50 = anteriores[-50:].count(atual)
+            freq_100 = anteriores[-100:].count(atual)
+            rel_freq = freq_100 / max(1, len(anteriores[-100:]))
+            diff_lag = atual - anteriores[-1] if anteriores else 0
+            coluna = get_coluna(atual)
+            duzia = get_duzia(atual)
+            cor = get_cor(atual)
+            coluna_anterior = get_coluna(anteriores[-1]) if anteriores else 0
+            duzia_anterior = get_duzia(anteriores[-1]) if anteriores else 0
+            reversao_coluna = int(coluna != coluna_anterior)
+            reversao_duzia = int(duzia != duzia_anterior)
+            posicoes = [i for i, n in enumerate(reversed(anteriores)) if n == atual]
+            dist_ultima_ocorrencia = posicoes[0] if posicoes else len(anteriores)
+            top5_freq = [n for n, _ in Counter(anteriores[-50:]).most_common(5)]
+            numero_quente = int(atual in top5_freq)
+            repetido = int(atual == anteriores[-1])
+            vizinho = int(abs(atual - anteriores[-1]) == 1)
+            classe_baixa = int(atual < 12)
+            classe_media = int(12 <= atual <= 24)
+            classe_alta = int(atual > 24)
+            classe_baixo18 = int(atual in range(1, 19))
+            classe_alto18 = int(atual in range(19, 37))
+            classe_zero = int(atual == 0)
+
+        lag1 = anteriores[-1]
+        lag2 = anteriores[-2] if len(anteriores) >= 2 else -1
+        lag3 = anteriores[-3] if len(anteriores) >= 3 else -1
+        tendencia = int(np.mean(np.diff(anteriores[-5:])) > 0) if len(anteriores) >= 5 else 0
         ultimos_10 = anteriores[-10:]
         media_ultimos = np.mean(ultimos_10) if ultimos_10 else 0
         mediana_ultimos = np.median(ultimos_10) if ultimos_10 else 0
         std_ultimos = np.std(ultimos_10) if ultimos_10 else 0
+
         return [
-            atual, atual % 2, atual % 3, int(str(atual)[-1]),
+            0, 0, 0, 0,
             freq_10, freq_20, freq_30, freq_50, freq_100,
             rel_freq, lag1, lag2, lag3, diff_lag, tendencia,
             coluna, duzia, cor, coluna_anterior, duzia_anterior,
             reversao_coluna, reversao_duzia, dist_ultima_ocorrencia,
             numero_quente, repetido, vizinho,
             media_ultimos, mediana_ultimos, std_ultimos,
-            int(atual < 12), int(12 <= atual <= 24), int(atual > 24),
-            int(atual in range(1, 19)), int(atual in range(19, 37)), int(atual == 0)
+            classe_baixa, classe_media, classe_alta,
+            classe_baixo18, classe_alto18, classe_zero
         ]
 
     def treinar(self, historico):
@@ -80,7 +95,7 @@ class ModeloTopNumerosMelhorado:
         X, y = [], []
         for i in range(self.janela, len(numeros) - 1):
             janela = numeros[i - self.janela:i + 1]
-            feat = self.construir_features(janela)
+            feat = self.construir_features(janela, modo_treinamento=True)
             if feat:
                 X.append(feat)
                 y.append(numeros[i])
@@ -100,7 +115,7 @@ class ModeloTopNumerosMelhorado:
         if len(numeros) < self.janela:
             return []
         anteriores = numeros[-self.janela:]
-        entrada = self.construir_features(anteriores + [-1])
+        entrada = self.construir_features(anteriores, modo_treinamento=False)
         if entrada is None:
             return []
         entrada = np.array([entrada], dtype=np.float32)
@@ -118,6 +133,7 @@ class ModeloTopNumerosMelhorado:
         return list(zip(top_numeros, top_probs))
 
 
+
 # --- Modelo Alto/Baixo/Zero ---
 class ModeloAltoBaixoZero:
     def __init__(self, janela=250):
@@ -126,11 +142,12 @@ class ModeloAltoBaixoZero:
         self.encoder = LabelEncoder()
         self.treinado = False
 
-    def construir_features(self, numeros):
-        if len(numeros) < self.janela + 1:
+    def construir_features(self, numeros, modo_treinamento=True):
+        if len(numeros) < self.janela + (1 if modo_treinamento else 0):
             return None
-        anteriores = numeros[:-1]
-        atual = numeros[-1]
+
+        anteriores = numeros[:-1] if modo_treinamento else numeros
+        atual = numeros[-1] if modo_treinamento else None
 
         def classe_abz(n):
             if n == 0:
@@ -140,17 +157,18 @@ class ModeloAltoBaixoZero:
             else:
                 return 2
 
-        freq_0 = anteriores[-self.janela:].count(0) / self.janela
-        freq_baixo = sum(1 for x in anteriores[-self.janela:] if 1 <= x <= 18) / self.janela
-        freq_alto = sum(1 for x in anteriores[-self.janela:] if 19 <= x <= 36) / self.janela
+        freq_0 = anteriores.count(0) / self.janela
+        freq_baixo = sum(1 for x in anteriores if 1 <= x <= 18) / self.janela
+        freq_alto = sum(1 for x in anteriores if 19 <= x <= 36) / self.janela
 
         lag1 = classe_abz(anteriores[-1])
         lag2 = classe_abz(anteriores[-2]) if len(anteriores) >= 2 else -1
         tendencia = int(np.mean(np.diff([classe_abz(x) for x in anteriores[-5:]])) > 0) if len(anteriores) >= 5 else 0
 
+        classe_atual = classe_abz(atual) if modo_treinamento else -1
+
         return [
-            classe_abz(atual),
-            freq_0, freq_baixo, freq_alto,
+            classe_atual, freq_0, freq_baixo, freq_alto,
             lag1, lag2, tendencia
         ]
 
@@ -159,10 +177,10 @@ class ModeloAltoBaixoZero:
         X, y = [], []
         for i in range(self.janela, len(numeros) - 1):
             janela = numeros[i - self.janela:i + 1]
-            feat = self.construir_features(janela)
+            feat = self.construir_features(janela, modo_treinamento=True)
             if feat:
-                X.append(feat[1:])  # features sem classe atual
-                y.append(feat[0])   # classe atual
+                X.append(feat[1:])
+                y.append(feat[0])
         if not X:
             return
         X = np.array(X, dtype=np.float32)
@@ -177,7 +195,7 @@ class ModeloAltoBaixoZero:
         if len(numeros) < self.janela:
             return "", 0.0
         anteriores = numeros[-self.janela:]
-        entrada = self.construir_features(anteriores + [-1])
+        entrada = self.construir_features(anteriores, modo_treinamento=False)
         if entrada is None:
             return "", 0.0
         entrada = np.array([entrada[1:]], dtype=np.float32)
@@ -191,6 +209,7 @@ class ModeloAltoBaixoZero:
         classe = self.encoder.inverse_transform([idx])[0]
         mapeamento = {0: "zero", 1: "baixo", 2: "alto"}
         return mapeamento.get(classe, ""), proba[idx]
+
 
 
 # --- Funções auxiliares ---
