@@ -253,6 +253,7 @@ if st.session_state.modelo_top4.treinado:
     top4 = st.session_state.modelo_top4.prever_top_n(st.session_state.historico)
     st.session_state.ultimos_top4 = [n for n, _ in top4]
     st.subheader("🎯 Números Prováveis (Top 4)")
+    
     if top4:
         col1, col2, col3, col4 = st.columns(4)
         for col, (n, p) in zip([col1, col2, col3, col4], top4):
@@ -260,18 +261,16 @@ if st.session_state.modelo_top4.treinado:
                 st.markdown(f"<h1 style='text-align:center; color:#ff4b4b'>{n}</h1>", unsafe_allow_html=True)
                 st.markdown(f"<p style='text-align:center'>{p:.2%}</p>", unsafe_allow_html=True)
 
-    # Envia alerta Telegram se previsão mudou
-top4_numeros_atuais = [n for n, _ in top4]
-if top4_numeros_atuais != st.session_state.ultima_mensagem_enviada_top4:
-    st.session_state.ultima_mensagem_enviada_top4 = top4_numeros_atuais
-    mensagem = " ".join(str(n) for n in top4_numeros_atuais)
-    enviar_alerta_telegram(mensagem)
-        
-else:
-    st.info("Aguardando dados suficientes.")
+        # ✅ Envia alerta Telegram se previsão mudou
+        top4_numeros_atuais = [n for n, _ in top4]
+        if top4_numeros_atuais != st.session_state.ultima_mensagem_enviada_top4:
+            st.session_state.ultima_mensagem_enviada_top4 = top4_numeros_atuais
+            mensagem = " ".join(str(n) for n in top4_numeros_atuais)
+            enviar_alerta_telegram(mensagem)
+    else:
+        st.info("Aguardando dados suficientes.")
 else:
     st.info("IA ainda não treinada.")
-
 # 📊 Desempenho
 with st.expander("📊 Desempenho"):
     total = len(st.session_state.historico) - st.session_state.modelo_top4.janela
