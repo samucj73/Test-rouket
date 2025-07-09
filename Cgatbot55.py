@@ -134,6 +134,9 @@ class ModeloTopNumerosMelhorado:
         return list(zip(top_numeros, top_probs))
 
   # --- Modelo Alto/Baixo/Zero ---
+
+from sklearn.ensemble import RandomForestClassifier
+
 class ModeloAltoBaixoZero:
     def __init__(self, janela=100):
         self.janela = janela
@@ -156,19 +159,58 @@ class ModeloAltoBaixoZero:
             else:
                 return 2
 
-        freq_0 = anteriores.count(0) / self.janela
-        freq_baixo = sum(1 for x in anteriores if 1 <= x <= 18) / self.janela
-        freq_alto = sum(1 for x in anteriores if 19 <= x <= 36) / self.janela
+        classes = [classe_abz(x) for x in anteriores]
 
-        lag1 = classe_abz(anteriores[-1])
-        lag2 = classe_abz(anteriores[-2]) if len(anteriores) >= 2 else -1
-        tendencia = int(np.mean(np.diff([classe_abz(x) for x in anteriores[-5:]])) > 0) if len(anteriores) >= 5 else 0
+        # Frequência das classes
+        freq_0 = classes.count(0) / self.janela
+        freq_baixo = classes.count(1) / self.janela
+        freq_alto = classes.count(2) / self.janela
 
+        # Últimos
+        lag1 = classes[-1]
+        lag2 = classes[-2] if len(classes) >= 2 else -1
+
+        # Tendência
+        tendencia = int(np.mean(np.diff(classes[-5:])) > 0) if len(classes) >= 5 else 0
+
+        # Média, mediana, desvio padrão
+        media = np.mean(anteriores)
+        mediana = np.median(anteriores)
+        desvio = np.std(anteriores)
+
+        # Classe atual
         classe_atual = classe_abz(atual) if modo_treinamento else -1
 
+        # Frequência da mesma classe nos últimos 20 e 50
+        freq20 = sum(1 for x in anteriores[-20:] if classe_abz(x) == classe_atual) / 20 if modo_treinamento else 0
+        freq50 = sum(1 for x in anteriores[-50:] if classe_abz(x) == classe_atual) / 50 if modo_treinamento else 0
+
+        # Distância até última ocorrência da mesma classe
+        dist = 100
+        if modo_treinamento:
+            for i in range(len(anteriores)-1, -1, -1):
+                if classe_abz(anteriores[i]) == classe_atual:
+                    dist = len(anteriores) - 1 - i
+                    break
+
+        # Número de trocas de classe nos últimos 10
+        trocas = sum(1 for i in range(-10, -1) if i > -len(classes) and classes[i] != classes[i+1])
+
+        # Repetições consecutivas da mesma classe
+        repeticoes = 1
+        for i in range(len(classes)-2, -1, -1):
+            if classes[i] == classes[i+1]:
+                repeticoes += 1
+            else:
+                break
+
         return [
-            classe_atual, freq_0, freq_baixo, freq_alto,
-            lag1, lag2, tendencia
+            classe_atual,
+            freq_0, freq_baixo, freq_alto,
+            lag1, lag2, tendencia,
+            media, mediana, desvio,
+            freq20, freq50, dist,
+            trocas, repeticoes
         ]
 
     def treinar(self, historico):
@@ -178,14 +220,15 @@ class ModeloAltoBaixoZero:
             janela = numeros[i - self.janela:i + 1]
             feat = self.construir_features(janela, modo_treinamento=True)
             if feat:
-                X.append(feat[1:])
-                y.append(feat[0])
+                X.append(feat[1:])  # Features
+                y.append(feat[0])   # Classe (label)
         if not X:
             return
         X = np.array(X, dtype=np.float32)
         y_enc = self.encoder.fit_transform(y)
         Xb, yb = balancear_amostras(X, y_enc)
-        self.modelo = HistGradientBoostingClassifier(max_iter=500, max_depth=10, learning_rate=0.05)
+
+        self.modelo = RandomForestClassifier(n_estimators=300, max_depth=12, random_state=42)
         self.modelo.fit(Xb, yb)
         self.treinado = True
 
@@ -208,6 +251,7 @@ class ModeloAltoBaixoZero:
         classe = self.encoder.inverse_transform([idx])[0]
         mapeamento = {0: "zero", 1: "baixo", 2: "alto"}
         return mapeamento.get(classe, ""), proba[idx]
+
 
 # --- Funções auxiliares ---
 def balancear_amostras(X, y):
