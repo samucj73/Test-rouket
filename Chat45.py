@@ -403,14 +403,22 @@ else:
     st.info("⚠️ Aguardando dados suficientes para prever os Top 4.")
 
 # ---------- Exibição Previsão ABZ ----------
+# ---------- Exibição Previsão ABZ ----------
 if incluir_abz:
     st.subheader("⚡ Previsão Alto / Baixo / Zero (ABZ)")
     ab_range = {"alto": "19–36", "baixo": "1–18", "zero": "0"}
-    abz_pred = st.session_state.ultima_previsao_abz if "ultima_previsao_abz" in st.session_state else None
-    if abz_pred:
-        st.markdown(f"<h2 style='text-align:center; color:#008000'>{abz_pred.title()} ({ab_range.get(abz_pred, '')})</h2>", unsafe_allow_html=True)
+
+    abz_pred = st.session_state.get("ultima_previsao_abz", ("", 0.0))
+    abz_str, _ = abz_pred
+
+    if abz_str:
+        st.markdown(
+            f"<h2 style='text-align:center; color:#008000'>{abz_str.title()} ({ab_range.get(abz_str, '')})</h2>",
+            unsafe_allow_html=True
+        )
     else:
         st.info("⚠️ Aguardando dados suficientes para previsão ABZ.")
+
 
 # ---------- Desempenho ----------
 with st.expander("📊 Desempenho"):
