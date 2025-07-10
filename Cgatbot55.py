@@ -460,7 +460,7 @@ with st.expander("📊 Desempenho"):
 
 # ---------- Histórico ----------
 with st.expander("📜 Últimos Números"):
-    ultimos = [str(h["number"]) for h in st.session_state.historico[-20:]]
+    ultimos = [str(h["number"]) for h in st.session_state.historico[-5:]]
     st.code(" | ".join(ultimos), language="text")
 
 # ---------- Download ----------
