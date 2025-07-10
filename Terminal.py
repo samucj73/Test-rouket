@@ -62,8 +62,8 @@ if "dominantes" not in st.session_state:
     st.session_state.dominantes = []
 if "ultimos_12" not in st.session_state:
     st.session_state.ultimos_12 = []
-if "aguardando_resultado" not in st.session_state:
-    st.session_state.aguardando_resultado = False
+if "numero_previsto" not in st.session_state:
+    st.session_state.numero_previsto = None
 if "resultado_sinais" not in st.session_state:
     st.session_state.resultado_sinais = deque(maxlen=100)
 
@@ -82,47 +82,50 @@ st.title("🎯 Estratégia de Terminais com Vizinhos (Auto)")
 st.subheader("📥 Últimos Números Sorteados:")
 st.write(list(st.session_state.historico)[-20:])
 
-# Lógica
+# Lógica principal
 historico = list(st.session_state.historico)
 
-# Ativação da entrada
-if st.session_state.estado == "coletando" and len(historico) >= 13:
-    ultimos_12 = historico[-13:-1]
-    numero_13 = historico[-1]
+# Coleta + Ativação de entrada
+if st.session_state.estado == "coletando" and len(historico) >= 14:
+    ultimos_12 = historico[-14:-2]   # últimos 12 sorteios
+    numero_13 = historico[-2]        # 13º número
+    numero_14 = historico[-1]        # 14º número
 
     terminais = [n % 10 for n in ultimos_12]
     contagem = Counter(terminais)
-    dominantes = [t for t, _ in contagem.most_common(2)]
+    dominantes = [t for t, c in contagem.items() if c >= 3]  # Dominantes com 3 ou mais ocorrências
 
-    entrada = gerar_entrada_com_vizinhos(dominantes)
-
-    if numero_13 in ultimos_12:
-        st.session_state.estado = "entrada_ativa"
+    if len(dominantes) == 2 and numero_13 in ultimos_12:
+        entrada = gerar_entrada_com_vizinhos(dominantes)
+        st.session_state.estado = "verificando_resultado"
         st.session_state.entrada_numeros = entrada
         st.session_state.dominantes = dominantes
         st.session_state.ultimos_12 = ultimos_12
-        st.session_state.aguardando_resultado = True
-        enviar_telegram(f"🎯 ENTRADA ATIVADA\nTerminais: {dominantes}\nEntrada: {entrada}")
+        st.session_state.numero_previsto = numero_14
+        enviar_telegram(f"🎯 ENTRADA ATIVADA\nTerminais: {dominantes}\nEntrada: {entrada}\nAguardando número: {numero_14}")
 
-# Verificação de resultado (número seguinte)
-elif st.session_state.estado == "entrada_ativa" and st.session_state.aguardando_resultado:
-    if numero in st.session_state.entrada_numeros:
-        st.success("✅ GREEN automático!")
-        st.session_state.resultado_sinais.append("GREEN")
-        st.session_state.estado = "coletando"
-        enviar_telegram("✅ GREEN confirmado!")
-    else:
-        st.warning("❌ RED automático!")
-        st.session_state.resultado_sinais.append("RED")
-        st.session_state.estado = "pos_red"
-        enviar_telegram("❌ RED registrado!")
-    st.session_state.aguardando_resultado = False
+# Verificação de resultado com o 14º número
+elif st.session_state.estado == "verificando_resultado":
+    if numero == st.session_state.numero_previsto:
+        if numero in st.session_state.entrada_numeros:
+            st.success("✅ GREEN automático!")
+            st.session_state.resultado_sinais.append("GREEN")
+            enviar_telegram("✅ GREEN confirmado!")
+        else:
+            st.warning("❌ RED automático!")
+            st.session_state.resultado_sinais.append("RED")
+            st.session_state.estado = "pos_red"
+            enviar_telegram("❌ RED registrado!")
+        st.session_state.entrada_numeros = []
+        st.session_state.numero_previsto = None
 
-# Pós-RED → aguarda reentrada
+# Pós-RED → Reentrada com os mesmos dominantes
 elif st.session_state.estado == "pos_red":
     if numero in st.session_state.ultimos_12:
-        st.session_state.estado = "entrada_ativa"
-        st.session_state.aguardando_resultado = True
+        entrada = gerar_entrada_com_vizinhos(st.session_state.dominantes)
+        st.session_state.entrada_numeros = entrada
+        st.session_state.numero_previsto = numero
+        st.session_state.estado = "verificando_resultado"
         enviar_telegram("🎯 REENTRADA após RED! Mesma entrada.")
 
 # Exibição
@@ -132,7 +135,7 @@ if st.session_state.entrada_numeros:
     st.write(f"🎰 Entrada: {st.session_state.entrada_numeros}")
     st.write(f"🔥 Terminais dominantes: {st.session_state.dominantes}")
 
-# Gráfico
+# Gráfico de sinais
 if st.session_state.resultado_sinais:
     st.subheader("📈 Histórico de Sinais")
     sinais = [1 if x == "GREEN" else 0 for x in st.session_state.resultado_sinais]
