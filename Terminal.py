@@ -47,41 +47,45 @@ def gerar_entrada_com_vizinhos(terminais):
             vizinhos.add(ROULETTE_ORDER[(idx + i) % len(ROULETTE_ORDER)])
     return sorted(vizinhos)
 
-# Estado Streamlit
+# Configuração do app
 st.set_page_config("🎯 Estratégia Automática Terminais")
 st_autorefresh(interval=10000, key="refresh")
 
+# Estado inicial
 if "historico" not in st.session_state:
     st.session_state.historico = deque(maxlen=50)
 if "estado" not in st.session_state:
-    st.session_state.estado = "coletando"  # ou entrada_ativa ou pos_red
+    st.session_state.estado = "coletando"
 if "entrada_numeros" not in st.session_state:
     st.session_state.entrada_numeros = []
 if "dominantes" not in st.session_state:
     st.session_state.dominantes = []
 if "ultimos_12" not in st.session_state:
     st.session_state.ultimos_12 = []
+if "aguardando_resultado" not in st.session_state:
+    st.session_state.aguardando_resultado = False
 if "resultado_sinais" not in st.session_state:
     st.session_state.resultado_sinais = deque(maxlen=100)
 
-# Obter número novo
+# Número novo da API
 numero = get_numero_api()
 if numero is None:
-    st.warning("Aguardando número da API...")
+    st.warning("⏳ Aguardando número da API...")
     st.stop()
 
-# Só adiciona se for novo
+# Evita repetição
 if not st.session_state.historico or numero != st.session_state.historico[-1]:
     st.session_state.historico.append(numero)
 
 # Interface
-st.title("🎯 Estratégia Terminais + Vizinhos (Auto GREEN/RED)")
+st.title("🎯 Estratégia de Terminais com Vizinhos (Auto)")
 st.subheader("📥 Últimos Números Sorteados:")
 st.write(list(st.session_state.historico)[-20:])
 
-# Aplicar lógica automática
+# Lógica
 historico = list(st.session_state.historico)
 
+# Ativação da entrada
 if st.session_state.estado == "coletando" and len(historico) >= 13:
     ultimos_12 = historico[-13:-1]
     numero_13 = historico[-1]
@@ -97,36 +101,39 @@ if st.session_state.estado == "coletando" and len(historico) >= 13:
         st.session_state.entrada_numeros = entrada
         st.session_state.dominantes = dominantes
         st.session_state.ultimos_12 = ultimos_12
-
+        st.session_state.aguardando_resultado = True
         enviar_telegram(f"🎯 ENTRADA ATIVADA\nTerminais: {dominantes}\nEntrada: {entrada}")
 
-elif st.session_state.estado == "entrada_ativa":
+# Verificação de resultado (número seguinte)
+elif st.session_state.estado == "entrada_ativa" and st.session_state.aguardando_resultado:
     if numero in st.session_state.entrada_numeros:
         st.success("✅ GREEN automático!")
         st.session_state.resultado_sinais.append("GREEN")
         st.session_state.estado = "coletando"
-        st.session_state.entrada_numeros = []
         enviar_telegram("✅ GREEN confirmado!")
     else:
         st.warning("❌ RED automático!")
         st.session_state.resultado_sinais.append("RED")
         st.session_state.estado = "pos_red"
         enviar_telegram("❌ RED registrado!")
+    st.session_state.aguardando_resultado = False
 
+# Pós-RED → aguarda reentrada
 elif st.session_state.estado == "pos_red":
     if numero in st.session_state.ultimos_12:
         st.session_state.estado = "entrada_ativa"
-        enviar_telegram("🎯 REENTRADA após RED! Mesmo padrão.")
+        st.session_state.aguardando_resultado = True
+        enviar_telegram("🎯 REENTRADA após RED! Mesma entrada.")
 
-# Exibição atual
+# Exibição
 st.subheader("📊 Estado Atual")
 st.write(f"Estado: **{st.session_state.estado}**")
 if st.session_state.entrada_numeros:
     st.write(f"🎰 Entrada: {st.session_state.entrada_numeros}")
     st.write(f"🔥 Terminais dominantes: {st.session_state.dominantes}")
 
-# Gráfico desempenho
+# Gráfico
 if st.session_state.resultado_sinais:
     st.subheader("📈 Histórico de Sinais")
-    sinais_num = [1 if x == "GREEN" else 0 for x in st.session_state.resultado_sinais]
-    st.line_chart(sinais_num, height=200)
+    sinais = [1 if x == "GREEN" else 0 for x in st.session_state.resultado_sinais]
+    st.line_chart(sinais, height=200)
