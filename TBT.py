@@ -28,14 +28,12 @@ TERMINAL_JOGADAS = {
     9: [9, 19, 29]
 }
 
-# Gera números com vizinhos
 def gerar_com_vizinhos(lista):
     vizinhos = []
     for num in lista:
         vizinhos += [(num + i) % 37 for i in range(-2, 3)]
     return sorted(set(vizinhos))
 
-# Telegram
 def enviar_telegram(msg):
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -44,7 +42,6 @@ def enviar_telegram(msg):
     except:
         pass
 
-# IA
 def treinar_modelo(sequencia):
     X, y = [], []
     janela = 5
@@ -57,7 +54,6 @@ def treinar_modelo(sequencia):
     modelo.fit(X, y)
     return modelo
 
-# Salva histórico CSV
 def salvar_historico(numero, terminal):
     df = pd.DataFrame([{
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -69,24 +65,23 @@ def salvar_historico(numero, terminal):
     else:
         df.to_csv(HISTORICO_CSV, sep=";", index=False)
 
-# API (Nova estrutura)
 def get_numeros():
     try:
         r = requests.get(API_URL, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
         data = r.json()
         numero = data.get("data", {}).get("result", {}).get("outcome", {}).get("number")
         if numero is not None and 0 <= int(numero) <= 36:
-            return [int(numero)]  # retorna lista com um número
+            return [int(numero)]
         return []
     except Exception as e:
         st.error(f"Erro ao acessar a API: {e}")
         return []
 
-# Configuração da página
+# Config página
 st.set_page_config(page_title="🎯 Estratégia de Terminais com IA e Telegram")
 st_autorefresh(interval=10000, key="refresh")
 
-# Session state
+# Estado
 if "historico_terminais" not in st.session_state:
     st.session_state.historico_terminais = deque(maxlen=200)
 if "historico_sinais" not in st.session_state:
@@ -98,7 +93,7 @@ if "entrada_em_andamento" not in st.session_state:
 if "martingale_ativo" not in st.session_state:
     st.session_state.martingale_ativo = False
 
-# Coleta de número
+# Pega número da API
 numeros = get_numeros()
 if not numeros:
     st.warning("⏳ Aguardando número da API...")
@@ -116,18 +111,12 @@ top_terminal, top_freq = freq.most_common(1)[0]
 modelo = treinar_modelo(list(st.session_state.historico_terminais))
 prev_ia = modelo.predict([list(st.session_state.historico_terminais)[-5:]])[0] if modelo else None
 
-# Blacklist
-blacklist = {8, 30, 23, 28, 12, 7, 17, 34}
-evitar = numero_atual in blacklist
+# Blacklist dinâmica com base nos últimos 8 terminais
+blacklist = list(st.session_state.historico_terminais)[-8:]
+evitar = terminal_atual in blacklist
 
-# Condições de entrada
-cond_entrada = (
-    not evitar and (
-        (top_terminal == 6 and top_freq >= 3) or
-        (top_terminal == 4 and top_freq >= 3) or
-        (top_terminal in [5, 9] and top_freq >= 2)
-    )
-)
+# Lógica dinâmica: terminal dominante aparece ≥3 e não está na blacklist
+cond_entrada = not evitar and top_freq >= 3
 tempo_desde_green = datetime.now() - st.session_state.ultimo_green
 aguardando = tempo_desde_green < timedelta(minutes=2)
 
@@ -143,7 +132,12 @@ st.markdown(f"🔥 Terminal dominante: **{top_terminal}** ({top_freq}x)")
 if prev_ia is not None:
     st.markdown(f"🤖 IA prevê próximo terminal provável: **{prev_ia}**")
 
-# Jogada recomendada
+st.subheader("🛑 Blacklist dinâmica")
+st.write(f"Terminais a evitar: {blacklist}")
+if evitar:
+    st.error(f"⚠️ Terminal {terminal_atual} está na blacklist recente. Evitando entrada.")
+
+# Jogada sugerida
 base = TERMINAL_JOGADAS.get(top_terminal, [])
 jogadas = gerar_com_vizinhos(base)
 
@@ -161,7 +155,7 @@ else:
     st.warning("⚠️ Sem entrada no momento.")
     st.session_state.entrada_em_andamento = False
 
-# Salva histórico
+# Salvar histórico
 salvar_historico(numero_atual, terminal_atual)
 
 # Botões
@@ -179,7 +173,7 @@ with col2:
         st.session_state.historico_sinais.append("RED")
         enviar_telegram("❌ RED registrado! 🔴")
 
-# Gráfico de sinais
+# Gráfico
 if st.session_state.historico_sinais:
     st.subheader("📈 Desempenho recente")
     resultado_map = {"GREEN": 1, "RED": 0}
