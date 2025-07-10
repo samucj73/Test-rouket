@@ -17,6 +17,7 @@ TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 TELEGRAM_CHAT_ID = "5121457416"
 
 # --- Modelo Top 4 Números ---
+
 class ModeloTopNumerosMelhorado:
     def __init__(self, janela=100, confianca_min=0.1):
         self.janela = janela
@@ -109,40 +110,40 @@ class ModeloTopNumerosMelhorado:
         self.modelo.fit(Xb, yb)
         self.treinado = True
 
-def prever_top_n(self, historico, n=4):
-    if not self.treinado:
-        return []
-    
-    numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
-    if len(numeros) < self.janela:
-        return []
-    
-    anteriores = numeros[-self.janela:]
-    entrada = self.construir_features(anteriores, modo_treinamento=False)
-    if entrada is None:
-        return []
-    
-    entrada = np.array([entrada], dtype=np.float32)
-    if entrada.shape[1] != self.modelo.n_features_in_:
-        return []
-    
-    try:
-        proba = self.modelo.predict_proba(entrada)[0]
-    except Exception:
-        return []
+    def prever_top_n(self, historico, n=4):
+        if not self.treinado:
+            return []
 
-    self.ultima_proba = proba
-    idx_sorted = np.argsort(proba)[::-1]
-    top_indices = idx_sorted[:n]
+        numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
+        if len(numeros) < self.janela:
+            return []
 
-    # ✅ Filtra apenas os índices válidos para o encoder
-    valid_indices = [i for i in top_indices if i < len(self.encoder.classes_)]
-    if not valid_indices:
-        return []
+        anteriores = numeros[-self.janela:]
+        entrada = self.construir_features(anteriores, modo_treinamento=False)
+        if entrada is None:
+            return []
 
-    top_numeros = self.encoder.inverse_transform(valid_indices)
-    top_probs = proba[valid_indices]
-    return list(zip(top_numeros, top_probs))
+        entrada = np.array([entrada], dtype=np.float32)
+        if entrada.shape[1] != self.modelo.n_features_in_:
+            return []
+
+        try:
+            proba = self.modelo.predict_proba(entrada)[0]
+        except Exception:
+            return []
+
+        self.ultima_proba = proba
+        idx_sorted = np.argsort(proba)[::-1]
+        top_indices = idx_sorted[:n]
+
+        valid_indices = [i for i in top_indices if i < len(self.encoder.classes_)]
+        if not valid_indices:
+            return []
+
+        top_numeros = self.encoder.inverse_transform(valid_indices)
+        top_probs = proba[valid_indices]
+        return list(zip(top_numeros, top_probs))
+
 
     
 
