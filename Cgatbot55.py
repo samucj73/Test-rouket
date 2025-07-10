@@ -353,6 +353,7 @@ if st.session_state.modelo_abz.treinado:
         enviar_alerta_telegram(f"⚡ Previsão ABZ: {abz_label} ({abz_conf:.2%})")
 
 # ---------- Captura novo número da API ----------
+
 def buscar_novo_numero():
     try:
         r = requests.get(API_URL, headers=HEADERS, timeout=10)
@@ -361,11 +362,12 @@ def buscar_novo_numero():
             numero = data.get("data", {}).get("result", {}).get("outcome", {}).get("number")
             timestamp = data.get("data", {}).get("startedAt")
             if numero is not None and timestamp:
+                # Se for número novo
                 if all(h["timestamp"] != timestamp for h in st.session_state.historico):
                     st.session_state.historico.append({"number": numero, "timestamp": timestamp})
                     salvar_resultado_em_arquivo(st.session_state.historico)
 
-                    # Verificar acertos com base nas previsões anteriores
+                    # ✅ Verificar acertos das previsões anteriores
                     if numero in st.session_state.ultimos_top4:
                         st.session_state.acertos_top4 += 1
 
@@ -375,8 +377,15 @@ def buscar_novo_numero():
                             st.session_state.acertos_abz += 1
 
                     st.session_state.novo_numero_capturado = True
-    except:
-        pass
+
+                    # ✅ Re-treinar modelos com o histórico atualizado
+                    if len(st.session_state.historico) > st.session_state.modelo_top4.janela:
+                        st.session_state.modelo_top4.treinar(st.session_state.historico)
+                    if incluir_abz and len(st.session_state.historico) > st.session_state.modelo_abz.janela:
+                        st.session_state.modelo_abz.treinar(st.session_state.historico)
+
+    except Exception as e:
+        st.warning(f"Erro ao buscar novo número: {e}")
 
 buscar_novo_numero()
 
