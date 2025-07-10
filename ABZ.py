@@ -159,7 +159,7 @@ if "historico" not in st.session_state:
     st.session_state.historico = carregar_historico()
 
 if "modelo_abz" not in st.session_state:
-    st.session_state.modelo_abz = ModeloAltoBaixoZero(janela=250)
+    st.session_state.modelo_abz = ModeloAltoBaixoZero(janela=10)
     if len(st.session_state.historico) > 15:
         st.session_state.modelo_abz.treinar(st.session_state.historico)
 
