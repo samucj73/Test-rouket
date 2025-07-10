@@ -109,29 +109,42 @@ class ModeloTopNumerosMelhorado:
         self.modelo.fit(Xb, yb)
         self.treinado = True
 
-    def prever_top_n(self, historico, n=4):
-        if not self.treinado:
-            return []
-        numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
-        if len(numeros) < self.janela:
-            return []
-        anteriores = numeros[-self.janela:]
-        entrada = self.construir_features(anteriores, modo_treinamento=False)
-        if entrada is None:
-            return []
-        entrada = np.array([entrada], dtype=np.float32)
-        if entrada.shape[1] != self.modelo.n_features_in_:
-            return []
-        try:
-            proba = self.modelo.predict_proba(entrada)[0]
-        except Exception:
-            return []
-        self.ultima_proba = proba
-        idx_sorted = np.argsort(proba)[::-1]
-        top_indices = idx_sorted[:n]
-        top_numeros = self.encoder.inverse_transform(top_indices)
-        top_probs = proba[top_indices]
-        return list(zip(top_numeros, top_probs))
+def prever_top_n(self, historico, n=4):
+    if not self.treinado:
+        return []
+    
+    numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
+    if len(numeros) < self.janela:
+        return []
+    
+    anteriores = numeros[-self.janela:]
+    entrada = self.construir_features(anteriores, modo_treinamento=False)
+    if entrada is None:
+        return []
+    
+    entrada = np.array([entrada], dtype=np.float32)
+    if entrada.shape[1] != self.modelo.n_features_in_:
+        return []
+    
+    try:
+        proba = self.modelo.predict_proba(entrada)[0]
+    except Exception:
+        return []
+
+    self.ultima_proba = proba
+    idx_sorted = np.argsort(proba)[::-1]
+    top_indices = idx_sorted[:n]
+
+    # ✅ Filtra apenas os índices válidos para o encoder
+    valid_indices = [i for i in top_indices if i < len(self.encoder.classes_)]
+    if not valid_indices:
+        return []
+
+    top_numeros = self.encoder.inverse_transform(valid_indices)
+    top_probs = proba[valid_indices]
+    return list(zip(top_numeros, top_probs))
+
+    
 
   # --- Modelo Alto/Baixo/Zero ---
 
@@ -232,25 +245,34 @@ class ModeloAltoBaixoZero:
         self.modelo.fit(Xb, yb)
         self.treinado = True
 
-    def prever(self, historico):
-        numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
-        if len(numeros) < self.janela:
-            return "", 0.0
-        anteriores = numeros[-self.janela:]
-        entrada = self.construir_features(anteriores, modo_treinamento=False)
-        if entrada is None:
-            return "", 0.0
-        entrada = np.array([entrada[1:]], dtype=np.float32)
-        if entrada.shape[1] != self.modelo.n_features_in_:
-            return "", 0.0
-        try:
-            proba = self.modelo.predict_proba(entrada)[0]
-        except Exception:
-            return "", 0.0
-        idx = np.argmax(proba)
-        classe = self.encoder.inverse_transform([idx])[0]
-        mapeamento = {0: "zero", 1: "baixo", 2: "alto"}
-        return mapeamento.get(classe, ""), proba[idx]
+def prever(self, historico):
+    numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
+    if len(numeros) < self.janela:
+        return "", 0.0
+
+    anteriores = numeros[-self.janela:]
+    entrada = self.construir_features(anteriores, modo_treinamento=False)
+    if entrada is None:
+        return "", 0.0
+
+    entrada = np.array([entrada[1:]], dtype=np.float32)
+    if entrada.shape[1] != self.modelo.n_features_in_:
+        return "", 0.0
+
+    try:
+        proba = self.modelo.predict_proba(entrada)[0]
+    except Exception:
+        return "", 0.0
+
+    idx = np.argmax(proba)
+    if idx >= len(self.encoder.classes_):
+        return "", 0.0
+
+    classe = self.encoder.inverse_transform([idx])[0]
+    mapeamento = {0: "zero", 1: "baixo", 2: "alto"}
+    return mapeamento.get(classe, ""), proba[idx]
+
+    
 
 
 # --- Funções auxiliares ---
