@@ -16,46 +16,7 @@ HISTORICO_PATH = "historico_abz.json"
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 TELEGRAM_CHAT_ID = "5121457416"
 
-# Funções auxiliares
-def balancear_amostras(X, y):
-    classes = np.unique(y)
-    n_max = max([np.sum(y == c) for c in classes])
-    Xb, yb = [], []
-    for c in classes:
-        idx = np.where(y == c)[0]
-        X_c, y_c = X[idx], y[idx]
-        Xr, yr = resample(X_c, y_c, replace=True, n_samples=n_max, random_state=42)
-        Xb.append(Xr)
-        yb.append(yr)
-    return np.vstack(Xb), np.hstack(yb)
-
-def salvar_resultado_em_arquivo(historico):
-    with open(HISTORICO_PATH, "w") as f:
-        json.dump(historico, f)
-
-def carregar_historico():
-    if os.path.exists(HISTORICO_PATH):
-        with open(HISTORICO_PATH) as f:
-            return json.load(f)
-    return []
-
-def enviar_alerta_telegram(mensagem):
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    data = {"chat_id": TELEGRAM_CHAT_ID, "text": mensagem}
-    try:
-        requests.post(url, data=data, timeout=10)
-    except:
-        pass
-
-def numero_abz_class(n):
-    if n == 0:
-        return "zero"
-    elif 1 <= n <= 18:
-        return "baixo"
-    else:
-        return "alto"
-
-# Modelo ABZ
+# ---------- Classe Modelo ABZ ----------
 class ModeloAltoBaixoZero:
     def __init__(self, janela=100):
         self.janela = janela
@@ -71,12 +32,7 @@ class ModeloAltoBaixoZero:
         atual = numeros[-1] if modo_treinamento else None
 
         def classe_abz(n):
-            if n == 0:
-                return 0
-            elif 1 <= n <= 18:
-                return 1
-            else:
-                return 2
+            return 0 if n == 0 else 1 if 1 <= n <= 18 else 2
 
         classes = [classe_abz(x) for x in anteriores]
 
@@ -93,6 +49,7 @@ class ModeloAltoBaixoZero:
         desvio = np.std(anteriores)
 
         classe_atual = classe_abz(atual) if modo_treinamento else -1
+
         freq20 = sum(1 for x in anteriores[-20:] if classe_abz(x) == classe_atual) / 20 if modo_treinamento else 0
         freq50 = sum(1 for x in anteriores[-50:] if classe_abz(x) == classe_atual) / 50 if modo_treinamento else 0
 
@@ -104,7 +61,6 @@ class ModeloAltoBaixoZero:
                     break
 
         trocas = sum(1 for i in range(-10, -1) if i > -len(classes) and classes[i] != classes[i+1])
-
         repeticoes = 1
         for i in range(len(classes)-2, -1, -1):
             if classes[i] == classes[i+1]:
@@ -143,56 +99,77 @@ class ModeloAltoBaixoZero:
         numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
         if len(numeros) < self.janela:
             return "", 0.0
+
         anteriores = numeros[-self.janela:]
         entrada = self.construir_features(anteriores, modo_treinamento=False)
         if entrada is None:
             return "", 0.0
+
         entrada = np.array([entrada[1:]], dtype=np.float32)
         if entrada.shape[1] != self.modelo.n_features_in_:
             return "", 0.0
-        try:
-            proba = self.modelo.predict_proba(entrada)[0]
-        except:
-            return "", 0.0
+
+        proba = self.modelo.predict_proba(entrada)[0]
         idx = np.argmax(proba)
         if idx >= len(self.encoder.classes_):
             return "", 0.0
+
         classe = self.encoder.inverse_transform([idx])[0]
         mapeamento = {0: "zero", 1: "baixo", 2: "alto"}
         return mapeamento.get(classe, ""), proba[idx]
 
-# App Streamlit
-st.set_page_config("⚡ Previsão ABZ", layout="centered")
-st.title("⚡ Previsão Alto / Baixo / Zero (ABZ)")
-st_autorefresh(interval=5_000, limit=None, key="refresh")
+# ---------- Funções auxiliares ----------
+def balancear_amostras(X, y):
+    classes = np.unique(y)
+    n_max = max([np.sum(y == c) for c in classes])
+    Xb, yb = [], []
+    for c in classes:
+        idx = np.where(y == c)[0]
+        X_c, y_c = X[idx], y[idx]
+        Xr, yr = resample(X_c, y_c, replace=True, n_samples=n_max, random_state=42)
+        Xb.append(Xr)
+        yb.append(yr)
+    return np.vstack(Xb), np.hstack(yb)
 
-# Estado
+def salvar_resultado(historico):
+    with open(HISTORICO_PATH, "w") as f:
+        json.dump(historico, f)
+
+def carregar_historico():
+    if os.path.exists(HISTORICO_PATH):
+        with open(HISTORICO_PATH) as f:
+            return json.load(f)
+    return []
+
+def numero_abz_class(n):
+    if n == 0:
+        return "zero"
+    elif 1 <= n <= 18:
+        return "baixo"
+    else:
+        return "alto"
+
+# ---------- Streamlit App ----------
+st.set_page_config("⚡ Previsão ABZ", layout="centered")
+st_autorefresh(interval=5000, key="refresh")
+
+st.title("⚡ Previsão Alto / Baixo / Zero (ABZ)")
+
 if "historico" not in st.session_state:
     st.session_state.historico = carregar_historico()
 
 if "modelo_abz" not in st.session_state:
-    st.session_state.modelo_abz = ModeloAltoBaixoZero(janela=200)
-    if len(st.session_state.historico) > 220:
+    st.session_state.modelo_abz = ModeloAltoBaixoZero(janela=250)
+    if len(st.session_state.historico) > 260:
         st.session_state.modelo_abz.treinar(st.session_state.historico)
 
 if "acertos_abz" not in st.session_state:
     st.session_state.acertos_abz = 0
 
 if "ultima_previsao_abz" not in st.session_state:
-    st.session_state.ultima_previsao_abz = ""
+    st.session_state.ultima_previsao_abz = ("", 0.0)
 
-if "ultima_mensagem_enviada_abz" not in st.session_state:
-    st.session_state.ultima_mensagem_enviada_abz = ""
-
-# Fazer previsão antes do novo número
-if st.session_state.modelo_abz.treinado:
-    abz_label, abz_conf = st.session_state.modelo_abz.prever(st.session_state.historico)
-    st.session_state.ultima_previsao_abz = (abz_label, abz_conf)
-    if abz_label != st.session_state.ultima_mensagem_enviada_abz:
-        st.session_state.ultima_mensagem_enviada_abz = abz_label
-        enviar_alerta_telegram(f"⚡ Previsão ABZ: {abz_label} ({abz_conf:.2%})")
-
-# Captura novo número
+# ---------- Buscar novo número da API ----------
 def buscar_novo_numero():
     try:
         r = requests.get(API_URL, headers=HEADERS, timeout=10)
@@ -203,47 +180,69 @@ def buscar_novo_numero():
             if numero is not None and timestamp:
                 if all(h["timestamp"] != timestamp for h in st.session_state.historico):
                     st.session_state.historico.append({"number": numero, "timestamp": timestamp})
-                    salvar_resultado_em_arquivo(st.session_state.historico)
-                    abz_esperado = numero_abz_class(numero)
-                    if isinstance(st.session_state.ultima_previsao_abz, (list, tuple)):
-                        if abz_esperado == st.session_state.ultima_previsao_abz[0]:
+                    salvar_resultado(st.session_state.historico)
+
+                    esperado = numero_abz_class(numero)
+                    previsao = st.session_state.ultima_previsao_abz
+                    if isinstance(previsao, (tuple, list)) and len(previsao) == 2:
+                        if esperado == previsao[0]:
                             st.session_state.acertos_abz += 1
+
                     if len(st.session_state.historico) > st.session_state.modelo_abz.janela:
                         st.session_state.modelo_abz.treinar(st.session_state.historico)
+
     except Exception as e:
-        st.warning(f"Erro ao buscar novo número: {e}")
+        st.warning(f"Erro: {e}")
 
 buscar_novo_numero()
 
-# Previsão
-st.subheader("⚡ Última Previsão ABZ")
-abz_range = {"alto": "19–36", "baixo": "1–18", "zero": "0"}
-abz_label, abz_conf = st.session_state.ultima_previsao_abz
-if abz_label:
-    st.markdown(
-        f"<h2 style='text-align:center; color:#008000'>{abz_label.title()} "
-        f"({abz_range.get(abz_label, '')})</h2>"
-        f"<p style='text-align:center'>Confiança: {abz_conf:.2%}</p>",
-        unsafe_allow_html=True
-    )
-else:
-    st.info("⚠️ Aguardando dados suficientes para previsão ABZ.")
+# ---------- Prever ABZ ----------
+if st.session_state.modelo_abz.treinado:
+    label, conf = st.session_state.modelo_abz.prever(st.session_state.historico)
+    st.session_state.ultima_previsao_abz = (label, conf)
 
-# Desempenho
+    if label:
+        st.markdown(f"<h2 style='text-align:center'>{label.upper()}</h2>", unsafe_allow_html=True)
+        st.markdown(f"<p style='text-align:center'>Confiança: {conf:.2%}</p>", unsafe_allow_html=True)
+    else:
+        st.info("⚠️ Aguardando dados suficientes para previsão ABZ.")
+else:
+    st.info("⚠️ Modelo ainda não treinado.")
+
+# ---------- Desempenho ----------
 with st.expander("📊 Desempenho"):
     total_abz = len(st.session_state.historico) - st.session_state.modelo_abz.janela
     if total_abz > 0:
-        taxa_abz = st.session_state.acertos_abz / total_abz * 100
-        st.success(f"⚡ Acertos ABZ: {st.session_state.acertos_abz}/{total_abz} ({taxa_abz:.2f}%)")
+        taxa = st.session_state.acertos_abz / total_abz * 100
+        st.success(f"Acertos ABZ: {st.session_state.acertos_abz}/{total_abz} ({taxa:.2f}%)")
     else:
-        st.info("Aguardando mais dados para avaliar ABZ.")
+        st.info("Aguardando mais dados...")
 
-# Histórico
+# ---------- Histórico ----------
 with st.expander("📜 Últimos Números"):
     ultimos = [str(h["number"]) for h in st.session_state.historico[-5:]]
-    st.code(" | ".join(ultimos), language="text")
+    st.code(" | ".join(ultimos))
 
-# Download
+# ---------- Inserção manual ----------
+with st.expander("✍️ Inserir Números Manualmente"):
+    entrada = st.text_area("Digite números de 0 a 36 separados por espaço:")
+    if st.button("➕ Adicionar"):
+        try:
+            nums = [int(n) for n in entrada.split() if 0 <= int(n) <= 36]
+            for n in nums:
+                st.session_state.historico.append({
+                    "number": n,
+                    "timestamp": f"manual_{len(st.session_state.historico)}"
+                })
+            salvar_resultado(st.session_state.historico)
+            st.success(f"{len(nums)} números adicionados.")
+        except:
+            st.error("Erro na entrada.")
+
+# ---------- Baixar histórico ----------
 if os.path.exists(HISTORICO_PATH):
     with open(HISTORICO_PATH) as f:
         st.download_button("📥 Baixar Histórico", f.read(), file_name="historico_abz.json")
+
+
+
