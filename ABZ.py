@@ -160,7 +160,7 @@ if "historico" not in st.session_state:
 
 if "modelo_abz" not in st.session_state:
     st.session_state.modelo_abz = ModeloAltoBaixoZero(janela=250)
-    if len(st.session_state.historico) > 260:
+    if len(st.session_state.historico) > 15:
         st.session_state.modelo_abz.treinar(st.session_state.historico)
 
 if "acertos_abz" not in st.session_state:
