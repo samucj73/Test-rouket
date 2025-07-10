@@ -81,9 +81,11 @@ def get_numeros():
 st.set_page_config(page_title="🎯 Estratégia de Terminais com IA e Telegram")
 st_autorefresh(interval=10000, key="refresh")
 
-# Estado
+# Estado inicial
 if "historico_terminais" not in st.session_state:
     st.session_state.historico_terminais = deque(maxlen=200)
+if "historico_numeros_reais" not in st.session_state:
+    st.session_state.historico_numeros_reais = deque(maxlen=200)
 if "historico_sinais" not in st.session_state:
     st.session_state.historico_sinais = deque(maxlen=50)
 if "ultimo_green" not in st.session_state:
@@ -101,6 +103,7 @@ if not numeros:
 
 numero_atual = numeros[0]
 terminal_atual = numero_atual % 10
+st.session_state.historico_numeros_reais.append(numero_atual)
 st.session_state.historico_terminais.append(terminal_atual)
 
 # Frequência terminal
@@ -111,11 +114,11 @@ top_terminal, top_freq = freq.most_common(1)[0]
 modelo = treinar_modelo(list(st.session_state.historico_terminais))
 prev_ia = modelo.predict([list(st.session_state.historico_terminais)[-5:]])[0] if modelo else None
 
-# Blacklist dinâmica com base nos últimos 8 terminais
-blacklist = list(st.session_state.historico_terminais)[-8:]
-evitar = terminal_atual in blacklist
+# Blacklist com base nos últimos 8 números REAIS sorteados
+blacklist = list(st.session_state.historico_numeros_reais)[-8:]
+evitar = numero_atual in blacklist
 
-# Lógica dinâmica: terminal dominante aparece ≥3 e não está na blacklist
+# Lógica de entrada dinâmica
 cond_entrada = not evitar and top_freq >= 3
 tempo_desde_green = datetime.now() - st.session_state.ultimo_green
 aguardando = tempo_desde_green < timedelta(minutes=2)
@@ -133,9 +136,9 @@ if prev_ia is not None:
     st.markdown(f"🤖 IA prevê próximo terminal provável: **{prev_ia}**")
 
 st.subheader("🛑 Blacklist dinâmica")
-st.write(f"Terminais a evitar: {blacklist}")
+st.write(f"Números a evitar: {blacklist}")
 if evitar:
-    st.error(f"⚠️ Terminal {terminal_atual} está na blacklist recente. Evitando entrada.")
+    st.error(f"⚠️ Número atual **{numero_atual}** está na blacklist. Evitando entrada.")
 
 # Jogada sugerida
 base = TERMINAL_JOGADAS.get(top_terminal, [])
@@ -158,7 +161,7 @@ else:
 # Salvar histórico
 salvar_historico(numero_atual, terminal_atual)
 
-# Botões
+# Botões de controle
 col1, col2 = st.columns(2)
 with col1:
     if st.button("✅ GREEN"):
@@ -173,7 +176,7 @@ with col2:
         st.session_state.historico_sinais.append("RED")
         enviar_telegram("❌ RED registrado! 🔴")
 
-# Gráfico
+# Gráfico de desempenho
 if st.session_state.historico_sinais:
     st.subheader("📈 Desempenho recente")
     resultado_map = {"GREEN": 1, "RED": 0}
