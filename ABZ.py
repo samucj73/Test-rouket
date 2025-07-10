@@ -18,7 +18,7 @@ TELEGRAM_CHAT_ID = "5121457416"
 
 # ---------- Classe Modelo ABZ ----------
 class ModeloAltoBaixoZero:
-    def __init__(self, janela=100):
+    def __init__(self, janela=10):
         self.janela = janela
         self.modelo = None
         self.encoder = LabelEncoder()
@@ -53,7 +53,7 @@ class ModeloAltoBaixoZero:
         freq20 = sum(1 for x in anteriores[-20:] if classe_abz(x) == classe_atual) / 20 if modo_treinamento else 0
         freq50 = sum(1 for x in anteriores[-50:] if classe_abz(x) == classe_atual) / 50 if modo_treinamento else 0
 
-        dist = 100
+        dist = 10
         if modo_treinamento:
             for i in range(len(anteriores)-1, -1, -1):
                 if classe_abz(anteriores[i]) == classe_atual:
