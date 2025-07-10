@@ -17,12 +17,18 @@ TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 TELEGRAM_CHAT_ID = "5121457416"
 
 # ---------- Classe Modelo ABZ ----------
+
+from sklearn.ensemble import RandomForestClassifier
+
 class ModeloAltoBaixoZero:
-    def __init__(self, janela=10):
+    def __init__(self, janela=15):
         self.janela = janela
         self.modelo = None
         self.encoder = LabelEncoder()
         self.treinado = False
+
+    def classe_abz(self, n):
+        return 0 if n == 0 else 1 if 1 <= n <= 18 else 2
 
     def construir_features(self, numeros, modo_treinamento=True):
         if len(numeros) < self.janela + (1 if modo_treinamento else 0):
@@ -30,15 +36,18 @@ class ModeloAltoBaixoZero:
 
         anteriores = numeros[:-1] if modo_treinamento else numeros
         atual = numeros[-1] if modo_treinamento else None
+        classes = [self.classe_abz(x) for x in anteriores]
 
-        def classe_abz(n):
-            return 0 if n == 0 else 1 if 1 <= n <= 18 else 2
+        def freq_classe(c, ultimos):
+            return ultimos.count(c) / len(ultimos) if ultimos else 0
 
-        classes = [classe_abz(x) for x in anteriores]
+        freq_0 = freq_classe(0, classes[-self.janela:])
+        freq_baixo = freq_classe(1, classes[-self.janela:])
+        freq_alto = freq_classe(2, classes[-self.janela:])
 
-        freq_0 = classes.count(0) / self.janela
-        freq_baixo = classes.count(1) / self.janela
-        freq_alto = classes.count(2) / self.janela
+        freq5 = [freq_classe(i, classes[-5:]) for i in range(3)]
+        freq10 = [freq_classe(i, classes[-10:]) for i in range(3)]
+        freq30 = [freq_classe(i, classes[-30:]) for i in range(3)]
 
         lag1 = classes[-1]
         lag2 = classes[-2] if len(classes) >= 2 else -1
@@ -48,22 +57,22 @@ class ModeloAltoBaixoZero:
         mediana = np.median(anteriores)
         desvio = np.std(anteriores)
 
-        classe_atual = classe_abz(atual) if modo_treinamento else -1
+        classe_atual = self.classe_abz(atual) if modo_treinamento else -1
 
-        freq20 = sum(1 for x in anteriores[-20:] if classe_abz(x) == classe_atual) / 20 if modo_treinamento else 0
-        freq50 = sum(1 for x in anteriores[-50:] if classe_abz(x) == classe_atual) / 50 if modo_treinamento else 0
+        freq20 = sum(1 for x in anteriores[-20:] if self.classe_abz(x) == classe_atual) / 20 if modo_treinamento else 0
+        freq50 = sum(1 for x in anteriores[-50:] if self.classe_abz(x) == classe_atual) / 50 if modo_treinamento else 0
 
         dist = 10
         if modo_treinamento:
-            for i in range(len(anteriores)-1, -1, -1):
-                if classe_abz(anteriores[i]) == classe_atual:
+            for i in range(len(anteriores) - 1, -1, -1):
+                if self.classe_abz(anteriores[i]) == classe_atual:
                     dist = len(anteriores) - 1 - i
                     break
 
-        trocas = sum(1 for i in range(-10, -1) if i > -len(classes) and classes[i] != classes[i+1])
+        trocas = sum(1 for i in range(-10, -1) if i > -len(classes) and classes[i] != classes[i + 1])
         repeticoes = 1
-        for i in range(len(classes)-2, -1, -1):
-            if classes[i] == classes[i+1]:
+        for i in range(len(classes) - 2, -1, -1):
+            if classes[i] == classes[i + 1]:
                 repeticoes += 1
             else:
                 break
@@ -71,6 +80,7 @@ class ModeloAltoBaixoZero:
         return [
             classe_atual,
             freq_0, freq_baixo, freq_alto,
+            *freq5, *freq10, *freq30,
             lag1, lag2, tendencia,
             media, mediana, desvio,
             freq20, freq50, dist,
@@ -91,7 +101,7 @@ class ModeloAltoBaixoZero:
         X = np.array(X, dtype=np.float32)
         y_enc = self.encoder.fit_transform(y)
         Xb, yb = balancear_amostras(X, y_enc)
-        self.modelo = RandomForestClassifier(n_estimators=300, max_depth=12, random_state=42)
+        self.modelo = RandomForestClassifier(n_estimators=200, max_depth=10, random_state=42)
         self.modelo.fit(Xb, yb)
         self.treinado = True
 
@@ -117,6 +127,7 @@ class ModeloAltoBaixoZero:
         classe = self.encoder.inverse_transform([idx])[0]
         mapeamento = {0: "zero", 1: "baixo", 2: "alto"}
         return mapeamento.get(classe, ""), proba[idx]
+
 
 # ---------- Funções auxiliares ----------
 def balancear_amostras(X, y):
