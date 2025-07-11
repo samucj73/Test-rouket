@@ -80,7 +80,7 @@ if not st.session_state.historico or numero != st.session_state.historico[-1]:
 # Interface
 st.title("🎯 Estratégia de Terminais com Vizinhos (Auto)")
 st.subheader("📥 Últimos Números Sorteados:")
-st.write(list(st.session_state.historico)[-20:])
+st.write(list(st.session_state.historico)[-15:])
 
 # Lógica principal
 historico = list(st.session_state.historico)
