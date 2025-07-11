@@ -2,22 +2,22 @@ import streamlit as st
 import requests
 from collections import Counter, deque
 from streamlit_autorefresh import st_autorefresh
+import os
+import json
 
-# Telegram
+# === CONFIGURAÇÃO ===
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 CHAT_ID = "5121457416"
-
-# API
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
+CAMINHO_ARQUIVO = "historico_roleta.json"
 
-# Ordem física da roleta europeia
 ROULETTE_ORDER = [
     0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27,
     13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1,
     20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26
 ]
 
-# Funções
+# === FUNÇÕES ===
 def enviar_telegram(msg):
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -46,13 +46,24 @@ def gerar_entrada_com_vizinhos(terminais):
             vizinhos.add(ROULETTE_ORDER[(idx + i) % len(ROULETTE_ORDER)])
     return sorted(vizinhos)
 
-# Configuração do app
+def salvar_historico(historico):
+    with open(CAMINHO_ARQUIVO, "w") as f:
+        json.dump(list(historico), f)
+
+def carregar_historico():
+    if os.path.exists(CAMINHO_ARQUIVO):
+        with open(CAMINHO_ARQUIVO, "r") as f:
+            dados = json.load(f)
+            return deque(dados, maxlen=50)
+    return deque(maxlen=50)
+
+# === CONFIGURAÇÃO STREAMLIT ===
 st.set_page_config("🎯 Estratégia Automática Terminais")
 st_autorefresh(interval=10000, key="refresh")
 
-# Estado inicial
+# === ESTADO INICIAL ===
 if "historico" not in st.session_state:
-    st.session_state.historico = deque(maxlen=50)
+    st.session_state.historico = carregar_historico()
 if "estado" not in st.session_state:
     st.session_state.estado = "coletando"
 if "entrada_numeros" not in st.session_state:
@@ -68,22 +79,22 @@ if "telegram_enviado" not in st.session_state:
 if "ciclos_continuacao" not in st.session_state:
     st.session_state.ciclos_continuacao = 0
 
-# Número novo da API
+# === OBTÉM NÚMERO DA API ===
 numero = get_numero_api()
 if numero is None:
     st.warning("⏳ Aguardando número da API...")
     st.stop()
 
-# Evita repetição
+# === EVITA REPETIÇÃO E SALVA HISTÓRICO ===
 if not st.session_state.historico or numero != st.session_state.historico[-1]:
     st.session_state.historico.append(numero)
+    salvar_historico(st.session_state.historico)
 
-# Interface
+# === INTERFACE ===
 st.title("🎯 Estratégia de Terminais com Vizinhos (Auto)")
 st.subheader("📥 Últimos Números Sorteados:")
 st.write(list(st.session_state.historico)[-14:])
 
-# Histórico completo
 historico = list(st.session_state.historico)
 
 # === ESTADO COLETANDO ===
@@ -154,7 +165,7 @@ elif st.session_state.estado == "pos_red":
         st.session_state.ciclos_continuacao = 1
         enviar_telegram("🎯 REENTRADA após RED! Mesma entrada.")
 
-# Exibição
+# === EXIBIÇÃO FINAL ===
 st.subheader("📊 Estado Atual")
 st.write(f"Estado: **{st.session_state.estado}**")
 if st.session_state.entrada_numeros:
@@ -162,7 +173,6 @@ if st.session_state.entrada_numeros:
     st.write(f"🔥 Terminais dominantes: {st.session_state.dominantes}")
     st.write(f"🔁 Ciclos consecutivos: {st.session_state.ciclos_continuacao}/3")
 
-# Gráfico de sinais
 if st.session_state.resultado_sinais:
     st.subheader("📈 Histórico de Sinais")
     sinais = [1 if x == "GREEN" else 0 for x in st.session_state.resultado_sinais]
