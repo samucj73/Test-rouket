@@ -28,7 +28,7 @@ def enviar_telegram(msg):
 
 def get_numero_api():
     try:
-        r = requests.get(API_URL, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
+        r = requests.get(API_URL, headers={"User-Agent": "Mozilla/5.0"}, timeout=2)
         data = r.json()
         numero = data.get("data", {}).get("result", {}).get("outcome", {}).get("number")
         if numero is not None and 0 <= int(numero) <= 36:
