@@ -65,6 +65,8 @@ if "resultado_sinais" not in st.session_state:
     st.session_state.resultado_sinais = deque(maxlen=100)
 if "telegram_enviado" not in st.session_state:
     st.session_state.telegram_enviado = False
+if "ciclos_continuacao" not in st.session_state:
+    st.session_state.ciclos_continuacao = 0
 
 # Número novo da API
 numero = get_numero_api()
@@ -79,9 +81,9 @@ if not st.session_state.historico or numero != st.session_state.historico[-1]:
 # Interface
 st.title("🎯 Estratégia de Terminais com Vizinhos (Auto)")
 st.subheader("📥 Últimos Números Sorteados:")
-st.write(list(st.session_state.historico)[-15:])
+st.write(list(st.session_state.historico)[-14:])
 
-# uHistórico completo
+# Histórico completo
 historico = list(st.session_state.historico)
 
 # === ESTADO COLETANDO ===
@@ -106,6 +108,7 @@ if st.session_state.estado == "coletando" and len(historico) >= 14:
                 st.session_state.dominantes = dominantes
                 st.session_state.ultimos_12 = ultimos_12
                 st.session_state.telegram_enviado = False
+                st.session_state.ciclos_continuacao = 1
                 enviar_telegram("✅ GREEN confirmado!")
             else:
                 st.warning("❌ RED automático!")
@@ -114,22 +117,32 @@ if st.session_state.estado == "coletando" and len(historico) >= 14:
                 st.session_state.dominantes = dominantes
                 st.session_state.ultimos_12 = ultimos_12
                 st.session_state.telegram_enviado = False
+                st.session_state.ciclos_continuacao = 0
                 enviar_telegram("❌ RED registrado!")
 
 # === ESTADO AGUARDANDO CONTINUAÇÃO ===
 elif st.session_state.estado == "aguardando_continuacao":
     if numero in st.session_state.entrada_numeros:
-        st.success("✅ GREEN durante continuação!")
+        st.success(f"✅ GREEN durante continuação! Ciclo {st.session_state.ciclos_continuacao}/3")
         if not st.session_state.telegram_enviado:
-            enviar_telegram("✅ GREEN durante continuação!")
+            enviar_telegram(f"✅ GREEN durante continuação! Ciclo {st.session_state.ciclos_continuacao}/3")
             st.session_state.telegram_enviado = True
         st.session_state.resultado_sinais.append("GREEN")
-        st.session_state.estado = "aguardando_continuacao"
+        st.session_state.ciclos_continuacao += 1
+
+        if st.session_state.ciclos_continuacao > 3:
+            st.warning("🔁 Limite de 3 ciclos atingido. Reiniciando...")
+            st.session_state.estado = "coletando"
+            st.session_state.entrada_numeros = []
+            st.session_state.dominantes = []
+            st.session_state.telegram_enviado = False
+            st.session_state.ciclos_continuacao = 0
     else:
         st.session_state.estado = "coletando"
         st.session_state.entrada_numeros = []
         st.session_state.dominantes = []
         st.session_state.telegram_enviado = False
+        st.session_state.ciclos_continuacao = 0
 
 # === ESTADO PÓS-RED ===
 elif st.session_state.estado == "pos_red":
@@ -138,6 +151,7 @@ elif st.session_state.estado == "pos_red":
         st.session_state.entrada_numeros = entrada
         st.session_state.estado = "aguardando_continuacao"
         st.session_state.telegram_enviado = False
+        st.session_state.ciclos_continuacao = 1
         enviar_telegram("🎯 REENTRADA após RED! Mesma entrada.")
 
 # Exibição
@@ -146,6 +160,7 @@ st.write(f"Estado: **{st.session_state.estado}**")
 if st.session_state.entrada_numeros:
     st.write(f"🎰 Entrada: {st.session_state.entrada_numeros}")
     st.write(f"🔥 Terminais dominantes: {st.session_state.dominantes}")
+    st.write(f"🔁 Ciclos consecutivos: {st.session_state.ciclos_continuacao}/3")
 
 # Gráfico de sinais
 if st.session_state.resultado_sinais:
