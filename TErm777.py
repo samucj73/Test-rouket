@@ -111,6 +111,24 @@ if st.session_state.estado == "coletando" and len(historico) >= 14:
         entrada = gerar_entrada_com_vizinhos(dominantes)
 
         if numero_13 in ultimos_12 or numero_13 in entrada:
+            # Enviar alerta com os números dos terminais dominantes em 2 linhas
+            if not st.session_state.telegram_enviado:
+                linhas = []
+                for t in dominantes:
+                    numeros_terminal = [n for n in range(37) if n % 10 == t]
+                    numeros_terminal.sort()
+                    linha = " ".join(map(str, numeros_terminal))
+                    linhas.append(linha)
+                msg = "Entrada:\n" + "\n".join(linhas)
+                enviar_telegram(msg)
+                st.session_state.telegram_enviado = True
+
+            # Exibe a entrada antes do número 14
+            st.info("🚨 Entrada gerada! Aguardando resultado do próximo número (14º)...")
+            st.write(f"🎰 Entrada: {entrada}")
+            st.write(f"🔥 Terminais dominantes: {dominantes}")
+            st.write(f"🧪 Verificando se o número {numero_14} está na entrada...")
+
             if numero_14 in entrada:
                 st.success("✅ GREEN automático!")
                 st.session_state.resultado_sinais.append("GREEN")
@@ -118,8 +136,8 @@ if st.session_state.estado == "coletando" and len(historico) >= 14:
                 st.session_state.entrada_numeros = entrada
                 st.session_state.dominantes = dominantes
                 st.session_state.ultimos_12 = ultimos_12
-                st.session_state.telegram_enviado = False
                 st.session_state.ciclos_continuacao = 1
+                st.session_state.telegram_enviado = False
                 enviar_telegram("✅ GREEN confirmado!")
             else:
                 st.warning("❌ RED automático!")
