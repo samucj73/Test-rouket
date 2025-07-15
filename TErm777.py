@@ -105,7 +105,7 @@ if st.session_state.estado == "coletando" and len(historico) >= 14:
 
     terminais = [n % 10 for n in ultimos_12]
     contagem = Counter(terminais)
-    dominantes = [t for t, c in contagem.items() if c >= 3]
+    dominantes = [t for t, c in contagem.items() if c >= 2$]
 
     if len(dominantes) == 2:
         entrada = gerar_entrada_com_vizinhos(dominantes)
