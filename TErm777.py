@@ -31,8 +31,9 @@ def get_numero_api():
         r = requests.get(API_URL, headers={"User-Agent": "Mozilla/5.0"}, timeout=2)
         data = r.json()
         numero = data.get("data", {}).get("result", {}).get("outcome", {}).get("number")
-        if numero is not None and 0 <= int(numero) <= 36:
-            return int(numero)
+        timestamp = data.get("data", {}).get("result", {}).get("timestamp")
+        if numero is not None and timestamp:
+            return {"numero": int(numero), "timestamp": timestamp}
     except:
         pass
     return None
@@ -59,14 +60,10 @@ def carregar_historico():
 
 # === CONFIGURAÇÃO STREAMLIT ===
 st.set_page_config("🎯 Estratégia Automática Terminais")
-# Recarrega a página com tudo reiniciado
-# Botão para reiniciar tudo e apagar histórico
+
 if st.button("🔄 Reiniciar Estratégia (limpar tudo)"):
-    # Apaga o arquivo de histórico, se existir
     if os.path.exists(CAMINHO_ARQUIVO):
         os.remove(CAMINHO_ARQUIVO)
-
-    # Resetar todas as variáveis de estado
     st.session_state.historico = deque(maxlen=50)
     st.session_state.estado = "coletando"
     st.session_state.entrada_numeros = []
@@ -75,8 +72,8 @@ if st.button("🔄 Reiniciar Estratégia (limpar tudo)"):
     st.session_state.resultado_sinais = deque(maxlen=100)
     st.session_state.telegram_enviado = False
     st.session_state.ciclos_continuacao = 0
+    st.rerun()
 
-    st.rerun()  # Recarrega a página com estado zerado
 st_autorefresh(interval=10000, key="refresh")
 
 # === ESTADO INICIAL ===
@@ -97,23 +94,24 @@ if "telegram_enviado" not in st.session_state:
 if "ciclos_continuacao" not in st.session_state:
     st.session_state.ciclos_continuacao = 0
 
-# === OBTÉM NÚMERO DA API ===
-numero = get_numero_api()
-if numero is None:
+# === OBTÉM NÚMERO E TIMESTAMP DA API ===
+resultado = get_numero_api()
+if resultado is None:
     st.warning("⏳ Aguardando número da API...")
     st.stop()
 
-# === EVITA REPETIÇÃO E SALVA HISTÓRICO ===
-if not st.session_state.historico or numero != st.session_state.historico[-1]:
-    st.session_state.historico.append(numero)
+# EVITA REPETIÇÃO COM BASE NO TIMESTAMP
+if not st.session_state.historico or resultado["timestamp"] != st.session_state.historico[-1]["timestamp"]:
+    st.session_state.historico.append(resultado)
     salvar_historico(st.session_state.historico)
+
+numero = resultado["numero"]
+historico = [item["numero"] for item in st.session_state.historico]
 
 # === INTERFACE ===
 st.title("🎯 Estratégia de Terminais com Vizinhos (Auto)")
 st.subheader("📥 Últimos Números Sorteados:")
-st.write(list(st.session_state.historico)[-15:])
-
-historico = list(st.session_state.historico)
+st.write(historico[-15:])
 
 # === ESTADO COLETANDO ===
 if st.session_state.estado == "coletando" and len(historico) >= 14:
@@ -129,7 +127,6 @@ if st.session_state.estado == "coletando" and len(historico) >= 14:
         entrada = gerar_entrada_com_vizinhos(dominantes)
 
         if numero_13 in ultimos_12 or numero_13 in entrada:
-            # Enviar alerta com os números dos terminais dominantes em 2 linhas
             if not st.session_state.telegram_enviado:
                 linhas = []
                 for t in dominantes:
@@ -141,7 +138,6 @@ if st.session_state.estado == "coletando" and len(historico) >= 14:
                 enviar_telegram(msg)
                 st.session_state.telegram_enviado = True
 
-            # Exibe a entrada antes do número 14
             st.info("🚨 Entrada gerada! Aguardando resultado do próximo número (14º)...")
             st.write(f"🎰 Entrada: {entrada}")
             st.write(f"🔥 Terminais dominantes: {dominantes}")
