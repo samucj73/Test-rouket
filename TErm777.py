@@ -31,12 +31,14 @@ def get_numero_api():
         r = requests.get(API_URL, headers={"User-Agent": "Mozilla/5.0"}, timeout=2)
         data = r.json()
         numero = data.get("data", {}).get("result", {}).get("outcome", {}).get("number")
-        timestamp = data.get("data", {}).get("result", {}).get("timestamp")
+        timestamp = data.get("data", {}).get("settledAt")  # Corrigido aqui!
         if numero is not None and timestamp:
             return {"numero": int(numero), "timestamp": timestamp}
-    except:
-        pass
+    except Exception as e:
+        st.error(f"Erro na API: {e}")
     return None
+
+
 
 def gerar_entrada_com_vizinhos(terminais):
     numeros_terminal = [n for n in range(37) if n % 10 in terminais]
