@@ -59,9 +59,15 @@ def carregar_historico():
 
 # === CONFIGURAÇÃO STREAMLIT ===
 st.set_page_config("🎯 Estratégia Automática Terminais")
-# Botão para reiniciar tudo
-if st.button("🔄 Reiniciar Estratégia"):
-    st.session_state.historico = carregar_historico()
+# Recarrega a página com tudo reiniciado
+# Botão para reiniciar tudo e apagar histórico
+if st.button("🔄 Reiniciar Estratégia (limpar tudo)"):
+    # Apaga o arquivo de histórico, se existir
+    if os.path.exists(CAMINHO_ARQUIVO):
+        os.remove(CAMINHO_ARQUIVO)
+
+    # Resetar todas as variáveis de estado
+    st.session_state.historico = deque(maxlen=50)
     st.session_state.estado = "coletando"
     st.session_state.entrada_numeros = []
     st.session_state.dominantes = []
@@ -69,7 +75,8 @@ if st.button("🔄 Reiniciar Estratégia"):
     st.session_state.resultado_sinais = deque(maxlen=100)
     st.session_state.telegram_enviado = False
     st.session_state.ciclos_continuacao = 0
-    st.experimental_rerun()  # Recarrega a página com tudo reiniciado
+
+    st.rerun()  # Recarrega a página com estado zerado
 st_autorefresh(interval=10000, key="refresh")
 
 # === ESTADO INICIAL ===
