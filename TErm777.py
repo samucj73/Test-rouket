@@ -112,8 +112,14 @@ historico = [item["numero"] for item in st.session_state.historico]
 
 # === INTERFACE ===
 st.title("🎯 Estratégia de Terminais com Vizinhos (Auto)")
-st.subheader("📥 Últimos Números Sorteados:")
-st.write(historico[-15:])
+st.subheader("📥 Últimos Números Sorteados (15 mais recentes):")
+
+ultimos_15 = historico[-15:]
+linhas = [ultimos_15[i:i+5] for i in range(0, 15, 5)]
+
+for linha in linhas:
+    st.write(" | ".join(f"{n:2d}" for n in linha))
+
 
 # === ESTADO COLETANDO ===
 if st.session_state.estado == "coletando" and len(historico) >= 14:
