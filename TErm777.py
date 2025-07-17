@@ -103,7 +103,7 @@ if "contador_pos_red" not in st.session_state:
 # === OBTÉM NÚMERO E TIMESTAMP DA API ===
 resultado = get_numero_api()
 if resultado is None:
-    st.warning("⏳ Aguardando número da API...")
+   # st.warning("⏳ Aguardando número da API...")
     st.stop()
 
 numero = resultado["numero"]
