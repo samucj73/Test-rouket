@@ -106,23 +106,13 @@ if resultado is None:
     st.warning("⏳ Aguardando número da API...")
     st.stop()
 
-numero = resultado["numero"]
+
 
 # Inicializa controle do último número processado
 if "ultimo_numero_processado" not in st.session_state:
     st.session_state.ultimo_numero_processado = None
 
 # HISTÓRICO TEMPORÁRIO (antes de processar)
-historico = [item["numero"] for item in st.session_state.historico]
-
-# EXIBE INTERFACE DA ENTRADA ATUAL
-st.subheader("🎰 Entrada Ativa (se houver)")
-if st.session_state.entrada_numeros:
-    st.write(f"🎯 Entrada: {st.session_state.entrada_numeros}")
-    st.write(f"🔥 Terminais dominantes: {st.session_state.dominantes}")
-    st.write(f"🔁 Ciclos consecutivos: {st.session_state.ciclos_continuacao}/3")
-else:
-    st.info("🔎 Aguardando geração da próxima entrada...")
 
 # Verifica se o número já foi processado
 if numero == st.session_state.ultimo_numero_processado:
