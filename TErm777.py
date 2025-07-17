@@ -96,6 +96,9 @@ if "telegram_enviado" not in st.session_state:
 if "ciclos_continuacao" not in st.session_state:
     st.session_state.ciclos_continuacao = 0
 
+if "contador_pos_red" not in st.session_state:
+    st.session_state.contador_pos_red = 0
+
 # === OBTÉM NÚMERO E TIMESTAMP DA API ===
 resultado = get_numero_api()
 if resultado is None:
@@ -211,7 +214,19 @@ elif st.session_state.estado == "pos_red":
         st.session_state.estado = "aguardando_continuacao"
         st.session_state.telegram_enviado = False
         st.session_state.ciclos_continuacao = 1
+        st.session_state.contador_pos_red = 0
         enviar_telegram("🎯 REENTRADA após RED! Mesma entrada.")
+    else:
+        st.session_state.contador_pos_red += 1
+        st.warning(f"⏳ Aguardando pós-RED... ({st.session_state.contador_pos_red}/2)")
+        if st.session_state.contador_pos_red >= 2:
+            st.session_state.estado = "coletando"
+            st.session_state.entrada_numeros = []
+            st.session_state.dominantes = []
+            st.session_state.telegram_enviado = False
+            st.session_state.ultimos_12 = []
+            st.session_state.contador_pos_red = 0
+            st.info("🔄 Voltando ao estado de coleta após RED.")
 
 # === EXIBIÇÃO FINAL ===
 st.subheader("📊 Estado Atual")
