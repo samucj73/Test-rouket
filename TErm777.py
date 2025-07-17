@@ -100,27 +100,33 @@ if "contador_pos_red" not in st.session_state:
     st.session_state.contador_pos_red = 0
 
 # === OBTÉM NÚMERO E TIMESTAMP DA API ===
-# === OBTÉM NÚMERO E TIMESTAMP DA API ===
+# === INTERFACE PRINCIPAL FIXA (sempre aparece) ===
+st.set_page_config("🎯 Estratégia Automática Terminais")
+st.title("🎯 Estratégia de Terminais com Vizinhos (Auto)")
+st.caption("🔄 Atualiza automaticamente a cada 10 segundos")
+
+# === OBTÉM NÚMERO DA API ===
 resultado = get_numero_api()
 if resultado is None:
-   # st.warning("⏳ Aguardando número da API...")
+    st.warning("⏳ Aguardando número da API...")
     st.stop()
 
 numero = resultado["numero"]
 
-# Inicializa controle de número processado
+# Inicializa controle do último número processado
 if "ultimo_numero_processado" not in st.session_state:
     st.session_state.ultimo_numero_processado = None
 
-# Verifica se o número já foi processado (evita duplicação)
+# Verifica se o número já foi processado (evita duplicações por refresh)
 if numero == st.session_state.ultimo_numero_processado:
-#  st.warning("⏳ Aguardando novo número...")
+    st.caption("⏳ Aguardando novo número da roleta...")
     st.stop()
 else:
     st.session_state.ultimo_numero_processado = numero
     st.session_state.historico.append(resultado)
     salvar_historico(st.session_state.historico)
 
+# Após validação, segue fluxo normalmente
 historico = [item["numero"] for item in st.session_state.historico]
 
 # === INTERFACE ===
