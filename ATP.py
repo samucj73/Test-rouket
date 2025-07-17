@@ -3,11 +3,10 @@ import requests
 import json
 import os
 from collections import Counter
-from streamlit_autorefresh import st_autorefresh
 
 # === CONFIGURAÇÕES ===
-TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
-CHAT_ID = "5121457416"
+TELEGRAM_TOKEN = "SEU_TOKEN"
+CHAT_ID = "SEU_CHAT_ID"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 HISTORICO_PATH = "historico.json"
 ULTIMO_TIMESTAMP_PATH = "ultimo_timestamp.txt"
@@ -74,8 +73,6 @@ def obter_numero_e_timestamp():
         st.error(f"❌ Erro na requisição: {e}")
         return None, None
 
-
-
 def obter_terminal(numero):
     return numero % 10
 
@@ -94,12 +91,17 @@ def vizinhos(numero):
 # === INÍCIO DO APP ===
 
 st.set_page_config(layout="centered")
-st.title("🎯 Estratégia de Roleta – Terminais Dominantes com Controle de Timestamp")
+st.title("🎯 Estratégia de Roleta – Terminais Dominantes com Refresh Inteligente")
 
-# st_autorefresh(interval=85000, key="datarefresh")
+# Obter dados da API
 numero, timestamp = obter_numero_e_timestamp()
 ultimo_timestamp = carregar_timestamp()
-historico = carregar_historico()  # <- Adicionada esta linha
+historico = carregar_historico()
+
+# 🛠️ DEBUG: Mostrar dados da API
+st.markdown("### 🔍 Dados da API")
+st.write(f"📦 Número atual da API: `{numero}`")
+st.write(f"⏱️ Timestamp da API: `{timestamp}`")
 
 # Só processa se timestamp for novo e número válido
 if numero is None or timestamp == ultimo_timestamp:
@@ -119,10 +121,11 @@ salvar_historico(historico)
 salvar_timestamp(timestamp)
 st.experimental_rerun()
 
+# O restante do código abaixo NUNCA será executado na primeira chegada do número
+# porque o rerun acontecerá antes — após o rerun, o mesmo número já estará salvo
+# e passará para a lógica de estratégia normalmente
 
-
-
-# Inicializar variáveis estado
+# Inicializar variáveis de estado
 if "estado" not in st.session_state:
     st.session_state.estado = "coletando"
 if "entrada_principal" not in st.session_state:
@@ -188,7 +191,7 @@ elif estado == "aguardando_13" and len(historico) >= 13:
     numero_13 = historico[-1]
     if (
         numero_13 in numeros_usados_para_entrada
-        or numero_13 in st.session_state.entrada_principal  # incluir vizinhos no total
+        or numero_13 in st.session_state.entrada_principal
     ):
         enviar_telegram(f"🎯 ENTRADA CONFIRMADA: {entrada_principal}")
         st.success(f"🎯 ENTRADA CONFIRMADA: {entrada_principal}")
