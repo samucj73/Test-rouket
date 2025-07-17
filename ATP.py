@@ -71,29 +71,31 @@ if numero is not None and (not historico or numero != historico[-1]):
     salvar_historico()
 
 # Exibir últimos 15 números em 3 linhas
-# Exibir últimos 15 números em 3 linhas de 5 colunas fixas
+# Exibir últimos 15 números no layout: 3 linhas de 5, com cores
 st.markdown("### Últimos Números")
-for linha in range(3):
-    cols = st.columns(5)
-    for i in range(5):
-        idx = linha * 5 + i
-        if idx < len(historico):
-            n = historico[idx]
-            cor = "black"
-            if idx == len(historico) - 1:
-                if estado == "verificando":
-                    cor = "green" if n in entrada_atual else "red"
-                else:
-                    cor = "orange"
-            cols[i].markdown(
-                f"<div style='text-align:center; color:{cor}; font-size:24px'>{n}</div>",
-                unsafe_allow_html=True
-            )
+
+ultimos_15 = list(historico)[-15:]
+faltando = 15 - len(ultimos_15)
+ultimos_15 = ['-'] * faltando + ultimos_15  # Preencher à esquerda com "-"
+
+linhas = [ultimos_15[i:i+5] for i in range(0, 15, 5)]
+
+for linha in linhas:
+    linha_formatada = ""
+    for n in linha:
+        if n == '-':
+            cor = "gray"
+        elif n == historico[-1]:
+            if estado == "verificando":
+                cor = "green" if n in entrada_atual else "red"
+            else:
+                cor = "orange"
         else:
-            cols[i].markdown(
-                f"<div style='text-align:center; color:gray; font-size:24px'>-</div>",
-                unsafe_allow_html=True
-            )
+            cor = "black"
+        linha_formatada += f"<span style='color:{cor}; font-size:22px'><b>{n}</b></span> &nbsp; - &nbsp; "
+    linha_formatada = linha_formatada.rstrip(" &nbsp; - &nbsp; ")  # remove final extra
+    st.markdown(f"<div style='text-align:center'>{linha_formatada}</div>", unsafe_allow_html=True)
+
 
 # Exibir terminais dominantes se houver
 if terminais_dominantes:
