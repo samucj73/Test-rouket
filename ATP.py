@@ -71,21 +71,29 @@ if numero is not None and (not historico or numero != historico[-1]):
     salvar_historico()
 
 # Exibir últimos 15 números em 3 linhas
+# Exibir últimos 15 números em 3 linhas de 5 colunas fixas
 st.markdown("### Últimos Números")
-cols_linha = [st.columns(5), st.columns(5), st.columns(5)]
-for i, n in enumerate(historico):
-    cor = "black"
-    if i == len(historico) - 1:
-        if estado == "verificando":
-            cor = "green" if n in entrada_atual else "red"
+for linha in range(3):
+    cols = st.columns(5)
+    for i in range(5):
+        idx = linha * 5 + i
+        if idx < len(historico):
+            n = historico[idx]
+            cor = "black"
+            if idx == len(historico) - 1:
+                if estado == "verificando":
+                    cor = "green" if n in entrada_atual else "red"
+                else:
+                    cor = "orange"
+            cols[i].markdown(
+                f"<div style='text-align:center; color:{cor}; font-size:24px'>{n}</div>",
+                unsafe_allow_html=True
+            )
         else:
-            cor = "orange"
-    linha = i // 5
-    pos = i % 5
-    cols_linha[linha][pos].markdown(
-        f"<div style='text-align:center; color:{cor}; font-size:24px'>{n}</div>",
-        unsafe_allow_html=True
-    )
+            cols[i].markdown(
+                f"<div style='text-align:center; color:gray; font-size:24px'>-</div>",
+                unsafe_allow_html=True
+            )
 
 # Exibir terminais dominantes se houver
 if terminais_dominantes:
