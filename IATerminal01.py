@@ -124,9 +124,13 @@ if len(historico_numeros) >= 16 and not os.path.exists(CAMINHO_MODELO):
         X_treino.append(features)
         y_treino.append(1 if numero_resultado in entrada else 0)
 
-    modelo.fit(pd.DataFrame(X_treino), y_treino)
-    salvar_modelo(modelo)
-    st.success("🤖 Modelo treinado com base no histórico!")
+    y_counter = Counter(y_treino)
+    if len(y_counter) >= 2:
+        modelo.fit(pd.DataFrame(X_treino), y_treino)
+        salvar_modelo(modelo)
+        st.success("🤖 Modelo treinado com base no histórico!")
+    else:
+        st.warning("⚠️ Dados insuficientes para treinar a IA com diversidade de classes.")
 
 # === INTERFACE VISUAL ===
 st.subheader("🎰 Últimos Números (15):")
@@ -140,9 +144,19 @@ if len(historico_numeros) >= 14:
     X = pd.DataFrame([extrair_features(janela)])
 
     try:
-        prob = modelo.predict_proba(X)[0][1]
+        probs = modelo.predict_proba(X)[0]
+        if len(probs) == 1:
+            if modelo.classes_[0] == 1:
+                prob = probs[0]
+            else:
+                prob = 0
+        else:
+            prob = probs[1]
     except NotFittedError:
         st.warning("🔧 IA ainda não treinada. Aguardando mais dados...")
+        prob = 0
+    except Exception as e:
+        st.error(f"Erro na previsão: {e}")
         prob = 0
 
     if prob > 0.65 and not st.session_state.entrada_atual:
@@ -168,8 +182,10 @@ if len(historico_numeros) >= 14:
             st.session_state.resultado_sinais.append("RED")
             y = [0]
 
-        modelo.fit(X, y)
-        salvar_modelo(modelo)
+        y_counter = Counter(y)
+        if len(y_counter) >= 2:
+            modelo.fit(X, y)
+            salvar_modelo(modelo)
         st.session_state.entrada_atual = []
 
 # === STATUS VISUAL ===
