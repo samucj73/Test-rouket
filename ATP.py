@@ -54,12 +54,18 @@ def obter_numero_e_timestamp():
         resp = requests.get(API_URL)
         if resp.status_code == 200:
             data = resp.json()
-            if "result" in data and "outcome" in data["result"] and "settledAt" in data["data"]:
-                numero = data["result"]["outcome"]["number"]
+            if (
+                "data" in data and
+                "result" in data["data"] and
+                "outcome" in data["data"]["result"] and
+                "number" in data["data"]["result"]["outcome"] and
+                "settledAt" in data["data"]
+            ):
+                numero = data["data"]["result"]["outcome"]["number"]
                 timestamp = data["data"]["settledAt"]
                 return numero, timestamp
             else:
-                st.warning("⚠️ Estrutura inesperada da API. Ignorando este sorteio.")
+                st.warning("⚠️ Estrutura inesperada da API. Verifique o conteúdo retornado.")
                 return None, None
         else:
             st.error(f"❌ Erro ao acessar a API. Código: {resp.status_code}")
@@ -67,6 +73,8 @@ def obter_numero_e_timestamp():
     except Exception as e:
         st.error(f"❌ Erro na requisição: {e}")
         return None, None
+
+
 
 def obter_terminal(numero):
     return numero % 10
