@@ -100,17 +100,27 @@ if "contador_pos_red" not in st.session_state:
     st.session_state.contador_pos_red = 0
 
 # === OBTÉM NÚMERO E TIMESTAMP DA API ===
+# === OBTÉM NÚMERO E TIMESTAMP DA API ===
 resultado = get_numero_api()
 if resultado is None:
     st.warning("⏳ Aguardando número da API...")
     st.stop()
 
-# EVITA REPETIÇÃO COM BASE NO TIMESTAMP
-if not st.session_state.historico or resultado["timestamp"] != st.session_state.historico[-1]["timestamp"]:
+numero = resultado["numero"]
+
+# Inicializa controle de número processado
+if "ultimo_numero_processado" not in st.session_state:
+    st.session_state.ultimo_numero_processado = None
+
+# Verifica se o número já foi processado (evita duplicação)
+if numero == st.session_state.ultimo_numero_processado:
+    st.warning("⏳ Aguardando novo número...")
+    st.stop()
+else:
+    st.session_state.ultimo_numero_processado = numero
     st.session_state.historico.append(resultado)
     salvar_historico(st.session_state.historico)
 
-numero = resultado["numero"]
 historico = [item["numero"] for item in st.session_state.historico]
 
 # === INTERFACE ===
