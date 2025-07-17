@@ -83,7 +83,7 @@ def vizinhos(numero):
 
 st.set_page_config(layout="centered")
 st.title("🎯 Estratégia de Roleta – Terminais Dominantes")
-st_autorefresh(interval=120000, key="datarefresh")
+st_autorefresh(interval=50000, key="datarefresh")
 
 # Carregar histórico e timestamp
 historico = carregar_historico()
