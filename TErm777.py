@@ -114,7 +114,7 @@ if "ultimo_numero_processado" not in st.session_state:
 
 # Verifica se o número já foi processado (evita duplicação)
 if numero == st.session_state.ultimo_numero_processado:
-    st.warning("⏳ Aguardando novo número...")
+#  st.warning("⏳ Aguardando novo número...")
     st.stop()
 else:
     st.session_state.ultimo_numero_processado = numero
