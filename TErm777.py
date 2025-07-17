@@ -99,12 +99,7 @@ if "ciclos_continuacao" not in st.session_state:
 if "contador_pos_red" not in st.session_state:
     st.session_state.contador_pos_red = 0
 
-# === OBTÉM NÚMERO E TIMESTAMP DA API ===
-# === INTERFACE PRINCIPAL FIXA (sempre aparece) ===
-st.set_page_config("🎯 Estratégia Automática Terminais")
-st.title("🎯 Estratégia de Terminais com Vizinhos (Auto)")
-st.caption("🔄 Atualiza automaticamente a cada 10 segundos")
-
+# === OBTÉM NÚMERO E TIMESTAMP DA API == === OBTÉM NÚMERO DA API ===
 # === OBTÉM NÚMERO DA API ===
 resultado = get_numero_api()
 if resultado is None:
@@ -117,17 +112,29 @@ numero = resultado["numero"]
 if "ultimo_numero_processado" not in st.session_state:
     st.session_state.ultimo_numero_processado = None
 
-# Verifica se o número já foi processado (evita duplicações por refresh)
+# HISTÓRICO TEMPORÁRIO (antes de processar)
+historico = [item["numero"] for item in st.session_state.historico]
+
+# EXIBE INTERFACE DA ENTRADA ATUAL
+st.subheader("🎰 Entrada Ativa (se houver)")
+if st.session_state.entrada_numeros:
+    st.write(f"🎯 Entrada: {st.session_state.entrada_numeros}")
+    st.write(f"🔥 Terminais dominantes: {st.session_state.dominantes}")
+    st.write(f"🔁 Ciclos consecutivos: {st.session_state.ciclos_continuacao}/3")
+else:
+    st.info("🔎 Aguardando geração da próxima entrada...")
+
+# Verifica se o número já foi processado
 if numero == st.session_state.ultimo_numero_processado:
     st.caption("⏳ Aguardando novo número da roleta...")
     st.stop()
-else:
-    st.session_state.ultimo_numero_processado = numero
-    st.session_state.historico.append(resultado)
-    salvar_historico(st.session_state.historico)
 
-# Após validação, segue fluxo normalmente
+# === Só continua se for número novo ===
+st.session_state.ultimo_numero_processado = numero
+st.session_state.historico.append(resultado)
+salvar_historico(st.session_state.historico)
 historico = [item["numero"] for item in st.session_state.historico]
+
 
 # === INTERFACE ===
 st.title("🎯 Estratégia de Terminais com Vizinhos (Auto)")
