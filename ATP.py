@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 import json
 import os
-from collections import Counter, deque
+from collections import Counter
 from streamlit_autorefresh import st_autorefresh
 
 # === CONFIGURAÇÕES ===
@@ -53,12 +53,15 @@ def obter_numero_e_timestamp():
     try:
         resp = requests.get(API_URL)
         if resp.status_code == 200:
-            dados = resp.json()["data"]["result"]["outcome"]
-            numero = dados["number"]
-            timestamp = resp.json()["data"]["createdDate"]
-            return numero, timestamp
-    except:
-        return None, None
+            data = resp.json().get("data", {})
+            resultado = data.get("result", {})
+            outcome = resultado.get("outcome", {})
+            numero = outcome.get("number", None)
+            timestamp = data.get("settledAt", None)  # corrigido para usar settledAt
+            if numero is not None and timestamp is not None:
+                return numero, timestamp
+    except Exception as e:
+        pass
     return None, None
 
 def obter_terminal(numero):
@@ -76,10 +79,6 @@ def vizinhos(numero):
         ROULETTE_NUMBERS[(idx + 2) % len(ROULETTE_NUMBERS)],
     ]
 
-def formatar_linhas(numeros):
-    linhas = [numeros[i:i+5] for i in range(0, len(numeros), 5)]
-    return "\n".join(" - ".join(str(n) for n in linha) for linha in linhas)
-
 # === INÍCIO DO APP ===
 
 st.set_page_config(layout="centered")
@@ -88,41 +87,61 @@ st.title("🎯 Estratégia de Roleta – Terminais Dominantes")
 # Autorefresh a cada 5 segundos
 st_autorefresh(interval=5000, key="datarefresh")
 
-# Histórico e controle
+# Carregar histórico e timestamp armazenados
 historico = carregar_historico()
 ultimo_timestamp = carregar_timestamp()
 
-# Estado da estratégia
-estado = st.session_state.get("estado", "coletando")
-entrada_principal = st.session_state.get("entrada_principal", [])
-vizinhos_entrada = st.session_state.get("vizinhos_entrada", [])
-numeros_usados_para_entrada = st.session_state.get("numeros_usados_para_entrada", [])
+# Inicializar variáveis de estado do Streamlit se não existirem
+if "estado" not in st.session_state:
+    st.session_state.estado = "coletando"
+if "entrada_principal" not in st.session_state:
+    st.session_state.entrada_principal = []
+if "vizinhos_entrada" not in st.session_state:
+    st.session_state.vizinhos_entrada = []
+if "numeros_usados_para_entrada" not in st.session_state:
+    st.session_state.numeros_usados_para_entrada = []
+if "numero_13_confirmado" not in st.session_state:
+    st.session_state.numero_13_confirmado = None
 
-# Obter novo número
+estado = st.session_state.estado
+entrada_principal = st.session_state.entrada_principal
+vizinhos_entrada = st.session_state.vizinhos_entrada
+numeros_usados_para_entrada = st.session_state.numeros_usados_para_entrada
+
+# Obter novo número e timestamp da API
 numero, timestamp = obter_numero_e_timestamp()
-if numero and timestamp != ultimo_timestamp:
+
+if numero is not None and timestamp != ultimo_timestamp:
     historico.append(numero)
     salvar_historico(historico)
     salvar_timestamp(timestamp)
 
-# Exibição dos últimos 15
+# Exibição dos últimos 15 números com cores
 st.subheader("📊 Últimos Números")
 ultimos_15 = historico[-15:]
-cores = {num: "green" if num in entrada_principal else "white" for num in ultimos_15}
+
+def cor_numero(n):
+    if estado == "aguardando_resultado" and n == st.session_state.numero_13_confirmado:
+        return "green"  # 13º número confirmado
+    if estado == "aguardando_resultado" and n == numero:
+        return "white"
+    if n in entrada_principal:
+        return "green"
+    return "white"
 
 linhas = [ultimos_15[i:i+5] for i in range(0, len(ultimos_15), 5)]
 for linha in linhas:
     st.markdown(
         "<div style='font-size: 22px; margin-bottom: 5px;'>"
         + " - ".join(
-            f"<span style='color:{'green' if n in entrada_principal else 'white'};'>{n:02d}</span>"
+            f"<span style='color:{cor_numero(n)};'>{n:02d}</span>"
             for n in linha
         )
         + "</div>",
         unsafe_allow_html=True
     )
 
-# Estratégia
+# Lógica da estratégia
 if estado == "coletando" and len(historico) >= 12:
     ultimos_12 = historico[-12:]
     terminais = [obter_terminal(n) for n in ultimos_12]
@@ -140,7 +159,6 @@ if estado == "coletando" and len(historico) >= 12:
         entrada_principal = sorted(set(entrada_principal))
         vizinhos_entrada = sorted(set(vizinhos_entrada))
 
-        # Salva estado
         st.session_state.estado = "aguardando_13"
         st.session_state.entrada_principal = entrada_principal
         st.session_state.vizinhos_entrada = vizinhos_entrada
@@ -157,9 +175,34 @@ elif estado == "aguardando_13" and len(historico) >= 13:
     ):
         enviar_telegram(f"🎯 ENTRADA CONFIRMADA: {entrada_principal}")
         st.success(f"🎯 ENTRADA CONFIRMADA: {entrada_principal}")
+        st.session_state.estado = "aguardando_resultado"
+        st.session_state.numero_13_confirmado = numero_13
+        st.write(f"⏳ Aguardando resultado com o próximo número após {numero_13}...")
+    else:
+        st.warning("❌ 13º número não confirmou a entrada. Continuando coleta...")
         st.session_state.estado = "coletando"
         st.session_state.entrada_principal = []
         st.session_state.vizinhos_entrada = []
         st.session_state.numeros_usados_para_entrada = []
+        st.session_state.numero_13_confirmado = None
+
+elif estado == "aguardando_resultado" and len(historico) >= 14:
+    numero_14 = historico[-1]
+    entrada = st.session_state.entrada_principal
+
+    if numero_14 in entrada:
+        st.success(f"🟢 GREEN! Número {numero_14} está na entrada.")
+        enviar_telegram(f"🟢 GREEN! Número {numero_14} está na entrada.")
     else:
-        st.warning("❌ 13º número não confirmou a entrada. Aguardando novo sorteio...")
+        st.error(f"🔴 RED! Número {numero_14} não está na entrada.")
+        enviar_telegram(f"🔴 RED! Número {numero_14} não está na entrada.")
+
+    # Reinicia o ciclo
+    st.session_state.estado = "coletando"
+    st.session_state.entrada_principal = []
+    st.session_state.vizinhos_entrada = []
+    st.session_state.numeros_usados_para_entrada = []
+    st.session_state.numero_13_confirmado = None
+
+else:
+    st.info("⏳ Aguardando números suficientes para gerar entrada...")
