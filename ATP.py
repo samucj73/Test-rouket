@@ -17,7 +17,6 @@ ROULETTE_ORDER = [
     20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26
 ]
 
-# === FUNÇÕES ===
 def enviar_telegram(msg):
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -95,91 +94,93 @@ if "telegram_enviado" not in st.session_state:
 resultado = get_numero_api()
 if resultado is None:
     st.warning("⏳ Aguardando número da API...")
-    st.stop()
 
 numero_novo = False
-if not st.session_state.historico or resultado["timestamp"] != st.session_state.historico[-1]["timestamp"]:
+if resultado and (
+    not st.session_state.historico or resultado["timestamp"] != st.session_state.historico[-1]["timestamp"]
+):
     st.session_state.historico.append(resultado)
     salvar_historico(st.session_state.historico)
     numero_novo = True
 
 if not numero_novo:
-    st.stop()
+    st.info("⏳ Aguardando novo número...")
+else:
+    numero = resultado["numero"]
+    historico = [item["numero"] for item in st.session_state.historico]
 
-numero = resultado["numero"]
-historico = [item["numero"] for item in st.session_state.historico]
-
-# === INTERFACE ===
-st.title("🎯 Estratégia de Terminais com Vizinhos (Auto)")
-st.subheader("📥 Últimos Números Sorteados (15 mais recentes):")
-ultimos_15 = historico[-15:]
-linhas = [ultimos_15[i:i+5] for i in range(0, 15, 5)]
-for linha in linhas:
-    linha_formatada = []
-    for n in linha:
-        if (
-            len(historico) >= 14
-            and n == historico[-1]
-            and st.session_state.entrada_numeros
-        ):
-            cor = "green" if n in st.session_state.entrada_numeros else "red"
-            linha_formatada.append(f"<span style='color:{cor}; font-weight:bold; font-size:20px'>{n:2d}</span>")
-        else:
-            linha_formatada.append(f"{n:2d}")
-    st.markdown(" | ".join(linha_formatada), unsafe_allow_html=True)
-
-# === LÓGICA PRINCIPAL ===
-if st.session_state.estado == "coletando" and len(historico) >= 12:
-    if not st.session_state.entrada_numeros:
-        ultimos_12 = historico[-12:]
-        terminais = [n % 10 for n in ultimos_12]
-        contagem = Counter(terminais)
-        dominantes = [t for t, _ in contagem.most_common(2)]
-        if len(dominantes) == 2:
-            entrada = gerar_entrada_com_vizinhos(dominantes)
-            st.session_state.entrada_numeros = entrada
-            st.session_state.dominantes = dominantes
-            st.session_state.ultimos_12 = ultimos_12
-
-    if len(historico) >= 14:
-        numero_13 = historico[-2]
-        numero_14 = historico[-1]
-
-        if numero_13 in st.session_state.ultimos_12 or numero_13 in st.session_state.entrada_numeros:
-            if not st.session_state.telegram_enviado:
-                linhas = []
-                for t in st.session_state.dominantes:
-                    numeros_terminal = [n for n in range(37) if n % 10 == t]
-                    numeros_terminal.sort()
-                    linha = " ".join(map(str, numeros_terminal))
-                    linhas.append(linha)
-                msg = "Entrada:\n" + "\n".join(linhas)
-                enviar_telegram(msg)
-                st.session_state.telegram_enviado = True
-
-            st.info("🚨 Entrada gerada! Aguardando resultado do próximo número (14º)...")
-            st.write(f"🎰 Entrada: {st.session_state.entrada_numeros}")
-            st.write(f"🔥 Terminais dominantes: {st.session_state.dominantes}")
-            st.write(f"🧪 Verificando se o número {numero_14} está na entrada...")
-
-            if numero_14 in st.session_state.entrada_numeros:
-                st.success("✅ GREEN automático!")
-                st.session_state.resultado_sinais.append("GREEN")
-                enviar_telegram("✅ GREEN confirmado!")
+    # === INTERFACE ===
+    st.title("🎯 Estratégia de Terminais com Vizinhos (Auto)")
+    st.subheader("📥 Últimos Números Sorteados (15 mais recentes):")
+    ultimos_15 = historico[-15:]
+    linhas = [ultimos_15[i:i+5] for i in range(0, 15, 5)]
+    for linha in linhas:
+        linha_formatada = []
+        for n in linha:
+            if (
+                len(historico) >= 14
+                and n == historico[-1]
+                and st.session_state.entrada_numeros
+            ):
+                cor = "green" if n in st.session_state.entrada_numeros else "red"
+                linha_formatada.append(f"<span style='color:{cor}; font-weight:bold; font-size:20px'>{n:2d}</span>")
             else:
-                st.warning("❌ RED automático!")
-                st.session_state.resultado_sinais.append("RED")
-                enviar_telegram("❌ RED registrado!")
+                linha_formatada.append(f"{n:2d}")
+        st.markdown(" | ".join(linha_formatada), unsafe_allow_html=True)
 
-            st.session_state.estado = "coletando"
-            st.session_state.entrada_numeros = []
-            st.session_state.dominantes = []
-            st.session_state.ultimos_12 = []
-            st.session_state.telegram_enviado = False
+    # === LÓGICA PRINCIPAL ===
+    if st.session_state.estado == "coletando" and len(historico) >= 12:
+        if not st.session_state.entrada_numeros:
+            ultimos_12 = historico[-12:]
+            terminais = [n % 10 for n in ultimos_12]
+            contagem = Counter(terminais)
+            dominantes = [t for t, _ in contagem.most_common(2)]
+            if len(dominantes) == 2:
+                entrada = gerar_entrada_com_vizinhos(dominantes)
+                st.session_state.entrada_numeros = entrada
+                st.session_state.dominantes = dominantes
+                st.session_state.ultimos_12 = ultimos_12
+
+        if len(historico) >= 14:
+            numero_13 = historico[-2]
+            numero_14 = historico[-1]
+
+            if numero_13 in st.session_state.ultimos_12 or numero_13 in st.session_state.entrada_numeros:
+                if not st.session_state.telegram_enviado:
+                    linhas = []
+                    for t in st.session_state.dominantes:
+                        numeros_terminal = [n for n in range(37) if n % 10 == t]
+                        numeros_terminal.sort()
+                        linha = " ".join(map(str, numeros_terminal))
+                        linhas.append(linha)
+                    msg = "Entrada:\n" + "\n".join(linhas)
+                    enviar_telegram(msg)
+                    st.session_state.telegram_enviado = True
+
+                st.info("🚨 Entrada gerada! Aguardando resultado do próximo número (14º)...")
+                st.write(f"🎰 Entrada: {st.session_state.entrada_numeros}")
+                st.write(f"🔥 Terminais dominantes: {st.session_state.dominantes}")
+                st.write(f"🧪 Verificando se o número {numero_14} está na entrada...")
+
+                if numero_14 in st.session_state.entrada_numeros:
+                    st.success("✅ GREEN automático!")
+                    st.session_state.resultado_sinais.append("GREEN")
+                    enviar_telegram("✅ GREEN confirmado!")
+                else:
+                    st.warning("❌ RED automático!")
+                    st.session_state.resultado_sinais.append("RED")
+                    enviar_telegram("❌ RED registrado!")
+
+                st.session_state.estado = "coletando"
+                st.session_state.entrada_numeros = []
+                st.session_state.dominantes = []
+                st.session_state.ultimos_12 = []
+                st.session_state.telegram_enviado = False
 
 # === EXIBIÇÃO FINAL ===
 st.subheader("📊 Estado Atual")
-st.write(f"Estado: **{st.session_state.estado}**")
+st.write(f"Estado: **{st.session_state.estado.replace('foge', 'pós_red')}**")  # renomeado visualmente
+
 if st.session_state.entrada_numeros:
     st.write(f"🎰 Entrada: {st.session_state.entrada_numeros}")
     st.write(f"🔥 Terminais dominantes: {st.session_state.dominantes}")
