@@ -71,12 +71,12 @@ if numero is not None and (not historico or numero != historico[-1]):
     salvar_historico()
 
 # Exibir últimos 15 números em 3 linhas
-# Exibir últimos 15 números no layout: 3 linhas de 5, com cores
+# Exibir últimos 15 números em sequência em 3 linhas de 5, com cores aplicadas
 st.markdown("### Últimos Números")
 
 ultimos_15 = list(historico)[-15:]
 faltando = 15 - len(ultimos_15)
-ultimos_15 = ['-'] * faltando + ultimos_15  # Preencher à esquerda com "-"
+ultimos_15 = ['-'] * faltando + ultimos_15  # Preenche com '-' se ainda não tiver 15
 
 linhas = [ultimos_15[i:i+5] for i in range(0, 15, 5)]
 
@@ -93,8 +93,9 @@ for linha in linhas:
         else:
             cor = "black"
         linha_formatada += f"<span style='color:{cor}; font-size:22px'><b>{n}</b></span> &nbsp; - &nbsp; "
-    linha_formatada = linha_formatada.rstrip(" &nbsp; - &nbsp; ")  # remove final extra
+    linha_formatada = linha_formatada.rstrip(" &nbsp; - &nbsp; ")
     st.markdown(f"<div style='text-align:center'>{linha_formatada}</div>", unsafe_allow_html=True)
+
 
 
 # Exibir terminais dominantes se houver
