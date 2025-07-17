@@ -8,7 +8,7 @@ import json
 # === CONFIGURAÇÃO ===
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 CHAT_ID = "5121457416"
-API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremeltingroulette/latest"
+API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 CAMINHO_ARQUIVO = "historico_roleta.json"
 
 ROULETTE_ORDER = [
@@ -31,12 +31,14 @@ def get_numero_api():
         r = requests.get(API_URL, headers={"User-Agent": "Mozilla/5.0"}, timeout=2)
         data = r.json()
         numero = data.get("data", {}).get("result", {}).get("outcome", {}).get("number")
-        timestamp = data.get("data", {}).get("settledAt")  
+        timestamp = data.get("data", {}).get("settledAt")  # Corrigido aqui!
         if numero is not None and timestamp:
             return {"numero": int(numero), "timestamp": timestamp}
     except Exception as e:
         st.error(f"Erro na API: {e}")
     return None
+
+
 
 def gerar_entrada_com_vizinhos(terminais):
     numeros_terminal = [n for n in range(37) if n % 10 in terminais]
@@ -118,10 +120,12 @@ linhas = [ultimos_15[i:i+5] for i in range(0, 15, 5)]
 for linha in linhas:
     st.write(" | ".join(f"{n:2d}" for n in linha))
 
+
 # === ESTADO COLETANDO ===
-if st.session_state.estado == "coletando" and len(historico) >= 13:
-    ultimos_12 = historico[-13:-1]
-    numero_13 = historico[-1]
+if st.session_state.estado == "coletando" and len(historico) >= 14:
+    ultimos_12 = historico[-14:-2]
+    numero_13 = historico[-2]
+    numero_14 = historico[-1]
 
     terminais = [n % 10 for n in ultimos_12]
     contagem = Counter(terminais)
@@ -145,29 +149,27 @@ if st.session_state.estado == "coletando" and len(historico) >= 13:
             st.info("🚨 Entrada gerada! Aguardando resultado do próximo número (14º)...")
             st.write(f"🎰 Entrada: {entrada}")
             st.write(f"🔥 Terminais dominantes: {dominantes}")
-            st.write(f"🧪 Verificando se o próximo número estará na entrada...")
+            st.write(f"🧪 Verificando se o número {numero_14} está na entrada...")
 
-            st.session_state.estado = "aguardando_resultado"
-            st.session_state.entrada_numeros = entrada
-            st.session_state.dominantes = dominantes
-            st.session_state.ultimos_12 = ultimos_12
-
-# === VERIFICAÇÃO DO RESULTADO APÓS GERAÇÃO DE ENTRADA ===
-elif st.session_state.estado == "aguardando_resultado":
-    if numero in st.session_state.entrada_numeros:
-        st.success("✅ GREEN automático!")
-        st.session_state.resultado_sinais.append("GREEN")
-        st.session_state.estado = "aguardando_continuacao"
-        st.session_state.ciclos_continuacao = 1
-        st.session_state.telegram_enviado = False
-        enviar_telegram("✅ GREEN confirmado!")
-    else:
-        st.warning("❌ RED automático!")
-        st.session_state.resultado_sinais.append("RED")
-        st.session_state.estado = "pos_red"
-        st.session_state.telegram_enviado = False
-        st.session_state.ciclos_continuacao = 0
-        enviar_telegram("❌ RED registrado!")
+            if numero_14 in entrada:
+                st.success("✅ GREEN automático!")
+                st.session_state.resultado_sinais.append("GREEN")
+                st.session_state.estado = "aguardando_continuacao"
+                st.session_state.entrada_numeros = entrada
+                st.session_state.dominantes = dominantes
+                st.session_state.ultimos_12 = ultimos_12
+                st.session_state.ciclos_continuacao = 1
+                st.session_state.telegram_enviado = False
+                enviar_telegram("✅ GREEN confirmado!")
+            else:
+                st.warning("❌ RED automático!")
+                st.session_state.resultado_sinais.append("RED")
+                st.session_state.estado = "pos_red"
+                st.session_state.dominantes = dominantes
+                st.session_state.ultimos_12 = ultimos_12
+                st.session_state.telegram_enviado = False
+                st.session_state.ciclos_continuacao = 0
+                enviar_telegram("❌ RED registrado!")
 
 # === ESTADO AGUARDANDO CONTINUAÇÃO ===
 elif st.session_state.estado == "aguardando_continuacao":
