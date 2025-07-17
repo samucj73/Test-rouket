@@ -89,9 +89,9 @@ if estado == "coletando" and len(historico) >= 12:
         st.session_state["numero_alvo"] = numero_alvo
         st.session_state["estado"] = "verificando"
 
-        mensagem = f"🎯 ENTRADA IDENTIFICADA
+        mensagem = f"""🎯 ENTRADA IDENTIFICADA
 Dominantes: {dominantes}
-Entrada: {entrada_atual}"
+Entrada: {entrada_atual}"""
         enviar_telegram(mensagem)
 
 elif estado == "verificando":
