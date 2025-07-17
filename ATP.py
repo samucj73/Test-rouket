@@ -98,6 +98,7 @@ for linha in linhas:
 
 
 
+
 # Exibir terminais dominantes se houver
 if terminais_dominantes:
     st.markdown(f"**Terminais Dominantes:** {terminais_dominantes}")
