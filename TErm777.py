@@ -122,22 +122,30 @@ for linha in linhas:
 
 
 # === ESTADO COLETANDO ===
-if st.session_state.estado == "coletando" and len(historico) >= 14:
-    ultimos_12 = historico[-14:-2]
-    numero_13 = historico[-2]
-    numero_14 = historico[-1]
+# === ESTADO COLETANDO ===
+if st.session_state.estado == "coletando" and len(historico) >= 12:
 
-    terminais = [n % 10 for n in ultimos_12]
-    contagem = Counter(terminais)
-    dominantes = [t for t, c in contagem.items() if c >= 2]
+    # Gera entrada com base nos 12 últimos números
+    if not st.session_state.entrada_numeros:
+        ultimos_12 = historico[-12:]
+        terminais = [n % 10 for n in ultimos_12]
+        contagem = Counter(terminais)
+        dominantes = [t for t, c in contagem.items() if c >= 2]
+        if len(dominantes) == 2:
+            entrada = gerar_entrada_com_vizinhos(dominantes)
+            st.session_state.entrada_numeros = entrada
+            st.session_state.dominantes = dominantes
+            st.session_state.ultimos_12 = ultimos_12
 
-    if len(dominantes) == 2:
-        entrada = gerar_entrada_com_vizinhos(dominantes)
+    if len(historico) >= 14:
+        numero_13 = historico[-2]
+        numero_14 = historico[-1]
 
-        if numero_13 in ultimos_12 or numero_13 in entrada:
+        # Gatilho: 13º número precisa estar nos últimos 12 ou na entrada
+        if numero_13 in st.session_state.ultimos_12 or numero_13 in st.session_state.entrada_numeros:
             if not st.session_state.telegram_enviado:
                 linhas = []
-                for t in dominantes:
+                for t in st.session_state.dominantes:
                     numeros_terminal = [n for n in range(37) if n % 10 == t]
                     numeros_terminal.sort()
                     linha = " ".join(map(str, numeros_terminal))
@@ -147,17 +155,14 @@ if st.session_state.estado == "coletando" and len(historico) >= 14:
                 st.session_state.telegram_enviado = True
 
             st.info("🚨 Entrada gerada! Aguardando resultado do próximo número (14º)...")
-            st.write(f"🎰 Entrada: {entrada}")
-            st.write(f"🔥 Terminais dominantes: {dominantes}")
+            st.write(f"🎰 Entrada: {st.session_state.entrada_numeros}")
+            st.write(f"🔥 Terminais dominantes: {st.session_state.dominantes}")
             st.write(f"🧪 Verificando se o número {numero_14} está na entrada...")
 
-            if numero_14 in entrada:
+            if numero_14 in st.session_state.entrada_numeros:
                 st.success("✅ GREEN automático!")
                 st.session_state.resultado_sinais.append("GREEN")
                 st.session_state.estado = "aguardando_continuacao"
-                st.session_state.entrada_numeros = entrada
-                st.session_state.dominantes = dominantes
-                st.session_state.ultimos_12 = ultimos_12
                 st.session_state.ciclos_continuacao = 1
                 st.session_state.telegram_enviado = False
                 enviar_telegram("✅ GREEN confirmado!")
@@ -165,11 +170,14 @@ if st.session_state.estado == "coletando" and len(historico) >= 14:
                 st.warning("❌ RED automático!")
                 st.session_state.resultado_sinais.append("RED")
                 st.session_state.estado = "pos_red"
-                st.session_state.dominantes = dominantes
-                st.session_state.ultimos_12 = ultimos_12
                 st.session_state.telegram_enviado = False
                 st.session_state.ciclos_continuacao = 0
                 enviar_telegram("❌ RED registrado!")
+                # Limpa a entrada após o RED
+                st.session_state.entrada_numeros = []
+                st.session_state.dominantes = []
+                st.session_state.ultimos_12 = []
+
 
 # === ESTADO AGUARDANDO CONTINUAÇÃO ===
 elif st.session_state.estado == "aguardando_continuacao":
