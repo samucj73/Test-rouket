@@ -98,7 +98,8 @@ st.title("🎯 Estratégia de Roleta – Terminais Dominantes com Controle de Ti
 
 # st_autorefresh(interval=85000, key="datarefresh")
 numero, timestamp = obter_numero_e_timestamp()
-ultimo_timestamp = carregar_timestamp()  # <-- Adicione isso aqui!
+ultimo_timestamp = carregar_timestamp()
+historico = carregar_historico()  # <- Adicionada esta linha
 
 # Só processa se timestamp for novo e número válido
 if numero is None or timestamp == ultimo_timestamp:
@@ -118,13 +119,6 @@ salvar_historico(historico)
 salvar_timestamp(timestamp)
 st.experimental_rerun()
 
-# Novo número detectado — salvar e forçar rerun ANTES de qualquer exibição
-historico.append(numero)
-if len(historico) > 100:
-    historico = historico[-100:]
-salvar_historico(historico)
-salvar_timestamp(timestamp)
-st.experimental_rerun()
 
 
 
