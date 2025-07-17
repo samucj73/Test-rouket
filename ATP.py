@@ -3,7 +3,6 @@ import requests
 from collections import Counter, deque
 from streamlit_autorefresh import st_autorefresh
 import os
-import json
 import joblib
 
 # === CONFIGURAÇÃO ===
@@ -12,15 +11,14 @@ CHAT_ID = "SEU_CHAT_ID"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 HISTORICO_PATH = "historico.pkl"
 ROULETTE_NUMBERS = [
-    0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23,
-    10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26
+    0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26
 ]
 
 # === ESTADOS ===
 estado = st.session_state.get("estado", "coletando")
-entrada_atual = st.session_state.get("entrada_atual", [])
+entrada_principal = st.session_state.get("entrada_principal", [])
+vizinhos_entrada = st.session_state.get("vizinhos_entrada", [])
 numero_alvo = st.session_state.get("numero_alvo", None)
-terminais_dominantes = st.session_state.get("terminais_dominantes", [])
 
 # === HISTÓRICO COM JOBLIB ===
 if os.path.exists(HISTORICO_PATH):
@@ -28,127 +26,92 @@ if os.path.exists(HISTORICO_PATH):
 else:
     historico = deque(maxlen=15)
 
-# === FUNÇÕES ===
 def salvar_historico():
     joblib.dump(historico, HISTORICO_PATH)
 
 def enviar_telegram(mensagem):
-    try:
-        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-        data = {"chat_id": CHAT_ID, "text": mensagem}
-        requests.post(url, data=data)
-    except Exception as e:
-        st.error(f"Erro ao enviar Telegram: {e}")
+    requests.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
+                  data={"chat_id": CHAT_ID, "text": mensagem})
 
 def obter_numero():
-    try:
-        resposta = requests.get(API_URL)
-        if resposta.status_code == 200:
-            data = resposta.json()
-            return data["data"]["result"]["outcome"]["number"]
-    except Exception as e:
-        st.error(f"Erro ao obter número: {e}")
+    resp = requests.get(API_URL)
+    if resp.status_code == 200:
+        return resp.json()["data"]["result"]["outcome"]["number"]
     return None
 
-def terminal(numero):
-    return numero % 10
+def terminal(n): return n % 10
 
-def vizinhos_fisicos(numero):
-    if numero not in ROULETTE_NUMBERS:
-        return []
-    idx = ROULETTE_NUMBERS.index(numero)
-    vizinhos = []
-    for i in range(-2, 3):
-        vizinhos.append(ROULETTE_NUMBERS[(idx + i) % len(ROULETTE_NUMBERS)])
-    return vizinhos
+def vizinhos_fisicos(n):
+    idx = ROULETTE_NUMBERS.index(n)
+    return [ROULETTE_NUMBERS[(idx+i) % len(ROULETTE_NUMBERS)] for i in (-2, -1, 1, 2)]
 
 # === INTERFACE ===
-st.title("🎯 Estratégia de Roleta - Terminais Dominantes")
+st.title("🎯 Estratégia de Roleta – Entrada Principal + Vizinhos")
 
 numero = obter_numero()
-if numero is not None and (not historico or numero != historico[-1]):
+if numero and (not historico or historico[-1] != numero):
     historico.append(numero)
     salvar_historico()
 
-# Exibir últimos 15 números em 3 linhas
-# Exibir últimos números em linhas de 5, conforme chegam
+# Exibição dos últimos números:
 st.markdown("### Últimos Números")
+def cor(n):
+    if n == historico[-1]:
+        if estado=="verificando": return "green" if n in vizinhos_entrada else "red"
+        return "orange"
+    return "white"
 
-def cor_numero(n):
-    if n == historico[-1]:  # número mais recente
-        if estado == "verificando":
-            return "green" if n in entrada_atual else "red"
-        else:
-            return "orange"
-    else:
-        return "white"
-
-# Separar números em grupos de 5
-linhas = [list(historico)[i:i+5] for i in range(0, len(historico), 5)]
-
-# Mostrar cada linha com espaçamento e cores
-for linha in linhas:
-    linha_formatada = ' &nbsp; - &nbsp; '.join(
-        f"<span style='color:{cor_numero(n)}; font-size:24px;'><b>{n}</b></span>" for n in linha
+for slice_i in range(0, len(historico), 5):
+    linha = list(historico)[slice_i : slice_i+5]
+    styled = ' &nbsp; - &nbsp; '.join(
+        f"<span style='color:{cor(n)}; font-size:22px'><b>{n}</b></span>" for n in linha
     )
-    st.markdown(f"<div style='text-align:center'>{linha_formatada}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='text-align:center'>{styled}</div>", unsafe_allow_html=True)
 
-
-
-
-
-# Exibir terminais dominantes se houver
-if terminais_dominantes:
-    st.markdown(f"**Terminais Dominantes:** {terminais_dominantes}")
-
-# === LÓGICA PRINCIPAL ===
-if estado == "coletando" and len(historico) >= 12:
-    ultimos_12 = list(historico)[-12:]
-    terminais = [terminal(n) for n in ultimos_12]
-    contagem = Counter(terminais).most_common(2)
-
-    if len(contagem) >= 2 and contagem[0][1] >= 3 and contagem[1][1] >= 3:
-        dominantes = [contagem[0][0], contagem[1][0]]
-        candidatos = [n for n in ultimos_12 if terminal(n) in dominantes]
-        entrada = set()
-        for c in candidatos:
-            entrada.update(vizinhos_fisicos(c))
-        entrada_atual = list(sorted(set(entrada)))
-        numero_alvo = historico[-1]  # 13º número
-
-        # Salvar no estado
-        st.session_state["entrada_atual"] = entrada_atual
-        st.session_state["numero_alvo"] = numero_alvo
+# === LÓGICA ===
+if estado=="coletando" and len(historico)>=12:
+    ult12 = list(historico)[-12:]
+    tcount = Counter(terminal(n) for n in ult12).most_common(2)
+    if len(tcount)==2 and tcount[0][1]>=3 and tcount[1][1]>=3:
+        t1, t2 = tcount[0][0], tcount[1][0]
+        entrada_principal = [n for n in ult12 if terminal(n) in (t1, t2)]
+        vizinhos_set = set()
+        for principal in entrada_principal:
+            vizinhos_set |= set(vizinhos_fisicos(principal))
+        vizinhos_entrada = list(vizinhos_set)
+        st.session_state.update({
+            "estado": "aguardando13",
+            "entrada_principal": entrada_principal,
+            "vizinhos_entrada": vizinhos_entrada,
+        })
+        enviar_telegram(f"⚠️ Entrada possível gerada:\nPrincipais: {entrada_principal}")
+elif estado=="aguardando13" and len(historico)>=13:
+    num13 = historico[-1]
+    ult12 = set(list(historico)[-13:-1])
+    if num13 in ult12 or num13 in vizinhos_entrada:
+        numero_alvo = num13
         st.session_state["estado"] = "verificando"
-        st.session_state["terminais_dominantes"] = dominantes
-
-        mensagem = f"""🎯 ENTRADA IDENTIFICADA
-Dominantes: {dominantes}
-Entrada: {entrada_atual}"""
-        enviar_telegram(mensagem)
-
-elif estado == "verificando":
-    if len(historico) >= 1 and historico[-1] != numero_alvo:
-        resultado = historico[-1]
-        if resultado in entrada_atual:
-            enviar_telegram(f"✅ GREEN com número {resultado}")
-        else:
-            enviar_telegram(f"❌ RED com número {resultado}")
-            st.session_state["estado"] = "pós_red"
-        # Resetar
+        enviar_telegram(f"🎯 ENTRADA ATIVADA! {numero_alvo} está válid* entrada será:* {entrada_principal + vizinhos_entrada}")
+    else:
         st.session_state["estado"] = "coletando"
-        st.session_state["entrada_atual"] = []
-        st.session_state["numero_alvo"] = None
-        st.session_state["terminais_dominantes"] = []
+elif estado=="verificando" and len(historico)>=14:
+    res = historico[-1]
+    if res in entrada_principal + vizinhos_entrada:
+        enviar_telegram(f"✅ GREEN ✔ com número {res}")
+    else:
+        enviar_telegram(f"❌ RED ✘ com número {res}")
+    st.session_state.update({
+        "estado": "coletando",
+        "entrada_principal": [],
+        "vizinhos_entrada": [],
+        "numero_alvo": None
+    })
 
-# === STATUS ===
-estado_atual = st.session_state.get("estado", "coletando")
-if estado_atual == "pós_red":
-    st.warning("🟡 Estado: PÓS_RED")
-elif estado_atual == "verificando":
-    st.info("🔍 Estado: VERIFICANDO")
-else:
-    st.success("📥 Estado: COLETANDO")
+# Exibir estado e entrada
+st.markdown(f"**Estado atual:** {estado.replace('aguardando13','aguardando 13º')}") 
+if entrada_principal:
+    st.markdown(f"**Entrada principal:** {entrada_principal}")
+if vizinhos_entrada:
+    st.markdown(f"**Vizinhos:** {vizinhos_entrada}")
 
-# Atualiza a cada 5 segundos
-st_autorefresh(interval=5000, key="atualizacao")
+st_autorefresh(interval=5000, key="auto")
