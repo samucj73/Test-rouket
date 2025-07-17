@@ -127,15 +127,15 @@ if st.session_state.estado == "coletando" and len(historico) >= 12:
 
     # Gera entrada com base nos 12 últimos números
     if not st.session_state.entrada_numeros:
-        ultimos_12 = historico[-12:]
-        terminais = [n % 10 for n in ultimos_12]
-        contagem = Counter(terminais)
-        dominantes = [t for t, c in contagem.items() if c >= 2]
-        if len(dominantes) == 2:
-            entrada = gerar_entrada_com_vizinhos(dominantes)
-            st.session_state.entrada_numeros = entrada
-            st.session_state.dominantes = dominantes
-            st.session_state.ultimos_12 = ultimos_12
+    ultimos_12 = historico[-12:]
+    terminais = [n % 10 for n in ultimos_12]
+    contagem = Counter(terminais)
+    dominantes = [t for t, _ in contagem.most_common(2)]  # ← Correção aqui
+    if len(dominantes) == 2:
+        entrada = gerar_entrada_com_vizinhos(dominantes)
+        st.session_state.entrada_numeros = entrada
+        st.session_state.dominantes = dominantes
+        st.session_state.ultimos_12 = ultimos_12
 
     if len(historico) >= 14:
         numero_13 = historico[-2]
