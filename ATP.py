@@ -6,8 +6,8 @@ from collections import Counter
 from streamlit_autorefresh import st_autorefresh
 
 # === CONFIGURAÇÕES ===
-TELEGRAM_TOKEN = "SEU_TOKEN"
-CHAT_ID = "SEU_CHAT_ID"
+TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
+CHAT_ID = "5121457416"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 HISTORICO_PATH = "historico.json"
 ULTIMO_TIMESTAMP_PATH = "ultimo_timestamp.txt"
