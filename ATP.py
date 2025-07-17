@@ -96,7 +96,7 @@ def vizinhos(numero):
 st.set_page_config(layout="centered")
 st.title("🎯 Estratégia de Roleta – Terminais Dominantes com Controle de Timestamp")
 
-st_autorefresh(interval=85000, key="datarefresh")
+# st_autorefresh(interval=85000, key="datarefresh")
 
 historico = carregar_historico()
 ultimo_timestamp = carregar_timestamp()
@@ -119,6 +119,7 @@ if len(historico) > 100:
 
 salvar_historico(historico)
 salvar_timestamp(timestamp)
+st.experimental_rerun()
 
 # Inicializar variáveis estado
 if "estado" not in st.session_state:
