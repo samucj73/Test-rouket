@@ -7,6 +7,7 @@ from collections import Counter, deque
 from streamlit_autorefresh import st_autorefresh
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.exceptions import NotFittedError
 
 # === CONFIGURAÇÕES ===
 TELEGRAM_TOKEN = "SEU_TOKEN"
@@ -15,15 +16,12 @@ API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremeli
 CAMINHO_HISTORICO = "historico_roleta.json"
 CAMINHO_MODELO = "modelo_roleta_ia.pkl"
 
-# === ORDEM DA ROLETA ===
+# === FUNÇÕES ===
 def extrair_features(janela):
     terminais = [n % 10 for n in janela]
     contagem = Counter(terminais)
     mais_comuns = contagem.most_common(3)
-    
-    features = {}
-    for i in range(10):
-        features[f"terminal_{i}"] = terminais.count(i)
+    features = {f"terminal_{i}": terminais.count(i) for i in range(10)}
     features["terminal_top1"] = mais_comuns[0][0] if len(mais_comuns) > 0 else -1
     features["terminal_top2"] = mais_comuns[1][0] if len(mais_comuns) > 1 else -1
     return features
@@ -66,7 +64,7 @@ def carregar_modelo():
 def salvar_modelo(modelo):
     joblib.dump(modelo, CAMINHO_MODELO)
 
-# === STREAMLIT ===
+# === INTERFACE STREAMLIT ===
 st.set_page_config("🎯 Estratégia IA Roleta")
 st.title("🎯 Estratégia com Inteligência Artificial (IA) - Terminais")
 
@@ -97,7 +95,7 @@ if resultado is None:
     st.warning("⏳ Aguardando número da API...")
     st.stop()
 
-# === EVITA REPETIÇÃO ===
+# === EVITA REPETIÇÃO DE SORTEIO ===
 novo = False
 if not st.session_state.historico or resultado["timestamp"] != st.session_state.historico[-1]["timestamp"]:
     st.session_state.historico.append(resultado)
@@ -111,19 +109,41 @@ if not novo:
 numero = resultado["numero"]
 historico_numeros = [h["numero"] for h in st.session_state.historico]
 
-# === INTERFACE ===
+# === TREINAMENTO RETROATIVO AUTOMÁTICO ===
+if len(historico_numeros) >= 16 and not os.path.exists(CAMINHO_MODELO):
+    X_treino = []
+    y_treino = []
+    for i in range(14, len(historico_numeros) - 1):
+        janela = historico_numeros[i - 14:i - 2]
+        numero_entrada = historico_numeros[i - 2]
+        numero_resultado = historico_numeros[i - 1]
+        features = extrair_features(janela)
+        terminais = [n % 10 for n in janela]
+        dominantes = [t for t, _ in Counter(terminais).most_common(2)]
+        entrada = [n for n in range(37) if n % 10 in dominantes]
+        X_treino.append(features)
+        y_treino.append(1 if numero_resultado in entrada else 0)
+
+    modelo.fit(pd.DataFrame(X_treino), y_treino)
+    salvar_modelo(modelo)
+    st.success("🤖 Modelo treinado com base no histórico!")
+
+# === INTERFACE VISUAL ===
 st.subheader("🎰 Últimos Números (15):")
 st.write(" | ".join(map(str, historico_numeros[-15:])))
 
-# === IA ===
+# === IA - PREVISÃO E AVALIAÇÃO ===
 if len(historico_numeros) >= 14:
     janela = historico_numeros[-14:-2]
     numero_13 = historico_numeros[-2]
     numero_14 = historico_numeros[-1]
-
-    # IA decide entrada
     X = pd.DataFrame([extrair_features(janela)])
-    prob = modelo.predict_proba(X)[0][1]
+
+    try:
+        prob = modelo.predict_proba(X)[0][1]
+    except NotFittedError:
+        st.warning("🔧 IA ainda não treinada. Aguardando mais dados...")
+        prob = 0
 
     if prob > 0.65 and not st.session_state.entrada_atual:
         terminais = [n % 10 for n in janela]
@@ -138,7 +158,6 @@ if len(historico_numeros) >= 14:
         }
         enviar_telegram(f"🎯 Entrada IA:\nTerminais: {dominantes}\nNúmeros: {entrada}")
 
-    # Avalia resultado
     if st.session_state.entrada_atual:
         if numero_14 in st.session_state.entrada_atual:
             st.success("✅ GREEN IA!")
@@ -149,12 +168,11 @@ if len(historico_numeros) >= 14:
             st.session_state.resultado_sinais.append("RED")
             y = [0]
 
-        # Atualiza modelo
         modelo.fit(X, y)
         salvar_modelo(modelo)
         st.session_state.entrada_atual = []
 
-# === STATUS ===
+# === STATUS VISUAL ===
 st.subheader("📊 Histórico de Resultados")
 st.write(list(st.session_state.resultado_sinais))
 
