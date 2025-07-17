@@ -116,12 +116,27 @@ historico = [item["numero"] for item in st.session_state.historico]
 # === INTERFACE ===
 st.title("🎯 Estratégia de Terminais com Vizinhos (Auto)")
 st.subheader("📥 Últimos Números Sorteados (15 mais recentes):")
-
 ultimos_15 = historico[-15:]
 linhas = [ultimos_15[i:i+5] for i in range(0, 15, 5)]
 
 for linha in linhas:
-    st.write(" | ".join(f"{n:2d}" for n in linha))
+    linha_formatada = []
+    for n in linha:
+        if (
+            len(historico) >= 14
+            and n == historico[-1]  # número 14º é o último da lista (historico[-1])
+            and st.session_state.entrada_numeros  # só se houver entrada ativa
+        ):
+            if n in st.session_state.entrada_numeros:
+                cor = "green"
+            else:
+                cor = "red"
+            linha_formatada.append(f"<span style='color:{cor}; font-weight:bold; font-size:20px'>{n:2d}</span>")
+        else:
+            linha_formatada.append(f"{n:2d}")
+    st.markdown(" | ".join(linha_formatada), unsafe_allow_html=True)
+
+
 
 
 # === ESTADO COLETANDO ===
