@@ -4,11 +4,13 @@ from collections import Counter, deque
 from streamlit_autorefresh import st_autorefresh
 import os
 import json
+import joblib
 
 # === CONFIGURAÇÃO ===
 TELEGRAM_TOKEN = "SEU_TOKEN"
 CHAT_ID = "SEU_CHAT_ID"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
+HISTORICO_PATH = "historico.pkl"
 ROULETTE_NUMBERS = [
     0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23,
     10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26
@@ -16,11 +18,20 @@ ROULETTE_NUMBERS = [
 
 # === ESTADOS ===
 estado = st.session_state.get("estado", "coletando")
-historico = st.session_state.get("historico", deque(maxlen=15))
 entrada_atual = st.session_state.get("entrada_atual", [])
 numero_alvo = st.session_state.get("numero_alvo", None)
+terminais_dominantes = st.session_state.get("terminais_dominantes", [])
+
+# === HISTÓRICO COM JOBLIB ===
+if os.path.exists(HISTORICO_PATH):
+    historico = joblib.load(HISTORICO_PATH)
+else:
+    historico = deque(maxlen=15)
 
 # === FUNÇÕES ===
+def salvar_historico():
+    joblib.dump(historico, HISTORICO_PATH)
+
 def enviar_telegram(mensagem):
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -57,11 +68,11 @@ st.title("🎯 Estratégia de Roleta - Terminais Dominantes")
 numero = obter_numero()
 if numero is not None and (not historico or numero != historico[-1]):
     historico.append(numero)
-    st.session_state["historico"] = historico
+    salvar_historico()
 
-# Exibir últimos 15 números
+# Exibir últimos 15 números em 3 linhas
 st.markdown("### Últimos Números")
-cols = st.columns(len(historico))
+cols_linha = [st.columns(5), st.columns(5), st.columns(5)]
 for i, n in enumerate(historico):
     cor = "black"
     if i == len(historico) - 1:
@@ -69,7 +80,16 @@ for i, n in enumerate(historico):
             cor = "green" if n in entrada_atual else "red"
         else:
             cor = "orange"
-    cols[i].markdown(f"<div style='text-align:center; color:{cor}; font-size:24px'>{n}</div>", unsafe_allow_html=True)
+    linha = i // 5
+    pos = i % 5
+    cols_linha[linha][pos].markdown(
+        f"<div style='text-align:center; color:{cor}; font-size:24px'>{n}</div>",
+        unsafe_allow_html=True
+    )
+
+# Exibir terminais dominantes se houver
+if terminais_dominantes:
+    st.markdown(f"**Terminais Dominantes:** {terminais_dominantes}")
 
 # === LÓGICA PRINCIPAL ===
 if estado == "coletando" and len(historico) >= 12:
@@ -85,9 +105,12 @@ if estado == "coletando" and len(historico) >= 12:
             entrada.update(vizinhos_fisicos(c))
         entrada_atual = list(sorted(set(entrada)))
         numero_alvo = historico[-1]  # 13º número
+
+        # Salvar no estado
         st.session_state["entrada_atual"] = entrada_atual
         st.session_state["numero_alvo"] = numero_alvo
         st.session_state["estado"] = "verificando"
+        st.session_state["terminais_dominantes"] = dominantes
 
         mensagem = f"""🎯 ENTRADA IDENTIFICADA
 Dominantes: {dominantes}
@@ -102,9 +125,11 @@ elif estado == "verificando":
         else:
             enviar_telegram(f"❌ RED com número {resultado}")
             st.session_state["estado"] = "pós_red"
+        # Resetar
         st.session_state["estado"] = "coletando"
         st.session_state["entrada_atual"] = []
         st.session_state["numero_alvo"] = None
+        st.session_state["terminais_dominantes"] = []
 
 # === STATUS ===
 estado_atual = st.session_state.get("estado", "coletando")
