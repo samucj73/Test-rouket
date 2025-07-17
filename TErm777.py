@@ -124,7 +124,6 @@ for linha in linhas:
 # === ESTADO COLETANDO ===
 # === ESTADO COLETANDO ===
 if st.session_state.estado == "coletando" and len(historico) >= 12:
-
     # Gera entrada com base nos 12 últimos números
     if not st.session_state.entrada_numeros:
     ultimos_12 = historico[-12:]
