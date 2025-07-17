@@ -57,10 +57,10 @@ def obter_numero_e_timestamp():
             resultado = data.get("result", {})
             outcome = resultado.get("outcome", {})
             numero = outcome.get("number", None)
-            timestamp = data.get("settledAt", None)  # corrigido para usar settledAt
+            timestamp = data.get("settledAt", None)
             if numero is not None and timestamp is not None:
                 return numero, timestamp
-    except Exception as e:
+    except:
         pass
     return None, None
 
@@ -83,15 +83,32 @@ def vizinhos(numero):
 
 st.set_page_config(layout="centered")
 st.title("🎯 Estratégia de Roleta – Terminais Dominantes")
-
-# Autorefresh a cada 5 segundos
 st_autorefresh(interval=5000, key="datarefresh")
 
-# Carregar histórico e timestamp armazenados
+# Carregar histórico e timestamp
 historico = carregar_historico()
 ultimo_timestamp = carregar_timestamp()
 
-# Inicializar variáveis de estado do Streamlit se não existirem
+# Obter número e timestamp
+numero, timestamp = obter_numero_e_timestamp()
+
+# Evita execução se número é repetido ou nulo
+if numero is None or timestamp == ultimo_timestamp:
+    st.stop()
+
+# Evita duplicatas consecutivas no histórico
+if len(historico) > 0 and historico[-1] == numero:
+    st.stop()
+
+# Adiciona novo número ao histórico e limita a 100
+historico.append(numero)
+if len(historico) > 100:
+    historico = historico[-100:]
+
+salvar_historico(historico)
+salvar_timestamp(timestamp)
+
+# Inicialização de estados
 if "estado" not in st.session_state:
     st.session_state.estado = "coletando"
 if "entrada_principal" not in st.session_state:
@@ -108,21 +125,13 @@ entrada_principal = st.session_state.entrada_principal
 vizinhos_entrada = st.session_state.vizinhos_entrada
 numeros_usados_para_entrada = st.session_state.numeros_usados_para_entrada
 
-# Obter novo número e timestamp da API
-numero, timestamp = obter_numero_e_timestamp()
-
-if numero is not None and timestamp != ultimo_timestamp:
-    historico.append(numero)
-    salvar_historico(historico)
-    salvar_timestamp(timestamp)
-
 # Exibição dos últimos 15 números com cores
 st.subheader("📊 Últimos Números")
 ultimos_15 = historico[-15:]
 
 def cor_numero(n):
     if estado == "aguardando_resultado" and n == st.session_state.numero_13_confirmado:
-        return "green"  # 13º número confirmado
+        return "green"
     if estado == "aguardando_resultado" and n == numero:
         return "white"
     if n in entrada_principal:
@@ -141,7 +150,8 @@ for linha in linhas:
         unsafe_allow_html=True
     )
 
-# Lógica da estratégia
+# === LÓGICA DA ESTRATÉGIA ===
+
 if estado == "coletando" and len(historico) >= 12:
     ultimos_12 = historico[-12:]
     terminais = [obter_terminal(n) for n in ultimos_12]
@@ -197,7 +207,6 @@ elif estado == "aguardando_resultado" and len(historico) >= 14:
         st.error(f"🔴 RED! Número {numero_14} não está na entrada.")
         enviar_telegram(f"🔴 RED! Número {numero_14} não está na entrada.")
 
-    # Reinicia o ciclo
     st.session_state.estado = "coletando"
     st.session_state.entrada_principal = []
     st.session_state.vizinhos_entrada = []
