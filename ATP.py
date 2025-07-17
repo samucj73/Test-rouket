@@ -97,10 +97,6 @@ st.set_page_config(layout="centered")
 st.title("🎯 Estratégia de Roleta – Terminais Dominantes com Controle de Timestamp")
 
 # st_autorefresh(interval=85000, key="datarefresh")
-
-historico = carregar_historico()
-ultimo_timestamp = carregar_timestamp()
-
 numero, timestamp = obter_numero_e_timestamp()
 
 # Só processa se timestamp for novo e número válido
@@ -113,13 +109,15 @@ if len(historico) > 0 and historico[-1] == numero:
     st.info("⏳ Número repetido no histórico, aguardando próximo...")
     st.stop()
 
+# Novo número detectado — salvar e forçar rerun ANTES de qualquer exibição
 historico.append(numero)
 if len(historico) > 100:
     historico = historico[-100:]
-
 salvar_historico(historico)
 salvar_timestamp(timestamp)
 st.experimental_rerun()
+
+
 
 # Inicializar variáveis estado
 if "estado" not in st.session_state:
