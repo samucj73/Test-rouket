@@ -100,6 +100,8 @@ if st.button("🔁 Reiniciar"):
     st.rerun()
     if "alertas_enviados" not in st.session_state:
         st.session_state.alertas_enviados = set()
+        if "alertas_enviados" not in st.session_state:
+            st.session_state.alertas_enviados = set()
 
 st_autorefresh(interval=5000, key="auto")
 
