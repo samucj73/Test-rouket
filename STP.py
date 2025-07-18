@@ -205,13 +205,12 @@ if st.session_state.entrada_atual:
             if len(janela) == 12:
                 X_novo = pd.DataFrame([extrair_features(janela)])
                 y_novo = [1 if numero_atual in entrada else 0]
-
-        if len(set(y_novo)) > 1:
-    modelo.fit(X_novo, y_novo)
-    salvar_modelo(modelo)
-    st.success("🔄 IA atualizada com novo feedback!")
-else:
-    st.warning("⚠️ Dados insuficientes para treinar: apenas uma classe presente.")
+            if len(set(y_novo)) > 1:
+                modelo.fit(X_novo, y_novo)
+                salvar_modelo(modelo)
+                st.success("🔄 IA atualizada com novo feedback!")
+            else:
+                st.warning("⚠️ Dados insuficientes para treinar: apenas uma classe presente.")
 
                 
         except Exception as e:
