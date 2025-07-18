@@ -84,7 +84,7 @@ try:
     resposta = requests.get(API_URL, timeout=10)
     if resposta.status_code == 200:
         dados = resposta.json()
-        numero = int(dados["data"]["result"]["outcome"])
+        numero = dados["data"]["result"]["outcome"]["number"]
         timestamp = dados["data"]["settledAt"]
 
         if timestamp != st.session_state.ultimo_timestamp:
