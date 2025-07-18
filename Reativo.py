@@ -1,4 +1,3 @@
-
 import streamlit as st
 import requests
 import json
@@ -17,6 +16,12 @@ API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremeli
 CAMINHO_HISTORICO = "historico_roleta.json"
 CAMINHO_MODELO = "modelo_roleta_ia.pkl"
 
+# === ORDEM FÍSICA DA ROLETA EUROPEIA ===
+ORDEM_ROLETA = [
+    0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23,
+    10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26
+]
+
 # === FUNÇÕES ===
 def extrair_features(janela):
     terminais = [n % 10 for n in janela]
@@ -26,6 +31,22 @@ def extrair_features(janela):
     features["terminal_top1"] = mais_comuns[0][0] if len(mais_comuns) > 0 else -1
     features["terminal_top2"] = mais_comuns[1][0] if len(mais_comuns) > 1 else -1
     return features
+
+def expandir_com_vizinhos(entrada):
+    posicoes = {n: i for i, n in enumerate(ORDEM_ROLETA)}
+    resultado = set(entrada)
+    for num in entrada:
+        if num not in posicoes:
+            continue
+        i = posicoes[num]
+        vizinhos = [
+            ORDEM_ROLETA[(i - 2) % 37],
+            ORDEM_ROLETA[(i - 1) % 37],
+            ORDEM_ROLETA[(i + 1) % 37],
+            ORDEM_ROLETA[(i + 2) % 37],
+        ]
+        resultado.update(vizinhos)
+    return sorted(resultado)
 
 def enviar_telegram(msg):
     try:
@@ -135,8 +156,9 @@ if len(historico_numeros) >= 16 and not os.path.exists(CAMINHO_MODELO):
         terminais = [n % 10 for n in janela]
         dominantes = [t for t, _ in Counter(terminais).most_common(2)]
         entrada = [n for n in range(37) if n % 10 in dominantes]
+        entrada_expandida = expandir_com_vizinhos(entrada)
         X_treino.append(features)
-        y_treino.append(1 if numero_resultado in entrada else 0)
+        y_treino.append(1 if numero_resultado in entrada_expandida else 0)
 
     y_counter = Counter(y_treino)
     if len(y_counter) >= 2:
@@ -161,10 +183,7 @@ if len(historico_numeros) >= 14:
     try:
         probs = modelo.predict_proba(X)[0]
         if len(probs) == 1:
-            if modelo.classes_[0] == 1:
-                prob = probs[0]
-            else:
-                prob = 0
+            prob = probs[0] if modelo.classes_[0] == 1 else 0
         else:
             prob = probs[1]
     except NotFittedError:
@@ -178,14 +197,19 @@ if len(historico_numeros) >= 14:
         terminais = [n % 10 for n in janela]
         contagem = Counter(terminais)
         dominantes = [t for t, _ in contagem.most_common(2)]
-        entrada = sorted([n for n in range(37) if n % 10 in dominantes])
-        st.session_state.entrada_atual = entrada
+        entrada_principal = [n for n in range(37) if n % 10 in dominantes]
+        entrada_expandida = expandir_com_vizinhos(entrada_principal)
+
+        st.session_state.entrada_atual = entrada_expandida
         st.session_state.entrada_info = {
             "dominantes": dominantes,
             "base": janela,
             "gatilho": numero_13
         }
-        enviar_telegram(f"🎯 Entrada IA:\nTerminais: {dominantes}\nNúmeros: {entrada}")
+
+        enviar_telegram(
+            f"🎯 Entrada IA:\nTerminais: {dominantes}\nNúcleos: {entrada_principal}\nEntrada completa: {entrada_expandida}"
+        )
 
     if st.session_state.entrada_atual:
         if numero_14 in st.session_state.entrada_atual:
