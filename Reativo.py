@@ -154,15 +154,14 @@ if len(historico_numeros) >= 14:
 
         if chave_alerta not in st.session_state.alertas_enviados:
             st.session_state.alertas_enviados.add(chave_alerta)
-            enviar_telegram(
-                f"🎯 Entrada IA:
-"
-                f"Terminais: {dominantes}
-"
-                f"Núcleos: {entrada_principal}
-"
-                f"Entrada completa: {entrada_expandida}"
-            )
+
+        enviar_telegram(
+    f"""🎯 Entrada IA:
+Terminais: {dominantes}
+Núcleos: {entrada_principal}
+Entrada completa: {entrada_expandida}"""
+)
+            
 
         st.session_state.entrada_atual = entrada_expandida
         st.session_state.entrada_info = {
