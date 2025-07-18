@@ -175,26 +175,49 @@ if len(historico_numeros) >= 14:
             "janela": janela
         }
 
+        st.session_state.entrada_info = {
+            "terminais": dominantes,
+            "nucleos": entrada_principal,
+            "entrada": entrada_expandida
+        }
+
 # === FEEDBACK COM APRENDIZADO CONTÍNUO ===
+# === FEEDBACK E AVALIAÇÃO ===
 if st.session_state.entrada_atual:
-    numero_14 = st.session_state.historico[-1]
     entrada = st.session_state.entrada_atual
-    janela = st.session_state.entrada_info["janela"]
-    resultado = 1 if numero_14 in entrada else 0
+    numero_atual = st.session_state.historico[-1]
 
-    X_feedback = pd.DataFrame([extrair_features(janela)])
-    try:
-        modelo.partial_fit(X_feedback, [resultado])
-        salvar_modelo(modelo)
-    except Exception as e:
-        st.error(f"Erro ao atualizar modelo com feedback: {e}")
+    resultado = "✅ GREEN" if numero_atual in entrada else "❌ RED"
+    cor = "green" if resultado == "✅ GREEN" else "red"
+    st.markdown(f"<h3 style='color:{cor}'>{resultado} - Último número: {numero_atual}</h3>", unsafe_allow_html=True)
 
-    msg = "🟢 GREEN!" if resultado == 1 else "🔴 RED!"
-    enviar_telegram(f"{msg} Número: {numero_14} {'acertou' if resultado == 1 else 'não estava'} na entrada.")
-    st.success(msg)
+    # Enviar alerta de GREEN/RED somente se ainda não foi enviado para este número
+    chave_resultado = f"{numero_atual}-{tuple(sorted(entrada))}"
+    if chave_resultado not in st.session_state.alertas_enviados:
+        st.session_state.alertas_enviados.add(chave_resultado)
 
+        mensagem_resultado = f"{resultado} 🎯\nNúmero: {numero_atual}\nEntrada: {entrada}"
+        enviar_telegram(mensagem_resultado)
+
+        # Treinar IA com o novo feedback
+        try:
+            janela = list(st.session_state.historico)[-14:-2]  # Últimos 12 números antes do número_13
+            if len(janela) == 12:
+                X_novo = pd.DataFrame([extrair_features(janela)])
+                y_novo = [1 if numero_atual in entrada else 0]
+
+                modelo.fit(X_novo, y_novo)
+                salvar_modelo(modelo)
+                st.success("🔄 IA atualizada com novo feedback!")
+        except Exception as e:
+            st.error(f"Erro no feedback de aprendizado: {e}")
+
+    # Limpar entrada após avaliação
     st.session_state.entrada_atual = []
     st.session_state.entrada_info = None
+
+
+
 
 # === INTERFACE ===
 st.subheader("📊 Histórico dos últimos números")
