@@ -98,6 +98,8 @@ if st.button("🔁 Reiniciar"):
     st.session_state.entrada_atual = []
     st.session_state.entrada_info = {}
     st.rerun()
+    if "alertas_enviados" not in st.session_state:
+    st.session_state.alertas_enviados = set()
 
 st_autorefresh(interval=5000, key="auto")
 
@@ -193,13 +195,17 @@ if len(historico_numeros) >= 14:
         st.error(f"Erro na previsão: {e}")
         prob = 0
 
-    if prob > 0.65 and not st.session_state.entrada_atual:
-        terminais = [n % 10 for n in janela]
-        contagem = Counter(terminais)
-        dominantes = [t for t, _ in contagem.most_common(2)]
-        entrada_principal = [n for n in range(37) if n % 10 in dominantes]
-        entrada_expandida = expandir_com_vizinhos(entrada_principal)
+if prob > 0.65 and not st.session_state.entrada_atual:
+    terminais = [n % 10 for n in janela]
+    contagem = Counter(terminais)
+    dominantes = [t for t, _ in contagem.most_common(2)]
+    entrada_principal = [n for n in range(37) if n % 10 in dominantes]
+    entrada_expandida = expandir_com_vizinhos(entrada_principal)
 
+    # === GERAR CHAVE ÚNICA PARA A ENTRADA
+    chave_alerta = f"{tuple(sorted(dominantes))}_{numero_13}"
+
+    if chave_alerta not in st.session_state.alertas_enviados:
         st.session_state.entrada_atual = entrada_expandida
         st.session_state.entrada_info = {
             "dominantes": dominantes,
@@ -210,22 +216,9 @@ if len(historico_numeros) >= 14:
         enviar_telegram(
             f"🎯 Entrada IA:\nTerminais: {dominantes}\nNúcleos: {entrada_principal}\nEntrada completa: {entrada_expandida}"
         )
+        st.session_state.alertas_enviados.add(chave_alerta)
 
-    if st.session_state.entrada_atual:
-        if numero_14 in st.session_state.entrada_atual:
-            st.success("✅ GREEN IA!")
-            st.session_state.resultado_sinais.append("GREEN")
-            y = [1]
-        else:
-            st.error("❌ RED IA!")
-            st.session_state.resultado_sinais.append("RED")
-            y = [0]
-
-        y_counter = Counter(y)
-        if len(y_counter) >= 2:
-            modelo.fit(X, y)
-            salvar_modelo(modelo)
-        st.session_state.entrada_atual = []
+    
 
 # === STATUS VISUAL ===
 st.subheader("📊 Histórico de Resultados")
