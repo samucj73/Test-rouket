@@ -206,7 +206,7 @@ if prob > 0.65 and not st.session_state.entrada_atual:
 
     # === GERAR CHAVE ÚNICA PARA A ENTRADA
    if "alertas_enviados" not in st.session_state:
-    st.session_state.alertas_enviados = set()
+       st.session_state.alertas_enviados = set()
 
 if chave_alerta not in st.session_state.alertas_enviados:
     st.session_state.alertas_enviados.add(chave_alerta)
