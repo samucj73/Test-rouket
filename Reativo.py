@@ -201,9 +201,11 @@ if prob > 0.65 and not st.session_state.entrada_atual:
     terminais = [n % 10 for n in janela]
     contagem = Counter(terminais)
     dominantes = [t for t, _ in contagem.most_common(2)]
+
     entrada_principal = [n for n in range(37) if n % 10 in dominantes]
     entrada_expandida = expandir_com_vizinhos(entrada_principal)
 
+    numero_13 = novo_numero
     chave_alerta = f"{numero_13}-{dominantes}"
 
     if "alertas_enviados" not in st.session_state:
@@ -222,6 +224,8 @@ if prob > 0.65 and not st.session_state.entrada_atual:
         "nucleos": entrada_principal,
         "entrada": entrada_expandida
     }
+
+
 
 
 
