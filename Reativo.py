@@ -1,4 +1,3 @@
-
 import streamlit as st
 import requests
 import json
@@ -34,7 +33,7 @@ if "alertas_enviados" not in st.session_state:
 # === AUTOREFRESH ===
 st_autorefresh(interval=5000, key="refresh")
 
-# === ORDEM FÍSICA DOS NÚMEROS DA ROLETA EUROPEIA ===
+# === ORDEM FÍSICA DA ROLETA EUROPEIA ===
 ROULETTE_ORDER = [
     0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36,
     11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9,
@@ -43,10 +42,7 @@ ROULETTE_ORDER = [
 
 def get_vizinhos(numero):
     idx = ROULETTE_ORDER.index(numero)
-    vizinhos = []
-    for i in range(-2, 3):
-        vizinhos.append(ROULETTE_ORDER[(idx + i) % len(ROULETTE_ORDER)])
-    return vizinhos
+    return [ROULETTE_ORDER[(idx + i) % len(ROULETTE_ORDER)] for i in range(-2, 3)]
 
 def expandir_com_vizinhos(numeros):
     entrada = set()
@@ -54,22 +50,16 @@ def expandir_com_vizinhos(numeros):
         entrada.update(get_vizinhos(numero))
     return sorted(entrada)
 
-# === FUNÇÕES ===
 def enviar_telegram(mensagem):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": CHAT_ID,
-        "text": mensagem
-    }
+    payload = {"chat_id": CHAT_ID, "text": mensagem}
     try:
         requests.post(url, json=payload, timeout=10)
     except Exception as e:
         st.error(f"Erro ao enviar para Telegram: {e}")
 
 def extrair_features(janela):
-    return {
-        f"num_{i}": n for i, n in enumerate(janela)
-    }
+    return {f"num_{i}": n for i, n in enumerate(janela)}
 
 def carregar_modelo():
     if os.path.exists(MODELO_PATH):
@@ -84,10 +74,14 @@ try:
     resposta = requests.get(API_URL, timeout=10)
     if resposta.status_code == 200:
         dados = resposta.json()
-        numero = dados["data"]["result"]["outcome"]["number"]
-        timestamp = dados["data"]["settledAt"]
+        try:
+            numero = int(dados["data"]["result"]["outcome"]["number"])
+            timestamp = dados["data"]["settledAt"]
+        except Exception as e:
+            st.error(f"Erro ao extrair número da API: {e}")
+            numero = None
 
-        if timestamp != st.session_state.ultimo_timestamp:
+        if numero is not None and timestamp != st.session_state.ultimo_timestamp:
             st.session_state.historico.append(numero)
             st.session_state.ultimo_timestamp = timestamp
             st.success(f"🎯 Novo número: {numero} - {timestamp}")
@@ -100,8 +94,7 @@ except Exception as e:
 modelo = carregar_modelo()
 
 if len(st.session_state.historico) >= 100:
-    X = []
-    y = []
+    X, y = [], []
     for i in range(len(st.session_state.historico) - 13):
         janela = list(st.session_state.historico)[i:i + 12]
         numero_13 = st.session_state.historico[i + 12]
@@ -119,8 +112,9 @@ if len(st.session_state.historico) >= 100:
 
     modelo.fit(pd.DataFrame(X), y)
     salvar_modelo(modelo)
+    st.info("✅ Modelo treinado com base nos últimos dados!")
 
-# === IA - PREVISÃO E AVALIAÇÃO ===
+# === IA - PREVISÃO ===
 historico_numeros = list(st.session_state.historico)
 
 if len(historico_numeros) >= 14:
@@ -131,12 +125,9 @@ if len(historico_numeros) >= 14:
 
     try:
         probs = modelo.predict_proba(X)[0]
-        if len(probs) == 1:
-            prob = probs[0] if modelo.classes_[0] == 1 else 0
-        else:
-            prob = probs[1]
+        prob = probs[1] if len(probs) > 1 else 0
     except NotFittedError:
-        st.warning("🔧 IA ainda não treinada. Aguardando mais dados...")
+        st.warning("🔧 IA ainda não treinada.")
         prob = 0
     except Exception as e:
         st.error(f"Erro na previsão: {e}")
@@ -151,17 +142,16 @@ if len(historico_numeros) >= 14:
         entrada_expandida = expandir_com_vizinhos(entrada_principal)
 
         chave_alerta = f"{numero_13}-{dominantes}"
-
         if chave_alerta not in st.session_state.alertas_enviados:
             st.session_state.alertas_enviados.add(chave_alerta)
 
-        enviar_telegram(
-    f"""🎯 Entrada IA:
-Terminais: {dominantes}
-Núcleos: {entrada_principal}
-Entrada completa: {entrada_expandida}"""
-)
-            
+            mensagem = (
+                f"🎯 Entrada IA:\n"
+                f"Terminais: {dominantes}\n"
+                f"Núcleos: {entrada_principal}\n"
+                f"Entrada completa: {entrada_expandida}"
+            )
+            enviar_telegram(mensagem)
 
         st.session_state.entrada_atual = entrada_expandida
         st.session_state.entrada_info = {
@@ -169,3 +159,11 @@ Entrada completa: {entrada_expandida}"""
             "nucleos": entrada_principal,
             "entrada": entrada_expandida
         }
+
+# === EXIBIÇÃO NA INTERFACE ===
+st.subheader("📊 Histórico dos últimos números")
+st.write(list(st.session_state.historico)[-20:])
+
+if st.session_state.entrada_info:
+    st.subheader("📥 Entrada atual sugerida pela IA")
+    st.write(st.session_state.entrada_info)
