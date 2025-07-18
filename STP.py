@@ -206,9 +206,14 @@ if st.session_state.entrada_atual:
                 X_novo = pd.DataFrame([extrair_features(janela)])
                 y_novo = [1 if numero_atual in entrada else 0]
 
-                modelo.fit(X_novo, y_novo)
-                salvar_modelo(modelo)
-                st.success("🔄 IA atualizada com novo feedback!")
+        if len(set(y_novo)) > 1:
+    modelo.fit(X_novo, y_novo)
+    salvar_modelo(modelo)
+    st.success("🔄 IA atualizada com novo feedback!")
+else:
+    st.warning("⚠️ Dados insuficientes para treinar: apenas uma classe presente.")
+
+                
         except Exception as e:
             st.error(f"Erro no feedback de aprendizado: {e}")
 
