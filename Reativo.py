@@ -205,19 +205,20 @@ if prob > 0.65 and not st.session_state.entrada_atual:
     entrada_expandida = expandir_com_vizinhos(entrada_principal)
 
     # === GERAR CHAVE ÚNICA PARA A ENTRADA
-   if "alertas_enviados" not in st.session_state:
-       st.session_state.alertas_enviados = set()
+chave_alerta = f"{numero_13}-{dominantes}"
+
+if "alertas_enviados" not in st.session_state:
+    st.session_state.alertas_enviados = set()
 
 if chave_alerta not in st.session_state.alertas_enviados:
     st.session_state.alertas_enviados.add(chave_alerta)
-    # enviar alerta 
-    
-        }
 
-        enviar_telegram(
-            f"🎯 Entrada IA:\nTerminais: {dominantes}\nNúcleos: {entrada_principal}\nEntrada completa: {entrada_expandida}"
-        )
-        st.session_state.alertas_enviados.add(chave_alerta)
+    enviar_telegram(
+        f"🎯 Entrada IA:\nTerminais: {dominantes}\nNúcleos: {entrada_principal}\nEntrada completa: {entrada_com_vizinhos}"
+    )
+  
+    
+       
 
     
 
