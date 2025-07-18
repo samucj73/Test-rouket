@@ -14,13 +14,19 @@ TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 CHAT_ID = "5121457416"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 MODELO_PATH = "modelo_random_forest.pkl"
+HISTORICO_PATH = "historico.pkl"
 
 # === INICIALIZAÇÃO ===
 st.set_page_config(layout="wide")
 st.title("🎯 Estratégia Reativa com IA e Telegram")
 
-if "historico" not in st.session_state:
+# Carrega histórico salvo com joblib
+if os.path.exists(HISTORICO_PATH):
+    historico_salvo = joblib.load(HISTORICO_PATH)
+    st.session_state.historico = deque(historico_salvo, maxlen=200)
+else:
     st.session_state.historico = deque(maxlen=200)
+
 if "ultimo_timestamp" not in st.session_state:
     st.session_state.ultimo_timestamp = None
 if "entrada_atual" not in st.session_state:
@@ -85,6 +91,9 @@ try:
             st.session_state.historico.append(numero)
             st.session_state.ultimo_timestamp = timestamp
             st.success(f"🎯 Novo número: {numero} - {timestamp}")
+
+            # Salvar histórico com joblib
+            joblib.dump(list(st.session_state.historico), HISTORICO_PATH)
     else:
         st.error("Erro ao acessar a API.")
 except Exception as e:
