@@ -93,7 +93,7 @@ except Exception as e:
 # === TREINAMENTO ===
 modelo = carregar_modelo()
 
-if len(st.session_state.historico) >= 100:
+if len(st.session_state.historico) >= 20:
     X, y = [], []
     for i in range(len(st.session_state.historico) - 13):
         janela = list(st.session_state.historico)[i:i + 12]
