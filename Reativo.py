@@ -162,7 +162,7 @@ if len(historico_numeros) >= 14:
 
 # === EXIBIÇÃO NA INTERFACE ===
 st.subheader("📊 Histórico dos últimos números")
-st.write(list(st.session_state.historico)[-:15])
+st.write(list(st.session_state.historico)[-15:])
 
 if st.session_state.entrada_info:
     st.subheader("📥 Entrada atual sugerida pela IA")
