@@ -37,7 +37,7 @@ if "alertas_enviados" not in st.session_state:
     st.session_state.alertas_enviados = set()
 
 # === AUTOREFRESH ===
-st_autorefresh(interval=5000, key="refresh")
+st_autorefresh(interval=2000, key="refresh")
 
 # === ORDEM FÍSICA DA ROLETA EUROPEIA ===
 ROULETTE_ORDER = [
@@ -77,7 +77,7 @@ def salvar_modelo(modelo):
 
 # === CAPTURA DO NÚMERO MAIS RECENTE ===
 try:
-    resposta = requests.get(API_URL, timeout=10)
+    resposta = requests.get(API_URL, timeout=5)
     if resposta.status_code == 200:
         dados = resposta.json()
         try:
