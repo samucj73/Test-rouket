@@ -147,7 +147,7 @@ if len(historico_numeros) >= 14:
         st.error(f"Erro na previsão: {e}")
         prob = 0
 
-    if prob > 0.80 and not st.session_state.entrada_atual:
+    if prob > 0.60 and not st.session_state.entrada_atual:
         terminais = [n % 10 for n in janela]
         contagem = Counter(terminais)
         dominantes = [t for t, _ in contagem.most_common(2)]
