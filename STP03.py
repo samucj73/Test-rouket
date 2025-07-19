@@ -160,7 +160,7 @@ if len(historico) >= 14:
             prob_n = modelo.predict_proba(pd.DataFrame([features_simuladas]))[0][1]
             probs_numeros.append((n, prob_n))
 
-        top_numeros = sorted(probs_numeros, key=lambda x: x[1], reverse=True)[:2]
+        top_numeros = sorted(probs_numeros, key=lambda x: x[1], reverse=True)[:3]
         nucleos_filtrados = [n for n, _ in top_numeros]
         entrada_expandida = expandir_com_vizinhos(nucleos_filtrados)
 
