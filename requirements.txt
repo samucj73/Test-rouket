@@ -5,3 +5,5 @@ matplotlib
 numpy
 requests
 streamlit-autorefresh
+pyTelegramBotAPI
+python-dotenv
