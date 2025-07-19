@@ -1,12 +1,8 @@
 import streamlit as st
 import requests
 import json
-import os
-import joblib
 from collections import deque
 from streamlit_autorefresh import st_autorefresh
-import pandas as pd
-import time
 
 # === CONFIGURAÇÕES ===
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
@@ -38,6 +34,7 @@ def get_vizinhos(numero, total_vizinhos=5):
 st.set_page_config(page_title="Roleta Estratégia Terminal", layout="centered")
 st.title("🎯 Estratégia Terminal 2 / 6 / 9")
 
+# === INICIALIZAÇÃO DE VARIÁVEIS ===
 if "historico" not in st.session_state:
     st.session_state.historico = deque(maxlen=50)
 if "timestamps" not in st.session_state:
@@ -50,9 +47,20 @@ if "aguardando_resultado" not in st.session_state:
     st.session_state.aguardando_resultado = False
 if "entrada_timestamp" not in st.session_state:
     st.session_state.entrada_timestamp = ""
+if "green_count" not in st.session_state:
+    st.session_state.green_count = 0
+if "red_count" not in st.session_state:
+    st.session_state.red_count = 0
 
 # === AUTOREFRESH ===
 st_autorefresh(interval=5000, key="refresh")
+
+# === EXIBIR CONTADORES DE GREEN E RED ===
+st.markdown(f"""
+### 📈 Resultados
+- ✅ GREENs: **{st.session_state.green_count}**
+- ❌ REDs: **{st.session_state.red_count}**
+""")
 
 # === CAPTURA DA API ===
 try:
@@ -77,9 +85,13 @@ try:
                 if numero in st.session_state.entrada_ativa:
                     enviar_telegram("✅ GREEN!\n🎯 Número sorteado dentro da entrada.")
                     st.success("✅ GREEN! Número dentro da entrada.")
+                    st.session_state.green_count += 1
                 else:
                     enviar_telegram("❌ RED!\n🔻 Número fora da entrada.")
                     st.error("❌ RED! Número fora da entrada.")
+                    st.session_state.red_count += 1
+
+                # Resetar estado após resultado
                 st.session_state.entrada_ativa = None
                 st.session_state.aguardando_resultado = False
 
