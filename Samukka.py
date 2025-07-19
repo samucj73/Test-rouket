@@ -106,15 +106,15 @@ if "ultimo_timestamp" not in st.session_state:
 # Carrega modelo IA
 modelo = carregar_modelo()
 
-# Consulta API
+# Consulta API NOVA
 try:
     resposta = requests.get(API_URL)
     dados = resposta.json()
-    numero = dados[0]["number"]
-    timestamp = dados[0]["timestamp"]
+    numero = dados["data"]["outcome"]["number"]
+    timestamp = dados["data"]["settledAt"]
     st.write(f"🎲 Último número: {numero} às {timestamp}")
-except:
-    st.error("Erro ao acessar API")
+except Exception as e:
+    st.error(f"Erro ao acessar API: {e}")
     st.stop()
 
 # Verifica duplicidade
