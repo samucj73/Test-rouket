@@ -32,7 +32,9 @@ for key, default in {
     "entrada_info": None,
     "alertas_enviados": set(),
     "acertos": 0,
-    "erros": 0
+    "erros": 0,
+    "avaliar_proximo": False,
+    "entrada_prevista_para": None
 }.items():
     if key not in st.session_state:
         st.session_state[key] = default
@@ -168,9 +170,11 @@ if len(historico) >= 14:
             "nucleos": entrada_principal,
             "entrada": entrada_expandida
         }
+        st.session_state.avaliar_proximo = True
+        st.session_state.entrada_prevista_para = numero_13
 
-# FEEDBACK E AVALIAÇÃO
-if st.session_state.entrada_atual:
+# AVALIAÇÃO GREEN/RED (APÓS novo número)
+if st.session_state.avaliar_proximo and st.session_state.entrada_atual:
     entrada = st.session_state.entrada_atual
     numero_atual = st.session_state.historico[-1]
 
@@ -183,14 +187,16 @@ if st.session_state.entrada_atual:
         st.session_state.alertas_enviados.add(chave_resultado)
         enviar_telegram(f"{resultado} 🎯\nNúmero: {numero_atual}\nEntrada: {entrada}")
 
-        # Atualiza contadores
         if resultado == "✅ GREEN":
             st.session_state.acertos += 1
         else:
             st.session_state.erros += 1
 
+    # Limpa para próxima rodada
     st.session_state.entrada_atual = []
     st.session_state.entrada_info = None
+    st.session_state.avaliar_proximo = False
+    st.session_state.entrada_prevista_para = None
 
 # INTERFACE
 st.subheader("📊 Últimos 15 números")
