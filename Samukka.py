@@ -14,7 +14,7 @@ import time
 # === CONFIGURAÇÕES ===
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 TELEGRAM_CHAT_ID = "-1002796136111"
-API_URL = "https://casino-api.arugula.games/history?limit=1"
+API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 MODELO_PATH = "modelo_estrategia.pkl"
 HISTORICO_MAX = 100
 N_JANELA = 12
