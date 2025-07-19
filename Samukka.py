@@ -3,11 +3,10 @@ import requests
 import json
 import os
 import joblib
-from collections import Counter, deque
+from collections import deque
 from streamlit_autorefresh import st_autorefresh
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.exceptions import NotFittedError
+import time
 
 # === CONFIGURAÇÕES ===
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
@@ -28,40 +27,16 @@ def enviar_telegram(mensagem):
     except Exception as e:
         st.error(f"Erro ao enviar Telegram: {e}")
 
-def get_vizinhos(numero):
+def get_vizinhos(numero, total_vizinhos=5):
     idx = ROULETTE_ORDER.index(numero)
     vizinhos = []
-    for i in range(-2, 3):
+    for i in range(-total_vizinhos, total_vizinhos + 1):
         vizinhos.append(ROULETTE_ORDER[(idx + i) % len(ROULETTE_ORDER)])
     return vizinhos
 
-def gerar_entrada_estrategia_1(janela):
-    terminais = [n % 10 for n in janela]
-    contagem = Counter(terminais)
-    dominantes = [t for t, _ in contagem.most_common(2)]
-    entrada_principal = [n for n in range(37) if n % 10 in dominantes]
-    entrada_completa = set()
-    for n in entrada_principal:
-        entrada_completa.update(get_vizinhos(n))
-    return list(entrada_completa)
-
-def gerar_entrada_estrategia_8(janela):
-    grupos = [n % 3 for n in janela]
-    contagem = Counter(grupos)
-    dominantes = [g for g, _ in contagem.most_common(2)]
-    entrada_principal = [n for n in range(37) if n % 3 in dominantes]
-    entrada_completa = set()
-    for n in entrada_principal:
-        entrada_completa.update(get_vizinhos(n))
-    return list(entrada_completa)
-
-def calcular_probabilidade(entrada, ultimos_numeros):
-    acertos = sum([1 for n in ultimos_numeros if n in entrada])
-    return acertos / len(ultimos_numeros) if ultimos_numeros else 0
-
-# === INICIALIZAÇÃO ===
-st.set_page_config(page_title="Roleta IA Estratégica", layout="centered")
-st.title("🎯 Estratégia com IA - Roleta")
+# === INICIALIZAÇÃO DO APP ===
+st.set_page_config(page_title="Roleta Estratégia Terminal", layout="centered")
+st.title("🎯 Estratégia Terminal 2 / 6 / 9")
 
 if "historico" not in st.session_state:
     st.session_state.historico = deque(maxlen=50)
@@ -69,13 +44,17 @@ if "timestamps" not in st.session_state:
     st.session_state.timestamps = deque(maxlen=50)
 if "ultimo_numero" not in st.session_state:
     st.session_state.ultimo_numero = None
-if "ultima_entrada" not in st.session_state:
-    st.session_state.ultima_entrada = None
+if "entrada_ativa" not in st.session_state:
+    st.session_state.entrada_ativa = None
+if "aguardando_resultado" not in st.session_state:
+    st.session_state.aguardando_resultado = False
+if "entrada_timestamp" not in st.session_state:
+    st.session_state.entrada_timestamp = ""
 
 # === AUTOREFRESH ===
 st_autorefresh(interval=5000, key="refresh")
 
-# === CAPTURA DA API COM TRATAMENTO DE ERRO ===
+# === CAPTURA DA API ===
 try:
     response = requests.get(URL_API)
     data = response.json()
@@ -91,40 +70,51 @@ try:
             st.session_state.timestamps.append(timestamp)
             st.session_state.ultimo_numero = numero
 
-        st.success(f"🎲 Último número: **{numero}** às {timestamp}")
+            st.success(f"🎲 Último número: **{numero}** às {timestamp}")
+
+            # === VERIFICAÇÃO DO RESULTADO DE UMA ENTRADA ATIVA ===
+            if st.session_state.aguardando_resultado and st.session_state.entrada_ativa:
+                if numero in st.session_state.entrada_ativa:
+                    enviar_telegram("✅ GREEN!\n🎯 Número sorteado dentro da entrada.")
+                    st.success("✅ GREEN! Número dentro da entrada.")
+                else:
+                    enviar_telegram("❌ RED!\n🔻 Número fora da entrada.")
+                    st.error("❌ RED! Número fora da entrada.")
+                st.session_state.entrada_ativa = None
+                st.session_state.aguardando_resultado = False
+
+            # === CHECAR SE DEVE GERAR NOVA ENTRADA ===
+            elif numero % 10 in [2, 6, 9]:
+                entrada = set()
+                for base in [31, 34]:
+                    entrada.update(get_vizinhos(base, total_vizinhos=5))
+                entrada_ordenada = sorted(entrada)
+                st.session_state.entrada_ativa = entrada_ordenada
+                st.session_state.aguardando_resultado = True
+                st.session_state.entrada_timestamp = timestamp
+
+                mensagem = (
+                    "🚨 NOVA ENTRADA DETECTADA\n"
+                    "🎯 Estratégia: Terminais 2 / 6 / 9\n"
+                    f"🔢 Entrada: {entrada_ordenada}\n"
+                    f"🕒 Ativada após número: {numero} ({timestamp})\n"
+                    "🎰 Aguardando próximo número para validar (GREEN/RED)"
+                )
+                enviar_telegram(mensagem)
+                st.success("🚨 Entrada gerada e enviada via Telegram")
+
     else:
         st.warning("⚠️ Resultado ainda não disponível ou incompleto.")
 except Exception as e:
     st.error(f"Erro ao acessar API: {e}")
 
-# === EXIBIR HISTÓRICO ===
+# === EXIBIÇÃO DO HISTÓRICO ===
 st.subheader("📋 Histórico (últimos 20):")
 st.write(list(st.session_state.historico)[-20:])
 
-# === IA DECIDE MELHOR ESTRATÉGIA ===
-if len(st.session_state.historico) >= 15:
-    janela = list(st.session_state.historico)[-12:]
-    ultimos3 = list(st.session_state.historico)[-3:]
-
-    entrada1 = gerar_entrada_estrategia_1(janela)
-    entrada8 = gerar_entrada_estrategia_8(janela)
-
-    prob1 = calcular_probabilidade(entrada1, ultimos3)
-    prob8 = calcular_probabilidade(entrada8, ultimos3)
-
-    if prob1 > prob8:
-        entrada_escolhida = entrada1
-        estrategia = "1 - Vizinhos físicos"
-        prob = prob1
-    else:
-        entrada_escolhida = entrada8
-        estrategia = "8 - Grupos mod 3"
-        prob = prob8
-
-    if entrada_escolhida != st.session_state.ultima_entrada and prob >= 0.5:
-        st.session_state.ultima_entrada = entrada_escolhida
-        mensagem = f"🎯 ENTRADA GERADA\n🎲 Números: {sorted(entrada_escolhida)}\n📊 Estratégia: {estrategia}\n📈 Probabilidade: {prob:.2%}"
-        enviar_telegram(mensagem)
-        st.success("✅ Entrada enviada via Telegram")
-    else:
-        st.info(f"🤖 Aguardando melhor probabilidade (Atual: {prob:.2%})")
+# === EXIBIÇÃO DA ENTRADA ATIVA ===
+if st.session_state.entrada_ativa:
+    st.subheader("🎯 Entrada Ativa")
+    st.info(f"🔢 Números: {st.session_state.entrada_ativa}")
+    st.info(f"🕒 Ativada em: {st.session_state.entrada_timestamp}")
+    st.info("🎰 Aguardando próximo número para validação...")
