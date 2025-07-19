@@ -122,7 +122,7 @@ except Exception as e:
 
 # === EXIBIÇÃO DO HISTÓRICO ===
 st.subheader("📋 Histórico (últimos 20):")
-st.write(list(st.session_state.historico)[-20:])
+st.write(list(st.session_state.historico)[-2:])
 
 # === EXIBIÇÃO DA ENTRADA ATIVA ===
 if st.session_state.entrada_ativa:
