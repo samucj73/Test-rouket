@@ -1,30 +1,38 @@
 import streamlit as st
 import json
-import requests
+import os
 
-TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
-CANAL_ID = "-1002796136111"
-USUARIOS_JSON = "usuarios_autorizados.json"
+USUARIOS_FILE = "usuarios.json"
+LIBERADOS_FILE = "liberados.json"
 
-def carregar_usuarios():
-    try:
-        with open(USUARIOS_JSON, "r") as f:
+st.set_page_config(page_title="Painel de Liberação", layout="wide")
+st.title("🔐 Painel de Liberação de Acesso - Canal Sinais VIP")
+
+def carregar_json(path):
+    if os.path.exists(path):
+        with open(path, "r") as f:
             return json.load(f)
-    except:
-        return []
+    return []
 
-st.title("🔐 Painel de Liberação - Canal Sinais VIP")
+def salvar_json(dados, path):
+    with open(path, "w") as f:
+        json.dump(dados, f, indent=2)
 
-usuarios = carregar_usuarios()
-for uid in usuarios:
-    col1, col2 = st.columns([3,1])
-    col1.write(f"Usuário `{uid}`")
-    if col2.button("Liberar", key=str(uid)):
-        resp = requests.post(
-            f"https://api.telegram.org/bot{TOKEN}/addChatMember",
-            json={"chat_id": CANAL_ID, "user_id": int(uid)}
-        )
-        if resp.ok:
-            st.success(f"Acesso concedido a {uid}")
-        else:
-            st.error(f"Erro com {uid}: {resp.text}")
+usuarios = carregar_json(USUARIOS_FILE)
+liberados = carregar_json(LIBERADOS_FILE)
+
+usuarios_nao_liberados = [u for u in usuarios if u["id"] not in liberados]
+
+st.subheader("Usuários aguardando liberação")
+if not usuarios_nao_liberados:
+    st.success("Nenhum usuário aguardando.")
+else:
+    for usuario in usuarios_nao_liberados:
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.write(f"👤 {usuario['nome']} (ID: `{usuario['id']}`)")
+        with col2:
+            if st.button("✅ Liberar", key=usuario["id"]):
+                liberados.append(usuario["id"])
+                salvar_json(liberados, LIBERADOS_FILE)
+                st.success(f"✅ {usuario['nome']} foi liberado.")
