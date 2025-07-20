@@ -85,12 +85,12 @@ except Exception as e:
 
 # === EXIBE HISTÓRICO ===
 st.subheader("📋 Histórico")
-st.write(st.session_state.historico[-30:])
+st.write(st.session_state.historico[-15:])
 
 # === GERA ENTRADA COM IA ===
 historico = st.session_state.historico
 
-if len(historico) >= 100:
+if len(historico) >= 15:
     modelo = treinar_modelo(historico)
     janela = historico[-JANELA_ANALISE:]
     contagem = Counter([n % 10 for n in janela])
