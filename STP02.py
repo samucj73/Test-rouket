@@ -49,9 +49,10 @@ ROULETTE_ORDER = [
     22, 18, 29, 7, 28, 12, 35, 3, 26
 ]
 
+# --- ALTERAÇÃO: reduzir vizinhos para 1 anterior e 1 posterior (total 3 números)
 def get_vizinhos(numero):
     idx = ROULETTE_ORDER.index(numero)
-    return [ROULETTE_ORDER[(idx + i) % len(ROULETTE_ORDER)] for i in range(-2, 3)]
+    return [ROULETTE_ORDER[(idx + i) % len(ROULETTE_ORDER)] for i in range(-1, 2)]  # vizinho anterior, atual e posterior
 
 def expandir_com_vizinhos(numeros):
     entrada = set()
@@ -114,7 +115,11 @@ if len(st.session_state.historico) >= 14:
         contagem = Counter(terminais)
         dominantes = [t for t, _ in contagem.most_common(2)]
 
-        entrada = [n for n in range(37) if n % 10 in dominantes]
+        # --- ALTERAÇÃO: filtrar os 3 números mais frequentes entre os dominantes, não todos
+        numeros_dominantes = [n for n in janela if n % 10 in dominantes]
+        contagem_numeros = Counter(numeros_dominantes)
+        entrada = [num for num, _ in contagem_numeros.most_common(3)]  # pega top 3 números
+
         entrada_expandida = expandir_com_vizinhos(entrada)
 
         X.append(extrair_features(janela))
@@ -150,17 +155,28 @@ if len(historico) >= 14:
         contagem = Counter(terminais)
         dominantes = [t for t, _ in contagem.most_common(2)]
 
-        entrada_principal = [n for n in range(37) if n % 10 in dominantes]
-        entrada_expandida = expandir_com_vizinhos(entrada_principal)
+        numeros_dominantes = [n for n in janela if n % 10 in dominantes]
+        contagem_numeros = Counter(numeros_dominantes)
+        entrada_principal = [num for num, _ in contagem_numeros.most_common(3)]  # top 3 números
 
-        chave_alerta = f"{numero_13}-{dominantes}"
+        # --- ALTERAÇÃO: se prob alta (>0.80), aposta só os núcleos (sem vizinhos)
+        if prob > 0.80:
+            entrada_expandida = entrada_principal
+        else:
+            entrada_expandida = expandir_com_vizinhos(entrada_principal)
+
+        # --- ALTERAÇÃO: limitar máximo de números na entrada expandida
+        entrada_expandida = sorted(entrada_expandida)[:10]
+
+        chave_alerta = f"{numero_13}-{dominantes}-{prob:.2f}"
         if chave_alerta not in st.session_state.alertas_enviados:
             st.session_state.alertas_enviados.add(chave_alerta)
             mensagem = (
                 f"🎯 Entrada IA:\n"
                 f"Terminais: {dominantes}\n"
-                f"Núcleos: {entrada_principal}\n"
-                f"Entrada completa: {entrada_expandida}"
+                f"Núcleos (top 3): {entrada_principal}\n"
+                f"Entrada completa (limitada a 10): {entrada_expandida}\n"
+                f"Probabilidade: {prob:.2%}"
             )
             enviar_telegram(mensagem)
 
@@ -168,7 +184,8 @@ if len(historico) >= 14:
         st.session_state.entrada_info = {
             "terminais": dominantes,
             "nucleos": entrada_principal,
-            "entrada": entrada_expandida
+            "entrada": entrada_expandida,
+            "probabilidade": prob
         }
         st.session_state.avaliar_proximo = True
         st.session_state.entrada_prevista_para = numero_13
