@@ -1,199 +1,127 @@
 import streamlit as st
 import requests
-import pandas as pd
 import joblib
 import os
-from collections import deque, Counter
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.exceptions import NotFittedError
+import time
+from collections import Counter
 from streamlit_autorefresh import st_autorefresh
-import numpy as np
 
-# === CONFIGURAÇÕES ===
-API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
-MODELO_PATH = "modelo_grandes_numeros.pkl"
-MAX_HISTORICO = 300
-FREQ_ESPERADA = 1 / 37
-N_PREDITOS = 5
-PREVER_CADA = 6  # Gera nova previsão a cada 6 sorteios
-HISTORICO_PATH = "historico.pkl"  # caminho para salvar histórico persistente
-
-# === TELEGRAM CONFIG ===
+# === CONFIGURAÇÕES DO TELEGRAM ===
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 TELEGRAM_CHAT_ID = "-1002796136111"
 
-def enviar_telegram(mensagem):
-    try:
-        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-        payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensagem, "parse_mode": "Markdown"}
-        requests.post(url, data=payload)
-    except Exception as e:
-        st.error(f"Erro ao enviar Telegram: {e}")
+# === ARQUIVOS DE HISTÓRICO ===
+HISTORICO_PATH = "/mnt/data/historico.pkl"
+PREVISOES_PATH = "/mnt/data/previsoes.pkl"
 
-# === INICIALIZA SESSION STATE COM HISTÓRICO PERSISTENTE ===
-if 'historico' not in st.session_state:
+# === API CONFIG ===
+API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
+
+# === CONFIGURAÇÕES ===
+INTERVALO_PREVISAO = 6  # a cada 6 novos sorteios
+NUMERO_MINIMO_PARA_PREVER = 60
+QUANTIDADE_NUMEROS_PARA_APOSTA = 5
+
+# === FUNÇÕES AUXILIARES ===
+
+def carregar_historico():
     if os.path.exists(HISTORICO_PATH):
-        historico_salvo = joblib.load(HISTORICO_PATH)
-        st.session_state.historico = deque(historico_salvo, maxlen=MAX_HISTORICO)
-    else:
-        st.session_state.historico = deque(maxlen=MAX_HISTORICO)
+        return joblib.load(HISTORICO_PATH)
+    return []
 
-if 'ultimo_timestamp' not in st.session_state:
-    st.session_state.ultimo_timestamp = None
-if 'contador_sorteios' not in st.session_state:
-    st.session_state.contador_sorteios = 0
-if 'ultima_previsao' not in st.session_state:
-    st.session_state.ultima_previsao = []
-if 'registro_previsoes' not in st.session_state:
-    st.session_state.registro_previsoes = []
-if 'aguardando_resultado' not in st.session_state:
-    st.session_state.aguardando_resultado = False
-if 'entrada_ativa' not in st.session_state:
-    st.session_state.entrada_ativa = []
+def salvar_historico(historico):
+    joblib.dump(historico, HISTORICO_PATH)
 
-# === API CORRIGIDA ===
+def carregar_previsoes():
+    if os.path.exists(PREVISOES_PATH):
+        return joblib.load(PREVISOES_PATH)
+    return []
+
+def salvar_previsoes(previsoes):
+    joblib.dump(previsoes, PREVISOES_PATH)
+
 def obter_ultimo_numero():
     try:
-        response = requests.get(API_URL, timeout=5)
-        response.raise_for_status()
-        data = response.json().get("data", {})
-        resultado = data.get("result", {}).get("outcome", {})
-        numero = resultado.get("number")
-        timestamp = data.get("settledAt")
-
-        if numero is None or timestamp is None:
-            return None, None
-
-        return int(numero), timestamp
-
+        response = requests.get(API_URL, timeout=10)
+        data = response.json()
+        return data["data"]["result"]["outcome"]["number"]
     except Exception as e:
-        st.error(f"Erro ao acessar API: {e}")
-        return None, None
+        st.warning(f"Erro na API: {e}")
+        return None
 
-# === FEATURES ===
-def calcular_features(historico):
+def teoria_grandes_numeros(historico):
+    """
+    Seleciona os números que mais se aproximam da média esperada (idealmente 1/37 de frequência)
+    """
     total = len(historico)
     contagem = Counter(historico)
-    features = []
-    for n in range(37):
-        freq = contagem[n] / total if total > 0 else 0
-        erro_convergencia = FREQ_ESPERADA - freq
-        ultima_ocorrencia = (
-            total - list(historico)[::-1].index(n)
-            if n in historico else MAX_HISTORICO
-        )
-        features.append([n, freq, erro_convergencia, ultima_ocorrencia])
-    return pd.DataFrame(features, columns=["numero", "frequencia", "erro", "ultima_ocorrencia"])
+    media_ideal = total / 37
 
-def gerar_dataset_para_treinamento(historico):
-    dataset = []
-    for i in range(30, len(historico) - 1):
-        jan = list(historico)[i - 30:i]
-        features = calcular_features(jan)
-        proximo = historico[i]
-        for _, row in features.iterrows():
-            amostra = row.copy()
-            amostra["alvo"] = 1 if row["numero"] == proximo else 0
-            dataset.append(amostra)
-    return pd.DataFrame(dataset)
+    # Diferença entre frequência atual e média ideal
+    diferencas = {num: abs(contagem.get(num, 0) - media_ideal) for num in range(37)}
 
-# === MODELO ===
-def carregar_ou_treinar_modelo(historico):
-    if os.path.exists(MODELO_PATH):
-        modelo = joblib.load(MODELO_PATH)
-    else:
-        modelo = RandomForestClassifier(n_estimators=200, random_state=42)
+    # Seleciona os 5 que mais se aproximam da média
+    mais_equilibrados = sorted(diferencas, key=lambda x: diferencas[x])[:QUANTIDADE_NUMEROS_PARA_APOSTA]
+    return mais_equilibrados
 
+def enviar_telegram_mensagem(mensagem):
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": mensagem
+    }
     try:
-        modelo.predict([[0, 0.027, 0, 50]])
-    except NotFittedError:
-        if len(historico) >= 60:
-            df = gerar_dataset_para_treinamento(historico)
-            X = df[["numero", "frequencia", "erro", "ultima_ocorrencia"]]
-            y = df["alvo"]
-            modelo.fit(X, y)
-            joblib.dump(modelo, MODELO_PATH)
+        requests.post(url, data=payload, timeout=10)
+    except Exception as e:
+        st.error(f"Erro ao enviar mensagem no Telegram: {e}")
 
-    return modelo
+# === APP STREAMLIT ===
 
-# === CAPTURA NÚMERO ATUAL ===
-numero, timestamp = obter_ultimo_numero()
-if numero is not None and timestamp != st.session_state.ultimo_timestamp:
-    st.session_state.historico.append(numero)
-    # Salva histórico atualizado no arquivo para persistência
-    joblib.dump(list(st.session_state.historico), HISTORICO_PATH)
+st.set_page_config(page_title="Teoria dos Grandes Números - Roleta", layout="centered")
+st.title("🎯 Previsão Roleta com Teoria dos Grandes Números")
 
-    st.session_state.ultimo_timestamp = timestamp
-    st.session_state.contador_sorteios += 1
+# Autorefresh a cada 10s
+st_autorefresh(interval=10 * 1000, key="refresh")
 
-    # Verificar GREEN/RED após previsão
-    if st.session_state.aguardando_resultado and st.session_state.entrada_ativa:
-        acerto = "GREEN" if numero in st.session_state.entrada_ativa else "RED"
-        st.session_state.registro_previsoes.append({
-            "previstos": st.session_state.entrada_ativa.copy(),
-            "sorteado": numero,
-            "resultado": acerto
-        })
-        st.session_state.aguardando_resultado = False
-        st.session_state.entrada_ativa = []
+historico = carregar_historico()
+previsoes = carregar_previsoes()
+ultimo_numero = obter_ultimo_numero()
 
-# === PREVISÃO A CADA 6 SORTEIOS ===
-nova_previsao = False
-top5 = pd.DataFrame()
+if ultimo_numero is not None:
+    if not historico or historico[-1] != ultimo_numero:
+        historico.append(ultimo_numero)
+        salvar_historico(historico)
 
-if st.session_state.contador_sorteios >= PREVER_CADA and len(st.session_state.historico) >= 60:
-    modelo = carregar_ou_treinar_modelo(st.session_state.historico)
-    features_atuais = calcular_features(st.session_state.historico)
-    X_atual = features_atuais[["numero", "frequencia", "erro", "ultima_ocorrencia"]]
-    probs = modelo.predict_proba(X_atual)[:, 1]
-    features_atuais["probabilidade"] = probs
-    top5 = features_atuais.sort_values(by="probabilidade", ascending=False).head(N_PREDITOS)
+        if len(historico) >= NUMERO_MINIMO_PARA_PREVER and len(historico) % INTERVALO_PREVISAO == 0:
+            nova_previsao = teoria_grandes_numeros(historico)
+            previsoes.append({
+                "entrada": nova_previsao,
+                "verificar_em": len(historico) + 1,
+                "status": "AGUARDANDO"
+            })
+            salvar_previsoes(previsoes)
+            enviar_telegram_mensagem(f"🎯 Nova Previsão (Teoria dos Grandes Números): {nova_previsao}")
 
-    novos_numeros = top5["numero"].tolist()
-    if novos_numeros != st.session_state.ultima_previsao:
-        st.session_state.ultima_previsao = novos_numeros
-        nova_previsao = True
-        mensagem = "🎯 *Nova Previsão (IA - Teoria dos Grandes Números)*\n\n"
-        mensagem += "\n".join([f"➡️ Número `{n}`" for n in novos_numeros])
-        enviar_telegram(mensagem)
+# === Verificação dos acertos
+for previsao in previsoes:
+    if previsao["status"] == "AGUARDANDO" and len(historico) >= previsao["verificar_em"]:
+        numero_verificacao = historico[previsao["verificar_em"] - 1]
+        if numero_verificacao in previsao["entrada"]:
+            previsao["status"] = "✅ GREEN"
+        else:
+            previsao["status"] = "❌ RED"
+        salvar_previsoes(previsoes)
 
-    # Salva entrada e ativa verificação posterior
-    st.session_state.entrada_ativa = novos_numeros
-    st.session_state.aguardando_resultado = True
-    st.session_state.contador_sorteios = 0
+# === EXIBIÇÃO ===
+st.subheader("📊 Últimos números:")
+st.write(historico[-20:][::-1])
 
-# === INTERFACE STREAMLIT ===
-st.title("🎲 IA Roleta - Teoria dos Grandes Números (com Telegram + Acertos)")
-st.write(f"📍 Último número capturado: `{numero}` — Total: `{len(st.session_state.historico)}`")
-st.write(f"📡 Nova previsão gerada a cada `{PREVER_CADA}` sorteios")
+st.subheader("📌 Previsões recentes:")
+for previsao in previsoes[-5:][::-1]:
+    st.write(f"🎯 Entrada: {previsao['entrada']} | Verificação: sorteio #{previsao['verificar_em']} | Resultado: {previsao['status']}")
 
-# Exibir previsão atual
-if not top5.empty:
-    st.subheader("🔮 Números previstos:")
-    for i, row in top5.iterrows():
-        st.markdown(f"**{int(row['numero'])}** — Probabilidade: `{row['probabilidade']:.3f}`")
+total_green = sum(1 for p in previsoes if p["status"] == "✅ GREEN")
+total_red = sum(1 for p in previsoes if p["status"] == "❌ RED")
 
-    st.subheader("📊 Probabilidades (Top 5):")
-    chart_data = top5.set_index("numero")[["probabilidade"]].sort_index()
-    st.bar_chart(chart_data)
-
-# === DASHBOARD DE ACERTOS ===
-st.subheader("📊 Histórico de Resultados (GREEN / RED)")
-if st.session_state.registro_previsoes:
-    df_resultados = pd.DataFrame(st.session_state.registro_previsoes)
-    df_resultados["previstos"] = df_resultados["previstos"].apply(lambda x: ", ".join(map(str, x)))
-    df_resultados["ícone"] = df_resultados["resultado"].apply(
-        lambda r: "🟢 GREEN" if r == "GREEN" else "🔴 RED"
-    )
-    st.dataframe(df_resultados[["previstos", "sorteado", "ícone"]].iloc[::-1], use_container_width=True)
-
-    total_green = sum(1 for r in st.session_state.registro_previsoes if r["resultado"] == "GREEN")
-    total_red = sum(1 for r in st.session_state.registro_previsoes if r["resultado"] == "RED")
-
-    st.success(f"✅ Total de GREENs: {total_green}")
-    st.error(f"❌ Total de REDs: {total_red}")
-else:
-    st.info("Nenhuma previsão concluída ainda.")
-
-# === REFRESH ===
-st_autorefresh(interval=5000, key="refresh")
+st.success(f"✅ Total GREEN: {total_green}")
+st.error(f"❌ Total RED: {total_red}")
