@@ -231,3 +231,19 @@ if total > 0:
     st.markdown(f"**✅ Acertos:** {st.session_state.acertos}")
     st.markdown(f"**❌ Erros:** {st.session_state.erros}")
     st.markdown(f"**📈 Acurácia:** `{acuracia:.2f}%`")
+
+# ENTRADA ATIVA (com layout aprimorado)
+if st.session_state.entrada_info:
+    entrada = st.session_state.entrada_info
+    st.subheader("📥 Entrada IA Ativa")
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("🎯 Terminais", ", ".join(map(str, entrada['terminais'])))
+    col2.metric("🔥 Núcleos", ", ".join(map(str, entrada['nucleos'])))
+    col3.metric("🎰 Entrada", ", ".join(map(str, entrada['entrada'])))
+
+    st.markdown(
+        f"<h4>🔎 <span style='color:#4CAF50'>Probabilidade estimada:</span> "
+        f"<code>{entrada['probabilidade']:.2%}</code></h4>",
+        unsafe_allow_html=True
+    )
