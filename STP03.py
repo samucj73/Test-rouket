@@ -2,146 +2,159 @@ import streamlit as st
 import requests
 import json
 import os
+import joblib
 from collections import Counter, deque
 from streamlit_autorefresh import st_autorefresh
-from sklearn.ensemble import RandomForestClassifier
 import pandas as pd
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.exceptions import NotFittedError
 
 # === CONFIGURAÇÕES ===
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 TELEGRAM_CHAT_ID = "-1002796136111"
-NUM_VIZINHOS = 2
+MODELO_PATH = "modelo_terminal.pkl"
+HISTORICO_MAXIMO = 200
 JANELA_ANALISE = 12
-PROBABILIDADE_MINIMA = 0.75
+PROB_MINIMA = 0.75
 
-# === ORDEM FÍSICA DA ROLETA EUROPEIA ===
-ordem_roleta = [0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36,
-                11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9,
-                22, 18, 29, 7, 28, 12, 35, 3, 26]
-
-# === FUNÇÃO PARA ENVIAR ALERTA TELEGRAM ===
+# === FUNÇÕES AUXILIARES ===
 def enviar_telegram(mensagem):
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensagem}
-    requests.post(url, json=payload)
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensagem}
+        requests.post(url, json=payload)
+    except Exception as e:
+        st.error(f"Erro ao enviar Telegram: {e}")
 
-# === FUNÇÃO PARA PEGAR VIZINHOS FÍSICOS NA ROLETA ===
-def pegar_vizinhos(numero, n=2):
+def carregar_modelo():
+    if os.path.exists(MODELO_PATH):
+        return joblib.load(MODELO_PATH)
+    else:
+        return RandomForestClassifier()
+
+def salvar_modelo(modelo):
+    joblib.dump(modelo, MODELO_PATH)
+
+def extrair_numero_api():
+    try:
+        response = requests.get(API_URL)
+        data = response.json()
+        return data["result"]["outcome"]["number"], data["settledAt"]
+    except Exception as e:
+        st.error(f"Erro ao acessar API: {e}")
+        return None, None
+
+def obter_vizinhos(numero):
+    ordem_fisica = [
+        0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6,
+        27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16,
+        33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28,
+        12, 35, 3, 26
+    ]
+    idx = ordem_fisica.index(numero)
     vizinhos = []
-    if numero in ordem_roleta:
-        idx = ordem_roleta.index(numero)
-        total = len(ordem_roleta)
-        for i in range(-n, n+1):
-            vizinhos.append(ordem_roleta[(idx + i) % total])
+    for i in range(-5, 6):
+        if i == 0:
+            continue
+        vizinhos.append(ordem_fisica[(idx + i) % len(ordem_fisica)])
     return vizinhos
 
-# === FUNÇÃO PARA TREINAR IA ===
-def treinar_modelo(dados):
-    X = []
-    y = []
-    for i in range(len(dados) - JANELA_ANALISE - 1):
-        janela = dados[i:i + JANELA_ANALISE]
-        alvo = dados[i + JANELA_ANALISE]
-        contagem = Counter([n % 10 for n in janela])
-        linha = [contagem.get(i, 0) for i in range(10)]
-        X.append(linha)
-        y.append(alvo)
-    modelo = RandomForestClassifier()
-    modelo.fit(X, y)
-    return modelo
-
-# === CONTROLE DE ESTADO STREAMLIT ===
+# === ESTADO DO APP ===
 if "historico" not in st.session_state:
-    st.session_state.historico = []
-if "ultimo_timestamp" not in st.session_state:
-    st.session_state.ultimo_timestamp = ""
+    st.session_state.historico = deque(maxlen=HISTORICO_MAXIMO)
+if "timestamps" not in st.session_state:
+    st.session_state.timestamps = set()
+if "modelo" not in st.session_state:
+    st.session_state.modelo = carregar_modelo()
+if "reds_recentes" not in st.session_state:
+    st.session_state.reds_recentes = set()
 if "entrada_atual" not in st.session_state:
-    st.session_state.entrada_atual = None
-if "red_nucleos" not in st.session_state:
-    st.session_state.red_nucleos = set()
+    st.session_state.entrada_atual = []
 
-# === AUTOREFRESH A CADA 5 SEGUNDOS ===
-st_autorefresh(interval=5000, key="atualizacao")
+# === ATUALIZAÇÃO AUTOMÁTICA ===
+st_autorefresh(interval=5000, key="atualizar")
 
-# === CAPTURA DADOS DA API ===
-try:
-    response = requests.get(API_URL)
-    data = response.json()
+# === CAPTURA DE NOVO NÚMERO ===
+numero, timestamp = extrair_numero_api()
+if numero is not None and timestamp not in st.session_state.timestamps:
+    st.session_state.timestamps.add(timestamp)
+    st.session_state.historico.append(numero)
 
-    numero = data["data"]["result"]["outcome"]["number"]
-    timestamp = data["data"]["settledAt"]
+    st.write(f"🎯 Último número: **{numero}** às {timestamp}")
+    st.write(f"📋 Histórico ({len(st.session_state.historico)}): {list(st.session_state.historico)}")
 
-    if timestamp != st.session_state.ultimo_timestamp:
-        st.session_state.ultimo_timestamp = timestamp
-        st.session_state.historico.append(numero)
-        st.success(f"Número capturado: {numero}")
-    else:
-        st.warning("⏳ Aguardando novo número...")
+    # === TREINAMENTO DA IA ===
+    if len(st.session_state.historico) >= JANELA_ANALISE + 1:
+        X = []
+        y = []
+        historico = list(st.session_state.historico)
+        for i in range(len(historico) - JANELA_ANALISE):
+            entrada = [n % 10 for n in historico[i:i + JANELA_ANALISE]]
+            saida = historico[i + JANELA_ANALISE] % 10
+            X.append(entrada)
+            y.append(saida)
+        df_X = pd.DataFrame(X, columns=[f"n{i}" for i in range(JANELA_ANALISE)])
+        st.session_state.modelo.fit(df_X, y)
+        salvar_modelo(st.session_state.modelo)
 
-except Exception as e:
-    st.error(f"Erro ao acessar API: {e}")
-    st.stop()
+        # === PREDIÇÃO COM IA ===
+        terminais = [n % 10 for n in historico[-JANELA_ANALISE:]]
+        df_pred = pd.DataFrame([terminais], columns=[f"n{i}" for i in range(JANELA_ANALISE)])
 
-# === EXIBE HISTÓRICO ===
-st.subheader("📋 Histórico")
-st.write(st.session_state.historico[-15:])
+        try:
+            probs = st.session_state.modelo.predict_proba(df_pred)[0]
+            if probs is not None and len(probs) == 10:
+                contagem = Counter(terminais)
+                dominantes = [t for t, _ in contagem.most_common(2)]
 
-# === GERA ENTRADA COM IA ===
-historico = st.session_state.historico
+                probs_numeros = [(i, probs[i % 10]) for i in range(37) if i % 10 in dominantes]
+                probs_numeros = [pn for pn in probs_numeros if pn[0] not in st.session_state.reds_recentes]
 
-if len(historico) >= 15:
-    modelo = treinar_modelo(historico)
-    janela = historico[-JANELA_ANALISE:]
-    contagem = Counter([n % 10 for n in janela])
-    linha = [[contagem.get(i, 0) for i in range(10)]]
-    probs = modelo.predict_proba(linha)[0]
-    indices_ordenados = sorted(range(37), key=lambda i: probs[i], reverse=True)
+                # Ordena por probabilidade
+                probs_numeros.sort(key=lambda x: x[1], reverse=True)
 
-    top4 = indices_ordenados[:4]
-    p1, p4 = probs[top4[0]], probs[top4[3]]
+                top_numeros = probs_numeros[:3]
 
-    # Se os 4 primeiros estão próximos, usa os 4
-    if p1 - p4 < 0.02:
-        nucleos = top4
-    else:
-        nucleos = indices_ordenados[:3]
+                # Se 4 primeiros tiverem probabilidade muito próxima, pega 4
+                if len(probs_numeros) > 3:
+                    delta = probs_numeros[0][1] - probs_numeros[3][1]
+                    if delta < 0.05:
+                        top_numeros = probs_numeros[:4]
 
-    # Remove REDs recentes
-    nucleos = [n for n in nucleos if n not in st.session_state.red_nucleos]
+                if top_numeros and top_numeros[0][1] >= PROB_MINIMA:
+                    entrada = set()
+                    for n, _ in top_numeros:
+                        entrada.add(n)
+                        entrada.update(obter_vizinhos(n))
+                    entrada = sorted(entrada)
 
-    if not nucleos:
-        st.warning("❌ Nucleos recentes deram RED. Aguardando nova análise.")
-        st.stop()
+                    mensagem = f"""
+🎯 *SINAL GERADO!*
+Núcleos: {[n for n, _ in top_numeros]}
+Entrada: {entrada}
+Probabilidade: {top_numeros[0][1]:.2%}
+                    """
+                    enviar_telegram(mensagem)
+                    st.success(mensagem)
+                    st.session_state.entrada_atual = entrada
+                else:
+                    st.session_state.entrada_atual = []
+                    st.info("⚠️ Nenhuma entrada gerada (probabilidade abaixo do mínimo ou sem dados confiáveis).")
+        except Exception as e:
+            st.warning(f"Erro na previsão: {e}")
 
-    prob_media = sum([probs[n] for n in nucleos]) / len(nucleos)
+    # === VERIFICAÇÃO DE GREEN/RED ===
+    if st.session_state.entrada_atual:
+        if numero in st.session_state.entrada_atual:
+            enviar_telegram(f"✅ GREEN! Número: {numero}")
+            st.success(f"✅ GREEN! Número {numero} estava na entrada.")
+            st.session_state.entrada_atual = []
+        else:
+            enviar_telegram(f"❌ RED! Número: {numero}")
+            st.error(f"❌ RED! Número {numero} não estava na entrada.")
+            st.session_state.reds_recentes.add(numero)
 
-    if prob_media >= PROBABILIDADE_MINIMA and not st.session_state.entrada_atual:
-        entrada = set()
-        for n in nucleos:
-            entrada.update(pegar_vizinhos(n, n=NUM_VIZINHOS))
-        entrada = sorted(entrada)
-        st.session_state.entrada_atual = {
-            "entrada": entrada,
-            "timestamp": timestamp,
-            "nucleos": nucleos
-        }
-        enviar_telegram(f"🎯 Entrada gerada com IA:\n👉 Números: {entrada}\n🎲 Núcleos: {nucleos}")
-        st.success("✅ Entrada enviada!")
-    else:
-        st.info("⏳ Aguardando condições ideais para nova entrada.")
-
-# === VERIFICA SE DEU GREEN OU RED ===
-entrada_atual = st.session_state.entrada_atual
-if entrada_atual and entrada_atual["timestamp"] != timestamp:
-    numero_atual = historico[-1]
-    if numero_atual in entrada_atual["entrada"]:
-        enviar_telegram("🟢 GREEN!\n🎯 Número sorteado: " + str(numero_atual))
-        st.success("🟢 GREEN!")
-        st.session_state.red_nucleos.clear()
-    else:
-        enviar_telegram("🔴 RED\nNúmero sorteado: " + str(numero_atual))
-        st.error("🔴 RED")
-        st.session_state.red_nucleos.update(entrada_atual["nucleos"])
-
-    st.session_state.entrada_atual = None
+    # Limita tamanho do set de REDs recentes
+    if len(st.session_state.reds_recentes) > 20:
+        st.session_state.reds_recentes = set(list(st.session_state.reds_recentes)[-20:])
