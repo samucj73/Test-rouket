@@ -10,7 +10,7 @@ from sklearn.exceptions import NotFittedError
 
 # === CONFIGURAÇÕES ===
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
-CHAT_ID = "5121457416"
+CHAT_ID = "-1002796136111"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 MODELO_PATH = "modelo_rf.pkl"
 HISTORICO_PATH = "historico.pkl"
