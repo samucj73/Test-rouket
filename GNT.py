@@ -1,127 +1,112 @@
 import streamlit as st
 import requests
-import joblib
 import os
-import time
-from collections import Counter
+import joblib
+from collections import Counter, deque
 from streamlit_autorefresh import st_autorefresh
+import pandas as pd
 
-# === CONFIGURAÇÕES DO TELEGRAM ===
+# === CONFIGURAÇÕES ===
+API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
+HISTORICO_PATH = "/mnt/data/historico_gnt.joblib"
+INTERVALO_PREVISAO = 6  # Gera previsão a cada 6 sorteios
+NUM_PREVISOES = 5       # Quantos números prever
+MAX_HISTORICO = 300     # Limite do histórico mantido em memória
+
+# === TELEGRAM CONFIG ===
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 TELEGRAM_CHAT_ID = "-1002796136111"
 
-# === ARQUIVOS DE HISTÓRICO ===
-HISTORICO_PATH = "/mnt/data/historico.pkl"
-PREVISOES_PATH = "/mnt/data/previsoes.pkl"
-
-# === API CONFIG ===
-API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
-
-# === CONFIGURAÇÕES ===
-INTERVALO_PREVISAO = 6  # a cada 6 novos sorteios
-NUMERO_MINIMO_PARA_PREVER = 60
-QUANTIDADE_NUMEROS_PARA_APOSTA = 5
+def enviar_telegram(mensagem):
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensagem, "parse_mode": "Markdown"}
+        requests.post(url, data=payload)
+    except Exception as e:
+        st.error(f"Erro ao enviar Telegram: {e}")
 
 # === FUNÇÕES AUXILIARES ===
-
 def carregar_historico():
     if os.path.exists(HISTORICO_PATH):
         return joblib.load(HISTORICO_PATH)
-    return []
+    return deque(maxlen=MAX_HISTORICO)
 
 def salvar_historico(historico):
+    os.makedirs(os.path.dirname(HISTORICO_PATH), exist_ok=True)
     joblib.dump(historico, HISTORICO_PATH)
 
-def carregar_previsoes():
-    if os.path.exists(PREVISOES_PATH):
-        return joblib.load(PREVISOES_PATH)
-    return []
-
-def salvar_previsoes(previsoes):
-    joblib.dump(previsoes, PREVISOES_PATH)
-
-def obter_ultimo_numero():
+def capturar_numero_atual():
     try:
-        response = requests.get(API_URL, timeout=10)
-        data = response.json()
-        return data["data"]["result"]["outcome"]["number"]
+        resposta = requests.get(API_URL)
+        dados = resposta.json()
+        numero = dados['data']['result']['outcome']['number']
+        timestamp = dados['data']['settledAt']
+        return int(numero), timestamp
     except Exception as e:
-        st.warning(f"Erro na API: {e}")
-        return None
+        st.error(f"Erro na API: {e}")
+        return None, None
 
-def teoria_grandes_numeros(historico):
-    """
-    Seleciona os números que mais se aproximam da média esperada (idealmente 1/37 de frequência)
-    """
-    total = len(historico)
+def teoria_dos_grandes_numeros(historico):
+    if not historico:
+        return []
+
     contagem = Counter(historico)
-    media_ideal = total / 37
+    total = len(historico)
+    frequencias = {n: contagem.get(n, 0) / total for n in range(37)}
+    diferencas = {n: abs(frequencias[n] - (1/37)) for n in range(37)}
 
-    # Diferença entre frequência atual e média ideal
-    diferencas = {num: abs(contagem.get(num, 0) - media_ideal) for num in range(37)}
+    # Ordena por maior diferença para baixo (menos saíram do que o esperado)
+    tendencia = sorted(diferencas.items(), key=lambda x: x[1], reverse=True)
+    candidatos = [n for n, _ in tendencia if frequencias[n] < (1/37)]
+    return candidatos[:NUM_PREVISOES]
 
-    # Seleciona os 5 que mais se aproximam da média
-    mais_equilibrados = sorted(diferencas, key=lambda x: diferencas[x])[:QUANTIDADE_NUMEROS_PARA_APOSTA]
-    return mais_equilibrados
+# === INTERFACE STREAMLIT ===
+st.set_page_config(page_title="IA - Teoria dos Grandes Números", layout="centered")
+st.title("🎯 Previsão com Teoria dos Grandes Números")
+st_autorefresh(interval=5_000, key="auto")
 
-def enviar_telegram_mensagem(mensagem):
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": TELEGRAM_CHAT_ID,
-        "text": mensagem
-    }
-    try:
-        requests.post(url, data=payload, timeout=10)
-    except Exception as e:
-        st.error(f"Erro ao enviar mensagem no Telegram: {e}")
-
-# === APP STREAMLIT ===
-
-st.set_page_config(page_title="Teoria dos Grandes Números - Roleta", layout="centered")
-st.title("🎯 Previsão Roleta com Teoria dos Grandes Números")
-
-# Autorefresh a cada 10s
-st_autorefresh(interval=10 * 1000, key="refresh")
-
+# === EXECUÇÃO PRINCIPAL ===
 historico = carregar_historico()
-previsoes = carregar_previsoes()
-ultimo_numero = obter_ultimo_numero()
+numero_atual, timestamp = capturar_numero_atual()
 
-if ultimo_numero is not None:
-    if not historico or historico[-1] != ultimo_numero:
-        historico.append(ultimo_numero)
-        salvar_historico(historico)
+if "ultimo_timestamp" not in st.session_state:
+    st.session_state.ultimo_timestamp = ""
 
-        if len(historico) >= NUMERO_MINIMO_PARA_PREVER and len(historico) % INTERVALO_PREVISAO == 0:
-            nova_previsao = teoria_grandes_numeros(historico)
-            previsoes.append({
-                "entrada": nova_previsao,
-                "verificar_em": len(historico) + 1,
-                "status": "AGUARDANDO"
-            })
-            salvar_previsoes(previsoes)
-            enviar_telegram_mensagem(f"🎯 Nova Previsão (Teoria dos Grandes Números): {nova_previsao}")
+if numero_atual is not None and timestamp != st.session_state.ultimo_timestamp:
+    st.session_state.ultimo_timestamp = timestamp
+    historico.append(numero_atual)
+    salvar_historico(historico)
 
-# === Verificação dos acertos
-for previsao in previsoes:
-    if previsao["status"] == "AGUARDANDO" and len(historico) >= previsao["verificar_em"]:
-        numero_verificacao = historico[previsao["verificar_em"] - 1]
-        if numero_verificacao in previsao["entrada"]:
-            previsao["status"] = "✅ GREEN"
+# Exibe histórico
+st.subheader("📋 Histórico recente:")
+st.write(list(historico)[-20:][::-1])  # últimos 20
+
+# Lógica de previsão
+if len(historico) >= 20 and len(historico) % INTERVALO_PREVISAO == 0:
+    previsao = teoria_dos_grandes_numeros(historico)
+    st.subheader("🔮 Previsão de Números:")
+    st.success(f"Números sugeridos: {sorted(previsao)}")
+
+    # Enviar para Telegram
+    mensagem = "🎯 *Nova Previsão - IA Teoria dos Grandes Números*\n\n"
+    mensagem += "\n".join([f"➡️ Número `{n}`" for n in sorted(previsao)])
+    enviar_telegram(mensagem)
+
+    if "ult_previsao" not in st.session_state:
+        st.session_state.ult_previsao = []
+        st.session_state.resultados = []
+
+    if st.session_state.ult_previsao:
+        ultimo_num = historico[-1]
+        if ultimo_num in st.session_state.ult_previsao:
+            st.success(f"✅ GREEN! {ultimo_num} estava na previsão anterior.")
+            st.session_state.resultados.append("🟢")
         else:
-            previsao["status"] = "❌ RED"
-        salvar_previsoes(previsoes)
+            st.error(f"❌ RED! {ultimo_num} não estava na previsão anterior.")
+            st.session_state.resultados.append("🔴")
 
-# === EXIBIÇÃO ===
-st.subheader("📊 Últimos números:")
-st.write(historico[-20:][::-1])
+    st.session_state.ult_previsao = previsao
 
-st.subheader("📌 Previsões recentes:")
-for previsao in previsoes[-5:][::-1]:
-    st.write(f"🎯 Entrada: {previsao['entrada']} | Verificação: sorteio #{previsao['verificar_em']} | Resultado: {previsao['status']}")
-
-total_green = sum(1 for p in previsoes if p["status"] == "✅ GREEN")
-total_red = sum(1 for p in previsoes if p["status"] == "❌ RED")
-
-st.success(f"✅ Total GREEN: {total_green}")
-st.error(f"❌ Total RED: {total_red}")
+# Dashboard de acertos
+st.subheader("📊 Resultados recentes:")
+st.write("".join(st.session_state.get("resultados", [])))
