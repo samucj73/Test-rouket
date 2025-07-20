@@ -211,7 +211,7 @@ if st.session_state.avaliar_proximo and st.session_state.entrada_atual:
 
     # Limpa para próxima rodada
     st.session_state.entrada_atual = []
-    st.session_state.entrada_info = None
+    # st.session_state.entrada_info = None
     st.session_state.avaliar_proximo = False
     st.session_state.entrada_prevista_para = None
 
