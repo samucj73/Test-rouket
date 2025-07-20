@@ -15,7 +15,8 @@ MODELO_PATH = "modelo_grandes_numeros.pkl"
 MAX_HISTORICO = 300
 FREQ_ESPERADA = 1 / 37
 N_PREDITOS = 5
-PREVER_CADA = 6 # Gera nova previsão a cada 2 sorteios
+PREVER_CADA = 6  # Gera nova previsão a cada 6 sorteios
+HISTORICO_PATH = "historico.pkl"  # caminho para salvar histórico persistente
 
 # === TELEGRAM CONFIG ===
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
@@ -29,9 +30,14 @@ def enviar_telegram(mensagem):
     except Exception as e:
         st.error(f"Erro ao enviar Telegram: {e}")
 
-# === INICIALIZA SESSION STATE ===
+# === INICIALIZA SESSION STATE COM HISTÓRICO PERSISTENTE ===
 if 'historico' not in st.session_state:
-    st.session_state.historico = deque(maxlen=MAX_HISTORICO)
+    if os.path.exists(HISTORICO_PATH):
+        historico_salvo = joblib.load(HISTORICO_PATH)
+        st.session_state.historico = deque(historico_salvo, maxlen=MAX_HISTORICO)
+    else:
+        st.session_state.historico = deque(maxlen=MAX_HISTORICO)
+
 if 'ultimo_timestamp' not in st.session_state:
     st.session_state.ultimo_timestamp = None
 if 'contador_sorteios' not in st.session_state:
@@ -114,6 +120,9 @@ def carregar_ou_treinar_modelo(historico):
 numero, timestamp = obter_ultimo_numero()
 if numero is not None and timestamp != st.session_state.ultimo_timestamp:
     st.session_state.historico.append(numero)
+    # Salva histórico atualizado no arquivo para persistência
+    joblib.dump(list(st.session_state.historico), HISTORICO_PATH)
+
     st.session_state.ultimo_timestamp = timestamp
     st.session_state.contador_sorteios += 1
 
@@ -128,7 +137,7 @@ if numero is not None and timestamp != st.session_state.ultimo_timestamp:
         st.session_state.aguardando_resultado = False
         st.session_state.entrada_ativa = []
 
-# === PREVISÃO A CADA 2 SORTEIOS ===
+# === PREVISÃO A CADA 6 SORTEIOS ===
 nova_previsao = False
 top5 = pd.DataFrame()
 
