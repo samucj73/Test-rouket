@@ -70,6 +70,10 @@ def treinar_modelo(numeros):
         y.append(numeros[i + JANELA])
     if X and y:
         modelo.fit(X, y)
+
+        # 🔧 Garante que o modelo reconheça todas as classes (0 a 36)
+        modelo.classes_ = list(range(37))
+
         joblib.dump(modelo, MODELO_PATH)
 
 def prever_proximos(numeros):
@@ -81,20 +85,19 @@ def prever_proximos(numeros):
         return None
 
 def analisar_probabilidades(probs):
-    if probs is None:
+    if probs is None or len(probs) < 37:
+        st.error(f"Erro: vetor de probabilidades com tamanho incorreto ({len(probs)}). Esperado: 37")
         return []
 
     indices_ordenados = sorted(range(37), key=lambda i: probs[i], reverse=True)
     top3 = indices_ordenados[:3]
     p_top3 = [probs[i] for i in top3]
 
-    # Expansão para 4 números se o 4º estiver muito próximo do 3º
     if len(indices_ordenados) >= 4:
         dif = probs[indices_ordenados[3]] - probs[indices_ordenados[2]]
         if dif >= -0.01:
             top3.append(indices_ordenados[3])
 
-    # Remover números que deram RED recentemente
     top_filtrado = [n for n in top3 if n not in st.session_state.ultimos_reds]
 
     return top_filtrado
@@ -107,7 +110,7 @@ def obter_vizinhos(numero):
     ]
     idx = ordem_fisica.index(numero)
     vizinhos = []
-    for i in range(-2, 3):  # dois anteriores e dois posteriores
+    for i in range(-2, 3):
         vizinhos.append(ordem_fisica[(idx + i) % len(ordem_fisica)])
     return vizinhos
 
@@ -123,11 +126,11 @@ if numero is not None and timestamp != st.session_state.ultimo_timestamp:
     st.session_state.historico.append(numero)
     st.session_state.ultimo_timestamp = timestamp
 
-    # Treinamento
-    if len(st.session_state.historico) > JANELA + 1:
+    # 🔁 Treinamento com mínimo de dados
+    if len(st.session_state.historico) > JANELA + 20:
         treinar_modelo(st.session_state.historico)
 
-        # Previsão
+        # 🔮 Previsão
         probs = prever_proximos(st.session_state.historico)
         top_numeros = analisar_probabilidades(probs)
 
@@ -144,7 +147,7 @@ if numero is not None and timestamp != st.session_state.ultimo_timestamp:
         else:
             st.info("🔎 Aguardando oportunidade com alta probabilidade...")
 
-    # Verificar resultado anterior
+    # ✅ Verificar resultado anterior
     if st.session_state.entrada_atual:
         if numero in st.session_state.entrada_atual:
             st.success(f"✅ GREEN! Número {numero} estava na entrada.")
