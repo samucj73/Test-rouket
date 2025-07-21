@@ -126,8 +126,7 @@ elif len(historico) >= 13:
 # === ALERTA ===
 if entrada and estrategia:
     msg = f"📢 Estratégia: *{estrategia}*\n🎯 Entrada gerada: {sorted(list(entrada))}\n{mensagem_extra}"
-    
-🎯 Entrada: {sorted(entrada)}
+    msg = f"Estratégia: {estrategia}\nEntrada: {sorted(entrada)}\n{mensagem_extra}"p
 {mensagem_extra}"
     enviar_telegram(msg)
     st.success("✅ Entrada gerada e enviada ao Telegram!")
