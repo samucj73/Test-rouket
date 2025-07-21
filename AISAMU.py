@@ -136,3 +136,14 @@ try:
 
 except Exception as e:
     st.error(f"Erro ao acessar API: {e}")
+
+# === CONTADOR DE ACERTOS ===
+green_count = sum(1 for r in st.session_state.entradas_resultados if r["resultado"] == "✅ GREEN")
+total_count = len(st.session_state.entradas_resultados)
+taxa_acerto = (green_count / total_count * 100) if total_count > 0 else 0
+
+st.markdown("---")
+st.subheader("✅ Desempenho Geral")
+st.markdown(f"**Total de previsões:** {total_count}")
+st.markdown(f"**Total de GREENs:** {green_count}")
+st.markdown(f"**Taxa de acerto:** `{taxa_acerto:.1f}%`")
