@@ -1,60 +1,48 @@
 import streamlit as st
 import requests
-import os
 import joblib
+import os
 import random
 from collections import deque, Counter
 from streamlit_autorefresh import st_autorefresh
-import pandas as pd
-import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 
 # === CONFIGURAÇÕES ===
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 TELEGRAM_CHAT_ID = "-1002796136111"
-HISTORICO_FILE = "historico_ia.pkl"
-ENTRADAS_FILE = "entradas_ia.pkl"
-ACERTOS_FILE = "acertos_ia.pkl"
-ROULETTE_ORDER = [26,3,35,12,28,7,29,18,22,9,31,14,20,1,33,16,24,5,10,
-                  23,8,30,11,36,13,27,6,34,17,25,2,21,4,19,15,32,0]
+HISTORICO_PATH = "historico_ia.pkl"
+ENTRADA_ATUAL_PATH = "entrada_ia.pkl"
+MODELO_PATH = "modelo_rf.pkl"
+HISTORICO_LIMITE = 20
+PROBABILIDADE_MINIMA = 0.75
 
-# === FUNÇÕES ===
-def enviar_telegram(mensagem):
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    data = {"chat_id": TELEGRAM_CHAT_ID, "text": mensagem}
-    try:
-        requests.post(url, data=data, timeout=5)
-    except:
-        pass
-
-def carregar_objeto(nome, default):
-    if os.path.exists(nome):
-        return joblib.load(nome)
-    return default
-
-def salvar_objeto(nome, valor):
-    joblib.dump(valor, nome)
+# === VIZINHANÇA ORDEM FÍSICA ROLETA EUROPEIA ===
+ORDEM_FISICA = [0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27,
+                13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1,
+                20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26]
 
 def get_vizinhos(numero, n=2):
-    if numero not in ROULETTE_ORDER:
-        return []
-    idx = ROULETTE_ORDER.index(numero)
-    return [ROULETTE_ORDER[(idx + i) % len(ROULETTE_ORDER)] for i in range(-n, n+1)]
+    vizinhos = []
+    if numero not in ORDEM_FISICA:
+        return vizinhos
+    idx = ORDEM_FISICA.index(numero)
+    for i in range(-n, n+1):
+        vizinhos.append(ORDEM_FISICA[(idx + i) % len(ORDEM_FISICA)])
+    return vizinhos
 
-def extrair_terminais(numeros):
-    return [str(n)[-1] for n in numeros]
+def extrair_terminais(lista):
+    return [str(n)[-1] for n in lista]
 
 def treinar_modelo(historico):
     if len(historico) < 21:
         return None
 
-    X = []
-    y = []
-
-    for i in range(len(historico) - 1):
-        janela = list(historico)[i:i+20]
-        alvo = historico[i + 20]
+    X, y = [], []
+    historico_list = list(historico)
+    for i in range(len(historico_list) - 20):
+        janela = historico_list[i:i+20]
+        alvo = historico_list[i + 20]
         contagem = Counter(extrair_terminais(janela))
         vetor = [contagem.get(str(i), 0) for i in range(10)]
         X.append(vetor)
@@ -65,112 +53,99 @@ def treinar_modelo(historico):
     return modelo
 
 def prever_terminais(modelo, historico):
-    janela = list(historico)[-20:]
-    contagem = Counter(extrair_terminais(janela))
-    vetor = [contagem.get(str(i), 0) for i in range(10)]
-    probs = modelo.predict_proba([vetor])[0]
-    terminais_provaveis = [(str(i), p) for i, p in enumerate(probs) if p >= 0.75]
-    terminais_ordenados = sorted(terminais_provaveis, key=lambda x: x[1], reverse=True)
-    return [t[0] for t in terminais_ordenados[:2]]  # até 2 terminais com probabilidade alta
+    contagem = Counter(extrair_terminais(list(historico)[-20:]))
+    vetor = [[contagem.get(str(i), 0) for i in range(10)]]
+    probas = modelo.predict_proba(vetor)[0]
+    classes = modelo.classes_
+    previsoes = list(zip(classes, probas))
+    previsoes.sort(key=lambda x: x[1], reverse=True)
+    top2 = [p for p in previsoes if p[1] >= PROBABILIDADE_MINIMA][:2]
+    return top2
 
-# === INTERFACE STREAMLIT ===
-st.set_page_config(page_title="IA Estratégia Roleta", layout="centered")
-st.title("🎯 Estratégia IA - Roleta (Somente IA)")
+def gerar_entrada_com_vizinhos(terminais):
+    entrada = set()
+    for t in terminais:
+        nums = [n for n in range(37) if str(n)[-1] == t]
+        for n in nums:
+            entrada.update(get_vizinhos(n, n=2))
+    return list(entrada)
 
-st_autorefresh(interval=10 * 1000, key="refresh")
+def enviar_telegram(mensagem):
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensagem}
+    try:
+        requests.post(url, data=payload)
+    except:
+        pass
 
-# Carregamento
-historico = carregar_objeto(HISTORICO_FILE, deque(maxlen=300))
-entradas_realizadas = carregar_objeto(ENTRADAS_FILE, [])
-acertos = carregar_objeto(ACERTOS_FILE, 0)
+def carregar_objeto(path, padrao):
+    if os.path.exists(path):
+        return joblib.load(path)
+    return padrao
 
-if "ultimo_numero" not in st.session_state:
-    st.session_state.ultimo_numero = None
+def salvar_objeto(path, objeto):
+    joblib.dump(objeto, path)
 
-# === CAPTURA DO NÚMERO NOVO ===
-try:
-    response = requests.get(API_URL, timeout=10)
-    data = response.json()
-    numero = int(data["data"]["result"]["outcome"]["number"])
-    timestamp = data["data"]["settledAt"]
+def obter_ultimo_numero():
+    try:
+        resposta = requests.get(API_URL, timeout=10)
+        if resposta.status_code == 200:
+            dados = resposta.json()
+            numero = int(dados['data']['outcome']['number'])
+            timestamp = dados['data']['startedAt']
+            return numero, timestamp
+    except:
+        return None, None
+    return None, None
 
-    if numero != st.session_state.ultimo_numero:
-        historico.append(numero)
-        salvar_objeto(HISTORICO_FILE, historico)
-        st.session_state.ultimo_numero = numero
-        st.success(f"🎲 Último número: **{numero}** às {timestamp}")
+# === INICIALIZAÇÃO ===
+st.set_page_config(layout="centered", page_title="IA Roleta - Terminal", page_icon="🎯")
+st_autorefresh(interval=5000, key="auto")
 
-        entrada = []
-        estrategia = "IA Terminais + Vizinhos"
-        terminais_previstos = []
+st.title("🎯 IA Roleta - Terminais Inteligentes")
 
-        # === Lógica IA ===
+historico = carregar_objeto(HISTORICO_PATH, deque(maxlen=HISTORICO_LIMITE + 1))
+entrada_atual = carregar_objeto(ENTRADA_ATUAL_PATH, None)
+
+numero_atual, timestamp = obter_ultimo_numero()
+if numero_atual is not None:
+    if not hasattr(st.session_state, "ultimo_timestamp"):
+        st.session_state.ultimo_timestamp = ""
+
+    if timestamp != st.session_state.ultimo_timestamp:
+        st.session_state.ultimo_timestamp = timestamp
+        historico.append(numero_atual)
+        salvar_objeto(HISTORICO_PATH, historico)
+
         modelo = treinar_modelo(historico)
         if modelo:
+            salvar_objeto(MODELO_PATH, modelo)
             terminais_previstos = prever_terminais(modelo, historico)
+            if len(terminais_previstos) >= 1:
+                digitos = [t[0] for t in terminais_previstos]
+                entrada = gerar_entrada_com_vizinhos(digitos)
+                if entrada:
+                    entrada = list(set(entrada))
+                    random.shuffle(entrada)
+                    entrada = entrada[:10]
+                    salvar_objeto(ENTRADA_ATUAL_PATH, {"numeros": entrada, "entrada_timestamp": timestamp})
+                    enviar_telegram(f"🎯 Entrada IA Terminal ({digitos})\n🎰 Números: {entrada}")
+                    entrada_atual = {"numeros": entrada, "entrada_timestamp": timestamp}
 
-            if terminais_previstos:
-                base = []
-                for t in terminais_previstos:
-                    base.extend([n for n in range(37) if str(n).endswith(t)])
-
-                entrada_final = []
-                for n in base:
-                    entrada_final.extend(get_vizinhos(n, 2))
-
-                entrada_final = list(set(entrada_final))
-                random.shuffle(entrada_final)
-                entrada = entrada_final[:10]
-
-                # === Sinal gerado
-                msg = f"🤖 Estratégia IA Ativada\n🎯 Terminais previstos: {terminais_previstos}\n🎲 Entrada: {sorted(entrada)}"
-                enviar_telegram(msg)
-                st.markdown(f"**{estrategia}** — Entrada: `{sorted(entrada)}`")
-
-                green = numero in entrada
-                icone = "🟢 GREEN" if green else "🔴 RED"
-
-                entradas_realizadas.append({
-                    "estrategia": estrategia,
-                    "previstos": sorted(entrada),
-                    "sorteado": numero,
-                    "icone": icone
-                })
-
-                if green:
-                    acertos += 1
-                    salvar_objeto(ACERTOS_FILE, acertos)
-                    st.success("🎉 GREEN confirmado!")
-                    st.balloons()
-
-                salvar_objeto(ENTRADAS_FILE, entradas_realizadas)
-
+        # Verifica acerto do número anterior
+        if entrada_atual and entrada_atual.get("entrada_timestamp") != timestamp:
+            if numero_atual in entrada_atual["numeros"]:
+                enviar_telegram(f"✅ GREEN! Saiu {numero_atual}")
             else:
-                st.info("🧠 IA não encontrou terminais com confiança suficiente.")
-        else:
-            st.info("⏳ Aguardando histórico mínimo para treinar a IA.")
+                enviar_telegram(f"❌ RED! Saiu {numero_atual}")
+            salvar_objeto(ENTRADA_ATUAL_PATH, None)
 
-    else:
-        st.warning("⏳ Aguardando novo número...")
+# === INTERFACE STREAMLIT ===
+st.markdown("### Últimos números:")
+st.write(list(historico))
 
-except Exception as e:
-    st.error(f"Erro ao acessar API: {e}")
-
-# === TABELA DE HISTÓRICO ===
-if entradas_realizadas:
-    st.markdown("---")
-    st.subheader("📊 Histórico de Entradas")
-    dados = []
-    for i, entrada in enumerate(entradas_realizadas[::-1], 1):
-        dados.append({
-            "id": len(entradas_realizadas) - i + 1,
-            "estratégia": entrada["estrategia"],
-            "previstos": ", ".join(map(str, entrada["previstos"])),
-            "sorteado": entrada["sorteado"],
-            "ícone": entrada["icone"]
-        })
-    df = pd.DataFrame(dados)
-    st.dataframe(df, use_container_width=True)
-
-    st.success(f"✅ Total de GREENs: {acertos}")
-    st.error(f"❌ Total de REDs: {len(entradas_realizadas) - acertos}")
+if entrada_atual:
+    st.markdown("### 🎯 Entrada gerada:")
+    st.write(entrada_atual["numeros"])
+else:
+    st.info("⚠️ Aguardando nova entrada da IA...")
