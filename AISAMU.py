@@ -5,6 +5,7 @@ import joblib
 import random
 from collections import deque, Counter
 from streamlit_autorefresh import st_autorefresh
+import pandas as pd
 
 # === CONFIGURAÇÕES ===
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
@@ -12,6 +13,7 @@ TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 TELEGRAM_CHAT_ID = "-1002796136111"
 HISTORICO_FILE = "historico_sorteios.pkl"
 ACERTOS_FILE = "contador_acertos.pkl"
+ENTRADAS_FILE = "entradas_realizadas.pkl"
 ROULETTE_ORDER = [26,3,35,12,28,7,29,18,22,9,31,14,20,1,33,16,24,5,10,
                   23,8,30,11,36,13,27,6,34,17,25,2,21,4,19,15,32,0]
 
@@ -24,21 +26,13 @@ def enviar_telegram(mensagem):
     except:
         pass
 
-def carregar_historico():
-    if os.path.exists(HISTORICO_FILE):
-        return joblib.load(HISTORICO_FILE)
-    return deque(maxlen=300)
+def carregar_objeto(nome, default):
+    if os.path.exists(nome):
+        return joblib.load(nome)
+    return default
 
-def salvar_historico(historico):
-    joblib.dump(historico, HISTORICO_FILE)
-
-def carregar_acertos():
-    if os.path.exists(ACERTOS_FILE):
-        return joblib.load(ACERTOS_FILE)
-    return 0
-
-def salvar_acertos(valor):
-    joblib.dump(valor, ACERTOS_FILE)
+def salvar_objeto(nome, valor):
+    joblib.dump(valor, nome)
 
 def get_vizinhos(numero, n=2):
     if numero not in ROULETTE_ORDER:
@@ -51,19 +45,23 @@ st.set_page_config(page_title="IA Estratégia Roleta", layout="centered")
 st.title("🎯 Estratégia IA - Roleta")
 
 st_autorefresh(interval=10 * 1000, key="refresh")
-historico = carregar_historico()
-acertos = carregar_acertos()
+
+# Carregamento
+historico = carregar_objeto(HISTORICO_FILE, deque(maxlen=300))
+acertos = carregar_objeto(ACERTOS_FILE, 0)
+entradas_realizadas = carregar_objeto(ENTRADAS_FILE, [])
 
 # Estado do número anterior
 if "ultimo_numero" not in st.session_state:
     st.session_state.ultimo_numero = None
 
-# Seletor de estratégias
+# === SIDEBAR ===
 st.sidebar.header("🎛️ Estratégias Ativadas")
 usar_estrategia_1 = st.sidebar.checkbox("Terminais 2/6/9", value=True)
 usar_estrategia_2 = st.sidebar.checkbox("Gatilho 4/14/24/34", value=True)
 usar_estrategia_3 = st.sidebar.checkbox("Terminais Dominantes", value=True)
 st.sidebar.markdown(f"✅ **Total de GREENs:** `{acertos}`")
+st.sidebar.markdown(f"❌ **Total de REDs:** `{len(entradas_realizadas) - acertos}`")
 
 # === CAPTURA DA API ===
 try:
@@ -74,7 +72,7 @@ try:
 
     if numero != st.session_state.ultimo_numero:
         historico.append(numero)
-        salvar_historico(historico)
+        salvar_objeto(HISTORICO_FILE, historico)
         st.session_state.ultimo_numero = numero
         st.success(f"🎲 Último número: **{numero}** às {timestamp}")
 
@@ -82,7 +80,7 @@ try:
         estrategia = None
         mensagem_extra = ""
 
-        # Estratégia 1: Terminais 2, 6, 9
+        # Estratégia 1
         if usar_estrategia_1 and str(numero)[-1] in ["2", "6", "9"]:
             base = [31, 34]
             entrada = []
@@ -93,7 +91,7 @@ try:
             entrada = entrada[:10]
             estrategia = "Terminais 2/6/9"
 
-        # Estratégia 2: Número 4, 14, 24, 34 ativa 1 e 2
+        # Estratégia 2
         elif usar_estrategia_2 and numero in [4, 14, 24, 34]:
             candidatos = [1, 2]
             scores = {c: historico.count(c) for c in candidatos}
@@ -104,9 +102,9 @@ try:
             entrada = list(set(entrada))
             random.shuffle(entrada)
             entrada = entrada[:10]
-            estrategia = "Gatilho 4/14/24/34 (1 e 2)"
+            estrategia = "Gatilho 4/14/24/34"
 
-        # Estratégia 3: Terminais dominantes
+        # Estratégia 3
         elif usar_estrategia_3 and len(historico) >= 13:
             ultimos_12 = list(historico)[-13:-1]
             terminais = [str(n)[-1] for n in ultimos_12]
@@ -128,19 +126,29 @@ try:
                 else:
                     entrada = None
 
-        # === ALERTA E CHECAGEM DE GREEN ===
+        # === ENTRADA E CHECK ===
         if entrada and estrategia:
             msg = f"🎯 Estratégia: {estrategia}\n🎲 Entrada: {sorted(entrada)}\n{mensagem_extra}"
             enviar_telegram(msg)
-            st.success("✅ Entrada gerada e enviada ao Telegram!")
             st.markdown(f"**{estrategia}** — Entrada: `{sorted(entrada)}`")
 
-            # Verifica se o número atual está na entrada anterior (GREEN)
-            if numero in entrada:
+            green = numero in entrada
+            icone = "🟢 GREEN" if green else "🔴 RED"
+
+            entradas_realizadas.append({
+                "estrategia": estrategia,
+                "previstos": sorted(entrada),
+                "sorteado": numero,
+                "icone": icone
+            })
+
+            if green:
                 acertos += 1
-                salvar_acertos(acertos)
-                st.balloons()
+                salvar_objeto(ACERTOS_FILE, acertos)
                 st.success("🎉 GREEN confirmado!")
+                st.balloons()
+
+            salvar_objeto(ENTRADAS_FILE, entradas_realizadas)
         else:
             st.info("Aguardando condições para gerar nova entrada.")
     else:
@@ -148,3 +156,22 @@ try:
 
 except Exception as e:
     st.error(f"Erro ao acessar API: {e}")
+
+# === TABELA DE HISTÓRICO ===
+if entradas_realizadas:
+    st.markdown("---")
+    st.subheader("📊 Histórico de Entradas")
+    dados = []
+    for i, entrada in enumerate(entradas_realizadas[::-1], 1):
+        dados.append({
+            "id": len(entradas_realizadas) - i + 1,
+            "estratégia": entrada["estrategia"],
+            "previstos": ", ".join(map(str, entrada["previstos"])),
+            "sorteado": entrada["sorteado"],
+            "ícone": entrada["icone"]
+        })
+    df = pd.DataFrame(dados)
+    st.dataframe(df, use_container_width=True)
+
+    st.success(f"✅ Total de GREENs: {acertos}")
+    st.error(f"❌ Total de REDs: {len(entradas_realizadas) - acertos}")
