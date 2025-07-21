@@ -15,7 +15,7 @@ MODELO_PATH = "modelo_grandes_numeros.pkl"
 MAX_HISTORICO = 300
 FREQ_ESPERADA = 1 / 37
 N_PREDITOS = 5
-PREVER_CADA = 13  # Gera nova previsão a cada 2 sorteios
+PREVER_CADA = 1  # Gera nova previsão a cada 2 sorteios
 
 # === TELEGRAM CONFIG ===
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
