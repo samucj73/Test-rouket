@@ -75,9 +75,7 @@ try:
 
 
 
-st.markdown(f"🎲 Último número: **{numero}**")
-st.markdown(f"🕒 Timestamp: `{timestamp}`")
-st.markdown(f"📋 Histórico ({len(historico)}): {list(historico)}")
+
 
 # === ESCOLHA DE ESTRATÉGIA DINÂMICA ===
 entrada = None
