@@ -123,13 +123,11 @@ elif len(historico) >= 13:
         else:
             entrada = None
 
-# === ALERTA ===
+# # === ALERTA ===
 if entrada and estrategia:
-    msg = f"📢 Estratégia: *{estrategia}*
-🎯 Entrada: {sorted(entrada)}
-{mensagem_extra}"
+    msg = f"Estratégia: {estrategia}\nEntrada: {sorted(entrada)}\n{mensagem_extra}"
     enviar_telegram(msg)
     st.success("✅ Entrada gerada e enviada ao Telegram!")
     st.markdown(f"**{estrategia}** — Entrada enviada: `{sorted(entrada)}`")
 else:
-    st.info("🔎 Aguardando condições para gerar nova entrada.")
+    st.info("Aguardando condições para gerar nova entrada.")
