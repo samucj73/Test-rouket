@@ -112,7 +112,7 @@ def carregar_ou_treinar_modelo(historico):
         )
 
     try:
-        modelo.predict([[0] * 8])
+        modelo.predict([ [0] * modelo.n_features_in_ ])
     except NotFittedError:
         if len(historico) >= 13:
             df = gerar_dataset_para_treinamento(historico)
