@@ -14,8 +14,8 @@ API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremeli
 MODELO_PATH = "modelo_grandes_numeros.pkl"
 MAX_HISTORICO = 300
 FREQ_ESPERADA = 1 / 37
-N_PREDITOS = 5
-PREVER_CADA = 3  # Gera nova previsão a cada 2 sorteios
+N_PREDITOS = 7
+PREVER_CADA = 2  # Gera nova previsão a cada 2 sorteios
 
 # === TELEGRAM CONFIG ===
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
