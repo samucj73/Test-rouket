@@ -43,8 +43,15 @@ st.title("🎯 Estratégia IA - Roleta")
 st_autorefresh(interval=10 * 1000, key="refresh")
 historico = carregar_historico()
 
+# === ESTADO GLOBAL ===
 if "ultimo_numero" not in st.session_state:
     st.session_state.ultimo_numero = None
+if "entrada_ativa" not in st.session_state:
+    st.session_state.entrada_ativa = None
+if "estrategia_ativa" not in st.session_state:
+    st.session_state.estrategia_ativa = None
+if "timestamp_ativo" not in st.session_state:
+    st.session_state.timestamp_ativo = None
 
 # === CAPTURA DA API ===
 try:
@@ -107,13 +114,25 @@ try:
         if entrada and estrategia:
             msg = f"Estratégia: {estrategia}\nEntrada: {sorted(entrada)}\n{mensagem_extra}"
             enviar_telegram(msg)
-            st.success("✅ Entrada gerada e enviada ao Telegram!")
+            st.success("✅ Nova entrada gerada e enviada ao Telegram!")
             st.markdown(f"**{estrategia}** — Entrada: `{sorted(entrada)}`")
+
+            # Armazena como entrada ativa
+            st.session_state.entrada_ativa = entrada
+            st.session_state.estrategia_ativa = estrategia
+            st.session_state.timestamp_ativo = timestamp
         else:
-            st.info("Aguardando condições para gerar nova entrada.")
+            # Limpa a entrada ativa
+            st.session_state.entrada_ativa = None
+            st.session_state.estrategia_ativa = None
+            st.session_state.timestamp_ativo = None
 
     else:
         st.warning("⏳ Aguardando novo número...")
+
+        # Exibe entrada ativa
+        if st.session_state.entrada_ativa and st.session_state.estrategia_ativa:
+            st.info(f"📌 Entrada ativa (ainda válida):\n**{st.session_state.estrategia_ativa}** — Entrada: `{sorted(st.session_state.entrada_ativa)}`\n(Sorteio em: {st.session_state.timestamp_ativo})")
 
 except Exception as e:
     st.error(f"Erro ao acessar API: {e}")
