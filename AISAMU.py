@@ -100,8 +100,7 @@ try:
                     st.session_state.red_count += 1
                 st.session_state.entrada_ativa = None
                 st.session_state.aguardando_resultado = False
-
-            # === Verifica ativação da Estratégia 3 (terminais dominantes) ===
+                
 # === ESCOLHA DE ESTRATÉGIA DINÂMICA ===
 entrada = None
 estrategia = None
