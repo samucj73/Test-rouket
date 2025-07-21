@@ -121,7 +121,7 @@ if numero_atual is not None:
         if modelo:
             salvar_objeto(MODELO_PATH, modelo)
             terminais_previstos = prever_terminais(modelo, historico)
-          st.write("Probabilidades previstas (terminal, prob):", terminais_previstos)
+             st.write("Probabilidades previstas (terminal, prob):", terminais_previstos)
           
             if len(terminais_previstos) >= 1:
                 digitos = [t[0] for t in terminais_previstos]
