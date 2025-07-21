@@ -60,23 +60,19 @@ ultimo_timestamp = st.session_state.get("ultimo_timestamp")
 # === CAPTURA DA API ===
 try:
     response = requests.get(URL_API)
-    response.raise_for_status()
-    dados = response.json()
-    
-    # Debug: veja a estrutura completa da resposta (comente depois)
-    st.json(dados)
-    
-    # Extrai o número sorteado
-    numero = dados['data']['result']['outcome']['number']
-    # Extrai o timestamp do início do sorteio
-    timestamp = dados['data']['startedAt']
+    data = response.json()
 
-except KeyError as e:
-    st.error(f"Erro ao acessar API: campo ausente {e}")
-    st.stop()
-except Exception as e:
-    st.error(f"Erro inesperado ao acessar API: {e}")
-    st.stop()
+    resultado = data.get("data", {}).get("result", {}).get("outcome")
+    if resultado and "number" in resultado:
+        numero = resultado["number"]
+        timestamp = data["data"].get("settledAt", "")
+
+        if numero != st.session_state.ultimo_numero:
+            st.session_state.historico.append(numero)
+            st.session_state.timestamps.append(timestamp)
+            st.session_state.ultimo_numero = numero
+            st.success(f"🎲 Último número: **{numero}** às {timestamp}")
+
 
 
 st.markdown(f"🎲 Último número: **{numero}**")
