@@ -102,9 +102,10 @@ try:
                 st.session_state.aguardando_resultado = False
                 
 # === ESCOLHA DE ESTRATÉGIA DINÂMICA ===
-entrada = None
-estrategia = None
-mensagem_extra = ""
+try:
+    entrada = None
+    estrategia = None
+    mensagem_extra = ""
 
 # Estratégia 3: Terminais Dominantes
 dominantes = detectar_terminais_dominantes(st.session_state.historico)
