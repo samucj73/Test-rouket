@@ -102,63 +102,52 @@ try:
                 st.session_state.aguardando_resultado = False
 
             # === Verifica ativação da Estratégia 3 (terminais dominantes) ===
-            dominantes = detectar_terminais_dominantes(st.session_state.historico)
-            if dominantes:
-                entrada = gerar_entrada_por_terminais(dominantes)
-                if numero in st.session_state.historico or numero in entrada:
-                    # Gatilho detectado → ativa entrada
-                    st.session_state.entrada_ativa = entrada
-                    st.session_state.aguardando_resultado = True
-                    st.session_state.entrada_timestamp = timestamp
-                    st.session_state.gatilho_detectado = True
-                    enviar_telegram(
-                        f"🚨 NOVA ENTRADA DETECTADA\n🎯 Estratégia: Terminais Dominantes\n"
-                        f"🔢 Terminais: {dominantes}\n🔢 Entrada: {entrada}\n"
-                        f"🕒 Ativada após número: {numero} ({timestamp})\n"
-                        "🎰 Aguardando próximo número para validar (GREEN/RED)"
-                    )
-                    st.success("🚨 Entrada gerada (Terminais Dominantes)")
+# === ESCOLHA DE ESTRATÉGIA DINÂMICA ===
+entrada = None
+estrategia = None
+mensagem_extra = ""
 
-            # === Estratégia 1: Terminais 2 / 6 / 9 ===
-            elif numero % 10 in [2, 6, 9]:
-                entrada = set()
-                for base in [31, 34]:
-                    entrada.update(get_vizinhos(base, 5))
-                entrada_ordenada = sorted(entrada)
-                st.session_state.entrada_ativa = entrada_ordenada
-                st.session_state.aguardando_resultado = True
-                st.session_state.entrada_timestamp = timestamp
-                enviar_telegram(
-                    f"🚨 NOVA ENTRADA DETECTADA\n🎯 Estratégia: Terminais 2/6/9\n"
-                    f"🔢 Entrada: {entrada_ordenada}\n"
-                    f"🕒 Ativada após número: {numero} ({timestamp})\n"
-                    "🎰 Aguardando próximo número para validar (GREEN/RED)"
-                )
-                st.success("🚨 Entrada gerada (2/6/9)")
+# Estratégia 3: Terminais Dominantes
+dominantes = detectar_terminais_dominantes(st.session_state.historico)
+if dominantes:
+    temp_entrada = gerar_entrada_por_terminais(dominantes)
+    if numero in list(st.session_state.historico)[-12:] or numero in temp_entrada:
+        entrada = temp_entrada
+        estrategia = "Terminais Dominantes"
+        mensagem_extra = f"🔢 Terminais: {dominantes}"
 
-            # === Estratégia 2: Números 4 / 14 / 24 / 34 ===
-            elif numero in [4, 14, 24, 34]:
-                candidatos = set()
-                for base in [1, 2]:
-                    candidatos.update(get_vizinhos(base, 5))
-                freq = {n: list(st.session_state.historico).count(n) for n in candidatos}
-                entrada = sorted(freq, key=freq.get, reverse=True)[:10]
-                st.session_state.entrada_ativa = entrada
-                st.session_state.aguardando_resultado = True
-                st.session_state.entrada_timestamp = timestamp
-                enviar_telegram(
-                    f"🚨 NOVA ENTRADA DETECTADA\n🎯 Estratégia: Após 4/14/24/34\n"
-                    "📊 Seleção baseada na frequência recente\n"
-                    f"🔢 Entrada: {entrada}\n"
-                    f"🕒 Ativada após número: {numero} ({timestamp})\n"
-                    "🎰 Aguardando próximo número para validar (GREEN/RED)"
-                )
-                st.success("🚨 Entrada gerada (4/14/24/34)")
+# Estratégia 1: Terminais 2 / 6 / 9
+elif numero % 10 in [2, 6, 9]:
+    entrada = set()
+    for base in [31, 34]:
+        entrada.update(get_vizinhos(base, 5))
+    entrada = sorted(entrada)
+    estrategia = "Terminais 2/6/9"
 
-    else:
-        st.warning("⚠️ Resultado ainda não disponível.")
-except Exception as e:
-    st.error(f"Erro ao acessar API: {e}")
+# Estratégia 2: Números 4 / 14 / 24 / 34
+elif numero in [4, 14, 24, 34]:
+    candidatos = set()
+    for base in [1, 2]:
+        candidatos.update(get_vizinhos(base, 5))
+    freq = {n: list(st.session_state.historico).count(n) for n in candidatos}
+    entrada = sorted(freq, key=freq.get, reverse=True)[:10]
+    estrategia = "Após 4/14/24/34"
+    mensagem_extra = "📊 Seleção baseada na frequência recente"
+
+# APLICAÇÃO FINAL DA ENTRADA
+if entrada:
+    st.session_state.entrada_ativa = entrada
+    st.session_state.aguardando_resultado = True
+    st.session_state.entrada_timestamp = timestamp
+    enviar_telegram(
+        f"🚨 NOVA ENTRADA DETECTADA\n🎯 Estratégia: {estrategia}\n"
+        f"{mensagem_extra}\n"
+        f"🔢 Entrada: {entrada}\n"
+        f"🕒 Ativada após número: {numero} ({timestamp})\n"
+        "🎰 Aguardando próximo número para validar (GREEN/RED)"
+    )
+    st.success(f"🚨 Entrada gerada ({estrategia})")
+            
 
 # === INTERFACE ===
 st.markdown(f"""
