@@ -88,8 +88,8 @@ def calcular_features(historico):
 
 def gerar_dataset_para_treinamento(historico):
     dataset = []
-    for i in range(30, len(historico) - 1):
-        jan = list(historico)[i - 30:i]
+    for i in range(12, len(historico) - 1):
+        jan = list(historico)[i - 12:i]
         features = calcular_features(jan)
         proximo = historico[i]
         for _, row in features.iterrows():
@@ -114,7 +114,7 @@ def carregar_ou_treinar_modelo(historico):
     try:
         modelo.predict([[0] * 8])
     except NotFittedError:
-        if len(historico) >= 130:
+        if len(historico) >= 13:
             df = gerar_dataset_para_treinamento(historico)
             X = df.drop(columns=["alvo", "numero"])
             y = df["alvo"]
@@ -144,7 +144,7 @@ if numero is not None and timestamp != st.session_state.ultimo_timestamp:
 nova_previsao = False
 top5 = pd.DataFrame()
 
-if st.session_state.contador_sorteios >= PREVER_CADA and len(st.session_state.historico) >= 130:
+if st.session_state.contador_sorteios >= PREVER_CADA and len(st.session_state.historico) >= 13:
     modelo = carregar_ou_treinar_modelo(st.session_state.historico)
     features_atuais = calcular_features(st.session_state.historico)
     X_atual = features_atuais.drop(columns=["numero"])
