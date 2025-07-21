@@ -12,6 +12,7 @@ import numpy as np
 # === CONFIGURAÇÕES ===
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 MODELO_PATH = "modelo_grandes_numeros.pkl"
+FEATURES_PATH = "features_treinadas.pkl"
 MAX_HISTORICO = 300
 FREQ_ESPERADA = 1 / 37
 N_PREDITOS = 6
@@ -120,6 +121,7 @@ def carregar_ou_treinar_modelo(historico):
             y = df["alvo"]
             modelo.fit(X, y)
             joblib.dump(modelo, MODELO_PATH)
+            joblib.dump(X.columns.tolist(), FEATURES_PATH)  # ⬅️ Salva as features usadas no treino
 
     return modelo
 
@@ -148,6 +150,15 @@ if st.session_state.contador_sorteios >= PREVER_CADA and len(st.session_state.hi
     modelo = carregar_ou_treinar_modelo(st.session_state.historico)
     features_atuais = calcular_features(st.session_state.historico)
     X_atual = features_atuais.drop(columns=["numero"])
+
+    # Garantir que as features estejam na ordem e formato corretos
+    try:
+        feature_names = joblib.load(FEATURES_PATH)
+        X_atual = X_atual[feature_names]
+    except Exception as e:
+        st.error(f"Erro ao alinhar features com modelo: {e}")
+        st.stop()
+
     probs = modelo.predict_proba(X_atual)[:, 1]
     features_atuais["probabilidade"] = probs
     top5 = features_atuais.sort_values(by="probabilidade", ascending=False).head(N_PREDITOS)
