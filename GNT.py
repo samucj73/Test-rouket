@@ -132,7 +132,7 @@ if numero is not None and timestamp != st.session_state.ultimo_timestamp:
 nova_previsao = False
 top5 = pd.DataFrame()
 
-if st.session_state.contador_sorteios >= PREVER_CADA and len(st.session_state.historico) >= 37:
+if st.session_state.contador_sorteios >= PREVER_CADA and len(st.session_state.historico) >= 60:
     modelo = carregar_ou_treinar_modelo(st.session_state.historico)
     features_atuais = calcular_features(st.session_state.historico)
     X_atual = features_atuais[["numero", "frequencia", "erro", "ultima_ocorrencia"]]
