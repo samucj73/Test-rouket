@@ -15,7 +15,7 @@ MODELO_PATH = "modelo_grandes_numeros.pkl"
 MAX_HISTORICO = 300
 FREQ_ESPERADA = 1 / 37
 N_PREDITOS = 10
-PREVER_CADA = 1  # Gera nova previsão a cada 2 sorteios
+PREVER_CADA = 1
 
 # === TELEGRAM CONFIG ===
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
@@ -45,7 +45,7 @@ if 'aguardando_resultado' not in st.session_state:
 if 'entrada_ativa' not in st.session_state:
     st.session_state.entrada_ativa = []
 
-# === API CORRIGIDA ===
+# === API ===
 def obter_ultimo_numero():
     try:
         response = requests.get(API_URL, timeout=5)
@@ -54,12 +54,9 @@ def obter_ultimo_numero():
         resultado = data.get("result", {}).get("outcome", {})
         numero = resultado.get("number")
         timestamp = data.get("settledAt")
-
         if numero is None or timestamp is None:
             return None, None
-
         return int(numero), timestamp
-
     except Exception as e:
         st.error(f"Erro ao acessar API: {e}")
         return None, None
@@ -76,8 +73,18 @@ def calcular_features(historico):
             total - list(historico)[::-1].index(n)
             if n in historico else MAX_HISTORICO
         )
-        features.append([n, freq, erro_convergencia, ultima_ocorrencia])
-    return pd.DataFrame(features, columns=["numero", "frequencia", "erro", "ultima_ocorrencia"])
+        par = 1 if n % 2 == 0 else 0
+        duzia = 0 if n == 0 else (n - 1) // 12 + 1
+        coluna = 0 if n == 0 else ((n - 1) % 3) + 1
+        grupo_mod3 = n % 3
+
+        features.append([
+            n, freq, erro_convergencia, ultima_ocorrencia, par, duzia, coluna, grupo_mod3
+        ])
+
+    return pd.DataFrame(features, columns=[
+        "numero", "frequencia", "erro", "ultima_ocorrencia", "par", "duzia", "coluna", "mod3"
+    ])
 
 def gerar_dataset_para_treinamento(historico):
     dataset = []
@@ -93,17 +100,23 @@ def gerar_dataset_para_treinamento(historico):
 
 # === MODELO ===
 def carregar_ou_treinar_modelo(historico):
+    modelo = None
     if os.path.exists(MODELO_PATH):
         modelo = joblib.load(MODELO_PATH)
     else:
-        modelo = RandomForestClassifier(n_estimators=200, random_state=42)
+        modelo = RandomForestClassifier(
+            n_estimators=200,
+            random_state=42,
+            class_weight='balanced',
+            warm_start=True
+        )
 
     try:
-        modelo.predict([[0, 0.027, 0, 50]])
+        modelo.predict([[0] * 8])
     except NotFittedError:
         if len(historico) >= 130:
             df = gerar_dataset_para_treinamento(historico)
-            X = df[["numero", "frequencia", "erro", "ultima_ocorrencia"]]
+            X = df.drop(columns=["alvo", "numero"])
             y = df["alvo"]
             modelo.fit(X, y)
             joblib.dump(modelo, MODELO_PATH)
@@ -117,7 +130,6 @@ if numero is not None and timestamp != st.session_state.ultimo_timestamp:
     st.session_state.ultimo_timestamp = timestamp
     st.session_state.contador_sorteios += 1
 
-    # Verificar GREEN/RED após previsão
     if st.session_state.aguardando_resultado and st.session_state.entrada_ativa:
         acerto = "GREEN" if numero in st.session_state.entrada_ativa else "RED"
         st.session_state.registro_previsoes.append({
@@ -128,14 +140,14 @@ if numero is not None and timestamp != st.session_state.ultimo_timestamp:
         st.session_state.aguardando_resultado = False
         st.session_state.entrada_ativa = []
 
-# === PREVISÃO A CADA 2 SORTEIOS ===
+# === PREVISÃO A CADA N SORTEIOS ===
 nova_previsao = False
 top5 = pd.DataFrame()
 
 if st.session_state.contador_sorteios >= PREVER_CADA and len(st.session_state.historico) >= 130:
     modelo = carregar_ou_treinar_modelo(st.session_state.historico)
     features_atuais = calcular_features(st.session_state.historico)
-    X_atual = features_atuais[["numero", "frequencia", "erro", "ultima_ocorrencia"]]
+    X_atual = features_atuais.drop(columns=["numero"])
     probs = modelo.predict_proba(X_atual)[:, 1]
     features_atuais["probabilidade"] = probs
     top5 = features_atuais.sort_values(by="probabilidade", ascending=False).head(N_PREDITOS)
@@ -148,7 +160,6 @@ if st.session_state.contador_sorteios >= PREVER_CADA and len(st.session_state.hi
         mensagem += "\n".join([f"➡️ Número `{n}`" for n in novos_numeros])
         enviar_telegram(mensagem)
 
-    # Salva entrada e ativa verificação posterior
     st.session_state.entrada_ativa = novos_numeros
     st.session_state.aguardando_resultado = True
     st.session_state.contador_sorteios = 0
@@ -158,7 +169,6 @@ st.title("🎲 IA Roleta - Teoria dos Grandes Números (com Telegram + Acertos)"
 st.write(f"📍 Último número capturado: `{numero}` — Total: `{len(st.session_state.historico)}`")
 st.write(f"📡 Nova previsão gerada a cada `{PREVER_CADA}` sorteios")
 
-# Exibir previsão atual
 if not top5.empty:
     st.subheader("🔮 Números previstos:")
     for i, row in top5.iterrows():
@@ -185,6 +195,22 @@ if st.session_state.registro_previsoes:
     st.error(f"❌ Total de REDs: {total_red}")
 else:
     st.info("Nenhuma previsão concluída ainda.")
+
+# === IMPORTÂNCIA DAS FEATURES ===
+if len(st.session_state.historico) >= 130:
+    modelo = carregar_ou_treinar_modelo(st.session_state.historico)
+    df = gerar_dataset_para_treinamento(st.session_state.historico)
+    X = df.drop(columns=["alvo", "numero"])
+    try:
+        importancias = modelo.feature_importances_
+        st.subheader("🧠 Importância das Features no Modelo")
+        importance_df = pd.DataFrame({
+            "Feature": X.columns,
+            "Importância": importancias
+        }).sort_values(by="Importância", ascending=False)
+        st.bar_chart(importance_df.set_index("Feature"))
+    except Exception as e:
+        st.warning(f"Não foi possível exibir a importância das features: {e}")
 
 # === REFRESH ===
 st_autorefresh(interval=5000, key="refresh")
