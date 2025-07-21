@@ -6,14 +6,16 @@ import random
 from collections import deque, Counter
 from streamlit_autorefresh import st_autorefresh
 import pandas as pd
+import numpy as np
+from sklearn.ensemble import RandomForestClassifier
 
 # === CONFIGURAÇÕES ===
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 TELEGRAM_CHAT_ID = "-1002796136111"
-HISTORICO_FILE = "historico_sorteios.pkl"
-ACERTOS_FILE = "contador_acertos.pkl"
-ENTRADAS_FILE = "entradas_realizadas.pkl"
+HISTORICO_FILE = "historico_ia.pkl"
+ENTRADAS_FILE = "entradas_ia.pkl"
+ACERTOS_FILE = "acertos_ia.pkl"
 ROULETTE_ORDER = [26,3,35,12,28,7,29,18,22,9,31,14,20,1,33,16,24,5,10,
                   23,8,30,11,36,13,27,6,34,17,25,2,21,4,19,15,32,0]
 
@@ -40,30 +42,52 @@ def get_vizinhos(numero, n=2):
     idx = ROULETTE_ORDER.index(numero)
     return [ROULETTE_ORDER[(idx + i) % len(ROULETTE_ORDER)] for i in range(-n, n+1)]
 
+def extrair_terminais(numeros):
+    return [str(n)[-1] for n in numeros]
+
+def treinar_modelo(historico):
+    if len(historico) < 21:
+        return None
+
+    X = []
+    y = []
+
+    for i in range(len(historico) - 1):
+        janela = list(historico)[i:i+20]
+        alvo = historico[i + 20]
+        contagem = Counter(extrair_terminais(janela))
+        vetor = [contagem.get(str(i), 0) for i in range(10)]
+        X.append(vetor)
+        y.append(str(alvo)[-1])  # terminal como string
+
+    modelo = RandomForestClassifier(n_estimators=100, random_state=42)
+    modelo.fit(X, y)
+    return modelo
+
+def prever_terminais(modelo, historico):
+    janela = list(historico)[-20:]
+    contagem = Counter(extrair_terminais(janela))
+    vetor = [contagem.get(str(i), 0) for i in range(10)]
+    probs = modelo.predict_proba([vetor])[0]
+    terminais_provaveis = [(str(i), p) for i, p in enumerate(probs) if p >= 0.75]
+    terminais_ordenados = sorted(terminais_provaveis, key=lambda x: x[1], reverse=True)
+    return [t[0] for t in terminais_ordenados[:2]]  # até 2 terminais com probabilidade alta
+
 # === INTERFACE STREAMLIT ===
 st.set_page_config(page_title="IA Estratégia Roleta", layout="centered")
-st.title("🎯 Estratégia IA - Roleta")
+st.title("🎯 Estratégia IA - Roleta (Somente IA)")
 
 st_autorefresh(interval=10 * 1000, key="refresh")
 
 # Carregamento
 historico = carregar_objeto(HISTORICO_FILE, deque(maxlen=300))
-acertos = carregar_objeto(ACERTOS_FILE, 0)
 entradas_realizadas = carregar_objeto(ENTRADAS_FILE, [])
+acertos = carregar_objeto(ACERTOS_FILE, 0)
 
-# Estado do número anterior
 if "ultimo_numero" not in st.session_state:
     st.session_state.ultimo_numero = None
 
-# === SIDEBAR ===
-st.sidebar.header("🎛️ Estratégias Ativadas")
-usar_estrategia_1 = st.sidebar.checkbox("Terminais 2/6/9", value=True)
-usar_estrategia_2 = st.sidebar.checkbox("Gatilho 4/14/24/34", value=True)
-usar_estrategia_3 = st.sidebar.checkbox("Terminais Dominantes", value=True)
-st.sidebar.markdown(f"✅ **Total de GREENs:** `{acertos}`")
-st.sidebar.markdown(f"❌ **Total de REDs:** `{len(entradas_realizadas) - acertos}`")
-
-# === CAPTURA DA API ===
+# === CAPTURA DO NÚMERO NOVO ===
 try:
     response = requests.get(API_URL, timeout=10)
     data = response.json()
@@ -76,81 +100,56 @@ try:
         st.session_state.ultimo_numero = numero
         st.success(f"🎲 Último número: **{numero}** às {timestamp}")
 
-        entrada = None
-        estrategia = None
-        mensagem_extra = ""
+        entrada = []
+        estrategia = "IA Terminais + Vizinhos"
+        terminais_previstos = []
 
-        # Estratégia 1
-        if usar_estrategia_1 and str(numero)[-1] in ["2", "6", "9"]:
-            base = [31, 34]
-            entrada = []
-            for b in base:
-                entrada.extend(get_vizinhos(b, 5))
-            entrada = list(set(entrada))
-            random.shuffle(entrada)
-            entrada = entrada[:10]
-            estrategia = "Terminais 2/6/9"
+        # === Lógica IA ===
+        modelo = treinar_modelo(historico)
+        if modelo:
+            terminais_previstos = prever_terminais(modelo, historico)
 
-        # Estratégia 2
-        elif usar_estrategia_2 and numero in [4, 14, 24, 34]:
-            candidatos = [1, 2]
-            scores = {c: historico.count(c) for c in candidatos}
-            escolhidos = sorted(scores, key=scores.get, reverse=True)
-            entrada = []
-            for e in escolhidos:
-                entrada.extend(get_vizinhos(e, 5))
-            entrada = list(set(entrada))
-            random.shuffle(entrada)
-            entrada = entrada[:10]
-            estrategia = "Gatilho 4/14/24/34"
-
-        # Estratégia 3
-        elif usar_estrategia_3 and len(historico) >= 13:
-            ultimos_12 = list(historico)[-13:-1]
-            terminais = [str(n)[-1] for n in ultimos_12]
-            contagem = Counter(terminais)
-            dominantes = [int(t) for t, c in contagem.items() if c > 2]
-            if dominantes:
+            if terminais_previstos:
                 base = []
-                for d in dominantes:
-                    base.extend([n for n in range(37) if str(n).endswith(str(d))])
-                entrada = []
+                for t in terminais_previstos:
+                    base.extend([n for n in range(37) if str(n).endswith(t)])
+
+                entrada_final = []
                 for n in base:
-                    entrada.extend(get_vizinhos(n, 2))
-                entrada = list(set(entrada))
-                random.shuffle(entrada)
-                entrada = entrada[:10]
-                if numero in ultimos_12 or numero in entrada:
-                    estrategia = "Terminais dominantes"
-                    mensagem_extra = "(Gatilho validado)"
-                else:
-                    entrada = None
+                    entrada_final.extend(get_vizinhos(n, 2))
 
-        # === ENTRADA E CHECK ===
-        if entrada and estrategia:
-            msg = f"🎯 Estratégia: {estrategia}\n🎲 Entrada: {sorted(entrada)}\n{mensagem_extra}"
-            enviar_telegram(msg)
-            st.markdown(f"**{estrategia}** — Entrada: `{sorted(entrada)}`")
+                entrada_final = list(set(entrada_final))
+                random.shuffle(entrada_final)
+                entrada = entrada_final[:10]
 
-            green = numero in entrada
-            icone = "🟢 GREEN" if green else "🔴 RED"
+                # === Sinal gerado
+                msg = f"🤖 Estratégia IA Ativada\n🎯 Terminais previstos: {terminais_previstos}\n🎲 Entrada: {sorted(entrada)}"
+                enviar_telegram(msg)
+                st.markdown(f"**{estrategia}** — Entrada: `{sorted(entrada)}`")
 
-            entradas_realizadas.append({
-                "estrategia": estrategia,
-                "previstos": sorted(entrada),
-                "sorteado": numero,
-                "icone": icone
-            })
+                green = numero in entrada
+                icone = "🟢 GREEN" if green else "🔴 RED"
 
-            if green:
-                acertos += 1
-                salvar_objeto(ACERTOS_FILE, acertos)
-                st.success("🎉 GREEN confirmado!")
-                st.balloons()
+                entradas_realizadas.append({
+                    "estrategia": estrategia,
+                    "previstos": sorted(entrada),
+                    "sorteado": numero,
+                    "icone": icone
+                })
 
-            salvar_objeto(ENTRADAS_FILE, entradas_realizadas)
+                if green:
+                    acertos += 1
+                    salvar_objeto(ACERTOS_FILE, acertos)
+                    st.success("🎉 GREEN confirmado!")
+                    st.balloons()
+
+                salvar_objeto(ENTRADAS_FILE, entradas_realizadas)
+
+            else:
+                st.info("🧠 IA não encontrou terminais com confiança suficiente.")
         else:
-            st.info("Aguardando condições para gerar nova entrada.")
+            st.info("⏳ Aguardando histórico mínimo para treinar a IA.")
+
     else:
         st.warning("⏳ Aguardando novo número...")
 
