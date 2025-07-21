@@ -14,7 +14,7 @@ API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremeli
 MODELO_PATH = "modelo_grandes_numeros.pkl"
 MAX_HISTORICO = 300
 FREQ_ESPERADA = 1 / 37
-N_PREDITOS = 10
+N_PREDITOS = 6
 PREVER_CADA = 1
 
 # === TELEGRAM CONFIG ===
@@ -48,7 +48,7 @@ if 'entrada_ativa' not in st.session_state:
 # === API ===
 def obter_ultimo_numero():
     try:
-        response = requests.get(API_URL, timeout=5)
+        response = requests.get(API_URL, timeout=3)
         response.raise_for_status()
         data = response.json().get("data", {})
         resultado = data.get("result", {}).get("outcome", {})
