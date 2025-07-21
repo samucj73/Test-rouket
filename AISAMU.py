@@ -50,6 +50,19 @@ def get_vizinhos(numero, n=2):
 st.set_page_config(page_title="IA Estratégia Roleta", layout="centered")
 st.title("🎯 Estratégia IA - Roleta")
 
+# === SELETOR DE ESTRATÉGIAS ===
+estrategias_disponiveis = [
+    "Terminais 2/6/9",
+    "Gatilho 4/14/24/34 (1 e 2)",
+    "Terminais dominantes"
+]
+
+estrategias_ativas = st.multiselect(
+    "🎯 Selecione as estratégias que deseja ativar:",
+    estrategias_disponiveis,
+    default=estrategias_disponiveis  # todas ativas por padrão
+)
+
 st_autorefresh(interval=10 * 1000, key="refresh")
 historico = carregar_historico()
 
@@ -73,7 +86,7 @@ try:
     timestamp = data["data"]["settledAt"]
 
     if numero != st.session_state.ultimo_numero:
-        # Avalia a entrada anterior
+        # Avaliar acerto da entrada anterior
         if st.session_state.entrada_ativa and st.session_state.estrategia_ativa:
             resultado = "✅ GREEN" if numero in st.session_state.entrada_ativa else "❌ RED"
             st.session_state.entradas_resultados.appendleft({
@@ -94,7 +107,7 @@ try:
         mensagem_extra = ""
 
         # Estratégia 1: Terminais 2, 6, 9
-        if str(numero)[-1] in ["2", "6", "9"]:
+        if "Terminais 2/6/9" in estrategias_ativas and str(numero)[-1] in ["2", "6", "9"]:
             base = [31, 34]
             entrada = []
             for b in base:
@@ -103,7 +116,7 @@ try:
             estrategia = "Terminais 2/6/9"
 
         # Estratégia 2: Número 4, 14, 24, 34 ativa 1 e 2
-        elif numero in [4, 14, 24, 34]:
+        elif "Gatilho 4/14/24/34 (1 e 2)" in estrategias_ativas and numero in [4, 14, 24, 34]:
             candidatos = [1, 2]
             scores = {c: historico.count(c) for c in candidatos}
             escolhidos = sorted(scores, key=scores.get, reverse=True)
@@ -114,7 +127,7 @@ try:
             estrategia = "Gatilho 4/14/24/34 (1 e 2)"
 
         # Estratégia 3: Terminais dominantes
-        elif len(historico) >= 13:
+        elif "Terminais dominantes" in estrategias_ativas and len(historico) >= 13:
             ultimos_12 = list(historico)[-13:-1]
             terminais = [str(n)[-1] for n in ultimos_12]
             contagem = Counter(terminais)
@@ -145,7 +158,7 @@ try:
             st.session_state.estrategia_ativa = estrategia
             st.session_state.timestamp_ativo = timestamp
         else:
-            # Limpa a entrada ativa
+            # Limpa entrada ativa
             st.session_state.entrada_ativa = None
             st.session_state.estrategia_ativa = None
             st.session_state.timestamp_ativo = None
@@ -153,14 +166,13 @@ try:
     else:
         st.warning("⏳ Aguardando novo número...")
 
-        # Exibe entrada ativa
         if st.session_state.entrada_ativa and st.session_state.estrategia_ativa:
             st.info(f"📌 Entrada ativa (ainda válida):\n**{st.session_state.estrategia_ativa}** — Entrada: `{sorted(st.session_state.entrada_ativa)}`\n(Sorteio em: {st.session_state.timestamp_ativo})")
 
 except Exception as e:
     st.error(f"Erro ao acessar API: {e}")
 
-# === TABELA DE RESULTADOS ===
+# === HISTÓRICO DE RESULTADOS ===
 st.markdown("---")
 st.subheader("📊 Histórico de Previsões")
 
@@ -169,3 +181,14 @@ if st.session_state.entradas_resultados:
     st.dataframe(df, use_container_width=True)
 else:
     st.info("Ainda não há previsões avaliadas.")
+
+# === CONTADOR DE ACERTOS ===
+green_count = sum(1 for r in st.session_state.entradas_resultados if r["resultado"] == "✅ GREEN")
+total_count = len(st.session_state.entradas_resultados)
+taxa_acerto = (green_count / total_count * 100) if total_count > 0 else 0
+
+st.markdown("---")
+st.subheader("✅ Desempenho Geral")
+st.markdown(f"**Total de previsões:** {total_count}")
+st.markdown(f"**Total de GREENs:** {green_count}")
+st.markdown(f"**Taxa de acerto:** `{taxa_acerto:.1f}%`")
