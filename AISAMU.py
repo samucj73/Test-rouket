@@ -72,11 +72,7 @@ try:
             st.session_state.timestamps.append(timestamp)
             st.session_state.ultimo_numero = numero
             st.success(f"🎲 Último número: **{numero}** às {timestamp}")
-
-
-
-
-
+            
 # === ESCOLHA DE ESTRATÉGIA DINÂMICA ===
 entrada = None
 estrategia = None
