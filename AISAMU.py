@@ -4,12 +4,14 @@ import os
 import joblib
 from collections import deque, Counter
 from streamlit_autorefresh import st_autorefresh
+import pandas as pd
 
 # === CONFIGURAÇÕES ===
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 TELEGRAM_CHAT_ID = "-1002796136111"
 HISTORICO_FILE = "historico_sorteios.pkl"
+ENTRADAS_FILE = "entradas_resultados.pkl"
 ROULETTE_ORDER = [26,3,35,12,28,7,29,18,22,9,31,14,20,1,33,16,24,5,10,
                   23,8,30,11,36,13,27,6,34,17,25,2,21,4,19,15,32,0]
 
@@ -29,6 +31,14 @@ def carregar_historico():
 
 def salvar_historico(historico):
     joblib.dump(historico, HISTORICO_FILE)
+
+def carregar_entradas_resultados():
+    if os.path.exists(ENTRADAS_FILE):
+        return joblib.load(ENTRADAS_FILE)
+    return deque(maxlen=50)
+
+def salvar_entradas_resultados(dados):
+    joblib.dump(dados, ENTRADAS_FILE)
 
 def get_vizinhos(numero, n=2):
     if numero not in ROULETTE_ORDER:
@@ -52,6 +62,8 @@ if "estrategia_ativa" not in st.session_state:
     st.session_state.estrategia_ativa = None
 if "timestamp_ativo" not in st.session_state:
     st.session_state.timestamp_ativo = None
+if "entradas_resultados" not in st.session_state:
+    st.session_state.entradas_resultados = carregar_entradas_resultados()
 
 # === CAPTURA DA API ===
 try:
@@ -61,6 +73,17 @@ try:
     timestamp = data["data"]["settledAt"]
 
     if numero != st.session_state.ultimo_numero:
+        # Avalia a entrada anterior
+        if st.session_state.entrada_ativa and st.session_state.estrategia_ativa:
+            resultado = "✅ GREEN" if numero in st.session_state.entrada_ativa else "❌ RED"
+            st.session_state.entradas_resultados.appendleft({
+                "numero": numero,
+                "entrada": sorted(st.session_state.entrada_ativa),
+                "estrategia": st.session_state.estrategia_ativa,
+                "resultado": resultado
+            })
+            salvar_entradas_resultados(st.session_state.entradas_resultados)
+
         historico.append(numero)
         salvar_historico(historico)
         st.session_state.ultimo_numero = numero
@@ -137,13 +160,12 @@ try:
 except Exception as e:
     st.error(f"Erro ao acessar API: {e}")
 
-# === CONTADOR DE ACERTOS ===
-green_count = sum(1 for r in st.session_state.entradas_resultados if r["resultado"] == "✅ GREEN")
-total_count = len(st.session_state.entradas_resultados)
-taxa_acerto = (green_count / total_count * 100) if total_count > 0 else 0
-
+# === TABELA DE RESULTADOS ===
 st.markdown("---")
-st.subheader("✅ Desempenho Geral")
-st.markdown(f"**Total de previsões:** {total_count}")
-st.markdown(f"**Total de GREENs:** {green_count}")
-st.markdown(f"**Taxa de acerto:** `{taxa_acerto:.1f}%`")
+st.subheader("📊 Histórico de Previsões")
+
+if st.session_state.entradas_resultados:
+    df = pd.DataFrame(list(st.session_state.entradas_resultados))
+    st.dataframe(df, use_container_width=True)
+else:
+    st.info("Ainda não há previsões avaliadas.")
