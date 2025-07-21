@@ -74,9 +74,6 @@ try:
             st.success(f"🎲 Último número: **{numero}** às {timestamp}")
             
 # === ESCOLHA DE ESTRATÉGIA DINÂMICA ===
-entrada = None
-estrategia = None
-mensagem_extra = ""
 
 # Estratégia 1 - Terminais fixos 2, 6, 9
 if numero is not None and str(numero)[-1] in ["2", "6", "9"]:
