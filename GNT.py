@@ -15,7 +15,7 @@ MODELO_PATH = "modelo_grandes_numeros.pkl"
 MAX_HISTORICO = 300
 FREQ_ESPERADA = 1 / 37
 N_PREDITOS = 5
-PREVER_CADA = 6  # Gera nova previsão a cada 2 sorteios
+PREVER_CADA = 12  # Gera nova previsão a cada 2 sorteios
 
 # === TELEGRAM CONFIG ===
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
@@ -132,7 +132,7 @@ if numero is not None and timestamp != st.session_state.ultimo_timestamp:
 nova_previsao = False
 top5 = pd.DataFrame()
 
-if st.session_state.contador_sorteios >= PREVER_CADA and len(st.session_state.historico) >= 60:
+if st.session_state.contador_sorteios >= PREVER_CADA and len(st.session_state.historico) >= 37:
     modelo = carregar_ou_treinar_modelo(st.session_state.historico)
     features_atuais = calcular_features(st.session_state.historico)
     X_atual = features_atuais[["numero", "frequencia", "erro", "ultima_ocorrencia"]]
