@@ -116,7 +116,6 @@ if numero_atual is not None:
         st.session_state.ultimo_timestamp = timestamp
         historico.append(numero_atual)
         salvar_objeto(HISTORICO_PATH, historico)
-
       modelo = treinar_modelo(historico)
       if modelo:
           salvar_objeto(MODELO_PATH, modelo)
