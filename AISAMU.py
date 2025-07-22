@@ -2,151 +2,139 @@ import streamlit as st
 import requests
 import os
 import joblib
-import random
 from collections import deque, Counter
+from sklearn.ensemble import RandomForestClassifier
+import numpy as np
 from streamlit_autorefresh import st_autorefresh
 
 # === CONFIGURAÇÕES ===
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
-TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
-TELEGRAM_CHAT_ID = "-1002796136111"
-HISTORICO_PATH = "historico_terminal.joblib"
-MODELO_PATH = "modelo_terminal.joblib"
-ENTRADA_ATUAL_PATH = "entrada_atual.joblib"
-NUMERO_VIZINHOS = 2
-PROBABILIDADE_MINIMA = 0.75
-HISTORICO_MAXIMO = 20
+MODELO_PATH = "modelo_terminal.pkl"
+HISTORICO_PATH = "historico.pkl"
+MAX_HISTORICO = 20
+PROBABILIDADE_MINIMA = 0.75  # IA só gera entrada se terminal dominante >= 75%
+AUTOREFRESH_INTERVAL = 5000  # em milissegundos (5 segundos)
 
 # === ORDEM FÍSICA DA ROLETA EUROPEIA ===
-ORDEM_ROLETA = [26, 3, 35, 12, 28, 7, 29, 18, 22, 9, 31, 14, 20, 1, 33, 16, 24, 5,
-                10, 23, 8, 30, 11, 36, 13, 27, 6, 34, 17, 25, 2, 21, 4, 19, 15, 32]
+ordem_roleta = [
+    0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27,
+    13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33,
+    1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12,
+    35, 3, 26
+]
 
-# === FUNÇÕES UTILITÁRIAS ===
+def carregar_historico():
+    if os.path.exists(HISTORICO_PATH):
+        return joblib.load(HISTORICO_PATH)
+    return deque(maxlen=MAX_HISTORICO)
 
-def enviar_telegram(mensagem):
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensagem}
-    try:
-        requests.post(url, json=payload, timeout=3)
-    except:
-        pass
+def salvar_historico(historico):
+    joblib.dump(historico, HISTORICO_PATH)
 
-def carregar_objeto(caminho):
-    if os.path.exists(caminho):
-        return joblib.load(caminho)
+def carregar_modelo():
+    if os.path.exists(MODELO_PATH):
+        return joblib.load(MODELO_PATH)
     return None
 
-def salvar_objeto(caminho, objeto):
-    joblib.dump(objeto, caminho)
+def salvar_modelo(modelo):
+    joblib.dump(modelo, MODELO_PATH)
 
 def extrair_terminal(numero):
-    return int(str(numero)[-1])
+    return numero % 10
 
-def gerar_entrada_com_vizinhos(digitos):
-    numeros_base = []
-    for d in digitos:
-        for n in range(37):
-            if extrair_terminal(n) == d:
-                numeros_base.append(n)
-
-    entrada_completa = set()
-    for numero in numeros_base:
-        if numero in ORDEM_ROLETA:
-            idx = ORDEM_ROLETA.index(numero)
-            for i in range(-NUMERO_VIZINHOS, NUMERO_VIZINHOS + 1):
-                vizinho = ORDEM_ROLETA[(idx + i) % len(ORDEM_ROLETA)]
-                entrada_completa.add(vizinho)
-    return list(entrada_completa)
+def extrair_features(historico):
+    return [[n % 10] for n in historico]
 
 def treinar_modelo(historico):
-    if len(historico) < 20:
+    if len(historico) < 10:
         return None
-    terminais = [extrair_terminal(n) for n in historico[:-1]]
-    X = [[t] for t in terminais]
-    y = [extrair_terminal(n) for n in historico[1:]]
-    from sklearn.ensemble import RandomForestClassifier
+
+    X = extrair_features(historico)
+    y = [n % 10 for n in list(historico)[1:]]
+
     modelo = RandomForestClassifier(n_estimators=100, random_state=42)
-    modelo.fit(X, y)
+    modelo.fit(X[:-1], y)
+    salvar_modelo(modelo)
     return modelo
 
 def prever_terminais(modelo, historico):
-    if not modelo or len(historico) < 1:
+    if not modelo or len(historico) < 5:
         return []
-    ultimo_terminal = extrair_terminal(historico[-1])
-    probas = modelo.predict_proba([[ultimo_terminal]])[0]
-    terminal_probabilidades = list(enumerate(probas))
-    terminal_probabilidades.sort(key=lambda x: x[1], reverse=True)
-    return terminal_probabilidades[:2]
+
+    ultima_entrada = [[historico[-1] % 10]]
+    probas = modelo.predict_proba(ultima_entrada)[0]
+
+    terminais_prob = sorted([(i, p) for i, p in enumerate(probas)], key=lambda x: -x[1])
+    return terminais_prob[:2]  # dois terminais mais prováveis
+
+def gerar_entrada_com_vizinhos(terminais):
+    numeros_base = []
+    for t in terminais:
+        numeros_base.extend([n for n in range(37) if n % 10 == t])
+
+    entrada_completa = set()
+    for numero in numeros_base:
+        try:
+            idx = ordem_roleta.index(numero)
+            vizinhos = [ordem_roleta[(idx + i) % len(ordem_roleta)] for i in range(-2, 3)]
+            entrada_completa.update(vizinhos)
+        except ValueError:
+            pass
+
+    return sorted(entrada_completa)
 
 # === INÍCIO DO APP ===
+st.set_page_config(page_title="IA Sinais Roleta", layout="centered")
+st.title("🎯 IA Sinais de Roleta: Estratégia por Terminais Dominantes + Vizinhos")
 
-st.set_page_config(page_title="IA Terminal Roleta", layout="centered")
-st.title("🎯 Estratégia IA Terminal + Vizinhos")
+# Atualização automática
+st_autorefresh(interval=AUTOREFRESH_INTERVAL, key="refresh")
 
-# Auto refresh
-st_autorefresh(interval=5000, key="refresh")
+# Histórico
+historico = carregar_historico()
 
-# Estado inicial
-if "ultimo_timestamp" not in st.session_state:
-    st.session_state.ultimo_timestamp = None
-
-# Carregar dados
-historico = carregar_objeto(HISTORICO_PATH) or []
-modelo = carregar_objeto(MODELO_PATH)
-entrada_atual = carregar_objeto(ENTRADA_ATUAL_PATH)
-
-# Obter último número
+# === CONSULTA A API COM ERROS TRATADOS ===
 try:
-    resposta = requests.get(API_URL, timeout=5)
-    dados = resposta.json()
-    numero_atual = int(dados["data"]["result"]["outcome"])
-    timestamp = dados["data"]["startedAt"]
-except:
-    st.warning("⚠️ Erro ao acessar API.")
+    response = requests.get(API_URL, timeout=7)
+    response.raise_for_status()
+    data = response.json()
+
+    numero_atual = data["data"]["result"]["outcome"]["number"]
+    timestamp = data["data"]["startedAt"]
+
+except requests.exceptions.RequestException as e:
+    st.error(f"⚠️ Erro ao acessar API: {e}")
     st.stop()
 
-st.write(f"🎲 Último número: **{numero_atual}**")
-st.write(f"🕒 Timestamp: `{timestamp}`")
+except (KeyError, TypeError, ValueError) as e:
+    st.error(f"⚠️ Erro ao processar resposta da API: {e}")
+    st.stop()
 
-# Atualiza histórico e IA
-if timestamp != st.session_state.ultimo_timestamp:
-    st.session_state.ultimo_timestamp = timestamp
+# Evita duplicatas
+if not historico or numero_atual != historico[-1]:
     historico.append(numero_atual)
-    historico = historico[-HISTORICO_MAXIMO:]  # Limita a 20
-    salvar_objeto(HISTORICO_PATH, historico)
+    salvar_historico(historico)
 
+st.write("🕒 Último número:", numero_atual)
+
+# IA decide se deve entrar
+modelo = carregar_modelo()
+if not modelo:
     modelo = treinar_modelo(historico)
-    if modelo:
-        salvar_objeto(MODELO_PATH, modelo)
-        terminais_previstos = prever_terminais(modelo, historico)
-        st.write("📊 Terminais previstos (terminal, prob):", terminais_previstos)
 
-        if len(terminais_previstos) >= 1:
-            terminais_fortes = [t for t, p in terminais_previstos if p >= PROBABILIDADE_MINIMA]
-            if terminais_fortes:
-                entrada = gerar_entrada_com_vizinhos(terminais_fortes)
-                if entrada:
-                    entrada = list(set(entrada))
-                    random.shuffle(entrada)
-                    entrada = entrada[:10]
-                    salvar_objeto(ENTRADA_ATUAL_PATH, {"numeros": entrada, "entrada_timestamp": timestamp})
-                    entrada_atual = {"numeros": entrada, "entrada_timestamp": timestamp}
-                    enviar_telegram(f"🤖 Estratégia: IA Terminal\n🎯 Entrada: {entrada}")
-            else:
-                salvar_objeto(ENTRADA_ATUAL_PATH, None)
-                entrada_atual = None
-                st.write("⚠️ IA decidiu não entrar.")
+if modelo and len(historico) >= 10:
+    terminais_previstos = prever_terminais(modelo, historico)
 
-# Verifica acerto anterior
-if entrada_atual and entrada_atual.get("entrada_timestamp") != timestamp:
-    if numero_atual in entrada_atual["numeros"]:
-        enviar_telegram(f"✅ GREEN! Saiu {numero_atual}")
+    if terminais_previstos:
+        st.write("🔍 Probabilidades previstas (terminal, prob):", terminais_previstos)
+        if terminais_previstos[0][1] >= PROBABILIDADE_MINIMA:
+            terminais_escolhidos = [t[0] for t in terminais_previstos]
+            entrada = gerar_entrada_com_vizinhos(terminais_escolhidos)
+
+            st.success(f"✅ Entrada gerada pela IA (terminais {terminais_escolhidos}): {entrada}")
+        else:
+            st.warning("⚠️ Aguardando nova entrada da IA...")
     else:
-        enviar_telegram(f"❌ RED! Saiu {numero_atual}")
-    salvar_objeto(ENTRADA_ATUAL_PATH, None)
-
-# Exibir entrada atual
-if entrada_atual:
-    st.success(f"✅ Entrada ativa: {entrada_atual['numeros']}")
+        st.warning("⚠️ Não foi possível prever terminais.")
 else:
-    st.warning("⚠️ Aguardando nova entrada da IA..")
+    st.info("⏳ Aguardando dados suficientes para treinar o modelo.")
