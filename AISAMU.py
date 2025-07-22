@@ -1,11 +1,9 @@
+
 import streamlit as st
 import requests
-import joblib
 import os
+import joblib
 from collections import deque, Counter
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.exceptions import NotFittedError
-import numpy as np
 from streamlit_autorefresh import st_autorefresh
 import time
 
@@ -13,119 +11,125 @@ import time
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 TELEGRAM_CHAT_ID = "-1002796136111"
-MODELO_PATH = "modelo_ia.pkl"
-HISTORICO_MAX = 100
-JANELA_ANALISE = 12
+HISTORICO_FILE = "historico_sorteios.pkl"
+ROULETTE_ORDER = [26,3,35,12,28,7,29,18,22,9,31,14,20,1,33,16,24,5,10,23,8,30,11,36,13,27,6,34,17,25,2,21,4,19,15,32,0]
 
-# === LISTA DA ROLETA FÍSICA EUROPEIA ===
-roleta = [0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36,
-          11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31,
-          9, 22, 18, 29, 7, 28, 12, 35, 3, 26]
-
-# === INICIALIZA HISTÓRICO E ESTADO ===
-if "historico" not in st.session_state:
-    st.session_state.historico = deque(maxlen=HISTORICO_MAX)
-if "ultimo_timestamp" not in st.session_state:
-    st.session_state.ultimo_timestamp = None
-if "placar" not in st.session_state:
-    st.session_state.placar = {"GREEN": 0, "RED": 0}
-
-# === FUNÇÕES UTILITÁRIAS ===
-def extrair_terminal(numero):
-    return int(str(numero)[-1])
-
-def vizinhos_roleta(numero):
-    idx = roleta.index(numero)
-    vizinhos = [roleta[(idx + i) % len(roleta)] for i in [-2, -1, 1, 2]]
-    return vizinhos
-
-def enviar_telegram(msg):
+# === FUNÇÕES AUXILIARES ===
+def enviar_telegram(mensagem):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    data = {"chat_id": TELEGRAM_CHAT_ID, "text": msg}
+    data = {"chat_id": TELEGRAM_CHAT_ID, "text": mensagem}
     try:
-        requests.post(url, data=data)
+        requests.post(url, data=data, timeout=5)
     except:
         pass
 
-def carregar_ou_treinar_modelo(historico):
-    if len(historico) < 6:
+def carregar_historico():
+    if os.path.exists(HISTORICO_FILE):
+        return joblib.load(HISTORICO_FILE)
+    return deque(maxlen=300)
+
+def salvar_historico(historico):
+    joblib.dump(historico, HISTORICO_FILE)
+
+def extrair_numero(resultado):
+    try:
+        return int(resultado["outcome"]["number"])
+    except:
         return None
-    X, y = [], []
-    for i in range(len(historico) - 5):
-        X.append([extrair_terminal(n) for n in list(historico)[i:i+5]])
-        y.append(extrair_terminal(list(historico)[i+5]))
-    modelo = RandomForestClassifier(n_estimators=100, random_state=42)
-    modelo.fit(X, y)
-    return modelo
 
-def prever_proximos_terminais(modelo, historico):
-    if len(historico) < 5:
-        return []
-    entrada = [extrair_terminal(n) for n in list(historico)[-5:]]
-    probs = modelo.predict_proba([entrada])[0]
-    indices_ordenados = np.argsort(probs)[::-1]
-    melhores = indices_ordenados[:2]
-    return list(melhores)
+def get_vizinhos(numero, n=2):
+    vizinhos = []
+    if numero not in ROULETTE_ORDER:
+        return vizinhos
+    idx = ROULETTE_ORDER.index(numero)
+    for i in range(-n, n+1):
+        vizinhos.append(ROULETTE_ORDER[(idx + i) % len(ROULETTE_ORDER)])
+    return vizinhos
 
-def montar_entrada(dominantes):
-    entrada = []
-    for terminal in dominantes:
-        numeros_terminal = [n for n in range(37) if extrair_terminal(n) == terminal]
-        for n in numeros_terminal:
-            entrada.append(n)
-            entrada.extend(vizinhos_roleta(n))
-    return sorted(set(entrada))
+# === STREAMLIT CONFIG ===
+st.set_page_config(page_title="IA Estratégia Roleta", layout="centered")
+st.title("🎯 Estratégia IA - Roleta")
 
-# === LOOP PRINCIPAL ===
-st_autorefresh(interval=5000, key="atualizacao")
+# Auto refresh a cada 10s
+st_autorefresh(interval=10 * 1000, key="refresh")
 
-st.title("🎯 Estratégia IA com Vizinhos Físicos")
+# === HISTÓRICO ===
+historico = carregar_historico()
+ultimo_timestamp = st.session_state.get("ultimo_timestamp")
+
+# === CAPTURA DA API ===
 try:
-    res = requests.get(API_URL, timeout=10).json()
-    numero = int(res["data"]["result"]["outcome"]["number"])
-    timestamp = res["data"]["settledAt"]
+    response = requests.get(API_URL, timeout=10)
+    resultado = response.json()
+    numero = extrair_numero(resultado)
+    timestamp = resultado["startedAt"]
 except Exception as e:
-    st.warning("⚠️ Erro ao acessar API.")
+    st.error(f"Erro ao acessar API: {e}")
     st.stop()
 
-# Evita processar o mesmo número
-if timestamp == st.session_state.ultimo_timestamp:
-    st.info("⏳ Aguardando novo sorteio...")
-    st.stop()
+if timestamp != ultimo_timestamp:
+    historico.append(numero)
+    salvar_historico(historico)
+    st.session_state.ultimo_timestamp = timestamp
 
-st.session_state.ultimo_timestamp = timestamp
-st.session_state.historico.append(numero)
+st.markdown(f"🎲 Último número: **{numero}**")
+st.markdown(f"🕒 Timestamp: `{timestamp}`")
+st.markdown(f"📋 Histórico ({len(historico)}): {list(historico)}")
 
-st.write(f"🎲 Último número: **{numero}**")
-modelo = carregar_ou_treinar_modelo(st.session_state.historico)
+# === ESCOLHA DE ESTRATÉGIA DINÂMICA ===
+entrada = None
+estrategia = None
+mensagem_extra = ""
 
-if modelo:
-    terminais_previstos = prever_proximos_terminais(modelo, st.session_state.historico)
-    if terminais_previstos:
-        entrada = montar_entrada(terminais_previstos)
-        st.success(f"📈 Entrada sugerida: {entrada}")
-        st.write(f"🔢 Terminais previstos: {terminais_previstos}")
+# Estratégia 1 - Terminais fixos 2, 6, 9
+if numero is not None and str(numero)[-1] in ["2", "6", "9"]:
+    entrada_base = [31, 34]
+    entrada = []
+    for n in entrada_base:
+        entrada.extend(get_vizinhos(n, 5))
+    entrada = list(set(entrada))[:10]
+    estrategia = "Terminais 2/6/9"
 
-        if numero in entrada:
-            st.success("✅ GREEN!")
-            st.session_state.placar["GREEN"] += 1
-            enviar_telegram(f"✅ GREEN! Número {numero} estava na entrada.")
+# Estratégia 2 - Número 4, 14, 24, 34 ativa fixos 1 e 2 com maior probabilidade
+elif numero in [4,14,24,34]:
+    candidatos = [1,2]
+    scores = {}
+    for c in candidatos:
+        scores[c] = historico.count(c)
+    escolhidos = sorted(scores, key=scores.get, reverse=True)
+    entrada = []
+    for n in escolhidos:
+        entrada.extend(get_vizinhos(n, 5))
+    entrada = list(set(entrada))[:10]
+    estrategia = "Gatilho 4/14/24/34 (1 e 2)"
+
+# Estratégia 3 - Terminais dominantes
+elif len(historico) >= 13:
+    ultimos_12 = list(historico)[-13:-1]
+    terminais = [str(n)[-1] for n in ultimos_12]
+    contagem = Counter(terminais)
+    dominantes = [int(t) for t, c in contagem.items() if c > 2]
+    if dominantes:
+        base = []
+        for d in dominantes:
+            base += [n for n in range(37) if str(n).endswith(str(d))]
+        entrada = []
+        for n in base:
+            entrada.extend(get_vizinhos(n, 2))
+        entrada = list(set(entrada))[:10]
+        if numero in ultimos_12 or numero in entrada:
+            estrategia = "Terminais dominantes"
+            mensagem_extra = "(Gatilho validado)"
         else:
-            st.error("❌ RED.")
-            st.session_state.placar["RED"] += 1
-            enviar_telegram(f"❌ RED. Número {numero} não estava na entrada.")
+            entrada = None
 
-        enviar_telegram(f"🎯 Nova entrada IA: {entrada}\n🔢 Terminais: {terminais_previstos}")
-    else:
-        st.warning("⚠️ Aguardando nova entrada da IA...")
+# === ALERTA ===
+if entrada and estrategia:
+    msg = f"📢 Estratégia: *{estrategia}*
+🎯 Entrada: {sorted(entrada)}
+{mensagem_extra}"
+    enviar_telegram(msg)
+    st.success("✅ Entrada gerada e enviada ao Telegram!")
+    st.markdown(f"**{estrategia}** — Entrada enviada: `{sorted(entrada)}`")
 else:
-    st.info("⏳ Aguardando mais dados para treinar o modelo...")
-
-# === PLACAR FINAL ===
-total = st.session_state.placar["GREEN"] + st.session_state.placar["RED"]
-taxa_green = (st.session_state.placar["GREEN"] / total * 100) if total > 0 else 0
-
-st.subheader("📊 Placar")
-st.write(f"✅ GREENs: {st.session_state.placar['GREEN']}")
-st.write(f"❌ REDs: {st.session_state.placar['RED']}")
-st.write(f"📈 Taxa de acerto: **{taxa_green:.2f}%**")
+    st.info("🔎 Aguardando condições para gerar nova entrada.")
