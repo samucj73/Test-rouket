@@ -2,156 +2,137 @@ import streamlit as st
 import requests
 import os
 import joblib
+import random
 from collections import deque, Counter
-from sklearn.ensemble import RandomForestClassifier
-import numpy as np
 from streamlit_autorefresh import st_autorefresh
-import time
 
 # === CONFIGURAÇÕES ===
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
-MODELO_PATH = "modelo_terminal.pkl"
-HISTORICO_PATH = "historico.pkl"
-ULTIMO_ENVIO_PATH = "ultimo_envio.pkl"
+TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
+ID_CANAL = "-1002796136111"
+
+# === HISTÓRICO ===
+HISTORICO_FILE = "historico.pkl"
 MAX_HISTORICO = 20
-PROBABILIDADE_MINIMA = 0.50
-AUTOREFRESH_INTERVAL = 5000  # 5 segundos
 
-# TELEGRAM
-TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY" 
-TELEGRAM_CHAT_ID = "-1002796136111"
+# === DESEMPENHO IA ===
+DESEMPENHO_FILE = "desempenho_ia.pkl"
 
-# === ORDEM FÍSICA DA ROLETA ===
-ordem_roleta = [
-    0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27,
-    13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33,
-    1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12,
+# === ORDEM FÍSICA DA ROLETA EUROPEIA ===
+ORDEM_ROLETA = [
+    0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8,
+    23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12,
     35, 3, 26
 ]
 
-# === FUNÇÕES UTILITÁRIAS ===
+# === Funções utilitárias ===
 def carregar_historico():
-    if os.path.exists(HISTORICO_PATH):
-        return joblib.load(HISTORICO_PATH)
+    if os.path.exists(HISTORICO_FILE):
+        return joblib.load(HISTORICO_FILE)
     return deque(maxlen=MAX_HISTORICO)
 
 def salvar_historico(historico):
-    joblib.dump(historico, HISTORICO_PATH)
+    joblib.dump(historico, HISTORICO_FILE)
 
-def carregar_modelo():
-    if os.path.exists(MODELO_PATH):
-        return joblib.load(MODELO_PATH)
-    return None
+def carregar_desempenho():
+    if os.path.exists(DESEMPENHO_FILE):
+        return joblib.load(DESEMPENHO_FILE)
+    return {"green": 0, "red": 0, "total": 0}
 
-def salvar_modelo(modelo):
-    joblib.dump(modelo, MODELO_PATH)
+def salvar_desempenho(dados):
+    joblib.dump(dados, DESEMPENHO_FILE)
 
-def extrair_terminal(numero):
-    return numero % 10
-
-def extrair_features(historico):
-    return [[n % 10] for n in historico]
-
-def treinar_modelo(historico):
-    if len(historico) < 10:
-        return None
-    X = extrair_features(historico)
-    y = [n % 10 for n in list(historico)[1:]]
-    modelo = RandomForestClassifier(n_estimators=100, random_state=42)
-    modelo.fit(X[:-1], y)
-    salvar_modelo(modelo)
-    return modelo
-
-def prever_terminais(modelo, historico):
-    if not modelo or len(historico) < 5:
-        return []
-    ultima_entrada = [[historico[-1] % 10]]
-    probas = modelo.predict_proba(ultima_entrada)[0]
-    terminais_prob = sorted([(i, p) for i, p in enumerate(probas)], key=lambda x: -x[1])
-    return terminais_prob[:2]
-
-def gerar_entrada_com_vizinhos(terminais):
-    numeros_base = []
-    for t in terminais:
-        numeros_base.extend([n for n in range(37) if n % 10 == t])
-    entrada_completa = set()
-    for numero in numeros_base:
-        try:
-            idx = ordem_roleta.index(numero)
-            vizinhos = [ordem_roleta[(idx + i) % len(ordem_roleta)] for i in range(-2, 3)]
-            entrada_completa.update(vizinhos)
-        except ValueError:
-            pass
-    return sorted(entrada_completa)
-
-def enviar_alerta_telegram(mensagem):
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": TELEGRAM_CHAT_ID,
-        "text": mensagem
-    }
-    try:
-        requests.post(url, json=payload, timeout=10)
-    except:
-        pass
-
-def carregar_ultimo_envio():
-    if os.path.exists(ULTIMO_ENVIO_PATH):
-        return joblib.load(ULTIMO_ENVIO_PATH)
-    return None
-
-def salvar_ultimo_envio(numero):
-    joblib.dump(numero, ULTIMO_ENVIO_PATH)
-
-# === INÍCIO DO APP ===
-st.set_page_config(page_title="IA Sinais Roleta", layout="centered")
-st.title("🎯 IA Sinais de Roleta: Estratégia por Terminais Dominantes + Vizinhos")
-st_autorefresh(interval=AUTOREFRESH_INTERVAL, key="refresh")
-
-historico = carregar_historico()
-ultimo_enviado = carregar_ultimo_envio()
-
-# === CONSULTA A API COM ERROS TRATADOS ===
-try:
-    response = requests.get(API_URL, timeout=7)
-    response.raise_for_status()
-    data = response.json()
-    numero_atual = data["data"]["result"]["outcome"]["number"]
-    timestamp = data["data"]["startedAt"]
-except Exception as e:
-    st.error(f"⚠️ Erro ao acessar API: {e}")
-    st.stop()
-
-# Salva novo número no histórico
-if not historico or numero_atual != historico[-1]:
-    historico.append(numero_atual)
-    salvar_historico(historico)
-
-st.write("🕒 Último número:", numero_atual)
-
-modelo = carregar_modelo()
-if not modelo:
-    modelo = treinar_modelo(historico)
-
-if modelo and len(historico) >= 10:
-    terminais_previstos = prever_terminais(modelo, historico)
-
-    if terminais_previstos:
-        st.write("🔍 Probabilidades previstas:", terminais_previstos)
-        if terminais_previstos[0][1] >= PROBABILIDADE_MINIMA:
-            terminais_escolhidos = [t[0] for t in terminais_previstos]
-            entrada = gerar_entrada_com_vizinhos(terminais_escolhidos)
-
-            st.success(f"✅ Entrada BOA (terminais {terminais_escolhidos}): {entrada}")
-
-            # Enviar alerta caso ainda não tenha sido enviado para esse número
-            if numero_atual != ultimo_enviado:
-                mensagem = f"🎯 *SINAL IA ROLET* 🎯\n\n📍 Terminais: {terminais_escolhidos}\n🎯 Entrada: {entrada}\n🕒 Número atual: {numero_atual}"
-                enviar_alerta_telegram(mensagem)
-                salvar_ultimo_envio(numero_atual)
-        else:
-            st.warning("⚠️ Aguardando nova entrada da IA...")
+def registrar_resultado(acertou: bool):
+    desempenho = carregar_desempenho()
+    if acertou:
+        desempenho["green"] += 1
     else:
-        st.warning("⚠️ Não foi possível prever terminais.")
+        desempenho["red"] += 1
+    desempenho["total"] += 1
+    salvar_desempenho(desempenho)
+
+def exibir_painel_desempenho():
+    desempenho = carregar_desempenho()
+    st.markdown("### 📊 Desempenho da IA")
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("✅ GREENs", desempenho["green"])
+    col2.metric("❌ REDs", desempenho["red"])
+    col3.metric("📈 Taxa de Acerto", f'{(desempenho["green"]/desempenho["total"]*100):.1f}%' if desempenho["total"] > 0 else "0%")
+    col4.metric("🔢 Total de Sinais", desempenho["total"])
+
+def get_vizinhos(numero):
+    idx = ORDEM_ROLETA.index(numero)
+    vizinhos = []
+    for i in range(-2, 3):
+        vizinhos.append(ORDEM_ROLETA[(idx + i) % len(ORDEM_ROLETA)])
+    return vizinhos
+
+def obter_ultimo_numero():
+    try:
+        response = requests.get(API_URL)
+        if response.status_code == 200:
+            data = response.json()
+            return int(data["data"]["result"]["outcome"]["number"])
+    except Exception as e:
+        st.warning("⚠️ Erro ao acessar API.")
+    return None
+
+def enviar_telegram(mensagem):
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    payload = {"chat_id": ID_CANAL, "text": mensagem}
+    try:
+        requests.post(url, data=payload)
+    except:
+        st.warning("⚠️ Falha ao enviar mensagem para Telegram.")
+
+# === INICIALIZAÇÃO ===
+st.set_page_config(layout="centered")
+st_autorefresh(interval=5000, key="refresh")
+
+st.title("🎯 IA Roleta – Estratégia Dominantes + Vizinhos")
+exibir_painel_desempenho()
+
+if "historico" not in st.session_state:
+    st.session_state.historico = carregar_historico()
+
+ultimo_numero = obter_ultimo_numero()
+if ultimo_numero is not None:
+    if len(st.session_state.historico) == 0 or st.session_state.historico[-1] != ultimo_numero:
+        st.session_state.historico.append(ultimo_numero)
+        salvar_historico(st.session_state.historico)
+
+        # IA: prevê os 2 terminais mais prováveis
+        historico = list(st.session_state.historico)
+        terminais = [n % 10 for n in historico]
+        contagem = Counter(terminais)
+        mais_comuns = contagem.most_common(2)
+        terminais_previstos = [t[0] for t in mais_comuns]
+
+        entrada_principal = []
+        for terminal in terminais_previstos:
+            numeros_terminal = [n for n in range(37) if n % 10 == terminal]
+            for num in numeros_terminal:
+                entrada_principal.extend(get_vizinhos(num))
+        entrada_final = sorted(set(entrada_principal))
+
+        # Mostrar entrada gerada
+        st.markdown("### 🎰 Entrada Gerada pela IA")
+        st.write("🔢 Terminais dominantes:", terminais_previstos)
+        st.write("🎯 Números da entrada:", entrada_final)
+
+        # Verificar acerto
+        if len(historico) >= 14:
+            numero_resultado = historico[-1]
+            if numero_resultado in entrada_final:
+                resultado = "✅ GREEN"
+                registrar_resultado(True)
+            else:
+                resultado = "❌ RED"
+                registrar_resultado(False)
+
+            st.markdown(f"### Resultado anterior: **{resultado}**")
+            enviar_telegram(f"🎯 Entrada IA: {entrada_final}\n🔢 Terminais: {terminais_previstos}\nResultado: {resultado}")
+    else:
+        st.info("⏳ Aguardando novo número da roleta...")
 else:
-    st.info("⏳ Aguardando dados suficientes para treinar o modelo.")
+    st.warning("⚠️ Não foi possível obter o número atual da API.")
