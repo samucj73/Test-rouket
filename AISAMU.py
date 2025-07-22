@@ -142,7 +142,7 @@ if modelo and len(historico) >= 10:
             terminais_escolhidos = [t[0] for t in terminais_previstos]
             entrada = gerar_entrada_com_vizinhos(terminais_escolhidos)
 
-            st.success(f"✅ Entrada IA (terminais {terminais_escolhidos}): {entrada}")
+            st.success(f"✅ Entrada BOA (terminais {terminais_escolhidos}): {entrada}")
 
             # Enviar alerta caso ainda não tenha sido enviado para esse número
             if numero_atual != ultimo_enviado:
