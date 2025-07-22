@@ -88,7 +88,7 @@ def salvar_objeto(path, objeto):
 
 def obter_ultimo_numero():
     try:
-        resposta = requests.get(API_URL, timeout=10)
+        resposta = requests.get(API_URL, timeout=3)
         if resposta.status_code == 200:
             dados = resposta.json()
             numero = int(dados['data']['outcome']['number'])
