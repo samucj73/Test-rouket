@@ -119,8 +119,8 @@ if numero_atual is not None:
 
         modelo = treinar_modelo(historico)
         if modelo:
-            salvar_objeto(MODELO_PATH, modelo)
-            terminais_previstos = prever_terminais(modelo, historico)
+          salvar_objeto(MODELO_PATH, modelo)
+          terminais_previstos = prever_terminais(modelo, historico)
           st.write("Probabilidades previstas (terminal, prob):", terminais_previstos)
           
             if len(terminais_previstos) >= 1:
