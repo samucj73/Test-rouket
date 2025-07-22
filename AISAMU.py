@@ -114,6 +114,7 @@ if not historico or numero_atual != historico[-1]:
 
 st.write("🎲 Último número:", numero_atual)
 
+# === IA: TREINAMENTO / PREVISÃO ==
 # === IA: TREINAMENTO / PREVISÃO ===
 if len(historico) >= 15:
     modelo = treinar_modelo(historico)  # Treina sempre com o histórico atualizado
@@ -125,8 +126,32 @@ if len(historico) >= 15:
 
         st.success(f"✅ Entrada IA: {entrada} | Terminais: {terminais_escolhidos}")
         st.write("🔍 Probabilidades:", terminais_previstos)
-        
-        # ... (mantém o restante do código: alerta, green/red, etc.)
+
+        # === ALERTA SE NOVA BASE ===
+        if ultimo_alerta["referencia"] != historico[-2]:
+            mensagem = "🚨 <b>Entrada IA</b>\n📊 <b>Terminais previstos:</b>\n"
+            for t in terminais_escolhidos:
+                numeros_terminal = [n for n in range(37) if n % 10 == t]
+                mensagem += f"{t} → {numeros_terminal}\n"
+            mensagem += "🎯 Aguardando resultado..."
+
+            enviar_telegram(mensagem)
+            ultimo_alerta = {
+                "referencia": historico[-2],
+                "entrada": entrada
+            }
+            salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
+
+        # === RESULTADO (GREEN / RED) ===
+        if ultimo_alerta["entrada"]:
+            if numero_atual in ultimo_alerta["entrada"]:
+                contadores["green"] += 1
+                resultado = "🟢 GREEN!"
+            else:
+                contadores["red"] += 1
+                resultado = "🔴 RED!"
+            salvar(contadores, CONTADORES_PATH)
+            st.markdown(f"📈 Resultado do número {numero_atual}: **{resultado}**")
     else:
         st.warning("⚠️ Aguardando nova entrada da IA...")
 else:
