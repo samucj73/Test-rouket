@@ -1,135 +1,140 @@
-
 import streamlit as st
 import requests
 import os
 import joblib
 from collections import deque, Counter
+from sklearn.ensemble import RandomForestClassifier
+import numpy as np
 from streamlit_autorefresh import st_autorefresh
-import time
 
 # === CONFIGURAÇÕES ===
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
-TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
-TELEGRAM_CHAT_ID = "-1002796136111"
-HISTORICO_FILE = "historico_sorteios.pkl"
-ROULETTE_ORDER = [26,3,35,12,28,7,29,18,22,9,31,14,20,1,33,16,24,5,10,23,8,30,11,36,13,27,6,34,17,25,2,21,4,19,15,32,0]
+MODELO_PATH = "modelo_terminal.pkl"
+HISTORICO_PATH = "historico.pkl"
+MAX_HISTORICO = 20
+PROBABILIDADE_MINIMA = 0.50  # IA só gera entrada se terminal dominante >= 75%
+AUTOREFRESH_INTERVAL = 5000  # em milissegundos (5 segundos)
 
-# === FUNÇÕES AUXILIARES ===
-def enviar_telegram(mensagem):
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    data = {"chat_id": TELEGRAM_CHAT_ID, "text": mensagem}
-    try:
-        requests.post(url, data=data, timeout=5)
-    except:
-        pass
+# === ORDEM FÍSICA DA ROLETA EUROPEIA ===
+ordem_roleta = [
+    0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27,
+    13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33,
+    1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12,
+    35, 3, 26
+]
 
 def carregar_historico():
-    if os.path.exists(HISTORICO_FILE):
-        return joblib.load(HISTORICO_FILE)
-    return deque(maxlen=300)
+    if os.path.exists(HISTORICO_PATH):
+        return joblib.load(HISTORICO_PATH)
+    return deque(maxlen=MAX_HISTORICO)
 
 def salvar_historico(historico):
-    joblib.dump(historico, HISTORICO_FILE)
+    joblib.dump(historico, HISTORICO_PATH)
 
-def extrair_numero(resultado):
-    try:
-        return int(resultado["outcome"]["number"])
-    except:
+def carregar_modelo():
+    if os.path.exists(MODELO_PATH):
+        return joblib.load(MODELO_PATH)
+    return None
+
+def salvar_modelo(modelo):
+    joblib.dump(modelo, MODELO_PATH)
+
+def extrair_terminal(numero):
+    return numero % 10
+
+def extrair_features(historico):
+    return [[n % 10] for n in historico]
+
+def treinar_modelo(historico):
+    if len(historico) < 10:
         return None
 
-def get_vizinhos(numero, n=2):
-    vizinhos = []
-    if numero not in ROULETTE_ORDER:
-        return vizinhos
-    idx = ROULETTE_ORDER.index(numero)
-    for i in range(-n, n+1):
-        vizinhos.append(ROULETTE_ORDER[(idx + i) % len(ROULETTE_ORDER)])
-    return vizinhos
+    X = extrair_features(historico)
+    y = [n % 10 for n in list(historico)[1:]]
 
-# === STREAMLIT CONFIG ===
-st.set_page_config(page_title="IA Estratégia Roleta", layout="centered")
-st.title("🎯 Estratégia IA - Roleta")
+    modelo = RandomForestClassifier(n_estimators=100, random_state=42)
+    modelo.fit(X[:-1], y)
+    salvar_modelo(modelo)
+    return modelo
 
-# Auto refresh a cada 10s
-st_autorefresh(interval=10 * 1000, key="refresh")
+def prever_terminais(modelo, historico):
+    if not modelo or len(historico) < 5:
+        return []
 
-# === HISTÓRICO ===
+    ultima_entrada = [[historico[-1] % 10]]
+    probas = modelo.predict_proba(ultima_entrada)[0]
+
+    terminais_prob = sorted([(i, p) for i, p in enumerate(probas)], key=lambda x: -x[1])
+    return terminais_prob[:2]  # dois terminais mais prováveis
+
+def gerar_entrada_com_vizinhos(terminais):
+    numeros_base = []
+    for t in terminais:
+        numeros_base.extend([n for n in range(37) if n % 10 == t])
+
+    entrada_completa = set()
+    for numero in numeros_base:
+        try:
+            idx = ordem_roleta.index(numero)
+            vizinhos = [ordem_roleta[(idx + i) % len(ordem_roleta)] for i in range(-2, 3)]
+            entrada_completa.update(vizinhos)
+        except ValueError:
+            pass
+
+    return sorted(entrada_completa)
+
+# === INÍCIO DO APP ===
+st.set_page_config(page_title="IA Sinais Roleta", layout="centered")
+st.title("🎯 IA Sinais de Roleta: Estratégia por Terminais Dominantes + Vizinhos")
+
+# Atualização automática
+st_autorefresh(interval=AUTOREFRESH_INTERVAL, key="refresh")
+
+# Histórico
 historico = carregar_historico()
-ultimo_timestamp = st.session_state.get("ultimo_timestamp")
 
-# === CAPTURA DA API ===
+# === CONSULTA A API COM ERROS TRATADOS ===
 try:
-    response = requests.get(API_URL, timeout=10)
-    resultado = response.json()
-    numero = extrair_numero(resultado)
-    timestamp = resultado["startedAt"]
-except Exception as e:
-    st.error(f"Erro ao acessar API: {e}")
+    response = requests.get(API_URL, timeout=7)
+    response.raise_for_status()
+    data = response.json()
+
+    numero_atual = data["data"]["result"]["outcome"]["number"]
+    timestamp = data["data"]["startedAt"]
+
+except requests.exceptions.RequestException as e:
+    st.error(f"⚠️ Erro ao acessar API: {e}")
     st.stop()
 
-if timestamp != ultimo_timestamp:
-    historico.append(numero)
+except (KeyError, TypeError, ValueError) as e:
+    st.error(f"⚠️ Erro ao processar resposta da API: {e}")
+    st.stop()
+
+# Evita duplicatas
+if not historico or numero_atual != historico[-1]:
+    historico.append(numero_atual)
     salvar_historico(historico)
-    st.session_state.ultimo_timestamp = timestamp
 
-st.markdown(f"🎲 Último número: **{numero}**")
-st.markdown(f"🕒 Timestamp: `{timestamp}`")
-st.markdown(f"📋 Histórico ({len(historico)}): {list(historico)}")
+st.write("🕒 Último número:", numero_atual)
 
-# === ESCOLHA DE ESTRATÉGIA DINÂMICA ===
-entrada = None
-estrategia = None
-mensagem_extra = ""
+# IA decide se deve entrar
+modelo = carregar_modelo()
+if not modelo:
+    modelo = treinar_modelo(historico)
 
-# Estratégia 1 - Terminais fixos 2, 6, 9
-if numero is not None and str(numero)[-1] in ["2", "6", "9"]:
-    entrada_base = [31, 34]
-    entrada = []
-    for n in entrada_base:
-        entrada.extend(get_vizinhos(n, 5))
-    entrada = list(set(entrada))[:10]
-    estrategia = "Terminais 2/6/9"
+if modelo and len(historico) >= 10:
+    terminais_previstos = prever_terminais(modelo, historico)
 
-# Estratégia 2 - Número 4, 14, 24, 34 ativa fixos 1 e 2 com maior probabilidade
-elif numero in [4,14,24,34]:
-    candidatos = [1,2]
-    scores = {}
-    for c in candidatos:
-        scores[c] = historico.count(c)
-    escolhidos = sorted(scores, key=scores.get, reverse=True)
-    entrada = []
-    for n in escolhidos:
-        entrada.extend(get_vizinhos(n, 5))
-    entrada = list(set(entrada))[:10]
-    estrategia = "Gatilho 4/14/24/34 (1 e 2)"
+    if terminais_previstos:
+        st.write("🔍 Probabilidades previstas (terminal, prob):", terminais_previstos)
+        if terminais_previstos[0][1] >= PROBABILIDADE_MINIMA:
+            terminais_escolhidos = [t[0] for t in terminais_previstos]
+            entrada = gerar_entrada_com_vizinhos(terminais_escolhidos)
 
-# Estratégia 3 - Terminais dominantes
-elif len(historico) >= 13:
-    ultimos_12 = list(historico)[-13:-1]
-    terminais = [str(n)[-1] for n in ultimos_12]
-    contagem = Counter(terminais)
-    dominantes = [int(t) for t, c in contagem.items() if c > 2]
-    if dominantes:
-        base = []
-        for d in dominantes:
-            base += [n for n in range(37) if str(n).endswith(str(d))]
-        entrada = []
-        for n in base:
-            entrada.extend(get_vizinhos(n, 2))
-        entrada = list(set(entrada))[:10]
-        if numero in ultimos_12 or numero in entrada:
-            estrategia = "Terminais dominantes"
-            mensagem_extra = "(Gatilho validado)"
+            st.success(f"✅ Entrada gerada pela IA (terminais {terminais_escolhidos}): {entrada}")
         else:
-            entrada = None
-
-# === ALERTA ===
-if entrada and estrategia:
-    msg = f"📢 Estratégia: *{estrategia}*
-🎯 Entrada: {sorted(entrada)}
-{mensagem_extra}"
-    enviar_telegram(msg)
-    st.success("✅ Entrada gerada e enviada ao Telegram!")
-    st.markdown(f"**{estrategia}** — Entrada enviada: `{sorted(entrada)}`")
+            st.warning("⚠️ Aguardando nova entrada da IA...")
+    else:
+        st.warning("⚠️ Não foi possível prever terminais.")
 else:
-    st.info("🔎 Aguardando condições para gerar nova entrada.")
+    st.info("⏳ Aguardando dados suficientes para treinar o modelo.")
