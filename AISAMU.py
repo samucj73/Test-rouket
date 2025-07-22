@@ -130,7 +130,12 @@ if modelo and len(historico) >= 10:
 
         # === ALERTA SE NOVA BASE ===
         if ultimo_alerta["referencia"] != historico[-2]:
-            mensagem = f"🚨 <b>Entrada IA</b>\n🎯 Números: <code>{entrada}</code>\n📊 Base: terminais {terminais_escolhidos}"
+            mensagem = "🚨 <b>Entrada IA</b>\n📊 <b>Terminais previstos:</b>\n"
+            for t in terminais_escolhidos:
+                numeros_terminal = [n for n in range(37) if n % 10 == t]
+                mensagem += f"{t} → {numeros_terminal}\n"
+                mensagem += "🎯 Aguardando resultado..."
+            
             enviar_telegram(mensagem)
             ultimo_alerta = {
                 "referencia": historico[-2],
