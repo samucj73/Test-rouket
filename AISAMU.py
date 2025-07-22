@@ -186,7 +186,7 @@ else:
             st.markdown(f"📈 Resultado do número {numero_atual}: **{resultado}**")
     else:
         st.warning("⚠️ Aguardando nova entrada da IA...")
-else:
+    else:
     st.info("⏳ Aguardando dados suficientes para treinar a IA...")
 
 # === CONTADORES ===
