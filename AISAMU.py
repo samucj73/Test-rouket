@@ -27,7 +27,7 @@ def get_vizinhos(numero, n=2):
     if numero not in ORDEM_FISICA:
         return vizinhos
     idx = ORDEM_FISICA.index(numero)
-    for i in range(-n, n+1):
+    for i in range(-n, n + 1):
         vizinhos.append(ORDEM_FISICA[(idx + i) % len(ORDEM_FISICA)])
     return vizinhos
 
@@ -116,12 +116,13 @@ if numero_atual is not None:
         st.session_state.ultimo_timestamp = timestamp
         historico.append(numero_atual)
         salvar_objeto(HISTORICO_PATH, historico)
-      modelo = treinar_modelo(historico)
-      if modelo:
-          salvar_objeto(MODELO_PATH, modelo)
-          terminais_previstos = prever_terminais(modelo, historico)
-          st.write("Probabilidades previstas (terminal, prob):", terminais_previstos)
-          
+
+        modelo = treinar_modelo(historico)
+        if modelo:
+            salvar_objeto(MODELO_PATH, modelo)
+            terminais_previstos = prever_terminais(modelo, historico)
+            st.write("Probabilidades previstas (terminal, prob):", terminais_previstos)
+
             if len(terminais_previstos) >= 1:
                 digitos = [t[0] for t in terminais_previstos]
                 entrada = gerar_entrada_com_vizinhos(digitos)
