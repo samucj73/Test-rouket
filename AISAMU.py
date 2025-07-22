@@ -115,18 +115,24 @@ if not historico or numero_atual != historico[-1]:
 st.write("🎲 Último número:", numero_atual)
 
 # === IA: TREINAMENTO / PREVISÃO ===
-modelo = carregar(MODELO_PATH, None)
-if not modelo:
-    modelo = treinar_modelo(historico)
-
-if modelo and len(historico) >= 10:
+if len(historico) >= 15:
+    modelo = treinar_modelo(historico)  # Treina sempre com o histórico atualizado
     terminais_previstos = prever_terminais(modelo, historico)
+
     if terminais_previstos and terminais_previstos[0][1] >= PROBABILIDADE_MINIMA:
         terminais_escolhidos = [t[0] for t in terminais_previstos]
         entrada = gerar_entrada_com_vizinhos(terminais_escolhidos)
 
         st.success(f"✅ Entrada IA: {entrada} | Terminais: {terminais_escolhidos}")
         st.write("🔍 Probabilidades:", terminais_previstos)
+        
+        # ... (mantém o restante do código: alerta, green/red, etc.)
+    else:
+        st.warning("⚠️ Aguardando nova entrada da IA...")
+else:
+    st.info("⏳ Aguardando dados suficientes para treinar a IA...")
+
+
 
         # === ALERTA SE NOVA BASE ===
         if ultimo_alerta["referencia"] != historico[-2]:
