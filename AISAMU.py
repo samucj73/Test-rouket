@@ -12,7 +12,7 @@ API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremeli
 MODELO_PATH = "modelo_terminal.pkl"
 HISTORICO_PATH = "historico.pkl"
 MAX_HISTORICO = 20
-PROBABILIDADE_MINIMA = 0.75  # IA só gera entrada se terminal dominante >= 75%
+PROBABILIDADE_MINIMA = 0.55  # IA só gera entrada se terminal dominante >= 75%
 AUTOREFRESH_INTERVAL = 5000  # em milissegundos (5 segundos)
 
 # === ORDEM FÍSICA DA ROLETA EUROPEIA ===
