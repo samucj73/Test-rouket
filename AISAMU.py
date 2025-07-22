@@ -117,8 +117,8 @@ if numero_atual is not None:
         historico.append(numero_atual)
         salvar_objeto(HISTORICO_PATH, historico)
 
-        modelo = treinar_modelo(historico)
-        if modelo:
+      modelo = treinar_modelo(historico)
+      if modelo:
           salvar_objeto(MODELO_PATH, modelo)
           terminais_previstos = prever_terminais(modelo, historico)
           st.write("Probabilidades previstas (terminal, prob):", terminais_previstos)
