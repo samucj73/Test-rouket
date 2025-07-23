@@ -156,6 +156,21 @@ if len(historico) >= 15:
 else:
     st.info("⏳ Aguardando dados suficientes para treinar a IA...")
 
+# === RESULTADO (GREEN / RED) ===
+if ultimo_alerta["entrada"]:
+    if numero_atual in ultimo_alerta["entrada"]:
+        contadores["green"] += 1
+        resultado = "🟢 GREEN!"
+    else:
+        contadores["red"] += 1
+        resultado = "🔴 RED!"
+    salvar(contadores, CONTADORES_PATH)
+    st.markdown(f"📈 Resultado do número {numero_atual}: **{resultado}**")
+
+    # Enviar resultado para o Telegram
+    mensagem_resultado = f"🎯 Resultado do número <b>{numero_atual}</b>: <b>{resultado}</b>"
+    enviar_telegram(mensagem_resultado)
+
 # === CONTADORES ===
 col1, col2 = st.columns(2)
 col1.metric("🟢 GREENs", contadores["green"])
