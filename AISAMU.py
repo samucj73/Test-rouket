@@ -97,12 +97,13 @@ ultimo_alerta = carregar(ULTIMO_ALERTA_PATH, {"referencia": None, "entrada": []}
 contadores = carregar(CONTADORES_PATH, {"green": 0, "red": 0})
 
 # === CONSULTA API ===
+# === CONSULTA API ===
 try:
     response = requests.get(API_URL, timeout=3)
     response.raise_for_status()
     data = response.json()
     numero_atual = data["data"]["result"]["outcome"]["number"]
-    timestamp = data["data"]["startedAt"]
+    timestamp = data["data"]["startedAt"]  # este timestamp será usado como referência única
 except Exception as e:
     st.error(f"⚠️ Erro ao acessar API: {e}")
     st.stop()
@@ -127,7 +128,7 @@ if len(historico) >= 15:
         st.write("🔍 Probabilidades:", terminais_previstos)
 
         # === ALERTA SE NOVA BASE ===
-        if ultimo_alerta["referencia"] != historico[-2]:
+        if ultimo_alerta["referencia"] != timestamp:  # AJUSTADO: usando timestamp como referência única
             mensagem = "🚨 <b>Entrada IA</b>\n📊 <b>Terminais previstos:</b>\n"
             for t in terminais_escolhidos:
                 numeros_terminal = [n for n in range(37) if n % 10 == t]
@@ -136,19 +137,16 @@ if len(historico) >= 15:
 
             enviar_telegram(mensagem)
             ultimo_alerta = {
-                "referencia": historico[-2],
-                "entrada": entrada
+                "referencia": timestamp,  # AJUSTADO
+                "entrada": entrada,
+                "resultado_enviado": None  # AJUSTADO: reinicia controle de envio
             }
             salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
-
-        # === RESULTADO (GREEN / RED) ===
-        
     else:
         st.warning("⚠️ Aguardando nova entrada da IA...")
 else:
     st.info("⏳ Aguardando dados suficientes para treinar a IA...")
-    
-# === RESULTADO (GREEN / RED) ===
+
 # === RESULTADO (GREEN / RED) ===
 if ultimo_alerta["entrada"] and ultimo_alerta.get("resultado_enviado") != numero_atual:
     if numero_atual in ultimo_alerta["entrada"]:
@@ -157,6 +155,7 @@ if ultimo_alerta["entrada"] and ultimo_alerta.get("resultado_enviado") != numero
     else:
         contadores["red"] += 1
         resultado = "🔴 RED!"
+
     salvar(contadores, CONTADORES_PATH)
     st.markdown(f"📈 Resultado do número {numero_atual}: **{resultado}**")
 
@@ -164,15 +163,14 @@ if ultimo_alerta["entrada"] and ultimo_alerta.get("resultado_enviado") != numero
     mensagem_resultado = f"🎯 Resultado do número <b>{numero_atual}</b>: <b>{resultado}</b>"
     enviar_telegram(mensagem_resultado)
 
-    # Marcar como resultado já enviado e limpar entrada
+    # Marcar resultado como enviado
     ultimo_alerta["resultado_enviado"] = numero_atual
     ultimo_alerta["entrada"] = []
-    ultimo_alerta["referencia"] = None  # zera base para permitir novo alerta
+    ultimo_alerta["referencia"] = None  # limpa para permitir nova previsão depois
     salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
 
-
-#
 # === CONTADORES ===
 col1, col2 = st.columns(2)
 col1.metric("🟢 GREENs", contadores["green"])
 col2.metric("🔴 REDs", contadores["red"])
+
