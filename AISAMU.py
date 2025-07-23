@@ -43,7 +43,7 @@ def extrair_features(historico):
     return [[n % 10] for n in historico]
 
 def treinar_modelo(historico):
-    if len(historico) < 15:
+    if len(historico) < 13:
         return None
     X = extrair_features(historico)
     y = [n % 10 for n in list(historico)[1:]]
