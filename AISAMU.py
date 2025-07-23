@@ -155,9 +155,10 @@ if len(historico) >= 15:
         st.warning("⚠️ Aguardando nova entrada da IA...")
 else:
     st.info("⏳ Aguardando dados suficientes para treinar a IA...")
-
+    
 # === RESULTADO (GREEN / RED) ===
-if ultimo_alerta["entrada"]:
+# === RESULTADO (GREEN / RED) ===
+if ultimo_alerta["entrada"] and ultimo_alerta.get("resultado_enviado") != numero_atual:
     if numero_atual in ultimo_alerta["entrada"]:
         contadores["green"] += 1
         resultado = "🟢 GREEN!"
@@ -170,6 +171,11 @@ if ultimo_alerta["entrada"]:
     # Enviar resultado para o Telegram
     mensagem_resultado = f"🎯 Resultado do número <b>{numero_atual}</b>: <b>{resultado}</b>"
     enviar_telegram(mensagem_resultado)
+
+    # Marcar como resultado já enviado
+    ultimo_alerta["resultado_enviado"] = numero_atual
+    salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
+
 
 # === CONTADORES ===
 col1, col2 = st.columns(2)
