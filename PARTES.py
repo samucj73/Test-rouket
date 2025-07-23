@@ -239,16 +239,49 @@ if ultimo_alerta["entrada"] and ultimo_alerta.get("resultado_enviado") != numero
     else:
         contadores["red"] += 1
         resultado = "🔴 RED!"
+    
     salvar(contadores, CONTADORES_PATH)
     st.markdown(f"📈 Resultado do número {numero_atual}: **{resultado}**")
 
-    mensagem_resultado = f"🎯 Resultado do número <b>{numero_atual}</b>: <b>{resultado}</b>"
+    mensagem_resultado = f"🎯 Resultado do número <b>{numero_atual}</b>: <b>{resultado}</b>\n"
+
+    # ⬇️ Verificar desempenho por estratégia
+    desempenho_estrategias = []
+    for cat, val, prob in melhores:
+        if cat == "Terminal":
+            previsto_terminal = int(val)
+            real_terminal = numero_atual % 10
+            acerto = previsto_terminal == real_terminal
+        elif cat == "Dúzia":
+            acerto = get_duzia(numero_atual) == val
+        elif cat == "Coluna":
+            acerto = get_coluna(numero_atual) == val
+        elif cat == "Par/Ímpar":
+            acerto = get_par_impar(numero_atual) == val
+        elif cat == "Terço Físico":
+            acerto = get_terco_fisico(numero_atual) == val
+        else:
+            acerto = False
+
+        simbolo = "🟢" if acerto else "🔴"
+        desempenho_estrategias.append(f"{simbolo} {cat}: {val}")
+
+    # Mostrar no app
+    for linha in desempenho_estrategias:
+        st.write(f"📊 {linha}")
+    
+    # Enviar também para o Telegram
+    mensagem_resultado += "\n<b>🎯 Desempenho por Estratégia:</b>\n"
+    mensagem_resultado += "\n".join(desempenho_estrategias)
+
     enviar_telegram(mensagem_resultado)
 
+    # Reset alerta
     ultimo_alerta["resultado_enviado"] = numero_atual
     ultimo_alerta["entrada"] = []
     ultimo_alerta["referencia"] = None
     salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
+
 
 # === CONTADORES ===
 col1, col2 = st.columns(2)
