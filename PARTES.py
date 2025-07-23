@@ -6,6 +6,9 @@ from collections import deque, Counter
 from sklearn.ensemble import RandomForestClassifier
 import numpy as np
 from streamlit_autorefresh import st_autorefresh
+# === Manter app ativo ===
+import auto_ping
+auto_ping.manter_app_ativo()
 
 # === CONFIGURAÇÕES ===
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
