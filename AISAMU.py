@@ -172,11 +172,14 @@ if ultimo_alerta["entrada"] and ultimo_alerta.get("resultado_enviado") != numero
     mensagem_resultado = f"🎯 Resultado do número <b>{numero_atual}</b>: <b>{resultado}</b>"
     enviar_telegram(mensagem_resultado)
 
-    # Marcar como resultado já enviado
+    # Marcar como resultado já enviado e limpar entrada
     ultimo_alerta["resultado_enviado"] = numero_atual
+    ultimo_alerta["entrada"] = []
+    ultimo_alerta["referencia"] = None  # zera base para permitir novo alerta
     salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
 
 
+#
 # === CONTADORES ===
 col1, col2 = st.columns(2)
 col1.metric("🟢 GREENs", contadores["green"])
