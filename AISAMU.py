@@ -142,15 +142,7 @@ if len(historico) >= 15:
             salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
 
         # === RESULTADO (GREEN / RED) ===
-        if ultimo_alerta["entrada"]:
-            if numero_atual in ultimo_alerta["entrada"]:
-                contadores["green"] += 1
-                resultado = "🟢 GREEN!"
-            else:
-                contadores["red"] += 1
-                resultado = "🔴 RED!"
-            salvar(contadores, CONTADORES_PATH)
-            st.markdown(f"📈 Resultado do número {numero_atual}: **{resultado}**")
+        
     else:
         st.warning("⚠️ Aguardando nova entrada da IA...")
 else:
