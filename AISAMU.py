@@ -98,7 +98,7 @@ contadores = carregar(CONTADORES_PATH, {"green": 0, "red": 0})
 
 # === CONSULTA API ===
 try:
-    response = requests.get(API_URL, timeout=7)
+    response = requests.get(API_URL, timeout=3)
     response.raise_for_status()
     data = response.json()
     numero_atual = data["data"]["result"]["outcome"]["number"]
