@@ -37,7 +37,7 @@ def salvar(obj, path):
     joblib.dump(obj, path)
 
 def extrair_features(historico, janela=12):
-    X, y = []
+    X, y = [], []
     historico = list(historico)
     for i in range(len(historico) - janela):
         entrada = [n % 10 for n in historico[i:i+janela]]
@@ -47,9 +47,8 @@ def extrair_features(historico, janela=12):
     return X, y
 
 def treinar_modelo(historico):
-    if len(historico) < 25:  # 12 entrada + 1 alvo + margem
+    if len(historico) < 25:
         return None
-    # Remove modelo antigo
     if os.path.exists(MODELO_PATH):
         os.remove(MODELO_PATH)
     X, y = extrair_features(historico, janela=12)
@@ -118,11 +117,18 @@ if not historico or numero_atual != historico[-1]:
     historico.append(numero_atual)
     salvar(historico, HISTORICO_PATH)
 
+    # === REtreinar IA com novo histórico ===
+    if len(historico) >= 25:
+        modelo = treinar_modelo(historico)
+    else:
+        modelo = None
+else:
+    modelo = carregar(MODELO_PATH, None)
+
 st.write("🎲 Último número:", numero_atual)
 
-# === IA: TREINAMENTO / PREVISÃO ===
-if len(historico) >= 25:
-    modelo = treinar_modelo(historico)
+# === IA: PREVISÃO E ALERTA ===
+if modelo:
     terminais_previstos = prever_terminais(modelo, historico)
 
     if terminais_previstos and terminais_previstos[0][1] >= PROBABILIDADE_MINIMA:
