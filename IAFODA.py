@@ -7,7 +7,7 @@ from sklearn.ensemble import RandomForestClassifier
 from streamlit_autorefresh import st_autorefresh
 
 # === CONFIGURAÇÕES ===
-API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette"
+API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 MODELO_PATH = "modelo_terminal.pkl"
 HISTORICO_PATH = "historico.pkl"
 ULTIMO_ALERTA_PATH = "ultimo_alerta.pkl"
@@ -30,11 +30,12 @@ def salvar(obj, path):
 def extrair_numero(dados):
     data = dados.get("data")
     if isinstance(data, dict):
-        return int(data["result"]["outcome"]["number"])
-    elif isinstance(data, list) and len(data) > 0:
-        return int(data[0]["result"]["outcome"]["number"])
-    else:
-        return None
+        resultado = data.get("result", {})
+        outcome = resultado.get("outcome", {})
+        numero = outcome.get("number")
+        if numero is not None:
+            return int(numero)
+    return None
 
 def extrair_features(historico):
     return [[n % 10] for n in historico]
@@ -79,15 +80,17 @@ def enviar_telegram(mensagem, chat_id=TELEGRAM_IA_CHAT_ID):
     except:
         pass
 
+# === INÍCIO DO APP ===
 st.set_page_config(page_title="IA Sinais Roleta", layout="centered")
 st.title("🎯 IA Sinais de Roleta: Terminais + Números Quentes")
 st_autorefresh(interval=AUTOREFRESH_INTERVAL, key="refresh")
 
 historico = carregar(HISTORICO_PATH, deque(maxlen=MAX_HISTORICO))
 ultimo_alerta = carregar(ULTIMO_ALERTA_PATH, {"entrada": [], "resultado_enviado": None, "quentes_enviados": []})
+contadores = carregar(CONTADORES_PATH, {"green": 0, "red": 0})
 
 try:
-    resposta = requests.get(API_URL)
+    resposta = requests.get(API_URL, timeout=5)
     dados = resposta.json()
     numero_atual = extrair_numero(dados)
     if numero_atual is None:
@@ -130,9 +133,13 @@ if len(historico) >= 15 and (not ultimo_alerta["entrada"] or ultimo_alerta["resu
 if ultimo_alerta["entrada"] and ultimo_alerta.get("resultado_enviado") != numero_atual:
     deu_green = numero_atual % 10 in ultimo_alerta["entrada"]
     if deu_green:
+        contadores["green"] += 1
         resultado = f"🟢 GREEN! Número {numero_atual}"
     else:
+        contadores["red"] += 1
         resultado = f"🔴 RED! Número {numero_atual}"
+    salvar(contadores, CONTADORES_PATH)
+
     enviar_telegram(f"🎯 {resultado}", TELEGRAM_IA_CHAT_ID)
     st.markdown(resultado.replace("<b>", "**").replace("</b>", "**"))
 
