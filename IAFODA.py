@@ -180,20 +180,26 @@ def prever_terminais(modelo, historico):
     previsoes = [(i, p) for i, p in enumerate(probas)]
     return sorted(previsoes, key=lambda x: -x[1])[:3]
 
-
-    
-
-    
-
-
-
-
 def prever_multiclasse(modelo, historico):
-    if not modelo or len(historico) < 25:
+    if len(historico) < 12:
         return []
-    entrada = [[historico[-1] % 10]]
+
+    X = extrair_features(historico)
+    entrada = [X[-1]]  # última entrada com mesmo número de features usadas no treino
+
     probas = modelo.predict_proba(entrada)[0]
-    return sorted([(i, p) for i, p in enumerate(probas)], key=lambda x: -x[1])
+    previsoes = [(i, p) for i, p in enumerate(probas)]
+    return sorted(previsoes, key=lambda x: -x[1])[:2]
+
+
+    
+
+    
+
+
+
+
+
 
 def prever_numeros_quentes(modelo, historico, prob_minima=0.07):
     if not modelo or len(historico) < 15:
