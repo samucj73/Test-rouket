@@ -191,33 +191,28 @@ def prever_multiclasse(modelo, historico):
     previsoes = [(i, p) for i, p in enumerate(probas)]
     return sorted(previsoes, key=lambda x: -x[1])[:2]
 
-
-    
-
-    
-
-
-
-
-
-
 def prever_numeros_quentes(modelo, historico, prob_minima=0.07):
     if not modelo or len(historico) < 15:
         return []
-    janela = 12
-    if len(historico) < janela:
-        return []
-    janela_atual = list(historico)[-janela:]
-    terminais = [n % 10 for n in janela_atual]
-    duzias = [extrair_duzia(n) for n in janela_atual]
-    colunas = [extrair_coluna(n) for n in janela_atual]
-    soma = sum(janela_atual)
-    media = np.mean(janela_atual)
-
-    entrada = [[terminais[-1], duzias[-1], colunas[-1], soma, media]]
+    
+    X = extrair_features(historico)
+    entrada = [X[-1]]  # Usa a última entrada com as mesmas features do treinamento
+    
     probas = modelo.predict_proba(entrada)[0]
     previsoes_filtradas = [(i, p) for i, p in enumerate(probas) if p >= prob_minima]
     return sorted(previsoes_filtradas, key=lambda x: -x[1])[:5]
+
+
+    
+
+    
+
+
+
+
+
+
+
 
 
 
