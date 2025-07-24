@@ -151,6 +151,9 @@ contadores = carregar(CONTADORES_PATH, {
     "green": 0, "red": 0,
     "quentes_green": 0, "quentes_red": 0
 })
+for chave in ["quentes_green", "quentes_red"]:
+    if chave not in contadores:
+        contadores[chave] = 0
 
 # ✅ CORREÇÃO: API JSON CORRETO
 try:
