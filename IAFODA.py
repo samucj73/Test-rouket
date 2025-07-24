@@ -93,14 +93,14 @@ def prever_terminais(modelo, historico):
     return sorted([(i, p) for i, p in enumerate(probas)], key=lambda x: -x[1])[:2]
 
 def prever_multiclasse(modelo, historico):
-    if not modelo or len(historico) < 5:
+    if not modelo or len(historico) < 25:
         return []
     entrada = [[historico[-1] % 10]]
     probas = modelo.predict_proba(entrada)[0]
     return sorted([(i, p) for i, p in enumerate(probas)], key=lambda x: -x[1])
 
 def prever_numeros_quentes(modelo, historico):
-    if not modelo or len(historico) < 5:
+    if not modelo or len(historico) < 25:
         return []
     entrada = [[historico[-1] % 10]]
     probas = modelo.predict_proba(entrada)[0]
