@@ -14,7 +14,7 @@ HISTORICO_PATH = "historico.pkl"
 ULTIMO_ALERTA_PATH = "ultimo_alerta.pkl"
 CONTADORES_PATH = "contadores.pkl"
 MAX_HISTORICO = 300
-PROBABILIDADE_MINIMA = 0.25
+PROBABILIDADE_MINIMA = 0.35
 AUTOREFRESH_INTERVAL = 5000
 
 # === TELEGRAM ===
@@ -178,7 +178,7 @@ def prever_terminais(modelo, historico):
     
     probas = modelo.predict_proba(ultima_entrada)[0]
     previsoes = [(i, p) for i, p in enumerate(probas)]
-    return sorted(previsoes, key=lambda x: -x[1])[:3]
+    return sorted(previsoes, key=lambda x: -x[1])[:2]
 
 def prever_multiclasse(modelo, historico):
     if len(historico) < 12:
@@ -191,7 +191,7 @@ def prever_multiclasse(modelo, historico):
     previsoes = [(i, p) for i, p in enumerate(probas)]
     return sorted(previsoes, key=lambda x: -x[1])[:2]
 
-def prever_numeros_quentes(modelo, historico, prob_minima=0.07):
+def prever_numeros_quentes(modelo, historico, prob_minima=0.10):
     if not modelo or len(historico) < 15:
         return []
     
@@ -200,7 +200,7 @@ def prever_numeros_quentes(modelo, historico, prob_minima=0.07):
     
     probas = modelo.predict_proba(entrada)[0]
     previsoes_filtradas = [(i, p) for i, p in enumerate(probas) if p >= prob_minima]
-    return sorted(previsoes_filtradas, key=lambda x: -x[1])[:5]
+    return sorted(previsoes_filtradas, key=lambda x: -x[1])[:7]
 
 
     
@@ -375,7 +375,7 @@ if 'modelo_numeros' not in locals():
     _, _, _, modelo_numeros = treinar_modelo(historico)
 
 # Faz a previsão com probabilidade mínima
-numeros_previstos = prever_numeros_quentes(modelo_numeros, historico, prob_minima=0.07)
+numeros_previstos = prever_numeros_quentes(modelo_numeros, historico, prob_minima=0.10)
 
 # Extrai os números quentes (mesmo se a lista for vazia)
 quentes = [num for num, _ in numeros_previstos]
