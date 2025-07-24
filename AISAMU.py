@@ -120,7 +120,7 @@ if not historico or numero_atual != historico[-1]:
 st.write("🎲 Último número:", numero_atual)
 
 # === IA: TREINAMENTO / PREVISÃO ===
-if len(historico) >= 15:
+if len(historico) >= 15 and (not ultimo_alerta["entrada"] or ultimo_alerta["resultado_enviado"] == numero_atual):
     modelo = treinar_modelo(historico)
     terminais_previstos = prever_terminais(modelo, historico)
 
