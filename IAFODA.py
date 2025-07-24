@@ -99,7 +99,7 @@ def prever_multiclasse(modelo, historico):
     probas = modelo.predict_proba(entrada)[0]
     return sorted([(i, p) for i, p in enumerate(probas)], key=lambda x: -x[1])
 
-def prever_numeros_quentes(modelo, historico, prob_minima=0.20):
+def prever_numeros_quentes(modelo, historico, prob_minima=0.08):
     if not modelo or len(historico) < 50:
         return []
     entrada = [[historico[-1] % 10]]
