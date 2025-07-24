@@ -265,6 +265,9 @@ if 'modelo_numeros' not in locals():
 
 numeros_previstos = prever_numeros_quentes(modelo_numeros, historico, prob_minima=0.25)
 
+if 'quentes' not in locals():
+    quentes = []
+
 
 
 st.write("🔥 Números Quentes previstos pela IA:", quentes)
