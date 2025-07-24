@@ -155,10 +155,7 @@ if nova_previsao:
     }
     salvar(ultimo_alerta, ULTIMO_ALERTA_PATH) 
     
-else:
-        st.warning("⚠️ Aguardando nova entrada da IA...")
-else:
-    st.info("⏳ Aguardando dados suficientes para treinar a IA...")
+
 
 # === RESULTADO (GREEN / RED) ===
 if ultimo_alerta["entrada"] and ultimo_alerta.get("resultado_enviado") != numero_atual:
