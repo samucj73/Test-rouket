@@ -132,8 +132,7 @@ if len(historico) >= 15:
         st.write("🔍 Probabilidades:", terminais_previstos)
 
         # === VERIFICA SE É UMA NOVA PREVISÃO ===
-        # === VERIFICA SE É UMA NOVA PREVISÃO (DE FATO NOVA, NÃO REPETIDA) ===
-nova_previsao = (
+    nova_previsao = (
     timestamp != ultimo_alerta.get("referencia") and
     set(entrada) != set(ultimo_alerta.get("entrada", [])) and
     set(terminais_escolhidos) != set(ultimo_alerta.get("terminais", []))
@@ -155,7 +154,7 @@ if nova_previsao:
                 "resultado_enviado": None
             }
             salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
-    else:
+else:
         st.warning("⚠️ Aguardando nova entrada da IA...")
 else:
     st.info("⏳ Aguardando dados suficientes para treinar a IA...")
