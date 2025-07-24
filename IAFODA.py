@@ -59,28 +59,76 @@ def extrair_coluna(numero):
     else:
         return 3
 
-def extrair_features(historico):
-    return [[n % 10] for n in historico]
+    def extrair_features(historico):
+    features = []
+    janela = 12
+    for i in range(len(historico) - janela):
+        janela_atual = list(historico)[i:i+janela]
+        ult_num = janela_atual[-1]
+        penult_num = janela_atual[-2] if len(janela_atual) >= 2 else -1
 
-def treinar_modelo(historico):
+        # Frequência dos números
+        contagem_numeros = Counter(janela_atual)
+        top_freq = [contagem_numeros.get(n, 0) for n in range(37)]  # De 0 a 36
+
+        # Frequência dos terminais
+        terminais = [n % 10 for n in janela_atual]
+        contagem_terminais = Counter(terminais)
+        term_freq = [contagem_terminais.get(t, 0) for t in range(10)]
+
+        # Frequência de dúzias
+        duzias = [extrair_duzia(n) for n in janela_atual]
+        duzia_freq = [duzias.count(1), duzias.count(2), duzias.count(3)]
+
+        # Frequência de colunas
+        colunas = [extrair_coluna(n) for n in janela_atual]
+        coluna_freq = [colunas.count(1), colunas.count(2), colunas.count(3)]
+
+        # Frequência de cor
+        cores = [obter_cor(n) for n in janela_atual]
+        cor_freq = [cores.count(0), cores.count(1), cores.count(2)]  # Zero, Vermelho, Preto
+
+        # Soma e média
+        soma = sum(janela_atual)
+        media = np.mean(janela_atual)
+
+        # Repetição imediata?
+        repetido = int(ult_num == penult_num)
+
+        # Construir a feature final
+        entrada = (
+            [ult_num % 10, extrair_duzia(ult_num), extrair_coluna(ult_num), soma, media, repetido]
+            + term_freq
+            + duzia_freq
+            + coluna_freq
+            + cor_freq
+        )
+
+        features.append(entrada)
+    return features
+
+
+
     if len(historico) < 35:
         return None, None, None, None
 
     X = extrair_features(historico)
-    y_terminal = [n % 10 for n in list(historico)[1:]]
-    y_duzia = [extrair_duzia(n) for n in list(historico)[1:]]
-    y_coluna = [extrair_coluna(n) for n in list(historico)[1:]]
-    y_numeros = list(historico)[1:]
+    y_terminal = [n % 10 for n in list(historico)[1+len(historico)-len(X):]]
+    y_duzia = [extrair_duzia(n) for n in list(historico)[1+len(historico)-len(X):]]
+    y_coluna = [extrair_coluna(n) for n in list(historico)[1+len(historico)-len(X):]]
+    y_numeros = list(historico)[1+len(historico)-len(X):]
 
     modelo_terminal = RandomForestClassifier(n_estimators=100, random_state=42)
     modelo_duzia = RandomForestClassifier(n_estimators=100, random_state=42)
     modelo_coluna = RandomForestClassifier(n_estimators=100, random_state=42)
     modelo_numeros = RandomForestClassifier(n_estimators=100, random_state=42)
 
-    modelo_terminal.fit(X[:-1], y_terminal)
-    modelo_duzia.fit(X[:-1], y_duzia)
-    modelo_coluna.fit(X[:-1], y_coluna)
-    modelo_numeros.fit(X[:-1], y_numeros)
+    modelo_terminal.fit(X, y_terminal)
+    modelo_duzia.fit(X, y_duzia)
+    modelo_coluna.fit(X, y_coluna)
+    modelo_numeros.fit(X, y_numeros)
+
+
 
     salvar(modelo_terminal, MODELO_PATH)
     return modelo_terminal, modelo_duzia, modelo_coluna, modelo_numeros
@@ -100,12 +148,24 @@ def prever_multiclasse(modelo, historico):
     return sorted([(i, p) for i, p in enumerate(probas)], key=lambda x: -x[1])
 
 def prever_numeros_quentes(modelo, historico, prob_minima=0.07):
-    if not modelo or len(historico) < 22:
+    if not modelo or len(historico) < 15:
         return []
-    entrada = [[historico[-1] % 10]]
+    janela = 12
+    if len(historico) < janela:
+        return []
+    janela_atual = list(historico)[-janela:]
+    terminais = [n % 10 for n in janela_atual]
+    duzias = [extrair_duzia(n) for n in janela_atual]
+    colunas = [extrair_coluna(n) for n in janela_atual]
+    soma = sum(janela_atual)
+    media = np.mean(janela_atual)
+
+    entrada = [[terminais[-1], duzias[-1], colunas[-1], soma, media]]
     probas = modelo.predict_proba(entrada)[0]
     previsoes_filtradas = [(i, p) for i, p in enumerate(probas) if p >= prob_minima]
     return sorted(previsoes_filtradas, key=lambda x: -x[1])[:5]
+
+
 
 
 
