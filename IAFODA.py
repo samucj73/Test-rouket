@@ -59,6 +59,7 @@ def extrair_coluna(numero):
     else:
         return 3
 
+
     def extrair_features(historico):
     features = []
     janela = 12
@@ -95,7 +96,7 @@ def extrair_coluna(numero):
         # Repetição imediata?
         repetido = int(ult_num == penult_num)
 
-        # Construir a feature final
+        # Feature final
         entrada = (
             [ult_num % 10, extrair_duzia(ult_num), extrair_coluna(ult_num), soma, media, repetido]
             + term_freq
@@ -106,6 +107,8 @@ def extrair_coluna(numero):
 
         features.append(entrada)
     return features
+
+    
 
 
 
