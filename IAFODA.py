@@ -86,21 +86,21 @@ def treinar_modelo(historico):
     return modelo_terminal, modelo_duzia, modelo_coluna, modelo_numeros
 
 def prever_terminais(modelo, historico):
-    if not modelo or len(historico) < 15:
+    if not modelo or len(historico) < 30:
         return []
     ultima_entrada = [[historico[-1] % 10]]
     probas = modelo.predict_proba(ultima_entrada)[0]
     return sorted([(i, p) for i, p in enumerate(probas)], key=lambda x: -x[1])[:2]
 
 def prever_multiclasse(modelo, historico):
-    if not modelo or len(historico) < 5:
+    if not modelo or len(historico) < 30:
         return []
     entrada = [[historico[-1] % 10]]
     probas = modelo.predict_proba(entrada)[0]
     return sorted([(i, p) for i, p in enumerate(probas)], key=lambda x: -x[1])
 
 def prever_numeros_quentes(modelo, historico):
-    if not modelo or len(historico) < 5:
+    if not modelo or len(historico) < 35:
         return []
     entrada = [[historico[-1] % 10]]
     probas = modelo.predict_proba(entrada)[0]
