@@ -99,7 +99,7 @@ def prever_multiclasse(modelo, historico):
     probas = modelo.predict_proba(entrada)[0]
     return sorted([(i, p) for i, p in enumerate(probas)], key=lambda x: -x[1])
 
-def prever_numeros_quentes(modelo, historico, prob_minima=0.10):
+def prever_numeros_quentes(modelo, historico, prob_minima=0.07):
     if not modelo or len(historico) < 12:
         return []
     entrada = [[historico[-1] % 10]]
@@ -266,7 +266,7 @@ if 'modelo_numeros' not in locals():
     _, _, _, modelo_numeros = treinar_modelo(historico)
 
 # Faz a previsão com probabilidade mínima
-numeros_previstos = prever_numeros_quentes(modelo_numeros, historico, prob_minima=0.10)
+numeros_previstos = prever_numeros_quentes(modelo_numeros, historico, prob_minima=0.07)
 
 # Extrai os números quentes (mesmo se a lista for vazia)
 quentes = [num for num, _ in numeros_previstos]
