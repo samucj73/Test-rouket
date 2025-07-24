@@ -132,19 +132,28 @@ def extrair_features(historico):
         features.append(entrada)
     return features
 
-
-    
-
-    
 def treinar_modelo(historico):
     if len(historico) < 35:
         return None, None, None, None
 
     X = extrair_features(historico)
-    y_terminal = [n % 10 for n in list(historico)[1+len(historico)-len(X):]]
-    y_duzia = [extrair_duzia(n) for n in list(historico)[1+len(historico)-len(X):]]
-    y_coluna = [extrair_coluna(n) for n in list(historico)[1+len(historico)-len(X):]]
-    y_numeros = list(historico)[1+len(historico)-len(X):]
+    
+    # Calcular início para alinhar com X
+    inicio = len(historico) - len(X) - 1
+    historico_alvo = list(historico)[inicio + 1:]
+
+    y_terminal = [n % 10 for n in historico_alvo]
+    y_duzia = [extrair_duzia(n) for n in historico_alvo]
+    y_coluna = [extrair_coluna(n) for n in historico_alvo]
+    y_numeros = historico_alvo
+
+    # Garantir todos com o mesmo tamanho
+    min_len = min(len(X), len(y_terminal), len(y_duzia), len(y_coluna), len(y_numeros))
+    X = X[:min_len]
+    y_terminal = y_terminal[:min_len]
+    y_duzia = y_duzia[:min_len]
+    y_coluna = y_coluna[:min_len]
+    y_numeros = y_numeros[:min_len]
 
     modelo_terminal = RandomForestClassifier(n_estimators=100, random_state=42)
     modelo_duzia = RandomForestClassifier(n_estimators=100, random_state=42)
@@ -156,10 +165,14 @@ def treinar_modelo(historico):
     modelo_coluna.fit(X, y_coluna)
     modelo_numeros.fit(X, y_numeros)
 
-
-
     salvar(modelo_terminal, MODELO_PATH)
     return modelo_terminal, modelo_duzia, modelo_coluna, modelo_numeros
+
+
+    
+
+    
+
 
 def prever_terminais(modelo, historico):
     if not modelo or len(historico) < 13:
