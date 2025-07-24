@@ -59,6 +59,31 @@ def extrair_coluna(numero):
     else:
         return 3
 
+def extrair_duzia(numero):
+    if 1 <= numero <= 12:
+        return 1
+    elif 13 <= numero <= 24:
+        return 2
+    elif 25 <= numero <= 36:
+        return 3
+    return 0  # Para o zero
+
+def extrair_coluna(numero):
+    if numero == 0:
+        return 0
+    elif numero % 3 == 1:
+        return 1
+    elif numero % 3 == 2:
+        return 2
+    else:
+        return 3
+
+def obter_cor(numero):
+    if numero == 0:
+        return 0  # Verde
+    vermelhos = {1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36}
+    return 1 if numero in vermelhos else 2  # 1 = vermelho, 2 = preto
+
 def extrair_features(historico):
     features = []
     janela = 12
