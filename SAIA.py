@@ -98,7 +98,7 @@ st_autorefresh(interval=AUTOREFRESH_INTERVAL, key="refresh")
 
 # === ESTADOS ===
 historico = carregar(HISTORICO_PATH, deque(maxlen=MAX_HISTORICO))
-ultimo_alerta = carregar(ULTIMO_ALERTA_PATH, {"referencia": None, "entrada": []})
+ultimo_alerta = carregar(ULTIMO_ALERTA_PATH, {"referencia": None, "entrada": [], "resultado_enviado": None})
 contadores = carregar(CONTADORES_PATH, {"green": 0, "red": 0})
 
 # === CONSULTA API ===
@@ -147,9 +147,11 @@ if modelo:
             mensagem += "🎯 Aguardando resultado..."
 
             enviar_telegram(mensagem)
+
             ultimo_alerta = {
                 "referencia": historico[-2],
-                "entrada": entrada
+                "entrada": entrada,
+                "resultado_enviado": None  # Resetado para novo número
             }
             salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
     else:
@@ -158,19 +160,24 @@ else:
     st.info("⏳ Aguardando dados suficientes para treinar a IA...")
 
 # === RESULTADO (GREEN / RED) ===
-if ultimo_alerta.get("entrada") and ultimo_alerta.get("resultado_enviado") != numero_atual:
+if (
+    ultimo_alerta.get("entrada") and
+    ultimo_alerta.get("resultado_enviado") != numero_atual
+):
     if numero_atual in ultimo_alerta["entrada"]:
         contadores["green"] += 1
         resultado = "🟢 GREEN!"
     else:
         contadores["red"] += 1
         resultado = "🔴 RED!"
+
     salvar(contadores, CONTADORES_PATH)
     st.markdown(f"📈 Resultado do número {numero_atual}: **{resultado}**")
 
     mensagem_resultado = f"🎯 Resultado do número <b>{numero_atual}</b>: <b>{resultado}</b>"
     enviar_telegram(mensagem_resultado)
 
+    # Marcar resultado como enviado e limpar entrada
     ultimo_alerta["resultado_enviado"] = numero_atual
     ultimo_alerta["entrada"] = []
     ultimo_alerta["referencia"] = None
