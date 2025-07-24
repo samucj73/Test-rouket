@@ -263,7 +263,7 @@ if "quentes_enviados" in ultimo_alerta and ultimo_alerta["quentes_enviados"]:
 if 'modelo_numeros' not in locals():
     _, _, _, modelo_numeros = treinar_modelo(historico)
 
-numeros_previstos = prever_numeros_quentes(modelo_numeros, historico, prob_minima=0.25)
+numeros_previstos = prever_numeros_quentes(modelo_numeros, historico, prob_minima=0.08)
 
 if 'quentes' not in locals():
     quentes = []
