@@ -63,10 +63,11 @@ def extrair_coluna(numero):
     def extrair_features(historico):
         features = []
         janela = 12
+        
         for i in range(len(historico) - janela):
-        janela_atual = list(historico)[i:i+janela]
-        ult_num = janela_atual[-1]
-        penult_num = janela_atual[-2] if len(janela_atual) >= 2 else -1
+            janela_atual = list(historico)[i:i+janela]
+            ult_num = janela_atual[-1]
+            penult_num = janela_atual[-2] if len(janela_atual) >= 2 else -1
 
         # Frequência dos números
         contagem_numeros = Counter(janela_atual)
