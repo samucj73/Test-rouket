@@ -147,6 +147,11 @@ ultimo_alerta = carregar(ULTIMO_ALERTA_PATH, {
 })
 contadores = carregar(CONTADORES_PATH, {"green": 0, "red": 0})
 
+contadores = carregar(CONTADORES_PATH, {
+    "green": 0, "red": 0,
+    "quentes_green": 0, "quentes_red": 0
+})
+
 # ✅ CORREÇÃO: API JSON CORRETO
 try:
     response = requests.get(API_URL, timeout=3)
@@ -235,6 +240,18 @@ if ultimo_alerta["entrada"] and ultimo_alerta.get("resultado_enviado") != numero
     ultimo_alerta["terminais"] = []
     salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
 
+# === RESULTADO QUENTES GREEN / RED ===
+if "quentes_enviados" in ultimo_alerta and ultimo_alerta["quentes_enviados"]:
+    if numero_atual in ultimo_alerta["quentes_enviados"]:
+        contadores["quentes_green"] += 1
+        resultado_quentes = "🟢 GREEN nos Quentes!"
+    else:
+        contadores["quentes_red"] += 1
+        resultado_quentes = "🔴 RED nos Quentes!"
+
+    salvar(contadores, CONTADORES_PATH)
+    enviar_telegram(f"🔥 Resultado dos Quentes: <b>{resultado_quentes}</b>", TELEGRAM_QUENTES_CHAT_ID)
+
 # === NÚMEROS QUENTES IA ===
 # 🔥 Números Quentes previstos pela IA
 if 'modelo_numeros' not in locals():
@@ -257,3 +274,6 @@ if ultimo_alerta.get("quentes_enviados") != quentes:
 col1, col2 = st.columns(2)
 col1.metric("🟢 GREENs", contadores["green"])
 col2.metric("🔴 REDs", contadores["red"])
+col3, col4 = st.columns(2)
+col3.metric("🔥 Quentes GREENs", contadores["quentes_green"])
+col4.metric("🔥 Quentes REDs", contadores["quentes_red"])
