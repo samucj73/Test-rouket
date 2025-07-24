@@ -14,7 +14,7 @@ HISTORICO_PATH = "historico.pkl"
 ULTIMO_ALERTA_PATH = "ultimo_alerta.pkl"
 CONTADORES_PATH = "contadores.pkl"
 MAX_HISTORICO = 30
-PROBABILIDADE_MINIMA = 0.45
+PROBABILIDADE_MINIMA = 0.35
 AUTOREFRESH_INTERVAL = 5000
 
 # === TELEGRAM ===
@@ -107,7 +107,6 @@ try:
     response.raise_for_status()
     data = response.json()
     numero_atual = data["data"]["result"]["outcome"]["number"]
-    timestamp = data["data"]["startedAt"]
 except Exception as e:
     st.error(f"⚠️ Erro ao acessar API: {e}")
     st.stop()
@@ -131,32 +130,32 @@ if len(historico) >= 15 and (not ultimo_alerta["entrada"] or ultimo_alerta["resu
         st.success(f"✅ Entrada IA: {entrada} | Terminais: {terminais_escolhidos}")
         st.write("🔍 Probabilidades:", terminais_previstos)
 
-        # === VERIFICA SE É UMA NOVA PREVISÃO ===
-        # === VERIFICA SE É UMA NOVA PREVISÃO (usando o número atual como referência) ===
-ja_enviou_alerta = ultimo_alerta.get("referencia") == numero_atual
-previsao_repetida = (
-    set(entrada) == set(ultimo_alerta.get("entrada", [])) and
-    set(terminais_escolhidos) == set(ultimo_alerta.get("terminais", []))
-)
+        # === VERIFICA SE A PREVISÃO JÁ FOI ENVIADA PARA ESTE NÚMERO ===
+        ja_enviou_alerta = ultimo_alerta.get("referencia") == numero_atual
+        previsao_repetida = (
+            set(entrada) == set(ultimo_alerta.get("entrada", [])) and
+            set(terminais_escolhidos) == set(ultimo_alerta.get("terminais", []))
+        )
 
-if not ja_enviou_alerta and not previsao_repetida:
-    mensagem = "🚨 <b>Entrada IA</b>\n📊 <b>Terminais previstos:</b>\n"
-    for t in terminais_escolhidos:
-        numeros_terminal = [n for n in range(37) if n % 10 == t]
-        mensagem += f"{t} → {numeros_terminal}\n"
-    mensagem += "🎯 Aguardando resultado..."
+        if not ja_enviou_alerta and not previsao_repetida:
+            mensagem = "🚨 <b>Entrada IA</b>\n📊 <b>Terminais previstos:</b>\n"
+            for t in terminais_escolhidos:
+                numeros_terminal = [n for n in range(37) if n % 10 == t]
+                mensagem += f"{t} → {numeros_terminal}\n"
+            mensagem += "🎯 Aguardando resultado..."
 
-    enviar_telegram(mensagem)
-    ultimo_alerta = {
-        "referencia": numero_atual,  # Agora é o número, não o timestamp
-        "entrada": entrada,
-        "terminais": terminais_escolhidos,
-        "resultado_enviado": None
-    }
-    salvar(ultimo_alerta, ULTIMO_ALERTA_PATH) 
-
-
-
+            enviar_telegram(mensagem)
+            ultimo_alerta = {
+                "referencia": numero_atual,
+                "entrada": entrada,
+                "terminais": terminais_escolhidos,
+                "resultado_enviado": None
+            }
+            salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
+    else:
+        st.warning("⚠️ Aguardando nova entrada da IA...")
+else:
+    st.info("⏳ Aguardando dados suficientes para treinar a IA...")
 
 # === RESULTADO (GREEN / RED) ===
 if ultimo_alerta["entrada"] and ultimo_alerta.get("resultado_enviado") != numero_atual:
@@ -174,14 +173,11 @@ if ultimo_alerta["entrada"] and ultimo_alerta.get("resultado_enviado") != numero
     mensagem_resultado = f"🎯 Resultado do número <b>{numero_atual}</b>: <b>{resultado}</b>"
     enviar_telegram(mensagem_resultado)
 
-    # Zera alerta após resultado
-    # Zera alerta após resultado
-ultimo_alerta["resultado_enviado"] = numero_atual
-ultimo_alerta["entrada"] = []
-ultimo_alerta["terminais"] = []
-# NÃO ZERE a "referencia" aqui!
-salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
-  
+    # Zera apenas entrada e terminais, mas mantém referência
+    ultimo_alerta["resultado_enviado"] = numero_atual
+    ultimo_alerta["entrada"] = []
+    ultimo_alerta["terminais"] = []
+    salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
 
 # === CONTADORES ===
 col1, col2 = st.columns(2)
