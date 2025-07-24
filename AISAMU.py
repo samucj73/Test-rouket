@@ -132,12 +132,15 @@ if len(historico) >= 15:
         st.write("🔍 Probabilidades:", terminais_previstos)
 
         # === VERIFICA SE É UMA NOVA PREVISÃO ===
-        nova_previsao = (
-            set(entrada) != set(ultimo_alerta.get("entrada", [])) or
-            set(terminais_escolhidos) != set(ultimo_alerta.get("terminais", []))
-        )
+        # === VERIFICA SE É UMA NOVA PREVISÃO (DE FATO NOVA, NÃO REPETIDA) ===
+nova_previsao = (
+    timestamp != ultimo_alerta.get("referencia") and
+    set(entrada) != set(ultimo_alerta.get("entrada", [])) and
+    set(terminais_escolhidos) != set(ultimo_alerta.get("terminais", []))
+)
 
-        if nova_previsao:
+if nova_previsao:
+        
             mensagem = "🚨 <b>Entrada IA</b>\n📊 <b>Terminais previstos:</b>\n"
             for t in terminais_escolhidos:
                 numeros_terminal = [n for n in range(37) if n % 10 == t]
