@@ -99,12 +99,15 @@ def prever_multiclasse(modelo, historico):
     probas = modelo.predict_proba(entrada)[0]
     return sorted([(i, p) for i, p in enumerate(probas)], key=lambda x: -x[1])
 
-def prever_numeros_quentes(modelo, historico):
+def prever_numeros_quentes(modelo, historico, prob_minima=0.25):
     if not modelo or len(historico) < 25:
         return []
     entrada = [[historico[-1] % 10]]
     probas = modelo.predict_proba(entrada)[0]
-    return sorted([(i, p) for i, p in enumerate(probas)], key=lambda x: -x[1])[:5]
+    previsoes_filtradas = [(i, p) for i, p in enumerate(probas) if p >= prob_minima]
+    return sorted(previsoes_filtradas, key=lambda x: -x[1])[:5]
+
+
 
 def gerar_entrada_com_vizinhos(terminais):
     numeros_base = []
@@ -260,8 +263,9 @@ if "quentes_enviados" in ultimo_alerta and ultimo_alerta["quentes_enviados"]:
 if 'modelo_numeros' not in locals():
     _, _, _, modelo_numeros = treinar_modelo(historico)
 
-numeros_previstos = prever_numeros_quentes(modelo_numeros, historico)
-quentes = [num for num, _ in numeros_previstos]
+numeros_previstos = prever_numeros_quentes(modelo_numeros, historico, prob_minima=0.25)
+
+
 
 st.write("🔥 Números Quentes previstos pela IA:", quentes)
 
