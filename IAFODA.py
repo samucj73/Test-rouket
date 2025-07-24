@@ -259,17 +259,19 @@ if "quentes_enviados" in ultimo_alerta and ultimo_alerta["quentes_enviados"]:
     enviar_telegram(f"🔥 Resultado dos Quentes: <b>{resultado_quentes}</b>", TELEGRAM_QUENTES_CHAT_ID)
 
 # === NÚMEROS QUENTES IA ===
-# 🔥 Números Quentes previstos pela IA
+st.write("🔥 Números Quentes previstos pela IA")
+
+# Garante que o modelo está carregado
 if 'modelo_numeros' not in locals():
     _, _, _, modelo_numeros = treinar_modelo(historico)
 
+# Faz a previsão com probabilidade mínima
 numeros_previstos = prever_numeros_quentes(modelo_numeros, historico, prob_minima=0.08)
 
-if 'quentes' not in locals():
-    quentes = []
+# Extrai os números quentes (mesmo se a lista for vazia)
+quentes = [num for num, _ in numeros_previstos]
 
-
-
+# Mostra os quentes na tela
 st.write("🔥 Números Quentes previstos pela IA:", quentes)
 
 if ultimo_alerta.get("quentes_enviados") != quentes:
