@@ -13,7 +13,7 @@ MODELO_PATH = "modelo_terminal.pkl"
 HISTORICO_PATH = "historico.pkl"
 ULTIMO_ALERTA_PATH = "ultimo_alerta.pkl"
 CONTADORES_PATH = "contadores.pkl"
-MAX_HISTORICO = 30
+MAX_HISTORICO = 300
 PROBABILIDADE_MINIMA = 0.50
 AUTOREFRESH_INTERVAL = 5000
 
@@ -63,7 +63,7 @@ def extrair_features(historico):
     return [[n % 10] for n in historico]
 
 def treinar_modelo(historico):
-    if len(historico) < 25:
+    if len(historico) < 35:
         return None, None, None
     X = extrair_features(historico)
     y_terminal = [n % 10 for n in list(historico)[1:]]
@@ -82,7 +82,7 @@ def treinar_modelo(historico):
     return modelo_terminal, modelo_duzia, modelo_coluna
 
 def prever_terminais(modelo, historico):
-    if not modelo or len(historico) < 5:
+    if not modelo or len(historico) < 15:
         return []
     ultima_entrada = [[historico[-1] % 10]]
     probas = modelo.predict_proba(ultima_entrada)[0]
