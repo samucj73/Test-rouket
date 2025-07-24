@@ -86,7 +86,7 @@ def treinar_modelo(historico):
     return modelo_terminal, modelo_duzia, modelo_coluna, modelo_numeros
 
 def prever_terminais(modelo, historico):
-    if not modelo or len(historico) < 15:
+    if not modelo or len(historico) < 13:
         return []
     ultima_entrada = [[historico[-1] % 10]]
     probas = modelo.predict_proba(ultima_entrada)[0]
