@@ -168,18 +168,25 @@ def treinar_modelo(historico):
     salvar(modelo_terminal, MODELO_PATH)
     return modelo_terminal, modelo_duzia, modelo_coluna, modelo_numeros
 
-
-    
-
-    
-
-
 def prever_terminais(modelo, historico):
-    if not modelo or len(historico) < 13:
+    if len(historico) < 12:
         return []
-    ultima_entrada = [[historico[-1] % 10]]
+
+    # Extração de features usando a mesma função do treinamento
+    X = extrair_features(historico)
+    ultima_entrada = [X[-1]]  # Deve ser uma lista com o último item (shape: [1, n_features])
+    
     probas = modelo.predict_proba(ultima_entrada)[0]
-    return sorted([(i, p) for i, p in enumerate(probas)], key=lambda x: -x[1])[:2]
+    previsoes = [(i, p) for i, p in enumerate(probas)]
+    return sorted(previsoes, key=lambda x: -x[1])[:3]
+
+
+    
+
+    
+
+
+
 
 def prever_multiclasse(modelo, historico):
     if not modelo or len(historico) < 25:
