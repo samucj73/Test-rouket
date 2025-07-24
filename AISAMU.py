@@ -132,28 +132,29 @@ if len(historico) >= 15:
         st.write("🔍 Probabilidades:", terminais_previstos)
 
         # === VERIFICA SE É UMA NOVA PREVISÃO ===
-    nova_previsao = (
+       # === VERIFICA SE É UMA NOVA PREVISÃO (de fato nova) ===
+nova_previsao = (
     timestamp != ultimo_alerta.get("referencia") and
     set(entrada) != set(ultimo_alerta.get("entrada", [])) and
     set(terminais_escolhidos) != set(ultimo_alerta.get("terminais", []))
 )
 
 if nova_previsao:
-        
-            mensagem = "🚨 <b>Entrada IA</b>\n📊 <b>Terminais previstos:</b>\n"
-            for t in terminais_escolhidos:
-                numeros_terminal = [n for n in range(37) if n % 10 == t]
-                mensagem += f"{t} → {numeros_terminal}\n"
-            mensagem += "🎯 Aguardando resultado..."
+    mensagem = "🚨 <b>Entrada IA</b>\n📊 <b>Terminais previstos:</b>\n"
+    for t in terminais_escolhidos:
+        numeros_terminal = [n for n in range(37) if n % 10 == t]
+        mensagem += f"{t} → {numeros_terminal}\n"
+    mensagem += "🎯 Aguardando resultado..."
 
-            enviar_telegram(mensagem)
-            ultimo_alerta = {
-                "referencia": timestamp,
-                "entrada": entrada,
-                "terminais": terminais_escolhidos,
-                "resultado_enviado": None
-            }
-            salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
+    enviar_telegram(mensagem)
+    ultimo_alerta = {
+        "referencia": timestamp,
+        "entrada": entrada,
+        "terminais": terminais_escolhidos,
+        "resultado_enviado": None
+    }
+    salvar(ultimo_alerta, ULTIMO_ALERTA_PATH) 
+    
 else:
         st.warning("⚠️ Aguardando nova entrada da IA...")
 else:
