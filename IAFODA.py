@@ -236,8 +236,13 @@ if ultimo_alerta["entrada"] and ultimo_alerta.get("resultado_enviado") != numero
     salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
 
 # === NÚMEROS QUENTES IA ===
+# 🔥 Números Quentes previstos pela IA
+if 'modelo_numeros' not in locals():
+    _, _, _, modelo_numeros = treinar_modelo(historico)
+
 numeros_previstos = prever_numeros_quentes(modelo_numeros, historico)
 quentes = [num for num, _ in numeros_previstos]
+
 st.write("🔥 Números Quentes previstos pela IA:", quentes)
 
 if ultimo_alerta.get("quentes_enviados") != quentes:
