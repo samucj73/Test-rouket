@@ -14,7 +14,7 @@ HISTORICO_PATH = "historico.pkl"
 ULTIMO_ALERTA_PATH = "ultimo_alerta.pkl"
 CONTADORES_PATH = "contadores.pkl"
 MAX_HISTORICO = 300
-PROBABILIDADE_MINIMA = 0.50
+PROBABILIDADE_MINIMA = 0.45
 AUTOREFRESH_INTERVAL = 5000
 
 # === TELEGRAM ===
@@ -214,7 +214,10 @@ else:
     st.info("⏳ Aguardando dados suficientes para treinar a IA...")
 
 if ultimo_alerta["entrada"] and ultimo_alerta.get("resultado_enviado") != numero_atual:
-    if numero_atual in ultimo_alerta["entrada"]:
+    deu_green = numero_atual in ultimo_alerta["entrada"]
+    deu_quente = numero_atual in quentes
+
+    if deu_green:
         contadores["green"] += 1
         resultado = "🟢 GREEN!"
     else:
@@ -222,15 +225,21 @@ if ultimo_alerta["entrada"] and ultimo_alerta.get("resultado_enviado") != numero
         resultado = "🔴 RED!"
 
     salvar(contadores, CONTADORES_PATH)
-    st.markdown(f"📈 Resultado do número {numero_atual}: **{resultado}**")
 
-    mensagem_resultado = f"🎯 Resultado do número <b>{numero_atual}</b>: <b>{resultado}</b>"
-    enviar_telegram(mensagem_resultado, TELEGRAM_IA_CHAT_ID)
+    resultado_msg = f"📈 Resultado do número <b>{numero_atual}</b>: <b>{resultado}</b>"
+    if deu_quente:
+        resultado_msg += "\n🔥 Esse número estava entre os <b>quentes previstos</b> pela IA!"
+
+    st.markdown(resultado_msg.replace("<b>", "**").replace("</b>", "**"))
+
+    enviar_telegram(f"🎯 {resultado_msg}", TELEGRAM_IA_CHAT_ID)
 
     ultimo_alerta["resultado_enviado"] = numero_atual
     ultimo_alerta["entrada"] = []
     ultimo_alerta["terminais"] = []
     salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
+
+
 
 # 🔥 Números Quentes previstos pela IA
 numeros_previstos = prever_numeros_quentes(modelo_numeros, historico)
