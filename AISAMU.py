@@ -132,14 +132,14 @@ if len(historico) >= 15:
         st.write("🔍 Probabilidades:", terminais_previstos)
 
         # === VERIFICA SE É UMA NOVA PREVISÃO ===
-       # === VERIFICA SE É UMA NOVA PREVISÃO (de fato nova) ===
-nova_previsao = (
-    timestamp != ultimo_alerta.get("referencia") and
-    set(entrada) != set(ultimo_alerta.get("entrada", [])) and
-    set(terminais_escolhidos) != set(ultimo_alerta.get("terminais", []))
+        # === VERIFICA SE É UMA NOVA PREVISÃO (usando o número atual como referência) ===
+ja_enviou_alerta = ultimo_alerta.get("referencia") == numero_atual
+previsao_repetida = (
+    set(entrada) == set(ultimo_alerta.get("entrada", [])) and
+    set(terminais_escolhidos) == set(ultimo_alerta.get("terminais", []))
 )
 
-if nova_previsao:
+if not ja_enviou_alerta and not previsao_repetida:
     mensagem = "🚨 <b>Entrada IA</b>\n📊 <b>Terminais previstos:</b>\n"
     for t in terminais_escolhidos:
         numeros_terminal = [n for n in range(37) if n % 10 == t]
@@ -148,13 +148,14 @@ if nova_previsao:
 
     enviar_telegram(mensagem)
     ultimo_alerta = {
-        "referencia": timestamp,
+        "referencia": numero_atual,  # Agora é o número, não o timestamp
         "entrada": entrada,
         "terminais": terminais_escolhidos,
         "resultado_enviado": None
     }
     salvar(ultimo_alerta, ULTIMO_ALERTA_PATH) 
-    
+
+
 
 
 # === RESULTADO (GREEN / RED) ===
