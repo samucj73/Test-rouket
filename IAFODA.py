@@ -62,6 +62,10 @@ def extrair_coluna(numero):
 def extrair_features(historico):
     return [[n % 10] for n in historico]
 
+st.write("🔄 Última entrada prevista:", ultimo_alerta["entrada"])
+st.write("🎯 Resultado já enviado para:", ultimo_alerta["resultado_enviado"])
+st.write("🔢 Número atual:", numero_atual)
+
 def treinar_modelo(historico):
     if len(historico) < 35:
         return None, None, None, None
