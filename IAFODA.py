@@ -30,30 +30,42 @@ ordem_roleta = [
     35, 3, 26
 ]
 
-# === FUNÇÕES AUXILIARES ===
 def carregar(path, default):
     return joblib.load(path) if os.path.exists(path) else default
 
 def salvar(obj, path):
     joblib.dump(obj, path)
 
-def extrair_terminal(numero): return numero % 10
+def extrair_terminal(numero):
+    return numero % 10
+
 def extrair_duzia(numero):
-    if numero == 0: return -1
-    elif numero <= 12: return 1
-    elif numero <= 24: return 2
-    else: return 3
+    if numero == 0:
+        return -1
+    elif numero <= 12:
+        return 1
+    elif numero <= 24:
+        return 2
+    else:
+        return 3
+
 def extrair_coluna(numero):
-    if numero == 0: return -1
-    elif numero % 3 == 1: return 1
-    elif numero % 3 == 2: return 2
-    else: return 3
+    if numero == 0:
+        return -1
+    elif numero % 3 == 1:
+        return 1
+    elif numero % 3 == 2:
+        return 2
+    else:
+        return 3
+
 def extrair_features(historico):
     return [[n % 10] for n in historico]
 
 def treinar_modelo(historico):
     if len(historico) < 35:
         return None, None, None, None
+
     X = extrair_features(historico)
     y_terminal = [n % 10 for n in list(historico)[1:]]
     y_duzia = [extrair_duzia(n) for n in list(historico)[1:]]
@@ -76,22 +88,16 @@ def treinar_modelo(historico):
 def prever_terminais(modelo, historico):
     if modelo is None:
         return []
+
     X = extrair_features(historico)
     proba = modelo.predict_proba([X[-1]])[0]
     top_indices = np.argsort(proba)[::-1][:2]
     return [(i, proba[i]) for i in top_indices if proba[i] >= PROBABILIDADE_MINIMA]
 
-def prever_multiclasse(modelo, historico):
-    if modelo is None:
-        return []
-    X = extrair_features(historico)
-    proba = modelo.predict_proba([X[-1]])[0]
-    top = np.argsort(proba)[::-1]
-    return [(i, proba[i]) for i in top]
-
 def prever_numeros_quentes(modelo, historico):
     if modelo is None:
         return []
+
     X = extrair_features(historico)
     proba = modelo.predict_proba([X[-1]])[0]
     top_indices = np.argsort(proba)[::-1][:5]
@@ -99,42 +105,38 @@ def prever_numeros_quentes(modelo, historico):
 
 def enviar_telegram(mensagem, chat_id):
     url = f"https://api.telegram.org/bot{TELEGRAM_IA_TOKEN}/sendMessage"
-    payload = {"chat_id": chat_id, "text": mensagem, "parse_mode": "HTML"}
+    payload = {
+        "chat_id": chat_id,
+        "text": mensagem,
+        "parse_mode": "HTML"
+    }
     try:
         requests.post(url, data=payload)
     except Exception as e:
-        st.error(f"Erro ao enviar mensagem: {e}")
+        st.error(f"Erro ao enviar mensagem para o Telegram: {e}")
 
 def obter_ultimo_numero():
     try:
         response = requests.get(API_URL)
         if response.status_code == 200:
-            return int(response.json()["winningNumber"])
-    except: return None
+            data = response.json()
+            numero = int(data["winningNumber"])
+            return numero
+    except Exception as e:
+        st.error(f"Erro ao obter o último número: {e}")
+    return None
 
-def gerar_entrada_com_vizinhos(terminais):
-    vizinhos = set()
-    for t in terminais:
-        grupo = [n for n in ordem_roleta if n % 10 == t]
-        for n in grupo:
-            idx = ordem_roleta.index(n)
-            vizinhos.update([
-                ordem_roleta[(idx - 1) % len(ordem_roleta)],
-                n,
-                ordem_roleta[(idx + 1) % len(ordem_roleta)],
-            ])
-    return sorted(vizinhos)
-
-# === INICIALIZAÇÃO ===
+# === INICIALIZAÇÃO DO APP ===
 st.set_page_config(layout="centered", page_title="IA Roleta")
 st.title("🎰 IA Roleta")
 st_autorefresh(interval=AUTOREFRESH_INTERVAL, key="refresh")
 
 historico = carregar(HISTORICO_PATH, deque(maxlen=MAX_HISTORICO))
-ultimo_alerta = carregar(ULTIMO_ALERTA_PATH, {"entrada": [], "resultado_enviado": None, "terminais": [], "quentes_enviados": []})
+ultimo_alerta = carregar(ULTIMO_ALERTA_PATH, {"entrada": [], "resultado_enviado": None, "terminais": []})
 contadores = carregar(CONTADORES_PATH, {"green": 0, "red": 0})
 
 numero_atual = obter_ultimo_numero()
+
 if numero_atual is not None:
     if not historico or numero_atual != historico[-1]:
         historico.append(numero_atual)
@@ -194,23 +196,26 @@ if numero_atual is not None:
 
         salvar(contadores, CONTADORES_PATH)
         st.markdown(f"🎯 Resultado: **{resultado}**")
+
         enviar_telegram(f"🎯 Resultado: <b>{numero_atual}</b> → <b>{resultado}</b>", TELEGRAM_IA_CHAT_ID)
+
         ultimo_alerta["resultado_enviado"] = numero_atual
         salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
 
-    # 🔥 NÚMEROS QUENTES
+    # 🔥 Números quentes
     if modelo_numeros:
         numeros_quentes = prever_numeros_quentes(modelo_numeros, historico)
         st.write("🔥 Números Quentes:", numeros_quentes)
 
         if numeros_quentes != ultimo_alerta.get("quentes_enviados"):
             msg_quentes = "<b>🔥 Números Quentes Previstos:</b>\n"
-            msg_quentes += "\n".join(str(n) for n in numeros_quentes)
+            for n in numeros_quentes:
+                msg_quentes += f"{n}\n"
             enviar_telegram(msg_quentes, TELEGRAM_QUENTES_CHAT_ID)
             ultimo_alerta["quentes_enviados"] = numeros_quentes
             salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
 
-# === CONTADORES
+# Mostrar contadores
 col1, col2 = st.columns(2)
 col1.metric("🟢 GREENs", contadores["green"])
 col2.metric("🔴 REDs", contadores["red"])
