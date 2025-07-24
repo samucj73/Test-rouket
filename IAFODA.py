@@ -64,22 +64,26 @@ def extrair_features(historico):
 
 def treinar_modelo(historico):
     if len(historico) < 35:
-        return None, None, None
+        return None, None, None, None
+
     X = extrair_features(historico)
     y_terminal = [n % 10 for n in list(historico)[1:]]
     y_duzia = [extrair_duzia(n) for n in list(historico)[1:]]
     y_coluna = [extrair_coluna(n) for n in list(historico)[1:]]
+    y_numeros = list(historico)[1:]
 
     modelo_terminal = RandomForestClassifier(n_estimators=100, random_state=42)
     modelo_duzia = RandomForestClassifier(n_estimators=100, random_state=42)
     modelo_coluna = RandomForestClassifier(n_estimators=100, random_state=42)
+    modelo_numeros = RandomForestClassifier(n_estimators=100, random_state=42)
 
     modelo_terminal.fit(X[:-1], y_terminal)
     modelo_duzia.fit(X[:-1], y_duzia)
     modelo_coluna.fit(X[:-1], y_coluna)
+    modelo_numeros.fit(X[:-1], y_numeros)
 
     salvar(modelo_terminal, MODELO_PATH)
-    return modelo_terminal, modelo_duzia, modelo_coluna
+    return modelo_terminal, modelo_duzia, modelo_coluna, modelo_numeros
 
 def prever_terminais(modelo, historico):
     if not modelo or len(historico) < 15:
@@ -94,6 +98,13 @@ def prever_multiclasse(modelo, historico):
     entrada = [[historico[-1] % 10]]
     probas = modelo.predict_proba(entrada)[0]
     return sorted([(i, p) for i, p in enumerate(probas)], key=lambda x: -x[1])
+
+def prever_numeros_quentes(modelo, historico):
+    if not modelo or len(historico) < 5:
+        return []
+    entrada = [[historico[-1] % 10]]
+    probas = modelo.predict_proba(entrada)[0]
+    return sorted([(i, p) for i, p in enumerate(probas)], key=lambda x: -x[1])[:5]
 
 def gerar_entrada_com_vizinhos(terminais):
     numeros_base = []
@@ -126,7 +137,6 @@ st.set_page_config(page_title="IA Sinais Roleta", layout="centered")
 st.title("🎯 IA Sinais de Roleta: Terminais + Dúzia + Coluna + Quentes")
 st_autorefresh(interval=AUTOREFRESH_INTERVAL, key="refresh")
 
-# Carregar estados
 historico = carregar(HISTORICO_PATH, deque(maxlen=MAX_HISTORICO))
 ultimo_alerta = carregar(ULTIMO_ALERTA_PATH, {
     "referencia": None,
@@ -137,7 +147,6 @@ ultimo_alerta = carregar(ULTIMO_ALERTA_PATH, {
 })
 contadores = carregar(CONTADORES_PATH, {"green": 0, "red": 0})
 
-# Consulta API
 try:
     response = requests.get(API_URL, timeout=3)
     response.raise_for_status()
@@ -147,16 +156,14 @@ except Exception as e:
     st.error(f"⚠️ Erro ao acessar API: {e}")
     st.stop()
 
-# Atualiza histórico
 if not historico or numero_atual != historico[-1]:
     historico.append(numero_atual)
     salvar(historico, HISTORICO_PATH)
 
 st.write("🎲 Último número:", numero_atual)
 
-# IA: Treinamento e Previsão
 if len(historico) >= 15 and (not ultimo_alerta["entrada"] or ultimo_alerta["resultado_enviado"] == numero_atual):
-    modelo_terminal, modelo_duzia, modelo_coluna = treinar_modelo(historico)
+    modelo_terminal, modelo_duzia, modelo_coluna, modelo_numeros = treinar_modelo(historico)
     terminais_previstos = prever_terminais(modelo_terminal, historico)
 
     if terminais_previstos and terminais_previstos[0][1] >= PROBABILIDADE_MINIMA:
@@ -179,7 +186,6 @@ if len(historico) >= 15 and (not ultimo_alerta["entrada"] or ultimo_alerta["resu
                 mensagem += f"{t} → {numeros_terminal}\n"
             mensagem += "🎯 Aguardando resultado..."
 
-            # Dúzia e Coluna
             duzia_prev = prever_multiclasse(modelo_duzia, historico)
             coluna_prev = prever_multiclasse(modelo_coluna, historico)
 
@@ -207,7 +213,6 @@ if len(historico) >= 15 and (not ultimo_alerta["entrada"] or ultimo_alerta["resu
 else:
     st.info("⏳ Aguardando dados suficientes para treinar a IA...")
 
-# Resultado GREEN / RED
 if ultimo_alerta["entrada"] and ultimo_alerta.get("resultado_enviado") != numero_atual:
     if numero_atual in ultimo_alerta["entrada"]:
         contadores["green"] += 1
@@ -227,18 +232,19 @@ if ultimo_alerta["entrada"] and ultimo_alerta.get("resultado_enviado") != numero
     ultimo_alerta["terminais"] = []
     salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
 
-# 5 Números Quentes
-contador_freq = Counter(historico)
-quentes = [num for num, _ in contador_freq.most_common(5)]
-st.write("🔥 5 Números Quentes:", quentes)
+# 🔥 Números Quentes previstos pela IA
+numeros_previstos = prever_numeros_quentes(modelo_numeros, historico)
+quentes = [num for num, _ in numeros_previstos]
+st.write("🔥 Números Quentes previstos pela IA:", quentes)
 
 if ultimo_alerta.get("quentes_enviados") != quentes:
-    mensagem_quentes = "🔥 <b>Top 5 Números Quentes</b>\n" + ", ".join(map(str, quentes))
+    mensagem_quentes = "🔥 <b>Números Quentes Previstos pela IA</b>\n"
+    for num, prob in numeros_previstos:
+        mensagem_quentes += f"{num} → {prob:.2%}\n"
     enviar_telegram(mensagem_quentes, TELEGRAM_QUENTES_CHAT_ID)
     ultimo_alerta["quentes_enviados"] = quentes
     salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
 
-# Contadores na interface
 col1, col2 = st.columns(2)
 col1.metric("🟢 GREENs", contadores["green"])
 col2.metric("🔴 REDs", contadores["red"])
