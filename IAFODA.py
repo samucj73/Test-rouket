@@ -110,11 +110,9 @@ def extrair_coluna(numero):
     return features
 
     
-
-
-
+def treinar_modelo(historico):
     if len(historico) < 35:
-        return None, None, None, None
+    return None, None, None, None
 
     X = extrair_features(historico)
     y_terminal = [n % 10 for n in list(historico)[1+len(historico)-len(X):]]
