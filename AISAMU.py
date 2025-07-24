@@ -175,11 +175,13 @@ if ultimo_alerta["entrada"] and ultimo_alerta.get("resultado_enviado") != numero
     enviar_telegram(mensagem_resultado)
 
     # Zera alerta após resultado
-    ultimo_alerta["resultado_enviado"] = numero_atual
-    ultimo_alerta["entrada"] = []
-    ultimo_alerta["terminais"] = []
-    ultimo_alerta["referencia"] = None
-    salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
+    # Zera alerta após resultado
+ultimo_alerta["resultado_enviado"] = numero_atual
+ultimo_alerta["entrada"] = []
+ultimo_alerta["terminais"] = []
+# NÃO ZERE a "referencia" aqui!
+salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
+  
 
 # === CONTADORES ===
 col1, col2 = st.columns(2)
