@@ -404,6 +404,26 @@ if ultimo_alerta.get("quentes_referencia") != numero_atual:
     ultimo_alerta["quentes_referencia"] = numero_atual
     salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
 
+# === RESULTADO QUENTES GREEN / RED (com controle de repetição) ===
+if (
+    "quentes_enviados" in ultimo_alerta
+    and ultimo_alerta["quentes_enviados"]
+    and ultimo_alerta.get("resultado_quente_enviado") != numero_atual
+):
+    if numero_atual in ultimo_alerta["quentes_enviados"]:
+        contadores["quentes_green"] += 1
+        mensagem_quente = f"🔥 Quente 🟢: <b>{numero_atual}</b>"
+    else:
+        contadores["quentes_red"] += 1
+        mensagem_quente = f"🔥 Quente 🔴: <b>{numero_atual}</b>"
+
+    # Marcar que já enviou alerta do resultado quente para esse número
+    ultimo_alerta["resultado_quente_enviado"] = numero_atual
+    salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
+
+    salvar(contadores, CONTADORES_PATH)
+    enviar_telegram(mensagem_quente, TELEGRAM_QUENTES_CHAT_ID)
+
 # === CONTADORES ===
 col1, col2 = st.columns(2)
 col1.metric("🟢 GREENs", contadores["green"])
