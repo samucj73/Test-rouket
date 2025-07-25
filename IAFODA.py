@@ -194,7 +194,7 @@ def prever_multiclasse(modelo, historico, prob_minima=0.90):
 
 
 
-def prever_numeros_quentes(modelo, historico, prob_minima=0.15):
+def prever_numeros_quentes(modelo, historico, prob_minima=0.05):
     if not modelo or len(historico) < 15:
         return []
     
