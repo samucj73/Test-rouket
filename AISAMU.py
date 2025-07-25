@@ -6,6 +6,7 @@ from collections import deque, Counter
 from sklearn.ensemble import RandomForestClassifier
 import numpy as np
 from streamlit_autorefresh import st_autorefresh
+import html
 
 # === CONFIGURAÇÕES ===
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
@@ -102,6 +103,9 @@ ultimo_alerta = carregar(ULTIMO_ALERTA_PATH, {
 contadores = carregar(CONTADORES_PATH, {"green": 0, "red": 0})
 
 # === CONSULTA API ===
+  # ← Adicionado no início
+
+# === CONSULTA API ===
 try:
     response = requests.get(API_URL, timeout=3)
     response.raise_for_status()
@@ -141,7 +145,8 @@ if len(historico) >= 15 and (not ultimo_alerta["entrada"] or ultimo_alerta["resu
             mensagem = "🚨 <b>Entrada IA</b>\n📊 <b>Terminais previstos:</b>\n"
             for t in terminais_escolhidos:
                 numeros_terminal = [n for n in range(37) if n % 10 == t]
-                mensagem += f"{t} → {numeros_terminal}\n"
+                lista_str = ", ".join(map(str, numeros_terminal))
+                mensagem += f"{html.escape(str(t))} → {html.escape(lista_str)}\n"
             mensagem += "🎯 Aguardando resultado..."
 
             enviar_telegram(mensagem)
@@ -156,6 +161,7 @@ if len(historico) >= 15 and (not ultimo_alerta["entrada"] or ultimo_alerta["resu
         st.warning("⚠️ Aguardando nova entrada da IA...")
 else:
     st.info("⏳ Aguardando dados suficientes para treinar a IA...")
+
 
 # === RESULTADO (GREEN / RED) ===
 if ultimo_alerta["entrada"] and ultimo_alerta.get("resultado_enviado") != numero_atual:
