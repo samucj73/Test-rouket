@@ -259,6 +259,7 @@ ultimo_alerta = carregar(ULTIMO_ALERTA_PATH, {
     "terminais": [],
     "resultado_enviado": None,
     "quentes_enviados": []
+    "quentes_referencia": None
 })
 contadores = carregar(CONTADORES_PATH, {"green": 0, "red": 0})
 
