@@ -284,38 +284,58 @@ if not historico or numero_atual != historico[-1]:
 st.write("🎲 Último número:", numero_atual)
 
 # === ENTRADA DA IA ===
+# === ENTRADA DA IA ===
 if len(historico) >= 15 and (not ultimo_alerta["entrada"] or ultimo_alerta["resultado_enviado"] == numero_atual):
     modelo_terminal, modelo_duzia, modelo_coluna, modelo_numeros = treinar_modelo(historico)
     terminais_previstos = prever_terminais(modelo_terminal, historico)
 
     if terminais_previstos and terminais_previstos[0][1] >= PROBABILIDADE_MINIMA:
         terminais_escolhidos = [t[0] for t in terminais_previstos]
-        entrada = gerar_entrada_com_vizinhos(terminais_escolhidos)
+        entrada = gerar_entrada_com_vizinhos(terminais_escolhidos)  # Ainda usado para verificar hit/red
 
-        st.success(f"✅ Entrada IA: {entrada} | Terminais: {terminais_escolhidos}")
+        st.success(f"✅ Entrada IA: Terminais {terminais_escolhidos}")
         st.write("🔍 Probabilidades:", terminais_previstos)
 
-        ja_enviou_alerta = ultimo_alerta.get("referencia") == numero_atual
         previsao_repetida = (
             set(entrada) == set(ultimo_alerta.get("entrada", [])) and
             set(terminais_escolhidos) == set(ultimo_alerta.get("terminais", []))
         )
+        ja_enviou_alerta = ultimo_alerta.get("referencia") == numero_atual
 
         if not ja_enviou_alerta and not previsao_repetida:
-            duzia_prev = prever_multiclasse(modelo_duzia, historico)
-            coluna_prev = prever_multiclasse(modelo_coluna, historico)
-
             mensagem = "🚨 <b>ENTRADA IA</b>\n\n"
-
             mensagem += "T: " + " | ".join(f"{t}️⃣" for t in terminais_escolhidos) + "\n"
-            mensagem += "➡️ " + " - ".join(str(n) for n in entrada if isinstance(n, int)) + "\n\n"
 
-            mensagem += "D: " + " | ".join(f"{d}️⃣ → {p:.0%}" for d, p in duzia_prev if p > 0) + "\n"
-            mensagem += "C: " + " | ".join(f"{c}️⃣ → {p:.0%}" for c, p in coluna_prev if p > 0) + "\n\n"
+            duzia_prev = prever_multiclasse(modelo_duzia, historico)
+            mensagem += "D: " + " | ".join(f"{d}️⃣ → {p:.0%}" for d, p in duzia_prev[:2] if d > 0) + "\n"
+
+            coluna_prev = prever_multiclasse(modelo_coluna, historico)
+            mensagem += "C: " + " | ".join(f"{c}️⃣ → {p:.0%}" for c, p in coluna_prev[:2] if c > 0) + "\n\n"
 
             mensagem += "⏳ Aguardando resultado..."
-
             enviar_telegram(mensagem, TELEGRAM_IA_CHAT_ID)
+
+            ultimo_alerta.update({
+                "referencia": numero_atual,
+                "entrada": entrada,
+                "terminais": terminais_escolhidos,
+                "resultado_enviado": None
+            })
+            salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
+    else:
+        st.warning("⚠️ Aguardando nova entrada da IA...")
+else:
+    st.info("⏳ Aguardando dados suficientes para treinar a IA...")
+
+# === RESULTADO IA ===
+if ultimo_alerta["entrada"] and ultimo_alerta["resultado_enviado"] != numero_atual:
+    if numero_atual in ultimo_alerta["entrada"]:
+        enviar_telegram(f"✅ <b>HIT</b> 🎯 Número {numero_atual} estava na entrada!", TELEGRAM_IA_CHAT_ID)
+    else:
+        enviar_telegram(f"❌ <b>RED</b> 🟥 Número {numero_atual} fora da entrada.", TELEGRAM_IA_CHAT_ID)
+    ultimo_alerta["resultado_enviado"] = numero_atual
+    salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
+
         
             
             
