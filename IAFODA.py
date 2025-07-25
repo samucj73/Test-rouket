@@ -357,8 +357,8 @@ if ultimo_alerta["entrada"] and ultimo_alerta.get("resultado_enviado") != numero
     salvar(contadores, CONTADORES_PATH)
     st.markdown(f"📈 Resultado do número {numero_atual}: **{resultado}**")
 
-    mensagem_resultado = f"🎯 Resultado do número <b>{numero_atual}</b>: <b>{resultado}</b>"
-    enviar_telegram(mensagem_resultado, TELEGRAM_IA_CHAT_ID)
+    # mensagem_resultado = f"🎯 Resultado do número <b>{numero_atual}</b>: <b>{resultado}</b>"
+    # enviar_telegram(mensagem_resultado, TELEGRAM_IA_CHAT_ID)
 
     ultimo_alerta["resultado_enviado"] = numero_atual
     ultimo_alerta["entrada"] = []
