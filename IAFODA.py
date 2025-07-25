@@ -315,6 +315,8 @@ coluna_prev = prever_multiclasse(modelo_coluna, historico)
 mensagem += "C: " + " | ".join(f"{c}️⃣ → {p:.0%}" for c, p in coluna_prev if c > 0) + "\n\n"
 
 mensagem += "⏳ Aguardando resultado..."
+            
+            
 
 
 
