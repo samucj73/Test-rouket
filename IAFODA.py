@@ -14,7 +14,7 @@ MODELO_PATH = "modelo_terminal.pkl"
 HISTORICO_PATH = "historico.pkl"
 ULTIMO_ALERTA_PATH = "ultimo_alerta.pkl"
 CONTADORES_PATH = "contadores.pkl"
-MAX_HISTORICO = 300
+MAX_HISTORICO = 600
 PROBABILIDADE_MINIMA = 0.45
 AUTOREFRESH_INTERVAL = 5000
 
