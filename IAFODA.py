@@ -300,10 +300,10 @@ if len(historico) >= 15 and (not ultimo_alerta["entrada"] or ultimo_alerta["resu
             set(entrada) == set(ultimo_alerta.get("entrada", [])) and
             set(terminais_escolhidos) == set(ultimo_alerta.get("terminais", []))
         )
-    if not ja_enviou_alerta and not previsao_repetida:
+        if not ja_enviou_alerta and not previsao_repetida:
             duzia_prev = prever_multiclasse(modelo_duzia, historico)
             coluna_prev = prever_multiclasse(modelo_coluna, historico)
-                    mensagem = "🚨 <b>ENTRADA IA</b>\n\n"
+            mensagem = "🚨 <b>ENTRADA IA</b>\n\n"
 
 mensagem += "T: " + " | ".join(f"{t}️⃣" for t in terminais_escolhidos) + "\n"
 mensagem += "➡️ " + " - ".join(str(n) for n in entrada) + "\n\n"
