@@ -325,18 +325,16 @@ mensagem += "⏳ Aguardando resultado..."
 
         
 
-        
-
-            ultimo_alerta.update({
-                "referencia": numero_atual,
-                "entrada": entrada,
-                "terminais": terminais_escolhidos,
-                "resultado_enviado": None
+        ultimo_alerta.update({
+            "referencia": numero_atual,
+            "entrada": entrada,
+            "terminais": terminais_escolhidos,
+            "resultado_enviado": None
             })
             salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
     else:
         st.warning("⚠️ Aguardando nova entrada da IA...")
-else:
+    else:
     st.info("⏳ Aguardando dados suficientes para treinar a IA...")
 
 # === RESULTADO GREEN / RED ===
