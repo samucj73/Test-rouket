@@ -332,6 +332,29 @@ else:
     st.info("⏳ Aguardando dados suficientes para treinar a IA...")
 
 # === RESULTADO IA ===
+# === CONFERÊNCIA DO RESULTADO (ENVIA APENAS UMA VEZ) ===
+if ultimo_alerta["entrada"] and ultimo_alerta.get("resultado_enviado") != numero_atual:
+    if numero_atual in ultimo_alerta["entrada"]:
+        contadores["green"] += 1
+        resultado = "🟢 GREEN!"
+    else:
+        contadores["red"] += 1
+        resultado = "🔴 RED!"
+
+    salvar(contadores, CONTADORES_PATH)
+    st.markdown(f"📈 Resultado do número {numero_atual}: **{resultado}**")
+
+    # Envia resultado para Telegram
+    mensagem_resultado = f"🎯 Resultado do número <b>{numero_atual}</b>: <b>{resultado}</b>"
+    enviar_telegram(mensagem_resultado)
+
+    # Marca que o resultado foi enviado e limpa estado da entrada
+    ultimo_alerta.update({
+        "resultado_enviado": numero_atual,
+        "entrada": [],
+        "referencia": None
+    })
+    salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
 
 
 
