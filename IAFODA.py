@@ -181,7 +181,7 @@ def prever_terminais(modelo, historico):
     previsoes = [(i, p) for i, p in enumerate(probas)]
     return sorted(previsoes, key=lambda x: -x[1])[:1]
 
-def prever_multiclasse(modelo, historico):
+def prever_multiclasse(modelo, historico, prob_minima=0.35):
     if len(historico) < 12:
         return []
 
@@ -189,8 +189,10 @@ def prever_multiclasse(modelo, historico):
     entrada = [X[-1]]  # última entrada com mesmo número de features usadas no treino
 
     probas = modelo.predict_proba(entrada)[0]
-    previsoes = [(i, p) for i, p in enumerate(probas)]
-    return sorted(previsoes, key=lambda x: -x[1])[:2]
+    previsoes = [(i, p) for i, p in enumerate(probas) if p >= prob_minima]
+    return sorted(previsoes, key=lambda x: -x[1])[:1]  # Retorna só a melhor
+
+
 
 def prever_numeros_quentes(modelo, historico, prob_minima=0.05):
     if not modelo or len(historico) < 15:
@@ -308,8 +310,8 @@ if len(historico) >= 15 and (not ultimo_alerta["entrada"] or ultimo_alerta["resu
         if not ja_enviou_alerta and not previsao_repetida:
         
             # === NOVA MENSAGEM SIMPLES ===
-            duzia_prev = prever_multiclasse(modelo_duzia, historico)
-            coluna_prev = prever_multiclasse(modelo_coluna, historico)
+            duzia_prev = prever_multiclasse(modelo_duzia, historico, prob_minima=0.35)
+            coluna_prev = prever_multiclasse(modelo_coluna, historico, prob_minima=0.35)
 
             melhor_duzia = next((d for d, p in duzia_prev if d > 0), None)
             melhor_coluna = next((c for c, p in coluna_prev if c > 0), None)
