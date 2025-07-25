@@ -304,16 +304,19 @@ if len(historico) >= 15 and (not ultimo_alerta["entrada"] or ultimo_alerta["resu
         ja_enviou_alerta = ultimo_alerta.get("referencia") == numero_atual
 
         if not ja_enviou_alerta and not previsao_repetida:
-            mensagem = "🚨 <b>ENTRADA IA</b>\n\n"
-            mensagem += "T: " + " | ".join(f"{t}️⃣" for t in terminais_escolhidos) + "\n"
-
+            # === NOVA MENSAGEM SIMPLES ===
             duzia_prev = prever_multiclasse(modelo_duzia, historico)
-            mensagem += "D: " + " | ".join(f"{d}️⃣ → {p:.0%}" for d, p in duzia_prev[:2] if d > 0) + "\n"
-
             coluna_prev = prever_multiclasse(modelo_coluna, historico)
-            mensagem += "C: " + " | ".join(f"{c}️⃣ → {p:.0%}" for c, p in coluna_prev[:2] if c > 0) + "\n\n"
 
-            mensagem += "⏳ Aguardando resultado..."
+            melhor_duzia = next((d for d, p in duzia_prev if d > 0), None)
+            melhor_coluna = next((c for c, p in coluna_prev if c > 0), None)
+
+            mensagem = f"🎯 Jogar\nT {terminais_escolhidos[0]}"
+            if melhor_duzia:
+                mensagem += f" | D {melhor_duzia}"
+            if melhor_coluna:
+                mensagem += f" | C {melhor_coluna}"
+
             enviar_telegram(mensagem, TELEGRAM_IA_CHAT_ID)
 
             ultimo_alerta.update({
