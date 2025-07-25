@@ -181,8 +181,8 @@ def prever_terminais(modelo, historico):
     previsoes = [(i, p) for i, p in enumerate(probas)]
     return sorted(previsoes, key=lambda x: -x[1])[:1]
 
-def prever_multiclasse(modelo, historico, prob_minima=0.75):
-    if len(historico) < 12:
+def prever_multiclasse(modelo, historico, prob_minima=0.90):
+    if len(historico) < 50:
         return []
 
     X = extrair_features(historico)
@@ -199,11 +199,11 @@ def prever_numeros_quentes(modelo, historico, prob_minima=0.05):
         return []
     
     X = extrair_features(historico)
-    entrada = [X[-1]]  # Usa a última entrada com as mesmas features do treinamento
+    entrada = [X[-2]]  # Usa a última entrada com as mesmas features do treinamento
     
     probas = modelo.predict_proba(entrada)[0]
     previsoes_filtradas = [(i, p) for i, p in enumerate(probas) if p >= prob_minima]
-    return sorted(previsoes_filtradas, key=lambda x: -x[1])[:7]
+    return sorted(previsoes_filtradas, key=lambda x: -x[2])[:7]
 
 
     
