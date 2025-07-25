@@ -203,7 +203,7 @@ def prever_numeros_quentes(modelo, historico, prob_minima=0.05):
     
     probas = modelo.predict_proba(entrada)[0]
     previsoes_filtradas = [(i, p) for i, p in enumerate(probas) if p >= prob_minima]
-    return sorted(previsoes_filtradas, key=lambda x: -x[2])[:7]
+    return sorted(previsoes_filtradas, key=lambda x: -x[1])[:7]
 
 
     
