@@ -301,9 +301,9 @@ if len(historico) >= 15 and (not ultimo_alerta["entrada"] or ultimo_alerta["resu
             set(entrada) == set(ultimo_alerta.get("entrada", [])) and
             set(terminais_escolhidos) == set(ultimo_alerta.get("terminais", []))
         )
-        ja_enviou_alerta = ultimo_alerta.get("referencia") == numero_atual
+      #  ja_enviou_alerta = ultimo_alerta.get("referencia") == numero_atual
 
-        # if not ja_enviou_alerta and not previsao_repetida:
+        if not ja_enviou_alerta and not previsao_repetida:
         if not ja_enviou_alerta and not previsao_repetida and ultimo_alerta.get("resultado_enviado") == numero_atual:
             # === NOVA MENSAGEM SIMPLES ===
             duzia_prev = prever_multiclasse(modelo_duzia, historico)
