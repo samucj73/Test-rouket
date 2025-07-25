@@ -332,13 +332,7 @@ else:
     st.info("⏳ Aguardando dados suficientes para treinar a IA...")
 
 # === RESULTADO IA ===
-if ultimo_alerta["entrada"] and ultimo_alerta["resultado_enviado"] != numero_atual:
-    if numero_atual in ultimo_alerta["entrada"]:
-        enviar_telegram(f"✅ <b>HIT</b> 🎯 Número {numero_atual} estava na entrada!", TELEGRAM_IA_CHAT_ID)
-    else:
-        enviar_telegram(f"❌ <b>RED</b> 🟥 Número {numero_atual} fora da entrada.", TELEGRAM_IA_CHAT_ID)
-    ultimo_alerta["resultado_enviado"] = numero_atual
-    salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
+
 
         
             
