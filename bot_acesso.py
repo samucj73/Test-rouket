@@ -2,8 +2,8 @@ import telebot
 import json
 from random import randint
 
-TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
-CANAL_ID = -1002796136111
+# TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
+# CANAL_ID = -1002796136111
 USUARIOS_JSON = "usuarios_autorizados.json"
 
 bot = telebot.TeleBot(TOKEN)
