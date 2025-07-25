@@ -2,8 +2,8 @@ import streamlit as st
 import json
 import requests
 
-TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
-CANAL_ID = "-1002796136111"
+# TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
+# CANAL_ID = "-1002796136111"
 USUARIOS_JSON = "usuarios_autorizados.json"
 
 def carregar_usuarios():
