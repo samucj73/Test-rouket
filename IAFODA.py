@@ -375,16 +375,7 @@ if ultimo_alerta["entrada"] and ultimo_alerta.get("resultado_enviado") != numero
     salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
 
 # === RESULTADO QUENTES GREEN / RED ===
-if "quentes_enviados" in ultimo_alerta and ultimo_alerta["quentes_enviados"]:
-    if numero_atual in ultimo_alerta["quentes_enviados"]:
-        contadores["quentes_green"] += 1
-        resultado_quentes = "🟢 GREEN nos Quentes!"
-    else:
-        contadores["quentes_red"] += 1
-        resultado_quentes = "🔴 RED nos Quentes!"
 
-    salvar(contadores, CONTADORES_PATH)
-    enviar_telegram(f"🔥 Resultado dos Quentes: <b>{resultado_quentes}</b>", TELEGRAM_QUENTES_CHAT_ID)
 
 # === NÚMEROS QUENTES IA ===
 # 
