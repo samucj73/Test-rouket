@@ -316,6 +316,19 @@ mensagem += "C: " + " | ".join(f"{c}️⃣ → {p:.0%}" for c, p in coluna_prev 
 
 mensagem += "⏳ Aguardando resultado..."
 
+if previsao_disponivel:  # Substitua pela sua condição correta
+    ultimo_alerta.update({
+        "referencia": numero_atual,
+        "entrada": entrada,
+        "terminais": terminais_escolhidos,
+        "resultado_enviado": None
+    })
+    salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
+elif outra_condicao:  # Se tiver outra condição intermediária
+    st.warning("⚠️ Aguardando nova entrada da IA...")
+else:
+    st.info("⏳ Aguardando dados suficientes para treinar a IA...")
+
             
 
 
