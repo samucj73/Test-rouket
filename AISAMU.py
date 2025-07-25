@@ -103,9 +103,6 @@ ultimo_alerta = carregar(ULTIMO_ALERTA_PATH, {
 contadores = carregar(CONTADORES_PATH, {"green": 0, "red": 0})
 
 # === CONSULTA API ===
-# import html  # ← adicione no topo do seu código, se ainda não estiver
-
-# === CONSULTA API ===
 try:
     response = requests.get(API_URL, timeout=3)
     response.raise_for_status()
@@ -142,10 +139,11 @@ if len(historico) >= 15 and (not ultimo_alerta["entrada"] or ultimo_alerta["resu
         )
 
         if not ja_enviou_alerta and not previsao_repetida:
-            # === MENSAGEM AJUSTADA ===
-            mensagem = "🚨 <b>Entrada IA</b>\n📊 <b>Terminais previstos:</b> "
-            mensagem += " | ".join(f"<b>{html.escape(str(t))}</b>" for t in terminais_escolhidos)
-            mensagem += "\n🎯 Aguardando resultado..."
+            mensagem = "🚨 <b>Entrada IA</b>\n📊 <b>Terminais previstos:</b>\n"
+            for t in terminais_escolhidos:
+                numeros_terminal = [n for n in range(37) if n % 10 == t]
+                mensagem += f"{t} → {numeros_terminal}\n"
+            mensagem += "🎯 Aguardando resultado..."
 
             enviar_telegram(mensagem)
             ultimo_alerta = {
