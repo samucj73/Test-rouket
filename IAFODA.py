@@ -300,21 +300,23 @@ if len(historico) >= 15 and (not ultimo_alerta["entrada"] or ultimo_alerta["resu
             set(entrada) == set(ultimo_alerta.get("entrada", [])) and
             set(terminais_escolhidos) == set(ultimo_alerta.get("terminais", []))
         )
+
         if not ja_enviou_alerta and not previsao_repetida:
             duzia_prev = prever_multiclasse(modelo_duzia, historico)
             coluna_prev = prever_multiclasse(modelo_coluna, historico)
+
             mensagem = "🚨 <b>ENTRADA IA</b>\n\n"
 
-mensagem += "T: " + " | ".join(f"{t}️⃣" for t in terminais_escolhidos) + "\n"
-mensagem += "➡️ " + " - ".join(str(n) for n in entrada) + "\n\n"
+            mensagem += "T: " + " | ".join(f"{t}️⃣" for t in terminais_escolhidos) + "\n"
+            mensagem += "➡️ " + " - ".join(str(n) for n in entrada if isinstance(n, int)) + "\n\n"
 
-duzia_prev = prever_multiclasse(modelo_duzia, historico)
-mensagem += "D: " + " | ".join(f"{d}️⃣ → {p:.0%}" for d, p in duzia_prev if d > 0) + "\n"
+            mensagem += "D: " + " | ".join(f"{d}️⃣ → {p:.0%}" for d, p in duzia_prev if p > 0) + "\n"
+            mensagem += "C: " + " | ".join(f"{c}️⃣ → {p:.0%}" for c, p in coluna_prev if p > 0) + "\n\n"
 
-coluna_prev = prever_multiclasse(modelo_coluna, historico)
-mensagem += "C: " + " | ".join(f"{c}️⃣ → {p:.0%}" for c, p in coluna_prev if c > 0) + "\n\n"
+            mensagem += "⏳ Aguardando resultado..."
 
-mensagem += "⏳ Aguardando resultado..."
+            enviar_telegram(mensagem, TELEGRAM_IA_CHAT_ID)
+        
             
             
 
