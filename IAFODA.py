@@ -390,30 +390,26 @@ if "quentes_enviados" in ultimo_alerta and ultimo_alerta["quentes_enviados"]:
 # === NÚMEROS QUENTES IA ===
 st.write("🔥 Números Quentes previstos pela IA")
 
-# Garante que o modelo está carregado
 if 'modelo_numeros' not in locals():
     _, _, _, modelo_numeros = treinar_modelo(historico)
 
-# Faz a previsão com probabilidade mínima
 numeros_previstos = prever_numeros_quentes(modelo_numeros, historico, prob_minima=0.05)
-
-# Extrai os quentes
 quentes = [num for num, _ in numeros_previstos]
-
-# Mostra os quentes na tela
 st.write("🔥 Números Quentes previstos pela IA:", quentes)
 
-# Verifica se já enviou alerta de quentes para esse número
-if ultimo_alerta.get("quentes_referencia") != numero_atual:
+# Define referência dos quentes com base na entrada usada na previsão
+referencia_quentes = historico[-2] if len(historico) >= 15 else None
+
+# Só envia se for um novo número base
+if referencia_quentes is not None and ultimo_alerta.get("quentes_referencia") != referencia_quentes:
     mensagem_quentes = "🔥 <b>Números Quentes Previstos pela IA</b>\n"
     for num, prob in numeros_previstos:
         mensagem_quentes += f"{num} → {prob:.2%}\n"
 
     enviar_telegram(mensagem_quentes, TELEGRAM_QUENTES_CHAT_ID)
 
-    # Atualiza o estado para não repetir alerta nesse número
     ultimo_alerta["quentes_enviados"] = quentes
-    ultimo_alerta["quentes_referencia"] = numero_atual
+    ultimo_alerta["quentes_referencia"] = referencia_quentes
     salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
 
 # === CONTADORES ===
