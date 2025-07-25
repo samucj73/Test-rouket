@@ -301,27 +301,25 @@ if len(historico) >= 15 and (not ultimo_alerta["entrada"] or ultimo_alerta["resu
             set(terminais_escolhidos) == set(ultimo_alerta.get("terminais", []))
         )
 
-        if not ja_enviou_alerta and not previsao_repetida:
-            mensagem = "🚨 <b>Entrada IA</b>\n📊 <b>Terminais previstos:</b>\n"
-            for t in terminais_escolhidos:
-                numeros_terminal = [n for n in range(37) if n % 10 == t]
-                mensagem += f"{t} → {numeros_terminal}\n"
-            mensagem += "🎯 Aguardando resultado..."
-
+                if not ja_enviou_alerta and not previsao_repetida:
             duzia_prev = prever_multiclasse(modelo_duzia, historico)
             coluna_prev = prever_multiclasse(modelo_coluna, historico)
 
-            mensagem += "\n📌 <b>Dúzia com maior chance:</b>\n"
-            for d, prob in duzia_prev[:2]:
-                if d != -1:
-                    mensagem += f"Dúzia {d} → {prob:.2%}\n"
+            mensagem = "🚨 <b>ENTRADA IA</b>\n\n"
 
-            mensagem += "\n📌 <b>Coluna com maior chance:</b>\n"
-            for c, prob in coluna_prev[:2]:
-                if c != -1:
-                    mensagem += f"Coluna {c} → {prob:.2%}\n"
+            mensagem += "T: " + " | ".join(f"{t}️⃣" for t in terminais_escolhidos) + "\n"
+            mensagem += "➡️ " + " - ".join(str(n) for n in entrada if isinstance(n, int)) + "\n\n"
+
+            mensagem += "D: " + " | ".join(f"{d}️⃣ → {p:.0%}" for d, p in duzia_prev if p > 0) + "\n"
+            mensagem += "C: " + " | ".join(f"{c}️⃣ → {p:.0%}" for c, p in coluna_prev if p > 0) + "\n\n"
+
+            mensagem += "⏳ Aguardando resultado..."
 
             enviar_telegram(mensagem, TELEGRAM_IA_CHAT_ID)
+
+        
+
+        
 
             ultimo_alerta.update({
                 "referencia": numero_atual,
