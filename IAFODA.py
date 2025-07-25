@@ -374,11 +374,31 @@ if ultimo_alerta["entrada"] and ultimo_alerta.get("resultado_enviado") != numero
     ultimo_alerta["terminais"] = []
     salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
 
-# === RESULTADO QUENTES GREEN / RED ===
-
-
+# === RESULTADO QUENTES GREEN / 
 # === NÚMEROS QUENTES IA ===
-# 
+st.write("🔥 Números Quentes previstos pela IA")
+
+if 'modelo_numeros' not in locals():
+    _, _, _, modelo_numeros = treinar_modelo(historico)
+
+numeros_previstos = prever_numeros_quentes(modelo_numeros, historico, prob_minima=0.05)
+quentes = [num for num, _ in numeros_previstos]
+st.write("🔥 Números Quentes previstos pela IA:", quentes)
+
+# Define referência dos quentes com base na entrada usada na previsão
+referencia_quentes = historico[-2] if len(historico) >= 15 else None
+
+# Só envia se for um novo número base
+if referencia_quentes is not None and ultimo_alerta.get("quentes_referencia") != referencia_quentes:
+    mensagem_quentes = "🔥 <b>Números Quentes Previstos pela IA</b>\n"
+    for num, prob in numeros_previstos:
+        mensagem_quentes += f"{num} → {prob:.2%}\n"
+
+    enviar_telegram(mensagem_quentes, TELEGRAM_QUENTES_CHAT_ID)
+
+    ultimo_alerta["quentes_enviados"] = quentes
+    ultimo_alerta["quentes_referencia"] = referencia_quentes
+    salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
 
 # === CONTADORES ===
 col1, col2 = st.columns(2)
