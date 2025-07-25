@@ -393,7 +393,7 @@ st.write("🔥 Números Quentes previstos pela IA:", quentes)
 
 # Verifica se já enviou alerta de quentes para esse número
 if ultimo_alerta.get("quentes_referencia") != numero_atual:
-    mensagem_quentes = "🔥 <b>Números Quentes Previstos pela IA</b>\n"
+    mensagem_quentes = "🔥 <b>Quentes IA</b>\n"
     for num, prob in numeros_previstos:
         mensagem_quentes += f"{num} → {prob:.2%}\n"
 
