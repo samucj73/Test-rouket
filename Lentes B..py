@@ -271,13 +271,14 @@ modelo_quentes = treinar_modelo_quentes(historico)
 quentes_bin = prever_quentes_binario(modelo_quentes, historico)
 
 quentes_formatados_bin = [str(num) for num, _ in quentes_bin]
-st.write("🔥 Quentes IA (binário):", ", ".join(quentes_formatados_bin))
+st.markdown(f"🔥 **Números Quentes IA:** {', '.join(quentes_formatados_bin)}")
 
 # ALERTA TELEGRAM
 if ultimo_alerta.get("quentes_referencia_binario") != numero_atual:
-    mensagem_bin = "🔥 <b>Quentes IA</b>\n" + " ".join(quentes_formatados_bin)
-    time.sleep(4)  # Delay após resultado
+    mensagem_bin = f"🔥 <b>Quentes IA</b>\n🎯 {' '.join(quentes_formatados_bin)}"
+    time.sleep(4)  # delay pequeno entre resultado e alerta
     enviar_telegram(mensagem_bin, TELEGRAM_QUENTES_CHAT_ID)
 
     ultimo_alerta["quentes_referencia_binario"] = numero_atual
     salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
+
