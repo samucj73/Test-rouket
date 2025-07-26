@@ -339,6 +339,47 @@ else:
     st.info("⏳ Aguardando dados suficientes para treinar a IA...")
 
 # === RESULTADO IA ===
+=== RESULTADO TERMINAL ===
+if (
+    "terminais" in ultimo_alerta
+    and ultimo_alerta["terminais"]
+    and ultimo_alerta.get("resultado_terminal_enviado") != numero_atual
+):
+    terminal_hit = int(str(numero_atual)[-1]) in ultimo_alerta["terminais"]
+    mensagem_terminal = f"🎯 Terminal {'🟢' if terminal_hit else '🔴'}: <b>{numero_atual}</b>"
+
+    ultimo_alerta["resultado_terminal_enviado"] = numero_atual
+    salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
+    time.sleep(4)  # espera 4 segundos antes de enviar
+    enviar_telegram(mensagem_terminal, TELEGRAM_IA_CHAT_ID)
+
+# === RESULTADO DÚZIA ===
+if (
+    "duzia" in ultimo_alerta
+    and ultimo_alerta["duzia"]
+    and ultimo_alerta.get("resultado_duzia_enviado") != numero_atual
+):
+    duzia_hit = numero_atual in ultimo_alerta["duzia"]
+    mensagem_duzia = f"📦 Dúzia {'🟢' if duzia_hit else '🔴'}: <b>{numero_atual}</b>"
+
+    ultimo_alerta["resultado_duzia_enviado"] = numero_atual
+    salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
+    time.sleep(4)  # espera mais 4 segundos
+    enviar_telegram(mensagem_duzia, TELEGRAM_IA_CHAT_ID)
+
+# === RESULTADO COLUNA ===
+if (
+    "coluna" in ultimo_alerta
+    and ultimo_alerta["coluna"]
+    and ultimo_alerta.get("resultado_coluna_enviado") != numero_atual
+):
+    coluna_hit = numero_atual in ultimo_alerta["coluna"]
+    mensagem_coluna = f"🏛️ Coluna {'🟢' if coluna_hit else '🔴'}: <b>{numero_atual}</b>"
+
+    ultimo_alerta["resultado_coluna_enviado"] = numero_atual
+    salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
+    time.sleep(4)  # mais 4 segundos de pausa
+    enviar_telegram(mensagem_coluna, TELEGRAM_IA_CHAT_ID)
 
 
 
@@ -427,47 +468,7 @@ if (
 
 # import time  # certifique-se de ter isso no topo do seu script
 
-# === RESULTADO TERMINAL ===
-if (
-    "terminais" in ultimo_alerta
-    and ultimo_alerta["terminais"]
-    and ultimo_alerta.get("resultado_terminal_enviado") != numero_atual
-):
-    terminal_hit = int(str(numero_atual)[-1]) in ultimo_alerta["terminais"]
-    mensagem_terminal = f"🎯 Terminal {'🟢' if terminal_hit else '🔴'}: <b>{numero_atual}</b>"
 
-    ultimo_alerta["resultado_terminal_enviado"] = numero_atual
-    salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
-    time.sleep(4)  # espera 4 segundos antes de enviar
-    enviar_telegram(mensagem_terminal, TELEGRAM_IA_CHAT_ID)
-
-# === RESULTADO DÚZIA ===
-if (
-    "duzia" in ultimo_alerta
-    and ultimo_alerta["duzia"]
-    and ultimo_alerta.get("resultado_duzia_enviado") != numero_atual
-):
-    duzia_hit = numero_atual in ultimo_alerta["duzia"]
-    mensagem_duzia = f"📦 Dúzia {'🟢' if duzia_hit else '🔴'}: <b>{numero_atual}</b>"
-
-    ultimo_alerta["resultado_duzia_enviado"] = numero_atual
-    salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
-    time.sleep(4)  # espera mais 4 segundos
-    enviar_telegram(mensagem_duzia, TELEGRAM_IA_CHAT_ID)
-
-# === RESULTADO COLUNA ===
-if (
-    "coluna" in ultimo_alerta
-    and ultimo_alerta["coluna"]
-    and ultimo_alerta.get("resultado_coluna_enviado") != numero_atual
-):
-    coluna_hit = numero_atual in ultimo_alerta["coluna"]
-    mensagem_coluna = f"🏛️ Coluna {'🟢' if coluna_hit else '🔴'}: <b>{numero_atual}</b>"
-
-    ultimo_alerta["resultado_coluna_enviado"] = numero_atual
-    salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
-    time.sleep(4)  # mais 4 segundos de pausa
-    enviar_telegram(mensagem_coluna, TELEGRAM_IA_CHAT_ID)
 
 # === CONTADORES ===
 col1, col2 = st.columns(2)
