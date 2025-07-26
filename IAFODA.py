@@ -406,7 +406,7 @@ referencia_quentes = historico[-2] if len(historico) >= 15 else None
 if referencia_quentes is not None and ultimo_alerta.get("quentes_referencia") != referencia_quentes:
     mensagem_quentes = "🔥 <b>Quentes🍀IA</b>\n"
     for num, prob in numeros_previstos:
-        mensagem_quentes += f"{num}\n"
+        mensagem_quentes += f"{num} → \n"
         
 
     enviar_telegram(mensagem_quentes, TELEGRAM_QUENTES_CHAT_ID)
