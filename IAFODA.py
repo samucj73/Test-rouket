@@ -236,30 +236,7 @@ def prever_numeros_quentes(modelo, historico, prob_minima=0.10):
     previsoes_filtradas = [(i, p) for i, p in enumerate(probas) if p >= prob_minima]
     return sorted(previsoes_filtradas, key=lambda x: -x[1])[:10]
 
-def treinar_modelo_quentes(historico, janela_freq=20):
-    if len(historico) < janela_freq + 12:
-        return None
 
-    X = []
-    y = []
-
-    for i in range(janela_freq + 12, len(historico)):
-        janela = list(historico)[i - janela_freq - 12:i - janela_freq]
-        top_frequentes = [n for n, _ in Counter(janela).most_common(5)]
-
-        features = extrair_features(historico[i - janela_freq - 12 : i - janela_freq + 12])
-        if not features:
-            continue
-
-        X.append(features[-1])
-        y.append(1 if historico[i] in top_frequentes else 0)
-
-    if not X or not y:
-        return None
-
-    modelo = RandomForestClassifier(n_estimators=100, random_state=42)
-    modelo.fit(X, y)
-    return modelo
 
 
 def prever_quentes_binario(modelo, historico):
@@ -291,6 +268,31 @@ if ultimo_alerta.get("quentes_referencia_binario") != numero_atual:
 
     ultimo_alerta["quentes_referencia_binario"] = numero_atual
     salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
+
+def treinar_modelo_quentes(historico, janela_freq=20):
+    if len(historico) < janela_freq + 12:
+        return None
+
+    X = []
+    y = []
+
+    for i in range(janela_freq + 12, len(historico)):
+        janela = list(historico)[i - janela_freq - 12:i - janela_freq]
+        top_frequentes = [n for n, _ in Counter(janela).most_common(5)]
+
+        features = extrair_features(historico[i - janela_freq - 12 : i - janela_freq + 12])
+        if not features:
+            continue
+
+        X.append(features[-1])
+        y.append(1 if historico[i] in top_frequentes else 0)
+
+    if not X or not y:
+        return None
+
+    modelo = RandomForestClassifier(n_estimators=100, random_state=42)
+    modelo.fit(X, y)
+    return modelo
 
 
     
