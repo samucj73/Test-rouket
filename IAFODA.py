@@ -221,6 +221,8 @@ def treinar_modelo_quentes(historico, janela_freq=20):
     return modelo
 
 
+
+
 def prever_terminais(modelo, historico):
     if len(historico) < 12:
         return []
