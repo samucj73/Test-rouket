@@ -438,7 +438,7 @@ if ultimo_alerta.get("quentes_referencia") != numero_atual:
     mensagem_quentes = "🔥 <b>Quentes IA</b>\n"
     for num, prob in numeros_previstos:
         mensagem_quentes += f"{num} → {prob:.2%}\n"
-        time.sleep(10)
+        
 
     enviar_telegram(mensagem_quentes, TELEGRAM_QUENTES_CHAT_ID)
 
