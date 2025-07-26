@@ -195,12 +195,12 @@ def prever_multiclasse(modelo, historico, prob_minima=0.90):
 
 
 
-def prever_numeros_quentes(modelo, historico, prob_minima=0.05):
-    if not modelo or len(historico) < 15:
+def prever_numeros_quentes(modelo, historico, prob_minima=0.10):
+    if not modelo or len(historico) < 30:
         return []
     
     X = extrair_features(historico)
-    entrada = [X[-2]]  # Usa a última entrada com as mesmas features do treinamento
+    entrada = [X[-1]]  # Usa a última entrada com as mesmas features do treinamento
     
     probas = modelo.predict_proba(entrada)[0]
     previsoes_filtradas = [(i, p) for i, p in enumerate(probas) if p >= prob_minima]
