@@ -339,7 +339,7 @@ else:
     st.info("⏳ Aguardando dados suficientes para treinar a IA...")
 
 # === RESULTADO IA ===
-=== RESULTADO TERMINAL ===
+# === RESULTADO TERMINAL ===
 if (
     "terminais" in ultimo_alerta
     and ultimo_alerta["terminais"]
