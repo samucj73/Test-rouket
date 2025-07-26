@@ -239,35 +239,10 @@ def prever_numeros_quentes(modelo, historico, prob_minima=0.10):
 
 
 
-def prever_quentes_binario(modelo, historico):
-    if not modelo or len(historico) < 30:
-        return []
 
-    X = extrair_features(historico)
-    entrada = [X[-1]]
-    probas = modelo.predict_proba(entrada)[0]
-
-    # Retorna os 5 números com maior chance de serem quentes
-    previsao = [(i, probas[i]) for i in range(37)]
-    top5 = sorted(previsao, key=lambda x: -x[1])[:5]
-    return top5
 
 # === NÚMEROS QUENTES BINÁRIOS (modelo dedicado) ===
-st.write("🔥 IA Quentes (modelo dedicado)")
 
-modelo_quentes = treinar_modelo_quentes(historico)
-quentes_bin = prever_quentes_binario(modelo_quentes, historico)
-
-quentes_formatados_bin = [str(num) for num, _ in quentes_bin]
-st.write("🔥 Quentes (binário):", quentes_formatados_bin)
-
-# Enviar alerta se ainda não foi enviado para esse número
-if ultimo_alerta.get("quentes_referencia_binario") != numero_atual:
-    mensagem_bin = "🔥 <b>Quentes Binário IA</b>\n" + " ".join(quentes_formatados_bin)
-    enviar_telegram(mensagem_bin, TELEGRAM_QUENTES_CHAT_ID)
-
-    ultimo_alerta["quentes_referencia_binario"] = numero_atual
-    salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
 
 
 
