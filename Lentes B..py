@@ -158,6 +158,46 @@ def extrair_features(historico):
 from collections import Counter
 from sklearn.ensemble import RandomForestClassifier
 
+ INÍCIO DO APP ===
+st.set_page_config(page_title="IA Sinais Roleta", layout="centered")
+st.title("🎯 IA Sinais de Roleta: Terminais + Dúzia + Coluna + Quentes")
+st_autorefresh(interval=AUTOREFRESH_INTERVAL, key="refresh")
+
+historico = carregar(HISTORICO_PATH, deque(maxlen=MAX_HISTORICO))
+ultimo_alerta = carregar(ULTIMO_ALERTA_PATH, {
+    "referencia": None,
+    "entrada": [],
+    "terminais": [],
+    "resultado_enviado": None,
+    "quentes_enviados": [],
+    "quentes_referencia": None
+})
+contadores = carregar(CONTADORES_PATH, {"green": 0, "red": 0})
+
+contadores = carregar(CONTADORES_PATH, {
+    "green": 0, "red": 0,
+    "quentes_green": 0, "quentes_red": 0
+})
+for chave in ["quentes_green", "quentes_red"]:
+    if chave not in contadores:
+        contadores[chave] = 0
+
+# ✅ CORREÇÃO: API JSON CORRETO
+try:
+    response = requests.get(API_URL, timeout=3)
+    response.raise_for_status()
+    data = response.json()
+    numero_atual = data["data"]["result"]["outcome"]["number"]
+except Exception as e:
+    st.error(f"⚠️ Erro ao acessar API: {e}")
+    st.stop()
+
+if not historico or numero_atual != historico[-1]:
+    historico.append(numero_atual)
+    salvar(historico, HISTORICO_PATH)
+
+st.write("🎲 Último número:", numero_atual)
+
 # === Função IA Quentes Binário ===
 def treinar_modelo_quentes(historico, janela_freq=20):
     if len(historico) < janela_freq + 12:
