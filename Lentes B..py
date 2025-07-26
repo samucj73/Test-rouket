@@ -155,6 +155,10 @@ def extrair_features(historico):
 
     return features
 
+from collections import Counter
+from sklearn.ensemble import RandomForestClassifier
+
+# === Função IA Quentes Binário ===
 def treinar_modelo_quentes(historico, janela_freq=20):
     if len(historico) < janela_freq + 12:
         return None
@@ -188,24 +192,35 @@ def prever_quentes_binario(modelo, historico):
     entrada = [X[-1]]
     probas = modelo.predict_proba(entrada)[0]
 
-    # Retorna os 5 números com maior chance de serem quentes
     previsao = [(i, probas[i]) for i in range(37)]
     top5 = sorted(previsao, key=lambda x: -x[1])[:5]
     return top5
-# === NÚMEROS QUENTES BINÁRIOS (modelo dedicado) ===
-st.write("🔥 IA Quentes (modelo dedicado)")
 
+# === CARREGAR OS DADOS ===
+historico = carregar(HISTORICO_PATH, deque(maxlen=MAX_HISTORICO))
+ultimo_alerta = carregar(ULTIMO_ALERTA_PATH, {
+    "referencia": None,
+    "entrada": None,
+    "terminais": [],
+    "resultado_enviado": None,
+    "quentes_referencia": None,
+    "quentes_referencia_binario": None
+})
+contadores = carregar(CONTADORES_PATH, {"acertos": 0, "erros": 0, "acertos_quentes": 0, "erros_quentes": 0})
+numero_atual = historico[-1] if historico else None
+
+# === IA Quentes Binário ===
 modelo_quentes = treinar_modelo_quentes(historico)
 quentes_bin = prever_quentes_binario(modelo_quentes, historico)
 
 quentes_formatados_bin = [str(num) for num, _ in quentes_bin]
-st.write("🔥 Quentes (binário):", quentes_formatados_bin)
+st.write("🔥 Quentes IA (binário):", ", ".join(quentes_formatados_bin))
 
-# Enviar alerta se ainda não foi enviado para esse número
+# ALERTA TELEGRAM
 if ultimo_alerta.get("quentes_referencia_binario") != numero_atual:
-    mensagem_bin = "🔥 <b>Quentes Binário IA</b>\n" + " ".join(quentes_formatados_bin)
+    mensagem_bin = "🔥 <b>Quentes IA</b>\n" + " ".join(quentes_formatados_bin)
+    time.sleep(4)  # Delay após resultado
     enviar_telegram(mensagem_bin, TELEGRAM_QUENTES_CHAT_ID)
 
     ultimo_alerta["quentes_referencia_binario"] = numero_atual
     salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
-
