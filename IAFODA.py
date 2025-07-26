@@ -212,12 +212,12 @@ def prever_terminais(modelo, historico):
     previsoes = [(i, p) for i, p in enumerate(probas)]
     return sorted(previsoes, key=lambda x: -x[1])[:1]
 
-def prever_multiclasse(modelo, historico, prob_minima=0.200):
+def prever_multiclasse(modelo, historico, prob_minima=0.500):
     if len(historico) < 50:
         return []
 
     X = extrair_features(historico)
-    entrada = [X[-1]]  # última entrada com mesmo número de features usadas no treino
+    entrada = [X[-5]]  # última entrada com mesmo número de features usadas no treino
 
     probas = modelo.predict_proba(entrada)[0]
     previsoes = [(i, p) for i, p in enumerate(probas) if p >= prob_minima]
