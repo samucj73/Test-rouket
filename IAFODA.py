@@ -122,8 +122,8 @@ def extrair_features(historico):
         cor_freq = [cores.count(0), cores.count(1), cores.count(2)]  # Verde, vermelho, preto
 
         # Frequência últimos 5 e 10
-        ult5 = janela_atual[-5:]
-        ult10 = janela_atual[-10:]
+        ult5 = janela_atual[-50:]
+        ult10 = janela_atual[-50:]
         freq_ult5 = [ult5.count(n) for n in range(37)]
         freq_ult10 = [ult10.count(n) for n in range(37)]
 
@@ -160,7 +160,7 @@ def extrair_features(historico):
 
 
 def treinar_modelo(historico):
-    if len(historico) < 50:
+    if len(historico) < 100:
         return None, None, None, None
 
     X = extrair_features(historico)
@@ -201,7 +201,7 @@ def treinar_modelo(historico):
 
 
 def prever_terminais(modelo, historico):
-    if len(historico) < 12:
+    if len(historico) < 13:
         return []
 
     # Extração de features usando a mesma função do treinamento
@@ -226,7 +226,7 @@ def prever_multiclasse(modelo, historico, prob_minima=0.90):
 
 
 def prever_numeros_quentes(modelo, historico, prob_minima=0.10):
-    if not modelo or len(historico) < 30:
+    if not modelo or len(historico) < 100:
         return []
     
     X = extrair_features(historico)
