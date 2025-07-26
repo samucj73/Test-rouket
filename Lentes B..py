@@ -158,7 +158,7 @@ def extrair_features(historico):
 from collections import Counter
 from sklearn.ensemble import RandomForestClassifier
 
- INÍCIO DO APP ===
+ # INÍCIO DO APP ===
 st.set_page_config(page_title="IA Sinais Roleta", layout="centered")
 st.title("🎯 IA Sinais de Roleta: Terminais + Dúzia + Coluna + Quentes")
 st_autorefresh(interval=AUTOREFRESH_INTERVAL, key="refresh")
