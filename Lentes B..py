@@ -199,6 +199,7 @@ if not historico or numero_atual != historico[-1]:
 st.write("🎲 Último número:", numero_atual)
 
 import requests
+🛠️ DEBUG: quentes_bin = [(5, 0.82), (14, 0.75), (8, 0.68), (23, 0.65), (36, 0.60)]
 
 def enviar_telegram(mensagem, chat_id):
     token = TELEGRAM_IA_TOKEN
