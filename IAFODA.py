@@ -418,33 +418,7 @@ if ultimo_alerta["entrada"] and ultimo_alerta.get("resultado_enviado") != numero
 
 # === RESULTADO QUENTES GREEN / 
 # # === NÚMEROS QUENTES IA ===
-st.write("🔥 Números Quentes previstos pela IA")
 
-# Garante que o modelo está carregado
-if 'modelo_numeros' not in locals():
-    _, _, _, modelo_numeros = treinar_modelo(historico)
-
-# Faz a previsão com probabilidade mínima
-numeros_previstos = prever_numeros_quentes(modelo_numeros, historico, prob_minima=0.05)
-
-# Extrai os quentes
-quentes = [num for num, _ in numeros_previstos]
-
-# Mostra os quentes na tela
-st.write("🔥 Números Quentes previstos pela IA:", quentes)
-
-# Verifica se já enviou alerta de quentes para esse número
-if ultimo_alerta.get("quentes_referencia") != numero_atual:
-    numeros_formatados = " ".join(str(num) for num, _ in numeros_previstos)
-    mensagem_quentes = f"🔥 <b>Quentes IA</b>\n{numeros_formatados}"
-        
-
-    enviar_telegram(mensagem_quentes, TELEGRAM_QUENTES_CHAT_ID)
-
-    # Atualiza o estado para não repetir alerta nesse número
-    ultimo_alerta["quentes_enviados"] = quentes
-    ultimo_alerta["quentes_referencia"] = numero_atual
-    salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
 
 # === RESULTADO QUENTES GREEN / RED (com controle de repetição) ===
 
