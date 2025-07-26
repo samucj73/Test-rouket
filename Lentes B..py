@@ -201,7 +201,7 @@ st.write("🎲 Último número:", numero_atual)
 import requests
 
 def enviar_telegram(mensagem, chat_id):
-    token = TELEGRAM_BOT_TOKEN
+    token = TELEGRAM_IA_TOKEN
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     dados = {
         "chat_id": chat_id,
