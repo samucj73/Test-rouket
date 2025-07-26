@@ -88,20 +88,26 @@ def obter_cor(numero):
 
 def extrair_features(historico):
     features = []
-    janela = 12
+    janela = 30
     for i in range(len(historico) - janela):
         janela_atual = list(historico)[i:i+janela]
         ult_num = janela_atual[-1]
         penult_num = janela_atual[-2] if len(janela_atual) >= 2 else -1
 
-        # Frequência dos números
+        # Frequência absoluta
         contagem_numeros = Counter(janela_atual)
-        top_freq = [contagem_numeros.get(n, 0) for n in range(37)]  # De 0 a 36
+        freq_numeros = [contagem_numeros.get(n, 0) for n in range(37)]
+
+        # Frequência ponderada (quanto mais recente, mais peso)
+        peso = list(range(1, len(janela_atual)+1))  # Ex: [1, 2, ..., 12]
+        freq_ponderada = [0]*37
+        for idx, n in enumerate(janela_atual):
+            freq_ponderada[n] += peso[idx]
 
         # Frequência dos terminais
         terminais = [n % 10 for n in janela_atual]
         contagem_terminais = Counter(terminais)
-        term_freq = [contagem_terminais.get(t, 0) for t in range(10)]
+        freq_terminais = [contagem_terminais.get(t, 0) for t in range(10)]
 
         # Frequência de dúzias
         duzias = [extrair_duzia(n) for n in janela_atual]
@@ -113,7 +119,18 @@ def extrair_features(historico):
 
         # Frequência de cor
         cores = [obter_cor(n) for n in janela_atual]
-        cor_freq = [cores.count(0), cores.count(1), cores.count(2)]  # Zero, Vermelho, Preto
+        cor_freq = [cores.count(0), cores.count(1), cores.count(2)]  # Verde, vermelho, preto
+
+        # Frequência últimos 5 e 10
+        ult5 = janela_atual[-5:]
+        ult10 = janela_atual[-10:]
+        freq_ult5 = [ult5.count(n) for n in range(37)]
+        freq_ult10 = [ult10.count(n) for n in range(37)]
+
+        # Mudança de cor entre penúltimo e último
+        cor_ult = obter_cor(ult_num)
+        cor_penult = obter_cor(penult_num) if penult_num != -1 else cor_ult
+        mudou_cor = int(cor_ult != cor_penult)
 
         # Soma e média
         soma = sum(janela_atual)
@@ -122,17 +139,23 @@ def extrair_features(historico):
         # Repetição imediata?
         repetido = int(ult_num == penult_num)
 
-        # Feature final
         entrada = (
-            [ult_num % 10, extrair_duzia(ult_num), extrair_coluna(ult_num), soma, media, repetido]
-            + term_freq
+            [ult_num % 10, extrair_duzia(ult_num), extrair_coluna(ult_num), soma, media, repetido, mudou_cor]
+            + freq_numeros
+            + freq_ponderada
+            + freq_ult5
+            + freq_ult10
+            + freq_terminais
             + duzia_freq
             + coluna_freq
             + cor_freq
         )
 
         features.append(entrada)
+
     return features
+
+
 
 def treinar_modelo(historico):
     if len(historico) < 50:
