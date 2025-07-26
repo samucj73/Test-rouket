@@ -88,7 +88,7 @@ def obter_cor(numero):
 
 def extrair_features(historico):
     features = []
-    janela = 30
+    janela = 100
     for i in range(len(historico) - janela):
         janela_atual = list(historico)[i:i+janela]
         ult_num = janela_atual[-1]
