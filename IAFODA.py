@@ -350,7 +350,7 @@ if (
 
     ultimo_alerta["resultado_terminal_enviado"] = numero_atual
     salvar(ultimo_alerta, ULTIMO_ALERTA_PATH)
-    time.sleep(4)  # espera 4 segundos antes de enviar
+    time.sleep(10)  # espera 4 segundos antes de enviar
     enviar_telegram(mensagem_terminal, TELEGRAM_IA_CHAT_ID)
 
 # === RESULTADO DÚZIA ===
@@ -438,6 +438,7 @@ if ultimo_alerta.get("quentes_referencia") != numero_atual:
     mensagem_quentes = "🔥 <b>Quentes IA</b>\n"
     for num, prob in numeros_previstos:
         mensagem_quentes += f"{num} → {prob:.2%}\n"
+        time.sleep(10)
 
     enviar_telegram(mensagem_quentes, TELEGRAM_QUENTES_CHAT_ID)
 
