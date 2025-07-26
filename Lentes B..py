@@ -198,6 +198,23 @@ if not historico or numero_atual != historico[-1]:
 
 st.write("🎲 Último número:", numero_atual)
 
+import requests
+
+def enviar_telegram(mensagem, chat_id):
+    token = TELEGRAM_BOT_TOKEN
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    dados = {
+        "chat_id": chat_id,
+        "text": mensagem,
+        "parse_mode": "HTML"
+    }
+    try:
+        response = requests.post(url, data=dados)
+        if not response.ok:
+            print("Erro ao enviar mensagem:", response.text)
+    except Exception as e:
+        print("Erro de conexão com o Telegram:", e)
+
 # === Função IA Quentes Binário ===
 def treinar_modelo_quentes(historico, janela_freq=20):
     if len(historico) < janela_freq + 12:
