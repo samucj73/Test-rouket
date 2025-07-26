@@ -435,9 +435,8 @@ st.write("🔥 Números Quentes previstos pela IA:", quentes)
 
 # Verifica se já enviou alerta de quentes para esse número
 if ultimo_alerta.get("quentes_referencia") != numero_atual:
-    mensagem_quentes = "🔥 <b>Quentes IA</b>\n"
-    for num, prob in numeros_previstos:
-        mensagem_quentes += f"{num} # → {prob:.2%}\n"
+    numeros_formatados = " ".join(str(num) for num, _ in numeros_previstos)
+    mensagem_quentes = f"🔥 <b>Quentes IA</b>\n{numeros_formatados}"
         
 
     enviar_telegram(mensagem_quentes, TELEGRAM_QUENTES_CHAT_ID)
