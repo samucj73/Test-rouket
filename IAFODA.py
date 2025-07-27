@@ -88,7 +88,7 @@ def obter_cor(numero):
 
 def extrair_features(historico):
     features = []
-    janela = 100
+    janela = 250
     for i in range(len(historico) - janela):
         janela_atual = list(historico)[i:i+janela]
         ult_num = janela_atual[-1]
@@ -160,7 +160,7 @@ def extrair_features(historico):
 
 
 def treinar_modelo(historico):
-    if len(historico) < 100:
+    if len(historico) < 250:
         return None, None, None, None
 
     X = extrair_features(historico)
@@ -201,7 +201,7 @@ def treinar_modelo(historico):
 
 
 def prever_terminais(modelo, historico):
-    if len(historico) < 13:
+    if len(historico) < 50:
         return []
 
     # Extração de features usando a mesma função do treinamento
@@ -213,11 +213,11 @@ def prever_terminais(modelo, historico):
     return sorted(previsoes, key=lambda x: -x[1])[:1]
 
 def prever_multiclasse(modelo, historico, prob_minima=0.500):
-    if len(historico) < 200:
+    if len(historico) < 50:
         return []
 
     X = extrair_features(historico)
-    entrada = [X[-50]]  # última entrada com mesmo número de features usadas no treino
+    entrada = [X[-6]]  # última entrada com mesmo número de features usadas no treino
 
     probas = modelo.predict_proba(entrada)[0]
     previsoes = [(i, p) for i, p in enumerate(probas) if p >= prob_minima]
