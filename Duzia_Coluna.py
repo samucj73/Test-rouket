@@ -70,9 +70,16 @@ def treinar_modelos(historico):
     if len(historico) < 50:
         return None, None
 
-    X = extrair_features(historico)
-    y_duzia = [((n - 1) // 12) + 1 for n in list(historico)[1:] if n != 0]
-    y_coluna = [((n - 1) % 3) + 1 for n in list(historico)[1:] if n != 0]
+    historico_list = list(historico)
+
+    # Removemos o último número da sequência para treinar até N-1 e prever N
+    X = extrair_features(historico_list[:-1])
+
+    # y será a resposta do próximo número (N+1)
+    y_duzia = [((n - 1) // 12) + 1 if n != 0 else 0 for n in historico_list[2:]]
+    y_coluna = [((n - 1) % 3) + 1 if n != 0 else 0 for n in historico_list[2:]]
+
+    # Alinha X com o tamanho de y
     X = X[-len(y_duzia):]
 
     modelo_duzia = RandomForestClassifier(n_estimators=100, random_state=42)
