@@ -153,6 +153,10 @@ if numero_atual is not None:
                 ultimo_alerta["resultado_enviado"] = None
         else:
             st.warning("⏳ Aguardando próxima entrada")
+            st.write(f"🔎 Histórico: {list(historico)}")
+st.write(f"📍 último_alerta['entrada']: {ultimo_alerta['entrada']}")
+st.write(f"📍 último_alerta['resultado_enviado']: {ultimo_alerta['resultado_enviado']}")
+st.write(f"📍 Número atual: {numero_atual}")
 
         # Resultado do número anterior
         if ultimo_alerta["entrada"] and ultimo_alerta["resultado_enviado"] != numero_atual:
