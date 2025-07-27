@@ -6,6 +6,7 @@ from sklearn.ensemble import RandomForestClassifier
 from collections import Counter, deque
 import time
 from streamlit_autorefresh import st_autorefresh
+from pathlib import Path
 
 # === CONFIGURAÇÕES ===
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
@@ -13,10 +14,16 @@ TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 TELEGRAM_CHAT_ID = "5121457416"
 PROBABILIDADE_MINIMA = 0.08
 MAX_HISTORICO = 100
+CAMINHO_HISTORICO = Path("historico_duzia_coluna.joblib")
 
-# === ESTADO PERSISTENTE ===
+# === HISTÓRICO PERSISTENTE ===
+if CAMINHO_HISTORICO.exists():
+    historico_carregado = joblib.load(CAMINHO_HISTORICO)
+else:
+    historico_carregado = deque(maxlen=MAX_HISTORICO)
+
 if "historico" not in st.session_state:
-    st.session_state.historico = deque(maxlen=MAX_HISTORICO)
+    st.session_state.historico = historico_carregado
 
 if "ultimo_alerta" not in st.session_state:
     st.session_state.ultimo_alerta = {
@@ -126,6 +133,7 @@ if numero_atual is not None:
 
     if len(historico) == 0 or numero_atual != historico[-1]:
         historico.append(numero_atual)
+        joblib.dump(historico, CAMINHO_HISTORICO)  # <- Salva após cada novo número
         st.write(f"🧠 Tamanho do histórico: {len(historico)}")
 
         if len(historico) >= 15 and (
