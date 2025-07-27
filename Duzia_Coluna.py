@@ -177,7 +177,7 @@ if numero_atual is not None:
             else:
                 resultado += "🔴 COLUNA RED\n"
 
-            time.sleep(24)  # ⏱️ Delay aqui
+            time.sleep(10)  # ⏱️ Delay aqui
 
             enviar_telegram(resultado)
             st.write("🎯 Resultado enviado")
