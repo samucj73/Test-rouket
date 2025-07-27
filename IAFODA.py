@@ -213,7 +213,7 @@ def prever_terminais(modelo, historico):
     return sorted(previsoes, key=lambda x: -x[1])[:1]
 
 def prever_multiclasse(modelo, historico, prob_minima=0.500):
-    if len(historico) < 50:
+    if len(historico) < 10:
         return []
 
     X = extrair_features(historico)
