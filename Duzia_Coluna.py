@@ -77,7 +77,7 @@ def treinar_modelos(historico):
     return modelo_duzia, modelo_coluna
 
 def prever_proxima_duzia(modelo, historico):
-    if not modelo or len(historico) < 15:
+    if not modelo or len(historico) < 6:
         return None, 0.0
 
     X = extrair_features(historico)
@@ -88,7 +88,7 @@ def prever_proxima_duzia(modelo, historico):
     return classe, prob
 
 def prever_proxima_coluna(modelo, historico):
-    if not modelo or len(historico) < 15:
+    if not modelo or len(historico) < 6:
         return None, 0.0
 
     X = extrair_features(historico)
