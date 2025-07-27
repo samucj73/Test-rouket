@@ -14,21 +14,24 @@ TELEGRAM_CHAT_ID = "SEU_CHAT_ID_AQUI"
 PROBABILIDADE_MINIMA = 0.08
 MAX_HISTORICO = 100
 
-# === HISTÓRICO E ALERTA ===
-historico = deque(maxlen=MAX_HISTORICO)
-ultimo_alerta = {
-    "entrada": None,
-    "resultado_enviado": None
-}
+# === ESTADO PERSISTENTE ===
+if "historico" not in st.session_state:
+    st.session_state.historico = deque(maxlen=MAX_HISTORICO)
+
+if "ultimo_alerta" not in st.session_state:
+    st.session_state.ultimo_alerta = {
+        "entrada": None,
+        "resultado_enviado": None
+    }
+
+historico = st.session_state.historico
+ultimo_alerta = st.session_state.ultimo_alerta
 
 # === FUNÇÕES ===
-
 def extrair_features(historico):
     features = []
     for i in range(1, len(historico)):
-        amostra = historico[:i+1]
-        ultimo = amostra[-1]
-
+        amostra = list(historico)[:i+1]
         freq_abs = [amostra.count(n) for n in range(37)]
         freq_ult5 = [amostra[-5:].count(n) for n in range(37)] if len(amostra) >= 5 else [0]*37
         freq_ult10 = [amostra[-10:].count(n) for n in range(37)] if len(amostra) >= 10 else [0]*37
@@ -43,13 +46,11 @@ def extrair_features(historico):
 
         vermelhos = {1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36}
         pretos = {2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35}
-
         cores = [1 if n in vermelhos else 2 if n in pretos else 0 for n in amostra]
         freq_cores = [cores.count(c) for c in range(3)]
 
         cor_igual = int(cores[-1] == cores[-2]) if len(cores) >= 2 else 0
         repetido = int(amostra[-1] == amostra[-2]) if len(amostra) >= 2 else 0
-
         soma = sum(amostra)
         media = np.mean(amostra)
 
@@ -63,14 +64,12 @@ def treinar_modelos(historico):
         return None, None
 
     X = extrair_features(historico)
-    y_duzia = [((n - 1) // 12) + 1 for n in historico[1:] if n != 0]
-    y_coluna = [((n - 1) % 3) + 1 for n in historico[1:] if n != 0]
-
+    y_duzia = [((n - 1) // 12) + 1 for n in list(historico)[1:] if n != 0]
+    y_coluna = [((n - 1) % 3) + 1 for n in list(historico)[1:] if n != 0]
     X = X[-len(y_duzia):]
 
     modelo_duzia = RandomForestClassifier(n_estimators=100, random_state=42)
     modelo_coluna = RandomForestClassifier(n_estimators=100, random_state=42)
-
     modelo_duzia.fit(X, y_duzia)
     modelo_coluna.fit(X, y_coluna)
 
@@ -79,7 +78,6 @@ def treinar_modelos(historico):
 def prever_proxima_duzia(modelo, historico):
     if not modelo or len(historico) < 6:
         return None, 0.0
-
     X = extrair_features(historico)
     entrada = [X[-1]]
     probas = modelo.predict_proba(entrada)[0]
@@ -90,7 +88,6 @@ def prever_proxima_duzia(modelo, historico):
 def prever_proxima_coluna(modelo, historico):
     if not modelo or len(historico) < 6:
         return None, 0.0
-
     X = extrair_features(historico)
     entrada = [X[-1]]
     probas = modelo.predict_proba(entrada)[0]
@@ -117,26 +114,25 @@ def obter_numero_atual():
         st.error(f"Erro ao consultar API: {e}")
         return None
 
-# === STREAMLIT ===
+# === INTERFACE STREAMLIT ===
 st.set_page_config(page_title="IA Dúzia e Coluna", layout="centered")
 st.title("🎯 IA de Roleta - Dúzia e Coluna")
-
 st_autorefresh(interval=5000, key="refresh")
 
 numero_atual = obter_numero_atual()
+
 if numero_atual is not None:
     st.write(f"🎯 Último número: **{numero_atual}**")
+
     if len(historico) == 0 or numero_atual != historico[-1]:
         historico.append(numero_atual)
         st.write(f"🧠 Tamanho do histórico: {len(historico)}")
-
 
         if len(historico) >= 15 and (
             not ultimo_alerta["entrada"]
             or ultimo_alerta["resultado_enviado"] == ultimo_alerta["entrada"]
         ):
             modelo_duzia, modelo_coluna = treinar_modelos(historico)
-
             duzia, prob_duzia = prever_proxima_duzia(modelo_duzia, historico)
             coluna, prob_coluna = prever_proxima_coluna(modelo_coluna, historico)
 
