@@ -73,7 +73,7 @@ def treinar_modelos(historico):
     historico_list = list(historico)
 
     # Removemos o último número da sequência para treinar até N-1 e prever N
-    X = extrair_features(historico_list[:-2])
+    X = extrair_features(historico_list[:-1])
 
     # y será a resposta do próximo número (N+1)
     y_duzia = [((n - 1) // 12) + 1 if n != 0 else 0 for n in historico_list[2:]]
