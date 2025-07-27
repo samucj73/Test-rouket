@@ -12,7 +12,7 @@ from pathlib import Path
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 TELEGRAM_CHAT_ID = "-1002880411750"
-PROBABILIDADE_MINIMA = 0.07
+PROBABILIDADE_MINIMA = 0.05
 MAX_HISTORICO = 1000
 CAMINHO_HISTORICO = Path("historico_duzia_coluna.joblib")
 
@@ -73,7 +73,7 @@ def treinar_modelos(historico):
     historico_list = list(historico)
 
     # Removemos o último número da sequência para treinar até N-1 e prever N
-    X = extrair_features(historico_list[:-1])
+    X = extrair_features(historico_list[:-2])
 
     # y será a resposta do próximo número (N+1)
     y_duzia = [((n - 1) // 12) + 1 if n != 0 else 0 for n in historico_list[2:]]
@@ -93,7 +93,7 @@ def prever_proxima_duzia(modelo, historico):
     if not modelo or len(historico) < 50:
         return None, 0.0
     X = extrair_features(historico)
-    entrada = [X[-2]]
+    entrada = [X[-3]]
     probas = modelo.predict_proba(entrada)[0]
     classe = modelo.classes_[np.argmax(probas)]
     prob = max(probas)
@@ -103,7 +103,7 @@ def prever_proxima_coluna(modelo, historico):
     if not modelo or len(historico) < 50:
         return None, 0.0
     X = extrair_features(historico)
-    entrada = [X[-2]]
+    entrada = [X[-3]]
     probas = modelo.predict_proba(entrada)[0]
     classe = modelo.classes_[np.argmax(probas)]
     prob = max(probas)
