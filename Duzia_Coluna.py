@@ -28,6 +28,12 @@ if "historico" not in st.session_state:
 if "ultimo_alerta" not in st.session_state:
     st.session_state.ultimo_alerta = {"entrada": None, "resultado_enviado": None}
 
+if "duzia_prevista" not in st.session_state:
+    st.session_state.duzia_prevista = None
+
+if "coluna_prevista" not in st.session_state:
+    st.session_state.coluna_prevista = None
+
 historico = st.session_state.historico
 ultimo_alerta = st.session_state.ultimo_alerta
 
@@ -146,6 +152,10 @@ if numero_atual is not None:
             duzia, prob_duzia = prever_proxima_duzia(modelo_duzia, historico)
             coluna, prob_coluna = prever_proxima_coluna(modelo_coluna, historico)
 
+            # Salvar as previsões
+            st.session_state.duzia_prevista = duzia
+            st.session_state.coluna_prevista = coluna
+
             mensagem = ""
             if prob_duzia >= PROBABILIDADE_MINIMA:
                 mensagem += f"<b>D</b>: {duzia}\n"
@@ -166,13 +176,16 @@ if numero_atual is not None:
             duzia_resultado = ((numero_atual - 1) // 12) + 1 if numero_atual != 0 else 0
             coluna_resultado = ((numero_atual - 1) % 3) + 1 if numero_atual != 0 else 0
 
+            duzia_prevista = st.session_state.get("duzia_prevista")
+            coluna_prevista = st.session_state.get("coluna_prevista")
+
             resultado = ""
-            if duzia == duzia_resultado:
+            if duzia_prevista == duzia_resultado:
                 resultado += "🟢 DÚZIA GREEN\n"
             else:
                 resultado += "🔴 DÚZIA RED\n"
 
-            if coluna == coluna_resultado:
+            if coluna_prevista == coluna_resultado:
                 resultado += "🟢 COLUNA GREEN\n"
             else:
                 resultado += "🔴 COLUNA RED\n"
