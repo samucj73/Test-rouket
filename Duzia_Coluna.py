@@ -1,160 +1,171 @@
-# IA DÚZIA + COLUNA - APP STREAMLIT
 import streamlit as st
 import requests
-import os
 import joblib
-import time
-from collections import deque, Counter
-from sklearn.ensemble import RandomForestClassifier
 import numpy as np
+from sklearn.ensemble import RandomForestClassifier
+from collections import Counter, deque
+import time
 from streamlit_autorefresh import st_autorefresh
 
-# ========== CONFIG ========== #
+# === CONFIGURAÇÕES ===
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
-TELEGRAM_TOKEN = "SEU_TOKEN"
-TELEGRAM_CHAT_ID = "SEU_CHAT_ID"
-HISTORICO_PATH = "historico.pkl"
-ULTIMO_ALERTA_PATH = "ultimo_alerta.pkl"
-CONTADORES_PATH = "contadores.pkl"
-MAX_HIST = 600
+TELEGRAM_TOKEN = "SEU_TOKEN_AQUI"
+TELEGRAM_CHAT_ID = "SEU_CHAT_ID_AQUI"
+PROBABILIDADE_MINIMA = 0.35
+MAX_HISTORICO = 100
 
-# ========== FUNÇÕES ========= #
+# === HISTÓRICO E ALERTA ===
+historico = deque(maxlen=MAX_HISTORICO)
+ultimo_alerta = {
+    "entrada": None,
+    "resultado_enviado": None
+}
 
-def enviar_telegram(mensagem):
-    try:
-        requests.get(
-            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
-            params={"chat_id": TELEGRAM_CHAT_ID, "text": mensagem, "parse_mode": "HTML"}
-        )
-    except Exception as e:
-        print("Erro ao enviar mensagem Telegram:", e)
+# === FUNÇÕES ===
 
 def extrair_features(historico):
     features = []
-    for i in range(len(historico)):
+    for i in range(1, len(historico)):
         amostra = historico[:i+1]
-        x = []
+        ultimo = amostra[-1]
 
-        contagem = Counter(amostra)
-        for n in range(37):
-            x.append(contagem.get(n, 0))
+        freq_abs = [amostra.count(n) for n in range(37)]
+        freq_ult5 = [amostra[-5:].count(n) for n in range(37)] if len(amostra) >= 5 else [0]*37
+        freq_ult10 = [amostra[-10:].count(n) for n in range(37)] if len(amostra) >= 10 else [0]*37
 
-        ultimos_5 = amostra[-5:]
-        ultimos_10 = amostra[-10:]
+        terminais = [n % 10 for n in amostra]
+        freq_terminais = [terminais.count(t) for t in range(10)]
 
-        for n in range(37):
-            x.append(ultimos_5.count(n))
-            x.append(ultimos_10.count(n))
+        duzias = [((n-1)//12)+1 if n != 0 else 0 for n in amostra]
+        colunas = [((n-1)%3)+1 if n != 0 else 0 for n in amostra]
+        freq_duzias = [duzias.count(d) for d in range(4)]
+        freq_colunas = [colunas.count(c) for c in range(4)]
 
-        x.append(sum(amostra) / len(amostra))
-        x.append(amostra[-1] if len(amostra) >= 1 else 0)
-        x.append(1 if len(amostra) >= 2 and amostra[-1] == amostra[-2] else 0)
+        vermelhos = {1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36}
+        pretos = {2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35}
 
-        terminal = amostra[-1] % 10 if len(amostra) >= 1 else 0
-        x.append(terminal)
+        cores = [1 if n in vermelhos else 2 if n in pretos else 0 for n in amostra]
+        freq_cores = [cores.count(c) for c in range(3)]
 
-        duzia = (amostra[-1] - 1) // 12 + 1 if amostra[-1] != 0 else 0
-        x.append(duzia)
+        cor_igual = int(cores[-1] == cores[-2]) if len(cores) >= 2 else 0
+        repetido = int(amostra[-1] == amostra[-2]) if len(amostra) >= 2 else 0
 
-        coluna = (amostra[-1] - 1) % 3 + 1 if amostra[-1] != 0 else 0
-        x.append(coluna)
+        soma = sum(amostra)
+        media = np.mean(amostra)
 
-        features.append(x)
+        features.append(freq_abs + freq_ult5 + freq_ult10 + freq_terminais +
+                        freq_duzias + freq_colunas + freq_cores +
+                        [cor_igual, repetido, soma, media])
     return features
 
 def treinar_modelos(historico):
+    if len(historico) < 15:
+        return None, None
+
     X = extrair_features(historico)
-    y_duzia = [(n - 1) // 12 + 1 if n != 0 else 0 for n in historico]
-    y_coluna = [(n - 1) % 3 + 1 if n != 0 else 0 for n in historico]
+    y_duzia = [((n - 1) // 12) + 1 for n in historico[1:] if n != 0]
+    y_coluna = [((n - 1) % 3) + 1 for n in historico[1:] if n != 0]
+
+    X = X[-len(y_duzia):]
 
     modelo_duzia = RandomForestClassifier(n_estimators=100, random_state=42)
     modelo_coluna = RandomForestClassifier(n_estimators=100, random_state=42)
 
-    modelo_duzia.fit(X[:-1], y_duzia[:-1])
-    modelo_coluna.fit(X[:-1], y_coluna[:-1])
+    modelo_duzia.fit(X, y_duzia)
+    modelo_coluna.fit(X, y_coluna)
 
     return modelo_duzia, modelo_coluna
 
-def prever(modelo, historico):
+def prever_proxima_duzia(modelo, historico):
+    if not modelo or len(historico) < 15:
+        return None, 0.0
+
     X = extrair_features(historico)
     entrada = [X[-1]]
     probas = modelo.predict_proba(entrada)[0]
-    classe = np.argmax(probas)
-    return classe + 1  # Dúzias e colunas começam em 1
+    classe = modelo.classes_[np.argmax(probas)]
+    prob = max(probas)
+    return classe, prob
 
-# ========== INTERFACE ========= #
+def prever_proxima_coluna(modelo, historico):
+    if not modelo or len(historico) < 15:
+        return None, 0.0
 
-st.set_page_config(layout="centered")
-st.title("🎯 IA Roleta - Dúzia & Coluna")
+    X = extrair_features(historico)
+    entrada = [X[-1]]
+    probas = modelo.predict_proba(entrada)[0]
+    classe = modelo.classes_[np.argmax(probas)]
+    prob = max(probas)
+    return classe, prob
 
-st_autorefresh(interval=5000)
+def enviar_telegram(mensagem):
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensagem, "parse_mode": "HTML"}
+        requests.post(url, data=payload)
+    except:
+        pass
 
-if os.path.exists(HISTORICO_PATH):
-    historico = joblib.load(HISTORICO_PATH)
+def obter_numero_atual():
+    try:
+        r = requests.get(API_URL, timeout=5)
+        r.raise_for_status()
+        data = r.json()
+        numero = int(data["data"]["result"]["outcome"]["number"])
+        return numero
+    except Exception as e:
+        st.error(f"Erro ao consultar API: {e}")
+        return None
+
+# === STREAMLIT ===
+st.set_page_config(page_title="IA Dúzia e Coluna", layout="centered")
+st.title("🎯 IA de Roleta - Dúzia e Coluna")
+
+st_autorefresh(interval=5000, key="refresh")
+
+numero_atual = obter_numero_atual()
+if numero_atual is not None:
+    st.write(f"🎯 Último número: **{numero_atual}**")
+    if len(historico) == 0 or numero_atual != historico[-1]:
+        historico.append(numero_atual)
+
+        if len(historico) >= 15 and (not ultimo_alerta["entrada"] or ultimo_alerta["resultado_enviado"] == numero_atual):
+            modelo_duzia, modelo_coluna = treinar_modelos(historico)
+
+            duzia, prob_duzia = prever_proxima_duzia(modelo_duzia, historico)
+            coluna, prob_coluna = prever_proxima_coluna(modelo_coluna, historico)
+
+            mensagem = ""
+            if prob_duzia >= PROBABILIDADE_MINIMA:
+                mensagem += f"🎯 <b>Entrada IA - DÚZIA</b>\nDúzia: {duzia}\n"
+            if prob_coluna >= PROBABILIDADE_MINIMA:
+                mensagem += f"🎯 <b>Entrada IA - COLUNA</b>\nColuna: {coluna}\n"
+
+            if mensagem:
+                enviar_telegram(mensagem)
+                st.success("✅ Alerta enviado")
+                ultimo_alerta["entrada"] = numero_atual
+                ultimo_alerta["resultado_enviado"] = None
+        else:
+            st.warning("⏳ Aguardando próxima entrada")
+
+        # Resultado do número anterior
+        if ultimo_alerta["entrada"] and ultimo_alerta["resultado_enviado"] != numero_atual:
+            duzia_resultado = ((numero_atual - 1) // 12) + 1 if numero_atual != 0 else 0
+            coluna_resultado = ((numero_atual - 1) % 3) + 1 if numero_atual != 0 else 0
+
+            resultado = ""
+            if duzia == duzia_resultado:
+                resultado += "🟢 DÚZIA GREEN\n"
+            else:
+                resultado += "🔴 DÚZIA RED\n"
+            if coluna == coluna_resultado:
+                resultado += "🟢 COLUNA GREEN\n"
+            else:
+                resultado += "🔴 COLUNA RED\n"
+
+            enviar_telegram(resultado)
+            st.write("🎯 Resultado enviado")
+            ultimo_alerta["resultado_enviado"] = numero_atual
 else:
-    historico = deque(maxlen=MAX_HIST)
-
-if os.path.exists(ULTIMO_ALERTA_PATH):
-    ultimo_alerta = joblib.load(ULTIMO_ALERTA_PATH)
-else:
-    ultimo_alerta = {"entrada": None, "resultado": None}
-
-if os.path.exists(CONTADORES_PATH):
-    contadores = joblib.load(CONTADORES_PATH)
-else:
-    contadores = {"green": 0, "red": 0}
-
-# ========== API ========= #
-
-try:
-    r = requests.get(API_URL, timeout=5)
-    r.raise_for_status()
-    data = r.json()
-    numero_atual = int(data["data"]["result"]["outcome"]["number"])
-except Exception as e:
-    st.error(f"Erro ao consultar API: {e}")
-    st.write("Resposta da API:", r.text if 'r' in locals() else "sem resposta")
-    st.stop()
-
-st.write(f"Número atual: 🎲 **{numero_atual}**")
-historico.append(numero_atual)
-
-# ========== IA ========= #
-
-if len(historico) >= 15 and ultimo_alerta["entrada"] != numero_atual:
-    modelo_duzia, modelo_coluna = treinar_modelos(historico)
-    previsao_duzia = prever(modelo_duzia, historico)
-    previsao_coluna = prever(modelo_coluna, historico)
-
-    mensagem = f"🎯 <b>IA Sugestão</b>\n📦 Dúzia {previsao_duzia}  📍 Coluna {previsao_coluna}"
-    enviar_telegram(mensagem)
-    ultimo_alerta["entrada"] = numero_atual
-    ultimo_alerta["duzia"] = previsao_duzia
-    ultimo_alerta["coluna"] = previsao_coluna
-
-# ========== RESULTADO ========= #
-
-if ultimo_alerta.get("entrada") != numero_atual and ultimo_alerta.get("duzia"):
-    duzia_atual = (numero_atual - 1) // 12 + 1 if numero_atual != 0 else 0
-    coluna_atual = (numero_atual - 1) % 3 + 1 if numero_atual != 0 else 0
-
-    acertou_duzia = duzia_atual == ultimo_alerta.get("duzia")
-    acertou_coluna = coluna_atual == ultimo_alerta.get("coluna")
-
-    if acertou_duzia or acertou_coluna:
-        enviar_telegram("🟢 <b>GREEN!</b>")
-        contadores["green"] += 1
-    else:
-        enviar_telegram("🔴 <b>RED!</b>")
-        contadores["red"] += 1
-
-    ultimo_alerta["resultado"] = numero_atual
-
-# ========== METRICAS ========= #
-st.metric("🟢 Greens", contadores["green"])
-st.metric("🔴 Reds", contadores["red"])
-
-# ========== SALVAR ========= #
-joblib.dump(historico, HISTORICO_PATH)
-joblib.dump(ultimo_alerta, ULTIMO_ALERTA_PATH)
-joblib.dump(contadores, CONTADORES_PATH)
+    st.error("❌ Não foi possível obter número da API.")
