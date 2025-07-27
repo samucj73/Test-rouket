@@ -107,11 +107,13 @@ else:
 # ========== API ========= #
 
 try:
-    r = requests.get(API_URL)
+    r = requests.get(API_URL, timeout=5)
+    r.raise_for_status()
     data = r.json()
-    numero_atual = int(data["number"])
-except Exception:
-    st.error("Erro ao consultar API")
+    numero_atual = int(data["data"]["result"]["outcome"]["number"])
+except Exception as e:
+    st.error(f"Erro ao consultar API: {e}")
+    st.write("Resposta da API:", r.text if 'r' in locals() else "sem resposta")
     st.stop()
 
 st.write(f"Número atual: 🎲 **{numero_atual}**")
