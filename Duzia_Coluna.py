@@ -128,6 +128,8 @@ if numero_atual is not None:
     st.write(f"🎯 Último número: **{numero_atual}**")
     if len(historico) == 0 or numero_atual != historico[-1]:
         historico.append(numero_atual)
+        st.write(f"🧠 Tamanho do histórico: {len(historico)}")
+
 
         if len(historico) >= 15 and (
             not ultimo_alerta["entrada"]
