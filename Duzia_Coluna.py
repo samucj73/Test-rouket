@@ -86,7 +86,7 @@ def prever_proxima_duzia(modelo, historico):
     if not modelo or len(historico) < 50:
         return None, 0.0
     X = extrair_features(historico)
-    entrada = [X[-5]]
+    entrada = [X[-1]]
     probas = modelo.predict_proba(entrada)[0]
     classe = modelo.classes_[np.argmax(probas)]
     prob = max(probas)
@@ -96,7 +96,7 @@ def prever_proxima_coluna(modelo, historico):
     if not modelo or len(historico) < 50:
         return None, 0.0
     X = extrair_features(historico)
-    entrada = [X[-5]]
+    entrada = [X[-1]]
     probas = modelo.predict_proba(entrada)[0]
     classe = modelo.classes_[np.argmax(probas)]
     prob = max(probas)
