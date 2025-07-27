@@ -35,6 +35,43 @@ historico = st.session_state.historico
 ultimo_alerta = st.session_state.ultimo_alerta
 
 # === FUNÇÕES ===
+
+from sklearn.ensemble import RandomForestClassifier
+import numpy as np
+import streamlit as st
+
+# === CACHE DO MODELO ===
+@st.cache_resource(show_spinner=False)
+def treinar_modelos(historico):
+    if len(historico) < 50:
+        return None, None
+
+    historico_list = list(historico)
+    X = extrair_features(historico_list[:-1])
+
+    y_duzia = [((n - 1) // 12) + 1 if n != 0 else 0 for n in historico_list[2:]]
+    y_coluna = [((n - 1) % 3) + 1 if n != 0 else 0 for n in historico_list[2:]]
+    X = X[-len(y_duzia):]
+
+    modelo_duzia = RandomForestClassifier(
+        n_estimators=200,
+        max_depth=10,
+        min_samples_split=4,
+        random_state=42
+    )
+    modelo_coluna = RandomForestClassifier(
+        n_estimators=200,
+        max_depth=10,
+        min_samples_split=4,
+        random_state=42
+    )
+    modelo_duzia.fit(X, y_duzia)
+    modelo_coluna.fit(X, y_coluna)
+
+    return modelo_duzia, modelo_coluna
+
+
+# === FEATURES DO HISTÓRICO ===
 def extrair_features(historico):
     features = []
     for i in range(1, len(historico)):
@@ -60,54 +97,38 @@ def extrair_features(historico):
         repetido = int(amostra[-1] == amostra[-2]) if len(amostra) >= 2 else 0
         soma = sum(amostra)
         media = np.mean(amostra)
+        desvio = np.std(amostra)
 
         features.append(freq_abs + freq_ult5 + freq_ult10 + freq_terminais +
                         freq_duzias + freq_colunas + freq_cores +
-                        [cor_igual, repetido, soma, media])
+                        [cor_igual, repetido, soma, media, desvio])
     return features
 
-def treinar_modelos(historico):
-    if len(historico) < 50:
-        return None, None
 
-    historico_list = list(historico)
-
-    # Removemos o último número da sequência para treinar até N-1 e prever N
-    X = extrair_features(historico_list[:-1])
-
-    # y será a resposta do próximo número (N+1)
-    y_duzia = [((n - 1) // 12) + 1 if n != 0 else 0 for n in historico_list[2:]]
-    y_coluna = [((n - 1) % 3) + 1 if n != 0 else 0 for n in historico_list[2:]]
-
-    # Alinha X com o tamanho de y
-    X = X[-len(y_duzia):]
-
-    modelo_duzia = RandomForestClassifier(n_estimators=100, random_state=42)
-    modelo_coluna = RandomForestClassifier(n_estimators=100, random_state=42)
-    modelo_duzia.fit(X, y_duzia)
-    modelo_coluna.fit(X, y_coluna)
-
-    return modelo_duzia, modelo_coluna
-
+# === PREVISÕES COM ENTRADA ROBUSTA (X[-3:], média das 3) ===
 def prever_proxima_duzia(modelo, historico):
     if not modelo or len(historico) < 50:
         return None, 0.0
     X = extrair_features(historico)
-    entrada = [X[-3]]
-    probas = modelo.predict_proba(entrada)[0]
+    entradas = X[-3:]  # Usa as 3 últimas entradas
+    probas = np.mean([modelo.predict_proba([e])[0] for e in entradas], axis=0)
     classe = modelo.classes_[np.argmax(probas)]
     prob = max(probas)
     return classe, prob
+
 
 def prever_proxima_coluna(modelo, historico):
     if not modelo or len(historico) < 50:
         return None, 0.0
     X = extrair_features(historico)
-    entrada = [X[-3]]
-    probas = modelo.predict_proba(entrada)[0]
+    entradas = X[-3:]  # Usa as 3 últimas entradas
+    probas = np.mean([modelo.predict_proba([e])[0] for e in entradas], axis=0)
     classe = modelo.classes_[np.argmax(probas)]
     prob = max(probas)
     return classe, prob
+
+
+
 
 def enviar_telegram(mensagem):
     try:
