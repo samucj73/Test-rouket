@@ -138,9 +138,9 @@ if numero_atual is not None:
 
             mensagem = ""
             if prob_duzia >= PROBABILIDADE_MINIMA:
-                mensagem += f"🎯 <b>Entrada IA - DÚZIA</b>\nDúzia: {duzia}\n"
+                mensagem += f"🎯 <b>DÚZIA</b>\nDúzia: {duzia}\n"
             if prob_coluna >= PROBABILIDADE_MINIMA:
-                mensagem += f"🎯 <b>Entrada IA - COLUNA</b>\nColuna: {coluna}\n"
+                mensagem += f"🎯 <b>COLUNA</b>\nColuna: {coluna}\n"
 
             if mensagem:
                 enviar_telegram(mensagem)
