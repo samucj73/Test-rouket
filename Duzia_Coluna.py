@@ -11,7 +11,7 @@ from streamlit_autorefresh import st_autorefresh
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 TELEGRAM_TOKEN = "SEU_TOKEN_AQUI"
 TELEGRAM_CHAT_ID = "SEU_CHAT_ID_AQUI"
-PROBABILIDADE_MINIMA = 0.35
+PROBABILIDADE_MINIMA = 0.08
 MAX_HISTORICO = 100
 
 # === HISTÓRICO E ALERTA ===
