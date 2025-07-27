@@ -12,7 +12,7 @@ from pathlib import Path
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 TELEGRAM_CHAT_ID = "5121457416"
-PROBABILIDADE_MINIMA = 0.45
+PROBABILIDADE_MINIMA = 0.15
 MAX_HISTORICO = 1000
 CAMINHO_HISTORICO = Path("historico_duzia_coluna.joblib")
 
