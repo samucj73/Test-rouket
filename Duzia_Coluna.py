@@ -165,10 +165,21 @@ if len(historico) == 0 or numero_atual != historico[-1]:
     historico.append(numero_atual)
     joblib.dump(historico, HISTORICO_PATH)
 
-    # Treina os modelos caso histórico seja suficiente
-    modelo_duzia, modelo_coluna = treinar_modelos(historico)
+    # Treina os modelos apenas a cada 10 novas entradas, com mínimo de 80 números
+    if len(historico) >= 80 and len(historico) % 10 == 0:
+        modelo_duzia, modelo_coluna = treinar_modelos(historico)
+        joblib.dump(modelo_duzia, MODELO_DUZIA_PATH)
+        joblib.dump(modelo_coluna, MODELO_COLUNA_PATH)
+    else:
+        # Carrega os modelos salvos (se existirem)
+        try:
+            modelo_duzia = joblib.load(MODELO_DUZIA_PATH)
+            modelo_coluna = joblib.load(MODELO_COLUNA_PATH)
+        except:
+            modelo_duzia = None
+            modelo_coluna = None
 
-    # Faz previsões apenas se os modelos estão prontos
+    # Faz previsões apenas se os modelos estão carregados
     if modelo_duzia is not None and modelo_coluna is not None:
         duzia, prob_duzia = prever_proxima(modelo_duzia, historico)
         coluna, prob_coluna = prever_proxima(modelo_coluna, historico)
@@ -182,9 +193,11 @@ if len(historico) == 0 or numero_atual != historico[-1]:
         st.markdown(mensagem, unsafe_allow_html=True)
         enviar_telegram(mensagem)
     else:
-        st.warning("Aguardando mais dados para treinar os modelos...")
+        st.warning("Aguardando mais dados ou modelos...")
 else:
     st.info("Aguardando novo número...")
+
+
 
 # === EXIBIR HISTÓRICO ===
 st.markdown("### 🎡 Histórico de Números")
