@@ -66,7 +66,7 @@ def treinar_modelos(historico):
 def prever_proxima(modelo, historico):
     if len(historico) < 41:
         return None, 0.0
-    entrada = list(historico)[-1:-40:-1]  # Últimos 12 em ordem reversa
+    entrada = list(historico)[-1:-41:-1]  # Últimos 12 em ordem reversa
     x = np.array(entrada).reshape(1, -1)
     try:
         probas = modelo.predict_proba(x)[0]
@@ -80,7 +80,7 @@ def prever_proxima(modelo, historico):
 if Path(HISTORICO_PATH).exists():
     historico = joblib.load(HISTORICO_PATH)
 else:
-    historico = deque(maxlen=100)
+    historico = deque(maxlen=500)
 
 modelo_duzia = joblib.load(MODELO_DUZIA_PATH) if Path(MODELO_DUZIA_PATH).exists() else None
 modelo_coluna = joblib.load(MODELO_COLUNA_PATH) if Path(MODELO_COLUNA_PATH).exists() else None
