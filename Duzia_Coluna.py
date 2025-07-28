@@ -189,9 +189,9 @@ if len(historico) == 0 or numero_atual != historico[-1]:
         duzia, p_d = prever_proxima(modelo_duzia, historico, prob_min_duzia)
         coluna, p_c = prever_proxima(modelo_coluna, historico, prob_min_coluna)
 
-        mensagem = f"<b>NA:</b> {numero_atual}"
+        mensagem = f"<b>NA:</b>{numero_atual}"
         if duzia:
-            mensagem += f"\n D: <b>{duzia}</b>"
+            mensagem += f"\nD: <b>{duzia}</b>"
         if coluna:
             mensagem += f"\nC: <b>{coluna}</b>"
 
