@@ -39,7 +39,7 @@ def extrair_features(historico):
     for i in range(len(historico) - 1):
         entrada = [
             historico[i - j] if i - j >= 0 else 0
-            for j in range(12)
+            for j in range(40)
         ]
         X.append(entrada)
     return np.array(X)
