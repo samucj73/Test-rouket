@@ -54,8 +54,8 @@ def extrair_features(historico):
             return 'G'
         return 'R' if n in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36] else 'B'
 
-    for i in range(60, len(historico)):
-        ultimos = historico[i - 60:i]
+    for i in range(120, len(historico)):
+        ultimos = historico[i - 120:i]
         entrada = []
 
         for janela in [10, 20]:
@@ -71,7 +71,7 @@ def extrair_features(historico):
             entrada += d_freq + c_freq
 
         cores = {'R': 0, 'B': 0, 'G': 0}
-        for n in ultimos[-20:]:
+        for n in ultimos[-6:]:
             cores[cor(n)] += 1
         entrada += [cores['R'], cores['B'], cores['G']]
 
@@ -79,24 +79,24 @@ def extrair_features(historico):
         impar = 20 - par
         entrada += [par, impar]
 
-        alta = sum(1 for n in ultimos[-20:] if n > 18)
-        baixa = sum(1 for n in ultimos[-20:] if 0 < n <= 18)
+        alta = sum(1 for n in ultimos[-6:] if n > 18)
+        baixa = sum(1 for n in ultimos[-6:] if 0 < n <= 18)
         entrada += [alta, baixa]
 
-        entrada += ultimos[-5:]
+        entrada += ultimos[-6:]
 
-        for j in range(-5, -1):
+        for j in range(-6, -1):
             entrada.append(ultimos[j] - ultimos[j - 1])
 
         X.append(entrada)
     return np.array(X)
 
 def treinar_modelos(historico):
-    if len(historico) < 80:
+    if len(historico) < 250:
         return None, None
 
     X = extrair_features(historico)
-    y = list(historico)[60:]
+    y = list(historico)[250:]
 
     y_duzia = [((n - 1) // 12) + 1 if n != 0 else 0 for n in y]
     y_coluna = [((n - 1) % 3) + 1 if n != 0 else 0 for n in y]
@@ -121,8 +121,8 @@ def treinar_modelos(historico):
 
     return modelo_duzia, modelo_coluna
 
-def prever_proxima(modelo, historico, prob_minima=0.60):
-    if len(historico) < 80:
+def prever_proxima(modelo, historico, prob_minima=0.85):
+    if len(historico) < 250:
         return None, 0.0
 
     X = extrair_features(historico)
@@ -191,9 +191,9 @@ if len(historico) == 0 or numero_atual != historico[-1]:
 
         mensagem = f"🎯 <b>NA:</b> {numero_atual}"
         if duzia:
-            mensagem += f"\n📌 Dúzia Prevista: <b>{duzia}</b>"
+            mensagem += f"\n D: <b>{duzia}</b>"
         if coluna:
-            mensagem += f"\n📌 Coluna Prevista: <b>{coluna}</b>"
+            mensagem += f"\n C: <b>{coluna}</b>"
 
         entrada = (duzia, coluna)
         if entrada != estado["ultimo_alerta"]:
