@@ -191,9 +191,9 @@ if len(historico) == 0 or numero_atual != historico[-1]:
 
         mensagem = f"🎯 <b>NA:</b> {numero_atual}"
         if duzia:
-            mensagem += f"\n📌 Dúzia Prevista: <b>{duzia}</b>"
+            mensagem += f"\n D: <b>{duzia}</b>"
         if coluna:
-            mensagem += f"\n📌 Coluna Prevista: <b>{coluna}</b>"
+            mensagem += f"\n C: <b>{coluna}</b>"
 
         entrada = (duzia, coluna)
         if entrada != estado["ultimo_alerta"]:
