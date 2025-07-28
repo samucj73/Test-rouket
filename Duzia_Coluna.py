@@ -205,8 +205,8 @@ elif coluna:
 
         joblib.dump(estado, ESTADO_PATH)
         st.success(mensagem)
-    else:
-        st.warning("Aguardando modelo...")
+else:
+    st.warning("Aguardando modelo...")
 else:
     st.info("Aguardando novo número...")
 
