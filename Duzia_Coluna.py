@@ -118,17 +118,18 @@ if len(historico) == 0 or numero_atual != historico[-1]:
         coluna, prob_coluna = prever_proxima(modelo_coluna, historico)
 
         mensagem = f"NA {numero_atual}"
-if duzia is not None:
-    mensagem += f" - D {duzia}"
-if coluna is not None:
-    mensagem += f" - C {coluna}"
-st.markdown(mensagem, unsafe_allow_html=True)
-enviar_telegram(mensagem)
+        if duzia is not None:
+            mensagem += f" - D {duzia}"
+        if coluna is not None:
+            mensagem += f" - C {coluna}"
 
-else:
-    st.warning("Aguardando mais dados para treinar os modelos...")
+        st.markdown(mensagem, unsafe_allow_html=True)
+        enviar_telegram(mensagem)
+    else:
+        st.warning("Aguardando mais dados para treinar os modelos...")
 else:
     st.info("Aguardando novo número...")
+    
 
 # === EXIBIR HISTÓRICO ===
 
