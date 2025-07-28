@@ -126,8 +126,8 @@ if coluna is not None:
         
         
 
-        st.markdown(mensagem, unsafe_allow_html=True)
-        enviar_telegram(mensagem)
+    st.markdown(mensagem, unsafe_allow_html=True)
+    enviar_telegram(mensagem)
     else:
         st.warning("Aguardando mais dados para treinar os modelos...")
 else:
