@@ -54,8 +54,8 @@ def extrair_features(historico):
             return 'G'
         return 'R' if n in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36] else 'B'
 
-    for i in range(120, len(historico)):
-        ultimos = historico[i - 120:i]
+    for i in range(250, len(historico)):
+        ultimos = historico[i - 250:i]
         entrada = []
 
         for janela in [10, 20]:
@@ -83,9 +83,9 @@ def extrair_features(historico):
         baixa = sum(1 for n in ultimos[-6:] if 0 < n <= 18)
         entrada += [alta, baixa]
 
-        entrada += ultimos[-6:]
+        entrada += ultimos[-250:]
 
-        for j in range(-6, -1):
+        for j in range(-250, -1):
             entrada.append(ultimos[j] - ultimos[j - 1])
 
         X.append(entrada)
@@ -121,7 +121,7 @@ def treinar_modelos(historico):
 
     return modelo_duzia, modelo_coluna
 
-def prever_proxima(modelo, historico, prob_minima=0.35):
+def prever_proxima(modelo, historico, prob_minima=0.05):
     if len(historico) < 250:
         return None, 0.0
 
