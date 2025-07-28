@@ -4,141 +4,119 @@ import joblib
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from collections import deque
+import time
 from streamlit_autorefresh import st_autorefresh
 from pathlib import Path
-import time
 import os
 
 # === CONFIGURAÇÕES ===
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
-TELEGRAM_TOKEN = "SEU_TOKEN"
-TELEGRAM_CHAT_ID = "SEU_CHAT_ID"
-MODELO_DUZIA_PATH = "modelo_duzia.pkl"
-MODELO_COLUNA_PATH = "modelo_coluna.pkl"
-HISTORICO_MAX = 200
+TELEGRAM_TOKEN = "SEU_TOKEN_AQUI"
+TELEGRAM_CHAT_ID = "SEU_CHAT_ID_AQUI"
 
 # === HISTÓRICO ===
-if "historico" not in st.session_state:
-    st.session_state.historico = deque(maxlen=HISTORICO_MAX)
+HISTORICO_PATH = "historico_duzia_coluna.pkl"
+MAX_HISTORICO = 200
+historico = deque(maxlen=MAX_HISTORICO)
 
-# === MAPAS DE FEATURES FÍSICAS ===
-ROULETTE_ORDER = [0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8,
-                  23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28,
-                  12, 35, 3, 26]
+# === AUTORELOAD ===
+st_autorefresh(interval=5000, key="atualizacao")
 
-def numero_vizinho(n):
-    if n not in ROULETTE_ORDER:
-        return -1
-    i = ROULETTE_ORDER.index(n)
-    return ROULETTE_ORDER[(i + 1) % len(ROULETTE_ORDER)]
-
-def setor_roleta(n):
-    if n in [22, 18, 29, 7, 28, 12, 35, 3, 26, 0, 32, 15, 19, 4, 21, 2, 25]:
-        return 1  # Voisins
-    elif n in [27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33]:
-        return 2  # Tiers
-    elif n in [1, 20, 14, 31, 9, 6, 17, 34]:
-        return 3  # Orphelins
-    return 0
-
-# === FEATURE ENGINEERING ===
-@st.cache_data
+# === Função para extrair features ===
 def extrair_features(historico):
+    historico = list(historico)
     features = []
-    h = list(historico)
-    for i in range(1, len(h)):
-        atual = h[i]
-        anterior = h[i - 1]
-        duzia = ((anterior - 1) // 12) + 1 if anterior != 0 else 0
-        coluna = ((anterior - 1) % 3) + 1 if anterior != 0 else 0
-        par = 1 if anterior % 2 == 0 else 0
-        vermelho = int(anterior in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36])
-        vizinho = numero_vizinho(anterior)
-        setor = setor_roleta(anterior)
-        features.append([
-            anterior, duzia, coluna, par, vermelho,
-            vizinho, setor
-        ])
+    for i in range(1, len(historico)):
+        prev = historico[i - 1]
+        atual = historico[i]
+
+        duzia = ((prev - 1) // 12) + 1 if prev != 0 else 0
+        coluna = ((prev - 1) % 3) + 1 if prev != 0 else 0
+        par = 1 if prev % 2 == 0 else 0
+        vermelho = 1 if prev in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36] else 0
+
+        features.append([duzia, coluna, par, vermelho])
     return np.array(features)
 
-# === TREINAMENTO ===
-def treinar_modelo(y):
-    X = extrair_features(st.session_state.historico)
-    y = y[-len(X):]
-    modelo = RandomForestClassifier(n_estimators=100, random_state=42)
-    modelo.fit(X, y)
-    return modelo
+# === Treinar os modelos ===
+def treinar_modelos(historico):
+    if len(historico) < 50:
+        return None, None
 
-def treinar_modelos():
-    hist = list(st.session_state.historico)
-    if len(hist) < 50: return None, None
+    X = extrair_features(historico)
+    y_duzia = [((n - 1) // 12) + 1 for n in list(historico)[1:] if n != 0]
+    y_coluna = [((n - 1) % 3) + 1 for n in list(historico)[1:] if n != 0]
 
-    y_duzia = [((n - 1) // 12) + 1 if n != 0 else 0 for n in hist[1:]]
-    y_coluna = [((n - 1) % 3) + 1 if n != 0 else 0 for n in hist[1:]]
+    modelo_duzia = RandomForestClassifier(n_estimators=100, random_state=42)
+    modelo_coluna = RandomForestClassifier(n_estimators=100, random_state=42)
+    modelo_duzia.fit(X, y_duzia)
+    modelo_coluna.fit(X, y_coluna)
 
-    modelo_duzia = treinar_modelo(y_duzia)
-    modelo_coluna = treinar_modelo(y_coluna)
-
-    joblib.dump(modelo_duzia, MODELO_DUZIA_PATH)
-    joblib.dump(modelo_coluna, MODELO_COLUNA_PATH)
+    joblib.dump(modelo_duzia, "modelo_duzia.pkl")
+    joblib.dump(modelo_coluna, "modelo_coluna.pkl")
 
     return modelo_duzia, modelo_coluna
 
-# === PREDIÇÃO ===
-def prever(modelo):
-    X = extrair_features(st.session_state.historico)
-    if len(X) == 0: return None, 0
-    probas = modelo.predict_proba([X[-1]])[0]
-    classe = np.argmax(probas) + 1
-    prob = probas[classe - 1]
-    return classe, prob
+# === Carregar histórico ===
+if Path(HISTORICO_PATH).exists():
+    historico = joblib.load(HISTORICO_PATH)
 
-# === TELEGRAM ===
-def enviar_telegram(mensagem):
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensagem, "parse_mode": "HTML"}
-    try: requests.post(url, data=payload)
-    except: pass
-
-# === APP STREAMLIT ===
-st.set_page_config(layout="wide")
-st.title("🎯 IA Roleta: Previsão Dúzia e Coluna")
-
-st_autorefresh(interval=5000, key="refresh")
-
-# === API E HISTÓRICO ===
-try:
-    response = requests.get(API_URL)
-    data = response.json()
-    ultimo_numero = int(data["winningNumber"])
-except:
-    st.error("Erro ao acessar API.")
-    st.stop()
-
-if len(st.session_state.historico) == 0 or st.session_state.historico[-1] != ultimo_numero:
-    st.session_state.historico.append(ultimo_numero)
-
-# === MODELOS ===
-if Path(MODELO_DUZIA_PATH).exists() and Path(MODELO_COLUNA_PATH).exists():
-    modelo_duzia = joblib.load(MODELO_DUZIA_PATH)
-    modelo_coluna = joblib.load(MODELO_COLUNA_PATH)
+# === Carregar ou treinar modelo ===
+if Path("modelo_duzia.pkl").exists() and Path("modelo_coluna.pkl").exists():
+    modelo_duzia = joblib.load("modelo_duzia.pkl")
+    modelo_coluna = joblib.load("modelo_coluna.pkl")
 else:
-    modelo_duzia, modelo_coluna = treinar_modelos()
+    modelo_duzia, modelo_coluna = treinar_modelos(historico)
 
-# === PREVISÃO E ALERTAS ===
-duzia, prob_duzia = prever(modelo_duzia)
-coluna, prob_coluna = prever(modelo_coluna)
+# === Função para obter número da API ===
+def obter_numero_api():
+    try:
+        response = requests.get(API_URL)
+        response.raise_for_status()
+        data = response.json()
+        numero = int(data.get("data", {}).get("result", {}).get("outcome", {}).get("number", -1))
+        return numero if 0 <= numero <= 36 else None
+    except Exception as e:
+        st.error("Erro ao acessar API.")
+        st.text(f"Detalhe: {e}")
+        return None
 
-if duzia and prob_duzia > 0.5:
-    mensagem = f"🎯 <b>Dúzia IA:</b> {duzia} (confiança: {prob_duzia:.0%})"
+# === Função para prever próxima jogada ===
+def prever_proxima(modelo, historico):
+    if len(historico) < 2:
+        return None, 0.0
+    X = extrair_features(historico)
+    x_entrada = X[-1].reshape(1, -1)
+    probas = modelo.predict_proba(x_entrada)[0]
+    classe = modelo.classes_[np.argmax(probas)]
+    confianca = np.max(probas)
+    return classe, confianca
+
+# === Função para enviar mensagem ao Telegram ===
+def enviar_telegram(mensagem):
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        data = {"chat_id": TELEGRAM_CHAT_ID, "text": mensagem, "parse_mode": "HTML"}
+        requests.post(url, data=data)
+    except Exception as e:
+        st.warning(f"Falha ao enviar para Telegram: {e}")
+
+# === MAIN ===
+numero_atual = obter_numero_api()
+
+if numero_atual is not None and (len(historico) == 0 or numero_atual != historico[-1]):
+    historico.append(numero_atual)
+    joblib.dump(historico, HISTORICO_PATH)
+    modelo_duzia, modelo_coluna = treinar_modelos(historico)
+
+    duzia, prob_duzia = prever_proxima(modelo_duzia, historico)
+    coluna, prob_coluna = prever_proxima(modelo_coluna, historico)
+
+    mensagem = f"🎯 <b>Previsão IA</b>\n🎲 Último número: <b>{numero_atual}</b>\n"
+    if duzia: mensagem += f"📦 Dúzia prevista: <b>{duzia}</b> ({prob_duzia:.0%})\n"
+    if coluna: mensagem += f"📍 Coluna prevista: <b>{coluna}</b> ({prob_coluna:.0%})"
+
+    st.markdown(mensagem, unsafe_allow_html=True)
     enviar_telegram(mensagem)
-    st.success(mensagem)
-
-if coluna and prob_coluna > 0.5:
-    mensagem = f"🎯 <b>Coluna IA:</b> {coluna} (confiança: {prob_coluna:.0%})"
-    enviar_telegram(mensagem)
-    st.success(mensagem)
-
-# === HISTÓRICO VISUAL ===
-st.markdown("### Últimos Números:")
-st.write(list(st.session_state.historico)[-10:])
+else:
+    st.info("Aguardando novo número...")
