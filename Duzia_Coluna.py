@@ -34,44 +34,101 @@ def enviar_telegram(mensagem):
         st.error(f"Erro ao enviar mensagem para o Telegram: {e}")
 
 def extrair_features(historico):
-    X = []
     historico = list(historico)
-    for i in range(len(historico) - 1):
-        entrada = [
-            historico[i - j] if i - j >= 0 else 0
-            for j in range(40)
-        ]
+    X = []
+
+    def cor(n):
+        if n == 0:
+            return 'G'
+        return 'R' if n in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36] else 'B'
+
+    for i in range(40, len(historico)):
+        ultimos = historico[i - 40:i]
+        entrada = []
+
+        # Frequência de dúzia e coluna nos últimos 10 e 20
+        for janela in [10, 20]:
+            d_freq = [0, 0, 0]
+            c_freq = [0, 0, 0]
+            for n in ultimos[-janela:]:
+                if n == 0:
+                    continue
+                d = ((n - 1) // 12)
+                c = ((n - 1) % 3)
+                d_freq[d] += 1
+                c_freq[c] += 1
+            entrada += d_freq + c_freq
+
+        # Frequência de cor (R, B, G) nos últimos 20
+        cores = {'R': 0, 'B': 0, 'G': 0}
+        for n in ultimos[-20:]:
+            cores[cor(n)] += 1
+        entrada += [cores['R'], cores['B'], cores['G']]
+
+        # Frequência par/ímpar
+        par = sum(1 for n in ultimos[-20:] if n != 0 and n % 2 == 0)
+        impar = 20 - par
+        entrada += [par, impar]
+
+        # Frequência alta (19–36) / baixa (1–18)
+        alta = sum(1 for n in ultimos[-20:] if n > 18)
+        baixa = sum(1 for n in ultimos[-20:] if 0 < n <= 18)
+        entrada += [alta, baixa]
+
+        # Últimos 5 números brutos
+        entrada += ultimos[-5:]
+
         X.append(entrada)
+
     return np.array(X)
 
 def treinar_modelos(historico):
-    if len(historico) < 40:
+    if len(historico) < 80:
         return None, None
 
     X = extrair_features(historico)
-    y_duzia = [((n - 1) // 12) + 1 for n in list(historico)[1:] if n != 0]
-    y_coluna = [((n - 1) % 3) + 1 for n in list(historico)[1:] if n != 0]
+    y = list(historico)[40:]
 
-    modelo_duzia = RandomForestClassifier(n_estimators=100, random_state=42)
-    modelo_coluna = RandomForestClassifier(n_estimators=100, random_state=42)
+    # Targets
+    y_duzia = [((n - 1) // 12) + 1 if n != 0 else 0 for n in y]
+    y_coluna = [((n - 1) % 3) + 1 if n != 0 else 0 for n in y]
 
-    modelo_duzia.fit(X[:len(y_duzia)], y_duzia)
-    modelo_coluna.fit(X[:len(y_coluna)], y_coluna)
+    # Filtra entradas válidas (exclui 0 do target)
+    X_filtrado = []
+    y_duzia_filtrado = []
+    y_coluna_filtrado = []
+
+    for xi, d, c in zip(X, y_duzia, y_coluna):
+        if d > 0 and c > 0:
+            X_filtrado.append(xi)
+            y_duzia_filtrado.append(d)
+            y_coluna_filtrado.append(c)
+
+    modelo_duzia = RandomForestClassifier(n_estimators=200, random_state=42, class_weight='balanced')
+    modelo_coluna = RandomForestClassifier(n_estimators=200, random_state=42, class_weight='balanced')
+
+    modelo_duzia.fit(X_filtrado, y_duzia_filtrado)
+    modelo_coluna.fit(X_filtrado, y_coluna_filtrado)
 
     joblib.dump(modelo_duzia, MODELO_DUZIA_PATH)
     joblib.dump(modelo_coluna, MODELO_COLUNA_PATH)
 
     return modelo_duzia, modelo_coluna
 
+
 def prever_proxima(modelo, historico, prob_minima=0.60):
-    if len(historico) < 41:
+    if len(historico) < 80:
         return None, 0.0
-    entrada = list(historico)[-1:-41:-1]  # Últimos 40 em ordem reversa
-    x = np.array(entrada).reshape(1, -1)
+
+    # Extrai apenas a última entrada de features
+    X = extrair_features(historico)
+    x = X[-1].reshape(1, -1)
+
     try:
         probas = modelo.predict_proba(x)[0]
         classe = np.argmax(probas) + 1
         probabilidade = probas[classe - 1]
+
         if probabilidade >= prob_minima:
             return classe, probabilidade
         else:
