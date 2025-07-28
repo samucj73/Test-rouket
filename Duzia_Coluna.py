@@ -22,6 +22,18 @@ ESTADO_PATH = "estado.pkl"
 
 st_autorefresh(interval=5000, key="atualizacao")
 
+# Treinar
+modelo_duzia, modelo_coluna = treinar_modelos(historico)
+
+# Prever dúzia
+classe_duzia, prob_duzia = prever_proxima(modelo_duzia, historico)
+
+# Prever coluna
+classe_coluna, prob_coluna = prever_proxima(modelo_coluna, historico)
+
+print(f"Dúzia prevista: {classe_duzia} com probabilidade {prob_duzia:.2f}")
+print(f"Coluna prevista: {classe_coluna} com probabilidade {prob_coluna:.2f}")
+
 # === VARIÁVEIS DE CONTROLE ===
 estado = {
     "ultimo_alerta": None,
