@@ -117,9 +117,14 @@ if len(historico) == 0 or numero_atual != historico[-1]:
         duzia, prob_duzia = prever_proxima(modelo_duzia, historico)
         coluna, prob_coluna = prever_proxima(modelo_coluna, historico)
 
+        mensagem = f"NA {numero_atual}"
+if duzia is not None:
+    mensagem += f" - D {duzia}"
+if coluna is not None:
+    mensagem += f" - C {coluna}"
+
         
-        if duzia: mensagem += f"Dúzia:<b>{duzia}</b> ({prob_duzia:.0%})\n"
-        if coluna: mensagem += f"Coluna:<b>{coluna}</b> ({prob_coluna:.0%})"
+        
 
         st.markdown(mensagem, unsafe_allow_html=True)
         enviar_telegram(mensagem)
