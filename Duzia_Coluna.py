@@ -63,17 +63,23 @@ def treinar_modelos(historico):
 
     return modelo_duzia, modelo_coluna
 
-def prever_proxima(modelo, historico):
+def prever_proxima(modelo, historico, prob_minima=0.75):
     if len(historico) < 41:
         return None, 0.0
-    entrada = list(historico)[-1:-41:-1]  # Últimos 12 em ordem reversa
+    entrada = list(historico)[-1:-41:-1]  # Últimos 40 em ordem reversa
     x = np.array(entrada).reshape(1, -1)
     try:
         probas = modelo.predict_proba(x)[0]
         classe = np.argmax(probas) + 1
-        return classe, probas[classe - 1]
+        probabilidade = probas[classe - 1]
+        if probabilidade >= prob_minima:
+            return classe, probabilidade
+        else:
+            return None, probabilidade
     except:
         return None, 0.0
+
+
 
 # === CARREGAR HISTÓRICO E MODELOS ===
 
