@@ -48,12 +48,21 @@ def enviar_telegram(mensagem):
     except Exception as e:
         st.error(f"Erro ao enviar mensagem: {e}")
 
+import numpy as np
+import joblib
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.feature_selection import SelectFromModel
+
+MODELO_DUZIA_PATH = "modelo_duzia.pkl"
+MODELO_COLUNA_PATH = "modelo_coluna.pkl"
+
 def extrair_features(historico):
     historico = list(historico)
     X = []
 
     def cor(n):
-        if n == 0: return 'G'
+        if n == 0:
+            return 'G'
         return 'R' if n in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36] else 'B'
 
     for i in range(250, len(historico)):
@@ -64,7 +73,8 @@ def extrair_features(historico):
             d_freq = [0, 0, 0]
             c_freq = [0, 0, 0]
             for n in ultimos[-janela:]:
-                if n == 0: continue
+                if n == 0:
+                    continue
                 d = ((n - 1) // 12)
                 c = ((n - 1) % 3)
                 d_freq[d] += 1
@@ -90,9 +100,6 @@ def extrair_features(historico):
         X.append(entrada)
     return np.array(X)
 
-MODELO_DUZIA_PATH = "modelo_duzia.pkl"
-MODELO_COLUNA_PATH = "modelo_coluna.pkl"
-
 def treinar_modelos(historico):
     if len(historico) < 250:
         return None, None
@@ -103,28 +110,46 @@ def treinar_modelos(historico):
 
     y_duzia = [((n - 1) // 12) + 1 for n in y if n != 0]
     y_coluna = [((n - 1) % 3) + 1 for n in y if n != 0]
-    X = X[-len(y_duzia):]  # ajustar X ao tamanho dos y válidos
 
+    # Ajusta X para tamanho válido de y
+    X = X[-len(y_duzia):]
+
+    # Treina RF base para dúzia (feature selection)
+    rf_fs_duzia = RandomForestClassifier(n_estimators=100, random_state=42)
+    rf_fs_duzia.fit(X, y_duzia)
+    selector_duzia = SelectFromModel(rf_fs_duzia, prefit=True, threshold='median')
+    X_duzia_sel = selector_duzia.transform(X)
+
+    # Treina RF base para coluna (feature selection)
+    rf_fs_coluna = RandomForestClassifier(n_estimators=100, random_state=42)
+    rf_fs_coluna.fit(X, y_coluna)
+    selector_coluna = SelectFromModel(rf_fs_coluna, prefit=True, threshold='median')
+    X_coluna_sel = selector_coluna.transform(X)
+
+    # Treina modelos finais com features selecionadas
     modelo_duzia = RandomForestClassifier(n_estimators=200, class_weight='balanced', random_state=42)
     modelo_coluna = RandomForestClassifier(n_estimators=200, class_weight='balanced', random_state=42)
 
-    modelo_duzia.fit(X, y_duzia)
-    modelo_coluna.fit(X, y_coluna)
+    modelo_duzia.fit(X_duzia_sel, y_duzia)
+    modelo_coluna.fit(X_coluna_sel, y_coluna)
 
-    joblib.dump(modelo_duzia, MODELO_DUZIA_PATH)
-    joblib.dump(modelo_coluna, MODELO_COLUNA_PATH)
+    # Salva modelo + seletor juntos
+    joblib.dump((modelo_duzia, selector_duzia), MODELO_DUZIA_PATH)
+    joblib.dump((modelo_coluna, selector_coluna), MODELO_COLUNA_PATH)
 
-    return modelo_duzia, modelo_coluna
+    return (modelo_duzia, selector_duzia), (modelo_coluna, selector_coluna)
 
-def prever_proxima(modelo, historico, prob_minima=0.05):
+def prever_proxima(modelo_e_selector, historico, prob_minima=0.05):
     if len(historico) < 250:
         return None, 0.0
 
+    modelo, selector = modelo_e_selector
     X = extrair_features(historico)
     x = X[-1].reshape(1, -1)
+    x_sel = selector.transform(x)
 
     try:
-        probas = modelo.predict_proba(x)[0]
+        probas = modelo.predict_proba(x_sel)[0]
         classe = np.argmax(probas) + 1
         prob = probas[classe - 1]
         return (classe, prob) if prob >= prob_minima else (None, 0.0)
