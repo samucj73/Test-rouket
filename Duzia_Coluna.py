@@ -117,9 +117,9 @@ if len(historico) == 0 or numero_atual != historico[-1]:
         duzia, prob_duzia = prever_proxima(modelo_duzia, historico)
         coluna, prob_coluna = prever_proxima(modelo_coluna, historico)
 
-        mensagem = f"🎯 <b>Previsão IA</b>\n🎲 Último número: <b>{numero_atual}</b>\n"
-        if duzia: mensagem += f"📦 Dúzia prevista: <b>{duzia}</b> ({prob_duzia:.0%})\n"
-        if coluna: mensagem += f"📍 Coluna prevista: <b>{coluna}</b> ({prob_coluna:.0%})"
+        mensagem = f"🎯 <b>Previsão IA</b>\n🎲: <b>{numero_atual}</b>\n"
+        if duzia: mensagem += f"Dúzia:<b>{duzia}</b> ({prob_duzia:.0%})\n"
+        if coluna: mensagem += f"Coluna:<b>{coluna}</b> ({prob_coluna:.0%})"
 
         st.markdown(mensagem, unsafe_allow_html=True)
         enviar_telegram(mensagem)
