@@ -190,10 +190,17 @@ if len(historico) == 0 or numero_atual != historico[-1]:
         coluna, p_c = prever_proxima(modelo_coluna, historico, prob_min_coluna)
 
         mensagem = f"🎯 <b>NA:</b> {numero_atual}"
-        if duzia:
-            mensagem += f"\n D: <b>{duzia}</b>"
-        if coluna:
-            mensagem += f"\n C: <b>{coluna}</b>"
+
+if duzia or coluna:
+    # Monta a mensagem com D sempre antes de C
+    if duzia and coluna:
+        mensagem += f" | <b>D:</b> {duzia} | <b>C:</b> {coluna}</b>"
+    elif duzia:
+        mensagem += f" | <b>D:</b> {duzia}</b>"
+    elif coluna:
+        mensagem += f" | <b>D:</b> - | <b>C:</b> {coluna}</b>"  # mantém a ordem com D fixo
+
+        
 
         entrada = (duzia, coluna)
         if entrada != estado["ultimo_alerta"]:
