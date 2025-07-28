@@ -122,16 +122,12 @@ if duzia is not None:
     mensagem += f" - D {duzia}"
 if coluna is not None:
     mensagem += f" - C {coluna}"
-
-        
-        
-
-    st.markdown(mensagem, unsafe_allow_html=True)
+st.markdown(mensagem, unsafe_allow_html=True)
     enviar_telegram(mensagem)
 else:
-    st.warning("Aguardando mais dados para treinar os modelos...")
+st.warning("Aguardando mais dados para treinar os modelos...")
 else:
-    st.info("Aguardando novo número...")
+st.info("Aguardando novo número...")
 
 # === EXIBIR HISTÓRICO ===
 
