@@ -38,37 +38,94 @@ historico = st.session_state.historico
 ultimo_alerta = st.session_state.ultimo_alerta
 
 # === FUNÇÕES DE FEATURES ===
+ordem_roda = [
+    0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27,
+    13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1,
+    20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26
+]
+
+# Mapeia número para sua posição na roleta
+posicao_roda = {num: i for i, num in enumerate(ordem_roda)}
+terco1 = set(ordem_roda[:13])
+terco2 = set(ordem_roda[13:26])
+terco3 = set(ordem_roda[26:])
+
+def get_vizinhos_fisicos(numero):
+    if numero not in posicao_roda:
+        return -1, -1
+    i = posicao_roda[numero]
+    esquerda = ordem_roda[(i - 1) % 37]
+    direita = ordem_roda[(i + 1) % 37]
+    return esquerda, direita
+
+def get_terco_fisico(numero):
+    if numero in terco1:
+        return 1
+    elif numero in terco2:
+        return 2
+    elif numero in terco3:
+        return 3
+    else:
+        return 0
+
 def extrair_features(historico):
     features = []
+    historico = list(historico)
     for i in range(1, len(historico)):
-        amostra = list(historico)[:i+1]
+        amostra = historico[:i]
         freq_abs = [amostra.count(n) for n in range(37)]
-        freq_ult5 = [amostra[-5:].count(n) for n in range(37)] if len(amostra) >= 5 else [0]*37
-        freq_ult10 = [amostra[-10:].count(n) for n in range(37)] if len(amostra) >= 10 else [0]*37
+        freq_ult5 = [amostra[-5:].count(n) for n in range(37)]
+        freq_ult10 = [amostra[-10:].count(n) for n in range(37)]
 
         terminais = [n % 10 for n in amostra]
         freq_terminais = [terminais.count(t) for t in range(10)]
 
-        duzias = [((n-1)//12)+1 if n != 0 else 0 for n in amostra]
-        colunas = [((n-1)%3)+1 if n != 0 else 0 for n in amostra]
+        duzias = [((n - 1) // 12) + 1 if n != 0 else 0 for n in amostra]
         freq_duzias = [duzias.count(d) for d in range(4)]
+
+        colunas = [((n - 1) % 3) + 1 if n != 0 else 0 for n in amostra]
         freq_colunas = [colunas.count(c) for c in range(4)]
 
-        vermelhos = {1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36}
-        pretos = {2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35}
-        cores = [1 if n in vermelhos else 2 if n in pretos else 0 for n in amostra]
+        cores = []
+        for n in amostra:
+            if n == 0:
+                cores.append(0)
+            elif n in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]:
+                cores.append(1)  # vermelho
+            else:
+                cores.append(2)  # preto
+
         freq_cores = [cores.count(c) for c in range(3)]
 
-        cor_igual = int(cores[-1] == cores[-2]) if len(cores) >= 2 else 0
-        repetido = int(amostra[-1] == amostra[-2]) if len(amostra) >= 2 else 0
-        soma = sum(amostra)
-        media = np.mean(amostra)
-        desvio = np.std(amostra)
+        cor_igual = 1 if len(cores) >= 2 and cores[-1] == cores[-2] else 0
+        repetido = 1 if len(amostra) >= 2 and amostra[-1] == amostra[-2] else 0
+        soma = sum(amostra[-5:]) if len(amostra) >= 5 else sum(amostra)
+        media = soma / min(len(amostra), 5)
+        desvio = np.std(amostra[-5:]) if len(amostra) >= 5 else np.std(amostra)
 
-        features.append(freq_abs + freq_ult5 + freq_ult10 + freq_terminais +
-                        freq_duzias + freq_colunas + freq_cores +
-                        [cor_igual, repetido, soma, media, desvio])
-    return features
+        # === Novas features: Vizinhos físicos e Terço físico ===
+        vizinhos_esq = []
+        vizinhos_dir = []
+        tercos = []
+
+        for n in amostra:
+            esq, dir = get_vizinhos_fisicos(n)
+            vizinhos_esq.append(esq)
+            vizinhos_dir.append(dir)
+            tercos.append(get_terco_fisico(n))
+
+        freq_viz_esq = [vizinhos_esq.count(n) for n in range(37)]
+        freq_viz_dir = [vizinhos_dir.count(n) for n in range(37)]
+        freq_tercos = [tercos.count(t) for t in range(4)]  # 0,1,2,3
+
+        features.append(
+            freq_abs + freq_ult5 + freq_ult10 + freq_terminais +
+            freq_duzias + freq_colunas + freq_cores +
+            [cor_igual, repetido, soma, media, desvio] +
+            freq_viz_esq + freq_viz_dir + freq_tercos
+        )
+    return np.array(features)
+
 
 # === TREINAMENTO DOS MODELOS ===
 @st.cache_resource(show_spinner=False)
