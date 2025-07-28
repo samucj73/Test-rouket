@@ -207,9 +207,8 @@ elif coluna:
         st.success(mensagem)
 else:
     st.warning("Aguardando modelo...")
-
 else:
-st.info("Aguardando novo número...")
+    st.info("Aguardando novo número...")
 
 # === EXIBIÇÃO ===
 st.metric("🟢 GREEN Dúzia", estado["green_duzia"])
