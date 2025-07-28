@@ -189,26 +189,29 @@ if len(historico) == 0 or numero_atual != historico[-1]:
         duzia, p_d = prever_proxima(modelo_duzia, historico, prob_min_duzia)
         coluna, p_c = prever_proxima(modelo_coluna, historico, prob_min_coluna)
 
-        mensagem = f"🎯 <b>NA:</b> {numero_atual}"
-if duzia and coluna:
-        mensagem += f"\n🎯 <b>D:</b> {duzia} | <b>C:</b> {coluna}</b>"
-elif duzia:
-        mensagem += f"\n🎯 <b>D:</b> {duzia}</b>"
-elif coluna:
-        mensagem += f"\n🎯 <b>C:</b> {coluna}</b>"
-        
-        entrada = (duzia, coluna)
-        if entrada != estado["ultimo_alerta"]:
-            enviar_telegram(mensagem)
-            estado["ultimo_alerta"] = entrada
-            estado["previsao_pendente"] = entrada  # ← será verificada na próxima rodada
+mensagem = f"🎯 <b>NA:</b> {numero_atual}"
 
-        joblib.dump(estado, ESTADO_PATH)
-        st.success(mensagem)
+if duzia or coluna:
+    if duzia and coluna:
+        mensagem += f"\n🎯 <b>D:</b> {duzia} | <b>C:</b> {coluna}</b>"
+    elif duzia:
+        mensagem += f"\n🎯 <b>D:</b> {duzia}</b>"
+    elif coluna:
+        mensagem += f"\n🎯 <b>C:</b> {coluna}</b>"
+
+    entrada = (duzia, coluna)
+    if entrada != estado["ultimo_alerta"]:
+        enviar_telegram(mensagem)
+        estado["ultimo_alerta"] = entrada
+        estado["previsao_pendente"] = entrada  # ← será verificada na próxima rodada
+
+    joblib.dump(estado, ESTADO_PATH)
+    st.success(mensagem)
+
 else:
     st.warning("Aguardando modelo...")
-else:
-    st.info("Aguardando novo número...")
+
+        
 
 # === EXIBIÇÃO ===
 st.metric("🟢 GREEN Dúzia", estado["green_duzia"])
