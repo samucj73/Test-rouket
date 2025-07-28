@@ -191,11 +191,11 @@ if len(historico) == 0 or numero_atual != historico[-1]:
 
         mensagem = f"🎯 <b>NA:</b> {numero_atual}"
 if duzia and coluna:
-    mensagem += f"\n🎯 <b>D:</b> {duzia} | <b>C:</b> {coluna}</b>"
+        mensagem += f"\n🎯 <b>D:</b> {duzia} | <b>C:</b> {coluna}</b>"
 elif duzia:
-    mensagem += f"\n🎯 <b>D:</b> {duzia}</b>"
+        mensagem += f"\n🎯 <b>D:</b> {duzia}</b>"
 elif coluna:
-    mensagem += f"\n🎯 <b>C:</b> {coluna}</b>"
+        mensagem += f"\n🎯 <b>C:</b> {coluna}</b>"
         
         entrada = (duzia, coluna)
         if entrada != estado["ultimo_alerta"]:
