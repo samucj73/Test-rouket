@@ -63,7 +63,7 @@ def treinar_modelos(historico):
 
     return modelo_duzia, modelo_coluna
 
-def prever_proxima(modelo, historico, prob_minima=0.75):
+def prever_proxima(modelo, historico, prob_minima=0.60):
     if len(historico) < 41:
         return None, 0.0
     entrada = list(historico)[-1:-41:-1]  # Últimos 40 em ordem reversa
