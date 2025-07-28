@@ -47,7 +47,7 @@ def extrair_features(historico):
     return np.array(X)
 
 def treinar_modelos(historico):
-    if len(historico) < 50:
+    if len(historico) < 12:
         return None, None
 
     X = extrair_features(historico)
