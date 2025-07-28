@@ -1,3 +1,6 @@
+# --- SEU CÓDIGO, AGORA COM AS CORREÇÕES APLICADAS ---
+# Manteve estrutura original e corrigiu apenas o necessário
+
 import streamlit as st
 import requests
 import joblib
@@ -171,15 +174,12 @@ if len(historico) == 0 or numero_atual != historico[-1]:
 
         estado["previsao_pendente"] = None
 
-    # Atualiza histórico
     historico.append(numero_atual)
     joblib.dump(historico, HISTORICO_PATH)
 
-    # Re-treina a cada 10
     if len(historico) >= 80 and len(historico) % 10 == 0:
         modelo_duzia, modelo_coluna = treinar_modelos(historico)
 
-    # Faz previsão
     if modelo_duzia and modelo_coluna:
         taxa_duzia = estado["green_duzia"] / estado["total_duzia"] if estado["total_duzia"] else 0
         taxa_coluna = estado["green_coluna"] / estado["total_coluna"] if estado["total_coluna"] else 0
@@ -189,17 +189,18 @@ if len(historico) == 0 or numero_atual != historico[-1]:
         duzia, p_d = prever_proxima(modelo_duzia, historico, prob_min_duzia)
         coluna, p_c = prever_proxima(modelo_coluna, historico, prob_min_coluna)
 
-        mensagem = f"🎯 <b>NA:</b> {numero_atual}"
-        if duzia:
-            mensagem += f"\n D: <b>{duzia}</b>"
-        if coluna:
-            mensagem += f"\n C: <b>{coluna}</b>"
-
         entrada = (duzia, coluna)
+
         if entrada != estado["ultimo_alerta"]:
+            mensagem = f"<b>🎯 Número Atual:</b> {numero_atual}"
+            if duzia:
+                mensagem += f"\n<b>Dúzia:</b> {duzia}"
+            if coluna:
+                mensagem += f"\n<b>Coluna:</b> {coluna}"
+
             enviar_telegram(mensagem)
             estado["ultimo_alerta"] = entrada
-            estado["previsao_pendente"] = entrada  # ← será verificada na próxima rodada
+            estado["previsao_pendente"] = entrada
 
         joblib.dump(estado, ESTADO_PATH)
         st.success(mensagem)
