@@ -10,8 +10,8 @@ from pathlib import Path
 
 # === CONFIGURAÇÕES ===
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
-TELEGRAM_TOKEN = "SEU_TOKEN_AQUI"
-TELEGRAM_CHAT_ID = "SEU_CHAT_ID_AQUI"
+TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
+TELEGRAM_CHAT_ID = "-1002880411750"
 HISTORICO_PATH = "historico_duzia_coluna.pkl"
 MODELO_DUZIA_PATH = "modelo_duzia.pkl"
 MODELO_COLUNA_PATH = "modelo_coluna.pkl"
@@ -189,11 +189,11 @@ if len(historico) == 0 or numero_atual != historico[-1]:
         duzia, p_d = prever_proxima(modelo_duzia, historico, prob_min_duzia)
         coluna, p_c = prever_proxima(modelo_coluna, historico, prob_min_coluna)
 
-        mensagem = f"🎯 <b>NA:</b> {numero_atual}"
+        mensagem = f"<b>NA:</b> {numero_atual}"
         if duzia:
-            mensagem += f"\n📌 Dúzia Prevista: <b>{duzia}</b>"
+            mensagem += f"\n D: <b>{duzia}</b>"
         if coluna:
-            mensagem += f"\n📌 Coluna Prevista: <b>{coluna}</b>"
+            mensagem += f"\nC: <b>{coluna}</b>"
 
         entrada = (duzia, coluna)
         if entrada != estado["ultimo_alerta"]:
