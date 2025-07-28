@@ -123,7 +123,7 @@ if duzia is not None:
 if coluna is not None:
     mensagem += f" - C {coluna}"
 st.markdown(mensagem, unsafe_allow_html=True)
-    enviar_telegram(mensagem)
+enviar_telegram(mensagem)
 else:
 st.warning("Aguardando mais dados para treinar os modelos...")
 else:
