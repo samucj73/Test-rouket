@@ -25,7 +25,8 @@ estado = {
     "green_duzia": 0,
     "green_coluna": 0,
     "total_duzia": 0,
-    "total_coluna": 0
+    "total_coluna": 0,
+    "previsao_pendente": None
 }
 if Path(ESTADO_PATH).exists():
     estado = joblib.load(ESTADO_PATH)
@@ -57,7 +58,6 @@ def extrair_features(historico):
         ultimos = historico[i - 60:i]
         entrada = []
 
-        # Frequência de dúzia e coluna (últimos 10 e 20)
         for janela in [10, 20]:
             d_freq = [0, 0, 0]
             c_freq = [0, 0, 0]
@@ -70,26 +70,21 @@ def extrair_features(historico):
                 c_freq[c] += 1
             entrada += d_freq + c_freq
 
-        # Frequência cor (R, B, G)
         cores = {'R': 0, 'B': 0, 'G': 0}
         for n in ultimos[-20:]:
             cores[cor(n)] += 1
         entrada += [cores['R'], cores['B'], cores['G']]
 
-        # Par / ímpar
         par = sum(1 for n in ultimos[-20:] if n != 0 and n % 2 == 0)
         impar = 20 - par
         entrada += [par, impar]
 
-        # Alta / baixa
         alta = sum(1 for n in ultimos[-20:] if n > 18)
         baixa = sum(1 for n in ultimos[-20:] if 0 < n <= 18)
         entrada += [alta, baixa]
 
-        # Últimos 5 números brutos
         entrada += ultimos[-5:]
 
-        # Diferenças entre últimos números
         for j in range(-5, -1):
             entrada.append(ultimos[j] - ultimos[j - 1])
 
@@ -159,16 +154,33 @@ except:
 
 # === NOVO NÚMERO DETECTADO ===
 if len(historico) == 0 or numero_atual != historico[-1]:
+    # Verificar acerto da previsão anterior
+    previsao_anterior = estado.get("previsao_pendente")
+    if previsao_anterior:
+        prev_duzia, prev_coluna = previsao_anterior
+
+        if prev_duzia:
+            estado["total_duzia"] += 1
+            if ((numero_atual - 1) // 12) + 1 == prev_duzia:
+                estado["green_duzia"] += 1
+
+        if prev_coluna:
+            estado["total_coluna"] += 1
+            if ((numero_atual - 1) % 3) + 1 == prev_coluna:
+                estado["green_coluna"] += 1
+
+        estado["previsao_pendente"] = None
+
+    # Atualiza histórico
     historico.append(numero_atual)
     joblib.dump(historico, HISTORICO_PATH)
 
-    # Re-treinar modelos a cada 10
+    # Re-treina a cada 10
     if len(historico) >= 80 and len(historico) % 10 == 0:
         modelo_duzia, modelo_coluna = treinar_modelos(historico)
 
-    # Fazer previsões
+    # Faz previsão
     if modelo_duzia and modelo_coluna:
-        # Ajuste dinâmico da probabilidade mínima
         taxa_duzia = estado["green_duzia"] / estado["total_duzia"] if estado["total_duzia"] else 0
         taxa_coluna = estado["green_coluna"] / estado["total_coluna"] if estado["total_coluna"] else 0
         prob_min_duzia = 0.55 if taxa_duzia < 0.5 else 0.60
@@ -179,27 +191,17 @@ if len(historico) == 0 or numero_atual != historico[-1]:
 
         mensagem = f"🎯 <b>NA:</b> {numero_atual}"
         if duzia:
-            mensagem += f"\n🎯 Dúzia Prevista: <b>{duzia}</b>"
+            mensagem += f"\n📌 Dúzia Prevista: <b>{duzia}</b>"
         if coluna:
-            mensagem += f"\n🎯 Coluna Prevista: <b>{coluna}</b>"
+            mensagem += f"\n📌 Coluna Prevista: <b>{coluna}</b>"
 
         entrada = (duzia, coluna)
         if entrada != estado["ultimo_alerta"]:
             enviar_telegram(mensagem)
             estado["ultimo_alerta"] = entrada
-
-        # Verifica se foi GREEN
-        if duzia:
-            estado["total_duzia"] += 1
-            if ((numero_atual - 1) // 12) + 1 == duzia:
-                estado["green_duzia"] += 1
-        if coluna:
-            estado["total_coluna"] += 1
-            if ((numero_atual - 1) % 3) + 1 == coluna:
-                estado["green_coluna"] += 1
+            estado["previsao_pendente"] = entrada  # ← será verificada na próxima rodada
 
         joblib.dump(estado, ESTADO_PATH)
-
         st.success(mensagem)
     else:
         st.warning("Aguardando modelo...")
@@ -207,8 +209,8 @@ else:
     st.info("Aguardando novo número...")
 
 # === EXIBIÇÃO ===
-st.metric("🎯 GREEN Dúzia", estado["green_duzia"])
-st.metric("🎯 GREEN Coluna", estado["green_coluna"])
+st.metric("🟢 GREEN Dúzia", estado["green_duzia"])
+st.metric("🟢 GREEN Coluna", estado["green_coluna"])
 st.metric("🎲 Total Dúzia", estado["total_duzia"])
 st.metric("🎲 Total Coluna", estado["total_coluna"])
 st.markdown("### Últimos números")
