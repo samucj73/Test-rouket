@@ -45,7 +45,7 @@ def extrair_features(historico):
     return np.array(X)
 
 def treinar_modelos(historico):
-    if len(historico) < 41:
+    if len(historico) < 40:
         return None, None
 
     X = extrair_features(historico)
@@ -64,7 +64,7 @@ def treinar_modelos(historico):
     return modelo_duzia, modelo_coluna
 
 def prever_proxima(modelo, historico):
-    if len(historico) < 40:
+    if len(historico) < 41:
         return None, 0.0
     entrada = list(historico)[-1:-40:-1]  # Últimos 12 em ordem reversa
     x = np.array(entrada).reshape(1, -1)
