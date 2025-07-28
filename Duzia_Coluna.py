@@ -47,7 +47,7 @@ def extrair_features(historico):
     return np.array(X)
 
 def treinar_modelos(historico):
-    if len(historico) < 12:
+    if len(historico) < 25:
         return None, None
 
     X = extrair_features(historico)
@@ -117,7 +117,7 @@ if len(historico) == 0 or numero_atual != historico[-1]:
         duzia, prob_duzia = prever_proxima(modelo_duzia, historico)
         coluna, prob_coluna = prever_proxima(modelo_coluna, historico)
 
-        mensagem = f"🎲: <b>{numero_atual}</b>\n"
+        
         if duzia: mensagem += f"Dúzia:<b>{duzia}</b> ({prob_duzia:.0%})\n"
         if coluna: mensagem += f"Coluna:<b>{coluna}</b> ({prob_coluna:.0%})"
 
