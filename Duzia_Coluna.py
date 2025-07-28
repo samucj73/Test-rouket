@@ -36,18 +36,16 @@ def enviar_telegram(mensagem):
 def extrair_features(historico):
     X = []
     historico = list(historico)
-    for i in range(len(historico)-1):
+    for i in range(len(historico) - 1):
         entrada = [
-            historico[i],
-            historico[i-1] if i >= 1 else 0,
-            historico[i-2] if i >= 2 else 0,
-            historico[i-3] if i >= 3 else 0,
+            historico[i - j] if i - j >= 0 else 0
+            for j in range(12)
         ]
         X.append(entrada)
     return np.array(X)
 
 def treinar_modelos(historico):
-    if len(historico) < 25:
+    if len(historico) < 13:
         return None, None
 
     X = extrair_features(historico)
@@ -66,14 +64,9 @@ def treinar_modelos(historico):
     return modelo_duzia, modelo_coluna
 
 def prever_proxima(modelo, historico):
-    if len(historico) < 4:
+    if len(historico) < 12:
         return None, 0.0
-    entrada = [
-        historico[-1],
-        historico[-2],
-        historico[-3],
-        historico[-4]
-    ]
+    entrada = list(historico)[-1:-13:-1]  # Últimos 12 em ordem reversa
     x = np.array(entrada).reshape(1, -1)
     try:
         probas = modelo.predict_proba(x)[0]
@@ -129,9 +122,7 @@ if len(historico) == 0 or numero_atual != historico[-1]:
         st.warning("Aguardando mais dados para treinar os modelos...")
 else:
     st.info("Aguardando novo número...")
-    
 
 # === EXIBIR HISTÓRICO ===
-
 st.markdown("### 🎡 Histórico de Números")
 st.write(list(historico))
