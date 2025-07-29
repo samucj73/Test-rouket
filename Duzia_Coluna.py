@@ -66,7 +66,7 @@ def extrair_features(historico):
           #  c_freq = [0, 0, 0]
           #  for n in ultimos[-janela:]:
            #     if n == 0:
-                    continue
+                   # continue
                 d = ((n - 1) // 12)
                 c = ((n - 1) % 3)
                 d_freq[d] += 1
