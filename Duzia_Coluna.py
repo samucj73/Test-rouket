@@ -191,10 +191,9 @@ if len(historico) == 0 or numero_atual != historico[-1]:
 
         mensagem = f"🎯 <b>NA:</b> {numero_atual}"
 
-if duzia or coluna:
-    # Monta a mensagem com D sempre antes de C
-    if duzia and coluna:
-        mensagem += f" | <b>D:</b> {duzia} | <b>C:</b> {coluna}</b>"
+        
+
+
     elif duzia:
         mensagem += f" | <b>D:</b> {duzia}</b>"
     elif coluna:
