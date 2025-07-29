@@ -108,6 +108,8 @@ def extrair_features(historico):
 
 
 
+
+
 def treinar_modelos(historico):
     if len(historico) < 25:
         return None, None
