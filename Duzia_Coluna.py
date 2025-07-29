@@ -191,10 +191,10 @@ if len(historico) == 0 or numero_atual != historico[-1]:
 
         
         mensagem = f"🎯 <b>NA:</b> {numero_atual}"
-        if duzia:
-            mensagem += f"\n D: <b>{duzia}</b>"
-        if coluna:
-            mensagem += f"\n C: <b>{coluna}</b>"
+if duzia:
+    mensagem += f" | D: <b>{duzia}</b>"
+if coluna:
+    mensagem += f" | C: <b>{coluna}</b>"
 
         
 
