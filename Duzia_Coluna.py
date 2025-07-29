@@ -63,7 +63,7 @@ def extrair_features(historico):
         ] else 'B'
 
     for i in range(24, len(historico)):
-        ultimos = historico[i - 24:i]
+        ultimos = historico[i - 25:i]
         entrada = []
 
         # Frequência de dúzias e colunas nas últimas janelas
