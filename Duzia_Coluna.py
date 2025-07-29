@@ -140,7 +140,7 @@ def treinar_modelos(historico):
 
     return modelo_duzia, modelo_coluna
 
-def prever_proxima(modelo, historico, prob_minima=0.55):
+def prever_proxima(modelo, historico, prob_minima=0.05):
     if len(historico) < 25:
         return None, 0.0
 
