@@ -48,6 +48,8 @@ def enviar_telegram(mensagem):
     except Exception as e:
         st.error(f"Erro ao enviar mensagem: {e}")
 
+import numpy as np
+
 def extrair_features(historico):
     historico = list(historico)
     X = []
@@ -55,44 +57,56 @@ def extrair_features(historico):
     def cor(n):
         if n == 0:
             return 'G'
-        return 'R' if n in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36] else 'B'
+        return 'R' if n in [
+            1, 3, 5, 7, 9, 12, 14, 16, 18,
+            19, 21, 23, 25, 27, 30, 32, 34, 36
+        ] else 'B'
 
     for i in range(60, len(historico)):
         ultimos = historico[i - 60:i]
         entrada = []
 
-        #for janela in [10, 20]:
-         #   d_freq = [0, 0, 0]
-          #  c_freq = [0, 0, 0]
-          #  for n in ultimos[-janela:]:
-           #     if n == 0:
-                   # continue
-             #   d = ((n - 1) // 12)
-             #   c = ((n - 1) % 3)
-         #       d_freq[d] += 1
-         #       c_freq[c] += 1
-          #  entrada += d_freq + c_freq
+        # Frequência de dúzias e colunas nas últimas janelas
+        for janela in [10, 20]:
+            d_freq = [0, 0, 0]
+            c_freq = [0, 0, 0]
+            for n in ultimos[-janela:]:
+                if n == 0:
+                    continue
+                d = ((n - 1) // 12)
+                c = ((n - 1) % 3)
+                d_freq[d] += 1
+                c_freq[c] += 1
+            entrada += d_freq + c_freq
 
-       # cores = {'R': 0, 'B': 0, 'G': 0}
-       # for n in ultimos[-20:]:
-          #  cores[cor(n)] += 1
-     #   entrada += [cores['R'], cores['B'], cores['G']]
+        # Frequência de cores nas últimas 20 jogadas
+        cores = {'R': 0, 'B': 0, 'G': 0}
+        for n in ultimos[-20:]:
+            cores[cor(n)] += 1
+        entrada += [cores['R'], cores['B'], cores['G']]
 
-     #   par = sum(1 for n in ultimos[-20:] if n != 0 and n % 2 == 0)
-     #   impar = 20 - par
-    #    entrada += [par, impar]
+        # Par e ímpar nas últimas 20 jogadas
+        par = sum(1 for n in ultimos[-20:] if n != 0 and n % 2 == 0)
+        impar = 20 - par
+        entrada += [par, impar]
 
-      #  alta = sum(1 for n in ultimos[-20:] if n > 18)
-      #  baixa = sum(1 for n in ultimos[-20:] if 0 < n <= 18)
-      #  entrada += [alta, baixa]
+        # Alta (19-36) e baixa (1-18)
+        alta = sum(1 for n in ultimos[-20:] if n > 18)
+        baixa = sum(1 for n in ultimos[-20:] if 0 < n <= 18)
+        entrada += [alta, baixa]
 
-      #  entrada += ultimos[-5:]
+        # Últimos 5 números crus (pode ajudar a detectar repetições)
+        entrada += ultimos[-5:]
 
-       # for j in range(-5, -1):
-          #  entrada.append(ultimos[j] - ultimos[j - 1])
+        # Diferenças entre os últimos 5 números (variação)
+        for j in range(-5, -1):
+            entrada.append(ultimos[j] - ultimos[j - 1])
 
         X.append(entrada)
+
     return np.array(X)
+
+
 
 def treinar_modelos(historico):
     if len(historico) < 80:
