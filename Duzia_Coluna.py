@@ -56,55 +56,56 @@ def extrair_features(historico):
 
     def cor(n):
         if n == 0:
-            return 'G'
+            return 'G'  # green
         return 'R' if n in [
-            1, 3, 5, 7, 9, 12, 14, 16, 18,
-            19, 21, 23, 25, 27, 30, 32, 34, 36
+            1,3,5,7,9,12,14,16,18,
+            19,21,23,25,27,30,32,34,36
         ] else 'B'
 
-    for i in range(24, len(historico)):
-        ultimos = historico[i - 25:i]
-        entrada = []
+    janela = 24  # << NOVA JANELA DE CONTEXTO
 
-        # Frequência de dúzias e colunas nas últimas janelas
-        for janela in [10, 20]:
-            d_freq = [0, 0, 0]
-            c_freq = [0, 0, 0]
-            for n in ultimos[-janela:]:
-                if n == 0:
-                    continue
-                d = ((n - 1) // 12)
-                c = ((n - 1) % 3)
-                d_freq[d] += 1
-                c_freq[c] += 1
-            entrada += d_freq + c_freq
+    for i in range(janela, len(historico)):
+        janela_anterior = historico[i-janela:i]
 
-        # Frequência de cores nas últimas 20 jogadas
-        cores = {'R': 0, 'B': 0, 'G': 0}
-        for n in ultimos[-20:]:
-            cores[cor(n)] += 1
-        entrada += [cores['R'], cores['B'], cores['G']]
+        cores = [cor(n) for n in janela_anterior]
+        vermelhos = cores.count('R')
+        pretos = cores.count('B')
+        verdes = cores.count('G')
 
-        # Par e ímpar nas últimas 20 jogadas
-        par = sum(1 for n in ultimos[-20:] if n != 0 and n % 2 == 0)
-        impar = 20 - par
-        entrada += [par, impar]
+        pares = sum(1 for n in janela_anterior if n != 0 and n % 2 == 0)
+        impares = sum(1 for n in janela_anterior if n != 0 and n % 2 != 0)
 
-        # Alta (19-36) e baixa (1-18)
-        alta = sum(1 for n in ultimos[-20:] if n > 18)
-        baixa = sum(1 for n in ultimos[-20:] if 0 < n <= 18)
-        entrada += [alta, baixa]
+        baixos = sum(1 for n in janela_anterior if 1 <= n <= 18)
+        altos = sum(1 for n in janela_anterior if 19 <= n <= 36)
 
-        # Últimos 5 números crus (pode ajudar a detectar repetições)
-       # entrada += ultimos[-5:]
+        dezenas = [((n - 1) // 12) + 1 if n != 0 else 0 for n in janela_anterior]
+        colunas = [((n - 1) % 3) + 1 if n != 0 else 0 for n in janela_anterior]
 
-        # Diferenças entre os últimos 5 números (variação)
-    #for j in range(-5, -1):
-          #  entrada.append(ultimos[j] - ultimos[j - 1])
+        d1 = dezenas.count(1)
+        d2 = dezenas.count(2)
+        d3 = dezenas.count(3)
 
-        X.append(entrada)
+        c1 = colunas.count(1)
+        c2 = colunas.count(2)
+        c3 = colunas.count(3)
 
-    return np.array(X)
+        terminais = [n % 10 for n in janela_anterior if n != 0]
+        terminais_freq = [terminais.count(t) for t in range(10)]
+
+        features = [
+            vermelhos, pretos, verdes,
+            pares, impares,
+            baixos, altos,
+            d1, d2, d3,
+            c1, c2, c3,
+            *terminais_freq
+        ]
+
+        X.append(features)
+
+    return X
+
+
 
 
 
