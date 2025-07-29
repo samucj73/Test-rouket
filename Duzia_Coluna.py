@@ -26,7 +26,8 @@ estado = {
     "green_coluna": 0,
     "total_duzia": 0,
     "total_coluna": 0,
-    "previsao_pendente": None
+    "previsao_pendente": None,
+    "contador_retreino": 0
 }
 if Path(ESTADO_PATH).exists():
     estado = joblib.load(ESTADO_PATH)
@@ -121,7 +122,7 @@ def treinar_modelos(historico):
 
     return modelo_duzia, modelo_coluna
 
-def prever_proxima(modelo, historico, prob_minima=0.08):
+def prever_proxima(modelo, historico, prob_minima=0.55):
     if len(historico) < 80:
         return None, 0.0
 
