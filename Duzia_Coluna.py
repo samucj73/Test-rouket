@@ -79,14 +79,14 @@ def extrair_features(historico):
         impar = 20 - par
         entrada += [par, impar]
 
-        alta = sum(1 for n in ultimos[-20:] if n > 18)
-        baixa = sum(1 for n in ultimos[-20:] if 0 < n <= 18)
-        entrada += [alta, baixa]
+      #  alta = sum(1 for n in ultimos[-20:] if n > 18)
+      #  baixa = sum(1 for n in ultimos[-20:] if 0 < n <= 18)
+      #  entrada += [alta, baixa]
 
-        entrada += ultimos[-5:]
+      #  entrada += ultimos[-5:]
 
-        for j in range(-5, -1):
-            entrada.append(ultimos[j] - ultimos[j - 1])
+       # for j in range(-5, -1):
+          #  entrada.append(ultimos[j] - ultimos[j - 1])
 
         X.append(entrada)
     return np.array(X)
