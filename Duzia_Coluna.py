@@ -196,15 +196,15 @@ if len(historico) == 0 or numero_atual != historico[-1]:
     joblib.dump(historico, HISTORICO_PATH)
 
     # Re-treina a cada 10
-    if len(historico) >= 80 and len(historico) % 10 == 0:
+    if len(historico) >= 30 and len(historico) % 10 == 0:
         modelo_duzia, modelo_coluna = treinar_modelos(historico)
 
     # Faz previsão
     if modelo_duzia and modelo_coluna:
         taxa_duzia = estado["green_duzia"] / estado["total_duzia"] if estado["total_duzia"] else 0
         taxa_coluna = estado["green_coluna"] / estado["total_coluna"] if estado["total_coluna"] else 0
-        prob_min_duzia = 0.55 if taxa_duzia < 0.5 else 0.60
-        prob_min_coluna = 0.55 if taxa_coluna < 0.5 else 0.60
+        prob_min_duzia = 0.05 if taxa_duzia < 0.5 else 0.10
+        prob_min_coluna = 0.05 if taxa_coluna < 0.5 else 0.10
 
         duzia, p_d = prever_proxima(modelo_duzia, historico, prob_min_duzia)
         coluna, p_c = prever_proxima(modelo_coluna, historico, prob_min_coluna)
