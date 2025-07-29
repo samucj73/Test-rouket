@@ -62,8 +62,8 @@ def extrair_features(historico):
             19, 21, 23, 25, 27, 30, 32, 34, 36
         ] else 'B'
 
-    for i in range(60, len(historico)):
-        ultimos = historico[i - 60:i]
+    for i in range(24, len(historico)):
+        ultimos = historico[i - 24:i]
         entrada = []
 
         # Frequência de dúzias e colunas nas últimas janelas
@@ -96,11 +96,11 @@ def extrair_features(historico):
         entrada += [alta, baixa]
 
         # Últimos 5 números crus (pode ajudar a detectar repetições)
-        entrada += ultimos[-5:]
+       # entrada += ultimos[-5:]
 
         # Diferenças entre os últimos 5 números (variação)
-        for j in range(-5, -1):
-            entrada.append(ultimos[j] - ultimos[j - 1])
+    #for j in range(-5, -1):
+          #  entrada.append(ultimos[j] - ultimos[j - 1])
 
         X.append(entrada)
 
@@ -109,11 +109,11 @@ def extrair_features(historico):
 
 
 def treinar_modelos(historico):
-    if len(historico) < 80:
+    if len(historico) < 25:
         return None, None
 
     X = extrair_features(historico)
-    y = list(historico)[60:]
+    y = list(historico)[24:]
 
     y_duzia = [((n - 1) // 12) + 1 if n != 0 else 0 for n in y]
     y_coluna = [((n - 1) % 3) + 1 if n != 0 else 0 for n in y]
@@ -139,7 +139,7 @@ def treinar_modelos(historico):
     return modelo_duzia, modelo_coluna
 
 def prever_proxima(modelo, historico, prob_minima=0.55):
-    if len(historico) < 80:
+    if len(historico) < 25:
         return None, 0.0
 
     X = extrair_features(historico)
