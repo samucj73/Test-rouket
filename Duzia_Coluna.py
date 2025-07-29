@@ -70,14 +70,14 @@ def extrair_features(historico):
                 c_freq[c] += 1
             entrada += d_freq + c_freq
 
-        cores = {'R': 0, 'B': 0, 'G': 0}
-        for n in ultimos[-20:]:
-            cores[cor(n)] += 1
-        entrada += [cores['R'], cores['B'], cores['G']]
+       # cores = {'R': 0, 'B': 0, 'G': 0}
+       # for n in ultimos[-20:]:
+          #  cores[cor(n)] += 1
+     #   entrada += [cores['R'], cores['B'], cores['G']]
 
-        par = sum(1 for n in ultimos[-20:] if n != 0 and n % 2 == 0)
-        impar = 20 - par
-        entrada += [par, impar]
+     #   par = sum(1 for n in ultimos[-20:] if n != 0 and n % 2 == 0)
+     #   impar = 20 - par
+    #    entrada += [par, impar]
 
       #  alta = sum(1 for n in ultimos[-20:] if n > 18)
       #  baixa = sum(1 for n in ultimos[-20:] if 0 < n <= 18)
