@@ -30,7 +30,7 @@ if "total_top10" not in st.session_state:
     st.session_state.total_top10 = 0
 if "ultimo_alerta" not in st.session_state:
     st.session_state.ultimo_alerta = []
-  if "top10_anterior" not in st.session_state:
+if "top10_anterior" not in st.session_state:
     st.session_state.top10_anterior = []
 
 if ESTADO_PATH.exists():
