@@ -65,9 +65,12 @@ def extrair_features(historico):
         if n == 0: return 'G'
         return 'R' if n in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36] else 'B'
 
-    for i in range(10, len(historico)):
-        janela = historico[i-10:i]
-        ult = historico[i-1]
+    # Ignora o último número (não usar o sorteio atual como base)
+    historico_sem_ultimo = historico[:-1]
+
+    for i in range(6, len(historico_sem_ultimo)):
+        janela = historico_sem_ultimo[i-5:i]
+        ult = historico_sem_ultimo[i-1]
 
         cores = [cor(n) for n in janela]
         vermelhos = cores.count('R')
@@ -75,7 +78,7 @@ def extrair_features(historico):
         verdes = cores.count('G')
 
         pares = sum(1 for n in janela if n != 0 and n % 2 == 0)
-        impares = 10 - pares
+        impares = 5 - pares
 
         terminal = ult % 10
         duzia = (ult - 1) // 12 + 1 if ult != 0 else 0
@@ -95,12 +98,12 @@ def extrair_features(historico):
         ]
 
         X.append(features)
-        y.append(historico[i])
+        y.append(historico_sem_ultimo[i])
 
     return np.array(X, dtype=np.float64), np.array(y, dtype=int)
 
 def treinar_modelo(historico):
-    if len(historico) < 30:
+    if len(historico) < 40:
         return None
 
     X, y = extrair_features(historico)
@@ -113,14 +116,16 @@ def treinar_modelo(historico):
     return modelo
 
 def prever_top10(modelo, historico):
-    if len(historico) < 30:
+    if len(historico) < 40:
         return []
 
     X, _ = extrair_features(historico)
     if X.size == 0:
         return []
 
+    # Usar o penúltimo vetor de features, baseado nos 5 números antes do último
     x = X[-1].reshape(1, -1)
+
     try:
         probas = modelo.predict_proba(x)[0]
         indices = np.argsort(probas)[::-1][:10]
@@ -129,6 +134,8 @@ def prever_top10(modelo, historico):
     except Exception as e:
         print(f"[ERRO PREVISÃO]: {e}")
         return []
+
+
 
 # === LOOP PRINCIPAL ===
 st.title("🎯 IA Roleta Profissional - Top 10 Números")
