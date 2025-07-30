@@ -169,10 +169,15 @@ st_autorefresh(interval=5000, key="atualizacao")
 
 try:
     resposta = requests.get(API_URL, timeout=10).json()
-    numero_atual = int(resposta["number"]) if "number" in resposta else None
-    if numero_atual is None:
-        st.error("Número não encontrado.")
-        st.stop()
+    numero_atual = int(resposta["data"]["result"]["outcome"]["number"])
+except Exception as e:
+    st.error(f"Erro ao obter número da API: {e}")
+    st.stop()
+
+
+
+
+
 except Exception as e:
     st.error(f"Erro API: {e}")
     st.stop()
