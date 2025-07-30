@@ -127,25 +127,31 @@ def treinar_modelos(historico):
     return modelo_duzia, modelo_coluna
 
 def prever_proxima(modelo, historico, prob_minima=0.60):
+    # só entra se tiver histórico suficiente
     if len(historico) < 80:
         return None, 0.0
 
+    # extrai features
     X = extrair_features(historico)
-    if len(X) == 0:
+    if X.size == 0:            # X é np.ndarray, tamanho zero?
         return None, 0.0
 
-    x = np.array(X[-1:])  # <-- aqui a mudança segura
+    # garante array 2D: shape (1, n_features)
+    x = X[-1:].astype(float)   # já é (1, n), cast para float por precaução
 
     try:
         probas = modelo.predict_proba(x)[0]
-        classe = np.argmax(probas) + 1
-        prob = probas[classe - 1]
+        classe = int(np.argmax(probas) + 1)
+        prob = float(probas[classe - 1])
         if prob >= prob_minima:
             return classe, prob
         return None, prob
     except Exception as e:
+        # logue o erro no console do Streamlit
         print(f"Erro previsão: {e}")
         return None, 0.0
+
+
 
 
 
