@@ -97,8 +97,8 @@ erros_coluna = st.session_state.get("erros_coluna", 0)
 # === COLETA DE DADOS DA API LIVE ===
 try:
     resp = requests.get(API_URL, headers=HEADERS)
-    dados = resp.json()
-    numero_atual = int(dados["history"][0]["number"])
+        dados = resp.json()
+    st.write("🔍 Resposta da API:", dados)  # Mostrar no Streamlit para debug
 except Exception as e:
     st.error(f"Erro ao acessar API: {e}")
     st.stop()
