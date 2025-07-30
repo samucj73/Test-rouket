@@ -172,7 +172,7 @@ if len(historico) == 0 or numero_atual != historico[-1]:
                 resultado = f"✅ {numero_atual} estava na previsão: 🟢"
             else:
                 resultado = f"✅ {numero_atual} não estava: 🔴"
-            time.sleep(4)
+            time.sleep(20)
             enviar_telegram(resultado)
 
 # === UI STREAMLIT ===
