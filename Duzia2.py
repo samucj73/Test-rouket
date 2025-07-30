@@ -131,7 +131,10 @@ def prever_proxima(modelo, historico, prob_minima=0.60):
         return None, 0.0
 
     X = extrair_features(historico)
-    x = X[-1].reshape(1, -1)
+    if len(X) == 0:
+        return None, 0.0
+
+    x = np.array(X[-1]).reshape(1, -1)
 
     try:
         probas = modelo.predict_proba(x)[0]
@@ -143,6 +146,8 @@ def prever_proxima(modelo, historico, prob_minima=0.60):
     except Exception as e:
         print(f"Erro previsão: {e}")
         return None, 0.0
+
+
 
 # === HISTÓRICO E MODELOS ===
 historico = joblib.load(HISTORICO_PATH) if Path(HISTORICO_PATH).exists() else deque(maxlen=500)
