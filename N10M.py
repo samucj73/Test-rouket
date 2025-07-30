@@ -30,6 +30,8 @@ if "total_top10" not in st.session_state:
     st.session_state.total_top10 = 0
 if "ultimo_alerta" not in st.session_state:
     st.session_state.ultimo_alerta = []
+  if "top10_anterior" not in st.session_state:
+    st.session_state.top10_anterior = []
 
 if ESTADO_PATH.exists():
     estado_salvo = joblib.load(ESTADO_PATH)
@@ -154,26 +156,27 @@ if len(historico) == 0 or numero_atual != historico[-1]:
     historico.append(numero_atual)
     joblib.dump(historico, HISTORICO_PATH)
 
+
+    # === VERIFICAÇÃO DE ACERTO DO SORTEIO ANTERIOR ===
+    if "top10_anterior" in st.session_state and st.session_state.top10_anterior:
+        st.session_state.total_top10 += 1
+        if numero_atual in st.session_state.top10_anterior:
+            st.session_state.acertos_top10 += 1
+            resultado = f"✅ {numero_atual} estava na previsão: 🟢"
+        else:
+            resultado = f"✅ {numero_atual} não estava: 🔴"
+        time.sleep(4)
+        enviar_telegram(resultado)
+
+    # === GERA NOVA PREVISÃO PARA O PRÓXIMO SORTEIO ===
     modelo = treinar_modelo(historico)
-
     if modelo:
-        top10 = prever_top10(modelo, historico)
-
-        if top10 != st.session_state.ultimo_alerta and len(top10) == 10:
-            msg = "🎯 <b>Top 10:</b> " + ", ".join(str(n) for n in top10)
+        nova_previsao = prever_top10(modelo, historico)
+        if nova_previsao != st.session_state.ultimo_alerta and len(nova_previsao) == 10:
+            msg = "🎯 <b>Top 10:</b> " + ", ".join(str(n) for n in nova_previsao)
             enviar_telegram(msg)
-            st.session_state.ultimo_alerta = top10
-
-        # Verificação de acerto
-        if st.session_state.ultimo_alerta:
-            st.session_state.total_top10 += 1
-            if numero_atual in st.session_state.ultimo_alerta:
-                st.session_state.acertos_top10 += 1
-                resultado = f"✅ {numero_atual} estava na previsão: 🟢"
-            else:
-                resultado = f"✅ {numero_atual} não estava: 🔴"
-            time.sleep(20)
-            enviar_telegram(resultado)
+            st.session_state.ultimo_alerta = nova_previsao
+            st.session_state.top10_anterior = nova_previsao  # salva para conferir no próximo ciclo
 
 # === UI STREAMLIT ===
 st.write("Último número:", numero_atual)
