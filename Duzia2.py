@@ -129,12 +129,14 @@ st.title("🎯 IA Roleta - Dúzia & Coluna")
 contador = st_autorefresh(interval=5000, key="refresh")
 
 # PEGA O ÚLTIMO NÚMERO
+
 try:
     resposta = requests.get(API_URL, timeout=10).json()
-    numero_atual = int(resposta["number"])
+    numero_atual = int(resposta["data"]["result"]["outcome"]["number"])
 except Exception as e:
-    st.error("Erro ao obter número da API.")
+    st.error(f"Erro ao obter número da API: {e}")
     st.stop()
+
 
 historico = st.session_state.historico
 
