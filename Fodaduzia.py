@@ -1,8 +1,10 @@
-import joblib
+import streamlit as st
 import numpy as np
+import requests
+import joblib
+import time
 from sklearn.ensemble import RandomForestClassifier
 from collections import deque
-import time
 from streamlit_autorefresh import st_autorefresh
 from pathlib import Path
 
