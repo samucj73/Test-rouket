@@ -70,8 +70,8 @@ def extrair_features(historico):
     # Ignora o último número (não usar o sorteio atual como base)
     historico_sem_ultimo = historico[:-1]
 
-    for i in range(6, len(historico_sem_ultimo)):
-        janela = historico_sem_ultimo[i-5:i]
+    for i in range(11, len(historico_sem_ultimo)):
+        janela = historico_sem_ultimo[i-10:i]
         ult = historico_sem_ultimo[i-1]
 
         cores = [cor(n) for n in janela]
