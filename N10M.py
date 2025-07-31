@@ -112,7 +112,7 @@ def treinar_modelo(historico):
     if len(X) == 0:
         return None
 
-    modelo = RandomForestClassifier(n_estimators=200, max_depth=12, random_state=42)
+    modelo = RandomForestClassifier(n_estimators=300, max_depth=None, random_state=42)
     modelo.fit(X, y)
     joblib.dump(modelo, "modelo_top10.pkl")
     return modelo
