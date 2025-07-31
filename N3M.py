@@ -151,7 +151,7 @@ st.title("🎯 IA Roleta Profissional - Top 3 + Vizinhos (Conferência oculta)")
 st_autorefresh(interval=5000, key="atualizacao")
 
 try:
-    resposta = requests.get(API_URL, timeout=10).json()
+    resposta = requests.get(API_URL, timeout=5).json()
     numero_atual = int(resposta["data"]["result"]["outcome"]["number"])
 except Exception as e:
     st.error(f"Erro ao obter número da API: {e}")
@@ -211,7 +211,7 @@ if modelo:
 # === INTERFACE STREAMLIT ===
 st.write("Último número:", numero_atual)
 st.write(f"Acertos Top 3 + vizinhos: {st.session_state.acertos_top} / {st.session_state.total_top}")
-st.write("Últimos números:", list(historico)[-20:])
+st.write("Últimos números:", list(historico)[-12:])
 
 # === SALVAR ESTADO ===
 joblib.dump({
