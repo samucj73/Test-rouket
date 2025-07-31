@@ -176,18 +176,32 @@ if len(historico) == 0 or numero_atual != historico[-1]:
 
     # Nova previsão
 
+# Garante que as variáveis existam
+if "top3_anterior" not in st.session_state:
+    st.session_state.top3_anterior = []
+if "contador_sem_alerta" not in st.session_state:
+    st.session_state.contador_sem_alerta = 0
+
 modelo = treinar_modelo(historico)
 if modelo:
     top3, com_vizinhos = prever_top3(modelo, historico)
 
-    if top3 != st.session_state.top3_anterior or st.session_state.contador_sem_alerta >= 3:
-        # Enviar novo alerta com apenas Top 3
+    if top3 != st.session_state.top3_anterior:
+        # Top3 mudou → envia alerta
         st.session_state.top3_anterior = top3
         st.session_state.contador_sem_alerta = 0
         mensagem = f"📊 <b>TOP 3 NÚMEROS:</b> {top3[0]}, {top3[1]}, {top3[2]}"
         enviar_telegram(mensagem)
+
     else:
+        # Top3 igual ao anterior → incrementa o contador
         st.session_state.contador_sem_alerta += 1
+
+        # Se passaram 3 rodadas e top3 ainda igual → aguarda nova mudança (não envia)
+        if st.session_state.contador_sem_alerta >= 3:
+            print("⏱ Aguardando novo Top3 após 3 rodadas...")
+
+
     
       
       
