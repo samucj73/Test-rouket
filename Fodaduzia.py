@@ -1,10 +1,10 @@
 import streamlit as st
-import numpy as np
 import requests
 import joblib
-import time
+import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from collections import deque
+import time
 from streamlit_autorefresh import st_autorefresh
 from pathlib import Path
 
@@ -16,10 +16,8 @@ HISTORICO_PATH = Path("historico.pkl")
 ESTADO_PATH = Path("estado.pkl")
 
 # === SESSION STATE ===
-
 if "historico" not in st.session_state:
-    st.session_state.historico = deque(maxlen=200)
-
+    st.session_state.historico = joblib.load(HISTORICO_PATH) if HISTORICO_PATH.exists() else deque(maxlen=500)
 
 if "acertos_top" not in st.session_state:
     st.session_state.acertos_top = 0
