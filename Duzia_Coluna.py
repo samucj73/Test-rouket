@@ -80,7 +80,7 @@ def extrair_features(historico):
         if n == 0: return 'G'
         return 'R' if n in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36] else 'B'
 
-    for i in range(10, len(historico)):
+    for i in range(11, len(historico)):
         janela = historico[i-10:i]
         ult = historico[i-1]
 
