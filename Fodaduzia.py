@@ -14,8 +14,10 @@ HISTORICO_PATH = Path("historico.pkl")
 ESTADO_PATH = Path("estado.pkl")
 
 # === SESSION STATE ===
+
 if "historico" not in st.session_state:
-    st.session_state.historico = joblib.load(HISTORICO_PATH) if HISTORICO_PATH.exists() else deque(maxlen=500)
+    st.session_state.historico = deque(maxlen=200)
+
 
 if "acertos_top" not in st.session_state:
     st.session_state.acertos_top = 0
