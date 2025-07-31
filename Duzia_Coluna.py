@@ -10,8 +10,8 @@ from pathlib import Path
 
 # === CONFIGURAÇÕES ===
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
-TELEGRAM_TOKEN = "SEU_TOKEN"
-TELEGRAM_CHAT_ID = "SEU_CHAT_ID"
+#TELEGRAM_TOKEN = "SEU_TOKEN"
+#TELEGRAM_CHAT_ID = "SEU_CHAT_ID"
 HISTORICO_PATH = Path("historico.pkl")
 ESTADO_PATH = Path("estado.pkl")
 
