@@ -171,7 +171,8 @@ if len(historico) == 0 or numero_atual != historico[-1]:
     modelo = treinar_modelo(historico)
     if modelo:
         top3, com_vizinhos = prever_top3(modelo, historico)
-      if top3 != st.session_state.top3_anterior or st.session_state.contador_sem_alerta >= 3:
+      
+  if top3 != st.session_state.top3_anterior or st.session_state.contador_sem_alerta >= 3:
     # Enviar novo alerta com apenas Top 3
     st.session_state.top3_anterior = top3
     st.session_state.contador_sem_alerta = 0
