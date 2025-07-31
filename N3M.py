@@ -171,12 +171,15 @@ if len(historico) == 0 or numero_atual != historico[-1]:
     modelo = treinar_modelo(historico)
     if modelo:
         top3, com_vizinhos = prever_top3(modelo, historico)
-        if top3 != st.session_state.ultimo_alerta and len(top3) == 3:
-            msg = "🎯 <b>Top 3:</b> " + ", ".join(str(n) for n in top3)
-            enviar_telegram(msg)
-            st.session_state.ultimo_alerta = top3
-            st.session_state.top3_principal = top3
-            st.session_state.top3_com_vizinhos = com_vizinhos
+      if top3 != st.session_state.top3_anterior or st.session_state.contador_sem_alerta >= 3:
+    # Enviar novo alerta com apenas Top 3
+    st.session_state.top3_anterior = top3
+    st.session_state.contador_sem_alerta = 0
+    mensagem = f"📊 <b>TOP 3 NÚMEROS:</b> {top3[0]}, {top3[1]}, {top3[2]}"
+    enviar_telegram(mensagem)
+else:
+    st.session_state.contador_sem_alerta += 1
+        
 
 # === INTERFACE STREAMLIT ===
 st.write("Último número:", numero_atual)
