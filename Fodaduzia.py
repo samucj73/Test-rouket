@@ -14,7 +14,6 @@ TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 TELEGRAM_CHAT_ID = "-1002880411750"
 HISTORICO_PATH = Path("historico.pkl")
 ESTADO_PATH = Path("estado.pkl")
-CONFIANCA_MINIMA = 0.60  # 70%
 
 # === SESSION STATE ===
 if "historico" not in st.session_state:
@@ -28,8 +27,6 @@ if "top3_anterior" not in st.session_state:
     st.session_state.top3_anterior = []
 if "contador_sem_alerta" not in st.session_state:
     st.session_state.contador_sem_alerta = 0
-if "ultima_confianca" not in st.session_state:
-    st.session_state.ultima_confianca = 0.0
 
 if ESTADO_PATH.exists():
     estado_salvo = joblib.load(ESTADO_PATH)
@@ -105,21 +102,20 @@ def treinar_modelo_duzia(historico):
 
 def prever_duzias(modelo, historico):
     if len(historico) < 17:
-        return [], 0.0
+        return []
 
     X, _ = extrair_features(historico)
     if X.size == 0:
-        return [], 0.0
+        return []
 
     x = X[-1].reshape(1, -1)
     try:
         probas = modelo.predict_proba(x)[0]
         indices = np.argsort(probas)[::-1][:2]
-        confianca = probas[indices[0]] + probas[indices[1]]
-        return [int(i) for i in indices], confianca
+        return [int(i) for i in indices]
     except Exception as e:
         print(f"[ERRO PREVISÃO DÚZIA]: {e}")
-        return [], 0.0
+        return []
 
 # === LOOP PRINCIPAL ===
 st.title("🎯 IA Roleta Profissional - 2 Dúzias mais Prováveis")
@@ -153,26 +149,21 @@ if len(historico) == 0 or numero_atual != historico[-1]:
 # Previsão das duas dúzias mais prováveis
 modelo = treinar_modelo_duzia(historico)
 if modelo:
-    duzias_previstas, confianca = prever_duzias(modelo, historico)
-    st.session_state.ultima_confianca = confianca
+    duzias_previstas = prever_duzias(modelo, historico)
 
-    if confianca >= CONFIANCA_MINIMA:
-        if duzias_previstas != st.session_state.top3_anterior:
-            st.session_state.top3_anterior = duzias_previstas
-            st.session_state.contador_sem_alerta = 0
-            mensagem = f"📊 <b>ENTRADA DÚZIAS:</b> {duzias_previstas[0]}ª e {duzias_previstas[1]}ª (Confiança: {confianca:.0%})"
-            enviar_telegram(mensagem)
-        else:
-            st.session_state.contador_sem_alerta += 1
-            if st.session_state.contador_sem_alerta >= 3:
-                print("⏱ Aguardando nova previsão após 3 rodadas...")
+    if duzias_previstas != st.session_state.top3_anterior:
+        st.session_state.top3_anterior = duzias_previstas
+        st.session_state.contador_sem_alerta = 0
+        mensagem = f"📊 <b>ENTRADA DÚZIAS:</b> {duzias_previstas[0]}ª e {duzias_previstas[1]}ª"
+        enviar_telegram(mensagem)
     else:
-        print(f"🔕 Previsão ignorada (confiança {confianca:.0%} abaixo do mínimo de {CONFIANCA_MINIMA:.0%})")
+        st.session_state.contador_sem_alerta += 1
+        if st.session_state.contador_sem_alerta >= 3:
+            print("⏱ Aguardando nova previsão após 3 rodadas...")
 
 # === INTERFACE STREAMLIT ===
 st.write("Último número:", numero_atual)
 st.write(f"Acertos nas Dúzias: {st.session_state.acertos_top} / {st.session_state.total_top}")
-st.metric("Confiança da última previsão", f"{st.session_state.ultima_confianca:.1%}")
 st.write("Últimos números:", list(historico)[-12:])
 
 # === SALVAR ESTADO ===
@@ -180,6 +171,5 @@ joblib.dump({
     "acertos_top": st.session_state.acertos_top,
     "total_top": st.session_state.total_top,
     "top3_anterior": st.session_state.top3_anterior,
-    "contador_sem_alerta": st.session_state.contador_sem_alerta,
-    "ultima_confianca": st.session_state.ultima_confianca
+    "contador_sem_alerta": st.session_state.contador_sem_alerta
 }, ESTADO_PATH)
