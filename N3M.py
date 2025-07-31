@@ -10,15 +10,10 @@ from pathlib import Path
 
 # === CONFIGURAÇÕES ===
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
-#TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
-#TELEGRAM_CHAT_ID = "-1002880411750"
+TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
+TELEGRAM_CHAT_ID = "-1002880411750"
 HISTORICO_PATH = Path("historico.pkl")
 ESTADO_PATH = Path("estado.pkl")
-
-ROULETTE_SEQUENCE = [0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6,
-                     27, 13, 36, 11, 30, 8, 23, 10, 5, 24,
-                     16, 33, 1, 20, 14, 31, 9, 22, 18, 29,
-                     7, 28, 12, 35, 3, 26]
 
 # === SESSION STATE ===
 if "historico" not in st.session_state:
@@ -28,17 +23,8 @@ if "acertos_top" not in st.session_state:
     st.session_state.acertos_top = 0
 if "total_top" not in st.session_state:
     st.session_state.total_top = 0
-if "ultimo_alerta" not in st.session_state:
-    st.session_state.ultimo_alerta = []
-if "top3_principal" not in st.session_state:
-    st.session_state.top3_principal = []
-if "top3_com_vizinhos" not in st.session_state:
-    st.session_state.top3_com_vizinhos = []
-
-# Inicializa variáveis de estado, se ainda não existirem
 if "top3_anterior" not in st.session_state:
     st.session_state.top3_anterior = []
-
 if "contador_sem_alerta" not in st.session_state:
     st.session_state.contador_sem_alerta = 0
 
@@ -55,12 +41,6 @@ def enviar_telegram(mensagem):
         requests.post(url, json=payload, timeout=10)
     except Exception as e:
         print("Erro Telegram:", e)
-
-def get_neighbors(n, k=2):
-    if n not in ROULETTE_SEQUENCE:
-        return []
-    idx = ROULETTE_SEQUENCE.index(n)
-    return [ROULETTE_SEQUENCE[(idx + i) % len(ROULETTE_SEQUENCE)] for i in range(-k, k + 1)]
 
 def bloco_terco(numero):
     if numero == 0: return "zero"
@@ -94,9 +74,6 @@ def extrair_features(historico):
         duzia = (ult - 1) // 12 + 1 if ult != 0 else 0
         coluna = (ult - 1) % 3 + 1 if ult != 0 else 0
 
-        vizinhos = get_neighbors(ult, k=2)
-        viz_media = np.mean(vizinhos)
-
         bloco = bloco_terco(ult)
         bloco_num = {"terco1": 1, "terco2": 2, "terco3": 3, "zero": 0}[bloco]
 
@@ -104,7 +81,7 @@ def extrair_features(historico):
             vermelhos, pretos, verdes,
             pares, impares,
             terminal, duzia, coluna,
-            viz_media, bloco_num
+            bloco_num
         ]
 
         X.append(features)
@@ -112,42 +89,36 @@ def extrair_features(historico):
 
     return np.array(X, dtype=np.float64), np.array(y, dtype=int)
 
-def treinar_modelo(historico):
+def treinar_modelo_duzia(historico):
     if len(historico) < 17:
         return None
-    X, y = extrair_features(historico)
+    X, y_raw = extrair_features(historico)
     if len(X) == 0:
         return None
+    y = [(n - 1) // 12 + 1 if n != 0 else 0 for n in y_raw]
     modelo = RandomForestClassifier(n_estimators=300, max_depth=None, random_state=42)
     modelo.fit(X, y)
     return modelo
 
-def prever_top3(modelo, historico):
+def prever_duzias(modelo, historico):
     if len(historico) < 17:
-        return [], []
+        return []
 
     X, _ = extrair_features(historico)
     if X.size == 0:
-        return [], []
+        return []
 
     x = X[-1].reshape(1, -1)
     try:
         probas = modelo.predict_proba(x)[0]
-        indices = np.argsort(probas)[::-1][:3]
-        top3 = [int(i) for i in indices]
-
-        vizinhos_totais = set()
-        for numero in top3:
-            vizinhos = get_neighbors(numero, k=2)
-            vizinhos_totais.update(vizinhos)
-
-        return top3, sorted(vizinhos_totais)
+        indices = np.argsort(probas)[::-1][:2]
+        return [int(i) for i in indices]
     except Exception as e:
-        print(f"[ERRO PREVISÃO]: {e}")
-        return [], []
+        print(f"[ERRO PREVISÃO DÚZIA]: {e}")
+        return []
 
 # === LOOP PRINCIPAL ===
-st.title("🎯 IA Roleta Profissional - Top 3 + Vizinhos (Conferência oculta)")
+st.title("🎯 IA Roleta Profissional - 2 Dúzias mais Prováveis")
 st_autorefresh(interval=5000, key="atualizacao")
 
 try:
@@ -163,61 +134,42 @@ if len(historico) == 0 or numero_atual != historico[-1]:
     historico.append(numero_atual)
     joblib.dump(historico, HISTORICO_PATH)
 
-    # Verificação da previsão anterior
-    if st.session_state.top3_com_vizinhos:
+    # Conferência do resultado anterior
+    if st.session_state.top3_anterior:
         st.session_state.total_top += 1
-        if numero_atual in st.session_state.top3_com_vizinhos:
+        duzia_atual = (numero_atual - 1) // 12 + 1 if numero_atual != 0 else 0
+        if duzia_atual in st.session_state.top3_anterior:
             st.session_state.acertos_top += 1
-            resultado = f"✅ {numero_atual} estava nos vizinhos: 🟢"
+            resultado = f"✅ Saiu {numero_atual} ({duzia_atual}ª dúzia): 🟢"
         else:
-            resultado = f"✅ {numero_atual} não estava: 🔴"
+            resultado = f"✅ Saiu {numero_atual} ({duzia_atual}ª dúzia): 🔴"
         time.sleep(4)
         enviar_telegram(resultado)
 
-    # Nova previsão
-
-# Garante que as variáveis existam
-if "top3_anterior" not in st.session_state:
-    st.session_state.top3_anterior = []
-if "contador_sem_alerta" not in st.session_state:
-    st.session_state.contador_sem_alerta = 0
-
-modelo = treinar_modelo(historico)
+# Previsão das duas dúzias mais prováveis
+modelo = treinar_modelo_duzia(historico)
 if modelo:
-    top3, com_vizinhos = prever_top3(modelo, historico)
+    duzias_previstas = prever_duzias(modelo, historico)
 
-    if top3 != st.session_state.top3_anterior:
-        # Top3 mudou → envia alerta
-        st.session_state.top3_anterior = top3
+    if duzias_previstas != st.session_state.top3_anterior:
+        st.session_state.top3_anterior = duzias_previstas
         st.session_state.contador_sem_alerta = 0
-        mensagem = f"📊 <b>TOP 3 NÚMEROS:</b> {top3[0]}, {top3[1]}, {top3[2]}"
+        mensagem = f"📊 <b>ENTRADA DÚZIAS:</b> {duzias_previstas[0]}ª e {duzias_previstas[1]}ª"
         enviar_telegram(mensagem)
-
     else:
-        # Top3 igual ao anterior → incrementa o contador
         st.session_state.contador_sem_alerta += 1
-
-        # Se passaram 3 rodadas e top3 ainda igual → aguarda nova mudança (não envia)
         if st.session_state.contador_sem_alerta >= 3:
-            print("⏱ Aguardando novo Top3 após 3 rodadas...")
-
-
-    
-      
-      
-     
-        
+            print("⏱ Aguardando nova previsão após 3 rodadas...")
 
 # === INTERFACE STREAMLIT ===
 st.write("Último número:", numero_atual)
-st.write(f"Acertos Top 3 + vizinhos: {st.session_state.acertos_top} / {st.session_state.total_top}")
+st.write(f"Acertos nas Dúzias: {st.session_state.acertos_top} / {st.session_state.total_top}")
 st.write("Últimos números:", list(historico)[-12:])
 
 # === SALVAR ESTADO ===
 joblib.dump({
     "acertos_top": st.session_state.acertos_top,
     "total_top": st.session_state.total_top,
-    "ultimo_alerta": st.session_state.ultimo_alerta,
-    "top3_principal": st.session_state.top3_principal,
-    "top3_com_vizinhos": st.session_state.top3_com_vizinhos
+    "top3_anterior": st.session_state.top3_anterior,
+    "contador_sem_alerta": st.session_state.contador_sem_alerta
 }, ESTADO_PATH)
