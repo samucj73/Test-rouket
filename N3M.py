@@ -35,6 +35,13 @@ if "top3_principal" not in st.session_state:
 if "top3_com_vizinhos" not in st.session_state:
     st.session_state.top3_com_vizinhos = []
 
+# Inicializa variáveis de estado, se ainda não existirem
+if "top3_anterior" not in st.session_state:
+    st.session_state.top3_anterior = []
+
+if "contador_sem_alerta" not in st.session_state:
+    st.session_state.contador_sem_alerta = 0
+
 if ESTADO_PATH.exists():
     estado_salvo = joblib.load(ESTADO_PATH)
     for k, v in estado_salvo.items():
