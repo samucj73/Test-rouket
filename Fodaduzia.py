@@ -10,8 +10,8 @@ from pathlib import Path
 
 # === CONFIGURAÇÕES ===
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
-TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
-TELEGRAM_CHAT_ID = "-1002880411750"
+#TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
+#TELEGRAM_CHAT_ID = "-1002880411750"
 HISTORICO_PATH = Path("historico.pkl")
 ESTADO_PATH = Path("estado.pkl")
 
@@ -27,6 +27,8 @@ if "top3_anterior" not in st.session_state:
     st.session_state.top3_anterior = []
 if "contador_sem_alerta" not in st.session_state:
     st.session_state.contador_sem_alerta = 0
+if "tipo_entrada_anterior" not in st.session_state:
+    st.session_state.tipo_entrada_anterior = ""
 
 if ESTADO_PATH.exists():
     estado_salvo = joblib.load(ESTADO_PATH)
@@ -68,12 +70,7 @@ def extrair_features(historico):
         verdes = cores.count('G')
 
         pares = sum(1 for n in janela if n != 0 and n % 2 == 0)
-        impares = sum(1 for n in janela if n != 0 and n % 2 != 0)
-
-
-        
-
-        
+        impares = 5 - pares
 
         terminal = ult % 10
         duzia = (ult - 1) // 12 + 1 if ult != 0 else 0
@@ -94,36 +91,39 @@ def extrair_features(historico):
 
     return np.array(X, dtype=np.float64), np.array(y, dtype=int)
 
-def treinar_modelo_duzia(historico):
-    if len(historico) < 17:
+def treinar_modelo(historico, tipo="duzia"):
+    if len(historico) < 120:
         return None
     X, y_raw = extrair_features(historico)
     if len(X) == 0:
         return None
-    y = [(n - 1) // 12 + 1 if n != 0 else 0 for n in y_raw]
+    if tipo == "duzia":
+        y = [(n - 1) // 12 + 1 if n != 0 else 0 for n in y_raw]
+    else:
+        y = [(n - 1) % 3 + 1 if n != 0 else 0 for n in y_raw]
     modelo = RandomForestClassifier(n_estimators=300, max_depth=None, random_state=42)
     modelo.fit(X, y)
     return modelo
 
-def prever_duzias(modelo, historico):
-    if len(historico) < 17:
-        return []
+def prever_top2(modelo, historico):
+    if len(historico) < 120:
+        return [], []
 
     X, _ = extrair_features(historico)
     if X.size == 0:
-        return []
+        return [], []
 
     x = X[-1].reshape(1, -1)
     try:
         probas = modelo.predict_proba(x)[0]
         indices = np.argsort(probas)[::-1][:2]
-        return [int(i) for i in indices]
+        return [int(i) for i in indices], [probas[i] for i in indices]
     except Exception as e:
-        print(f"[ERRO PREVISÃO DÚZIA]: {e}")
-        return []
+        print(f"[ERRO PREVISÃO]: {e}")
+        return [], []
 
 # === LOOP PRINCIPAL ===
-st.title("🎯 IA Roleta Profissional - 2 Dúzias mais Prováveis")
+st.title("🎯 IA Roleta Profissional - Dúzia ou Coluna mais provável")
 st_autorefresh(interval=5000, key="atualizacao")
 
 try:
@@ -139,36 +139,57 @@ if len(historico) == 0 or numero_atual != historico[-1]:
     historico.append(numero_atual)
     joblib.dump(historico, HISTORICO_PATH)
 
-    # Conferência do resultado anterior
     if st.session_state.top3_anterior:
         st.session_state.total_top += 1
-        duzia_atual = (numero_atual - 1) // 12 + 1 if numero_atual != 0 else 0
-        if duzia_atual in st.session_state.top3_anterior:
-            st.session_state.acertos_top += 1
-            resultado = f"✅ Saiu {numero_atual} ({duzia_atual}ª dúzia): 🟢"
+        entrada_tipo = st.session_state.tipo_entrada_anterior
+        if entrada_tipo == "duzia":
+            valor = (numero_atual - 1) // 12 + 1 if numero_atual != 0 else 0
         else:
-            resultado = f"✅ Saiu {numero_atual} ({duzia_atual}ª dúzia): 🔴"
+            valor = (numero_atual - 1) % 3 + 1 if numero_atual != 0 else 0
+
+        if valor in st.session_state.top3_anterior:
+            st.session_state.acertos_top += 1
+            resultado = f"✅ Saiu {numero_atual} ({valor}ª {entrada_tipo}): 🟢"
+        else:
+            resultado = f"✅ Saiu {numero_atual} ({valor}ª {entrada_tipo}): 🔴"
         time.sleep(4)
         enviar_telegram(resultado)
 
-# Previsão das duas dúzias mais prováveis
-modelo = treinar_modelo_duzia(historico)
-if modelo:
-    duzias_previstas = prever_duzias(modelo, historico)
+modelo_d = treinar_modelo(historico, "duzia")
+modelo_c = treinar_modelo(historico, "coluna")
 
-    if duzias_previstas != st.session_state.top3_anterior:
-        st.session_state.top3_anterior = duzias_previstas
+if modelo_d and modelo_c:
+    top_d, prob_d = prever_top2(modelo_d, historico)
+    top_c, prob_c = prever_top2(modelo_c, historico)
+
+    soma_d = sum(prob_d)
+    soma_c = sum(prob_c)
+
+    if soma_d >= soma_c:
+        tipo = "duzia"
+        top = top_d
+    else:
+        tipo = "coluna"
+        top = top_c
+
+    if top != st.session_state.top3_anterior or tipo != st.session_state.tipo_entrada_anterior:
+        st.session_state.top3_anterior = top
+        st.session_state.tipo_entrada_anterior = tipo
         st.session_state.contador_sem_alerta = 0
-        mensagem = f"📊 <b>ENTRADA DÚZIAS:</b> {duzias_previstas[0]}ª e {duzias_previstas[1]}ª"
+        mensagem = f"📊 <b>ENTRADA {tipo.upper()}S:</b> {top[0]}ª e {top[1]}ª"
         enviar_telegram(mensagem)
     else:
         st.session_state.contador_sem_alerta += 1
         if st.session_state.contador_sem_alerta >= 3:
-            print("⏱ Aguardando nova previsão após 3 rodadas...")
+            st.session_state.top3_anterior = top
+            st.session_state.tipo_entrada_anterior = tipo
+            mensagem = f"📊 <b>ENTRADA {tipo.upper()}S (forçada):</b> {top[0]}ª e {top[1]}ª"
+            enviar_telegram(mensagem)
+            st.session_state.contador_sem_alerta = 0
 
 # === INTERFACE STREAMLIT ===
 st.write("Último número:", numero_atual)
-st.write(f"Acertos nas Dúzias: {st.session_state.acertos_top} / {st.session_state.total_top}")
+st.write(f"Acertos: {st.session_state.acertos_top} / {st.session_state.total_top}")
 st.write("Últimos números:", list(historico)[-12:])
 
 # === SALVAR ESTADO ===
@@ -176,5 +197,6 @@ joblib.dump({
     "acertos_top": st.session_state.acertos_top,
     "total_top": st.session_state.total_top,
     "top3_anterior": st.session_state.top3_anterior,
-    "contador_sem_alerta": st.session_state.contador_sem_alerta
+    "contador_sem_alerta": st.session_state.contador_sem_alerta,
+    "tipo_entrada_anterior": st.session_state.tipo_entrada_anterior
 }, ESTADO_PATH)
