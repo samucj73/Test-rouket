@@ -180,12 +180,7 @@ if modelo_d and modelo_c:
         enviar_telegram(mensagem)
     else:
         st.session_state.contador_sem_alerta += 1
-        if st.session_state.contador_sem_alerta >= 3:
-            st.session_state.top3_anterior = top
-            st.session_state.tipo_entrada_anterior = tipo
-            mensagem = f"📊 <b>ENTRADA {tipo.upper()}S (forçada):</b> {top[0]}ª e {top[1]}ª"
-            enviar_telegram(mensagem)
-            st.session_state.contador_sem_alerta = 0
+        
 
 # === INTERFACE STREAMLIT ===
 st.write("Último número:", numero_atual)
