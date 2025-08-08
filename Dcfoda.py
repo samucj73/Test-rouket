@@ -200,3 +200,20 @@ joblib.dump({
     "contador_sem_alerta": st.session_state.contador_sem_alerta,
     "tipo_entrada_anterior": st.session_state.tipo_entrada_anterior
 }, ESTADO_PATH)
+
+# Criar conteúdo do TXT com 20 números por linha
+linhas = []
+numeros = list(historico)
+for i in range(0, len(numeros), 20):
+    linha = " ".join(map(str, numeros[i:i+20]))
+    linhas.append(linha)
+
+conteudo_txt = "\n".join(linhas)
+
+# Botão para baixar histórico como TXT
+st.download_button(
+    label="📥 Baixar histórico (.txt)",
+    data=conteudo_txt,
+    file_name="historico_roleta.txt",
+    mime="text/plain"
+)
