@@ -68,9 +68,11 @@ def extrair_features(historico):
         vermelhos = cores.count('R')
         pretos = cores.count('B')
         verdes = cores.count('G')
-
         pares = sum(1 for n in janela if n != 0 and n % 2 == 0)
-        impares = 5 - pares
+        impares = sum(1 for n in janela if n != 0 and n % 2 != 0)
+
+
+        
 
         terminal = ult % 10
         duzia = (ult - 1) // 12 + 1 if ult != 0 else 0
