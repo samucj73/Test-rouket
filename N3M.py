@@ -79,9 +79,11 @@ def extrair_features(historico):
     historico_sem_ultimo = historico[:-1]
 
 
-def extrair_features(historico_sem_ultimo):
+def extrair_features(historico):
+    # Remove o último valor do histórico (caso queira prever o próximo)
+    historico_sem_ultimo = historico[:-1]
     X, y = [], []
-    
+
     for i in range(111, len(historico_sem_ultimo)):
         janela = historico_sem_ultimo[i-110:i]
         ult = historico_sem_ultimo[i-1]
@@ -116,6 +118,23 @@ def extrair_features(historico_sem_ultimo):
 
     return np.array(X, dtype=np.float64), np.array(y, dtype=int)
 
+
+def treinar_modelo(historico):
+    if len(historico) < 17:
+        return None
+
+    X, y = extrair_features(historico)
+    if len(X) == 0:
+        return None
+
+    modelo = RandomForestClassifier(n_estimators=300, max_depth=None, random_state=42)
+    modelo.fit(X, y)
+    return modelo
+
+
+
+    
+    
 
   
 
