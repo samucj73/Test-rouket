@@ -34,11 +34,8 @@ if "top3_principal" not in st.session_state:
     st.session_state.top3_principal = []
 if "top3_com_vizinhos" not in st.session_state:
     st.session_state.top3_com_vizinhos = []
-
-# Inicializa variáveis de estado, se ainda não existirem
 if "top3_anterior" not in st.session_state:
     st.session_state.top3_anterior = []
-
 if "contador_sem_alerta" not in st.session_state:
     st.session_state.contador_sem_alerta = 0
 
@@ -78,9 +75,6 @@ def extrair_features(historico):
 
     historico_sem_ultimo = historico[:-1]
 
-
-
-
     for i in range(111, len(historico_sem_ultimo)):
         janela = historico_sem_ultimo[i-110:i]
         ult = historico_sem_ultimo[i-1]
@@ -115,27 +109,6 @@ def extrair_features(historico):
 
     return np.array(X, dtype=np.float64), np.array(y, dtype=int)
 
-
-def treinar_modelo(historico):
-    if len(historico) < 17:
-        return None
-
-    X, y = extrair_features(historico)
-    if len(X) == 0:
-        return None
-
-    modelo = RandomForestClassifier(n_estimators=300, max_depth=None, random_state=42)
-    modelo.fit(X, y)
-    return modelo
-
-
-
-    
-    
-
-  
-
-
 def treinar_modelo(historico):
     if len(historico) < 17:
         return None
@@ -149,11 +122,9 @@ def treinar_modelo(historico):
 def prever_top3(modelo, historico):
     if len(historico) < 17:
         return [], []
-
     X, _ = extrair_features(historico)
     if X.size == 0:
         return [], []
-
     x = X[-1].reshape(1, -1)
     try:
         probas = modelo.predict_proba(x)[0]
@@ -187,50 +158,35 @@ if len(historico) == 0 or numero_atual != historico[-1]:
     historico.append(numero_atual)
     joblib.dump(historico, HISTORICO_PATH)
 
-    # Verificação da previsão anterior
+    # Conferência GREEN/RED
     if st.session_state.top3_com_vizinhos:
         st.session_state.total_top += 1
         if numero_atual in st.session_state.top3_com_vizinhos:
             st.session_state.acertos_top += 1
-            resultado = f"✅ {numero_atual} estava nos vizinhos: 🟢"
+            resultado = f"✅ <b>GREEN!</b> Número {numero_atual} estava na previsão 🟢"
         else:
-            resultado = f"✅ {numero_atual} não estava: 🔴"
+            resultado = f"❌ <b>RED!</b> Número {numero_atual} não estava na previsão 🔴"
         time.sleep(4)
         enviar_telegram(resultado)
 
     # Nova previsão
+    modelo = treinar_modelo(historico)
+    if modelo:
+        top3, com_vizinhos = prever_top3(modelo, historico)
 
-# Garante que as variáveis existam
-if "top3_anterior" not in st.session_state:
-    st.session_state.top3_anterior = []
-if "contador_sem_alerta" not in st.session_state:
-    st.session_state.contador_sem_alerta = 0
-
-modelo = treinar_modelo(historico)
-if modelo:
-    top3, com_vizinhos = prever_top3(modelo, historico)
-
-    if top3 != st.session_state.top3_anterior:
-        # Top3 mudou → envia alerta
-        st.session_state.top3_anterior = top3
-        st.session_state.contador_sem_alerta = 0
-        mensagem = f"📊 <b>TOP 3 NÚMEROS:</b> {top3[0]}, {top3[1]}, {top3[2]}"
-        enviar_telegram(mensagem)
-
-    else:
-        # Top3 igual ao anterior → incrementa o contador
-        st.session_state.contador_sem_alerta += 1
-
-        # Se passaram 3 rodadas e top3 ainda igual → aguarda nova mudança (não envia)
-        if st.session_state.contador_sem_alerta >= 3:
-            print("⏱ Aguardando novo Top3 após 3 rodadas...")
-
-
-    
-      
-      
-     
-        
+        if top3 != st.session_state.top3_anterior:
+            st.session_state.top3_anterior = top3
+            st.session_state.contador_sem_alerta = 0
+            st.session_state.top3_com_vizinhos = com_vizinhos
+            mensagem = f"📊 <b>TOP 3 NÚMEROS:</b> {top3[0]}, {top3[1]}, {top3[2]}"
+            enviar_telegram(mensagem)
+        else:
+            st.session_state.contador_sem_alerta += 1
+            if st.session_state.contador_sem_alerta >= 3:
+                st.session_state.top3_com_vizinhos = com_vizinhos
+                mensagem = f"📊 <b>TOP 3 (repetido 3x):</b> {top3[0]}, {top3[1]}, {top3[2]}"
+                enviar_telegram(mensagem)
+                st.session_state.contador_sem_alerta = 0
 
 # === INTERFACE STREAMLIT ===
 st.write("Último número:", numero_atual)
@@ -243,5 +199,7 @@ joblib.dump({
     "total_top": st.session_state.total_top,
     "ultimo_alerta": st.session_state.ultimo_alerta,
     "top3_principal": st.session_state.top3_principal,
-    "top3_com_vizinhos": st.session_state.top3_com_vizinhos
+    "top3_com_vizinhos": st.session_state.top3_com_vizinhos,
+    "top3_anterior": st.session_state.top3_anterior,
+    "contador_sem_alerta": st.session_state.contador_sem_alerta
 }, ESTADO_PATH)
