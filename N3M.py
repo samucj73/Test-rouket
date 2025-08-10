@@ -110,7 +110,7 @@ def extrair_features(historico):
     return np.array(X, dtype=np.float64), np.array(y, dtype=int)
 
 def treinar_modelo(historico):
-    if len(historico) < 17:
+    if len(historico) < 50:
         return None
     X, y = extrair_features(historico)
     if len(X) == 0:
@@ -120,7 +120,7 @@ def treinar_modelo(historico):
     return modelo
 
 def prever_top3(modelo, historico):
-    if len(historico) < 17:
+    if len(historico) < 50:
         return [], []
     X, _ = extrair_features(historico)
     if X.size == 0:
