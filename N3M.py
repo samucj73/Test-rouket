@@ -78,16 +78,19 @@ def extrair_features(historico):
 
     historico_sem_ultimo = historico[:-1]
 
-    for i in range(111, len(historico_sem_ultimo)):
-        janela = historico_sem_ultimo[i-110:i]
-        ult = historico_sem_ultimo[i-1]
+  for i in range(111, len(historico_sem_ultimo)):
+    janela = historico_sem_ultimo[i-110:i]
+    ult = historico_sem_ultimo[i-1]
 
-        cores = [cor(n) for n in janela]
-        vermelhos = cores.count('R')
-        pretos = cores.count('B')
-        verdes = cores.count('G')
-      pares = sum(1 for n in janela if n != 0 and n % 2 == 0)
-      impares = sum(1 for n in janela if n != 0 and n % 2 != 0)
+    cores = [cor(n) for n in janela]
+    vermelhos = cores.count('R')
+    pretos = cores.count('B')
+    verdes = cores.count('G')
+
+    pares = sum(1 for n in janela if n != 0 and n % 2 == 0)
+    impares = sum(1 for n in janela if n != 0 and n % 2 != 0)
+
+    
       
   
 
