@@ -154,7 +154,7 @@ if len(historico) == 0 or numero_atual != historico[-1]:
             resultado = f"✅ Saiu {numero_atual} ({valor}ª {entrada_tipo}): 🟢"
         else:
             resultado = f"✅ Saiu {numero_atual} ({valor}ª {entrada_tipo}): 🔴"
-        time.sleep(4)
+        time.sleep(15)
         enviar_telegram(resultado)
 
 modelo_d = treinar_modelo(historico, "duzia")
