@@ -88,18 +88,13 @@ for i in range(111, len(historico_sem_ultimo)):
   pretos = cores.count('B')
   verdes = cores.count('G')
 
-    pares = sum(1 for n in janela if n != 0 and n % 2 == 0)
-    impares = sum(1 for n in janela if n != 0 and n % 2 != 0)
+  pares = sum(1 for n in janela if n != 0 and n % 2 == 0)
+  impares = sum(1 for n in janela if n != 0 and n % 2 != 0)
 
     
-      
-  
-
-        
-
-        terminal = ult % 10
-        duzia = (ult - 1) // 12 + 1 if ult != 0 else 0
-        coluna = (ult - 1) % 3 + 1 if ult != 0 else 0
+   terminal = ult % 10
+   duzia = (ult - 1) // 12 + 1 if ult != 0 else 0
+   coluna = (ult - 1) % 3 + 1 if ult != 0 else 0
 
         vizinhos = get_neighbors(ult, k=2)
         viz_media = np.mean(vizinhos)
