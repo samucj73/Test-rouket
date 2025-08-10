@@ -79,39 +79,44 @@ def extrair_features(historico):
     historico_sem_ultimo = historico[:-1]
 
 
-for i in range(111, len(historico_sem_ultimo)):
-    janela = historico_sem_ultimo[i-110:i]
-    ult = historico_sem_ultimo[i-1]
+def extrair_features(historico_sem_ultimo):
+    X, y = [], []
+    
+    for i in range(111, len(historico_sem_ultimo)):
+        janela = historico_sem_ultimo[i-110:i]
+        ult = historico_sem_ultimo[i-1]
 
-    cores = [cor(n) for n in janela]
-    vermelhos = cores.count('R')
-    pretos = cores.count('B')
-    verdes = cores.count('G')
+        cores = [cor(n) for n in janela]
+        vermelhos = cores.count('R')
+        pretos = cores.count('B')
+        verdes = cores.count('G')
 
-    pares = sum(1 for n in janela if n != 0 and n % 2 == 0)
-    impares = sum(1 for n in janela if n != 0 and n % 2 != 0)
+        pares = sum(1 for n in janela if n != 0 and n % 2 == 0)
+        impares = sum(1 for n in janela if n != 0 and n % 2 != 0)
 
-    terminal = ult % 10
-    duzia = (ult - 1) // 12 + 1 if ult != 0 else 0
-    coluna = (ult - 1) % 3 + 1 if ult != 0 else 0
+        terminal = ult % 10
+        duzia = (ult - 1) // 12 + 1 if ult != 0 else 0
+        coluna = (ult - 1) % 3 + 1 if ult != 0 else 0
 
-    vizinhos = get_neighbors(ult, k=2)
-    viz_media = np.mean(vizinhos)
+        vizinhos = get_neighbors(ult, k=2)
+        viz_media = np.mean(vizinhos)
 
-    bloco = bloco_terco(ult)
-    bloco_num = {"terco1": 1, "terco2": 2, "terco3": 3, "zero": 0}[bloco]
+        bloco = bloco_terco(ult)
+        bloco_num = {"terco1": 1, "terco2": 2, "terco3": 3, "zero": 0}[bloco]
 
-    features = [
-        vermelhos, pretos, verdes,
-        pares, impares,
-        terminal, duzia, coluna,
-        viz_media, bloco_num
-    ]
+        features = [
+            vermelhos, pretos, verdes,
+            pares, impares,
+            terminal, duzia, coluna,
+            viz_media, bloco_num
+        ]
 
-    X.append(features)
-    y.append(historico_sem_ultimo[i])
+        X.append(features)
+        y.append(historico_sem_ultimo[i])
 
-return np.array(X, dtype=np.float64), np.array(y, dtype=int)
+    return np.array(X, dtype=np.float64), np.array(y, dtype=int)
+
+
   
 
 
