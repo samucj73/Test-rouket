@@ -79,10 +79,7 @@ def extrair_features(historico):
     historico_sem_ultimo = historico[:-1]
 
 
-def extrair_features(historico):
-    # Remove o último valor do histórico (caso queira prever o próximo)
-    historico_sem_ultimo = historico[:-1]
-    X, y = [], []
+
 
     for i in range(111, len(historico_sem_ultimo)):
         janela = historico_sem_ultimo[i-110:i]
