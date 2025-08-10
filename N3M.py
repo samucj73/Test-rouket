@@ -10,8 +10,8 @@ from pathlib import Path
 
 # === CONFIGURAÇÕES ===
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
-#TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
-#TELEGRAM_CHAT_ID = "-1002880411750"
+TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
+TELEGRAM_CHAT_ID = "5121457416"
 HISTORICO_PATH = Path("historico.pkl")
 ESTADO_PATH = Path("estado.pkl")
 
@@ -87,8 +87,10 @@ def extrair_features(historico):
         pretos = cores.count('B')
         verdes = cores.count('G')
 
-        pares = sum(1 for n in janela if n != 0 and n % 2 == 0)
-        impares = 5 - pares
+      pares = sum(1 for n in janela if n != 0 and n % 2 == 0)
+      impares = sum(1 for n in janela if n != 0 and n % 2 != 0)
+
+        
 
         terminal = ult % 10
         duzia = (ult - 1) // 12 + 1 if ult != 0 else 0
