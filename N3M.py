@@ -133,7 +133,7 @@ def prever_top3(modelo, historico):
 
         vizinhos_totais = set()
         for numero in top3:
-            vizinhos = get_neighbors(numero, k=2)
+            vizinhos = get_neighbors(numero, k=3)
             vizinhos_totais.update(vizinhos)
 
         return top3, sorted(vizinhos_totais)
