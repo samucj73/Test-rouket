@@ -91,7 +91,7 @@ def extrair_features(historico):
         duzia = (ult - 1) // 12 + 1 if ult != 0 else 0
         coluna = (ult - 1) % 3 + 1 if ult != 0 else 0
 
-        vizinhos = get_neighbors(ult, k=2)
+        vizinhos = get_neighbors(ult, k=3)
         viz_media = np.mean(vizinhos)
 
         bloco = bloco_terco(ult)
