@@ -77,8 +77,7 @@ def extrair_features(historico):
         return 'R' if n in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36] else 'B'
 
     historico_sem_ultimo = historico[:-1]
-
-  for i in range(111, len(historico_sem_ultimo)):
+for i in range(111, len(historico_sem_ultimo)):
     janela = historico_sem_ultimo[i-110:i]
     ult = historico_sem_ultimo[i-1]
 
