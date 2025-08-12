@@ -14,7 +14,7 @@ API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremeli
 #TELEGRAM_CHAT_ID = "-1002880411750"
 HISTORICO_PATH = Path("historico.pkl")
 ESTADO_PATH = Path("estado.pkl")
-PROB_MINIMA = 0.25  # filtro para entradas
+PROB_MINIMA = 0.08  # filtro para entradas
 
 # === DADOS DA ROULETA FÍSICA ===
 ROULETTE_ORDER = [32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11,
