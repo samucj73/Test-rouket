@@ -365,6 +365,21 @@ prev_duzia, prob_duzia = prever_tudo("duzia")
 prev_coluna, prob_coluna = prever_tudo("coluna")
 
 # Definir qual previsão enviar
+# Definir qual previsão enviar
 if prev_duzia is not None and prev_coluna is not None:
     if prob_duzia >= prob_coluna:
-        previs
+        previsao_final = ("duzia", prev_duzia, prob_duzia)
+    else:
+        previsao_final = ("coluna", prev_coluna, prob_coluna)
+
+    tipo_prev, valor_prev, prob_prev = previsao_final
+    chave_prev = f"{tipo_prev}_{valor_prev}"
+
+    # Checar se deve enviar alerta
+    if controle_alertas.deve_enviar(chave_prev):
+        st.session_state.duzia_prevista = prev_duzia if tipo_prev == "duzia" else None
+        st.session_state.coluna_prevista = prev_coluna if tipo_prev == "coluna" else None
+
+        msg = f"🎯 Previsão IA: {tipo_prev.upper()} {valor_prev} — Confiança: {prob_prev:.0%}"
+        st.write(msg)
+        enviar_telegram(msg)
