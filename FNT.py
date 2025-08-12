@@ -22,7 +22,7 @@ TELEGRAM_CHAT_ID = "-1002796136111"
 HISTORICO_PATH = Path("historico.pkl")
 ESTADO_PATH = Path("estado.pkl")
 REFRESH_INTERVAL = 10000  # 10s
-MAX_HIST_LEN = 800        # um pouco maior p/ features temporais
+MAX_HIST_LEN = 4800        # um pouco maior p/ features temporais
 RETRAIN_EVERY = 10        # ### NOVO: re-treinar RF/LGBM só a cada N giros
 
 # Limites da PROB dinâmica
