@@ -7,3 +7,4 @@ requests
 streamlit-autorefresh
 pyTelegramBotAPI
 python-dotenv
+lightgbm
