@@ -369,7 +369,7 @@ if numero_atual is not None:
                 texto_top = ", ".join(str(n) for n in top_labels)
             elif tipo_escolhido in ("duzia", "coluna"):
                 texto_top = f"{top_labels[0]}ª e {top_labels[1]}ª" if len(top_labels) >= 2 else f"{top_labels[0]}ª"
-                        elif tipo_escolhido == "terco":
+            elif tipo_escolhido == "terco":
                 texto_top = f"{top_labels[0]}º e {top_labels[1]}º terço" if len(top_labels) >= 2 else f"{top_labels[0]}º terço"
             else:
                 texto_top = ", ".join(str(n) for n in top_labels)
