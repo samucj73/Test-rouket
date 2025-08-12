@@ -15,7 +15,7 @@ TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 TELEGRAM_CHAT_ID = "-1002880411750"
 HISTORICO_PATH = Path("historico.pkl")
 ESTADO_PATH = Path("estado.pkl")
-PROB_MINIMA = 0.65  # filtro para entradas (ajuste aqui)
+PROB_MINIMA = 0.25  # filtro para entradas (ajuste aqui)
 
 # === ORDEM FÍSICA (europea) ===
 ROULETTE_ORDER = [32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11,
