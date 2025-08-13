@@ -6,7 +6,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 
 # === CONFIGURAÇÕES ===
-APP_URL = "https://test-rouket-jcdijgmwnb8vlhv9v86scu.streamlit.app/"
+#APP_URL = "https://test-rouket-jcdijgmwnb8vlhv9v86scu.streamlit.app/"
 
 # Configurações do Chrome para ambiente sem interface (headless)
 options = Options()
