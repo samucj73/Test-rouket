@@ -1,45 +1,53 @@
 import time
 import random
 from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.keys import Keys
 
 # === CONFIGURAÇÕES ===
-URL_APP = "https://test-rouket-jcdijgmwnb8vlhv9v86scu.streamlit.app/"
+APP_URL = "https://test-rouket-jcdijgmwnb8vlhv9v86scu.streamlit.app/"
 
-# Inicia navegador
-options = webdriver.ChromeOptions()
-options.add_argument("--start-maximized")
+# Configurações do Chrome para ambiente sem interface (headless)
+options = Options()
+options.add_argument("--headless=new")
+options.add_argument("--no-sandbox")
+options.add_argument("--disable-dev-shm-usage")
+options.add_argument("--disable-gpu")
+options.add_argument("--window-size=1920x1080")
+options.add_argument("--disable-blink-features=AutomationControlled")
+
 driver = webdriver.Chrome(options=options)
-driver.get(URL_APP)
 
-actions = ActionChains(driver)
+try:
+    driver.get(APP_URL)
+    print("Bot iniciado no app!")
 
-print("Bot iniciado, interagindo com o app...")
+    while True:
+        # Simula rolagem
+        scroll_y = random.randint(200, 800)
+        driver.execute_script(f"window.scrollBy(0, {scroll_y});")
+        print(f"Rolou {scroll_y} pixels")
 
-while True:
-    acao = random.choice(["mover_mouse", "rolar", "clicar_botao", "pressionar_tecla"])
+        time.sleep(random.uniform(2, 5))
 
-    if acao == "mover_mouse":
-        actions.move_by_offset(random.randint(-50, 50), random.randint(-50, 50)).perform()
+        # Volta pro topo
+        driver.find_element(By.TAG_NAME, "body").send_keys(Keys.HOME)
 
-    elif acao == "rolar":
-        driver.execute_script(f"window.scrollBy(0, {random.randint(-200, 200)});")
-
-    elif acao == "clicar_botao":
+        # Simula clique aleatório se houver botões
         botoes = driver.find_elements(By.TAG_NAME, "button")
         if botoes:
             botao = random.choice(botoes)
             try:
                 botao.click()
+                print("Clicou em um botão")
             except:
                 pass
 
-    elif acao == "pressionar_tecla":
-        body = driver.find_element(By.TAG_NAME, "body")
-        body.send_keys(Keys.SPACE)  # simula espaço
-        time.sleep(0.5)
-        body.send_keys(Keys.ARROW_DOWN)  # seta para baixo
+        time.sleep(random.uniform(10, 20))  # Pausa antes da próxima ação
 
-    time.sleep(random.uniform(5, 15))  # pausa aleatória
+except Exception as e:
+    print("Erro no bot:", e)
+
+finally:
+    driver.quit()
