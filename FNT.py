@@ -173,3 +173,80 @@ st.write("Últimos números:",list(st.session_state.historico)[-12:])
 
 # Salvar estado
 joblib.dump(st.session_state.estado,ESTADO_PATH)
+
+# === FUNÇÃO DE TREINAMENTO E PREDIÇÃO ===
+def treinar_modelos():
+    X, y = extrair_features(st.session_state.historico)
+    if len(X) < 50:  # evitar treinar com poucos dados
+        return None, None
+    # RandomForest
+    modelo_rf_d = RandomForestClassifier(n_estimators=200, max_depth=8, random_state=42)
+    modelo_rf_c = RandomForestClassifier(n_estimators=200, max_depth=8, random_state=42)
+    # SGD Classifier online
+    sgd_d = SGDClassifier(loss='log', max_iter=1000, tol=1e-3, random_state=42)
+    sgd_c = SGDClassifier(loss='log', max_iter=1000, tol=1e-3, random_state=42)
+
+    # Preparar targets
+    y_duzia = np.array([(n-1)//12+1 if n!=0 else 0 for n in y])
+    y_coluna = np.array([(n-1)%3+1 if n!=0 else 0 for n in y])
+
+    modelo_rf_d.fit(X, y_duzia)
+    modelo_rf_c.fit(X, y_coluna)
+    sgd_d.fit(X, y_duzia)
+    sgd_c.fit(X, y_coluna)
+
+    return (modelo_rf_d, modelo_rf_c, sgd_d, sgd_c)
+
+def prever_top2(X_ultimo):
+    # Ensemble ponderado RF + SGD
+    proba_d = 0.6*st.session_state.modelo_d[0].predict_proba(X_ultimo) + 0.4*st.session_state.sgd_d.predict_proba(X_ultimo)
+    proba_c = 0.6*st.session_state.modelo_c[0].predict_proba(X_ultimo) + 0.4*st.session_state.sgd_c.predict_proba(X_ultimo)
+
+    top2_d = np.argsort(proba_d[0])[-2:][::-1]+1
+    top2_c = np.argsort(proba_c[0])[-2:][::-1]+1
+    sum_prob_d = proba_d[0][top2_d-1].sum()
+    sum_prob_c = proba_c[0][top2_c-1].sum()
+
+    # Escolher entre dúzia ou coluna
+    if sum_prob_d >= sum_prob_c:
+        tipo = "duzia"
+        top2 = top2_d.tolist()
+        sum_prob = sum_prob_d
+    else:
+        tipo = "coluna"
+        top2 = top2_c.tolist()
+        sum_prob = sum_prob_c
+
+    return tipo, top2, sum_prob
+
+# === CHECAR E TREINAR MODELOS SE NECESSÁRIO ===
+st.session_state.rounds_desde_retrain += 1
+if st.session_state.rounds_desde_retrain >= RETRAIN_EVERY or st.session_state.modelo_d is None:
+    modelos = treinar_modelos()
+    if modelos:
+        st.session_state.modelo_d, st.session_state.modelo_c, st.session_state.sgd_d, st.session_state.sgd_c = modelos
+        st.session_state.rounds_desde_retrain = 0
+
+# === PREDIÇÃO TOP2 E ALERTA ===
+if st.session_state.modelo_d:
+    X_ultimo,_ = extrair_features(st.session_state.historico[-121:])
+    X_ultimo = X_ultimo[-1].reshape(1,-1)
+    tipo, top2, sum_prob = prever_top2(X_ultimo)
+
+    # Atualizar probabilidade mínima dinâmica
+    st.session_state.prob_minima_dinamica = PROB_MIN_BASE + 0.1*np.tanh(len(st.session_state.historico)/200)
+
+    enviar_alerta = False
+    # Se mudou ou passaram 3 rodadas sem alerta
+    if top2 != st.session_state.top2_anterior or st.session_state.contador_sem_alerta >= 3:
+        enviar_alerta = True
+        st.session_state.top2_anterior = top2
+        st.session_state.tipo_entrada_anterior = tipo
+        st.session_state.contador_sem_alerta = 0
+    else:
+        st.session_state.contador_sem_alerta += 1
+
+    if enviar_alerta:
+        msg = f"🎯 Previsão Top2 {tipo}: {top2[0]} | {top2[1]}\nProbabilidade: {sum_prob:.2f}"
+        enviar_telegram_async(msg)
+        st.write("Alerta enviado:", msg)
