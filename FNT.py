@@ -404,41 +404,72 @@ def registrar_resultado(tipo, soma_prob, hit):
     atualizar_prob_minima_dinamica()
 
 def pick_tipo_duzia_ou_coluna(res_duzia, res_coluna):
-    """Escolhe entre dúzia ou coluna de forma mais equilibrada, com contador forçado para coluna."""
+    """Escolhe entre dúzia ou coluna de forma equilibrada, forçando alternância se uma ficar muito tempo sem aparecer."""
     top_d, probs_d, soma_d = res_duzia
     top_c, probs_c, soma_c = res_coluna
 
     hr_d = np.mean(st.session_state.hit_rate_por_tipo["duzia"]) if st.session_state.hit_rate_por_tipo["duzia"] else 0.5
     hr_c = np.mean(st.session_state.hit_rate_por_tipo["coluna"]) if st.session_state.hit_rate_por_tipo["coluna"] else 0.5
 
-    # Inicializa contador de rodadas sem coluna
+    # Inicializa contadores persistentes
     if "rodadas_sem_coluna" not in st.session_state:
-        st.session_state.rodadas_sem_coluna = 0
+        st.session_state.rodadas_sem_coluna = st.session_state.estado.get("rodadas_sem_coluna", 0)
+    if "rodadas_sem_duzia" not in st.session_state:
+        st.session_state.rodadas_sem_duzia = st.session_state.estado.get("rodadas_sem_duzia", 0)
 
-    # Peso reduzido do hit rate para não travar a decisão
+    # Score ajustado (peso 20% do hit rate)
     score_d = soma_d * (0.8 + 0.2 * hr_d)
     score_c = soma_c * (0.8 + 0.2 * hr_c)
 
-    # Regra de confiança: se diferença for grande, escolhe direto
+    # Diferença ≥ 10% garante escolha direta
     if soma_c - soma_d >= 0.10:
         st.session_state.rodadas_sem_coluna = 0
-        return "coluna", top_c, soma_c
-    if soma_d - soma_c >= 0.10:
+        st.session_state.rodadas_sem_duzia += 1
+    elif soma_d - soma_c >= 0.10:
+        st.session_state.rodadas_sem_duzia = 0
         st.session_state.rodadas_sem_coluna += 1
-        return "duzia", top_d, soma_d
-
-    # Força coluna se ficar 4 rodadas seguidas sem enviar coluna
-    if st.session_state.rodadas_sem_coluna >= 4:
-        st.session_state.rodadas_sem_coluna = 0
-        return "coluna", top_c, soma_c
-
-    # Caso comum: escolhe pelo maior score ajustado
-    if score_d >= score_c:
-        st.session_state.rodadas_sem_coluna += 1
-        return "duzia", top_d, soma_d
     else:
-        st.session_state.rodadas_sem_coluna = 0
+        # Se passou limite, força lado que está ausente
+        if st.session_state.rodadas_sem_coluna >= 4:
+            st.session_state.rodadas_sem_coluna = 0
+            st.session_state.rodadas_sem_duzia += 1
+            escolha = "coluna"
+        elif st.session_state.rodadas_sem_duzia >= 4:
+            st.session_state.rodadas_sem_duzia = 0
+            st.session_state.rodadas_sem_coluna += 1
+            escolha = "duzia"
+        else:
+            # Escolhe pelo score ajustado
+            if score_d >= score_c:
+                st.session_state.rodadas_sem_duzia = 0
+                st.session_state.rodadas_sem_coluna += 1
+                escolha = "duzia"
+            else:
+                st.session_state.rodadas_sem_coluna = 0
+                st.session_state.rodadas_sem_duzia += 1
+                escolha = "coluna"
+
+        # Persistência e retorno
+        st.session_state.estado["rodadas_sem_coluna"] = st.session_state.rodadas_sem_coluna
+        st.session_state.estado["rodadas_sem_duzia"] = st.session_state.rodadas_sem_duzia
+
+        if escolha == "duzia":
+            return "duzia", top_d, soma_d
+        else:
+            return "coluna", top_c, soma_c
+
+    # Persistência e retorno nos casos diretos
+    st.session_state.estado["rodadas_sem_coluna"] = st.session_state.rodadas_sem_coluna
+    st.session_state.estado["rodadas_sem_duzia"] = st.session_state.rodadas_sem_duzia
+
+    if soma_c - soma_d >= 0.10:
         return "coluna", top_c, soma_c
+    else:
+        return "duzia", top_d, soma_d
+
+
+
+
 
 
 
