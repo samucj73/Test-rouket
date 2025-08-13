@@ -372,31 +372,25 @@ def plot_feature_importances(modelos_tuple, feature_names, titulo):
     st.pyplot(fig)
 
 def atualizar_prob_minima_dinamica():
-    """### NOVO: ajusta PROB_MIN com base na janela recente."""
     janela = list(st.session_state.metricas_janela)
-    if not janela:
+    if len(janela) < 10:  # espera ter 10+ exemplos para ajustar
         st.session_state.prob_minima_dinamica = PROB_MIN_BASE
         return
-    # média de confiança e hit rate
     confs = [m["soma_prob"] for m in janela]
     hits = [m["hit"] for m in janela]
     avg_conf = float(np.mean(confs)) if confs else PROB_MIN_BASE
     hit_rate = float(np.mean(hits)) if hits else 0.5
 
-    # Regras simples: se está acertando bem, podemos aceitar entradas com um pouco menos de confiança
-    # Caso contrário, subimos a exigência
-    alvo = PROB_MIN_BASE
-    if hit_rate >= 0.65 and avg_conf >= 1.60:
-        alvo = 0.90
-    elif hit_rate >= 0.55:
-        alvo = 0.92
-    elif hit_rate >= 0.45:
-        alvo = 0.95
-    else:
-        alvo = 0.97
+    base = PROB_MIN_BASE
+    ajuste_hit = (1 - hit_rate) * 0.1       # aumenta threshold se erro alto
+    ajuste_conf = max(0, (1.6 - avg_conf)) * 0.1  # aumenta threshold se confiança baixa
 
+    alvo = base + ajuste_hit + ajuste_conf
     alvo = max(min(alvo, PROB_MIN_MAX), PROB_MIN_MIN)
+
     st.session_state.prob_minima_dinamica = alvo
+
+
 
 def registrar_resultado(tipo, soma_prob, hit):
     st.session_state.metricas_janela.append({"tipo": tipo, "soma_prob": soma_prob, "hit": 1 if hit else 0})
