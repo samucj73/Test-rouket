@@ -113,27 +113,53 @@ def freq_duzia_coluna_ultimos(janela,k=10):
 
 def extrair_features(historico):
     """Extrai features da última rodada (incremental)."""
-    if len(historico)<121: return np.zeros((0,25)), np.zeros(0)
-    janela=list(historico)[-121:-1]; ult=historico[-2]
-    cores=[cor(n) for n in ventana]
-    vermelhos=cores.count('R'); pretos=cores.count('B'); verdes=cores.count('G')
-    pares=sum(1 for n in ventana if n!=0 and n%2==0)
-    impares=sum(1 for n in ventana if n!=0 and n%2!=0)
-    duzia=(ult-1)//12+1 if ult!=0 else 0
-    coluna=(ult-1)%3+1 if ult!=0 else 0
-    tempo_zero=next((idx for idx,val in enumerate(reversed(janela),1) if val==0),len(janela))
-    dist_fisica=float(np.mean([distancia_fisica(ult,n) for n in ventana[-3:]])) if len(janela)>=3 else 0.0
-    numeros_quentes,freq_quentes=frequencia_numeros_quentes(janela,top_n=5)
-    blocos=blocos_fisicos(ult)
-    pares_prop,impares_prop=tendencia_pares_impares(janela)
-    repeticoes=repeticoes_ultimos_n(janela,n=5)
-    fd,fc=freq_duzia_coluna_ultimos(janela,k=10)
-    viz=get_neighbors(ult,2)
-    viz_cores=[cor(n) for n in viz]
-    viz_r,viz_b,viz_g=viz_cores.count('R'),viz_cores.count('B'),viz_cores.count('G')
-    features=[vermelhos,pretos,verdes,pares,impares,duzia,coluna,tempo_zero,
-              dist_fisica,*freq_quentes,blocos,pares_prop,impares_prop,repeticoes,*fd,*fc,viz_r,viz_b,viz_g]
-    return np.array(features).reshape(1,-1), np.array([historico[-1]])
+    if len(historico) < 121:
+        return np.zeros((0, 25)), np.zeros(0)
+
+    janela = list(historico)[-121:-1]
+    ult = historico[-2]
+
+    cores = [cor(n) for n in janela]
+    vermelhos = cores.count('R')
+    pretos = cores.count('B')
+    verdes = cores.count('G')
+
+    pares = sum(1 for n in janela if n != 0 and n % 2 == 0)
+    impares = sum(1 for n in janela if n != 0 and n % 2 != 0)
+
+    duzia = (ult - 1) // 12 + 1 if ult != 0 else 0
+    coluna = (ult - 1) % 3 + 1 if ult != 0 else 0
+
+    tempo_zero = next((idx for idx, val in enumerate(reversed(janela), 1) if val == 0), len(janela))
+    dist_fisica = float(np.mean([distancia_fisica(ult, n) for n in janela[-3:]])) if len(janela) >= 3 else 0.0
+
+    numeros_quentes, freq_quentes = frequencia_numeros_quentes(janela, top_n=5)
+    blocos = blocos_fisicos(ult)
+    pares_prop, impares_prop = tendencia_pares_impares(janela)
+    repeticoes = repeticoes_ultimos_n(janela, n=5)
+    fd, fc = freq_duzia_coluna_ultimos(janela, k=10)
+
+    viz = get_neighbors(ult, 2)
+    viz_cores = [cor(n) for n in viz]
+    viz_r, viz_b, viz_g = viz_cores.count('R'), viz_cores.count('B'), viz_cores.count('G')
+
+    features = [
+        vermelhos, pretos, verdes,
+        pares, impares,
+        duzia, coluna,
+        tempo_zero,
+        dist_fisica,
+        *freq_quentes,
+        blocos,
+        pares_prop, impares_prop,
+        repeticoes,
+        *fd, *fc,
+        viz_r, viz_b, viz_g
+    ]
+
+    return np.array(features).reshape(1, -1), np.array([historico[-1]])
+
+
 
 def ajustar_target(y_raw,tipo):
     if tipo=="duzia": return np.array([(n-1)//12+1 if n!=0 else 0 for n in y_raw])
