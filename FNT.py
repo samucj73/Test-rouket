@@ -404,20 +404,30 @@ def registrar_resultado(tipo, soma_prob, hit):
     atualizar_prob_minima_dinamica()
 
 def pick_tipo_duzia_ou_coluna(res_duzia, res_coluna):
-    """### NOVO: meta-regra para escolher melhor tipo considerando histórico por tipo."""
+    """Escolhe entre dúzia ou coluna de forma mais equilibrada."""
     top_d, probs_d, soma_d = res_duzia
     top_c, probs_c, soma_c = res_coluna
 
     hr_d = np.mean(st.session_state.hit_rate_por_tipo["duzia"]) if st.session_state.hit_rate_por_tipo["duzia"] else 0.5
     hr_c = np.mean(st.session_state.hit_rate_por_tipo["coluna"]) if st.session_state.hit_rate_por_tipo["coluna"] else 0.5
 
-    score_d = soma_d * (0.5 + 0.5*hr_d)
-    score_c = soma_c * (0.5 + 0.5*hr_c)
+    # Peso reduzido do hit rate para não travar a decisão
+    score_d = soma_d * (0.8 + 0.2 * hr_d)
+    score_c = soma_c * (0.8 + 0.2 * hr_c)
 
+    # Se diferença de confiança for grande, escolhe direto
+    if soma_c - soma_d >= 0.10:
+        return "coluna", top_c, soma_c
+    if soma_d - soma_c >= 0.10:
+        return "duzia", top_d, soma_d
+
+    # Caso comum: escolhe pelo maior score ajustado
     if score_d >= score_c:
         return "duzia", top_d, soma_d
     else:
         return "coluna", top_c, soma_c
+
+
 
 # === INTERFACE ===
 st.title("🎯 IA Roleta PRO — Ensemble Dinâmico + Treino Online + Threshold Adaptativo")
