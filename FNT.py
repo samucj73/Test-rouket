@@ -294,36 +294,42 @@ if novo_num:
         if scores_c is not None: st.session_state.cv_scores["coluna"]["lgb"]=scores_c[0]; st.session_state.cv_scores["coluna"]["rf"]=scores_c[1]
         st.session_state.rounds_desde_retrain=0
 
-    # Previsão top2 dúzia
-    res_duzia=prever_top2_ensemble(st.session_state.modelo_d,st.session_state.sgd_d,st.session_state.historico)
-    res_coluna=prever_top2_ensemble(st.session_state.modelo_c,st.session_state.sgd_c,st.session_state.historico)
+  # === Previsão top2 dúzia e coluna ===
+res_duzia = prever_top2_ensemble(st.session_state.modelo_d, st.session_state.sgd_d, st.session_state.historico)
+res_coluna = prever_top2_ensemble(st.session_state.modelo_c, st.session_state.sgd_c, st.session_state.historico)
 
-    # Combina com pesos
-    pesos={"lgb":0.45,"rf":0.45,"sgd":0.1}
-    top_d,probs_d,soma_d=combinar_com_pesos(*res_duzia,pesos)
-    top_c,probs_c,soma_c=combinar_com_pesos(*res_coluna,pesos)
+# Extrai probs_list e classes separadamente
+probs_list_d, classes_d = res_duzia
+probs_list_c, classes_c = res_coluna
 
-    # Escolhe se envia dúzia ou coluna
-    tipo_escolhido,top2,soma_prob=pick_tipo_duzia_ou_coluna((top_d,probs_d,soma_d),(top_c,probs_c,soma_c))
-    st.session_state.last_soma_prob=soma_prob
+# Combina com pesos
+pesos = {"lgb": 0.45, "rf": 0.45, "sgd": 0.1}
+top_d, probs_d, soma_d = combinar_com_pesos(probs_list_d, pesos, classes_d)
+top_c, probs_c, soma_c = combinar_com_pesos(probs_list_c, pesos, classes_c)
 
-    enviar_alerta=False
-    # Verifica repetição de alerta
-    if top2!=st.session_state.top2_anterior:
-        enviar_alerta=True
-        st.session_state.contador_sem_alerta=0
-    else:
-        st.session_state.contador_sem_alerta+=1
-        if st.session_state.contador_sem_alerta>=3:
-            enviar_alerta=True
-            st.session_state.contador_sem_alerta=0
+# Escolhe se envia dúzia ou coluna
+tipo_escolhido, top2, soma_prob = pick_tipo_duzia_ou_coluna((top_d, probs_d, soma_d), (top_c, probs_c, soma_c))
+st.session_state.last_soma_prob = soma_prob
 
-    # Só envia se soma_prob >= prob_minima_dinamica
-    if soma_prob>=st.session_state.prob_minima_dinamica and enviar_alerta:
-        msg=f"🎯 Previsão {tipo_escolhido.upper()}: {top2[0]} e {top2[1]} — Prob={soma_prob:.2f}"
-        enviar_telegram_async(msg)
-        st.session_state.top2_anterior=top2
-        st.session_state.tipo_entrada_anterior=tipo_escolhido
+# Controle de envio de alerta
+enviar_alerta = False
+if top2 != st.session_state.top2_anterior:
+    enviar_alerta = True
+    st.session_state.contador_sem_alerta = 0
+else:
+    st.session_state.contador_sem_alerta += 1
+    if st.session_state.contador_sem_alerta >= 3:
+        enviar_alerta = True
+        st.session_state.contador_sem_alerta = 0
+
+# Só envia se soma_prob >= prob_minima_dinamica
+if soma_prob >= st.session_state.prob_minima_dinamica and enviar_alerta:
+    msg = f"🎯 Previsão {tipo_escolhido.upper()}: {top2[0]} e {top2[1]} — Prob={soma_prob:.2f}"
+    enviar_telegram_async(msg)
+    st.session_state.top2_anterior = top2
+    st.session_state.tipo_entrada_anterior = tipo_escolhido
+
+   
 
     # Salva estado
     to_save = {k: st.session_state[k] for k in defaults.keys()}
