@@ -246,12 +246,28 @@ def registrar_resultado(tipo,soma_prob,hit):
     atualizar_prob_minima_dinamica()
 
 def pick_tipo_duzia_ou_coluna(res_duzia,res_coluna):
-    top_d,probs_d,soma_d=res_duzia
-    top_c,probs_c,soma_c=res_coluna
-    hr_d=np.mean(st.session_state.hit_rate_por_tipo["duzia"]) if st.session_state.hit_rate_por_tipo["duzia"] else 0.5
-    hr_c=np.mean(st.session_state.hit_rate_por_tipo["coluna"]) if st.session_state.hit_rate_por_tipo["coluna"] else 0.5
-    score_d=soma_d*(0.5+0.5*hr_d); score_c=soma_c*(0.5+0.5*hr_c)
-    return ("duzia",top_d,soma_d) if score_d>=score_c else ("coluna",top_c,soma_c)
+    top_d, probs_d, soma_d = res_duzia
+    top_c, probs_c, soma_c = res_coluna
+
+    # Hit rate recentes (0.5 se ainda não houver histórico)
+    hr_d = np.mean(st.session_state.hit_rate_por_tipo["duzia"]) if st.session_state.hit_rate_por_tipo["duzia"] else 0.5
+    hr_c = np.mean(st.session_state.hit_rate_por_tipo["coluna"]) if st.session_state.hit_rate_por_tipo["coluna"] else 0.5
+
+    # Normaliza as somas para [0,1] com base em máximos teóricos (2.0 para top2)
+    soma_d_norm = soma_d / 2.0
+    soma_c_norm = soma_c / 2.0
+
+    # Calcula score ponderado de forma justa
+    score_d = soma_d_norm * (0.5 + 0.5 * hr_d)
+    score_c = soma_c_norm * (0.5 + 0.5 * hr_c)
+
+    # Escolhe o tipo com score maior
+    if score_d >= score_c:
+        return "duzia", top_d, soma_d
+    else:
+        return "coluna", top_c, soma_c
+
+
 
 # === INTERFACE ===
 st.title("🎯 IA Roleta PRO — Ensemble Dinâmico + Treino Online + Threshold Adaptativo")
