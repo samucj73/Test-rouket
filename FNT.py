@@ -26,9 +26,9 @@ MAX_HIST_LEN = 800        # um pouco maior p/ features temporais
 RETRAIN_EVERY = 10        # ### NOVO: re-treinar RF/LGBM só a cada N giros
 
 # Limites da PROB dinâmica
-PROB_MIN_BASE = 0.90
-PROB_MIN_MAX = 0.97
-PROB_MIN_MIN = 0.85
+PROB_MIN_BASE = 0.80
+PROB_MIN_MAX = 0.90
+PROB_MIN_MIN = 0.65
 
 # Janela para métrica dinâmica
 JANELA_METRICAS = 30
