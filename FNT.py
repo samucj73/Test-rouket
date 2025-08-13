@@ -98,10 +98,12 @@ def tendencia_pares_impares(janela):
     pares=sum(1 for n in janela if n!=0 and n%2==0)
     impares=sum(1 for n in janela if n!=0 and n%2!=0)
     return pares/total,impares/total
-def repeticoes_ultimos_n(janela,n=5):
-    if len(janela)<n+1: return 0
-    ultimo=janela[-1]
-    return ventana[-(n+1):-1].count(ultimo)
+
+def repeticoes_ultimos_n(janela, n=5):
+    if len(janela) < n + 1:
+        return 0
+    ultimo = janela[-1]
+    return janela[-(n + 1):-1].count(ultimo)
 def freq_duzia_coluna_ultimos(janela,k=10):
     sub=list(janela[-k:]) if len(janela)>=1 else []
     if not sub: return [0,0,0],[0,0,0]
