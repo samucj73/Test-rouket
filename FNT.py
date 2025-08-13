@@ -286,7 +286,7 @@ if novo_num:
     # Re-treino batch
     if st.session_state.rounds_desde_retrain>=RETRAIN_EVERY or st.session_state.modelo_d is None or st.session_state.modelo_c is None:
         modelos_d,Xd,yd,scores_d=treinar_modelos_batch(st.session_state.historico,"duzia")
-        modelos_c,Xc,yc,scores_c=tre
+        
         modelos_c,Xc,yc,scores_c=treinar_modelos_batch(st.session_state.historico,"coluna")
         if modelos_d is not None: st.session_state.modelo_d=modelos_d
         if modelos_c is not None: st.session_state.modelo_c=modelos_c
