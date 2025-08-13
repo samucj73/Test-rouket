@@ -352,8 +352,14 @@ ax.set_ylim(0,1); ax.set_ylabel("Hit")
 ax.legend(); st.pyplot(fig)
 
 st.subheader("⚙️ Controles")
+
+# Botão para resetar apenas os contadores Top2
 if st.button("🔄 Resetar contadores Top2"):
     st.session_state.acertos_top = 0
     st.session_state.total_top = 0
     st.success("✅ Contadores Top2 resetados!")
+
+
+
+
       
