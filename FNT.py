@@ -350,4 +350,10 @@ ax.plot(list(st.session_state.hit_rate_por_tipo["duzia"]),label="Dúzia")
 ax.plot(list(st.session_state.hit_rate_por_tipo["coluna"]),label="Coluna")
 ax.set_ylim(0,1); ax.set_ylabel("Hit")
 ax.legend(); st.pyplot(fig)
+
+st.subheader("⚙️ Controles")
+if st.button("🔄 Resetar contadores Top2"):
+    st.session_state.acertos_top = 0
+    st.session_state.total_top = 0
+    st.success("✅ Contadores Top2 resetados!")
       
