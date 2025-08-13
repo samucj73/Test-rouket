@@ -404,28 +404,43 @@ def registrar_resultado(tipo, soma_prob, hit):
     atualizar_prob_minima_dinamica()
 
 def pick_tipo_duzia_ou_coluna(res_duzia, res_coluna):
-    """Escolhe entre dúzia ou coluna de forma mais equilibrada."""
+    """Escolhe entre dúzia ou coluna de forma mais equilibrada, com contador forçado para coluna."""
     top_d, probs_d, soma_d = res_duzia
     top_c, probs_c, soma_c = res_coluna
 
     hr_d = np.mean(st.session_state.hit_rate_por_tipo["duzia"]) if st.session_state.hit_rate_por_tipo["duzia"] else 0.5
     hr_c = np.mean(st.session_state.hit_rate_por_tipo["coluna"]) if st.session_state.hit_rate_por_tipo["coluna"] else 0.5
 
+    # Inicializa contador de rodadas sem coluna
+    if "rodadas_sem_coluna" not in st.session_state:
+        st.session_state.rodadas_sem_coluna = 0
+
     # Peso reduzido do hit rate para não travar a decisão
     score_d = soma_d * (0.8 + 0.2 * hr_d)
     score_c = soma_c * (0.8 + 0.2 * hr_c)
 
-    # Se diferença de confiança for grande, escolhe direto
+    # Regra de confiança: se diferença for grande, escolhe direto
     if soma_c - soma_d >= 0.10:
+        st.session_state.rodadas_sem_coluna = 0
         return "coluna", top_c, soma_c
     if soma_d - soma_c >= 0.10:
+        st.session_state.rodadas_sem_coluna += 1
         return "duzia", top_d, soma_d
+
+    # Força coluna se ficar 4 rodadas seguidas sem enviar coluna
+    if st.session_state.rodadas_sem_coluna >= 4:
+        st.session_state.rodadas_sem_coluna = 0
+        return "coluna", top_c, soma_c
 
     # Caso comum: escolhe pelo maior score ajustado
     if score_d >= score_c:
+        st.session_state.rodadas_sem_coluna += 1
         return "duzia", top_d, soma_d
     else:
+        st.session_state.rodadas_sem_coluna = 0
         return "coluna", top_c, soma_c
+
+
 
 
 
