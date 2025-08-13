@@ -7,6 +7,6 @@ requests
 streamlit-autorefresh
 pyTelegramBotAPI
 python-dotenv
-lightgb
+lightgbm
 selenium
 
