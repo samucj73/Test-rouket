@@ -336,9 +336,11 @@ if soma_prob >= st.session_state.prob_minima_dinamica and enviar_alerta:
     joblib.dump(to_save,ESTADO_PATH)
 
 # === DASHBOARD ===
+# Dashboard atualizado
 st.subheader("📊 Métricas")
 st.write(f"Acertos Top2: {st.session_state.acertos_top}/{st.session_state.total_top}")
 st.write(f"Probabilidade mínima dinâmica: {st.session_state.prob_minima_dinamica:.2f}")
+
 
 st.subheader("🔹 Últimos números")
 st.write(list(st.session_state.historico)[-20:])
