@@ -17,10 +17,15 @@ frequencia = st.slider("Chance de clicar a cada ciclo (%)", 0, 100, 20)
 # Inicializa estado do bot
 if "bot_ativo" not in st.session_state:
     st.session_state.bot_ativo = False
+if "bot_thread" not in st.session_state:
+    st.session_state.bot_thread = None
+
+# Variável global de status do bot (thread-safe)
 if "bot_status" not in st.session_state:
     st.session_state.bot_status = "Inativo"
 
-def rodar_bot(APP_URL, chance):
+# Função da thread do bot
+def rodar_bot(APP_URL, chance, status_dict):
     options = Options()
     options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
@@ -33,47 +38,52 @@ def rodar_bot(APP_URL, chance):
 
     try:
         driver.get(APP_URL)
-        st.session_state.bot_status = f"Bot iniciado no site: {APP_URL}"
+        status_dict["mensagem"] = f"Bot iniciado no site: {APP_URL}"
 
         while st.session_state.bot_ativo:
             # Rolagem aleatória
             scroll = random.randint(100, 800)
             driver.execute_script(f"window.scrollBy(0, {scroll});")
-            st.session_state.bot_status = f"Rolou a página {scroll}px"
+            status_dict["mensagem"] = f"Rolou a página {scroll}px"
 
             # Seleciona botões visíveis
             botoes = driver.find_elements(By.TAG_NAME, "button")
             botoes_visiveis = [b for b in botoes if b.is_displayed() and b.is_enabled()]
 
-            # Clique aleatório com base na chance
+            # Clique aleatório
             if botoes_visiveis and random.random() < (chance / 100):
                 botao = random.choice(botoes_visiveis)
                 try:
                     botao.click()
-                    st.session_state.bot_status = "Clicou em um botão"
+                    status_dict["mensagem"] = "Clicou em um botão"
                     time.sleep(random.uniform(1, 2))
                 except:
-                    st.session_state.bot_status = "Erro ao clicar em um botão"
+                    status_dict["mensagem"] = "Erro ao clicar em um botão"
 
-            # Pausa aleatória entre ciclos
+            # Pausa aleatória
             time.sleep(random.uniform(2, 5))
 
     except:
-        st.session_state.bot_status = "Erro no bot"
+        status_dict["mensagem"] = "Erro no bot"
 
     finally:
         driver.quit()
-        st.session_state.bot_status = "Bot finalizado"
+        status_dict["mensagem"] = "Bot finalizado"
         st.session_state.bot_ativo = False
 
-# Botão para iniciar/parar
+# Botão iniciar/parar
 if st.button("Iniciar / Parar Bot") and url:
     if not st.session_state.bot_ativo:
         st.session_state.bot_ativo = True
-        threading.Thread(target=rodar_bot, args=(url, frequencia), daemon=True).start()
+        st.session_state.bot_thread = threading.Thread(
+            target=rodar_bot,
+            args=(url, frequencia, {"mensagem": "Iniciado"}),
+            daemon=True
+        )
+        st.session_state.bot_thread.start()
     else:
         st.session_state.bot_ativo = False
         st.session_state.bot_status = "Parando o bot..."
 
-# Atualiza status na interface
+# Atualiza status de forma segura
 st.write("Status do Bot:", st.session_state.bot_status)
