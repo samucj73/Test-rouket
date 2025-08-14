@@ -3,12 +3,10 @@ import random
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
 
 # === CONFIGURAÇÕES ===
 APP_URL = "https://test-rouket-jcdijgmwnb8vlhv9v86scu.streamlit.app/"
 
-# Configurações do Chrome para ambiente sem interface (headless)
 options = Options()
 options.add_argument("--headless=new")
 options.add_argument("--no-sandbox")
@@ -24,27 +22,26 @@ try:
     print("Bot iniciado no app!")
 
     while True:
-        # Simula rolagem
-        scroll_y = random.randint(200, 800)
+        # Scroll parcial
+        scroll_y = random.randint(100, 500)
         driver.execute_script(f"window.scrollBy(0, {scroll_y});")
-        print(f"Rolou {scroll_y} pixels")
+        print(f"Rolou {scroll_y} pixels para baixo")
+        time.sleep(random.uniform(1, 3))
 
-        time.sleep(random.uniform(2, 5))
-
-        # Volta pro topo
-        driver.find_element(By.TAG_NAME, "body").send_keys(Keys.HOME)
-
-        # Simula clique aleatório se houver botões
+        # Chance de clicar em botão visível
         botoes = driver.find_elements(By.TAG_NAME, "button")
-        if botoes:
-            botao = random.choice(botoes)
+        botoes_visiveis = [b for b in botoes if b.is_displayed() and b.is_enabled()]
+        if botoes_visiveis and random.random() < 0.2:  # 20% de chance
+            botao = random.choice(botoes_visiveis)
             try:
                 botao.click()
                 print("Clicou em um botão")
-            except:
-                pass
+                time.sleep(random.uniform(1, 3))  # pausa após clique
+            except Exception as e:
+                print("Erro ao clicar no botão:", e)
 
-        time.sleep(random.uniform(10, 20))  # Pausa antes da próxima ação
+        # Pequena pausa entre ações
+        time.sleep(random.uniform(2, 5))
 
 except Exception as e:
     print("Erro no bot:", e)
