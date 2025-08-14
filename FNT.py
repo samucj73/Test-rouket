@@ -246,6 +246,54 @@ def registrar_resultado(tipo,soma_prob,hit):
     atualizar_prob_minima_dinamica()
 
 # --- Inicialização dos contadores ---
+# 
+
+
+
+
+
+# === INTERFACE ===
+st.title("🎯 IA Roleta PRO — Ensemble Dinâmico + Treino Online + Threshold Adaptativo")
+st_autorefresh(interval=REFRESH_INTERVAL,key="atualizacao")
+
+# === COLETA API ===
+try: numero_atual=int(requests.get(API_URL,timeout=5).json()["data"]["result"]["outcome"]["number"])
+except Exception as e: st.error(f"Erro API: {e}"); st.stop()
+
+# === PIPELINE ===
+novo_num = len(st.session_state.historico)==0 or numero_atual!=st.session_state.historico[-1]
+if novo_num:
+    st.session_state.historico.append(numero_atual)
+    joblib.dump(st.session_state.historico,HISTORICO_PATH)
+
+    # Conferir acerto da rodada anterior
+    if st.session_state.top2_anterior:
+        st.session_state.total_top+=1
+        tipo_prev=st.session_state.tipo_entrada_anterior or "duzia"
+        valor=(numero_atual-1)//12+1 if tipo_prev=="duzia" else (numero_atual-1)%3+1
+        hit=(valor in st.session_state.top2_anterior)
+        st.session_state.acertos_top+=hit
+        enviar_telegram_async(f"✅ Saiu {numero_atual} ({valor}ª {tipo_prev}): {'🟢' if hit else '🔴'}")
+        registrar_resultado(tipo_prev,st.session_state.last_soma_prob if "last_soma_prob" in st.session_state else 0.0,hit)
+
+    st.session_state.rounds_desde_retrain+=1
+
+    # Atualiza SGD online
+    st.session_state.sgd_d=atualizar_sgd(st.session_state.sgd_d,st.session_state.historico,"duzia")
+    st.session_state.sgd_c=atualizar_sgd(st.session_state.sgd_c,st.session_state.historico,"coluna")
+
+    # Re-treino batch
+    if st.session_state.rounds_desde_retrain>=RETRAIN_EVERY or st.session_state.modelo_d is None or st.session_state.modelo_c is None:
+        modelos_d,Xd,yd,scores_d=treinar_modelos_batch(st.session_state.historico,"duzia")
+        
+        modelos_c,Xc,yc,scores_c=treinar_modelos_batch(st.session_state.historico,"coluna")
+        if modelos_d is not None: st.session_state.modelo_d=modelos_d
+        if modelos_c is not None: st.session_state.modelo_c=modelos_c
+        if scores_d is not None: st.session_state.cv_scores["duzia"]["lgb"]=scores_d[0]; st.session_state.cv_scores["duzia"]["rf"]=scores_d[1]
+        if scores_c is not None: st.session_state.cv_scores["coluna"]["lgb"]=scores_c[0]; st.session_state.cv_scores["coluna"]["rf"]=scores_c[1]
+        st.session_state.rounds_desde_retrain=0
+
+  # === Previsão top2 dúzia e coluna ==
 # === 1. Calcular previsões de dúzia ===
 top_d, probs_d = previsao_duzia(X_d, modelos_d)
 soma_d = sum(probs_d)
@@ -313,116 +361,6 @@ if soma_prob >= st.session_state.prob_minima_dinamica and enviar_alerta:
     st.session_state.tipo_entrada_anterior = tipo_escolhido
 
     # Salvar estado
-    to_save = {k: st.session_state[k] for k in defaults.keys()}
-    joblib.dump(to_save, ESTADO_PATH)
-
-
-
-
-
-
-# === INTERFACE ===
-st.title("🎯 IA Roleta PRO — Ensemble Dinâmico + Treino Online + Threshold Adaptativo")
-st_autorefresh(interval=REFRESH_INTERVAL,key="atualizacao")
-
-# === COLETA API ===
-try: numero_atual=int(requests.get(API_URL,timeout=5).json()["data"]["result"]["outcome"]["number"])
-except Exception as e: st.error(f"Erro API: {e}"); st.stop()
-
-# === PIPELINE ===
-novo_num = len(st.session_state.historico)==0 or numero_atual!=st.session_state.historico[-1]
-if novo_num:
-    st.session_state.historico.append(numero_atual)
-    joblib.dump(st.session_state.historico,HISTORICO_PATH)
-
-    # Conferir acerto da rodada anterior
-    if st.session_state.top2_anterior:
-        st.session_state.total_top+=1
-        tipo_prev=st.session_state.tipo_entrada_anterior or "duzia"
-        valor=(numero_atual-1)//12+1 if tipo_prev=="duzia" else (numero_atual-1)%3+1
-        hit=(valor in st.session_state.top2_anterior)
-        st.session_state.acertos_top+=hit
-        enviar_telegram_async(f"✅ Saiu {numero_atual} ({valor}ª {tipo_prev}): {'🟢' if hit else '🔴'}")
-        registrar_resultado(tipo_prev,st.session_state.last_soma_prob if "last_soma_prob" in st.session_state else 0.0,hit)
-
-    st.session_state.rounds_desde_retrain+=1
-
-    # Atualiza SGD online
-    st.session_state.sgd_d=atualizar_sgd(st.session_state.sgd_d,st.session_state.historico,"duzia")
-    st.session_state.sgd_c=atualizar_sgd(st.session_state.sgd_c,st.session_state.historico,"coluna")
-
-    # Re-treino batch
-    if st.session_state.rounds_desde_retrain>=RETRAIN_EVERY or st.session_state.modelo_d is None or st.session_state.modelo_c is None:
-        modelos_d,Xd,yd,scores_d=treinar_modelos_batch(st.session_state.historico,"duzia")
-        
-        modelos_c,Xc,yc,scores_c=treinar_modelos_batch(st.session_state.historico,"coluna")
-        if modelos_d is not None: st.session_state.modelo_d=modelos_d
-        if modelos_c is not None: st.session_state.modelo_c=modelos_c
-        if scores_d is not None: st.session_state.cv_scores["duzia"]["lgb"]=scores_d[0]; st.session_state.cv_scores["duzia"]["rf"]=scores_d[1]
-        if scores_c is not None: st.session_state.cv_scores["coluna"]["lgb"]=scores_c[0]; st.session_state.cv_scores["coluna"]["rf"]=scores_c[1]
-        st.session_state.rounds_desde_retrain=0
-
-  # === Previsão top2 dúzia e coluna ===
-# === Previsão top2 dúzia e coluna ===
-res_duzia = prever_top2_ensemble(st.session_state.modelo_d, st.session_state.sgd_d, st.session_state.historico)
-res_coluna = prever_top2_ensemble(st.session_state.modelo_c, st.session_state.sgd_c, st.session_state.historico)
-
-# Extrai probs_list e classes separadamente
-probs_list_d, classes_d = res_duzia
-probs_list_c, classes_c = res_coluna
-
-# Combina com pesos
-pesos = {"lgb": 0.45, "rf": 0.45, "sgd": 0.1}
-top_d, probs_d, soma_d = combinar_com_pesos(probs_list_d, pesos, classes_d)
-top_c, probs_c, soma_c = combinar_com_pesos(probs_list_c, pesos, classes_c)
-
-# Função aprimorada de escolha tipo (dúzia ou coluna)
-def pick_tipo_duzia_ou_coluna(res_duzia, res_coluna):
-    top_d, probs_d, soma_d = res_duzia
-    top_c, probs_c, soma_c = res_coluna
-
-    hr_d = np.mean(st.session_state.hit_rate_por_tipo["duzia"]) if st.session_state.hit_rate_por_tipo["duzia"] else 0.5
-    hr_c = np.mean(st.session_state.hit_rate_por_tipo["coluna"]) if st.session_state.hit_rate_por_tipo["coluna"] else 0.5
-
-    soma_d_norm = soma_d / 2.0
-    soma_c_norm = soma_c / 2.0
-
-    score_d = soma_d_norm * (0.5 + 0.5 * hr_d)
-    score_c = soma_c_norm * (0.5 + 0.5 * hr_c)
-
-    # Alternância forçada: evita repetir coluna várias vezes
-    if st.session_state.tipo_entrada_anterior == "coluna" and st.session_state.contador_sem_alerta >= 2:
-        return "duzia", top_d, soma_d
-
-    # Escolha normal baseada em score
-    if score_d >= score_c:
-        return "duzia", top_d, soma_d
-    else:
-        return "coluna", top_c, soma_c
-
-# Escolhe tipo e top2
-tipo_escolhido, top2, soma_prob = pick_tipo_duzia_ou_coluna((top_d, probs_d, soma_d), (top_c, probs_c, soma_c))
-st.session_state.last_soma_prob = soma_prob
-
-# Controle de envio de alerta
-enviar_alerta = False
-if top2 != st.session_state.top2_anterior:
-    enviar_alerta = True
-    st.session_state.contador_sem_alerta = 0
-else:
-    st.session_state.contador_sem_alerta += 1
-    if st.session_state.contador_sem_alerta >= 3:
-        enviar_alerta = True
-        st.session_state.contador_sem_alerta = 0
-
-# Envia alerta apenas se soma_prob >= prob_minima_dinamica
-if soma_prob >= st.session_state.prob_minima_dinamica and enviar_alerta:
-    msg = f"🎯 Previsão {tipo_escolhido.upper()}: {top2[0]} e {top2[1]} — Prob={soma_prob:.2f}"
-    enviar_telegram_async(msg)
-    st.session_state.top2_anterior = top2
-    st.session_state.tipo_entrada_anterior = tipo_escolhido
-
-    # Salva estado
     to_save = {k: st.session_state[k] for k in defaults.keys()}
     joblib.dump(to_save, ESTADO_PATH)
 
