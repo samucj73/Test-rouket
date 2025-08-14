@@ -245,27 +245,58 @@ def registrar_resultado(tipo,soma_prob,hit):
     st.session_state.hit_rate_por_tipo[tipo].append(1 if hit else 0)
     atualizar_prob_minima_dinamica()
 
-def pick_tipo_duzia_ou_coluna(res_duzia,res_coluna):
-    top_d, probs_d, soma_d = res_duzia
-    top_c, probs_c, soma_c = res_coluna
+# --- Inicialização dos contadores ---
+if "contador_alertas" not in st.session_state:
+    st.session_state.contador_alertas = 0
+if "top2_anterior" not in st.session_state:
+    st.session_state.top2_anterior = None
+if "tipo_anterior" not in st.session_state:
+    st.session_state.tipo_anterior = None
 
-    # Hit rate recentes (0.5 se ainda não houver histórico)
-    hr_d = np.mean(st.session_state.hit_rate_por_tipo["duzia"]) if st.session_state.hit_rate_por_tipo["duzia"] else 0.5
-    hr_c = np.mean(st.session_state.hit_rate_por_tipo["coluna"]) if st.session_state.hit_rate_por_tipo["coluna"] else 0.5
+# --- Cálculo dos scores ---
+hr_c = np.mean(st.session_state.hit_rate_por_tipo["coluna"]) if st.session_state.hit_rate_por_tipo["coluna"] else 0
+hr_d = np.mean(st.session_state.hit_rate_por_tipo["duzia"]) if st.session_state.hit_rate_por_tipo["duzia"] else 0
 
-    # Normaliza as somas para [0,1] com base em máximos teóricos (2.0 para top2)
-    soma_d_norm = soma_d / 2.0
-    soma_c_norm = soma_c / 2.0
+score_c = soma_c * (0.5 + 0.5 * hr_c)
+score_d = soma_d * (0.5 + 0.5 * hr_d)
 
-    # Calcula score ponderado de forma justa
-    score_d = soma_d_norm * (0.5 + 0.5 * hr_d)
-    score_c = soma_c_norm * (0.5 + 0.5 * hr_c)
+# --- Alternância forçada ---
+st.session_state.contador_alertas += 1
+forcar_duzia = (st.session_state.contador_alertas % 3 == 0)
 
-    # Escolhe o tipo com score maior
-    if score_d >= score_c:
-        return "duzia", top_d, soma_d
+if forcar_duzia:
+    tipo_escolhido = "duzia"
+    top2 = top_d
+    soma_prob = soma_d
+else:
+    # Escolhe o melhor entre coluna e dúzia pelo score
+    if score_c >= score_d:
+        tipo_escolhido = "coluna"
+        top2 = top_c
+        soma_prob = soma_c
     else:
-        return "coluna", top_c, soma_c
+        tipo_escolhido = "duzia"
+        top2 = top_d
+        soma_prob = soma_d
+
+# --- Evitar alertas repetidos ---
+if (tipo_escolhido == st.session_state.tipo_anterior and
+    top2 == st.session_state.top2_anterior and
+    not forcar_duzia):
+    enviar_alerta = False
+else:
+    enviar_alerta = True
+    st.session_state.top2_anterior = top2
+    st.session_state.tipo_anterior = tipo_escolhido
+
+# --- Envio do alerta ---
+if enviar_alerta:
+    mensagem = f"🎯 {tipo_escolhido.upper()} mais prováveis: {top2} (Prob. {soma_prob:.1%})"
+    enviar_telegram(mensagem)
+
+
+
+
 
 
 
