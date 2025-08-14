@@ -235,48 +235,84 @@ except Exception as e:
     st.error(f"Erro API: {e}")
     st.stop()
 
-novo_num = len(st.session_state.historico)==0 or numero_atual!=st.session_state.historico[-1]
+# === Atualização da rodada ===
+novo_num = len(st.session_state.historico) == 0 or numero_atual != st.session_state.historico[-1]
+
 if novo_num:
     st.session_state.historico.append(numero_atual)
-    joblib.dump(st.session_state.historico,HISTORICO_PATH)
+    joblib.dump(st.session_state.historico, HISTORICO_PATH)
 
     # Conferir acerto da rodada anterior
     if st.session_state.top2_anterior:
-        st.session_state.total_top+=1
-        tipo_prev=st.session_state.tipo_entrada_anterior or "duzia"
-        valor=(numero_atual-1)//12+1 if tipo_prev=="duzia" else (numero_atual-1)%3+1
-        hit=(valor in st.session_state.top2_anterior)
-        st.session_state.acertos_top+=hit
+        st.session_state.total_top += 1
+        tipo_prev = st.session_state.tipo_entrada_anterior or "duzia"
+        valor = (numero_atual - 1) // 12 + 1 if tipo_prev == "duzia" else (numero_atual - 1) % 3 + 1
+        hit = (valor in st.session_state.top2_anterior)
+        st.session_state.acertos_top += hit
         enviar_telegram_async(f"✅ Saiu {numero_atual} ({valor}ª {tipo_prev}): {'🟢' if hit else '🔴'}")
+        registrar_resultado(tipo_prev,
+                            st.session_state.last_soma_prob if "last_soma_prob" in st.session_state else 0.0,
+                            hit)
 
-    st.session_state.rounds_desde_retrain+=1
+    st.session_state.rounds_desde_retrain += 1
 
-    # Re-treino batch
-    if st.session_state.rounds_desde_retrain>=RETRAIN_EVERY or st.session_state.modelo_d is None or st.session_state.modelo_c is None:
-        modelos_d, X_d, y_d, scores_d = treinar_modelos_batch(st.session_state.historico,"duzia")
-        modelos_c, X_c, y_c, scores_c = treinar_modelos_batch(st.session_state.historico,"coluna")
+    # Atualiza SGD online
+    st.session_state.sgd_d = atualizar_sgd(st.session_state.sgd_d, st.session_state.historico, "duzia")
+    st.session_state.sgd_c = atualizar_sgd(st.session_state.sgd_c, st.session_state.historico, "coluna")
+
+    # Re-treino batch se necessário
+    if st.session_state.rounds_desde_retrain >= RETRAIN_EVERY or \
+       st.session_state.modelo_d is None or st.session_state.modelo_c is None:
+
+        modelos_d, Xd, yd, scores_d = treinar_modelos_batch(st.session_state.historico, "duzia")
+        modelos_c, Xc, yc, scores_c = treinar_modelos_batch(st.session_state.historico, "coluna")
+
         if modelos_d is not None: st.session_state.modelo_d = modelos_d
         if modelos_c is not None: st.session_state.modelo_c = modelos_c
+
+        if scores_d is not None:
+            st.session_state.cv_scores["duzia"]["lgb"] = scores_d[0]
+            st.session_state.cv_scores["duzia"]["rf"] = scores_d[1]
+
+        if scores_c is not None:
+            st.session_state.cv_scores["coluna"]["lgb"] = scores_c[0]
+            st.session_state.cv_scores["coluna"]["rf"] = scores_c[1]
+
         st.session_state.rounds_desde_retrain = 0
 
-    # === Previsões
-    top_d, probs_d = previsao_duzia(X_d, st.session_state.modelo_d)
-    soma_d = sum(probs_d)
-    top_c, probs_c = previsao_coluna(X_c, st.session_state.modelo_c)
-    soma_c = sum(probs_c)
+    # === Previsão top2 ===
+    # Garantir X_d e X_c válidos
+    X_d = Xd if 'Xd' in locals() and Xd is not None else np.zeros((1, 25))
+    X_c = Xc if 'Xc' in locals() and Xc is not None else np.zeros((1, 25))
 
+    # Previsão dúzia
+    if st.session_state.modelo_d is not None:
+        top_d, probs_d = previsao_duzia(X_d, st.session_state.modelo_d)
+        soma_d = sum(probs_d)
+    else:
+        top_d, probs_d, soma_d = [], [], 0.0
+
+    # Previsão coluna
+    if st.session_state.modelo_c is not None:
+        top_c, probs_c = previsao_coluna(X_c, st.session_state.modelo_c)
+        soma_c = sum(probs_c)
+    else:
+        top_c, probs_c, soma_c = [], [], 0.0
+
+    # Escolher entre dúzia ou coluna
     tipo_escolhido, top2, soma_prob = pick_tipo_duzia_ou_coluna(
         (top_d, probs_d, soma_d),
         (top_c, probs_c, soma_c)
     )
     st.session_state.last_soma_prob = soma_prob
 
+    # Atualiza contador de mesmo tipo seguido
     if tipo_escolhido == st.session_state.tipo_entrada_anterior:
         st.session_state.contador_mesmo_tipo += 1
     else:
         st.session_state.contador_mesmo_tipo = 1
 
-    # Controle de alerta
+    # Controle de envio de alerta
     enviar_alerta = False
     if top2 != st.session_state.top2_anterior:
         enviar_alerta = True
@@ -287,6 +323,7 @@ if novo_num:
             enviar_alerta = True
             st.session_state.contador_sem_alerta = 0
 
+    # Enviar alerta
     if soma_prob >= st.session_state.prob_minima_dinamica and enviar_alerta:
         msg = f"🎯 Previsão {tipo_escolhido.upper()}: {top2[0]} e {top2[1]} — Prob={soma_prob:.2f}"
         enviar_telegram_async(msg)
@@ -294,8 +331,10 @@ if novo_num:
         st.session_state.tipo_entrada_anterior = tipo_escolhido
 
         # Salvar estado
-        to_save = {k: st.session_state.get(k) for k in defaults.keys()}
+        to_save = {k: st.session_state[k] for k in defaults.keys()}
         joblib.dump(to_save, ESTADO_PATH)
+
+
 
 # === DASHBOARD ===
 st.subheader("📊 Métricas")
