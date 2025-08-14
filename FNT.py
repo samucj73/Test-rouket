@@ -246,54 +246,75 @@ def registrar_resultado(tipo,soma_prob,hit):
     atualizar_prob_minima_dinamica()
 
 # --- Inicialização dos contadores ---
-if "contador_alertas" not in st.session_state:
-    st.session_state.contador_alertas = 0
-if "top2_anterior" not in st.session_state:
-    st.session_state.top2_anterior = None
-if "tipo_anterior" not in st.session_state:
-    st.session_state.tipo_anterior = None
+# === 1. Calcular previsões de dúzia ===
+top_d, probs_d = previsao_duzia(X_d, modelos_d)
+soma_d = sum(probs_d)
 
-# --- Cálculo dos scores ---
-hr_c = np.mean(st.session_state.hit_rate_por_tipo["coluna"]) if st.session_state.hit_rate_por_tipo["coluna"] else 0
-hr_d = np.mean(st.session_state.hit_rate_por_tipo["duzia"]) if st.session_state.hit_rate_por_tipo["duzia"] else 0
+# === 2. Calcular previsões de coluna ===
+top_c, probs_c = previsao_coluna(X_c, modelos_c)
+soma_c = sum(probs_c)
 
-score_c = soma_c * (0.5 + 0.5 * hr_c)
-score_d = soma_d * (0.5 + 0.5 * hr_d)
+# === 3. Função para escolher entre dúzia ou coluna ===
+def pick_tipo_duzia_ou_coluna(res_duzia, res_coluna):
+    top_d, probs_d, soma_d = res_duzia
+    top_c, probs_c, soma_c = res_coluna
 
-# --- Alternância forçada ---
-st.session_state.contador_alertas += 1
-forcar_duzia = (st.session_state.contador_alertas % 3 == 0)
+    # Média de acertos para ponderar
+    hr_d = np.mean(st.session_state.hit_rate_por_tipo["duzia"]) if st.session_state.hit_rate_por_tipo["duzia"] else 0.5
+    hr_c = np.mean(st.session_state.hit_rate_por_tipo["coluna"]) if st.session_state.hit_rate_por_tipo["coluna"] else 0.5
 
-if forcar_duzia:
-    tipo_escolhido = "duzia"
-    top2 = top_d
-    soma_prob = soma_d
-else:
-    # Escolhe o melhor entre coluna e dúzia pelo score
-    if score_c >= score_d:
-        tipo_escolhido = "coluna"
-        top2 = top_c
-        soma_prob = soma_c
+    soma_d_norm = soma_d / 2.0
+    soma_c_norm = soma_c / 2.0
+
+    score_d = soma_d_norm * (0.5 + 0.5 * hr_d)
+    score_c = soma_c_norm * (0.5 + 0.5 * hr_c)
+
+    # Alternância forçada se repetir 2x seguidas
+    if st.session_state.tipo_entrada_anterior == "coluna" and st.session_state.contador_mesmo_tipo >= 2:
+        return "duzia", top_d, soma_d
+    if st.session_state.tipo_entrada_anterior == "duzia" and st.session_state.contador_mesmo_tipo >= 2:
+        return "coluna", top_c, soma_c
+
+    # Escolha pelo score
+    if score_d >= score_c:
+        return "duzia", top_d, soma_d
     else:
-        tipo_escolhido = "duzia"
-        top2 = top_d
-        soma_prob = soma_d
+        return "coluna", top_c, soma_c
 
-# --- Evitar alertas repetidos ---
-if (tipo_escolhido == st.session_state.tipo_anterior and
-    top2 == st.session_state.top2_anterior and
-    not forcar_duzia):
-    enviar_alerta = False
+# === 4. Escolher tipo e top2 ===
+tipo_escolhido, top2, soma_prob = pick_tipo_duzia_ou_coluna(
+    (top_d, probs_d, soma_d),
+    (top_c, probs_c, soma_c)
+)
+st.session_state.last_soma_prob = soma_prob
+
+# Atualiza contador de mesmo tipo seguido
+if tipo_escolhido == st.session_state.tipo_entrada_anterior:
+    st.session_state.contador_mesmo_tipo += 1
 else:
+    st.session_state.contador_mesmo_tipo = 1
+
+# === 5. Controle de envio de alerta ===
+enviar_alerta = False
+if top2 != st.session_state.top2_anterior:
     enviar_alerta = True
+    st.session_state.contador_sem_alerta = 0
+else:
+    st.session_state.contador_sem_alerta += 1
+    if st.session_state.contador_sem_alerta >= 3:
+        enviar_alerta = True
+        st.session_state.contador_sem_alerta = 0
+
+# === 6. Enviar alerta ===
+if soma_prob >= st.session_state.prob_minima_dinamica and enviar_alerta:
+    msg = f"🎯 Previsão {tipo_escolhido.upper()}: {top2[0]} e {top2[1]} — Prob={soma_prob:.2f}"
+    enviar_telegram_async(msg)
     st.session_state.top2_anterior = top2
-    st.session_state.tipo_anterior = tipo_escolhido
+    st.session_state.tipo_entrada_anterior = tipo_escolhido
 
-# --- Envio do alerta ---
-if enviar_alerta:
-    mensagem = f"🎯 {tipo_escolhido.upper()} mais prováveis: {top2} (Prob. {soma_prob:.1%})"
-    enviar_telegram(mensagem)
-
+    # Salvar estado
+    to_save = {k: st.session_state[k] for k in defaults.keys()}
+    joblib.dump(to_save, ESTADO_PATH)
 
 
 
