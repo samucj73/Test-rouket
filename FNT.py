@@ -280,7 +280,7 @@ if novo_num:
     if enviar_alerta: st.session_state.contador_sem_alerta=0
     else: st.session_state.contador_sem_alerta+=1
 
-    if soma_prob >= st.session_state.prob_minima_dinamica and enviar_alerta
+    
     if soma_prob >= st.session_state.prob_minima_dinamica and enviar_alerta:
         st.session_state.top2_anterior = top2
         st.session_state.tipo_entrada_anterior = tipo_escolhido
