@@ -274,10 +274,9 @@ if novo_num:
         if modelos_c is not None: st.session_state.modelo_c=modelos_c
         if scores_d is not None: st.session_state.cv_scores["duzia"]["lgb"]=scores_d[0]; st.session_state.cv_scores["duzia"]["rf"]=scores_d[1]
         if scores_c is not None: st.session_state.cv_scores["coluna"]["lgb"]=scores_c[0]; st.session_state.cv_scores["coluna"]["rf"]=scores_c[1]
-        st.session_state.rounds_desde_retrain
+        st.session_state.rounds_desde_retrain = 0
 
-        =0
-
+        
     # Previsão Top2
     pesos_d = {"lgb": st.session_state.cv_scores["duzia"]["lgb"],
                "rf": st.session_state.cv_scores["duzia"]["rf"],
