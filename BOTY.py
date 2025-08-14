@@ -5,7 +5,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 
 # === CONFIGURAÇÕES ===
-APP_URL = "https://test-rouket-jcdijgmwnb8vlhv9v86scu.streamlit.app/"
+#APP_URL = "https://test-rouket-jcdijgmwnb8vlhv9v86scu.streamlit.app/"
 
 options = Options()
 options.add_argument("--headless=new")
