@@ -1,7 +1,6 @@
 import streamlit as st
 import requests
 import joblib
-import numpy as np
 from collections import deque, Counter
 import threading
 from pathlib import Path
@@ -35,7 +34,7 @@ if ESTADO_PATH.exists():
         st.session_state[k] = v
 
 # === INTERFACE ===
-st.title("🎯 IA Roleta - Padrões de Dúzia (Acertos Apenas)")
+st.title("🎯 IA Roleta - Padrões de Dúzia (Feedback Apenas Acertos)")
 tamanho_janela = st.slider("📏 Tamanho da janela de análise", min_value=3, max_value=120, value=12)
 prob_minima = st.slider("📊 Probabilidade mínima (%)", min_value=10, max_value=100, value=60) / 100.0
 
@@ -115,12 +114,16 @@ if len(st.session_state.historico) == 0 or numero_atual != st.session_state.hist
     if st.session_state.top2_anterior:
         st.session_state.total_top += 1
         valor = (numero_atual - 1) // 12 + 1
+        # Envia alerta sempre, mas só reforça padrões se acertou
         if valor in st.session_state.top2_anterior:
             st.session_state.acertos_top += 1
             enviar_telegram_async(f"✅ Saiu {numero_atual} ({valor}ª dúzia): 🟢")
             st.session_state.padroes_certos.append(valor)
             if len(st.session_state.padroes_certos) > 10:
                 st.session_state.padroes_certos.pop(0)
+        else:
+            # Erro: apenas alerta vermelho, sem feedback
+            enviar_telegram_async(f"✅ Saiu {numero_atual} ({valor}ª dúzia): 🔴")
 
     # Previsão da próxima entrada
     duzia_prevista, prob = prever_duzia_com_feedback()
