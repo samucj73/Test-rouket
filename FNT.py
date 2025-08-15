@@ -112,6 +112,11 @@ def freq_duzia_coluna_ultimos(janela,k=10):
     fc=[colunas.count(1)/len(sub),colunas.count(2)/len(sub),colunas.count(3)/len(sub)]
     return fd,fc
 
+def obter_historico_para_predicao(historico):
+    if len(historico) <= 3:
+        return deque(historico, maxlen=MAX_HIST_LEN)
+    return deque(list(historico)[:-3], maxlen=MAX_HIST_LEN)
+
 def extrair_features(historico):
     if len(historico) < 121:
         return np.zeros((0, 25)), np.zeros(0)
