@@ -285,10 +285,10 @@ if novo_num:
         if scores_d:
             st.session_state.cv_scores["duzia"]["lgb"] = scores_d[0]
             st.session_state.cv_scores["duzia"]["rf"] = scores_d[1]
-                  if scores_c:
+        if scores_c:
             st.session_state.cv_scores["coluna"]["lgb"] = scores_c[0]
             st.session_state.cv_scores["coluna"]["rf"] = scores_c[1]
-        st.session_state.rounds_desde_retrain = 0
+            st.session_state.rounds_desde_retrain = 0
 
     # --- Previsão Top2 Ensemble ---
     pesos = {"lgb": 0.4, "rf": 0.4, "sgd": 0.2}
