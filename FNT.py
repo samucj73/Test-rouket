@@ -227,16 +227,43 @@ def atualizar_prob_minima_dinamica():
     alvo=PROB_MIN_BASE + (hit_rate-0.5)*0.3
     st.session_state.prob_minima_dinamica=max(min(alvo,PROB_MIN_MAX),PROB_MIN_MIN)
 
-def registrar_resultado_duzia_coluna(valor_duzia, valor_coluna):
-    hit_duzia = (st.session_state.top2_anterior[0] == valor_duzia)
-    hit_coluna = (st.session_state.top2_anterior[1] == valor_coluna)
-    st.session_state.total_top +=1
-    st.session_state.acertos_top += (hit_duzia and hit_coluna)
-    st.session_state.metricas_janela.append({"hit_duzia":hit_duzia, "hit_coluna":hit_coluna, "soma_prob": st.session_state.last_soma_prob})
-    st.session_state.hit_rate_por_tipo["duzia"].append(1 if hit_duzia else 0)
-    st.session_state.hit_rate_por_tipo["coluna"].append(1 if hit_coluna else 0)
-    atualizar_prob_minima_dinamica()
+# === REGISTRAR RESULTADO DÚZIA + COLUNA ===
+def registrar_resultado_duzia_coluna(numero_atual):
+    """
+    Registra o hit de dúzia e coluna da rodada atual e atualiza métricas.
+    Retorna hit_duzia e hit_coluna (0 ou 1)
+    """
+    if not st.session_state.top2_anterior:
+        return 0, 0
+
+    valor_duzia = (numero_atual - 1)//12 + 1 if numero_atual != 0 else 0
+    valor_coluna = (numero_atual - 1)%3 + 1 if numero_atual != 0 else 0
+
+    hit_duzia = int(valor_duzia == st.session_state.top2_anterior[0])
+    hit_coluna = int(valor_coluna == st.session_state.top2_anterior[1])
+
+    # Atualizar métricas de janela e hit rate
+    st.session_state.metricas_janela.append({"duzia": hit_duzia, "coluna": hit_coluna})
+    st.session_state.hit_rate_por_tipo["duzia"].append(hit_duzia)
+    st.session_state.hit_rate_por_tipo["coluna"].append(hit_coluna)
+
+    # Atualizar acertos totais
+    st.session_state.acertos_top += int(hit_duzia and hit_coluna)
+    st.session_state.total_top += 1
+
     return hit_duzia, hit_coluna
+
+
+# === EXEMPLO DE USO NA RODADA ===
+if novo_num:
+    # Registra resultado da rodada anterior
+    hit_duzia, hit_coluna = registrar_resultado_duzia_coluna(numero_atual)
+    emoji = "🟢" if hit_duzia and hit_coluna else "🔴"
+    enviar_telegram_async(
+        f"✅ Saiu {numero_atual} (Dúzia {((numero_atual-1)//12+1)}, Coluna {((numero_atual-1)%3+1)}): {emoji}"
+    )
+
+
 
 # === INTERFACE ===
 st.title("🎯 IA Roleta PRO — Dúzia + Coluna")
