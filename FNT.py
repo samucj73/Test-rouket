@@ -60,7 +60,7 @@ def numero_para_duzia(num):
     else:
         return 3
 
-def prever_duzia_com_feedback(min_match=0.8):
+def prever_duzia_com_feedback(min_match=0.4):
     """Prevê a dúzia usando apenas padrões que deram certo anteriormente"""
     if len(st.session_state.historico) < tamanho_janela:
         return None, 0.0
