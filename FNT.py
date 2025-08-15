@@ -239,33 +239,33 @@ def registrar_resultado(tipo, soma_prob, hit):
     atualizar_prob_minima_dinamica()
 
 # === INTERFACE / PIPELINE ===
-st.title("🎯 IA Roleta PRO — Ensemble Dinâmico + Treino Online + Threshold Adaptativo")
+
+  # === INTERFACE / PIPELINE ===
+st.title("🎯 IA Roleta PRO — Dúzia + Coluna")
+
 st_autorefresh(interval=REFRESH_INTERVAL,key="atualizacao")
 
-try: numero_atual=int(requests.get(API_URL,timeout=5).json()["data"]["result"]["outcome"]["number"])
-except Exception as e: st.error(f"Erro API: {e}"); st.stop()
+try:
+    numero_atual=int(requests.get(API_URL,timeout=5).json()["data"]["result"]["outcome"]["number"])
+except Exception as e:
+    st.error(f"Erro API: {e}")
+    st.stop()
 
 # --- Atualização de rodada ---
-
-# --- Atualização de rodada ---
-novo_num = len(st.session_state.historico) == 0 or numero_atual != st.session_state.historico[-1]
-
+novo_num = numero_atual != st.session_state.ultimo_numero_api
 if novo_num:
+    st.session_state.ultimo_numero_api = numero_atual
     st.session_state.historico.append(numero_atual)
-    joblib.dump(st.session_state.historico, HISTORICO_PATH)
+    joblib.dump(st.session_state.historico,HISTORICO_PATH)
 
     # Conferir acerto da rodada anterior
     if st.session_state.top2_anterior:
-        st.session_state.total_top += 1
-        tipo_prev = st.session_state.tipo_entrada_anterior or "duzia+coluna"
-        valor_duzia = (numero_atual - 1) // 12 + 1
-        valor_coluna = (numero_atual - 1) % 3 + 1
-        hit = ((valor_duzia in [st.session_state.top2_anterior[0]]) and
-               (valor_coluna in [st.session_state.top2_anterior[1]]))
-        st.session_state.acertos_top += hit
-        enviar_telegram_async(f"✅ Saiu {numero_atual} | Acerto: {'🟢' if hit else '🔴'}")
-        soma_prob = st.session_state.get("last_soma_prob", 0.0)
-        registrar_resultado(tipo_prev, soma_prob, hit)
+        st.session_state.total_top+=1
+        valor_duzia = (numero_atual-1)//12+1
+        valor_coluna = (numero_atual-1)%3+1
+        hit = (valor_duzia==st.session_state.top2_anterior[0]) and (valor_coluna==st.session_state.top2_anterior[1])
+        st.session_state.acertos_top+=hit
+        enviar_telegram_async(f"✅ Saiu {numero_atual} (Dúzia {valor_duzia}, Coluna {valor_coluna}): {'🟢' if hit else '🔴'}")
 
     # Atualizar SGD
     st.session_state.sgd_d = atualizar_sgd(st.session_state.sgd_d, st.session_state.historico, "duzia")
