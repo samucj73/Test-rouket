@@ -252,7 +252,12 @@ except Exception as e:
     st.stop()
 
 # --- Atualização de rodada ---
-novo_num = numero_atual != st.session_state.ultimo_numero_api
+
+# --- Atualização de rodada ---
+if "ultimo_numero_api" not in st.session_state:
+    st.session_state.ultimo_numero_api = None
+
+novo_num = st.session_state.ultimo_numero_api != numero_atual
 if novo_num:
     st.session_state.ultimo_numero_api = numero_atual
     st.session_state.historico.append(numero_atual)
@@ -260,11 +265,11 @@ if novo_num:
 
     # Conferir acerto da rodada anterior
     if st.session_state.top2_anterior:
-        st.session_state.total_top+=1
+        st.session_state.total_top += 1
         valor_duzia = (numero_atual-1)//12+1
         valor_coluna = (numero_atual-1)%3+1
         hit = (valor_duzia==st.session_state.top2_anterior[0]) and (valor_coluna==st.session_state.top2_anterior[1])
-        st.session_state.acertos_top+=hit
+        st.session_state.acertos_top += hit
         enviar_telegram_async(f"✅ Saiu {numero_atual} (Dúzia {valor_duzia}, Coluna {valor_coluna}): {'🟢' if hit else '🔴'}")
 
     # Atualizar SGD
@@ -272,9 +277,8 @@ if novo_num:
     st.session_state.sgd_c = atualizar_sgd(st.session_state.sgd_c, st.session_state.historico, "coluna")
     st.session_state.rounds_desde_retrain += 1
 
-    # Re-treino batch
-    if (st.session_state.rounds_desde_retrain >= RETRAIN_EVERY or
-        st.session_state.modelo_d is None or st.session_state.modelo_c is None):
+    # Re-treino batch se necessário
+    if st.session_state.rounds_desde_retrain >= RETRAIN_EVERY or st.session_state.modelo_d is None or st.session_state.modelo_c is None:
         modelos_d, Xd, yd, scores_d = treinar_modelos_batch(st.session_state.historico, "duzia")
         modelos_c, Xc, yc, scores_c = treinar_modelos_batch(st.session_state.historico, "coluna")
         if modelos_d: st.session_state.modelo_d = modelos_d
@@ -301,10 +305,10 @@ if novo_num:
     top_d, probs_d_vals, soma_prob_d = combinar_com_pesos(probs_d, pesos_d, classes_d)
     top_c, probs_c_vals, soma_prob_c = combinar_com_pesos(probs_c, pesos_c, classes_c)
 
-    # Garantir previsão de uma dúzia e uma coluna
     top2 = [top_d[0] if top_d else 0, top_c[0] if top_c else 0]
     soma_prob = soma_prob_d + soma_prob_c
 
+    # --- ENVIO DE ALERTA ---
     enviar_alerta = False
     if top2 != st.session_state.top2_anterior:
         enviar_alerta = True
@@ -322,13 +326,13 @@ if novo_num:
         enviar_telegram_async(f"🎯 Previsão Dúzia+Coluna: Dúzia {top2[0]}, Coluna {top2[1]} | Probabilidade {soma_prob:.2f}")
 
     # Salvar estado
-    estado = {k: st.session_state[k] for k in ["top2_anterior", "tipo_entrada_anterior",
-                                               "contador_sem_alerta", "modelo_d", "modelo_c",
-                                               "sgd_d", "sgd_c", "rounds_desde_retrain",
-                                               "metricas_janela", "hit_rate_por_tipo",
-                                               "cv_scores", "last_soma_prob", "prob_minima_dinamica"]}
+    estado = {k: st.session_state[k] for k in ["top2_anterior","tipo_entrada_anterior",
+                                               "contador_sem_alerta","modelo_d","modelo_c",
+                                               "sgd_d","sgd_c","rounds_desde_retrain",
+                                               "metricas_janela","hit_rate_por_tipo",
+                                               "cv_scores","last_soma_prob","prob_minima_dinamica",
+                                               "ultimo_numero_api"]}
     joblib.dump(estado, ESTADO_PATH)
-
 
     
     
