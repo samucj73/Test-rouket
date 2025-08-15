@@ -278,13 +278,17 @@ if novo_num:
         st.session_state.rounds_desde_retrain = 0
 
     # --- PREVISÃO DÚZIA + COLUNA ---
-    pesos_d = {"lgb": st.session_state.cv_scores["duzia"]["lgb"],
-               "rf": st
-    estado.cv_scores["duzia"]["rf"],
-               "sgd": 0.3}
-pesos_c = {"lgb": st.session_state.cv_scores["coluna"]["lgb"],
-           "rf": st.session_state.cv_scores["coluna"]["rf"],
-           "sgd": 0.3}
+   # --- PREVISÃO DÚZIA + COLUNA ---
+pesos_d = {
+    "lgb": st.session_state.cv_scores["duzia"]["lgb"],
+    "rf": st.session_state.cv_scores["duzia"]["rf"],
+    "sgd": 0.3
+}
+pesos_c = {
+    "lgb": st.session_state.cv_scores["coluna"]["lgb"],
+    "rf": st.session_state.cv_scores["coluna"]["rf"],
+    "sgd": 0.3
+}
 
 probs_d, classes_d = prever_top2_ensemble(st.session_state.modelo_d, st.session_state.sgd_d, st.session_state.historico)
 probs_c, classes_c = prever_top2_ensemble(st.session_state.modelo_c, st.session_state.sgd_c, st.session_state.historico)
@@ -333,7 +337,4 @@ fig, ax = plt.subplots()
 janela_hits = [m["hit"] for m in st.session_state.metricas_janela]
 ax.plot(janela_hits, marker='o', linestyle='-', color='green')
 ax.set_title("Histórico de Hits Recentes (1=acerto, 0=erro)")
-st.pyplot(fig)
-
-               
-  
+st.pyplot(fig) 
