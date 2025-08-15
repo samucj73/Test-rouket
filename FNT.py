@@ -5,6 +5,7 @@ import numpy as np
 from collections import deque, Counter
 import threading
 from pathlib import Path
+from streamlit_autorefresh import st_autorefresh
 
 # === CONFIGURAÇÕES ===
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
