@@ -246,36 +246,92 @@ try: numero_atual=int(requests.get(API_URL,timeout=5).json()["data"]["result"]["
 except Exception as e: st.error(f"Erro API: {e}"); st.stop()
 
 # --- Atualização de rodada ---
-novo_num = len(st.session_state.historico)==0 or numero_atual!=st.session_state.historico[-1]
+
+# --- Atualização de rodada ---
+novo_num = len(st.session_state.historico) == 0 or numero_atual != st.session_state.historico[-1]
+
 if novo_num:
     st.session_state.historico.append(numero_atual)
-    joblib.dump(st.session_state.historico,HISTORICO_PATH)
+    joblib.dump(st.session_state.historico, HISTORICO_PATH)
 
     # Conferir acerto da rodada anterior
     if st.session_state.top2_anterior:
-        st.session_state.total_top+=1
-        tipo_prev=st.session_state.tipo_entrada_anterior or "duzia+coluna"
-        duzia_val=(numero_atual-1)//12+1 if numero_atual!=0 else 0
-        coluna_val=(numero_atual-1)%3+1 if numero_atual!=0 else 0
-        hit = duzia_val in [st.session_state.top2_anterior[0]] or coluna_val in [st.session_state.top2_anterior[1]]
-        st.session_state.acertos_top+=hit
-        enviar_telegram_async(f"✅ Saiu {numero_atual} (Dúzia {duzia_val}, Coluna {coluna_val}): {'🟢' if hit else '🔴'}")
-        soma_prob=st.session_state.get("last_soma_prob",0.0)
-        registrar_resultado(tipo_prev,soma_prob,hit)
+        st.session_state.total_top += 1
+        tipo_prev = st.session_state.tipo_entrada_anterior or "duzia+coluna"
+        valor_duzia = (numero_atual - 1) // 12 + 1
+        valor_coluna = (numero_atual - 1) % 3 + 1
+        hit = ((valor_duzia in [st.session_state.top2_anterior[0]]) and
+               (valor_coluna in [st.session_state.top2_anterior[1]]))
+        st.session_state.acertos_top += hit
+        enviar_telegram_async(f"✅ Saiu {numero_atual} | Acerto: {'🟢' if hit else '🔴'}")
+        soma_prob = st.session_state.get("last_soma_prob", 0.0)
+        registrar_resultado(tipo_prev, soma_prob, hit)
 
-    st.session_state.rounds_desde_retrain+=1
-    st.session_state.sgd_d=atualizar_sgd(st.session_state.sgd_d,st.session_state.historico,"duzia")
-    st.session_state.sgd_c=atualizar_sgd(st.session_state.sgd_c,st.session_state.historico,"coluna")
+    # Atualizar SGD
+    st.session_state.sgd_d = atualizar_sgd(st.session_state.sgd_d, st.session_state.historico, "duzia")
+    st.session_state.sgd_c = atualizar_sgd(st.session_state.sgd_c, st.session_state.historico, "coluna")
+    st.session_state.rounds_desde_retrain += 1
 
     # Re-treino batch
-    if st.session_state.rounds_desde_retrain>=RETRAIN_EVERY or st.session_state.modelo_d is None or st.session_state.modelo_c is None:
-        modelos_d,Xd,yd,scores_d=treinar_modelos_batch(st.session_state.historico,"duzia")
-        modelos_c,Xc,yc,scores_c=treinar_modelos_batch(st.session_state.historico,"coluna")
-        if modelos_d is not None: st.session_state.modelo_d=modelos_d
-        if modelos_c is not None: st.session_state.modelo_c=modelos_c
-        if scores_d is not None: st.session_state.cv_scores["duzia"]["lgb"]=scores_d[0]; st.session_state.cv_scores["duzia"]["rf"]=scores_d[1]
-        if scores_c is not None: st.session_state.cv_scores["coluna"]["lgb"]=scores_c[0]; st.session_state.cv_scores["coluna"]["rf"]=scores_c[1]
+    if (st.session_state.rounds_desde_retrain >= RETRAIN_EVERY or
+        st.session_state.modelo_d is None or st.session_state.modelo_c is None):
+        modelos_d, Xd, yd, scores_d = treinar_modelos_batch(st.session_state.historico, "duzia")
+        modelos_c, Xc, yc, scores_c = treinar_modelos_batch(st.session_state.historico, "coluna")
+        if modelos_d: st.session_state.modelo_d = modelos_d
+        if modelos_c: st.session_state.modelo_c = modelos_c
+        if scores_d:
+            st.session_state.cv_scores["duzia"]["lgb"] = scores_d[0]
+            st.session_state.cv_scores["duzia"]["rf"] = scores_d[1]
+        if scores_c:
+            st.session_state.cv_scores["coluna"]["lgb"] = scores_c[0]
+            st.session_state.cv_scores["coluna"]["rf"] = scores_c[1]
         st.session_state.rounds_desde_retrain = 0
+
+    # --- PREVISÃO DÚZIA + COLUNA ---
+    pesos_d = {"lgb": st.session_state.cv_scores["duzia"]["lgb"],
+               "rf": st.session_state.cv_scores["duzia"]["rf"],
+               "sgd": 0.3}
+    pesos_c = {"lgb": st.session_state.cv_scores["coluna"]["lgb"],
+               "rf": st.session_state.cv_scores["coluna"]["rf"],
+               "sgd": 0.3}
+
+    probs_d, classes_d = prever_top2_ensemble(st.session_state.modelo_d, st.session_state.sgd_d, st.session_state.historico)
+    probs_c, classes_c = prever_top2_ensemble(st.session_state.modelo_c, st.session_state.sgd_c, st.session_state.historico)
+
+    top_d, probs_d_vals, soma_prob_d = combinar_com_pesos(probs_d, pesos_d, classes_d)
+    top_c, probs_c_vals, soma_prob_c = combinar_com_pesos(probs_c, pesos_c, classes_c)
+
+    # Garantir previsão de uma dúzia e uma coluna
+    top2 = [top_d[0] if top_d else 0, top_c[0] if top_c else 0]
+    soma_prob = soma_prob_d + soma_prob_c
+
+    enviar_alerta = False
+    if top2 != st.session_state.top2_anterior:
+        enviar_alerta = True
+        st.session_state.contador_sem_alerta = 0
+    else:
+        st.session_state.contador_sem_alerta += 1
+        if st.session_state.contador_sem_alerta >= 3:
+            enviar_alerta = True
+            st.session_state.contador_sem_alerta = 0
+
+    if enviar_alerta:
+        st.session_state.top2_anterior = top2
+        st.session_state.tipo_entrada_anterior = "duzia+coluna"
+        st.session_state.last_soma_prob = soma_prob
+        enviar_telegram_async(f"🎯 Previsão Dúzia+Coluna: Dúzia {top2[0]}, Coluna {top2[1]} | Probabilidade {soma_prob:.2f}")
+
+    # Salvar estado
+    estado = {k: st.session_state[k] for k in ["top2_anterior", "tipo_entrada_anterior",
+                                               "contador_sem_alerta", "modelo_d", "modelo_c",
+                                               "sgd_d", "sgd_c", "rounds_desde_retrain",
+                                               "metricas_janela", "hit_rate_por_tipo",
+                                               "cv_scores", "last_soma_prob", "prob_minima_dinamica"]}
+    joblib.dump(estado, ESTADO_PATH)
+
+
+    
+    
 
     # --- PREVISÃO DÚZIA + COLUNA ---
    # --- PREVISÃO DÚZIA + COLUNA ---
