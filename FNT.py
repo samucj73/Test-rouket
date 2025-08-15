@@ -112,11 +112,6 @@ def freq_duzia_coluna_ultimos(janela,k=10):
     fc=[colunas.count(1)/len(sub),colunas.count(2)/len(sub),colunas.count(3)/len(sub)]
     return fd,fc
 
-def obter_historico_para_predicao(historico):
-    if len(historico) <= 3:
-        return deque(historico, maxlen=MAX_HIST_LEN)
-    return deque(list(historico)[:-3], maxlen=MAX_HIST_LEN)
-
 def extrair_features(historico):
     if len(historico) < 121:
         return np.zeros((0, 25)), np.zeros(0)
@@ -227,72 +222,57 @@ def combinar_com_pesos(probs_list,pesos_dict,classes):
 def atualizar_prob_minima_dinamica():
     janela=list(st.session_state.metricas_janela)
     if not janela: st.session_state.prob_minima_dinamica=PROB_MIN_BASE; return
-    confs=[m["soma_prob"] for m in janela]; hits=[m["hit"] for m in janela]
+    confs=[m["soma_prob"] for m in janela]; hits=[m["hit_duzia"]*m["hit_coluna"] for m in janela]
     avg_conf=np.mean(confs) if confs else PROB_MIN_BASE; hit_rate=np.mean(hits) if hits else 0.5
     alvo=PROB_MIN_BASE + (hit_rate-0.5)*0.3
     st.session_state.prob_minima_dinamica=max(min(alvo,PROB_MIN_MAX),PROB_MIN_MIN)
 
-def registrar_resultado(tipo, soma_prob, hit):
-    if tipo not in ["duzia","coluna"]: tipo="duzia"
-    if soma_prob is None: soma_prob=0.0
-    if "metricas_janela" not in st.session_state:
-        st.session_state.metricas_janela=deque(maxlen=JANELA_METRICAS)
-    if "hit_rate_por_tipo" not in st.session_state:
-        st.session_state.hit_rate_por_tipo={"duzia":deque(maxlen=JANELA_METRICAS),"coluna":deque(maxlen=JANELA_METRICAS)}
-    st.session_state.metricas_janela.append({"tipo":tipo,"soma_prob":soma_prob,"hit":1 if hit else 0})
-    st.session_state.hit_rate_por_tipo[tipo].append(1 if hit else 0)
+def registrar_resultado_duzia_coluna(valor_duzia, valor_coluna):
+    hit_duzia = (st.session_state.top2_anterior[0] == valor_duzia)
+    hit_coluna = (st.session_state.top2_anterior[1] == valor_coluna)
+    st.session_state.total_top +=1
+    st.session_state.acertos_top += (hit_duzia and hit_coluna)
+    st.session_state.metricas_janela.append({"hit_duzia":hit_duzia, "hit_coluna":hit_coluna, "soma_prob": st.session_state.last_soma_prob})
+    st.session_state.hit_rate_por_tipo["duzia"].append(1 if hit_duzia else 0)
+    st.session_state.hit_rate_por_tipo["coluna"].append(1 if hit_coluna else 0)
     atualizar_prob_minima_dinamica()
+    return hit_duzia, hit_coluna
 
-# === INTERFACE / PIPELINE ===
-
-  # === INTERFACE / PIPELINE ===
+# === INTERFACE ===
 st.title("🎯 IA Roleta PRO — Dúzia + Coluna")
-
 st_autorefresh(interval=REFRESH_INTERVAL,key="atualizacao")
-
-try:
-    numero_atual=int(requests.get(API_URL,timeout=5).json()["data"]["result"]["outcome"]["number"])
-except Exception as e:
-    st.error(f"Erro API: {e}")
-    st.stop()
-
-# --- Atualização de rodada ---
-
-# --- Atualização de rodada ---
-# === Atualização de rodada e previsão ===
-# --- GARANTIR CHAVE EXISTE ---
-if "ultimo_numero_api" not in st.session_state:
-    st.session_state.ultimo_numero_api = None
 
 # --- PEGAR NÚMERO ATUAL ---
 try:
-    numero_atual = int(requests.get(API_URL, timeout=5).json()["data"]["result"]["outcome"]["number"])
+    resp = requests.get(API_URL, timeout=5).json()
+    numero_atual = int(resp["data"]["result"]["outcome"]["number"])
 except Exception as e:
     st.error(f"Erro API: {e}")
     st.stop()
 
 # --- VERIFICAR SE HOUVE NOVO NÚMERO ---
+if "ultimo_numero_api" not in st.session_state:
+    st.session_state.ultimo_numero_api = None
+
 novo_num = numero_atual != st.session_state.ultimo_numero_api
 if novo_num:
     st.session_state.ultimo_numero_api = numero_atual
     st.session_state.historico.append(numero_atual)
     joblib.dump(st.session_state.historico, HISTORICO_PATH)
 
-    # Conferir acerto da rodada anterior
+    # --- Conferir acerto da rodada anterior ---
     if st.session_state.top2_anterior:
-        st.session_state.total_top += 1
-        valor_duzia = (numero_atual - 1) // 12 + 1
-        valor_coluna = (numero_atual - 1) % 3 + 1
-        hit = (valor_duzia == st.session_state.top2_anterior[0]) and (valor_coluna == st.session_state.top2_anterior[1])
-        st.session_state.acertos_top += hit
-        enviar_telegram_async(f"✅ Saiu {numero_atual} (Dúzia {valor_duzia}, Coluna {valor_coluna}): {'🟢' if hit else '🔴'}")
+        hit_duzia, hit_coluna = registrar_resultado_duzia_coluna(
+            (numero_atual - 1)//12 +1, (numero_atual - 1)%3 +1
+        )
+        enviar_telegram_async(f"✅ Saiu {numero_atual}: Dúzia {((numero_atual - 1)//12 +1)} ({'🟢' if hit_duzia else '🔴'}), Coluna {((numero_atual -1)%3+1)} ({'🟢' if hit_coluna else '🔴'})")
 
-    # Atualizar SGD
+    # --- Atualizar SGD ---
     st.session_state.sgd_d = atualizar_sgd(st.session_state.sgd_d, st.session_state.historico, "duzia")
     st.session_state.sgd_c = atualizar_sgd(st.session_state.sgd_c, st.session_state.historico, "coluna")
     st.session_state.rounds_desde_retrain += 1
 
-    # Re-treino batch se necessário
+    # --- Re-treino batch se necessário ---
     if (st.session_state.rounds_desde_retrain >= RETRAIN_EVERY or
         st.session_state.modelo_d is None or st.session_state.modelo_c is None):
         modelos_d, Xd, yd, scores_d = treinar_modelos_batch(st.session_state.historico, "duzia")
@@ -307,67 +287,57 @@ if novo_num:
             st.session_state.cv_scores["coluna"]["rf"] = scores_c[1]
         st.session_state.rounds_desde_retrain = 0
 
-    # --- PREVISÃO DÚZIA + COLUNA (DUAS RODADAS ANTES) ---
-    if len(st.session_state.historico) >= 3:
-        historico_pred = deque(list(st.session_state.historico)[:-2], maxlen=MAX_HIST_LEN)
-    else:
-        historico_pred = st.session_state.historico
+    # --- Previsão Dúzia +
 
-    pesos_d = {"lgb": st.session_state.cv_scores["duzia"]["lgb"],
-               "rf": st.session_state.cv_scores["duzia"]["rf"],
-               "sgd": 0.3}
-    pesos_c = {"lgb": st.session_state.cv_scores["coluna"]["lgb"],
-               "rf": st.session_state.cv_scores["coluna"]["rf"],
-               "sgd": 0.3}
+    # --- Previsão Dúzia + Coluna ---
+    pesos = {"lgb": st.session_state.cv_scores["duzia"]["lgb"],
+             "rf": st.session_state.cv_scores["duzia"]["rf"],
+             "sgd": 0.5}
 
-    probs_d, classes_d = prever_top2_ensemble(st.session_state.modelo_d, st.session_state.sgd_d, historico_pred)
-    probs_c, classes_c = prever_top2_ensemble(st.session_state.modelo_c, st.session_state.sgd_c, historico_pred)
+    probs_d, classes_d = prever_top2_ensemble(st.session_state.modelo_d, st.session_state.sgd_d, st.session_state.historico)
+    probs_c, classes_c = prever_top2_ensemble(st.session_state.modelo_c, st.session_state.sgd_c, st.session_state.historico)
 
-    top_d, probs_d_vals, soma_prob_d = combinar_com_pesos(probs_d, pesos_d, classes_d)
-    top_c, probs_c_vals, soma_prob_c = combinar_com_pesos(probs_c, pesos_c, classes_c)
+    top2_duzia, top2_probs_duzia, soma_prob_duzia = combinar_com_pesos(probs_d, pesos, classes_d)
+    top2_coluna, top2_probs_coluna, soma_prob_coluna = combinar_com_pesos(probs_c, pesos, classes_c)
 
-    top2 = [top_d[0] if top_d else 0, top_c[0] if top_c else 0]
-    soma_prob = soma_prob_d + soma_prob_c
+    st.session_state.last_soma_prob = (soma_prob_duzia + soma_prob_coluna)/2
 
-    # --- ENVIAR ALERTA APENAS SE MUDOU ---
-    if top2 != st.session_state.top2_anterior:
-        st.session_state.top2_anterior = top2
-        st.session_state.tipo_entrada_anterior = "duzia+coluna"
-        st.session_state.last_soma_prob = soma_prob
-        st.session_state.contador_sem_alerta = 0
-        enviar_telegram_async(f"🎯 Previsão Dúzia+Coluna: Dúzia {top2[0]}, Coluna {top2[1]} | Probabilidade {soma_prob:.2f}")
-    else:
-        st.session_state.contador_sem_alerta += 1
-        # Forçar alerta se passaram 3 rodadas sem mudar
-        if st.session_state.contador_sem_alerta >= 3:
+    # --- Decisão alerta único ---
+    enviar_alerta = False
+    if novo_num:
+        mesma_entrada = (st.session_state.top2_anterior == top2_duzia + top2_coluna)
+        if not mesma_entrada or st.session_state.contador_sem_alerta >= 3:
+            enviar_alerta = True
+            st.session_state.top2_anterior = top2_duzia + top2_coluna
             st.session_state.contador_sem_alerta = 0
-            enviar_telegram_async(f"🎯 Previsão Dúzia+Coluna (mesmo Top2): Dúzia {top2[0]}, Coluna {top2[1]} | Probabilidade {soma_prob:.2f}")
+        else:
+            st.session_state.contador_sem_alerta +=1
 
-    # Salvar estado
-    estado = {k: st.session_state[k] for k in ["top2_anterior", "tipo_entrada_anterior",
-                                               "contador_sem_alerta", "modelo_d", "modelo_c",
-                                               "sgd_d", "sgd_c", "rounds_desde_retrain",
-                                               "metricas_janela", "hit_rate_por_tipo",
-                                               "cv_scores", "last_soma_prob", "prob_minima_dinamica"]}
-    joblib.dump(estado, ESTADO_PATH)
-    
-    
+    # --- Enviar alerta Telegram ---
+    if enviar_alerta:
+        msg = f"🎯 Previsão rodada {len(st.session_state.historico)}:\n"
+        msg += f"Dúzia: {top2_duzia[0]} | {top2_duzia[1]}\n"
+        msg += f"Coluna: {top2_coluna[0]} | {top2_coluna[1]}"
+        enviar_telegram_async(msg)
 
-    # --- PREVISÃO DÚZIA + COLUNA ---
-   # --- PREVISÃO DÚZIA + COLUNA ---
+# === PLOTAGEM MÉTRICAS ===
+st.subheader("📊 Histórico de Hits")
+fig, ax = plt.subplots(figsize=(8,4))
+x = range(len(st.session_state.hit_rate_por_tipo["duzia"]))
+ax.plot(x, list(st.session_state.hit_rate_por_tipo["duzia"]), label="Dúzia")
+ax.plot(x, list(st.session_state.hit_rate_por_tipo["coluna"]), label="Coluna")
+ax.set_ylim(0,1)
+ax.set_ylabel("Hit (1=verde,0=vermelho)")
+ax.set_xlabel("Últimas rodadas")
+ax.legend()
+st.pyplot(fig)
 
-
-# === DASHBOARD METRICS ===
-st.subheader("📊 Métricas Recentes")
-st.write(f"Top2 Acertos: {st.session_state.acertos_top}/{st.session_state.total_top} ({(st.session_state.acertos_top/st.session_state.total_top*100 if st.session_state.total_top>0 else 0):.2f}%)")
-hit_rate_duzia = np.mean(st.session_state.hit_rate_por_tipo["duzia"]) if st.session_state.hit_rate_por_tipo["duzia"] else 0
-hit_rate_coluna = np.mean(st.session_state.hit_rate_por_tipo["coluna"]) if st.session_state.hit_rate_por_tipo["coluna"] else 0
-st.write(f"Hit rate Janela (Dúzia): {hit_rate_duzia:.2f} | (Coluna): {hit_rate_coluna:.2f}")
-st.write(f"Prob. mínima dinâmica atual: {st.session_state.prob_minima_dinamica:.2f}")
-
-# Plot histórico de acertos
-fig, ax = plt.subplots()
-janela_hits = [m["hit"] for m in st.session_state.metricas_janela]
-ax.plot(janela_hits, marker='o', linestyle='-', color='green')
-ax.set_title("Histórico de Hits Recentes (1=acerto, 0=erro)")
-st.pyplot(fig) 
+# === SALVAR ESTADO ===
+estado_para_salvar = {k:st.session_state[k] for k in ["acertos_top","total_top","top2_anterior",
+                                                       "contador_sem_alerta","tipo_entrada_anterior",
+                                                       "contador_mesmo_tipo","modelo_d","modelo_c",
+                                                       "sgd_d","sgd_c","rounds_desde_retrain",
+                                                       "metricas_janela","hit_rate_por_tipo",
+                                                       "cv_scores","prob_minima_dinamica",
+                                                       "last_soma_prob"]}
+joblib.dump(estado_para_salvar, ESTADO_PATH)
