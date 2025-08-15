@@ -109,6 +109,7 @@ def prever_duzia_por_padrao_parcial(min_match=0.8):
     return None, probabilidade
 
 # === LOOP PRINCIPAL ===
+# === LOOP PRINCIPAL ===
 try:
     resposta = requests.get(API_URL, timeout=5).json()
     numero_atual = int(resposta["data"]["result"]["outcome"]["number"])
@@ -130,15 +131,17 @@ if len(st.session_state.historico) == 0 or numero_atual != st.session_state.hist
         else:
             enviar_telegram_async(f"✅ Saiu {numero_atual} ({valor}ª dúzia): 🔴")
 
-    # Previsão por padrão de janela
-    duzia_prevista, prob = prever_duzia_por_padrao()
+    # Previsão por padrão de janela parcial (80% de correspondência)
+    duzia_prevista, prob = prever_duzia_por_padrao_parcial(min_match=0.8)
     if duzia_prevista is not None:
         alerta_novo = (st.session_state.top2_anterior != [duzia_prevista])
         if alerta_novo or st.session_state.contador_sem_alerta >= 3:
             st.session_state.top2_anterior = [duzia_prevista]
             st.session_state.tipo_entrada_anterior = "duzia"
             st.session_state.contador_sem_alerta = 0
-            enviar_telegram_async(f"📊 <b>ENTRADA DÚZIA:</b> {duzia_prevista}ª (conf: {prob*100:.1f}%)")
+            enviar_telegram_async(
+                f"📊 <b>ENTRADA DÚZIA:</b> {duzia_prevista}ª (conf: {prob*100:.1f}%)"
+            )
         else:
             st.session_state.contador_sem_alerta += 1
     else:
@@ -160,3 +163,5 @@ joblib.dump({
 
 # Auto-refresh
 st_autorefresh(interval=REFRESH_INTERVAL, key="atualizacao")
+
+    
