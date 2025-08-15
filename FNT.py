@@ -284,7 +284,7 @@ if novo_num:
             st.session_state.cv_scores["coluna"]["rf"] = scores_c[1]
         st.session_state.rounds_desde_retrain = 0
 
-    pesos = {"lgb": st.session_state.cv_scores["duzia"]["
+    
     pesos = {"lgb": st.session_state.cv_scores["duzia"]["lgb"],
              "rf": st.session_state.cv_scores["duzia"]["rf"],
              "sgd": 0.5}  # peso fixo para SGD
