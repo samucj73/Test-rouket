@@ -350,50 +350,7 @@ if novo_num:
 
     # --- PREVISÃO DÚZIA + COLUNA ---
    # --- PREVISÃO DÚZIA + COLUNA ---
-pesos_d = {
-    "lgb": st.session_state.cv_scores["duzia"]["lgb"],
-    "rf": st.session_state.cv_scores["duzia"]["rf"],
-    "sgd": 0.3
-}
-pesos_c = {
-    "lgb": st.session_state.cv_scores["coluna"]["lgb"],
-    "rf": st.session_state.cv_scores["coluna"]["rf"],
-    "sgd": 0.3
-}
 
-probs_d, classes_d = prever_top2_ensemble(st.session_state.modelo_d, st.session_state.sgd_d, st.session_state.historico)
-probs_c, classes_c = prever_top2_ensemble(st.session_state.modelo_c, st.session_state.sgd_c, st.session_state.historico)
-
-top_d, probs_d_vals, soma_prob_d = combinar_com_pesos(probs_d, pesos_d, classes_d)
-top_c, probs_c_vals, soma_prob_c = combinar_com_pesos(probs_c, pesos_c, classes_c)
-
-# Garantir previsão de uma dúzia e uma coluna
-top2 = [top_d[0] if top_d else 0, top_c[0] if top_c else 0]
-soma_prob = soma_prob_d + soma_prob_c
-
-enviar_alerta = False
-if top2 != st.session_state.top2_anterior:
-    enviar_alerta = True
-    st.session_state.contador_sem_alerta = 0
-else:
-    st.session_state.contador_sem_alerta += 1
-    if st.session_state.contador_sem_alerta >= 3:
-        enviar_alerta = True
-        st.session_state.contador_sem_alerta = 0
-
-if enviar_alerta:
-    st.session_state.top2_anterior = top2
-    st.session_state.tipo_entrada_anterior = "duzia+coluna"
-    st.session_state.last_soma_prob = soma_prob
-    enviar_telegram_async(f"🎯 Previsão Dúzia+Coluna: Dúzia {top2[0]}, Coluna {top2[1]} | Probabilidade {soma_prob:.2f}")
-
-# Salvar estado
-estado = {k: st.session_state[k] for k in ["top2_anterior","tipo_entrada_anterior",
-                                           "contador_sem_alerta","modelo_d","modelo_c",
-                                           "sgd_d","sgd_c","rounds_desde_retrain",
-                                           "metricas_janela","hit_rate_por_tipo",
-                                           "cv_scores","last_soma_prob","prob_minima_dinamica"]}
-joblib.dump(estado, ESTADO_PATH)
 
 # === DASHBOARD METRICS ===
 st.subheader("📊 Métricas Recentes")
