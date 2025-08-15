@@ -36,8 +36,8 @@ if ESTADO_PATH.exists():
 
 # === INTERFACE ===
 st.title("🎯 IA Roleta - Padrões de Dúzia (Acertos Apenas)")
-tamanho_janela = st.slider("📏 Tamanho da janela de análise", min_value=6, max_value=120, value=12)
-prob_minima = st.slider("📊 Probabilidade mínima (%)", min_value=30, max_value=100, value=60) / 100.0
+tamanho_janela = st.slider("📏 Tamanho da janela de análise", min_value=3, max_value=120, value=12)
+prob_minima = st.slider("📊 Probabilidade mínima (%)", min_value=10, max_value=100, value=60) / 100.0
 
 # === FUNÇÕES ===
 def enviar_telegram_async(mensagem):
