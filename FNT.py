@@ -65,19 +65,33 @@ def numero_para_duzia(num):
     else:
         return 3
 
-def prever_duzia_por_padrao():
+# ===== FUNCAO DUZIA =====
+
+def prever_duzia_por_padrao_parcial(min_match=0.8):
     """
-    Busca no histórico a sequência igual à janela atual e vê qual dúzia aparece mais depois dela.
+    Busca no histórico a sequência de dúzias semelhante à janela atual.
+    Retorna a dúzia mais frequente após janelas que batem parcialmente.
+    
+    min_match: proporção mínima de acerto na janela para considerar padrão (0.8 = 80%)
     """
     if len(st.session_state.historico) < tamanho_janela + 1:
         return None, 0.0
 
+    # Converte a janela atual em dúzias
     janela_atual = list(st.session_state.historico)[-tamanho_janela:]
-    contagem_duzias = Counter()
+    janela_duzias = [numero_para_duzia(n) for n in janela_atual]
 
+    contagem_duzias = Counter()
     hist_list = list(st.session_state.historico)
+
     for i in range(len(hist_list) - tamanho_janela):
-        if hist_list[i:i + tamanho_janela] == janela_atual:
+        sublista_duzias = [numero_para_duzia(n) for n in hist_list[i:i + tamanho_janela]]
+
+        # Calcula proporção de acerto na janela
+        acertos = sum(1 for a, b in zip(janela_duzias, sublista_duzias) if a == b)
+        proporcao = acertos / tamanho_janela
+
+        if proporcao >= min_match:
             prox_num = hist_list[i + tamanho_janela]
             prox_duzia = numero_para_duzia(prox_num)
             if prox_duzia != 0:
