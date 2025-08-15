@@ -321,16 +321,32 @@ if novo_num:
         enviar_telegram_async(msg)
 
 # === PLOTAGEM MÉTRICAS ===
+# === PLOTAGEM MÉTRICAS ===
 st.subheader("📊 Histórico de Hits")
-fig, ax = plt.subplots(figsize=(8,4))
-x = range(len(st.session_state.hit_rate_por_tipo["duzia"]))
-ax.plot(x, list(st.session_state.hit_rate_por_tipo["duzia"]), label="Dúzia")
-ax.plot(x, list(st.session_state.hit_rate_por_tipo["coluna"]), label="Coluna")
-ax.set_ylim(0,1)
-ax.set_ylabel("Hit (1=verde,0=vermelho)")
-ax.set_xlabel("Últimas rodadas")
-ax.legend()
-st.pyplot(fig)
+
+# Garantir que os deques tenham o mesmo tamanho mínimo
+len_duzia = len(st.session_state.hit_rate_por_tipo["duzia"])
+len_coluna = len(st.session_state.hit_rate_por_tipo["coluna"])
+min_len = min(len_duzia, len_coluna)
+
+if min_len > 0:
+    x = range(min_len)
+    hits_duzia = list(st.session_state.hit_rate_por_tipo["duzia"])[-min_len:]
+    hits_coluna = list(st.session_state.hit_rate_por_tipo["coluna"])[-min_len:]
+
+    fig, ax = plt.subplots(figsize=(8,4))
+    ax.plot(x, hits_duzia, marker='o', linestyle='-', color='green', label="Dúzia")
+    ax.plot(x, hits_coluna, marker='o', linestyle='-', color='blue', label="Coluna")
+    ax.set_ylim(0,1)
+    ax.set_ylabel("Hit (1=verde,0=vermelho)")
+    ax.set_xlabel("Últimas rodadas")
+    ax.set_title("Histórico de Hits Recentes")
+    ax.legend()
+    st.pyplot(fig)
+else:
+    st.write("Ainda não há dados suficientes para plotar o histórico de hits.")
+
+
 
 # === SALVAR ESTADO ===
 estado_para_salvar = {k:st.session_state[k] for k in ["acertos_top","total_top","top2_anterior",
