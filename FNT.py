@@ -14,29 +14,20 @@ TELEGRAM_CHAT_ID = "-1002796136111"
 HISTORICO_PATH = Path("historico.pkl")
 ESTADO_PATH = Path("estado.pkl")
 MAX_HIST_LEN = 4500
-REFRESH_INTERVAL = 10000  # 10s
-
-ROULETTE_ORDER = [32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11,
-                  30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18,
-                  29, 7, 28, 12, 35, 3, 26, 0]
+REFRESH_INTERVAL = 10000  # 10 segundos
 
 # === SESSION STATE ===
 if "historico" not in st.session_state:
     st.session_state.historico = joblib.load(HISTORICO_PATH) if HISTORICO_PATH.exists() else deque(maxlen=MAX_HIST_LEN)
 
-for var in ["acertos_top", "total_top", "top2_anterior", "contador_sem_alerta", "tipo_entrada_anterior"]:
+for var in ["acertos_top", "total_top", "top2_anterior", "contador_sem_alerta", "tipo_entrada_anterior", "padroes_certos"]:
     if var not in st.session_state:
-        if var in ["top2_anterior"]:
+        if var in ["top2_anterior", "padroes_certos"]:
             st.session_state[var] = []
         elif var == "tipo_entrada_anterior":
             st.session_state[var] = ""
         else:
             st.session_state[var] = 0
-
-# Inicializa listas de feedback
-for var in ["padroes_errados", "padroes_certos"]:
-    if var not in st.session_state:
-        st.session_state[var] = []
 
 if ESTADO_PATH.exists():
     estado_salvo = joblib.load(ESTADO_PATH)
@@ -44,9 +35,9 @@ if ESTADO_PATH.exists():
         st.session_state[k] = v
 
 # === INTERFACE ===
-st.title("🎯 IA Roleta - Padrões de Dúzia com Feedback")
-tamanho_janela = st.slider("📏 Tamanho da janela de análise", min_value=3, max_value=250, value=12)
-prob_minima = st.slider("📊 Probabilidade mínima (%)", min_value=10, max_value=100, value=60) / 100.0
+st.title("🎯 IA Roleta - Padrões de Dúzia (Acertos Apenas)")
+tamanho_janela = st.slider("📏 Tamanho da janela de análise", min_value=6, max_value=120, value=12)
+prob_minima = st.slider("📊 Probabilidade mínima (%)", min_value=30, max_value=100, value=60) / 100.0
 
 # === FUNÇÕES ===
 def enviar_telegram_async(mensagem):
@@ -71,9 +62,7 @@ def numero_para_duzia(num):
         return 3
 
 def prever_duzia_com_feedback(min_match=0.8):
-    """
-    Prevê a dúzia considerando feedback de padrões errados e priorizando padrões certos.
-    """
+    """Prevê a dúzia usando apenas padrões que deram certo anteriormente"""
     if len(st.session_state.historico) < tamanho_janela:
         return None, 0.0
 
@@ -91,16 +80,16 @@ def prever_duzia_com_feedback(min_match=0.8):
         if proporcao >= min_match:
             prox_num = hist_list[i + tamanho_janela]
             prox_duzia = numero_para_duzia(prox_num)
-            if prox_duzia != 0 and prox_duzia not in st.session_state.padroes_errados:
+            if prox_duzia != 0:
                 contagem_duzias[prox_duzia] += 1
 
-    if not contagem_duzias:
-        return None, 0.0
-
-    # Prioriza padrões certos
+    # Prioriza padrões que acertaram anteriormente
     for padrao in st.session_state.padroes_certos:
         if padrao in contagem_duzias:
             contagem_duzias[padrao] += 2  # peso maior
+
+    if not contagem_duzias:
+        return None, 0.0
 
     total = sum(contagem_duzias.values())
     duzia_mais_frequente, ocorrencias = contagem_duzias.most_common(1)[0]
@@ -122,7 +111,7 @@ if len(st.session_state.historico) == 0 or numero_atual != st.session_state.hist
     st.session_state.historico.append(numero_atual)
     joblib.dump(st.session_state.historico, HISTORICO_PATH)
 
-    # Atualiza métricas e envia resultado anterior
+    # Feedback apenas dos acertos
     if st.session_state.top2_anterior:
         st.session_state.total_top += 1
         valor = (numero_atual - 1) // 12 + 1
@@ -132,14 +121,8 @@ if len(st.session_state.historico) == 0 or numero_atual != st.session_state.hist
             st.session_state.padroes_certos.append(valor)
             if len(st.session_state.padroes_certos) > 10:
                 st.session_state.padroes_certos.pop(0)
-        else:
-            enviar_telegram_async(f"✅ Saiu {numero_atual} ({valor}ª dúzia): 🔴")
-            if st.session_state.top2_anterior:
-                st.session_state.padroes_errados.append(st.session_state.top2_anterior[0])
-                if len(st.session_state.padroes_errados) > 10:
-                    st.session_state.padroes_errados.pop(0)
 
-    # Previsão por janela + feedback
+    # Previsão da próxima entrada
     duzia_prevista, prob = prever_duzia_com_feedback()
     if duzia_prevista is not None:
         alerta_novo = (st.session_state.top2_anterior != [duzia_prevista])
@@ -153,7 +136,7 @@ if len(st.session_state.historico) == 0 or numero_atual != st.session_state.hist
     else:
         st.info(f"Nenhum padrão confiável encontrado (prob: {prob*100:.1f}%)")
 
-# Interface
+# Interface limpa
 st.write("Último número:", numero_atual)
 st.write(f"Acertos: {st.session_state.acertos_top} / {st.session_state.total_top}")
 st.write("Últimos números:", list(st.session_state.historico)[-12:])
@@ -165,8 +148,7 @@ joblib.dump({
     "top2_anterior": st.session_state.top2_anterior,
     "contador_sem_alerta": st.session_state.contador_sem_alerta,
     "tipo_entrada_anterior": st.session_state.tipo_entrada_anterior,
-    "padroes_certos": st.session_state.padroes_certos,
-    "padroes_errados": st.session_state.padroes_errados
+    "padroes_certos": st.session_state.padroes_certos
 }, ESTADO_PATH)
 
 # Auto-refresh
