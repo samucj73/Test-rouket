@@ -13,7 +13,7 @@ TELEGRAM_CHAT_ID = "-1002796136111"
 HISTORICO_PATH = Path("historico.pkl")
 ESTADO_PATH = Path("estado.pkl")
 MAX_HIST_LEN = 4500
-REFRESH_INTERVAL = 10000  # 10 segundos
+REFRESH_INTERVAL = 5000  # 10 segundos
 
 ROULETTE_ORDER = [32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11,
                   30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18,
@@ -180,3 +180,6 @@ joblib.dump({
     "padroes_certos": st.session_state.padroes_certos,
     "ultima_chave_alerta": st.session_state.ultima_chave_alerta
 }, ESTADO_PATH)
+
+# Auto-refresh
+st_autorefresh(interval=REFRESH_INTERVAL, key="atualizacao")
