@@ -115,6 +115,15 @@ def prever_duzia_com_feedback(min_match=0.4):
         return duzia_mais_frequente, probabilidade
     return None, probabilidade
 
+# === FUNÇÃO AUXILIAR PARA SALVAR HISTÓRICO EM DÚZIAS ===
+def salvar_historico_duzia(numero):
+    """Converte número para dúzia e salva no histórico"""
+    duzia = numero_para_duzia(numero)
+    if len(st.session_state.historico) == 0 or duzia != st.session_state.historico[-1]:
+        st.session_state.historico.append(duzia)
+        joblib.dump(st.session_state.historico, HISTORICO_PATH)
+    return duzia
+
 # === LOOP # Interface limpa
 # === LOOP PRINCIPAL ===
 try:
@@ -125,24 +134,23 @@ except Exception as e:
     st.stop()
 
 # Atualiza histórico apenas se novo número
+# Atualiza histórico apenas se novo número
 if len(st.session_state.historico) == 0 or numero_atual != st.session_state.historico[-1]:
-    st.session_state.historico.append(numero_atual)
-    joblib.dump(st.session_state.historico, HISTORICO_PATH)
+    duzia_atual = salvar_historico_duzia(numero_atual)
 
     # Feedback apenas de acertos
     if st.session_state.ultima_entrada:
         st.session_state.total_top += 1
-        valor = (numero_atual - 1) // 12 + 1
+        valor = duzia_atual
         if valor in st.session_state.ultima_entrada:
             st.session_state.acertos_top += 1
             enviar_telegram_async(f"✅ Saiu {numero_atual} ({valor}ª dúzia): 🟢")
-            # Armazena padrão que acertou
             st.session_state.padroes_certos.append(valor)
             if len(st.session_state.padroes_certos) > 10:
                 st.session_state.padroes_certos.pop(0)
         else:
-            # Apenas alerta de não acerto
             enviar_telegram_async(f"✅ Saiu {numero_atual} ({valor}ª dúzia): 🔴")
+
 
     # Previsão da próxima entrada
     duzia_prevista, prob = prever_duzia_com_feedback()
