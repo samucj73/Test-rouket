@@ -13,6 +13,24 @@ ESTADO_PATH = Path("estado.pkl")
 MAX_HIST_LEN = 4500
 REFRESH_INTERVAL = 5000  # 10 segundos
 
+# === SESSION STATE ===
+if "historico" not in st.session_state:
+    st.session_state.historico = joblib.load(HISTORICO_PATH) if HISTORICO_PATH.exists() else deque(maxlen=MAX_HIST_LEN)
+
+for var in ["acertos_top", "total_top", "contador_sem_alerta", "tipo_entrada_anterior", "padroes_certos", "ultima_entrada"]:
+    if var not in st.session_state:
+        if var in ["padroes_certos", "ultima_entrada"]:
+            st.session_state[var] = []
+        elif var == "tipo_entrada_anterior":
+            st.session_state[var] = ""
+        else:
+            st.session_state[var] = 0
+
+if ESTADO_PATH.exists():
+    estado_salvo = joblib.load(ESTADO_PATH)
+    for k, v in estado_salvo.items():
+        st.session_state[k] = v
+
 # === Funções auxiliares ===
 def calcular_frequencia_duzias(historico, janela=30):
     ultimos = [h for h in list(historico)[-janela:] if h != 0]
