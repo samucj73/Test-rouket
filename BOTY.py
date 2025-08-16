@@ -39,14 +39,14 @@ if st.button("Iniciar Bot") and url:
                 botoes_visiveis = [b for b in botoes if b.is_displayed() and b.is_enabled()]
 
                 # Clicar em um botão aleatório com chance definida
-                if botoes_visiveis and random.random() < (chance / 100):
-                    botao = random.choice(botoes_visiveis)
-                    try:
-                        botao.click()
-                        st.write("Clicou em um botão")
-                        time.sleep(random.uniform(1, 3))
-                    except Exception as e:
-                        st.write(f"Erro ao clicar no botão: {e}")
+             #   if botoes_visiveis and random.random() < (chance / 100):
+               #     botao = random.choice(botoes_visiveis)
+              #      try:
+              #          botao.click()
+                     #   st.write("Clicou em um botão")
+                      #  time.sleep(random.uniform(1, 3))
+               #     except Exception as e:
+                     #   st.write(f"Erro ao clicar no botão: {e}")
 
                 # Pequena pausa entre ações
                 time.sleep(random.uniform(2, 5))
