@@ -24,6 +24,8 @@ if "ultima_entrada" not in st.session_state:
 if "tipo_entrada_anterior" not in st.session_state:
     st.session_state.tipo_entrada_anterior = None
 
+ESTADO_PATH = Path("estado.pkl")
+
 # === INICIALIZA MODELO RANDOM FOREST ===
 if "modelo_duzia" not in st.session_state:
     st.session_state.modelo_duzia = RandomForestClassifier(n_estimators=200, random_state=42)
