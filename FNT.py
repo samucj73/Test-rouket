@@ -81,6 +81,31 @@ def prever_duzia_com_feedback(min_match=0.2):
     alt = calcular_alternancia(st.session_state.historico)  # 0 = repetindo muito, 1 = alternando muito
     tend = calcular_tendencia(st.session_state.historico)
 
+    from collections import Counter
+import numpy as np
+
+def calcular_frequencia_duzias(historico, janela=30):
+    """Conta quantas vezes cada dúzia apareceu nos últimos N sorteios"""
+    ultimos = [h for h in list(historico)[-janela:] if h != 0]
+    return Counter(ultimos)
+
+def calcular_alternancia(historico, janela=20):
+    """Mede a taxa de alternância entre dúzias consecutivas"""
+    duzias = [h for h in list(historico)[-janela:] if h != 0]
+    if len(duzias) < 2:
+        return 0.5
+    alternancias = sum(1 for i in range(1, len(duzias)) if duzias[i] != duzias[i-1])
+    return alternancias / (len(duzias)-1)
+
+def calcular_tendencia(historico, peso=0.9, janela=15):
+    """Dá mais peso para as dúzias mais recentes"""
+    duzias = [h for h in list(historico)[-janela:] if h != 0]
+    pesos = [peso**i for i in range(len(duzias)-1, -1, -1)]
+    tendencia = {1:0, 2:0, 3:0}
+    for d, w in zip(duzias, pesos):
+        tendencia[d] += w
+    return tendencia
+
     # === Ajuste dinâmico dos pesos ===
     # Quanto mais alternância, mais peso na tendência; quanto menos, mais peso na frequência
     peso_freq = 0.3 + (0.4 * (1 - alt))   # até 70% se estiver repetindo
