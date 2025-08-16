@@ -13,7 +13,7 @@ TELEGRAM_CHAT_ID = "-1002796136111"
 HISTORICO_PATH = Path("historico.pkl")
 ESTADO_PATH = Path("estado.pkl")
 MAX_HIST_LEN = 4500
-REFRESH_INTERVAL = 10000  # 10s
+REFRESH_INTERVAL = 10000  # 10 segundos
 
 ROULETTE_ORDER = [32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11,
                   30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18,
@@ -23,9 +23,9 @@ ROULETTE_ORDER = [32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11,
 if "historico" not in st.session_state:
     st.session_state.historico = joblib.load(HISTORICO_PATH) if HISTORICO_PATH.exists() else deque(maxlen=MAX_HIST_LEN)
 
-for var in ["acertos_top", "total_top", "ultima_entrada", "contador_sem_alerta", "tipo_entrada_anterior", "padroes_certos"]:
+for var in ["acertos_top", "total_top", "contador_sem_alerta", "tipo_entrada_anterior", "padroes_certos", "ultima_entrada"]:
     if var not in st.session_state:
-        if var in ["ultima_entrada", "padroes_certos"]:
+        if var in ["padroes_certos", "ultima_entrada"]:
             st.session_state[var] = []
         elif var == "tipo_entrada_anterior":
             st.session_state[var] = ""
@@ -38,7 +38,7 @@ if ESTADO_PATH.exists():
         st.session_state[k] = v
 
 # === INTERFACE ===
-st.title("🎯 IA Roleta - Dúzia com Vizinho e Feedback Acertos")
+st.title("🎯 IA Roleta - Padrões de Dúzia (Feedback Apenas Acertos)")
 tamanho_janela = st.slider("📏 Tamanho da janela de análise", min_value=2, max_value=120, value=12)
 prob_minima = st.slider("📊 Probabilidade mínima (%)", min_value=10, max_value=100, value=60) / 100.0
 
@@ -64,30 +64,42 @@ def numero_para_duzia(num):
     else:
         return 3
 
+def vizinhos_fisicos(index, raio=2):
+    """Retorna os números vizinhos na roleta em ordem física"""
+    total = len(ROULETTE_ORDER)
+    return [ROULETTE_ORDER[(index + i) % total] for i in range(-raio, raio+1) if i != 0]
+
+def salvar_historico_duzia(numero):
+    """Converte número para dúzia e salva no histórico"""
+    duzia = numero_para_duzia(numero)
+    if len(st.session_state.historico) == 0 or duzia != st.session_state.historico[-1]:
+        st.session_state.historico.append(duzia)
+        joblib.dump(st.session_state.historico, HISTORICO_PATH)
+    return duzia
+
 def prever_duzia_com_feedback(min_match=0.4):
-    """Prevê a dúzia usando apenas padrões que deram certo anteriormente"""
+    """Prevê a próxima dúzia usando apenas histórico de dúzias e reforçando padrões que acertaram"""
     if len(st.session_state.historico) < tamanho_janela:
         return None, 0.0
 
-    # Converte histórico para dúzias
     janela_atual = list(st.session_state.historico)[-tamanho_janela:]
-    janela_duzias = [numero_para_duzia(n) for n in janela_atual]
-
     contagem_duzias = Counter()
     hist_list = list(st.session_state.historico)
 
     for i in range(len(hist_list) - tamanho_janela):
-        sublista_duzias = [numero_para_duzia(n) for n in hist_list[i:i + tamanho_janela]]
-        acertos = sum(1 for a, b in zip(janela_duzias, sublista_duzias) if a == b)
+        sublista = hist_list[i:i + tamanho_janela]
+        acertos = sum(1 for a, b in zip(janela_atual, sublista) if a == b)
         proporcao = acertos / tamanho_janela
 
         if proporcao >= min_match:
-            prox_num = hist_list[i + tamanho_janela]
-            prox_duzia = numero_para_duzia(prox_num)
+            prox_duzia = hist_list[i + tamanho_janela]
             if prox_duzia != 0:
-                contagem_duzias[prox_duzia] += 1
+                # inclui vizinhos físicos como possíveis acertos
+                index_num = ROULETTE_ORDER.index(prox_duzia)
+                for vizinho_num in vizinhos_fisicos(index_num):
+                    contagem_duzias[numero_para_duzia(vizinho_num)] += 1
 
-    # Prioriza padrões que acertaram anteriormente
+    # Reforço para padrões que acertaram anteriormente
     for padrao in st.session_state.padroes_certos:
         if padrao in contagem_duzias:
             contagem_duzias[padrao] += 2
@@ -103,16 +115,6 @@ def prever_duzia_com_feedback(min_match=0.4):
         return duzia_mais_frequente, probabilidade
     return None, probabilidade
 
-# Função para pegar vizinhos físicos na roleta
-def vizinhos(num):
-    if num not in ROULETTE_ORDER:
-        return []
-    idx = ROULETTE_ORDER.index(num)
-    # 2 anteriores e 2 posteriores
-    return [ROULETTE_ORDER[(idx-2)%37], ROULETTE_ORDER[(idx-1)%37],
-            num,
-            ROULETTE_ORDER[(idx+1)%37], ROULETTE_ORDER[(idx+2)%37]]
-
 # === LOOP PRINCIPAL ===
 try:
     resposta = requests.get(API_URL, timeout=5).json()
@@ -121,50 +123,39 @@ except Exception as e:
     st.error(f"Erro API: {e}")
     st.stop()
 
-# Adiciona número ao histórico
-if len(st.session_state.historico) == 0 or numero_atual != st.session_state.historico[-1]:
-    st.session_state.historico.append(numero_atual)
-    joblib.dump(st.session_state.historico, HISTORICO_PATH)
+# Converte e salva a dúzia no histórico
+duzia_atual = salvar_historico_duzia(numero_atual)
 
-    # Feedback apenas acertos
-    if st.session_state.ultima_entrada:
-        st.session_state.total_top += 1
-        valor = (numero_atual - 1) // 12 + 1
-        if valor in st.session_state.ultima_entrada:
-            st.session_state.acertos_top += 1
-            enviar_telegram_async(f"✅ Saiu {numero_atual} ({valor}ª dúzia): 🟢")
-            st.session_state.padroes_certos.append(valor)
-            if len(st.session_state.padroes_certos) > 10:
-                st.session_state.padroes_certos.pop(0)
-        else:
-            enviar_telegram_async(f"✅ Saiu {numero_atual} ({valor}ª dúzia): 🔴")
-
-    # Previsão da próxima entrada
-    duzia_prevista, prob = prever_duzia_com_feedback()
-    if duzia_prevista is not None:
-        alerta_novo = (st.session_state.ultima_entrada != [duzia_prevista])
-        if alerta_novo or st.session_state.contador_sem_alerta >= 3:
-            st.session_state.ultima_entrada = [duzia_prevista]
-            st.session_state.tipo_entrada_anterior = "duzia"
-            st.session_state.contador_sem_alerta = 0
-
-            # Inclui vizinhos na previsão
-            numeros_vizinhos = []
-            for n in st.session_state.historico[-tamanho_janela:]:
-                if numero_para_duzia(n) == duzia_prevista:
-                    numeros_vizinhos.extend(vizinhos(n))
-
-            numeros_vizinhos = sorted(set(numeros_vizinhos))
-            enviar_telegram_async(f"📊 <b>ENTRADA DÚZIA:</b> {duzia_prevista}ª (conf: {prob*100:.1f}%)\nVizinhos: {numeros_vizinhos}")
-        else:
-            st.session_state.contador_sem_alerta += 1
+# Feedback apenas dos acertos
+if st.session_state.ultima_entrada:
+    st.session_state.total_top += 1
+    if duzia_atual == st.session_state.ultima_entrada[0]:
+        st.session_state.acertos_top += 1
+        enviar_telegram_async(f"✅ Saiu {numero_atual} ({duzia_atual}ª dúzia): 🟢")
+        st.session_state.padroes_certos.append(duzia_atual)
+        if len(st.session_state.padroes_certos) > 10:
+            st.session_state.padroes_certos.pop(0)
     else:
-        st.info(f"Nenhum padrão confiável encontrado (prob: {prob*100:.1f}%)")
+        enviar_telegram_async(f"✅ Saiu {numero_atual} ({duzia_atual}ª dúzia): 🔴")
+
+# Previsão da próxima entrada
+duzia_prevista, prob = prever_duzia_com_feedback()
+if duzia_prevista is not None:
+    alerta_novo = (st.session_state.ultima_entrada != [duzia_prevista])
+    if alerta_novo or st.session_state.contador_sem_alerta >= 3:
+        st.session_state.ultima_entrada = [duzia_prevista]
+        st.session_state.tipo_entrada_anterior = "duzia"
+        st.session_state.contador_sem_alerta = 0
+        enviar_telegram_async(f"📊 <b>ENTRADA DÚZIA:</b> {duzia_prevista}ª (conf: {prob*100:.1f}%)")
+    else:
+        st.session_state.contador_sem_alerta += 1
+else:
+    st.info(f"Nenhum padrão confiável encontrado (prob: {prob*100:.1f}%)")
 
 # Interface limpa
 st.write("Último número:", numero_atual)
 st.write(f"Acertos: {st.session_state.acertos_top} / {st.session_state.total_top}")
-st.write("Últimos números:", list(st.session_state.historico)[-12:])
+st.write("Últimos números (Dúzias):", list(st.session_state.historico)[-12:])
 
 # Salva estado
 joblib.dump({
