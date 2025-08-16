@@ -16,6 +16,8 @@ MAX_HIST_LEN = 4500
 REFRESH_INTERVAL = 5000  # 10 segundos
 
 # === SESSION STATE ===
+if "ultima_chave_alerta" not in st.session_state:
+    st.session_state.ultima_chave_alerta = None
 if "historico" not in st.session_state:
     st.session_state.historico = joblib.load(HISTORICO_PATH) if HISTORICO_PATH.exists() else deque(maxlen=MAX_HIST_LEN)
 
