@@ -74,45 +74,18 @@ def salvar_historico_duzia(numero):
 def prever_duzia_com_feedback(min_match=0.2):
     """Prevê a próxima dúzia com pesos dinâmicos baseados em alternância e dominância"""
     if len(st.session_state.historico) < tamanho_janela:
-        return None, 0.0
+        return None, 0.0, (0,0,0)
 
     # === Novos fatores ===
     freq = calcular_frequencia_duzias(st.session_state.historico)
     alt = calcular_alternancia(st.session_state.historico)  # 0 = repetindo muito, 1 = alternando muito
     tend = calcular_tendencia(st.session_state.historico)
 
-    from collections import Counter
-import numpy as np
-
-def calcular_frequencia_duzias(historico, janela=30):
-    """Conta quantas vezes cada dúzia apareceu nos últimos N sorteios"""
-    ultimos = [h for h in list(historico)[-janela:] if h != 0]
-    return Counter(ultimos)
-
-def calcular_alternancia(historico, janela=20):
-    """Mede a taxa de alternância entre dúzias consecutivas"""
-    duzias = [h for h in list(historico)[-janela:] if h != 0]
-    if len(duzias) < 2:
-        return 0.5
-    alternancias = sum(1 for i in range(1, len(duzias)) if duzias[i] != duzias[i-1])
-    return alternancias / (len(duzias)-1)
-
-def calcular_tendencia(historico, peso=0.9, janela=15):
-    """Dá mais peso para as dúzias mais recentes"""
-    duzias = [h for h in list(historico)[-janela:] if h != 0]
-    pesos = [peso**i for i in range(len(duzias)-1, -1, -1)]
-    tendencia = {1:0, 2:0, 3:0}
-    for d, w in zip(duzias, pesos):
-        tendencia[d] += w
-    return tendencia
-
     # === Ajuste dinâmico dos pesos ===
-    # Quanto mais alternância, mais peso na tendência; quanto menos, mais peso na frequência
     peso_freq = 0.3 + (0.4 * (1 - alt))   # até 70% se estiver repetindo
     peso_tend = 0.3 + (0.4 * alt)         # até 70% se estiver alternando
-    peso_rep = 1.0 - (peso_freq + peso_tend)  # resto fica pro fator repetição
+    peso_rep = 1.0 - (peso_freq + peso_tend)
 
-    # Se uma dúzia está MUITO mais frequente que as outras, reforça ainda mais frequência
     if freq:
         mais_frequente = max(freq.values())
         soma_freq = sum(freq.values())
@@ -120,7 +93,7 @@ def calcular_tendencia(historico, peso=0.9, janela=15):
             peso_freq += 0.1
             peso_tend -= 0.1 if peso_tend > 0.2 else 0
 
-    # Normaliza pesos (garante soma = 1)
+    # Normaliza
     total_peso = peso_freq + peso_tend + peso_rep
     peso_freq /= total_peso
     peso_tend /= total_peso
@@ -135,7 +108,7 @@ def calcular_tendencia(historico, peso=0.9, janela=15):
             (1-alt) * peso_rep
         )
 
-    # === Reforço para padrões que acertaram anteriormente ===
+    # === Reforço de acertos anteriores ===
     for padrao in st.session_state.padroes_certos:
         scores[padrao] = scores.get(padrao, 0) + 1
 
@@ -143,13 +116,14 @@ def calcular_tendencia(historico, peso=0.9, janela=15):
     melhor = max(scores.items(), key=lambda x: x[1])
     duzia_prevista, score = melhor
 
-    # Normaliza para probabilidade
     total = sum(scores.values())
     probabilidade = score / total if total > 0 else 0
 
     if probabilidade >= prob_minima:
-        return duzia_prevista, probabilidade
-    return None, probabilidade
+        return duzia_prevista, probabilidade, (peso_freq, peso_tend, peso_rep)
+    return None, probabilidade, (peso_freq, peso_tend, peso_rep)
+
+
 
 
 
