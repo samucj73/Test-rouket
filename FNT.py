@@ -72,38 +72,63 @@ def salvar_historico_duzia(numero):
     return duzia
 
 def prever_duzia_com_feedback(min_match=0.2):
-    """Prevê a próxima dúzia usando apenas histórico de dúzias e reforçando padrões que acertaram"""
+    """Prevê a próxima dúzia com pesos dinâmicos baseados em alternância e dominância"""
     if len(st.session_state.historico) < tamanho_janela:
         return None, 0.0
 
-    janela_atual = list(st.session_state.historico)[-tamanho_janela:]
-    contagem_duzias = Counter()
-    hist_list = list(st.session_state.historico)
+    # === Novos fatores ===
+    freq = calcular_frequencia_duzias(st.session_state.historico)
+    alt = calcular_alternancia(st.session_state.historico)  # 0 = repetindo muito, 1 = alternando muito
+    tend = calcular_tendencia(st.session_state.historico)
 
-    for i in range(len(hist_list) - tamanho_janela):
-        sublista = hist_list[i:i + tamanho_janela]
-        acertos = sum(1 for a, b in zip(janela_atual, sublista) if a == b)
-        proporcao = acertos / tamanho_janela
+    # === Ajuste dinâmico dos pesos ===
+    # Quanto mais alternância, mais peso na tendência; quanto menos, mais peso na frequência
+    peso_freq = 0.3 + (0.4 * (1 - alt))   # até 70% se estiver repetindo
+    peso_tend = 0.3 + (0.4 * alt)         # até 70% se estiver alternando
+    peso_rep = 1.0 - (peso_freq + peso_tend)  # resto fica pro fator repetição
 
-        if proporcao >= min_match:
-            prox_duzia = hist_list[i + tamanho_janela]
-            if prox_duzia != 0:
-                contagem_duzias[prox_duzia] += 1
+    # Se uma dúzia está MUITO mais frequente que as outras, reforça ainda mais frequência
+    if freq:
+        mais_frequente = max(freq.values())
+        soma_freq = sum(freq.values())
+        if soma_freq > 0 and (mais_frequente / soma_freq) > 0.5:
+            peso_freq += 0.1
+            peso_tend -= 0.1 if peso_tend > 0.2 else 0
 
-    # Reforço para padrões que acertaram anteriormente
+    # Normaliza pesos (garante soma = 1)
+    total_peso = peso_freq + peso_tend + peso_rep
+    peso_freq /= total_peso
+    peso_tend /= total_peso
+    peso_rep /= total_peso
+
+    # === Cálculo dos scores ===
+    scores = {}
+    for d in [1,2,3]:
+        scores[d] = (
+            freq.get(d,0) * peso_freq +
+            tend.get(d,0) * peso_tend +
+            (1-alt) * peso_rep
+        )
+
+    # === Reforço para padrões que acertaram anteriormente ===
     for padrao in st.session_state.padroes_certos:
-        contagem_duzias[padrao] += 1
+        scores[padrao] = scores.get(padrao, 0) + 1
 
-    if not contagem_duzias:
-        return None, 0.0
+    # Ordena pelo score
+    melhor = max(scores.items(), key=lambda x: x[1])
+    duzia_prevista, score = melhor
 
-    total = sum(contagem_duzias.values())
-    duzia_mais_frequente, ocorrencias = contagem_duzias.most_common(1)[0]
-    probabilidade = ocorrencias / total
+    # Normaliza para probabilidade
+    total = sum(scores.values())
+    probabilidade = score / total if total > 0 else 0
 
     if probabilidade >= prob_minima:
-        return duzia_mais_frequente, probabilidade
+        return duzia_prevista, probabilidade
     return None, probabilidade
+
+
+
+
 
 # === LOOP PRINCIPAL ===
 try:
