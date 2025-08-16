@@ -182,7 +182,7 @@ if len(st.session_state.historico) == 0 or numero_para_duzia(numero_atual) != st
             enviar_telegram_async(f"✅ Saiu {numero_atual} ({valor}ª dúzia): 🔴")
 
     # Previsão da próxima entrada
-    duzia_prevista, prob = prever_duzia_com_feedback()
+    duzia_prevista, prob, pesos = prever_duzia_com_feedback()
 
     if duzia_prevista is not None:
         chave_alerta = f"{duzia_prevista}_{st.session_state.historico[-1]}"
@@ -204,6 +204,7 @@ if len(st.session_state.historico) == 0 or numero_para_duzia(numero_atual) != st
 st.write("Último número:", numero_atual)
 st.write(f"Acertos: {st.session_state.acertos_top} / {st.session_state.total_top}")
 st.write("Últimos registros (dúzias):", list(st.session_state.historico)[-12:])
+st.write(f"📊 Pesos dinâmicos → Frequência: {pesos[0]:.2f}, Tendência: {pesos[1]:.2f}, Repetição: {pesos[2]:.2f}")
 
 # Salva estado
 joblib.dump({
