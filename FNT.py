@@ -68,7 +68,11 @@ tamanho_janela = st.slider("📏 Tamanho da janela de análise", min_value=2, ma
 prob_minima = st.slider("📊 Probabilidade mínima (%)", min_value=10, max_value=100, value=30) / 100.0
 
 # === FUNÇÕES AUXILIARES ===
-def enviar_telegram_async(mensagem):
+def enviar_telegram_async(mensagem, delay=0):
+    """
+    Envia mensagem ao Telegram de forma assíncrona.
+    Se delay > 0, espera 'delay' segundos antes de enviar.
+    """
     def _send():
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
         payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensagem, "parse_mode": "HTML"}
@@ -76,7 +80,11 @@ def enviar_telegram_async(mensagem):
             requests.post(url, json=payload, timeout=5)
         except Exception as e:
             print("Erro Telegram:", e)
-    threading.Thread(target=_send, daemon=True).start()
+
+    if delay > 0:
+        threading.Timer(delay, _send).start()
+    else:
+        threading.Thread(target=_send, daemon=True).start()
 
 def numero_para_duzia(num):
     if num == 0:
