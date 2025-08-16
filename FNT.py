@@ -128,7 +128,7 @@ def salvar_historico_duzia(numero):
 # === LOOP PRINCIPAL ===
 try:
     resposta = requests.get(API_URL, timeout=5).json()
-    #numero_atual = int(resposta["data"]["result"]["outcome"]["number"])
+    numero_atual = int(resposta["data"]["result"]["outcome"]["number"])
     duzia_atual = salvar_historico_duzia(numero_atual)
   
 except Exception as e:
