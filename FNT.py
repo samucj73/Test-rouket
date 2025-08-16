@@ -101,7 +101,7 @@ def criar_features_avancadas(historico):
         pesos = [0.9**i for i in range(WINDOW_SIZE-1,-1,-1)]
         tend = [0,0,0]
         for val, w in zip(janela, pesos):
-            if val != 0:
+            if val in [1,2,3]:  # proteção contra zero ou valor inválido
                 tend[val-1] += w
         total_tend = sum(tend) if sum(tend)>0 else 1
         tend_norm = [t/total_tend for t in tend]
@@ -111,34 +111,31 @@ def criar_features_avancadas(historico):
         y.append(alvo)
     return np.array(X), np.array(y)
 
-def treinar_modelo_rf():
-    X, y = criar_features_avancadas(st.session_state.historico)
-    if X is not None and len(X) > 0:
-        modelo = RandomForestClassifier(n_estimators=200, max_depth=8, random_state=42)
-        modelo.fit(X, y)
-        st.session_state.modelo_rf = modelo
-
 def prever_duzia_rf():
     if st.session_state.modelo_rf is None or len(st.session_state.historico) < WINDOW_SIZE:
         return None, 0.0
     janela = list(st.session_state.historico)[-WINDOW_SIZE:]
     features = list(janela)
+
     contador = Counter(janela)
     freq1 = contador.get(1,0)/WINDOW_SIZE
     freq2 = contador.get(2,0)/WINDOW_SIZE
     freq3 = contador.get(3,0)/WINDOW_SIZE
     features.extend([freq1, freq2, freq3])
+
     alternancias = sum(1 for j in range(1,len(janela)) if janela[j] != janela[j-1])
     alt_norm = alternancias / (WINDOW_SIZE-1)
     features.append(alt_norm)
+
     pesos = [0.9**i for i in range(WINDOW_SIZE-1,-1,-1)]
     tend = [0,0,0]
     for val, w in zip(janela, pesos):
-        if val != 0:
+        if val in [1,2,3]:  # proteção
             tend[val-1] += w
     total_tend = sum(tend) if sum(tend)>0 else 1
     tend_norm = [t/total_tend for t in tend]
     features.extend(tend_norm)
+
     features = np.array(features).reshape(1,-1)
     probs = st.session_state.modelo_rf.predict_proba(features)[0]
     classes = st.session_state.modelo_rf.classes_
