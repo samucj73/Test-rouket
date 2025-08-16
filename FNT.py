@@ -143,17 +143,25 @@ if st.session_state.ultima_entrada:
 # Previsão da próxima entrada
 duzia_prevista, prob = prever_duzia_com_feedback()
 if duzia_prevista is not None:
+    # Criar chave de alerta combinando previsão e último número
+    chave_alerta = f"{duzia_prevista}_{st.session_state.historico[-1]}"
+    
+    if "ultima_chave_alerta" not in st.session_state:
+        st.session_state.ultima_chave_alerta = ""
+    
     # Checa se é uma previsão nova ou se passaram 3 rodadas sem alerta
-    alerta_novo = (st.session_state.ultima_entrada != [duzia_prevista])
-    if alerta_novo or st.session_state.contador_sem_alerta >= 3:
+    if chave_alerta != st.session_state.ultima_chave_alerta or st.session_state.contador_sem_alerta >= 3:
         st.session_state.ultima_entrada = [duzia_prevista]
         st.session_state.tipo_entrada_anterior = "duzia"
         st.session_state.contador_sem_alerta = 0
+        st.session_state.ultima_chave_alerta = chave_alerta
         enviar_telegram_async(f"📊 <b>ENTRADA DÚZIA:</b> {duzia_prevista}ª (conf: {prob*100:.1f}%)")
     else:
         st.session_state.contador_sem_alerta += 1
 else:
     st.info(f"Nenhum padrão confiável encontrado (prob: {prob*100:.1f}%)")
+
+
 
 # Interface limpa
 st.write("Último número:", numero_atual)
