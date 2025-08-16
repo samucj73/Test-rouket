@@ -94,56 +94,45 @@ def calcular_tendencia(historico, peso=0.9, janela=15):
     return tendencia
 
 def prever_duzia_com_feedback(min_match=0.2):
-    """Prevê a próxima dúzia com pesos dinâmicos baseados em alternância e dominância"""
+    """Prevê a próxima dúzia de forma balanceada usando frequência, alternância e tendência"""
     if len(st.session_state.historico) < tamanho_janela:
         return None, 0.0, (0,0,0)
 
-    # === Novos fatores ===
+    # --- Calcula fatores ---
     freq = calcular_frequencia_duzias(st.session_state.historico)
     alt = calcular_alternancia(st.session_state.historico)  # 0 = repetindo muito, 1 = alternando muito
     tend = calcular_tendencia(st.session_state.historico)
 
-    # === Ajuste dinâmico dos pesos ===
-    peso_freq = 0.3 + (0.4 * (1 - alt))   # até 70% se estiver repetindo
-    peso_tend = 0.3 + (0.4 * alt)         # até 70% se estiver alternando
+    # --- Normaliza fatores ---
+    total_freq = sum(freq.values()) if freq else 1
+    total_tend = sum(tend.values()) if tend else 1
+
+    freq_norm = {d: freq.get(d,0)/total_freq for d in [1,2,3]}
+    tend_norm = {d: tend.get(d,0)/total_tend for d in [1,2,3]}
+
+    # --- Ajuste dinâmico dos pesos ---
+    peso_freq = 0.35 + 0.3*(1-alt)   # mais peso se repetindo
+    peso_tend = 0.35 + 0.3*alt      # mais peso se alternando
     peso_rep = 1.0 - (peso_freq + peso_tend)
+    peso_rep = max(peso_rep, 0.05)  # garante chance mínima
 
-    if freq:
-        mais_frequente = max(freq.values())
-        soma_freq = sum(freq.values())
-        if soma_freq > 0 and (mais_frequente / soma_freq) > 0.5:
-            peso_freq += 0.1
-            peso_tend -= 0.1 if peso_tend > 0.2 else 0
-
-    # Normaliza
-    total_peso = peso_freq + peso_tend + peso_rep
-    peso_freq /= total_peso
-    peso_tend /= total_peso
-    peso_rep /= total_peso
-
-    # === Cálculo dos scores ===
+    # --- Calcula scores ---
     scores = {}
     for d in [1,2,3]:
-        scores[d] = (
-            freq.get(d,0) * peso_freq +
-            tend.get(d,0) * peso_tend +
-            (1-alt) * peso_rep
-        )
+        # score = freq + tendência + alternância
+        scores[d] = freq_norm[d]*peso_freq + tend_norm[d]*peso_tend + (1-alt)*peso_rep
 
-    # === Reforço de acertos anteriores ===
-    for padrao in st.session_state.padroes_certos:
-        scores[padrao] = scores.get(padrao, 0) + 1
+    # --- Reforço de acertos anteriores (suavizado) ---
+    for padrao in set(st.session_state.padroes_certos):
+        scores[padrao] += 0.2  # valor pequeno para não dominar demais
 
-    # Ordena pelo score
+    # --- Ordena e calcula probabilidade ---
     melhor = max(scores.items(), key=lambda x: x[1])
     duzia_prevista, score = melhor
+    total_score = sum(scores.values())
+    probabilidade = score / total_score if total_score > 0 else 0
 
-    total = sum(scores.values())
-    probabilidade = score / total if total > 0 else 0
-
-    if probabilidade >= prob_minima:
-        return duzia_prevista, probabilidade, (peso_freq, peso_tend, peso_rep)
-    return None, probabilidade, (peso_freq, peso_tend, peso_rep)
+    return duzia_prevista, probabilidade, (peso_freq, peso_tend, peso_rep)
 
 
 
