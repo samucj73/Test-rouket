@@ -74,7 +74,7 @@ def salvar_historico_duzia(numero):
     return duzia
 
 # === FEATURES AVANÇADAS ===
-def criar_features_avancadas(historico, window_size=WINDOW_SIZE):
+def criar_features_avancadas(historico, window_size):
     if len(historico) < window_size + 1:
         return None, None
 
@@ -146,9 +146,6 @@ def treinar_modelo_rf():
 
 # === PREVISÃO ===
 def prever_duzia_rf():
-    if st.session_state.modelo_rf is None or len(st.session_state.historico) < tamanho_janela:
-        return None, 0.0
-
     janela = list(st.session_state.historico)[-tamanho_janela:]
     features = []
 
@@ -202,7 +199,7 @@ def prever_duzia_rf():
 
     return classes[melhor_idx], probs[melhor_idx]
 
-# === LOOP PRINCIPAL ===
+# === LOOP PRINCIPAL PROTEGIDO ===
 try:
     resposta = requests.get(API_URL, timeout=5).json()
     numero_atual = int(resposta["data"]["result"]["outcome"]["number"])
@@ -214,8 +211,9 @@ except Exception as e:
 if len(st.session_state.historico) == 0 or numero_para_duzia(numero_atual) != st.session_state.historico[-1]:
     duzia_atual = salvar_historico_duzia(numero_atual)
 
-    # Treina modelo RF a cada novo número
-    treinar_modelo_rf()
+    # Treina modelo RF se houver histórico suficiente
+    if len(st.session_state.historico) >= tamanho_janela:
+        treinar_modelo_rf()
 
     # Feedback de acertos
     if st.session_state.ultima_entrada:
@@ -230,9 +228,16 @@ if len(st.session_state.historico) == 0 or numero_para_duzia(numero_atual) != st
         else:
             enviar_telegram_async(f"✅ Saiu {numero_atual} ({valor}ª dúzia): 🔴")
 
-# Previsão RF
-duzia_prevista, prob = prever_duzia_rf()
+# Previsão segura
+duzia_prevista, prob = None, 0.0
+if st.session_state.modelo_rf is not None and len(st.session_state.historico) >= tamanho_janela:
+    try:
+        duzia_prevista, prob = prever_duzia_rf()
+    except ValueError as e:
+        st.warning(f"Erro de previsão (features incompatíveis): {e}")
+        duzia_prevista, prob = None, 0.0
 
+# Envio de alerta
 if duzia_prevista is not None:
     chave_alerta = f"duzia_{duzia_prevista}"
     if chave_alerta != st.session_state.ultima_chave_alerta:
@@ -240,7 +245,7 @@ if duzia_prevista is not None:
         st.session_state.tipo_entrada_anterior = "duzia"
         st.session_state.contador_sem_alerta = 0
         st.session_state.ultima_chave_alerta = chave_alerta
-        enviar_telegram_async(f"📊 <b>ENTRADA DÚZIA RF:</b> {duzia_prevista}ª (conf: {prob*100:.1f}%)")
+        enviar_telegram_async(f"📊 <enviar_telegram_async(f"📊 <b>ENTRADA DÚZIA RF:</b> {duzia_prevista}ª (conf: {prob*100:.1f}%)")
 
 # Interface
 st.write("Último número:", numero_atual)
