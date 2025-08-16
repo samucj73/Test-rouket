@@ -18,6 +18,28 @@ MAX_HIST_LEN = 4500
 REFRESH_INTERVAL = 5000  # 5 segundos
 WINDOW_SIZE = 8  # janela para RF
 
+import streamlit as st
+import joblib
+from pathlib import Path
+
+# === CONFIGURAÇÕES DE ESTADO ===
+ESTADO_PATH = Path("estado.pkl")
+
+# Carrega ou reinicia o estado salvo de forma segura
+try:
+    if ESTADO_PATH.exists():
+        estado_salvo = joblib.load(ESTADO_PATH)
+    else:
+        estado_salvo = {}
+except Exception as e:
+    st.warning(f"⚠️ Estado corrompido ou incompatível, reiniciando: {e}")
+    # Se quiser resetar o arquivo quebrado:
+    try:
+        ESTADO_PATH.unlink()
+    except Exception:
+        pass
+    estado_salvo = {}
+
 # === SESSION STATE ===
 if "ultima_chave_alerta" not in st.session_state:
     st.session_state.ultima_chave_alerta = None
