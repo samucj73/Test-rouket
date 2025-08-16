@@ -115,6 +115,7 @@ def prever_duzia_com_feedback(min_match=0.4):
         return duzia_mais_frequente, probabilidade
     return None, probabilidade
 
+# === LOOP # Interface limpa
 # === LOOP PRINCIPAL ===
 try:
     resposta = requests.get(API_URL, timeout=5).json()
@@ -123,50 +124,51 @@ except Exception as e:
     st.error(f"Erro API: {e}")
     st.stop()
 
-# Converte e salva a dúzia no histórico
-duzia_atual = salvar_historico_duzia(numero_atual)
+# Atualiza histórico apenas se novo número
+if len(st.session_state.historico) == 0 or numero_atual != st.session_state.historico[-1]:
+    st.session_state.historico.append(numero_atual)
+    joblib.dump(st.session_state.historico, HISTORICO_PATH)
 
-# Feedback apenas dos acertos
-if st.session_state.ultima_entrada:
-    st.session_state.total_top += 1
-    if duzia_atual == st.session_state.ultima_entrada[0]:
-        st.session_state.acertos_top += 1
-        enviar_telegram_async(f"✅ Saiu {numero_atual} ({duzia_atual}ª dúzia): 🟢")
-        st.session_state.padroes_certos.append(duzia_atual)
-        if len(st.session_state.padroes_certos) > 10:
-            st.session_state.padroes_certos.pop(0)
+    # Feedback apenas de acertos
+    if st.session_state.ultima_entrada:
+        st.session_state.total_top += 1
+        valor = (numero_atual - 1) // 12 + 1
+        if valor in st.session_state.ultima_entrada:
+            st.session_state.acertos_top += 1
+            enviar_telegram_async(f"✅ Saiu {numero_atual} ({valor}ª dúzia): 🟢")
+            # Armazena padrão que acertou
+            st.session_state.padroes_certos.append(valor)
+            if len(st.session_state.padroes_certos) > 10:
+                st.session_state.padroes_certos.pop(0)
+        else:
+            # Apenas alerta de não acerto
+            enviar_telegram_async(f"✅ Saiu {numero_atual} ({valor}ª dúzia): 🔴")
+
+    # Previsão da próxima entrada
+    duzia_prevista, prob = prever_duzia_com_feedback()
+
+    if duzia_prevista is not None:
+        # Cria chave única combinando previsão + último número
+        chave_alerta = f"{duzia_prevista}_{st.session_state.historico[-1]}"
+        if "ultima_chave_alerta" not in st.session_state:
+            st.session_state.ultima_chave_alerta = ""
+
+        # Envia alerta somente se nova previsão ou passaram 3 rodadas sem alerta
+        if chave_alerta != st.session_state.ultima_chave_alerta or st.session_state.contador_sem_alerta >= 3:
+            st.session_state.ultima_entrada = [duzia_prevista]
+            st.session_state.tipo_entrada_anterior = "duzia"
+            st.session_state.contador_sem_alerta = 0
+            st.session_state.ultima_chave_alerta = chave_alerta
+            enviar_telegram_async(f"📊 <b>ENTRADA DÚZIA:</b> {duzia_prevista}ª (conf: {prob*100:.1f}%)")
+        else:
+            st.session_state.contador_sem_alerta += 1
     else:
-        enviar_telegram_async(f"✅ Saiu {numero_atual} ({duzia_atual}ª dúzia): 🔴")
-
-# Previsão da próxima entrada
-
-# Previsão da próxima entrada
-duzia_prevista, prob = prever_duzia_com_feedback()
-if duzia_prevista is not None:
-    # Criar chave de alerta combinando previsão e último número
-    chave_alerta = f"{duzia_prevista}_{st.session_state.historico[-1]}"
-    
-    if "ultima_chave_alerta" not in st.session_state:
-        st.session_state.ultima_chave_alerta = ""
-    
-    # Checa se é uma previsão nova ou se passaram 3 rodadas sem alerta
-    if chave_alerta != st.session_state.ultima_chave_alerta or st.session_state.contador_sem_alerta >= 3:
-        st.session_state.ultima_entrada = [duzia_prevista]
-        st.session_state.tipo_entrada_anterior = "duzia"
-        st.session_state.contador_sem_alerta = 0
-        st.session_state.ultima_chave_alerta = chave_alerta
-        enviar_telegram_async(f"📊 <b>ENTRADA DÚZIA:</b> {duzia_prevista}ª (conf: {prob*100:.1f}%)")
-    else:
-        st.session_state.contador_sem_alerta += 1
-else:
-    st.info(f"Nenhum padrão confiável encontrado (prob: {prob*100:.1f}%)")
-
-
+        st.info(f"Nenhum padrão confiável encontrado (prob: {prob*100:.1f}%)")
 
 # Interface limpa
 st.write("Último número:", numero_atual)
 st.write(f"Acertos: {st.session_state.acertos_top} / {st.session_state.total_top}")
-st.write("Últimos números (Dúzias):", list(st.session_state.historico)[-12:])
+st.write("Últimos números:", list(st.session_state.historico)[-12:])
 
 # Salva estado
 joblib.dump({
@@ -175,8 +177,6 @@ joblib.dump({
     "ultima_entrada": st.session_state.ultima_entrada,
     "contador_sem_alerta": st.session_state.contador_sem_alerta,
     "tipo_entrada_anterior": st.session_state.tipo_entrada_anterior,
-    "padroes_certos": st.session_state.padroes_certos
+    "padroes_certos": st.session_state.padroes_certos,
+    "ultima_chave_alerta": st.session_state.ultima_chave_alerta
 }, ESTADO_PATH)
-
-# Auto-refresh
-st_autorefresh(interval=REFRESH_INTERVAL, key="atualizacao")
