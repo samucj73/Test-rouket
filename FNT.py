@@ -10,8 +10,8 @@ from sklearn.ensemble import RandomForestClassifier
 
 # === CONFIGURAÇÕES ===
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
-TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
-TELEGRAM_CHAT_ID = "-1002796136111"
+TELEGRAM_TOKEN = "SEU_TOKEN"
+TELEGRAM_CHAT_ID = "SEU_CHAT_ID"
 HISTORICO_PATH = Path("historico.pkl")
 ESTADO_PATH = Path("estado.pkl")
 MAX_HIST_LEN = 4500
@@ -41,11 +41,11 @@ if ESTADO_PATH.exists():
         st.session_state[k] = v
 
 # === INTERFACE ===
-st.title("🎯 IA Roleta - Padrões de Dúzia (RF + Feedback Acertos)")
-tamanho_janela = st.slider("📏 Tamanho da janela de análise", min_value=2, max_value=120, value=8)
+st.title("🎯 IA Roleta - Padrões de Dúzia (RF + Features Avançadas)")
+tamanho_janela = st.slider("📏 Tamanho da janela de análise", min_value=2, max_value=120, value=WINDOW_SIZE)
 prob_minima = st.slider("📊 Probabilidade mínima (%)", min_value=10, max_value=100, value=30) / 100.0
 
-# === FUNÇÕES ===
+# === FUNÇÕES AUXILIARES ===
 def enviar_telegram_async(mensagem):
     def _send():
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -73,83 +73,134 @@ def salvar_historico_duzia(numero):
         joblib.dump(st.session_state.historico, HISTORICO_PATH)
     return duzia
 
-def criar_features_avancadas(historico):
-    if len(historico) < WINDOW_SIZE + 1:
+# === FEATURES AVANÇADAS ===
+def criar_features_avancadas(historico, window_size=WINDOW_SIZE):
+    if len(historico) < window_size + 1:
         return None, None
+
     X, y = [], []
     seq = list(historico)
-    for i in range(len(seq) - WINDOW_SIZE):
-        janela = seq[i:i+WINDOW_SIZE]
-        alvo = seq[i+WINDOW_SIZE]
 
-        # Sequência simples
-        features = list(janela)
+    for i in range(len(seq) - window_size):
+        janela = seq[i:i+window_size]
+        alvo = seq[i+window_size]
 
-        # Frequência das dúzias na janela
+        features = []
+
+        # Sequência direta
+        features.extend(janela)
+
+        # Frequência simples
         contador = Counter(janela)
-        freq1 = contador.get(1,0)/WINDOW_SIZE
-        freq2 = contador.get(2,0)/WINDOW_SIZE
-        freq3 = contador.get(3,0)/WINDOW_SIZE
+        freq1 = contador.get(1, 0)/window_size
+        freq2 = contador.get(2, 0)/window_size
+        freq3 = contador.get(3, 0)/window_size
         features.extend([freq1, freq2, freq3])
 
-        # Alternância
-        alternancias = sum(1 for j in range(1,len(janela)) if janela[j] != janela[j-1])
-        alt_norm = alternancias / (WINDOW_SIZE-1)
+        # Frequência ponderada
+        pesos = np.array([0.9**i for i in range(window_size-1, -1, -1)])
+        freq1_w = sum(w for val, w in zip(janela, pesos) if val==1)/pesos.sum()
+        freq2_w = sum(w for val, w in zip(janela, pesos) if val==2)/pesos.sum()
+        freq3_w = sum(w for val, w in zip(janela, pesos) if val==3)/pesos.sum()
+        features.extend([freq1_w, freq2_w, freq3_w])
+
+        # Alternância simples
+        alternancias = sum(1 for j in range(1, window_size) if janela[j] != janela[j-1])
+        alt_norm = alternancias / (window_size-1)
         features.append(alt_norm)
 
-        # Tendência ponderada
-        pesos = [0.9**i for i in range(WINDOW_SIZE-1,-1,-1)]
+        # Alternância ponderada
+        alt_ponderada = sum((janela[j] != janela[j-1]) * 0.9**(window_size-1-j) for j in range(1, window_size)) / sum(0.9**i for i in range(window_size-1))
+        features.append(alt_ponderada)
+
+        # Tendência normalizada
         tend = [0,0,0]
         for val, w in zip(janela, pesos):
-            if val in [1,2,3]:  # proteção contra zero ou valor inválido
+            if val in [1,2,3]:
                 tend[val-1] += w
-        total_tend = sum(tend) if sum(tend)>0 else 1
+        total_tend = sum(tend) if sum(tend) > 0 else 1
         tend_norm = [t/total_tend for t in tend]
         features.extend(tend_norm)
 
+        # Diferença de tendência
+        tend_diff = max(tend_norm) - min(tend_norm)
+        features.append(tend_diff)
+
+        # Contagem de zeros
+        zeros_count = janela.count(0)/window_size
+        features.append(zeros_count)
+
         X.append(features)
         y.append(alvo)
+
     return np.array(X), np.array(y)
 
-def prever_duzia_rf():
-    if st.session_state.modelo_rf is None or len(st.session_state.historico) < WINDOW_SIZE:
-        return None, 0.0
-    janela = list(st.session_state.historico)[-WINDOW_SIZE:]
-    features = list(janela)
-
-    contador = Counter(janela)
-    freq1 = contador.get(1,0)/WINDOW_SIZE
-    freq2 = contador.get(2,0)/WINDOW_SIZE
-    freq3 = contador.get(3,0)/WINDOW_SIZE
-    features.extend([freq1, freq2, freq3])
-
-    alternancias = sum(1 for j in range(1,len(janela)) if janela[j] != janela[j-1])
-    alt_norm = alternancias / (WINDOW_SIZE-1)
-    features.append(alt_norm)
-
-    pesos = [0.9**i for i in range(WINDOW_SIZE-1,-1,-1)]
-    tend = [0,0,0]
-    for val, w in zip(janela, pesos):
-        if val in [1,2,3]:  # proteção
-            tend[val-1] += w
-    total_tend = sum(tend) if sum(tend)>0 else 1
-    tend_norm = [t/total_tend for t in tend]
-    features.extend(tend_norm)
-
-    features = np.array(features).reshape(1,-1)
-    probs = st.session_state.modelo_rf.predict_proba(features)[0]
-    classes = st.session_state.modelo_rf.classes_
-    melhor_idx = np.argmax(probs)
-    return classes[melhor_idx], probs[melhor_idx]
-
-# === FUNÇÃO DE TREINAMENTO ===
+# === TREINAMENTO DO MODELO ===
 def treinar_modelo_rf():
-    X, y = criar_features_avancadas(st.session_state.historico)
+    X, y = criar_features_avancadas(st.session_state.historico, window_size=tamanho_janela)
     if X is None or len(X) == 0:
         return
     rf = RandomForestClassifier(n_estimators=200, max_depth=8, random_state=42)
     rf.fit(X, y)
     st.session_state.modelo_rf = rf
+
+# === PREVISÃO ===
+def prever_duzia_rf():
+    if st.session_state.modelo_rf is None or len(st.session_state.historico) < tamanho_janela:
+        return None, 0.0
+
+    janela = list(st.session_state.historico)[-tamanho_janela:]
+    features = []
+
+    # Sequência direta
+    features.extend(janela)
+
+    # Frequência simples
+    contador = Counter(janela)
+    freq1 = contador.get(1, 0)/tamanho_janela
+    freq2 = contador.get(2, 0)/tamanho_janela
+    freq3 = contador.get(3, 0)/tamanho_janela
+    features.extend([freq1, freq2, freq3])
+
+    # Frequência ponderada
+    pesos = np.array([0.9**i for i in range(tamanho_janela-1, -1, -1)])
+    freq1_w = sum(w for val, w in zip(janela, pesos) if val==1)/pesos.sum()
+    freq2_w = sum(w for val, w in zip(janela, pesos) if val==2)/pesos.sum()
+    freq3_w = sum(w for val, w in zip(janela, pesos) if val==3)/pesos.sum()
+    features.extend([freq1_w, freq2_w, freq3_w])
+
+    # Alternância simples
+    alternancias = sum(1 for j in range(1, tamanho_janela) if janela[j] != janela[j-1])
+    alt_norm = alternancias / (tamanho_janela-1)
+    features.append(alt_norm)
+
+    # Alternância ponderada
+    alt_ponderada = sum((janela[j] != janela[j-1]) * 0.9**(tamanho_janela-1-j) for j in range(1, tamanho_janela)) / sum(0.9**i for i in range(tamanho_janela-1))
+    features.append(alt_ponderada)
+
+    # Tendência normalizada
+    tend = [0,0,0]
+    for val, w in zip(janela, pesos):
+        if val in [1,2,3]:
+            tend[val-1] += w
+    total_tend = sum(tend) if sum(tend) > 0 else 1
+    tend_norm = [t/total_tend for t in tend]
+    features.extend(tend_norm)
+
+    # Diferença de tendência
+    tend_diff = max(tend_norm) - min(tend_norm)
+    features.append(tend_diff)
+
+    # Contagem de zeros
+    zeros_count = janela.count(0)/tamanho_janela
+    features.append(zeros_count)
+
+    features = np.array(features).reshape(1, -1)
+    probs = st.session_state.modelo_rf.predict_proba(features)[0]
+    classes = st.session_state.modelo_rf.classes_
+    melhor_idx = np.argmax(probs)
+
+    return classes[melhor_idx], probs[melhor_idx]
 
 # === LOOP PRINCIPAL ===
 try:
@@ -166,7 +217,7 @@ if len(st.session_state.historico) == 0 or numero_para_duzia(numero_atual) != st
     # Treina modelo RF a cada novo número
     treinar_modelo_rf()
 
-    # Feedback apenas de acertos
+    # Feedback de acertos
     if st.session_state.ultima_entrada:
         st.session_state.total_top += 1
         valor = numero_para_duzia(numero_atual)
@@ -191,7 +242,7 @@ if duzia_prevista is not None:
         st.session_state.ultima_chave_alerta = chave_alerta
         enviar_telegram_async(f"📊 <b>ENTRADA DÚZIA RF:</b> {duzia_prevista}ª (conf: {prob*100:.1f}%)")
 
-# Interface limpa
+# Interface
 st.write("Último número:", numero_atual)
 st.write(f"Acertos: {st.session_state.acertos_top} / {st.session_state.total_top}")
 st.write("Últimos registros (dúzias):", list(st.session_state.historico)[-12:])
