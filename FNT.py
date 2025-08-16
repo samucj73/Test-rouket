@@ -77,7 +77,7 @@ def salvar_historico_duzia(numero):
         joblib.dump(st.session_state.historico, HISTORICO_PATH)
     return duzia
 
-def prever_duzia_com_feedback(min_match=0.4):
+def prever_duzia_com_feedback(min_match=0.2):
     """Prevê a próxima dúzia usando apenas histórico de dúzias e reforçando padrões que acertaram"""
     if len(st.session_state.historico) < tamanho_janela:
         return None, 0.0
