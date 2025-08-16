@@ -200,6 +200,7 @@ def prever_duzia_rf():
     return classes[melhor_idx], probs[melhor_idx]
 
 # === LOOP PRINCIPAL PROTEGIDO ===
+# === LOOP PRINCIPAL PROTEGIDO ===
 try:
     resposta = requests.get(API_URL, timeout=5).json()
     numero_atual = int(resposta["data"]["result"]["outcome"]["number"])
@@ -245,7 +246,9 @@ if duzia_prevista is not None:
         st.session_state.tipo_entrada_anterior = "duzia"
         st.session_state.contador_sem_alerta = 0
         st.session_state.ultima_chave_alerta = chave_alerta
-        enviar_telegram_async(f"📊 <enviar_telegram_async(f"📊 <b>ENTRADA DÚZIA RF:</b> {duzia_prevista}ª (conf: {prob*100:.1f}%)")
+        # Linha corrigida: emoji seguro e f-string única
+        mensagem_alerta = f"📊 <b>ENTRADA DÚZIA RF:</b> {duzia_prevista}ª (conf: {prob*100:.1f}%)"
+        enviar_telegram_async(mensagem_alerta)
 
 # Interface
 st.write("Último número:", numero_atual)
