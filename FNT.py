@@ -139,8 +139,11 @@ if st.session_state.ultima_entrada:
         enviar_telegram_async(f"✅ Saiu {numero_atual} ({duzia_atual}ª dúzia): 🔴")
 
 # Previsão da próxima entrada
+
+# Previsão da próxima entrada
 duzia_prevista, prob = prever_duzia_com_feedback()
 if duzia_prevista is not None:
+    # Checa se é uma previsão nova ou se passaram 3 rodadas sem alerta
     alerta_novo = (st.session_state.ultima_entrada != [duzia_prevista])
     if alerta_novo or st.session_state.contador_sem_alerta >= 3:
         st.session_state.ultima_entrada = [duzia_prevista]
