@@ -136,20 +136,24 @@ except Exception as e:
 # Atualiza histórico apenas se novo número
 # Atualiza histórico apenas se novo número
 if len(st.session_state.historico) == 0 or numero_atual != st.session_state.historico[-1]:
-    duzia_atual = salvar_historico_duzia(numero_atual)
+    st.session_state.historico.append(numero_atual)
+    joblib.dump(st.session_state.historico, HISTORICO_PATH)
 
     # Feedback apenas de acertos
     if st.session_state.ultima_entrada:
         st.session_state.total_top += 1
-        valor = duzia_atual
+        valor = (numero_atual - 1) // 12 + 1
         if valor in st.session_state.ultima_entrada:
             st.session_state.acertos_top += 1
             enviar_telegram_async(f"✅ Saiu {numero_atual} ({valor}ª dúzia): 🟢")
+            # Armazena padrão que acertou
             st.session_state.padroes_certos.append(valor)
             if len(st.session_state.padroes_certos) > 10:
                 st.session_state.padroes_certos.pop(0)
         else:
+            # Apenas alerta de não acerto
             enviar_telegram_async(f"✅ Saiu {numero_atual} ({valor}ª dúzia): 🔴")
+
 
 
     # Previsão da próxima entrada
