@@ -170,6 +170,7 @@ if len(st.session_state.historico) == 0 or numero_para_duzia(numero_atual) != st
 # === Previsão da próxima entrada com controle de alertas ===
 # === Previsão da próxima entrada com controle de alertas ===
 # === Previsão da próxima entrada com controle de alertas ===
+# === Previsão da próxima entrada com controle de alertas ===
 duzia_prevista, prob, pesos = prever_duzia_com_feedback()
 
 if duzia_prevista is not None:
@@ -179,27 +180,16 @@ if duzia_prevista is not None:
     # Chave é apenas a previsão
     chave_alerta = f"duzia_{duzia_prevista}"
 
-    # Verifica se precisa enviar
+    # Envia alerta apenas se mudou a previsão
     if chave_alerta != st.session_state.ultima_chave_alerta:
-        # Mudou a previsão → envia
         st.session_state.ultima_entrada = [duzia_prevista]
         st.session_state.tipo_entrada_anterior = "duzia"
         st.session_state.contador_sem_alerta = 0
         st.session_state.ultima_chave_alerta = chave_alerta
-        enviar_telegram_async(f"📊 <b>ENTRADA DÚZIA:</b> {duzia_prevista}ª (conf: {prob*100:.1f}%)")
 
-    elif st.session_state.contador_sem_alerta >= 3:
-        # Força envio se repetiu 3 rodadas seguidas
-        st.session_state.ultima_entrada = [duzia_prevista]
-        st.session_state.tipo_entrada_anterior = "duzia"
-        st.session_state.contador_sem_alerta = 0  # zera só aqui
-        st.session_state.ultima_chave_alerta = chave_alerta
-        enviar_telegram_async(f"♻️ <b>REPETIÇÃO DÚZIA:</b> {duzia_prevista}ª (conf: {prob*100:.1f}%)")
-
-    else:
-        # Mesma previsão e ainda não passou do limite → só conta
-        st.session_state.contador_sem_alerta += 1
-
+        enviar_telegram_async(
+            f"📊 <b>ENTRADA DÚZIA:</b> {duzia_prevista}ª (conf: {prob*100:.1f}%)"
+        )
 else:
     st.info(f"Nenhum padrão confiável encontrado (prob: {prob*100:.1f}%)")
 
