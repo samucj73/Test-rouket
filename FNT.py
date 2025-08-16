@@ -152,6 +152,7 @@ def prever_duzia_com_feedback(min_match=0.2):
 
 
 # === LOOP PRINCIPAL ===
+# === LOOP PRINCIPAL AJUSTADO ===
 try:
     resposta = requests.get(API_URL, timeout=5).json()
     numero_atual = int(resposta["data"]["result"]["outcome"]["number"])
@@ -177,18 +178,21 @@ if len(st.session_state.historico) == 0 or numero_para_duzia(numero_atual) != st
         else:
             enviar_telegram_async(f"✅ Saiu {numero_atual} ({valor}ª dúzia): 🔴")
 
-    # Previsão da próxima entrada
-
+# === Previsão da próxima entrada com controle de alertas ===
 duzia_prevista, prob, pesos = prever_duzia_com_feedback()
 
 if duzia_prevista is not None:
     # Exibe pesos dinâmicos no painel
     st.write(f"📊 Pesos dinâmicos → Frequência: {pesos[0]:.2f}, Tendência: {pesos[1]:.2f}, Repetição: {pesos[2]:.2f}")
 
+    # Cria chave única para o alerta
     chave_alerta = f"{duzia_prevista}_{st.session_state.historico[-1]}"
-    if "ultima_chave_alerta" not in st.session_state:
+
+    # Inicializa ultima_chave_alerta se necessário
+    if "ultima_chave_alerta" not in st.session_state or st.session_state.ultima_chave_alerta is None:
         st.session_state.ultima_chave_alerta = ""
 
+    # Envia alerta apenas se for nova previsão ou se passaram 3 rodadas sem envio
     if chave_alerta != st.session_state.ultima_chave_alerta or st.session_state.contador_sem_alerta >= 3:
         st.session_state.ultima_entrada = [duzia_prevista]
         st.session_state.tipo_entrada_anterior = "duzia"
@@ -196,10 +200,11 @@ if duzia_prevista is not None:
         st.session_state.ultima_chave_alerta = chave_alerta
         enviar_telegram_async(f"📊 <b>ENTRADA DÚZIA:</b> {duzia_prevista}ª (conf: {prob*100:.1f}%)")
     else:
+        # Incrementa contador de rodadas sem alerta
         st.session_state.contador_sem_alerta += 1
 else:
     st.info(f"Nenhum padrão confiável encontrado (prob: {prob*100:.1f}%)")
-    
+
 # Interface limpa
 st.write("Último número:", numero_atual)
 st.write(f"Acertos: {st.session_state.acertos_top} / {st.session_state.total_top}")
@@ -216,6 +221,7 @@ joblib.dump({
     "padroes_certos": st.session_state.padroes_certos,
     "ultima_chave_alerta": st.session_state.ultima_chave_alerta
 }, ESTADO_PATH)
+
 
 # Auto-refresh
 st_autorefresh(interval=REFRESH_INTERVAL, key="atualizacao")
