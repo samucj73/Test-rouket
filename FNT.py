@@ -102,7 +102,7 @@ def prever_duzia_com_feedback(min_match=0.4):
     # Reforço para padrões que acertaram anteriormente
     for padrao in st.session_state.padroes_certos:
         if padrao in contagem_duzias:
-            contagem_duzias[padrao] += 2
+            contagem_duzias[padrao] += 0
 
     if not contagem_duzias:
         return None, 0.0
