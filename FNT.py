@@ -15,10 +15,6 @@ ESTADO_PATH = Path("estado.pkl")
 MAX_HIST_LEN = 4500
 REFRESH_INTERVAL = 5000  # 10 segundos
 
-ROULETTE_ORDER = [32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11,
-                  30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18,
-                  29, 7, 28, 12, 35, 3, 26, 0]
-
 # === SESSION STATE ===
 if "historico" not in st.session_state:
     st.session_state.historico = joblib.load(HISTORICO_PATH) if HISTORICO_PATH.exists() else deque(maxlen=MAX_HIST_LEN)
@@ -55,6 +51,7 @@ def enviar_telegram_async(mensagem):
     threading.Thread(target=_send, daemon=True).start()
 
 def numero_para_duzia(num):
+    """Converte número cru em dúzia"""
     if num == 0:
         return 0
     elif 1 <= num <= 12:
@@ -63,11 +60,6 @@ def numero_para_duzia(num):
         return 2
     else:
         return 3
-
-def vizinhos_fisicos(index, raio=2):
-    """Retorna os números vizinhos na roleta em ordem física"""
-    total = len(ROULETTE_ORDER)
-    return [ROULETTE_ORDER[(index + i) % total] for i in range(-raio, raio+1) if i != 0]
 
 def salvar_historico_duzia(numero):
     """Converte número para dúzia e salva no histórico"""
@@ -94,15 +86,11 @@ def prever_duzia_com_feedback(min_match=0.2):
         if proporcao >= min_match:
             prox_duzia = hist_list[i + tamanho_janela]
             if prox_duzia != 0:
-                # inclui vizinhos físicos como possíveis acertos
-                index_num = ROULETTE_ORDER.index(prox_duzia)
-                for vizinho_num in vizinhos_fisicos(index_num):
-                    contagem_duzias[numero_para_duzia(vizinho_num)] += 1
+                contagem_duzias[prox_duzia] += 1
 
     # Reforço para padrões que acertaram anteriormente
     for padrao in st.session_state.padroes_certos:
-        if padrao in contagem_duzias:
-            contagem_duzias[padrao] += 0
+        contagem_duzias[padrao] += 1
 
     if not contagem_duzias:
         return None, 0.0
@@ -115,36 +103,22 @@ def prever_duzia_com_feedback(min_match=0.2):
         return duzia_mais_frequente, probabilidade
     return None, probabilidade
 
-# === FUNÇÃO AUXILIAR PARA SALVAR HISTÓRICO EM DÚZIAS ===
-def salvar_historico_duzia(numero):
-    """Converte número para dúzia e salva no histórico"""
-    duzia = numero_para_duzia(numero)
-    if len(st.session_state.historico) == 0 or duzia != st.session_state.historico[-1]:
-        st.session_state.historico.append(duzia)
-        joblib.dump(st.session_state.historico, HISTORICO_PATH)
-    return duzia
-
-# === LOOP # Interface limpa
 # === LOOP PRINCIPAL ===
 try:
     resposta = requests.get(API_URL, timeout=5).json()
     numero_atual = int(resposta["data"]["result"]["outcome"]["number"])
-   # duzia_atual = salvar_historico_duzia(numero_atual)
-  
 except Exception as e:
     st.error(f"Erro API: {e}")
     st.stop()
 
 # Atualiza histórico apenas se novo número
-# Atualiza histórico apenas se novo número
-if len(st.session_state.historico) == 0 or numero_atual != st.session_state.historico[-1]:
-    st.session_state.historico.append(numero_atual)
-    joblib.dump(st.session_state.historico, HISTORICO_PATH)
+if len(st.session_state.historico) == 0 or numero_para_duzia(numero_atual) != st.session_state.historico[-1]:
+    duzia_atual = salvar_historico_duzia(numero_atual)
 
     # Feedback apenas de acertos
     if st.session_state.ultima_entrada:
         st.session_state.total_top += 1
-        valor = (numero_atual - 1) // 12 + 1
+        valor = numero_para_duzia(numero_atual)
         if valor in st.session_state.ultima_entrada:
             st.session_state.acertos_top += 1
             enviar_telegram_async(f"✅ Saiu {numero_atual} ({valor}ª dúzia): 🟢")
@@ -153,21 +127,16 @@ if len(st.session_state.historico) == 0 or numero_atual != st.session_state.hist
             if len(st.session_state.padroes_certos) > 10:
                 st.session_state.padroes_certos.pop(0)
         else:
-            # Apenas alerta de não acerto
             enviar_telegram_async(f"✅ Saiu {numero_atual} ({valor}ª dúzia): 🔴")
-
-
 
     # Previsão da próxima entrada
     duzia_prevista, prob = prever_duzia_com_feedback()
 
     if duzia_prevista is not None:
-        # Cria chave única combinando previsão + último número
         chave_alerta = f"{duzia_prevista}_{st.session_state.historico[-1]}"
         if "ultima_chave_alerta" not in st.session_state:
             st.session_state.ultima_chave_alerta = ""
 
-        # Envia alerta somente se nova previsão ou passaram 3 rodadas sem alerta
         if chave_alerta != st.session_state.ultima_chave_alerta or st.session_state.contador_sem_alerta >= 3:
             st.session_state.ultima_entrada = [duzia_prevista]
             st.session_state.tipo_entrada_anterior = "duzia"
@@ -182,7 +151,7 @@ if len(st.session_state.historico) == 0 or numero_atual != st.session_state.hist
 # Interface limpa
 st.write("Último número:", numero_atual)
 st.write(f"Acertos: {st.session_state.acertos_top} / {st.session_state.total_top}")
-st.write("Últimos números:", list(st.session_state.historico)[-12:])
+st.write("Últimos registros (dúzias):", list(st.session_state.historico)[-12:])
 
 # Salva estado
 joblib.dump({
