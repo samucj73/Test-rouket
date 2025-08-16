@@ -71,6 +71,28 @@ def salvar_historico_duzia(numero):
         joblib.dump(st.session_state.historico, HISTORICO_PATH)
     return duzia
 
+def calcular_frequencia_duzias(historico, janela=30):
+    """Conta quantas vezes cada dúzia apareceu nos últimos N sorteios"""
+    ultimos = [h for h in list(historico)[-janela:] if h != 0]
+    return Counter(ultimos)
+
+def calcular_alternancia(historico, janela=20):
+    """Mede a taxa de alternância entre dúzias consecutivas"""
+    duzias = [h for h in list(historico)[-janela:] if h != 0]
+    if len(duzias) < 2:
+        return 0.5
+    alternancias = sum(1 for i in range(1, len(duzias)) if duzias[i] != duzias[i-1])
+    return alternancias / (len(duzias)-1)
+
+def calcular_tendencia(historico, peso=0.9, janela=15):
+    """Dá mais peso para as dúzias mais recentes"""
+    duzias = [h for h in list(historico)[-janela:] if h != 0]
+    pesos = [peso**i for i in range(len(duzias)-1, -1, -1)]
+    tendencia = {1:0, 2:0, 3:0}
+    for d, w in zip(duzias, pesos):
+        tendencia[d] += w
+    return tendencia
+
 def prever_duzia_com_feedback(min_match=0.2):
     """Prevê a próxima dúzia com pesos dinâmicos baseados em alternância e dominância"""
     if len(st.session_state.historico) < tamanho_janela:
@@ -182,7 +204,7 @@ else:
 st.write("Último número:", numero_atual)
 st.write(f"Acertos: {st.session_state.acertos_top} / {st.session_state.total_top}")
 st.write("Últimos registros (dúzias):", list(st.session_state.historico)[-12:])
-st.write(f"📊 Pesos dinâmicos → Frequência: {pesos[0]:.2f}, Tendência: {pesos[1]:.2f}, Repetição: {pesos[2]:.2f}")
+#st.write(f"📊 Pesos dinâmicos → Frequência: {pesos[0]:.2f}, Tendência: {pesos[1]:.2f}, Repetição: {pesos[2]:.2f}")
 
 # Salva estado
 joblib.dump({
