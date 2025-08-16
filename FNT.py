@@ -142,6 +142,15 @@ def prever_duzia_rf():
     melhor_idx = np.argmax(probs)
     return classes[melhor_idx], probs[melhor_idx]
 
+# === FUNÇÃO DE TREINAMENTO ===
+def treinar_modelo_rf():
+    X, y = criar_features_avancadas(st.session_state.historico)
+    if X is None or len(X) == 0:
+        return
+    rf = RandomForestClassifier(n_estimators=200, max_depth=8, random_state=42)
+    rf.fit(X, y)
+    st.session_state.modelo_rf = rf
+
 # === LOOP PRINCIPAL ===
 try:
     resposta = requests.get(API_URL, timeout=5).json()
