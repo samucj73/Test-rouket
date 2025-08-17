@@ -266,49 +266,50 @@ if "ultimo_resultado_numero" not in st.session_state:
 
 
 # === ALERTA DE RESULTADO (GREEN/RED) ===
-if st.session_state.ultima_entrada and st.session_state.ultimo_resultado_numero != numero_atual:
-    st.session_state.ultimo_resultado_numero = numero_atual  # garante 1 alerta por rodada
-    st.session_state.total_top += 1
-    valor = numero_para_duzia(numero_atual)
+# === ALERTA DE RESULTADO + PREVISÃO (1x por rodada) ===
+if st.session_state.ultimo_resultado_numero != numero_atual:
+    # trava para evitar duplicação no refresh
+    st.session_state.ultimo_resultado_numero = numero_atual  
 
-    if valor in st.session_state.ultima_entrada:
-        st.session_state.acertos_top += 1
-        enviar_telegram_async(
-            f"✅ Saiu {numero_atual} ({valor}ª dúzia): 🟢",
-            delay=1
-        )
-        st.session_state.padroes_certos.append(valor)
-        if len(st.session_state.padroes_certos) > 10:
-            st.session_state.padroes_certos.pop(0)
-    else:
-        enviar_telegram_async(
-            f"✅ Saiu {numero_atual} ({valor}ª dúzia): 🔴",
-            delay=1
-        )
+    # === RESULTADO ===
+    if st.session_state.ultima_entrada:
+        st.session_state.total_top += 1
+        valor = numero_para_duzia(numero_atual)
 
-    # Previsão segura
-duzia_prevista, prob = None, 0.0
-if st.session_state.modelo_rf is not None and len(st.session_state.historico) >= tamanho_janela:
-    try:
-        duzia_prevista, prob = prever_duzia_rf()
-    except ValueError as e:
-        st.warning(f"Erro de previsão (features incompatíveis): {e}")
-        duzia_prevista, prob = None, 0.0
+        if valor in st.session_state.ultima_entrada:
+            st.session_state.acertos_top += 1
+            enviar_telegram_async(
+                f"✅ Saiu {numero_atual} ({valor}ª dúzia): 🟢",
+                delay=1
+            )
+        else:
+            enviar_telegram_async(
+                f"✅ Saiu {numero_atual} ({valor}ª dúzia): 🔴",
+                delay=1
+            )
 
-    # 🔑 Sempre gera nova previsão, mesmo no erro
+    # === PREVISÃO ===
     if st.session_state.modelo_rf is not None and len(st.session_state.historico) >= tamanho_janela:
         try:
             duzia_prevista, prob = prever_duzia_rf()
             if duzia_prevista is not None:
+                # salva nova entrada
                 st.session_state.ultima_entrada = [duzia_prevista]
                 st.session_state.tipo_entrada_anterior = "duzia"
                 st.session_state.contador_sem_alerta = 0
                 st.session_state.ultima_chave_alerta = f"duzia_{duzia_prevista}"
 
-                mensagem_alerta = f"📊 <b>ENTRADA DÚZIA RF:</b> {duzia_prevista}ª (conf: {prob*100:.1f}%)"
+                # único alerta de previsão por rodada
+                mensagem_alerta = (
+                    f"📊 <b>ENTRADA DÚZIA RF:</b> {duzia_prevista}ª "
+                    f"(conf: {prob*100:.1f}%)"
+                )
                 enviar_telegram_async(mensagem_alerta, delay=10)
         except Exception as e:
             st.warning(f"Erro na previsão: {e}")
+
+
+
 
 
 
