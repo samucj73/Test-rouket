@@ -249,18 +249,32 @@ if len(st.session_state.historico) == 0 or numero_para_duzia(numero_atual) != st
 
     # Feedback de acertos
 
-if st.session_state.ultima_entrada:
+# Inicializa variável de controle no início do app (antes do loop principal)
+if "ultimo_resultado_numero" not in st.session_state:
+    st.session_state.ultimo_resultado_numero = None
+
+# === ALERTA DE RESULTADO (GREEN/RED) ===
+if st.session_state.ultima_entrada and st.session_state.ultimo_resultado_numero != numero_atual:
+    st.session_state.ultimo_resultado_numero = numero_atual  # garante 1 alerta por rodada
     st.session_state.total_top += 1
     valor = numero_para_duzia(numero_atual)
+
     if valor in st.session_state.ultima_entrada:
         st.session_state.acertos_top += 1
-        # AQUI adicionamos delay só no resultado
-        enviar_telegram_async(f"✅ Saiu {numero_atual} ({valor}ª dúzia): 🟢", delay=15)
+        enviar_telegram_async(
+            f"✅ Saiu {numero_atual} ({valor}ª dúzia): 🟢",
+            delay=5  # delay só no resultado
+        )
         st.session_state.padroes_certos.append(valor)
         if len(st.session_state.padroes_certos) > 10:
             st.session_state.padroes_certos.pop(0)
     else:
-        enviar_telegram_async(f"✅ Saiu {numero_atual} ({valor}ª dúzia): 🔴", delay=15)
+        enviar_telegram_async(
+            f"✅ Saiu {numero_atual} ({valor}ª dúzia): 🔴",
+            delay=5  # delay só no resultado
+        )
+
+
 
     
 
