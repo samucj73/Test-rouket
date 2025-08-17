@@ -171,7 +171,13 @@ def treinar_modelo_rf():
     X, y = criar_features_avancadas(st.session_state.historico, window_size=tamanho_janela)
     if X is None or len(X) == 0:
         return
-    rf = RandomForestClassifier(n_estimators=200, max_depth=8, random_state=42)
+    rf = RandomForestClassifier(
+    n_estimators=400,
+    max_depth=12,
+    min_samples_leaf=2,
+    random_state=42,
+    class_weight="balanced_subsample"
+)
     rf.fit(X, y)
     st.session_state.modelo_rf = rf
 
@@ -244,8 +250,9 @@ if len(st.session_state.historico) == 0 or numero_para_duzia(numero_atual) != st
     duzia_atual = salvar_historico_duzia(numero_atual)
 
     # Treina modelo RF se houver histórico suficiente
-    if len(st.session_state.historico) >= tamanho_janela:
-        treinar_modelo_rf()
+    if len(st.session_state.historico) % 10 == 0:
+       treinar_modelo_rf()
+        
 
     # Feedback de acertos
 
