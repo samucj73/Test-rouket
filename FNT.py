@@ -123,43 +123,47 @@ def criar_features_avancadas(historico, window_size):
 
         # Frequência simples
         contador = Counter(janela)
-        freq1 = contador.get(1, 0)/window_size
-        freq2 = contador.get(2, 0)/window_size
-        freq3 = contador.get(3, 0)/window_size
-        features.extend([freq1, freq2, freq3])
+        for d in [1,2,3]:
+            features.append(contador.get(d, 0)/window_size)
 
-        # Frequência ponderada
+        # Frequência ponderada (recentes mais pesados)
         pesos = np.array([0.9**i for i in range(window_size-1, -1, -1)])
-        freq1_w = sum(w for val, w in zip(janela, pesos) if val==1)/pesos.sum()
-        freq2_w = sum(w for val, w in zip(janela, pesos) if val==2)/pesos.sum()
-        freq3_w = sum(w for val, w in zip(janela, pesos) if val==3)/pesos.sum()
-        features.extend([freq1_w, freq2_w, freq3_w])
+        for d in [1,2,3]:
+            fw = sum(w for val, w in zip(janela, pesos) if val==d)/pesos.sum()
+            features.append(fw)
 
-        # Alternância simples
+        # Alternância simples e ponderada
         alternancias = sum(1 for j in range(1, window_size) if janela[j] != janela[j-1])
-        alt_norm = alternancias / (window_size-1)
-        features.append(alt_norm)
-
-        # Alternância ponderada
-        alt_ponderada = sum((janela[j] != janela[j-1]) * 0.9**(window_size-1-j) for j in range(1, window_size)) / sum(0.9**i for i in range(window_size-1))
-        features.append(alt_ponderada)
+        features.append(alternancias/(window_size-1))
+        features.append(sum((janela[j]!=janela[j-1])*0.9**(window_size-1-j) for j in range(1, window_size))/sum(0.9**i for i in range(window_size-1)))
 
         # Tendência normalizada
         tend = [0,0,0]
         for val, w in zip(janela, pesos):
             if val in [1,2,3]:
                 tend[val-1] += w
-        total_tend = sum(tend) if sum(tend) > 0 else 1
-        tend_norm = [t/total_tend for t in tend]
-        features.extend(tend_norm)
+        total = sum(tend) if sum(tend) > 0 else 1
+        features.extend([t/total for t in tend])
 
-        # Diferença de tendência
-        tend_diff = max(tend_norm) - min(tend_norm)
-        features.append(tend_diff)
+        # Diferença entre a mais forte e a mais fraca
+        features.append(max(tend)-min(tend))
 
         # Contagem de zeros
-        zeros_count = janela.count(0)/window_size
-        features.append(zeros_count)
+        features.append(janela.count(0)/window_size)
+
+        # NOVAS FEATURES:
+        # Última ocorrência de cada dúzia (quanto tempo atrás apareceu)
+        for d in [1,2,3]:
+            try:
+                idx = window_size - 1 - janela[::-1].index(d)
+                features.append(idx/window_size)
+            except ValueError:
+                features.append(1.0)  # nunca apareceu
+
+        # Frequência das últimas 5 rodadas (mais curta)
+        ultimos5 = janela[-5:]
+        for d in [1,2,3]:
+            features.append(ultimos5.count(d)/5)
 
         X.append(features)
         y.append(alvo)
