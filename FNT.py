@@ -248,17 +248,21 @@ if len(st.session_state.historico) == 0 or numero_para_duzia(numero_atual) != st
         treinar_modelo_rf()
 
     # Feedback de acertos
-    if st.session_state.ultima_entrada:
-        st.session_state.total_top += 1
-        valor = numero_para_duzia(numero_atual)
-        if valor in st.session_state.ultima_entrada:
-            st.session_state.acertos_top += 1
-            enviar_telegram_async(f"✅ Saiu {numero_atual} ({valor}ª dúzia): 🟢")
-            st.session_state.padroes_certos.append(valor)
-            if len(st.session_state.padroes_certos) > 10:
-                st.session_state.padroes_certos.pop(0)
-        else:
-            enviar_telegram_async(f"✅ Saiu {numero_atual} ({valor}ª dúzia): 🔴")
+
+if st.session_state.ultima_entrada:
+    st.session_state.total_top += 1
+    valor = numero_para_duzia(numero_atual)
+    if valor in st.session_state.ultima_entrada:
+        st.session_state.acertos_top += 1
+        # AQUI adicionamos delay só no resultado
+        enviar_telegram_async(f"✅ Saiu {numero_atual} ({valor}ª dúzia): 🟢", delay=15)
+        st.session_state.padroes_certos.append(valor)
+        if len(st.session_state.padroes_certos) > 10:
+            st.session_state.padroes_certos.pop(0)
+    else:
+        enviar_telegram_async(f"✅ Saiu {numero_atual} ({valor}ª dúzia): 🔴", delay=15)
+
+    
 
 # Previsão segura
 duzia_prevista, prob = None, 0.0
