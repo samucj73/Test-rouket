@@ -17,7 +17,7 @@ HISTORICO_PATH = Path("historico.pkl")
 ESTADO_PATH = Path("estado.pkl")
 MAX_HIST_LEN = 4500
 REFRESH_INTERVAL = 5000  # 5 segundos
-WINDOW_SIZE = 25  # janela para RF
+WINDOW_SIZE = 30  # janela para RF
 
 import streamlit as st
 import joblib
@@ -106,7 +106,7 @@ def salvar_historico_duzia(numero):
 
 # === FEATURES AVANÇADAS ===
 def criar_features_avancadas(historico, window_size):
-    if len(historico) < window_size + 1:
+    if len(historico) < window_size + 5:
         return None, None
 
     X, y = [], []
