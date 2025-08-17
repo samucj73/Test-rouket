@@ -286,6 +286,15 @@ if st.session_state.ultima_entrada and st.session_state.ultimo_resultado_numero 
             delay=1
         )
 
+    # Previsão segura
+duzia_prevista, prob = None, 0.0
+if st.session_state.modelo_rf is not None and len(st.session_state.historico) >= tamanho_janela:
+    try:
+        duzia_prevista, prob = prever_duzia_rf()
+    except ValueError as e:
+        st.warning(f"Erro de previsão (features incompatíveis): {e}")
+        duzia_prevista, prob = None, 0.0
+
     # 🔑 Sempre gera nova previsão, mesmo no erro
     if st.session_state.modelo_rf is not None and len(st.session_state.historico) >= tamanho_janela:
         try:
@@ -303,14 +312,7 @@ if st.session_state.ultima_entrada and st.session_state.ultimo_resultado_numero 
 
 
 
-# Previsão segura
-duzia_prevista, prob = None, 0.0
-if st.session_state.modelo_rf is not None and len(st.session_state.historico) >= tamanho_janela:
-    try:
-        duzia_prevista, prob = prever_duzia_rf()
-    except ValueError as e:
-        st.warning(f"Erro de previsão (features incompatíveis): {e}")
-        duzia_prevista, prob = None, 0.0
+
 
 # Interface
 st.write("Último número:", numero_atual)
