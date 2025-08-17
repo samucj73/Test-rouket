@@ -263,7 +263,7 @@ if st.session_state.ultima_entrada and st.session_state.ultimo_resultado_numero 
         st.session_state.acertos_top += 1
         enviar_telegram_async(
             f"✅ Saiu {numero_atual} ({valor}ª dúzia): 🟢",
-            delay=12  # delay só no resultado
+            delay=1  # delay só no resultado
         )
         st.session_state.padroes_certos.append(valor)
         if len(st.session_state.padroes_certos) > 10:
@@ -271,7 +271,7 @@ if st.session_state.ultima_entrada and st.session_state.ultimo_resultado_numero 
     else:
         enviar_telegram_async(
             f"✅ Saiu {numero_atual} ({valor}ª dúzia): 🔴",
-            delay=12  # delay só no resultado
+            delay=1  # delay só no resultado
         )
 
 
@@ -296,7 +296,7 @@ if duzia_prevista is not None:
         st.session_state.contador_sem_alerta = 0
         st.session_state.ultima_chave_alerta = chave_alerta
         # Linha corrigida: emoji seguro e f-string única
-        mensagem_alerta = f"📊 <b>ENTRADA DÚZIA RF:</b> {duzia_prevista}ª (conf: {prob*100:.1f}%)"
+        mensagem_alerta = f"📊 <b>ENTRADA DÚZIA RF:</b> {duzia_prevista}ª (conf: {prob*100:.1f}%)", delay=14
         enviar_telegram_async(mensagem_alerta)
 
 # Interface
