@@ -17,7 +17,7 @@ HISTORICO_PATH = Path("historico.pkl")
 ESTADO_PATH = Path("estado.pkl")
 MAX_HIST_LEN = 4500
 REFRESH_INTERVAL = 5000  # 5 segundos
-WINDOW_SIZE = 8  # janela para RF
+WINDOW_SIZE = 12  # janela para RF
 
 import streamlit as st
 import joblib
@@ -263,7 +263,7 @@ if st.session_state.ultima_entrada and st.session_state.ultimo_resultado_numero 
         st.session_state.acertos_top += 1
         enviar_telegram_async(
             f"✅ Saiu {numero_atual} ({valor}ª dúzia): 🟢",
-            delay=5  # delay só no resultado
+            delay=12  # delay só no resultado
         )
         st.session_state.padroes_certos.append(valor)
         if len(st.session_state.padroes_certos) > 10:
@@ -271,7 +271,7 @@ if st.session_state.ultima_entrada and st.session_state.ultimo_resultado_numero 
     else:
         enviar_telegram_async(
             f"✅ Saiu {numero_atual} ({valor}ª dúzia): 🔴",
-            delay=5  # delay só no resultado
+            delay=12  # delay só no resultado
         )
 
 
