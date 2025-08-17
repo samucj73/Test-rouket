@@ -297,7 +297,7 @@ if duzia_prevista is not None:
         st.session_state.ultima_chave_alerta = chave_alerta
         # Linha corrigida: emoji seguro e f-string única
         mensagem_alerta = f"📊 <b>ENTRADA DÚZIA RF:</b> {duzia_prevista}ª (conf: {prob*100:.1f}%)"
-        enviar_telegram_async(mensagem_alerta, delay=14)
+        enviar_telegram_async(mensagem_alerta, delay=10)
 
 # Interface
 st.write("Último número:", numero_atual)
