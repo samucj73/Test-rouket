@@ -69,7 +69,7 @@ tamanho_janela = st.slider("📏 Tamanho da janela de análise", min_value=2, ma
 prob_minima = st.slider("📊 Probabilidade mínima (%)", min_value=10, max_value=100, value=30) / 100.0
 
 # === FUNÇÕES AUXILIARES ===
-def enviar_telegram_async(mensagem, delay=20):
+def enviar_telegram_async(mensagem, delay=0):
     """
     Envia mensagem ao Telegram de forma assíncrona.
     Se delay > 0, espera 'delay' segundos antes de enviar.
