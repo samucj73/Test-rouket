@@ -264,6 +264,7 @@ if len(st.session_state.historico) == 0 or numero_para_duzia(numero_atual) != st
 if "ultimo_resultado_numero" not in st.session_state:
     st.session_state.ultimo_resultado_numero = None
 
+
 # === ALERTA DE RESULTADO (GREEN/RED) ===
 if st.session_state.ultima_entrada and st.session_state.ultimo_resultado_numero != numero_atual:
     st.session_state.ultimo_resultado_numero = numero_atual  # garante 1 alerta por rodada
@@ -274,7 +275,7 @@ if st.session_state.ultima_entrada and st.session_state.ultimo_resultado_numero 
         st.session_state.acertos_top += 1
         enviar_telegram_async(
             f"✅ Saiu {numero_atual} ({valor}ª dúzia): 🟢",
-            delay=1  # delay só no resultado
+            delay=1
         )
         st.session_state.padroes_certos.append(valor)
         if len(st.session_state.padroes_certos) > 10:
@@ -282,12 +283,25 @@ if st.session_state.ultima_entrada and st.session_state.ultimo_resultado_numero 
     else:
         enviar_telegram_async(
             f"✅ Saiu {numero_atual} ({valor}ª dúzia): 🔴",
-            delay=1  # delay só no resultado
+            delay=1
         )
 
+    # 🔑 Sempre gera nova previsão, mesmo no erro
+    if st.session_state.modelo_rf is not None and len(st.session_state.historico) >= tamanho_janela:
+        try:
+            duzia_prevista, prob = prever_duzia_rf()
+            if duzia_prevista is not None:
+                st.session_state.ultima_entrada = [duzia_prevista]
+                st.session_state.tipo_entrada_anterior = "duzia"
+                st.session_state.contador_sem_alerta = 0
+                st.session_state.ultima_chave_alerta = f"duzia_{duzia_prevista}"
+
+                mensagem_alerta = f"📊 <b>ENTRADA DÚZIA RF:</b> {duzia_prevista}ª (conf: {prob*100:.1f}%)"
+                enviar_telegram_async(mensagem_alerta, delay=10)
+        except Exception as e:
+            st.warning(f"Erro na previsão: {e}")
 
 
-    
 
 # Previsão segura
 duzia_prevista, prob = None, 0.0
@@ -297,18 +311,6 @@ if st.session_state.modelo_rf is not None and len(st.session_state.historico) >=
     except ValueError as e:
         st.warning(f"Erro de previsão (features incompatíveis): {e}")
         duzia_prevista, prob = None, 0.0
-
-# Envio de alerta
-if duzia_prevista is not None:
-    chave_alerta = f"duzia_{duzia_prevista}"
-    if chave_alerta != st.session_state.ultima_chave_alerta:
-        st.session_state.ultima_entrada = [duzia_prevista]
-        st.session_state.tipo_entrada_anterior = "duzia"
-        st.session_state.contador_sem_alerta = 0
-        st.session_state.ultima_chave_alerta = chave_alerta
-        # Linha corrigida: emoji seguro e f-string única
-        mensagem_alerta = f"📊 <b>ENTRADA DÚZIA RF:</b> {duzia_prevista}ª (conf: {prob*100:.1f}%)"
-        enviar_telegram_async(mensagem_alerta, delay=10)
 
 # Interface
 st.write("Último número:", numero_atual)
