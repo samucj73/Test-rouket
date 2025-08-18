@@ -191,6 +191,7 @@ def treinar_modelo_rf():
     st.session_state.modelo_rf = rf
 
 # === PREVISÃO ===
+
 def prever_duzia_rf():
     janela = list(st.session_state.historico)[-tamanho_janela:]
     features = []
@@ -200,25 +201,24 @@ def prever_duzia_rf():
 
     # Frequência simples
     contador = Counter(janela)
-    freq1 = contador.get(1, 0)/tamanho_janela
-    freq2 = contador.get(2, 0)/tamanho_janela
-    freq3 = contador.get(3, 0)/tamanho_janela
-    features.extend([freq1, freq2, freq3])
+    for d in [1,2,3]:
+        features.append(contador.get(d, 0)/tamanho_janela)
 
     # Frequência ponderada
     pesos = np.array([0.9**i for i in range(tamanho_janela-1, -1, -1)])
-    freq1_w = sum(w for val, w in zip(janela, pesos) if val==1)/pesos.sum()
-    freq2_w = sum(w for val, w in zip(janela, pesos) if val==2)/pesos.sum()
-    freq3_w = sum(w for val, w in zip(janela, pesos) if val==3)/pesos.sum()
-    features.extend([freq1_w, freq2_w, freq3_w])
+    for d in [1,2,3]:
+        fw = sum(w for val, w in zip(janela, pesos) if val==d)/pesos.sum()
+        features.append(fw)
 
     # Alternância simples
     alternancias = sum(1 for j in range(1, tamanho_janela) if janela[j] != janela[j-1])
-    alt_norm = alternancias / (tamanho_janela-1)
-    features.append(alt_norm)
+    features.append(alternancias / (tamanho_janela-1))
 
     # Alternância ponderada
-    alt_ponderada = sum((janela[j] != janela[j-1]) * 0.9**(tamanho_janela-1-j) for j in range(1, tamanho_janela)) / sum(0.9**i for i in range(tamanho_janela-1))
+    alt_ponderada = sum(
+        (janela[j] != janela[j-1]) * 0.9**(tamanho_janela-1-j)
+        for j in range(1, tamanho_janela)
+    ) / sum(0.9**i for i in range(tamanho_janela-1))
     features.append(alt_ponderada)
 
     # Tendência normalizada
@@ -227,23 +227,35 @@ def prever_duzia_rf():
         if val in [1,2,3]:
             tend[val-1] += w
     total_tend = sum(tend) if sum(tend) > 0 else 1
-    tend_norm = [t/total_tend for t in tend]
-    features.extend(tend_norm)
+    features.extend([t/total_tend for t in tend])
 
-    # Diferença de tendência
-    tend_diff = max(tend_norm) - min(tend_norm)
-    features.append(tend_diff)
+    # Diferença entre a mais forte e a mais fraca
+    features.append(max(tend)-min(tend))
 
     # Contagem de zeros
-    zeros_count = janela.count(0)/tamanho_janela
-    features.append(zeros_count)
+    features.append(janela.count(0)/tamanho_janela)
 
+    # 🔥 Última ocorrência de cada dúzia
+    for d in [1,2,3]:
+        try:
+            idx = tamanho_janela - 1 - janela[::-1].index(d)
+            features.append(idx/tamanho_janela)
+        except ValueError:
+            features.append(1.0)
+
+    # 🔥 Frequência das últimas 5 rodadas
+    ultimos5 = janela[-5:]
+    for d in [1,2,3]:
+        features.append(ultimos5.count(d)/5)
+
+    # === PREVISÃO ===
     features = np.array(features).reshape(1, -1)
     probs = st.session_state.modelo_rf.predict_proba(features)[0]
     classes = st.session_state.modelo_rf.classes_
     melhor_idx = np.argmax(probs)
 
     return classes[melhor_idx], probs[melhor_idx]
+
 
 # === LOOP PRINCIPAL PROTEGIDO ===
 # === LOOP PRINCIPAL PROTEGIDO ===
