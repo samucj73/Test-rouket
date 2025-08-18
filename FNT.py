@@ -42,6 +42,9 @@ except Exception as e:
     estado_salvo = {}
 
 # === SESSION STATE ===
+# inicialize uma vez no topo do app
+if "ultimo_numero_salvo" not in st.session_state:
+    st.session_state.ultimo_numero_salvo = None
 if "ultima_chave_alerta" not in st.session_state:
     st.session_state.ultima_chave_alerta = None
 if "historico" not in st.session_state:
