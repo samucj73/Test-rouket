@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulação de Lucro - Roleta</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
+
+    body {
+        margin: 0;
+        font-family: 'Roboto', sans-serif;
+        background: linear-gradient(135deg, #1f1c2c, #928dab);
+        color: #fff;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+    }
+
+    .container {
+        text-align: center;
+        background: rgba(0,0,0,0.5);
+        padding: 40px 60px;
+        border-radius: 20px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        max-width: 600px;
+    }
+
+    h1 {
+        font-size: 2.2rem;
+        margin-bottom: 20px;
+        color: #ffd700;
+    }
+
+    label {
+        display: block;
+        margin: 10px 0 5px;
+        font-weight: bold;
+    }
+
+    input {
+        padding: 8px;
+        width: 80%;
+        border-radius: 8px;
+        border: none;
+        text-align: center;
+        margin-bottom: 15px;
+        font-size: 1rem;
+    }
+
+    button {
+        padding: 12px 25px;
+        font-size: 1rem;
+        border: none;
+        border-radius: 10px;
+        background-color: #00ff7f;
+        color: #000;
+        cursor: pointer;
+        font-weight: bold;
+        transition: transform 0.2s;
+    }
+
+    button:hover {
+        transform: scale(1.05);
+    }
+
+    .card {
+        background: rgba(255,255,255,0.1);
+        margin: 15px 0;
+        padding: 20px;
+        border-radius: 15px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        transition: transform 0.2s;
+    }
+
+    .highlight {
+        color: #00ff7f;
+        font-weight: bold;
+    }
+
+    .percentil {
+        color: #ff6f61;
+        font-weight: bold;
+    }
+</style>
+</head>
+<body>
+<div class="container">
+    <h1>🎰 Simulação de Lucro - Roleta</h1>
+
+    <label for="rodadas">Número de rodadas</label>
+    <input type="number" id="rodadas" value="100">
+
+    <label for="valor">Valor por rodada (R$)</label>
+    <input type="number" id="valor" value="10">
+
+    <label for="prob">Probabilidade de acerto (%)</label>
+    <input type="number" id="prob" value="72.7">
+
+    <button onclick="simular()">Simular</button>
+
+    <div id="resultado"></div>
+</div>
+
+<script>
+function simular() {
+    const rodadas = parseInt(document.getElementById('rodadas').value);
+    const valor = parseFloat(document.getElementById('valor').value);
+    const prob = parseFloat(document.getElementById('prob').value)/100;
+    const simulacoes = 10000;
+    let resultados = [];
+
+    for(let i=0;i<simulacoes;i++){
+        let lucro = 0;
+        for(let j=0;j<rodadas;j++){
+            if(Math.random() < prob){
+                lucro += valor; // acerto: lucro líquido = valor
+            } else {
+                lucro -= valor; // erro: perda = valor
+            }
+        }
+        resultados.push(lucro);
+    }
+
+    resultados.sort((a,b)=>a-b);
+    const media = resultados.reduce((a,b)=>a+b,0)/simulacoes;
+    const minimo = resultados[0];
+    const maximo = resultados[resultados.length-1];
+    const probPerda = resultados.filter(x=>x<0).length/simulacoes*100;
+
+    const percentis = [10,25,50,75,90].map(p=>{
+        const idx = Math.floor(p/100*simulacoes);
+        return resultados[idx];
+    });
+
+    // Monta HTML
+    let html = `
+    <div class="card">
+        <p>Lucro médio esperado: <span class="highlight">R$ ${media.toFixed(2)}</span></p>
+        <p>Lucro máximo simulado: <span class="highlight">R$ ${maximo}</span></p>
+        <p>Lucro mínimo simulado: <span class="highlight">R$ ${minimo}</span></p>
+        <p>Probabilidade de perder dinheiro: <span class="highlight">${probPerda.toFixed(2)}%</span></p>
+    </div>
+    <div class="card">
+        <h2>📊 Percentis de Lucro</h2>
+        <p>10º percentil: <span class="percentil">R$ ${percentis[0]}</span></p>
+        <p>25º percentil: <span class="percentil">R$ ${percentis[1]}</span></p>
+        <p>50º percentil (mediano): <span class="percentil">R$ ${percentis[2]}</span></p>
+        <p>75º percentil: <span class="percentil">R$ ${percentis[3]}</span></p>
+        <p>90º percentil: <span class="percentil">R$ ${percentis[4]}</span></p>
+    </div>
+    `;
+
+    document.getElementById('resultado').innerHTML = html;
+}
+</script>
+</body>
+</html>
