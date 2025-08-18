@@ -324,7 +324,7 @@ if st.session_state.ultimo_resultado_numero != numero_atual:
 
                 mensagem_alerta = (
     f"📊 <b>ENT DÚZIA: </b>{duzia_prevista} "
-    f"(conf: {prob*100:.1f}%)"
+    f" (conf: {prob*100:.1f}%)"
 )
                 
                 enviar_telegram_async(mensagem_alerta, delay=10)
