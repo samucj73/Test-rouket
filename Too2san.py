@@ -137,24 +137,27 @@ def extrair_features(janela):
 
     return features
 
-def criar_dataset(historico, tamanho_janela=36):
+def criar_dataset(historico, tamanho_janela=15):
     X, y = [], []
     if len(historico) <= tamanho_janela:
         return np.empty((0, tamanho_janela)), np.array([])  # evita erro
-    
+
     for i in range(len(historico) - tamanho_janela):
         X.append(historico[i:i+tamanho_janela])
         y.append(historico[i+tamanho_janela])
-    
+
     return np.array(X), np.array(y)
+
+
 
 
 
 # === TREINAMENTO ===
 
 def treinar_modelo_rf():
-    X, y = criar_dataset(st.session_state.historico)
-    if len(y) > 1 and len(set(y)) > 1:  # precisa ter amostras e classes diferentes
+    X, y = criar_dataset(st.session_state.historico, tamanho_janela)
+    if len(y) > 1 and len(set(y)) > 1:  # precisa de mais de uma amostra e pelo menos 2 classes
+        from catboost import CatBoostClassifier
         modelo = CatBoostClassifier(
             iterations=200,
             depth=6,
@@ -164,6 +167,8 @@ def treinar_modelo_rf():
         )
         modelo.fit(X, y)
         st.session_state.modelo_rf = modelo
+
+
 
 
 
