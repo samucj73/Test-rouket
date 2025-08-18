@@ -135,17 +135,18 @@ def extrair_features(janela):
 
     return features
 
-def criar_dataset(historico, window_size):
-    if len(historico) < window_size - 1:
-        return None, None
+def criar_dataset(historico, tamanho_janela=36):
     X, y = [], []
-    seq = list(historico)
-    for i in range(len(seq) - window_size):
-        janela = seq[i:i+window_size]
-        alvo = seq[i+window_size]
-        X.append(extrair_features(janela))
-        y.append(alvo)
+    if len(historico) <= tamanho_janela:
+        return np.empty((0, tamanho_janela)), np.array([])  # evita erro
+    
+    for i in range(len(historico) - tamanho_janela):
+        X.append(historico[i:i+tamanho_janela])
+        y.append(historico[i+tamanho_janela])
+    
     return np.array(X), np.array(y)
+
+
 
 # === TREINAMENTO ===
 
