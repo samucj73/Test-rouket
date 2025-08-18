@@ -150,11 +150,9 @@ def criar_dataset(historico, tamanho_janela=36):
 
 # === TREINAMENTO ===
 
-from catboost import CatBoostClassifier
-
 def treinar_modelo_rf():
     X, y = criar_dataset(st.session_state.historico)
-    if len(set(y)) > 1:  # precisa ter pelo menos 2 classes
+    if len(y) > 1 and len(set(y)) > 1:  # precisa ter amostras e classes diferentes
         modelo = CatBoostClassifier(
             iterations=200,
             depth=6,
@@ -164,6 +162,9 @@ def treinar_modelo_rf():
         )
         modelo.fit(X, y)
         st.session_state.modelo_rf = modelo
+
+
+
 
 
 # === PREVISÃO ===
