@@ -86,7 +86,7 @@ def salvar_historico_duzia(numero):
 
 # === FEATURES AVANÇADAS ===
 def criar_features_avancadas(historico, window_size):
-    if len(historico) < window_size - 1:
+    if len(historico) < window_size -1:
         return None, None
 
     X, y = [], []
@@ -238,7 +238,7 @@ if numero_atual != st.session_state.ultimo_numero_salvo:
     st.session_state.ultimo_numero_salvo = numero_atual
 
     # Treina modelo
-    if len(st.session_state.historico) % 10 == 0:
+    if len(st.session_state.historico) % 100 == 0:
         treinar_modelo_rf()
 
 # === ALERTA DE RESULTADO ===
