@@ -54,7 +54,7 @@ for k, v in estado_salvo.items():
 
 # === INTERFACE ===
 st.title("🎯 IA Roleta - Padrões de Dúzia (RF + Features Avançadas)")
-tamanho_janela = st.slider("📏 Tamanho da janela de análise", min_value=2, max_value=150, value=WINDOW_SIZE)
+tamanho_janela = st.slider("📏 Tamanho da janela de análise", min_value=5, max_value=150, value=WINDOW_SIZE)
 prob_minima = st.slider("📊 Probabilidade mínima (%)", min_value=10, max_value=100, value=30) / 100.0
 
 # === FUNÇÕES AUXILIARES ===
@@ -84,71 +84,73 @@ def salvar_historico_duzia(numero):
     joblib.dump(st.session_state.historico, HISTORICO_PATH)
     return duzia
 
-# === FEATURES AVANÇADAS ===
-def criar_features_avancadas(historico):
-    if len(historico) < window_size -1:
-        return None, None
+# === FEATURES (única função para treino e previsão) ===
+def extrair_features(janela):
+    features = []
+    window_size = len(janela)
 
+    # Sequência direta
+    features.extend(janela)
+
+    # Frequência simples
+    contador = Counter(janela)
+    for d in [1, 2, 3]:
+        features.append(contador.get(d, 0) / window_size)
+
+    # Frequência ponderada
+    pesos = np.array([0.9**i for i in range(window_size-1, -1, -1)])
+    for d in [1, 2, 3]:
+        fw = sum(w for val, w in zip(janela, pesos) if val == d) / pesos.sum()
+        features.append(fw)
+
+    # Alternância simples e ponderada
+    alternancias = sum(1 for j in range(1, window_size) if janela[j] != janela[j-1])
+    features.append(alternancias / (window_size-1))
+    features.append(sum((janela[j] != janela[j-1]) * 0.9**(window_size-1-j) for j in range(1, window_size)) /
+                    sum(0.9**i for i in range(window_size-1)))
+
+    # Tendência normalizada
+    tend = [0, 0, 0]
+    for val, w in zip(janela, pesos):
+        if val in [1, 2, 3]:
+            tend[val-1] += w
+    total = sum(tend) if sum(tend) > 0 else 1
+    features.extend([t/total for t in tend])
+    features.append(max(tend) - min(tend))
+
+    # Contagem zeros
+    features.append(janela.count(0) / window_size)
+
+    # Última ocorrência de cada dúzia
+    for d in [1, 2, 3]:
+        try: idx = window_size - 1 - janela[::-1].index(d)
+        except ValueError: idx = window_size
+        features.append(idx / window_size)
+
+    # Últimas 5 rodadas
+    ult5 = janela[-5:]
+    for d in [1, 2, 3]:
+        features.append(ult5.count(d) / 5)
+
+    return features
+
+def criar_dataset(historico, window_size):
+    if len(historico) < window_size - 1:
+        return None, None
     X, y = [], []
     seq = list(historico)
-
     for i in range(len(seq) - window_size):
         janela = seq[i:i+window_size]
         alvo = seq[i+window_size]
-        features = []
-
-        # Sequência direta
-        features.extend(janela)
-
-        # Frequência simples
-        contador = Counter(janela)
-        for d in [1,2,3]:
-            features.append(contador.get(d, 0)/window_size)
-
-        # Frequência ponderada
-        pesos = np.array([0.9**i for i in range(window_size-1, -1, -1)])
-        for d in [1,2,3]:
-            fw = sum(w for val, w in zip(janela, pesos) if val==d)/pesos.sum()
-            features.append(fw)
-
-        # Alternância simples e ponderada
-        alternancias = sum(1 for j in range(1, window_size) if janela[j] != janela[j-1])
-        features.append(alternancias/(window_size-1))
-        features.append(sum((janela[j]!=janela[j-1])*0.9**(window_size-1-j) for j in range(1, window_size))/sum(0.9**i for i in range(window_size-1)))
-
-        # Tendência normalizada
-        tend = [0,0,0]
-        for val, w in zip(janela, pesos):
-            if val in [1,2,3]: tend[val-1] += w
-        total = sum(tend) if sum(tend) > 0 else 1
-        features.extend([t/total for t in tend])
-
-        # Diferença mais forte / mais fraca
-        features.append(max(tend)-min(tend))
-
-        # Contagem zeros
-        features.append(janela.count(0)/window_size)
-
-        # Última ocorrência de cada dúzia
-        for d in [1,2,3]:
-            try: idx = window_size - 1 - janela[::-1].index(d)
-            except ValueError: idx = window_size
-            features.append(idx/window_size)
-
-        # Últimas 5 rodadas
-        ultimos5 = janela[-5:]
-        for d in [1,2,3]:
-            features.append(ultimos5.count(d)/5)
-
-        X.append(features)
+        X.append(extrair_features(janela))
         y.append(alvo)
-
     return np.array(X), np.array(y)
 
 # === TREINAMENTO ===
 def treinar_modelo_rf():
-    X, y = criar_features_avancadas(st.session_state.historico, window_size=tamanho_janela)
-    if X is None or len(X)==0: return
+    X, y = criar_dataset(st.session_state.historico, tamanho_janela)
+    if X is None or len(X) == 0:
+        return
     rf = RandomForestClassifier(
         n_estimators=700,
         max_depth=14,
@@ -164,55 +166,9 @@ def treinar_modelo_rf():
 # === PREVISÃO ===
 def prever_duzia_rf():
     janela = list(st.session_state.historico)[-tamanho_janela:]
-    if len(janela) < tamanho_janela: return None, None
-    features = []
-
-    # Sequência direta
-    features.extend(janela)
-
-    # Frequências simples e ponderadas
-    contador = Counter(janela)
-    for d in [1,2,3]:
-        features.append(contador.get(d,0)/tamanho_janela)
-    pesos = np.array([0.9**i for i in range(tamanho_janela-1, -1, -1)])
-    for d in [1,2,3]:
-        features.append(sum(w for val,w in zip(janela,pesos) if val==d)/pesos.sum())
-
-    # Últimas 20 rodadas ponderadas
-    ult20 = janela[-20:] if len(janela)>=20 else janela
-    pesos20 = np.array([0.9**i for i in range(len(ult20)-1,-1,-1)])
-    for d in [1,2,3]:
-        features.append(sum(w for val,w in zip(ult20,pesos20) if val==d)/pesos20.sum())
-
-    # Alternâncias simples e ponderada
-    alt_simples = sum(1 for j in range(1,tamanho_janela) if janela[j]!=janela[j-1])/(tamanho_janela-1)
-    alt_ponderada = sum((janela[j]!=janela[j-1])*0.9**(tamanho_janela-1-j) for j in range(1,tamanho_janela))/sum(0.9**i for i in range(tamanho_janela-1))
-    features.extend([alt_simples, alt_ponderada])
-
-    # Tendência normalizada e diferença
-    tend = [0,0,0]
-    for val,w in zip(janela,pesos):
-        if val in [1,2,3]: tend[val-1]+=w
-    total = sum(tend) if sum(tend)>0 else 1
-    features.extend([t/total for t in tend])
-    features.append(max(tend)-min(tend))
-
-    # Contagem zeros
-    features.append(janela.count(0)/tamanho_janela)
-
-    # Última ocorrência
-    for d in [1,2,3]:
-        try: idx = tamanho_janela-1 - janela[::-1].index(d)
-        except ValueError: idx = tamanho_janela
-        features.append(idx/tamanho_janela)
-
-    # Últimas 5 rodadas
-    ult5 = janela[-5:]
-    for d in [1,2,3]:
-        features.append(ult5.count(d)/5)
-
-    # Previsão
-    features = np.array(features).reshape(1,-1)
+    if len(janela) < tamanho_janela:
+        return None, None
+    features = np.array(extrair_features(janela)).reshape(1, -1)
     try:
         probs = st.session_state.modelo_rf.predict_proba(features)[0]
         classes = st.session_state.modelo_rf.classes_
@@ -223,6 +179,7 @@ def prever_duzia_rf():
     top_idxs = np.argsort(probs)[-2:][::-1]
     top_duzias = classes[top_idxs]
     top_probs = probs[top_idxs]
+
     return list(top_duzias), list(top_probs)
 
 # === LOOP PRINCIPAL ===
@@ -237,11 +194,10 @@ if numero_atual != st.session_state.ultimo_numero_salvo:
     duzia_atual = salvar_historico_duzia(numero_atual)
     st.session_state.ultimo_numero_salvo = numero_atual
 
-    # Treina modelo
-    if len(st.session_state.historico) % 1 == 0:
+    if len(st.session_state.historico) >= tamanho_janela + 10 and len(st.session_state.historico) % 10 == 0:
         treinar_modelo_rf()
 
-# === ALERTA DE RESULTADO ===
+# === ALERTA DE RESULTADO === (SEM ALTERAÇÃO)
 if st.session_state.ultimo_resultado_numero != numero_atual:
     st.session_state.ultimo_resultado_numero = numero_atual
 
@@ -254,7 +210,6 @@ if st.session_state.ultimo_resultado_numero != numero_atual:
         else:
             enviar_telegram_async(f"✅ Saiu {numero_atual} ({valor}ª dúzia): 🔴", delay=1)
 
-    # Previsão
     if st.session_state.modelo_rf is not None and len(st.session_state.historico) >= tamanho_janela:
         try:
             duzias_previstas, probs = prever_duzia_rf()
