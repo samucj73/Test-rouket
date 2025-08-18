@@ -16,7 +16,7 @@ HISTORICO_PATH = Path("historico.pkl")
 ESTADO_PATH = Path("estado.pkl")
 MAX_HIST_LEN = 4500
 REFRESH_INTERVAL = 5000  # 5 segundos
-WINDOW_SIZE = 100  # janela para RF
+WINDOW_SIZE = 6  # janela para RF
 
 # === CONFIGURAÇÕES DE ESTADO ===
 try:
