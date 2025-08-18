@@ -238,7 +238,7 @@ if numero_atual != st.session_state.ultimo_numero_salvo:
     st.session_state.ultimo_numero_salvo = numero_atual
 
     # Treina modelo
-    if len(st.session_state.historico) % 100 == 0:
+    if len(st.session_state.historico) % 1 == 0:
         treinar_modelo_rf()
 
 # === ALERTA DE RESULTADO ===
