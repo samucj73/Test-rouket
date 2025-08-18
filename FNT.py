@@ -323,7 +323,7 @@ if st.session_state.ultimo_resultado_numero != numero_atual:
                 # único alerta de previsão por rodada
 
                 mensagem_alerta = (
-    f"📊 <b>ENT DÚZIA:</b>{duzia_prevista}"
+    f"📊 <b>ENT DÚZIA: </b>{duzia_prevista}"
     f"(conf: {prob*100:.1f}%)"
 )
                 
