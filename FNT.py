@@ -321,10 +321,12 @@ if st.session_state.ultimo_resultado_numero != numero_atual:
                 st.session_state.ultima_chave_alerta = f"duzia_{duzia_prevista}"
 
                 # único alerta de previsão por rodada
+
                 mensagem_alerta = (
-                    f"📊 <b>ENTRADA DÚZIA RF:</b> {duzia_prevista}
-                    f"(conf: {prob*100:.1f}%)"
-                )
+    f"📊 <b>ENTRADA DÚZIA RF:</b> {duzia_prevista}a "
+    f"(conf: {prob*100:.1f}%)"
+)
+                
                 enviar_telegram_async(mensagem_alerta, delay=10)
         except Exception as e:
             st.warning(f"Erro na previsão: {e}")
