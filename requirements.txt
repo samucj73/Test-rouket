@@ -9,4 +9,5 @@ pyTelegramBotAPI
 python-dotenv
 lightgbm
 selenium
+catboost
 
