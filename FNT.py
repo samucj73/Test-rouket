@@ -252,8 +252,11 @@ except Exception as e:
     st.stop()
 
 # Atualiza histórico apenas se novo número
-if len(st.session_state.historico) == 0 or numero_para_duzia(numero_atual) != st.session_state.historico[-1]:
+
+if numero_atual != st.session_state.ultimo_numero_salvo:
     duzia_atual = salvar_historico_duzia(numero_atual)
+    st.session_state.ultimo_numero_salvo = numero_atual
+
 
     # Treina modelo RF se houver histórico suficiente
     if len(st.session_state.historico) % 10 == 0:
