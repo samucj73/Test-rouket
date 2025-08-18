@@ -7,6 +7,7 @@ from collections import deque, Counter
 from pathlib import Path
 from streamlit_autorefresh import st_autorefresh
 from sklearn.ensemble import RandomForestClassifier
+from catboost import CatBoostClassifier
 
 # === CONFIGURAÇÕES ===
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
@@ -195,7 +196,7 @@ if numero_atual != st.session_state.ultimo_numero_salvo:
     duzia_atual = salvar_historico_duzia(numero_atual)
     st.session_state.ultimo_numero_salvo = numero_atual
 
-    if len(st.session_state.historico) >= tamanho_janela + 10 and len(st.session_state.historico) % 10 == 0:
+    if len(st.session_state.historico) >= tamanho_janela + 2 and len(st.session_state.historico) % 2 == 0:
         treinar_modelo_rf()
 
 # === ALERTA DE RESULTADO === (SEM ALTERAÇÃO)
