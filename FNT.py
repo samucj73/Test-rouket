@@ -97,12 +97,14 @@ def numero_para_duzia(num):
     else:
         return 3
 
+
 def salvar_historico_duzia(numero):
     duzia = numero_para_duzia(numero)
-    if len(st.session_state.historico) == 0 or duzia != st.session_state.historico[-1]:
-        st.session_state.historico.append(duzia)
-        joblib.dump(st.session_state.historico, HISTORICO_PATH)
+    st.session_state.historico.append(duzia)  # sempre adiciona
+    joblib.dump(st.session_state.historico, HISTORICO_PATH)
     return duzia
+
+
 
 # === FEATURES AVANÇADAS ===
 def criar_features_avancadas(historico, window_size):
