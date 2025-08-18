@@ -86,7 +86,7 @@ def salvar_historico_duzia(numero):
 
 # === FEATURES AVANÇADAS ===
 def criar_features_avancadas(historico, window_size):
-    if len(historico) < window_size + 5:
+    if len(historico) < window_size + 1:
         return None, None
 
     X, y = [], []
