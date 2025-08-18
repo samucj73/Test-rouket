@@ -11,12 +11,12 @@ from sklearn.ensemble import RandomForestClassifier
 # === CONFIGURAÇÕES ===
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
-TELEGRAM_CHAT_ID = "-1002796136111"
+TELEGRAM_CHAT_ID = "5121457416"
 HISTORICO_PATH = Path("historico.pkl")
 ESTADO_PATH = Path("estado.pkl")
 MAX_HIST_LEN = 4500
 REFRESH_INTERVAL = 5000  # 5 segundos
-WINDOW_SIZE = 100  # janela para RF
+WINDOW_SIZE = 15  # janela para RF
 
 # === CARREGA ESTADO ===
 try:
