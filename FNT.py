@@ -191,7 +191,6 @@ def treinar_modelo_rf():
     st.session_state.modelo_rf = rf
 
 # === PREVISÃO ===
-
 def prever_duzia_rf():
     janela = list(st.session_state.historico)[-tamanho_janela:]
     features = []
@@ -255,6 +254,8 @@ def prever_duzia_rf():
     melhor_idx = np.argmax(probs)
 
     return classes[melhor_idx], probs[melhor_idx]
+
+
 
 
 # === LOOP PRINCIPAL PROTEGIDO ===
