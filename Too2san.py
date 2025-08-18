@@ -147,21 +147,22 @@ def criar_dataset(historico, window_size):
     return np.array(X), np.array(y)
 
 # === TREINAMENTO ===
+
+from catboost import CatBoostClassifier
+
 def treinar_modelo_rf():
-    X, y = criar_dataset(st.session_state.historico, tamanho_janela)
-    if X is None or len(X) == 0:
-        return
-    rf = RandomForestClassifier(
-        n_estimators=700,
-        max_depth=14,
-        min_samples_leaf=1,
-        max_features="sqrt",
-        random_state=42,
-        class_weight="balanced_subsample",
-        n_jobs=-1
-    )
-    rf.fit(X, y)
-    st.session_state.modelo_rf = rf
+    X, y = criar_dataset(st.session_state.historico)
+    if len(set(y)) > 1:  # precisa ter pelo menos 2 classes
+        modelo = CatBoostClassifier(
+            iterations=200,
+            depth=6,
+            learning_rate=0.1,
+            loss_function='MultiClass',
+            verbose=False
+        )
+        modelo.fit(X, y)
+        st.session_state.modelo_rf = modelo
+
 
 # === PREVISÃO ===
 def prever_duzia_rf():
