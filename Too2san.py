@@ -31,8 +31,7 @@ except Exception as e:
     estado_salvo = {}
 
 # === SESSION STATE ===
-if "historico" not in st.session_state:
-    st.session_state.historico = []
+
 if "ultimo_numero_salvo" not in st.session_state:
     st.session_state.ultimo_numero_salvo = None
 if "ultima_chave_alerta" not in st.session_state:
