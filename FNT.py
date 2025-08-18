@@ -68,7 +68,7 @@ if ESTADO_PATH.exists():
 
 # === INTERFACE ===
 st.title("🎯 IA Roleta - Padrões de Dúzia (RF + Features Avançadas)")
-tamanho_janela = st.slider("📏 Tamanho da janela de análise", min_value=2, max_value=15, value=WINDOW_SIZE)
+tamanho_janela = st.slider("📏 Tamanho da janela de análise", min_value=2, max_value=25, value=WINDOW_SIZE)
 prob_minima = st.slider("📊 Probabilidade mínima (%)", min_value=10, max_value=100, value=30) / 100.0
 
 # === FUNÇÕES AUXILIARES ===
