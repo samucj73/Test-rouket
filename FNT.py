@@ -166,6 +166,7 @@ def montar_seq(labels_func, numeros):
 # =========================
 # TREINAMENTO
 # =========================
+
 def treinar_modelos_rf():
     numeros = list(st.session_state.historico_numeros)
     if len(numeros) < tamanho_janela + 10:
@@ -174,15 +175,14 @@ def treinar_modelos_rf():
     # Dúzia
     seq_duzia = montar_seq(numero_para_duzia, numeros)
     Xd, yd = criar_features_de_seq(seq_duzia, tamanho_janela)
-    if Xd is not None and len(Xd)>0:
-        rf_d = RandomForestClassifier(
-            n_estimators=700,
-            max_depth=14,
-            min_samples_leaf=1,
-            max_features="sqrt",
-            random_state=42,
-            class_weight="balanced_subsample",
-            n_jobs=-1
+    if Xd is not None and len(Xd) > 0:
+        rf_d = CatBoostClassifier(
+            iterations=500,
+            depth=8,
+            learning_rate=0.1,
+            loss_function='MultiClass',
+            verbose=0,
+            random_state=42
         )
         rf_d.fit(Xd, yd)
         st.session_state.modelo_rf_duzia = rf_d
@@ -190,18 +190,18 @@ def treinar_modelos_rf():
     # Coluna
     seq_col = montar_seq(numero_para_coluna, numeros)
     Xc, yc = criar_features_de_seq(seq_col, tamanho_janela)
-    if Xc is not None and len(Xc)>0:
-        rf_c = RandomForestClassifier(
-            n_estimators=700,
-            max_depth=14,
-            min_samples_leaf=1,
-            max_features="sqrt",
-            random_state=42,
-            class_weight="balanced_subsample",
-            n_jobs=-1
+    if Xc is not None and len(Xc) > 0:
+        rf_c = CatBoostClassifier(
+            iterations=500,
+            depth=8,
+            learning_rate=0.1,
+            loss_function='MultiClass',
+            verbose=0,
+            random_state=42
         )
         rf_c.fit(Xc, yc)
         st.session_state.modelo_rf_coluna = rf_c
+
 
 # =========================
 # PREVISÃO / ALERTA
