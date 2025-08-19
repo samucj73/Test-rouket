@@ -24,8 +24,8 @@ st.markdown("""
 """, unsafe_allow_html=True)
 # === CONFIGURAÇÕES ===
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
-TELEGRAM_TOKEN = "SEU_TOKEN"
-TELEGRAM_CHAT_ID = "SEU_CHAT_ID"
+TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
+TELEGRAM_CHAT_ID = "-1002796136111"
 HISTORICO_PATH = Path("historico.pkl")
 ESTADO_PATH = Path("estado.pkl")
 MAX_HIST_LEN = 4500
