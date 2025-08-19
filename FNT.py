@@ -172,6 +172,42 @@ st.write("Último número:", numero_atual)
 st.write(f"Acertos: {st.session_state.acertos_top} / {st.session_state.total_top}")
 st.write("Últimos registros (dúzia):", list(st.session_state.historico_duzia)[-12:])
 st.write("Últimos registros (coluna):", list(st.session_state.historico_coluna)[-12:])
+# === INTERFACE BONITA ===
+st.set_page_config(
+    page_title="🎯 IA Roleta",
+    page_icon="🎲",
+    layout="centered",
+    initial_sidebar_state="collapsed"
+)
+
+st.title("🎯 IA Roleta - Previsão de Dúzia + Coluna")
+
+col1, col2, col3 = st.columns(3)
+col1.metric("Último número", numero_atual)
+col2.metric("Acertos", st.session_state.acertos_top)
+col3.metric("Total rodadas", st.session_state.total_top)
+
+if st.session_state.ultima_entrada:
+    st.subheader("📊 Última Previsão")
+    st.write(f"➡️ Dúzia: **{st.session_state.ultima_entrada['duzia']}**")
+    st.write(f"➡️ Coluna: **{st.session_state.ultima_entrada['coluna']}**")
+
+st.subheader("📜 Últimos registros")
+hist_duzia = list(st.session_state.historico_duzia)[-12:]
+hist_coluna = list(st.session_state.historico_coluna)[-12:]
+
+st.table({
+    "Dúzia": hist_duzia,
+    "Coluna": hist_coluna
+})
+
+# === FORÇAR TEMA CLARO ===
+st.markdown("""
+    <style>
+    body { background-color: #ffffff; color: #000000; }
+    .stApp { background-color: #ffffff; }
+    </style>
+""", unsafe_allow_html=True)
 
 # === AUTO REFRESH ===
 st_autorefresh(interval=REFRESH_INTERVAL, key="atualizacao")
