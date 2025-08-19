@@ -7,6 +7,7 @@ from collections import deque, Counter
 from pathlib import Path
 from streamlit_autorefresh import st_autorefresh
 from sklearn.ensemble import RandomForestClassifier
+from catboost import CatBoostClassifier
 
 # =========================
 # CONFIGURAÇÕES
