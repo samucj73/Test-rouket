@@ -199,6 +199,31 @@ def treinar_modelos_catboost():
 # =========================
 # PREVISÃO COM FALBACK
 # =========================
+def prever_top2_cat(seq_labels, modelo_cat):
+    if modelo_cat is None:
+        return None, None
+    # Cria features da janela atual
+    feats = _features_atual(seq_labels, tamanho_janela)
+    if feats is None:
+        return None, None
+    try:
+        probs = modelo_cat.predict_proba(feats)[0]
+        classes = modelo_cat.classes_
+    except:
+        return None, None
+
+    # Mapeia classes para probabilidades
+    mapa = {int(c): float(p) for c, p in zip(classes, probs)}
+
+    # Opcional: desconsidera zero
+    if 0 in mapa:
+        mapa[0] = -1.0
+
+    # Ordena e pega top 2
+    ordenado = sorted(mapa.items(), key=lambda kv: kv[1], reverse=True)
+    top = ordenado[:2]
+    return [t[0] for t in top], [max(0.0, t[1]) for t in top]
+
 def prever_top2_cat(seq_labels, modelo):
     if modelo is None:
         # fallback: pegar últimas 2 classes mais frequentes
