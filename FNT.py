@@ -273,45 +273,76 @@ if numero_atual != st.session_state.ultimo_numero_salvo:
         treinar_modelos_rf()
 
 # ALERTA DE RESULTADO
+
+# =========================
+# ALERTA DE RESULTADO (GREEN/RED) — 1x por rodada
+# =========================
 if st.session_state.ultimo_resultado_numero != numero_atual:
     st.session_state.ultimo_resultado_numero = numero_atual
+
     if st.session_state.ultima_entrada:
         st.session_state.total_top += 1
         tipo = st.session_state.tipo_entrada_anterior
-        valor = numero_para_duzia(numero_atual) if tipo=="duzia" else numero_para_coluna(numero_atual)
-        if valor in st.session_state.ultima_entrada:
-            st.session_state.acertos_top += 1
-            enviar_telegram_async(f"✅ Saiu {numero_atual} ({tipo.capitalize()} {valor}) — 🟢 GREEN", delay=1)
-        else:
-            enviar_telegram_async(f"✅ Saiu {numero_atual} ({tipo.capitalize()} {valor}) — 🔴 RED", delay=1)
+        valor = numero_para_duzia(numero_atual) if tipo == "duzia" else numero_para_coluna(numero_atual)
 
-# PREVISÃO E ALERTA
+        # Criar chave de resultado única
+        chave_resultado = f"{tipo}_{valor}_{st.session_state.ultima_chave_alerta}"
+
+        # Envia alerta de resultado apenas se ainda não enviado
+        if st.session_state.get("ultima_chave_resultado") != chave_resultado:
+            st.session_state.ultima_chave_resultado = chave_resultado
+
+            if valor in st.session_state.ultima_entrada:
+                st.session_state.acertos_top += 1
+                enviar_telegram_async(f"✅ Saiu {numero_atual} ({tipo.capitalize()} {valor}) — 🟢 GREEN", delay=1)
+            else:
+                enviar_telegram_async(f"✅ Saiu {numero_atual} ({tipo.capitalize()} {valor}) — 🔴 RED", delay=1)
+
+# =========================
+# ALERTA DE PREVISÃO (TOP-2)
+# =========================
 nums = list(st.session_state.historico_numeros)
 if len(nums) >= tamanho_janela and (st.session_state.modelo_rf_duzia or st.session_state.modelo_rf_coluna):
+
     seq_duzia = montar_seq(numero_para_duzia, nums)
     seq_coluna = montar_seq(numero_para_coluna, nums)
+
+    # Top-2
     top_d, prob_d = prever_top2(seq_duzia, st.session_state.modelo_rf_duzia)
     top_c, prob_c = prever_top2(seq_coluna, st.session_state.modelo_rf_coluna)
+
     soma_d = sum(prob_d) if prob_d else -1.0
     soma_c = sum(prob_c) if prob_c else -1.0
-    tipo_escolhido = "duzia" if soma_d>=soma_c else "coluna"
-    classes, probs = (top_d, prob_d) if tipo_escolhido=="duzia" else (top_c, prob_c)
-    pode_alertar = classes is not None and len(classes)==2 and (max(probs)>=prob_minima or prob_minima<=0)
+
+    tipo_escolhido = "duzia" if soma_d >= soma_c else "coluna"
+    classes, probs = (top_d, prob_d) if tipo_escolhido == "duzia" else (top_c, prob_c)
+
+    pode_alertar = classes is not None and len(classes) == 2 and (max(probs) >= prob_minima or prob_minima <= 0)
 
     if pode_alertar:
         chave_atual = f"{tipo_escolhido}_{classes[0]}_{classes[1]}"
-        enviar=False
+
+        enviar = False
+        # Só envia se mudou ou se passaram 3 rodadas sem enviar
         if st.session_state.ultima_chave_alerta != chave_atual:
-            enviar=True; st.session_state.contador_sem_alerta=0
-        elif st.session_state.contador_sem_alerta>=3:
-            enviar=True; st.session_state.contador_sem_alerta=0
+            enviar = True
+            st.session_state.contador_sem_alerta = 0
+        elif st.session_state.contador_sem_alerta >= 3:
+            enviar = True
+            st.session_state.contador_sem_alerta = 0
         else:
-            st.session_state.contador_sem_alerta+=1
+            st.session_state.contador_sem_alerta += 1
+
         if enviar:
-            st.session_state.ultima_entrada=classes
-            st.session_state.tipo_entrada_anterior=tipo_escolhido
-            st.session_state.ultima_chave_alerta=chave_atual
-            msg = f"📊 <b>ENTRADA ({tipo_escolhido.upper()})</b>\n➡️ {classes[0]}ª ({probs[0]*100:.1f}%)\n➡️ {classes[1]}ª ({probs[1]*100:.1f}%)"
+            st.session_state.ultima_entrada = classes
+            st.session_state.tipo_entrada_anterior = tipo_escolhido
+            st.session_state.ultima_chave_alerta = chave_atual
+
+            msg = (
+                f"📊 <b>ENTRADA ({tipo_escolhido.upper()})</b>\n"
+                f"➡️ {classes[0]}ª ({probs[0]*100:.1f}%)\n"
+                f"➡️ {classes[1]}ª ({probs[1]*100:.1f}%)"
+            )
             enviar_telegram_async(msg, delay=2)
 
 # =========================
