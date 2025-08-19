@@ -240,7 +240,7 @@ if numero_atual != st.session_state.ultimo_numero_salvo:
     salvar_numero(numero_atual)
     st.session_state.ultimo_numero_salvo=numero_atual
     if len(st.session_state.historico_numeros)>=tamanho_janela+10:
-        treinar_modelos_cat()
+        treinar_modelos_catboost()
 
 # =========================
 # ALERTA DE RESULTADO
