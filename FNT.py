@@ -96,54 +96,52 @@ def salvar_numero(numero:int):
 # =========================
 # FEATURES
 # =========================
-def criar_features_de_seq(seq_labels, window_size):
-    if len(seq_labels)<window_size+5: return None,None
-    X,y=[],[]
-    S=list(seq_labels)
-    for i in range(len(S)-window_size):
-        janela=S[i:i+window_size]
-        alvo=S[i+window_size]
-        feats=[]
-        feats.extend(janela)
-        contador=Counter(janela)
-        for d in [1,2,3]: feats.append(contador.get(d,0)/window_size)
-        pesos=np.array([0.9**k for k in range(window_size-1,-1,-1)])
-        pesos_sum=pesos.sum()
-        for d in [1,2,3]: feats.append(sum(w for val,w in zip(janela,pesos) if val==d)/pesos_sum)
-        ult=janela[-20:] if window_size>=20 else janela
-        pesos20=np.array([0.9**k for k in range(len(ult)-1,-1,-1)])
-        s20=pesos20.sum() if pesos20.sum()!=0 else 1.0
-        for d in [1,2,3]: feats.append(sum(w for val,w in zip(ult,pesos20) if val==d)/s20)
-        if window_size>1:
-            alt_simples=sum(1 for j in range(1,window_size) if janela[j]!=janela[j-1])/(window_size-1)
-            denom=sum(0.9**k for k in range(window_size-1))
-            alt_pond=sum((janela[j]!=janela[j-1])*(0.9**(window_size-1-j)) for j in range(1,window_size))/(denom if denom!=0 else 1)
-        else: alt_simples,alt_pond=0.0,0.0
-        feats.extend([alt_simples,alt_pond])
-        tend=[0.0,0.0,0.0]
-        for val,w in zip(janela,pesos):
-            if val in [1,2,3]: tend[val-1]+=w
-        total_tend=sum(tend) if sum(tend)>0 else 1.0
-        feats.extend([t/total_tend for t in tend])
-        feats.append(max(tend)-min(tend))
-        feats.append(janela.count(0)/window_size)
-        for d in [1,2,3]:
-            try: idx=window_size-1-janela[::-1].index(d); feats.append(idx/window_size)
-            except ValueError: feats.append(1.0)
-        ult5=janela[-5:] if window_size>=5 else janela
-        for d in [1,2,3]: feats.append(ult5.count(d)/(len(ult5) if len(ult5) else 1))
-        X.append(feats)
-        y.append(alvo)
-    return np.array(X,dtype=np.float32),np.array(y)
+# =========================
+# FUNÇÃO DE FEATURES ATUAL
+# =========================
+def _features_atual(seq_labels, window_size):
+    if len(seq_labels) < window_size:
+        return None
+    janela = seq_labels[-window_size:]
+    feats=[]
+    feats.extend(janela)
+    contador = Counter(janela)
+    for d in [1,2,3]:
+        feats.append(contador.get(d,0)/window_size)
+    pesos = np.array([0.9**k for k in range(window_size-1,-1,-1)])
+    pesos_sum = pesos.sum() if pesos.sum()!=0 else 1.0
+    for d in [1,2,3]:
+        feats.append(sum(w for val,w in zip(janela,pesos) if val==d)/pesos_sum)
+    # Alternância simples e ponderada
+    if window_size>1:
+        alt_simples = sum(1 for j in range(1,window_size) if janela[j]!=janela[j-1])/(window_size-1)
+        denom=sum(0.9**k for k in range(window_size-1))
+        alt_pond = sum((janela[j]!=janela[j-1])*(0.9**(window_size-1-j)) for j in range(1,window_size))/(denom if denom!=0 else 1)
+    else:
+        alt_simples, alt_pond = 0.0, 0.0
+    feats.extend([alt_simples, alt_pond])
+    # Tendência
+    tend=[0.0,0.0,0.0]
+    for val,w in zip(janela,pesos):
+        if val in [1,2,3]:
+            tend[val-1]+=w
+    total_tend=sum(tend) if sum(tend)>0 else 1.0
+    feats.extend([t/total_tend for t in tend])
+    feats.append(max(tend)-min(tend))
+    feats.append(janela.count(0)/window_size)
+    # Últimas posições de cada classe
+    for d in [1,2,3]:
+        try: idx=window_size-1-janela[::-1].index(d)
+        except ValueError: idx=window_size
+        feats.append(idx/window_size)
+    # Últimos 5
+    ult5=janela[-5:] if window_size>=5 else janela
+    for d in [1,2,3]:
+        feats.append(ult5.count(d)/(len(ult5) if len(ult5) else 1))
+    return np.array(feats,dtype=np.float32).reshape(1,-1)
 
-def montar_seq(labels_func,numeros):
-    return [labels_func(n) for n in numeros]
-
 # =========================
-# TREINAMENTO
-# =========================
-# =========================
-# TREINAMENTO COM CATBOOST
+# TREINAMENTO CATBOOST
 # =========================
 def treinar_modelos_catboost():
     numeros = list(st.session_state.historico_numeros)
@@ -154,102 +152,65 @@ def treinar_modelos_catboost():
     # --- Dúzia ---
     seq_duzia = montar_seq(numero_para_duzia, numeros)
     Xd, yd = criar_features_de_seq(seq_duzia, tamanho_janela)
-    if Xd is not None and len(Xd) > 0:
-        yd_classes = set(yd)
-        if len(yd_classes) > 1:
-            modelo_duzia = CatBoostClassifier(
-                iterations=500,
-                depth=8,
-                learning_rate=0.1,
-                loss_function='MultiClass',
-                verbose=0,
-                random_state=42
-            )
-            modelo_duzia.fit(np.array(Xd, dtype=float), yd)
-            st.session_state.modelo_rf_duzia = modelo_duzia
-            st.write("✅ Modelo Dúzia treinado")
-        else:
-            st.write(f"⚠️ Modelo Dúzia NÃO treinado: pouca diversidade de classes ({yd_classes})")
+    if Xd is not None and len(Xd)>0 and len(set(yd))>1:
+        modelo_duzia = CatBoostClassifier(
+            iterations=500,
+            depth=8,
+            learning_rate=0.1,
+            loss_function='MultiClass',
+            verbose=0,
+            random_state=42
+        )
+        modelo_duzia.fit(np.array(Xd,dtype=float), yd)
+        st.session_state.modelo_cat_duzia = modelo_duzia
+        st.write("✅ Modelo Dúzia treinado")
     else:
-        st.write("⚠️ Modelo Dúzia NÃO treinado: features insuficientes")
+        st.write("⚠️ Modelo Dúzia NÃO treinado")
 
     # --- Coluna ---
     seq_col = montar_seq(numero_para_coluna, numeros)
     Xc, yc = criar_features_de_seq(seq_col, tamanho_janela)
-    if Xc is not None and len(Xc) > 0:
-        yc_classes = set(yc)
-        if len(yc_classes) > 1:
-            modelo_col = CatBoostClassifier(
-                iterations=500,
-                depth=8,
-                learning_rate=0.1,
-                loss_function='MultiClass',
-                verbose=0,
-                random_state=42
-            )
-            modelo_col.fit(np.array(Xc, dtype=float), yc)
-            st.session_state.modelo_rf_coluna = modelo_col
-            st.write("✅ Modelo Coluna treinado")
-        else:
-            st.write(f"⚠️ Modelo Coluna NÃO treinado: pouca diversidade de classes ({yc_classes})")
+    if Xc is not None and len(Xc)>0 and len(set(yc))>1:
+        modelo_col = CatBoostClassifier(
+            iterations=500,
+            depth=8,
+            learning_rate=0.1,
+            loss_function='MultiClass',
+            verbose=0,
+            random_state=42
+        )
+        modelo_col.fit(np.array(Xc,dtype=float), yc)
+        st.session_state.modelo_cat_coluna = modelo_col
+        st.write("✅ Modelo Coluna treinado")
     else:
-        st.write("⚠️ Modelo Coluna NÃO treinado: features insuficientes")
-
+        st.write("⚠️ Modelo Coluna NÃO treinado")
 
 # =========================
-# PREVISÃO COM FALBACK
+# FUNÇÃO DE PREVISÃO TOP2
 # =========================
-def prever_top2_cat(seq_labels, modelo_cat):
-    if modelo_cat is None:
-        return None, None
-    # Cria features da janela atual
-    feats = _features_atual(seq_labels, tamanho_janela)
-    if feats is None:
-        return None, None
-    try:
-        probs = modelo_cat.predict_proba(feats)[0]
-        classes = modelo_cat.classes_
-    except:
-        return None, None
-
-    # Mapeia classes para probabilidades
-    mapa = {int(c): float(p) for c, p in zip(classes, probs)}
-
-    # Opcional: desconsidera zero
-    if 0 in mapa:
-        mapa[0] = -1.0
-
-    # Ordena e pega top 2
-    ordenado = sorted(mapa.items(), key=lambda kv: kv[1], reverse=True)
-    top = ordenado[:2]
-    return [t[0] for t in top], [max(0.0, t[1]) for t in top]
-
 def prever_top2_cat(seq_labels, modelo):
     if modelo is None:
-        # fallback: pegar últimas 2 classes mais frequentes
+        # fallback: últimas 2 classes mais frequentes
         cont = Counter(seq_labels[-tamanho_janela:])
         mais_freq = [k for k,_ in cont.most_common(2)]
         probs = [cont[mais_freq[0]]/tamanho_janela, cont[mais_freq[1]]/tamanho_janela] if len(mais_freq)>1 else [1.0, 0.0]
         return mais_freq, probs
 
     feats = _features_atual(seq_labels, tamanho_janela)
-    if feats is None:
-        st.write("⚠️ Features insuficientes para previsão")
-        return None, None
+    if feats is None: return None, None
 
     try:
         probs_array = modelo.predict_proba(feats)[0]
         classes = modelo.classes_
-        mapa = {int(c): float(p) for c, p in zip(classes, probs_array)}
-        for zero_key in [0]:
-            if zero_key in mapa:
-                mapa[zero_key] = -1.0
+        mapa = {int(c): float(p) for c,p in zip(classes, probs_array)}
+        if 0 in mapa: mapa[0] = -1.0  # desconsidera zero
         ordenado = sorted(mapa.items(), key=lambda kv: kv[1], reverse=True)
         top = ordenado[:2]
-        return [t[0] for t in top], [max(0.0, t[1]) for t in top]
+        return [t[0] for t in top], [max(0.0,t[1]) for t in top]
     except Exception as e:
         st.write("⚠️ Erro na previsão:", e)
         return None, None
+
 
 # =========================
 # LOOP PRINCIPAL
