@@ -8,6 +8,20 @@ from pathlib import Path
 from streamlit_autorefresh import st_autorefresh
 from catboost import CatBoostClassifier
 
+st.set_page_config(
+    page_title="🎯 IA Roleta",
+    page_icon="🎲",
+    layout="centered",
+    initial_sidebar_state="collapsed"
+)
+
+# Forçar Dark Mode manual
+st.markdown("""
+    <style>
+    body { background-color: #0e1117; color: #ffffff; }
+    .stApp { background-color: #0e1117; color: #ffffff; }
+    </style>
+""", unsafe_allow_html=True)
 # === CONFIGURAÇÕES ===
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 TELEGRAM_TOKEN = "SEU_TOKEN"
