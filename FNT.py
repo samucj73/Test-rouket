@@ -264,10 +264,10 @@ if st.session_state.ultimo_resultado_numero != numero_atual:
                 st.session_state.contador_sem_alerta = 0
                 st.session_state.ultima_chave_alerta = f"duzia_{duzia}_col_{coluna}"
                 mensagem_alerta = (
-                  "📊 <b>ENTRADA</b>\n"
-                  f"{duzia}ª Dúzia ({prob_d*100:.1f}%) {coluna}ª Coluna ({prob_c*100:.1f}%)"
-)
-                  enviar_telegram_async(mensagem_alerta, delay=5)
+                    "📊 <b>ENTRADA</b>\n"
+                    f"{duzia}ª Dúzia ({prob_d*100:.1f}%) {coluna}ª Coluna ({prob_c*100:.1f}%)"
+                )
+                enviar_telegram_async(mensagem_alerta, delay=5)
                 
         except Exception as e:
             st.warning(f"Erro na previsão: {e}")
