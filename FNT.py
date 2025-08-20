@@ -348,6 +348,80 @@ def extrair_features(janela):
 # Apenas ajuste: criar_dataset, extrair_features, treinar_modelos, prever_tudo
 # continuam usando st.session_state.historico como lista de números
 
+def criar_dataset(historico, window):
+    """
+    Cria X (features) e y (alvos) para números, dúzia e coluna
+    """
+    hist = list(historico)
+    if len(hist) < window + 1:
+        return np.empty((0, 1)), np.array([]), np.array([]), np.array([])
+    
+    X, y_num, y_dz, y_col = [], [], [], []
+    for i in range(window, len(hist)):
+        janela = hist[i - window:i]
+        if len(janela) < window:
+            continue
+        X.append(extrair_features(janela))
+        alvo = hist[i]  # pega apenas o número do spin atual
+        y_num.append(alvo)
+        y_dz.append(numero_para_duzia(alvo))
+        y_col.append(numero_para_coluna(alvo))
+    return np.array(X), np.array(y_num), np.array(y_dz), np.array(y_col)
+
+def treinar_modelos():
+    """
+    Treina CatBoost para números, dúzia e coluna
+    """
+    X, y_num, y_dz, y_col = criar_dataset(st.session_state.historico, tamanho_janela)
+    if len(X) == 0:
+        return
+
+    modelo_numero = CatBoostClassifier(verbose=0, iterations=200)
+    modelo_duzia = CatBoostClassifier(verbose=0, iterations=200)
+    modelo_coluna = CatBoostClassifier(verbose=0, iterations=200)
+
+    modelo_numero.fit(X, y_num)
+    modelo_duzia.fit(X, y_dz)
+    modelo_coluna.fit(X, y_col)
+
+    st.session_state.modelo_numero = modelo_numero
+    st.session_state.modelo_duzia = modelo_duzia
+    st.session_state.modelo_coluna = modelo_coluna
+
+def prever_tudo(top_k=3):
+    """
+    Faz previsão do próximo número, dúzia e coluna
+    Retorna dict com: numeros (top_k), duzia, prob_duzia, coluna, prob_coluna
+    """
+    if not st.session_state.modelo_numero:
+        return None
+    janela = list(st.session_state.historico)[-tamanho_janela:]
+    X = np.array([extrair_features(janela)])
+    
+    # Números
+    probs_num = st.session_state.modelo_numero.predict_proba(X)[0]
+    top_idx = np.argsort(probs_num)[-top_k:][::-1]
+    numeros = [int(i) for i in top_idx]
+
+    # Dúzia
+    probs_dz = st.session_state.modelo_duzia.predict_proba(X)[0]
+    dz_idx = np.argmax(probs_dz)+0
+    duzia = dz_idx
+    prob_duzia = probs_dz[dz_idx]
+
+    # Coluna
+    probs_co = st.session_state.modelo_coluna.predict_proba(X)[0]
+    co_idx = np.argmax(probs_co)+0
+    coluna = co_idx
+    prob_coluna = probs_co[co_idx]
+
+    return {
+        "numeros": numeros,
+        "duzia": duzia,
+        "prob_duzia": prob_duzia,
+        "coluna": coluna,
+        "prob_coluna": prob_coluna
+    }
 # === LOOP PRINCIPAL (coleta API) ===
 try:
     resposta = requests.get(API_URL, timeout=5).json()
