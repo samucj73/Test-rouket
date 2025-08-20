@@ -87,31 +87,64 @@ def salvar_historico_duzia(numero):
 
 # === FEATURES ===
 def extrair_features(janela):
-    features=[]
-    window_size=len(janela)
+    features = []
+    window_size = len(janela)
+    if window_size == 0:
+        return [0]*30  # retorna vetor padrão se janela estiver vazia
+
+    # adiciona valores brutos da janela
     features.extend(janela)
-    contador=Counter(janela)
-    for d in [1,2,3]: features.append(contador.get(d,0)/window_size)
-    pesos=np.array([0.9**i for i in range(window_size-1,-1,-1)])
-    for d in [1,2,3]:
-        fw=sum(w for val,w in zip(janela,pesos) if val==d)/pesos.sum()
+
+    # frequência relativa de cada dúzia
+    contador = Counter(janela)
+    for d in [1, 2, 3]:
+        features.append(contador.get(d, 0) / window_size)
+
+    # pesos decrescentes para tendência
+    pesos = np.array([0.9**i for i in range(window_size-1, -1, -1)])
+
+    # frequência ponderada
+    for d in [1, 2, 3]:
+        fw = sum(w for val, w in zip(janela, pesos) if val == d) / pesos.sum() if pesos.sum() != 0 else 0
         features.append(fw)
-    alternancias=sum(1 for j in range(1,window_size) if janela[j]!=janela[j-1])
-    features.append(alternancias/(window_size-1))
-    features.append(sum((janela[j]!=janela[j-1])*0.9**(window_size-1-j) for j in range(1,window_size))/sum(0.9**i for i in range(window_size-1)))
-    tend=[0,0,0]
-    for val,w in zip(janela,pesos):
-        if val in [1,2,3]: tend[val-1]+=w
-    total=sum(tend) if sum(tend)>0 else 1
+
+    # alternâncias
+    alternancias = sum(1 for j in range(1, window_size) if janela[j] != janela[j-1])
+    features.append(alternancias / (window_size-1) if window_size > 1 else 0)
+
+    # alternâncias ponderadas
+    sum_pesos = sum(0.9**i for i in range(window_size-1)) if window_size > 1 else 1
+    features.append(
+        sum((janela[j] != janela[j-1]) * 0.9**(window_size-1-j) for j in range(1, window_size)) / sum_pesos
+    )
+
+    # tendência ponderada
+    tend = [0, 0, 0]
+    for val, w in zip(janela, pesos):
+        if val in [1, 2, 3]:
+            tend[val-1] += w
+    total = sum(tend) if sum(tend) > 0 else 1
     features.extend([t/total for t in tend])
+
+    # diferença entre máxima e mínima tendência
     features.append(max(tend)-min(tend))
+
+    # proporção de zeros
     features.append(janela.count(0)/window_size)
-    for d in [1,2,3]:
-        try: idx=window_size-1 - janela[::-1].index(d)
-        except ValueError: idx=window_size
+
+    # última ocorrência de cada dúzia
+    for d in [1, 2, 3]:
+        try:
+            idx = window_size - 1 - ventana[::-1].index(d)
+        except ValueError:
+            idx = window_size
         features.append(idx/window_size)
-    ult5=janela[-5:]
-    for d in [1,2,3]: features.append(ult5.count(d)/5)
+
+    # frequência nas últimas 5 rodadas
+    ult5 = ventana[-5:]
+    for d in [1, 2, 3]:
+        features.append(ult5.count(d)/len(ult5) if ult5 else 0)
+
     return features
 
 # === DATASETS ===
