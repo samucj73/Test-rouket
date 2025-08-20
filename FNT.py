@@ -90,9 +90,9 @@ def extrair_features(janela):
     features = []
     window_size = len(janela)
     if window_size == 0:
-        return [0]*30  # retorna vetor padrão se janela estiver vazia
+        return [0]*30  # vetor padrão se janela vazia
 
-    # adiciona valores brutos da janela
+    # valores brutos da janela
     features.extend(janela)
 
     # frequência relativa de cada dúzia
@@ -126,7 +126,7 @@ def extrair_features(janela):
     total = sum(tend) if sum(tend) > 0 else 1
     features.extend([t/total for t in tend])
 
-    # diferença entre máxima e mínima tendência
+    # diferença máxima-mínima tendência
     features.append(max(tend)-min(tend))
 
     # proporção de zeros
@@ -135,17 +135,18 @@ def extrair_features(janela):
     # última ocorrência de cada dúzia
     for d in [1, 2, 3]:
         try:
-            idx = window_size - 1 - ventana[::-1].index(d)
+            idx = window_size - 1 - janela[::-1].index(d)
         except ValueError:
             idx = window_size
         features.append(idx/window_size)
 
     # frequência nas últimas 5 rodadas
-    ult5 = ventana[-5:]
+    ult5 = janela[-5:]
     for d in [1, 2, 3]:
         features.append(ult5.count(d)/len(ult5) if ult5 else 0)
 
     return features
+
 
 # === DATASETS ===
 def criar_dataset_duzia(historico, tamanho_janela=15):
