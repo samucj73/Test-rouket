@@ -256,7 +256,7 @@ if st.session_state.ultimo_resultado_numero != numero_atual:
     if duzia and coluna:
         st.session_state.ultima_entrada = (duzia,coluna)
         st.session_state.tipo_entrada_anterior = "duzia_coluna"
-                st.session_state.contador_sem_alerta = 0
+        st.session_state.contador_sem_alerta = 0
         st.session_state.ultima_chave_alerta = f"duzia_{duzia}_col_{coluna}"
         mensagem_alerta = f"📊 <b>ENTRADA</b>\n{duzia}ª Dúzia ({prob_d*100:.1f}%) {coluna}ª Coluna ({prob_c*100:.1f}%)"
         enviar_telegram_async(mensagem_alerta, delay=5)
