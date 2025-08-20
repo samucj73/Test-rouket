@@ -136,25 +136,46 @@ def criar_dataset_coluna(historico, tamanho_janela=15):
 # === TREINAMENTO ===
 def treinar_modelos_rf():
     st.info("⚙️ Treinando modelos (Dúzia e Coluna)...")
-    Xd, yd = criar_dataset_duzia(list(st.session_state.historico), tamanho_janela)
-    if len(yd)>0 and len(set(yd))>0:
-        if len(yd)<5:
-            Xd = np.tile(Xd,(5,1))
-            yd = np.tile(yd,5)
-        modelo_d = CatBoostClassifier(iterations=100, depth=4, learning_rate=0.1,
-                                      loss_function='MultiClass', verbose=False)
-        modelo_d.fit(Xd, yd)
-        st.session_state.modelo_rf_duzia = modelo_d
 
+    # --- DÚZIA ---
+    Xd, yd = criar_dataset_duzia(list(st.session_state.historico), tamanho_janela)
+    if Xd.shape[0] > 0 and len(set(yd)) > 0:
+        # Se poucos dados, repete linhas, mantendo y como vetor 1D
+        if len(yd) < 5:
+            Xd = np.repeat(Xd, 5, axis=0)
+            yd = np.tile(yd, 5)
+        try:
+            modelo_d = CatBoostClassifier(
+                iterations=100,
+                depth=4,
+                learning_rate=0.1,
+                loss_function='MultiClass',
+                verbose=False
+            )
+            modelo_d.fit(Xd, yd)
+            st.session_state.modelo_rf_duzia = modelo_d
+        except Exception as e:
+            st.warning(f"Erro treino dúzia: {e}")
+
+    # --- COLUNA ---
     Xc, yc = criar_dataset_coluna(list(st.session_state.historico), tamanho_janela)
-    if len(yc)>0 and len(set(yc))>0:
-        if len(yc)<5:
-            Xc = np.tile(Xc,(5,1))
-            yc = np.tile(yc,5)
-        modelo_c = CatBoostClassifier(iterations=100, depth=4, learning_rate=0.1,
-                                      loss_function='MultiClass', verbose=False)
-        modelo_c.fit(Xc, yc)
-        st.session_state.modelo_rf_coluna = modelo_c
+    if Xc.shape[0] > 0 and len(set(yc)) > 0:
+        if len(yc) < 5:
+            Xc = np.repeat(Xc, 5, axis=0)
+            yc = np.tile(yc, 5)
+        try:
+            modelo_c = CatBoostClassifier(
+                iterations=100,
+                depth=4,
+                learning_rate=0.1,
+                loss_function='MultiClass',
+                verbose=False
+            )
+            modelo_c.fit(Xc, yc)
+            st.session_state.modelo_rf_coluna = modelo_c
+        except Exception as e:
+            st.warning(f"Erro treino coluna: {e}")
+
 
 # === PREVISÃO ===
 def prever_duzia_coluna_rf():
