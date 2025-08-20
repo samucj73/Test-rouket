@@ -376,8 +376,7 @@ st.session_state.ultimo_numero_salvo = numero_atual
 st.session_state.spins_desde_treino += 1
 
 if (st.session_state.spins_desde_treino >= RETRAIN_EVERY) or \
-   (st.session_state.modelo_numero is None and st.session_state.modelo_duzia is None and st
-       (st.session_state.modelo_numero is None and st.session_state.modelo_duzia is None and st.session_state.modelo_coluna is None):
+   (st.session_state.modelo_numero is None and st.session_state.modelo_duzia is None and st.session_state.modelo_coluna is None):
     treinar_modelos()
     st.session_state.spins_desde_treino = 0
 
