@@ -98,78 +98,8 @@ def salvar_historico_numero(numero):
     return numero
 
 # === FEATURES (com números crus) ===
-def extrair_features(janela):
-    """
-    Extrai features a partir de uma janela de números crus (0–36).
-    Protegida contra divisões por zero e janelas pequenas.
-    """
-    window_size = len(janela)
-    if window_size == 0:
-        # tamanho fixo mínimo para não quebrar modelos no início
-        return [0.0] * (4 + 37 + 5 + 4 + 4 + 2 + 2 + 2 + 1)
 
-    features = []
 
-    # Estatísticas básicas
-    features.append(float(np.mean(janela)))
-    features.append(float(np.std(janela)))
-    features.append(float(janela[-1]))
-    features.append(float(len(set(janela))))
-
-    # Frequência relativa 0..36
-    contagem = Counter(janela)
-    for n in range(37):
-        features.append(contagem.get(n, 0) / window_size)
-
-    # Últimos 5 números (ordem)
-    ult5 = [-1] * 5
-    for i, n in enumerate(janela[-5:]):
-        ult5[i] = n
-    features.extend(ult5)
-
-    # Distribuição por dúzia (0..3)
-    duzias = [numero_para_duzia(n) for n in janela]
-    cont_dz = Counter(duzias)
-    for d in range(4):
-        features.append(cont_dz.get(d, 0) / window_size)
-
-    # Distribuição por coluna (0..3)
-    colunas = [numero_para_coluna(n) for n in janela]
-    cont_col = Counter(colunas)
-    for c in range(4):
-        features.append(cont_col.get(c, 0) / window_size)
-
-    # Par/ímpar
-    pares = sum(1 for n in janela if n > 0 and n % 2 == 0)
-    impares = sum(1 for n in janela if n > 0 and n % 2 == 1)
-    features.append(pares / window_size)
-    features.append(impares / window_size)
-
-    # Vermelho/Preto
-    vermelhos = {1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36}
-    pretos    = {2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35}
-    v_count = sum(1 for n in janela if n in vermelhos)
-    p_count = sum(1 for n in janela if n in pretos)
-    features.append(v_count / window_size)
-    features.append(p_count / window_size)
-
-    # Terminais dominantes (2 mais comuns)
-    terminais = [n % 10 for n in janela if n > 0]
-    cont_term = Counter(terminais)
-    mais_comuns = [t for t, _ in cont_term.most_common(2)]
-    while len(mais_comuns) < 2:
-        mais_comuns.append(-1)
-    features.extend(mais_comuns)
-
-    # Alternância par/ímpar
-    altern = sum(
-        (janela[i] % 2) != (janela[i-1] % 2)
-        for i in range(1, window_size)
-        if janela[i] > 0 and janela[i-1] > 0
-    )
-    features.append(altern / max(1, window_size - 1))
-
-    return features
 
 # === DATASET (para 3 modelos) ===
 def criar_dataset(historico, window):
