@@ -98,22 +98,52 @@ def salvar_historico_numero(numero):
     return numero
 
 # === FEATURES (com números crus) ===
-
-# === FEATURES (com números crus) ===
 def extrair_features(janela):
     """
     Extrai features a partir de uma janela de números crus (0–36).
-    Inclui estatísticas básicas + padrões avançados.
+    Inclui estatísticas básicas + padrões avançados (layout físico da roda,
+    tendências multi-horizontes, streaks, entropia, etc.).
     Protegida contra divisões por zero e janelas pequenas.
     """
     window_size = len(janela)
     if window_size == 0:
-        # tamanho fixo mínimo para não quebrar modelos no início
-        return [0.0] * 120  # padding seguro (ajustado p/ novas features)
+        # padding seguro enquanto ainda não há dados suficientes
+        return [0.0] * 220
 
     features = []
 
-    # === Estatísticas básicas ===
+    # --- Constantes úteis ---
+    vermelhos = {1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36}
+    pretos    = {2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35}
+    roleta = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,
+              33,1,20,14,31,9,22,18,29,7,28,12,35,3,26]  # ordem física europeia
+    pos = {n:i for i,n in enumerate(roleta)}
+    # setores físicos (3 terços da roda)
+    s1 = set(roleta[0:12])
+    s2 = set(roleta[12:24])
+    s3 = set(roleta[24:37])
+
+    # ----- helpers -----
+    def cor(n):
+        if n == 0: return 0
+        return 1 if n in vermelhos else 2  # 1=vermelho, 2=preto
+
+    def streaks(seq):
+        """retorna (streak_atual, maior_streak) para sequência categórica"""
+        if not seq: return 0, 0
+        atual = 1
+        maxs = 1
+        for i in range(1, len(seq)):
+            if seq[i] == seq[i-1] and seq[i] != 0:
+                atual += 1
+                maxs = max(maxs, atual)
+            else:
+                atual = 1
+        return atual, maxs
+
+    # ===========================
+    # 1) Estatísticas básicas
+    # ===========================
     features.append(float(np.mean(janela)))
     features.append(float(np.std(janela)))
     features.append(float(janela[-1]))
@@ -130,7 +160,9 @@ def extrair_features(janela):
         ult5[i] = n
     features.extend(ult5)
 
-    # === Dúzia / Coluna ===
+    # ===========================
+    # 2) Dúzia / Coluna
+    # ===========================
     duzias = [numero_para_duzia(n) for n in janela]
     cont_dz = Counter(duzias)
     for d in range(4):
@@ -141,29 +173,29 @@ def extrair_features(janela):
     for c in range(4):
         features.append(cont_col.get(c, 0) / window_size)
 
-    # Par/ímpar
+    # ===========================
+    # 3) Par/ímpar e Cor
+    # ===========================
     pares = sum(1 for n in janela if n > 0 and n % 2 == 0)
     impares = sum(1 for n in janela if n > 0 and n % 2 == 1)
     features.append(pares / window_size)
     features.append(impares / window_size)
 
-    # Vermelho/Preto
-    vermelhos = {1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36}
-    pretos    = {2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35}
     v_count = sum(1 for n in janela if n in vermelhos)
     p_count = sum(1 for n in janela if n in pretos)
     features.append(v_count / window_size)
     features.append(p_count / window_size)
 
-    # === Terminais (2 mais comuns) ===
+    # ===========================
+    # 4) Terminais + Alternância
+    # ===========================
     terminais = [n % 10 for n in janela if n > 0]
     cont_term = Counter(terminais)
-    mais_comuns = [t for t, _ in cont_term.most_common(2)]
-    while len(mais_comuns) < 2:
-        mais_comuns.append(-1)
-    features.extend(mais_comuns)
+    top_terms = [t for t, _ in cont_term.most_common(2)]
+    while len(top_terms) < 2:
+        top_terms.append(-1)
+    features.extend(top_terms)
 
-    # Alternância par/ímpar
     altern = sum(
         (janela[i] % 2) != (janela[i-1] % 2)
         for i in range(1, window_size)
@@ -171,44 +203,94 @@ def extrair_features(janela):
     )
     features.append(altern / max(1, window_size - 1))
 
-    # === Features avançadas ===
-    # Frequência do 0
-    features.append(contagem.get(0, 0) / window_size)
+    # ===========================
+    # 5) Avançadas: Zero, Repetição, Blocos numéricos
+    # ===========================
+    features.append(contagem.get(0, 0) / window_size)  # freq do 0
 
-    # Repetição do último número
     repet_last = sum(1 for i in range(1, window_size) if janela[i] == janela[i-1])
     features.append(repet_last / max(1, window_size - 1))
 
-    # Frequência blocos (1–12, 13–24, 25–36)
     blocos = [(1,12), (13,24), (25,36)]
     for lo, hi in blocos:
         features.append(sum(1 for n in janela if lo <= n <= hi) / window_size)
 
-    # Vizinhos físicos (distância circular no cilindro europeu)
-    roleta = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,
-              33,1,20,14,31,9,22,18,29,7,28,12,35,3,26]
-    pos = {n:i for i,n in enumerate(roleta)}
+    # ===========================
+    # 6) Layout físico da roda
+    # ===========================
+    # vizinhos (distância <= 2)
     vizinhos = 0
+    distancias = []
     for i in range(1, window_size):
-        if janela[i] in pos and janela[i-1] in pos:
-            d = abs(pos[janela[i]] - pos[janela[i-1]])
+        a, b = janela[i-1], janela[i]
+        if a in pos and b in pos:
+            d = abs(pos[a] - pos[b])
             d = min(d, len(roleta)-d)  # circular
-            if d <= 2:  # até 2 posições de distância = "vizinhos"
+            distancias.append(d)
+            if d <= 2:
                 vizinhos += 1
     features.append(vizinhos / max(1, window_size - 1))
+    # distância média e desvio
+    if distancias:
+        features.append(float(np.mean(distancias)))
+        features.append(float(np.std(distancias)))
+        features.append(sum(1 for d in distancias if d >= 10) / len(distancias))  # saltos longos
+    else:
+        features.extend([0.0, 0.0, 0.0])
 
-    # Entropia da distribuição
+    # setores físicos (terços reais)
+    s1c = sum(1 for n in janela if n in s1) / window_size
+    s2c = sum(1 for n in janela if n in s2) / window_size
+    s3c = sum(1 for n in janela if n in s3) / window_size
+    features.extend([s1c, s2c, s3c])
+
+    # ===========================
+    # 7) Entropia e diferenças
+    # ===========================
     freqs = np.array([c/window_size for c in contagem.values()])
-    entropia = -np.sum(freqs * np.log2(freqs+1e-9))
+    entropia = -np.sum(freqs * np.log2(freqs + 1e-9))
     features.append(entropia)
 
-    # Média das diferenças absolutas consecutivas
     diffs = [abs(janela[i]-janela[i-1]) for i in range(1, window_size)]
     features.append(np.mean(diffs) if diffs else 0.0)
 
+    # ===========================
+    # 8) Streaks (cor, paridade, dúzia, coluna)
+    # ===========================
+    cores = [cor(n) for n in janela]  # 0/1/2
+    paridade = [0 if n==0 else (1 if n % 2 == 0 else 2) for n in janela]  # 0/1(par)/2(ímpar)
+
+    cur_cor, max_cor = streaks(cores)
+    cur_par, max_par = streaks(paridade)
+    cur_dz,  max_dz  = streaks(duzias)
+    cur_co,  max_co  = streaks(colunas)
+    features.extend([cur_cor, max_cor, cur_par, max_par, cur_dz, max_dz, cur_co, max_co])
+
+    # ===========================
+    # 9) Tempo desde o último zero
+    # ===========================
+    try:
+        last_zero_idx_from_end = next(i for i in range(window_size-1, -1, -1) if janela[i] == 0)
+        tempo_desde_zero = window_size - 1 - last_zero_idx_from_end
+    except StopIteration:
+        tempo_desde_zero = window_size
+    features.append(tempo_desde_zero / max(1, window_size))
+
+    # ===========================
+    # 10) Tendências multi-horizontes (curto/médio/longo)
+    # ===========================
+    for L in (min(12, window_size), min(36, window_size), min(72, window_size)):
+        sub = janela[-L:]
+        dz_sub = [numero_para_duzia(n) for n in sub]
+        co_sub = [numero_para_coluna(n) for n in sub]
+        c_dz = Counter(dz_sub); c_co = Counter(co_sub)
+        # distribuição normalizada de dúzias e colunas nesse horizonte
+        for d in range(4):
+            features.append(c_dz.get(d, 0)/L)
+        for c in range(4):
+            features.append(c_co.get(c, 0)/L)
+
     return features
-
-
 
 # === DATASET (para 3 modelos) ===
 def criar_dataset(historico, window):
@@ -282,7 +364,6 @@ def prever_tudo(top_k=3):
             top_nums = top_idx.tolist()
             top_probs = probs_num[top_idx].tolist()
         except Exception:
-            # fallback: números mais frequentes na janela
             cont = Counter(janela)
             top = [x for x,_ in cont.most_common(top_k)]
             top_nums = top + [None] * (top_k - len(top))
@@ -300,7 +381,6 @@ def prever_tudo(top_k=3):
             dz_classe = int(np.argmax(probs_dz))
             dz_prob = float(np.max(probs_dz))
         except Exception:
-            # fallback: dúzia mais frequente
             dzs = [numero_para_duzia(n) for n in janela]
             cont_dz = Counter(dzs)
             dz_classe, dz_prob = cont_dz.most_common(1)[0]
