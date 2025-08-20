@@ -53,7 +53,7 @@ for k, v in estado_salvo.items():
 
 # === INTERFACE ===
 st.title("🎯 IA Roleta - Dúzia + Coluna (Previsão desde primeira rodada)")
-tamanho_janela = st.slider("📏 Tamanho da janela de análise", min_value=5, max_value=150, value=WINDOW_SIZE)
+tamanho_janela = st.slider("📏 Tamanho da janela de análise", min_value=3, max_value=150, value=WINDOW_SIZE)
 prob_minima = st.slider("📊 Probabilidade mínima (%)", min_value=10, max_value=100, value=30)/100.0
 
 # === FUNÇÕES AUXILIARES ===
