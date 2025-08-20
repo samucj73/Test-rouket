@@ -298,7 +298,7 @@ if st.session_state.ultimo_resultado_numero != numero_atual:
 # === INTERFACE ===
 st.write("Último número:", numero_atual)
 st.write(f"Acertos: {st.session_state.acertos_top} / {st.session_state.total_top}")
-st.write("Últimos registros (dúzias):", list(st.session_state.historico)[-5:])
+st.write("Últimos registros (dúzias):", list(st.session_state.historico)[-12:])
 
 # === SALVA ESTADO ===
 joblib.dump({
