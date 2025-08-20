@@ -133,17 +133,13 @@ def criar_dataset_coluna(historico, tamanho_janela=15):
         y.append(numero_para_coluna(historico[i+tamanho_janela]))
     return np.array(X), np.array(y)
 
-# === TREINAMENTO ===
+# === TREINAMENTO COM CHECK DE CLASSES ===
 def treinar_modelos_rf():
     st.info("⚙️ Treinando modelos (Dúzia e Coluna)...")
 
     # --- DÚZIA ---
     Xd, yd = criar_dataset_duzia(list(st.session_state.historico), tamanho_janela)
-    if Xd.shape[0] > 0 and len(set(yd)) > 0:
-        # Se poucos dados, repete linhas, mantendo y como vetor 1D
-        if len(yd) < 5:
-            Xd = np.repeat(Xd, 5, axis=0)
-            yd = np.tile(yd, 5)
+    if Xd.shape[0] > 0 and len(set(yd)) > 1:
         try:
             modelo_d = CatBoostClassifier(
                 iterations=100,
@@ -159,10 +155,7 @@ def treinar_modelos_rf():
 
     # --- COLUNA ---
     Xc, yc = criar_dataset_coluna(list(st.session_state.historico), tamanho_janela)
-    if Xc.shape[0] > 0 and len(set(yc)) > 0:
-        if len(yc) < 5:
-            Xc = np.repeat(Xc, 5, axis=0)
-            yc = np.tile(yc, 5)
+    if Xc.shape[0] > 0 and len(set(yc)) > 1:
         try:
             modelo_c = CatBoostClassifier(
                 iterations=100,
@@ -176,13 +169,32 @@ def treinar_modelos_rf():
         except Exception as e:
             st.warning(f"Erro treino coluna: {e}")
 
+# === FALLBACK HEURÍSTICO ---
+def prever_duzia_fallback():
+    janela=list(st.session_state.historico)[-tamanho_janela:]
+    if not janela: return None, None
+    freq=Counter(janela)
+    duzia=max(freq, key=freq.get)
+    prob=freq[duzia]/len(janela)
+    return duzia, prob
 
-# === PREVISÃO ===
+def prever_coluna_fallback():
+    janela=list(st.session_state.historico)[-tamanho_janela:]
+    if not janela: return None, None
+    colunas=[numero_para_coluna(d) for d in janela if numero_para_coluna(d)>0]
+    if not colunas: return None, None
+    freq=Counter(colunas)
+    coluna=max(freq, key=freq.get)
+    prob=freq[coluna]/len(colunas)
+    return coluna, prob
+
+# === PREVISÃO COM FALBACK ===
 def prever_duzia_coluna_rf():
     janela=list(st.session_state.historico)[-tamanho_janela:]
-    if len(janela)==0: return None,None,None,None
+    if not janela: return None,None,None,None
     features=np.array(extrair_features(janela)).reshape(1,-1)
 
+    # Dúzia
     duzia, prob_d = None,None
     if st.session_state.modelo_rf_duzia:
         try:
@@ -192,8 +204,12 @@ def prever_duzia_coluna_rf():
             freq = [janela.count(classes_d[i]) for i in top_idx]
             duzia = classes_d[top_idx[np.argmin(freq)]]
             prob_d = probs_d[classes_d.tolist().index(duzia)]
-        except: pass
+        except: 
+            duzia, prob_d = prever_duzia_fallback()
+    else:
+        duzia, prob_d = prever_duzia_fallback()
 
+    # Coluna
     coluna, prob_c = None,None
     if st.session_state.modelo_rf_coluna:
         try:
@@ -203,7 +219,10 @@ def prever_duzia_coluna_rf():
             freq = [janela.count(classes_c[i]) for i in top_idx]
             coluna = classes_c[top_idx[np.argmin(freq)]]
             prob_c = probs_c[classes_c.tolist().index(coluna)]
-        except: pass
+        except:
+            coluna, prob_c = prever_coluna_fallback()
+    else:
+        coluna, prob_c = prever_coluna_fallback()
 
     return duzia, prob_d, coluna, prob_c
 
@@ -218,7 +237,7 @@ except Exception as e:
 if numero_atual != st.session_state.ultimo_numero_salvo:
     duzia_atual = salvar_historico_duzia(numero_atual)
     st.session_state.ultimo_numero_salvo = numero_atual
-    treinar_modelos_rf()  # sempre treina
+    treinar_modelos_rf()  # sempre treina se possível
 
 # === ALERTA DE RESULTADO ===
 if st.session_state.ultimo_resultado_numero != numero_atual:
@@ -233,15 +252,14 @@ if st.session_state.ultimo_resultado_numero != numero_atual:
         else:
             enviar_telegram_async(f"✅ Saiu {numero_atual} → 🔴", delay=1)
 
-    if st.session_state.modelo_rf_duzia or st.session_state.modelo_rf_coluna:
-        duzia, prob_d, coluna, prob_c = prever_duzia_coluna_rf()
-        if duzia and coluna:
-            st.session_state.ultima_entrada = (duzia,coluna)
-            st.session_state.tipo_entrada_anterior = "duzia_coluna"
-            st.session_state.contador_sem_alerta = 0
-            st.session_state.ultima_chave_alerta = f"duzia_{duzia}_col_{coluna}"
-            mensagem_alerta = f"📊 <b>ENTRADA</b>\n{duzia}ª Dúzia ({prob_d*100:.1f}%) {coluna}ª Coluna ({prob_c*100:.1f}%)"
-            enviar_telegram_async(mensagem_alerta, delay=5)
+    duzia, prob_d, coluna, prob_c = prever_duzia_coluna_rf()
+    if duzia and coluna:
+        st.session_state.ultima_entrada = (duzia,coluna)
+        st.session_state.tipo_entrada_anterior = "duzia_coluna"
+                st.session_state.contador_sem_alerta = 0
+        st.session_state.ultima_chave_alerta = f"duzia_{duzia}_col_{coluna}"
+        mensagem_alerta = f"📊 <b>ENTRADA</b>\n{duzia}ª Dúzia ({prob_d*100:.1f}%) {coluna}ª Coluna ({prob_c*100:.1f}%)"
+        enviar_telegram_async(mensagem_alerta, delay=5)
 
 # === INTERFACE ===
 st.write("Último número:", numero_atual)
@@ -264,3 +282,4 @@ joblib.dump({
 
 # === AUTO REFRESH ===
 st_autorefresh(interval=REFRESH_INTERVAL, key="atualizacao")
+        
