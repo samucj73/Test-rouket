@@ -17,7 +17,7 @@ ESTADO_PATH = Path("estado.pkl")
 MAX_HIST_LEN = 4500
 REFRESH_INTERVAL = 5000   # 5s
 WINDOW_SIZE = 15          # janela p/ features
-RETRAIN_EVERY = 10        # re-treina a cada N giros novos (se possível)
+RETRAIN_EVERY = 2       # re-treina a cada N giros novos (se possível)
 
 # === CARREGA ESTADO ===
 try:
