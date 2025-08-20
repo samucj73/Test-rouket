@@ -267,7 +267,7 @@ if st.session_state.ultimo_resultado_numero != numero_atual:
                   "📊 <b>ENTRADA</b>\n"
                   f"{duzia}ª Dúzia ({prob_d*100:.1f}%) {coluna}ª Coluna ({prob_c*100:.1f}%)"
 )
-        enviar_telegram_async(mensagem_alerta, delay=5)
+                  enviar_telegram_async(mensagem_alerta, delay=5)
                 
         except Exception as e:
             st.warning(f"Erro na previsão: {e}")
