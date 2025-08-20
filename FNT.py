@@ -237,7 +237,7 @@ if numero_atual != st.session_state.ultimo_numero_salvo:
     duzia_atual = salvar_historico_duzia(numero_atual)
     st.session_state.ultimo_numero_salvo = numero_atual
 
-    if len(st.session_state.historico) >= tamanho_janela + 2 and len(st.session_state.historico) % 6 == 0:
+    if len(st.session_state.historico) >= tamanho_janela + 2 and len(st.session_state.historico) % 2 == 0:
         treinar_modelos_rf()
 
 # === ALERTA DE RESULTADO ===
