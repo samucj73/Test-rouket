@@ -87,22 +87,54 @@ def salvar_historico_duzia(numero):
     return duzia
 
 # === FEATURES (única função para treino e previsão) ===
-def treinar_modelo_rf():
-    X, y = criar_dataset(st.session_state.historico, tamanho_janela)
-    if X is None or len(X) == 0:
-        return
-    rf = RandomForestClassifier(
-        n_estimators=700,
-        max_depth=14,
-        min_samples_leaf=1,
-        max_features="sqrt",
-        random_state=42,
-        class_weight="balanced_subsample",
-        n_jobs=-1
-    )
-    rf.fit(X, y)
-    st.session_state.modelo_rf = rf
+def extrair_features(janela):
+    features = []
+    window_size = len(janela)
 
+    # Sequência direta
+    features.extend(janela)
+
+    # Frequência simples
+    contador = Counter(janela)
+    for d in [1, 2, 3]:
+        features.append(contador.get(d, 0) / window_size)
+
+    # Frequência ponderada
+    pesos = np.array([0.9**i for i in range(window_size-1, -1, -1)])
+    for d in [1, 2, 3]:
+        fw = sum(w for val, w in zip(janela, pesos) if val == d) / pesos.sum()
+        features.append(fw)
+
+    # Alternância simples e ponderada
+    alternancias = sum(1 for j in range(1, window_size) if janela[j] != janela[j-1])
+    features.append(alternancias / (window_size-1))
+    features.append(sum((janela[j] != janela[j-1]) * 0.9**(window_size-1-j) for j in range(1, window_size)) /
+                    sum(0.9**i for i in range(window_size-1)))
+
+    # Tendência normalizada
+    tend = [0, 0, 0]
+    for val, w in zip(janela, pesos):
+        if val in [1, 2, 3]:
+            tend[val-1] += w
+    total = sum(tend) if sum(tend) > 0 else 1
+    features.extend([t/total for t in tend])
+    features.append(max(tend) - min(tend))
+
+    # Contagem zeros
+    features.append(janela.count(0) / window_size)
+
+    # Última ocorrência de cada dúzia
+    for d in [1, 2, 3]:
+        try: idx = window_size - 1 - janela[::-1].index(d)
+        except ValueError: idx = window_size
+        features.append(idx / window_size)
+
+    # Últimas 5 rodadas
+    ult5 = janela[-5:]
+    for d in [1, 2, 3]:
+        features.append(ult5.count(d) / 5)
+
+    return features
 
 
 
