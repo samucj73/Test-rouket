@@ -16,7 +16,7 @@ HISTORICO_PATH = Path("historico.pkl")
 ESTADO_PATH = Path("estado.pkl")
 MAX_HIST_LEN = 4500
 REFRESH_INTERVAL = 5000  # 5 segundos
-WINDOW_SIZE = 12  # janela para features
+WINDOW_SIZE = 15  # janela para features
 
 # === CARREGA ESTADO ===
 try:
@@ -53,7 +53,7 @@ for k, v in estado_salvo.items():
 
 # === INTERFACE ===
 st.title("🎯 IA Roleta - Dúzia + Coluna (Previsão desde primeira rodada)")
-tamanho_janela = st.slider("📏 Tamanho da janela de análise", min_value=3, max_value=150, value=WINDOW_SIZE)
+tamanho_janela = st.slider("📏 Tamanho da janela de análise", min_value=5, max_value=150, value=WINDOW_SIZE)
 prob_minima = st.slider("📊 Probabilidade mínima (%)", min_value=10, max_value=100, value=30)/100.0
 
 # === FUNÇÕES AUXILIARES ===
@@ -298,7 +298,7 @@ if st.session_state.ultimo_resultado_numero != numero_atual:
 # === INTERFACE ===
 st.write("Último número:", numero_atual)
 st.write(f"Acertos: {st.session_state.acertos_top} / {st.session_state.total_top}")
-st.write("Últimos registros (dúzias):", list(st.session_state.historico)[-12:])
+st.write("Últimos registros (dúzias):", list(st.session_state.historico)[-5:])
 
 # === SALVA ESTADO ===
 joblib.dump({
