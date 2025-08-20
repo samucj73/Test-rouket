@@ -7,7 +7,6 @@ from collections import deque, Counter
 from pathlib import Path
 from streamlit_autorefresh import st_autorefresh
 from catboost import CatBoostClassifier
-import time
 
 # === CONFIGURAÇÕES ===
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
@@ -18,61 +17,53 @@ ESTADO_PATH = Path("estado.pkl")
 MAX_HIST_LEN = 4500
 REFRESH_INTERVAL = 5000   # 5s
 WINDOW_SIZE = 15          # janela p/ features
-RETRAIN_EVERY = 2         # re-treina a cada N giros novos
+RETRAIN_EVERY = 2       # re-treina a cada N giros novos (se possível)
 
 # === CARREGA ESTADO ===
 try:
     estado_salvo = joblib.load(ESTADO_PATH) if ESTADO_PATH.exists() else {}
 except Exception as e:
     st.warning(f"⚠️ Estado corrompido, reiniciando: {e}")
-    try:
-        ESTADO_PATH.unlink()
-    except Exception:
-        pass
+    try: ESTADO_PATH.unlink()
+    except Exception: pass
     estado_salvo = {}
 
 # === SESSION STATE ===
-defaults = {
-    "ultimo_numero_salvo": None,
-    "ultima_chave_alerta": None,
-    "acertos_top": 0,
-    "total_top": 0,
-    "contador_sem_alerta": 0,
-    "tipo_entrada_anterior": 0,
-    "padroes_certos": [],
-    "ultima_entrada": None,
-    "modelo_numero": None,
-    "modelo_duzia": None,
-    "modelo_coluna": None,
-    "spins_desde_treino": 0,
-    "time_step": 0,
-}
-for k, v in defaults.items():
-    if k not in st.session_state:
-        st.session_state[k] = v
-
-# Histórico agora guarda apenas números
-def _carregar_historico():
-    if not HISTORICO_PATH.exists():
-        return deque(maxlen=MAX_HIST_LEN)
-    try:
-        hist = joblib.load(HISTORICO_PATH)
-        return deque(hist, maxlen=MAX_HIST_LEN)
-    except Exception:
-        return deque(maxlen=MAX_HIST_LEN)
-
+if "ultimo_numero_salvo" not in st.session_state:
+    st.session_state.ultimo_numero_salvo = None
+if "ultima_chave_alerta" not in st.session_state:
+    st.session_state.ultima_chave_alerta = None
 if "historico" not in st.session_state:
-    st.session_state.historico = _carregar_historico()
+    # AGORA: histórico guarda NÚMEROS crus (0–36)
+    st.session_state.historico = joblib.load(HISTORICO_PATH) if HISTORICO_PATH.exists() else deque(maxlen=MAX_HIST_LEN)
 
-# Restaurar chaves salvas (ignorando modelos)
+for var in [
+    "acertos_top", "total_top", "contador_sem_alerta", "tipo_entrada_anterior",
+    "padroes_certos", "ultima_entrada", "modelo_numero", "modelo_duzia", "modelo_coluna",
+    "ultimo_resultado_numero", "spins_desde_treino"
+]:
+    if var not in st.session_state:
+        if var in ["padroes_certos"]:
+            st.session_state[var] = []
+        elif var == "ultima_entrada":
+            # guardará {"numeros":[...], "duzia":int, "coluna":int}
+            st.session_state[var] = None
+        elif var in ["modelo_numero", "modelo_duzia", "modelo_coluna"]:
+            st.session_state[var] = None
+        elif var == "spins_desde_treino":
+            st.session_state[var] = 0
+        else:
+            st.session_state[var] = 0
+
+# restaurar chaves salvas anteriormente (ignora modelos para evitar incompatibilidade binária)
 for k, v in estado_salvo.items():
     if k not in ["modelo_numero", "modelo_duzia", "modelo_coluna"]:
         st.session_state[k] = v
 
 # === INTERFACE ===
-st.title("🎯 IA Roleta - Números + Dúzia + Coluna (CatBoost) — com time_step")
+st.title("🎯 IA Roleta - Números + Dúzia + Coluna (CatBoost + Fallback)")
 tamanho_janela = st.slider("📏 Tamanho da janela de análise", min_value=5, max_value=150, value=WINDOW_SIZE)
-prob_minima = st.slider("📊 Probabilidade mínima para alertar (%)", min_value=10, max_value=100, value=30)/100.0
+prob_minima = st.slider("📊 Probabilidade mínima para alertar (%)", min_value=10, max_value=100, value=30) / 100.0
 top_k_numeros = st.slider("🔥 Quantos números no Top (1–5)", min_value=1, max_value=5, value=3)
 
 # === FUNÇÕES AUXILIARES ===
@@ -101,16 +92,12 @@ def numero_para_coluna(n):
     return (n - 1) % 3 + 1
 
 def salvar_historico_numero(numero):
-    """
-    Salva o número no histórico (apenas número) e incrementa time_step.
-    """
+    # salva NÚMERO cru (0–36)
     st.session_state.historico.append(numero)
-    st.session_state.ultimo_numero_salvo = numero
-    st.session_state.time_step += 1
-    joblib.dump(list(st.session_state.historico), HISTORICO_PATH)
+    joblib.dump(st.session_state.historico, HISTORICO_PATH)
     return numero
 
-# === RESTO DO CÓDIGO DE FEATURES, TREINO E PREVISÃO ===
+# === FEATURES (com números crus) ===
 def extrair_features(janela):
     """
     Extrai features a partir de uma janela de números crus (0–36).
@@ -344,138 +331,200 @@ def extrair_features(janela):
 
     # ===========================
     return features
-# (Mantém-se igual ao seu código anterior, sem alterar lógica de CatBoost)
-# Apenas ajuste: criar_dataset, extrair_features, treinar_modelos, prever_tudo
-# continuam usando st.session_state.historico como lista de números
 
+
+# === DATASET (para 3 modelos) ===
 def criar_dataset(historico, window):
     """
-    Cria X (features) e y (alvos) para números, dúzia e coluna
+    Cria X e ys para número (0..36), dúzia (0..3) e coluna (0..3)
+    a partir de uma lista de números crus.
     """
-    hist = list(historico)
-    if len(hist) < window + 1:
+    if len(historico) < window + 1:
         return np.empty((0, 1)), np.array([]), np.array([]), np.array([])
-    
+
     X, y_num, y_dz, y_col = [], [], [], []
+    hist = list(historico)
+
     for i in range(window, len(hist)):
-        janela = hist[i - window:i]
-        if len(janela) < window:
-            continue
+        janela = hist[i - window: i]
         X.append(extrair_features(janela))
-        alvo = hist[i]  # pega apenas o número do spin atual
+        alvo = hist[i]
         y_num.append(alvo)
         y_dz.append(numero_para_duzia(alvo))
         y_col.append(numero_para_coluna(alvo))
+
     return np.array(X), np.array(y_num), np.array(y_dz), np.array(y_col)
 
+# === TREINAMENTO COM CHECKS ===
 def treinar_modelos():
-    """
-    Treina CatBoost para números, dúzia e coluna
-    """
     X, y_num, y_dz, y_col = criar_dataset(st.session_state.historico, tamanho_janela)
-    if len(X) == 0:
+    if X.shape[0] == 0:
         return
 
-    modelo_numero = CatBoostClassifier(verbose=0, iterations=200)
-    modelo_duzia = CatBoostClassifier(verbose=0, iterations=200)
-    modelo_coluna = CatBoostClassifier(verbose=0, iterations=200)
-
-    modelo_numero.fit(X, y_num)
-    modelo_duzia.fit(X, y_dz)
-    modelo_coluna.fit(X, y_col)
-
-    st.session_state.modelo_numero = modelo_numero
-    st.session_state.modelo_duzia = modelo_duzia
-    st.session_state.modelo_coluna = modelo_coluna
-
-def prever_tudo(top_k=3):
-    """
-    Faz previsão do próximo número, dúzia e coluna
-    Retorna dict com: numeros (top_k), duzia, prob_duzia, coluna, prob_coluna
-    """
-    if not st.session_state.modelo_numero:
-        return None
-    janela = list(st.session_state.historico)[-tamanho_janela:]
-    X = np.array([extrair_features(janela)])
-    
-    # Números
-    probs_num = st.session_state.modelo_numero.predict_proba(X)[0]
-    top_idx = np.argsort(probs_num)[-top_k:][::-1]
-    numeros = [int(i) for i in top_idx]
+    # Número
+    if len(set(y_num)) > 1:
+        try:
+            m_num = CatBoostClassifier(iterations=200, depth=6, learning_rate=0.1, loss_function='MultiClass', verbose=False)
+            m_num.fit(X, y_num)
+            st.session_state.modelo_numero = m_num
+        except Exception as e:
+            st.warning(f"Erro treino NÚMERO: {e}")
 
     # Dúzia
-    probs_dz = st.session_state.modelo_duzia.predict_proba(X)[0]
-    dz_idx = np.argmax(probs_dz)+0
-    duzia = dz_idx
-    prob_duzia = probs_dz[dz_idx]
+    if len(set(y_dz)) > 1:
+        try:
+            m_dz = CatBoostClassifier(iterations=200, depth=6, learning_rate=0.1, loss_function='MultiClass', verbose=False)
+            m_dz.fit(X, y_dz)
+            st.session_state.modelo_duzia = m_dz
+        except Exception as e:
+            st.warning(f"Erro treino DÚZIA: {e}")
 
     # Coluna
-    probs_co = st.session_state.modelo_coluna.predict_proba(X)[0]
-    co_idx = np.argmax(probs_co)+0
-    coluna = co_idx
-    prob_coluna = probs_co[co_idx]
+    if len(set(y_col)) > 1:
+        try:
+            m_col = CatBoostClassifier(iterations=200, depth=6, learning_rate=0.1, loss_function='MultiClass', verbose=False)
+            m_col.fit(X, y_col)
+            st.session_state.modelo_coluna = m_col
+        except Exception as e:
+            st.warning(f"Erro treino COLUNA: {e}")
+
+# === PREVISÃO + FALLBACK ===
+def prever_tudo(top_k=3):
+    janela = list(st.session_state.historico)[-tamanho_janela:]
+    if len(janela) == 0:
+        return None
+
+    feats = np.array(extrair_features(janela)).reshape(1, -1)
+
+    # NÚMEROS
+    if st.session_state.modelo_numero:
+        try:
+            probs_num = st.session_state.modelo_numero.predict_proba(feats)[0]
+            idx_ord = np.argsort(probs_num)[::-1]
+            top_idx = idx_ord[:top_k]
+            top_nums = top_idx.tolist()
+            top_probs = probs_num[top_idx].tolist()
+        except Exception:
+            cont = Counter(janela)
+            top = [x for x,_ in cont.most_common(top_k)]
+            top_nums = top + [None] * (top_k - len(top))
+            top_probs = [cont.get(x,0)/len(janela) if x is not None else 0 for x in top_nums]
+    else:
+        cont = Counter(janela)
+        top = [x for x,_ in cont.most_common(top_k)]
+        top_nums = top + [None] * (top_k - len(top))
+        top_probs = [cont.get(x,0)/len(janela) if x is not None else 0 for x in top_nums]
+
+    # DÚZIA
+    if st.session_state.modelo_duzia:
+        try:
+            probs_dz = st.session_state.modelo_duzia.predict_proba(feats)[0]
+            dz_classe = int(np.argmax(probs_dz))
+            dz_prob = float(np.max(probs_dz))
+        except Exception:
+            dzs = [numero_para_duzia(n) for n in janela]
+            cont_dz = Counter(dzs)
+            dz_classe, dz_prob = cont_dz.most_common(1)[0]
+            dz_prob = dz_prob/len(dzs)
+    else:
+        dzs = [numero_para_duzia(n) for n in janela]
+        cont_dz = Counter(dzs)
+        dz_classe, dz_prob = cont_dz.most_common(1)[0]
+        dz_prob = dz_prob/len(dzs)
+
+    # COLUNA
+    if st.session_state.modelo_coluna:
+        try:
+            probs_col = st.session_state.modelo_coluna.predict_proba(feats)[0]
+            col_classe = int(np.argmax(probs_col))
+            col_prob = float(np.max(probs_col))
+        except Exception:
+            cols = [numero_para_coluna(n) for n in janela]
+            cont_col = Counter(cols)
+            col_classe, col_prob = cont_col.most_common(1)[0]
+            col_prob = col_prob/len(cols)
+    else:
+        cols = [numero_para_coluna(n) for n in janela]
+        cont_col = Counter(cols)
+        col_classe, col_prob = cont_col.most_common(1)[0]
+        col_prob = col_prob/len(cols)
 
     return {
-        "numeros": numeros,
-        "duzia": duzia,
-        "prob_duzia": prob_duzia,
-        "coluna": coluna,
-        "prob_coluna": prob_coluna
+        "numeros": top_nums,
+        "prob_numeros": top_probs,
+        "duzia": dz_classe,
+        "prob_duzia": dz_prob,
+        "coluna": col_classe,
+        "prob_coluna": col_prob
     }
+
 # === LOOP PRINCIPAL (coleta API) ===
 try:
     resposta = requests.get(API_URL, timeout=5).json()
-    numero_api = int(resposta["data"]["result"]["outcome"]["number"])
+    numero_atual = int(resposta["data"]["result"]["outcome"]["number"])
 except Exception as e:
     st.error(f"Erro API: {e}")
     st.stop()
 
-# Salva SEMPRE o número (cada spin incrementa time_step)
-numero_atual = salvar_historico_numero(numero_api)
-st.session_state.spins_desde_treino += 1
+# Novo número → salva e (talvez) treina
+if numero_atual != st.session_state.ultimo_numero_salvo:
+    salvar_historico_numero(numero_atual)
+    st.session_state.ultimo_numero_salvo = numero_atual
+    st.session_state.spins_desde_treino += 1
 
-# Re-treina periodicamente ou se ainda não há modelos
-if (st.session_state.spins_desde_treino >= RETRAIN_EVERY) or \
-   (st.session_state.modelo_numero is None and st.session_state.modelo_duzia is None and st.session_state.modelo_coluna is None):
-    treinar_modelos()
-    st.session_state.spins_desde_treino = 0
+    # re-treina periodicamente ou se ainda não há modelos
+    if (st.session_state.spins_desde_treino >= RETRAIN_EVERY) or \
+       (st.session_state.modelo_numero is None and st.session_state.modelo_duzia is None and st.session_state.modelo_coluna is None):
+        treinar_modelos()
+        st.session_state.spins_desde_treino = 0
 
-# === PROCESSA O NOVO SPIN ===
-# scoring do último palpite
-if st.session_state.ultima_entrada is not None:
-    st.session_state.total_top += 1
-    acertou = False
-    if numero_atual in (st.session_state.ultima_entrada.get("numeros") or []):
-        acertou = True
-    if numero_para_duzia(numero_atual) == st.session_state.ultima_entrada.get("duzia"):
-        acertou = True
-    if numero_para_coluna(numero_atual) == st.session_state.ultima_entrada.get("coluna"):
-        acertou = True
+# === ALERTA DE RESULTADO + NOVA PREVISÃO ===
+if st.session_state.ultimo_resultado_numero != numero_atual:
+    st.session_state.ultimo_resultado_numero = numero_atual
 
-    if acertou:
-        st.session_state.acertos_top += 1
-        enviar_telegram_async(f"✅ Saiu {numero_atual} → 🟢", delay=1)
-    else:
-        enviar_telegram_async(f"✅ Saiu {numero_atual} → 🔴", delay=1)
+    # scoring do último palpite
+    if st.session_state.ultima_entrada:
+        st.session_state.total_top += 1
+        acertou = False
 
-# nova previsão
-prev = prever_tudo(top_k=top_k_numeros)
-if prev:
-    st.session_state.ultima_entrada = prev
-    if (prev["prob_duzia"] >= prob_minima) or (prev["prob_coluna"] >= prob_minima):
-        numeros_fmt = ", ".join(str(n) for n in prev["numeros"] if n is not None)
-        msg = (
-            f"📊 <b>ENTRADA</b>\n"
-            f"🔥 Números: {numeros_fmt}\n"
-            f"🎯 Dúzia: {prev['duzia']} ({prev['prob_duzia']*100:.1f}%)\n"
-            f"📈 Coluna: {prev['coluna']} ({prev['prob_coluna']*100:.1f}%)"
-        )
-        enviar_telegram_async(msg, delay=4)
+        # acerto por número (se estava no top)
+        if numero_atual in (st.session_state.ultima_entrada.get("numeros") or []):
+            acertou = True
+
+        # acerto por dúzia/coluna
+        if numero_para_duzia(numero_atual) == st.session_state.ultima_entrada.get("duzia"):
+            acertou = True
+        if numero_para_coluna(numero_atual) == st.session_state.ultima_entrada.get("coluna"):
+            acertou = True
+
+        if acertou:
+            st.session_state.acertos_top += 1
+            enviar_telegram_async(f"✅ Saiu {numero_atual} → 🟢", delay=1)
+        else:
+            enviar_telegram_async(f"✅ Saiu {numero_atual} → 🔴", delay=1)
+
+    # nova previsão
+    prev = prever_tudo(top_k=top_k_numeros)
+    if prev:
+        st.session_state.ultima_entrada = prev
+
+        # só alerta se bater prob_minima para dúzia/coluna OU sempre mostra top números
+        if (prev["prob_duzia"] >= prob_minima) or (prev["prob_coluna"] >= prob_minima):
+            numeros_fmt = ", ".join(str(n) for n in prev["numeros"] if n is not None)
+            msg = (
+                f"📊 <b>ENTRADA</b>\n"
+                f"🔥 Números: {numeros_fmt}\n"
+                f"🎯 Dúzia: {prev['duzia']} ({prev['prob_duzia']*100:.1f}%)\n"
+                f"📈 Coluna: {prev['coluna']} ({prev['prob_coluna']*100:.1f}%)"
+            )
+            enviar_telegram_async(msg, delay=4)
 
 # === INTERFACE ===
 st.write("Último número:", numero_atual)
 st.write(f"Acertos: {st.session_state.acertos_top} / {st.session_state.total_top}")
-st.write("Últimos registros (números):", list(st.session_state.historico)[-20:])
+
+ultimos_n = list(st.session_state.historico)[-min(20, len(st.session_state.historico)):]
+st.write("Últimos registros (números):", ultimos_n)
 
 if st.session_state.ultima_entrada:
     st.subheader("🧠 Última previsão")
@@ -484,7 +533,7 @@ if st.session_state.ultima_entrada:
     st.write(f"🎯 Dúzia: {st.session_state.ultima_entrada['duzia']} ({st.session_state.ultima_entrada['prob_duzia']*100:.1f}%)")
     st.write(f"📈 Coluna: {st.session_state.ultima_entrada['coluna']} ({st.session_state.ultima_entrada['prob_coluna']*100:.1f}%)")
 
-# === SALVA ESTADO (sem modelos) ===
+# === SALVA ESTADO (sem salvar os modelos no pickle de estado) ===
 joblib.dump({
     "acertos_top": st.session_state.acertos_top,
     "total_top": st.session_state.total_top,
@@ -493,9 +542,8 @@ joblib.dump({
     "tipo_entrada_anterior": st.session_state.tipo_entrada_anterior,
     "padroes_certos": st.session_state.padroes_certos,
     "ultima_chave_alerta": st.session_state.ultima_chave_alerta,
-    "spins_desde_treino": st.session_state.spins_desde_treino,
-    "ultimo_numero_salvo": st.session_state.ultimo_numero_salvo,
-    "time_step": st.session_state.time_step,
+    "ultimo_resultado_numero": st.session_state.ultimo_resultado_numero,
+    "spins_desde_treino": st.session_state.spins_desde_treino
 }, ESTADO_PATH)
 
 # === AUTO REFRESH ===
