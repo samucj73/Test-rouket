@@ -166,6 +166,7 @@ def criar_dataset_coluna(historico, tamanho_janela=15):
 
 # === TREINAMENTO (2 modelos) ===
 def treinar_modelos_rf():
+    st.info("⚙️ Treinando modelos RF (Dúzia e Coluna)...")  # <-- aviso na interface
     # Dúzia
     Xd, yd = criar_dataset_duzia(list(st.session_state.historico), tamanho_janela)
     if len(yd) > 1 and len(set(yd)) > 1:
