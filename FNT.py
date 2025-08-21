@@ -359,7 +359,7 @@ if prev and (prev.get("prob_duzia", 0) >= prob_minima or prev.get("prob_coluna",
     
     # Evita alertas duplicados: guarda última mensagem enviada
     ultima_msg = st.session_state.get("ultima_msg", "")
-    msg = f"ENTRADA\nNnDúzia: {prev['duzia']} ({prev['prob_duzia']*100:.1f}%) | Coluna: {prev['coluna']} ({prev['prob_coluna']*100:.1f}%)"
+    msg = f"ENTRADA\ Duzia: {prev['duzia']} ({prev['prob_duzia']*100:.1f}%) | Coluna: {prev['coluna']} ({prev['prob_coluna']*100:.1f}%)"
     
     if msg != ultima_msg:
         enviar_telegram_async(msg, delay=4)
