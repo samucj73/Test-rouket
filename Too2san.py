@@ -309,12 +309,14 @@ def enviar_alerta_duzia():
 
 # === CAPTURA API AO VIVO ===
 def capturar_ultimo_numero():
+
     try:
-        r=requests.get(API_URL,timeout=3)
-        data=r.json()
-        numero=int(data.get("result",0))
-        return numero
-    except: return None
+    resposta = requests.get(API_URL, timeout=5).json()
+    numero_atual = int(resposta["data"]["result"]["outcome"]["number"])
+except Exception as e:
+    st.error(f"Erro API: {e}")
+    st.stop()
+    
 
 # === LOOP PRINCIPAL ===
 def loop_principal():
