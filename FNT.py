@@ -357,7 +357,7 @@ msg = (
     f"ENTRADA\n"
     f"Números: {numeros_fmt} | Dúzia: {prev['duzia']} ({prev['prob_duzia']*100:.1f}%) | Coluna: {prev['coluna']} ({prev['prob_coluna']*100:.1f}%)"         
             )
-            enviar_telegram_async(msg, delay=4)
+enviar_telegram_async(msg, delay=4)
 
 
 
