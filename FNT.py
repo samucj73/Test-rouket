@@ -348,19 +348,24 @@ if st.session_state.ultimo_resultado_numero != numero_atual:
 
     # Nova previsão
 
+# prev já veio da função prever_tudo
 prev = prever_tudo(top_k=top_k_numeros)
-if prev:
-    st.session_state.ultima_entrada = prev
-    if (prev["prob_duzia"] >= prob_minima) or (prev["prob_coluna"] >= prob_minima):
-        numeros_fmt = ", ".join(str(n) for n in prev["numeros"] if n is not None)
 
-        msg = (
-            f"ENTRADA\n"
-            f"Números: {numeros_fmt}\n"
-            f"Dúzia: {prev['duzia']} ({prev['prob_duzia']*100:.1f}%) | "
-            f"Coluna: {prev['coluna']} ({prev['prob_coluna']*100:.1f}%)"
-        )
+# Só prossegue se prev existir e probabilidade mínima for atingida
+if prev and (prev.get("prob_duzia", 0) >= prob_minima or prev.get("prob_coluna", 0) >= prob_minima):
+    
+    # Formata números
+    numeros_fmt = ", ".join(str(n) for n in prev.get("numeros", []) if n is not None)
+    
+    # Evita alertas duplicados: guarda última mensagem enviada
+    ultima_msg = st.session_state.get("ultima_msg", "")
+    msg = f"ENTRADA\nNúmeros: {numeros_fmt}\nDúzia: {prev['duzia']} ({prev['prob_duzia']*100:.1f}%) | Coluna: {prev['coluna']} ({prev['prob_coluna']*100:.1f}%)"
+    
+    if msg != ultima_msg:
         enviar_telegram_async(msg, delay=4)
+        st.session_state["ultima_msg"] = msg  # salva última mensagem enviada
+
+
     
 
 
