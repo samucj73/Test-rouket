@@ -313,7 +313,7 @@ def capturar_ultimo_numero():
  try:
     resposta = requests.get(API_URL, timeout=5).json()
     numero_atual = int(resposta["data"]["result"]["outcome"]["number"])
-except Exception as e:
+ except Exception as e:
     st.error(f"Erro API: {e}")
     st.stop()
     
