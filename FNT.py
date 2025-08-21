@@ -375,7 +375,7 @@ st.write(f"Acertos: {st.session_state.acertos_top} / {st.session_state.total_top
 ultimos_n = list(st.session_state.historico)[-min(20,len(st.session_state.historico)):]
 st.write("Últimos registros (números):",ultimos_n)
 if st.session_state.ultima_entrada:
-        st.subheader("🧠 Última previsão")
+    st.subheader("🧠 Última previsão")
     nums_fmt = ", ".join(str(n) for n in st.session_state.ultima_entrada["numeros"] if n is not None)
     st.write(f"Números: {nums_fmt}")
     st.write(f"Dúzia: {st.session_state.ultima_entrada['duzia']} "
