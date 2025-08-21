@@ -310,44 +310,82 @@ def prever_tudo(top_k=3):
 
 # === LOOP PRINCIPAL ===
 try:
-    resposta=requests.get(API_URL,timeout=5).json()
-    numero_atual = resposta.get("result", {}).get("number")
-    if numero_atual is not None and numero_atual != st.session_state.ultimo_numero_salvo:
-        salvar_historico_numero(numero_atual)
-        st.session_state.ultimo_numero_salvo = numero_atual
-        st.session_state.spins_desde_treino += 1
-
-        # TREINAR MODELOS SE NECESSÁRIO
-        if st.session_state.spins_desde_treino >= RETRAIN_EVERY:
-            treinar_modelos()
-            st.session_state.spins_desde_treino = 0
-            joblib.dump({k: st.session_state[k] for k in st.session_state if k not in ["modelo_numero","modelo_duzia","modelo_coluna"]}, ESTADO_PATH)
-
-        # PREVISÃO
-        previsao = prever_tudo(top_k=top_k_numeros)
-        if previsao:
-            enviar = False
-            # evita alertas duplicados
-            if st.session_state.ultima_entrada is None:
-                enviar = True
-            else:
-                ultima = st.session_state.ultima_entrada
-                if previsao["numeros"] != ultima.get("numeros") or previsao["duzia"] != ultima.get("duzia") or previsao["coluna"] != ultima.get("coluna"):
-                    enviar = True
-                else:
-                    st.session_state.contador_sem_alerta += 1
-                    if st.session_state.contador_sem_alerta >= 3:
-                        enviar = True
-                        st.session_state.contador_sem_alerta = 0
-
-            if enviar:
-                msg = f"🎯 Previsão:\nNúmeros: {previsao['numeros']}\nDúzia: {previsao['duzia']}\nColuna: {previsao['coluna']}"
-                enviar_telegram_async(msg)
-                st.session_state.ultima_entrada = previsao
-                st.session_state.contador_sem_alerta = 0
-
+    resposta = requests.get(API_URL, timeout=5).json()
+    numero_atual = int(resposta["data"]["result"]["outcome"]["number"])
 except Exception as e:
-    st.warning(f"⚠️ Erro no loop principal: {e}")
+    st.error(f"Erro API: {e}")
+    st.stop()
 
-# === AUTORREFRESH ===
-st_autorefresh(interval=REFRESH_INTERVAL, key="autorefresh")
+if numero_atual != st.session_state.ultimo_numero_salvo:
+    salvar_historico_numero(numero_atual)
+    st.session_state.ultimo_numero_salvo = numero_atual
+    st.session_state.spins_desde_treino += 1
+
+    if (st.session_state.spins_desde_treino >= RETRAIN_EVERY) or \
+       (st.session_state.modelo_numero is None and st.session_state.modelo_duzia is None and st.session_state.modelo_coluna is None):
+        treinar_modelos()
+        st.session_state.spins_desde_treino = 0
+
+# === ALERTAS ===
+if st.session_state.ultimo_resultado_numero != numero_atual:
+    st.session_state.ultimo_resultado_numero = numero_atual
+
+    # Resultado
+    if st.session_state.ultima_entrada:
+        st.session_state.total_top += 1
+        acertou = False
+
+        ultima = st.session_state.ultima_entrada
+        if numero_atual in (ultima.get("numeros") or []): acertou = True
+        if numero_para_duzia(numero_atual) == ultima.get("duzia"): acertou = True
+        if numero_para_coluna(numero_atual) == ultima.get("coluna"): acertou = True
+
+        if acertou:
+            st.session_state.acertos_top += 1
+            enviar_telegram_async(f"✅ Saiu {numero_atual} → 🟢", delay=1)
+        else:
+            enviar_telegram_async(f"✅ Saiu {numero_atual} → 🔴", delay=1)
+
+    # Nova previsão
+    prev = prever_tudo(top_k=top_k_numeros)
+    if prev:
+        st.session_state.ultima_entrada = prev
+        if (prev["prob_duzia"] >= prob_minima) or (prev["prob_coluna"] >= prob_minima):
+            numeros_fmt = ", ".join(str(n) for n in prev["numeros"] if n is not None)
+            msg = (
+                f"📊 <b>ENTRADA</b>\n"
+                f"🔥 Números: {numeros_fmt}\n"
+                f"🎯 Dúzia: {prev['duzia']} ({prev['prob_duzia']*100:.1f}%)\n"
+                f"📈 Coluna: {prev['coluna']} ({prev['prob_coluna']*100:.1f}%)"
+            )
+            enviar_telegram_async(msg, delay=4)
+
+# === INTERFACE ===
+st.write("Último número:", numero_atual)
+st.write(f"Acertos: {st.session_state.acertos_top} / {st.session_state.total_top}")
+
+ultimos_n = list(st.session_state.historico)[-20:]
+st.write("Últimos registros:", ultimos_n)
+
+if st.session_state.ultima_entrada:
+    st.subheader("🧠 Última previsão")
+    nums = ", ".join(str(n) for n in st.session_state.ultima_entrada["numeros"] if n is not None)
+    st.write(f"🔥 Top números: {nums}")
+    st.write(f"🎯 Dúzia: {st.session_state.ultima_entrada['duzia']} ({st.session_state.ultima_entrada['prob_duzia']*100:.1f}%)")
+    st.write(f"📈 Coluna: {st.session_state.ultima_entrada['coluna']} ({st.session_state.ultima_entrada['prob_coluna']*100:.1f}%)")
+
+# === SALVA ESTADO ===
+joblib.dump({
+    "acertos_top": st.session_state.acertos_top,
+    "total_top": st.session_state.total_top,
+    "ultima_entrada": st.session_state.ultima_entrada,
+    "contador_sem_alerta": st.session_state.contador_sem_alerta,
+    "tipo_entrada_anterior": st.session_state.tipo_entrada_anterior,
+    "padroes_certos": st.session_state.padroes_certos,
+    "ultima_chave_alerta": st.session_state.ultima_chave_alerta,
+    "ultimo_resultado_numero": st.session_state.ultimo_resultado_numero,
+    "spins_desde_treino": st.session_state.spins_desde_treino
+}, ESTADO_PATH)
+
+# === AUTO REFRESH ===
+st_autorefresh(interval=REFRESH_INTERVAL, key="atualizacao")
