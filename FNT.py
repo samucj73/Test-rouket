@@ -357,7 +357,7 @@ if st.session_state.ultimo_resultado_numero != numero_atual:
     f"Dúzia: {prev['duzia']} ({prev['prob_duzia']*100:.1f}%), Coluna: {prev['coluna']} ({prev['prob_coluna']*100:.1f}%)"
 )
 enviar_telegram_async(msg, delay=4)
-
+            
 # === INTERFACE ===
 st.write("Último número:", numero_atual)
 st.write(f"Acertos: {st.session_state.acertos_top} / {st.session_state.total_top}")
