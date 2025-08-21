@@ -384,5 +384,5 @@ else:
 st_autorefresh(interval=REFRESH_INTERVAL, key="autoreload")
 
 # === THREAD DE CAPTURA AO VIVO ===
-#threading.Thread(target=loop_principal,daemon=True).start()
-#st.info("Sistema de previsão de Dúzia ativo. Alertas Telegram serão enviados automaticamente.")
+threading.Thread(target=loop_principal,daemon=True).start()
+st.info("Sistema de previsão de Dúzia ativo. Alertas Telegram serão enviados automaticamente.")
