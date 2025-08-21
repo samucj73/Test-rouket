@@ -352,11 +352,16 @@ if st.session_state.ultimo_resultado_numero != numero_atual:
         st.session_state.ultima_entrada = prev
         if (prev["prob_duzia"] >= prob_minima) or (prev["prob_coluna"] >= prob_minima):
             numeros_fmt = ", ".join(str(n) for n in prev["numeros"] if n is not None)
-            msg = (
-    f"ENTRADA: Números {numeros_fmt}\n"
-    f"Dúzia: {prev['duzia']} ({prev['prob_duzia']*100:.1f}%), Coluna: {prev['coluna']} ({prev['prob_coluna']*100:.1f}%)"
-)
-enviar_telegram_async(msg, delay=4)
+
+msg = (
+    f"ENTRADA\n"
+    f"Números: {numeros_fmt} | Dúzia: {prev['duzia']} ({prev['prob_duzia']*100:.1f}%) | Coluna: {prev['coluna']} ({prev['prob_coluna']*100:.1f}%)"         
+            )
+            enviar_telegram_async(msg, delay=4)
+
+
+
+            
             
 # === INTERFACE ===
 st.write("Último número:", numero_atual)
