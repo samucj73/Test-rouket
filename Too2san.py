@@ -95,9 +95,34 @@ for var in ["acertos_top","total_top","contador_sem_alerta","tipo_entrada_anteri
 for k,v in estado_salvo.items(): st.session_state[k]=v
 
 # === INTERFACE ===
-st.title("🎯 IA Roleta Profissional - Dúzia")
-tamanho_janela = st.slider("📏 Tamanho da janela",5,150,WINDOW_SIZE)
-prob_minima = st.slider("📊 Probabilidade mínima (%)",10,100,30)/100.0
+
+st.title("🎯 IA Roleta - Padrões de Dúzia (CatBoost + Features Avançadas)")
+
+# Últimos números capturados
+st.subheader("📌 Últimos números e dúzias")
+if len(st.session_state.historico_numeros) > 0:
+    ult_numeros = list(st.session_state.historico_numeros)[-12:]
+    ult_duzias  = [numero_para_duzia(n) for n in ult_numeros]
+    tabela = { "Número": ult_numeros, "Dúzia": ult_duzias }
+    st.table(tabela)
+
+# Acertos do modelo
+st.subheader("📊 Estatísticas de Acerto")
+st.write(f"Acertos: {st.session_state.acertos_top} / {st.session_state.total_top}")
+
+# Previsão atual
+st.subheader("🎯 Previsão Atual (Top 2 Dúzias)")
+top = prever_duzia_rf()
+if top:
+    st.write(", ".join(f"{d} ({p*100:.1f}%)" for d,p in top))
+else:
+    st.write("Ainda sem previsão disponível.")
+
+# Configurações interativas
+tamanho_janela = st.slider("📏 Tamanho da janela de análise", 5, 150, WINDOW_SIZE)
+prob_minima    = st.slider("📊 Probabilidade mínima (%)", 10, 100, 30)/100.0
+
+
 
 # === TELEGRAM ===
 def enviar_telegram_async(msg,delay=0):
@@ -318,31 +343,7 @@ if st.session_state.modelo_rf is None:
     treinar_modelo_rf()
 
 # === INTERFACE ATUALIZADA ===
-st.title("🎯 IA Roleta - Padrões de Dúzia (CatBoost + Features Avançadas)")
 
-# Últimos números capturados
-st.subheader("📌 Últimos números e dúzias")
-if len(st.session_state.historico_numeros) > 0:
-    ult_numeros = list(st.session_state.historico_numeros)[-12:]
-    ult_duzias  = [numero_para_duzia(n) for n in ult_numeros]
-    tabela = { "Número": ult_numeros, "Dúzia": ult_duzias }
-    st.table(tabela)
-
-# Acertos do modelo
-st.subheader("📊 Estatísticas de Acerto")
-st.write(f"Acertos: {st.session_state.acertos_top} / {st.session_state.total_top}")
-
-# Previsão atual
-st.subheader("🎯 Previsão Atual (Top 2 Dúzias)")
-top = prever_duzia_rf()
-if top:
-    st.write(", ".join(f"{d} ({p*100:.1f}%)" for d,p in top))
-else:
-    st.write("Ainda sem previsão disponível.")
-
-# Configurações interativas
-tamanho_janela = st.slider("📏 Tamanho da janela de análise", 5, 150, WINDOW_SIZE)
-prob_minima    = st.slider("📊 Probabilidade mínima (%)", 10, 100, 30)/100.0
 
 # === AUTORELOAD STREAMLIT ===
 st_autorefresh(interval=REFRESH_INTERVAL, key="autoreload")
