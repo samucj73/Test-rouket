@@ -11,7 +11,7 @@ from catboost import CatBoostClassifier
 # === CONFIGURAÇÕES ===
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
-TELEGRAM_CHAT_ID = "5121457416"
+TELEGRAM_CHAT_ID = "-1002796136111"
 HISTORICO_DUZIAS_PATH = Path("historico.pkl")          # legado (dúzias)
 HISTORICO_NUMEROS_PATH = Path("historico_numeros.pkl") # novo (números brutos)
 ESTADO_PATH = Path("estado.pkl")
