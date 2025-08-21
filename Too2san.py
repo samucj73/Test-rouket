@@ -310,7 +310,7 @@ def enviar_alerta_duzia():
 # === CAPTURA API AO VIVO ===
 def capturar_ultimo_numero():
 
-    try:
+ try:
     resposta = requests.get(API_URL, timeout=5).json()
     numero_atual = int(resposta["data"]["result"]["outcome"]["number"])
 except Exception as e:
