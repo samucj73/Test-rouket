@@ -355,7 +355,7 @@ if st.session_state.ultimo_resultado_numero != numero_atual:
 
 msg = (
                 f"📊 <b>ENTRADA</b>\n"
-                f"🔥 Números: {numeros_fmt}\n"
+                
                 f"🎯 Dúzia: {prev['duzia']} ({prev['prob_duzia']*100:.1f}%)\n"
                 f"📈 Coluna: {prev['coluna']} ({prev['prob_coluna']*100:.1f}%)"
             )
