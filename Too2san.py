@@ -341,7 +341,13 @@ if st.session_state.modelo_rf is None:
 
 # === INTERFACE ATUALIZADA ===
 
-st.write("Últimos números:", list(st.session_state.historico_numeros)[-12:])
+if len(st.session_state.historico_numeros) > 0:
+    ult_numeros = list(st.session_state.historico_numeros)[-12:]
+    ult_duzias  = [numero_para_duzia(n) for n in ult_numeros]
+    tabela = {"Número": ult_numeros, "Dúzia": ult_duzias}
+    st.table(tabela)
+else:
+    st.write("Ainda não há números no histórico.")
 
 
 
