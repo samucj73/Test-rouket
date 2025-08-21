@@ -17,8 +17,8 @@ HISTORICO_NUMEROS_PATH = Path("historico_numeros.pkl") # novo (números brutos)
 ESTADO_PATH = Path("estado.pkl")
 MAX_HIST_LEN = 4500
 REFRESH_INTERVAL = 5000  # ms
-WINDOW_SIZE = 15         # janela para features base
-TRAIN_EVERY = 10         # treinar a cada N novas entradas
+WINDOW_SIZE = 20         # janela para features base
+TRAIN_EVERY = 2         # treinar a cada N novas entradas
 
 # === MAPAS AUXILIARES (roda europeia 0) ===
 RED_SET = {1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36}
