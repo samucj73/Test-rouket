@@ -111,12 +111,13 @@ st.subheader("📊 Estatísticas de Acerto")
 st.write(f"Acertos: {st.session_state.acertos_top} / {st.session_state.total_top}")
 
 # Previsão atual
-st.subheader("🎯 Previsão Atual (Top 2 Dúzias)")
-top = prever_duzia_rf()
-if top:
-    st.write(", ".join(f"{d} ({p*100:.1f}%)" for d,p in top))
+
+top_duzias, top_probs = prever_duzia_rf()
+if top_duzias is not None and top_probs is not None:
+    st.write(", ".join(f"{d} ({p*100:.1f}%)" for d, p in zip(top_duzias, top_probs)))
 else:
     st.write("Ainda sem previsão disponível.")
+
 
 # Configurações interativas
 tamanho_janela = st.slider("📏 Tamanho da janela de análise", 5, 150, WINDOW_SIZE)
