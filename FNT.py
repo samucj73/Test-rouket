@@ -347,19 +347,21 @@ if st.session_state.ultimo_resultado_numero != numero_atual:
             enviar_telegram_async(f"✅ Saiu {numero_atual} → 🔴", delay=1)
 
     # Nova previsão
-    prev = prever_tudo(top_k=top_k_numeros)
-    if prev:
-        st.session_state.ultima_entrada = prev
-        if (prev["prob_duzia"] >= prob_minima) or (prev["prob_coluna"] >= prob_minima):
-            numeros_fmt = " , ".join(str(n) for n in prev["numeros"] if n is not None)
 
-msg = (
-                f"📊 <b>ENTRADA</b>\n"
-                
-                f"🎯 Dúzia: {prev['duzia']} ({prev['prob_duzia']*100:.1f}%)\n"
-                f"📈 Coluna: {prev['coluna']} ({prev['prob_coluna']*100:.1f}%)"
-            )
-enviar_telegram_async(msg, delay=4)
+prev = prever_tudo(top_k=top_k_numeros)
+if prev:
+    st.session_state.ultima_entrada = prev
+    if (prev["prob_duzia"] >= prob_minima) or (prev["prob_coluna"] >= prob_minima):
+        numeros_fmt = ", ".join(str(n) for n in prev["numeros"] if n is not None)
+
+        msg = (
+            f"ENTRADA\n"
+            f"Números: {numeros_fmt}\n"
+            f"Dúzia: {prev['duzia']} ({prev['prob_duzia']*100:.1f}%) | "
+            f"Coluna: {prev['coluna']} ({prev['prob_coluna']*100:.1f}%)"
+        )
+        enviar_telegram_async(msg, delay=4)
+    
 
 
 
