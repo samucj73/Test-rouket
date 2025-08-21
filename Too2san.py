@@ -341,6 +341,9 @@ if st.session_state.modelo_rf is None:
 
 # === INTERFACE ATUALIZADA ===
 
+st.write("Últimos números:", list(st.session_state.historico_numeros)[-12:])
+
+
 
 # === AUTORELOAD STREAMLIT ===
 st_autorefresh(interval=REFRESH_INTERVAL, key="autoreload")
