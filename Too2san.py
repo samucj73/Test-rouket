@@ -308,40 +308,67 @@ def enviar_alerta_duzia():
     enviar_telegram_async(msg)
 
 # === CAPTURA API AO VIVO ===
+# === CAPTURA API AO VIVO SEGURA ===
 def capturar_ultimo_numero():
+    """Tenta capturar o último número da API. Retorna int ou None se falhar."""
+    try:
+        resposta = requests.get(API_URL, timeout=5).json()
+        numero = int(resposta.get("data", {}).get("result", {}).get("outcome", {}).get("number", -1))
+        if 0 <= numero <= 36:
+            return numero
+        else:
+            return None
+    except Exception as e:
+        # Apenas log para debug, não trava o app
+        print(f"[Erro API] {e}")
+        return None
 
- try:
-    resposta = requests.get(API_URL, timeout=5).json()
-    numero_atual = int(resposta["data"]["result"]["outcome"]["number"])
- except Exception as e:
-    st.error(f"Erro API: {e}")
-    st.stop()
-    
 
-# === LOOP PRINCIPAL ===
+# === LOOP PRINCIPAL SEGURANÇA + LOG ===
 def loop_principal():
+    import time
     while True:
-        numero=capturar_ultimo_numero()
-        if numero is None: continue
-        if numero!=st.session_state.ultimo_numero_salvo:
-            st.session_state.ultimo_numero_salvo=numero
+        numero = capturar_ultimo_numero()
+        if numero is None:
+            print("[Loop] Número não capturado, tentando novamente...")
+            time.sleep(2)
+            continue
+
+        # Se novo número
+        if numero != st.session_state.ultimo_numero_salvo:
+            print(f"[Loop] Novo número capturado: {numero}")
+            st.session_state.ultimo_numero_salvo = numero
+
+            # Salva histórico
             salvar_historico(numero)
-            enviar_alerta_duzia()
-            # salvar estado
-            estado=dict(ultima_chave_alerta=st.session_state.ultima_chave_alerta,
-                        contador_sem_alerta=st.session_state.contador_sem_alerta)
-            try: joblib.dump(estado,ESTADO_PATH)
-            except: pass
-            if len(st.session_state.historico)%TRAIN_EVERY==0:
-                treinar_modelo_rf()
-        import time
-        time.sleep(2)
 
-# === INICIALIZAÇÃO ===
-if st.session_state.modelo_rf is None:
-    treinar_modelo_rf()
+            # Envia alerta de dúzia
+            try:
+                enviar_alerta_duzia()
+            except Exception as e:
+                print(f"[Loop] Erro ao enviar alerta Telegram: {e}")
 
-# === INTERFACE ATUALIZADA ===
+            # Salva estado
+            estado = dict(
+                ultima_chave_alerta=st.session_state.ultima_chave_alerta,
+                contador_sem_alerta=st.session_state.contador_sem_alerta
+            )
+            try:
+                joblib.dump(estado, ESTADO_PATH)
+            except Exception as e:
+                print(f"[Loop] Erro ao salvar estado: {e}")
+
+            # Treina modelo periodicamente
+            if len(st.session_state.historico) % TRAIN_EVERY == 0:
+                print("[Loop] Treinando modelo CatBoost...")
+                sucesso = treinar_modelo_rf()
+                if sucesso:
+                    print("[Loop] Modelo treinado com sucesso.")
+                else:
+                    print("[Loop] Falha no treinamento do modelo.")
+
+        time.sleep(2)  # Delay entre verificações
+
 
 if len(st.session_state.historico_numeros) > 0:
     ult_numeros = list(st.session_state.historico_numeros)[-12:]
