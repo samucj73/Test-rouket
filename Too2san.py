@@ -112,11 +112,7 @@ st.write(f"Acertos: {st.session_state.acertos_top} / {st.session_state.total_top
 
 # Previsão atual
 
-top_duzias, top_probs = prever_duzia_rf()
-if top_duzias is not None and top_probs is not None:
-    st.write(", ".join(f"{d} ({p*100:.1f}%)" for d, p in zip(top_duzias, top_probs)))
-else:
-    st.write("Ainda sem previsão disponível.")
+
 
 
 # Configurações interativas
