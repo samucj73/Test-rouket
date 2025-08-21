@@ -11,13 +11,50 @@ from catboost import CatBoostClassifier
 # === CONFIGURAÇÕES ===
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
-TELEGRAM_CHAT_ID = "-1002796136111"
-HISTORICO_PATH = Path("historico.pkl")
+TELEGRAM_CHAT_ID = "5121457416"
+HISTORICO_DUZIAS_PATH = Path("historico.pkl")          # legado (dúzias)
+HISTORICO_NUMEROS_PATH = Path("historico_numeros.pkl") # novo (números brutos)
 ESTADO_PATH = Path("estado.pkl")
 MAX_HIST_LEN = 4500
-REFRESH_INTERVAL = 5000   # 5s
-WINDOW_SIZE = 15          # janela p/ features
-RETRAIN_EVERY = 2         # re-treina a cada N giros novos (se possível)
+REFRESH_INTERVAL = 5000  # ms
+WINDOW_SIZE = 15         # janela para features base
+TRAIN_EVERY = 10         # treinar a cada N novas entradas
+
+# === MAPAS AUXILIARES (roda europeia 0) ===
+RED_SET = {1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36}
+WHEEL = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26]
+IDX = {n:i for i,n in enumerate(WHEEL)}
+
+def numero_para_duzia(num:int)->int:
+    if num == 0: return 0
+    if 1 <= num <= 12: return 1
+    if 13 <= num <= 24: return 2
+    return 3
+
+def numero_para_coluna(num:int)->int:
+    if num == 0: return 0
+    r = num % 3
+    return 3 if r == 0 else r  # 1->col1, 2->col2, 0->col3
+
+def is_red(num:int)->int:
+    return 1 if num in RED_SET else 0 if num != 0 else 0
+
+def is_even(num:int)->int:
+    return 1 if (num != 0 and num % 2 == 0) else 0
+
+def is_low(num:int)->int:
+    return 1 if (1 <= num <= 18) else 0
+
+def vizinhos_set(num:int, k:int=2)->set:
+    if num not in IDX: return set()
+    i = IDX[num]
+    L = len(WHEEL)
+    indices = [(i + j) % L for j in range(-k, k+1)]
+    return { WHEEL[idx] for idx in indices }
+
+VOISINS = {22,18,29,7,28,12,35,3,26,0,32,15,19,4,21,2,25}
+TIERS   = {27,13,36,11,30,8,23,10,5,24,16,33}
+ORPH    = {1,20,14,31,9,17,34,6}
 
 # === CARREGA ESTADO ===
 try:
@@ -29,38 +66,50 @@ except Exception as e:
     estado_salvo = {}
 
 # === SESSION STATE ===
-for var in [
-    "ultimo_numero_salvo", "ultima_chave_alerta", "historico",
-    "acertos_top", "total_top", "contador_sem_alerta", "tipo_entrada_anterior",
-    "padroes_certos", "ultima_entrada", "modelo_numero", "modelo_duzia", "modelo_coluna",
-    "ultimo_resultado_numero", "spins_desde_treino"
-]:
+if "ultimo_numero_salvo" not in st.session_state:
+    st.session_state.ultimo_numero_salvo = None
+if "ultima_chave_alerta" not in st.session_state:
+    st.session_state.ultima_chave_alerta = None
+
+# histórico de dúzias (legado)
+if "historico" not in st.session_state:
+    if HISTORICO_DUZIAS_PATH.exists():
+        st.session_state.historico = joblib.load(HISTORICO_DUZIAS_PATH)
+        if not isinstance(st.session_state.historico, deque):
+            st.session_state.historico = deque(st.session_state.historico, maxlen=MAX_HIST_LEN)
+    else:
+        st.session_state.historico = deque(maxlen=MAX_HIST_LEN)
+
+# histórico de números (novo)
+if "historico_numeros" not in st.session_state:
+    if HISTORICO_NUMEROS_PATH.exists():
+        hist_num = joblib.load(HISTORICO_NUMEROS_PATH)
+        st.session_state.historico_numeros = deque(hist_num, maxlen=MAX_HIST_LEN)
+    else:
+        st.session_state.historico_numeros = deque(maxlen=MAX_HIST_LEN)
+
+for var in ["acertos_top","total_top","contador_sem_alerta","tipo_entrada_anterior",
+            "padroes_certos","ultima_entrada","modelo_rf","ultimo_resultado_numero"]:
     if var not in st.session_state:
-        if var == "historico":
-            st.session_state[var] = joblib.load(HISTORICO_PATH) if HISTORICO_PATH.exists() else deque(maxlen=MAX_HIST_LEN)
-        elif var == "padroes_certos":
+        if var in ["padroes_certos","ultima_entrada"]:
             st.session_state[var] = []
-        elif var == "ultima_entrada":
+        elif var == "tipo_entrada_anterior":
+            st.session_state[var] = ""
+        elif var == "modelo_rf":
             st.session_state[var] = None
-        elif var in ["modelo_numero", "modelo_duzia", "modelo_coluna"]:
-            st.session_state[var] = None
-        elif var == "spins_desde_treino":
-            st.session_state[var] = 0
         else:
             st.session_state[var] = 0
 
-# restaurar chaves salvas anteriormente (ignora modelos)
+# Restaura contadores/chaves do estado salvo (nunca carrega modelo do disco)
 for k, v in estado_salvo.items():
-    if k not in ["modelo_numero", "modelo_duzia", "modelo_coluna"]:
-        st.session_state[k] = v
+    st.session_state[k] = v
 
 # === INTERFACE ===
-st.title("🎯 IA Roleta - Números + Dúzia + Coluna (CatBoost + Fallback)")
-tamanho_janela = st.slider("📏 Tamanho da janela de análise", min_value=5, max_value=150, value=WINDOW_SIZE)
-prob_minima = st.slider("📊 Probabilidade mínima para alertar (%)", min_value=10, max_value=100, value=30) / 100.0
-top_k_numeros = st.slider("🔥 Quantos números no Top (1–5)", min_value=1, max_value=5, value=3)
+st.title("🎯 IA Roleta - Padrões de Dúzia (CatBoost + Features Avançadas)")
+tamanho_janela = st.slider("📏 Tamanho da janela de análise", 5, 150, WINDOW_SIZE)
+prob_minima = st.slider("📊 Probabilidade mínima (%)", 10, 100, 30) / 100.0
 
-# === FUNÇÕES AUXILIARES ===
+# === TELEGRAM ===
 def enviar_telegram_async(mensagem, delay=0):
     def _send():
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -74,241 +123,262 @@ def enviar_telegram_async(mensagem, delay=0):
     else:
         threading.Thread(target=_send, daemon=True).start()
 
-def numero_para_duzia(n):
-    if n == 0: return 0
-    if 1 <= n <= 12: return 1
-    if 13 <= n <= 24: return 2
-    return 3
+# === HISTÓRICO ===
+def salvar_historico(numero:int):
+    """Salva número bruto e sua dúzia, persistindo ambos os históricos."""
+    duzia = numero_para_duzia(numero)
+    if not isinstance(st.session_state.historico, deque):
+        st.session_state.historico = deque(st.session_state.historico, maxlen=MAX_HIST_LEN)
+    if not isinstance(st.session_state.historico_numeros, deque):
+        st.session_state.historico_numeros = deque(st.session_state.historico_numeros, maxlen=MAX_HIST_LEN)
 
-def numero_para_coluna(n):
-    if n == 0: return 0
-    return (n - 1) % 3 + 1
+    st.session_state.historico.append(duzia)
+    st.session_state.historico_numeros.append(numero)
 
-def salvar_historico_numero(numero):
-    st.session_state.historico.append(numero)
-    joblib.dump(st.session_state.historico, HISTORICO_PATH)
-    return numero
+    joblib.dump(st.session_state.historico, HISTORICO_DUZIAS_PATH)
+    joblib.dump(st.session_state.historico_numeros, HISTORICO_NUMEROS_PATH)
+    return duzia
 
-# === FEATURES OTIMIZADAS ===
-def extrair_features(janela):
-    window_size = len(janela)
-    if window_size == 0:
-        return [0.0]*300  # padding seguro
-    
-    features = []
-    vermelhos = {1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36}
-    pretos = {2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35}
-    roleta = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,
-              33,1,20,14,31,9,22,18,29,7,28,12,35,3,26]
-    pos = {n:i for i,n in enumerate(roleta)}
-    s1 = set(roleta[0:12]); s2 = set(roleta[12:24]); s3 = set(roleta[24:37])
+# (compat): mantém nome antigo caso usem em outro lugar
+def salvar_historico_duzia(numero:int):
+    return salvar_historico(numero)
 
-    def cor(n):
-        if n==0: return 0
-        return 1 if n in vermelhos else 2
+# === FEATURES ===
+def freq_em_janela(valores, universo, w):
+    """Frequência relativa de cada item de universo nos últimos w valores."""
+    w = max(1, min(w, len(valores)))
+    sub = valores[-w:]
+    c = Counter(sub)
+    total = float(w)
+    return [c.get(u, 0)/total for u in universo]
 
-    def streaks(seq):
-        if not seq: return 0,0
-        atual = maxs = 1
-        for i in range(1,len(seq)):
-            if seq[i]==seq[i-1] and seq[i]!=0:
-                atual+=1
-                maxs=max(maxs,atual)
-            else:
-                atual=1
-        return atual,maxs
+def tempo_desde_ultimo(valores, universo):
+    """Distância normalizada até a última ocorrência de cada item em universo."""
+    L = len(valores)
+    out = []
+    rev = valores[::-1]
+    for u in universo:
+        try:
+            idx = rev.index(u)  # 0 é o último elemento
+            out.append(idx / max(1, L-1))
+        except ValueError:
+            out.append(1.0)  # nunca visto na janela
+    return out
 
-    contagem = Counter(janela)
-    
-    # estatísticas básicas
-    features.append(float(np.mean(janela)))
-    features.append(float(np.std(janela)))
-    features.append(float(janela[-1]))
-    features.append(float(len(set(janela))))
-    for n in range(37):
-        features.append(contagem.get(n,0)/window_size)
-    features.extend(janela[-5:] + [-1]*(5-len(janela[-5:])))
-    
-    # dúzia / coluna
-    duzias = [numero_para_duzia(n) for n in janela]
-    colunas = [numero_para_coluna(n) for n in janela]
-    for d in range(4): features.append(Counter(duzias).get(d,0)/window_size)
-    for c in range(4): features.append(Counter(colunas).get(c,0)/window_size)
-    
-    # par/ímpar e cor
-    pares = sum(1 for n in janela if n>0 and n%2==0)
-    impares = sum(1 for n in janela if n>0 and n%2==1)
-    v_count = sum(1 for n in janela if n in vermelhos)
-    p_count = sum(1 for n in janela if n in pretos)
-    features.extend([pares/window_size, impares/window_size, v_count/window_size, p_count/window_size])
-    
-    # terminais e alternância
-    terminais = [n%10 for n in janela if n>0]
-    cont_term = Counter(terminais)
-    top_terms = [t for t,_ in cont_term.most_common(2)] + [-1]*(2-len(cont_term))
-    features.extend(top_terms)
-    altern = sum((janela[i]%2)!=(janela[i-1]%2) for i in range(1,window_size) if janela[i]>0 and janela[i-1]>0)
-    features.append(altern/max(1,window_size-1))
-    
-    # zero, repetição e blocos
-    features.append(contagem.get(0,0)/window_size)
-    repet_last = sum(1 for i in range(1,window_size) if janela[i]==janela[i-1])
-    features.append(repet_last/max(1,window_size-1))
-    for lo,hi in [(1,12),(13,24),(25,36)]:
-        features.append(sum(1 for n in janela if lo<=n<=hi)/window_size)
-    
-    # layout físico
-    vizinhos=0; distancias=[]
-    for i in range(1,window_size):
-        a,b=janela[i-1],janela[i]
-        if a in pos and b in pos:
-            d = abs(pos[a]-pos[b]); d=min(d,len(roleta)-d)
-            distancias.append(d)
-            if d<=2: vizinhos+=1
-    features.append(vizinhos/max(1,window_size-1))
-    features.extend([float(np.mean(distancias)) if distancias else 0.0,
-                     float(np.std(distancias)) if distancias else 0.0,
-                     sum(1 for d in distancias if d>=10)/len(distancias) if distancias else 0.0])
-    features.extend([sum(1 for n in janela if n in s)/window_size for s in [s1,s2,s3]])
-    
-    # entropia e diferenças
-    freqs = np.array([c/window_size for c in contagem.values()])
-    entropia = -np.sum(freqs*np.log2(freqs+1e-9))
-    features.append(entropia)
-    diffs = [abs(janela[i]-janela[i-1]) for i in range(1,window_size)]
-    features.append(np.mean(diffs) if diffs else 0.0)
-    
-    # streaks
-    cores = [cor(n) for n in janela]
-    paridade = [0 if n==0 else (1 if n%2==0 else 2) for n in janela]
-    cur_cor,max_cor=streaks(cores)
-    cur_par,max_par=streaks(paridade)
-    cur_dz,max_dz=streaks(duzias)
-    cur_co,max_co=streaks(colunas)
-    features.extend([cur_cor,max_cor,cur_par,max_par,cur_dz,max_dz,cur_co,max_co])
-    
-    # tempo desde último zero
-    try:
-        last_zero_idx_from_end = next(i for i in range(window_size-1,-1,-1) if janela[i]==0)
-        tempo_desde_zero = window_size-1 - last_zero_idx_from_end
-    except StopIteration:
-        tempo_desde_zero = window_size
-    features.append(tempo_desde_zero/max(1,window_size))
-    
-    # tendências multi-horizontes
-    for L in (min(12,window_size), min(36,window_size), min(72,window_size)):
-        sub = janela[-L:]
-        dz_sub = [numero_para_duzia(n) for n in sub]
-        co_sub = [numero_para_coluna(n) for n in sub]
-        for d in range(4): features.append(Counter(dz_sub).get(d,0)/L)
-        for c in range(4): features.append(Counter(co_sub).get(c,0)/L)
-    
-    # novas features simplificadas
-    for lo,hi in [(1,18),(19,36),(1,9),(10,18),(19,27),(28,36)]:
-        features.append(sum(1 for n in janela if lo<=n<=hi)/window_size)
-    for L in (6,12,24):
-        sub = janela[-min(L,window_size):]
-        features.append(float(np.var(sub)) if sub else 0.0)
-    for n in janela[-5:]:
-        try: idx=next(i for i in range(window_size-2,-1,-1) if janela[i]==n)
-        except StopIteration: idx= -1
-        features.append((window_size-1 - idx)/window_size)
-    decay = np.exp(-np.linspace(0,3,window_size))
-    for n in range(37):
-        features.append(sum(decay[i] for i,v in enumerate(janela[::-1]) if v==n)/np.sum(decay))
-    opostos = sum(1 for i in range(1,window_size) if 15<=min(abs(pos.get(janela[i-1],0)-pos.get(janela[i],0)),37-abs(pos.get(janela[i-1],0)-pos.get(janela[i],0)))<=18)
-    features.append(opostos/max(1,window_size-1))
-    mais_comum = contagem.most_common(1)[0][1] if contagem else 0
-    menos_comum = contagem.most_common()[-1][1] if contagem else 0
-    features.append((mais_comum - menos_comum)/max(1,window_size))
-    for lag in [2,3,4]:
-        diffs_lag = [abs(janela[i]-janela[i-lag]) for i in range(lag, window_size)]
-        features.append(np.mean(diffs_lag) if diffs_lag else 0.0)
+def matriz_transicoes(valores, universo):
+    """Matriz 3x3 de transições normalizada por total de passos."""
+    m = {a:{b:0 for b in universo} for a in universo}
+    for a, b in zip(valores[:-1], valores[1:]):
+        if a in m and b in m[a]:
+            m[a][b] += 1
+    total = sum(m[a][b] for a in universo for b in universo)
+    if total == 0: total = 1
+    return [m[a][b]/total for a in universo for b in universo]
 
-    return features
+def extrair_features(janela_duzias, janela_numeros):
+    """Features combinando dúzias e números brutos (roda física e propriedades)."""
+    feats = []
+    L = len(janela_duzias)
 
-# === CRIAR DATASET ===
-def criar_dataset(historico, window):
-    if len(historico)<window+1:
-        return np.empty((0,1)), np.array([]), np.array([]), np.array([])
-    X, y_num, y_dz, y_col=[],[],[],[]
-    hist=list(historico)
-    for i in range(window,len(hist)):
-        janela=hist[i-window:i]
-        X.append(extrair_features(janela))
-        alvo=hist[i]
-        y_num.append(alvo)
-        y_dz.append(numero_para_duzia(alvo))
-        y_col.append(numero_para_coluna(alvo))
-    return np.array(X), np.array(y_num), np.array(y_dz), np.array(y_col)
+    # 1) Sequência crua de dúzias
+    feats.extend(janela_duzias)
+
+    # 2) Frequência simples e ponderada (decay) das dúzias
+    contador = Counter(janela_duzias)
+    for d in [1,2,3]:
+        feats.append(contador.get(d, 0) / max(1, L))
+    pesos = np.array([0.9**i for i in range(L-1, -1, -1)], dtype=float)
+    s_pesos = float(pesos.sum()) if pesos.size else 1.0
+    for d in [1,2,3]:
+        fw = sum(w for val, w in zip(janela_duzias, pesos) if val == d) / s_pesos
+        feats.append(fw)
+
+    # 3) Alternância (simples & ponderada)
+    if L > 1:
+        altern = sum(1 for j in range(1, L) if janela_duzias[j] != janela_duzias[j-1])
+        feats.append(altern / (L-1))
+        den = sum(0.9**i for i in range(L-1)) or 1.0
+        feats.append(sum((janela_duzias[j] != janela_duzias[j-1]) * 0.9**(L-1-j)
+                         for j in range(1, L)) / den)
+    else:
+        feats.extend([0.0, 0.0])
+
+    # 4) Tendência normalizada das dúzias
+    tend = [0.0,0.0,0.0]
+    for val, w in zip(janela_duzias, pesos if L else []):
+        if val in [1,2,3]: tend[val-1] += float(w)
+    total = sum(tend) if sum(tend) > 0 else 1.0
+    feats.extend([t/total for t in tend])
+    feats.append((max(tend)-min(tend)) if tend else 0.0)
+
+    # 5) Zero-rate na janela
+    feats.append(janela_duzias.count(0) / max(1, L))
+
+    # 6) Última ocorrência (distância normalizada) por dúzia
+    feats.extend(tempo_desde_ultimo(janela_duzias, [1,2,3]))
+
+    # 7) Últimas k (k=5) contagens normalizadas por dúzia
+    k = min(5, L)
+    ultk = janela_duzias[-k:] if L else []
+    for d in [1,2,3]:
+        feats.append(ultk.count(d) / max(1, k))
+
+    # 8) Frequências por janelas múltiplas (12, 24, 36) – recortadas ao tamanho L
+    for w in [12,24,36]:
+        feats.extend(freq_em_janela(janela_duzias, [1,2,3], w))
+
+    # 9) Streak atual (comprimento da sequência final da mesma dúzia, normalizado)
+    streak = 0
+    if L:
+        last = janela_duzias[-1]
+        for v in reversed(janela_duzias):
+            if v == last: streak += 1
+            else: break
+    feats.append(streak / max(1, L))
+
+    # 10) Matriz de transições 3x3 entre dúzias
+    feats.extend(matriz_transicoes(janela_duzias, [1,2,3]))
+
+    # ======= Features baseadas nos NÚMEROS brutos =======
+    Ln = len(janela_numeros)
+    if Ln == 0:
+        # reserva espaço para manter dimensionalidade estável (26 features abaixo)
+        feats.extend([0.0]*26)
+        return feats
+
+    # 10a) Par/Ímpar, Vermelho/Preto, Baixo/Alto nas últimas janelas (12)
+    wnum = min(12, Ln)
+    ult = janela_numeros[-wnum:]
+    if wnum == 0: wnum = 1
+    feats.append(sum(is_even(n) for n in ult)/wnum)
+    feats.append(sum(1-is_even(n) for n in ult)/wnum)
+    feats.append(sum(is_red(n) for n in ult)/wnum)
+    feats.append(sum(1-is_red(n) for n in ult if n!=0)/max(1, sum(1 for n in ult if n!=0)))  # preto
+    feats.append(sum(is_low(n) for n in ult)/wnum)
+    feats.append(sum(1-is_low(n) for n in ult if n!=0)/max(1, sum(1 for n in ult if n!=0)))  # alto
+
+    # 10b) Colunas 1/2/3 nas últimas janelas
+    cols = [numero_para_coluna(n) for n in ult]
+    for c in [1,2,3]:
+        feats.append(cols.count(c) / len(ult))
+
+    # 10c) Vizinhos físicos do último número (±2) – proporção de hits nos últimos 12
+    last_num = janela_numeros[-1]
+    viz = vizinhos_set(last_num, k=2)
+    feats.append(sum(1 for n in ult if n in viz) / len(ult))
+
+    # 10d) Setores clássicos (Voisins, Tiers, Orphelins) – proporção nos últimos 12
+    feats.append(sum(1 for n in ult if n in VOISINS) / len(ult))
+    feats.append(sum(1 for n in ult if n in TIERS) / len(ult))
+    feats.append(sum(1 for n in ult if n in ORPH) / len(ult))
+
+    # 10e) Frequência do ZERO nas últimas 36 (sinaliza tendência a travar padrão)
+    w36 = min(36, Ln)
+    ult36 = janela_numeros[-w36:]
+    feats.append(ult36.count(0) / max(1, w36))
+
+    # 10f) Distâncias na roda entre os últimos 3 números (média normalizada)
+    if Ln >= 3:
+        trip = janela_numeros[-3:]
+        Lwheel = len(WHEEL)
+        dists = []
+        ok = True
+        for a,b in zip(trip[:-1], trip[1:]):
+            if a not in IDX or b not in IDX:
+                ok = False; break
+            ia, ib = IDX[a], IDX[b]
+            cw = (ib - ia) % Lwheel
+            ccw = (ia - ib) % Lwheel
+            dists.append(min(cw, ccw)/Lwheel)
+        feats.append(np.mean(dists) if (dists and ok) else 0.0)
+    else:
+        feats.append(0.0)
+
+    # 10g) Qual dúzia do último número (one-hot), ajuda o modelo a entender regime
+    last_dz = numero_para_duzia(last_num)
+    for d in [1,2,3]:
+        feats.append(1.0 if last_dz == d else 0.0)
+
+    # 10h) Qual coluna do último número (one-hot)
+    last_col = numero_para_coluna(last_num)
+    for c in [1,2,3]:
+        feats.append(1.0 if last_col == c else 0.0)
+
+    # 10i) Últimos 6 números (one-hot compacta por dúzia)
+    k6 = min(6, Ln)
+    ult6 = janela_numeros[-k6:]
+    for d in [1,2,3]:
+        feats.append(sum(1 for n in ult6 if numero_para_duzia(n)==d)/max(1,k6))
+
+    return feats
+
+# === DATASET (X, y) ===
+def criar_dataset_features(hist_duzias, hist_numeros, janela_size):
+    X, y = [], []
+    duz = list(hist_duzias)
+    nums = list(hist_numeros)
+    L = min(len(duz), len(nums))
+    if L <= janela_size: 
+        return np.array(X), np.array(y)
+
+    # alinhar pelas mesmas posições
+    duz = duz[-L:]
+    nums = nums[-L:]
+
+    for i in range(L - janela_size):
+        janela_duz = duz[i:i+janela_size]
+        janela_num = nums[i:i+janela_size]
+        alvo = duz[i + janela_size]  # próxima dúzia
+        if alvo in [1,2,3]:  # ignora zero como target
+            X.append(extrair_features(janela_duz, janela_num))
+            y.append(alvo)
+    return np.array(X, dtype=float), np.array(y, dtype=int)
 
 # === TREINAMENTO ===
-def treinar_modelos():
-    X, y_num, y_dz, y_col = criar_dataset(st.session_state.historico, tamanho_janela)
-    if X.shape[0]==0: return
-    try:
-        if len(set(y_num))>1:
-            m_num=CatBoostClassifier(iterations=200,depth=6,learning_rate=0.1,loss_function='MultiClass',verbose=False)
-            m_num.fit(X,y_num); st.session_state.modelo_numero=m_num
-    except Exception as e: st.warning(f"Erro treino NÚMERO: {e}")
-    try:
-        if len(set(y_dz))>1:
-            m_dz=CatBoostClassifier(iterations=200,depth=6,learning_rate=0.1,loss_function='MultiClass',verbose=False)
-            m_dz.fit(X,y_dz); st.session_state.modelo_duzia=m_dz
-    except Exception as e: st.warning(f"Erro treino DÚZIA: {e}")
-    try:
-        if len(set(y_col))>1:
-            m_col=CatBoostClassifier(iterations=200,depth=6,learning_rate=0.1,loss_function='MultiClass',verbose=False)
-            m_col.fit(X,y_col); st.session_state.modelo_coluna=m_col
-    except Exception as e: st.warning(f"Erro treino COLUNA: {e}")
+def treinar_modelo_rf():
+    X, y = criar_dataset_features(st.session_state.historico, st.session_state.historico_numeros, tamanho_janela)
+    if len(y) > 1 and len(set(y)) > 1 and len(X) == len(y):
+        modelo = CatBoostClassifier(
+            iterations=300,
+            depth=6,
+            learning_rate=0.08,
+            loss_function='MultiClass',
+            verbose=False
+        )
+        try:
+            modelo.fit(X, y)
+            st.session_state.modelo_rf = modelo
+            return True
+        except Exception as e:
+            st.warning(f"Erro ao treinar modelo: {e}")
+            return False
+    return False
 
 # === PREVISÃO ===
-def prever_tudo(top_k=3):
-    janela=list(st.session_state.historico)[-tamanho_janela:]
-    if not janela: return None
-    feats=np.array(extrair_features(janela)).reshape(1,-1)
-    
-    # números
-    if st.session_state.modelo_numero:
-        try:
-            probs_num=st.session_state.modelo_numero.predict_proba(feats)[0]
-            idx_ord=np.argsort(probs_num)[::-1]; top_idx=idx_ord[:top_k]
-            top_nums=top_idx.tolist(); top_probs=probs_num[top_idx].tolist()
-        except Exception:
-            cont=Counter(janela); top=[x for x,_ in cont.most_common(top_k)]
-            top_nums=top+[None]*(top_k-len(top)); top_probs=[cont.get(x,0)/len(janela) if x is not None else 0 for x in top_nums]
-    else:
-        cont=Counter(janela); top=[x for x,_ in cont.most_common(top_k)]
-        top_nums=top+[None]*(top_k-len(top)); top_probs=[cont.get(x,0)/len(janela) if x is not None else 0 for x in top_nums]
-    
-    # dúzia
-    if st.session_state.modelo_duzia:
-        try:
-            probs_dz=st.session_state.modelo_duzia.predict_proba(feats)[0]
-            dz_classe=int(np.argmax(probs_dz)); dz_prob=float(np.max(probs_dz))
-        except Exception:
-            dzs=[numero_para_duzia(n) for n in janela]; cont_dz=Counter(dzs)
-            dz_classe,dz_prob=cont_dz.most_common(1)[0]; dz_prob=dz_prob/len(dzs)
-    else:
-        dzs=[numero_para_duzia(n) for n in janela]; cont_dz=Counter(dzs)
-        dz_classe,dz_prob=cont_dz.most_common(1)[0]; dz_prob=dz_prob/len(dzs)
-    
-    # coluna
-    if st.session_state.modelo_coluna:
-        try:
-            probs_col=st.session_state.modelo_coluna.predict_proba(feats)[0]
-            col_classe=int(np.argmax(probs_col)); col_prob=float(np.max(probs_col))
-        except Exception:
-            cols=[numero_para_coluna(n) for n in janela]; cont_col=Counter(cols)
-            col_classe,col_prob=cont_col.most_common(1)[0]; col_prob=col_prob/len(cols)
-    else:
-        cols=[numero_para_coluna(n) for n in janela]; cont_col=Counter(cols)
-        col_classe,col_prob=cont_col.most_common(1)[0]; col_prob=col_prob/len(cols)
-    
-    return {"numeros":top_nums,"prob_numeros":top_probs,"duzia":dz_classe,"prob_duzia":dz_prob,
-            "coluna":col_classe,"prob_coluna":col_prob}
+def prever_duzia_rf():
+    duz = list(st.session_state.historico)
+    nums = list(st.session_state.historico_numeros)
+    L = min(len(duz), len(nums))
+    if L < tamanho_janela or st.session_state.modelo_rf is None:
+        return None, None
 
-# === LOOP PRINCIPAL ===
+    janela_duz = duz[-tamanho_janela:]
+    janela_num = nums[-tamanho_janela:]
+    feats = np.array(extrair_features(janela_duz, janela_num)).reshape(1, -1)
+
+    try:
+        probs = st.session_state.modelo_rf.predict_proba(feats)[0]
+        classes = st.session_state.modelo_rf.classes_
+    except Exception as e:
+        st.warning(f"Erro na predição: {e}")
+        return None, None
+
+    top_idxs = np.argsort(probs)[-2:][::-1]
+    top_duzias = list(classes[top_idxs])
+    top_probs = list(probs[top_idxs])
+    return top_duzias, top_probs
+
+# === LOOP PRINCIPAL (API) ===
 try:
     resposta = requests.get(API_URL, timeout=5).json()
     numero_atual = int(resposta["data"]["result"]["outcome"]["number"])
@@ -316,82 +386,61 @@ except Exception as e:
     st.error(f"Erro API: {e}")
     st.stop()
 
+# Atualiza histórico e (eventualmente) re-treina
 if numero_atual != st.session_state.ultimo_numero_salvo:
-    salvar_historico_numero(numero_atual)
+    duzia_atual = salvar_historico(numero_atual)
     st.session_state.ultimo_numero_salvo = numero_atual
-    st.session_state.spins_desde_treino += 1
 
-    if (st.session_state.spins_desde_treino >= RETRAIN_EVERY) or \
-       (st.session_state.modelo_numero is None and st.session_state.modelo_duzia is None and st.session_state.modelo_coluna is None):
-        treinar_modelos()
-        st.session_state.spins_desde_treino = 0
+    # treina a cada TRAIN_EVERY inserções
+    Lmin = min(len(st.session_state.historico), len(st.session_state.historico_numeros))
+    if Lmin >= tamanho_janela + 2 and (Lmin % TRAIN_EVERY == 0):
+        treinar_modelo_rf()
 
-# === ALERTAS ===
+# === ALERTA DE RESULTADO (com emojis) ===
 if st.session_state.ultimo_resultado_numero != numero_atual:
     st.session_state.ultimo_resultado_numero = numero_atual
 
-    # Resultado
     if st.session_state.ultima_entrada:
         st.session_state.total_top += 1
-        acertou = False
-
-        ultima = st.session_state.ultima_entrada
-        if numero_atual in (ultima.get("numeros") or []): acertou = True
-        if numero_para_duzia(numero_atual) == ultima.get("duzia"): acertou = True
-        if numero_para_coluna(numero_atual) == ultima.get("coluna"): acertou = True
-
-        if acertou:
+        valor = numero_para_duzia(numero_atual)
+        if valor in st.session_state.ultima_entrada:
             st.session_state.acertos_top += 1
-            enviar_telegram_async(f"✅ Saiu {numero_atual} → 🟢", delay=1)
+            enviar_telegram_async(f"✅ Saiu {numero_atual} ({valor}ª dúzia): 🟢", delay=1)
         else:
-            enviar_telegram_async(f"✅ Saiu {numero_atual} → 🔴", delay=1)
+            enviar_telegram_async(f"✅ Saiu {numero_atual} ({valor}ª dúzia): 🔴", delay=1)
 
-    # Nova previsão
+    # === PREVISÃO + ANTI-SPAM + PROB MÍNIMA (entrada sem emojis) ===
+    if st.session_state.modelo_rf is not None:
+        try:
+            duzias_previstas, probs = prever_duzia_rf()
+            if duzias_previstas is not None and len(duzias_previstas) == 2:
+                if max(probs) >= prob_minima:
+                    chave_atual = f"duzia_{duzias_previstas[0]}_{duzias_previstas[1]}"
+                    if (chave_atual != st.session_state.ultima_chave_alerta) or (st.session_state.contador_sem_alerta >= 3):
+                        st.session_state.ultima_entrada = duzias_previstas
+                        st.session_state.tipo_entrada_anterior = "duzia"
+                        st.session_state.contador_sem_alerta = 0
+                        st.session_state.ultima_chave_alerta = chave_atual
 
-# prev já veio da função prever_tudo
-prev = prever_tudo(top_k=top_k_numeros)
+                        mensagem_alerta = (
+                            f"📊 <b>ENT DÚZIA:</b> {duzias_previstas[0]} / {duzias_previstas[1]}"
+                            f" (conf: {probs[0]*100:.1f}% / {probs[1]*100:.1f}%)"
+                        )
+                        enviar_telegram_async(mensagem_alerta, delay=5)
+                    else:
+                        st.session_state.contador_sem_alerta += 1
+                else:
+                    st.session_state.contador_sem_alerta += 1
+        except Exception as e:
+            st.warning(f"Erro na previsão: {e}")
 
-# Só prossegue se prev existir e probabilidade mínima for atingida
-if prev and (prev.get("prob_duzia", 0) >= prob_minima or prev.get("prob_coluna", 0) >= prob_minima):
-    
-    # Formata números
-    numeros_fmt = ", ".join(str(n) for n in prev.get("numeros", []) if n is not None)
-    
-    # Evita alertas duplicados: guarda última mensagem enviada
-    ultima_msg = st.session_state.get("ultima_msg", "")
-    msg = f"ENTRADA\ Duzia: {prev['duzia']} ({prev['prob_duzia']*100:.1f}%) | Coluna: {prev['coluna']} ({prev['prob_coluna']*100:.1f}%)"
-    
-    if msg != ultima_msg:
-        enviar_telegram_async(msg, delay=4)
-        st.session_state["ultima_msg"] = msg  # salva última mensagem enviada
-
-
-    
-
-
-
-
-
-
-
-
-            
-            
 # === INTERFACE ===
 st.write("Último número:", numero_atual)
 st.write(f"Acertos: {st.session_state.acertos_top} / {st.session_state.total_top}")
+st.write("Últimos registros (dúzias):", list(st.session_state.historico)[-12:])
+st.write("Últimos números:", list(st.session_state.historico_numeros)[-12:])
 
-ultimos_n = list(st.session_state.historico)[-20:]
-st.write("Últimos registros:", ultimos_n)
-
-if st.session_state.ultima_entrada:
-    st.subheader("🧠 Última previsão")
-    nums = ", ".join(str(n) for n in st.session_state.ultima_entrada["numeros"] if n is not None)
-    st.write(f"🔥 Top números: {nums}")
-    st.write(f"🎯 Dúzia: {st.session_state.ultima_entrada['duzia']} ({st.session_state.ultima_entrada['prob_duzia']*100:.1f}%)")
-    st.write(f"📈 Coluna: {st.session_state.ultima_entrada['coluna']} ({st.session_state.ultima_entrada['prob_coluna']*100:.1f}%)")
-
-# === SALVA ESTADO ===
+# === SALVA ESTADO (NÃO salva o modelo!) ===
 joblib.dump({
     "acertos_top": st.session_state.acertos_top,
     "total_top": st.session_state.total_top,
@@ -400,8 +449,7 @@ joblib.dump({
     "tipo_entrada_anterior": st.session_state.tipo_entrada_anterior,
     "padroes_certos": st.session_state.padroes_certos,
     "ultima_chave_alerta": st.session_state.ultima_chave_alerta,
-    "ultimo_resultado_numero": st.session_state.ultimo_resultado_numero,
-    "spins_desde_treino": st.session_state.spins_desde_treino
+    "ultimo_resultado_numero": st.session_state.ultimo_resultado_numero
 }, ESTADO_PATH)
 
 # === AUTO REFRESH ===
