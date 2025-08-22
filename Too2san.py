@@ -210,9 +210,10 @@ def treinar_modelo(tipo="duzia"):
         feats = extrair_features(janela)
         X.append(feats)
         y.append(alvo)
-
-if len(X) < 5 or len(set(y)) < 2: 
-    return False
+        
+        
+        if len(X) < 5 or len(set(y)) < 2: 
+            return False
 
     X = np.array(X,dtype=float)
     y = np.array(y,dtype=int)
