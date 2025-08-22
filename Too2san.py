@@ -315,71 +315,66 @@ if numero is not None and (st.session_state.ultimo_numero_salvo is None or numer
     st.session_state._alerta_enviado_rodada = False
 
     # === Top-3 previsão e escolha automática ===
-    top_duzia = prever("duzia")
-    top_coluna = prever("coluna")
+    # ... (todo o código acima até este ponto permanece igual)
 
-    sum_duzia = sum(p for _,p in top_duzia) if top_duzia else 0.0
-    sum_coluna = sum(p for _,p in top_coluna) if top_coluna else 0.0
-
-    chosen = None
-    if sum_duzia == 0 and sum_coluna == 0:
-        chosen = None
-    elif sum_duzia >= sum_coluna:
-        chosen = ("Dúzia", top_duzia)
-    else:
-        chosen = ("Coluna", top_coluna)
-
-if chosen and not st.session_state._alerta_enviado_rodada:
-        tipo, classes_probs = chosen
-        classes_probs = [(c,p) for c,p in classes_probs if p >= st.session_state.prob_minima]
-        if classes_probs:
-            chave = f"{tipo}_" + "_".join(str(c) for c,_ in classes_probs)
-            reenvio_forcado = False
-
-     # Pega a dúzia e coluna com maior probabilidade
+# === Top-3 previsão e escolha automática ===
 top_duzia = prever("duzia") or []
 top_coluna = prever("coluna") or []
 
+sum_duzia = sum(p for _,p in top_duzia) if top_duzia else 0.0
+sum_coluna = sum(p for _,p in top_coluna) if top_coluna else 0.0
+
+chosen = None
+if sum_duzia == 0 and sum_coluna == 0:
+    chosen = None
+elif sum_duzia >= sum_coluna:
+    chosen = ("Dúzia", top_duzia)
+else:
+    chosen = ("Coluna", top_coluna)
+
+# =========================
+# Envio alerta principal
+# =========================
+if chosen and not st.session_state._alerta_enviado_rodada:
+    tipo, classes_probs = chosen
+    classes_probs = [(c,p) for c,p in classes_probs if p >= st.session_state.prob_minima]
+    if classes_probs:
+        chave = f"{tipo}_" + "_".join(str(c) for c,_ in classes_probs)
+        reenvio_forcado = False
+
+        if st.session_state.ultima_entrada and chave == st.session_state.ultima_entrada.get("chave"):
+            st.session_state.contador_sem_envio += 1
+        if st.session_state.contador_sem_envio >= 3:
+            reenvio_forcado = True
+        else:
+            st.session_state.contador_sem_envio = 0
+
+        if (not st.session_state.ultima_entrada) or reenvio_forcado or chave != st.session_state.ultima_entrada.get("chave"):
+            entrada_obj = {"tipo": tipo, "classes": classes_probs, "chave": chave}
+            txt = f"📊 <b>ENT {tipo}</b>: " + ", ".join(f"{c} ({p*100:.1f}%)" for c,p in classes_probs)
+            #time.sleep(8)  # ⏳ espera 7 segundos antes de enviar
+            enviar_telegram(txt)
+            st.session_state.ultima_entrada = entrada_obj
+            st.session_state.contador_sem_envio = 0
+            st.session_state._alerta_enviado_rodada = True
+
+        try:
+            joblib.dump({
+                "acertos_top": st.session_state.acertos_top,
+                "total_top": st.session_state.total_top,
+                "ultima_entrada": st.session_state.ultima_entrada,
+                "contador_sem_envio": st.session_state.contador_sem_envio
+            }, ESTADO_PATH)
+        except:
+            pass
+
+# =========================
+# Canal extra
+# =========================
 if top_duzia and top_coluna:
     melhor_duzia = top_duzia[0][0]
     melhor_coluna = top_coluna[0][0]
     registrar_entrada(melhor_duzia, melhor_coluna)
-if top_duzia and top_coluna:
-    melhor_duzia = top_duzia[0][0]
-    melhor_coluna = top_coluna[0][0]
-    registrar_entrada(melhor_duzia, melhor_coluna)  # <-- CHAMADA AQUI
-
-    
-
-
-
-           
-
-            if st.session_state.ultima_entrada and chave == st.session_state.ultima_entrada.get("chave"):
-                st.session_state.contador_sem_envio += 1
-            if st.session_state.contador_sem_envio >= 3:
-                reenvio_forcado = True
-            else:
-                st.session_state.contador_sem_envio = 0
-
-            if (not st.session_state.ultima_entrada) or reenvio_forcado or chave != st.session_state.ultima_entrada.get("chave"):
-                entrada_obj = {"tipo": tipo, "classes": classes_probs, "chave": chave}
-                txt = f"📊 <b>ENT {tipo}</b>: " + ", ".join(f"{c} ({p*100:.1f}%)" for c,p in classes_probs)
-                #time.sleep(8)  # ⏳ espera 7 segundos antes de enviar
-                enviar_telegram(txt)
-                st.session_state.ultima_entrada = entrada_obj
-                st.session_state.contador_sem_envio = 0
-                st.session_state._alerta_enviado_rodada = True
-
-            try:
-                joblib.dump({
-                    "acertos_top": st.session_state.acertos_top,
-                    "total_top": st.session_state.total_top,
-                    "ultima_entrada": st.session_state.ultima_entrada,
-                    "contador_sem_envio": st.session_state.contador_sem_envio
-                }, ESTADO_PATH)
-            except:
-                pass
 
 
 
