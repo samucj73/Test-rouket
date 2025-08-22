@@ -407,12 +407,14 @@ else:
 
 # Previsões atuais (exibição)
 st.subheader("🔮 Previsões (Top-2) — modelos atuais")
-pd = prever("duzia")
-pc = prever("coluna")
+pd, _ = prever("duzia")
+pc, _ = prever("coluna")
+
 if pd:
     st.write("Dúzia:", ", ".join(f"{c} ({p*100:.1f}%)" for c,p in pd))
 else:
     st.write("Dúzia: sem previsão (modelo não treinado ou poucos dados).")
+
 if pc:
     st.write("Coluna:", ", ".join(f"{c} ({p*100:.1f}%)" for c,p in pc))
 else:
