@@ -1,4 +1,4 @@
-um import streamlit as st
+import streamlit as st
 import requests
 import joblib
 import numpy as np
