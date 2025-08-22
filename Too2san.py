@@ -14,7 +14,7 @@ from canal_extra import registrar_entrada, processar_resultado
 # =========================
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
-TELEGRAM_CHAT_ID = "5121457416"
+TELEGRAM_CHAT_ID = "-1002880411750"
 
 TAMANHO_JANELA_DEFAULT = 15
 MAX_HISTORICO = 4500
