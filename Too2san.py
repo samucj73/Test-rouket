@@ -235,9 +235,12 @@ def prever(tipo="duzia", topk=3):
         idxs = np.argsort(probs)[::-1][:topk]
         top = [(int(classes[i]), float(probs[i])) for i in idxs]
         return top
-    except Exception as e:
-        st.debug(f"Erro prever {tipo}: {e}")
-        return []
+
+ except Exception as e:
+    st.error(f"⚠️ Erro prever {tipo}: {e}")
+    st.exception(e)   # mostra traceback completo no app
+    return [] 
+    
 
 def enviar_telegram(msg:str):
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
