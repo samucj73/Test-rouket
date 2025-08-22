@@ -70,8 +70,10 @@ if "modelo_coluna" not in st.session_state:
 
 if "tamanho_janela" not in st.session_state:
     st.session_state.tamanho_janela = TAMANHO_JANELA_DEFAULT
+
 if "prob_minima" not in st.session_state:
-    st.session_state.prob_minima = 0.30
+    st.session_state.prob_minima = 0.10
+
 
 if "_alerta_enviado_rodada" not in st.session_state:
     st.session_state._alerta_enviado_rodada = False
@@ -208,7 +210,10 @@ def treinar_modelo(tipo="duzia"):
         feats = extrair_features(janela)
         X.append(feats)
         y.append(alvo)
-    if len(X) < 10 or len(set(y)) < 2: return False
+
+if len(X) < 5 or len(set(y)) < 2: 
+    return False
+
     X = np.array(X,dtype=float)
     y = np.array(y,dtype=int)
     modelo = CatBoostClassifier(iterations=200, depth=6, learning_rate=0.08, loss_function='MultiClass', verbose=False)
