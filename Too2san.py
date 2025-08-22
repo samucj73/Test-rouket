@@ -269,8 +269,8 @@ def enviar_telegram(msg:str):
 # === AUTORREFRESH (apenas para atualização de tela, não interfere nos alertas) ===
 st_autorefresh(interval=REFRESH_INTERVAL_MS, key="auto_refresh_key")
 
-# Captura manual ou automática
-# Captura manual ou automática (corrigido para não duplicar chamada)
+ Captura manual ou automática
+ Captura manual ou automática (corrigido para não duplicar chamada)
 #manual_flag = st.session_state.pop("_manual_capture", False) if "_manual_capture" in st.session_state else False
 #numero = capturar_numero_api() if (manual_flag or not st.session_state.get("ultimo_numero_salvo")) else None
 
