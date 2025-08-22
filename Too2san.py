@@ -299,29 +299,41 @@ else:
     chosen = ("Coluna", top_coluna)
 
 # 🔒 GARANTIA: UM ALERTA POR RODADA
-# só envia se: 1) modelo existe, 2) existe previsão, 3) ainda não enviou nesta rodada
-if chosen and not st.session_state.get("_alerta_enviado_rodada", False):
+# # =========================
+# ENVIO DE ALERTA — TOP DÚZIA / COLUNA (ANTI-SPAM)
+# =========================
+# chosen = ("Dúzia"/"Coluna", top2)
+if chosen:
     tipo, classes_probs = chosen
     # filtra por prob_minima
     classes_probs = [(c,p) for c,p in classes_probs if p >= st.session_state.prob_minima]
+
     if classes_probs:
-        # cria chave única da previsão
-        chave = f"{tipo}_" + "_".join(str(c) for c,_ in classes_probs)
+        # chave única da previsão
+        chave_atual = f"{tipo}_" + "_".join(str(c) for c,_ in classes_probs)
 
-        ultima_chave = st.session_state.get("ultima_chave_enviada", "")
-        reenvio_forcado = (ultima_chave == chave and st.session_state.get("contador_sem_envio",0) >= 3)
+        # recupera valores do session_state ou inicializa
+        ultima_chave = st.session_state.get("ultima_chave_alerta", "")
+        contador = st.session_state.get("contador_sem_alerta", 0)
 
-        if chave != ultima_chave or reenvio_forcado:
-            # envia telegram
-            txt = f"📊 <b>ENT {tipo}</b>: " + ", ".join(f"{c} ({p*100:.1f}%)" for c,p in classes_probs)
-            enviar_telegram(txt)
-            # atualiza flags
-            st.session_state["_alerta_enviado_rodada"] = True
-            st.session_state["ultima_chave_enviada"] = chave
-            st.session_state["contador_sem_envio"] = 0
+        # envia alerta se chave mudou ou se mesma previsão repetida >=3 rodadas
+        if (chave_atual != ultima_chave) or (contador >= 3):
+            # atualiza estado
+            st.session_state.ultima_entrada = classes_probs
+            st.session_state.tipo_entrada_anterior = tipo
+            st.session_state.ultima_chave_alerta = chave_atual
+            st.session_state.contador_sem_alerta = 0
+
+            # cria mensagem
+            mensagem_alerta = (
+                f"📊 <b>ENT {tipo.upper()}:</b> " +
+                ", ".join(f"{c} ({p*100:.1f}%)" for c,p in classes_probs)
+            )
+            # envia Telegram
+            enviar_telegram(mensagem_alerta)
         else:
-            # ainda conta sem envio
-            st.session_state["contador_sem_envio"] = st.session_state.get("contador_sem_envio",0) + 1
+            # mesma previsão ainda, incrementa contador
+            st.session_state.contador_sem_alerta = contador + 1
 
 
 
