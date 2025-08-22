@@ -325,6 +325,9 @@ top_duzia = prever("duzia")  # [(class,prob), ...]
 top_coluna = prever("coluna")
 
 # Escolha entre dúzia/coluna por soma de probabilidades (simples)
+top_duzia, _ = prever("duzia")
+top_coluna, _ = prever("coluna")
+
 sum_duzia = sum(p for _,p in top_duzia) if top_duzia else 0.0
 sum_coluna = sum(p for _,p in top_coluna) if top_coluna else 0.0
 
