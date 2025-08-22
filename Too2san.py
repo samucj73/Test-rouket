@@ -366,6 +366,12 @@ if numero is not None and (st.session_state.ultimo_numero_salvo is None or numer
             except:
                 pass
 
+ # Pega a dúzia e coluna com maior probabilidade
+if top_duzia and top_coluna:
+    melhor_duzia = top_duzia[0][0]
+    melhor_coluna = top_coluna[0][0]
+    registrar_entrada(melhor_duzia, melhor_coluna)  # <-- CHAMADA AQUI
+
 
 
 # =========================
