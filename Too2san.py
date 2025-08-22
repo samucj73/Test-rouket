@@ -265,6 +265,12 @@ st_autorefresh(interval=REFRESH_INTERVAL_MS, key="auto_refresh_key")
 
 manual_flag = st.session_state.pop("_manual_capture", False) if "_manual_capture" in st.session_state else False
 numero = capturar_numero_api() if (manual_flag or not st.session_state.get("ultimo_numero_salvo")) else None
+# === Captura de novo número ===
+numero = capturar_numero_api()
+
+# Se não conseguiu pegar da API, abre opção manual
+#if numero is None:
+   # numero = st.number_input("Digite número manual", 0, 36, 0, key="manual")
 
 if numero is not None and (st.session_state.ultimo_numero_salvo is None or numero != st.session_state.ultimo_numero_salvo):
     st.session_state.ultimo_numero_salvo = numero
