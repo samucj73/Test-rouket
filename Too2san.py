@@ -298,26 +298,33 @@ elif sum_duzia >= sum_coluna:
 else:
     chosen = ("Coluna", top_coluna)
 
-if chosen and not st.session_state._alerta_enviado_rodada:
+# 🔒 GARANTIA: UM ALERTA POR RODADA
+# só envia se: 1) modelo existe, 2) existe previsão, 3) ainda não enviou nesta rodada
+if chosen and not st.session_state.get("_alerta_enviado_rodada", False):
     tipo, classes_probs = chosen
+    # filtra por prob_minima
     classes_probs = [(c,p) for c,p in classes_probs if p >= st.session_state.prob_minima]
     if classes_probs:
+        # cria chave única da previsão
         chave = f"{tipo}_" + "_".join(str(c) for c,_ in classes_probs)
-        reenvio_forcado = False
-        if st.session_state.ultima_entrada and chave == st.session_state.ultima_entrada.get("chave"):
-            st.session_state.contador_sem_envio += 1
-            if st.session_state.contador_sem_envio >= 3:
-                reenvio_forcado = True
-        else:
-            st.session_state.contador_sem_envio = 0
 
-        if not st.session_state.ultima_entrada or reenvio_forcado or chave != st.session_state.ultima_entrada.get("chave"):
-            entrada_obj = {"tipo": tipo, "classes": classes_probs, "chave": chave}
+        ultima_chave = st.session_state.get("ultima_chave_enviada", "")
+        reenvio_forcado = (ultima_chave == chave and st.session_state.get("contador_sem_envio",0) >= 3)
+
+        if chave != ultima_chave or reenvio_forcado:
+            # envia telegram
             txt = f"📊 <b>ENT {tipo}</b>: " + ", ".join(f"{c} ({p*100:.1f}%)" for c,p in classes_probs)
             enviar_telegram(txt)
-            st.session_state.ultima_entrada = entrada_obj
-            st.session_state.contador_sem_envio = 0
-            st.session_state._alerta_enviado_rodada = True
+            # atualiza flags
+            st.session_state["_alerta_enviado_rodada"] = True
+            st.session_state["ultima_chave_enviada"] = chave
+            st.session_state["contador_sem_envio"] = 0
+        else:
+            # ainda conta sem envio
+            st.session_state["contador_sem_envio"] = st.session_state.get("contador_sem_envio",0) + 1
+
+
+
 
         try:
             joblib.dump({
