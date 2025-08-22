@@ -254,13 +254,39 @@ def enviar_telegram(msg:str):
 # =========================
 # Fluxo principal adaptado (evita múltiplos alertas)
 # =========================
-
-# Autorefresh do Streamlit
 st_autorefresh(interval=REFRESH_INTERVAL_MS, key="auto_refresh_key")
 
-# 1) Captura - manual ou automática
 manual_flag = st.session_state.pop("_manual_capture", False) if "_manual_capture" in st.session_state else False
-numero = capturar_numero_api() if (manual_flag or len(st.session_state.historico_numeros) > 0) else None
+numero = capturar_numero_api() if manual_flag or True else None
+
+if numero is not None and (st.session_state.ultimo_numero_salvo is None or numero != st.session_state.ultimo_numero_salvo):
+    st.session_state.ultimo_numero_salvo = numero
+    salvar_historico(numero)
+
+    if st.session_state.ultima_entrada:
+        ent = st.session_state.ultima_entrada
+        try:
+            tipo = ent.get("tipo")
+            classes = [c for c,_ in ent.get("classes",[])]
+            acerto = False
+            if tipo=="Dúzia" and numero_para_duzia(numero) in classes: acerto=True
+            if tipo=="Coluna" and numero_para_coluna(numero) in classes: acerto=True
+            if acerto:
+                st.session_state.acertos_top += 1
+                enviar_telegram(f"✅ Saiu {numero} — ACERTO! ({tipo})")
+            else:
+                enviar_telegram(f"❌ Saiu {numero} — ERRO. ({tipo})")
+            st.session_state.total_top += 1
+        except: pass
+
+    if len(st.session_state.historico_numeros) >= st.session_state.tamanho_janela + 3:
+        if len(st.session_state.historico_numeros) % TRAIN_EVERY == 0:
+            treinar_modelo("duzia")
+            treinar_modelo("coluna")
+
+st.session_state._alerta_enviado_rodada = False
+
+
 
 # 2) Se veio número e for novo -> salva e processa
 if numero is not None and (st.session_state.ultimo_numero_salvo is None or numero != st.session_state.ultimo_numero_salvo):
@@ -269,29 +295,8 @@ if numero is not None and (st.session_state.ultimo_numero_salvo is None or numer
 
     # 2a) Resultado do último alerta (GREEN/RED)
     # Resultado do último alerta (GREEN/RED)
-if st.session_state.ultima_entrada and st.session_state.tipo_entrada_anterior:
-    tipo = st.session_state.tipo_entrada_anterior
-    classes = [c for c,_ in st.session_state.ultima_entrada]
-    acerto = False
-    if tipo == "Dúzia":
-        if numero_para_duzia(numero) in classes:
-            acerto = True
-    elif tipo == "Coluna":
-        if numero_para_coluna(numero) in classes:
-            acerto = True
-    if acerto:
-        st.session_state.acertos_top += 1
-        enviar_telegram(f"✅ Saiu {numero} — ACERTO! ({tipo})")
-    else:
-        enviar_telegram(f"❌ Saiu {numero} — ERRO. ({tipo})")
-    st.session_state.total_top += 1
-    except: pass
-    if len(st.session_state.historico_numeros) >= st.session_state.tamanho_janela + 3:
-        if len(st.session_state.historico_numeros) % TRAIN_EVERY == 0:
-            treinar_modelo("duzia")
-            treinar_modelo("coluna")
 
-    st.session_state._alerta_enviado_rodada = False
+
     
 
     # 2b) Treinamento conservador
