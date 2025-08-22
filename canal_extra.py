@@ -5,12 +5,13 @@ import requests
 # CONFIGURAÇÃO DO CANAL EXTRA
 # =========================
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
-TELEGRAM_CHAT_ID_EXTRA = "-1002880411750"
+TELEGRAM_CHAT_ID_EXTRA = "SEU_CHAT_ID_EXTRA_AQUI"
 
 # =========================
 # ESTADO INTERNO
 # =========================
-entrada_atual = []  # lista dos 4 números da última entrada registrada
+entrada_atual = []         # lista dos números da última entrada registrada
+resultado_enviado = False  # flag para evitar múltiplos envios do resultado
 
 # =========================
 # FUNÇÕES
@@ -44,21 +45,34 @@ def gerar_intersecao_numeros(duzia:int, coluna:int):
     # Interseção
     return sorted(list(nums_duzia & nums_coluna))
 
+def reset_canal_extra():
+    """Reseta a entrada e a flag de resultado no início de cada nova rodada"""
+    global entrada_atual, resultado_enviado
+    entrada_atual = []
+    resultado_enviado = False
+
 def registrar_entrada(duzia:int, coluna:int):
-    """Registra a entrada para o canal extra e envia a mensagem"""
-    global entrada_atual
+    """
+    Registra a entrada para o canal extra e envia a mensagem.
+    Evita enviar múltiplos alertas se a entrada não mudou.
+    """
+    global entrada_atual, resultado_enviado
     intersecao = gerar_intersecao_numeros(duzia, coluna)
-    if intersecao:
+    if intersecao and intersecao != entrada_atual:
         entrada_atual = intersecao
+        resultado_enviado = False  # reset da flag para nova rodada
         enviar_telegram_extra(f"🎯 {entrada_atual}")
 
 def processar_resultado(numero:int):
-    """Verifica se saiu GREEN ou RED para a entrada atual"""
-    global entrada_atual
-    if not entrada_atual:
+    """
+    Verifica se saiu GREEN ou RED para a entrada atual.
+    Evita múltiplos envios por rodada usando a flag resultado_enviado.
+    """
+    global entrada_atual, resultado_enviado
+    if not entrada_atual or resultado_enviado:
         return
     if numero in entrada_atual:
         enviar_telegram_extra(f"🟢 {numero}")
     else:
         enviar_telegram_extra(f"🔴 {numero}")
-    entrada_atual = []  # zera após enviar resultado
+    resultado_enviado = True  # marca que já enviou resultado
