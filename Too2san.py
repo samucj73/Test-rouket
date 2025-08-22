@@ -6,7 +6,7 @@ from collections import deque, Counter
 from pathlib import Path
 from streamlit_autorefresh import st_autorefresh
 from catboost import CatBoostClassifier
-import Time
+import time
 # =========================
 # CONFIGURAÇÕES
 # =========================
