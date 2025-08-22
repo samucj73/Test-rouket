@@ -8,6 +8,7 @@ from streamlit_autorefresh import st_autorefresh
 from catboost import CatBoostClassifier
 import time
 from canal_extra import registrar_entrada, processar_resultado
+
 # =========================
 # CONFIGURAÇÕES
 # =========================
@@ -26,10 +27,11 @@ HIST_PATH_NUMS = Path("historico_numeros.pkl")
 ESTADO_PATH = Path("estado.pkl")
 
 # =========================
-# ROUE EUROPEIA
+# ROULETTE EUROPEIA
 # =========================
 RED_SET = {1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36}
-WHEEL = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26]
+WHEEL = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,
+         24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26]
 IDX = {n:i for i,n in enumerate(WHEEL)}
 
 def numero_para_duzia(n:int)->int:
@@ -74,16 +76,13 @@ if "tamanho_janela" not in st.session_state:
 if "prob_minima" not in st.session_state:
     st.session_state.prob_minima = 0.10
 
-
 if "_alerta_enviado_rodada" not in st.session_state:
     st.session_state._alerta_enviado_rodada = False
-
 if "ultima_entrada" not in st.session_state: st.session_state.ultima_entrada = None
 if "contador_sem_envio" not in st.session_state: st.session_state.contador_sem_envio = 0
 if "ultimo_numero_salvo" not in st.session_state: st.session_state.ultimo_numero_salvo = None
 if "acertos_top" not in st.session_state: st.session_state.acertos_top = 0
 if "total_top" not in st.session_state: st.session_state.total_top = 0
-if "ultimo_resultado_numero" not in st.session_state: st.session_state.ultimo_resultado_numero = None
 
 # restore counters
 for k,v in estado_salvo.items():
@@ -94,7 +93,7 @@ for k,v in estado_salvo.items():
 # UI
 # =========================
 st.set_page_config(page_title="IA Roleta - Dúzia & Coluna", page_icon="🎯", layout="centered")
-st.title("🎯 IA Roleta - Dúzia & Coluna (sem threads)")
+st.title("🎯 IA Roleta - Dúzia & Coluna")
 
 col1, col2 = st.columns([2,1])
 with col1:
@@ -188,7 +187,7 @@ def capturar_numero_api():
             except:
                 continue
     except Exception as e:
-        st.debug(f"Erro captura API: {e}")
+        st.write(f"Erro captura API: {e}")
     return None
 
 def treinar_modelo(tipo="duzia"):
@@ -197,6 +196,7 @@ def treinar_modelo(tipo="duzia"):
     window = st.session_state.tamanho_janela
     if n < window + 3:
         return False
+
     X, y = [], []
     for i in range(n - window):
         janela = nums[i:i+window]
@@ -210,10 +210,10 @@ def treinar_modelo(tipo="duzia"):
         feats = extrair_features(janela)
         X.append(feats)
         y.append(alvo)
-        
-        
-        if len(X) < 5 or len(set(y)) < 2: 
-            return False
+
+    # <-- agora só verifica depois do loop
+    if len(X) < 5 or len(set(y)) < 2: 
+        return False
 
     X = np.array(X,dtype=float)
     y = np.array(y,dtype=int)
@@ -245,12 +245,9 @@ def prever(tipo="duzia", topk=3):
         idxs = np.argsort(probs)[::-1][:topk]
         top = [(int(classes[i]), float(probs[i])) for i in idxs]
         return top
-    
     except Exception as e:
         st.error(f"⚠️ Erro prever {tipo}: {e}")
-        st.exception(e)   # mostra traceback completo no app
         return [] 
-    
 
 def enviar_telegram(msg:str):
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
@@ -264,56 +261,16 @@ def enviar_telegram(msg:str):
 # =========================
 # FLUXO PRINCIPAL
 # =========================
-# =========================
-# Fluxo principal adaptado (evita múltiplos alertas)
-# === AUTORREFRESH (apenas para atualização de tela, não interfere nos alertas) ===
 st_autorefresh(interval=REFRESH_INTERVAL_MS, key="auto_refresh_key")
 
- #Captura manual ou automática
-# Captura manual ou automática (corrigido para não duplicar chamada)
 manual_flag = st.session_state.pop("_manual_capture", False) if "_manual_capture" in st.session_state else False
 numero = capturar_numero_api() if (manual_flag or not st.session_state.get("ultimo_numero_salvo")) else None
 
-# Garantir que só processa número novo
 if numero is not None and (st.session_state.ultimo_numero_salvo is None or numero != st.session_state.ultimo_numero_salvo):
     st.session_state.ultimo_numero_salvo = numero
     salvar_historico(numero)
 
-    # === Conferência de acerto/erro ===
-    if st.session_state.ultima_entrada:
-        ent = st.session_state.ultima_entrada
-        try:
-            tipo = ent.get("tipo")
-            classes = [c for c,_ in ent.get("classes",[])]
-            acerto = False
-            if tipo == "Dúzia" and numero_para_duzia(numero) in classes:
-                acerto = True
-            if tipo == "Coluna" and numero_para_coluna(numero) in classes:
-                acerto = True
-
-            if acerto:
-                st.session_state.acertos_top += 1
-                enviar_telegram(f"✅ Saiu {numero} — ACERTO! ({tipo})")
-            else:
-                enviar_telegram(f"❌ Saiu {numero} — ERRO. ({tipo})")
-
-            st.session_state.total_top += 1
-        except:
-            pass
-
-    numero = capturar_numero_api() if (manual_flag or True) else None
-
-# Garantir que só processa número novo
-if numero is not None and (st.session_state.ultimo_numero_salvo is None or numero != st.session_state.ultimo_numero_salvo):
-    st.session_state.ultimo_numero_salvo = numero
-    salvar_historico(numero)
-
-    # === Conferência canal extra ===
-    processar_resultado(numero)  # <-- CHAMADA AQUI
-
-    # === Conferência de acerto/erro canal principal ===
-    if st.session_state.ultima_entrada:
-        ...
+    processar_resultado(numero)  # canal extra
 
     # === Re-treino periódico ===
     if len(st.session_state.historico_numeros) >= st.session_state.tamanho_janela + 3:
@@ -321,13 +278,15 @@ if numero is not None and (st.session_state.ultimo_numero_salvo is None or numer
             treinar_modelo("duzia")
             treinar_modelo("coluna")
 
-    # Reset do flag de alerta a cada número novo
     st.session_state._alerta_enviado_rodada = False
 
-    # === Top-3 previsão e escolha automática ===
-    # ... (todo o código acima até este ponto permanece igual)
+# === Força treino inicial se ainda não houver modelos ===
+if st.session_state.modelo_duzia is None and len(st.session_state.historico_numeros) > st.session_state.tamanho_janela + 3:
+    treinar_modelo("duzia")
+if st.session_state.modelo_coluna is None and len(st.session_state.historico_numeros) > st.session_state.tamanho_janela + 3:
+    treinar_modelo("coluna")
 
-# === Top-3 previsão e escolha automática ===
+# === Previsão ===
 top_duzia = prever("duzia") or []
 top_coluna = prever("coluna") or []
 
@@ -342,9 +301,6 @@ elif sum_duzia >= sum_coluna:
 else:
     chosen = ("Coluna", top_coluna)
 
-# =========================
-# Envio alerta principal
-# =========================
 if chosen and not st.session_state._alerta_enviado_rodada:
     tipo, classes_probs = chosen
     classes_probs = [(c,p) for c,p in classes_probs if p >= st.session_state.prob_minima]
@@ -362,7 +318,6 @@ if chosen and not st.session_state._alerta_enviado_rodada:
         if (not st.session_state.ultima_entrada) or reenvio_forcado or chave != st.session_state.ultima_entrada.get("chave"):
             entrada_obj = {"tipo": tipo, "classes": classes_probs, "chave": chave}
             txt = f"📊 <b>ENT {tipo}</b>: " + ", ".join(f"{c} ({p*100:.1f}%)" for c,p in classes_probs)
-            #time.sleep(8)  # ⏳ espera 7 segundos antes de enviar
             enviar_telegram(txt)
             st.session_state.ultima_entrada = entrada_obj
             st.session_state.contador_sem_envio = 0
@@ -386,19 +341,12 @@ if top_duzia and top_coluna:
     melhor_coluna = top_coluna[0][0]
     registrar_entrada(melhor_duzia, melhor_coluna)
 
-
-
-
-
 # =========================
 # UI FINAL
 # =========================
 st.subheader("📌 Últimos números capturados")
 if len(st.session_state.historico_numeros) > 0:
     st.write(list(st.session_state.historico_numeros)[-20:])
-
-
-
 else:
     st.info("Nenhum número capturado ainda. Use o botão 'Capturar' ou aguarde o auto-refresh.")
 
@@ -413,7 +361,7 @@ if st.session_state.ultima_entrada:
 else:
     st.write("Nenhuma entrada enviada ainda.")
 
-st.subheader("🔮 Previsões (Top-3) — modelos atuais")
+st.subheader("🔮 Previsões (Top-3)")
 pd = prever("duzia")
 pc = prever("coluna")
 
