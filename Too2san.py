@@ -354,7 +354,7 @@ if numero is not None and (st.session_state.ultimo_numero_salvo is None or numer
                 st.session_state.contador_sem_envio += 1
                 # se passou 3 rodadas sem envio, força reenvio
                 if st.session_state.contador_sem_envio >= 3:
-                    txt = f"📊 <b>ENTRADA {tipo}</b>: " + ", ".join(f"{c} ({p*100:.1f}%)" for c,p in classes_probs)
+                    txt = f"📊 <b>ENT {tipo}</b>: " + ", ".join(f"{c} ({p*100:.1f}%)" for c,p in classes_probs)
                     enviar_telegram(txt)
                     st.session_state.contador_sem_envio = 0
         # else: nenhuma classe acima da prob_minima -> não envia entrada
