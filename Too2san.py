@@ -355,7 +355,9 @@ if numero is not None and (st.session_state.ultimo_numero_salvo is None or numer
 # UI FINAL
 # =========================
 st.subheader("📌 Últimos números capturados")
-# tipo de entrada anterior
+if len(st.session_state.historico_numeros) > 0:
+    st.write(list(st.session_state.historico_numeros)[-20:])
+
 
 
 else:
