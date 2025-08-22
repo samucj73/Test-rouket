@@ -1,4 +1,4 @@
-import streamlit as st
+um import streamlit as st
 import requests
 import joblib
 import numpy as np
@@ -329,6 +329,13 @@ if numero is not None and (st.session_state.ultimo_numero_salvo is None or numer
     else:
         chosen = ("Coluna", top_coluna)
 
+if chosen and not st.session_state._alerta_enviado_rodada:
+        tipo, classes_probs = chosen
+        classes_probs = [(c,p) for c,p in classes_probs if p >= st.session_state.prob_minima]
+        if classes_probs:
+            chave = f"{tipo}_" + "_".join(str(c) for c,_ in classes_probs)
+            reenvio_forcado = False
+
      # Pega a dúzia e coluna com maior probabilidade
 top_duzia = prever("duzia") or []
 top_coluna = prever("coluna") or []
@@ -342,12 +349,7 @@ if top_duzia and top_coluna:
     melhor_coluna = top_coluna[0][0]
     registrar_entrada(melhor_duzia, melhor_coluna)  # <-- CHAMADA AQUI
 
-    if chosen and not st.session_state._alerta_enviado_rodada:
-        tipo, classes_probs = chosen
-        classes_probs = [(c,p) for c,p in classes_probs if p >= st.session_state.prob_minima]
-        if classes_probs:
-            chave = f"{tipo}_" + "_".join(str(c) for c,_ in classes_probs)
-            reenvio_forcado = False
+    
 
 
 
