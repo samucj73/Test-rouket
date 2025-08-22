@@ -273,7 +273,7 @@ if numero is not None and (st.session_state.ultimo_numero_salvo is None or numer
     processar_resultado(numero)  # canal extra
 
     # === Re-treino periódico ===
-    if len(st.session_state.historico_numeros) >= st.session_state.tamanho_janela + 3:
+    if len(st.session_state.historico_numeros) >= st.session_state.tamanho_janela + 2:
         if len(st.session_state.historico_numeros) % TRAIN_EVERY == 0:
             treinar_modelo("duzia")
             treinar_modelo("coluna")
@@ -281,9 +281,9 @@ if numero is not None and (st.session_state.ultimo_numero_salvo is None or numer
     st.session_state._alerta_enviado_rodada = False
 
 # === Força treino inicial se ainda não houver modelos ===
-if st.session_state.modelo_duzia is None and len(st.session_state.historico_numeros) > st.session_state.tamanho_janela + 3:
+if st.session_state.modelo_duzia is None and len(st.session_state.historico_numeros) > st.session_state.tamanho_janela + 2:
     treinar_modelo("duzia")
-if st.session_state.modelo_coluna is None and len(st.session_state.historico_numeros) > st.session_state.tamanho_janela + 3:
+if st.session_state.modelo_coluna is None and len(st.session_state.historico_numeros) > st.session_state.tamanho_janela + 2:
     treinar_modelo("coluna")
 
 # === Previsão ===
