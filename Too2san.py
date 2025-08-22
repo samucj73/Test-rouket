@@ -17,7 +17,7 @@ TELEGRAM_CHAT_ID = "5121457416"                                   # substitua se
 TAMANHO_JANELA_DEFAULT = 15
 MAX_HISTORICO = 4500
 REFRESH_INTERVAL_MS = 5000   # 5s
-TRAIN_EVERY = 10
+TRAIN_EVERY = 1
 
 MODELO_DUZIA_PATH = Path("modelo_duzia.pkl")
 MODELO_COLUNA_PATH = Path("modelo_coluna.pkl")
