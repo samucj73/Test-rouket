@@ -136,15 +136,19 @@ def salvar_historico(numero:int):
             joblib.dump(list(st.session_state.historico_numeros), HIST_PATH_NUMS)
         except: pass
 
+# === FEATURES ===
+
 def extrair_features(janela_numeros):
     feats = []
     L = len(janela_numeros)
     window = st.session_state.tamanho_janela
 
+    # --- Sequência da janela ---
     pad = [0]*(window - L)
     seq = pad + list(janela_numeros)[-window:]
     feats.extend(seq)
 
+    # --- Contagem relativa dúzia e coluna ---
     cnt_duzia = Counter(numero_para_duzia(n) for n in janela_numeros)
     cnt_coluna = Counter(numero_para_coluna(n) for n in janela_numeros)
     for d in [1,2,3]:
@@ -152,23 +156,99 @@ def extrair_features(janela_numeros):
     for c in [1,2,3]:
         feats.append(cnt_coluna.get(c,0)/max(1,L))
 
+    # --- Último número ---
     if L>0:
         last = janela_numeros[-1]
-        feats.append(int(last%2==0))
-        feats.append(is_red(last))
+        feats.append(int(last%2==0))  # paridade
+        feats.append(is_red(last))    # cor
     else:
         feats.extend([0,0])
 
+    # --- Distância desde o último zero ---
     last_zero_dist = next((L-i for i,n in enumerate(reversed(janela_numeros)) if n==0), L)
     feats.append(last_zero_dist / max(1,L))
 
-    for n in janela_numeros[-1:]:
-        idx = IDX.get(n,0)
+    # --- Vizinhos físicos na roleta ---
+    if L>0:
+        last_idx = IDX.get(janela_numeros[-1],0)
         for offset in [-2,-1,1,2]:
-            neighbor = WHEEL[(idx+offset)%37]
+            neighbor = WHEEL[(last_idx+offset)%37]
             feats.append(neighbor)
+    else:
+        feats.extend([0,0,0,0])
+
+    # --- Gaps importantes ---
+    # Gap desde último zero
+    last_zero = next((i for i,n in enumerate(reversed(janela_numeros)) if n==0), None)
+    feats.append(last_zero if last_zero is not None else L)
+
+    # Gap desde última aparição do mesmo número
+    last_num = janela_numeros[-1] if L>0 else None
+    last_num_idx = next((i for i,n in enumerate(reversed(janela_numeros)) if n==last_num), None)
+    feats.append(last_num_idx if last_num_idx is not None else L)
+
+    # Gap desde última aparição da mesma dúzia
+    if L>0:
+        last_duz = numero_para_duzia(janela_numeros[-1])
+        last_duz_idx = next((i for i,n in enumerate(reversed(janela_numeros)) if numero_para_duzia(n)==last_duz), None)
+        feats.append(last_duz_idx if last_duz_idx is not None else L)
+    else:
+        feats.append(L)
+
+    # Gap desde última aparição da mesma coluna
+    if L>0:
+        last_col = numero_para_coluna(janela_numeros[-1])
+        last_col_idx = next((i for i,n in enumerate(reversed(janela_numeros)) if numero_para_coluna(n)==last_col), None)
+        feats.append(last_col_idx if last_col_idx is not None else L)
+    else:
+        feats.append(L)
+
+    # Gap desde última aparição da mesma cor
+    if L>0:
+        last_color = is_red(janela_numeros[-1])
+        last_color_idx = next((i for i,n in enumerate(reversed(janela_numeros)) if is_red(n)==last_color), None)
+        feats.append(last_color_idx if last_color_idx is not None else L)
+    else:
+        feats.append(L)
+
+    # Gap desde última aparição da mesma paridade
+    if L>0:
+        last_par = int(janela_numeros[-1]%2==0)
+        last_par_idx = next((i for i,n in enumerate(reversed(janela_numeros)) if int(n%2==0)==last_par), None)
+        feats.append(last_par_idx if last_par_idx is not None else L)
+    else:
+        feats.append(L)
+
+    # --- Frequência relativa dos últimos 3 números mais saídos na janela ---
+    cnt_nums = Counter(janela_numeros)
+    top3 = [c for c,_ in cnt_nums.most_common(3)]
+    for n in top3:
+        feats.append(cnt_nums.get(n,0)/max(1,L))
+    # completa se tiver menos de 3
+    while len(top3)<3:
+        feats.append(0)
+        top3.append(None)
+
+    # --- Delta entre últimas duas saídas ---
+    if L>=2:
+        delta_num = janela_numeros[-1] - janela_numeros[-2]
+        idx1 = IDX[janela_numeros[-2]]
+        idx2 = IDX[janela_numeros[-1]]
+        delta_phys = idx2 - idx1
+        feats.extend([delta_num, delta_phys])
+    else:
+        feats.extend([0,0])
+
+    # --- Repetições recentes do mesmo número nos últimos X giros ---
+    if L>0:
+        repeats = sum(1 for n in janela_numeros[-5:] if n==janela_numeros[-1])
+        feats.append(repeats)
+    else:
+        feats.append(0)
 
     return np.array(feats,dtype=float)
+
+
 
 def capturar_numero_api():
     try:
@@ -231,7 +311,7 @@ def treinar_modelo(tipo="duzia"):
 
     X = np.array(X,dtype=float)
     y = np.array(y,dtype=int)
-    modelo = CatBoostClassifier(iterations=200, depth=6, learning_rate=0.08, loss_function='MultiClass', verbose=False)
+    modelo = CatBoostClassifier(iterations=300, depth=6, learning_rate=0.08, loss_function='MultiClass', verbose=False)
     try:
         modelo.fit(X, y)
         if tipo=="duzia":
