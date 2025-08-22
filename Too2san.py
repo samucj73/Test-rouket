@@ -285,6 +285,13 @@ if st.session_state.ultima_entrada and st.session_state.tipo_entrada_anterior:
     else:
         enviar_telegram(f"❌ Saiu {numero} — ERRO. ({tipo})")
     st.session_state.total_top += 1
+
+except: pass
+
+    if len(st.session_state.historico_numeros) >= st.session_state.tamanho_janela + 3:
+        if len(st.session_state.historico_numeros) % TRAIN_EVERY == 0:
+            treinar_modelo("duzia")
+            treinar_modelo("coluna")
     
 
     # 2b) Treinamento conservador
