@@ -317,46 +317,57 @@ if numero is not None and (st.session_state.ultimo_numero_salvo is None or numer
             treinar_modelo("coluna")
 
     # Previsão atual (top-2) para enviar entrada (anti-spam aplicado)
-    top_duzia = prever("duzia")  # [(class,prob), ...]
-    top_coluna = prever("coluna")
+    # reset flag de alerta por rodada ao capturar um número novo
+st.session_state._alerta_enviado_rodada = False
 
-    # Escolha entre dúzia/coluna por soma de probabilidades (simples)
-    sum_duzia = sum(p for _,p in top_duzia) if top_duzia else 0.0
-    sum_coluna = sum(p for _,p in top_coluna) if top_coluna else 0.0
+# Previsão atual (top-2) para enviar entrada (anti-spam aplicado)
+top_duzia = prever("duzia")  # [(class,prob), ...]
+top_coluna = prever("coluna")
 
+# Escolha entre dúzia/coluna por soma de probabilidades (simples)
+sum_duzia = sum(p for _,p in top_duzia) if top_duzia else 0.0
+sum_coluna = sum(p for _,p in top_coluna) if top_coluna else 0.0
+
+chosen = None
+if sum_duzia == 0 and sum_coluna == 0:
     chosen = None
-    if sum_duzia == 0 and sum_coluna == 0:
-        chosen = None
-    elif sum_duzia >= sum_coluna:
-        chosen = ("Dúzia", top_duzia)
-    else:
-        chosen = ("Coluna", top_coluna)
+elif sum_duzia >= sum_coluna:
+    chosen = ("Dúzia", top_duzia)
+else:
+    chosen = ("Coluna", top_coluna)
 
-    if chosen:
-        tipo, classes_probs = chosen
-        # filtra por prob_minima
-        classes_probs = [(c,p) for c,p in classes_probs if p >= st.session_state.prob_minima]
-        if classes_probs:
-            # monta estrutura para comparar/armazenar
-            entrada_obj = {"tipo": tipo, "classes": classes_probs}
-            chave = f"{tipo}_" + "_".join(str(c) for c,_ in classes_probs)
-            # anti-spam: novo envio se chave diferente ou contador >= 3
-            if chave != st.session_state.ultima_entrada.get("chave") if isinstance(st.session_state.ultima_entrada, dict) else True:
-                # enviar
-                txt = f"📊 <b>ENTRADA {tipo}</b>: " + ", ".join(f"{c} ({p*100:.1f}%)" for c,p in classes_probs)
-                enviar_telegram(txt)
-                # salvar última entrada com chave / estrutura
-                entrada_obj["chave"] = chave
-                st.session_state.ultima_entrada = entrada_obj
-                st.session_state.contador_sem_envio = 0
-            else:
-                # mesma entrada: aumenta contador
-                st.session_state.contador_sem_envio += 1
-                # se passou 3 rodadas sem envio, força reenvio
-                if st.session_state.contador_sem_envio >= 3:
-                    txt = f"📊 <b>ENT{tipo}</b>: " + ", ".join(f"{c} ({p*100:.1f}%)" for c,p in classes_probs)
-                    enviar_telegram(txt)
-                    st.session_state.contador_sem_envio = 0
+# 🔒 GARANTIA: UM ALERTA POR RODADA
+if chosen and not st.session_state._alerta_enviado_rodada:
+    tipo, classes_probs = chosen
+    # filtra por prob_minima
+    classes_probs = [(c,p) for c,p in classes_probs if p >= st.session_state.prob_minima]
+    if classes_probs:
+        entrada_obj = {"tipo": tipo, "classes": classes_probs}
+        chave = f"{tipo}_" + "_".join(str(c) for c,_ in classes_probs)
+
+        reenvio_forcado = False
+        if isinstance(st.session_state.ultima_entrada, dict):
+            mesma_chave = (chave == st.session_state.ultima_entrada.get("chave"))
+        else:
+            mesma_chave = False
+
+        if mesma_chave:
+            st.session_state.contador_sem_envio += 1
+            if st.session_state.contador_sem_envio >= 3:
+                reenvio_forcado = True
+        else:
+            st.session_state.contador_sem_envio = 0
+
+        if not mesma_chave or reenvio_forcado:
+            txt = f"📊 <b>ENT {tipo}</b>: " + ", ".join(
+                f"{c} ({p*100:.1f}%)" for c,p in classes_probs
+            )
+            enviar_telegram(txt)
+            entrada_obj["chave"] = chave
+            st.session_state.ultima_entrada = entrada_obj
+            st.session_state.contador_sem_envio = 0
+            st.session_state._alerta_enviado_rodada = True  # marca que já enviou nesta rodada
+    
         # else: nenhuma classe acima da prob_minima -> não envia entrada
 
     # salva estado parcial (não salva modelos grandes)
