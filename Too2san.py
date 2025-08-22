@@ -281,11 +281,12 @@ if numero is not None and (st.session_state.ultimo_numero_salvo is None or numer
 
     #======== Alerta resultado========    
 if st.session_state.ultima_entrada:
-           ent = st.session_state.ultima_entrada
-        try:
-            tipo = ent.get("tipo")
-            classes = [c for c,_ in ent.get("classes",[])]
-            acerto = False
+
+    ent = st.session_state.ultima_entrada
+         try:
+                  tipo = ent.get("tipo")
+                  classes = [c for c,_ in ent.get("classes",[])]
+                  acerto = False
             if tipo=="Dúzia" and numero_para_duzia(numero) in classes: acerto=True
             if tipo=="Coluna" and numero_para_coluna(numero) in classes: acerto=True
             if acerto:
