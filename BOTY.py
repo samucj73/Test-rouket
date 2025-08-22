@@ -1,7 +1,7 @@
 import streamlit as st
 import time
 import random
-from selenium import webdriver
+#from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 import threading
@@ -9,7 +9,7 @@ import threading
 st.title("Bot de Cliques Aleatórios")
 
 # Entrada da URL
-url = st.text_input("Digite a URL do site:", "")
+#url = st.text_input("Digite a URL do site:", "")
 
 # Slider para controlar frequência de cliques (0 a 100%)
 frequencia = st.slider("Chance de clicar a cada ciclo (%)", min_value=0, max_value=100, value=20)
