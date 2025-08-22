@@ -26,6 +26,20 @@ MODELO_COLUNA_PATH = Path("modelo_coluna.pkl")
 HIST_PATH_NUMS = Path("historico_numeros.pkl")
 ESTADO_PATH = Path("estado.pkl")
 
+# Inicialização das variáveis de controle
+if "ultima_entrada" not in st.session_state:
+    st.session_state.ultima_entrada = None
+if "tipo_entrada_anterior" not in st.session_state:
+    st.session_state.tipo_entrada_anterior = None
+if "ultima_chave_alerta" not in st.session_state:
+    st.session_state.ultima_chave_alerta = None
+if "contador_sem_alerta" not in st.session_state:
+    st.session_state.contador_sem_alerta = 0
+if "acertos_top" not in st.session_state:
+    st.session_state.acertos_top = 0
+if "total_top" not in st.session_state:
+    st.session_state.total_top = 0
+
 # =========================
 # ROULETTE EUROPEIA
 # =========================
