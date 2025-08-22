@@ -290,6 +290,8 @@ if st.session_state.ultima_entrada and st.session_state.tipo_entrada_anterior:
         if len(st.session_state.historico_numeros) % TRAIN_EVERY == 0:
             treinar_modelo("duzia")
             treinar_modelo("coluna")
+
+    st.session_state._alerta_enviado_rodada = False
     
 
     # 2b) Treinamento conservador
