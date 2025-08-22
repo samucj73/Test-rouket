@@ -268,22 +268,24 @@ if numero is not None and (st.session_state.ultimo_numero_salvo is None or numer
     salvar_historico(numero)
 
     # 2a) Resultado do último alerta (GREEN/RED)
-    if st.session_state.ultima_entrada:
-        tipo = st.session_state.get("tipo_entrada_anterior", None)
-        classes = [c for c,_ in st.session_state.ultima_entrada] if st.session_state.ultima_entrada else []
-        acerto = False
-        if tipo == "Dúzia":
-            if numero_para_duzia(numero) in classes:
-                acerto = True
-        elif tipo == "Coluna":
-            if numero_para_coluna(numero) in classes:
-                acerto = True
-        if acerto:
-            st.session_state.acertos_top += 1
-            enviar_telegram(f"✅ Saiu {numero} — ACERTO! ({tipo})")
-        else:
-            enviar_telegram(f"❌ Saiu {numero} — ERRO. ({tipo})")
-        st.session_state.total_top += 1
+    # Resultado do último alerta (GREEN/RED)
+if st.session_state.ultima_entrada and st.session_state.tipo_entrada_anterior:
+    tipo = st.session_state.tipo_entrada_anterior
+    classes = [c for c,_ in st.session_state.ultima_entrada]
+    acerto = False
+    if tipo == "Dúzia":
+        if numero_para_duzia(numero) in classes:
+            acerto = True
+    elif tipo == "Coluna":
+        if numero_para_coluna(numero) in classes:
+            acerto = True
+    if acerto:
+        st.session_state.acertos_top += 1
+        enviar_telegram(f"✅ Saiu {numero} — ACERTO! ({tipo})")
+    else:
+        enviar_telegram(f"❌ Saiu {numero} — ERRO. ({tipo})")
+    st.session_state.total_top += 1
+    
 
     # 2b) Treinamento conservador
     if len(st.session_state.historico_numeros) >= st.session_state.tamanho_janela + 3:
