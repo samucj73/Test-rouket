@@ -346,7 +346,7 @@ if top_duzia and top_coluna:
 
             if st.session_state.ultima_entrada and chave == st.session_state.ultima_entrada.get("chave"):
                 st.session_state.contador_sem_envio += 1
-                if st.session_state.contador_sem_envio >= 3:
+            if st.session_state.contador_sem_envio >= 3:
                 reenvio_forcado = True
             else:
                 st.session_state.contador_sem_envio = 0
