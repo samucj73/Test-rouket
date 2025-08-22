@@ -237,9 +237,9 @@ def prever(tipo="duzia", topk=3):
         return top
     
     except Exception as e:
-    st.error(f"⚠️ Erro prever {tipo}: {e}")
-    st.exception(e)   # mostra traceback completo no app
-    return [] 
+        st.error(f"⚠️ Erro prever {tipo}: {e}")
+        st.exception(e)   # mostra traceback completo no app
+        return [] 
     
 
 def enviar_telegram(msg:str):
