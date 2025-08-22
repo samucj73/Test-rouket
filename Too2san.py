@@ -278,6 +278,31 @@ if numero is not None and (st.session_state.ultimo_numero_salvo is None or numer
 
     processar_resultado(numero)  # canal extra
 
+
+    #======== Alerta resultado========    
+        if st.session_state.ultima_entrada:
+        ent = st.session_state.ultima_entrada
+        try:
+            tipo = ent.get("tipo")
+            classes = [c for c,_ in ent.get("classes",[])]
+            acerto = False
+            if tipo=="Dúzia" and numero_para_duzia(numero) in classes: acerto=True
+            if tipo=="Coluna" and numero_para_coluna(numero) in classes: acerto=True
+            if acerto:
+                st.session_state.acertos_top += 1
+                enviar_telegram(f"✅ Saiu {numero} — ACERTO! ({tipo})")
+            else:
+                enviar_telegram(f"❌ Saiu {numero} — ERRO. ({tipo})")
+            st.session_state.total_top += 1
+        except: pass
+
+    if len(st.session_state.historico_numeros) >= st.session_state.tamanho_janela + 3:
+        if len(st.session_state.historico_numeros) % TRAIN_EVERY == 0:
+            treinar_modelo("duzia")
+            treinar_modelo("coluna")
+
+st.session_state._alerta_enviado_rodada = False 
+
     # === Re-treino periódico ===
     if len(st.session_state.historico_numeros) >= st.session_state.tamanho_janela + 2:
         if len(st.session_state.historico_numeros) % TRAIN_EVERY == 0:
