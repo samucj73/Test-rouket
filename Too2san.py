@@ -251,109 +251,112 @@ def enviar_telegram(msg:str):
 # =========================
 # FLUXO PRINCIPAL
 # =========================
+# =========================
+# Fluxo principal adaptado (evita múltiplos alertas)
+# =========================
+
+# Autorefresh do Streamlit
 st_autorefresh(interval=REFRESH_INTERVAL_MS, key="auto_refresh_key")
 
+# 1) Captura - manual ou automática
 manual_flag = st.session_state.pop("_manual_capture", False) if "_manual_capture" in st.session_state else False
-numero = capturar_numero_api() if manual_flag or True else None
+numero = capturar_numero_api() if (manual_flag or len(st.session_state.historico_numeros) > 0) else None
 
+# 2) Se veio número e for novo -> salva e processa
 if numero is not None and (st.session_state.ultimo_numero_salvo is None or numero != st.session_state.ultimo_numero_salvo):
     st.session_state.ultimo_numero_salvo = numero
     salvar_historico(numero)
 
+    # 2a) Resultado do último alerta (GREEN/RED)
     if st.session_state.ultima_entrada:
-        ent = st.session_state.ultima_entrada
-        try:
-            tipo = ent.get("tipo")
-            classes = [c for c,_ in ent.get("classes",[])]
-            acerto = False
-            if tipo=="Dúzia" and numero_para_duzia(numero) in classes: acerto=True
-            if tipo=="Coluna" and numero_para_coluna(numero) in classes: acerto=True
-            if acerto:
-                st.session_state.acertos_top += 1
-                enviar_telegram(f"✅ Saiu {numero} — ACERTO! ({tipo})")
-            else:
-                enviar_telegram(f"❌ Saiu {numero} — ERRO. ({tipo})")
-            st.session_state.total_top += 1
-        except: pass
+        tipo = st.session_state.get("tipo_entrada_anterior", None)
+        classes = [c for c,_ in st.session_state.ultima_entrada] if st.session_state.ultima_entrada else []
+        acerto = False
+        if tipo == "Dúzia":
+            if numero_para_duzia(numero) in classes:
+                acerto = True
+        elif tipo == "Coluna":
+            if numero_para_coluna(numero) in classes:
+                acerto = True
+        if acerto:
+            st.session_state.acertos_top += 1
+            enviar_telegram(f"✅ Saiu {numero} — ACERTO! ({tipo})")
+        else:
+            enviar_telegram(f"❌ Saiu {numero} — ERRO. ({tipo})")
+        st.session_state.total_top += 1
 
+    # 2b) Treinamento conservador
     if len(st.session_state.historico_numeros) >= st.session_state.tamanho_janela + 3:
         if len(st.session_state.historico_numeros) % TRAIN_EVERY == 0:
             treinar_modelo("duzia")
             treinar_modelo("coluna")
 
-st.session_state._alerta_enviado_rodada = False
+    # 2c) Previsão atual (top-2) para envio
+    top_duzia = prever("duzia")  # [(classe, prob), ...]
+    top_coluna = prever("coluna")
 
-# Top-3 previsão e escolha automática
-top_duzia = prever("duzia")
-top_coluna = prever("coluna")
+    sum_duzia = sum(p for _,p in top_duzia) if top_duzia else 0.0
+    sum_coluna = sum(p for _,p in top_coluna) if top_coluna else 0.0
 
-sum_duzia = sum(p for _,p in top_duzia) if top_duzia else 0.0
-sum_coluna = sum(p for _,p in top_coluna) if top_coluna else 0.0
-
-chosen = None
-if sum_duzia == 0 and sum_coluna == 0:
     chosen = None
-elif sum_duzia >= sum_coluna:
-    chosen = ("Dúzia", top_duzia)
-else:
-    chosen = ("Coluna", top_coluna)
+    if sum_duzia == 0 and sum_coluna == 0:
+        chosen = None
+    elif sum_duzia >= sum_coluna:
+        chosen = ("Dúzia", top_duzia)
+    else:
+        chosen = ("Coluna", top_coluna)
 
-# 🔒 GARANTIA: UM ALERTA POR RODADA
-# # =========================
-# ENVIO DE ALERTA — TOP DÚZIA / COLUNA (ANTI-SPAM)
-# =========================
-# chosen = ("Dúzia"/"Coluna", top2)
-if chosen:
-    tipo, classes_probs = chosen
-    # filtra por prob_minima
-    classes_probs = [(c,p) for c,p in classes_probs if p >= st.session_state.prob_minima]
+    # 🔒 GARANTIA: UM ALERTA POR RODADA
+    if chosen:
+        tipo, classes_probs = chosen
+        classes_probs = [(c,p) for c,p in classes_probs if p >= st.session_state.prob_minima]
+        if classes_probs:
+            # gerar chave da rodada
+            chave_atual = f"{tipo}_" + "_".join(str(c) for c,_ in classes_probs)
 
-    if classes_probs:
-        # chave única da previsão
-        chave_atual = f"{tipo}_" + "_".join(str(c) for c,_ in classes_probs)
+            reenvio_forcado = False
+            mesma_chave = (chave_atual == st.session_state.get("ultima_chave_alerta"))
 
-        # recupera valores do session_state ou inicializa
-        ultima_chave = st.session_state.get("ultima_chave_alerta", "")
-        contador = st.session_state.get("contador_sem_alerta", 0)
+            if mesma_chave:
+                st.session_state.contador_sem_alerta += 1
+                if st.session_state.contador_sem_alerta >= 3:
+                    reenvio_forcado = True
+            else:
+                st.session_state.contador_sem_alerta = 0
 
-        # envia alerta se chave mudou ou se mesma previsão repetida >=3 rodadas
-        if (chave_atual != ultima_chave) or (contador >= 3):
-            # atualiza estado
-            st.session_state.ultima_entrada = classes_probs
-            st.session_state.tipo_entrada_anterior = tipo
-            st.session_state.ultima_chave_alerta = chave_atual
-            st.session_state.contador_sem_alerta = 0
+            if not mesma_chave or reenvio_forcado:
+                mensagem_alerta = (
+                    f"📊 <b>ENT {tipo.upper()}:</b> " +
+                    ", ".join(f"{c} ({p*100:.1f}%)" for c,p in classes_probs)
+                )
+                enviar_telegram(mensagem_alerta)  # ou enviar_telegram_async com delay se quiser
 
-            # cria mensagem
-            mensagem_alerta = (
-                f"📊 <b>ENT {tipo.upper()}:</b> " +
-                ", ".join(f"{c} ({p*100:.1f}%)" for c,p in classes_probs)
-            )
-            # envia Telegram
-            enviar_telegram(mensagem_alerta)
-        else:
-            # mesma previsão ainda, incrementa contador
-            st.session_state.contador_sem_alerta = contador + 1
+                # salvar estado de alerta
+                st.session_state.ultima_entrada = classes_probs
+                st.session_state.tipo_entrada_anterior = tipo
+                st.session_state.ultima_chave_alerta = chave_atual
+                st.session_state.contador_sem_alerta = 0
 
+    # 2d) Persistir estado parcial
+    try:
+        joblib.dump({
+            "acertos_top": st.session_state.acertos_top,
+            "total_top": st.session_state.total_top,
+            "ultima_entrada": st.session_state.ultima_entrada,
+            "tipo_entrada_anterior": st.session_state.tipo_entrada_anterior,
+            "ultima_chave_alerta": st.session_state.ultima_chave_alerta,
+            "contador_sem_alerta": st.session_state.contador_sem_alerta
+        }, ESTADO_PATH)
+    except:
+        pass
 
-
-
-        try:
-            joblib.dump({
-                "acertos_top": st.session_state.acertos_top,
-                "total_top": st.session_state.total_top,
-                "ultima_entrada": st.session_state.ultima_entrada,
-                "contador_sem_envio": st.session_state.contador_sem_envio
-            }, ESTADO_PATH)
-        except: pass
 
 # =========================
 # UI FINAL
 # =========================
 st.subheader("📌 Últimos números capturados")
 # tipo de entrada anterior
-tipo = st.session_state.get("tipo_entrada_anterior", None)
-classes = [c for c,_ in st.session_state.ultima_entrada] if st.session_state.ultima_entrada else []
+
 
 else:
     st.info("Nenhum número capturado ainda. Use o botão 'Capturar' ou aguarde o auto-refresh.")
