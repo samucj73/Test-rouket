@@ -253,82 +253,96 @@ def enviar_telegram(msg:str):
 # =========================
 # =========================
 # Fluxo principal adaptado (evita múltiplos alertas)
+# === AUTORREFRESH (apenas para atualização de tela, não interfere nos alertas) ===
 st_autorefresh(interval=REFRESH_INTERVAL_MS, key="auto_refresh_key")
 
+# Captura manual ou automática
 manual_flag = st.session_state.pop("_manual_capture", False) if "_manual_capture" in st.session_state else False
-numero = capturar_numero_api() if manual_flag or True else None
+numero = capturar_numero_api() if (manual_flag or True) else None
 
+# Garantir que só processa número novo
 if numero is not None and (st.session_state.ultimo_numero_salvo is None or numero != st.session_state.ultimo_numero_salvo):
     st.session_state.ultimo_numero_salvo = numero
     salvar_historico(numero)
 
+    # === Conferência de acerto/erro ===
     if st.session_state.ultima_entrada:
         ent = st.session_state.ultima_entrada
         try:
             tipo = ent.get("tipo")
             classes = [c for c,_ in ent.get("classes",[])]
             acerto = False
-            if tipo=="Dúzia" and numero_para_duzia(numero) in classes: acerto=True
-            if tipo=="Coluna" and numero_para_coluna(numero) in classes: acerto=True
+            if tipo == "Dúzia" and numero_para_duzia(numero) in classes:
+                acerto = True
+            if tipo == "Coluna" and numero_para_coluna(numero) in classes:
+                acerto = True
+
             if acerto:
                 st.session_state.acertos_top += 1
                 enviar_telegram(f"✅ Saiu {numero} — ACERTO! ({tipo})")
             else:
                 enviar_telegram(f"❌ Saiu {numero} — ERRO. ({tipo})")
-            st.session_state.total_top += 1
-        except: pass
 
+            st.session_state.total_top += 1
+        except:
+            pass
+
+    # === Re-treino periódico ===
     if len(st.session_state.historico_numeros) >= st.session_state.tamanho_janela + 3:
         if len(st.session_state.historico_numeros) % TRAIN_EVERY == 0:
             treinar_modelo("duzia")
             treinar_modelo("coluna")
 
-st.session_state._alerta_enviado_rodada = False
+    # Reset do flag de alerta a cada número novo
+    st.session_state._alerta_enviado_rodada = False
 
-# Top-3 previsão e escolha automática
-top_duzia = prever("duzia")
-top_coluna = prever("coluna")
+    # === Top-3 previsão e escolha automática ===
+    top_duzia = prever("duzia")
+    top_coluna = prever("coluna")
 
-sum_duzia = sum(p for _,p in top_duzia) if top_duzia else 0.0
-sum_coluna = sum(p for _,p in top_coluna) if top_coluna else 0.0
+    sum_duzia = sum(p for _,p in top_duzia) if top_duzia else 0.0
+    sum_coluna = sum(p for _,p in top_coluna) if top_coluna else 0.0
 
-chosen = None
-if sum_duzia == 0 and sum_coluna == 0:
     chosen = None
-elif sum_duzia >= sum_coluna:
-    chosen = ("Dúzia", top_duzia)
-else:
-    chosen = ("Coluna", top_coluna)
+    if sum_duzia == 0 and sum_coluna == 0:
+        chosen = None
+    elif sum_duzia >= sum_coluna:
+        chosen = ("Dúzia", top_duzia)
+    else:
+        chosen = ("Coluna", top_coluna)
 
-if chosen and not st.session_state._alerta_enviado_rodada:
-    tipo, classes_probs = chosen
-    classes_probs = [(c,p) for c,p in classes_probs if p >= st.session_state.prob_minima]
-    if classes_probs:
-        chave = f"{tipo}_" + "_".join(str(c) for c,_ in classes_probs)
-        reenvio_forcado = False
-        if st.session_state.ultima_entrada and chave == st.session_state.ultima_entrada.get("chave"):
-            st.session_state.contador_sem_envio += 1
-            if st.session_state.contador_sem_envio >= 3:
-                reenvio_forcado = True
-        else:
-            st.session_state.contador_sem_envio = 0
+    if chosen and not st.session_state._alerta_enviado_rodada:
+        tipo, classes_probs = chosen
+        classes_probs = [(c,p) for c,p in classes_probs if p >= st.session_state.prob_minima]
+        if classes_probs:
+            chave = f"{tipo}_" + "_".join(str(c) for c,_ in classes_probs)
+            reenvio_forcado = False
 
-        if not st.session_state.ultima_entrada or reenvio_forcado or chave != st.session_state.ultima_entrada.get("chave"):
-            entrada_obj = {"tipo": tipo, "classes": classes_probs, "chave": chave}
-            txt = f"📊 <b>ENT {tipo}</b>: " + ", ".join(f"{c} ({p*100:.1f}%)" for c,p in classes_probs)
-            enviar_telegram(txt)
-            st.session_state.ultima_entrada = entrada_obj
-            st.session_state.contador_sem_envio = 0
-            st.session_state._alerta_enviado_rodada = True
+            if st.session_state.ultima_entrada and chave == st.session_state.ultima_entrada.get("chave"):
+                st.session_state.contador_sem_envio += 1
+                if st.session_state.contador_sem_envio >= 3:
+                    reenvio_forcado = True
+            else:
+                st.session_state.contador_sem_envio = 0
 
-        try:
-            joblib.dump({
-                "acertos_top": st.session_state.acertos_top,
-                "total_top": st.session_state.total_top,
-                "ultima_entrada": st.session_state.ultima_entrada,
-                "contador_sem_envio": st.session_state.contador_sem_envio
-            }, ESTADO_PATH)
-        except: pass
+            if (not st.session_state.ultima_entrada) or reenvio_forcado or chave != st.session_state.ultima_entrada.get("chave"):
+                entrada_obj = {"tipo": tipo, "classes": classes_probs, "chave": chave}
+                txt = f"📊 <b>ENT {tipo}</b>: " + ", ".join(f"{c} ({p*100:.1f}%)" for c,p in classes_probs)
+                enviar_telegram(txt)
+                st.session_state.ultima_entrada = entrada_obj
+                st.session_state.contador_sem_envio = 0
+                st.session_state._alerta_enviado_rodada = True
+
+            try:
+                joblib.dump({
+                    "acertos_top": st.session_state.acertos_top,
+                    "total_top": st.session_state.total_top,
+                    "ultima_entrada": st.session_state.ultima_entrada,
+                    "contador_sem_envio": st.session_state.contador_sem_envio
+                }, ESTADO_PATH)
+            except:
+                pass
+
 
 
 # =========================
