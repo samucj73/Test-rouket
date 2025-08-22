@@ -73,6 +73,9 @@ if "tamanho_janela" not in st.session_state:
 if "prob_minima" not in st.session_state:
     st.session_state.prob_minima = 0.30
 
+if "_alerta_enviado_rodada" not in st.session_state:
+    st.session_state._alerta_enviado_rodada = False
+
 if "ultima_entrada" not in st.session_state: st.session_state.ultima_entrada = None
 if "contador_sem_envio" not in st.session_state: st.session_state.contador_sem_envio = 0
 if "ultimo_numero_salvo" not in st.session_state: st.session_state.ultimo_numero_salvo = None
