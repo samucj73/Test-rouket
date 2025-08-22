@@ -7,6 +7,7 @@ from pathlib import Path
 from streamlit_autorefresh import st_autorefresh
 from catboost import CatBoostClassifier
 import time
+from canal_extra import registrar_entrada, processar_resultado
 # =========================
 # CONFIGURAÇÕES
 # =========================
@@ -290,6 +291,20 @@ if numero is not None and (st.session_state.ultimo_numero_salvo is None or numer
         except:
             pass
 
+    numero = capturar_numero_api() if (manual_flag or True) else None
+
+# Garantir que só processa número novo
+if numero is not None and (st.session_state.ultimo_numero_salvo is None or numero != st.session_state.ultimo_numero_salvo):
+    st.session_state.ultimo_numero_salvo = numero
+    salvar_historico(numero)
+
+    # === Conferência canal extra ===
+    processar_resultado(numero)  # <-- CHAMADA AQUI
+
+    # === Conferência de acerto/erro canal principal ===
+    if st.session_state.ultima_entrada:
+        ...
+
     # === Re-treino periódico ===
     if len(st.session_state.historico_numeros) >= st.session_state.tamanho_janela + 3:
         if len(st.session_state.historico_numeros) % TRAIN_EVERY == 0:
@@ -320,6 +335,14 @@ if numero is not None and (st.session_state.ultimo_numero_salvo is None or numer
         if classes_probs:
             chave = f"{tipo}_" + "_".join(str(c) for c,_ in classes_probs)
             reenvio_forcado = False
+
+
+
+            # Pega a dúzia e coluna com maior probabilidade
+if top_duzia and top_coluna:
+    melhor_duzia = top_duzia[0][0]
+    melhor_coluna = top_coluna[0][0]
+    registrar_entrada(melhor_duzia, melhor_coluna)  # <-- CHAMADA AQUI
 
             if st.session_state.ultima_entrada and chave == st.session_state.ultima_entrada.get("chave"):
                 st.session_state.contador_sem_envio += 1
