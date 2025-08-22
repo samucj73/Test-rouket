@@ -351,8 +351,10 @@ if chosen:
 # UI FINAL
 # =========================
 st.subheader("📌 Últimos números capturados")
-if len(st.session_state.historico_numeros) > 0:
-    st.write(list(st.session_state.historico_numeros)[-20:])
+# tipo de entrada anterior
+tipo = st.session_state.get("tipo_entrada_anterior", None)
+classes = [c for c,_ in st.session_state.ultima_entrada] if st.session_state.ultima_entrada else []
+
 else:
     st.info("Nenhum número capturado ainda. Use o botão 'Capturar' ou aguarde o auto-refresh.")
 
