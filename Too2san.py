@@ -172,22 +172,20 @@ def enviar_alerta_duzia():
     except: pass
 
 # === INTERFACE ===
-st.title("🎯 IA Roleta Profissional - Dúzia")
+# === INTERFACE ATUALIZADA ===
+st.title("🎯 IA Roleta - Padrões de Dúzia (CatBoost + Features Avançadas)")
 
-# Botão manual para atualizar números
-if st.button("🔄 Capturar último número da API"):
-    numero = capturar_ultimo_numero()
-    if numero is not None and numero != st.session_state.ultimo_numero_salvo:
-        st.session_state.ultimo_numero_salvo = numero
-        salvar_historico(numero)
-        enviar_alerta_duzia()
-        if len(st.session_state.historico)%TRAIN_EVERY==0:
-            treinar_modelo_rf()
+# Últimos números capturados
+st.subheader("📌 Últimos números e dúzias")
+if len(st.session_state.historico_numeros) > 0:
+    ult_numeros = list(st.session_state.historico_numeros)[-12:]
+    ult_duzias  = [numero_para_duzia(n) for n in ult_numeros]
+    tabela = { "Número": ult_numeros, "Dúzia": ult_duzias }
+    st.table(tabela)
 
-# Mostra últimos números
-st.subheader("📌 Últimos números")
-ult_numeros = list(st.session_state.historico_numeros)[-12:]
-st.write(ult_numeros)
+# Acertos do modelo
+st.subheader("📊 Estatísticas de Acerto")
+st.write(f"Acertos: {st.session_state.acertos_top} / {st.session_state.total_top}")
 
 # Previsão atual
 st.subheader("🎯 Previsão Atual (Top 2 Dúzias)")
@@ -197,9 +195,9 @@ if top:
 else:
     st.write("Ainda sem previsão disponível.")
 
-# Estatísticas
-st.subheader("📊 Estatísticas de Acerto")
-st.write(f"Acertos: {st.session_state.acertos_top} / {st.session_state.total_top}")
+# Configurações interativas
+tamanho_janela = st.slider("📏 Tamanho da janela de análise", 5, 150, WINDOW_SIZE)
+prob_minima    = st.slider("📊 Probabilidade mínima (%)", 10, 100, 30)/100.0
 
 # Autorefresh
 st_autorefresh(interval=REFRESH_INTERVAL, key="autoreload")
