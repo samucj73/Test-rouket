@@ -331,6 +331,7 @@ if numero is not None and (st.session_state.ultimo_numero_salvo is None or numer
             if (not st.session_state.ultima_entrada) or reenvio_forcado or chave != st.session_state.ultima_entrada.get("chave"):
                 entrada_obj = {"tipo": tipo, "classes": classes_probs, "chave": chave}
                 txt = f"📊 <b>ENT {tipo}</b>: " + ", ".join(f"{c} ({p*100:.1f}%)" for c,p in classes_probs)
+                time.sleep(5)  # ⏳ espera 7 segundos antes de enviar
                 enviar_telegram(txt)
                 st.session_state.ultima_entrada = entrada_obj
                 st.session_state.contador_sem_envio = 0
