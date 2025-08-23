@@ -105,8 +105,7 @@ def salvar_historico(numero:int):
         except:
             pass
 
-
-  # =========================
+# =========================
 # FUNÇÃO DE EXTRAÇÃO DE FEATURES
 # =========================
 def extrair_features_num(janela_numeros):
@@ -211,7 +210,7 @@ def treinar_modelo_num():
         alvo = nums[i+window:i+window+5]  # próximos 5 números
         feats = extrair_features_num(janela)
         X.append(feats)
-        y.append(alvo[0])  # para simplificar, alvo principal é o primeiro do top5
+        y.append(alvo[0])  # alvo principal = primeiro
 
     if len(X) < 10 or len(set(y)) < 2:
         return False
@@ -233,7 +232,7 @@ def treinar_modelo_num():
         return False
 
 # =========================
-# PREVISÃO TOP-5 NÚMEROS
+# PREVISÃO TOP-5 NÚMEROS (MAIS PROVÁVEIS)
 # =========================
 def prever_top5():
     modelo = st.session_state.modelo_num
@@ -244,15 +243,15 @@ def prever_top5():
     try:
         probs = modelo.predict_proba(feats)[0]
         classes = list(modelo.classes_)
-        idxs = np.argsort(probs)[:5]  # 5 números menos prováveis
-        top5_improv = [(int(classes[i]), float(probs[i])) for i in idxs]
-        return top5_improv
+        idxs = np.argsort(probs)[-5:][::-1]  # 5 mais prováveis
+        top5_prov = [(int(classes[i]), float(probs[i])) for i in idxs]
+        return top5_prov
     except Exception as e:
         st.error(f"⚠️ Erro prever top5: {e}")
         st.exception(e)
         return []
 
-  # =========================
+# =========================
 # PATH DO MODELO TOP-5 NÚMEROS
 # =========================
 MODELO_NUM_PATH = Path("modelo_num.pkl")
@@ -306,10 +305,10 @@ if numero is not None and (st.session_state.ultimo_numero_salvo is None or numer
     # Reset flag alerta
     st.session_state._alerta_enviado_num = False
 
-    # === Previsão Top-5 números menos prováveis e envio ===
-    top5_improv = prever_top5()
-    if top5_improv and not st.session_state._alerta_enviado_num:
-        chave = "_".join(str(c) for c,_ in top5_improv)
+    # === Previsão Top-5 números mais prováveis e envio ===
+    top5_prov = prever_top5()
+    if top5_prov and not st.session_state._alerta_enviado_num:
+        chave = "_".join(str(c) for c,_ in top5_prov)
         reenvio_forcado = False
 
         if st.session_state.ultima_entrada_num and chave == st.session_state.ultima_entrada_num.get("chave"):
@@ -321,8 +320,8 @@ if numero is not None and (st.session_state.ultimo_numero_salvo is None or numer
             st.session_state.contador_sem_envio = 0
 
         if (not st.session_state.ultima_entrada_num) or reenvio_forcado or chave != st.session_state.ultima_entrada_num.get("chave"):
-            entrada_obj = {"classes": top5_improv, "chave": chave}
-            txt = "🔮 <b>Top-5 Números Improváveis</b>: " + ", ".join(f"{c} ({p*100:.1f}%)" for c,p in top5_improv)
+            entrada_obj = {"classes": top5_prov, "chave": chave}
+            txt = "🔮 <b>Top-5 Números Prováveis</b>: " + ", ".join(f"{c} ({p*100:.1f}%)" for c,p in top5_prov)
             enviar_telegram_num(txt)
             st.session_state.ultima_entrada_num = entrada_obj
             st.session_state._alerta_enviado_num = True
@@ -341,7 +340,7 @@ if st.session_state.ultima_entrada_num:
 else:
     st.write("Nenhuma entrada enviada ainda.")
 
-st.subheader("📌 Previsão Top-5 Números menos prováveis")
+st.subheader("📌 Previsão Top-5 Números mais prováveis")
 top5_display = prever_top5()
 if top5_display:
     st.write(", ".join(f"{c} ({p*100:.1f}%)" for c,p in top5_display))
