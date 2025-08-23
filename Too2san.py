@@ -18,7 +18,7 @@ TELEGRAM_CHAT_ID = "5121457416"
 TAMANHO_JANELA_DEFAULT = 15
 MAX_HISTORICO = 4500
 REFRESH_INTERVAL_MS = 5000
-TRAIN_EVERY = 15  # mantém periodicidade, mas com reforços abaixo
+TRAIN_EVERY = 5  # mantém periodicidade, mas com reforços abaixo
 
 MODELO_DUZIA_PATH = Path("modelo_duzia.pkl")
 MODELO_COLUNA_PATH = Path("modelo_coluna.pkl")
