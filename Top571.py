@@ -18,7 +18,6 @@ TELEGRAM_CHAT_ID = "5121457416"
 TAMANHO_JANELA_DEFAULT = 15
 MAX_HISTORICO = 4500
 REFRESH_INTERVAL_MS = 5000
-TRAIN_EVERY = 2
 
 MODELO_NUM_PATH = Path("modelo_top5_num.pkl")
 HIST_PATH_NUMS = Path("historico_numeros.pkl")
@@ -34,17 +33,6 @@ IDX = {n:i for i,n in enumerate(WHEEL)}
 def is_red(n:int)->int:
     return 1 if (n in RED_SET) else 0
 
-# =========================
-# CARREGA ESTADO SALVO
-# =========================
-try:
-    estado_salvo = joblib.load(ESTADO_PATH) if ESTADO_PATH.exists() else {}
-except Exception:
-    estado_salvo = {}
-
-# =========================
-# SESSION STATE INIT
-# =========================
 # =========================
 # SESSION STATE INIT CORRIGIDO
 # =========================
@@ -80,7 +68,7 @@ with col1:
     )
 with col2:
     st.session_state.prob_minima = st.slider(
-        "📊 Prob mínima (%)", 5, 100, int(st.session_state.prob_minima * 100), key="slider_prob"
+        "📊 Prob mínima (%)", 10, 100, int(st.session_state.prob_minima * 100), key="slider_prob"
     ) / 100.0
 
 # =========================
@@ -117,24 +105,10 @@ def extrair_features_num(janela_numeros):
     # --- Último número ---
     if L > 0:
         last = janela_numeros[-1]
-        # Paridade
-        feats.append(1 if last % 2 == 0 else 0)
-        # Cor
-        if last == 0:
-            feats.append(2)  # verde
-        else:
-            feats.append(1 if last in RED_SET else 0)
-        # Dúzia
-        if last == 0:
-            feats.append(0)
-        elif last <= 12:
-            feats.append(1)
-        elif last <= 24:
-            feats.append(2)
-        else:
-            feats.append(3)
-        # Coluna
-        feats.append(0 if last == 0 else ((last - 1) % 3) + 1)
+        feats.append(1 if last % 2 == 0 else 0)  # Paridade
+        feats.append(2 if last == 0 else (1 if last in RED_SET else 0))  # Cor
+        feats.append(0 if last == 0 else 1 if last <=12 else 2 if last <=24 else 3)  # Dúzia
+        feats.append(0 if last == 0 else ((last - 1) % 3) + 1)  # Coluna
     else:
         feats.extend([0,0,0,0])
 
@@ -151,10 +125,10 @@ def extrair_features_num(janela_numeros):
     else:
         feats.extend([0,0,0,0])
 
-    # --- Frequência relativa dos últimos N ---
+    # --- Frequência relativa de todos os números ---
     cnt_nums = Counter(janela_numeros)
     for n in range(37):
-        feats.append(cnt_nums.get(n,0) / max(1,L))
+        feats.append(cnt_nums.get(n,0)/max(1,L))
 
     # --- Gap (tempo desde última ocorrência) ---
     for n in range(37):
@@ -165,6 +139,7 @@ def extrair_features_num(janela_numeros):
         feats.append(gap / max(1,L))
 
     return np.array(feats, dtype=float)
+
 # =========================
 # CAPTURA DE NÚMERO PELA API
 # =========================
@@ -176,35 +151,28 @@ def capturar_numero_api():
         candidates = []
 
         if isinstance(data, dict):
-            # chaves comuns
             for k in ["winningNumber","number","result","value","outcome"]:
                 v = data.get(k)
-                if isinstance(v, int) and 0 <= v <= 36:
+                if isinstance(v,int) and 0<=v<=36:
                     candidates.append(v)
-                elif isinstance(v, str) and v.isdigit():
-                    vv = int(v)
-                    if 0 <= vv <= 36:
+                elif isinstance(v,str) and v.isdigit():
+                    vv=int(v)
+                    if 0<=vv<=36:
                         candidates.append(vv)
-
-            # varredura profunda
             def deep_search(d):
-                if isinstance(d, dict):
-                    for _, v in d.items():
-                        deep_search(v)
-                elif isinstance(d, list):
-                    for item in d:
-                        deep_search(item)
+                if isinstance(d,dict):
+                    for _,v in d.items(): deep_search(v)
+                elif isinstance(d,list):
+                    for item in d: deep_search(item)
                 else:
-                    if isinstance(d, int) and 0 <= d <= 36:
-                        candidates.append(d)
-                    elif isinstance(d, str) and d.isdigit():
-                        vv = int(d)
-                        if 0 <= vv <= 36:
-                            candidates.append(vv)
+                    if isinstance(d,int) and 0<=d<=36: candidates.append(d)
+                    elif isinstance(d,str) and d.isdigit():
+                        vv=int(d)
+                        if 0<=vv<=36: candidates.append(vv)
             deep_search(data)
 
         for c in candidates:
-            if isinstance(c, int) and 0 <= c <= 36:
+            if isinstance(c,int) and 0<=c<=36:
                 return c
     except Exception as e:
         st.warning(f"Erro captura API: {e}")
@@ -217,13 +185,13 @@ def treinar_modelo_num():
     nums = list(st.session_state.historico_numeros)
     n = len(nums)
     window = st.session_state.tamanho_janela
-    if n < window + 2:
+    if n < window + 5:
         return False
 
     X, y = [], []
     for i in range(n - window):
         janela = nums[i:i+window]
-        alvo = nums[i+window]  # próximo número
+        alvo = nums[i+window]
         feats = extrair_features_num(janela)
         X.append(feats)
         y.append(alvo)
@@ -231,14 +199,12 @@ def treinar_modelo_num():
     if len(X) < 10 or len(set(y)) < 2:
         return False
 
-    X = np.array(X, dtype=float)
-    y = np.array(y, dtype=int)
+    X = np.array(X,dtype=float)
+    y = np.array(y,dtype=int)
 
-    modelo = CatBoostClassifier(
-        iterations=400, depth=7, learning_rate=0.07, loss_function='MultiClass', verbose=False
-    )
+    modelo = CatBoostClassifier(iterations=400, depth=7, learning_rate=0.07, loss_function='MultiClass', verbose=False)
     try:
-        modelo.fit(X, y)
+        modelo.fit(X,y)
         st.session_state.modelo_num = modelo
         try: joblib.dump(modelo, MODELO_NUM_PATH)
         except: pass
@@ -248,7 +214,7 @@ def treinar_modelo_num():
         return False
 
 # =========================
-# PREVISÃO TOP-5 NÚMEROS (MAIS PROVÁVEIS)
+# PREVISÃO TOP-5 NÚMEROS
 # =========================
 def prever_top5():
     modelo = st.session_state.modelo_num
@@ -268,29 +234,6 @@ def prever_top5():
         return []
 
 # =========================
-# SESSION STATE INIT PARA NÚMEROS
-# =========================
-# =========================
-# SESSION STATE INIT CORRIGIDO
-# =========================
-if "historico_numeros" not in st.session_state:
-    st.session_state.historico_numeros = deque(maxlen=MAX_HISTORICO)
-    if HIST_PATH_NUMS.exists():
-        hist = joblib.load(HIST_PATH_NUMS)
-        st.session_state.historico_numeros.extend(hist)
-
-if "modelo_num" not in st.session_state:
-    st.session_state.modelo_num = joblib.load(MODELO_NUM_PATH) if MODELO_NUM_PATH.exists() else None
-
-st.session_state.tamanho_janela = st.session_state.get("tamanho_janela", TAMANHO_JANELA_DEFAULT)
-st.session_state.prob_minima = st.session_state.get("prob_minima", 0.30)
-st.session_state.ultima_entrada_num = st.session_state.get("ultima_entrada_num", None)
-st.session_state.ultimo_numero_salvo = st.session_state.get("ultimo_numero_salvo", None)
-st.session_state.acertos_num = st.session_state.get("acertos_num", 0)
-st.session_state.total_num = st.session_state.get("total_num", 0)
-st.session_state.contador_sem_envio = st.session_state.get("contador_sem_envio", 0)
-st.session_state._alerta_enviado_num = st.session_state.get("_alerta_enviado_num", False)
-# =========================
 # FUNÇÃO DE ENVIO TELEGRAM
 # =========================
 def enviar_telegram_num(msg:str):
@@ -298,8 +241,8 @@ def enviar_telegram_num(msg:str):
         return
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-        requests.post(url, json={"chat_id": TELEGRAM_CHAT_ID, "text": msg, "parse_mode": "HTML"}, timeout=5)
-    except Exception:
+        requests.post(url, json={"chat_id": TELEGRAM_CHAT_ID,"text":msg,"parse_mode":"HTML"}, timeout=5)
+    except:
         pass
 
 # =========================
@@ -310,6 +253,7 @@ if numero is not None and (st.session_state.ultimo_numero_salvo is None or numer
     st.session_state.ultimo_numero_salvo = numero
     salvar_historico(numero)
 
+    # Conferência de acerto Top-5
     if st.session_state.ultima_entrada_num:
         classes_prev = [c for c,_ in st.session_state.ultima_entrada_num.get("classes",[])]
         acerto = numero in classes_prev
@@ -320,25 +264,24 @@ if numero is not None and (st.session_state.ultimo_numero_salvo is None or numer
             enviar_telegram_num(f"❌ Saiu {numero} — ERRO. (Top-5 Números)")
         st.session_state.total_num += 1
 
+    # Treinamento
     if len(st.session_state.historico_numeros) >= st.session_state.tamanho_janela + 5:
         treinar_modelo_num()
 
-    st.session_state._alerta_enviado_num = False
-
+    # Previsão Top-5
     top5_prov = prever_top5()
-    if top5_prov and not st.session_state._alerta_enviado_num:
-        chave = "_".join(str(c) for c,_ in top5_prov)
+    if top5_prov:
+        chave_atual = "_".join(str(c) for c,_ in top5_prov)
         reenvio_forcado = False
-
-        if st.session_state.ultima_entrada_num and chave == st.session_state.ultima_entrada_num.get("chave"):
+        if st.session_state.ultima_entrada_num and chave_atual == st.session_state.ultima_entrada_num.get("chave"):
             st.session_state.contador_sem_envio += 1
             if st.session_state.contador_sem_envio >= 3:
                 reenvio_forcado = True
         else:
             st.session_state.contador_sem_envio = 0
 
-        if (not st.session_state.ultima_entrada_num) or reenvio_forcado or chave != st.session_state.ultima_entrada_num.get("chave"):
-            entrada_obj = {"classes": top5_prov, "chave": chave}
+        if (not st.session_state.ultima_entrada_num) or reenvio_forcado or chave_atual != st.session_state.ultima_entrada_num.get("chave"):
+            entrada_obj = {"classes": top5_prov,"chave":chave_atual}
             txt = "🔮 <b>Top-5 Números Prováveis</b>: " + ", ".join(f"{c} ({p*100:.1f}%)" for c,p in top5_prov)
             enviar_telegram_num(txt)
             st.session_state.ultima_entrada_num = entrada_obj
