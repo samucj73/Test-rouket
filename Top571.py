@@ -76,7 +76,7 @@ for k,v in estado_salvo.items():
 # UI
 # =========================
 st.set_page_config(page_title="IA Roleta - Top 5 Números", page_icon="🎯", layout="centered")
-st.title("🎯 IA Roleta - Top 5 Números (sem threads)")
+st.title("🎯 IA Roleta - Top 5 Números (com captura automática)")
 
 col1, col2 = st.columns([2,1])
 with col1:
@@ -89,8 +89,10 @@ with col2:
         "📊 Prob mínima (%)", 10, 100, int(st.session_state.prob_minima * 100), key="slider_prob"
     ) / 100.0
 
-if st.button("🔄 Capturar último número AGORA"):
-    st.session_state._manual_capture = True
+# =========================
+# AUTO-REFRESH
+# =========================
+st_autorefresh(interval=REFRESH_INTERVAL_MS, key="autorefresh")
 
 # =========================
 # FUNÇÃO PARA SALVAR HISTÓRICO
@@ -252,11 +254,6 @@ def prever_top5():
         return []
 
 # =========================
-# PATH DO MODELO TOP-5 NÚMEROS
-# =========================
-MODELO_NUM_PATH = Path("modelo_num.pkl")
-
-# =========================
 # SESSION STATE INIT PARA NÚMEROS
 # =========================
 if "modelo_num" not in st.session_state:
@@ -280,14 +277,13 @@ def enviar_telegram_num(msg:str):
         pass
 
 # =========================
-# FLUXO PRINCIPAL PARA TOP-5 NÚMEROS
+# FLUXO PRINCIPAL AUTOMÁTICO
 # =========================
 numero = capturar_numero_api()
 if numero is not None and (st.session_state.ultimo_numero_salvo is None or numero != st.session_state.ultimo_numero_salvo):
     st.session_state.ultimo_numero_salvo = numero
     salvar_historico(numero)
 
-    # === Conferência de acerto/erro para top-5 número ===
     if st.session_state.ultima_entrada_num:
         classes_prev = [c for c,_ in st.session_state.ultima_entrada_num.get("classes",[])]
         acerto = numero in classes_prev
@@ -298,21 +294,17 @@ if numero is not None and (st.session_state.ultimo_numero_salvo is None or numer
             enviar_telegram_num(f"❌ Saiu {numero} — ERRO. (Top-5 Números)")
         st.session_state.total_num += 1
 
-    # === Re-treino modelo números ===
     if len(st.session_state.historico_numeros) >= st.session_state.tamanho_janela + 5:
         treinar_modelo_num()
 
-    # Reset flag alerta
     st.session_state._alerta_enviado_num = False
 
-    # === Previsão Top-5 números mais prováveis e envio ===
     top5_prov = prever_top5()
     if top5_prov and not st.session_state._alerta_enviado_num:
         chave = "_".join(str(c) for c,_ in top5_prov)
         reenvio_forcado = False
 
         if st.session_state.ultima_entrada_num and chave == st.session_state.ultima_entrada_num.get("chave"):
-            # força envio a cada 3 rodadas repetidas
             st.session_state.contador_sem_envio += 1
             if st.session_state.contador_sem_envio >= 3:
                 reenvio_forcado = True
