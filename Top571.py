@@ -15,7 +15,7 @@ API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremeli
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 TELEGRAM_CHAT_ID = "5121457416"
 
-TAMANHO_JANELA_DEFAULT = 15
+TAMANHO_JANELA_DEFAULT = 80
 MAX_HISTORICO = 4500
 REFRESH_INTERVAL_MS = 5000
 
@@ -64,7 +64,7 @@ col1, col2 = st.columns([2,1])
 with col1:
     st.session_state.tamanho_janela = st.slider(
         "📏 Tamanho da janela (giros para features)",
-        5, 150, st.session_state.tamanho_janela, key="slider_tamanho"
+        5, 250, st.session_state.tamanho_janela, key="slider_tamanho"
     )
 with col2:
     st.session_state.prob_minima = st.slider(
@@ -185,7 +185,7 @@ def treinar_modelo_num():
     nums = list(st.session_state.historico_numeros)
     n = len(nums)
     window = st.session_state.tamanho_janela
-    if n < window + 5:
+    if n < window + 2:
         return False
 
     X, y = [], []
@@ -202,7 +202,7 @@ def treinar_modelo_num():
     X = np.array(X,dtype=float)
     y = np.array(y,dtype=int)
 
-    modelo = CatBoostClassifier(iterations=400, depth=7, learning_rate=0.07, loss_function='MultiClass', verbose=False)
+    modelo = CatBoostClassifier(iterations=600, depth=8, learning_rate=0.08, loss_function='MultiClass', verbose=False)
     try:
         modelo.fit(X,y)
         st.session_state.modelo_num = modelo
