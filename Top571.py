@@ -120,13 +120,29 @@ def extrair_features_num(janela_numeros):
     seq = pad + list(janela_numeros)[-window:]
     feats.extend(seq)
 
-    # --- Último número: paridade e cor ---
-    if L>0:
+    # --- Último número ---
+    if L > 0:
         last = janela_numeros[-1]
-        feats.append(int(last%2==0))  # paridade
-        feats.append(is_red(last))    # cor
+        # Paridade
+        feats.append(1 if last % 2 == 0 else 0)
+        # Cor
+        if last == 0:
+            feats.append(2)  # verde
+        else:
+            feats.append(1 if last in RED_SET else 0)
+        # Dúzia
+        if last == 0:
+            feats.append(0)
+        elif last <= 12:
+            feats.append(1)
+        elif last <= 24:
+            feats.append(2)
+        else:
+            feats.append(3)
+        # Coluna
+        feats.append(0 if last == 0 else ((last - 1) % 3) + 1)
     else:
-        feats.extend([0,0])
+        feats.extend([0,0,0,0])
 
     # --- Distância normalizada desde o último zero ---
     last_zero_dist = next((L-i for i,n in enumerate(reversed(janela_numeros)) if n==0), L)
@@ -137,20 +153,24 @@ def extrair_features_num(janela_numeros):
         last_idx = IDX.get(janela_numeros[-1],0)
         for offset in [-2,-1,1,2]:
             neighbor_idx = (last_idx + offset) % 37
-            feats.append(float(neighbor_idx))
+            feats.append(WHEEL[neighbor_idx])
     else:
-        feats.extend([0.0,0.0,0.0,0.0])
+        feats.extend([0,0,0,0])
 
-    # --- Frequência relativa dos últimos 5 números mais saídos na janela ---
+    # --- Frequência relativa dos últimos N ---
     cnt_nums = Counter(janela_numeros)
-    commons = cnt_nums.most_common(5)
-    for n, c in commons:
-        feats.append(c / max(1,L))
-    for _ in range(5 - len(commons)):
-        feats.append(0.0)
+    for n in range(37):
+        feats.append(cnt_nums.get(n,0) / max(1,L))
+
+    # --- Gap (tempo desde última ocorrência) ---
+    for n in range(37):
+        if n in janela_numeros:
+            gap = L - 1 - max(i for i,v in enumerate(janela_numeros) if v==n)
+        else:
+            gap = L
+        feats.append(gap / max(1,L))
 
     return np.array(feats, dtype=float)
-
 # =========================
 # CAPTURA DE NÚMERO PELA API
 # =========================
@@ -209,10 +229,10 @@ def treinar_modelo_num():
     X, y = [], []
     for i in range(n - window):
         janela = nums[i:i+window]
-        alvo = nums[i+window:i+window+5]  # próximos 5 números
+        alvo = nums[i+window]  # próximo número
         feats = extrair_features_num(janela)
         X.append(feats)
-        y.append(alvo[0])  # alvo principal = primeiro
+        y.append(alvo)
 
     if len(X) < 10 or len(set(y)) < 2:
         return False
@@ -221,7 +241,7 @@ def treinar_modelo_num():
     y = np.array(y, dtype=int)
 
     modelo = CatBoostClassifier(
-        iterations=300, depth=6, learning_rate=0.08, loss_function='MultiClass', verbose=False
+        iterations=400, depth=7, learning_rate=0.07, loss_function='MultiClass', verbose=False
     )
     try:
         modelo.fit(X, y)
@@ -245,7 +265,7 @@ def prever_top5():
     try:
         probs = modelo.predict_proba(feats)[0]
         classes = list(modelo.classes_)
-        idxs = np.argsort(probs)[-5:][::-1]  # 5 mais prováveis
+        idxs = np.argsort(probs)[-5:][::-1]
         top5_prov = [(int(classes[i]), float(probs[i])) for i in idxs]
         return top5_prov
     except Exception as e:
