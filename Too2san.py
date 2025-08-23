@@ -107,6 +107,11 @@ if st.button("🔄 Capturar último número AGORA"):
     st.session_state._manual_capture = True
 
 # =========================
+# OPÇÕES AVANÇADAS
+# =========================
+st.session_state.inverter_unica = st.checkbox("🔀 Inverter previsão única", value=True)
+
+# =========================
 # FUNÇÕES
 # =========================
 def salvar_historico(numero:int):
@@ -410,40 +415,46 @@ if numero is not None and (st.session_state.ultimo_numero_salvo is None or numer
         chosen = ("Coluna", top_coluna)
 
     if chosen and not st.session_state._alerta_enviado_rodada:
-        tipo, classes_probs = chosen
-        classes_probs = [(c,p) for c,p in classes_probs if p >= st.session_state.prob_minima]
-        if classes_probs:
-            chave = f"{tipo}_" + "_".join(str(c) for c,_ in classes_probs)
-            reenvio_forcado = False
+       tipo, classes_probs = chosen
+       classes_probs = [(c,p) for c,p in classes_probs if p >= st.session_state.prob_minima]
 
-            if st.session_state.ultima_entrada and chave == st.session_state.ultima_entrada.get("chave"):
-                st.session_state.contador_sem_envio += 1
-                if st.session_state.contador_sem_envio >= 3:
-                    reenvio_forcado = True
-            else:
-                st.session_state.contador_sem_envio = 0
+    # 🚨 Inversão só se o checkbox estiver ativado e houver apenas 1 previsão
+    if st.session_state.inverter_unica and len(classes_probs) == 1:
+        unica = classes_probs[0][0]  # pega a classe prevista (1,2,3)
+        if tipo in ["Dúzia", "Coluna"]:
+            alternativas = [1,2,3]
+            invertidas = [(c, 0.5) for c in alternativas if c != unica]  
+            classes_probs = invertidas
 
-            if (not st.session_state.ultima_entrada) or reenvio_forcado or chave != st.session_state.ultima_entrada.get("chave"):
-                entrada_obj = {"tipo": tipo, "classes": classes_probs, "chave": chave}
-                txt = f"📊 <b>ENT {tipo}</b>: " + ", ".join(f"{c} ({p*100:.1f}%)" for c,p in classes_probs)
+    if classes_probs:
+        chave = f"{tipo}_" + "_".join(str(c) for c,_ in classes_probs)
+        reenvio_forcado = False
 
-                # ⚠️ Opcional: delay (bloqueia a UI); mantenha comentado se não quiser travar
-                # time.sleep(7)
+        if st.session_state.ultima_entrada and chave == st.session_state.ultima_entrada.get("chave"):
+            st.session_state.contador_sem_envio += 1
+            if st.session_state.contador_sem_envio >= 3:
+                reenvio_forcado = True
+        else:
+            st.session_state.contador_sem_envio = 0
 
-                enviar_telegram(txt)
-                st.session_state.ultima_entrada = entrada_obj
-                st.session_state.contador_sem_envio = 0
-                st.session_state._alerta_enviado_rodada = True
+        if (not st.session_state.ultima_entrada) or reenvio_forcado or chave != st.session_state.ultima_entrada.get("chave"):
+            entrada_obj = {"tipo": tipo, "classes": classes_probs, "chave": chave}
+            txt = f"📊 <b>ENT {tipo}</b>: " + ", ".join(f"{c} ({p*100:.1f}%)" for c,p in classes_probs)
 
-            try:
-                joblib.dump({
-                    "acertos_top": st.session_state.acertos_top,
-                    "total_top": st.session_state.total_top,
-                    "ultima_entrada": st.session_state.ultima_entrada,
-                    "contador_sem_envio": st.session_state.contador_sem_envio
-                }, ESTADO_PATH)
-            except:
-                pass
+            enviar_telegram(txt)
+            st.session_state.ultima_entrada = entrada_obj
+            st.session_state.contador_sem_envio = 0
+            st.session_state._alerta_enviado_rodada = True
+
+        try:
+            joblib.dump({
+                "acertos_top": st.session_state.acertos_top,
+                "total_top": st.session_state.total_top,
+                "ultima_entrada": st.session_state.ultima_entrada,
+                "contador_sem_envio": st.session_state.contador_sem_envio
+            }, ESTADO_PATH)
+        except:
+            pass
 
 # =========================
 # UI FINAL
