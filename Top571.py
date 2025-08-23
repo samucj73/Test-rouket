@@ -80,7 +80,7 @@ with col1:
     )
 with col2:
     st.session_state.prob_minima = st.slider(
-        "📊 Prob mínima (%)", 10, 100, int(st.session_state.prob_minima * 100), key="slider_prob"
+        "📊 Prob mínima (%)", 5, 100, int(st.session_state.prob_minima * 100), key="slider_prob"
     ) / 100.0
 
 # =========================
@@ -217,7 +217,7 @@ def treinar_modelo_num():
     nums = list(st.session_state.historico_numeros)
     n = len(nums)
     window = st.session_state.tamanho_janela
-    if n < window + 5:
+    if n < window + 2:
         return False
 
     X, y = [], []
@@ -270,14 +270,26 @@ def prever_top5():
 # =========================
 # SESSION STATE INIT PARA NÚMEROS
 # =========================
+# =========================
+# SESSION STATE INIT CORRIGIDO
+# =========================
+if "historico_numeros" not in st.session_state:
+    st.session_state.historico_numeros = deque(maxlen=MAX_HISTORICO)
+    if HIST_PATH_NUMS.exists():
+        hist = joblib.load(HIST_PATH_NUMS)
+        st.session_state.historico_numeros.extend(hist)
+
 if "modelo_num" not in st.session_state:
     st.session_state.modelo_num = joblib.load(MODELO_NUM_PATH) if MODELO_NUM_PATH.exists() else None
 
-if "acertos_num" not in st.session_state: st.session_state.acertos_num = 0
-if "total_num" not in st.session_state: st.session_state.total_num = 0
-if "ultima_entrada_num" not in st.session_state: st.session_state.ultima_entrada_num = None
-if "_alerta_enviado_num" not in st.session_state: st.session_state._alerta_enviado_num = False
-
+st.session_state.tamanho_janela = st.session_state.get("tamanho_janela", TAMANHO_JANELA_DEFAULT)
+st.session_state.prob_minima = st.session_state.get("prob_minima", 0.30)
+st.session_state.ultima_entrada_num = st.session_state.get("ultima_entrada_num", None)
+st.session_state.ultimo_numero_salvo = st.session_state.get("ultimo_numero_salvo", None)
+st.session_state.acertos_num = st.session_state.get("acertos_num", 0)
+st.session_state.total_num = st.session_state.get("total_num", 0)
+st.session_state.contador_sem_envio = st.session_state.get("contador_sem_envio", 0)
+st.session_state._alerta_enviado_num = st.session_state.get("_alerta_enviado_num", False)
 # =========================
 # FUNÇÃO DE ENVIO TELEGRAM
 # =========================
