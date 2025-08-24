@@ -488,3 +488,19 @@ if pc:
     st.write("Coluna:", ", ".join(f"{c} ({p*100:.1f}%)" for c,p in pc))
 else:
     st.write("Coluna: sem previsão (modelo não treinado ou poucos dados).")
+
+# =========================
+# PAINEL DE ESTATÍSTICAS
+# =========================
+st.markdown("### 📊 Estatísticas em Tempo Real")
+
+total = st.session_state.total_top
+acertos = st.session_state.acertos_top
+erros = total - acertos
+taxa = (acertos / total * 100) if total > 0 else 0
+
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("🎲 Rodadas", total)
+col2.metric("✅ Acertos", acertos)
+col3.metric("❌ Erros", erros)
+col4.metric("📈 Taxa", f"{taxa:.1f}%")
