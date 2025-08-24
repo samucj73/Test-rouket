@@ -183,8 +183,7 @@ if st.session_state.concursos:
     # --- Aba 2 ---
     with abas[1]:
         st.subheader("🧾 Geração de Cartões Inteligentes")
-        n_cartoes = st.slider("Quantidade de cartões", 1, 5, 5)
-        if st.button("🚀 Gerar Cartões"):
+        if st.button("🚀 Gerar 5 Cartões"):
             st.session_state.cartoes_gerados = jogos_gerados
             st.success("5 Cartões gerados com sucesso!")
         if st.session_state.cartoes_gerados:
@@ -192,4 +191,45 @@ if st.session_state.concursos:
                 st.write(f"Jogo {i}: {c}")
 
             st.subheader("📁 Exportar Cartões para TXT")
-            if st
+            conteudo = "\n".join(",".join(str(n) for n in cartao) for cartao in st.session_state.cartoes_gerados)
+            st.download_button("💾 Baixar Arquivo", data=conteudo, file_name="cartoes_lotofacil.txt", mime="text/plain")
+
+    # --- Aba 3 ---
+    with abas[2]:
+        st.subheader("🎯 Conferência de Cartões")
+        if st.session_state.info_ultimo_concurso:
+            info = st.session_state.info_ultimo_concurso
+            st.markdown(
+                f"<h4 style='text-align: center;'>Último Concurso #{info['numero']} ({info['data']})<br>Dezenas: {info['dezenas']}</h4>",
+                unsafe_allow_html=True
+            )
+            if st.button("🔍 Conferir agora"):
+                for i, cartao in enumerate(st.session_state.cartoes_gerados,1):
+                    acertos = len(set(cartao) & set(info['dezenas']))
+                    st.write(f"Jogo {i}: {cartao} - **{acertos} acertos**")
+
+    # --- Aba 4 ---
+    with abas[3]:
+        st.subheader("📤 Conferir Cartões de um Arquivo TXT")
+        uploaded_file = st.file_uploader("Faça upload do arquivo TXT com os cartões (formato: 15 dezenas separadas por vírgula)", type="txt")
+        if uploaded_file:
+            linhas = uploaded_file.read().decode("utf-8").splitlines()
+            cartoes_txt = []
+            for linha in linhas:
+                try:
+                    dezenas = sorted([int(x) for x in linha.strip().split(",")])
+                    if len(dezenas) == 15 and all(1 <= x <= 25 for x in dezenas):
+                        cartoes_txt.append(dezenas)
+                except:
+                    continue
+            if cartoes_txt:
+                st.success(f"{len(cartoes_txt)} cartões carregados com sucesso.")
+                if st.session_state.info_ultimo_concurso:
+                    info = st.session_state.info_ultimo_concurso
+                    st.markdown(
+                        f"<h4 style='text-align: center;'>Último Concurso #{info['numero']} ({info['data']})<br>Dezenas: {info['dezenas']}</h4>",
+                        unsafe_allow_html=True
+                    )
+                    if st.button("📊 Conferir Cartões do Arquivo"):
+                        for i, cartao in enumerate(cartoes_txt,1):
+                            acertos = len(set(cartao) & set(info['dezenas
