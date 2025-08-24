@@ -17,7 +17,7 @@ API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremeli
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 TELEGRAM_CHAT_ID = "-1002880411750"
 
-TAMANHO_JANELA_DEFAULT = 15
+TAMANHO_JANELA_DEFAULT = 115
 MAX_HISTORICO = 4500
 REFRESH_INTERVAL_MS = 5000
 TRAIN_EVERY = 5  # mantém periodicidade, mas com reforços abaixo
@@ -102,7 +102,7 @@ with col1:
     )
 with col2:
     st.session_state.prob_minima = st.slider(
-        "📊 Prob mínima (%)", 10, 100, int(st.session_state.prob_minima * 100), key="slider_prob"
+        "📊 Prob mínima (%)", 50, 100, int(st.session_state.prob_minima * 100), key="slider_prob"
     ) / 100.0
 
 if st.button("🔄 Capturar último número AGORA"):
