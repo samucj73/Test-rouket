@@ -7,7 +7,7 @@ from sklearn.ensemble import RandomForestClassifier
 st.set_page_config(page_title="Lotofácil Inteligente", layout="centered")
 
 # =========================
-# Função para capturar últimos concursos via API
+# Captura concursos via API
 # =========================
 def capturar_ultimos_resultados(qtd=250):
     url_base = "https://loteriascaixa-api.herokuapp.com/api/lotofacil/"
@@ -51,7 +51,7 @@ def capturar_ultimos_resultados(qtd=250):
         return [], None
 
 # =========================
-# Features e Modelo
+# IA e Features
 # =========================
 class LotoFacilIA:
     def __init__(self, concursos):
@@ -60,7 +60,7 @@ class LotoFacilIA:
         self.primos = {2,3,5,7,11,13,17,19,23}
         self.model = RandomForestClassifier(n_estimators=200, random_state=42)
         self.X = self.matriz_binaria()
-        self.Y = self.X.copy()  # Multi-label: próximo concurso
+        self.Y = self.X.copy()  # Multi-label
         if len(self.X) > 1:
             self.treinar_modelo()
 
@@ -161,6 +161,7 @@ with st.expander("📥 Capturar Concursos"):
                 st.session_state.info_ultimo_concurso = info
                 st.success(f"{len(concursos)} concursos capturados com sucesso!")
 
+# --- Abas principais ---
 if st.session_state.concursos:
     ia = LotoFacilIA(st.session_state.concursos)
     probs = ia.prever_proximo()
@@ -191,14 +192,4 @@ if st.session_state.concursos:
                 st.write(f"Jogo {i}: {c}")
 
             st.subheader("📁 Exportar Cartões para TXT")
-            if st.button("💾 Exportar"):
-                conteudo = "\n".join(",".join(str(n) for n in cartao) for cartao in st.session_state.cartoes_gerados)
-                st.download_button("📥 Baixar Arquivo", data=conteudo, file_name="cartoes_lotofacil.txt", mime="text/plain")
-
-    # --- Aba 3 ---
-    with abas[2]:
-        st.subheader("🎯 Conferência de Cartões")
-        if st.session_state.info_ultimo_concurso:
-            info = st.session_state.info_ultimo_concurso
-            st.markdown(
-                f"<h4 style='text-align: center;'>Último Concurso #{info['numero']} ({info['data']})<br>Dezenas: {info
+            if st
