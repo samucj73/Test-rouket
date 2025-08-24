@@ -19,8 +19,8 @@ from canal_extra import processar_resultado as extra_processar_resultado
 # CONFIGURAÇÕES
 # =========================
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
-TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
-TELEGRAM_CHAT_ID = "5121457416"
+#TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
+#TELEGRAM_CHAT_ID = "5121457416"
 
 TAMANHO_JANELA_DEFAULT = 80
 MAX_HISTORICO = 4500
