@@ -207,7 +207,7 @@ if st.session_state.concursos:
     with abas[3]:
         st.subheader("📤 Conferir Cartões de um Arquivo TXT")
         uploaded_file = st.file_uploader("Faça upload do arquivo TXT com os cartões (15 dezenas separadas por vírgula)", type="txt")
-                if uploaded_file:
+        if uploaded_file:
             linhas = uploaded_file.read().decode("utf-8").splitlines()
             cartoes_txt = []
             for linha in linhas:
