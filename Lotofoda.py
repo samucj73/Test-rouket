@@ -176,6 +176,40 @@ class LotoFacilIA:
             if 7 <= pares <=10 and (not forcar_primos or primos_count>=3):
                 return cartao
 
+    # =========================
+    # NOVO: Gerar 5 cartões por padrões últimos concursos
+    # =========================
+    def gerar_cartoes_por_padroes(self, n_jogos=5, janela=10):
+        ultimos = self.concursos[-janela:]  # últimos concursos
+        freq = {n:0 for n in self.numeros}
+        for jogo in ultimos:
+            for n in jogo:
+                freq[n] += 1
+
+        quentes = [n for n,v in sorted(freq.items(), key=lambda x:x[1], reverse=True)[:15]]
+        frios = [n for n,v in sorted(freq.items(), key=lambda x:x[1])[:10]]
+
+        padrao_par_impar = []
+        for jogo in ultimos:
+            pares = sum(1 for x in jogo if x%2==0)
+            padrao_par_impar.append((pares, 15-pares))
+        media_pares = int(np.mean([p for p,_ in padrao_par_impar]))
+        media_impares = 15 - media_pares
+
+        jogos=[]
+        for _ in range(n_jogos):
+            cartao = set()
+            while len(cartao) < 15:
+                if len(cartao) < media_pares:
+                    n = random.choice([x for x in quentes if x%2==0])
+                else:
+                    n = random.choice([x for x in quentes if x%2==1])
+                cartao.add(n)
+            while len(cartao) < 15:
+                cartao.add(random.choice(frios))
+            jogos.append(sorted(cartao))
+        return jogos
+
 # =========================
 # Streamlit
 # =========================
@@ -211,7 +245,13 @@ if st.session_state.concursos:
     quentes_frios = ia.quentes_frios()
     pares_impares_primos = ia.pares_impares_primos()
 
-    abas = st.tabs(["📊 Estatísticas", "🧠 Gerar Cartões", "✅ Conferência", "📤 Conferir Arquivo TXT"])
+    abas = st.tabs([
+        "📊 Estatísticas", 
+        "🧠 Gerar Cartões", 
+        "🧩 Gerar Cartões por Padrões",  # nova aba
+        "✅ Conferência", 
+        "📤 Conferir Arquivo TXT"
+    ])
 
     # Aba 1 - Estatísticas
     with abas[0]:
@@ -236,8 +276,24 @@ if st.session_state.concursos:
             conteudo = "\n".join(",".join(str(n) for n in cartao) for cartao in st.session_state.cartoes_gerados)
             st.download_button("💾 Baixar Arquivo", data=conteudo, file_name="cartoes_lotofacil.txt", mime="text/plain")
 
-    # Aba 3 - Conferência
+    #     # Aba 3 - Gerar Cartões por Padrões
     with abas[2]:
+        st.subheader("🧩 Geração de Cartões com Base em Padrões")
+        if st.button("🚀 Gerar 5 Cartões por Padrões"):
+            cartoes_padrao = ia.gerar_cartoes_por_padroes()
+            st.session_state.cartoes_gerados_padrao = cartoes_padrao
+            st.success("5 Cartões por Padrões gerados com sucesso!")
+        
+        if "cartoes_gerados_padrao" in st.session_state and st.session_state.cartoes_gerados_padrao:
+            for i, c in enumerate(st.session_state.cartoes_gerados_padrao,1):
+                st.write(f"Cartão {i}: {c}")
+
+            st.subheader("📁 Exportar Cartões por Padrões para TXT")
+            conteudo_padrao = "\n".join(",".join(str(n) for n in cartao) for cartao in st.session_state.cartoes_gerados_padrao)
+            st.download_button("💾 Baixar Arquivo Padrões", data=conteudo_padrao, file_name="cartoes_padroes_lotofacil.txt", mime="text/plain")
+
+    # Aba 4 - Conferência
+    with abas[3]:
         st.subheader("🎯 Conferência de Cartões")
         if st.session_state.info_ultimo_concurso:
             info = st.session_state.info_ultimo_concurso
@@ -249,9 +305,15 @@ if st.session_state.concursos:
                 for i, cartao in enumerate(st.session_state.cartoes_gerados,1):
                     acertos = len(set(cartao) & set(info['dezenas']))
                     st.write(f"Jogo {i}: {cartao} - **{acertos} acertos**")
+                # Conferir também os cartões por padrões, se existirem
+                if "cartoes_gerados_padrao" in st.session_state:
+                    st.markdown("**Cartões por Padrões:**")
+                    for i, cartao in enumerate(st.session_state.cartoes_gerados_padrao,1):
+                        acertos = len(set(cartao) & set(info['dezenas']))
+                        st.write(f"Cartão {i}: {cartao} - **{acertos} acertos**")
 
-    # Aba 4 - Conferir Arquivo TXT
-    with abas[3]:
+    # Aba 5 - Conferir Arquivo TXT
+    with abas[4]:
         st.subheader("📤 Conferir Cartões de um Arquivo TXT")
         uploaded_file = st.file_uploader("Faça upload do arquivo TXT com os cartões (15 dezenas separadas por vírgula)", type="txt")
         if uploaded_file:
