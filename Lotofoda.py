@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 import numpy as np
 import random
-from sklearn.ensemble import RandomForestClassifier
+from catboost import CatBoostClassifier
 
 st.set_page_config(page_title="Lotofácil Inteligente", layout="centered")
 
@@ -51,14 +51,20 @@ def capturar_ultimos_resultados(qtd=250):
         return [], None
 
 # =========================
-# IA e Features
+# IA e Features CatBoost
 # =========================
 class LotoFacilIA:
     def __init__(self, concursos):
-        self.concursos = concursos
+        self.concursos = concursos[:-1]  # Excluir último concurso dos cálculos
+        self.ultimo_concurso = concursos[-1]
         self.numeros = list(range(1, 26))
         self.primos = {2,3,5,7,11,13,17,19,23}
-        self.model = RandomForestClassifier(n_estimators=200, random_state=42)
+        self.model = CatBoostClassifier(
+            iterations=500,
+            learning_rate=0.1,
+            depth=5,
+            verbose=0
+        )
         self.X = self.matriz_binaria()
         self.Y = self.X.copy()  # Multi-label
         if len(self.X) > 1:
@@ -91,19 +97,20 @@ class LotoFacilIA:
         return {"quentes": quentes, "frios": frios}
 
     def pares_impares_primos(self):
-        pares = sum(1 for n in self.concursos[-1] if n %2==0)
+        pares = sum(1 for n in self.ultimo_concurso if n %2==0)
         impares = 15 - pares
-        primos = sum(1 for n in self.concursos[-1] if n in self.primos)
+        primos = sum(1 for n in self.ultimo_concurso if n in self.primos)
         return {"pares": pares, "impares": impares, "primos": primos}
 
     def treinar_modelo(self):
-        X_train = self.X[:-1]
-        Y_train = self.Y[1:]
+        X_train = self.X
+        Y_train = self.Y
         self.model.fit(X_train, Y_train)
 
     def prever_proximo(self):
-        ultima = self.X[-1].reshape(1,-1)
+        ultima = np.array([[1 if n in self.ultimo_concurso else 0 for n in self.numeros]])
         probs_list = self.model.predict_proba(ultima)
+        # CatBoost multi-label retorna lista de arrays
         probabilidades = {n+1: probs_list[n][0][1] for n in range(25)}
         return probabilidades
 
@@ -195,11 +202,12 @@ if st.session_state.concursos:
         if st.session_state.info_ultimo_concurso:
             info = st.session_state.info_ultimo_concurso
             st.markdown(
-                f"<h4 style='text-align: center;'>Último Concurso #{info['numero']} ({info['data']})<br>Dezenas: {info['dezenas']}</h4>",
+                f"<h4 style='text-align: center;'>Último Concurso #{info['numero']} ({info['data']})<br>Dezenas: {info
+            ['dezenas']}</h4>",
                 unsafe_allow_html=True
             )
             if st.button("🔍 Conferir agora"):
-                for i, cartao in enumerate(st.session_state.cartoes_gerados,1):
+                for i, cartao in enumerate(st.session_state.cartoes_gerados, 1):
                     acertos = len(set(cartao) & set(info['dezenas']))
                     st.write(f"Jogo {i}: {cartao} - **{acertos} acertos**")
 
@@ -227,7 +235,7 @@ if st.session_state.concursos:
                         unsafe_allow_html=True
                     )
                     if st.button("📊 Conferir Cartões do Arquivo"):
-                        for i, cartao in enumerate(cartoes_txt,1):
+                        for i, cartao in enumerate(cartoes_txt, 1):
                             acertos = len(set(cartao) & set(info['dezenas']))
                             st.write(f"Cartão {i}: {cartao} - **{acertos} acertos**")
             else:
