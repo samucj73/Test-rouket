@@ -51,42 +51,37 @@ def capturar_ultimos_resultados(qtd=250):
         return [], None
 
 # =========================
-# IA e Features CatBoost
+# IA e Features com CatBoost
 # =========================
 class LotoFacilIA:
     def __init__(self, concursos):
-        self.concursos = concursos[:-1]  # Excluir último concurso dos cálculos
-        self.ultimo_concurso = concursos[-1]
-        self.numeros = list(range(1, 26))
+        self.concursos = concursos
+        self.numeros = list(range(1,26))
         self.primos = {2,3,5,7,11,13,17,19,23}
-        self.model = CatBoostClassifier(
-            iterations=500,
-            learning_rate=0.1,
-            depth=5,
-            verbose=0
-        )
-        self.X = self.matriz_binaria()
-        self.Y = self.X.copy()  # Multi-label
-        if len(self.X) > 1:
-            self.treinar_modelo()
+        self.models = {}  # Um modelo por número
+        # Excluindo o último concurso para treino
+        self.X = self.matriz_binaria()[:-1]
+        self.Y = self.matriz_binaria()[1:]
+        if len(self.X) > 0:
+            self.treinar_modelos()
 
     def matriz_binaria(self):
         return np.array([[1 if n in jogo else 0 for n in self.numeros] for jogo in self.concursos])
 
     def frequencia(self, janela=50):
         freq = {n:0 for n in self.numeros}
-        for jogo in self.concursos[-janela:]:
+        for jogo in self.concursos[-janela-1:-1]:  # exclui o último concurso
             for d in jogo:
-                freq[d] += 1
+                freq[d] +=1
         return freq
 
     def atraso(self):
         atraso = {n:0 for n in self.numeros}
-        for i in range(len(self.concursos)-1, -1, -1):
+        for i in range(len(self.concursos)-2, -1, -1):  # exclui o último concurso
             jogo = self.concursos[i]
             for n in self.numeros:
-                if atraso[n] == 0 and n not in jogo:
-                    atraso[n] = len(self.concursos) - i
+                if atraso[n]==0 and n not in jogo:
+                    atraso[n] = len(self.concursos)-1 - i
         return atraso
 
     def quentes_frios(self, top=10):
@@ -97,33 +92,38 @@ class LotoFacilIA:
         return {"quentes": quentes, "frios": frios}
 
     def pares_impares_primos(self):
-        pares = sum(1 for n in self.ultimo_concurso if n %2==0)
+        ultimo = self.concursos[-1]
+        pares = sum(1 for n in ultimo if n%2==0)
         impares = 15 - pares
-        primos = sum(1 for n in self.ultimo_concurso if n in self.primos)
+        primos = sum(1 for n in ultimo if n in self.primos)
         return {"pares": pares, "impares": impares, "primos": primos}
 
-    def treinar_modelo(self):
-        X_train = self.X
-        Y_train = self.Y
-        self.model.fit(X_train, Y_train)
+    def treinar_modelos(self):
+        for i, n in enumerate(self.numeros):
+            model = CatBoostClassifier(iterations=200, verbose=0, random_state=42)
+            y = self.Y[:,i]
+            model.fit(self.X, y)
+            self.models[n] = model
 
     def prever_proximo(self):
-        ultima = np.array([[1 if n in self.ultimo_concurso else 0 for n in self.numeros]])
-        probs_list = self.model.predict_proba(ultima)
-        # CatBoost multi-label retorna lista de arrays
-        probabilidades = {n+1: probs_list[n][0][1] for n in range(25)}
+        ultima = self.matriz_binaria()[-1].reshape(1,-1)
+        probabilidades = {}
+        for n in self.numeros:
+            prob = self.models[n].predict_proba(ultima)[0][1]
+            probabilidades[n] = prob
         return probabilidades
 
     def gerar_5_jogos(self, probabilidades):
-        top15 = [n for n,_ in sorted(probabilidades.items(), key=lambda x: x[1], reverse=True)[:15]]
-        top20 = [n for n,_ in sorted(probabilidades.items(), key=lambda x: x[1], reverse=True)[:20]]
-        mid = [n for n,_ in sorted(probabilidades.items(), key=lambda x: x[1])[10:20]]
-        frios = [n for n,_ in sorted(probabilidades.items(), key=lambda x: x[1])[:10]]
+        # ordena por probabilidade
+        top15 = [n for n,_ in sorted(probabilidades.items(), key=lambda x:x[1], reverse=True)[:15]]
+        top20 = [n for n,_ in sorted(probabilidades.items(), key=lambda x:x[1], reverse=True)[:20]]
+        mid = [n for n,_ in sorted(probabilidades.items(), key=lambda x:x[1])[10:20]]
+        frios = [n for n,_ in sorted(probabilidades.items(), key=lambda x:x[1])[:10]]
 
-        jogos = []
+        jogos=[]
         jogos.append(sorted(top15))
-        jogos.append(sorted(top15[:10] + random.sample(mid, 5)))
-        jogos.append(sorted(top15[:12] + random.sample(frios, 3)))
+        jogos.append(sorted(top15[:10] + random.sample(mid,5)))
+        jogos.append(sorted(top15[:12] + random.sample(frios,3)))
         jogos.append(self._equilibrado(top20))
         jogos.append(self._equilibrado(top20, forcar_primos=True))
         return jogos
@@ -179,8 +179,8 @@ if st.session_state.concursos:
         st.write(f"Números quentes: {quentes_frios['quentes']}")
         st.write(f"Números frios: {quentes_frios['frios']}")
         st.write(f"Pares/Ímpares/Primos último concurso: {pares_impares_primos}")
-        st.write(f"Frequência últimos 50 concursos: {ia.frequencia()}")
-        st.write(f"Atraso de cada número: {ia.atraso()}")
+        st.write(f"Frequência últimos 50 concursos (excluindo último): {ia.frequencia()}")
+        st.write(f"Atraso de cada número (excluindo último concurso): {ia.atraso()}")
 
     # --- Aba 2 ---
     with abas[1]:
@@ -202,13 +202,11 @@ if st.session_state.concursos:
         if st.session_state.info_ultimo_concurso:
             info = st.session_state.info_ultimo_concurso
             st.markdown(
-                f"<h4 style='text-align: center;'>Último Concurso #{info['numero']} ({info['data']})<br>Dezenas: {info
-
-            ['dezenas']}</h4>",
+                f"<h4 style='text-align: center;'>Último Concurso #{info['numero']} ({info['data']})<br>Dezenas: {info['dezenas']}</h4>",
                 unsafe_allow_html=True
             )
             if st.button("🔍 Conferir agora"):
-                for i, cartao in enumerate(st.session_state.cartoes_gerados, 1):
+                for i, cartao in enumerate(st.session_state.cartoes_gerados,1):
                     acertos = len(set(cartao) & set(info['dezenas']))
                     st.write(f"Jogo {i}: {cartao} - **{acertos} acertos**")
 
@@ -236,7 +234,7 @@ if st.session_state.concursos:
                         unsafe_allow_html=True
                     )
                     if st.button("📊 Conferir Cartões do Arquivo"):
-                        for i, cartao in enumerate(cartoes_txt, 1):
+                        for i, cartao in enumerate(cartoes_txt,1):
                             acertos = len(set(cartao) & set(info['dezenas']))
                             st.write(f"Cartão {i}: {cartao} - **{acertos} acertos**")
             else:
