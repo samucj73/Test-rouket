@@ -177,36 +177,39 @@ class LotoFacilIA:
                 return cartao
 
     # =========================
-    # NOVO: Gerar 5 cartões por padrões últimos concursos
+    # Novo: Gerar 5 cartões por linha x coluna
     # =========================
-    def gerar_cartoes_por_padroes(self, n_jogos=5, janela=10):
-        ultimos = self.concursos[-janela:]  # últimos concursos
-        freq = {n:0 for n in self.numeros}
+    def gerar_cartoes_por_linha_coluna(self, n_jogos=5, janela=50):
+        # Matriz 5x5: linhas x colunas (valores de contagem)
+        ultimos = self.concursos[-janela:]
+        padroes_linhas = [0]*5
+        padroes_colunas = [0]*5
+
+        # Contar números por linha e coluna (linhas 0-4, colunas 0-4)
         for jogo in ultimos:
             for n in jogo:
-                freq[n] += 1
+                linha = (n-1)//5
+                coluna = (n-1)%5
+                padroes_linhas[linha] += 1
+                padroes_colunas[coluna] += 1
 
-        quentes = [n for n,v in sorted(freq.items(), key=lambda x:x[1], reverse=True)[:15]]
-        frios = [n for n,v in sorted(freq.items(), key=lambda x:x[1])[:10]]
+        # Média por linha e coluna
+        media_linhas = [int(round(c/len(ultimos))) for c in padroes_linhas]
+        media_colunas = [int(round(c/len(ultimos))) for c in padroes_colunas]
 
-        padrao_par_impar = []
-        for jogo in ultimos:
-            pares = sum(1 for x in jogo if x%2==0)
-            padrao_par_impar.append((pares, 15-pares))
-        media_pares = int(np.mean([p for p,_ in padrao_par_impar]))
-        media_impares = 15 - media_pares
-
-        jogos=[]
+        jogos = []
         for _ in range(n_jogos):
             cartao = set()
+            linhas_atuais = [0]*5
+            colunas_atuais = [0]*5
             while len(cartao) < 15:
-                if len(cartao) < media_pares:
-                    n = random.choice([x for x in quentes if x%2==0])
-                else:
-                    n = random.choice([x for x in quentes if x%2==1])
-                cartao.add(n)
-            while len(cartao) < 15:
-                cartao.add(random.choice(frios))
+                n = random.randint(1,25)
+                linha = (n-1)//5
+                coluna = (n-1)%5
+                if linhas_atuais[linha] < media_linhas[linha] and colunas_atuais[coluna] < media_colunas[coluna]:
+                    cartao.add(n)
+                    linhas_atuais[linha] += 1
+                    colunas_atuais[coluna] += 1
             jogos.append(sorted(cartao))
         return jogos
 
@@ -218,6 +221,9 @@ if "concursos" not in st.session_state:
 
 if "cartoes_gerados" not in st.session_state:
     st.session_state.cartoes_gerados = []
+
+if "cartoes_linha_coluna" not in st.session_state:
+    st.session_state.cartoes_linha_coluna = []
 
 if "info_ultimo_concurso" not in st.session_state:
     st.session_state.info_ultimo_concurso = None
@@ -248,7 +254,7 @@ if st.session_state.concursos:
     abas = st.tabs([
         "📊 Estatísticas", 
         "🧠 Gerar Cartões", 
-        "🧩 Gerar Cartões por Padrões",  # nova aba
+        "📐 Padrões Linha×Coluna", 
         "✅ Conferência", 
         "📤 Conferir Arquivo TXT"
     ])
@@ -276,21 +282,21 @@ if st.session_state.concursos:
             conteudo = "\n".join(",".join(str(n) for n in cartao) for cartao in st.session_state.cartoes_gerados)
             st.download_button("💾 Baixar Arquivo", data=conteudo, file_name="cartoes_lotofacil.txt", mime="text/plain")
 
-    #     # Aba 3 - Gerar Cartões por Padrões
+    # Aba 3 - Padrões Linha×Coluna
     with abas[2]:
-        st.subheader("🧩 Geração de Cartões com Base em Padrões")
-        if st.button("🚀 Gerar 5 Cartões por Padrões"):
-            cartoes_padrao = ia.gerar_cartoes_por_padroes()
-            st.session_state.cartoes_gerados_padrao = cartoes_padrao
-            st.success("5 Cartões por Padrões gerados com sucesso!")
-        
-        if "cartoes_gerados_padrao" in st.session_state and st.session_state.cartoes_gerados_padrao:
-            for i, c in enumerate(st.session_state.cartoes_gerados_padrao,1):
+        st.subheader("📐 Geração de Cartões por Padrões Linha×Coluna")
+        if st.button("🚀 Gerar 5 Cartões por Linha×Coluna"):
+            cartoes_lc = ia.gerar_cartoes_por_linha_coluna()
+            st.session_state.cartoes_linha_coluna = cartoes_lc
+            st.success("5 Cartões por Linha×Coluna gerados com sucesso!")
+
+        if st.session_state.cartoes_linha_coluna:
+            for i, c in enumerate(st.session_state.cartoes_linha_coluna,1):
                 st.write(f"Cartão {i}: {c}")
 
-            st.subheader("📁 Exportar Cartões por Padrões para TXT")
-            conteudo_padrao = "\n".join(",".join(str(n) for n in cartao) for cartao in st.session_state.cartoes_gerados_padrao)
-            st.download_button("💾 Baixar Arquivo Padrões", data=conteudo_padrao, file_name="cartoes_padroes_lotofacil.txt", mime="text/plain")
+            st.subheader("📁 Exportar Cartões Linha×Coluna para TXT")
+            conteudo_lc = "\n".join(",".join(str(n) for n in cartao) for cartao in st.session_state.cartoes_linha_coluna)
+            st.download_button("💾 Baixar Arquivo Linha×Coluna", data=conteudo_lc, file_name="cartoes_linha_coluna_lotofacil.txt", mime="text/plain")
 
     # Aba 4 - Conferência
     with abas[3]:
@@ -302,13 +308,14 @@ if st.session_state.concursos:
                 unsafe_allow_html=True
             )
             if st.button("🔍 Conferir agora"):
+                # Conferir cartões inteligentes
                 for i, cartao in enumerate(st.session_state.cartoes_gerados,1):
                     acertos = len(set(cartao) & set(info['dezenas']))
-                    st.write(f"Jogo {i}: {cartao} - **{acertos} acertos**")
-                # Conferir também os cartões por padrões, se existirem
-                if "cartoes_gerados_padrao" in st.session_state:
-                    st.markdown("**Cartões por Padrões:**")
-                    for i, cartao in enumerate(st.session_state.cartoes_gerados_padrao,1):
+                    st.write(f"Cartão {i}: {cartao} - **{acertos} acertos**")
+                # Conferir cartões linha×coluna
+                if st.session_state.cartoes_linha_coluna:
+                    st.markdown("**Cartões Linha×Coluna:**")
+                    for i, cartao in enumerate(st.session_state.cartoes_linha_coluna,1):
                         acertos = len(set(cartao) & set(info['dezenas']))
                         st.write(f"Cartão {i}: {cartao} - **{acertos} acertos**")
 
