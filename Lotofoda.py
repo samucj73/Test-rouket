@@ -203,6 +203,7 @@ if st.session_state.concursos:
             info = st.session_state.info_ultimo_concurso
             st.markdown(
                 f"<h4 style='text-align: center;'>Último Concurso #{info['numero']} ({info['data']})<br>Dezenas: {info
+
             ['dezenas']}</h4>",
                 unsafe_allow_html=True
             )
