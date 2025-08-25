@@ -1,11 +1,14 @@
 import streamlit as st
-from lotofacil_stats import LotoFacilStats
-from lotofacil_avancado import LotoFacilAvancado
 import requests
 import random
+import numpy as np
+from collections import Counter
 
 st.set_page_config(page_title="Lotofácil Inteligente", layout="centered")
 
+# =========================
+# Captura concursos via API
+# =========================
 def capturar_ultimos_resultados(qtd=250):
     url_base = "https://loteriascaixa-api.herokuapp.com/api/lotofacil/"
     concursos = []
@@ -47,7 +50,107 @@ def capturar_ultimos_resultados(qtd=250):
         st.error(f"Erro ao acessar API: {e}")
         return [], None
 
-# Sessão
+# =========================
+# Classe de Estatísticas
+# =========================
+class LotoFacilStats:
+    def __init__(self, concursos):
+        self.concursos = concursos[:-1]  # excluir o último
+        self.numeros = list(range(1,26))
+        self.primos = {2,3,5,7,11,13,17,19,23}
+
+    def frequencia_numeros(self):
+        freq = {n:0 for n in self.numeros}
+        for jogo in self.concursos:
+            for n in jogo:
+                freq[n] +=1
+        return freq
+
+    def soma_media(self):
+        return np.mean([sum(j) for j in self.concursos])
+
+    def pares_impares_distribuicao(self):
+        pares = [sum(1 for n in j if n%2==0) for j in self.concursos]
+        impares = [15-p for p in pares]
+        return {"pares": np.mean(pares), "impares": np.mean(impares)}
+
+    def numeros_consecutivos(self):
+        total = 0
+        for j in self.concursos:
+            count = 1
+            max_count = 1
+            for i in range(1,len(j)):
+                if j[i] == j[i-1]+1:
+                    count +=1
+                    max_count = max(max_count,count)
+                else:
+                    count =1
+            total += max_count
+        return total / len(self.concursos)
+
+    def grupos_distribuicao(self):
+        grupos = {1:0,2:0,3:0,4:0,5:0}
+        for j in self.concursos:
+            for n in j:
+                g = (n-1)//5 +1
+                grupos[g] +=1
+        for k in grupos:
+            grupos[k] /= len(self.concursos)
+        return grupos
+
+    def numeros_quentes_frios(self, top=10):
+        freq = self.frequencia_numeros()
+        ordenado = sorted(freq.items(), key=lambda x:x[1], reverse=True)
+        quentes = [n for n,_ in ordenado[:top]]
+        frios = [n for n,_ in ordenado[-top:]]
+        return {"quentes": quentes, "frios": frios}
+
+# =========================
+# Classe Avançada de Geração
+# =========================
+class LotoFacilAvancado:
+    def __init__(self, concursos):
+        self.concursos = concursos[:-1]  # excluir último
+        self.numeros = list(range(1,26))
+        self.primos = {2,3,5,7,11,13,17,19,23}
+
+    def calcular_padroes_linha_coluna(self):
+        linhas = [0]*5
+        colunas = [0]*5
+        for jogo in self.concursos:
+            for n in jogo:
+                linhas[(n-1)//5] +=1
+                colunas[(n-1)%5] +=1
+        total = len(self.concursos)
+        media_linhas = [max(1,int(round(c/total))) for c in linhas]
+        media_colunas = [max(1,int(round(c/total))) for c in colunas]
+        return media_linhas, media_colunas
+
+    def gerar_cartoes_por_padrao(self, n_cartoes=5):
+        media_linhas, media_colunas = self.calcular_padroes_linha_coluna()
+        cartoes = []
+        tentativas_max = 1000
+        while len(cartoes) < n_cartoes and tentativas_max>0:
+            cartao = set()
+            linhas_atual = [0]*5
+            colunas_atual = [0]*5
+            while len(cartao)<15:
+                n = random.randint(1,25)
+                l = (n-1)//5
+                c = (n-1)%5
+                if linhas_atual[l] < media_linhas[l] and colunas_atual[c] < media_colunas[c]:
+                    cartao.add(n)
+                    linhas_atual[l]+=1
+                    colunas_atual[c]+=1
+            c_sorted = tuple(sorted(cartao))
+            if c_sorted not in cartoes:
+                cartoes.append(c_sorted)
+            tentativas_max -=1
+        return [list(c) for c in cartoes]
+
+# =========================
+# Streamlit
+# =========================
 if "concursos" not in st.session_state:
     st.session_state.concursos = []
 
@@ -72,14 +175,12 @@ with st.expander("📥 Capturar Concursos"):
                 st.session_state.info_ultimo_concurso = info
                 st.success(f"{len(concursos)} concursos capturados com sucesso!")
 
-if not st.session_state.concursos:
-    st.warning("Capture os concursos antes de utilizar as funcionalidades abaixo.")
-else:
-    abas = st.tabs(["📊 Estatísticas", "🧠 Gerar Cartões", "✅ Conferência", "📤 Conferir Arquivo TXT"])
+if st.session_state.concursos:
     stats = LotoFacilStats(st.session_state.concursos)
-    stats_adv = LotoFacilAvancado(st.session_state.concursos)
+    adv = LotoFacilAvancado(st.session_state.concursos)
+    abas = st.tabs(["📊 Estatísticas", "🧠 Gerar Cartões", "✅ Conferência", "📤 Conferir Arquivo TXT"])
 
-    # --- Aba 1 ---
+    # --- Estatísticas ---
     with abas[0]:
         st.subheader("📈 Estatísticas Gerais")
         st.write(f"Frequência dos números: {stats.frequencia_numeros()}")
@@ -87,154 +188,63 @@ else:
         st.write(f"Média de pares/impares: {stats.pares_impares_distribuicao()}")
         st.write(f"Média de consecutivos: {stats.numeros_consecutivos():.2f}")
         st.write(f"Distribuição por grupos: {stats.grupos_distribuicao()}")
-        quentes_frios = stats.numeros_quentes_frios()
-        st.write(f"Números quentes: {quentes_frios['quentes']}")
-        st.write(f"Números frios: {quentes_frios['frios']}")
+        qf = stats.numeros_quentes_frios()
+        st.write(f"Números quentes: {qf['quentes']}")
+        st.write(f"Números frios: {qf['frios']}")
 
-        st.divider()
-        st.subheader("📐 Estatísticas Avançadas")
-        st.write(f"Média de primos por jogo: {stats_adv.media_primos():.2f}")
-        st.write(f"Distribuição de primos: {stats_adv.distribuicao_primos()}")
-        st.write(f"Média de múltiplos de 3 por jogo: {stats_adv.media_multiplos_3():.2f}")
-        st.write(f"Distribuição de múltiplos de 3: {stats_adv.distribuicao_multiplos_3()}")
-
-    # --- Aba 2 ---
+    # --- Gerar Cartões ---
     with abas[1]:
-        st.subheader("🧾 Geração de Cartões Equilibrados com Padrões e Features")
-        n_cartoes = st.slider("Quantidade de cartões", 1, 220, 10)
-
-        if st.button("🚀 Gerar Cartões Equilibrados"):
-            concursos_hist = st.session_state.concursos[:-1]
-            freq = stats.frequencia_numeros()
-            quentes_frios = stats.numeros_quentes_frios()
-
-            # Identifica padrões linha×coluna mais frequentes
-            def extrair_distribuicao(jogo):
-                linhas = [[i for i in range(l*5+1, l*5+6)] for l in range(5)]
-                colunas = [[i for i in range(c+1, 26, 5)] for c in range(5)]
-                dist_linhas = tuple(sum(1 for n in jogo if n in linha) for linha in linhas)
-                dist_colunas = tuple(sum(1 for n in jogo if n in coluna) for coluna in colunas)
-                return dist_linhas, dist_colunas
-
-            from collections import Counter
-            padroes = [extrair_distribuicao(jogo) for jogo in concursos_hist]
-            padroes_freq = [p for p,_ in Counter(padroes).most_common(5)]
-
-            # Função para calcular features do cartão
-            def calcular_features(cartao):
-                pares = sum(1 for n in cartao if n % 2 == 0)
-                primos = sum(1 for n in cartao if n in stats_adv.primos)
-                consecutivos = sum(1 for i in range(1,15) if cartao[i]-cartao[i-1]==1)
-                multiplos3 = sum(1 for n in cartao if n%3==0)
-                quentes = sum(1 for n in cartao if n in quentes_frios['quentes'])
-                frios = sum(1 for n in cartao if n in quentes_frios['frios'])
-                return {"pares": pares, "primos": primos, "consecutivos": consecutivos, "mult3": multiplos3, "quentes": quentes, "frios": frios}
-
-            # Geração dos cartões
-            cartoes = []
-            tentativas = 0
-            while len(cartoes) < n_cartoes and tentativas < 3000:
-                padrao_linhas, padrao_colunas = padroes_freq[random.randint(0, len(padroes_freq)-1)]
-                jogo = []
-
-                # Construção por linha
-                linhas_def = [[i for i in range(l*5+1, l*5+6)] for l in range(5)]
-                for l, qtd in enumerate(padrao_linhas):
-                    candidatos = [n for n in linhas_def[l] if n not in jogo]
-                    candidatos = sorted(candidatos, key=lambda x: (-freq.get(x,0), x in quentes_frios['quentes']))
-                    jogo += candidatos[:qtd]
-
-                # Completa 15 dezenas
-                if len(jogo) < 15:
-                    restantes = [n for n in range(1,26) if n not in jogo]
-                    restantes = sorted(restantes, key=lambda x: (-freq.get(x,0), x in quentes_frios['quentes']))
-                    jogo += restantes[:15-len(jogo)]
-                elif len(jogo) > 15:
-                    jogo = sorted(jogo, key=lambda x: -freq.get(x,0))[:15]
-
-                jogo_sorted = sorted(jogo)
-
-                # Checa se já existe
-                if jogo_sorted in cartoes:
-                    tentativas +=1
-                    continue
-
-                # Ajusta características para equilibrar features
-                feats = calcular_features(jogo_sorted)
-                if 7 <= feats['pares'] <= 9 and feats['primos'] >= 3 and 2 <= feats['consecutivos'] <= 4 and 4 <= feats['mult3'] <= 6:
-                    cartoes.append(jogo_sorted)
-                tentativas += 1
-
+        st.subheader("🧾 Geração de Cartões Otimizados")
+        n_cartoes = st.slider("Quantidade de cartões", 1, 220, 5)
+        if st.button("🚀 Gerar Cartões"):
+            cartoes = adv.gerar_cartoes_por_padrao(n_cartoes)
             st.session_state.cartoes_gerados = cartoes
-            st.success(f"{len(cartoes)} cartões equilibrados gerados com padrões e features!")
+            st.success(f"{len(cartoes)} cartões gerados!")
 
-        # Exibe cartões
         if st.session_state.cartoes_gerados:
-            st.subheader("📄 Cartões Gerados")
-            for i, c in enumerate(st.session_state.cartoes_gerados, 1):
+            for i,c in enumerate(st.session_state.cartoes_gerados,1):
                 st.write(f"Cartão {i}: {c}")
 
             st.subheader("📁 Exportar Cartões para TXT")
-            if st.button("💾 Exportar"):
-                conteudo = "\n".join(",".join(str(n) for n in cartao) for cartao in st.session_state.cartoes_gerados)
-                st.download_button("📥 Baixar Arquivo", data=conteudo, file_name="cartoes_lotofacil.txt", mime="text/plain")
+            conteudo = "\n".join(",".join(str(n) for n in c) for c in st.session_state.cartoes_gerados)
+            st.download_button("💾 Baixar Arquivo", data=conteudo, file_name="cartoes_lotofacil.txt", mime="text/plain")
 
-    # --- Aba 3 ---
+    # --- Conferência ---
     with abas[2]:
         st.subheader("🎯 Conferência de Cartões")
         if st.session_state.info_ultimo_concurso:
             info = st.session_state.info_ultimo_concurso
-            st.markdown(
-                f"<h4 style='text-align: center;'>Último Concurso #{info['numero']} ({info['data']})<br>Dezenas: {info['dezenas']}</h4>",
-                unsafe_allow_html=True
-            )
+            dezenas_ultimo = info["dezenas"]
+            st.markdown(f"<h4 style='text-align: center;'>Último Concurso #{info['numero']} ({info['data']})<br>Dezenas: {dezenas_ultimo}</h4>", unsafe_allow_html=True)
+            if st.button("🔍 Conferir agora"):
+                for i,c in enumerate(st.session_state.cartoes_gerados,1):
+                    acertos = len(set(c) & set(dezenas_ultimo))
+                    st.write(f"Cartão {i}: {c} - **{acertos} acertos**")
         else:
             st.warning("Informações do último concurso indisponíveis.")
 
-        if st.button("🔍 Conferir agora"):
-            if not st.session_state.cartoes_gerados:
-                st.info("Gere os cartões primeiro.")
-            elif not st.session_state.info_ultimo_concurso:
-                st.warning("Dados do último concurso não encontrados.")
-            else:
-                dezenas_ultimo = st.session_state.info_ultimo_concurso["dezenas"]
-                for i, cartao in enumerate(st.session_state.cartoes_gerados, 1):
-                    acertos = len(set(cartao) & set(dezenas_ultimo))
-                    st.write(f"Cartão {i}: {cartao} - **{acertos} acertos**")
-
-    # --- Aba 4 ---
+    # --- Conferir arquivo TXT ---
     with abas[3]:
         st.subheader("📤 Conferir Cartões de um Arquivo TXT")
-        uploaded_file = st.file_uploader("Faça upload do arquivo TXT com os cartões (formato: 15 dezenas separadas por vírgula)", type="txt")
-
-        if uploaded_file is not None:
+        uploaded_file = st.file_uploader("Upload do arquivo TXT (15 dezenas separadas por vírgula)", type="txt")
+        if uploaded_file:
             linhas = uploaded_file.read().decode("utf-8").splitlines()
             cartoes_txt = []
-            for linha in linhas:
+            for l in linhas:
                 try:
-                    dezenas = sorted([int(x) for x in linha.strip().split(",")])
-                    if len(dezenas) == 15 and all(1 <= x <= 25 for x in dezenas):
+                    dezenas = sorted([int(x) for x in l.strip().split(",")])
+                    if len(dezenas)==15 and all(1<=x<=25 for x in dezenas):
                         cartoes_txt.append(dezenas)
                 except:
                     continue
-
             if cartoes_txt:
                 st.success(f"{len(cartoes_txt)} cartões carregados com sucesso.")
                 if st.session_state.info_ultimo_concurso:
                     info = st.session_state.info_ultimo_concurso
                     dezenas_ultimo = info["dezenas"]
-                    st.markdown(
-                        f"<h4 style='text-align: center;'>Último Concurso #{info['numero']} ({info['data']})<br>Dezenas: {info['dezenas']}</h4>",
-                        unsafe_allow_html=True
-                    )
+                    st.markdown(f"<h4 style='text-align: center;'>Último Concurso #{info['numero']} ({info['data']})<br>Dezenas: {dezenas_ultimo}</h4>", unsafe_allow_html=True)
                     if st.button("📊 Conferir Cartões do Arquivo"):
-                        for i, cartao in enumerate(cartoes_txt, 1):
-                            acertos = len(set(cartao) & set(dezenas_ultimo))
-                            st.write(f"Cartão {i}: {cartao} - **{acertos} acertos**")
-
-                else:
-                    st.warning("Capture os concursos para saber o resultado mais recente.")
-            else:
-                st.error("Nenhum cartão válido foi encontrado no arquivo.")
-
+                        for i,c in enumerate(cartoes_txt,1):
+                            acertos = len(set(c) & set(dezenas_ultimo))
+                            st.write(f"Cartão {i}: {c} - **{acertos} acertos**")
 st.markdown("<hr><p style='text-align: center;'>SAMUCJ TECHNOLOGY</p>", unsafe_allow_html=True)
