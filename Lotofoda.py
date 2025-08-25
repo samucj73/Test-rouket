@@ -238,13 +238,13 @@ if st.session_state.concursos:
                     )
                     if st.button("📊 Conferir Cartões do Arquivo"):
                         for i, cartao in enumerate(cartoes_txt,1):
-                            acertos = len(set(cartao) & set(info['dezenas']))
-                            st.write(f"Cartão {i}: {cartao} - **{acertos
+                            #acertos = len(set(cartao) & set(info['dezenas']))
+                            #st.write(f"Cartão {i}: {cartao} - **{acertos
                                                                  
 
 
                                             
-                                                        acertos = len(set(cartao) & set(info['dezenas']))
+                            acertos = len(set(cartao) & set(info['dezenas']))
                             st.write(f"Cartão {i}: {cartao} - **{acertos} acertos**")
             else:
                 st.warning("Nenhum cartão válido foi encontrado no arquivo.")
