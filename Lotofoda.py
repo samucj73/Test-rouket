@@ -9,7 +9,7 @@ st.set_page_config(page_title="Lotofácil Inteligente", layout="centered")
 # =========================
 # Captura concursos via API
 # =========================
-def capturar_ultimos_resultados(qtd=600):
+def capturar_ultimos_resultados(qtd=250):
     url_base = "https://loteriascaixa-api.herokuapp.com/api/lotofacil/"
     concursos = []
 
@@ -51,7 +51,7 @@ def capturar_ultimos_resultados(qtd=600):
         return [], None
 
 # =========================
-# IA e Features com CatBoost
+# IA Avançada com CatBoost
 # =========================
 class LotoFacilIA:
     def __init__(self, concursos):
@@ -59,33 +59,28 @@ class LotoFacilIA:
         self.numeros = list(range(1,26))
         self.primos = {2,3,5,7,11,13,17,19,23}
         self.models = {}
-
-        # Excluindo o último concurso para treino
-        self.X = self.matriz_binaria()[:-1]
+        self.X = self.gerar_features()[:-1]
         self.Y = self.matriz_binaria()[1:]
-
         if len(self.X) > 0:
-            self.treinar_modelos(iterations=600)
+            self.treinar_modelos()
 
     def matriz_binaria(self):
         return np.array([[1 if n in jogo else 0 for n in self.numeros] for jogo in self.concursos])
 
     def frequencia(self, janela=50):
         freq = {n:0 for n in self.numeros}
-        ultimos = self.concursos[-janela-1:-1]  # exclui último concurso
-        for jogo in ultimos:
+        for jogo in self.concursos[-janela-1:-1]:
             for d in jogo:
                 freq[d] +=1
         return freq
 
-    def atraso(self, janela=50):
+    def atraso(self):
         atraso = {n:0 for n in self.numeros}
-        ultimos = self.concursos[-janela-1:-1]
-        for i in range(len(ultimos)-1, -1, -1):
-            jogo = ultimos[i]
+        for i in range(len(self.concursos)-2, -1, -1):
+            jogo = self.concursos[i]
             for n in self.numeros:
                 if atraso[n]==0 and n not in jogo:
-                    atraso[n] = len(ultimos) - i
+                    atraso[n] = len(self.concursos)-1 - i
         return atraso
 
     def quentes_frios(self, top=10):
@@ -102,15 +97,57 @@ class LotoFacilIA:
         primos = sum(1 for n in ultimo if n in self.primos)
         return {"pares": pares, "impares": impares, "primos": primos}
 
-    def treinar_modelos(self, iterations=600):
+    def interacoes(self, janela=50):
+        matriz = np.zeros((25,25), dtype=int)
+        for jogo in self.concursos[-janela-1:-1]:
+            for i in range(15):
+                for j in range(i+1,15):
+                    matriz[jogo[i]-1, jogo[j]-1] += 1
+                    matriz[jogo[j]-1, jogo[i]-1] += 1
+        return matriz
+
+    def prob_condicional(self, janela=50):
+        matriz = self.interacoes(janela)
+        prob = np.zeros((25,25))
+        freq = np.array([v for v in self.frequencia(janela).values()])
+        for i in range(25):
+            for j in range(25):
+                if freq[i] > 0:
+                    prob[i,j] = matriz[i,j]/freq[i]
+        return prob
+
+    def gap_medio(self):
+        gaps = {n:[] for n in self.numeros}
+        for i, jogo in enumerate(self.concursos[:-1]):
+            for n in self.numeros:
+                if n not in jogo:
+                    gaps[n].append(len(self.concursos)-1-i)
+        return {n: np.mean(gaps[n]) if gaps[n] else 0 for n in self.numeros}
+
+    def gerar_features(self):
+        features = []
+        freq = self.frequencia(janela=len(self.concursos)-1)
+        gaps = self.gap_medio()
+        for jogo in self.concursos:
+            f = []
+            for n in self.numeros:
+                f.append(1 if n in jogo else 0)
+                f.append(freq[n])
+                f.append(gaps[n])
+                f.append(1 if n%2==0 else 0)
+                f.append(1 if n in self.primos else 0)
+            features.append(f)
+        return np.array(features)
+
+    def treinar_modelos(self):
         for i, n in enumerate(self.numeros):
-            model = CatBoostClassifier(iterations=iterations, verbose=0, random_state=42)
+            model = CatBoostClassifier(iterations=600, verbose=0, random_state=42)
             y = self.Y[:,i]
             model.fit(self.X, y)
             self.models[n] = model
 
     def prever_proximo(self):
-        ultima = self.matriz_binaria()[-1].reshape(1,-1)
+        ultima = self.gerar_features()[-1].reshape(1,-1)
         probabilidades = {}
         for n in self.numeros:
             prob = self.models[n].predict_proba(ultima)[0][1]
@@ -140,7 +177,7 @@ class LotoFacilIA:
                 return cartao
 
 # =========================
-# Sessão Streamlit
+# Streamlit
 # =========================
 if "concursos" not in st.session_state:
     st.session_state.concursos = []
@@ -157,7 +194,7 @@ st.markdown("<hr>", unsafe_allow_html=True)
 
 # --- Captura concursos ---
 with st.expander("📥 Capturar Concursos"):
-    qtd_concursos = st.slider("Quantidade de concursos para análise", 10, 600, 100)
+    qtd_concursos = st.slider("Quantidade de concursos para análise", 10, 250, 100)
     if st.button("🔄 Capturar Agora"):
         with st.spinner("Capturando concursos da Lotofácil..."):
             concursos, info = capturar_ultimos_resultados(qtd_concursos)
@@ -176,7 +213,7 @@ if st.session_state.concursos:
 
     abas = st.tabs(["📊 Estatísticas", "🧠 Gerar Cartões", "✅ Conferência", "📤 Conferir Arquivo TXT"])
 
-    # --- Aba 1 ---
+    # Aba 1 - Estatísticas
     with abas[0]:
         st.subheader("📈 Estatísticas Gerais")
         st.write(f"Números quentes: {quentes_frios['quentes']}")
@@ -185,7 +222,7 @@ if st.session_state.concursos:
         st.write(f"Frequência últimos 50 concursos (excluindo último): {ia.frequencia()}")
         st.write(f"Atraso de cada número (excluindo último concurso): {ia.atraso()}")
 
-    # --- Aba 2 ---
+    # Aba 2 - Gerar Cartões
     with abas[1]:
         st.subheader("🧾 Geração de Cartões Inteligentes")
         if st.button("🚀 Gerar 5 Cartões"):
@@ -199,7 +236,7 @@ if st.session_state.concursos:
             conteudo = "\n".join(",".join(str(n) for n in cartao) for cartao in st.session_state.cartoes_gerados)
             st.download_button("💾 Baixar Arquivo", data=conteudo, file_name="cartoes_lotofacil.txt", mime="text/plain")
 
-    # --- Aba 3 ---
+    # Aba 3 - Conferência
     with abas[2]:
         st.subheader("🎯 Conferência de Cartões")
         if st.session_state.info_ultimo_concurso:
@@ -213,7 +250,7 @@ if st.session_state.concursos:
                     acertos = len(set(cartao) & set(info['dezenas']))
                     st.write(f"Jogo {i}: {cartao} - **{acertos} acertos**")
 
-    # --- Aba 4 ---
+    # Aba 4 - Conferir Arquivo TXT
     with abas[3]:
         st.subheader("📤 Conferir Cartões de um Arquivo TXT")
         uploaded_file = st.file_uploader("Faça upload do arquivo TXT com os cartões (15 dezenas separadas por vírgula)", type="txt")
@@ -238,19 +275,9 @@ if st.session_state.concursos:
                     )
                     if st.button("📊 Conferir Cartões do Arquivo"):
                         for i, cartao in enumerate(cartoes_txt,1):
-                            #acertos = len(set(cartao) & set(info['dezenas']))
-                            #st.write(f"Cartão {i}: {cartao} - **{acertos
-                                                                 
-
-
-                                            
                             acertos = len(set(cartao) & set(info['dezenas']))
                             st.write(f"Cartão {i}: {cartao} - **{acertos} acertos**")
             else:
                 st.warning("Nenhum cartão válido foi encontrado no arquivo.")
 
 st.markdown("<hr><p style='text-align: center;'>SAMUCJ TECHNOLOGY</p>", unsafe_allow_html=True)
-                                                                 
-                                                                 
-
-        
