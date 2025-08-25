@@ -1,8 +1,10 @@
 import streamlit as st
+import streamlit as st
 import requests
 import numpy as np
 import random
 from catboost import CatBoostClassifier
+from collections import Counter
 
 st.set_page_config(page_title="Lotofácil Inteligente", layout="centered")
 
@@ -176,11 +178,8 @@ class LotoFacilIA:
             if 7 <= pares <=10 and (not forcar_primos or primos_count>=3):
                 return cartao
 
-    # =========================
-    # NOVO: Gerar 5 cartões por padrões últimos concursos
-    # =========================
     def gerar_cartoes_por_padroes(self, n_jogos=5, janela=10):
-        ultimos = self.concursos[-janela:]  # últimos concursos
+        ultimos = self.concursos[-janela:]
         freq = {n:0 for n in self.numeros}
         for jogo in ultimos:
             for n in jogo:
@@ -209,6 +208,37 @@ class LotoFacilIA:
                 cartao.add(random.choice(frios))
             jogos.append(sorted(cartao))
         return jogos
+
+# =========================
+# Funções da aba Padrões Linha×Coluna
+# =========================
+linhas = [list(range(1,6)), list(range(6,11)), list(range(11,16)), list(range(16,21)), list(range(21,26))]
+colunas = [list(range(1,26,5)), list(range(2,26,5)), list(range(3,26,5)), list(range(4,26,5)), list(range(5,26,5))]
+
+def contar_padroes(concursos):
+    padrao_linhas = []
+    padrao_colunas = []
+
+    for concurso in concursos:
+        linha_cont = [sum(1 for n in concurso if n in l) for l in linhas]
+        col_cont = [sum(1 for n in concurso if n in c) for c in colunas]
+        padrao_linhas.append(tuple(linha_cont))
+        padrao_colunas.append(tuple(col_cont))
+
+    freq_linhas = Counter(padrao_linhas)
+    freq_colunas = Counter(padrao_colunas)
+    return freq_linhas, freq_colunas
+
+def gerar_padroes_futuros(freq_linhas, freq_colunas, n=5):
+    padroes_linhas = [p for p,_ in freq_linhas.most_common(n)]
+    padroes_colunas = [p for p,_ in freq_colunas.most_common(n)]
+    futuros = []
+    for i in range(n):
+        futuros.append({
+            "linhas": padroes_linhas[i % len(padroes_linhas)],
+            "colunas": padroes_colunas[i % len(padroes_colunas)]
+        })
+    return futuros
 
 # =========================
 # Streamlit
@@ -248,9 +278,10 @@ if st.session_state.concursos:
     abas = st.tabs([
         "📊 Estatísticas", 
         "🧠 Gerar Cartões", 
-        "🧩 Gerar Cartões por Padrões",  # nova aba
+        "🧩 Gerar Cartões por Padrões",  
         "✅ Conferência", 
-        "📤 Conferir Arquivo TXT"
+        "📤 Conferir Arquivo TXT",
+        "📐 Padrões Linha × Coluna"   # NOVA ABA
     ])
 
     # Aba 1 - Estatísticas
@@ -277,8 +308,6 @@ if st.session_state.concursos:
             st.download_button("💾 Baixar Arquivo", data=conteudo, file_name="cartoes_lotofacil.txt", mime="text/plain")
 
     # Aba 3 - Gerar Cartões por Padrões
-
-        # Aba 3 - Gerar Cartões por Padrões
     with abas[2]:
         st.subheader("🧩 Geração de Cartões com Base em Padrões")
         if st.button("🚀 Gerar 5 Cartões por Padrões"):
@@ -307,7 +336,6 @@ if st.session_state.concursos:
                 for i, cartao in enumerate(st.session_state.cartoes_gerados,1):
                     acertos = len(set(cartao) & set(info['dezenas']))
                     st.write(f"Jogo {i}: {cartao} - **{acertos} acertos**")
-                # Conferir também os cartões por padrões, se existirem
                 if "cartoes_gerados_padrao" in st.session_state:
                     st.markdown("**Cartões por Padrões:**")
                     for i, cartao in enumerate(st.session_state.cartoes_gerados_padrao,1):
@@ -319,9 +347,9 @@ if st.session_state.concursos:
         st.subheader("📤 Conferir Cartões de um Arquivo TXT")
         uploaded_file = st.file_uploader("Faça upload do arquivo TXT com os cartões (15 dezenas separadas por vírgula)", type="txt")
         if uploaded_file:
-            linhas = uploaded_file.read().decode("utf-8").splitlines()
+            linhas_txt = uploaded_file.read().decode("utf-8").splitlines()
             cartoes_txt = []
-            for linha in linhas:
+            for linha in linhas_txt:
                 try:
                     dezenas = sorted([int(x) for x in linha.strip().split(",")])
                     if len(dezenas) == 15 and all(1 <= x <= 25 for x in dezenas):
@@ -341,7 +369,4 @@ if st.session_state.concursos:
                         for i, cartao in enumerate(cartoes_txt,1):
                             acertos = len(set(cartao) & set(info['dezenas']))
                             st.write(f"Cartão {i}: {cartao} - **{acertos} acertos**")
-            else:
-                st.warning("Nenhum cartão válido foi encontrado no arquivo.")
-
 st.markdown("<hr><p style='text-align: center;'>SAMUCJ TECHNOLOGY</p>", unsafe_allow_html=True)
