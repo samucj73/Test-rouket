@@ -179,13 +179,12 @@ class LotoFacilIA:
     # =========================
     # Novo: Gerar 5 cartões por linha x coluna
     # =========================
-    def gerar_cartoes_por_linha_coluna(self, n_jogos=5, janela=50):
-        # Matriz 5x5: linhas x colunas (valores de contagem)
+# Novo método: calcular padrões linha×coluna
+    def calcular_padroes_linha_coluna(self, janela=50):
         ultimos = self.concursos[-janela:]
         padroes_linhas = [0]*5
         padroes_colunas = [0]*5
 
-        # Contar números por linha e coluna (linhas 0-4, colunas 0-4)
         for jogo in ultimos:
             for n in jogo:
                 linha = (n-1)//5
@@ -193,12 +192,30 @@ class LotoFacilIA:
                 padroes_linhas[linha] += 1
                 padroes_colunas[coluna] += 1
 
-        # Média por linha e coluna
-        media_linhas = [int(round(c/len(ultimos))) for c in padroes_linhas]
-        media_colunas = [int(round(c/len(ultimos))) for c in padroes_colunas]
+        media_linhas = [max(1, round(c/len(ultimos),2)) for c in padroes_linhas]
+        media_colunas = [max(1, round(c/len(ultimos),2)) for c in padroes_colunas]
+
+        return media_linhas, media_colunas
+
+    # Novo método melhorado: geração distinta por linha×coluna
+    def gerar_cartoes_por_linha_coluna(self, n_jogos=5, janela=50):
+        ultimos = self.concursos[-janela:]
+        padroes_linhas = [0]*5
+        padroes_colunas = [0]*5
+
+        for jogo in ultimos:
+            for n in jogo:
+                linha = (n-1)//5
+                coluna = (n-1)%5
+                padroes_linhas[linha] += 1
+                padroes_colunas[coluna] += 1
+
+        media_linhas = [max(1, int(round(c/len(ultimos)))) for c in padroes_linhas]
+        media_colunas = [max(1, int(round(c/len(ultimos)))) for c in padroes_colunas]
 
         jogos = []
-        for _ in range(n_jogos):
+        tentativas_max = 1000
+        while len(jogos) < n_jogos and tentativas_max > 0:
             cartao = set()
             linhas_atuais = [0]*5
             colunas_atuais = [0]*5
@@ -210,9 +227,15 @@ class LotoFacilIA:
                     cartao.add(n)
                     linhas_atuais[linha] += 1
                     colunas_atuais[coluna] += 1
-            jogos.append(sorted(cartao))
-        return jogos
+            cartao_sorted = tuple(sorted(cartao))
+            if cartao_sorted not in jogos:
+                jogos.append(cartao_sorted)
+            tentativas_max -= 1
 
+        return [list(c) for c in jogos]
+
+
+    
 # =========================
 # Streamlit
 # =========================
