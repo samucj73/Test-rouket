@@ -202,8 +202,8 @@ if st.session_state.concursos:
     # --- Aba 1 ---
     with abas[0]:
         st.subheader("📈 Estatísticas Gerais")
-        st.write(f"Números quentes: {quentes_frios['
-                 st.write(f"Números quentes: {quentes_frios['quentes']}")
+        #st.write(f"Números quentes: {quentes_frios['
+        st.write(f"Números quentes: {quentes_frios['quentes']}")
         st.write(f"Números frios: {quentes_frios['frios']}")
         st.write(f"Pares/Ímpares/Primos último concurso: {pares_impares_primos}")
         st.write(f"Frequência últimos 50 concursos (excluindo último): {ia.frequencia()}")
