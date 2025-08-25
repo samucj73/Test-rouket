@@ -207,4 +207,30 @@ if st.session_state.concursos:
     with abas[3]:
         st.subheader("📤 Conferir Cartões de um Arquivo TXT")
         uploaded_file = st.file_uploader("Faça upload do arquivo TXT com os cartões (15 dezenas separadas por vírgula)", type="txt")
-        if
+                if uploaded_file:
+            linhas = uploaded_file.read().decode("utf-8").splitlines()
+            cartoes_txt = []
+            for linha in linhas:
+                try:
+                    dezenas = sorted([int(x) for x in linha.strip().split(",")])
+                    if len(dezenas) == 15 and all(1 <= x <= 25 for x in dezenas):
+                        cartoes_txt.append(dezenas)
+                except:
+                    continue
+
+            if cartoes_txt:
+                st.success(f"{len(cartoes_txt)} cartões carregados com sucesso.")
+                if st.session_state.info_ultimo_concurso:
+                    info = st.session_state.info_ultimo_concurso
+                    st.markdown(
+                        f"<h4 style='text-align: center;'>Último Concurso #{info['numero']} ({info['data']})<br>Dezenas: {info['dezenas']}</h4>",
+                        unsafe_allow_html=True
+                    )
+                    if st.button("📊 Conferir Cartões do Arquivo"):
+                        for i, cartao in enumerate(cartoes_txt,1):
+                            acertos = len(set(cartao) & set(info['dezenas']))
+                            st.write(f"Cartão {i}: {cartao} - **{acertos} acertos**")
+            else:
+                st.warning("Nenhum cartão válido foi encontrado no arquivo.")
+
+st.markdown("<hr><p style='text-align: center;'>SAMUCJ TECHNOLOGY</p>", unsafe_allow_html=True)
