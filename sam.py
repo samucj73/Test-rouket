@@ -7,8 +7,10 @@ import numpy as np
 from collections import Counter
 from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.preprocessing import LabelEncoder
+from alertas import enviar_previsao, enviar_resultado
 from streamlit_autorefresh import st_autorefresh
 import base64
+
 
 HISTORICO_PATH = "historico_coluna_duzia.json"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
@@ -252,6 +254,9 @@ if resultado and resultado["timestamp"] != ultimo:
         st.balloons()
         tocar_som_moeda()
 
+# 🚨 Envia alerta de resultado
+enviar_resultado(resultado["number"], st.session_state.duzia_prevista)
+
 # Se nenhuma previsão ainda
 if st.session_state.duzia_prevista is None:
     tentar_treinar()
@@ -267,6 +272,9 @@ candidatos = [st.session_state.duzia_prevista, prev_quente, prev_tendencia, prev
 votacao = Counter(candidatos)
 mais_votado, votos = votacao.most_common(1)[0]
 st.session_state.duzia_prevista = mais_votado
+
+# 🚨 Envia alerta de previsão
+enviar_previsao(mais_votado)
 
 # Interface
 st.subheader("🔁 Últimos 10 Números")
