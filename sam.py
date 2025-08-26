@@ -253,31 +253,36 @@ if resultado and resultado["timestamp"] != ultimo:
     tentar_treinar()
 
     # === Conferir resultado com previsão anterior antes de enviar alerta ===
- # Captura número atual
-numero_atual = resultado["number"]
+   # Captura resultado da API
+resultado = fetch_latest_result()
+ultimo = st.session_state.historico[-1]["timestamp"] if st.session_state.historico else None
 
-# Se entrou rodada nova
-if numero_atual != st.session_state.rodada_atual:
-    st.session_state.rodada_atual = numero_atual
-    st.session_state.previsao_enviada = False
-    st.session_state.resultado_enviado = False  # reset para nova rodada
+if resultado and resultado["timestamp"] != ultimo:
+    numero_atual = resultado["number"]
 
-    # Conferência do resultado com a previsão ANTERIOR (antes de atualizar a previsão)
-    if st.session_state.duzia_prevista is not None:
-        duzia_real = get_duzia(numero_atual)
-        acertou = duzia_real == st.session_state.duzia_prevista
+    # Se entrou rodada nova
+    if numero_atual != st.session_state.rodada_atual:
+        # Reset de flags
+        st.session_state.rodada_atual = numero_atual
+        st.session_state.previsao_enviada = False
+        st.session_state.resultado_enviado = False
 
-        # Estatísticas locais
-        if acertou:
-            st.session_state.duzias_acertadas += 1
-            st.toast("✅ Acertou a dúzia!")
-            st.balloons()
-            tocar_som_moeda()
+        # --- CONFERÊNCIA DO RESULTADO ANTERIOR ---
+        if st.session_state.duzia_prevista is not None:
+            duzia_real = get_duzia(numero_atual)
+            acertou = duzia_real == st.session_state.duzia_prevista
 
-        # Envia alerta de resultado (GREEN ou RED)
-        if not st.session_state.resultado_enviado:
+            # Atualiza estatísticas locais
+            if acertou:
+                st.session_state.duzias_acertadas += 1
+                st.toast("✅ Acertou a dúzia!")
+                st.balloons()
+                tocar_som_moeda()
+
+            # Envia alerta Telegram (GREEN ou RED)
             enviar_resultado(numero_atual, acertou)
-            st.session_state.resultado_enviado = True
+            st.session_state.resultado_enviado = True 
+
 
     # Agora sim adiciona o resultado ao histórico
     st.session_state.historico.append(resultado)
