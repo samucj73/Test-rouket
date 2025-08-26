@@ -39,14 +39,9 @@ def get_duzia(n: int):
         return 3
     return None
 
+def enviar_resultado(numero_sorteado, acertou: bool):
+    """Envia alerta do resultado da rodada para o Telegram"""
+    status = "🟢 GREEN! Acertou!" if acertou else "🔴 RED! Errou!"
+    mensagem = f"🎲 Resultado: {numero_sorteado}\n{status}"
+    enviar_alerta(mensagem)
 
-def enviar_resultado(numero: int, duzia_prevista: int):
-    """
-    Envia alerta com o resultado e se deu GREEN ou RED
-    """
-    duzia_resultado = get_duzia(numero)
-    deu_green = duzia_resultado == duzia_prevista
-    status = "🟢 GREEN" if deu_green else "🔴 RED"
-    msg = f"🎲 Resultado: {numero} (Dúzia {duzia_resultado})\n➡️ {status}"
-    time.sleep(4)  # espera 4s para separar da previsão
-    send_telegram_message(msg)
