@@ -254,11 +254,25 @@ if resultado and resultado["timestamp"] != ultimo:
 
     # === Conferir resultado com previsão anterior antes de enviar alerta ===
     # === Conferir resultado com previsão anterior antes de enviar alerta ===
-if resultado and not st.session_state.resultado_enviado:
-    if "duzia_prevista" in st.session_state and st.session_state.duzia_prevista is not None:
-        duzia_real = get_duzia(resultado["number"])  # calcula a dúzia do número sorteado
+# Captura número atual
+numero_atual = resultado["number"]
+
+# Se entrou rodada nova
+if numero_atual != st.session_state.rodada_atual:
+    st.session_state.rodada_atual = numero_atual
+    st.session_state.previsao_enviada = False
+    st.session_state.resultado_enviado = False  # reset para nova rodada
+
+    # Adiciona ao histórico
+    st.session_state.historico.append(resultado)
+    salvar_resultado_em_arquivo(st.session_state.historico)
+    tentar_treinar()
+
+    # Conferência do resultado com a previsão anterior
+    if st.session_state.duzia_prevista is not None and not st.session_state.resultado_enviado:
+        duzia_real = get_duzia(numero_atual)
         acertou = duzia_real == st.session_state.duzia_prevista
-        enviar_resultado(resultado["number"], acertou)   # GREEN ou RED
+        enviar_resultado(numero_atual, acertou)  # envia GREEN ou RED
         st.session_state.resultado_enviado = True
 
 
@@ -275,7 +289,7 @@ if resultado and not st.session_state.resultado_enviado:
         st.session_state.resultado_enviado = True
 
 # Se nenhuma previsão ainda
-if st.session_state.duzia_prevista is None:
+if st.session_state.duzia_prevista is ***:
     tentar_treinar()
     st.session_state.duzia_prevista = st.session_state.modelo_duzia.prever(st.session_state.historico)
 
