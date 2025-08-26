@@ -43,5 +43,7 @@ def enviar_resultado(numero_sorteado, acertou: bool):
     """Envia alerta do resultado da rodada para o Telegram"""
     status = "🟢 GREEN! Acertou!" if acertou else "🔴 RED! Errou!"
     mensagem = f"🎲 Resultado: {numero_sorteado}\n{status}"
-    enviar_alerta(mensagem)
+    send_telegram_message(mensagem)  # ✅ corrigido
+
+
 
