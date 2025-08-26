@@ -253,8 +253,7 @@ if resultado and resultado["timestamp"] != ultimo:
     tentar_treinar()
 
     # === Conferir resultado com previsão anterior antes de enviar alerta ===
-    # === Conferir resultado com previsão anterior antes de enviar alerta ===
-# Captura número atual
+ # Captura número atual
 numero_atual = resultado["number"]
 
 # Se entrou rodada nova
@@ -263,27 +262,30 @@ if numero_atual != st.session_state.rodada_atual:
     st.session_state.previsao_enviada = False
     st.session_state.resultado_enviado = False  # reset para nova rodada
 
-    # Adiciona ao histórico
-    st.session_state.historico.append(resultado)
-    salvar_resultado_em_arquivo(st.session_state.historico)
-    tentar_treinar()
-
-    # Conferência do resultado com a previsão anterior
-        # Conferência do resultado com a previsão anterior
-    if st.session_state.duzia_prevista is not None and not st.session_state.resultado_enviado:
+    # Conferência do resultado com a previsão ANTERIOR (antes de atualizar a previsão)
+    if st.session_state.duzia_prevista is not None:
         duzia_real = get_duzia(numero_atual)
         acertou = duzia_real == st.session_state.duzia_prevista
 
-        # Atualiza estatísticas locais
+        # Estatísticas locais
         if acertou:
             st.session_state.duzias_acertadas += 1
             st.toast("✅ Acertou a dúzia!")
             st.balloons()
             tocar_som_moeda()
 
-        # Envia alerta Telegram (GREEN ou RED)
-        enviar_resultado(numero_atual, acertou)
-        st.session_state.resultado_enviado = True
+        # Envia alerta de resultado (GREEN ou RED)
+        if not st.session_state.resultado_enviado:
+            enviar_resultado(numero_atual, acertou)
+            st.session_state.resultado_enviado = True
+
+    # Agora sim adiciona o resultado ao histórico
+    st.session_state.historico.append(resultado)
+    salvar_resultado_em_arquivo(st.session_state.historico)
+
+    # E atualiza a previsão para a próxima rodada
+    tentar_treinar()
+    st.session_state.duzia_prevista = st.session_state.modelo_duzia.prever(st.session_state.historico)
 
 # Se nenhuma previsão ainda
 if st.session_state.duzia_prevista is None:
