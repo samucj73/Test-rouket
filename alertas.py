@@ -39,6 +39,18 @@ def get_duzia(n: int):
         return 3
     return None
 
+def get_coluna(n: int):
+    """Cálculo da coluna (0 = zero, 1 = 1ª coluna, 2 = 2ª coluna, 3 = 3ª coluna)"""
+    if n == 0:
+        return 0
+    elif n % 3 == 1:
+        return 1  # números da 1ª coluna
+    elif n % 3 == 2:
+        return 2  # números da 2ª coluna
+    elif n % 3 == 0:
+        return 3  # números da 3ª coluna
+    return None
+
 def enviar_resultado(numero_sorteado, acertou: bool):
     """Envia alerta do resultado da rodada para o Telegram"""
     status = "🟢 GREEN! Acertou!" if acertou else "🔴 RED! Errou!"
