@@ -61,6 +61,14 @@ def fetch_latest_result():
         logging.error(f"Erro ao buscar resultado: {e}")
         return None
 
+numero_atual = resultado["number"]
+
+# Se entrou rodada nova
+if numero_atual != st.session_state.rodada_atual:
+    st.session_state.rodada_atual = numero_atual
+    st.session_state.previsao_enviada = False
+    st.session_state.resultado_enviado = False
+
 def get_duzia(n):
     if n == 0:
         return 0
@@ -220,6 +228,15 @@ if "alerta_previsao_enviado" not in st.session_state:
 if "alerta_resultado_enviado" not in st.session_state:
     st.session_state.alerta_resultado_enviado = False
 
+if "ultimo_numero_capturado" not in st.session_state:
+    st.session_state.ultimo_numero_capturado = None
+if "rodada_atual" not in st.session_state:
+    st.session_state.rodada_atual = None
+if "previsao_enviada" not in st.session_state:
+    st.session_state.previsao_enviada = False
+if "resultado_enviado" not in st.session_state:
+    st.session_state.resultado_enviado = False
+
 def tentar_treinar():
     historico = st.session_state.historico
     modelo = st.session_state.modelo_duzia
@@ -267,10 +284,9 @@ if resultado and resultado["timestamp"] != ultimo:
         tocar_som_moeda()
 
 # 🚨 Envia alerta de resultado
-# Envia o resultado somente se ainda não foi enviado nesta rodada
-if not st.session_state.alerta_resultado_enviado:
-    enviar_resultado(resultado["number"], st.session_state.duzia_prevista)
-    st.session_state.alerta_resultado_enviado = True
+if not st.session_state.resultado_enviado:
+    enviar_resultado(numero_atual, st.session_state.duzia_prevista)
+    st.session_state.resultado_enviado = True
 
 # Se nenhuma previsão ainda
 if st.session_state.duzia_prevista is None:
@@ -289,12 +305,9 @@ mais_votado, votos = votacao.most_common(1)[0]
 st.session_state.duzia_prevista = mais_votado
 
 # 🚨 Envia alerta de previsão
-# Se capturamos um novo número (nova rodada)
-if resultado and resultado["number"] != st.session_state.ultimo_numero_capturado:
-    # Reset flags para nova rodada
-    st.session_state.alerta_previsao_enviado = False
-    st.session_state.alerta_resultado_enviado = False
-    st.session_state.ultimo_numero_capturado = resultado["number"]
+if not st.session_state.previsao_enviada:
+    enviar_previsao(mais_votado)
+    st.session_state.previsao_enviada = True
 
 # Envia a previsão somente se ainda não foi enviada nesta rodada
 if not st.session_state.alerta_previsao_enviado:
