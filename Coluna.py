@@ -3,6 +3,7 @@ import requests
 import joblib
 import time
 import logging
+from streamlit_autorefresh import st_autorefresh
 from collections import deque, Counter
 from pathlib import Path
 from alertas import enviar_previsao, enviar_resultado, get_coluna
@@ -183,3 +184,9 @@ if total > 0:
     st.success(f"✅ Acertos de coluna: {st.session_state.colunas_acertadas}/{total} ({taxa:.2f}%)")
 else:
     st.info("🔎 Aguardando mais resultados para avaliar desempenho.")
+
+
+
+
+# Atualiza a cada 3 segundos (3000 ms)
+st_autorefresh(interval=3000, key="refresh_coluna")
