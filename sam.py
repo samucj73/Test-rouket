@@ -213,6 +213,13 @@ if "ultimo_alerta_previsao" not in st.session_state:
 if "ultimo_alerta_resultado" not in st.session_state:
     st.session_state.ultimo_alerta_resultado = None
 
+if "ultimo_numero_capturado" not in st.session_state:
+    st.session_state.ultimo_numero_capturado = None
+if "alerta_previsao_enviado" not in st.session_state:
+    st.session_state.alerta_previsao_enviado = False
+if "alerta_resultado_enviado" not in st.session_state:
+    st.session_state.alerta_resultado_enviado = False
+
 def tentar_treinar():
     historico = st.session_state.historico
     modelo = st.session_state.modelo_duzia
@@ -260,10 +267,10 @@ if resultado and resultado["timestamp"] != ultimo:
         tocar_som_moeda()
 
 # 🚨 Envia alerta de resultado
-# 🚨 Enviar resultado apenas se ainda não foi enviado para este timestamp
-if resultado and resultado["timestamp"] != st.session_state.ultimo_alerta_resultado:
+# Envia o resultado somente se ainda não foi enviado nesta rodada
+if not st.session_state.alerta_resultado_enviado:
     enviar_resultado(resultado["number"], st.session_state.duzia_prevista)
-    st.session_state.ultimo_alerta_resultado = resultado["timestamp"]
+    st.session_state.alerta_resultado_enviado = True
 
 # Se nenhuma previsão ainda
 if st.session_state.duzia_prevista is None:
@@ -282,10 +289,17 @@ mais_votado, votos = votacao.most_common(1)[0]
 st.session_state.duzia_prevista = mais_votado
 
 # 🚨 Envia alerta de previsão
-# 🚨 Enviar previsão apenas se ainda não foi enviada para este timestamp
-if resultado and resultado["timestamp"] != st.session_state.ultimo_alerta_previsao:
+# Se capturamos um novo número (nova rodada)
+if resultado and resultado["number"] != st.session_state.ultimo_numero_capturado:
+    # Reset flags para nova rodada
+    st.session_state.alerta_previsao_enviado = False
+    st.session_state.alerta_resultado_enviado = False
+    st.session_state.ultimo_numero_capturado = resultado["number"]
+
+# Envia a previsão somente se ainda não foi enviada nesta rodada
+if not st.session_state.alerta_previsao_enviado:
     enviar_previsao(mais_votado)
-    st.session_state.ultimo_alerta_previsao = resultado["timestamp"]
+    st.session_state.alerta_previsao_enviado = True
 # Interface
 st.subheader("🔁 Últimos 10 Números")
 st.write(" ".join(str(h["number"]) for h in st.session_state.historico[-10:]))
