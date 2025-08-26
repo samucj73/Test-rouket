@@ -208,6 +208,11 @@ if "duzia_prevista" not in st.session_state:
 if "ultimo_treino" not in st.session_state:
     st.session_state.ultimo_treino = 0
 
+if "ultimo_alerta_previsao" not in st.session_state:
+    st.session_state.ultimo_alerta_previsao = None
+if "ultimo_alerta_resultado" not in st.session_state:
+    st.session_state.ultimo_alerta_resultado = None
+
 def tentar_treinar():
     historico = st.session_state.historico
     modelo = st.session_state.modelo_duzia
@@ -255,7 +260,10 @@ if resultado and resultado["timestamp"] != ultimo:
         tocar_som_moeda()
 
 # 🚨 Envia alerta de resultado
-enviar_resultado(resultado["number"], st.session_state.duzia_prevista)
+# 🚨 Enviar resultado apenas se ainda não foi enviado para este timestamp
+if resultado and resultado["timestamp"] != st.session_state.ultimo_alerta_resultado:
+    enviar_resultado(resultado["number"], st.session_state.duzia_prevista)
+    st.session_state.ultimo_alerta_resultado = resultado["timestamp"]
 
 # Se nenhuma previsão ainda
 if st.session_state.duzia_prevista is None:
@@ -274,8 +282,10 @@ mais_votado, votos = votacao.most_common(1)[0]
 st.session_state.duzia_prevista = mais_votado
 
 # 🚨 Envia alerta de previsão
-enviar_previsao(mais_votado)
-
+# 🚨 Enviar previsão apenas se ainda não foi enviada para este timestamp
+if resultado and resultado["timestamp"] != st.session_state.ultimo_alerta_previsao:
+    enviar_previsao(mais_votado)
+    st.session_state.ultimo_alerta_previsao = resultado["timestamp"]
 # Interface
 st.subheader("🔁 Últimos 10 Números")
 st.write(" ".join(str(h["number"]) for h in st.session_state.historico[-10:]))
