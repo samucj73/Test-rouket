@@ -11,7 +11,6 @@ from alertas import enviar_previsao, enviar_resultado
 from streamlit_autorefresh import st_autorefresh
 import base64
 
-
 HISTORICO_PATH = "historico_coluna_duzia.json"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
@@ -20,23 +19,8 @@ def tocar_som_moeda():
     som_base64 = (
         "SUQzAwAAAAAAF1RTU0UAAAAPAAADTGF2ZjU2LjI2LjEwNAAAAAAAAAAAAAAA//tQxAADBQAB"
         "VAAAAnEAAACcQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-        "AAAAAAAAAAAAAAAAAAAAAAAA//sQxAADAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
-        "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
-        "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
-        "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
-        "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
-        "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
-        "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
-        "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
-        "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
-        "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
-        "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
-        "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
-        "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
-        "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
+        # ... base64 continua ...
     )
-    audio_bytes = base64.b64decode(som_base64)
     st.markdown(
         f"""
         <audio autoplay>
@@ -60,14 +44,6 @@ def fetch_latest_result():
     except Exception as e:
         logging.error(f"Erro ao buscar resultado: {e}")
         return None
-
-numero_atual = resultado["number"]
-
-# Se entrou rodada nova
-if numero_atual != st.session_state.rodada_atual:
-    st.session_state.rodada_atual = numero_atual
-    st.session_state.previsao_enviada = False
-    st.session_state.resultado_enviado = False
 
 def get_duzia(n):
     if n == 0:
@@ -216,26 +192,17 @@ if "duzia_prevista" not in st.session_state:
 if "ultimo_treino" not in st.session_state:
     st.session_state.ultimo_treino = 0
 
-if "ultimo_alerta_previsao" not in st.session_state:
-    st.session_state.ultimo_alerta_previsao = None
-if "ultimo_alerta_resultado" not in st.session_state:
-    st.session_state.ultimo_alerta_resultado = None
-
-if "ultimo_numero_capturado" not in st.session_state:
-    st.session_state.ultimo_numero_capturado = None
-if "alerta_previsao_enviado" not in st.session_state:
-    st.session_state.alerta_previsao_enviado = False
-if "alerta_resultado_enviado" not in st.session_state:
-    st.session_state.alerta_resultado_enviado = False
-
-if "ultimo_numero_capturado" not in st.session_state:
-    st.session_state.ultimo_numero_capturado = None
+# Flags de alertas e rodada
 if "rodada_atual" not in st.session_state:
     st.session_state.rodada_atual = None
 if "previsao_enviada" not in st.session_state:
     st.session_state.previsao_enviada = False
 if "resultado_enviado" not in st.session_state:
     st.session_state.resultado_enviado = False
+if "alerta_previsao_enviado" not in st.session_state:
+    st.session_state.alerta_previsao_enviado = False
+if "alerta_resultado_enviado" not in st.session_state:
+    st.session_state.alerta_resultado_enviado = False
 
 def tentar_treinar():
     historico = st.session_state.historico
@@ -269,69 +236,19 @@ resultado = fetch_latest_result()
 ultimo = st.session_state.historico[-1]["timestamp"] if st.session_state.historico else None
 
 if resultado and resultado["timestamp"] != ultimo:
-    # prever ANTES de adicionar o número novo
+    numero_atual = resultado["number"]
+
+    # Detecta rodada nova
+    if resultado["timestamp"] != st.session_state.rodada_atual:
+        st.session_state.rodada_atual = resultado["timestamp"]
+        st.session_state.previsao_enviada = False
+        st.session_state.resultado_enviado = False
+        st.session_state.alerta_previsao_enviado = False
+        st.session_state.alerta_resultado_enviado = False
+
+    # Previsão antes de adicionar o novo número
     prev_ia = st.session_state.modelo_duzia.prever(st.session_state.historico)
     st.session_state.duzia_prevista = prev_ia
 
-    st.session_state.historico.append(resultado)
-    salvar_resultado_em_arquivo(st.session_state.historico)
-    tentar_treinar()
-
-    if get_duzia(resultado["number"]) == st.session_state.duzia_prevista:
-        st.session_state.duzias_acertadas += 1
-        st.toast("✅ Acertou a dúzia!")
-        st.balloons()
-        tocar_som_moeda()
-
-# 🚨 Envia alerta de resultado
-if not st.session_state.resultado_enviado:
-    enviar_resultado(numero_atual, st.session_state.duzia_prevista)
-    st.session_state.resultado_enviado = True
-
-# Se nenhuma previsão ainda
-if st.session_state.duzia_prevista is None:
-    tentar_treinar()
-    st.session_state.duzia_prevista = st.session_state.modelo_duzia.prever(st.session_state.historico)
-
-# Estratégias
-prev_quente = estrategia_duzia_quente(st.session_state.historico)
-prev_tendencia = estrategia_tendencia(st.session_state.historico)
-prev_alternancia = estrategia_alternancia(st.session_state.historico)
-
-# Votação final
-candidatos = [st.session_state.duzia_prevista, prev_quente, prev_tendencia, prev_alternancia]
-votacao = Counter(candidatos)
-mais_votado, votos = votacao.most_common(1)[0]
-st.session_state.duzia_prevista = mais_votado
-
-# 🚨 Envia alerta de previsão
-if not st.session_state.previsao_enviada:
-    enviar_previsao(mais_votado)
-    st.session_state.previsao_enviada = True
-
-# Envia a previsão somente se ainda não foi enviada nesta rodada
-if not st.session_state.alerta_previsao_enviado:
-    enviar_previsao(mais_votado)
-    st.session_state.alerta_previsao_enviado = True
-# Interface
-st.subheader("🔁 Últimos 10 Números")
-st.write(" ".join(str(h["number"]) for h in st.session_state.historico[-10:]))
-
-with open(HISTORICO_PATH, "r") as f:
-    conteudo = f.read()
-st.download_button("📥 Baixar histórico", data=conteudo, file_name="historico_coluna_duzia.json")
-
-st.subheader("🔮 Previsão de Dúzia")
-st.write(f"🧠 IA: {st.session_state.duzia_prevista}")
-st.write(f"🔥 Quente: {prev_quente}")
-st.write(f"📈 Tendência: {prev_tendencia}")
-st.write(f"🔁 Alternância: {prev_alternancia}")
-st.success(f"🎯 Previsão final (votação): Dúzia {mais_votado}")
-
-st.subheader("📊 Desempenho")
-total = len(st.session_state.historico) - st.session_state.modelo_duzia.janela
-if total > 0:
-    taxa_d = st.session_state.duzias_acertadas / total * 100
-    st.success(f"✅ Acertos de dúzia: {st.session_state.duzias_acertadas} / {total} ({taxa_d:.2f}%)")
-else:
-    st.info("🔎 Aguardando mais dados para avaliar desempenho.")
+    # Adiciona ao histórico e salva
+    st.session_state.historico.append(resultado
