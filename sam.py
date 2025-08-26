@@ -251,4 +251,4 @@ if resultado and resultado["timestamp"] != ultimo:
     st.session_state.duzia_prevista = prev_ia
 
     # Adiciona ao histórico e salva
-    st.session_state.historico.append(resultado
+    st.session_state.historico.append(resultado)
