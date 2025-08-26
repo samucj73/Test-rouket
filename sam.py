@@ -289,7 +289,7 @@ if numero_atual != st.session_state.rodada_atual:
         st.session_state.resultado_enviado = True
 
 # Se nenhuma previsão ainda
-if st.session_state.duzia_prevista is ***:
+if st.session_state.duzia_prevista is None:
     tentar_treinar()
     st.session_state.duzia_prevista = st.session_state.modelo_duzia.prever(st.session_state.historico)
 
