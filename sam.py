@@ -254,12 +254,12 @@ if resultado and resultado["timestamp"] != ultimo:
 
     # === Conferir resultado com previsão anterior antes de enviar alerta ===
     # === Conferir resultado com previsão anterior antes de enviar alerta ===
-if "duzia_prevista" in st.session_state and st.session_state.duzia_prevista is not None:
-    duzia_real = get_duzia(resultado["number"])  # calcula a dúzia do número sorteado
-    if duzia_real == st.session_state.duzia_prevista:
-        enviar_resultado(resultado["number"], True)   # GREEN
-    else:
-        enviar_resultado(resultado["number"], False)  # RED
+if resultado and not st.session_state.resultado_enviado:
+    if "duzia_prevista" in st.session_state and st.session_state.duzia_prevista is not None:
+        duzia_real = get_duzia(resultado["number"])  # calcula a dúzia do número sorteado
+        acertou = duzia_real == st.session_state.duzia_prevista
+        enviar_resultado(resultado["number"], acertou)   # GREEN ou RED
+        st.session_state.resultado_enviado = True
 
 
     # verifica acerto
