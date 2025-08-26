@@ -269,23 +269,20 @@ if numero_atual != st.session_state.rodada_atual:
     tentar_treinar()
 
     # Conferência do resultado com a previsão anterior
+        # Conferência do resultado com a previsão anterior
     if st.session_state.duzia_prevista is not None and not st.session_state.resultado_enviado:
         duzia_real = get_duzia(numero_atual)
         acertou = duzia_real == st.session_state.duzia_prevista
-        enviar_resultado(numero_atual, acertou)  # envia GREEN ou RED
-        st.session_state.resultado_enviado = True
 
+        # Atualiza estatísticas locais
+        if acertou:
+            st.session_state.duzias_acertadas += 1
+            st.toast("✅ Acertou a dúzia!")
+            st.balloons()
+            tocar_som_moeda()
 
-    # verifica acerto
-    if get_duzia(numero_atual) == st.session_state.duzia_prevista:
-        st.session_state.duzias_acertadas += 1
-        st.toast("✅ Acertou a dúzia!")
-        st.balloons()
-        tocar_som_moeda()
-
-    # envia alerta de resultado apenas uma vez
-    if not st.session_state.resultado_enviado:
-        enviar_resultado(numero_atual, st.session_state.duzia_prevista)
+        # Envia alerta Telegram (GREEN ou RED)
+        enviar_resultado(numero_atual, acertou)
         st.session_state.resultado_enviado = True
 
 # Se nenhuma previsão ainda
