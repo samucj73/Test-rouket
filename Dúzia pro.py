@@ -306,12 +306,15 @@ if st.button("Adicionar Sorteios"):
 # =============================
 # Atualização automática
 # =============================
-st_autorefresh(interval=3000,key="refresh_duzia")
-resultado=fetch_latest_result()
-ultimo=st.session_state.historico[-1]["timestamp"] if st.session_state.historico else None
+# =============================
+# Atualização automática e conferência de resultados
+# =============================
+st_autorefresh(interval=3000, key="refresh_duzia")
+resultado = fetch_latest_result()
+ultimo = st.session_state.historico[-1]["timestamp"] if st.session_state.historico else None
 
-if resultado and resultado["timestamp"]!=ultimo:
-    numero_atual=resultado["number"]
+if resultado and resultado["timestamp"] != ultimo:
+    numero_atual = resultado["number"]
 
     # Reset flags para nova rodada
     if numero_atual != st.session_state.rodada_atual:
@@ -319,34 +322,47 @@ if resultado and resultado["timestamp"]!=ultimo:
         st.session_state.previsao_enviada = False
         st.session_state.resultado_enviado = False
 
-        # Conferir resultado anterior
+        # Atualiza previsões de todas as estratégias
+        previsoes = {
+            "ia": st.session_state.modelo_duzia.prever(st.session_state.historico),
+            "quente": estrategia_duzia_quente(st.session_state.historico),
+            "tendencia": estrategia_tendencia(st.session_state.historico),
+            "alternancia": estrategia_alternancia(st.session_state.historico),
+            "par_impar": estrategia_par_impar(st.session_state.historico),
+            "salto": estrategia_salto_grande(st.session_state.historico),
+            "zero": estrategia_zero_reset(st.session_state.historico)
+        }
+
+        # Conferência do resultado da rodada anterior
         if st.session_state.duzia_prevista is not None:
-            duzia_real=get_duzia(numero_atual)
-            acertou=duzia_real==st.session_state.duzia_prevista
+            duzia_real = get_duzia(numero_atual)
+            acertou = duzia_real == st.session_state.duzia_prevista
 
             if acertou:
-                st.session_state.duzias_acertadas+=1
+                st.session_state.duzias_acertadas += 1
                 st.toast("✅ Acertou a dúzia!")
                 st.balloons()
                 tocar_som_moeda()
 
-            enviar_resultado(numero_atual,acertou)
-            st.session_state.resultado_enviado=True
+            # Envia alerta de resultado para Telegram
+            enviar_resultado(numero_atual, acertou)
+            st.session_state.resultado_enviado = True
 
             # Feedback por estratégia
             for estr in st.session_state.acertos_por_estrategia:
-                if previsoes.get(estr)==duzia_real:
-                    st.session_state.acertos_por_estrategia[estr]+=1
+                if previsoes.get(estr) == duzia_real:
+                    st.session_state.acertos_por_estrategia[estr] += 1
 
-        # Adiciona resultado ao histórico
+        # Adiciona resultado atual ao histórico
         st.session_state.historico.append(resultado)
         salvar_resultado_em_arquivo(st.session_state.historico)
 
-        # Treina IA se necessário
+        # Treina IA se houver novos dados
         tentar_treinar()
 
-        # Atualiza previsão IA
+        # Atualiza a previsão da IA para próxima rodada
         st.session_state.duzia_prevista = st.session_state.modelo_duzia.prever(st.session_state.historico)
+
 
 # =============================
 # Estratégias e votação ponderada
