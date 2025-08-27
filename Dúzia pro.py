@@ -364,56 +364,35 @@ if resultado and resultado["timestamp"] != ultimo:
         # Atualiza previsão IA
         st.session_state.duzia_prevista = st.session_state.modelo_duzia.prever(st.session_state.historico)
 
-# =============================
-# Estratégias e votação ponderada
-# =============================
-previsoes = {
-    "ia": st.session_state.duzia_prevista,
-    "quente": estrategia_duzia_quente(st.session_state.historico),
-    "tendencia": estrategia_tendencia(st.session_state.historico),
-    "alternancia": estrategia_alternancia(st.session_state.historico),
-    "par_impar": estrategia_par_impar(st.session_state.historico),
-    "salto": estrategia_salto_grande(st.session_state.historico),
-    "zero": estrategia_zero_reset(st.session_state.historico)
-}
+        # =============================
+        # Envio de alerta de previsão — somente 1 vez por rodada
+        # =============================
+        previsoes = {
+            "ia": st.session_state.duzia_prevista,
+            "quente": estrategia_duzia_quente(st.session_state.historico),
+            "tendencia": estrategia_tendencia(st.session_state.historico),
+            "alternancia": estrategia_alternancia(st.session_state.historico),
+            "par_impar": estrategia_par_impar(st.session_state.historico),
+            "salto": estrategia_salto_grande(st.session_state.historico),
+            "zero": estrategia_zero_reset(st.session_state.historico)
+        }
 
-# Votação ponderada usando pesos dinâmicos
-def votacao_ponderada(previsoes, pesos):
-    counter = Counter()
-    for key, val in previsoes.items():
-        if val is not None:
-            counter[val] += pesos.get(key,1)
-    if not counter:
-        return None
-    return counter.most_common(1)[0][0]
+        mais_votado = votacao_ponderada(previsoes, st.session_state.pesos_estrategias)
+        st.session_state.duzia_prevista = mais_votado
 
-mais_votado = votacao_ponderada(previsoes, st.session_state.pesos_estrategias)
-st.session_state.duzia_prevista = mais_votado
+        # Evita múltiplos alertas
+        chave_alerta = f"{numero_atual}_{mais_votado}"
+        if "ultima_chave_alerta" not in st.session_state:
+            st.session_state.ultima_chave_alerta = None
 
-# =============================
-# Envia alerta de previsão apenas se necessário
-# =============================
-# =============================
-# Envio de alerta de previsão — somente 1 vez por rodada
-# =============================
-mais_votado = votacao_ponderada(previsoes, st.session_state.pesos_estrategias)
-st.session_state.duzia_prevista = mais_votado
-
-# Verifica se precisa enviar
-if numero_atual is not None:
-    chave_alerta = f"{numero_atual}_{mais_votado}"
-
-    if "ultima_chave_alerta" not in st.session_state:
-        st.session_state.ultima_chave_alerta = None
-
-    if (chave_alerta != st.session_state.ultima_chave_alerta) or (st.session_state.rodadas_sem_alerta >= MAX_RODADAS_SEM_ALERTA):
-        if mais_votado is not None:
-            enviar_previsao(mais_votado)
-            st.session_state.ultima_chave_alerta = chave_alerta
-            st.session_state.previsao_enviada = True
-            st.session_state.rodadas_sem_alerta = 0
-    else:
-        st.session_state.rodadas_sem_alerta += 1
+        if (chave_alerta != st.session_state.ultima_chave_alerta) or (st.session_state.rodadas_sem_alerta >= MAX_RODADAS_SEM_ALERTA):
+            if mais_votado is not None:
+                enviar_previsao(mais_votado)
+                st.session_state.ultima_chave_alerta = chave_alerta
+                st.session_state.previsao_enviada = True
+                st.session_state.rodadas_sem_alerta = 0
+        else:
+            st.session_state.rodadas_sem_alerta += 1
 
 # =============================
 # Interface Streamlit
