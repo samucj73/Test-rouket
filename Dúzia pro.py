@@ -206,7 +206,7 @@ class ModeloIAHistGB:
         for i in range(self.janela,len(numeros)-1):
             janela=numeros[i-self.janela:i+1]
             target=get_duzia(numeros[i])
-                        if target is not None:
+        if target is not None:
                 X.append(self.construir_features(janela))
                 y.append(target)
         if not X:
