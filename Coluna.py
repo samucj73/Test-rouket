@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 import joblib
 import numpy as np
-from collections import deque, Counter
+from collections import deque
 from pathlib import Path
 from streamlit_autorefresh import st_autorefresh
 import time
@@ -12,7 +12,7 @@ from alertas_coluna import enviar_previsao, enviar_resultado, get_coluna
 # =========================
 # CONFIGURAÇÕES
 # =========================
-API_URL = "https://loteriascaixa-api.herokuapp.com/api/roleta/latest"
+API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 HIST_PATH = Path("historico_coluna.pkl")
 MAX_HISTORICO = 200
 
@@ -39,7 +39,7 @@ if "red_count" not in st.session_state:
 
 
 # =========================
-# FUNÇÃO API - PADRÃO DÚZIAS
+# FUNÇÃO API - NOVA (casinoscores)
 # =========================
 def obter_ultimo_numero():
     try:
@@ -47,9 +47,8 @@ def obter_ultimo_numero():
         r.raise_for_status()
         data = r.json()
 
-        # 🔹 igual ao código de dúzia
-        numero = int(data["value"])  
-        return numero
+        numero = data["data"]["result"]["outcome"]["number"]
+        return int(numero)
     except Exception as e:
         st.error(f"[ERRO API] {e}")
         return None
@@ -72,7 +71,7 @@ def treinar_modelo_coluna(historico):
     if len(X) < 10:
         return None
 
-    modelo = RandomForestClassifier(n_estimators=200, random_state=42)
+    modelo = RandomForestClassifier(n_estimators=300, max_depth=6, random_state=42)
     modelo.fit(X, y)
     return modelo
 
