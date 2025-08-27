@@ -2,24 +2,19 @@ import streamlit as st
 import requests
 import joblib
 import numpy as np
-from collections import deque
+from collections import deque, Counter
 from pathlib import Path
 from streamlit_autorefresh import st_autorefresh
-from sklearn.ensemble import RandomForestClassifier
 import time
 
-# =========================
-# IMPORTAÇÕES DO ALERTAS
-# =========================
 from alertas_coluna import enviar_previsao, enviar_resultado, get_coluna
 
 # =========================
 # CONFIGURAÇÕES
 # =========================
-API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
+API_URL = "https://loteriascaixa-api.herokuapp.com/api/roleta/latest"
 HIST_PATH = Path("historico_coluna.pkl")
 MAX_HISTORICO = 200
-RETRAIN_INTERVAL = 10
 
 # =========================
 # SESSION STATE INIT
@@ -33,111 +28,100 @@ if "historico" not in st.session_state:
 if "modelo_coluna" not in st.session_state:
     st.session_state.modelo_coluna = None
 
-if "rodadas_desde_treino" not in st.session_state:
-    st.session_state.rodadas_desde_treino = 0
+if "coluna_prevista" not in st.session_state:
+    st.session_state.coluna_prevista = None
 
-if "ultima_previsao" not in st.session_state:
-    st.session_state.ultima_previsao = None
+if "green_count" not in st.session_state:
+    st.session_state.green_count = 0
+
+if "red_count" not in st.session_state:
+    st.session_state.red_count = 0
+
 
 # =========================
-# FUNÇÃO API
+# FUNÇÃO API - PADRÃO DÚZIAS
 # =========================
 def obter_ultimo_numero():
     try:
         r = requests.get(API_URL, timeout=10)
         r.raise_for_status()
         data = r.json()
-        return int(data["winningNumber"])
+
+        # 🔹 igual ao código de dúzia
+        numero = int(data["value"])  
+        return numero
     except Exception as e:
         st.error(f"[ERRO API] {e}")
         return None
 
-# =========================
-# FEATURES
-# =========================
-def extrair_features(seq):
-    features = []
-    for n in seq:
-        coluna = get_coluna(n)
-        paridade = 0 if n % 2 == 0 else 1
-        features.append([n, coluna, paridade])
-    return np.array(features)
 
 # =========================
-# TREINAMENTO
+# TREINAMENTO MODELO
 # =========================
-def treinar_modelo(historico):
+from sklearn.ensemble import RandomForestClassifier
+
+def treinar_modelo_coluna(historico):
     X, y = [], []
-    for i in range(len(historico) - 5):
-        seq = list(historico)[i:i+5]
-        alvo = get_coluna(historico[i+5])
-        X.append(seq)
+    hist_list = list(historico)
+    for i in range(len(hist_list) - 5):
+        janela = hist_list[i:i+5]
+        alvo = get_coluna(hist_list[i+5])
+        X.append(janela)
         y.append(alvo)
-    if not X:
+
+    if len(X) < 10:
         return None
-    X = extrair_features([n for seq in X for n in seq]).reshape(len(X), -1)
+
     modelo = RandomForestClassifier(n_estimators=200, random_state=42)
     modelo.fit(X, y)
     return modelo
 
-# =========================
-# PREVISÃO
-# =========================
-def prever_coluna(modelo, historico):
-    if len(historico) < 5:
-        return None
-    seq = list(historico)[-5:]
-    X = extrair_features(seq).reshape(1, -1)
-    try:
-        probs = modelo.predict_proba(X)[0]
-        coluna_prevista = np.argmax(probs)
-        return coluna_prevista
-    except Exception:
-        return None
 
 # =========================
 # LOOP PRINCIPAL
 # =========================
-def main():
-    st.title("🎰 Previsão de Colunas - Roleta")
+st.title("🎯 Previsão de Coluna - Roleta")
 
-    # autorefresh a cada 5s
-    st_autorefresh(interval=5000, key="refresh")
+# autorefresh a cada 10 segundos
+st_autorefresh(interval=10000, key="refresh")
 
-    numero = obter_ultimo_numero()
-    if numero is None:
-        return
-
-    if not st.session_state.historico or numero != st.session_state.historico[-1]:
+numero = obter_ultimo_numero()
+if numero is not None:
+    if len(st.session_state.historico) == 0 or numero != st.session_state.historico[-1]:
         st.session_state.historico.append(numero)
         joblib.dump(list(st.session_state.historico), HIST_PATH)
 
-        st.session_state.rodadas_desde_treino += 1
+        # treino do modelo
+        if len(st.session_state.historico) > 30:
+            st.session_state.modelo_coluna = treinar_modelo_coluna(st.session_state.historico)
 
-        # treina a cada intervalo
-        if (
-            st.session_state.modelo_coluna is None
-            or st.session_state.rodadas_desde_treino >= RETRAIN_INTERVAL
-        ):
-            modelo = treinar_modelo(st.session_state.historico)
-            if modelo:
-                st.session_state.modelo_coluna = modelo
-                st.session_state.rodadas_desde_treino = 0
+        # previsão
+        if st.session_state.modelo_coluna is not None and len(st.session_state.historico) >= 5:
+            entrada = [list(st.session_state.historico)[-5:]]
+            probs = st.session_state.modelo_coluna.predict_proba(entrada)[0]
+            melhor_coluna = np.argmax(probs) + 1
 
-        # faz previsão
-        if st.session_state.modelo_coluna:
-            previsao = prever_coluna(st.session_state.modelo_coluna, st.session_state.historico)
-            if previsao and previsao != st.session_state.ultima_previsao:
-                enviar_previsao(previsao)
-                st.session_state.ultima_previsao = previsao
+            # envia previsão se mudou
+            if st.session_state.coluna_prevista != melhor_coluna:
+                enviar_previsao(melhor_coluna)
+                st.session_state.coluna_prevista = melhor_coluna
 
-        # confere acerto/erro
-        if st.session_state.ultima_previsao is not None:
+        # conferir resultado da rodada anterior
+        if st.session_state.coluna_prevista is not None:
             coluna_real = get_coluna(numero)
-            acertou = coluna_real == st.session_state.ultima_previsao
+            acertou = coluna_real == st.session_state.coluna_prevista
+
+            if acertou:
+                st.session_state.green_count += 1
+            else:
+                st.session_state.red_count += 1
+
             enviar_resultado(numero, acertou)
 
-    st.write("Histórico:", list(st.session_state.historico))
 
-if __name__ == "__main__":
-    main()
+# =========================
+# STATUS
+# =========================
+st.write("📊 Histórico:", list(st.session_state.historico)[-15:])
+st.write("🟢 GREENs:", st.session_state.green_count)
+st.write("🔴 REDs:", st.session_state.red_count)
