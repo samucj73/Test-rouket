@@ -309,59 +309,40 @@ if st.button("Adicionar Sorteios"):
 # =============================
 # Atualização automática e conferência de resultados
 # =============================
-st_autorefresh(interval=3000, key="refresh_duzia")
 resultado = fetch_latest_result()
 ultimo = st.session_state.historico[-1]["timestamp"] if st.session_state.historico else None
 
 if resultado and resultado["timestamp"] != ultimo:
     numero_atual = resultado["number"]
 
-    # Reset flags para nova rodada
+    # Adiciona resultado ao histórico primeiro
+    st.session_state.historico.append(resultado)
+    salvar_resultado_em_arquivo(st.session_state.historico)
+
+    # Reset flags se entrou nova rodada
     if numero_atual != st.session_state.rodada_atual:
         st.session_state.rodada_atual = numero_atual
         st.session_state.previsao_enviada = False
         st.session_state.resultado_enviado = False
 
-        # Atualiza previsões de todas as estratégias
-        previsoes = {
-            "ia": st.session_state.modelo_duzia.prever(st.session_state.historico),
-            "quente": estrategia_duzia_quente(st.session_state.historico),
-            "tendencia": estrategia_tendencia(st.session_state.historico),
-            "alternancia": estrategia_alternancia(st.session_state.historico),
-            "par_impar": estrategia_par_impar(st.session_state.historico),
-            "salto": estrategia_salto_grande(st.session_state.historico),
-            "zero": estrategia_zero_reset(st.session_state.historico)
-        }
-
-        # Conferência do resultado da rodada anterior
+        # Conferência do resultado anterior
         if st.session_state.duzia_prevista is not None:
             duzia_real = get_duzia(numero_atual)
             acertou = duzia_real == st.session_state.duzia_prevista
-
             if acertou:
                 st.session_state.duzias_acertadas += 1
                 st.toast("✅ Acertou a dúzia!")
                 st.balloons()
                 tocar_som_moeda()
-
-            # Envia alerta de resultado para Telegram
             enviar_resultado(numero_atual, acertou)
-            st.session_state.resultado_enviado = True
-
-            # Feedback por estratégia
-            for estr in st.session_state.acertos_por_estrategia:
-                if previsoes.get(estr) == duzia_real:
-                    st.session_state.acertos_por_estrategia[estr] += 1
-
-        # Adiciona resultado atual ao histórico
-        st.session_state.historico.append(resultado)
-        salvar_resultado_em_arquivo(st.session_state.historico)
 
         # Treina IA se houver novos dados
         tentar_treinar()
 
-        # Atualiza a previsão da IA para próxima rodada
-        st.session_state.duzia_prevista = st.session_state.modelo_duzia.prever(st.session_state.historico)
+        # Atualiza a previsão da IA para a próxima rodada
+        nova_previsao = st.session_state.modelo_duzia.prever(st.session_state.historico)
+        st.session_state.duzia_prevista = nova_previsao
+
 
 
 # =============================
@@ -386,24 +367,22 @@ st.session_state.duzia_prevista = mais_votado
 # Envio de alerta de previsão seguro
 # =============================
 
-# inicializa variável se não existir
 if "ultima_previsao_alerta" not in st.session_state:
-    st.session_state.ultima_previsao_alerta = None
+            st.session_state.ultima_previsao_alerta = None
+            st.session_state.rodadas_sem_alerta = 0
 
-# envia apenas se:
-# 1) ainda não enviou nesta rodada
-# 2) ou se a previsão mudou
-# 3) ou se passou MAX_RODADAS_SEM_ALERTA rodadas sem envio
-if (not st.session_state.previsao_enviada) or \
-   (st.session_state.duzia_prevista != st.session_state.ultima_previsao_alerta) or \
-   (st.session_state.rodadas_sem_alerta >= MAX_RODADAS_SEM_ALERTA):
+        if (not st.session_state.previsao_enviada) or \
+           (st.session_state.duzia_prevista != st.session_state.ultima_previsao_alerta) or \
+           (st.session_state.rodadas_sem_alerta >= MAX_RODADAS_SEM_ALERTA):
 
-    enviar_previsao(st.session_state.duzia_prevista)
-    st.session_state.previsao_enviada = True
-    st.session_state.ultima_previsao_alerta = st.session_state.duzia_prevista
-    st.session_state.rodadas_sem_alerta = 0
-else:
-    st.session_state.rodadas_sem_alerta += 1
+            enviar_previsao(st.session_state.duzia_prevista)
+            st.session_state.previsao_enviada = True
+            st.session_state.ultima_previsao_alerta = st.session_state.duzia_prevista
+            st.session_state.rodadas_sem_alerta = 0
+        else:
+            st.session_state.rodadas_sem_alerta += 1
+
+
 
 # =============================
 # Interface Streamlit
