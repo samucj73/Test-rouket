@@ -155,7 +155,7 @@ class ModeloIAHistGB:
         numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
         X, y = [], []
         for i in range(self.janela, len(numeros) - 1):
-            janela = numeros[i - self.janela:i + 1]
+            janela = numeros[i - self.janela:i + 10]
             target = get_duzia(numeros[i])
             if target is not None:
                 X.append(self.construir_features(janela))
@@ -177,7 +177,7 @@ class ModeloIAHistGB:
         janela = numeros[-(self.janela + 1):]
         entrada = np.array([self.construir_features(janela)], dtype=np.float32)
         proba = self.modelo.predict_proba(entrada)[0]
-        if max(proba) >= 0.54:
+        if max(proba) >= 0.75:
             return self.encoder.inverse_transform([np.argmax(proba)])[0]
         return None
 
