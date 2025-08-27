@@ -65,7 +65,7 @@ def salvar_resultado_em_arquivo(historico, caminho=HISTORICO_PATH):
     with open(caminho, "w") as f:
         json.dump(historico, f, indent=2)
 
-def estrategia_duzia_quente(historico, janela=130):
+def estrategia_duzia_quente(historico, janela=230):
     numeros = [h["number"] for h in historico[-janela:] if h["number"] > 0]
     duzias = [get_duzia(n) for n in numeros]
     mais_comum = Counter(duzias).most_common(1)
@@ -73,7 +73,7 @@ def estrategia_duzia_quente(historico, janela=130):
 
 def estrategia_tendencia(historico):
     numeros = [h["number"] for h in historico if h["number"] > 0]
-    if len(numeros) < 5:
+    if len(numeros) < 6:
         return None
     ultimos = numeros[-5:]
     dif = np.mean(np.diff(ultimos))
