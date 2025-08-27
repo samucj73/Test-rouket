@@ -386,8 +386,8 @@ if resultado and resultado["timestamp"] != ultimo:
         st.session_state.duzia_prevista = mais_votado
 
         #Agora é seguro iterar
-for k, v in previsoes.items():# Agora é seguro iterar
-for k, v in previsoes.items():
+    for k, v in previsoes.items():
+     for k, v in previsoes.items():
     st.write(f"{k}: {v} (acertos: {st.session_state.acertos_por_estrategia.get(k,0)})")
     st.write(f"{k}: {v} (acertos: {st.session_state.acertos_por_estrategia.get(k,0)})")
 
