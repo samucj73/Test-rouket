@@ -349,10 +349,11 @@ if resultado and resultado["timestamp"]!=ultimo:
         st.session_state.duzia_prevista = st.session_state.modelo_duzia.prever(st.session_state.historico)
 
 # =============================
+# =============================
 # Estratégias e votação ponderada
 # =============================
 previsoes = {
-    "ia": st.session_state.modelo_duzia.prever(st.session_state.historico),
+    "ia": st.session_state.duzia_prevista,  # usa previsão já calculada após atualização do histórico
     "quente": estrategia_duzia_quente(st.session_state.historico),
     "tendencia": estrategia_tendencia(st.session_state.historico),
     "alternancia": estrategia_alternancia(st.session_state.historico),
@@ -366,11 +367,23 @@ mais_votado = votacao_ponderada(previsoes, st.session_state.pesos_estrategias)
 st.session_state.duzia_prevista = mais_votado
 
 # =============================
-# Envia alerta apenas se necessário
+# Envio de alerta seguro (evita múltiplos alertas)
 # =============================
-if not st.session_state.previsao_enviada or st.session_state.rodadas_sem_alerta>=MAX_RODADAS_SEM_ALERTA:
-    enviar_previsao(mais_votado)
+if "ultima_previsao_alerta" not in st.session_state:
+    st.session_state.ultima_previsao_alerta = None
+    st.session_state.rodadas_sem_alerta = 0
+
+# Envia apenas se:
+# - previsão mudou em relação à última enviada
+# - ou se ainda não enviou nesta rodada
+# - ou se passou MAX_RODADAS_SEM_ALERTA sem envio
+if (not st.session_state.previsao_enviada) or \
+   (st.session_state.duzia_prevista != st.session_state.ultima_previsao_alerta) or \
+   (st.session_state.rodadas_sem_alerta >= MAX_RODADAS_SEM_ALERTA):
+
+    enviar_previsao(st.session_state.duzia_prevista)
     st.session_state.previsao_enviada = True
+    st.session_state.ultima_previsao_alerta = st.session_state.duzia_prevista
     st.session_state.rodadas_sem_alerta = 0
 else:
     st.session_state.rodadas_sem_alerta += 1
