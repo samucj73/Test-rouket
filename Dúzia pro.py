@@ -376,8 +376,9 @@ if resultado and resultado["timestamp"] != ultimo:
             "zero": estrategia_zero_reset(st.session_state.historico)
         }
         # Votação ponderada usando pesos dinâmicos
-           mais_votado = votacao_ponderada(previsoes, st.session_state.pesos_estrategias)
-           st.session_state.duzia_prevista = mais_votado
+        
+mais_votado = votacao_ponderada(previsoes, st.session_state.pesos_estrategias)
+st.session_state.duzia_prevista = mais_votado
 
         # =============================
         # Envio de alerta de previsão — somente 1 vez por rodada
