@@ -67,7 +67,7 @@ def get_terminal_dominante(hist):
 def calcular_offlines(hist, n=36):
     """Retorna dict com rodadas desde que cada número saiu"""
     offline={i:0 for i in range(n+1)}
-    for i,num in enumerate(hist):
+    for num in hist:
         for key in offline.keys():
             if key!=num:
                 offline[key]+=1
@@ -132,12 +132,11 @@ def treinar_modelo_coluna(historico):
 # =========================
 # API
 # =========================
-def obter_ultimo_numero():
+def fetch_latest_result():
     try:
         r = requests.get(API_URL, headers=HEADERS, timeout=10)
         r.raise_for_status()
         data = r.json()
-
         numero = data.get("result", {}).get("outcome", {}).get("number")
         if numero is None:
             return None
@@ -149,7 +148,7 @@ def obter_ultimo_numero():
 # =========================
 # STREAMLIT
 # =========================
-st.title("🎯 Previsão Coluna PRO — Vizinhos + Offlines + Tiers + Zeros")
+st.title("🎯 Previsão Coluna PRO — Vizinhos + Offlines + Tiers + Zeros + Terminal Dominante")
 
 st_autorefresh(interval=10000, key="refresh")
 
