@@ -379,7 +379,7 @@ if (not st.session_state.previsao_enviada) or \
             st.session_state.previsao_enviada = True
             st.session_state.ultima_previsao_alerta = st.session_state.duzia_prevista
             st.session_state.rodadas_sem_alerta = 0
-        else:
+else:
             st.session_state.rodadas_sem_alerta += 1
 
 
