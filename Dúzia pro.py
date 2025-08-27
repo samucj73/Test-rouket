@@ -9,7 +9,6 @@ from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.preprocessing import LabelEncoder
 from alertas import enviar_previsao, enviar_resultado
 from streamlit_autorefresh import st_autorefresh
-import base64
 import random
 import time
 
@@ -156,7 +155,7 @@ class ModeloIAHistGB:
         self.modelo = None
         self.encoder = LabelEncoder()
         self.treinado = False
-        self.historico_acertos = deque(maxlen=50)  # feedback de acertos
+        self.historico_acertos = deque(maxlen=50)
 
     def construir_features(self, numeros):
         ultimos = numeros[-self.janela:]
@@ -166,7 +165,7 @@ class ModeloIAHistGB:
             return -1 if n==0 else get_duzia(n)
         grupo = safe_get_duzia(atual)
         freq_20 = Counter(safe_get_duzia(n) for n in numeros[-20:])
-        freq_50 = Counter(safe_get_duzia(n) for n in numeros[-50:]) if len(numeros)>=150 else freq_20
+        freq_50 = Counter(safe_get_duzia(n) for n in numeros[-50:]) if len(numeros)>=50 else freq_20
         total_50 = sum(freq_50.values()) or 1
         lag1 = safe_get_duzia(anteriores[-1]) if len(anteriores)>=1 else -1
         lag2 = safe_get_duzia(anteriores[-2]) if len(anteriores)>=2 else -1
@@ -188,7 +187,7 @@ class ModeloIAHistGB:
             atual%2, atual%3, int(str(atual)[-1]),
             abs(atual-anteriores[-1]) if anteriores else 0,
             int(atual==anteriores[-1]) if anteriores else 0,
-            1 if atual>anteriores[-1] else -1 if atual<anteriores[-1] else 0,
+            1 if anteriores and atual>anteriores[-1] else -1 if anteriores and atual<anteriores[-1] else 0,
             sum(1 for x in anteriores[-3:] if grupo==safe_get_duzia(x)),
             Counter(numeros[-30:]).get(atual,0),
             int(atual in [n for n,_ in Counter(numeros[-30:]).most_common(5)]),
@@ -206,7 +205,7 @@ class ModeloIAHistGB:
         for i in range(self.janela,len(numeros)-1):
             janela=numeros[i-self.janela:i+1]
             target=get_duzia(numeros[i])
-        if target is not None:
+            if target is not None:
                 X.append(self.construir_features(janela))
                 y.append(target)
         if not X:
@@ -273,7 +272,7 @@ def tentar_treinar():
         if len(historico)>st.session_state.ultimo_treino:
             modelo.treinar(historico)
             st.session_state.ultimo_treino=len(historico)
-            st.toast(f"🧠 Modelo treinado com {len(historico)} resultados.")
+            st.info(f"🧠 Modelo treinado com {len(historico)} resultados.")
 
 def votacao_ponderada(previsoes, pesos):
     counter = Counter()
@@ -306,40 +305,35 @@ if st.button("Adicionar Sorteios"):
 # =============================
 # Atualização automática
 # =============================
-# =============================
-# Atualização automática
-# =============================
 st_autorefresh(interval=3000, key="refresh_duzia")
 resultado = fetch_latest_result()
 ultimo = st.session_state.historico[-1]["timestamp"] if st.session_state.historico else None
 
+previsoes = {}
+mais_votado = None
+
 if resultado and resultado["timestamp"] != ultimo:
     numero_atual = resultado["number"]
 
-    # Se entrou rodada nova
     if numero_atual != st.session_state.rodada_atual:
-        # Reset de flags
         st.session_state.rodada_atual = numero_atual
         st.session_state.previsao_enviada = False
         st.session_state.resultado_enviado = False
 
-        # --- Conferência do resultado anterior ---
+        # Conferência do resultado anterior
         if st.session_state.duzia_prevista is not None:
             duzia_real = get_duzia(numero_atual)
             acertou = duzia_real == st.session_state.duzia_prevista
 
-            # Atualiza acertos gerais
             if acertou:
                 st.session_state.duzias_acertadas += 1
-                st.toast("✅ Acertou a dúzia!")
+                st.success("✅ Acertou a dúzia!")
                 st.balloons()
                 tocar_som_moeda()
 
-            # Envia alerta de resultado
             enviar_resultado(numero_atual, acertou)
             st.session_state.resultado_enviado = True
 
-            # --- Feedback por estratégia ---
             previsoes_atual = {
                 "ia": st.session_state.duzia_prevista,
                 "quente": estrategia_duzia_quente(st.session_state.historico),
@@ -354,22 +348,14 @@ if resultado and resultado["timestamp"] != ultimo:
                 if pred == duzia_real:
                     st.session_state.acertos_por_estrategia[estr] += 1
 
-        # Adiciona resultado ao histórico
         st.session_state.historico.append(resultado)
         salvar_resultado_em_arquivo(st.session_state.historico)
-
-        # Treina IA se necessário
         tentar_treinar()
 
         # Atualiza previsão IA
         st.session_state.duzia_prevista = st.session_state.modelo_duzia.prever(st.session_state.historico)
-        # =============================
+
         # Estratégias e votação ponderada
-        # =============================
-        
-        # =============================
-        # Envio de alerta de previsão — somente 1 vez por rodada
-        # =============================
         previsoes = {
             "ia": st.session_state.duzia_prevista,
             "quente": estrategia_duzia_quente(st.session_state.historico),
@@ -380,16 +366,12 @@ if resultado and resultado["timestamp"] != ultimo:
             "zero": estrategia_zero_reset(st.session_state.historico)
         }
 
-        
-
         mais_votado = votacao_ponderada(previsoes, st.session_state.pesos_estrategias)
         st.session_state.duzia_prevista = mais_votado
 
-        #Agora é seguro iterar
-    for k, v in previsoes.items():
-     for k, v in previsoes.items():
-    st.write(f"{k}: {v} (acertos: {st.session_state.acertos_por_estrategia.get(k,0)})")
-    st.write(f"{k}: {v} (acertos: {st.session_state.acertos_por_estrategia.get(k,0)})")
+        # Exibe acertos por estratégia
+        for k, v in previsoes.items():
+            st.write(f"{k}: {v} (acertos: {st.session_state.acertos_por_estrategia.get(k,0)})")
 
         # Evita múltiplos alertas
         chave_alerta = f"{numero_atual}_{mais_votado}"
@@ -400,7 +382,8 @@ if resultado and resultado["timestamp"] != ultimo:
             if mais_votado is not None:
                 enviar_previsao(mais_votado)
                 st.session_state.ultima_chave_alerta = chave_alerta
-                st.session_state.previsao_enviada = True
+               # st.session_state.previs
+                               st.session_state.previsao_enviada = True
                 st.session_state.rodadas_sem_alerta = 0
         else:
             st.session_state.rodadas_sem_alerta += 1
@@ -416,11 +399,17 @@ with open(HISTORICO_PATH,"r") as f:
 st.download_button("📥 Baixar histórico", data=conteudo, file_name="historico_coluna_duzia.json")
 
 st.subheader("🔮 Previsões por Estratégia")
-for k,v in previsoes.items():
-    st.write(f"{k}: {v} (acertos: {st.session_state.acertos_por_estrategia.get(k,0)})")
+if previsoes:
+    for k,v in previsoes.items():
+        st.write(f"{k}: {v} (acertos: {st.session_state.acertos_por_estrategia.get(k,0)})")
+else:
+    st.info("🔎 Aguardando novos resultados para gerar previsões.")
 
 st.subheader("🎯 Previsão Final (votação ponderada)")
-st.success(f"Dúzia {mais_votado}")
+if mais_votado is not None:
+    st.success(f"Dúzia {mais_votado}")
+else:
+    st.info("🔎 Aguardando IA para gerar previsão final.")
 
 st.subheader("📊 Desempenho")
 total = len(st.session_state.historico)
@@ -429,3 +418,4 @@ if total>0:
     st.success(f"✅ Acertos de dúzia: {st.session_state.duzias_acertadas}/{total} ({taxa_d:.2f}%)")
 else:
     st.info("🔎 Aguardando mais dados para avaliar desempenho.")
+                
