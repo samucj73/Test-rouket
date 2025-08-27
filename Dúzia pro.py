@@ -383,7 +383,7 @@ if resultado and resultado["timestamp"] != ultimo:
                 enviar_previsao(mais_votado)
                 st.session_state.ultima_chave_alerta = chave_alerta
                # st.session_state.previs
-                               st.session_state.previsao_enviada = True
+                 st.session_state.previsao_enviada = True
                 st.session_state.rodadas_sem_alerta = 0
         else:
             st.session_state.rodadas_sem_alerta += 1
