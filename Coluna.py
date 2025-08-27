@@ -132,15 +132,18 @@ def treinar_modelo_coluna(historico):
 # =========================
 # API
 # =========================
-def fetch_latest_result():
+def obter_ultimo_numero():
     try:
-        r=requests.get(API_URL, headers=HEADERS, timeout=5)
+        r = requests.get(API_URL, headers=HEADERS, timeout=10)
         r.raise_for_status()
-        data=r.json()
-        numero=data.get("result",{}).get("outcome",{}).get("number")
-        return int(numero) if numero is not None else None
+        data = r.json()
+
+        numero = data.get("result", {}).get("outcome", {}).get("number")
+        if numero is None:
+            return None
+        return int(numero)
     except Exception as e:
-        logging.error(f"Erro API: {e}")
+        logging.error(f"[ERRO API] {e}")
         return None
 
 # =========================
