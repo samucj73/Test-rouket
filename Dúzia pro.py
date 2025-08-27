@@ -363,6 +363,22 @@ if resultado and resultado["timestamp"] != ultimo:
 
         # Atualiza previsão IA
         st.session_state.duzia_prevista = st.session_state.modelo_duzia.prever(st.session_state.historico)
+        # =============================
+# Estratégias e votação ponderada
+# =============================
+previsoes = {
+    "ia": st.session_state.modelo_duzia.prever(st.session_state.historico),
+    "quente": estrategia_duzia_quente(st.session_state.historico),
+    "tendencia": estrategia_tendencia(st.session_state.historico),
+    "alternancia": estrategia_alternancia(st.session_state.historico),
+    "par_impar": estrategia_par_impar(st.session_state.historico),
+    "salto": estrategia_salto_grande(st.session_state.historico),
+    "zero": estrategia_zero_reset(st.session_state.historico)
+}
+
+# Votação ponderada usando pesos dinâmicos
+mais_votado = votacao_ponderada(previsoes, st.session_state.pesos_estrategias)
+st.session_state.duzia_prevista = mais_votado
 
         # =============================
         # Envio de alerta de previsão — somente 1 vez por rodada
