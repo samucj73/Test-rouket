@@ -384,11 +384,19 @@ st.session_state.duzia_prevista = mais_votado
 # =============================
 # Envia alerta apenas se necessário
 # =============================
-if not st.session_state.previsao_enviada or st.session_state.rodadas_sem_alerta>=MAX_RODADAS_SEM_ALERTA:
+# =============================
+# Envio de alerta de previsão — versão robusta
+# =============================
+# Se a previsão mudou em relação à rodada anterior, envia imediatamente
+previsao_anterior = st.session_state.get("ultima_previsao_alerta", None)
+
+if (previsao_anterior != mais_votado) or (st.session_state.rodadas_sem_alerta >= MAX_RODADAS_SEM_ALERTA):
     enviar_previsao(mais_votado)
     st.session_state.previsao_enviada = True
+    st.session_state.ultima_previsao_alerta = mais_votado
     st.session_state.rodadas_sem_alerta = 0
 else:
+    # Incrementa contador de rodadas sem envio
     st.session_state.rodadas_sem_alerta += 1
 
 # =============================
