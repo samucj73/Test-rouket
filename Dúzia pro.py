@@ -393,14 +393,27 @@ st.session_state.duzia_prevista = mais_votado
 # =============================
 # Envia alerta de previsão apenas se necessário
 # =============================
-if (not st.session_state.previsao_enviada) or (st.session_state.rodadas_sem_alerta >= MAX_RODADAS_SEM_ALERTA):
-    if mais_votado is not None:
-        enviar_previsao(mais_votado)
-        st.session_state.previsao_enviada = True
-        st.session_state.rodadas_sem_alerta = 0
-else:
-    st.session_state.rodadas_sem_alerta += 1
+# =============================
+# Envio de alerta de previsão — somente 1 vez por rodada
+# =============================
+mais_votado = votacao_ponderada(previsoes, st.session_state.pesos_estrategias)
+st.session_state.duzia_prevista = mais_votado
 
+# Verifica se precisa enviar
+if numero_atual is not None:
+    chave_alerta = f"{numero_atual}_{mais_votado}"
+
+    if "ultima_chave_alerta" not in st.session_state:
+        st.session_state.ultima_chave_alerta = None
+
+    if (chave_alerta != st.session_state.ultima_chave_alerta) or (st.session_state.rodadas_sem_alerta >= MAX_RODADAS_SEM_ALERTA):
+        if mais_votado is not None:
+            enviar_previsao(mais_votado)
+            st.session_state.ultima_chave_alerta = chave_alerta
+            st.session_state.previsao_enviada = True
+            st.session_state.rodadas_sem_alerta = 0
+    else:
+        st.session_state.rodadas_sem_alerta += 1
 
 # =============================
 # Interface Streamlit
