@@ -380,6 +380,10 @@ if resultado and resultado["timestamp"] != ultimo:
             "zero": estrategia_zero_reset(st.session_state.historico)
         }
 
+        # Agora é seguro iterar
+for k, v in previsoes.items():
+    st.write(f"{k}: {v} (acertos: {st.session_state.acertos_por_estrategia.get(k,0)})")
+
         mais_votado = votacao_ponderada(previsoes, st.session_state.pesos_estrategias)
         st.session_state.duzia_prevista = mais_votado
 
