@@ -371,7 +371,7 @@ if "ultima_previsao_alerta" not in st.session_state:
             st.session_state.ultima_previsao_alerta = None
             st.session_state.rodadas_sem_alerta = 0
 
-        if (not st.session_state.previsao_enviada) or \
+if (not st.session_state.previsao_enviada) or \
            (st.session_state.duzia_prevista != st.session_state.ultima_previsao_alerta) or \
            (st.session_state.rodadas_sem_alerta >= MAX_RODADAS_SEM_ALERTA):
 
