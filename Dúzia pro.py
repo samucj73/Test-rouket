@@ -306,37 +306,53 @@ if st.button("Adicionar Sorteios"):
 # =============================
 # Atualização automática
 # =============================
-st_autorefresh(interval=3000,key="refresh_duzia")
-resultado=fetch_latest_result()
-ultimo=st.session_state.historico[-1]["timestamp"] if st.session_state.historico else None
+# =============================
+# Atualização automática
+# =============================
+st_autorefresh(interval=3000, key="refresh_duzia")
+resultado = fetch_latest_result()
+ultimo = st.session_state.historico[-1]["timestamp"] if st.session_state.historico else None
 
-if resultado and resultado["timestamp"]!=ultimo:
-    numero_atual=resultado["number"]
+if resultado and resultado["timestamp"] != ultimo:
+    numero_atual = resultado["number"]
 
-    # Reset flags para nova rodada
+    # Se entrou rodada nova
     if numero_atual != st.session_state.rodada_atual:
+        # Reset de flags
         st.session_state.rodada_atual = numero_atual
         st.session_state.previsao_enviada = False
         st.session_state.resultado_enviado = False
 
-        # Conferir resultado anterior
+        # --- Conferência do resultado anterior ---
         if st.session_state.duzia_prevista is not None:
-            duzia_real=get_duzia(numero_atual)
-            acertou=duzia_real==st.session_state.duzia_prevista
+            duzia_real = get_duzia(numero_atual)
+            acertou = duzia_real == st.session_state.duzia_prevista
 
+            # Atualiza acertos gerais
             if acertou:
-                st.session_state.duzias_acertadas+=1
+                st.session_state.duzias_acertadas += 1
                 st.toast("✅ Acertou a dúzia!")
                 st.balloons()
                 tocar_som_moeda()
 
-            enviar_resultado(numero_atual,acertou)
-            st.session_state.resultado_enviado=True
+            # Envia alerta de resultado
+            enviar_resultado(numero_atual, acertou)
+            st.session_state.resultado_enviado = True
 
-            # Feedback por estratégia
-            for estr in st.session_state.acertos_por_estrategia:
-                if previsoes.get(estr)==duzia_real:
-                    st.session_state.acertos_por_estrategia[estr]+=1
+            # --- Feedback por estratégia ---
+            previsoes_atual = {
+                "ia": st.session_state.duzia_prevista,
+                "quente": estrategia_duzia_quente(st.session_state.historico),
+                "tendencia": estrategia_tendencia(st.session_state.historico),
+                "alternancia": estrategia_alternancia(st.session_state.historico),
+                "par_impar": estrategia_par_impar(st.session_state.historico),
+                "salto": estrategia_salto_grande(st.session_state.historico),
+                "zero": estrategia_zero_reset(st.session_state.historico)
+            }
+
+            for estr, pred in previsoes_atual.items():
+                if pred == duzia_real:
+                    st.session_state.acertos_por_estrategia[estr] += 1
 
         # Adiciona resultado ao histórico
         st.session_state.historico.append(resultado)
@@ -349,11 +365,10 @@ if resultado and resultado["timestamp"]!=ultimo:
         st.session_state.duzia_prevista = st.session_state.modelo_duzia.prever(st.session_state.historico)
 
 # =============================
-# =============================
 # Estratégias e votação ponderada
 # =============================
 previsoes = {
-    "ia": st.session_state.duzia_prevista,  # usa previsão já calculada após atualização do histórico
+    "ia": st.session_state.duzia_prevista,
     "quente": estrategia_duzia_quente(st.session_state.historico),
     "tendencia": estrategia_tendencia(st.session_state.historico),
     "alternancia": estrategia_alternancia(st.session_state.historico),
@@ -363,30 +378,29 @@ previsoes = {
 }
 
 # Votação ponderada usando pesos dinâmicos
+def votacao_ponderada(previsoes, pesos):
+    counter = Counter()
+    for key, val in previsoes.items():
+        if val is not None:
+            counter[val] += pesos.get(key,1)
+    if not counter:
+        return None
+    return counter.most_common(1)[0][0]
+
 mais_votado = votacao_ponderada(previsoes, st.session_state.pesos_estrategias)
 st.session_state.duzia_prevista = mais_votado
 
 # =============================
-# Envio de alerta seguro (evita múltiplos alertas)
+# Envia alerta de previsão apenas se necessário
 # =============================
-if "ultima_previsao_alerta" not in st.session_state:
-    st.session_state.ultima_previsao_alerta = None
-    st.session_state.rodadas_sem_alerta = 0
-
-# Envia apenas se:
-# - previsão mudou em relação à última enviada
-# - ou se ainda não enviou nesta rodada
-# - ou se passou MAX_RODADAS_SEM_ALERTA sem envio
-if (not st.session_state.previsao_enviada) or \
-   (st.session_state.duzia_prevista != st.session_state.ultima_previsao_alerta) or \
-   (st.session_state.rodadas_sem_alerta >= MAX_RODADAS_SEM_ALERTA):
-
-    enviar_previsao(st.session_state.duzia_prevista)
-    st.session_state.previsao_enviada = True
-    st.session_state.ultima_previsao_alerta = st.session_state.duzia_prevista
-    st.session_state.rodadas_sem_alerta = 0
+if (not st.session_state.previsao_enviada) or (st.session_state.rodadas_sem_alerta >= MAX_RODADAS_SEM_ALERTA):
+    if mais_votado is not None:
+        enviar_previsao(mais_votado)
+        st.session_state.previsao_enviada = True
+        st.session_state.rodadas_sem_alerta = 0
 else:
     st.session_state.rodadas_sem_alerta += 1
+
 
 # =============================
 # Interface Streamlit
