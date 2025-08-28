@@ -31,7 +31,6 @@ def tocar_som_moeda():
         "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
         "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC"
     )
-    audio_bytes = base64.b64decode(som_base64)
     st.markdown(
         f"""
         <audio autoplay>
@@ -68,102 +67,14 @@ def get_duzia(n):
     return None
 
 def salvar_resultado_em_arquivo(historico, caminho=HISTORICO_PATH):
-    with open(caminho, "w") as f:
-        json.dump(historico, f, indent=2)
+    try:
+        with open(caminho, "w") as f:
+            json.dump(historico, f, indent=2)
+    except Exception as e:
+        logging.error(f"Erro ao salvar histórico: {e}")
 
 # =============================
-# Modelo IA HistGradientBoosting
-# =============================
-class ModeloIAHistGB:
-    def __init__(self, tipo="duzia", janela=800):
-        self.tipo = tipo
-        self.janela = janela
-        self.modelo = None
-        self.encoder = LabelEncoder()
-        self.treinado = False
-
-    def construir_features(self, numeros):
-        ultimos = numeros[-self.janela:]
-        atual = ultimos[-1]
-        anteriores = ultimos[:-1]
-
-        def safe_get_duzia(n):
-            return -1 if n == 0 else get_duzia(n)
-
-        grupo = safe_get_duzia(atual)
-        freq_20 = Counter(safe_get_duzia(n) for n in numeros[-20:])
-        freq_50 = Counter(safe_get_duzia(n) for n in numeros[-50:]) if len(numeros) >= 50 else freq_20
-        total_50 = sum(freq_50.values()) or 1
-
-        lag1 = safe_get_duzia(anteriores[-1]) if len(anteriores) >= 1 else -1
-        lag2 = safe_get_duzia(anteriores[-2]) if len(anteriores) >= 2 else -1
-        lag3 = safe_get_duzia(anteriores[-3]) if len(anteriores) >= 3 else -1
-
-        val1 = anteriores[-1] if len(anteriores) >= 1 else 0
-        val2 = anteriores[-2] if len(anteriores) >= 2 else 0
-        val3 = anteriores[-3] if len(anteriores) >= 3 else 0
-
-        tendencia = 0
-        if len(anteriores) >= 3:
-            diffs = np.diff(anteriores[-3:])
-            tendencia = int(np.mean(diffs) > 0) - int(np.mean(diffs) < 0)
-
-        zeros_50 = numeros[-50:].count(0)
-        porc_zeros = zeros_50 / 50
-
-        densidade_20 = freq_20.get(grupo, 0)
-        densidade_50 = freq_50.get(grupo, 0)
-        rel_freq_grupo = densidade_50 / total_50
-        repete_duzia = int(grupo == safe_get_duzia(anteriores[-1])) if anteriores else 0
-
-        return [
-            atual % 2, atual % 3, int(str(atual)[-1]),
-            abs(atual - anteriores[-1]) if anteriores else 0,
-            int(atual == anteriores[-1]) if anteriores else 0,
-            1 if atual > anteriores[-1] else -1 if atual < anteriores[-1] else 0,
-            sum(1 for x in anteriores[-3:] if grupo == safe_get_duzia(x)),
-            Counter(numeros[-30:]).get(atual, 0),
-            int(atual in [n for n, _ in Counter(numeros[-30:]).most_common(5)]),
-            int(np.mean(anteriores) < atual) if anteriores else 0,
-            int(atual == 0),
-            grupo,
-            densidade_20, densidade_50, rel_freq_grupo,
-            repete_duzia, tendencia, lag1, lag2, lag3,
-            val1, val2, val3, porc_zeros
-        ]
-
-    def treinar(self, historico):
-        numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
-        X, y = [], []
-        for i in range(self.janela, len(numeros) - 1):
-            janela = numeros[i - self.janela:i + 2]
-            target = get_duzia(numeros[i])
-            if target is not None:
-                X.append(self.construir_features(janela))
-                y.append(target)
-        if not X:
-            return
-        X = np.array(X, dtype=np.float32)
-        y = self.encoder.fit_transform(np.array(y))
-        self.modelo = HistGradientBoostingClassifier(max_iter=400, max_depth=7, random_state=42)
-        self.modelo.fit(X, y)
-        self.treinado = True
-
-    def prever(self, historico):
-        if not self.treinado:
-            return None
-        numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
-        if len(numeros) < self.janela + 1:
-            return None
-        janela = numeros[-(self.janela + 1):]
-        entrada = np.array([self.construir_features(janela)], dtype=np.float32)
-        proba = self.modelo.predict_proba(entrada)[0]
-        if max(proba) >= 0.3:
-            return self.encoder.inverse_transform([np.argmax(proba)])[0]
-        return None
-
-# =============================
-# Estratégia de roleta baseada em dominantes
+# Estratégia baseada em terminais dominantes
 # =============================
 class EstrategiaRoleta:
     def __init__(self, janela=12):
@@ -188,8 +99,8 @@ class EstrategiaRoleta:
         if len(self.historico) < self.janela + 1:
             return None
         ultimos = list(self.historico)
-        ultimos_12 = ultimos[:self.janela]
-        numero_13 = ultimos[-1]
+        ultimos_12 = ultimos[:-1]   # 12 primeiros
+        numero_13 = ultimos[-1]     # 13º
         dominantes = self.calcular_dominantes()
         if numero_13 in ultimos_12:
             return {
@@ -212,37 +123,21 @@ class EstrategiaRoleta:
 # Streamlit App
 # =============================
 st.set_page_config(page_title="IA Roleta Dúzia", layout="centered")
-st.title("🎯 IA Roleta XXXtreme — Previsão de Dúzia")
+st.title("🎯 IA Roleta XXXtreme — Estratégia dos Terminais Dominantes")
 
 # --- Estado ---
 if "historico" not in st.session_state:
     st.session_state.historico = json.load(open(HISTORICO_PATH)) if os.path.exists(HISTORICO_PATH) else []
-if "modelo_duzia" not in st.session_state:
-    st.session_state.modelo_duzia = ModeloIAHistGB()
 if "estrategia" not in st.session_state:
     st.session_state.estrategia = EstrategiaRoleta(janela=12)
-if "duzias_acertadas" not in st.session_state:
-    st.session_state.duzias_acertadas = 0
 if "duzia_prevista" not in st.session_state:
     st.session_state.duzia_prevista = None
-if "ultimo_treino" not in st.session_state:
-    st.session_state.ultimo_treino = 0
 if "rodada_atual" not in st.session_state:
     st.session_state.rodada_atual = None
 if "previsao_enviada" not in st.session_state:
     st.session_state.previsao_enviada = False
 if "resultado_enviado" not in st.session_state:
     st.session_state.resultado_enviado = False
-
-# --- Função de treino ---
-def tentar_treinar():
-    historico = st.session_state.historico
-    modelo = st.session_state.modelo_duzia
-    if len(historico) >= modelo.janela:
-        if len(historico) > st.session_state.ultimo_treino:
-            modelo.treinar(historico)
-            st.session_state.ultimo_treino = len(historico)
-            st.toast(f"🧠 Modelo treinado com {len(historico)} resultados.")
 
 # --- Entrada manual ---
 st.subheader("✍️ Inserir Sorteios Manualmente")
@@ -258,7 +153,6 @@ if st.button("Adicionar Sorteios"):
                 st.session_state.estrategia.adicionar_numero(n)
             salvar_resultado_em_arquivo(st.session_state.historico)
             st.success(f"{len(numeros)} números adicionados.")
-            tentar_treinar()
     except Exception as e:
         st.error(f"Erro ao adicionar números: {e}")
 
@@ -276,23 +170,10 @@ if resultado and resultado["timestamp"] != ultimo:
         st.session_state.previsao_enviada = False
         st.session_state.resultado_enviado = False
 
-        # --- Conferência do resultado anterior ---
-        if st.session_state.duzia_prevista is not None:
-            duzia_real = get_duzia(numero_atual)
-            acertou = duzia_real in st.session_state.duzia_prevista if isinstance(st.session_state.duzia_prevista, list) else duzia_real == st.session_state.duzia_prevista
-            if acertou:
-                st.session_state.duzias_acertadas += 1
-                st.toast("✅ Acertou a dúzia!")
-                st.balloons()
-                tocar_som_moeda()
-            enviar_resultado(numero_atual, acertou)
-            st.session_state.resultado_enviado = True
-
     # Atualiza histórico e estratégia
     st.session_state.historico.append(resultado)
     st.session_state.estrategia.adicionar_numero(numero_atual)
     salvar_resultado_em_arquivo(st.session_state.historico)
-    tentar_treinar()
 
     # --- Verifica entrada pelo 13º número ---
     entrada_info = st.session_state.estrategia.verificar_entrada()
@@ -313,15 +194,8 @@ if st.session_state.duzia_prevista:
 else:
     st.info("🔎 Aguardando próximo número para calcular dominantes.")
 
-st.subheader("📊 Desempenho")
-total = len(st.session_state.historico) - st.session_state.modelo_duzia.janela
-if total > 0:
-    taxa_d = st.session_state.duzias_acertadas / total * 100
-    st.success(f"✅ Acertos de dúzia: {st.session_state.duzias_acertadas} / {total} ({taxa_d:.2f}%)")
-else:
-    st.info("🔎 Aguardando mais dados para avaliar desempenho.")
-
 # --- Download histórico ---
-with open(HISTORICO_PATH, "r") as f:
-    conteudo = f.read()
-st.download_button("📥 Baixar histórico", data=conteudo, file_name="historico_coluna_duzia.json")
+if os.path.exists(HISTORICO_PATH):
+    with open(HISTORICO_PATH, "r") as f:
+        conteudo = f.read()
+    st.download_button("📥 Baixar histórico", data=conteudo, file_name="historico_coluna_duzia.json")
