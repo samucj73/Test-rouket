@@ -155,7 +155,7 @@ class ModeloIAHistGB:
         numeros = [h["number"] for h in historico if 0 <= h["number"] <= 36]
         X, y = [], []
         for i in range(self.janela, len(numeros) - 1):
-            janela = numeros[i - self.janela:i + 10]
+            janela = numeros[i - self.janela:i + 2]
             target = get_duzia(numeros[i])
             if target is not None:
                 X.append(self.construir_features(janela))
