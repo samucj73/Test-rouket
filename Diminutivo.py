@@ -175,14 +175,37 @@ if resultado and resultado["timestamp"] != ultimo:
     st.session_state.estrategia.adicionar_numero(numero_atual)
     salvar_resultado_em_arquivo(st.session_state.historico)
 
-    # --- Verifica entrada pelo 13º número ---
-    entrada_info = st.session_state.estrategia.verificar_entrada()
-    if entrada_info and entrada_info.get("entrada"):
-        dominantes = entrada_info["dominantes"]
+# --- Sempre recalcula com base no histórico atual ---
+entrada_info = st.session_state.estrategia.verificar_entrada()
+if entrada_info:
+    dominantes = entrada_info["dominantes"]
+
+    # Se deu entrada válida, guarda a previsão e envia alerta
+    if entrada_info.get("entrada"):
         st.session_state.duzia_prevista = dominantes
         if not st.session_state.previsao_enviada:
             enviar_previsao(dominantes)
             st.session_state.previsao_enviada = True
+    else:
+        # mesmo sem entrada, mantém dominantes calculados
+        st.session_state.duzia_prevista = dominantes
+
+# --- Conferência do resultado (GREEN/RED) ---
+if (
+    st.session_state.previsao_enviada 
+    and not st.session_state.resultado_enviado 
+    and len(st.session_state.historico) >= 1
+):
+    ultimo_numero = st.session_state.historico[-1]["number"]
+    terminais_previstos = st.session_state.duzia_prevista or []
+
+    terminal_ultimo = ultimo_numero % 10
+    if terminal_ultimo in terminais_previstos:
+        enviar_resultado(f"Resultado: {ultimo_numero} | Terminais: {terminais_previstos} | 🟢 GREEN")
+    else:
+        enviar_resultado(f"Resultado: {ultimo_numero} | Terminais: {terminais_previstos} | 🔴 RED")
+
+    st.session_state.resultado_enviado = True
 
 # --- Interface ---
 st.subheader("🔁 Últimos 13 Números")
