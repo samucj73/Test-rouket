@@ -65,7 +65,7 @@ def salvar_resultado_em_arquivo(historico, caminho=HISTORICO_PATH):
     with open(caminho, "w") as f:
         json.dump(historico, f, indent=2)
 
-def estrategia_duzia_quente(historico, janela=230):
+def estrategia_duzia_quente(historico, janela=12):
     numeros = [h["number"] for h in historico[-janela:] if h["number"] > 0]
     duzias = [get_duzia(n) for n in numeros]
     mais_comum = Counter(duzias).most_common(1)
@@ -73,7 +73,7 @@ def estrategia_duzia_quente(historico, janela=230):
 
 def estrategia_tendencia(historico):
     numeros = [h["number"] for h in historico if h["number"] > 0]
-    if len(numeros) < 6:
+    if len(numeros) < 5:
         return None
     ultimos = numeros[-5:]
     dif = np.mean(np.diff(ultimos))
@@ -94,7 +94,7 @@ def estrategia_alternancia(historico, limite=2):
     return duzias[-1]
 
 class ModeloIAHistGB:
-    def __init__(self, tipo="duzia", janela=250):
+    def __init__(self, tipo="duzia", janela=800):
         self.tipo = tipo
         self.janela = janela
         self.modelo = None
@@ -164,7 +164,7 @@ class ModeloIAHistGB:
             return
         X = np.array(X, dtype=np.float32)
         y = self.encoder.fit_transform(np.array(y))
-        self.modelo = HistGradientBoostingClassifier(max_iter=200, max_depth=7, random_state=42)
+        self.modelo = HistGradientBoostingClassifier(max_iter=400, max_depth=7, random_state=42)
         self.modelo.fit(X, y)
         self.treinado = True
 
