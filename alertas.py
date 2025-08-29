@@ -5,8 +5,8 @@ import time
 # =========================
 # CONFIGURAÇÕES TELEGRAM
 # =========================
-TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
-TELEGRAM_CHAT_ID = "5121457416"
+#TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
+#TELEGRAM_CHAT_ID = "5121457416"
 
 
 def send_telegram_message(message: str):
