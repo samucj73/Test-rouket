@@ -71,7 +71,7 @@ class LotoFacilIA:
     def matriz_binaria(self):
         return np.array([[1 if n in jogo else 0 for n in self.numeros] for jogo in self.concursos])
 
-    def frequencia(self, janela=50):
+    def frequencia(self, janela=10):
         janela = min(janela, max(1, len(self.concursos)-1))
         freq = {n:0 for n in self.numeros}
         for jogo in self.concursos[-janela-1:-1]:
