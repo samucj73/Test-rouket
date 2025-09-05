@@ -6,7 +6,7 @@ import datetime
 # =============================
 # Configuração da API
 # =============================
-API_KEY = "SUA_CHAVE_AQUI"  # insira sua chave gratuita da Football-Data.org
+API_KEY = "9058de85e3324bdb969adc005b5d918a"  # insira sua chave gratuita da Football-Data.org
 BASE_URL = "https://api.football-data.org/v4"
 headers = {"X-Auth-Token": API_KEY}
 
