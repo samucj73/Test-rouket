@@ -3,7 +3,6 @@ import requests
 import numpy as np
 import pandas as pd
 import datetime
-import json
 
 # =============================
 # Configuração da API
@@ -13,23 +12,24 @@ BASE_URL = "https://api.football-data.org/v4"
 HEADERS = {"X-Auth-Token": API_KEY}
 
 # =============================
-# Ligas disponíveis
+# Buscar códigos oficiais das ligas
 # =============================
-LIGAS = {
-    "Brasileirão Série A": "BSA",
-    "Championship": "ELC",
-    "Premier League": "PL",
-    "Champions League": "CL",
-    "European Championship": "EC",
-    "Ligue 1": "FL1",
-    "Bundesliga": "BL1",
-    "Serie A": "SA",
-    "Eredivisie": "DED",
-    "Primeira Liga": "PPL",
-    "Copa Libertadores": "CLI",
-    "Primera Division": "PD",
-    "FIFA World Cup": "WC"
-}
+@st.cache_data
+def carregar_competicoes():
+    uri = f"{BASE_URL}/competitions"
+    response = requests.get(uri, headers=HEADERS)
+    comps = {}
+    if response.status_code == 200:
+        data = response.json()
+        for comp in data.get("competitions", []):
+            name = comp["name"]
+            code = comp["code"]
+            comps[name] = code
+    else:
+        st.warning(f"Erro ao buscar competições: {response.status_code}")
+    return comps
+
+COMPETICOES = carregar_competicoes()
 
 # =============================
 # Funções auxiliares
@@ -50,7 +50,6 @@ def buscar_partidas(codigo_liga=None, status="SCHEDULED"):
         return []
 
 def calcular_estatisticas(time_id, partidas, linha=2.5, n=10):
-    """Média de gols e % over X.5 nos últimos n jogos do time"""
     ultimos = [p for p in partidas if p["homeTeam"]["id"] == time_id or p["awayTeam"]["id"] == time_id]
     ultimos = ultimos[-n:]
 
@@ -73,7 +72,6 @@ def calcular_estatisticas(time_id, partidas, linha=2.5, n=10):
     return round(media, 2), round(prob_over, 1)
 
 def analisar_jogo(home, away, partidas, linha=2.5):
-    """Analisa um jogo baseado nos últimos resultados dos times"""
     mediaA, overA = calcular_estatisticas(home["id"], partidas, linha)
     mediaB, overB = calcular_estatisticas(away["id"], partidas, linha)
     media_total = round((mediaA + mediaB)/2, 2)
@@ -102,7 +100,7 @@ st.title("⚽ Mais/Menos Gols - Previsões Inteligentes")
 # Seletor de campeonato e data
 col1, col2 = st.columns(2)
 with col1:
-    liga_escolhida = st.selectbox("🏆 Campeonato", list(LIGAS.keys()))
+    liga_escolhida = st.selectbox("🏆 Campeonato", list(COMPETICOES.keys()))
 with col2:
     data_escolhida = st.date_input(
         "📅 Data do jogo",
@@ -111,7 +109,7 @@ with col2:
         max_value=datetime.date.today() + datetime.timedelta(days=7)
     )
 
-# Seletor de linha de gols, tipo de análise e status
+# Linha de gols, tipo de aposta e status
 col3, col4, col5 = st.columns(3)
 with col3:
     linha_escolhida = st.radio("📏 Linha de gols", [1.5, 2.5, 3.5], horizontal=True)
@@ -124,9 +122,8 @@ with col5:
 # =============================
 # Buscar partidas
 # =============================
-codigo_liga = LIGAS[liga_escolhida]
+codigo_liga = COMPETICOES[liga_escolhida]
 partidas = buscar_partidas(codigo_liga=codigo_liga, status=status_api)
-# Filtra por data
 partidas = [p for p in partidas if p["utcDate"].startswith(str(data_escolhida))]
 
 # =============================
