@@ -1,143 +1,123 @@
 import streamlit as st
 import requests
-import numpy as np
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import date
 
 # =============================
-# Configurações
+# CONFIGURAÇÃO
 # =============================
-API_KEY = '9058de85e3324bdb969adc005b5d918a'
-BASE_URL = 'https://api.football-data.org/v4/matches'
-HEADERS = {'X-Auth-Token': API_KEY}
+API_TOKEN = "9058de85e3324bdb969adc005b5d918a"
+BASE_URL = "https://api.football-data.org/v4"
 
-# =============================
-# Funções auxiliares
-# =============================
-@st.cache_data
-def carregar_competicoes():
-    uri = f"{BASE_URL}/competitions"
-    response = requests.get(uri, headers=HEADERS)
-    comps = {}
-    if response.status_code == 200:
-        data = response.json()
-        for comp in data.get("competitions", []):
-            name = comp["name"]
-            code = comp["code"]
-            comps[name] = code
-    return comps
+HEADERS = {"X-Auth-Token": API_TOKEN}
 
-def buscar_partidas(codigo_liga=None, status="FINISHED"):
-    uri = f"{BASE_URL}/matches"
-    response = requests.get(uri, headers=HEADERS)
-    matches = []
-    if response.status_code == 200:
-        data = response.json()
-        matches = data.get('matches', [])
-        if codigo_liga:
-            matches = [m for m in matches if m.get("competition", {}).get("code") == codigo_liga]
-        matches = [m for m in matches if m.get("status") == status]
-    return matches
-
-def calcular_estatisticas(time_id, partidas, linha=2.5, n=10):
-    ultimos = [p for p in partidas if p["homeTeam"]["id"] == time_id or p["awayTeam"]["id"] == time_id]
-    ultimos = ultimos[-n:]
-    gols = []
-    overs = 0
-    for p in ultimos:
-        gh = p["score"]["fullTime"]["home"]
-        ga = p["score"]["fullTime"]["away"]
-        if gh is None or ga is None:
-            continue
-        total = gh + ga
-        gols.append(total)
-        if total > linha:
-            overs += 1
-    if not gols:
-        return 0, 0
-    media = np.mean(gols)
-    prob_over = (overs / len(gols)) * 100
-    return round(media, 2), round(prob_over, 1)
-
-def analisar_jogo(home, away, partidas, linha=2.5):
-    mediaA, overA = calcular_estatisticas(home["id"], partidas, linha)
-    mediaB, overB = calcular_estatisticas(away["id"], partidas, linha)
-    media_total = round((mediaA + mediaB)/2, 2)
-    prob_over = round((overA + overB)/2, 1)
-    prob_under = 100 - prob_over
-    return media_total, prob_over, prob_under
 
 # =============================
-# Interface Streamlit
+# FUNÇÕES
 # =============================
-st.set_page_config(page_title="Mais/Menos Gols", layout="wide")
-st.markdown("""
-<style>
-.block-container { max-width: 950px; margin: auto; padding-top: 2rem; background-color: #0e1117; color: white; }
-h1, h2 { text-align: center; color: #1DB954; }
-.game-card { border-radius: 10px; padding: 15px; margin: 10px 0; background-color: #1e222b; }
-.over { border-left: 5px solid #21bf73; }
-.under { border-left: 5px solid #f39c12; }
-</style>
-""", unsafe_allow_html=True)
 
-st.title("⚽ Mais/Menos Gols - Previsões Inteligentes")
-
-COMPETICOES = carregar_competicoes()
-
-# Seleção de campeonato e linha de gols
-col1, col2 = st.columns(2)
-with col1:
-    liga_escolhida = st.selectbox("🏆 Campeonato", list(COMPETICOES.keys()))
-with col2:
-    linha_escolhida = st.radio("📏 Linha de gols", [1.5, 2.5, 3.5], horizontal=True)
-
-tipo_aposta = st.radio("🎯 Analisar", ["Mais (Over)", "Menos (Under)"], horizontal=True)
-
-# Buscar partidas
-codigo_liga = COMPETICOES[liga_escolhida]
-partidas = buscar_partidas(codigo_liga=codigo_liga)
-
-if partidas:
-    st.subheader(f"📊 Últimos jogos de {liga_escolhida} ({len(partidas)} partidas)")
-
-    dados_tabela = []
-    recomendados = []
-
-    for jogo in partidas[-20:]:  # analisar últimos 20 jogos
-        home = jogo["homeTeam"]
-        away = jogo["awayTeam"]
-
-        media, prob_over, prob_under = analisar_jogo(home, away, partidas, linha_escolhida)
-
-        dados_tabela.append({
-            "Jogo": f"{home['name']} x {away['name']}",
-            "Média Gols": media,
-            f"Prob. Over {linha_escolhida}": f"{prob_over}%",
-            f"Prob. Under {linha_escolhida}": f"{prob_under}%"
+def listar_competicoes():
+    """Lista as competições disponíveis"""
+    url = f"{BASE_URL}/competitions"
+    r = requests.get(url, headers=HEADERS)
+    if r.status_code != 200:
+        return []
+    data = r.json()
+    competicoes = []
+    for comp in data.get("competitions", []):
+        competicoes.append({
+            "id": comp["id"],
+            "nome": comp["name"],
+            "codigo": comp.get("code", "N/A")
         })
+    return competicoes
 
-        if tipo_aposta == "Mais (Over)" and prob_over >= 60:
-            recomendados.append(("over", home, away, media, prob_over))
-        elif tipo_aposta == "Menos (Under)" and prob_under >= 60:
-            recomendados.append(("under", home, away, media, prob_under))
 
-    df = pd.DataFrame(dados_tabela)
-    st.dataframe(df, use_container_width=True)
+def listar_partidas(competicao_id, data_escolhida):
+    """Lista partidas de uma competição e data escolhida"""
+    url = f"{BASE_URL}/competitions/{competicao_id}/matches?dateFrom={data_escolhida}&dateTo={data_escolhida}"
+    r = requests.get(url, headers=HEADERS)
+    if r.status_code != 200:
+        return []
+    data = r.json()
+    return data.get("matches", [])
 
-    if recomendados:
-        st.subheader("🔥 Jogos recomendados")
-        for tipo, home, away, media, prob in recomendados:
-            cor = "21bf73" if tipo=="over" else "f39c12"
-            emoji = "🔥" if tipo=="over" else "🛡️"
-            st.markdown(f"""
-                <div class="game-card {'over' if tipo=='over' else 'under'}">
-                    <h4>{home['name']} x {away['name']}</h4>
-                    <p>📊 Média gols: <b>{media}</b></p>
-                    <p>{emoji} Probabilidade {tipo}: <b>{prob}%</b></p>
-                </div>
-            """, unsafe_allow_html=True)
+
+def media_gols_time(time_id, qtd=5):
+    """Calcula a média de gols de um time nas últimas partidas"""
+    url = f"{BASE_URL}/teams/{time_id}/matches?limit={qtd}&status=FINISHED"
+    r = requests.get(url, headers=HEADERS)
+    if r.status_code != 200:
+        return 1.0  # valor padrão
+    matches = r.json().get("matches", [])
+    if not matches:
+        return 1.0
+
+    gols = []
+    for m in matches:
+        if m["homeTeam"]["id"] == time_id:
+            gols.append(m["score"]["fullTime"]["home"] + m["score"]["fullTime"]["away"])
+        else:
+            gols.append(m["score"]["fullTime"]["home"] + m["score"]["fullTime"]["away"])
+
+    return sum(gols) / len(gols)
+
+
+def prever_mais_menos_gols(home_id, away_id, linha):
+    """Previsão se vai ser Over ou Under"""
+    media_home = media_gols_time(home_id)
+    media_away = media_gols_time(away_id)
+    expectativa = (media_home + media_away) / 2
+
+    if expectativa >= linha:
+        return f"🔼 Over {linha} (Mais Gols) - Média esperada: {expectativa:.2f}"
     else:
-        st.info("Nenhum jogo forte identificado para essa linha.")
+        return f"🔽 Under {linha} (Menos Gols) - Média esperada: {expectativa:.2f}"
+
+
+# =============================
+# INTERFACE STREAMLIT
+# =============================
+
+st.set_page_config(page_title="Futebol - Mais/Menos Gols", layout="centered")
+
+st.title("⚽ Analisador de Jogos - Mais/Menos Gols")
+
+# Seleção de competição
+competicoes = listar_competicoes()
+if not competicoes:
+    st.error("Não foi possível carregar as competições. Verifique sua API Key.")
 else:
-    st.info("Nenhuma partida disponível para esta liga.")
+    nomes = [c["nome"] for c in competicoes]
+    escolha = st.selectbox("Escolha a competição", nomes)
+
+    comp_id = next(c["id"] for c in competicoes if c["nome"] == escolha)
+
+    # Seleção de data
+    data_jogo = st.date_input("Escolha a data", value=date.today())
+
+    # Linha de gols escolhida pelo usuário
+    linha_gol = st.number_input("Linha de gols (ex: 2.5)", min_value=0.5, max_value=5.0, step=0.5, value=2.5)
+
+    if st.button("Buscar Partidas"):
+        partidas = listar_partidas(comp_id, data_jogo)
+
+        if not partidas:
+            st.warning("Nenhuma partida disponível para esta liga e data.")
+        else:
+            tabela = []
+            for match in partidas:
+                home = match["homeTeam"]["name"]
+                away = match["awayTeam"]["name"]
+                previsao = prever_mais_menos_gols(match["homeTeam"]["id"], match["awayTeam"]["id"], linha_gol)
+
+                tabela.append({
+                    "Data": match["utcDate"][:10],
+                    "Hora": match["utcDate"][11:16],
+                    "Casa": home,
+                    "Fora": away,
+                    "Status": match["status"],
+                    "Previsão": previsao
+                })
+            df = pd.DataFrame(tabela)
+            st.dataframe(df, use_container_width=True)
