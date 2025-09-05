@@ -1,6 +1,6 @@
 import streamlit as st
 import requests
-from datetime import date
+from datetime import date, timedelta
 
 BASE_URL = "https://api.football-data.org/v4"
 API_TOKEN = "9058de85e3324bdb969adc005b5d918a"
@@ -24,8 +24,10 @@ def listar_partidas(codigo, data_escolhida=None, status=None):
         url = f"{BASE_URL}/competitions/{codigo}/matches"
         params = {}
         if data_escolhida:
-            params["dateFrom"] = data_escolhida
-            params["dateTo"] = data_escolhida
+            # dateTo da API v4 exclui o dia especificado, então somamos 1 dia
+            dt_to = (data_escolhida + timedelta(days=1)).strftime("%Y-%m-%d")
+            params["dateFrom"] = data_escolhida.strftime("%Y-%m-%d")
+            params["dateTo"] = dt_to
         if status:
             params["status"] = status
         r = requests.get(url, headers=HEADERS, params=params)
@@ -92,11 +94,10 @@ def calcular_mais_menos_gols_avancado(home_id, away_id, linha_gols=2.5, limite=1
 # Interface Streamlit
 # =============================
 st.set_page_config(page_title="Futebol - Mais/Menos Gols", layout="centered")
-st.title("⚽ Futebol - Mais/Menos Gols (Segurança Total)")
+st.title("⚽ Futebol - Mais/Menos Gols (API v4 Segura)")
 
 # Seleção de data
 data_escolhida = st.date_input("Escolha a data:", value=date.today())
-data_formatada = data_escolhida.strftime("%Y-%m-%d")
 
 # Status da partida
 status_selecionado = st.selectbox("Status da partida:", ["SCHEDULED", "LIVE", "FINISHED"], index=0)
@@ -112,7 +113,7 @@ elif not dados_comp:
 else:
     for c in dados_comp:
         codigo = c.get("code", "")
-        partidas = listar_partidas(codigo, data_formatada, status_selecionado)
+        partidas = listar_partidas(codigo, data_escolhida, status_selecionado)
         if isinstance(partidas, list) and partidas:
             competicoes_disponiveis.append({"nome": c.get("name","Desconhecido"), "codigo": codigo})
 
@@ -128,7 +129,7 @@ else:
             linha_gols = st.number_input("Linha de gols (ex: 2.5):", min_value=0.0, max_value=10.0,
                                          value=2.5, step=0.1)
 
-            partidas = listar_partidas(codigo, data_formatada, status_selecionado)
+            partidas = listar_partidas(codigo, data_escolhida, status_selecionado)
             if not isinstance(partidas, list) or not partidas:
                 st.warning("⚠️ Nenhum jogo encontrado para os filtros selecionados.")
             else:
