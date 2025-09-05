@@ -17,7 +17,7 @@ HEADERS = {"X-Auth-Token": API_TOKEN}
 # =============================
 
 def listar_competicoes():
-    """Lista as competições disponíveis"""
+    """Lista competições principais"""
     url = f"{BASE_URL}/competitions"
     r = requests.get(url, headers=HEADERS)
     if r.status_code != 200:
@@ -33,9 +33,9 @@ def listar_competicoes():
     return competicoes
 
 
-def listar_partidas(competicao_id, data_escolhida):
-    """Lista partidas de uma competição e data escolhida"""
-    url = f"{BASE_URL}/competitions/{competicao_id}/matches?dateFrom={data_escolhida}&dateTo={data_escolhida}"
+def listar_partidas(comp_code):
+    """Lista partidas de hoje de uma competição"""
+    url = f"{BASE_URL}/competitions/{comp_code}/matches"
     r = requests.get(url, headers=HEADERS)
     if r.status_code != 200:
         return []
@@ -43,28 +43,44 @@ def listar_partidas(competicao_id, data_escolhida):
     return data.get("matches", [])
 
 
-def media_gols_time(time_id, qtd=5):
-    """Calcula a média de gols de um time nas últimas partidas"""
-    url = f"{BASE_URL}/teams/{time_id}/matches?limit={qtd}&status=FINISHED"
+def classificacao_liga(comp_code):
+    """Tabela de classificação da liga"""
+    url = f"{BASE_URL}/competitions/{comp_code}/standings"
     r = requests.get(url, headers=HEADERS)
     if r.status_code != 200:
-        return 1.0  # valor padrão
+        return None
+    return r.json()
+
+
+def artilheiros_liga(comp_code):
+    """Lista artilheiros da competição"""
+    url = f"{BASE_URL}/competitions/{comp_code}/scorers"
+    r = requests.get(url, headers=HEADERS)
+    if r.status_code != 200:
+        return None
+    return r.json()
+
+
+def media_gols_time(team_id, qtd=5):
+    """Média de gols dos últimos jogos do time"""
+    url = f"{BASE_URL}/teams/{team_id}/matches?limit={qtd}&status=FINISHED"
+    r = requests.get(url, headers=HEADERS)
+    if r.status_code != 200:
+        return 1.0
     matches = r.json().get("matches", [])
     if not matches:
         return 1.0
 
     gols = []
     for m in matches:
-        if m["homeTeam"]["id"] == time_id:
-            gols.append(m["score"]["fullTime"]["home"] + m["score"]["fullTime"]["away"])
-        else:
-            gols.append(m["score"]["fullTime"]["home"] + m["score"]["fullTime"]["away"])
+        total_gols = (m["score"]["fullTime"]["home"] or 0) + (m["score"]["fullTime"]["away"] or 0)
+        gols.append(total_gols)
 
     return sum(gols) / len(gols)
 
 
 def prever_mais_menos_gols(home_id, away_id, linha):
-    """Previsão se vai ser Over ou Under"""
+    """Previsão de Over/Under baseado em médias"""
     media_home = media_gols_time(home_id)
     media_away = media_gols_time(away_id)
     expectativa = (media_home + media_away) / 2
@@ -88,25 +104,24 @@ competicoes = listar_competicoes()
 if not competicoes:
     st.error("Não foi possível carregar as competições. Verifique sua API Key.")
 else:
-    nomes = [c["nome"] for c in competicoes]
+    nomes = [f"{c['nome']} ({c['codigo']})" for c in competicoes]
     escolha = st.selectbox("Escolha a competição", nomes)
 
-    comp_id = next(c["id"] for c in competicoes if c["nome"] == escolha)
-
-    # Seleção de data
-    data_jogo = st.date_input("Escolha a data", value=date.today())
+    comp_code = escolha.split("(")[-1].replace(")", "").strip()
 
     # Linha de gols escolhida pelo usuário
     linha_gol = st.number_input("Linha de gols (ex: 2.5)", min_value=0.5, max_value=5.0, step=0.5, value=2.5)
 
-    if st.button("Buscar Partidas"):
-        partidas = listar_partidas(comp_id, data_jogo)
+    if st.button("Analisar Jogos de Hoje"):
+        partidas = listar_partidas(comp_code)
 
         if not partidas:
-            st.warning("Nenhuma partida disponível para esta liga e data.")
+            st.warning("Nenhuma partida disponível para esta liga hoje.")
         else:
             tabela = []
             for match in partidas:
+                if match["status"] not in ["SCHEDULED", "TIMED"]:
+                    continue
                 home = match["homeTeam"]["name"]
                 away = match["awayTeam"]["name"]
                 previsao = prever_mais_menos_gols(match["homeTeam"]["id"], match["awayTeam"]["id"], linha_gol)
@@ -116,8 +131,45 @@ else:
                     "Hora": match["utcDate"][11:16],
                     "Casa": home,
                     "Fora": away,
-                    "Status": match["status"],
                     "Previsão": previsao
                 })
-            df = pd.DataFrame(tabela)
-            st.dataframe(df, use_container_width=True)
+
+            if tabela:
+                st.subheader("📊 Jogos de Hoje com Previsão Over/Under")
+                df = pd.DataFrame(tabela)
+                st.dataframe(df, use_container_width=True)
+            else:
+                st.info("Nenhum jogo futuro encontrado para hoje nessa competição.")
+
+        # Classificação da liga
+        standings = classificacao_liga(comp_code)
+        if standings and "standings" in standings:
+            st.subheader("🏆 Classificação da Liga")
+            table_data = []
+            for team in standings["standings"][0]["table"]:
+                table_data.append({
+                    "Posição": team["position"],
+                    "Time": team["team"]["name"],
+                    "Pontos": team["points"],
+                    "Vitórias": team["won"],
+                    "Empates": team["draw"],
+                    "Derrotas": team["lost"],
+                    "Gols Pró": team["goalsFor"],
+                    "Gols Contra": team["goalsAgainst"]
+                })
+            df_table = pd.DataFrame(table_data)
+            st.dataframe(df_table, use_container_width=True)
+
+        # Artilheiros
+        scorers = artilheiros_liga(comp_code)
+        if scorers and "scorers" in scorers:
+            st.subheader("⚽ Artilheiros da Competição")
+            top_scorers = []
+            for s in scorers["scorers"]:
+                top_scorers.append({
+                    "Jogador": s["player"]["name"],
+                    "Time": s["team"]["name"],
+                    "Gols": s["goals"]
+                })
+            df_scorers = pd.DataFrame(top_scorers)
+            st.dataframe(df_scorers, use_container_width=True)
