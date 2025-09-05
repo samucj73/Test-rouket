@@ -5,7 +5,7 @@ import pandas as pd
 # =============================
 # Configuração da API
 # =============================
-API_KEY = "9058de85e3324bdb969adc005b5d918a"  # sua chave
+API_KEY = "9058de85e3324bdb969adc005b5d918a"
 BASE_URL = "https://api.football-data.org/v4"
 headers = {"X-Auth-Token": API_KEY}
 
@@ -19,12 +19,16 @@ def listar_competicoes():
         data = r.json()
         comps = []
         for comp in data.get("competitions", []):
-            # Corrige erro caso "plan" seja None
-            plan_name = comp["plan"]["name"] if comp.get("plan") else "N/A"
+            plan = comp.get("plan")
+            # Verifica se plan existe e é dict antes de acessar "name"
+            if isinstance(plan, dict):
+                plan_name = plan.get("name", "N/A")
+            else:
+                plan_name = "N/A"
             comps.append({
-                "Nome": comp.get("name"),
-                "Código": comp.get("code"),
-                "ID": comp.get("id"),
+                "Nome": comp.get("name", "N/A"),
+                "Código": comp.get("code", "N/A"),
+                "ID": comp.get("id", "N/A"),
                 "Nível": plan_name
             })
         return comps
