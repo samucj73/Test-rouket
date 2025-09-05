@@ -166,3 +166,19 @@ if proximos:
         st.info("Nenhum jogo forte identificado para essa linha nessa data.")
 else:
     st.info("Nenhum jogo encontrado nessa data.")
+
+
+import requests
+
+API_KEY = "9058de85e3324bdb969adc005b5d918a"
+BASE_URL = "https://api.football-data.org/v4"
+headers = {"X-Auth-Token": API_KEY}
+
+url = f"{BASE_URL}/competitions/PL/matches"  # Premier League
+response = requests.get(url, headers=headers)
+
+if response.status_code == 200:
+    data = response.json()
+    print("✅ Conexão OK, partidas encontradas:", len(data["matches"]))
+else:
+    print("❌ Erro:", response.status_code, response.text)
