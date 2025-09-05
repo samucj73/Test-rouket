@@ -29,7 +29,7 @@ def listar_partidas(codigo, data_escolhida=None, status=None):
     r = requests.get(url, headers=HEADERS, params=params)
     if r.status_code != 200:
         return {"erro": f"Erro {r.status_code}: {r.text}"}
-    return r.json()
+    return r.json().get("matches", [])
 
 @st.cache_data(ttl=60)
 def historico_time(time_id, limite=10):
@@ -39,18 +39,14 @@ def historico_time(time_id, limite=10):
         return {"erro": f"Erro {r.status_code}: {r.text}"}
     return r.json().get("matches", [])
 
-# =============================
-# Cálculo avançado de Over/Under
-# =============================
 def calcular_mais_menos_gols_avancado(home_id, away_id, linha_gols=2.5, limite=10):
     home_historico = historico_time(home_id, limite)
     away_historico = historico_time(away_id, limite)
 
-    if "erro" in home_historico or "erro" in away_historico:
+    if not home_historico or not away_historico:
         return "Não foi possível calcular"
 
-    # Média de gols marcados e sofridos
-    def media_gols(matches, time_id, casa=True):
+    def media_gols(matches, time_id):
         gols_marcados = 0
         gols_sofridos = 0
         for m in matches:
@@ -66,10 +62,9 @@ def calcular_mais_menos_gols_avancado(home_id, away_id, linha_gols=2.5, limite=1
         n = max(1, len(matches))
         return gols_marcados/n, gols_sofridos/n
 
-    home_marcados, home_sofridos = media_gols(home_historico, home_id, casa=True)
-    away_marcados, away_sofridos = media_gols(away_historico, away_id, casa=False)
+    home_marcados, home_sofridos = media_gols(home_historico, home_id)
+    away_marcados, away_sofridos = media_gols(away_historico, away_id)
 
-    # Expectativa de gols combinando atacantes e defensores
     gols_esperados = (home_marcados + away_sofridos + away_marcados + home_sofridos)/2
 
     if gols_esperados > linha_gols:
@@ -81,46 +76,52 @@ def calcular_mais_menos_gols_avancado(home_id, away_id, linha_gols=2.5, limite=1
 # App Streamlit
 # =============================
 st.set_page_config(page_title="Futebol - Mais/Menos Gols", layout="centered")
-st.title("⚽ Futebol - Mais/Menos Gols (Avançado)")
+st.title("⚽ Futebol - Mais/Menos Gols (Robusto)")
 
-# Competições
+# Seleção de data
+data_escolhida = st.date_input("Escolha a data:", value=date.today())
+data_formatada = data_escolhida.strftime("%Y-%m-%d")
+
+# Seleção de status
+status_selecionado = st.selectbox("Status da partida:", ["SCHEDULED", "LIVE", "FINISHED"], index=0)
+
+# Listar competições que têm partidas nessa data
 dados_comp = listar_competicoes()
+competicoes_disponiveis = []
+
 if "erro" in dados_comp:
     st.error(f"❌ {dados_comp['erro']}")
 else:
-    competicoes = [{"id": c["id"], "nome": c["name"], "codigo": c.get("code","N/A")}
-                   for c in dados_comp.get("competitions", [])]
-    nomes = [f"{c['nome']} ({c['codigo']})" for c in competicoes]
+    for c in dados_comp.get("competitions", []):
+        matches = listar_partidas(c.get("code",""), data_formatada, status_selecionado)
+        if matches:  # só adiciona se houver partidas
+            competicoes_disponiveis.append({"nome": c["name"], "codigo": c.get("code","")})
+
+if not competicoes_disponiveis:
+    st.warning("⚠️ Nenhuma competição com partidas disponíveis nessa data.")
+else:
+    nomes = [f"{c['nome']} ({c['codigo']})" for c in competicoes_disponiveis]
     selecao = st.selectbox("Selecione uma competição:", nomes)
 
     if selecao:
         codigo = selecao.split("(")[1].split(")")[0]
 
-        data_escolhida = st.date_input("Escolha a data:", value=date.today())
-        data_formatada = data_escolhida.strftime("%Y-%m-%d")
-
-        status_selecionado = st.selectbox("Status da partida:", ["SCHEDULED", "LIVE", "FINISHED"], index=0)
-
+        # Linha de gols
         linha_gols = st.number_input("Linha de gols (ex: 2.5):", min_value=0.0, max_value=10.0,
                                      value=2.5, step=0.1)
 
-        st.write(f"🔍 Buscando partidas para **{codigo}** em {data_formatada}...")
-
-        dados_partidas = listar_partidas(codigo, data_formatada, status_selecionado)
-        if "erro" in dados_partidas:
-            st.error(f"❌ {dados_partidas['erro']}")
+        # Buscar partidas filtradas
+        partidas = listar_partidas(codigo, data_formatada, status_selecionado)
+        if not partidas:
+            st.warning("⚠️ Nenhum jogo encontrado para os filtros selecionados.")
         else:
-            partidas = dados_partidas.get("matches", [])
-            if partidas:
-                for p in partidas:
-                    home_id = p["homeTeam"]["id"]
-                    away_id = p["awayTeam"]["id"]
-                    sugestao = calcular_mais_menos_gols_avancado(home_id, away_id, linha_gols)
+            for p in partidas:
+                home_id = p["homeTeam"]["id"]
+                away_id = p["awayTeam"]["id"]
+                sugestao = calcular_mais_menos_gols_avancado(home_id, away_id, linha_gols)
 
-                    st.write(f"**{p['homeTeam']['name']} vs {p['awayTeam']['name']}**")
-                    st.write(f"📅 {p['utcDate']}")
-                    st.write(f"🏆 Status: {p['status']}")
-                    st.write(f"💡 Sugestão: {sugestao}")
-                    st.write("---")
-            else:
-                st.warning("⚠️ Nenhum jogo encontrado para os filtros selecionados.")
+                st.write(f"**{p['homeTeam']['name']} vs {p['awayTeam']['name']}**")
+                st.write(f"📅 {p['utcDate']}")
+                st.write(f"🏆 Status: {p['status']}")
+                st.write(f"💡 Sugestão: {sugestao}")
+                st.write("---")
