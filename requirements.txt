@@ -10,4 +10,5 @@ python-dotenv
 lightgbm
 selenium
 catboost
-
+plotly
+beautifulsoup4
