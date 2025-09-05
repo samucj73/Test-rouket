@@ -3,6 +3,7 @@ import requests
 import numpy as np
 import pandas as pd
 import datetime
+import json
 
 # =============================
 # Configuração da API
@@ -35,15 +36,13 @@ LIGAS = {
 # =============================
 def buscar_partidas(codigo_liga=None, status="SCHEDULED"):
     """Busca partidas gerais ou de uma liga específica"""
-    url = f"{BASE_URL}/matches"
-    response = requests.get(url, headers=HEADERS)
+    uri = f"{BASE_URL}/matches"
+    response = requests.get(uri, headers=HEADERS)
     if response.status_code == 200:
         data = response.json()
         matches = data.get('matches', [])
-        # Filtra por liga se fornecida
         if codigo_liga:
             matches = [m for m in matches if m.get("competition", {}).get("code") == codigo_liga]
-        # Filtra por status (SCHEDULED, FINISHED, etc)
         matches = [m for m in matches if m.get("status") == status]
         return matches
     else:
@@ -100,6 +99,7 @@ st.markdown("""
 # =============================
 st.title("⚽ Mais/Menos Gols - Previsões Inteligentes")
 
+# Seletor de campeonato e data
 col1, col2 = st.columns(2)
 with col1:
     liga_escolhida = st.selectbox("🏆 Campeonato", list(LIGAS.keys()))
@@ -107,21 +107,25 @@ with col2:
     data_escolhida = st.date_input(
         "📅 Data do jogo",
         value=datetime.date.today(),
-        min_value=datetime.date.today(),
+        min_value=datetime.date.today() - datetime.timedelta(days=365),
         max_value=datetime.date.today() + datetime.timedelta(days=7)
     )
 
-col3, col4 = st.columns(2)
+# Seletor de linha de gols, tipo de análise e status
+col3, col4, col5 = st.columns(3)
 with col3:
     linha_escolhida = st.radio("📏 Linha de gols", [1.5, 2.5, 3.5], horizontal=True)
 with col4:
     tipo_aposta = st.radio("🎯 Analisar", ["Mais (Over)", "Menos (Under)"], horizontal=True)
+with col5:
+    status_partidas = st.radio("🕒 Tipo de partidas", ["Futuras", "Finalizadas"], horizontal=True)
+    status_api = "SCHEDULED" if status_partidas == "Futuras" else "FINISHED"
 
 # =============================
 # Buscar partidas
 # =============================
 codigo_liga = LIGAS[liga_escolhida]
-partidas = buscar_partidas(codigo_liga=codigo_liga, status="SCHEDULED")
+partidas = buscar_partidas(codigo_liga=codigo_liga, status=status_api)
 # Filtra por data
 partidas = [p for p in partidas if p["utcDate"].startswith(str(data_escolhida))]
 
@@ -129,7 +133,7 @@ partidas = [p for p in partidas if p["utcDate"].startswith(str(data_escolhida))]
 # Resultados
 # =============================
 if partidas:
-    st.subheader(f"📊 Jogos em {data_escolhida}")
+    st.subheader(f"📊 Jogos em {data_escolhida} ({status_partidas})")
     dados_tabela = []
     recomendados = []
 
