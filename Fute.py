@@ -7,9 +7,9 @@ import datetime
 # =============================
 # Configuração da API
 # =============================
-API_KEY = "9058de85e3324bdb969adc005b5d918a"  # sua chave
+API_KEY = "9058de85e3324bdb969adc005b5d918a"  # substitua pela sua chave
 BASE_URL = "https://api.football-data.org/v4"
-headers = {"X-Auth-Token": API_KEY}
+HEADERS = {"X-Auth-Token": API_KEY}
 
 # =============================
 # Ligas disponíveis
@@ -33,20 +33,25 @@ LIGAS = {
 # =============================
 # Funções auxiliares
 # =============================
-def buscar_partidas(codigo_liga, status="SCHEDULED"):
-    """Busca partidas de uma liga"""
-    url = f"{BASE_URL}/competitions/{codigo_liga}/matches"
-    params = {"status": status}
-    r = requests.get(url, headers=headers, params=params)
-    if r.status_code == 200:
-        return r.json().get("matches", [])
+def buscar_partidas(codigo_liga=None, status="SCHEDULED"):
+    """Busca partidas gerais ou de uma liga específica"""
+    url = f"{BASE_URL}/matches"
+    response = requests.get(url, headers=HEADERS)
+    if response.status_code == 200:
+        data = response.json()
+        matches = data.get('matches', [])
+        # Filtra por liga se fornecida
+        if codigo_liga:
+            matches = [m for m in matches if m.get("competition", {}).get("code") == codigo_liga]
+        # Filtra por status (SCHEDULED, FINISHED, etc)
+        matches = [m for m in matches if m.get("status") == status]
+        return matches
     else:
-        st.warning(f"Não foi possível carregar partidas da liga {codigo_liga}. Status: {r.status_code}")
+        st.warning(f"Erro ao buscar partidas: {response.status_code}")
         return []
 
-def calcular_estatisticas(codigo_liga, time_id, linha=2.5, n=10):
-    """Média de gols e % over X.5 nos últimos n jogos"""
-    partidas = buscar_partidas(codigo_liga, status="FINISHED")
+def calcular_estatisticas(time_id, partidas, linha=2.5, n=10):
+    """Média de gols e % over X.5 nos últimos n jogos do time"""
     ultimos = [p for p in partidas if p["homeTeam"]["id"] == time_id or p["awayTeam"]["id"] == time_id]
     ultimos = ultimos[-n:]
 
@@ -68,12 +73,12 @@ def calcular_estatisticas(codigo_liga, time_id, linha=2.5, n=10):
     prob_over = (overs / len(gols)) * 100
     return round(media, 2), round(prob_over, 1)
 
-def analisar_jogo(codigo_liga, home, away, linha=2.5):
+def analisar_jogo(home, away, partidas, linha=2.5):
     """Analisa um jogo baseado nos últimos resultados dos times"""
-    mediaA, overA = calcular_estatisticas(codigo_liga, home["id"], linha)
-    mediaB, overB = calcular_estatisticas(codigo_liga, away["id"], linha)
-    media_total = round((mediaA + mediaB) / 2, 2)
-    prob_over = round((overA + overB) / 2, 1)
+    mediaA, overA = calcular_estatisticas(home["id"], partidas, linha)
+    mediaB, overB = calcular_estatisticas(away["id"], partidas, linha)
+    media_total = round((mediaA + mediaB)/2, 2)
+    prob_over = round((overA + overB)/2, 1)
     prob_under = 100 - prob_over
     return media_total, prob_over, prob_under
 
@@ -112,27 +117,27 @@ with col3:
 with col4:
     tipo_aposta = st.radio("🎯 Analisar", ["Mais (Over)", "Menos (Under)"], horizontal=True)
 
-# Buscar jogos agendados
+# =============================
+# Buscar partidas
+# =============================
 codigo_liga = LIGAS[liga_escolhida]
-proximos = buscar_partidas(codigo_liga, status="SCHEDULED")
-proximos = [p for p in proximos if p["utcDate"].startswith(str(data_escolhida))]
+partidas = buscar_partidas(codigo_liga=codigo_liga, status="SCHEDULED")
+# Filtra por data
+partidas = [p for p in partidas if p["utcDate"].startswith(str(data_escolhida))]
 
 # =============================
 # Resultados
 # =============================
-if proximos:
+if partidas:
     st.subheader(f"📊 Jogos em {data_escolhida}")
-
     dados_tabela = []
     recomendados = []
 
-    for jogo in proximos:
+    for jogo in partidas:
         home = jogo["homeTeam"]
         away = jogo["awayTeam"]
 
-        media, prob_over, prob_under = analisar_jogo(
-            codigo_liga, home, away, linha_escolhida
-        )
+        media, prob_over, prob_under = analisar_jogo(home, away, partidas, linha_escolhida)
 
         dados_tabela.append({
             "Jogo": f"{home['name']} x {away['name']}",
