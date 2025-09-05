@@ -19,11 +19,13 @@ def listar_competicoes():
         data = r.json()
         comps = []
         for comp in data.get("competitions", []):
+            # Corrige erro caso "plan" seja None
+            plan_name = comp["plan"]["name"] if comp.get("plan") else "N/A"
             comps.append({
                 "Nome": comp.get("name"),
                 "Código": comp.get("code"),
                 "ID": comp.get("id"),
-                "Nível": comp.get("plan", {}).get("name", "N/A")
+                "Nível": plan_name
             })
         return comps
     else:
@@ -31,7 +33,7 @@ def listar_competicoes():
         return []
 
 # =============================
-# Estilo CSS para Streamlit
+# Estilo visual (CSS)
 # =============================
 st.markdown("""
     <style>
