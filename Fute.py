@@ -1,108 +1,102 @@
 import streamlit as st
 import pandas as pd
 import requests
-from bs4 import BeautifulSoup
+from datetime import datetime, timedelta
 import plotly.express as px
-import time
-from datetime import date
 
 # =============================
 # Configurações
 # =============================
-URL_BUNDESLIGA = "https://native-stats.org/competition/BL1/"
-LINHA_GOLS_DEFAULT = 2.5
-ALERTA_EXTRA = 0.5
-REFRESH_INTERVAL = 60  # segundos
+API_TOKEN = "9058de85e3324bdb969adc005b5d918a"
+HEADERS = {"X-Auth-Token": API_TOKEN}
 
-st.set_page_config(page_title="Bundesliga Mais/Menos Gols", layout="centered")
-st.title("⚽ Bundesliga - Painel Mais/Menos Gols com Alertas 🔔")
+st.set_page_config(page_title="Mais/Menos Gols - Futebol", layout="centered")
+st.title("⚽ Previsão Mais/Menos Gols - Futebol")
+
+# Competição
+competicoes = {
+    "Bundesliga": "BL1",
+    "Premier League": "PL",
+    "Champions League": "CL",
+    "Serie A": "SA",
+    "La Liga": "PD"
+}
+competicao_selecionada = st.selectbox("Selecione a competição:", list(competicoes.keys()))
+codigo_competicao = competicoes[competicao_selecionada]
+
+# Data
+data_escolhida = st.date_input("Selecione a data para análise:", datetime.today())
+
+# Linha de gols
+linha_gols = st.number_input("Linha de gols:", min_value=0.0, max_value=10.0, value=2.5, step=0.1)
 
 # =============================
-# Funções auxiliares
+# Funções
 # =============================
-def obter_dados_bundesliga():
-    """ Faz scraping da página da BL1 e retorna partidas, xG e odds """
-    try:
-        response = requests.get(URL_BUNDESLIGA)
-        soup = BeautifulSoup(response.text, 'html.parser')
+def obter_partidas(codigo, data):
+    """Puxa partidas da API para a competição e data selecionada"""
+    date_from = data.strftime("%Y-%m-%d")
+    date_to = (data + timedelta(days=1)).strftime("%Y-%m-%d")
+    url = f"https://api.football-data.org/v4/competitions/{codigo}/matches"
+    params = {"dateFrom": date_from, "dateTo": date_to}
+    response = requests.get(url, headers=HEADERS, params=params)
+    if response.status_code != 200:
+        st.error(f"Erro {response.status_code}: {response.json().get('message')}")
+        return []
+    return response.json().get("matches", [])
 
-        partidas = []
-        xg_list = []
-        odds_list = []
+def calcular_gols_esperados(partidas):
+    """Calcula uma estimativa de gols esperados baseada em resultados passados"""
+    resultados = []
+    for p in partidas:
+        home = p["homeTeam"]["name"]
+        away = p["awayTeam"]["name"]
+        # Para simplificação, usamos placar médio passado (0 se não tiver)
+        home_goals = p.get("score", {}).get("fullTime", {}).get("home", 0)
+        away_goals = p.get("score", {}).get("fullTime", {}).get("away", 0)
+        xg_total = home_goals + away_goals  # estimativa simples
+        resultados.append({
+            "Partida": f"{home} vs {away}",
+            "Gols Esperados": xg_total
+        })
+    return resultados
 
-        # Exemplo genérico, ajuste conforme o HTML real do site
-        jogos_html = soup.select(".match-row")  # cada partida
-        for jogo in jogos_html:
-            time_home = jogo.select_one(".home-team").text.strip()
-            time_away = jogo.select_one(".away-team").text.strip()
-            partida_nome = f"{time_home} vs {time_away}"
-
-            xg_home = float(jogo.select_one(".home-xg").text.strip())
-            xg_away = float(jogo.select_one(".away-xg").text.strip())
-            xg_total = xg_home + xg_away
-
-            # Odds ou placeholders
-            odd_home = jogo.select_one(".home-odd").text.strip() if jogo.select_one(".home-odd") else "-"
-            odd_draw = jogo.select_one(".draw-odd").text.strip() if jogo.select_one(".draw-odd") else "-"
-            odd_away = jogo.select_one(".away-odd").text.strip() if jogo.select_one(".away-odd") else "-"
-
-            partidas.append(partida_nome)
-            xg_list.append(xg_total)
-            odds_list.append(f"{odd_home}/{odd_draw}/{odd_away}")
-
-        return partidas, xg_list, odds_list
-    except Exception as e:
-        st.error(f"Erro ao obter dados: {e}")
-        return [], [], []
-
-def calcular_alertas(xg_list, linha_gols):
+def gerar_alertas(df, linha):
     alertas = []
-    for xg in xg_list:
-        if xg > linha_gols + ALERTA_EXTRA:
+    for g in df["Gols Esperados"]:
+        if g > linha:
             alertas.append("Mais de gols 🟢")
         else:
             alertas.append("Menos de gols 🔴")
-    return alertas
+    df["Sugestão"] = alertas
+    return df
 
 # =============================
-# Interface Streamlit
+# Execução
 # =============================
-linha_gols = st.number_input("Linha de gols:", min_value=0.0, max_value=10.0,
-                             value=LINHA_GOLS_DEFAULT, step=0.1)
+partidas = obter_partidas(codigo_competicao, data_escolhida)
+if not partidas:
+    st.warning("Nenhuma partida encontrada para a data/competição selecionada.")
+else:
+    resultados = calcular_gols_esperados(partidas)
+    df = pd.DataFrame(resultados)
+    df = gerar_alertas(df, linha_gols)
+    
+    st.subheader("Tabela de partidas")
+    st.dataframe(df.style.applymap(
+        lambda x: "background-color: lightgreen" if "Mais" in str(x) else
+                  ("background-color: tomato" if "Menos" in str(x) else ""),
+        subset=["Sugestão"]
+    ))
 
-st.info(f"⏱️ Atualizando automaticamente a cada {REFRESH_INTERVAL} segundos...")
-
-placeholder = st.empty()
-
-while True:
-    partidas, xg_list, odds_list = obter_dados_bundesliga()
-    if partidas:
-        alertas_list = calcular_alertas(xg_list, linha_gols)
-
-        df = pd.DataFrame({
-            "Partida": partidas,
-            "xG Total": xg_list,
-            "Odds (Home/Draw/Away)": odds_list,
-            "Sugestão": alertas_list
-        })
-
-        with placeholder.container():
-            st.subheader("Tabela de Partidas")
-            st.dataframe(df.style.applymap(lambda x: "background-color: lightgreen" if "Mais" in str(x) else
-                                           ("background-color: tomato" if "Menos" in str(x) else ""), subset=["Sugestão"]))
-
-            # Gráfico interativo
-            fig = px.bar(df, x="Partida", y="xG Total", text="Sugestão",
-                         color=df["Sugestão"].apply(lambda x: "Mais" in x),
-                         color_discrete_map={True: "green", False: "red"})
-            fig.update_layout(title=f"Gols esperados vs Linha ({linha_gols})",
-                              yaxis_title="Gols esperados",
-                              xaxis_title="Partidas",
-                              xaxis_tickangle=-45,
-                              template="plotly_white",
-                              height=500)
-            st.plotly_chart(fig)
-    else:
-        placeholder.warning("⚠️ Nenhuma partida encontrada ou erro ao coletar dados.")
-
-    time.sleep(REFRESH_INTERVAL)
+    # Gráfico interativo
+    fig = px.bar(df, x="Partida", y="Gols Esperados", text="Sugestão",
+                 color=df["Sugestão"].apply(lambda x: "Mais" in x),
+                 color_discrete_map={True: "green", False: "red"})
+    fig.update_layout(title=f"Gols esperados vs Linha ({linha_gols})",
+                      yaxis_title="Gols esperados",
+                      xaxis_title="Partidas",
+                      xaxis_tickangle=-45,
+                      template="plotly_white",
+                      height=500)
+    st.plotly_chart(fig)
