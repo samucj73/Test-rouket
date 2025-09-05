@@ -2,17 +2,17 @@ import streamlit as st
 import requests
 import numpy as np
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # =============================
-# Configuração da API
+# Configurações
 # =============================
-API_KEY = "9058de85e3324bdb969adc005b5d918a"  # substitua pela sua chave
-BASE_URL = "https://api.football-data.org/v4"
-HEADERS = {"X-Auth-Token": API_KEY}
+API_KEY = '9058de85e3324bdb969adc005b5d918a'
+BASE_URL = 'https://api.football-data.org/v4'
+HEADERS = {'X-Auth-Token': API_KEY}
 
 # =============================
-# Buscar códigos oficiais das ligas
+# Funções auxiliares
 # =============================
 @st.cache_data
 def carregar_competicoes():
@@ -25,17 +25,9 @@ def carregar_competicoes():
             name = comp["name"]
             code = comp["code"]
             comps[name] = code
-    else:
-        st.warning(f"Erro ao buscar competições: {response.status_code}")
     return comps
 
-COMPETICOES = carregar_competicoes()
-
-# =============================
-# Funções auxiliares
-# =============================
 def buscar_partidas(codigo_liga=None, status="FINISHED"):
-    """Busca partidas já finalizadas de uma liga"""
     uri = f"{BASE_URL}/matches"
     response = requests.get(uri, headers=HEADERS)
     matches = []
@@ -45,14 +37,11 @@ def buscar_partidas(codigo_liga=None, status="FINISHED"):
         if codigo_liga:
             matches = [m for m in matches if m.get("competition", {}).get("code") == codigo_liga]
         matches = [m for m in matches if m.get("status") == status]
-    else:
-        st.warning(f"Erro ao buscar partidas: {response.status_code}")
     return matches
 
 def calcular_estatisticas(time_id, partidas, linha=2.5, n=10):
     ultimos = [p for p in partidas if p["homeTeam"]["id"] == time_id or p["awayTeam"]["id"] == time_id]
     ultimos = ultimos[-n:]
-
     gols = []
     overs = 0
     for p in ultimos:
@@ -64,7 +53,6 @@ def calcular_estatisticas(time_id, partidas, linha=2.5, n=10):
         gols.append(total)
         if total > linha:
             overs += 1
-
     if not gols:
         return 0, 0
     media = np.mean(gols)
@@ -83,9 +71,21 @@ def analisar_jogo(home, away, partidas, linha=2.5):
 # Interface Streamlit
 # =============================
 st.set_page_config(page_title="Mais/Menos Gols", layout="wide")
+st.markdown("""
+<style>
+.block-container { max-width: 950px; margin: auto; padding-top: 2rem; background-color: #0e1117; color: white; }
+h1, h2 { text-align: center; color: #1DB954; }
+.game-card { border-radius: 10px; padding: 15px; margin: 10px 0; background-color: #1e222b; }
+.over { border-left: 5px solid #21bf73; }
+.under { border-left: 5px solid #f39c12; }
+</style>
+""", unsafe_allow_html=True)
+
 st.title("⚽ Mais/Menos Gols - Previsões Inteligentes")
 
-# Seleção de liga e linha de gols
+COMPETICOES = carregar_competicoes()
+
+# Seleção de campeonato e linha de gols
 col1, col2 = st.columns(2)
 with col1:
     liga_escolhida = st.selectbox("🏆 Campeonato", list(COMPETICOES.keys()))
@@ -94,9 +94,7 @@ with col2:
 
 tipo_aposta = st.radio("🎯 Analisar", ["Mais (Over)", "Menos (Under)"], horizontal=True)
 
-# =============================
-# Buscar partidas já finalizadas da liga
-# =============================
+# Buscar partidas
 codigo_liga = COMPETICOES[liga_escolhida]
 partidas = buscar_partidas(codigo_liga=codigo_liga)
 
@@ -124,18 +122,16 @@ if partidas:
         elif tipo_aposta == "Menos (Under)" and prob_under >= 60:
             recomendados.append(("under", home, away, media, prob_under))
 
-    # Tabela geral
     df = pd.DataFrame(dados_tabela)
     st.dataframe(df, use_container_width=True)
 
-    # Jogos recomendados
     if recomendados:
         st.subheader("🔥 Jogos recomendados")
         for tipo, home, away, media, prob in recomendados:
             cor = "21bf73" if tipo=="over" else "f39c12"
             emoji = "🔥" if tipo=="over" else "🛡️"
             st.markdown(f"""
-                <div style='border-left:5px solid #{cor}; padding:10px; margin:5px; background-color:#1e222b; border-radius:8px'>
+                <div class="game-card {'over' if tipo=='over' else 'under'}">
                     <h4>{home['name']} x {away['name']}</h4>
                     <p>📊 Média gols: <b>{media}</b></p>
                     <p>{emoji} Probabilidade {tipo}: <b>{prob}%</b></p>
@@ -143,6 +139,5 @@ if partidas:
             """, unsafe_allow_html=True)
     else:
         st.info("Nenhum jogo forte identificado para essa linha.")
-
 else:
     st.info("Nenhuma partida disponível para esta liga.")
