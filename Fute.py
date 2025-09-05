@@ -36,29 +36,34 @@ def historico_time(time_id, limite=10):
     url = f"{BASE_URL}/teams/{time_id}/matches?status=FINISHED&limit={limite}"
     r = requests.get(url, headers=HEADERS)
     if r.status_code != 200:
-        return {"erro": f"Erro {r.status_code}: {r.text}"}
+        return []
     return r.json().get("matches", [])
 
+# =============================
+# Cálculo avançado de Over/Under
+# =============================
 def calcular_mais_menos_gols_avancado(home_id, away_id, linha_gols=2.5, limite=10):
     home_historico = historico_time(home_id, limite)
     away_historico = historico_time(away_id, limite)
 
     if not home_historico or not away_historico:
-        return "Não foi possível calcular"
+        return "Não foi possível calcular (sem histórico suficiente)"
 
     def media_gols(matches, time_id):
         gols_marcados = 0
         gols_sofridos = 0
         for m in matches:
-            ht_id = m["homeTeam"]["id"]
-            at_id = m["awayTeam"]["id"]
-            score = m["score"]["fullTime"]
-            if ht_id == time_id:  # time jogou em casa
-                gols_marcados += score["home"]
-                gols_sofridos += score["away"]
-            elif at_id == time_id:  # time jogou fora
-                gols_marcados += score["away"]
-                gols_sofridos += score["home"]
+            ht_id = m.get("homeTeam", {}).get("id")
+            at_id = m.get("awayTeam", {}).get("id")
+            score = m.get("score", {}).get("fullTime", {})
+            if not ht_id or not at_id or score is None:
+                continue
+            if ht_id == time_id:  # jogou em casa
+                gols_marcados += score.get("home",0)
+                gols_sofridos += score.get("away",0)
+            elif at_id == time_id:  # jogou fora
+                gols_marcados += score.get("away",0)
+                gols_sofridos += score.get("home",0)
         n = max(1, len(matches))
         return gols_marcados/n, gols_sofridos/n
 
@@ -85,7 +90,7 @@ data_formatada = data_escolhida.strftime("%Y-%m-%d")
 # Seleção de status
 status_selecionado = st.selectbox("Status da partida:", ["SCHEDULED", "LIVE", "FINISHED"], index=0)
 
-# Listar competições que têm partidas nessa data
+# Listar competições com partidas disponíveis
 dados_comp = listar_competicoes()
 competicoes_disponiveis = []
 
@@ -94,7 +99,7 @@ if "erro" in dados_comp:
 else:
     for c in dados_comp.get("competitions", []):
         matches = listar_partidas(c.get("code",""), data_formatada, status_selecionado)
-        if matches:  # só adiciona se houver partidas
+        if matches:
             competicoes_disponiveis.append({"nome": c["name"], "codigo": c.get("code","")})
 
 if not competicoes_disponiveis:
@@ -106,7 +111,6 @@ else:
     if selecao:
         codigo = selecao.split("(")[1].split(")")[0]
 
-        # Linha de gols
         linha_gols = st.number_input("Linha de gols (ex: 2.5):", min_value=0.0, max_value=10.0,
                                      value=2.5, step=0.1)
 
@@ -116,12 +120,18 @@ else:
             st.warning("⚠️ Nenhum jogo encontrado para os filtros selecionados.")
         else:
             for p in partidas:
-                home_id = p["homeTeam"]["id"]
-                away_id = p["awayTeam"]["id"]
+                if not p.get("homeTeam") or not p.get("awayTeam"):
+                    continue  # ignora partidas incompletas
+
+                home_id = p["homeTeam"].get("id")
+                away_id = p["awayTeam"].get("id")
+                if not home_id or not away_id:
+                    continue
+
                 sugestao = calcular_mais_menos_gols_avancado(home_id, away_id, linha_gols)
 
-                st.write(f"**{p['homeTeam']['name']} vs {p['awayTeam']['name']}**")
-                st.write(f"📅 {p['utcDate']}")
-                st.write(f"🏆 Status: {p['status']}")
+                st.write(f"**{p['homeTeam'].get('name','Desconhecido')} vs {p['awayTeam'].get('name','Desconhecido')}**")
+                st.write(f"📅 {p.get('utcDate','-')}")
+                st.write(f"🏆 Status: {p.get('status','-')}")
                 st.write(f"💡 Sugestão: {sugestao}")
                 st.write("---")
