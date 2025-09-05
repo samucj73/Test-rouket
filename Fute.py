@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 # Configurações
 # =============================
 API_KEY = '9058de85e3324bdb969adc005b5d918a'
-BASE_URL = 'https://api.football-data.org/v4'
+BASE_URL = 'https://api.football-data.org/v4/matches'
 HEADERS = {'X-Auth-Token': API_KEY}
 
 # =============================
