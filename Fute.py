@@ -21,23 +21,25 @@ def get_ligas():
     response = requests.get(url, headers=HEADERS)
     if response.status_code == 200:
         data = response.json()["response"]
-        ligas = [{"id": l["league"]["id"], "nome": l["league"]["name"], "pais": l["country"]["name"]} for l in data]
-        return ligas
-    return []
+        return [{"id": l["league"]["id"], "nome": l["league"]["name"], "pais": l["country"]["name"]} for l in data]
+    else:
+        st.error(f"Erro {response.status_code}: {response.text}")
+        return []
 
 def media_gols_time(team_id):
     url = f"{BASE_URL}/fixtures?team={team_id}&last=5"
     response = requests.get(url, headers=HEADERS)
-    if response.status_code == 200:
-        jogos = response.json()["response"]
-        if not jogos:
-            return 0, 0
-        gols_marcados = [j["goals"]["home"] if j["teams"]["home"]["id"] == team_id else j["goals"]["away"] for j in jogos]
-        gols_sofridos = [j["goals"]["away"] if j["teams"]["home"]["id"] == team_id else j["goals"]["home"] for j in jogos]
-        return sum(gols_marcados)/len(gols_marcados), sum(gols_sofridos)/len(gols_sofridos)
-    return 0,0
+    if response.status_code != 200:
+        return 0, 0
+    jogos = response.json()["response"]
+    if not jogos:
+        return 0, 0
+    gols_marcados = [j["goals"]["home"] if j["teams"]["home"]["id"] == team_id else j["goals"]["away"] for j in jogos]
+    gols_sofridos = [j["goals"]["away"] if j["teams"]["home"]["id"] == team_id else j["goals"]["home"] for j in jogos]
+    return sum(gols_marcados)/len(gols_marcados), sum(gols_sofridos)/len(gols_sofridos)
 
 def exibir_jogo_card(fixture, teams, media_casa, media_fora, estimativa, tendencia):
+    # Definir cor
     if "Mais 2.5" in tendencia:
         cor = "red"
     elif "Menos 1.5" in tendencia:
@@ -57,7 +59,7 @@ def exibir_jogo_card(fixture, teams, media_casa, media_fora, estimativa, tendenc
             f"<b>{tendencia}</b><br>({estimativa:.2f} gols)</div>",
             unsafe_allow_html=True
         )
-        st.caption(f"📍 {fixture['venue']['name']}\n{fixture['date'][:16].replace('T', ' ')}")
+        st.caption(f"📍 {fixture['venue']['name'] if fixture['venue'] else 'Desconhecido'}\n{fixture['date'][:16].replace('T',' ')}")
 
     with col3:
         st.image(teams["away"]["logo"], width=50)
@@ -82,12 +84,13 @@ else:
     if st.button("🔍 Buscar Jogos"):
         url = f"{BASE_URL}/fixtures?date={data_formatada}&league={liga_id}"
         response = requests.get(url, headers=HEADERS)
+
         if response.status_code != 200:
             st.error(f"Erro {response.status_code}: {response.text}")
         else:
             data = response.json()["response"]
             if not data:
-                st.warning("Nenhum jogo encontrado para essa liga/data.")
+                st.warning("⚠️ Nenhum jogo encontrado para essa liga/data.")
             else:
                 jogos_lista = []
                 # Calcular médias e estimativa
@@ -95,9 +98,9 @@ else:
                     fixture = j["fixture"]
                     teams = j["teams"]
 
-                    media_casa_marc, media_casa_sofr = media_gols_time(teams["home"]["id"])
-                    media_fora_marc, media_fora_sofr = media_gols_time(teams["away"]["id"])
-                    estimativa = ((media_casa_marc + media_fora_sofr)/2 + (media_fora_marc + media_casa_sofr)/2)
+                    media_casa = media_gols_time(teams["home"]["id"])
+                    media_fora = media_gols_time(teams["away"]["id"])
+                    estimativa = ((media_casa[0] + media_fora[1])/2 + (media_fora[0] + media_casa[1])/2)
 
                     if estimativa >= 2.5:
                         tendencia = "🔥 Mais 2.5"
@@ -111,8 +114,8 @@ else:
                         "teams": teams,
                         "estimativa": estimativa,
                         "tendencia": tendencia,
-                        "media_casa": (media_casa_marc, media_casa_sofr),
-                        "media_fora": (media_fora_marc, media_fora_sofr)
+                        "media_casa": media_casa,
+                        "media_fora": media_fora
                     })
 
                 # Ranking TOP 5 jogos Mais 2.5 gols
