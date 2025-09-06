@@ -41,6 +41,9 @@ def buscar_jogos(data, competicoes_ids):
                 })
         else:
             st.error(f"Erro ao buscar jogos: {response.status_code}")
+    # Garantir que o DataFrame sempre tenha as colunas corretas
+    if not todos_jogos:
+        return pd.DataFrame(columns=["time_casa", "time_fora", "data", "league", "país"])
     return pd.DataFrame(todos_jogos)
 
 # =============================
@@ -75,12 +78,17 @@ if st.button("Buscar jogos"):
     else:
         with st.spinner("Buscando jogos..."):
             df_jogos = buscar_jogos(data_formatada, competicoes_ids)
-            # Filtra apenas jogos futuros
-            agora = datetime.now(timezone.utc)
-            df_jogos = df_jogos[df_jogos["data"] >= agora]
 
-            if df_jogos.empty:
+            # Verifica se a coluna 'data' existe e se não está vazio
+            if df_jogos.empty or "data" not in df_jogos.columns:
                 st.info("Nenhum jogo encontrado para a data e campeonatos selecionados.")
             else:
-                st.success(f"{len(df_jogos)} jogos encontrados")
-                st.dataframe(df_jogos[["time_casa", "time_fora", "league", "país", "data"]])
+                # Filtra apenas jogos futuros
+                agora = datetime.now(timezone.utc)
+                df_jogos = df_jogos[df_jogos["data"] >= agora]
+
+                if df_jogos.empty:
+                    st.info("Nenhum jogo futuro encontrado para a data e campeonatos selecionados.")
+                else:
+                    st.success(f"{len(df_jogos)} jogos encontrados")
+                    st.dataframe(df_jogos[["time_casa", "time_fora", "league", "país", "data"]])
