@@ -29,7 +29,7 @@ def get_ligas():
         return []
 
 # ==========================
-# Função para buscar estatísticas da liga (somente jogos finalizados)
+# Função para buscar jogos finalizados da liga e calcular estatísticas
 # ==========================
 @st.cache_data
 def buscar_estatisticas_liga(liga_id, season=datetime.today().year):
@@ -44,10 +44,8 @@ def buscar_estatisticas_liga(liga_id, season=datetime.today().year):
         return {}
 
     times_stats = {}
-    barra = st.progress(0)  # Barra de progresso
-    total_jogos = len(jogos)
-    
-    for i, j in enumerate(jogos, start=1):
+
+    for j in jogos:
         fixture = j["fixture"]
         status = fixture["status"]["short"]
         if status != "FT":
@@ -58,6 +56,7 @@ def buscar_estatisticas_liga(liga_id, season=datetime.today().year):
         home_goals = j["score"]["fulltime"]["home"]
         away_goals = j["score"]["fulltime"]["away"]
 
+        # Inicializar estatísticas
         for t in [home, away]:
             if t["id"] not in times_stats:
                 times_stats[t["id"]] = {
@@ -71,13 +70,16 @@ def buscar_estatisticas_liga(liga_id, season=datetime.today().year):
                     "gols_sofridos": 0
                 }
 
+        # Atualizar estatísticas
         times_stats[home["id"]]["jogos_disputados"] += 1
         times_stats[away["id"]]["jogos_disputados"] += 1
+
         times_stats[home["id"]]["gols_marcados"] += home_goals
         times_stats[home["id"]]["gols_sofridos"] += away_goals
         times_stats[away["id"]]["gols_marcados"] += away_goals
         times_stats[away["id"]]["gols_sofridos"] += home_goals
 
+        # Vitórias / Empates / Derrotas
         if home_goals > away_goals:
             times_stats[home["id"]]["vitorias"] += 1
             times_stats[away["id"]]["derrotas"] += 1
@@ -88,15 +90,12 @@ def buscar_estatisticas_liga(liga_id, season=datetime.today().year):
             times_stats[home["id"]]["empates"] += 1
             times_stats[away["id"]]["empates"] += 1
 
-        barra.progress(i / total_jogos)
-
     # Calcular médias
     for t_id, t_stats in times_stats.items():
         jogos = t_stats["jogos_disputados"]
         t_stats["media_gols_marcados"] = round(t_stats["gols_marcados"] / jogos, 2) if jogos else 0
         t_stats["media_gols_sofridos"] = round(t_stats["gols_sofridos"] / jogos, 2) if jogos else 0
 
-    barra.empty()  # Remove barra
     return times_stats
 
 # ==========================
