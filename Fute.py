@@ -7,16 +7,16 @@ from datetime import datetime
 # Configurações
 # =============================
 API_KEY = "f07fc89fcff4416db7f079fda478dd61"
-BASE_URL = "https://api-football-v1.p.rapidapi.com/v3"
+BASE_URL = "https://v3.football.api-sports.io"
 HEADERS = {
-    "X-RapidAPI-Key": API_KEY,
-    "X-RapidAPI-Host": "api-football-v1.p.rapidapi.com"
+    "x-apisports-key": API_KEY
 }
 
 # =============================
 # Funções principais
 # =============================
 def buscar_jogos_por_data(data, competicoes=[]):
+    """Busca todos os jogos de uma data em competições selecionadas"""
     todos_jogos = []
     for comp_id in competicoes:
         url = f"{BASE_URL}/fixtures?league={comp_id}&season={datetime.now().year}&date={data}"
@@ -29,38 +29,37 @@ def buscar_jogos_por_data(data, competicoes=[]):
                     "time_fora": j["teams"]["away"]["name"],
                     "data": j["fixture"]["date"],
                     "league": j["league"]["name"],
-                    "fixture_id": j["fixture"]["id"]
+                    "fixture_id": j["fixture"]["id"],
+                    # Odds de +1.5 gols já incluídas aqui (evita requisições separadas)
+                    "odds_over_1_5": obter_odds_jogo(j)
                 })
         else:
             st.error(f"Erro ao buscar jogos: {response.status_code}")
     return pd.DataFrame(todos_jogos)
 
-def buscar_odds(fixture_id):
-    url = f"{BASE_URL}/odds?fixture={fixture_id}&market=Over/Under"
-    response = requests.get(url, headers=HEADERS)
-    if response.status_code != 200:
-        return None
-    
-    odds_data = response.json().get("response", [])
-    for bookie in odds_data:
-        for market in bookie.get("bookmakers", []):
-            for bet in market.get("bets", []):
-                if bet["name"] == "Over/Under":
-                    for value in bet.get("values", []):
-                        if value["value"] == "Over 1.5":
-                            return value["odd"]
+def obter_odds_jogo(jogo):
+    """
+    Tenta extrair a odd de Over 1.5 do JSON do jogo.
+    Caso não tenha, retorna None.
+    """
+    odds_data = jogo.get("odds", {}).get("1.5", {})
+    # Se houver múltiplas casas, pega a primeira
+    if odds_data:
+        for casa, odds in odds_data.items():
+            if "Over" in odds:
+                return float(odds["Over"])
     return None
 
 def calcular_probabilidade(odd):
+    """Converte odd em probabilidade implícita"""
     if odd:
-        return round(1 / float(odd), 2)
+        return round(1 / odd, 2)
     return None
 
 def filtrar_jogos_mais_1_5(df, limiar_prob=0.5):
     resultados = []
     for _, row in df.iterrows():
-        odd = buscar_odds(row["fixture_id"])
-        prob = calcular_probabilidade(odd)
+        prob = calcular_probabilidade(row["odds_over_1_5"])
         if prob and prob >= limiar_prob:
             row["prob_mais_1_5"] = prob
             resultados.append(row)
