@@ -14,46 +14,37 @@ st.set_page_config(page_title="Jogos e Tendência de Gols", layout="wide")
 st.title("⚽ Jogos e Tendência de Gols - API Football")
 
 # ==========================
-# Ligas principais (IDs fixos)
+# Função para buscar ligas
 # ==========================
-LIGAS_PRINCIPAIS = {
-    # Brasil
-    71: "Brasileirão Série A",
-    72: "Brasileirão Série B",
-    73: "Copa do Brasil",
-    100: "Copa do Nordeste",
-
-    # América do Sul
-    13: "Copa Libertadores",
-    14: "Copa Sul-Americana",
-    298: "Copa América",
-
-    # América do Norte
-    253: "MLS (EUA/Canadá)",
-    262: "Liga MX (México)",
-    667: "CONCACAF Champions Cup",
-
-    # Europa
-    2: "UEFA Champions League",
-    39: "Premier League (Inglaterra)",
-    140: "La Liga (Espanha)",
-    135: "Serie A (Itália)",
-    78: "Bundesliga (Alemanha)",
-    61: "Ligue 1 (França)",
-}
-
-# ==========================
-# Função para buscar ligas (filtradas)
-# ==========================
+@st.cache_data
 def get_ligas():
-    ligas = [{"id": lid, "nome": nome} for lid, nome in LIGAS_PRINCIPAIS.items()]
-    return pd.DataFrame(ligas)
+    url = f"{BASE_URL}/leagues"
+    response = requests.get(url, headers=HEADERS)
+    if response.status_code == 200:
+        data = response.json()["response"]
+        # Filtrar ligas principais
+        ligas_principais = []
+        ligas_desejadas = [
+            "Copa Libertadores", "Copa Sul-Americana", 
+            "MLS", "Liga MX", "Copa do Nordeste"
+        ]
+        for l in data:
+            if l["league"]["name"] in ligas_desejadas:
+                ligas_principais.append({
+                    "id": l["league"]["id"],
+                    "nome": l["league"]["name"],
+                    "pais": l["country"]["name"]
+                })
+        return ligas_principais
+    else:
+        st.error(f"Erro {response.status_code}: {response.text}")
+        return []
 
 # ==========================
-# Função para calcular média de gols
+# Função para calcular média de gols (marcados e sofridos)
 # ==========================
 def media_gols_time(team_id):
-    url = f"{BASE_URL}/fixtures?team={team_id}&last=5&status=FT"
+    url = f"{BASE_URL}/fixtures?team={team_id}&last=5"
     response = requests.get(url, headers=HEADERS)
     if response.status_code == 200:
         jogos = response.json()["response"]
@@ -65,18 +56,33 @@ def media_gols_time(team_id):
     return 0, 0
 
 # ==========================
+# Função para calcular confiança
+# ==========================
+def calcular_confianca(media_casa, media_fora):
+    # Estimativa combinando ataque + defesa
+    estimativa = (media_casa[0] + media_fora[1] + media_fora[0] + media_casa[1]) / 2
+
+    if estimativa >= 2.5:
+        conf = min(95, 50 + (estimativa - 2.5) * 20)
+        tendencia = "Mais 2.5 gols 🔥"
+    elif estimativa <= 1.5:
+        conf = min(95, 50 + (1.5 - estimativa) * 20)
+        tendencia = "Menos 1.5 gols ❄️"
+    else:
+        conf = 50
+        tendencia = "Equilibrado ⚖️"
+    return estimativa, conf, tendencia
+
+# ==========================
 # Função visual para exibir cada jogo
 # ==========================
-def exibir_jogo_card(fixture, league, teams, media_casa, media_fora, estimativa, tendencia):
+def exibir_jogo_card(fixture, league, teams, media_casa, media_fora, estimativa, tendencia, confianca):
     if "Mais 2.5" in tendencia:
         cor = "red"
-        icone = "🔥"
     elif "Menos 1.5" in tendencia:
         cor = "blue"
-        icone = "❄️"
     else:
         cor = "orange"
-        icone = "⚖️"
 
     col1, col2, col3 = st.columns([3,1,3])
     with col1:
@@ -87,7 +93,9 @@ def exibir_jogo_card(fixture, league, teams, media_casa, media_fora, estimativa,
     with col2:
         st.markdown(
             f"<div style='text-align:center; color:{cor}; font-size:18px;'>"
-            f"<b>{icone} {tendencia}</b><br>Estimativa: {estimativa:.2f}</div>",
+            f"<b>{tendencia}</b><br>"
+            f"Estimativa: {estimativa:.2f}<br>"
+            f"Confiança: {confianca:.0f}%</div>",
             unsafe_allow_html=True
         )
         st.caption(f"📍 {fixture['venue']['name'] if fixture['venue'] else 'Desconhecido'}\n{fixture['date'][:16].replace('T',' ')}")
@@ -103,36 +111,39 @@ def exibir_jogo_card(fixture, league, teams, media_casa, media_fora, estimativa,
 # ==========================
 # Interface principal
 # ==========================
-df_ligas = get_ligas()
-liga_escolhida = st.selectbox("Escolha uma liga:", options=df_ligas["nome"].unique())
-liga_id = df_ligas[df_ligas["nome"] == liga_escolhida]["id"].values[0]
-data_selecionada = st.date_input("Escolha a data:", value=datetime.today())
-data_formatada = data_selecionada.strftime("%Y-%m-%d")
+ligas = get_ligas()
+if ligas:
+    df_ligas = pd.DataFrame(ligas)
+    liga_escolhida = st.selectbox(
+        "Escolha uma liga:",
+        options=df_ligas["nome"].unique()
+    )
+    liga_id = df_ligas[df_ligas["nome"] == liga_escolhida]["id"].values[0]
+    data_selecionada = st.date_input("Escolha a data:", value=datetime.today())
+    data_formatada = data_selecionada.strftime("%Y-%m-%d")
 
-if st.button("Buscar Jogos"):
-    url = f"{BASE_URL}/fixtures?date={data_formatada}&league={liga_id}"
-    response = requests.get(url, headers=HEADERS)
-    if response.status_code == 200:
-        data = response.json()["response"]
-        if data:
-            for j in data:
-                fixture = j["fixture"]
-                league = j["league"]
-                teams = j["teams"]
+    if st.button("Buscar Jogos"):
+        url = f"{BASE_URL}/fixtures?date={data_formatada}"
+        response = requests.get(url, headers=HEADERS)
+        if response.status_code == 200:
+            data = response.json()["response"]
+            if data:
+                data_filtrada = [j for j in data if j["league"]["id"] == int(liga_id)]
+                if data_filtrada:
+                    for j in data_filtrada:
+                        fixture = j["fixture"]
+                        league = j["league"]
+                        teams = j["teams"]
 
-                media_casa = media_gols_time(teams["home"]["id"])
-                media_fora = media_gols_time(teams["away"]["id"])
+                        media_casa = media_gols_time(teams["home"]["id"])
+                        media_fora = media_gols_time(teams["away"]["id"])
 
-                estimativa = media_casa[0] + media_fora[0]
-                if estimativa >= 2.5:
-                    tendencia = "Mais 2.5"
-                elif estimativa <= 1.5:
-                    tendencia = "Menos 1.5"
+                        estimativa, confianca, tendencia = calcular_confianca(media_casa, media_fora)
+
+                        exibir_jogo_card(fixture, league, teams, media_casa, media_fora, estimativa, tendencia, confianca)
                 else:
-                    tendencia = "Equilibrado"
-
-                exibir_jogo_card(fixture, league, teams, media_casa, media_fora, estimativa, tendencia)
+                    st.warning("⚠️ Não há jogos dessa liga na data selecionada.")
+            else:
+                st.info("ℹ️ Nenhum jogo encontrado para essa data.")
         else:
-            st.info("ℹ️ Nenhum jogo encontrado para essa liga e data.")
-    else:
-        st.error(f"Erro {response.status_code}: {response.text}")
+            st.error(f"Erro {response.status_code}: {response.text}")
