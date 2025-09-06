@@ -29,7 +29,7 @@ def get_ligas():
         return []
 
 # ==========================
-# Função para buscar jogos finalizados da liga e calcular estatísticas
+# Função para buscar estatísticas da liga (somente jogos finalizados)
 # ==========================
 @st.cache_data
 def buscar_estatisticas_liga(liga_id, season=datetime.today().year):
@@ -44,7 +44,7 @@ def buscar_estatisticas_liga(liga_id, season=datetime.today().year):
         return {}
 
     times_stats = {}
-    barra = st.progress(0)  # Inicializa barra de progresso
+    barra = st.progress(0)  # Barra de progresso
     total_jogos = len(jogos)
     
     for i, j in enumerate(jogos, start=1):
@@ -71,7 +71,6 @@ def buscar_estatisticas_liga(liga_id, season=datetime.today().year):
                     "gols_sofridos": 0
                 }
 
-        # Atualizar estatísticas
         times_stats[home["id"]]["jogos_disputados"] += 1
         times_stats[away["id"]]["jogos_disputados"] += 1
         times_stats[home["id"]]["gols_marcados"] += home_goals
@@ -89,7 +88,7 @@ def buscar_estatisticas_liga(liga_id, season=datetime.today().year):
             times_stats[home["id"]]["empates"] += 1
             times_stats[away["id"]]["empates"] += 1
 
-        barra.progress(i / total_jogos)  # Atualiza progresso
+        barra.progress(i / total_jogos)
 
     # Calcular médias
     for t_id, t_stats in times_stats.items():
@@ -97,7 +96,7 @@ def buscar_estatisticas_liga(liga_id, season=datetime.today().year):
         t_stats["media_gols_marcados"] = round(t_stats["gols_marcados"] / jogos, 2) if jogos else 0
         t_stats["media_gols_sofridos"] = round(t_stats["gols_sofridos"] / jogos, 2) if jogos else 0
 
-    barra.empty()  # Remove barra de progresso
+    barra.empty()  # Remove barra
     return times_stats
 
 # ==========================
