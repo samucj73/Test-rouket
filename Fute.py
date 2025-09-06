@@ -26,7 +26,6 @@ def get_ligas():
                 "id": l["league"]["id"],
                 "nome": l["league"]["name"],
                 "pais": l["country"]["name"],
-                "season": l["seasons"][-1]["year"] if l["seasons"] else None
             }
             for l in data
         ]
@@ -40,7 +39,7 @@ ligas = get_ligas()
 if ligas:
     df_ligas = pd.DataFrame(ligas)
     st.write(f"✅ Total de ligas disponíveis: {len(df_ligas)}")
-    st.dataframe(df_ligas[["id", "nome", "pais", "season"]])
+    st.dataframe(df_ligas[["id", "nome", "pais"]])
 
     # ==========================
     # Seleção de liga e data
@@ -51,39 +50,44 @@ if ligas:
     )
 
     liga_id = df_ligas[df_ligas["nome"] == liga_escolhida]["id"].values[0]
-    liga_season = df_ligas[df_ligas["nome"] == liga_escolhida]["season"].values[0]
 
     data_selecionada = st.date_input("Escolha a data:", value=datetime.today())
     data_formatada = data_selecionada.strftime("%Y-%m-%d")
 
     if st.button("Buscar Jogos"):
-        url = f"{BASE_URL}/fixtures?league={liga_id}&season={liga_season}&date={data_formatada}"
+        url = f"{BASE_URL}/fixtures?date={data_formatada}"
         response = requests.get(url, headers=HEADERS)
 
         if response.status_code == 200:
             data = response.json()["response"]
 
             if data:
-                lista = []
-                for j in data:
-                    fixture = j["fixture"]
-                    league = j["league"]
-                    teams = j["teams"]
-                    goals = j["goals"]
+                # Filtrar só os jogos da liga escolhida
+                data_filtrada = [j for j in data if j["league"]["id"] == int(liga_id)]
 
-                    lista.append({
-                        "Data/Hora": fixture["date"],
-                        "Liga": league["name"],
-                        "Time Casa": teams["home"]["name"],
-                        "Time Fora": teams["away"]["name"],
-                        "Gols Casa": goals["home"],
-                        "Gols Fora": goals["away"],
-                        "Status": fixture["status"]["long"]
-                    })
+                if data_filtrada:
+                    lista = []
+                    for j in data_filtrada:
+                        fixture = j["fixture"]
+                        league = j["league"]
+                        teams = j["teams"]
+                        goals = j["goals"]
 
-                df_jogos = pd.DataFrame(lista)
-                st.dataframe(df_jogos)
+                        lista.append({
+                            "Data/Hora": fixture["date"],
+                            "Liga": league["name"],
+                            "Time Casa": teams["home"]["name"],
+                            "Time Fora": teams["away"]["name"],
+                            "Gols Casa": goals["home"],
+                            "Gols Fora": goals["away"],
+                            "Status": fixture["status"]["long"]
+                        })
+
+                    df_jogos = pd.DataFrame(lista)
+                    st.dataframe(df_jogos)
+                else:
+                    st.warning("⚠️ Não há jogos dessa liga na data selecionada.")
             else:
-                st.info("Nenhum jogo encontrado para essa data e liga.")
+                st.info("ℹ️ Nenhum jogo encontrado para essa data.")
         else:
             st.error(f"Erro {response.status_code}: {response.text}")
