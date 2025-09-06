@@ -29,7 +29,7 @@ def get_ligas():
         return []
 
 # ==========================
-# Função para buscar jogos finalizados da liga e calcular estatísticas
+# Função para buscar estatísticas de todos os times da liga
 # ==========================
 @st.cache_data
 def buscar_estatisticas_liga(liga_id, season=datetime.today().year):
@@ -56,7 +56,7 @@ def buscar_estatisticas_liga(liga_id, season=datetime.today().year):
         home_goals = j["score"]["fulltime"]["home"]
         away_goals = j["score"]["fulltime"]["away"]
 
-        # Inicializar estatísticas
+        # Inicializar estatísticas se time ainda não estiver no dicionário
         for t in [home, away]:
             if t["id"] not in times_stats:
                 times_stats[t["id"]] = {
@@ -70,16 +70,17 @@ def buscar_estatisticas_liga(liga_id, season=datetime.today().year):
                     "gols_sofridos": 0
                 }
 
-        # Atualizar estatísticas
+        # Atualizar jogos disputados
         times_stats[home["id"]]["jogos_disputados"] += 1
         times_stats[away["id"]]["jogos_disputados"] += 1
 
+        # Atualizar gols marcados/sofridos
         times_stats[home["id"]]["gols_marcados"] += home_goals
         times_stats[home["id"]]["gols_sofridos"] += away_goals
         times_stats[away["id"]]["gols_marcados"] += away_goals
         times_stats[away["id"]]["gols_sofridos"] += home_goals
 
-        # Vitórias / Empates / Derrotas
+        # Atualizar vitórias/empates/derrotas
         if home_goals > away_goals:
             times_stats[home["id"]]["vitorias"] += 1
             times_stats[away["id"]]["derrotas"] += 1
@@ -149,7 +150,8 @@ if ligas:
     data_formatada = data_selecionada.strftime("%Y-%m-%d")
 
     if st.button("Buscar Jogos"):
-        st.info("⏳ Buscando jogos finalizados da liga e calculando estatísticas...")
+        st.info("⏳ Buscando jogos e calculando estatísticas...")
+        # Buscar estatísticas da liga
         times_stats = buscar_estatisticas_liga(liga_id)
 
         url = f"{BASE_URL}/fixtures?date={data_formatada}"
