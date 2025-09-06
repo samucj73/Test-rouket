@@ -31,8 +31,19 @@ def get_ligas():
 # ==========================
 # Função para calcular médias de gols corretamente
 # ==========================
-def media_gols_time(team_id):
-    url = f"{BASE_URL}/fixtures?team={team_id}&last=10"  # últimos 10 jogos
+def media_gols_time(team_id, historico=20):
+    """
+    Calcula a média de gols marcados e sofridos de um time.
+    
+    team_id : int
+        ID do time na API.
+    historico : int
+        Quantos jogos anteriores buscar (padrão 20).
+    
+    Retorna:
+        (media_marcados, media_sofridos)
+    """
+    url = f"{BASE_URL}/fixtures?team={team_id}&last={historico}"
     response = requests.get(url, headers=HEADERS)
     if response.status_code != 200:
         return 0, 0
@@ -45,25 +56,28 @@ def media_gols_time(team_id):
     gols_sofridos = []
 
     for j in jogos:
-        # Considera apenas jogos finalizados
-        if j["status"]["short"] != "FT":
-            continue
-
         home_id = j["teams"]["home"]["id"]
         away_id = j["teams"]["away"]["id"]
         home_goals = j["goals"]["home"]
         away_goals = j["goals"]["away"]
 
-        # Ignora jogos sem gols registrados
-        if home_goals is None or away_goals is None:
-            continue
-
-        if team_id == home_id:
-            gols_marcados.append(home_goals)
-            gols_sofridos.append(away_goals)
+        # Se jogo finalizado, usa os gols finais
+        if j["status"]["short"] == "FT":
+            if team_id == home_id:
+                gols_marcados.append(home_goals)
+                gols_sofridos.append(away_goals)
+            else:
+                gols_marcados.append(away_goals)
+                gols_sofridos.append(home_goals)
         else:
-            gols_marcados.append(away_goals)
-            gols_sofridos.append(home_goals)
+            # Fallback: se poucos jogos finalizados, pega gols parciais
+            if home_goals is not None and away_goals is not None:
+                if team_id == home_id:
+                    gols_marcados.append(home_goals)
+                    gols_sofridos.append(away_goals)
+                else:
+                    gols_marcados.append(away_goals)
+                    gols_sofridos.append(home_goals)
 
     if not gols_marcados:
         return 0, 0
