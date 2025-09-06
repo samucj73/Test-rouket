@@ -33,15 +33,13 @@ def get_ligas():
 # ==========================
 def media_gols_time(team_id, historico=20):
     """
-    Calcula a média de gols marcados e sofridos de um time.
+    Calcula a média de gols marcados e sofridos de um time,
+    usando apenas jogos finalizados com placar disponível.
     
-    team_id : int
-        ID do time na API.
-    historico : int
-        Quantos jogos anteriores buscar (padrão 20).
+    team_id : int -> ID do time na API
+    historico : int -> Quantos jogos anteriores buscar (padrão 20)
     
-    Retorna:
-        (media_marcados, media_sofridos)
+    Retorna: (media_marcados, media_sofridos)
     """
     url = f"{BASE_URL}/fixtures?team={team_id}&last={historico}"
     response = requests.get(url, headers=HEADERS)
@@ -56,33 +54,33 @@ def media_gols_time(team_id, historico=20):
     gols_sofridos = []
 
     for j in jogos:
+        # Só considerar jogos finalizados
+        if j["status"]["short"] != "FT":
+            continue
+
         home_id = j["teams"]["home"]["id"]
         away_id = j["teams"]["away"]["id"]
-        home_goals = j["goals"]["home"]
-        away_goals = j["goals"]["away"]
 
-        # Se jogo finalizado, usa os gols finais
-        if j["status"]["short"] == "FT":
-            if team_id == home_id:
-                gols_marcados.append(home_goals)
-                gols_sofridos.append(away_goals)
-            else:
-                gols_marcados.append(away_goals)
-                gols_sofridos.append(home_goals)
+        # Pegar placar final do jogo
+        home_goals = j["score"]["fulltime"]["home"]
+        away_goals = j["score"]["fulltime"]["away"]
+
+        # Se o placar não estiver disponível, pula o jogo
+        if home_goals is None or away_goals is None:
+            continue
+
+        if team_id == home_id:
+            gols_marcados.append(home_goals)
+            gols_sofridos.append(away_goals)
         else:
-            # Fallback: se poucos jogos finalizados, pega gols parciais
-            if home_goals is not None and away_goals is not None:
-                if team_id == home_id:
-                    gols_marcados.append(home_goals)
-                    gols_sofridos.append(away_goals)
-                else:
-                    gols_marcados.append(away_goals)
-                    gols_sofridos.append(home_goals)
+            gols_marcados.append(away_goals)
+            gols_sofridos.append(home_goals)
 
     if not gols_marcados:
         return 0, 0
 
     return sum(gols_marcados)/len(gols_marcados), sum(gols_sofridos)/len(gols_sofridos)
+
 
 # ==========================
 # Função visual para exibir cada jogo
