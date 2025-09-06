@@ -71,6 +71,13 @@ def filtrar_jogos_mais_1_5(df, limiar_prob=0.5):
 # =============================
 st.title("⚽ Jogos com Probabilidade de +1.5 Gols")
 
+# Seletor de data
+data_selecionada = st.date_input(
+    "Escolha a data do jogo",
+    value=datetime.today()
+)
+data_formatada = data_selecionada.strftime("%Y-%m-%d")
+
 # Seleção de campeonatos
 competicoes_disponiveis = {
     "Premier League": 39,
@@ -88,11 +95,10 @@ limiar_prob = st.slider("Limite mínimo de probabilidade (+1.5 gols)", 0.1, 1.0,
 
 if st.button("Buscar jogos"):
     ids_competicoes = [competicoes_disponiveis[c] for c in competicoes_selecionadas]
-    hoje = datetime.now().strftime("%Y-%m-%d")
     with st.spinner("Buscando jogos..."):
-        df_jogos = buscar_jogos_por_data(hoje, ids_competicoes)
+        df_jogos = buscar_jogos_por_data(data_formatada, ids_competicoes)
         if df_jogos.empty:
-            st.warning("Nenhum jogo encontrado para hoje.")
+            st.warning("Nenhum jogo encontrado para a data selecionada.")
         else:
             df_filtrado = filtrar_jogos_mais_1_5(df_jogos, limiar_prob)
             if df_filtrado.empty:
