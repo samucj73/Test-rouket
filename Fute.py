@@ -1,7 +1,11 @@
+import streamlit as st
 import requests
 import pandas as pd
 from datetime import datetime
 
+# =============================
+# Configurações
+# =============================
 API_KEY = "f07fc89fcff4416db7f079fda478dd61"
 BASE_URL = "https://api-football-v1.p.rapidapi.com/v3"
 HEADERS = {
@@ -9,6 +13,9 @@ HEADERS = {
     "X-RapidAPI-Host": "api-football-v1.p.rapidapi.com"
 }
 
+# =============================
+# Funções principais
+# =============================
 def buscar_jogos_por_data(data, competicoes=[]):
     todos_jogos = []
     for comp_id in competicoes:
@@ -25,11 +32,10 @@ def buscar_jogos_por_data(data, competicoes=[]):
                     "fixture_id": j["fixture"]["id"]
                 })
         else:
-            print("Erro ao buscar jogos:", response.status_code)
+            st.error(f"Erro ao buscar jogos: {response.status_code}")
     return pd.DataFrame(todos_jogos)
 
 def buscar_odds(fixture_id):
-    """Puxa odds de Over/Under 1.5 gols de um jogo específico"""
     url = f"{BASE_URL}/odds?fixture={fixture_id}&market=Over/Under"
     response = requests.get(url, headers=HEADERS)
     if response.status_code != 200:
@@ -46,7 +52,6 @@ def buscar_odds(fixture_id):
     return None
 
 def calcular_probabilidade(odd):
-    """Converte odd em probabilidade implícita"""
     if odd:
         return round(1 / float(odd), 2)
     return None
@@ -61,21 +66,37 @@ def filtrar_jogos_mais_1_5(df, limiar_prob=0.5):
             resultados.append(row)
     return pd.DataFrame(resultados)
 
-def executar_varredura_diaria(competicoes, limiar_prob=0.5):
-    hoje = datetime.now().strftime("%Y-%m-%d")
-    df_jogos = buscar_jogos_por_data(hoje, competicoes)
-    df_filtrado = filtrar_jogos_mais_1_5(df_jogos, limiar_prob)
-    
-    if df_filtrado.empty:
-        print("Nenhum jogo hoje com probabilidade de +1.5 gols acima do limite.")
-    else:
-        print("Jogos com probabilidade de +1.5 gols >= {}:".format(limiar_prob*100))
-        print(df_filtrado[["time_casa", "time_fora", "league", "prob_mais_1_5"]])
-    
-    return df_filtrado
+# =============================
+# Streamlit UI
+# =============================
+st.title("⚽ Jogos com Probabilidade de +1.5 Gols")
 
-# --------------------------
-# Uso diário
-# --------------------------
-competicoes = [39, 61]  # IDs da Premier League e Serie A
-df_resultados = executar_varredura_diaria(competicoes, limiar_prob=0.5)
+# Seleção de campeonatos
+competicoes_disponiveis = {
+    "Premier League": 39,
+    "Serie A": 61,
+    "La Liga": 140,
+    "Bundesliga": 78
+}
+competicoes_selecionadas = st.multiselect(
+    "Selecione os campeonatos",
+    list(competicoes_disponiveis.keys()),
+    default=["Premier League", "Serie A"]
+)
+
+limiar_prob = st.slider("Limite mínimo de probabilidade (+1.5 gols)", 0.1, 1.0, 0.5, 0.05)
+
+if st.button("Buscar jogos"):
+    ids_competicoes = [competicoes_disponiveis[c] for c in competicoes_selecionadas]
+    hoje = datetime.now().strftime("%Y-%m-%d")
+    with st.spinner("Buscando jogos..."):
+        df_jogos = buscar_jogos_por_data(hoje, ids_competicoes)
+        if df_jogos.empty:
+            st.warning("Nenhum jogo encontrado para hoje.")
+        else:
+            df_filtrado = filtrar_jogos_mais_1_5(df_jogos, limiar_prob)
+            if df_filtrado.empty:
+                st.info("Nenhum jogo com probabilidade de +1.5 gols acima do limite.")
+            else:
+                st.success(f"{len(df_filtrado)} jogos encontrados com probabilidade >= {limiar_prob*100}%")
+                st.dataframe(df_filtrado[["time_casa", "time_fora", "league", "prob_mais_1_5"]])
