@@ -14,7 +14,7 @@ st.set_page_config(page_title="Jogos e Tendência de Gols", layout="wide")
 st.title("⚽ Jogos e Tendência de Gols - API Football")
 
 # ==========================
-# Função para buscar ligas
+# Função para buscar ligas principais
 # ==========================
 @st.cache_data
 def get_ligas():
@@ -22,7 +22,6 @@ def get_ligas():
     response = requests.get(url, headers=HEADERS)
     if response.status_code == 200:
         data = response.json()["response"]
-        # Filtrar ligas principais
         ligas_principais = []
         ligas_desejadas = [
             "Copa Libertadores", "Copa Sul-Americana", 
@@ -41,7 +40,7 @@ def get_ligas():
         return []
 
 # ==========================
-# Função para calcular média de gols (marcados e sofridos)
+# Função para calcular média de gols
 # ==========================
 def media_gols_time(team_id):
     url = f"{BASE_URL}/fixtures?team={team_id}&last=5"
@@ -59,7 +58,6 @@ def media_gols_time(team_id):
 # Função para calcular confiança
 # ==========================
 def calcular_confianca(media_casa, media_fora):
-    # Estimativa combinando ataque + defesa
     estimativa = (media_casa[0] + media_fora[1] + media_fora[0] + media_casa[1]) / 2
 
     if estimativa >= 2.5:
@@ -78,35 +76,48 @@ def calcular_confianca(media_casa, media_fora):
 # ==========================
 def exibir_jogo_card(fixture, league, teams, media_casa, media_fora, estimativa, tendencia, confianca):
     if "Mais 2.5" in tendencia:
-        cor = "red"
+        cor_fundo = "#ffcccc"  # vermelho claro
+        cor_texto = "red"
     elif "Menos 1.5" in tendencia:
-        cor = "blue"
+        cor_fundo = "#cce5ff"  # azul claro
+        cor_texto = "blue"
     else:
-        cor = "orange"
+        cor_fundo = "#fff2cc"  # laranja claro
+        cor_texto = "orange"
 
-    col1, col2, col3 = st.columns([3,1,3])
-    with col1:
-        st.image(teams["home"]["logo"], width=50)
-        st.markdown(f"### {teams['home']['name']}")
-        st.caption(f"⚽ Média: {media_casa[0]:.2f} | 🛡️ Sofridos: {media_casa[1]:.2f}")
+    st.markdown(
+        f"""
+        <div style='
+            background-color: {cor_fundo}; 
+            padding: 15px; 
+            border-radius: 10px; 
+            margin-bottom: 10px;
+        '>
+            <div style='display:flex; justify-content:space-between; align-items:center;'>
+                <div style='text-align:center; width:30%;'>
+                    <img src="{teams['home']['logo']}" width="50"><br>
+                    <b>{teams['home']['name']}</b><br>
+                    ⚽ Média: {media_casa[0]:.2f} | 🛡️ Sofridos: {media_casa[1]:.2f}
+                </div>
 
-    with col2:
-        st.markdown(
-            f"<div style='text-align:center; color:{cor}; font-size:18px;'>"
-            f"<b>{tendencia}</b><br>"
-            f"Estimativa: {estimativa:.2f}<br>"
-            f"Confiança: {confianca:.0f}%</div>",
-            unsafe_allow_html=True
-        )
-        st.caption(f"📍 {fixture['venue']['name'] if fixture['venue'] else 'Desconhecido'}\n{fixture['date'][:16].replace('T',' ')}")
-        st.caption(f"🏟️ Liga: {league['name']}\nStatus: {fixture['status']['long']}")
+                <div style='text-align:center; width:40%; color:{cor_texto};'>
+                    <b>{tendencia}</b><br>
+                    Estimativa: {estimativa:.2f}<br>
+                    Confiança: {confianca:.0f}%<br>
+                    📍 {fixture['venue']['name'] if fixture['venue'] else 'Desconhecido'}<br>
+                    🏟️ Liga: {league['name']}<br>
+                    Status: {fixture['status']['long']}
+                </div>
 
-    with col3:
-        st.image(teams["away"]["logo"], width=50)
-        st.markdown(f"### {teams['away']['name']}")
-        st.caption(f"⚽ Média: {media_fora[0]:.2f} | 🛡️ Sofridos: {media_fora[1]:.2f}")
-
-    st.divider()
+                <div style='text-align:center; width:30%;'>
+                    <img src="{teams['away']['logo']}" width="50"><br>
+                    <b>{teams['away']['name']}</b><br>
+                    ⚽ Média: {media_fora[0]:.2f} | 🛡️ Sofridos: {media_fora[1]:.2f}
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True
+    )
 
 # ==========================
 # Interface principal
@@ -130,6 +141,7 @@ if ligas:
             if data:
                 data_filtrada = [j for j in data if j["league"]["id"] == int(liga_id)]
                 if data_filtrada:
+                    st.info(f"⏳ {len(data_filtrada)} jogos encontrados, calculando estatísticas...")
                     for j in data_filtrada:
                         fixture = j["fixture"]
                         league = j["league"]
