@@ -1,16 +1,13 @@
 import streamlit as st
 import requests
-import pandas as pd
 from datetime import datetime
 
-# ==========================
-# Configurações da API
-# ==========================
 API_KEY = "f07fc89fcff4416db7f079fda478dd61"
 BASE_URL = "https://v3.football.api-sports.io"
 HEADERS = {"x-apisports-key": API_KEY}
 
-st.title("Jogos e Tendência de Gols - API Football")
+st.set_page_config(page_title="Análise de Gols", layout="wide")
+st.title("⚽ Jogos e Tendência de Gols")
 
 # ==========================
 # Função para buscar ligas
@@ -26,12 +23,10 @@ def get_ligas():
             for l in data
         ]
         return ligas
-    else:
-        st.error(f"Erro {response.status_code}: {response.text}")
-        return []
+    return []
 
 # ==========================
-# Função para calcular média de gols (marcados e sofridos)
+# Função para médias de gols
 # ==========================
 def media_gols_time(team_id):
     url = f"{BASE_URL}/fixtures?team={team_id}&last=5"
@@ -50,83 +45,79 @@ def media_gols_time(team_id):
             for j in jogos
         ]
 
-        media_marcados = sum(gols_marcados) / len(gols_marcados)
-        media_sofridos = sum(gols_sofridos) / len(gols_sofridos)
-        return media_marcados, media_sofridos
-    else:
-        return 0, 0
+        return sum(gols_marcados) / len(gols_marcados), sum(gols_sofridos) / len(gols_sofridos)
+    return 0, 0
 
 # ==========================
-# Buscar ligas e jogos
+# Interface principal
 # ==========================
 ligas = get_ligas()
 
 if ligas:
-    df_ligas = pd.DataFrame(ligas)
-    st.write(f"✅ Total de ligas disponíveis: {len(df_ligas)}")
-    st.dataframe(df_ligas[["id", "nome", "pais"]])
+    liga_opcao = st.selectbox("🏆 Escolha a liga:", [f'{l["nome"]} - {l["pais"]}' for l in ligas])
+    liga_id = [l["id"] for l in ligas if f'{l["nome"]} - {l["pais"]}' == liga_opcao][0]
 
-    liga_escolhida = st.selectbox(
-        "Escolha uma liga pelo nome:",
-        options=df_ligas["nome"].unique()
-    )
-
-    liga_id = df_ligas[df_ligas["nome"] == liga_escolhida]["id"].values[0]
-    data_selecionada = st.date_input("Escolha a data:", value=datetime.today())
+    data_selecionada = st.date_input("📅 Escolha a data:", value=datetime.today())
     data_formatada = data_selecionada.strftime("%Y-%m-%d")
 
-    if st.button("Buscar Jogos"):
-        url = f"{BASE_URL}/fixtures?date={data_formatada}"
+    if st.button("🔍 Buscar Jogos"):
+        url = f"{BASE_URL}/fixtures?date={data_formatada}&league={liga_id}"
         response = requests.get(url, headers=HEADERS)
 
         if response.status_code == 200:
             data = response.json()["response"]
 
             if data:
-                data_filtrada = [j for j in data if j["league"]["id"] == int(liga_id)]
+                for j in data:
+                    fixture = j["fixture"]
+                    league = j["league"]
+                    teams = j["teams"]
 
-                if data_filtrada:
-                    lista = []
-                    for j in data_filtrada:
-                        fixture = j["fixture"]
-                        league = j["league"]
-                        teams = j["teams"]
+                    # Médias de gols
+                    media_casa_marc, media_casa_sofr = media_gols_time(teams["home"]["id"])
+                    media_fora_marc, media_fora_sofr = media_gols_time(teams["away"]["id"])
 
-                        # Médias de gols (casa e fora)
-                        media_casa_marc, media_casa_sofr = media_gols_time(teams["home"]["id"])
-                        media_fora_marc, media_fora_sofr = media_gols_time(teams["away"]["id"])
+                    # Estimativa
+                    estimativa = (
+                        (media_casa_marc + media_fora_sofr) / 2
+                        + (media_fora_marc + media_casa_sofr) / 2
+                    )
 
-                        # Estimativa baseada em ataque + defesa
-                        estimativa = (
-                            (media_casa_marc + media_fora_sofr) / 2
-                            + (media_fora_marc + media_casa_sofr) / 2
-                        )
+                    if estimativa >= 2.5:
+                        tendencia = "🔥 Mais 2.5"
+                        cor = "red"
+                    elif estimativa <= 1.5:
+                        tendencia = "❄️ Menos 1.5"
+                        cor = "blue"
+                    else:
+                        tendencia = "⚖️ Equilibrado"
+                        cor = "orange"
 
-                        # Classificação
-                        if estimativa >= 2.5:
-                            tendencia = "🔥 Mais 2.5"
-                        elif estimativa <= 1.5:
-                            tendencia = "❄️ Menos 1.5"
-                        else:
-                            tendencia = "⚖️ Equilibrado"
+                    # Layout em card
+                    with st.container():
+                        col1, col2, col3 = st.columns([3, 1, 3])
 
-                        lista.append({
-                            "Data/Hora": fixture["date"],
-                            "Liga": league["name"],
-                            "Time Casa": teams["home"]["name"],
-                            "Time Fora": teams["away"]["name"],
-                            "Casa (M/S)": f"{round(media_casa_marc,2)}/{round(media_casa_sofr,2)}",
-                            "Fora (M/S)": f"{round(media_fora_marc,2)}/{round(media_fora_sofr,2)}",
-                            "Estimativa Gols": round(estimativa, 2),
-                            "Tendência": tendencia,
-                            "Status": fixture["status"]["long"]
-                        })
+                        with col1:
+                            st.image(teams["home"]["logo"], width=50)
+                            st.markdown(f"### {teams['home']['name']}")
+                            st.caption(f"⚽ {media_casa_marc:.1f} | 🛡️ {media_casa_sofr:.1f}")
 
-                    df_jogos = pd.DataFrame(lista)
-                    st.dataframe(df_jogos)
-                else:
-                    st.warning("⚠️ Não há jogos dessa liga na data selecionada.")
+                        with col2:
+                            st.markdown(
+                                f"<div style='text-align:center; color:{cor}; font-size:20px;'>"
+                                f"<b>{tendencia}</b><br>"
+                                f"({estimativa:.2f} gols)</div>",
+                                unsafe_allow_html=True
+                            )
+                            st.caption(f"📍 {fixture['venue']['name']}")
+
+                        with col3:
+                            st.image(teams["away"]["logo"], width=50)
+                            st.markdown(f"### {teams['away']['name']}")
+                            st.caption(f"⚽ {media_fora_marc:.1f} | 🛡️ {media_fora_sofr:.1f}")
+
+                        st.divider()
             else:
-                st.info("ℹ️ Nenhum jogo encontrado para essa data.")
+                st.warning("⚠️ Nenhum jogo encontrado para essa liga/data.")
         else:
             st.error(f"Erro {response.status_code}: {response.text}")
