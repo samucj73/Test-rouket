@@ -10,8 +10,8 @@ API_KEY = "f07fc89fcff4416db7f079fda478dd61"
 BASE_URL = "https://v3.football.api-sports.io"
 HEADERS = {"x-apisports-key": API_KEY}
 
-st.set_page_config(page_title="Jogos e Tendência de Gols", layout="wide")
-st.title("⚽ Jogos e Tendência de Gols - API Football")
+st.set_page_config(page_title="Jogos e Estatísticas - API Football", layout="wide")
+st.title("⚽ Jogos e Estatísticas de Gols - API Football")
 
 # ==========================
 # Função para buscar ligas
@@ -29,18 +29,9 @@ def get_ligas():
         return []
 
 # ==========================
-# Função para calcular médias de gols corretamente
+# Função para calcular média de gols (últimos jogos finalizados)
 # ==========================
 def media_gols_time(team_id, historico=20):
-    """
-    Calcula a média de gols marcados e sofridos de um time,
-    usando apenas jogos finalizados com placar disponível.
-    
-    team_id : int -> ID do time na API
-    historico : int -> Quantos jogos anteriores buscar (padrão 20)
-    
-    Retorna: (media_marcados, media_sofridos)
-    """
     url = f"{BASE_URL}/fixtures?team={team_id}&last={historico}"
     response = requests.get(url, headers=HEADERS)
     if response.status_code != 200:
@@ -54,18 +45,14 @@ def media_gols_time(team_id, historico=20):
     gols_sofridos = []
 
     for j in jogos:
-        # Só considerar jogos finalizados
         if j["status"]["short"] != "FT":
             continue
-
         home_id = j["teams"]["home"]["id"]
         away_id = j["teams"]["away"]["id"]
 
-        # Pegar placar final do jogo
         home_goals = j["score"]["fulltime"]["home"]
         away_goals = j["score"]["fulltime"]["away"]
 
-        # Se o placar não estiver disponível, pula o jogo
         if home_goals is None or away_goals is None:
             continue
 
@@ -81,12 +68,53 @@ def media_gols_time(team_id, historico=20):
 
     return sum(gols_marcados)/len(gols_marcados), sum(gols_sofridos)/len(gols_sofridos)
 
+# ==========================
+# Função para buscar estatísticas dos times da liga
+# ==========================
+def buscar_estatisticas_liga(liga_id, season=datetime.today().year):
+    url = f"{BASE_URL}/teams?league={liga_id}&season={season}"
+    response = requests.get(url, headers=HEADERS)
+    if response.status_code != 200:
+        st.error(f"Erro {response.status_code} ao buscar times da liga: {response.text}")
+        return []
+
+    times = response.json()["response"]
+    lista_estatisticas = []
+
+    for t in times:
+        time_id = t["team"]["id"]
+        nome = t["team"]["name"]
+        logo = t["team"]["logo"]
+
+        # Estatísticas na liga
+        url_stats = f"{BASE_URL}/teams/statistics?league={liga_id}&season={season}&team={time_id}"
+        resp_stats = requests.get(url_stats, headers=HEADERS)
+        if resp_stats.status_code != 200:
+            continue
+
+        stats = resp_stats.json()["response"]
+
+        estatistica = {
+            "id": time_id,
+            "nome": nome,
+            "logo": logo,
+            "jogos_disputados": stats.get("fixtures", {}).get("played", 0),
+            "vitorias": stats.get("fixtures", {}).get("wins", 0),
+            "empates": stats.get("fixtures", {}).get("draws", 0),
+            "derrotas": stats.get("fixtures", {}).get("loses", 0),
+            "gols_marcados": stats.get("goals", {}).get("for", {}).get("total", 0),
+            "gols_sofridos": stats.get("goals", {}).get("against", {}).get("total", 0),
+            "media_gols_marcados": stats.get("goals", {}).get("for", {}).get("average", 0),
+            "media_gols_sofridos": stats.get("goals", {}).get("against", {}).get("average", 0),
+        }
+        lista_estatisticas.append(estatistica)
+
+    return lista_estatisticas
 
 # ==========================
 # Função visual para exibir cada jogo
 # ==========================
 def exibir_jogo_card(fixture, league, teams, media_casa, media_fora, estimativa, tendencia):
-    # Definir cor e ícone
     if "Mais 2.5" in tendencia:
         cor = "red"
         icone = "🔥"
@@ -130,25 +158,28 @@ if ligas:
         options=df_ligas["nome"].unique()
     )
     liga_id = df_ligas[df_ligas["nome"] == liga_escolhida]["id"].values[0]
-
+    season = datetime.today().year
     data_selecionada = st.date_input("Escolha a data:", value=datetime.today())
     data_formatada = data_selecionada.strftime("%Y-%m-%d")
 
+    # Botão para buscar jogos
     if st.button("Buscar Jogos"):
+        # ==========================
+        # Buscar jogos da data
+        # ==========================
         url = f"{BASE_URL}/fixtures?date={data_formatada}"
         response = requests.get(url, headers=HEADERS)
         if response.status_code == 200:
             data = response.json()["response"]
             if data:
-                # Filtra apenas jogos da liga escolhida
                 data_filtrada = [j for j in data if j["league"]["id"] == int(liga_id)]
                 if data_filtrada:
+                    st.subheader("🏆 Jogos do Dia")
                     for j in data_filtrada:
                         fixture = j["fixture"]
                         league = j["league"]
                         teams = j["teams"]
 
-                        # Calcular médias corretamente
                         media_casa = media_gols_time(teams["home"]["id"])
                         media_fora = media_gols_time(teams["away"]["id"])
 
@@ -160,7 +191,6 @@ if ligas:
                         else:
                             tendencia = "Equilibrado"
 
-                        # Exibe o card
                         exibir_jogo_card(fixture, league, teams, media_casa, media_fora, estimativa, tendencia)
                 else:
                     st.warning("⚠️ Não há jogos dessa liga na data selecionada.")
@@ -168,3 +198,17 @@ if ligas:
                 st.info("ℹ️ Nenhum jogo encontrado para essa data.")
         else:
             st.error(f"Erro {response.status_code}: {response.text}")
+
+        # ==========================
+        # Buscar estatísticas dos times da liga
+        # ==========================
+        st.subheader(f"📊 Estatísticas dos Times - {liga_escolhida}")
+        stats_times = buscar_estatisticas_liga(liga_id, season)
+        if stats_times:
+            df_stats = pd.DataFrame(stats_times)
+            st.dataframe(df_stats[[
+                "nome","jogos_disputados","vitorias","empates","derrotas",
+                "gols_marcados","gols_sofridos","media_gols_marcados","media_gols_sofridos"
+            ]])
+        else:
+            st.info("ℹ️ Não foi possível carregar estatísticas dos times.")
