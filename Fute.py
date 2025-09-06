@@ -33,7 +33,7 @@ def get_ligas():
 # Função para calcular média de gols apenas com jogos finalizados
 # ==========================
 def media_gols_time(team_id):
-    url = f"{BASE_URL}/fixtures?team={team_id}&last=5"
+    url = f"{BASE_URL}/fixtures?team={team_id}&last=10"  # pega mais jogos para aumentar chance de histórico
     response = requests.get(url, headers=HEADERS)
     if response.status_code != 200:
         return 0, 0
@@ -46,16 +46,18 @@ def media_gols_time(team_id):
     gols_sofridos = []
 
     for j in jogos:
-        # Considerar apenas jogos finalizados
+        # Considera apenas jogos finalizados com gols válidos
         if j["status"]["short"] != "FT":
             continue
 
         if j["teams"]["home"]["id"] == team_id:
-            gols_marcados.append(j["goals"]["home"])
-            gols_sofridos.append(j["goals"]["away"])
+            if j["goals"]["home"] is not None and j["goals"]["away"] is not None:
+                gols_marcados.append(j["goals"]["home"])
+                gols_sofridos.append(j["goals"]["away"])
         else:
-            gols_marcados.append(j["goals"]["away"])
-            gols_sofridos.append(j["goals"]["home"])
+            if j["goals"]["home"] is not None and j["goals"]["away"] is not None:
+                gols_marcados.append(j["goals"]["away"])
+                gols_sofridos.append(j["goals"]["home"])
 
     if not gols_marcados:
         return 0, 0
@@ -63,7 +65,6 @@ def media_gols_time(team_id):
     media_marcados = sum(gols_marcados) / len(gols_marcados)
     media_sofridos = sum(gols_sofridos) / len(gols_sofridos)
     return media_marcados, media_sofridos
-
 
 # ==========================
 # Função visual para exibir cada jogo
