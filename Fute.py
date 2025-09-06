@@ -33,7 +33,7 @@ def get_ligas():
 # Função para calcular média de gols apenas com jogos finalizados
 # ==========================
 def media_gols_time(team_id):
-    url = f"{BASE_URL}/fixtures?team={team_id}&last=10"  # pega mais jogos para aumentar chance de histórico
+    url = f"{BASE_URL}/fixtures?team={team_id}&last=10"
     response = requests.get(url, headers=HEADERS)
     if response.status_code != 200:
         return 0, 0
@@ -46,25 +46,31 @@ def media_gols_time(team_id):
     gols_sofridos = []
 
     for j in jogos:
-        # Considera apenas jogos finalizados com gols válidos
+        # Apenas jogos finalizados
         if j["status"]["short"] != "FT":
             continue
 
-        if j["teams"]["home"]["id"] == team_id:
-            if j["goals"]["home"] is not None and j["goals"]["away"] is not None:
-                gols_marcados.append(j["goals"]["home"])
-                gols_sofridos.append(j["goals"]["away"])
+        home_id = j["teams"]["home"]["id"]
+        away_id = j["teams"]["away"]["id"]
+        home_goals = j["goals"]["home"]
+        away_goals = j["goals"]["away"]
+
+        # Ignora jogos sem gols registrados
+        if home_goals is None or away_goals is None:
+            continue
+
+        if team_id == home_id:
+            gols_marcados.append(home_goals)
+            gols_sofridos.append(away_goals)
         else:
-            if j["goals"]["home"] is not None and j["goals"]["away"] is not None:
-                gols_marcados.append(j["goals"]["away"])
-                gols_sofridos.append(j["goals"]["home"])
+            gols_marcados.append(away_goals)
+            gols_sofridos.append(home_goals)
 
     if not gols_marcados:
         return 0, 0
 
-    media_marcados = sum(gols_marcados) / len(gols_marcados)
-    media_sofridos = sum(gols_sofridos) / len(gols_sofridos)
-    return media_marcados, media_sofridos
+    return sum(gols_marcados)/len(gols_marcados), sum(gols_sofridos)/len(gols_sofridos)
+
 
 # ==========================
 # Função visual para exibir cada jogo
