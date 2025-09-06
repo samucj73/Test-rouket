@@ -29,11 +29,10 @@ def get_ligas():
         return []
 
 # ==========================
-# ==========================
-# Função para calcular média de gols apenas com jogos finalizados
+# Função para calcular médias de gols corretamente
 # ==========================
 def media_gols_time(team_id):
-    url = f"{BASE_URL}/fixtures?team={team_id}&last=10"
+    url = f"{BASE_URL}/fixtures?team={team_id}&last=10"  # últimos 10 jogos
     response = requests.get(url, headers=HEADERS)
     if response.status_code != 200:
         return 0, 0
@@ -46,7 +45,7 @@ def media_gols_time(team_id):
     gols_sofridos = []
 
     for j in jogos:
-        # Apenas jogos finalizados
+        # Considera apenas jogos finalizados
         if j["status"]["short"] != "FT":
             continue
 
@@ -70,7 +69,6 @@ def media_gols_time(team_id):
         return 0, 0
 
     return sum(gols_marcados)/len(gols_marcados), sum(gols_sofridos)/len(gols_sofridos)
-
 
 # ==========================
 # Função visual para exibir cada jogo
@@ -120,6 +118,7 @@ if ligas:
         options=df_ligas["nome"].unique()
     )
     liga_id = df_ligas[df_ligas["nome"] == liga_escolhida]["id"].values[0]
+
     data_selecionada = st.date_input("Escolha a data:", value=datetime.today())
     data_formatada = data_selecionada.strftime("%Y-%m-%d")
 
@@ -129,6 +128,7 @@ if ligas:
         if response.status_code == 200:
             data = response.json()["response"]
             if data:
+                # Filtra apenas jogos da liga escolhida
                 data_filtrada = [j for j in data if j["league"]["id"] == int(liga_id)]
                 if data_filtrada:
                     for j in data_filtrada:
@@ -136,7 +136,7 @@ if ligas:
                         league = j["league"]
                         teams = j["teams"]
 
-                        # Calcular médias
+                        # Calcular médias corretamente
                         media_casa = media_gols_time(teams["home"]["id"])
                         media_fora = media_gols_time(teams["away"]["id"])
 
@@ -148,6 +148,7 @@ if ligas:
                         else:
                             tendencia = "Equilibrado"
 
+                        # Exibe o card
                         exibir_jogo_card(fixture, league, teams, media_casa, media_fora, estimativa, tendencia)
                 else:
                     st.warning("⚠️ Não há jogos dessa liga na data selecionada.")
