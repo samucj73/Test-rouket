@@ -184,7 +184,7 @@ if ligas:
                         estimativa = media_casa["media_gols_marcados"] + media_fora["media_gols_marcados"]
                         if estimativa >= 2.5:
                             tendencia = "Mais 2.5"
-                                                elif estimativa <= 1.5:
+                        elif estimativa <= 1.5:
                             tendencia = "Menos 1.5"
                         else:
                             tendencia = "Equilibrado"
