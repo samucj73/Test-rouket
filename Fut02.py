@@ -25,16 +25,28 @@ st.title("⚽ Jogos e Tendência de Gols - API Football")
 # Funções Telegram
 # ==========================
 def enviar_alerta_telegram(fixture, tendencia, confianca, estimativa):
+    # Usar .get() para prevenir KeyError
+    teams = fixture.get("teams", {})
+    home_team = teams.get("home", {}).get("name", "Casa")
+    away_team = teams.get("away", {}).get("name", "Fora")
+    status = fixture.get("status", {}).get("long", "Desconhecido")
+    goals = fixture.get("goals", {})
+    home_goals = goals.get("home", 0)
+    away_goals = goals.get("away", 0)
+
     msg = (
         f"⚽ Alerta de Gols!\n"
-        f"{fixture['teams']['home']['name']} x {fixture['teams']['away']['name']}\n"
+        f"{home_team} x {away_team}\n"
         f"Tendência: {tendencia}\n"
         f"Estimativa: {estimativa:.2f} gols\n"
         f"Confiança: {confianca:.0f}%\n"
-        f"Status: {fixture['status']['long']}\n"
-        f"Placar atual: {fixture['goals']['home'] or 0} x {fixture['goals']['away'] or 0}"
+        f"Status: {status}\n"
+        f"Placar atual: {home_goals} x {away_goals}"
     )
-    requests.get(BASE_URL_TG, params={"chat_id": TELEGRAM_CHAT_ID, "text": msg})
+    try:
+        requests.get(BASE_URL_TG, params={"chat_id": TELEGRAM_CHAT_ID, "text": msg})
+    except Exception as e:
+        st.error(f"Erro ao enviar alerta Telegram: {e}")
 
 def carregar_alertas_andamento():
     if os.path.exists(ALERTAS_PATH):
@@ -48,16 +60,22 @@ def salvar_alertas_andamento(alertas):
 
 def verificar_e_atualizar_alerta(fixture, tendencia, confianca, estimativa):
     alertas = carregar_alertas_andamento()
-    fixture_id = str(fixture["id"])
-    home_goals = fixture["goals"]["home"] or 0
-    away_goals = fixture["goals"]["away"] or 0
+    fixture_id = str(fixture.get("id", 0))
+
+    goals = fixture.get("goals", {})
+    home_goals = goals.get("home", 0)
+    away_goals = goals.get("away", 0)
 
     precisa_enviar = False
     if fixture_id not in alertas:
         precisa_enviar = True
     else:
-        ultimo = alertas[fixture_id]
-        if ultimo["home_goals"] != home_goals or ultimo["away_goals"] != away_goals or ultimo["tendencia"] != tendencia:
+        ultimo = alertas.get(fixture_id, {})
+        if (
+            ultimo.get("home_goals") != home_goals or
+            ultimo.get("away_goals") != away_goals or
+            ultimo.get("tendencia") != tendencia
+        ):
             precisa_enviar = True
 
     if precisa_enviar:
@@ -67,7 +85,7 @@ def verificar_e_atualizar_alerta(fixture, tendencia, confianca, estimativa):
             "away_goals": away_goals,
             "tendencia": tendencia
         }
-        salvar_alertas_andamento(alertas)
+        salvar_alertas_andamento(alertas
 
 # ==========================
 # Função para buscar ligas
