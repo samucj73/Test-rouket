@@ -85,7 +85,7 @@ def verificar_e_atualizar_alerta(fixture, tendencia, confianca, estimativa):
             "away_goals": away_goals,
             "tendencia": tendencia
         }
-        salvar_alertas_andamento(alertas
+        salvar_alertas_andamento(alertas)
 
 # ==========================
 # Função para buscar ligas
