@@ -11,7 +11,6 @@ API_KEY = "f07fc89fcff4416db7f079fda478dd61"
 BASE_URL = "https://v3.football.api-sports.io"
 HEADERS = {"x-apisports-key": API_KEY}
 
-
 # =============================
 # Configurações Telegram
 # =============================
@@ -19,6 +18,12 @@ TELEGRAM_TOKEN = "SEU_TELEGRAM_TOKEN"
 TELEGRAM_CHAT_ID = "SEU_CHAT_ID"
 BASE_URL_TG = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
 ALERTAS_PATH = "alertas.json"
+
+# =============================
+# Configurações do filtro de alertas
+# =============================
+CONF_MINIMA = 60
+TENDENCIAS_ALERTA = ["Mais 2.5", "Menos 1.5"]
 
 # =============================
 # Funções de persistência
@@ -83,6 +88,11 @@ def verificar_e_atualizar_alerta(fixture, tendencia, confianca, estimativa):
         }
         salvar_alertas_andamento(alertas)
 
+def verificar_e_enviar_alerta_filtrado(fixture, estimativa, confianca, tendencia):
+    if confianca < CONF_MINIMA or tendencia not in TENDENCIAS_ALERTA:
+        return
+    verificar_e_atualizar_alerta(fixture, tendencia, confianca, estimativa)
+
 def media_gols_time(team_id, league_id, season):
     """Busca média de gols marcados/sofridos de um time em uma liga/temporada"""
     url = f"{BASE_URL}/fixtures?league={league_id}&season={season}&team={team_id}"
@@ -133,18 +143,20 @@ def calcular_tendencia_confianca(media_casa, media_fora):
 # =============================
 # Interface Streamlit
 # =============================
-st.set_page_config(page_title="⚽ Alerta de Gols", layout="wide")
-
+st.set_page_config(page_title="⚽ Alertas de Gols", layout="wide")
 st.title("⚽ Sistema de Alertas Automáticos de Gols")
 st.markdown("Monitora jogos do dia nas principais ligas e envia alertas de tendência de gols.")
 
-# Escolher temporada
+# Seleção da temporada
 temporada = st.selectbox("📅 Escolha a temporada:", [2022, 2023, 2024, 2025], index=1)
+
+# Seleção da data
+data_selecionada = st.date_input("📆 Escolha a data:", value=datetime.today())
+data_formatada = data_selecionada.strftime("%Y-%m-%d")
 
 # Botão para buscar jogos
 if st.button("🔍 Buscar jogos do dia"):
-    hoje = datetime.today().strftime("%Y-%m-%d")
-    url = f"{BASE_URL}/fixtures?date={hoje}"
+    url = f"{BASE_URL}/fixtures?date={data_formatada}"
     response = requests.get(url, headers=HEADERS)
     jogos = response.json().get("response", [])
 
@@ -155,10 +167,11 @@ if st.button("🔍 Buscar jogos do dia"):
         "Bundesliga": 78,
         "Ligue 1": 61,
         "Brasileirão Série A": 71,
+        "Brasileirão Série B": 74,
     }
 
     if not jogos:
-        st.warning("⚠️ Nenhum jogo encontrado para hoje.")
+        st.warning("⚠️ Nenhum jogo encontrado para a data selecionada.")
     else:
         for match in jogos:
             league_id = match.get("league", {}).get("id")
@@ -181,6 +194,9 @@ if st.button("🔍 Buscar jogos do dia"):
                 st.write(f"📊 Estimativa de gols: **{estimativa:.2f}**")
                 st.write(f"🔥 Tendência: **{tendencia}**")
                 st.write(f"✅ Confiança: **{confianca:.0f}%**")
+                home_goals = match.get("goals", {}).get("home", 0) or 0
+                away_goals = match.get("goals", {}).get("away", 0) or 0
+                st.write(f"⚽ Placar Atual: {home} {home_goals} x {away_goals} {away}")
 
-            if confianca >= 60 and tendencia != "Equilibrado":
-                verificar_e_atualizar_alerta(match, tendencia, confianca, estimativa)
+            # Verifica e envia alerta filtrado
+            verificar_e_enviar_alerta_filtrado(match, estimativa, confianca, tendencia)
