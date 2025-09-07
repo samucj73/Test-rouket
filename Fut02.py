@@ -26,9 +26,12 @@ st.title("⚽ Jogos e Tendência de Gols - API Football")
 # Função para enviar alerta no Telegram
 # ==========================
 def enviar_alerta_telegram(fixture, tendencia, confianca, estimativa):
-    teams = fixture.get("teams", {})
-    home_team = teams.get("home", {}).get("name", "Time da Casa")
-    away_team = teams.get("away", {}).get("name", "Time de Fora")
+    try:
+        home_team = fixture["teams"]["home"]["name"]
+        away_team = fixture["teams"]["away"]["name"]
+    except KeyError:
+        home_team, away_team = "?", "?"
+
     status = fixture.get("status", {}).get("long", "Desconhecido")
     goals = fixture.get("goals", {})
     home_goals = goals.get("home", 0)
@@ -43,11 +46,11 @@ def enviar_alerta_telegram(fixture, tendencia, confianca, estimativa):
         f"Status: {status}\n"
         f"Placar atual: {home_team} {home_goals} x {away_goals} {away_team}"
     )
+
     try:
         requests.get(BASE_URL_TG, params={"chat_id": TELEGRAM_CHAT_ID, "text": msg})
     except Exception as e:
         st.error(f"Erro ao enviar alerta Telegram: {e}")
-
 
 # ==========================
 # Controle de alertas (para evitar repetição desnecessária)
