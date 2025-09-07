@@ -27,12 +27,12 @@ st.title("⚽ Jogos e Tendência de Gols - API Football")
 # ==========================
 def enviar_alerta_telegram(fixture, tendencia, confianca, estimativa):
     try:
-        home_team = fixture["teams"]["home"]["name"]
-        away_team = fixture["teams"]["away"]["name"]
-    except KeyError:
+        home_team = fixture.get("teams", {}).get("home", {}).get("name", "?")
+        away_team = fixture.get("teams", {}).get("away", {}).get("name", "?")
+    except Exception:
         home_team, away_team = "?", "?"
 
-    status = fixture.get("status", {}).get("long", "Desconhecido")
+    status = fixture.get("fixture", {}).get("status", {}).get("long", "Desconhecido")
     goals = fixture.get("goals", {})
     home_goals = goals.get("home", 0)
     away_goals = goals.get("away", 0)
