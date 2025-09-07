@@ -108,38 +108,71 @@ def buscar_estatisticas_liga(liga_id, season=datetime.today().year):
 # ==========================
 # Função visual para exibir cada jogo
 # ==========================
-def exibir_jogo_card(fixture, league, teams, media_casa, media_fora, estimativa, tendencia):
+def exibir_jogo_card(fixture, league, teams, media_casa, media_fora, estimativa, tendencia, confianca):
+    # Determinar cor e ícone conforme tendência
     if "Mais 2.5" in tendencia:
-        cor = "red"
+        cor_fundo = "#ffcccc"  # vermelho claro
+        cor_texto = "red"
         icone = "🔥"
     elif "Menos 1.5" in tendencia:
-        cor = "blue"
+        cor_fundo = "#cce5ff"  # azul claro
+        cor_texto = "blue"
         icone = "❄️"
     else:
-        cor = "orange"
+        cor_fundo = "#fff2cc"  # laranja claro
+        cor_texto = "orange"
         icone = "⚖️"
 
-    col1, col2, col3 = st.columns([3,1,3])
-    with col1:
-        st.image(teams["home"]["logo"], width=50)
-        st.markdown(f"### {teams['home']['name']}")
-        st.caption(f"⚽ Média: {media_casa['media_gols_marcados']:.2f} | 🛡️ Sofridos: {media_casa['media_gols_sofridos']:.2f}")
+    # Placar da partida
+    home_goals = fixture.get("score", {}).get("fulltime", {}).get("home")
+    away_goals = fixture.get("score", {}).get("fulltime", {}).get("away")
 
-    with col2:
-        st.markdown(
-            f"<div style='text-align:center; color:{cor}; font-size:18px;'>"
-            f"<b>{icone} {tendencia}</b><br>Estimativa: {estimativa:.2f}</div>",
-            unsafe_allow_html=True
-        )
-        st.caption(f"📍 {fixture['venue']['name'] if fixture['venue'] else 'Desconhecido'}\n{fixture['date'][:16].replace('T',' ')}")
-        st.caption(f"🏟️ Liga: {league['name']}\nStatus: {fixture['status']['long']}")
+    # Se o jogo não terminou, usar o placar do halftime
+    if fixture["status"]["short"] != "FT":
+        home_goals = fixture.get("score", {}).get("halftime", {}).get("home", 0)
+        away_goals = fixture.get("score", {}).get("halftime", {}).get("away", 0)
 
-    with col3:
-        st.image(teams["away"]["logo"], width=50)
-        st.markdown(f"### {teams['away']['name']}")
-        st.caption(f"⚽ Média: {media_fora['media_gols_marcados']:.2f} | 🛡️ Sofridos: {media_fora['media_gols_sofridos']:.2f}")
+    placar_texto = f"{home_goals} x {away_goals}" if home_goals is not None and away_goals is not None else "Sem gols ainda"
 
-    st.divider()
+    # Layout do card
+    st.markdown(
+        f"""
+        <div style='
+            background-color: {cor_fundo};
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+        '>
+            <div style='display:flex; justify-content:space-between; align-items:center;'>
+                
+                <!-- Time da casa -->
+                <div style='text-align:center; width:30%;'>
+                    <img src="{teams['home']['logo']}" width="50"><br>
+                    <b>{teams['home']['name']}</b><br>
+                    ⚽ Média: {media_casa['media_gols_marcados']:.2f} | 🛡️ Sofridos: {media_casa['media_gols_sofridos']:.2f}
+                </div>
+
+                <!-- Centro: Tendência e placar -->
+                <div style='text-align:center; width:40%; color:{cor_texto};'>
+                    <b>{icone} {tendencia}</b><br>
+                    Estimativa: {estimativa:.2f}<br>
+                    Confiança: {confianca:.0f}%<br>
+                    📊 Placar: {placar_texto}<br>
+                    📍 {fixture['venue']['name'] if fixture['venue'] else 'Desconhecido'}<br>
+                    🏟️ Liga: {league['name']}<br>
+                    Status: {fixture['status']['long']}
+                </div>
+
+                <!-- Time visitante -->
+                <div style='text-align:center; width:30%;'>
+                    <img src="{teams['away']['logo']}" width="50"><br>
+                    <b>{teams['away']['name']}</b><br>
+                    ⚽ Média: {media_fora['media_gols_marcados']:.2f} | 🛡️ Sofridos: {media_fora['media_gols_sofridos']:.2f}
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True
+    )
 
 # ==========================
 # Interface principal
