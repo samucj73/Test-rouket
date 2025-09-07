@@ -7,7 +7,7 @@ import json
 # =============================
 # Configurações API
 # =============================
-API_KEY = "SUA_API_KEY"  # coloque sua chave da API-Football
+API_KEY = "f07fc89fcff4416db7f079fda478dd61"# coloque sua chave da API-Football
 BASE_URL = "https://api-football-v1.p.rapidapi.com/v3"
 HEADERS = {"x-apisports-key": API_KEY}
 
