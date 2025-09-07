@@ -194,7 +194,7 @@ if ligas:
                 verificar_e_atualizar_alerta(fixture, tendencia, confianca, estimativa)
 
                # st.markdown(f"**{teams['home']['name']} vs {
-                 st.markdown(f"**{teams['home']['name']} vs {teams['away']['name']}**")
+                st.markdown(f"**{teams['home']['name']} vs {teams['away']['name']}**")
                 st.caption(f"Estimativa de gols: {estimativa:.2f} | Tendência: {tendencia} | Confiança: {confianca:.0f}%")
                 home_goals = fixture.get("goals", {}).get("home", 0)
                 away_goals = fixture.get("goals", {}).get("away", 0)
