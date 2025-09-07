@@ -38,33 +38,10 @@ def get_ligas():
 # ==========================
 # Função para buscar jogos finalizados da liga e calcular estatísticas
 # ==========================
-# ==========================
-# Função para buscar jogos finalizados da liga e calcular estatísticas
-# ==========================
 @st.cache_data
-def buscar_estatisticas_liga(liga_id):
-    # Primeiro, pegar a lista de temporadas disponíveis para a liga
-    url = f"{BASE_URL}/leagues"
-    response = requests.get(url, headers=HEADERS)
-    if response.status_code != 200:
-        st.error(f"Erro {response.status_code} ao buscar temporadas da liga: {response.text}")
-        return {}
-
-    ligas_data = response.json()["response"]
-    temporada = None
-    for l in ligas_data:
-        if l["league"]["id"] == liga_id:
-            # Pega a última temporada disponível (ordena decrescente)
-            temporadas = l["seasons"]
-            temporadas.sort(key=lambda x: x["year"], reverse=True)
-            temporada = temporadas[0]["year"]
-            break
-    if not temporada:
-        st.error("Não foi possível determinar a temporada para essa liga.")
-        return {}
-
-    # Buscar jogos finalizados da temporada encontrada
-    url_fixtures = f"{BASE_URL}/fixtures?league={liga_id}&season={temporada}"
+def buscar_estatisticas_liga(liga_id, season=datetime.today().year):
+    # Buscar jogos finalizados da temporada selecionada
+    url_fixtures = f"{BASE_URL}/fixtures?league={liga_id}&season={season}"
     response = requests.get(url_fixtures, headers=HEADERS)
     if response.status_code != 200:
         st.error(f"Erro {response.status_code} ao buscar jogos da liga: {response.text}")
@@ -72,7 +49,7 @@ def buscar_estatisticas_liga(liga_id):
 
     jogos = response.json()["response"]
     if not jogos:
-        st.warning(f"🔎 API retornou 0 jogos da liga {liga_id} na temporada {temporada}")
+        st.warning(f"🔎 API retornou 0 jogos da liga {liga_id} na temporada {season}")
         return {}
 
     times_stats = {}
@@ -128,8 +105,6 @@ def buscar_estatisticas_liga(liga_id):
 
     return times_stats
 
-
-
 # ==========================
 # Função visual para exibir cada jogo
 # ==========================
@@ -177,12 +152,20 @@ if ligas:
         options=df_ligas["nome"].unique()
     )
     liga_id = df_ligas[df_ligas["nome"] == liga_escolhida]["id"].values[0]
+
+    # Seleção da temporada
+    ano_temporada = st.selectbox(
+        "Escolha a temporada para estatísticas:",
+        options=[2021, 2022, 2023, 2024, 2025],
+        index=4  # padrão 2025
+    )
+
     data_selecionada = st.date_input("Escolha a data:", value=datetime.today())
     data_formatada = data_selecionada.strftime("%Y-%m-%d")
 
     if st.button("Buscar Jogos"):
         st.info("⏳ Buscando jogos finalizados da liga e calculando estatísticas...")
-        times_stats = buscar_estatisticas_liga(liga_id)
+        times_stats = buscar_estatisticas_liga(liga_id, season=ano_temporada)
 
         url = f"{BASE_URL}/fixtures?date={data_formatada}"
         response = requests.get(url, headers=HEADERS)
