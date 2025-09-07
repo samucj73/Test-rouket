@@ -112,63 +112,40 @@ def buscar_estatisticas_liga(liga_id, season=datetime.today().year):
 # Função visual para exibir cada jogo
 # ==========================
 def exibir_jogo_card(fixture, league, teams, media_casa, media_fora, estimativa, tendencia, confianca):
-    # Pegar gols atuais da partida
-    gols_home = fixture.get("goals", {}).get("home")
-    gols_away = fixture.get("goals", {}).get("away")
-    gols_home = gols_home if gols_home is not None else 0
-    gols_away = gols_away if gols_away is not None else 0
-
-    # Definir cores e ícones
     if "Mais 2.5" in tendencia:
-        cor_fundo = "#ffcccc"  # vermelho claro
-        cor_texto = "red"
+        cor = "red"
         icone = "🔥"
     elif "Menos 1.5" in tendencia:
-        cor_fundo = "#cce5ff"  # azul claro
-        cor_texto = "blue"
+        cor = "blue"
         icone = "❄️"
     else:
-        cor_fundo = "#fff2cc"  # laranja claro
-        cor_texto = "orange"
+        cor = "orange"
         icone = "⚖️"
 
-    st.markdown(
-        f"""
-        <div style='
-            background-color: {cor_fundo}; 
-            padding: 15px; 
-            border-radius: 10px; 
-            margin-bottom: 10px;
-        '>
-            <div style='display:flex; justify-content:space-between; align-items:center;'>
-                <div style='text-align:center; width:30%;'>
-                    <img src="{teams['home']['logo']}" width="50"><br>
-                    <b>{teams['home']['name']}</b><br>
-                    ⚽ Média: {media_casa['media_gols_marcados']:.2f} | 🛡️ Sofridos: {media_casa['media_gols_sofridos']:.2f}<br>
-                    🥅 Gols: {gols_home}
-                </div>
+    col1, col2, col3 = st.columns([3,1,3])
+    with col1:
+        st.image(teams["home"]["logo"], width=50)
+        st.markdown(f"### {teams['home']['name']}")
+        st.caption(f"⚽ Média: {media_casa['media_gols_marcados']:.2f} | 🛡️ Sofridos: {media_casa['media_gols_sofridos']:.2f}")
 
-                <div style='text-align:center; width:40%; color:{cor_texto};'>
-                    <b>{icone} {tendencia}</b><br>
-                    Estimativa: {estimativa:.2f}<br>
-                    Confiança: {confianca:.0f}%<br>
-                    📍 {fixture['venue']['name'] if fixture['venue'] else 'Desconhecido'}<br>
-                    🏟️ Liga: {league['name']}<br>
-                    Status: {fixture['status']['long']}<br>
-                    ⚽ Placar atual: {gols_home} - {gols_away}
-                </div>
+    with col2:
+        st.markdown(
+            f"<div style='text-align:center; color:{cor}; font-size:18px;'>"
+            f"<b>{icone} {tendencia}</b><br>"
+            f"Estimativa: {estimativa:.2f}<br>"
+            f"Confiança: {confianca:.0f}%</div>",
+            unsafe_allow_html=True
+        )
+        st.caption(f"📍 {fixture['venue']['name'] if fixture['venue'] else 'Desconhecido'}\n{fixture['date'][:16].replace('T',' ')}")
+        st.caption(f"🏟️ Liga: {league['name']}\nStatus: {fixture['status']['long']}")
 
-                <div style='text-align:center; width:30%;'>
-                    <img src="{teams['away']['logo']}" width="50"><br>
-                    <b>{teams['away']['name']}</b><br>
-                    ⚽ Média: {media_fora['media_gols_marcados']:.2f} | 🛡️ Sofridos: {media_fora['media_gols_sofridos']:.2f}<br>
-                    🥅 Gols: {gols_away}
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True
-    )
+    with col3:
+        st.image(teams["away"]["logo"], width=50)
+        st.markdown(f"### {teams['away']['name']}")
+        st.caption(f"⚽ Média: {media_fora['media_gols_marcados']:.2f} | 🛡️ Sofridos: {media_fora['media_gols_sofridos']:.2f}")
+
     st.divider()
+
 
 # ==========================
 # Interface principal
