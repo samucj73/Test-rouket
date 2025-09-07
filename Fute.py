@@ -108,8 +108,17 @@ def buscar_estatisticas_liga(liga_id, season=datetime.today().year):
 # ==========================
 # Função visual para exibir cada jogo
 # ==========================
+# ==========================
+# Função visual para exibir cada jogo
+# ==========================
 def exibir_jogo_card(fixture, league, teams, media_casa, media_fora, estimativa, tendencia, confianca):
-    # Determinar cor e ícone conforme tendência
+    # Pegar gols atuais da partida
+    gols_home = fixture.get("goals", {}).get("home")
+    gols_away = fixture.get("goals", {}).get("away")
+    gols_home = gols_home if gols_home is not None else 0
+    gols_away = gols_away if gols_away is not None else 0
+
+    # Definir cores e ícones
     if "Mais 2.5" in tendencia:
         cor_fundo = "#ffcccc"  # vermelho claro
         cor_texto = "red"
@@ -123,56 +132,43 @@ def exibir_jogo_card(fixture, league, teams, media_casa, media_fora, estimativa,
         cor_texto = "orange"
         icone = "⚖️"
 
-    # Placar da partida
-    home_goals = fixture.get("score", {}).get("fulltime", {}).get("home")
-    away_goals = fixture.get("score", {}).get("fulltime", {}).get("away")
-
-    # Se o jogo não terminou, usar o placar do halftime
-    if fixture["status"]["short"] != "FT":
-        home_goals = fixture.get("score", {}).get("halftime", {}).get("home", 0)
-        away_goals = fixture.get("score", {}).get("halftime", {}).get("away", 0)
-
-    placar_texto = f"{home_goals} x {away_goals}" if home_goals is not None and away_goals is not None else "Sem gols ainda"
-
-    # Layout do card
     st.markdown(
         f"""
         <div style='
-            background-color: {cor_fundo};
-            padding: 15px;
-            border-radius: 10px;
+            background-color: {cor_fundo}; 
+            padding: 15px; 
+            border-radius: 10px; 
             margin-bottom: 10px;
         '>
             <div style='display:flex; justify-content:space-between; align-items:center;'>
-                
-                <!-- Time da casa -->
                 <div style='text-align:center; width:30%;'>
                     <img src="{teams['home']['logo']}" width="50"><br>
                     <b>{teams['home']['name']}</b><br>
-                    ⚽ Média: {media_casa['media_gols_marcados']:.2f} | 🛡️ Sofridos: {media_casa['media_gols_sofridos']:.2f}
+                    ⚽ Média: {media_casa['media_gols_marcados']:.2f} | 🛡️ Sofridos: {media_casa['media_gols_sofridos']:.2f}<br>
+                    🥅 Gols: {gols_home}
                 </div>
 
-                <!-- Centro: Tendência e placar -->
                 <div style='text-align:center; width:40%; color:{cor_texto};'>
                     <b>{icone} {tendencia}</b><br>
                     Estimativa: {estimativa:.2f}<br>
                     Confiança: {confianca:.0f}%<br>
-                    📊 Placar: {placar_texto}<br>
                     📍 {fixture['venue']['name'] if fixture['venue'] else 'Desconhecido'}<br>
                     🏟️ Liga: {league['name']}<br>
-                    Status: {fixture['status']['long']}
+                    Status: {fixture['status']['long']}<br>
+                    ⚽ Placar atual: {gols_home} - {gols_away}
                 </div>
 
-                <!-- Time visitante -->
                 <div style='text-align:center; width:30%;'>
                     <img src="{teams['away']['logo']}" width="50"><br>
                     <b>{teams['away']['name']}</b><br>
-                    ⚽ Média: {media_fora['media_gols_marcados']:.2f} | 🛡️ Sofridos: {media_fora['media_gols_sofridos']:.2f}
+                    ⚽ Média: {media_fora['media_gols_marcados']:.2f} | 🛡️ Sofridos: {media_fora['media_gols_sofridos']:.2f}<br>
+                    🥅 Gols: {gols_away}
                 </div>
             </div>
         </div>
         """, unsafe_allow_html=True
     )
+    st.divider()
 
 # ==========================
 # Interface principal
