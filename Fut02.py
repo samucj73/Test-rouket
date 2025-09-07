@@ -12,8 +12,8 @@ API_KEY = "f07fc89fcff4416db7f079fda478dd61"
 BASE_URL = "https://v3.football.api-sports.io"
 HEADERS = {"x-apisports-key": API_KEY}
 
-TELEGRAM_TOKEN = "SEU_TOKEN_AQUI"
-TELEGRAM_CHAT_ID = "SEU_CHAT_ID_AQUI"
+TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
+TELEGRAM_CHAT_ID = "5121457416"
 BASE_URL_TG = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
 
 ALERTAS_PATH = "alertas_em_andamento.json"
@@ -175,6 +175,7 @@ def buscar_estatisticas_liga(liga_id, temporada=None):
 # Função visual
 # ==========================
 def exibir_jogo_card(fixture, league, teams, media_casa, media_fora, estimativa, tendencia, confianca):
+    # Definir cores e ícones conforme a tendência
     if "Mais 2.5" in tendencia:
         cor = "red"
         icone = "🔥"
@@ -185,28 +186,34 @@ def exibir_jogo_card(fixture, league, teams, media_casa, media_fora, estimativa,
         cor = "orange"
         icone = "⚖️"
 
+    # Obter gols com segurança
+    goals = fixture.get("goals", {})
+    home_goals = goals.get("home", 0)
+    away_goals = goals.get("away", 0)
+
     col1, col2, col3 = st.columns([3,1,3])
     with col1:
-        st.image(teams["home"]["logo"], width=50)
-        st.markdown(f"### {teams['home']['name']}")
-        st.caption(f"⚽ Média: {media_casa['media_gols_marcados']:.2f} | 🛡️ Sofridos: {media_casa['media_gols_sofridos']:.2f}")
+        st.image(teams["home"].get("logo",""), width=50)
+        st.markdown(f"### {teams['home'].get('name','Casa')}")
+        st.caption(f"⚽ Média: {media_casa.get('media_gols_marcados',0):.2f} | 🛡️ Sofridos: {media_casa.get('media_gols_sofridos',0):.2f}")
 
     with col2:
         st.markdown(
             f"<div style='text-align:center; color:{cor}; font-size:18px;'>"
-            f"<b>{icone} {tendencia}</b><br>Estimativa: {estimativa:.2f} | Confiança: {confianca:.0f}%</div>",
+            f"<b>{icone} {tendencia}</b><br>Estimativa: {estimativa:.2f}<br>Confiança: {confianca:.0f}%</div>",
             unsafe_allow_html=True
         )
-        st.caption(f"📍 {fixture['venue']['name'] if fixture['venue'] else 'Desconhecido'}\n{fixture['date'][:16].replace('T',' ')}")
-        st.caption(f"🏟️ Liga: {league['name']} | Status: {fixture['status']['long']}")
-        st.caption(f"⚽ Placar Atual: {fixture['goals']['home'] or 0} x {fixture['goals']['away'] or 0}")
+        st.caption(f"⚽ Placar Atual: {home_goals} x {away_goals}")
+        st.caption(f"📍 {fixture.get('venue', {}).get('name','Desconhecido')}\n{fixture.get('date','')[:16].replace('T',' ')}")
+        st.caption(f"🏟️ Liga: {league.get('name','Desconhecida')}\nStatus: {fixture.get('status',{}).get('long','Desconhecido')}")
 
     with col3:
-        st.image(teams["away"]["logo"], width=50)
-        st.markdown(f"### {teams['away']['name']}")
-        st.caption(f"⚽ Média: {media_fora['media_gols_marcados']:.2f} | 🛡️ Sofridos: {media_fora['media_gols_sofridos']:.2f}")
+        st.image(teams["away"].get("logo",""), width=50)
+        st.markdown(f"### {teams['away'].get('name','Fora')}")
+        st.caption(f"⚽ Média: {media_fora.get('media_gols_marcados',0):.2f} | 🛡️ Sofridos: {media_fora.get('media_gols_sofridos',0):.2f}")
 
     st.divider()
+
 
 # ==========================
 # Interface principal
