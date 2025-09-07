@@ -47,10 +47,13 @@ def buscar_estatisticas_liga(liga_id, season=datetime.today().year):
         return {}
 
     jogos = response.json()["response"]
+    st.write(f"🔎 API retornou {len(jogos)} jogos da liga {liga_id} na temporada {season}")
+
     if not jogos:
         return {}
 
     times_stats = {}
+    finalizados = 0
 
     for j in jogos:
         fixture = j["fixture"]
@@ -58,6 +61,7 @@ def buscar_estatisticas_liga(liga_id, season=datetime.today().year):
         if status != "FT":
             continue  # Apenas jogos finalizados
 
+        finalizados += 1
         home = j["teams"]["home"]
         away = j["teams"]["away"]
         home_goals = j["score"]["fulltime"]["home"]
@@ -97,6 +101,9 @@ def buscar_estatisticas_liga(liga_id, season=datetime.today().year):
             times_stats[home["id"]]["empates"] += 1
             times_stats[away["id"]]["empates"] += 1
 
+    st.write(f"📊 Foram encontrados {finalizados} jogos finalizados para calcular estatísticas.")
+    st.write(f"📌 Estatísticas calculadas para {len(times_stats)} times.")
+
     # Calcular médias
     for t_id, t_stats in times_stats.items():
         jogos = t_stats["jogos_disputados"]
@@ -104,6 +111,7 @@ def buscar_estatisticas_liga(liga_id, season=datetime.today().year):
         t_stats["media_gols_sofridos"] = round(t_stats["gols_sofridos"] / jogos, 2) if jogos else 0
 
     return times_stats
+
 
 # ==========================
 # Função visual para exibir cada jogo
