@@ -32,6 +32,7 @@ def get_ligas():
             if any(x in nome_lower for x in ligas_desejadas):
                 ligas_principais.append({
                     "id": l["league"]["id"],
+                    "season": l["seasons"][-1]["year"],  # pega a temporada mais recente
                     "nome": l["league"]["name"],
                     "pais": l["country"]["name"]
                 })
@@ -44,10 +45,10 @@ def get_ligas():
         return []
 
 # ==========================
-# Função para calcular média de gols
+# Função para calcular média de gols por time na liga
 # ==========================
-def media_gols_time(team_id):
-    url = f"{BASE_URL}/fixtures?team={team_id}&last=5"
+def media_gols_time(team_id, league_id, season):
+    url = f"{BASE_URL}/fixtures?league={league_id}&season={season}&team={team_id}&status=FT"
     response = requests.get(url, headers=HEADERS)
     if response.status_code == 200:
         jogos = response.json()["response"]
@@ -133,33 +134,32 @@ if ligas:
         "Escolha uma liga:",
         options=df_ligas["nome"].unique()
     )
-    liga_id = df_ligas[df_ligas["nome"] == liga_escolhida]["id"].values[0]
+    liga_info = df_ligas[df_ligas["nome"] == liga_escolhida].iloc[0]
+    liga_id = liga_info["id"]
+    season = liga_info["season"]
+
     data_selecionada = st.date_input("Escolha a data:", value=datetime.today())
     data_formatada = data_selecionada.strftime("%Y-%m-%d")
 
     if st.button("Buscar Jogos"):
-        url = f"{BASE_URL}/fixtures?date={data_formatada}"
+        url = f"{BASE_URL}/fixtures?league={liga_id}&season={season}&date={data_formatada}"
         response = requests.get(url, headers=HEADERS)
         if response.status_code == 200:
             data = response.json()["response"]
             if data:
-                data_filtrada = [j for j in data if j["league"]["id"] == int(liga_id)]
-                if data_filtrada:
-                    st.info(f"⏳ {len(data_filtrada)} jogos encontrados, calculando estatísticas...")
-                    for j in data_filtrada:
-                        fixture = j["fixture"]
-                        league = j["league"]
-                        teams = j["teams"]
+                st.info(f"⏳ {len(data)} jogos encontrados, calculando estatísticas...")
+                for j in data:
+                    fixture = j["fixture"]
+                    league = j["league"]
+                    teams = j["teams"]
 
-                        media_casa = media_gols_time(teams["home"]["id"])
-                        media_fora = media_gols_time(teams["away"]["id"])
+                    media_casa = media_gols_time(teams["home"]["id"], liga_id, season)
+                    media_fora = media_gols_time(teams["away"]["id"], liga_id, season)
 
-                        estimativa, confianca, tendencia = calcular_confianca(media_casa, media_fora)
+                    estimativa, confianca, tendencia = calcular_confianca(media_casa, media_fora)
 
-                        exibir_jogo_card(fixture, league, teams, media_casa, media_fora, estimativa, tendencia, confianca)
-                else:
-                    st.warning("⚠️ Não há jogos dessa liga na data selecionada.")
+                    exibir_jogo_card(fixture, league, teams, media_casa, media_fora, estimativa, tendencia, confianca)
             else:
-                st.info("ℹ️ Nenhum jogo encontrado para essa data.")
+                st.warning("⚠️ Nenhum jogo dessa liga encontrado na data selecionada.")
         else:
             st.error(f"Erro {response.status_code}: {response.text}")
