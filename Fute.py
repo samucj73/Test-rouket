@@ -39,9 +39,28 @@ def get_ligas():
 # Função para buscar jogos finalizados da liga e calcular estatísticas
 # ==========================
 @st.cache_data
-def buscar_estatisticas_liga(liga_id, season=datetime.today().year):
-    # Buscar jogos finalizados da temporada selecionada
-    url_fixtures = f"{BASE_URL}/fixtures?league={liga_id}&season={season}"
+def buscar_estatisticas_liga(liga_id):
+    # Primeiro, pegar a lista de temporadas disponíveis para a liga
+    url = f"{BASE_URL}/leagues"
+    response = requests.get(url, headers=HEADERS)
+    if response.status_code != 200:
+        st.error(f"Erro {response.status_code} ao buscar temporadas da liga: {response.text}")
+        return {}
+
+    ligas_data = response.json()["response"]
+    temporada = None
+    for l in ligas_data:
+        if l["league"]["id"] == liga_id:
+            temporadas = l["seasons"]
+            temporadas.sort(key=lambda x: x["year"], reverse=True)
+            temporada = temporadas[0]["year"]
+            break
+    if not temporada:
+        st.error("Não foi possível determinar a temporada para essa liga.")
+        return {}
+
+    # Buscar jogos finalizados da temporada encontrada
+    url_fixtures = f"{BASE_URL}/fixtures?league={liga_id}&season={temporada}"
     response = requests.get(url_fixtures, headers=HEADERS)
     if response.status_code != 200:
         st.error(f"Erro {response.status_code} ao buscar jogos da liga: {response.text}")
@@ -49,7 +68,7 @@ def buscar_estatisticas_liga(liga_id, season=datetime.today().year):
 
     jogos = response.json()["response"]
     if not jogos:
-        st.warning(f"🔎 API retornou 0 jogos da liga {liga_id} na temporada {season}")
+        st.warning(f"🔎 API retornou 0 jogos da liga {liga_id} na temporada {temporada}")
         return {}
 
     times_stats = {}
@@ -106,8 +125,22 @@ def buscar_estatisticas_liga(liga_id, season=datetime.today().year):
     return times_stats
 
 # ==========================
-# Função visual para exibir cada jogo
+# Função para calcular confiança
 # ==========================
+def calcular_confianca(media_casa, media_fora):
+    estimativa = media_casa["media_gols_marcados"] + media_fora["media_gols_marcados"]
+
+    if estimativa >= 2.5:
+        conf = min(95, 50 + (estimativa - 2.5) * 20)
+        tendencia = "Mais 2.5 gols 🔥"
+    elif estimativa <= 1.5:
+        conf = min(95, 50 + (1.5 - estimativa) * 20)
+        tendencia = "Menos 1.5 gols ❄️"
+    else:
+        conf = 50
+        tendencia = "Equilibrado ⚖️"
+    return estimativa, conf, tendencia
+
 # ==========================
 # Função visual para exibir cada jogo
 # ==========================
@@ -138,6 +171,7 @@ def exibir_jogo_card(fixture, league, teams, media_casa, media_fora, estimativa,
         )
         st.caption(f"📍 {fixture['venue']['name'] if fixture['venue'] else 'Desconhecido'}\n{fixture['date'][:16].replace('T',' ')}")
         st.caption(f"🏟️ Liga: {league['name']}\nStatus: {fixture['status']['long']}")
+        st.caption(f"⚽ Placar Atual: {fixture['status']['elapsed']}’ - {teams['home']['name']} {fixture['goals']['home']} x {fixture['goals']['away']} {teams['away']['name']}")
 
     with col3:
         st.image(teams["away"]["logo"], width=50)
@@ -145,7 +179,6 @@ def exibir_jogo_card(fixture, league, teams, media_casa, media_fora, estimativa,
         st.caption(f"⚽ Média: {media_fora['media_gols_marcados']:.2f} | 🛡️ Sofridos: {media_fora['media_gols_sofridos']:.2f}")
 
     st.divider()
-
 
 # ==========================
 # Interface principal
@@ -158,20 +191,12 @@ if ligas:
         options=df_ligas["nome"].unique()
     )
     liga_id = df_ligas[df_ligas["nome"] == liga_escolhida]["id"].values[0]
-
-    # Seleção da temporada
-    ano_temporada = st.selectbox(
-        "Escolha a temporada para estatísticas:",
-        options=[2021, 2022, 2023, 2024, 2025],
-        index=4  # padrão 2025
-    )
-
     data_selecionada = st.date_input("Escolha a data:", value=datetime.today())
     data_formatada = data_selecionada.strftime("%Y-%m-%d")
 
     if st.button("Buscar Jogos"):
         st.info("⏳ Buscando jogos finalizados da liga e calculando estatísticas...")
-        times_stats = buscar_estatisticas_liga(liga_id, season=ano_temporada)
+        times_stats = buscar_estatisticas_liga(liga_id)
 
         url = f"{BASE_URL}/fixtures?date={data_formatada}"
         response = requests.get(url, headers=HEADERS)
@@ -188,15 +213,9 @@ if ligas:
                         media_casa = times_stats.get(teams["home"]["id"], {"media_gols_marcados":0,"media_gols_sofridos":0})
                         media_fora = times_stats.get(teams["away"]["id"], {"media_gols_marcados":0,"media_gols_sofridos":0})
 
-                        estimativa = media_casa["media_gols_marcados"] + media_fora["media_gols_marcados"]
-                        if estimativa >= 2.5:
-                            tendencia = "Mais 2.5"
-                        elif estimativa <= 1.5:
-                            tendencia = "Menos 1.5"
-                        else:
-                            tendencia = "Equilibrado"
+                        estimativa, confianca, tendencia = calcular_confianca(media_casa, media_fora)
 
-                        exibir_jogo_card(fixture, league, teams, media_casa, media_fora, estimativa, tendencia)
+                        exibir_jogo_card(fixture, league, teams, media_casa, media_fora, estimativa, tendencia, confianca)
                 else:
                     st.warning("⚠️ Não há jogos dessa liga na data selecionada.")
             else:
