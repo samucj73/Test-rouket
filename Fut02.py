@@ -7,8 +7,8 @@ import os
 # ==================================
 # Configurações
 # ==================================
-API_KEY = "SUA_API_KEY_AQUI"
-BASE_URL = "https://api-football-v1.p.rapidapi.com/v3"
+API_KEY = "f07fc89fcff4416db7f079fda478dd61"
+BASE_URL = "https://v3.football.api-sports.io"
 HEADERS = {"x-apisports-key": API_KEY}
 
 # Telegram
