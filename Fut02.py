@@ -1,205 +1,165 @@
 import streamlit as st
 import requests
-import pandas as pd
 from datetime import datetime
 import json
 import os
 
-# ==========================
-# Configurações da API
-# ==========================
-API_KEY = "f07fc89fcff4416db7f079fda478dd61"
-BASE_URL = "https://v3.football.api-sports.io"
+# ==================================
+# Configurações
+# ==================================
+API_KEY = "SUA_API_KEY_AQUI"
+BASE_URL = "https://api-football-v1.p.rapidapi.com/v3"
 HEADERS = {"x-apisports-key": API_KEY}
 
 # Telegram
-TELEGRAM_TOKEN = "SEU_TOKEN_AQUI"
+TELEGRAM_TOKEN = "SEU_TOKEN"
 TELEGRAM_CHAT_ID = "SEU_CHAT_ID"
 BASE_URL_TG = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+ALERTAS_PATH = "alertas.json"
 
-ALERTAS_PATH = "alertas_andamento.json"
+# Principais ligas (Europa + Brasil A e B)
+LIGAS_PRINCIPAIS = {
+    39: "Premier League",
+    140: "La Liga",
+    135: "Serie A (Itália)",
+    78: "Bundesliga",
+    61: "Ligue 1",
+    71: "Brasileirão Série A",
+    72: "Brasileirão Série B"
+}
 
-st.set_page_config(page_title="⚽ Jogos e Tendência de Gols", layout="wide")
-st.title("⚽ Jogos e Tendência de Gols - API Football")
+# ==================================
+# Função para calcular média de gols da temporada
+# ==================================
+def calcular_media_gols(liga_id, temporada=2023):
+    url = f"{BASE_URL}/fixtures?league={liga_id}&season={temporada}&status=FT"
+    resp = requests.get(url, headers=HEADERS).json()
+    jogos = resp.get("response", [])
 
-# ==========================
-# Função para buscar ligas principais
-# ==========================
-@st.cache_data
-def get_ligas():
-    url = f"{BASE_URL}/leagues"
-    response = requests.get(url, headers=HEADERS)
-    if response.status_code == 200:
-        data = response.json()["response"]
-        ligas_desejadas = [
-            "Serie A", "Serie B", "Premier League", "La Liga",
-            "Serie A Italia", "Bundesliga", "Ligue 1", "Brasileirão"
-        ]
-        ligas = [
-            {
-                "id": l["league"]["id"],
-                "nome": l["league"]["name"],
-                "pais": l["country"]["name"]
-            }
-            for l in data if l["league"]["name"] in ligas_desejadas
-        ]
-        return ligas
-    else:
-        st.error(f"Erro {response.status_code}: {response.text}")
-        return []
-
-# ==========================
-# Buscar estatísticas da temporada 2023
-# ==========================
-@st.cache_data
-def buscar_estatisticas_liga(liga_id, temporada=2023):
-    url_fixtures = f"{BASE_URL}/fixtures?league={liga_id}&season={temporada}"
-    response = requests.get(url_fixtures, headers=HEADERS)
-    if response.status_code != 200:
-        st.error(f"Erro {response.status_code} ao buscar jogos da liga: {response.text}")
-        return {}
-
-    jogos = response.json()["response"]
     if not jogos:
-        return {}
+        return 0.0
 
-    times_stats = {}
-    for j in jogos:
-        fixture = j["fixture"]
-        status = fixture["status"]["short"]
-        if status != "FT":
-            continue  # Apenas finalizados
+    total_gols = sum(
+        (j["goals"]["home"] or 0) + (j["goals"]["away"] or 0)
+        for j in jogos
+    )
+    return total_gols / len(jogos)
 
-        home = j["teams"]["home"]
-        away = j["teams"]["away"]
-        home_goals = j["score"]["fulltime"]["home"]
-        away_goals = j["score"]["fulltime"]["away"]
-
-        for t in [home, away]:
-            if t["id"] not in times_stats:
-                times_stats[t["id"]] = {
-                    "nome": t["name"],
-                    "logo": t["logo"],
-                    "jogos_disputados": 0,
-                    "gols_marcados": 0,
-                    "gols_sofridos": 0
-                }
-
-        times_stats[home["id"]]["jogos_disputados"] += 1
-        times_stats[away["id"]]["jogos_disputados"] += 1
-        times_stats[home["id"]]["gols_marcados"] += home_goals
-        times_stats[home["id"]]["gols_sofridos"] += away_goals
-        times_stats[away["id"]]["gols_marcados"] += away_goals
-        times_stats[away["id"]]["gols_sofridos"] += home_goals
-
-    # Calcular médias
-    for t_id, t_stats in times_stats.items():
-        jogos = t_stats["jogos_disputados"]
-        t_stats["media_gols_marcados"] = round(t_stats["gols_marcados"] / jogos, 2) if jogos else 0
-        t_stats["media_gols_sofridos"] = round(t_stats["gols_sofridos"] / jogos, 2) if jogos else 0
-
-    return times_stats
-
-# ==========================
+# ==================================
 # Funções de alerta Telegram
-# ==========================
-def enviar_alerta_telegram(fixture, tendencia, confianca, estimativa):
-    home = fixture["teams"]["home"]["name"]
-    away = fixture["teams"]["away"]["name"]
-    home_goals = fixture.get("goals", {}).get("home", 0)
-    away_goals = fixture.get("goals", {}).get("away", 0)
-    status = fixture.get("status", {}).get("long", "Desconhecido")
+# ==================================
+def enviar_alerta_telegram(home, away, liga, tendencia, media_gols, status, home_goals, away_goals):
     msg = (
         f"⚽ Alerta de Gols!\n"
         f"🏟️ {home} vs {away}\n"
+        f"Liga: {liga}\n"
+        f"📊 Média de gols (2023): {media_gols:.2f}\n"
         f"Tendência: {tendencia}\n"
-        f"Estimativa: {estimativa:.2f} gols\n"
-        f"Confiança: {confianca:.0f}%\n"
         f"Status: {status}\n"
         f"Placar atual: {home} {home_goals} x {away_goals} {away}"
     )
     requests.get(BASE_URL_TG, params={"chat_id": TELEGRAM_CHAT_ID, "text": msg})
 
-def carregar_alertas_andamento():
+def carregar_alertas():
     if os.path.exists(ALERTAS_PATH):
         with open(ALERTAS_PATH, "r") as f:
             return json.load(f)
     return {}
 
-def salvar_alertas_andamento(alertas):
+def salvar_alertas(alertas):
     with open(ALERTAS_PATH, "w") as f:
         json.dump(alertas, f)
 
-def verificar_e_atualizar_alerta(fixture, tendencia, confianca, estimativa):
-    alertas = carregar_alertas_andamento()
-    fixture_id = str(fixture["fixture"]["id"])
-    home_goals = fixture.get("goals", {}).get("home", 0)
-    away_goals = fixture.get("goals", {}).get("away", 0)
-
+def verificar_enviar_alerta(jogo_id, home, away, liga, tendencia, media_gols, status, home_goals, away_goals):
+    alertas = carregar_alertas()
     precisa_enviar = False
-    if fixture_id not in alertas:
+
+    if jogo_id not in alertas:
         precisa_enviar = True
     else:
-        ultimo = alertas[fixture_id]
-        if ultimo["home_goals"] != home_goals or ultimo["away_goals"] != away_goals or ultimo["tendencia"] != tendencia:
+        if (alertas[jogo_id]["tendencia"] != tendencia or
+            alertas[jogo_id]["home_goals"] != home_goals or
+            alertas[jogo_id]["away_goals"] != away_goals):
             precisa_enviar = True
 
     if precisa_enviar:
-        enviar_alerta_telegram(fixture, tendencia, confianca, estimativa)
-        alertas[fixture_id] = {
+        enviar_alerta_telegram(home, away, liga, tendencia, media_gols, status, home_goals, away_goals)
+        alertas[jogo_id] = {
+            "tendencia": tendencia,
             "home_goals": home_goals,
-            "away_goals": away_goals,
-            "tendencia": tendencia
+            "away_goals": away_goals
         }
-        salvar_alertas_andamento(alertas)
+        salvar_alertas(alertas)
 
-# ==========================
-# Interface principal
-# ==========================
-ligas = get_ligas()
-if ligas:
-    df_ligas = pd.DataFrame(ligas)
-    data_selecionada = st.date_input("Escolha a data:", value=datetime.today())
-    data_formatada = data_selecionada.strftime("%Y-%m-%d")
+# ==================================
+# Interface
+# ==================================
+st.title("⚽ Scanner de Jogos - Alertas de Gols (Placar ao Vivo)")
 
-    if st.button("Buscar Jogos de Hoje"):
-        st.info("⏳ Buscando jogos do dia e calculando médias da temporada 2023...")
-        todas_ligas_ids = df_ligas["id"].tolist()
-        todos_jogos = []
+# Seletor de data
+data_escolhida = st.date_input(
+    "📅 Escolha a data dos jogos",
+    datetime.today()
+).strftime("%Y-%m-%d")
 
-        for liga_id in todas_ligas_ids:
-            times_stats = buscar_estatisticas_liga(liga_id, temporada=2023)
-            url = f"{BASE_URL}/fixtures?date={data_formatada}&league={liga_id}"
-            response = requests.get(url, headers=HEADERS)
-            if response.status_code == 200:
-                jogos = response.json()["response"]
-                if jogos:
-                    todos_jogos.extend([(j, times_stats) for j in jogos])
+st.write(f"🔍 Buscando jogos em **{data_escolhida}**...")
 
-        if todos_jogos:
-            for fixture, times_stats in todos_jogos:
-                teams = fixture["teams"]
-                media_casa = times_stats.get(teams["home"]["id"], {"media_gols_marcados":0,"media_gols_sofridos":0})
-                media_fora = times_stats.get(teams["away"]["id"], {"media_gols_marcados":0,"media_gols_sofridos":0})
+# ==================================
+# Buscar jogos da data escolhida
+# ==================================
+url = f"{BASE_URL}/fixtures?date={data_escolhida}"
+response = requests.get(url, headers=HEADERS)
+dados = response.json()
 
-                estimativa = media_casa["media_gols_marcados"] + media_fora["media_gols_marcados"]
-                confianca = min(95, 50 + abs(estimativa - 1.75) * 30)
-                if estimativa >= 2.5:
-                    tendencia = "Mais 2.5"
-                elif estimativa <= 1.5:
-                    tendencia = "Menos 1.5"
-                else:
-                    tendencia = "Equilibrado"
+jogos = dados.get("response", [])
 
-                verificar_e_atualizar_alerta(fixture, tendencia, confianca, estimativa)
+# Filtrar pelas ligas principais
+jogos_filtrados = [
+    j for j in jogos if j["league"]["id"] in LIGAS_PRINCIPAIS
+]
 
-               # st.markdown(f"**{teams['home']['name']} vs {
-                st.markdown(f"**{teams['home']['name']} vs {teams['away']['name']}**")
-                st.caption(f"Estimativa de gols: {estimativa:.2f} | Tendência: {tendencia} | Confiança: {confianca:.0f}%")
-                home_goals = fixture.get("goals", {}).get("home", 0)
-                away_goals = fixture.get("goals", {}).get("away", 0)
-                status = fixture.get("status", {}).get("long", "Desconhecido")
-                st.caption(f"Status: {status} | Placar atual: {teams['home']['name']} {home_goals} x {away_goals} {teams['away']['name']}")
-                st.divider()
+if not jogos_filtrados:
+    st.warning("⚠️ Nenhum jogo encontrado para essa data nas ligas principais.")
+else:
+    st.success(f"✅ {len(jogos_filtrados)} jogos encontrados!")
+
+    for jogo in jogos_filtrados:
+        home = jogo["teams"]["home"]["name"]
+        away = jogo["teams"]["away"]["name"]
+        status = jogo["fixture"]["status"]["long"]
+        liga_id = jogo["league"]["id"]
+        liga_nome = LIGAS_PRINCIPAIS[liga_id]
+
+        # Gols ao vivo
+        home_goals = jogo["goals"]["home"] or 0
+        away_goals = jogo["goals"]["away"] or 0
+
+        # Calcular média da temporada 2023
+        media_gols = calcular_media_gols(liga_id, 2023)
+
+        # Determinar tendência
+        if media_gols >= 2.5:
+            tendencia = "Mais 2.5 gols 🔥"
+        elif media_gols <= 1.5:
+            tendencia = "Menos 1.5 gols ❄️"
         else:
-            st.warning("⚠️ Nenhum jogo encontrado para a data selecionada nas ligas principais.")
+            tendencia = "Equilibrado ⚖️"
+
+        # Exibir na interface
+        st.markdown(
+            f"""
+            🏟️ **{home} vs {away}**  
+            📍 Liga: {liga_nome}  
+            📊 Média de gols (2023): **{media_gols:.2f}**  
+            📌 Status: {status}  
+            ⚡ Tendência: **{tendencia}**  
+            ⚽ Placar Atual: **{home} {home_goals} x {away_goals} {away}**
+            """
+        )
+
+        # Enviar alerta apenas se for Mais 2.5 ou Menos 1.5
+        if "Mais 2.5" in tendencia or "Menos 1.5" in tendencia:
+            verificar_enviar_alerta(
+                str(jogo["fixture"]["id"]), home, away, liga_nome, tendencia,
+                media_gols, status, home_goals, away_goals
+            )
