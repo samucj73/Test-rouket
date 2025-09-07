@@ -25,28 +25,13 @@ st.title("⚽ Jogos e Tendência de Gols - API Football")
 # ==========================
 # Função para enviar alerta no Telegram
 # ==========================
-def enviar_alerta_telegram(fixture, tendencia, confianca, estimativa):
-    # Primeiro tenta acessar os times pela chave "teams"
-    home_team = fixture.get("teams", {}).get("home", {}).get("name")
-    away_team = fixture.get("teams", {}).get("away", {}).get("name")
+def enviar_alerta_telegram(fixture, teams, tendencia, confianca, estimativa):
+    home_team = teams.get("home", {}).get("name", "Time da Casa")
+    away_team = teams.get("away", {}).get("name", "Time de Fora")
 
-    # Se não achar, tenta pegar pelo nível raiz
-    if not home_team or not away_team:
-        home_team = fixture.get("home", {}).get("name", "Time da Casa")
-        away_team = fixture.get("away", {}).get("name", "Time de Fora")
-
-    # Gols
-    home_goals = (
-        fixture.get("goals", {}).get("home")
-        if fixture.get("goals") else fixture.get("score", {}).get("home", 0)
-    ) or 0
-    away_goals = (
-        fixture.get("goals", {}).get("away")
-        if fixture.get("goals") else fixture.get("score", {}).get("away", 0)
-    ) or 0
-
-    # Status do jogo
-    status = fixture.get("status", {}).get("long") or fixture.get("status", {}).get("short", "Desconhecido")
+    home_goals = fixture.get("goals", {}).get("home", 0) or 0
+    away_goals = fixture.get("goals", {}).get("away", 0) or 0
+    status = fixture.get("status", {}).get("long", "Desconhecido")
 
     msg = (
         f"⚽ Alerta de Gols!\n"
@@ -61,17 +46,32 @@ def enviar_alerta_telegram(fixture, tendencia, confianca, estimativa):
     requests.get(BASE_URL_TG, params={"chat_id": TELEGRAM_CHAT_ID, "text": msg})
 
 
-def verificar_e_atualizar_alerta(fixture, tendencia, confianca, estimativa):
-    # Salvar debug para inspecionar estrutura do fixture
-    salvar_fixture_debug(fixture)
+def carregar_alertas_andamento():
+    if os.path.exists(ALERTAS_PATH):
+        with open(ALERTAS_PATH, "r") as f:
+            return json.load(f)
+    return {}
 
-    alertas = carregar_alertas_andamento()
-    fixture_id = str(fixture.get("fixture", {}).get("id", fixture.get("id", "desconhecido")))
+
+def salvar_alertas_andamento(alertas):
+    with open(ALERTAS_PATH, "w") as f:
+        json.dump(alertas, f)
+
+
+def verificar_e_atualizar_alerta(match, tendencia, confianca, estimativa):
+    """
+    match = objeto completo da API (contém fixture, teams, league, etc.)
+    """
+    fixture = match.get("fixture", {})
+    teams = match.get("teams", {})
+    fixture_id = str(fixture.get("id", "0"))
 
     home_goals = fixture.get("goals", {}).get("home", 0) or 0
     away_goals = fixture.get("goals", {}).get("away", 0) or 0
 
+    alertas = carregar_alertas_andamento()
     precisa_enviar = False
+
     if fixture_id not in alertas:
         precisa_enviar = True
     else:
@@ -84,7 +84,7 @@ def verificar_e_atualizar_alerta(fixture, tendencia, confianca, estimativa):
             precisa_enviar = True
 
     if precisa_enviar:
-        enviar_alerta_telegram(fixture, tendencia, confianca, estimativa)
+        enviar_alerta_telegram(fixture, teams, tendencia, confianca, estimativa)
         alertas[fixture_id] = {
             "home_goals": home_goals,
             "away_goals": away_goals,
