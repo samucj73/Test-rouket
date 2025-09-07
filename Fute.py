@@ -38,30 +38,50 @@ def get_ligas():
 # ==========================
 # Função para buscar jogos finalizados da liga e calcular estatísticas
 # ==========================
+# ==========================
+# Função para buscar jogos finalizados da liga e calcular estatísticas
+# ==========================
 @st.cache_data
-def buscar_estatisticas_liga(liga_id, season=datetime.today().year):
-    url = f"{BASE_URL}/fixtures?league={liga_id}&season={season}"
+def buscar_estatisticas_liga(liga_id):
+    # Primeiro, pegar a lista de temporadas disponíveis para a liga
+    url = f"{BASE_URL}/leagues"
     response = requests.get(url, headers=HEADERS)
+    if response.status_code != 200:
+        st.error(f"Erro {response.status_code} ao buscar temporadas da liga: {response.text}")
+        return {}
+
+    ligas_data = response.json()["response"]
+    temporada = None
+    for l in ligas_data:
+        if l["league"]["id"] == liga_id:
+            # Pega a última temporada disponível (ordena decrescente)
+            temporadas = l["seasons"]
+            temporadas.sort(key=lambda x: x["year"], reverse=True)
+            temporada = temporadas[0]["year"]
+            break
+    if not temporada:
+        st.error("Não foi possível determinar a temporada para essa liga.")
+        return {}
+
+    # Buscar jogos finalizados da temporada encontrada
+    url_fixtures = f"{BASE_URL}/fixtures?league={liga_id}&season={temporada}"
+    response = requests.get(url_fixtures, headers=HEADERS)
     if response.status_code != 200:
         st.error(f"Erro {response.status_code} ao buscar jogos da liga: {response.text}")
         return {}
 
     jogos = response.json()["response"]
-    st.write(f"🔎 API retornou {len(jogos)} jogos da liga {liga_id} na temporada {season}")
-
     if not jogos:
+        st.warning(f"🔎 API retornou 0 jogos da liga {liga_id} na temporada {temporada}")
         return {}
 
     times_stats = {}
-    finalizados = 0
-
     for j in jogos:
         fixture = j["fixture"]
         status = fixture["status"]["short"]
         if status != "FT":
             continue  # Apenas jogos finalizados
 
-        finalizados += 1
         home = j["teams"]["home"]
         away = j["teams"]["away"]
         home_goals = j["score"]["fulltime"]["home"]
@@ -84,7 +104,6 @@ def buscar_estatisticas_liga(liga_id, season=datetime.today().year):
         # Atualizar estatísticas
         times_stats[home["id"]]["jogos_disputados"] += 1
         times_stats[away["id"]]["jogos_disputados"] += 1
-
         times_stats[home["id"]]["gols_marcados"] += home_goals
         times_stats[home["id"]]["gols_sofridos"] += away_goals
         times_stats[away["id"]]["gols_marcados"] += away_goals
@@ -101,9 +120,6 @@ def buscar_estatisticas_liga(liga_id, season=datetime.today().year):
             times_stats[home["id"]]["empates"] += 1
             times_stats[away["id"]]["empates"] += 1
 
-    st.write(f"📊 Foram encontrados {finalizados} jogos finalizados para calcular estatísticas.")
-    st.write(f"📌 Estatísticas calculadas para {len(times_stats)} times.")
-
     # Calcular médias
     for t_id, t_stats in times_stats.items():
         jogos = t_stats["jogos_disputados"]
@@ -111,6 +127,7 @@ def buscar_estatisticas_liga(liga_id, season=datetime.today().year):
         t_stats["media_gols_sofridos"] = round(t_stats["gols_sofridos"] / jogos, 2) if jogos else 0
 
     return times_stats
+
 
 
 # ==========================
