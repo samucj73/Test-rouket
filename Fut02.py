@@ -20,12 +20,6 @@ BASE_URL_TG = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
 ALERTAS_PATH = "alertas.json"
 
 # =============================
-# Configurações do filtro de alertas
-# =============================
-CONF_MINIMA = 60
-TENDENCIAS_ALERTA = ["Mais 2.5", "Menos 1.5"]
-
-# =============================
 # Funções de persistência
 # =============================
 def carregar_alertas_andamento():
@@ -88,11 +82,6 @@ def verificar_e_atualizar_alerta(fixture, tendencia, confianca, estimativa):
         }
         salvar_alertas_andamento(alertas)
 
-def verificar_e_enviar_alerta_filtrado(fixture, estimativa, confianca, tendencia):
-    if confianca < CONF_MINIMA or tendencia not in TENDENCIAS_ALERTA:
-        return
-    verificar_e_atualizar_alerta(fixture, tendencia, confianca, estimativa)
-
 def media_gols_time(team_id, league_id, season):
     """Busca média de gols marcados/sofridos de um time em uma liga/temporada"""
     url = f"{BASE_URL}/fixtures?league={league_id}&season={season}&team={team_id}"
@@ -143,21 +132,27 @@ def calcular_tendencia_confianca(media_casa, media_fora):
 # =============================
 # Interface Streamlit
 # =============================
-st.set_page_config(page_title="⚽ Alertas de Gols", layout="wide")
+st.set_page_config(page_title="⚽ Alerta de Gols", layout="wide")
+
 st.title("⚽ Sistema de Alertas Automáticos de Gols")
 st.markdown("Monitora jogos do dia nas principais ligas e envia alertas de tendência de gols.")
 
-# Seleção da temporada
+# Escolher temporada
 temporada = st.selectbox("📅 Escolha a temporada:", [2022, 2023, 2024, 2025], index=1)
 
-# Seleção da data
-data_selecionada = st.date_input("📆 Escolha a data:", value=datetime.today())
-data_formatada = data_selecionada.strftime("%Y-%m-%d")
+# Escolher data
+data_selecionada = st.date_input("📅 Escolha a data para os jogos:", value=datetime.today())
 
 # Botão para buscar jogos
 if st.button("🔍 Buscar jogos do dia"):
-    url = f"{BASE_URL}/fixtures?date={data_formatada}"
+    hoje = data_selecionada.strftime("%Y-%m-%d")
+    url = f"{BASE_URL}/fixtures?date={hoje}"
     response = requests.get(url, headers=HEADERS)
+    
+    # DEBUG: Mostrar JSON completo da API
+    st.subheader("📝 Todos os jogos retornados pela API (para conferência)")
+    st.json(response.json())
+    
     jogos = response.json().get("response", [])
 
     ligas_principais = {
@@ -167,12 +162,13 @@ if st.button("🔍 Buscar jogos do dia"):
         "Bundesliga": 78,
         "Ligue 1": 61,
         "Brasileirão Série A": 71,
-        "Brasileirão Série B": 74,
+        "Brasileirão Série B": 72
     }
 
     if not jogos:
         st.warning("⚠️ Nenhum jogo encontrado para a data selecionada.")
     else:
+        st.success(f"✅ Total de jogos encontrados: {len(jogos)}")
         for match in jogos:
             league_id = match.get("league", {}).get("id")
             if league_id not in ligas_principais.values():
@@ -194,23 +190,6 @@ if st.button("🔍 Buscar jogos do dia"):
                 st.write(f"📊 Estimativa de gols: **{estimativa:.2f}**")
                 st.write(f"🔥 Tendência: **{tendencia}**")
                 st.write(f"✅ Confiança: **{confianca:.0f}%**")
-                home_goals = match.get("goals", {}).get("home", 0) or 0
-                away_goals = match.get("goals", {}).get("away", 0) or 0
-                st.write(f"⚽ Placar Atual: {home} {home_goals} x {away_goals} {away}")
 
-            # Verifica e envia alerta filtrado
-            verificar_e_enviar_alerta_filtrado(match, estimativa, confianca, tendencia)
-
-# Mostrar todos os jogos retornados pela API (para conferência)
-st.subheader("🔎 Todos os jogos do dia (para conferência)")
-if jogos:
-    for match in jogos:
-        home = match["teams"]["home"]["name"]
-        away = match["teams"]["away"]["name"]
-        liga = match["league"]["name"]
-        data_jogo = match["fixture"]["date"][:16].replace("T", " ")
-        status = match["fixture"]["status"]["long"]
-
-        st.write(f"🏟️ {home} vs {away} | Liga: {liga} | Data: {data_jogo} | Status: {status}")
-else:
-    st.warning("⚠️ Nenhum jogo encontrado para a data selecionada.")
+            if confianca >= 60 and tendencia != "Equilibrado":
+                verificar_e_atualizar_alerta(match, tendencia, confianca, estimativa)
