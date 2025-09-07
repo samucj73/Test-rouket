@@ -200,3 +200,17 @@ if st.button("🔍 Buscar jogos do dia"):
 
             # Verifica e envia alerta filtrado
             verificar_e_enviar_alerta_filtrado(match, estimativa, confianca, tendencia)
+
+# Mostrar todos os jogos retornados pela API (para conferência)
+st.subheader("🔎 Todos os jogos do dia (para conferência)")
+if jogos:
+    for match in jogos:
+        home = match["teams"]["home"]["name"]
+        away = match["teams"]["away"]["name"]
+        liga = match["league"]["name"]
+        data_jogo = match["fixture"]["date"][:16].replace("T", " ")
+        status = match["fixture"]["status"]["long"]
+
+        st.write(f"🏟️ {home} vs {away} | Liga: {liga} | Data: {data_jogo} | Status: {status}")
+else:
+    st.warning("⚠️ Nenhum jogo encontrado para a data selecionada.")
