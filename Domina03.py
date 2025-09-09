@@ -56,6 +56,7 @@ def tocar_som_moeda():
     )
 
 # =============================
+# =============================
 # Estratégia de Deslocamento
 # =============================
 class EstrategiaDeslocamento:
@@ -136,13 +137,16 @@ st.title("🎯 Roleta — IA de Deslocamento Adaptativa")
 
 st_autorefresh(interval=7000, key="refresh")
 
-# Inicialização
+# Inicialização do session_state
 if "estrategia" not in st.session_state:
     st.session_state.estrategia = EstrategiaDeslocamento()
     st.session_state.ia = IA_Deslocamento(janela=12)
-    for n in carregar_historico():
+    historico_carregado = carregar_historico()
+    for n in historico_carregado:
         st.session_state.estrategia.adicionar_numero(n)
     st.session_state.ia.atualizar_historico(st.session_state.estrategia.historico)
+    
+    # Inicializa todas as variáveis do session_state
     st.session_state.previsao = []
     st.session_state.previsao_enviada = False
     st.session_state.resultado_enviado = False
@@ -190,9 +194,9 @@ st.subheader("📜 Histórico (últimos 20 números)")
 st.write(list(st.session_state.estrategia.historico)[-20:])
 
 # Estatísticas
-total = st.session_state.acertos + st.session_state.erros
-taxa = (st.session_state.acertos / total * 100) if total > 0 else 0.0
+total = st.session_state.get("acertos",0) + st.session_state.get("erros",0)
+taxa = (st.session_state.get("acertos",0) / total * 100) if total > 0 else 0.0
 col1, col2, col3 = st.columns(3)
-col1.metric("🟢 GREEN", st.session_state.acertos)
-col2.metric("🔴 RED", st.session_state.erros)
-col3.metric("✅ Taxa de acerto", f"{taxa:.1f}%")
+col1.metric("🟢 GREEN", st.session_state.get("acertos",0))
+col2.metric("🔴 RED", st.session_state.get("erros",0))
+col3.metric("✅ Taxa de acerto", f"{taxa:.1f}%")#
