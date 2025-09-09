@@ -14,8 +14,11 @@ HISTORICO_PATH = "historico_coluna_duzia.json"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
-TELEGRAM_TOKEN = "SEU_TOKEN_AQUI"
-CHAT_ID = "SEU_CHAT_ID_AQUI"
+TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
+CHAT_ID = "5121457416"
+
+#TELEGRAM_TOKEN = "SEU_TOKEN_AQUI"
+#CHAT_ID = "SEU_CHAT_ID_AQUI"
 
 # =============================
 # Função unificada de envio (Telegram)
