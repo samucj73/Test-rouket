@@ -4,7 +4,6 @@ import os
 import requests
 import logging
 from collections import Counter, deque
-from alertas import enviar_previsao, enviar_resultado
 from streamlit_autorefresh import st_autorefresh
 import base64
 
@@ -15,6 +14,39 @@ HISTORICO_PATH = "historico_coluna_duzia.json"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
+# =============================
+# Função unificada de envio
+# =============================
+def enviar_msg(msg, tipo="previsao"):
+    """
+    Envia mensagens de forma segura, tanto previsões quanto resultados.
+    :param msg: conteúdo da mensagem
+    :param tipo: "previsao" ou "resultado"
+    """
+    try:
+        # Garante que msg seja string
+        if not isinstance(msg, str):
+            msg = str(msg)
+
+        # Remove caracteres problemáticos
+        msg = msg.encode('utf-8', errors='ignore').decode('utf-8')
+
+        # Lógica de envio real (Telegram, API, etc.)
+        # Exemplo local para teste
+        if tipo == "previsao":
+            print(f"[Previsão Enviada]: {msg}")
+        elif tipo == "resultado":
+            print(f"[Resultado Enviado]: {msg}")
+        else:
+            print(f"[Mensagem Enviada]: {msg}")
+
+    except Exception as e:
+        print(f"Erro ao enviar {tipo}: {e}")
+
+
+# =============================
+# Funções auxiliares
+# =============================
 def tocar_som_moeda():
     som_base64 = (
         "SUQzAwAAAAAAF1RTU0UAAAAPAAADTGF2ZjU2LjI2LjEwNAAAAAAAAAAAAAAA//tQxAADBQAB"
@@ -62,6 +94,10 @@ def fetch_latest_result():
         logging.error(f"Erro ao buscar resultado: {e}")
         return None
 
+
+# =============================
+# Classe estratégia da roleta
+# =============================
 class EstrategiaRoleta:
     def __init__(self, janela=12):
         self.janela = janela
@@ -82,7 +118,6 @@ class EstrategiaRoleta:
         self.historico.append(numero)
 
     def calcular_dominante(self):
-        """Retorna apenas o terminal mais dominante (top 1)."""
         if len(self.historico) < self.janela:
             return None
         ultimos = list(self.historico)[:-1]
@@ -92,35 +127,27 @@ class EstrategiaRoleta:
         return dominante[0][0] if dominante else None
 
     def adicionar_vizinhos_fisicos(self, numeros):
-        """Expande cada número com 1 vizinho físico antes e 1 depois."""
         conjunto = set()
         for n in numeros:
             if n not in self.roleta:
                 continue
             idx = self.roleta.index(n)
-            for offset in range(-1, 2):  # 1 antes, ele mesmo, 1 depois
+            for offset in range(-1, 2):
                 vizinho = self.roleta[(idx + offset) % len(self.roleta)]
                 conjunto.add(vizinho)
         return conjunto
 
     def selecionar_numeros_mais_fortes(self, terminal, limite=5):
-        """Seleciona até 'limite' números mais fortes dentro do terminal."""
         if terminal is None:
             return []
 
-        # Todos números do terminal
         base = [n for n in range(37) if n % 10 == terminal]
-
-        # Frequência nos últimos 50 giros
         ultimos = list(self.historico)[-50:]
         freq = Counter([n for n in ultimos if n in base])
-
-        # Pega os mais frequentes (até 'limite')
         mais_fortes = [n for n, _ in freq.most_common(limite)]
-        if not mais_fortes:  # fallback: todos do terminal
+        if not mais_fortes:
             mais_fortes = base
 
-        # Expande com vizinhos físicos reduzidos
         numeros_final = set()
         for n in mais_fortes:
             numeros_final.update(self.adicionar_vizinhos_fisicos([n]))
@@ -140,7 +167,6 @@ class EstrategiaRoleta:
         if dominante is None:
             return None
 
-        # Critérios
         condicao_a = numero_13 in ultimos_12
         condicao_b = terminal_13 in [self.extrair_terminal(n) for n in ultimos_12]
         condicao_c = not condicao_a and not condicao_b
@@ -170,14 +196,13 @@ class EstrategiaRoleta:
 st.set_page_config(page_title="IA Roleta — Números Certeiros", layout="centered")
 st.title("🎯 IA Roleta XXXtreme — Estratégia dos Números Certeiros")
 
-# --- Estado ---
+# Estado inicial
 if "historico" not in st.session_state:
     st.session_state.historico = json.load(open(HISTORICO_PATH)) if os.path.exists(HISTORICO_PATH) else []
 
 if "estrategia" not in st.session_state:
     st.session_state.estrategia = EstrategiaRoleta(janela=12)
 
-# Pré-carrega a estratégia com até 13 últimos números já salvos
 if "estrategia_inicializada" not in st.session_state:
     for h in st.session_state.historico[-13:]:
         try:
@@ -186,7 +211,6 @@ if "estrategia_inicializada" not in st.session_state:
             pass
     st.session_state.estrategia_inicializada = True
 
-# Previsão/resultado & métricas
 for k, v in {
     "numeros_previstos": None,
     "criterio": None,
@@ -198,10 +222,10 @@ for k, v in {
     if k not in st.session_state:
         st.session_state[k] = v
 
-# --- Atualização automática ---
+# Autorefresh
 st_autorefresh(interval=3000, key="refresh_certeiros")
 
-# Busca resultado mais recente da API
+# Busca resultado mais recente
 resultado = fetch_latest_result()
 ultimo_ts = st.session_state.historico[-1]["timestamp"] if st.session_state.historico else None
 
@@ -209,7 +233,6 @@ if resultado and resultado.get("timestamp") and resultado["timestamp"] != ultimo
     numero_atual = resultado["number"]
     ts_atual = resultado["timestamp"]
 
-    # Atualiza histórico e estratégia
     st.session_state.historico.append(resultado)
     try:
         st.session_state.estrategia.adicionar_numero(int(numero_atual))
@@ -217,13 +240,12 @@ if resultado and resultado.get("timestamp") and resultado["timestamp"] != ultimo
         pass
     salvar_resultado_em_arquivo(st.session_state.historico)
 
-    # GREEN/RED conferência
     if st.session_state.previsao_enviada and not st.session_state.resultado_enviado:
         numeros_validos = set(st.session_state.numeros_previstos or [])
         green = int(numero_atual) in numeros_validos
 
         msg = f"Resultado: {numero_atual} | {'🟢 GREEN' if green else '🔴 RED'}"
-        enviar_resultado(msg)
+        enviar_msg(msg, tipo="resultado")
         st.session_state.resultado_enviado = True
         st.session_state.previsao_enviada = False
         if green:
@@ -232,9 +254,7 @@ if resultado and resultado.get("timestamp") and resultado["timestamp"] != ultimo
         else:
             st.session_state.erros += 1
 
-    # Verifica nova entrada
     entrada_info = st.session_state.estrategia.verificar_entrada()
-
     if entrada_info:
         if entrada_info.get("entrada") and not st.session_state.previsao_enviada:
             st.session_state.numeros_previstos = entrada_info.get("numeros_fortes")
@@ -246,13 +266,13 @@ if resultado and resultado.get("timestamp") and resultado["timestamp"] != ultimo
                 f"🎯 Critério {entrada_info['criterio']} | Terminal {entrada_info['dominante']}\n"
                 f"Números certeiros: {', '.join(map(str, st.session_state.numeros_previstos))}"
             )
-            enviar_previsao(msg_alerta)
+            enviar_msg(msg_alerta, tipo="previsao")
 
         elif entrada_info.get("criterio") == "C" and st.session_state.criterio != "C":
             st.session_state.previsao_enviada = False
             st.session_state.numeros_previstos = None
             st.session_state.criterio = "C"
-            enviar_previsao("⏳ Nenhum número certeiro agora. Aguardando próximo giro...")
+            enviar_msg("⏳ Nenhum número certeiro agora. Aguardando próximo giro...", tipo="previsao")
 
 # --- Interface ---
 st.subheader("🔁 Últimos 13 Números")
@@ -272,14 +292,13 @@ col1.metric("🟢 GREEN", st.session_state.acertos)
 col2.metric("🔴 RED", st.session_state.erros)
 col3.metric("✅ Taxa de acerto", f"{taxa:.1f}%")
 
-# --- Download histórico ---
+# Download histórico
 if os.path.exists(HISTORICO_PATH):
     with open(HISTORICO_PATH, "r") as f:
         conteudo = f.read()
     st.download_button("📥 Baixar histórico", data=conteudo, file_name="historico_coluna_duzia.json")
 
-
-st.subheader("✍️ Inserir Sorteios Manualmente")
+# Inserir sorteios manualmente
 entrada = st.text_area(
     "Digite números (0–36), separados por espaço — até 100:",
     height=100,
@@ -297,13 +316,12 @@ if st.button("Adicionar Sorteios"):
                 st.session_state.historico.append(item)
                 st.session_state.estrategia.adicionar_numero(n)
 
-                # GREEN/RED conferência
                 if st.session_state.previsao_enviada and not st.session_state.resultado_enviado:
                     numeros_validos = set(st.session_state.numeros_previstos or [])
                     green = n in numeros_validos
 
                     msg = f"Resultado: {n} | {'🟢 GREEN' if green else '🔴 RED'}"
-                    enviar_resultado(msg)
+                    enviar_msg(msg, tipo="resultado")
                     st.session_state.resultado_enviado = True
                     st.session_state.previsao_enviada = False
 
