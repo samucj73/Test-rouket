@@ -14,35 +14,29 @@ HISTORICO_PATH = "historico_coluna_duzia.json"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
+TELEGRAM_TOKEN = "SEU_TOKEN_AQUI"
+CHAT_ID = "SEU_CHAT_ID_AQUI"
+
 # =============================
-# Função unificada de envio
+# Função unificada de envio (Telegram)
 # =============================
 def enviar_msg(msg, tipo="previsao"):
-    """
-    Envia mensagens de forma segura, tanto previsões quanto resultados.
-    :param msg: conteúdo da mensagem
-    :param tipo: "previsao" ou "resultado"
-    """
     try:
-        # Garante que msg seja string
+        # Garante string
         if not isinstance(msg, str):
             msg = str(msg)
-
-        # Remove caracteres problemáticos
         msg = msg.encode('utf-8', errors='ignore').decode('utf-8')
 
-        # Lógica de envio real (Telegram, API, etc.)
-        # Exemplo local para teste
-        if tipo == "previsao":
-            print(f"[Previsão Enviada]: {msg}")
-        elif tipo == "resultado":
-            print(f"[Resultado Enviado]: {msg}")
-        else:
-            print(f"[Mensagem Enviada]: {msg}")
+        # Envio via Telegram
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        payload = {"chat_id": CHAT_ID, "text": msg}
+        requests.post(url, data=payload, timeout=5)
+
+        # Debug local
+        print(f"[{tipo.upper()} Enviado]: {msg}")
 
     except Exception as e:
         print(f"Erro ao enviar {tipo}: {e}")
-
 
 # =============================
 # Funções auxiliares
@@ -66,9 +60,7 @@ def tocar_som_moeda():
         unsafe_allow_html=True,
     )
 
-
 def salvar_resultado_em_arquivo(historico, caminho=HISTORICO_PATH, limite=500):
-    """Salva histórico limitado (últimos 500 sorteios)."""
     try:
         if len(historico) > limite:
             historico = historico[-limite:]
@@ -77,9 +69,7 @@ def salvar_resultado_em_arquivo(historico, caminho=HISTORICO_PATH, limite=500):
     except Exception as e:
         logging.error(f"Erro ao salvar histórico: {e}")
 
-
 def fetch_latest_result():
-    """Busca o último resultado da roleta na API oficial."""
     try:
         response = requests.get(API_URL, headers=HEADERS, timeout=5)
         response.raise_for_status()
@@ -94,16 +84,13 @@ def fetch_latest_result():
         logging.error(f"Erro ao buscar resultado: {e}")
         return None
 
-
 # =============================
-# Classe estratégia da roleta
+# Estratégia da Roleta
 # =============================
 class EstrategiaRoleta:
     def __init__(self, janela=12):
         self.janela = janela
         self.historico = deque(maxlen=janela + 1)
-
-        # ordem física da roleta europeia (Race)
         self.roleta = [
             0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27,
             13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33,
@@ -189,14 +176,12 @@ class EstrategiaRoleta:
                 "dominante": dominante
             }
 
-
 # =============================
-# App Streamlit
+# Streamlit App
 # =============================
 st.set_page_config(page_title="IA Roleta — Números Certeiros", layout="centered")
 st.title("🎯 IA Roleta XXXtreme — Estratégia dos Números Certeiros")
 
-# Estado inicial
 if "historico" not in st.session_state:
     st.session_state.historico = json.load(open(HISTORICO_PATH)) if os.path.exists(HISTORICO_PATH) else []
 
@@ -222,10 +207,8 @@ for k, v in {
     if k not in st.session_state:
         st.session_state[k] = v
 
-# Autorefresh
 st_autorefresh(interval=3000, key="refresh_certeiros")
 
-# Busca resultado mais recente
 resultado = fetch_latest_result()
 ultimo_ts = st.session_state.historico[-1]["timestamp"] if st.session_state.historico else None
 
@@ -239,6 +222,8 @@ if resultado and resultado.get("timestamp") and resultado["timestamp"] != ultimo
     except Exception:
         pass
     salvar_resultado_em_arquivo(st.session_state.historico)
+
+    #if st.session_state.previsao_enviada and not st.session
 
     if st.session_state.previsao_enviada and not st.session_state.resultado_enviado:
         numeros_validos = set(st.session_state.numeros_previstos or [])
@@ -292,13 +277,13 @@ col1.metric("🟢 GREEN", st.session_state.acertos)
 col2.metric("🔴 RED", st.session_state.erros)
 col3.metric("✅ Taxa de acerto", f"{taxa:.1f}%")
 
-# Download histórico
+# --- Download histórico ---
 if os.path.exists(HISTORICO_PATH):
     with open(HISTORICO_PATH, "r") as f:
         conteudo = f.read()
     st.download_button("📥 Baixar histórico", data=conteudo, file_name="historico_coluna_duzia.json")
 
-# Inserir sorteios manualmente
+# --- Inserir sorteios manualmente ---
 entrada = st.text_area(
     "Digite números (0–36), separados por espaço — até 100:",
     height=100,
@@ -336,5 +321,4 @@ if st.button("Adicionar Sorteios"):
 
     except Exception as e:
         st.error(f"Erro ao adicionar números: {e}")
-
-  
+    
