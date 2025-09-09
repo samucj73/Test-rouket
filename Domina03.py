@@ -7,6 +7,7 @@ from streamlit_autorefresh import st_autorefresh
 from sklearn.ensemble import RandomForestClassifier
 import numpy as np
 import base64
+import logging
 
 # =============================
 # Configurações
@@ -19,7 +20,9 @@ HEADERS = {"User-Agent": "Mozilla/5.0"}
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 CHAT_ID = "5121457416"
 
-
+# =============================
+# Função de envio de mensagens
+# =============================
 def enviar_telegram(msg: str):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     payload = {"chat_id": CHAT_ID, "text": msg}
@@ -36,6 +39,9 @@ def enviar_msg(msg, tipo="previsao"):
         st.info(msg)
         enviar_telegram(msg)
 
+# =============================
+# Som de alerta
+# =============================
 def tocar_som_moeda():
     som_base64 = (
         "SUQzAwAAAAAAF1RTU0UAAAAPAAADTGF2ZjU2LjI2LjEwNAAAAAAAAAAAAAAA//tQxAADBQAB"
@@ -56,7 +62,6 @@ def tocar_som_moeda():
     )
 
 # =============================
-# =============================
 # Estratégia de Deslocamento
 # =============================
 class EstrategiaDeslocamento:
@@ -73,7 +78,7 @@ class EstrategiaDeslocamento:
         self.historico.append(numero)
 
 # =============================
-# IA para previsão de deslocamentos
+# IA de Deslocamento
 # =============================
 class IA_Deslocamento:
     def __init__(self, janela=12):
@@ -87,9 +92,9 @@ class IA_Deslocamento:
         ultimos = list(historico)
         if len(ultimos) <= self.janela:
             return
-        for i in range(len(ultimos)-self.janela):
-            janela_nums = ultimos[i:i+self.janela]
-            proximo = ultimos[i+self.janela]
+        for i in range(len(ultimos) - self.janela):
+            janela_nums = ultimos[i:i + self.janela]
+            proximo = ultimos[i + self.janela]
             self.X.append(janela_nums)
             self.y.append(proximo)
         if len(self.X) > 0:
@@ -106,7 +111,7 @@ class IA_Deslocamento:
         return [classes[i] for i in top_indices]
 
 # =============================
-# Auxiliares
+# Histórico
 # =============================
 def carregar_historico():
     if os.path.exists(HISTORICO_PATH):
@@ -118,7 +123,9 @@ def salvar_historico(historico):
     with open(HISTORICO_PATH, "w") as f:
         json.dump(historico, f)
 
-#def capturar_numero():
+# =============================
+# Captura número da API
+# =============================
 def fetch_latest_result():
     try:
         response = requests.get(API_URL, headers=HEADERS, timeout=5)
@@ -133,7 +140,6 @@ def fetch_latest_result():
     except Exception as e:
         logging.error(f"Erro ao buscar resultado: {e}")
         return None
-    
 
 # =============================
 # Streamlit App
@@ -160,15 +166,17 @@ if "estrategia" not in st.session_state:
 janela = st.slider("📏 Tamanho da janela (nº de sorteios considerados)", min_value=6, max_value=500, value=12, step=1)
 st.session_state.ia.janela = janela
 
-# Captura número
-numero = capturar_numero()
+# Captura número mais recente
+resultado = fetch_latest_result()
+numero = resultado["number"] if resultado else None
+
 if numero is not None:
     if not st.session_state.estrategia.historico or numero != st.session_state.estrategia.historico[-1]:
         st.session_state.estrategia.adicionar_numero(numero)
         salvar_historico(list(st.session_state.estrategia.historico))
         st.session_state.ia.atualizar_historico(st.session_state.estrategia.historico)
 
-        # Conferir resultado
+        # Conferir resultado anterior
         if st.session_state.previsao and not st.session_state.resultado_enviado:
             if numero in st.session_state.previsao:
                 enviar_msg(f"🟢 GREEN! Saiu {numero}", tipo="resultado")
