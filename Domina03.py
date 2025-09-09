@@ -17,13 +17,11 @@ TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 CHAT_ID = "5121457416"
 
 # =============================
-# Função de envio Telegram
+# =============================
+# Função envio Telegram
 # =============================
 def enviar_msg(msg, tipo="previsao"):
     try:
-        if not isinstance(msg, str):
-            msg = str(msg)
-        msg = msg.encode('utf-8', errors='ignore').decode('utf-8')
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
         payload = {"chat_id": CHAT_ID, "text": msg}
         requests.post(url, data=payload, timeout=5)
@@ -32,7 +30,7 @@ def enviar_msg(msg, tipo="previsao"):
         print(f"Erro ao enviar {tipo}: {e}")
 
 # =============================
-# Histórico
+# Salvar histórico
 # =============================
 def salvar_resultado_em_arquivo(historico, caminho=HISTORICO_PATH, limite=500):
     try:
@@ -59,7 +57,7 @@ def fetch_latest_result():
         return None
 
 # =============================
-# Estratégia de deslocamento
+# Estratégia baseada em deslocamentos
 # =============================
 class EstrategiaDeslocamento:
     def __init__(self):
@@ -86,7 +84,7 @@ class EstrategiaDeslocamento:
             deslocamentos.append(d)
         return deslocamentos
 
-    def prever_proximos(self, janela=36, top_n=3):
+    def prever_proximos(self, janela=36, top_n=10):
         deslocamentos = self.calcular_deslocamentos(janela)
         if not deslocamentos:
             return []
@@ -94,30 +92,32 @@ class EstrategiaDeslocamento:
         mais_comuns = [d for d, _ in freq.most_common(top_n)]
         ultima_pos = self.roleta.index(self.historico[-1])
         proximos = [(self.roleta[(ultima_pos + d) % len(self.roleta)]) for d in mais_comuns]
-        return sorted(proximos)
+        return sorted(set(proximos))[:10]
 
 # =============================
 # Streamlit App
 # =============================
-st.set_page_config(page_title="IA Roleta — Deslocamento", layout="centered")
-st.title("🎯 IA Roleta XXXtreme — Estratégia de Deslocamento (Top 3)")
+st.set_page_config(page_title="IA Roleta — Deslocamentos", layout="centered")
+st.title("🎯 IA Roleta — Estratégia por Deslocamentos")
 
-# Sessão
 if "historico" not in st.session_state:
     st.session_state.historico = json.load(open(HISTORICO_PATH)) if os.path.exists(HISTORICO_PATH) else []
 
 if "estrategia" not in st.session_state:
     st.session_state.estrategia = EstrategiaDeslocamento()
-    for h in st.session_state.historico:
+
+if "estrategia_inicializada" not in st.session_state:
+    for h in st.session_state.historico[-37:]:
         try:
             st.session_state.estrategia.adicionar_numero(int(h["number"]))
-        except:
+        except Exception:
             pass
+    st.session_state.estrategia_inicializada = True
 
 for k, v in {
+    "previsao": None,
     "previsao_enviada": False,
     "resultado_enviado": False,
-    "previsao": [],
     "acertos": 0,
     "erros": 0,
 }.items():
@@ -134,12 +134,15 @@ if resultado and resultado.get("timestamp") and resultado["timestamp"] != ultimo
     ts_atual = resultado["timestamp"]
 
     st.session_state.historico.append(resultado)
-    st.session_state.estrategia.adicionar_numero(int(numero_atual))
+    try:
+        st.session_state.estrategia.adicionar_numero(int(numero_atual))
+    except Exception:
+        pass
     salvar_resultado_em_arquivo(st.session_state.historico)
 
-    # Conferência resultado
+    # Conferir GREEN/RED
     if st.session_state.previsao_enviada and not st.session_state.resultado_enviado:
-        green = numero_atual in st.session_state.previsao
+        green = int(numero_atual) in (st.session_state.previsao or [])
         msg = f"Resultado: {numero_atual} | {'🟢 GREEN' if green else '🔴 RED'}"
         enviar_msg(msg, tipo="resultado")
         st.session_state.resultado_enviado = True
@@ -149,23 +152,30 @@ if resultado and resultado.get("timestamp") and resultado["timestamp"] != ultimo
         else:
             st.session_state.erros += 1
 
-    # Previsão próximo número
-    prox_numeros = st.session_state.estrategia.prever_proximos(janela=36, top_n=3)
+    # Nova previsão
+    prox_numeros = st.session_state.estrategia.prever_proximos(janela=36, top_n=10)
     if prox_numeros and not st.session_state.previsao_enviada:
         st.session_state.previsao = prox_numeros
         st.session_state.previsao_enviada = True
         st.session_state.resultado_enviado = False
-        enviar_msg(f"🎯 Próximos números prováveis (top 3 deslocamentos): {prox_numeros}", tipo="previsao")
+
+        # formatar em 2 linhas de 5
+        linha1 = " ".join(map(str, prox_numeros[:5]))
+        linha2 = " ".join(map(str, prox_numeros[5:10]))
+        msg_alerta = f"Próximos números prováveis:\n{linha1}\n{linha2}"
+        enviar_msg(msg_alerta, tipo="previsao")
 
 # --- Interface ---
-st.subheader("🔁 Últimos números")
-st.write(" ".join(str(h["number"]) for h in st.session_state.historico[-37:]))
+st.subheader("🔁 Últimos Números")
+st.write(" ".join(str(h["number"]) for h in st.session_state.historico[-13:]))
 
 st.subheader("🔮 Previsão Atual")
-if st.session_state.get("previsao_enviada"):
-    st.write(f"🎯 Números previstos: {st.session_state.previsao}")
+if st.session_state.previsao:
+    linha1 = " ".join(map(str, st.session_state.previsao[:5]))
+    linha2 = " ".join(map(str, st.session_state.previsao[5:10]))
+    st.write(f"{linha1}\n{linha2}")
 else:
-    st.info("🔎 Aguardando próxima previsão...")
+    st.info("🔎 Aguardando próximo número para calcular.")
 
 st.subheader("📊 Desempenho")
 total = st.session_state.acertos + st.session_state.erros
@@ -180,33 +190,3 @@ if os.path.exists(HISTORICO_PATH):
     with open(HISTORICO_PATH, "r") as f:
         conteudo = f.read()
     st.download_button("📥 Baixar histórico", data=conteudo, file_name="historico_deslocamento.json")
-
-# --- Inserir números manualmente ---
-entrada = st.text_area(
-    "Digite números (0–36), separados por espaço:",
-    height=100,
-    key="entrada_manual"
-)
-
-if st.button("Adicionar Sorteios"):
-    try:
-        nums = [int(n) for n in entrada.split() if n.isdigit() and 0 <= int(n) <= 36]
-        for n in nums:
-            item = {"number": n, "timestamp": f"manual_{len(st.session_state.historico)}"}
-            st.session_state.historico.append(item)
-            st.session_state.estrategia.adicionar_numero(n)
-            # Conferência resultado
-            if st.session_state.previsao_enviada and not st.session_state.resultado_enviado:
-                green = n in st.session_state.previsao
-                msg = f"Resultado: {n} | {'🟢 GREEN' if green else '🔴 RED'}"
-                enviar_msg(msg, tipo="resultado")
-                st.session_state.resultado_enviado = True
-                st.session_state.previsao_enviada = False
-                if green:
-                    st.session_state.acertos += 1
-                else:
-                    st.session_state.erros += 1
-        salvar_resultado_em_arquivo(st.session_state.historico)
-        st.success(f"{len(nums)} números adicionados com sucesso!")
-    except Exception as e:
-        st.error(f"Erro ao adicionar números: {e}")
