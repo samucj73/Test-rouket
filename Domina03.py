@@ -118,16 +118,22 @@ def salvar_historico(historico):
     with open(HISTORICO_PATH, "w") as f:
         json.dump(historico, f)
 
-def capturar_numero():
+#def capturar_numero():
+def fetch_latest_result():
     try:
-        r = requests.get(API_URL, headers=HEADERS, timeout=10)
-        if r.status_code == 200:
-            data = r.json()
-            if "winningNumber" in data:
-                return int(data["winningNumber"])
-    except Exception:
+        response = requests.get(API_URL, headers=HEADERS, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        game_data = data.get("data", {})
+        result = game_data.get("result", {})
+        outcome = result.get("outcome", {})
+        number = outcome.get("number")
+        timestamp = game_data.get("startedAt")
+        return {"number": number, "timestamp": timestamp}
+    except Exception as e:
+        logging.error(f"Erro ao buscar resultado: {e}")
         return None
-    return None
+    
 
 # =============================
 # Streamlit App
