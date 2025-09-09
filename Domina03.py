@@ -111,62 +111,42 @@ class EstrategiaRoleta:
         return dominante[0][0] if dominante else None
 
     def vizinhos_fisicos(self, numero, n=1):
-        """Retorna vizinhos físicos usando a roleta europeia real."""
         idx = self.ROLETAS_EUROPEIA.index(numero)
         viz = []
         for i in range(1, n+1):
-            viz.append(self.ROLETAS_EUROPEIA[(idx - i) % len(self.ROLETAS_EUROPEIA)])  # esquerda
-            viz.append(self.ROLETAS_EUROPEIA[(idx + i) % len(self.ROLETAS_EUROPEIA)])  # direita
+            viz.append(self.ROLETAS_EUROPEIA[(idx - i) % len(self.ROLETAS_EUROPEIA)])
+            viz.append(self.ROLETAS_EUROPEIA[(idx + i) % len(self.ROLETAS_EUROPEIA)])
         return viz
 
     def selecionar_numeros_mais_fortes(self, terminal, limite=5, incluir_vizinhos=False):
         if terminal is None:
             return []
 
+        # Números do terminal
         base = [n for n in range(37) if n % 10 == terminal]
+
+        # Frequência nos últimos 50 giros
         ultimos = list(self.historico)[-50:]
         freq = Counter([n for n in ultimos if n in base])
+        
+        # Ordena por mais frequentes
         mais_fortes = [n for n, _ in freq.most_common(limite)]
-        if not mais_fortes:
-            mais_fortes = base[:limite]
 
+        # Se não houver frequência suficiente, preenche com base
+        if len(mais_fortes) < limite:
+            for n in base:
+                if n not in mais_fortes:
+                    mais_fortes.append(n)
+                if len(mais_fortes) >= limite:
+                    break
+
+        # Inclui vizinhos físicos se necessário
         numeros_final = set(mais_fortes)
         if incluir_vizinhos:
             for n in mais_fortes:
                 numeros_final.update(self.vizinhos_fisicos(n, n=1))
 
         return sorted(numeros_final)
-
-    def verificar_entrada(self):
-        if len(self.historico) < self.janela + 1:
-            return None
-
-        ultimos = list(self.historico)
-        ultimos_12 = ultimos[:-1]
-        numero_13 = ultimos[-1]
-        terminal_13 = self.extrair_terminal(numero_13)
-        dominante = self.calcular_dominante()
-
-        if dominante is None:
-            return None
-
-        condicao_a = numero_13 in ultimos_12
-        condicao_b = terminal_13 in [self.extrair_terminal(n) for n in ultimos_12]
-        condicao_c = not condicao_a and not condicao_b
-
-        if condicao_a:
-            criterio = "A"
-        elif condicao_b:
-            criterio = "B"
-        else:
-            criterio = "C"
-
-        return {
-            "entrada": condicao_a or condicao_b,
-            "criterio": criterio,
-            "numero_13": numero_13,
-            "dominante": dominante
-        }
 
 # =============================
 # Streamlit App
