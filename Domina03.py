@@ -122,7 +122,7 @@ class EstrategiaRoleta:
             if n not in self.roleta:
                 continue
             idx = self.roleta.index(n)
-            for offset in range(-3, 4):
+            for offset in range(-4, 5):
                 vizinho = self.roleta[(idx + offset) % len(self.roleta)]
                 conjunto.add(vizinho)
         return conjunto
