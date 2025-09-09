@@ -72,7 +72,7 @@ class EstrategiaDeslocamento:
     def adicionar_numero(self, numero):
         self.historico.append(numero)
 
-    def calcular_deslocamentos(self, janela=36):
+    def calcular_deslocamentos(self, janela=12):
         if len(self.historico) < janela:
             return None
         ultimos = list(self.historico)[-janela:]
@@ -84,7 +84,7 @@ class EstrategiaDeslocamento:
             deslocamentos.append(d)
         return deslocamentos
 
-    def prever_proximos(self, janela=36, top_n=10):
+    def prever_proximos(self, janela=12, top_n=10):
         deslocamentos = self.calcular_deslocamentos(janela)
         if not deslocamentos:
             return []
@@ -153,7 +153,7 @@ if resultado and resultado.get("timestamp") and resultado["timestamp"] != ultimo
             st.session_state.erros += 1
 
     # Nova previsão
-    prox_numeros = st.session_state.estrategia.prever_proximos(janela=36, top_n=10)
+    prox_numeros = st.session_state.estrategia.prever_proximos(janela=12, top_n=10)
     if prox_numeros and not st.session_state.previsao_enviada:
         st.session_state.previsao = prox_numeros
         st.session_state.previsao_enviada = True
