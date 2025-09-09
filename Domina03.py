@@ -21,7 +21,7 @@ TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 CHAT_ID = "5121457416"
 
 # =============================
-# Função de envio de mensagens
+# Funções auxiliares
 # =============================
 def enviar_telegram(msg: str):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -39,9 +39,6 @@ def enviar_msg(msg, tipo="previsao"):
         st.info(msg)
         enviar_telegram(msg)
 
-# =============================
-# Som de alerta
-# =============================
 def tocar_som_moeda():
     som_base64 = (
         "SUQzAwAAAAAAF1RTU0UAAAAPAAADTGF2ZjU2LjI2LjEwNAAAAAAAAAAAAAAA//tQxAADBQAB"
@@ -73,42 +70,69 @@ class EstrategiaDeslocamento:
             16, 33, 1, 20, 14, 31, 9, 22, 18, 29,
             7, 28, 12, 35, 3, 26
         ]
+        self.posicao = {n: i for i, n in enumerate(self.roleta)}
 
     def adicionar_numero(self, numero):
         self.historico.append(numero)
 
 # =============================
-# IA de Deslocamento
+# IA baseada em deslocamentos
 # =============================
 class IA_Deslocamento:
     def __init__(self, janela=12):
         self.janela = janela
-        self.model = RandomForestClassifier(n_estimators=100)
+        self.model = RandomForestClassifier(n_estimators=200)
         self.X = []
         self.y = []
         self.treinado = False
+        self.roleta = [
+            0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6,
+            27, 13, 36, 11, 30, 8, 23, 10, 5, 24,
+            16, 33, 1, 20, 14, 31, 9, 22, 18, 29,
+            7, 28, 12, 35, 3, 26
+        ]
+        self.posicao = {n: i for i, n in enumerate(self.roleta)}
+
+    def calcular_deslocamentos(self, historico):
+        deslocamentos = []
+        nums = list(historico)
+        for i in range(1, len(nums)):
+            delta = (self.posicao[nums[i]] - self.posicao[nums[i-1]]) % 37
+            deslocamentos.append(delta)
+        return deslocamentos
 
     def atualizar_historico(self, historico):
-        ultimos = list(historico)
-        if len(ultimos) <= self.janela:
+        deslocamentos = self.calcular_deslocamentos(historico)
+        if len(deslocamentos) <= self.janela:
             return
-        for i in range(len(ultimos) - self.janela):
-            janela_nums = ultimos[i:i + self.janela]
-            proximo = ultimos[i + self.janela]
-            self.X.append(janela_nums)
-            self.y.append(proximo)
+        for i in range(len(deslocamentos)-self.janela):
+            X_seq = deslocamentos[i:i+self.janela]
+            y_next = deslocamentos[i+self.janela]
+            self.X.append(X_seq)
+            self.y.append(y_next)
         if len(self.X) > 0:
             self.model.fit(self.X, self.y)
             self.treinado = True
 
     def prever(self, historico, top_n=10):
-        if not self.treinado or len(historico) < self.janela:
+        if not self.treinado or len(historico) <= 1:
             return []
-        ultimos = list(historico)[-self.janela:]
-        probs = self.model.predict_proba([ultimos])[0]
+
+        ultimos = list(historico)
+        last_num = ultimos[-1]
+        last_pos = self.posicao[last_num]
+
+        deslocamentos_recentes = self.calcular_deslocamentos(ultimos)
+        X_pred = deslocamentos_recentes[-self.janela:] if len(deslocamentos_recentes) >= self.janela else [0]*self.janela
+
+        probs = self.model.predict_proba([X_pred])[0]
         classes = self.model.classes_
         top_indices = np.argsort(probs)[::-1][:top_n]
-        return [classes[i] for i in top_indices]
+        top_deslocamentos = [classes[i] for i in top_indices]
+
+        proximos_numeros = [(last_pos + d) % 37 for d in top_deslocamentos]
+        proximos_numeros = [self.roleta[n] for n in proximos_numeros]
+        return proximos_numeros
 
 # =============================
 # Histórico
@@ -124,7 +148,7 @@ def salvar_historico(historico):
         json.dump(historico, f)
 
 # =============================
-# Captura número da API
+# Captura número
 # =============================
 def fetch_latest_result():
     try:
@@ -142,11 +166,10 @@ def fetch_latest_result():
         return None
 
 # =============================
-# Streamlit App
+# Streamlit
 # =============================
 st.set_page_config(page_title="Roleta IA Deslocamento", layout="centered")
 st.title("🎯 Roleta — IA de Deslocamento Adaptativa")
-
 st_autorefresh(interval=7000, key="refresh")
 
 # Inicialização
@@ -163,44 +186,43 @@ if "estrategia" not in st.session_state:
     st.session_state.erros = 0
 
 # Slider da janela
-janela = st.slider("📏 Tamanho da janela (nº de sorteios considerados)", min_value=6, max_value=500, value=12, step=1)
+janela = st.slider("📏 Tamanho da janela (nº de deslocamentos considerados)", min_value=6, max_value=50, value=12, step=1)
 st.session_state.ia.janela = janela
 
-# Captura número mais recente
+# Captura resultado
 resultado = fetch_latest_result()
-numero = resultado["number"] if resultado else None
+ultimo_ts = st.session_state.estrategia.historico[-1]["timestamp"] if st.session_state.estrategia.historico else None
 
-if numero is not None:
-    if not st.session_state.estrategia.historico or numero != st.session_state.estrategia.historico[-1]:
-        st.session_state.estrategia.adicionar_numero(numero)
-        salvar_historico(list(st.session_state.estrategia.historico))
-        st.session_state.ia.atualizar_historico(st.session_state.estrategia.historico)
+if resultado and resultado.get("timestamp") != ultimo_ts:
+    numero_atual = resultado["number"]
+    st.session_state.estrategia.adicionar_numero(numero_atual)
+    salvar_historico(list(st.session_state.estrategia.historico))
+    st.session_state.ia.atualizar_historico(st.session_state.estrategia.historico)
 
-        # Conferir resultado anterior
-        if st.session_state.previsao and not st.session_state.resultado_enviado:
-            if numero in st.session_state.previsao:
-                enviar_msg(f"🟢 GREEN! Saiu {numero}", tipo="resultado")
-                st.session_state.acertos += 1
-                tocar_som_moeda()
-            else:
-                enviar_msg(f"🔴 RED! Saiu {numero}", tipo="resultado")
-                st.session_state.erros += 1
-            st.session_state.resultado_enviado = True
-            st.session_state.previsao_enviada = False
+    # Conferir resultado da previsão anterior
+    if st.session_state.previsao and not st.session_state.resultado_enviado:
+        if numero_atual in st.session_state.previsao:
+            enviar_msg(f"🟢 GREEN! Saiu {numero_atual}", tipo="resultado")
+            st.session_state.acertos += 1
+            tocar_som_moeda()
+        else:
+            enviar_msg(f"🔴 RED! Saiu {numero_atual}", tipo="resultado")
+            st.session_state.erros += 1
+        st.session_state.resultado_enviado = True
+        st.session_state.previsao_enviada = False
 
-        # Nova previsão usando IA
-        prox_numeros = st.session_state.ia.prever(st.session_state.estrategia.historico, top_n=10)
-        if prox_numeros and not st.session_state.previsao_enviada:
-            st.session_state.previsao = prox_numeros
-            st.session_state.previsao_enviada = True
-            st.session_state.resultado_enviado = False
+    # Nova previsão
+    prox_numeros = st.session_state.ia.prever(st.session_state.estrategia.historico, top_n=10)
+    if prox_numeros and not st.session_state.previsao_enviada:
+        st.session_state.previsao = prox_numeros
+        st.session_state.previsao_enviada = True
+        st.session_state.resultado_enviado = False
+        linha1 = " ".join(str(n) for n in prox_numeros[:5])
+        linha2 = " ".join(str(n) for n in prox_numeros[5:])
+        msg_alerta = f"🎯 Próximos números prováveis:\n{linha1}\n{linha2}"
+        enviar_msg(msg_alerta, tipo="previsao")
 
-            linha1 = " ".join(str(n) for n in prox_numeros[:5])
-            linha2 = " ".join(str(n) for n in prox_numeros[5:])
-            msg_alerta = f"🎯 Próximos números prováveis:\n{linha1}\n{linha2}"
-            enviar_msg(msg_alerta, tipo="previsao")
-
-# Histórico
+# Interface
 st.subheader("📜 Histórico (últimos 20 números)")
 st.write(list(st.session_state.estrategia.historico)[-20:])
 
