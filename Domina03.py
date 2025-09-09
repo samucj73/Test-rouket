@@ -7,6 +7,7 @@ from streamlit_autorefresh import st_autorefresh
 from sklearn.ensemble import RandomForestClassifier
 import numpy as np
 import base64
+import logging
 
 # =============================
 # Configurações
@@ -15,12 +16,11 @@ HISTORICO_PATH = "historico_deslocamento.json"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
-# Telegram
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 CHAT_ID = "5121457416"
 
 # =============================
-# Funções de envio e som
+# Funções de Telegram
 # =============================
 def enviar_telegram(msg: str):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -38,6 +38,9 @@ def enviar_msg(msg, tipo="previsao"):
         st.info(msg)
         enviar_telegram(msg)
 
+# =============================
+# Som de acerto
+# =============================
 def tocar_som_moeda():
     som_base64 = (
         "SUQzAwAAAAAAF1RTU0UAAAAPAAADTGF2ZjU2LjI2LjEwNAAAAAAAAAAAAAAA//tQxAADBQAB"
@@ -74,7 +77,7 @@ class EstrategiaDeslocamento:
         self.historico.append(numero)
 
 # =============================
-# IA para previsão de deslocamentos
+# IA de Deslocamento
 # =============================
 class IA_Deslocamento:
     def __init__(self, janela=12):
@@ -85,11 +88,12 @@ class IA_Deslocamento:
         self.treinado = False
 
     def atualizar_historico(self, historico):
-        ultimos = list(historico)
+        # Extrai apenas números inteiros
+        ultimos = [h["number"] if isinstance(h, dict) else h for h in historico]
         if len(ultimos) <= self.janela:
             return
-        self.X.clear()
-        self.y.clear()
+        self.X = []
+        self.y = []
         for i in range(len(ultimos) - self.janela):
             janela_nums = ultimos[i:i + self.janela]
             proximo = ultimos[i + self.janela]
@@ -102,7 +106,7 @@ class IA_Deslocamento:
     def prever(self, historico, top_n=10):
         if not self.treinado or len(historico) < self.janela:
             return []
-        ultimos = list(historico)[-self.janela:]
+        ultimos = [h["number"] if isinstance(h, dict) else h for h in historico][-self.janela:]
         probs = self.model.predict_proba([ultimos])[0]
         classes = self.model.classes_
         top_indices = np.argsort(probs)[::-1][:top_n]
@@ -119,10 +123,10 @@ def carregar_historico():
 
 def salvar_historico(historico):
     with open(HISTORICO_PATH, "w") as f:
-        json.dump(list(historico), f)
+        json.dump(historico, f)
 
 # =============================
-# Captura de número
+# Captura do resultado mais recente
 # =============================
 def fetch_latest_result():
     try:
@@ -133,9 +137,10 @@ def fetch_latest_result():
         result = game_data.get("result", {})
         outcome = result.get("outcome", {})
         number = outcome.get("number")
-        return number
+        timestamp = game_data.get("startedAt")
+        return {"number": number, "timestamp": timestamp}
     except Exception as e:
-        print(f"Erro ao buscar resultado: {e}")
+        logging.error(f"Erro ao buscar resultado: {e}")
         return None
 
 # =============================
@@ -164,15 +169,18 @@ janela = st.slider("📏 Tamanho da janela (nº de sorteios considerados)", min_
 st.session_state.ia.janela = janela
 
 # Captura número
-numero_atual = fetch_latest_result()
-ultimo_num = st.session_state.estrategia.historico[-1] if st.session_state.estrategia.historico else None
+resultado = fetch_latest_result()
+ultimo_ts = st.session_state.estrategia.historico[-1]["timestamp"] if st.session_state.estrategia.historico else None
 
-if numero_atual is not None and numero_atual != ultimo_num:
-    st.session_state.estrategia.adicionar_numero(numero_atual)
-    salvar_historico(st.session_state.estrategia.historico)
+if resultado and resultado.get("timestamp") != ultimo_ts:
+    numero_atual = resultado["number"]
+    timestamp_atual = resultado["timestamp"]
+
+    st.session_state.estrategia.adicionar_numero({"number": numero_atual, "timestamp": timestamp_atual})
+    salvar_historico(list(st.session_state.estrategia.historico))
     st.session_state.ia.atualizar_historico(st.session_state.estrategia.historico)
 
-    # Conferir resultado anterior
+    # Conferir resultado
     if st.session_state.previsao and not st.session_state.resultado_enviado:
         if numero_atual in st.session_state.previsao:
             enviar_msg(f"🟢 GREEN! Saiu {numero_atual}", tipo="resultado")
@@ -190,23 +198,35 @@ if numero_atual is not None and numero_atual != ultimo_num:
         st.session_state.previsao = prox_numeros
         st.session_state.previsao_enviada = True
         st.session_state.resultado_enviado = False
-
         linha1 = " ".join(str(n) for n in prox_numeros[:5])
         linha2 = " ".join(str(n) for n in prox_numeros[5:])
         msg_alerta = f"🎯 Próximos números prováveis:\n{linha1}\n{linha2}"
         enviar_msg(msg_alerta, tipo="previsao")
 
-# Histórico
+# --- Interface ---
 st.subheader("📜 Histórico (últimos 20 números)")
-st.write(list(st.session_state.estrategia.historico)[-20:])
+ultimos_20 = [h["number"] if isinstance(h, dict) else h for h in st.session_state.estrategia.historico][-20:]
+st.write(ultimos_20)
 
-# Estatísticas
+st.subheader("🔮 Previsão Atual")
+if st.session_state.previsao:
+    st.write(f"🎯 Próximos números prováveis: {st.session_state.previsao}")
+else:
+    st.info("🔎 Aguardando próximo número para calcular.")
+
+st.subheader("📊 Desempenho")
 total = st.session_state.acertos + st.session_state.erros
 taxa = (st.session_state.acertos / total * 100) if total > 0 else 0.0
 col1, col2, col3 = st.columns(3)
 col1.metric("🟢 GREEN", st.session_state.acertos)
 col2.metric("🔴 RED", st.session_state.erros)
 col3.metric("✅ Taxa de acerto", f"{taxa:.1f}%")
+
+# --- Download histórico ---
+if os.path.exists(HISTORICO_PATH):
+    with open(HISTORICO_PATH, "r") as f:
+        conteudo = f.read()
+    st.download_button("📥 Baixar histórico", data=conteudo, file_name="historico_deslocamento.json")
 
 # --- Inserir sorteios manualmente ---
 entrada = st.text_area(
@@ -222,11 +242,10 @@ if st.button("Adicionar Sorteios"):
             st.warning("Limite de 100 números.")
         else:
             for n in nums:
-                st.session_state.estrategia.adicionar_numero(n)
-                salvar_historico(st.session_state.estrategia.historico)
-                st.session_state.ia.atualizar_historico(st.session_state.estrategia.historico)
+                item = {"number": n, "timestamp": f"manual_{len(st.session_state.estrategia.historico)}"}
+                st.session_state.estrategia.adicionar_numero(item)
 
-                #   # Conferir resultado
+                # Conferir resultado
                 if st.session_state.previsao and not st.session_state.resultado_enviado:
                     if n in st.session_state.previsao:
                         enviar_msg(f"🟢 GREEN! Saiu {n}", tipo="resultado")
@@ -238,7 +257,9 @@ if st.button("Adicionar Sorteios"):
                     st.session_state.resultado_enviado = True
                     st.session_state.previsao_enviada = False
 
+            salvar_historico(list(st.session_state.estrategia.historico))
             st.success(f"{len(nums)} números adicionados com sucesso!")
 
     except Exception as e:
         st.error(f"Erro ao adicionar números: {e}")
+        
