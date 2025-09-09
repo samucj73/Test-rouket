@@ -62,7 +62,7 @@ def fetch_latest_result():
         logging.error(f"Erro ao buscar resultado: {e}")
         return None
 
-  class EstrategiaRoleta:
+class EstrategiaRoleta:
     def __init__(self, janela=12):
         self.janela = janela
         self.historico = deque(maxlen=janela + 1)
