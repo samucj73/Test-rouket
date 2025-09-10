@@ -91,7 +91,7 @@ def fetch_latest_result():
         return None
 
 # =============================
-# Estrutura de Estratégia
+# Estratégia
 # =============================
 class EstrategiaDeslocamento:
     def __init__(self):
@@ -101,13 +101,15 @@ class EstrategiaDeslocamento:
         self.historico.append(numero_dict)
 
 # =============================
-# IA baseada em deslocamento físico
+# IA de deslocamento físico profissional
 # =============================
-class IA_Deslocamento_Fisico:
-    def __init__(self, layout=None, janela=12):
+class IA_Deslocamento_Fisico_Pro:
+    def __init__(self, layout=None, janela=12, top_n_deltas=3, max_numeros=7):
         self.layout = layout or ROULETTE_LAYOUT
         self.janela = janela
-        self.model = RandomForestClassifier(n_estimators=200)
+        self.top_n_deltas = top_n_deltas
+        self.max_numeros = max_numeros
+        self.model = RandomForestClassifier(n_estimators=400)
         self.X = []
         self.y = []
         self.treinado = False
@@ -137,43 +139,52 @@ class IA_Deslocamento_Fisico:
             self.model.fit(self.X, self.y)
             self.treinado = True
 
-    def prever(self, historico, top_n=10):
+    def prever(self, historico):
         if not self.treinado or len(historico) < self.janela:
             return []
+
         ultimos = [h["number"] for h in list(historico)[-self.janela:]]
         ultimos_deltas = self._calcular_deslocamentos(ultimos)
         probs = self.model.predict_proba([ultimos_deltas])[0]
         classes = self.model.classes_
-        top_indices = np.argsort(probs)[::-1][:top_n]
+
+        top_indices = np.argsort(probs)[::-1][:self.top_n_deltas]
         top_deltas = [classes[i] for i in top_indices]
 
         ultimo_numero = ultimos[-1]
-        posicao_atual = self.layout.index(ultimo_numero)
+        pos_atual = self.layout.index(ultimo_numero)
+
         numeros_previstos = []
         for delta in top_deltas:
-            n = self.layout[(posicao_atual + delta) % len(self.layout)]
+            n = self.layout[(pos_atual + delta) % len(self.layout)]
             numeros_previstos.append(n)
             idx = self.layout.index(n)
+
+            # Inclui vizinhos e vizinhos dos vizinhos
             vizinhos = [
                 self.layout[(idx - 1) % len(self.layout)],
-                self.layout[(idx + 1) % len(self.layout)]
+                self.layout[(idx + 1) % len(self.layout)],
+                self.layout[(idx - 2) % len(self.layout)],
+                self.layout[(idx + 2) % len(self.layout)]
             ]
             numeros_previstos.extend(vizinhos)
-        numeros_previstos = list(dict.fromkeys(numeros_previstos))[:top_n]
+
+        # Remove duplicados e limita a quantidade final
+        numeros_previstos = list(dict.fromkeys(numeros_previstos))[:self.max_numeros]
         return numeros_previstos
 
 # =============================
 # Streamlit App
 # =============================
-st.set_page_config(page_title="Roleta IA Deslocamento Físico", layout="centered")
-st.title("🎯 Roleta — IA de Deslocamento Físico")
+st.set_page_config(page_title="Roleta IA Profissional", layout="centered")
+st.title("🎯 Roleta — IA de Deslocamento Físico Profissional")
 
 st_autorefresh(interval=7000, key="refresh")
 
 # Inicialização
 if "estrategia" not in st.session_state:
     st.session_state.estrategia = EstrategiaDeslocamento()
-    st.session_state.ia = IA_Deslocamento_Fisico(janela=12)
+    st.session_state.ia = IA_Deslocamento_Fisico_Pro(janela=12)
     historico = carregar_historico()
     for n in historico:
         st.session_state.estrategia.adicionar_numero(n)
@@ -200,7 +211,8 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
 
     # Conferir resultado
     if st.session_state.previsao and not st.session_state.resultado_enviado:
-        if numero_dict["number"] in st.session_state.previsao:
+        #if numero_dict["number"] in st.session_state.previsao:
+         if numero_dict["number"] in st.session_state.previsao:
             enviar_msg(f"🟢 GREEN! Saiu {numero_dict['number']}", tipo="resultado")
             st.session_state.acertos += 1
             tocar_som_moeda()
@@ -211,15 +223,13 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
         st.session_state.previsao_enviada = False
 
     # Nova previsão usando IA
-    prox_numeros = st.session_state.ia.prever(st.session_state.estrategia.historico, top_n=10)
+    prox_numeros = st.session_state.ia.prever(st.session_state.estrategia.historico)
     if prox_numeros and not st.session_state.previsao_enviada:
         st.session_state.previsao = prox_numeros
         st.session_state.previsao_enviada = True
         st.session_state.resultado_enviado = False
 
-        linha1 = " ".join(str(n) for n in prox_numeros[:5])
-        linha2 = " ".join(str(n) for n in prox_numeros[5:])
-        msg_alerta = f"🎯 Próximos números prováveis:\n{linha1}\n{linha2}"
+        msg_alerta = "🎯 Próximos números prováveis: " + " ".join(str(n) for n in prox_numeros)
         enviar_msg(msg_alerta, tipo="previsao")
 
 # --- Histórico ---
