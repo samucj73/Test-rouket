@@ -23,7 +23,7 @@ MODEL_CAT_PATH = "model_catboost.joblib"
 MODEL_RF_PATH = "model_rf.joblib"
 META_PATH = "meta_deslocamento.json"
 
-historico_coluna_duzia.json"
+#historico_coluna_duzia.json"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
