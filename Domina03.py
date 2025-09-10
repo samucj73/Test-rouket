@@ -238,7 +238,7 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
 
 # Histórico
 st.subheader("📜 Histórico (últimos 20 números)")
-st.write(list(st.session_state.estrategia.historico)[-20:])
+st.write(list(st.session_state.estrategia.historico)[-6:])
 
 # Estatísticas
 total = st.session_state.acertos + st.session_state.erros
