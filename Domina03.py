@@ -90,6 +90,21 @@ def fetch_latest_result():
         logging.error(f"Erro ao buscar resultado: {e}")
         return None
 
+def obter_vizinhos(numero, layout, antes=2, depois=2):
+    """Retorna o número + vizinhos físicos na roleta"""
+    idx = layout.index(numero)
+    n = len(layout)
+    vizinhos = []
+    # números antes
+    for i in range(antes, 0, -1):
+        vizinhos.append(layout[(idx - i) % n])
+    # número central
+    vizinhos.append(numero)
+    # números depois
+    for i in range(1, depois + 1):
+        vizinhos.append(layout[(idx + i) % n])
+    return vizinhos
+
 # =============================
 # Estratégia
 # =============================
@@ -162,24 +177,18 @@ class IA_Deslocamento_Fisico_Pro:
             if delta == 0:
                 continue
             n = self.layout[(pos_atual + delta) % len(self.layout)]
-            # adiciona vizinhos físicos
             vizinhos = obter_vizinhos(n, self.layout, antes=2, depois=2)
             for v in vizinhos:
                 if v not in numeros_previstos:
                     numeros_previstos.append(v)
 
-        # limita ao máximo de números
-        return numeros_previstos[:self.top_n_deltas*5]  # cada delta com 5 números (central+2+2)
-
-
-    
+        return numeros_previstos[:self.top_n_deltas*5]  # central + vizinhos
 
 # =============================
 # Streamlit App
 # =============================
 st.set_page_config(page_title="Roleta IA Profissional", layout="centered")
 st.title("🎯 Roleta — IA de Deslocamento Físico Profissional")
-
 st_autorefresh(interval=3000, key="refresh")
 
 # Inicialização
@@ -210,7 +219,7 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
     salvar_historico(list(st.session_state.estrategia.historico))
     st.session_state.ia.atualizar_historico(st.session_state.estrategia.historico)
 
-    # --- Conferir resultado da previsão anterior ---
+    # Conferir resultado anterior
     if st.session_state.previsao:
         if numero_dict["number"] in st.session_state.previsao:
             enviar_msg(f"🟢 GREEN! Saiu {numero_dict['number']}", tipo="resultado")
@@ -219,7 +228,7 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
             enviar_msg(f"🔴 RED! Saiu {numero_dict['number']}", tipo="resultado")
             st.session_state.erros += 1
 
-    # --- Nova previsão para o próximo número ---
+    # Nova previsão
     prox_numeros = st.session_state.ia.prever(st.session_state.estrategia.historico)
     if prox_numeros:
         st.session_state.previsao = prox_numeros
@@ -227,13 +236,11 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
         msg_alerta = "🎯 Próximos números prováveis: " + " ".join(str(n) for n in prox_numeros)
         enviar_msg(msg_alerta, tipo="previsao")
 
-
-
-# --- Histórico ---
+# Histórico
 st.subheader("📜 Histórico (últimos 20 números)")
 st.write(list(st.session_state.estrategia.historico)[-20:])
 
-# --- Estatísticas ---
+# Estatísticas
 total = st.session_state.acertos + st.session_state.erros
 taxa = (st.session_state.acertos / total * 100) if total > 0 else 0.0
 col1, col2, col3 = st.columns(3)
@@ -241,7 +248,7 @@ col1.metric("🟢 GREEN", st.session_state.acertos)
 col2.metric("🔴 RED", st.session_state.erros)
 col3.metric("✅ Taxa de acerto", f"{taxa:.1f}%")
 
-# --- Inserir sorteios manualmente ---
+# Inserir sorteios manualmente
 entrada = st.text_area(
     "Digite números (0–36), separados por espaço — até 100:",
     height=100,
