@@ -148,39 +148,41 @@ class IA_Deslocamento_Fisico_Pro:
             self.model.fit(self.X, self.y)
             self.treinado = True
 
-    def prever(self, historico):
-        if not self.treinado or len(historico) < self.janela:
-            return []
+def prever(self, historico):
+    if not self.treinado or len(historico) < self.janela:
+        return []
 
-        ultimos = [h["number"] for h in list(historico)[-self.janela:]]
-        ultimos_deltas = self._calcular_deslocamentos(ultimos)
-        probs = self.model.predict_proba([ultimos_deltas])[0]
-        classes = self.model.classes_
+    # pega os últimos N números
+    ultimos = [h["number"] for h in list(historico)[-self.janela:]]
+    
+    # calcula deslocamentos direcionais
+    ultimos_deltas = self._calcular_deslocamentos(ultimos)
+    
+    # previsão com o modelo
+    probs = self.model.predict_proba([ultimos_deltas])[0]
+    classes = self.model.classes_
 
-        top_indices = np.argsort(probs)[::-1][:self.top_n_deltas]
-        top_deltas = [classes[i] for i in top_indices]
+    # seleciona os top deslocamentos mais prováveis
+    top_indices = np.argsort(probs)[::-1][:self.top_n_deltas]
+    top_deltas = [classes[i] for i in top_indices]
 
-        ultimo_numero = ultimos[-1]
-        pos_atual = self.layout.index(ultimo_numero)
+    # pega último número real
+    ultimo_numero = ultimos[-1]
+    pos_atual = self.layout.index(ultimo_numero)
 
-        numeros_previstos = []
-        for delta in top_deltas:
-            n = self.layout[(pos_atual + delta) % len(self.layout)]
-            numeros_previstos.append(n)
-            idx = self.layout.index(n)
+    # converte deslocamentos em números previstos
+    numeros_previstos = []
+    for delta in top_deltas:
+        if delta == 0:
+            continue  # evita repetir o mesmo número
+        n = self.layout[(pos_atual + delta) % len(self.layout)]
+        numeros_previstos.append(n)
 
-            # Inclui vizinhos e vizinhos dos vizinhos
-            vizinhos = [
-                self.layout[(idx - 1) % len(self.layout)],
-                self.layout[(idx + 1) % len(self.layout)],
-                self.layout[(idx - 2) % len(self.layout)],
-                self.layout[(idx + 2) % len(self.layout)]
-            ]
-            numeros_previstos.extend(vizinhos)
+    return numeros_previstos
 
-        # Remove duplicados e limita a quantidade final
-        numeros_previstos = list(dict.fromkeys(numeros_previstos))[:self.max_numeros]
-        return numeros_previstos
+
+
+    
 
 # =============================
 # Streamlit App
