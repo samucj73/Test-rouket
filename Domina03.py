@@ -127,9 +127,8 @@ class IA_Deslocamento_Fisico_Pro:
         # ajusta para o menor deslocamento possível
         if delta > n // 2:
             delta -= n   # agora pode ser negativo (anti-horário)
-        
-        deltas.append(delta)
-    return deltas
+            deltas.append(delta)
+            return deltas
 
     
 
