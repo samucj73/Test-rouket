@@ -179,7 +179,7 @@ class IA_Deslocamento_Fisico_Pro:
 st.set_page_config(page_title="Roleta IA Profissional", layout="centered")
 st.title("🎯 Roleta — IA de Deslocamento Físico Profissional")
 
-st_autorefresh(interval=7000, key="refresh")
+st_autorefresh(interval=3000, key="refresh")
 
 # Inicialização
 if "estrategia" not in st.session_state:
