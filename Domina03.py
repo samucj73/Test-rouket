@@ -115,8 +115,8 @@ class IA_Deslocamento_Fisico_Pro:
         self.treinado = False
 
     def _calcular_deslocamentos(self, numeros):
-    deltas = []
-    n = len(self.layout)
+        deltas = []
+        n = len(self.layout)
     for i in range(1, len(numeros)):
         pos_anterior = self.layout.index(numeros[i-1])
         pos_atual = self.layout.index(numeros[i])
