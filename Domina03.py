@@ -216,9 +216,9 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
             enviar_msg(f"🟢 GREEN! Saiu {numero_dict['number']}", tipo="resultado")
             st.session_state.acertos += 1
             tocar_som_moeda()
-        else:
-            enviar_msg(f"🔴 RED! Saiu {numero_dict['number']}", tipo="resultado")
-            st.session_state.erros += 1
+    else:
+         enviar_msg(f"🔴 RED! Saiu {numero_dict['number']}", tipo="resultado")
+         st.session_state.erros += 1
         st.session_state.resultado_enviado = True
         st.session_state.previsao_enviada = False
 
