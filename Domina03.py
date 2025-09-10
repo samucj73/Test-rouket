@@ -84,35 +84,17 @@ def fetch_latest_result():
         response = requests.get(API_URL, headers=HEADERS, timeout=5)
         response.raise_for_status()
         data = response.json()
-
-        # 1) Estrutura com lista em "data"
-        if isinstance(data, dict) and "data" in data:
-            eventos = data["data"]
-            if isinstance(eventos, list) and len(eventos) > 0:
-                ultimo = eventos[0]  # geralmente o mais recente
-                number = ultimo.get("winningNumber") or ultimo.get("number")
-                timestamp = ultimo.get("createdAt") or ultimo.get("timestamp")
-                if number is not None:
-                    return {"number": number, "timestamp": timestamp}
-
-        # 2) Estrutura mais direta (sem lista)
-        if "result" in data:
-            result = data["result"]
-            number = result.get("winningNumber") or result.get("number")
-            timestamp = result.get("createdAt") or result.get("timestamp")
-            if number is not None:
-                return {"number": number, "timestamp": timestamp}
-
-        # 3) Fallback: tentar pegar qualquer chave "number"
-        if "number" in data:
-            return {"number": data["number"], "timestamp": data.get("timestamp")}
-
-        logging.warning(f"Formato inesperado da API: {data}")
-        return None
-
+        game_data = data.get("data", {})
+        result = game_data.get("result", {})
+        outcome = result.get("outcome", {})
+        number = outcome.get("number")
+        timestamp = game_data.get("startedAt")
+        return {"number": number, "timestamp": timestamp}
     except Exception as e:
         logging.error(f"Erro ao buscar resultado: {e}")
         return None
+
+
 
 
 
