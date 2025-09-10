@@ -130,8 +130,6 @@ class IA_Deslocamento_Fisico_Pro:
             deltas.append(delta)
         return deltas
 
-    
-
     def atualizar_historico(self, historico):
         ultimos = [h["number"] for h in historico]
         if len(ultimos) <= self.janela:
@@ -148,38 +146,37 @@ class IA_Deslocamento_Fisico_Pro:
             self.model.fit(self.X, self.y)
             self.treinado = True
 
-def prever(self, historico):
-    if not self.treinado or len(historico) < self.janela:
-        return []
+    def prever(self, historico):
+        if not self.treinado or len(historico) < self.janela:
+            return []
 
-    # pega os últimos N números
-    ultimos = [h["number"] for h in list(historico)[-self.janela:]]
-    
-    # calcula deslocamentos direcionais
-    ultimos_deltas = self._calcular_deslocamentos(ultimos)
-    
-    # previsão com o modelo
-    probs = self.model.predict_proba([ultimos_deltas])[0]
-    classes = self.model.classes_
+        # pega os últimos N números
+        ultimos = [h["number"] for h in list(historico)[-self.janela:]]
+        
+        # calcula deslocamentos direcionais
+        ultimos_deltas = self._calcular_deslocamentos(ultimos)
+        
+        # previsão com o modelo
+        probs = self.model.predict_proba([ultimos_deltas])[0]
+        classes = self.model.classes_
 
-    # seleciona os top deslocamentos mais prováveis
-    top_indices = np.argsort(probs)[::-1][:self.top_n_deltas]
-    top_deltas = [classes[i] for i in top_indices]
+        # seleciona os top deslocamentos mais prováveis
+        top_indices = np.argsort(probs)[::-1][:self.top_n_deltas]
+        top_deltas = [classes[i] for i in top_indices]
 
-    # pega último número real
-    ultimo_numero = ultimos[-1]
-    pos_atual = self.layout.index(ultimo_numero)
+        # pega último número real
+        ultimo_numero = ultimos[-1]
+        pos_atual = self.layout.index(ultimo_numero)
 
-    # converte deslocamentos em números previstos
-    numeros_previstos = []
-    for delta in top_deltas:
-        if delta == 0:
-            continue  # evita repetir o mesmo número
-        n = self.layout[(pos_atual + delta) % len(self.layout)]
-        numeros_previstos.append(n)
+        # converte deslocamentos em números previstos
+        numeros_previstos = []
+        for delta in top_deltas:
+            if delta == 0:
+                continue  # evita repetir o mesmo número
+            n = self.layout[(pos_atual + delta) % len(self.layout)]
+            numeros_previstos.append(n)
 
-    return numeros_previstos
-
+        return numeros_previstos
 
 
     
