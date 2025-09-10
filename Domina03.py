@@ -123,7 +123,7 @@ class IA_Deslocamento_Fisico_Pro:
         self.layout = layout or ROULETTE_LAYOUT
         self.janela = janela
         self.top_n_deltas = top_n_deltas
-        self.model = RandomForestClassifier(n_estimators=400)
+        self.model = RandomForestClassifier(n_estimators=600)
         self.X = []
         self.y = []
         self.treinado = False
