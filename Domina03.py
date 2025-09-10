@@ -117,18 +117,18 @@ class IA_Deslocamento_Fisico_Pro:
     def _calcular_deslocamentos(self, numeros):
         deltas = []
         n = len(self.layout)
-    for i in range(1, len(numeros)):
-        pos_anterior = self.layout.index(numeros[i-1])
-        pos_atual = self.layout.index(numeros[i])
-        
-        # diferença circular (0 → n-1)
-        delta = (pos_atual - pos_anterior) % n
-        
-        # ajusta para o menor deslocamento possível
-        if delta > n // 2:
-            delta -= n   
+        for i in range(1, len(numeros)):
+            pos_anterior = self.layout.index(numeros[i-1])
+            pos_atual = self.layout.index(numeros[i])
+            
+            # diferença circular (0 → n-1)
+            delta = (pos_atual - pos_anterior) % n
+            
+            # ajusta para o menor deslocamento possível
+            if delta > n // 2:
+                delta -= n   
             deltas.append(delta)
-    return deltas
+        return deltas
 
     
 
