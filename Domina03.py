@@ -221,7 +221,11 @@ def construir_dataset_completo(historico: List[Dict[str,Any]], janela:int=WINDOW
 # =============================
 # Modelo Ensemble: CatBoost + RandomForest (melhorias)
 # =============================
+from sklearn.feature_selection import SelectKBest, f_classif
+
 class IA_Deslocamento_Pro_v2:
+    MIN_TRAIN_SAMPLES = 200  # mínimo histórico para treino confiável
+
     def __init__(self, layout=None, janela=WINDOW, top_k=TOP_K, max_numeros=MAX_NUMEROS_APOSTA):
         self.layout = layout or ROULETTE_LAYOUT
         self.janela = janela
@@ -235,8 +239,7 @@ class IA_Deslocamento_Pro_v2:
         self.meta = {
             "trained_on": 0,
             "last_trained_at": None,
-            "selected_features": None,
-            "model_scores": {}
+            "selected_features": []
         }
         self._carregar_modelos_e_meta()
 
@@ -254,9 +257,9 @@ class IA_Deslocamento_Pro_v2:
         if os.path.exists(META_PATH):
             try:
                 with open(META_PATH, "r") as f:
-                    self.meta.update(json.load(f))
-            except Exception as e:
-                logging.error(f"Erro ao carregar meta: {e}")
+                    self.meta = json.load(f)
+            except:
+                pass
 
     def _salvar_modelos_e_meta(self):
         try:
@@ -269,254 +272,152 @@ class IA_Deslocamento_Pro_v2:
         except Exception as e:
             logging.error(f"Erro ao salvar modelos/meta: {e}")
 
-    def precisa_treinar(self, historico: List[Dict[str,Any]]) -> bool:
-        df = construir_dataset_completo(historico, janela=self.janela)
+    def precisa_treinar(self, historico):
+        df = construir_dataset_completo(historico, self.janela)
         n = len(df)
-        if n == 0:
-            return False
-        # treina apenas se dataset >= MIN_TRAIN_SAMPLES e houver crescimento suficiente
-        if n < MIN_TRAIN_SAMPLES:
+        if n < self.MIN_TRAIN_SAMPLES:
             return False
         if n - self.meta.get("trained_on", 0) >= BATCH_TREINO:
             return True
         return False
 
-    def treinar(self, historico: List[Dict[str,Any]]):
-        df = construir_dataset_completo(historico, janela=self.janela)
-        if df.empty or len(df) < MIN_TRAIN_SAMPLES:
-            logging.info("Dataset insuficiente para treinar (precisa de MIN_TRAIN_SAMPLES).")
+    def treinar(self, historico):
+        df = construir_dataset_completo(historico, self.janela)
+        if len(df) < self.MIN_TRAIN_SAMPLES:
+            logging.warning("Histórico insuficiente para treino confiável")
             return False
 
-        # shuffle/split
         df = df.sample(frac=1, random_state=RANDOM_SEED).reset_index(drop=True)
         X = df.drop(columns=['label'])
-        y = df['label'].astype(int)
+        y = df['label']
 
-        # one-hot para cores (se existir)
-        color_cols = [c for c in X.columns if c.endswith('_color')]
-        if color_cols:
-            X_proc = pd.get_dummies(X, columns=color_cols, dummy_na=True)
-        else:
-            X_proc = X.copy()
+        # One-hot colunas categóricas (cores)
+        X_proc = pd.get_dummies(X, columns=[c for c in X.columns if c.endswith('_color')], dummy_na=True)
 
-        # salvar dataset (apenas para auditoria)
-        try:
-            X_proc['label'] = y
-            X_proc.to_csv(DATASET_PATH, index=False)
-        except Exception as e:
-            logging.error(f"Falha salvar dataset: {e}")
+        # Seleção de features importantes
+        selector = SelectKBest(score_func=f_classif, k=min(30, X_proc.shape[1]))
+        selector.fit(X_proc, y)
+        selected_cols = X_proc.columns[selector.get_support()].tolist()
+        X_selected = X_proc[selected_cols]
 
-        # divisão treino/val rápida para avaliar pesos do ensemble
-        X_train, X_val, y_train, y_val = train_test_split(X_proc, y, test_size=0.18, random_state=RANDOM_SEED, stratify=y if len(y.unique())>1 else None)
+        # Salvar features selecionadas na meta
+        self.meta['selected_features'] = selected_cols
 
-        # Treinar RandomForest
-        rf_score = 0.0
-        try:
-            rf = RandomForestClassifier(
-                n_estimators=200,
-                max_depth=12,
-                random_state=RANDOM_SEED,
-                n_jobs=-1,
-                class_weight=None
-            )
-            rf.fit(X_train.drop(columns=['label'], errors='ignore'), y_train)
-            # validação rf
-            try:
-                rf_score = rf.score(X_val.drop(columns=['label'], errors='ignore'), y_val)
-            except Exception:
-                rf_score = 0.0
-            self.model_rf = rf
-        except Exception as e:
-            logging.error(f"Erro treinando RandomForest: {e}")
-            self.model_rf = None
-
-        # Treinar CatBoost com early stopping (economiza tempo)
-        cb_score = 0.0
+        # Treinar CatBoost
         try:
             cb = CatBoostClassifier(
-                iterations=600,
-                depth=6,
-                learning_rate=0.05,
-                l2_leaf_reg=3,
+                iterations=1000,
+                depth=7,
+                learning_rate=0.03,
+                l2_leaf_reg=5,
                 loss_function="MultiClass",
                 random_seed=RANDOM_SEED,
                 verbose=0
             )
-            # se muitas classes / poucas amostras, preparar Pool
-            pool_train = Pool(X_train.drop(columns=['label'], errors='ignore'), y_train)
-            pool_val = Pool(X_val.drop(columns=['label'], errors='ignore'), y_val)
-            cb.fit(pool_train, eval_set=pool_val, early_stopping_rounds=40, use_best_model=True, verbose=False)
-            try:
-                cb_score = cb.score(X_val.drop(columns=['label'], errors='ignore'), y_val)
-            except Exception:
-                cb_score = 0.0
+            cb.fit(X_selected, y)
             self.model_cat = cb
         except Exception as e:
             logging.error(f"Erro treinando CatBoost: {e}")
             self.model_cat = None
 
-        # Seleção de features usando importances do RF (se existir), senão usar todas
-        selected = None
+        # Treinar RandomForest
         try:
-            if self.model_rf is not None:
-                importances = self.model_rf.feature_importances_
-                cols = X_train.drop(columns=['label'], errors='ignore').columns.tolist()
-                pairs = list(zip(cols, importances))
-                pairs_sorted = sorted(pairs, key=lambda x: x[1], reverse=True)
-                selected = [p[0] for p in pairs_sorted[:N_FEATURES_SEL]]
-            else:
-                selected = X_train.drop(columns=['label'], errors='ignore').columns.tolist()[:N_FEATURES_SEL]
+            rf = RandomForestClassifier(
+                n_estimators=300,
+                max_depth=10,
+                random_state=RANDOM_SEED,
+                n_jobs=-1
+            )
+            rf.fit(X_selected, y)
+            self.model_rf = rf
         except Exception as e:
-            logging.error(f"Erro selecionando features: {e}")
-            selected = X_train.drop(columns=['label'], errors='ignore').columns.tolist()[:N_FEATURES_SEL]
+            logging.error(f"Erro treinando RandomForest: {e}")
+            self.model_rf = None
 
-        # atualizar meta
         self.meta['trained_on'] = len(df)
         self.meta['last_trained_at'] = time.strftime("%Y-%m-%d %H:%M:%S")
-        self.meta['selected_features'] = selected
-        self.meta['model_scores'] = {
-            "rf_val_score": float(rf_score),
-            "cb_val_score": float(cb_score)
-        }
         self.treinado = (self.model_cat is not None or self.model_rf is not None)
         self._salvar_modelos_e_meta()
         return self.treinado
 
-    def _preparar_features_entrada(self, historico: List[Dict[str,Any]]):
+    def _preparar_features_entrada(self, historico):
         nums = [h['number'] for h in historico]
         if len(nums) < self.janela:
             return None, None
         contexto = nums[-self.janela:]
-        feat = extrair_features_janela(contexto, janela=self.janela)
+        feat = extrair_features_janela(contexto, self.janela)
         X = pd.DataFrame([feat])
-        # aplicar mesmo one-hot do treino (cores) se houver
-        color_cols = [c for c in X.columns if c.endswith('_color')]
-        if color_cols:
-            X_proc = pd.get_dummies(X, columns=color_cols, dummy_na=True)
-        else:
-            X_proc = X.copy()
-
-        # alinhar com selected_features salvo na meta (se houver)
-        sel = self.meta.get('selected_features')
-        if sel:
-            for c in sel:
-                if c not in X_proc.columns:
-                    X_proc[c] = 0
-            # descartar extras
-            for c in list(X_proc.columns):
-                if c not in sel:
-                    X_proc.drop(columns=[c], inplace=True)
-            X_proc = X_proc[sel]
-        else:
-            # se não há seleção, manter todas colunas atuais
-            pass
-
+        X_proc = pd.get_dummies(X, columns=[c for c in X.columns if c.endswith('_color')], dummy_na=True)
+        # alinhar colunas com features selecionadas
+        for c in self.meta.get('selected_features', []):
+            if c not in X_proc.columns:
+                X_proc[c] = 0
+        X_proc = X_proc[self.meta.get('selected_features', [])]
         return X_proc, feat
 
-    def prever(self, historico: List[Dict[str,Any]]) -> List[int]:
-        if not self.treinado:
+    def prever(self, historico):
+        if not self.treinado or not self.meta.get('selected_features'):
             return []
 
         X_proc, feat_raw = self._preparar_features_entrada(historico)
-        if X_proc is None:
+        if X_proc is None or X_proc.empty:
             return []
 
+        # Ensemble ponderado
         probs_agg = None
         classes = None
-        model_weights = []
-
-        # obter scores para ponderar (se disponíveis)
-        meta_scores = self.meta.get('model_scores', {})
-        cb_score = meta_scores.get('cb_val_score', 0.0)
-        rf_score = meta_scores.get('rf_val_score', 0.0)
-        # normalizar pesos
-        total = max(cb_score + rf_score, 1e-6)
-        weight_cb = cb_score / total if cb_score>0 else 0.5
-        weight_rf = rf_score / total if rf_score>0 else 0.5
-
-        # CatBoost predict_proba (com fallback)
-        try:
-            if self.model_cat is not None:
-                try:
-                    proba_cb = np.array(self.model_cat.predict_proba(X_proc))
-                except Exception:
-                    # fallback usa predict
-                    pred_cb = int(self.model_cat.predict(X_proc)[0])
-                    proba_cb = np.zeros((1, 37))
-                    proba_cb[0, pred_cb] = 0.9
-                classes_cb = np.array(self.model_cat.classes_, dtype=int)
-                probs_agg = proba_cb * weight_cb
-                classes = classes_cb
-                model_weights.append(('cb', weight_cb))
-        except Exception as e:
-            logging.error(f"Erro predict_proba CatBoost: {e}")
-
-        # RandomForest predict_proba (com fallback)
-        try:
-            if self.model_rf is not None:
-                try:
-                    proba_rf = np.array(self.model_rf.predict_proba(X_proc))
-                except Exception:
-                    pred_rf = int(self.model_rf.predict(X_proc)[0])
-                    proba_rf = np.zeros((1, 37))
-                    proba_rf[0, pred_rf] = 0.9
-                classes_rf = np.array(self.model_rf.classes_, dtype=int)
-                if classes is None:
-                    probs_agg = proba_rf * weight_rf
+        if self.model_cat is not None:
+            try:
+                proba_cb = self.model_cat.predict_proba(X_proc)
+                classes = np.array(self.model_cat.classes_)
+                probs_agg = proba_cb * 0.6  # peso 60% CatBoost
+            except:
+                pass
+        if self.model_rf is not None:
+            try:
+                proba_rf = self.model_rf.predict_proba(X_proc)
+                classes_rf = np.array(self.model_rf.classes_)
+                if probs_agg is None:
+                    probs_agg = proba_rf * 0.4  # peso 40% RF
                     classes = classes_rf
                 else:
-                    # union das classes
+                    # alinhar classes
                     union_classes = np.union1d(classes, classes_rf)
                     probs_sum = np.zeros((1, len(union_classes)))
-                    # map cb
-                    for i,c in enumerate(classes):
-                        idx = int(np.where(union_classes == c)[0][0])
-                        probs_sum[0, idx] += (probs_agg[0,i] if probs_agg is not None else 0)
-                    # map rf
-                    for i,c in enumerate(classes_rf):
-                        idx = int(np.where(union_classes == c)[0][0])
-                        probs_sum[0, idx] += proba_rf[0,i] * weight_rf / weight_cb if weight_cb>0 else proba_rf[0,i]
-                    # média ponderada (normalizando pelos pesos aproximados)
-                    probs_agg = probs_sum / 2.0
+                    for i, c in enumerate(classes):
+                        idx = np.where(union_classes == c)[0][0]
+                        probs_sum[0, idx] += probs_agg[0, i]
+                    for i, c in enumerate(classes_rf):
+                        idx = np.where(union_classes == c)[0][0]
+                        probs_sum[0, idx] += proba_rf[0, i] * 0.4/0.6  # ajustar peso
+                    probs_agg = probs_sum
                     classes = union_classes
-                model_weights.append(('rf', weight_rf))
-        except Exception as e:
-            logging.error(f"Erro predict_proba RF: {e}")
+            except:
+                pass
 
         if probs_agg is None or classes is None:
             return []
 
-        probs = probs_agg[0]
-        # ordenar e pegar top_k
-        top_idx = np.argsort(probs)[::-1]
-        top_classes = [int(classes[i]) for i in top_idx if classes.size>0]
+        top_idx = np.argsort(probs_agg[0])[::-1][:self.top_k]
+        top_classes = [int(classes[i]) for i in top_idx]
 
-        # retirar o último número como prioridade trivial (evita repetir o último como previsão)
-        ultimo_num = feat_raw['last_number']
-        filtered_top = [c for c in top_classes if c != ultimo_num]
-        if len(filtered_top) < self.top_k:
-            # se removido demais, permite colocar o ultimo de volta no final
-            filtered_top = top_classes[:self.top_k]
-
-        chosen = filtered_top[:self.top_k]
-
-        # Construir lista final com vizinhos (1 lado primeiro, depois expandir)
+        # Construir números previstos + vizinhos físicos
         numeros_previstos = []
-        for num in chosen:
+        ultimo_num = feat_raw['last_number']
+        for num in top_classes:
             if num not in numeros_previstos:
                 numeros_previstos.append(num)
-            idx = self.layout.index(num)
-            left = self.layout[(idx-1) % len(self.layout)]
-            right = self.layout[(idx+1) % len(self.layout)]
+            left = self.layout[(self.layout.index(num)-1)%len(self.layout)]
+            right = self.layout[(self.layout.index(num)+1)%len(self.layout)]
             for v in (left, right):
                 if v not in numeros_previstos:
                     numeros_previstos.append(v)
 
-        # expandir até max com vizinhos secundários
+        # expandir até max_numeros
         if len(numeros_previstos) < self.max_numeros:
-            for num in chosen:
-                extra = vizinhos_fisicos(num, k=2, layout=self.layout)
-                for v in extra:
+            for num in top_classes:
+                extras = vizinhos_fisicos(num, k=2, layout=self.layout)
+                for v in extras:
                     if v not in numeros_previstos:
                         numeros_previstos.append(v)
                     if len(numeros_previstos) >= self.max_numeros:
@@ -524,8 +425,8 @@ class IA_Deslocamento_Pro_v2:
                 if len(numeros_previstos) >= self.max_numeros:
                     break
 
-        numeros_previstos = numeros_previstos[:self.max_numeros]
-        return numeros_previstos
+        return numeros_previstos[:self.max_numeros]
+
 
 # =============================
 # Streamlit App
