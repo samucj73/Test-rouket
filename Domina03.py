@@ -104,11 +104,10 @@ class EstrategiaDeslocamento:
 # IA de deslocamento físico profissional
 # =============================
 class IA_Deslocamento_Fisico_Pro:
-    def __init__(self, layout=None, janela=12, top_n_deltas=3, max_numeros=7):
+    def __init__(self, layout=None, janela=12, top_n_deltas=3):
         self.layout = layout or ROULETTE_LAYOUT
         self.janela = janela
         self.top_n_deltas = top_n_deltas
-        self.max_numeros = max_numeros
         self.model = RandomForestClassifier(n_estimators=400)
         self.X = []
         self.y = []
@@ -120,13 +119,9 @@ class IA_Deslocamento_Fisico_Pro:
         for i in range(1, len(numeros)):
             pos_anterior = self.layout.index(numeros[i-1])
             pos_atual = self.layout.index(numeros[i])
-            
-            # diferença circular (0 → n-1)
             delta = (pos_atual - pos_anterior) % n
-            
-            # ajusta para o menor deslocamento possível
             if delta > n // 2:
-                delta -= n   
+                delta -= n
             deltas.append(delta)
         return deltas
 
@@ -150,33 +145,31 @@ class IA_Deslocamento_Fisico_Pro:
         if not self.treinado or len(historico) < self.janela:
             return []
 
-        # pega os últimos N números
         ultimos = [h["number"] for h in list(historico)[-self.janela:]]
-        
-        # calcula deslocamentos direcionais
         ultimos_deltas = self._calcular_deslocamentos(ultimos)
-        
-        # previsão com o modelo
+
         probs = self.model.predict_proba([ultimos_deltas])[0]
         classes = self.model.classes_
 
-        # seleciona os top deslocamentos mais prováveis
         top_indices = np.argsort(probs)[::-1][:self.top_n_deltas]
         top_deltas = [classes[i] for i in top_indices]
 
-        # pega último número real
         ultimo_numero = ultimos[-1]
         pos_atual = self.layout.index(ultimo_numero)
 
-        # converte deslocamentos em números previstos
         numeros_previstos = []
         for delta in top_deltas:
             if delta == 0:
-                continue  # evita repetir o mesmo número
+                continue
             n = self.layout[(pos_atual + delta) % len(self.layout)]
-            numeros_previstos.append(n)
+            # adiciona vizinhos físicos
+            vizinhos = obter_vizinhos(n, self.layout, antes=2, depois=2)
+            for v in vizinhos:
+                if v not in numeros_previstos:
+                    numeros_previstos.append(v)
 
-        return numeros_previstos
+        # limita ao máximo de números
+        return numeros_previstos[:self.top_n_deltas*5]  # cada delta com 5 números (central+2+2)
 
 
     
