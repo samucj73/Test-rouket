@@ -128,7 +128,7 @@ class IA_Deslocamento_Fisico_Pro:
         if delta > n // 2:
             delta -= n   
             deltas.append(delta)
-        return deltas
+    return deltas
 
     
 
