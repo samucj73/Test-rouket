@@ -106,7 +106,7 @@ class EstrategiaDeslocamento:
 # IA com CatBoost
 # =============================
 class IA_Deslocamento_Fisico_Pro:
-    def __init__(self, layout=None, janela=12, top_n_deltas=3, max_numeros=7):
+    def __init__(self, layout=None, janela=12, top_n_deltas=3, max_numeros=14):
         self.layout = layout or ROULETTE_LAYOUT
         self.janela = janela
         self.top_n_deltas = top_n_deltas
