@@ -27,8 +27,10 @@ META_PATH = "meta_deslocamento.json"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 # Recomendo mover TOKEN e CHAT_ID para variáveis de ambiente no deploy
-TELEGRAM_TOKEN = os.environ.get("ROULETTE_TELEGRAM_TOKEN", "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY")
-CHAT_ID = os.environ.get("ROULETTE_CHAT_ID", "-1002940111195")
+#TELEGRAM_TOKEN = os.environ.get("ROULETTE_TELEGRAM_TOKEN", "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY")
+#CHAT_ID = os.environ.get("ROULETTE_CHAT_ID", "-1002940111195")
+TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
+CHAT_ID = "5121457416"
 
 ROULETTE_LAYOUT = [
     0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6,
