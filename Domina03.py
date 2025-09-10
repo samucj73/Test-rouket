@@ -2,7 +2,7 @@ import streamlit as st
 import json
 import os
 import requests
-from collections import deque
+from collections import deque, Counter
 from streamlit_autorefresh import st_autorefresh
 from sklearn.ensemble import RandomForestClassifier
 import numpy as np
@@ -24,6 +24,13 @@ ROULETTE_LAYOUT = [
     16, 33, 1, 20, 14, 31, 9, 22, 18, 29,
     7, 28, 12, 35, 3, 26
 ]
+
+COLOR_MAP = {0:"green",1:"red",2:"black",3:"red",4:"black",5:"red",6:"black",
+             7:"red",8:"black",9:"red",10:"black",11:"black",12:"red",13:"black",
+             14:"red",15:"black",16:"red",17:"black",18:"red",19:"red",20:"black",
+             21:"red",22:"black",23:"red",24:"black",25:"red",26:"black",27:"red",
+             28:"black",29:"black",30:"red",31:"black",32:"red",33:"black",34:"red",
+             35:"black",36:"red"}
 
 # =============================
 # Funções auxiliares
@@ -95,15 +102,44 @@ def obter_vizinhos(numero, layout, antes=2, depois=2):
     idx = layout.index(numero)
     n = len(layout)
     vizinhos = []
-    # números antes
     for i in range(antes, 0, -1):
         vizinhos.append(layout[(idx - i) % n])
-    # número central
     vizinhos.append(numero)
-    # números depois
     for i in range(1, depois + 1):
         vizinhos.append(layout[(idx + i) % n])
     return vizinhos
+
+def setor_fisico(numero):
+    idx = ROULETTE_LAYOUT.index(numero)
+    n = len(ROULETTE_LAYOUT)
+    terco = n // 3
+    if idx < terco:
+        return 0
+    elif idx < 2*terco:
+        return 1
+    else:
+        return 2
+
+def extrair_features(historico, janela=30):
+    """Extrai features avançadas para IA"""
+    ultimos = [h["number"] for h in list(historico)[-janela:]]
+    features = []
+    for i in range(len(ultimos)-1):
+        atual = ultimos[i]
+        prox = ultimos[i+1]
+        delta = (ROULETTE_LAYOUT.index(prox) - ROULETTE_LAYOUT.index(atual)) % len(ROULETTE_LAYOUT)
+        if delta > len(ROULETTE_LAYOUT)//2:
+            delta -= len(ROULETTE_LAYOUT)
+        features.append([
+            delta,
+            COLOR_MAP[atual],
+            atual % 2,          # par/ímpar
+            setor_fisico(atual),
+            ultimos[max(0,i-2):i+1].count(atual)  # frequência recente
+        ])
+    X = [f[:-1] for f in features]
+    y = [f[-1] for f in features]
+    return X, y
 
 # =============================
 # Estratégia
@@ -116,73 +152,42 @@ class EstrategiaDeslocamento:
         self.historico.append(numero_dict)
 
 # =============================
-# IA de deslocamento físico profissional
+# IA otimizada profissional
 # =============================
 class IA_Deslocamento_Fisico_Pro:
-    def __init__(self, layout=None, janela=12, top_n_deltas=3):
+    def __init__(self, layout=None, janela=30, top_n_deltas=3):
         self.layout = layout or ROULETTE_LAYOUT
         self.janela = janela
         self.top_n_deltas = top_n_deltas
         self.model = RandomForestClassifier(n_estimators=600)
-        self.X = []
-        self.y = []
         self.treinado = False
 
-    def _calcular_deslocamentos(self, numeros):
-        deltas = []
-        n = len(self.layout)
-        for i in range(1, len(numeros)):
-            pos_anterior = self.layout.index(numeros[i-1])
-            pos_atual = self.layout.index(numeros[i])
-            delta = (pos_atual - pos_anterior) % n
-            if delta > n // 2:
-                delta -= n
-            deltas.append(delta)
-        return deltas
-
     def atualizar_historico(self, historico):
-        ultimos = [h["number"] for h in historico]
-        if len(ultimos) <= self.janela:
+        if len(historico) < self.janela:
             return
-        self.X = []
-        self.y = []
-        deltas = self._calcular_deslocamentos(ultimos)
-        for i in range(len(deltas) - self.janela + 1):
-            janela_deltas = deltas[i:i+self.janela-1]
-            proximo_delta = deltas[i+self.janela-1]
-            self.X.append(janela_deltas)
-            self.y.append(proximo_delta)
-        if self.X:
-            self.model.fit(self.X, self.y)
+        X, y = extrair_features(historico, self.janela)
+        if X:
+            self.model.fit(X, y)
             self.treinado = True
 
     def prever(self, historico):
         if not self.treinado or len(historico) < self.janela:
             return []
-
-        ultimos = [h["number"] for h in list(historico)[-self.janela:]]
-        ultimos_deltas = self._calcular_deslocamentos(ultimos)
-
-        probs = self.model.predict_proba([ultimos_deltas])[0]
+        X, _ = extrair_features(historico, self.janela)
+        probs = self.model.predict_proba([X[-1]])[0]
         classes = self.model.classes_
-
         top_indices = np.argsort(probs)[::-1][:self.top_n_deltas]
         top_deltas = [classes[i] for i in top_indices]
-
-        ultimo_numero = ultimos[-1]
+        ultimo_numero = [h["number"] for h in list(historico)[-1:]][0]
         pos_atual = self.layout.index(ultimo_numero)
-
         numeros_previstos = []
         for delta in top_deltas:
-            if delta == 0:
-                continue
             n = self.layout[(pos_atual + delta) % len(self.layout)]
             vizinhos = obter_vizinhos(n, self.layout, antes=2, depois=2)
             for v in vizinhos:
                 if v not in numeros_previstos:
                     numeros_previstos.append(v)
-
-        return numeros_previstos[:self.top_n_deltas*5]  # central + vizinhos
+        return numeros_previstos[:self.top_n_deltas*5]
 
 # =============================
 # Streamlit App
@@ -194,7 +199,7 @@ st_autorefresh(interval=3000, key="refresh")
 # Inicialização
 if "estrategia" not in st.session_state:
     st.session_state.estrategia = EstrategiaDeslocamento()
-    st.session_state.ia = IA_Deslocamento_Fisico_Pro(janela=12)
+    st.session_state.ia = IA_Deslocamento_Fisico_Pro(janela=30)
     historico = carregar_historico()
     for n in historico:
         st.session_state.estrategia.adicionar_numero(n)
@@ -206,7 +211,7 @@ if "estrategia" not in st.session_state:
     st.session_state.erros = 0
 
 # Slider da janela
-janela = st.slider("📏 Tamanho da janela (nº de sorteios considerados)", min_value=6, max_value=50, value=12, step=1)
+janela = st.slider("📏 Tamanho da janela (nº de sorteios considerados)", min_value=6, max_value=50, value=30, step=1)
 st.session_state.ia.janela = janela
 
 # Captura número
@@ -224,6 +229,7 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
         if numero_dict["number"] in st.session_state.previsao:
             enviar_msg(f"🟢 GREEN! Saiu {numero_dict['number']}", tipo="resultado")
             st.session_state.acertos += 1
+            tocar_som_moeda()
         else:
             enviar_msg(f"🔴 RED! Saiu {numero_dict['number']}", tipo="resultado")
             st.session_state.erros += 1
@@ -238,7 +244,7 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
 
 # Histórico
 st.subheader("📜 Histórico (últimos 20 números)")
-st.write(list(st.session_state.estrategia.historico)[-6:])
+st.write(list(st.session_state.estrategia.historico)[-20:])
 
 # Estatísticas
 total = st.session_state.acertos + st.session_state.erros
@@ -247,38 +253,3 @@ col1, col2, col3 = st.columns(3)
 col1.metric("🟢 GREEN", st.session_state.acertos)
 col2.metric("🔴 RED", st.session_state.erros)
 col3.metric("✅ Taxa de acerto", f"{taxa:.1f}%")
-
-# Inserir sorteios manualmente
-entrada = st.text_area(
-    "Digite números (0–36), separados por espaço — até 100:",
-    height=100,
-    key="entrada_manual"
-)
-
-if st.button("Adicionar Sorteios"):
-    try:
-        nums = [int(n) for n in entrada.split() if n.isdigit() and 0 <= int(n) <= 36]
-        if len(nums) > 100:
-            st.warning("Limite de 100 números.")
-        else:
-            for n in nums:
-                numero_dict = {"number": n, "timestamp": f"manual_{len(st.session_state.estrategia.historico)}"}
-                st.session_state.estrategia.adicionar_numero(numero_dict)
-                salvar_historico(list(st.session_state.estrategia.historico))
-                st.session_state.ia.atualizar_historico(st.session_state.estrategia.historico)
-
-                if st.session_state.previsao and not st.session_state.resultado_enviado:
-                    if n in st.session_state.previsao:
-                        enviar_msg(f"🟢 GREEN! Saiu {n}", tipo="resultado")
-                        st.session_state.acertos += 1
-                        tocar_som_moeda()
-                    else:
-                        enviar_msg(f"🔴 RED! Saiu {n}", tipo="resultado")
-                        st.session_state.erros += 1
-                    st.session_state.resultado_enviado = True
-                    st.session_state.previsao_enviada = False
-
-            st.success(f"{len(nums)} números adicionados com sucesso!")
-
-    except Exception as e:
-        st.error(f"Erro ao adicionar números: {e}")
