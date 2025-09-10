@@ -209,28 +209,24 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
     salvar_historico(list(st.session_state.estrategia.historico))
     st.session_state.ia.atualizar_historico(st.session_state.estrategia.historico)
 
-    # Conferir resultado
-    if st.session_state.previsao and not st.session_state.resultado_enviado:
-        #if numero_dict["number"] in st.session_state.previsao:
-         if numero_dict["number"] in st.session_state.previsao:
+    # --- Conferir resultado da previsão anterior ---
+    if st.session_state.previsao:
+        if numero_dict["number"] in st.session_state.previsao:
             enviar_msg(f"🟢 GREEN! Saiu {numero_dict['number']}", tipo="resultado")
             st.session_state.acertos += 1
-            tocar_som_moeda()
-    else:
-         enviar_msg(f"🔴 RED! Saiu {numero_dict['number']}", tipo="resultado")
-         st.session_state.erros += 1
-         st.session_state.resultado_enviado = True
-         st.session_state.previsao_enviada = False
+        else:
+            enviar_msg(f"🔴 RED! Saiu {numero_dict['number']}", tipo="resultado")
+            st.session_state.erros += 1
 
-    # Nova previsão usando IA
+    # --- Nova previsão para o próximo número ---
     prox_numeros = st.session_state.ia.prever(st.session_state.estrategia.historico)
-    if prox_numeros and not st.session_state.previsao_enviada:
+    if prox_numeros:
         st.session_state.previsao = prox_numeros
         st.session_state.previsao_enviada = True
-        st.session_state.resultado_enviado = False
-
         msg_alerta = "🎯 Próximos números prováveis: " + " ".join(str(n) for n in prox_numeros)
         enviar_msg(msg_alerta, tipo="previsao")
+
+
 
 # --- Histórico ---
 st.subheader("📜 Histórico (últimos 20 números)")
