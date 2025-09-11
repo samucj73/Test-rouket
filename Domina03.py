@@ -2,7 +2,7 @@ import streamlit as st
 import json
 import os
 import requests
-from collections import deque
+from collections import deque, Counter
 from streamlit_autorefresh import st_autorefresh
 import logging
 
