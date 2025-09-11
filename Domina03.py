@@ -117,7 +117,7 @@ def obter_vizinhos(numero, layout, antes=2, depois=2):
 # =============================
 class EstrategiaDeslocamento:
     def __init__(self):
-        self.historico = deque(maxlen=1000)
+        self.historico = deque(maxlen=5000)
     def adicionar_numero(self, numero_dict):
         self.historico.append(numero_dict)
 
