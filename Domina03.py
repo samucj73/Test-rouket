@@ -2,7 +2,7 @@ import streamlit as st
 import json
 import os
 import requests
-from collections import deque
+from collections import deque, Counter
 from streamlit_autorefresh import st_autorefresh
 from sklearn.ensemble import RandomForestClassifier
 import numpy as np
@@ -15,8 +15,13 @@ HISTORICO_PATH = "historico_deslocamento.json"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
+# Canal da estratégia física
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 CHAT_ID = "-1002940111195"
+
+# Canal da estratégia recorrência
+TELEGRAM_TOKEN_RECORRENCIA = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
+CHAT_ID_RECORRENCIA = "5121457416"
 
 ROULETTE_LAYOUT = [
     0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6,
@@ -42,6 +47,14 @@ def enviar_telegram(msg: str):
         requests.post(url, data=payload, timeout=10)
     except Exception as e:
         print(f"Erro ao enviar para Telegram: {e}")
+
+def enviar_telegram_recorrencia(msg: str):
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN_RECORRENCIA}/sendMessage"
+        payload = {"chat_id": CHAT_ID_RECORRENCIA, "text": msg}
+        requests.post(url, data=payload, timeout=10)
+    except Exception as e:
+        print(f"Erro ao enviar recorrência: {e}")
 
 def enviar_msg(msg, tipo="previsao"):
     if tipo == "previsao":
@@ -109,7 +122,42 @@ def obter_vizinhos(numero, layout, antes=2, depois=2):
     return vizinhos
 
 # =============================
-# Estratégia
+# Estratégia recorrência
+# =============================
+class EstrategiaRecorrencia:
+    def __init__(self, top_n=5):
+        self.top_n = top_n
+        self.ultima_previsao = []
+        self.acertos = 0
+        self.erros = 0
+
+    def prever(self, historico):
+        if len(historico) < 2:
+            return []
+        ultimo_numero = historico[-1]["number"]
+        sequencias = []
+        for i in range(len(historico)-1):
+            if historico[i]["number"] == ultimo_numero:
+                sequencias.append(historico[i+1]["number"])
+        if not sequencias:
+            return []
+        contagem = Counter(sequencias)
+        mais_comuns = [n for n, _ in contagem.most_common(self.top_n)]
+        self.ultima_previsao = mais_comuns
+        return mais_comuns
+
+    def conferir(self, numero_sorteado):
+        if not self.ultima_previsao:
+            return None
+        if numero_sorteado in self.ultima_previsao:
+            self.acertos += 1
+            return True
+        else:
+            self.erros += 1
+            return False
+
+# =============================
+# Estratégia física existente
 # =============================
 class EstrategiaDeslocamento:
     def __init__(self):
@@ -117,9 +165,6 @@ class EstrategiaDeslocamento:
     def adicionar_numero(self, numero_dict):
         self.historico.append(numero_dict)
 
-# =============================
-# IA otimizada profissional
-# =============================
 class IA_Deslocamento_Fisico_Pro:
     def __init__(self, layout=None, janela=30, top_n_deltas=3):
         self.layout = layout or ROULETTE_LAYOUT
@@ -173,13 +218,14 @@ class IA_Deslocamento_Fisico_Pro:
 # Streamlit App
 # =============================
 st.set_page_config(page_title="Roleta IA Profissional", layout="centered")
-st.title("🎯 Roleta — IA de Deslocamento Físico Profissional")
+st.title("🎯 Roleta — IA de Deslocamento + Recorrência")
 st_autorefresh(interval=3000, key="refresh")
 
 # Inicialização segura do session_state
 for key, default in {
     "estrategia": EstrategiaDeslocamento(),
     "ia": IA_Deslocamento_Fisico_Pro(janela=30),
+    "recorrencia": EstrategiaRecorrencia(top_n=5),
     "previsao": [],
     "previsao_enviada": False,
     "resultado_enviado": False,
@@ -213,7 +259,7 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
     # Incrementa contador de rodadas
     st.session_state.contador_rodadas += 1
 
-    # Conferir resultado anterior
+    # Conferir resultado anterior da estratégia física
     if st.session_state.previsao:
         if numero_dict["number"] in st.session_state.previsao:
             enviar_msg(f"🟢 GREEN! Saiu {numero_dict['number']}", tipo="resultado")
@@ -223,18 +269,30 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
             enviar_msg(f"🔴 RED! Saiu {numero_dict['number']}", tipo="resultado")
             st.session_state.erros += 1
 
-    # Nova previsão a cada 2 rodadas
+    # Nova previsão a cada 2 rodadas (estratégia física)
     if st.session_state.contador_rodadas % 2 == 0:
         prox_numeros = st.session_state.ia.prever(st.session_state.estrategia.historico)
         if prox_numeros:
             st.session_state.previsao = prox_numeros
             st.session_state.previsao_enviada = True
-            msg_alerta = "🎯 Próximos números prováveis: " + " ".join(str(n) for n in prox_numeros)
+            msg_alerta = "🎯 Física — Próximos números prováveis: " + " ".join(str(n) for n in prox_numeros)
             enviar_msg(msg_alerta, tipo="previsao")
+
+    # Estratégia recorrência (roda sempre)
+    previsao_recorrencia = st.session_state.recorrencia.prever(list(st.session_state.estrategia.historico))
+    if previsao_recorrencia:
+        enviar_telegram_recorrencia("♻️ Recorrência — Top 5: " + " ".join(str(n) for n in previsao_recorrencia))
+
+    # Conferir resultado recorrência
+    resultado_rec = st.session_state.recorrencia.conferir(numero_dict["number"])
+    if resultado_rec is True:
+        enviar_telegram_recorrencia(f"🟢 GREEN Recorrência! Saiu {numero_dict['number']}")
+    elif resultado_rec is False:
+        enviar_telegram_recorrencia(f"🔴 RED Recorrência! Saiu {numero_dict['number']}")
 
 # Histórico
 st.subheader("📜 Histórico (últimos 20 números)")
-st.write(list(st.session_state.estrategia.historico)[-3:])
+st.write(list(st.session_state.estrategia.historico)[-20:])
 
 # Estatísticas
 acertos = st.session_state.get("acertos", 0)
@@ -243,6 +301,17 @@ total = acertos + erros
 taxa = (acertos / total * 100) if total > 0 else 0.0
 
 col1, col2, col3 = st.columns(3)
-col1.metric("🟢 GREEN", acertos)
-col2.metric("🔴 RED", erros)
-col3.metric("✅ Taxa de acerto", f"{taxa:.1f}%")
+col1.metric("🟢 GREEN (Física)", acertos)
+col2.metric("🔴 RED (Física)", erros)
+col3.metric("✅ Taxa Física", f"{taxa:.1f}%")
+
+# Estatísticas recorrência
+acertos_rec = st.session_state.recorrencia.acertos
+erros_rec = st.session_state.recorrencia.erros
+total_rec = acertos_rec + erros_rec
+taxa_rec = (acertos_rec / total_rec * 100) if total_rec > 0 else 0.0
+
+col4, col5, col6 = st.columns(3)
+col4.metric("🟢 GREEN (Recorrência)", acertos_rec)
+col5.metric("🔴 RED (Recorrência)", erros_rec)
+col6.metric("✅ Taxa Recorrência", f"{taxa_rec:.1f}%")
