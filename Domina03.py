@@ -259,6 +259,17 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
     # Incrementa contador de rodadas
     st.session_state.contador_rodadas += 1
 
+        # -----------------------------
+    # Estatísticas da recorrência
+    # -----------------------------
+    historico_total = len(st.session_state.estrategia.historico)
+    ultimo_numero = st.session_state.estrategia.historico[-1]["number"]
+    ocorrencias_ultimo = sum(1 for h in st.session_state.estrategia.historico[:-1] if h["number"] == ultimo_numero)
+
+    st.subheader("📊 Estatísticas da Recorrência")
+    st.write(f"Total de registros no histórico: {historico_total}")
+    st.write(f"Quantidade de ocorrências do último número ({ultimo_numero}) usadas para recorrência: {ocorrencias_ultimo}")
+
     # Conferir resultado anterior IA física
     if st.session_state.previsao:
         if numero_dict["number"] in st.session_state.previsao:
