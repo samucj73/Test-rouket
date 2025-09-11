@@ -114,7 +114,7 @@ class IA_Recorrencia:
 
                 # Peso maior se estiver dentro da janela recente
                 if i >= len(historico_lista) - self.janela_recente:
-                    pesos.append(2)  # peso duplo
+                    pesos.append(2)
                 else:
                     pesos.append(1)
 
@@ -148,6 +148,7 @@ for key, default in {
     "estrategia": EstrategiaDeslocamento(),
     "ia_recorrencia": IA_Recorrencia(),
     "previsao": [],
+    "ultima_alerta": [],
     "acertos": 0,
     "erros": 0,
     "contador_rodadas": 0
@@ -164,7 +165,7 @@ for n in historico:
 resultado = fetch_latest_result()
 ultimo_ts = st.session_state.estrategia.historico[-1]["timestamp"] if st.session_state.estrategia.historico else None
 
-if resultado and resultado.get("timestamp") != ultimo_ts:
+if resultado and resultado.get("number") is not None and resultado.get("timestamp") != ultimo_ts:
     numero_dict = {"number": resultado["number"], "timestamp": resultado["timestamp"]}
     st.session_state.estrategia.adicionar_numero(numero_dict)
     salvar_historico(list(st.session_state.estrategia.historico))
@@ -174,12 +175,12 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
         numero_real = numero_dict["number"]
         if numero_real in st.session_state.previsao:
             st.session_state.acertos += 1
-            msg = f"GREEN! Saiu {numero_real}"
+            msg = f"🟢 GREEN! Saiu {numero_real}"
             st.success(msg)
             enviar_telegram(msg)
         else:
             st.session_state.erros += 1
-            msg = f"RED! Saiu {numero_real}"
+            msg = f"🔴 RED! Saiu {numero_real}"
             st.error(msg)
             enviar_telegram(msg)
         st.session_state.previsao = []
@@ -188,10 +189,11 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
     st.session_state.contador_rodadas += 1
 
     # Gera nova previsão a cada 2 rodadas
-    if st.session_state.contador_rodadas % 1 == 0:
+    if st.session_state.contador_rodadas % 2 == 0:
         prox_numeros = st.session_state.ia_recorrencia.prever(st.session_state.estrategia.historico)
-        if prox_numeros:
+        if prox_numeros and prox_numeros != st.session_state.ultima_alerta:
             st.session_state.previsao = prox_numeros
+            st.session_state.ultima_alerta = prox_numeros
             msg_alerta = "Próximos: " + " ".join(str(n) for n in prox_numeros)
             enviar_telegram(msg_alerta)
 
