@@ -2,7 +2,7 @@ import streamlit as st
 import json
 import os
 import requests
-from collections import deque, Counter
+from collections import deque
 from streamlit_autorefresh import st_autorefresh
 from sklearn.ensemble import RandomForestClassifier
 import numpy as np
@@ -108,37 +108,6 @@ def obter_vizinhos(numero, layout, antes=2, depois=2):
         vizinhos.append(layout[(idx + i) % n])
     return vizinhos
 
-def setor_fisico(numero):
-    idx = ROULETTE_LAYOUT.index(numero)
-    n = len(ROULETTE_LAYOUT)
-    terco = n // 3
-    if idx < terco:
-        return 0
-    elif idx < 2*terco:
-        return 1
-    else:
-        return 2
-
-def extrair_features(historico, janela=30):
-    ultimos = [h["number"] for h in list(historico)[-janela:]]
-    features = []
-    for i in range(len(ultimos)-1):
-        atual = ultimos[i]
-        prox = ultimos[i+1]
-        delta = (ROULETTE_LAYOUT.index(prox) - ROULETTE_LAYOUT.index(atual)) % len(ROULETTE_LAYOUT)
-        if delta > len(ROULETTE_LAYOUT)//2:
-            delta -= len(ROULETTE_LAYOUT)
-        features.append([
-            delta,
-            1 if COLOR_MAP[atual]=="red" else 0,
-            atual % 2,
-            setor_fisico(atual),
-            ultimos[max(0,i-2):i+1].count(atual)
-        ])
-    X = [f[:-1] for f in features]
-    y = [f[-1] for f in features]
-    return X, y
-
 # =============================
 # Estratégia
 # =============================
@@ -162,7 +131,16 @@ class IA_Deslocamento_Fisico_Pro:
     def atualizar_historico(self, historico):
         if len(historico) < self.janela:
             return
-        X, y = extrair_features(historico, self.janela)
+        X, y = [], []
+        ultimos = [h["number"] for h in list(historico)[-self.janela:]]
+        for i in range(len(ultimos)-1):
+            pos_anterior = self.layout.index(ultimos[i])
+            pos_atual = self.layout.index(ultimos[i+1])
+            delta = (pos_atual - pos_anterior) % len(self.layout)
+            if delta > len(self.layout)//2:
+                delta -= len(self.layout)
+            X.append([delta])
+            y.append(delta)
         if X:
             self.model.fit(X, y)
             self.treinado = True
@@ -170,12 +148,17 @@ class IA_Deslocamento_Fisico_Pro:
     def prever(self, historico):
         if not self.treinado or len(historico) < self.janela:
             return []
-        X, _ = extrair_features(historico, self.janela)
-        probs = self.model.predict_proba([X[-1]])[0]
+        ultimos = [h["number"] for h in list(historico)[-self.janela:]]
+        pos_anterior = self.layout.index(ultimos[-2])
+        pos_atual = self.layout.index(ultimos[-1])
+        delta = (pos_atual - pos_anterior) % len(self.layout)
+        if delta > len(self.layout)//2:
+            delta -= len(self.layout)
+        probs = self.model.predict_proba([[delta]])[0]
         classes = self.model.classes_
         top_indices = np.argsort(probs)[::-1][:self.top_n_deltas]
         top_deltas = [classes[i] for i in top_indices]
-        ultimo_numero = [h["number"] for h in list(historico)[-1:]][0]
+        ultimo_numero = ultimos[-1]
         pos_atual = self.layout.index(ultimo_numero)
         numeros_previstos = []
         for delta in top_deltas:
@@ -201,7 +184,8 @@ for key, default in {
     "previsao_enviada": False,
     "resultado_enviado": False,
     "acertos": 0,
-    "erros": 0
+    "erros": 0,
+    "contador_rodadas": 0
 }.items():
     if key not in st.session_state:
         st.session_state[key] = default
@@ -226,6 +210,9 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
     salvar_historico(list(st.session_state.estrategia.historico))
     st.session_state.ia.atualizar_historico(st.session_state.estrategia.historico)
 
+    # Incrementa contador de rodadas
+    st.session_state.contador_rodadas += 1
+
     # Conferir resultado anterior
     if st.session_state.previsao:
         if numero_dict["number"] in st.session_state.previsao:
@@ -236,13 +223,14 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
             enviar_msg(f"🔴 RED! Saiu {numero_dict['number']}", tipo="resultado")
             st.session_state.erros += 1
 
-    # Nova previsão
-    prox_numeros = st.session_state.ia.prever(st.session_state.estrategia.historico)
-    if prox_numeros:
-        st.session_state.previsao = prox_numeros
-        st.session_state.previsao_enviada = True
-        msg_alerta = "🎯 Próximos números prováveis: " + " ".join(str(n) for n in prox_numeros)
-        enviar_msg(msg_alerta, tipo="previsao")
+    # Nova previsão a cada 2 rodadas
+    if st.session_state.contador_rodadas % 2 == 0:
+        prox_numeros = st.session_state.ia.prever(st.session_state.estrategia.historico)
+        if prox_numeros:
+            st.session_state.previsao = prox_numeros
+            st.session_state.previsao_enviada = True
+            msg_alerta = "🎯 Próximos números prováveis: " + " ".join(str(n) for n in prox_numeros)
+            enviar_msg(msg_alerta, tipo="previsao")
 
 # Histórico
 st.subheader("📜 Histórico (últimos 20 números)")
