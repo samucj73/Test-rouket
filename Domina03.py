@@ -211,8 +211,8 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
             enviar_telegram(msg_alerta)
 
 # Histórico
-st.subheader("📜 Histórico (últimos 2 números)")
-st.write(list(st.session_state.estrategia.historico)[-2:])
+st.subheader("📜 Histórico (últimos 3 números)")
+st.write(list(st.session_state.estrategia.historico)[-3:])
 
 # Estatísticas de GREEN/RED
 acertos = st.session_state.get("acertos", 0)
