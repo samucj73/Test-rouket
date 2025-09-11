@@ -4,8 +4,6 @@ import os
 import requests
 from collections import deque
 from streamlit_autorefresh import st_autorefresh
-from sklearn.ensemble import RandomForestClassifier
-import numpy as np
 import logging
 
 # =============================
@@ -182,19 +180,28 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
             enviar_telegram(msg_alerta)
 
             # -----------------------------
-            # Conferência RED/GREEN (Recorrência)
+            # Conferência RED/GREEN (Recorrência com vizinhos)
             # -----------------------------
             numero_real = numero_dict["number"]
-            if numero_real in prox_numeros:
+
+            # Expande a previsão incluindo vizinhos físicos de cada número previsto
+            numeros_com_vizinhos = []
+            for n in prox_numeros:
+                vizinhos = obter_vizinhos(n, ROULETTE_LAYOUT, antes=2, depois=2)
+                for v in vizinhos:
+                    if v not in numeros_com_vizinhos:
+                        numeros_com_vizinhos.append(v)
+
+            if numero_real in numeros_com_vizinhos:
                 st.session_state.acertos += 1
-                st.success(f"🟢 GREEN! Número {numero_real} previsto pela recorrência.")
-                enviar_telegram(f"🟢 GREEN! Número {numero_real} previsto pela recorrência.")
+                st.success(f"🟢 GREEN! Número {numero_real} previsto pela recorrência (incluindo vizinhos).")
+                enviar_telegram(f"🟢 GREEN! Número {numero_real} previsto pela recorrência (incluindo vizinhos).")
             else:
                 st.session_state.erros += 1
-                st.error(f"🔴 RED! Número {numero_real} não estava na previsão de recorrência.")
-                enviar_telegram(f"🔴 RED! Número {numero_real} não estava na previsão de recorrência.")
+                st.error(f"🔴 RED! Número {numero_real} não estava na previsão de recorrência nem nos vizinhos.")
+                enviar_telegram(f"🔴 RED! Número {numero_real} não estava na previsão de recorrência nem nos vizinhos.")
 
-            # Reseta flag
+            # Reseta flag para próxima rodada
             st.session_state.previsao_enviada = False
 
 # Histórico
