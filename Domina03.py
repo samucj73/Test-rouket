@@ -16,13 +16,6 @@ HEADERS = {"User-Agent": "Mozilla/5.0"}
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 TELEGRAM_CHAT_ID = "5121457416"
 
-ROULETTE_LAYOUT = [
-    0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6,
-    27, 13, 36, 11, 30, 8, 23, 10, 5, 24,
-    16, 33, 1, 20, 14, 31, 9, 22, 18, 29,
-    7, 28, 12, 35, 3, 26
-]
-
 # =============================
 # Funções auxiliares
 # =============================
@@ -66,17 +59,6 @@ def fetch_latest_result():
         logging.error(f"Erro ao buscar resultado: {e}")
         return None
 
-def obter_vizinhos(numero, layout, antes=2, depois=2):
-    idx = layout.index(numero)
-    n = len(layout)
-    vizinhos = []
-    for i in range(antes, 0, -1):
-        vizinhos.append(layout[(idx - i) % n])
-    vizinhos.append(numero)
-    for i in range(1, depois + 1):
-        vizinhos.append(layout[(idx + i) % n])
-    return vizinhos
-
 # =============================
 # Estratégia
 # =============================
@@ -90,8 +72,7 @@ class EstrategiaDeslocamento:
 # IA recorrência
 # =============================
 class IA_Recorrencia:
-    def __init__(self, layout=None, top_n=2):
-        self.layout = layout or ROULETTE_LAYOUT
+    def __init__(self, top_n=10):
         self.top_n = top_n
 
     def prever(self, historico):
@@ -118,21 +99,13 @@ class IA_Recorrencia:
         from collections import Counter
         contagem = Counter(proximos)
         top_numeros = [num for num, _ in contagem.most_common(self.top_n)]
-
-        numeros_previstos = []
-        for n in top_numeros:
-            vizinhos = obter_vizinhos(n, self.layout, antes=1, depois=1)
-            for v in vizinhos:
-                if v not in numeros_previstos:
-                    numeros_previstos.append(v)
-
-        return numeros_previstos
+        return top_numeros
 
 # =============================
 # Streamlit App
 # =============================
 st.set_page_config(page_title="Roleta IA Profissional", layout="centered")
-st.title("🎯 Roleta — IA de Deslocamento Físico Profissional")
+st.title("🎯 Roleta — IA Recorrência Top 10")
 st_autorefresh(interval=3000, key="refresh")
 
 # Inicialização segura do session_state
@@ -140,7 +113,6 @@ for key, default in {
     "estrategia": EstrategiaDeslocamento(),
     "ia_recorrencia": IA_Recorrencia(),
     "previsao": [],              # previsão pendente da rodada anterior
-    "previsao_enviada": False,
     "acertos": 0,
     "erros": 0,
     "contador_rodadas": 0
@@ -166,24 +138,13 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
     # Conferência da previsão pendente da rodada anterior
     # -----------------------------
     if st.session_state.previsao:
-        numeros_com_vizinhos = []
-        for n in st.session_state.previsao:
-            vizinhos = obter_vizinhos(n, ROULETTE_LAYOUT, antes=2, depois=2)
-            for v in vizinhos:
-                if v not in numeros_com_vizinhos:
-                    numeros_com_vizinhos.append(v)
-
         numero_real = numero_dict["number"]
-        if numero_real in numeros_com_vizinhos:
+        if numero_real in st.session_state.previsao:
             st.session_state.acertos += 1
-            st.success(f"🟢 GREEN! Número {numero_real} previsto pela recorrência (incluindo vizinhos).")
-            enviar_telegram(f"🟢 GREEN! Número {numero_real} previsto pela recorrência (incluindo vizinhos).")
+            enviar_telegram(f"GREEN\nSaiu {numero_real} dentro dos top 10")
         else:
             st.session_state.erros += 1
-            st.error(f"🔴 RED! Número {numero_real} não estava na previsão de recorrência nem nos vizinhos.")
-            enviar_telegram(f"🔴 RED! Número {numero_real} não estava na previsão de recorrência nem nos vizinhos.")
-
-        # Reseta a previsão após conferência
+            enviar_telegram(f"RED\nSaiu {numero_real} fora dos top 10")
         st.session_state.previsao = []
 
     # Incrementa contador de rodadas
@@ -195,17 +156,10 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
     if st.session_state.contador_rodadas % 2 == 0:
         prox_numeros = st.session_state.ia_recorrencia.prever(st.session_state.estrategia.historico)
         if prox_numeros:
-            st.session_state.previsao = prox_numeros
-            msg_alerta = "🎯 Próximos números prováveis (Recorrência): " + " ".join(str(n) for n in prox_numeros)
+            top_10 = prox_numeros[:10]
+            st.session_state.previsao = top_10
+            msg_alerta = "PREVISÃO\n" + " ".join(str(n) for n in top_10)
             enviar_telegram(msg_alerta)
-# -----------------------------
-# Alerta enxuto da recorrência em duas linhas
-# -----------------------------
-# -----------------------------
-# Gera nova previsão a cada 2 rodadas e envia alerta enxuto apenas 1 vez
-# -----------------------------
-
-
 
 # Histórico
 st.subheader("📜 Histórico (últimos 2 números)")
@@ -222,7 +176,6 @@ col1.metric("🟢 GREEN", acertos)
 col2.metric("🔴 RED", erros)
 col3.metric("✅ Taxa de acerto", f"{taxa:.1f}%")
 
-# Estatísticas da recorrência
 # Estatísticas da recorrência
 historico_lista = list(st.session_state.estrategia.historico)
 historico_total = len(historico_lista)
