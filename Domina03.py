@@ -98,7 +98,6 @@ def fetch_latest_result():
         return None
 
 def obter_vizinhos(numero, layout, antes=2, depois=2):
-    """Retorna o número + vizinhos físicos na roleta"""
     idx = layout.index(numero)
     n = len(layout)
     vizinhos = []
@@ -121,7 +120,6 @@ def setor_fisico(numero):
         return 2
 
 def extrair_features(historico, janela=30):
-    """Extrai features avançadas para IA"""
     ultimos = [h["number"] for h in list(historico)[-janela:]]
     features = []
     for i in range(len(ultimos)-1):
@@ -132,10 +130,10 @@ def extrair_features(historico, janela=30):
             delta -= len(ROULETTE_LAYOUT)
         features.append([
             delta,
-            COLOR_MAP[atual],
-            atual % 2,          # par/ímpar
+            1 if COLOR_MAP[atual]=="red" else 0,
+            atual % 2,
             setor_fisico(atual),
-            ultimos[max(0,i-2):i+1].count(atual)  # frequência recente
+            ultimos[max(0,i-2):i+1].count(atual)
         ])
     X = [f[:-1] for f in features]
     y = [f[-1] for f in features]
@@ -147,7 +145,6 @@ def extrair_features(historico, janela=30):
 class EstrategiaDeslocamento:
     def __init__(self):
         self.historico = deque(maxlen=1000)
-
     def adicionar_numero(self, numero_dict):
         self.historico.append(numero_dict)
 
@@ -196,19 +193,24 @@ st.set_page_config(page_title="Roleta IA Profissional", layout="centered")
 st.title("🎯 Roleta — IA de Deslocamento Físico Profissional")
 st_autorefresh(interval=3000, key="refresh")
 
-# Inicialização
-if "estrategia" not in st.session_state:
-    st.session_state.estrategia = EstrategiaDeslocamento()
-    st.session_state.ia = IA_Deslocamento_Fisico_Pro(janela=30)
-    historico = carregar_historico()
-    for n in historico:
-        st.session_state.estrategia.adicionar_numero(n)
-    st.session_state.ia.atualizar_historico(st.session_state.estrategia.historico)
-    st.session_state.previsao = []
-    st.session_state.previsao_enviada = False
-    st.session_state.resultado_enviado = False
-    st.session_state.acertos = 0
-    st.session_state.erros = 0
+# Inicialização segura do session_state
+for key, default in {
+    "estrategia": EstrategiaDeslocamento(),
+    "ia": IA_Deslocamento_Fisico_Pro(janela=30),
+    "previsao": [],
+    "previsao_enviada": False,
+    "resultado_enviado": False,
+    "acertos": 0,
+    "erros": 0
+}.items():
+    if key not in st.session_state:
+        st.session_state[key] = default
+
+# Carregar histórico existente
+historico = carregar_historico()
+for n in historico:
+    st.session_state.estrategia.adicionar_numero(n)
+st.session_state.ia.atualizar_historico(st.session_state.estrategia.historico)
 
 # Slider da janela
 janela = st.slider("📏 Tamanho da janela (nº de sorteios considerados)", min_value=6, max_value=50, value=30, step=1)
@@ -247,9 +249,12 @@ st.subheader("📜 Histórico (últimos 20 números)")
 st.write(list(st.session_state.estrategia.historico)[-20:])
 
 # Estatísticas
-total = st.session_state.acertos + st.session_state.erros
-taxa = (st.session_state.acertos / total * 100) if total > 0 else 0.0
+acertos = st.session_state.get("acertos", 0)
+erros = st.session_state.get("erros", 0)
+total = acertos + erros
+taxa = (acertos / total * 100) if total > 0 else 0.0
+
 col1, col2, col3 = st.columns(3)
-col1.metric("🟢 GREEN", st.session_state.acertos)
-col2.metric("🔴 RED", st.session_state.erros)
+col1.metric("🟢 GREEN", acertos)
+col2.metric("🔴 RED", erros)
 col3.metric("✅ Taxa de acerto", f"{taxa:.1f}%")
