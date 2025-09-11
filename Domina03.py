@@ -234,12 +234,10 @@ col3.metric("✅ Taxa de acerto", f"{taxa:.1f}%")
 historico_lista = list(st.session_state.estrategia.historico)
 historico_total = len(historico_lista)
 ultimo_numero = historico_lista[-1]["number"] if historico_total > 0 and isinstance(historico_lista[-1], dict) else None
-
 ocorrencias_ultimo = 0
 if ultimo_numero is not None:
-ocorrencias_ultimo = sum(
-    1 for h in historico_lista[:-1]
-    if isinstance(h, dict) and h.get("number") == ultimo_numero
+    ocorrencias_ultimo = sum(1 for h in historico_lista[:-1]
+if isinstance(h, dict) and h.get("number") == ultimo_numero
         )
 
     st.subheader("📊 Estatísticas da Recorrência")
