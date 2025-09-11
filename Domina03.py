@@ -203,12 +203,18 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
     # -----------------------------
     # Gera nova previsão a cada 2 rodadas
     # -----------------------------
-    if st.session_state.contador_rodadas % 3 == 0:
-        prox_numeros = st.session_state.ia_recorrencia.prever(st.session_state.estrategia.historico)
-        if prox_numeros:
-            st.session_state.previsao = prox_numeros
-            msg_alerta = "🎯 Próximos números prováveis (Recorrência): " + " ".join(str(n) for n in prox_numeros)
-            enviar_telegram(msg_alerta)
+if st.session_state.contador_rodadas % 3 == 0:
+    prox_numeros = st.session_state.ia_recorrencia.prever(st.session_state.estrategia.historico)
+    if prox_numeros:
+        st.session_state.previsao = prox_numeros
+
+        # 🔹 Ordena os números antes de enviar
+        numeros_ordenados = sorted(set(prox_numeros))
+
+        msg_alerta = "🎯 Próximos números prováveis (Recorrência): " + " ".join(str(n) for n in numeros_ordenados)
+        enviar_telegram(msg_alerta)
+
+    
 
 # Histórico
 st.subheader("📜 Histórico (últimos 3 números)")
