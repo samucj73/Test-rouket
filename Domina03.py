@@ -24,47 +24,70 @@ ROULETTE_LAYOUT = [
 ]
 
 # =============================
+# Logging básico
+# =============================
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+# =============================
 # Funções auxiliares
 # =============================
 def enviar_telegram(msg: str, token=TELEGRAM_TOKEN, chat_id=TELEGRAM_CHAT_ID):
     try:
         url = f"https://api.telegram.org/bot{token}/sendMessage"
         payload = {"chat_id": chat_id, "text": msg}
-        requests.post(url, data=payload, timeout=10)
+        resp = requests.post(url, data=payload, timeout=10)
+        resp.raise_for_status()
+        logging.info("Mensagem enviada ao Telegram.")
     except Exception as e:
-        print(f"Erro ao enviar para Telegram: {e}")
+        logging.error(f"Erro ao enviar para Telegram: {e}")
 
 def carregar_historico():
     if os.path.exists(HISTORICO_PATH):
-        with open(HISTORICO_PATH, "r") as f:
-            historico = json.load(f)
-        return [
-            h if isinstance(h, dict) else {"number": h, "timestamp": f"manual_{i}"}
-            for i, h in enumerate(historico)
-        ]
+        try:
+            with open(HISTORICO_PATH, "r") as f:
+                historico = json.load(f)
+            return [
+                h if isinstance(h, dict) and "number" in h else {"number": h, "timestamp": f"manual_{i}"}
+                for i, h in enumerate(historico)
+            ]
+        except Exception as e:
+            logging.error(f"Erro ao carregar histórico: {e}")
+            return []
     return []
 
 def salvar_historico(historico):
-    with open(HISTORICO_PATH, "w") as f:
-        json.dump(historico, f, indent=2)
+    try:
+        with open(HISTORICO_PATH, "w") as f:
+            json.dump(historico, f, indent=2)
+    except Exception as e:
+        logging.error(f"Erro ao salvar histórico: {e}")
 
 def fetch_latest_result():
     try:
-        response = requests.get(API_URL, headers=HEADERS, timeout=5)
+        response = requests.get(API_URL, headers=HEADERS, timeout=6)
         response.raise_for_status()
         data = response.json()
         game_data = data.get("data", {})
         result = game_data.get("result", {})
-        outcome = result.get("outcome", {})
+        outcome = result.get("outcome", {}) if isinstance(result, dict) else {}
         number = outcome.get("number")
         timestamp = game_data.get("startedAt")
+        # Segurança: só retorna se number e timestamp existirem
+        if number is None or timestamp is None:
+            logging.info("Resultado retornado sem 'number' ou 'timestamp'. Ignorando.")
+            return None
         return {"number": number, "timestamp": timestamp}
     except Exception as e:
         logging.error(f"Erro ao buscar resultado: {e}")
         return None
 
 def obter_vizinhos(numero, layout, antes=1, depois=1):
-    idx = layout.index(numero)
+    try:
+        idx = layout.index(numero)
+    except ValueError:
+        # Número não encontrado no layout (evita crash)
+        logging.warning(f"Número {numero} não encontrado no layout. Retornando somente o número.")
+        return [numero]
     n = len(layout)
     vizinhos = []
     for i in range(antes, 0, -1):
@@ -82,6 +105,14 @@ class EstrategiaDeslocamento:
         self.historico = deque(maxlen=1000)
 
     def adicionar_numero(self, numero_dict):
+        # numero_dict deve ter 'number' e 'timestamp'
+        if not isinstance(numero_dict, dict) or "number" not in numero_dict or "timestamp" not in numero_dict:
+            logging.warning("Tentativa de adicionar entrada inválida ao histórico. Ignorando.")
+            return
+        # Evita adicionar entradas duplicadas por timestamp
+        if self.historico and self.historico[-1].get("timestamp") == numero_dict.get("timestamp"):
+            logging.info("Timestamp igual ao último, não adicionando duplicado.")
+            return
         self.historico.append(numero_dict)
 
 # =============================
@@ -97,14 +128,20 @@ class IA_Recorrencia:
             return []
 
         historico_lista = list(historico)
+        # garante que os dois últimos existam e sejam dicts
+        if not (isinstance(historico_lista[-2], dict) and isinstance(historico_lista[-1], dict)):
+            return []
+
         ultimos2 = (historico_lista[-2]["number"], historico_lista[-1]["number"])
 
         proximos = []
         for i in range(len(historico_lista) - 2):
-            n1 = historico_lista[i]["number"]
-            n2 = historico_lista[i + 1]["number"]
-            if (n1, n2) == ultimos2:
-                proximos.append(historico_lista[i + 2]["number"])
+            h0 = historico_lista[i]
+            h1 = historico_lista[i + 1]
+            h2 = historico_lista[i + 2]
+            if (isinstance(h0, dict) and isinstance(h1, dict) and isinstance(h2, dict)
+                and (h0["number"], h1["number"]) == ultimos2):
+                proximos.append(h2["number"])
 
         if not proximos:
             return []
@@ -149,23 +186,29 @@ resultado = fetch_latest_result()
 ultimo_ts = st.session_state.estrategia.historico[-1]["timestamp"] if st.session_state.estrategia.historico else None
 
 if resultado and resultado.get("timestamp") != ultimo_ts:
-    numero_dict = {"number": resultado["number"], "timestamp": resultado["timestamp"]}
-    st.session_state.estrategia.adicionar_numero(numero_dict)
-    salvar_historico(list(st.session_state.estrategia.historico))
+    # Segurança: só adiciona se number não for None
+    if resultado.get("number") is not None:
+        numero_dict = {"number": resultado["number"], "timestamp": resultado["timestamp"]}
+        st.session_state.estrategia.adicionar_numero(numero_dict)
+        salvar_historico(list(st.session_state.estrategia.historico))
+    else:
+        logging.info("Resultado sem número válido; ignorando resultado.")
 
-    # Conferência da previsão anterior
+    # Conferência da previsão anterior (somente nos top previstos, sem vizinhos extras)
     if st.session_state.previsao:
-        numero_real = numero_dict["number"]
-        if numero_real in st.session_state.previsao:
+        numero_real = resultado.get("number")
+        if numero_real is not None and numero_real in st.session_state.previsao:
             st.session_state.acertos += 1
             msg = f"GREEN! Saiu {numero_real}"
             st.success(msg)
             enviar_telegram(msg)
         else:
-            st.session_state.erros += 1
-            msg = f"RED! Saiu {numero_real}"
-            st.error(msg)
-            enviar_telegram(msg)
+            # Se número_real for None, marcamos como erro? aqui só tratamos quando há número válido
+            if numero_real is not None:
+                st.session_state.erros += 1
+                msg = f"RED! Saiu {numero_real}"
+                st.error(msg)
+                enviar_telegram(msg)
         st.session_state.previsao = []
 
     # Incrementa rodadas
@@ -176,7 +219,8 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
         prox_numeros = st.session_state.ia_recorrencia.prever(st.session_state.estrategia.historico)
         if prox_numeros:
             st.session_state.previsao = prox_numeros
-            msg_alerta = "Próximos: " + " ".join(str(n) for n in prox_numeros)
+            # Mensagem enxuta em duas linhas
+            msg_alerta = "Próximos:\n" + " ".join(str(n) for n in prox_numeros)
             enviar_telegram(msg_alerta)
 
 # Histórico
@@ -193,4 +237,3 @@ col1, col2, col3 = st.columns(3)
 col1.metric("🟢 GREEN", acertos)
 col2.metric("🔴 RED", erros)
 col3.metric("✅ Taxa", f"{taxa:.1f}%")
-
