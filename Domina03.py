@@ -201,11 +201,11 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
 # -----------------------------
 # Alerta enxuto da recorrência em duas linhas
 # -----------------------------
-if prox_numeros:
-    st.session_state.previsao = prox_numeros
-    meio = (len(prox_numeros) + 1) // 2  # divide os números em duas linhas
-    linha1 = " ".join(str(n) for n in prox_numeros[:meio])
-    linha2 = " ".join(str(n) for n in prox_numeros[meio:])
+if st.session_state.previsao:
+    numeros_previstos = st.session_state.previsao
+    meio = (len(numeros_previstos) + 1) // 2
+    linha1 = " ".join(str(n) for n in numeros_previstos[:meio])
+    linha2 = " ".join(str(n) for n in numeros_previstos[meio:])
     msg_alerta = f"🎯 Recorrência - Próximos números:\n{linha1}\n{linha2}"
     enviar_telegram(msg_alerta)
 
