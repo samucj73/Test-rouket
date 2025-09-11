@@ -322,8 +322,8 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
         enviar_msg(msg_alerta, tipo="previsao", token=TELEGRAM_TOKEN_RECORRENCIA, chat_id=CHAT_ID_RECORRENCIA)
 
 # Histórico
-st.subheader("📜 Histórico (últimos 20 números)")
-st.write(list(st.session_state.estrategia.historico)[-20:])
+st.subheader("📜 Histórico (últimos 2 números)")
+st.write(list(st.session_state.estrategia.historico)[-2:])
 
 # Estatísticas
 acertos = st.session_state.get("acertos", 0)
