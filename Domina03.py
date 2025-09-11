@@ -196,8 +196,8 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
         prox_numeros = st.session_state.ia_recorrencia.prever(st.session_state.estrategia.historico)
         if prox_numeros:
             st.session_state.previsao = prox_numeros
-             msg_alerta = "🎯 Próximos números prováveis (Recorrência): " + " ".join(str(n) for n in prox_numeros)
-             enviar_telegram(msg_alerta)
+            msg_alerta = "🎯 Próximos números prováveis (Recorrência): " + " ".join(str(n) for n in prox_numeros)
+            enviar_telegram(msg_alerta)
 # -----------------------------
 # Alerta enxuto da recorrência em duas linhas
 # -----------------------------
