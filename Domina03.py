@@ -90,7 +90,7 @@ class EstrategiaDeslocamento:
 # IA recorrência
 # =============================
 class IA_Recorrencia:
-    def __init__(self, layout=None, top_n=3):
+    def __init__(self, layout=None, top_n=2):
         self.layout = layout or ROULETTE_LAYOUT
         self.top_n = top_n
 
