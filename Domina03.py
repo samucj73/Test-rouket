@@ -192,7 +192,7 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
     # -----------------------------
     # Gera nova previsão a cada 2 rodadas
     # -----------------------------
-    if st.session_state.contador_rodadas % 2 == 0:
+    if st.session_state.contador_rodadas % 1 == 0:
         prox_numeros = st.session_state.ia_recorrencia.prever(st.session_state.estrategia.historico)
         if prox_numeros:
             st.session_state.previsao = prox_numeros
