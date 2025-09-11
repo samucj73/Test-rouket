@@ -316,20 +316,22 @@ col2.metric("🔴 RED", erros)
 col3.metric("✅ Taxa de acerto", f"{taxa:.1f}%")
 
 # -----------------------------
-
-# Contadores de recorrência
+# -----------------------------
+# Estatísticas da recorrência
+# -----------------------------
 historico_total = len(st.session_state.estrategia.historico)
+ultimo_numero = st.session_state.estrategia.historico[-1]["number"] if historico_total > 0 and isinstance(st.session_state.estrategia.historico[-1], dict) else None
 
-# Último número sorteado
-ultimo_numero = st.session_state.estrategia.historico[-1]["number"] if historico_total > 0 else None
-
-# Quantas vezes o último número aparece no histórico (para recorrência)
 ocorrencias_ultimo = 0
 if ultimo_numero is not None:
-    ocorrencias_ultimo = sum(1 for h in st.session_state.estrategia.historico[:-1] if h["number"] == ultimo_numero)
+    ocorrencias_ultimo = sum(
+        1 for h in st.session_state.estrategia.historico[:-1]
+        if isinstance(h, dict) and h.get("number") == ultimo_numero
+    )
 
-# Mostrar no Streamlit
+# Exibir no Streamlit
 st.subheader("📊 Estatísticas da Recorrência")
 st.write(f"Total de registros no histórico: {historico_total}")
 st.write(f"Quantidade de ocorrências do último número ({ultimo_numero}) usadas para recorrência: {ocorrencias_ultimo}")
-    
+
+
