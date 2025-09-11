@@ -16,6 +16,7 @@ HEADERS = {"User-Agent": "Mozilla/5.0"}
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 TELEGRAM_CHAT_ID = "5121457416"
 
+
 ROULETTE_LAYOUT = [
     0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6,
     27, 13, 36, 11, 30, 8, 23, 10, 5, 24,
@@ -87,7 +88,7 @@ class EstrategiaDeslocamento:
         self.historico.append(numero_dict)
 
 # =============================
-# IA recorrência
+# IA recorrência (antes + depois)
 # =============================
 class IA_Recorrencia:
     def __init__(self, layout=None, top_n=2):
@@ -103,24 +104,35 @@ class IA_Recorrencia:
         if ultimo_numero is None:
             return []
 
-        indices = [i for i, h in enumerate(historico_lista[:-1]) if isinstance(h, dict) and h.get("number") == ultimo_numero]
+        antes, depois = [], []
 
-        proximos = []
-        for i in indices:
-            if i + 1 < len(historico_lista):
-                proximo_h = historico_lista[i+1]
-                if isinstance(proximo_h, dict):
-                    proximos.append(proximo_h["number"])
+        # Percorre todas as ocorrências anteriores do último número
+        for i, h in enumerate(historico_lista[:-1]):
+            if isinstance(h, dict) and h.get("number") == ultimo_numero:
+                # Pega o número anterior se existir
+                if i - 1 >= 0 and isinstance(historico_lista[i-1], dict):
+                    antes.append(historico_lista[i-1]["number"])
+                # Pega o número seguinte se existir
+                if i + 1 < len(historico_lista) and isinstance(historico_lista[i+1], dict):
+                    depois.append(historico_lista[i+1]["number"])
 
-        if not proximos:
+        if not antes and not depois:
             return []
 
         from collections import Counter
-        contagem = Counter(proximos)
-        top_numeros = [num for num, _ in contagem.most_common(self.top_n)]
+        contagem_antes = Counter(antes)
+        contagem_depois = Counter(depois)
 
+        # Pega os top_n mais frequentes de cada lado
+        top_antes = [num for num, _ in contagem_antes.most_common(self.top_n)]
+        top_depois = [num for num, _ in contagem_depois.most_common(self.top_n)]
+
+        # Junta os dois contextos (antes + depois)
+        candidatos = list(set(top_antes + top_depois))
+
+        # Expande cada candidato com seus vizinhos físicos
         numeros_previstos = []
-        for n in top_numeros:
+        for n in candidatos:
             vizinhos = obter_vizinhos(n, self.layout, antes=1, depois=1)
             for v in vizinhos:
                 if v not in numeros_previstos:
@@ -132,7 +144,7 @@ class IA_Recorrencia:
 # Streamlit App
 # =============================
 st.set_page_config(page_title="Roleta IA Profissional", layout="centered")
-st.title("🎯 Roleta — IA de Deslocamento Físico Profissional")
+st.title("🎯 Roleta — IA de Recorrência (Antes + Depois) Profissional")
 st_autorefresh(interval=3000, key="refresh")
 
 # Inicialização segura do session_state
@@ -140,7 +152,6 @@ for key, default in {
     "estrategia": EstrategiaDeslocamento(),
     "ia_recorrencia": IA_Recorrencia(),
     "previsao": [],              # previsão pendente da rodada anterior
-    "previsao_enviada": False,
     "acertos": 0,
     "erros": 0,
     "contador_rodadas": 0
@@ -198,14 +209,6 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
             st.session_state.previsao = prox_numeros
             msg_alerta = "🎯 Próximos números prováveis (Recorrência): " + " ".join(str(n) for n in prox_numeros)
             enviar_telegram(msg_alerta)
-# -----------------------------
-# Alerta enxuto da recorrência em duas linhas
-# -----------------------------
-# -----------------------------
-# Gera nova previsão a cada 2 rodadas e envia alerta enxuto apenas 1 vez
-# -----------------------------
-
-
 
 # Histórico
 st.subheader("📜 Histórico (últimos 2 números)")
@@ -223,7 +226,6 @@ col2.metric("🔴 RED", erros)
 col3.metric("✅ Taxa de acerto", f"{taxa:.1f}%")
 
 # Estatísticas da recorrência
-# Estatísticas da recorrência
 historico_lista = list(st.session_state.estrategia.historico)
 historico_total = len(historico_lista)
 ultimo_numero = historico_lista[-1]["number"] if historico_total > 0 and isinstance(historico_lista[-1], dict) else None
@@ -237,3 +239,4 @@ st.subheader("📊 Estatísticas da Recorrência")
 st.write(f"Total de registros no histórico: {historico_total}")
 if ultimo_numero is not None:
     st.write(f"Quantidade de ocorrências do último número ({ultimo_numero}) usadas para recorrência: {ocorrencias_ultimo}")
+
