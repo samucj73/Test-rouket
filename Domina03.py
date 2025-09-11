@@ -25,13 +25,6 @@ ROULETTE_LAYOUT = [
     7, 28, 12, 35, 3, 26
 ]
 
-COLOR_MAP = {0:"green",1:"red",2:"black",3:"red",4:"black",5:"red",6:"black",
-             7:"red",8:"black",9:"red",10:"black",11:"black",12:"red",13:"black",
-             14:"red",15:"black",16:"red",17:"black",18:"red",19:"red",20:"black",
-             21:"red",22:"black",23:"red",24:"black",25:"red",26:"black",27:"red",
-             28:"black",29:"black",30:"red",31:"black",32:"red",33:"black",34:"red",
-             35:"black",36:"red"}
-
 # =============================
 # Funções auxiliares
 # =============================
@@ -42,28 +35,6 @@ def enviar_telegram(msg: str, token=TELEGRAM_TOKEN, chat_id=TELEGRAM_CHAT_ID):
         requests.post(url, data=payload, timeout=10)
     except Exception as e:
         print(f"Erro ao enviar para Telegram: {e}")
-
-def enviar_msg(msg, tipo="previsao"):
-    if tipo == "previsao":
-        st.success(msg)
-        enviar_telegram(msg)
-    else:
-        st.info(msg)
-        enviar_telegram(msg)
-
-def tocar_som_moeda():
-    som_base64 = (
-        "SUQzAwAAAAAAF1RTU0UAAAAPAAADTGF2ZjU2LjI2LjEwNAAAAAAAAAAAAAAA//tQxAADBQAB"
-        "VAAAAnEAAACcQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-    )
-    st.markdown(
-        f"""
-        <audio autoplay>
-            <source src="data:audio/mp3;base64,{som_base64}" type="audio/mp3">
-        </audio>
-        """,
-        unsafe_allow_html=True,
-    )
 
 def carregar_historico():
     if os.path.exists(HISTORICO_PATH):
@@ -118,7 +89,7 @@ class EstrategiaDeslocamento:
         self.historico.append(numero_dict)
 
 # =============================
-# IA recorrência (novidade)
+# IA recorrência
 # =============================
 class IA_Recorrencia:
     def __init__(self, layout=None, top_n=5):
@@ -154,7 +125,6 @@ class IA_Recorrencia:
 
         # Adiciona 2 vizinhos anteriores e 2 posteriores de cada número
         numeros_previstos = []
-        pos_ultimo = self.layout.index(ultimo_numero)
         for n in top_numeros:
             vizinhos = obter_vizinhos(n, self.layout, antes=2, depois=2)
             for v in vizinhos:
@@ -176,7 +146,6 @@ for key, default in {
     "ia_recorrencia": IA_Recorrencia(),
     "previsao": [],
     "previsao_enviada": False,
-    "resultado_enviado": False,
     "acertos": 0,
     "erros": 0,
     "contador_rodadas": 0
@@ -202,9 +171,6 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
     st.session_state.contador_rodadas += 1
 
     # -----------------------------
-  
-
-    # -----------------------------
     # Previsão recorrência a cada 2 rodadas
     # -----------------------------
     if st.session_state.contador_rodadas % 2 == 0:
@@ -214,6 +180,22 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
             st.session_state.previsao_enviada = True
             msg_alerta = "🎯 Próximos números prováveis (Recorrência): " + " ".join(str(n) for n in prox_numeros)
             enviar_telegram(msg_alerta)
+
+            # -----------------------------
+            # Conferência RED/GREEN (Recorrência)
+            # -----------------------------
+            numero_real = numero_dict["number"]
+            if numero_real in prox_numeros:
+                st.session_state.acertos += 1
+                st.success(f"🟢 GREEN! Número {numero_real} previsto pela recorrência.")
+                enviar_telegram(f"🟢 GREEN! Número {numero_real} previsto pela recorrência.")
+            else:
+                st.session_state.erros += 1
+                st.error(f"🔴 RED! Número {numero_real} não estava na previsão de recorrência.")
+                enviar_telegram(f"🔴 RED! Número {numero_real} não estava na previsão de recorrência.")
+
+            # Reseta flag
+            st.session_state.previsao_enviada = False
 
 # Histórico
 st.subheader("📜 Histórico (últimos 20 números)")
@@ -229,17 +211,16 @@ col1, col2, col3 = st.columns(3)
 col1.metric("🟢 GREEN", acertos)
 col2.metric("🔴 RED", erros)
 col3.metric("✅ Taxa de acerto", f"{taxa:.1f}%")
-# Estatísticas da recorrência
 
+# Estatísticas da recorrência
 historico_lista = list(st.session_state.estrategia.historico)
 historico_total = len(historico_lista)
 ultimo_numero = historico_lista[-1]["number"] if historico_total > 0 and isinstance(historico_lista[-1], dict) else None
 ocorrencias_ultimo = 0
 if ultimo_numero is not None:
-    ocorrencias_ultimo = sum(1 for h in historico_lista[:-1]
-if isinstance(h, dict) and h.get("number") == ultimo_numero
-        )
-
+    ocorrencias_ultimo = sum(
+        1 for h in historico_lista[:-1] if isinstance(h, dict) and h.get("number") == ultimo_numero
+    )
     st.subheader("📊 Estatísticas da Recorrência")
     st.write(f"Total de registros no histórico: {historico_total}")
     st.write(f"Quantidade de ocorrências do último número ({ultimo_numero}) usadas para recorrência: {ocorrencias_ultimo}")
