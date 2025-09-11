@@ -272,27 +272,37 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
 
     # Conferir resultado anterior recorrência
     # -----------------------------
-# Conferir resultado recorrência
-# -----------------------------
-if st.session_state.previsao:
-    numero_real = numero_dict["number"]
+if resultado and resultado.get("timestamp") != ultimo_ts:
+    numero_dict = {"number": resultado["number"], "timestamp": resultado["timestamp"]}
+    st.session_state.estrategia.adicionar_numero(numero_dict)
+    salvar_historico(list(st.session_state.estrategia.historico))
 
-    # Criar lista de números previstos + vizinhos
-    numeros_com_vizinhos = []
-    for n in st.session_state.previsao:
-        vizinhos = obter_vizinhos(n, ROULETTE_LAYOUT, antes=2, depois=2)
-        for v in vizinhos:
-            if v not in numeros_com_vizinhos:
-                numeros_com_vizinhos.append(v)
+    # Incrementa contador de rodadas
+    st.session_state.contador_rodadas += 1
 
-    if numero_real in numeros_com_vizinhos:
-        enviar_msg(f"🟢 GREEN! Saiu {numero_real}", tipo="resultado")
-        st.session_state.acertos += 1
-        tocar_som_moeda()
-    else:
-        enviar_msg(f"🔴 RED! Saiu {numero_real}", tipo="resultado")
-        st.session_state.erros += 1
-    
+    # -----------------------------
+    # Conferir resultado recorrência
+    # -----------------------------
+    if st.session_state.previsao:
+        numero_real = numero_dict["number"]
+
+        # Criar lista de números previstos + vizinhos
+        numeros_com_vizinhos = []
+        for n in st.session_state.previsao:
+            vizinhos = obter_vizinhos(n, ROULETTE_LAYOUT, antes=2, depois=2)
+            for v in vizinhos:
+                if v not in numeros_com_vizinhos:
+                    numeros_com_vizinhos.append(v)
+
+        if numero_real in numeros_com_vizinhos:
+            enviar_msg(f"🟢 GREEN! Saiu {numero_real}", tipo="resultado")
+            st.session_state.acertos += 1
+            tocar_som_moeda()
+        else:
+            enviar_msg(f"🔴 RED! Saiu {numero_real}", tipo="resultado")
+            st.session_state.erros += 1
+
+
 
     # Nova previsão IA física a cada 2 rodadas
     if st.session_state.contador_rodadas % 2 == 0:
