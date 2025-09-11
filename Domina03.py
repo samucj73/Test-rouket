@@ -103,7 +103,6 @@ class IA_Recorrencia:
         if ultimo_numero is None:
             return []
 
-        # Conta todas as ocorrências do último número no histórico (exceto o último)
         indices = [i for i, h in enumerate(historico_lista[:-1]) if isinstance(h, dict) and h.get("number") == ultimo_numero]
 
         proximos = []
@@ -116,12 +115,10 @@ class IA_Recorrencia:
         if not proximos:
             return []
 
-        # Top N mais comuns
         from collections import Counter
         contagem = Counter(proximos)
         top_numeros = [num for num, _ in contagem.most_common(self.top_n)]
 
-        # Adiciona 2 vizinhos anteriores e 2 posteriores de cada número
         numeros_previstos = []
         for n in top_numeros:
             vizinhos = obter_vizinhos(n, self.layout, antes=2, depois=2)
@@ -142,7 +139,7 @@ st_autorefresh(interval=3000, key="refresh")
 for key, default in {
     "estrategia": EstrategiaDeslocamento(),
     "ia_recorrencia": IA_Recorrencia(),
-    "previsao": [],
+    "previsao": [],              # previsão pendente da rodada anterior
     "previsao_enviada": False,
     "acertos": 0,
     "erros": 0,
@@ -165,44 +162,42 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
     st.session_state.estrategia.adicionar_numero(numero_dict)
     salvar_historico(list(st.session_state.estrategia.historico))
 
+    # -----------------------------
+    # Conferência da previsão pendente da rodada anterior
+    # -----------------------------
+    if st.session_state.previsao:
+        numeros_com_vizinhos = []
+        for n in st.session_state.previsao:
+            vizinhos = obter_vizinhos(n, ROULETTE_LAYOUT, antes=2, depois=2)
+            for v in vizinhos:
+                if v not in numeros_com_vizinhos:
+                    numeros_com_vizinhos.append(v)
+
+        numero_real = numero_dict["number"]
+        if numero_real in numeros_com_vizinhos:
+            st.session_state.acertos += 1
+            st.success(f"🟢 GREEN! Número {numero_real} previsto pela recorrência (incluindo vizinhos).")
+            enviar_telegram(f"🟢 GREEN! Número {numero_real} previsto pela recorrência (incluindo vizinhos).")
+        else:
+            st.session_state.erros += 1
+            st.error(f"🔴 RED! Número {numero_real} não estava na previsão de recorrência nem nos vizinhos.")
+            enviar_telegram(f"🔴 RED! Número {numero_real} não estava na previsão de recorrência nem nos vizinhos.")
+
+        # Reseta a previsão após conferência
+        st.session_state.previsao = []
+
     # Incrementa contador de rodadas
     st.session_state.contador_rodadas += 1
 
     # -----------------------------
-    # Previsão recorrência a cada 2 rodadas
+    # Gera nova previsão a cada 2 rodadas
     # -----------------------------
     if st.session_state.contador_rodadas % 2 == 0:
         prox_numeros = st.session_state.ia_recorrencia.prever(st.session_state.estrategia.historico)
         if prox_numeros:
             st.session_state.previsao = prox_numeros
-            st.session_state.previsao_enviada = True
             msg_alerta = "🎯 Próximos números prováveis (Recorrência): " + " ".join(str(n) for n in prox_numeros)
             enviar_telegram(msg_alerta)
-
-            # -----------------------------
-            # Conferência RED/GREEN (Recorrência com vizinhos)
-            # -----------------------------
-            numero_real = numero_dict["number"]
-
-            # Expande a previsão incluindo vizinhos físicos de cada número previsto
-            numeros_com_vizinhos = []
-            for n in prox_numeros:
-                vizinhos = obter_vizinhos(n, ROULETTE_LAYOUT, antes=2, depois=2)
-                for v in vizinhos:
-                    if v not in numeros_com_vizinhos:
-                        numeros_com_vizinhos.append(v)
-
-            if numero_real in numeros_com_vizinhos:
-                st.session_state.acertos += 1
-                st.success(f"🟢 GREEN! Número {numero_real} previsto pela recorrência (incluindo vizinhos).")
-                enviar_telegram(f"🟢 GREEN! Número {numero_real} previsto pela recorrência (incluindo vizinhos).")
-            else:
-                st.session_state.erros += 1
-                st.error(f"🔴 RED! Número {numero_real} não estava na previsão de recorrência nem nos vizinhos.")
-                enviar_telegram(f"🔴 RED! Número {numero_real} não estava na previsão de recorrência nem nos vizinhos.")
-
-            # Reseta flag para próxima rodada
-            st.session_state.previsao_enviada = False
 
 # Histórico
 st.subheader("📜 Histórico (últimos 20 números)")
@@ -220,6 +215,7 @@ col2.metric("🔴 RED", erros)
 col3.metric("✅ Taxa de acerto", f"{taxa:.1f}%")
 
 # Estatísticas da recorrência
+# Estatísticas da recorrência
 historico_lista = list(st.session_state.estrategia.historico)
 historico_total = len(historico_lista)
 ultimo_numero = historico_lista[-1]["number"] if historico_total > 0 and isinstance(historico_lista[-1], dict) else None
@@ -228,6 +224,8 @@ if ultimo_numero is not None:
     ocorrencias_ultimo = sum(
         1 for h in historico_lista[:-1] if isinstance(h, dict) and h.get("number") == ultimo_numero
     )
-    st.subheader("📊 Estatísticas da Recorrência")
-    st.write(f"Total de registros no histórico: {historico_total}")
+
+st.subheader("📊 Estatísticas da Recorrência")
+st.write(f"Total de registros no histórico: {historico_total}")
+if ultimo_numero is not None:
     st.write(f"Quantidade de ocorrências do último número ({ultimo_numero}) usadas para recorrência: {ocorrencias_ultimo}")
