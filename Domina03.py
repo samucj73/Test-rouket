@@ -316,13 +316,4 @@ col2.metric("🔴 RED", erros)
 col3.metric("✅ Taxa de acerto", f"{taxa:.1f}%")
 
 # -----------------------------
-    # Estatísticas da recorrência
-    # -----------------------------
-    historico_total = len(st.session_state.estrategia.historico)
-    ultimo_numero = st.session_state.estrategia.historico[-1]["number"]
-    ocorrencias_ultimo = sum(1 for h in st.session_state.estrategia.historico[:-1] if h["number"] == ultimo_numero)
-
-    st.subheader("📊 Estatísticas da Recorrência")
-    st.write(f"Total de registros no histórico: {historico_total}")
-    st.write(f"Quantidade de ocorrências do último número ({ultimo_numero}) usadas para recorrência: {ocorrencias_ultimo}")
-
+    
