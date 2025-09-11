@@ -319,13 +319,15 @@ col3.metric("✅ Taxa de acerto", f"{taxa:.1f}%")
 # -----------------------------
 # Estatísticas da recorrência
 # -----------------------------
-historico_total = len(st.session_state.estrategia.historico)
-ultimo_numero = st.session_state.estrategia.historico[-1]["number"] if historico_total > 0 and isinstance(st.session_state.estrategia.historico[-1], dict) else None
+historico_lista = list(st.session_state.estrategia.historico)
+
+historico_total = len(historico_lista)
+ultimo_numero = historico_lista[-1]["number"] if historico_total > 0 and isinstance(historico_lista[-1], dict) else None
 
 ocorrencias_ultimo = 0
 if ultimo_numero is not None:
     ocorrencias_ultimo = sum(
-        1 for h in st.session_state.estrategia.historico[:-1]
+        1 for h in historico_lista[:-1]
         if isinstance(h, dict) and h.get("number") == ultimo_numero
     )
 
@@ -333,5 +335,6 @@ if ultimo_numero is not None:
 st.subheader("📊 Estatísticas da Recorrência")
 st.write(f"Total de registros no histórico: {historico_total}")
 st.write(f"Quantidade de ocorrências do último número ({ultimo_numero}) usadas para recorrência: {ocorrencias_ultimo}")
+
 
 
