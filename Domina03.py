@@ -194,10 +194,20 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
     # -----------------------------
     if st.session_state.contador_rodadas % 1 == 0:
         prox_numeros = st.session_state.ia_recorrencia.prever(st.session_state.estrategia.historico)
-        if prox_numeros:
-            st.session_state.previsao = prox_numeros
-            msg_alerta = "🎯 Próximos números prováveis (Recorrência): " + " ".join(str(n) for n in prox_numeros)
-            enviar_telegram(msg_alerta)
+      #  if prox_numeros:
+          #  st.session_state.previsao = prox_numeros
+            #msg_alerta = "🎯 Próximos números prováveis (Recorrência): " + " ".join(str(n) for n in prox_numeros)
+            #enviar_telegram(msg_alerta)
+# -----------------------------
+# Alerta enxuto da recorrência em duas linhas
+# -----------------------------
+if prox_numeros:
+    st.session_state.previsao = prox_numeros
+    meio = (len(prox_numeros) + 1) // 2  # divide os números em duas linhas
+    linha1 = " ".join(str(n) for n in prox_numeros[:meio])
+    linha2 = " ".join(str(n) for n in prox_numeros[meio:])
+    msg_alerta = f"🎯 Recorrência - Próximos números:\n{linha1}\n{linha2}"
+    enviar_telegram(msg_alerta)
 
 # Histórico
 st.subheader("📜 Histórico (últimos 20 números)")
