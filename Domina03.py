@@ -15,11 +15,10 @@ HISTORICO_PATH = "historico_deslocamento.json"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
-# Canal da estratégia física
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 CHAT_ID = "-1002940111195"
 
-# Canal da estratégia recorrência
+# Token separado para recorrência
 TELEGRAM_TOKEN_RECORRENCIA = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 CHAT_ID_RECORRENCIA = "5121457416"
 
@@ -40,29 +39,21 @@ COLOR_MAP = {0:"green",1:"red",2:"black",3:"red",4:"black",5:"red",6:"black",
 # =============================
 # Funções auxiliares
 # =============================
-def enviar_telegram(msg: str):
+def enviar_telegram(msg: str, token=TELEGRAM_TOKEN, chat_id=CHAT_ID):
     try:
-        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-        payload = {"chat_id": CHAT_ID, "text": msg}
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        payload = {"chat_id": chat_id, "text": msg}
         requests.post(url, data=payload, timeout=10)
     except Exception as e:
         print(f"Erro ao enviar para Telegram: {e}")
 
-def enviar_telegram_recorrencia(msg: str):
-    try:
-        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN_RECORRENCIA}/sendMessage"
-        payload = {"chat_id": CHAT_ID_RECORRENCIA, "text": msg}
-        requests.post(url, data=payload, timeout=10)
-    except Exception as e:
-        print(f"Erro ao enviar recorrência: {e}")
-
-def enviar_msg(msg, tipo="previsao"):
+def enviar_msg(msg, tipo="previsao", token=TELEGRAM_TOKEN, chat_id=CHAT_ID):
     if tipo == "previsao":
         st.success(msg)
-        enviar_telegram(msg)
+        enviar_telegram(msg, token=token, chat_id=chat_id)
     else:
         st.info(msg)
-        enviar_telegram(msg)
+        enviar_telegram(msg, token=token, chat_id=chat_id)
 
 def tocar_som_moeda():
     som_base64 = (
@@ -122,14 +113,21 @@ def obter_vizinhos(numero, layout, antes=2, depois=2):
     return vizinhos
 
 # =============================
-# Estratégia recorrência
+# Estratégia
+# =============================
+class EstrategiaDeslocamento:
+    def __init__(self):
+        self.historico = deque(maxlen=1000)
+    def adicionar_numero(self, numero_dict):
+        self.historico.append(numero_dict)
+
+# =============================
+# Estratégia de recorrência
 # =============================
 class EstrategiaRecorrencia:
-    def __init__(self, top_n=10):
+    def __init__(self, top_n=5):
         self.top_n = top_n
         self.ultima_previsao = []
-        self.acertos = 0
-        self.erros = 0
 
     def prever(self, historico):
         if len(historico) < 2:
@@ -143,28 +141,28 @@ class EstrategiaRecorrencia:
             return []
         contagem = Counter(sequencias)
         mais_comuns = [n for n, _ in contagem.most_common(self.top_n)]
-        self.ultima_previsao = mais_comuns
-        return mais_comuns
+        
+        # Adiciona vizinhos (2 antes e 2 depois) de cada número previsto
+        numeros_expandidos = []
+        for n in mais_comuns:
+            idx = ROULETTE_LAYOUT.index(n)
+            n_vizinhos = [
+                ROULETTE_LAYOUT[(idx-2) % len(ROULETTE_LAYOUT)],
+                ROULETTE_LAYOUT[(idx-1) % len(ROULETTE_LAYOUT)],
+                n,
+                ROULETTE_LAYOUT[(idx+1) % len(ROULETTE_LAYOUT)],
+                ROULETTE_LAYOUT[(idx+2) % len(ROULETTE_LAYOUT)],
+            ]
+            for v in n_vizinhos:
+                if v not in numeros_expandidos:
+                    numeros_expandidos.append(v)
 
-    def conferir(self, numero_sorteado):
-        if not self.ultima_previsao:
-            return None
-        if numero_sorteado in self.ultima_previsao:
-            self.acertos += 1
-            return True
-        else:
-            self.erros += 1
-            return False
+        self.ultima_previsao = numeros_expandidos
+        return numeros_expandidos
 
 # =============================
-# Estratégia física existente
+# IA otimizada profissional
 # =============================
-class EstrategiaDeslocamento:
-    def __init__(self):
-        self.historico = deque(maxlen=1000)
-    def adicionar_numero(self, numero_dict):
-        self.historico.append(numero_dict)
-
 class IA_Deslocamento_Fisico_Pro:
     def __init__(self, layout=None, janela=30, top_n_deltas=3):
         self.layout = layout or ROULETTE_LAYOUT
@@ -218,16 +216,18 @@ class IA_Deslocamento_Fisico_Pro:
 # Streamlit App
 # =============================
 st.set_page_config(page_title="Roleta IA Profissional", layout="centered")
-st.title("🎯 Roleta — IA de Deslocamento + Recorrência")
+st.title("🎯 Roleta — IA de Deslocamento Físico Profissional")
 st_autorefresh(interval=3000, key="refresh")
 
 # Inicialização segura do session_state
 for key, default in {
     "estrategia": EstrategiaDeslocamento(),
+    "estrategia_recorrencia": EstrategiaRecorrencia(top_n=5),
     "ia": IA_Deslocamento_Fisico_Pro(janela=30),
-    "recorrencia": EstrategiaRecorrencia(top_n=5),
     "previsao": [],
+    "previsao_recorrencia": [],
     "previsao_enviada": False,
+    "previsao_recorrencia_enviada": False,
     "resultado_enviado": False,
     "acertos": 0,
     "erros": 0,
@@ -259,7 +259,7 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
     # Incrementa contador de rodadas
     st.session_state.contador_rodadas += 1
 
-    # Conferir resultado anterior da estratégia física
+    # Conferir resultado anterior IA física
     if st.session_state.previsao:
         if numero_dict["number"] in st.session_state.previsao:
             enviar_msg(f"🟢 GREEN! Saiu {numero_dict['number']}", tipo="resultado")
@@ -269,26 +269,35 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
             enviar_msg(f"🔴 RED! Saiu {numero_dict['number']}", tipo="resultado")
             st.session_state.erros += 1
 
-    # Nova previsão a cada 2 rodadas (estratégia física)
+    # Conferir resultado anterior recorrência
+    if st.session_state.previsao_recorrencia:
+        if numero_dict["number"] in st.session_state.previsao_recorrencia:
+            enviar_msg(f"🟢 GREEN (Recorrência)! Saiu {numero_dict['number']}", 
+                        tipo="resultado", 
+                        token=TELEGRAM_TOKEN_RECORRENCIA, 
+                        chat_id=CHAT_ID_RECORRENCIA)
+        else:
+            enviar_msg(f"🔴 RED (Recorrência)! Saiu {numero_dict['number']}", 
+                        tipo="resultado", 
+                        token=TELEGRAM_TOKEN_RECORRENCIA, 
+                        chat_id=CHAT_ID_RECORRENCIA)
+
+    # Nova previsão IA física a cada 2 rodadas
     if st.session_state.contador_rodadas % 2 == 0:
         prox_numeros = st.session_state.ia.prever(st.session_state.estrategia.historico)
         if prox_numeros:
             st.session_state.previsao = prox_numeros
             st.session_state.previsao_enviada = True
-            msg_alerta = "🎯 Física — Próximos números prováveis: " + " ".join(str(n) for n in prox_numeros)
+            msg_alerta = "🎯 Próximos números prováveis: " + " ".join(str(n) for n in prox_numeros)
             enviar_msg(msg_alerta, tipo="previsao")
 
-    # Estratégia recorrência (roda sempre)
-    previsao_recorrencia = st.session_state.recorrencia.prever(list(st.session_state.estrategia.historico))
-    if previsao_recorrencia:
-        enviar_telegram_recorrencia("♻️ Recorrência — Top 5: " + " ".join(str(n) for n in previsao_recorrencia))
-
-    # Conferir resultado recorrência
-    resultado_rec = st.session_state.recorrencia.conferir(numero_dict["number"])
-    if resultado_rec is True:
-        enviar_telegram_recorrencia(f"🟢 GREEN Recorrência! Saiu {numero_dict['number']}")
-    elif resultado_rec is False:
-        enviar_telegram_recorrencia(f"🔴 RED Recorrência! Saiu {numero_dict['number']}")
+    # Nova previsão recorrência a cada número
+    prox_recorrencia = st.session_state.estrategia_recorrencia.prever(list(st.session_state.estrategia.historico))
+    if prox_recorrencia:
+        st.session_state.previsao_recorrencia = prox_recorrencia
+        st.session_state.previsao_recorrencia_enviada = True
+        msg_alerta = "🔄 Recorrência — próximos números prováveis: " + " ".join(str(n) for n in prox_recorrencia)
+        enviar_msg(msg_alerta, tipo="previsao", token=TELEGRAM_TOKEN_RECORRENCIA, chat_id=CHAT_ID_RECORRENCIA)
 
 # Histórico
 st.subheader("📜 Histórico (últimos 20 números)")
@@ -301,17 +310,6 @@ total = acertos + erros
 taxa = (acertos / total * 100) if total > 0 else 0.0
 
 col1, col2, col3 = st.columns(3)
-col1.metric("🟢 GREEN (Física)", acertos)
-col2.metric("🔴 RED (Física)", erros)
-col3.metric("✅ Taxa Física", f"{taxa:.1f}%")
-
-# Estatísticas recorrência
-acertos_rec = st.session_state.recorrencia.acertos
-erros_rec = st.session_state.recorrencia.erros
-total_rec = acertos_rec + erros_rec
-taxa_rec = (acertos_rec / total_rec * 100) if total_rec > 0 else 0.0
-
-col4, col5, col6 = st.columns(3)
-col4.metric("🟢 GREEN (Recorrência)", acertos_rec)
-col5.metric("🔴 RED (Recorrência)", erros_rec)
-col6.metric("✅ Taxa Recorrência", f"{taxa_rec:.1f}%")
+col1.metric("🟢 GREEN", acertos)
+col2.metric("🔴 RED", erros)
+col3.metric("✅ Taxa de acerto", f"{taxa:.1f}%")
