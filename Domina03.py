@@ -208,8 +208,8 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
 
 
 # Histórico
-st.subheader("📜 Histórico (últimos 20 números)")
-st.write(list(st.session_state.estrategia.historico)[-20:])
+st.subheader("📜 Histórico (últimos 2 números)")
+st.write(list(st.session_state.estrategia.historico)[-2:])
 
 # Estatísticas de GREEN/RED
 acertos = st.session_state.get("acertos", 0)
