@@ -125,7 +125,7 @@ def obter_vizinhos(numero, layout, antes=2, depois=2):
 # Estratégia recorrência
 # =============================
 class EstrategiaRecorrencia:
-    def __init__(self, top_n=5):
+    def __init__(self, top_n=10):
         self.top_n = top_n
         self.ultima_previsao = []
         self.acertos = 0
