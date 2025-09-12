@@ -2,7 +2,7 @@ import streamlit as st
 import json
 import os
 import requests
-from collections import deque
+from collections import deque, Counter
 from streamlit_autorefresh import st_autorefresh
 import logging
 
@@ -78,7 +78,7 @@ def obter_vizinhos(numero, layout, antes=2, depois=2):
     return vizinhos
 
 # =============================
-# Estratégia
+# Estratégia de recorrência
 # =============================
 class EstrategiaDeslocamento:
     def __init__(self):
@@ -86,9 +86,6 @@ class EstrategiaDeslocamento:
     def adicionar_numero(self, numero_dict):
         self.historico.append(numero_dict)
 
-# =============================
-# IA recorrência (antes + depois)
-# =============================
 class IA_Recorrencia:
     def __init__(self, layout=None, top_n=2):
         self.layout = layout or ROULETTE_LAYOUT
@@ -103,30 +100,23 @@ class IA_Recorrencia:
         if ultimo_numero is None:
             return []
 
-        antes, depois = [], []
+        indices = [i for i, h in enumerate(historico_lista[:-1]) if isinstance(h, dict) and h.get("number") == ultimo_numero]
 
-        # Percorre todas as ocorrências anteriores do último número
-        for i, h in enumerate(historico_lista[:-1]):
-            if isinstance(h, dict) and h.get("number") == ultimo_numero:
-                if i - 1 >= 0 and isinstance(historico_lista[i-1], dict):
-                    antes.append(historico_lista[i-1]["number"])
-                if i + 1 < len(historico_lista) and isinstance(historico_lista[i+1], dict):
-                    depois.append(historico_lista[i+1]["number"])
+        proximos = []
+        for i in indices:
+            if i + 1 < len(historico_lista):
+                proximo_h = historico_lista[i+1]
+                if isinstance(proximo_h, dict):
+                    proximos.append(proximo_h["number"])
 
-        if not antes and not depois:
+        if not proximos:
             return []
 
-        from collections import Counter
-        contagem_antes = Counter(antes)
-        contagem_depois = Counter(depois)
-
-        top_antes = [num for num, _ in contagem_antes.most_common(self.top_n)]
-        top_depois = [num for num, _ in contagem_depois.most_common(self.top_n)]
-
-        candidatos = list(set(top_antes + top_depois))
+        contagem = Counter(proximos)
+        top_numeros = [num for num, _ in contagem.most_common(self.top_n)]
 
         numeros_previstos = []
-        for n in candidatos:
+        for n in top_numeros:
             vizinhos = obter_vizinhos(n, self.layout, antes=1, depois=1)
             for v in vizinhos:
                 if v not in numeros_previstos:
@@ -135,17 +125,81 @@ class IA_Recorrencia:
         return numeros_previstos
 
 # =============================
+# Estratégia Terminais Dominantes + Vizinhos
+# =============================
+class EstrategiaRoleta:
+    def __init__(self, janela=12):
+        self.janela = janela
+        self.historico = deque(maxlen=janela+1)
+        self.roleta = [
+            0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27,
+            13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33,
+            1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12,
+            35, 3, 26
+        ]
+    def extrair_terminal(self, numero):
+        return numero % 10
+    def adicionar_numero(self, numero):
+        self.historico.append(numero)
+    def calcular_dominantes(self):
+        if len(self.historico) < self.janela:
+            return []
+        ultimos_13 = list(self.historico)
+        ultimos_12 = ultimos_13[:-1] if len(ultimos_13) >= 13 else ultimos_13
+        terminais = [self.extrair_terminal(n) for n in ultimos_12]
+        contagem = Counter(terminais)
+        return [t for t, _ in contagem.most_common(2)]
+    def adicionar_vizinhos_fisicos(self, numeros):
+        conjunto = set()
+        for n in numeros:
+            if n not in self.roleta:
+                continue
+            idx = self.roleta.index(n)
+            for offset in range(-2, 3):
+                vizinho = self.roleta[(idx + offset) % len(self.roleta)]
+                conjunto.add(vizinho)
+        return conjunto
+    def verificar_entrada(self):
+        if len(self.historico) < self.janela + 1:
+            return None
+        ultimos = list(self.historico)
+        ultimos_12 = ultimos[:-1]
+        numero_13 = ultimos[-1]
+        dominantes = self.calcular_dominantes()
+        condicao_a = numero_13 in ultimos_12
+        condicao_b = self.extrair_terminal(numero_13) in [self.extrair_terminal(n) for n in ultimos_12]
+        condicao_c = not condicao_a and not condicao_b
+        if condicao_a or condicao_b:
+            jogar_nos_terminais = {}
+            for t in dominantes:
+                base = [n for n in range(37) if self.extrair_terminal(n) == t]
+                jogar_nos_terminais[t] = sorted(self.adicionar_vizinhos_fisicos(base))
+            return {
+                "entrada": True,
+                "criterio": "A" if condicao_a else "B",
+                "numero_13": numero_13,
+                "dominantes": dominantes,
+                "jogar_nos_terminais": jogar_nos_terminais
+            }
+        elif condicao_c:
+            return {"entrada": False, "criterio": "C", "numero_13": numero_13, "dominantes": dominantes}
+        else:
+            return {"entrada": False, "numero_13": numero_13, "dominantes": dominantes}
+
+# =============================
 # Streamlit App
 # =============================
 st.set_page_config(page_title="Roleta IA Profissional", layout="centered")
-st.title("🎯 Roleta — IA de Recorrência (Antes + Depois) Profissional")
+st.title("🎯 Roleta — IA de Deslocamento e Terminais Dominantes")
 st_autorefresh(interval=3000, key="refresh")
 
-# Inicialização segura do session_state
+# Inicialização session_state
 for key, default in {
     "estrategia": EstrategiaDeslocamento(),
     "ia_recorrencia": IA_Recorrencia(),
+    "estrategia_term": EstrategiaRoleta(janela=12),
     "previsao": [],
+    "previsao_enviada": False,
     "acertos": 0,
     "erros": 0,
     "contador_rodadas": 0
@@ -157,6 +211,7 @@ for key, default in {
 historico = carregar_historico()
 for n in historico:
     st.session_state.estrategia.adicionar_numero(n)
+    st.session_state.estrategia_term.adicionar_numero(n["number"] if isinstance(n, dict) else n)
 
 # Captura número
 resultado = fetch_latest_result()
@@ -165,11 +220,10 @@ ultimo_ts = st.session_state.estrategia.historico[-1]["timestamp"] if st.session
 if resultado and resultado.get("timestamp") != ultimo_ts:
     numero_dict = {"number": resultado["number"], "timestamp": resultado["timestamp"]}
     st.session_state.estrategia.adicionar_numero(numero_dict)
+    st.session_state.estrategia_term.adicionar_numero(numero_dict["number"])
     salvar_historico(list(st.session_state.estrategia.historico))
 
-    # -----------------------------
     # Conferência GREEN/RED
-    # -----------------------------
     if st.session_state.previsao:
         numeros_com_vizinhos = []
         for n in st.session_state.previsao:
@@ -177,7 +231,6 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
             for v in vizinhos:
                 if v not in numeros_com_vizinhos:
                     numeros_com_vizinhos.append(v)
-
         numero_real = numero_dict["number"]
         if numero_real in numeros_com_vizinhos:
             st.session_state.acertos += 1
@@ -190,26 +243,39 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
 
         st.session_state.previsao = []
 
+    # Incrementa contador de rodadas
     st.session_state.contador_rodadas += 1
 
     # -----------------------------
-    # Previsão a cada 3 rodadas (alerta com números ordenados)
+    # Recorrência a cada 3 rodadas
     # -----------------------------
     if st.session_state.contador_rodadas % 3 == 0:
         prox_numeros = st.session_state.ia_recorrencia.prever(st.session_state.estrategia.historico)
         if prox_numeros:
             st.session_state.previsao = prox_numeros
-
-            # 🔹 Ordena do menor para o maior apenas na exibição
             msg_alerta = "🎯 Próximos números prováveis (Recorrência): " + \
                          " ".join(str(n) for n in sorted(prox_numeros))
             enviar_telegram(msg_alerta)
+    # -----------------------------
+    # Terminais dominantes nas rodadas intermediárias
+    # -----------------------------
+    else:
+        info_term = st.session_state.estrategia_term.verificar_entrada()
+        if info_term and info_term.get("entrada"):
+            numeros_alerta = []
+            for t, nums in info_term["jogar_nos_terminais"].items():
+                numeros_alerta.extend(nums)
+            numeros_alerta = sorted(set(numeros_alerta))
+            msg_term = f"🎯 Terminais dominantes (Rodada {st.session_state.contador_rodadas}): " + \
+                       " ".join(str(n) for n in numeros_alerta)
+            enviar_telegram(msg_term)
 
-# Histórico
-st.subheader("📜 Histórico (últimos 3 números)")
-st.write(list(st.session_state.estrategia.historico)[-3:])
+# -----------------------------
+# Histórico e estatísticas
+# -----------------------------
+st.subheader("📜 Histórico (últimos 2 números)")
+st.write(list(st.session_state.estrategia.historico)[-2:])
 
-# Estatísticas GREEN/RED
 acertos = st.session_state.get("acertos", 0)
 erros = st.session_state.get("erros", 0)
 total = acertos + erros
@@ -220,18 +286,12 @@ col1.metric("🟢 GREEN", acertos)
 col2.metric("🔴 RED", erros)
 col3.metric("✅ Taxa de acerto", f"{taxa:.1f}%")
 
-# Estatísticas recorrência
 historico_lista = list(st.session_state.estrategia.historico)
 historico_total = len(historico_lista)
 ultimo_numero = historico_lista[-1]["number"] if historico_total > 0 and isinstance(historico_lista[-1], dict) else None
-ocorrencias_ultimo = 0
-if ultimo_numero is not None:
-    ocorrencias_ultimo = sum(
-        1 for h in historico_lista[:-1] if isinstance(h, dict) and h.get("number") == ultimo_numero
-    )
+ocorrencias_ultimo = sum(1 for h in historico_lista[:-1] if isinstance(h, dict) and h.get("number") == ultimo_numero) if ultimo_numero is not None else 0
 
 st.subheader("📊 Estatísticas da Recorrência")
 st.write(f"Total de registros no histórico: {historico_total}")
 if ultimo_numero is not None:
     st.write(f"Quantidade de ocorrências do último número ({ultimo_numero}) usadas para recorrência: {ocorrencias_ultimo}")
-
