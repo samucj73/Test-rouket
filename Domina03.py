@@ -269,6 +269,17 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
             msg_term = f"🎯 Terminais dominantes (Rodada {st.session_state.contador_rodadas}): " + \
                        " ".join(str(n) for n in numeros_alerta)
             enviar_telegram(msg_term)
+            # Conferência GREEN/RED Terminais Dominantes
+            if numero_real in numeros_alerta:
+                st.session_state.acertos += 1
+                st.success(f"🟢 GREEN Terminais Dominantes! Número {numero_real} previsto.")
+                enviar_telegram(f"🟢 GREEN Terminais Dominantes! Número {numero_real} previsto.")
+            else:
+                st.session_state.erros += 1
+                st.error(f"🔴 RED Terminais Dominantes! Número {numero_real} não previsto.")
+                enviar_telegram(f"🔴 RED Terminais Dominantes! Número {numero_real} não previsto.")
+
+
 
 # -----------------------------
 # Histórico e estatísticas
