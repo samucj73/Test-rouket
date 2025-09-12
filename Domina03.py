@@ -259,31 +259,31 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
     # -----------------------------
     # Terminais dominantes nas rodadas intermediárias
     # -----------------------------
-    else:
-        info_term = st.session_state.estrategia_term.verificar_entrada()
-        # Apenas os números correspondentes aos terminais dominantes, sem vizinhos
-if term_result and term_result.get("entrada"):
-    numeros_alerta = []
-    for t in term_result["dominantes"]:  # ← corrigido 'dominantes' plural
-        base = [n for n in range(37) if st.session_state.estrategia_term.extrair_terminal(n) == t]
-        numeros_alerta.extend(base)
-    numeros_alerta = sorted(numeros_alerta)
+else:
+    info_term = st.session_state.estrategia_term.verificar_entrada()
+    if info_term and info_term.get("entrada"):
+        # Apenas números que correspondem aos terminais dominantes
+        numeros_alerta = []
+        for t in info_term["dominantes"]:
+            base = [n for n in range(37) if st.session_state.estrategia_term.extrair_terminal(n) == t]
+            numeros_alerta.extend(base)
+        numeros_alerta = sorted(set(numeros_alerta))
 
-    msg_alerta = "🎯 Terminais Dominantes: " + " ".join(str(n) for n in numeros_alerta)
-    enviar_telegram(msg_alerta)
+        msg_term = f"🎯 Terminais dominantes (Rodada {st.session_state.contador_rodadas}): " + \
+                   " ".join(str(n) for n in numeros_alerta)
+        enviar_telegram(msg_term)
 
-    # Conferência GREEN/RED Terminais Dominantes
-    numero_real = numero_dict["number"]
-    if numero_real in numeros_alerta:
-        st.session_state.acertos += 1
-        st.success(f"🟢 GREEN Terminais Dominantes! Número {numero_real} previsto.")
-        enviar_telegram(f"🟢 GREEN Terminais Dominantes! Número {numero_real} previsto.")
-    else:
-        st.session_state.erros += 1
-        st.error(f"🔴 RED Terminais Dominantes! Número {numero_real} não previsto.")
-        enviar_telegram(f"🔴 RED Terminais Dominantes! Número {numero_real} não previsto.")
-        
-            
+        # Conferência GREEN/RED Terminais Dominantes
+        numero_real = numero_dict["number"]
+        if numero_real in numeros_alerta:
+            st.session_state.acertos += 1
+            st.success(f"🟢 GREEN Terminais Dominantes! Número {numero_real} previsto.")
+            enviar_telegram(f"🟢 GREEN Terminais Dominantes! Número {numero_real} previsto.")
+        else:
+            st.session_state.erros += 1
+            st.error(f"🔴 RED Terminais Dominantes! Número {numero_real} não previsto.")
+            enviar_telegram(f"🔴 RED Terminais Dominantes! Número {numero_real} não previsto.")
+    
 
 
 
