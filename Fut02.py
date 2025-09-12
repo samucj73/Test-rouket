@@ -14,8 +14,8 @@ HEADERS = {"x-apisports-key": API_KEY}
 # =============================
 # Configurações Telegram
 # =============================
-TELEGRAM_TOKEN = "SEU_TELEGRAM_TOKEN"
-TELEGRAM_CHAT_ID = "SEU_CHAT_ID"
+TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
+TELEGRAM_CHAT_ID = "5121457416"
 BASE_URL_TG = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
 ALERTAS_PATH = "alertas.json"
 
