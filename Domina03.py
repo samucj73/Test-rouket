@@ -16,8 +16,9 @@ HEADERS = {"User-Agent": "Mozilla/5.0"}
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 TELEGRAM_CHAT_ID = "5121457416"
 
-MIN_HIST = 12   # mínimo de rodadas para começar a prever
-TOP_N = 10       # quantidade de ausentes mais 
+MIN_HIST = 21  # mínimo de rodadas para começar a prever
+TOP_N = 5      # quantidade de números previstos
+TAMANHO_JANELA = 50  # janela histórica para cálculo de ausentes
 
 # =============================
 # Funções auxiliares
@@ -66,9 +67,10 @@ def fetch_latest_result():
 # Estratégia Ausentes Inteligente
 # =============================
 class EstrategiaAusentes:
-    def __init__(self):
+    def __init__(self, tamanho_janela=TAMANHO_JANELA):
         self.historico = deque(maxlen=1000)
         self.ausentes = defaultdict(int)
+        self.tamanho_janela = tamanho_janela
 
     def adicionar_numero(self, numero_dict):
         numero = numero_dict["number"]
@@ -85,9 +87,14 @@ class EstrategiaAusentes:
         if len(self.historico) < MIN_HIST:
             return []
 
-        # calcular frequência histórica
+        # Janela: penúltimo até trás
+        janela = list(self.historico)[:-1]
+        if self.tamanho_janela:
+            janela = janela[-self.tamanho_janela:]
+
+        # calcular frequência na janela
         freq = defaultdict(int)
-        for h in self.historico:
+        for h in janela:
             freq[h["number"]] += 1
 
         max_freq = max(freq.values()) if freq else 1
@@ -153,7 +160,7 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
     st.session_state.contador_rodadas += 1
 
     # -----------------------------
-    # Nova previsão (a cada rodada)
+    # Nova previsão a cada rodada
     # -----------------------------
     prox_numeros = st.session_state.estrategia.prever()
     if prox_numeros:
@@ -165,7 +172,7 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
 # Dashboard
 # =============================
 st.subheader("📜 Histórico (últimos 5 números)")
-st.write(list(st.session_state.estrategia.historico)[-12:])
+st.write(list(st.session_state.estrategia.historico)[-5:])
 
 # Estatísticas GREEN/RED
 acertos = st.session_state.get("acertos", 0)
@@ -178,6 +185,7 @@ col1.metric("🟢 GREEN", acertos)
 col2.metric("🔴 RED", erros)
 col3.metric("✅ Taxa de acerto", f"{taxa:.1f}%")
 
-# Estatísticas extras
+# Estatísticas de Ausentes
 st.subheader("📊 Estatísticas de Ausentes")
 st.write(f"Total de registros no histórico: {len(st.session_state.estrategia.historico)}")
+
