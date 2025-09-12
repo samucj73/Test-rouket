@@ -16,14 +16,8 @@ HEADERS = {"User-Agent": "Mozilla/5.0"}
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 TELEGRAM_CHAT_ID = "5121457416"
 
-ROULETTE_LAYOUT = [
-    0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6,
-    27, 13, 36, 11, 30, 8, 23, 10, 5, 24,
-    16, 33, 1, 20, 14, 31, 9, 22, 18, 29,
-    7, 28, 12, 35, 3, 26
-]
-
-MIN_HIST = 12  # mínimo de rodadas para começar a prever
+MIN_HIST = 21   # mínimo de rodadas para começar a prever
+TOP_N = 5       # quantidade de ausentes mais prováveis
 
 # =============================
 # Funções auxiliares
@@ -87,7 +81,7 @@ class EstrategiaAusentes:
             else:
                 self.ausentes[n] += 1
 
-    def prever(self, qtd=16):
+    def prever(self, qtd=TOP_N):
         if len(self.historico) < MIN_HIST:
             return []
         return [num for num, _ in sorted(self.ausentes.items(), key=lambda x: x[1], reverse=True)[:qtd]]
@@ -131,26 +125,25 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
         numero_real = numero_dict["number"]
         if numero_real in st.session_state.previsao:
             st.session_state.acertos += 1
-            st.success(f"🟢 GREEN! Número {numero_real} estava entre os ausentes previstos.")
-            enviar_telegram(f"🟢 GREEN! Número {numero_real} estava entre os ausentes previstos.")
+            st.success(f"🟢 GREEN! Número {numero_real} estava entre os {TOP_N} ausentes previstos.")
+            enviar_telegram(f"🟢 GREEN! Número {numero_real} estava entre os {TOP_N} ausentes previstos.")
         else:
             st.session_state.erros += 1
-            st.error(f"🔴 RED! Número {numero_real} não estava entre os ausentes previstos.")
-            enviar_telegram(f"🔴 RED! Número {numero_real} não estava entre os ausentes previstos.")
+            st.error(f"🔴 RED! Número {numero_real} não estava entre os {TOP_N} ausentes previstos.")
+            enviar_telegram(f"🔴 RED! Número {numero_real} não estava entre os {TOP_N} ausentes previstos.")
 
         st.session_state.previsao = []
 
     st.session_state.contador_rodadas += 1
 
     # -----------------------------
-    # Previsão a cada 3 rodadas
+    # Previsão
     # -----------------------------
-    if st.session_state.contador_rodadas % 1 == 0:
-        prox_numeros = st.session_state.estrategia.prever()
-        if prox_numeros:
-            st.session_state.previsao = prox_numeros
-            msg_alerta = "🎯 Números ausentes: " + " ".join(str(n) for n in prox_numeros)
-            enviar_telegram(msg_alerta)
+    prox_numeros = st.session_state.estrategia.prever()
+    if prox_numeros:
+        st.session_state.previsao = prox_numeros
+        msg_alerta = f"🎯 Top {TOP_N} ausentes mais prováveis: " + " ".join(str(n) for n in prox_numeros)
+        enviar_telegram(msg_alerta)
 
 # Histórico
 st.subheader("📜 Histórico (últimos 3 números)")
@@ -170,3 +163,4 @@ col3.metric("✅ Taxa de acerto", f"{taxa:.1f}%")
 # Estatísticas Ausentes
 st.subheader("📊 Estatísticas de Ausentes")
 st.write(f"Total de registros no histórico: {len(st.session_state.estrategia.historico)}")
+
