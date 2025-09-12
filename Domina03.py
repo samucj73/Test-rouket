@@ -259,9 +259,12 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
     # -----------------------------
     # Terminais dominantes nas rodadas intermediárias
     # -----------------------------
+# Apenas para referência segura do número atual
+numero_real = resultado["number"] if resultado else None
+
 else:
     info_term = st.session_state.estrategia_term.verificar_entrada()
-    if info_term and info_term.get("entrada"):
+    if info_term and info_term.get("entrada") and numero_real is not None:
         # Apenas números que correspondem aos terminais dominantes
         numeros_alerta = []
         for t in info_term["dominantes"]:
@@ -274,7 +277,6 @@ else:
         enviar_telegram(msg_term)
 
         # Conferência GREEN/RED Terminais Dominantes
-        numero_real = numero_dict["number"]
         if numero_real in numeros_alerta:
             st.session_state.acertos += 1
             st.success(f"🟢 GREEN Terminais Dominantes! Número {numero_real} previsto.")
@@ -283,8 +285,6 @@ else:
             st.session_state.erros += 1
             st.error(f"🔴 RED Terminais Dominantes! Número {numero_real} não previsto.")
             enviar_telegram(f"🔴 RED Terminais Dominantes! Número {numero_real} não previsto.")
-    
-
 
 
 # -----------------------------
