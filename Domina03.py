@@ -267,9 +267,8 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
                 base = [n for n in range(37) if st.session_state.estrategia_term.extrair_terminal(n) == t]
                 numeros_alerta.extend(base)
             numeros_alerta = sorted(numeros_alerta)
-
-           msg_alerta = "🎯 Terminais Dominantes: " + " ".join(str(n) for n in numeros_alerta)
-           enviar_telegram(msg_alerta) 
+            msg_alerta = "🎯 Terminais Dominantes: " + " ".join(str(n) for n in numeros_alerta)
+            enviar_telegram(msg_alerta) 
             
             # Conferência GREEN/RED Terminais Dominantes
             
