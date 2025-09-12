@@ -2,7 +2,7 @@ import streamlit as st
 import json
 import os
 import requests
-from collections import deque
+from collections import deque, defaultdict
 from streamlit_autorefresh import st_autorefresh
 import logging
 
@@ -22,6 +22,8 @@ ROULETTE_LAYOUT = [
     16, 33, 1, 20, 14, 31, 9, 22, 18, 29,
     7, 28, 12, 35, 3, 26
 ]
+
+MIN_HIST = 21  # mínimo de rodadas para começar a prever
 
 # =============================
 # Funções auxiliares
@@ -66,85 +68,40 @@ def fetch_latest_result():
         logging.error(f"Erro ao buscar resultado: {e}")
         return None
 
-def obter_vizinhos(numero, layout, antes=2, depois=2):
-    idx = layout.index(numero)
-    n = len(layout)
-    vizinhos = []
-    for i in range(antes, 0, -1):
-        vizinhos.append(layout[(idx - i) % n])
-    vizinhos.append(numero)
-    for i in range(1, depois + 1):
-        vizinhos.append(layout[(idx + i) % n])
-    return vizinhos
-
 # =============================
-# Estratégia
+# Estratégia Ausentes
 # =============================
-class EstrategiaDeslocamento:
+class EstrategiaAusentes:
     def __init__(self):
         self.historico = deque(maxlen=1000)
+        self.ausentes = defaultdict(int)
+
     def adicionar_numero(self, numero_dict):
+        numero = numero_dict["number"]
         self.historico.append(numero_dict)
 
-# =============================
-# IA recorrência (antes + depois)
-# =============================
-class IA_Recorrencia:
-    def __init__(self, layout=None, top_n=5):
-        self.layout = layout or ROULETTE_LAYOUT
-        self.top_n = top_n
+        # atualizar contadores
+        for n in range(37):
+            if n == numero:
+                self.ausentes[n] = 0
+            else:
+                self.ausentes[n] += 1
 
-    def prever(self, historico):
-        if not historico:
+    def prever(self, qtd=3):
+        if len(self.historico) < MIN_HIST:
             return []
-
-        historico_lista = list(historico)
-        ultimo_numero = historico_lista[-1]["number"] if isinstance(historico_lista[-1], dict) else None
-        if ultimo_numero is None:
-            return []
-
-        antes, depois = [], []
-
-        # Percorre todas as ocorrências anteriores do último número
-        for i, h in enumerate(historico_lista[:-1]):
-            if isinstance(h, dict) and h.get("number") == ultimo_numero:
-                if i - 1 >= 0 and isinstance(historico_lista[i-1], dict):
-                    antes.append(historico_lista[i-1]["number"])
-                if i + 1 < len(historico_lista) and isinstance(historico_lista[i+1], dict):
-                    depois.append(historico_lista[i+1]["number"])
-
-        if not antes and not depois:
-            return []
-
-        from collections import Counter
-        contagem_antes = Counter(antes)
-        contagem_depois = Counter(depois)
-
-        top_antes = [num for num, _ in contagem_antes.most_common(self.top_n)]
-        top_depois = [num for num, _ in contagem_depois.most_common(self.top_n)]
-
-        candidatos = list(set(top_antes + top_depois))
-
-        numeros_previstos = []
-        for n in candidatos:
-            vizinhos = obter_vizinhos(n, self.layout, antes=1, depois=1)
-            for v in vizinhos:
-                if v not in numeros_previstos:
-                    numeros_previstos.append(v)
-
-        return numeros_previstos
+        return [num for num, _ in sorted(self.ausentes.items(), key=lambda x: x[1], reverse=True)[:qtd]]
 
 # =============================
 # Streamlit App
 # =============================
-st.set_page_config(page_title="Roleta IA Profissional", layout="centered")
-st.title("🎯 Roleta — IA de Recorrência (Antes + Depois) Profissional")
+st.set_page_config(page_title="Roleta - Estratégia Ausentes", layout="centered")
+st.title("🎯 Roleta — Estratégia Números Ausentes")
 st_autorefresh(interval=3000, key="refresh")
 
 # Inicialização segura do session_state
 for key, default in {
-    "estrategia": EstrategiaDeslocamento(),
-    "ia_recorrencia": IA_Recorrencia(),
+    "estrategia": EstrategiaAusentes(),
     "previsao": [],
     "acertos": 0,
     "erros": 0,
@@ -171,38 +128,28 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
     # Conferência GREEN/RED
     # -----------------------------
     if st.session_state.previsao:
-        numeros_com_vizinhos = []
-        for n in st.session_state.previsao:
-            vizinhos = obter_vizinhos(n, ROULETTE_LAYOUT, antes=2, depois=2)
-            for v in vizinhos:
-                if v not in numeros_com_vizinhos:
-                    numeros_com_vizinhos.append(v)
-
         numero_real = numero_dict["number"]
-        if numero_real in numeros_com_vizinhos:
+        if numero_real in st.session_state.previsao:
             st.session_state.acertos += 1
-            st.success(f"🟢 GREEN! Número {numero_real} previsto pela recorrência (incluindo vizinhos).")
-            enviar_telegram(f"🟢 GREEN! Número {numero_real} previsto pela recorrência (incluindo vizinhos).")
+            st.success(f"🟢 GREEN! Número {numero_real} estava entre os ausentes previstos.")
+            enviar_telegram(f"🟢 GREEN! Número {numero_real} estava entre os ausentes previstos.")
         else:
             st.session_state.erros += 1
-            st.error(f"🔴 RED! Número {numero_real} não estava na previsão de recorrência nem nos vizinhos.")
-            enviar_telegram(f"🔴 RED! Número {numero_real} não estava na previsão de recorrência nem nos vizinhos.")
+            st.error(f"🔴 RED! Número {numero_real} não estava entre os ausentes previstos.")
+            enviar_telegram(f"🔴 RED! Número {numero_real} não estava entre os ausentes previstos.")
 
         st.session_state.previsao = []
 
     st.session_state.contador_rodadas += 1
 
     # -----------------------------
-    # Previsão a cada 3 rodadas (alerta com números ordenados)
+    # Previsão a cada 3 rodadas
     # -----------------------------
     if st.session_state.contador_rodadas % 3 == 0:
-        prox_numeros = st.session_state.ia_recorrencia.prever(st.session_state.estrategia.historico)
+        prox_numeros = st.session_state.estrategia.prever()
         if prox_numeros:
             st.session_state.previsao = prox_numeros
-
-            # 🔹 Ordena do menor para o maior apenas na exibição
-            msg_alerta = "(NR): " + \
-                         " ".join(str(n) for n in sorted(prox_numeros))
+            msg_alerta = "🎯 Números ausentes: " + " ".join(str(n) for n in prox_numeros)
             enviar_telegram(msg_alerta)
 
 # Histórico
@@ -220,18 +167,6 @@ col1.metric("🟢 GREEN", acertos)
 col2.metric("🔴 RED", erros)
 col3.metric("✅ Taxa de acerto", f"{taxa:.1f}%")
 
-# Estatísticas recorrência
-historico_lista = list(st.session_state.estrategia.historico)
-historico_total = len(historico_lista)
-ultimo_numero = historico_lista[-1]["number"] if historico_total > 0 and isinstance(historico_lista[-1], dict) else None
-ocorrencias_ultimo = 0
-if ultimo_numero is not None:
-    ocorrencias_ultimo = sum(
-        1 for h in historico_lista[:-1] if isinstance(h, dict) and h.get("number") == ultimo_numero
-    )
-
-st.subheader("📊 Estatísticas da Recorrência")
-st.write(f"Total de registros no histórico: {historico_total}")
-if ultimo_numero is not None:
-    st.write(f"Quantidade de ocorrências do último número ({ultimo_numero}) usadas para recorrência: {ocorrencias_ultimo}")
-
+# Estatísticas Ausentes
+st.subheader("📊 Estatísticas de Ausentes")
+st.write(f"Total de registros no histórico: {len(st.session_state.estrategia.historico)}")
