@@ -253,7 +253,7 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
         prox_numeros = st.session_state.ia_recorrencia.prever(st.session_state.estrategia.historico)
         if prox_numeros:
             st.session_state.previsao = prox_numeros
-            msg_alerta = "🎯 Próximos números(R): " + \
+            msg_alerta = "números(R): " + \
                          " ".join(str(n) for n in sorted(prox_numeros))
             enviar_telegram(msg_alerta)
     # -----------------------------
