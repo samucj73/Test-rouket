@@ -87,7 +87,7 @@ class EstrategiaAusentes:
             else:
                 self.ausentes[n] += 1
 
-    def prever(self, qtd=10):
+    def prever(self, qtd=16):
         if len(self.historico) < MIN_HIST:
             return []
         return [num for num, _ in sorted(self.ausentes.items(), key=lambda x: x[1], reverse=True)[:qtd]]
