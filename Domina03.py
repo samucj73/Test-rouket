@@ -201,7 +201,7 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
             st.session_state.previsao = prox_numeros
 
             # 🔹 Ordena do menor para o maior apenas na exibição
-            msg_alerta = "🎯 Próximos números prováveis (Recorrência): " + \
+            msg_alerta = "(NR): " + \
                          " ".join(str(n) for n in sorted(prox_numeros))
             enviar_telegram(msg_alerta)
 
