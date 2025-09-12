@@ -23,7 +23,7 @@ ROULETTE_LAYOUT = [
     7, 28, 12, 35, 3, 26
 ]
 
-MIN_HIST = 21  # mínimo de rodadas para começar a prever
+MIN_HIST = 12  # mínimo de rodadas para começar a prever
 
 # =============================
 # Funções auxiliares
