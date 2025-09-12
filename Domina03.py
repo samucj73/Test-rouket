@@ -259,10 +259,8 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
     # -----------------------------
     # Terminais dominantes nas rodadas intermediárias
     # -----------------------------
-# Apenas para referência segura do número atual
-# Inicialização da flag no session_state (uma vez)
-if "term_alerta_enviado" not in st.session_state:
-    st.session_state.term_alerta_enviado = False
+# Garantir que temos o número atual
+numero_real = resultado["number"] if resultado else None
 
 # Estratégia Terminais Dominantes nas rodadas intermediárias
 if st.session_state.contador_rodadas % 3 != 0:
@@ -294,6 +292,7 @@ if st.session_state.contador_rodadas % 3 != 0:
             st.session_state.term_alerta_enviado = True
     else:
         st.session_state.term_alerta_enviado = False  # Reseta se não há entrada
+# A
 # -----------------------------
 # Histórico e estatísticas
 # -----------------------------
