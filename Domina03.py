@@ -262,7 +262,7 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
 # Apenas para referência segura do número atual
 numero_real = resultado["number"] if resultado else None
 info_term = st.session_state.estrategia_term.verificar_entrada()
-    if info_term and info_term.get("entrada") and numero_real is not None:
+if info_term and info_term.get("entrada") and numero_real is not None:
         # Apenas números que correspondem aos terminais dominantes
         numeros_alerta = []
         for t in info_term["dominantes"]:
