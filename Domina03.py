@@ -17,7 +17,7 @@ TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 TELEGRAM_CHAT_ID = "5121457416"
 
 MIN_HIST = 50   # mínimo de rodadas para começar a prever
-TOP_N = 10       # quantidade de ausentes mais prováveis
+TOP_N = 10       # quantidade de ausentes mais 
 
 # =============================
 # Funções auxiliares
@@ -63,7 +63,7 @@ def fetch_latest_result():
         return None
 
 # =============================
-# Estratégia Ausentes
+# Estratégia Ausentes Inteligente
 # =============================
 class EstrategiaAusentes:
     def __init__(self):
@@ -74,7 +74,7 @@ class EstrategiaAusentes:
         numero = numero_dict["number"]
         self.historico.append(numero_dict)
 
-        # atualizar contadores
+        # atualizar contadores de ausência
         for n in range(37):
             if n == numero:
                 self.ausentes[n] = 0
@@ -84,16 +84,33 @@ class EstrategiaAusentes:
     def prever(self, qtd=TOP_N):
         if len(self.historico) < MIN_HIST:
             return []
-        return [num for num, _ in sorted(self.ausentes.items(), key=lambda x: x[1], reverse=True)[:qtd]]
+
+        # calcular frequência histórica
+        freq = defaultdict(int)
+        for h in self.historico:
+            freq[h["number"]] += 1
+
+        max_freq = max(freq.values()) if freq else 1
+        max_ausencia = max(self.ausentes.values()) if self.ausentes else 1
+
+        scores = {}
+        for n in range(37):
+            ausencia_norm = self.ausentes[n] / max_ausencia if max_ausencia > 0 else 0
+            freq_norm = freq[n] / max_freq if max_freq > 0 else 0
+            score = (ausencia_norm * 0.6) + (freq_norm * 0.4)
+            scores[n] = score
+
+        # pegar top N com maior score
+        return [num for num, _ in sorted(scores.items(), key=lambda x: x[1], reverse=True)[:qtd]]
 
 # =============================
 # Streamlit App
 # =============================
 st.set_page_config(page_title="Roleta - Estratégia Ausentes", layout="centered")
-st.title("🎯 Roleta — Estratégia Números Ausentes")
+st.title("🎯 Roleta — Estratégia Números Ausentes Inteligente")
 st_autorefresh(interval=3000, key="refresh")
 
-# Inicialização segura do session_state
+# Inicialização do session_state
 for key, default in {
     "estrategia": EstrategiaAusentes(),
     "previsao": [],
@@ -104,12 +121,12 @@ for key, default in {
     if key not in st.session_state:
         st.session_state[key] = default
 
-# Carregar histórico existente
+# Carregar histórico salvo
 historico = carregar_historico()
 for n in historico:
     st.session_state.estrategia.adicionar_numero(n)
 
-# Captura número
+# Buscar novo resultado
 resultado = fetch_latest_result()
 ultimo_ts = st.session_state.estrategia.historico[-1]["timestamp"] if st.session_state.estrategia.historico else None
 
@@ -125,29 +142,30 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
         numero_real = numero_dict["number"]
         if numero_real in st.session_state.previsao:
             st.session_state.acertos += 1
-            st.success(f"🟢 GREEN! Número {numero_real} estava entre os {TOP_N} ausentes previstos.")
-            enviar_telegram(f"🟢 GREEN! Número {numero_real} estava entre os {TOP_N} ausentes previstos.")
+            st.success(f"🟢 GREEN! Número {numero_real} estava entre os ausentes previstos.")
+            enviar_telegram(f"🟢 GREEN! Número {numero_real} estava entre os ausentes previstos.")
         else:
             st.session_state.erros += 1
-            st.error(f"🔴 RED! Número {numero_real} não estava entre os {TOP_N} ausentes previstos.")
-            enviar_telegram(f"🔴 RED! Número {numero_real} não estava entre os {TOP_N} ausentes previstos.")
-
+            st.error(f"🔴 RED! Número {numero_real} não estava entre os ausentes previstos.")
+            enviar_telegram(f"🔴 RED! Número {numero_real} não estava entre os ausentes previstos.")
         st.session_state.previsao = []
 
     st.session_state.contador_rodadas += 1
 
     # -----------------------------
-    # Previsão
+    # Nova previsão (a cada rodada)
     # -----------------------------
     prox_numeros = st.session_state.estrategia.prever()
     if prox_numeros:
         st.session_state.previsao = prox_numeros
-        msg_alerta = f"🎯 Top {TOP_N} ausentes mais prováveis: " + " ".join(str(n) for n in prox_numeros)
+        msg_alerta = "🎯 Números prováveis (ausentes): " + " ".join(str(n) for n in prox_numeros)
         enviar_telegram(msg_alerta)
 
-# Histórico
-st.subheader("📜 Histórico (últimos 3 números)")
-st.write(list(st.session_state.estrategia.historico)[-3:])
+# =============================
+# Dashboard
+# =============================
+st.subheader("📜 Histórico (últimos 5 números)")
+st.write(list(st.session_state.estrategia.historico)[-5:])
 
 # Estatísticas GREEN/RED
 acertos = st.session_state.get("acertos", 0)
@@ -160,7 +178,6 @@ col1.metric("🟢 GREEN", acertos)
 col2.metric("🔴 RED", erros)
 col3.metric("✅ Taxa de acerto", f"{taxa:.1f}%")
 
-# Estatísticas Ausentes
+# Estatísticas extras
 st.subheader("📊 Estatísticas de Ausentes")
 st.write(f"Total de registros no histórico: {len(st.session_state.estrategia.historico)}")
-
