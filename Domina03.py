@@ -18,7 +18,7 @@ TELEGRAM_CHAT_ID = "5121457416"
 
 MIN_HIST = 21  # mínimo de rodadas para começar a prever
 TOP_N = 10      # quantidade de números previstos
-TAMANHO_JANELA = 50  # janela histórica para cálculo de ausentesy
+TAMANHO_JANELA = 100  # janela histórica para cálculo de ausentesy
 
 # =============================
 # =============================
