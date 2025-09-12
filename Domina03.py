@@ -16,9 +16,9 @@ HEADERS = {"User-Agent": "Mozilla/5.0"}
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 TELEGRAM_CHAT_ID = "5121457416"
 
-MIN_HIST = 21  # mínimo de rodadas para começar a prever
+MIN_HIST = 5  # mínimo de rodadas para começar a prever
 TOP_N = 10      # quantidade de números previstos
-TAMANHO_JANELA = 100  # janela histórica para cálculo de ausentesy
+TAMANHO_JANELA = 10  # janela histórica para cálculo de ausentesy
 
 # =============================
 # =============================
