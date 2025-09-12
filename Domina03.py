@@ -260,31 +260,40 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
     # Terminais dominantes nas rodadas intermediárias
     # -----------------------------
 # Apenas para referência segura do número atual
-numero_real = resultado["number"] if resultado else None
-info_term = st.session_state.estrategia_term.verificar_entrada()
-if info_term and info_term.get("entrada") and numero_real is not None:
-        # Apenas números que correspondem aos terminais dominantes
-        numeros_alerta = []
-        for t in info_term["dominantes"]:
-            base = [n for n in range(37) if st.session_state.estrategia_term.extrair_terminal(n) == t]
-            numeros_alerta.extend(base)
-        numeros_alerta = sorted(set(numeros_alerta))
+# Inicialização da flag no session_state (uma vez)
+if "term_alerta_enviado" not in st.session_state:
+    st.session_state.term_alerta_enviado = False
 
-        msg_term = f"🎯 Terminais dominantes (Rodada {st.session_state.contador_rodadas}): " + \
-                   " ".join(str(n) for n in numeros_alerta)
-        enviar_telegram(msg_term)
+# Estratégia Terminais Dominantes nas rodadas intermediárias
+if st.session_state.contador_rodadas % 3 != 0:
+    info_term = st.session_state.estrategia_term.verificar_entrada()
+    if info_term and info_term.get("entrada") and numero_real is not None:
+        if not st.session_state.term_alerta_enviado:
+            # Apenas números que correspondem aos terminais dominantes
+            numeros_alerta = []
+            for t in info_term["dominantes"]:
+                base = [n for n in range(37) if st.session_state.estrategia_term.extrair_terminal(n) == t]
+                numeros_alerta.extend(base)
+            numeros_alerta = sorted(set(numeros_alerta))
 
-        # Conferência GREEN/RED Terminais Dominantes
-        if numero_real in numeros_alerta:
-            st.session_state.acertos += 1
-            st.success(f"🟢 GREEN Terminais Dominantes! Número {numero_real} previsto.")
-            enviar_telegram(f"🟢 GREEN Terminais Dominantes! Número {numero_real} previsto.")
-        else:
-            st.session_state.erros += 1
-            st.error(f"🔴 RED Terminais Dominantes! Número {numero_real} não previsto.")
-            enviar_telegram(f"🔴 RED Terminais Dominantes! Número {numero_real} não previsto.")
+            msg_term = f"🎯 Terminais dominantes (Rodada {st.session_state.contador_rodadas}): " + \
+                       " ".join(str(n) for n in numeros_alerta)
+            enviar_telegram(msg_term)
 
+            # Conferência GREEN/RED Terminais Dominantes
+            if numero_real in numeros_alerta:
+                st.session_state.acertos += 1
+                st.success(f"🟢 GREEN Terminais Dominantes! Número {numero_real} previsto.")
+                enviar_telegram(f"🟢 GREEN Terminais Dominantes! Número {numero_real} previsto.")
+            else:
+                st.session_state.erros += 1
+                st.error(f"🔴 RED Terminais Dominantes! Número {numero_real} não previsto.")
+                enviar_telegram(f"🔴 RED Terminais Dominantes! Número {numero_real} não previsto.")
 
+            # Marca que o alerta já foi enviado para esta rodada
+            st.session_state.term_alerta_enviado = True
+    else:
+        st.session_state.term_alerta_enviado = False  # Reseta se não há entrada
 # -----------------------------
 # Histórico e estatísticas
 # -----------------------------
