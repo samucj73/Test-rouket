@@ -21,6 +21,7 @@ TOP_N = 10      # quantidade de números previstos
 TAMANHO_JANELA = 12  # janela histórica para cálculo de ausentes
 
 # =============================
+# =============================
 # Funções auxiliares
 # =============================
 def enviar_telegram(msg: str, token=TELEGRAM_TOKEN, chat_id=TELEGRAM_CHAT_ID):
@@ -69,19 +70,10 @@ def fetch_latest_result():
 class EstrategiaAusentes:
     def __init__(self, tamanho_janela=TAMANHO_JANELA):
         self.historico = deque(maxlen=1000)
-        self.ausentes = defaultdict(int)
         self.tamanho_janela = tamanho_janela
 
     def adicionar_numero(self, numero_dict):
-        numero = numero_dict["number"]
         self.historico.append(numero_dict)
-
-        # atualizar contadores de ausência
-        for n in range(37):
-            if n == numero:
-                self.ausentes[n] = 0
-            else:
-                self.ausentes[n] += 1
 
     def prever(self, qtd=TOP_N):
         if len(self.historico) < MIN_HIST:
@@ -94,15 +86,20 @@ class EstrategiaAusentes:
 
         # calcular frequência na janela
         freq = defaultdict(int)
+        numeros_na_janela = set()
         for h in janela:
+            numeros_na_janela.add(h["number"])
             freq[h["number"]] += 1
 
+        # calcular ausentes apenas com base na janela
+        ausentes = {n: (self.tamanho_janela if n not in numeros_na_janela else 0) for n in range(37)}
+
         max_freq = max(freq.values()) if freq else 1
-        max_ausencia = max(self.ausentes.values()) if self.ausentes else 1
+        max_ausencia = max(ausentes.values()) if ausentes else 1
 
         scores = {}
         for n in range(37):
-            ausencia_norm = self.ausentes[n] / max_ausencia if max_ausencia > 0 else 0
+            ausencia_norm = ausentes[n] / max_ausencia if max_ausencia > 0 else 0
             freq_norm = freq[n] / max_freq if max_freq > 0 else 0
             score = (ausencia_norm * 0.6) + (freq_norm * 0.4)
             scores[n] = score
@@ -188,4 +185,3 @@ col3.metric("✅ Taxa de acerto", f"{taxa:.1f}%")
 # Estatísticas de Ausentes
 st.subheader("📊 Estatísticas de Ausentes")
 st.write(f"Total de registros no histórico: {len(st.session_state.estrategia.historico)}")
-
