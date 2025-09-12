@@ -165,7 +165,7 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
 # Dashboard
 # =============================
 st.subheader("📜 Histórico (últimos 5 números)")
-st.write(list(st.session_state.estrategia.historico)[-5:])
+st.write(list(st.session_state.estrategia.historico)[-12:])
 
 # Estatísticas GREEN/RED
 acertos = st.session_state.get("acertos", 0)
