@@ -263,12 +263,14 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
         info_term = st.session_state.estrategia_term.verificar_entrada()
         if info_term and info_term.get("entrada"):
             numeros_alerta = []
-            for t, nums in info_term["jogar_nos_terminais"].items():
-                numeros_alerta.extend(nums)
-            numeros_alerta = sorted(set(numeros_alerta))
-            msg_term = f"🎯 Terminais dominantes (Rodada {st.session_state.contador_rodadas}): " + \
-                       " ".join(str(n) for n in numeros_alerta)
-            enviar_telegram(msg_term)
+            for t in term_result["dominantes"]:
+                base = [n for n in range(37) if st.session_state.estrategia_term.extrair_terminal(n) == t]
+                numeros_alerta.extend(base)
+            numeros_alerta = sorted(numeros_alerta)
+
+           msg_alerta = "🎯 Terminais Dominantes: " + " ".join(str(n) for n in numeros_alerta)
+           enviar_telegram(msg_alerta) 
+            
             # Conferência GREEN/RED Terminais Dominantes
             
 
