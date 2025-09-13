@@ -82,42 +82,43 @@ def verificar_e_atualizar_alerta(fixture, tendencia, confianca, estimativa):
         }
         salvar_alertas_andamento(alertas)
 
-def media_gols_time(team_id, league_id, season):
-    """Busca média de gols marcados/sofridos de um time em uma liga/temporada"""
-    url = f"{BASE_URL}/fixtures?league={league_id}&season={season}&team={team_id}"
+# =============================
+# NOVO: cálculo com base nos confrontos diretos (H2H)
+# =============================
+def media_gols_confrontos_diretos(home_id, away_id, temporada=None):
+    """Busca média de gols nos confrontos diretos entre os dois times"""
+    url = f"{BASE_URL}/fixtures/headtohead?h2h={home_id}-{away_id}"
     response = requests.get(url, headers=HEADERS)
     if response.status_code != 200:
-        return {"media_gols_marcados": 0, "media_gols_sofridos": 0}
+        return {"media_gols": 0, "total_jogos": 0}
 
     jogos = response.json().get("response", [])
-    gols_marcados, gols_sofridos, jogos_disputados = 0, 0, 0
+    gols_totais, jogos_disputados = 0, 0
 
     for j in jogos:
         if j["fixture"]["status"]["short"] != "FT":
             continue
-        home = j["teams"]["home"]["id"]
-        away = j["teams"]["away"]["id"]
+        # mantém compatibilidade com temporada
+        if temporada and j["league"]["season"] != temporada:
+            continue
+
         home_goals = j["score"]["fulltime"]["home"]
         away_goals = j["score"]["fulltime"]["away"]
-
-        if team_id == home:
-            gols_marcados += home_goals
-            gols_sofridos += away_goals
-        elif team_id == away:
-            gols_marcados += away_goals
-            gols_sofridos += home_goals
+        gols_totais += home_goals + away_goals
         jogos_disputados += 1
 
     if jogos_disputados == 0:
-        return {"media_gols_marcados": 0, "media_gols_sofridos": 0}
+        return {"media_gols": 0, "total_jogos": 0}
 
     return {
-        "media_gols_marcados": round(gols_marcados / jogos_disputados, 2),
-        "media_gols_sofridos": round(gols_sofridos / jogos_disputados, 2),
+        "media_gols": round(gols_totais / jogos_disputados, 2),
+        "total_jogos": jogos_disputados
     }
 
-def calcular_tendencia_confianca(media_casa, media_fora):
-    estimativa = media_casa["media_gols_marcados"] + media_fora["media_gols_marcados"]
+def calcular_tendencia_confianca(media_h2h):
+    """Calcula tendência só com base no H2H"""
+    estimativa = media_h2h["media_gols"]
+
     if estimativa >= 2.5:
         tendencia = "Mais 2.5"
         confianca = min(90, 50 + estimativa * 10)
@@ -127,6 +128,7 @@ def calcular_tendencia_confianca(media_casa, media_fora):
     else:
         tendencia = "Equilibrado"
         confianca = 50
+
     return estimativa, confianca, tendencia
 
 # =============================
@@ -179,15 +181,14 @@ if st.button("🔍 Buscar jogos do dia"):
             home_id = match["teams"]["home"]["id"]
             away_id = match["teams"]["away"]["id"]
 
-            media_casa = media_gols_time(home_id, league_id, temporada)
-            media_fora = media_gols_time(away_id, league_id, temporada)
-
-            estimativa, confianca, tendencia = calcular_tendencia_confianca(media_casa, media_fora)
+            # usa somente H2H
+            media_h2h = media_gols_confrontos_diretos(home_id, away_id, temporada)
+            estimativa, confianca, tendencia = calcular_tendencia_confianca(media_h2h)
 
             with st.container():
                 st.subheader(f"🏟️ {home} vs {away}")
                 st.caption(f"Liga: {match['league']['name']} | Temporada: {temporada}")
-                st.write(f"📊 Estimativa de gols: **{estimativa:.2f}**")
+                st.write(f"📊 Estimativa de gols (H2H): **{estimativa:.2f}**")
                 st.write(f"🔥 Tendência: **{tendencia}**")
                 st.write(f"✅ Confiança: **{confianca:.0f}%**")
 
