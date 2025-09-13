@@ -115,21 +115,80 @@ def media_gols_confrontos_diretos(home_id, away_id, temporada=None):
         "total_jogos": jogos_disputados
     }
 
-def calcular_tendencia_confianca(media_h2h):
-    """Calcula tendência só com base no H2H"""
-    estimativa = media_h2h["media_gols"]
+def calcular_tendencia_confianca(media_casa, media_fora, home_id, away_id, league_id, temporada):
+    try:
+        # =============================
+        # 1. Estatísticas detalhadas de cada time (API /teams/statistics)
+        # =============================
+        url_stats_home = f"{BASE_URL}/teams/statistics?league={league_id}&season={temporada}&team={home_id}"
+        url_stats_away = f"{BASE_URL}/teams/statistics?league={league_id}&season={temporada}&team={away_id}"
 
-    if estimativa >= 2.5:
+        stats_home = requests.get(url_stats_home, headers=HEADERS, timeout=10).json().get("response", {})
+        stats_away = requests.get(url_stats_away, headers=HEADERS, timeout=10).json().get("response", {})
+
+        # =============================
+        # 2. Confrontos diretos (API /fixtures/headtohead)
+        # =============================
+        url_h2h = f"{BASE_URL}/fixtures/headtohead?h2h={home_id}-{away_id}&season={temporada}"
+        h2h_data = requests.get(url_h2h, headers=HEADERS, timeout=10).json().get("response", [])
+        ultimos_h2h = h2h_data[:5]
+
+        # =============================
+        # 3. Variáveis base
+        # =============================
+        estimativa = media_casa["media_gols_marcados"] + media_fora["media_gols_marcados"]
+
+        recent_avg = (
+            stats_home.get("goals", {}).get("for", {}).get("average", {}).get("total", 0) +
+            stats_away.get("goals", {}).get("for", {}).get("average", {}).get("total", 0)
+        ) / 2
+
+        over25 = (
+            stats_home.get("fixtures", {}).get("over_25", {}).get("total", 0) +
+            stats_away.get("fixtures", {}).get("over_25", {}).get("total", 0)
+        ) / 2
+
+        btts = (
+            stats_home.get("both_teams_to_score", {}).get("total", 0) +
+            stats_away.get("both_teams_to_score", {}).get("total", 0)
+        ) / 2
+
+        if ultimos_h2h:
+            h2h_goals = sum(m["goals"]["home"] + m["goals"]["away"] for m in ultimos_h2h) / len(ultimos_h2h)
+        else:
+            h2h_goals = 0
+
+        # =============================
+        # 4. Score final com pesos
+        # =============================
+        score = (
+            estimativa * 0.25 +
+            recent_avg * 0.25 +
+            (over25 / 100) * 2.5 * 0.2 +
+            (btts / 100) * 2.5 * 0.15 +
+            h2h_goals * 0.15
+        )
+
+    except Exception as e:
+        # ⚠️ Se der erro na API ou nos cálculos, usa fallback simples
+        print(f"[ERRO calcular_tendencia_confianca] {e}")
+        score = media_casa["media_gols_marcados"] + media_fora["media_gols_marcados"]
+
+    # =============================
+    # 5. Decisão de tendência
+    # =============================
+    if score >= 2.5:
         tendencia = "Mais 2.5"
-        confianca = min(90, 50 + estimativa * 10)
-    elif estimativa <= 1.5:
+        confianca = min(95, 60 + score * 10)
+    elif score <= 1.5:
         tendencia = "Menos 1.5"
-        confianca = min(90, 50 + (1.5 - estimativa) * 20)
+        confianca = min(95, 60 + (1.5 - score) * 15)
     else:
         tendencia = "Equilibrado"
         confianca = 50
 
-    return estimativa, confianca, tendencia
+    return round(score, 2), round(confianca, 1), tendencia
+
 
 # =============================
 # Interface Streamlit
@@ -183,7 +242,10 @@ if st.button("🔍 Buscar jogos do dia"):
 
             # usa somente H2H
             media_h2h = media_gols_confrontos_diretos(home_id, away_id, temporada)
-            estimativa, confianca, tendencia = calcular_tendencia_confianca(media_h2h)
+            estimativa, confianca, tendencia = calcular_tendencia_confianca(
+            media_casa, media_fora, home_id, away_id, league_id, temporada
+)
+            
 
             with st.container():
                 st.subheader(f"🏟️ {home} vs {away}")
