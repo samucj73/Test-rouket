@@ -205,10 +205,12 @@ if ligas:
                         )
 
                         exibir_jogo_card(fixture, league, teams, media_casa, media_fora, estimativa, tendencia, confianca)
-                                    else:
+                else:
                         st.warning("⚠️ Não há jogos dessa liga na data selecionada.")
-            else:
-                st.info("ℹ️ Nenhum jogo encontrado para essa data.")
+                else:
+                        st.info("ℹ️ Nenhum jogo encontrado para essa data.")
+
         else:
-            st.error(f"Erro {response.status_code}: {response.text}")
+                        
+                       st.error(f"Erro {response.status_code}: {response.text}")
                    
