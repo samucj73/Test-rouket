@@ -14,7 +14,7 @@ st.set_page_config(page_title="Jogos e Tendência de Gols", layout="wide")
 st.title("⚽ Jogos e Tendência de Gols - API Football")
 
 # ==========================
-# Função para buscar ligas (VERSÃO ORIGINAL)
+# Função para buscar ligas
 # ==========================
 @st.cache_data
 def get_ligas():
@@ -101,25 +101,41 @@ def buscar_estatisticas_liga(liga_id, temporada):
     return times_stats
 
 # ==========================
-# Função visual para exibir cada jogo
+# Função para calcular tendência profissional com confiança
 # ==========================
-def exibir_jogo_card(fixture, league, teams, media_casa, media_fora, estimativa, tendencia):
+def calcular_tendencia_pro(media_casa_gols, media_fora_gols):
+    estimativa = media_casa_gols + media_fora_gols
+
+    if estimativa >= 2.5:
+        tendencia = "Mais 2.5"
+        confianca = min(95, 50 + (estimativa - 2.5) * 20 + 10)  # maior confiança em jogos com média alta
+    elif estimativa <= 1.5:
+        tendencia = "Menos 1.5"
+        confianca = min(95, 50 + (1.5 - estimativa) * 20 + 10)  # maior confiança em jogos com média baixa
+    else:
+        tendencia = "Equilibrado"
+        confianca = 50 + (abs(2 - estimativa) * 10)  # ajuste sutil para médias entre 1.5 e 2.5
+
+    return round(estimativa, 2), tendencia, round(confianca, 0)
+
+# ==========================
+# Função visual para exibir cada jogo (atualizada com confiança e cores profissionais)
+# ==========================
+def exibir_jogo_card(fixture, league, teams, media_casa, media_fora, estimativa, tendencia, confianca):
     # cores e ícones
     if "Mais 2.5" in tendencia:
-        cor = "red"
+        cor = "red" if confianca >= 60 else "orange"
         icone = "🔥"
     elif "Menos 1.5" in tendencia:
-        cor = "blue"
+        cor = "blue" if confianca >= 60 else "orange"
         icone = "❄️"
     else:
         cor = "orange"
         icone = "⚖️"
 
     # obter placar atual seguro
-    home_goals = fixture.get("goals", {}).get("home")
-    away_goals = fixture.get("goals", {}).get("away")
-    if home_goals is None: home_goals = 0
-    if away_goals is None: away_goals = 0
+    home_goals = fixture.get("goals", {}).get("home") or 0
+    away_goals = fixture.get("goals", {}).get("away") or 0
     elapsed = fixture.get("status", {}).get("elapsed", 0)
 
     col1, col2, col3 = st.columns([3,1,3])
@@ -131,7 +147,9 @@ def exibir_jogo_card(fixture, league, teams, media_casa, media_fora, estimativa,
     with col2:
         st.markdown(
             f"<div style='text-align:center; color:{cor}; font-size:18px;'>"
-            f"<b>{icone} {tendencia}</b><br>Estimativa: {estimativa:.2f}<br>"
+            f"<b>{icone} {tendencia}</b><br>"
+            f"Estimativa: {estimativa:.2f} gols<br>"
+            f"Confiança: {confianca:.0f}%<br>"
             f"⚽ Placar Atual: {elapsed}’ - {teams['home']['name']} {home_goals} x {away_goals} {teams['away']['name']}</div>",
             unsafe_allow_html=True
         )
@@ -181,21 +199,16 @@ if ligas:
                         media_casa = times_stats.get(teams["home"]["id"], {"media_gols_marcados":0,"media_gols_sofridos":0})
                         media_fora = times_stats.get(teams["away"]["id"], {"media_gols_marcados":0,"media_gols_sofridos":0})
 
-                        estimativa = media_casa["media_gols_marcados"] + media_fora["media_gols_marcados"]
-                        if estimativa >= 2.5:
-                            tendencia = "Mais 2.5"
-                        elif estimativa <= 1.5:
-                            tendencia = "Menos 1.5"
-                        else:
-                            tendencia = "Equilibrado"
+                        # Calcula tendência profissional
+                        estimativa, tendencia, confianca = calcular_tendencia_pro(
+                            media_casa["media_gols_marcados"], media_fora["media_gols_marcados"]
+                        )
 
-                        exibir_jogo_card(fixture, league, teams, media_casa, media_fora, estimativa, tendencia)
-                else:
-                    st.warning("⚠️ Não há jogos dessa liga na data selecionada.")
+                        exibir_jogo_card(fixture, league, teams, media_casa, media_fora, estimativa, tendencia, confianca)
+                                    else:
+                        st.warning("⚠️ Não há jogos dessa liga na data selecionada.")
             else:
                 st.info("ℹ️ Nenhum jogo encontrado para essa data.")
         else:
             st.error(f"Erro {response.status_code}: {response.text}")
-
-
-                        
+                   
