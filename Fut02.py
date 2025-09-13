@@ -165,6 +165,7 @@ if st.button("🔍 Buscar jogos do dia"):
         "Premier League": 39,
         "La Liga": 140,
         "Serie A": 135,
+        "MLS": 253, 
         "Bundesliga": 78,
         "Ligue 1": 61,
         "Brasileirão Série A": 71,
