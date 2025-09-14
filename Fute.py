@@ -35,9 +35,9 @@ def salvar_alertas(alertas):
         json.dump(alertas, f)
 
 # ==========================
-# Funções Telegram
+# Funções Telegram (ajustada)
 # ==========================
-def enviar_alerta_telegram(fixture, league, estimativa):
+def enviar_alerta_telegram(fixture, league, estimativa, tendencia):
     home = fixture["teams"]["home"]["name"]
     away = fixture["teams"]["away"]["name"]
     league_name = league["name"]
@@ -45,16 +45,16 @@ def enviar_alerta_telegram(fixture, league, estimativa):
     msg = (
         f"⚽ Alerta de Gols!\n"
         f"🏟️ {home} vs {away}\n"
-        f"🔥 Probabilidade: Mais 2.5\n"
-        f"Estimativa de gols: {estimativa:.2f}\n"
-        f"Liga: {league_name}"
+        f"🔥 Tendência: {tendencia}\n"
+        f"📊 Estimativa de gols: {estimativa:.2f}\n"
+        f"🏆 Liga: {league_name}"
     )
     requests.get(BASE_URL_TG, params={"chat_id": TELEGRAM_CHAT_ID, "text": msg})
 
-def verificar_enviar_alerta(fixture_id, fixture, league, estimativa):
+def verificar_enviar_alerta(fixture_id, fixture, league, estimativa, tendencia):
     alertas = carregar_alertas()
     if fixture_id not in alertas:
-        enviar_alerta_telegram(fixture, league, estimativa)
+        enviar_alerta_telegram(fixture, league, estimativa, tendencia)
         alertas[fixture_id] = True
         salvar_alertas(alertas)
 
@@ -217,8 +217,12 @@ if ligas:
                         media_fora = times_stats.get(teams["away"]["id"], {"media_gols_marcados":0,"media_gols_sofridos":0})
 
                         estimativa = media_casa["media_gols_marcados"] + media_fora["media_gols_marcados"]
+
+                        # Ajuste das tendências
                         if estimativa >= 2.5:
                             tendencia = "Mais 2.5"
+                        elif estimativa >= 1.5:
+                            tendencia = "Mais 1.5"
                         elif estimativa <= 1.5:
                             tendencia = "Menos 1.5"
                         else:
@@ -226,9 +230,9 @@ if ligas:
 
                         exibir_jogo_card(fixture, league, teams, media_casa, media_fora, estimativa, tendencia)
 
-                        # Enviar alerta Telegram apenas se for Mais 2.5
-                        if tendencia == "Mais 2.5":
-                            verificar_enviar_alerta(str(fixture["id"]), j, league, estimativa)
+                        # Enviar alerta Telegram para Mais 2.5, Mais 1.5 e Menos 1.5
+                        if tendencia in ["Mais 2.5", "Mais 1.5", "Menos 1.5"]:
+                            verificar_enviar_alerta(str(fixture["id"]), j, league, estimativa, tendencia)
                 else:
                     st.warning("⚠️ Não há jogos dessa liga na data selecionada.")
             else:
