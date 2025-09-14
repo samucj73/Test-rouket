@@ -16,12 +16,13 @@ HEADERS = {"x-apisports-key": API_KEY}
 # Configurações Telegram
 # ==========================
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
-TELEGRAM_CHAT_ID = "-1002796136111"
+TELEGRAM_CHAT_ID = "5121457416"
+
 BASE_URL_TG = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
 ALERTAS_PATH = "alertas_telegram.json"
 
 # ==========================
-# Funções Telegram
+# Funções de persistência
 # ==========================
 def carregar_alertas():
     if os.path.exists(ALERTAS_PATH):
@@ -33,30 +34,28 @@ def salvar_alertas(alertas):
     with open(ALERTAS_PATH, "w") as f:
         json.dump(alertas, f)
 
+# ==========================
+# Funções Telegram
+# ==========================
 def enviar_alerta_telegram(fixture, league, estimativa):
     home = fixture["teams"]["home"]["name"]
     away = fixture["teams"]["away"]["name"]
-    liga = league["name"]
+    league_name = league["name"]
 
     msg = (
         f"⚽ Alerta de Gols!\n"
         f"🏟️ {home} vs {away}\n"
-        f"🏆 Liga: {liga}\n"
-        f"🔥 Tendência: Mais 2.5\n"
-        f"📊 Estimativa de gols: {estimativa:.2f}"
+        f"🔥 Probabilidade: Mais 2.5\n"
+        f"Estimativa de gols: {estimativa:.2f}\n"
+        f"Liga: {league_name}"
     )
     requests.get(BASE_URL_TG, params={"chat_id": TELEGRAM_CHAT_ID, "text": msg})
 
 def verificar_enviar_alerta(fixture_id, fixture, league, estimativa):
     alertas = carregar_alertas()
-    precisa_enviar = False
-
     if fixture_id not in alertas:
-        precisa_enviar = True
-
-    if precisa_enviar:
         enviar_alerta_telegram(fixture, league, estimativa)
-        alertas[fixture_id] = {"enviado": True}
+        alertas[fixture_id] = True
         salvar_alertas(alertas)
 
 # ==========================
@@ -78,7 +77,7 @@ def get_ligas():
         return []
 
 # ==========================
-# Função para buscar jogos finalizados da liga e calcular estatísticas
+# Função para buscar estatísticas
 # ==========================
 @st.cache_data
 def buscar_estatisticas_liga(liga_id, temporada):
@@ -98,7 +97,7 @@ def buscar_estatisticas_liga(liga_id, temporada):
         fixture = j["fixture"]
         status = fixture["status"]["short"]
         if status != "FT":
-            continue  # Apenas jogos finalizados
+            continue
 
         home = j["teams"]["home"]
         away = j["teams"]["away"]
@@ -143,25 +142,7 @@ def buscar_estatisticas_liga(liga_id, temporada):
     return times_stats
 
 # ==========================
-# Função para calcular tendência de gols
-# ==========================
-def calcular_tendencia(times_stats, home_id, away_id):
-    media_casa = times_stats.get(home_id, {"media_gols_marcados":0,"media_gols_sofridos":0})
-    media_fora = times_stats.get(away_id, {"media_gols_marcados":0,"media_gols_sofridos":0})
-
-    estimativa = media_casa["media_gols_marcados"] + media_fora["media_gols_marcados"]
-
-    if estimativa >= 2.5:
-        tendencia = "Mais 2.5"
-    elif estimativa <= 1.5:
-        tendencia = "Menos 1.5"
-    else:
-        tendencia = "Equilibrado"
-
-    return estimativa, tendencia, media_casa, media_fora
-
-# ==========================
-# Função visual para exibir cada jogo
+# Função visual
 # ==========================
 def exibir_jogo_card(fixture, league, teams, media_casa, media_fora, estimativa, tendencia):
     if "Mais 2.5" in tendencia:
@@ -212,12 +193,7 @@ if ligas:
     )
     liga_id = df_ligas[df_ligas["nome"] == liga_escolhida]["id"].values[0]
 
-    temporada = st.number_input("Escolha o ano da temporada para estatísticas", 
-                                min_value=2000, 
-                                max_value=datetime.today().year, 
-                                value=datetime.today().year, 
-                                step=1)
-
+    temporada = st.number_input("Escolha o ano da temporada para estatísticas", min_value=2000, max_value=datetime.today().year, value=datetime.today().year, step=1)
     data_selecionada = st.date_input("Escolha a data:", value=datetime.today())
     data_formatada = data_selecionada.strftime("%Y-%m-%d")
 
@@ -237,14 +213,22 @@ if ligas:
                         league = j["league"]
                         teams = j["teams"]
 
-                        estimativa, tendencia, media_casa, media_fora = calcular_tendencia(times_stats, teams["home"]["id"], teams["away"]["id"])
-                        
-                        # Exibir card
+                        media_casa = times_stats.get(teams["home"]["id"], {"media_gols_marcados":0,"media_gols_sofridos":0})
+                        media_fora = times_stats.get(teams["away"]["id"], {"media_gols_marcados":0,"media_gols_sofridos":0})
+
+                        estimativa = media_casa["media_gols_marcados"] + media_fora["media_gols_marcados"]
+                        if estimativa >= 2.5:
+                            tendencia = "Mais 2.5"
+                        elif estimativa <= 1.5:
+                            tendencia = "Menos 1.5"
+                        else:
+                            tendencia = "Equilibrado"
+
                         exibir_jogo_card(fixture, league, teams, media_casa, media_fora, estimativa, tendencia)
 
-                        # Enviar alerta apenas se "Mais 2.5"
+                        # Enviar alerta Telegram apenas se for Mais 2.5
                         if tendencia == "Mais 2.5":
-                            verificar_enviar_alerta(str(fixture["id"]), fixture, league, estimativa)
+                            verificar_enviar_alerta(str(fixture["id"]), j, league, estimativa)
                 else:
                     st.warning("⚠️ Não há jogos dessa liga na data selecionada.")
             else:
