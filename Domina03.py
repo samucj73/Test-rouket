@@ -265,7 +265,7 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
     # -----------------------------
     # Previsão a cada 3 rodadas (recorrência)
     # -----------------------------
-    if st.session_state.contador_rodadas % 3 == 0:
+    if st.session_state.contador_rodadas % 2 == 0:
         prox_numeros = st.session_state.ia_recorrencia.prever(st.session_state.estrategia.historico)
         if prox_numeros:
             st.session_state.previsao = prox_numeros
