@@ -293,10 +293,14 @@ erros = st.session_state.get("erros", 0)
 total = acertos + erros
 taxa = (acertos / total * 100) if total > 0 else 0.0
 
-col1, col2, col3 = st.columns(3)
+# Quantidade de números previstos na última entrada recorrência
+qtd_previstos_rec = len(st.session_state.get("previsao", []))
+
+col1, col2, col3, col7 = st.columns(4)
 col1.metric("🟢 GREEN", acertos)
 col2.metric("🔴 RED", erros)
 col3.metric("✅ Taxa de acerto", f"{taxa:.1f}%")
+col7.metric("🎯 Qtd. previstos Recorrência", qtd_previstos_rec)
 
 # Estatísticas 31/34
 acertos_31_34 = st.session_state.get("acertos_31_34", 0)
@@ -304,15 +308,20 @@ erros_31_34 = st.session_state.get("erros_31_34", 0)
 total_31_34 = acertos_31_34 + erros_31_34
 taxa_31_34 = (acertos_31_34 / total_31_34 * 100) if total_31_34 > 0 else 0.0
 
-col4, col5, col6 = st.columns(3)
+# Quantidade de números previstos na última entrada 31/34
+qtd_previstos_31_34 = len(st.session_state.get("previsao_31_34", []))
+
+col4, col5, col6, col8 = st.columns(4)
 col4.metric("🟢 GREEN 31/34", acertos_31_34)
 col5.metric("🔴 RED 31/34", erros_31_34)
 col6.metric("✅ Taxa 31/34", f"{taxa_31_34:.1f}%")
+col8.metric("🎯 Qtd. previstos 31/34", qtd_previstos_31_34)
 
 # Estatísticas recorrência
 historico_lista = list(st.session_state.estrategia.historico)
 historico_total = len(historico_lista)
-ultimo_numero = historical_last = (historico_lista[-1]["number"] if historico_total > 0 and isinstance(historico_lista[-1], dict) else None)
+ultimo_numero = (historico_lista[-1]["number"] if historico_total > 0 and isinstance(historico_lista[-1], dict) else None)
+
 ocorrencias_ultimo = 0
 if ultimo_numero is not None:
     ocorrencias_ultimo = sum(
