@@ -316,10 +316,10 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
             st.session_state.previsao_topN = entrada_topN
 
             # Envia alertas
-            msg_alerta = "🎯 Próximos números prováveis (Recorrência): " + " ".join(str(n) for n in sorted(prox_numeros))
+            msg_alerta = "🎯 NP): " + " ".join(str(n) for n in sorted(prox_numeros))
             enviar_telegram(msg_alerta)
 
-            msg_topN = "🎯 Top N Dinâmico (mais prováveis): " + " ".join(str(n) for n in sorted(entrada_topN))
+            msg_topN = "Top N : " + " ".join(str(n) for n in sorted(entrada_topN))
             enviar_telegram_topN(msg_topN)
 
     else:
