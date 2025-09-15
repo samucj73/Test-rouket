@@ -163,9 +163,6 @@ class IA_Recorrencia:
 # =============================
 # Ajuste Dinâmico Top N
 # =============================
-# =============================
-# Ajuste Dinâmico Top N Otimizado
-# =============================
 TOP_N_COOLDOWN = 3       # Quantas rodadas um RED fica fora do Top N
 TOP_N_PROB_BASE = 0.3    # Probabilidade base mínima
 TOP_N_PROB_MAX = 0.5     # Máximo para ajuste dinâmico
@@ -205,7 +202,7 @@ def ajustar_top_n(previsoes, historico=None, min_n=MIN_TOP_N, max_n=MAX_TOP_N):
     atualizar_cooldown_reds()
     prob_min = calcular_prob_min_topN()
 
-    # Filtra previsões por cooldown e probabilidade mínima
+    # Filtra previsões por cooldown
     filtrados = [num for num in previsoes if num not in st.session_state.topn_reds]
 
     # Pondera números com GREENs recentes
@@ -296,18 +293,17 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
     st.session_state.estrategia.adicionar_numero(numero_dict)
     salvar_historico(list(st.session_state.estrategia.historico))
 
+    numero_real = numero_dict["number"]
+
     # -----------------------------
     # Conferência GREEN/RED (Recorrência)
     # -----------------------------
     if st.session_state.previsao:
         numeros_com_vizinhos = []
         for n in st.session_state.previsao:
-            vizinhos = obter_vizinhos(n, ROULETTE_LAYOUT, antes=2, depois=2)
-            for v in vizinhos:
-                if v not in numeros_com_vizinhos:
-                    numeros_com_vizinhos.append(v)
+            numeros_com_vizinhos.extend(obter_vizinhos(n, ROULETTE_LAYOUT, antes=2, depois=2))
+        numeros_com_vizinhos = list(set(numeros_com_vizinhos))
 
-        numero_real = numero_dict["number"]
         if numero_real in numeros_com_vizinhos:
             st.session_state.acertos += 1
             st.success(f"🟢 GREEN! Número {numero_real} previsto pela recorrência (incluindo vizinhos).")
@@ -322,35 +318,29 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
     # -----------------------------
     # Conferência GREEN/RED (Top N Dinâmico)
     # -----------------------------
-    # -----------------------------
-# Conferência GREEN/RED (Top N Dinâmico)
-# -----------------------------
-if st.session_state.previsao_topN:
-    numero_real = numero_dict["number"]
-    topN_com_vizinhos = []
-    for n in st.session_state.previsao_topN:
-        vizinhos = obter_vizinhos(n, ROULETTE_LAYOUT, antes=1, depois=1)
-        for v in vizinhos:
-            if v not in topN_com_vizinhos:
-                topN_com_vizinhos.append(v)
+    if st.session_state.previsao_topN:
+        registrar_resultado_topN(numero_real, st.session_state.previsao_topN)
 
-    if numero_real in topN_com_vizinhos:
-        st.session_state.acertos_topN += 1
-        st.success(f"🟢 GREEN Top N! Número {numero_real} estava entre os mais prováveis.")
-        enviar_telegram_topN(f"🟢 GREEN Top N! Número {numero_real} estava entre os mais prováveis.")
-    else:
-        st.session_state.erros_topN += 1
-        st.error(f"🔴 RED Top N! Número {numero_real} não estava entre os mais prováveis.")
-        enviar_telegram_topN(f"🔴 RED Top N! Número {numero_real} não estava entre os mais prováveis.")
+        topN_com_vizinhos = []
+        for n in st.session_state.previsao_topN:
+            topN_com_vizinhos.extend(obter_vizinhos(n, ROULETTE_LAYOUT, antes=1, depois=1))
+        topN_com_vizinhos = list(set(topN_com_vizinhos))
 
-    st.session_state.previsao_topN = []
-    
+        if numero_real in topN_com_vizinhos:
+            st.session_state.acertos_topN += 1
+            st.success(f"🟢 GREEN Top N! Número {numero_real} estava entre os mais prováveis.")
+            enviar_telegram_topN(f"🟢 GREEN Top N! Número {numero_real} estava entre os mais prováveis.")
+        else:
+            st.session_state.erros_topN += 1
+            st.error(f"🔴 RED Top N! Número {numero_real} não estava entre os mais prováveis.")
+            enviar_telegram_topN(f"🔴 RED Top N! Número {numero_real} não estava entre os mais prováveis.")
+
+        st.session_state.previsao_topN = []
 
     # -----------------------------
     # Conferência GREEN/RED (31/34)
     # -----------------------------
     if st.session_state.previsao_31_34:
-        numero_real = numero_dict["number"]
         if numero_real in st.session_state.previsao_31_34:
             st.session_state.acertos_31_34 += 1
             st.success(f"🟢 GREEN (31/34)! Número {numero_real} estava na entrada 31/34.")
@@ -366,27 +356,26 @@ if st.session_state.previsao_topN:
     st.session_state.contador_rodadas += 1
 
     # -----------------------------
-    # Previsão recorrência a cada 2 rodadas
+    # Previsão recorrência e Top N a cada 2 rodadas
     # -----------------------------
     if st.session_state.contador_rodadas % 2 == 0:
         prox_numeros = st.session_state.ia_recorrencia.prever(st.session_state.estrategia.historico)
         if prox_numeros:
             st.session_state.previsao = prox_numeros
-
             # 🔹 Top N Dinâmico
-            entrada_topN = ajustar_top_n(prox_numeros, st.session_state.estrategia.historico)
+            entrada_topN = ajustar_top_n(prox_numeros)
             st.session_state.previsao_topN = entrada_topN
 
             # Envia alertas
-            msg_alerta = "🎯 NP): " + " ".join(str(n) for n in sorted(prox_numeros))
+            msg_alerta = "🎯 NP: " + " ".join(str(n) for n in sorted(prox_numeros))
             enviar_telegram(msg_alerta)
 
-            msg_topN = "Top N : " + " ".join(str(n) for n in sorted(entrada_topN))
+            msg_topN = "Top N: " + " ".join(str(n) for n in sorted(entrada_topN))
             enviar_telegram_topN(msg_topN)
 
     else:
         # Estratégia 31/34
-        entrada_31_34 = estrategia_31_34(numero_dict["number"])
+        entrada_31_34 = estrategia_31_34(numero_real)
         if entrada_31_34:
             st.session_state.previsao_31_34 = entrada_31_34
 
@@ -406,20 +395,25 @@ taxa = (acertos / total * 100) if total > 0 else 0.0
 qtd_previstos_rec = len(st.session_state.get("previsao", []))
 qtd_previstos_topN = len(st.session_state.get("previsao_topN", []))
 
+
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("🟢 GREEN", acertos)
 col2.metric("🔴 RED", erros)
 col3.metric("✅ Taxa de acerto", f"{taxa:.1f}%")
 col4.metric("🎯 Qtd. previstos Recorrência", qtd_previstos_rec)
 
-col1, col2, col3 = st.columns(3)
-col1.metric("🟢 GREEN Top N", st.session_state.get("acertos_topN", 0))
-col2.metric("🔴 RED Top N", st.session_state.get("erros_topN", 0))
-col3.metric("🎯 Qtd. Top N Dinâmica", qtd_previstos_topN)
+# Estatísticas Top N Dinâmico
+acertos_topN = st.session_state.get("acertos_topN", 0)
+erros_topN = st.session_state.get("erros_topN", 0)
+total_topN = acertos_topN + erros_topN
+taxa_topN = (acertos_topN / total_topN * 100) if total_topN > 0 else 0.0
 
-# -----------------------------
+col1, col2, col3 = st.columns(3)
+col1.metric("🟢 GREEN Top N", acertos_topN)
+col2.metric("🔴 RED Top N", erros_topN)
+col3.metric("✅ Taxa Top N", f"{taxa_topN:.1f}%")
+
 # Estatísticas 31/34
-# -----------------------------
 acertos_31_34 = st.session_state.get("acertos_31_34", 0)
 erros_31_34 = st.session_state.get("erros_31_34", 0)
 total_31_34 = acertos_31_34 + erros_31_34
@@ -431,3 +425,4 @@ col1.metric("🟢 GREEN 31/34", acertos_31_34)
 col2.metric("🔴 RED 31/34", erros_31_34)
 col3.metric("✅ Taxa 31/34", f"{taxa_31_34:.1f}%")
 col4.metric("🎯 Qtd. previstos 31/34", qtd_previstos_31_34)
+
