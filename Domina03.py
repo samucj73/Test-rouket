@@ -163,11 +163,11 @@ class IA_Recorrencia:
 # =============================
 # Ajuste Dinâmico Top N
 # =============================
-TOP_N_COOLDOWN = 3       # Quantas rodadas um RED fica fora do Top N
+TOP_N_COOLDOWN = 2       # Quantas rodadas um RED fica fora do Top N
 TOP_N_PROB_BASE = 0.3    # Probabilidade base mínima
 TOP_N_PROB_MAX = 0.5     # Máximo para ajuste dinâmico
 TOP_N_PROB_MIN = 0.2     # Mínimo para ajuste dinâmico
-TOP_N_WINDOW = 12        # Janela histórica para cálculo
+TOP_N_WINDOW = 50        # Janela histórica para cálculo
 
 # Inicializa históricos de REDs/ GREENs Top N
 if "topn_history" not in st.session_state:
