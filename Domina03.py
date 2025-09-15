@@ -140,7 +140,7 @@ class IA_Recorrencia:
 
         numeros_previstos = []
         for n in candidatos:
-            vizinhos = obter_vizinhos(n, self.layout, antes=1, depois=1)
+            vizinhos = obter_vizinhos(n, self.layout, antes=2, depois=2)
             for v in vizinhos:
                 if v not in numeros_previstos:
                     numeros_previstos.append(v)
@@ -167,8 +167,8 @@ def estrategia_31_34(numero_capturado):
         return None
 
     # gera vizinhos fixos de 31 e 34 (5 antes + número + 5 depois)
-    viz_31 = obter_vizinhos_fixos(31, ROULETTE_LAYOUT, antes=5, depois=5)
-    viz_34 = obter_vizinhos_fixos(34, ROULETTE_LAYOUT, antes=5, depois=5)
+    viz_31 = obter_vizinhos_fixos(31, ROULETTE_LAYOUT, antes=4, depois=4)
+    viz_34 = obter_vizinhos_fixos(34, ROULETTE_LAYOUT, antes=4, depois=4)
 
     # monta entrada: 0,26,30 + vizinhos de 31 + vizinhos de 34
     entrada = set([0, 26, 30] + viz_31 + viz_34)
