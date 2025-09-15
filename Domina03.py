@@ -163,16 +163,74 @@ class IA_Recorrencia:
 # =============================
 # Ajuste Dinâmico Top N
 # =============================
-def ajustar_top_n(previsoes, historico, window=WINDOW_SIZE, min_n=MIN_TOP_N, max_n=MAX_TOP_N):
-    if not previsoes or not historico:
+# =============================
+# Ajuste Dinâmico Top N Otimizado
+# =============================
+TOP_N_COOLDOWN = 3       # Quantas rodadas um RED fica fora do Top N
+TOP_N_PROB_BASE = 0.3    # Probabilidade base mínima
+TOP_N_PROB_MAX = 0.5     # Máximo para ajuste dinâmico
+TOP_N_PROB_MIN = 0.2     # Mínimo para ajuste dinâmico
+TOP_N_WINDOW = 12        # Janela histórica para cálculo
+
+# Inicializa históricos de REDs/ GREENs Top N
+if "topn_history" not in st.session_state:
+    st.session_state.topn_history = deque(maxlen=TOP_N_WINDOW)  # Armazena "G" ou "R"
+if "topn_reds" not in st.session_state:
+    st.session_state.topn_reds = {}  # {numero: rodadas_restantes}
+if "topn_greens" not in st.session_state:
+    st.session_state.topn_greens = {}  # {numero: contagem_green}
+
+# Atualiza cooldown dos REDs
+def atualizar_cooldown_reds():
+    novos_reds = {}
+    for num, rodadas in st.session_state.topn_reds.items():
+        if rodadas > 1:
+            novos_reds[num] = rodadas - 1
+    st.session_state.topn_reds = novos_reds
+
+# Calcula probabilidade mínima dinâmica baseada em taxa de REDs recentes
+def calcular_prob_min_topN():
+    historico = list(st.session_state.topn_history)
+    if not historico:
+        return TOP_N_PROB_BASE
+    taxa_red = historico.count("R") / len(historico)
+    prob_min = TOP_N_PROB_BASE + (taxa_red * (TOP_N_PROB_MAX - TOP_N_PROB_BASE))
+    return min(max(prob_min, TOP_N_PROB_MIN), TOP_N_PROB_MAX)
+
+# Gera Top N otimizado
+def ajustar_top_n(previsoes, historico=None, min_n=MIN_TOP_N, max_n=MAX_TOP_N):
+    if not previsoes:
         return previsoes[:min_n]
 
-    ultimos_resultados = [h["number"] for h in list(historico)[-window:] if isinstance(h, dict)]
-    hits = sum(1 for n in previsoes if n in ultimos_resultados)
-    n = max(min_n, min(max_n, int(len(previsoes) * (window - hits) / window) + min_n))
-    contagem = Counter(previsoes)
-    ordenados = [num for num, _ in contagem.most_common(n)]
-    return ordenados
+    atualizar_cooldown_reds()
+    prob_min = calcular_prob_min_topN()
+
+    # Filtra previsões por cooldown e probabilidade mínima
+    filtrados = [num for num in previsoes if num not in st.session_state.topn_reds]
+
+    # Pondera números com GREENs recentes
+    pesos = {}
+    for num in filtrados:
+        pesos[num] = 1.0 + st.session_state.topn_greens.get(num, 0) * 0.05
+
+    # Ordena por peso decrescente
+    ordenados = sorted(pesos.keys(), key=lambda x: pesos[x], reverse=True)
+
+    # Ajusta quantidade final Top N
+    n = max(min_n, min(max_n, int(len(ordenados) * prob_min) + min_n))
+    top_n_final = ordenados[:n]
+
+    return top_n_final
+
+# Registrar resultado Top N após rodada
+def registrar_resultado_topN(numero_real, top_n):
+    for num in top_n:
+        if num == numero_real:
+            st.session_state.topn_greens[num] = st.session_state.topn_greens.get(num, 0) + 1
+            st.session_state.topn_history.append("G")
+        else:
+            st.session_state.topn_reds[num] = TOP_N_COOLDOWN
+            st.session_state.topn_history.append("R")
 
 # =============================
 # Estratégia 31/34
@@ -264,25 +322,29 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
     # -----------------------------
     # Conferência GREEN/RED (Top N Dinâmico)
     # -----------------------------
-    if st.session_state.previsao_topN:
-        numero_real = numero_dict["number"]
-        topN_com_vizinhos = []
-        for n in st.session_state.previsao_topN:
-            vizinhos = obter_vizinhos(n, ROULETTE_LAYOUT, antes=1, depois=1)
-            for v in vizinhos:
-                if v not in topN_com_vizinhos:
-                    topN_com_vizinhos.append(v)
+    # -----------------------------
+# Conferência GREEN/RED (Top N Dinâmico)
+# -----------------------------
+if st.session_state.previsao_topN:
+    numero_real = numero_dict["number"]
+    topN_com_vizinhos = []
+    for n in st.session_state.previsao_topN:
+        vizinhos = obter_vizinhos(n, ROULETTE_LAYOUT, antes=1, depois=1)
+        for v in vizinhos:
+            if v not in topN_com_vizinhos:
+                topN_com_vizinhos.append(v)
 
-        if numero_real in topN_com_vizinhos:
-            st.session_state.acertos_topN += 1
-            st.success(f"🟢 GREEN Top N! Número {numero_real} estava entre os mais prováveis.")
-            enviar_telegram_topN(f"🟢 GREEN Top N! Número {numero_real} estava entre os mais prováveis.")
-        else:
-            st.session_state.erros_topN += 1
-            st.error(f"🔴 RED Top N! Número {numero_real} não estava entre os mais prováveis.")
-            enviar_telegram_topN(f"🔴 RED Top N! Número {numero_real} não estava entre os mais prováveis.")
+    if numero_real in topN_com_vizinhos:
+        st.session_state.acertos_topN += 1
+        st.success(f"🟢 GREEN Top N! Número {numero_real} estava entre os mais prováveis.")
+        enviar_telegram_topN(f"🟢 GREEN Top N! Número {numero_real} estava entre os mais prováveis.")
+    else:
+        st.session_state.erros_topN += 1
+        st.error(f"🔴 RED Top N! Número {numero_real} não estava entre os mais prováveis.")
+        enviar_telegram_topN(f"🔴 RED Top N! Número {numero_real} não estava entre os mais prováveis.")
 
-        st.session_state.previsao_topN = []
+    st.session_state.previsao_topN = []
+    
 
     # -----------------------------
     # Conferência GREEN/RED (31/34)
