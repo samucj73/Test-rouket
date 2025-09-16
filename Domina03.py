@@ -5,6 +5,8 @@ import requests
 from collections import deque, Counter
 from streamlit_autorefresh import st_autorefresh
 import logging
+from sklearn.ensemble import RandomForestClassifier
+import numpy as np
 
 # =============================
 # Configurações
@@ -115,42 +117,72 @@ class EstrategiaDeslocamento:
         self.historico.append(numero_dict)
 
 # =============================
-# IA recorrência (antes + depois)
+# IA recorrência aprimorada
 # =============================
-class IA_Recorrencia:
-    def __init__(self, layout=None, top_n=3):
+class IA_Recorrencia_Aprimorada:
+    def __init__(self, layout=None, top_n=5):
         self.layout = layout or ROULETTE_LAYOUT
         self.top_n = top_n
+        self.model = None
+
+    def criar_features(self, historico):
+        if len(historico) < 3:
+            return None, None
+        numeros = [h["number"] if isinstance(h, dict) else h for h in historico]
+        X, y = [], []
+        for i in range(2, len(numeros)):
+            features = []
+            # últimos dois números
+            features += [numeros[i-2], numeros[i-1]]
+            # frequência do último
+            features.append(numeros[i-1])
+            # vizinhos físicos
+            features += obter_vizinhos(numeros[i-1], self.layout, antes=1, depois=1)
+            X.append(features)
+            y.append(numeros[i])
+        return np.array(X), np.array(y)
+
+    def treinar_modelo(self, historico):
+        X, y = self.criar_features(historico)
+        if X is None or len(X) == 0:
+            return
+        self.model = RandomForestClassifier(n_estimators=100)
+        self.model.fit(X, y)
 
     def prever(self, historico):
         if not historico:
             return []
 
-        historico_lista = list(historico)
-        ultimo_numero = historico_lista[-1]["number"] if isinstance(historico_lista[-1], dict) else None
-        if ultimo_numero is None:
-            return []
+        self.treinar_modelo(historico)
 
+        numeros = [h["number"] if isinstance(h, dict) else h for h in historico]
+        ultimo_num = numeros[-1]
+
+        # frequência antes/depois
         antes, depois = [], []
-
-        for i, h in enumerate(historico_lista[:-1]):
-            if isinstance(h, dict) and h.get("number") == ultimo_numero:
-                if i - 1 >= 0 and isinstance(historico_lista[i-1], dict):
-                    antes.append(historico_lista[i-1]["number"])
-                if i + 1 < len(historico_lista) and isinstance(historico_lista[i+1], dict):
-                    depois.append(historico_lista[i+1]["number"])
-
-        if not antes and not depois:
-            return []
-
-        contagem_antes = Counter(antes)
-        contagem_depois = Counter(depois)
-
-        top_antes = [num for num, _ in contagem_antes.most_common(self.top_n)]
-        top_depois = [num for num, _ in contagem_depois.most_common(self.top_n)]
+        for i, n in enumerate(numeros[:-1]):
+            if n == ultimo_num:
+                if i-1 >=0: antes.append(numeros[i-1])
+                if i+1 < len(numeros): depois.append(numeros[i+1])
+        cont_antes = Counter(antes)
+        cont_depois = Counter(depois)
+        top_antes = [num for num,_ in cont_antes.most_common(self.top_n)]
+        top_depois = [num for num,_ in cont_depois.most_common(self.top_n)]
 
         candidatos = list(set(top_antes + top_depois))
 
+        # previsão via ML
+        if self.model:
+            features = [numeros[-2] if len(numeros)>1 else 0, numeros[-1]]
+            features += [numeros[-1]]
+            features += obter_vizinhos(numeros[-1], self.layout, antes=1, depois=1)
+            pred_proba = self.model.predict_proba([features])
+            classes = self.model.classes_
+            probs = pred_proba[0]
+            top_ml = [classes[i] for i in np.argsort(probs)[-self.top_n:]]
+            candidatos = list(set(candidatos + top_ml))
+
+        # expande vizinhos físicos
         numeros_previstos = []
         for n in candidatos:
             vizinhos = obter_vizinhos(n, self.layout, antes=1, depois=1)
@@ -206,6 +238,7 @@ def ajustar_top_n(previsoes, historico=None, min_n=MIN_TOP_N, max_n=MAX_TOP_N):
 
     ordenados = sorted(pesos.keys(), key=lambda x: pesos[x], reverse=True)
 
+    #n = max(min_n, min(max_n, int(len(ordenados) * prob_min)
     n = max(min_n, min(max_n, int(len(ordenados) * prob_min) + min_n))
     top_n_final = ordenados[:n]
 
@@ -249,13 +282,13 @@ def estrategia_31_34(numero_capturado):
 # Streamlit App
 # =============================
 st.set_page_config(page_title="Roleta IA Profissional", layout="centered")
-st.title("🎯 Roleta — IA de Recorrência (Antes + Depois) Profissional")
+st.title("🎯 Roleta — IA de Recorrência Aprimorada")
 st_autorefresh(interval=3000, key="refresh")
 
 # Inicialização session_state
 for key, default in {
     "estrategia": EstrategiaDeslocamento(),
-    "ia_recorrencia": IA_Recorrencia(),
+    "ia_recorrencia": IA_Recorrencia_Aprimorada(layout=ROULETTE_LAYOUT, top_n=5),
     "previsao": [],
     "previsao_topN": [],
     "previsao_31_34": [],
@@ -387,7 +420,6 @@ erros_31_34 = st.session_state.get("erros_31_34", 0)
 total_31_34 = acertos_31_34 + erros_31_34
 taxa_31_34 = (acertos_31_34 / total_31_34 * 100) if total_31_34 > 0 else 0.0
 qtd_previstos_31_34 = len(st.session_state.get("previsao_31_34", []))
-
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("🟢 GREEN 31/34", acertos_31_34)
 col2.metric("🔴 RED 31/34", erros_31_34)
