@@ -118,7 +118,7 @@ class EstrategiaDeslocamento:
 # IA recorrência aprimorada
 # =============================
 class IA_Recorrencia_Aprimorada:
-    def __init__(self, layout=None, top_n=3):
+    def __init__(self, layout=None, top_n=5):
         self.layout = layout or ROULETTE_LAYOUT
         self.top_n = top_n
 
@@ -153,7 +153,7 @@ class IA_Recorrencia_Aprimorada:
 
         numeros_previstos = []
         for n in candidatos:
-            vizinhos = obter_vizinhos(n, self.layout, antes=1, depois=1)
+            vizinhos = obter_vizinhos(n, self.layout, antes=3, depois=3)
             for v in vizinhos:
                 if v not in numeros_previstos:
                     numeros_previstos.append(v)
