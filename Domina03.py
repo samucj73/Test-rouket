@@ -398,6 +398,9 @@ taxa = (acertos / total * 100) if total > 0 else 0
 # =============================
 # 📊 Métricas no Streamlit
 # =============================
+# =============================
+# 📊 Métricas no Streamlit
+# =============================
 
 st.subheader("📊 Métricas de desempenho")
 
@@ -431,3 +434,4 @@ st.write(f"✅ Taxa de acerto: {taxa_3134:.1f}%")
 # Histórico dos últimos 10
 st.subheader("📜 Histórico (últimos 10 números)")
 st.write([h["number"] for h in list(st.session_state.estrategia.historico)[-10:]])
+
