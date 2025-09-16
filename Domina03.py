@@ -278,7 +278,40 @@ def estrategia_31_34(numero_capturado):
     return list(entrada)
 
 # =============================
-# entrada)
+# Inicialização do Streamlit
+# =============================
+st.set_page_config(page_title="Roleta IA Profissional", layout="centered")
+st.title("🎯 Roleta — IA de Recorrência Aprimorada")
+st_autorefresh(interval=3000, key="refresh")
+
+# Inicializa session_state
+for key, default in {
+    "estrategia": EstrategiaDeslocamento(),
+    "ia_recorrencia": IA_Recorrencia_Aprimorada(layout=ROULETTE_LAYOUT, top_n=5),
+    "previsao": [],
+    "previsao_topN": [],
+    "previsao_31_34": [],
+    "recorrencia_acertos": 0,
+    "recorrencia_erros": 0,
+    "acertos_topN": 0,
+    "erros_topN": 0,
+    "acertos_31_34": 0,
+    "erros_31_34": 0,
+    "contador_rodadas": 0,
+    "topn_history": deque(maxlen=WINDOW_SIZE),
+    "topn_reds": {},
+    "topn_greens": {}
+}.items():
+    if key not in st.session_state:
+        st.session_state[key] = default
+
+# Carregar histórico existente
+historico = carregar_historico()
+for n in historico:
+    st.session_state.estrategia.adicionar_numero(n)
+
+# Aqui você continuaria com a captura do número, conferência e atualização de métricas
+# usando os atributos inicializados corretame
 
 # =============================
 
