@@ -120,7 +120,7 @@ class EstrategiaDeslocamento:
 # IA recorrência aprimorada
 # =============================
 class IA_Recorrencia_Aprimorada:
-    def __init__(self, layout=None, top_n=5):
+    def __init__(self, layout=None, top_n=3):
         self.layout = layout or ROULETTE_LAYOUT
         self.top_n = top_n
         self.model = None
