@@ -118,7 +118,7 @@ class EstrategiaDeslocamento:
 # IA recorrência (antes + depois)
 # =============================
 class IA_Recorrencia:
-    def __init__(self, layout=None, top_n=3):
+    def __init__(self, layout=None, top_n=4):
         self.layout = layout or ROULETTE_LAYOUT
         self.top_n = top_n
 
@@ -163,11 +163,11 @@ class IA_Recorrencia:
 # =============================
 # Ajuste Dinâmico Top N
 # =============================
-TOP_N_COOLDOWN = 3
+TOP_N_COOLDOWN = 2
 TOP_N_PROB_BASE = 0.3
 TOP_N_PROB_MAX = 0.5
 TOP_N_PROB_MIN = 0.2
-TOP_N_WINDOW = 12
+TOP_N_WINDOW = 18
 
 if "topn_history" not in st.session_state:
     st.session_state.topn_history = deque(maxlen=TOP_N_WINDOW)
