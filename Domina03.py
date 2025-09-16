@@ -393,7 +393,7 @@ st.write(list(st.session_state.estrategia.historico)[-3:])
 acertos = st.session_state.get("acertos", 0)
 erros = st.session_state.get("erros", 0)
 total = acertos + erros
-taxa = (acertos / total * 100) if total >
+taxa = (acertos / total * 100) if total > 0 else 0
 
 # =============================
 # 📊 Métricas no Streamlit
