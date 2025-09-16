@@ -1,4 +1,3 @@
-# Deslocamento.py  (arquivo completo)
 import streamlit as st
 import json
 import os
@@ -6,6 +5,8 @@ import requests
 from collections import deque, Counter
 from streamlit_autorefresh import st_autorefresh
 import logging
+from sklearn.ensemble import RandomForestClassifier
+import numpy as np
 
 # =============================
 # Configurações
@@ -19,7 +20,7 @@ TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 TELEGRAM_CHAT_ID = "5121457416"
 
 # Canal alternativo para Top N Dinâmico
-ALT_TELEGRAM_TOKEN = TELEGRAM_TOKEN
+ALT_TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 ALT_TELEGRAM_CHAT_ID = "-1002979544095"
 
 ROULETTE_LAYOUT = [
@@ -29,12 +30,12 @@ ROULETTE_LAYOUT = [
     7, 28, 12, 35, 3, 26
 ]
 
-WINDOW_SIZE = 18   # janela móvel para cálculos de frequência
-MIN_TOP_N = 5
-MAX_TOP_N = 15
+WINDOW_SIZE = 18   # janela móvel para Top N dinâmico
+MIN_TOP_N = 5      # mínimo de números na Top N
+MAX_TOP_N = 15     # máximo de números na Top N
 
 # =============================
-# Funções auxiliares (Telegram, histórico, API, vizinhos)
+# Funções auxiliares
 # =============================
 def enviar_telegram(msg: str, token=TELEGRAM_TOKEN, chat_id=TELEGRAM_CHAT_ID):
     try:
@@ -42,7 +43,7 @@ def enviar_telegram(msg: str, token=TELEGRAM_TOKEN, chat_id=TELEGRAM_CHAT_ID):
         payload = {"chat_id": chat_id, "text": msg}
         requests.post(url, data=payload, timeout=10)
     except Exception as e:
-        logging.error(f"Erro ao enviar para Telegram: {e}")
+        print(f"Erro ao enviar para Telegram: {e}")
 
 def enviar_telegram_topN(msg: str, token=ALT_TELEGRAM_TOKEN, chat_id=ALT_TELEGRAM_CHAT_ID):
     try:
@@ -50,36 +51,28 @@ def enviar_telegram_topN(msg: str, token=ALT_TELEGRAM_TOKEN, chat_id=ALT_TELEGRA
         payload = {"chat_id": chat_id, "text": msg}
         requests.post(url, data=payload, timeout=10)
     except Exception as e:
-        logging.error(f"Erro ao enviar para Telegram Top N: {e}")
+        print(f"Erro ao enviar para Telegram Top N: {e}")
 
 def carregar_historico():
     if os.path.exists(HISTORICO_PATH):
-        try:
-            with open(HISTORICO_PATH, "r") as f:
-                historico = json.load(f)
-        except Exception:
-            # se arquivo estiver corrompido, retorna vazio
-            return []
+        with open(HISTORICO_PATH, "r") as f:
+            historico = json.load(f)
         historico_padronizado = []
-        for i, h in enumerate(historico):
-            if isinstance(h, dict) and "number" in h:
+        for h in historico:
+            if isinstance(h, dict):
                 historico_padronizado.append(h)
             else:
-                # converte formato simples [num, num, ...] em dict
-                historico_padronizado.append({"number": h, "timestamp": f"manual_{i}"})
+                historico_padronizado.append({"number": h, "timestamp": f"manual_{len(historico_padronizado)}"})
         return historico_padronizado
     return []
 
 def salvar_historico(historico):
-    try:
-        with open(HISTORICO_PATH, "w") as f:
-            json.dump(historico, f, indent=2)
-    except Exception as e:
-        logging.error(f"Erro ao salvar histórico: {e}")
+    with open(HISTORICO_PATH, "w") as f:
+        json.dump(historico, f, indent=2)
 
 def fetch_latest_result():
     try:
-        response = requests.get(API_URL, headers=HEADERS, timeout=6)
+        response = requests.get(API_URL, headers=HEADERS, timeout=5)
         response.raise_for_status()
         data = response.json()
         game_data = data.get("data", {})
@@ -93,9 +86,6 @@ def fetch_latest_result():
         return None
 
 def obter_vizinhos(numero, layout, antes=2, depois=2):
-    """Retorna vizinhos físicos (antes, numero, depois). Usa wrap-around."""
-    if numero not in layout:
-        return [numero]
     idx = layout.index(numero)
     n = len(layout)
     vizinhos = []
@@ -107,8 +97,6 @@ def obter_vizinhos(numero, layout, antes=2, depois=2):
     return vizinhos
 
 def obter_vizinhos_fixos(numero, layout, antes=5, depois=5):
-    if numero not in layout:
-        return [numero]
     idx = layout.index(numero)
     n = len(layout)
     vizinhos = []
@@ -120,7 +108,7 @@ def obter_vizinhos_fixos(numero, layout, antes=5, depois=5):
     return vizinhos
 
 # =============================
-# Estratégia - controle do histórico
+# Estratégia
 # =============================
 class EstrategiaDeslocamento:
     def __init__(self):
@@ -129,42 +117,72 @@ class EstrategiaDeslocamento:
         self.historico.append(numero_dict)
 
 # =============================
-# IA Recorrência (antes + depois) - versão simples compatível com seu histórico
+# IA recorrência aprimorada
 # =============================
-class IA_Recorrencia:
-    def __init__(self, layout=None, top_n=3):
+class IA_Recorrencia_Aprimorada:
+    def __init__(self, layout=None, top_n=5):
         self.layout = layout or ROULETTE_LAYOUT
         self.top_n = top_n
+        self.model = None
+
+    def criar_features(self, historico):
+        if len(historico) < 3:
+            return None, None
+        numeros = [h["number"] if isinstance(h, dict) else h for h in historico]
+        X, y = [], []
+        for i in range(2, len(numeros)):
+            features = []
+            # últimos dois números
+            features += [numeros[i-2], numeros[i-1]]
+            # frequência do último
+            features.append(numeros[i-1])
+            # vizinhos físicos
+            features += obter_vizinhos(numeros[i-1], self.layout, antes=1, depois=1)
+            X.append(features)
+            y.append(numeros[i])
+        return np.array(X), np.array(y)
+
+    def treinar_modelo(self, historico):
+        X, y = self.criar_features(historico)
+        if X is None or len(X) == 0:
+            return
+        self.model = RandomForestClassifier(n_estimators=100)
+        self.model.fit(X, y)
 
     def prever(self, historico):
         if not historico:
             return []
 
-        historico_lista = list(historico)
-        ultimo_numero = historico_lista[-1]["number"] if isinstance(historico_lista[-1], dict) else None
-        if ultimo_numero is None:
-            return []
+        self.treinar_modelo(historico)
 
+        numeros = [h["number"] if isinstance(h, dict) else h for h in historico]
+        ultimo_num = numeros[-1]
+
+        # frequência antes/depois
         antes, depois = [], []
-
-        for i, h in enumerate(historico_lista[:-1]):
-            if isinstance(h, dict) and h.get("number") == ultimo_numero:
-                if i - 1 >= 0 and isinstance(historico_lista[i-1], dict):
-                    antes.append(historico_lista[i-1]["number"])
-                if i + 1 < len(historico_lista) and isinstance(historico_lista[i+1], dict):
-                    depois.append(historico_lista[i+1]["number"])
-
-        if not antes and not depois:
-            return []
-
-        contagem_antes = Counter(antes)
-        contagem_depois = Counter(depois)
-
-        top_antes = [num for num, _ in contagem_antes.most_common(self.top_n)]
-        top_depois = [num for num, _ in contagem_depois.most_common(self.top_n)]
+        for i, n in enumerate(numeros[:-1]):
+            if n == ultimo_num:
+                if i-1 >=0: antes.append(numeros[i-1])
+                if i+1 < len(numeros): depois.append(numeros[i+1])
+        cont_antes = Counter(antes)
+        cont_depois = Counter(depois)
+        top_antes = [num for num,_ in cont_antes.most_common(self.top_n)]
+        top_depois = [num for num,_ in cont_depois.most_common(self.top_n)]
 
         candidatos = list(set(top_antes + top_depois))
 
+        # previsão via ML
+        if self.model:
+            features = [numeros[-2] if len(numeros)>1 else 0, numeros[-1]]
+            features += [numeros[-1]]
+            features += obter_vizinhos(numeros[-1], self.layout, antes=1, depois=1)
+            pred_proba = self.model.predict_proba([features])
+            classes = self.model.classes_
+            probs = pred_proba[0]
+            top_ml = [classes[i] for i in np.argsort(probs)[-self.top_n:]]
+            candidatos = list(set(candidatos + top_ml))
+
+        # expande vizinhos físicos
         numeros_previstos = []
         for n in candidatos:
             vizinhos = obter_vizinhos(n, self.layout, antes=1, depois=1)
@@ -175,53 +193,64 @@ class IA_Recorrencia:
         return numeros_previstos
 
 # =============================
-# Redução inteligente (metade) — pontua e escolhe 50% mais fortes
+# Ajuste Dinâmico Top N
 # =============================
-def reduzir_metade_inteligente(previsoes, historico):
+TOP_N_COOLDOWN = 2
+TOP_N_PROB_BASE = 0.3
+TOP_N_PROB_MAX = 0.5
+TOP_N_PROB_MIN = 0.2
+TOP_N_WINDOW = 18
+
+if "topn_history" not in st.session_state:
+    st.session_state.topn_history = deque(maxlen=TOP_N_WINDOW)
+if "topn_reds" not in st.session_state:
+    st.session_state.topn_reds = {}
+if "topn_greens" not in st.session_state:
+    st.session_state.topn_greens = {}
+
+def atualizar_cooldown_reds():
+    novos_reds = {}
+    for num, rodadas in st.session_state.topn_reds.items():
+        if rodadas > 1:
+            novos_reds[num] = rodadas - 1
+    st.session_state.topn_reds = novos_reds
+
+def calcular_prob_min_topN():
+    historico = list(st.session_state.topn_history)
+    if not historico:
+        return TOP_N_PROB_BASE
+    taxa_red = historico.count("R") / len(historico)
+    prob_min = TOP_N_PROB_BASE + (taxa_red * (TOP_N_PROB_MAX - TOP_N_PROB_BASE))
+    return min(max(prob_min, TOP_N_PROB_MIN), TOP_N_PROB_MAX)
+
+def ajustar_top_n(previsoes, historico=None, min_n=MIN_TOP_N, max_n=MAX_TOP_N):
     if not previsoes:
-        return []
+        return previsoes[:min_n]
 
-    # últimos WINDOW_SIZE números (apenas os 'number')
-    ultimos = [h["number"] for h in historico[-WINDOW_SIZE:]] if historico else []
-    contagem_total = Counter(ultimos)
+    atualizar_cooldown_reds()
+    prob_min = calcular_prob_min_topN()
 
-    pontuacoes = {}
-    # pega bônus TopN greens se existir
-    topn_greens = st.session_state.get("topn_greens", {})
+    filtrados = [num for num in previsoes if num not in st.session_state.topn_reds]
 
-    for n in previsoes:
-        freq = contagem_total.get(n, 0)                # frequência recente
-        vizinhos = obter_vizinhos(n, ROULETTE_LAYOUT, antes=1, depois=1)
-        redundancia = sum(1 for v in vizinhos if v in previsoes)  # penaliza agrupamentos
-        topN_bonus = topn_greens.get(n, 0)             # histórico de greens no topN
-        # pontuação combinada (ajustável)
-        pontuacoes[n] = freq + (topN_bonus * 0.8) - (redundancia * 0.6)
+    pesos = {}
+    for num in filtrados:
+        pesos[num] = 1.0 + st.session_state.topn_greens.get(num, 0) * 0.05
 
-    # Ordena pela pontuação (maior primeiro)
-    ordenados = sorted(pontuacoes.keys(), key=lambda x: pontuacoes[x], reverse=True)
+    ordenados = sorted(pesos.keys(), key=lambda x: pesos[x], reverse=True)
 
-    # Seleciona metade (inteligente)
-    n_reduzidos = max(1, len(ordenados) // 2)
-    return ordenados[:n_reduzidos]
+    n = max(min_n, min(max_n, int(len(ordenados) * prob_min) + min_n))
+    top_n_final = ordenados[:n]
 
-# =============================
-# Ajuste Top N (simples - baseado em frequência recente filtrada pelos previsoes)
-# =============================
-def ajustar_top_n(previsoes, historico, min_n=MIN_TOP_N, max_n=MAX_TOP_N):
-    if not previsoes:
-        return []
+    return top_n_final
 
-    ultimos = [h["number"] for h in historico[-WINDOW_SIZE:]] if historico else []
-    contagem = Counter(ultimos)
-    # pega os mais frequentes no período (até max_n)
-    candidatos = [num for num, _ in contagem.most_common(max_n)]
-    # filtra apenas os que estão na lista de previsões (prioriza coerência)
-    filtrados = [n for n in candidatos if n in previsoes]
-    # garante pelo menos min_n (preenche com os top das previsoes caso falte)
-    if len(filtrados) < min_n:
-        extras = [n for n in previsoes if n not in filtrados]
-        filtrados += extras[:(min_n - len(filtrados))]
-    return filtrados[:max_n]
+def registrar_resultado_topN(numero_real, top_n):
+    for num in top_n:
+        if num == numero_real:
+            st.session_state.topn_greens[num] = st.session_state.topn_greens.get(num, 0) + 1
+            st.session_state.topn_history.append("G")
+        else:
+            st.session_state.topn_reds[num] = TOP_N_COOLDOWN
+            st.session_state.topn_history.append("R")
 
 # =============================
 # Estratégia 31/34
@@ -233,7 +262,6 @@ def estrategia_31_34(numero_capturado):
         terminal = int(str(numero_capturado)[-1])
     except Exception:
         return None
-    # gatilho original: se terminal em {2,6,9}
     if terminal not in {2, 6, 9}:
         return None
 
@@ -241,7 +269,6 @@ def estrategia_31_34(numero_capturado):
     viz_34 = obter_vizinhos_fixos(34, ROULETTE_LAYOUT, antes=5, depois=5)
     entrada = set([0, 26, 30] + viz_31 + viz_34)
 
-    # envia alerta compacto
     msg = (
         "🎯 Estratégia 31/34 disparada!\n"
         f"Número capturado: {numero_capturado} (terminal {terminal})\n"
@@ -251,16 +278,16 @@ def estrategia_31_34(numero_capturado):
     return list(entrada)
 
 # =============================
-# Streamlit - inicialização session_state
+# Streamlit App
 # =============================
 st.set_page_config(page_title="Roleta IA Profissional", layout="centered")
-st.title("🎯 Roleta — IA Recorrência + Redução Inteligente")
+st.title("🎯 Roleta — IA de Recorrência Aprimorada")
 st_autorefresh(interval=3000, key="refresh")
 
-# chaves iniciais
-defaults = {
+# Inicialização session_state
+for key, default in {
     "estrategia": EstrategiaDeslocamento(),
-    "ia_recorrencia": IA_Recorrencia(),
+    "ia_recorrencia": IA_Recorrencia_Aprimorada(layout=ROULETTE_LAYOUT, top_n=5),
     "previsao": [],
     "previsao_topN": [],
     "previsao_31_34": [],
@@ -270,22 +297,18 @@ defaults = {
     "erros_topN": 0,
     "acertos_31_34": 0,
     "erros_31_34": 0,
-    "contador_rodadas": 0,
-    "topn_greens": {}
-}
-for key, default in defaults.items():
+    "contador_rodadas": 0
+}.items():
     if key not in st.session_state:
         st.session_state[key] = default
 
-# Carrega histórico do arquivo
+# Carregar histórico existente
 historico = carregar_historico()
 for n in historico:
-    # evita duplicar caso já esteja no session_state (útil no reload)
-    if not st.session_state.estrategia.historico or st.session_state.estrategia.historico[-1].get("timestamp") != n.get("timestamp"):
-        st.session_state.estrategia.adicionar_numero(n)
+    st.session_state.estrategia.adicionar_numero(n)
 
 # -----------------------------
-# Captura novo número (API)
+# Captura número
 # -----------------------------
 resultado = fetch_latest_result()
 ultimo_ts = st.session_state.estrategia.historico[-1]["timestamp"] if st.session_state.estrategia.historico else None
@@ -296,39 +319,9 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
     salvar_historico(list(st.session_state.estrategia.historico))
     numero_real = numero_dict["number"]
 
-    # incrementa contador de rodadas (usado para alternar IA / 31_34)
-    st.session_state.contador_rodadas += 1
-
     # -----------------------------
-    # Previsão: rodadas pares -> IA recorrência + redução inteligente
+    # Conferência (primeiro)
     # -----------------------------
-    if st.session_state.contador_rodadas % 2 == 0:
-        prox_numeros = st.session_state.ia_recorrencia.prever(st.session_state.estrategia.historico)
-        if prox_numeros:
-            # redução inteligente pela metade (mantém melhores pontuados)
-            prox_numeros = reduzir_metade_inteligente(prox_numeros, st.session_state.estrategia.historico)
-            st.session_state.previsao = prox_numeros
-
-            # ajusta Top N
-            entrada_topN = ajustar_top_n(prox_numeros, st.session_state.estrategia.historico)
-            st.session_state.previsao_topN = entrada_topN
-
-            # envia alertas compactos
-            enviar_telegram("🎯 NP: " + " ".join(str(n) for n in sorted(prox_numeros)))
-            enviar_telegram_topN("📊 Top N: " + " ".join(str(n) for n in sorted(entrada_topN)))
-    # -----------------------------
-    # Estratégia 31/34 nas rodadas ímpares
-    # -----------------------------
-    else:
-        entrada_31_34 = estrategia_31_34(numero_real)
-        if entrada_31_34:
-            st.session_state.previsao_31_34 = entrada_31_34
-            enviar_telegram("🎯 Estrat 31/34: " + " ".join(str(n) for n in entrada_31_34))
-
-    # -----------------------------
-    # === Conferência e contagem (GREEN/RED) ===
-    # -----------------------------
-    # Recorrência
     if st.session_state.previsao:
         numeros_com_vizinhos = []
         for n in st.session_state.previsao:
@@ -345,7 +338,6 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
             enviar_telegram(f"🔴 RED! Número {numero_real} não estava na previsão de recorrência nem nos vizinhos.")
         st.session_state.previsao = []
 
-    # Top N
     if st.session_state.previsao_topN:
         topN_com_vizinhos = []
         for n in st.session_state.previsao_topN:
@@ -356,15 +348,12 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
             st.session_state.acertos_topN += 1
             st.success(f"🟢 GREEN Top N! Número {numero_real} estava entre os mais prováveis.")
             enviar_telegram_topN(f"🟢 GREEN Top N! Número {numero_real} estava entre os mais prováveis.")
-            # registra para usar como bônus na redução inteligente
-            st.session_state.topn_greens[numero_real] = st.session_state.topn_greens.get(numero_real, 0) + 1
         else:
             st.session_state.erros_topN += 1
             st.error(f"🔴 RED Top N! Número {numero_real} não estava entre os mais prováveis.")
             enviar_telegram_topN(f"🔴 RED Top N! Número {numero_real} não estava entre os mais prováveis.")
         st.session_state.previsao_topN = []
 
-    # 31/34
     if st.session_state.previsao_31_34:
         if numero_real in st.session_state.previsao_31_34:
             st.session_state.acertos_31_34 += 1
@@ -376,74 +365,69 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
             enviar_telegram(f"🔴 RED (31/34)! Número {numero_real} não estava na entrada 31/34.")
         st.session_state.previsao_31_34 = []
 
-# =============================
-# Exibição no Streamlit (histórico, previsões e métricas)
-# =============================
-st.subheader("📜 Histórico (últimos 10 números)")
-ultimos_display = [h["number"] for h in list(st.session_state.estrategia.historico)[-10:]]
-st.write(ultimos_display)
+    # -----------------------------
+    # Previsão (depois)
+    # -----------------------------
+    if st.session_state.contador_rodadas % 2 == 0:
+        prox_numeros = st.session_state.ia_recorrencia.prever(st.session_state.estrategia.historico)
+        if prox_numeros:
+            st.session_state.previsao = prox_numeros
+            entrada_topN = ajustar_top_n(prox_numeros, st.session_state.estrategia.historico)
+            st.session_state.previsao_topN = entrada_topN
+            enviar_telegram("🎯 NP: " + " ".join(str(n) for n in sorted(prox_numeros)))
+            enviar_telegram_topN("Top N : " + " ".join(str(n) for n in sorted(entrada_topN)))
+    else:
+        entrada_31_34 = estrategia_31_34(numero_real)
+        if entrada_31_34:
+            st.session_state.previsao_31_34 = entrada_31_34
 
-st.subheader("📊 Última previsão IA Recorrência (reduzida inteligentemente)")
-st.write(st.session_state.get("previsao", []))
+    st.session_state.contador_rodadas += 1
 
-st.subheader("📊 Última previsão Top N")
-st.write(st.session_state.get("previsao_topN", []))
+# -----------------------------
+# Histórico e métricas
+# -----------------------------
+st.subheader("📜 Histórico (últimos 3 números)")
+st.write(list(st.session_state.estrategia.historico)[-3:])
 
-st.subheader("📊 Última previsão Estrat 31/34")
-st.write(st.session_state.get("previsao_31_34", []))
-
-# =============================
-# Métricas finais e indicadores
-# =============================
-st.subheader("📈 Métricas de Performance")
-
-# Recorrência
+# Estatísticas Recorrência
 acertos = st.session_state.get("acertos", 0)
 erros = st.session_state.get("erros", 0)
 total = acertos + erros
-taxa = (acertos / total * 100) if total > 0 else 0.0
-qtd_previstos_rec = len(st.session_state.get("previsao", []))
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("🟢 GREEN", acertos)
-col2.metric("🔴 RED", erros)
-col3.metric("✅ Taxa de acerto", f"{taxa:.1f}%")
-col4.metric("🎯 Qtd. previstos Recorrência", qtd_previstos_rec)
+taxa = (acertos / total * 100) if total >
+
+# =============================
+# 📊 Métricas no Streamlit
+# =============================
+
+st.subheader("📊 Métricas de desempenho")
+
+# IA Recorrência
+total_rec = st.session_state.recorrencia_acertos + st.session_state.recorrencia_erros
+taxa_rec = (st.session_state.recorrencia_acertos / total_rec * 100) if total_rec > 0 else 0
+
+st.write("### IA Recorrência")
+st.write(f"🟢 GREEN: {st.session_state.recorrencia_acertos}")
+st.write(f"🔴 RED: {st.session_state.recorrencia_erros}")
+st.write(f"✅ Taxa de acerto: {taxa_rec:.1f}%")
 
 # Top N
-acertos_topN = st.session_state.get("acertos_topN", 0)
-erros_topN = st.session_state.get("erros_topN", 0)
-total_topN = acertos_topN + erros_topN
-taxa_topN = (acertos_topN / total_topN * 100) if total_topN > 0 else 0.0
-qtd_previstos_topN = len(st.session_state.get("previsao_topN", []))
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("🟢 GREEN Top N", acertos_topN)
-col2.metric("🔴 RED Top N", erros_topN)
-col3.metric("✅ Taxa Top N", f"{taxa_topN:.1f}%")
-col4.metric("🎯 Qtd. previstos Top N", qtd_previstos_topN)
+total_topn = st.session_state.topn_acertos + st.session_state.topn_erros
+taxa_topn = (st.session_state.topn_acertos / total_topn * 100) if total_topn > 0 else 0
 
-# 31/34
-acertos_31_34 = st.session_state.get("acertos_31_34", 0)
-erros_31_34 = st.session_state.get("erros_31_34", 0)
-total_31_34 = acertos_31_34 + erros_31_34
-taxa_31_34 = (acertos_31_34 / total_31_34 * 100) if total_31_34 > 0 else 0.0
-qtd_previstos_31_34 = len(st.session_state.get("previsao_31_34", []))
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("🟢 GREEN 31/34", acertos_31_34)
-col2.metric("🔴 RED 31/34", erros_31_34)
-col3.metric("✅ Taxa 31/34", f"{taxa_31_34:.1f}%")
-col4.metric("🎯 Qtd. previstos 31/34", qtd_previstos_31_34)
+st.write("### Top N")
+st.write(f"🟢 GREEN: {st.session_state.topn_acertos}")
+st.write(f"🔴 RED: {st.session_state.topn_erros}")
+st.write(f"✅ Taxa de acerto: {taxa_topn:.1f}%")
 
-# =============================
-# Salvamento periódico de métricas (opcional)
-# =============================
-# Se quiser salvar métricas em arquivo (historico_metricas.json), descomente abaixo:
-# try:
-#     metrics = {
-#         "acertos": acertos, "erros": erros,
-#         "acertos_topN": acertos_topN, "erros_topN": erros_topN,
-#         "acertos_31_34": acertos_31_34, "erros_31_34": erros_31_34
-#     }
-#     with open("historico_metricas.json", "w") as f:
-#         json.dump(metrics, f, indent=2)
-# except Exception as e:
-#     logging.error(f"Erro ao salvar métricas: {e}")
+# Estratégia 31/34
+total_3134 = st.session_state.estrat_acertos + st.session_state.estrat_erros
+taxa_3134 = (st.session_state.estrat_acertos / total_3134 * 100) if total_3134 > 0 else 0
+
+st.write("### Estratégia 31/34")
+st.write(f"🟢 GREEN: {st.session_state.estrat_acertos}")
+st.write(f"🔴 RED: {st.session_state.estrat_erros}")
+st.write(f"✅ Taxa de acerto: {taxa_3134:.1f}%")
+
+# Histórico dos últimos 10
+st.subheader("📜 Histórico (últimos 10 números)")
+st.write([h["number"] for h in list(st.session_state.estrategia.historico)[-10:]])
