@@ -467,11 +467,7 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
             st.session_state.erros_31_34 += 1
             st.error(f"🔴 RED (31/34)! Número {numero_real} não estava na entrada 31/34.")
             enviar_telegram(f"🔴 RED (31/34)! Número {numero_real} não estava na entrada 31/34.")
-        st.session_state.previsao_31_34 = []
-
-    # -----------------------------
-    # -----------------------------
-# ===== ALERTA NP (um por rodada) =====
+        # ===== ALERTA NP (um por rodada) =====
 if "alerta_np_enviado" not in st.session_state:
     st.session_state.alerta_np_enviado = False
 
@@ -506,10 +502,9 @@ st.session_state.previsao_topN = []
 st.session_state.alerta_np_enviado = False
 st.session_state.alerta_topn_enviado = False
 
-
     
-    # incrementa contador
-  #  st.session_state.contador_rodadas += 1
+    # incrementa 
+  st.session_state.contador_rodadas += 1
 
     # -----------------------------
     # Salvar métricas após cada rodada (simples)
