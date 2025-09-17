@@ -467,6 +467,9 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
             st.session_state.erros_31_34 += 1
             st.error(f"🔴 RED (31/34)! Número {numero_real} não estava na entrada 31/34.")
             enviar_telegram(f"🔴 RED (31/34)! Número {numero_real} não estava na entrada 31/34.")
+
+    # ✅ Resetar a previsão depois da conferência
+    st.session_state.previsao_31_34 = None
       
 
     #473
