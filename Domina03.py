@@ -471,43 +471,29 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
 
     # -----------------------------
     # -----------------------------
-# Previsão (IA Recorrência ou 31/34)
-# -----------------------------
-if st.session_state.contador_rodadas % 2 == 0:
-    # usa RandomForest-based recurrence IA
-    prox_numeros = st.session_state.ia_recorrencia.prever(st.session_state.estrategia.historico)
-    if prox_numeros:
-        # garante unicidade e aplica limite final se necessário
-        prox_numeros = list(dict.fromkeys(prox_numeros))
-        if len(prox_numeros) > MAX_PREVIEWS:
-            prox_numeros = prox_numeros[:MAX_PREVIEWS]
-        st.session_state.previsao = prox_numeros
+# ===== ALERTA NP (um por rodada) =====
+if st.session_state.previsao:
+    prox_numeros = sorted(st.session_state.previsao)
+    n = len(prox_numeros)
+    metade = (n + 1) // 2
+    linha1 = " ".join(str(num) for num in prox_numeros[:metade])
+    linha2 = " ".join(str(num) for num in prox_numeros[metade:])
+    mensagem_np = f"🎯 NP: {linha1}\n{linha2}"
+    enviar_telegram(mensagem_np)
+    # limpa para não enviar novamente
+    st.session_state.previsao = []
 
-        entrada_topN = ajustar_top_n(prox_numeros, st.session_state.estrategia.historico)
-        st.session_state.previsao_topN = entrada_topN
-
-        # ===== ALERTA NP =====
-        prox_numeros = sorted(prox_numeros)
-        n = len(prox_numeros)
-        metade = (n + 1) // 2
-        linha1 = " ".join(str(num) for num in prox_numeros[:metade])
-        linha2 = " ".join(str(num) for num in prox_numeros[metade:])
-        mensagem_np = f"🎯 NP: {linha1}\n{linha2}"
-        enviar_telegram(mensagem_np)
-
-        # ===== ALERTA TOP N =====
-        entrada_topN = sorted(entrada_topN)
-        n2 = len(entrada_topN)
-        metade2 = (n2 + 1) // 2
-        linha1_top = " ".join(str(num) for num in entrada_topN[:metade2])
-        linha2_top = " ".join(str(num) for num in entrada_topN[metade2:])
-        mensagem_topn = f"📊 Top N: {linha1_top}\n{linha2_top}"
-        enviar_telegram_topN(mensagem_topn)
-
-else:
-    entrada_31_34 = estrategia_31_34(numero_real)
-    if entrada_31_34:
-        st.session_state.previsao_31_34 = entrada_31_34
+# ===== ALERTA TOP N (um por rodada) =====
+if st.session_state.previsao_topN:
+    entrada_topN = sorted(st.session_state.previsao_topN)
+    n2 = len(entrada_topN)
+    metade2 = (n2 + 1) // 2
+    linha1_top = " ".join(str(num) for num in entrada_topN[:metade2])
+    linha2_top = " ".join(str(num) for num in entrada_topN[metade2:])
+    mensagem_topn = f"📊 Top N: {linha1_top}\n{linha2_top}"
+    enviar_telegram_topN(mensagem_topn)
+    # limpa para não enviar novamente
+    st.session_state.previsao_topN = []
 
 
 
