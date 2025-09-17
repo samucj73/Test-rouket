@@ -500,7 +500,7 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
     
 
     # incrementa 
-     #st.session_state.contador_rodadas += 1
+        st.session_state.contador_rodadas += 1
 
     # -----------------------------
     # Salvar métricas após cada rodada (simples)
