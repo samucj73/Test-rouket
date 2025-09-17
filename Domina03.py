@@ -494,10 +494,10 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
             
             
             enviar_telegram_topN("Top N : " + " ".join(str(n) for n in sorted(entrada_topN)))
-  #  else:
-        #entrada_31_34 = estrategia_31_34(numero_real)
-        #if entrada_31_34:
-            #st.session_state.previsao_31_34 = entrada_31_34
+    else:
+        entrada_31_34 = estrategia_31_34(numero_real)
+        if entrada_31_34:
+            st.session_state.previsao_31_34 = entrada_31_34
 
     
     
