@@ -469,7 +469,7 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
             enviar_telegram(f"🔴 RED (31/34)! Número {numero_real} não estava na entrada 31/34.")
 
     # ✅ Resetar a previsão depois da conferência
-    st.session_state.previsao_31_34 = None
+    st.session_state.previsao_31_34 = []
       
 
     #473
