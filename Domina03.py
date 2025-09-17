@@ -479,7 +479,6 @@ if st.session_state.contador_rodadas % 2 == 0:
     if prox_numeros:
         # garante unicidade e aplica limite final se necessário
         prox_numeros = list(dict.fromkeys(prox_numeros))
-        # se prox_numeros maior que MAX_PREVIEWS, manter os melhores (já feito dentro do prever)
         if len(prox_numeros) > MAX_PREVIEWS:
             prox_numeros = prox_numeros[:MAX_PREVIEWS]
         st.session_state.previsao = prox_numeros
@@ -509,6 +508,10 @@ else:
     entrada_31_34 = estrategia_31_34(numero_real)
     if entrada_31_34:
         st.session_state.previsao_31_34 = entrada_31_34
+
+
+
+
     
     # incrementa contador
     st.session_state.contador_rodadas += 1
