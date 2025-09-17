@@ -478,27 +478,32 @@ if st.session_state.previsao and not st.session_state.alerta_np_enviado:
     linha2 = " ".join(str(num) for num in prox_numeros[metade:])
     mensagem_np = f"🎯 NP: {linha1}\n{linha2}"
     enviar_telegram(mensagem_np)
-    st.session_state.alerta_np_enviado = True  # marca como enviado
+    st.session_state.alerta_np_enviado = True 
 
-# ===== ALERTA TOP N (um por rodada) =====
-if "alerta_topn_enviado" not in st.session_state:
-    st.session_state.alerta_topn_enviado = False
+    #473
+    # Previsão (IA Recorrência ou 31/34)
+    # -----------------------------
+    if st.session_state.contador_rodadas % 2 == 0:
+        # usa RandomForest-based recurrence IA
+        prox_numeros = st.session_state.ia_recorrencia.prever(st.session_state.estrategia.historico)
+        if prox_numeros:
+            # garante unicidade e aplica limite final se necessário
+            prox_numeros = list(dict.fromkeys(prox_numeros))
+            # se prox_numeros maior que MAX_PREVIEWS, manter os melhores (já feito dentro do prever)
+            if len(prox_numeros) > MAX_PREVIEWS:
+                prox_numeros = prox_numeros[:MAX_PREVIEWS]
+            st.session_state.previsao = prox_numeros
 
-if st.session_state.previsao_topN and not st.session_state.alerta_topn_enviado:
-    entrada_topN = sorted(st.session_state.previsao_topN)
-    n2 = len(entrada_topN)
-    metade2 = (n2 + 1) // 2
-    linha1_top = " ".join(str(num) for num in entrada_topN[:metade2])
-    linha2_top = " ".join(str(num) for num in entrada_topN[metade2:])
-    mensagem_topn = f"📊 Top N: {linha1_top}\n{linha2_top}"
-    enviar_telegram_topN(mensagem_topn)
-    st.session_state.alerta_topn_enviado = True  # marca como enviado
+            entrada_topN = ajustar_top_n(prox_numeros, st.session_state.estrategia.historico)
+            st.session_state.previsao_topN = entrada_topN
 
-# Limpa as listas e prepara flags para próxima rodada
-st.session_state.previsao = []
-st.session_state.previsao_topN = []
-st.session_state.alerta_np_enviado = False
-st.session_state.alerta_topn_enviado = False
+            #enviar_telegram("🎯 NP: " + " ".join(str(n) for n in prox_numeros))
+            enviar_telegram("🎯 NP: " + " ".join(str(n) for n in sorted(prox_numeros)))
+            enviar_telegram_topN("Top N : " + " ".join(str(n) for n in sorted(entrada_topN)))
+    else:
+        entrada_31_34 = estrategia_31_34(numero_real)
+        if entrada_31_34:
+            st.session_state.previsao_31_34 = entrada_31_34
 
     
     
