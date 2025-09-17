@@ -398,6 +398,7 @@ for n in historico:
         st.session_state.estrategia.adicionar_numero(n)
 
 # -----------------------------
+# -----------------------------
 # Captura número (API)
 # -----------------------------
 resultado = fetch_latest_result()
@@ -409,6 +410,7 @@ if st.session_state.estrategia.historico:
     if isinstance(ultimo_item, dict) and "timestamp" in ultimo_item:
         ultimo_ts = ultimo_item["timestamp"]
 
+# Nova rodada detectada
 if resultado and resultado.get("timestamp") != ultimo_ts:
     numero_dict = {"number": resultado["number"], "timestamp": resultado["timestamp"]}
     st.session_state.estrategia.adicionar_numero(numero_dict)
@@ -416,10 +418,9 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
     numero_real = numero_dict["number"]
 
     # -----------------------------
-    # Conferência (Recorrência)
+    # Conferência Recorrência
     # -----------------------------
     if st.session_state.previsao:
-        # expandir vizinhos (2 de cada lado) para conferir
         numeros_com_vizinhos = []
         for n in st.session_state.previsao:
             for v in obter_vizinhos(n, ROULETTE_LAYOUT, antes=2, depois=2):
@@ -467,51 +468,39 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
             st.session_state.erros_31_34 += 1
             st.error(f"🔴 RED (31/34)! Número {numero_real} não estava na entrada 31/34.")
             enviar_telegram(f"🔴 RED (31/34)! Número {numero_real} não estava na entrada 31/34.")
+        st.session_state.previsao_31_34 = []
 
-    # ✅ Resetar a previsão depois da conferência
-    st.session_state.previsao_31_34 = []
-      
-
-    #473
-    # Previsão (IA Recorrência ou 31/34)
+    # -----------------------------
+    # Gerar próxima previsão
     # -----------------------------
     if st.session_state.contador_rodadas % 3 == 0:
-        # usa RandomForest-based recurrence IA
+        # Usa IA Recorrência RandomForest
         prox_numeros = st.session_state.ia_recorrencia.prever(st.session_state.estrategia.historico)
         if prox_numeros:
-            # garante unicidade e aplica limite final se necessário
-            prox_numeros = list(dict.fromkeys(prox_numeros))
-            # se prox_numeros maior que MAX_PREVIEWS, manter os melhores (já feito dentro do prever)
-            if len(prox_numeros) > MAX_PREVIEWS:
-                prox_numeros = prox_numeros[:MAX_PREVIEWS]
+            prox_numeros = list(dict.fromkeys(prox_numeros))  # garante unicidade
             st.session_state.previsao = prox_numeros
 
             entrada_topN = ajustar_top_n(prox_numeros, st.session_state.estrategia.historico)
             st.session_state.previsao_topN = entrada_topN
 
-            #enviar_telegram("🎯 NP: " + " ".join(str(n) for n in prox_numeros))
-            #enviar_telegram("🎯 NP: " + " ".join(str(n) for n in sorted(prox_numeros)))
-            #enviar_telegram("🎯 NP: " + " ".join(str(n) for n in (s:=sorted(prox_numeros))[:5]) + ("\n" + " ".join(str(n) for n in s[5:]) if len(s) > 5 else ""))
-            enviar_telegram("🎯 NP: " + " ".join(map(str, sorted(prox_numeros)[:5])) + ("\n" + " ".join(map(str, sorted(prox_numeros)[5:])) if len(prox_numeros) > 5 else ""))
-            
-            
-            
-            enviar_telegram_topN("Top N : " + " ".join(str(n) for n in sorted(entrada_topN)))
+            # Envio Telegram
+            s = sorted(prox_numeros)
+            enviar_telegram("🎯 NP: " + " ".join(map(str, s[:5])) +
+                            ("\n" + " ".join(map(str, s[5:])) if len(s) > 5 else ""))
+            enviar_telegram_topN("Top N: " + " ".join(map(str, sorted(entrada_topN))))
     else:
+        # Estratégia 31/34
         entrada_31_34 = estrategia_31_34(numero_real)
         if entrada_31_34:
             st.session_state.previsao_31_34 = entrada_31_34
 
-    
-    
-
-    
-
-    # incrementa 
-        st.session_state.contador_rodadas += 1
+    # -----------------------------
+    # Incrementa contador de rodadas
+    # -----------------------------
+    st.session_state.contador_rodadas += 1
 
     # -----------------------------
-    # Salvar métricas após cada rodada (simples)
+    # Salvar métricas após cada rodada
     # -----------------------------
     metrics = {
         "timestamp": resultado.get("timestamp"),
@@ -524,6 +513,7 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
         "erros_31_34": st.session_state.get("erros_31_34", 0)
     }
     salvar_metricas(metrics)
+
 
 # -----------------------------
 # Histórico e métricas (exibição)
