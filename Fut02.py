@@ -36,6 +36,8 @@ def salvar_alertas_andamento(alertas):
 # Funções auxiliares
 # =============================
 def enviar_alerta_telegram(fixture, tendencia, confianca, estimativa):
+    from datetime import datetime, timedelta
+
     home = fixture["teams"]["home"]["name"]
     away = fixture["teams"]["away"]["name"]
 
@@ -43,16 +45,29 @@ def enviar_alerta_telegram(fixture, tendencia, confianca, estimativa):
     away_goals = fixture.get("goals", {}).get("away", 0) or 0
     status = fixture.get("fixture", {}).get("status", {}).get("long", "Desconhecido")
 
+    # Obter data e horário do jogo (convertendo para horário de Brasília)
+    data_iso = fixture["fixture"]["date"]
+    data_jogo = datetime.fromisoformat(data_iso.replace("Z", "+00:00"))  # UTC
+    data_jogo_brt = data_jogo - timedelta(hours=3)  # UTC-3
+
+    data_formatada = data_jogo_brt.strftime("%d/%m/%Y")  # dd/mm/aaaa
+    hora_formatada = data_jogo_brt.strftime("%H:%M")     # HH:MM
+
     msg = (
         f"⚽ Alerta de Gols!\n"
         f"🏟️ {home} vs {away}\n"
+        f"📅 Data do jogo: {data_formatada}\n"
+        f"⏰ Horário do jogo (BRT): {hora_formatada}\n"
         f"Tendência: {tendencia}\n"
         f"Estimativa: {estimativa:.2f} gols\n"
         f"Confiança: {confianca:.0f}%\n"
         f"Status: {status}\n"
         f"Placar atual: {home} {home_goals} x {away_goals} {away}"
     )
+
+    # Envia mensagem para o Telegram
     requests.get(BASE_URL_TG, params={"chat_id": TELEGRAM_CHAT_ID, "text": msg})
+
 
 def verificar_e_atualizar_alerta(fixture, tendencia, confianca, estimativa):
     alertas = carregar_alertas_andamento()
