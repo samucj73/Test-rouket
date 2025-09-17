@@ -487,7 +487,9 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
             st.session_state.previsao_topN = entrada_topN
 
             #enviar_telegram("🎯 NP: " + " ".join(str(n) for n in prox_numeros))
-            enviar_telegram("🎯 NP: " + " ".join(str(n) for n in sorted(prox_numeros)))
+            #enviar_telegram("🎯 NP: " + " ".join(str(n) for n in sorted(prox_numeros)))
+            enviar_telegram("🎯 NP: " + " ".join(str(n) for n in (s:=sorted(prox_numeros))[:5]) + ("\n" + " ".join(str(n) for n in s[5:]) if len(s) > 5 else ""))
+            
             enviar_telegram_topN("Top N : " + " ".join(str(n) for n in sorted(entrada_topN)))
     else:
         entrada_31_34 = estrategia_31_34(numero_real)
