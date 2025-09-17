@@ -509,7 +509,7 @@ st.session_state.alerta_topn_enviado = False
 
     
     # incrementa contador
-    st.session_state.contador_rodadas += 1
+  #  st.session_state.contador_rodadas += 1
 
     # -----------------------------
     # Salvar métricas após cada rodada (simples)
