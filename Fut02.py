@@ -175,17 +175,25 @@ if st.button("🔍 Buscar jogos do dia"):
     st.json(response.json())
     
     jogos = response.json().get("response", [])
-
     ligas_principais = {
-        "Premier League": 39,
-        "La Liga": 140,
-        "Serie A": 135,
-        "MLS": 253, 
-        "Bundesliga": 78,
-        "Ligue 1": 61,
-        "Brasileirão Série A": 71,
-        "Brasileirão Série B": 72
-    }
+    "Premier League": 39,
+    "Premier League 2ª Divisão": 40,
+    "La Liga": 140,
+    "La Liga 2ª Divisão": 141,
+    "Serie A": 135,
+    "MLS": 253, 
+    "Bundesliga": 78,
+    "Bundesliga 2ª Divisão": 79,
+    "Ligue 1": 61,
+    "Brasileirão Série A": 71,
+    "Brasileirão Série B": 72,
+    "UEFA Champions League": 2,
+    "Copa Libertadores": 13,
+    "Copa Sul-Americana": 14,
+    "Copa do Brasil": 73
+}
+
+    
 
     if not jogos:
         st.warning("⚠️ Nenhum jogo encontrado para a data selecionada.")
