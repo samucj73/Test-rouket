@@ -467,17 +467,7 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
             st.session_state.erros_31_34 += 1
             st.error(f"🔴 RED (31/34)! Número {numero_real} não estava na entrada 31/34.")
             enviar_telegram(f"🔴 RED (31/34)! Número {numero_real} não estava na entrada 31/34.")
-     if "alerta_np_enviado" not in st.session_state:
-        st.session_state.alerta_np_enviado = False
-     if st.session_state.previsao and not st.session_state.alerta_np_enviado:
-    prox_numeros = sorted(st.session_state.previsao)
-    n = len(prox_numeros)
-    metade = (n + 1) // 2
-    linha1 = " ".join(str(num) for num in prox_numeros[:metade])
-    linha2 = " ".join(str(num) for num in prox_numeros[metade:])
-    mensagem_np = f"🎯 NP: {linha1}\n{linha2}"
-    enviar_telegram(mensagem_np)
-    st.session_state.alerta_np_enviado = True 
+      
 
     #473
     # Previsão (IA Recorrência ou 31/34)
