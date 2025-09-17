@@ -468,9 +468,8 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
             st.error(f"🔴 RED (31/34)! Número {numero_real} não estava na entrada 31/34.")
             enviar_telegram(f"🔴 RED (31/34)! Número {numero_real} não estava na entrada 31/34.")
      if "alerta_np_enviado" not in st.session_state:
-    st.session_state.alerta_np_enviado = False
-
-if st.session_state.previsao and not st.session_state.alerta_np_enviado:
+            st.session_state.alerta_np_enviado = False
+     if st.session_state.previsao and not st.session_state.alerta_np_enviado:
     prox_numeros = sorted(st.session_state.previsao)
     n = len(prox_numeros)
     metade = (n + 1) // 2
