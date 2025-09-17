@@ -472,7 +472,10 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
     # -----------------------------
     # -----------------------------
 # ===== ALERTA NP (um por rodada) =====
-if st.session_state.previsao:
+if "alerta_np_enviado" not in st.session_state:
+    st.session_state.alerta_np_enviado = False
+
+if st.session_state.previsao and not st.session_state.alerta_np_enviado:
     prox_numeros = sorted(st.session_state.previsao)
     n = len(prox_numeros)
     metade = (n + 1) // 2
@@ -480,11 +483,13 @@ if st.session_state.previsao:
     linha2 = " ".join(str(num) for num in prox_numeros[metade:])
     mensagem_np = f"🎯 NP: {linha1}\n{linha2}"
     enviar_telegram(mensagem_np)
-    # limpa para não enviar novamente
-    st.session_state.previsao = []
+    st.session_state.alerta_np_enviado = True  # marca como enviado
 
 # ===== ALERTA TOP N (um por rodada) =====
-if st.session_state.previsao_topN:
+if "alerta_topn_enviado" not in st.session_state:
+    st.session_state.alerta_topn_enviado = False
+
+if st.session_state.previsao_topN and not st.session_state.alerta_topn_enviado:
     entrada_topN = sorted(st.session_state.previsao_topN)
     n2 = len(entrada_topN)
     metade2 = (n2 + 1) // 2
@@ -492,10 +497,14 @@ if st.session_state.previsao_topN:
     linha2_top = " ".join(str(num) for num in entrada_topN[metade2:])
     mensagem_topn = f"📊 Top N: {linha1_top}\n{linha2_top}"
     enviar_telegram_topN(mensagem_topn)
-    # limpa para não enviar novamente
-    st.session_state.previsao_topN = []
+    st.session_state.alerta_topn_enviado = True  # marca como enviado
 
-
+# -----------------------------
+# Após conferência, reset das listas e flags para próxima rodada
+st.session_state.previsao = []
+st.session_state.previsao_topN = []
+st.session_state.alerta_np_enviado = False
+st.session_state.alerta_topn_enviado = False
 
 
     
