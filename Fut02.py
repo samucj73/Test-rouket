@@ -15,8 +15,8 @@ HEADERS = {"x-apisports-key": API_KEY}
 # Configurações Telegram
 # =============================
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
-TELEGRAM_CHAT_ID = "-1003073115320"   # canal principal
-TELEGRAM_CHAT_ID_ALT2 = "-1002932611974" # canal alternativo 2
+TELEGRAM_CHAT_ID = "-1003073115320"       # canal principal
+TELEGRAM_CHAT_ID_ALT2 = "-1002932611974"  # canal alternativo 2
 BASE_URL_TG = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
 
 ALERTAS_PATH = "alertas.json"
@@ -192,13 +192,6 @@ if st.button("🔍 Buscar jogos do dia"):
         home_id = match["teams"]["home"]["id"]
         away_id = match["teams"]["away"]["id"]
 
-        # Competição e horário
-        competencia = match["league"]["name"]
-        data_iso = match["fixture"]["date"]
-        data_jogo = datetime.fromisoformat(data_iso.replace("Z", "+00:00"))
-        data_jogo_brt = data_jogo - timedelta(hours=3)
-        hora_formatada = data_jogo_brt.strftime("%H:%M")
-
         media_h2h = media_gols_confrontos_diretos(home_id, away_id, temporada, max_jogos=5)
         
         # Exemplo: médias fictícias (substituir por cálculo real)
@@ -207,23 +200,31 @@ if st.button("🔍 Buscar jogos do dia"):
 
         estimativa, confianca, tendencia = calcular_tendencia_confianca_ajustada(media_h2h, media_casa, media_fora)
 
+        # Hora e competição
+        data_iso = match["fixture"]["date"]
+        data_jogo = datetime.fromisoformat(data_iso.replace("Z", "+00:00")) - timedelta(hours=3)
+        hora_formatada = data_jogo.strftime("%H:%M")
+        competicao = match.get("league", {}).get("name", "Desconhecido")
+
         with st.container():
             st.subheader(f"🏟️ {home} vs {away}")
-            st.caption(f"Liga: {competencia} | Temporada: {temporada}")
+            st.caption(f"Liga: {competicao} | Temporada: {temporada}")
             st.write(f"📊 Estimativa de gols: **{estimativa:.2f}**")
             st.write(f"🔥 Tendência: **{tendencia}**")
             st.write(f"✅ Confiança: **{confianca:.0f}%**")
 
         verificar_enviar_alerta(match, tendencia, confianca, estimativa)
 
+        # Adicionar ao top 3 com odds fictícias (substituir pelo cálculo real de odds)
         if tendencia == "Mais 1.5":
             melhores_15.append({
                 "home": home,
                 "away": away,
                 "estimativa": estimativa,
                 "confianca": confianca,
-                "competicao": competencia,
-                "hora": hora_formatada
+                "hora": hora_formatada,
+                "competicao": competicao,
+                "odds_15": 1.8  # exemplo de odd
             })
         elif tendencia == "Mais 2.5":
             melhores_25.append({
@@ -231,8 +232,9 @@ if st.button("🔍 Buscar jogos do dia"):
                 "away": away,
                 "estimativa": estimativa,
                 "confianca": confianca,
-                "competicao": competencia,
-                "hora": hora_formatada
+                "hora": hora_formatada,
+                "competicao": competicao,
+                "odds_25": 2.0  # exemplo de odd
             })
 
     # Ordenar e pegar top 3
@@ -243,24 +245,30 @@ if st.button("🔍 Buscar jogos do dia"):
         msg_alt = "📢 TOP ENTRADAS - Alertas Consolidados\n\n"
 
         if melhores_15:
-            msg_alt += "🔥 Top 3 Jogos para +1.5 Gols\n"
+            odd_combinada_15 = 1
             for j in melhores_15:
+                odd_combinada_15 *= float(j.get("odds_15", 1))
                 msg_alt += (
                     f"🏆 {j['competicao']}\n"
                     f"🕒 {j['hora']} BRT\n"
                     f"🏟️ {j['home']} vs {j['away']}\n"
-                    f"📊 {j['estimativa']:.2f} gols | ✅ {j['confianca']:.0f}%\n\n"
+                    f"📊 {j['estimativa']:.2f} gols | ✅ {j['confianca']:.0f}%\n"
+                    f"💰 Odd: {j.get('odds_15', 'N/A')}\n\n"
                 )
+            msg_alt += f"🎯 Odd combinada (3 jogos): {odd_combinada_15:.2f}\n\n"
 
         if melhores_25:
-            msg_alt += "⚡ Top 3 Jogos para +2.5 Gols\n"
+            odd_combinada_25 = 1
             for j in melhores_25:
+                odd_combinada_25 *= float(j.get("odds_25", 1))
                 msg_alt += (
                     f"🏆 {j['competicao']}\n"
                     f"🕒 {j['hora']} BRT\n"
                     f"🏟️ {j['home']} vs {j['away']}\n"
-                    f"📊 {j['estimativa']:.2f} gols | ✅ {j['confianca']:.0f}%\n\n"
+                    f"📊 {j['estimativa']:.2f} gols | ✅ {j['confianca']:.0f}%\n"
+                    f"💰 Odd: {j.get('odds_25', 'N/A')}\n\n"
                 )
+            msg_alt += f"🎯 Odd combinada (3 jogos): {odd_combinada_25:.2f}\n\n"
 
         enviar_telegram(msg_alt, TELEGRAM_CHAT_ID_ALT2)
         st.success("🚀 Top jogos enviados para o canal alternativo 2!")
