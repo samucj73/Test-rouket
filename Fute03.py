@@ -52,7 +52,7 @@ def salvar_alertas(alertas):
 # =============================
 def enviar_telegram(msg, chat_id=TELEGRAM_CHAT_ID):
     try:
-        requests.get(BASE_URL_TG, params={"chat_id": chat_id, "text": msg})
+        requests.get(BASE_URL_TG, params={"chat_id": chat_id, "text": msg, "parse_mode":"Markdown"})
     except Exception as e:
         st.warning(f"Erro ao enviar mensagem Telegram: {e}")
 
@@ -109,24 +109,12 @@ def verificar_enviar_alerta(fixture, tendencia, confianca, estimativa):
 # =============================
 # Funções cálculo tendência
 # =============================
-# =============================
-# Funções cálculo tendência (ajustadas)
-# =============================
 def calcular_tendencia_confianca_ajustada(media_h2h, media_casa, media_fora, peso_h2h=0.3):
-    """
-    Calcula estimativa de gols, confiança e tendência usando médias históricas e H2H.
-    """
-    # Média do time da casa e visitante
     media_time_casa = media_casa.get("media_gols_marcados", 0) + media_fora.get("media_gols_sofridos", 0)
     media_time_fora = media_fora.get("media_gols_marcados", 0) + media_casa.get("media_gols_sofridos", 0)
-
-    # Estimativa base
     estimativa_base = (media_time_casa + media_time_fora) / 2
-
-    # Combinar com média H2H ponderada
     estimativa_final = (1 - peso_h2h) * estimativa_base + peso_h2h * media_h2h.get("media_gols", 0)
 
-    # Ajuste de tendência e confiança
     if estimativa_final >= 2.5:
         tendencia = "Mais 2.5"
         confianca = min(95, 60 + (estimativa_final - 2.5) * 15)
@@ -137,118 +125,78 @@ def calcular_tendencia_confianca_ajustada(media_h2h, media_casa, media_fora, pes
         tendencia = "Menos 1.5"
         confianca = min(95, 50 + (1.5 - estimativa_final) * 20)
 
-    return round(estimativa_final, 2), round(confianca, 0), tendencia
+    return round(estimativa_final,2), round(confianca,0), tendencia
 
-# =============================
-# Funções cálculo média H2H (ajustadas)
-# =============================
 def media_gols_confrontos_diretos(home_id, away_id, temporada=None, max_jogos=5):
-    """
-    Calcula média ponderada de gols em confrontos diretos recentes entre os times.
-    """
     try:
         url = f"{BASE_URL}/fixtures/headtohead?h2h={home_id}-{away_id}"
         response = requests.get(url, headers=HEADERS, timeout=10)
         if response.status_code != 200:
-            return {"media_gols": 0, "total_jogos": 0}
-
+            return {"media_gols":0,"total_jogos":0}
         jogos = response.json().get("response", [])
         if temporada:
-            jogos = [j for j in jogos if j["league"]["season"] == temporada]
-
-        # Ordena do mais recente para o mais antigo
+            jogos = [j for j in jogos if j["league"]["season"]==temporada]
         jogos = sorted(jogos, key=lambda x: x["fixture"]["date"], reverse=True)[:max_jogos]
         if not jogos:
-            return {"media_gols": 0, "total_jogos": 0}
-
-        total_pontos, total_peso = 0, 0
-        for idx, j in enumerate(jogos):
-            if j["fixture"]["status"]["short"] != "FT":
+            return {"media_gols":0,"total_jogos":0}
+        total_pontos, total_peso = 0,0
+        for idx,j in enumerate(jogos):
+            if j["fixture"]["status"]["short"]!="FT":
                 continue
             home_goals = j["score"]["fulltime"]["home"]
             away_goals = j["score"]["fulltime"]["away"]
             gols = home_goals + away_goals
-            peso = max_jogos - idx  # jogos mais recentes têm peso maior
-            total_pontos += gols * peso
+            peso = max_jogos - idx
+            total_pontos += gols*peso
             total_peso += peso
-
-        media_ponderada = round(total_pontos / total_peso, 2) if total_peso else 0
-        return {"media_gols": media_ponderada, "total_jogos": len(jogos)}
-
-    except Exception:
-        return {"media_gols": 0, "total_jogos": 0}
+        media_ponderada = round(total_pontos/total_peso,2) if total_peso else 0
+        return {"media_gols":media_ponderada,"total_jogos":len(jogos)}
+    except:
+        return {"media_gols":0,"total_jogos":0}
 
 # =============================
-# Função cálculo médias históricas (OpenLigaDB)
-# =============================
-def calcular_media_gols_times(jogos_hist):
-    """
-    Retorna médias de gols marcados e sofridos para cada time baseado em jogos históricos.
-    """
-    stats = {}
-    for j in jogos_hist:
-        home, away = j["team1"]["teamName"], j["team2"]["teamName"]
-        placar = None
-        for r in j.get("matchResults", []):
-            if r.get("resultTypeID") == 2:
-                placar = (r.get("pointsTeam1", 0), r.get("pointsTeam2", 0))
-                break
-        if not placar:
-            continue
-
-        stats.setdefault(home, {"marcados": [], "sofridos": []})
-        stats.setdefault(away, {"marcados": [], "sofridos": []})
-
-        stats[home]["marcados"].append(placar[0])
-        stats[home]["sofridos"].append(placar[1])
-        stats[away]["marcados"].append(placar[1])
-        stats[away]["sofridos"].append(placar[0])
-
-    medias = {}
-    for time, gols in stats.items():
-        media_marcados = sum(gols["marcados"]) / len(gols["marcados"]) if gols["marcados"] else 0
-        media_sofridos = sum(gols["sofridos"]) / len(gols["sofridos"]) if gols["sofridos"] else 0
-        medias[time] = {"media_gols_marcados": media_marcados, "media_gols_sofridos": media_sofridos}
-    return medias
-
-
-# =============================
-# OpenLigaDB
+# Funções OpenLigaDB
 # =============================
 def obter_jogos_liga_temporada(liga_id, temporada):
     try:
         r = requests.get(f"{OPENLIGA_BASE}/getmatchdata/{liga_id}/{temporada}", timeout=15)
-        if r.status_code == 200:
+        if r.status_code==200:
             return r.json()
     except Exception as e:
         st.warning(f"Erro ao obter jogos OpenLigaDB: {e}")
     return []
 
 def calcular_media_gols_times(jogos_hist):
-    stats = {}
+    stats={}
     for j in jogos_hist:
         home, away = j["team1"]["teamName"], j["team2"]["teamName"]
-        placar = None
-        for r in j.get("matchResults", []):
-            if r.get("resultTypeID") == 2:
-                placar = (r.get("pointsTeam1", 0), r.get("pointsTeam2", 0))
+        placar=None
+        for r in j.get("matchResults",[]):
+            if r.get("resultTypeID")==2:
+                placar=(r.get("pointsTeam1",0), r.get("pointsTeam2",0))
                 break
         if not placar:
             continue
-        stats.setdefault(home, {"marcados": [], "sofridos": []})
-        stats.setdefault(away, {"marcados": [], "sofridos": []})
-
+        stats.setdefault(home,{"marcados":[],"sofridos":[]})
+        stats.setdefault(away,{"marcados":[],"sofridos":[]})
         stats[home]["marcados"].append(placar[0])
         stats[home]["sofridos"].append(placar[1])
         stats[away]["marcados"].append(placar[1])
         stats[away]["sofridos"].append(placar[0])
-
-    medias = {}
-    for time, gols in stats.items():
-        media_marcados = sum(gols["marcados"]) / len(gols["marcados"]) if gols["marcados"] else 0
-        media_sofridos = sum(gols["sofridos"]) / len(gols["sofridos"]) if gols["sofridos"] else 0
-        medias[time] = {"media_gols_marcados": media_marcados, "media_gols_sofridos": media_sofridos}
+    medias={}
+    for time,gols in stats.items():
+        media_marcados=sum(gols["marcados"])/len(gols["marcados"]) if gols["marcados"] else 0
+        media_sofridos=sum(gols["sofridos"])/len(gols["sofridos"]) if gols["sofridos"] else 0
+        medias[time]={"media_gols_marcados":media_marcados,"media_gols_sofridos":media_sofridos}
     return medias
+
+# =============================
+# =============================
+# Função para obter odds (placeholder)
+# =============================
+def obter_odds(fixture_id):
+    # Placeholder: caso queira integrar odds reais, pode usar API de odds
+    return {"1.5": 1.5, "2.5": 2.2}
 
 # =============================
 # Interface Streamlit
@@ -257,7 +205,6 @@ st.set_page_config(page_title="⚽ Alertas e Jogos Históricos", layout="wide")
 st.title("⚽ Sistema de Alertas de Gols + Jogos Históricos")
 aba = st.tabs(["⚡ Alertas de Jogos Hoje", "📊 Jogos de Temporadas Passadas"])
 
-# ---------- ABA 1:
 # ---------- ABA 1: Alertas ----------
 with aba[0]:
     st.subheader("📅 Jogos do dia e alertas de tendência")
@@ -300,7 +247,6 @@ with aba[0]:
             home_id = match["teams"]["home"]["id"]
             away_id = match["teams"]["away"]["id"]
 
-            # Média H2H via API
             media_h2h = media_gols_confrontos_diretos(home_id, away_id, temporada_atual, max_jogos=5)
             media_casa = medias_historicas.get(home, {"media_gols_marcados": 1, "media_gols_sofridos": 1})
             media_fora = medias_historicas.get(away, {"media_gols_marcados": 1, "media_gols_sofridos": 1})
@@ -311,16 +257,12 @@ with aba[0]:
                 media_fora=media_fora
             )
 
-            # Formatar hora
             data_iso = match["fixture"]["date"]
             data_jogo = datetime.fromisoformat(data_iso.replace("Z", "+00:00")) - timedelta(hours=3)
             hora_formatada = data_jogo.strftime("%H:%M")
             competicao = match.get("league", {}).get("name", "Desconhecido")
-
-            # Obter odds
             odds = obter_odds(match["fixture"]["id"])
 
-            # Mostrar na interface
             with st.container():
                 st.subheader(f"🏟️ {home} vs {away}")
                 st.caption(f"Liga: {competicao} | Temporada: {temporada_atual}")
@@ -329,10 +271,8 @@ with aba[0]:
                 st.write(f"✅ Confiança: **{confianca:.0f}%**")
                 st.write(f"💰 Odds Over 1.5: {odds['1.5']} | Over 2.5: {odds['2.5']}")
 
-            # Enviar alerta Telegram
             verificar_enviar_alerta(match, tendencia, confianca, estimativa)
 
-            # Adicionar aos Top 3
             if tendencia == "Mais 1.5":
                 melhores_15.append({
                     "home": home, "away": away,
@@ -354,7 +294,6 @@ with aba[0]:
 
         if melhores_15 or melhores_25:
             msg_alt = "📢 *TOP ENTRADAS - Alertas Consolidados*\n\n"
-
             if melhores_15:
                 odd_combinada_15 = 1
                 msg_alt += "🔥 Top 3 Jogos para +1.5 Gols\n"
@@ -402,7 +341,7 @@ with aba[1]:
                 st.info("Nenhum jogo encontrado para essa temporada/liga.")
             else:
                 st.success(f"{len(jogos_hist)} jogos encontrados na {liga_nome_hist} ({temporada_hist})")
-                for j in jogos_hist[:50]:  # Limite de exibição inicial
+                for j in jogos_hist[:50]:
                     home = j["team1"]["teamName"]
                     away = j["team2"]["teamName"]
                     placar = "-"
