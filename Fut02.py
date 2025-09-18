@@ -217,6 +217,8 @@ if st.button("🔍 Buscar jogos do dia"):
     st.subheader("📝 Jogos retornados pela API")
     st.json(response.json())
 
+    #melhores_15 = []
+    #melhores_25 = []
     melhores_15 = []
     melhores_25 = []
 
