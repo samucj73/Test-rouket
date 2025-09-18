@@ -16,7 +16,7 @@ HEADERS = {"x-apisports-key": API_KEY}
 # =============================
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 TELEGRAM_CHAT_ID = "-1003073115320"   # canal principal
-TELEGRAM_CHAT_ID_ALT2 = "-1002796136111"  # canal alternativo 2
+TELEGRAM_CHAT_ID_ALT2 = "-1002932611974" # canal alternativo 2
 BASE_URL_TG = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
 
 ALERTAS_PATH = "alertas.json"
