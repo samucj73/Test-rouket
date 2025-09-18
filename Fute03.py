@@ -1,62 +1,59 @@
 import streamlit as st
 import requests
-import json
+from datetime import datetime
 
-# =========================
-# Função para puxar dados
-# =========================
-def pegar_jogos_espn(league_code="bra.1"):
-    url = f"http://site.api.espn.com/apis/site/v2/sports/soccer/{league_code}/scoreboard"
-    response = requests.get(url)
+# =============================
+# Configurações
+# =============================
+OPENLIGA_BASE = "https://api.openligadb.de"
 
-    if response.status_code != 200:
-        st.error(f"Erro {response.status_code} ao acessar a API")
-        return None
-
-    return response.json()
-
-# =========================
-# Interface Streamlit
-# =========================
-st.set_page_config(page_title="Placar ESPN", layout="wide")
-
-st.title("⚽ Jogos de Futebol - ESPN API")
-
-# Seleção da liga
-ligas = {
-    "Brasileirão Série A": "bra.1",
-    "Premier League": "eng.1",
-    "La Liga": "esp.1",
-    "Serie A (Itália)": "ita.1",
-    "Bundesliga": "ger.1",
-    "Ligue 1": "fra.1"
+ligas_openliga = {
+    "Bundesliga (Alemanha)": "bl1",
+    "2. Bundesliga (Alemanha)": "bl2",
+    "DFB-Pokal (Alemanha)": "dfb",
+    "Premier League (Inglaterra)": "eng1",
+    "La Liga (Espanha)": "esp1",
+    "Serie A (Itália)": "ita1",
+    "Ligue 1 (França)": "fra1"
 }
 
-liga_escolhida = st.selectbox("Escolha a liga:", list(ligas.keys()))
-codigo_liga = ligas[liga_escolhida]
+# =============================
+# Função para puxar jogos da temporada
+# =============================
+def obter_jogos_liga_temporada(liga_id, temporada):
+    try:
+        url = f"{OPENLIGA_BASE}/getmatchdata/{liga_id}/{temporada}"
+        r = requests.get(url, timeout=15)
+        if r.status_code == 200:
+            return r.json()
+    except Exception as e:
+        st.error(f"Erro ao obter jogos: {e}")
+    return []
 
-# Pegar jogos
-data = pegar_jogos_espn(codigo_liga)
+# =============================
+# Streamlit interface
+# =============================
+st.set_page_config(page_title="📊 Jogos de Temporadas Passadas", layout="wide")
+st.title("📊 Consulta de Jogos de Temporadas Passadas (OpenLigaDB)")
 
-if data and "events" in data:
-    st.subheader(f"📅 Jogos de hoje - {liga_escolhida}")
+temporada = st.selectbox("📅 Escolha a temporada:", ["2022", "2023", "2024", "2025"], index=2)
+liga_nome = st.selectbox("🏆 Escolha a Liga:", list(ligas_openliga.keys()))
+liga_id = ligas_openliga[liga_nome]
 
-    for jogo in data["events"]:
-        try:
-            time_casa = jogo["competitions"][0]["competitors"][0]["team"]["displayName"]
-            placar_casa = jogo["competitions"][0]["competitors"][0]["score"]
-
-            time_fora = jogo["competitions"][0]["competitors"][1]["team"]["displayName"]
-            placar_fora = jogo["competitions"][0]["competitors"][1]["score"]
-
-            status = jogo["status"]["type"]["description"]
-
-            st.markdown(
-                f"**{time_casa} {placar_casa} x {placar_fora} {time_fora}**  \n"
-                f"🕒 {status}"
-            )
-        except Exception as e:
-            st.warning(f"Erro ao processar jogo: {e}")
-
-else:
-    st.info("Nenhum jogo encontrado para hoje.")
+if st.button("🔍 Buscar jogos da temporada"):
+    with st.spinner("Buscando jogos..."):
+        jogos = obter_jogos_liga_temporada(liga_id, temporada)
+        if not jogos:
+            st.info("Nenhum jogo encontrado para essa temporada/ligue.")
+        else:
+            st.success(f"{len(jogos)} jogos encontrados na {liga_nome} ({temporada})")
+            for j in jogos[:50]:  # mostrar os primeiros 50 jogos para teste
+                home = j["team1"]["teamName"]
+                away = j["team2"]["teamName"]
+                placar = "-"
+                for r in j.get("matchResults", []):
+                    if r.get("resultTypeID") == 2:
+                        placar = f"{r.get('pointsTeam1',0)} x {r.get('pointsTeam2',0)}"
+                        break
+                data = j.get("matchDateTime") or j.get("matchDateTimeUTC") or "Desconhecida"
+                st.write(f"🏟️ {home} vs {away} | 📅 {data} | ⚽ Placar: {placar}")
