@@ -1,31 +1,31 @@
 import streamlit as st
 import requests
-from datetime import datetime
 
 # =============================
 # Configurações
 # =============================
-OPENLIGA_BASE = "https://api.openligadb.de"
-
-ligas_openliga = {
-    "Bundesliga (Alemanha)": "bl1",
-    "2. Bundesliga (Alemanha)": "bl2",
-    "DFB-Pokal (Alemanha)": "dfb",
-    "Premier League (Inglaterra)": "eng1",
-    "La Liga (Espanha)": "esp1",
-    "Serie A (Itália)": "ita1",
-    "Ligue 1 (França)": "fra1"
+LEAGUES = {
+    "Premier League (Inglaterra)": "eng.1",
+    "La Liga (Espanha)": "esp.1",
+    "Serie A (Itália)": "ita.1",
+    "Bundesliga (Alemanha)": "ger.1",
+    "Brasileirão Série A": "bra.1",
+    "Brasileirão Série B": "bra.2"
 }
 
+BASE_URL_ESPN = "http://site.api.espn.com/apis/site/v2/sports/soccer/{league}/scoreboard"
+
 # =============================
-# Função para puxar jogos da temporada
+# Função para puxar jogos
 # =============================
-def obter_jogos_liga_temporada(liga_id, temporada):
+def obter_jogos_espn(league_code):
     try:
-        url = f"{OPENLIGA_BASE}/getmatchdata/{liga_id}/{temporada}"
+        url = BASE_URL_ESPN.format(league=league_code)
         r = requests.get(url, timeout=15)
         if r.status_code == 200:
-            return r.json()
+            data = r.json()
+            events = data.get("events", [])
+            return events
     except Exception as e:
         st.error(f"Erro ao obter jogos: {e}")
     return []
@@ -33,27 +33,23 @@ def obter_jogos_liga_temporada(liga_id, temporada):
 # =============================
 # Streamlit interface
 # =============================
-st.set_page_config(page_title="📊 Jogos de Temporadas Passadas", layout="wide")
-st.title("📊 Consulta de Jogos de Temporadas Passadas (OpenLigaDB)")
+st.set_page_config(page_title="📊 Jogos da Temporada Passada - API ESPN", layout="wide")
+st.title("📊 Consulta de Jogos da Temporada Passada - API ESPN")
 
-temporada = st.selectbox("📅 Escolha a temporada:", ["2022", "2023", "2024", "2025"], index=2)
-liga_nome = st.selectbox("🏆 Escolha a Liga:", list(ligas_openliga.keys()))
-liga_id = ligas_openliga[liga_nome]
+liga_nome = st.selectbox("🏆 Escolha a Liga:", list(LEAGUES.keys()))
+liga_code = LEAGUES[liga_nome]
 
-if st.button("🔍 Buscar jogos da temporada"):
+if st.button("🔍 Buscar jogos da temporada passada"):
     with st.spinner("Buscando jogos..."):
-        jogos = obter_jogos_liga_temporada(liga_id, temporada)
+        jogos = obter_jogos_espn(liga_code)
         if not jogos:
-            st.info("Nenhum jogo encontrado para essa temporada/ligue.")
+            st.info("Nenhum jogo encontrado para essa liga.")
         else:
-            st.success(f"{len(jogos)} jogos encontrados na {liga_nome} ({temporada})")
-            for j in jogos[:50]:  # mostrar os primeiros 50 jogos para teste
-                home = j["team1"]["teamName"]
-                away = j["team2"]["teamName"]
-                placar = "-"
-                for r in j.get("matchResults", []):
-                    if r.get("resultTypeID") == 2:
-                        placar = f"{r.get('pointsTeam1',0)} x {r.get('pointsTeam2',0)}"
-                        break
-                data = j.get("matchDateTime") or j.get("matchDateTimeUTC") or "Desconhecida"
-                st.write(f"🏟️ {home} vs {away} | 📅 {data} | ⚽ Placar: {placar}")
+            st.success(f"{len(jogos)} jogos encontrados na {liga_nome}")
+            for j in jogos:
+                home = j["competitions"][0]["competitors"][0]["team"]["displayName"]
+                away = j["competitions"][0]["competitors"][1]["team"]["displayName"]
+                status = j["status"]["type"]["description"]
+                placar_home = j["competitions"][0]["competitors"][0].get("score", 0)
+                placar_away = j["competitions"][0]["competitors"][1].get("score", 0)
+                st.write(f"🏟️ {home} vs {away} | ⚽ {placar_home} x {placar_away} | 🕒 {status}")
