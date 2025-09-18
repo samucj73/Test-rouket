@@ -15,8 +15,10 @@ HEADERS = {"x-apisports-key": API_KEY}
 # Configurações Telegram
 # =============================
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
-TELEGRAM_CHAT_ID = "-1003073115320"
+TELEGRAM_CHAT_ID = "-1003073115320"   # canal principal
+TELEGRAM_CHAT_ID_ALT2 = "-1002796136111"  # canal alternativo 2
 BASE_URL_TG = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+
 ALERTAS_PATH = "alertas.json"
 
 # =============================
@@ -35,6 +37,9 @@ def salvar_alertas(alertas):
 # =============================
 # Funções auxiliares
 # =============================
+def enviar_telegram(msg, chat_id=TELEGRAM_CHAT_ID):
+    requests.get(BASE_URL_TG, params={"chat_id": chat_id, "text": msg})
+
 def enviar_alerta_telegram(fixture, tendencia, confianca, estimativa):
     home = fixture["teams"]["home"]["name"]
     away = fixture["teams"]["away"]["name"]
@@ -43,25 +48,23 @@ def enviar_alerta_telegram(fixture, tendencia, confianca, estimativa):
     away_goals = fixture.get("goals", {}).get("away", 0) or 0
     status = fixture.get("fixture", {}).get("status", {}).get("long", "Desconhecido")
 
-    # Obter data e horário do jogo (BRT)
     data_iso = fixture["fixture"]["date"]
-    data_jogo = datetime.fromisoformat(data_iso.replace("Z", "+00:00"))  # UTC
-    data_jogo_brt = data_jogo - timedelta(hours=3)  # UTC-3
+    data_jogo = datetime.fromisoformat(data_iso.replace("Z", "+00:00"))
+    data_jogo_brt = data_jogo - timedelta(hours=3)
     data_formatada = data_jogo_brt.strftime("%d/%m/%Y")
     hora_formatada = data_jogo_brt.strftime("%H:%M")
 
     msg = (
         f"⚽ Alerta de Gols!\n"
         f"🏟️ {home} vs {away}\n"
-        f"📅 Data do jogo: {data_formatada}\n"
-        f"⏰ Horário do jogo (BRT): {hora_formatada}\n"
+        f"📅 {data_formatada} ⏰ {hora_formatada} (BRT)\n"
         f"Tendência: {tendencia}\n"
         f"Estimativa: {estimativa:.2f} gols\n"
         f"Confiança: {confianca:.0f}%\n"
         f"Status: {status}\n"
         f"Placar atual: {home} {home_goals} x {away_goals} {away}"
     )
-    requests.get(BASE_URL_TG, params={"chat_id": TELEGRAM_CHAT_ID, "text": msg})
+    enviar_telegram(msg, TELEGRAM_CHAT_ID)
 
 def verificar_enviar_alerta(fixture, tendencia, confianca, estimativa):
     alertas = carregar_alertas()
@@ -159,58 +162,88 @@ hoje = data_selecionada.strftime("%Y-%m-%d")
 
 ligas_principais = {
     "Premier League": 39,
-    "Premier League 2ª Divisão": 40,
     "La Liga": 140,
-    "La Liga 2ª Divisão": 141,
     "Serie A": 135,
-    "MLS": 253, 
     "Bundesliga": 78,
-    "Bundesliga 2ª Divisão": 79,
     "Ligue 1": 61,
     "Brasileirão Série A": 71,
-    "Brasileirão Série B": 72,
     "UEFA Champions League": 2,
-    "Copa Libertadores": 13,
-    "Copa Sul-Americana": 14,
-    "Copa do Brasil": 73
+    "Copa Libertadores": 13
 }
 
 if st.button("🔍 Buscar jogos do dia"):
     url = f"{BASE_URL}/fixtures?date={hoje}"
     response = requests.get(url, headers=HEADERS)
-    
-    st.subheader("📝 Jogos retornados pela API")
-    st.json(response.json())
-    
     jogos = response.json().get("response", [])
 
-    if not jogos:
-        st.warning("⚠️ Nenhum jogo encontrado para a data selecionada.")
+    st.subheader("📝 Jogos retornados pela API")
+    st.json(response.json())
+
+    melhores_15 = []
+    melhores_25 = []
+
+    for match in jogos:
+        league_id = match.get("league", {}).get("id")
+        if league_id not in ligas_principais.values():
+            continue
+
+        home = match["teams"]["home"]["name"]
+        away = match["teams"]["away"]["name"]
+        home_id = match["teams"]["home"]["id"]
+        away_id = match["teams"]["away"]["id"]
+
+        media_h2h = media_gols_confrontos_diretos(home_id, away_id, temporada, max_jogos=5)
+        
+        # Exemplo: médias fictícias (substituir por cálculo real)
+        media_casa = {"media_gols_marcados": 1.2, "media_gols_sofridos": 1.1}
+        media_fora = {"media_gols_marcados": 1.1, "media_gols_sofridos": 1.3}
+
+        estimativa, confianca, tendencia = calcular_tendencia_confianca_ajustada(media_h2h, media_casa, media_fora)
+
+        with st.container():
+            st.subheader(f"🏟️ {home} vs {away}")
+            st.caption(f"Liga: {match['league']['name']} | Temporada: {temporada}")
+            st.write(f"📊 Estimativa de gols: **{estimativa:.2f}**")
+            st.write(f"🔥 Tendência: **{tendencia}**")
+            st.write(f"✅ Confiança: **{confianca:.0f}%**")
+
+        verificar_enviar_alerta(match, tendencia, confianca, estimativa)
+
+        if tendencia == "Mais 1.5":
+            melhores_15.append({
+                "home": home,
+                "away": away,
+                "estimativa": estimativa,
+                "confianca": confianca
+            })
+        elif tendencia == "Mais 2.5":
+            melhores_25.append({
+                "home": home,
+                "away": away,
+                "estimativa": estimativa,
+                "confianca": confianca
+            })
+
+    # Ordenar e pegar top 3
+    melhores_15 = sorted(melhores_15, key=lambda x: (x["confianca"], x["estimativa"]), reverse=True)[:3]
+    melhores_25 = sorted(melhores_25, key=lambda x: (x["confianca"], x["estimativa"]), reverse=True)[:3]
+
+    if melhores_15 or melhores_25:
+        msg_alt = "📢 TOP ENTRADAS - Alertas Consolidados\n\n"
+
+        if melhores_15:
+            msg_alt += "🔥 Top 3 Jogos para +1.5 Gols\n"
+            for j in melhores_15:
+                msg_alt += f"🏟️ {j['home']} vs {j['away']}\n"
+                msg_alt += f"📊 {j['estimativa']:.2f} gols | ✅ {j['confianca']:.0f}%\n\n"
+
+        if melhores_25:
+            msg_alt += "⚡ Top 3 Jogos para +2.5 Gols\n"
+            for j in melhores_25:
+                msg_alt += f"🏟️ {j['home']} vs {j['away']}\n"
+                msg_alt += f"📊 {j['estimativa']:.2f} gols | ✅ {j['confianca']:.0f}%\n\n"
+
+        enviar_telegram(msg_alt, TELEGRAM_CHAT_ID_ALT2)
+        st.success("🚀 Top jogos enviados para o canal alternativo 2!")
     else:
-        st.success(f"✅ Total de jogos encontrados: {len(jogos)}")
-        for match in jogos:
-            league_id = match.get("league", {}).get("id")
-            if league_id not in ligas_principais.values():
-                continue
-
-            home = match["teams"]["home"]["name"]
-            away = match["teams"]["away"]["name"]
-            home_id = match["teams"]["home"]["id"]
-            away_id = match["teams"]["away"]["id"]
-
-            media_h2h = media_gols_confrontos_diretos(home_id, away_id, temporada, max_jogos=5)
-            
-            # Exemplo simples: médias fictícias ou calculadas a partir de histórico
-            media_casa = {"media_gols_marcados": 1.2, "media_gols_sofridos": 1.1}
-            media_fora = {"media_gols_marcados": 1.1, "media_gols_sofridos": 1.3}
-
-            estimativa, confianca, tendencia = calcular_tendencia_confianca_ajustada(media_h2h, media_casa, media_fora)
-
-            with st.container():
-                st.subheader(f"🏟️ {home} vs {away}")
-                st.caption(f"Liga: {match['league']['name']} | Temporada: {temporada}")
-                st.write(f"📊 Estimativa de gols: **{estimativa:.2f}**")
-                st.write(f"🔥 Tendência: **{tendencia}**")
-                st.write(f"✅ Confiança: **{confianca:.0f}%**")
-
-            verificar_enviar_alerta(match, tendencia, confianca, estimativa)
+        st.info("Nenhum jogo com tendência clara de +1.5 ou +2.5 gols encontrado.")
