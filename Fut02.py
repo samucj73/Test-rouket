@@ -192,6 +192,13 @@ if st.button("🔍 Buscar jogos do dia"):
         home_id = match["teams"]["home"]["id"]
         away_id = match["teams"]["away"]["id"]
 
+        # Competição e horário
+        competencia = match["league"]["name"]
+        data_iso = match["fixture"]["date"]
+        data_jogo = datetime.fromisoformat(data_iso.replace("Z", "+00:00"))
+        data_jogo_brt = data_jogo - timedelta(hours=3)
+        hora_formatada = data_jogo_brt.strftime("%H:%M")
+
         media_h2h = media_gols_confrontos_diretos(home_id, away_id, temporada, max_jogos=5)
         
         # Exemplo: médias fictícias (substituir por cálculo real)
@@ -202,7 +209,7 @@ if st.button("🔍 Buscar jogos do dia"):
 
         with st.container():
             st.subheader(f"🏟️ {home} vs {away}")
-            st.caption(f"Liga: {match['league']['name']} | Temporada: {temporada}")
+            st.caption(f"Liga: {competencia} | Temporada: {temporada}")
             st.write(f"📊 Estimativa de gols: **{estimativa:.2f}**")
             st.write(f"🔥 Tendência: **{tendencia}**")
             st.write(f"✅ Confiança: **{confianca:.0f}%**")
@@ -214,14 +221,18 @@ if st.button("🔍 Buscar jogos do dia"):
                 "home": home,
                 "away": away,
                 "estimativa": estimativa,
-                "confianca": confianca
+                "confianca": confianca,
+                "competicao": competencia,
+                "hora": hora_formatada
             })
         elif tendencia == "Mais 2.5":
             melhores_25.append({
                 "home": home,
                 "away": away,
                 "estimativa": estimativa,
-                "confianca": confianca
+                "confianca": confianca,
+                "competicao": competencia,
+                "hora": hora_formatada
             })
 
     # Ordenar e pegar top 3
@@ -234,14 +245,22 @@ if st.button("🔍 Buscar jogos do dia"):
         if melhores_15:
             msg_alt += "🔥 Top 3 Jogos para +1.5 Gols\n"
             for j in melhores_15:
-                msg_alt += f"🏟️ {j['home']} vs {j['away']}\n"
-                msg_alt += f"📊 {j['estimativa']:.2f} gols | ✅ {j['confianca']:.0f}%\n\n"
+                msg_alt += (
+                    f"🏆 {j['competicao']}\n"
+                    f"🕒 {j['hora']} BRT\n"
+                    f"🏟️ {j['home']} vs {j['away']}\n"
+                    f"📊 {j['estimativa']:.2f} gols | ✅ {j['confianca']:.0f}%\n\n"
+                )
 
         if melhores_25:
             msg_alt += "⚡ Top 3 Jogos para +2.5 Gols\n"
             for j in melhores_25:
-                msg_alt += f"🏟️ {j['home']} vs {j['away']}\n"
-                msg_alt += f"📊 {j['estimativa']:.2f} gols | ✅ {j['confianca']:.0f}%\n\n"
+                msg_alt += (
+                    f"🏆 {j['competicao']}\n"
+                    f"🕒 {j['hora']} BRT\n"
+                    f"🏟️ {j['home']} vs {j['away']}\n"
+                    f"📊 {j['estimativa']:.2f} gols | ✅ {j['confianca']:.0f}%\n\n"
+                )
 
         enviar_telegram(msg_alt, TELEGRAM_CHAT_ID_ALT2)
         st.success("🚀 Top jogos enviados para o canal alternativo 2!")
