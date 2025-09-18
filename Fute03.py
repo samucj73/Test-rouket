@@ -109,12 +109,24 @@ def verificar_enviar_alerta(fixture, tendencia, confianca, estimativa):
 # =============================
 # Funções cálculo tendência
 # =============================
+# =============================
+# Funções cálculo tendência (ajustadas)
+# =============================
 def calcular_tendencia_confianca_ajustada(media_h2h, media_casa, media_fora, peso_h2h=0.3):
+    """
+    Calcula estimativa de gols, confiança e tendência usando médias históricas e H2H.
+    """
+    # Média do time da casa e visitante
     media_time_casa = media_casa.get("media_gols_marcados", 0) + media_fora.get("media_gols_sofridos", 0)
     media_time_fora = media_fora.get("media_gols_marcados", 0) + media_casa.get("media_gols_sofridos", 0)
+
+    # Estimativa base
     estimativa_base = (media_time_casa + media_time_fora) / 2
+
+    # Combinar com média H2H ponderada
     estimativa_final = (1 - peso_h2h) * estimativa_base + peso_h2h * media_h2h.get("media_gols", 0)
 
+    # Ajuste de tendência e confiança
     if estimativa_final >= 2.5:
         tendencia = "Mais 2.5"
         confianca = min(95, 60 + (estimativa_final - 2.5) * 15)
@@ -123,11 +135,17 @@ def calcular_tendencia_confianca_ajustada(media_h2h, media_casa, media_fora, pes
         confianca = min(95, 55 + (estimativa_final - 1.5) * 20)
     else:
         tendencia = "Menos 1.5"
-        confianca = min(95, 55 + (1.5 - estimativa_final) * 20)
+        confianca = min(95, 50 + (1.5 - estimativa_final) * 20)
 
-    return estimativa_final, confianca, tendencia
+    return round(estimativa_final, 2), round(confianca, 0), tendencia
 
+# =============================
+# Funções cálculo média H2H (ajustadas)
+# =============================
 def media_gols_confrontos_diretos(home_id, away_id, temporada=None, max_jogos=5):
+    """
+    Calcula média ponderada de gols em confrontos diretos recentes entre os times.
+    """
     try:
         url = f"{BASE_URL}/fixtures/headtohead?h2h={home_id}-{away_id}"
         response = requests.get(url, headers=HEADERS, timeout=10)
@@ -138,6 +156,7 @@ def media_gols_confrontos_diretos(home_id, away_id, temporada=None, max_jogos=5)
         if temporada:
             jogos = [j for j in jogos if j["league"]["season"] == temporada]
 
+        # Ordena do mais recente para o mais antigo
         jogos = sorted(jogos, key=lambda x: x["fixture"]["date"], reverse=True)[:max_jogos]
         if not jogos:
             return {"media_gols": 0, "total_jogos": 0}
@@ -149,43 +168,49 @@ def media_gols_confrontos_diretos(home_id, away_id, temporada=None, max_jogos=5)
             home_goals = j["score"]["fulltime"]["home"]
             away_goals = j["score"]["fulltime"]["away"]
             gols = home_goals + away_goals
-            peso = max_jogos - idx
+            peso = max_jogos - idx  # jogos mais recentes têm peso maior
             total_pontos += gols * peso
             total_peso += peso
 
         media_ponderada = round(total_pontos / total_peso, 2) if total_peso else 0
         return {"media_gols": media_ponderada, "total_jogos": len(jogos)}
-    except Exception as e:
+
+    except Exception:
         return {"media_gols": 0, "total_jogos": 0}
 
-def obter_odds(fixture_id):
-    try:
-        url = f"{BASE_URL}/odds?fixture={fixture_id}"
-        response = requests.get(url, headers=HEADERS, timeout=10)
-        if response.status_code != 200:
-            return {"1.5": None, "2.5": None}
+# =============================
+# Função cálculo médias históricas (OpenLigaDB)
+# =============================
+def calcular_media_gols_times(jogos_hist):
+    """
+    Retorna médias de gols marcados e sofridos para cada time baseado em jogos históricos.
+    """
+    stats = {}
+    for j in jogos_hist:
+        home, away = j["team1"]["teamName"], j["team2"]["teamName"]
+        placar = None
+        for r in j.get("matchResults", []):
+            if r.get("resultTypeID") == 2:
+                placar = (r.get("pointsTeam1", 0), r.get("pointsTeam2", 0))
+                break
+        if not placar:
+            continue
 
-        response_json = response.json().get("response", [])
-        if not response_json:
-            return {"1.5": None, "2.5": None}
+        stats.setdefault(home, {"marcados": [], "sofridos": []})
+        stats.setdefault(away, {"marcados": [], "sofridos": []})
 
-        odds_15 = odds_25 = None
-        bookmakers = response_json[0].get("bookmakers", [])
-        if not bookmakers:
-            return {"1.5": None, "2.5": None}
+        stats[home]["marcados"].append(placar[0])
+        stats[home]["sofridos"].append(placar[1])
+        stats[away]["marcados"].append(placar[1])
+        stats[away]["sofridos"].append(placar[0])
 
-        markets = bookmakers[0].get("markets", [])
-        for bet in markets:
-            if bet.get("label", "").lower() == "goals over/under":
-                for outcome in bet.get("outcomes", []):
-                    name, price = outcome.get("name"), outcome.get("price")
-                    if name == "Over 1.5":
-                        odds_15 = price
-                    elif name == "Over 2.5":
-                        odds_25 = price
-        return {"1.5": odds_15, "2.5": odds_25}
-    except:
-        return {"1.5": None, "2.5": None}
+    medias = {}
+    for time, gols in stats.items():
+        media_marcados = sum(gols["marcados"]) / len(gols["marcados"]) if gols["marcados"] else 0
+        media_sofridos = sum(gols["sofridos"]) / len(gols["sofridos"]) if gols["sofridos"] else 0
+        medias[time] = {"media_gols_marcados": media_marcados, "media_gols_sofridos": media_sofridos}
+    return medias
+
 
 # =============================
 # OpenLigaDB
