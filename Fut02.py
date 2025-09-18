@@ -154,22 +154,38 @@ def calcular_tendencia_confianca_ajustada(media_h2h, media_casa, media_fora, pes
 # =============================
 def obter_odds(fixture_id):
     url = f"{BASE_URL}/odds?fixture={fixture_id}"
-    response = requests.get(url, headers=HEADERS)
+    response = requests.get(url, headers=HEADERS, timeout=10)
     if response.status_code != 200:
-        return {"1.5": 0, "2.5": 0}
+        return {"1.5": None, "2.5": None}
 
-    dados = response.json().get("response", [])
-    odd_1_5, odd_2_5 = 0, 0
-    for bookie in dados:
-        for market in bookie.get("bookmakers", []):
-            for bet in market.get("bets", []):
-                if bet["label"].lower() == "goals over/under":
-                    for value in bet.get("values", []):
-                        if value["value"] == "Over 1.5":
-                            odd_1_5 = float(value["odd"])
-                        elif value["value"] == "Over 2.5":
-                            odd_2_5 = float(value["odd"])
-    return {"1.5": odd_1_5, "2.5": odd_2_5}
+    response_json = response.json().get("response", [])
+    odds_15 = None
+    odds_25 = None
+
+    if not response_json:
+        return {"1.5": None, "2.5": None}
+
+    # Considera apenas a primeira casa de apostas (ou ajustar conforme necessidade)
+    bookmakers = response_json[0].get("bookmakers", [])
+    if not bookmakers:
+        return {"1.5": None, "2.5": None}
+
+    markets = bookmakers[0].get("markets", [])
+    for bet in markets:
+        # Verifica se a chave 'label' existe antes de acessar
+        if "label" not in bet or not bet["label"]:
+            continue
+
+        if bet["label"].lower() == "goals over/under":
+            for outcome in bet.get("outcomes", []):
+                name = outcome.get("name", "")
+                price = outcome.get("price")
+                if name == "Over 1.5":
+                    odds_15 = price
+                elif name == "Over 2.5":
+                    odds_25 = price
+
+    return {"1.5": odds_15, "2.5": odds_25}
 
 # =============================
 # Interface Streamlit
