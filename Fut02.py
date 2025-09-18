@@ -165,17 +165,15 @@ def obter_odds(fixture_id):
     if not response_json:
         return {"1.5": None, "2.5": None}
 
-    # Considera apenas a primeira casa de apostas (ou ajustar conforme necessidade)
+    # Considera apenas a primeira casa de apostas
     bookmakers = response_json[0].get("bookmakers", [])
     if not bookmakers:
         return {"1.5": None, "2.5": None}
 
     markets = bookmakers[0].get("markets", [])
     for bet in markets:
-        # Verifica se a chave 'label' existe antes de acessar
         if "label" not in bet or not bet["label"]:
             continue
-
         if bet["label"].lower() == "goals over/under":
             for outcome in bet.get("outcomes", []):
                 name = outcome.get("name", "")
@@ -217,8 +215,6 @@ if st.button("🔍 Buscar jogos do dia"):
     st.subheader("📝 Jogos retornados pela API")
     st.json(response.json())
 
-    #melhores_15 = []
-    #melhores_25 = []
     melhores_15 = []
     melhores_25 = []
 
@@ -233,7 +229,7 @@ if st.button("🔍 Buscar jogos do dia"):
         away_id = match["teams"]["away"]["id"]
         media_h2h = media_gols_confrontos_diretos(home_id, away_id, temporada, max_jogos=5)
         
-        # Exemplo: médias fictícias (substituir por cálculo real de médias do time)
+        # Exemplo: médias fictícias
         media_casa = {"media_gols_marcados": 1.2, "media_gols_sofridos": 1.1}
         media_fora = {"media_gols_marcados": 1.1, "media_gols_sofridos": 1.3}
 
@@ -280,44 +276,44 @@ if st.button("🔍 Buscar jogos do dia"):
                 "odd_25": odds["2.5"]
             })
 
-# Ordenar e pegar top 3
-melhores_15 = sorted(melhores_15, key=lambda x: (x["confianca"], x["estimativa"]), reverse=True)[:3]
-melhores_25 = sorted(melhores_25, key=lambda x: (x["confianca"], x["estimativa"]), reverse=True)[:3]
+    # Ordenar e pegar top 3
+    melhores_15 = sorted(melhores_15, key=lambda x: (x["confianca"], x["estimativa"]), reverse=True)[:3]
+    melhores_25 = sorted(melhores_25, key=lambda x: (x["confianca"], x["estimativa"]), reverse=True)[:3]
 
-if melhores_15 or melhores_25:
-    msg_alt = "📢 TOP ENTRADAS - Alertas Consolidados\n\n"
+    if melhores_15 or melhores_25:
+        msg_alt = "📢 TOP ENTRADAS - Alertas Consolidados\n\n"
 
-    if melhores_15:
-        odd_combinada_15 = 1
-        msg_alt += "🔥 Top 3 Jogos para +1.5 Gols\n"
-        for j in melhores_15:
-            odd_combinada_15 *= float(j.get("odd_15", 1))
-            msg_alt += (
-                f"🏆 {j['competicao']}\n"
-                f"🕒 {j['hora']} BRT\n"
-                f"🏟️ {j['home']} vs {j['away']}\n"
-                f"📊 Estimativa: {j['estimativa']:.2f} gols | ✅ Confiança: {j['confianca']:.0f}%\n"
-                f"💰 Odd: {j.get('odd_15', 'N/A')}\n\n"
-            )
-        msg_alt += f"🎯 Odd combinada (3 jogos): {odd_combinada_15:.2f}\n\n"
+        if melhores_15:
+            odd_combinada_15 = 1
+            msg_alt += "🔥 Top 3 Jogos para +1.5 Gols\n"
+            for j in melhores_15:
+                odd_combinada_15 *= float(j.get("odd_15") or 1)
+                msg_alt += (
+                    f"🏆 {j['competicao']}\n"
+                    f"🕒 {j['hora']} BRT\n"
+                    f"🏟️ {j['home']} vs {j['away']}\n"
+                    f"📊 Estimativa: {j['estimativa']:.2f} gols | ✅ Confiança: {j['confianca']:.0f}%\n"
+                    f"💰 Odd: {j.get('odd_15', 'N/A')}\n\n"
+                )
+            msg_alt += f"🎯 Odd combinada (3 jogos): {odd_combinada_15:.2f}\n\n"
 
-    if melhores_25:
-        odd_combinada_25 = 1
-        msg_alt += "⚡ Top 3 Jogos para +2.5 Gols\n"
-        for j in melhores_25:
-            odd_combinada_25 *= float(j.get("odd_25", 1))
-            msg_alt += (
-                f"🏆 {j['competicao']}\n"
-                f"🕒 {j['hora']} BRT\n"
-                f"🏟️ {j['home']} vs {j['away']}\n"
-                f"📊 Estimativa: {j['estimativa']:.2f} gols | ✅ Confiança: {j['confianca']:.0f}%\n"
-                f"💰 Odd: {j.get('odd_25', 'N/A')}\n\n"
-            )
-        msg_alt += f"🎯 Odd combinada (3 jogos): {odd_combinada_25:.2f}\n\n"
+      #  if melhores_25:
+        if melhores_25:
+            odd_combinada_25 = 1
+            msg_alt += "⚡ Top 3 Jogos para +2.5 Gols\n"
+            for j in melhores_25:
+                odd_combinada_25 *= float(j.get("odd_25") or 1)
+                msg_alt += (
+                    f"🏆 {j['competicao']}\n"
+                    f"🕒 {j['hora']} BRT\n"
+                    f"🏟️ {j['home']} vs {j['away']}\n"
+                    f"📊 Estimativa: {j['estimativa']:.2f} gols | ✅ Confiança: {j['confianca']:.0f}%\n"
+                    f"💰 Odd: {j.get('odd_25', 'N/A')}\n\n"
+                )
+            msg_alt += f"🎯 Odd combinada (3 jogos): {odd_combinada_25:.2f}\n\n"
 
-    enviar_telegram(msg_alt, TELEGRAM_CHAT_ID_ALT2)
-    st.success("🚀 Top jogos enviados para o canal alternativo 2!")
-else:
-    st.info("Nenhum jogo com tendência clara de +1.5 ou +2.5 gols encontrado.")
-
-    
+        # Enviar alerta consolidado para canal alternativo
+        enviar_telegram(msg_alt, TELEGRAM_CHAT_ID_ALT2)
+        st.success("🚀 Top jogos enviados para o canal alternativo 2!")
+    else:
+        st.info("Nenhum jogo com tendência clara de +1.5 ou +2.5 gols encontrado.")
