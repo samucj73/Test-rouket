@@ -180,68 +180,116 @@ def construir_tabela_from_matches(matches):
    # =============================
 # Cálculo estimativa/tendência
 # =============================
-def calcular_estimativa_e_tendencia(match, all_league_matches, past_season_matches, peso_config=None):
+def calcular_estimativa_e_tendencia(match, all_matches_current, past_season_matches, peso_config=None):
+    """
+    match: objeto do jogo em análise (temporada atual)
+    all_matches_current: todos os jogos da liga da temporada atual (para médias recentes)
+    past_season_matches: jogos da temporada passada (para tabela/posições)
+    Retorna: dict com estimativa de gols, confiança, tendência e detalhes
+    """
+
     if peso_config is None:
-        peso_config = {"h2h":0.3,"recent":0.4,"table":0.15,"gd":0.15}
+        peso_config = {
+            "h2h": 0.30,
+            "recent": 0.40,
+            "table": 0.15,
+            "gd": 0.15
+        }
 
     home = match["team1"]["teamName"]
     away = match["team2"]["teamName"]
 
-    # H2H usando temporada passada
-    h2h_jogs = obter_h2h(match.get("league",{}).get("leagueName","") or match.get("group",""), home, away, max_jogos=6)
-    total_gols_h2h = h2h_count = 0
+    # --- H2H ---
+    h2h_jogs = obter_h2h(match.get("league", {}).get("leagueName", "") or match.get("group", ""), home, away, max_jogos=6)
+    total_gols_h2h = 0
+    h2h_count = 0
     for j in h2h_jogs:
-        final = next((r for r in j.get("matchResults",[]) if r.get("resultTypeID")==2), None)
-        if final:
-            total_gols_h2h += final.get("pointsTeam1",0) + final.get("pointsTeam2",0)
-            h2h_count += 1
-    media_h2h = round(total_gols_h2h/h2h_count,2) if h2h_count else 0.0
+        for r in j.get("matchResults", []):
+            if r.get("resultTypeID") == 2:
+                total_gols_h2h += r.get("pointsTeam1", 0) + r.get("pointsTeam2", 0)
+                h2h_count += 1
+    media_h2h = round(total_gols_h2h / h2h_count, 2) if h2h_count else 0.0
 
-    # Últimos jogos de cada time (temporadas passadas)
+    # --- Últimos jogos de cada time na temporada atual ---
     recent_n = 8
-    recent_home = extrair_jogos_time(past_season_matches, home, recent_n)
-    recent_away = extrair_jogos_time(past_season_matches, away, recent_n)
+    recent_home = extrair_jogos_time(all_matches_current, home, max_jogos=recent_n)
+    recent_away = extrair_jogos_time(all_matches_current, away, max_jogos=recent_n)
+
     stats_home = calcular_stats_time_por_nome(recent_home, home)
     stats_away = calcular_stats_time_por_nome(recent_away, away)
-    media_recente_total = stats_home["media_marc"] + stats_away["media_marc"]
 
-    # Tabela temporada passada
+    media_recente_total = (stats_home["media_marc"] + stats_away["media_marc"])
+
+    # --- Tabela da temporada passada ---
     tabela = construir_tabela_from_matches(past_season_matches)
-    pos_home = tabela.get(home, {}).get("position", None)
-    pos_away = tabela.get(away, {}).get("position", None)
-    pos_diff = (pos_away - pos_home) if pos_home and pos_away else 0
-    avg_gd_abs = (stats_home.get("avg_gd",0) + stats_away.get("avg_gd",0))/2
 
-    # Combinação ponderada
-    estimativa = (peso_config["h2h"]*media_h2h +
-                  peso_config["recent"]*media_recente_total +
-                  peso_config["table"]*max(-1.0,min(1.5,pos_diff/10)) +
-                  peso_config["gd"]*avg_gd_abs)
-    estimativa = max(0.2,min(5.0,estimativa))
+    # Função para calcular posições
+    def calcular_posicoes(tabela):
+        sorted_times = sorted(tabela.items(), key=lambda x: (x[1]["points"], x[1]["gd"], x[1]["gf"]), reverse=True)
+        pos_dict = {}
+        for i, (time, stats) in enumerate(sorted_times, 1):
+            pos_dict[time] = i
+        return pos_dict
 
-    # Confiança baseada em número de jogos e coerência
-    data_score = (25 if h2h_count>=3 else 0) + min(25,(stats_home["jogos_validos"] + stats_away["jogos_validos"])*2)
-    coerencia = max(0,min(100,100 - abs((media_h2h if media_h2h else media_recente_total) - media_recente_total)*20))
+    posicoes = calcular_posicoes(tabela)
+    pos_home = posicoes.get(home, None)
+    pos_away = posicoes.get(away, None)
+
+    # --- Diferença de posição ---
+    pos_diff = None
+    if pos_home and pos_away:
+        pos_diff = pos_away - pos_home
+
+    # --- Saldo médio de gols (GD) ---
+    avg_gd_abs = (stats_home.get("avg_gd", 0) + stats_away.get("avg_gd", 0)) / 2
+
+    # --- Cálculo ponderado da estimativa ---
+    comp_h2h = media_h2h if media_h2h > 0 else media_recente_total
+    comp_recent = media_recente_total
+    comp_table = max(-1.0, min(1.5, (pos_diff / 10))) if pos_diff is not None else 0
+    comp_gd = avg_gd_abs
+
+    w_h2h = peso_config.get("h2h", 0.3)
+    w_recent = peso_config.get("recent", 0.4)
+    w_table = peso_config.get("table", 0.15)
+    w_gd = peso_config.get("gd", 0.15)
+
+    estimativa = (w_h2h * comp_h2h) + (w_recent * comp_recent) + (w_table * comp_table) + (w_gd * comp_gd)
+    estimativa = max(0.2, min(5.0, estimativa))
+
+    # --- Confiança ---
+    data_score = 0
+    if h2h_count >= 3:
+        data_score += 25
+    data_score += min(25, (stats_home["jogos_validos"] + stats_away["jogos_validos"]) * 2)
+    coerencia = max(0, min(100, 100 - abs(comp_h2h - comp_recent) * 20))
     confianca = min(95, 40 + data_score + (coerencia/3))
 
-    # Determina linha
-    if estimativa >= 3.5: tendencia_line="Mais 3.5"
-    elif estimativa >=2.5: tendencia_line="Mais 2.5"
-    elif estimativa >=1.5: tendencia_line="Mais 1.5"
-    else: tendencia_line="Menos 1.5"
+    # --- Definir tendência ---
+    if estimativa >= 3.5:
+        tendencia_line = "Mais 3.5"
+    elif estimativa >= 2.5:
+        tendencia_line = "Mais 2.5"
+    elif estimativa >= 1.5:
+        tendencia_line = "Mais 1.5"
+    else:
+        tendencia_line = "Menos 1.5"
 
-    return {
-        "estimativa": round(estimativa,2),
-        "confianca": round(confianca,1),
+    detalhe = {
+        "estimativa": round(estimativa, 2),
+        "confianca": round(confianca, 1),
         "tendencia_line": tendencia_line,
-        "media_h2h": round(media_h2h,2),
+        "media_h2h": round(media_h2h, 2),
         "h2h_count": h2h_count,
-        "media_recente_total": round(media_recente_total,2),
+        "media_recente_total": round(media_recente_total, 2),
         "stats_home": stats_home,
         "stats_away": stats_away,
         "pos_home": pos_home,
         "pos_away": pos_away
     }
+
+    return detalhe
+
 
 # =============================
 # Interface Streamlit
