@@ -285,10 +285,10 @@ if st.button("🔍 Buscar jogos do dia"):
     melhores_15 = sorted(melhores_15, key=lambda x: (x["confianca"], x["estimativa"]), reverse=True)[:3]
     melhores_25 = sorted(melhores_25, key=lambda x: (x["confianca"], x["estimativa"]), reverse=True)[:3]
 
-   if melhores_15 or melhores_25:
-      msg_alt = "📢 TOP ENTRADAS - Alertas Consolidados\n\n"
+if melhores_15 or melhores_25:
+    msg_alt = "📢 TOP ENTRADAS - Alertas Consolidados\n\n"
 
-    if melhores_15:
+if melhores_15:
         odd_combinada_15 = 1
         msg_alt += "🔥 Top 3 Jogos para +1.5 Gols\n"
         for j in melhores_15:
