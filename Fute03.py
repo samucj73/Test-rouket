@@ -73,7 +73,7 @@ def enviar_alerta_telegram(jogo, tendencia_text, confianca, estimativa, chat_id=
     enviar_telegram(msg, chat_id)
 
 # =============================
-# OpenLigaDB helpers
+# Helpers OpenLigaDB
 # =============================
 def slugify_team(name: str):
     if not name:
@@ -118,6 +118,44 @@ def extrair_jogos_time(all_matches, team_name, max_jogos=10):
     team_games = [j for j in all_matches if team_name.lower() in [j.get("team1",{}).get("teamName","").lower(), j.get("team2",{}).get("teamName","").lower()]]
     return sorted(team_games, key=lambda x: x.get("matchDateTime") or x.get("matchDateTimeUTC") or "", reverse=True)[:max_jogos]
 
+# =============================
+# Helpers ESPN (histórico passado)
+# =============================
+def obter_historico_time_espn(team_id, league_id, max_jogos=10):
+    """
+    Busca resultados passados do time via API ESPN.
+    Retorna lista de jogos no mesmo formato do OpenLigaDB.
+    """
+    try:
+        url = f"http://site.api.espn.com/apis/site/v2/sports/soccer/{league_id}/scoreboard"
+        r = requests.get(url, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            jogos_time = []
+            for ev in data.get("events", []):
+                comps = ev.get("competitions", [])
+                if not comps: continue
+                comp = comps[0]
+                home = comp["competitors"][0]["team"]["displayName"]
+                away = comp["competitors"][1]["team"]["displayName"]
+                pts_home = int(comp["competitors"][0].get("score",0) or 0)
+                pts_away = int(comp["competitors"][1].get("score",0) or 0)
+                jogos_time.append({
+                    "team1":{"teamName":home},
+                    "team2":{"teamName":away},
+                    "matchResults":[{"resultTypeID":2,"pointsTeam1":pts_home,"pointsTeam2":pts_away}],
+                    "matchDateTime":comp.get("date")
+                })
+            # Filtrar apenas jogos do time_id
+            jogos_time = [j for j in jogos_time if home.lower() == str(team_id).lower() or away.lower() == str(team_id).lower()]
+            return sorted(jogos_time, key=lambda x:x.get("matchDateTime") or "", reverse=True)[:max_jogos]
+    except Exception as e:
+        print("Erro obter_historico_time_espn:", e)
+    return []
+
+# =============================
+# Cálculo de estatísticas
+# =============================
 def calcular_stats_time_por_nome(jogos, team_name):
     gols_marc = gols_sof = jogos_validos = over15 = over25 = over35 = gd_total = 0
     for j in jogos:
@@ -157,6 +195,9 @@ def calcular_stats_time_por_nome(jogos, team_name):
         "avg_gd":round(gd_total/jogos_validos,2)
     }
 
+# =============================
+# Tabela
+# =============================
 def construir_tabela_from_matches(matches):
     table = defaultdict(lambda: {"points":0,"gd":0,"gf":0,"ga":0,"played":0})
     for j in matches:
@@ -177,19 +218,12 @@ def construir_tabela_from_matches(matches):
         if pts1>pts2: table[home]["points"]+=3
         elif pts2>pts1: table[away]["points"]+=3
         else: table[home]["points"]+=1; table[away]["points"]+=1
-   # =============================
-# Cálculo estimativa/tendência
+    return table
+
 # =============================
-# =============================
-# Função segura de cálculo de estimativa e tendência
+# Cálculo estimativa e tendência
 # =============================
 def calcular_estimativa_e_tendencia(match, all_matches_current, past_season_matches, peso_config=None):
-    """
-    match: jogo do dia (temporada atual)
-    all_matches_current: todos os jogos da liga da temporada atual (para extração recentes)
-    past_season_matches: jogos da temporada passada (para tabela)
-    peso_config: pesos para cada fator
-    """
     if peso_config is None:
         peso_config = {"h2h":0.3, "recent":0.4, "table":0.15, "gd":0.15}
 
@@ -216,7 +250,7 @@ def calcular_estimativa_e_tendencia(match, all_matches_current, past_season_matc
 
     media_recente_total = (stats_home["media_marc"] + stats_away["media_marc"])
 
-    # --- Tabela da temporada passada ---
+    # --- Tabela baseada nos jogos históricos (passados) ---
     tabela = construir_tabela_from_matches(past_season_matches)
 
     def calcular_posicoes(tabela):
@@ -287,17 +321,15 @@ def calcular_estimativa_e_tendencia(match, all_matches_current, past_season_matc
 
     return detalhe
 
-
 # =============================
 # Interface Streamlit
 # =============================
 st.set_page_config(page_title="⚽ Alerta Over/Under", layout="wide")
-st.title("⚽ Sistema de Alertas Automáticos - Over/Under (OpenLigaDB)")
+st.title("⚽ Sistema de Alertas Automáticos - Over/Under")
 st.markdown("Calcula tendência Over/Under (1.5 / 2.5 / 3.5) usando H2H + médias passadas + posição da tabela + saldo de gols.")
 
 # Temporada e data
 temporada_atual = st.selectbox("📅 Escolha a temporada atual (para jogos do dia):", ["2023","2024","2025"], index=2)
-temporadas_passadas = st.multiselect("📅 Escolha temporadas passadas (para cálculos de stats):", ["2022","2023","2024"], default=["2023","2024"])
 data_selecionada = st.date_input("📅 Escolha a data para os jogos:", value=datetime.today())
 hoje = data_selecionada.strftime("%Y-%m-%d")
 
@@ -314,6 +346,7 @@ ligas_principais_openliga = {
 liga_escolhida_nome = st.selectbox("🏆 Escolha a Liga:", list(ligas_principais_openliga.keys()))
 liga_id = ligas_principais_openliga[liga_escolhida_nome]
 
+#if st.button("🔍 Buscar
 if st.button("🔍 Buscar jogos do dia e calcular tendência"):
     with st.spinner("Buscando jogos e calculando estatísticas..."):
         # Jogos do dia: temporada atual
@@ -322,12 +355,19 @@ if st.button("🔍 Buscar jogos do dia e calcular tendência"):
         if not matches_today:
             st.info("Nenhum jogo encontrado para essa data/ligue/temporada.")
         else:
-            # Estatísticas das temporadas passadas
-            past_season_matches = []
-            for temp in temporadas_passadas:
-                past_season_matches += obter_jogos_liga_temporada(liga_id, temp)
-
             st.subheader(f"📝 {len(matches_today)} jogos encontrados em {liga_escolhida_nome} para {hoje}")
+            
+            # Estatísticas históricas via ESPN para cada time
+            past_season_matches = []
+            for match in matches_today:
+                home = match["team1"]["teamName"]
+                away = match["team2"]["teamName"]
+                
+                # Obter últimos 10 jogos de cada time via ESPN
+                jogos_home = obter_historico_time_espn(home, liga_id, max_jogos=10)
+                jogos_away = obter_historico_time_espn(away, liga_id, max_jogos=10)
+                past_season_matches += jogos_home + jogos_away
+
             melhores_por_linha = {"1.5": [], "2.5": [], "3.5": []}
             alertas = carregar_alertas()
 
@@ -344,7 +384,7 @@ if st.button("🔍 Buscar jogos do dia e calcular tendência"):
                 st.write(f"📊 Estimativa total (gols): **{estimativa:.2f}** | Tendência: **{tendencia_line}** | Confiança: **{confianca:.0f}%**")
                 st.write(f"- Média H2H: {detalhe['media_h2h']} (últimos {detalhe['h2h_count']})")
                 st.write(f"- Média recente total: {detalhe['media_recente_total']:.2f}")
-                st.write(f"- Posição tabela: Home={detalhe['pos_home']} | Away={detalhe['pos_away']}")
+                st.write(f"- Posição tabela (histórico): Home={detalhe['pos_home']} | Away={detalhe['pos_away']}")
                 st.write("---")
 
                 # Adicionar ao bucket
