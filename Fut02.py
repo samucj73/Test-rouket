@@ -282,8 +282,8 @@ if st.button("🔍 Buscar jogos do dia"):
 
     # Ordenar e pegar top 3
     # Ordenar e pegar top 3
-melhores_15 = sorted(melhores_15, key=lambda x: (x["confianca"], x["estimativa"]), reverse=True)[:3]
-melhores_25 = sorted(melhores_25, key=lambda x: (x["confianca"], x["estimativa"]), reverse=True)[:3]
+    melhores_15 = sorted(melhores_15, key=lambda x: (x["confianca"], x["estimativa"]), reverse=True)[:3]
+    melhores_25 = sorted(melhores_25, key=lambda x: (x["confianca"], x["estimativa"]), reverse=True)[:3]
 
 if melhores_15 or melhores_25:
     msg_alt = "📢 TOP ENTRADAS - Alertas Consolidados\n\n"
