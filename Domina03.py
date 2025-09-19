@@ -558,3 +558,9 @@ col1.metric("🟢 GREEN 31/34", acertos_31_34)
 col2.metric("🔴 RED 31/34", erros_31_34)
 col3.metric("✅ Taxa 31/34", f"{taxa_31_34:.1f}%")
 col4.metric("🎯 Qtd. previstos 31/34", qtd_previstos_31_34)
+# -----------------------------
+# Exibir tamanho do histórico
+# -----------------------------
+st.subheader("📊 Informações do Histórico")
+st.write(f"Total de números armazenados no histórico: **{len(st.session_state.estrategia.historico)}**")
+st.write(f"Capacidade máxima do deque: **{st.session_state.estrategia.historico.maxlen}**")
