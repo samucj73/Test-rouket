@@ -331,7 +331,7 @@ with aba[0]:
 
             if melhores_25:
                 odd_combinada_25 = 1
-                msg_alt += "⚡ Top 3 Jogos para +2.5 Gols
+                msg_alt += "⚡ Top 3 Jogos para +2.5 Gols \n"
                 for j in melhores_25:
                     odd_combinada_25 *= float(j.get("odd_25") or 1)
                     msg_alt += (
