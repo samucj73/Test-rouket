@@ -181,7 +181,8 @@ def obter_jogos_liga_temporada(liga_id, temporada):
 def calcular_media_gols_times(jogos_hist):
     stats = {}
     for j in jogos_hist:
-        home, away = j["team1"]["teamName"], j["team2"]["teamName"]
+        home = j["team1"]["teamName"]
+        away = j["team2"]["teamName"]
         placar = None
         for r in j.get("matchResults", []):
             if r.get("resultTypeID") == 2:
@@ -202,11 +203,13 @@ def calcular_media_gols_times(jogos_hist):
         medias[time] = {"media_gols_marcados": media_marcados, "media_gols_sofridos": media_sofridos}
     return medias
 
+
+
 # =============================
 # Função dummy para odds (substitua com real se tiver API)
 # =============================
 def obter_odds(fixture_id):
-    return {"1.5": round(1.2 + fixture_id % 2 * 0.3,2), "2.5": round(1.8 + fixture_id % 3 * 0.4,2)}
+    return {"1.5": round(1.2 + fixture_id % 2 * 0.3, 2), "2.5": round(1.8 + fixture_id % 3 * 0.4, 2)}
 
 # =============================
 # Interface Streamlit
@@ -246,7 +249,6 @@ with aba[0]:
         medias_historicas = calcular_media_gols_times(jogos_hist)
 
         melhores_15, melhores_25 = [], []
-        top_favoritos, top_btts = [], []
 
         for match in jogos:
             league_id = match.get("league", {}).get("id")
@@ -275,10 +277,16 @@ with aba[0]:
 
             odds = obter_odds(match["fixture"]["id"])
 
-            # ===== Persistência de alertas =====
+            with st.container():
+                st.subheader(f"🏟️ {home} vs {away}")
+                st.caption(f"Liga: {competicao} | Temporada: {temporada_atual}")
+                st.write(f"📊 Estimativa de gols: **{estimativa:.2f}**")
+                st.write(f"🔥 Tendência: **{tendencia}**")
+                st.write(f"✅ Confiança: **{confianca:.0f}%**")
+                st.write(f"💰 Odds Over 1.5: {odds['1.5']} | Over 2.5: {odds['2.5']}")
+
             verificar_enviar_alerta(match, tendencia, confianca, estimativa)
 
-            # ===== +1.5 e +2.5 existentes =====
             if tendencia == "Mais 1.5":
                 melhores_15.append({
                     "home": home, "away": away,
@@ -294,27 +302,12 @@ with aba[0]:
                     "odd_25": odds["2.5"]
                 })
 
-            # ===== Top 3 Favoritos e BTTS =====
-            media_home_total = media_casa.get("media_gols_marcados",1.5)
-            media_away_total = media_fora.get("media_gols_marcados",1.4)
-            if media_home_total >= media_away_total:
-                top_favoritos.append({"time": home, "estimativa": estimativa, "confianca": confianca, "competicao": competicao, "hora": hora_formatada})
-            else:
-                top_favoritos.append({"time": away, "estimativa": estimativa, "confianca": confianca, "competicao": competicao, "hora": hora_formatada})
-
-            if estimativa >= 2.0:
-                top_btts.append({"home": home, "away": away, "estimativa": estimativa, "confianca": confianca, "competicao": competicao, "hora": hora_formatada})
-
-        # ===== Ordenar e pegar top 3 =====
+        # Top 3 consolidados
         melhores_15 = sorted(melhores_15, key=lambda x: (x["confianca"], x["estimativa"]), reverse=True)[:3]
         melhores_25 = sorted(melhores_25, key=lambda x: (x["confianca"], x["estimativa"]), reverse=True)[:3]
-        top_favoritos = sorted(top_favoritos, key=lambda x: (x["confianca"], x["estimativa"]), reverse=True)[:3]
-        top_btts = sorted(top_btts, key=lambda x: (x["confianca"], x["estimativa"]), reverse=True)[:3]
 
-        # ===== Enviar Telegram consolidados =====
-        if melhores_15 or melhores_25 or top_favoritos or top_btts:
+        if melhores_15 or melhores_25:
             msg_alt = "📢 *TOP ENTRADAS - Alertas Consolidados*\n\n"
-
             if melhores_15:
                 odd_combinada_15 = 1
                 msg_alt += "🔥 Top 3 Jogos para +1.5 Gols\n"
@@ -331,7 +324,7 @@ with aba[0]:
 
             if melhores_25:
                 odd_combinada_25 = 1
-                msg_alt += "⚡ Top 3 Jogos para +2.5 Gols \n"
+                msg_alt += "⚡ Top 3 Jogos para +2.5 Gols\n"
                 for j in melhores_25:
                     odd_combinada_25 *= float(j.get("odd_25") or 1)
                     msg_alt += (
@@ -342,26 +335,6 @@ with aba[0]:
                         f"💰 Odd: {j.get('odd_25', 'N/A')}\n\n"
                     )
                 msg_alt += f"🎯 Odd combinada (3 jogos): {odd_combinada_25:.2f}\n\n"
-
-            if top_favoritos:
-                msg_alt += "⭐ Top 3 Favoritos (time com maior média de gols)\n"
-                for j in top_favoritos:
-                    msg_alt += (
-                        f"🏆 {j['competicao']}\n"
-                        f"🕒 {j['hora']} BRT\n"
-                        f"🏟️ Time: {j['time']}\n"
-                        f"📊 Estimativa: {j['estimativa']:.2f} | ✅ Confiança: {j['confianca']:.0f}%\n\n"
-                    )
-
-            if top_btts:
-                msg_alt += "🔥 Top 3 Jogos BTTS Provável (Estimativa ≥ 2 gols)\n"
-                for j in top_btts:
-                    msg_alt += (
-                        f"🏆 {j['competicao']}\n"
-                        f"🕒 {j['hora']} BRT\n"
-                        f"🏟️ {j['home']} vs {j['away']}\n"
-                        f"📊 Estimativa: {j['estimativa']:.2f} | ✅ Confiança: {j['confianca']:.0f}%\n\n"
-                    )
 
             enviar_telegram(msg_alt, TELEGRAM_CHAT_ID_ALT2)
             st.success("🚀 Top jogos enviados para o canal alternativo 2!")
