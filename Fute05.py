@@ -257,7 +257,6 @@ st.title("⚽ Alertas Top3 por Faixa (+1.5 / +2.5 / +3.5) — OpenLigaDB (Aleman
 aba = st.tabs(["⚡ Gerar & Enviar Top3 (pré-jogo)", "📊 Jogos Históricos", "🎯 Conferência Top3 (pós-jogo)"])
 
 # ---------- ABA 1: Gerar & Enviar Top3 ----------
-# ---------- ABA 1: Gerar & Enviar Top3 ----------
 with aba[0]:
     st.subheader("🔎 Buscar jogos do dia nas ligas da Alemanha e enviar Top3 por faixa")
     temporada_hist = st.selectbox("📅 Temporada (para médias):", ["2022", "2023", "2024", "2025"], index=2)
@@ -329,38 +328,38 @@ with aba[0]:
                         "temporada": match.get("_temporada")
                     })
 
-                # --- Criar Top3 distintos por faixa ---
-                def selecionar_top3_distintos(lista, prob_key, times_usados=set())
-                      prob_key: ex: "prob_1_5", "prob_2_5", "prob_3_5"
-                      conf_key = "conf_" + prob_key.split("_")[1]  # transforma "prob_1_5" → "conf_1_5"
-                      selecionados = []
-                      for j in sorted(lista, key=lambda x: (x[prob_key], x[conf_key], x["estimativa"]), reverse=True):
-                          if j["home"] not in times_usados and j["away"] not in times_usados:
-                      selecionados.append(j)
-                     times_usados.update([j["home"], j["away"]])
-                           if len(selecionados) >= 3:
-                         break
-                         return selecionados        
+                # criar Top3 para cada faixa
+                top_15 = sorted(partidas_info, key=lambda x: (x["prob_1_5"], x["conf_1_5"], x["estimativa"]), reverse=True)[:3]
+                top_25 = sorted(partidas_info, key=lambda x: (x["prob_2_5"], x["conf_2_5"], x["estimativa"]), reverse=True)[:3]
+                top_35 = sorted(partidas_info, key=lambda x: (x["prob_3_5"], x["conf_3_5"], x["estimativa"]), reverse=True)[:3]
 
-                
-                
+                # --- Envia 3 mensagens separadas (uma por faixa) ---
+                # Mensagem +1.5
+                if top_15:
+                    msg = f"🔔 *TOP 3 +1.5 GOLS — {hoje_str}*\n\n"
+                    for idx, j in enumerate(top_15, start=1):
+                        msg += (f"{idx}️⃣ *{j['home']} x {j['away']}* — {j['competicao']} — {j['hora']} BRT\n"
+                                f"   • Est: {j['estimativa']:.2f} gols | P(+1.5): *{j['prob_1_5']:.1f}%* | Conf: *{j['conf_1_5']:.0f}%*\n")
+                    enviar_telegram(msg, TELEGRAM_CHAT_ID)
+                    enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2)
 
-                times_usados = set()
-                top_15 = selecionar_top3_distintos(partidas_info, "prob_1_5", times_usados)
-                top_25 = selecionar_top3_distintos([j for j in partidas_info if j not in top_15], "prob_2_5", times_usados)
-                top_35 = selecionar_top3_distintos([j for j in partidas_info if j not in top_15 + top_25], "prob_3_5", times_usados)
+                # Mensagem +2.5
+                if top_25:
+                    msg = f"🔔 *TOP 3 +2.5 GOLS — {hoje_str}*\n\n"
+                    for idx, j in enumerate(top_25, start=1):
+                        msg += (f"{idx}️⃣ *{j['home']} x {j['away']}* — {j['competicao']} — {j['hora']} BRT\n"
+                                f"   • Est: {j['estimativa']:.2f} gols | P(+2.5): *{j['prob_2_5']:.1f}%* | Conf: *{j['conf_2_5']:.0f}%*\n")
+                    enviar_telegram(msg, TELEGRAM_CHAT_ID)
+                    enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2)
 
-                # --- Envia mensagens separadas ---
-                for top, faixa in zip([top_15, top_25, top_35], ["+1.5", "+2.5", "+3.5"]):
-                    if top:
-                        msg = f"🔔 *TOP 3 {faixa} GOLS — {hoje_str}*\n\n"
-                        for idx, j in enumerate(top, start=1):
-                            prob = j[f"prob_{faixa.replace('+','').replace('.','_')}"]
-                            conf = j[f"conf_{faixa.replace('+','').replace('.','_')}"]
-                            msg += (f"{idx}️⃣ *{j['home']} x {j['away']}* — {j['competicao']} — {j['hora']} BRT\n"
-                                    f"   • Est: {j['estimativa']:.2f} gols | P({faixa}): *{prob:.1f}%* | Conf: *{conf:.0f}%*\n")
-                        enviar_telegram(msg, TELEGRAM_CHAT_ID)
-                        enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2)
+                # Mensagem +3.5
+                if top_35:
+                    msg = f"🔔 *TOP 3 +3.5 GOLS — {hoje_str}*\n\n"
+                    for idx, j in enumerate(top_35, start=1):
+                        msg += (f"{idx}️⃣ *{j['home']} x {j['away']}* — {j['competicao']} — {j['hora']} BRT\n"
+                                f"   • Est: {j['estimativa']:.2f} gols | P(+3.5): *{j['prob_3_5']:.1f}%* | Conf: *{j['conf_3_5']:.0f}%*\n")
+                    enviar_telegram(msg, TELEGRAM_CHAT_ID)
+                    enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2)
 
                 # salva o lote Top3 (persistente)
                 top3_list = carregar_top3()
@@ -375,7 +374,7 @@ with aba[0]:
                 top3_list.append(novo_top)
                 salvar_top3(top3_list)
 
-                st.success("✅ Top3 gerados e enviados (uma mensagem por faixa, times distintos).")
+                st.success("✅ Top3 gerados e enviados (uma mensagem por faixa).")
                 st.write("### Top 3 +1.5")
                 st.table([{ "Jogo": f"{t['home']} x {t['away']}", "P(+1.5)": f"{t['prob_1_5']}%", "Conf": f"{t['conf_1_5']}%"} for t in top_15])
                 st.write("### Top 3 +2.5")
@@ -383,6 +382,30 @@ with aba[0]:
                 st.write("### Top 3 +3.5")
                 st.table([{ "Jogo": f"{t['home']} x {t['away']}", "P(+3.5)": f"{t['prob_3_5']}%", "Conf": f"{t['conf_3_5']}%"} for t in top_35])
 
+# ---------- ABA 2: Jogos históricos ----------
+with aba[1]:
+    st.subheader("📊 Jogos de Temporadas Passadas (OpenLigaDB) — Ligas da Alemanha")
+    temporada_hist2 = st.selectbox("📅 Temporada histórica:", ["2022", "2023", "2024", "2025"], index=2, key="hist2")
+    liga_nome_hist = st.selectbox("🏆 Escolha a Liga:", list(ligas_openliga.keys()), key="hist_liga")
+    liga_id_hist = ligas_openliga[liga_nome_hist]
+
+    if st.button("🔍 Buscar jogos da temporada", key="btn_hist"):
+        with st.spinner("Buscando jogos..."):
+            jogos_hist = obter_jogos_liga_temporada(liga_id_hist, temporada_hist2)
+            if not jogos_hist:
+                st.info("Nenhum jogo encontrado para essa temporada/liga.")
+            else:
+                st.success(f"{len(jogos_hist)} jogos encontrados na {liga_nome_hist} ({temporada_hist2})")
+                for j in jogos_hist[:50]:
+                    home = j.get("team1", {}).get("teamName")
+                    away = j.get("team2", {}).get("teamName")
+                    placar = "-"
+                    for r in j.get("matchResults", []):
+                        if r.get("resultTypeID") == 2:
+                            placar = f"{r.get('pointsTeam1',0)} x {r.get('pointsTeam2',0)}"
+                            break
+                    data = j.get("matchDateTimeUTC") or j.get("matchDateTime") or "Desconhecida"
+                    st.write(f"🏟️ {home} vs {away} | 📅 {data} | ⚽ Placar: {placar}")
 
 # ---------- ABA 3: Conferência Top 3 ----------
 with aba[2]:
