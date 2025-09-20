@@ -330,17 +330,17 @@ with aba[0]:
                     })
 
                 # --- Criar Top3 distintos por faixa ---
- def selecionar_top3_distintos(lista, prob_key, times_usados=set()):
-    # prob_key: ex: "prob_1_5", "prob_2_5", "prob_3_5"
-    conf_key = "conf_" + prob_key.split("_")[1]  # transforma "prob_1_5" → "conf_1_5"
-    selecionados = []
-    for j in sorted(lista, key=lambda x: (x[prob_key], x[conf_key], x["estimativa"]), reverse=True):
-        if j["home"] not in times_usados and j["away"] not in times_usados:
-            selecionados.append(j)
-            times_usados.update([j["home"], j["away"]])
-        if len(selecionados) >= 3:
-            break
-    return selecionados        
+                def selecionar_top3_distintos(lista, prob_key, times_usados=set())
+                     # prob_key: ex: "prob_1_5", "prob_2_5", "prob_3_5"
+                      conf_key = "conf_" + prob_key.split("_")[1]  # transforma "prob_1_5" → "conf_1_5"
+                      selecionados = []
+                      for j in sorted(lista, key=lambda x: (x[prob_key], x[conf_key], x["estimativa"]), reverse=True):
+                          if j["home"] not in times_usados and j["away"] not in times_usados:
+                      selecionados.append(j)
+                     times_usados.update([j["home"], j["away"]])
+                           if len(selecionados) >= 3:
+                         break
+                         return selecionados        
 
                 
                 
