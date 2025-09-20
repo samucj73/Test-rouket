@@ -150,7 +150,7 @@ class EstrategiaDeslocamento:
 # IA Recorrência com RandomForest
 # =============================
 class IA_Recorrencia_RF:
-    def __init__(self, layout=None, top_n=m5, window=WINDOW_SIZE):
+    def __init__(self, layout=None, top_n=5, window=WINDOW_SIZE):
         self.layout = layout or ROULETTE_LAYOUT
         self.top_n = top_n
         self.window = window
