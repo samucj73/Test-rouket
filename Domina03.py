@@ -150,7 +150,7 @@ class EstrategiaDeslocamento:
 # IA Recorrência com RandomForest
 # =============================
 class IA_Recorrencia_RF:
-    def __init__(self, layout=None, top_n=18, window=WINDOW_SIZE):
+    def __init__(self, layout=None, top_n=m5, window=WINDOW_SIZE):
         self.layout = layout or ROULETTE_LAYOUT
         self.top_n = top_n
         self.window = window
@@ -473,7 +473,7 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
     # -----------------------------
     # Gerar próxima previsão
     # -----------------------------
-    if st.session_state.contador_rodadas % 2 == 1:
+    if st.session_state.contador_rodadas % 2 == 0:
         # Usa IA Recorrência RandomForest
         prox_numeros = st.session_state.ia_recorrencia.prever(st.session_state.estrategia.historico)
         if prox_numeros:
