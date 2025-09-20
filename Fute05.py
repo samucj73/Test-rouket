@@ -249,6 +249,62 @@ def conferir_jogo_openliga(fixture_id, liga_id, temporada, tipo_threshold):
         return None
 
 # =============================
+# Helpers para selecionar Top3 distintos entre faixas
+# =============================
+def selecionar_top3_distintos(partidas_info, max_por_faixa=3):
+    """
+    Seleciona Top3 para +1.5, +2.5 e +3.5 garantindo:
+      - prioridade +1.5 -> +2.5 -> +3.5
+      - não repetir fixture_id entre faixas
+      - evita repetir times (home/away) entre faixas quando possível
+    Retorna (top_15, top_25, top_35)
+    """
+    if not partidas_info:
+        return [], [], []
+
+    # lista base (cópia)
+    base = list(partidas_info)
+
+    # Top +1.5 (maior prob_1_5)
+    top_15 = sorted(base, key=lambda x: (x.get("prob_1_5", 0), x.get("conf_1_5", 0), x.get("estimativa", 0)), reverse=True)[:max_por_faixa]
+    selected_ids = set(str(j.get("fixture_id")) for j in top_15)
+    selected_teams = set()
+    for j in top_15:
+        selected_teams.add(j.get("home"))
+        selected_teams.add(j.get("away"))
+
+    # candidatos para +2.5: exclui fixtures já selecionados
+    candidatos_25 = sorted([j for j in base if str(j.get("fixture_id")) not in selected_ids],
+                           key=lambda x: (x.get("prob_2_5", 0), x.get("conf_2_5", 0), x.get("estimativa", 0)), reverse=True)
+    top_25 = []
+    for c in candidatos_25:
+        if len(top_25) >= max_por_faixa:
+            break
+        # evita times repetidos entre faixas (home/away)
+        if c.get("home") in selected_teams or c.get("away") in selected_teams:
+            continue
+        top_25.append(c)
+        selected_ids.add(str(c.get("fixture_id")))
+        selected_teams.add(c.get("home"))
+        selected_teams.add(c.get("away"))
+
+    # candidatos para +3.5: exclui fixtures já selecionados
+    candidatos_35 = sorted([j for j in base if str(j.get("fixture_id")) not in selected_ids],
+                           key=lambda x: (x.get("prob_3_5", 0), x.get("conf_3_5", 0), x.get("estimativa", 0)), reverse=True)
+    top_35 = []
+    for c in candidatos_35:
+        if len(top_35) >= max_por_faixa:
+            break
+        if c.get("home") in selected_teams or c.get("away") in selected_teams:
+            continue
+        top_35.append(c)
+        selected_ids.add(str(c.get("fixture_id")))
+        selected_teams.add(c.get("home"))
+        selected_teams.add(c.get("away"))
+
+    return top_15, top_25, top_35
+
+# =============================
 # UI Streamlit
 # =============================
 st.set_page_config(page_title="⚽ Alertas Top3 (OpenLigaDB) - Alemanha", layout="wide")
@@ -262,6 +318,8 @@ with aba[0]:
     temporada_hist = st.selectbox("📅 Temporada (para médias):", ["2022", "2023", "2024", "2025"], index=2)
     data_selecionada = st.date_input("📅 Data dos jogos:", value=datetime.today().date())
     hoje_str = data_selecionada.strftime("%Y-%m-%d")
+
+    st.markdown("**Obs:** as listas são agora *distintas*: um jogo/time selecionado em +1.5 não será repetido em +2.5 ou +3.5 (prioridade: +1.5 → +2.5 → +3.5).")
 
     if st.button("🔍 Buscar jogos do dia e enviar Top3 (cada faixa uma mensagem)"):
         with st.spinner("Buscando jogos e calculando probabilidades..."):
@@ -328,10 +386,8 @@ with aba[0]:
                         "temporada": match.get("_temporada")
                     })
 
-                # criar Top3 para cada faixa
-                top_15 = sorted(partidas_info, key=lambda x: (x["prob_1_5"], x["conf_1_5"], x["estimativa"]), reverse=True)[:3]
-                top_25 = sorted(partidas_info, key=lambda x: (x["prob_2_5"], x["conf_2_5"], x["estimativa"]), reverse=True)[:3]
-                top_35 = sorted(partidas_info, key=lambda x: (x["prob_3_5"], x["conf_3_5"], x["estimativa"]), reverse=True)[:3]
+                # --- Seleciona Top3 distintos usando a função de prioridade ---
+                top_15, top_25, top_35 = selecionar_top3_distintos(partidas_info, max_por_faixa=3)
 
                 # --- Envia 3 mensagens separadas (uma por faixa) ---
                 # Mensagem +1.5
@@ -431,14 +487,6 @@ with aba[2]:
                 greens_1_5 = reds_1_5 = 0
                 greens_2_5 = reds_2_5 = 0
                 greens_3_5 = reds_3_5 = 0
-
-                # processa cada faixa
-                for tipo_key, lista, detalhes, g_count, r_count in [
-                    ("1.5", lote.get("top_1_5", []), detalhes_1_5, 0, 0),
-                    ("2.5", lote.get("top_2_5", []), detalhes_2_5, 0, 0),
-                    ("3.5", lote.get("top_3_5", []), detalhes_3_5, 0, 0),
-                ]:
-                    pass  # we'll fill in after
 
                 # função auxiliar para processar uma lista e retornar mensagem e resumo
                 def processar_lista_e_mandar(lista_top, threshold_label):
