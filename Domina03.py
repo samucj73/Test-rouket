@@ -473,7 +473,7 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
     # -----------------------------
     # Gerar próxima previsão
     # -----------------------------
-    if st.session_state.contador_rodadas % 1 == 0:
+    if st.session_state.contador_rodadas % 3 == 0:
         # Usa IA Recorrência RandomForest
         prox_numeros = st.session_state.ia_recorrencia.prever(st.session_state.estrategia.historico)
         if prox_numeros:
