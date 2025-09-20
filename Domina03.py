@@ -36,7 +36,7 @@ ROULETTE_LAYOUT = [
 WINDOW_SIZE = 250   # janela móvel para Top N dinâmico
 MIN_TOP_N = 5      # mínimo de números na Top N
 MAX_TOP_N = 10     # máximo de números na Top N
-MAX_PREVIEWS = 15   # limite final de previsões para reduzir custo
+MAX_PREVIEWS = 6   # limite final de previsões para reduzir custo
 
 # =============================
 # Utilitários (Telegram, histórico, API, vizinhos)
@@ -423,7 +423,7 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
     if st.session_state.previsao:
         numeros_com_vizinhos = []
         for n in st.session_state.previsao:
-            for v in obter_vizinhos(n, ROULETTE_LAYOUT, antes=0, depois=0):
+            for v in obter_vizinhos(n, ROULETTE_LAYOUT, antes=1, depois=1):
                 if v not in numeros_com_vizinhos:
                     numeros_com_vizinhos.append(v)
         if numero_real in numeros_com_vizinhos:
