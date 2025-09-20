@@ -423,7 +423,7 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
     if st.session_state.previsao:
         numeros_com_vizinhos = []
         for n in st.session_state.previsao:
-            for v in obter_vizinhos(n, ROULETTE_LAYOUT, antes=2, depois=2):
+            for v in obter_vizinhos(n, ROULETTE_LAYOUT, antes=0, depois=0):
                 if v not in numeros_com_vizinhos:
                     numeros_com_vizinhos.append(v)
         if numero_real in numeros_com_vizinhos:
@@ -473,7 +473,7 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
     # -----------------------------
     # Gerar próxima previsão
     # -----------------------------
-    if st.session_state.contador_rodadas % 2 == 0:
+    if st.session_state.contador_rodadas % 1 == 0:
         # Usa IA Recorrência RandomForest
         prox_numeros = st.session_state.ia_recorrencia.prever(st.session_state.estrategia.historico)
         if prox_numeros:
