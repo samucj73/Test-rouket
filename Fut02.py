@@ -229,7 +229,7 @@ if st.button("🔍 Buscar partidas"):
             away = match["awayTeam"]["name"]
             status = match.get("status", "DESCONHECIDO")
              # ⛔ Filtro: só considerar jogos que ainda não começaram
-             if status != "SCHEDULED":
+        if status != "SCHEDULED":
              continue
 
             # Placar
