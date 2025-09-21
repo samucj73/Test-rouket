@@ -79,15 +79,21 @@ def calcular_tendencia(media_casa, media_fora):
 # Funções API Football-Data
 # =============================
 def obter_ligas():
-    try:
-        resp = requests.get(f"{BASE_URL}/competitions", headers=HEADERS, timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
-        ligas = {c['name']: c['id'] for c in data['competitions']}
-        return ligas
-    except:
-        st.error("Erro ao obter ligas da API")
-        return {}
+    # Dropdown baseado nas competições disponíveis da conta
+    return {
+        "FIFA World Cup": "WC",
+        "UEFA Champions League": "CL",
+        "Bundesliga": "BL1",
+        "Eredivisie": "DED",
+        "Brasileirão Série A": "BSA",
+        "La Liga": "PD",
+        "Ligue 1": "FL1",
+        "Championship": "ELC",
+        "Primeira Liga": "PPL",
+        "European Championship": "EC",
+        "Serie A": "SA",
+        "Premier League": "PL"
+    }
 
 def obter_classificacao(liga_id):
     try:
@@ -120,9 +126,6 @@ def obter_jogos_dia(liga_id, data):
 # =============================
 # Streamlit Interface
 # =============================
-# =============================
-# Streamlit Interface
-# =============================
 st.set_page_config(page_title="⚽ Alerta de Gols", layout="wide")
 st.title("⚽ Sistema de Alertas Automáticos de Gols")
 st.markdown("Monitora jogos do dia e envia alertas de tendência de gols.")
@@ -131,7 +134,7 @@ data_selecionada = st.date_input("📅 Escolha a data:", value=datetime.today())
 data_iso = data_selecionada.strftime("%Y-%m-%d")
 
 ligas = obter_ligas()
-liga_escolhida = st.selectbox("🏆 Liga:", list(ligas.keys()) if ligas else ["Nenhuma"])
+liga_escolhida = st.selectbox("🏆 Liga:", list(ligas.keys()))
 liga_id = ligas.get(liga_escolhida)
 
 # Checkbox para buscar todos os jogos do dia
@@ -139,14 +142,12 @@ buscar_todos = st.checkbox("📌 Buscar todos os jogos do dia (todas as ligas)")
 
 if st.button("🔍 Buscar jogos"):
     classificacao = {}
+    jogos = []
+    
     if buscar_todos:
-        # Obter todas as ligas para buscar classificação
-        classificacao = {}
+        # Buscar classificação e jogos de todas as ligas
         for lid in ligas.values():
             classificacao.update(obter_classificacao(lid))
-        jogos = []
-        # Buscar jogos para cada liga
-        for lid in ligas.values():
             jogos += obter_jogos_dia(lid, data_iso)
     else:
         if not liga_id:
