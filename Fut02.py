@@ -226,7 +226,7 @@ if st.button("🔍 Buscar partidas"):
 #jogos = obter_jogos(liga_id)
 
 # Se não trouxe nada, evitar erro
-if not jogos:
+#if not jogos:
     st.warning("Nenhum jogo encontrado para esta liga.")
 else:
     # Checkbox para permitir filtrar só jogos que ainda não começaram
