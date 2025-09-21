@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 import requests
 import json
 import os
+import pandas as pd
 
 # =============================
 # Configurações API Football-Data.org
@@ -109,6 +110,7 @@ def obter_classificacao(liga_id):
         resp.raise_for_status()
         data = resp.json()
         standings = {}
+        tabela = []
         for s in data.get("standings", []):
             if s["type"] != "TOTAL":
                 continue
@@ -117,15 +119,32 @@ def obter_classificacao(liga_id):
                 gols_marcados = t.get("goalsFor", 0)
                 gols_sofridos = t.get("goalsAgainst", 0)
                 partidas = t.get("playedGames", 1)
+                vitorias = t.get("won", 0)
+                empates = t.get("draw", 0)
+                derrotas = t.get("lost", 0)
+                saldo = gols_marcados - gols_sofridos
+                pontos = t.get("points", 0)
                 standings[name] = {
                     "scored": gols_marcados,
                     "against": gols_sofridos,
                     "played": partidas
                 }
-        return standings
+                tabela.append({
+                    "Pos": t.get("position", 0),
+                    "Time": name,
+                    "Jogos": partidas,
+                    "Vitórias": vitorias,
+                    "Empates": empates,
+                    "Derrotas": derrotas,
+                    "Gols Marcados": gols_marcados,
+                    "Gols Sofridos": gols_sofridos,
+                    "Saldo": saldo,
+                    "Pontos": pontos
+                })
+        return standings, tabela
     except:
         st.error(f"Erro ao obter classificação da liga {liga_id}")
-        return {}
+        return {}, []
 
 def obter_jogos(liga_id, data):
     try:
@@ -138,13 +157,12 @@ def obter_jogos(liga_id, data):
         return []
 
 # =============================
-# Cálculo tendência (versão melhorada)
+# Cálculo tendência (versão aprimorada)
 # =============================
 def calcular_tendencia(home, away, classificacao):
     dados_home = classificacao.get(home, {"scored":0, "against":0, "played":1})
     dados_away = classificacao.get(away, {"scored":0, "against":0, "played":1})
 
-    # Médias por jogo
     media_home_feitos = dados_home["scored"] / dados_home["played"]
     media_home_sofridos = dados_home["against"] / dados_home["played"]
 
@@ -155,7 +173,6 @@ def calcular_tendencia(home, away, classificacao):
     estimativa = ((media_home_feitos + media_away_sofridos) / 2 +
                   (media_away_feitos + media_home_sofridos) / 2)
 
-    # Definir tendência com base na estimativa
     if estimativa >= 3.0:
         tendencia = "Mais 2.5"
         confianca = min(95, 70 + (estimativa - 3.0)*10)
@@ -190,7 +207,6 @@ if not todas_ligas:
     liga_selecionada = st.selectbox("📌 Escolha a liga:", list(liga_dict.keys()))
 
 # Botão para iniciar pesquisa
-# Botão para iniciar pesquisa
 if st.button("🔍 Buscar partidas"):
     ligas_busca = liga_dict.values() if todas_ligas else [liga_dict[liga_selecionada]]
 
@@ -200,15 +216,13 @@ if st.button("🔍 Buscar partidas"):
 
     for liga_id in ligas_busca:
         classificacao, tabela_visual = obter_classificacao(liga_id)
-
-        # Exibir tabela da liga de forma compacta
+        # Exibir tabela da liga
         if tabela_visual:
-            st.subheader(f"🏆 Tabela de Classificação")
             df_tabela = pd.DataFrame(tabela_visual)
-          #  st.dataframe(df_tabela, use_container
+            st.subheader(f"Tabela da Liga: {liga_selecionada if liga_selecionada else liga_id}")
             st.dataframe(df_tabela, use_container_width=True)
 
-            jogos = obter_jogos(liga_id, hoje)
+        jogos = obter_jogos(liga_id, hoje)
 
         for match in jogos:
             home = match["homeTeam"]["name"]
@@ -220,6 +234,7 @@ if st.button("🔍 Buscar partidas"):
             gols_away = match.get("score", {}).get("fullTime", {}).get("away")
             placar = None
             if gols_home is not None and gols_away is not None:
+                #placar =
                 placar = f"{gols_home} x {gols_away}"
 
             estimativa, confianca, tendencia = calcular_tendencia(home, away, classificacao)
@@ -242,18 +257,6 @@ if st.button("🔍 Buscar partidas"):
     top_jogos_sorted = sorted(top_jogos, key=lambda x: x["confianca"], reverse=True)[:3]
 
     if top_jogos_sorted:
-        st.subheader("📢 TOP 3 Jogos do Dia")
-        for j in top_jogos_sorted:
-            hora_format = j["hora"].strftime("%H:%M")
-            st.markdown(
-                f"**🏟️ {j['home']} vs {j['away']}**  \n"
-                f"🕒 {hora_format} BRT | Liga: {j['liga']} | Status: {j['status']}  \n"
-                + (f"📊 Placar: {j['placar']}  \n" if j["placar"] else "") +
-                f"Tendência: {j['tendencia']} | Estimativa: {j['estimativa']:.2f} | "
-                f"Confiança: {j['confianca']:.0f}%"
-            )
-
-        # Envia para canal alternativo
         msg = "📢 TOP 3 Jogos do Dia\n\n"
         for j in top_jogos_sorted:
             hora_format = j["hora"].strftime("%H:%M")
@@ -270,7 +273,4 @@ if st.button("🔍 Buscar partidas"):
         enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2)
         st.success("🚀 Top 3 jogos enviados para o canal alternativo 2!")
 
-    st.info("✅ Busca finalizada.")             
-
-    # Ordenar top 3 por confiança
-    
+    st.info("✅ Busca finalizada.")
