@@ -120,6 +120,9 @@ def obter_jogos_dia(liga_id, data):
 # =============================
 # Streamlit Interface
 # =============================
+# =============================
+# Streamlit Interface
+# =============================
 st.set_page_config(page_title="⚽ Alerta de Gols", layout="wide")
 st.title("⚽ Sistema de Alertas Automáticos de Gols")
 st.markdown("Monitora jogos do dia e envia alertas de tendência de gols.")
@@ -131,51 +134,65 @@ ligas = obter_ligas()
 liga_escolhida = st.selectbox("🏆 Liga:", list(ligas.keys()) if ligas else ["Nenhuma"])
 liga_id = ligas.get(liga_escolhida)
 
+# Checkbox para buscar todos os jogos do dia
+buscar_todos = st.checkbox("📌 Buscar todos os jogos do dia (todas as ligas)")
+
 if st.button("🔍 Buscar jogos"):
-    if not liga_id:
-        st.error("Selecione uma liga válida!")
+    classificacao = {}
+    if buscar_todos:
+        # Obter todas as ligas para buscar classificação
+        classificacao = {}
+        for lid in ligas.values():
+            classificacao.update(obter_classificacao(lid))
+        jogos = []
+        # Buscar jogos para cada liga
+        for lid in ligas.values():
+            jogos += obter_jogos_dia(lid, data_iso)
     else:
-        classificacao = obter_classificacao(liga_id)
-        jogos = obter_jogos_dia(liga_id, data_iso)
-
-        melhores_15, melhores_25 = [], []
-
-        for match in jogos:
-            home = match["homeTeam"]["name"]
-            away = match["awayTeam"]["name"]
-            fixture_id = str(match["id"])
-            data_jogo = datetime.fromisoformat(match["utcDate"].replace("Z","+00:00")) - timedelta(hours=3)
-
-            media_casa = classificacao.get(home, {}).get("scored", 1)
-            media_fora = classificacao.get(away, {}).get("against", 1)
-
-            estimativa, confianca, tendencia = calcular_tendencia(media_casa, media_fora)
-            verificar_enviar_alerta(fixture_id, home, away, data_jogo, tendencia, estimativa, confianca)
-
-            if tendencia == "Mais 1.5":
-                melhores_15.append({"home": home, "away": away, "estimativa": estimativa, "confianca": confianca})
-            elif tendencia == "Mais 2.5":
-                melhores_25.append({"home": home, "away": away, "estimativa": estimativa, "confianca": confianca})
-
-        # Top 3
-        melhores_15 = sorted(melhores_15, key=lambda x: (x["confianca"], x["estimativa"]), reverse=True)[:3]
-        melhores_25 = sorted(melhores_25, key=lambda x: (x["confianca"], x["estimativa"]), reverse=True)[:3]
-
-        msg_alt = "📢 TOP ENTRADAS - Alertas Consolidados\n\n"
-        if melhores_15:
-            msg_alt += "🔥 Top 3 +1.5 Gols\n"
-            for j in melhores_15:
-                msg_alt += f"🏟️ {j['home']} vs {j['away']} | Estimativa: {j['estimativa']:.2f} | Confiança: {j['confianca']:.0f}%\n"
-            msg_alt += "\n"
-
-        if melhores_25:
-            msg_alt += "⚡ Top 3 +2.5 Gols\n"
-            for j in melhores_25:
-                msg_alt += f"🏟️ {j['home']} vs {j['away']} | Estimativa: {j['estimativa']:.2f} | Confiança: {j['confianca']:.0f}%\n"
-            msg_alt += "\n"
-
-        if melhores_15 or melhores_25:
-            enviar_telegram(msg_alt, TELEGRAM_CHAT_ID_ALT2)
-            st.success("🚀 Top jogos enviados para canal alternativo 2!")
+        if not liga_id:
+            st.error("Selecione uma liga válida!")
         else:
-            st.info("Nenhum jogo com tendência clara +1.5 ou +2.5 encontrado.")
+            classificacao = obter_classificacao(liga_id)
+            jogos = obter_jogos_dia(liga_id, data_iso)
+
+    melhores_15, melhores_25 = [], []
+
+    for match in jogos:
+        home = match["homeTeam"]["name"]
+        away = match["awayTeam"]["name"]
+        fixture_id = str(match["id"])
+        data_jogo = datetime.fromisoformat(match["utcDate"].replace("Z","+00:00")) - timedelta(hours=3)
+
+        media_casa = classificacao.get(home, {}).get("scored", 1)
+        media_fora = classificacao.get(away, {}).get("against", 1)
+
+        estimativa, confianca, tendencia = calcular_tendencia(media_casa, media_fora)
+        verificar_enviar_alerta(fixture_id, home, away, data_jogo, tendencia, estimativa, confianca)
+
+        if tendencia == "Mais 1.5":
+            melhores_15.append({"home": home, "away": away, "estimativa": estimativa, "confianca": confianca})
+        elif tendencia == "Mais 2.5":
+            melhores_25.append({"home": home, "away": away, "estimativa": estimativa, "confianca": confianca})
+
+    # Top 3
+    melhores_15 = sorted(melhores_15, key=lambda x: (x["confianca"], x["estimativa"]), reverse=True)[:3]
+    melhores_25 = sorted(melhores_25, key=lambda x: (x["confianca"], x["estimativa"]), reverse=True)[:3]
+
+    msg_alt = "📢 TOP ENTRADAS - Alertas Consolidados\n\n"
+    if melhores_15:
+        msg_alt += "🔥 Top 3 +1.5 Gols\n"
+        for j in melhores_15:
+            msg_alt += f"🏟️ {j['home']} vs {j['away']} | Estimativa: {j['estimativa']:.2f} | Confiança: {j['confianca']:.0f}%\n"
+        msg_alt += "\n"
+
+    if melhores_25:
+        msg_alt += "⚡ Top 3 +2.5 Gols\n"
+        for j in melhores_25:
+            msg_alt += f"🏟️ {j['home']} vs {j['away']} | Estimativa: {j['estimativa']:.2f} | Confiança: {j['confianca']:.0f}%\n"
+        msg_alt += "\n"
+
+    if melhores_15 or melhores_25:
+        enviar_telegram(msg_alt, TELEGRAM_CHAT_ID_ALT2)
+        st.success("🚀 Top jogos enviados para canal alternativo 2!")
+    else:
+        st.info("Nenhum jogo com tendência clara +1.5 ou +2.5 encontrado.")
