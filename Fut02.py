@@ -190,6 +190,7 @@ if not todas_ligas:
     liga_selecionada = st.selectbox("📌 Escolha a liga:", list(liga_dict.keys()))
 
 # Botão para iniciar pesquisa
+# Botão para iniciar pesquisa
 if st.button("🔍 Buscar partidas"):
     ligas_busca = liga_dict.values() if todas_ligas else [liga_dict[liga_selecionada]]
 
@@ -200,6 +201,48 @@ if st.button("🔍 Buscar partidas"):
     for liga_id in ligas_busca:
         classificacao = obter_classificacao(liga_id)
         jogos = obter_jogos(liga_id, hoje)
+
+        # Mostrar tabela oficial da liga
+        if classificacao:
+            st.subheader(f"📊 Tabela da Liga: {liga_selecionada if not todas_ligas else 'Várias Ligas'}")
+            tabela = []
+            # Obter a posição ordenada pela API (se disponível) ou calcular pelo saldo de gols
+            posicao = 1
+            for s in classificacao.get("standings_list", classificacao.items()):
+                # Se a API já traz lista ordenada, use-a; se não, usamos o dicionário
+                if isinstance(s, dict) and "team" in s:
+                    t = s
+                    tabela.append({
+                        "Pos": posicao,
+                        "Time": t["team"]["name"],
+                        "Jogos": t["playedGames"],
+                        "Vitórias": t.get("won", 0),
+                        "Empates": t.get("draw", 0),
+                        "Derrotas": t.get("lost", 0),
+                        "Gols Marcados": t.get("goalsFor", 0),
+                        "Gols Sofridos": t.get("goalsAgainst", 0),
+                        "Saldo": t.get("goalsFor", 0) - t.get("goalsAgainst", 0),
+                        "Pontos": t.get("points", 0)
+                    })
+                    posicao += 1
+                else:
+                    # Caso seja o dicionário simples
+                    name, dados = s
+                    tabela.append({
+                        "Pos": posicao,
+                        "Time": name,
+                        "Jogos": dados["played"],
+                        "Vitórias": "-",  # Não disponível no dicionário simples
+                        "Empates": "-",
+                        "Derrotas": "-",
+                        "Gols Marcados": dados["scored"],
+                        "Gols Sofridos": dados["against"],
+                        "Saldo": dados["scored"] - dados["against"],
+                        "Pontos": "-"
+                    })
+                    posicao += 1
+
+            st.table(tabela)
 
         for match in jogos:
             home = match["homeTeam"]["name"]
@@ -228,6 +271,7 @@ if st.button("🔍 Buscar partidas"):
                 "status": status,
                 "placar": placar
             })
+
 
     # Ordenar top 3 por confiança
     top_jogos_sorted = sorted(top_jogos, key=lambda x: x["confianca"], reverse=True)[:3]
