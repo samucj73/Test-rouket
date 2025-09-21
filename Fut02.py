@@ -223,7 +223,7 @@ if st.button("🔍 Buscar partidas"):
 
         jogos = obter_jogos(liga_id, hoje)
         # Buscar jogos da liga selecionada
-jogos = obter_jogos(liga_id)
+#jogos = obter_jogos(liga_id)
 
 # Se não trouxe nada, evitar erro
 if not jogos:
