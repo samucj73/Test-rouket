@@ -222,7 +222,7 @@ if st.button("🔍 Buscar partidas"):
             st.dataframe(df_tabela, use_container_width=True)
 
         jogos = obter_jogos(liga_id, hoje)
-        st.write("🔎 Jogos retornados pela API:", jogos)  # Debug
+       # st.write("🔎 Jogos retornados pela API:", jogos)  # Debug
         for match in jogos:
             home = match["homeTeam"]["name"]
             away = match["awayTeam"]["name"]
