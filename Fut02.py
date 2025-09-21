@@ -164,47 +164,48 @@ liga_selecionada = None
 if not todas_ligas:
     liga_selecionada = st.selectbox("📌 Escolha a liga:", list(liga_dict.keys()))
 
-# Preparar lista de ligas a buscar
-ligas_busca = liga_dict.values() if todas_ligas else [liga_dict[liga_selecionada]]
+# Botão para iniciar pesquisa
+if st.button("🔍 Buscar partidas"):
+    ligas_busca = liga_dict.values() if todas_ligas else [liga_dict[liga_selecionada]]
 
-st.write(f"⏳ Buscando jogos para {data_selecionada}...")
+    st.write(f"⏳ Buscando jogos para {data_selecionada}...")
 
-top_jogos = []
+    top_jogos = []
 
-for liga_id in ligas_busca:
-    classificacao = obter_classificacao(liga_id)
-    jogos = obter_jogos(liga_id, hoje)
+    for liga_id in ligas_busca:
+        classificacao = obter_classificacao(liga_id)
+        jogos = obter_jogos(liga_id, hoje)
 
-    for match in jogos:
-        home = match["homeTeam"]["name"]
-        away = match["awayTeam"]["name"]
-        estimativa, confianca, tendencia = calcular_tendencia(home, away, classificacao)
+        for match in jogos:
+            home = match["homeTeam"]["name"]
+            away = match["awayTeam"]["name"]
+            estimativa, confianca, tendencia = calcular_tendencia(home, away, classificacao)
 
-        verificar_enviar_alerta(match, tendencia, estimativa, confianca)
+            verificar_enviar_alerta(match, tendencia, estimativa, confianca)
 
-        top_jogos.append({
-            "home": home,
-            "away": away,
-            "tendencia": tendencia,
-            "estimativa": estimativa,
-            "confianca": confianca,
-            "liga": match.get("competition", {}).get("name", "Desconhecido"),
-            "hora": datetime.fromisoformat(match["utcDate"].replace("Z","+00:00"))-timedelta(hours=3)
-        })
+            top_jogos.append({
+                "home": home,
+                "away": away,
+                "tendencia": tendencia,
+                "estimativa": estimativa,
+                "confianca": confianca,
+                "liga": match.get("competition", {}).get("name", "Desconhecido"),
+                "hora": datetime.fromisoformat(match["utcDate"].replace("Z","+00:00"))-timedelta(hours=3)
+            })
 
-# Ordenar top 3 por confiança
-top_jogos_sorted = sorted(top_jogos, key=lambda x: x["confianca"], reverse=True)[:3]
+    # Ordenar top 3 por confiança
+    top_jogos_sorted = sorted(top_jogos, key=lambda x: x["confianca"], reverse=True)[:3]
 
-if top_jogos_sorted:
-    msg = "📢 TOP 3 Jogos do Dia\n\n"
-    for j in top_jogos_sorted:
-        hora_format = j["hora"].strftime("%H:%M")
-        msg += (
-            f"🏟️ {j['home']} vs {j['away']}\n"
-            f"🕒 {hora_format} BRT | Liga: {j['liga']}\n"
-            f"Tendência: {j['tendencia']} | Estimativa: {j['estimativa']:.2f} | Confiança: {j['confianca']:.0f}%\n\n"
-        )
-    enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2)
-    st.success("🚀 Top 3 jogos enviados para o canal alternativo 2!")
+    if top_jogos_sorted:
+        msg = "📢 TOP 3 Jogos do Dia\n\n"
+        for j in top_jogos_sorted:
+            hora_format = j["hora"].strftime("%H:%M")
+            msg += (
+                f"🏟️ {j['home']} vs {j['away']}\n"
+                f"🕒 {hora_format} BRT | Liga: {j['liga']}\n"
+                f"Tendência: {j['tendencia']} | Estimativa: {j['estimativa']:.2f} | Confiança: {j['confianca']:.0f}%\n\n"
+            )
+        enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2)
+        st.success("🚀 Top 3 jogos enviados para o canal alternativo 2!")
 
-st.info("✅ Busca finalizada.")
+    st.info("✅ Busca finalizada.")
