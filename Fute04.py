@@ -301,7 +301,7 @@ with aba[0]:
 
         league_id = match.get("league", {}).get("id")
         if league_id not in ligas_principais.values():
-        continue
+         continue
 
         
 
