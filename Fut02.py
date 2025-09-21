@@ -205,11 +205,7 @@ liga_dict = {liga["name"]: liga["id"] for liga in ligas}
 liga_selecionada = None
 if not todas_ligas:
     liga_selecionada = st.selectbox("📌 Escolha a liga:", list(liga_dict.keys()))
-
-    # Checkbox para filtrar apenas jogos não iniciados
-filtrar_nao_iniciados = st.checkbox("Mostrar apenas jogos que ainda não começaram", value=True)
-
-# Botão para iniciar pesquisa
+    # Botão para iniciar pesquisa
 if st.button("🔍 Buscar partidas"):
     ligas_busca = liga_dict.values() if todas_ligas else [liga_dict[liga_selecionada]]
 
@@ -228,37 +224,38 @@ if st.button("🔍 Buscar partidas"):
         jogos = obter_jogos(liga_id, hoje)
 
         for match in jogos:
-            home = match["homeTeam"]["name"]
-            away = match["awayTeam"]["name"]
-            status = match.get("status", "DESCONHECIDO")
+    home = match["homeTeam"]["name"]
+    away = match["awayTeam"]["name"]
+    status = match.get("status", "DESCONHECIDO")
 
-            # ⛔ Filtro: só considerar jogos que ainda não começaram se checkbox marcado
-            if filtrar_nao_iniciados and status != "SCHEDULED":
-                continue
+    # ⛔ Filtro: só considerar jogos que ainda não começaram
+    if status != "SCHEDULED":
+        continue
 
-            # Placar
-            gols_home = match.get("score", {}).get("fullTime", {}).get("home")
-            gols_away = match.get("score", {}).get("fullTime", {}).get("away")
-            placar = None
-            if gols_home is not None and gols_away is not None:
-                placar = f"{gols_home} x {gols_away}"
+    # Placar
+    gols_home = match.get("score", {}).get("fullTime", {}).get("home")
+    gols_away = match.get("score", {}).get("fullTime", {}).get("away")
+    placar = None
+    if gols_home is not None and gols_away is not None:
+        placar = f"{gols_home} x {gols_away}"
 
-            estimativa, confianca, tendencia = calcular_tendencia(home, away, classificacao)
+    estimativa, confianca, tendencia = calcular_tendencia(home, away, classificacao)
 
-            verificar_enviar_alerta(match, tendencia, estimativa, confianca)
+    verificar_enviar_alerta(match, tendencia, estimativa, confianca)
 
-            top_jogos.append({
-                "home": home,
-                "away": away,
-                "tendencia": tendencia,
-                "estimativa": estimativa,
-                "confianca": confianca,
-                "liga": match.get("competition", {}).get("name", "Desconhecido"),
-                "hora": datetime.fromisoformat(match["utcDate"].replace("Z","+00:00"))-timedelta(hours=3),
-                "status": status,
-                "placar": placar
-            })
+    top_jogos.append({
+        "home": home,
+        "away": away,
+        "tendencia": tendencia,
+        "estimativa": estimativa,
+        "confianca": confianca,
+        "liga": match.get("competition", {}).get("name", "Desconhecido"),
+        "hora": datetime.fromisoformat(match["utcDate"].replace("Z","+00:00"))-timedelta(hours=3),
+        "status": status,
+        "placar": placar
+    })
 
+    
 
 
     # Ordenar top 3 por confiança
