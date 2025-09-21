@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 import requests
 import json
 import os
+import time
 
 # =============================
 # Configurações Football-Data.org
@@ -20,6 +21,7 @@ TELEGRAM_CHAT_ID_ALT2 = "-1002932611974"  # canal alternativo 2
 BASE_URL_TG = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
 
 ALERTAS_PATH = "alertas.json"
+CACHE_PATH = "cache_jogos.json"
 
 # =============================
 # Persistência alertas
@@ -33,6 +35,19 @@ def carregar_alertas():
 def salvar_alertas(alertas):
     with open(ALERTAS_PATH, "w") as f:
         json.dump(alertas, f)
+
+# =============================
+# Cache local
+# =============================
+def carregar_cache():
+    if os.path.exists(CACHE_PATH):
+        with open(CACHE_PATH, "r") as f:
+            return json.load(f)
+    return {}
+
+def salvar_cache(cache):
+    with open(CACHE_PATH, "w") as f:
+        json.dump(cache, f)
 
 # =============================
 # Telegram
@@ -94,7 +109,9 @@ def obter_ligas():
         "Premier League": "PL"
     }
 
-def obter_classificacao(liga_id):
+def obter_classificacao(liga_id, cache):
+    if liga_id in cache.get("classificacao", {}):
+        return cache["classificacao"][liga_id]
     try:
         url = f"{BASE_URL}/competitions/{liga_id}/standings"
         resp = requests.get(url, headers=HEADERS, timeout=10)
@@ -108,17 +125,23 @@ def obter_classificacao(liga_id):
                 gols_marcados = t.get('goalsFor', 1)
                 gols_sofridos = t.get('goalsAgainst', 1)
                 standings[name] = {"scored": gols_marcados, "against": gols_sofridos}
+        cache.setdefault("classificacao", {})[liga_id] = standings
+        salvar_cache(cache)
         return standings
     except Exception as e:
         st.warning(f"Erro ao obter classificação da liga {liga_id}: {e}")
         return {}
 
-def obter_jogos_dia(liga_id, data):
+def obter_jogos_dia(liga_id, data, cache):
+    if liga_id in cache.get("jogos", {}):
+        return cache["jogos"][liga_id]
     try:
         url = f"{BASE_URL}/competitions/{liga_id}/matches?dateFrom={data}&dateTo={data}"
         resp = requests.get(url, headers=HEADERS, timeout=10)
         resp.raise_for_status()
         jogos = resp.json().get("matches", [])
+        cache.setdefault("jogos", {})[liga_id] = jogos
+        salvar_cache(cache)
         return jogos
     except Exception as e:
         st.warning(f"Erro ao obter jogos da liga {liga_id}: {e}")
@@ -138,23 +161,25 @@ ligas = obter_ligas()
 liga_escolhida = st.selectbox("🏆 Liga:", list(ligas.keys()))
 liga_id = ligas.get(liga_escolhida)
 
-# Checkbox para buscar todos os jogos do dia
 buscar_todos = st.checkbox("📌 Buscar todos os jogos do dia (todas as ligas)")
 
 if st.button("🔍 Buscar jogos"):
+    cache = carregar_cache()
     classificacao = {}
     jogos = []
-    
+
     if buscar_todos:
+        st.info("Buscando todas as ligas… isso pode levar alguns minutos devido ao limite da API.")
         for lid in ligas.values():
-            classificacao.update(obter_classificacao(lid))
-            jogos += obter_jogos_dia(lid, data_iso)
+            classificacao.update(obter_classificacao(lid, cache))
+            jogos += obter_jogos_dia(lid, data_iso, cache)
+            time.sleep(7)  # evita limite 10 req/min
     else:
         if not liga_id:
             st.error("Selecione uma liga válida!")
         else:
-            classificacao = obter_classificacao(liga_id)
-            jogos = obter_jogos_dia(liga_id, data_iso)
+            classificacao = obter_classificacao(liga_id, cache)
+            jogos = obter_jogos_dia(liga_id, data_iso, cache)
 
     melhores_15, melhores_25 = [], []
 
