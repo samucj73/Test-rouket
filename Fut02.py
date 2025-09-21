@@ -199,50 +199,16 @@ if st.button("🔍 Buscar partidas"):
     top_jogos = []
 
     for liga_id in ligas_busca:
-        classificacao = obter_classificacao(liga_id)
-        jogos = obter_jogos(liga_id, hoje)
+        classificacao, tabela_visual = obter_classificacao(liga_id)
 
-        # Mostrar tabela oficial da liga
-        if classificacao:
-            st.subheader(f"📊 Tabela da Liga: {liga_selecionada if not todas_ligas else 'Várias Ligas'}")
-            tabela = []
-            # Obter a posição ordenada pela API (se disponível) ou calcular pelo saldo de gols
-            posicao = 1
-            for s in classificacao.get("standings_list", classificacao.items()):
-                # Se a API já traz lista ordenada, use-a; se não, usamos o dicionário
-                if isinstance(s, dict) and "team" in s:
-                    t = s
-                    tabela.append({
-                        "Pos": posicao,
-                        "Time": t["team"]["name"],
-                        "Jogos": t["playedGames"],
-                        "Vitórias": t.get("won", 0),
-                        "Empates": t.get("draw", 0),
-                        "Derrotas": t.get("lost", 0),
-                        "Gols Marcados": t.get("goalsFor", 0),
-                        "Gols Sofridos": t.get("goalsAgainst", 0),
-                        "Saldo": t.get("goalsFor", 0) - t.get("goalsAgainst", 0),
-                        "Pontos": t.get("points", 0)
-                    })
-                    posicao += 1
-                else:
-                    # Caso seja o dicionário simples
-                    name, dados = s
-                    tabela.append({
-                        "Pos": posicao,
-                        "Time": name,
-                        "Jogos": dados["played"],
-                        "Vitórias": "-",  # Não disponível no dicionário simples
-                        "Empates": "-",
-                        "Derrotas": "-",
-                        "Gols Marcados": dados["scored"],
-                        "Gols Sofridos": dados["against"],
-                        "Saldo": dados["scored"] - dados["against"],
-                        "Pontos": "-"
-                    })
-                    posicao += 1
+        # Exibir tabela da liga de forma compacta
+        if tabela_visual:
+            st.subheader(f"🏆 Tabela de Classificação")
+            df_tabela = pd.DataFrame(tabela_visual)
+          #  st.dataframe(df_tabela, use_container
+            st.dataframe(df_tabela, use_container_width=True)
 
-            st.table(tabela)
+            jogos = obter_jogos(liga_id, hoje)
 
         for match in jogos:
             home = match["homeTeam"]["name"]
@@ -272,11 +238,22 @@ if st.button("🔍 Buscar partidas"):
                 "placar": placar
             })
 
-
     # Ordenar top 3 por confiança
     top_jogos_sorted = sorted(top_jogos, key=lambda x: x["confianca"], reverse=True)[:3]
 
     if top_jogos_sorted:
+        st.subheader("📢 TOP 3 Jogos do Dia")
+        for j in top_jogos_sorted:
+            hora_format = j["hora"].strftime("%H:%M")
+            st.markdown(
+                f"**🏟️ {j['home']} vs {j['away']}**  \n"
+                f"🕒 {hora_format} BRT | Liga: {j['liga']} | Status: {j['status']}  \n"
+                + (f"📊 Placar: {j['placar']}  \n" if j["placar"] else "") +
+                f"Tendência: {j['tendencia']} | Estimativa: {j['estimativa']:.2f} | "
+                f"Confiança: {j['confianca']:.0f}%"
+            )
+
+        # Envia para canal alternativo
         msg = "📢 TOP 3 Jogos do Dia\n\n"
         for j in top_jogos_sorted:
             hora_format = j["hora"].strftime("%H:%M")
@@ -293,4 +270,7 @@ if st.button("🔍 Buscar partidas"):
         enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2)
         st.success("🚀 Top 3 jogos enviados para o canal alternativo 2!")
 
-    st.info("✅ Busca finalizada.")
+    st.info("✅ Busca finalizada.")             
+
+    # Ordenar top 3 por confiança
+    
