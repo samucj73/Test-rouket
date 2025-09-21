@@ -297,7 +297,7 @@ with aba[0]:
         # 🔎 Filtro para pegar apenas jogos que ainda não começaram
         status = match["fixture"]["status"]["short"]
         if status != "NS":
-        continue
+         continue
 
         league_id = match.get("league", {}).get("id")
         if league_id not in ligas_principais.values():
