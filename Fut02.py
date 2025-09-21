@@ -534,4 +534,4 @@ with aba[2]:
 
 # Fim do arquivo
 
-Análise o código acima eu quero botar essa restrição os jogos do dia que já foram finalizados ou em andamento na busca dos jogos de dia e daí nos alertas top
+#Análise o código acima eu quero botar essa restrição os jogos do dia que já foram finalizados ou em andamento na busca dos jogos de dia e daí nos alertas top
