@@ -293,15 +293,14 @@ with aba[0]:
         medias_historicas = calcular_media_gols_times(jogos_hist)
 
         melhores_15, melhores_25 = [], []
-
- for match in jogos:
-    # 🔎 Filtro para pegar apenas jogos que ainda não começaram
-    status = match["fixture"]["status"]["short"]
-    if status != "NS":
+    for match in jogos:
+        # 🔎 Filtro para pegar apenas jogos que ainda não começaram
+        status = match["fixture"]["status"]["short"]
+       if status != "NS":
         continue
 
-    league_id = match.get("league", {}).get("id")
-    if league_id not in ligas_principais.values():
+        league_id = match.get("league", {}).get("id")
+        if league_id not in ligas_principais.values():
         continue
 
         
