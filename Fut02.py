@@ -52,10 +52,23 @@ def enviar_alerta_telegram(fixture, tendencia, estimativa, confianca):
     hora_formatada = data_jogo.strftime("%H:%M")
     competicao = fixture.get("competition", {}).get("name", "Desconhecido")
 
+    # Novo: status e placar
+    status = fixture.get("status", "DESCONHECIDO")
+    gols_home = fixture.get("score", {}).get("fullTime", {}).get("home")
+    gols_away = fixture.get("score", {}).get("fullTime", {}).get("away")
+    placar = None
+    if gols_home is not None and gols_away is not None:
+        placar = f"{gols_home} x {gols_away}"
+
     msg = (
         f"⚽ Alerta de Gols!\n"
         f"🏟️ {home} vs {away}\n"
         f"📅 {data_formatada} ⏰ {hora_formatada} (BRT)\n"
+        f"📌 Status: {status}\n"
+    )
+    if placar:
+        msg += f"📊 Placar: {placar}\n"
+    msg += (
         f"Tendência: {tendencia}\n"
         f"Estimativa: {estimativa:.2f} gols\n"
         f"Confiança: {confianca:.0f}%\n"
@@ -179,6 +192,15 @@ if st.button("🔍 Buscar partidas"):
         for match in jogos:
             home = match["homeTeam"]["name"]
             away = match["awayTeam"]["name"]
+            status = match.get("status", "DESCONHECIDO")
+
+            # Novo: placar
+            gols_home = match.get("score", {}).get("fullTime", {}).get("home")
+            gols_away = match.get("score", {}).get("fullTime", {}).get("away")
+            placar = None
+            if gols_home is not None and gols_away is not None:
+                placar = f"{gols_home} x {gols_away}"
+
             estimativa, confianca, tendencia = calcular_tendencia(home, away, classificacao)
 
             verificar_enviar_alerta(match, tendencia, estimativa, confianca)
@@ -190,7 +212,9 @@ if st.button("🔍 Buscar partidas"):
                 "estimativa": estimativa,
                 "confianca": confianca,
                 "liga": match.get("competition", {}).get("name", "Desconhecido"),
-                "hora": datetime.fromisoformat(match["utcDate"].replace("Z","+00:00"))-timedelta(hours=3)
+                "hora": datetime.fromisoformat(match["utcDate"].replace("Z","+00:00"))-timedelta(hours=3),
+                "status": status,
+                "placar": placar
             })
 
     # Ordenar top 3 por confiança
@@ -202,8 +226,13 @@ if st.button("🔍 Buscar partidas"):
             hora_format = j["hora"].strftime("%H:%M")
             msg += (
                 f"🏟️ {j['home']} vs {j['away']}\n"
-                f"🕒 {hora_format} BRT | Liga: {j['liga']}\n"
-                f"Tendência: {j['tendencia']} | Estimativa: {j['estimativa']:.2f} | Confiança: {j['confianca']:.0f}%\n\n"
+                f"🕒 {hora_format} BRT | Liga: {j['liga']} | Status: {j['status']}\n"
+            )
+            if j["placar"]:
+                msg += f"📊 Placar: {j['placar']}\n"
+            msg += (
+                f"Tendência: {j['tendencia']} | Estimativa: {j['estimativa']:.2f} | "
+                f"Confiança: {j['confianca']:.0f}%\n\n"
             )
         enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2)
         st.success("🚀 Top 3 jogos enviados para o canal alternativo 2!")
