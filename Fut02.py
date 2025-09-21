@@ -222,47 +222,37 @@ if st.button("🔍 Buscar partidas"):
             st.dataframe(df_tabela, use_container_width=True)
 
         jogos = obter_jogos(liga_id, hoje)
-        # Buscar jogos da liga selecionada
-#jogos = obter_jogos(liga_id)
+       for match in jogos:
+            home = match["homeTeam"]["name"]
+            away = match["awayTeam"]["name"]
+            status = match.get("status", "DESCONHECIDO")
+            
+    # ⛔ Filtro: só considerar jogos que ainda não começaram
+            if status != "SCHEDULED":
+                continue
 
-# Se não trouxe nada, evitar erro
-#if not jogos:
-    st.warning("Nenhum jogo encontrado para esta liga.")
-else:
-    # Checkbox para permitir filtrar só jogos que ainda não começaram
-    filtrar_nao_iniciados = st.checkbox("Mostrar apenas jogos que ainda não começaram", value=True)
+    # Placar
+    gols_home = match.get("score", {}).get("fullTime", {}).get("home")
+    gols_away = match.get("score", {}).get("fullTime", {}).get("away")
+    placar = None
+    if gols_home is not None and gols_away is not None:
+        placar = f"{gols_home} x {gols_away}"
 
-    for match in jogos:
-        home = match["homeTeam"]["name"]
-        away = match["awayTeam"]["name"]
-        status = match.get("status", "DESCONHECIDO")
+    estimativa, confianca, tendencia = calcular_tendencia(home, away, classificacao)
 
-        # ⛔ Filtro: só considerar jogos que ainda não começaram (se o checkbox estiver marcado)
-        if filtrar_nao_iniciados and status != "SCHEDULED":
-            continue
+    verificar_enviar_alerta(match, tendencia, estimativa, confianca)
 
-        # Placar
-        gols_home = match.get("score", {}).get("fullTime", {}).get("home")
-        gols_away = match.get("score", {}).get("fullTime", {}).get("away")
-        placar = None
-        if gols_home is not None and gols_away is not None:
-            placar = f"{gols_home} x {gols_away}"
-
-        estimativa, confianca, tendencia = calcular_tendencia(home, away, classificacao)
-
-        verificar_enviar_alerta(match, tendencia, estimativa, confianca)
-
-        top_jogos.append({
-            "home": home,
-            "away": away,
-            "tendencia": tendencia,
-            "estimativa": estimativa,
-            "confianca": confianca,
-            "liga": match.get("competition", {}).get("name", "Desconhecido"),
-            "hora": datetime.fromisoformat(match["utcDate"].replace("Z","+00:00"))-timedelta(hours=3),
-            "status": status,
-            "placar": placar
-        })
+    top_jogos.append({
+        "home": home,
+        "away": away,
+        "tendencia": tendencia,
+        "estimativa": estimativa,
+        "confianca": confianca,
+        "liga": match.get("competition", {}).get("name", "Desconhecido"),
+        "hora": datetime.fromisoformat(match["utcDate"].replace("Z","+00:00"))-timedelta(hours=3),
+        "status": status,
+        "placar": placar
+    }) 
      
 
     
