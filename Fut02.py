@@ -1,29 +1,16 @@
-# Futebol_Alertas.py
 import streamlit as st
 from datetime import datetime, timedelta
 import requests
-import os
 import json
+import os
+import pandas as pd
 
 # =============================
-# Configurações API
+# Configurações API Football-Data.org
 # =============================
-API_KEY = "f07fc89fcff4416db7f079fda478dd61"
-BASE_URL = "https://v3.football.api-sports.io"
-HEADERS = {"x-apisports-key": API_KEY}
-
-OPENLIGA_BASE = "https://api.openligadb.de"
-ligas_openliga = {
-    "Bundesliga (Alemanha)": "bl1",
-    "2. Bundesliga (Alemanha)": "bl2",
-    "DFB-Pokal (Alemanha)": "dfb",
-    "Premier League (Inglaterra)": "eng1",
-    "La Liga (Espanha)": "esp1",
-    "Serie A (Itália)": "ita1",
-    "Ligue 1 (França)": "fra1",
-    "Brasileirão Série A": "bra1",
-    "Brasileirão Série B": "bra2"
-}
+API_KEY = "9058de85e3324bdb969adc005b5d918a"
+HEADERS = {"X-Auth-Token": API_KEY}
+BASE_URL_FD = "https://api.football-data.org/v4"
 
 # =============================
 # Configurações Telegram
@@ -34,7 +21,6 @@ TELEGRAM_CHAT_ID_ALT2 = "-1002932611974"
 BASE_URL_TG = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
 
 ALERTAS_PATH = "alertas.json"
-TOP3_PATH = "top3.json"
 
 # =============================
 # Persistência de alertas
@@ -50,486 +36,243 @@ def salvar_alertas(alertas):
         json.dump(alertas, f)
 
 # =============================
-# Persistência Top 3
-# =============================
-def carregar_top3():
-    if os.path.exists(TOP3_PATH):
-        with open(TOP3_PATH, "r") as f:
-            return json.load(f)
-    return []
-
-def salvar_top3(lista):
-    with open(TOP3_PATH, "w") as f:
-        json.dump(lista, f)
-
-# =============================
-# Envio Telegram
+# Envio de alertas Telegram
 # =============================
 def enviar_telegram(msg, chat_id=TELEGRAM_CHAT_ID):
     try:
-        requests.get(BASE_URL_TG, params={"chat_id": chat_id, "text": msg, "parse_mode": "Markdown"})
-    except Exception as e:
-        st.warning(f"Erro ao enviar mensagem Telegram: {e}")
+        requests.get(BASE_URL_TG, params={"chat_id": chat_id, "text": msg})
+    except:
+        pass
 
-def enviar_alerta_telegram(fixture, tendencia, confianca, estimativa):
-    home = fixture["teams"]["home"]["name"]
-    away = fixture["teams"]["away"]["name"]
-    home_goals = fixture.get("goals", {}).get("home", 0) or 0
-    away_goals = fixture.get("goals", {}).get("away", 0) or 0
-    status = fixture.get("fixture", {}).get("status", {}).get("long", "Desconhecido")
+def enviar_alerta_telegram(fixture, tendencia, estimativa, confianca):
+    home = fixture["homeTeam"]["name"]
+    away = fixture["awayTeam"]["name"]
+    data_iso = fixture["utcDate"]
+    data_jogo = datetime.fromisoformat(data_iso.replace("Z", "+00:00")) - timedelta(hours=3)
+    data_formatada = data_jogo.strftime("%d/%m/%Y")
+    hora_formatada = data_jogo.strftime("%H:%M")
+    competicao = fixture.get("competition", {}).get("name", "Desconhecido")
 
-    data_iso = fixture["fixture"]["date"]
-    data_jogo = datetime.fromisoformat(data_iso.replace("Z", "+00:00"))
-    data_jogo_brt = data_jogo - timedelta(hours=3)
-    data_formatada = data_jogo_brt.strftime("%d/%m/%Y")
-    hora_formatada = data_jogo_brt.strftime("%H:%M")
+    # Status e placar
+    status = fixture.get("status", "DESCONHECIDO")
+    gols_home = fixture.get("score", {}).get("fullTime", {}).get("home")
+    gols_away = fixture.get("score", {}).get("fullTime", {}).get("away")
+    placar = None
+    if gols_home is not None and gols_away is not None:
+        placar = f"{gols_home} x {gols_away}"
 
     msg = (
-        f"⚽ *Alerta de Gols!*\n"
+        f"⚽ Alerta de Gols!\n"
         f"🏟️ {home} vs {away}\n"
         f"📅 {data_formatada} ⏰ {hora_formatada} (BRT)\n"
-        f"🔥 Tendência: {tendencia}\n"
-        f"📊 Estimativa: {estimativa:.2f} gols\n"
-        f"✅ Confiança: {confianca:.0f}%\n"
         f"📌 Status: {status}\n"
-        f"🔢 Placar atual: {home} {home_goals} x {away_goals} {away}"
+    )
+    if placar:
+        msg += f"📊 Placar: {placar}\n"
+    msg += (
+        f"Tendência: {tendencia}\n"
+        f"Estimativa: {estimativa:.2f} gols\n"
+        f"Confiança: {confianca:.0f}%\n"
+        f"Liga: {competicao}"
     )
     enviar_telegram(msg, TELEGRAM_CHAT_ID)
 
-def verificar_enviar_alerta(fixture, tendencia, confianca, estimativa):
+def verificar_enviar_alerta(fixture, tendencia, estimativa, confianca):
     alertas = carregar_alertas()
-    fixture_id = str(fixture["fixture"]["id"])
-    home_goals = fixture.get("goals", {}).get("home", 0) or 0
-    away_goals = fixture.get("goals", {}).get("away", 0) or 0
-
-    precisa_enviar = False
-    if fixture_id not in alertas:
-        precisa_enviar = True
-    else:
-        ultimo = alertas[fixture_id]
-        if (ultimo["home_goals"] != home_goals or
-            ultimo["away_goals"] != away_goals or
-            ultimo["tendencia"] != tendencia):
-            precisa_enviar = True
-
+    fixture_id = str(fixture["id"])
+    precisa_enviar = fixture_id not in alertas
     if precisa_enviar:
-        enviar_alerta_telegram(fixture, tendencia, confianca, estimativa)
+        enviar_alerta_telegram(fixture, tendencia, estimativa, confianca)
         alertas[fixture_id] = {
-            "home_goals": home_goals,
-            "away_goals": away_goals,
-            "tendencia": tendencia
+            "tendencia": tendencia,
+            "estimativa": estimativa,
+            "confianca": confianca
         }
         salvar_alertas(alertas)
 
 # =============================
-# Funções tendência de gols
+# Funções de API Football-Data
 # =============================
-def calcular_tendencia_confianca_realista(media_h2h, media_casa, media_fora, peso_h2h=0.3):
-    media_casa_marcados = media_casa.get("media_gols_marcados", 1.5)
-    media_casa_sofridos = media_casa.get("media_gols_sofridos", 1.2)
-    media_fora_marcados = media_fora.get("media_gols_marcados", 1.4)
-    media_fora_sofridos = media_fora.get("media_gols_sofridos", 1.1)
-    
-    media_time_casa = media_casa_marcados + media_fora_sofridos
-    media_time_fora = media_fora_marcados + media_casa_sofridos
-    estimativa_base = (media_time_casa + media_time_fora) / 2
-
-    h2h_media = media_h2h.get("media_gols", 2.5) if media_h2h.get("total_jogos",0) > 0 else 2.5
-    estimativa_final = (1 - peso_h2h) * estimativa_base + peso_h2h * h2h_media
-
-    if estimativa_final >= 2.5:
-        tendencia = "Mais 2.5"
-        confianca = min(95, 60 + (estimativa_final - 2.5) * 15)
-    elif estimativa_final >= 1.5:
-        tendencia = "Mais 1.5"
-        confianca = min(95, 55 + (estimativa_final - 1.5) * 20)
-    else:
-        tendencia = "Mais 1.5"
-        confianca = max(50, min(75, 55 + (estimativa_final - 1.5) * 20))
-
-    return round(estimativa_final, 2), round(confianca, 0), tendencia
-
-# =============================
-# Funções H2H
-# =============================
-def media_gols_confrontos_diretos(home_id, away_id, temporada=None, max_jogos=5):
+def obter_ligas():
     try:
-        url = f"{BASE_URL}/fixtures/headtohead?h2h={home_id}-{away_id}"
-        response = requests.get(url, headers=HEADERS, timeout=10)
-        if response.status_code != 200:
-            return {"media_gols": 0, "total_jogos": 0}
-        jogos = response.json().get("response", [])
-        if temporada:
-            jogos = [j for j in jogos if j["league"]["season"] == temporada]
-        jogos = sorted(jogos, key=lambda x: x["fixture"]["date"], reverse=True)[:max_jogos]
-        if not jogos:
-            return {"media_gols": 0, "total_jogos": 0}
-
-        total_pontos, total_peso = 0, 0
-        for idx, j in enumerate(jogos):
-            if j["fixture"]["status"]["short"] != "FT":
-                continue
-            home_goals = j["score"]["fulltime"]["home"]
-            away_goals = j["score"]["fulltime"]["away"]
-            gols = home_goals + away_goals
-            peso = max_jogos - idx
-            total_pontos += gols * peso
-            total_peso += peso
-
-        media_ponderada = round(total_pontos / total_peso, 2) if total_peso else 0
-        return {"media_gols": media_ponderada, "total_jogos": len(jogos)}
-    except Exception:
-        return {"media_gols": 0, "total_jogos": 0}
-
-# =============================
-# Funções médias históricas OpenLigaDB
-# =============================
-def obter_jogos_liga_temporada(liga_id, temporada):
-    try:
-        r = requests.get(f"{OPENLIGA_BASE}/getmatchdata/{liga_id}/{temporada}", timeout=15)
-        if r.status_code == 200:
-            return r.json()
-    except Exception as e:
-        st.warning(f"Erro ao obter jogos OpenLigaDB: {e}")
-    return []
-
-def calcular_media_gols_times(jogos_hist):
-    stats = {}
-    for j in jogos_hist:
-        home, away = j["team1"]["teamName"], j["team2"]["teamName"]
-        placar = None
-        for r in j.get("matchResults", []):
-            if r.get("resultTypeID") == 2:
-                placar = (r.get("pointsTeam1", 0), r.get("pointsTeam2", 0))
-                break
-        if not placar:
-            continue
-        stats.setdefault(home, {"marcados": [], "sofridos": []})
-        stats.setdefault(away, {"marcados": [], "sofridos": []})
-        stats[home]["marcados"].append(placar[0])
-        stats[home]["sofridos"].append(placar[1])
-        stats[away]["marcados"].append(placar[1])
-        stats[away]["sofridos"].append(placar[0])
-    medias = {}
-    for time, gols in stats.items():
-        media_marcados = sum(gols["marcados"]) / len(gols["marcados"]) if gols["marcados"] else 1.5
-        media_sofridos = sum(gols["sofridos"]) / len(gols["sofridos"]) if gols["sofridos"] else 1.2
-        medias[time] = {"media_gols_marcados": media_marcados, "media_gols_sofridos": media_sofridos}
-    return medias
-
-# =============================
-# Função dummy para odds
-# =============================
-def obter_odds(fixture_id):
-    return {"1.5": round(1.2 + fixture_id % 2 * 0.3,2), "2.5": round(1.8 + fixture_id % 3 * 0.4,2)}
-
-# =============================
-# Conferência dos jogos
-# =============================
-def conferir_jogo(fixture_id, tipo):
-    try:
-        url = f"{BASE_URL}/fixtures?id={fixture_id}"
+        url = f"{BASE_URL_FD}/competitions"
         resp = requests.get(url, headers=HEADERS, timeout=10)
-        jogo = resp.json().get("response", [])
-        if not jogo:
-            return None
+        resp.raise_for_status()
+        return resp.json().get("competitions", [])
+    except:
+        st.error("Erro ao obter ligas")
+        return []
 
-        jogo = jogo[0]
-        home = jogo["teams"]["home"]["name"]
-        away = jogo["teams"]["away"]["name"]
-        gols_home = jogo["goals"]["home"] or 0
-        gols_away = jogo["goals"]["away"] or 0
-        total_gols = gols_home + gols_away
+def obter_classificacao(liga_id):
+    try:
+        url = f"{BASE_URL_FD}/competitions/{liga_id}/standings"
+        resp = requests.get(url, headers=HEADERS, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        standings = {}
+        tabela = []
+        for s in data.get("standings", []):
+            if s["type"] != "TOTAL":
+                continue
+            for t in s["table"]:
+                name = t["team"]["name"]
+                gols_marcados = t.get("goalsFor", 0)
+                gols_sofridos = t.get("goalsAgainst", 0)
+                partidas = t.get("playedGames", 1)
+                vitorias = t.get("won", 0)
+                empates = t.get("draw", 0)
+                derrotas = t.get("lost", 0)
+                saldo = gols_marcados - gols_sofridos
+                pontos = t.get("points", 0)
+                standings[name] = {
+                    "scored": gols_marcados,
+                    "against": gols_sofridos,
+                    "played": partidas
+                }
+                tabela.append({
+                    "Pos": t.get("position", 0),
+                    "Time": name,
+                    "Jogos": partidas,
+                    "Vitórias": vitorias,
+                    "Empates": empates,
+                    "Derrotas": derrotas,
+                    "Gols Marcados": gols_marcados,
+                    "Gols Sofridos": gols_sofridos,
+                    "Saldo": saldo,
+                    "Pontos": pontos
+                })
+        return standings, tabela
+    except:
+        st.error(f"Erro ao obter classificação da liga {liga_id}")
+        return {}, []
 
-        if tipo == "1.5":
-            green = total_gols >= 2
-        else:
-            green = total_gols >= 3
+def obter_jogos(liga_id, data):
+    try:
+        url = f"{BASE_URL_FD}/competitions/{liga_id}/matches?dateFrom={data}&dateTo={data}"
+        resp = requests.get(url, headers=HEADERS, timeout=10)
+        resp.raise_for_status()
+        return resp.json().get("matches", [])
+    except:
+        st.error(f"Erro ao obter jogos da liga {liga_id}")
+        return []
 
-        return {
-            "home": home, "away": away,
-            "total_gols": total_gols,
-            "aposta": f"+{tipo}",
-            "resultado": "🟢 GREEN" if green else "🔴 RED"
-        }
-    except Exception:
-        return None
+# =============================
+# Cálculo tendência (versão aprimorada)
+# =============================
+def calcular_tendencia(home, away, classificacao):
+    dados_home = classificacao.get(home, {"scored":0, "against":0, "played":1})
+    dados_away = classificacao.get(away, {"scored":0, "against":0, "played":1})
+
+    media_home_feitos = dados_home["scored"] / dados_home["played"]
+    media_home_sofridos = dados_home["against"] / dados_home["played"]
+
+    media_away_feitos = dados_away["scored"] / dados_away["played"]
+    media_away_sofridos = dados_away["against"] / dados_away["played"]
+
+    # Estimativa mais realista: ataque vs defesa
+    estimativa = ((media_home_feitos + media_away_sofridos) / 2 +
+                  (media_away_feitos + media_home_sofridos) / 2)
+
+    if estimativa >= 3.0:
+        tendencia = "Mais 2.5"
+        confianca = min(95, 70 + (estimativa - 3.0)*10)
+    elif estimativa >= 2.0:
+        tendencia = "Mais 1.5"
+        confianca = min(90, 60 + (estimativa - 2.0)*10)
+    else:
+        tendencia = "Menos 2.5"
+        confianca = min(85, 55 + (2.0 - estimativa)*10)
+
+    return estimativa, confianca, tendencia
 
 # =============================
 # Interface Streamlit
 # =============================
-st.set_page_config(page_title="⚽ Alertas e Jogos Históricos", layout="wide")
-st.title("⚽ Sistema de Alertas de Gols + Jogos Históricos")
-aba = st.tabs(["⚡ Alertas de Jogos Hoje", "📊 Jogos de Temporadas Passadas", "🎯 Conferência Top 3"])
+st.set_page_config(page_title="⚽ Alerta de Gols", layout="wide")
+st.title("⚽ Sistema de Alertas Automáticos de Gols")
 
-# ---------- ABA 1: Alertas ----------
-with aba[0]:
-    st.subheader("📅 Jogos do dia e alertas de tendência")
-    temporada_atual = st.selectbox("📅 Escolha a temporada:", [2022, 2023, 2024, 2025], index=1)
-    data_selecionada = st.date_input("📅 Escolha a data para os jogos:", value=datetime.today())
-    hoje = data_selecionada.strftime("%Y-%m-%d")
+# Data
+data_selecionada = st.date_input("📅 Escolha a data para os jogos:", value=datetime.today())
+hoje = data_selecionada.strftime("%Y-%m-%d")
 
-    ligas_principais = {
-        "Premier League": 39,
-        "La Liga": 140,
-        "Serie A": 135,
-        "Bundesliga": 78,
-        "Ligue 1": 61,
-        "Brasileirão Série A": 71,
-        "UEFA Champions League": 2,
-        "Copa Libertadores": 13
-    }
+# Checkbox para buscar todas ligas
+todas_ligas = st.checkbox("📌 Buscar jogos de todas as ligas do dia", value=True)
 
-    if st.button("🔍 Buscar jogos do dia"):
-        with st.spinner("Buscando jogos da API Football..."):
-            url = f"{BASE_URL}/fixtures?date={hoje}"
-            response = requests.get(url, headers=HEADERS)
-            jogos = response.json().get("response", [])
+# Obter ligas
+ligas = obter_ligas()
+liga_dict = {liga["name"]: liga["id"] for liga in ligas}
 
-        liga_nome = st.selectbox("🏆 Escolha a liga histórica para médias:", list(ligas_openliga.keys()))
-        liga_id = ligas_openliga[liga_nome]
-        temporada_hist = st.selectbox("📅 Temporada histórica:", ["2022", "2023", "2024", "2025"], index=2)
-        jogos_hist = obter_jogos_liga_temporada(liga_id, temporada_hist)
-        medias_historicas = calcular_media_gols_times(jogos_hist)
+liga_selecionada = None
+if not todas_ligas:
+    liga_selecionada = st.selectbox("📌 Escolha a liga:", list(liga_dict.keys()))
 
-        melhores_15, melhores_25 = [], []
+# Botão para iniciar pesquisa
+if st.button("🔍 Buscar partidas"):
+    ligas_busca = liga_dict.values() if todas_ligas else [liga_dict[liga_selecionada]]
+
+    st.write(f"⏳ Buscando jogos para {data_selecionada}...")
+
+    top_jogos = []
+
+    for liga_id in ligas_busca:
+        classificacao, tabela_visual = obter_classificacao(liga_id)
+        # Exibir tabela da liga
+        if tabela_visual:
+            df_tabela = pd.DataFrame(tabela_visual)
+            st.subheader(f"Tabela da Liga: {liga_selecionada if liga_selecionada else liga_id}")
+            st.dataframe(df_tabela, use_container_width=True)
+
+        jogos = obter_jogos(liga_id, hoje)
 
         for match in jogos:
-            league_id = match.get("league", {}).get("id")
-            if league_id not in ligas_principais.values():
-                continue
+            home = match["homeTeam"]["name"]
+            away = match["awayTeam"]["name"]
+            status = match.get("status", "DESCONHECIDO")
 
-            home = match["teams"]["home"]["name"]
-            away = match["teams"]["away"]["name"]
-            home_id = match["teams"]["home"]["id"]
-            away_id = match["teams"]["away"]["id"]
+            # Placar
+            gols_home = match.get("score", {}).get("fullTime", {}).get("home")
+            gols_away = match.get("score", {}).get("fullTime", {}).get("away")
+            placar = None
+            if gols_home is not None and gols_away is not None:
+                #placar =
+                placar = f"{gols_home} x {gols_away}"
 
-            media_h2h = media_gols_confrontos_diretos(home_id, away_id, temporada_atual, max_jogos=5)
-            media_casa = medias_historicas.get(home, {"media_gols_marcados": 1.5, "media_gols_sofridos": 1.2})
-            media_fora = medias_historicas.get(away, {"media_gols_marcados": 1.4, "media_gols_sofridos": 1.1})
+            estimativa, confianca, tendencia = calcular_tendencia(home, away, classificacao)
 
-            estimativa, confianca, tendencia = calcular_tendencia_confianca_realista(
-                media_h2h=media_h2h,
-                media_casa=media_casa,
-                media_fora=media_fora
+            verificar_enviar_alerta(match, tendencia, estimativa, confianca)
+
+            top_jogos.append({
+                "home": home,
+                "away": away,
+                "tendencia": tendencia,
+                "estimativa": estimativa,
+                "confianca": confianca,
+                "liga": match.get("competition", {}).get("name", "Desconhecido"),
+                "hora": datetime.fromisoformat(match["utcDate"].replace("Z","+00:00"))-timedelta(hours=3),
+                "status": status,
+                "placar": placar
+            })
+
+    # Ordenar top 3 por confiança
+    top_jogos_sorted = sorted(top_jogos, key=lambda x: x["confianca"], reverse=True)[:3]
+
+    if top_jogos_sorted:
+        msg = "📢 TOP 3 Jogos do Dia\n\n"
+        for j in top_jogos_sorted:
+            hora_format = j["hora"].strftime("%H:%M")
+            msg += (
+                f"🏟️ {j['home']} vs {j['away']}\n"
+                f"🕒 {hora_format} BRT | Liga: {j['liga']} | Status: {j['status']}\n"
             )
+            if j["placar"]:
+                msg += f"📊 Placar: {j['placar']}\n"
+            msg += (
+                f"Tendência: {j['tendencia']} | Estimativa: {j['estimativa']:.2f} | "
+                f"Confiança: {j['confianca']:.0f}%\n\n"
+            )
+        enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2)
+        st.success("🚀 Top 3 jogos enviados para o canal alternativo 2!")
 
-            data_iso = match["fixture"]["date"]
-            data_jogo = datetime.fromisoformat(data_iso.replace("Z", "+00:00")) - timedelta(hours=3)
-            hora_formatada = data_jogo.strftime("%H:%M")
-            competicao = match.get("league", {}).get("name", "Desconhecido")
+    st.info("✅ Busca finalizada.")
 
-            odds = obter_odds(match["fixture"]["id"])
-
-            with st.container():
-                st.subheader(f"🏟️ {home} vs {away}")
-                st.caption(f"Liga: {competicao} | Temporada: {temporada_atual}")
-                st.write(f"📊 Estimativa de gols: **{estimativa:.2f}**")
-                st.write(f"🔥 Tendência: **{tendencia}**")
-                st.write(f"✅ Confiança: **{confianca:.0f}%**")
-                st.write(f"💰 Odds Over 1.5: {odds['1.5']} | Over 2.5: {odds['2.5']}")
-
-            verificar_enviar_alerta(match, tendencia, confianca, estimativa)
-
-            if tendencia == "Mais 1.5":
-                melhores_15.append({
-                    "fixture_id": match["fixture"]["id"],
-                    "home": home, "away": away,
-                    "estimativa": estimativa, "confianca": confianca,
-                    "hora": hora_formatada, "competicao": competicao,
-                    "odd_15": odds["1.5"]
-                })
-            elif tendencia == "Mais 2.5":
-                melhores_25.append({
-                    "fixture_id": match["fixture"]["id"],
-                    "home": home, "away": away,
-                    "estimativa": estimativa, "confianca": confianca,
-                    "hora": hora_formatada, "competicao": competicao,
-                    "odd_25": odds["2.5"]
-                })
-
-        # Top 3
-        melhores_15 = sorted(melhores_15, key=lambda x: (x["confianca"], x["estimativa"]), reverse=True)[:3]
-        melhores_25 = sorted(melhores_25, key=lambda x: (x["confianca"], x["estimativa"]), reverse=True)[:3]
-
-        if melhores_15 or melhores_25:
-            msg_alt = "📢 *TOP ENTRADAS - Alertas Consolidados*\n\n"
-            if melhores_15:
-                odd_combinada_15 = 1
-                msg_alt += "🔥 Top 3 Jogos para +1.5 Gols\n"
-                for j in melhores_15:
-                    odd_combinada_15 *= float(j.get("odd_15") or 1)
-                    #msg
-                    msg_alt += (
-                        f"🏆 {j['competicao']}\n"
-                        f"🕒 {j['hora']} BRT\n"
-                        f"🏟️ {j['home']} vs {j['away']}\n"
-                        f"📊 Estimativa: {j['estimativa']:.2f} | ✅ Confiança: {j['confianca']:.0f}%\n"
-                        f"💰 Odd: {j.get('odd_15', 'N/A')}\n\n"
-                    )
-                msg_alt += f"🎯 Odd combinada (3 jogos): {odd_combinada_15:.2f}\n\n"
-
-            if melhores_25:
-                odd_combinada_25 = 1
-                msg_alt += "⚡ Top 3 Jogos para +2.5 Gols\n"
-                for j in melhores_25:
-                    odd_combinada_25 *= float(j.get("odd_25") or 1)
-                    msg_alt += (
-                        f"🏆 {j['competicao']}\n"
-                        f"🕒 {j['hora']} BRT\n"
-                        f"🏟️ {j['home']} vs {j['away']}\n"
-                        f"📊 Estimativa: {j['estimativa']:.2f} | ✅ Confiança: {j['confianca']:.0f}%\n"
-                        f"💰 Odd: {j.get('odd_25', 'N/A')}\n\n"
-                    )
-                msg_alt += f"🎯 Odd combinada (3 jogos): {odd_combinada_25:.2f}\n\n"
-
-            # Envia mensagem consolidada para canal alternativo
-            enviar_telegram(msg_alt, TELEGRAM_CHAT_ID_ALT2)
-            st.success("🚀 Top jogos enviados para o canal alternativo 2!")
-
-            # Salva o Top3 no histórico (persistência)
-            top3_list = carregar_top3()
-            novo_top = {
-                "data_envio": hoje,
-                "hora_envio": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "melhores_15": melhores_15,
-                "melhores_25": melhores_25
-            }
-            top3_list.append(novo_top)
-            salvar_top3(top3_list)
-        else:
-            st.info("Nenhum jogo com tendência clara de +1.5 ou +2.5 gols encontrado.")
-
-# ---------- ABA 2: Jogos históricos ----------
-with aba[1]:
-    st.subheader("📊 Jogos de Temporadas Passadas (OpenLigaDB)")
-    temporada_hist = st.selectbox("📅 Escolha a temporada histórica:", ["2022", "2023", "2024", "2025"], index=2, key="hist")
-    liga_nome_hist = st.selectbox("🏆 Escolha a Liga:", list(ligas_openliga.keys()), key="hist_liga")
-    liga_id_hist = ligas_openliga[liga_nome_hist]
-
-    if st.button("🔍 Buscar jogos da temporada", key="btn_hist"):
-        with st.spinner("Buscando jogos..."):
-            jogos_hist = obter_jogos_liga_temporada(liga_id_hist, temporada_hist)
-            if not jogos_hist:
-                st.info("Nenhum jogo encontrado para essa temporada/liga.")
-            else:
-                st.success(f"{len(jogos_hist)} jogos encontrados na {liga_nome_hist} ({temporada_hist})")
-                for j in jogos_hist[:50]:  # Limite de exibição inicial
-                    home = j["team1"]["teamName"]
-                    away = j["team2"]["teamName"]
-                    placar = "-"
-                    for r in j.get("matchResults", []):
-                        if r.get("resultTypeID") == 2:
-                            placar = f"{r.get('pointsTeam1',0)} x {r.get('pointsTeam2',0)}"
-                            break
-                    data = j.get("matchDateTime") or j.get("matchDateTimeUTC") or "Desconhecida"
-                    st.write(f"🏟️ {home} vs {away} | 📅 {data} | ⚽ Placar: {placar}")
-
-# ---------- ABA 3: Conferência Top 3 ----------
-with aba[2]:
-    st.subheader("🎯 Conferência dos Top 3 enviados")
-    top3_salvos = carregar_top3()
-
-    if not top3_salvos:
-        st.info("Nenhum Top 3 registrado ainda. Gere e envie um Top 3 na aba 'Alertas de Jogos Hoje'.")
-    else:
-        st.write(f"✅ Total de envios registrados: {len(top3_salvos)}")
-        # Permite selecionar qual envio conferir
-        options = [f"{idx+1} - {t['data_envio']} ({t['hora_envio']})" for idx, t in enumerate(top3_salvos)]
-        seletor = st.selectbox("Selecione o lote Top3 para conferir:", options, index=len(options)-1)
-        idx_selecionado = options.index(seletor)
-
-        lote = top3_salvos[idx_selecionado]
-        st.markdown(f"### Lote selecionado — Envio: **{lote['data_envio']}** às **{lote['hora_envio']}**")
-        st.markdown("---")
-
-        btn_recheck = st.button("🔄 Rechecar resultados agora")
-
-        # Função interna para processar um lote
-        def processar_lote(lote):
-            resultados = []
-            greens, reds = 0, 0
-            detalhes = []
-
-            # Processa +1.5
-            for j in lote.get("melhores_15", []):
-                fixture_id = j.get("fixture_id")
-                info = conferir_jogo(fixture_id, "1.5")
-                if not info:
-                    detalhes.append({
-                        "home": j.get("home"),
-                        "away": j.get("away"),
-                        "aposta": "+1.5",
-                        "status": "Não encontrado / API"
-                    })
-                    continue
-                detalhes.append({
-                    "home": info["home"],
-                    "away": info["away"],
-                    "aposta": info["aposta"],
-                    "total_gols": info["total_gols"],
-                    "resultado": info["resultado"]
-                })
-                if "GREEN" in info["resultado"]:
-                    greens += 1
-                else:
-                    reds += 1
-
-            # Processa +2.5
-            for j in lote.get("melhores_25", []):
-                fixture_id = j.get("fixture_id")
-                info = conferir_jogo(fixture_id, "2.5")
-                if not info:
-                    detalhes.append({
-                        "home": j.get("home"),
-                        "away": j.get("away"),
-                        "aposta": "+2.5",
-                        "status": "Não encontrado / API"
-                    })
-                    continue
-                detalhes.append({
-                    "home": info["home"],
-                    "away": info["away"],
-                    "aposta": info["aposta"],
-                    "total_gols": info["total_gols"],
-                    "resultado": info["resultado"]
-                })
-                if "GREEN" in info["resultado"]:
-                    greens += 1
-                else:
-                    reds += 1
-
-            total = greens + reds
-            taxa = (greens / total * 100) if total > 0 else 0
-            resumo = {"greens": greens, "reds": reds, "total": total, "taxa": round(taxa, 1)}
-            return detalhes, resumo
-
-        with st.spinner("Conferindo resultados..."):
-            detalhes, resumo = processar_lote(lote)
-
-        # Exibe detalhes jogo a jogo
-        for d in detalhes:
-            if d.get("status") == "Não encontrado / API":
-                st.warning(f"🏟️ {d['home']} vs {d['away']} — {d['aposta']} — {d['status']}")
-            else:
-                resultado_text = d["resultado"]
-                gols = d.get("total_gols", "-")
-                if "GREEN" in resultado_text:
-                    st.success(f"🏟️ {d['home']} vs {d['away']} | Gols: {gols} | {d['aposta']} → {resultado_text}")
-                else:
-                    st.error(f"🏟️ {d['home']} vs {d['away']} | Gols: {gols} | {d['aposta']} → {resultado_text}")
-
-        # Exibe resumo
-        st.markdown("---")
-        st.markdown(f"**Resumo do lote:** 🟢 {resumo['greens']} GREEN | 🔴 {resumo['reds']} RED | Total verificados: {resumo['total']}")
-        st.markdown(f"**Taxa de acerto:** {resumo['taxa']}%")
-
-        # Oferece opção de exportar relatório simples em JSON
-        if st.button("📥 Exportar relatório JSON deste lote"):
-            nome_arquivo = f"relatorio_top3_{lote['data_envio'].replace('/','-')}_{lote['hora_envio'].replace(':','-').replace(' ','_')}.json"
-            rel = {"lote": lote, "detalhes": detalhes, "resumo": resumo}
-            with open(nome_arquivo, "w", encoding="utf-8") as f:
-                json.dump(rel, f, ensure_ascii=False, indent=2)
-            st.success(f"Relatório salvo: {nome_arquivo}")
-
-# Fim do arquivo
+#Quero fazer o mesmo nesse código mostre o trecho que é pra fazer a atualização
