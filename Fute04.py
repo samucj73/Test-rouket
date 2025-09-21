@@ -296,7 +296,7 @@ with aba[0]:
     for match in jogos:
         # 🔎 Filtro para pegar apenas jogos que ainda não começaram
         status = match["fixture"]["status"]["short"]
-       if status != "NS":
+        if status != "NS":
         continue
 
         league_id = match.get("league", {}).get("id")
