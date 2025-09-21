@@ -222,11 +222,10 @@ if st.button("🔍 Buscar partidas"):
             st.dataframe(df_tabela, use_container_width=True)
 
         jogos = obter_jogos(liga_id, hoje)
-
         for match in jogos:
-    home = match["homeTeam"]["name"]
-    away = match["awayTeam"]["name"]
-    status = match.get("status", "DESCONHECIDO")
+            home = match["homeTeam"]["name"]
+            away = match["awayTeam"]["name"]
+            status = match.get("status", "DESCONHECIDO")
 
     # ⛔ Filtro: só considerar jogos que ainda não começaram
     if status != "SCHEDULED":
