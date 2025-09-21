@@ -1,10 +1,8 @@
 # Futebol_Alertas_OpenLiga_Top3.py
 import streamlit as st
-from datetime import datetime, timedelta, date
+from datetime import datetime, date
 import requests
 import os
-import json
-import math
 
 # =============================
 # Configurações OpenLigaDB + Telegram
@@ -55,15 +53,15 @@ def calcular_tendencias_avancado(home, away, classificacao):
     
     return tendencias
 
-def buscar_jogos(liga):
-    url = f"{OPENLIGA_BASE}/getmatchdata/{liga}/{date.today().year}"
+def buscar_jogos(liga, ano, data_escolhida):
+    url = f"{OPENLIGA_BASE}/getmatchdata/{liga}/{ano}/{data_escolhida}"
     resp = requests.get(url)
     if resp.status_code != 200:
         return []
     return resp.json()
 
-def processar_partidas(liga_codigo):
-    partidas = buscar_jogos(liga_codigo)
+def processar_partidas(liga_codigo, data_escolhida):
+    partidas = buscar_jogos(liga_codigo, data_escolhida.year, data_escolhida.strftime("%Y-%m-%d"))
     resultados = []
 
     # Montar "classificação fake" com médias por time
@@ -112,8 +110,10 @@ def processar_partidas(liga_codigo):
 st.title("⚽ Alertas de Futebol - OpenLiga TOP 3")
 
 liga_nome = st.selectbox("Selecione a Liga", list(ligas_openliga.keys()))
+data_escolhida = st.date_input("Escolha a Data", value=date.today())
+
 if st.button("Buscar Partidas"):
-    partidas = processar_partidas(ligas_openliga[liga_nome])
+    partidas = processar_partidas(ligas_openliga[liga_nome], data_escolhida)
 
     partidas_info = []
     for p in partidas:
