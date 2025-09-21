@@ -79,7 +79,6 @@ def calcular_tendencia(media_casa, media_fora):
 # Funções API Football-Data
 # =============================
 def obter_ligas():
-    # Dropdown baseado nas competições disponíveis da conta
     return {
         "FIFA World Cup": "WC",
         "UEFA Champions League": "CL",
@@ -102,29 +101,31 @@ def obter_classificacao(liga_id):
         resp.raise_for_status()
         data = resp.json()
         standings = {}
-        table = data['standings'][0]['table']
-        for t in table:
-            name = t['team']['name']
-            gols_marcados = t['goalsFor']
-            gols_sofridos = t['goalsAgainst']
-            standings[name] = {"scored": gols_marcados, "against": gols_sofridos}
+        if "standings" in data and len(data["standings"]) > 0:
+            table = data["standings"][0].get("table", [])
+            for t in table:
+                name = t['team']['name']
+                gols_marcados = t.get('goalsFor', 1)
+                gols_sofridos = t.get('goalsAgainst', 1)
+                standings[name] = {"scored": gols_marcados, "against": gols_sofridos}
         return standings
-    except:
-        st.warning("Erro ao obter classificação")
+    except Exception as e:
+        st.warning(f"Erro ao obter classificação da liga {liga_id}: {e}")
         return {}
 
 def obter_jogos_dia(liga_id, data):
     try:
-        url = f"{BASE_URL}/matches?competitions={liga_id}&dateFrom={data}&dateTo={data}"
+        url = f"{BASE_URL}/competitions/{liga_id}/matches?dateFrom={data}&dateTo={data}"
         resp = requests.get(url, headers=HEADERS, timeout=10)
         resp.raise_for_status()
-        return resp.json().get('matches', [])
-    except:
-        st.warning("Erro ao obter jogos")
+        jogos = resp.json().get("matches", [])
+        return jogos
+    except Exception as e:
+        st.warning(f"Erro ao obter jogos da liga {liga_id}: {e}")
         return []
 
 # =============================
-# Streamlit Interface
+# Interface Streamlit
 # =============================
 st.set_page_config(page_title="⚽ Alerta de Gols", layout="wide")
 st.title("⚽ Sistema de Alertas Automáticos de Gols")
@@ -145,7 +146,6 @@ if st.button("🔍 Buscar jogos"):
     jogos = []
     
     if buscar_todos:
-        # Buscar classificação e jogos de todas as ligas
         for lid in ligas.values():
             classificacao.update(obter_classificacao(lid))
             jogos += obter_jogos_dia(lid, data_iso)
