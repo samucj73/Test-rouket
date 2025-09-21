@@ -222,14 +222,17 @@ if st.button("🔍 Buscar partidas"):
             st.dataframe(df_tabela, use_container_width=True)
 
         jogos = obter_jogos(liga_id, hoje)
-        for match in jogos:
-            home = match["homeTeam"]["name"]
-            away = match["awayTeam"]["name"]
-            status = match.get("status", "DESCONHECIDO")
-            
-    # ⛔ Filtro: só considerar jogos que ainda não começaram
-            if status != "SCHEDULED":
-                continue
+     # Checkbox para permitir filtrar só jogos que ainda não começaram
+filtrar_nao_iniciados = st.checkbox("Mostrar apenas jogos que ainda não começaram", value=True)
+
+for match in jogos:
+    home = match["homeTeam"]["name"]
+    away = match["awayTeam"]["name"]
+    status = match.get("status", "DESCONHECIDO")
+
+    # ⛔ Filtro: só considerar jogos que ainda não começaram (se o checkbox estiver marcado)
+    if filtrar_nao_iniciados and status != "SCHEDULED":
+        continue
 
     # Placar
     gols_home = match.get("score", {}).get("fullTime", {}).get("home")
@@ -252,7 +255,8 @@ if st.button("🔍 Buscar partidas"):
         "hora": datetime.fromisoformat(match["utcDate"].replace("Z","+00:00"))-timedelta(hours=3),
         "status": status,
         "placar": placar
-    })
+    })   
+        
 
     
 
