@@ -52,7 +52,7 @@ def enviar_alerta_telegram(fixture, tendencia, estimativa, confianca):
     hora_formatada = data_jogo.strftime("%H:%M")
     competicao = fixture.get("competition", {}).get("name", "Desconhecido")
 
-    # ✅ Novo: status e placar
+    # Status e placar
     status = fixture.get("status", "DESCONHECIDO")
     gols_home = fixture.get("score", {}).get("fullTime", {}).get("home")
     gols_away = fixture.get("score", {}).get("fullTime", {}).get("away")
@@ -138,22 +138,34 @@ def obter_jogos(liga_id, data):
         return []
 
 # =============================
-# Cálculo tendência
+# Cálculo tendência (versão melhorada)
 # =============================
 def calcular_tendencia(home, away, classificacao):
-    media_casa = classificacao.get(home, {}).get("scored",0) / max(1, classificacao.get(home, {}).get("played",1))
-    media_fora = classificacao.get(away, {}).get("against",0) / max(1, classificacao.get(away, {}).get("played",1))
-    estimativa = (media_casa + media_fora)/2
+    dados_home = classificacao.get(home, {"scored":0, "against":0, "played":1})
+    dados_away = classificacao.get(away, {"scored":0, "against":0, "played":1})
 
-    if estimativa >= 2.5:
+    # Médias por jogo
+    media_home_feitos = dados_home["scored"] / dados_home["played"]
+    media_home_sofridos = dados_home["against"] / dados_home["played"]
+
+    media_away_feitos = dados_away["scored"] / dados_away["played"]
+    media_away_sofridos = dados_away["against"] / dados_away["played"]
+
+    # Estimativa mais realista: ataque vs defesa
+    estimativa = ((media_home_feitos + media_away_sofridos) / 2 +
+                  (media_away_feitos + media_home_sofridos) / 2)
+
+    # Definir tendência com base na estimativa
+    if estimativa >= 3.0:
         tendencia = "Mais 2.5"
-        confianca = min(95, 60 + (estimativa - 2.5)*20)
-    elif estimativa >= 1.5:
+        confianca = min(95, 70 + (estimativa - 3.0)*10)
+    elif estimativa >= 2.0:
         tendencia = "Mais 1.5"
-        confianca = min(95, 55 + (estimativa - 1.5)*20)
+        confianca = min(90, 60 + (estimativa - 2.0)*10)
     else:
-        tendencia = "Menos 1.5"
-        confianca = min(95, 55 + (1.5 - estimativa)*20)
+        tendencia = "Menos 2.5"
+        confianca = min(85, 55 + (2.0 - estimativa)*10)
+
     return estimativa, confianca, tendencia
 
 # =============================
@@ -162,7 +174,7 @@ def calcular_tendencia(home, away, classificacao):
 st.set_page_config(page_title="⚽ Alerta de Gols", layout="wide")
 st.title("⚽ Sistema de Alertas Automáticos de Gols")
 
-# ✅ Escolha da data
+# Data
 data_selecionada = st.date_input("📅 Escolha a data para os jogos:", value=datetime.today())
 hoje = data_selecionada.strftime("%Y-%m-%d")
 
@@ -194,7 +206,7 @@ if st.button("🔍 Buscar partidas"):
             away = match["awayTeam"]["name"]
             status = match.get("status", "DESCONHECIDO")
 
-            # ✅ Novo: placar
+            # Placar
             gols_home = match.get("score", {}).get("fullTime", {}).get("home")
             gols_away = match.get("score", {}).get("fullTime", {}).get("away")
             placar = None
