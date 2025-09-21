@@ -228,8 +228,8 @@ if st.button("🔍 Buscar partidas"):
             status = match.get("status", "DESCONHECIDO")
             
     # ⛔ Filtro: só considerar jogos que ainda não começaram
-          if status != "SCHEDULED":
-             continue
+            if status != "SCHEDULED":
+                continue
 
     # Placar
     gols_home = match.get("score", {}).get("fullTime", {}).get("home")
