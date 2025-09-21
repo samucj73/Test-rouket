@@ -137,25 +137,66 @@ def obter_jogos(liga_id, data):
         st.error(f"Erro ao obter jogos da liga {liga_id}")
         return []
 
+def obter_ultimos_jogos(time_id, n=5):
+    try:
+        url = f"{BASE_URL_FD}/teams/{time_id}/matches?status=FINISHED"
+        resp = requests.get(url, headers=HEADERS, timeout=10)
+        resp.raise_for_status()
+        partidas = resp.json().get("matches", [])
+        resultados = []
+        for p in partidas:
+            gols_marcados = p.get("score", {}).get("fullTime", {}).get("home") if p["homeTeam"]["id"] == time_id else p.get("score", {}).get("fullTime", {}).get("away")
+            gols_sofridos = p.get("score", {}).get("fullTime", {}).get("away") if p["homeTeam"]["id"] == time_id else p.get("score", {}).get("fullTime", {}).get("home")
+            if gols_marcados is not None and gols_sofridos is not None:
+                resultados.append((gols_marcados, gols_sofridos))
+        return resultados[:n]
+    except:
+        return []
+
+def obter_h2h(home_id, away_id, n=5):
+    try:
+        url = f"{BASE_URL_FD}/matches?h2h={home_id},{away_id}&status=FINISHED"
+        resp = requests.get(url, headers=HEADERS, timeout=10)
+        resp.raise_for_status()
+        partidas = resp.json().get("matches", [])
+        resultados = []
+        for p in partidas:
+            gols_home = p.get("score", {}).get("fullTime", {}).get("home")
+            gols_away = p.get("score", {}).get("fullTime", {}).get("away")
+            if gols_home is not None and gols_away is not None:
+                resultados.append((gols_home, gols_away))
+        return resultados[:n]
+    except:
+        return []
+
 # =============================
-# Cálculo tendência (versão melhorada)
+# Cálculo tendência com últimos jogos e H2H
 # =============================
-def calcular_tendencia(home, away, classificacao):
+def calcular_tendencia(home, away, classificacao, ult_jogos_home=[], ult_jogos_away=[], h2h=[]):
     dados_home = classificacao.get(home, {"scored":0, "against":0, "played":1})
     dados_away = classificacao.get(away, {"scored":0, "against":0, "played":1})
 
-    # Médias por jogo
+    # Média ataque/defesa
     media_home_feitos = dados_home["scored"] / dados_home["played"]
     media_home_sofridos = dados_home["against"] / dados_home["played"]
-
     media_away_feitos = dados_away["scored"] / dados_away["played"]
     media_away_sofridos = dados_away["against"] / dados_away["played"]
 
-    # Estimativa mais realista: ataque vs defesa
-    estimativa = ((media_home_feitos + media_away_sofridos) / 2 +
-                  (media_away_feitos + media_home_sofridos) / 2)
+    # Últimos jogos
+    media_ult_home = sum([g[0] for g in ult_jogos_home])/max(1,len(ult_jogos_home))
+    media_ult_away = sum([g[0] for g in ult_jogos_away])/max(1,len(ult_jogos_away))
 
-    # Definir tendência com base na estimativa
+    # H2H
+    media_h2h = sum([g[0]+g[1] for g in h2h])/max(1,len(h2h))
+
+    # Estimativa final ponderada
+    estimativa = (0.4*(media_home_feitos + media_away_sofridos)/2 +
+                  0.3*(media_away_feitos + media_home_sofridos)/2 +
+                  0.2*media_ult_home +
+                  0.1*media_ult_away +
+                  0.2*(media_h2h/2))
+
+    # Definir tendência
     if estimativa >= 3.0:
         tendencia = "Mais 2.5"
         confianca = min(95, 70 + (estimativa - 3.0)*10)
@@ -213,7 +254,12 @@ if st.button("🔍 Buscar partidas"):
             if gols_home is not None and gols_away is not None:
                 placar = f"{gols_home} x {gols_away}"
 
-            estimativa, confianca, tendencia = calcular_tendencia(home, away, classificacao)
+            # Puxar últimos jogos e H2H
+            ult_home = obter_ultimos_jogos(match["homeTeam"]["id"])
+            ult_away = obter_ultimos_jogos(match["awayTeam"]["id"])
+            h2h = obter_h2h(match["homeTeam"]["id"], match["awayTeam"]["id"])
+
+            estimativa, confianca, tendencia = calcular_tendencia(home, away, classificacao, ult_home, ult_away, h2h)
 
             verificar_enviar_alerta(match, tendencia, estimativa, confianca)
 
