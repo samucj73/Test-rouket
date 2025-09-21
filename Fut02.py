@@ -198,6 +198,8 @@ hoje = data_selecionada.strftime("%Y-%m-%d")
 # Checkbox para buscar todas ligas
 todas_ligas = st.checkbox("📌 Buscar jogos de todas as ligas do dia", value=True)
 
+# Checkbox para filtrar apenas jogos não iniciados
+filtrar_nao_iniciados = st.checkbox("Mostrar apenas jogos que ainda não começaram", value=True)
 # Obter ligas
 ligas = obter_ligas()
 liga_dict = {liga["name"]: liga["id"] for liga in ligas}
@@ -227,7 +229,11 @@ if st.button("🔍 Buscar partidas"):
         for match in jogos:
             home = match["homeTeam"]["name"]
             away = match["awayTeam"]["name"]
+            #status = match.get("status", "DESCONHECIDO")
             status = match.get("status", "DESCONHECIDO")
+            # Se o usuário marcar a opção, só deixa jogos agendados
+        if filtrar_nao_iniciados and status != "SCHEDULED":
+            continue
 
             # Placar
             gols_home = match.get("score", {}).get("fullTime", {}).get("home")
