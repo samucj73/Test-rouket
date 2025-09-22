@@ -138,7 +138,7 @@ def obter_jogos(liga_id, data):
         return []
 
 # =============================
-# Cálculo tendência (versão melhorada)
+# Cálculo tendência
 # =============================
 def calcular_tendencia(home, away, classificacao):
     dados_home = classificacao.get(home, {"scored":0, "against":0, "played":1})
@@ -151,11 +151,11 @@ def calcular_tendencia(home, away, classificacao):
     media_away_feitos = dados_away["scored"] / dados_away["played"]
     media_away_sofridos = dados_away["against"] / dados_away["played"]
 
-    # Estimativa mais realista: ataque vs defesa
+    # Estimativa ataque vs defesa
     estimativa = ((media_home_feitos + media_away_sofridos) / 2 +
                   (media_away_feitos + media_home_sofridos) / 2)
 
-    # Definir tendência com base na estimativa
+    # Tendência
     if estimativa >= 3.0:
         tendencia = "Mais 2.5"
         confianca = min(95, 70 + (estimativa - 3.0)*10)
@@ -206,7 +206,6 @@ if st.button("🔍 Buscar partidas"):
             away = match["awayTeam"]["name"]
             status = match.get("status", "DESCONHECIDO")
 
-            # Placar
             gols_home = match.get("score", {}).get("fullTime", {}).get("home")
             gols_away = match.get("score", {}).get("fullTime", {}).get("away")
             placar = None
@@ -252,8 +251,7 @@ if st.button("🔍 Buscar partidas"):
     st.info("✅ Busca finalizada.")
 
 # =============================
-# =============================
-# # Conferência dos resultados (cards escuros)
+# Conferência dos resultados (cards escuros)
 # =============================
 st.subheader("📊 Conferência dos Resultados")
 
