@@ -252,7 +252,8 @@ if st.button("🔍 Buscar partidas"):
     st.info("✅ Busca finalizada.")
 
 # =============================
-# Conferência dos resultados dos alertas
+# =============================
+# Conferência dos resultados dos alertas (cards bonitos)
 # =============================
 st.subheader("📊 Conferência dos Resultados")
 
@@ -260,7 +261,6 @@ alertas = carregar_alertas()
 resultados = []
 
 for fixture_id, info in alertas.items():
-    # Puxar novamente os dados da partida pela API
     url = f"{BASE_URL_FD}/matches/{fixture_id}"
     try:
         resp = requests.get(url, headers=HEADERS, timeout=10)
@@ -300,6 +300,16 @@ for fixture_id, info in alertas.items():
         continue
 
 if resultados:
-    st.table(resultados)
+    for r in resultados:
+        st.markdown(f"""
+        <div style="border:1px solid #ccc; border-radius:10px; padding:12px; margin-bottom:10px;
+                    background-color:#f8f9fa; font-size:15px;">
+            <b>🏟️ {r['Jogo']}</b><br>
+            📌 Status: <b>{r['Status']}</b><br>
+            ⚽ Tendência: <b>{r['Tendência']}</b> | Estim.: {r['Estimativa']} | Conf.: {r['Confiança']}<br>
+            📊 Placar: <b>{r['Placar']}</b><br>
+            ✅ Resultado: {r['Resultado']}
+        </div>
+        """, unsafe_allow_html=True)
 else:
     st.info("Ainda não há resultados para conferir.")
