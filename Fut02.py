@@ -250,3 +250,56 @@ if st.button("🔍 Buscar partidas"):
         st.success("🚀 Top 3 jogos enviados para o canal alternativo 2!")
 
     st.info("✅ Busca finalizada.")
+
+# =============================
+# Conferência dos resultados dos alertas
+# =============================
+st.subheader("📊 Conferência dos Resultados")
+
+alertas = carregar_alertas()
+resultados = []
+
+for fixture_id, info in alertas.items():
+    # Puxar novamente os dados da partida pela API
+    url = f"{BASE_URL_FD}/matches/{fixture_id}"
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=10)
+        resp.raise_for_status()
+        match = resp.json()
+
+        status = match.get("status", "DESCONHECIDO")
+        home = match["homeTeam"]["name"]
+        away = match["awayTeam"]["name"]
+
+        gols_home = match.get("score", {}).get("fullTime", {}).get("home")
+        gols_away = match.get("score", {}).get("fullTime", {}).get("away")
+        total_gols = (gols_home or 0) + (gols_away or 0)
+
+        resultado = "-"
+        if status == "FINISHED":
+            tendencia = info["tendencia"]
+
+            if tendencia == "Mais 2.5":
+                resultado = "🟢 GREEN" if total_gols > 2 else "🔴 RED"
+            elif tendencia == "Mais 1.5":
+                resultado = "🟢 GREEN" if total_gols > 1 else "🔴 RED"
+            elif tendencia == "Menos 2.5":
+                resultado = "🟢 GREEN" if total_gols < 3 else "🔴 RED"
+
+        resultados.append({
+            "Jogo": f"{home} vs {away}",
+            "Tendência": info["tendencia"],
+            "Estimativa": f"{info['estimativa']:.2f}",
+            "Confiança": f"{info['confianca']:.0f}%",
+            "Placar": f"{gols_home} x {gols_away}" if gols_home is not None else "-",
+            "Status": status,
+            "Resultado": resultado
+        })
+
+    except:
+        continue
+
+if resultados:
+    st.table(resultados)
+else:
+    st.info("Ainda não há resultados para conferir.")
