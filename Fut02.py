@@ -236,31 +236,58 @@ if st.button("🔍 Buscar partidas"):
     st.info("✅ Busca finalizada.")
 
 # =============================
-# Conferência de Resultados
+# =============================
+# Conferência de Resultados (usando alertas salvos)
 # =============================
 if st.button("📊 Conferir Resultados"):
-    if top_jogos:
+    alertas = carregar_alertas()
+    if alertas:
         st.subheader("📊 Conferência dos Resultados")
-        for r in top_jogos:
-            if r["status"] == "FINISHED" and r["placar"]:
-                # verificar GREEN ou RED
-                green = (("Mais" in r["tendencia"] and sum(map(int, r["placar"].split("x"))) > 1) or
-                         ("Menos" in r["tendencia"] and sum(map(int, r["placar"].split("x"))) <= 2))
-                resultado = "🟢 GREEN" if green else "🔴 RED"
-            else:
-                resultado = "⏳ Aguardando"
 
-            bg_color = "#1e4620" if resultado == "🟢 GREEN" else "#5a1e1e" if resultado == "🔴 RED" else "#2c2c2c"
+        for fixture_id, info in alertas.items():
+            try:
+                url = f"{BASE_URL_FD}/matches/{fixture_id}"
+                resp = requests.get(url, headers=HEADERS, timeout=10)
+                resp.raise_for_status()
+                match = resp.json()
 
-            st.markdown(f"""
-            <div style="border:1px solid #444; border-radius:10px; padding:12px; margin-bottom:10px;
-                        background-color:{bg_color}; font-size:15px; color:#f1f1f1;">
-                <b>🏟️ {r['home']} vs {r['away']}</b><br>
-                📌 Status: <b>{r['status']}</b><br>
-                ⚽ Tendência: <b>{r['tendencia']}</b> | Estim.: {r['estimativa']:.2f} | Conf.: {r['confianca']:.0f}%<br>
-                📊 Placar: <b>{r['placar'] if r['placar'] else '-'} </b><br>
-                ✅ Resultado: {resultado}
-            </div>
-            """, unsafe_allow_html=True)
+                home = match["homeTeam"]["name"]
+                away = match["awayTeam"]["name"]
+                status = match.get("status", "DESCONHECIDO")
+                gols_home = match.get("score", {}).get("fullTime", {}).get("home")
+                gols_away = match.get("score", {}).get("fullTime", {}).get("away")
+                placar = f"{gols_home} x {gols_away}" if gols_home is not None and gols_away is not None else "-"
+
+                # Determinar resultado
+                total_gols = (gols_home or 0) + (gols_away or 0)
+                if status == "FINISHED":
+                    tendencia = info["tendencia"]
+                    if "Mais 2.5" in tendencia:
+                        resultado = "🟢 GREEN" if total_gols > 2 else "🔴 RED"
+                    elif "Mais 1.5" in tendencia:
+                        resultado = "🟢 GREEN" if total_gols > 1 else "🔴 RED"
+                    elif "Menos 2.5" in tendencia:
+                        resultado = "🟢 GREEN" if total_gols < 3 else "🔴 RED"
+                    else:
+                        resultado = "-"
+                else:
+                    resultado = "⏳ Aguardando"
+
+                # Cor do card
+                bg_color = "#1e4620" if resultado == "🟢 GREEN" else "#5a1e1e" if resultado == "🔴 RED" else "#2c2c2c"
+
+                st.markdown(f"""
+                <div style="border:1px solid #444; border-radius:10px; padding:12px; margin-bottom:10px;
+                            background-color:{bg_color}; font-size:15px; color:#f1f1f1;">
+                    <b>🏟️ {home} vs {away}</b><br>
+                    📌 Status: <b>{status}</b><br>
+                    ⚽ Tendência: <b>{info['tendencia']}</b> | Estim.: {info['estimativa']:.2f} | Conf.: {info['confianca']:.0f}%<br>
+                    📊 Placar: <b>{placar}</b><br>
+                    ✅ Resultado: {resultado}
+                </div>
+                """, unsafe_allow_html=True)
+
+            except:
+                continue
     else:
         st.info("Ainda não há resultados para conferir.")
