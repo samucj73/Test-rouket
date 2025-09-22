@@ -345,27 +345,68 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 import io
 
 # -----------------------------
-# Botão para exportar PDF
+# Botão para exportar PDF com detalhes completos
 # -----------------------------
 alertas = carregar_alertas()
+cache_jogos = carregar_cache_jogos()
 jogos_conferidos = []
 
 for fixture_id, info in alertas.items():
     if info.get("conferido"):
+        # Buscar dados do jogo no cache
+        jogo_dado = None
+        for key, jogos in cache_jogos.items():
+            for match in jogos:
+                if str(match["id"]) == fixture_id:
+                    jogo_dado = match
+                    break
+            if jogo_dado:
+                break
+        if not jogo_dado:
+            continue
+
+        home = jogo_dado["homeTeam"]["name"]
+        away = jogo_dado["awayTeam"]["name"]
+        status = jogo_dado.get("status", "DESCONHECIDO")
+        gols_home = jogo_dado.get("score", {}).get("fullTime", {}).get("home")
+        gols_away = jogo_dado.get("score", {}).get("fullTime", {}).get("away")
+        placar = f"{gols_home} x {gols_away}" if gols_home is not None and gols_away is not None else "-"
+
+        total_gols = (gols_home or 0) + (gols_away or 0)
+        if status == "FINISHED":
+            if "Mais 2.5" in info["tendencia"]:
+                resultado = "🟢 GREEN" if total_gols > 2 else "🔴 RED"
+            elif "Mais 1.5" in info["tendencia"]:
+                resultado = "🟢 GREEN" if total_gols > 1 else "🔴 RED"
+            elif "Menos 2.5" in info["tendencia"]:
+                resultado = "🟢 GREEN" if total_gols < 3 else "🔴 RED"
+            else:
+                resultado = "-"
+        else:
+            resultado = "⏳ Aguardando"
+
+        hora = datetime.fromisoformat(jogo_dado["utcDate"].replace("Z","+00:00")) - timedelta(hours=3)
+        hora_format = hora.strftime("%d/%m %H:%M")
+
         jogos_conferidos.append([
-            fixture_id,
+            f"{home} vs {away}",
             info["tendencia"],
             f"{info['estimativa']:.2f}",
-            f"{info['confianca']:.0f}%"
+            f"{info['confianca']:.0f}%",
+            placar,
+            status,
+            resultado,
+            hora_format
         ])
 
+# Gerar PDF
 if jogos_conferidos:
     buffer = io.BytesIO()
     pdf = SimpleDocTemplate(buffer, pagesize=letter)
-    data = [["ID do Jogo", "Tendência", "Estimativa", "Confiança"]]
+    data = [["Jogo", "Tendência", "Estimativa", "Confiança", "Placar", "Status", "Resultado", "Hora"]]
     data.extend(jogos_conferidos)
 
-    table = Table(data)
+    table = Table(data, colWidths=[120, 70, 60, 60, 50, 70, 60, 70])
     style = TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1e1e1e")),
         ('TEXTCOLOR', (0,0), (-1,0), colors.white),
@@ -383,11 +424,8 @@ if jogos_conferidos:
     st.download_button(
         label="📄 Baixar Jogos Conferidos em PDF",
         data=buffer,
-        file_name=f"jogos_conferidos_{hoje}.pdf",
+        file_name=f"jogos_conferidos_{datetime.today().strftime('%Y-%m-%d')}.pdf",
         mime="application/pdf"
     )
 else:
     st.info("Nenhum jogo conferido disponível para gerar PDF.")
-
-                          
-                          
