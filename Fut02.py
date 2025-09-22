@@ -16,7 +16,7 @@ BASE_URL_FD = "https://api.football-data.org/v4"
 # =============================
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 TELEGRAM_CHAT_ID = "-1003073115320"
-TELEGRAM_CHAT_ID_ALT2 = "-1002932611974"
+TELEGRAM_CHAT_ID_ALT2 = "-1002754276285"
 BASE_URL_TG = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
 
 ALERTAS_PATH = "alertas.json"
