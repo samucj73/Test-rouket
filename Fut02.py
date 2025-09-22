@@ -1,61 +1,65 @@
-# Futebol_Alertas_FD.py
+# Futebol_Alertas_OpenLiga_Top3.py
 import streamlit as st
 import requests
 import json
 import os
 import math
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from collections import defaultdict
 import numpy as np
 
 # =============================
-# Configurações API Football-Data.org
+# Configurações OpenLigaDB + Telegram
 # =============================
-API_KEY = "9058de85e3324bdb969adc005b5d918a"
-HEADERS = {"X-Auth-Token": API_KEY}
-BASE_URL_FD = "https://api.football-data.org/v4"
+OPENLIGA_BASE = "https://api.openligadb.de"
+ligas_openliga = {
+    "Bundesliga (Alemanha)": "bl1",
+    "2. Bundesliga (Alemanha)": "bl2",
+    "Premier League (Inglaterra)": "pl",
+    "La Liga (Espanha)": "es1",
+    "Serie A (Itália)": "it1",
+    "Ligue 1 (França)": "fr1",
+    "Brasileirão Série A": "br1"
+}
 
-# =============================
-# Configurações Telegram
-# =============================
 TELEGRAM_TOKEN = "SEU_TOKEN"
 TELEGRAM_CHAT_ID = "SEU_CHAT_ID"
 
-def enviar_telegram(msg):
+def enviar_telegram(msg: str):
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
         requests.post(url, data={"chat_id": TELEGRAM_CHAT_ID, "text": msg})
     except Exception as e:
-        st.error(f"Erro ao enviar Telegram: {e}")
+        st.error(f"Erro ao enviar para Telegram: {e}")
 
 # =============================
-# Buscar jogos do dia por liga
+# Funções auxiliares
 # =============================
-def buscar_jogos_fd(league_id, dia=None):
-    if dia is None:
-        dia = date.today()
-    dia_str = dia.strftime("%Y-%m-%d")
-    url = f"{BASE_URL_FD}/competitions/{league_id}/matches?dateFrom={dia_str}&dateTo={dia_str}"
+def parse_data(data_str):
+    return datetime.fromisoformat(data_str.replace("Z", "+00:00"))
+
+def buscar_jogos_openliga(league, season, dia=None):
+    url = f"{OPENLIGA_BASE}/getmatchdata/{league}/{season}"
     try:
-        resp = requests.get(url, headers=HEADERS, timeout=15)
+        resp = requests.get(url, timeout=15)
         resp.raise_for_status()
-        return resp.json().get("matches", [])
+        jogos = resp.json()
+        if dia:
+            return [j for j in jogos if parse_data(j["matchDateTime"]).date() == dia]
+        return jogos
     except Exception as e:
-        st.error(f"Erro ao buscar jogos: {e}")
+        st.error(f"Erro ao buscar jogos da {league}: {e}")
         return []
 
-# =============================
-# Calcular médias de gols
-# =============================
-def calcular_medias_fd(matches):
+def calcular_medias_openliga(matches):
     stats = defaultdict(lambda: {"feitos": [], "sofridos": []})
     for m in matches:
-        if m["status"] != "FINISHED":
+        if not m.get("matchIsFinished"):
             continue
-        home = m["homeTeam"]["name"]
-        away = m["awayTeam"]["name"]
-        gols_home = m["score"]["fullTime"]["home"] or 0
-        gols_away = m["score"]["fullTime"]["away"] or 0
+        home = m["team1"]["teamName"]
+        away = m["team2"]["teamName"]
+        gols_home = m["matchResults"][-1]["pointsTeam1"]
+        gols_away = m["matchResults"][-1]["pointsTeam2"]
         stats[home]["feitos"].append(gols_home)
         stats[home]["sofridos"].append(gols_away)
         stats[away]["feitos"].append(gols_away)
@@ -67,9 +71,27 @@ def calcular_medias_fd(matches):
         medias[t] = {"feitos": feitos, "sofridos": sofridos}
     return medias
 
-# =============================
-# Probabilidade via Poisson
-# =============================
+def calcular_media_confrontos(matches, team1, team2):
+    gols_t1, gols_t2, jogos = [], [], []
+    for m in matches:
+        if not m.get("matchIsFinished"):
+            continue
+        h = m["team1"]["teamName"]
+        a = m["team2"]["teamName"]
+        if {h, a} == {team1, team2}:
+            gols_home = m["matchResults"][-1]["pointsTeam1"]
+            gols_away = m["matchResults"][-1]["pointsTeam2"]
+            if h == team1:
+                gols_t1.append(gols_home)
+                gols_t2.append(gols_away)
+            else:
+                gols_t1.append(gols_away)
+                gols_t2.append(gols_home)
+            jogos.append(m)
+    if not jogos:
+        return None, None
+    return np.mean(gols_t1), np.mean(gols_t2)
+
 def probabilidade_over(gols_casa, gols_fora, limite):
     max_gols = 10
     prob = 0
@@ -81,10 +103,7 @@ def probabilidade_over(gols_casa, gols_fora, limite):
                 prob += p
     return round(prob * 100, 2)
 
-# =============================
-# Selecionar Top 3 distintos
-# =============================
-def selecionar_top3(jogos, chave):
+def selecionar_top3_distintos(jogos, chave):
     usados = set()
     top3 = []
     for jogo in sorted(jogos, key=lambda x: x[chave], reverse=True):
@@ -100,16 +119,17 @@ def selecionar_top3(jogos, chave):
 # =============================
 # Conferência dos resultados
 # =============================
-def conferir_alertas_fd(league_id, faixa, jogos_previstos):
-    jogos_api = buscar_jogos_fd(league_id)
+def conferir_alertas_openliga(league, season, faixa, jogos_previstos):
+    jogos_api = buscar_jogos_openliga(league, season)
     lista_final = []
     for jogo in jogos_api:
-        home = jogo["homeTeam"]["name"]
-        away = jogo["awayTeam"]["name"]
+        if not jogo.get("matchIsFinished"):
+            continue
+        home = jogo["team1"]["teamName"]
+        away = jogo["team2"]["teamName"]
         partida = f"{home} vs {away}"
-        ft = jogo["score"]["fullTime"]
-        gols_home = ft.get("home", 0) or 0
-        gols_away = ft.get("away", 0) or 0
+        gols_home = jogo["matchResults"][-1]["pointsTeam1"]
+        gols_away = jogo["matchResults"][-1]["pointsTeam2"]
         total_gols = gols_home + gols_away
         placar = f"{gols_home}x{gols_away}"
         limite = int(faixa.strip("+").split(".")[0])
@@ -118,9 +138,6 @@ def conferir_alertas_fd(league_id, faixa, jogos_previstos):
             lista_final.append({"faixa": faixa, "jogo": partida, "placar": placar, "status": status})
     return lista_final
 
-# =============================
-# Processar e mandar conferência
-# =============================
 def processar_lista_e_mandar(lista_final):
     for faixa in ["+1.5", "+2.5", "+3.5"]:
         jogos_faixa = [j for j in lista_final if j["faixa"] == faixa]
@@ -135,40 +152,37 @@ def processar_lista_e_mandar(lista_final):
 # =============================
 # App Streamlit
 # =============================
-st.title("⚽ Alertas Futebol - Football-Data.org")
+st.title("⚽ Alertas Futebol - OpenLigaDB")
 
-ligas_fd = {
-    "Premier League": 2021,
-    "La Liga": 2014,
-    "Serie A (Itália)": 2019,
-    "Bundesliga": 2002,
-    "Brasileirão Série A": 2013
-}
+opcao_liga = st.selectbox("Escolha a liga:", list(ligas_openliga.keys()))
+league = ligas_openliga[opcao_liga]
+ano = st.number_input("Ano da temporada", min_value=2015, max_value=date.today().year, value=date.today().year)
 
-opcao_liga = st.selectbox("Escolha a liga:", list(ligas_fd.keys()))
-league_id = ligas_fd[opcao_liga]
-
-aba = st.radio("Selecione:", ["Gerar Alertas", "Conferência"])
+aba = st.radio("Selecione:", ["Gerar Alertas", "Histórico", "Conferência"])
 
 if aba == "Gerar Alertas":
     st.subheader("📢 Alertas Pré-Jogo")
-    matches = buscar_jogos_fd(league_id)
-    medias = calcular_medias_fd(matches)
+    jogos = buscar_jogos_openliga(league, ano, date.today())
+    medias = calcular_medias_openliga(buscar_jogos_openliga(league, ano))
     jogos_info = []
-    for m in matches:
-        home = m["homeTeam"]["name"]
-        away = m["awayTeam"]["name"]
+    for j in jogos:
+        home, away = j["team1"]["teamName"], j["team2"]["teamName"]
         if home not in medias or away not in medias:
             continue
         exp_home = (medias[home]["feitos"] + medias[away]["sofridos"]) / 2
         exp_away = (medias[away]["feitos"] + medias[home]["sofridos"]) / 2
-        prob_15 = probabilidade_over(exp_home, exp_away, 1)
-        prob_25 = probabilidade_over(exp_home, exp_away, 2)
-        prob_35 = probabilidade_over(exp_home, exp_away, 3)
-        jogos_info.append({"home": home, "away": away, "prob_1_5": prob_15, "prob_2_5": prob_25, "prob_3_5": prob_35})
-
+        h2h_home, h2h_away = calcular_media_confrontos(buscar_jogos_openliga(league, ano), home, away)
+        if h2h_home and h2h_away:
+            exp_home = (exp_home + h2h_home) / 2
+            exp_away = (exp_away + h2h_away) / 2
+        jogos_info.append({
+            "home": home, "away": away,
+            "prob_1_5": probabilidade_over(exp_home, exp_away, 1),
+            "prob_2_5": probabilidade_over(exp_home, exp_away, 2),
+            "prob_3_5": probabilidade_over(exp_home, exp_away, 3)
+        })
     for faixa, chave in [("+1.5", "prob_1_5"), ("+2.5", "prob_2_5"), ("+3.5", "prob_3_5")]:
-        top3 = selecionar_top3(jogos_info, chave)
+        top3 = selecionar_top3_distintos(jogos_info, chave)
         if not top3:
             continue
         msg = f"🔥 TOP 3 {faixa} - {opcao_liga}\n"
@@ -176,9 +190,20 @@ if aba == "Gerar Alertas":
             msg += f"⚽ {j['home']} vs {j['away']} → {j[chave]}%\n"
         enviar_telegram(msg)
         st.text_area(f"Top 3 {faixa}", msg, height=150)
-        # salva previsões
         with open(f"previstos_{faixa}.json", "w") as f:
             json.dump([f"{j['home']} vs {j['away']}" for j in top3], f)
+
+elif aba == "Histórico":
+    st.subheader("📜 Histórico de Jogos")
+    jogos = buscar_jogos_openliga(league, ano)
+    for j in jogos:
+        data_j = parse_data(j["matchDateTime"]).strftime("%d/%m/%Y %H:%M")
+        home, away = j["team1"]["teamName"], j["team2"]["teamName"]
+        status = "Encerrado" if j["matchIsFinished"] else "Agendado"
+        placar = ""
+        if j["matchIsFinished"]:
+            placar = f" {j['matchResults'][-1]['pointsTeam1']}x{j['matchResults'][-1]['pointsTeam2']}"
+        st.write(f"📅 {data_j} - ⚽ {home} vs {away} → {status}{placar}")
 
 elif aba == "Conferência":
     st.subheader("📊 Conferência Pós-Jogo")
@@ -187,7 +212,7 @@ elif aba == "Conferência":
         if os.path.exists(f"previstos_{faixa}.json"):
             with open(f"previstos_{faixa}.json") as f:
                 previstos = json.load(f)
-            lista_final.extend(conferir_alertas_fd(league_id, faixa, previstos))
+            lista_final.extend(conferir_alertas_openliga(league, ano, faixa, previstos))
     if lista_final:
         processar_lista_e_mandar(lista_final)
     else:
