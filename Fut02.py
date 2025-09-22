@@ -22,6 +22,18 @@ BASE_URL_TG = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
 ALERTAS_PATH = "alertas.json"
 
 # =============================
+# Dicionário de Ligas (fixo para evitar erro)
+# =============================
+liga_dict = {
+    "Premier League (Inglaterra)": "PL",
+    "La Liga (Espanha)": "PD",
+    "Serie A (Itália)": "SA",
+    "Bundesliga (Alemanha)": "BL1",
+    "Ligue 1 (França)": "FL1",
+    "Campeonato Brasileiro Série A": "BSA"
+}
+
+# =============================
 # Persistência de alertas
 # =============================
 def carregar_alertas():
@@ -52,7 +64,6 @@ def enviar_alerta_telegram(fixture, tendencia, estimativa, confianca):
     hora_formatada = data_jogo.strftime("%H:%M")
     competicao = fixture.get("competition", {}).get("name", "Desconhecido")
 
-    # Status e placar
     status = fixture.get("status", "DESCONHECIDO")
     gols_home = fixture.get("score", {}).get("fullTime", {}).get("home")
     gols_away = fixture.get("score", {}).get("fullTime", {}).get("away")
@@ -92,16 +103,6 @@ def verificar_enviar_alerta(fixture, tendencia, estimativa, confianca):
 # =============================
 # Funções de API Football-Data
 # =============================
-def obter_ligas():
-    try:
-        url = f"{BASE_URL_FD}/competitions"
-        resp = requests.get(url, headers=HEADERS, timeout=10)
-        resp.raise_for_status()
-        return resp.json().get("competitions", [])
-    except:
-        st.error("Erro ao obter ligas")
-        return []
-
 def obter_classificacao(liga_id):
     try:
         url = f"{BASE_URL_FD}/competitions/{liga_id}/standings"
@@ -144,18 +145,14 @@ def calcular_tendencia(home, away, classificacao):
     dados_home = classificacao.get(home, {"scored":0, "against":0, "played":1})
     dados_away = classificacao.get(away, {"scored":0, "against":0, "played":1})
 
-    # Médias por jogo
     media_home_feitos = dados_home["scored"] / dados_home["played"]
     media_home_sofridos = dados_home["against"] / dados_home["played"]
-
     media_away_feitos = dados_away["scored"] / dados_away["played"]
     media_away_sofridos = dados_away["against"] / dados_away["played"]
 
-    # Estimativa ataque vs defesa
     estimativa = ((media_home_feitos + media_away_sofridos) / 2 +
                   (media_away_feitos + media_home_sofridos) / 2)
 
-    # Tendência
     if estimativa >= 3.0:
         tendencia = "Mais 2.5"
         confianca = min(95, 70 + (estimativa - 3.0)*10)
@@ -174,40 +171,21 @@ def calcular_tendencia(home, away, classificacao):
 st.set_page_config(page_title="⚽ Alerta de Gols", layout="wide")
 st.title("⚽ Sistema de Alertas Automáticos de Gols")
 
-# Data
 data_selecionada = st.date_input("📅 Escolha a data para os jogos:", value=datetime.today())
 hoje = data_selecionada.strftime("%Y-%m-%d")
 
-# Checkbox para buscar todas ligas
 todas_ligas = st.checkbox("📌 Buscar jogos de todas as ligas do dia", value=True)
-# =============================
-# Seleção de Liga
-# =============================
-todas_ligas = st.checkbox("Buscar em todas as ligas", value=False)
-liga_selecionada = st.selectbox("Selecione a Liga", list(liga_dict.keys()))
-
-if todas_ligas:
-    ligas_busca = list(liga_dict.values())
-else:
-    ligas_busca = [liga_dict.get(liga_selecionada)] if liga_dict.get(liga_selecionada) else []
-    if not ligas_busca:
-        st.warning("⚠️ Liga selecionada não encontrada. Escolha outra.")
-
-# Obter ligas
-ligas = obter_ligas()
-liga_dict = {liga["name"]: liga["id"] for liga in ligas}
 
 liga_selecionada = None
 if not todas_ligas:
     liga_selecionada = st.selectbox("📌 Escolha a liga:", list(liga_dict.keys()))
 
-# Botão para iniciar pesquisa
+top_jogos = []
+
 if st.button("🔍 Buscar partidas"):
-    ligas_busca = liga_dict.values() if todas_ligas else [liga_dict[liga_selecionada]]
+    ligas_busca = list(liga_dict.values()) if todas_ligas else [liga_dict.get(liga_selecionada)]
 
     st.write(f"⏳ Buscando jogos para {data_selecionada}...")
-
-    top_jogos = []
 
     for liga_id in ligas_busca:
         classificacao = obter_classificacao(liga_id)
@@ -217,15 +195,11 @@ if st.button("🔍 Buscar partidas"):
             home = match["homeTeam"]["name"]
             away = match["awayTeam"]["name"]
             status = match.get("status", "DESCONHECIDO")
-
             gols_home = match.get("score", {}).get("fullTime", {}).get("home")
             gols_away = match.get("score", {}).get("fullTime", {}).get("away")
-            placar = None
-            if gols_home is not None and gols_away is not None:
-                placar = f"{gols_home} x {gols_away}"
+            placar = f"{gols_home} x {gols_away}" if gols_home is not None and gols_away is not None else None
 
             estimativa, confianca, tendencia = calcular_tendencia(home, away, classificacao)
-
             verificar_enviar_alerta(match, tendencia, estimativa, confianca)
 
             top_jogos.append({
@@ -240,7 +214,6 @@ if st.button("🔍 Buscar partidas"):
                 "placar": placar
             })
 
-    # Ordenar top 3 por confiança
     top_jogos_sorted = sorted(top_jogos, key=lambda x: x["confianca"], reverse=True)[:3]
 
     if top_jogos_sorted:
@@ -254,7 +227,7 @@ if st.button("🔍 Buscar partidas"):
             if j["placar"]:
                 msg += f"📊 Placar: {j['placar']}\n"
             msg += (
-                f"Tendência: {j['tendencia']} | Estimativa: {j['estimativa']:.2f} | "
+                f"Tendência: {j['tendencia']} | Estim.: {j['estimativa']:.2f} | "
                 f"Confiança: {j['confianca']:.0f}%\n\n"
             )
         enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2)
@@ -263,72 +236,30 @@ if st.button("🔍 Buscar partidas"):
     st.info("✅ Busca finalizada.")
 
 # =============================
+# Conferência de Resultados
 # =============================
-# Conferência dos resultados
-# =============================
-st.subheader("📊 Conferência dos Resultados")
-
-if st.button("🔍 Conferir agora"):
-    alertas = carregar_alertas()
-    resultados = []
-
-    for fixture_id, info in alertas.items():
-        url = f"{BASE_URL_FD}/matches/{fixture_id}"
-        try:
-            resp = requests.get(url, headers=HEADERS, timeout=10)
-            resp.raise_for_status()
-            match = resp.json()
-
-            status = match.get("status", "DESCONHECIDO")
-            home = match["homeTeam"]["name"]
-            away = match["awayTeam"]["name"]
-
-            gols_home = match.get("score", {}).get("fullTime", {}).get("home")
-            gols_away = match.get("score", {}).get("fullTime", {}).get("away")
-            total_gols = (gols_home or 0) + (gols_away or 0)
-
-            resultado = "-"
-            if status == "FINISHED":
-                tendencia = info["tendencia"]
-
-                if tendencia == "Mais 2.5":
-                    resultado = "🟢 GREEN" if total_gols > 2 else "🔴 RED"
-                elif tendencia == "Mais 1.5":
-                    resultado = "🟢 GREEN" if total_gols > 1 else "🔴 RED"
-                elif tendencia == "Menos 2.5":
-                    resultado = "🟢 GREEN" if total_gols < 3 else "🔴 RED"
-
-            resultados.append({
-                "Jogo": f"{home} vs {away}",
-                "Tendência": info["tendencia"],
-                "Estimativa": f"{info['estimativa']:.2f}",
-                "Confiança": f"{info['confianca']:.0f}%",
-                "Placar": f"{gols_home} x {gols_away}" if gols_home is not None else "-",
-                "Status": status,
-                "Resultado": resultado
-            })
-
-        except:
-            continue
-
-    if resultados:
-        for r in resultados:
-            # Fundo escuro com destaque
-            if r["Resultado"] == "🟢 GREEN":
-                bg_color = "#1e4620"   # verde escuro
-            elif r["Resultado"] == "🔴 RED":
-                bg_color = "#5a1e1e"   # vermelho escuro
+if st.button("📊 Conferir Resultados"):
+    if top_jogos:
+        st.subheader("📊 Conferência dos Resultados")
+        for r in top_jogos:
+            if r["status"] == "FINISHED" and r["placar"]:
+                # verificar GREEN ou RED
+                green = (("Mais" in r["tendencia"] and sum(map(int, r["placar"].split("x"))) > 1) or
+                         ("Menos" in r["tendencia"] and sum(map(int, r["placar"].split("x"))) <= 2))
+                resultado = "🟢 GREEN" if green else "🔴 RED"
             else:
-                bg_color = "#2c2c2c"   # cinza escuro
+                resultado = "⏳ Aguardando"
+
+            bg_color = "#1e4620" if resultado == "🟢 GREEN" else "#5a1e1e" if resultado == "🔴 RED" else "#2c2c2c"
 
             st.markdown(f"""
             <div style="border:1px solid #444; border-radius:10px; padding:12px; margin-bottom:10px;
                         background-color:{bg_color}; font-size:15px; color:#f1f1f1;">
-                <b>🏟️ {r['Jogo']}</b><br>
-                📌 Status: <b>{r['Status']}</b><br>
-                ⚽ Tendência: <b>{r['Tendência']}</b> | Estim.: {r['Estimativa']} | Conf.: {r['Confiança']}<br>
-                📊 Placar: <b>{r['Placar']}</b><br>
-                ✅ Resultado: {r['Resultado']}
+                <b>🏟️ {r['home']} vs {r['away']}</b><br>
+                📌 Status: <b>{r['status']}</b><br>
+                ⚽ Tendência: <b>{r['tendencia']}</b> | Estim.: {r['estimativa']:.2f} | Conf.: {r['confianca']:.0f}%<br>
+                📊 Placar: <b>{r['placar'] if r['placar'] else '-'} </b><br>
+                ✅ Resultado: {resultado}
             </div>
             """, unsafe_allow_html=True)
     else:
