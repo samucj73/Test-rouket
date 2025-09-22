@@ -24,16 +24,24 @@ CACHE_JOGOS = "cache_jogos.json"
 CACHE_CLASSIFICACAO = "cache_classificacao.json"
 
 # =============================
-# Dicionário de Ligas
+# =============================
+# Dicionário de Ligas Atualizado
 # =============================
 liga_dict = {
-    "Premier League (Inglaterra)": "PL",
-    "La Liga (Espanha)": "PD",
+    "FIFA World Cup": "WC",
+    "UEFA Champions League": "CL",
+    "Bundesliga": "BL1",
+    "Eredivisie": "DED",
+    "Campeonato Brasileiro Série A": "BSA",
+    "Primera Division": "PD",
+    "Ligue 1": "FL1",
+    "Championship (Inglaterra)": "ELC",
+    "Primeira Liga (Portugal)": "PPL",
+    "European Championship": "EC",
     "Serie A (Itália)": "SA",
-    "Bundesliga (Alemanha)": "BL1",
-    "Ligue 1 (França)": "FL1",
-    "Campeonato Brasileiro Série A": "BSA"
+    "Premier League (Inglaterra)": "PL"
 }
+
 
 # =============================
 # Persistência e cache
