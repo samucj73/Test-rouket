@@ -340,59 +340,80 @@ if st.button("📊 Conferir resultados"):
         st.info("Ainda não há resultados para conferir.")
 
 # -----------------------------
-# Conferência automática dos Top 3 por tipo de entrada
 # -----------------------------
-alertas = carregar_alertas()
-cache_jogos = carregar_cache_jogos()
+# Conferência automática dos Top 3 (Mais 1.5 e Mais 2.5)
+# -----------------------------
+alertas = carregar_alertas()       # Carrega alertas persistidos
+cache_jogos = carregar_cache_jogos()  # Carrega cache de jogos do dia
 
-# IDs Top 3 de cada tipo (assumindo que você já tenha calculado top3 por confiança)
-top3_1_5 = [str(j["id"]) for j in top_jogos_sorted if "Mais 1.5" in j["tendencia"]][:3]
-top3_2_5 = [str(j["id"]) for j in top_jogos_sorted if "Mais 2.5" in j["tendencia"]][:3]
+# Certifique-se que top_jogos está populado
+# top_jogos deve conter todos os jogos do dia com suas estimativas, tendências, confianca, id
+# Exemplo de top_jogos:
+# top_jogos = [{"id": fixture_id, "tendencia": "Mais 1.5", "confianca": 64}, ...]
 
-def conferir_jogos(lista_top, tipo):
-    for fixture_id in lista_top:
-        info = alertas.get(fixture_id)
-        if not info:
-            continue
+if not top_jogos:
+    st.warning("⚠️ Não há jogos processados para gerar Top 3.")
+else:
+    # Top 3 Mais 1.5
+    top3_1_5 = sorted(
+        [j for j in top_jogos if "Mais 1.5" in j["tendencia"]],
+        key=lambda x: x["confianca"], reverse=True
+    )[:3]
 
-        # Buscar dados no cache
-        jogo_dado = None
-        for key, jogos in cache_jogos.items():
-            for match in jogos:
-                if str(match["id"]) == fixture_id:
-                    jogo_dado = match
+    # Top 3 Mais 2.5
+    top3_2_5 = sorted(
+        [j for j in top_jogos if "Mais 2.5" in j["tendencia"]],
+        key=lambda x: x["confianca"], reverse=True
+    )[:3]
+
+    # Função para conferir jogos
+    def conferir_top3(lista_top, tipo):
+        for j in lista_top:
+            fixture_id = str(j["id"])
+            info = alertas.get(fixture_id)
+            if not info:
+                continue
+
+            # Buscar dados do jogo no cache
+            jogo_dado = None
+            for key, jogos in cache_jogos.items():
+                for match in jogos:
+                    if str(match["id"]) == fixture_id:
+                        jogo_dado = match
+                        break
+                if jogo_dado:
                     break
-            if jogo_dado:
-                break
-        if not jogo_dado:
-            continue
+            if not jogo_dado:
+                continue
 
-        gols_home = jogo_dado.get("score", {}).get("fullTime", {}).get("home")
-        gols_away = jogo_dado.get("score", {}).get("fullTime", {}).get("away")
-        total_gols = (gols_home or 0) + (gols_away or 0)
-        status = jogo_dado.get("status", "TIMED")
+            gols_home = jogo_dado.get("score", {}).get("fullTime", {}).get("home")
+            gols_away = jogo_dado.get("score", {}).get("fullTime", {}).get("away")
+            total_gols = (gols_home or 0) + (gols_away or 0)
+            status = jogo_dado.get("status", "TIMED")
 
-        if status == "FINISHED":
-            if tipo == "1.5":
-                resultado = "🟢 GREEN" if total_gols > 1 else "🔴 RED"
-            elif tipo == "2.5":
-                resultado = "🟢 GREEN" if total_gols > 2 else "🔴 RED"
+            # Conferência por tipo
+            if status == "FINISHED":
+                if tipo == "1.5":
+                    resultado = "🟢 GREEN" if total_gols > 1 else "🔴 RED"
+                elif tipo == "2.5":
+                    resultado = "🟢 GREEN" if total_gols > 2 else "🔴 RED"
+                else:
+                    resultado = "-"
             else:
-                resultado = "-"
-        else:
-            resultado = "⏳ Aguardando"
+                resultado = "⏳ Aguardando"
 
-        # Atualizar alertas
-        info[f"resultado_top3_{tipo}"] = resultado
-        info["conferido"] = True
-        alertas[fixture_id] = info
+            # Atualizar alerta
+            info[f"resultado_top3_{tipo}"] = resultado
+            info["conferido"] = True
+            alertas[fixture_id] = info
 
-# Conferir cada Top 3
-conferir_jogos(top3_1_5, "1.5")
-conferir_jogos(top3_2_5, "2.5")
+    # Conferir os dois tipos
+    conferir_top3(top3_1_5, "1.5")
+    conferir_top3(top3_2_5, "2.5")
 
-# Salvar alertas atualizados
-salvar_alertas(alertas)
+    # Salvar alertas atualizados
+    salvar_alertas(alertas)
+    st.success("✅ Conferência Top 3 (Mais 1.5 e Mais 2.5) concluída!")
 
 import io
 import pandas as pd
