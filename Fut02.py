@@ -348,6 +348,18 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 import streamlit as st
 
 # -----------------------------
+# Função para abreviar nomes longos
+# -----------------------------
+def abreviar_nome(nome, max_len=15):
+    if len(nome) <= max_len:
+        return nome
+    palavras = nome.split()
+    abreviado = " ".join([p[0] + "." if len(p) > 2 else p for p in palavras])
+    if len(abreviado) > max_len:
+        abreviado = abreviado[:max_len-3] + "..."
+    return abreviado
+
+# -----------------------------
 # Preparar lista de jogos conferidos
 # -----------------------------
 alertas = carregar_alertas()           # Função existente
@@ -368,8 +380,8 @@ for fixture_id, info in alertas.items():
         if not jogo_dado:
             continue
 
-        home = jogo_dado["homeTeam"]["name"]
-        away = jogo_dado["awayTeam"]["name"]
+        home = abreviar_nome(jogo_dado["homeTeam"]["name"])
+        away = abreviar_nome(jogo_dado["awayTeam"]["name"])
         status = jogo_dado.get("status", "DESCONHECIDO")
         gols_home = jogo_dado.get("score", {}).get("fullTime", {}).get("home")
         gols_away = jogo_dado.get("score", {}).get("fullTime", {}).get("away")
