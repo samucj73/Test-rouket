@@ -339,5 +339,55 @@ if st.button("📊 Conferir resultados"):
     else:
         st.info("Ainda não há resultados para conferir.")
 
+from reportlab.lib.pagesizes import letter
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
+import io
+
+# -----------------------------
+# Botão para exportar PDF
+# -----------------------------
+alertas = carregar_alertas()
+jogos_conferidos = []
+
+for fixture_id, info in alertas.items():
+    if info.get("conferido"):
+        jogos_conferidos.append([
+            fixture_id,
+            info["tendencia"],
+            f"{info['estimativa']:.2f}",
+            f"{info['confianca']:.0f}%"
+        ])
+
+if jogos_conferidos:
+    buffer = io.BytesIO()
+    pdf = SimpleDocTemplate(buffer, pagesize=letter)
+    data = [["ID do Jogo", "Tendência", "Estimativa", "Confiança"]]
+    data.extend(jogos_conferidos)
+
+    table = Table(data)
+    style = TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1e1e1e")),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('BACKGROUND', (0,1), (-1,-1), colors.HexColor("#2c2c2c")),
+        ('TEXTCOLOR', (0,1), (-1,-1), colors.white),
+        ('GRID', (0,0), (-1,-1), 1, colors.white),
+        ('FONTNAME', (0,0), (-1,-1), 'Helvetica-Bold')
+    ])
+    table.setStyle(style)
+
+    pdf.build([table])
+    buffer.seek(0)
+
+    st.download_button(
+        label="📄 Baixar Jogos Conferidos em PDF",
+        data=buffer,
+        file_name=f"jogos_conferidos_{hoje}.pdf",
+        mime="application/pdf"
+    )
+else:
+    st.info("Nenhum jogo conferido disponível para gerar PDF.")
+
                           
                           
