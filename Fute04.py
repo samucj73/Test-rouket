@@ -319,10 +319,12 @@ aba = st.tabs(["⚡ Alertas de Jogos Hoje", "📊 Jogos de Temporadas Passadas",
 # ---------- ABA 1: Alertas ----------
 with aba[0]:
     st.subheader("📅 Jogos do dia e alertas de tendência")
+
     temporada_atual = st.selectbox("📅 Escolha a temporada:", [2022, 2023, 2024, 2025], index=1)
-    data_selecionada = st.date_input("📅 Escolha a data para os jogos:", value=datetime.today())
+    data_selecionada = st.date_input("📅 Escolha a data para os jogos:", value=datetime.today().date())
     hoje = data_selecionada.strftime("%Y-%m-%d")
 
+    # ✅ Ligas principais (Football-API)
     ligas_principais = {
         "Premier League": 39,
         "La Liga": 140,
@@ -334,27 +336,35 @@ with aba[0]:
         "Copa Libertadores": 13
     }
 
-    # Checkbox para incluir todas as ligas do dia
+    # ✅ Ligas históricas (OpenLigaDB)
+    ligas_openliga = {
+        "Bundesliga (Alemanha)": "bl1",
+        "2. Bundesliga (Alemanha)": "bl2",
+        "DFB Pokal": "dfb",
+        "Premier League (Inglaterra)": "pl",
+        "La Liga (Espanha)": "pd"
+    }
+
     incluir_todas = st.checkbox("🔎 Buscar jogos de todas as ligas do dia", value=False)
 
     if st.button("🔍 Buscar jogos do dia"):
         with st.spinner("Buscando jogos da API Football..."):
             jogos = obter_jogos_dia(hoje)
 
+        # ✅ Seleção de liga histórica
         liga_nome = st.selectbox("🏆 Escolha a liga histórica para médias:", list(ligas_openliga.keys()))
         liga_id = ligas_openliga[liga_nome]
         temporada_hist = st.selectbox("📅 Temporada histórica:", ["2022", "2023", "2024", "2025"], index=2)
+
         jogos_hist = obter_jogos_liga_temporada(liga_id, temporada_hist)
         medias_historicas = calcular_media_gols_times(jogos_hist)
 
         melhores_15, melhores_25 = [], []
 
-        # 🔎 Agora o loop está dentro do botão
         for match in jogos:
-            # Só pega jogos que ainda não começaram
             status = match.get("fixture", {}).get("status", {}).get("short")
             if status != "NS":
-                continue
+                continue  # Só jogos que não começaram
 
             league_id = match.get("league", {}).get("id")
             if not incluir_todas and league_id not in ligas_principais.values():
@@ -365,8 +375,8 @@ with aba[0]:
             home_id = match["teams"]["home"]["id"]
             away_id = match["teams"]["away"]["id"]
 
+            # ✅ Tratar retorno dict ou float
             media_h2h = media_gols_confrontos_diretos(home_id, away_id, temporada_atual, max_jogos=5)
-            # media_h2h pode retornar dict ou float (compatibilidade); tratar
             if isinstance(media_h2h, dict):
                 media_h2h_val = media_h2h.get("media_gols", 2.5)
             else:
@@ -381,20 +391,24 @@ with aba[0]:
                 media_fora=media_fora
             )
 
+            # ✅ Ajuste de timezone (mantendo BRT fixo -3h)
             data_iso = match["fixture"]["date"]
             data_jogo = datetime.fromisoformat(data_iso.replace("Z", "+00:00")) - timedelta(hours=3)
             hora_formatada = data_jogo.strftime("%H:%M")
             competicao = match.get("league", {}).get("name", "Desconhecido")
 
-            odds = obter_odds(match["fixture"]["id"])
+            # ✅ Odds com fallback
+            odds = obter_odds(match["fixture"]["id"]) or {}
+            odd_15 = odds.get("1.5", "N/A")
+            odd_25 = odds.get("2.5", "N/A")
 
             with st.container():
                 st.subheader(f"🏟️ {home} vs {away}")
-                st.caption(f"Liga: {competicao} | Temporada: {temporada_atual}")
+                st.caption(f"Liga: {competicao} | Temporada: {temorada_atual}")
                 st.write(f"📊 Estimativa de gols: **{estimativa:.2f}**")
                 st.write(f"🔥 Tendência: **{tendencia}**")
                 st.write(f"✅ Confiança: **{confianca:.0f}%**")
-                st.write(f"💰 Odds Over 1.5: {odds['1.5']} | Over 2.5: {odds['2.5']}")
+                st.write(f"💰 Odds Over 1.5: {odd_15} | Over 2.5: {odd_25}")
 
             verificar_enviar_alerta(match, tendencia, confianca, estimativa)
 
@@ -404,7 +418,7 @@ with aba[0]:
                     "home": home, "away": away,
                     "estimativa": estimativa, "confianca": confianca,
                     "hora": hora_formatada, "competicao": competicao,
-                    "odd_15": odds["1.5"]
+                    "odd_15": odd_15
                 })
             elif tendencia == "Mais 2.5":
                 melhores_25.append({
@@ -412,8 +426,35 @@ with aba[0]:
                     "home": home, "away": away,
                     "estimativa": estimativa, "confianca": confianca,
                     "hora": hora_formatada, "competicao": competicao,
-                    "odd_25": odds["2.5"]
+                    "odd_25": odd_25
                 })
+
+        # =====================================================
+        # 🏆 Ranking final Top 3
+        # =====================================================
+        if melhores_15:
+            st.markdown("## 🏆 Top 3 Jogos com tendência **+1.5 gols**")
+            top15 = sorted(melhores_15, key=lambda x: (x["confianca"], x["estimativa"]), reverse=True)[:3]
+            for jogo in top15:
+                st.write(
+                    f"⚽ {jogo['home']} vs {jogo['away']} "
+                    f"({jogo['hora']}, {jogo['competicao']})\n"
+                    f"📊 Estimativa: {jogo['estimativa']:.2f} | "
+                    f"✅ Confiança: {jogo['confianca']:.0f}% | "
+                    f"💰 Odd +1.5: {jogo['odd_15']}"
+                )
+
+        if melhores_25:
+            st.markdown("## 🏆 Top 3 Jogos com tendência **+2.5 gols**")
+            top25 = sorted(melhores_25, key=lambda x: (x["confianca"], x["estimativa"]), reverse=True)[:3]
+            for jogo in top25:
+                st.write(
+                    f"⚽ {jogo['home']} vs {jogo['away']} "
+                    f"({jogo['hora']}, {jogo['competicao']})\n"
+                    f"📊 Estimativa: {jogo['estimativa']:.2f} | "
+                    f"✅ Confiança: {jogo['confianca']:.0f}% | "
+                    f"💰 Odd +2.5: {jogo['odd_25']}"
+                )
 
 
         # Top 3
