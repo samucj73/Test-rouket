@@ -331,6 +331,9 @@ if st.button("📊 Conferir resultados"):
             </div>
             """, unsafe_allow_html=True)
 
+            #info["conferido"] = True
+            #mudou = True
+            if status == "FINISHED":
             info["conferido"] = True
             mudou = True
 
