@@ -345,7 +345,7 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 import io
 
 # -----------------------------
-# Botão para exportar PDF com detalhes completos
+Botão para exportar PDF com detalhes completos
 # -----------------------------
 alertas = carregar_alertas()
 cache_jogos = carregar_cache_jogos()
