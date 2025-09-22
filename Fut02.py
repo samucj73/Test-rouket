@@ -334,8 +334,8 @@ if st.button("📊 Conferir resultados"):
             #info["conferido"] = True
             #mudou = True
             if status == "FINISHED":
-            info["conferido"] = True
-            mudou = True
+             info["conferido"] = True
+             mudou = True
 
         if mudou:
             salvar_alertas(alertas)
