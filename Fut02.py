@@ -179,7 +179,7 @@ data_selecionada = st.date_input("📅 Escolha a data para os jogos:", value=dat
 hoje = data_selecionada.strftime("%Y-%m-%d")
 
 # Checkbox para buscar todas ligas
-#todas_ligas = st.checkbox("📌 Buscar jogos de todas as ligas do dia", value=True)
+todas_ligas = st.checkbox("📌 Buscar jogos de todas as ligas do dia", value=True)
 # =============================
 # Seleção de Liga
 # =============================
