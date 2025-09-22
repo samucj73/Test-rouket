@@ -12,3 +12,4 @@ selenium
 catboost
 plotly
 beautifulsoup4
+reportlab
