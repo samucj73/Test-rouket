@@ -344,56 +344,8 @@ import pandas as pd
 from datetime import datetime, timedelta
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 import streamlit as st
-
-# -----------------------------
-# Função para gerar PDF em formato "cards"
-# -----------------------------
-def gerar_pdf_jogos_cards(df_conferidos):
-    buffer = io.BytesIO()
-    pdf = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20)
-    
-    elements = []
-    styles = getSampleStyleSheet()
-    style_title = styles["Heading4"]
-    style_title.alignment = 1  # centralizado
-    style_normal = styles["Normal"]
-    style_normal.fontSize = 9
-
-    # Cabeçalho PDF
-    elements.append(Paragraph(f"Relatório de Jogos Conferidos - {datetime.today().strftime('%d/%m/%Y')}", style_title))
-    elements.append(Spacer(1,12))
-
-    # Criar card para cada jogo
-    for idx, row in df_conferidos.iterrows():
-        jogo_text = f"<b>Jogo:</b> {row['Jogo']} | <b>Hora:</b> {row['Hora']}"
-        tendencia_text = f"<b>Tendência:</b> {row['Tendência']} | <b>Estimativa:</b> {row['Estimativa']} | <b>Confiança:</b> {row['Confiança']}"
-        placar_text = f"<b>Placar:</b> {row['Placar']} | <b>Status:</b> {row['Status']} | <b>Resultado:</b> {row['Resultado']}"
-
-        data = [[Paragraph(jogo_text, style_normal)],
-                [Paragraph(tendencia_text, style_normal)],
-                [Paragraph(placar_text, style_normal)]]
-
-        table = Table(data, colWidths=[480])
-        bg_color = colors.HexColor("#f2f2f2") if idx % 2 == 0 else colors.HexColor("#e6e6e6")
-        table.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,-1), bg_color),
-            ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
-            ('INNERGRID', (0,0), (-1,-1), 0.5, colors.grey),
-            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-            ('LEFTPADDING', (0,0), (-1,-1), 6),
-            ('RIGHTPADDING', (0,0), (-1,-1), 6),
-            ('TOPPADDING', (0,0), (-1,-1), 4),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
-        ]))
-        elements.append(table)
-        elements.append(Spacer(1,6))
-
-    pdf.build(elements)
-    buffer.seek(0)
-    return buffer
 
 # -----------------------------
 # Preparar lista de jogos conferidos
@@ -451,20 +403,55 @@ for fixture_id, info in alertas.items():
         ])
 
 # -----------------------------
-# Converter para DataFrame e gerar PDF
+# Converter para DataFrame
 # -----------------------------
 if jogos_conferidos:
     df_conferidos = pd.DataFrame(jogos_conferidos, columns=[
         "Jogo","Tendência","Estimativa","Confiança","Placar","Status","Resultado","Hora"
     ])
 
-    buffer_pdf = gerar_pdf_jogos_cards(df_conferidos)
+    # -----------------------------
+    # Gerar PDF estilo matriz
+    # -----------------------------
+    buffer = io.BytesIO()
+    pdf = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20)
+
+    data = [df_conferidos.columns.tolist()] + df_conferidos.values.tolist()
+
+    table = Table(data, repeatRows=1, colWidths=[120, 70, 60, 60, 50, 70, 60, 70])
+    style = TableStyle([
+        # Cabeçalho
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#4B4B4B")),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,0), 10),
+
+        # Linhas do corpo
+        ('BACKGROUND', (0,1), (-1,-1), colors.HexColor("#F5F5F5")),
+        ('TEXTCOLOR', (0,1), (-1,-1), colors.black),
+        ('FONTNAME', (0,1), (-1,-1), 'Helvetica'),
+        ('FONTSIZE', (0,1), (-1,-1), 9),
+
+        # Grid
+        ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+    ])
+
+    # Alternar cor das linhas para melhor visual
+    for i in range(1, len(data)):
+        if i % 2 == 0:
+            style.add('BACKGROUND', (0,i), (-1,i), colors.HexColor("#E0E0E0"))
+
+    table.setStyle(style)
+    pdf.build([table])
+    buffer.seek(0)
 
     st.download_button(
-        label="📄 Baixar Jogos Conferidos em PDF (Cards)",
-        data=buffer_pdf,
-        file_name=f"jogos_conferidos_cards_{datetime.today().strftime('%Y-%m-%d')}.pdf",
+        label="📄 Baixar Jogos Conferidos em PDF (Tabela Estilo Matriz)",
+        data=buffer,
+        file_name=f"jogos_conferidos_matriz_{datetime.today().strftime('%Y-%m-%d')}.pdf",
         mime="application/pdf"
     )
 else:
     st.info("Nenhum jogo conferido disponível para gerar PDF.")
+
