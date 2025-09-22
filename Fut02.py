@@ -343,108 +343,69 @@ import io
 from datetime import datetime, timedelta
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
 import streamlit as st
 
-# -----------------------------
-# Preparar lista de jogos conferidos
-# -----------------------------
-alertas = carregar_alertas()
-cache_jogos = carregar_cache_jogos()
-jogos_conferidos = []
-
-for fixture_id, info in alertas.items():
-    if info.get("conferido"):
-        # Buscar dados do jogo no cache
-        jogo_dado = None
-        for key, jogos in cache_jogos.items():
-            for match in jogos:
-                if str(match["id"]) == fixture_id:
-                    jogo_dado = match
-                    break
-            if jogo_dado:
-                break
-        if not jogo_dado:
-            continue
-
-        home = jogo_dado["homeTeam"]["name"]
-        away = jogo_dado["awayTeam"]["name"]
-        status = jogo_dado.get("status", "DESCONHECIDO")
-        gols_home = jogo_dado.get("score", {}).get("fullTime", {}).get("home")
-        gols_away = jogo_dado.get("score", {}).get("fullTime", {}).get("away")
-        placar = f"{gols_home} x {gols_away}" if gols_home is not None and gols_away is not None else "-"
-
-        total_gols = (gols_home or 0) + (gols_away or 0)
-        if status == "FINISHED":
-            if "Mais 2.5" in info["tendencia"]:
-                resultado = "🟢 GREEN" if total_gols > 2 else "🔴 RED"
-            elif "Mais 1.5" in info["tendencia"]:
-                resultado = "🟢 GREEN" if total_gols > 1 else "🔴 RED"
-            elif "Menos 2.5" in info["tendencia"]:
-                resultado = "🟢 GREEN" if total_gols < 3 else "🔴 RED"
-            else:
-                resultado = "-"
-        else:
-            resultado = "⏳ Aguardando"
-
-        hora = datetime.fromisoformat(jogo_dado["utcDate"].replace("Z","+00:00")) - timedelta(hours=3)
-        hora_format = hora.strftime("%d/%m %H:%M")
-
-        jogos_conferidos.append([
-            f"{home} vs {away}",
-            info["tendencia"],
-            f"{info['estimativa']:.2f}",
-            f"{info['confianca']:.0f}%",
-            placar,
-            status,
-            resultado,
-            hora_format
-        ])
-
-# -----------------------------
-# Gerar PDF
-# -----------------------------
-if jogos_conferidos:
+def gerar_pdf_jogos_cards(df_conferidos):
+    """
+    Gera PDF estilizado em formato "cards" para cada jogo.
+    """
     buffer = io.BytesIO()
-    pdf = SimpleDocTemplate(buffer, pagesize=letter)
+    pdf = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20)
+    
+    elements = []
+    styles = getSampleStyleSheet()
+    style_title = styles["Heading4"]
+    style_title.alignment = 1  # centralizado
+    style_normal = styles["Normal"]
+    style_normal.fontSize = 9
 
-    data = [["Jogo", "Tendência", "Estimativa", "Confiança", "Placar", "Status", "Resultado", "Hora"]]
-    data.extend(jogos_conferidos)
+    # Cabeçalho PDF
+    elements.append(Paragraph(f"Relatório de Jogos Conferidos - {datetime.today().strftime('%d/%m/%Y')}", style_title))
+    elements.append(Spacer(1,12))
 
-    table = Table(data, colWidths=[120, 70, 60, 60, 50, 70, 60, 70])
-    style = TableStyle([
-        # Cabeçalho escuro
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1e1e1e")),
-        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
-        ('ALIGN', (0,0), (-1,0), 'CENTER'),
-        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0,0), (-1,0), 10),
+    # Para cada linha do DataFrame, criar "card"
+    for idx, row in df_conferidos.iterrows():
+        # Construir conteúdo do card
+        jogo_text = f"<b>Jogo:</b> {row['Jogo']} | <b>Hora:</b> {row['Hora']}"
+        tendencia_text = f"<b>Tendência:</b> {row['Tendência']} | <b>Estimativa:</b> {row['Estimativa']} | <b>Confiança:</b> {row['Confiança']}"
+        placar_text = f"<b>Placar:</b> {row['Placar']} | <b>Status:</b> {row['Status']} | <b>Resultado:</b> {row['Resultado']}"
 
-        # Linhas do corpo
-        ('BACKGROUND', (0,1), (-1,-1), colors.HexColor("#2c2c2c")),
-        ('TEXTCOLOR', (0,1), (-1,-1), colors.white),
-        ('ALIGN', (0,1), (-1,-1), 'CENTER'),
-        ('FONTSIZE', (0,1), (-1,-1), 9),
+        # Criar tabela de 1 linha para o "card"
+        data = [[Paragraph(jogo_text, style_normal)],
+                [Paragraph(tendencia_text, style_normal)],
+                [Paragraph(placar_text, style_normal)]]
 
-        # Grid
-        ('GRID', (0,0), (-1,-1), 0.5, colors.white),
-    ])
+        table = Table(data, colWidths=[480])
+        bg_color = colors.HexColor("#f2f2f2") if idx % 2 == 0 else colors.HexColor("#e6e6e6")
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,-1), bg_color),
+            ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
+            ('INNERGRID', (0,0), (-1,-1), 0.5, colors.grey),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('LEFTPADDING', (0,0), (-1,-1), 6),
+            ('RIGHTPADDING', (0,0), (-1,-1), 6),
+            ('TOPPADDING', (0,0), (-1,-1), 4),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+        ]))
+        elements.append(table)
+        elements.append(Spacer(1,6))
 
-    # Alternar cor das linhas para melhor visual
-    for i in range(1, len(data)):
-        if i % 2 == 0:
-            style.add('BACKGROUND', (0,i), (-1,i), colors.HexColor("#383838"))
-
-    table.setStyle(style)
-    pdf.build([table])
+    pdf.build(elements)
     buffer.seek(0)
+    return buffer
 
-    st.download_button(
-        label="📄 Baixar Jogos Conferidos em PDF",
-        data=buffer,
-        file_name=f"jogos_conferidos_{datetime.today().strftime('%Y-%m-%d')}.pdf",
-        mime="application/pdf"
-    )
-else:
-    st.info("Nenhum jogo conferido disponível para gerar PDF.")
+# -----------------------------
+# Exemplo de uso no Streamlit
+# -----------------------------
+# df_conferidos: DataFrame já criado com os jogos conferidos
+buffer_pdf = gerar_pdf_jogos_cards(df_conferidos)
+
+st.download_button(
+    label="📄 Baixar Jogos Conferidos em PDF (Cards)",
+    data=buffer_pdf,
+    file_name=f"jogos_conferidos_cards_{datetime.today().strftime('%Y-%m-%d')}.pdf",
+    mime="application/pdf"
+)
 
