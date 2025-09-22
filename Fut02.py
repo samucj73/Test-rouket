@@ -339,13 +339,15 @@ if st.button("📊 Conferir resultados"):
     else:
         st.info("Ainda não há resultados para conferir.")
 
+import io
+from datetime import datetime, timedelta
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
-import io
+import streamlit as st
 
 # -----------------------------
-Botão para exportar PDF com detalhes completos
+# Preparar lista de jogos conferidos
 # -----------------------------
 alertas = carregar_alertas()
 cache_jogos = carregar_cache_jogos()
@@ -399,25 +401,41 @@ for fixture_id, info in alertas.items():
             hora_format
         ])
 
+# -----------------------------
 # Gerar PDF
+# -----------------------------
 if jogos_conferidos:
     buffer = io.BytesIO()
     pdf = SimpleDocTemplate(buffer, pagesize=letter)
+
     data = [["Jogo", "Tendência", "Estimativa", "Confiança", "Placar", "Status", "Resultado", "Hora"]]
     data.extend(jogos_conferidos)
 
     table = Table(data, colWidths=[120, 70, 60, 60, 50, 70, 60, 70])
     style = TableStyle([
+        # Cabeçalho escuro
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1e1e1e")),
         ('TEXTCOLOR', (0,0), (-1,0), colors.white),
-        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('ALIGN', (0,0), (-1,0), 'CENTER'),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,0), 10),
+
+        # Linhas do corpo
         ('BACKGROUND', (0,1), (-1,-1), colors.HexColor("#2c2c2c")),
         ('TEXTCOLOR', (0,1), (-1,-1), colors.white),
-        ('GRID', (0,0), (-1,-1), 1, colors.white),
-        ('FONTNAME', (0,0), (-1,-1), 'Helvetica-Bold')
-    ])
-    table.setStyle(style)
+        ('ALIGN', (0,1), (-1,-1), 'CENTER'),
+        ('FONTSIZE', (0,1), (-1,-1), 9),
 
+        # Grid
+        ('GRID', (0,0), (-1,-1), 0.5, colors.white),
+    ])
+
+    # Alternar cor das linhas para melhor visual
+    for i in range(1, len(data)):
+        if i % 2 == 0:
+            style.add('BACKGROUND', (0,i), (-1,i), colors.HexColor("#383838"))
+
+    table.setStyle(style)
     pdf.build([table])
     buffer.seek(0)
 
@@ -429,3 +447,4 @@ if jogos_conferidos:
     )
 else:
     st.info("Nenhum jogo conferido disponível para gerar PDF.")
+
