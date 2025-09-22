@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import requests
 import os
 import json
+import time
 
 # =============================
 # Configurações API
@@ -35,6 +36,28 @@ BASE_URL_TG = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
 
 ALERTAS_PATH = "alertas.json"
 TOP3_PATH = "top3.json"
+
+# =============================
+# Rate limiter simples
+# =============================
+# intervalo mínimo entre requisições (em segundos). Ajuste se precisar.
+_MIN_REQUEST_INTERVAL = 0.9
+_last_request_time = 0.0
+
+def _safe_get(url, headers=None, timeout=10):
+    """Faz requests.get com um pequeno rate limit para evitar 429s."""
+    global _last_request_time
+    now = time.time()
+    gap = now - _last_request_time
+    if gap < _MIN_REQUEST_INTERVAL:
+        time.sleep(_MIN_REQUEST_INTERVAL - gap)
+    try:
+        resp = requests.get(url, headers=headers, timeout=timeout)
+    except Exception as e:
+        # Retorna None em caso de falha de conexão
+        return None
+    _last_request_time = time.time()
+    return resp
 
 # =============================
 # Persistência de alertas
@@ -134,7 +157,11 @@ def calcular_tendencia_confianca_realista(media_h2h, media_casa, media_fora, pes
     media_time_fora = media_fora_marcados + media_casa_sofridos
     estimativa_base = (media_time_casa + media_time_fora) / 2
 
-    h2h_media = media_h2h.get("media_gols", 2.5) if media_h2h.get("total_jogos",0) > 0 else 2.5
+    h2h_media = media_h2h.get("media_gols", 2.5) if isinstance(media_h2h, dict) and media_h2h.get("total_jogos",0) > 0 else 2.5
+    # Caso media_h2h seja um float (em algumas versões podemos retornar número), tratar:
+    if isinstance(media_h2h, (int, float)):
+        h2h_media = media_h2h
+
     estimativa_final = (1 - peso_h2h) * estimativa_base + peso_h2h * h2h_media
 
     if estimativa_final >= 2.5:
@@ -150,28 +177,36 @@ def calcular_tendencia_confianca_realista(media_h2h, media_casa, media_fora, pes
     return round(estimativa_final, 2), round(confianca, 0), tendencia
 
 # =============================
-# Funções H2H
+# Funções H2H (com cache)
 # =============================
+@st.cache_data(ttl=60)
 def media_gols_confrontos_diretos(home_id, away_id, temporada=None, max_jogos=5):
     try:
         url = f"{BASE_URL}/fixtures/headtohead?h2h={home_id}-{away_id}"
-        response = requests.get(url, headers=HEADERS, timeout=10)
-        if response.status_code != 200:
+        response = _safe_get(url, headers=HEADERS, timeout=10)
+        if not response or response.status_code != 200:
             return {"media_gols": 0, "total_jogos": 0}
         jogos = response.json().get("response", [])
         if temporada:
-            jogos = [j for j in jogos if j["league"]["season"] == temporada]
+            jogos = [j for j in jogos if j.get("league", {}).get("season") == temporada]
         jogos = sorted(jogos, key=lambda x: x["fixture"]["date"], reverse=True)[:max_jogos]
         if not jogos:
             return {"media_gols": 0, "total_jogos": 0}
 
         total_pontos, total_peso = 0, 0
         for idx, j in enumerate(jogos):
-            if j["fixture"]["status"]["short"] != "FT":
+            if j.get("fixture", {}).get("status", {}).get("short") != "FT":
                 continue
-            home_goals = j["score"]["fulltime"]["home"]
-            away_goals = j["score"]["fulltime"]["away"]
-            gols = home_goals + away_goals
+            # usar keys que existem nas respostas da API
+            # tentar compatibilidade com diferentes formatos
+            try:
+                home_goals = j.get("score", {}).get("fulltime", {}).get("home", 0)
+                away_goals = j.get("score", {}).get("fulltime", {}).get("away", 0)
+            except Exception:
+                home_goals = j.get("goals", {}).get("home", 0) if j.get("goals") else 0
+                away_goals = j.get("goals", {}).get("away", 0) if j.get("goals") else 0
+
+            gols = (home_goals or 0) + (away_goals or 0)
             peso = max_jogos - idx
             total_pontos += gols * peso
             total_peso += peso
@@ -182,12 +217,14 @@ def media_gols_confrontos_diretos(home_id, away_id, temporada=None, max_jogos=5)
         return {"media_gols": 0, "total_jogos": 0}
 
 # =============================
-# Funções médias históricas OpenLigaDB
+# Funções médias históricas OpenLigaDB (com cache)
 # =============================
+@st.cache_data(ttl=300)
 def obter_jogos_liga_temporada(liga_id, temporada):
     try:
-        r = requests.get(f"{OPENLIGA_BASE}/getmatchdata/{liga_id}/{temporada}", timeout=15)
-        if r.status_code == 200:
+        url = f"{OPENLIGA_BASE}/getmatchdata/{liga_id}/{temporada}"
+        r = _safe_get(url, timeout=15)
+        if r and r.status_code == 200:
             return r.json()
     except Exception as e:
         st.warning(f"Erro ao obter jogos OpenLigaDB: {e}")
@@ -224,21 +261,24 @@ def obter_odds(fixture_id):
     return {"1.5": round(1.2 + fixture_id % 2 * 0.3,2), "2.5": round(1.8 + fixture_id % 3 * 0.4,2)}
 
 # =============================
-# Conferência dos jogos
+# Conferência dos jogos (com cache)
 # =============================
+@st.cache_data(ttl=60)
 def conferir_jogo(fixture_id, tipo):
     try:
         url = f"{BASE_URL}/fixtures?id={fixture_id}"
-        resp = requests.get(url, headers=HEADERS, timeout=10)
+        resp = _safe_get(url, headers=HEADERS, timeout=10)
+        if not resp:
+            return None
         jogo = resp.json().get("response", [])
         if not jogo:
             return None
 
         jogo = jogo[0]
-        home = jogo["teams"]["home"]["name"]
-        away = jogo["teams"]["away"]["name"]
-        gols_home = jogo["goals"]["home"] or 0
-        gols_away = jogo["goals"]["away"] or 0
+        home = jogo.get("teams", {}).get("home", {}).get("name", "Desconhecido")
+        away = jogo.get("teams", {}).get("away", {}).get("name", "Desconhecido")
+        gols_home = jogo.get("goals", {}).get("home") or 0
+        gols_away = jogo.get("goals", {}).get("away") or 0
         total_gols = gols_home + gols_away
 
         if tipo == "1.5":
@@ -254,6 +294,20 @@ def conferir_jogo(fixture_id, tipo):
         }
     except Exception:
         return None
+
+# =============================
+# Função auxiliar para buscar jogos do dia (com cache)
+# =============================
+@st.cache_data(ttl=60)
+def obter_jogos_dia(data):
+    url = f"{BASE_URL}/fixtures?date={data}"
+    resp = _safe_get(url, headers=HEADERS, timeout=10)
+    if not resp:
+        return []
+    try:
+        return resp.json().get("response", [])
+    except Exception:
+        return []
 
 # =============================
 # Interface Streamlit
@@ -280,11 +334,12 @@ with aba[0]:
         "Copa Libertadores": 13
     }
 
+    # Checkbox para incluir todas as ligas do dia
+    incluir_todas = st.checkbox("🔎 Buscar jogos de todas as ligas do dia", value=False)
+
     if st.button("🔍 Buscar jogos do dia"):
         with st.spinner("Buscando jogos da API Football..."):
-            url = f"{BASE_URL}/fixtures?date={hoje}"
-            response = requests.get(url, headers=HEADERS)
-            jogos = response.json().get("response", [])
+            jogos = obter_jogos_dia(hoje)
 
         liga_nome = st.selectbox("🏆 Escolha a liga histórica para médias:", list(ligas_openliga.keys()))
         liga_id = ligas_openliga[liga_nome]
@@ -297,12 +352,12 @@ with aba[0]:
         # 🔎 Agora o loop está dentro do botão
         for match in jogos:
             # Só pega jogos que ainda não começaram
-            status = match["fixture"]["status"]["short"]
+            status = match.get("fixture", {}).get("status", {}).get("short")
             if status != "NS":
                 continue
 
             league_id = match.get("league", {}).get("id")
-            if league_id not in ligas_principais.values():
+            if not incluir_todas and league_id not in ligas_principais.values():
                 continue
 
             home = match["teams"]["home"]["name"]
@@ -311,11 +366,17 @@ with aba[0]:
             away_id = match["teams"]["away"]["id"]
 
             media_h2h = media_gols_confrontos_diretos(home_id, away_id, temporada_atual, max_jogos=5)
+            # media_h2h pode retornar dict ou float (compatibilidade); tratar
+            if isinstance(media_h2h, dict):
+                media_h2h_val = media_h2h.get("media_gols", 2.5)
+            else:
+                media_h2h_val = media_h2h
+
             media_casa = medias_historicas.get(home, {"media_gols_marcados": 1.5, "media_gols_sofridos": 1.2})
             media_fora = medias_historicas.get(away, {"media_gols_marcados": 1.4, "media_gols_sofridos": 1.1})
 
             estimativa, confianca, tendencia = calcular_tendencia_confianca_realista(
-                media_h2h=media_h2h,
+                media_h2h=media_h2h_val,
                 media_casa=media_casa,
                 media_fora=media_fora
             )
