@@ -22,8 +22,8 @@ ligas_openliga = {
     "Brasileirão Série A": "br1"
 }
 
-TELEGRAM_TOKEN = "SEU_TOKEN"
-TELEGRAM_CHAT_ID = "SEU_CHAT_ID"
+TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
+TELEGRAM_CHAT_ID = "5121457416"
 
 def enviar_telegram(msg: str):
     try:
