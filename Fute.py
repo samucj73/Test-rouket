@@ -1,53 +1,51 @@
-# Futebol_Alertas_Principal.py
+# Futebol_Alertas_TheSportsDB.py
 import streamlit as st
 from datetime import datetime
 import requests
 
 # =============================
-# Configurações API Football-Data.org
+# Configurações API TheSportsDB
 # =============================
-API_KEY = "9058de85e3324bdb969adc005b5d918a"  # Substitua pela sua chave
-HEADERS = {"X-Auth-Token": API_KEY}
-BASE_URL = "https://api.football-data.org/v4"
+API_KEY = "123"  # Chave gratuita
+BASE_URL = f"https://www.thesportsdb.com/api/v1/json/{API_KEY}"
 
 # =============================
 # Dicionário de Ligas Importantes
 # =============================
 liga_dict = {
-    "Premier League (Inglaterra)": 2021,
-    "Championship (Inglaterra)": 2016,
-    "Bundesliga (Alemanha)": 2002,
-    "2. Bundesliga (Alemanha)": 2005,
-    "La Liga (Espanha)": 2014,
-    "Segunda División (Espanha)": 2015,
-    "Serie A (Itália)": 2019,
-    "Serie B (Itália)": 2017,
-    "Ligue 1 (França)": 2015,
-    "Ligue 2 (França)": 2016,
-    "Primeira Liga (Portugal)": 2017,
-    "Campeonato Brasileiro Série A": 2013,
-    "Campeonato Brasileiro Série B": 2014,
-    "UEFA Champions League": 2001,
-    "UEFA Europa League": 2003,
-    "Copa Libertadores (CONMEBOL)": 2019,
-    "Copa Sudamericana (CONMEBOL)": 2017,
+    "Premier League (Inglaterra)": 4328,
+    "Championship (Inglaterra)": 4329,
+    "Bundesliga (Alemanha)": 4331,
+    "2. Bundesliga (Alemanha)": 4332,
+    "La Liga (Espanha)": 4335,
+    "Segunda División (Espanha)": 4336,
+    "Serie A (Itália)": 4332,
+    "Serie B (Itália)": 4333,
+    "Ligue 1 (França)": 4334,
+    "Ligue 2 (França)": 4335,
+    "Primeira Liga (Portugal)": 4344,
+    "Campeonato Brasileiro Série A": 4357,
+    "Campeonato Brasileiro Série B": 4358,
+    "UEFA Champions League": 4415,
+    "UEFA Europa League": 4462,
+    "Copa Libertadores (CONMEBOL)": 4349,
+    "Copa Sudamericana (CONMEBOL)": 4350,
 }
 
 # =============================
 # Função para buscar jogos de uma liga e data específica
 # =============================
 def buscar_jogos(liga_id, data_evento):
-    url = f"{BASE_URL}/matches"
+    url = f"{BASE_URL}/eventsday.php"
     params = {
-        "dateFrom": data_evento,
-        "dateTo": data_evento,
-        "competitions": liga_id
+        "d": data_evento,
+        "l": liga_id
     }
     try:
-        response = requests.get(url, headers=HEADERS, params=params)
+        response = requests.get(url, params=params)
         response.raise_for_status()
         data = response.json()
-        return data.get("matches", [])
+        return data.get("events", [])
     except requests.exceptions.HTTPError as e:
         st.error(f"Erro ao buscar jogos: {e}")
         return []
@@ -79,15 +77,16 @@ todos_jogos = []
 
 for liga_id in ligas_busca:
     jogos = buscar_jogos(liga_id, data_str)
-    todos_jogos.extend(jogos)
+    if jogos:
+        todos_jogos.extend(jogos)
 
 if not todos_jogos:
     st.warning(f"Não há jogos registrados para a(s) liga(s) selecionada(s) no dia {data_str}.")
 else:
     st.success(f"🔎 Foram encontrados {len(todos_jogos)} jogos para {data_str}:")
     for jogo in todos_jogos:
-        home = jogo["homeTeam"]["name"]
-        away = jogo["awayTeam"]["name"]
-        hora = jogo["utcDate"][11:16]  # HH:MM
-        competicao = jogo["competition"]["name"]
+        home = jogo["strHomeTeam"]
+        away = jogo["strAwayTeam"]
+        hora = jogo.get("strTime", "??:??")  # Horário pode estar ausente
+        competicao = jogo.get("strLeague", "Liga Desconhecida")
         st.write(f"**{hora}** | {competicao} | {home} x {away}")
