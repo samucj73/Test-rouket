@@ -268,7 +268,7 @@ top_n = st.selectbox(
 # ==============================
 # Ordenar e enviar Top N por confiança
 # ==============================
- if "top_jogos" in globals() and top_jogos: # só entra se já houver jogos processados
+    if "top_jogos" in globals() and top_jogos: # só entra se já houver jogos processados
     top_jogos_sorted = sorted(top_jogos, key=lambda x: x["confianca"], reverse=True)[:top_n]
 
     if top_jogos_sorted:
