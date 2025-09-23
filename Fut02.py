@@ -256,6 +256,7 @@ if st.button("🔍 Buscar partidas"):
 
     # Ordenar Top 3 por confiança
 # ==============================
+# ==============================
 # Controle manual do Top N
 # ==============================
 top_n = st.selectbox(
@@ -265,23 +266,26 @@ top_n = st.selectbox(
 )
 
 # ==============================
-# Ordenar Top N por confiança
+# Ordenar e enviar Top N por confiança
 # ==============================
-top_jogos_sorted = sorted(top_jogos, key=lambda x: x["confianca"], reverse=True)[:top_n]
+if top_jogos:  # só entra se já houver jogos processados
+    top_jogos_sorted = sorted(top_jogos, key=lambda x: x["confianca"], reverse=True)[:top_n]
 
-if top_jogos_sorted:
-    msg = f"📢 TOP {top_n} Jogos do Dia\n\n"
-    for j in top_jogos_sorted:
-        hora_format = j["hora"].strftime("%H:%M")
-        msg += (
-            f"🏟️ {j['home']} vs {j['away']}\n"
-            f"🕒 {hora_format} BRT | Liga: {j['liga']} | Status: {j['status']}\n"
-            f"Tendência: {j['tendencia']} | Estimativa: {j['estimativa']:.2f} | "
-            f"Confiança: {j['confianca']:.0f}%\n\n"
-        )
+    if top_jogos_sorted:
+        msg = f"📢 TOP {top_n} Jogos do Dia\n\n"
+        for j in top_jogos_sorted:
+            hora_format = j["hora"].strftime("%H:%M")
+            msg += (
+                f"🏟️ {j['home']} vs {j['away']}\n"
+                f"🕒 {hora_format} BRT | Liga: {j['liga']} | Status: {j['status']}\n"
+                f"Tendência: {j['tendencia']} | Estimativa: {j['estimativa']:.2f} | "
+                f"Confiança: {j['confianca']:.0f}%\n\n"
+            )
 
-    enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2)
-    st.success(f"🚀 Top {top_n} jogos enviados para o canal alternativo 2!")
+        enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2)
+        st.success(f"🚀 Top {top_n} jogos enviados para o canal alternativo 2!")
+else:
+    st.warning("⚠️ Nenhum jogo disponível ainda para montar o Top.")
     
 # -----------------------------
 # -----------------------------
