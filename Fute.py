@@ -1,112 +1,93 @@
+# Futebol_Alertas_Principal.py
 import streamlit as st
-from datetime import datetime, timedelta
+from datetime import datetime
 import requests
 
 # =============================
-# Configurações Telegram
+# Configurações API Football-Data.org
 # =============================
-TELEGRAM_TOKEN = "SEU_TELEGRAM_BOT_TOKEN"
-TELEGRAM_CHAT_ID = "SEU_CHAT_ID"
-
-def enviar_telegram(msg, chat_id):
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {"chat_id": chat_id, "text": msg}
-    try:
-        requests.post(url, data=payload)
-    except Exception as e:
-        st.error(f"Erro ao enviar Telegram: {e}")
-
-# =============================
-# Configurações API (exemplo Football-Data.org)
-# =============================
-API_KEY = "SUA_API_KEY"
-BASE_URL = "https://api.football-data.org/v4/matches"
+API_KEY = "SUA_CHAVE_AQUI"  # Substitua pela sua chave
 HEADERS = {"X-Auth-Token": API_KEY}
+BASE_URL = "https://api.football-data.org/v4"
 
 # =============================
-# Ligas disponíveis (exemplo)
+# Dicionário de Ligas Importantes
 # =============================
 liga_dict = {
-    "English Premier League": 2021,
-    "Spanish La Liga": 2014,
-    "Bundesliga (Alemanha)": 2002
+    "Premier League (Inglaterra)": 2021,
+    "Championship (Inglaterra)": 2016,
+    "Bundesliga (Alemanha)": 2002,
+    "2. Bundesliga (Alemanha)": 2005,
+    "La Liga (Espanha)": 2014,
+    "Segunda División (Espanha)": 2015,
+    "Serie A (Itália)": 2019,
+    "Serie B (Itália)": 2017,
+    "Ligue 1 (França)": 2015,
+    "Ligue 2 (França)": 2016,
+    "Primeira Liga (Portugal)": 2017,
+    "Campeonato Brasileiro Série A": 2013,
+    "Campeonato Brasileiro Série B": 2014,
+    "UEFA Champions League": 2001,
+    "UEFA Europa League": 2003,
+    "Copa Libertadores (CONMEBOL)": 2019,
+    "Copa Sudamericana (CONMEBOL)": 2017,
 }
 
 # =============================
-# Funções de API e processamento
+# Função para buscar jogos de uma liga e data específica
 # =============================
-def obter_jogos(liga_id, data):
-    """Busca jogos de uma liga em uma data específica"""
-    url = f"{BASE_URL}?competitions={liga_id}&dateFrom={data}&dateTo={data}"
+def buscar_jogos(liga_id, data_evento):
+    url = f"{BASE_URL}/matches"
+    params = {
+        "dateFrom": data_evento,
+        "dateTo": data_evento,
+        "competitions": liga_id
+    }
     try:
-        resp = requests.get(url, headers=HEADERS)
-        resp.raise_for_status()
-        return resp.json().get("matches", [])
-    except Exception as e:
-        st.error(f"Erro ao obter jogos: {e}")
+        response = requests.get(url, headers=HEADERS, params=params)
+        response.raise_for_status()
+        data = response.json()
+        return data.get("matches", [])
+    except requests.exceptions.HTTPError as e:
+        st.error(f"Erro ao buscar jogos: {e}")
         return []
 
-def calcular_tendencia(home, away, classificacao):
-    """Retorna estimativa, confiança e tendência"""
-    # Exemplo fictício - substituir com lógica real
-    estimativa = 1.5
-    confianca = 70
-    tendencia = "Mais de 1.5 gols"
-    return estimativa, confianca, tendencia
-
-def verificar_enviar_alerta(match, tendencia, estimativa, confianca):
-    """Função para alertar via Telegram"""
-    msg = (
-        f"🏟️ {match['homeTeam']['name']} vs {match['awayTeam']['name']}\n"
-        f"Tendência: {tendencia} | Estimativa: {estimativa:.2f} | Confiança: {confianca}%"
-    )
-    enviar_telegram(msg, TELEGRAM_CHAT_ID)
-
 # =============================
-# Streamlit App
+# Interface Streamlit
 # =============================
-st.title("📊 Alertas de Jogos e Estimativas de Gols")
+st.title("⚽ Alertas de Jogos - Futebol")
+st.markdown("Selecione a data e a liga para ver os jogos do dia:")
 
 # Seleção de data
-data_selecionada = st.date_input("Escolha a data dos jogos:", value=datetime.today())
+data_selecionada = st.date_input("📅 Escolha a data:", value=datetime.today())
+data_str = data_selecionada.strftime("%Y-%m-%d")
 
-# Seleção de liga
-liga_selecionada = st.selectbox("Escolha a liga:", list(liga_dict.keys()))
+# Opção de buscar todas as ligas ou uma específica
+todas_ligas = st.checkbox("📌 Buscar jogos de todas as ligas do dia", value=True)
 
-# Botão para buscar partidas
-if st.button("🔍 Buscar partidas"):
-    liga_id = liga_dict[liga_selecionada]
-    hoje = data_selecionada.strftime("%Y-%m-%d")
-    jogos = obter_jogos(liga_id, hoje)
+liga_selecionada = None
+if not todas_ligas:
+    liga_selecionada = st.selectbox("📌 Escolha a liga:", list(liga_dict.keys()))
 
-    if not jogos:
-        st.warning(f"⚠️ Não há jogos registrados para {liga_selecionada} no dia {data_selecionada}")
+# Determinar IDs de busca
+ligas_busca = liga_dict.values() if todas_ligas else [liga_dict[liga_selecionada]]
 
-        # Sugere próximos dias com jogos
-        proxima_data = data_selecionada
-        for _ in range(7):
-            proxima_data += timedelta(days=1)
-            jogos_prox = obter_jogos(liga_id, proxima_data.strftime("%Y-%m-%d"))
-            if jogos_prox:
-                st.info(f"ℹ️ Próximos jogos da {liga_selecionada} disponíveis em {proxima_data}")
-                break
-    else:
-        st.success(f"✅ {len(jogos)} jogos encontrados para {liga_selecionada} em {data_selecionada}")
-        top_jogos = []
-        for match in jogos:
-            home = match["homeTeam"]["name"]
-            away = match["awayTeam"]["name"]
-            estimativa, confianca, tendencia = calcular_tendencia(home, away, None)
+# =============================
+# Exibir jogos
+# =============================
+todos_jogos = []
 
-            # Cálculo de lucro com imposto
-            lucro_estimado = estimativa * (confianca/100)
-            imposto = 0.30 * lucro_estimado
-            lucro_liquido = lucro_estimado - imposto
+for liga_id in ligas_busca:
+    jogos = buscar_jogos(liga_id, data_str)
+    todos_jogos.extend(jogos)
 
-            # Mostra na tela
-            st.write(f"🏟️ {home} vs {away}")
-            st.write(f"Tendência: {tendencia}")
-            st.write(f"Estimativa: {estimativa:.2f} | Confiança: {confianca}%")
-            st.write(f"Lucro bruto: {lucro_estimado:.2f} | Imposto 30%: {imposto:.2f} | Lucro líquido: {lucro_liquido:.2f}")
-
-            verificar_enviar_alerta(match, tendencia, estimativa, confianca)
+if not todos_jogos:
+    st.warning(f"Não há jogos registrados para a(s) liga(s) selecionada(s) no dia {data_str}.")
+else:
+    st.success(f"🔎 Foram encontrados {len(todos_jogos)} jogos para {data_str}:")
+    for jogo in todos_jogos:
+        home = jogo["homeTeam"]["name"]
+        away = jogo["awayTeam"]["name"]
+        hora = jogo["utcDate"][11:16]  # HH:MM
+        competicao = jogo["competition"]["name"]
+        st.write(f"**{hora}** | {competicao} | {home} x {away}")
