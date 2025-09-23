@@ -7,7 +7,7 @@ import requests
 # Configurações API TheSportsDB
 # =============================
 API_KEY = "123"  # Chave gratuita
-BASE_URL = f"https://www.thesportsdb.com/api/v1/json/{API_KEY}"
+BASE_URL = "https://www.thesportsdb.com/api/v1/json"
 
 # =============================
 # Dicionário de Ligas Importantes
@@ -26,17 +26,17 @@ liga_dict = {
     "Primeira Liga (Portugal)": 4344,
     "Campeonato Brasileiro Série A": 4357,
     "Campeonato Brasileiro Série B": 4358,
-    "UEFA Champions League": 4415,
-    "UEFA Europa League": 4462,
-    "Copa Libertadores (CONMEBOL)": 4349,
-    "Copa Sudamericana (CONMEBOL)": 4350,
+    "UEFA Champions League": 4480,
+    "UEFA Europa League": 4465,
+    "Copa Libertadores (CONMEBOL)": 4359,
+    "Copa Sudamericana (CONMEBOL)": 4360,
 }
 
 # =============================
 # Função para buscar jogos de uma liga e data específica
 # =============================
 def buscar_jogos(liga_id, data_evento):
-    url = f"{BASE_URL}/eventsday.php"
+    url = f"{BASE_URL}/{API_KEY}/eventsday.php"
     params = {
         "d": data_evento,
         "l": liga_id
@@ -45,7 +45,7 @@ def buscar_jogos(liga_id, data_evento):
         response = requests.get(url, params=params)
         response.raise_for_status()
         data = response.json()
-        return data.get("events", [])
+        return data.get("events", [])  # Retorna lista ou vazia
     except requests.exceptions.HTTPError as e:
         st.error(f"Erro ao buscar jogos: {e}")
         return []
@@ -60,7 +60,7 @@ st.markdown("Selecione a data e a liga para ver os jogos do dia:")
 data_selecionada = st.date_input("📅 Escolha a data:", value=datetime.today())
 data_str = data_selecionada.strftime("%Y-%m-%d")
 
-# Opção de buscar todas as ligas ou uma específica
+# Seleção de liga
 todas_ligas = st.checkbox("📌 Buscar jogos de todas as ligas do dia", value=True)
 
 liga_selecionada = None
@@ -71,13 +71,13 @@ if not todas_ligas:
 ligas_busca = liga_dict.values() if todas_ligas else [liga_dict[liga_selecionada]]
 
 # =============================
-# Exibir jogos
+# Buscar e exibir jogos
 # =============================
 todos_jogos = []
 
 for liga_id in ligas_busca:
     jogos = buscar_jogos(liga_id, data_str)
-    if jogos:
+    if jogos:  # Adiciona apenas se houver jogos
         todos_jogos.extend(jogos)
 
 if not todos_jogos:
@@ -87,6 +87,6 @@ else:
     for jogo in todos_jogos:
         home = jogo["strHomeTeam"]
         away = jogo["strAwayTeam"]
-        hora = jogo.get("strTime", "??:??")  # Horário pode estar ausente
-        competicao = jogo.get("strLeague", "Liga Desconhecida")
+        hora = jogo.get("strTime", "")  # Hora se disponível
+        competicao = jogo.get("strLeague", "Liga desconhecida")
         st.write(f"**{hora}** | {competicao} | {home} x {away}")
