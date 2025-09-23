@@ -271,6 +271,7 @@ if st.button("🔍 Buscar partidas"):
         st.success("🚀 Top 3 jogos enviados para o canal alternativo 2!")
 
 # -----------------------------
+# -----------------------------
 # Botão para conferir resultados
 # -----------------------------
 if st.button("📊 Conferir resultados"):
@@ -315,11 +316,22 @@ if st.button("📊 Conferir resultados"):
                     resultado = "🟢 GREEN" if total_gols < 3 else "🔴 RED"
                 else:
                     resultado = "-"
+
+                # 🚀 Enviar para Telegram (canal alternativo 2)
+                msg_res = (
+                    f"📊 Resultado Conferido\n"
+                    f"🏟️ {home} vs {away}\n"
+                    f"⚽ Tendência: {tendencia} | Estim.: {info['estimativa']:.2f} | Conf.: {info['confianca']:.0f}%\n"
+                    f"📊 Placar Final: {placar}\n"
+                    f"✅ Resultado: {resultado}"
+                )
+                enviar_telegram(msg_res, TELEGRAM_CHAT_ID_ALT2)
+
             else:
                 resultado = "⏳ Aguardando"
 
+            # Exibir no Streamlit
             bg_color = "#1e4620" if resultado == "🟢 GREEN" else "#5a1e1e" if resultado == "🔴 RED" else "#2c2c2c"
-
             st.markdown(f"""
             <div style="border:1px solid #444; border-radius:10px; padding:12px; margin-bottom:10px;
                         background-color:{bg_color}; font-size:15px; color:#f1f1f1;">
@@ -331,11 +343,9 @@ if st.button("📊 Conferir resultados"):
             </div>
             """, unsafe_allow_html=True)
 
-            #info["conferido"] = True
-            #mudou = True
             if status == "FINISHED":
-             info["conferido"] = True
-             mudou = True
+                info["conferido"] = True
+                mudou = True
 
         if mudou:
             salvar_alertas(alertas)
