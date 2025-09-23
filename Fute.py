@@ -13,7 +13,7 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 # =============================
 # Configurações API TheSportsDB v2
 # =============================
-API_KEY_TSB = "123"  # <-- substitua pela sua chave da TheSportsDB v2
+API_KEY_TSB = "123 (Usuário gratuito)"  # <-- substitua pela sua chave da TheSportsDB v2
 BASE_URL_TSB = f"https://www.thesportsdb.com/api/v2/json/{API_KEY_TSB}"
 
 # =============================
