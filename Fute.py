@@ -6,7 +6,7 @@ import requests
 # =============================
 # Configurações API Football-Data.org
 # =============================
-API_KEY = "SUA_CHAVE_AQUI"  # Substitua pela sua chave
+API_KEY = "9058de85e3324bdb969adc005b5d918a"  # Substitua pela sua chave
 HEADERS = {"X-Auth-Token": API_KEY}
 BASE_URL = "https://api.football-data.org/v4"
 
