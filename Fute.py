@@ -1,4 +1,4 @@
-# Futebol_Alertas_TheSportsDB.py
+# Futebol_Alertas_TheSportsDB_v2.py
 import streamlit as st
 from datetime import datetime
 import requests
@@ -6,87 +6,133 @@ import requests
 # =============================
 # Configurações API TheSportsDB
 # =============================
-API_KEY = "123"  # Chave gratuita
-BASE_URL = "https://www.thesportsdb.com/api/v1/json"
+API_KEY = "123"  # Substitua pela sua chave
+BASE_URL = f"https://www.thesportsdb.com/api/v1/json/{API_KEY}"
 
 # =============================
-# Dicionário de Ligas Importantes
+# Funções para buscar dados
 # =============================
-liga_dict = {
-    "Premier League (Inglaterra)": 4328,
-    "Championship (Inglaterra)": 4329,
-    "Bundesliga (Alemanha)": 4331,
-    "2. Bundesliga (Alemanha)": 4332,
-    "La Liga (Espanha)": 4335,
-    "Segunda División (Espanha)": 4336,
-    "Serie A (Itália)": 4332,
-    "Serie B (Itália)": 4333,
-    "Ligue 1 (França)": 4334,
-    "Ligue 2 (França)": 4335,
-    "Primeira Liga (Portugal)": 4344,
-    "Campeonato Brasileiro Série A": 4357,
-    "Campeonato Brasileiro Série B": 4358,
-    "UEFA Champions League": 4480,
-    "UEFA Europa League": 4465,
-    "Copa Libertadores (CONMEBOL)": 4359,
-    "Copa Sudamericana (CONMEBOL)": 4360,
-}
+def buscar_todas_ligas():
+    url = f"{BASE_URL}/all_leagues.php"
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        return response.json().get("leagues") or []
+    except Exception as e:
+        st.error(f"Erro ao buscar ligas: {e}")
+        return []
 
-# =============================
-# Função para buscar jogos de uma liga e data específica
-# =============================
-def buscar_jogos(liga_id, data_evento):
-    url = f"{BASE_URL}/{API_KEY}/eventsday.php"
-    params = {
-        "d": data_evento,
-        "l": liga_id
-    }
+def buscar_ligas_por_pais_esporte(pais, esporte="Soccer"):
+    url = f"{BASE_URL}/search_all_leagues.php?c={pais}&s={esporte}"
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        return response.json().get("countrys") or []
+    except Exception as e:
+        st.error(f"Erro ao buscar ligas por país/esporte: {e}")
+        return []
+
+def buscar_times_liga(liga_nome):
+    url = f"{BASE_URL}/search_all_teams.php?l={liga_nome}"
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        return response.json().get("teams") or []
+    except Exception as e:
+        st.error(f"Erro ao buscar times da liga: {e}")
+        return []
+
+def buscar_eventos_dia(data_evento, liga_id=None, esporte="Soccer"):
+    url = f"{BASE_URL}/eventsday.php"
+    params = {"d": data_evento, "s": esporte}
+    if liga_id:
+        params["l"] = liga_id
     try:
         response = requests.get(url, params=params)
         response.raise_for_status()
-        data = response.json()
-        return data.get("events", [])  # Retorna lista ou vazia
-    except requests.exceptions.HTTPError as e:
-        st.error(f"Erro ao buscar jogos: {e}")
+        return response.json().get("events") or []
+    except Exception as e:
+        st.error(f"Erro ao buscar eventos do dia: {e}")
+        return []
+
+def buscar_proximos_eventos_time(id_team):
+    url = f"{BASE_URL}/eventsnext.php?id={id_team}"
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        return response.json().get("events") or []
+    except Exception as e:
+        st.error(f"Erro ao buscar próximos eventos do time: {e}")
+        return []
+
+def buscar_eventos_proximos_liga(id_league):
+    url = f"{BASE_URL}/eventsnextleague.php?id={id_league}"
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        return response.json().get("events") or []
+    except Exception as e:
+        st.error(f"Erro ao buscar próximos eventos da liga: {e}")
         return []
 
 # =============================
 # Interface Streamlit
 # =============================
-st.title("⚽ Alertas de Jogos - Futebol")
-st.markdown("Selecione a data e a liga para ver os jogos do dia:")
+st.title("⚽ Alertas de Jogos - TheSportsDB")
+st.markdown("Escolha a forma de busca: por data, liga ou time.")
 
-# Seleção de data
+# Data
 data_selecionada = st.date_input("📅 Escolha a data:", value=datetime.today())
 data_str = data_selecionada.strftime("%Y-%m-%d")
 
-# Seleção de liga
-todas_ligas = st.checkbox("📌 Buscar jogos de todas as ligas do dia", value=True)
+# Modo de busca
+modo = st.radio("🔎 Modo de busca:", ["Data", "Liga específica", "Time específico"])
 
-liga_selecionada = None
-if not todas_ligas:
-    liga_selecionada = st.selectbox("📌 Escolha a liga:", list(liga_dict.keys()))
+eventos = []
 
-# Determinar IDs de busca
-ligas_busca = liga_dict.values() if todas_ligas else [liga_dict[liga_selecionada]]
+if modo == "Data":
+    ligas = st.multiselect("Selecione ligas específicas (ou deixe vazio para todas)", [l['strLeague'] for l in buscar_todas_ligas()])
+    if ligas:
+        for liga in ligas:
+            eventos.extend(buscar_eventos_dia(data_str, liga_id=liga))
+    else:
+        eventos = buscar_eventos_dia(data_str)
+
+elif modo == "Liga específica":
+    todas_ligas = buscar_todas_ligas()
+    liga_selecionada = st.selectbox("Escolha a liga:", [l['strLeague'] for l in todas_ligas])
+    eventos = buscar_eventos_proximos_liga(liga_selecionada)
+
+else:  # Time específico
+    id_team = st.text_input("Digite o ID do time:")
+    if id_team:
+        eventos = buscar_proximos_eventos_time(id_team)
 
 # =============================
-# Buscar e exibir jogos
+# Exibição dos resultados
 # =============================
-todos_jogos = []
-
-for liga_id in ligas_busca:
-    jogos = buscar_jogos(liga_id, data_str)
-    if jogos:  # Adiciona apenas se houver jogos
-        todos_jogos.extend(jogos)
-
-if not todos_jogos:
-    st.warning(f"Não há jogos registrados para a(s) liga(s) selecionada(s) no dia {data_str}.")
+if not eventos:
+    st.warning("Nenhum evento encontrado.")
 else:
-    st.success(f"🔎 Foram encontrados {len(todos_jogos)} jogos para {data_str}:")
-    for jogo in todos_jogos:
-        home = jogo["strHomeTeam"]
-        away = jogo["strAwayTeam"]
-        hora = jogo.get("strTime", "")  # Hora se disponível
-        competicao = jogo.get("strLeague", "Liga desconhecida")
-        st.write(f"**{hora}** | {competicao} | {home} x {away}")
+    st.success(f"🔎 Foram encontrados {len(eventos)} eventos:")
+    for e in eventos:
+        home = e.get("strHomeTeam")
+        away = e.get("strAwayTeam")
+        hora = e.get("strTime") or e.get("strTimestamp","")[:5]
+        competicao = e.get("strLeague") or e.get("strCompetition")
+        logo_home = e.get("strHomeTeamBadge") or ""
+        logo_away = e.get("strAwayTeamBadge") or ""
+
+        cols = st.columns([1,3,1])
+        with cols[0]:
+            if logo_home:
+                st.image(logo_home, width=40)
+            st.write(home)
+        with cols[1]:
+            st.write(f"**{hora}** | {competicao} | {home} x {away}")
+        with cols[2]:
+            if logo_away:
+                st.image(logo_away, width=40)
+            st.write(away)
+
+        st.markdown("---")
