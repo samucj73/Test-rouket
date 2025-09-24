@@ -167,22 +167,13 @@ def listar_ligas_tsd():
     # retornar lista única de nomes
     return ligas
 
-BASE_URL = "https://www.thesportsdb.com/api/v1/json/1"  # ou sua API Key
-
-@st.cache_data(ttl=3600)
-def buscar_jogos_tsd(liga_nome, data):
-    url = f"{BASE_URL}/eventsday.php?d={data}&l={liga_nome}"
-    st.write("🔎 URL chamada:", url)  # ajuda a debugar
-    try:
-        r = requests.get(url)
-        if r.status_code != 200:
-            st.warning(f"⚠️ Erro na API TheSportsDB ({r.status_code}): {r.text}")
-            return []
-        data_json = r.json()
-        return data_json.get("events", [])
-    except requests.exceptions.RequestException as e:
-        st.error(f"Erro de conexão com a TheSportsDB: {e}")
-        return []
+@st.cache_data(ttl=120)
+def buscar_jogos_tsd(liga_nome, data_evento):
+    url = f"{BASE_URL_TSD}/eventsday.php"
+    params = {"d": data_evento, "l": liga_nome}
+    r = requests.get(url, params=params, timeout=10)
+    r.raise_for_status()
+    return r.json().get("events") or []
 
 @st.cache_data(ttl=120)
 def buscar_eventslast_team_tsd(id_team):
