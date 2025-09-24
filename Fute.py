@@ -169,18 +169,23 @@ def listar_ligas_tsd():
 
 @st.cache_data(ttl=3600)
 def buscar_jogos_tsd(liga_nome, data):
-    url = f"{BASE_URL}/eventsday.php?d={data}&l={liga_nome}"
-    try:
-        r = requests.get(url)
-        if r.status_code != 200:
-            st.warning(f"⚠️ Erro na API TheSportsDB ({r.status_code}): {r.text}")
-            return []
-        data_json = r.json()
-        return data_json.get("events", [])
-    except requests.exceptions.RequestException as e:
-        st.error(f"Erro de conexão com a TheSportsDB: {e}")
+    liga_id = ligas_fd.get(liga_nome)
+    if not liga_id:
+        st.warning(f"⚠️ Liga {liga_nome} não suportada pela Football-Data.org")
         return []
 
+    url = f"{BASE_URL_FD}/competitions/{liga_id}/matches?dateFrom={data}&dateTo={data}"
+    try:
+        r = requests.get(url, headers=HEADERS)
+        r.raise_for_status()
+        dados = r.json()
+        return dados.get("matches", [])
+    except requests.exceptions.HTTPError as e:
+        st.error(f"Erro na API para {liga_nome}: {e}")
+        return []
+    except Exception as e:
+        st.error(f"Erro inesperado em {liga_nome}: {e}")
+        return []
 
 
 @st.cache_data(ttl=120)
