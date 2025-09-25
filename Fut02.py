@@ -289,86 +289,116 @@ else:
     
 # -----------------------------
 # -----------------------------
-# Botão para conferir resultados
 # -----------------------------
-if st.button("📊 Conferir resultados"):
-    alertas = carregar_alertas()
-    jogos_cache = carregar_cache_jogos()
-    mudou = False
+# Botões para atualizar e conferir resultados
+# -----------------------------
+col1, col2 = st.columns(2)
 
-    if alertas:
-        for fixture_id, info in alertas.items():
-            if info.get("conferido"):
-                continue  # já conferido
+with col1:
+    if st.button("🔄 Atualizar status das partidas"):
+        cache_jogos = carregar_cache_jogos()
+        mudou = False
 
-            # Procurar dados do jogo no cache
-            jogo_dado = None
-            for key, jogos in jogos_cache.items():
-                for match in jogos:
-                    if str(match["id"]) == fixture_id:
-                        jogo_dado = match
-                        break
-                if jogo_dado:
-                    break
+        for key, jogos in cache_jogos.items():
+            liga_id = key.split("_")[0]
+            data = key.split("_")[1]
 
-            if not jogo_dado:
-                continue
+            try:
+                url = f"{BASE_URL_FD}/competitions/{liga_id}/matches?dateFrom={data}&dateTo={data}"
+                resp = requests.get(url, headers=HEADERS, timeout=10)
+                resp.raise_for_status()
+                jogos_atualizados = resp.json().get("matches", [])
 
-            home = jogo_dado["homeTeam"]["name"]
-            away = jogo_dado["awayTeam"]["name"]
-            status = jogo_dado.get("status", "DESCONHECIDO")
-            gols_home = jogo_dado.get("score", {}).get("fullTime", {}).get("home")
-            gols_away = jogo_dado.get("score", {}).get("fullTime", {}).get("away")
-            placar = f"{gols_home} x {gols_away}" if gols_home is not None and gols_away is not None else "-"
-
-            # Determinar resultado
-            total_gols = (gols_home or 0) + (gols_away or 0)
-            if status == "FINISHED":
-                tendencia = info["tendencia"]
-                if "Mais 2.5" in tendencia:
-                    resultado = "🟢 GREEN" if total_gols > 2 else "🔴 RED"
-                elif "Mais 1.5" in tendencia:
-                    resultado = "🟢 GREEN" if total_gols > 1 else "🔴 RED"
-                elif "Menos 2.5" in tendencia:
-                    resultado = "🟢 GREEN" if total_gols < 3 else "🔴 RED"
-                else:
-                    resultado = "-"
-
-                # 🚀 Enviar para Telegram (canal alternativo 2)
-                msg_res = (
-                    f"📊 Resultado Conferido\n"
-                    f"🏟️ {home} vs {away}\n"
-                    f"⚽ Tendência: {tendencia} | Estim.: {info['estimativa']:.2f} | Conf.: {info['confianca']:.0f}%\n"
-                    f"📊 Placar Final: {placar}\n"
-                    f"✅ Resultado: {resultado}"
-                )
-                enviar_telegram(msg_res, TELEGRAM_CHAT_ID_ALT2)
-
-            else:
-                resultado = "⏳ Aguardando"
-
-            # Exibir no Streamlit
-            bg_color = "#1e4620" if resultado == "🟢 GREEN" else "#5a1e1e" if resultado == "🔴 RED" else "#2c2c2c"
-            st.markdown(f"""
-            <div style="border:1px solid #444; border-radius:10px; padding:12px; margin-bottom:10px;
-                        background-color:{bg_color}; font-size:15px; color:#f1f1f1;">
-                <b>🏟️ {home} vs {away}</b><br>
-                📌 Status: <b>{status}</b><br>
-                ⚽ Tendência: <b>{info['tendencia']}</b> | Estim.: {info['estimativa']:.2f} | Conf.: {info['confianca']:.0f}%<br>
-                📊 Placar: <b>{placar}</b><br>
-                ✅ Resultado: {resultado}
-            </div>
-            """, unsafe_allow_html=True)
-
-            if status == "FINISHED":
-                info["conferido"] = True
-                mudou = True
+                if jogos_atualizados:
+                    cache_jogos[key] = jogos_atualizados
+                    mudou = True
+            except Exception as e:
+                st.error(f"Erro ao atualizar jogos da liga {liga_id}: {e}")
 
         if mudou:
-            salvar_alertas(alertas)
-    else:
-        st.info("Ainda não há resultados para conferir.")
+            salvar_cache_jogos(cache_jogos)
+            st.success("✅ Status das partidas atualizado com sucesso!")
+        else:
+            st.info("ℹ️ Nenhum jogo foi atualizado no momento.")
 
+with col2:
+    if st.button("📊 Conferir resultados"):
+        alertas = carregar_alertas()
+        jogos_cache = carregar_cache_jogos()
+        mudou = False
+
+        if alertas:
+            for fixture_id, info in alertas.items():
+                if info.get("conferido"):
+                    continue  # já conferido
+
+                # Procurar dados do jogo no cache
+                jogo_dado = None
+                for key, jogos in jogos_cache.items():
+                    for match in jogos:
+                        if str(match["id"]) == fixture_id:
+                            jogo_dado = match
+                            break
+                    if jogo_dado:
+                        break
+
+                if not jogo_dado:
+                    continue
+
+                home = jogo_dado["homeTeam"]["name"]
+                away = jogo_dado["awayTeam"]["name"]
+                status = jogo_dado.get("status", "DESCONHECIDO")
+                gols_home = jogo_dado.get("score", {}).get("fullTime", {}).get("home")
+                gols_away = jogo_dado.get("score", {}).get("fullTime", {}).get("away")
+                placar = f"{gols_home} x {gols_away}" if gols_home is not None and gols_away is not None else "-"
+
+                # Determinar resultado
+                total_gols = (gols_home or 0) + (gols_away or 0)
+                if status == "FINISHED":
+                    tendencia = info["tendencia"]
+                    if "Mais 2.5" in tendencia:
+                        resultado = "🟢 GREEN" if total_gols > 2 else "🔴 RED"
+                    elif "Mais 1.5" in tendencia:
+                        resultado = "🟢 GREEN" if total_gols > 1 else "🔴 RED"
+                    elif "Menos 2.5" in tendencia:
+                        resultado = "🟢 GREEN" if total_gols < 3 else "🔴 RED"
+                    else:
+                        resultado = "-"
+
+                    # 🚀 Enviar para Telegram (canal alternativo 2)
+                    msg_res = (
+                        f"📊 Resultado Conferido\n"
+                        f"🏟️ {home} vs {away}\n"
+                        f"⚽ Tendência: {tendencia} | Estim.: {info['estimativa']:.2f} | Conf.: {info['confianca']:.0f}%\n"
+                        f"📊 Placar Final: {placar}\n"
+                        f"✅ Resultado: {resultado}"
+                    )
+                    enviar_telegram(msg_res, TELEGRAM_CHAT_ID_ALT2)
+
+                else:
+                    resultado = "⏳ Aguardando"
+
+                # Exibir no Streamlit
+                bg_color = "#1e4620" if resultado == "🟢 GREEN" else "#5a1e1e" if resultado == "🔴 RED" else "#2c2c2c"
+                st.markdown(f"""
+                <div style="border:1px solid #444; border-radius:10px; padding:12px; margin-bottom:10px;
+                            background-color:{bg_color}; font-size:15px; color:#f1f1f1;">
+                    <b>🏟️ {home} vs {away}</b><br>
+                    📌 Status: <b>{status}</b><br>
+                    ⚽ Tendência: <b>{info['tendencia']}</b> | Estim.: {info['estimativa']:.2f} | Conf.: {info['confianca']:.0f}%<br>
+                    📊 Placar: <b>{placar}</b><br>
+                    ✅ Resultado: {resultado}
+                </div>
+                """, unsafe_allow_html=True)
+
+                if status == "FINISHED":
+                    info["conferido"] = True
+                    mudou = True
+
+            if mudou:
+                salvar_alertas(alertas)
+        else:
+            st.info("Ainda não há resultados para conferir.")
 # -----------------------------
 # -----------------------------
 # 
