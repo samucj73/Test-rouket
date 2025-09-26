@@ -150,111 +150,225 @@ class EstrategiaDeslocamento:
 # IA Recorrência com RandomForest
 # =============================
 class IA_Recorrencia_RF:
-    def __init__(self, layout=None, top_n=3, window=WINDOW_SIZE):
+    """
+    Versão otimizada mantendo a interface original:
+    - features melhores (índice físico, par/ímpar, dúzia, coluna, terminal, distância física)
+    - re-treinamento controlado por retrain_interval (evita treinar a cada rodada)
+    - suavização de probabilidades entre rodadas (exp smoothing)
+    - expansão de vizinhos limitada (apenas top K candidatos)
+    - compatível com o restante do código (mesmos métodos: treinar, prever)
+    """
+    def __init__(self, layout=None, top_n=3, window=WINDOW_SIZE, retrain_interval=8):
         self.layout = layout or ROULETTE_LAYOUT
         self.top_n = top_n
         self.window = window
         self.model = None
+        self.retrain_interval = retrain_interval
+        self._rounds_since_train = 0
+        self._last_train_len = 0
+        self._prev_prob_map = {}  # suavização das probabilidades por número
+
+    def _num_to_idx(self, n):
+        try:
+            return self.layout.index(n)
+        except ValueError:
+            return -1
+
+    def _terminal(self, n):
+        try:
+            return int(str(n)[-1])
+        except Exception:
+            return -1
 
     def _criar_features_simples(self, historico: List[dict]):
         """
-        Features simples:
-        - último número (categorical -> numeric as index)
-        - penúltimo número
-        - vizinhos do último (1 antes, 1 depois)
-        Output X (n_samples x n_features), y (n_samples,)
+        Substitui a versão anterior por features mais informativas:
+        - idx_last2, idx_last1 (índices físicos no layout)
+        - par_impar(last1)
+        - duzia(last1)  -> 0,1,2 (0: 1-12, 1:13-24, 2:25-36), zero -> -1
+        - coluna(last1) -> 0,1,2 (mod 3 map), zero -> -1
+        - terminal(last1)
+        - distancia fisica entre last1 e last2 (módulo no layout)
+        Retorna X (np.array) e y (np.array).
         """
         numeros = [h["number"] for h in historico]
         if len(numeros) < 3:
             return None, None
         X = []
         y = []
+        n_layout = len(self.layout)
         for i in range(2, len(numeros)):
-            last2 = numeros[i-2]
-            last1 = numeros[i-1]
-            nbrs = obter_vizinhos(last1, self.layout, antes=2, depois=2)
-            feat = [last2, last1] + nbrs  # 2 + 3 = 5 features
-            X.append(feat)
-            y.append(numeros[i])
-        return np.array(X), np.array(y)
+            n2 = numeros[i-2]
+            n1 = numeros[i-1]
+            tgt = numeros[i]
 
-    def treinar(self, historico):
-        X, y = self._criar_features_simples(historico)
-        if X is None or len(X) == 0:
-            self.model = None
-            return
+            idx2 = self._num_to_idx(n2)
+            idx1 = self._num_to_idx(n1)
+            # distância física (menor direção)
+            if idx1 >= 0 and idx2 >= 0:
+                raw_dist = abs(idx1 - idx2)
+                dist = min(raw_dist, n_layout - raw_dist)
+            else:
+                dist = n_layout
+
+            # par/impar (zero -> -1)
+            if n1 == 0:
+                par_impar = -1
+            else:
+                par_impar = (n1 % 2)
+
+            # dúzia
+            if 1 <= n1 <= 36:
+                duzia = ( (n1 - 1) // 12 )
+            else:
+                duzia = -1
+
+            # coluna (1ª, 2ª, 3ª) map 0,1,2; zero -> -1
+            if 1 <= n1 <= 36:
+                coluna = ( (n1 - 1) % 3 )
+            else:
+                coluna = -1
+
+            terminal = self._terminal(n1)
+
+            feat = [
+                idx2, idx1,
+                par_impar, duzia, coluna,
+                terminal, dist
+            ]
+            X.append(feat)
+            y.append(tgt)
+        return np.array(X, dtype=float), np.array(y, dtype=int)
+
+    def treinar(self, historico, force=False):
+        """
+        Treina o RF, mas evita re-treinar toda rodada.
+        - retrain_interval controla frequência (padrão 8)
+        - force=True força o re-treinamento imediato
+        """
         try:
-            self.model = RandomForestClassifier(n_estimators=200, random_state=42)
+            hist_list = list(historico)[-self.window:] if historico else []
+            # evita re-treinar se nada mudou e não foi forçado
+            if not force:
+                self._rounds_since_train += 1
+                if self.model is not None and self._rounds_since_train < self.retrain_interval and len(hist_list) == self._last_train_len:
+                    return
+            X, y = self._criar_features_simples(hist_list)
+            if X is None or len(X) == 0:
+                return
+            # hiperparâmetros moderados para performance
+            self.model = RandomForestClassifier(n_estimators=150, max_depth=14, min_samples_leaf=2, random_state=42, n_jobs=-1)
             self.model.fit(X, y)
+            # reset counters
+            self._rounds_since_train = 0
+            self._last_train_len = len(hist_list)
         except Exception as e:
-            logging.error(f"Erro treinando RF: {e}")
+            logging.error(f"Erro treinando RF (otimizado): {e}")
             self.model = None
 
     def prever(self, historico):
         """
-        Combina:
-         - estatística antes/depois (como já existia)
-         - predição do RandomForest (probabilidades)
-        Depois expande para vizinhos e aplica redução inteligente + limite (MAX_PREVIEWS)
+        Previsão combinada:
+         - pega estatística antes/depois como candidato base
+         - treina condicionalmente
+         - usa RF para obter probabilidades (com suavização)
+         - expande vizinhos apenas para top_k candidatos (limita explosão)
+         - aplica reduzir_metade_inteligente e limita MAX_PREVIEWS
         """
         if not historico or len(historico) < 2:
             return []
 
-        # estatística antes/depois (seu método original)
         historico_lista = list(historico)
-        ultimo_numero = historico_lista[-1]["number"] if isinstance(historico_lista[-1], dict) else None
-        if ultimo_numero is None:
+        ultimo_item = historico_lista[-1]
+        if not isinstance(ultimo_item, dict) or "number" not in ultimo_item:
             return []
 
-        antes, depois = [], []
+        ultimo_numero = ultimo_item["number"]
+
+        # estatística antes/depois
+        antes = []
+        depois = []
         for i, h in enumerate(historico_lista[:-1]):
             if isinstance(h, dict) and h.get("number") == ultimo_numero:
                 if i - 1 >= 0 and isinstance(historico_lista[i-1], dict):
                     antes.append(historico_lista[i-1]["number"])
                 if i + 1 < len(historico_lista) and isinstance(historico_lista[i+1], dict):
                     depois.append(historico_lista[i+1]["number"])
-
         cont_antes = Counter(antes)
         cont_depois = Counter(depois)
         top_antes = [num for num, _ in cont_antes.most_common(self.top_n)]
         top_depois = [num for num, _ in cont_depois.most_common(self.top_n)]
-        candidatos = list(set(top_antes + top_depois))
+        candidatos = list(dict.fromkeys(top_antes + top_depois))  # mantém ordem, remove duplicatas
 
-        # Treina o RF usando todo o histórico recente (janela)
-        window_hist = historico_lista[-max(len(historico_lista), self.window):]
-        self.treinar(window_hist)
+        # prepara janela e treina condicionalmente
+        window_hist = historico_lista[-self.window:]
+        # força re-treinamento se ainda não há modelo
+        self.treinar(window_hist, force=(self.model is None))
 
-        # Se tivermos modelo, pegamos top classes por probabilidade
+        # se modelo existe, calcular probabilidades e integrar candidatos
         if self.model is not None:
-            # build features for current last
-            numeros = [h["number"] for h in historico_lista]
-            last2 = numeros[-2] if len(numeros) > 1 else 0
-            last1 = numeros[-1]
-            feats = [last2, last1] + obter_vizinhos(last1, self.layout, antes=1, depois=1)
             try:
-                probs = self.model.predict_proba([feats])[0]
-                classes = self.model.classes_
-                # pega top_n com maiores probabilidades
-                idx_top = np.argsort(probs)[-self.top_n:]
-                top_ml = [int(classes[i]) for i in idx_top]
-                candidatos = list(set(candidatos + top_ml))
-            except Exception as e:
-                logging.error(f"Erro predict_proba RF: {e}")
+                # monta features para o estado atual (last2, last1)
+                numeros = [h["number"] for h in historico_lista]
+                last2 = numeros[-2] if len(numeros) > 1 else numeros[-1]
+                last1 = numeros[-1]
+                idx2 = self._num_to_idx(last2)
+                idx1 = self._num_to_idx(last1)
+                n_layout = len(self.layout)
+                if idx1 >=0 and idx2 >=0:
+                    raw_dist = abs(idx1 - idx2)
+                    dist = min(raw_dist, n_layout - raw_dist)
+                else:
+                    dist = n_layout
 
-        # Expandir para vizinhos físicos
+                par_impar = -1 if last1 == 0 else (last1 % 2)
+                duzia = -1 if not (1 <= last1 <= 36) else ((last1 - 1) // 12)
+                coluna = -1 if not (1 <= last1 <= 36) else ((last1 - 1) % 3)
+                terminal = self._terminal(last1)
+
+                feat = [[idx2, idx1, par_impar, duzia, coluna, terminal, dist]]
+                probs = self.model.predict_proba(feat)[0]
+                classes = self.model.classes_.astype(int)
+
+                # mapeia probabilidades para números
+                prob_map = {int(classes[i]): float(probs[i]) for i in range(len(classes))}
+                # suavização exponencial com prev map existente
+                alpha = 0.35
+                for k, v in prob_map.items():
+                    prev = self._prev_prob_map.get(k, 0.0)
+                    self._prev_prob_map[k] = alpha * v + (1 - alpha) * prev
+
+                # ordena por probabilidades suavizadas e pega top_n candidatos ML
+                ordered_by_prob = sorted(self._prev_prob_map.items(), key=lambda x: x[1], reverse=True)
+                top_ml = [num for num, p in ordered_by_prob[:self.top_n]]
+                # junta candidatos estatísticos + ML (mantendo unicidade)
+                for t in top_ml:
+                    if t not in candidatos:
+                        candidatos.append(t)
+            except Exception as e:
+                logging.error(f"Erro durante predict_proba (IA otimizada): {e}")
+
+        # EXPANSÃO CONTROLADA DE VIZINHOS:
+        # Expande vizinhos apenas para os top_k candidatos (top_k = 3 por padrão)
+        top_k = 3
+        candidatos_ord = candidatos[:top_k] + [c for c in candidatos if c not in candidatos[:top_k]]
         numeros_previstos = []
-        for n in candidatos:
-            vizs = obter_vizinhos(n, self.layout, antes=2, depois=2)
+        for c in candidatos_ord[:top_k]:
+            # pegar vizinhos 1 antes/1 depois para cada candidato top
+            vizs = obter_vizinhos(c, self.layout, antes=1, depois=1)
             for v in vizs:
                 if v not in numeros_previstos:
                     numeros_previstos.append(v)
 
-        # Redução inteligente (metade), pontuando por frequência + topn_greens + penaliza redundância
+        # se ainda vazio (fallback), pega candidatos simples sem vizinhos
+        if not numeros_previstos:
+            numeros_previstos = list(dict.fromkeys(candidatos))
+
+        # redução inteligente (usa sua função existente)
         numeros_previstos = reduzir_metade_inteligente(numeros_previstos, historico)
 
-        # Limita a quantidade final para MAX_PREVIEWS (escolhe os mais pontuados)
+        # limitar o total final a MAX_PREVIEWS aplicando score rápida
         if len(numeros_previstos) > MAX_PREVIEWS:
-            # recalcula pontuações rápidas
             ultimos = [h["number"] for h in list(historico)[-WINDOW_SIZE:]] if historico else []
             freq = Counter(ultimos)
             topn_greens = st.session_state.get("topn_greens", {})
@@ -263,7 +377,16 @@ class IA_Recorrencia_RF:
                 scores[n] = freq.get(n, 0) + 0.8 * topn_greens.get(n, 0)
             numeros_previstos = sorted(numeros_previstos, key=lambda x: scores.get(x, 0), reverse=True)[:MAX_PREVIEWS]
 
-        return numeros_previstos
+        # garante inteiros e unicidade preservada na ordem
+        final = []
+        for n in numeros_previstos:
+            try:
+                ni = int(n)
+                if ni not in final:
+                    final.append(ni)
+            except Exception:
+                continue
+        return final
 
 # =============================
 # Redução inteligente (metade) - função reutilizável
