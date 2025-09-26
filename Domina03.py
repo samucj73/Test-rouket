@@ -33,7 +33,7 @@ ROULETTE_LAYOUT = [
     7, 28, 12, 35, 3, 26
 ]
 
-WINDOW_SIZE = 250   # janela móvel para Top N dinâmico
+WINDOW_SIZE = 12   # janela móvel para Top N dinâmico
 MIN_TOP_N = 5      # mínimo de números na Top N
 MAX_TOP_N = 10     # máximo de números na Top N
 MAX_PREVIEWS = 6   # limite final de previsões para reduzir custo
@@ -111,7 +111,7 @@ def fetch_latest_result():
         logging.error(f"Erro ao buscar resultado: {e}")
         return None
 
-def obter_vizinhos(numero, layout, antes=2, depois=2):
+def obter_vizinhos(numero, layout, antes=3, depois=3):
     if numero not in layout:
         return [numero]
     idx = layout.index(numero)
@@ -172,7 +172,7 @@ class IA_Recorrencia_RF:
         for i in range(2, len(numeros)):
             last2 = numeros[i-2]
             last1 = numeros[i-1]
-            nbrs = obter_vizinhos(last1, self.layout, antes=1, depois=1)
+            nbrs = obter_vizinhos(last1, self.layout, antes=2, depois=2)
             feat = [last2, last1] + nbrs  # 2 + 3 = 5 features
             X.append(feat)
             y.append(numeros[i])
@@ -244,7 +244,7 @@ class IA_Recorrencia_RF:
         # Expandir para vizinhos físicos
         numeros_previstos = []
         for n in candidatos:
-            vizs = obter_vizinhos(n, self.layout, antes=1, depois=1)
+            vizs = obter_vizinhos(n, self.layout, antes=2, depois=2)
             for v in vizs:
                 if v not in numeros_previstos:
                     numeros_previstos.append(v)
