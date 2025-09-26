@@ -36,7 +36,7 @@ ROULETTE_LAYOUT = [
 WINDOW_SIZE = 18   # janela móvel para Top N dinâmico
 MIN_TOP_N = 5      # mínimo de números na Top N
 MAX_TOP_N = 10     # máximo de números na Top N
-MAX_PREVIEWS = 10   # limite final de previsões para reduzir custo
+MAX_PREVIEWS = 15   # limite final de previsões para reduzir custo
 
 # =============================
 # Utilitários (Telegram, histórico, API, vizinhos)
@@ -111,7 +111,7 @@ def fetch_latest_result():
         logging.error(f"Erro ao buscar resultado: {e}")
         return None
 
-def obter_vizinhos(numero, layout, antes=3, depois=3):
+def obter_vizinhos(numero, layout, antes=2, depois=2):
     if numero not in layout:
         return [numero]
     idx = layout.index(numero)
@@ -184,7 +184,7 @@ class IA_Recorrencia_RF:
             self.model = None
             return
         try:
-            self.model = RandomForestClassifier(n_estimators=100, random_state=42)
+            self.model = RandomForestClassifier(n_estimators=200, random_state=42)
             self.model.fit(X, y)
         except Exception as e:
             logging.error(f"Erro treinando RF: {e}")
