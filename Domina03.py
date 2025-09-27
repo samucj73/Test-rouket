@@ -33,7 +33,7 @@ ROULETTE_LAYOUT = [
     7, 28, 12, 35, 3, 26
 ]
 
-WINDOW_SIZE = 18   # janela móvel para Top N dinâmico
+WINDOW_SIZE = 1200   # janela móvel para Top N dinâmico
 MIN_TOP_N = 5      # mínimo de números na Top N
 MAX_TOP_N = 10     # máximo de números na Top N
 MAX_PREVIEWS = 15   # limite final de previsões para reduzir custo
@@ -158,7 +158,7 @@ class IA_Recorrencia_RF:
     - expansão de vizinhos limitada (apenas top K candidatos)
     - compatível com o restante do código (mesmos métodos: treinar, prever)
     """
-    def __init__(self, layout=None, top_n=3, window=WINDOW_SIZE, retrain_interval=8):
+    def __init__(self, layout=None, top_n=15, window=WINDOW_SIZE, retrain_interval=8):
         self.layout = layout or ROULETTE_LAYOUT
         self.top_n = top_n
         self.window = window
