@@ -251,56 +251,104 @@ def conferir_jogo_openliga(fixture_id, liga_id, temporada, tipo_threshold):
 # =============================
 # Helpers para selecionar Top3 distintos entre faixas
 # =============================
-def selecionar_top3_distintos(partidas_info, max_por_faixa=3):
+def selecionar_top3_distintos(partidas_info, max_por_faixa=3, prefer_best_fit=True):
     """
-    Seleciona Top3 para +1.5, +2.5 e +3.5 garantindo:
-      - prioridade +2.5 -> +1.5 -> +3.5
+    Seleciona Tops para +2.5, +1.5 e +3.5 garantindo:
+      - prioridade: +2.5 -> +1.5 -> +3.5
       - não repetir fixture_id entre faixas
       - evita repetir times (home/away) entre faixas quando possível
-    Retorna (top_15, top_25, top_35)
+      - prefere alocar a partida na faixa onde ela tem a maior probabilidade (se prefer_best_fit=True)
+      - se não houver candidatos suficientes, relaxa a restrição de times para preencher vagas
+    Retorna (top_15, top_25, top_35) — mesmo ordem de retorno que você usava antes.
     """
     if not partidas_info:
         return [], [], []
 
-    # lista base (cópia)
-    base = list(partidas_info)
+    base = list(partidas_info)  # cópia
 
-    # Top +1.5 (maior prob_1_5)
-    top_15 = sorted(base, key=lambda x: (x.get("prob_1_5", 0), x.get("conf_1_5", 0), x.get("estimativa", 0)), reverse=True)[:max_por_faixa]
-    selected_ids = set(str(j.get("fixture_id")) for j in top_15)
+    def get_num(d, k):
+        v = d.get(k, 0)
+        try:
+            return float(v) if v is not None else 0.0
+        except Exception:
+            return 0.0
+
+    def sort_key(match, prob_key):
+        # ordena por (probabilidade, confiança, estimativa)
+        prob = get_num(match, prob_key)
+        conf = get_num(match, prob_key.replace("prob", "conf"))
+        est = get_num(match, "estimativa")
+        return (prob, conf, est)
+
+    selected_ids = set()
     selected_teams = set()
-    for j in top_15:
-        selected_teams.add(j.get("home"))
-        selected_teams.add(j.get("away"))
 
-    # candidatos para +2.5: exclui fixtures já selecionados
-    candidatos_25 = sorted([j for j in base if str(j.get("fixture_id")) not in selected_ids],
-                           key=lambda x: (x.get("prob_2_5", 0), x.get("conf_2_5", 0), x.get("estimativa", 0)), reverse=True)
-    top_25 = []
-    for c in candidatos_25:
-        if len(top_25) >= max_por_faixa:
-            break
-        # evita times repetidos entre faixas (home/away)
-        if c.get("home") in selected_teams or c.get("away") in selected_teams:
-            continue
-        top_25.append(c)
-        selected_ids.add(str(c.get("fixture_id")))
-        selected_teams.add(c.get("home"))
-        selected_teams.add(c.get("away"))
+    def safe_team_names(m):
+        # retorna nomes de times coerentes para comparar (evita None)
+        return str(m.get("home", "")).strip(), str(m.get("away", "")).strip()
 
-    # candidatos para +3.5: exclui fixtures já selecionados
-    candidatos_35 = sorted([j for j in base if str(j.get("fixture_id")) not in selected_ids],
-                           key=lambda x: (x.get("prob_3_5", 0), x.get("conf_3_5", 0), x.get("estimativa", 0)), reverse=True)
-    top_35 = []
-    for c in candidatos_35:
-        if len(top_35) >= max_por_faixa:
-            break
-        if c.get("home") in selected_teams or c.get("away") in selected_teams:
-            continue
-        top_35.append(c)
-        selected_ids.add(str(c.get("fixture_id")))
-        selected_teams.add(c.get("home"))
-        selected_teams.add(c.get("away"))
+    def allocate(prefix, other_prefixes):
+        """
+        Aloca até max_por_faixa partidas para a faixa indicada por `prefix` (ex: '2_5'),
+        preferindo partidas cuja probabilidade para essa faixa seja >= das outras faixas.
+        """
+        nonlocal base, selected_ids, selected_teams
+        prob_key = f"prob_{prefix}"
+        conf_key = f"conf_{prefix}"
+
+        # candidatos que ainda não foram selecionados por fixture_id
+        candidatos = [m for m in base if str(m.get("fixture_id")) not in selected_ids]
+
+        # preferred = candidatos cuja prob_{prefix} >= prob_{other} para todos os outros
+        preferred = []
+        if prefer_best_fit:
+            for m in candidatos:
+                cur = get_num(m, prob_key)
+                others = [get_num(m, f"prob_{o}") for o in other_prefixes]
+                # se cur é maior ou igual aos outros, consideramos "melhor encaixe"
+                if cur >= max(others):
+                    preferred.append(m)
+
+        # ordena preferred e o restante pelos critérios
+        preferred_sorted = sorted(preferred, key=lambda x: sort_key(x, prob_key), reverse=True)
+        remaining = [m for m in candidatos if m not in preferred_sorted]
+        remaining_sorted = sorted(remaining, key=lambda x: sort_key(x, prob_key), reverse=True)
+
+        chosen = []
+
+        # helper para tentar adicionar respeitando unicidade de times
+        def try_add_list(lst, respect_teams=True):
+            nonlocal chosen, selected_ids, selected_teams
+            for m in lst:
+                if len(chosen) >= max_por_faixa:
+                    break
+                fid = str(m.get("fixture_id"))
+                if fid in selected_ids:
+                    continue
+                home, away = safe_team_names(m)
+                if respect_teams and (home in selected_teams or away in selected_teams):
+                    continue
+                # adiciona
+                chosen.append(m)
+                selected_ids.add(fid)
+                selected_teams.add(home)
+                selected_teams.add(away)
+
+        # 1) tenta preferred respeitando times
+        try_add_list(preferred_sorted, respect_teams=True)
+        # 2) se ainda faltam, tenta remaining respeitando times
+        if len(chosen) < max_por_faixa:
+            try_add_list(remaining_sorted, respect_teams=True)
+        # 3) se ainda faltam, relaxa restrição de times (mas mantém não-repetir fixture_id)
+        if len(chosen) < max_por_faixa:
+            try_add_list(preferred_sorted + remaining_sorted, respect_teams=False)
+
+        return chosen
+
+    # Ordem de alocação: +2.5 primeiro, depois +1.5, por último +3.5
+    top_25 = allocate("2_5", other_prefixes=["1_5", "3_5"])
+    top_15 = allocate("1_5", other_prefixes=["2_5", "3_5"])
+    top_35 = allocate("3_5", other_prefixes=["2_5", "1_5"])
 
     return top_15, top_25, top_35
 
