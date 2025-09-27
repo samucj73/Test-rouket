@@ -36,7 +36,7 @@ ROULETTE_LAYOUT = [
 WINDOW_SIZE = 1200   # janela móvel para Top N dinâmico
 MIN_TOP_N = 5      # mínimo de números na Top N
 MAX_TOP_N = 10     # máximo de números na Top N
-MAX_PREVIEWS = 6   # limite final de previsões para reduzir custo
+MAX_PREVIEWS = 3   # limite final de previsões para reduzir custo
 
 # =============================
 # Utilitários (Telegram, histórico, API, vizinhos)
