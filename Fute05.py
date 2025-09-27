@@ -254,7 +254,7 @@ def conferir_jogo_openliga(fixture_id, liga_id, temporada, tipo_threshold):
 def selecionar_top3_distintos(partidas_info, max_por_faixa=3):
     """
     Seleciona Top3 para +1.5, +2.5 e +3.5 garantindo:
-      - prioridade +1.5 -> +2.5 -> +3.5
+      - prioridade +2.5 -> +1.5 -> +3.5
       - não repetir fixture_id entre faixas
       - evita repetir times (home/away) entre faixas quando possível
     Retorna (top_15, top_25, top_35)
