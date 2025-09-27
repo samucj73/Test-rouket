@@ -158,7 +158,7 @@ class IA_Recorrencia_RF:
     - expansão de vizinhos limitada (apenas top K candidatos)
     - compatível com o restante do código (mesmos métodos: treinar, prever)
     """
-    def __init__(self, layout=None, top_n=15, window=WINDOW_SIZE, retrain_interval=8):
+    def __init__(self, layout=None, top_n=20, window=WINDOW_SIZE, retrain_interval=2):
         self.layout = layout or ROULETTE_LAYOUT
         self.top_n = top_n
         self.window = window
@@ -257,7 +257,7 @@ class IA_Recorrencia_RF:
             if X is None or len(X) == 0:
                 return
             # hiperparâmetros moderados para performance
-            self.model = RandomForestClassifier(n_estimators=150, max_depth=14, min_samples_leaf=2, random_state=42, n_jobs=-1)
+            self.model = RandomForestClassifier(n_estimators=300, max_depth=14, min_samples_leaf=2, random_state=42, n_jobs=-1)
             self.model.fit(X, y)
             # reset counters
             self._rounds_since_train = 0
@@ -350,12 +350,12 @@ class IA_Recorrencia_RF:
 
         # EXPANSÃO CONTROLADA DE VIZINHOS:
         # Expande vizinhos apenas para os top_k candidatos (top_k = 3 por padrão)
-        top_k = 3
+        top_k = 5
         candidatos_ord = candidatos[:top_k] + [c for c in candidatos if c not in candidatos[:top_k]]
         numeros_previstos = []
         for c in candidatos_ord[:top_k]:
             # pegar vizinhos 1 antes/1 depois para cada candidato top
-            vizs = obter_vizinhos(c, self.layout, antes=1, depois=1)
+            vizs = obter_vizinhos(c, self.layout, antes=2, depois=2)
             for v in vizs:
                 if v not in numeros_previstos:
                     numeros_previstos.append(v)
