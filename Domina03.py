@@ -158,7 +158,7 @@ class IA_Recorrencia_RF:
     - expansão de vizinhos limitada (apenas top K candidatos)
     - compatível com o restante do código (mesmos métodos: treinar, prever)
     """
-    def __init__(self, layout=None, top_n=20, window=WINDOW_SIZE, retrain_interval=2):
+    def __init__(self, layout=None, top_n=10, window=WINDOW_SIZE, retrain_interval=2):
         self.layout = layout or ROULETTE_LAYOUT
         self.top_n = top_n
         self.window = window
@@ -243,7 +243,7 @@ class IA_Recorrencia_RF:
     def treinar(self, historico, force=False):
         """
         Treina o RF, mas evita re-treinar toda rodada.
-        - retrain_interval controla frequência (padrão 8)
+        - retrain_interval controla frequência (padrão 2)
         - force=True força o re-treinamento imediato
         """
         try:
