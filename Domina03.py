@@ -36,7 +36,7 @@ ROULETTE_LAYOUT = [
 WINDOW_SIZE = 1200   # janela móvel para Top N dinâmico
 MIN_TOP_N = 5      # mínimo de números na Top N
 MAX_TOP_N = 10     # máximo de números na Top N
-MAX_PREVIEWS = 3   # limite final de previsões para reduzir custo
+MAX_PREVIEWS = 10   # limite final de previsões para reduzir custo
 
 # =============================
 # Utilitários (Telegram, histórico, API, vizinhos)
@@ -355,7 +355,7 @@ class IA_Recorrencia_RF:
         numeros_previstos = []
         for c in candidatos_ord[:top_k]:
             # pegar vizinhos 1 antes/1 depois para cada candidato top
-            vizs = obter_vizinhos(c, self.layout, antes=4, depois=4)
+            vizs = obter_vizinhos(c, self.layout, antes=0, depois=0)
             for v in vizs:
                 if v not in numeros_previstos:
                     numeros_previstos.append(v)
