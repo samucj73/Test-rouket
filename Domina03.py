@@ -355,7 +355,7 @@ class IA_Recorrencia_RF:
         numeros_previstos = []
         for c in candidatos_ord[:top_k]:
             # pegar vizinhos 1 antes/1 depois para cada candidato top
-            vizs = obter_vizinhos(c, self.layout, antes=0, depois=0)
+            vizs = obter_vizinhos(c, self.layout, antes=2, depois=2)
             for v in vizs:
                 if v not in numeros_previstos:
                     numeros_previstos.append(v)
@@ -400,7 +400,7 @@ def reduzir_metade_inteligente(previsoes, historico):
     pontuacoes = {}
     for n in previsoes:
         freq = contagem_total.get(n, 0)
-        vizinhos = obter_vizinhos(n, ROULETTE_LAYOUT, antes=1, depois=1)
+        vizinhos = obter_vizinhos(n, ROULETTE_LAYOUT, antes=2, depois=2)
         redundancia = sum(1 for v in vizinhos if v in previsoes)
         bonus = topn_greens.get(n, 0)
         pontuacoes[n] = freq + (bonus * 0.8) - (0.5 * redundancia)
