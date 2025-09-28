@@ -336,4 +336,4 @@ with aba[0]:
             enviar_telegram(msg_alt, TELEGRAM_CHAT_ID_ALT2)
             st.success("🚀 Top jogos enviados para o canal alternativo 2!")
         else:
-            st.info("Nenhum jogo com tendência clara
+            st.info("Nenhum jogo com tendência clara")
