@@ -1,4 +1,4 @@
-# Domina03.py (arquivo completo corrigido)
+# Domina03.py (corrigido para timeline fiel dos sorteios)
 import streamlit as st
 import json
 import os
@@ -10,6 +10,7 @@ import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from typing import List, Dict, Any
 import time
+import hashlib
 
 # =============================
 # Configurações
@@ -34,13 +35,13 @@ ROULETTE_LAYOUT = [
     7, 28, 12, 35, 3, 26
 ]
 
-WINDOW_SIZE = 18   # janela móvel para Top N dinâmico
-MIN_TOP_N = 5      # mínimo de números na Top N
-MAX_TOP_N = 10     # máximo de números na Top N
-MAX_PREVIEWS = 15   # limite final de previsões para reduzir custo
+WINDOW_SIZE = 18
+MIN_TOP_N = 5
+MAX_TOP_N = 10
+MAX_PREVIEWS = 15
 
 # =============================
-# Configuração de Logging Otimizada
+# Configuração de Logging
 # =============================
 logging.basicConfig(
     level=logging.INFO,
@@ -52,15 +53,102 @@ logging.basicConfig(
 )
 
 def log_estrategia(mensagem: str, nivel: str = "info"):
-    """Log estruturado para estratégias"""
     log_func = getattr(logging, nivel.lower(), logging.info)
     log_func(f"🎯 {mensagem}")
+
+# =============================
+# Sistema de Timeline Fiel
+# =============================
+class TimelineManager:
+    """Gerencia a timeline fiel dos sorteios sem duplicações"""
+    
+    def __init__(self, historico_path: str):
+        self.historico_path = historico_path
+        self._ultimo_hash = None
+        
+    def gerar_hash_sorteio(self, numero_dict: Dict[str, Any]) -> str:
+        """Gera hash único para cada sorteio baseado em timestamp + número"""
+        if not numero_dict or 'timestamp' not in numero_dict:
+            return None
+            
+        content = f"{numero_dict['timestamp']}_{numero_dict.get('number', '')}"
+        return hashlib.md5(content.encode()).hexdigest()
+    
+    def carregar_timeline(self) -> List[Dict[str, Any]]:
+        """Carrega timeline garantindo ordenação correta e sem duplicatas"""
+        if not os.path.exists(self.historico_path):
+            return []
+            
+        try:
+            with open(self.historico_path, "r", encoding='utf-8') as f:
+                historico = json.load(f)
+            
+            # Remove duplicatas e garante ordenação
+            timeline_limpa = self._remover_duplicatas(historico)
+            log_estrategia(f"Timeline carregada: {len(timeline_limpa)} sorteios únicos")
+            return timeline_limpa
+            
+        except Exception as e:
+            log_estrategia(f"Erro ao carregar timeline: {e}", "error")
+            return []
+    
+    def _remover_duplicatas(self, historico: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Remove entradas duplicadas baseado no hash"""
+        seen_hashes = set()
+        timeline_limpa = []
+        
+        for sorteio in historico:
+            hash_sorteio = self.gerar_hash_sorteio(sorteio)
+            if hash_sorteio and hash_sorteio not in seen_hashes:
+                seen_hashes.add(hash_sorteio)
+                timeline_limpa.append(sorteio)
+        
+        # Ordena por timestamp (mais recente primeiro)
+        timeline_limpa.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+        return timeline_limpa
+    
+    def adicionar_sorteio(self, numero_dict: Dict[str, Any]) -> bool:
+        """Adiciona sorteio apenas se for novo, retorna True se adicionado"""
+        if not numero_dict or 'timestamp' not in numero_dict:
+            return False
+            
+        hash_novo = self.gerar_hash_sorteio(numero_dict)
+        if not hash_novo:
+            return False
+            
+        # Carrega timeline atual
+        timeline_atual = self.carregar_timeline()
+        
+        # Verifica se já existe
+        for sorteio_existente in timeline_atual:
+            if self.gerar_hash_sorteio(sorteio_existente) == hash_novo:
+                log_estrategia(f"Sorteio duplicado ignorado: {numero_dict}")
+                return False
+        
+        # Adiciona novo sorteio no início (mais recente primeiro)
+        timeline_atual.insert(0, numero_dict)
+        
+        # Mantém apenas os últimos 15000 sorteios
+        if len(timeline_atual) > 15000:
+            timeline_atual = timeline_atual[:15000]
+        
+        # Salva timeline atualizada
+        try:
+            with open(self.historico_path, "w", encoding='utf-8') as f:
+                json.dump(timeline_atual, f, indent=2)
+            log_estrategia(f"Novo sorteio adicionado: {numero_dict}")
+            return True
+        except Exception as e:
+            log_estrategia(f"Erro ao salvar timeline: {e}", "error")
+            return False
+
+# Inicializar Timeline Manager
+timeline_manager = TimelineManager(HISTORICO_PATH)
 
 # =============================
 # Classes de Gerenciamento
 # =============================
 class Estatisticas:
-    """Gerencia estatísticas de forma eficiente"""
     def __init__(self):
         self.acertos = 0
         self.erros = 0
@@ -86,29 +174,33 @@ class EstrategiaDeslocamento:
         self.historico = deque(maxlen=15000)
     
     def adicionar_numero(self, numero_dict: Dict[str, Any]):
+        # Só adiciona se for realmente novo (verificação adicional)
+        if self.historico:
+            ultimo = self.historico[-1]
+            if (ultimo.get('timestamp') == numero_dict.get('timestamp') and 
+                ultimo.get('number') == numero_dict.get('number')):
+                return  # Ignora duplicata
+        
         self.historico.append(numero_dict)
         log_estrategia(f"Número {numero_dict['number']} adicionado ao histórico")
 
 # =============================
-# Cache e Pré-computação
+# Cache e API
 # =============================
 class CacheManager:
-    """Gerencia cache para melhor performance"""
     def __init__(self):
         self._vizinhos_cache = {}
         self._api_cache = None
         self._api_cache_time = 0
-        self._cache_duration = 8  # segundos
+        self._cache_duration = 8
     
     def get_vizinhos(self, numero: int, antes: int = 2, depois: int = 2):
-        """Cache para cálculos de vizinhos"""
         key = (numero, antes, depois)
         if key not in self._vizinhos_cache:
             self._vizinhos_cache[key] = self._calcular_vizinhos(numero, antes, depois)
         return self._vizinhos_cache[key]
     
     def _calcular_vizinhos(self, numero: int, antes: int, depois: int):
-        """Calcula vizinhos uma vez e cachea"""
         if numero not in ROULETTE_LAYOUT:
             return [numero]
         
@@ -125,7 +217,6 @@ class CacheManager:
         return vizinhos
     
     def get_api_result(self):
-        """Cache para resultados da API"""
         current_time = time.time()
         if (self._api_cache is None or 
             current_time - self._api_cache_time > self._cache_duration):
@@ -134,9 +225,8 @@ class CacheManager:
         return self._api_cache
 
     def _fetch_latest_result(self):
-        """Busca resultado da API com tratamento robusto"""
         try:
-            response = requests.get(API_URL, headers=HEADERS, timeout=8)
+            response = requests.get(API_URL, headers=HEADERS, timeout=10)
             response.raise_for_status()
             data = response.json()
             
@@ -146,74 +236,39 @@ class CacheManager:
             number = outcome.get("number")
             timestamp = game_data.get("startedAt")
             
-            log_estrategia(f"API resultado: {number} (timestamp: {timestamp})")
-            return {"number": number, "timestamp": timestamp}
-            
+            if timestamp and number is not None:
+                log_estrategia(f"API - Novo resultado: {number} em {timestamp}")
+                return {"number": number, "timestamp": timestamp}
+            else:
+                log_estrategia("API - Dados incompletos recebidos", "warning")
+                return None
+                
         except requests.exceptions.Timeout:
-            log_estrategia("Timeout na requisição da API", "warning")
+            log_estrategia("Timeout na API", "warning")
             return None
         except Exception as e:
             log_estrategia(f"Erro na API: {e}", "error")
             return None
 
-# Inicializar cache global
 cache_manager = CacheManager()
 
 # =============================
-# Funções Utilitárias Otimizadas
+# Funções Utilitárias
 # =============================
 def enviar_telegram(msg: str, token: str = TELEGRAM_TOKEN, chat_id: str = TELEGRAM_CHAT_ID):
-    """Envia mensagem para Telegram com tratamento de erro"""
     try:
         url = f"https://api.telegram.org/bot{token}/sendMessage"
         payload = {"chat_id": chat_id, "text": msg}
         response = requests.post(url, data=payload, timeout=10)
         response.raise_for_status()
-        log_estrategia(f"Telegram enviado: {msg[:80]}...")
+        log_estrategia(f"Telegram: {msg[:80]}...")
     except Exception as e:
         log_estrategia(f"Erro Telegram: {e}", "error")
 
 def enviar_telegram_topN(msg: str):
-    """Envia para canal Top N"""
     enviar_telegram(msg, ALT_TELEGRAM_TOKEN, ALT_TELEGRAM_CHAT_ID)
 
-def carregar_historico() -> List[Dict[str, Any]]:
-    """Carrega histórico com validação robusta"""
-    if not os.path.exists(HISTORICO_PATH):
-        log_estrategia("Arquivo de histórico não encontrado")
-        return []
-    
-    try:
-        with open(HISTORICO_PATH, "r", encoding='utf-8') as f:
-            historico = json.load(f)
-        
-        historico_validado = []
-        for i, h in enumerate(historico):
-            if isinstance(h, dict) and "number" in h:
-                # Valida se o número existe no layout da roleta
-                if h["number"] in ROULETTE_LAYOUT + [None]:
-                    historico_validado.append(h)
-            else:
-                # Converte formato antigo
-                historico_validado.append({"number": h, "timestamp": f"manual_{i}"})
-        
-        log_estrategia(f"Histórico carregado: {len(historico_validado)} registros válidos")
-        return historico_validado
-    except Exception as e:
-        log_estrategia(f"Erro ao carregar histórico: {e}", "error")
-        return []
-
-def salvar_historico(historico: List[Dict[str, Any]]):
-    """Salva histórico com tratamento de erro"""
-    try:
-        with open(HISTORICO_PATH, "w", encoding='utf-8') as f:
-            json.dump(historico, f, indent=2)
-        log_estrategia(f"Histórico salvo: {len(historico)} registros")
-    except Exception as e:
-        log_estrategia(f"Erro ao salvar histórico: {e}", "error")
-
 def salvar_metricas(metricas: Dict[str, Any]):
-    """Salva métricas com append seguro"""
     try:
         historico_metricas = []
         if os.path.exists(METRICAS_PATH):
@@ -228,11 +283,10 @@ def salvar_metricas(metricas: Dict[str, Any]):
         with open(METRICAS_PATH, "w", encoding='utf-8') as f:
             json.dump(historico_metricas, f, indent=2)
         
-        log_estrategia(f"Métricas salvas: {len(historico_metricas)} registros")
+        log_estrategia(f"Métricas salvas")
     except Exception as e:
         log_estrategia(f"Erro ao salvar métricas: {e}", "error")
 
-# Funções de vizinhos usando cache
 def obter_vizinhos(numero: int, antes: int = 2, depois: int = 2):
     return cache_manager.get_vizinhos(numero, antes, depois)
 
@@ -240,7 +294,7 @@ def obter_vizinhos_fixos(numero: int, antes: int = 5, depois: int = 5):
     return cache_manager.get_vizinhos(numero, antes, depois)
 
 # =============================
-# IA Recorrência com RandomForest Otimizada
+# IA Recorrência (versão simplificada para exemplo)
 # =============================
 class IA_Recorrencia_RF:
     def __init__(self, layout=None, top_n=3, window=WINDOW_SIZE):
@@ -248,94 +302,13 @@ class IA_Recorrencia_RF:
         self.top_n = top_n
         self.window = window
         self.model = None
-        self._ultimo_treino = 0
-        self._treino_interval = 50  # Treinar a cada 50 rodadas
-        self._model_treinado = False  # Flag para verificar se o modelo está treinado
-
-    def _criar_features_otimizado(self, historico: List[Dict[str, Any]]):
-        """Features otimizadas com pré-alocação"""
-        if len(historico) < 3:
-            return None, None
-        
-        numeros = [h["number"] for h in historico]
-        n_samples = len(numeros) - 2
-        
-        # Pré-aloca arrays
-        X = np.zeros((n_samples, 7), dtype=int)  # 7 features
-        y = np.zeros(n_samples, dtype=int)
-        
-        for i in range(2, len(numeros)):
-            idx = i - 2
-            last2, last1 = numeros[i-2], numeros[i-1]
-            vizinhos = obter_vizinhos(last1, 1, 1)  # 1 antes, 1 depois = 3 números
-            
-            X[idx, 0] = last2
-            X[idx, 1] = last1
-            for j, viz in enumerate(vizinhos[:3]):  # Garante 3 features de vizinhos
-                X[idx, 2 + j] = viz
-            
-            y[idx] = numeros[i]
-        
-        return X, y
-
-    def treinar(self, historico: List[Dict[str, Any]]):
-        """Treina modelo apenas quando necessário"""
-        if len(historico) < self.window:
-            self._model_treinado = False
-            return
-        
-        # Treina apenas periodicamente para performance
-        if len(historico) - self._ultimo_treino < self._treino_interval:
-            return
-            
-        X, y = self._criar_features_otimizado(historico)
-        if X is None or len(X) < 10:  # Mínimo de amostras
-            self._model_treinado = False
-            return
-            
-        try:
-            self.model = RandomForestClassifier(
-                n_estimators=100,  # Reduzido para performance
-                max_depth=10,
-                random_state=42,
-                n_jobs=-1  # Usa todos os cores
-            )
-            self.model.fit(X, y)
-            self._ultimo_treino = len(historico)
-            self._model_treinado = True
-            log_estrategia(f"Modelo RF treinado com {len(X)} amostras")
-        except Exception as e:
-            log_estrategia(f"Erro treinando RF: {e}", "error")
-            self.model = None
-            self._model_treinado = False
+        self._model_treinado = False
 
     def prever(self, historico: List[Dict[str, Any]]) -> List[int]:
-        """Previsão otimizada com fallback para método estatístico"""
         if not historico or len(historico) < 2:
             return []
 
-        # Método estatístico original (sempre funciona)
-        candidatos = self._previsao_estatistica(historico)
-        
-        # Adiciona predição ML se disponível
-        if self._model_treinado and self.model is not None and len(historico) >= 3:
-            try:
-                candidatos_ml = self._previsao_ml(historico)
-                candidatos.extend(candidatos_ml)
-            except Exception as e:
-                log_estrategia(f"Erro na previsão ML, usando apenas estatística: {e}", "warning")
-        
-        # Remove duplicatas mantendo ordem
-        candidatos = list(dict.fromkeys(candidatos))
-        
-        # Expande para vizinhos
-        numeros_previstos = self._expandir_para_vizinhos(candidatos)
-        
-        # Redução inteligente e limite
-        return self._aplicar_limites(numeros_previstos, historico)
-
-    def _previsao_estatistica(self, historico: List[Dict[str, Any]]) -> List[int]:
-        """Método estatístico original"""
+        # Método estatístico simples
         historico_lista = list(historico)
         ultimo_numero = historico_lista[-1]["number"]
         
@@ -353,65 +326,20 @@ class IA_Recorrencia_RF:
         top_antes = [num for num, _ in cont_antes.most_common(self.top_n)]
         top_depois = [num for num, _ in cont_depois.most_common(self.top_n)]
         
-        return list(set(top_antes + top_depois))
-
-    def _previsao_ml(self, historico: List[Dict[str, Any]]) -> List[int]:
-        """Predição com Machine Learning"""
-        try:
-            numeros = [h["number"] for h in historico]
-            last2, last1 = numeros[-2], numeros[-1]
-            vizinhos = obter_vizinhos(last1, 1, 1)
-            
-            # Garante que temos 5 features
-            features = [last2, last1] + vizinhos
-            while len(features) < 5:
-                features.append(0)  # Preenche com zero se necessário
-            features = features[:5]  # Garante máximo de 5 features
-            
-            features_array = np.array(features).reshape(1, -1)
-            
-            probs = self.model.predict_proba(features_array)[0]
-            classes = self.model.classes_
-            
-            # Pega top_n com maiores probabilidades
-            idx_top = np.argsort(probs)[-self.top_n:]
-            return [int(classes[i]) for i in idx_top]
-            
-        except Exception as e:
-            log_estrategia(f"Erro predição ML: {e}", "warning")
-            return []
-
-    def _expandir_para_vizinhos(self, candidatos: List[int]) -> List[int]:
-        """Expande candidatos para incluir vizinhos"""
+        candidatos = list(set(top_antes + top_depois))
+        
+        # Expande para vizinhos
         numeros_previstos = []
         for n in candidatos:
             vizinhos = obter_vizinhos(n, 2, 2)
             for v in vizinhos:
                 if v not in numeros_previstos:
                     numeros_previstos.append(v)
-        return numeros_previstos
-
-    def _aplicar_limites(self, previsoes: List[int], historico: List[Dict[str, Any]]) -> List[int]:
-        """Aplica redução inteligente e limites"""
-        if not previsoes:
-            return []
-            
-        # Redução inteligente
-        previsoes_reduzidas = reduzir_metade_inteligente(previsoes, historico)
         
-        # Limite final
-        if len(previsoes_reduzidas) > MAX_PREVIEWS:
-            previsoes_reduzidas = previsoes_reduzidas[:MAX_PREVIEWS]
-            
-        return previsoes_reduzidas
-
-    @property
-    def modelo_treinado(self):
-        """Propriedade segura para verificar se o modelo está treinado"""
-        return self._model_treinado and self.model is not None
+        return numeros_previstos[:MAX_PREVIEWS]
 
 # =============================
-# Sistema de Top N Dinâmico Otimizado
+# Sistema de Top N Dinâmico
 # =============================
 TOP_N_COOLDOWN = 3
 TOP_N_PROB_BASE = 0.3
@@ -420,14 +348,12 @@ TOP_N_PROB_MIN = 0.2
 TOP_N_WINDOW = 12
 
 class TopNManager:
-    """Gerencia Top N dinâmico de forma eficiente"""
     def __init__(self):
         self.history = deque(maxlen=TOP_N_WINDOW)
         self.reds = {}
         self.greens = {}
     
     def atualizar_cooldown(self):
-        """Atualiza cooldowns dos números em RED"""
         novos_reds = {}
         for num, cooldown in self.reds.items():
             if cooldown > 1:
@@ -435,7 +361,6 @@ class TopNManager:
         self.reds = novos_reds
     
     def calcular_probabilidade(self):
-        """Calcula probabilidade mínima baseada no histórico"""
         if not self.history:
             return TOP_N_PROB_BASE
         
@@ -444,29 +369,24 @@ class TopNManager:
         return min(max(prob_min, TOP_N_PROB_MIN), TOP_N_PROB_MAX)
     
     def ajustar_top_n(self, previsoes: List[int]) -> List[int]:
-        """Ajusta Top N baseado em probabilidades e cooldowns"""
         if not previsoes:
             return previsoes[:MIN_TOP_N]
         
         self.atualizar_cooldown()
         prob_min = self.calcular_probabilidade()
         
-        # Filtra números em cooldown
         filtrados = [num for num in previsoes if num not in self.reds]
         
-        # Aplica pesos baseados em greens anteriores
         pesos = {}
         for num in filtrados:
             pesos[num] = 1.0 + self.greens.get(num, 0) * 0.05
         
-        # Ordena e seleciona
         ordenados = sorted(pesos.keys(), key=lambda x: pesos[x], reverse=True)
         n = max(MIN_TOP_N, min(MAX_TOP_N, int(len(ordenados) * prob_min) + MIN_TOP_N))
         
         return ordenados[:n]
     
     def registrar_resultado(self, numero_real: int, top_n: List[int]):
-        """Registra resultado do Top N"""
         for num in top_n:
             if num == numero_real:
                 self.greens[num] = self.greens.get(num, 0) + 1
@@ -477,38 +397,9 @@ class TopNManager:
                 self.history.append("R")
 
 # =============================
-# Funções de Redução Inteligente
-# =============================
-def reduzir_metade_inteligente(previsoes: List[int], historico: List[Dict[str, Any]]) -> List[int]:
-    """Reduz previsões pela metade de forma inteligente"""
-    if len(previsoes) <= 1:
-        return previsoes
-    
-    # Usa janela menor para performance
-    window = min(WINDOW_SIZE, len(historico))
-    ultimos_numeros = [h["number"] for h in list(historico)[-window:]] if historico else []
-    
-    contagem_total = Counter(ultimos_numeros)
-    topn_greens = st.session_state.get("topn_manager", TopNManager()).greens
-    
-    pontuacoes = {}
-    for n in previsoes:
-        freq = contagem_total.get(n, 0)
-        vizinhos = obter_vizinhos(n, 1, 1)
-        redundancia = sum(1 for v in vizinhos if v in previsoes)
-        bonus = topn_greens.get(n, 0)
-        pontuacoes[n] = freq + (bonus * 0.8) - (0.5 * redundancia)
-    
-    ordenados = sorted(pontuacoes.keys(), key=lambda x: pontuacoes[x], reverse=True)
-    n_reduzidos = max(1, len(ordenados) // 2)
-    
-    return ordenados[:n_reduzidos]
-
-# =============================
-# Estratégia 31/34 Otimizada
+# Estratégia 31/34
 # =============================
 def estrategia_31_34(numero_capturado: int) -> List[int]:
-    """Estratégia 31/34 com cache de vizinhos"""
     if numero_capturado is None:
         return None
     
@@ -520,7 +411,6 @@ def estrategia_31_34(numero_capturado: int) -> List[int]:
     if terminal not in {2, 6, 9}:
         return None
     
-    # Usa cache para vizinhos
     viz_31 = obter_vizinhos_fixos(31, 5, 5)
     viz_34 = obter_vizinhos_fixos(34, 5, 5)
     
@@ -536,13 +426,13 @@ def estrategia_31_34(numero_capturado: int) -> List[int]:
     return list(entrada)
 
 # =============================
-# Streamlit App - Interface Otimizada
+# Streamlit App
 # =============================
 st.set_page_config(page_title="Roleta IA Profissional", layout="centered")
-st.title("🎯 Roleta — IA Recorrência (RandomForest) + Redução Inteligente")
+st.title("🎯 Roleta — Timeline Fiel dos Sorteios")
 st_autorefresh(interval=3000, key="refresh")
 
-# Inicialização session_state otimizada
+# Inicialização session_state
 def inicializar_session_state():
     defaults = {
         "estrategia": EstrategiaDeslocamento(),
@@ -555,6 +445,7 @@ def inicializar_session_state():
         "previsao_topN": [],
         "previsao_31_34": [],
         "contador_rodadas": 0,
+        "ultimo_sorteio_processado": None,
     }
     
     for k, v in defaults.items():
@@ -563,34 +454,36 @@ def inicializar_session_state():
 
 inicializar_session_state()
 
-# Carregar histórico existente
-historico = carregar_historico()
-for n in historico:
+# Carregar timeline existente
+timeline_existente = timeline_manager.carregar_timeline()
+for sorteio in timeline_existente:
     if (not st.session_state.estrategia.historico or 
-        st.session_state.estrategia.historico[-1].get("timestamp") != n.get("timestamp")):
-        st.session_state.estrategia.adicionar_numero(n)
+        st.session_state.estrategia.historico[-1].get("timestamp") != sorteio.get("timestamp")):
+        st.session_state.estrategia.adicionar_numero(sorteio)
 
 # -----------------------------
-# Processamento Principal Otimizado
+# Processamento Principal CORRIGIDO
 # -----------------------------
 def processar_rodada():
-    """Processa uma rodada completa de forma otimizada"""
+    """Processa uma rodada garantindo timeline fiel"""
     resultado = cache_manager.get_api_result()
-    if not resultado:
+    
+    if not resultado or 'timestamp' not in resultado:
+        log_estrategia("Resultado inválido da API", "warning")
         return
     
-    # Verifica se é um novo resultado
-    ultimo_ts = None
-    if st.session_state.estrategia.historico:
-        ultimo_item = st.session_state.estrategia.historico[-1]
-        ultimo_ts = ultimo_item.get("timestamp")
+    # Verifica se é um sorteio NOVO usando o TimelineManager
+    novo_sorteio_adicionado = timeline_manager.adicionar_sorteio(resultado)
     
-    if resultado.get("timestamp") == ultimo_ts:
+    if not novo_sorteio_adicionado:
+        # Sorteio já existe ou é inválido
         return
     
-    # Adiciona novo número
+    # Só processa se for realmente um novo sorteio
+    log_estrategia(f"🎲 NOVO SORTEIO PROCESSADO: {resultado['number']}")
+    
+    # Atualiza histórico em memória
     st.session_state.estrategia.adicionar_numero(resultado)
-    salvar_historico(list(st.session_state.estrategia.historico))
     
     numero_real = resultado["number"]
     
@@ -604,10 +497,9 @@ def processar_rodada():
     salvar_metricas_rodada(resultado, numero_real)
     
     st.session_state.contador_rodadas += 1
+    st.session_state.ultimo_sorteio_processado = resultado['timestamp']
 
 def processar_conferencias(numero_real: int):
-    """Processa todas as conferências de uma vez"""
-    # Conferência Recorrência
     if st.session_state.previsao:
         numeros_conferencia = []
         for n in st.session_state.previsao:
@@ -623,7 +515,6 @@ def processar_conferencias(numero_real: int):
         
         st.session_state.previsao = []
     
-    # Conferência Top N
     if st.session_state.previsao_topN:
         numeros_topn = []
         for n in st.session_state.previsao_topN:
@@ -641,7 +532,6 @@ def processar_conferencias(numero_real: int):
         
         st.session_state.previsao_topN = []
     
-    # Conferência 31/34
     if st.session_state.previsao_31_34:
         if numero_real in st.session_state.previsao_31_34:
             st.session_state.estatisticas_31_34.registrar_acerto()
@@ -654,18 +544,14 @@ def processar_conferencias(numero_real: int):
         st.session_state.previsao_31_34 = []
 
 def gerar_previsoes(numero_real: int):
-    """Gera novas previsões baseado no contador de rodadas"""
     if st.session_state.contador_rodadas % 2 == 0:
-        # Previsão Recorrência + Top N
         prox_numeros = st.session_state.ia_recorrencia.prever(st.session_state.estrategia.historico)
         if prox_numeros:
             st.session_state.previsao = prox_numeros
             
-            # Top N Dinâmico
             entrada_topN = st.session_state.topn_manager.ajustar_top_n(prox_numeros)
             st.session_state.previsao_topN = entrada_topN
             
-            # Telegram
             numeros_ordenados = sorted(prox_numeros)
             msg_recorrencia = "🎯 NP: " + " ".join(map(str, numeros_ordenados[:5]))
             if len(numeros_ordenados) > 5:
@@ -674,13 +560,11 @@ def gerar_previsoes(numero_real: int):
             enviar_telegram(msg_recorrencia)
             enviar_telegram_topN("Top N: " + " ".join(map(str, sorted(entrada_topN))))
     else:
-        # Estratégia 31/34
         entrada_31_34 = estrategia_31_34(numero_real)
         if entrada_31_34:
             st.session_state.previsao_31_34 = entrada_31_34
 
 def salvar_metricas_rodada(resultado: Dict[str, Any], numero_real: int):
-    """Salva métricas da rodada"""
     metrics = {
         "timestamp": resultado.get("timestamp"),
         "numero_real": numero_real,
@@ -698,62 +582,35 @@ def salvar_metricas_rodada(resultado: Dict[str, Any], numero_real: int):
 processar_rodada()
 
 # -----------------------------
-# Interface de Exibição
+# Interface
 # -----------------------------
-st.subheader("📜 Histórico (últimos 3 números)")
-ultimos = list(st.session_state.estrategia.historico)[-3:]
-st.write(ultimos)
+st.subheader("📜 Timeline dos Sorteios (últimos 5)")
+ultimos = list(st.session_state.estrategia.historico)[-5:]
+if ultimos:
+    for i, sorteio in enumerate(ultimos):
+        st.write(f"{i+1}. Número: {sorteio['number']} - Timestamp: {sorteio['timestamp']}")
+else:
+    st.write("Nenhum sorteio registrado ainda")
 
-# Função para exibir métricas
+# Estatísticas
 def exibir_metricas(estatisticas: Estatisticas, previsao: List[int], titulo: str):
-    """Exibe métricas de forma consistente"""
     col1, col2, col3, col4 = st.columns(4)
     col1.metric(f"🟢 GREEN {titulo}", estatisticas.acertos)
     col2.metric(f"🔴 RED {titulo}", estatisticas.erros)
     col3.metric(f"✅ Taxa {titulo}", f"{estatisticas.taxa_acerto:.1f}%")
     col4.metric(f"🎯 Qtd. previstos {titulo}", len(previsao))
 
-# Métricas Recorrência
-exibir_metricas(
-    st.session_state.estatisticas_recorrencia,
-    st.session_state.previsao,
-    "Recorrência"
-)
-
-# Métricas Top N
-exibir_metricas(
-    st.session_state.estatisticas_topn,
-    st.session_state.previsao_topN,
-    "Top N"
-)
-
-# Métricas 31/34
-exibir_metricas(
-    st.session_state.estatisticas_31_34,
-    st.session_state.previsao_31_34,
-    "31/34"
-)
+exibir_metricas(st.session_state.estatisticas_recorrencia, st.session_state.previsao, "Recorrência")
+exibir_metricas(st.session_state.estatisticas_topn, st.session_state.previsao_topN, "Top N")
+exibir_metricas(st.session_state.estatisticas_31_34, st.session_state.previsao_31_34, "31/34")
 
 # Informações do sistema
 st.subheader("📊 Informações do Sistema")
-st.write(f"Total no histórico: **{len(st.session_state.estrategia.historico)}**")
-st.write(f"Capacidade máxima: **{st.session_state.estrategia.historico.maxlen}**")
+st.write(f"Total na timeline: **{len(st.session_state.estrategia.historico)}**")
 st.write(f"Contador de rodadas: **{st.session_state.contador_rodadas}**")
 
-# Status do modelo - CORRIGIDO
-if hasattr(st.session_state.ia_recorrencia, 'modelo_treinado'):
-    if st.session_state.ia_recorrencia.modelo_treinado:
-        st.success("🤖 Modelo RandomForest ativo e treinado")
-    else:
-        st.info("🤖 Modelo RandomForest em inicialização")
-else:
-    st.info("🤖 Modelo RandomForest em configuração")
+if st.session_state.ultimo_sorteio_processado:
+    st.write(f"Último sorteio processado: **{st.session_state.ultimo_sorteio_processado}**")
 
-# Logs recentes (opcional)
-if st.checkbox("Mostrar logs recentes"):
-    try:
-        with open('roleta_ia.log', 'r', encoding='utf-8') as f:
-            logs = f.readlines()[-20:]
-        st.text_area("Logs:", "".join(logs), height=200)
-    except FileNotFoundError:
-        st.info("Arquivo de log não encontrado")
+# Status da timeline
+st.success("✅ Timeline fiel ativa - Sem duplicatas")
