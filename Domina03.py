@@ -513,8 +513,8 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
     if not st.session_state.estrategia.historico or round_id != st.session_state.estrategia.historico[-1].get("id"):
         # sua lógica aqui
     # padroniza o dict salvo em memória
-    numero_dict = {"id": str(round_id), "number": int(number_api), "timestamp": str(timestamp_api)}
-    st.session_state.estrategia.adicionar_numero(numero_dict)
+    #numero_dict = {"id": str(round_id), "number": int(number_api), "timestamp": str(timestamp_api)}
+    #st.session_state.estrategia.adicionar_numero(numero_dict)
 
     # salva no arquivo (evita duplicação por id)
     salvar_historico(round_id, number_api, timestamp=timestamp_api)
