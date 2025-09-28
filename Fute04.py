@@ -2,6 +2,8 @@ import requests
 import streamlit as st
 import datetime
 import pytz
+import json
+import os
 
 # =============================
 # Configurações API Football-Data.org
@@ -48,7 +50,8 @@ def buscar_jogos_fd(codigo_liga: str, data: str):
     if resp.status_code != 200:
         print("Erro buscar jogos:", resp.status_code, resp.text)
         return []
-    return resp.json().get("matches", [])
+    data = resp.json()
+    return data.get("matches", [])
 
 def conferir_jogo_fd(match_id: int):
     """Consulta o status e placar final de um jogo."""
@@ -59,58 +62,24 @@ def conferir_jogo_fd(match_id: int):
         return None
     return resp.json().get("match", {})
 
-def carregar_estatisticas_liga(codigo_liga: str):
-    """Carrega estatísticas dos times de uma liga (gols feitos/sofridos)."""
-    url = f"{BASE_URL_FD}/competitions/{codigo_liga}/standings"
-    resp = requests.get(url, headers=HEADERS, timeout=15)
-    if resp.status_code != 200:
-        print("Erro ao buscar estatísticas:", resp.status_code, resp.text)
-        return {}
-    data = resp.json()
+def calcular_gols_estimados(match):
+    """Exemplo simples: média de gols esperada = 2.5 (ajustar futuramente com stats reais)."""
+    return 2.5
 
-    stats = {}
-    for table in data.get("standings", []):
-        for entry in table.get("table", []):
-            team_id = entry["team"]["id"]
-            stats[team_id] = {
-                "name": entry["team"]["name"],
-                "played": entry["playedGames"],
-                "gf": entry["goalsFor"],
-                "ga": entry["goalsAgainst"]
-            }
-    return stats
-
-def calcular_gols_estimados(match, stats_liga):
-    """Calcula a estimativa de gols de um jogo usando as médias reais da temporada."""
-    home_id = match["homeTeam"]["id"]
-    away_id = match["awayTeam"]["id"]
-
-    home_stats = stats_liga.get(home_id, None)
-    away_stats = stats_liga.get(away_id, None)
-
-    if not home_stats or not away_stats:
-        return 2.5  # fallback
-
-    def media(time):
-        if time["played"] > 0:
-            return (time["gf"] + time["ga"]) / time["played"]
-        return 2.5
-
-    media_home = media(home_stats)
-    media_away = media(away_stats)
-
-    return round((media_home + media_away) / 2, 2)
-
-def selecionar_top3_distintos(partidas, stats_liga, max_por_faixa=3):
+def selecionar_top3_distintos(partidas, max_por_faixa=3):
     """Seleciona até 3 partidas distintas para cada faixa de gols."""
     top_15, top_25, top_35 = [], [], []
 
     for match in partidas:
-        estimativa = calcular_gols_estimados(match, stats_liga)
+        estimativa = calcular_gols_estimados(match)
+        fixture_id = match["id"]
+        home = match["homeTeam"]["name"]
+        away = match["awayTeam"]["name"]
+
         partida_info = {
-            "id": match["id"],
-            "home": match["homeTeam"]["name"],
-            "away": match["awayTeam"]["name"],
+            "id": fixture_id,
+            "home": home,
+            "away": away,
             "estimativa": estimativa
         }
 
@@ -144,24 +113,23 @@ with aba[0]:
 
     if st.button("🔎 Buscar Jogos & Enviar Alertas"):
         todas_partidas = []
-        mensagens = []
         for liga in ligas_escolhidas:
             jogos = buscar_jogos_fd(liga, hoje)
-            stats = carregar_estatisticas_liga(liga)
-            if jogos:
-                top15, top25, top35 = selecionar_top3_distintos(jogos, stats)
-                mensagens.append(f"🏆 {COMPETICOES_PADRAO[liga]}")
-                for titulo, lista in [("+1.5 Gols", top15), ("+2.5 Gols", top25), ("+3.5 Gols", top35)]:
-                    mensagens.append(f"\n🎯 *{titulo}*")
-                    for p in lista:
-                        mensagens.append(f"🏟️ {p['home']} vs {p['away']} | Estim.: {p['estimativa']}")
+            todas_partidas.extend(jogos)
 
-        if mensagens:
-            mensagem_final = "📢 *Top3 Alertas do Dia*\n" + "\n".join(mensagens)
-            st.code(mensagem_final)
-            enviar_telegram(mensagem_final)
-        else:
+        if not todas_partidas:
             st.warning("Nenhum jogo encontrado.")
+        else:
+            top15, top25, top35 = selecionar_top3_distintos(todas_partidas)
+
+            mensagem = "📢 *Top3 Alertas do Dia*\n"
+            for titulo, lista in [("+1.5 Gols", top15), ("+2.5 Gols", top25), ("+3.5 Gols", top35)]:
+                mensagem += f"\n🎯 *{titulo}*\n"
+                for p in lista:
+                    mensagem += f"🏟️ {p['home']} vs {p['away']} | Estim.: {p['estimativa']}\n"
+
+            st.code(mensagem)
+            enviar_telegram(mensagem)
 
 # -----------------------------
 # Aba 2 - Conferência
