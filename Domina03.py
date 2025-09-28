@@ -73,13 +73,31 @@ def carregar_historico():
         return historico_padronizado
     return []
 
-def salvar_historico(historico):
+#def salvar_historico(historico):
+ def salvar_historico(id_sorteio, numero_sorteado):
     try:
-        with open(HISTORICO_PATH, "w") as f:
-            json.dump(historico, f, indent=2)
+        # Carregar histórico existente
+        historico = []
+        if os.path.exists(HISTORICO_PATH):
+            with open(HISTORICO_PATH, "r") as f:
+                try:
+                    historico = json.load(f)
+                except Exception:
+                    historico = []
+
+        # Verificar se já existe esse ID no histórico
+        if not any(item["id"] == id_sorteio for item in historico):
+            historico.append({
+                "id": id_sorteio,
+                "numero": numero_sorteado
+            })
+
+            with open(HISTORICO_PATH, "w") as f:
+                json.dump(historico, f, indent=2)
+
     except Exception as e:
         logging.error(f"Erro ao salvar histórico: {e}")
-
+    
 def salvar_metricas(m):
     try:
         # salva lista de métricas (apenda)
