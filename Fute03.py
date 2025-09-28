@@ -213,8 +213,8 @@ def obter_odds(fixture_id):
 # =============================
 st.set_page_config(page_title="⚽ Alertas e Jogos Históricos", layout="wide")
 st.title("⚽ Sistema de Alertas de Gols + Jogos Históricos")
-#aba = st.tabs(["⚡ Alertas de Jogos Hoje", "📊 Jogos de Temporadas Passadas", "✅ Conferência dos Alertas Top 3"])
-aba = st.tabs(["⚡ Alertas de Jogos Hoje", "📊 Jogos de Temporadas Passadas"])
+aba = st.tabs(["⚡ Alertas de Jogos Hoje", "📊 Jogos de Temporadas Passadas", "✅ Conferência dos Alertas Top 3"])
+#aba = st.tabs(["⚡ Alertas de Jogos Hoje", "📊 Jogos de Temporadas Passadas"])
 
 # ---------- ABA 1: Alertas ----------
 with aba[0]:
@@ -367,7 +367,7 @@ with aba[1]:
 
 
 # ---------- ABA 3: Conferência dos jogos enviados ----------
-with st.tab("✅ Conferência dos Alertas Top 3"):
+with aba[2]:
     st.subheader("✅ Conferência dos jogos enviados (Top 3)")
 
     if st.button("🔍 Atualizar conferência"):
