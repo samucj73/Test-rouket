@@ -1,6 +1,7 @@
 import requests
 import datetime
 import time
+import streamlit as st
 
 # =============================
 # Configurações API
@@ -25,12 +26,11 @@ LIGAS = ["PL", "PD", "BL1", "SA", "FL1", "BSA"]
 # Funções utilitárias
 # =============================
 def enviar_alerta(msg: str):
-    """Envia alerta para o Telegram."""
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": msg, "parse_mode": "Markdown"}
     try:
         requests.post(BASE_URL_TG, data=payload, timeout=10)
     except Exception as e:
-        print("Erro ao enviar alerta:", e)
+        st.error(f"Erro ao enviar alerta: {e}")
 
 def carregar_estatisticas_liga(codigo_liga: str):
     url = f"{BASE_URL_FD}/competitions/{codigo_liga}/standings"
@@ -95,6 +95,7 @@ def selecionar_top3_distintos(partidas_info, max_por_faixa=3):
     return top_15, top_25, top_35
 
 def conferir_resultados(jogos_previstos):
+    resultados = []
     for faixa, jogos in jogos_previstos.items():
         for jogo in jogos:
             url = f"{BASE_URL_FD}/matches/{jogo['id']}"
@@ -116,20 +117,20 @@ def conferir_resultados(jogos_previstos):
                     bateu = total > 3.5
 
                 status = "🟢 GREEN" if bateu else "🔴 RED"
-                msg = (f"📊 Resultado confirmado\n"
-                       f"{jogo['home']} vs {jogo['away']}\n"
-                       f"Faixa: {faixa}\n"
-                       f"Placar: {gols_home} x {gols_away} → {total} gols\n"
-                       f"Status: {status}")
+                msg = f"{jogo['home']} vs {jogo['away']} | {faixa} | {total} gols → {status}"
                 enviar_alerta(msg)
+                resultados.append(msg)
+    return resultados
 
 # =============================
-# Execução principal
+# Interface Streamlit
 # =============================
-if __name__ == "__main__":
-    hoje = datetime.date.today().strftime("%Y-%m-%d")
-    enviar_alerta(f"📅 *Buscando jogos de hoje* ({hoje})")
+st.title("⚽ Alertas Automáticos de Gols")
+st.write("Baseado na API Football-Data.org")
 
+hoje = datetime.date.today().strftime("%Y-%m-%d")
+
+if st.button("📅 Buscar Jogos de Hoje"):
     todas_partidas = []
     stats_cache = {}
 
@@ -147,14 +148,25 @@ if __name__ == "__main__":
 
     top15, top25, top35 = selecionar_top3_distintos(todas_partidas)
 
-    # Enviar alertas
-    alerta = "🚨 *ALERTAS DO DIA*\n\n"
-    alerta += "*Top +2.5:*\n" + "\n".join([f"{j['home']} vs {j['away']} → {j['estimativa']}" for j in top25]) + "\n\n"
-    alerta += "*Top +1.5:*\n" + "\n".join([f"{j['home']} vs {j['away']} → {j['estimativa']}" for j in top15]) + "\n\n"
-    alerta += "*Top +3.5:*\n" + "\n".join([f"{j['home']} vs {j['away']} → {j['estimativa']}" for j in top35])
+    st.subheader("🚨 Top Jogos do Dia")
+    st.write("**Top +2.5:**")
+    for j in top25: st.write(f"{j['home']} vs {j['away']} → {j['estimativa']}")
 
-    enviar_alerta(alerta)
+    st.write("**Top +1.5:**")
+    for j in top15: st.write(f"{j['home']} vs {j['away']} → {j['estimativa']}")
 
-    # Conferir resultados (pode rodar em loop ou via cron job)
-    time.sleep(5)
-    conferir_resultados({"+1.5": top15, "+2.5": top25, "+3.5": top35})
+    st.write("**Top +3.5:**")
+    for j in top35: st.write(f"{j['home']} vs {j['away']} → {j['estimativa']}")
+
+    if st.button("🚀 Enviar Alertas no Telegram"):
+        alerta = "🚨 *ALERTAS DO DIA*\n\n"
+        alerta += "*Top +2.5:*\n" + "\n".join([f"{j['home']} vs {j['away']} → {j['estimativa']}" for j in top25]) + "\n\n"
+        alerta += "*Top +1.5:*\n" + "\n".join([f"{j['home']} vs {j['away']} → {j['estimativa']}" for j in top15]) + "\n\n"
+        alerta += "*Top +3.5:*\n" + "\n".join([f"{j['home']} vs {j['away']} → {j['estimativa']}" for j in top35])
+        enviar_alerta(alerta)
+        st.success("✅ Alertas enviados para o Telegram!")
+
+    if st.button("✅ Conferir Resultados"):
+        resultados = conferir_resultados({"+1.5": top15, "+2.5": top25, "+3.5": top35})
+        for r in resultados:
+            st.write(r)
