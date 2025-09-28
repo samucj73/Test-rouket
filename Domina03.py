@@ -1,4 +1,4 @@
-# Domina03.py (arquivo completo atualizado)
+# Domina03.py (versão atualizada — histórico padronizado e correções)
 import streamlit as st
 import json
 import os
@@ -9,6 +9,7 @@ import logging
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from typing import List
+import pandas as pd
 
 # =============================
 # Configurações
@@ -39,6 +40,11 @@ MAX_TOP_N = 10     # máximo de números na Top N
 MAX_PREVIEWS = 15   # limite final de previsões para reduzir custo
 
 # =============================
+# Logging
+# =============================
+logging.basicConfig(level=logging.INFO)
+
+# =============================
 # Utilitários (Telegram, histórico, API, vizinhos)
 # =============================
 def enviar_telegram(msg: str, token=TELEGRAM_TOKEN, chat_id=TELEGRAM_CHAT_ID):
@@ -58,49 +64,106 @@ def enviar_telegram_topN(msg: str, token=ALT_TELEGRAM_TOKEN, chat_id=ALT_TELEGRA
         logging.error(f"Erro ao enviar para Telegram Top N: {e}")
 
 def carregar_historico():
-    if os.path.exists(HISTORICO_PATH):
-        try:
-            with open(HISTORICO_PATH, "r") as f:
-                historico = json.load(f)
-        except Exception:
-            return []
-        historico_padronizado = []
-        for i, h in enumerate(historico):
-            if isinstance(h, dict) and "number" in h:
-                historico_padronizado.append(h)
-            else:
-                historico_padronizado.append({"number": h, "timestamp": f"manual_{i}"})
-        return historico_padronizado
-    return []
-
-#def salvar_historico(historico):
-def salvar_historico(id_sorteio, numero_sorteado):
+    """
+    Lê o arquivo de histórico e padroniza cada entrada para:
+    {"id": <str>, "number": <int>, "timestamp": <str>}
+    Aceita formatos antigos (lista de ints, ou dicts com keys diferentes).
+    """
+    if not os.path.exists(HISTORICO_PATH):
+        return []
     try:
-        # Carregar histórico existente
+        with open(HISTORICO_PATH, "r") as f:
+            raw = json.load(f)
+    except Exception as e:
+        logging.error(f"Erro lendo histórico: {e}")
+        return []
+
+    historico_padronizado = []
+    for i, item in enumerate(raw):
+        if isinstance(item, dict):
+            # tenta extrair id
+            id_val = (item.get("id") or item.get("roundId") or item.get("timestamp") or f"manual_{i}")
+            # tenta extrair número
+            if "number" in item:
+                number = item["number"]
+            elif "numero" in item:
+                number = item["numero"]
+            elif "winningNumber" in item:
+                number = item["winningNumber"]
+            else:
+                # busca primeiro int disponível
+                number = None
+                for v in item.values():
+                    if isinstance(v, int):
+                        number = v
+                        break
+            # tenta extrair timestamp
+            timestamp = item.get("timestamp") or item.get("startedAt") or item.get("time") or id_val
+            if number is None:
+                continue
+            historico_padronizado.append({"id": str(id_val), "number": int(number), "timestamp": str(timestamp)})
+        else:
+            # item é primitivo (ex: int) -> transforma
+            try:
+                n = int(item)
+                historico_padronizado.append({"id": f"manual_{i}", "number": n, "timestamp": f"manual_{i}"})
+            except Exception:
+                continue
+    return historico_padronizado
+
+def salvar_historico(id_sorteio, numero_sorteado, timestamp=None):
+    """
+    Salva um registro padronizado {"id","number","timestamp"} apenas se id ainda não existir no arquivo.
+    Evita gravação repetida por loops; permite mesmo número em sorteios distintos.
+    """
+    try:
         historico = []
         if os.path.exists(HISTORICO_PATH):
-            with open(HISTORICO_PATH, "r") as f:
-                try:
+            try:
+                with open(HISTORICO_PATH, "r") as f:
                     historico = json.load(f)
+            except Exception:
+                historico = []
+
+        # padroniza em memória o conteúdo atual (para evitar misturas de formatos)
+        normalized = []
+        for i, it in enumerate(historico):
+            if isinstance(it, dict):
+                id_val = it.get("id") or it.get("roundId") or f"old_{i}"
+                number = it.get("number") or it.get("numero") or it.get("winningNumber")
+                timestamp_val = it.get("timestamp") or it.get("startedAt") or f"old_{i}"
+                # se number ainda None, tenta achar um inteiro
+                if number is None:
+                    for v in it.values():
+                        if isinstance(v, int):
+                            number = v
+                            break
+                if number is None:
+                    continue
+                normalized.append({"id": str(id_val), "number": int(number), "timestamp": str(timestamp_val)})
+            else:
+                try:
+                    n = int(it)
+                    normalized.append({"id": f"old_{i}", "number": n, "timestamp": f"old_{i}"})
                 except Exception:
-                    historico = []
+                    continue
 
-        # Verificar se já existe esse ID no histórico
-        if not any(item["id"] == id_sorteio for item in historico):
-            historico.append({
-                "id": id_sorteio,
-                "numero": numero_sorteado
-            })
+        # checa se ID já existe
+        if any(entry.get("id") == str(id_sorteio) for entry in normalized):
+            logging.debug(f"ID {id_sorteio} já registrado — ignorando gravação.")
+            return
 
-            with open(HISTORICO_PATH, "w") as f:
-                json.dump(historico, f, indent=2)
+        ts = timestamp or f"captured_{id_sorteio}"
+        normalized.append({"id": str(id_sorteio), "number": int(numero_sorteado), "timestamp": str(ts)})
 
+        with open(HISTORICO_PATH, "w") as f:
+            json.dump(normalized, f, indent=2)
+        logging.info(f"Histórico salvo: id={id_sorteio}, number={numero_sorteado}")
     except Exception as e:
         logging.error(f"Erro ao salvar histórico: {e}")
-    
+
 def salvar_metricas(m):
     try:
-        # salva lista de métricas (apenda)
         hist = []
         if os.path.exists(METRICAS_PATH):
             try:
@@ -115,16 +178,38 @@ def salvar_metricas(m):
         logging.error(f"Erro ao salvar métricas: {e}")
 
 def fetch_latest_result():
+    """
+    Tenta extrair roundId/startedAt/number do JSON da API.
+    Retorna dict com chaves: {'number', 'timestamp', 'roundId'} ou None.
+    """
     try:
         response = requests.get(API_URL, headers=HEADERS, timeout=6)
         response.raise_for_status()
-        data = response.json()
-        game_data = data.get("data", {})
-        result = game_data.get("result", {})
-        outcome = result.get("outcome", {})
+        data = response.json() or {}
+        game_data = data.get("data", {}) or {}
+        result = game_data.get("result", {}) or {}
+        outcome = result.get("outcome", {}) or {}
+
+        # extração robusta de number
         number = outcome.get("number")
-        timestamp = game_data.get("startedAt")
-        return {"number": number, "timestamp": timestamp}
+        if number is None:
+            number = outcome.get("winningNumber") or result.get("winningNumber") or data.get("winningNumber") or data.get("number")
+
+        # timestamp/startedAt
+        timestamp = game_data.get("startedAt") or game_data.get("time") or data.get("timestamp") or data.get("time")
+
+        # round id
+        round_id = game_data.get("roundId") or game_data.get("id") or result.get("roundId") or data.get("roundId")
+
+        if number is None:
+            logging.error("fetch_latest_result: número não encontrado na resposta da API")
+            return None
+
+        return {
+            "number": int(number),
+            "timestamp": timestamp or str(round_id) or "",
+            "roundId": str(round_id) if round_id is not None else f"r_{timestamp}"
+        }
     except Exception as e:
         logging.error(f"Erro ao buscar resultado: {e}")
         return None
@@ -162,6 +247,7 @@ class EstrategiaDeslocamento:
     def __init__(self):
         self.historico = deque(maxlen=15000)
     def adicionar_numero(self, numero_dict):
+        # numero_dict esperado: {"id","number","timestamp"} ou {"number","timestamp"}
         self.historico.append(numero_dict)
 
 # =============================
@@ -175,13 +261,6 @@ class IA_Recorrencia_RF:
         self.model = None
 
     def _criar_features_simples(self, historico: List[dict]):
-        """
-        Features simples:
-        - último número (categorical -> numeric as index)
-        - penúltimo número
-        - vizinhos do último (1 antes, 1 depois)
-        Output X (n_samples x n_features), y (n_samples,)
-        """
         numeros = [h["number"] for h in historico]
         if len(numeros) < 3:
             return None, None
@@ -191,7 +270,7 @@ class IA_Recorrencia_RF:
             last2 = numeros[i-2]
             last1 = numeros[i-1]
             nbrs = obter_vizinhos(last1, self.layout, antes=2, depois=2)
-            feat = [last2, last1] + nbrs  # 2 + 3 = 5 features
+            feat = [last2, last1] + nbrs  # 2 + 4 = 6 features (pois obter_vizinhos com antes=2,depois=2 retorna 5 incl. número)
             X.append(feat)
             y.append(numeros[i])
         return np.array(X), np.array(y)
@@ -209,16 +288,9 @@ class IA_Recorrencia_RF:
             self.model = None
 
     def prever(self, historico):
-        """
-        Combina:
-         - estatística antes/depois (como já existia)
-         - predição do RandomForest (probabilidades)
-        Depois expande para vizinhos e aplica redução inteligente + limite (MAX_PREVIEWS)
-        """
         if not historico or len(historico) < 2:
             return []
 
-        # estatística antes/depois (seu método original)
         historico_lista = list(historico)
         ultimo_numero = historico_lista[-1]["number"] if isinstance(historico_lista[-1], dict) else None
         if ultimo_numero is None:
@@ -242,9 +314,7 @@ class IA_Recorrencia_RF:
         window_hist = historico_lista[-max(len(historico_lista), self.window):]
         self.treinar(window_hist)
 
-        # Se tivermos modelo, pegamos top classes por probabilidade
         if self.model is not None:
-            # build features for current last
             numeros = [h["number"] for h in historico_lista]
             last2 = numeros[-2] if len(numeros) > 1 else 0
             last1 = numeros[-1]
@@ -252,7 +322,6 @@ class IA_Recorrencia_RF:
             try:
                 probs = self.model.predict_proba([feats])[0]
                 classes = self.model.classes_
-                # pega top_n com maiores probabilidades
                 idx_top = np.argsort(probs)[-self.top_n:]
                 top_ml = [int(classes[i]) for i in idx_top]
                 candidatos = list(set(candidatos + top_ml))
@@ -267,12 +336,11 @@ class IA_Recorrencia_RF:
                 if v not in numeros_previstos:
                     numeros_previstos.append(v)
 
-        # Redução inteligente (metade), pontuando por frequência + topn_greens + penaliza redundância
+        # Redução inteligente (metade)
         numeros_previstos = reduzir_metade_inteligente(numeros_previstos, historico)
 
-        # Limita a quantidade final para MAX_PREVIEWS (escolhe os mais pontuados)
+        # Limita a quantidade final para MAX_PREVIEWS
         if len(numeros_previstos) > MAX_PREVIEWS:
-            # recalcula pontuações rápidas
             ultimos = [h["number"] for h in list(historico)[-WINDOW_SIZE:]] if historico else []
             freq = Counter(ultimos)
             topn_greens = st.session_state.get("topn_greens", {})
@@ -304,7 +372,7 @@ def reduzir_metade_inteligente(previsoes, historico):
     return ordenados[:n_reduzidos]
 
 # =============================
-# Ajuste Dinâmico Top N (mantive a sua lógica)
+# Ajuste Dinâmico Top N
 # =============================
 TOP_N_COOLDOWN = 3
 TOP_N_PROB_BASE = 0.3
@@ -357,7 +425,7 @@ def registrar_resultado_topN(numero_real, top_n):
             st.session_state.topn_history.append("R")
 
 # =============================
-# Estratégia 31/34 (mantive sua lógica)
+# Estratégia 31/34
 # =============================
 def estrategia_31_34(numero_capturado):
     if numero_capturado is None:
@@ -408,35 +476,48 @@ for k, v in defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
-# Carregar histórico existente
-historico = carregar_historico()
-for n in historico:
-    # evita duplicar caso já exista
-    if not st.session_state.estrategia.historico or st.session_state.estrategia.historico[-1].get("timestamp") != n.get("timestamp"):
+# Carregar histórico existente (padronizado) e popular deque da estratégia
+historico_pad = carregar_historico()
+for n in historico_pad:
+    # evita duplicar caso já exista: compara pelo id
+    if (not st.session_state.estrategia.historico) or (st.session_state.estrategia.historico[-1].get("id") != n.get("id")):
         st.session_state.estrategia.adicionar_numero(n)
 
-# -----------------------------
 # -----------------------------
 # Captura número (API)
 # -----------------------------
 resultado = fetch_latest_result()
 
-# acesso seguro ao último timestamp
+# acesso seguro ao último timestamp (comparação por timestamp)
 ultimo_ts = None
 if st.session_state.estrategia.historico:
     ultimo_item = st.session_state.estrategia.historico[-1]
     if isinstance(ultimo_item, dict) and "timestamp" in ultimo_item:
         ultimo_ts = ultimo_item["timestamp"]
+    elif isinstance(ultimo_item, dict) and "id" in ultimo_item:
+        ultimo_ts = ultimo_item["id"]
 
 # Nova rodada detectada
-if resultado and resultado.get("timestamp") != ultimo_ts:
-    numero_dict = {"number": resultado["number"], "timestamp": resultado["timestamp"]}
+if resultado:
+    # padroniza valores vindos da API
+    round_id = resultado.get("roundId") or resultado.get("timestamp") or f"r_{resultado.get('timestamp')}"
+    timestamp_api = resultado.get("timestamp") or round_id
+    number_api = resultado.get("number")
+    # se número inválido, ignora
+    if number_api is None:
+        logging.debug("Resultado retornado sem número válido; ignorando.")
+        resultado = None
+
+if resultado and resultado.get("timestamp") != ultimo_ts and (st.session_state.estrategia.historico == [] or round_id != (st.session_state.estrategia.historico[-1].get("id"))):
+    # padroniza o dict salvo em memória
+    numero_dict = {"id": str(round_id), "number": int(number_api), "timestamp": str(timestamp_api)}
     st.session_state.estrategia.adicionar_numero(numero_dict)
-    #salvar_historico(list(st.session_state.estrategia.historico))
-    #numero_real = numero_dict["number"]
-    id_sorteio = resultado["roundId"]         # ou como a API retorna
-    numero_sorteado = resultado["winningNumber"]
-    salvar_historico(id_sorteio, numero_sorteado) 
+
+    # salva no arquivo (evita duplicação por id)
+    salvar_historico(round_id, number_api, timestamp=timestamp_api)
+
+    # define numero_real para conferências mais abaixo
+    numero_real = int(number_api)
 
     # -----------------------------
     # Conferência Recorrência
@@ -521,10 +602,11 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
     st.session_state.contador_rodadas += 1
 
     # -----------------------------
-    # Salvar métricas após cada rodada
+    # Salvar métricas após cada rodada (inclui id/timestamp)
     # -----------------------------
     metrics = {
-        "timestamp": resultado.get("timestamp"),
+        "timestamp": timestamp_api,
+        "roundId": round_id,
         "numero_real": numero_real,
         "acertos": st.session_state.get("acertos", 0),
         "erros": st.session_state.get("erros", 0),
@@ -535,11 +617,10 @@ if resultado and resultado.get("timestamp") != ultimo_ts:
     }
     salvar_metricas(metrics)
 
-
 # -----------------------------
 # Histórico e métricas (exibição)
 # -----------------------------
-st.subheader("📜 Histórico (últimos 3 números)")
+st.subheader("📜 Histórico (últimos 3 registros)")
 ultimos = list(st.session_state.estrategia.historico)[-3:]
 st.write(ultimos)
 
@@ -579,6 +660,7 @@ col1.metric("🟢 GREEN 31/34", acertos_31_34)
 col2.metric("🔴 RED 31/34", erros_31_34)
 col3.metric("✅ Taxa 31/34", f"{taxa_31_34:.1f}%")
 col4.metric("🎯 Qtd. previstos 31/34", qtd_previstos_31_34)
+
 # -----------------------------
 # Exibir tamanho do histórico
 # -----------------------------
@@ -586,35 +668,55 @@ st.subheader("📊 Informações do Histórico")
 st.write(f"Total de números armazenados no histórico: **{len(st.session_state.estrategia.historico)}**")
 st.write(f"Capacidade máxima do deque: **{st.session_state.estrategia.historico.maxlen}**")
 
-#Analise o código acima  da parte da ia recorrência vamos otimizar essa parte
-
 # =============================
 # Botões de Download
 # =============================
 st.subheader("⬇️ Download dos Arquivos")
 
-# Botão para baixar o histórico de sorteios
+# Histórico: JSON + CSV
 if os.path.exists(HISTORICO_PATH):
     with open(HISTORICO_PATH, "r") as f:
         historico_json = f.read()
     st.download_button(
-        label="📜 Baixar Histórico de Números",
+        label="📜 Baixar Histórico (JSON)",
         data=historico_json,
         file_name="historico_deslocamento.json",
         mime="application/json"
     )
+    try:
+        df_hist = pd.DataFrame(json.loads(historico_json))
+        csv_data = df_hist.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            label="📜 Baixar Histórico (CSV)",
+            data=csv_data,
+            file_name="historico_deslocamento.csv",
+            mime="text/csv"
+        )
+    except Exception as e:
+        st.warning(f"Não foi possível converter histórico para CSV: {e}")
 else:
     st.info("Nenhum histórico de números encontrado ainda.")
 
-# Botão para baixar as métricas
+# Métricas: JSON + CSV
 if os.path.exists(METRICAS_PATH):
     with open(METRICAS_PATH, "r") as f:
         metricas_json = f.read()
     st.download_button(
-        label="📊 Baixar Histórico de Métricas",
+        label="📊 Baixar Histórico de Métricas (JSON)",
         data=metricas_json,
         file_name="historico_metricas.json",
         mime="application/json"
     )
+    try:
+        df_metricas = pd.DataFrame(json.loads(metricas_json))
+        csv_data = df_metricas.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            label="📊 Baixar Histórico de Métricas (CSV)",
+            data=csv_data,
+            file_name="historico_metricas.csv",
+            mime="text/csv"
+        )
+    except Exception as e:
+        st.warning(f"Não foi possível converter métricas para CSV: {e}")
 else:
     st.info("Nenhuma métrica registrada ainda.")
