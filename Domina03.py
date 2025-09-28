@@ -510,7 +510,7 @@ if resultado:
 
 #if resultado and resultado.get("timestamp") != ultimo_ts and (st.session_state.estrategia.historico == [] or round_id != (st.session_state.estrategia.historico[-1].get("id"))):
     if resultado and resultado.get("timestamp") != ultimo_ts:
-    if not st.session_state.estrategia.historico or round_id != st.session_state.estrategia.historico[-1].get("id"):
+         if not st.session_state.estrategia.historico or round_id != st.session_state.estrategia.historico[-1].get("id"):
         # sua lógica aqui
     # padroniza o dict salvo em memória
     numero_dict = {"id": str(round_id), "number": int(number_api), "timestamp": str(timestamp_api)}
