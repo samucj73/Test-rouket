@@ -566,3 +566,34 @@ st.write(f"Total de números armazenados no histórico: **{len(st.session_state.
 st.write(f"Capacidade máxima do deque: **{st.session_state.estrategia.historico.maxlen}**")
 
 #Analise o código acima  da parte da ia recorrência vamos otimizar essa parte
+
+# =============================
+# Botões de Download
+# =============================
+st.subheader("⬇️ Download dos Arquivos")
+
+# Botão para baixar o histórico de sorteios
+if os.path.exists(HISTORICO_PATH):
+    with open(HISTORICO_PATH, "r") as f:
+        historico_json = f.read()
+    st.download_button(
+        label="📜 Baixar Histórico de Números",
+        data=historico_json,
+        file_name="historico_deslocamento.json",
+        mime="application/json"
+    )
+else:
+    st.info("Nenhum histórico de números encontrado ainda.")
+
+# Botão para baixar as métricas
+if os.path.exists(METRICAS_PATH):
+    with open(METRICAS_PATH, "r") as f:
+        metricas_json = f.read()
+    st.download_button(
+        label="📊 Baixar Histórico de Métricas",
+        data=metricas_json,
+        file_name="historico_metricas.json",
+        mime="application/json"
+    )
+else:
+    st.info("Nenhuma métrica registrada ainda.")
