@@ -1,4 +1,4 @@
-# Domina03.py (corrigido para timeline fiel dos sorteios)
+# Domina03.py (corrigido - mantendo estrutura original)
 import streamlit as st
 import json
 import os
@@ -8,9 +8,7 @@ from streamlit_autorefresh import st_autorefresh
 import logging
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
-from typing import List, Dict, Any
-import time
-import hashlib
+from typing import List
 
 # =============================
 # Configurações
@@ -35,266 +33,121 @@ ROULETTE_LAYOUT = [
     7, 28, 12, 35, 3, 26
 ]
 
-WINDOW_SIZE = 18
-MIN_TOP_N = 5
-MAX_TOP_N = 10
-MAX_PREVIEWS = 15
+WINDOW_SIZE = 18   # janela móvel para Top N dinâmico
+MIN_TOP_N = 5      # mínimo de números na Top N
+MAX_TOP_N = 10     # máximo de números na Top N
+MAX_PREVIEWS = 15   # limite final de previsões para reduzir custo
 
 # =============================
-# Configuração de Logging
+# Utilitários (Telegram, histórico, API, vizinhos)
 # =============================
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('roleta_ia.log', encoding='utf-8'),
-        logging.StreamHandler()
-    ]
-)
-
-def log_estrategia(mensagem: str, nivel: str = "info"):
-    log_func = getattr(logging, nivel.lower(), logging.info)
-    log_func(f"🎯 {mensagem}")
-
-# =============================
-# Sistema de Timeline Fiel
-# =============================
-class TimelineManager:
-    """Gerencia a timeline fiel dos sorteios sem duplicações"""
-    
-    def __init__(self, historico_path: str):
-        self.historico_path = historico_path
-        self._ultimo_hash = None
-        
-    def gerar_hash_sorteio(self, numero_dict: Dict[str, Any]) -> str:
-        """Gera hash único para cada sorteio baseado em timestamp + número"""
-        if not numero_dict or 'timestamp' not in numero_dict:
-            return None
-            
-        content = f"{numero_dict['timestamp']}_{numero_dict.get('number', '')}"
-        return hashlib.md5(content.encode()).hexdigest()
-    
-    def carregar_timeline(self) -> List[Dict[str, Any]]:
-        """Carrega timeline garantindo ordenação correta e sem duplicatas"""
-        if not os.path.exists(self.historico_path):
-            return []
-            
-        try:
-            with open(self.historico_path, "r", encoding='utf-8') as f:
-                historico = json.load(f)
-            
-            # Remove duplicatas e garante ordenação
-            timeline_limpa = self._remover_duplicatas(historico)
-            log_estrategia(f"Timeline carregada: {len(timeline_limpa)} sorteios únicos")
-            return timeline_limpa
-            
-        except Exception as e:
-            log_estrategia(f"Erro ao carregar timeline: {e}", "error")
-            return []
-    
-    def _remover_duplicatas(self, historico: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Remove entradas duplicadas baseado no hash"""
-        seen_hashes = set()
-        timeline_limpa = []
-        
-        for sorteio in historico:
-            hash_sorteio = self.gerar_hash_sorteio(sorteio)
-            if hash_sorteio and hash_sorteio not in seen_hashes:
-                seen_hashes.add(hash_sorteio)
-                timeline_limpa.append(sorteio)
-        
-        # Ordena por timestamp (mais recente primeiro)
-        timeline_limpa.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
-        return timeline_limpa
-    
-    def adicionar_sorteio(self, numero_dict: Dict[str, Any]) -> bool:
-        """Adiciona sorteio apenas se for novo, retorna True se adicionado"""
-        if not numero_dict or 'timestamp' not in numero_dict:
-            return False
-            
-        hash_novo = self.gerar_hash_sorteio(numero_dict)
-        if not hash_novo:
-            return False
-            
-        # Carrega timeline atual
-        timeline_atual = self.carregar_timeline()
-        
-        # Verifica se já existe
-        for sorteio_existente in timeline_atual:
-            if self.gerar_hash_sorteio(sorteio_existente) == hash_novo:
-                log_estrategia(f"Sorteio duplicado ignorado: {numero_dict}")
-                return False
-        
-        # Adiciona novo sorteio no início (mais recente primeiro)
-        timeline_atual.insert(0, numero_dict)
-        
-        # Mantém apenas os últimos 15000 sorteios
-        if len(timeline_atual) > 15000:
-            timeline_atual = timeline_atual[:15000]
-        
-        # Salva timeline atualizada
-        try:
-            with open(self.historico_path, "w", encoding='utf-8') as f:
-                json.dump(timeline_atual, f, indent=2)
-            log_estrategia(f"Novo sorteio adicionado: {numero_dict}")
-            return True
-        except Exception as e:
-            log_estrategia(f"Erro ao salvar timeline: {e}", "error")
-            return False
-
-# Inicializar Timeline Manager
-timeline_manager = TimelineManager(HISTORICO_PATH)
-
-# =============================
-# Classes de Gerenciamento
-# =============================
-class Estatisticas:
-    def __init__(self):
-        self.acertos = 0
-        self.erros = 0
-    
-    @property
-    def total(self):
-        return self.acertos + self.erros
-    
-    @property
-    def taxa_acerto(self):
-        return (self.acertos / self.total * 100) if self.total > 0 else 0.0
-    
-    def registrar_acerto(self):
-        self.acertos += 1
-        log_estrategia(f"ACERTO - Taxa: {self.taxa_acerto:.1f}%")
-    
-    def registrar_erro(self):
-        self.erros += 1
-        log_estrategia(f"ERRO - Taxa: {self.taxa_acerto:.1f}%")
-
-class EstrategiaDeslocamento:
-    def __init__(self):
-        self.historico = deque(maxlen=15000)
-    
-    def adicionar_numero(self, numero_dict: Dict[str, Any]):
-        # Só adiciona se for realmente novo (verificação adicional)
-        if self.historico:
-            ultimo = self.historico[-1]
-            if (ultimo.get('timestamp') == numero_dict.get('timestamp') and 
-                ultimo.get('number') == numero_dict.get('number')):
-                return  # Ignora duplicata
-        
-        self.historico.append(numero_dict)
-        log_estrategia(f"Número {numero_dict['number']} adicionado ao histórico")
-
-# =============================
-# Cache e API
-# =============================
-class CacheManager:
-    def __init__(self):
-        self._vizinhos_cache = {}
-        self._api_cache = None
-        self._api_cache_time = 0
-        self._cache_duration = 8
-    
-    def get_vizinhos(self, numero: int, antes: int = 2, depois: int = 2):
-        key = (numero, antes, depois)
-        if key not in self._vizinhos_cache:
-            self._vizinhos_cache[key] = self._calcular_vizinhos(numero, antes, depois)
-        return self._vizinhos_cache[key]
-    
-    def _calcular_vizinhos(self, numero: int, antes: int, depois: int):
-        if numero not in ROULETTE_LAYOUT:
-            return [numero]
-        
-        idx = ROULETTE_LAYOUT.index(numero)
-        n = len(ROULETTE_LAYOUT)
-        vizinhos = []
-        
-        for i in range(antes, 0, -1):
-            vizinhos.append(ROULETTE_LAYOUT[(idx - i) % n])
-        vizinhos.append(numero)
-        for i in range(1, depois + 1):
-            vizinhos.append(ROULETTE_LAYOUT[(idx + i) % n])
-        
-        return vizinhos
-    
-    def get_api_result(self):
-        current_time = time.time()
-        if (self._api_cache is None or 
-            current_time - self._api_cache_time > self._cache_duration):
-            self._api_cache = self._fetch_latest_result()
-            self._api_cache_time = current_time
-        return self._api_cache
-
-    def _fetch_latest_result(self):
-        try:
-            response = requests.get(API_URL, headers=HEADERS, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-            
-            game_data = data.get("data", {})
-            result = game_data.get("result", {})
-            outcome = result.get("outcome", {})
-            number = outcome.get("number")
-            timestamp = game_data.get("startedAt")
-            
-            if timestamp and number is not None:
-                log_estrategia(f"API - Novo resultado: {number} em {timestamp}")
-                return {"number": number, "timestamp": timestamp}
-            else:
-                log_estrategia("API - Dados incompletos recebidos", "warning")
-                return None
-                
-        except requests.exceptions.Timeout:
-            log_estrategia("Timeout na API", "warning")
-            return None
-        except Exception as e:
-            log_estrategia(f"Erro na API: {e}", "error")
-            return None
-
-cache_manager = CacheManager()
-
-# =============================
-# Funções Utilitárias
-# =============================
-def enviar_telegram(msg: str, token: str = TELEGRAM_TOKEN, chat_id: str = TELEGRAM_CHAT_ID):
+def enviar_telegram(msg: str, token=TELEGRAM_TOKEN, chat_id=TELEGRAM_CHAT_ID):
     try:
         url = f"https://api.telegram.org/bot{token}/sendMessage"
         payload = {"chat_id": chat_id, "text": msg}
-        response = requests.post(url, data=payload, timeout=10)
-        response.raise_for_status()
-        log_estrategia(f"Telegram: {msg[:80]}...")
+        requests.post(url, data=payload, timeout=10)
     except Exception as e:
-        log_estrategia(f"Erro Telegram: {e}", "error")
+        logging.error(f"Erro ao enviar para Telegram: {e}")
 
-def enviar_telegram_topN(msg: str):
-    enviar_telegram(msg, ALT_TELEGRAM_TOKEN, ALT_TELEGRAM_CHAT_ID)
-
-def salvar_metricas(metricas: Dict[str, Any]):
+def enviar_telegram_topN(msg: str, token=ALT_TELEGRAM_TOKEN, chat_id=ALT_TELEGRAM_CHAT_ID):
     try:
-        historico_metricas = []
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        payload = {"chat_id": chat_id, "text": msg}
+        requests.post(url, data=payload, timeout=10)
+    except Exception as e:
+        logging.error(f"Erro ao enviar para Telegram Top N: {e}")
+
+def carregar_historico():
+    if os.path.exists(HISTORICO_PATH):
+        try:
+            with open(HISTORICO_PATH, "r") as f:
+                historico = json.load(f)
+        except Exception:
+            return []
+        historico_padronizado = []
+        for i, h in enumerate(historico):
+            if isinstance(h, dict) and "number" in h:
+                historico_padronizado.append(h)
+            else:
+                historico_padronizado.append({"number": h, "timestamp": f"manual_{i}"})
+        return historico_padronizado
+    return []
+
+def salvar_historico(historico):
+    try:
+        with open(HISTORICO_PATH, "w") as f:
+            json.dump(historico, f, indent=2)
+    except Exception as e:
+        logging.error(f"Erro ao salvar histórico: {e}")
+
+def salvar_metricas(m):
+    try:
+        # salva lista de métricas (apenda)
+        hist = []
         if os.path.exists(METRICAS_PATH):
             try:
-                with open(METRICAS_PATH, "r", encoding='utf-8') as f:
-                    historico_metricas = json.load(f)
+                with open(METRICAS_PATH, "r") as f:
+                    hist = json.load(f)
             except Exception:
-                historico_metricas = []
-        
-        historico_metricas.append(metricas)
-        
-        with open(METRICAS_PATH, "w", encoding='utf-8') as f:
-            json.dump(historico_metricas, f, indent=2)
-        
-        log_estrategia(f"Métricas salvas")
+                hist = []
+        hist.append(m)
+        with open(METRICAS_PATH, "w") as f:
+            json.dump(hist, f, indent=2)
     except Exception as e:
-        log_estrategia(f"Erro ao salvar métricas: {e}", "error")
+        logging.error(f"Erro ao salvar métricas: {e}")
 
-def obter_vizinhos(numero: int, antes: int = 2, depois: int = 2):
-    return cache_manager.get_vizinhos(numero, antes, depois)
+def fetch_latest_result():
+    try:
+        response = requests.get(API_URL, headers=HEADERS, timeout=6)
+        response.raise_for_status()
+        data = response.json()
+        game_data = data.get("data", {})
+        result = game_data.get("result", {})
+        outcome = result.get("outcome", {})
+        number = outcome.get("number")
+        timestamp = game_data.get("startedAt")
+        return {"number": number, "timestamp": timestamp}
+    except Exception as e:
+        logging.error(f"Erro ao buscar resultado: {e}")
+        return None
 
-def obter_vizinhos_fixos(numero: int, antes: int = 5, depois: int = 5):
-    return cache_manager.get_vizinhos(numero, antes, depois)
+def obter_vizinhos(numero, layout, antes=2, depois=2):
+    if numero not in layout:
+        return [numero]
+    idx = layout.index(numero)
+    n = len(layout)
+    vizinhos = []
+    for i in range(antes, 0, -1):
+        vizinhos.append(layout[(idx - i) % n])
+    vizinhos.append(numero)
+    for i in range(1, depois + 1):
+        vizinhos.append(layout[(idx + i) % n])
+    return vizinhos
+
+def obter_vizinhos_fixos(numero, layout, antes=5, depois=5):
+    if numero not in layout:
+        return [numero]
+    idx = layout.index(numero)
+    n = len(layout)
+    vizinhos = []
+    for i in range(antes, 0, -1):
+        vizinhos.append(layout[(idx - i) % n])
+    vizinhos.append(numero)
+    for i in range(1, depois + 1):
+        vizinhos.append(layout[(idx + i) % n])
+    return vizinhos
 
 # =============================
-# IA Recorrência (versão simplificada para exemplo)
+# Estratégia
+# =============================
+class EstrategiaDeslocamento:
+    def __init__(self):
+        self.historico = deque(maxlen=15000)
+    def adicionar_numero(self, numero_dict):
+        self.historico.append(numero_dict)
+
+# =============================
+# IA Recorrência com RandomForest
 # =============================
 class IA_Recorrencia_RF:
     def __init__(self, layout=None, top_n=3, window=WINDOW_SIZE):
@@ -302,44 +155,138 @@ class IA_Recorrencia_RF:
         self.top_n = top_n
         self.window = window
         self.model = None
-        self._model_treinado = False
 
-    def prever(self, historico: List[Dict[str, Any]]) -> List[int]:
+    def _criar_features_simples(self, historico: List[dict]):
+        """
+        Features simples:
+        - último número (categorical -> numeric as index)
+        - penúltimo número
+        - vizinhos do último (1 antes, 1 depois)
+        Output X (n_samples x n_features), y (n_samples,)
+        """
+        numeros = [h["number"] for h in historico]
+        if len(numeros) < 3:
+            return None, None
+        X = []
+        y = []
+        for i in range(2, len(numeros)):
+            last2 = numeros[i-2]
+            last1 = numeros[i-1]
+            nbrs = obter_vizinhos(last1, self.layout, antes=2, depois=2)
+            feat = [last2, last1] + nbrs  # 2 + 3 = 5 features
+            X.append(feat)
+            y.append(numeros[i])
+        return np.array(X), np.array(y)
+
+    def treinar(self, historico):
+        X, y = self._criar_features_simples(historico)
+        if X is None or len(X) == 0:
+            self.model = None
+            return
+        try:
+            self.model = RandomForestClassifier(n_estimators=200, random_state=42)
+            self.model.fit(X, y)
+        except Exception as e:
+            logging.error(f"Erro treinando RF: {e}")
+            self.model = None
+
+    def prever(self, historico):
+        """
+        Combina:
+         - estatística antes/depois (como já existia)
+         - predição do RandomForest (probabilidades)
+        Depois expande para vizinhos e aplica redução inteligente + limite (MAX_PREVIEWS)
+        """
         if not historico or len(historico) < 2:
             return []
 
-        # Método estatístico simples
+        # estatística antes/depois (seu método original)
         historico_lista = list(historico)
-        ultimo_numero = historico_lista[-1]["number"]
-        
+        ultimo_numero = historico_lista[-1]["number"] if isinstance(historico_lista[-1], dict) else None
+        if ultimo_numero is None:
+            return []
+
         antes, depois = [], []
         for i, h in enumerate(historico_lista[:-1]):
-            if h.get("number") == ultimo_numero:
-                if i - 1 >= 0:
+            if isinstance(h, dict) and h.get("number") == ultimo_numero:
+                if i - 1 >= 0 and isinstance(historico_lista[i-1], dict):
                     antes.append(historico_lista[i-1]["number"])
-                if i + 1 < len(historico_lista):
+                if i + 1 < len(historico_lista) and isinstance(historico_lista[i+1], dict):
                     depois.append(historico_lista[i+1]["number"])
 
         cont_antes = Counter(antes)
         cont_depois = Counter(depois)
-        
         top_antes = [num for num, _ in cont_antes.most_common(self.top_n)]
         top_depois = [num for num, _ in cont_depois.most_common(self.top_n)]
-        
         candidatos = list(set(top_antes + top_depois))
-        
-        # Expande para vizinhos
+
+        # Treina o RF usando todo o histórico recente (janela)
+        window_hist = historico_lista[-max(len(historico_lista), self.window):]
+        self.treinar(window_hist)
+
+        # Se tivermos modelo, pegamos top classes por probabilidade
+        if self.model is not None:
+            # build features for current last
+            numeros = [h["number"] for h in historico_lista]
+            last2 = numeros[-2] if len(numeros) > 1 else 0
+            last1 = numeros[-1]
+            feats = [last2, last1] + obter_vizinhos(last1, self.layout, antes=1, depois=1)
+            try:
+                probs = self.model.predict_proba([feats])[0]
+                classes = self.model.classes_
+                # pega top_n com maiores probabilidades
+                idx_top = np.argsort(probs)[-self.top_n:]
+                top_ml = [int(classes[i]) for i in idx_top]
+                candidatos = list(set(candidatos + top_ml))
+            except Exception as e:
+                logging.error(f"Erro predict_proba RF: {e}")
+
+        # Expandir para vizinhos físicos
         numeros_previstos = []
         for n in candidatos:
-            vizinhos = obter_vizinhos(n, 2, 2)
-            for v in vizinhos:
+            vizs = obter_vizinhos(n, self.layout, antes=2, depois=2)
+            for v in vizs:
                 if v not in numeros_previstos:
                     numeros_previstos.append(v)
-        
-        return numeros_previstos[:MAX_PREVIEWS]
+
+        # Redução inteligente (metade), pontuando por frequência + topn_greens + penaliza redundância
+        numeros_previstos = reduzir_metade_inteligente(numeros_previstos, historico)
+
+        # Limita a quantidade final para MAX_PREVIEWS (escolhe os mais pontuados)
+        if len(numeros_previstos) > MAX_PREVIEWS:
+            # recalcula pontuações rápidas
+            ultimos = [h["number"] for h in list(historico)[-WINDOW_SIZE:]] if historico else []
+            freq = Counter(ultimos)
+            topn_greens = st.session_state.get("topn_greens", {})
+            scores = {}
+            for n in numeros_previstos:
+                scores[n] = freq.get(n, 0) + 0.8 * topn_greens.get(n, 0)
+            numeros_previstos = sorted(numeros_previstos, key=lambda x: scores.get(x, 0), reverse=True)[:MAX_PREVIEWS]
+
+        return numeros_previstos
 
 # =============================
-# Sistema de Top N Dinâmico
+# Redução inteligente (metade) - função reutilizável
+# =============================
+def reduzir_metade_inteligente(previsoes, historico):
+    if not previsoes:
+        return []
+    ultimos_numeros = [h["number"] for h in list(historico)[-WINDOW_SIZE:]] if historico else []
+    contagem_total = Counter(ultimos_numeros)
+    topn_greens = st.session_state.get("topn_greens", {})
+    pontuacoes = {}
+    for n in previsoes:
+        freq = contagem_total.get(n, 0)
+        vizinhos = obter_vizinhos(n, ROULETTE_LAYOUT, antes=1, depois=1)
+        redundancia = sum(1 for v in vizinhos if v in previsoes)
+        bonus = topn_greens.get(n, 0)
+        pontuacoes[n] = freq + (bonus * 0.8) - (0.5 * redundancia)
+    ordenados = sorted(pontuacoes.keys(), key=lambda x: pontuacoes[x], reverse=True)
+    n_reduzidos = max(1, len(ordenados) // 2)
+    return ordenados[:n_reduzidos]
+
+# =============================
+# Ajuste Dinâmico Top N (mantive a sua lógica)
 # =============================
 TOP_N_COOLDOWN = 3
 TOP_N_PROB_BASE = 0.3
@@ -347,270 +294,289 @@ TOP_N_PROB_MAX = 0.5
 TOP_N_PROB_MIN = 0.2
 TOP_N_WINDOW = 12
 
-class TopNManager:
-    def __init__(self):
-        self.history = deque(maxlen=TOP_N_WINDOW)
-        self.reds = {}
-        self.greens = {}
-    
-    def atualizar_cooldown(self):
-        novos_reds = {}
-        for num, cooldown in self.reds.items():
-            if cooldown > 1:
-                novos_reds[num] = cooldown - 1
-        self.reds = novos_reds
-    
-    def calcular_probabilidade(self):
-        if not self.history:
-            return TOP_N_PROB_BASE
-        
-        taxa_red = list(self.history).count("R") / len(self.history)
-        prob_min = TOP_N_PROB_BASE + (taxa_red * (TOP_N_PROB_MAX - TOP_N_PROB_BASE))
-        return min(max(prob_min, TOP_N_PROB_MIN), TOP_N_PROB_MAX)
-    
-    def ajustar_top_n(self, previsoes: List[int]) -> List[int]:
-        if not previsoes:
-            return previsoes[:MIN_TOP_N]
-        
-        self.atualizar_cooldown()
-        prob_min = self.calcular_probabilidade()
-        
-        filtrados = [num for num in previsoes if num not in self.reds]
-        
-        pesos = {}
-        for num in filtrados:
-            pesos[num] = 1.0 + self.greens.get(num, 0) * 0.05
-        
-        ordenados = sorted(pesos.keys(), key=lambda x: pesos[x], reverse=True)
-        n = max(MIN_TOP_N, min(MAX_TOP_N, int(len(ordenados) * prob_min) + MIN_TOP_N))
-        
-        return ordenados[:n]
-    
-    def registrar_resultado(self, numero_real: int, top_n: List[int]):
-        for num in top_n:
-            if num == numero_real:
-                self.greens[num] = self.greens.get(num, 0) + 1
-                self.history.append("G")
-                log_estrategia(f"Top N GREEN: {num}")
-            else:
-                self.reds[num] = TOP_N_COOLDOWN
-                self.history.append("R")
+if "topn_history" not in st.session_state:
+    st.session_state.topn_history = deque(maxlen=TOP_N_WINDOW)
+if "topn_reds" not in st.session_state:
+    st.session_state.topn_reds = {}
+if "topn_greens" not in st.session_state:
+    st.session_state.topn_greens = {}
+
+def atualizar_cooldown_reds():
+    novos_reds = {}
+    for num, rodadas in st.session_state.topn_reds.items():
+        if rodadas > 1:
+            novos_reds[num] = rodadas - 1
+    st.session_state.topn_reds = novos_reds
+
+def calcular_prob_min_topN():
+    historico = list(st.session_state.topn_history)
+    if not historico:
+        return TOP_N_PROB_BASE
+    taxa_red = historico.count("R") / len(historico)
+    prob_min = TOP_N_PROB_BASE + (taxa_red * (TOP_N_PROB_MAX - TOP_N_PROB_BASE))
+    return min(max(prob_min, TOP_N_PROB_MIN), TOP_N_PROB_MAX)
+
+def ajustar_top_n(previsoes, historico=None, min_n=MIN_TOP_N, max_n=MAX_TOP_N):
+    if not previsoes:
+        return previsoes[:min_n]
+    atualizar_cooldown_reds()
+    prob_min = calcular_prob_min_topN()
+    filtrados = [num for num in previsoes if num not in st.session_state.topn_reds]
+    pesos = {}
+    for num in filtrados:
+        pesos[num] = 1.0 + st.session_state.topn_greens.get(num, 0) * 0.05
+    ordenados = sorted(pesos.keys(), key=lambda x: pesos[x], reverse=True)
+    n = max(min_n, min(max_n, int(len(ordenados) * prob_min) + min_n))
+    return ordenados[:n]
+
+def registrar_resultado_topN(numero_real, top_n):
+    for num in top_n:
+        if num == numero_real:
+            st.session_state.topn_greens[num] = st.session_state.topn_greens.get(num, 0) + 1
+            st.session_state.topn_history.append("G")
+        else:
+            st.session_state.topn_reds[num] = TOP_N_COOLDOWN
+            st.session_state.topn_history.append("R")
 
 # =============================
-# Estratégia 31/34
+# Estratégia 31/34 (mantive sua lógica)
 # =============================
-def estrategia_31_34(numero_capturado: int) -> List[int]:
+def estrategia_31_34(numero_capturado):
     if numero_capturado is None:
         return None
-    
     try:
         terminal = int(str(numero_capturado)[-1])
-    except (ValueError, TypeError):
+    except Exception:
         return None
-    
     if terminal not in {2, 6, 9}:
         return None
-    
-    viz_31 = obter_vizinhos_fixos(31, 5, 5)
-    viz_34 = obter_vizinhos_fixos(34, 5, 5)
-    
+    viz_31 = obter_vizinhos_fixos(31, ROULETTE_LAYOUT, antes=5, depois=5)
+    viz_34 = obter_vizinhos_fixos(34, ROULETTE_LAYOUT, antes=5, depois=5)
     entrada = set([0, 26, 30] + viz_31 + viz_34)
-    
     msg = (
         "🎯 Estratégia 31/34 disparada!\n"
         f"Número capturado: {numero_capturado} (terminal {terminal})\n"
         "Entrar nos números: 31 34"
     )
     enviar_telegram(msg)
-    
     return list(entrada)
 
 # =============================
 # Streamlit App
 # =============================
 st.set_page_config(page_title="Roleta IA Profissional", layout="centered")
-st.title("🎯 Roleta — Timeline Fiel dos Sorteios")
+st.title("🎯 Roleta — IA Recorrência (RandomForest) + Redução Inteligente")
 st_autorefresh(interval=3000, key="refresh")
 
-# Inicialização session_state
-def inicializar_session_state():
-    defaults = {
-        "estrategia": EstrategiaDeslocamento(),
-        "ia_recorrencia": IA_Recorrencia_RF(layout=ROULETTE_LAYOUT, top_n=5, window=WINDOW_SIZE),
-        "topn_manager": TopNManager(),
-        "estatisticas_recorrencia": Estatisticas(),
-        "estatisticas_topn": Estatisticas(),
-        "estatisticas_31_34": Estatisticas(),
-        "previsao": [],
-        "previsao_topN": [],
-        "previsao_31_34": [],
-        "contador_rodadas": 0,
-        "ultimo_sorteio_processado": None,
-    }
-    
-    for k, v in defaults.items():
-        if k not in st.session_state:
-            st.session_state[k] = v
+# Inicialização session_state (todas as chaves necessárias)
+defaults = {
+    "estrategia": EstrategiaDeslocamento(),
+    "ia_recorrencia": IA_Recorrencia_RF(layout=ROULETTE_LAYOUT, top_n=5, window=WINDOW_SIZE),
+    "previsao": [],
+    "previsao_topN": [],
+    "previsao_31_34": [],
+    "acertos": 0,
+    "erros": 0,
+    "acertos_topN": 0,
+    "erros_topN": 0,
+    "acertos_31_34": 0,
+    "erros_31_34": 0,
+    "contador_rodadas": 0,
+    "topn_history": deque(maxlen=TOP_N_WINDOW),
+    "topn_reds": {},
+    "topn_greens": {},
+    "ultimo_timestamp_processado": None,  # NOVO: para evitar duplicatas
+}
+for k, v in defaults.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
 
-inicializar_session_state()
-
-# Carregar timeline existente
-timeline_existente = timeline_manager.carregar_timeline()
-for sorteio in timeline_existente:
-    if (not st.session_state.estrategia.historico or 
-        st.session_state.estrategia.historico[-1].get("timestamp") != sorteio.get("timestamp")):
-        st.session_state.estrategia.adicionar_numero(sorteio)
+# Carregar histórico existente
+historico = carregar_historico()
+for n in historico:
+    # evita duplicar caso já exista
+    if not st.session_state.estrategia.historico or st.session_state.estrategia.historico[-1].get("timestamp") != n.get("timestamp"):
+        st.session_state.estrategia.adicionar_numero(n)
+        # Atualiza o último timestamp processado
+        st.session_state.ultimo_timestamp_processado = n.get("timestamp")
 
 # -----------------------------
-# Processamento Principal CORRIGIDO
+# Captura número (API) - CORRIGIDO para evitar duplicatas
 # -----------------------------
-def processar_rodada():
-    """Processa uma rodada garantindo timeline fiel"""
-    resultado = cache_manager.get_api_result()
-    
-    if not resultado or 'timestamp' not in resultado:
-        log_estrategia("Resultado inválido da API", "warning")
-        return
-    
-    # Verifica se é um sorteio NOVO usando o TimelineManager
-    novo_sorteio_adicionado = timeline_manager.adicionar_sorteio(resultado)
-    
-    if not novo_sorteio_adicionado:
-        # Sorteio já existe ou é inválido
-        return
-    
-    # Só processa se for realmente um novo sorteio
-    log_estrategia(f"🎲 NOVO SORTEIO PROCESSADO: {resultado['number']}")
-    
-    # Atualiza histórico em memória
-    st.session_state.estrategia.adicionar_numero(resultado)
-    
-    numero_real = resultado["number"]
-    
-    # Processa conferências
-    processar_conferencias(numero_real)
-    
-    # Gera novas previsões
-    gerar_previsoes(numero_real)
-    
-    # Salva métricas
-    salvar_metricas_rodada(resultado, numero_real)
-    
-    st.session_state.contador_rodadas += 1
-    st.session_state.ultimo_sorteio_processado = resultado['timestamp']
+resultado = fetch_latest_result()
 
-def processar_conferencias(numero_real: int):
+# Verificação robusta para evitar duplicatas
+novo_sorteio = False
+if resultado and resultado.get("timestamp"):
+    # Se é o primeiro sorteio ou se o timestamp é diferente do último processado
+    if (st.session_state.ultimo_timestamp_processado is None or 
+        resultado.get("timestamp") != st.session_state.ultimo_timestamp_processado):
+        novo_sorteio = True
+        logging.info(f"🎲 NOVO SORTEIO: {resultado['number']} - {resultado['timestamp']}")
+
+# Nova rodada detectada (APENAS se for realmente novo)
+if resultado and novo_sorteio:
+    numero_dict = {"number": resultado["number"], "timestamp": resultado["timestamp"]}
+    st.session_state.estrategia.adicionar_numero(numero_dict)
+    salvar_historico(list(st.session_state.estrategia.historico))
+    
+    # ATUALIZA o último timestamp processado
+    st.session_state.ultimo_timestamp_processado = resultado["timestamp"]
+    
+    numero_real = numero_dict["number"]
+
+    # -----------------------------
+    # Conferência Recorrência
+    # -----------------------------
     if st.session_state.previsao:
-        numeros_conferencia = []
+        numeros_com_vizinhos = []
         for n in st.session_state.previsao:
-            numeros_conferencia.extend(obter_vizinhos(n, 1, 1))
-        
-        if numero_real in set(numeros_conferencia):
-            st.session_state.estatisticas_recorrencia.registrar_acerto()
-            st.success(f"🟢 GREEN! Número {numero_real} previsto.")
-            enviar_telegram(f"🟢 GREEN! Número {numero_real} previsto pela recorrência.")
+            for v in obter_vizinhos(n, ROULETTE_LAYOUT, antes=1, depois=1):
+                if v not in numeros_com_vizinhos:
+                    numeros_com_vizinhos.append(v)
+        if numero_real in numeros_com_vizinhos:
+            st.session_state.acertos += 1
+            st.success(f"🟢 GREEN! Número {numero_real} previsto pela recorrência (incluindo vizinhos).")
+            enviar_telegram(f"🟢 GREEN! Número {numero_real} previsto pela recorrência (incluindo vizinhos).")
         else:
-            st.session_state.estatisticas_recorrencia.registrar_erro()
-            st.error(f"🔴 RED! Número {numero_real} não previsto.")
-        
+            st.session_state.erros += 1
+            st.error(f"🔴 RED! Número {numero_real} não estava na previsão de recorrência nem nos vizinhos.")
+            enviar_telegram(f"🔴 RED! Número {numero_real} não estava na previsão de recorrência nem nos vizinhos.")
         st.session_state.previsao = []
-    
+
+    # -----------------------------
+    # Conferência TopN
+    # -----------------------------
     if st.session_state.previsao_topN:
-        numeros_topn = []
+        topN_com_vizinhos = []
         for n in st.session_state.previsao_topN:
-            numeros_topn.extend(obter_vizinhos(n, 1, 1))
-        
-        if numero_real in set(numeros_topn):
-            st.session_state.estatisticas_topn.registrar_acerto()
-            st.session_state.topn_manager.registrar_resultado(numero_real, st.session_state.previsao_topN)
-            st.success(f"🟢 GREEN Top N! Número {numero_real}.")
-            enviar_telegram_topN(f"🟢 GREEN Top N! Número {numero_real}.")
+            for v in obter_vizinhos(n, ROULETTE_LAYOUT, antes=1, depois=1):
+                if v not in topN_com_vizinhos:
+                    topN_com_vizinhos.append(v)
+        if numero_real in topN_com_vizinhos:
+            st.session_state.acertos_topN += 1
+            st.success(f"🟢 GREEN Top N! Número {numero_real} estava entre os mais prováveis.")
+            enviar_telegram_topN(f"🟢 GREEN Top N! Número {numero_real} estava entre os mais prováveis.")
+            st.session_state.topn_greens[numero_real] = st.session_state.topn_greens.get(numero_real, 0) + 1
         else:
-            st.session_state.estatisticas_topn.registrar_erro()
-            st.session_state.topn_manager.registrar_resultado(numero_real, st.session_state.previsao_topN)
-            st.error(f"🔴 RED Top N! Número {numero_real}.")
-        
+            st.session_state.erros_topN += 1
+            st.error(f"🔴 RED Top N! Número {numero_real} não estava entre os mais prováveis.")
+            enviar_telegram_topN(f"🔴 RED Top N! Número {numero_real} não estava entre os mais prováveis.")
         st.session_state.previsao_topN = []
-    
+
+    # -----------------------------
+    # Conferência 31/34
+    # -----------------------------
     if st.session_state.previsao_31_34:
         if numero_real in st.session_state.previsao_31_34:
-            st.session_state.estatisticas_31_34.registrar_acerto()
-            st.success(f"🟢 GREEN 31/34! Número {numero_real}.")
-            enviar_telegram(f"🟢 GREEN 31/34! Número {numero_real}.")
+            st.session_state.acertos_31_34 += 1
+            st.success(f"🟢 GREEN (31/34)! Número {numero_real} estava na entrada 31/34.")
+            enviar_telegram(f"🟢 GREEN (31/34)! Número {numero_real} estava na entrada 31/34.")
         else:
-            st.session_state.estatisticas_31_34.registrar_erro()
-            st.error(f"🔴 RED 31/34! Número {numero_real}.")
-        
+            st.session_state.erros_31_34 += 1
+            st.error(f"🔴 RED (31/34)! Número {numero_real} não estava na entrada 31/34.")
+            enviar_telegram(f"🔴 RED (31/34)! Número {numero_real} não estava na entrada 31/34.")
         st.session_state.previsao_31_34 = []
 
-def gerar_previsoes(numero_real: int):
+    # -----------------------------
+    # Gerar próxima previsão
+    # -----------------------------
     if st.session_state.contador_rodadas % 2 == 0:
+        # Usa IA Recorrência RandomForest
         prox_numeros = st.session_state.ia_recorrencia.prever(st.session_state.estrategia.historico)
         if prox_numeros:
+            prox_numeros = list(dict.fromkeys(prox_numeros))  # garante unicidade
             st.session_state.previsao = prox_numeros
-            
-            entrada_topN = st.session_state.topn_manager.ajustar_top_n(prox_numeros)
+
+            entrada_topN = ajustar_top_n(prox_numeros, st.session_state.estrategia.historico)
             st.session_state.previsao_topN = entrada_topN
-            
-            numeros_ordenados = sorted(prox_numeros)
-            msg_recorrencia = "🎯 NP: " + " ".join(map(str, numeros_ordenados[:5]))
-            if len(numeros_ordenados) > 5:
-                msg_recorrencia += "\n" + " ".join(map(str, numeros_ordenados[5:10]))
-            
-            enviar_telegram(msg_recorrencia)
+
+            # Envio Telegram
+            s = sorted(prox_numeros)
+            enviar_telegram("🎯 NP: " + " ".join(map(str, s[:5])) +
+                            ("\n" + " ".join(map(str, s[5:])) if len(s) > 5 else ""))
             enviar_telegram_topN("Top N: " + " ".join(map(str, sorted(entrada_topN))))
     else:
+        # Estratégia 31/34
         entrada_31_34 = estrategia_31_34(numero_real)
         if entrada_31_34:
             st.session_state.previsao_31_34 = entrada_31_34
 
-def salvar_metricas_rodada(resultado: Dict[str, Any], numero_real: int):
+    # -----------------------------
+    # Incrementa contador de rodadas
+    # -----------------------------
+    st.session_state.contador_rodadas += 1
+
+    # -----------------------------
+    # Salvar métricas após cada rodada
+    # -----------------------------
     metrics = {
         "timestamp": resultado.get("timestamp"),
         "numero_real": numero_real,
-        "acertos_recorrencia": st.session_state.estatisticas_recorrencia.acertos,
-        "erros_recorrencia": st.session_state.estatisticas_recorrencia.erros,
-        "acertos_topn": st.session_state.estatisticas_topn.acertos,
-        "erros_topn": st.session_state.estatisticas_topn.erros,
-        "acertos_31_34": st.session_state.estatisticas_31_34.acertos,
-        "erros_31_34": st.session_state.estatisticas_31_34.erros,
-        "contador_rodadas": st.session_state.contador_rodadas
+        "acertos": st.session_state.get("acertos", 0),
+        "erros": st.session_state.get("erros", 0),
+        "acertos_topN": st.session_state.get("acertos_topN", 0),
+        "erros_topN": st.session_state.get("erros_topN", 0),
+        "acertos_31_34": st.session_state.get("acertos_31_34", 0),
+        "erros_31_34": st.session_state.get("erros_31_34", 0)
     }
     salvar_metricas(metrics)
 
-# Executa processamento
-processar_rodada()
+# Exibir informação sobre duplicatas
+if resultado and not novo_sorteio:
+    st.info(f"⏳ Aguardando novo sorteio... Último processado: {st.session_state.ultimo_timestamp_processado}")
 
 # -----------------------------
-# Interface
+# Histórico e métricas (exibição)
 # -----------------------------
-st.subheader("📜 Timeline dos Sorteios (últimos 5)")
-ultimos = list(st.session_state.estrategia.historico)[-5:]
-if ultimos:
-    for i, sorteio in enumerate(ultimos):
-        st.write(f"{i+1}. Número: {sorteio['number']} - Timestamp: {sorteio['timestamp']}")
-else:
-    st.write("Nenhum sorteio registrado ainda")
+st.subheader("📜 Histórico (últimos 3 números)")
+ultimos = list(st.session_state.estrategia.historico)[-3:]
+st.write(ultimos)
 
-# Estatísticas
-def exibir_metricas(estatisticas: Estatisticas, previsao: List[int], titulo: str):
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric(f"🟢 GREEN {titulo}", estatisticas.acertos)
-    col2.metric(f"🔴 RED {titulo}", estatisticas.erros)
-    col3.metric(f"✅ Taxa {titulo}", f"{estatisticas.taxa_acerto:.1f}%")
-    col4.metric(f"🎯 Qtd. previstos {titulo}", len(previsao))
+# Estatísticas Recorrência
+acertos = st.session_state.get("acertos", 0)
+erros = st.session_state.get("erros", 0)
+total = acertos + erros
+taxa = (acertos / total * 100) if total > 0 else 0.0
+qtd_previstos_rec = len(st.session_state.get("previsao", []))
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("🟢 GREEN", acertos)
+col2.metric("🔴 RED", erros)
+col3.metric("✅ Taxa de acerto", f"{taxa:.1f}%")
+col4.metric("🎯 Qtd. previstos Recorrência", qtd_previstos_rec)
 
-exibir_metricas(st.session_state.estatisticas_recorrencia, st.session_state.previsao, "Recorrência")
-exibir_metricas(st.session_state.estatisticas_topn, st.session_state.previsao_topN, "Top N")
-exibir_metricas(st.session_state.estatisticas_31_34, st.session_state.previsao_31_34, "31/34")
+# Estatísticas Top N Dinâmico
+acertos_topN = st.session_state.get("acertos_topN", 0)
+erros_topN = st.session_state.get("erros_topN", 0)
+total_topN = acertos_topN + erros_topN
+taxa_topN = (acertos_topN / total_topN * 100) if total_topN > 0 else 0.0
+qtd_previstos_topN = len(st.session_state.get("previsao_topN", []))
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("🟢 GREEN Top N", acertos_topN)
+col2.metric("🔴 RED Top N", erros_topN)
+col3.metric("✅ Taxa Top N", f"{taxa_topN:.1f}%")
+col4.metric("🎯 Qtd. previstos Top N", qtd_previstos_topN)
 
-# Informações do sistema
-st.subheader("📊 Informações do Sistema")
-st.write(f"Total na timeline: **{len(st.session_state.estrategia.historico)}**")
-st.write(f"Contador de rodadas: **{st.session_state.contador_rodadas}**")
+# Estatísticas 31/34
+acertos_31_34 = st.session_state.get("acertos_31_34", 0)
+erros_31_34 = st.session_state.get("erros_31_34", 0)
+total_31_34 = acertos_31_34 + erros_31_34
+taxa_31_34 = (acertos_31_34 / total_31_34 * 100) if total_31_34 > 0 else 0.0
+qtd_previstos_31_34 = len(st.session_state.get("previsao_31_34", []))
 
-if st.session_state.ultimo_sorteio_processado:
-    st.write(f"Último sorteio processado: **{st.session_state.ultimo_sorteio_processado}**")
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("🟢 GREEN 31/34", acertos_31_34)
+col2.metric("🔴 RED 31/34", erros_31_34)
+col3.metric("✅ Taxa 31/34", f"{taxa_31_34:.1f}%")
+col4.metric("🎯 Qtd. previstos 31/34", qtd_previstos_31_34)
 
-# Status da timeline
-st.success("✅ Timeline fiel ativa - Sem duplicatas")
+# -----------------------------
+# Exibir tamanho do histórico
+# -----------------------------
+st.subheader("📊 Informações do Histórico")
+st.write(f"Total de números armazenados no histórico: **{len(st.session_state.estrategia.historico)}**")
+st.write(f"Capacidade máxima do deque: **{st.session_state.estrategia.historico.maxlen}**")
+
+# Informação sobre último timestamp
+if st.session_state.ultimo_timestamp_processado:
+    st.write(f"Último sorteio processado: **{st.session_state.ultimo_timestamp_processado}**")
