@@ -74,7 +74,7 @@ def carregar_historico():
     return []
 
 #def salvar_historico(historico):
- def salvar_historico(id_sorteio, numero_sorteado):
+def salvar_historico(id_sorteio, numero_sorteado):
     try:
         # Carregar histórico existente
         historico = []
