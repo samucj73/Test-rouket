@@ -1,4 +1,4 @@
-# Domina03.py (arquivo completo atualizado e otimizado)
+# Domina03.py (arquivo completo corrigido)
 import streamlit as st
 import json
 import os
@@ -129,9 +129,32 @@ class CacheManager:
         current_time = time.time()
         if (self._api_cache is None or 
             current_time - self._api_cache_time > self._cache_duration):
-            self._api_cache = fetch_latest_result()
+            self._api_cache = self._fetch_latest_result()
             self._api_cache_time = current_time
         return self._api_cache
+
+    def _fetch_latest_result(self):
+        """Busca resultado da API com tratamento robusto"""
+        try:
+            response = requests.get(API_URL, headers=HEADERS, timeout=8)
+            response.raise_for_status()
+            data = response.json()
+            
+            game_data = data.get("data", {})
+            result = game_data.get("result", {})
+            outcome = result.get("outcome", {})
+            number = outcome.get("number")
+            timestamp = game_data.get("startedAt")
+            
+            log_estrategia(f"API resultado: {number} (timestamp: {timestamp})")
+            return {"number": number, "timestamp": timestamp}
+            
+        except requests.exceptions.Timeout:
+            log_estrategia("Timeout na requisição da API", "warning")
+            return None
+        except Exception as e:
+            log_estrategia(f"Erro na API: {e}", "error")
+            return None
 
 # Inicializar cache global
 cache_manager = CacheManager()
@@ -209,29 +232,6 @@ def salvar_metricas(metricas: Dict[str, Any]):
     except Exception as e:
         log_estrategia(f"Erro ao salvar métricas: {e}", "error")
 
-def fetch_latest_result() -> Dict[str, Any]:
-    """Busca resultado da API com tratamento robusto"""
-    try:
-        response = requests.get(API_URL, headers=HEADERS, timeout=8)
-        response.raise_for_status()
-        data = response.json()
-        
-        game_data = data.get("data", {})
-        result = game_data.get("result", {})
-        outcome = result.get("outcome", {})
-        number = outcome.get("number")
-        timestamp = game_data.get("startedAt")
-        
-        log_estrategia(f"API resultado: {number} (timestamp: {timestamp})")
-        return {"number": number, "timestamp": timestamp}
-        
-    except requests.exceptions.Timeout:
-        log_estrategia("Timeout na requisição da API", "warning")
-        return None
-    except Exception as e:
-        log_estrategia(f"Erro na API: {e}", "error")
-        return None
-
 # Funções de vizinhos usando cache
 def obter_vizinhos(numero: int, antes: int = 2, depois: int = 2):
     return cache_manager.get_vizinhos(numero, antes, depois)
@@ -250,6 +250,7 @@ class IA_Recorrencia_RF:
         self.model = None
         self._ultimo_treino = 0
         self._treino_interval = 50  # Treinar a cada 50 rodadas
+        self._model_treinado = False  # Flag para verificar se o modelo está treinado
 
     def _criar_features_otimizado(self, historico: List[Dict[str, Any]]):
         """Features otimizadas com pré-alocação"""
@@ -280,6 +281,7 @@ class IA_Recorrencia_RF:
     def treinar(self, historico: List[Dict[str, Any]]):
         """Treina modelo apenas quando necessário"""
         if len(historico) < self.window:
+            self._model_treinado = False
             return
         
         # Treina apenas periodicamente para performance
@@ -288,6 +290,7 @@ class IA_Recorrencia_RF:
             
         X, y = self._criar_features_otimizado(historico)
         if X is None or len(X) < 10:  # Mínimo de amostras
+            self._model_treinado = False
             return
             
         try:
@@ -299,10 +302,12 @@ class IA_Recorrencia_RF:
             )
             self.model.fit(X, y)
             self._ultimo_treino = len(historico)
+            self._model_treinado = True
             log_estrategia(f"Modelo RF treinado com {len(X)} amostras")
         except Exception as e:
             log_estrategia(f"Erro treinando RF: {e}", "error")
             self.model = None
+            self._model_treinado = False
 
     def prever(self, historico: List[Dict[str, Any]]) -> List[int]:
         """Previsão otimizada com fallback para método estatístico"""
@@ -313,9 +318,12 @@ class IA_Recorrencia_RF:
         candidatos = self._previsao_estatistica(historico)
         
         # Adiciona predição ML se disponível
-        if self.model is not None and len(historico) >= 3:
-            candidatos_ml = self._previsao_ml(historico)
-            candidatos.extend(candidatos_ml)
+        if self._model_treinado and self.model is not None and len(historico) >= 3:
+            try:
+                candidatos_ml = self._previsao_ml(historico)
+                candidatos.extend(candidatos_ml)
+            except Exception as e:
+                log_estrategia(f"Erro na previsão ML, usando apenas estatística: {e}", "warning")
         
         # Remove duplicatas mantendo ordem
         candidatos = list(dict.fromkeys(candidatos))
@@ -354,7 +362,12 @@ class IA_Recorrencia_RF:
             last2, last1 = numeros[-2], numeros[-1]
             vizinhos = obter_vizinhos(last1, 1, 1)
             
-            features = [last2, last1] + vizinhos[:3]  # Garante 5 features
+            # Garante que temos 5 features
+            features = [last2, last1] + vizinhos
+            while len(features) < 5:
+                features.append(0)  # Preenche com zero se necessário
+            features = features[:5]  # Garante máximo de 5 features
+            
             features_array = np.array(features).reshape(1, -1)
             
             probs = self.model.predict_proba(features_array)[0]
@@ -391,6 +404,11 @@ class IA_Recorrencia_RF:
             previsoes_reduzidas = previsoes_reduzidas[:MAX_PREVIEWS]
             
         return previsoes_reduzidas
+
+    @property
+    def modelo_treinado(self):
+        """Propriedade segura para verificar se o modelo está treinado"""
+        return self._model_treinado and self.model is not None
 
 # =============================
 # Sistema de Top N Dinâmico Otimizado
@@ -471,7 +489,7 @@ def reduzir_metade_inteligente(previsoes: List[int], historico: List[Dict[str, A
     ultimos_numeros = [h["number"] for h in list(historico)[-window:]] if historico else []
     
     contagem_total = Counter(ultimos_numeros)
-    topn_greens = st.session_state.get("topn_greens", {})
+    topn_greens = st.session_state.get("topn_manager", TopNManager()).greens
     
     pontuacoes = {}
     for n in previsoes:
@@ -722,11 +740,14 @@ st.write(f"Total no histórico: **{len(st.session_state.estrategia.historico)}**
 st.write(f"Capacidade máxima: **{st.session_state.estrategia.historico.maxlen}**")
 st.write(f"Contador de rodadas: **{st.session_state.contador_rodadas}**")
 
-# Status do modelo
-if st.session_state.ia_recorrencia.model is not None:
-    st.success("🤖 Modelo RandomForest ativo e treinado")
+# Status do modelo - CORRIGIDO
+if hasattr(st.session_state.ia_recorrencia, 'modelo_treinado'):
+    if st.session_state.ia_recorrencia.modelo_treinado:
+        st.success("🤖 Modelo RandomForest ativo e treinado")
+    else:
+        st.info("🤖 Modelo RandomForest em inicialização")
 else:
-    st.info("🤖 Modelo RandomForest em inicialização")
+    st.info("🤖 Modelo RandomForest em configuração")
 
 # Logs recentes (opcional)
 if st.checkbox("Mostrar logs recentes"):
