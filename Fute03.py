@@ -213,7 +213,7 @@ def obter_odds(fixture_id):
 # =============================
 st.set_page_config(page_title="⚽ Alertas e Jogos Históricos", layout="wide")
 st.title("⚽ Sistema de Alertas de Gols + Jogos Históricos")
-aba = st.tabs(["⚡ Alertas de Jogos Hoje", "📊 Jogos de Temporadas Passadas"])
+aba = st.tabs(["⚡ Alertas de Jogos Hoje", "📊 Jogos de Temporadas Passadas", "✅ Conferência dos Alertas Top 3"])
 
 # ---------- ABA 1: Alertas ----------
 with aba[0]:
@@ -363,3 +363,52 @@ with aba[1]:
                             break
                     data = j.get("matchDateTime") or j.get("matchDateTimeUTC") or "Desconhecida"
                     st.write(f"🏟️ {home} vs {away} | 📅 {data} | ⚽ Placar: {placar}")
+
+
+# ---------- ABA 3: Conferência dos jogos enviados ----------
+with st.tab("✅ Conferência dos Alertas Top 3"):
+    st.subheader("✅ Conferência dos jogos enviados (Top 3)")
+
+    if st.button("🔍 Atualizar conferência"):
+        with st.spinner("Carregando conferência dos jogos..."):
+            alertas = carregar_alertas()
+            if not alertas:
+                st.info("Nenhum alerta enviado ainda.")
+            else:
+                # Buscar todos os jogos do dia novamente
+                hoje = datetime.today().strftime("%Y-%m-%d")
+                url = f"{BASE_URL}/fixtures?date={hoje}"
+                response = requests.get(url, headers=HEADERS)
+                jogos = response.json().get("response", [])
+
+                jogos_map = {str(j["fixture"]["id"]): j for j in jogos}
+                for fixture_id, info in alertas.items():
+                    match = jogos_map.get(fixture_id)
+                    if not match:
+                        continue
+
+                    home = match["teams"]["home"]["name"]
+                    away = match["teams"]["away"]["name"]
+                    home_goals = match["goals"]["home"] or 0
+                    away_goals = match["goals"]["away"] or 0
+                    total_gols = home_goals + away_goals
+                    status = match["fixture"]["status"]["long"]
+
+                    tendencia = info["tendencia"]
+                    if tendencia == "Mais 1.5":
+                        green = total_gols >= 2
+                    elif tendencia == "Mais 2.5":
+                        green = total_gols >= 3
+                    else:
+                        green = False
+
+                    resultado = "🟢 GREEN" if green else "🔴 RED"
+                    st.markdown(
+                        f"🏟️ **{home} vs {away}**\n\n"
+                        f"📌 Tendência: {tendencia}\n"
+                        f"⚽ Placar atual: {home_goals} - {away_goals}\n"
+                        f"📊 Total gols: {total_gols}\n"
+                        f"📌 Status: {status}\n"
+                        f"🎯 Resultado: {resultado}\n"
+                        "---"
+                    )
