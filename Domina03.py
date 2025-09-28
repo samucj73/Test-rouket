@@ -432,8 +432,11 @@ if st.session_state.estrategia.historico:
 if resultado and resultado.get("timestamp") != ultimo_ts:
     numero_dict = {"number": resultado["number"], "timestamp": resultado["timestamp"]}
     st.session_state.estrategia.adicionar_numero(numero_dict)
-    salvar_historico(list(st.session_state.estrategia.historico))
-    numero_real = numero_dict["number"]
+    #salvar_historico(list(st.session_state.estrategia.historico))
+    #numero_real = numero_dict["number"]
+    id_sorteio = resultado["roundId"]         # ou como a API retorna
+    numero_sorteado = resultado["winningNumber"]
+    salvar_historico(id_sorteio, numero_sorteado) 
 
     # -----------------------------
     # Conferência Recorrência
