@@ -1,14 +1,12 @@
-# Domina03.py (versão final — previsão inicial imediata + controle de 1 alerta por rodada)
+# Domina03.py (com conferência de alertas)
 import streamlit as st
 import json
 import os
 import requests
-from collections import deque, Counter
-from streamlit_autorefresh import st_autorefresh
+from collections import deque
 import logging
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
-from typing import List
 
 # =============================
 # Configurações
@@ -30,112 +28,60 @@ ROULETTE_LAYOUT = [
 
 WINDOW_SIZE = 18
 MIN_TOP_N = 5
-MAX_TOP_N = 10
 MAX_PREVIEWS = 15
 
 # =============================
 # Utilitários
 # =============================
-def enviar_telegram(msg: str, token=TELEGRAM_TOKEN, chat_id=TELEGRAM_CHAT_ID):
+def enviar_telegram(msg: str):
     try:
-        url = f"https://api.telegram.org/bot{token}/sendMessage"
-        payload = {"chat_id": chat_id, "text": msg}
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        payload = {"chat_id": TELEGRAM_CHAT_ID, "text": msg}
         requests.post(url, data=payload, timeout=10)
     except Exception as e:
-        logging.error(f"Erro ao enviar para Telegram: {e}")
+        logging.error(f"Erro ao enviar Telegram: {e}")
 
 def enviar_telegram_unico(msg: str):
-    if "sending_lock" not in st.session_state:
-        st.session_state.sending_lock = False
-    if st.session_state.sending_lock:
-        logging.warning("Envio ignorado: lock ativo")
-        return
-    st.session_state.sending_lock = True
-    try:
-        enviar_telegram(msg)
-    finally:
-        st.session_state.sending_lock = False
+    if not st.session_state.get("sending_lock", False):
+        st.session_state.sending_lock = True
+        try:
+            enviar_telegram(msg)
+        finally:
+            st.session_state.sending_lock = False
 
 def carregar_historico():
     if os.path.exists(HISTORICO_PATH):
-        try:
-            with open(HISTORICO_PATH, "r") as f:
-                historico = json.load(f)
-            historico_sem_duplicatas = []
-            timestamps_vistos = set()
-            for h in historico:
-                if isinstance(h, dict) and "timestamp" in h:
-                    if h["timestamp"] not in timestamps_vistos:
-                        timestamps_vistos.add(h["timestamp"])
-                        historico_sem_duplicatas.append(h)
-                else:
-                    historico_sem_duplicatas.append(h)
-            return historico_sem_duplicatas
-        except Exception as e:
-            logging.error(f"Erro ao carregar histórico: {e}")
-            return []
+        with open(HISTORICO_PATH, "r") as f:
+            return json.load(f)
     return []
 
 def salvar_historico(historico):
-    try:
-        historico_sem_duplicatas = []
-        timestamps_vistos = set()
-        for h in historico:
-            if isinstance(h, dict) and "timestamp" in h:
-                if h["timestamp"] not in timestamps_vistos:
-                    timestamps_vistos.add(h["timestamp"])
-                    historico_sem_duplicatas.append(h)
-            else:
-                historico_sem_duplicatas.append(h)
-        with open(HISTORICO_PATH, "w") as f:
-            json.dump(historico_sem_duplicatas, f, indent=2)
-    except Exception as e:
-        logging.error(f"Erro ao salvar histórico: {e}")
-
-def salvar_metricas(m):
-    try:
-        hist = []
-        if os.path.exists(METRICAS_PATH):
-            try:
-                with open(METRICAS_PATH, "r") as f:
-                    hist = json.load(f)
-            except Exception:
-                hist = []
-        hist.append(m)
-        with open(METRICAS_PATH, "w") as f:
-            json.dump(hist, f, indent=2)
-    except Exception as e:
-        logging.error(f"Erro ao salvar métricas: {e}")
+    with open(HISTORICO_PATH, "w") as f:
+        json.dump(historico, f, indent=2)
 
 def fetch_latest_result():
     try:
-        response = requests.get(API_URL, headers=HEADERS, timeout=6)
-        response.raise_for_status()
-        data = response.json()
-        game_data = data.get("data", {})
-        result = game_data.get("result", {})
+        r = requests.get(API_URL, headers=HEADERS, timeout=6)
+        r.raise_for_status()
+        data = r.json().get("data", {})
+        result = data.get("result", {})
         outcome = result.get("outcome", {})
         number = outcome.get("number")
-        timestamp = game_data.get("startedAt")
+        timestamp = data.get("startedAt")
         if timestamp and number is not None:
             return {"number": number, "timestamp": timestamp}
-        else:
-            return None
     except Exception as e:
-        logging.error(f"Erro ao buscar resultado: {e}")
-        return None
+        logging.error(f"Erro fetch API: {e}")
+    return None
 
 def obter_vizinhos(numero, layout, antes=2, depois=2):
     if numero not in layout:
         return [numero]
     idx = layout.index(numero)
     n = len(layout)
-    vizinhos = []
-    for i in range(antes, 0, -1):
-        vizinhos.append(layout[(idx - i) % n])
+    vizinhos = [layout[(idx - i) % n] for i in range(antes, 0, -1)]
     vizinhos.append(numero)
-    for i in range(1, depois + 1):
-        vizinhos.append(layout[(idx + i) % n])
+    vizinhos += [layout[(idx + i) % n] for i in range(1, depois + 1)]
     return vizinhos
 
 # =============================
@@ -144,60 +90,49 @@ def obter_vizinhos(numero, layout, antes=2, depois=2):
 class EstrategiaDeslocamento:
     def __init__(self):
         self.historico = deque(maxlen=15000)
-    
     def adicionar_numero(self, numero_dict):
-        if not numero_dict or "timestamp" not in numero_dict:
-            return
-        for existing in self.historico:
-            if isinstance(existing, dict) and existing.get("timestamp") == numero_dict.get("timestamp"):
-                return
-        self.historico.append(numero_dict)
+        if numero_dict not in self.historico:
+            self.historico.append(numero_dict)
 
 # =============================
 # IA Recorrência
 # =============================
 class IA_Recorrencia_RF:
     def __init__(self, layout=None, top_n=3, window=WINDOW_SIZE):
-        self.layout = layout or ROULETTE_LAYOUT
+        self.layout = layout
         self.top_n = top_n
         self.window = window
         self.model = None
 
-    def _criar_features_simples(self, historico: List[dict]):
+    def _criar_features(self, historico):
         numeros = [h["number"] for h in historico]
         if len(numeros) < 3:
             return None, None
         X, y = [], []
         for i in range(2, len(numeros)):
             last2, last1 = numeros[i-2], numeros[i-1]
-            nbrs = obter_vizinhos(last1, self.layout, antes=2, depois=2)
-            feat = [last2, last1] + nbrs
-            X.append(feat)
+            feats = [last2, last1] + obter_vizinhos(last1, self.layout, 1,1)
+            X.append(feats)
             y.append(numeros[i])
         return np.array(X), np.array(y)
 
     def treinar(self, historico):
-        X, y = self._criar_features_simples(historico)
+        X, y = self._criar_features(historico)
         if X is None or len(X) == 0:
             self.model = None
             return
-        try:
-            self.model = RandomForestClassifier(n_estimators=200, random_state=42)
-            self.model.fit(X, y)
-        except Exception as e:
-            logging.error(f"Erro treinando RF: {e}")
-            self.model = None
+        self.model = RandomForestClassifier(n_estimators=200, random_state=42)
+        self.model.fit(X, y)
 
     def prever(self, historico):
-        if not historico or len(historico) < 2:
+        if len(historico) < 2:
             return []
-        historico_lista = list(historico)
-        ultimo_numero = historico_lista[-1]["number"]
-        self.treinar(historico_lista[-self.window:])
-        candidatos = [ultimo_numero]
-        if self.model is not None:
-            last2 = historico_lista[-2]["number"]
-            feats = [last2, ultimo_numero] + obter_vizinhos(ultimo_numero, self.layout, antes=1, depois=1)
+        ultimo = historico[-1]["number"]
+        self.treinar(historico[-self.window:])
+        candidatos = [ultimo]
+        if self.model:
+            last2 = historico[-2]["number"]
+            feats = [last2, ultimo] + obter_vizinhos(ultimo, self.layout, 1,1)
             try:
                 probs = self.model.predict_proba([feats])[0]
                 classes = self.model.classes_
@@ -208,77 +143,74 @@ class IA_Recorrencia_RF:
                 pass
         numeros_previstos = []
         for n in candidatos:
-            for v in obter_vizinhos(n, self.layout, antes=2, depois=2):
+            for v in obter_vizinhos(n, self.layout, 2,2):
                 if v not in numeros_previstos:
                     numeros_previstos.append(v)
         return numeros_previstos[:MAX_PREVIEWS]
 
 # =============================
-# Streamlit App
+# Inicialização Streamlit
 # =============================
 st.set_page_config(page_title="Roleta IA Profissional", layout="centered")
-st.title("🎯 Roleta — IA Recorrência (RandomForest) + Redução Inteligente")
-st_autorefresh(interval=3000, key="refresh")
+st.title("🎯 Roleta — IA Recorrência + Conferência")
+if "estrategia" not in st.session_state:
+    st.session_state.estrategia = EstrategiaDeslocamento()
+if "ia_recorrencia" not in st.session_state:
+    st.session_state.ia_recorrencia = IA_Recorrencia_RF(layout=ROULETTE_LAYOUT, top_n=5)
+if "previsao_sent_for_timestamp" not in st.session_state:
+    st.session_state.previsao_sent_for_timestamp = None
+if "aguardando_resultado" not in st.session_state:
+    st.session_state.aguardando_resultado = False
+if "acertos" not in st.session_state:
+    st.session_state.acertos = 0
+if "erros" not in st.session_state:
+    st.session_state.erros = 0
 
-# Inicialização session_state
-defaults = {
-    "estrategia": EstrategiaDeslocamento(),
-    "ia_recorrencia": IA_Recorrencia_RF(layout=ROULETTE_LAYOUT, top_n=5, window=WINDOW_SIZE),
-    "previsao_para_conferir": [],
-    "previsao_topN_para_conferir": [],
-    "acertos": 0,
-    "erros": 0,
-    "acertos_topN": 0,
-    "erros_topN": 0,
-    "contador_rodadas": 0,
-    "ultimo_timestamp": None,
-    "aguardando_resultado": False,
-    "ultima_previsao": None,
-    "previsao_sent_for_timestamp": None,
-    "ultimo_numero_recebido": None,
-    "sending_lock": False,
-}
-for k, v in defaults.items():
-    if k not in st.session_state:
-        st.session_state[k] = v
-
-# Carregar histórico
+# Carrega histórico
 historico = carregar_historico()
 for n in historico:
     st.session_state.estrategia.adicionar_numero(n)
     st.session_state.ultimo_timestamp = n.get("timestamp")
-    
+
 # -----------------------------
 # Captura número da API
 # -----------------------------
 resultado = fetch_latest_result()
-novo_sorteio = False
 if resultado and resultado.get("timestamp"):
     if st.session_state.ultimo_timestamp != resultado["timestamp"]:
-        novo_sorteio = True
         st.session_state.ultimo_timestamp = resultado["timestamp"]
         st.session_state.estrategia.adicionar_numero(resultado)
         salvar_historico(list(st.session_state.estrategia.historico))
+        st.session_state.aguardando_resultado = True
 
 # -----------------------------
-# Geração de nova previsão (corrigido: primeira previsão mesmo sem novo sorteio)
+# Geração de previsão
 # -----------------------------
-if not st.session_state.aguardando_resultado:
-    ultimo_num_timestamp = st.session_state.ultimo_timestamp
-    if ultimo_num_timestamp and (st.session_state.previsao_sent_for_timestamp != ultimo_num_timestamp):
-        prox_numeros = st.session_state.ia_recorrencia.prever(st.session_state.estrategia.historico)
-        if prox_numeros:
-            st.session_state.previsao_para_conferir = prox_numeros
-            st.session_state.previsao_topN_para_conferir = prox_numeros[:MIN_TOP_N]
-            st.session_state.ultima_previsao = {"previsao": prox_numeros, "topN": prox_numeros[:MIN_TOP_N]}
-            s = sorted(prox_numeros)
-            mensagem_parts = ["🎯 PREVISÃO: " + " ".join(map(str, s[:5]))]
-            if len(s) > 5:
-                mensagem_parts.append("... " + " ".join(map(str, s[5:])))
-            mensagem_previsao = "\n".join(mensagem_parts)
-            enviar_telegram_unico(mensagem_previsao)
-            st.session_state.previsao_sent_for_timestamp = ultimo_num_timestamp
-            st.session_state.aguardando_resultado = True
+if st.session_state.aguardando_resultado and st.session_state.ultimo_timestamp != st.session_state.previsao_sent_for_timestamp:
+    prox_numeros = st.session_state.ia_recorrencia.prever(st.session_state.estrategia.historico)
+    if prox_numeros:
+        st.session_state.previsao_sent_for_timestamp = st.session_state.ultimo_timestamp
+        mensagem = "🎯 PREVISÃO: " + " ".join(map(str, prox_numeros[:5]))
+        if len(prox_numeros) > 5:
+            mensagem += " ... " + " ".join(map(str, prox_numeros[5:]))
+        enviar_telegram_unico(mensagem)
+
+# -----------------------------
+# Conferência GREEN/RED
+# -----------------------------
+ultimo_numero = resultado["number"] if resultado else None
+if st.session_state.aguardando_resultado and ultimo_numero:
+    topN = st.session_state.ia_recorrencia.prever(st.session_state.estrategia.historico)
+    topN_vizinhos = []
+    for n in topN[:5]:
+        topN_vizinhos += obter_vizinhos(n, ROULETTE_LAYOUT, 2,2)
+    if ultimo_numero in topN_vizinhos:
+        st.session_state.acertos += 1
+        enviar_telegram_unico(f"🟢 GREEN! Número: {ultimo_numero}")
+    else:
+        st.session_state.erros += 1
+        enviar_telegram_unico(f"🔴 RED! Número: {ultimo_numero}")
+    st.session_state.aguardando_resultado = False
 
 # -----------------------------
 # Interface
