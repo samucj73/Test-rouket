@@ -19,12 +19,12 @@ API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremeli
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
 # Canal principal
-TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
-TELEGRAM_CHAT_ID = "5121457416"
+TELEGRAM_TOKEN = "SEU_TOKEN"
+TELEGRAM_CHAT_ID = "SEU_CHAT_ID"
 
-# Canal alternativo para Top N Dinâmico (mantive, mas agora usado apenas para logs/backup se quiser)
+# Canal alternativo (opcional)
 ALT_TELEGRAM_TOKEN = TELEGRAM_TOKEN
-ALT_TELEGRAM_CHAT_ID = "-1002979544095"
+ALT_TELEGRAM_CHAT_ID = "SEU_CHAT_ID_ALT"
 
 ROULETTE_LAYOUT = [
     0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6,
@@ -39,576 +39,187 @@ MAX_TOP_N = 10
 MAX_PREVIEWS = 15
 
 # =============================
-# Utilitários (Telegram, histórico, API, vizinhos)
+# Telegram
 # =============================
 def enviar_telegram(msg: str, token=TELEGRAM_TOKEN, chat_id=TELEGRAM_CHAT_ID):
-    """Envio simples (não bloqueante). Use o wrapper enviar_telegram_unico para evitar duplicatas."""
     try:
         url = f"https://api.telegram.org/bot{token}/sendMessage"
-        payload = {"chat_id": chat_id, "text": msg}
-        requests.post(url, data=payload, timeout=10)
+        requests.post(url, data={"chat_id": chat_id, "text": msg}, timeout=10)
     except Exception as e:
-        logging.error(f"Erro ao enviar para Telegram: {e}")
+        logging.error(f"Erro Telegram: {e}")
 
-def enviar_telegram_topN(msg: str, token=ALT_TELEGRAM_TOKEN, chat_id=ALT_TELEGRAM_CHAT_ID):
-    """Envio para canal alternativo (opcional). Não é chamado separadamente por padrão."""
-    try:
-        url = f"https://api.telegram.org/bot{token}/sendMessage"
-        payload = {"chat_id": chat_id, "text": msg}
-        requests.post(url, data=payload, timeout=10)
-    except Exception as e:
-        logging.error(f"Erro ao enviar para Telegram Top N: {e}")
-
-# Wrapper que garante só 1 envio por vez (debounce/lock)
-def enviar_telegram_unico(msg: str, token=TELEGRAM_TOKEN, chat_id=TELEGRAM_CHAT_ID):
-    # inicializa lock se não existir
+def enviar_telegram_unico(msg: str):
     if "sending_lock" not in st.session_state:
         st.session_state.sending_lock = False
-
-    # se já estiver enviando, ignora (evita envios duplicados em loops rápidos)
     if st.session_state.sending_lock:
-        logging.warning("Envio ignorado: outro envio em progresso (lock ativo).")
         return
-
     st.session_state.sending_lock = True
     try:
-        enviar_telegram(msg, token=token, chat_id=chat_id)
-    except Exception as e:
-        logging.error(f"Erro no enviar_telegram_unico: {e}")
+        enviar_telegram(msg)
     finally:
-        # garante liberação do lock
         st.session_state.sending_lock = False
 
+# =============================
+# Histórico
+# =============================
 def carregar_historico():
-    """Carrega histórico garantindo que não haja duplicatas"""
     if os.path.exists(HISTORICO_PATH):
         try:
             with open(HISTORICO_PATH, "r") as f:
                 historico = json.load(f)
-            
-            # Remove duplicatas baseado no timestamp
-            historico_sem_duplicatas = []
-            timestamps_vistos = set()
-            
+            visto, filtrado = set(), []
             for h in historico:
-                if isinstance(h, dict) and "timestamp" in h:
-                    if h["timestamp"] not in timestamps_vistos:
-                        timestamps_vistos.add(h["timestamp"])
-                        historico_sem_duplicatas.append(h)
-                else:
-                    # Para registros antigos sem timestamp
-                    historico_sem_duplicatas.append(h)
-            
-            logging.info(f"Histórico carregado: {len(historico_sem_duplicatas)} registros únicos")
-            return historico_sem_duplicatas
-        except Exception as e:
-            logging.error(f"Erro ao carregar histórico: {e}")
+                ts = h.get("timestamp")
+                if ts not in visto:
+                    visto.add(ts)
+                    filtrado.append(h)
+            return filtrado
+        except:
             return []
     return []
 
 def salvar_historico(historico):
-    """Salva histórico garantindo que não haja duplicatas"""
-    try:
-        # Remove duplicatas antes de salvar
-        historico_sem_duplicatas = []
-        timestamps_vistos = set()
-        
-        for h in historico:
-            if isinstance(h, dict) and "timestamp" in h:
-                if h["timestamp"] not in timestamps_vistos:
-                    timestamps_vistos.add(h["timestamp"])
-                    historico_sem_duplicatas.append(h)
-            else:
-                historico_sem_duplicatas.append(h)
-        
-        with open(HISTORICO_PATH, "w") as f:
-            json.dump(historico_sem_duplicatas, f, indent=2)
-        
-        logging.info(f"Histórico salvo: {len(historico_sem_duplicatas)} registros únicos")
-    except Exception as e:
-        logging.error(f"Erro ao salvar histórico: {e}")
+    visto, filtrado = set(), []
+    for h in historico:
+        ts = h.get("timestamp")
+        if ts not in visto:
+            visto.add(ts)
+            filtrado.append(h)
+    with open(HISTORICO_PATH, "w") as f:
+        json.dump(filtrado, f, indent=2)
 
 def salvar_metricas(m):
-    try:
-        hist = []
-        if os.path.exists(METRICAS_PATH):
-            try:
-                with open(METRICAS_PATH, "r") as f:
-                    hist = json.load(f)
-            except Exception:
-                hist = []
-        hist.append(m)
-        with open(METRICAS_PATH, "w") as f:
-            json.dump(hist, f, indent=2)
-    except Exception as e:
-        logging.error(f"Erro ao salvar métricas: {e}")
+    hist = []
+    if os.path.exists(METRICAS_PATH):
+        try:
+            with open(METRICAS_PATH, "r") as f:
+                hist = json.load(f)
+        except:
+            hist = []
+    hist.append(m)
+    with open(METRICAS_PATH, "w") as f:
+        json.dump(hist, f, indent=2)
 
+# =============================
+# API & Vizinhos
+# =============================
 def fetch_latest_result():
     try:
-        response = requests.get(API_URL, headers=HEADERS, timeout=6)
-        response.raise_for_status()
-        data = response.json()
-        game_data = data.get("data", {})
-        result = game_data.get("result", {})
-        outcome = result.get("outcome", {})
-        number = outcome.get("number")
-        timestamp = game_data.get("startedAt")
-        
-        if timestamp and number is not None:
-            logging.info(f"API retornou: número {number}, timestamp {timestamp}")
-            return {"number": number, "timestamp": timestamp}
-        else:
-            logging.warning("API retornou dados incompletos")
-            return None
-            
+        r = requests.get(API_URL, headers=HEADERS, timeout=6).json()
+        number = r.get("data", {}).get("result", {}).get("outcome", {}).get("number")
+        ts = r.get("data", {}).get("startedAt")
+        if ts and number is not None:
+            return {"number": number, "timestamp": ts}
     except Exception as e:
-        logging.error(f"Erro ao buscar resultado: {e}")
-        return None
+        logging.error(f"API error: {e}")
+    return None
 
-def obter_vizinhos(numero, layout, antes=2, depois=2):
-    if numero not in layout:
-        return [numero]
-    idx = layout.index(numero)
-    n = len(layout)
-    vizinhos = []
-    for i in range(antes, 0, -1):
-        vizinhos.append(layout[(idx - i) % n])
-    vizinhos.append(numero)
-    for i in range(1, depois + 1):
-        vizinhos.append(layout[(idx + i) % n])
-    return vizinhos
-
-def obter_vizinhos_fixos(numero, layout, antes=5, depois=5):
-    if numero not in layout:
-        return [numero]
-    idx = layout.index(numero)
-    n = len(layout)
-    vizinhos = []
-    for i in range(antes, 0, -1):
-        vizinhos.append(layout[(idx - i) % n])
-    vizinhos.append(numero)
-    for i in range(1, depois + 1):
-        vizinhos.append(layout[(idx + i) % n])
-    return vizinhos
+def obter_vizinhos(num, layout, antes=2, depois=2):
+    if num not in layout: return [num]
+    idx, n = layout.index(num), len(layout)
+    viz = [layout[(idx - i) % n] for i in range(antes, 0, -1)] + [num] + [layout[(idx + i) % n] for i in range(1, depois+1)]
+    return viz
 
 # =============================
 # Estratégia
 # =============================
 class EstrategiaDeslocamento:
-    def __init__(self):
-        self.historico = deque(maxlen=15000)
-    
-    def adicionar_numero(self, numero_dict):
-        """Adiciona número apenas se não for duplicado"""
-        if not numero_dict or "timestamp" not in numero_dict:
-            return
-            
-        # Verifica se já existe no histórico
-        for existing in self.historico:
-            if (isinstance(existing, dict) and 
-                existing.get("timestamp") == numero_dict.get("timestamp")):
-                logging.info(f"Sorteio duplicado ignorado: {numero_dict}")
-                return
-        
-        self.historico.append(numero_dict)
-        logging.info(f"Novo sorteio adicionado: {numero_dict}")
+    def __init__(self): self.historico = deque(maxlen=15000)
+    def adicionar_numero(self, nd): 
+        if not nd or "timestamp" not in nd: return
+        if any(h.get("timestamp") == nd["timestamp"] for h in self.historico): return
+        self.historico.append(nd)
 
 # =============================
-# IA Recorrência com RandomForest
+# IA Recorrência
 # =============================
 class IA_Recorrencia_RF:
     def __init__(self, layout=None, top_n=3, window=WINDOW_SIZE):
-        self.layout = layout or ROULETTE_LAYOUT
-        self.top_n = top_n
-        self.window = window
-        self.model = None
+        self.layout, self.top_n, self.window, self.model = layout or ROULETTE_LAYOUT, top_n, window, None
 
-    def _criar_features_simples(self, historico: List[dict]):
-        numeros = [h["number"] for h in historico]
-        if len(numeros) < 3:
-            return None, None
-        X = []
-        y = []
-        for i in range(2, len(numeros)):
-            last2 = numeros[i-2]
-            last1 = numeros[i-1]
-            nbrs = obter_vizinhos(last1, self.layout, antes=2, depois=2)
-            feat = [last2, last1] + nbrs
-            X.append(feat)
-            y.append(numeros[i])
+    def _criar_features_simples(self, hist):
+        nums = [h["number"] for h in hist]
+        if len(nums) < 3: return None, None
+        X, y = [], []
+        for i in range(2, len(nums)):
+            f = [nums[i-2], nums[i-1]] + obter_vizinhos(nums[i-1], self.layout, 2, 2)
+            X.append(f); y.append(nums[i])
         return np.array(X), np.array(y)
 
-    def treinar(self, historico):
-        X, y = self._criar_features_simples(historico)
-        if X is None or len(X) == 0:
-            self.model = None
-            return
-        try:
-            self.model = RandomForestClassifier(n_estimators=200, random_state=42)
-            self.model.fit(X, y)
-        except Exception as e:
-            logging.error(f"Erro treinando RF: {e}")
-            self.model = None
+    def treinar(self, hist):
+        X, y = self._criar_features_simples(hist)
+        if X is None: return
+        self.model = RandomForestClassifier(n_estimators=200, random_state=42).fit(X, y)
 
-    def prever(self, historico):
-        if not historico or len(historico) < 2:
-            return []
-
-        historico_lista = list(historico)
-        ultimo_numero = historico_lista[-1]["number"] if isinstance(historico_lista[-1], dict) else None
-        if ultimo_numero is None:
-            return []
-
-        antes, depois = [], []
-        for i, h in enumerate(historico_lista[:-1]):
-            if isinstance(h, dict) and h.get("number") == ultimo_numero:
-                if i - 1 >= 0 and isinstance(historico_lista[i-1], dict):
-                    antes.append(historico_lista[i-1]["number"])
-                if i + 1 < len(historico_lista) and isinstance(historico_lista[i+1], dict):
-                    depois.append(historico_lista[i+1]["number"])
-
-        cont_antes = Counter(antes)
-        cont_depois = Counter(depois)
-        top_antes = [num for num, _ in cont_antes.most_common(self.top_n)]
-        top_depois = [num for num, _ in cont_depois.most_common(self.top_n)]
-        candidatos = list(set(top_antes + top_depois))
-
-        window_hist = historico_lista[-max(len(historico_lista), self.window):]
-        self.treinar(window_hist)
-
-        if self.model is not None:
-            numeros = [h["number"] for h in historico_lista]
-            last2 = numeros[-2] if len(numeros) > 1 else 0
-            last1 = numeros[-1]
-            feats = [last2, last1] + obter_vizinhos(last1, self.layout, antes=1, depois=1)
+    def prever(self, hist):
+        if len(hist) < 2: return []
+        nums = [h["number"] for h in hist]
+        last2, last1 = nums[-2], nums[-1]
+        feats = [last2, last1] + obter_vizinhos(last1, self.layout, 1, 1)
+        self.treinar(hist[-self.window:])
+        candidatos = []
+        if self.model:
             try:
                 probs = self.model.predict_proba([feats])[0]
                 classes = self.model.classes_
                 idx_top = np.argsort(probs)[-self.top_n:]
-                top_ml = [int(classes[i]) for i in idx_top]
-                candidatos = list(set(candidatos + top_ml))
-            except Exception as e:
-                logging.error(f"Erro predict_proba RF: {e}")
-
-        numeros_previstos = []
+                candidatos = [int(classes[i]) for i in idx_top]
+            except: pass
+        prevs = []
         for n in candidatos:
-            vizs = obter_vizinhos(n, self.layout, antes=2, depois=2)
-            for v in vizs:
-                if v not in numeros_previstos:
-                    numeros_previstos.append(v)
-
-        numeros_previstos = reduzir_metade_inteligente(numeros_previstos, historico)
-
-        if len(numeros_previstos) > MAX_PREVIEWS:
-            ultimos = [h["number"] for h in list(historico)[-WINDOW_SIZE:]] if historico else []
-            freq = Counter(ultimos)
-            topn_greens = st.session_state.get("topn_greens", {})
-            scores = {}
-            for n in numeros_previstos:
-                scores[n] = freq.get(n, 0) + 0.8 * topn_greens.get(n, 0)
-            numeros_previstos = sorted(numeros_previstos, key=lambda x: scores.get(x, 0), reverse=True)[:MAX_PREVIEWS]
-
-        return numeros_previstos
-
-# =============================
-# Redução inteligente
-# =============================
-def reduzir_metade_inteligente(previsoes, historico):
-    if not previsoes:
-        return []
-    ultimos_numeros = [h["number"] for h in list(historico)[-WINDOW_SIZE:]] if historico else []
-    contagem_total = Counter(ultimos_numeros)
-    topn_greens = st.session_state.get("topn_greens", {})
-    pontuacoes = {}
-    for n in previsoes:
-        freq = contagem_total.get(n, 0)
-        vizinhos = obter_vizinhos(n, ROULETTE_LAYOUT, antes=1, depois=1)
-        redundancia = sum(1 for v in vizinhos if v in previsoes)
-        bonus = topn_greens.get(n, 0)
-        pontuacoes[n] = freq + (bonus * 0.8) - (0.5 * redundancia)
-    ordenados = sorted(pontuacoes.keys(), key=lambda x: pontuacoes[x], reverse=True)
-    n_reduzidos = max(1, len(ordenados) // 2)
-    return ordenados[:n_reduzidos]
-
-# =============================
-# Ajuste Dinâmico Top N
-# =============================
-TOP_N_COOLDOWN = 3
-TOP_N_PROB_BASE = 0.3
-TOP_N_PROB_MAX = 0.5
-TOP_N_PROB_MIN = 0.2
-TOP_N_WINDOW = 12
-
-if "topn_history" not in st.session_state:
-    st.session_state.topn_history = deque(maxlen=TOP_N_WINDOW)
-if "topn_reds" not in st.session_state:
-    st.session_state.topn_reds = {}
-if "topn_greens" not in st.session_state:
-    st.session_state.topn_greens = {}
-
-def atualizar_cooldown_reds():
-    novos_reds = {}
-    for num, rodadas in st.session_state.topn_reds.items():
-        if rodadas > 1:
-            novos_reds[num] = rodadas - 1
-    st.session_state.topn_reds = novos_reds
-
-def calcular_prob_min_topN():
-    historico = list(st.session_state.topn_history)
-    if not historico:
-        return TOP_N_PROB_BASE
-    taxa_red = historico.count("R") / len(historico)
-    prob_min = TOP_N_PROB_BASE + (taxa_red * (TOP_N_PROB_MAX - TOP_N_PROB_BASE))
-    return min(max(prob_min, TOP_N_PROB_MIN), TOP_N_PROB_MAX)
-
-def ajustar_top_n(previsoes, historico=None, min_n=MIN_TOP_N, max_n=MAX_TOP_N):
-    if not previsoes:
-        return previsoes[:min_n]
-    atualizar_cooldown_reds()
-    prob_min = calcular_prob_min_topN()
-    filtrados = [num for num in previsoes if num not in st.session_state.topn_reds]
-    pesos = {}
-    for num in filtrados:
-        pesos[num] = 1.0 + st.session_state.topn_greens.get(num, 0) * 0.05
-    ordenados = sorted(pesos.keys(), key=lambda x: pesos[x], reverse=True)
-    n = max(min_n, min(max_n, int(len(ordenados) * prob_min) + min_n))
-    return ordenados[:n]
-
-def registrar_resultado_topN(numero_real, top_n):
-    for num in top_n:
-        if num == numero_real:
-            st.session_state.topn_greens[num] = st.session_state.topn_greens.get(num, 0) + 1
-            st.session_state.topn_history.append("G")
-        else:
-            st.session_state.topn_reds[num] = TOP_N_COOLDOWN
-            st.session_state.topn_history.append("R")
+            for v in obter_vizinhos(n, self.layout, 2, 2):
+                if v not in prevs: prevs.append(v)
+        return prevs[:MAX_PREVIEWS]
 
 # =============================
 # Streamlit App
 # =============================
-st.set_page_config(page_title="Roleta IA Profissional", layout="centered")
-st.title("🎯 Roleta — IA Recorrência (RandomForest) + Redução Inteligente")
+st.set_page_config(page_title="Roleta IA", layout="centered")
+st.title("🎯 Roleta — IA Profissional")
 st_autorefresh(interval=3000, key="refresh")
 
-# Inicialização session_state (defaults)
+# Estado inicial
 defaults = {
     "estrategia": EstrategiaDeslocamento(),
-    "ia_recorrencia": IA_Recorrencia_RF(layout=ROULETTE_LAYOUT, top_n=5, window=WINDOW_SIZE),
-    "previsao_para_conferir": [],  # Previsões que serão conferidas no próximo sorteio
-    "previsao_topN_para_conferir": [],  # Previsões TopN que serão conferidas no próximo sorteio
-    "acertos": 0,
-    "erros": 0,
-    "acertos_topN": 0,
-    "erros_topN": 0,
-    "contador_rodadas": 0,
-    "topn_history": deque(maxlen=TOP_N_WINDOW),
-    "topn_reds": {},
-    "topn_greens": {},
+    "ia": IA_Recorrencia_RF(),
+    "aguardando_resultado": False,
+    "ultima_previsao": None,
     "ultimo_timestamp": None,
-    # CONTROLE DE ALERTAS (NOVO)
-    "aguardando_resultado": False,               # True se já enviamos previsão e estamos aguardando o próximo sorteio
-    "ultima_previsao": None,                     # Guarda qual foi a última previsão (lista de números)
-    "previsao_sent_for_timestamp": None,         # Timestamp do último sorteio para o qual enviamos previsão (evita reenvio)
-    "ultimo_numero_recebido": None,              # Último número recebido (para detectar mudança)
-    "sending_lock": False,                       # lock para evitar envios simultâneos
+    "acertos": 0, "erros": 0,
+    "acertos_topN": 0, "erros_topN": 0,
+    "sending_lock": False,
 }
-for k, v in defaults.items():
-    if k not in st.session_state:
-        st.session_state[k] = v
+for k,v in defaults.items(): st.session_state.setdefault(k,v)
 
-# Carregar histórico existente (mantendo proteção contra duplicatas)
-historico = carregar_historico()
-for n in historico:
-    if not st.session_state.estrategia.historico or st.session_state.estrategia.historico[-1].get("timestamp") != n.get("timestamp"):
-        st.session_state.estrategia.adicionar_numero(n)
-        st.session_state.ultimo_timestamp = n.get("timestamp")
+# Carregar histórico
+for n in carregar_historico():
+    st.session_state.estrategia.adicionar_numero(n)
+    st.session_state.ultimo_timestamp = n.get("timestamp")
 
-# -----------------------------
-# Captura número (API)
-# -----------------------------
-resultado = fetch_latest_result()
-
-# VERIFICAÇÃO ROBUSTA CONTRA DUPLICATAS (novo sorteio)
-novo_sorteio = False
-if resultado and resultado.get("timestamp"):
-    if st.session_state.ultimo_timestamp is None:
-        novo_sorteio = True
-        logging.info("🎲 PRIMEIRO SORTEIO DETECTADO")
-    elif resultado["timestamp"] != st.session_state.ultimo_timestamp:
-        novo_sorteio = True
-        logging.info(f"🎲 NOVO SORTEIO: {resultado['number']} (anterior: {st.session_state.ultimo_timestamp})")
-    else:
-        logging.info(f"⏳ Sorteio duplicado ignorado: {resultado['timestamp']}")
-
-# Processa APENAS se for realmente um novo sorteio
-if resultado and novo_sorteio:
-    numero_dict = {"number": resultado["number"], "timestamp": resultado["timestamp"]}
-    
-    # ATUALIZA imediatamente o último timestamp
-    st.session_state.ultimo_timestamp = resultado["timestamp"]
-    
-    # Adiciona ao histórico
-    st.session_state.estrategia.adicionar_numero(numero_dict)
-    
-    # Salva histórico (já com remoção de duplicatas)
+# Captura API
+res = fetch_latest_result()
+novo = res and res["timestamp"] != st.session_state.ultimo_timestamp
+if res and novo:
+    num = res["number"]; ts = res["timestamp"]
+    st.session_state.ultimo_timestamp = ts
+    st.session_state.estrategia.adicionar_numero(res)
     salvar_historico(list(st.session_state.estrategia.historico))
-    
-    numero_real = numero_dict["number"]
 
-    # -----------------------------
-    # SE ESTÁVAMOS AGUARDANDO O RESULTADO -> FAZ A CONFERÊNCIA E ENVIA 1 ALERTA DE RESULTADO
-    # -----------------------------
+    # Conferência
     if st.session_state.aguardando_resultado and st.session_state.ultima_previsao:
-        # Conferência Recorrência (previsao_para_conferir foi salva quando previmos)
-        numeros_com_vizinhos = []
-        for n in st.session_state.previsao_para_conferir:
-            for v in obter_vizinhos(n, ROULETTE_LAYOUT, antes=1, depois=1):
-                if v not in numeros_com_vizinhos:
-                    numeros_com_vizinhos.append(v)
-        
-        hit_rec = numero_real in numeros_com_vizinhos
-
-        # Conferência TopN
-        topN_com_vizinhos = []
-        for n in st.session_state.previsao_topN_para_conferir:
-            for v in obter_vizinhos(n, ROULETTE_LAYOUT, antes=1, depois=1):
-                if v not in topN_com_vizinhos:
-                    topN_com_vizinhos.append(v)
-        
-        hit_topn = numero_real in topN_com_vizinhos
-
-        # Atualiza métricas
-        if hit_rec:
-            st.session_state.acertos += 1
-        else:
-            st.session_state.erros += 1
-
-        if hit_topn:
-            st.session_state.acertos_topN += 1
-            st.session_state.topn_greens[numero_real] = st.session_state.topn_greens.get(numero_real, 0) + 1
-        else:
-            st.session_state.erros_topN += 1
-
-        # Prepara mensagem única de resultado
-        parts = []
-        if hit_rec:
-            parts.append(f"🟢 GREEN (Recorrência) — Número sorteado: {numero_real}")
-        else:
-            parts.append(f"🔴 RED (Recorrência) — Número sorteado: {numero_real}")
-
-        if hit_topn:
-            parts.append(f"🟢 GREEN (TopN) — Número entre os mais prováveis")
-        else:
-            parts.append(f"🔴 RED (TopN) — Não estava entre os mais prováveis")
-
-        mensagem_resultado = "\n".join(parts)
-        # Envia apenas 1 alerta de resultado (compacto) usando wrapper que evita duplicação
-        enviar_telegram_unico(mensagem_resultado)
-
-        # Registrar resultado TopN (atualiza cooldowns e histórico interno)
-        registrar_resultado_topN(numero_real, st.session_state.previsao_topN_para_conferir or [])
-
-        # Limpa previsões aguardadas (já conferidas)
-        st.session_state.previsao_para_conferir = []
-        st.session_state.previsao_topN_para_conferir = []
-        st.session_state.ultima_previsao = None
+        hit = num in st.session_state.ultima_previsao
+        if hit: st.session_state.acertos += 1; msg = f"🟢 GREEN — {num}"
+        else: st.session_state.erros += 1; msg = f"🔴 RED — {num}"
+        enviar_telegram_unico(msg)
         st.session_state.aguardando_resultado = False
-        st.session_state.previsao_sent_for_timestamp = None  # permitimos enviar previsão para o novo timestamp futuro
 
-    else:
-        # Se não estávamos aguardando (ou não havia previsão guardada), apenas checamos logs/estado.
-        logging.info("Novo sorteio detectado, mas sem previsão pendente para conferir.")
+    # Nova previsão
+    prev = st.session_state.ia.prever(st.session_state.estrategia.historico)
+    if prev:
+        st.session_state.ultima_previsao = prev
+        st.session_state.aguardando_resultado = True
+        enviar_telegram_unico("🎯 PREVISÃO: " + " ".join(map(str, prev)))
 
-    # Atualiza contador de rodadas e salva métricas
-    st.session_state.contador_rodadas = st.session_state.get("contador_rodadas", 0) + 1
-
-    metrics = {
-        "timestamp": resultado.get("timestamp"),
-        "numero_real": numero_real,
-        "acertos": st.session_state.get("acertos", 0),
-        "erros": st.session_state.get("erros", 0),
-        "acertos_topN": st.session_state.get("acertos_topN", 0),
-        "erros_topN": st.session_state.get("erros_topN", 0),
-    }
-    salvar_metricas(metrics)
-
-# -----------------------------
-# GERAÇÃO de NOVA PREVISÃO e ENVIO (apenas se NÃO estivermos aguardando resultado
-# e se ainda NÃO enviamos previsão para o timestamp atual)
-# -----------------------------
-# Observação: isso roda em cada loop/autorefresh, mas graças ao controle de
-# 'aguardando_resultado' + 'previsao_sent_for_timestamp' evitamos envios duplicados.
-if not st.session_state.aguardando_resultado:
-    # Só gera e envia previsão se já tivermos ao menos um sorteio no histórico
-    # e se ainda não enviamos previsão para o último timestamp
-    if st.session_state.ultimo_timestamp is not None and st.session_state.previsao_sent_for_timestamp != st.session_state.ultimo_timestamp:
-        prox_numeros = st.session_state.ia_recorrencia.prever(st.session_state.estrategia.historico)
-        if prox_numeros:
-            prox_numeros = list(dict.fromkeys(prox_numeros))
-            st.session_state.previsao_para_conferir = prox_numeros  # Guardamos para conferir no próximo sorteio
-            entrada_topN = ajustar_top_n(prox_numeros, st.session_state.estrategia.historico)
-            st.session_state.previsao_topN_para_conferir = entrada_topN
-            st.session_state.ultima_previsao = {
-                "previsao": prox_numeros,
-                "topN": entrada_topN,
-                "for_timestamp": st.session_state.ultimo_timestamp
-            }
-
-            # Mensagem única com PREVISÃO + (opcional) TOP N
-            s = sorted(prox_numeros)
-            mensagem_parts = []
-            # Mostra até top 5 por padrão para compactar (evita mensagens enormes)
-            mensagem_parts.append("🎯 PREVISÃO (Recorrência): " + " ".join(map(str, s[:5])))
-            if len(s) > 5:
-                mensagem_parts.append("... " + " ".join(map(str, s[5:])))
-            if entrada_topN:
-                mensagem_parts.append("🔝 TOP N: " + " ".join(map(str, sorted(entrada_topN))))
-
-            mensagem_previsao = "\n".join(mensagem_parts)
-
-            # Envia apenas UM alerta de previsão por rodada (usa wrapper)
-            enviar_telegram_unico(mensagem_previsao)
-
-            # Marca que já enviamos a previsão para este timestamp (evita reenvio)
-            st.session_state.previsao_sent_for_timestamp = st.session_state.ultimo_timestamp
-            st.session_state.aguardando_resultado = True
-
-# Status do último sorteio
-if st.session_state.ultimo_timestamp:
-    st.info(f"⏳ Último sorteio processado: {st.session_state.ultimo_timestamp}")
-else:
-    st.info("⏳ Aguardando primeiro sorteio...")
-
-# -----------------------------
-# Interface
-# -----------------------------
-st.subheader("📜 Histórico (últimos 3 números)")
-ultimos = list(st.session_state.estrategia.historico)[-3:]
-st.write(ultimos)
-
-# Estatísticas
-acertos = st.session_state.get("acertos", 0)
-erros = st.session_state.get("erros", 0)
-total = acertos + erros
-taxa = (acertos / total * 100) if total > 0 else 0.0
-qtd_previstos_rec = len(st.session_state.get("previsao_para_conferir", []))
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("🟢 GREEN", acertos)
-col2.metric("🔴 RED", erros)
-col3.metric("✅ Taxa de acerto", f"{taxa:.1f}%")
-col4.metric("🎯 Qtd. previstos Recorrência", qtd_previstos_rec)
-
-acertos_topN = st.session_state.get("acertos_topN", 0)
-erros_topN = st.session_state.get("erros_topN", 0)
-total_topN = acertos_topN + erros_topN
-taxa_topN = (acertos_topN / total_topN * 100) if total_topN > 0 else 0.0
-qtd_previstos_topN = len(st.session_state.get("previsao_topN_para_conferir", []))
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("🟢 GREEN Top N", acertos_topN)
-col2.metric("🔴 RED Top N", erros_topN)
-col3.metric("✅ Taxa Top N", f"{taxa_topN:.1f}%")
-col4.metric("🎯 Qtd. previstos Top N", qtd_previstos_topN)
-
-st.subheader("📊 Informações do Histórico")
-st.write(f"Total de números armazenados no histórico: **{len(st.session_state.estrategia.historico)}**")
-st.write(f"Capacidade máxima do deque: **{st.session_state.estrategia.historico.maxlen}**")
+# UI
+st.subheader("📜 Histórico")
+st.write(list(st.session_state.estrategia.historico)[-5:])
