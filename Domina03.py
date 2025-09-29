@@ -359,4 +359,42 @@ qtd_previstos_topN = len(st.session_state.previsao_topN_para_conferir or [])
 col1,col2,col3,col4=st.columns(4)
 col1.metric("🟢 GREEN Top N",acertos_topN)
 col2.metric("🔴 RED Top N",erros_topN)
-col3.metric("✅ Taxa Top N",f
+#col3.metric("✅ Taxa Top N",f
+col3.metric("✅ Taxa Top N", f"{taxa_topN:.1f}%")
+col4.metric("🎯 Qtd. previstos Top N", qtd_previstos_topN)
+
+st.subheader("📊 Informações do Histórico")
+st.write(f"Total de números armazenados no histórico: **{len(st.session_state.estrategia.historico)}**")
+st.write(f"Capacidade máxima do deque: **{st.session_state.estrategia.historico.maxlen}**")
+
+# Mostra última previsão enviada (se houver)
+if st.session_state.ultima_previsao:
+    st.subheader("🔔 Última Previsão Enviada")
+    prev = st.session_state.ultima_previsao.get("previsao", [])
+    topn = st.session_state.ultima_previsao.get("topN", [])
+    for_timestamp = st.session_state.ultima_previsao.get("for_timestamp")
+    st.write(f"Para timestamp: **{for_timestamp}**")
+    st.write("Previsão (Recorrência): " + " ".join(map(str, prev)))
+    if topn:
+        st.write("Top N: " + " ".join(map(str, sorted(topn))))
+
+# Opções de debug / controle manual (somente se quiser reiniciar contadores)
+with st.expander("⚙️ Controle e Debug"):
+    if st.button("Reiniciar métricas"):
+        st.session_state.acertos = 0
+        st.session_state.erros = 0
+        st.session_state.acertos_topN = 0
+        st.session_state.erros_topN = 0
+        st.success("Métricas reiniciadas.")
+    if st.button("Limpar histórico (apenas memória)"):
+        st.session_state.estrategia.historico.clear()
+        st.success("Histórico em memória limpo (arquivo não alterado).")
+    if st.button("Salvar histórico atual em disco"):
+        salvar_historico(list(st.session_state.estrategia.historico))
+        st.success("Histórico salvo em disco.")
+
+# Final: escreve logs mínimos no aplicativo para ajudar diagnóstico
+st.write("Último timestamp processado:", st.session_state.ultimo_timestamp)
+st.write("Aguardando resultado:", st.session_state.aguardando_resultado)
+st.write("Timestamp para qual a previsão foi enviada:", st.session_state.previsao_sent_for_timestamp)
+            
