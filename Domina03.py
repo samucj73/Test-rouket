@@ -440,10 +440,6 @@ if resultado and novo_sorteio:
     # -----------------------------
     # CONFERÊNCIA com previsões ANTERIORES (do último sorteio)
     # -----------------------------
-    # RESET dos controles de alerta para novo sorteio
-    st.session_state.alerta_recorrencia_enviado = False
-    st.session_state.alerta_topN_enviado = False
-
     # Conferência Recorrência (previsão do sorteio anterior)
     if st.session_state.previsao_anterior:
         numeros_com_vizinhos = []
@@ -455,9 +451,10 @@ if resultado and novo_sorteio:
         if numero_real in numeros_com_vizinhos:
             st.session_state.acertos += 1
             st.success(f"🟢 GREEN! Número {numero_real} previsto pela recorrência (incluindo vizinhos).")
-            if not st.session_state.alerta_recorrencia_enviado:
+            # Envia alerta APENAS se for um GREEN e se ainda não foi enviado para este número
+            if st.session_state.ultimo_alerta_numero != numero_real:
                 enviar_telegram(f"🟢 GREEN! Número {numero_real} previsto pela recorrência (incluindo vizinhos).")
-                st.session_state.alerta_recorrencia_enviado = True
+                st.session_state.ultimo_alerta_numero = numero_real
         else:
             st.session_state.erros += 1
             st.error(f"🔴 RED! Número {numero_real} não estava na previsão de recorrência nem nos vizinhos.")
@@ -475,9 +472,10 @@ if resultado and novo_sorteio:
         if numero_real in topN_com_vizinhos:
             st.session_state.acertos_topN += 1
             st.success(f"🟢 GREEN Top N! Número {numero_real} estava entre os mais prováveis.")
-            if not st.session_state.alerta_topN_enviado:
+            # Envia alerta APENAS se for um GREEN e se ainda não foi enviado para este número
+            if st.session_state.ultimo_alerta_topN_numero != numero_real:
                 enviar_telegram_topN(f"🟢 GREEN Top N! Número {numero_real} estava entre os mais prováveis.")
-                st.session_state.alerta_topN_enviado = True
+                st.session_state.ultimo_alerta_topN_numero = numero_real
             st.session_state.topn_greens[numero_real] = st.session_state.topn_greens.get(numero_real, 0) + 1
         else:
             st.session_state.erros_topN += 1
@@ -488,9 +486,6 @@ if resultado and novo_sorteio:
     # -----------------------------
     # GERAR NOVAS PREVISÕES para o PRÓXIMO sorteio
     # -----------------------------
-    # RESET do controle de previsões enviadas
-    st.session_state.previsoes_enviadas = False
-
     if st.session_state.contador_rodadas % 2 == 0:
         prox_numeros = st.session_state.ia_recorrencia.prever(st.session_state.estrategia.historico)
         if prox_numeros:
@@ -502,8 +497,10 @@ if resultado and novo_sorteio:
             entrada_topN = ajustar_top_n(prox_numeros, st.session_state.estrategia.historico)
             st.session_state.previsao_topN_anterior = entrada_topN
 
-            # Envia previsões apenas UMA VEZ - verifica se já não foram enviadas
-            if not st.session_state.previsoes_enviadas:
+            # Envia previsões APENAS UMA VEZ por ciclo de previsão
+            # Verifica se já não foram enviadas para este conjunto de números
+            previsao_hash = hash(tuple(sorted(prox_numeros)))
+            if st.session_state.ultima_previsao_hash != previsao_hash:
                 s = sorted(prox_numeros)
                 mensagem_previsao = "🎯 NP: " + " ".join(map(str, s[:5]))
                 if len(s) > 5:
@@ -515,8 +512,8 @@ if resultado and novo_sorteio:
                 if entrada_topN:
                     enviar_telegram_topN("Top N: " + " ".join(map(str, sorted(entrada_topN))))
                 
-                # MARCA que as previsões já foram enviadas
-                st.session_state.previsoes_enviadas = True
+                # MARCA que estas previsões já foram enviadas
+                st.session_state.ultima_previsao_hash = previsao_hash
 
     st.session_state.contador_rodadas += 1
 
