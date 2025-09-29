@@ -398,7 +398,6 @@ for n in historico:
 # -----------------------------
 # Captura número (API) - CORREÇÃO PRINCIPAL
 # -----------------------------
-# -----------------------------
 # Captura número (API) - CORREÇÃO PRINCIPAL
 # -----------------------------
 resultado = fetch_latest_result()
@@ -431,25 +430,16 @@ if resultado and novo_sorteio:
     
     numero_real = numero_dict["number"]
 
-    # Inicializa controle de alertas no session_state
-    if "alerta_enviado_recorrencia" not in st.session_state:
-        st.session_state.alerta_enviado_recorrencia = False
-    if "alerta_enviado_topN" not in st.session_state:
-        st.session_state.alerta_enviado_topN = False
-    if "previsao_enviada" not in st.session_state:
-        st.session_state.previsao_enviada = False
-
-    # Reset dos controles de alerta para novo sorteio
-    st.session_state.alerta_enviado_recorrencia = False
-    st.session_state.alerta_enviado_topN = False
-    st.session_state.previsao_enviada = False
-
     # -----------------------------
-    # Conferência Recorrência
+    # CONFERÊNCIA com previsões ANTERIORES (do último sorteio)
     # -----------------------------
-    if st.session_state.previsao:
+    alerta_enviado_recorrencia = False
+    alerta_enviado_topN = False
+
+    # Conferência Recorrência (previsão do sorteio anterior)
+    if st.session_state.previsao_anterior:
         numeros_com_vizinhos = []
-        for n in st.session_state.previsao:
+        for n in st.session_state.previsao_anterior:
             for v in obter_vizinhos(n, ROULETTE_LAYOUT, antes=1, depois=1):
                 if v not in numeros_com_vizinhos:
                     numeros_com_vizinhos.append(v)
@@ -457,21 +447,19 @@ if resultado and novo_sorteio:
         if numero_real in numeros_com_vizinhos:
             st.session_state.acertos += 1
             st.success(f"🟢 GREEN! Número {numero_real} previsto pela recorrência (incluindo vizinhos).")
-            if not st.session_state.alerta_enviado_recorrencia:
+            if not alerta_enviado_recorrencia:
                 enviar_telegram(f"🟢 GREEN! Número {numero_real} previsto pela recorrência (incluindo vizinhos).")
-                st.session_state.alerta_enviado_recorrencia = True
+                alerta_enviado_recorrencia = True
         else:
             st.session_state.erros += 1
             st.error(f"🔴 RED! Número {numero_real} não estava na previsão de recorrência nem nos vizinhos.")
-            # Não envia alerta de RED
-        st.session_state.previsao = []
+        # Limpa a previsão anterior após conferir
+        st.session_state.previsao_anterior = []
 
-    # -----------------------------
-    # Conferência TopN
-    # -----------------------------
-    if st.session_state.previsao_topN:
+    # Conferência TopN (previsão do sorteio anterior)
+    if st.session_state.previsao_topN_anterior:
         topN_com_vizinhos = []
-        for n in st.session_state.previsao_topN:
+        for n in st.session_state.previsao_topN_anterior:
             for v in obter_vizinhos(n, ROULETTE_LAYOUT, antes=1, depois=1):
                 if v not in topN_com_vizinhos:
                     topN_com_vizinhos.append(v)
@@ -479,42 +467,41 @@ if resultado and novo_sorteio:
         if numero_real in topN_com_vizinhos:
             st.session_state.acertos_topN += 1
             st.success(f"🟢 GREEN Top N! Número {numero_real} estava entre os mais prováveis.")
-            if not st.session_state.alerta_enviado_topN:
+            if not alerta_enviado_topN:
                 enviar_telegram_topN(f"🟢 GREEN Top N! Número {numero_real} estava entre os mais prováveis.")
-                st.session_state.alerta_enviado_topN = True
+                alerta_enviado_topN = True
             st.session_state.topn_greens[numero_real] = st.session_state.topn_greens.get(numero_real, 0) + 1
         else:
             st.session_state.erros_topN += 1
             st.error(f"🔴 RED Top N! Número {numero_real} não estava entre os mais prováveis.")
-            # Não envia alerta de RED
-        st.session_state.previsao_topN = []
+        # Limpa a previsão anterior após conferir
+        st.session_state.previsao_topN_anterior = []
 
     # -----------------------------
-    # Gerar próxima previsão (apenas a cada 2 rodadas)
+    # GERAR NOVAS PREVISÕES para o PRÓXIMO sorteio
     # -----------------------------
     if st.session_state.contador_rodadas % 2 == 0:
         prox_numeros = st.session_state.ia_recorrencia.prever(st.session_state.estrategia.historico)
         if prox_numeros:
             prox_numeros = list(dict.fromkeys(prox_numeros))
-            st.session_state.previsao = prox_numeros
+            
+            # Salva como previsões ANTERIORES para conferir no próximo sorteio
+            st.session_state.previsao_anterior = prox_numeros
 
             entrada_topN = ajustar_top_n(prox_numeros, st.session_state.estrategia.historico)
-            st.session_state.previsao_topN = entrada_topN
+            st.session_state.previsao_topN_anterior = entrada_topN
 
-            # Envia previsões apenas se ainda não foram enviadas
-            if not st.session_state.previsao_enviada:
-                s = sorted(prox_numeros)
-                mensagem_previsao = "🎯 NP: " + " ".join(map(str, s[:5]))
-                if len(s) > 5:
-                    mensagem_previsao += "\n" + " ".join(map(str, s[5:]))
-                
-                enviar_telegram(mensagem_previsao)
-                
-                # Envia apenas UMA mensagem para o canal Top N
-                if entrada_topN:
-                    enviar_telegram_topN("Top N: " + " ".join(map(str, sorted(entrada_topN))))
-                
-                st.session_state.previsao_enviada = True
+            # Envia previsões apenas UMA VEZ
+            s = sorted(prox_numeros)
+            mensagem_previsao = "🎯 NP: " + " ".join(map(str, s[:5]))
+            if len(s) > 5:
+                mensagem_previsao += "\n" + " ".join(map(str, s[5:]))
+            
+            enviar_telegram(mensagem_previsao)
+            
+            # Envia apenas UMA mensagem para o canal Top N
+            if entrada_topN:
+                enviar_telegram_topN("Top N: " + " ".join(map(str, sorted(entrada_topN))))
 
     st.session_state.contador_rodadas += 1
 
@@ -527,6 +514,7 @@ if resultado and novo_sorteio:
         "erros_topN": st.session_state.get("erros_topN", 0),
     }
     salvar_metricas(metrics)
+
 
 
 # Status do último sorteio
