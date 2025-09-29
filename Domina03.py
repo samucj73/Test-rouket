@@ -362,10 +362,6 @@ def registrar_resultado_topN(numero_real, top_n):
             st.session_state.topn_history.append("R")
 
 # =============================
-# Estratégia 31/34
-# =============================
-
-# =============================
 # Streamlit App
 # =============================
 st.set_page_config(page_title="Roleta IA Profissional", layout="centered")
@@ -378,13 +374,10 @@ defaults = {
     "ia_recorrencia": IA_Recorrencia_RF(layout=ROULETTE_LAYOUT, top_n=5, window=WINDOW_SIZE),
     "previsao": [],
     "previsao_topN": [],
-    "previsao_31_34": [],
     "acertos": 0,
     "erros": 0,
     "acertos_topN": 0,
     "erros_topN": 0,
-    "acertos_31_34": 0,
-    "erros_31_34": 0,
     "contador_rodadas": 0,
     "topn_history": deque(maxlen=TOP_N_WINDOW),
     "topn_reds": {},
@@ -475,20 +468,6 @@ if resultado and novo_sorteio:
         st.session_state.previsao_topN = []
 
     # -----------------------------
-    # Conferência 31/34
-    # -----------------------------
-    if st.session_state.previsao_31_34:
-        if numero_real in st.session_state.previsao_31_34:
-            st.session_state.acertos_31_34 += 1
-            st.success(f"🟢 GREEN (31/34)! Número {numero_real} estava na entrada 31/34.")
-            enviar_telegram(f"🟢 GREEN (31/34)! Número {numero_real} estava na entrada 31/34.")
-        else:
-            st.session_state.erros_31_34 += 1
-            st.error(f"🔴 RED (31/34)! Número {numero_real} não estava na entrada 31/34.")
-            enviar_telegram(f"🔴 RED (31/34)! Número {numero_real} não estava na entrada 31/34.")
-        st.session_state.previsao_31_34 = []
-
-    # -----------------------------
     # Gerar próxima previsão
     # -----------------------------
     if st.session_state.contador_rodadas % 2 == 0:
@@ -504,10 +483,6 @@ if resultado and novo_sorteio:
             enviar_telegram("🎯 NP: " + " ".join(map(str, s[:5])) +
                             ("\n" + " ".join(map(str, s[5:])) if len(s) > 5 else ""))
             enviar_telegram_topN("Top N: " + " ".join(map(str, sorted(entrada_topN))))
-    else:
-        entrada_31_34 = estrategia_31_34(numero_real)
-        if entrada_31_34:
-            st.session_state.previsao_31_34 = entrada_31_34
 
     st.session_state.contador_rodadas += 1
 
@@ -518,8 +493,6 @@ if resultado and novo_sorteio:
         "erros": st.session_state.get("erros", 0),
         "acertos_topN": st.session_state.get("acertos_topN", 0),
         "erros_topN": st.session_state.get("erros_topN", 0),
-        "acertos_31_34": st.session_state.get("acertos_31_34", 0),
-        "erros_31_34": st.session_state.get("erros_31_34", 0)
     }
     salvar_metricas(metrics)
 
@@ -558,18 +531,6 @@ col1.metric("🟢 GREEN Top N", acertos_topN)
 col2.metric("🔴 RED Top N", erros_topN)
 col3.metric("✅ Taxa Top N", f"{taxa_topN:.1f}%")
 col4.metric("🎯 Qtd. previstos Top N", qtd_previstos_topN)
-
-acertos_31_34 = st.session_state.get("acertos_31_34", 0)
-erros_31_34 = st.session_state.get("erros_31_34", 0)
-total_31_34 = acertos_31_34 + erros_31_34
-taxa_31_34 = (acertos_31_34 / total_31_34 * 100) if total_31_34 > 0 else 0.0
-qtd_previstos_31_34 = len(st.session_state.get("previsao_31_34", []))
-
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("🟢 GREEN 31/34", acertos_31_34)
-col2.metric("🔴 RED 31/34", erros_31_34)
-col3.metric("✅ Taxa 31/34", f"{taxa_31_34:.1f}%")
-col4.metric("🎯 Qtd. previstos 31/34", qtd_previstos_31_34)
 
 st.subheader("📊 Informações do Histórico")
 st.write(f"Total de números armazenados no histórico: **{len(st.session_state.estrategia.historico)}**")
