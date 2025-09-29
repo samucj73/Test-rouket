@@ -370,13 +370,12 @@ st_autorefresh(interval=3000, key="refresh")
 
 # Inicialização session_state
 # Inicialização session_state
-
 # Inicialização session_state
 defaults = {
     "estrategia": EstrategiaDeslocamento(),
     "ia_recorrencia": IA_Recorrencia_RF(layout=ROULETTE_LAYOUT, top_n=5, window=WINDOW_SIZE),
-    "previsao_anterior": [],  # Previsões para conferir no próximo sorteio
-    "previsao_topN_anterior": [],  # Previsões TopN para conferir no próximo sorteio
+    "previsao_para_conferir": [],  # Previsões que serão conferidas no próximo sorteio
+    "previsao_topN_para_conferir": [],  # Previsões TopN que serão conferidas no próximo sorteio
     "acertos": 0,
     "erros": 0,
     "acertos_topN": 0,
@@ -385,14 +384,12 @@ defaults = {
     "topn_history": deque(maxlen=TOP_N_WINDOW),
     "topn_reds": {},
     "topn_greens": {},
-    "ultimo_timestamp": None,  # CRÍTICO: controla duplicatas
-    "ultimo_alerta_numero": None,  # NOVO: último número que gerou alerta
-    "ultimo_alerta_topN_numero": None,  # NOVO: último número que gerou alerta TopN
-    "ultima_previsao_hash": None,  # NOVO: hash da última previsão enviada
+    "ultimo_timestamp": None,
 }
 for k, v in defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
+
 
 
 # Carregar histórico existente
