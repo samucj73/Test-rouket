@@ -76,11 +76,30 @@ def carregar_historico():
     return []
 
 def salvar_historico(historico):
+def salvar_historico(historico):
     try:
+        # Remove duplicatas consecutivas antes de salvar
+        historico_limpo = []
+        ultimo_timestamp = None
+        
+        for numero_dict in historico:
+            if isinstance(numero_dict, dict) and "timestamp" in numero_dict:
+                # Só adiciona se o timestamp for diferente do último
+                if numero_dict["timestamp"] != ultimo_timestamp:
+                    historico_limpo.append(numero_dict)
+                    ultimo_timestamp = numero_dict["timestamp"]
+            else:
+                # Para registros antigos sem timestamp, mantém todos
+                historico_limpo.append(numero_dict)
+        
         with open(HISTORICO_PATH, "w") as f:
-            json.dump(historico, f, indent=2)
+            json.dump(historico_limpo, f, indent=2)
+        
+        logging.info(f"✅ Histórico salvo com {len(historico_limpo)} registros únicos")
+        
     except Exception as e:
         logging.error(f"Erro ao salvar histórico: {e}")
+    
 
 def salvar_metricas(m):
     try:
