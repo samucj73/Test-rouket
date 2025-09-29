@@ -76,7 +76,7 @@ def carregar_historico():
     return []
 
 #def salvar_historico(historico):
- def salvar_historico(numero_dict):
+def salvar_historico(numero_dict):
     """Salva número diretamente da API no arquivo histórico persistente"""
     try:
         # Carrega histórico existente
