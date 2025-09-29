@@ -1,8 +1,8 @@
-# Domina03.py (corrigido - mantendo estrutura original)
+# Domina03.py (com otimizações de treinamento IA)
 import streamlit as st
 import json
 import os
-import  time
+import time
 import requests
 from collections import deque, Counter
 from streamlit_autorefresh import st_autorefresh
@@ -10,6 +10,9 @@ import logging
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from typing import List
+import pandas as pd
+import io
+from datetime import datetime
 
 # =============================
 # Configurações
@@ -38,6 +41,12 @@ WINDOW_SIZE = 18   # janela móvel para Top N dinâmico
 MIN_TOP_N = 5      # mínimo de números na Top N
 MAX_TOP_N = 10     # máximo de números na Top N
 MAX_PREVIEWS = 10   # limite final de previsões para reduzir custo
+
+# =============================
+# NOVO: Configurações de Otimização
+# =============================
+TREINAMENTO_INTERVALO = 5  # Treinar a cada 5 rodadas (ao invés de toda rodada)
+MIN_HISTORICO_TREINAMENTO = 50  # Mínimo de registros para treinar
 
 # =============================
 # Utilitários (Telegram, histórico, API, vizinhos)
@@ -195,7 +204,7 @@ class EstrategiaDeslocamento:
         self.historico.append(numero_dict)
 
 # =============================
-# IA Recorrência com RandomForest
+# IA Recorrência com RandomForest (OTIMIZADO)
 # =============================
 class IA_Recorrencia_RF:
     def __init__(self, layout=None, top_n=16, window=WINDOW_SIZE):
@@ -203,6 +212,7 @@ class IA_Recorrencia_RF:
         self.top_n = top_n
         self.window = window
         self.model = None
+        self.ultimo_treinamento_size = 0  # Controle de quando treinar
 
     def _criar_features_simples(self, historico: List[dict]):
         """
@@ -227,16 +237,42 @@ class IA_Recorrencia_RF:
         return np.array(X), np.array(y)
 
     def treinar(self, historico):
+        """Treina o modelo apenas se houver dados suficientes e necessidade"""
+        if len(historico) < 10:  # Mínimo absoluto para treinar
+            self.model = None
+            return False
+            
         X, y = self._criar_features_simples(historico)
         if X is None or len(X) == 0:
             self.model = None
-            return
+            return False
+        
         try:
-            self.model = RandomForestClassifier(n_estimators=200, random_state=42)
+            # CONFIGURAÇÃO OTIMIZADA
+            self.model = RandomForestClassifier(
+                n_estimators=100,      # Reduzido de 200 para 100
+                max_depth=8,           # Limitado para evitar overfitting
+                min_samples_split=5,   # Evitar árvores muito complexas
+                n_jobs=-1,             # Usar todos os cores da CPU
+                random_state=42
+            )
             self.model.fit(X, y)
+            self.ultimo_treinamento_size = len(historico)
+            logging.info(f"✅ Modelo RF treinado com {len(X)} amostras")
+            return True
         except Exception as e:
             logging.error(f"Erro treinando RF: {e}")
             self.model = None
+            return False
+
+    def precisa_treinar(self, historico_atual):
+        """Verifica se precisa treinar novamente"""
+        if self.model is None:
+            return True
+            
+        # Treinar se histórico cresceu significativamente
+        crescimento = len(historico_atual) - self.ultimo_treinamento_size
+        return crescimento >= 20  # Treinar a cada ~20 novos registros
 
     def prever(self, historico):
         """
@@ -268,9 +304,11 @@ class IA_Recorrencia_RF:
         top_depois = [num for num, _ in cont_depois.most_common(self.top_n)]
         candidatos = list(set(top_antes + top_depois))
 
-        # Treina o RF usando todo o histórico recente (janela)
+        # **OTIMIZAÇÃO: Treinar apenas quando necessário**
         window_hist = historico_lista[-max(len(historico_lista), self.window):]
-        self.treinar(window_hist)
+        
+        if self.precisa_treinar(window_hist):
+            self.treinar(window_hist)
 
         # Se tivermos modelo, pegamos top classes por probabilidade
         if self.model is not None:
@@ -312,7 +350,6 @@ class IA_Recorrencia_RF:
             numeros_previstos = sorted(numeros_previstos, key=lambda x: scores.get(x, 0), reverse=True)[:MAX_PREVIEWS]
 
         return numeros_previstos
-
 
 # =============================
 # Redução inteligente (metade) - função reutilizável
@@ -409,6 +446,65 @@ def estrategia_31_34(numero_capturado):
     )
     enviar_telegram(msg)
     return list(entrada)
+
+# =============================
+# Função para Download do Histórico
+# =============================
+def gerar_download_historico():
+    """Gera arquivo para download do histórico completo"""
+    try:
+        # Carrega o histórico persistente
+        historico = carregar_historico()
+        
+        if not historico:
+            st.warning("Nenhum histórico disponível para download")
+            return None
+        
+        # Converte para DataFrame
+        df = pd.DataFrame(historico)
+        
+        # Cria buffer para o arquivo
+        output = io.BytesIO()
+        
+        # Cria arquivo Excel com múltiplas abas
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            # Aba com histórico completo
+            df.to_excel(writer, sheet_name='Historico_Completo', index=False)
+            
+            # Aba com estatísticas
+            stats_data = {
+                'Metrica': [
+                    'Total de Registros',
+                    'Período Inicial', 
+                    'Período Final',
+                    'Números Mais Frequentes',
+                    'Acertos Recorrência',
+                    'Acertos Top N',
+                    'Acertos 31/34'
+                ],
+                'Valor': [
+                    len(df),
+                    df['timestamp'].min() if 'timestamp' in df.columns else 'N/A',
+                    df['timestamp'].max() if 'timestamp' in df.columns else 'N/A',
+                    str(dict(Counter(df['number']).most_common(5))) if 'number' in df.columns else 'N/A',
+                    st.session_state.get('acertos', 0),
+                    st.session_state.get('acertos_topN', 0),
+                    st.session_state.get('acertos_31_34', 0)
+                ]
+            }
+            stats_df = pd.DataFrame(stats_data)
+            stats_df.to_excel(writer, sheet_name='Estatisticas', index=False)
+            
+            # Aba com últimos 100 registros
+            ultimos_100 = df.tail(100)
+            ultimos_100.to_excel(writer, sheet_name='Ultimos_100', index=False)
+        
+        output.seek(0)
+        return output
+    
+    except Exception as e:
+        logging.error(f"Erro ao gerar download: {e}")
+        return None
 
 # =============================
 # Streamlit App
@@ -528,11 +624,12 @@ if resultado and novo_sorteio:
         st.session_state.previsao_31_34 = []
 
     # -----------------------------
-    # Gerar próxima previsão COM CONTROLE DE ALERTAS
+    # **OTIMIZAÇÃO: Gerar próxima previsão COM TREINAMENTO INTELIGENTE**
     # -----------------------------
     if st.session_state.contador_rodadas % 2 == 0 and not st.session_state.aguardando_novo_sorteio:
         # Usa IA Recorrência RandomForest
         prox_numeros = st.session_state.ia_recorrencia.prever(st.session_state.estrategia.historico)
+        
         if prox_numeros:
             prox_numeros = list(dict.fromkeys(prox_numeros))  # garante unicidade
             st.session_state.previsao = prox_numeros
@@ -564,6 +661,23 @@ if resultado and novo_sorteio:
         entrada_31_34 = estrategia_31_34(numero_real)
         if entrada_31_34:
             st.session_state.previsao_31_34 = entrada_31_34
+
+    # -----------------------------
+    # **OTIMIZAÇÃO: Treinamento Controlado**
+    # -----------------------------
+    historico_size = len(st.session_state.estrategia.historico)
+    
+    # Treinar apenas quando:
+    # 1. Há histórico suficiente
+    # 2. É hora de treinar (intervalo controlado)
+    # 3. Houve crescimento significativo no histórico
+    if (historico_size >= MIN_HISTORICO_TREINAMENTO and 
+        st.session_state.contador_rodadas % TREINAMENTO_INTERVALO == 0 and
+        st.session_state.ia_recorrencia.precisa_treinar(st.session_state.estrategia.historico)):
+        
+        logging.info("🔄 Treinamento programado da IA")
+        window_hist = list(st.session_state.estrategia.historico)[-WINDOW_SIZE:]
+        st.session_state.ia_recorrencia.treinar(window_hist)
 
     # -----------------------------
     # Incrementa contador de rodadas
@@ -638,6 +752,15 @@ col3.metric("✅ Taxa 31/34", f"{taxa_31_34:.1f}%")
 col4.metric("🎯 Qtd. previstos 31/34", qtd_previstos_31_34)
 
 # -----------------------------
+# Nova métrica para monitorar treinamentos
+# -----------------------------
+st.subheader("🤖 Status da IA")
+col1, col2, col3 = st.columns(3)
+col1.metric("🔄 Último Treinamento", f"{st.session_state.ia_recorrencia.ultimo_treinamento_size} registros")
+col2.metric("📊 Histórico Atual", f"{len(st.session_state.estrategia.historico)} registros")
+col3.metric("⚡ Próximo Treinamento", f"Rodada {TREINAMENTO_INTERVALO - (st.session_state.contador_rodadas % TREINAMENTO_INTERVALO)}")
+
+# -----------------------------
 # Exibir tamanho do histórico
 # -----------------------------
 st.subheader("📊 Informações do Histórico")
@@ -647,3 +770,38 @@ st.write(f"Capacidade máxima do deque: **{st.session_state.estrategia.historico
 # Informação sobre último timestamp
 if st.session_state.ultimo_timestamp_processado:
     st.write(f"Último sorteio processado: **{st.session_state.ultimo_timestamp_processado}**")
+
+# -----------------------------
+# NOVO: Seção de Download do Histórico
+# -----------------------------
+st.markdown("---")
+st.subheader("📥 Exportar Dados")
+
+# Botão para download
+if st.button("💾 Download Histórico Completo", type="primary"):
+    with st.spinner("Gerando arquivo de download..."):
+        arquivo = gerar_download_historico()
+        
+        if arquivo:
+            # Nome do arquivo com timestamp
+            nome_arquivo = f"historico_roleta_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+            
+            # Botão de download
+            st.download_button(
+                label="⬇️ Baixar Arquivo Excel",
+                data=arquivo,
+                file_name=nome_arquivo,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                help="Clique para baixar o histórico completo em formato Excel"
+            )
+            st.success("✅ Arquivo gerado com sucesso! Clique no botão acima para baixar.")
+        else:
+            st.error("❌ Erro ao gerar arquivo de download")
+
+# Informações sobre o arquivo
+st.info("""
+**📋 Conteúdo do arquivo:**
+- **Historico_Completo**: Todos os números registrados
+- **Estatisticas**: Métricas e análises do histórico  
+- **Ultimos_100**: Últimos 100 registros para análise recente
+""")
