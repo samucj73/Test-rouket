@@ -312,6 +312,7 @@ class IA_Recorrencia_RF:
 
         return numeros_previstos
 
+
 # =============================
 # Redução inteligente (metade) - função reutilizável
 # =============================
