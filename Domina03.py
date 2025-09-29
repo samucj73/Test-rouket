@@ -404,24 +404,6 @@ for n in historico:
 
 # -----------------------------
 # Captura número (API) - CORREÇÃO PRINCIPAL
-# -----------------------------
-# Captura número (API) - CORREÇÃO PRINCIPAL
-# -----------------------------
-resultado = fetch_latest_result()
-
-# VERIFICAÇÃO ROBUSTA CONTRA DUPLICATAS
-novo_sorteio = False
-if resultado and resultado.get("timestamp"):
-    # Se é o primeiro sorteio OU se o timestamp é DIFERENTE do último
-    if st.session_state.ultimo_timestamp is None:
-        novo_sorteio = True
-        logging.info("🎲 PRIMEIRO SORTEIO DETECTADO")
-    elif resultado["timestamp"] != st.session_state.ultimo_timestamp:
-        novo_sorteio = True
-        logging.info(f"🎲 NOVO SORTEIO: {resultado['number']} (anterior: {st.session_state.ultimo_timestamp})")
-    else:
-        logging.info(f"⏳ Sorteio duplicado ignorado: {resultado['timestamp']}")
-
 # Processa APENAS se for realmente um novo sorteio
 if resultado and novo_sorteio:
     numero_dict = {"number": resultado["number"], "timestamp": resultado["timestamp"]}
@@ -440,8 +422,9 @@ if resultado and novo_sorteio:
     # -----------------------------
     # CONFERÊNCIA com previsões ANTERIORES (do último sorteio)
     # -----------------------------
-    alerta_enviado_recorrencia = False
-    alerta_enviado_topN = False
+    # RESET dos controles de alerta para novo sorteio
+    st.session_state.alerta_recorrencia_enviado = False
+    st.session_state.alerta_topN_enviado = False
 
     # Conferência Recorrência (previsão do sorteio anterior)
     if st.session_state.previsao_anterior:
@@ -454,9 +437,9 @@ if resultado and novo_sorteio:
         if numero_real in numeros_com_vizinhos:
             st.session_state.acertos += 1
             st.success(f"🟢 GREEN! Número {numero_real} previsto pela recorrência (incluindo vizinhos).")
-            if not alerta_enviado_recorrencia:
+            if not st.session_state.alerta_recorrencia_enviado:
                 enviar_telegram(f"🟢 GREEN! Número {numero_real} previsto pela recorrência (incluindo vizinhos).")
-                alerta_enviado_recorrencia = True
+                st.session_state.alerta_recorrencia_enviado = True
         else:
             st.session_state.erros += 1
             st.error(f"🔴 RED! Número {numero_real} não estava na previsão de recorrência nem nos vizinhos.")
@@ -474,9 +457,9 @@ if resultado and novo_sorteio:
         if numero_real in topN_com_vizinhos:
             st.session_state.acertos_topN += 1
             st.success(f"🟢 GREEN Top N! Número {numero_real} estava entre os mais prováveis.")
-            if not alerta_enviado_topN:
+            if not st.session_state.alerta_topN_enviado:
                 enviar_telegram_topN(f"🟢 GREEN Top N! Número {numero_real} estava entre os mais prováveis.")
-                alerta_enviado_topN = True
+                st.session_state.alerta_topN_enviado = True
             st.session_state.topn_greens[numero_real] = st.session_state.topn_greens.get(numero_real, 0) + 1
         else:
             st.session_state.erros_topN += 1
@@ -487,6 +470,9 @@ if resultado and novo_sorteio:
     # -----------------------------
     # GERAR NOVAS PREVISÕES para o PRÓXIMO sorteio
     # -----------------------------
+    # RESET do controle de previsões enviadas
+    st.session_state.previsoes_enviadas = False
+
     if st.session_state.contador_rodadas % 2 == 0:
         prox_numeros = st.session_state.ia_recorrencia.prever(st.session_state.estrategia.historico)
         if prox_numeros:
@@ -498,17 +484,21 @@ if resultado and novo_sorteio:
             entrada_topN = ajustar_top_n(prox_numeros, st.session_state.estrategia.historico)
             st.session_state.previsao_topN_anterior = entrada_topN
 
-            # Envia previsões apenas UMA VEZ
-            s = sorted(prox_numeros)
-            mensagem_previsao = "🎯 NP: " + " ".join(map(str, s[:5]))
-            if len(s) > 5:
-                mensagem_previsao += "\n" + " ".join(map(str, s[5:]))
-            
-            enviar_telegram(mensagem_previsao)
-            
-            # Envia apenas UMA mensagem para o canal Top N
-            if entrada_topN:
-                enviar_telegram_topN("Top N: " + " ".join(map(str, sorted(entrada_topN))))
+            # Envia previsões apenas UMA VEZ - verifica se já não foram enviadas
+            if not st.session_state.previsoes_enviadas:
+                s = sorted(prox_numeros)
+                mensagem_previsao = "🎯 NP: " + " ".join(map(str, s[:5]))
+                if len(s) > 5:
+                    mensagem_previsao += "\n" + " ".join(map(str, s[5:]))
+                
+                enviar_telegram(mensagem_previsao)
+                
+                # Envia apenas UMA mensagem para o canal Top N
+                if entrada_topN:
+                    enviar_telegram_topN("Top N: " + " ".join(map(str, sorted(entrada_topN))))
+                
+                # MARCA que as previsões já foram enviadas
+                st.session_state.previsoes_enviadas = True
 
     st.session_state.contador_rodadas += 1
 
@@ -521,6 +511,7 @@ if resultado and novo_sorteio:
         "erros_topN": st.session_state.get("erros_topN", 0),
     }
     salvar_metricas(metrics)
+
 
 
 
