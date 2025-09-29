@@ -1,4 +1,4 @@
-# Domina03.py (com otimizações de treinamento IA)
+# Domina03.py (com correção do erro)
 import streamlit as st
 import json
 import os
@@ -533,6 +533,7 @@ defaults = {
     "ultimo_timestamp_processado": None,  # para evitar duplicatas
     "ultima_previsao_enviada": None,     # controle de alertas
     "aguardando_novo_sorteio": False,    # flag de espera
+    "ultimo_treinamento_size": 0,        # CORREÇÃO: Adicionado para controle
 }
 for k, v in defaults.items():
     if k not in st.session_state:
@@ -677,7 +678,11 @@ if resultado and novo_sorteio:
         
         logging.info("🔄 Treinamento programado da IA")
         window_hist = list(st.session_state.estrategia.historico)[-WINDOW_SIZE:]
-        st.session_state.ia_recorrencia.treinar(window_hist)
+        sucesso_treinamento = st.session_state.ia_recorrencia.treinar(window_hist)
+        
+        # CORREÇÃO: Atualiza o session_state com o tamanho do último treinamento
+        if sucesso_treinamento:
+            st.session_state.ultimo_treinamento_size = st.session_state.ia_recorrencia.ultimo_treinamento_size
 
     # -----------------------------
     # Incrementa contador de rodadas
@@ -752,13 +757,20 @@ col3.metric("✅ Taxa 31/34", f"{taxa_31_34:.1f}%")
 col4.metric("🎯 Qtd. previstos 31/34", qtd_previstos_31_34)
 
 # -----------------------------
-# Nova métrica para monitorar treinamentos
+# Nova métrica para monitorar treinamentos (COM CORREÇÃO)
 # -----------------------------
 st.subheader("🤖 Status da IA")
 col1, col2, col3 = st.columns(3)
-col1.metric("🔄 Último Treinamento", f"{st.session_state.ia_recorrencia.ultimo_treinamento_size} registros")
+
+# CORREÇÃO: Verifica se a propriedade existe antes de acessar
+ultimo_treinamento = getattr(st.session_state.ia_recorrencia, 'ultimo_treinamento_size', 0)
+col1.metric("🔄 Último Treinamento", f"{ultimo_treinamento} registros")
+
 col2.metric("📊 Histórico Atual", f"{len(st.session_state.estrategia.historico)} registros")
-col3.metric("⚡ Próximo Treinamento", f"Rodada {TREINAMENTO_INTERVALO - (st.session_state.contador_rodadas % TREINAMENTO_INTERVALO)}")
+
+# Calcula próxima rodada de treinamento
+proximo_treinamento = TREINAMENTO_INTERVALO - (st.session_state.contador_rodadas % TREINAMENTO_INTERVALO)
+col3.metric("⚡ Próximo Treinamento", f"Rodada {proximo_treinamento}")
 
 # -----------------------------
 # Exibir tamanho do histórico
