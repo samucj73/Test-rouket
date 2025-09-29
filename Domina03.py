@@ -369,11 +369,12 @@ st.title("🎯 Roleta — IA Recorrência (RandomForest) + Redução Inteligente
 st_autorefresh(interval=3000, key="refresh")
 
 # Inicialização session_state
+# Inicialização session_state
 defaults = {
     "estrategia": EstrategiaDeslocamento(),
     "ia_recorrencia": IA_Recorrencia_RF(layout=ROULETTE_LAYOUT, top_n=5, window=WINDOW_SIZE),
-    "previsao": [],
-    "previsao_topN": [],
+    "previsao_anterior": [],  # Previsões para conferir no próximo sorteio
+    "previsao_topN_anterior": [],  # Previsões TopN para conferir no próximo sorteio
     "acertos": 0,
     "erros": 0,
     "acertos_topN": 0,
