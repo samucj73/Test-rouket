@@ -406,6 +406,7 @@ for n in historico:
 # Captura número (API) - CORREÇÃO PRINCIPAL
 # -----------------------------
 # -----------------------------
+# -----------------------------
 # Captura número (API) - CORREÇÃO PRINCIPAL
 # -----------------------------
 resultado = fetch_latest_result()
@@ -519,7 +520,7 @@ if resultado and novo_sorteio:
         "acertos_topN": st.session_state.get("acertos_topN", 0),
         "erros_topN": st.session_state.get("erros_topN", 0),
     }
-    salvar_metricas(metrics))
+    salvar_metricas(metrics)
 
 
 
