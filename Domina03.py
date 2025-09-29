@@ -387,7 +387,7 @@ def estrategia_31_34(numero_capturado):
 # =============================
 st.set_page_config(page_title="Roleta IA Profissional", layout="centered")
 st.title("🎯 Roleta — IA Recorrência (RandomForest) + Redução Inteligente")
-st_autorefresh(interval=3000, key="refresh")
+st_autorefresh(interval=1.5000, key="refresh")
 
 # Inicialização session_state (todas as chaves necessárias)
 defaults = {
