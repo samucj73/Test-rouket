@@ -398,6 +398,7 @@ for n in historico:
 # -----------------------------
 # Captura número (API) - CORREÇÃO PRINCIPAL
 # -----------------------------
+# -----------------------------
 # Captura número (API) - CORREÇÃO PRINCIPAL
 # -----------------------------
 resultado = fetch_latest_result()
@@ -430,9 +431,18 @@ if resultado and novo_sorteio:
     
     numero_real = numero_dict["number"]
 
-    # Variáveis para controle de alertas
-    alerta_enviado_recorrencia = False
-    alerta_enviado_topN = False
+    # Inicializa controle de alertas no session_state
+    if "alerta_enviado_recorrencia" not in st.session_state:
+        st.session_state.alerta_enviado_recorrencia = False
+    if "alerta_enviado_topN" not in st.session_state:
+        st.session_state.alerta_enviado_topN = False
+    if "previsao_enviada" not in st.session_state:
+        st.session_state.previsao_enviada = False
+
+    # Reset dos controles de alerta para novo sorteio
+    st.session_state.alerta_enviado_recorrencia = False
+    st.session_state.alerta_enviado_topN = False
+    st.session_state.previsao_enviada = False
 
     # -----------------------------
     # Conferência Recorrência
@@ -447,13 +457,13 @@ if resultado and novo_sorteio:
         if numero_real in numeros_com_vizinhos:
             st.session_state.acertos += 1
             st.success(f"🟢 GREEN! Número {numero_real} previsto pela recorrência (incluindo vizinhos).")
-            if not alerta_enviado_recorrencia:
+            if not st.session_state.alerta_enviado_recorrencia:
                 enviar_telegram(f"🟢 GREEN! Número {numero_real} previsto pela recorrência (incluindo vizinhos).")
-                alerta_enviado_recorrencia = True
+                st.session_state.alerta_enviado_recorrencia = True
         else:
             st.session_state.erros += 1
             st.error(f"🔴 RED! Número {numero_real} não estava na previsão de recorrência nem nos vizinhos.")
-            # Não envia alerta de RED para evitar spam
+            # Não envia alerta de RED
         st.session_state.previsao = []
 
     # -----------------------------
@@ -469,14 +479,14 @@ if resultado and novo_sorteio:
         if numero_real in topN_com_vizinhos:
             st.session_state.acertos_topN += 1
             st.success(f"🟢 GREEN Top N! Número {numero_real} estava entre os mais prováveis.")
-            if not alerta_enviado_topN:
+            if not st.session_state.alerta_enviado_topN:
                 enviar_telegram_topN(f"🟢 GREEN Top N! Número {numero_real} estava entre os mais prováveis.")
-                alerta_enviado_topN = True
+                st.session_state.alerta_enviado_topN = True
             st.session_state.topn_greens[numero_real] = st.session_state.topn_greens.get(numero_real, 0) + 1
         else:
             st.session_state.erros_topN += 1
             st.error(f"🔴 RED Top N! Número {numero_real} não estava entre os mais prováveis.")
-            # Não envia alerta de RED para evitar spam
+            # Não envia alerta de RED
         st.session_state.previsao_topN = []
 
     # -----------------------------
@@ -491,17 +501,20 @@ if resultado and novo_sorteio:
             entrada_topN = ajustar_top_n(prox_numeros, st.session_state.estrategia.historico)
             st.session_state.previsao_topN = entrada_topN
 
-            # Envia apenas UMA mensagem de previsão por canal
-            s = sorted(prox_numeros)
-            mensagem_previsao = "🎯 NP: " + " ".join(map(str, s[:5]))
-            if len(s) > 5:
-                mensagem_previsao += "\n" + " ".join(map(str, s[5:]))
-            
-            enviar_telegram(mensagem_previsao)
-            
-            # Envia apenas UMA mensagem para o canal Top N
-            if entrada_topN:
-                enviar_telegram_topN("Top N: " + " ".join(map(str, sorted(entrada_topN))))
+            # Envia previsões apenas se ainda não foram enviadas
+            if not st.session_state.previsao_enviada:
+                s = sorted(prox_numeros)
+                mensagem_previsao = "🎯 NP: " + " ".join(map(str, s[:5]))
+                if len(s) > 5:
+                    mensagem_previsao += "\n" + " ".join(map(str, s[5:]))
+                
+                enviar_telegram(mensagem_previsao)
+                
+                # Envia apenas UMA mensagem para o canal Top N
+                if entrada_topN:
+                    enviar_telegram_topN("Top N: " + " ".join(map(str, sorted(entrada_topN))))
+                
+                st.session_state.previsao_enviada = True
 
     st.session_state.contador_rodadas += 1
 
