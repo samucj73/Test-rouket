@@ -1,4 +1,4 @@
-# Domina03.py (versão atualizada — controle de 1 alerta por rodada)
+# Domina03.py (versão final — controle de 1 alerta por rodada + lock de envio)
 import streamlit as st
 import json
 import os
@@ -42,6 +42,7 @@ MAX_PREVIEWS = 15
 # Utilitários (Telegram, histórico, API, vizinhos)
 # =============================
 def enviar_telegram(msg: str, token=TELEGRAM_TOKEN, chat_id=TELEGRAM_CHAT_ID):
+    """Envio simples (não bloqueante). Use o wrapper enviar_telegram_unico para evitar duplicatas."""
     try:
         url = f"https://api.telegram.org/bot{token}/sendMessage"
         payload = {"chat_id": chat_id, "text": msg}
@@ -50,12 +51,33 @@ def enviar_telegram(msg: str, token=TELEGRAM_TOKEN, chat_id=TELEGRAM_CHAT_ID):
         logging.error(f"Erro ao enviar para Telegram: {e}")
 
 def enviar_telegram_topN(msg: str, token=ALT_TELEGRAM_TOKEN, chat_id=ALT_TELEGRAM_CHAT_ID):
+    """Envio para canal alternativo (opcional). Não é chamado separadamente por padrão."""
     try:
         url = f"https://api.telegram.org/bot{token}/sendMessage"
         payload = {"chat_id": chat_id, "text": msg}
         requests.post(url, data=payload, timeout=10)
     except Exception as e:
         logging.error(f"Erro ao enviar para Telegram Top N: {e}")
+
+# Wrapper que garante só 1 envio por vez (debounce/lock)
+def enviar_telegram_unico(msg: str, token=TELEGRAM_TOKEN, chat_id=TELEGRAM_CHAT_ID):
+    # inicializa lock se não existir
+    if "sending_lock" not in st.session_state:
+        st.session_state.sending_lock = False
+
+    # se já estiver enviando, ignora (evita envios duplicados em loops rápidos)
+    if st.session_state.sending_lock:
+        logging.warning("Envio ignorado: outro envio em progresso (lock ativo).")
+        return
+
+    st.session_state.sending_lock = True
+    try:
+        enviar_telegram(msg, token=token, chat_id=chat_id)
+    except Exception as e:
+        logging.error(f"Erro no enviar_telegram_unico: {e}")
+    finally:
+        # garante liberação do lock
+        st.session_state.sending_lock = False
 
 def carregar_historico():
     """Carrega histórico garantindo que não haja duplicatas"""
@@ -388,6 +410,7 @@ defaults = {
     "ultima_previsao": None,                     # Guarda qual foi a última previsão (lista de números)
     "previsao_sent_for_timestamp": None,         # Timestamp do último sorteio para o qual enviamos previsão (evita reenvio)
     "ultimo_numero_recebido": None,              # Último número recebido (para detectar mudança)
+    "sending_lock": False,                       # lock para evitar envios simultâneos
 }
 for k, v in defaults.items():
     if k not in st.session_state:
@@ -479,8 +502,8 @@ if resultado and novo_sorteio:
             parts.append(f"🔴 RED (TopN) — Não estava entre os mais prováveis")
 
         mensagem_resultado = "\n".join(parts)
-        # Envia apenas 1 alerta de resultado (compacto)
-        enviar_telegram(mensagem_resultado)
+        # Envia apenas 1 alerta de resultado (compacto) usando wrapper que evita duplicação
+        enviar_telegram_unico(mensagem_resultado)
 
         # Registrar resultado TopN (atualiza cooldowns e histórico interno)
         registrar_resultado_topN(numero_real, st.session_state.previsao_topN_para_conferir or [])
@@ -534,16 +557,17 @@ if not st.session_state.aguardando_resultado:
             # Mensagem única com PREVISÃO + (opcional) TOP N
             s = sorted(prox_numeros)
             mensagem_parts = []
-            mensagem_parts.append("🎯 PREVISÃO (Recorrência): " + " ".join(map(str, s[:10])))
-            if len(s) > 10:
-                mensagem_parts.append("... " + " ".join(map(str, s[10:])))
+            # Mostra até top 5 por padrão para compactar (evita mensagens enormes)
+            mensagem_parts.append("🎯 PREVISÃO (Recorrência): " + " ".join(map(str, s[:5])))
+            if len(s) > 5:
+                mensagem_parts.append("... " + " ".join(map(str, s[5:])))
             if entrada_topN:
                 mensagem_parts.append("🔝 TOP N: " + " ".join(map(str, sorted(entrada_topN))))
 
             mensagem_previsao = "\n".join(mensagem_parts)
 
-            # Envia apenas UM alerta de previsão por rodada
-            enviar_telegram(mensagem_previsao)
+            # Envia apenas UM alerta de previsão por rodada (usa wrapper)
+            enviar_telegram_unico(mensagem_previsao)
 
             # Marca que já enviamos a previsão para este timestamp (evita reenvio)
             st.session_state.previsao_sent_for_timestamp = st.session_state.ultimo_timestamp
