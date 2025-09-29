@@ -370,6 +370,7 @@ st_autorefresh(interval=3000, key="refresh")
 
 # Inicialização session_state
 # Inicialização session_state
+# Inicialização session_state - ADICIONE ESTAS NOVAS VARIÁVEIS
 defaults = {
     "estrategia": EstrategiaDeslocamento(),
     "ia_recorrencia": IA_Recorrencia_RF(layout=ROULETTE_LAYOUT, top_n=5, window=WINDOW_SIZE),
@@ -384,10 +385,15 @@ defaults = {
     "topn_reds": {},
     "topn_greens": {},
     "ultimo_timestamp": None,  # CRÍTICO: controla duplicatas
+    "previsoes_enviadas": False,  # NOVO: controla se previsões já foram enviadas
+    "alerta_recorrencia_enviado": False,  # NOVO: controla alerta de green recorrencia
+    "alerta_topN_enviado": False,  # NOVO: controla alerta de green topN
 }
 for k, v in defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
+
+
 
 # Carregar histórico existente
 historico = carregar_historico()
