@@ -1,4 +1,4 @@
-# Domina03.py (com correção do erro)
+# Domina03.py (com Autoencoder para detecção de padrões)
 import streamlit as st
 import json
 import os
@@ -9,10 +9,16 @@ from streamlit_autorefresh import st_autorefresh
 import logging
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
 from typing import List
 import pandas as pd
 import io
 from datetime import datetime
+import tensorflow as tf
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Input, Dense
+import warnings
+warnings.filterwarnings('ignore')
 
 # =============================
 # Configurações
@@ -43,10 +49,16 @@ MAX_TOP_N = 10     # máximo de números na Top N
 MAX_PREVIEWS = 10   # limite final de previsões para reduzir custo
 
 # =============================
-# NOVO: Configurações de Otimização
+# Configurações de Otimização
 # =============================
-TREINAMENTO_INTERVALO = 5  # Treinar a cada 5 rodadas (ao invés de toda rodada)
+TREINAMENTO_INTERVALO = 5  # Treinar a cada 5 rodadas
 MIN_HISTORICO_TREINAMENTO = 50  # Mínimo de registros para treinar
+
+# =============================
+# NOVO: Configurações do Autoencoder
+# =============================
+AUTOENCODER_WINDOW = 50    # Janela para análise de padrões
+ANOMALY_THRESHOLD = 0.85   # Percentil para detecção de anomalias (85%)
 
 # =============================
 # Utilitários (Telegram, histórico, API, vizinhos)
@@ -204,6 +216,128 @@ class EstrategiaDeslocamento:
         self.historico.append(numero_dict)
 
 # =============================
+# NOVO: Autoencoder para Detecção de Padrões Anômalos
+# =============================
+class Pattern_Analyzer:
+    def __init__(self, encoding_dim=8, window_size=AUTOENCODER_WINDOW):
+        self.encoding_dim = encoding_dim
+        self.window_size = window_size
+        self.autoencoder = None
+        self.is_trained = False
+        
+    def build_autoencoder(self, input_dim):
+        """Constrói o modelo de autoencoder"""
+        try:
+            # Input layer
+            input_layer = Input(shape=(input_dim,))
+            
+            # Encoder
+            encoded = Dense(32, activation='relu')(input_layer)
+            encoded = Dense(16, activation='relu')(encoded)
+            encoded = Dense(self.encoding_dim, activation='relu')(encoded)
+            
+            # Decoder
+            decoded = Dense(16, activation='relu')(encoded)
+            decoded = Dense(32, activation='relu')(decoded)
+            decoded = Dense(input_dim, activation='sigmoid')(decoded)
+            
+            self.autoencoder = Model(input_layer, decoded)
+            self.autoencoder.compile(optimizer='adam', loss='mse', metrics=['mae'])
+            
+            logging.info("✅ Autoencoder construído com sucesso")
+            return True
+        except Exception as e:
+            logging.error(f"❌ Erro ao construir autoencoder: {e}")
+            return False
+    
+    def prepare_data(self, historico):
+        """Prepara os dados para o autoencoder (one-hot encoding)"""
+        try:
+            if len(historico) < self.window_size:
+                return None
+                
+            # Pega os últimos números
+            numeros = [h['number'] for h in list(historico)[-self.window_size:]]
+            
+            # One-hot encoding (37 números: 0-36)
+            encoded_data = np.zeros((len(numeros), 37))
+            for i, num in enumerate(numeros):
+                if 0 <= num <= 36:
+                    encoded_data[i, num] = 1.0
+            
+            return encoded_data
+        except Exception as e:
+            logging.error(f"❌ Erro ao preparar dados: {e}")
+            return None
+    
+    def train(self, historico):
+        """Treina o autoencoder"""
+        try:
+            data = self.prepare_data(historico)
+            if data is None or len(data) < 10:
+                self.is_trained = False
+                return False
+            
+            if self.autoencoder is None:
+                if not self.build_autoencoder(37):
+                    return False
+            
+            # Treina o autoencoder
+            history = self.autoencoder.fit(
+                data, data,
+                epochs=100,
+                batch_size=8,
+                verbose=0,
+                shuffle=True,
+                validation_split=0.2
+            )
+            
+            self.is_trained = True
+            logging.info(f"✅ Autoencoder treinado - Loss final: {history.history['loss'][-1]:.4f}")
+            return True
+            
+        except Exception as e:
+            logging.error(f"❌ Erro no treinamento do autoencoder: {e}")
+            self.is_trained = False
+            return False
+    
+    def detect_anomalies(self, historico):
+        """Detecta números com padrões anômalos (oportunidades)"""
+        try:
+            if not self.is_trained or self.autoencoder is None:
+                return []
+            
+            data = self.prepare_data(historico)
+            if data is None:
+                return []
+            
+            # Faz reconstruções
+            reconstructions = self.autoencoder.predict(data, verbose=0)
+            
+            # Calcula erro de reconstrução para cada amostra
+            mse = np.mean(np.power(data - reconstructions, 2), axis=1)
+            
+            # Identifica anomalias (amostras com alto erro de reconstrução)
+            threshold = np.percentile(mse, ANOMALY_THRESHOLD * 100)
+            anomaly_indices = np.where(mse > threshold)[0]
+            
+            # Pega os números correspondentes às anomalias
+            numeros = [h['number'] for h in list(historico)[-self.window_size:]]
+            anomalias = [numeros[i] for i in anomaly_indices if i < len(numeros)]
+            
+            # Remove duplicatas e limita a quantidade
+            anomalias_unicas = list(dict.fromkeys(anomalias))[:8]  # Máximo 8 anomalias
+            
+            if anomalias_unicas:
+                logging.info(f"🎯 Anomalias detectadas: {anomalias_unicas}")
+            
+            return anomalias_unicas
+            
+        except Exception as e:
+            logging.error(f"❌ Erro na detecção de anomalias: {e}")
+            return []
+
+# =============================
 # IA Recorrência com RandomForest (OTIMIZADO)
 # =============================
 class IA_Recorrencia_RF:
@@ -212,16 +346,9 @@ class IA_Recorrencia_RF:
         self.top_n = top_n
         self.window = window
         self.model = None
-        self.ultimo_treinamento_size = 0  # Controle de quando treinar
+        self.ultimo_treinamento_size = 0
 
     def _criar_features_simples(self, historico: List[dict]):
-        """
-        Features simples:
-        - último número (categorical -> numeric as index)
-        - penúltimo número
-        - vizinhos do último (1 antes, 1 depois)
-        Output X (n_samples x n_features), y (n_samples,)
-        """
         numeros = [h["number"] for h in historico]
         if len(numeros) < 3:
             return None, None
@@ -231,14 +358,13 @@ class IA_Recorrencia_RF:
             last2 = numeros[i-2]
             last1 = numeros[i-1]
             nbrs = obter_vizinhos(last1, self.layout, antes=2, depois=2)
-            feat = [last2, last1] + nbrs  # 2 + 3 = 5 features
+            feat = [last2, last1] + nbrs
             X.append(feat)
             y.append(numeros[i])
         return np.array(X), np.array(y)
 
     def treinar(self, historico):
-        """Treina o modelo apenas se houver dados suficientes e necessidade"""
-        if len(historico) < 10:  # Mínimo absoluto para treinar
+        if len(historico) < 10:
             self.model = None
             return False
             
@@ -248,12 +374,11 @@ class IA_Recorrencia_RF:
             return False
         
         try:
-            # CONFIGURAÇÃO OTIMIZADA
             self.model = RandomForestClassifier(
-                n_estimators=100,      # Reduzido de 200 para 100
-                max_depth=8,           # Limitado para evitar overfitting
-                min_samples_split=5,   # Evitar árvores muito complexas
-                n_jobs=-1,             # Usar todos os cores da CPU
+                n_estimators=100,
+                max_depth=8,
+                min_samples_split=5,
+                n_jobs=-1,
                 random_state=42
             )
             self.model.fit(X, y)
@@ -266,25 +391,19 @@ class IA_Recorrencia_RF:
             return False
 
     def precisa_treinar(self, historico_atual):
-        """Verifica se precisa treinar novamente"""
         if self.model is None:
             return True
-            
-        # Treinar se histórico cresceu significativamente
         crescimento = len(historico_atual) - self.ultimo_treinamento_size
-        return crescimento >= 20  # Treinar a cada ~20 novos registros
+        return crescimento >= 20
 
-    def prever(self, historico):
+    def prever(self, historico, anomalias=[]):
         """
-        Combina:
-         - estatística antes/depois (como já existia)
-         - predição do RandomForest (probabilidades)
-        Depois expande para vizinhos e aplica redução inteligente + limite (MAX_PREVIEWS)
+        Previsão aprimorada com integração de anomalias do autoencoder
         """
         if not historico or len(historico) < 2:
             return []
 
-        # estatística antes/depois (seu método original)
+        # Método original de estatística antes/depois
         historico_lista = list(historico)
         ultimo_numero = historico_lista[-1]["number"] if isinstance(historico_lista[-1], dict) else None
         if ultimo_numero is None:
@@ -304,15 +423,23 @@ class IA_Recorrencia_RF:
         top_depois = [num for num, _ in cont_depois.most_common(self.top_n)]
         candidatos = list(set(top_antes + top_depois))
 
-        # **OTIMIZAÇÃO: Treinar apenas quando necessário**
+        # **INTEGRAÇÃO DAS ANOMALIAS** - Boost nos números anômalos
+        for anomalia in anomalias:
+            if anomalia not in candidatos:
+                candidatos.append(anomalia)
+            # Da boost também nos vizinhos das anomalias
+            vizinhos_anomalia = obter_vizinhos(anomalia, self.layout, antes=1, depois=1)
+            for vizinho in vizinhos_anomalia:
+                if vizinho not in candidatos:
+                    candidatos.append(vizinho)
+
+        # Treinamento do RF
         window_hist = historico_lista[-max(len(historico_lista), self.window):]
-        
         if self.precisa_treinar(window_hist):
             self.treinar(window_hist)
 
-        # Se tivermos modelo, pegamos top classes por probabilidade
+        # Predição do RF
         if self.model is not None:
-            # build features for current last
             numeros = [h["number"] for h in historico_lista]
             last2 = numeros[-2] if len(numeros) > 1 else 0
             last1 = numeros[-1]
@@ -320,7 +447,6 @@ class IA_Recorrencia_RF:
             try:
                 probs = self.model.predict_proba([feats])[0]
                 classes = self.model.classes_
-                # pega top_n com maiores probabilidades
                 idx_top = np.argsort(probs)[-self.top_n:]
                 top_ml = [int(classes[i]) for i in idx_top]
                 candidatos = list(set(candidatos + top_ml))
@@ -335,18 +461,26 @@ class IA_Recorrencia_RF:
                 if v not in numeros_previstos:
                     numeros_previstos.append(v)
 
-        # Redução inteligente (metade), pontuando por frequência + topn_greens + penaliza redundância
+        # **BOOST NAS ANOMALIAS** - Garante que anomalias fiquem nas previsões
+        for anomalia in anomalias:
+            if anomalia not in numeros_previstos:
+                numeros_previstos.append(anomalia)
+
+        # Redução inteligente
         numeros_previstos = reduzir_metade_inteligente(numeros_previstos, historico)
 
-        # Limita a quantidade final para MAX_PREVIEWS (escolhe os mais pontuados)
+        # Limite final
         if len(numeros_previstos) > MAX_PREVIEWS:
-            # recalcula pontuações rápidas
             ultimos = [h["number"] for h in list(historico)[-WINDOW_SIZE:]] if historico else []
             freq = Counter(ultimos)
             topn_greens = st.session_state.get("topn_greens", {})
             scores = {}
             for n in numeros_previstos:
-                scores[n] = freq.get(n, 0) + 0.8 * topn_greens.get(n, 0)
+                base_score = freq.get(n, 0) + 0.8 * topn_greens.get(n, 0)
+                # **BONUS EXTRA PARA ANOMALIAS**
+                if n in anomalias:
+                    base_score += 2.0  # Boost significativo para anomalias
+                scores[n] = base_score
             numeros_previstos = sorted(numeros_previstos, key=lambda x: scores.get(x, 0), reverse=True)[:MAX_PREVIEWS]
 
         return numeros_previstos
@@ -372,7 +506,7 @@ def reduzir_metade_inteligente(previsoes, historico):
     return ordenados[:n_reduzidos]
 
 # =============================
-# Ajuste Dinâmico Top N (mantive a sua lógica)
+# Ajuste Dinâmico Top N
 # =============================
 TOP_N_COOLDOWN = 3
 TOP_N_PROB_BASE = 0.3
@@ -425,7 +559,7 @@ def registrar_resultado_topN(numero_real, top_n):
             st.session_state.topn_history.append("R")
 
 # =============================
-# Estratégia 31/34 (mantive sua lógica)
+# Estratégia 31/34
 # =============================
 def estrategia_31_34(numero_capturado):
     if numero_capturado is None:
@@ -510,16 +644,18 @@ def gerar_download_historico():
 # Streamlit App
 # =============================
 st.set_page_config(page_title="Roleta IA Profissional", layout="centered")
-st.title("🎯 Roleta — IA Recorrência (RandomForest) + Redução Inteligente")
+st.title("🎯 Roleta — IA Recorrência + Autoencoder (Padrões Anômalos)")
 st_autorefresh(interval=3000, key="refresh")
 
 # Inicialização session_state (todas as chaves necessárias)
 defaults = {
     "estrategia": EstrategiaDeslocamento(),
     "ia_recorrencia": IA_Recorrencia_RF(layout=ROULETTE_LAYOUT, top_n=16, window=WINDOW_SIZE),
+    "pattern_analyzer": Pattern_Analyzer(),  # NOVO: Autoencoder
     "previsao": [],
     "previsao_topN": [],
     "previsao_31_34": [],
+    "anomalias_detectadas": [],  # NOVO: Lista de anomalias
     "acertos": 0,
     "erros": 0,
     "acertos_topN": 0,
@@ -530,49 +666,45 @@ defaults = {
     "topn_history": deque(maxlen=TOP_N_WINDOW),
     "topn_reds": {},
     "topn_greens": {},
-    "ultimo_timestamp_processado": None,  # para evitar duplicatas
-    "ultima_previsao_enviada": None,     # controle de alertas
-    "aguardando_novo_sorteio": False,    # flag de espera
-    "ultimo_treinamento_size": 0,        # CORREÇÃO: Adicionado para controle
+    "ultimo_timestamp_processado": None,
+    "ultima_previsao_enviada": None,
+    "aguardando_novo_sorteio": False,
+    "ultimo_treinamento_size": 0,
 }
 for k, v in defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
-# Carregar histórico existente (já é feito automaticamente pela classe EstrategiaDeslocamento)
-
+# Carregar histórico existente
 # -----------------------------
-# Captura número (API) - CORRIGIDO para evitar duplicatas
+# Captura número (API)
 # -----------------------------
 resultado = fetch_latest_result()
 
 # Verificação robusta para evitar duplicatas
 novo_sorteio = False
 if resultado and resultado.get("timestamp"):
-    # Se é o primeiro sorteio ou se o timestamp é diferente do último processado
     if (st.session_state.ultimo_timestamp_processado is None or 
         resultado.get("timestamp") != st.session_state.ultimo_timestamp_processado):
         novo_sorteio = True
         logging.info(f"🎲 NOVO SORTEIO: {resultado['number']} - {resultado['timestamp']}")
-        st.session_state.aguardando_novo_sorteio = False  # Reset do flag de espera
+        st.session_state.aguardando_novo_sorteio = False
 
-# Nova rodada detectada (APENAS se for realmente novo)
+# Nova rodada detectada
 if resultado and novo_sorteio:
     numero_dict = {"number": resultado["number"], "timestamp": resultado["timestamp"]}
     
-    # Salva diretamente no arquivo histórico persistente
+    # Salva no histórico persistente
     salvo_com_sucesso = salvar_historico(numero_dict)
     
     if salvo_com_sucesso:
         st.session_state.estrategia.adicionar_numero(numero_dict)
     
-    # ATUALIZA o último timestamp processado
     st.session_state.ultimo_timestamp_processado = resultado["timestamp"]
-    
     numero_real = numero_dict["number"]
 
     # -----------------------------
-    # Conferência Recorrência
+    # Conferências (mantidas iguais)
     # -----------------------------
     if st.session_state.previsao:
         numeros_com_vizinhos = []
@@ -590,9 +722,6 @@ if resultado and novo_sorteio:
             enviar_telegram(f"🔴 RED! Número {numero_real} não estava na previsão de recorrência nem nos vizinhos.")
         st.session_state.previsao = []
 
-    # -----------------------------
-    # Conferência TopN
-    # -----------------------------
     if st.session_state.previsao_topN:
         topN_com_vizinhos = []
         for n in st.session_state.previsao_topN:
@@ -610,9 +739,6 @@ if resultado and novo_sorteio:
             enviar_telegram_topN(f"🔴 RED Top N! Número {numero_real} não estava entre os mais prováveis.")
         st.session_state.previsao_topN = []
 
-    # -----------------------------
-    # Conferência 31/34
-    # -----------------------------
     if st.session_state.previsao_31_34:
         if numero_real in st.session_state.previsao_31_34:
             st.session_state.acertos_31_34 += 1
@@ -625,31 +751,58 @@ if resultado and novo_sorteio:
         st.session_state.previsao_31_34 = []
 
     # -----------------------------
-    # **OTIMIZAÇÃO: Gerar próxima previsão COM TREINAMENTO INTELIGENTE**
+    # NOVO: Detecção de Anomalias com Autoencoder
+    # -----------------------------
+    historico_size = len(st.session_state.estrategia.historico)
+    
+    # Treinar autoencoder quando houver dados suficientes
+    if historico_size >= AUTOENCODER_WINDOW and st.session_state.contador_rodadas % 10 == 0:
+        logging.info("🔄 Treinando Autoencoder para detecção de padrões...")
+        sucesso_treinamento = st.session_state.pattern_analyzer.train(st.session_state.estrategia.historico)
+        if sucesso_treinamento:
+            st.session_state.anomalias_detectadas = st.session_state.pattern_analyzer.detect_anomalies(st.session_state.estrategia.historico)
+            if st.session_state.anomalias_detectadas:
+                logging.info(f"🎯 Anomalias detectadas: {st.session_state.anomalias_detectadas}")
+
+    # -----------------------------
+    # Geração de Previsão com Integração de Anomalias
     # -----------------------------
     if st.session_state.contador_rodadas % 2 == 0 and not st.session_state.aguardando_novo_sorteio:
-        # Usa IA Recorrência RandomForest
-        prox_numeros = st.session_state.ia_recorrencia.prever(st.session_state.estrategia.historico)
+        # Detectar anomalias se o autoencoder estiver treinado
+        anomalias = []
+        if st.session_state.pattern_analyzer.is_trained:
+            anomalias = st.session_state.pattern_analyzer.detect_anomalies(st.session_state.estrategia.historico)
+            st.session_state.anomalias_detectadas = anomalias
+        
+        # Previsão com integração de anomalias
+        prox_numeros = st.session_state.ia_recorrencia.prever(
+            st.session_state.estrategia.historico, 
+            anomalias=anomalias
+        )
         
         if prox_numeros:
-            prox_numeros = list(dict.fromkeys(prox_numeros))  # garante unicidade
+            prox_numeros = list(dict.fromkeys(prox_numeros))
             st.session_state.previsao = prox_numeros
 
             entrada_topN = ajustar_top_n(prox_numeros, st.session_state.estrategia.historico)
             st.session_state.previsao_topN = entrada_topN
 
-            # CONTROLE DE ALERTAS - Só envia se for diferente da última previsão
+            # CONTROLE DE ALERTAS
             previsao_atual = f"{sorted(prox_numeros)}_{sorted(entrada_topN)}"
             
             if previsao_atual != st.session_state.ultima_previsao_enviada:
                 st.session_state.ultima_previsao_enviada = previsao_atual
-                st.session_state.aguardando_novo_sorteio = True  # Impede novos alertas
+                st.session_state.aguardando_novo_sorteio = True
                 
-                # Envio Telegram
+                # Envio Telegram com informações das anomalias
                 s = sorted(prox_numeros)
                 mensagem_recorrencia = "🎯 NP: " + " ".join(map(str, s[:5]))
                 if len(s) > 5:
                     mensagem_recorrencia += "\n" + " ".join(map(str, s[5:10]))
+                
+                # Adiciona info sobre anomalias se houver
+                if anomalias:
+                    mensagem_recorrencia += f"\n🔍 Anomalias: {', '.join(map(str, sorted(anomalias)))}"
                 
                 enviar_telegram(mensagem_recorrencia)
                 enviar_telegram_topN("Top N: " + " ".join(map(str, sorted(entrada_topN))))
@@ -663,15 +816,8 @@ if resultado and novo_sorteio:
         if entrada_31_34:
             st.session_state.previsao_31_34 = entrada_31_34
 
-    # -----------------------------
-    # **OTIMIZAÇÃO: Treinamento Controlado**
-    # -----------------------------
+    # Treinamento controlado do RF
     historico_size = len(st.session_state.estrategia.historico)
-    
-    # Treinar apenas quando:
-    # 1. Há histórico suficiente
-    # 2. É hora de treinar (intervalo controlado)
-    # 3. Houve crescimento significativo no histórico
     if (historico_size >= MIN_HISTORICO_TREINAMENTO and 
         st.session_state.contador_rodadas % TREINAMENTO_INTERVALO == 0 and
         st.session_state.ia_recorrencia.precisa_treinar(st.session_state.estrategia.historico)):
@@ -679,19 +825,13 @@ if resultado and novo_sorteio:
         logging.info("🔄 Treinamento programado da IA")
         window_hist = list(st.session_state.estrategia.historico)[-WINDOW_SIZE:]
         sucesso_treinamento = st.session_state.ia_recorrencia.treinar(window_hist)
-        
-        # CORREÇÃO: Atualiza o session_state com o tamanho do último treinamento
         if sucesso_treinamento:
             st.session_state.ultimo_treinamento_size = st.session_state.ia_recorrencia.ultimo_treinamento_size
 
-    # -----------------------------
-    # Incrementa contador de rodadas
-    # -----------------------------
+    # Incrementa contador
     st.session_state.contador_rodadas += 1
 
-    # -----------------------------
-    # Salvar métricas após cada rodada
-    # -----------------------------
+    # Salvar métricas
     metrics = {
         "timestamp": resultado.get("timestamp"),
         "numero_real": numero_real,
@@ -700,7 +840,8 @@ if resultado and novo_sorteio:
         "acertos_topN": st.session_state.get("acertos_topN", 0),
         "erros_topN": st.session_state.get("erros_topN", 0),
         "acertos_31_34": st.session_state.get("acertos_31_34", 0),
-        "erros_31_34": st.session_state.get("erros_31_34", 0)
+        "erros_31_34": st.session_state.get("erros_31_34", 0),
+        "anomalias_detectadas": st.session_state.get("anomalias_detectadas", [])  # NOVO
     }
     salvar_metricas(metrics)
 
@@ -713,11 +854,32 @@ if st.session_state.aguardando_novo_sorteio:
     st.warning("🔄 Aguardando próximo sorteio para novos alertas...")
 
 # -----------------------------
-# Histórico e métricas (exibição)
+# Interface Streamlit Atualizada
 # -----------------------------
 st.subheader("📜 Histórico (últimos 3 números)")
 ultimos = list(st.session_state.estrategia.historico)[-3:]
 st.write(ultimos)
+
+# NOVA SEÇÃO: Status do Autoencoder
+st.subheader("🤖 Status do Autoencoder (Detecção de Padrões)")
+col1, col2, col3 = st.columns(3)
+
+# Status do autoencoder
+autoencoder_status = "✅ Treinado" if st.session_state.pattern_analyzer.is_trained else "⏳ Aguardando dados"
+col1.metric("🔍 Autoencoder", autoencoder_status)
+
+# Anomalias detectadas
+anomalias_count = len(st.session_state.anomalias_detectadas)
+col2.metric("🎯 Anomalias Ativas", anomalias_count)
+
+# Próxima análise
+proxima_analise = 10 - (st.session_state.contador_rodadas % 10)
+col3.metric("🔄 Próxima Análise", f"Rodada {proxima_analise}")
+
+# Exibir anomalias se houver
+if st.session_state.anomalias_detectadas:
+    st.info(f"**🔍 Padrões Anômalos Detectados:** {', '.join(map(str, sorted(st.session_state.anomalias_detectadas)))}")
+    st.caption("💡 Números com padrões incomuns que podem representar oportunidades")
 
 # Estatísticas Recorrência
 acertos = st.session_state.get("acertos", 0)
@@ -756,49 +918,34 @@ col2.metric("🔴 RED 31/34", erros_31_34)
 col3.metric("✅ Taxa 31/34", f"{taxa_31_34:.1f}%")
 col4.metric("🎯 Qtd. previstos 31/34", qtd_previstos_31_34)
 
-# -----------------------------
-# Nova métrica para monitorar treinamentos (COM CORREÇÃO)
-# -----------------------------
-st.subheader("🤖 Status da IA")
+# Status da IA
+st.subheader("🧠 Status da IA")
 col1, col2, col3 = st.columns(3)
-
-# CORREÇÃO: Verifica se a propriedade existe antes de acessar
 ultimo_treinamento = getattr(st.session_state.ia_recorrencia, 'ultimo_treinamento_size', 0)
-col1.metric("🔄 Último Treinamento", f"{ultimo_treinamento} registros")
-
+col1.metric("🔄 Último Treinamento RF", f"{ultimo_treinamento} registros")
 col2.metric("📊 Histórico Atual", f"{len(st.session_state.estrategia.historico)} registros")
-
-# Calcula próxima rodada de treinamento
 proximo_treinamento = TREINAMENTO_INTERVALO - (st.session_state.contador_rodadas % TREINAMENTO_INTERVALO)
 col3.metric("⚡ Próximo Treinamento", f"Rodada {proximo_treinamento}")
 
-# -----------------------------
-# Exibir tamanho do histórico
-# -----------------------------
+# Informações do Histórico
 st.subheader("📊 Informações do Histórico")
 st.write(f"Total de números armazenados no histórico: **{len(st.session_state.estrategia.historico)}**")
 st.write(f"Capacidade máxima do deque: **{st.session_state.estrategia.historico.maxlen}**")
 
-# Informação sobre último timestamp
 if st.session_state.ultimo_timestamp_processado:
     st.write(f"Último sorteio processado: **{st.session_state.ultimo_timestamp_processado}**")
 
-# -----------------------------
-# NOVO: Seção de Download do Histórico
-# -----------------------------
+# Seção de Download
 st.markdown("---")
 st.subheader("📥 Exportar Dados")
 
-# Botão para download
 if st.button("💾 Download Histórico Completo", type="primary"):
     with st.spinner("Gerando arquivo de download..."):
         arquivo = gerar_download_historico()
         
         if arquivo:
-            # Nome do arquivo com timestamp
             nome_arquivo = f"historico_roleta_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
             
-            # Botão de download
             st.download_button(
                 label="⬇️ Baixar Arquivo Excel",
                 data=arquivo,
@@ -810,7 +957,6 @@ if st.button("💾 Download Histórico Completo", type="primary"):
         else:
             st.error("❌ Erro ao gerar arquivo de download")
 
-# Informações sobre o arquivo
 st.info("""
 **📋 Conteúdo do arquivo:**
 - **Historico_Completo**: Todos os números registrados
