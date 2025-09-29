@@ -76,8 +76,8 @@ def carregar_historico():
     return []
 
 #def salvar_historico(historico):
-def salvar_historico(numero_dict):
-    """Salva número diretamente da API no arquivo histórico, evitando duplicatas"""
+ def salvar_historico(numero_dict):
+    """Salva número diretamente da API no arquivo histórico persistente"""
     try:
         # Carrega histórico existente
         historico_existente = []
@@ -85,7 +85,8 @@ def salvar_historico(numero_dict):
             try:
                 with open(HISTORICO_PATH, "r") as f:
                     historico_existente = json.load(f)
-            except Exception:
+            except Exception as e:
+                logging.error(f"Erro ao carregar histórico: {e}")
                 historico_existente = []
         
         # Verifica se o número já existe (pelo timestamp)
@@ -102,15 +103,11 @@ def salvar_historico(numero_dict):
         if not ja_existe:
             historico_existente.append(numero_dict)
             
-            # Mantém apenas os últimos 15000 registros
-            if len(historico_existente) > 15000:
-                historico_existente = historico_existente[-15000:]
-            
-            # Salva no arquivo
+            # Salva TODOS os registros no arquivo (sem limite de tamanho)
             with open(HISTORICO_PATH, "w") as f:
                 json.dump(historico_existente, f, indent=2)
             
-            logging.info(f"✅ Número {numero_dict['number']} salvo no histórico")
+            logging.info(f"✅ Número {numero_dict['number']} salvo no histórico persistente")
             return True
         else:
             logging.info(f"⏳ Número {numero_dict['number']} já existe no histórico")
@@ -119,6 +116,9 @@ def salvar_historico(numero_dict):
     except Exception as e:
         logging.error(f"Erro ao salvar histórico: {e}")
         return False
+
+            
+    
 
 
 def salvar_metricas(m):
