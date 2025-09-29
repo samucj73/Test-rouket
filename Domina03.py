@@ -33,7 +33,7 @@ ROULETTE_LAYOUT = [
     7, 28, 12, 35, 3, 26
 ]
 
-WINDOW_SIZE = 18   # janela móvel para Top N dinâmico
+WINDOW_SIZE = 45   # janela móvel para Top N dinâmico
 MIN_TOP_N = 5      # mínimo de números na Top N
 MAX_TOP_N = 10     # máximo de números na Top N
 MAX_PREVIEWS = 10   # limite final de previsões para reduzir custo
