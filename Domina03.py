@@ -1,4 +1,4 @@
-# Domina03.py (com Autoencoder para detecção de padrões)
+# Domina03.py (com Autoencoder usando Scikit-learn - versão compatível)
 import streamlit as st
 import json
 import os
@@ -10,13 +10,13 @@ import logging
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
+from sklearn.neural_network import MLPRegressor
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
 from typing import List
 import pandas as pd
 import io
 from datetime import datetime
-import tensorflow as tf
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input, Dense
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -55,7 +55,7 @@ TREINAMENTO_INTERVALO = 5  # Treinar a cada 5 rodadas
 MIN_HISTORICO_TREINAMENTO = 50  # Mínimo de registros para treinar
 
 # =============================
-# NOVO: Configurações do Autoencoder
+# NOVO: Configurações do Autoencoder (Scikit-learn)
 # =============================
 AUTOENCODER_WINDOW = 50    # Janela para análise de padrões
 ANOMALY_THRESHOLD = 0.85   # Percentil para detecção de anomalias (85%)
@@ -216,35 +216,29 @@ class EstrategiaDeslocamento:
         self.historico.append(numero_dict)
 
 # =============================
-# NOVO: Autoencoder para Detecção de Padrões Anômalos
+# NOVO: Autoencoder para Detecção de Padrões Anômalos (Scikit-learn)
 # =============================
 class Pattern_Analyzer:
     def __init__(self, encoding_dim=8, window_size=AUTOENCODER_WINDOW):
         self.encoding_dim = encoding_dim
         self.window_size = window_size
         self.autoencoder = None
+        self.scaler = StandardScaler()
         self.is_trained = False
         
     def build_autoencoder(self, input_dim):
-        """Constrói o modelo de autoencoder"""
+        """Constrói o modelo de autoencoder usando MLPRegressor"""
         try:
-            # Input layer
-            input_layer = Input(shape=(input_dim,))
-            
-            # Encoder
-            encoded = Dense(32, activation='relu')(input_layer)
-            encoded = Dense(16, activation='relu')(encoded)
-            encoded = Dense(self.encoding_dim, activation='relu')(encoded)
-            
-            # Decoder
-            decoded = Dense(16, activation='relu')(encoded)
-            decoded = Dense(32, activation='relu')(decoded)
-            decoded = Dense(input_dim, activation='sigmoid')(decoded)
-            
-            self.autoencoder = Model(input_layer, decoded)
-            self.autoencoder.compile(optimizer='adam', loss='mse', metrics=['mae'])
-            
-            logging.info("✅ Autoencoder construído com sucesso")
+            # MLPRegressor pode funcionar como autoencoder quando treinado para reconstruir a entrada
+            self.autoencoder = MLPRegressor(
+                hidden_layer_sizes=(32, self.encoding_dim, 32),  # Arquitetura encoder-decoder
+                activation='relu',
+                solver='adam',
+                max_iter=500,
+                random_state=42,
+                verbose=False
+            )
+            logging.info("✅ Autoencoder (MLP) construído com sucesso")
             return True
         except Exception as e:
             logging.error(f"❌ Erro ao construir autoencoder: {e}")
@@ -282,18 +276,11 @@ class Pattern_Analyzer:
                 if not self.build_autoencoder(37):
                     return False
             
-            # Treina o autoencoder
-            history = self.autoencoder.fit(
-                data, data,
-                epochs=100,
-                batch_size=8,
-                verbose=0,
-                shuffle=True,
-                validation_split=0.2
-            )
+            # Treina o autoencoder para reconstruir a entrada
+            self.autoencoder.fit(data, data)
             
             self.is_trained = True
-            logging.info(f"✅ Autoencoder treinado - Loss final: {history.history['loss'][-1]:.4f}")
+            logging.info("✅ Autoencoder treinado com sucesso")
             return True
             
         except Exception as e:
@@ -312,7 +299,7 @@ class Pattern_Analyzer:
                 return []
             
             # Faz reconstruções
-            reconstructions = self.autoencoder.predict(data, verbose=0)
+            reconstructions = self.autoencoder.predict(data)
             
             # Calcula erro de reconstrução para cada amostra
             mse = np.mean(np.power(data - reconstructions, 2), axis=1)
