@@ -404,6 +404,24 @@ for n in historico:
 
 # -----------------------------
 # Captura número (API) - CORREÇÃO PRINCIPAL
+# -----------------------------
+# Captura número (API) - CORREÇÃO PRINCIPAL
+# -----------------------------
+resultado = fetch_latest_result()
+
+# VERIFICAÇÃO ROBUSTA CONTRA DUPLICATAS
+novo_sorteio = False
+if resultado and resultado.get("timestamp"):
+    # Se é o primeiro sorteio OU se o timestamp é DIFERENTE do último
+    if st.session_state.ultimo_timestamp is None:
+        novo_sorteio = True
+        logging.info("🎲 PRIMEIRO SORTEIO DETECTADO")
+    elif resultado["timestamp"] != st.session_state.ultimo_timestamp:
+        novo_sorteio = True
+        logging.info(f"🎲 NOVO SORTEIO: {resultado['number']} (anterior: {st.session_state.ultimo_timestamp})")
+    else:
+        logging.info(f"⏳ Sorteio duplicado ignorado: {resultado['timestamp']}")
+
 # Processa APENAS se for realmente um novo sorteio
 if resultado and novo_sorteio:
     numero_dict = {"number": resultado["number"], "timestamp": resultado["timestamp"]}
