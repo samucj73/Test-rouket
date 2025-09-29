@@ -197,7 +197,7 @@ class EstrategiaDeslocamento:
 # IA Recorrência com RandomForest
 # =============================
 class IA_Recorrencia_RF:
-    def __init__(self, layout=None, top_n=6, window=WINDOW_SIZE):
+    def __init__(self, layout=None, top_n=16, window=WINDOW_SIZE):
         self.layout = layout or ROULETTE_LAYOUT
         self.top_n = top_n
         self.window = window
@@ -418,7 +418,7 @@ st_autorefresh(interval=3000, key="refresh")
 # Inicialização session_state (todas as chaves necessárias)
 defaults = {
     "estrategia": EstrategiaDeslocamento(),
-    "ia_recorrencia": IA_Recorrencia_RF(layout=ROULETTE_LAYOUT, top_n=5, window=WINDOW_SIZE),
+    "ia_recorrencia": IA_Recorrencia_RF(layout=ROULETTE_LAYOUT, top_n=16, window=WINDOW_SIZE),
     "previsao": [],
     "previsao_topN": [],
     "previsao_31_34": [],
