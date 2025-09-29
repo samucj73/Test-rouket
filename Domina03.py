@@ -364,25 +364,6 @@ def registrar_resultado_topN(numero_real, top_n):
 # =============================
 # Estratégia 31/34
 # =============================
-def estrategia_31_34(numero_capturado):
-    if numero_capturado is None:
-        return None
-    try:
-        terminal = int(str(numero_capturado)[-1])
-    except Exception:
-        return None
-    if terminal not in {2, 6, 9}:
-        return None
-    viz_31 = obter_vizinhos_fixos(31, ROULETTE_LAYOUT, antes=5, depois=5)
-    viz_34 = obter_vizinhos_fixos(34, ROULETTE_LAYOUT, antes=5, depois=5)
-    entrada = set([0, 26, 30] + viz_31 + viz_34)
-    msg = (
-        "🎯 Estratégia 31/34 disparada!\n"
-        f"Número capturado: {numero_capturado} (terminal {terminal})\n"
-        "Entrar nos números: 31 34"
-    )
-    enviar_telegram(msg)
-    return list(entrada)
 
 # =============================
 # Streamlit App
