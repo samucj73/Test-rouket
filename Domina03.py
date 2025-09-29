@@ -75,7 +75,7 @@ def carregar_historico():
         return historico_padronizado
     return []
 
-def salvar_historico(historico):
+#def salvar_historico(historico):
 def salvar_historico(historico):
     try:
         # Remove duplicatas consecutivas antes de salvar
