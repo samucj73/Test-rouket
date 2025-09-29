@@ -336,8 +336,7 @@ if resultado and novo_sorteio:
             enviar_alerta_unico(f"🟢 GREEN Top N! Número {numero_real} acertou.", resultado_topN_hash, topN=True)
         else:
             st.session_state.erros_topN += 1
-            #st.session_state.topn_reds[numero
-             st.session_state.topn_reds[numero_real] = TOP_N_COOLDOWN
+            st.session_state.topn_reds[numero_real] = TOP_N_COOLDOWN
             enviar_alerta_unico(f"🔴 RED Top N! Número {numero_real} errou.", resultado_topN_hash, topN=True)
         st.session_state.previsao_topN_para_conferir = []
         st.session_state.aguardando_resultado_topN = False
