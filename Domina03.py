@@ -60,22 +60,18 @@ def enviar_telegram_topN(msg: str, token=ALT_TELEGRAM_TOKEN, chat_id=ALT_TELEGRA
         logging.error(f"Erro ao enviar para Telegram Top N: {e}")
 
 def carregar_historico():
+    """Carrega histórico persistente do arquivo"""
     if os.path.exists(HISTORICO_PATH):
         try:
             with open(HISTORICO_PATH, "r") as f:
                 historico = json.load(f)
-        except Exception:
+            logging.info(f"📁 Histórico carregado: {len(historico)} registros")
+            return historico
+        except Exception as e:
+            logging.error(f"Erro ao carregar histórico: {e}")
             return []
-        historico_padronizado = []
-        for i, h in enumerate(historico):
-            if isinstance(h, dict) and "number" in h:
-                historico_padronizado.append(h)
-            else:
-                historico_padronizado.append({"number": h, "timestamp": f"manual_{i}"})
-        return historico_padronizado
     return []
 
-#def salvar_historico(historico):
 def salvar_historico(numero_dict):
     """Salva número diretamente da API no arquivo histórico persistente"""
     try:
@@ -116,10 +112,6 @@ def salvar_historico(numero_dict):
     except Exception as e:
         logging.error(f"Erro ao salvar histórico: {e}")
         return False
-
-            
-    
-
 
 def salvar_metricas(m):
     try:
@@ -183,8 +175,22 @@ def obter_vizinhos_fixos(numero, layout, antes=5, depois=5):
 # =============================
 class EstrategiaDeslocamento:
     def __init__(self):
-        self.historico = deque(maxlen=15000)
+        # Carrega do arquivo persistente
+        self.historico = deque(self.carregar_historico_persistente(), maxlen=15000)
+    
+    def carregar_historico_persistente(self):
+        """Carrega histórico completo do arquivo persistente"""
+        if os.path.exists(HISTORICO_PATH):
+            try:
+                with open(HISTORICO_PATH, "r") as f:
+                    return json.load(f)
+            except Exception as e:
+                logging.error(f"Erro ao carregar histórico persistente: {e}")
+        return []
+    
     def adicionar_numero(self, numero_dict):
+        # Já está sendo salvo no arquivo pela função salvar_historico
+        # Esta função apenas mantém o histórico em memória
         self.historico.append(numero_dict)
 
 # =============================
@@ -407,7 +413,7 @@ def estrategia_31_34(numero_capturado):
 # =============================
 st.set_page_config(page_title="Roleta IA Profissional", layout="centered")
 st.title("🎯 Roleta — IA Recorrência (RandomForest) + Redução Inteligente")
-st_autorefresh(interval=5000, key="refresh")
+st_autorefresh(interval=3000, key="refresh")
 
 # Inicialização session_state (todas as chaves necessárias)
 defaults = {
@@ -427,21 +433,14 @@ defaults = {
     "topn_reds": {},
     "topn_greens": {},
     "ultimo_timestamp_processado": None,  # para evitar duplicatas
-    "ultima_previsao_enviada": None,     # NOVO: controle de alertas
-    "aguardando_novo_sorteio": False,    # NOVO: flag de espera
+    "ultima_previsao_enviada": None,     # controle de alertas
+    "aguardando_novo_sorteio": False,    # flag de espera
 }
 for k, v in defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
-# Carregar histórico existente
-historico = carregar_historico()
-for n in historico:
-    # evita duplicar caso já exista
-    if not st.session_state.estrategia.historico or st.session_state.estrategia.historico[-1].get("timestamp") != n.get("timestamp"):
-        st.session_state.estrategia.adicionar_numero(n)
-        # Atualiza o último timestamp processado
-        st.session_state.ultimo_timestamp_processado = n.get("timestamp")
+# Carregar histórico existente (já é feito automaticamente pela classe EstrategiaDeslocamento)
 
 # -----------------------------
 # Captura número (API) - CORRIGIDO para evitar duplicatas
@@ -461,8 +460,12 @@ if resultado and resultado.get("timestamp"):
 # Nova rodada detectada (APENAS se for realmente novo)
 if resultado and novo_sorteio:
     numero_dict = {"number": resultado["number"], "timestamp": resultado["timestamp"]}
-    st.session_state.estrategia.adicionar_numero(numero_dict)
-    salvar_historico(list(st.session_state.estrategia.historico))
+    
+    # Salva diretamente no arquivo histórico persistente
+    salvo_com_sucesso = salvar_historico(numero_dict)
+    
+    if salvo_com_sucesso:
+        st.session_state.estrategia.adicionar_numero(numero_dict)
     
     # ATUALIZA o último timestamp processado
     st.session_state.ultimo_timestamp_processado = resultado["timestamp"]
