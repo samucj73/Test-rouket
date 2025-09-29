@@ -530,7 +530,7 @@ if resultado and novo_sorteio:
     # -----------------------------
     # Gerar próxima previsão COM CONTROLE DE ALERTAS
     # -----------------------------
-    if st.session_state.contador_rodadas % 1 == 0 and not st.session_state.aguardando_novo_sorteio:
+    if st.session_state.contador_rodadas % 2 == 0 and not st.session_state.aguardando_novo_sorteio:
         # Usa IA Recorrência RandomForest
         prox_numeros = st.session_state.ia_recorrencia.prever(st.session_state.estrategia.historico)
         if prox_numeros:
