@@ -385,6 +385,8 @@ defaults = {
     "topn_reds": {},
     "topn_greens": {},
     "ultimo_timestamp": None,
+    "ultimo_alerta_previsao": None,  # Controla último alerta de previsão enviado
+    "ultimo_alerta_resultado": None,  # Controla último alerta de resultado enviado
 }
 for k, v in defaults.items():
     if k not in st.session_state:
@@ -440,14 +442,23 @@ if resultado and novo_sorteio:
                 if v not in numeros_com_vizinhos:
                     numeros_com_vizinhos.append(v)
         
+        # Gera hash único para este resultado
+        resultado_hash = f"resultado_{numero_real}_{hash(tuple(sorted(st.session_state.previsao_para_conferir)))}"
+        
         if numero_real in numeros_com_vizinhos:
             st.session_state.acertos += 1
             st.success(f"🟢 GREEN! Número {numero_real} acertou na previsão.")
-            enviar_telegram(f"🟢 GREEN! Número {numero_real} acertou na previsão anterior.")
+            # Envia alerta apenas se ainda não foi enviado para este resultado
+            if st.session_state.ultimo_alerta_resultado != resultado_hash:
+                enviar_telegram(f"🟢 GREEN! Número {numero_real} acertou na previsão anterior.")
+                st.session_state.ultimo_alerta_resultado = resultado_hash
         else:
             st.session_state.erros += 1
             st.error(f"🔴 RED! Número {numero_real} errou na previsão.")
-            enviar_telegram(f"🔴 RED! Número {numero_real} errou na previsão anterior.")
+            # Envia alerta apenas se ainda não foi enviado para este resultado
+            if st.session_state.ultimo_alerta_resultado != resultado_hash:
+                enviar_telegram(f"🔴 RED! Número {numero_real} errou na previsão anterior.")
+                st.session_state.ultimo_alerta_resultado = resultado_hash
         
         # Limpa previsão após conferir
         st.session_state.previsao_para_conferir = []
@@ -461,15 +472,24 @@ if resultado and novo_sorteio:
                 if v not in topN_com_vizinhos:
                     topN_com_vizinhos.append(v)
         
+        # Gera hash único para este resultado TopN
+        resultado_topN_hash = f"topn_{numero_real}_{hash(tuple(sorted(st.session_state.previsao_topN_para_conferir)))}"
+        
         if numero_real in topN_com_vizinhos:
             st.session_state.acertos_topN += 1
             st.success(f"🟢 GREEN Top N! Número {numero_real} acertou.")
-            enviar_telegram_topN(f"🟢 GREEN Top N! Número {numero_real} acertou.")
+            # Envia alerta apenas se ainda não foi enviado para este resultado
+            if st.session_state.ultimo_alerta_resultado != resultado_topN_hash:
+                enviar_telegram_topN(f"🟢 GREEN Top N! Número {numero_real} acertou.")
+                st.session_state.ultimo_alerta_resultado = resultado_topN_hash
             st.session_state.topn_greens[numero_real] = st.session_state.topn_greens.get(numero_real, 0) + 1
         else:
             st.session_state.erros_topN += 1
             st.error(f"🔴 RED Top N! Número {numero_real} errou.")
-            enviar_telegram_topN(f"🔴 RED Top N! Número {numero_real} errou.")
+            # Envia alerta apenas se ainda não foi enviado para este resultado
+            if st.session_state.ultimo_alerta_resultado != resultado_topN_hash:
+                enviar_telegram_topN(f"🔴 RED Top N! Número {numero_real} errou.")
+                st.session_state.ultimo_alerta_resultado = resultado_topN_hash
         
         # Limpa previsão TopN após conferir
         st.session_state.previsao_topN_para_conferir = []
@@ -483,6 +503,9 @@ if resultado and novo_sorteio:
         if prox_numeros:
             prox_numeros = list(dict.fromkeys(prox_numeros))
             
+            # Gera hash único para esta previsão
+            previsao_hash = hash(tuple(sorted(prox_numeros)))
+            
             # Salva previsões para conferir no próximo sorteio
             st.session_state.previsao_para_conferir = prox_numeros
             st.session_state.aguardando_resultado = True  # 2. AGUARDAR: Bloqueia novas previsões
@@ -491,17 +514,20 @@ if resultado and novo_sorteio:
             st.session_state.previsao_topN_para_conferir = entrada_topN
             st.session_state.aguardando_resultado_topN = True
 
-            # Envia alerta de previsão
-            s = sorted(prox_numeros)
-            mensagem_previsao = "🎯 PREVISÃO: " + " ".join(map(str, s[:5]))
-            if len(s) > 5:
-                mensagem_previsao += "\n" + " ".join(map(str, s[5:]))
-            
-            enviar_telegram(mensagem_previsao)
-            
-            # Envia alerta Top N
-            if entrada_topN:
-                enviar_telegram_topN("🎯 TOP N: " + " ".join(map(str, sorted(entrada_topN))))
+            # Envia alerta de previsão apenas se ainda não foi enviado para esta previsão
+            if st.session_state.ultimo_alerta_previsao != previsao_hash:
+                s = sorted(prox_numeros)
+                mensagem_previsao = "🎯 PREVISÃO: " + " ".join(map(str, s[:5]))
+                if len(s) > 5:
+                    mensagem_previsao += "\n" + " ".join(map(str, s[5:]))
+                
+                enviar_telegram(mensagem_previsao)
+                
+                # Envia alerta Top N apenas se ainda não foi enviado
+                if entrada_topN:
+                    enviar_telegram_topN("🎯 TOP N: " + " ".join(map(str, sorted(entrada_topN))))
+                
+                st.session_state.ultimo_alerta_previsao = previsao_hash
 
     st.session_state.contador_rodadas += 1
 
