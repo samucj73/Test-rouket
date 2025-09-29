@@ -309,29 +309,55 @@ if resultado and novo_sorteio:
 # -----------------------------
 # Geração nova previsão (apenas 1 alerta)
 # -----------------------------
+# -----------------------------
+# GERAÇÃO de NOVA PREVISÃO e ENVIO (FORÇA 1ª PREVISÃO)
+# -----------------------------
 if not st.session_state.aguardando_resultado:
+    gerar_previsao = False
+
+    # Condição normal de envio
     if st.session_state.ultimo_timestamp is not None and st.session_state.previsao_sent_for_timestamp != st.session_state.ultimo_timestamp:
+        gerar_previsao = True
+
+    # Condição para garantir primeira previsão
+    if st.session_state.previsao_sent_for_timestamp is None and st.session_state.ultimo_timestamp is not None:
+        gerar_previsao = True
+
+    if gerar_previsao:
         prox_numeros = st.session_state.ia_recorrencia.prever(st.session_state.estrategia.historico)
         if prox_numeros:
             prox_numeros = list(dict.fromkeys(prox_numeros))
-            st.session_state.previsao_para_conferir=prox_numeros
-            entrada_topN=ajustar_top_n(prox_numeros, st.session_state.estrategia.historico)
-            st.session_state.previsao_topN_para_conferir=entrada_topN
-            st.session_state.ultima_previsao={
+            st.session_state.previsao_para_conferir = prox_numeros
+            entrada_topN = ajustar_top_n(prox_numeros, st.session_state.estrategia.historico)
+            st.session_state.previsao_topN_para_conferir = entrada_topN
+            st.session_state.ultima_previsao = {
                 "previsao": prox_numeros,
                 "topN": entrada_topN,
                 "for_timestamp": st.session_state.ultimo_timestamp
             }
+
+            # Mensagem única com PREVISÃO + TOP N
             s = sorted(prox_numeros)
-            msg_parts=[ "🎯 PREVISÃO (Recorrência): "+ " ".join(map(str,s[:5])) ]
-            if len(s)>5:
-                msg_parts.append("... "+ " ".join(map(str,s[5:])))
+            mensagem_parts = []
+            mensagem_parts.append("🎯 PREVISÃO (Recorrência): " + " ".join(map(str, s[:5])))
+            if len(s) > 5:
+                mensagem_parts.append("... " + " ".join(map(str, s[5:])))
             if entrada_topN:
-                msg_parts.append("🔝 TOP N: "+ " ".join(map(str,sorted(entrada_topN))))
-            mensagem_previsao="\n".join(msg_parts)
+                mensagem_parts.append("🔝 TOP N: " + " ".join(map(str, sorted(entrada_topN))))
+
+            mensagem_previsao = "\n".join(mensagem_parts)
+
+            # Envia apenas UM alerta de previsão por rodada
             enviar_telegram_unico(mensagem_previsao)
-            st.session_state.previsao_sent_for_timestamp=st.session_state.ultimo_timestamp
-            st.session_state.aguardando_resultado=True
+
+            # Marca que já enviamos a previsão para este timestamp
+            st.session_state.previsao_sent_for_timestamp = st.session_state.ultimo_timestamp
+            st.session_state.aguardando_resultado = True
+
+            # Debug
+            st.write("DEBUG: Previsão enviada ✅", prox_numeros)
+        else:
+            st.write("DEBUG: Função prever retornou lista vazia ❌")
 
 # -----------------------------
 # Interface Streamlit
