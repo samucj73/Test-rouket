@@ -36,7 +36,7 @@ ROULETTE_LAYOUT = [
 WINDOW_SIZE = 18   # janela móvel para Top N dinâmico
 MIN_TOP_N = 5      # mínimo de números na Top N
 MAX_TOP_N = 10     # máximo de números na Top N
-MAX_PREVIEWS = 15   # limite final de previsões para reduzir custo
+MAX_PREVIEWS = 10   # limite final de previsões para reduzir custo
 
 # =============================
 # Utilitários (Telegram, histórico, API, vizinhos)
@@ -197,7 +197,7 @@ class EstrategiaDeslocamento:
 # IA Recorrência com RandomForest
 # =============================
 class IA_Recorrencia_RF:
-    def __init__(self, layout=None, top_n=3, window=WINDOW_SIZE):
+    def __init__(self, layout=None, top_n=6, window=WINDOW_SIZE):
         self.layout = layout or ROULETTE_LAYOUT
         self.top_n = top_n
         self.window = window
