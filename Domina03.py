@@ -1,4 +1,4 @@
-# Domina03.py (com Autoencoder usando Scikit-learn - versão compatível)
+# RoletaVirtual.py - App Especializado em Previsão por Setores
 import streamlit as st
 import json
 import os
@@ -8,12 +8,6 @@ from collections import deque, Counter
 from streamlit_autorefresh import st_autorefresh
 import logging
 import numpy as np
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.linear_model import LogisticRegression
-from sklearn.neural_network import MLPRegressor
-from sklearn.preprocessing import StandardScaler
-from sklearn.decomposition import PCA
-from typing import List
 import pandas as pd
 import io
 from datetime import datetime
@@ -23,18 +17,14 @@ warnings.filterwarnings('ignore')
 # =============================
 # Configurações
 # =============================
-HISTORICO_PATH = "historico_deslocamento.json"
-METRICAS_PATH = "historico_metricas.json"
+HISTORICO_PATH = "historico_roleta_virtual.json"
+METRICAS_PATH = "metricas_roleta_virtual.json"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
-# Canal principal
+# Canal Telegram para Roleta Virtual
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 TELEGRAM_CHAT_ID = "5121457416"
-
-# Canal alternativo para Top N Dinâmico
-ALT_TELEGRAM_TOKEN = TELEGRAM_TOKEN
-ALT_TELEGRAM_CHAT_ID = "-1002979544095"
 
 ROULETTE_LAYOUT = [
     0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6,
@@ -43,25 +33,13 @@ ROULETTE_LAYOUT = [
     7, 28, 12, 35, 3, 26
 ]
 
-WINDOW_SIZE = 18   # janela móvel para Top N dinâmico
-MIN_TOP_N = 5      # mínimo de números na Top N
-MAX_TOP_N = 10     # máximo de números na Top N
-MAX_PREVIEWS = 10   # limite final de previsões para reduzir custo
+# Configurações da Roleta Virtual
+SETOR_SIZE = 5           # Tamanho do setor de previsão
+MIN_HISTORICO = 20       # Mínimo de registros para começar previsões
+MAX_PREVISOES = 8        # Máximo de números na previsão final
 
 # =============================
-# Configurações de Otimização
-# =============================
-TREINAMENTO_INTERVALO = 5  # Treinar a cada 5 rodadas
-MIN_HISTORICO_TREINAMENTO = 50  # Mínimo de registros para treinar
-
-# =============================
-# NOVO: Configurações do Autoencoder (Scikit-learn)
-# =============================
-AUTOENCODER_WINDOW = 50    # Janela para análise de padrões
-ANOMALY_THRESHOLD = 0.85   # Percentil para detecção de anomalias (85%)
-
-# =============================
-# Utilitários (Telegram, histórico, API, vizinhos)
+# Utilitários
 # =============================
 def enviar_telegram(msg: str, token=TELEGRAM_TOKEN, chat_id=TELEGRAM_CHAT_ID):
     try:
@@ -71,15 +49,6 @@ def enviar_telegram(msg: str, token=TELEGRAM_TOKEN, chat_id=TELEGRAM_CHAT_ID):
         logging.info(f"📤 Telegram enviado: {msg}")
     except Exception as e:
         logging.error(f"Erro ao enviar para Telegram: {e}")
-
-def enviar_telegram_topN(msg: str, token=ALT_TELEGRAM_TOKEN, chat_id=ALT_TELEGRAM_CHAT_ID):
-    try:
-        url = f"https://api.telegram.org/bot{token}/sendMessage"
-        payload = {"chat_id": chat_id, "text": msg}
-        requests.post(url, data=payload, timeout=10)
-        logging.info(f"📤 Telegram TopN enviado: {msg}")
-    except Exception as e:
-        logging.error(f"Erro ao enviar para Telegram Top N: {e}")
 
 def carregar_historico():
     """Carrega histórico persistente do arquivo"""
@@ -97,35 +66,21 @@ def carregar_historico():
 def salvar_historico(numero_dict):
     """Salva número diretamente da API no arquivo histórico persistente"""
     try:
-        # Carrega histórico existente
-        historico_existente = []
-        if os.path.exists(HISTORICO_PATH):
-            try:
-                with open(HISTORICO_PATH, "r") as f:
-                    historico_existente = json.load(f)
-            except Exception as e:
-                logging.error(f"Erro ao carregar histórico: {e}")
-                historico_existente = []
+        historico_existente = carregar_historico()
         
         # Verifica se o número já existe (pelo timestamp)
         timestamp_novo = numero_dict.get("timestamp")
-        ja_existe = False
-        
-        for registro in historico_existente:
-            if (isinstance(registro, dict) and 
-                registro.get("timestamp") == timestamp_novo):
-                ja_existe = True
-                break
+        ja_existe = any(registro.get("timestamp") == timestamp_novo for registro in historico_existente)
         
         # Só adiciona se for um novo registro
         if not ja_existe:
             historico_existente.append(numero_dict)
             
-            # Salva TODOS os registros no arquivo (sem limite de tamanho)
+            # Salva no arquivo
             with open(HISTORICO_PATH, "w") as f:
                 json.dump(historico_existente, f, indent=2)
             
-            logging.info(f"✅ Número {numero_dict['number']} salvo no histórico persistente")
+            logging.info(f"✅ Número {numero_dict['number']} salvo no histórico")
             return True
         else:
             logging.info(f"⏳ Número {numero_dict['number']} já existe no histórico")
@@ -137,7 +92,6 @@ def salvar_historico(numero_dict):
 
 def salvar_metricas(m):
     try:
-        # salva lista de métricas (apenda)
         hist = []
         if os.path.exists(METRICAS_PATH):
             try:
@@ -167,19 +121,7 @@ def fetch_latest_result():
         return None
 
 def obter_vizinhos(numero, layout, antes=2, depois=2):
-    if numero not in layout:
-        return [numero]
-    idx = layout.index(numero)
-    n = len(layout)
-    vizinhos = []
-    for i in range(antes, 0, -1):
-        vizinhos.append(layout[(idx - i) % n])
-    vizinhos.append(numero)
-    for i in range(1, depois + 1):
-        vizinhos.append(layout[(idx + i) % n])
-    return vizinhos
-
-def obter_vizinhos_fixos(numero, layout, antes=5, depois=5):
+    """Obtém vizinhos físicos na roleta"""
     if numero not in layout:
         return [numero]
     idx = layout.index(numero)
@@ -193,432 +135,422 @@ def obter_vizinhos_fixos(numero, layout, antes=5, depois=5):
     return vizinhos
 
 # =============================
-# Estratégia
+# SISTEMA DE ROLETA VIRTUAL
 # =============================
-class EstrategiaDeslocamento:
-    def __init__(self):
-        # Carrega do arquivo persistente
-        self.historico = deque(self.carregar_historico_persistente(), maxlen=15000)
+class RoletaVirtual:
+    def __init__(self, layout=ROULETTE_LAYOUT, setor_size=SETOR_SIZE):
+        self.layout = layout
+        self.setor_size = setor_size
+        self.setores = self._criar_setores()
+        
+    def _criar_setores(self):
+        """Divide a roleta em setores sobrepostos de 5 números"""
+        setores = []
+        n = len(self.layout)
+        
+        # Cria setores sobrepostos a cada posição
+        for i in range(n):
+            setor = []
+            for j in range(self.setor_size):
+                setor.append(self.layout[(i + j) % n])
+            setores.append(setor)
+        
+        logging.info(f"🎯 Roleta Virtual criada com {len(setores)} setores de {self.setor_size} números")
+        return setores
     
-    def carregar_historico_persistente(self):
-        """Carrega histórico completo do arquivo persistente"""
-        if os.path.exists(HISTORICO_PATH):
-            try:
-                with open(HISTORICO_PATH, "r") as f:
-                    return json.load(f)
-            except Exception as e:
-                logging.error(f"Erro ao carregar histórico persistente: {e}")
+    def encontrar_setor_ultimo_numero(self, ultimo_numero):
+        """Encontra todos os setores que contêm o último número"""
+        setores_com_ultimo = []
+        
+        for i, setor in enumerate(self.setores):
+            if ultimo_numero in setor:
+                # Calcula a posição relativa do último número no setor
+                posicao = setor.index(ultimo_numero)
+                setores_com_ultimo.append((i, setor, posicao))
+        
+        return setores_com_ultimo
+    
+    def analisar_historico_setores(self, historico, ultimo_numero):
+        """Analisa qual setor tem maior probabilidade baseado no histórico"""
+        if len(historico) < 10:
+            return []
+            
+        historico_numeros = [h['number'] for h in historico]
+        setores_com_ultimo = self.encontrar_setor_ultimo_numero(ultimo_numero)
+        
+        if not setores_com_ultimo:
+            return []
+        
+        # Analisa a performance de cada setor após o último número
+        performance_setores = {}
+        
+        for idx_setor, setor, pos_ultimo in setores_com_ultimo:
+            acertos = 0
+            total_ocorrencias = 0
+            
+            # Procura no histórico por padrões similares
+            for i in range(len(historico_numeros) - 1):
+                if historico_numeros[i] == ultimo_numero:
+                    # Verifica se o próximo número está neste setor
+                    proximo_numero = historico_numeros[i + 1]
+                    if proximo_numero in setor:
+                        acertos += 1
+                    total_ocorrencias += 1
+            
+            if total_ocorrencias > 0:
+                taxa_acerto = acertos / total_ocorrencias
+                # Bonus para setores onde o último número está mais no centro
+                bonus_posicao = 1.0 - (abs(pos_ultimo - (self.setor_size // 2)) / self.setor_size)
+                performance_setores[idx_setor] = {
+                    'setor': setor,
+                    'taxa_acerto': taxa_acerto,
+                    'score': taxa_acerto * (1.0 + bonus_posicao * 0.3),
+                    'acertos': acertos,
+                    'total': total_ocorrencias
+                }
+        
+        # Ordena por performance e pega o melhor
+        setores_ordenados = sorted(performance_setores.items(), 
+                                 key=lambda x: x[1]['score'], reverse=True)
+        
+        if setores_ordenados:
+            melhor_setor_idx, dados = setores_ordenados[0]
+            melhor_setor = dados['setor']
+            
+            logging.info(f"🎯 Melhor setor: {melhor_setor} (Score: {dados['score']:.3f}, Acertos: {dados['acertos']}/{dados['total']})")
+            return melhor_setor
+        
         return []
     
-    def adicionar_numero(self, numero_dict):
-        # Já está sendo salvo no arquivo pela função salvar_historico
-        # Esta função apenas mantém o histórico em memória
-        self.historico.append(numero_dict)
-
-# =============================
-# NOVO: Autoencoder para Detecção de Padrões Anômalos (Scikit-learn)
-# =============================
-class Pattern_Analyzer:
-    def __init__(self, encoding_dim=8, window_size=AUTOENCODER_WINDOW):
-        self.encoding_dim = encoding_dim
-        self.window_size = window_size
-        self.autoencoder = None
-        self.scaler = StandardScaler()
-        self.is_trained = False
-        
-    def build_autoencoder(self, input_dim):
-        """Constrói o modelo de autoencoder usando MLPRegressor"""
-        try:
-            # MLPRegressor pode funcionar como autoencoder quando treinado para reconstruir a entrada
-            self.autoencoder = MLPRegressor(
-                hidden_layer_sizes=(32, self.encoding_dim, 32),  # Arquitetura encoder-decoder
-                activation='relu',
-                solver='adam',
-                max_iter=500,
-                random_state=42,
-                verbose=False
-            )
-            logging.info("✅ Autoencoder (MLP) construído com sucesso")
-            return True
-        except Exception as e:
-            logging.error(f"❌ Erro ao construir autoencoder: {e}")
-            return False
-    
-    def prepare_data(self, historico):
-        """Prepara os dados para o autoencoder (one-hot encoding)"""
-        try:
-            if len(historico) < self.window_size:
-                return None
-                
-            # Pega os últimos números
-            numeros = [h['number'] for h in list(historico)[-self.window_size:]]
-            
-            # One-hot encoding (37 números: 0-36)
-            encoded_data = np.zeros((len(numeros), 37))
-            for i, num in enumerate(numeros):
-                if 0 <= num <= 36:
-                    encoded_data[i, num] = 1.0
-            
-            return encoded_data
-        except Exception as e:
-            logging.error(f"❌ Erro ao preparar dados: {e}")
-            return None
-    
-    def train(self, historico):
-        """Treina o autoencoder"""
-        try:
-            data = self.prepare_data(historico)
-            if data is None or len(data) < 10:
-                self.is_trained = False
-                return False
-            
-            if self.autoencoder is None:
-                if not self.build_autoencoder(37):
-                    return False
-            
-            # Treina o autoencoder para reconstruir a entrada
-            self.autoencoder.fit(data, data)
-            
-            self.is_trained = True
-            logging.info("✅ Autoencoder treinado com sucesso")
-            return True
-            
-        except Exception as e:
-            logging.error(f"❌ Erro no treinamento do autoencoder: {e}")
-            self.is_trained = False
-            return False
-    
-    def detect_anomalies(self, historico):
-        """Detecta números com padrões anômalos (oportunidades)"""
-        try:
-            if not self.is_trained or self.autoencoder is None:
-                return []
-            
-            data = self.prepare_data(historico)
-            if data is None:
-                return []
-            
-            # Faz reconstruções
-            reconstructions = self.autoencoder.predict(data)
-            
-            # Calcula erro de reconstrução para cada amostra
-            mse = np.mean(np.power(data - reconstructions, 2), axis=1)
-            
-            # Identifica anomalias (amostras com alto erro de reconstrução)
-            threshold = np.percentile(mse, ANOMALY_THRESHOLD * 100)
-            anomaly_indices = np.where(mse > threshold)[0]
-            
-            # Pega os números correspondentes às anomalias
-            numeros = [h['number'] for h in list(historico)[-self.window_size:]]
-            anomalias = [numeros[i] for i in anomaly_indices if i < len(numeros)]
-            
-            # Remove duplicatas e limita a quantidade
-            anomalias_unicas = list(dict.fromkeys(anomalias))[:8]  # Máximo 8 anomalias
-            
-            if anomalias_unicas:
-                logging.info(f"🎯 Anomalias detectadas: {anomalias_unicas}")
-            
-            return anomalias_unicas
-            
-        except Exception as e:
-            logging.error(f"❌ Erro na detecção de anomalias: {e}")
+    def prever_proximo_setor(self, historico):
+        """Previsão principal do sistema de roleta virtual"""
+        if len(historico) < 2:
             return []
-
-# =============================
-# IA Recorrência com RandomForest (OTIMIZADO)
-# =============================
-class IA_Recorrencia_RF:
-    def __init__(self, layout=None, top_n=16, window=WINDOW_SIZE):
-        self.layout = layout or ROULETTE_LAYOUT
-        self.top_n = top_n
-        self.window = window
-        self.model = None
-        self.ultimo_treinamento_size = 0
-
-    def _criar_features_simples(self, historico: List[dict]):
-        numeros = [h["number"] for h in historico]
-        if len(numeros) < 3:
-            return None, None
-        X = []
-        y = []
-        for i in range(2, len(numeros)):
-            last2 = numeros[i-2]
-            last1 = numeros[i-1]
-            nbrs = obter_vizinhos(last1, self.layout, antes=2, depois=2)
-            feat = [last2, last1] + nbrs
-            X.append(feat)
-            y.append(numeros[i])
-        return np.array(X), np.array(y)
-
-    def treinar(self, historico):
-        if len(historico) < 10:
-            self.model = None
-            return False
             
-        X, y = self._criar_features_simples(historico)
-        if X is None or len(X) == 0:
-            self.model = None
-            return False
-        
-        try:
-            self.model = RandomForestClassifier(
-                n_estimators=100,
-                max_depth=8,
-                min_samples_split=5,
-                n_jobs=-1,
-                random_state=42
-            )
-            self.model.fit(X, y)
-            self.ultimo_treinamento_size = len(historico)
-            logging.info(f"✅ Modelo RF treinado com {len(X)} amostras")
-            return True
-        except Exception as e:
-            logging.error(f"Erro treinando RF: {e}")
-            self.model = None
-            return False
-
-    def precisa_treinar(self, historico_atual):
-        if self.model is None:
-            return True
-        crescimento = len(historico_atual) - self.ultimo_treinamento_size
-        return crescimento >= 20
-
-    def prever(self, historico, anomalias=[]):
-        """
-        Previsão aprimorada com integração de anomalias do autoencoder
-        """
-        if not historico or len(historico) < 2:
-            return []
-
-        # Método original de estatística antes/depois
-        historico_lista = list(historico)
-        ultimo_numero = historico_lista[-1]["number"] if isinstance(historico_lista[-1], dict) else None
+        ultimo_numero = historico[-1]['number'] if isinstance(historico[-1], dict) else None
         if ultimo_numero is None:
             return []
-
-        antes, depois = [], []
-        for i, h in enumerate(historico_lista[:-1]):
-            if isinstance(h, dict) and h.get("number") == ultimo_numero:
-                if i - 1 >= 0 and isinstance(historico_lista[i-1], dict):
-                    antes.append(historico_lista[i-1]["number"])
-                if i + 1 < len(historico_lista) and isinstance(historico_lista[i+1], dict):
-                    depois.append(historico_lista[i+1]["number"])
-
-        cont_antes = Counter(antes)
-        cont_depois = Counter(depois)
-        top_antes = [num for num, _ in cont_antes.most_common(self.top_n)]
-        top_depois = [num for num, _ in cont_depois.most_common(self.top_n)]
-        candidatos = list(set(top_antes + top_depois))
-
-        # **INTEGRAÇÃO DAS ANOMALIAS** - Boost nos números anômalos
-        for anomalia in anomalias:
-            if anomalia not in candidatos:
-                candidatos.append(anomalia)
-            # Da boost também nos vizinhos das anomalias
-            vizinhos_anomalia = obter_vizinhos(anomalia, self.layout, antes=1, depois=1)
-            for vizinho in vizinhos_anomalia:
-                if vizinho not in candidatos:
-                    candidatos.append(vizinho)
-
-        # Treinamento do RF
-        window_hist = historico_lista[-max(len(historico_lista), self.window):]
-        if self.precisa_treinar(window_hist):
-            self.treinar(window_hist)
-
-        # Predição do RF
-        if self.model is not None:
-            numeros = [h["number"] for h in historico_lista]
-            last2 = numeros[-2] if len(numeros) > 1 else 0
-            last1 = numeros[-1]
-            feats = [last2, last1] + obter_vizinhos(last1, self.layout, antes=1, depois=1)
-            try:
-                probs = self.model.predict_proba([feats])[0]
-                classes = self.model.classes_
-                idx_top = np.argsort(probs)[-self.top_n:]
-                top_ml = [int(classes[i]) for i in idx_top]
-                candidatos = list(set(candidatos + top_ml))
-            except Exception as e:
-                logging.error(f"Erro predict_proba RF: {e}")
-
-        # Expandir para vizinhos físicos
-        numeros_previstos = []
-        for n in candidatos:
-            vizs = obter_vizinhos(n, self.layout, antes=2, depois=2)
-            for v in vizs:
-                if v not in numeros_previstos:
-                    numeros_previstos.append(v)
-
-        # **BOOST NAS ANOMALIAS** - Garante que anomalias fiquem nas previsões
-        for anomalia in anomalias:
-            if anomalia not in numeros_previstos:
-                numeros_previstos.append(anomalia)
-
-        # Redução inteligente
-        numeros_previstos = reduzir_metade_inteligente(numeros_previstos, historico)
-
-        # Limite final
-        if len(numeros_previstos) > MAX_PREVIEWS:
-            ultimos = [h["number"] for h in list(historico)[-WINDOW_SIZE:]] if historico else []
-            freq = Counter(ultimos)
-            topn_greens = st.session_state.get("topn_greens", {})
-            scores = {}
-            for n in numeros_previstos:
-                base_score = freq.get(n, 0) + 0.8 * topn_greens.get(n, 0)
-                # **BONUS EXTRA PARA ANOMALIAS**
-                if n in anomalias:
-                    base_score += 2.0  # Boost significativo para anomalias
-                scores[n] = base_score
-            numeros_previstos = sorted(numeros_previstos, key=lambda x: scores.get(x, 0), reverse=True)[:MAX_PREVIEWS]
-
-        return numeros_previstos
-
-# =============================
-# Redução inteligente (metade) - função reutilizável
-# =============================
-def reduzir_metade_inteligente(previsoes, historico):
-    if not previsoes:
-        return []
-    ultimos_numeros = [h["number"] for h in list(historico)[-WINDOW_SIZE:]] if historico else []
-    contagem_total = Counter(ultimos_numeros)
-    topn_greens = st.session_state.get("topn_greens", {})
-    pontuacoes = {}
-    for n in previsoes:
-        freq = contagem_total.get(n, 0)
-        vizinhos = obter_vizinhos(n, ROULETTE_LAYOUT, antes=1, depois=1)
-        redundancia = sum(1 for v in vizinhos if v in previsoes)
-        bonus = topn_greens.get(n, 0)
-        pontuacoes[n] = freq + (bonus * 0.8) - (0.5 * redundancia)
-    ordenados = sorted(pontuacoes.keys(), key=lambda x: pontuacoes[x], reverse=True)
-    n_reduzidos = max(1, len(ordenados) // 2)
-    return ordenados[:n_reduzidos]
-
-# =============================
-# Ajuste Dinâmico Top N
-# =============================
-TOP_N_COOLDOWN = 3
-TOP_N_PROB_BASE = 0.3
-TOP_N_PROB_MAX = 0.5
-TOP_N_PROB_MIN = 0.2
-TOP_N_WINDOW = 12
-
-if "topn_history" not in st.session_state:
-    st.session_state.topn_history = deque(maxlen=TOP_N_WINDOW)
-if "topn_reds" not in st.session_state:
-    st.session_state.topn_reds = {}
-if "topn_greens" not in st.session_state:
-    st.session_state.topn_greens = {}
-
-def atualizar_cooldown_reds():
-    novos_reds = {}
-    for num, rodadas in st.session_state.topn_reds.items():
-        if rodadas > 1:
-            novos_reds[num] = rodadas - 1
-    st.session_state.topn_reds = novos_reds
-
-def calcular_prob_min_topN():
-    historico = list(st.session_state.topn_history)
-    if not historico:
-        return TOP_N_PROB_BASE
-    taxa_red = historico.count("R") / len(historico)
-    prob_min = TOP_N_PROB_BASE + (taxa_red * (TOP_N_PROB_MAX - TOP_N_PROB_BASE))
-    return min(max(prob_min, TOP_N_PROB_MIN), TOP_N_PROB_MAX)
-
-def ajustar_top_n(previsoes, historico=None, min_n=MIN_TOP_N, max_n=MAX_TOP_N):
-    if not previsoes:
-        return previsoes[:min_n]
-    atualizar_cooldown_reds()
-    prob_min = calcular_prob_min_topN()
-    filtrados = [num for num in previsoes if num not in st.session_state.topn_reds]
-    pesos = {}
-    for num in filtrados:
-        pesos[num] = 1.0 + st.session_state.topn_greens.get(num, 0) * 0.05
-    ordenados = sorted(pesos.keys(), key=lambda x: pesos[x], reverse=True)
-    n = max(min_n, min(max_n, int(len(ordenados) * prob_min) + min_n))
-    return ordenados[:n]
-
-def registrar_resultado_topN(numero_real, top_n):
-    for num in top_n:
-        if num == numero_real:
-            st.session_state.topn_greens[num] = st.session_state.topn_greens.get(num, 0) + 1
-            st.session_state.topn_history.append("G")
-        else:
-            st.session_state.topn_reds[num] = TOP_N_COOLDOWN
-            st.session_state.topn_history.append("R")
-
-# =============================
-# Estratégia 31/34
-# =============================
-def estrategia_31_34(numero_capturado):
-    if numero_capturado is None:
-        return None
-    try:
-        terminal = int(str(numero_capturado)[-1])
-    except Exception:
-        return None
-    if terminal not in {2, 6, 9}:
-        return None
-    viz_31 = obter_vizinhos_fixos(31, ROULETTE_LAYOUT, antes=5, depois=5)
-    viz_34 = obter_vizinhos_fixos(34, ROULETTE_LAYOUT, antes=5, depois=5)
-    entrada = set([0, 26, 30] + viz_31 + viz_34)
-    msg = (
-        "🎯 Estratégia 31/34 disparada!\n"
-        f"Número capturado: {numero_capturado} (terminal {terminal})\n"
-        "Entrar nos números: 31 34"
-    )
-    enviar_telegram(msg)
-    return list(entrada)
-
-# =============================
-# Função para Download do Histórico
-# =============================
-def gerar_download_historico():
-    """Gera arquivo para download do histórico completo"""
-    try:
-        # Carrega o histórico persistente
-        historico = carregar_historico()
         
+        # 1. Análise estatística do setor mais provável
+        setor_previsto = self.analisar_historico_setores(historico, ultimo_numero)
+        
+        # 2. Se não encontrou padrão forte, usa fallback baseado na posição física
+        if not setor_previsto:
+            setor_previsto = self.fallback_posicao_fisica(ultimo_numero)
+        
+        return setor_previsto
+    
+    def fallback_posicao_fisica(self, ultimo_numero):
+        """Fallback: setor ao redor do último número + deslocamento estratégico"""
+        if ultimo_numero not in self.layout:
+            return []
+        
+        idx_ultimo = self.layout.index(ultimo_numero)
+        
+        # Deslocamento baseado em estatísticas de roleta (tendência de +2 a +4 posições)
+        deslocamento = 3
+        
+        idx_alvo = (idx_ultimo + deslocamento) % len(self.layout)
+        
+        # Pega setor centrado na posição alvo
+        setor_fallback = []
+        for i in range(self.setor_size):
+            pos = (idx_alvo + i - self.setor_size//2) % len(self.layout)
+            setor_fallback.append(self.layout[pos])
+        
+        logging.info(f"🔄 Fallback: Setor ao redor da posição {idx_alvo} -> {setor_fallback}")
+        return setor_fallback
+
+    def expandir_previsao_com_vizinhos(self, setor_previsto):
+        """Expande o setor previsto incluindo vizinhos físicos"""
+        if not setor_previsto:
+            return setor_previsto
+            
+        previsao_expandida = set(setor_previsto.copy())
+        
+        # Para cada número no setor, adiciona seus vizinhos
+        for numero in setor_previsto:
+            vizinhos = obter_vizinhos(numero, self.layout, antes=1, depois=1)
+            previsao_expandida.update(vizinhos)
+        
+        # Converte para lista e limita o tamanho
+        previsao_final = list(previsao_expandida)
+        if len(previsao_final) > MAX_PREVISOES:
+            # Prioriza números do setor original
+            numeros_prioridade = [n for n in previsao_final if n in setor_previsto]
+            outros_numeros = [n for n in previsao_final if n not in setor_previsto]
+            previsao_final = numeros_prioridade + outros_numeros
+            previsao_final = previsao_final[:MAX_PREVISOES]
+        
+        return previsao_final
+
+# =============================
+# GESTOR DE ESTRATÉGIA PRINCIPAL
+# =============================
+class GestorRoletaVirtual:
+    def __init__(self):
+        self.roleta_virtual = RoletaVirtual()
+        self.historico = deque(carregar_historico(), maxlen=1000)
+        
+    def adicionar_numero(self, numero_dict):
+        self.historico.append(numero_dict)
+        
+    def gerar_previsao(self):
+        """Gera previsão usando apenas a Roleta Virtual"""
+        if len(self.historico) < MIN_HISTORICO:
+            return [], []
+            
+        # 1. Previsão do setor principal
+        setor_previsto = self.roleta_virtual.prever_proximo_setor(self.historico)
+        
+        # 2. Expansão com vizinhos
+        previsao_final = self.roleta_virtual.expandir_previsao_com_vizinhos(setor_previsto)
+        
+        return setor_previsto, previsao_final
+
+# =============================
+# STREAMLIT APP - ROLETA VIRTUAL
+# =============================
+st.set_page_config(
+    page_title="Roleta Virtual - Previsão por Setores", 
+    page_icon="🎯", 
+    layout="centered"
+)
+
+st.title("🎯 Roleta Virtual - Previsão por Setores")
+st.markdown("### Sistema Inteligente de Previsão por Áreas da Roleta")
+
+# Auto-refresh a cada 3 segundos
+st_autorefresh(interval=3000, key="refresh")
+
+# Inicialização session_state
+defaults = {
+    "gestor": GestorRoletaVirtual(),
+    "setor_previsto": [],
+    "previsao_final": [],
+    "acertos_setor": 0,
+    "erros_setor": 0,
+    "acertos_previsao": 0,
+    "erros_previsao": 0,
+    "contador_rodadas": 0,
+    "ultimo_timestamp_processado": None,
+    "aguardando_novo_sorteio": False,
+}
+
+for k, v in defaults.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
+
+# =============================
+# CAPTURA E PROCESSAMENTO
+# =============================
+resultado = fetch_latest_result()
+
+# Verificação de novo sorteio
+novo_sorteio = False
+if resultado and resultado.get("timestamp"):
+    if (st.session_state.ultimo_timestamp_processado is None or 
+        resultado.get("timestamp") != st.session_state.ultimo_timestamp_processado):
+        novo_sorteio = True
+        logging.info(f"🎲 NOVO SORTEIO: {resultado['number']}")
+
+# Processamento do novo sorteio
+if resultado and novo_sorteio:
+    numero_dict = {"number": resultado["number"], "timestamp": resultado["timestamp"]}
+    
+    # Salva no histórico persistente
+    salvo_com_sucesso = salvar_historico(numero_dict)
+    
+    if salvo_com_sucesso:
+        st.session_state.gestor.adicionar_numero(numero_dict)
+    
+    st.session_state.ultimo_timestamp_processado = resultado["timestamp"]
+    numero_real = numero_dict["number"]
+
+    # =============================
+    # CONFERÊNCIA DE RESULTADOS
+    # =============================
+    # Conferência do SETOR PREVISTO
+    if st.session_state.setor_previsto:
+        if numero_real in st.session_state.setor_previsto:
+            st.session_state.acertos_setor += 1
+            st.success(f"🎯 **ACERTO NO SETOR!** Número {numero_real} estava no setor previsto!")
+            enviar_telegram(f"🎯 ACERTO SETOR! Número {numero_real} estava em {st.session_state.setor_previsto}")
+        else:
+            st.session_state.erros_setor += 1
+            st.error(f"🔴 Setor não acertou. Número {numero_real} não estava em {st.session_state.setor_previsto}")
+    
+    # Conferência da PREVISÃO FINAL
+    if st.session_state.previsao_final:
+        if numero_real in st.session_state.previsao_final:
+            st.session_state.acertos_previsao += 1
+            st.success(f"🟢 **GREEN!** Número {numero_real} estava na previsão final!")
+            enviar_telegram(f"🟢 GREEN! Número {numero_real} estava na previsão: {st.session_state.previsao_final}")
+        else:
+            st.session_state.erros_previsao += 1
+            st.error(f"🔴 Previsão final errou. Número {numero_real} não estava na lista.")
+
+    # =============================
+    # GERAÇÃO DE NOVA PREVISÃO
+    # =============================
+    if not st.session_state.aguardando_novo_sorteio:
+        # Gera nova previsão
+        setor_previsto, previsao_final = st.session_state.gestor.gerar_previsao()
+        
+        if setor_previsto:
+            st.session_state.setor_previsto = setor_previsto
+            st.session_state.previsao_final = previsao_final
+            st.session_state.aguardando_novo_sorteio = True
+            
+            # Envia alerta no Telegram
+            mensagem = f"🎯 **NOVA PREVISÃO ROLETA VIRTUAL**\n"
+            mensagem += f"📊 Setor Principal: {', '.join(map(str, sorted(setor_previsto)))}\n"
+            mensagem += f"🎲 Previsão Final: {', '.join(map(str, sorted(previsao_final)))}\n"
+            mensagem += f"📈 Histórico: {len(st.session_state.gestor.historico)} números"
+            
+            enviar_telegram(mensagem)
+            logging.info("🔔 Nova previsão gerada e enviada para Telegram")
+
+    st.session_state.contador_rodadas += 1
+
+    # Salva métricas
+    metrics = {
+        "timestamp": resultado.get("timestamp"),
+        "numero_real": numero_real,
+        "setor_previsto": st.session_state.setor_previsto,
+        "previsao_final": st.session_state.previsao_final,
+        "acertos_setor": st.session_state.acertos_setor,
+        "erros_setor": st.session_state.erros_setor,
+        "acertos_previsao": st.session_state.acertos_previsao,
+        "erros_previsao": st.session_state.erros_previsao,
+    }
+    salvar_metricas(metrics)
+
+# =============================
+# INTERFACE DO USUÁRIO
+# =============================
+st.markdown("---")
+
+# Status do Sistema
+if resultado and not novo_sorteio:
+    st.info(f"⏳ Aguardando novo sorteio...")
+
+if st.session_state.aguardando_novo_sorteio:
+    st.warning("🔄 Aguardando próximo sorteio para nova previsão...")
+
+# Histórico Recente
+st.subheader("📜 Últimos Números Sorteados")
+ultimos_numeros = [h['number'] for h in list(st.session_state.gestor.historico)[-5:]]
+if ultimos_numeros:
+    st.write(" → ".join(map(str, ultimos_numeros)))
+else:
+    st.write("Nenhum número registrado ainda")
+
+# PREVISÃO ATUAL
+st.markdown("---")
+st.subheader("🎯 PREVISÃO ATUAL")
+
+if st.session_state.setor_previsto:
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.metric("🎯 Setor Principal", f"{len(st.session_state.setor_previsto)} números")
+        st.info(f"**Setor:** {', '.join(map(str, sorted(st.session_state.setor_previsto)))}")
+    
+    with col2:
+        st.metric("🎲 Previsão Final", f"{len(st.session_state.previsao_final)} números")
+        st.success(f"**Previsão:** {', '.join(map(str, sorted(st.session_state.previsao_final)))}")
+else:
+    st.info("🔄 **Aguardando dados suficientes para primeira previsão...**")
+    st.write(f"Necessário: {MIN_HISTORICO} números | Atual: {len(st.session_state.gestor.historico)}")
+
+# ESTATÍSTICAS DE PERFORMANCE
+st.markdown("---")
+st.subheader("📊 ESTATÍSTICAS DE PERFORMANCE")
+
+col1, col2, col3, col4 = st.columns(4)
+
+# Estatísticas do SETOR
+acertos_setor = st.session_state.acertos_setor
+erros_setor = st.session_state.erros_setor
+total_setor = acertos_setor + erros_setor
+taxa_setor = (acertos_setor / total_setor * 100) if total_setor > 0 else 0.0
+
+col1.metric("🎯 Acertos Setor", acertos_setor)
+col2.metric("🔴 Erros Setor", erros_setor)
+col3.metric("✅ Taxa Setor", f"{taxa_setor:.1f}%")
+col4.metric("📊 Total Jogadas", total_setor)
+
+# Estatísticas da PREVISÃO FINAL
+acertos_previsao = st.session_state.acertos_previsao
+erros_previsao = st.session_state.erros_previsao
+total_previsao = acertos_previsao + erros_previsao
+taxa_previsao = (acertos_previsao / total_previsao * 100) if total_previsao > 0 else 0.0
+
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("🟢 Greens", acertos_previsao)
+col2.metric("🔴 Reds", erros_previsao)
+col3.metric("✅ Taxa Acerto", f"{taxa_previsao:.1f}%")
+col4.metric("🎯 Precisão", f"{len(st.session_state.previsao_final)} nums" if st.session_state.previsao_final else "0")
+
+# INFORMAÇÕES DO SISTEMA
+st.markdown("---")
+st.subheader("ℹ️ INFORMAÇÕES DO SISTEMA")
+
+col1, col2, col3 = st.columns(3)
+col1.metric("📈 Histórico", f"{len(st.session_state.gestor.historico)} números")
+col2.metric("🔄 Rodadas", st.session_state.contador_rodadas)
+col3.metric("🎯 Tamanho Setor", SETOR_SIZE)
+
+# COMO FUNCIONA
+with st.expander("🔍 **Como funciona a Roleta Virtual?**"):
+    st.markdown("""
+    **🎯 Estratégia de Setores:**
+    - Divide a roleta em **37 setores sobrepostos** de 5 números cada
+    - Analisa **padrões de transição** entre setores no histórico
+    - Identifica o **setor mais provável** após cada número
+    
+    **📊 Método de Previsão:**
+    1. **Análise Estatística**: Encontra setores com melhor performance histórica
+    2. **Posição Física**: Considera a disposição real dos números na roleta
+    3. **Expansão Inteligente**: Inclui vizinhos físicos dos números do setor
+    
+    **🎲 Vantagens:**
+    - Foca em **áreas** ao invés de números isolados
+    - Mais **consistência** que previsões pontuais
+    - **Adaptável** aos padrões recentes da roleta
+    """)
+
+# BOTÃO DE DOWNLOAD
+st.markdown("---")
+st.subheader("📥 EXPORTAR DADOS")
+
+def gerar_download_roleta_virtual():
+    try:
+        historico = carregar_historico()
         if not historico:
-            st.warning("Nenhum histórico disponível para download")
             return None
         
-        # Converte para DataFrame
         df = pd.DataFrame(historico)
-        
-        # Cria buffer para o arquivo
         output = io.BytesIO()
         
-        # Cria arquivo Excel com múltiplas abas
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            # Aba com histórico completo
             df.to_excel(writer, sheet_name='Historico_Completo', index=False)
             
-            # Aba com estatísticas
             stats_data = {
-                'Metrica': [
-                    'Total de Registros',
-                    'Período Inicial', 
-                    'Período Final',
-                    'Números Mais Frequentes',
-                    'Acertos Recorrência',
-                    'Acertos Top N',
-                    'Acertos 31/34'
-                ],
+                'Metrica': ['Total Registros', 'Acertos Setor', 'Erros Setor', 'Taxa Setor', 'Acertos Previsão', 'Erros Previsão', 'Taxa Previsão'],
                 'Valor': [
                     len(df),
-                    df['timestamp'].min() if 'timestamp' in df.columns else 'N/A',
-                    df['timestamp'].max() if 'timestamp' in df.columns else 'N/A',
-                    str(dict(Counter(df['number']).most_common(5))) if 'number' in df.columns else 'N/A',
-                    st.session_state.get('acertos', 0),
-                    st.session_state.get('acertos_topN', 0),
-                    st.session_state.get('acertos_31_34', 0)
+                    st.session_state.acertos_setor,
+                    st.session_state.erros_setor,
+                    f"{taxa_setor:.1f}%",
+                    st.session_state.acertos_previsao,
+                    st.session_state.erros_previsao,
+                    f"{taxa_previsao:.1f}%"
                 ]
             }
             stats_df = pd.DataFrame(stats_data)
             stats_df.to_excel(writer, sheet_name='Estatisticas', index=False)
-            
-            # Aba com últimos 100 registros
-            ultimos_100 = df.tail(100)
-            ultimos_100.to_excel(writer, sheet_name='Ultimos_100', index=False)
         
         output.seek(0)
         return output
@@ -627,326 +559,23 @@ def gerar_download_historico():
         logging.error(f"Erro ao gerar download: {e}")
         return None
 
-# =============================
-# Streamlit App
-# =============================
-st.set_page_config(page_title="Roleta IA Profissional", layout="centered")
-st.title("🎯 Roleta — IA Recorrência + Autoencoder (Padrões Anômalos)")
-st_autorefresh(interval=3000, key="refresh")
-
-# Inicialização session_state (todas as chaves necessárias)
-defaults = {
-    "estrategia": EstrategiaDeslocamento(),
-    "ia_recorrencia": IA_Recorrencia_RF(layout=ROULETTE_LAYOUT, top_n=16, window=WINDOW_SIZE),
-    "pattern_analyzer": Pattern_Analyzer(),  # NOVO: Autoencoder
-    "previsao": [],
-    "previsao_topN": [],
-    "previsao_31_34": [],
-    "anomalias_detectadas": [],  # NOVO: Lista de anomalias
-    "acertos": 0,
-    "erros": 0,
-    "acertos_topN": 0,
-    "erros_topN": 0,
-    "acertos_31_34": 0,
-    "erros_31_34": 0,
-    "contador_rodadas": 0,
-    "topn_history": deque(maxlen=TOP_N_WINDOW),
-    "topn_reds": {},
-    "topn_greens": {},
-    "ultimo_timestamp_processado": None,
-    "ultima_previsao_enviada": None,
-    "aguardando_novo_sorteio": False,
-    "ultimo_treinamento_size": 0,
-}
-for k, v in defaults.items():
-    if k not in st.session_state:
-        st.session_state[k] = v
-
-# Carregar histórico existente
-# -----------------------------
-# Captura número (API)
-# -----------------------------
-resultado = fetch_latest_result()
-
-# Verificação robusta para evitar duplicatas
-novo_sorteio = False
-if resultado and resultado.get("timestamp"):
-    if (st.session_state.ultimo_timestamp_processado is None or 
-        resultado.get("timestamp") != st.session_state.ultimo_timestamp_processado):
-        novo_sorteio = True
-        logging.info(f"🎲 NOVO SORTEIO: {resultado['number']} - {resultado['timestamp']}")
-        st.session_state.aguardando_novo_sorteio = False
-
-# Nova rodada detectada
-if resultado and novo_sorteio:
-    numero_dict = {"number": resultado["number"], "timestamp": resultado["timestamp"]}
-    
-    # Salva no histórico persistente
-    salvo_com_sucesso = salvar_historico(numero_dict)
-    
-    if salvo_com_sucesso:
-        st.session_state.estrategia.adicionar_numero(numero_dict)
-    
-    st.session_state.ultimo_timestamp_processado = resultado["timestamp"]
-    numero_real = numero_dict["number"]
-
-    # -----------------------------
-    # Conferências (mantidas iguais)
-    # -----------------------------
-    if st.session_state.previsao:
-        numeros_com_vizinhos = []
-        for n in st.session_state.previsao:
-            for v in obter_vizinhos(n, ROULETTE_LAYOUT, antes=1, depois=1):
-                if v not in numeros_com_vizinhos:
-                    numeros_com_vizinhos.append(v)
-        if numero_real in numeros_com_vizinhos:
-            st.session_state.acertos += 1
-            st.success(f"🟢 GREEN! Número {numero_real} previsto pela recorrência (incluindo vizinhos).")
-            enviar_telegram(f"🟢 GREEN! Número {numero_real} previsto pela recorrência (incluindo vizinhos).")
-        else:
-            st.session_state.erros += 1
-            st.error(f"🔴 RED! Número {numero_real} não estava na previsão de recorrência nem nos vizinhos.")
-            enviar_telegram(f"🔴 RED! Número {numero_real} não estava na previsão de recorrência nem nos vizinhos.")
-        st.session_state.previsao = []
-
-    if st.session_state.previsao_topN:
-        topN_com_vizinhos = []
-        for n in st.session_state.previsao_topN:
-            for v in obter_vizinhos(n, ROULETTE_LAYOUT, antes=1, depois=1):
-                if v not in topN_com_vizinhos:
-                    topN_com_vizinhos.append(v)
-        if numero_real in topN_com_vizinhos:
-            st.session_state.acertos_topN += 1
-            st.success(f"🟢 GREEN Top N! Número {numero_real} estava entre os mais prováveis.")
-            enviar_telegram_topN(f"🟢 GREEN Top N! Número {numero_real} estava entre os mais prováveis.")
-            st.session_state.topn_greens[numero_real] = st.session_state.topn_greens.get(numero_real, 0) + 1
-        else:
-            st.session_state.erros_topN += 1
-            st.error(f"🔴 RED Top N! Número {numero_real} não estava entre os mais prováveis.")
-            enviar_telegram_topN(f"🔴 RED Top N! Número {numero_real} não estava entre os mais prováveis.")
-        st.session_state.previsao_topN = []
-
-    if st.session_state.previsao_31_34:
-        if numero_real in st.session_state.previsao_31_34:
-            st.session_state.acertos_31_34 += 1
-            st.success(f"🟢 GREEN (31/34)! Número {numero_real} estava na entrada 31/34.")
-            enviar_telegram(f"🟢 GREEN (31/34)! Número {numero_real} estava na entrada 31/34.")
-        else:
-            st.session_state.erros_31_34 += 1
-            st.error(f"🔴 RED (31/34)! Número {numero_real} não estava na entrada 31/34.")
-            enviar_telegram(f"🔴 RED (31/34)! Número {numero_real} não estava na entrada 31/34.")
-        st.session_state.previsao_31_34 = []
-
-    # -----------------------------
-    # NOVO: Detecção de Anomalias com Autoencoder
-    # -----------------------------
-    historico_size = len(st.session_state.estrategia.historico)
-    
-    # Treinar autoencoder quando houver dados suficientes
-    if historico_size >= AUTOENCODER_WINDOW and st.session_state.contador_rodadas % 10 == 0:
-        logging.info("🔄 Treinando Autoencoder para detecção de padrões...")
-        sucesso_treinamento = st.session_state.pattern_analyzer.train(st.session_state.estrategia.historico)
-        if sucesso_treinamento:
-            st.session_state.anomalias_detectadas = st.session_state.pattern_analyzer.detect_anomalies(st.session_state.estrategia.historico)
-            if st.session_state.anomalias_detectadas:
-                logging.info(f"🎯 Anomalias detectadas: {st.session_state.anomalias_detectadas}")
-
-    # -----------------------------
-    # Geração de Previsão com Integração de Anomalias
-    # -----------------------------
-    if st.session_state.contador_rodadas % 2 == 0 and not st.session_state.aguardando_novo_sorteio:
-        # Detectar anomalias se o autoencoder estiver treinado
-        anomalias = []
-        if st.session_state.pattern_analyzer.is_trained:
-            anomalias = st.session_state.pattern_analyzer.detect_anomalies(st.session_state.estrategia.historico)
-            st.session_state.anomalias_detectadas = anomalias
-        
-        # Previsão com integração de anomalias
-        prox_numeros = st.session_state.ia_recorrencia.prever(
-            st.session_state.estrategia.historico, 
-            anomalias=anomalias
-        )
-        
-        if prox_numeros:
-            prox_numeros = list(dict.fromkeys(prox_numeros))
-            st.session_state.previsao = prox_numeros
-
-            entrada_topN = ajustar_top_n(prox_numeros, st.session_state.estrategia.historico)
-            st.session_state.previsao_topN = entrada_topN
-
-            # CONTROLE DE ALERTAS
-            previsao_atual = f"{sorted(prox_numeros)}_{sorted(entrada_topN)}"
-            
-            if previsao_atual != st.session_state.ultima_previsao_enviada:
-                st.session_state.ultima_previsao_enviada = previsao_atual
-                st.session_state.aguardando_novo_sorteio = True
-                
-                # Envio Telegram com informações das anomalias
-                s = sorted(prox_numeros)
-                mensagem_recorrencia = "🎯 NP: " + " ".join(map(str, s[:5]))
-                if len(s) > 5:
-                    mensagem_recorrencia += "\n" + " ".join(map(str, s[5:10]))
-                
-                # Adiciona info sobre anomalias se houver
-                if anomalias:
-                    mensagem_recorrencia += f"\n🔍 Anomalias: {', '.join(map(str, sorted(anomalias)))}"
-                
-                enviar_telegram(mensagem_recorrencia)
-                enviar_telegram_topN("Top N: " + " ".join(map(str, sorted(entrada_topN))))
-                
-                logging.info("🔔 Novos alertas enviados para Telegram")
-            else:
-                logging.info("⏳ Previsão idêntica à anterior, alertas não enviados")
-    else:
-        # Estratégia 31/34
-        entrada_31_34 = estrategia_31_34(numero_real)
-        if entrada_31_34:
-            st.session_state.previsao_31_34 = entrada_31_34
-
-    # Treinamento controlado do RF
-    historico_size = len(st.session_state.estrategia.historico)
-    if (historico_size >= MIN_HISTORICO_TREINAMENTO and 
-        st.session_state.contador_rodadas % TREINAMENTO_INTERVALO == 0 and
-        st.session_state.ia_recorrencia.precisa_treinar(st.session_state.estrategia.historico)):
-        
-        logging.info("🔄 Treinamento programado da IA")
-        window_hist = list(st.session_state.estrategia.historico)[-WINDOW_SIZE:]
-        sucesso_treinamento = st.session_state.ia_recorrencia.treinar(window_hist)
-        if sucesso_treinamento:
-            st.session_state.ultimo_treinamento_size = st.session_state.ia_recorrencia.ultimo_treinamento_size
-
-    # Incrementa contador
-    st.session_state.contador_rodadas += 1
-
-    # Salvar métricas
-    metrics = {
-        "timestamp": resultado.get("timestamp"),
-        "numero_real": numero_real,
-        "acertos": st.session_state.get("acertos", 0),
-        "erros": st.session_state.get("erros", 0),
-        "acertos_topN": st.session_state.get("acertos_topN", 0),
-        "erros_topN": st.session_state.get("erros_topN", 0),
-        "acertos_31_34": st.session_state.get("acertos_31_34", 0),
-        "erros_31_34": st.session_state.get("erros_31_34", 0),
-        "anomalias_detectadas": st.session_state.get("anomalias_detectadas", [])  # NOVO
-    }
-    salvar_metricas(metrics)
-
-# Exibir informação sobre duplicatas
-if resultado and not novo_sorteio:
-    st.info(f"⏳ Aguardando novo sorteio... Último processado: {st.session_state.ultimo_timestamp_processado}")
-
-# Status do sistema
-if st.session_state.aguardando_novo_sorteio:
-    st.warning("🔄 Aguardando próximo sorteio para novos alertas...")
-
-# -----------------------------
-# Interface Streamlit Atualizada
-# -----------------------------
-st.subheader("📜 Histórico (últimos 3 números)")
-ultimos = list(st.session_state.estrategia.historico)[-3:]
-st.write(ultimos)
-
-# NOVA SEÇÃO: Status do Autoencoder
-st.subheader("🤖 Status do Autoencoder (Detecção de Padrões)")
-col1, col2, col3 = st.columns(3)
-
-# Status do autoencoder
-autoencoder_status = "✅ Treinado" if st.session_state.pattern_analyzer.is_trained else "⏳ Aguardando dados"
-col1.metric("🔍 Autoencoder", autoencoder_status)
-
-# Anomalias detectadas
-anomalias_count = len(st.session_state.anomalias_detectadas)
-col2.metric("🎯 Anomalias Ativas", anomalias_count)
-
-# Próxima análise
-proxima_analise = 10 - (st.session_state.contador_rodadas % 10)
-col3.metric("🔄 Próxima Análise", f"Rodada {proxima_analise}")
-
-# Exibir anomalias se houver
-if st.session_state.anomalias_detectadas:
-    st.info(f"**🔍 Padrões Anômalos Detectados:** {', '.join(map(str, sorted(st.session_state.anomalias_detectadas)))}")
-    st.caption("💡 Números com padrões incomuns que podem representar oportunidades")
-
-# Estatísticas Recorrência
-acertos = st.session_state.get("acertos", 0)
-erros = st.session_state.get("erros", 0)
-total = acertos + erros
-taxa = (acertos / total * 100) if total > 0 else 0.0
-qtd_previstos_rec = len(st.session_state.get("previsao", []))
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("🟢 GREEN", acertos)
-col2.metric("🔴 RED", erros)
-col3.metric("✅ Taxa de acerto", f"{taxa:.1f}%")
-col4.metric("🎯 Qtd. previstos Recorrência", qtd_previstos_rec)
-
-# Estatísticas Top N Dinâmico
-acertos_topN = st.session_state.get("acertos_topN", 0)
-erros_topN = st.session_state.get("erros_topN", 0)
-total_topN = acertos_topN + erros_topN
-taxa_topN = (acertos_topN / total_topN * 100) if total_topN > 0 else 0.0
-qtd_previstos_topN = len(st.session_state.get("previsao_topN", []))
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("🟢 GREEN Top N", acertos_topN)
-col2.metric("🔴 RED Top N", erros_topN)
-col3.metric("✅ Taxa Top N", f"{taxa_topN:.1f}%")
-col4.metric("🎯 Qtd. previstos Top N", qtd_previstos_topN)
-
-# Estatísticas 31/34
-acertos_31_34 = st.session_state.get("acertos_31_34", 0)
-erros_31_34 = st.session_state.get("erros_31_34", 0)
-total_31_34 = acertos_31_34 + erros_31_34
-taxa_31_34 = (acertos_31_34 / total_31_34 * 100) if total_31_34 > 0 else 0.0
-qtd_previstos_31_34 = len(st.session_state.get("previsao_31_34", []))
-
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("🟢 GREEN 31/34", acertos_31_34)
-col2.metric("🔴 RED 31/34", erros_31_34)
-col3.metric("✅ Taxa 31/34", f"{taxa_31_34:.1f}%")
-col4.metric("🎯 Qtd. previstos 31/34", qtd_previstos_31_34)
-
-# Status da IA
-st.subheader("🧠 Status da IA")
-col1, col2, col3 = st.columns(3)
-ultimo_treinamento = getattr(st.session_state.ia_recorrencia, 'ultimo_treinamento_size', 0)
-col1.metric("🔄 Último Treinamento RF", f"{ultimo_treinamento} registros")
-col2.metric("📊 Histórico Atual", f"{len(st.session_state.estrategia.historico)} registros")
-proximo_treinamento = TREINAMENTO_INTERVALO - (st.session_state.contador_rodadas % TREINAMENTO_INTERVALO)
-col3.metric("⚡ Próximo Treinamento", f"Rodada {proximo_treinamento}")
-
-# Informações do Histórico
-st.subheader("📊 Informações do Histórico")
-st.write(f"Total de números armazenados no histórico: **{len(st.session_state.estrategia.historico)}**")
-st.write(f"Capacidade máxima do deque: **{st.session_state.estrategia.historico.maxlen}**")
-
-if st.session_state.ultimo_timestamp_processado:
-    st.write(f"Último sorteio processado: **{st.session_state.ultimo_timestamp_processado}**")
-
-# Seção de Download
-st.markdown("---")
-st.subheader("📥 Exportar Dados")
-
-if st.button("💾 Download Histórico Completo", type="primary"):
-    with st.spinner("Gerando arquivo de download..."):
-        arquivo = gerar_download_historico()
+if st.button("💾 Exportar Dados Completos", type="primary"):
+    with st.spinner("Gerando arquivo..."):
+        arquivo = gerar_download_roleta_virtual()
         
         if arquivo:
-            nome_arquivo = f"historico_roleta_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+            nome_arquivo = f"roleta_virtual_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
             
             st.download_button(
-                label="⬇️ Baixar Arquivo Excel",
+                label="⬇️ Baixar Excel",
                 data=arquivo,
                 file_name=nome_arquivo,
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                help="Clique para baixar o histórico completo em formato Excel"
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
-            st.success("✅ Arquivo gerado com sucesso! Clique no botão acima para baixar.")
+            st.success("✅ Arquivo gerado com sucesso!")
         else:
-            st.error("❌ Erro ao gerar arquivo de download")
+            st.error("❌ Erro ao gerar arquivo")
 
-st.info("""
-**📋 Conteúdo do arquivo:**
-- **Historico_Completo**: Todos os números registrados
-- **Estatisticas**: Métricas e análises do histórico  
-- **Ultimos_100**: Últimos 100 registros para análise recente
-""")
+# FOOTER
+st.markdown("---")
+st.caption("🎯 **Roleta Virtual** - Sistema Especializado em Previsão por Setores | Desenvolvido para máxima eficiência")
