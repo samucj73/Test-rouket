@@ -33,7 +33,7 @@ ROULETTE_LAYOUT = [
 ]
 
 # Configurações
-MIN_HISTORICO_TREINAMENTO = 50
+MIN_HISTORICO_TREINAMENTO = 300
 NUMERO_PREVISOES = 15
 
 # =============================
