@@ -1,4 +1,4 @@
-# RoletaHybridIA.py - SISTEMA COMPLETO ATUALIZADO
+# RoletaHybridIA.py - SISTEMA COMPLETO ATUALIZADO COM MELHORIAS
 import streamlit as st
 import json
 import os
@@ -33,7 +33,7 @@ ROULETTE_LAYOUT = [
 ]
 
 # Configurações
-MIN_HISTORICO_TREINAMENTO = 250
+MIN_HISTORICO_TREINAMENTO = 50
 NUMERO_PREVISOES = 15
 
 # =============================
@@ -151,7 +151,7 @@ def validar_previsao(previsao):
     return previsao_limpa
 
 # =============================
-# SISTEMA HÍBRIDO ATUALIZADO
+# SISTEMA HÍBRIDO ATUALIZADO COM MELHORIAS
 # =============================
 class Pattern_Analyzer_Atualizado:
     def __init__(self, window_size=20):
@@ -226,6 +226,38 @@ class Pattern_Analyzer_Atualizado:
         except Exception as e:
             logging.error(f"Erro na detecção de mudança de padrão: {e}")
             return False
+
+    def detectar_padroes_avançados(self, historico):
+        """Detecção mais agressiva de padrões recorrentes"""
+        try:
+            numeros = [h['number'] for h in historico if h.get('number') is not None][-30:]
+            
+            if len(numeros) < 10:
+                return []
+            
+            # Análise de sequências de 3 números
+            sequencias_3 = []
+            for i in range(len(numeros)-2):
+                sequencias_3.append(tuple(numeros[i:i+3]))
+            
+            # Encontra sequências que se repetem
+            counter_sequencias = Counter(sequencias_3)
+            sequencias_quentes = [seq for seq, count in counter_sequencias.items() if count >= 2]
+            
+            previsao_sequencias = set()
+            for seq in sequencias_quentes:
+                # Adiciona números que costumam vir após essa sequência
+                for i in range(len(numeros)-3):
+                    if tuple(numeros[i:i+3]) == seq:
+                        proximo_numero = numeros[i+3]
+                        previsao_sequencias.add(proximo_numero)
+            
+            logging.info(f"🔍 Padrões avançados detectados: {len(previsao_sequencias)} números")
+            return list(previsao_sequencias)
+            
+        except Exception as e:
+            logging.error(f"Erro na detecção avançada: {e}")
+            return []
     
     def get_tendencia_atual(self, historico):
         """Retorna a tendência atual baseada nos últimos números"""
@@ -365,9 +397,68 @@ class Hybrid_IA_System:
     def __init__(self):
         self.lstm_predictor = LSTM_Predictor()
         self.xgb_predictor = XGBoost_Predictor()
-        self.pattern_analyzer = Pattern_Analyzer_Atualizado()  # ATUALIZADO
+        self.pattern_analyzer = Pattern_Analyzer_Atualizado()
         self.ensemble = Ensemble_Predictor()
         self.ultima_previsao = None
+        
+    def estrategia_reativacao_agressiva(self, historico):
+        """Estratégia mais agressiva baseada nos últimos padrões"""
+        try:
+            numeros = [h['number'] for h in historico if h.get('number') is not None]
+            
+            if len(numeros) < 8:
+                return self.estrategia_inicial_agressiva()
+            
+            # FOCO NOS ÚLTIMOS 12 NÚMEROS
+            ultimos_12 = numeros[-12:]
+            frequencia = Counter(ultimos_12)
+            
+            # 1. NÚMEROS MAIS QUENTES (últimas 12 jogadas)
+            numeros_quentes = [num for num, count in frequencia.most_common(10) if count >= 2]
+            
+            # 2. VIZINHOS ESTRATÉGICOS DOS 5 ÚLTIMOS NÚMEROS
+            vizinhos_estrategicos = set()
+            for num in ultimos_12[-5:]:
+                vizinhos = obter_vizinhos(num, ROULETTE_LAYOUT, antes=3, depois=3)
+                vizinhos_estrategicos.update(vizinhos)
+            
+            # 3. PADRÕES DE SEQUÊNCIA
+            padroes_detectados = self.pattern_analyzer.detectar_padroes_avançados(historico)
+            
+            # COMBINAÇÃO ESTRATÉGICA
+            previsao_final = set()
+            previsao_final.update(numeros_quentes[:6])
+            previsao_final.update(list(vizinhos_estrategicos)[:8])
+            previsao_final.update(padroes_detectados[:4])
+            
+            # GARANTIR DIVERSIDADE
+            if len(previsao_final) < 12:
+                # Adiciona números estratégicos baseados na tendência
+                tendencia = self.pattern_analyzer.get_tendencia_atual(historico)
+                if tendencia == "ALTA":
+                    complemento = [n for n in range(25, 37) if n not in previsao_final]
+                elif tendencia == "BAIXA":
+                    complemento = [n for n in range(1, 13) if n not in previsao_final]
+                else:
+                    complemento = [n for n in range(0, 37) if n % 2 == 0 and n not in previsao_final]
+                
+                previsao_final.update(complemento[:15 - len(previsao_final)])
+            
+            # GARANTIR ZERO
+            previsao_final.add(0)
+            
+            previsao_ordenada = sorted(previsao_final, key=lambda x: (
+                x in numeros_quentes,
+                x in vizinhos_estrategicos,
+                x
+            ), reverse=True)
+            
+            logging.info(f"🎯 Reativação Agressiva: {len(previsao_ordenada)} números")
+            return validar_previsao(previsao_ordenada)[:NUMERO_PREVISOES]
+            
+        except Exception as e:
+            logging.error(f"Erro na estratégia agressiva: {e}")
+            return self.estrategia_intermediaria(historico)
         
     def estrategia_reativacao_rapida(self, historico):
         """Estratégia agressiva para se adaptar rapidamente a mudanças"""
@@ -529,34 +620,61 @@ class Hybrid_IA_System:
         except Exception as e:
             logging.error(f"Erro na diversificação: {e}")
             return self.estrategia_emergencia()
+
+    def verificar_alerta_estrategico(self, historico, previsao_atual):
+        """Verifica se precisa ajustar a estratégia baseado na performance"""
+        try:
+            if len(historico) < 10:
+                return "NORMAL"
+                
+            # Verifica performance recente (simulação)
+            ultimos_10 = historico[-10:]
+            numeros_sorteados = [h['number'] for h in ultimos_10]
+            
+            # Se muitos números consecutivos fora da previsão atual
+            consecutivos_fora = 0
+            max_consecutivos = 0
+            
+            for num in numeros_sorteados[-6:]:
+                if num not in previsao_atual:
+                    consecutivos_fora += 1
+                    max_consecutivos = max(max_consecutivos, consecutivos_fora)
+                else:
+                    consecutivos_fora = 0
+            
+            if max_consecutivos >= 4:
+                return "ALERTA: Mudança de padrão detectada"
+            elif max_consecutivos >= 3:
+                return "ATENÇÃO: Possível mudança de padrão"
+            else:
+                return "NORMAL"
+                
+        except Exception as e:
+            logging.error(f"Erro no alerta estratégico: {e}")
+            return "NORMAL"
     
     def predict_hybrid(self, historico):
-        """Sistema híbrido atualizado com detecção de mudanças"""
+        """Sistema híbrido atualizado com detecção avançada"""
         try:
             if not historico:
                 return self.estrategia_inicial_agressiva()
                 
             historico_size = len(historico)
             
-            # Verificar se há mudança de padrão detectada
-            mudanca_detectada = self.pattern_analyzer.detectar_mudanca_padrao(historico)
-            tendencia_atual = self.pattern_analyzer.get_tendencia_atual(historico)
+            # VERIFICAR ALERTA ESTRATÉGICO (nova funcionalidade)
+            alerta_status = self.verificar_alerta_estrategico(historico, self.ultima_previsao or [])
             
-            logging.info(f"🎯 Status: Histórico={historico_size}, Mudança={mudanca_detectada}, Tendência={tendencia_atual}")
-            
-            # DECISÃO ESTRATÉGICA
-            if mudanca_detectada or historico_size < 10:
-                # MUDANÇA DETECTADA ou POUCOS DADOS - Reativação Rápida
-                logging.info("🔄 Ativando modo de reativação rápida")
-                return self.estrategia_reativacao_rapida(historico)
-                
-            elif historico_size < 25:
-                # FASE INTERMEDIÁRIA - Estratégia balanceada
-                return self.estrategia_intermediaria(historico)
-                
+            # DECISÃO ESTRATÉGICA MELHORADA
+            if "ALERTA" in alerta_status or historico_size < 8:
+                logging.info("🔄 Ativando modo de reativação AGROSSIVA")
+                previsao = self.estrategia_reativacao_agressiva(historico)
+            elif historico_size < 20:
+                previsao = self.estrategia_intermediaria(historico)
             else:
-                # FASE AVANÇADA - IA Híbrida Completa
-                return self.estrategia_avancada(historico)
+                previsao = self.estrategia_avancada(historico)
+            
+            self.ultima_previsao = previsao
+            return previsao
                 
         except Exception as e:
             logging.error(f"Erro crítico no sistema híbrido atualizado: {e}")
@@ -586,7 +704,7 @@ class GestorHybridIA:
         try:
             historico_size = len(self.historico)
             if historico_size < 5:
-                return "🟡 Fase Inicial", "Reativação Rápida"
+                return "🟡 Fase Inicial", "Reativação Agressiva"
             elif historico_size < 20:
                 return "🟠 Coletando Dados", "Estratégia Intermediária"
             else:
@@ -598,13 +716,13 @@ class GestorHybridIA:
 # STREAMLIT APP
 # =============================
 st.set_page_config(
-    page_title="Roleta - Hybrid IA (Atualizado)", 
+    page_title="Roleta - Hybrid IA (Melhorado)", 
     page_icon="🧠", 
     layout="centered"
 )
 
-st.title("🧠 Hybrid IA System - ATUALIZADO")
-st.markdown("### **Com Detecção de Mudanças e Reativação Rápida**")
+st.title("🧠 Hybrid IA System - MELHORADO")
+st.markdown("### **Com Detecção Avançada e Reativação Agressiva**")
 
 st_autorefresh(interval=3000, key="refresh")
 
@@ -619,6 +737,7 @@ defaults = {
     "ultimo_numero": None,
     "status_ia": "🟡 Inicializando",
     "estrategia_atual": "Aguardando dados",
+    "alerta_status": "NORMAL"
 }
 
 for k, v in defaults.items():
@@ -656,6 +775,12 @@ try:
 
         # ATUALIZAR STATUS
         st.session_state.status_ia, st.session_state.estrategia_atual = st.session_state.gestor.get_status_sistema()
+        
+        # ATUALIZAR ALERTA
+        st.session_state.alerta_status = st.session_state.gestor.hybrid_system.verificar_alerta_estrategico(
+            list(st.session_state.gestor.historico), 
+            st.session_state.previsao_atual
+        )
 
         # CONFERÊNCIA
         previsao_valida = validar_previsao(st.session_state.previsao_atual)
@@ -676,12 +801,13 @@ try:
         # TELEGRAM
         if st.session_state.previsao_atual and len(st.session_state.gestor.historico) >= 3:
             try:
-                mensagem = f"🧠 **HYBRID IA ATUALIZADO - PREVISÃO**\n"
+                mensagem = f"🧠 **HYBRID IA MELHORADO - PREVISÃO**\n"
                 mensagem += f"📊 Status: {st.session_state.status_ia}\n"
                 mensagem += f"🎯 Estratégia: {st.session_state.estrategia_atual}\n"
+                mensagem += f"⚠️ Alerta: {st.session_state.alerta_status}\n"
                 mensagem += f"🔢 Último: {numero_real}\n"
                 mensagem += f"📈 Performance: {st.session_state.acertos}G/{st.session_state.erros}R\n"
-                mensagem += f"🔄 Sistema: Com Detecção de Mudanças\n"
+                mensagem += f"🔄 Sistema: Detecção Avançada Ativa\n"
                 mensagem += f"📋 Números: {', '.join(map(str, sorted(st.session_state.previsao_atual)))}"
                 
                 enviar_telegram(mensagem)
@@ -713,6 +839,14 @@ with col3:
 with col4:
     st.metric("🎯 Estratégia", st.session_state.estrategia_atual)
 
+# ALERTA DO SISTEMA
+if "ALERTA" in st.session_state.alerta_status:
+    st.warning(f"⚠️ {st.session_state.alerta_status}")
+elif "ATENÇÃO" in st.session_state.alerta_status:
+    st.info(f"🔔 {st.session_state.alerta_status}")
+else:
+    st.success("✅ Sistema operando normalmente")
+
 # BARRA DE PROGRESSO
 st.subheader("📈 Progresso do Sistema")
 historico_size = len(st.session_state.gestor.historico)
@@ -720,14 +854,14 @@ historico_size = len(st.session_state.gestor.historico)
 if historico_size < 5:
     progresso = historico_size / 5
     st.progress(progresso)
-    st.caption("🟡 Fase Inicial: Reativação Rápida Ativa")
+    st.caption("🟡 Fase Inicial: Reativação Agressiva Ativa")
 elif historico_size < 20:
     progresso = historico_size / 20
     st.progress(progresso)
     st.caption("🟠 Coletando Dados: Desenvolvendo padrões...")
 else:
     st.progress(1.0)
-    st.caption("🟢 Sistema Completo: IA Híbrida com Detecção de Mudanças!")
+    st.caption("🟢 Sistema Completo: IA Híbrida com Detecção Avançada!")
 
 # HISTÓRICO VISUAL
 st.subheader("📜 Últimos Números")
@@ -768,8 +902,6 @@ if previsao_valida:
             with col:
                 if num == 0:
                     st.markdown(f"<div style='background-color: green; color: white; padding: 10px; margin: 2px; border-radius: 5px; text-align: center; font-weight: bold;'>0</div>", unsafe_allow_html=True)
-                #elif num in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]:
-                    #st.markdown(f"<div style
                 elif num in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]:
                     st.markdown(f"<div style='background-color: red; color: white; padding: 10px; margin: 2px; border-radius: 5px; text-align: center; font-weight: bold;'>{num}</div>", unsafe_allow_html=True)
                 else:
@@ -794,11 +926,12 @@ with col3:
 
 # DETALHES TÉCNICOS
 with st.expander("🔍 Detalhes Técnicos do Sistema"):
-    st.write("**🧠 HYBRID IA SYSTEM - ATUALIZADO**")
-    st.write("- ✅ **Detecção de Mudanças de Padrão**")
-    st.write("- ✅ **Reativação Rápida Automática**")
+    st.write("**🧠 HYBRID IA SYSTEM - MELHORADO**")
+    st.write("- ✅ **Detecção Avançada de Padrões**")
+    st.write("- ✅ **Reativação Agressiva Automática**")
+    st.write("- ✅ **Sistema de Alertas Inteligentes**")
     st.write("- ✅ **LSTM + XGBoost Ensemble**")
-    st.write("- ✅ **Análise de Tendências em Tempo Real**")
+    st.write("- ✅ **Análise de Sequências em Tempo Real**")
     st.write("- ✅ **Gestão Inteligente de Estratégias**")
     
     if st.session_state.gestor.historico:
@@ -817,6 +950,7 @@ with st.expander("🔍 Detalhes Técnicos do Sistema"):
             with col2:
                 tendencia = st.session_state.gestor.hybrid_system.pattern_analyzer.get_tendencia_atual(st.session_state.gestor.historico)
                 st.write(f"**Tendência:** {tendencia}")
+                st.write(f"**Status Alerta:** {st.session_state.alerta_status}")
 
 # CONTROLES
 st.markdown("---")
@@ -849,9 +983,9 @@ with st.expander("📋 Logs do Sistema"):
             st.write(f"- Número {numero} | {timestamp}")
 
 st.markdown("---")
-st.markdown("### 🎯 **Sistema Atualizado com Detecção de Mudanças**")
-st.markdown("*Capaz de se adaptar rapidamente a mudanças de padrões*")
+st.markdown("### 🎯 **Sistema Melhorado com Detecção Avançada**")
+st.markdown("*Capaz de detectar padrões complexos e se adaptar agressivamente*")
 
 # Rodapé
 st.markdown("---")
-st.markdown("**🧠 Hybrid IA System v2.0** - *Com Reativação Rápida*")    
+st.markdown("**🧠 Hybrid IA System v3.0** - *Com Detecção Avançada*")
