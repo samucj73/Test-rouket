@@ -34,7 +34,7 @@ ROULETTE_LAYOUT = [
 
 # Configurações
 MIN_HISTORICO_TREINAMENTO = 200
-NUMERO_PREVISOES = 20
+NUMERO_PREVISOES = 10
 
 # =============================
 # Utilitários ROBUSTOS
