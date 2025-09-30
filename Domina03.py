@@ -1,4 +1,4 @@
-# RoletaHybridIA.py - SISTEMA COMPLETO ATUALIZADO COM MELHORIAS
+# RoletaHybridIA.py - SISTEMA COM DISPOSIÇÃO FÍSICA REAL
 import streamlit as st
 import json
 import os
@@ -25,15 +25,40 @@ HEADERS = {"User-Agent": "Mozilla/5.0"}
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 TELEGRAM_CHAT_ID = "5121457416"
 
-ROULETTE_LAYOUT = [
-    0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6,
-    27, 13, 36, 11, 30, 8, 23, 10, 5, 24,
-    16, 33, 1, 20, 14, 31, 9, 22, 18, 29,
-    7, 28, 12, 35, 3, 26
+# DISPOSIÇÃO FÍSICA REAL DA ROLETA (layout da mesa)
+ROULETTE_PHYSICAL_LAYOUT = [
+    # Coluna 1 (1ª dúzia)
+    [1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34],
+    # Coluna 2 (2ª dúzia)  
+    [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35],
+    # Coluna 3 (3ª dúzia)
+    [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36]
 ]
 
+# Dúzias
+PRIMEIRA_DUZIA = list(range(1, 13))
+SEGUNDA_DUZIA = list(range(13, 25))
+TERCEIRA_DUZIA = list(range(25, 37))
+
+# Colunas (baseadas no layout físico)
+COLUNA_1 = [1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34]
+COLUNA_2 = [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35]  
+COLUNA_3 = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36]
+
+# Vizinhos físicos na roda (aproximação)
+ROULETTE_WHEEL_NEIGHBORS = {
+    0: [32, 15, 19, 4, 21, 2, 25],
+    32: [0, 15, 19, 4, 21, 2, 25],
+    15: [32, 0, 19, 4, 21, 2, 25],
+    19: [15, 32, 0, 4, 21, 2, 25],
+    4: [19, 15, 32, 0, 21, 2, 25],
+    21: [4, 19, 15, 32, 0, 2, 25],
+    2: [21, 4, 19, 15, 32, 0, 25],
+    25: [2, 21, 4, 19, 15, 32, 0]
+}
+
 # Configurações
-MIN_HISTORICO_TREINAMENTO = 300
+MIN_HISTORICO_TREINAMENTO = 50
 NUMERO_PREVISOES = 15
 
 # =============================
@@ -124,18 +149,60 @@ def fetch_latest_result():
         logging.error(f"❌ Erro inesperado ao buscar resultado: {e}")
         return None
 
-def obter_vizinhos(numero, layout, antes=3, depois=3):
-    if numero is None or numero not in layout:
-        return []
-    idx = layout.index(numero)
-    n = len(layout)
-    vizinhos = []
-    for i in range(antes, 0, -1):
-        vizinhos.append(layout[(idx - i) % n])
-    vizinhos.append(numero)
-    for i in range(1, depois + 1):
-        vizinhos.append(layout[(idx + i) % n])
-    return vizinhos
+def obter_vizinhos_fisicos(numero):
+    """Retorna vizinhos físicos na mesa (mesma coluna e linhas adjacentes)"""
+    if numero == 0:
+        return [32, 15, 19, 4, 21, 2, 25]
+    
+    vizinhos = set()
+    
+    # Encontrar posição na mesa
+    for col_idx, coluna in enumerate(ROULETTE_PHYSICAL_LAYOUT):
+        if numero in coluna:
+            num_idx = coluna.index(numero)
+            
+            # Mesma coluna - acima e abaixo
+            if num_idx > 0:
+                vizinhos.add(coluna[num_idx - 1])  # Acima
+            if num_idx < len(coluna) - 1:
+                vizinhos.add(coluna[num_idx + 1])  # Abaixo
+                
+            # Colunas adjacentes - mesma linha
+            if col_idx > 0:  # Coluna à esquerda
+                if num_idx < len(ROULETTE_PHYSICAL_LAYOUT[col_idx - 1]):
+                    vizinhos.add(ROULETTE_PHYSICAL_LAYOUT[col_idx - 1][num_idx])
+            if col_idx < 2:  # Coluna à direita
+                if num_idx < len(ROULETTE_PHYSICAL_LAYOUT[col_idx + 1]):
+                    vizinhos.add(ROULETTE_PHYSICAL_LAYOUT[col_idx + 1][num_idx])
+    
+    return list(vizinhos)
+
+def obter_vizinhos_estendidos(numero, raio=2):
+    """Vizinhos estendidos na disposição física"""
+    if numero == 0:
+        return ROULETTE_WHEEL_NEIGHBORS.get(0, [])
+    
+    vizinhos = set()
+    
+    for col_idx, coluna in enumerate(ROULETTE_PHYSICAL_LAYOUT):
+        if numero in coluna:
+            num_idx = coluna.index(numero)
+            
+            # Expandir raio na mesma coluna
+            for i in range(max(0, num_idx - raio), min(len(coluna), num_idx + raio + 1)):
+                if i != num_idx:
+                    vizinhos.add(coluna[i])
+            
+            # Expandir para colunas adjacentes
+            for offset in [-1, 1]:
+                adj_col_idx = col_idx + offset
+                if 0 <= adj_col_idx <= 2:
+                    coluna_adj = ROULETTE_PHYSICAL_LAYOUT[adj_col_idx]
+                    # Mesma linha e linhas adjacentes
+                    for i in range(max(0, num_idx - 1), min(len(coluna_adj), num_idx + 2)):
+                        vizinhos.add(coluna_adj[i])
+    
+    return list(vizinhos)
 
 def validar_previsao(previsao):
     if not previsao or not isinstance(previsao, list):
@@ -150,136 +217,133 @@ def validar_previsao(previsao):
     
     return previsao_limpa
 
+def analisar_duzias_colunas(historico):
+    """Analisa padrões de dúzias e colunas"""
+    numeros = [h['number'] for h in historico if h.get('number') is not None]
+    
+    if not numeros:
+        return {"duzias_quentes": [], "colunas_quentes": []}
+    
+    # Análise das últimas 20 jogadas
+    ultimos_20 = numeros[-20:] if len(numeros) >= 20 else numeros
+    
+    contagem_duzias = {1: 0, 2: 0, 3: 0}
+    contagem_colunas = {1: 0, 2: 0, 3: 0}
+    
+    for num in ultimos_20:
+        # Dúzias
+        if 1 <= num <= 12:
+            contagem_duzias[1] += 1
+        elif 13 <= num <= 24:
+            contagem_duzias[2] += 1
+        elif 25 <= num <= 36:
+            contagem_duzias[3] += 1
+            
+        # Colunas
+        if num in COLUNA_1:
+            contagem_colunas[1] += 1
+        elif num in COLUNA_2:
+            contagem_colunas[2] += 1
+        elif num in COLUNA_3:
+            contagem_colunas[3] += 1
+    
+    # Identificar dúzias e colunas quentes
+    duzia_quente = max(contagem_duzias, key=contagem_duzias.get)
+    coluna_quente = max(contagem_colunas, key=contagem_colunas.get)
+    
+    return {
+        "duzias_quentes": [duzia_quente],
+        "colunas_quentes": [coluna_quente],
+        "contagem_duzias": contagem_duzias,
+        "contagem_colunas": contagem_colunas
+    }
+
 # =============================
-# SISTEMA HÍBRIDO ATUALIZADO COM MELHORIAS
+# SISTEMA HÍBRIDO COM DISPOSIÇÃO FÍSICA
 # =============================
-class Pattern_Analyzer_Atualizado:
+class Pattern_Analyzer_Fisico:
     def __init__(self, window_size=20):
         self.window_size = window_size
         self.ultimo_padrao_detectado = None
         
-    def detectar_mudanca_padrao(self, historico):
-        """Detecta mudanças bruscas nos padrões da roleta"""
-        try:
-            if len(historico) < 40:
-                return False
-                
-            numeros = [h['number'] for h in historico if h.get('number') is not None]
-            
-            if len(numeros) < 40:
-                return False
-            
-            # Últimos 20 números vs 20 números anteriores
-            ultimos_20 = numeros[-20:]
-            anteriores_20 = numeros[-40:-20]
-            
-            # Calcula estatísticas comparativas
-            media_ultimos = np.mean(ultimos_20)
-            media_anteriores = np.mean(anteriores_20)
-            
-            std_ultimos = np.std(ultimos_20)
-            std_anteriores = np.std(anteriores_20)
-            
-            # Análise de distribuição por setores
-            def analisar_setores(numeros_lista):
-                setores = {
-                    'baixa': [n for n in numeros_lista if 1 <= n <= 18],
-                    'alta': [n for n in numeros_lista if 19 <= n <= 36],
-                    'zero': [n for n in numeros_lista if n == 0]
-                }
-                return {k: len(v) for k, v in setores.items()}
-            
-            setores_ultimos = analisar_setores(ultimos_20)
-            setores_anteriores = analisar_setores(anteriores_20)
-            
-            # Critérios para detectar mudança
-            mudanca_detectada = False
-            
-            # 1. Mudança na média (mudança de faixa de números)
-            if abs(media_ultimos - media_anteriores) > 8:
-                mudanca_detectada = True
-                logging.info(f"📊 Mudança de média detectada: {media_anteriores:.1f} → {media_ultimos:.1f}")
-            
-            # 2. Mudança na distribuição por setores
-            diff_baixa = abs(setores_ultimos['baixa'] - setores_anteriores['baixa'])
-            diff_alta = abs(setores_ultimos['alta'] - setores_anteriores['alta'])
-            
-            if diff_baixa > 6 or diff_alta > 6:
-                mudanca_detectada = True
-                logging.info(f"🎯 Mudança de setores detectada: Baixa {setores_anteriores['baixa']}→{setores_ultimos['baixa']}, Alta {setores_anteriores['alta']}→{setores_ultimos['alta']}")
-            
-            # 3. Mudança na volatilidade
-            if abs(std_ultimos - std_anteriores) > 5:
-                mudanca_detectada = True
-                logging.info(f"🎲 Mudança de volatilidade detectada: {std_anteriores:.1f} → {std_ultimos:.1f}")
-            
-            if mudanca_detectada:
-                self.ultimo_padrao_detectado = {
-                    'media_ultimos': media_ultimos,
-                    'media_anteriores': media_anteriores,
-                    'tendencia': 'ALTA' if media_ultimos > 18 else 'BAIXA',
-                    'timestamp': datetime.now()
-                }
-                
-            return mudanca_detectada
-            
-        except Exception as e:
-            logging.error(f"Erro na detecção de mudança de padrão: {e}")
-            return False
-
-    def detectar_padroes_avançados(self, historico):
-        """Detecção mais agressiva de padrões recorrentes"""
-        try:
-            numeros = [h['number'] for h in historico if h.get('number') is not None][-30:]
-            
-            if len(numeros) < 10:
-                return []
-            
-            # Análise de sequências de 3 números
-            sequencias_3 = []
-            for i in range(len(numeros)-2):
-                sequencias_3.append(tuple(numeros[i:i+3]))
-            
-            # Encontra sequências que se repetem
-            counter_sequencias = Counter(sequencias_3)
-            sequencias_quentes = [seq for seq, count in counter_sequencias.items() if count >= 2]
-            
-            previsao_sequencias = set()
-            for seq in sequencias_quentes:
-                # Adiciona números que costumam vir após essa sequência
-                for i in range(len(numeros)-3):
-                    if tuple(numeros[i:i+3]) == seq:
-                        proximo_numero = numeros[i+3]
-                        previsao_sequencias.add(proximo_numero)
-            
-            logging.info(f"🔍 Padrões avançados detectados: {len(previsao_sequencias)} números")
-            return list(previsao_sequencias)
-            
-        except Exception as e:
-            logging.error(f"Erro na detecção avançada: {e}")
-            return []
-    
-    def get_tendencia_atual(self, historico):
-        """Retorna a tendência atual baseada nos últimos números"""
+    def detectar_padroes_fisicos(self, historico):
+        """Detecta padrões baseados na disposição física"""
         try:
             if len(historico) < 10:
-                return "NEUTRA"
+                return {"padroes": [], "tendencia": "NEUTRA"}
                 
             numeros = [h['number'] for h in historico if h.get('number') is not None][-15:]
-            media = np.mean(numeros)
             
-            if media > 20:
-                return "ALTA"
-            elif media < 16:
-                return "BAIXA"
-            else:
-                return "NEUTRA"
+            padroes_detectados = []
+            
+            # Padrão de Coluna
+            ultima_coluna = None
+            sequencia_colunas = 0
+            
+            for num in numeros[-5:]:
+                coluna_atual = None
+                for col_idx, coluna in enumerate(ROULETTE_PHYSICAL_LAYOUT, 1):
+                    if num in coluna:
+                        coluna_atual = col_idx
+                        break
                 
+                if coluna_atual == ultima_coluna and coluna_atual is not None:
+                    sequencia_colunas += 1
+                else:
+                    sequencia_colunas = 1
+                    ultima_coluna = coluna_atual
+                
+                if sequencia_colunas >= 3:
+                    padroes_detectados.append(f"COLUNA_{coluna_atual}_SEQUENCIA")
+            
+            # Padrão de Linha (horizontal)
+            for i in range(len(numeros) - 2):
+                trio = numeros[i:i+3]
+                linhas = []
+                for num in trio:
+                    for col_idx, coluna in enumerate(ROULETTE_PHYSICAL_LAYOUT):
+                        if num in coluna:
+                            linhas.append(coluna.index(num))
+                            break
+                
+                if len(set(linhas)) == 1:  # Mesma linha
+                    padroes_detectados.append(f"LINHA_{linhas[0]}_HORIZONTAL")
+            
+            # Tendência baseada em dúzias
+            analise = analisar_duzias_colunas(historico)
+            tendencia = self.calcular_tendencia_fisica(analise)
+            
+            return {
+                "padroes": padroes_detectados,
+                "tendencia": tendencia,
+                "duzias_quentes": analise["duzias_quentes"],
+                "colunas_quentes": analise["colunas_quentes"]
+            }
+            
         except Exception as e:
-            logging.error(f"Erro ao calcular tendência: {e}")
+            logging.error(f"Erro na detecção de padrões físicos: {e}")
+            return {"padroes": [], "tendencia": "NEUTRA"}
+    
+    def calcular_tendencia_fisica(self, analise):
+        """Calcula tendência baseada na disposição física"""
+        contagem_duzias = analise.get("contagem_duzias", {1:0, 2:0, 3:0})
+        
+        total = sum(contagem_duzias.values())
+        if total == 0:
+            return "NEUTRA"
+        
+        # Tendência ALTA se 3ª dúzia dominante, BAIXA se 1ª dúzia dominante
+        percent_duzia1 = contagem_duzias[1] / total
+        percent_duzia3 = contagem_duzias[3] / total
+        
+        if percent_duzia3 > 0.4:
+            return "ALTA"
+        elif percent_duzia1 > 0.4:
+            return "BAIXA"
+        else:
             return "NEUTRA"
 
-class LSTM_Predictor:
+class LSTM_Predictor_Fisico:
     def __init__(self):
         self.ultimo_treinamento = 0
         
@@ -290,35 +354,45 @@ class LSTM_Predictor:
         numeros = [h['number'] for h in historico]
         probs = {}
         
-        # Estratégia 1: Repetição recente
-        ultimos_8 = numeros[-8:]
-        counter_recente = Counter(ultimos_8)
-        for num, freq in counter_recente.items():
-            if freq >= 1:
-                probs[num] = probs.get(num, 0) + 0.2
+        # Estratégia baseada em padrões físicos
+        analise = analisar_duzias_colunas(historico)
+        duzia_quente = analise["duzias_quentes"][0] if analise["duzias_quentes"] else 1
+        coluna_quente = analise["colunas_quentes"][0] if analise["colunas_quentes"] else 1
         
-        # Estratégia 2: Tendência de movimento
-        if len(numeros) >= 3:
-            ultimo = numeros[-1]
-            penultimo = numeros[-2]
+        # Focar na dúzia e coluna quentes
+        if duzia_quente == 1:
+            numeros_foco = PRIMEIRA_DUZIA
+        elif duzia_quente == 2:
+            numeros_foco = SEGUNDA_DUZIA
+        else:
+            numeros_foco = TERCEIRA_DUZIA
             
-            idx_ultimo = ROULETTE_LAYOUT.index(ultimo)
-            idx_penultimo = ROULETTE_LAYOUT.index(penultimo)
-            
-            direcao = (idx_ultimo - idx_penultimo) % len(ROULETTE_LAYOUT)
-            if direcao > len(ROULETTE_LAYOUT)//2:
-                direcao -= len(ROULETTE_LAYOUT)
-            
-            next_idx = (idx_ultimo + direcao) % len(ROULETTE_LAYOUT)
-            next_num = ROULETTE_LAYOUT[next_idx]
-            probs[next_num] = probs.get(next_num, 0) + 0.3
+        if coluna_quente == 1:
+            coluna_foco = COLUNA_1
+        elif coluna_quente == 2:
+            coluna_foco = COLUNA_2
+        else:
+            coluna_foco = COLUNA_3
+        
+        # Interseção entre dúzia quente e coluna quente
+        numeros_estrategicos = [n for n in numeros_foco if n in coluna_foco]
+        
+        for num in numeros_estrategicos:
+            probs[num] = probs.get(num, 0) + 0.3
+        
+        # Adicionar vizinhos físicos dos últimos números
+        for num in numeros[-3:]:
+            vizinhos = obter_vizinhos_fisicos(num)
+            for vizinho in vizinhos:
+                probs[vizinho] = probs.get(vizinho, 0) + 0.2
         
         return probs if probs else self.previsao_inicial()
     
     def previsao_inicial(self):
-        return {num: 0.1 for num in [0, 7, 13, 22, 29, 32]}
+        # Números estrategicamente distribuídos na mesa
+        return {num: 0.1 for num in [1, 8, 13, 19, 25, 30, 36, 5, 16, 22, 28, 33, 0]}
 
-class XGBoost_Predictor:
+class XGBoost_Predictor_Fisico:
     def __init__(self):
         self.features_importance = {}
         
@@ -331,11 +405,14 @@ class XGBoost_Predictor:
         ultimo_numero = numeros[-1] if numeros else 0
         
         for num in range(37):
+            # Features baseadas na disposição física
             feature_vector = [
-                numeros.count(num),
-                1 if num == ultimo_numero else 0,
-                min(abs(ROULETTE_LAYOUT.index(num) - ROULETTE_LAYOUT.index(ultimo_numero)) % len(ROULETTE_LAYOUT),
-                    len(ROULETTE_LAYOUT) - abs(ROULETTE_LAYOUT.index(num) - ROULETTE_LAYOUT.index(ultimo_numero)) % len(ROULETTE_LAYOUT)),
+                # Posição na mesa
+                1 if num in PRIMEIRA_DUZIA else 2 if num in SEGUNDA_DUZIA else 3 if num in TERCEIRA_DUZIA else 0,
+                1 if num in COLUNA_1 else 2 if num in COLUNA_2 else 3 if num in COLUNA_3 else 0,
+                # Vizinhos físicos
+                1 if num in obter_vizinhos_fisicos(ultimo_numero) else 0,
+                # Características do número
                 1 if num % 2 == 0 else 0,
                 1 if num in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36] else 0,
             ]
@@ -352,32 +429,28 @@ class XGBoost_Predictor:
             return {}
             
         probs = {}
-        numeros = [h['number'] for h in historico]
-        ultimo_numero = numeros[-1]
         
         for num, feat in features:
             score = 0.0
-            score += min(feat[0] * 0.3, 0.3)
             
-            distancia = feat[2]
-            if distancia <= 2:
-                score += 0.4
-            elif distancia <= 4:
+            # Bônus por estar na mesma dúzia/coluna dos últimos números
+            if feat[0] != 0:  # Não é zero
                 score += 0.2
                 
-            if feat[4] != (1 if ultimo_numero in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36] else 0):
-                score += 0.1
+            # Bônus por ser vizinho físico
+            if feat[2] == 1:
+                score += 0.3
                 
             if score > 0:
                 probs[num] = score
                 
         return probs if probs else {num: 0.05 for num in range(37)}
 
-class Ensemble_Predictor:
+class Ensemble_Predictor_Fisico:
     def __init__(self):
-        self.model_weights = {'lstm': 0.4, 'xgb': 0.6}
+        self.model_weights = {'lstm': 0.5, 'xgb': 0.5}
         
-    def predict(self, lstm_probs, xgb_probs, anomalies):
+    def predict(self, lstm_probs, xgb_probs, padroes_fisicos):
         combined_scores = {}
         
         for number in range(37):
@@ -387,305 +460,235 @@ class Ensemble_Predictor:
             base_score = (lstm_score * self.model_weights['lstm'] + 
                          xgb_score * self.model_weights['xgb'])
             
-            anomaly_boost = 2.0 if number in anomalies else 1.0
+            # Bônus por estar em padrões físicos detectados
+            pattern_boost = 1.0
+            if padroes_fisicos.get("duzias_quentes"):
+                duzia_quente = padroes_fisicos["duzias_quentes"][0]
+                if (duzia_quente == 1 and number in PRIMEIRA_DUZIA) or \
+                   (duzia_quente == 2 and number in SEGUNDA_DUZIA) or \
+                   (duzia_quente == 3 and number in TERCEIRA_DUZIA):
+                    pattern_boost *= 1.5
             
-            combined_scores[number] = base_score * anomaly_boost
+            combined_scores[number] = base_score * pattern_boost
             
         return combined_scores
 
-class Hybrid_IA_System:
+class Hybrid_IA_System_Fisico:
     def __init__(self):
-        self.lstm_predictor = LSTM_Predictor()
-        self.xgb_predictor = XGBoost_Predictor()
-        self.pattern_analyzer = Pattern_Analyzer_Atualizado()
-        self.ensemble = Ensemble_Predictor()
+        self.lstm_predictor = LSTM_Predictor_Fisico()
+        self.xgb_predictor = XGBoost_Predictor_Fisico()
+        self.pattern_analyzer = Pattern_Analyzer_Fisico()
+        self.ensemble = Ensemble_Predictor_Fisico()
         self.ultima_previsao = None
         
-    def estrategia_reativacao_agressiva(self, historico):
-        """Estratégia mais agressiva baseada nos últimos padrões"""
+    def estrategia_reativacao_fisica(self, historico):
+        """Estratégia baseada na disposição física real"""
         try:
             numeros = [h['number'] for h in historico if h.get('number') is not None]
             
             if len(numeros) < 8:
-                return self.estrategia_inicial_agressiva()
-            
-            # FOCO NOS ÚLTIMOS 12 NÚMEROS
-            ultimos_12 = numeros[-12:]
-            frequencia = Counter(ultimos_12)
-            
-            # 1. NÚMEROS MAIS QUENTES (últimas 12 jogadas)
-            numeros_quentes = [num for num, count in frequencia.most_common(10) if count >= 2]
-            
-            # 2. VIZINHOS ESTRATÉGICOS DOS 5 ÚLTIMOS NÚMEROS
-            vizinhos_estrategicos = set()
-            for num in ultimos_12[-5:]:
-                vizinhos = obter_vizinhos(num, ROULETTE_LAYOUT, antes=3, depois=3)
-                vizinhos_estrategicos.update(vizinhos)
-            
-            # 3. PADRÕES DE SEQUÊNCIA
-            padroes_detectados = self.pattern_analyzer.detectar_padroes_avançados(historico)
-            
-            # COMBINAÇÃO ESTRATÉGICA
-            previsao_final = set()
-            previsao_final.update(numeros_quentes[:6])
-            previsao_final.update(list(vizinhos_estrategicos)[:8])
-            previsao_final.update(padroes_detectados[:4])
-            
-            # GARANTIR DIVERSIDADE
-            if len(previsao_final) < 12:
-                # Adiciona números estratégicos baseados na tendência
-                tendencia = self.pattern_analyzer.get_tendencia_atual(historico)
-                if tendencia == "ALTA":
-                    complemento = [n for n in range(25, 37) if n not in previsao_final]
-                elif tendencia == "BAIXA":
-                    complemento = [n for n in range(1, 13) if n not in previsao_final]
-                else:
-                    complemento = [n for n in range(0, 37) if n % 2 == 0 and n not in previsao_final]
-                
-                previsao_final.update(complemento[:15 - len(previsao_final)])
-            
-            # GARANTIR ZERO
-            previsao_final.add(0)
-            
-            previsao_ordenada = sorted(previsao_final, key=lambda x: (
-                x in numeros_quentes,
-                x in vizinhos_estrategicos,
-                x
-            ), reverse=True)
-            
-            logging.info(f"🎯 Reativação Agressiva: {len(previsao_ordenada)} números")
-            return validar_previsao(previsao_ordenada)[:NUMERO_PREVISOES]
-            
-        except Exception as e:
-            logging.error(f"Erro na estratégia agressiva: {e}")
-            return self.estrategia_intermediaria(historico)
-        
-    def estrategia_reativacao_rapida(self, historico):
-        """Estratégia agressiva para se adaptar rapidamente a mudanças"""
-        try:
-            numeros = [h['number'] for h in historico if h.get('number') is not None]
-            
-            if len(numeros) < 10:
-                return self.estrategia_inicial_agressiva()
-            
-            # Foco TOTAL nos últimos 15 números
-            ultimos_15 = numeros[-15:]
-            frequencia = Counter(ultimos_15)
+                return self.estrategia_inicial_fisica()
             
             previsao = set()
             
-            # 1. NÚMEROS MAIS QUENTES (últimas 15 jogadas)
-            numeros_quentes = [num for num, count in frequencia.most_common(8) if count >= 1]
+            # 1. ANÁLISE DE DÚZIAS E COLUNAS QUENTES
+            analise = analisar_duzias_colunas(historico)
+            duzia_quente = analise["duzias_quentes"][0] if analise["duzias_quentes"] else 1
+            coluna_quente = analise["colunas_quentes"][0] if analise["colunas_quentes"] else 1
+            
+            # Focar na interseção dúzia quente + coluna quente
+            if duzia_quente == 1:
+                numeros_duzia = PRIMEIRA_DUZIA
+            elif duzia_quente == 2:
+                numeros_duzia = SEGUNDA_DUZIA
+            else:
+                numeros_duzia = TERCEIRA_DUZIA
+                
+            if coluna_quente == 1:
+                numeros_coluna = COLUNA_1
+            elif coluna_quente == 2:
+                numeros_coluna = COLUNA_2
+            else:
+                numeros_coluna = COLUNA_3
+            
+            interseção = [n for n in numeros_duzia if n in numeros_coluna]
+            previsao.update(interseção[:4])
+            
+            # 2. VIZINHOS FÍSICOS DOS ÚLTIMOS 3 NÚMEROS
+            for num in numeros[-3:]:
+                vizinhos = obter_vizinhos_estendidos(num, raio=2)
+                previsao.update(vizinhos[:3])
+            
+            # 3. NÚMEROS MAIS FREQUENTES (últimas 15 jogadas)
+            ultimos_15 = numeros[-15:] if len(numeros) >= 15 else numeros
+            frequencia = Counter(ultimos_15)
+            numeros_quentes = [num for num, count in frequencia.most_common(5) if count >= 2]
             previsao.update(numeros_quentes)
             
-            # 2. VIZINHOS ESTRATÉGICOS (foco nos últimos 5 números)
-            for num in ultimos_15[-5:]:
-                vizinhos = obter_vizinhos(num, ROULETTE_LAYOUT, antes=2, depois=2)
-                previsao.update(vizinhos)
+            # 4. COMPLEMENTAÇÃO ESTRATÉGICA
+            if len(previsao) < NUMERO_PREVISOES:
+                # Adicionar números da dúzia quente
+                faltantes = NUMERO_PREVISOES - len(previsao)
+                complemento = [n for n in numeros_duzia if n not in previsao][:faltantes]
+                previsao.update(complemento)
             
-            # 3. TENDÊNCIA ATUAL (foco na área quente atual)
-            tendencia = self.pattern_analyzer.get_tendencia_atual(historico)
-            
-            if tendencia == "ALTA" and len(previsao) < 15:
-                # Adiciona números altos estratégicos
-                numeros_altos = [n for n in range(19, 37) if n not in previsao]
-                previsao.update(numeros_altos[:8])
-            elif tendencia == "BAIXA" and len(previsao) < 15:
-                # Adiciona números baixos estratégicos
-                numeros_baixos = [n for n in range(1, 19) if n not in previsao]
-                previsao.update(numeros_baixos[:8])
-            
-            # 4. GARANTIR ZERO
+            # 5. GARANTIR ZERO
             previsao.add(0)
             
             previsao_final = list(previsao)
             
-            # Ordenar por proximidade aos números quentes
-            def ordenar_por_proximidade(numeros_lista, numeros_referencia):
-                def distancia_minima(num):
-                    distancias = []
-                    for ref in numeros_referencia:
-                        if ref in ROULETTE_LAYOUT and num in ROULETTE_LAYOUT:
-                            idx_ref = ROULETTE_LAYOUT.index(ref)
-                            idx_num = ROULETTE_LAYOUT.index(num)
-                            distancia = min(abs(idx_num - idx_ref), 
-                                          len(ROULETTE_LAYOUT) - abs(idx_num - idx_ref))
-                            distancias.append(distancia)
-                    return min(distancias) if distancias else 99
-                return sorted(numeros_lista, key=distancia_minima)
-            
-            if numeros_quentes:
-                previsao_final = ordenar_por_proximidade(previsao_final, numeros_quentes[:3])
-            
-            logging.info(f"🔄 Reativação Rápida: {len(previsao_final)} números (Tendência: {tendencia})")
-            return previsao_final[:15]
+            logging.info(f"🎯 Reativação Física: Dúzia {duzia_quente}, Coluna {coluna_quente}, {len(previsao_final)} números")
+            return validar_previsao(previsao_final)[:NUMERO_PREVISOES]
             
         except Exception as e:
-            logging.error(f"Erro na estratégia de reativação rápida: {e}")
-            return self.estrategia_intermediaria(historico)
+            logging.error(f"Erro na estratégia física: {e}")
+            return self.estrategia_intermediaria_fisica(historico)
     
-    def estrategia_inicial_agressiva(self):
-        numeros_base = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36]
-        return validar_previsao(numeros_base[:NUMERO_PREVISOES])
+    def estrategia_inicial_fisica(self):
+        """Números estrategicamente distribuídos na mesa física"""
+        # Uma seleção balanceada cobrindo diferentes áreas da mesa
+        numeros_estrategicos = [
+            1, 2, 3,        # Topo da mesa
+            13, 14, 15,     # Meio
+            25, 26, 27,     # Fundo
+            34, 35, 36,     # Lateral direita
+            0               # Zero
+        ]
+        return validar_previsao(numeros_estrategicos)[:NUMERO_PREVISOES]
     
-    def estrategia_intermediaria(self, historico):
+    def estrategia_intermediaria_fisica(self, historico):
         try:
             numeros = [h['number'] for h in historico if h.get('number') is not None]
             
             if not numeros:
-                return self.estrategia_inicial_agressiva()
+                return self.estrategia_inicial_fisica()
                 
             previsao = set()
             
-            # Últimos números válidos
-            ultimos_validos = [n for n in numeros[-5:] if n is not None]
-            previsao.update(ultimos_validos)
+            # Foco nos padrões físicos recentes
+            analise = analisar_duzias_colunas(historico)
+            padroes = self.pattern_analyzer.detectar_padroes_fisicos(historico)
             
-            # Vizinhos dos últimos números válidos
-            for num in numeros[-3:]:
-                if num is not None:
-                    vizinhos = obter_vizinhos(num, ROULETTE_LAYOUT, antes=2, depois=2)
-                    previsao.update(vizinhos)
+            # Adicionar números baseados nos padrões detectados
+            for padrao in padroes.get("padroes", [])[:3]:
+                if "COLUNA" in padrao:
+                    coluna_num = int(padrao.split("_")[1])
+                    if coluna_num == 1:
+                        previsao.update(COLUNA_1[:4])
+                    elif coluna_num == 2:
+                        previsao.update(COLUNA_2[:4])
+                    else:
+                        previsao.update(COLUNA_3[:4])
             
-            # Preenche se necessário
-            if len(previsao) < NUMERO_PREVISOES:
-                numeros_faltantes = NUMERO_PREVISOES - len(previsao)
-                balanceados = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31, 33, 35]
-                previsao.update(balanceados[:numeros_faltantes])
+            # Vizinhos físicos dos últimos números
+            for num in numeros[-4:]:
+                vizinhos = obter_vizinhos_fisicos(num)
+                previsao.update(vizinhos[:2])
+            
+            # Garantir cobertura mínima
+            if len(previsao) < 10:
+                previsao.update([1, 13, 25, 2, 14, 26, 3, 15, 27, 0])
             
             return validar_previsao(list(previsao))[:NUMERO_PREVISOES]
             
         except Exception as e:
-            logging.error(f"Erro na estratégia intermediária: {e}")
-            return self.estrategia_inicial_agressiva()
+            logging.error(f"Erro na estratégia intermediária física: {e}")
+            return self.estrategia_inicial_fisica()
     
-    def estrategia_avancada(self, historico):
+    def estrategia_avancada_fisica(self, historico):
         try:
-            # 1. Predição LSTM
+            # 1. Predição LSTM física
             lstm_probs = self.lstm_predictor.predict_proba(historico)
             
-            # 2. Predição XGBoost
+            # 2. Predição XGBoost física
             xgb_probs = self.xgb_predictor.predict_proba(historico)
             
-            # 3. Detecção de anomalias
-            anomalies = self.pattern_analyzer.detectar_mudanca_padrao(historico)
+            # 3. Detecção de padrões físicos
+            padroes_fisicos = self.pattern_analyzer.detectar_padroes_fisicos(historico)
             
             # 4. Combinação inteligente
-            combined_scores = self.ensemble.predict(lstm_probs, xgb_probs, anomalies)
+            combined_scores = self.ensemble.predict(lstm_probs, xgb_probs, padroes_fisicos)
             
-            # 5. Seleção final
-            top_numbers = sorted(combined_scores.items(), key=lambda x: x[1], reverse=True)[:NUMERO_PREVISOES]
+            # 5. Seleção final com diversificação física
+            top_numbers = sorted(combined_scores.items(), key=lambda x: x[1], reverse=True)[:NUMERO_PREVISOES + 5]
             final_selection = [num for num, score in top_numbers]
             
-            # 6. Diversificação
-            final_selection = self.diversify_selection(final_selection)
+            # 6. Garantir diversificação na mesa
+            final_selection = self.diversificar_selecao_fisica(final_selection)
             
-            logging.info(f"🎯 Hybrid IA Avançada: {len(final_selection)} números")
+            logging.info(f"🎯 IA Física Avançada: {len(final_selection)} números")
             return validar_previsao(final_selection)
             
         except Exception as e:
-            logging.error(f"Erro na estratégia avançada: {e}")
-            return self.estrategia_intermediaria(historico)
+            logging.error(f"Erro na estratégia avançada física: {e}")
+            return self.estrategia_intermediaria_fisica(historico)
+    
+    def diversificar_selecao_fisica(self, numbers):
+        """Garante que a seleção cubra diferentes áreas da mesa"""
+        numbers = validar_previsao(numbers)
+        
+        if len(numbers) < 8:
+            return self.estrategia_inicial_fisica()
+        
+        diversificada = []
+        
+        # Garantir representação de cada coluna
+        for coluna in [COLUNA_1, COLUNA_2, COLUNA_3]:
+            for num in numbers:
+                if num in coluna and num not in diversificada:
+                    diversificada.append(num)
+                    break
+        
+        # Garantir representação de cada dúzia
+        for duzia in [PRIMEIRA_DUZIA, SEGUNDA_DUZIA, TERCEIRA_DUZIA]:
+            for num in numbers:
+                if num in duzia and num not in diversificada:
+                    diversificada.append(num)
+                    break
+        
+        # Completar com números originais
+        for num in numbers:
+            if num not in diversificada and len(diversificada) < NUMERO_PREVISOES:
+                diversificada.append(num)
+        
+        # Garantir zero
+        if 0 not in diversificada and len(diversificada) < NUMERO_PREVISOES:
+            diversificada.append(0)
+        
+        return diversificada[:NUMERO_PREVISOES]
     
     def estrategia_emergencia(self):
-        return [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
-    
-    def diversify_selection(self, numbers):
-        try:
-            numbers = validar_previsao(numbers)
-            if not numbers:
-                return self.estrategia_inicial_agressiva()
-                
-            diversified = []
-            sectors = {
-                'zero': [0],
-                'vermelhos_baixos': [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36],
-                'pretos_baixos': [2, 4, 6, 8, 10, 11, 13, 15, 17, 20, 22, 24, 26, 28, 29, 31, 33, 35]
-            }
-            
-            # Garante representação de cada setor
-            for sector, nums in sectors.items():
-                for num in numbers:
-                    if num in nums and num not in diversified:
-                        diversified.append(num)
-                        break
-            
-            # Completa com números originais
-            for num in numbers:
-                if num not in diversified and len(diversified) < NUMERO_PREVISOES:
-                    diversified.append(num)
-            
-            return diversified[:NUMERO_PREVISOES]
-            
-        except Exception as e:
-            logging.error(f"Erro na diversificação: {e}")
-            return self.estrategia_emergencia()
-
-    def verificar_alerta_estrategico(self, historico, previsao_atual):
-        """Verifica se precisa ajustar a estratégia baseado na performance"""
-        try:
-            if len(historico) < 10:
-                return "NORMAL"
-                
-            # Verifica performance recente (simulação)
-            ultimos_10 = historico[-10:]
-            numeros_sorteados = [h['number'] for h in ultimos_10]
-            
-            # Se muitos números consecutivos fora da previsão atual
-            consecutivos_fora = 0
-            max_consecutivos = 0
-            
-            for num in numeros_sorteados[-6:]:
-                if num not in previsao_atual:
-                    consecutivos_fora += 1
-                    max_consecutivos = max(max_consecutivos, consecutivos_fora)
-                else:
-                    consecutivos_fora = 0
-            
-            if max_consecutivos >= 4:
-                return "ALERTA: Mudança de padrão detectada"
-            elif max_consecutivos >= 3:
-                return "ATENÇÃO: Possível mudança de padrão"
-            else:
-                return "NORMAL"
-                
-        except Exception as e:
-            logging.error(f"Erro no alerta estratégico: {e}")
-            return "NORMAL"
+        return [0, 1, 2, 13, 14, 15, 25, 26, 27, 4, 16, 28, 7, 19, 31]
     
     def predict_hybrid(self, historico):
-        """Sistema híbrido atualizado com detecção avançada"""
+        """Sistema híbrido com abordagem física"""
         try:
             if not historico:
-                return self.estrategia_inicial_agressiva()
+                return self.estrategia_inicial_fisica()
                 
             historico_size = len(historico)
             
-            # VERIFICAR ALERTA ESTRATÉGICO (nova funcionalidade)
-            alerta_status = self.verificar_alerta_estrategico(historico, self.ultima_previsao or [])
-            
-            # DECISÃO ESTRATÉGICA MELHORADA
-            if "ALERTA" in alerta_status or historico_size < 8:
-                logging.info("🔄 Ativando modo de reativação AGROSSIVA")
-                previsao = self.estrategia_reativacao_agressiva(historico)
-            elif historico_size < 20:
-                previsao = self.estrategia_intermediaria(historico)
+            # DECISÃO ESTRATÉGICA BASEADA NA DISPOSIÇÃO FÍSICA
+            if historico_size < 10:
+                logging.info("🔄 Modo Físico Inicial: Reativação Física")
+                return self.estrategia_reativacao_fisica(historico)
+            elif historico_size < 25:
+                logging.info("🟠 Modo Físico Intermediário")
+                return self.estrategia_intermediaria_fisica(historico)
             else:
-                previsao = self.estrategia_avancada(historico)
-            
-            self.ultima_previsao = previsao
-            return previsao
+                logging.info("🟢 Modo Físico Avançado: IA Completa")
+                return self.estrategia_avancada_fisica(historico)
                 
         except Exception as e:
-            logging.error(f"Erro crítico no sistema híbrido atualizado: {e}")
+            logging.error(f"Erro crítico no sistema físico: {e}")
             return self.estrategia_emergencia()
 
 # =============================
 # GESTOR PRINCIPAL
 # =============================
-class GestorHybridIA:
+class GestorHybridIA_Fisico:
     def __init__(self):
-        self.hybrid_system = Hybrid_IA_System()
+        self.hybrid_system = Hybrid_IA_System_Fisico()
         self.historico = deque(carregar_historico(), maxlen=500)
         
     def adicionar_numero(self, numero_dict):
@@ -698,37 +701,52 @@ class GestorHybridIA:
             return validar_previsao(previsao)
         except Exception as e:
             logging.error(f"Erro crítico ao gerar previsão: {e}")
-            return [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+            return self.hybrid_system.estrategia_emergencia()
     
     def get_status_sistema(self):
         try:
             historico_size = len(self.historico)
-            if historico_size < 5:
-                return "🟡 Fase Inicial", "Reativação Agressiva"
-            elif historico_size < 20:
-                return "🟠 Coletando Dados", "Estratégia Intermediária"
+            if historico_size < 10:
+                return "🟡 Fase Física Inicial", "Reativação Física"
+            elif historico_size < 25:
+                return "🟠 Analisando Padrões", "Estratégia Intermediária"
             else:
-                return "🟢 IA Ativa", "Sistema Híbrido Completo"
+                return "🟢 IA Física Ativa", "Sistema Físico Completo"
         except:
             return "⚪ Sistema", "Carregando..."
+    
+    def get_analise_mesa(self):
+        """Retorna análise atual da mesa"""
+        if not self.historico:
+            return {"duzia_quente": "-", "coluna_quente": "-", "tendencia": "-"}
+        
+        analise = analisar_duzias_colunas(self.historico)
+        padroes = self.hybrid_system.pattern_analyzer.detectar_padroes_fisicos(self.historico)
+        
+        return {
+            "duzia_quente": analise["duzias_quentes"][0] if analise["duzias_quentes"] else "-",
+            "coluna_quente": analise["colunas_quentes"][0] if analise["colunas_quentes"] else "-",
+            "tendencia": padroes.get("tendencia", "NEUTRA"),
+            "total_numeros": len(self.historico)
+        }
 
 # =============================
 # STREAMLIT APP
 # =============================
 st.set_page_config(
-    page_title="Roleta - Hybrid IA (Melhorado)", 
-    page_icon="🧠", 
+    page_title="Roleta - IA com Disposição Física", 
+    page_icon="🎰", 
     layout="centered"
 )
 
-st.title("🧠 Hybrid IA System - MELHORADO")
-st.markdown("### **Com Detecção Avançada e Reativação Agressiva**")
+st.title("🎰 Hybrid IA System - DISPOSIÇÃO FÍSICA")
+st.markdown("### **Análise Baseada na Mesa Real da Roleta**")
 
 st_autorefresh(interval=3000, key="refresh")
 
 # Inicialização session_state
 defaults = {
-    "gestor": GestorHybridIA(),
+    "gestor": GestorHybridIA_Fisico(),
     "previsao_atual": [],
     "acertos": 0,
     "erros": 0,
@@ -737,16 +755,11 @@ defaults = {
     "ultimo_numero": None,
     "status_ia": "🟡 Inicializando",
     "estrategia_atual": "Aguardando dados",
-    "alerta_status": "NORMAL"
 }
 
 for k, v in defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
-
-# Garante que previsao_atual é uma lista válida
-if not isinstance(st.session_state.previsao_atual, list):
-    st.session_state.previsao_atual = []
 
 st.session_state.previsao_atual = validar_previsao(st.session_state.previsao_atual)
 
@@ -775,12 +788,6 @@ try:
 
         # ATUALIZAR STATUS
         st.session_state.status_ia, st.session_state.estrategia_atual = st.session_state.gestor.get_status_sistema()
-        
-        # ATUALIZAR ALERTA
-        st.session_state.alerta_status = st.session_state.gestor.hybrid_system.verificar_alerta_estrategico(
-            list(st.session_state.gestor.historico), 
-            st.session_state.previsao_atual
-        )
 
         # CONFERÊNCIA
         previsao_valida = validar_previsao(st.session_state.previsao_atual)
@@ -789,7 +796,7 @@ try:
             if acertou:
                 st.session_state.acertos += 1
                 st.success(f"🎯 **GREEN!** Número {numero_real} acertado!")
-                enviar_telegram(f"🟢 GREEN! Sistema acertou {numero_real}!")
+                enviar_telegram(f"🟢 GREEN! Sistema Físico acertou {numero_real}!")
             else:
                 st.session_state.erros += 1
                 st.error(f"🔴 Número {numero_real} não estava na previsão")
@@ -801,13 +808,15 @@ try:
         # TELEGRAM
         if st.session_state.previsao_atual and len(st.session_state.gestor.historico) >= 3:
             try:
-                mensagem = f"🧠 **HYBRID IA MELHORADO - PREVISÃO**\n"
+                analise_mesa = st.session_state.gestor.get_analise_mesa()
+                mensagem = f"🎰 **IA COM DISPOSIÇÃO FÍSICA - PREVISÃO**\n"
                 mensagem += f"📊 Status: {st.session_state.status_ia}\n"
                 mensagem += f"🎯 Estratégia: {st.session_state.estrategia_atual}\n"
-                mensagem += f"⚠️ Alerta: {st.session_state.alerta_status}\n"
+                mensagem += f"🔥 Dúzia Quente: {analise_mesa['duzia_quente']}\n"
+                mensagem += f"🔥 Coluna Quente: {analise_mesa['coluna_quente']}\n"
+                mensagem += f"📈 Tendência: {analise_mesa['tendencia']}\n"
                 mensagem += f"🔢 Último: {numero_real}\n"
                 mensagem += f"📈 Performance: {st.session_state.acertos}G/{st.session_state.erros}R\n"
-                mensagem += f"🔄 Sistema: Detecção Avançada Ativa\n"
                 mensagem += f"📋 Números: {', '.join(map(str, sorted(st.session_state.previsao_atual)))}"
                 
                 enviar_telegram(mensagem)
@@ -819,7 +828,7 @@ try:
 except Exception as e:
     logging.error(f"Erro crítico no processamento principal: {e}")
     st.error("🔴 Erro no sistema. Reiniciando...")
-    st.session_state.previsao_atual = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+    st.session_state.previsao_atual = [0, 1, 2, 13, 14, 15, 25, 26, 27, 4, 16, 28, 7, 19, 31]
 
 # =============================
 # INTERFACE
@@ -839,29 +848,100 @@ with col3:
 with col4:
     st.metric("🎯 Estratégia", st.session_state.estrategia_atual)
 
-# ALERTA DO SISTEMA
-if "ALERTA" in st.session_state.alerta_status:
-    st.warning(f"⚠️ {st.session_state.alerta_status}")
-elif "ATENÇÃO" in st.session_state.alerta_status:
-    st.info(f"🔔 {st.session_state.alerta_status}")
-else:
-    st.success("✅ Sistema operando normalmente")
+# ANÁLISE DA MESA
+st.subheader("📊 Análise da Mesa Física")
+analise_mesa = st.session_state.gestor.get_analise_mesa()
 
-# BARRA DE PROGRESSO
-st.subheader("📈 Progresso do Sistema")
-historico_size = len(st.session_state.gestor.historico)
+col1, col2, col3, col4 = st.columns(4)
+with col1:
+    st.metric("🔥 Dúzia Quente", analise_mesa["duzia_quente"])
+with col2:
+    st.metric("🔥 Coluna Quente", analise_mesa["coluna_quente"])
+with col3:
+    st.metric("📈 Tendência", analise_mesa["tendencia"])
+with col4:
+    st.metric("🔄 Total Análise", analise_mesa["total_numeros"])
 
-if historico_size < 5:
-    progresso = historico_size / 5
-    st.progress(progresso)
-    st.caption("🟡 Fase Inicial: Reativação Agressiva Ativa")
-elif historico_size < 20:
-    progresso = historico_size / 20
-    st.progress(progresso)
-    st.caption("🟠 Coletando Dados: Desenvolvendo padrões...")
+# VISUALIZAÇÃO DA MESA FÍSICA
+st.subheader("🎰 Disposição Física da Mesa")
+
+# Criar visualização simplificada da mesa
+def criar_visualizacao_mesa(previsao):
+    html = """
+    <style>
+    .mesa {
+        display: grid;
+        grid-template-columns: 60px repeat(3, 40px);
+        gap: 2px;
+        font-family: Arial, sans-serif;
+        font-size: 12px;
+    }
+    .zero {
+        grid-column: 1;
+        grid-row: 1 / span 12;
+        background-color: green;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+    }
+    .numero {
+        padding: 5px;
+        text-align: center;
+        border: 1px solid #ccc;
+        font-weight: bold;
+    }
+    .previsto {
+        background-color: #ffeb3b;
+        color: black;
+    }
+    .vermelho {
+        background-color: #ff4444;
+        color: white;
+    }
+    .preto {
+        background-color: #000000;
+        color: white;
+    }
+    .duzia-label {
+        grid-column: 1;
+        text-align: center;
+        padding: 5px;
+        font-weight: bold;
+        background-color: #f0f0f0;
+    }
+    </style>
+    
+    <div class="mesa">
+        <div class="zero">0</div>
+    """
+    
+    # Adicionar números da mesa
+    for linha in range(12):
+        # Label da linha
+        html += f'<div class="duzia-label">{linha+1}ª</div>'
+        
+        for coluna in range(3):
+            numero = ROULETTE_PHYSICAL_LAYOUT[coluna][linha]
+            classes = "numero"
+            
+            if numero in previsao:
+                classes += " previsto"
+            elif numero in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]:
+                classes += " vermelho"
+            else:
+                classes += " preto"
+                
+            html += f'<div class="{classes}">{numero}</div>'
+    
+    html += "</div>"
+    return html
+
+if st.session_state.previsao_atual:
+    st.components.v1.html(criar_visualizacao_mesa(st.session_state.previsao_atual), height=400)
 else:
-    st.progress(1.0)
-    st.caption("🟢 Sistema Completo: IA Híbrida com Detecção Avançada!")
+    st.info("Aguardando previsão para mostrar disposição da mesa...")
 
 # HISTÓRICO VISUAL
 st.subheader("📜 Últimos Números")
@@ -881,34 +961,43 @@ else:
 
 # PREVISÃO ATUAL
 st.markdown("---")
-st.subheader("🎯 PREVISÃO ATUAL")
+st.subheader("🎯 PREVISÃO ATUAL - DISPOSIÇÃO FÍSICA")
 
 previsao_valida = validar_previsao(st.session_state.previsao_atual)
 
 if previsao_valida:
     st.success(f"**{len(previsao_valida)} NÚMEROS PREVISTOS**")
     
-    # Display em grid
+    # Agrupar por dúzia para melhor visualização
+    st.write("**Organização por Dúzia:**")
+    
     col1, col2, col3 = st.columns(3)
     
-    try:
-        numeros_ordenados = sorted(previsao_valida)
-    except:
-        numeros_ordenados = previsao_valida
+    with col1:
+        st.write("**1ª Dúzia (1-12):**")
+        nums_duzia1 = [n for n in sorted(previsao_valida) if n in PRIMEIRA_DUZIA]
+        for num in nums_duzia1:
+            st.write(f"`{num}`")
     
-    for i, num in enumerate(numeros_ordenados):
-        if i < 15:
-            col = [col1, col2, col3][i % 3]
-            with col:
-                if num == 0:
-                    st.markdown(f"<div style='background-color: green; color: white; padding: 10px; margin: 2px; border-radius: 5px; text-align: center; font-weight: bold;'>0</div>", unsafe_allow_html=True)
-                elif num in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]:
-                    st.markdown(f"<div style='background-color: red; color: white; padding: 10px; margin: 2px; border-radius: 5px; text-align: center; font-weight: bold;'>{num}</div>", unsafe_allow_html=True)
-                else:
-                    st.markdown(f"<div style='background-color: black; color: white; padding: 10px; margin: 2px; border-radius: 5px; text-align: center; font-weight: bold;'>{num}</div>", unsafe_allow_html=True)
+    with col2:
+        st.write("**2ª Dúzia (13-24):**")
+        nums_duzia2 = [n for n in sorted(previsao_valida) if n in SEGUNDA_DUZIA]
+        for num in nums_duzia2:
+            st.write(f"`{num}`")
+    
+    with col3:
+        st.write("**3ª Dúzia (25-36) + Zero:**")
+        nums_duzia3 = [n for n in sorted(previsao_valida) if n in TERCEIRA_DUZIA]
+        for num in nums_duzia3:
+            st.write(f"`{num}`")
+        if 0 in previsao_valida:
+            st.write("`0` 🟢")
+    
+    st.write(f"**Lista Completa:** {', '.join(map(str, sorted(previsao_valida)))}")
+    
 else:
     st.warning("⚠️ Gerando previsão inicial...")
-    st.session_state.previsao_atual = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+    st.session_state.previsao_atual = [0, 1, 2, 13, 14, 15, 25, 26, 27, 4, 16, 28, 7, 19, 31]
 
 # PERFORMANCE
 st.markdown("---")
@@ -925,14 +1014,13 @@ with col3:
     st.metric("📈 Taxa Acerto", f"{taxa_acerto:.1f}%")
 
 # DETALHES TÉCNICOS
-with st.expander("🔍 Detalhes Técnicos do Sistema"):
-    st.write("**🧠 HYBRID IA SYSTEM - MELHORADO**")
-    st.write("- ✅ **Detecção Avançada de Padrões**")
-    st.write("- ✅ **Reativação Agressiva Automática**")
-    st.write("- ✅ **Sistema de Alertas Inteligentes**")
-    st.write("- ✅ **LSTM + XGBoost Ensemble**")
-    st.write("- ✅ **Análise de Sequências em Tempo Real**")
-    st.write("- ✅ **Gestão Inteligente de Estratégias**")
+with st.expander("🔍 Detalhes Técnicos do Sistema Físico"):
+    st.write("**🎰 SISTEMA COM DISPOSIÇÃO FÍSICA REAL**")
+    st.write("- ✅ **Análise de Dúzias e Colunas**")
+    st.write("- ✅ **Vizinhos Físicos na Mesa**")
+    st.write("- ✅ **Padrões de Linhas e Colunas**")
+    st.write("- ✅ **Estratégia Baseada na Mesa Real**")
+    st.write("- ✅ **Otimização por Áreas Quentes**")
     
     if st.session_state.gestor.historico:
         historico_size = len(st.session_state.gestor.historico)
@@ -940,17 +1028,29 @@ with st.expander("🔍 Detalhes Técnicos do Sistema"):
         
         if historico_size >= 5:
             numeros = [h['number'] for h in st.session_state.gestor.historico if h.get('number') is not None]
-            media = np.mean(numeros)
-            std = np.std(numeros)
             
             col1, col2 = st.columns(2)
             with col1:
-                st.write(f"**Média:** {media:.2f}")
-                st.write(f"**Desvio Padrão:** {std:.2f}")
+                st.write("**Distribuição por Dúzia:**")
+                duzia1 = len([n for n in numeros if n in PRIMEIRA_DUZIA])
+                duzia2 = len([n for n in numeros if n in SEGUNDA_DUZIA])
+                duzia3 = len([n for n in numeros if n in TERCEIRA_DUZIA])
+                zeros = numeros.count(0)
+                
+                st.write(f"1ª Dúzia: {duzia1}")
+                st.write(f"2ª Dúzia: {duzia2}")
+                st.write(f"3ª Dúzia: {duzia3}")
+                st.write(f"Zeros: {zeros}")
+                
             with col2:
-                tendencia = st.session_state.gestor.hybrid_system.pattern_analyzer.get_tendencia_atual(st.session_state.gestor.historico)
-                st.write(f"**Tendência:** {tendencia}")
-                st.write(f"**Status Alerta:** {st.session_state.alerta_status}")
+                st.write("**Distribuição por Coluna:**")
+                col1 = len([n for n in numeros if n in COLUNA_1])
+                col2 = len([n for n in numeros if n in COLUNA_2])
+                col3 = len([n for n in numeros if n in COLUNA_3])
+                
+                st.write(f"Coluna 1: {col1}")
+                st.write(f"Coluna 2: {col2}")
+                st.write(f"Coluna 3: {col3}")
 
 # CONTROLES
 st.markdown("---")
@@ -972,20 +1072,10 @@ with col2:
         st.session_state.erros = 0
         st.rerun()
 
-# LOGS
-with st.expander("📋 Logs do Sistema"):
-    st.write("**Últimas Ações:**")
-    if st.session_state.gestor.historico:
-        ultimos_5 = list(st.session_state.gestor.historico)[-5:]
-        for registro in reversed(ultimos_5):
-            numero = registro.get('number', 'N/A')
-            timestamp = registro.get('timestamp', 'N/A')
-            st.write(f"- Número {numero} | {timestamp}")
-
 st.markdown("---")
-st.markdown("### 🎯 **Sistema Melhorado com Detecção Avançada**")
-st.markdown("*Capaz de detectar padrões complexos e se adaptar agressivamente*")
+st.markdown("### 🎰 **Sistema com Análise de Disposição Física**")
+st.markdown("*Baseado na mesa real da roleta - Dúzias, Colunas e Vizinhos Físicos*")
 
 # Rodapé
 st.markdown("---")
-st.markdown("**🧠 Hybrid IA System v3.0** - *Com Detecção Avançada*")
+st.markdown("**🎰 Hybrid IA System v4.0** - *Disposição Física Real*")
