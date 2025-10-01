@@ -1,4 +1,4 @@
-# RoletaHybridIA.py - SISTEMA ESPECIALISTA 450+ REGISTROS CORRIGIDO
+# RoletaHybridIA.py - SISTEMA ESPECIALISTA COM ROTAÇÃO DINÂMICA
 import streamlit as st
 import json
 import os
@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import io
 from datetime import datetime
+import random
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -43,14 +44,14 @@ COLUNA_3 = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36]
 # =============================
 # CONFIGURAÇÃO ESPECIALISTA - 450+ REGISTROS
 # =============================
-MIN_HISTORICO_TREINAMENTO = 12  # 🎯 Ponto de ativação do modo especialista
-NUMERO_PREVISOES = 12
+MIN_HISTORICO_TREINAMENTO = 450
+NUMERO_PREVISOES = 15
 
 # Fases do sistema
 FASE_INICIAL = 50
 FASE_INTERMEDIARIA = 150  
 FASE_AVANCADA = 300
-FASE_ESPECIALISTA = 620
+FASE_ESPECIALISTA = 450
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -66,6 +67,34 @@ def enviar_telegram(msg: str, token=TELEGRAM_TOKEN, chat_id=TELEGRAM_CHAT_ID):
         logging.info(f"📤 Telegram enviado: {msg}")
     except Exception as e:
         logging.error(f"Erro ao enviar para Telegram: {e}")
+
+def enviar_alerta_rapido(numeros):
+    """Envia alerta no formato: 3 linhas de 5 números ordenados"""
+    try:
+        if not numeros or len(numeros) != 15:
+            return
+            
+        # Ordena os números do menor para o maior
+        numeros_ordenados = sorted(numeros)
+        
+        # Divide em 3 linhas de 5 números cada
+        linha1 = ' '.join(map(str, numeros_ordenados[0:5]))
+        linha2 = ' '.join(map(str, numeros_ordenados[5:10]))
+        linha3 = ' '.join(map(str, numeros_ordenados[10:15]))
+        
+        # Formata EXATAMENTE como você quer
+        mensagem = f"N {linha1}\n{linha2}\n{linha3}"
+        
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        payload = {
+            "chat_id": TELEGRAM_CHAT_ID, 
+            "text": mensagem
+        }
+        requests.post(url, data=payload, timeout=5)
+        logging.info(f"📤 Alerta enviado no formato 3x5")
+        
+    except Exception as e:
+        logging.error(f"Erro alerta: {e}")
 
 def carregar_historico():
     try:
@@ -221,7 +250,151 @@ def analisar_duzias_colunas(historico):
     }
 
 # =============================
-# SISTEMA ESPECIALISTA 450+ CORRIGIDO
+# SISTEMA DE ROTAÇÃO DINÂMICA
+# =============================
+class Dynamic_Rotator:
+    def __init__(self):
+        self.ultimas_previsoes = deque(maxlen=10)
+        self.contador_estabilidade = 0
+        
+    def aplicar_rotacao_estrategica(self, previsao_base, historico):
+        """Aplica rotação dinâmica mantendo o núcleo forte"""
+        try:
+            if len(previsao_base) != 15:
+                return previsao_base
+                
+            # Verificar se precisa de variação
+            if self.deve_aplicar_rotacao(previsao_base):
+                return self.rotacionar_previsao(previsao_base, historico)
+            else:
+                return previsao_base
+                
+        except Exception as e:
+            logging.error(f"Erro na rotação dinâmica: {e}")
+            return previsao_base
+    
+    def deve_aplicar_rotacao(self, previsao_atual):
+        """Decide se deve rotacionar baseado na estabilidade"""
+        # Se é a primeira previsão, não rotaciona
+        if not self.ultimas_previsoes:
+            self.ultimas_previsoes.append(previsao_atual)
+            return False
+            
+        # Verificar similaridade com previsões anteriores
+        similaridade = self.calcular_similaridade(previsao_atual, self.ultimas_previsoes[-1])
+        
+        # Se está muito similar por várias rodadas, rotaciona
+        if similaridade > 0.8:  # 80% de similaridade
+            self.contador_estabilidade += 1
+        else:
+            self.contador_estabilidade = 0
+            
+        # Rotacionar se está estável por 2 rodadas ou mais
+        deve_rotacionar = self.contador_estabilidade >= 2
+        
+        self.ultimas_previsoes.append(previsao_atual)
+        return deve_rotacionar
+    
+    def calcular_similaridade(self, previsao1, previsao2):
+        """Calcula similaridade entre duas previsões"""
+        set1 = set(previsao1)
+        set2 = set(previsao2)
+        return len(set1 & set2) / len(set1 | set2)
+    
+    def rotacionar_previsao(self, previsao_base, historico):
+        """Aplica rotação estratégica na previsão"""
+        numeros = [h['number'] for h in historico if h.get('number') is not None]
+        
+        if len(numeros) < 10:
+            return previsao_base
+            
+        # Estratégias de rotação
+        nova_previsao = self.rotacao_por_frequencia(previsao_base, numeros)
+        nova_previsao = self.rotacao_por_vizinhanca(nova_previsao, numeros)
+        nova_previsao = self.rotacao_aleatoria_controlada(nova_previsao)
+        
+        logging.info(f"🔄 ROTAÇÃO APLICADA: {len(set(previsao_base) - set(nova_previsao))} números alterados")
+        return nova_previsao
+    
+    def rotacao_por_frequencia(self, previsao_base, numeros):
+        """Rotaciona baseado na frequência recente"""
+        # Analisar frequência dos últimos 20 números
+        freq_recente = Counter(numeros[-20:])
+        
+        # Encontrar números frequentes não presentes na previsão
+        numeros_quentes = [num for num, count in freq_recente.most_common(10) 
+                          if num not in previsao_base and count >= 2]
+        
+        if numeros_quentes:
+            # Substituir 1-2 números de menor frequência na previsão
+            freq_na_previsao = {num: freq_recente.get(num, 0) for num in previsao_base}
+            para_remover = sorted(freq_na_previsao.items(), key=lambda x: x[1])[:2]
+            
+            nova_previsao = previsao_base.copy()
+            for num_remover, _ in para_remover:
+                if numeros_quentes and num_remover in nova_previsao:
+                    nova_previsao.remove(num_remover)
+                    novo_num = numeros_quentes.pop(0)
+                    nova_previsao.append(novo_num)
+            
+            return nova_previsao
+        
+        return previsao_base
+    
+    def rotacao_por_vizinhanca(self, previsao_base, numeros):
+        """Rotaciona baseado em vizinhança física"""
+        # Focar nos últimos números sorteados
+        ultimos_numeros = numeros[-5:]
+        
+        vizinhos_estrategicos = set()
+        for num in ultimos_numeros:
+            vizinhos = obter_vizinhos_fisicos(num)
+            vizinhos_estrategicos.update(vizinhos)
+        
+        # Filtrar vizinhos não presentes na previsão
+        vizinhos_novos = [v for v in vizinhos_estrategicos if v not in previsao_base]
+        
+        if vizinhos_novos:
+            # Substituir 1 número por um vizinho estratégico
+            nova_previsao = previsao_base.copy()
+            
+            # Remover um número menos promissor
+            numeros_para_remover = [num for num in nova_previsao 
+                                  if num not in ultimos_numeros and num != 0]
+            
+            if numeros_para_remover:
+                num_remover = numeros_para_remover[0]
+                nova_previsao.remove(num_remover)
+                nova_previsao.append(vizinhos_novos[0])
+                
+            return nova_previsao
+        
+        return previsao_base
+    
+    def rotacao_aleatoria_controlada(self, previsao_base):
+        """Rotação aleatória controlada (1 número)"""
+        # Números disponíveis para rotação (excluindo zero e números muito quentes)
+        todos_numeros = list(range(0, 37))
+        numeros_disponiveis = [num for num in todos_numeros if num not in previsao_base]
+        
+        if len(numeros_disponiveis) >= 1 and len(previsao_base) == 15:
+            nova_previsao = previsao_base.copy()
+            
+            # Escolher aleatoriamente 1 número para substituir (excluindo zero)
+            numeros_substituiveis = [num for num in nova_previsao if num != 0]
+            if numeros_substituiveis:
+                num_remover = random.choice(numeros_substituiveis)
+                num_novo = random.choice(numeros_disponiveis)
+                
+                nova_previsao.remove(num_remover)
+                nova_previsao.append(num_novo)
+                
+                return nova_previsao
+        
+        return previsao_base
+
+# =============================
+# SISTEMA ESPECIALISTA 450+ COM ROTAÇÃO
 # =============================
 class Pattern_Analyzer_Especialista:
     def __init__(self):
@@ -579,9 +752,11 @@ class Hybrid_IA_450_Plus_Corrigido:
     def __init__(self):
         self.pattern_analyzer = Pattern_Analyzer_Especialista()
         self.xgb_especialista = XGBoost_Especialista()
+        self.dynamic_rotator = Dynamic_Rotator()  # SISTEMA DE ROTAÇÃO
+        self.ultima_previsao_base = None
         
     def prever_com_historio_longo(self, historico):
-        """Sistema especializado para 450+ registros - CORRIGIDO"""
+        """Sistema especializado com rotação dinâmica"""
         historico_size = len(historico)
         
         if historico_size >= MIN_HISTORICO_TREINAMENTO:
@@ -593,13 +768,21 @@ class Hybrid_IA_450_Plus_Corrigido:
             # 2. Predição especializada
             probs_xgb = self.xgb_especialista.predict_com_450_plus(historico)
             
-            # 3. Combinação inteligente CORRIGIDA
-            previsao_final = self.combinar_previsoes_especialistas_corrigido(analise_profunda, probs_xgb, historico)
+            # 3. Combinação inteligente
+            previsao_base = self.combinar_previsoes_especialistas_corrigido(analise_profunda, probs_xgb, historico)
             
-            logging.info(f"🎯 MODO ESPECIALISTA: {analise_profunda['total_padroes']} padrões detectados → {len(previsao_final)} números")
+            # 4. APLICAR ROTAÇÃO DINÂMICA
+            previsao_final = self.dynamic_rotator.aplicar_rotacao_estrategica(previsao_base, historico)
+            self.ultima_previsao_base = previsao_base
+            
+            # Log das diferenças
+            if self.ultima_previsao_base and previsao_final != self.ultima_previsao_base:
+                diff = set(previsao_final) - set(self.ultima_previsao_base)
+                logging.info(f"🔄 Números rotacionados: {diff}")
+            
+            logging.info(f"🎯 ESPECIALISTA + ROTAÇÃO: {analise_profunda['total_padroes']} padrões → {len(previsao_final)} números")
             return previsao_final
         else:
-            # Modo normal para histórico menor
             return self.prever_com_historio_normal(historico)
     
     def combinar_previsoes_especialistas_corrigido(self, analise_profunda, probs_xgb, historico):
@@ -811,12 +994,13 @@ class Hybrid_IA_450_Plus_Corrigido:
         return validar_previsao(numeros_estrategicos)[:NUMERO_PREVISOES]
 
 # =============================
-# GESTOR PRINCIPAL CORRIGIDO
+# GESTOR PRINCIPAL COM ROTAÇÃO
 # =============================
 class GestorHybridIA_Especialista_Corrigido:
     def __init__(self):
         self.hybrid_system = Hybrid_IA_450_Plus_Corrigido()
         self.historico = deque(carregar_historico(), maxlen=1000)
+        self.previsao_anterior = None
         
     def adicionar_numero(self, numero_dict):
         if isinstance(numero_dict, dict) and numero_dict.get('number') is not None:
@@ -827,17 +1011,43 @@ class GestorHybridIA_Especialista_Corrigido:
             previsao = self.hybrid_system.prever_com_historio_longo(self.historico)
             previsao_validada = validar_previsao(previsao)
             
-            # GARANTIR QUE SEMPRE RETORNA 15 NÚMEROS
+            # Calcular diferenças com a previsão anterior
+            diferencas = self.calcular_diferencas(previsao_validada)
+            if diferencas:
+                logging.info(f"📊 Diferenças da previsão anterior: {diferencas}")
+            
+            self.previsao_anterior = previsao_validada.copy()
+            
+            # Garantir 15 números
             if len(previsao_validada) < NUMERO_PREVISOES:
-                logging.warning(f"⚠️ Previsão com apenas {len(previsao_validada)} números. Completando...")
                 previsao_validada = self.completar_para_15(previsao_validada)
             
-            logging.info(f"✅ Previsão gerada: {len(previsao_validada)} números")
+            logging.info(f"✅ Previsão gerada: {len(previsao_validada)} números (Rotação: {bool(diferencas)})")
             return previsao_validada
             
         except Exception as e:
             logging.error(f"Erro crítico ao gerar previsão: {e}")
             return [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+    
+    def calcular_diferencas(self, previsao_atual):
+        """Calcula diferenças com a previsão anterior"""
+        if not self.previsao_anterior or len(self.previsao_anterior) != 15 or len(previsao_atual) != 15:
+            return None
+            
+        anteriores = set(self.previsao_anterior)
+        atuais = set(previsao_atual)
+        
+        removidos = anteriores - atuais
+        adicionados = atuais - anteriores
+        
+        if removidos or adicionados:
+            return {
+                'removidos': sorted(removidos),
+                'adicionados': sorted(adicionados),
+                'total_mudancas': len(removidos)
+            }
+        
+        return None
     
     def completar_para_15(self, previsao):
         """Garante que sempre retorna 15 números"""
@@ -914,13 +1124,13 @@ class GestorHybridIA_Especialista_Corrigido:
 # STREAMLIT APP
 # =============================
 st.set_page_config(
-    page_title="Roleta - IA Especialista 450+", 
+    page_title="Roleta - IA Especialista com Rotação", 
     page_icon="🎯", 
     layout="centered"
 )
 
-st.title("🎯 Hybrid IA System - ESPECIALISTA 450+ CORRIGIDO")
-st.markdown("### **Sistema Corrigido com Garantia de 15 Números**")
+st.title("🎯 Hybrid IA System - ESPECIALISTA COM ROTAÇÃO DINÂMICA")
+st.markdown("### **Sistema com Variações Estratégicas entre Previsões**")
 
 st_autorefresh(interval=3000, key="refresh")
 
@@ -935,6 +1145,7 @@ defaults = {
     "ultimo_numero": None,
     "status_ia": "🟡 Inicializando",
     "estrategia_atual": "Aguardando dados",
+    "previsao_anterior": None,
 }
 
 for k, v in defaults.items():
@@ -976,38 +1187,24 @@ try:
             if acertou:
                 st.session_state.acertos += 1
                 st.success(f"🎯 **GREEN!** Número {numero_real} acertado!")
-                enviar_telegram(f"🟢 GREEN! Especialista Corrigido acertou {numero_real}!")
             else:
                 st.session_state.erros += 1
                 st.error(f"🔴 Número {numero_real} não estava na previsão")
 
         # GERAR NOVA PREVISÃO
         nova_previsao = st.session_state.gestor.gerar_previsao()
+        
+        # CALCULAR MUDANÇAS
+        diferencas = st.session_state.gestor.calcular_diferencas(nova_previsao)
+        st.session_state.previsao_anterior = st.session_state.previsao_atual.copy()
         st.session_state.previsao_atual = validar_previsao(nova_previsao)
         
-        # TELEGRAM - Mensagem especial para modo especialista
-        if st.session_state.previsao_atual and len(st.session_state.gestor.historico) >= 3:
+        # ENVIAR ALERTA TELEGRAM
+        if st.session_state.previsao_atual and len(st.session_state.previsao_atual) == 15:
             try:
-                analise = st.session_state.gestor.get_analise_detalhada()
-                mensagem = f"🎯 **IA ESPECIALISTA CORRIGIDA - PREVISÃO**\n"
-                
-                if analise["modo_especialista"]:
-                    mensagem += f"🚀 **MODO ESPECIALISTA ATIVO**\n"
-                    mensagem += f"📊 Padrões Detectados: {analise['padroes_detectados']}\n"
-                else:
-                    mensagem += f"📈 Progresso: {analise['historico_total']}/{analise['minimo_especialista']}\n"
-                
-                mensagem += f"🧠 Status: {st.session_state.status_ia}\n"
-                mensagem += f"🎯 Estratégia: {st.session_state.estrategia_atual}\n"
-                mensagem += f"💪 Confiança: {analise['confianca']}\n"
-                mensagem += f"🔢 Último: {numero_real}\n"
-                mensagem += f"📈 Performance: {st.session_state.acertos}G/{st.session_state.erros}R\n"
-                mensagem += f"🔢 Números Previstos: {len(st.session_state.previsao_atual)}\n"
-                mensagem += f"📋 Números: {', '.join(map(str, sorted(st.session_state.previsao_atual)))}"
-                
-                enviar_telegram(mensagem)
+                enviar_alerta_rapido(st.session_state.previsao_atual)
             except Exception as e:
-                logging.error(f"Erro ao enviar Telegram: {e}")
+                logging.error(f"Erro ao enviar alerta: {e}")
 
         st.session_state.contador_rodadas += 1
 
@@ -1066,9 +1263,15 @@ else:
 
 # PREVISÃO ATUAL
 st.markdown("---")
-st.subheader("🎯 PREVISÃO ATUAL - SISTEMA ESPECIALISTA CORRIGIDO")
+st.subheader("🎯 PREVISÃO ATUAL - SISTEMA COM ROTAÇÃO DINÂMICA")
 
 previsao_valida = validar_previsao(st.session_state.previsao_atual)
+
+# MOSTRAR MUDANÇAS
+if st.session_state.previsao_anterior and len(st.session_state.previsao_anterior) == 15:
+    diferencas = st.session_state.gestor.calcular_diferencas(st.session_state.previsao_atual)
+    if diferencas:
+        st.info(f"**🔄 Mudanças:** Removidos: {', '.join(map(str, diferencas['removidos']))} | Adicionados: {', '.join(map(str, diferencas['adicionados']))}")
 
 if previsao_valida:
     if analise["modo_especialista"]:
@@ -1129,8 +1332,8 @@ with col4:
     st.metric("🔄 Rodadas", st.session_state.contador_rodadas)
 
 # DETALHES TÉCNICOS
-with st.expander("🔧 Detalhes Técnicos do Sistema Especialista Corrigido"):
-    st.write("**🎯 ARQUITETURA ESPECIALISTA 450+ CORRIGIDA:**")
+with st.expander("🔧 Detalhes Técnicos do Sistema com Rotação"):
+    st.write("**🎯 ARQUITETURA ESPECIALISTA COM ROTAÇÃO DINÂMICA:**")
     
     if analise["modo_especialista"]:
         st.write("✅ **MODO ESPECIALISTA ATIVO**")
@@ -1139,11 +1342,11 @@ with st.expander("🔧 Detalhes Técnicos do Sistema Especialista Corrigido"):
         st.write("- 🕒 Padrões Temporais Avançados")
         st.write("- 🔄 Sequências de Alta Ordem")
         st.write(f"- 📊 {analise['padroes_detectados']} Padrões Detectados")
-        st.write("✅ **CORREÇÕES IMPLEMENTADAS:**")
-        st.write("- 🎯 Garantia de 15 números")
-        st.write("- ⚖️ Balanceamento entre dúzias")
-        st.write("- 🚀 Pesos otimizados do ensemble")
-        st.write("- 🛡️ Sistema de fallback robusto")
+        st.write("**🔄 SISTEMA DE ROTAÇÃO:**")
+        st.write("- 🎯 Rotação por Frequência")
+        st.write("- 📍 Rotação por Vizinhança Física") 
+        st.write("- 🎲 Rotação Aleatória Controlada")
+        st.write("- ⚖️ Balanceamento Automático")
     else:
         st.write("⏳ **AGUARDANDO DADOS SUFICIENTES**")
         st.write(f"- 📈 Progresso: {historico_atual}/{MIN_HISTORICO_TREINAMENTO}")
@@ -1177,9 +1380,9 @@ with col2:
         st.rerun()
 
 st.markdown("---")
-st.markdown("### 🚀 **Sistema Especialista Corrigido - Garantia de 15 Números**")
-st.markdown("*Padrões complexos, correlações avançadas e inteligência de longo prazo*")
+st.markdown("### 🚀 **Sistema Especialista com Rotação Dinâmica**")
+st.markdown("*Variações estratégicas mantendo alta assertividade*")
 
 # Rodapé
 st.markdown("---")
-st.markdown("**🎯 Hybrid IA System v6.1** - *Especialista 450+ Registros Corrigido*")
+st.markdown("**🎯 Hybrid IA System v7.0** - *Especialista com Rotação Dinâmica*")
