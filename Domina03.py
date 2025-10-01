@@ -43,7 +43,7 @@ COLUNA_3 = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36]
 # =============================
 # CONFIGURAÇÃO ESPECIALISTA - 450+ REGISTROS
 # =============================
-MIN_HISTORICO_TREINAMENTO = 500  # 🎯 Ponto de ativação do modo especialista
+MIN_HISTORICO_TREINAMENTO = 585  # 🎯 Ponto de ativação do modo especialista
 NUMERO_PREVISOES = 15
 
 # Fases do sistema
