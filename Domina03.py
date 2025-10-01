@@ -41,8 +41,8 @@ COLUNA_2 = [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35]
 COLUNA_3 = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36]
 
 # Configurações
-MIN_HISTORICO_TREINAMENTO = 50
-NUMERO_PREVISOES = 15
+MIN_HISTORICO_TREINAMENTO = 450
+NUMERO_PREVISOES = 8
 
 # =============================
 # Utilitários
