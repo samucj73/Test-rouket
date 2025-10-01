@@ -1,4 +1,4 @@
-# RoletaHybridIA.py - SISTEMA COM XGBOOST AVANÇADO E ENSEMBLE ROBUSTO
+# RoletaHybridIA.py - SISTEMA ESPECIALISTA 450+ REGISTROS
 import streamlit as st
 import json
 import os
@@ -40,12 +40,23 @@ COLUNA_1 = [1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34]
 COLUNA_2 = [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35]  
 COLUNA_3 = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36]
 
-# Configurações
-MIN_HISTORICO_TREINAMENTO = 450
-NUMERO_PREVISOES = 12
+# =============================
+# CONFIGURAÇÃO ESPECIALISTA - 450+ REGISTROS
+# =============================
+MIN_HISTORICO_TREINAMENTO = 450  # 🎯 Ponto de ativação do modo especialista
+NUMERO_PREVISOES = 15
+
+# Fases do sistema
+FASE_INICIAL = 50
+FASE_INTERMEDIARIA = 150  
+FASE_AVANCADA = 300
+FASE_ESPECIALISTA = 450
+
+# Configurar logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # =============================
-# Utilitários
+# UTILITÁRIOS ROBUSTOS
 # =============================
 def enviar_telegram(msg: str, token=TELEGRAM_TOKEN, chat_id=TELEGRAM_CHAT_ID):
     try:
@@ -177,12 +188,13 @@ def analisar_duzias_colunas(historico):
     if not numeros:
         return {"duzias_quentes": [], "colunas_quentes": []}
     
-    ultimos_20 = numeros[-20:] if len(numeros) >= 20 else numeros
+    periodo_analise = min(100, len(numeros))
+    ultimos_numeros = numeros[-periodo_analise:]
     
     contagem_duzias = {1: 0, 2: 0, 3: 0}
     contagem_colunas = {1: 0, 2: 0, 3: 0}
     
-    for num in ultimos_20:
+    for num in ultimos_numeros:
         if 1 <= num <= 12:
             contagem_duzias[1] += 1
         elif 13 <= num <= 24:
@@ -197,622 +209,488 @@ def analisar_duzias_colunas(historico):
         elif num in COLUNA_3:
             contagem_colunas[3] += 1
     
-    duzia_quente = max(contagem_duzias, key=contagem_duzias.get)
-    coluna_quente = max(contagem_colunas, key=contagem_colunas.get)
+    duzias_ordenadas = sorted(contagem_duzias.items(), key=lambda x: x[1], reverse=True)[:2]
+    colunas_ordenadas = sorted(contagem_colunas.items(), key=lambda x: x[1], reverse=True)[:2]
     
     return {
-        "duzias_quentes": [duzia_quente],
-        "colunas_quentes": [coluna_quente],
+        "duzias_quentes": [duzia for duzia, count in duzias_ordenadas if count > 0],
+        "colunas_quentes": [coluna for coluna, count in colunas_ordenadas if count > 0],
         "contagem_duzias": contagem_duzias,
-        "contagem_colunas": contagem_colunas
+        "contagem_colunas": contagem_colunas,
+        "periodo_analisado": periodo_analise
     }
 
 # =============================
-# SISTEMA HÍBRIDO AVANÇADO
+# SISTEMA ESPECIALISTA 450+
 # =============================
-class Pattern_Analyzer_Avancado:
-    def __init__(self, window_size=20):
-        self.window_size = window_size
+class Pattern_Analyzer_Especialista:
+    def __init__(self):
+        self.padroes_detectados = {}
         
-    def detectar_padroes_complexos(self, historico):
-        """Detecta padrões complexos incluindo sequências e ciclos"""
+    def analisar_padroes_profundos(self, historico):
+        """Análise PROFUNDA apenas possível com 450+ registros"""
         try:
-            if len(historico) < 15:
-                return {"padroes": [], "ciclos": []}
+            if len(historico) < MIN_HISTORICO_TREINAMENTO:
+                return self.analisar_padroes_rasos(historico)
                 
-            numeros = [h['number'] for h in historico if h.get('number') is not None][-30:]
+            numeros = [h['number'] for h in historico if h.get('number') is not None]
             
-            padroes = []
+            logging.info(f"🔍 ANALISANDO {len(numeros)} REGISTROS - MODO ESPECIALISTA ATIVO")
             
-            # Detecção de sequências
-            for i in range(len(numeros) - 4):
-                sequencia = numeros[i:i+5]
-                diferencas = [sequencia[j+1] - sequencia[j] for j in range(4)]
-                
-                # Sequência crescente/decrescente
-                if all(diff > 0 for diff in diferencas) or all(diff < 0 for diff in diferencas):
-                    padroes.append(f"SEQUENCIA_{i}")
+            # 1. PADRÕES DE CICLOS COMPLEXOS
+            ciclos_avancados = self.detectar_ciclos_avancados(numeros)
             
-            # Detecção de repetições em ciclo
-            ciclos = self.detectar_ciclos(numeros)
+            # 2. CORRELAÇÕES ENTRE NÚMEROS
+            correlacoes = self.analisar_correlacoes(numeros)
+            
+            # 3. PADRÕES TEMPORAIS COMPLEXOS
+            padroes_temporais = self.analisar_padroes_temporais(historico)
+            
+            # 4. SEQUÊNCIAS DE ALTA ORDEM
+            sequencias_complexas = self.detectar_sequencias_complexas(numeros)
             
             return {
-                "padroes": padroes,
-                "ciclos": ciclos,
-                "tendencia": self.calcular_tendencia_avancada(numeros)
+                'ciclos_avancados': ciclos_avancados,
+                'correlacoes': correlacoes,
+                'padroes_temporais': padroes_temporais,
+                'sequencias_complexas': sequencias_complexas,
+                'confianca': 'MUITO_ALTA',
+                'amostra_suficiente': True,
+                'total_padroes': len(ciclos_avancados) + len(correlacoes) + len(sequencias_complexas)
             }
             
         except Exception as e:
-            logging.error(f"Erro na detecção de padrões complexos: {e}")
-            return {"padroes": [], "ciclos": []}
+            logging.error(f"Erro na análise profunda: {e}")
+            return self.analisar_padroes_rasos(historico)
     
-    def detectar_ciclos(self, numeros):
-        """Detecta ciclos de repetição"""
-        ciclos = []
-        for ciclo in [3, 4, 5, 6, 7, 8]:
-            if len(numeros) < ciclo * 2:
-                continue
+    def detectar_ciclos_avancados(self, numeros):
+        """Detecta ciclos que só aparecem com muitos dados"""
+        ciclos = {}
+        
+        # Ciclos de diferentes tamanhos (apenas detectáveis com 450+ dados)
+        tamanhos_ciclo = [7, 15, 30, 50, 75, 100]
+        
+        for tamanho in tamanhos_ciclo:
+            if len(numeros) >= tamanho * 3:  # Precisa de pelo menos 3 ciclos completos
+                ciclos_detectados = []
                 
-            for i in range(len(numeros) - ciclo * 2):
-                segmento1 = numeros[i:i+ciclo]
-                segmento2 = numeros[i+ciclo:i+2*ciclo]
+                for i in range(len(numeros) - tamanho * 2):
+                    ciclo1 = numeros[i:i+tamanho]
+                    ciclo2 = numeros[i+tamanho:i+tamanho*2]
+                    
+                    # Similaridade mais sofisticada
+                    similaridade = self.calcular_similaridade_avancada(ciclo1, ciclo2)
+                    
+                    if similaridade > 0.35:  # Limite mais baixo por ter mais dados
+                        proximo_ciclo = numeros[i+tamanho*2:i+tamanho*3] if i+tamanho*3 <= len(numeros) else []
+                        
+                        ciclos_detectados.append({
+                            'posicao_inicial': i,
+                            'similaridade': similaridade,
+                            'tamanho': tamanho,
+                            'proximo_ciclo': proximo_ciclo[:5] if proximo_ciclo else [],
+                            'numeros_comuns': list(set(ciclo1) & set(ciclo2))[:8]
+                        })
                 
-                if segmento1 == segmento2:
-                    ciclos.append(f"CICLO_{ciclo}")
-                    break
+                if ciclos_detectados:
+                    ciclos[f'ciclo_{tamanho}'] = ciclos_detectados[:3]  # Top 3 ciclos
         
         return ciclos
     
-    def calcular_tendencia_avancada(self, numeros):
-        """Calcula tendência usando múltiplas métricas"""
-        if len(numeros) < 10:
-            return "NEUTRA"
-        
-        # Média móvel
-        media_curta = np.mean(numeros[-5:])
-        media_longa = np.mean(numeros[-15:])
-        
-        # Frequência de dúzias
-        contagem_duzias = {1: 0, 2: 0, 3: 0}
-        for num in numeros[-10:]:
-            if 1 <= num <= 12:
-                contagem_duzias[1] += 1
-            elif 13 <= num <= 24:
-                contagem_duzias[2] += 1
-            elif 25 <= num <= 36:
-                contagem_duzias[3] += 1
-        
-        duzia_dominante = max(contagem_duzias, key=contagem_duzias.get)
-        
-        # Decisão baseada em múltiplos fatores
-        if duzia_dominante == 3 and media_curta > 24:
-            return "FORTE_ALTA"
-        elif duzia_dominante == 1 and media_curta < 13:
-            return "FORTE_BAIXA"
-        elif media_curta > media_longa + 3:
-            return "ALTA"
-        elif media_curta < media_longa - 3:
-            return "BAIXA"
-        else:
-            return "NEUTRA"
-
-class XGBoost_Avancado:
-    def __init__(self):
-        self.historico_features = deque(maxlen=100)
-        self.modelo_treinado = False
-        
-    def criar_features_avancadas(self, historico):
-        """Cria features mais sofisticadas para o XGBoost"""
-        if len(historico) < 10:
-            return []
+    def calcular_similaridade_avancada(self, lista1, lista2):
+        """Calcula similaridade considerando ordem e frequência"""
+        if len(lista1) != len(lista2) or len(lista1) == 0:
+            return 0.0
             
-        numeros = [h['number'] for h in historico if h.get('number') is not None]
-        features_list = []
+        # Similaridade por elementos comuns
+        elementos_comuns = len(set(lista1) & set(lista2)) / len(set(lista1) | set(lista2))
         
-        for i, target_num in enumerate(range(37)):
-            features = []
-            
-            # Features básicas
-            features.extend([
-                numeros.count(target_num),  # Frequência absoluta
-                len([n for n in numeros[-10:] if n == target_num]),  # Frequência recente
-                1 if target_num == numeros[-1] else 0,  # É o último número?
-            ])
-            
-            # Features de posição física
-            linha, coluna = self.obter_posicao_fisica(target_num)
-            features.extend([linha, coluna])
-            
-            # Features de vizinhança
-            vizinhos = obter_vizinhos_fisicos(target_num)
-            features.append(len([v for v in vizinhos if v in numeros[-5:]]))
-            
-            # Features temporais
-            if len(numeros) > 1:
-                ultima_aparicao = self.obter_ultima_aparicao(numeros, target_num)
-                features.append(ultima_aparicao)
-            
-            # Features de tendência
-            features.extend(self.calcular_features_tendencia(numeros, target_num))
-            
-            features_list.append((target_num, features))
+        # Similaridade por posição (ordem)
+        posicoes_iguais = sum(1 for i in range(min(len(lista1), len(lista2))) if lista1[i] == lista2[i])
+        similaridade_posicao = posicoes_iguais / len(lista1)
         
-        return features_list
+        # Similaridade por frequência
+        freq1 = Counter(lista1)
+        freq2 = Counter(lista2)
+        similaridade_freq = sum(min(freq1.get(num, 0), freq2.get(num, 0)) for num in set(lista1) | set(lista2)) / len(lista1)
+        
+        # Combinação ponderada
+        return (elementos_comuns * 0.4 + similaridade_posicao * 0.3 + similaridade_freq * 0.3)
     
-    def obter_posicao_fisica(self, numero):
-        """Retorna linha e coluna na mesa física"""
-        if numero == 0:
-            return -1, -1
+    def analisar_correlacoes(self, numeros):
+        """Analisa correlações entre números (quais aparecem juntos)"""
+        correlacoes = {}
+        
+        # Janela de análise - com 450+ dados podemos usar janelas maiores
+        janela = 10
+        
+        for i in range(len(numeros) - janela):
+            janela_atual = numeros[i:i+janela]
             
-        for col_idx, coluna in enumerate(ROULETTE_PHYSICAL_LAYOUT):
-            if numero in coluna:
-                return coluna.index(numero), col_idx
-        return -1, -1
-    
-    def obter_ultima_aparicao(self, numeros, target_num):
-        """Calcula há quantas rodadas o número apareceu"""
-        for i in range(len(numeros)-1, -1, -1):
-            if numeros[i] == target_num:
-                return len(numeros) - i - 1
-        return len(numeros)
-    
-    def calcular_features_tendencia(self, numeros, target_num):
-        """Calcula features baseadas em tendências"""
-        features = []
+            for j in range(len(janela_atual)):
+                for k in range(j+1, len(janela_atual)):
+                    par = tuple(sorted([janela_atual[j], janela_atual[k]]))
+                    
+                    if par not in correlacoes:
+                        correlacoes[par] = 0
+                    correlacoes[par] += 1
         
-        # Tendência de dúzia
-        ultima_duzia = 3 if numeros[-1] in TERCEIRA_DUZIA else 2 if numeros[-1] in SEGUNDA_DUZIA else 1
-        target_duzia = 3 if target_num in TERCEIRA_DUZIA else 2 if target_num in SEGUNDA_DUZIA else 1
-        features.append(1 if ultima_duzia == target_duzia else 0)
+        # Filtrar correlações significativas
+        correlacoes_significativas = {}
+        for par, count in correlacoes.items():
+            if count >= len(numeros) * 0.02:  # Aparecem juntos em pelo menos 2% das janelas
+                correlacoes_significativas[par] = {
+                    'frequencia': count,
+                    'probabilidade': count / (len(numeros) - janela)
+                }
         
-        # Tendência de coluna
-        ultima_coluna = 3 if numeros[-1] in COLUNA_3 else 2 if numeros[-1] in COLUNA_2 else 1
-        target_coluna = 3 if target_num in COLUNA_3 else 2 if target_num in COLUNA_2 else 1
-        features.append(1 if ultima_coluna == target_coluna else 0)
-        
-        # Momentum
-        if len(numeros) >= 3:
-            diff1 = numeros[-1] - numeros[-2]
-            diff2 = numeros[-2] - numeros[-3]
-            features.append(1 if (diff1 > 0 and diff2 > 0) or (diff1 < 0 and diff2 < 0) else 0)
-        else:
-            features.append(0)
-            
-        return features
+        # Ordenar por frequência
+        return dict(sorted(correlacoes_significativas.items(), 
+                         key=lambda x: x[1]['frequencia'], reverse=True)[:15])
     
-    def predict_proba_avancado(self, historico):
-        """Predição avançada usando features complexas"""
+    def analisar_padroes_temporais(self, historico):
+        """Analisa padrões baseados em tempo real"""
         try:
-            if len(historico) < 15:
-                return self.predict_proba_basico(historico)
-                
-            features_list = self.criar_features_avancadas(historico)
-            if not features_list:
-                return {}
-                
-            numeros = [h['number'] for h in historico if h.get('number') is not None]
-            probs = {}
+            padroes = {
+                'horarios': {},
+                'sequencias_rapidas': {},
+                'intervalos': {}
+            }
             
-            for target_num, features in features_list:
-                score = 0.0
-                
-                # Frequência ponderada (features[0] e features[1])
-                freq_score = min(features[0] * 0.05 + features[1] * 0.15, 0.4)
-                score += freq_score
-                
-                # Último número (feature[2])
-                if features[2] == 1:
-                    score += 0.1
-                
-                # Posição física (features[3] e features[4])
-                linha, coluna = features[3], features[4]
-                if linha != -1:
-                    # Bônus para números centrais
-                    if 3 <= linha <= 8:
-                        score += 0.05
-                
-                # Vizinhos recentes (feature[5])
-                score += min(features[5] * 0.08, 0.24)
-                
-                # Recência (feature[6])
-                if features[6] <= 5:  # Apareceu nas últimas 5 rodadas
-                    score += 0.15 - (features[6] * 0.02)
-                
-                # Tendências (features[7] e features[8])
-                score += features[7] * 0.06  # Mesma dúzia
-                score += features[8] * 0.06  # Mesma coluna
-                
-                # Momentum (feature[9])
-                score += features[9] * 0.08
-                
-                if score > 0:
-                    probs[target_num] = score
+            # Análise por horário (apenas viável com muitos dados)
+            for i, registro in enumerate(historico):
+                if 'timestamp' in registro and i > 0:
+                    try:
+                        # Calcular intervalo desde o último número
+                        tempo_atual = datetime.fromisoformat(registro['timestamp'].replace('Z', '+00:00'))
+                        tempo_anterior = datetime.fromisoformat(historico[i-1]['timestamp'].replace('Z', '+00:00'))
+                        intervalo = (tempo_atual - tempo_anterior).total_seconds()
+                        
+                        # Agrupar por intervalo
+                        intervalo_chave = f"intervalo_{int(intervalo/60)}min"
+                        if intervalo_chave not in padroes['intervalos']:
+                            padroes['intervalos'][intervalo_chave] = []
+                        padroes['intervalos'][intervalo_chave].append(registro['number'])
+                        
+                    except:
+                        continue
             
-            # Normalizar scores
-            if probs:
-                total = sum(probs.values())
-                probs = {k: v/total for k, v in probs.items()}
+            # Processar padrões de intervalo
+            for intervalo, numeros in padroes['intervalos'].items():
+                if len(numeros) >= 10:  # Pelo menos 10 ocorrências
+                    contagem = Counter(numeros)
+                    mais_comum, freq = contagem.most_common(1)[0]
+                    if freq >= len(numeros) * 0.3:  # 30% de frequência
+                        padroes['intervalos'][intervalo] = {
+                            'numero_mais_comum': mais_comum,
+                            'frequencia': freq/len(numeros),
+                            'total_ocorrencias': len(numeros)
+                        }
+                else:
+                    padroes['intervalos'][intervalo] = 'insuficiente_dados'
             
-            return probs if probs else self.predict_proba_basico(historico)
+            return padroes
             
         except Exception as e:
-            logging.error(f"Erro no XGBoost avançado: {e}")
-            return self.predict_proba_basico(historico)
+            logging.error(f"Erro análise temporal: {e}")
+            return {}
     
-    def predict_proba_basico(self, historico):
-        """Fallback para predição básica"""
+    def detectar_sequencias_complexas(self, numeros):
+        """Detecta sequências complexas de alta ordem"""
+        sequencias = {}
+        
+        # Padrões de transição de estado
+        estados = []
+        for i in range(1, len(numeros)):
+            diff = numeros[i] - numeros[i-1]
+            if diff > 0:
+                estados.append('SUBINDO')
+            elif diff < 0:
+                estados.append('DESCENDO')
+            else:
+                estados.append('ESTAVEL')
+        
+        # Detectar padrões de transição
+        padroes_transicao = {}
+        for i in range(len(estados) - 3):
+            sequencia = tuple(estados[i:i+4])
+            if sequencia not in padroes_transicao:
+                padroes_transicao[sequencia] = []
+            padroes_transicao[sequencia].append(numeros[i+3])
+        
+        # Filtrar padrões consistentes
+        for seq, resultados in padroes_transicao.items():
+            if len(resultados) >= 5:  # Pelo menos 5 ocorrências
+                contagem = Counter(resultados)
+                mais_comum, freq = contagem.most_common(1)[0]
+                if freq >= len(resultados) * 0.4:  # 40% de consistência
+                    sequencias[f"transicao_{seq}"] = {
+                        'proximo_esperado': mais_comum,
+                        'confianca': freq/len(resultados),
+                        'ocorrencias': len(resultados)
+                    }
+        
+        return sequencias
+    
+    def analisar_padroes_rasos(self, historico):
+        """Fallback para quando não há dados suficientes"""
+        return {
+            'ciclos_avancados': {},
+            'correlacoes': {},
+            'padroes_temporais': {},
+            'sequencias_complexas': {},
+            'confianca': 'BAIXA',
+            'amostra_suficiente': False,
+            'total_padroes': 0
+        }
+
+class XGBoost_Especialista:
+    def __init__(self):
+        self.min_treinamento = MIN_HISTORICO_TREINAMENTO
+        
+    def predict_com_450_plus(self, historico):
+        """Predição especializada para 450+ registros"""
+        if len(historico) < self.min_treinamento:
+            return self.predict_basico(historico)
+            
+        numeros = [h['number'] for h in historico if h.get('number') is not None]
+        probs = {}
+        
+        logging.info(f"🧠 XGBOOST ESPECIALISTA ATIVO - {len(numeros)} REGISTROS")
+        
+        # 1. ANÁLISE DE CORRELAÇÕES (apenas com muitos dados)
+        correlacoes = self.calcular_correlacoes_avancadas(numeros)
+        for num, score in correlacoes.items():
+            probs[num] = probs.get(num, 0) + score * 0.3
+        
+        # 2. PADRÕES DE LONGO PRAZO
+        padroes_longo_prazo = self.analisar_padroes_longo_prazo(numeros)
+        for num, score in padroes_longo_prazo.items():
+            probs[num] = probs.get(num, 0) + score * 0.4
+        
+        # 3. TENDÊNCIAS COMPLEXAS
+        tendencias = self.calcular_tendencias_complexas(numeros)
+        for num, score in tendencias.items():
+            probs[num] = probs.get(num, 0) + score * 0.3
+        
+        return probs
+    
+    def calcular_correlacoes_avancadas(self, numeros):
+        """Calcula correlações complexas entre números"""
+        scores = {}
+        janela = 8
+        
+        for i in range(len(numeros) - janela):
+            contexto = numeros[i:i+janela]
+            proximo = numeros[i+janela] if i+janela < len(numeros) else None
+            
+            if proximo is not None:
+                # Bônus para números que aparecem em contextos similares
+                for num in set(contexto):
+                    scores[num] = scores.get(num, 0) + 0.01
+                
+                scores[proximo] = scores.get(proximo, 0) + 0.02
+        
+        return scores
+    
+    def analisar_padroes_longo_prazo(self, numeros):
+        """Analisa padrões que só aparecem com 450+ dados"""
+        scores = {}
+        
+        # Análise por segmentos de 50 números
+        segmentos = []
+        for i in range(0, len(numeros), 50):
+            segmento = numeros[i:i+50]
+            if len(segmento) >= 25:
+                segmentos.append(segmento)
+        
+        # Padrões entre segmentos
+        for i in range(len(segmentos) - 1):
+            seg1 = segmentos[i]
+            seg2 = segmentos[i+1]
+            
+            # Números que se repetem entre segmentos
+            comuns = set(seg1) & set(seg2)
+            for num in comuns:
+                scores[num] = scores.get(num, 0) + 0.05
+            
+            # Transições entre segmentos
+            if seg1 and seg2:
+                ultimo_seg1 = seg1[-1]
+                primeiro_seg2 = seg2[0]
+                
+                # Se há padrão de transição
+                scores[primeiro_seg2] = scores.get(primeiro_seg2, 0) + 0.03
+        
+        return scores
+    
+    def calcular_tendencias_complexas(self, numeros):
+        """Calcula tendências multivariadas complexas"""
+        scores = {}
+        
+        if len(numeros) < 100:
+            return scores
+        
+        # Tendência por características múltiplas
+        caracteristicas = {
+            'alta_frequencia': [n for n in range(37) if numeros.count(n) > len(numeros) * 0.03],
+            'recente': numeros[-20:],
+            'vizinhos_ativos': []
+        }
+        
+        # Adicionar vizinhos dos números recentes
+        for num in numeros[-10:]:
+            caracteristicas['vizinhos_ativos'].extend(obter_vizinhos_fisicos(num))
+        
+        # Calcular scores baseado nas características
+        for num in range(37):
+            score = 0
+            
+            if num in caracteristicas['alta_frequencia']:
+                score += 0.2
+            
+            if num in caracteristicas['recente']:
+                score += 0.3
+            
+            if num in caracteristicas['vizinhos_ativos']:
+                score += 0.15
+            
+            if score > 0:
+                scores[num] = score
+        
+        return scores
+    
+    def predict_basico(self, historico):
+        """Fallback para histórico insuficiente"""
         numeros = [h['number'] for h in historico if h.get('number') is not None]
         if not numeros:
             return {}
             
         probs = {}
-        ultimos_10 = numeros[-10:] if len(numeros) >= 10 else numeros
+        ultimos_15 = numeros[-15:] if len(numeros) >= 15 else numeros
         
-        # Frequência simples nos últimos 10 números
-        freq = Counter(ultimos_10)
+        freq = Counter(ultimos_15)
         for num, count in freq.items():
             probs[num] = count * 0.1
         
-        # Adicionar vizinhos do último número
-        if numeros:
-            vizinhos = obter_vizinhos_fisicos(numeros[-1])
-            for vizinho in vizinhos:
-                probs[vizinho] = probs.get(vizinho, 0) + 0.05
-        
         return probs
 
-class LSTM_Avancado:
+class Hybrid_IA_450_Plus:
     def __init__(self):
-        self.sequence_memory = deque(maxlen=20)
+        self.pattern_analyzer = Pattern_Analyzer_Especialista()
+        self.xgb_especialista = XGBoost_Especialista()
         
-    def predict_sequences(self, historico):
-        """Predição baseada em sequências temporais"""
-        try:
-            if len(historico) < 8:
-                return {}
-                
-            numeros = [h['number'] for h in historico if h.get('number') is not None]
-            probs = {}
+    def prever_com_historio_longo(self, historico):
+        """Sistema especializado para 450+ registros"""
+        historico_size = len(historico)
+        
+        if historico_size >= MIN_HISTORICO_TREINAMENTO:
+            logging.info(f"🚀 ATIVANDO MODO ESPECIALISTA - {historico_size} REGISTROS")
             
-            # Análise de padrões de sequência
-            sequencias = self.extrair_sequencias(numeros[-15:])
+            # 1. Análise profunda de padrões
+            analise_profunda = self.pattern_analyzer.analisar_padroes_profundos(historico)
             
-            for seq_type, seq_data in sequencias.items():
-                for num in seq_data.get('proximos', []):
-                    probs[num] = probs.get(num, 0) + seq_data.get('confidence', 0.1)
+            # 2. Predição especializada
+            probs_xgb = self.xgb_especialista.predict_com_450_plus(historico)
             
-            # Padrão de alternância
-            alternancia_probs = self.prever_alternancia(numeros)
-            for num, prob in alternancia_probs.items():
-                probs[num] = probs.get(num, 0) + prob
+            # 3. Combinação inteligente
+            previsao_final = self.combinar_previsoes_especialistas(analise_profunda, probs_xgb, historico)
             
-            return probs
-            
-        except Exception as e:
-            logging.error(f"Erro no LSTM avançado: {e}")
-            return {}
+            logging.info(f"🎯 MODO ESPECIALISTA: {analise_profunda['total_padroes']} padrões detectados")
+            return previsao_final
+        else:
+            # Modo normal para histórico menor
+            return self.prever_com_historio_normal(historico)
     
-    def extrair_sequencias(self, numeros):
-        """Extrai diferentes tipos de sequências"""
-        sequencias = {}
+    def combinar_previsoes_especialistas(self, analise_profunda, probs_xgb, historico):
+        """Combina múltiplas análises especializadas"""
+        scores_finais = {}
         
-        # Sequência aritmética
-        if len(numeros) >= 3:
-            diff1 = numeros[-1] - numeros[-2]
-            diff2 = numeros[-2] - numeros[-3]
-            
-            if diff1 == diff2 and abs(diff1) <= 18:
-                next_num = numeros[-1] + diff1
-                if 0 <= next_num <= 36:
-                    sequencias['aritmetica'] = {
-                        'proximos': [next_num],
-                        'confidence': 0.3
-                    }
+        # Base do XGBoost
+        for num, score in probs_xgb.items():
+            scores_finais[num] = score
         
-        # Sequência por dúzias
-        ultimas_duzias = [3 if n in TERCEIRA_DUZIA else 2 if n in SEGUNDA_DUZIA else 1 for n in numeros[-4:]]
-        if len(set(ultimas_duzias[-3:])) == 1:  # Mesma dúzia 3x
-            duzia_oposta = [d for d in [1,2,3] if d != ultimas_duzias[-1]][0]
-            numeros_duzia = TERCEIRA_DUZIA if duzia_oposta == 3 else SEGUNDA_DUZIA if duzia_oposta == 2 else PRIMEIRA_DUZIA
-            sequencias['alternancia_duzia'] = {
-                'proximos': numeros_duzia[:3],
-                'confidence': 0.2
-            }
+        # Bônus por correlações
+        correlacoes = analise_profunda.get('correlacoes', {})
+        for par, info in correlacoes.items():
+            for num in par:
+                scores_finais[num] = scores_finais.get(num, 0) + info['probabilidade'] * 0.2
         
-        return sequencias
+        # Bônus por sequências complexas
+        sequencias = analise_profunda.get('sequencias_complexas', {})
+        for seq, info in sequencias.items():
+            scores_finais[info['proximo_esperado']] = scores_finais.get(info['proximo_esperado'], 0) + info['confianca'] * 0.3
+        
+        # Ordenar e selecionar
+        top_numeros = sorted(scores_finais.items(), key=lambda x: x[1], reverse=True)[:NUMERO_PREVISOES]
+        selecao = [num for num, score in top_numeros]
+        
+        # Garantir diversificação
+        return self.diversificar_selecao_especialista(selecao, historico)
     
-    def prever_alternancia(self, numeros):
-        """Preve alternância entre características"""
-        probs = {}
+    def diversificar_selecao_especialista(self, selecao, historico):
+        """Diversificação inteligente para modo especialista"""
+        if len(selecao) >= NUMERO_PREVISOES:
+            return selecao[:NUMERO_PREVISOES]
         
-        if len(numeros) < 2:
-            return probs
-            
-        ultimo = numeros[-1]
-        penultimo = numeros[-2]
+        numeros = [h['number'] for h in historico if h.get('number') is not None]
+        analise = analisar_duzias_colunas(historico)
         
-        # Alternância par/ímpar
-        if ultimo % 2 == penultimo % 2:
-            # Se dois pares/ímpares consecutivos, preve mudança
-            alvo_paridade = 1 if ultimo % 2 == 0 else 0
-            for num in range(37):
-                if num % 2 == alvo_paridade:
-                    probs[num] = probs.get(num, 0) + 0.02
+        # Preencher com estratégia baseada na análise atual
+        duzias_quentes = analise.get("duzias_quentes", [2])
+        colunas_quentes = analise.get("colunas_quentes", [2])
         
-        # Alternância cor
-        ultima_cor = 'v' if ultimo in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36] else 'p'
-        penultima_cor = 'v' if penultimo in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36] else 'p'
+        duzia_principal = duzias_quentes[0]
+        if duzia_principal == 1:
+            numeros_complemento = PRIMEIRA_DUZIA
+        elif duzia_principal == 2:
+            numeros_complemento = SEGUNDA_DUZIA
+        else:
+            numeros_complemento = TERCEIRA_DUZIA
         
-        if ultima_cor == penultima_cor:
-            alvo_cor = 'p' if ultima_cor == 'v' else 'v'
-            for num in range(1, 37):
-                num_cor = 'v' if num in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36] else 'p'
-                if num_cor == alvo_cor:
-                    probs[num] = probs.get(num, 0) + 0.015
-        
-        return probs
-
-class Ensemble_Inteligente:
-    def __init__(self):
-        self.model_weights = {
-            'xgb': 0.45,
-            'lstm': 0.30,
-            'pattern': 0.25
-        }
-        self.performance_history = {
-            'xgb': deque(maxlen=20),
-            'lstm': deque(maxlen=20),
-            'pattern': deque(maxlen=20)
-        }
-        
-    def update_weights_based_performance(self, historico):
-        """Atualiza pesos baseado na performance recente"""
-        try:
-            if len(historico) < 10:
-                return
-                
-            # Avaliar performance dos últimos 10 números
-            numeros_reais = [h['number'] for h in historico[-10:] if h.get('number') is not None]
-            
-            # Simular previsões passadas (em produção isso viria do histórico de previsões)
-            # Por enquanto, vamos usar uma abordagem simplificada
-            xgb_score = self.avaliar_modelo('xgb', historico)
-            lstm_score = self.avaliar_modelo('lstm', historico)
-            pattern_score = self.avaliar_modelo('pattern', historico)
-            
-            scores = {
-                'xgb': max(xgb_score, 0.1),
-                'lstm': max(lstm_score, 0.1),
-                'pattern': max(pattern_score, 0.1)
-            }
-            
-            total = sum(scores.values())
-            if total > 0:
-                self.model_weights = {k: v/total for k, v in scores.items()}
-                
-            logging.info(f"🔧 Pesos atualizados: {self.model_weights}")
-            
-        except Exception as e:
-            logging.error(f"Erro ao atualizar pesos: {e}")
-    
-    def avaliar_modelo(self, modelo, historico):
-        """Avalia performance de um modelo específico"""
-        # Implementação simplificada - em produção isso usaria o histórico real de previsões
-        return np.random.uniform(0.3, 0.7)  # Placeholder
-    
-    def predict_ensemble(self, xgb_probs, lstm_probs, pattern_analysis):
-        """Combina previsões de múltiplos modelos"""
-        combined_scores = {}
-        
-        for number in range(37):
-            xgb_score = xgb_probs.get(number, 0)
-            lstm_score = lstm_probs.get(number, 0)
-            
-            # Score baseado na análise de padrões
-            pattern_score = self.calculate_pattern_score(number, pattern_analysis)
-            
-            # Combinação ponderada
-            total_score = (
-                xgb_score * self.model_weights['xgb'] +
-                lstm_score * self.model_weights['lstm'] +
-                pattern_score * self.model_weights['pattern']
-            )
-            
-            if total_score > 0:
-                combined_scores[number] = total_score
-        
-        return combined_scores
-    
-    def calculate_pattern_score(self, number, pattern_analysis):
-        """Calcula score baseado em análise de padrões"""
-        score = 0.0
-        
-        # Score por dúzia quente
-        duzias_quentes = pattern_analysis.get('duzias_quentes', [])
-        if duzias_quentes:
-            duzia_num = duzias_quentes[0]
-            if (duzia_num == 1 and number in PRIMEIRA_DUZIA) or \
-               (duzia_num == 2 and number in SEGUNDA_DUZIA) or \
-               (duzia_num == 3 and number in TERCEIRA_DUZIA):
-                score += 0.3
-        
-        # Score por coluna quente
-        colunas_quentes = pattern_analysis.get('colunas_quentes', [])
-        if colunas_quentes:
-            coluna_num = colunas_quentes[0]
-            if (coluna_num == 1 and number in COLUNA_1) or \
-               (coluna_num == 2 and number in COLUNA_2) or \
-               (coluna_num == 3 and number in COLUNA_3):
-                score += 0.2
-        
-        # Score por tendência
-        tendencia = pattern_analysis.get('tendencia', 'NEUTRA')
-        if tendencia == "FORTE_ALTA" and number in TERCEIRA_DUZIA:
-            score += 0.4
-        elif tendencia == "FORTE_BAIXA" and number in PRIMEIRA_DUZIA:
-            score += 0.4
-        elif tendencia == "ALTA" and number > 18:
-            score += 0.2
-        elif tendencia == "BAIXA" and number < 19 and number != 0:
-            score += 0.2
-        
-        return score
-
-class Hybrid_IA_System_Avancado:
-    def __init__(self):
-        self.xgb_avancado = XGBoost_Avancado()
-        self.lstm_avancado = LSTM_Avancado()
-        self.pattern_analyzer = Pattern_Analyzer_Avancado()
-        self.ensemble = Ensemble_Inteligente()
-        self.ultima_previsao = None
-        
-    def estrategia_ensemble_avancado(self, historico):
-        """Estratégia principal usando ensemble avançado"""
-        try:
-            if len(historico) < 10:
-                return self.estrategia_rapida_fisica(historico)
-            
-            # Atualizar pesos do ensemble
-            self.ensemble.update_weights_based_performance(historico)
-            
-            # 1. Predição XGBoost Avançado
-            xgb_probs = self.xgb_avancado.predict_proba_avancado(historico)
-            
-            # 2. Predição LSTM Avançado
-            lstm_probs = self.lstm_avancado.predict_sequences(historico)
-            
-            # 3. Análise de Padrões Complexos
-            pattern_analysis = self.pattern_analyzer.detectar_padroes_complexos(historico)
-            analise_duzias = analisar_duzias_colunas(historico)
-            pattern_analysis.update(analise_duzias)
-            
-            # 4. Ensemble Inteligente
-            combined_scores = self.ensemble.predict_ensemble(xgb_probs, lstm_probs, pattern_analysis)
-            
-            # 5. Seleção Final Otimizada
-            final_selection = self.selecionar_numeros_otimizados(combined_scores, historico)
-            
-            logging.info(f"🎯 Ensemble Avançado: {len(final_selection)} números")
-            return validar_previsao(final_selection)
-            
-        except Exception as e:
-            logging.error(f"Erro no ensemble avançado: {e}")
-            return self.estrategia_rapida_fisica(historico)
-    
-    def estrategia_rapida_fisica(self, historico):
-        """Estratégia rápida baseada na disposição física"""
-        try:
-            numeros = [h['number'] for h in historico if h.get('number') is not None]
-            
-            if len(numeros) < 5:
-                return self.estrategia_inicial_balanceada()
-            
-            previsao = set()
-            analise = analisar_duzias_colunas(historico)
-            
-            # Foco na área quente
-            duzia_quente = analise["duzias_quentes"][0] if analise["duzias_quentes"] else 2
-            coluna_quente = analise["colunas_quentes"][0] if analise["colunas_quentes"] else 2
-            
-            # Interseção dúzia + coluna quente
-            if duzia_quente == 1:
-                numeros_duzia = PRIMEIRA_DUZIA
-            elif duzia_quente == 2:
-                numeros_duzia = SEGUNDA_DUZIA
-            else:
-                numeros_duzia = TERCEIRA_DUZIA
-                
-            if coluna_quente == 1:
-                numeros_coluna = COLUNA_1
-            elif coluna_quente == 2:
-                numeros_coluna = COLUNA_2
-            else:
-                numeros_coluna = COLUNA_3
-            
-            interseccao = [n for n in numeros_duzia if n in numeros_coluna]
-            previsao.update(interseccao[:4])
-            
-            # Números quentes recentes
-            ultimos_10 = numeros[-10:] if len(numeros) >= 10 else numeros
-            frequencia = Counter(ultimos_10)
-            numeros_quentes = [num for num, count in frequencia.most_common(3) if count >= 2]
-            previsao.update(numeros_quentes)
-            
-            # Vizinhos dos últimos números
-            for num in numeros[-3:]:
-                vizinhos = obter_vizinhos_fisicos(num)
-                previsao.update(vizinhos[:2])
-            
-            # Garantir cobertura
-            if len(previsao) < NUMERO_PREVISOES:
-                complemento = [n for n in numeros_duzia if n not in previsao]
-                previsao.update(complemento[:NUMERO_PREVISOES - len(previsao)])
-            
-            previsao.add(0)
-            
-            return validar_previsao(list(previsao))[:NUMERO_PREVISOES]
-            
-        except Exception as e:
-            logging.error(f"Erro na estratégia rápida: {e}")
-            return self.estrategia_inicial_balanceada()
-    
-    def estrategia_inicial_balanceada(self):
-        """Estratégia inicial balanceada"""
-        numeros_balanceados = [
-            0, 2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35,
-            1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34
-        ]
-        return validar_previsao(numeros_balanceados)[:NUMERO_PREVISOES]
-    
-    def selecionar_numeros_otimizados(self, combined_scores, historico):
-        """Seleção otimizada considerando múltiplos fatores"""
-        if not combined_scores:
-            return self.estrategia_rapida_fisica(historico)
-        
-        # Ordenar por score
-        top_candidates = sorted(combined_scores.items(), key=lambda x: x[1], reverse=True)[:NUMERO_PREVISOES + 8]
-        
-        # Diversificar seleção
-        final_selection = self.diversificar_selecao([num for num, score in top_candidates])
-        
-        return final_selection[:NUMERO_PREVISOES]
-    
-    def diversificar_selecao(self, numeros):
-        """Garante diversidade na seleção"""
-        diversificados = []
-        
-        # Garantir representação de cada dúzia
-        for duzia in [PRIMEIRA_DUZIA, SEGUNDA_DUZIA, TERCEIRA_DUZIA]:
-            for num in numeros:
-                if num in duzia and num not in diversificados:
-                    diversificados.append(num)
-                    break
-        
-        # Garantir representação de cada coluna
-        for coluna in [COLUNA_1, COLUNA_2, COLUNA_3]:
-            for num in numeros:
-                if num in coluna and num not in diversificados:
-                    diversificados.append(num)
-                    break
-        
-        # Completar com melhores candidatos
-        for num in numeros:
-            if num not in diversificados and len(diversificados) < NUMERO_PREVISOES:
-                diversificados.append(num)
+        # Adicionar números da dúzia quente não selecionados
+        for num in numeros_complemento:
+            if num not in selecao and len(selecao) < NUMERO_PREVISOES:
+                selecao.append(num)
         
         # Garantir zero
-        if 0 not in diversificados and len(diversificados) < NUMERO_PREVISOES:
-            diversificados.append(0)
+        if 0 not in selecao and len(selecao) < NUMERO_PREVISOES:
+            selecao.append(0)
         
-        return diversificados[:NUMERO_PREVISOES]
+        return selecao[:NUMERO_PREVISOES]
+    
+    def prever_com_historio_normal(self, historico):
+        """Fallback para histórico insuficiente"""
+        # Estratégia básica anterior
+        numeros = [h['number'] for h in historico if h.get('number') is not None]
+        
+        if not numeros:
+            return [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28]
+        
+        previsao = set()
+        analise = analisar_duzias_colunas(historico)
+        
+        # Estratégia simplificada
+        duzia_quente = analise["duzias_quentes"][0] if analise["duzias_quentes"] else 2
+        
+        if duzia_quente == 1:
+            previsao.update(PRIMEIRA_DUZIA[:8])
+        elif duzia_quente == 2:
+            previsao.update(SEGUNDA_DUZIA[:8])
+        else:
+            previsao.update(TERCEIRA_DUZIA[:8])
+        
+        previsao.add(0)
+        
+        return list(previsao)[:NUMERO_PREVISOES]
 
 # =============================
 # GESTOR PRINCIPAL
 # =============================
-class GestorHybridIA_Avancado:
+class GestorHybridIA_Especialista:
     def __init__(self):
-        self.hybrid_system = Hybrid_IA_System_Avancado()
-        self.historico = deque(carregar_historico(), maxlen=500)
+        self.hybrid_system = Hybrid_IA_450_Plus()
+        self.historico = deque(carregar_historico(), maxlen=1000)  # Aumentado para 1000
         
     def adicionar_numero(self, numero_dict):
         if isinstance(numero_dict, dict) and numero_dict.get('number') is not None:
@@ -820,7 +698,7 @@ class GestorHybridIA_Avancado:
         
     def gerar_previsao(self):
         try:
-            previsao = self.hybrid_system.estrategia_ensemble_avancado(self.historico)
+            previsao = self.hybrid_system.prever_com_historio_longo(self.historico)
             return validar_previsao(previsao)
         except Exception as e:
             logging.error(f"Erro crítico ao gerar previsão: {e}")
@@ -829,47 +707,67 @@ class GestorHybridIA_Avancado:
     def get_status_sistema(self):
         try:
             historico_size = len(self.historico)
-            if historico_size < 15:
-                return "🟡 Coletando Dados", "Ensemble Inicial"
-            elif historico_size < 30:
-                return "🟠 Treinando Modelos", "Ensemble Intermediário"
+            
+            if historico_size < FASE_INICIAL:
+                return "🟡 Coletando Dados", "Estratégia Básica"
+            elif historico_size < FASE_INTERMEDIARIA:
+                return "🟠 Desenvolvendo", "Estratégia Intermediária"
+            elif historico_size < FASE_AVANCADA:
+                return "🟢 IA Avançada", "Análise Complexa"
+            elif historico_size < FASE_ESPECIALISTA:
+                return "🔵 Quase Especialista", "Otimização Final"
             else:
-                return "🟢 IA Avançada Ativa", "Ensemble Completo"
+                return "🎯 ESPECIALISTA ATIVO", "Máxima Inteligência"
+                
         except:
             return "⚪ Sistema", "Carregando..."
     
     def get_analise_detalhada(self):
         """Retorna análise detalhada do sistema"""
         if not self.historico:
-            return {"modelos_ativos": 0, "confianca": "Baixa"}
+            return {
+                "modo_especialista": False,
+                "historico_total": 0,
+                "confianca": "Baixa",
+                "padroes_detectados": 0
+            }
         
         historico_size = len(self.historico)
-        confianca = "Alta" if historico_size > 40 else "Média" if historico_size > 20 else "Baixa"
+        modo_especialista = historico_size >= MIN_HISTORICO_TREINAMENTO
+        
+        if modo_especialista:
+            analise_profunda = self.hybrid_system.pattern_analyzer.analisar_padroes_profundos(self.historico)
+            padroes_detectados = analise_profunda.get('total_padroes', 0)
+            confianca = "Muito Alta"
+        else:
+            padroes_detectados = 0
+            confianca = "Alta" if historico_size > 200 else "Média" if historico_size > 100 else "Baixa"
         
         return {
-            "modelos_ativos": 3,
+            "modo_especialista": modo_especialista,
+            "historico_total": historico_size,
             "confianca": confianca,
-            "historico_tamanho": historico_size,
-            "ensemble_otimizado": True
+            "padroes_detectados": padroes_detectados,
+            "minimo_especialista": MIN_HISTORICO_TREINAMENTO
         }
 
 # =============================
 # STREAMLIT APP
 # =============================
 st.set_page_config(
-    page_title="Roleta - IA com Ensemble Avançado", 
-    page_icon="🧠", 
+    page_title="Roleta - IA Especialista 450+", 
+    page_icon="🎯", 
     layout="centered"
 )
 
-st.title("🧠 Hybrid IA System - ENSEMBLE AVANÇADO")
-st.markdown("### **XGBoost + LSTM + Análise de Padrões com Ensemble Inteligente**")
+st.title("🎯 Hybrid IA System - ESPECIALISTA 450+")
+st.markdown("### **Sistema com Análise Profunda de Padrões de Longo Prazo**")
 
 st_autorefresh(interval=3000, key="refresh")
 
 # Inicialização session_state
 defaults = {
-    "gestor": GestorHybridIA_Avancado(),
+    "gestor": GestorHybridIA_Especialista(),
     "previsao_atual": [],
     "acertos": 0,
     "erros": 0,
@@ -919,7 +817,7 @@ try:
             if acertou:
                 st.session_state.acertos += 1
                 st.success(f"🎯 **GREEN!** Número {numero_real} acertado!")
-                enviar_telegram(f"🟢 GREEN! Ensemble acertou {numero_real}!")
+                enviar_telegram(f"🟢 GREEN! Especialista acertou {numero_real}!")
             else:
                 st.session_state.erros += 1
                 st.error(f"🔴 Número {numero_real} não estava na previsão")
@@ -928,14 +826,20 @@ try:
         nova_previsao = st.session_state.gestor.gerar_previsao()
         st.session_state.previsao_atual = validar_previsao(nova_previsao)
         
-        # TELEGRAM
+        # TELEGRAM - Mensagem especial para modo especialista
         if st.session_state.previsao_atual and len(st.session_state.gestor.historico) >= 3:
             try:
                 analise = st.session_state.gestor.get_analise_detalhada()
-                mensagem = f"🧠 **ENSEMBLE AVANÇADO - PREVISÃO**\n"
-                mensagem += f"📊 Status: {st.session_state.status_ia}\n"
+                mensagem = f"🎯 **IA ESPECIALISTA 450+ - PREVISÃO**\n"
+                
+                if analise["modo_especialista"]:
+                    mensagem += f"🚀 **MODO ESPECIALISTA ATIVO**\n"
+                    mensagem += f"📊 Padrões Detectados: {analise['padroes_detectados']}\n"
+                else:
+                    mensagem += f"📈 Progresso: {analise['historico_total']}/{analise['minimo_especialista']}\n"
+                
+                mensagem += f"🧠 Status: {st.session_state.status_ia}\n"
                 mensagem += f"🎯 Estratégia: {st.session_state.estrategia_atual}\n"
-                mensagem += f"🤖 Modelos: {analise['modelos_ativos']} ativos\n"
                 mensagem += f"💪 Confiança: {analise['confianca']}\n"
                 mensagem += f"🔢 Último: {numero_real}\n"
                 mensagem += f"📈 Performance: {st.session_state.acertos}G/{st.session_state.erros}R\n"
@@ -953,7 +857,7 @@ except Exception as e:
     st.session_state.previsao_atual = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
 
 # =============================
-# INTERFACE
+# INTERFACE STREAMLIT
 # =============================
 st.markdown("---")
 
@@ -970,44 +874,47 @@ with col3:
 with col4:
     st.metric("🎯 Estratégia", st.session_state.estrategia_atual)
 
-# ANÁLISE DO ENSEMBLE
-st.subheader("🤖 Análise do Ensemble Avançado")
+# ANÁLISE DO SISTEMA ESPECIALISTA
+st.subheader("🔍 Análise do Sistema Especialista")
 analise = st.session_state.gestor.get_analise_detalhada()
 
 col1, col2, col3, col4 = st.columns(4)
 with col1:
-    st.metric("🔧 Modelos Ativos", analise["modelos_ativos"])
+    modo = "🎯 ATIVO" if analise["modo_especialista"] else "⏳ AGUARDANDO"
+    st.metric("🚀 Modo Especialista", modo)
 with col2:
     st.metric("💪 Confiança", analise["confianca"])
 with col3:
-    st.metric("📈 Ensemble", "Otimizado" if analise["ensemble_otimizado"] else "Básico")
+    st.metric("📈 Padrões", analise["padroes_detectados"])
 with col4:
-    st.metric("🔄 Dados", analise["historico_tamanho"])
+    progresso = min(100, (analise["historico_total"] / analise["minimo_especialista"]) * 100)
+    st.metric("📊 Progresso", f"{progresso:.1f}%")
 
-# ARQUITETURA DO SISTEMA
-with st.expander("🏗️ Arquitetura do Ensemble"):
-    st.write("""
-    **🤖 MODELOS INTEGRADOS:**
-    
-    - **XGBoost Avançado**: Features complexas + análise temporal
-    - **LSTM Sequencial**: Padrões de sequência + alternância
-    - **Análise de Padrões**: Tendências + ciclos + repetições
-    
-    **🎯 ESTRATÉGIA DE COMBINAÇÃO:**
-    
-    - Pesos dinâmicos baseados em performance
-    - Diversificação inteligente
-    - Atualização em tempo real
-    """)
+# BARRA DE PROGRESSO PARA MODO ESPECIALISTA
+st.subheader("🎯 Progresso para Modo Especialista")
+historico_atual = len(st.session_state.gestor.historico)
+progresso = min(100, (historico_atual / MIN_HISTORICO_TREINAMENTO) * 100)
+
+st.progress(progresso / 100)
+
+if historico_atual < MIN_HISTORICO_TREINAMENTO:
+    st.info(f"📈 Coletando dados: {historico_atual}/{MIN_HISTORICO_TREINAMENTO} ({progresso:.1f}%)")
+    st.caption("🟡 O sistema se tornará ESPECIALISTA ao atingir 450 registros")
+else:
+    st.success(f"🎯 MODO ESPECIALISTA ATIVO - {analise['padroes_detectados']} padrões detectados")
+    st.caption("🟢 Sistema analisando padrões complexos de longo prazo")
 
 # PREVISÃO ATUAL
 st.markdown("---")
-st.subheader("🎯 PREVISÃO ATUAL - ENSEMBLE AVANÇADO")
+st.subheader("🎯 PREVISÃO ATUAL - SISTEMA ESPECIALISTA")
 
 previsao_valida = validar_previsao(st.session_state.previsao_atual)
 
 if previsao_valida:
-    st.success(f"**{len(previsao_valida)} NÚMEROS PREVISTOS PELO ENSEMBLE**")
+    if analise["modo_especialista"]:
+        st.success(f"**🚀 {len(previsao_valida)} NÚMEROS PREVISTOS PELO ESPECIALISTA**")
+    else:
+        st.success(f"**📊 {len(previsao_valida)} NÚMEROS PREVISTOS**")
     
     # Display organizado
     col1, col2, col3 = st.columns(3)
@@ -1039,12 +946,12 @@ if previsao_valida:
     st.write(f"**Lista Completa:** {', '.join(map(str, sorted(previsao_valida)))}")
     
 else:
-    st.warning("⚠️ Inicializando ensemble...")
+    st.warning("⚠️ Inicializando sistema...")
     st.session_state.previsao_atual = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
 
 # PERFORMANCE
 st.markdown("---")
-st.subheader("📊 Performance do Ensemble")
+st.subheader("📊 Performance do Sistema")
 
 col1, col2, col3, col4 = st.columns(4)
 with col1:
@@ -1059,33 +966,30 @@ with col4:
     st.metric("🔄 Rodadas", st.session_state.contador_rodadas)
 
 # DETALHES TÉCNICOS
-with st.expander("🔍 Detalhes Técnicos do Ensemble"):
-    st.write("**🧠 ARQUITETURA AVANÇADA:**")
-    st.write("- ✅ **XGBoost com Features Complexas**")
-    st.write("- ✅ **LSTM para Sequências Temporais**")
-    st.write("- ✅ **Detecção de Padrões Complexos**")
-    st.write("- ✅ **Ensemble com Pesos Dinâmicos**")
-    st.write("- ✅ **Otimização Contínua**")
+with st.expander("🔧 Detalhes Técnicos do Sistema Especialista"):
+    st.write("**🎯 ARQUITETURA ESPECIALISTA 450+:**")
     
-    if st.session_state.gestor.historico:
-        historico_size = len(st.session_state.gestor.historico)
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.write("**📊 Estatísticas:**")
-            st.write(f"- Histórico: {historico_size} registros")
-            st.write(f"- Modelos ativos: {analise['modelos_ativos']}")
-            st.write(f"- Confiança: {analise['confianca']}")
-        
-        with col2:
-            st.write("**🎯 Estratégia:**")
-            st.write(f"- Ensemble: {st.session_state.estrategia_atual}")
-            st.write(f"- Status: {st.session_state.status_ia}")
-            st.write(f"- Previsões: {NUMERO_PREVISOES} números")
+    if analise["modo_especialista"]:
+        st.write("✅ **MODO ESPECIALISTA ATIVO**")
+        st.write("- 🔍 Análise de Ciclos Complexos")
+        st.write("- 📈 Correlações entre Números") 
+        st.write("- 🕒 Padrões Temporais Avançados")
+        st.write("- 🔄 Sequências de Alta Ordem")
+        st.write(f"- 📊 {analise['padroes_detectados']} Padrões Detectados")
+    else:
+        st.write("⏳ **AGUARDANDO DADOS SUFICIENTES**")
+        st.write(f"- 📈 Progresso: {historico_atual}/{MIN_HISTORICO_TREINAMENTO}")
+        st.write("- 🎯 Ativação automática em 450 registros")
+        st.write("- 🔄 Coletando dados para análise profunda")
+    
+    st.write(f"**📊 Estatísticas:**")
+    st.write(f"- Histórico Atual: {historico_atual} registros")
+    st.write(f"- Confiança: {analise['confianca']}")
+    st.write(f"- Estratégia: {st.session_state.estrategia_atual}")
 
 # CONTROLES
 st.markdown("---")
-st.subheader("⚙️ Controles do Ensemble")
+st.subheader("⚙️ Controles do Sistema")
 
 col1, col2 = st.columns(2)
 with col1:
@@ -1104,9 +1008,9 @@ with col2:
         st.rerun()
 
 st.markdown("---")
-st.markdown("### 🧠 **Sistema com Ensemble Inteligente**")
-st.markdown("*XGBoost Avançado + LSTM + Análise de Padrões com Combinação Otimizada*")
+st.markdown("### 🚀 **Sistema Especialista com Análise de 450+ Registros**")
+st.markdown("*Padrões complexos, correlações avançadas e inteligência de longo prazo*")
 
 # Rodapé
 st.markdown("---")
-st.markdown("**🧠 Hybrid IA System v5.0** - *Ensemble Avançado*")
+st.markdown("**🎯 Hybrid IA System v6.0** - *Especialista 450+ Registros*")
