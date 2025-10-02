@@ -69,7 +69,7 @@ def enviar_telegram(msg: str, token=TELEGRAM_TOKEN, chat_id=TELEGRAM_CHAT_ID):
         logging.error(f"Erro ao enviar para Telegram: {e}")
 
 def enviar_alerta_rapido(numeros):
-    """Envia alerta no formato: 3 linhas de 5 números ordenados"""
+    """Envia alerta no formato: 2 linhas (8 + 7 números) ordenados"""
     try:
         if not numeros or len(numeros) != 15:
             return
@@ -77,13 +77,12 @@ def enviar_alerta_rapido(numeros):
         # Ordena os números do menor para o maior
         numeros_ordenados = sorted(numeros)
         
-        # Divide em 3 linhas de 5 números cada
-        linha1 = ' '.join(map(str, numeros_ordenados[0:5]))
-        linha2 = ' '.join(map(str, numeros_ordenados[5:10]))
-        linha3 = ' '.join(map(str, numeros_ordenados[10:15]))
+        # Divide em 2 linhas: 8 números na primeira, 7 na segunda
+        linha1 = ' '.join(map(str, numeros_ordenados[0:8]))
+        linha2 = ' '.join(map(str, numeros_ordenados[8:15]))
         
-        # Formata EXATAMENTE como você quer
-        mensagem = f"N {linha1}\n{linha2}\n{linha3}"
+        # Formata EXATAMENTE como você quer - 2 LINHAS
+        mensagem = f"N {linha1}\n{linha2}"
         
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
         payload = {
@@ -91,7 +90,7 @@ def enviar_alerta_rapido(numeros):
             "text": mensagem
         }
         requests.post(url, data=payload, timeout=5)
-        logging.info(f"📤 Alerta enviado no formato 3x5")
+        logging.info(f"📤 Alerta enviado no formato 2x (8+7)")
         
     except Exception as e:
         logging.error(f"Erro alerta: {e}")
