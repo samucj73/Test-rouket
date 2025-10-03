@@ -96,6 +96,57 @@ def enviar_alerta_rapido(numeros):
     except Exception as e:
         logging.error(f"Erro alerta: {e}")
 
+def enviar_alerta_contextual(numeros):
+    """Envia alerta contextual no formato: 2 linhas (4 + 4 números) ordenados"""
+    try:
+        if not numeros or len(numeros) != 8:
+            return
+            
+        # Ordena os números do menor para o maior
+        numeros_ordenados = sorted(numeros)
+        
+        # Divide em 2 linhas: 4 números na primeira, 4 na segunda
+        linha1 = ' '.join(map(str, numeros_ordenados[0:4]))
+        linha2 = ' '.join(map(str, numeros_ordenados[4:8]))
+        
+        # Formata EXATAMENTE como você quer - 2 LINHAS
+        mensagem = f"C {linha1}\n{linha2}"
+        
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        payload = {
+            "chat_id": TELEGRAM_CHAT_ID, 
+            "text": mensagem
+        }
+        requests.post(url, data=payload, timeout=5)
+        logging.info(f"📤 Alerta CONTEXTUAL enviado: 8 números")
+        
+    except Exception as e:
+        logging.error(f"Erro alerta contextual: {e}")
+
+def enviar_alerta_resultado(acertou, numero_sorteado, previsao_anterior):
+    """Envia alerta de resultado (GREEN/RED)"""
+    try:
+        if acertou:
+            mensagem = f"🟢 GREEN! Número {numero_sorteado} acertado na previsão!"
+            emoji = "🟢"
+        else:
+            mensagem = f"🔴 RED! Número {numero_sorteado} não estava na previsão anterior."
+            emoji = "🔴"
+        
+        # Adiciona informações extras
+        mensagem += f"\n🎯 Previsão anterior: {', '.join(map(str, sorted(previsao_anterior)))}"
+        
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        payload = {
+            "chat_id": TELEGRAM_CHAT_ID, 
+            "text": mensagem
+        }
+        requests.post(url, data=payload, timeout=5)
+        logging.info(f"📤 Alerta de RESULTADO enviado: {emoji}")
+        
+    except Exception as e:
+        logging.error(f"Erro alerta resultado: {e}")
+
 def carregar_historico():
     try:
         if os.path.exists(HISTORICO_PATH):
@@ -328,7 +379,7 @@ class Context_Predictor_Persistente:
         except Exception as e:
             logging.error(f"Erro ao atualizar contexto: {e}")
     
-    def prever_por_contexto(self, ultimo_numero, top_n=8):
+    def prever_por_contexto(self, ultimo_numero, top_n=8):  # ATUALIZADO: 5 → 8
         """Previsão CORRIGIDA - sem repetições"""
         try:
             # 1. TENTAR PREVISÃO POR CONTEXTO HISTÓRICO
@@ -346,7 +397,7 @@ class Context_Predictor_Persistente:
                             previsao.append(num)
                             numeros_vistos.add(num)
                     
-                    if len(previsao) >= 3:  # Pelo menos 3 números do contexto
+                    if len(previsao) >= 4:  # Pelo menos 4 números do contexto
                         logging.info(f"🔍 CONTEXTO FORTE: Após {ultimo_numero} → {previsao}")
                         return previsao
             
@@ -366,7 +417,7 @@ class Context_Predictor_Persistente:
         
         # 1. VIZINHOS FÍSICOS (40%)
         vizinhos = obter_vizinhos_fisicos(numero)
-        for vizinho in vizinhos[:max(3, quantidade//3)]:
+        for vizinho in vizinhos[:max(4, quantidade//2)]:  # Aumentado para 4
             if len(previsao) < quantidade:
                 previsao.add(vizinho)
         
@@ -406,7 +457,7 @@ class Context_Predictor_Persistente:
         
         # Ordenar por frequência
         numeros_ordenados = sorted(frequencia_global.items(), key=lambda x: x[1], reverse=True)
-        return [num for num, count in numeros_ordenados[:10]]
+        return [num for num, count in numeros_ordenados[:12]]  # Aumentado para 12
     
     def get_estatisticas_contexto(self):
         """Estatísticas CORRIGIDAS"""
@@ -435,7 +486,7 @@ class Context_Predictor_Persistente:
         # Pegar um contexto que tenha previsões
         for contexto_num in list(self.context_history.keys())[-5:]:  # Últimos 5 contextos
             if self.context_history[contexto_num]:
-                previsao = self.prever_por_contexto(contexto_num, 3)
+                previsao = self.prever_por_contexto(contexto_num, 8)  # ATUALIZADO: 5 → 8
                 if previsao:
                     return f"Após {contexto_num} → {previsao}"
         
@@ -1266,7 +1317,7 @@ class GestorHybridIA_Especialista_Corrigido:
             if self.ultimo_numero_processado is not None:
                 previsao_contexto = self.context_predictor.prever_por_contexto(
                     self.ultimo_numero_processado, 
-                    top_n=8
+                    top_n=8  # ATUALIZADO: 5 → 8
                 )
             
             # 3. COMBINAÇÃO INTELIGENTE
@@ -1308,12 +1359,12 @@ class GestorHybridIA_Especialista_Corrigido:
         """Retorna análise detalhada do sistema contextual"""
         estatisticas = self.context_predictor.get_estatisticas_contexto()
         
-        # Exemplo de previsão contextual atual
+        # Exemplo de previsão contextual atual - ATUALIZADO: 5 → 8
         previsao_atual = []
         if self.ultimo_numero_processado is not None:
             previsao_atual = self.context_predictor.prever_por_contexto(
                 self.ultimo_numero_processado, 
-                top_n=5
+                top_n=8  # ATUALIZADO: 5 → 8
             )
         
         return {
@@ -1484,14 +1535,19 @@ try:
 
         # CONFERÊNCIA
         previsao_valida = validar_previsao(st.session_state.previsao_atual)
+        acertou = False
         if previsao_valida:
             acertou = numero_real in previsao_valida
             if acertou:
                 st.session_state.acertos += 1
                 st.success(f"🎯 **GREEN!** Número {numero_real} acertado!")
+                # ENVIAR ALERTA DE GREEN
+                enviar_alerta_resultado(True, numero_real, st.session_state.previsao_atual)
             else:
                 st.session_state.erros += 1
                 st.error(f"🔴 Número {numero_real} não estava na previsão")
+                # ENVIAR ALERTA DE RED
+                enviar_alerta_resultado(False, numero_real, st.session_state.previsao_atual)
 
         # GERAR NOVA PREVISÃO COM CONTEXTO
         nova_previsao = st.session_state.gestor.gerar_previsao_contextual()  # AGORA USA CONTEXTO
@@ -1501,12 +1557,21 @@ try:
         st.session_state.previsao_anterior = st.session_state.previsao_atual.copy()
         st.session_state.previsao_atual = validar_previsao(nova_previsao)
         
-        # ENVIAR ALERTA TELEGRAM
+        # ENVIAR ALERTA TELEGRAM - PREVISÃO PRINCIPAL
         if st.session_state.previsao_atual and len(st.session_state.previsao_atual) == 15:
             try:
                 enviar_alerta_rapido(st.session_state.previsao_atual)
             except Exception as e:
-                logging.error(f"Erro ao enviar alerta: {e}")
+                logging.error(f"Erro ao enviar alerta principal: {e}")
+
+        # ENVIAR ALERTA TELEGRAM - PREVISÃO CONTEXTUAL (8 NÚMEROS)
+        analise_contexto = st.session_state.gestor.get_analise_contexto()
+        previsao_contexto = analise_contexto.get('previsao_contexto_atual', [])
+        if previsao_contexto and len(previsao_contexto) == 8:
+            try:
+                enviar_alerta_contextual(previsao_contexto)
+            except Exception as e:
+                logging.error(f"Erro ao enviar alerta contextual: {e}")
 
         st.session_state.contador_rodadas += 1
 
@@ -1565,7 +1630,7 @@ else:
 
 # NOVA SEÇÃO - PREVISÃO POR CONTEXTO HISTÓRICO PERSISTENTE (CORRIGIDA)
 st.markdown("---")
-st.subheader("🔮 PREVISÃO POR CONTEXTO HISTÓRICO - PERSISTENTE")
+st.subheader("🔮 PREVISÃO POR CONTEXTO HISTÓRICO - 8 NÚMEROS")
 
 analise_contexto = st.session_state.gestor.get_analise_contexto()
 
@@ -1584,7 +1649,7 @@ with col3:
 with col4:
     st.metric("🔥 Mais Frequente", analise_contexto['numero_mais_frequente'])
 
-# MOSTRAR PREVISÃO CONTEXTUAL ATUAL - CORRIGIDA
+# MOSTRAR PREVISÃO CONTEXTUAL ATUAL - CORRIGIDA (8 NÚMEROS)
 previsao_contexto = analise_contexto['previsao_contexto_atual']
 if previsao_contexto and analise_contexto['ultimo_numero'] is not None:
     # Verificar se há números repetidos e remover
@@ -1596,14 +1661,14 @@ if previsao_contexto and analise_contexto['ultimo_numero'] is not None:
             numeros_vistos.add(num)
     
     if previsao_unica:
-        st.success(f"**📈 Números mais prováveis após {analise_contexto['ultimo_numero']}:**")
+        st.success(f"**📈 8 NÚMEROS MAIS PROVÁVEIS APÓS {analise_contexto['ultimo_numero']}:**")
         
         # Mostrar com indicação de força
-        if len(previsao_unica) >= 5:
+        if len(previsao_unica) >= 6:
             emoji = "🎯"
             cor = "green"
             força = "ALTA"
-        elif len(previsao_unica) >= 3:
+        elif len(previsao_unica) >= 4:
             emoji = "🔍" 
             cor = "orange"
             força = "MÉDIA"
@@ -1612,8 +1677,15 @@ if previsao_contexto and analise_contexto['ultimo_numero'] is not None:
             cor = "blue" 
             força = "BAIXA"
         
-        contexto_str = " | ".join([f"**{num}**" for num in previsao_unica])
-        st.markdown(f"### {emoji} {contexto_str}")
+        # Dividir em 2 linhas de 4 números cada
+        linha1 = previsao_unica[:4]
+        linha2 = previsao_unica[4:8]
+        
+        linha1_str = " | ".join([f"**{num}**" for num in linha1])
+        linha2_str = " | ".join([f"**{num}**" for num in linha2])
+        
+        st.markdown(f"### {emoji} {linha1_str}")
+        st.markdown(f"### {emoji} {linha2_str}")
         st.caption(f"💡 **{força} CONFIANÇA** - Baseado em {analise_contexto['total_transicoes']} transições históricas")
         
         # Exemplo de previsão de outro contexto
@@ -1715,7 +1787,7 @@ with st.expander("🔧 Detalhes Técnicos do Sistema com Rotação"):
         st.write("- 📈 Correlações entre Números") 
         st.write("- 🕒 Padrões Temporais Avançados")
         st.write("- 🔄 Sequências de Alta Ordem")
-        st.write("- 🔮 **PREVISÃO POR CONTEXTO HISTÓRICO**")
+        st.write("- 🔮 **PREVISÃO POR CONTEXTO HISTÓRICO (8 NÚMEROS)**")
         st.write(f"- 📊 {analise['padroes_detectados']} Padrões Detectados")
         st.write("**🔄 SISTEMA DE ROTAÇÃO:**")
         st.write("- 🎯 Rotação por Frequência")
@@ -1737,10 +1809,16 @@ with st.expander("🔧 Detalhes Técnicos do Sistema com Rotação"):
     st.write(f"- Número mais frequente: {analise_contexto['numero_mais_frequente']}")
     
     if analise_contexto['previsao_contexto_atual']:
-        st.write(f"- Previsão atual: {analise_contexto['previsao_contexto_atual']}")
+        st.write(f"- Previsão atual (8 números): {analise_contexto['previsao_contexto_atual']}")
     
     if analise_contexto.get('previsao_exemplo'):
         st.write(f"- Exemplo: {analise_contexto['previsao_exemplo']}")
+    
+    st.write("**📨 SISTEMA DE ALERTAS TELEGRAM:**")
+    st.write("- 🔔 Alerta Principal: 15 números (formato 8+7)")
+    st.write("- 🔔 Alerta Contextual: 8 números (formato 4+4)") 
+    st.write("- 🟢 Alerta GREEN: Quando acerta o número")
+    st.write("- 🔴 Alerta RED: Quando erra o número")
     
     st.write(f"**📊 Estatísticas:**")
     st.write(f"- Histórico Atual: {historico_atual} registros")
@@ -1776,4 +1854,4 @@ st.markdown("*Variações estratégicas mantendo alta assertividade*")
 
 # Rodapé
 st.markdown("---")
-st.markdown("**🎯 Hybrid IA System v10.0** - *Especialista com Rotação Dinâmica e Contexto Histórico Persistente Corrigido*")
+st.markdown("**🎯 Hybrid IA System v11.0** - *Especialista com Rotação Dinâmica, Contexto Histórico Persistente e Sistema Completo de Alertas*")
