@@ -25,7 +25,7 @@ API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremeli
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
-TELEGRAM_CHAT_ID = "5121457416"
+TELEGRAM_CHAT_ID = "-1002979544095"
 
 # DISPOSIÇÃO FÍSICA REAL DA ROLETA
 ROULETTE_PHYSICAL_LAYOUT = [
