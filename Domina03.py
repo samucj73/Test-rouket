@@ -45,14 +45,14 @@ COLUNA_3 = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36]
 # =============================
 # CONFIGURAÇÃO ESPECIALISTA - 450+ REGISTROS
 # =============================
-MIN_HISTORICO_TREINAMENTO = 350
+MIN_HISTORICO_TREINAMENTO = 950
 NUMERO_PREVISOES = 15
 
 # Fases do sistema
 FASE_INICIAL = 50
 FASE_INTERMEDIARIA = 150  
 FASE_AVANCADA = 300
-FASE_ESPECIALISTA = 450
+FASE_ESPECIALISTA = 950
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -1619,7 +1619,7 @@ st.set_page_config(
 st.title("🎯 Hybrid IA System - ESPECIALISTA COM DETECÇÃO DE PADRÕES")
 st.markdown("### **Sistema que Captura Padrões Óbvios do Contexto Histórico**")
 
-st_autorefresh(interval=3000, key="refresh")
+st_autorefresh(interval=15000, key="refresh")
 
 # Inicialização session_state
 defaults = {
