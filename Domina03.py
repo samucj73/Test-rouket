@@ -300,6 +300,39 @@ def analisar_duzias_colunas(historico):
         "periodo_analisado": periodo_analise
     }
 
+def analisar_padroes_ultimos_20(historico):
+    """Analisa padrões específicos dos últimos 20 números"""
+    numeros = [h['number'] for h in historico if h.get('number') is not None]
+    if len(numeros) < 20:
+        return {}
+    
+    ultimos_20 = numeros[-20:]
+    
+    # Padrão: números que se repetem em intervalos curtos
+    padroes = {
+        'repetidos_3_rodadas': [],
+        'sequencias_vizinhas': [],
+        'alternancia_cores': 0
+    }
+    
+    # Encontrar números que se repetem a cada 3-4 rodadas
+    for i in range(len(ultimos_20) - 4):
+        if ultimos_20[i] == ultimos_20[i+3] or ultimos_20[i] == ultimos_20[i+4]:
+            if ultimos_20[i] not in padroes['repetidos_3_rodadas']:
+                padroes['repetidos_3_rodadas'].append(ultimos_20[i])
+    
+    # Analisar alternância de cores
+    mudancas_cor = 0
+    for i in range(1, len(ultimos_20)):
+        cor_atual = 'vermelho' if ultimos_20[i] in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36] else 'preto'
+        cor_anterior = 'vermelho' if ultimos_20[i-1] in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36] else 'preto'
+        if cor_atual != cor_anterior:
+            mudancas_cor += 1
+    
+    padroes['alternancia_cores'] = mudancas_cor / len(ultimos_20)
+    
+    return padroes
+
 # =============================
 # CONTEXT PREDICTOR COM PERSISTÊNCIA COMPLETA E CORREÇÕES
 # =============================
@@ -1067,85 +1100,169 @@ class Hybrid_IA_450_Plus_Corrigido:
         # Ordenar por score
         top_numeros = sorted(scores_finais.items(), key=lambda x: x[1], reverse=True)
         
-        # FASE 1: Pegar os 8 melhores por score
-        selecao = [num for num, score in top_numeros[:8]]
+        # FASE 1: Pegar os 10 melhores por score (aumentado de 8 para 10)
+        selecao = [num for num, score in top_numeros[:10]]
         
-        # FASE 2: Adicionar 4 números estratégicos (dúzias/colunas quentes)
+        # FASE 2: Adicionar 3 números estratégicos (dúzias/colunas quentes)
         analise = analisar_duzias_colunas(historico)
         selecao.extend(self.adicionar_numeros_estrategicos(analise, selecao))
         
-        # FASE 3: Adicionar 3 números de fallback inteligente
+        # FASE 3: Adicionar 2 números de fallback inteligente
         selecao.extend(self.adicionar_fallback_inteligente(numeros, selecao))
         
         # Garantir zero se não estiver presente
         if 0 not in selecao and len(selecao) < NUMERO_PREVISOES:
             selecao.append(0)
         
-        return selecao[:NUMERO_PREVISOES]
+        # FASE 4: APLICAR BALANCEAMENTO FINAL
+        selecao_balanceada = self.otimizar_balanceamento_final(selecao)
+        
+        return selecao_balanceada[:NUMERO_PREVISOES]
+
+    def otimizar_balanceamento_final(self, selecao):
+        """Otimização FINAL para melhor distribuição entre dúzias"""
+        if len(selecao) != NUMERO_PREVISOES:
+            return selecao
+        
+        # Contar distribuição atual
+        contagem_duzias = {1: 0, 2: 0, 3: 0}
+        for num in selecao:
+            if 1 <= num <= 12:
+                contagem_duzias[1] += 1
+            elif 13 <= num <= 24:
+                contagem_duzias[2] += 1
+            elif 25 <= num <= 36:
+                contagem_duzias[3] += 1
+        
+        # Meta ideal: 5 números por dúzia + zero
+        meta_por_duzia = 5
+        
+        selecao_balanceada = selecao.copy()
+        
+        # Ajustar 2ª Dúzia (13-24) se necessário
+        if contagem_duzias[2] < 4:
+            numeros_faltantes_2 = [n for n in SEGUNDA_DUZIA if n not in selecao_balanceada]
+            necessarios = min(meta_por_duzia - contagem_duzias[2], len(numeros_faltantes_2))
+            for i in range(necessarios):
+                if numeros_faltantes_2:
+                    # Remover um excesso da 1ª dúzia se possível
+                    excesso_1 = [n for n in selecao_balanceada if n in PRIMEIRA_DUZIA and n not in [0]]
+                    if excesso_1 and contagem_duzias[1] > meta_por_duzia:
+                        num_remover = excesso_1[0]
+                        selecao_balanceada.remove(num_remover)
+                        contagem_duzias[1] -= 1
+                    
+                    # Adicionar da 2ª dúzia
+                    num_adicionar = numeros_faltantes_2[i]
+                    selecao_balanceada.append(num_adicionar)
+                    contagem_duzias[2] += 1
+        
+        # Ajustar 3ª Dúzia (25-36) se necessário
+        if contagem_duzias[3] < 4:
+            numeros_faltantes_3 = [n for n in TERCEIRA_DUZIA if n not in selecao_balanceada]
+            necessarios = min(meta_por_duzia - contagem_duzias[3], len(numeros_faltantes_3))
+            for i in range(necessarios):
+                if numeros_faltantes_3:
+                    # Remover um excesso da 1ª dúzia se possível
+                    excesso_1 = [n for n in selecao_balanceada if n in PRIMEIRA_DUZIA and n not in [0]]
+                    if excesso_1 and contagem_duzias[1] > meta_por_duzia:
+                        num_remover = excesso_1[0]
+                        selecao_balanceada.remove(num_remover)
+                        contagem_duzias[1] -= 1
+                    
+                    # Adicionar da 3ª dúzia
+                    num_adicionar = numeros_faltantes_3[i]
+                    selecao_balanceada.append(num_adicionar)
+                    contagem_duzias[3] += 1
+        
+        # Garantir zero
+        if 0 not in selecao_balanceada:
+            # Remover um número menos estratégico (excesso da 1ª dúzia)
+            excesso_1 = [n for n in selecao_balanceada if n in PRIMEIRA_DUZIA and n not in [0]]
+            if excesso_1:
+                selecao_balanceada.remove(excesso_1[0])
+            selecao_balanceada.append(0)
+        
+        return selecao_balanceada[:NUMERO_PREVISOES]
 
     def adicionar_numeros_estrategicos(self, analise, selecao_atual):
-        """Adiciona números baseado em análise de dúzias/colunas"""
+        """Adiciona números baseado em análise de dúzias/colunas - MELHORADO"""
         estrategicos = []
         
         duzias_quentes = analise.get("duzias_quentes", [])
         colunas_quentes = analise.get("colunas_quentes", [])
         
-        # Adicionar números da interseção dúzia+coluna quente
-        for duzia in duzias_quentes[:2]:
-            for coluna in colunas_quentes[:2]:
-                if duzia == 1:
-                    numeros_duzia = PRIMEIRA_DUZIA
-                elif duzia == 2:
-                    numeros_duzia = SEGUNDA_DUZIA
-                else:
-                    numeros_duzia = TERCEIRA_DUZIA
-                
-                if coluna == 1:
-                    numeros_coluna = COLUNA_1
-                elif coluna == 2:
-                    numeros_coluna = COLUNA_2
-                else:
-                    numeros_coluna = COLUNA_3
-                
-                # Encontrar interseção
-                for num in numeros_duzia:
-                    if num in numeros_coluna and num not in selecao_atual and num not in estrategicos:
-                        estrategicos.append(num)
-                        if len(estrategicos) >= 4:
-                            return estrategicos
-                        break
+        # Focar em balancear as dúzias que estão faltando
+        contagem_atual = {1: 0, 2: 0, 3: 0}
+        for num in selecao_atual:
+            if 1 <= num <= 12:
+                contagem_atual[1] += 1
+            elif 13 <= num <= 24:
+                contagem_atual[2] += 1
+            elif 25 <= num <= 36:
+                contagem_atual[3] += 1
         
-        return estrategicos[:4]
+        # Priorizar dúzias que estão com menos representação
+        duzias_prioritarias = sorted([1, 2, 3], key=lambda d: contagem_atual[d])
+        
+        for duzia in duzias_prioritarias[:2]:  # As 2 dúzias mais necessitadas
+            if duzia == 1:
+                numeros_duzia = PRIMEIRA_DUZIA
+            elif duzia == 2:
+                numeros_duzia = SEGUNDA_DUZIA
+            else:
+                numeros_duzia = TERCEIRA_DUZIA
+            
+            # Adicionar números centrais da dúzia (mais estratégicos)
+            numeros_centrais = numeros_duzia[3:9]  # Pegar do meio
+            for num in numeros_centrais:
+                if num not in selecao_atual and num not in estrategicos:
+                    estrategicos.append(num)
+                    if len(estrategicos) >= 3:
+                        return estrategicos
+                    break
+        
+        return estrategicos[:3]
 
     def adicionar_fallback_inteligente(self, numeros, selecao_atual):
-        """Fallback inteligente baseado em padrões simples"""
+        """Fallback inteligente baseado em padrões dos últimos 20 números"""
         fallback = []
         
         if len(numeros) < 10:
             return fallback
         
-        # Padrão: números que aparecem após sequências
-        ultimos_3 = numeros[-3:] if len(numeros) >= 3 else []
+        # Analisar padrões recentes
+        padroes = analisar_padroes_ultimos_20([{'number': n} for n in numeros])
         
-        # Adicionar números que costumam seguir sequências
-        for i in range(len(numeros) - 4):
-            seq = numeros[i:i+3]
-            if seq == ultimos_3 and i+4 < len(numeros):
-                proximo = numeros[i+3]
-                if proximo not in selecao_atual and proximo not in fallback:
-                    fallback.append(proximo)
-                    if len(fallback) >= 3:
-                        return fallback
-        
-        # Se não encontrou padrões, adicionar números balanceados
-        balanceados = [2, 8, 11, 17, 20, 26, 29, 35]
-        for num in balanceados:
+        # 1. Adicionar números que se repetem em padrão de 3-4 rodadas
+        for num in padroes.get('repetidos_3_rodadas', [])[:2]:
             if num not in selecao_atual and num not in fallback:
                 fallback.append(num)
-                if len(fallback) >= 3:
-                    break
+                if len(fallback) >= 2:
+                    return fallback
         
-        return fallback[:3]
+        # 2. Se há alta alternância de cores, adicionar números da cor oposta ao último
+        if padroes.get('alternancia_cores', 0) > 0.6 and numeros:
+            ultimo_numero = numeros[-1]
+            ultima_cor_vermelha = ultimo_numero in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]
+            
+            # Adicionar 1 número da cor oposta
+            if ultima_cor_vermelha:
+                # Adicionar preto
+                pretos = [2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35]
+                for preto in pretos:
+                    if preto not in selecao_atual and preto not in fallback:
+                        fallback.append(preto)
+                        break
+            else:
+                # Adicionar vermelho
+                vermelhos = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]
+                for vermelho in vermelhos:
+                    if vermelho not in selecao_atual and vermelho not in fallback:
+                        fallback.append(vermelho)
+                        break
+        
+        return fallback[:2]
 
     def prever_com_historio_normal_melhorado(self, historico):
         """Estratégia MELHORADA para histórico menor"""
@@ -1721,6 +1838,11 @@ with st.expander("🔧 Detalhes Técnicos do Sistema com Rotação"):
         st.write("- 📍 Similaridade mínima de 85% para rotacionar")
         st.write("- ⚖️ Substituição máxima de 1-2 números")
         st.write("- 🛡️ Priorização de números recentes e frequentes")
+        st.write("**🎯 ESTRATÉGIA DE SELEÇÃO:**")
+        st.write("- 📊 10 melhores números por score")
+        st.write("- 🎯 3 números estratégicos balanceados")
+        st.write("- 🔄 2 números de fallback inteligente")
+        st.write("- ⚖️ Balanceamento automático entre dúzias")
     else:
         st.write("⏳ **AGUARDANDO DADOS SUFICIENTES**")
         st.write(f"- 📈 Progresso: {historico_atual}/{MIN_HISTORICO_TREINAMENTO}")
@@ -1781,4 +1903,4 @@ st.markdown("*Variações estratégicas mantendo alta assertividade*")
 
 # Rodapé
 st.markdown("---")
-st.markdown("**🎯 Hybrid IA System v12.0** - *Especialista com Rotação Conservadora, Contexto Persistente e Sistema de Alertas*")
+st.markdown("**🎯 Hybrid IA System v13.0** - *Especialista com Rotação Conservadora, Balanceamento Otimizado e Sistema Completo de Alertas*")
