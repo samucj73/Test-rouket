@@ -12,8 +12,8 @@ class Config:
     HEADERS = {"X-Auth-Token": API_KEY}
     BASE_URL_FD = "https://api.football-data.org/v4"
     
-    TELEGRAM_TOKEN = "SEU_TOKEN_AQUI"
-    TELEGRAM_CHAT_ID = "SEU_CHAT_ID_AQUI"
+    TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
+    TELEGRAM_CHAT_ID = "-1003073115320"
     BASE_URL_TG = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     
     LIGAS = {
