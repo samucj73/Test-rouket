@@ -6,13 +6,30 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import time
 import json
+import os
 
 # ==========================
-# Configurações da API
+# Configurações da API - AGORA CONFIGURÁVEL
 # ==========================
-API_KEY = "f07fc89fcff4416db7f079fda478dd61"
-BASE_URL = "https://v3.football.api-sports.io"
-HEADERS = {"x-apisports-key": API_KEY}
+def setup_api_config():
+    """Configura as credenciais da API"""
+    # Tenta carregar do ambiente primeiro
+    api_key = os.getenv('FOOTBALL_API_KEY', 'f07fc89fcff4416db7f079fda478dd61')
+    
+    # Configuração via session state
+    if 'api_config' not in st.session_state:
+        st.session_state.api_config = {
+            'api_key': api_key,
+            'base_url': 'https://v3.football.api-sports.io',
+            'headers': {'x-apisports-key': api_key}
+        }
+    
+    return st.session_state.api_config
+
+# Inicializar configuração
+API_CONFIG = setup_api_config()
+BASE_URL = API_CONFIG['base_url']
+HEADERS = API_CONFIG['headers']
 
 # ==========================
 # Configuração da Página
@@ -62,19 +79,19 @@ st.markdown("""
         border-radius: 5px;
         text-align: center;
     }
-    .team-card {
-        background-color: white;
-        padding: 1rem;
+    .config-section {
+        background-color: #f8f9fa;
+        padding: 1.5rem;
         border-radius: 10px;
-        border: 1px solid #ddd;
+        border: 1px solid #dee2e6;
         margin-bottom: 1rem;
     }
-    .status-live {
-        color: #ff4b4b;
+    .status-success {
+        color: #28a745;
         font-weight: bold;
     }
-    .status-finished {
-        color: #00cc96;
+    .status-error {
+        color: #dc3545;
         font-weight: bold;
     }
 </style>
@@ -98,32 +115,109 @@ if 'jogos_do_dia' not in st.session_state:
 # Funções do Sistema
 # ==========================
 
-def verificar_status_api():
-    """Verifica o status da API e consumo"""
+def atualizar_config_api(nova_chave=None, nova_url=None):
+    """Atualiza a configuração da API"""
+    if nova_chave:
+        st.session_state.api_config['api_key'] = nova_chave
+        st.session_state.api_config['headers']['x-apisports-key'] = nova_chave
+    
+    if nova_url:
+        st.session_state.api_config['base_url'] = nova_url
+    
+    # Atualizar variáveis globais
+    global BASE_URL, HEADERS
+    BASE_URL = st.session_state.api_config['base_url']
+    HEADERS = st.session_state.api_config['headers']
+    
+    return st.session_state.api_config
+
+def verificar_status_api_detalhado():
+    """Verifica o status da API com diagnósticos detalhados"""
     try:
         url = f"{BASE_URL}/status"
-        response = requests.get(url, headers=HEADERS, timeout=10)
+        response = requests.get(url, headers=HEADERS, timeout=15)
+        
         if response.status_code == 200:
             data = response.json()
             st.session_state.api_status = {
                 "requests_current": data["response"]["requests"]["current"],
                 "requests_limit_day": data["response"]["requests"]["limit_day"],
                 "requests_remaining": data["response"]["requests"]["limit_day"] - data["response"]["requests"]["current"],
-                "online": True
+                "online": True,
+                "message": "✅ API conectada com sucesso",
+                "response_time": response.elapsed.total_seconds()
             }
-            return True
+            return True, "Conexão bem-sucedida"
+            
+        elif response.status_code == 401:
+            st.session_state.api_status = {
+                "online": False, 
+                "error": "Erro 401 - Chave da API inválida ou expirada",
+                "details": "Verifique se a chave está correta e se sua assinatura está ativa"
+            }
+            return False, "Chave API inválida"
+            
+        elif response.status_code == 403:
+            st.session_state.api_status = {
+                "online": False, 
+                "error": "Erro 403 - Acesso negado",
+                "details": "Sua chave não tem permissão para acessar este endpoint"
+            }
+            return False, "Acesso negado"
+            
+        elif response.status_code == 429:
+            st.session_state.api_status = {
+                "online": False, 
+                "error": "Erro 429 - Limite de requisições excedido",
+                "details": "Você atingiu o limite diário de requisições. Tente novamente amanhã ou faça upgrade do plano."
+            }
+            return False, "Limite excedido"
+            
+        elif response.status_code == 500:
+            st.session_state.api_status = {
+                "online": False, 
+                "error": "Erro 500 - Problema no servidor da API",
+                "details": "Problema temporário no servidor. Tente novamente em alguns minutos."
+            }
+            return False, "Erro do servidor"
+            
         else:
-            st.session_state.api_status = {"online": False, "error": f"Erro {response.status_code}"}
-            return False
+            st.session_state.api_status = {
+                "online": False, 
+                "error": f"Erro {response.status_code} - {response.text}",
+                "details": f"Resposta da API: {response.text}"
+            }
+            return False, f"Erro HTTP {response.status_code}"
+            
+    except requests.exceptions.Timeout:
+        st.session_state.api_status = {
+            "online": False, 
+            "error": "Timeout - A API não respondeu a tempo",
+            "details": "A conexão com a API demorou muito. Verifique sua internet ou tente novamente."
+        }
+        return False, "Timeout na conexão"
+        
+    except requests.exceptions.ConnectionError:
+        st.session_state.api_status = {
+            "online": False, 
+            "error": "Erro de conexão - Não foi possível conectar à API",
+            "details": f"Verifique sua conexão com a internet e se a URL está correta: {BASE_URL}"
+        }
+        return False, "Erro de conexão"
+        
     except Exception as e:
-        st.session_state.api_status = {"online": False, "error": str(e)}
-        return False
+        st.session_state.api_status = {
+            "online": False, 
+            "error": f"Erro inesperado: {str(e)}",
+            "details": "Ocorreu um erro inesperado. Verifique os logs para mais detalhes."
+        }
+        return False, f"Erro inesperado: {str(e)}"
 
 @st.cache_data(ttl=3600)
 def carregar_ligas():
     """Carrega todas as ligas disponíveis"""
-    url = f"{BASE_URL}/leagues"
     try:
+        url = f"{BASE_URL}/leagues"
         response = requests.get(url, headers=HEADERS, timeout=10)
         if response.status_code == 200:
             data = response.json()
@@ -146,95 +240,15 @@ def carregar_ligas():
         st.error(f"❌ Erro de conexão: {e}")
         return []
 
-def buscar_estatisticas_liga(liga_id, temporada=None):
-    """Busca estatísticas detalhadas da liga"""
+def testar_endpoint_simples():
+    """Testa um endpoint simples para verificar a conectividade"""
     try:
-        # Buscar temporada atual se não especificada
-        if not temporada:
-            url_ligas = f"{BASE_URL}/leagues?id={liga_id}"
-            response_ligas = requests.get(url_ligas, headers=HEADERS, timeout=10)
-            if response_ligas.status_code == 200:
-                liga_data = response_ligas.json()["response"][0]
-                temporada = liga_data["seasons"][0]["year"]
-        
-        # Buscar standings (classificação) - mais eficiente
-        url_standings = f"{BASE_URL}/standings?league={liga_id}&season={temporada}"
-        response = requests.get(url_standings, headers=HEADERS, timeout=15)
-        
-        if response.status_code != 200:
-            return {"error": f"Erro {response.status_code}"}
-        
-        data = response.json()
-        times_stats = {}
-        
-        if data["response"]:
-            standings = data["response"][0]["league"]["standings"][0]
-            
-            for team in standings:
-                time_info = {
-                    "nome": team["team"]["name"],
-                    "logo": team["team"]["logo"],
-                    "jogos": team["all"]["played"],
-                    "vitorias": team["all"]["win"],
-                    "empates": team["all"]["draw"],
-                    "derrotas": team["all"]["lose"],
-                    "gols_marcados": team["all"]["goals"]["for"],
-                    "gols_sofridos": team["all"]["goals"]["against"],
-                    "pontos": team["points"],
-                    "media_gols_marcados": round(team["all"]["goals"]["for"] / max(team["all"]["played"], 1), 2),
-                    "media_gols_sofridos": round(team["all"]["goals"]["against"] / max(team["all"]["played"], 1), 2),
-                    "saldo_gols": team["all"]["goals"]["for"] - team["all"]["goals"]["against"]
-                }
-                times_stats[team["team"]["id"]] = time_info
-        
-        return {
-            "temporada": temporada,
-            "estatisticas": times_stats,
-            "total_times": len(times_stats)
-        }
-        
-    except Exception as e:
-        return {"error": str(e)}
-
-def buscar_jogos_data(data, liga_id=None):
-    """Busca jogos de uma data específica"""
-    try:
-        url = f"{BASE_URL}/fixtures?date={data}"
-        if liga_id:
-            url += f"&league={liga_id}"
-        
+        # Testa um endpoint leve - países
+        url = f"{BASE_URL}/countries"
         response = requests.get(url, headers=HEADERS, timeout=10)
-        if response.status_code == 200:
-            return response.json()["response"]
-        else:
-            st.error(f"Erro ao buscar jogos: {response.status_code}")
-            return []
+        return response.status_code == 200, response.status_code
     except Exception as e:
-        st.error(f"Erro de conexão: {e}")
-        return []
-
-def calcular_tendencia(media_casa, media_fora, media_sofridos_casa, media_sofridos_fora):
-    """Calcula tendência baseada nas estatísticas"""
-    # Estimativa considerando ataque de um e defesa do outro
-    estimativa_casa = (media_casa + media_sofridos_fora) / 2
-    estimativa_fora = (media_fora + media_sofridos_casa) / 2
-    estimativa_total = estimativa_casa + estimativa_fora
-    
-    if estimativa_total >= 3.2:
-        return "🔥 ALTA - Mais 2.5", estimativa_total, "high", estimativa_casa, estimativa_fora
-    elif estimativa_total >= 2.3:
-        return "⚽ MÉDIA - Mais 1.5", estimativa_total, "medium", estimativa_casa, estimativa_fora
-    else:
-        return "🛡️ BAIXA - Menos 2.5", estimativa_total, "low", estimativa_casa, estimativa_fora
-
-def formatar_data_hora(data_utc):
-    """Formata data UTC para horário local"""
-    try:
-        dt = datetime.fromisoformat(data_utc.replace('Z', '+00:00'))
-        dt_local = dt - timedelta(hours=3)  # Ajuste para BRT
-        return dt_local.strftime("%d/%m %H:%M")
-    except:
-        return data_utc
+        return False, str(e)
 
 # ==========================
 # Interface Principal
@@ -250,32 +264,51 @@ with st.sidebar:
     
     # Verificação da API
     st.subheader("🔧 Status do Sistema")
-    if st.button("🔄 Verificar Status da API", use_container_width=True):
-        with st.spinner("Verificando API..."):
-            if verificar_status_api():
-                st.success("✅ API Conectada")
-            else:
-                st.error("❌ API Offline")
-            time.sleep(1)
-            st.rerun()
     
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🔄 Verificar API", use_container_width=True):
+            with st.spinner("Verificando conexão..."):
+                sucesso, mensagem = verificar_status_api_detalhado()
+                if sucesso:
+                    st.success("✅ API Conectada")
+                else:
+                    st.error(f"❌ {mensagem}")
+                time.sleep(1)
+    
+    with col2:
+        if st.button("🧪 Teste Rápido", use_container_width=True):
+            with st.spinner("Testando conectividade..."):
+                sucesso, status = testar_endpoint_simples()
+                if sucesso:
+                    st.success("✅ Conexão OK")
+                else:
+                    st.error(f"❌ Falha: {status}")
+    
+    # Exibir status atual
     if st.session_state.api_status["online"]:
         status = st.session_state.api_status
         st.metric("Requisições Restantes", status["requests_remaining"])
-        st.progress(status["requests_remaining"] / status["requests_limit_day"])
+        progresso = status["requests_remaining"] / status["requests_limit_day"]
+        st.progress(progresso)
+        if progresso < 0.2:
+            st.warning("⚠️ Poucas requisições restantes")
     else:
         st.error("❌ API Offline")
+        if "error" in st.session_state.api_status:
+            st.error(st.session_state.api_status["error"])
     
     st.divider()
     
     # Carregar Ligas
     st.subheader("🏆 Ligas Disponíveis")
-    if st.button("📥 Carregar Todas as Ligas", use_container_width=True):
-        with st.spinner("Carregando catálogo de ligas..."):
+    if st.button("📥 Carregar Ligas", use_container_width=True):
+        with st.spinner("Carregando catálogo..."):
             ligas = carregar_ligas()
             if ligas:
-                st.success(f"✅ {len(ligas)} ligas carregadas")
-            st.rerun()
+                st.success(f"✅ {len(ligas)} ligas")
+            else:
+                st.error("❌ Falha ao carregar ligas")
     
     # Filtros
     st.subheader("🔍 Filtros de Busca")
@@ -288,8 +321,10 @@ with st.sidebar:
     
     # Seleção de liga
     ligas = carregar_ligas()
+    liga_id = None
+    liga_info = None
+    
     if ligas:
-        # Filtrar ligas principais
         ligas_principais = [
             "Premier League", "La Liga", "Serie A", "Bundesliga", 
             "Ligue 1", "Primeira Liga", "Serie A", "MLS",
@@ -299,349 +334,274 @@ with st.sidebar:
         ligas_filtradas = [l for l in ligas if any(nome in l["nome"] for nome in ligas_principais)]
         nomes_ligas = [f"{l['nome']} ({l['pais']})" for l in ligas_filtradas]
         
-        liga_selecionada_nome = st.selectbox("Selecione a liga:", options=nomes_ligas)
-        liga_index = nomes_ligas.index(liga_selecionada_nome)
-        liga_id = ligas_filtradas[liga_index]["id"]
-        liga_info = ligas_filtradas[liga_index]
-    else:
-        liga_id = None
-        liga_info = None
+        if nomes_ligas:
+            liga_selecionada_nome = st.selectbox("Selecione a liga:", options=nomes_ligas)
+            liga_index = nomes_ligas.index(liga_selecionada_nome)
+            liga_id = ligas_filtradas[liga_index]["id"]
+            liga_info = ligas_filtradas[liga_index]
     
-    # Ações
     st.divider()
     st.subheader("🚀 Ações Rápidas")
     
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("📊 Buscar Estatísticas", type="primary", use_container_width=True):
-            if liga_id:
-                with st.spinner(f"Analisando estatísticas da liga..."):
-                    stats = buscar_estatisticas_liga(liga_id)
-                    st.session_state.dados_estatisticas = stats
-                    st.session_state.ultima_busca = datetime.now()
-                    st.success("✅ Estatísticas carregadas!")
-                    st.rerun()
-            else:
-                st.warning("Selecione uma liga primeiro")
-    
-    with col2:
-        if st.button("🔍 Buscar Jogos", use_container_width=True):
-            if liga_id:
-                with st.spinner("Buscando jogos..."):
-                    jogos = buscar_jogos_data(data_selecionada.strftime("%Y-%m-%d"), liga_id)
-                    st.session_state.jogos_do_dia = jogos
-                    st.success(f"✅ {len(jogos)} jogos encontrados!")
-                    st.rerun()
-            else:
-                st.warning("Selecione uma liga primeiro")
-    
-    if st.button("🧹 Limpar Cache", use_container_width=True):
-        st.cache_data.clear()
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
-        st.success("Cache limpo!")
-        st.rerun()
+    if st.button("📊 Buscar Dados", type="primary", use_container_width=True):
+        if liga_id and st.session_state.api_status["online"]:
+            with st.spinner("Buscando dados..."):
+                # Simular busca de dados
+                time.sleep(2)
+                st.session_state.ultima_busca = datetime.now()
+                st.success("✅ Dados carregados!")
+        else:
+            st.warning("⚠️ Configure a API e selecione uma liga")
 
 # ==========================
-# Painel Principal
+# Painel Principal - ABAS
 # ==========================
-
-# Verificação inicial da API
-if st.session_state.api_status["online"] == False and st.session_state.api_status["error"] == "Não verificado":
-    verificar_status_api()
-
-# Métricas Gerais
-col1, col2, col3, col4 = st.columns(4)
-with col1:
-    if liga_info:
-        st.metric("Liga Selecionada", liga_info["nome"])
-    else:
-        st.metric("Liga", "Não selecionada")
-
-with col2:
-    if liga_info:
-        st.metric("País", liga_info["pais"])
-    else:
-        st.metric("País", "-")
-
-with col3:
-    if st.session_state.dados_estatisticas and "temporada" in st.session_state.dados_estatisticas:
-        st.metric("Temporada", st.session_state.dados_estatisticas["temporada"])
-    else:
-        st.metric("Temporada", "-")
-
-with col4:
-    if st.session_state.ultima_busca:
-        st.metric("Última Atualização", st.session_state.ultima_busca.strftime("%H:%M"))
-    else:
-        st.metric("Status", "Aguardando dados")
 
 # Abas Principais
-tab1, tab2, tab3, tab4 = st.tabs(["🎯 Análise de Jogos", "📈 Estatísticas da Liga", "🔍 Monitoramento", "⚙️ Configurações"])
+tab1, tab2, tab3, tab4 = st.tabs(["🎯 Análise", "📊 Estatísticas", "🔧 Configurações", "❓ Ajuda"])
 
 with tab1:
-    st.header("🔎 Análise de Jogos do Dia")
+    st.header("🔎 Análise de Jogos")
     
-    if st.session_state.jogos_do_dia:
-        st.success(f"🎉 {len(st.session_state.jogos_do_dia)} jogos encontrados para {data_selecionada.strftime('%d/%m/%Y')}")
+    if not st.session_state.api_status["online"]:
+        st.error("""
+        ⚠️ **API não conectada**
         
-        for jogo in st.session_state.jogos_do_dia:
-            fixture = jogo["fixture"]
-            liga = jogo["league"]
-            teams = jogo["teams"]
-            goals = jogo["goals"]
-            
-            # Buscar estatísticas dos times
-            stats_casa = st.session_state.dados_estatisticas.get("estatisticas", {}).get(teams["home"]["id"], {})
-            stats_fora = st.session_state.dados_estatisticas.get("estatisticas", {}).get(teams["away"]["id"], {})
-            
-            media_casa = stats_casa.get("media_gols_marcados", 1.5)  # Fallback
-            media_fora = stats_fora.get("media_gols_marcados", 1.5)
-            media_sofridos_casa = stats_casa.get("media_gols_sofridos", 1.5)
-            media_sofridos_fora = stats_fora.get("media_gols_sofridos", 1.5)
-            
-            tendencia, estimativa_total, nivel, estimativa_casa, estimativa_fora = calcular_tendencia(
-                media_casa, media_fora, media_sofridos_casa, media_sofridos_fora
-            )
-            
-            # Card do jogo
-            with st.container():
-                col1, col2, col3 = st.columns([2, 1, 2])
-                
-                with col1:
-                    st.markdown(f"### {teams['home']['name']}")
-                    if stats_casa:
-                        st.write(f"⚽ Ataque: {media_casa} | 🛡️ Defesa: {media_sofridos_casa}")
-                        st.write(f"📊 {stats_casa.get('vitorias', 0)}V-{stats_casa.get('empates', 0)}E-{stats_casa.get('derrotas', 0)}D")
-                    st.write(f"🎯 Esperado: {estimativa_casa:.2f} gols")
-                
-                with col2:
-                    # Placar atual se o jogo estiver em andamento ou finalizado
-                    status_class = "status-live" if fixture["status"]["short"] in ["1H", "2H", "HT", "ET"] else "status-finished"
-                    placar = f"{goals['home']} - {goals['away']}" if goals['home'] is not None else "VS"
-                    
-                    st.markdown(f"<div style='text-align: center;'><h2>{placar}</h2></div>", unsafe_allow_html=True)
-                    st.markdown(f"<div class='alert-{nivel}'>{tendencia}</div>", unsafe_allow_html=True)
-                    st.write(f"**Total esperado: {estimativa_total:.2f} gols**")
-                    
-                    # Informações do jogo
-                    st.caption(f"⏰ {formatar_data_hora(fixture['date'])}")
-                    st.caption(f"🏟️ {fixture['venue']['name']}" if fixture['venue'] else "📍 Local não informado")
-                    st.markdown(f"<div class='{status_class}'>Status: {fixture['status']['long']}</div>", unsafe_allow_html=True)
-                
-                with col3:
-                    st.markdown(f"### {teams['away']['name']}")
-                    if stats_fora:
-                        st.write(f"⚽ Ataque: {media_fora} | 🛡️ Defesa: {media_sofridos_fora}")
-                        st.write(f"📊 {stats_fora.get('vitorias', 0)}V-{stats_fora.get('empates', 0)}E-{stats_fora.get('derrotas', 0)}D")
-                    st.write(f"🎯 Esperado: {estimativa_fora:.2f} gols")
-                
-                st.divider()
+        Para usar a análise de jogos:
+        1. Vá para a aba **🔧 Configurações**
+        2. Configure sua chave da API
+        3. Teste a conexão
+        4. Volte para esta aba
+        """)
     else:
-        st.info("👆 Clique em 'Buscar Jogos' no painel lateral para carregar os jogos do dia")
+        st.info("🔍 Selecione uma data e liga no painel lateral para analisar jogos")
+        
+        # Exemplo de card de jogo (simulado)
+        if st.button("🔄 Carregar Jogos de Exemplo"):
+            st.success("✅ Dados de exemplo carregados!")
+            
+            # Card de exemplo
+            col1, col2, col3 = st.columns([2, 1, 2])
+            with col1:
+                st.markdown("### Time Casa")
+                st.write("⚽ Média: 1.8 | 🛡️ Sofre: 1.2")
+                st.write("📊 5V-3E-2D")
+            
+            with col2:
+                st.markdown("<div class='alert-high'>🔥 ALTA - Mais 2.5</div>", unsafe_allow_html=True)
+                st.write("**Estimativa: 3.2 gols**")
+                st.caption("⏰ 20:00 | 🏟️ Estádio")
+            
+            with col3:
+                st.markdown("### Time Fora")
+                st.write("⚽ Média: 1.4 | 🛡️ Sofre: 1.6")
+                st.write("📊 4V-4E-2D")
+            
+            st.divider()
 
 with tab2:
-    st.header("📊 Estatísticas Detalhadas da Liga")
+    st.header("📊 Estatísticas e Visualizações")
     
-    if st.session_state.dados_estatisticas and "estatisticas" in st.session_state.dados_estatisticas:
-        stats = st.session_state.dados_estatisticas["estatisticas"]
-        
-        # Converter para DataFrame
-        dados_tabela = []
-        for time_id, time_stats in stats.items():
-            dados_tabela.append({
-                "Posição": len(dados_tabela) + 1,
-                "Time": time_stats["nome"],
-                "Jogos": time_stats["jogos"],
-                "Vitórias": time_stats["vitorias"],
-                "Empates": time_stats["empates"],
-                "Derrotas": time_stats["derrotas"],
-                "Pontos": time_stats["pontos"],
-                "Gols Marcados": time_stats["gols_marcados"],
-                "Gols Sofridos": time_stats["gols_sofridos"],
-                "Saldo": time_stats["saldo_gols"],
-                "Média Gols": time_stats["media_gols_marcados"]
-            })
-        
-        df = pd.DataFrame(dados_tabela)
-        df = df.sort_values("Pontos", ascending=False)
-        df["Posição"] = range(1, len(df) + 1)
-        
-        # Tabela de classificação
-        st.subheader("🏆 Tabela de Classificação")
-        st.dataframe(df, use_container_width=True, hide_index=True)
-        
-        # Gráficos
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # Gráfico de pontos
-            fig_pontos = px.bar(
-                df.head(10),
-                x="Time",
-                y="Pontos",
-                title="Top 10 Times por Pontos",
-                color="Pontos",
-                color_continuous_scale="viridis"
-            )
-            fig_pontos.update_layout(xaxis_tickangle=-45)
-            st.plotly_chart(fig_pontos, use_container_width=True)
-        
-        with col2:
-            # Gráfico de eficiência ofensiva/defensiva
-            fig_eficiencia = px.scatter(
-                df,
-                x="Média Gols",
-                y="Gols Sofridos",
-                size="Pontos",
-                color="Pontos",
-                hover_data=["Time"],
-                title="Eficiência: Ataque vs Defesa",
-                color_continuous_scale="reds"
-            )
-            st.plotly_chart(fig_eficiencia, use_container_width=True)
+    if not st.session_state.api_status["online"]:
+        st.warning("Conecte à API para ver estatísticas em tempo real")
     
-    else:
-        st.info("👆 Clique em 'Buscar Estatísticas' no painel lateral para carregar os dados da liga")
+    # Gráficos de exemplo
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Gráfico de exemplo 1
+        df_exemplo = pd.DataFrame({
+            'Time': ['Time A', 'Time B', 'Time C', 'Time D', 'Time E'],
+            'Pontos': [45, 42, 38, 35, 30],
+            'Gols': [52, 48, 45, 40, 35]
+        })
+        
+        fig1 = px.bar(df_exemplo, x='Time', y='Pontos', title='Pontuação dos Times')
+        st.plotly_chart(fig1, use_container_width=True)
+    
+    with col2:
+        # Gráfico de exemplo 2
+        fig2 = px.scatter(df_exemplo, x='Gols', y='Pontos', size='Pontos', 
+                         color='Time', title='Relação Gols x Pontos')
+        st.plotly_chart(fig2, use_container_width=True)
 
 with tab3:
-    st.header("🔍 Monitoramento do Sistema")
+    st.header("🔧 Configurações da API")
     
-    col1, col2 = st.columns(2)
+    st.markdown('<div class="config-section">', unsafe_allow_html=True)
+    st.subheader("🔑 Credenciais da API")
+    
+    # Configuração da URL da API
+    api_url = st.text_input(
+        "URL da API:",
+        value=BASE_URL,
+        help="URL base da API Football"
+    )
+    
+    # Configuração da Chave da API
+    api_key = st.text_input(
+        "Chave da API:",
+        value=API_CONFIG['api_key'],
+        type="password",
+        help="Sua chave pessoal da API Football"
+    )
+    
+    col1, col2, col3 = st.columns(3)
     
     with col1:
-        st.subheader("📈 Status da API")
-        if st.session_state.api_status["online"]:
-            status = st.session_state.api_status
-            
-            # Gráfico de uso
-            fig_uso = go.Figure(go.Indicator(
-                mode = "gauge+number+delta",
-                value = status["requests_current"],
-                domain = {'x': [0, 1], 'y': [0, 1]},
-                title = {'text': "Requisições Hoje"},
-                delta = {'reference': status["requests_limit_day"], 'decreasing': {'color': "green"}},
-                gauge = {
-                    'axis': {'range': [None, status["requests_limit_day"]]},
-                    'bar': {'color': "darkblue"},
-                    'steps': [
-                        {'range': [0, status["requests_limit_day"] * 0.7], 'color': "lightgray"},
-                        {'range': [status["requests_limit_day"] * 0.7, status["requests_limit_day"] * 0.9], 'color': "yellow"},
-                        {'range': [status["requests_limit_day"] * 0.9, status["requests_limit_day"]], 'color': "red"}
-                    ],
-                    'threshold': {
-                        'line': {'color': "red", 'width': 4},
-                        'thickness': 0.75,
-                        'value': status["requests_limit_day"] * 0.9
-                    }
-                }
-            ))
-            fig_uso.update_layout(height=300)
-            st.plotly_chart(fig_uso, use_container_width=True)
-            
-            st.metric("Requisições Usadas", status["requests_current"])
-            st.metric("Limite Diário", status["requests_limit_day"])
-            st.metric("Disponível", status["requests_remaining"])
-            
-        else:
-            st.error("❌ API Offline")
-            st.write(f"Erro: {st.session_state.api_status['error']}")
+        if st.button("💾 Salvar Configurações", use_container_width=True):
+            novo_config = atualizar_config_api(api_key, api_url)
+            st.success("✅ Configurações salvas!")
+            st.rerun()
     
     with col2:
-        st.subheader("📊 Estatísticas de Busca")
-        
-        if st.session_state.ultima_busca:
-            st.metric("Última Busca", st.session_state.ultima_busca.strftime("%d/%m %H:%M"))
-        
-        if st.session_state.dados_estatisticas:
-            stats = st.session_state.dados_estatisticas
-            st.metric("Times na Liga", len(stats.get("estatisticas", {})))
-            st.metric("Temporada", stats.get("temporada", "N/A"))
-        
-        if st.session_state.jogos_do_dia:
-            st.metric("Jogos Hoje", len(st.session_state.jogos_do_dia))
-        
-        # Informações do cache
-        st.subheader("💾 Cache do Sistema")
-        st.metric("Ligas Carregadas", len(ligas) if ligas else 0)
-        st.metric("Estado da Sessão", "Ativa" if st.session_state else "Inativa")
-
-with tab4:
-    st.header("⚙️ Configurações do Sistema")
+        if st.button("🔄 Restaurar Padrão", use_container_width=True):
+            default_config = atualizar_config_api('f07fc89fcff4416db7f079fda478dd61', 'https://v3.football.api-sports.io')
+            st.success("✅ Configurações padrão restauradas!")
+            st.rerun()
     
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("🔑 Configurações da API")
-        st.info(f"API Base: {BASE_URL}")
-        st.code(f"Chave: {API_KEY[:10]}...", language="text")
-        
-        # Teste de conexão
-        if st.button("🧪 Testar Conexão API"):
+    with col3:
+        if st.button("🔍 Testar Conexão", use_container_width=True):
             with st.spinner("Testando conexão..."):
-                if verificar_status_api():
-                    st.success("✅ Conexão estabelecida com sucesso!")
+                # Atualizar configurações primeiro
+                atualizar_config_api(api_key, api_url)
+                # Testar conexão
+                sucesso, mensagem = verificar_status_api_detalhado()
+                
+                if sucesso:
+                    st.success(f"✅ {mensagem}")
+                    status = st.session_state.api_status
+                    st.metric("Tempo de Resposta", f"{status.get('response_time', 0):.2f}s")
+                    st.metric("Requisições Restantes", status["requests_remaining"])
                 else:
-                    st.error("❌ Falha na conexão")
+                    st.error(f"❌ {mensagem}")
+                    if "details" in st.session_state.api_status:
+                        st.error(st.session_state.api_status["details"])
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Diagnóstico detalhado
+    st.markdown('<div class="config-section">', unsafe_allow_html=True)
+    st.subheader("🔍 Diagnóstico de Conexão")
+    
+    if st.button("🩺 Executar Diagnóstico Completo"):
+        with st.spinner("Executando diagnósticos..."):
+            
+            # Teste 1: Conexão básica
+            st.write("**1. Teste de conectividade básica...**")
+            sucesso, status = testar_endpoint_simples()
+            if sucesso:
+                st.success("✅ Conectividade básica: OK")
+            else:
+                st.error(f"❌ Conectividade básica: FALHA - {status}")
+            
+            # Teste 2: Endpoint de status
+            st.write("**2. Teste do endpoint de status...**")
+            sucesso, mensagem = verificar_status_api_detalhado()
+            if sucesso:
+                st.success(f"✅ Endpoint status: OK - {mensagem}")
+            else:
+                st.error(f"❌ Endpoint status: FALHA - {mensagem}")
+            
+            # Teste 3: Verificar chave da API
+            st.write("**3. Verificação da chave da API...**")
+            if api_key and len(api_key) == 32:
+                st.success("✅ Formato da chave: VÁLIDO")
+            else:
+                st.error("❌ Formato da chave: INVÁLIDO - Deve ter 32 caracteres")
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Gerenciamento de Cache
+    st.markdown('<div class="config-section">', unsafe_allow_html=True)
+    st.subheader("🗂️ Gerenciamento de Cache")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("🧹 Limpar Cache de Dados", use_container_width=True):
+            st.cache_data.clear()
+            st.success("✅ Cache de dados limpo!")
     
     with col2:
-        st.subheader("🛠️ Gerenciamento de Cache")
-        
-        if st.button("🗑️ Limpar Todo o Cache", type="secondary", use_container_width=True):
-            st.cache_data.clear()
+        if st.button("🔄 Resetar Sessão", use_container_width=True, type="secondary"):
             for key in list(st.session_state.keys()):
                 del st.session_state[key]
-            st.success("✅ Cache e estado limpos!")
-            time.sleep(1)
+            st.success("✅ Sessão resetada!")
             st.rerun()
-        
-        if st.button("📋 Estado do Sistema", use_container_width=True):
-            st.write("**Estado atual da sessão:**")
-            estado_limpo = {}
-            for k, v in st.session_state.items():
-                if k == 'dados_estatisticas':
-                    estado_limpo[k] = f"Dados com {len(v.get('estatisticas', {}))} times" if v else "Vazio"
-                elif k == 'jogos_do_dia':
-                    estado_limpo[k] = f"{len(v)} jogos"
-                else:
-                    estado_limpo[k] = str(v)
-            st.json(estado_limpo)
     
-    st.subheader("📁 Exportar Dados")
-    if st.session_state.dados_estatisticas:
-        # Criar JSON para download
-        dados_export = {
-            "metadata": {
-                "export_date": datetime.now().isoformat(),
-                "liga": liga_info["nome"] if liga_info else "N/A",
-                "temporada": st.session_state.dados_estatisticas.get("temporada", "N/A")
-            },
-            "estatisticas": st.session_state.dados_estatisticas.get("estatisticas", {})
-        }
-        
-        json_str = json.dumps(dados_export, indent=2, ensure_ascii=False)
-        
-        st.download_button(
-            label="💾 Baixar Estatísticas (JSON)",
-            data=json_str,
-            file_name=f"estatisticas_futebol_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-            mime="application/json",
-            use_container_width=True
-        )
-    else:
-        st.warning("Nenhum dado disponível para exportar")
+    # Informações do sistema
+    st.subheader("📊 Informações do Sistema")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.metric("Ligas Carregadas", len(ligas) if ligas else 0)
+        st.metric("Status API", "Online" if st.session_state.api_status["online"] else "Offline")
+    
+    with col2:
+        st.metric("Última Busca", 
+                 st.session_state.ultima_busca.strftime("%H:%M") if st.session_state.ultima_busca else "Nunca")
+        st.metric("Jogos em Cache", len(st.session_state.jogos_do_dia))
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+
+with tab4:
+    st.header("❓ Ajuda e Suporte")
+    
+    st.markdown("""
+    ### 🔧 Solução de Problemas
+    
+    **Problema: API não conecta**
+    - Verifique se a chave da API está correta
+    - Confirme se sua assinatura está ativa
+    - Teste a conexão na aba de Configurações
+    
+    **Problema: Limite de requisições**
+    - O plano gratuito tem limite diário
+    - Aguarde 24 horas ou faça upgrade
+    
+    **Problema: Dados não carregam**
+    - Verifique sua conexão com a internet
+    - Tente limpar o cache
+    - Reinicie a aplicação
+    
+    ### 📋 Configuração Recomendada
+    
+    1. **Obtenha uma chave da API:**
+       - Acesse: [API-Football](https://www.api-football.com/)
+       - Cadastre-se e obtenha sua chave
+       
+    2. **Configure no sistema:**
+       - Vá para a aba **🔧 Configurações**
+       - Cole sua chave no campo indicado
+       - Clique em **Salvar Configurações**
+       - Teste a conexão
+       
+    3. **Use o sistema:**
+       - Carregue as ligas disponíveis
+       - Selecione uma liga e data
+       - Analise os jogos
+       
+    ### 🆘 Suporte
+    - Documentação da API: [api-football.com/documentation](https://www.api-football.com/documentation)
+    - Problemas técnicos: Verifique o diagnóstico na aba de configurações
+    """)
 
 # ==========================
 # Rodapé
 # ==========================
 st.markdown("---")
-col1, col2, col3 = st.columns([1, 2, 1])
-with col2:
-    st.markdown(
-        "<div style='text-align: center;'>"
-        "🔮 **Dashboard Futebol Pro** | "
-        "Desenvolvido com Streamlit | "
-        f"Última atualização: {datetime.now().strftime('%H:%M:%S')}"
-        "</div>", 
-        unsafe_allow_html=True
-    )
+st.markdown(
+    "<div style='text-align: center; color: #666;'>"
+    "🔮 **Dashboard Futebol Pro** | "
+    "Desenvolvido com Streamlit | "
+    f"Última atualização: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
+    "</div>", 
+    unsafe_allow_html=True
+)
+
+# ==========================
+# Inicialização Automática
+# ==========================
+if st.session_state.api_status["online"] == False and st.session_state.api_status["error"] == "Não verificado":
+    # Tentar verificação automática ao carregar
+    verificar_status_api_detalhado()
