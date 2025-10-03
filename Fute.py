@@ -94,6 +94,14 @@ st.markdown("""
         color: #dc3545;
         font-weight: bold;
     }
+    .debug-info {
+        background-color: #fff3cd;
+        padding: 1rem;
+        border-radius: 5px;
+        border-left: 4px solid #ffc107;
+        font-family: monospace;
+        font-size: 0.9rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -110,9 +118,11 @@ if 'ultima_busca' not in st.session_state:
     st.session_state.ultima_busca = None
 if 'jogos_do_dia' not in st.session_state:
     st.session_state.jogos_do_dia = []
+if 'debug_info' not in st.session_state:
+    st.session_state.debug_info = {}
 
 # ==========================
-# Funções do Sistema
+# Funções do Sistema CORRIGIDAS
 # ==========================
 
 def atualizar_config_api(nova_chave=None, nova_url=None):
@@ -132,23 +142,44 @@ def atualizar_config_api(nova_chave=None, nova_url=None):
     return st.session_state.api_config
 
 def verificar_status_api_detalhado():
-    """Verifica o status da API com diagnósticos detalhados"""
+    """Verifica o status da API com tratamento de erro robusto"""
     try:
         url = f"{BASE_URL}/status"
+        st.session_state.debug_info['status_url'] = url
+        st.session_state.debug_info['status_headers'] = HEADERS
+        
         response = requests.get(url, headers=HEADERS, timeout=15)
+        st.session_state.debug_info['status_response_code'] = response.status_code
+        st.session_state.debug_info['status_response_headers'] = dict(response.headers)
         
         if response.status_code == 200:
             data = response.json()
-            st.session_state.api_status = {
-                "requests_current": data["response"]["requests"]["current"],
-                "requests_limit_day": data["response"]["requests"]["limit_day"],
-                "requests_remaining": data["response"]["requests"]["limit_day"] - data["response"]["requests"]["current"],
-                "online": True,
-                "message": "✅ API conectada com sucesso",
-                "response_time": response.elapsed.total_seconds()
-            }
-            return True, "Conexão bem-sucedida"
+            st.session_state.debug_info['status_response_data'] = data
             
+            # Acesso SEGURO aos dados da resposta
+            if "response" in data and isinstance(data["response"], dict):
+                response_data = data["response"]
+                requests_info = response_data.get("requests", {})
+                
+                st.session_state.api_status = {
+                    "requests_current": requests_info.get("current", 0),
+                    "requests_limit_day": requests_info.get("limit_day", 100),
+                    "requests_remaining": requests_info.get("limit_day", 100) - requests_info.get("current", 0),
+                    "online": True,
+                    "message": "✅ API conectada com sucesso",
+                    "response_time": response.elapsed.total_seconds()
+                }
+                return True, "Conexão bem-sucedida"
+            else:
+                # Estrutura diferente do esperado, mas a API respondeu
+                st.session_state.api_status = {
+                    "online": True,
+                    "message": "✅ API respondeu (estrutura diferente)",
+                    "response_time": response.elapsed.total_seconds(),
+                    "raw_data": data
+                }
+                return True, "API respondeu (estrutura diferente do esperado)"
+                
         elif response.status_code == 401:
             st.session_state.api_status = {
                 "online": False, 
@@ -184,8 +215,8 @@ def verificar_status_api_detalhado():
         else:
             st.session_state.api_status = {
                 "online": False, 
-                "error": f"Erro {response.status_code} - {response.text}",
-                "details": f"Resposta da API: {response.text}"
+                "error": f"Erro {response.status_code}",
+                "details": f"Resposta da API: {response.text[:200]}..."
             }
             return False, f"Erro HTTP {response.status_code}"
             
@@ -211,33 +242,49 @@ def verificar_status_api_detalhado():
             "error": f"Erro inesperado: {str(e)}",
             "details": "Ocorreu um erro inesperado. Verifique os logs para mais detalhes."
         }
+        st.session_state.debug_info['status_exception'] = str(e)
         return False, f"Erro inesperado: {str(e)}"
 
 @st.cache_data(ttl=3600)
 def carregar_ligas():
-    """Carrega todas as ligas disponíveis"""
+    """Carrega todas as ligas disponíveis com tratamento de erro"""
     try:
         url = f"{BASE_URL}/leagues"
+        st.session_state.debug_info['leagues_url'] = url
+        
         response = requests.get(url, headers=HEADERS, timeout=10)
+        st.session_state.debug_info['leagues_response_code'] = response.status_code
+        
         if response.status_code == 200:
             data = response.json()
-            ligas = []
-            for l in data["response"]:
-                liga_info = {
-                    "id": l["league"]["id"],
-                    "nome": l["league"]["name"],
-                    "pais": l["country"]["name"],
-                    "tipo": l["league"]["type"],
-                    "logo": l["league"].get("logo", ""),
-                    "temporada_atual": l["seasons"][0]["year"] if l["seasons"] else None
-                }
-                ligas.append(liga_info)
-            return ligas
+            st.session_state.debug_info['leagues_response_data'] = data
+            
+            # Acesso seguro aos dados
+            if "response" in data and isinstance(data["response"], list):
+                ligas = []
+                for l in data["response"]:
+                    # Verificar estrutura esperada
+                    if isinstance(l, dict) and "league" in l and "country" in l:
+                        liga_info = {
+                            "id": l["league"].get("id", 0),
+                            "nome": l["league"].get("name", "Desconhecido"),
+                            "pais": l["country"].get("name", "Desconhecido"),
+                            "tipo": l["league"].get("type", "Desconhecido"),
+                            "logo": l["league"].get("logo", ""),
+                            "temporada_atual": l["seasons"][0].get("year", None) if l.get("seasons") else None
+                        }
+                        ligas.append(liga_info)
+                return ligas
+            else:
+                st.error("❌ Estrutura de resposta inesperada para ligas")
+                return []
         else:
             st.error(f"❌ Erro ao carregar ligas: {response.status_code}")
+            st.session_state.debug_info['leagues_error'] = response.text
             return []
     except Exception as e:
         st.error(f"❌ Erro de conexão: {e}")
+        st.session_state.debug_info['leagues_exception'] = str(e)
         return []
 
 def testar_endpoint_simples():
@@ -245,10 +292,46 @@ def testar_endpoint_simples():
     try:
         # Testa um endpoint leve - países
         url = f"{BASE_URL}/countries"
+        st.session_state.debug_info['test_url'] = url
+        
         response = requests.get(url, headers=HEADERS, timeout=10)
-        return response.status_code == 200, response.status_code
+        st.session_state.debug_info['test_response_code'] = response.status_code
+        
+        if response.status_code == 200:
+            data = response.json()
+            st.session_state.debug_info['test_response_data'] = data
+            return True, response.status_code
+        else:
+            st.session_state.debug_info['test_error'] = response.text
+            return False, response.status_code
     except Exception as e:
+        st.session_state.debug_info['test_exception'] = str(e)
         return False, str(e)
+
+def debug_verificar_estrutura_resposta():
+    """Função especial para debug da estrutura da resposta"""
+    try:
+        url = f"{BASE_URL}/status"
+        response = requests.get(url, headers=HEADERS, timeout=10)
+        
+        debug_info = {
+            'status_code': response.status_code,
+            'headers': dict(response.headers),
+            'content_type': response.headers.get('content-type'),
+            'text_sample': response.text[:500] if response.text else "Vazio",
+        }
+        
+        if response.status_code == 200:
+            try:
+                data = response.json()
+                debug_info['json_keys'] = list(data.keys()) if isinstance(data, dict) else "Não é dict"
+                debug_info['full_structure'] = str(data)
+            except Exception as e:
+                debug_info['json_error'] = str(e)
+        
+        return debug_info
+    except Exception as e:
+        return {'exception': str(e)}
 
 # ==========================
 # Interface Principal
@@ -286,13 +369,14 @@ with st.sidebar:
                     st.error(f"❌ Falha: {status}")
     
     # Exibir status atual
-    if st.session_state.api_status["online"]:
+    if st.session_state.api_status.get("online"):
         status = st.session_state.api_status
-        st.metric("Requisições Restantes", status["requests_remaining"])
-        progresso = status["requests_remaining"] / status["requests_limit_day"]
-        st.progress(progresso)
-        if progresso < 0.2:
-            st.warning("⚠️ Poucas requisições restantes")
+        st.metric("Requisições Restantes", status.get("requests_remaining", "N/A"))
+        if "requests_limit_day" in status:
+            progresso = status["requests_remaining"] / status["requests_limit_day"]
+            st.progress(progresso)
+            if progresso < 0.2:
+                st.warning("⚠️ Poucas requisições restantes")
     else:
         st.error("❌ API Offline")
         if "error" in st.session_state.api_status:
@@ -327,8 +411,8 @@ with st.sidebar:
     if ligas:
         ligas_principais = [
             "Premier League", "La Liga", "Serie A", "Bundesliga", 
-            "Ligue 1", "Primeira Liga", "Serie A", "MLS",
-            "Liga MX", "Brasileiro Série A", "Brasileiro Série B"
+            "Ligue 1", "Primeira Liga", "MLS", "Liga MX", 
+            "Brasileiro Série A", "Brasileiro Série B"
         ]
         
         ligas_filtradas = [l for l in ligas if any(nome in l["nome"] for nome in ligas_principais)]
@@ -339,12 +423,14 @@ with st.sidebar:
             liga_index = nomes_ligas.index(liga_selecionada_nome)
             liga_id = ligas_filtradas[liga_index]["id"]
             liga_info = ligas_filtradas[liga_index]
+        else:
+            st.info("Nenhuma liga principal encontrada")
     
     st.divider()
     st.subheader("🚀 Ações Rápidas")
     
     if st.button("📊 Buscar Dados", type="primary", use_container_width=True):
-        if liga_id and st.session_state.api_status["online"]:
+        if liga_id and st.session_state.api_status.get("online"):
             with st.spinner("Buscando dados..."):
                 # Simular busca de dados
                 time.sleep(2)
@@ -358,12 +444,12 @@ with st.sidebar:
 # ==========================
 
 # Abas Principais
-tab1, tab2, tab3, tab4 = st.tabs(["🎯 Análise", "📊 Estatísticas", "🔧 Configurações", "❓ Ajuda"])
+tab1, tab2, tab3, tab4 = st.tabs(["🎯 Análise", "📊 Estatísticas", "🔧 Configurações", "🐛 Debug"])
 
 with tab1:
     st.header("🔎 Análise de Jogos")
     
-    if not st.session_state.api_status["online"]:
+    if not st.session_state.api_status.get("online"):
         st.error("""
         ⚠️ **API não conectada**
         
@@ -402,7 +488,7 @@ with tab1:
 with tab2:
     st.header("📊 Estatísticas e Visualizações")
     
-    if not st.session_state.api_status["online"]:
+    if not st.session_state.api_status.get("online"):
         st.warning("Conecte à API para ver estatísticas em tempo real")
     
     # Gráficos de exemplo
@@ -471,8 +557,10 @@ with tab3:
                 if sucesso:
                     st.success(f"✅ {mensagem}")
                     status = st.session_state.api_status
-                    st.metric("Tempo de Resposta", f"{status.get('response_time', 0):.2f}s")
-                    st.metric("Requisições Restantes", status["requests_remaining"])
+                    if "response_time" in status:
+                        st.metric("Tempo de Resposta", f"{status['response_time']:.2f}s")
+                    if "requests_remaining" in status:
+                        st.metric("Requisições Restantes", status["requests_remaining"])
                 else:
                     st.error(f"❌ {mensagem}")
                     if "details" in st.session_state.api_status:
@@ -535,7 +623,7 @@ with tab3:
     
     with col1:
         st.metric("Ligas Carregadas", len(ligas) if ligas else 0)
-        st.metric("Status API", "Online" if st.session_state.api_status["online"] else "Offline")
+        st.metric("Status API", "Online" if st.session_state.api_status.get("online") else "Offline")
     
     with col2:
         st.metric("Última Busca", 
@@ -545,46 +633,32 @@ with tab3:
     st.markdown('</div>', unsafe_allow_html=True)
 
 with tab4:
-    st.header("❓ Ajuda e Suporte")
+    st.header("🐛 Debug e Logs do Sistema")
     
-    st.markdown("""
-    ### 🔧 Solução de Problemas
+    st.subheader("🔧 Informações de Debug")
     
-    **Problema: API não conecta**
-    - Verifique se a chave da API está correta
-    - Confirme se sua assinatura está ativa
-    - Teste a conexão na aba de Configurações
+    if st.button("🔍 Analisar Estrutura da Resposta"):
+        with st.spinner("Analisando resposta da API..."):
+            debug_info = debug_verificar_estrutura_resposta()
+            
+            st.markdown("### 📋 Resposta Bruta da API")
+            st.markdown('<div class="debug-info">', unsafe_allow_html=True)
+            st.json(debug_info)
+            st.markdown('</div>', unsafe_allow_html=True)
     
-    **Problema: Limite de requisições**
-    - O plano gratuito tem limite diário
-    - Aguarde 24 horas ou faça upgrade
+    st.markdown("### 📊 Debug Info da Sessão")
+    if st.session_state.debug_info:
+        st.markdown('<div class="debug-info">', unsafe_allow_html=True)
+        st.json(st.session_state.debug_info)
+        st.markdown('</div>', unsafe_allow_html=True)
+    else:
+        st.info("Nenhuma informação de debug disponível")
     
-    **Problema: Dados não carregam**
-    - Verifique sua conexão com a internet
-    - Tente limpar o cache
-    - Reinicie a aplicação
-    
-    ### 📋 Configuração Recomendada
-    
-    1. **Obtenha uma chave da API:**
-       - Acesse: [API-Football](https://www.api-football.com/)
-       - Cadastre-se e obtenha sua chave
-       
-    2. **Configure no sistema:**
-       - Vá para a aba **🔧 Configurações**
-       - Cole sua chave no campo indicado
-       - Clique em **Salvar Configurações**
-       - Teste a conexão
-       
-    3. **Use o sistema:**
-       - Carregue as ligas disponíveis
-       - Selecione uma liga e data
-       - Analise os jogos
-       
-    ### 🆘 Suporte
-    - Documentação da API: [api-football.com/documentation](https://www.api-football.com/documentation)
-    - Problemas técnicos: Verifique o diagnóstico na aba de configurações
-    """)
+    st.markdown("### 🗑️ Limpar Debug")
+    if st.button("🧹 Limpar Logs de Debug"):
+        st.session_state.debug_info = {}
+        st.success("Logs de debug limpos!")
+        st.rerun()
 
 # ==========================
 # Rodapé
@@ -602,6 +676,6 @@ st.markdown(
 # ==========================
 # Inicialização Automática
 # ==========================
-if st.session_state.api_status["online"] == False and st.session_state.api_status["error"] == "Não verificado":
+if st.session_state.api_status.get("online") == False and st.session_state.api_status.get("error") == "Não verificado":
     # Tentar verificação automática ao carregar
     verificar_status_api_detalhado()
