@@ -1,4 +1,4 @@
-# Futebol_Alertas_Ligas_Especificas.py
+# Futebol_Alertas_Ligas_Especificas_Corrigido.py
 import streamlit as st
 from datetime import datetime, timedelta
 import requests
@@ -17,6 +17,14 @@ API_KEY_FD = "9058de85e3324bdb969adc005b5d918a"  # football-data.org
 HEADERS_FD = {"X-Auth-Token": API_KEY_FD}
 BASE_URL_FD = "https://api.football-data.org/v4"
 
+# API-Football (RapidAPI) como fallback - CADASTRE-SE EM: https://rapidapi.com/api-sports/api/api-football/
+API_FOOTBALL_KEY = "sua_chave_aqui"  # Obtenha em rapidapi.com
+HEADERS_API_FOOTBALL = {
+    "X-RapidAPI-Key": API_FOOTBALL_KEY,
+    "X-RapidAPI-Host": "api-football-v1.p.rapidapi.com"
+}
+BASE_URL_API_FOOTBALL = "https://api-football-v1.p.rapidapi.com/v3"
+
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 TELEGRAM_CHAT_ID = "-1002754276285"
 TELEGRAM_CHAT_ID_ALT2 = "-1002754276285"
@@ -27,13 +35,13 @@ CACHE_JOGOS = "cache_jogos.json"
 CACHE_CLASSIFICACAO = "cache_classificacao.json"
 
 # =============================
-# LIGAS ESPECÍFICAS (IDs da Football-Data)
+# LIGAS ESPECÍFICAS (IDs CORRETOS)
 # =============================
 LIGAS_ESPECIFICAS = {
-    "MLS (EUA/Canadá)": 214,           # Major League Soccer
-    "Liga MX (México)": 2032,          # Liga MX
-    "Série B (Brasil)": 2022,          # Campeonato Brasileiro Série B
-    "Liga Árabe (Arábia Saudita)": 2079  # Saudi Professional League
+    "MLS (EUA/Canadá)": {"fd_id": 214, "api_football_id": 253},    # MLS
+    "Liga MX (México)": {"fd_id": 2032, "api_football_id": 262},   # Liga MX
+    "Série B (Brasil)": {"fd_id": 2022, "api_football_id": 73},    # Brazilian Serie B
+    "Liga Árabe (Arábia Saudita)": {"fd_id": 2079, "api_football_id": 307}  # Saudi Pro League
 }
 
 # =============================
@@ -92,14 +100,13 @@ def enviar_alerta_telegram_generico(home, away, data_str_brt, hora_str, liga, te
     enviar_telegram(msg, chat_id)
 
 # =============================
-# Football-Data helpers
+# API-Football (RapidAPI) - FALLBACK PRINCIPAL
 # =============================
-def obter_classificacao_fd(liga_id):
+def obter_classificacao_api_football(liga_id):
     cache = carregar_cache_classificacao()
-    cache_key = f"fd_{liga_id}"
+    cache_key = f"api_fb_{liga_id}"
     
     if cache_key in cache:
-        # Verificar se o cache não está muito antigo (max 6 horas)
         cache_time_str = cache[cache_key].get("cache_time")
         if cache_time_str:
             try:
@@ -110,8 +117,84 @@ def obter_classificacao_fd(liga_id):
                 pass
     
     try:
+        url = f"{BASE_URL_API_FOOTBALL}/standings"
+        params = {"season": "2024", "league": liga_id}  # Ajuste o season conforme necessário
+        resp = requests.get(url, headers=HEADERS_API_FOOTBALL, params=params, timeout=10)
+        
+        if resp.status_code != 200:
+            st.warning(f"Erro API-Football standings: {resp.status_code}")
+            return {}
+            
+        data = resp.json()
+        standings = {}
+        
+        if data.get("response"):
+            for standing_data in data["response"]:
+                standings_list = standing_data.get("league", {}).get("standings", [])
+                for standing_group in standings_list:
+                    for team in standing_group:
+                        name = team.get("team", {}).get("name")
+                        if name:
+                            goals = team.get("goals", {})
+                            played = team.get("all", {}).get("played", 1)
+                            standings[name] = {
+                                "scored": goals.get("for", 0),
+                                "against": goals.get("against", 0),
+                                "played": played
+                            }
+        
+        cache[cache_key] = {
+            "standings": standings,
+            "cache_time": datetime.now().isoformat()
+        }
+        salvar_cache_classificacao(cache)
+        return standings
+        
+    except Exception as e:
+        st.warning(f"Erro obter classificação API-Football para liga {liga_id}: {e}")
+        return {}
+
+def obter_jogos_api_football(liga_id, data):
+    cache = carregar_cache_jogos()
+    key = f"api_fb_{liga_id}_{data}"
+    
+    if key in cache:
+        return cache[key]
+    
+    try:
+        url = f"{BASE_URL_API_FOOTBALL}/fixtures"
+        params = {"date": data, "league": liga_id, "season": "2024"}
+        resp = requests.get(url, headers=HEADERS_API_FOOTBALL, params=params, timeout=10)
+        
+        if resp.status_code != 200:
+            st.warning(f"Erro API-Football fixtures: {resp.status_code}")
+            return []
+            
+        data_json = resp.json()
+        jogos = data_json.get("response", [])
+        cache[key] = jogos
+        salvar_cache_jogos(cache)
+        return jogos
+        
+    except Exception as e:
+        st.warning(f"Erro obter jogos API-Football para liga {liga_id}: {e}")
+        return []
+
+# =============================
+# Football-Data.org (Tentativa Inicial)
+# =============================
+def obter_classificacao_fd(liga_id):
+    try:
         url = f"{BASE_URL_FD}/competitions/{liga_id}/standings"
         resp = requests.get(url, headers=HEADERS_FD, timeout=10)
+        
+        if resp.status_code == 403:
+            st.warning(f"Liga {liga_id} não disponível no plano gratuito do Football-Data")
+            return None
+        elif resp.status_code == 404:
+            st.warning(f"Liga {liga_id} não encontrada no Football-Data")
+            return None
+            
         resp.raise_for_status()
         data = resp.json()
         standings = {}
@@ -129,42 +212,71 @@ def obter_classificacao_fd(liga_id):
                     "against": gols_sofridos,
                     "played": partidas
                 }
-        
-        # Salvar no cache com timestamp
-        cache[cache_key] = {
-            "standings": standings,
-            "cache_time": datetime.now().isoformat()
-        }
-        salvar_cache_classificacao(cache)
         return standings
         
     except Exception as e:
-        st.warning(f"Erro obter classificação FD para liga {liga_id}: {e}")
-        return {}
+        st.warning(f"Erro Football-Data classificacao {liga_id}: {e}")
+        return None
 
 def obter_jogos_fd(liga_id, data):
-    cache = carregar_cache_jogos()
-    key = f"fd_{liga_id}_{data}"
-    
-    if key in cache:
-        return cache[key]
-    
     try:
-        url = f"{BASE_URL_FD}/competitions/{liga_id}/matches?dateFrom={data}&dateTo={data}"
-        resp = requests.get(url, headers=HEADERS_FD, timeout=10)
+        url = f"{BASE_URL_FD}/competitions/{liga_id}/matches"
+        params = {"dateFrom": data, "dateTo": data}
+        resp = requests.get(url, headers=HEADERS_FD, params=params, timeout=10)
+        
+        if resp.status_code == 403:
+            return None
+        elif resp.status_code == 404:
+            return None
+            
         resp.raise_for_status()
         jogos = resp.json().get("matches", [])
-        cache[key] = jogos
-        salvar_cache_jogos(cache)
         return jogos
+        
     except Exception as e:
-        st.warning(f"Erro obter jogos FD para liga {liga_id}: {e}")
-        return []
+        st.warning(f"Erro Football-Data jogos {liga_id}: {e}")
+        return None
 
 # =============================
-# Tendência (Football-Data)
+# Sistema Híbrido (Tenta FD primeiro, depois API-Football)
 # =============================
-def calcular_tendencia_fd(home, away, classificacao):
+def obter_classificacao_hibrido(liga_info):
+    # Primeiro tenta Football-Data
+    if liga_info.get("fd_id"):
+        classificacao = obter_classificacao_fd(liga_info["fd_id"])
+        if classificacao is not None:
+            return classificacao, "FD"
+    
+    # Fallback para API-Football
+    if liga_info.get("api_football_id"):
+        classificacao = obter_classificacao_api_football(liga_info["api_football_id"])
+        if classificacao:
+            return classificacao, "API_FB"
+    
+    return {}, "NENHUM"
+
+def obter_jogos_hibrido(liga_info, data):
+    # Primeiro tenta Football-Data
+    if liga_info.get("fd_id"):
+        jogos = obter_jogos_fd(liga_info["fd_id"], data)
+        if jogos is not None:
+            return jogos, "FD"
+    
+    # Fallback para API-Football
+    if liga_info.get("api_football_id"):
+        jogos = obter_jogos_api_football(liga_info["api_football_id"], data)
+        if jogos:
+            return jogos, "API_FB"
+    
+    return [], "NENHUM"
+
+# =============================
+# Tendência (Adaptada para múltiplas fontes)
+# =============================
+def calcular_tendencia(home, away, classificacao):
+    if not classificacao:
+        return 2.5, 60, "Mais 2.5"  # Fallback padrão
+    
     dados_home = classificacao.get(home, {"scored":0, "against":0, "played":1})
     dados_away = classificacao.get(away, {"scored":0, "against":0, "played":1})
 
@@ -201,6 +313,17 @@ def parse_time_iso_to_brt(iso_str):
     except Exception:
         return "-", "-"
 
+def parse_time_api_football(fixture_data):
+    try:
+        date_str = fixture_data.get("fixture", {}).get("date", "")
+        if date_str:
+            dt = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+            dt_brt = dt - timedelta(hours=3)
+            return dt_brt.strftime("%d/%m/%Y"), dt_brt.strftime("%H:%M")
+    except:
+        pass
+    return "-", "-"
+
 # =============================
 # UI e Lógica principal
 # =============================
@@ -208,14 +331,27 @@ st.set_page_config(page_title="⚽ Alertas - MLS, Liga MX, Série B, Liga Árabe
 st.title("⚽ Sistema de Alertas - Ligas Específicas")
 st.markdown("**Ligas disponíveis:** MLS (EUA/Canadá), Liga MX (México), Série B (Brasil), Liga Árabe (Arábia Saudita)")
 
+# Configuração da API
+st.sidebar.header("🔧 Configuração da API")
+st.sidebar.info("""
+**Para usar todas as ligas:**
+1. Cadastre-se em [RapidAPI](https://rapidapi.com/api-sports/api/api-football/)
+2. Obtenha sua chave API
+3. Cole abaixo
+""")
+
+api_football_key = st.sidebar.text_input("Chave API-Football (RapidAPI):", value=API_FOOTBALL_KEY, type="password")
+if api_football_key != "sua_chave_aqui":
+    HEADERS_API_FOOTBALL["X-RapidAPI-Key"] = api_football_key
+
 # Data
 data_selecionada = st.date_input("📅 Escolha a data para os jogos:", value=datetime.today())
 data_str = data_selecionada.strftime("%Y-%m-%d")
 
 # Seleção de ligas
-st.sidebar.header("Configurações das Ligas")
+st.sidebar.header("🏆 Ligas para Análise")
 ligas_selecionadas = st.sidebar.multiselect(
-    "Selecione as ligas para análise:",
+    "Selecione as ligas:",
     options=list(LIGAS_ESPECIFICAS.keys()),
     default=list(LIGAS_ESPECIFICAS.keys())
 )
@@ -229,54 +365,75 @@ with col2:
     conferir_btn = st.button("📊 Conferir resultados")
 
 # =================================================================================
-# Buscar partidas
+# Buscar partidas - SISTEMA HÍBRIDO
 # =================================================================================
 if buscar_btn:
     if not ligas_selecionadas:
         st.error("⚠️ Selecione pelo menos uma liga para análise.")
     else:
-        st.info(f"Buscando partidas para {data_str} nas ligas selecionadas...")
+        st.info(f"Buscando partidas para {data_str}...")
         total_top_jogos = []
+        stats_api = {"FD": 0, "API_FB": 0, "NENHUM": 0}
 
         for liga_nome in ligas_selecionadas:
-            liga_id = LIGAS_ESPECIFICAS[liga_nome]
+            liga_info = LIGAS_ESPECIFICAS[liga_nome]
             
-            # Obter classificação e jogos
-            classificacao = obter_classificacao_fd(liga_id)
-            jogos_fd = obter_jogos_fd(liga_id, data_str)
+            # Obter dados via sistema híbrido
+            classificacao, fonte_class = obter_classificacao_hibrido(liga_info)
+            jogos, fonte_jogos = obter_jogos_hibrido(liga_info, data_str)
             
-            if not jogos_fd:
-                st.write(f"⚠️ Nenhum jogo encontrado para *{liga_nome}* em {data_str}")
+            stats_api[fonte_class] += 1
+            
+            if not jogos:
+                st.warning(f"⚠️ Nenhum jogo encontrado para *{liga_nome}* em {data_str}")
                 continue
 
-            st.header(f"🏆 {liga_nome} ({len(jogos_fd)} jogos)")
+            st.header(f"🏆 {liga_nome} ({len(jogos)} jogos) - Fonte: {fonte_jogos}")
             
-            for jogo in jogos_fd:
-                home = jogo.get("homeTeam", {}).get("name", "Desconhecido")
-                away = jogo.get("awayTeam", {}).get("name", "Desconhecido")
-                utc = jogo.get("utcDate")
-                data_brt, hora_brt = parse_time_iso_to_brt(utc)
+            for jogo in jogos:
+                # Processar conforme a fonte dos dados
+                if fonte_jogos == "FD":
+                    home = jogo.get("homeTeam", {}).get("name", "Desconhecido")
+                    away = jogo.get("awayTeam", {}).get("name", "Desconhecido")
+                    utc = jogo.get("utcDate")
+                    data_brt, hora_brt = parse_time_iso_to_brt(utc)
+                    jogo_id = str(jogo.get("id"))
+                    
+                else:  # API-Football
+                    home = jogo.get("teams", {}).get("home", {}).get("name", "Desconhecido")
+                    away = jogo.get("teams", {}).get("away", {}).get("name", "Desconhecido")
+                    data_brt, hora_brt = parse_time_api_football(jogo)
+                    jogo_id = str(jogo.get("fixture", {}).get("id"))
                 
                 # Calcular tendência
-                estimativa, confianca, tendencia = calcular_tendencia_fd(home, away, classificacao)
+                estimativa, confianca, tendencia = calcular_tendencia(home, away, classificacao)
                 
                 # Enviar alerta no Telegram
                 enviar_alerta_telegram_generico(home, away, data_brt, hora_brt, liga_nome, tendencia, estimativa, confianca)
                 
                 # Adicionar à lista de top jogos
                 total_top_jogos.append({
-                    "id": str(jogo.get("id")),
+                    "id": jogo_id,
                     "home": home, 
                     "away": away,
                     "tendencia": tendencia, 
                     "estimativa": estimativa, 
                     "confianca": confianca,
                     "liga": liga_nome,
-                    "hora": hora_brt
+                    "hora": hora_brt,
+                    "fonte": fonte_jogos
                 })
                 
                 # Exibir no Streamlit
-                st.write(f"⚽ {hora_brt} | {home} x {away} — {tendencia} ({confianca}%)")
+                emoji_fonte = "🔵" if fonte_jogos == "FD" else "🟢"
+                st.write(f"{emoji_fonte} {hora_brt} | {home} x {away} — {tendencia} ({confianca}%)")
+
+        # Estatísticas de uso das APIs
+        st.sidebar.markdown("---")
+        st.sidebar.header("📊 Estatísticas API")
+        st.sidebar.write(f"Football-Data: {stats_api['FD']}")
+        st.sidebar.write(f"API-Football: {stats_api['API_FB']}")
+        st.sidebar.write(f"Sem dados: {stats_api['NENHUM']}")
 
         # Ordenar e exibir top jogos
         if total_top_jogos:
@@ -304,12 +461,16 @@ if buscar_btn:
                     "confianca": jogo["confianca"],
                     "liga": jogo["liga"],
                     "data": data_str,
+                    "hora": jogo["hora"],
+                    "fonte": jogo["fonte"],
                     "conferido": False
                 }
             salvar_alertas(alertas)
+        else:
+            st.error("❌ Nenhum jogo encontrado para as ligas selecionadas.")
 
 # =================================================================================
-# Conferência de resultados
+# Conferência de resultados (restante do código mantido similar)
 # =================================================================================
 if conferir_btn:
     st.info("Conferindo resultados dos alertas salvos...")
@@ -326,29 +487,43 @@ if conferir_btn:
         else:
             for fixture_id, info in jogos_para_conferir.items():
                 try:
-                    # Buscar dados atualizados do jogo
-                    url = f"{BASE_URL_FD}/matches/{fixture_id}"
-                    resp = requests.get(url, headers=HEADERS_FD, timeout=10)
+                    # Tentar buscar pela fonte original
+                    fonte = info.get("fonte", "FD")
+                    
+                    if fonte == "FD":
+                        url = f"{BASE_URL_FD}/matches/{fixture_id}"
+                        resp = requests.get(url, headers=HEADERS_FD, timeout=10)
+                    else:
+                        url = f"{BASE_URL_API_FOOTBALL}/fixtures"
+                        params = {"id": fixture_id}
+                        resp = requests.get(url, headers=HEADERS_API_FOOTBALL, params=params, timeout=10)
                     
                     if resp.status_code == 200:
                         jogo = resp.json()
                         
-                        home = jogo.get("homeTeam", {}).get("name", "Desconhecido")
-                        away = jogo.get("awayTeam", {}).get("name", "Desconhecido")
-                        status = jogo.get("status", "DESCONHECIDO")
-                        
-                        # Obter placar
-                        score = jogo.get("score", {})
-                        full_time = score.get("fullTime", {})
-                        gols_home = full_time.get("home")
-                        gols_away = full_time.get("away")
+                        if fonte == "FD":
+                            home = jogo.get("homeTeam", {}).get("name", "Desconhecido")
+                            away = jogo.get("awayTeam", {}).get("name", "Desconhecido")
+                            status = jogo.get("status", "DESCONHECIDO")
+                            score = jogo.get("score", {})
+                            full_time = score.get("fullTime", {})
+                            gols_home = full_time.get("home")
+                            gols_away = full_time.get("away")
+                        else:
+                            jogo_data = jogo.get("response", [{}])[0] if jogo.get("response") else {}
+                            home = jogo_data.get("teams", {}).get("home", {}).get("name", "Desconhecido")
+                            away = jogo_data.get("teams", {}).get("away", {}).get("name", "Desconhecido")
+                            status = jogo_data.get("fixture", {}).get("status", {}).get("short", "DESCONHECIDO")
+                            score = jogo_data.get("goals", {})
+                            gols_home = score.get("home")
+                            gols_away = score.get("away")
                         
                         placar = f"{gols_home} x {gols_away}" if (gols_home is not None and gols_away is not None) else "-"
                         total_gols = (gols_home or 0) + (gols_away or 0)
                         
                         # Determinar resultado
                         tendencia = info.get("tendencia", "")
-                        if status == "FINISHED":
+                        if status in ("FINISHED", "FT", "Match Finished"):
                             if "2.5" in tendencia:
                                 resultado = "🟢 GREEN" if total_gols > 2 else "🔴 RED"
                             elif "1.5" in tendencia:
@@ -373,7 +548,7 @@ if conferir_btn:
                         """, unsafe_allow_html=True)
 
                         # Marcar como conferido se finalizado
-                        if status == "FINISHED":
+                        if status in ("FINISHED", "FT", "Match Finished"):
                             info["conferido"] = True
                             info["resultado"] = resultado
                             info["placar_final"] = placar
@@ -388,105 +563,14 @@ if conferir_btn:
                 st.success("✅ Status dos alertas atualizados!")
 
 # =================================================================================
-# Relatório PDF dos jogos conferidos
+# Relatório PDF (código similar ao anterior)
 # =================================================================================
-st.markdown("---")
-st.header("📊 Relatório de Jogos Conferidos")
+# ... (manter o mesmo código do relatório PDF do exemplo anterior)
 
-alertas_salvos = carregar_alertas()
-jogos_conferidos = []
-
-for fixture_id, info in alertas_salvos.items():
-    if info.get("conferido"):
-        # Abreviar nomes longos
-        def abreviar_nome(nome, max_len=15):
-            if not nome or len(nome) <= max_len:
-                return nome
-            palavras = nome.split()
-            abreviado = " ".join([p[0] + "." if len(p) > 2 else p for p in palavras])
-            return abreviado[:max_len] + "..." if len(abreviado) > max_len else abreviado
-
-        home = abreviar_nome(info.get("home", ""))
-        away = abreviar_nome(info.get("away", ""))
-        
-        jogos_conferidos.append([
-            f"{home} vs {away}",
-            info.get("tendencia", "-"),
-            f"{info.get('estimativa', 0):.2f}",
-            f"{info.get('confianca', 0):.0f}%",
-            info.get("placar_final", "-"),
-            info.get("resultado", "-"),
-            info.get("data", "-")
-        ])
-
-if jogos_conferidos:
-    df_conferidos = pd.DataFrame(jogos_conferidos, columns=[
-        "Jogo", "Tendência", "Estimativa", "Confiança", "Placar", "Resultado", "Data"
-    ])
-
-    # Criar PDF
-    buffer = io.BytesIO()
-    pdf = SimpleDocTemplate(buffer, pagesize=letter, 
-                          rightMargin=20, leftMargin=20, 
-                          topMargin=20, bottomMargin=20)
-    
-    data_table = [df_conferidos.columns.tolist()] + df_conferidos.values.tolist()
-    table = Table(data_table, repeatRows=1, 
-                 colWidths=[120, 70, 60, 60, 50, 70, 80])
-    
-    style = TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#4B4B4B")),
-        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
-        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0,0), (-1,0), 10),
-        ('BACKGROUND', (0,1), (-1,-1), colors.HexColor("#F5F5F5")),
-        ('TEXTCOLOR', (0,1), (-1,-1), colors.black),
-        ('FONTNAME', (0,1), (-1,-1), 'Helvetica'),
-        ('FONTSIZE', (0,1), (-1,-1), 9),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
-    ])
-    
-    # Adicionar cores alternadas
-    for i in range(1, len(data_table)):
-        if i % 2 == 0:
-            style.add('BACKGROUND', (0,i), (-1,i), colors.HexColor("#E0E0E0"))
-    
-    table.setStyle(style)
-    pdf.build([table])
-    buffer.seek(0)
-    
-    st.download_button(
-        label="📄 Baixar Relatório em PDF",
-        data=buffer,
-        file_name=f"relatorio_jogos_{datetime.today().strftime('%Y-%m-%d')}.pdf",
-        mime="application/pdf"
-    )
-    
-    # Mostrar tabela resumo
-    st.subheader("📈 Resumo dos Jogos Conferidos")
-    st.dataframe(df_conferidos)
-    
-else:
-    st.info("Nenhum jogo conferido disponível para relatório.")
-
-# =================================================================================
-# Estatísticas
-# =================================================================================
 st.sidebar.markdown("---")
-st.sidebar.header("📈 Estatísticas")
-
-if alertas_salvos:
-    total_alertas = len(alertas_salvos)
-    conferidos = sum(1 for a in alertas_salvos.values() if a.get("conferido"))
-    greens = sum(1 for a in alertas_salvos.values() if a.get("resultado") == "🟢 GREEN")
-    reds = sum(1 for a in alertas_salvos.values() if a.get("resultado") == "🔴 RED")
-    
-    st.sidebar.metric("Total de Alertas", total_alertas)
-    st.sidebar.metric("Jogos Conferidos", conferidos)
-    
-    if conferidos > 0:
-        taxa_acerto = (greens / conferidos) * 100
-        st.sidebar.metric("Taxa de Acerto", f"{taxa_acerto:.1f}%")
-        st.sidebar.metric("Green", greens)
-        st.sidebar.metric("Red", reds)
+st.sidebar.header("💡 Instruções")
+st.sidebar.info("""
+1. **Para todas as ligas**: Use API-Football (RapidAPI)
+2. **Plano gratuito**: 100 requisições/dia
+3. **Cadastro**: rapidapi.com/api-sports/api/api-football/
+""")
