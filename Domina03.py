@@ -1,4 +1,4 @@
-# RoletaHybridIA.py - SISTEMA ESPECIALISTA COM ROTAÇÃO DINÂMICA E CONTEXTO HISTÓRICO
+# RoletaHybridIA.py - SISTEMA ESPECIALISTA COM ROTAÇÃO DINÂMICA E CONTEXTO PERSISTENTE
 import streamlit as st
 import json
 import os
@@ -19,6 +19,7 @@ warnings.filterwarnings('ignore')
 # Configurações
 # =============================
 HISTORICO_PATH = "historico_hybrid_ia.json"
+CONTEXTO_PATH = "contexto_historico.json"  # NOVO ARQUIVO PARA CONTEXTO
 METRICAS_PATH = "metricas_hybrid_ia.json"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
@@ -249,19 +250,53 @@ def analisar_duzias_colunas(historico):
     }
 
 # =============================
-# SISTEMA DE PREVISÃO POR CONTEXTO HISTÓRICO
+# CONTEXT PREDICTOR COM PERSISTÊNCIA COMPLETA
 # =============================
-class Context_Predictor:
+class Context_Predictor_Persistente:
     def __init__(self):
         self.context_history = {}
-        self.min_occurrences = 3  # Mínimo de ocorrências para considerar padrão
+        self.min_occurrences = 1
+        self.arquivo_contexto = CONTEXTO_PATH
+        self.carregar_contexto()  # CARREGA CONTEXTO EXISTENTE AO INICIAR
         
+    def carregar_contexto(self):
+        """Carrega contexto histórico do arquivo"""
+        try:
+            if os.path.exists(self.arquivo_contexto):
+                with open(self.arquivo_contexto, "r") as f:
+                    dados = json.load(f)
+                    
+                    # Converter chaves string para int (JSON salva como string)
+                    contexto_convertido = {}
+                    for key_str, valor in dados.items():
+                        key_int = int(key_str)
+                        contexto_convertido[key_int] = valor
+                    
+                    self.context_history = contexto_convertido
+                logging.info(f"📂 CONTEXTO CARREGADO: {len(self.context_history)} contextos ativos")
+            else:
+                logging.info("🆕 Criando novo contexto histórico")
+                self.context_history = {}
+        except Exception as e:
+            logging.error(f"❌ Erro ao carregar contexto: {e}")
+            self.context_history = {}
+    
+    def salvar_contexto(self):
+        """Salva contexto histórico no arquivo"""
+        try:
+            with open(self.arquivo_contexto, "w") as f:
+                json.dump(self.context_history, f, indent=2)
+            logging.info(f"💾 CONTEXTO SALVO: {len(self.context_history)} contextos")
+        except Exception as e:
+            logging.error(f"❌ Erro ao salvar contexto: {e}")
+    
     def atualizar_contexto(self, numero_anterior, numero_atual):
-        """Atualiza o histórico de contexto com a transição entre números"""
+        """Atualiza contexto com persistência automática"""
         try:
             if numero_anterior is None or numero_atual is None:
                 return
                 
+            # ATUALIZAR CONTEXTO
             if numero_anterior not in self.context_history:
                 self.context_history[numero_anterior] = {}
             
@@ -270,16 +305,22 @@ class Context_Predictor:
                 
             self.context_history[numero_anterior][numero_atual] += 1
             
-            # Manter apenas os contextos mais relevantes (limpeza)
-            self.limpar_contexto_obsoleto()
+            # SALVAR AUTOMATICAMENTE APÓS ATUALIZAÇÃO
+            self.salvar_contexto()
+            
+            logging.debug(f"🔄 Contexto atualizado: {numero_anterior} → {numero_atual}")
             
         except Exception as e:
             logging.error(f"Erro ao atualizar contexto: {e}")
     
     def limpar_contexto_obsoleto(self):
-        """Remove contextos com poucas ocorrências"""
+        """Limpeza mantendo persistência"""
+        if len(self.context_history) < 30:
+            return
+            
+        contextos_antes = len(self.context_history)
+        
         for anterior in list(self.context_history.keys()):
-            # Remover números seguintes com poucas ocorrências
             seguintes = self.context_history[anterior]
             para_remover = [num for num, count in seguintes.items() 
                            if count < self.min_occurrences]
@@ -287,46 +328,103 @@ class Context_Predictor:
             for num in para_remover:
                 del seguintes[num]
             
-            # Remover contexto anterior se ficar vazio
             if not seguintes:
                 del self.context_history[anterior]
+        
+        # Salvar se houve mudanças
+        if len(self.context_history) != contextos_antes:
+            self.salvar_contexto()
     
-    def prever_por_contexto(self, ultimo_numero, top_n=10):
-        """Prevê os números mais prováveis baseado no último número sorteado"""
+    def prever_por_contexto(self, ultimo_numero, top_n=8):
+        """Previsão com fallback inteligente"""
         try:
-            if ultimo_numero not in self.context_history:
-                return []
+            # 1. TENTAR PREVISÃO POR CONTEXTO HISTÓRICO
+            if ultimo_numero in self.context_history:
+                contexto = self.context_history[ultimo_numero]
+                
+                if contexto:
+                    numeros_ordenados = sorted(contexto.items(), key=lambda x: x[1], reverse=True)
+                    previsao = [num for num, count in numeros_ordenados[:top_n]]
+                    
+                    if len(previsao) >= 3:  # Pelo menos 3 números do contexto
+                        logging.info(f"🔍 CONTEXTO FORTE: Após {ultimo_numero} → {previsao}")
+                        return previsao[:top_n]
             
-            contexto = self.context_history[ultimo_numero]
+            # 2. FALLBACK: VIZINHOS FÍSICOS + NÚMEROS QUENTES
+            previsao_fallback = self.get_previsao_fallback(ultimo_numero, top_n)
+            logging.info(f"🔄 CONTEXTO FALLBACK: Após {ultimo_numero} → {previsao_fallback}")
             
-            if not contexto:
-                return []
-            
-            # Ordenar por frequência (mais comum primeiro)
-            numeros_ordenados = sorted(contexto.items(), key=lambda x: x[1], reverse=True)
-            
-            # Retornar top N números
-            previsao = [num for num, count in numeros_ordenados[:top_n]]
-            
-            logging.info(f"🔍 CONTEXTO: Após {ultimo_numero} → {previsao}")
-            return previsao
+            return previsao_fallback
             
         except Exception as e:
             logging.error(f"Erro na previsão por contexto: {e}")
-            return []
+            return self.get_previsao_fallback(ultimo_numero, top_n)
+    
+    def get_previsao_fallback(self, numero, quantidade):
+        """Fallback inteligente quando não há contexto suficiente"""
+        previsao = set()
+        
+        # 1. VIZINHOS FÍSICOS (50%)
+        vizinhos = obter_vizinhos_fisicos(numero)
+        previsao.update(vizinhos[:quantidade//2])
+        
+        # 2. NÚMEROS MAIS FREQUENTES NO CONTEXTO GERAL (30%)
+        if len(previsao) < quantidade:
+            numeros_quentes = self.get_numeros_mais_frequentes()
+            for num in numeros_quentes:
+                if len(previsao) < quantidade and num not in previsao:
+                    previsao.add(num)
+        
+        # 3. COMPLETAR COM ESTRATÉGIA (20%)
+        if len(previsao) < quantidade:
+            estrategicos = [2, 5, 8, 11, 13, 16, 19, 22, 25, 28, 31, 34]
+            for num in estrategicos:
+                if len(previsao) < quantidade and num not in previsao:
+                    previsao.add(num)
+        
+        return list(previsao)[:quantidade]
+    
+    def get_numeros_mais_frequentes(self):
+        """Retorna os números mais frequentes em todo o contexto"""
+        frequencia_global = {}
+        
+        for anterior, seguintes in self.context_history.items():
+            for numero, count in seguintes.items():
+                frequencia_global[numero] = frequencia_global.get(numero, 0) + count
+        
+        # Ordenar por frequência
+        numeros_ordenados = sorted(frequencia_global.items(), key=lambda x: x[1], reverse=True)
+        return [num for num, count in numeros_ordenados[:10]]
     
     def get_estatisticas_contexto(self):
-        """Retorna estatísticas do sistema de contexto"""
+        """Retorna estatísticas detalhadas do contexto"""
         total_transicoes = sum(
             sum(seguintes.values()) 
             for seguintes in self.context_history.values()
         )
         
+        # Número mais frequente globalmente
+        frequencia_global = self.get_numeros_mais_frequentes()
+        numero_mais_frequente = frequencia_global[0] if frequencia_global else "Nenhum"
+        
         return {
             'contextos_ativos': len(self.context_history),
             'total_transicoes': total_transicoes,
-            'min_occurrences': self.min_occurrences
+            'min_occurrences': self.min_occurrences,
+            'numero_mais_frequente': numero_mais_frequente,
+            'previsao_exemplo': self.get_exemplo_previsao()
         }
+    
+    def get_exemplo_previsao(self):
+        """Retorna um exemplo de previsão para demonstração"""
+        if not self.context_history:
+            return "Aguardando dados..."
+        
+        # Pegar o último contexto disponível
+        ultimo_contexto = list(self.context_history.keys())[-1]
+        previsao = self.prever_por_contexto(ultimo_contexto, 3)
+        
+        return f"Após {ultimo_contexto} → {previsao}"
 
 # =============================
 # SISTEMA DE ROTAÇÃO DINÂMICA
@@ -1073,16 +1171,38 @@ class Hybrid_IA_450_Plus_Corrigido:
         return validar_previsao(numeros_estrategicos)[:NUMERO_PREVISOES]
 
 # =============================
-# GESTOR PRINCIPAL COM ROTAÇÃO E CONTEXTO
+# GESTOR PRINCIPAL COM ROTAÇÃO E CONTEXTO PERSISTENTE
 # =============================
 class GestorHybridIA_Especialista_Corrigido:
     def __init__(self):
         self.hybrid_system = Hybrid_IA_450_Plus_Corrigido()
-        self.context_predictor = Context_Predictor()  # NOVO SISTEMA
+        self.context_predictor = Context_Predictor_Persistente()  # AGORA COM PERSISTÊNCIA
         self.historico = deque(carregar_historico(), maxlen=1000)
         self.previsao_anterior = None
         self.ultimo_numero_processado = None
         
+        # INICIALIZAÇÃO RÁPIDA COM HISTÓRICO EXISTENTE
+        self.inicializar_contexto_com_historico()
+    
+    def inicializar_contexto_com_historico(self):
+        """Inicializa o contexto com todo o histórico existente"""
+        try:
+            if len(self.historico) > 1:
+                numeros = [h['number'] for h in self.historico if h.get('number') is not None]
+                transicoes_adicionadas = 0
+                
+                for i in range(1, len(numeros)):
+                    self.context_predictor.atualizar_contexto(numeros[i-1], numeros[i])
+                    transicoes_adicionadas += 1
+                
+                logging.info(f"🚀 CONTEXTO INICIALIZADO: {transicoes_adicionadas} transições do histórico")
+                
+                estatisticas = self.context_predictor.get_estatisticas_contexto()
+                logging.info(f"📊 CONTEXTO: {estatisticas['contextos_ativos']} contextos, {estatisticas['total_transicoes']} transições")
+                
+        except Exception as e:
+            logging.error(f"Erro na inicialização do contexto: {e}")
+    
     def adicionar_numero(self, numero_dict):
         """Adiciona número e atualiza contexto histórico"""
         if isinstance(numero_dict, dict) and numero_dict.get('number') is not None:
@@ -1164,7 +1284,9 @@ class GestorHybridIA_Especialista_Corrigido:
             'total_transicoes': estatisticas['total_transicoes'],
             'ultimo_numero': self.ultimo_numero_processado,
             'previsao_contexto_atual': previsao_atual,
-            'min_occurrences': estatisticas['min_occurrences']
+            'min_occurrences': estatisticas['min_occurrences'],
+            'numero_mais_frequente': estatisticas['numero_mais_frequente'],
+            'previsao_exemplo': estatisticas['previsao_exemplo']
         }
 
     def gerar_previsao(self):
@@ -1313,7 +1435,8 @@ try:
         
         salvo_com_sucesso = salvar_historico(numero_dict)
         if salvo_com_sucesso:
-            st.session_state.gestor.adicionar_numero(numero_dict)  # AGORA ATUALIZA CONTEXTO
+            # AGORA ATUALIZA CONTEXTO E SALVA AUTOMATICAMENTE
+            st.session_state.gestor.adicionar_numero(numero_dict)
         
         st.session_state.ultimo_timestamp = resultado["timestamp"]
         numero_real = resultado["number"]
@@ -1403,39 +1526,53 @@ else:
     st.success(f"🎯 MODO ESPECIALISTA ATIVO - {analise['padroes_detectados']} padrões detectados")
     st.caption("🟢 Sistema analisando padrões complexos de longo prazo")
 
-# NOVA SEÇÃO - PREVISÃO POR CONTEXTO HISTÓRICO
+# NOVA SEÇÃO - PREVISÃO POR CONTEXTO HISTÓRICO PERSISTENTE
 st.markdown("---")
-st.subheader("🔮 PREVISÃO POR CONTEXTO HISTÓRICO")
+st.subheader("🔮 PREVISÃO POR CONTEXTO HISTÓRICO - PERSISTENTE")
 
 analise_contexto = st.session_state.gestor.get_analise_contexto()
 
-if analise_contexto['ultimo_numero'] is not None:
-    col1, col2, col3 = st.columns(3)
+col1, col2, col3, col4 = st.columns(4)
+
+with col1:
+    st.metric("🎯 Último Número", analise_contexto['ultimo_numero'])
+
+with col2:
+    st.metric("📊 Contextos", analise_contexto['contextos_ativos'])
+
+with col3:
+    st.metric("🔄 Transições", analise_contexto['total_transicoes'])
+
+with col4:
+    st.metric("🔥 Nº Mais Frequente", analise_contexto['numero_mais_frequente'])
+
+# MOSTRAR PREVISÃO CONTEXTUAL ATUAL
+previsao_contexto = analise_contexto['previsao_contexto_atual']
+if previsao_contexto:
+    st.success(f"**📈 Números mais prováveis após {analise_contexto['ultimo_numero']}:**")
     
-    with col1:
-        st.metric("🎯 Último Número", analise_contexto['ultimo_numero'])
-    
-    with col2:
-        st.metric("📊 Contextos Ativos", analise_contexto['contextos_ativos'])
-    
-    with col3:
-        st.metric("🔄 Transições", analise_contexto['total_transicoes'])
-    
-    # MOSTRAR PREVISÃO CONTEXTUAL
-    previsao_contexto = analise_contexto['previsao_contexto_atual']
-    if previsao_contexto:
-        st.success(f"**📈 Números mais prováveis após {analise_contexto['ultimo_numero']}:**")
-        
-        # Mostrar em formato organizado
-        contexto_str = " | ".join([f"**{num}**" for num in previsao_contexto])
-        st.markdown(f"### {contexto_str}")
-        
-        st.caption(f"💡 Baseado em {analise_contexto['total_transicoes']} transições históricas analisadas")
+    # Mostrar com cores para indicar força da previsão
+    if len(previsao_contexto) >= 5:
+        emoji = "🎯"
+        cor = "green"
+    elif len(previsao_contexto) >= 3:
+        emoji = "🔍" 
+        cor = "orange"
     else:
-        st.info("📝 Coletando dados contextuais... O sistema está aprendendo os padrões.")
+        emoji = "🔄"
+        cor = "blue"
+    
+    contexto_str = " | ".join([f"**{num}**" for num in previsao_contexto])
+    st.markdown(f"### {emoji} {contexto_str}")
+    
+    st.caption(f"💡 Baseado em {analise_contexto['total_transicoes']} transições históricas (Dados Persistidos)")
+    
+    # Exemplo de previsão
+    if analise_contexto.get('previsao_exemplo'):
+        st.info(f"**Exemplo:** {analise_contexto['previsao_exemplo']}")
         
 else:
-    st.info("🔄 Aguardando primeiro número para ativar previsão contextual...")
+    st.info("🔄 Aguardando dados contextuais... O sistema está aprendendo os padrões.")
 
 # PREVISÃO ATUAL
 st.markdown("---")
@@ -1532,13 +1669,17 @@ with st.expander("🔧 Detalhes Técnicos do Sistema com Rotação"):
         st.write("- 🔮 **Coletando padrões contextuais**")
     
     # NOVA SEÇÃO DE CONTEXTO
-    st.write("**🔮 SISTEMA DE CONTEXTO HISTÓRICO:**")
+    st.write("**🔮 SISTEMA DE CONTEXTO HISTÓRICO PERSISTENTE:**")
     st.write(f"- Contextos ativos: {analise_contexto['contextos_ativos']}")
     st.write(f"- Transições analisadas: {analise_contexto['total_transicoes']}")
     st.write(f"- Mínimo de ocorrências: {analise_contexto['min_occurrences']}")
+    st.write(f"- Número mais frequente: {analise_contexto['numero_mais_frequente']}")
     
     if analise_contexto['previsao_contexto_atual']:
         st.write(f"- Previsão atual: {analise_contexto['previsao_contexto_atual']}")
+    
+    if analise_contexto.get('previsao_exemplo'):
+        st.write(f"- Exemplo: {analise_contexto['previsao_exemplo']}")
     
     st.write(f"**📊 Estatísticas:**")
     st.write(f"- Histórico Atual: {historico_atual} registros")
@@ -1561,6 +1702,8 @@ with col2:
     if st.button("🗑️ Limpar Histórico"):
         if os.path.exists(HISTORICO_PATH):
             os.remove(HISTORICO_PATH)
+        if os.path.exists(CONTEXTO_PATH):
+            os.remove(CONTEXTO_PATH)
         st.session_state.gestor.historico.clear()
         st.session_state.acertos = 0
         st.session_state.erros = 0
@@ -1572,4 +1715,4 @@ st.markdown("*Variações estratégicas mantendo alta assertividade*")
 
 # Rodapé
 st.markdown("---")
-st.markdown("**🎯 Hybrid IA System v8.0** - *Especialista com Rotação Dinâmica e Contexto Histórico*")
+st.markdown("**🎯 Hybrid IA System v9.0** - *Especialista com Rotação Dinâmica e Contexto Histórico Persistente*")
