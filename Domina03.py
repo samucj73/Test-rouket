@@ -27,7 +27,7 @@ ROULETTE_PHYSICAL_LAYOUT = [
     [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36]
 ]
 
-NUMERO_PREVISOES = 15
+NUMERO_PREVISOES = 8  # MUDANÇA: Agora trabalhamos com 8 números
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -44,40 +44,62 @@ def enviar_telegram(msg: str):
     except Exception as e:
         logging.error(f"Erro ao enviar para Telegram: {e}")
 
-def enviar_alerta_rapido(numeros):
-    """Envia alerta no formato: 2 linhas (8 + 7 números) ordenados"""
+def enviar_alerta_previsao(numeros):
+    """Envia alerta de PREVISÃO com 8 números no formato: 2 linhas (4 + 4 números)"""
     try:
-        if not numeros or len(numeros) != 15:
+        if not numeros or len(numeros) != 8:
+            logging.error(f"❌ Alerta de previsão precisa de 8 números, recebeu: {len(numeros) if numeros else 0}")
             return
             
+        # Ordena os números do menor para o maior
         numeros_ordenados = sorted(numeros)
-        linha1 = ' '.join(map(str, numeros_ordenados[0:8]))
-        linha2 = ' '.join(map(str, numeros_ordenados[8:15]))
         
-        mensagem = f"N {linha1}\n{linha2}"
+        # Divide em 2 linhas: 4 números na primeira, 4 na segunda
+        linha1 = ' '.join(map(str, numeros_ordenados[0:4]))
+        linha2 = ' '.join(map(str, numeros_ordenados[4:8]))
+        
+        # Formata EXATAMENTE como você quer - 2 LINHAS
+        mensagem = f"🎯 PREVISÃO:\n{linha1}\n{linha2}"
         
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-        payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensagem}
+        payload = {
+            "chat_id": TELEGRAM_CHAT_ID, 
+            "text": mensagem
+        }
         requests.post(url, data=payload, timeout=5)
-        logging.info(f"📤 Alerta enviado: 15 números")
+        logging.info(f"📤 Alerta de PREVISÃO enviado: 8 números")
         
     except Exception as e:
-        logging.error(f"Erro alerta: {e}")
+        logging.error(f"Erro alerta previsão: {e}")
 
 def enviar_alerta_resultado(acertou, numero_sorteado, previsao_anterior):
-    """Envia alerta de resultado (GREEN/RED)"""
+    """Envia alerta de resultado (GREEN/RED) com os 8 números da previsão"""
     try:
-        if acertou:
-            mensagem = f"🟢 GREEN! Número {numero_sorteado} acertado na previsão!"
-        else:
-            mensagem = f"🔴 RED! Número {numero_sorteado} não estava na previsão anterior."
+        if not previsao_anterior or len(previsao_anterior) != 8:
+            logging.error(f"❌ Alerta resultado precisa de 8 números na previsão")
+            return
+            
+        # Ordena os números da previsão anterior
+        previsao_ordenada = sorted(previsao_anterior)
         
-        mensagem += f"\n🎯 Previsão anterior: {', '.join(map(str, sorted(previsao_anterior)))}"
+        # Divide em 2 linhas: 4 números na primeira, 4 na segunda
+        linha1 = ' '.join(map(str, previsao_ordenada[0:4]))
+        linha2 = ' '.join(map(str, previsao_ordenada[4:8]))
+        
+        if acertou:
+            mensagem = f"🟢 GREEN! Acertou o {numero_sorteado}\n{linha1}\n{linha2}"
+            emoji = "🟢"
+        else:
+            mensagem = f"🔴 RED! Sorteado {numero_sorteado}\n{linha1}\n{linha2}"
+            emoji = "🔴"
         
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-        payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensagem}
+        payload = {
+            "chat_id": TELEGRAM_CHAT_ID, 
+            "text": mensagem
+        }
         requests.post(url, data=payload, timeout=5)
-        logging.info(f"📤 Alerta de RESULTADO enviado")
+        logging.info(f"📤 Alerta de {emoji} enviado: 8 números")
         
     except Exception as e:
         logging.error(f"Erro alerta resultado: {e}")
@@ -296,7 +318,7 @@ class Context_Predictor_Persistente:
         except Exception as e:
             logging.error(f"Erro ao atualizar contexto: {e}")
 
-    def prever_por_contexto_forte(self, ultimo_numero, top_n=15):
+    def prever_por_contexto_forte(self, ultimo_numero, top_n=8):  # MUDANÇA: padrão 8 números
         """Previsão FORTE - foca nos padrões óbvios"""
         try:
             if ultimo_numero in self.context_history:
@@ -436,21 +458,21 @@ class GestorContextoHistorico:
                     self.padroes_detectados = self.padroes_detectados[-20:]
 
     def gerar_previsao_contextual(self):
-        """Gera previsão baseada APENAS no contexto histórico"""
+        """Gera previsão baseada APENAS no contexto histórico - SEMPRE 8 NÚMEROS"""
         try:
             if self.ultimo_numero_processado is not None:
                 previsao = self.context_predictor.prever_por_contexto_forte(
                     self.ultimo_numero_processado, 
-                    top_n=15
+                    top_n=8  # SEMPRE 8 números
                 )
                 logging.info(f"🎯 PREVISÃO CONTEXTUAL: {self.ultimo_numero_processado} → {len(previsao)} números")
                 return previsao
             else:
-                return self.context_predictor.get_numeros_mais_frequentes_global(15)
+                return self.context_predictor.get_numeros_mais_frequentes_global(8)  # SEMPRE 8 números
             
         except Exception as e:
             logging.error(f"Erro na previsão contextual: {e}")
-            return list(range(0, 15))
+            return list(range(0, 8))  # SEMPRE 8 números
 
     def get_analise_contexto_detalhada(self):
         """Análise detalhada dos padrões de contexto"""
@@ -460,7 +482,7 @@ class GestorContextoHistorico:
         if self.ultimo_numero_processado is not None:
             previsao_atual = self.context_predictor.prever_por_contexto_forte(
                 self.ultimo_numero_processado, 
-                top_n=8
+                top_n=8  # SEMPRE 8 números
             )
         
         padroes_recentes = self.padroes_detectados[-5:] if self.padroes_detectados else []
@@ -476,7 +498,7 @@ class GestorContextoHistorico:
 
     def calcular_diferencas(self, previsao_atual):
         """Calcula diferenças com a previsão anterior"""
-        if not self.previsao_anterior or len(self.previsao_anterior) != 15 or len(previsao_atual) != 15:
+        if not self.previsao_anterior or len(self.previsao_anterior) != 8 or len(previsao_atual) != 8:  # MUDANÇA: 8 números
             return None
             
         anteriores = set(self.previsao_anterior)
@@ -503,8 +525,8 @@ st.set_page_config(
     layout="centered"
 )
 
-st.title("🎯 Sistema de Contexto Histórico - PADRÕES ÓBVIOS")
-st.markdown("### **Sistema que Captura Padrões Óbvios do Contexto Histórico**")
+st.title("🎯 Sistema de Contexto Histórico - 8 NÚMEROS")
+st.markdown("### **Sistema que Captura Padrões Óbvios - Alertas com 8 Números**")
 
 st_autorefresh(interval=15000, key="refresh")
 
@@ -548,21 +570,25 @@ try:
         numero_real = resultado["number"]
         st.session_state.ultimo_numero = numero_real
 
-        # CONFERÊNCIA
+        # CONFERÊNCIA - SEMPRE com 8 números
         previsao_valida = validar_previsao(st.session_state.previsao_atual)
         acertou = False
-        if previsao_valida:
+        if previsao_valida and len(previsao_valida) == 8:  # MUDANÇA: Verifica se tem 8 números
             acertou = numero_real in previsao_valida
             if acertou:
                 st.session_state.acertos += 1
                 st.success(f"🎯 **GREEN!** Número {numero_real} acertado!")
+                # ENVIAR ALERTA DE GREEN COM 8 NÚMEROS
                 enviar_alerta_resultado(True, numero_real, st.session_state.previsao_atual)
             else:
                 st.session_state.erros += 1
                 st.error(f"🔴 Número {numero_real} não estava na previsão")
+                # ENVIAR ALERTA DE RED COM 8 NÚMEROS
                 enviar_alerta_resultado(False, numero_real, st.session_state.previsao_atual)
+        else:
+            logging.warning(f"Previsão inválida para conferência: {previsao_valida}")
 
-        # GERAR NOVA PREVISÃO COM CONTEXTO
+        # GERAR NOVA PREVISÃO COM CONTEXTO - SEMPRE 8 NÚMEROS
         nova_previsao = st.session_state.gestor.gerar_previsao_contextual()
         
         # CALCULAR MUDANÇAS
@@ -570,19 +596,21 @@ try:
         st.session_state.previsao_anterior = st.session_state.previsao_atual.copy()
         st.session_state.previsao_atual = validar_previsao(nova_previsao)
         
-        # ENVIAR ALERTA TELEGRAM
-        if st.session_state.previsao_atual and len(st.session_state.previsao_atual) == 15:
+        # ENVIAR ALERTA TELEGRAM - PREVISÃO COM 8 NÚMEROS
+        if st.session_state.previsao_atual and len(st.session_state.previsao_atual) == 8:
             try:
-                enviar_alerta_rapido(st.session_state.previsao_atual)
+                enviar_alerta_previsao(st.session_state.previsao_atual)
             except Exception as e:
-                logging.error(f"Erro ao enviar alerta: {e}")
+                logging.error(f"Erro ao enviar alerta de previsão: {e}")
+        else:
+            logging.error(f"Previsão inválida para alerta: {st.session_state.previsao_atual}")
 
         st.session_state.contador_rodadas += 1
 
 except Exception as e:
     logging.error(f"Erro crítico no processamento principal: {e}")
     st.error("🔴 Erro no sistema. Reiniciando...")
-    st.session_state.previsao_atual = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+    st.session_state.previsao_atual = [0, 1, 2, 3, 4, 5, 6, 7]  # MUDANÇA: 8 números
 
 # =============================
 # INTERFACE STREAMLIT
@@ -627,7 +655,7 @@ if previsao_contexto and analise_contexto['ultimo_numero'] is not None:
             previsao_unica.append(num)
             numeros_vistos.add(num)
     
-    if previsao_unica:
+    if previsao_unica and len(previsao_unica) == 8:  # MUDANÇA: Garante 8 números
         st.success(f"**📈 8 NÚMEROS MAIS PROVÁVEIS APÓS {analise_contexto['ultimo_numero']}:**")
         
         if len(previsao_unica) >= 6:
@@ -640,6 +668,7 @@ if previsao_contexto and analise_contexto['ultimo_numero'] is not None:
             emoji = "🔄"
             força = "BAIXA"
         
+        # Formatação para 8 números (4+4)
         linha1 = previsao_unica[:4]
         linha2 = previsao_unica[4:8]
         
@@ -666,45 +695,37 @@ else:
 
 # PREVISÃO ATUAL
 st.markdown("---")
-st.subheader("🎯 PREVISÃO ATUAL - CONTEXTO HISTÓRICO")
+st.subheader("🎯 PREVISÃO ATUAL - 8 NÚMEROS")
 
 previsao_valida = validar_previsao(st.session_state.previsao_atual)
 
 # MOSTRAR MUDANÇAS
-if st.session_state.previsao_anterior and len(st.session_state.previsao_anterior) == 15:
+if st.session_state.previsao_anterior and len(st.session_state.previsao_anterior) == 8:  # MUDANÇA: 8 números
     diferencas = st.session_state.gestor.calcular_diferencas(st.session_state.previsao_atual)
     if diferencas:
         st.info(f"**🔄 Mudanças:** Removidos: {', '.join(map(str, diferencas['removidos']))} | Adicionados: {', '.join(map(str, diferencas['adicionados']))}")
 
-if previsao_valida:
-    st.success(f"**📊 {len(previsao_valida)} NÚMEROS PREVISTOS**")
+if previsao_valida and len(previsao_valida) == 8:  # MUDANÇA: Sempre 8 números
+    st.success(f"**📊 8 NÚMEROS PREVISTOS**")
     
-    # Display organizado
-    col1, col2, col3 = st.columns(3)
+    # Display organizado em 2 linhas de 4
+    col1, col2 = st.columns(2)
     
     with col1:
-        st.write("**1-12:**")
-        for num in sorted([n for n in previsao_valida if 1 <= n <= 12]):
+        st.write("**Linha 1:**")
+        for num in sorted(previsao_valida[:4]):
             st.write(f"`{num}`")
     
     with col2:
-        st.write("**13-24:**")
-        for num in sorted([n for n in previsao_valida if 13 <= n <= 24]):
+        st.write("**Linha 2:**")
+        for num in sorted(previsao_valida[4:8]):
             st.write(f"`{num}`")
     
-    with col3:
-        st.write("**25-36:**")
-        for num in sorted([n for n in previsao_valida if 25 <= n <= 36]):
-            st.write(f"`{num}`")
-        
-        if 0 in previsao_valida:
-            st.write("🟢 `0`")
-    
-    st.write(f"**Lista Completa:** {', '.join(map(str, sorted(previsao_valida)))}")
+    st.write(f"**Lista Completa (8 números):** {', '.join(map(str, sorted(previsao_valida)))}")
     
 else:
     st.warning("⚠️ Inicializando sistema...")
-    st.session_state.previsao_atual = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+    st.session_state.previsao_atual = [0, 1, 2, 3, 4, 5, 6, 7]  # MUDANÇA: 8 números
 
 # PERFORMANCE
 st.markdown("---")
@@ -736,10 +757,10 @@ with st.expander("🔧 Detalhes Técnicos do Sistema"):
     st.write(f"- Número mais frequente: {analise_contexto['numero_mais_frequente']}")
     st.write(f"- Padrões detectados recentemente: {len(analise_contexto['padroes_recentes'])}")
     
-    st.write("**📨 SISTEMA DE ALERTAS:**")
-    st.write("- 🔔 Alerta Principal: 15 números (formato 8+7)")
-    st.write("- 🟢 Alerta GREEN: Quando acerta o número")
-    st.write("- 🔴 Alerta RED: Quando erra o número")
+    st.write("**📨 SISTEMA DE ALERTAS (8 NÚMEROS):**")
+    st.write("- 🔔 Alerta de PREVISÃO: 8 números (formato 4+4)")
+    st.write("- 🟢 Alerta GREEN: 8 números da previsão anterior (formato 4+4)")
+    st.write("- 🔴 Alerta RED: 8 números da previsão anterior (formato 4+4)")
 
 # CONTROLES
 st.markdown("---")
@@ -764,9 +785,9 @@ with col2:
         st.rerun()
 
 st.markdown("---")
-st.markdown("### 🚀 **Sistema de Contexto Histórico - Padrões Óbvios**")
-st.markdown("*Captura padrões históricos que se repetem frequentemente*")
+st.markdown("### 🚀 **Sistema de Contexto Histórico - 8 Números**")
+st.markdown("*Alertas de PREVISÃO, GREEN e RED sempre com 8 números no formato 4+4*")
 
 # Rodapé
 st.markdown("---")
-st.markdown("**🎯 Contexto Histórico v1.0** - *Sistema Simplificado Focado em Padrões Óbvios*")
+st.markdown("**🎯 Contexto Histórico v2.0** - *Sistema Simplificado - 8 Números por Alerta*")
