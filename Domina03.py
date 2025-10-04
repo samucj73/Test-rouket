@@ -1,4 +1,4 @@
-# RoletaHybridIA.py - SISTEMA COM ESTRATÉGIA INTELIGENTE REVISADA
+# RoletaHybridIA.py - SISTEMA COM PROBABILIDADES REALISTAS (10-15%)
 import streamlit as st
 import json
 import os
@@ -11,7 +11,7 @@ import random
 import numpy as np
 
 # =============================
-# Configurações OTIMIZADAS
+# Configurações REALISTAS
 # =============================
 HISTORICO_PATH = "historico_hybrid_ia.json"
 CONTEXTO_PATH = "contexto_historico.json"
@@ -29,8 +29,8 @@ ROULETTE_PHYSICAL_LAYOUT = [
 ]
 
 NUMERO_PREVISOES = 10
-CICLO_PREVISAO = 1  # MAIS AGRESSIVO: Previsão a cada sorteio
-CONFIANCA_MINIMA = 0.60  # 60% de confiança mínima
+CICLO_PREVISAO = 1  # Previsão a cada sorteio
+CONFIANCA_MINIMA = 0.10  # 10% de confiança mínima - REALISTA
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -214,14 +214,13 @@ def enviar_alerta_resultado(acertou, numero_sorteado, previsao_anterior, confian
         logging.error(f"Erro alerta resultado: {e}")
 
 # =============================
-# CONTEXT PREDICTOR - ESTRATÉGIA INTELIGENTE REVISADA
+# CONTEXT PREDICTOR - PROBABILIDADES REALISTAS
 # =============================
-class Context_Predictor_Inteligente:
+class Context_Predictor_Realista:
     def __init__(self):
         self.context_history = {}
         self.arquivo_contexto = CONTEXTO_PATH
-        self.padroes_fortes_cache = []
-        self.ultimos_numeros = deque(maxlen=10)
+        self.ultimos_numeros = deque(maxlen=100)
         self.carregar_contexto()
         
     def carregar_contexto(self):
@@ -286,83 +285,66 @@ class Context_Predictor_Inteligente:
         except Exception as e:
             logging.error(f"Erro ao atualizar contexto: {e}")
 
-    def prever_com_estrategia_avancada(self, ultimo_numero, top_n=10):
-        """ESTRATÉGIA AVANÇADA - Foco em padrões reais e estatísticas sólidas"""
+    def prever_com_probabilidade_realista(self, ultimo_numero, top_n=10):
+        """ESTRATÉGIA REALISTA - Probabilidades entre 10-15%"""
         try:
             previsao_final = set()
-            confianca_total = 0
-            estrategias_utilizadas = 0
             
-            # 1. ANÁLISE DE PADRÕES FORTES (40% de peso)
-            padroes_fortes = self.identificar_padroes_fortes(ultimo_numero)
-            for padrao in padroes_fortes[:4]:
+            # 1. PADRÕES MAIS COMUNS (30% peso)
+            padroes_comuns = self.identificar_padroes_comuns(ultimo_numero)
+            for padrao in padroes_comuns[:4]:
                 if padrao['proximo'] not in previsao_final:
                     previsao_final.add(padrao['proximo'])
-                    confianca_total += padrao['probabilidade']
-                    estrategias_utilizadas += 1
-                    logging.info(f"🎯 PADRÃO FORTE: {ultimo_numero} → {padrao['proximo']} ({padrao['probabilidade']:.1%}, {padrao['ocorrencias']}x)")
+                    logging.info(f"📊 PADRÃO COMUM: {ultimo_numero} → {padrao['proximo']} ({padrao['probabilidade']:.1%})")
             
-            # 2. NÚMEROS QUENTES RECENTES (25% de peso)
-            numeros_quentes = self.analisar_numeros_quentes(5)
-            for num in numeros_quentes[:3]:
+            # 2. NÚMEROS MAIS FREQUENTES (25% peso)
+            numeros_frequentes = self.get_numeros_mais_frequentes_global(4)
+            for num in numeros_frequentes:
                 if num not in previsao_final:
                     previsao_final.add(num)
-                    confianca_total += 0.15
-                    estrategias_utilizadas += 1
             
-            # 3. SEQUÊNCIAS DE BAIXA FREQUÊNCIA (20% de peso)
-            numeros_frios = self.identificar_numeros_frios(4)
-            for num in numeros_frios[:2]:
+            # 3. VIZINHANÇA FÍSICA (20% peso)
+            vizinhos = obter_vizinhos_fisicos(ultimo_numero)
+            for vizinho in vizinhos[:3]:
+                if vizinho not in previsao_final:
+                    previsao_final.add(vizinho)
+            
+            # 4. NÚMEROS RECENTES (15% peso)
+            numeros_recentes = self.analisar_ultimos_numeros(3)
+            for num in numeros_recentes:
                 if num not in previsao_final:
                     previsao_final.add(num)
-                    confianca_total += 0.12
-                    estrategias_utilizadas += 1
             
-            # 4. VIZINHANÇA ESTRATÉGICA (15% de peso)
-            vizinhos_estrategicos = self.obter_vizinhos_estrategicos(ultimo_numero)
-            for num in vizinhos_estrategicos[:3]:
-                if num not in previsao_final:
-                    previsao_final.add(num)
-                    confianca_total += 0.10
-                    estrategias_utilizadas += 1
+            # 5. COMPLEMENTO ESTRATÉGICO (10% peso)
+            if len(previsao_final) < top_n:
+                complemento = self.get_complemento_balanceado(ultimo_numero, top_n - len(previsao_final))
+                for num in complemento:
+                    if num not in previsao_final:
+                        previsao_final.add(num)
             
-            # Converter para lista
             resultado = list(previsao_final)
             
-            # COMPLETAR COM NÚMEROS ESTRATÉGICOS SE NECESSÁRIO
-            if len(resultado) < top_n:
-                faltam = top_n - len(resultado)
-                complemento = self.get_complemento_estrategico(ultimo_numero, faltam)
-                for num in complemento:
-                    if num not in resultado:
-                        resultado.append(num)
-                        confianca_total += 0.05
-                        estrategias_utilizadas += 1
+            # CALCULAR CONFIANÇA REALISTA (10-15%)
+            confianca_base = 12.0  # Base realista
+            fator_ajuste = min(1.5, len(padroes_comuns) / 3.0)
+            confianca_final = min(confianca_base * fator_ajuste, 18.0)
             
-            # CALCULAR CONFIANÇA REALISTA
-            if estrategias_utilizadas > 0:
-                confianca_media = (confianca_total / estrategias_utilizadas) * 100
-                # Ajustar confiança baseado na força dos padrões
-                fator_ajuste = min(1.0, len(padroes_fortes) / 3.0)
-                confianca_final = confianca_media * fator_ajuste
-            else:
-                confianca_final = 25.0
+            # Garantir que está no range 10-15%
+            confianca_final = max(10.0, min(confianca_final, 15.0))
             
-            confianca_final = min(confianca_final, 85.0)  # Limite realista
-            
-            logging.info(f"🎯 ESTRATÉGIA AVANÇADA: {ultimo_numero} → {resultado} | Confiança: {confianca_final:.1f}%")
+            logging.info(f"🎯 PREVISÃO REALISTA: {ultimo_numero} → {resultado} | Confiança: {confianca_final:.1f}%")
             return resultado[:top_n], confianca_final
             
         except Exception as e:
-            logging.error(f"Erro na estratégia avançada: {e}")
-            fallback = self.get_complemento_estrategico(ultimo_numero, top_n)
-            return fallback, 30.0
+            logging.error(f"Erro na previsão realista: {e}")
+            fallback = self.get_complemento_balanceado(ultimo_numero, top_n)
+            return fallback, 12.0  # Confiança realista para fallback
 
-    def identificar_padroes_fortes(self, ultimo_numero):
-        """Identifica apenas padrões realmente fortes"""
-        padroes_fortes = []
+    def identificar_padroes_comuns(self, ultimo_numero):
+        """Identifica padrões comuns (não necessariamente fortes)"""
+        padroes_comuns = []
         
-        # PADRÕES DIRETOS DO ÚLTIMO NÚMERO
+        # PADRÕES DO ÚLTIMO NÚMERO
         if ultimo_numero in self.context_history:
             contexto = self.context_history[ultimo_numero]
             total = sum(contexto.values())
@@ -370,10 +352,10 @@ class Context_Predictor_Inteligente:
             for proximo, count in contexto.items():
                 probabilidade = count / total
                 
-                # CRITÉRIOS MAIS RIGOROSOS: prob > 8% E count >= 5
-                if probabilidade > 0.08 and count >= 5:
-                    score = probabilidade * 100 + min(count, 20)
-                    padroes_fortes.append({
+                # CRITÉRIOS MAIS REALISTAS: prob > 3% E count >= 2
+                if probabilidade > 0.03 and count >= 2:
+                    score = probabilidade * 100 + count
+                    padroes_comuns.append({
                         'anterior': ultimo_numero,
                         'proximo': proximo,
                         'probabilidade': probabilidade,
@@ -381,17 +363,17 @@ class Context_Predictor_Inteligente:
                         'score': score
                     })
         
-        # PADRÕES GERAIS FORTES (independente do último número)
+        # PADRÕES GERAIS COMUNS
         for anterior, seguintes in self.context_history.items():
             if seguintes:
                 total = sum(seguintes.values())
                 for proximo, count in seguintes.items():
                     probabilidade = count / total
                     
-                    # Padrões muito fortes (prob > 12% e count >= 8)
-                    if probabilidade > 0.12 and count >= 8:
-                        score = probabilidade * 100 + min(count, 25)
-                        padroes_fortes.append({
+                    # Padrões comuns gerais
+                    if probabilidade > 0.04 and count >= 3:
+                        score = probabilidade * 100 + count
+                        padroes_comuns.append({
                             'anterior': anterior,
                             'proximo': proximo,
                             'probabilidade': probabilidade,
@@ -400,85 +382,48 @@ class Context_Predictor_Inteligente:
                         })
         
         # Ordenar por score
-        padroes_fortes.sort(key=lambda x: x['score'], reverse=True)
-        return padroes_fortes[:8]
+        padroes_comuns.sort(key=lambda x: x['score'], reverse=True)
+        return padroes_comuns[:6]
 
-    def analisar_numeros_quentes(self, quantidade):
-        """Analisa números que aparecem com frequência recente"""
-        if len(self.ultimos_numeros) < 10:
-            return self.get_numeros_mais_frequentes_global(quantidade)
-        
-        # Analisar últimos 50 números para tendências
-        frequencia_recente = Counter(list(self.ultimos_numeros)[-50:])
-        return [num for num, count in frequencia_recente.most_common(quantidade)]
-
-    def identificar_numeros_frios(self, quantidade):
-        """Identifica números que não aparecem há tempo"""
-        if len(self.ultimos_numeros) < 20:
+    def analisar_ultimos_numeros(self, quantidade):
+        """Analisa os últimos números sorteados"""
+        if len(self.ultimos_numeros) < 5:
             return []
         
-        ultimos_50 = list(self.ultimos_numeros)[-50:]
-        todos_numeros = set(range(0, 37))
-        numeros_recentes = set(ultimos_50)
+        # Pegar os últimos 10-20 números
+        ultimos = list(self.ultimos_numeros)[-20:]
+        frequencia = Counter(ultimos)
         
-        numeros_frios = list(todos_numeros - numeros_recentes)
-        
-        if len(numeros_frios) < quantidade:
-            # Se não há números frios, pega os que menos apareceram
-            frequencia = Counter(ultimos_50)
-            numeros_frios = [num for num, count in frequencia.most_common()[-quantidade:]]
-        
-        return numeros_frios[:quantidade]
+        # Retornar os mais frequentes nos últimos números
+        return [num for num, count in frequencia.most_common(quantidade)]
 
-    def obter_vizinhos_estrategicos(self, numero):
-        """Vizinhos físicos com análise estratégica"""
-        vizinhos_base = obter_vizinhos_fisicos(numero)
-        
-        # Priorizar vizinhos que são quentes
-        numeros_quentes = self.analisar_numeros_quentes(10)
-        vizinhos_estrategicos = []
-        
-        for vizinho in vizinhos_base:
-            if vizinho in numeros_quentes[:5]:
-                vizinhos_estrategicos.append(vizinho)
-        
-        # Adicionar outros vizinhos se necessário
-        for vizinho in vizinhos_base:
-            if vizinho not in vizinhos_estrategicos and len(vizinhos_estrategicos) < 5:
-                vizinhos_estrategicos.append(vizinho)
-        
-        return vizinhos_estrategicos
-
-    def get_complemento_estrategico(self, ultimo_numero, quantidade):
-        """Complemento inteligente baseado em múltiplas estratégias"""
+    def get_complemento_balanceado(self, ultimo_numero, quantidade):
+        """Complemento balanceado entre várias estratégias"""
         numeros_complemento = set()
         
-        # 1. Números mais frequentes globalmente
-        frequentes_global = self.get_numeros_mais_frequentes_global(quantidade + 3)
-        for num in frequentes_global[:quantidade//2]:
+        # 1. Números médios em frequência (nem muito quentes, nem muito frios)
+        frequencia_global = Counter()
+        for anterior, seguintes in self.context_history.items():
+            for numero, count in seguintes.items():
+                frequencia_global[numero] += count
+        
+        # Pegar números do meio da distribuição
+        todos_numeros = list(range(0, 37))
+        numeros_ordenados = sorted(todos_numeros, key=lambda x: frequencia_global[x])
+        
+        # Evitar extremos (muito quentes ou muito frios)
+        meio = len(numeros_ordenados) // 2
+        numeros_medio = numeros_ordenados[meio-3:meio+3]
+        
+        for num in numeros_medio[:quantidade//2]:
             numeros_complemento.add(num)
         
-        # 2. Vizinhos físicos
-        vizinhos = obter_vizinhos_fisicos(ultimo_numero)
-        for vizinho in vizinhos[:quantidade//2]:
-            numeros_complemento.add(vizinho)
+        # 2. Alguns números aleatórios com distribuição uniforme
+        numeros_restantes = list(set(range(0, 37)) - numeros_complemento)
+        random.shuffle(numeros_restantes)
         
-        # 3. Preencher com números aleatórios estratégicos
-        if len(numeros_complemento) < quantidade:
-            estrategicos = [0, 2, 5, 8, 11, 17, 20, 26, 29, 32, 35]
-            for num in estrategicos:
-                if num not in numeros_complemento and len(numeros_complemento) < quantidade:
-                    numeros_complemento.add(num)
-        
-        # 4. Preencher com qualquer número se ainda faltar
-        if len(numeros_complemento) < quantidade:
-            todos_numeros = list(range(0, 37))
-            random.shuffle(todos_numeros)
-            for num in todos_numeros:
-                if num not in numeros_complemento:
-                    numeros_complemento.add(num)
-                if len(numeros_complemento) >= quantidade:
-                    break
+        for num in numeros_restantes[:quantidade - len(numeros_complemento)]:
+            numeros_complemento.add(num)
         
         return list(numeros_complemento)[:quantidade]
 
@@ -488,7 +433,7 @@ class Context_Predictor_Inteligente:
         
         for anterior, seguintes in self.context_history.items():
             for numero, count in seguintes.items():
-                frequencia_global[numero] += count
+                frequencia_global[numero] += 1  # Contar ocorrências, não transições
         
         numeros_mais_frequentes = [num for num, count in frequencia_global.most_common(quantidade)]
         
@@ -504,41 +449,41 @@ class Context_Predictor_Inteligente:
         return numeros_mais_frequentes[:quantidade]
 
     def get_estatisticas_contexto(self):
-        """Estatísticas do contexto"""
+        """Estatísticas realistas do contexto"""
         total_transicoes = self.get_total_transicoes()
         
         frequencia_global = self.get_numeros_mais_frequentes_global(3)
         numeros_mais_frequentes = frequencia_global if frequencia_global else ["Nenhum"]
         
-        # Analisar força dos padrões
-        padroes_fortes_count = 0
+        # Calcular força média dos padrões
+        probabilidades = []
         for anterior, seguintes in self.context_history.items():
             if seguintes:
                 total = sum(seguintes.values())
                 for count in seguintes.values():
-                    if count / total > 0.08 and count >= 5:
-                        padroes_fortes_count += 1
+                    probabilidades.append(count / total)
+        
+        probabilidade_media = np.mean(probabilidades) * 100 if probabilidades else 0
         
         return {
             'contextos_ativos': len(self.context_history),
             'total_transicoes': total_transicoes,
             'numeros_mais_frequentes': numeros_mais_frequentes,
-            'padroes_fortes_detectados': padroes_fortes_count,
+            'probabilidade_media_padroes': probabilidade_media,
             'tamanho_historico_recente': len(self.ultimos_numeros)
         }
 
 # =============================
-# GESTOR PRINCIPAL - ESTRATÉGIA REVISADA
+# GESTOR PRINCIPAL - ESTRATÉGIA REALISTA
 # =============================
-class GestorEstrategiaInteligente:
+class GestorEstrategiaRealista:
     def __init__(self):
-        self.context_predictor = Context_Predictor_Inteligente()
+        self.context_predictor = Context_Predictor_Realista()
         self.historico = deque(carregar_historico(), maxlen=5000)
         self.previsao_anterior = None
         self.ultimo_numero_processado = None
         self.contador_sorteios = 0
         self.confianca_ultima_previsao = 0
-        self.ultima_previsao_enviada = None
         self.acertos_consecutivos = 0
         self.erros_consecutivos = 0
         
@@ -581,60 +526,46 @@ class GestorEstrategiaInteligente:
             self.contador_sorteios += 1
 
     def deve_gerar_previsao(self):
-        """Decide se deve gerar nova previsão - ESTRATÉGIA MAIS AGRESSIVA"""
-        # Sempre gera na primeira execução
-        if self.previsao_anterior is None:
-            return True
-            
-        # Gera a cada CICLO_PREVISAO sorteios (AGORA MAIS FREQUENTE)
-        if self.contador_sorteios % CICLO_PREVISAO == 0:
-            return True
-            
-        # Gera se teve muitos erros consecutivos (mudar estratégia)
-        if self.erros_consecutivos >= 2:
-            logging.info("🔄 MUDANÇA DE ESTRATÉGIA - Muitos erros consecutivos")
-            return True
-            
-        return False
+        """Decide se deve gerar nova previsão - SEMPRE que possível"""
+        # Gera a cada CICLO_PREVISAO sorteios
+        return self.contador_sorteios % CICLO_PREVISAO == 0
 
-    def gerar_previsao_inteligente(self):
-        """Gera previsão usando estratégia avançada"""
+    def gerar_previsao_realista(self):
+        """Gera previsão usando estratégia realista"""
         try:
             if self.ultimo_numero_processado is not None:
-                previsao, confianca = self.context_predictor.prever_com_estrategia_avancada(
+                previsao, confianca = self.context_predictor.prever_com_probabilidade_realista(
                     self.ultimo_numero_processado, 
                     top_n=10
                 )
                 
-                logging.info(f"🎯 PREVISÃO INTELIGENTE: {self.ultimo_numero_processado} → {len(previsao)} números | Confiança: {confianca:.1f}%")
+                logging.info(f"🎯 PREVISÃO REALISTA: {self.ultimo_numero_processado} → {len(previsao)} números | Confiança: {confianca:.1f}%")
                 return previsao, confianca
             else:
                 previsao = self.context_predictor.get_numeros_mais_frequentes_global(10)
-                return previsao, 25.0
+                return previsao, 12.0
             
         except Exception as e:
-            logging.error(f"Erro na previsão inteligente: {e}")
-            return list(range(0, 10)), 20.0
+            logging.error(f"Erro na previsão realista: {e}")
+            return list(range(0, 10)), 10.0
 
     def registrar_resultado(self, acertou):
-        """Registra resultado e ajusta estratégia"""
+        """Registra resultado"""
         if acertou:
             self.acertos_consecutivos += 1
             self.erros_consecutivos = 0
-            logging.info(f"✅ ACERTO CONSECUTIVO #{self.acertos_consecutivos}")
         else:
             self.erros_consecutivos += 1
             self.acertos_consecutivos = 0
-            logging.info(f"🔴 ERRO CONSECUTIVO #{self.erros_consecutivos}")
 
-    def get_analise_estrategica(self):
-        """Análise detalhada da estratégia"""
+    def get_analise_realista(self):
+        """Análise realista do sistema"""
         estatisticas = self.context_predictor.get_estatisticas_contexto()
         
         previsao_atual = []
         confianca_atual = 0
         if self.ultimo_numero_processado is not None:
-            previsao_atual, confianca_atual = self.context_predictor.prever_com_estrategia_avancada(
+            previsao_atual, confianca_atual = self.context_predictor.prever_com_probabilidade_realista(
                 self.ultimo_numero_processado, 
                 top_n=10
             )
@@ -643,34 +574,32 @@ class GestorEstrategiaInteligente:
             'contextos_ativos': estatisticas['contextos_ativos'],
             'total_transicoes': estatisticas['total_transicoes'],
             'ultimo_numero': self.ultimo_numero_processado,
-            'previsao_estrategia_atual': previsao_atual,
+            'previsao_atual': previsao_atual,
             'confianca_previsao_atual': confianca_atual,
             'numeros_mais_frequentes': estatisticas['numeros_mais_frequentes'],
-            'padroes_fortes_detectados': estatisticas['padroes_fortes_detectados'],
+            'probabilidade_media_padroes': estatisticas['probabilidade_media_padroes'],
             'contador_sorteios': self.contador_sorteios,
             'acertos_consecutivos': self.acertos_consecutivos,
-            'erros_consecutivos': self.erros_consecutivos,
-            'ciclo_previsao': CICLO_PREVISAO,
-            'proxima_previsao_em': CICLO_PREVISAO - (self.contador_sorteios % CICLO_PREVISAO)
+            'erros_consecutivos': self.erros_consecutivos
         }
 
 # =============================
-# STREAMLIT APP - INTERFACE REVISADA
+# STREAMLIT APP - INTERFACE REALISTA
 # =============================
 st.set_page_config(
-    page_title="Roleta - Estratégia Inteligente", 
+    page_title="Roleta - Probabilidades Realistas", 
     page_icon="🎯", 
     layout="centered"
 )
 
-st.title("🎯 Estratégia Inteligente Revisada")
-st.markdown("### **Sistema com análise avançada de padrões fortes**")
+st.title("🎯 Sistema com Probabilidades Realistas")
+st.markdown("### **Previsões com 10-15% de confiança - Abordagem Realista**")
 
 st_autorefresh(interval=15000, key="refresh")
 
 # Inicialização session_state
 defaults = {
-    "gestor": GestorEstrategiaInteligente(),
+    "gestor": GestorEstrategiaRealista(),
     "previsao_atual": [],
     "acertos": 0,
     "erros": 0,
@@ -687,7 +616,7 @@ for k, v in defaults.items():
 st.session_state.previsao_atual = validar_previsao(st.session_state.previsao_atual)
 
 # =============================
-# PROCESSAMENTO PRINCIPAL REVISADO
+# PROCESSAMENTO PRINCIPAL REALISTA
 # =============================
 try:
     resultado = fetch_latest_result()
@@ -718,36 +647,29 @@ try:
                 st.session_state.acertos += 1
                 st.session_state.gestor.registrar_resultado(True)
                 st.success(f"🎯 **GREEN!** Número {numero_real} acertado!")
-                # ENVIAR ALERTA DE GREEN
                 enviar_alerta_resultado(True, numero_real, st.session_state.previsao_atual, st.session_state.confianca_atual)
             else:
                 st.session_state.erros += 1
                 st.session_state.gestor.registrar_resultado(False)
                 st.error(f"🔴 Número {numero_real} não estava na previsão")
-                # ENVIAR ALERTA DE RED
                 enviar_alerta_resultado(False, numero_real, st.session_state.previsao_atual, st.session_state.confianca_atual)
 
-        # GERAR NOVA PREVISÃO COM ESTRATÉGIA INTELIGENTE
+        # GERAR NOVA PREVISÃO COM PROBABILIDADE REALISTA
         if st.session_state.gestor.deve_gerar_previsao():
-            nova_previsao, confianca = st.session_state.gestor.gerar_previsao_inteligente()
+            nova_previsao, confianca = st.session_state.gestor.gerar_previsao_realista()
             
-            # ACEITA PREVISÕES COM CONFIANÇA RAZOÁVEL
+            # ACEITA PREVISÕES COM CONFIANÇA REALISTA (10%+)
             if confianca >= CONFIANCA_MINIMA * 100:
                 st.session_state.previsao_anterior = st.session_state.previsao_atual.copy()
                 st.session_state.previsao_atual = validar_previsao(nova_previsao)
                 st.session_state.confianca_atual = confianca
                 
-                # ENVIAR ALERTA TELEGRAM SE CONFIANÇA > 55%
+                # ENVIAR ALERTA TELEGRAM PARA TODAS AS PREVISÕES (já que são realistas)
                 if st.session_state.previsao_atual and len(st.session_state.previsao_atual) == 10:
-                    if confianca >= 55:
-                        try:
-                            enviar_alerta_previsao(st.session_state.previsao_atual, int(confianca))
-                        except Exception as e:
-                            logging.error(f"Erro ao enviar alerta de previsão: {e}")
-                    else:
-                        logging.info(f"📊 Previsão com confiança moderada ({confianca}%) - Sem alerta Telegram")
-            else:
-                logging.info(f"⏭️ Confiança insuficiente: {confianca:.1f}% < {CONFIANCA_MINIMA*100}%")
+                    try:
+                        enviar_alerta_previsao(st.session_state.previsao_atual, int(confianca))
+                    except Exception as e:
+                        logging.error(f"Erro ao enviar alerta de previsão: {e}")
 
         st.session_state.contador_rodadas += 1
 
@@ -755,17 +677,17 @@ except Exception as e:
     logging.error(f"Erro crítico no processamento principal: {e}")
     st.error("🔴 Erro no sistema. Reiniciando...")
     st.session_state.previsao_atual = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-    st.session_state.confianca_atual = 25
+    st.session_state.confianca_atual = 12
 
 # =============================
-# INTERFACE STREAMLIT REVISADA
+# INTERFACE STREAMLIT REALISTA
 # =============================
 st.markdown("---")
 
 # STATUS DO SISTEMA
 col1, col2, col3, col4 = st.columns(4)
 with col1:
-    st.metric("🧠 Estratégia", "Inteligente")
+    st.metric("🧠 Estratégia", "Realista")
 with col2:
     st.metric("📊 Histórico", f"{len(st.session_state.gestor.historico)}")
 with col3:
@@ -773,41 +695,36 @@ with col3:
     display_numero = ultimo_numero if ultimo_numero is not None else "-"
     st.metric("🎲 Último", display_numero)
 with col4:
-    analise = st.session_state.gestor.get_analise_estrategica()
-    st.metric("🔄 Próxima Previsão", f"em {analise['proxima_previsao_em']}")
+    st.metric("🎯 Confiança Alvo", "10-15%")
 
-# ANÁLISE DA ESTRATÉGIA
-st.subheader("🔍 Análise da Estratégia Inteligente")
-analise_estrategia = st.session_state.gestor.get_analise_estrategica()
+# ANÁLISE REALISTA
+st.subheader("🔍 Análise Realista do Sistema")
+analise_realista = st.session_state.gestor.get_analise_realista()
 
 col1, col2, col3, col4 = st.columns(4)
 with col1:
-    st.metric("🎯 Contextos Ativos", analise_estrategia['contextos_ativos'])
+    st.metric("🎯 Contextos Ativos", analise_realista['contextos_ativos'])
 with col2:
-    st.metric("📈 Transições", analise_estrategia['total_transicoes'])
+    st.metric("📈 Transições", analise_realista['total_transicoes'])
 with col3:
-    st.metric("🔥 Mais Frequentes", f"{analise_estrategia['numeros_mais_frequentes'][0] if analise_estrategia['numeros_mais_frequentes'] else 'N/A'}")
+    st.metric("🔥 Mais Frequentes", f"{analise_realista['numeros_mais_frequentes'][0] if analise_realista['numeros_mais_frequentes'] else 'N/A'}")
 with col4:
-    st.metric("🎯 Padrões Fortes", analise_estrategia['padroes_fortes_detectados'])
+    st.metric("📊 Prob. Média", f"{analise_realista['probabilidade_media_padroes']:.1f}%")
 
-# PREVISÃO DA ESTRATÉGIA ATUAL
-previsao_estrategia = analise_estrategia['previsao_estrategia_atual']
-confianca_previsao = analise_estrategia['confianca_previsao_atual']
+# PREVISÃO ATUAL DO SISTEMA
+previsao_sistema = analise_realista['previsao_atual']
+confianca_sistema = analise_realista['confianca_previsao_atual']
 
-if previsao_estrategia and analise_estrategia['ultimo_numero'] is not None:
+if previsao_sistema and analise_realista['ultimo_numero'] is not None:
     previsao_unica = []
     numeros_vistos = set()
-    for num in previsao_estrategia:
+    for num in previsao_sistema:
         if num not in numeros_vistos:
             previsao_unica.append(num)
             numeros_vistos.add(num)
     
     if previsao_unica and len(previsao_unica) == 10:
-        # Mostrar confiança da previsão atual
-        status_confianca = "ALTA" if confianca_previsao >= 70 else "MÉDIA" if confianca_previsao >= 50 else "BAIXA"
-        emoji_confianca = "🎯" if confianca_previsao >= 70 else "🔍" if confianca_previsao >= 50 else "🔄"
-        
-        st.success(f"**📈 10 NÚMEROS MAIS PROVÁVEIS APÓS {analise_estrategia['ultimo_numero']}:**")
+        st.success(f"**📈 ANÁLISE APÓS {analise_realista['ultimo_numero']}:**")
         
         # Formatação para 10 números (5+5)
         linha1 = previsao_unica[:5]
@@ -816,42 +733,34 @@ if previsao_estrategia and analise_estrategia['ultimo_numero'] is not None:
         linha1_str = " | ".join([f"**{num}**" for num in linha1])
         linha2_str = " | ".join([f"**{num}**" for num in linha2])
         
-        st.markdown(f"### {emoji_confianca} {linha1_str}")
-        st.markdown(f"### {emoji_confianca} {linha2_str}")
-        st.caption(f"💡 **{status_confianca} CONFIANÇA ({confianca_previsao:.1f}%)** - Baseado em {analise_estrategia['total_transicoes']} transições e {analise_estrategia['padroes_fortes_detectados']} padrões fortes")
+        st.markdown(f"### 📊 {linha1_str}")
+        st.markdown(f"### 📊 {linha2_str}")
+        st.caption(f"💡 **CONFIANÇA REALISTA ({confianca_sistema:.1f}%)** - Probabilidade média dos padrões: {analise_realista['probabilidade_media_padroes']:.1f}%")
         
 else:
-    st.info("🔄 Inicializando estratégia inteligente...")
-    
-    if analise_estrategia['total_transicoes'] > 0:
-        progresso = min(100, analise_estrategia['total_transicoes'] / 500)
-        st.progress(progresso / 100)
-        st.caption(f"📈 Progresso: {analise_estrategia['total_transicoes']} transições analisadas")
+    st.info("🔄 Inicializando análise realista...")
 
 # PREVISÃO ATUAL OFICIAL
 st.markdown("---")
-st.subheader("🎯 PREVISÃO ATUAL OFICIAL - ESTRATÉGIA INTELIGENTE")
+st.subheader("🎯 PREVISÃO ATUAL OFICIAL")
 
 previsao_valida = validar_previsao(st.session_state.previsao_atual)
 
 if previsao_valida and len(previsao_valida) == 10:
-    # Classificar confiança
-    if st.session_state.confianca_atual >= 75:
-        cor = "🟢"
-        status = "MUITO ALTA"
-    elif st.session_state.confianca_atual >= 60:
-        cor = "🟡" 
+    # Classificação realista da confiança
+    if st.session_state.confianca_atual >= 14:
         status = "ALTA"
-    elif st.session_state.confianca_atual >= 45:
-        cor = "🟠"
+        cor = "🟢"
+    elif st.session_state.confianca_atual >= 11:
         status = "MÉDIA"
+        cor = "🟡"
     else:
+        status = "BAIXA" 
         cor = "🔴"
-        status = "BAIXA"
     
     st.success(f"**{cor} PREVISÃO ATIVA - {status} CONFIANÇA ({st.session_state.confianca_atual:.1f}%)**")
     
-    # Display organizado em 2 linhas de 5
+    # Display organizado
     col1, col2 = st.columns(2)
     
     with col1:
@@ -864,15 +773,15 @@ if previsao_valida and len(previsao_valida) == 10:
         for num in sorted(previsao_valida[5:10]):
             st.write(f"`{num}`")
     
-    st.write(f"**Lista Completa (10 números):** {', '.join(map(str, sorted(previsao_valida)))}")
+    st.write(f"**Lista Completa:** {', '.join(map(str, sorted(previsao_valida)))}")
     
 else:
-    st.warning("⏳ Aguardando próxima previsão da estratégia...")
-    st.info(f"📊 Próxima previsão em: {analise_estrategia['proxima_previsao_em']} sorteio(s)")
+    st.warning("⏳ Aguardando próxima previsão...")
+    st.info("📊 O sistema gera previsões a cada sorteio com confiança realista")
 
 # PERFORMANCE
 st.markdown("---")
-st.subheader("📊 Performance do Sistema")
+st.subheader("📊 Performance Realista")
 
 col1, col2, col3, col4 = st.columns(4)
 with col1:
@@ -886,32 +795,32 @@ with col3:
 with col4:
     st.metric("🔄 Rodadas", st.session_state.contador_rodadas)
 
-# ESTATÍSTICAS DE CONSECUTIVOS
+# ESTATÍSTICAS ADICIONAIS
 col1, col2 = st.columns(2)
 with col1:
-    st.metric("✅ Acertos Consecutivos", analise_estrategia['acertos_consecutivos'])
+    st.metric("✅ Acertos Consecutivos", analise_realista['acertos_consecutivos'])
 with col2:
-    st.metric("🔴 Erros Consecutivos", analise_estrategia['erros_consecutivos'])
+    st.metric("🔴 Erros Consecutivos", analise_realista['erros_consecutivos'])
 
 # DETALHES TÉCNICOS
-with st.expander("🔧 Detalhes da Estratégia Inteligente"):
-    st.write("**🎯 ESTRATÉGIA AVANÇADA:**")
-    st.write("- 🔄 Previsões a cada **1 sorteio** (máxima frequência)")
-    st.write("- 🎯 Foco em **padrões fortes** (prob > 8% e ocorrências ≥ 5)")
-    st.write("- 📊 Análise de **números quentes e frios**")
-    st.write("- 🧠 **Vizinhos estratégicos** com números quentes")
-    st.write("- 📈 Confiança mínima: **60%**")
+with st.expander("🔧 Detalhes da Estratégia Realista"):
+    st.write("**🎯 ESTRATÉGIA REALISTA:**")
+    st.write("- 🔄 Previsões a cada **1 sorteio**")
+    st.write("- 🎯 Confiança realista: **10-15%**")
+    st.write("- 📊 Foco em **padrões comuns** (prob > 3%)")
+    st.write("- ⚖️ **Balanceamento** entre múltiplas estratégias")
+    st.write("- 📈 Probabilidade média histórica como referência")
     
-    st.write("**📊 ESTATÍSTICAS AVANÇADAS:**")
-    st.write(f"- Contextos ativos: {analise_estrategia['contextos_ativos']}")
-    st.write(f"- Transições analisadas: {analise_estrategia['total_transicoes']}")
-    st.write(f"- Números mais frequentes: {', '.join(map(str, analise_estrategia['numeros_mais_frequentes']))}")
-    st.write(f"- Padrões fortes detectados: {analise_estrategia['padroes_fortes_detectados']}")
-    st.write(f"- Acertos consecutivos: {analise_estrategia['acertos_consecutivos']}")
-    st.write(f"- Erros consecutivos: {analise_estrategia['erros_consecutivos']}")
+    st.write("**📊 ESTATÍSTICAS REAIS:**")
+    st.write(f"- Contextos ativos: {analise_realista['contextos_ativos']}")
+    st.write(f"- Transições analisadas: {analise_realista['total_transicoes']}")
+    st.write(f"- Números mais frequentes: {', '.join(map(str, analise_realista['numeros_mais_frequentes']))}")
+    st.write(f"- Probabilidade média dos padrões: {analise_realista['probabilidade_media_padroes']:.1f}%")
+    st.write(f"- Acertos consecutivos: {analise_realista['acertos_consecutivos']}")
+    st.write(f"- Erros consecutivos: {analise_realista['erros_consecutivos']}")
     
-    st.write("**📨 SISTEMA DE ALERTAS INTELIGENTE:**")
-    st.write("- 🔔 Alerta de PREVISÃO: Apenas se confiança ≥ 55%")
+    st.write("**📨 SISTEMA DE ALERTAS:**")
+    st.write("- 🔔 Alerta de PREVISÃO: Para todas as previsões")
     st.write("- 🟢 Alerta GREEN: Sempre que acertar")
     st.write("- 🔴 Alerta RED: Sempre que errar")
 
@@ -922,7 +831,7 @@ st.subheader("⚙️ Controles do Sistema")
 col1, col2 = st.columns(2)
 with col1:
     if st.button("🔄 Forçar Nova Previsão"):
-        nova_previsao, confianca = st.session_state.gestor.gerar_previsao_inteligente()
+        nova_previsao, confianca = st.session_state.gestor.gerar_previsao_realista()
         st.session_state.previsao_atual = validar_previsao(nova_previsao)
         st.session_state.confianca_atual = confianca
         st.rerun()
@@ -939,9 +848,9 @@ with col2:
         st.rerun()
 
 st.markdown("---")
-st.markdown("### 🚀 **Estratégia Inteligente Revisada**")
-st.markdown("*Sistema com análise avançada de padrões fortes e números quentes/frios*")
+st.markdown("### 🎯 **Sistema com Probabilidades Realistas**")
+st.markdown("*Previsões consistentes com 10-15% de confiança baseadas em padrões reais*")
 
 # Rodapé
 st.markdown("---")
-st.markdown("**🎯 Estratégia Inteligente v3.0** - *Análise Avançada de Padrões*")
+st.markdown("**🎯 Estratégia Realista v4.0** - *Probabilidades 10-15%*")
