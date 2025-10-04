@@ -27,7 +27,7 @@ ROULETTE_PHYSICAL_LAYOUT = [
     [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36]
 ]
 
-NUMERO_PREVISOES = 10  # MUDANÇA: Agora 10 números
+NUMERO_PREVISOES = 10
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -211,13 +211,14 @@ def validar_previsao(previsao):
     return previsao_limpa
 
 # =============================
-# CONTEXT PREDICTOR - ESTRATÉGIA PRINCIPAL
+# CONTEXT PREDICTOR - ESTRATÉGIA PRINCIPAL ATUALIZADA
 # =============================
 class Context_Predictor_Persistente:
     def __init__(self):
         self.context_history = {}
         self.min_occurrences = 1
         self.arquivo_contexto = CONTEXTO_PATH
+        self.padroes_fortes_cache = []  # Cache de padrões fortes
         self.carregar_contexto()
         
     def carregar_contexto(self):
@@ -310,9 +311,12 @@ class Context_Predictor_Persistente:
         except Exception as e:
             logging.error(f"Erro ao atualizar contexto: {e}")
 
-    def prever_por_contexto_forte(self, ultimo_numero, top_n=10):  # MUDANÇA: 10 números
-        """Previsão FORTE - com critérios mais inteligentes"""
+    def prever_por_contexto_forte(self, ultimo_numero, top_n=10):
+        """Previsão FORTE - com prioridade para padrões detectados"""
         try:
+            previsao_final = set()
+            
+            # 1. PRIMEIRA PRIORIDADE: Padrões diretos do último número (40%)
             if ultimo_numero in self.context_history:
                 contexto = self.context_history[ultimo_numero]
                 
@@ -324,30 +328,90 @@ class Context_Predictor_Persistente:
                     for num, count in contexto.items():
                         prob = count / total_ocorrencias
                         
-                        # CRITÉRIOS COMBINADOS - MAIS EFETIVOS
-                        if (prob > 0.12 and count >= 2) or (prob > 0.08 and count >= 5) or count >= 6:
-                            # BÔNUS para padrões muito consistentes
-                            score = prob * 100 + min(count, 10)
+                        # CRITÉRIOS MAIS FLEXÍVEIS PARA CAPTURAR PADRÕES
+                        if (prob > 0.10 and count >= 2) or (prob > 0.05 and count >= 3) or count >= 4:
+                            score = prob * 100 + min(count, 15)  # Bônus maior para ocorrências
                             padroes_fortes.append((num, count, prob, score))
                     
                     # Ordenar por score personalizado
                     padroes_fortes.sort(key=lambda x: x[3], reverse=True)
                     
-                    previsao = []
-                    for num, count, prob, score in padroes_fortes[:top_n]:
-                        previsao.append(num)
-                        logging.debug(f"🔍 {ultimo_numero} → {num}: {prob:.1%} ({count}x) score: {score:.1f}")
-                    
-                    if previsao:
-                        logging.info(f"🎯 CONTEXTO FORTE: {ultimo_numero} → {previsao}")
-                        return previsao
+                    for num, count, prob, score in padroes_fortes[:6]:  # Pegar até 6 dos melhores
+                        previsao_final.add(num)
+                        logging.info(f"🎯 PADRÃO INCLUÍDO: {ultimo_numero} → {num} ({prob:.1%}, {count}x)")
             
-            # FALLBACK INTELIGENTE
-            return self.get_fallback_inteligente(ultimo_numero, top_n)
+            # 2. SEGUNDA PRIORIDADE: Padrões detectados recentemente (30%)
+            padroes_recentes = self.analisar_padroes_recentes_ativos()
+            for padrao in padroes_recentes[:4]:  # Top 4 padrões recentes
+                previsao_final.add(padrao['proximo'])
+                logging.info(f"🔍 PADRÃO RECENTE INCLUÍDO: {padrao['anterior']} → {padrao['proximo']} ({padrao['probabilidade']:.1%})")
+            
+            # 3. TERCEIRA PRIORIDADE: Números quentes globais (20%)
+            numeros_quentes = self.get_numeros_mais_frequentes_global(4)
+            for num in numeros_quentes:
+                previsao_final.add(num)
+            
+            # 4. QUARTA PRIORIDADE: Vizinhança física (10%)
+            vizinhos = obter_vizinhos_fisicos(ultimo_numero)
+            for vizinho in vizinhos[:2]:
+                previsao_final.add(vizinho)
+            
+            # Converter para lista e completar se necessário
+            resultado = list(previsao_final)
+            
+            if len(resultado) < top_n:
+                # Completar com fallback inteligente
+                faltam = top_n - len(resultado)
+                complemento = self.get_fallback_inteligente(ultimo_numero, faltam)
+                for num in complemento:
+                    if num not in resultado:
+                        resultado.append(num)
+            
+            logging.info(f"🎯 PREVISÃO FINAL: {ultimo_numero} → {resultado}")
+            return resultado[:top_n]
             
         except Exception as e:
             logging.error(f"Erro na previsão por contexto forte: {e}")
             return self.get_fallback_inteligente(ultimo_numero, top_n)
+
+    def analisar_padroes_recentes_ativos(self):
+        """Analisa e retorna os padrões mais fortes e recentes"""
+        padroes_fortes = []
+        
+        for anterior, seguintes in self.context_history.items():
+            if seguintes:
+                total_transicoes = sum(seguintes.values())
+                for proximo, count in seguintes.items():
+                    probabilidade = count / total_transicoes
+                    
+                    # CRITÉRIOS PARA PADRÕES FORTES
+                    if probabilidade > 0.03 and count >= 3:  # Mais flexível para capturar padrões
+                        padroes_fortes.append({
+                            'anterior': anterior,
+                            'proximo': proximo,
+                            'probabilidade': probabilidade,
+                            'ocorrencias': count,
+                            'score': probabilidade * 100 + min(count, 20)
+                        })
+        
+        # Ordenar por score (probabilidade + ocorrências)
+        padroes_fortes.sort(key=lambda x: x['score'], reverse=True)
+        
+        # Atualizar cache
+        self.padroes_fortes_cache = padroes_fortes[:10]  # Manter top 10
+        
+        return padroes_fortes[:8]  # Retornar top 8 para uso imediato
+
+    def get_padroes_fortes_para_previsao(self, ultimo_numero):
+        """Retorna padrões fortes que podem ser relevantes para a previsão atual"""
+        padroes_relevantes = []
+        
+        for padrao in self.padroes_fortes_cache:
+            # Incluir padrões onde o anterior é o último número OU onde o próximo é frequente
+            if padrao['anterior'] == ultimo_numero or padrao['ocorrencias'] >= 5:
+                padroes_relevantes.append(padrao)
+        
+        return padroes_relevantes[:5]  # Top 5 mais relevantes
 
     def get_fallback_inteligente(self, ultimo_numero, quantidade):
         """Fallback mais inteligente baseado em múltiplos fatores"""
@@ -440,7 +504,7 @@ class Context_Predictor_Persistente:
         }
 
 # =============================
-# GESTOR PRINCIPAL SIMPLIFICADO
+# GESTOR PRINCIPAL ATUALIZADO
 # =============================
 class GestorContextoHistorico:
     def __init__(self):
@@ -487,7 +551,7 @@ class GestorContextoHistorico:
             self.historico.append(numero_dict)
 
     def analisar_padrao_em_tempo_real(self, anterior, atual):
-        """Analisa padrões em tempo real para detecção imediata"""
+        """Analisa padrões em tempo real e os inclui na previsão"""
         if anterior in self.context_predictor.context_history:
             transicoes = self.context_predictor.context_history[anterior]
             if atual in transicoes:
@@ -495,35 +559,77 @@ class GestorContextoHistorico:
                 total = sum(transicoes.values())
                 probabilidade = count / total if total > 0 else 0
                 
-                # LOGAR PADRÕES FORTES
-                if probabilidade > 0.20 or count >= 3:
-                    logging.info(f"🎯 PADRÃO CONFIRMADO: {anterior} → {atual} ({probabilidade:.1%}, {count}x)")
+                # LOGAR E REGISTRAR PADRÕES FORTES
+                if probabilidade > 0.03 and count >= 2:  # Critério mais sensível
+                    logging.info(f"🎯 PADRÃO DETECTADO: {anterior} → {atual} ({probabilidade:.1%}, {count}x)")
                     
                     padrao = {
                         'anterior': anterior,
                         'atual': atual,
                         'probabilidade': probabilidade,
-                        'ocorrencias': count
+                        'ocorrencias': count,
+                        'timestamp': time.time()
                     }
                     self.padroes_detectados.append(padrao)
-                    self.padroes_detectados = self.padroes_detectados[-20:]
+                    
+                    # Manter apenas os padrões mais recentes e fortes
+                    self.padroes_detectados = sorted(
+                        self.padroes_detectados, 
+                        key=lambda x: (x['probabilidade'], x['ocorrencias']), 
+                        reverse=True
+                    )[:15]
 
     def gerar_previsao_contextual(self):
-        """Gera previsão baseada APENAS no contexto histórico - SEMPRE 10 NÚMEROS"""
+        """Gera previsão com foco em incluir padrões detectados"""
         try:
             if self.ultimo_numero_processado is not None:
+                # ATUALIZAR ANÁLISE DE PADRÕES ANTES DE PREVER
+                self.context_predictor.analisar_padroes_recentes_ativos()
+                
                 previsao = self.context_predictor.prever_por_contexto_forte(
                     self.ultimo_numero_processado, 
-                    top_n=10  # SEMPRE 10 números
+                    top_n=10
                 )
-                logging.info(f"🎯 PREVISÃO CONTEXTUAL: {self.ultimo_numero_processado} → {len(previsao)} números")
-                return previsao
+                
+                # GARANTIR que padrões muito fortes sejam incluídos
+                previsao_melhorada = self.aplicar_refinamento_padroes(previsao)
+                
+                logging.info(f"🎯 PREVISÃO CONTEXTUAL: {self.ultimo_numero_processado} → {len(previsao_melhorada)} números")
+                return previsao_melhorada
             else:
-                return self.context_predictor.get_numeros_mais_frequentes_global(10)  # SEMPRE 10 números
+                return self.context_predictor.get_numeros_mais_frequentes_global(10)
             
         except Exception as e:
             logging.error(f"Erro na previsão contextual: {e}")
-            return list(range(0, 10))  # SEMPRE 10 números
+            return list(range(0, 10))
+
+    def aplicar_refinamento_padroes(self, previsao_base):
+        """Aplica refinamento para incluir padrões fortes que possam estar faltando"""
+        previsao_melhorada = set(previsao_base)
+        
+        # 1. INCLUIR PADRÕES RECENTES MUITO FORTES
+        padroes_recentes_fortes = [
+            p for p in self.padroes_detectados 
+            if p['probabilidade'] > 0.05 and p['ocorrencias'] >= 3
+        ]
+        
+        for padrao in padroes_recentes_fortes[:3]:  # Top 3 padrões mais fortes
+            if padrao['atual'] not in previsao_melhorada:
+                previsao_melhorada.add(padrao['atual'])
+                logging.info(f"🔧 REFINAMENTO: Adicionado {padrao['atual']} do padrão {padrao['anterior']}→{padrao['atual']}")
+        
+        # 2. SE A PREVISÃO AINDA NÃO TEM 10 NÚMEROS, COMPLETAR
+        if len(previsao_melhorada) < 10:
+            faltam = 10 - len(previsao_melhorada)
+            complemento = self.context_predictor.get_fallback_inteligente(
+                self.ultimo_numero_processado, 
+                faltam
+            )
+            for num in complemento:
+                if num not in previsao_melhorada:
+                    previsao_melhorada.add(num)
+        
+        return list(previsao_melhorada)[:10]
 
     def get_analise_contexto_detalhada(self):
         """Análise detalhada dos padrões de contexto"""
@@ -533,10 +639,15 @@ class GestorContextoHistorico:
         if self.ultimo_numero_processado is not None:
             previsao_atual = self.context_predictor.prever_por_contexto_forte(
                 self.ultimo_numero_processado, 
-                top_n=10  # SEMPRE 10 números
+                top_n=10
             )
         
-        padroes_recentes = self.padroes_detectados[-5:] if self.padroes_detectados else []
+        # Padrões recentes ordenados por força
+        padroes_recentes = sorted(
+            self.padroes_detectados[-8:], 
+            key=lambda x: (x['probabilidade'], x['ocorrencias']), 
+            reverse=True
+        )
         
         return {
             'contextos_ativos': estatisticas['contextos_ativos'],
@@ -544,7 +655,8 @@ class GestorContextoHistorico:
             'ultimo_numero': self.ultimo_numero_processado,
             'previsao_contexto_atual': previsao_atual,
             'padroes_recentes': padroes_recentes,
-            'numero_mais_frequente': estatisticas['numero_mais_frequente']
+            'numero_mais_frequente': estatisticas['numero_mais_frequente'],
+            'total_padroes_detectados': len(self.padroes_detectados)
         }
 
     def calcular_diferencas(self, previsao_atual):
@@ -577,7 +689,7 @@ st.set_page_config(
 )
 
 st.title("🎯 Sistema de Contexto Histórico - 10 NÚMEROS")
-st.markdown("### **Sistema que Captura Padrões Óbvios - Alertas com 10 Números**")
+st.markdown("### **Sistema que Captura Padrões Óbvios - Inclui Padrões na Previsão**")
 
 st_autorefresh(interval=15000, key="refresh")
 
@@ -661,7 +773,7 @@ try:
 except Exception as e:
     logging.error(f"Erro crítico no processamento principal: {e}")
     st.error("🔴 Erro no sistema. Reiniciando...")
-    st.session_state.previsao_atual = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]  # 10 números
+    st.session_state.previsao_atual = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
 # =============================
 # INTERFACE STREAMLIT
@@ -694,7 +806,7 @@ with col2:
 with col3:
     st.metric("🔥 Mais Frequente", analise_contexto['numero_mais_frequente'])
 with col4:
-    st.metric("🎯 Padrões Recentes", len(analise_contexto['padroes_recentes']))
+    st.metric("🎯 Padrões Detectados", analise_contexto['total_padroes_detectados'])
 
 # PREVISÃO CONTEXTUAL ATUAL
 previsao_contexto = analise_contexto['previsao_contexto_atual']
@@ -776,7 +888,7 @@ if previsao_valida and len(previsao_valida) == 10:
     
 else:
     st.warning("⚠️ Inicializando sistema...")
-    st.session_state.previsao_atual = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]  # 10 números
+    st.session_state.previsao_atual = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
 # PERFORMANCE
 st.markdown("---")
@@ -796,19 +908,20 @@ with col4:
 
 # DETALHES TÉCNICOS
 with st.expander("🔧 Detalhes Técnicos do Sistema"):
-    st.write("**🎯 ESTRATÉGIA DE CONTEXTO HISTÓRICO:**")
+    st.write("**🎯 ESTRATÉGIA DE CONTEXTO HISTÓRICO ATUALIZADA:**")
     st.write("- 🔍 Captura padrões óbvios de transição entre números")
-    st.write("- 📊 Critérios inteligentes: probabilidade >12% + ocorrências")
-    st.write("- ⚡ Análise em tempo real")
+    st.write("- 🎯 INCLUI AUTOMATICAMENTE padrões detectados na previsão")
+    st.write("- 📊 Critérios inteligentes: probabilidade >3% + 2+ ocorrências")
+    st.write("- ⚡ Análise em tempo real com refinamento automático")
     st.write("- 💾 Persistência de contexto entre execuções")
-    st.write("- 🎯 Fallback inteligente com múltiplas estratégias")
+    st.write("- 🔧 Sistema de refinamento para incluir padrões fortes")
     st.write("- 🔢 Sistema otimizado para 10 números")
     
     st.write("**📊 ESTATÍSTICAS ATUAIS:**")
     st.write(f"- Contextos ativos: {analise_contexto['contextos_ativos']}")
     st.write(f"- Transições analisadas: {analise_contexto['total_transicoes']}")
     st.write(f"- Número mais frequente: {analise_contexto['numero_mais_frequente']}")
-    st.write(f"- Padrões detectados recentemente: {len(analise_contexto['padroes_recentes'])}")
+    st.write(f"- Padrões detectados: {analise_contexto['total_padroes_detectados']}")
     
     st.write("**📨 SISTEMA DE ALERTAS (10 NÚMEROS):**")
     st.write("- 🔔 Alerta de PREVISÃO: '🎯 PREVISÃO: 1 2 3 4 5 6 7 8 9 10'")
@@ -839,8 +952,8 @@ with col2:
 
 st.markdown("---")
 st.markdown("### 🚀 **Sistema de Contexto Histórico - 10 Números**")
-st.markdown("*Alertas simplificados para notificações do Telegram*")
+st.markdown("*Agora inclui automaticamente os padrões detectados na previsão!*")
 
 # Rodapé
 st.markdown("---")
-st.markdown("**🎯 Contexto Histórico v3.0** - *Sistema Otimizado para 10 Números*")
+st.markdown("**🎯 Contexto Histórico v4.0** - *Sistema com Inclusão Automática de Padrões*")
