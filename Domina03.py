@@ -1,4 +1,4 @@
-# RoletaHybridIA.py - SISTEMA COM IA (RANDOM FOREST) PARA MELHORAR ASSERTIVIDADE
+# RoletaHybridIA.py - SISTEMA COM IA (RANDOM FOREST) OTIMIZADO
 import streamlit as st
 import json
 import os
@@ -15,9 +15,12 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score
 import joblib
+import functools
+import statistics
+import psutil
 
 # =============================
-# Configurações COM IA
+# CONFIGURAÇÕES OTIMIZADAS COM IA
 # =============================
 HISTORICO_PATH = "historico_hybrid_ia.json"
 CONTEXTO_PATH = "contexto_historico.json"
@@ -36,16 +39,55 @@ ROULETTE_PHYSICAL_LAYOUT = [
     [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36]
 ]
 
-NUMERO_PREVISOES = 10
-CICLO_PREVISAO = 2
-CONFIANCA_MINIMA = 0.035  # 3.5% de confiança mínima
+# CONFIGURAÇÕES OTIMIZADAS
+MIN_DADOS_TREINAMENTO = 1000
+TREINAMENTO_INTERVALO = 500
+WINDOW_SIZE = 15
+CACHE_INTERVAL = 30
+CONFIANCA_MINIMA = 0.035
 
-# Configurar logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Configurar logging avançado
+def setup_advanced_logging():
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+    
+    # File handler para histórico
+    file_handler = logging.FileHandler('sistema_hibrido_ia.log')
+    file_handler.setLevel(logging.INFO)
+    
+    # Console handler
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    
+    # Formatter
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    file_handler.setFormatter(formatter)
+    console_handler.setFormatter(formatter)
+    
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+
+setup_advanced_logging()
+
+# =============================
+# DECORATORS DE PERFORMANCE
+# =============================
+def timing_decorator(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        start_time = time.time()
+        result = func(*args, **kwargs)
+        end_time = time.time()
+        logging.debug(f"⏱️ {func.__name__} executado em {end_time - start_time:.4f}s")
+        return result
+    return wrapper
 
 # =============================
 # FUNÇÕES UTILITÁRIAS
 # =============================
+@timing_decorator
 def carregar_historico():
     try:
         if os.path.exists(HISTORICO_PATH):
@@ -59,6 +101,7 @@ def carregar_historico():
         logging.error(f"Erro ao carregar histórico: {e}")
         return []
 
+@timing_decorator
 def salvar_historico(numero_dict):
     try:
         if not isinstance(numero_dict, dict) or numero_dict.get('number') is None:
@@ -85,6 +128,7 @@ def salvar_historico(numero_dict):
         logging.error(f"Erro ao salvar histórico: {e}")
         return False
 
+@timing_decorator
 def fetch_latest_result():
     try:
         response = requests.get(API_URL, headers=HEADERS, timeout=10)
@@ -122,6 +166,7 @@ def fetch_latest_result():
         logging.error(f"❌ Erro inesperado ao buscar resultado: {e}")
         return None
 
+@timing_decorator
 def obter_vizinhos_fisicos(numero):
     """Retorna vizinhos físicos na mesa"""
     if numero == 0:
@@ -147,6 +192,7 @@ def obter_vizinhos_fisicos(numero):
     
     return list(vizinhos)
 
+@timing_decorator
 def validar_previsao(previsao):
     if not previsao or not isinstance(previsao, list):
         return []
@@ -160,6 +206,7 @@ def validar_previsao(previsao):
     
     return previsao_limpa
 
+@timing_decorator
 def enviar_telegram(msg: str):
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -169,6 +216,7 @@ def enviar_telegram(msg: str):
     except Exception as e:
         logging.error(f"Erro ao enviar para Telegram: {e}")
 
+@timing_decorator
 def enviar_alerta_previsao(numeros, confianca, metodo="IA"):
     """Envia alerta de PREVISÃO com 10 números e nível de confiança"""
     try:
@@ -194,6 +242,7 @@ def enviar_alerta_previsao(numeros, confianca, metodo="IA"):
     except Exception as e:
         logging.error(f"Erro alerta previsão: {e}")
 
+@timing_decorator
 def enviar_alerta_resultado(acertou, numero_sorteado, previsao_anterior, confianca, metodo="IA"):
     """Envia alerta de resultado (GREEN/RED) com os 10 números da previsão"""
     try:
@@ -222,7 +271,7 @@ def enviar_alerta_resultado(acertou, numero_sorteado, previsao_anterior, confian
         logging.error(f"Erro alerta resultado: {e}")
 
 # =============================
-# IA - RANDOM FOREST PREDICTOR
+# IA - RANDOM FOREST PREDICTOR OTIMIZADO
 # =============================
 class IAPredictor:
     def __init__(self):
@@ -259,9 +308,10 @@ class IAPredictor:
             logging.error(f"Erro ao salvar IA: {e}")
         return False
     
-    def preparar_dados_treinamento(self, historico, window_size=10):
-        """Prepara dados para treinamento da IA"""
-        if len(historico) < window_size + 2000:  # Mínimo de dados para treinar
+    @timing_decorator
+    def preparar_dados_treinamento(self, historico, window_size=15):
+        """Prepara dados com mais features para melhor aprendizado"""
+        if len(historico) < window_size + 100:
             return None, None
         
         numeros = [h['number'] for h in historico]
@@ -269,27 +319,36 @@ class IAPredictor:
         X = []
         y = []
         
-        # Criar features: últimos 'window_size' números
         for i in range(window_size, len(numeros)):
+            # Features principais
             features = numeros[i-window_size:i]
-            target = numeros[i]
             
-            # Adicionar features adicionais
+            # Calcular estatísticas avançadas
+            ultimos_10 = features[-10:] if len(features) >= 10 else features
+            ultimos_5 = features[-5:] if len(features) >= 5 else features
+            
+            # Adicionar features avançadas
             features.extend([
-                sum(features) / len(features),  # Média dos últimos
-                max(features),                  # Máximo
-                min(features),                  # Mínimo
-                len(set(features)),             # Números únicos
-                features[-1] - features[-2] if len(features) > 1 else 0,  # Diferença
+                sum(features) / len(features),           # Média
+                max(features),                           # Máximo
+                min(features),                           # Mínimo
+                len(set(features)),                      # Números únicos
+                features[-1] - features[-2] if len(features) > 1 else 0,  # Tendência
+                sum(1 for x in ultimos_10 if x % 2 == 0), # Pares recentes
+                sum(1 for x in ultimos_10 if x % 2 == 1), # Ímpares recentes
+                sum(1 for x in ultimos_10 if x <= 18),   # Baixos recentes
+                sum(1 for x in ultimos_10 if x > 18),    # Altos recentes
+                statistics.stdev(features) if len(features) > 1 else 0,  # Volatilidade
             ])
             
             X.append(features)
-            y.append(target)
+            y.append(numeros[i])
         
         return np.array(X), np.array(y)
     
+    @timing_decorator
     def treinar_modelo(self, historico):
-        """Treina o modelo de Random Forest"""
+        """Treina o modelo de Random Forest otimizado"""
         try:
             X, y = self.preparar_dados_treinamento(historico)
             if X is None or len(X) < 100:
@@ -304,14 +363,16 @@ class IAPredictor:
             X_train_scaled = self.scaler.fit_transform(X_train)
             X_test_scaled = self.scaler.transform(X_test)
             
-            # Treinar Random Forest
+            # Treinar Random Forest otimizada
             self.model = RandomForestClassifier(
                 n_estimators=200,
-                max_depth=10,
+                max_depth=15,
                 min_samples_split=5,
                 min_samples_leaf=2,
                 random_state=42,
-                n_jobs=-1
+                n_jobs=-1,
+                bootstrap=True,
+                max_features='sqrt'
             )
             
             self.model.fit(X_train_scaled, y_train)
@@ -330,25 +391,35 @@ class IAPredictor:
             logging.error(f"Erro ao treinar IA: {e}")
             return False
     
+    @timing_decorator
     def prever_com_ia(self, ultimos_numeros, top_n=10):
-        """Faz previsão usando IA"""
+        """Faz previsão usando IA otimizada"""
         try:
             if self.model is None or self.scaler is None:
                 return None, 0
             
-            if len(ultimos_numeros) < 10:
+            if len(ultimos_numeros) < 15:
                 return None, 0
             
             # Preparar features para predição
-            features = ultimos_numeros[-10:]  # Últimos 10 números
+            features = ultimos_numeros[-15:]  # Últimos 15 números
             
-            # Adicionar features adicionais
+            # Calcular estatísticas avançadas
+            ultimos_10 = features[-10:] if len(features) >= 10 else features
+            ultimos_5 = features[-5:] if len(features) >= 5 else features
+            
+            # Adicionar features avançadas
             features.extend([
-                sum(features) / len(features),  # Média
-                max(features),                  # Máximo
-                min(features),                  # Mínimo
-                len(set(features)),             # Números únicos
-                features[-1] - features[-2] if len(features) > 1 else 0,  # Diferença
+                sum(features) / len(features),           # Média
+                max(features),                           # Máximo
+                min(features),                           # Mínimo
+                len(set(features)),                      # Números únicos
+                features[-1] - features[-2] if len(features) > 1 else 0,  # Tendência
+                sum(1 for x in ultimos_10 if x % 2 == 0), # Pares recentes
+                sum(1 for x in ultimos_10 if x % 2 == 1), # Ímpares recentes
+                sum(1 for x in ultimos_10 if x <= 18),   # Baixos recentes
+                sum(1 for x in ultimos_10 if x > 18),    # Altos recentes
+                statistics.stdev(features) if len(features) > 1 else 0,  # Volatilidade
             ])
             
             X_pred = np.array([features])
@@ -379,18 +450,67 @@ class IAPredictor:
     
     def deve_treinar(self, historico):
         """Verifica se deve treinar o modelo"""
-        if len(historico) < 500:
+        if len(historico) < MIN_DADOS_TREINAMENTO:
             return False
         
-        # Treinar a cada 1000 novos registros ou se não tem modelo
+        # Treinar a cada TREINAMENTO_INTERVALO novos registros ou se não tem modelo
         if self.model is None:
             return True
         
         registros_novos = len(historico) - self.ultimo_treinamento
-        return registros_novos > 1000 or time.time() - self.ultimo_treinamento > 86400  # 1 dia
+        return registros_novos > TREINAMENTO_INTERVALO or time.time() - self.ultimo_treinamento > 86400  # 1 dia
 
 # =============================
-# SISTEMA HÍBRIDO - IA + CONTEXTO
+# HEALTH MONITOR
+# =============================
+class HealthMonitor:
+    def __init__(self, sistema):
+        self.sistema = sistema
+        self.metricas = {
+            'tempo_resposta': [],
+            'acuracia_ia': [],
+            'confianca_media': []
+        }
+    
+    def check_system_health(self):
+        """Verifica saúde do sistema"""
+        try:
+            health_status = {
+                'ia_status': self.sistema.ia_predictor.model is not None,
+                'historico_size': len(self.sistema.historico),
+                'ultima_previsao_time': time.time() - self.sistema.ultima_previsao_time,
+                'memory_usage': self.get_memory_usage(),
+                'performance': self.calculate_performance(),
+                'cache_hits': len(self.sistema.cache_previsoes),
+                'acertos_consecutivos': self.sistema.acertos_consecutivos,
+                'erros_consecutivos': self.sistema.erros_consecutivos
+            }
+            
+            return health_status
+        except Exception as e:
+            logging.error(f"Erro no health check: {e}")
+            return {}
+    
+    def get_memory_usage(self):
+        """Retorna uso de memória em MB"""
+        try:
+            process = psutil.Process()
+            return process.memory_info().rss / 1024 / 1024  # MB
+        except:
+            return 0
+    
+    def calculate_performance(self):
+        """Calcula performance do sistema"""
+        try:
+            total = self.sistema.acertos_consecutivos + self.sistema.erros_consecutivos
+            if total == 0:
+                return 0
+            return (self.sistema.acertos_consecutivos / total) * 100
+        except:
+            return 0
+
+# =============================
+# SISTEMA HÍBRIDO - IA + CONTEXTO OTIMIZADO
 # =============================
 class SistemaHibridoIA:
     def __init__(self):
@@ -404,6 +524,9 @@ class SistemaHibridoIA:
         self.acertos_consecutivos = 0
         self.erros_consecutivos = 0
         self.ultimos_numeros = deque(maxlen=50)
+        self.cache_previsoes = {}
+        self.ultima_previsao_time = 0
+        self.health_monitor = HealthMonitor(self)
         
         # Inicializar últimos números do histórico
         for registro in list(self.historico)[-50:]:
@@ -424,40 +547,65 @@ class SistemaHibridoIA:
             self.ultimos_numeros.append(numero_atual)
             self.contador_sorteios += 1
             
+            # Limpar cache quando novo número chega
+            self.cache_previsoes.clear()
+            
             # Verificar se deve treinar IA
             if self.ia_predictor.deve_treinar(list(self.historico)):
                 logging.info("🤖 Treinando IA com novos dados...")
                 self.ia_predictor.treinar_modelo(list(self.historico))
 
+    @timing_decorator
     def gerar_previsao_hibrida(self):
-        """Gera previsão combinando IA e contexto tradicional"""
+        """Gera previsão com cache para evitar processamento excessivo"""
         try:
-            if self.ultimo_numero_processado is None:
-                return self.gerar_previsao_fallback(), 3.5, "FALLBACK"
+            # Verificar cache
+            cache_key = hash(tuple(self.ultimos_numeros)) if self.ultimos_numeros else 0
+            current_time = time.time()
             
-            # Tentar previsão da IA primeiro
-            previsao_ia, confianca_ia = self.ia_predictor.prever_com_ia(list(self.ultimos_numeros))
+            if (cache_key in self.cache_previsoes and 
+                current_time - self.ultima_previsao_time < CACHE_INTERVAL):
+                return self.cache_previsoes[cache_key]
             
-            if previsao_ia and confianca_ia >= 4.0:
-                logging.info(f"🎯 USANDO IA - Confiança: {confianca_ia:.1f}%")
-                return previsao_ia, confianca_ia, "IA"
+            # Gerar nova previsão
+            previsao, confianca, metodo = self._gerar_previsao_hibrida_fresca()
             
-            # Se IA não tem confiança suficiente, usar contexto tradicional
-            previsao_contexto = self.gerar_previsao_contextual()
-            confianca_contexto = self.calcular_confianca_contexto()
+            # Atualizar cache
+            self.cache_previsoes[cache_key] = (previsao, confianca, metodo)
+            self.ultima_previsao_time = current_time
             
-            logging.info(f"🎯 USANDO CONTEXTO - Confiança: {confianca_contexto:.1f}%")
-            return previsao_contexto, confianca_contexto, "CONTEXTO"
+            return previsao, confianca, metodo
             
         except Exception as e:
             logging.error(f"Erro na previsão híbrida: {e}")
-            return self.gerar_previsao_fallback(), 3.0, "FALLBACK"
+            return self.gerar_previsao_inteligente_fallback(), 3.0, "FALLBACK"
 
+    def _gerar_previsao_hibrida_fresca(self):
+        """Gera previsão combinando IA e contexto tradicional"""
+        if self.ultimo_numero_processado is None:
+            return self.gerar_previsao_inteligente_fallback(), 3.5, "FALLBACK"
+        
+        # Tentar previsão da IA primeiro
+        previsao_ia, confianca_ia = self.ia_predictor.prever_com_ia(list(self.ultimos_numeros))
+        
+        if previsao_ia and confianca_ia >= 4.0:
+            confianca_avancada = self.calcular_confianca_avancada(previsao_ia, "IA")
+            logging.info(f"🎯 USANDO IA - Confiança: {confianca_avancada:.1f}%")
+            return previsao_ia, confianca_avancada, "IA"
+        
+        # Se IA não tem confiança suficiente, usar contexto tradicional
+        previsao_contexto = self.gerar_previsao_contextual()
+        confianca_contexto = self.calcular_confianca_avancada(previsao_contexto, "CONTEXTO")
+        
+        logging.info(f"🎯 USANDO CONTEXTO - Confiança: {confianca_contexto:.1f}%")
+        return previsao_contexto, confianca_contexto, "CONTEXTO"
+
+    @timing_decorator
     def gerar_previsao_contextual(self):
-        """Gera previsão baseada em contexto tradicional"""
+        """Gera previsão baseada em contexto tradicional otimizado"""
         try:
             if not self.ultimos_numeros:
-                return self.gerar_previsao_fallback()
+                return self.gerar_previsao_inteligente_fallback()
             
             ultimo_numero = self.ultimos_numeros[-1]
             previsao = set()
@@ -490,21 +638,51 @@ class SistemaHibridoIA:
             
         except Exception as e:
             logging.error(f"Erro na previsão contextual: {e}")
-            return self.gerar_previsao_fallback()
+            return self.gerar_previsao_inteligente_fallback()
 
-    def calcular_confianca_contexto(self):
-        """Calcula confiança baseada em contexto"""
-        if len(self.ultimos_numeros) < 20:
-            return 3.5
+    def calcular_confianca_avancada(self, previsao, metodo):
+        """Calcula confiança baseada em múltiplos fatores"""
+        if not previsao or len(previsao) != 10:
+            return 3.0
         
-        # Base de confiança aumenta com mais dados
         base_confianca = 3.5
-        fator_dados = min(1.5, len(self.ultimos_numeros) / 100)
+        fatores = []
         
-        return min(base_confianca * fator_dados, 6.0)
+        # Fator 1: Tamanho do histórico
+        if len(self.ultimos_numeros) >= 100:
+            fatores.append(1.2)
+        elif len(self.ultimos_numeros) >= 50:
+            fatores.append(1.1)
+        else:
+            fatores.append(0.8)
+        
+        # Fator 2: Método
+        if metodo == "IA":
+            fatores.append(1.3)
+        elif metodo == "CONTEXTO":
+            fatores.append(1.1)
+        else:
+            fatores.append(0.9)
+        
+        # Fator 3: Performance recente
+        total_recente = self.acertos_consecutivos + self.erros_consecutivos
+        if total_recente > 0:
+            taxa_acerto_recente = self.acertos_consecutivos / total_recente
+            fatores.append(1.0 + (taxa_acerto_recente * 0.5))
+        else:
+            fatores.append(1.0)
+        
+        # Fator 4: Diversidade da previsão
+        diversidade = len(set(previsao)) / 10.0
+        fatores.append(0.8 + (diversidade * 0.4))
+        
+        # Calcular confiança final
+        confianca_final = base_confianca * np.mean(fatores)
+        return min(confianca_final, 8.0)  # Limitar a 8%
 
+    @timing_decorator
     def gerar_complemento_estatistico(self, quantidade):
-        """Gera complemento estatístico"""
+        """Gera complemento estatístico otimizado"""
         if len(self.ultimos_numeros) < 10:
             return random.sample(range(0, 37), quantidade)
         
@@ -518,9 +696,38 @@ class SistemaHibridoIA:
         
         return numeros_ordenados[meio:meio+quantidade]
 
-    def gerar_previsao_fallback(self):
-        """Previsão de fallback quando não há dados suficientes"""
-        return random.sample(range(0, 37), 10)
+    @timing_decorator
+    def gerar_previsao_inteligente_fallback(self):
+        """Fallback mais inteligente baseado em estatísticas"""
+        if len(self.ultimos_numeros) < 10:
+            return random.sample(range(0, 37), 10)
+        
+        # Analisar padrões recentes
+        ultimos_20 = list(self.ultimos_numeros)[-20:]
+        counter_20 = Counter(ultimos_20)
+        
+        # Estratégia 1: Números quentes e frios balanceados
+        numeros_quentes = [num for num, count in counter_20.most_common(5)]
+        numeros_frios = [num for num in range(0, 37) if num not in counter_20][:3]
+        
+        # Estratégia 2: Distribuição por dezenas
+        primeira_dezena = [n for n in range(1, 13) if n not in numeros_quentes][:2]
+        segunda_dezena = [n for n in range(13, 25) if n not in numeros_quentes][:2]
+        terceira_dezena = [n for n in range(25, 37) if n not in numeros_quentes][:2]
+        
+        # Combinar estratégias
+        previsao = set()
+        previsao.update(numeros_quentes)
+        previsao.update(numeros_frios)
+        previsao.update(primeira_dezena)
+        previsao.update(segunda_dezena)
+        previsao.update(terceira_dezena)
+        
+        # Garantir 10 números
+        while len(previsao) < 10:
+            previsao.add(random.randint(0, 36))
+        
+        return list(previsao)[:10]
 
     def registrar_resultado(self, acertou):
         """Registra resultado do palpite"""
@@ -546,6 +753,8 @@ class SistemaHibridoIA:
         if self.ultimo_numero_processado is not None:
             previsao_atual, confianca_atual, metodo_atual = self.gerar_previsao_hibrida()
         
+        health_status = self.health_monitor.check_system_health()
+        
         return {
             'total_registros': len(self.historico),
             'ultimo_numero': self.ultimo_numero_processado,
@@ -557,11 +766,12 @@ class SistemaHibridoIA:
             'erros_consecutivos': self.erros_consecutivos,
             'ia_acuracia': estatisticas_ia['acuracia_treinamento'],
             'ia_modelo_carregado': estatisticas_ia['modelo_carregado'],
-            'tamanho_historico_recente': len(self.ultimos_numeros)
+            'tamanho_historico_recente': len(self.ultimos_numeros),
+            'health_status': health_status
         }
 
 # =============================
-# STREAMLIT APP - INTERFACE COM IA
+# STREAMLIT APP - INTERFACE COM IA OTIMIZADA
 # =============================
 st.set_page_config(
     page_title="Roleta - Sistema Híbrido com IA", 
@@ -570,7 +780,7 @@ st.set_page_config(
 )
 
 st.title("🤖 Sistema Híbrido com IA")
-st.markdown("### **Random Forest + Contexto Tradicional para máxima assertividade**")
+st.markdown("### **Random Forest + Contexto Tradicional - Versão Otimizada**")
 
 st_autorefresh(interval=8000, key="refresh")
 
@@ -594,7 +804,7 @@ for k, v in defaults.items():
 st.session_state.previsao_atual = validar_previsao(st.session_state.previsao_atual)
 
 # =============================
-# PROCESSAMENTO PRINCIPAL COM IA
+# PROCESSAMENTO PRINCIPAL COM IA OTIMIZADO
 # =============================
 try:
     resultado = fetch_latest_result()
@@ -659,7 +869,7 @@ except Exception as e:
     st.session_state.metodo_atual = "FALLBACK"
 
 # =============================
-# INTERFACE STREAMLIT COM IA
+# INTERFACE STREAMLIT COM IA OTIMIZADA
 # =============================
 st.markdown("---")
 
@@ -689,6 +899,20 @@ with col3:
     st.metric("🎯 Método Atual", analise_sistema['metodo_previsao_atual'])
 with col4:
     st.metric("📊 Confiança", f"{analise_sistema['confianca_previsao_atual']:.1f}%")
+
+# HEALTH STATUS
+st.subheader("🏥 Health Status do Sistema")
+health_status = analise_sistema.get('health_status', {})
+if health_status:
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("💾 Memória", f"{health_status.get('memory_usage', 0):.1f}MB")
+    with col2:
+        st.metric("⚡ Performance", f"{health_status.get('performance', 0):.1f}%")
+    with col3:
+        st.metric("🔧 IA Status", "ATIVA" if health_status.get('ia_status') else "INATIVA")
+    with col4:
+        st.metric("💾 Cache", health_status.get('cache_hits', 0))
 
 # PREVISÃO ATUAL DO SISTEMA
 previsao_sistema = analise_sistema['previsao_atual']
@@ -787,12 +1011,14 @@ with col3:
     st.metric("🤖 IA Ativa", "SIM" if analise_sistema['ia_modelo_carregado'] else "NÃO")
 
 # DETALHES TÉCNICOS
-with st.expander("🔧 Detalhes do Sistema Híbrido com IA"):
-    st.write("**🤖 ARQUITETURA HÍBRIDA:**")
-    st.write("- 🔄 **Random Forest**: 100 árvores, profundidade 10")
-    st.write("- 🎯 **Contexto Tradicional**: Vizinhança + Estatísticas")
-    st.write("- 📊 **Seleção Automática**: Escolhe o melhor método")
-    st.write("- 💾 **Treinamento Contínuo**: A cada 1000 novos dados")
+with st.expander("🔧 Detalhes do Sistema Híbrido com IA - Versão Otimizada"):
+    st.write("**🤖 ARQUITETURA HÍBRIDA OTIMIZADA:**")
+    st.write("- 🔄 **Random Forest**: 200 árvores, profundidade 15, features avançadas")
+    st.write("- 🎯 **Contexto Tradicional**: Vizinhança + Estatísticas + Cache")
+    st.write("- 📊 **Seleção Inteligente**: Confiança baseada em múltiplos fatores")
+    st.write("- 💾 **Sistema de Cache**: Prevenção de processamento excessivo")
+    st.write("- ⏱️ **Monitor de Performance**: Timing em todas as funções críticas")
+    st.write("- 🏥 **Health Monitor**: Verificação contínua do sistema")
     
     st.write("**📊 ESTATÍSTICAS DO SISTEMA:**")
     st.write(f"- Total de registros: {analise_sistema['total_registros']}")
@@ -802,15 +1028,22 @@ with st.expander("🔧 Detalhes do Sistema Híbrido com IA"):
     st.write(f"- Acertos consecutivos: {analise_sistema['acertos_consecutivos']}")
     st.write(f"- Erros consecutivos: {analise_sistema['erros_consecutivos']}")
     
-    st.write("**🎯 ESTRATÉGIA DE SELEÇÃO:**")
-    st.write("- 🤖 **IA**: Usada quando confiança ≥ 4%")
+    if health_status:
+        st.write("**🏥 HEALTH STATUS:**")
+        st.write(f"- Uso de memória: {health_status.get('memory_usage', 0):.1f} MB")
+        st.write(f"- Performance: {health_status.get('performance', 0):.1f}%")
+        st.write(f"- Itens em cache: {health_status.get('cache_hits', 0)}")
+        st.write(f"- IA status: {'ATIVA' if health_status.get('ia_status') else 'INATIVA'}")
+    
+    st.write("**🎯 ESTRATÉGIA DE SELEÇÃO AVANÇADA:**")
+    st.write("- 🤖 **IA**: Usada quando confiança ≥ 4% (com features avançadas)")
     st.write("- 🎯 **Contexto**: Usado quando IA não atinge confiança")
-    st.write("- 🔄 **Fallback**: Usado quando dados insuficientes")
+    st.write("- 🔄 **Fallback Inteligente**: Balanceamento quente/frio + dezenas")
     
     st.write("**📨 SISTEMA DE ALERTAS INTELIGENTE:**")
-    st.write("- 🔔 Alerta de PREVISÃO: Especifica método usado")
-    st.write("- 🟢 Alerta GREEN: Inclui método e confiança")
-    st.write("- 🔴 Alerta RED: Inclui método e confiança")
+    st.write("- 🔔 Alerta de PREVISÃO: Especifica método usado e confiança calculada")
+    st.write("- 🟢 Alerta GREEN: Inclui método, confiança e performance")
+    st.write("- 🔴 Alerta RED: Inclui método, confiança e análise")
 
 # CONTROLES AVANÇADOS
 st.markdown("---")
@@ -819,6 +1052,8 @@ st.subheader("⚙️ Controles Avançados do Sistema")
 col1, col2, col3 = st.columns(3)
 with col1:
     if st.button("🔄 Forçar Nova Previsão"):
+        # Limpar cache para forçar nova previsão
+        st.session_state.sistema.cache_previsoes.clear()
         nova_previsao, confianca, metodo = st.session_state.sistema.gerar_previsao_hibrida()
         st.session_state.previsao_atual = validar_previsao(nova_previsao)
         st.session_state.confianca_atual = confianca
@@ -827,12 +1062,12 @@ with col1:
 
 with col2:
     if st.button("🤖 Treinar IA Agora"):
-        with st.spinner("Treinando IA..."):
+        with st.spinner("Treinando IA com dados atualizados..."):
             sucesso = st.session_state.sistema.ia_predictor.treinar_modelo(list(st.session_state.sistema.historico))
             if sucesso:
-                st.success("IA treinada com sucesso!")
+                st.success(f"IA treinada com sucesso! Acurácia: {st.session_state.sistema.ia_predictor.acuracia_treinamento:.1f}%")
             else:
-                st.error("Erro ao treinar IA")
+                st.error("Erro ao treinar IA ou dados insuficientes")
         st.rerun()
 
 with col3:
@@ -846,14 +1081,24 @@ with col3:
         if os.path.exists(SCALER_PATH):
             os.remove(SCALER_PATH)
         st.session_state.sistema.historico.clear()
+        st.session_state.sistema.cache_previsoes.clear()
         st.session_state.acertos = 0
         st.session_state.erros = 0
+        st.success("Sistema limpo e reiniciado!")
         st.rerun()
 
+# BOTÃO DE HEALTH CHECK
+if st.button("🏥 Verificar Health do Sistema"):
+    health_status = st.session_state.sistema.health_monitor.check_system_health()
+    if health_status:
+        st.json(health_status)
+    else:
+        st.error("Erro ao verificar health do sistema")
+
 st.markdown("---")
-st.markdown("### 🤖 **Sistema Híbrido com IA**")
-st.markdown("*Combinação de Random Forest e contexto tradicional para máxima assertividade*")
+st.markdown("### 🤖 **Sistema Híbrido com IA - Versão 7.0 Otimizada**")
+st.markdown("*Combinação avançada de Random Forest e contexto tradicional com cache, health monitor e performance optimizada*")
 
 # Rodapé
 st.markdown("---")
-st.markdown("**🤖 Sistema Híbrido IA v6.0** - *Random Forest + Contexto Tradicional*")
+st.markdown("**🤖 Sistema Híbrido IA v7.0** - *Random Forest + Contexto Tradicional + Cache + Health Monitor*")
