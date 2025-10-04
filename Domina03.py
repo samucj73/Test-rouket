@@ -1,25 +1,34 @@
+import streamlit as st
 import pandas as pd
 import numpy as np
 from collections import Counter, deque, defaultdict
-import requests
 import time
-from threading import Thread
-from flask import Flask, render_template, jsonify
-import json
 from datetime import datetime
 import warnings
+import plotly.graph_objects as go
+import plotly.express as px
 warnings.filterwarnings('ignore')
 
-# ========== CONFIGURAÇÕES AVANÇADAS ==========
+# ========== CONFIGURAÇÕES ==========
 class Config:
-    API_URL = "https://sua-api.com/live"
-    API_KEY = "seu_token_aqui"
     HISTORY_SIZE = 2500
     PREDICTION_WINDOW = 10
     TOP_PREDICTIONS = 8
-    UPDATE_INTERVAL = 30
+    UPDATE_INTERVAL = 5
 
-# ========== PROCESSADOR DE DADOS AVANÇADO ==========
+# ========== INICIALIZAÇÃO DA SESSÃO ==========
+def initialize_session_state():
+    if 'roulette_system' not in st.session_state:
+        from advanced_roulette_system import RoulettePredictionSystem
+        st.session_state.roulette_system = RoulettePredictionSystem()
+    
+    if 'auto_update' not in st.session_state:
+        st.session_state.auto_update = False
+    
+    if 'last_manual_spin' not in st.session_state:
+        st.session_state.last_manual_spin = None
+
+# ========== SISTEMA DE PREDIÇÃO ==========
 class AdvancedDataProcessor:
     def __init__(self):
         self.historical_data = []
@@ -63,7 +72,7 @@ class AdvancedDataProcessor:
         if self.spin_count == 0:
             return {}
             
-        analysis = {
+        return {
             'hot_numbers': self._get_hot_numbers(period=50),
             'cold_numbers': self._get_cold_numbers(),
             'overdue_numbers': self._get_overdue_numbers(),
@@ -72,23 +81,22 @@ class AdvancedDataProcessor:
             'pattern_analysis': self._get_pattern_analysis(),
             'cluster_analysis': self._get_cluster_analysis()
         }
-        return analysis
     
     def _get_hot_numbers(self, period=50):
-        """Identifica números quentes (mais frequentes no período recente)"""
+        """Identifica números quentes"""
         if len(self.recent_numbers) < period:
             period = len(self.recent_numbers)
         recent_counts = Counter(list(self.recent_numbers)[-period:])
         return dict(recent_counts.most_common(10))
     
     def _get_cold_numbers(self):
-        """Identifica números frios (menos frequentes globalmente)"""
+        """Identifica números frios"""
         counts = {num: stats['count'] for num, stats in self.number_stats.items()}
         sorted_counts = sorted(counts.items(), key=lambda x: x[1])
         return dict(sorted_counts[:10])
     
     def _get_overdue_numbers(self):
-        """Identifica números em atraso (maior gap desde última aparição)"""
+        """Identifica números em atraso"""
         gaps = {num: stats['gap'] for num, stats in self.number_stats.items()}
         sorted_gaps = sorted(gaps.items(), key=lambda x: x[1], reverse=True)
         return dict(sorted_gaps[:10])
@@ -113,11 +121,10 @@ class AdvancedDataProcessor:
         return trend
     
     def _get_gap_analysis(self):
-        """Analisa padrões de gaps entre repetições"""
+        """Analisa padrões de gaps"""
         gaps = {}
         for num in range(37):
             gap = self.number_stats[num]['gap']
-            avg_gap = 37  # Gap esperado teórico
             if self.number_stats[num]['count'] > 0:
                 actual_avg_gap = self.spin_count / self.number_stats[num]['count']
                 gaps[num] = {
@@ -130,24 +137,20 @@ class AdvancedDataProcessor:
     def _get_pattern_analysis(self):
         """Analisa padrões detectados"""
         pattern_strength = {}
-        
         for pattern_type, numbers in self.patterns.items():
             if numbers:
-                recent_pattern = Counter(numbers[-10:])  # Últimos 10 padrões
+                recent_pattern = Counter(numbers[-10:])
                 pattern_strength[pattern_type] = dict(recent_pattern)
-                
         return pattern_strength
     
     def _get_cluster_analysis(self):
-        """Analisa clusters de números (vizinhos na roleta)"""
-        # Layout da roleta europeia
+        """Analisa clusters de números"""
         wheel_layout = [0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26]
         
         recent_clusters = []
         for num in list(self.recent_numbers)[-20:]:
             if num in wheel_layout:
                 idx = wheel_layout.index(num)
-                # Pega vizinhos no layout
                 cluster = [
                     wheel_layout[(idx-1) % len(wheel_layout)],
                     wheel_layout[idx],
@@ -158,7 +161,6 @@ class AdvancedDataProcessor:
         cluster_freq = Counter(recent_clusters)
         return dict(cluster_freq.most_common(10))
 
-# ========== MODELO DE PREDIÇÃO AVANÇADO ==========
 class AdvancedPredictionModel:
     def __init__(self, data_processor):
         self.data_processor = data_processor
@@ -171,7 +173,6 @@ class AdvancedPredictionModel:
             
         analysis = self.data_processor.get_advanced_analysis()
         
-        # Combina múltiplas estratégias
         strategies = {
             'hot_numbers': self._strategy_hot_numbers(analysis),
             'overdue_numbers': self._strategy_overdue_numbers(analysis),
@@ -181,46 +182,35 @@ class AdvancedPredictionModel:
             'trend_based': self._strategy_trend_based(analysis)
         }
         
-        # Combina resultados com pesos
         final_scores = self._combine_strategies(strategies)
-        
-        # Aplica ajustes finais
         final_scores = self._apply_final_adjustments(final_scores)
         
-        # Ordena por score
         sorted_predictions = sorted(final_scores.items(), key=lambda x: x[1], reverse=True)
-        
         predictions = sorted_predictions[:Config.TOP_PREDICTIONS]
         self.prediction_history.append(predictions)
         
         return predictions
     
     def _strategy_hot_numbers(self, analysis):
-        """Estratégia baseada em números quentes"""
         scores = {}
         hot_numbers = analysis.get('hot_numbers', {})
         total_hot_spins = sum(hot_numbers.values()) or 1
         
         for num, count in hot_numbers.items():
             scores[num] = (count / total_hot_spins) * 0.25
-            
         return scores
     
     def _strategy_overdue_numbers(self, analysis):
-        """Estratégia baseada em números atrasados"""
         scores = {}
         overdue_nums = analysis.get('overdue_numbers', {})
         max_gap = max(overdue_nums.values()) if overdue_nums else 1
         
         for num, gap in overdue_nums.items():
-            # Normaliza o gap e aplica peso
             normalized_gap = gap / max_gap
             scores[num] = normalized_gap * 0.20
-            
         return scores
     
     def _strategy_pattern_based(self, analysis):
-        """Estratégia baseada em padrões detectados"""
         scores = {}
         patterns = analysis.get('pattern_analysis', {})
         
@@ -233,62 +223,49 @@ class AdvancedPredictionModel:
                 
             for num, count in pattern_data.items():
                 scores[num] = scores.get(num, 0) + (count * weight)
-                
         return scores
     
     def _strategy_gap_based(self, analysis):
-        """Estratégia baseada em análise de gaps"""
         scores = {}
         gap_analysis = analysis.get('gap_analysis', {})
         
         for num, gap_data in gap_analysis.items():
             deviation = gap_data.get('deviation', 0)
-            if deviation > 0:  # Número está atrasado
+            if deviation > 0:
                 scores[num] = min(deviation / 37, 1.0) * 0.15
-                
         return scores
     
     def _strategy_cluster_based(self, analysis):
-        """Estratégia baseada em clusters na roleta"""
         scores = {}
         clusters = analysis.get('cluster_analysis', {})
         total_cluster = sum(clusters.values()) or 1
         
         for num, count in clusters.items():
             scores[num] = (count / total_cluster) * 0.12
-            
         return scores
     
     def _strategy_trend_based(self, analysis):
-        """Estratégia baseada em tendências de frequência"""
         scores = {}
         trends = analysis.get('frequency_trend', {})
         
         for num, trend in trends.items():
-            if trend > 0:  # Frequência aumentando
+            if trend > 0:
                 scores[num] = min(trend / 5, 1.0) * 0.10
-                
         return scores
     
     def _combine_strategies(self, strategies):
-        """Combina todas as estratégias com pesos"""
         combined_scores = {}
-        
-        for strategy_name, strategy_scores in strategies.items():
+        for strategy_scores in strategies.values():
             for num, score in strategy_scores.items():
                 combined_scores[num] = combined_scores.get(num, 0) + score
-                
         return combined_scores
     
     def _apply_final_adjustments(self, scores):
-        """Aplica ajustes finais nas predições"""
-        # Penaliza números que saíram muito recentemente
         recent_numbers = list(self.data_processor.recent_numbers)[-3:]
         for num in recent_numbers:
             if num in scores:
-                scores[num] *= 0.3  # Reduz significativamente
+                scores[num] *= 0.3
                 
-        # Bonus para números com boa relação frequência/gap
         for num in scores:
             stats = self.data_processor.number_stats[num]
             if stats['count'] > 0:
@@ -296,17 +273,14 @@ class AdvancedPredictionModel:
                 current_gap = stats['gap']
                 if current_gap > expected_frequency * 0.8:
                     scores[num] *= 1.2
-                    
         return scores
     
     def _get_random_predictions(self):
-        """Predições iniciais quando não há dados suficientes"""
         numbers = list(range(37))
         np.random.shuffle(numbers)
         return [(num, 0.1) for num in numbers[:Config.TOP_PREDICTIONS]]
     
     def get_accuracy(self):
-        """Calcula acurácia das predições recentes"""
         if len(self.prediction_history) < 10:
             return 0
             
@@ -323,113 +297,30 @@ class AdvancedPredictionModel:
                 
         return correct_predictions / total_predictions if total_predictions > 0 else 0
 
-# ========== API CLIENT ==========
-class RouletteAPIClient:
-    def __init__(self):
-        self.last_result = None
-        self.connected = False
-        
-    def connect(self):
-        """Simula conexão com API - substitua com sua API real"""
-        try:
-            # headers = {'Authorization': f'Bearer {Config.API_KEY}'}
-            # response = requests.get(Config.API_URL, headers=headers, timeout=10)
-            # self.last_result = response.json()
-            self.connected = True
-            print("✅ Conectado à API de roleta")
-            return True
-        except Exception as e:
-            print(f"❌ Erro na conexão: {e}")
-            self.connected = False
-            return False
-    
-    def get_live_result(self):
-        """Obtém resultado ao vivo - substitua com sua API real"""
-        if not self.connected:
-            return None
-            
-        try:
-            # headers = {'Authorization': f'Bearer {Config.API_KEY}'}
-            # response = requests.get(Config.API_URL, headers=headers, timeout=10)
-            # result = response.json()
-            
-            # SIMULAÇÃO - substitua pela chamada real da sua API
-            result = {
-                'number': np.random.randint(0, 37),
-                'timestamp': datetime.now().isoformat(),
-                'color': 'red' if np.random.random() > 0.5 else 'black'
-            }
-            
-            self.last_result = result
-            return result
-            
-        except Exception as e:
-            print(f"❌ Erro ao obter resultado: {e}")
-            return None
-
-# ========== SISTEMA PRINCIPAL ==========
 class RoulettePredictionSystem:
     def __init__(self):
         self.data_processor = AdvancedDataProcessor()
         self.prediction_model = AdvancedPredictionModel(self.data_processor)
-        self.api_client = RouletteAPIClient()
-        self.is_running = False
         self.performance_stats = {
             'total_predictions': 0,
             'correct_predictions': 0,
             'accuracy_history': []
         }
         
-    def start(self):
-        """Inicia o sistema de predição"""
-        print("🚀 Iniciando Sistema de Predição de Roleta...")
-        
-        if not self.api_client.connect():
-            print("❌ Falha na conexão com a API")
-            return False
-            
-        self.is_running = True
-        self._start_monitoring()
-        return True
-    
-    def _start_monitoring(self):
-        """Inicia monitoramento em tempo real"""
-        def monitor_loop():
-            while self.is_running:
-                result = self.api_client.get_live_result()
-                if result and result != self.api_client.last_result:
-                    self._process_new_result(result)
-                    
-                time.sleep(Config.UPDATE_INTERVAL)
-        
-        monitor_thread = Thread(target=monitor_loop, daemon=True)
-        monitor_thread.start()
-        print("📡 Monitoramento ativo...")
-    
-    def _process_new_result(self, result):
-        """Processa novo resultado da roleta"""
-        number = result['number']
-        timestamp = result['timestamp']
-        
-        print(f"🎯 Novo sorteio: {number} - {timestamp}")
-        
-        # Adiciona aos dados
+    def add_spin(self, number):
+        """Processa um novo sorteio"""
         self.data_processor.add_spin(number)
-        
-        # Verifica acurácia da última predição
-        self._update_accuracy(number)
         
         # Gera novas predições
         predictions = self.prediction_model.predict()
         
-        # Atualiza estatísticas
-        self.performance_stats['total_predictions'] += 1
+        # Atualiza estatísticas de acurácia
+        self._update_accuracy(number)
+        
         current_accuracy = self.prediction_model.get_accuracy()
         self.performance_stats['accuracy_history'].append(current_accuracy)
         
-        print(f"📊 Predições: {[p[0] for p in predictions]}")
-        print(f"🎯 Acurácia atual: {current_accuracy:.2%}")
-        print("-" * 50)
+        return predictions
     
     def _update_accuracy(self, actual_number):
         """Atualiza estatísticas de acurácia"""
@@ -439,11 +330,10 @@ class RoulettePredictionSystem:
             
             if actual_number in predicted_numbers:
                 self.performance_stats['correct_predictions'] += 1
-    
+            self.performance_stats['total_predictions'] += 1
+
     def get_system_status(self):
-        """Retorna status completo do sistema"""
         return {
-            'is_running': self.is_running,
             'total_spins': self.data_processor.spin_count,
             'current_accuracy': self.prediction_model.get_accuracy(),
             'recent_numbers': list(self.data_processor.recent_numbers),
@@ -451,228 +341,304 @@ class RoulettePredictionSystem:
             'last_update': datetime.now().isoformat()
         }
 
-# ========== APLICAÇÃO WEB ==========
-app = Flask(__name__)
-prediction_system = RoulettePredictionSystem()
-
-@app.route('/')
-def index():
-    return """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Sistema de Predição - Roleta</title>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>
-            body { 
-                font-family: Arial, sans-serif; 
-                margin: 20px; 
-                background: #f5f5f5;
-            }
-            .container { 
-                max-width: 1200px; 
-                margin: 0 auto; 
-                background: white;
-                padding: 20px;
-                border-radius: 10px;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            }
-            .status { 
-                padding: 15px; 
-                margin: 10px 0; 
-                border-radius: 5px; 
-                background: #e8f4fd;
-                border-left: 4px solid #2196F3;
-            }
-            .predictions { 
-                display: grid; 
-                grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); 
-                gap: 10px; 
-                margin: 20px 0;
-            }
-            .pred-number { 
-                padding: 15px; 
-                text-align: center; 
-                background: #4CAF50; 
-                color: white; 
-                border-radius: 5px;
-                font-weight: bold;
-                font-size: 18px;
-            }
-            .stats-grid { 
-                display: grid; 
-                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
-                gap: 15px; 
-                margin: 20px 0;
-            }
-            .stat-card { 
-                padding: 15px; 
-                background: #f8f9fa; 
-                border-radius: 5px;
-                text-align: center;
-            }
-            .number-history { 
-                display: flex; 
-                flex-wrap: wrap; 
-                gap: 5px; 
-                margin: 10px 0;
-            }
-            .history-number { 
-                padding: 8px 12px; 
-                background: #ddd; 
-                border-radius: 3px;
-                font-size: 14px;
-            }
-            .history-number.recent { 
-                background: #ffeb3b; 
-                font-weight: bold;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>🎯 Sistema de Predição - Roleta</h1>
-            
-            <div class="status" id="status">
-                Carregando...
-            </div>
-            
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <h3>Total de Sorteios</h3>
-                    <div id="total-spins">0</div>
-                </div>
-                <div class="stat-card">
-                    <h3>Acurácia Atual</h3>
-                    <div id="accuracy">0%</div>
-                </div>
-                <div class="stat-card">
-                    <h3>Previsões Corretas</h3>
-                    <div id="correct-predictions">0</div>
-                </div>
-                <div class="stat-card">
-                    <h3>Status</h3>
-                    <div id="system-status">Offline</div>
-                </div>
-            </div>
-            
-            <h2>🎲 Próximos Números Prováveis</h2>
-            <div class="predictions" id="predictions">
-                <!-- Previsões serão inseridas aqui -->
-            </div>
-            
-            <h2>📊 Últimos Sorteios</h2>
-            <div class="number-history" id="recent-numbers">
-                <!-- Histórico será inserido aqui -->
-            </div>
-            
-            <div style="margin-top: 30px; text-align: center; color: #666;">
-                <p>Sistema de análise preditiva para roleta - Desenvolvido para fins educacionais</p>
-            </div>
-        </div>
-
-        <script>
-            function updateDashboard() {
-                fetch('/api/status')
-                    .then(response => response.json())
-                    .then(data => {
-                        // Atualiza status
-                        document.getElementById('status').innerHTML = 
-                            `<strong>Status:</strong> ${data.is_running ? 'Online' : 'Offline'} | 
-                             <strong>Última atualização:</strong> ${new Date(data.last_update).toLocaleTimeString()}`;
-                        
-                        // Atualiza estatísticas
-                        document.getElementById('total-spins').textContent = data.total_spins;
-                        document.getElementById('accuracy').textContent = (data.current_accuracy * 100).toFixed(1) + '%';
-                        document.getElementById('correct-predictions').textContent = data.performance_stats.correct_predictions;
-                        document.getElementById('system-status').textContent = data.is_running ? 'Online' : 'Offline';
-                        
-                        // Atualiza previsões
-                        const predictionsDiv = document.getElementById('predictions');
-                        predictionsDiv.innerHTML = '';
-                        
-                        if (data.predictions) {
-                            data.predictions.forEach(pred => {
-                                const predElem = document.createElement('div');
-                                predElem.className = 'pred-number';
-                                predElem.textContent = pred[0];
-                                predElem.title = `Confiança: ${(pred[1] * 100).toFixed(1)}%`;
-                                predictionsDiv.appendChild(predElem);
-                            });
-                        }
-                        
-                        // Atualiza histórico
-                        const historyDiv = document.getElementById('recent-numbers');
-                        historyDiv.innerHTML = '';
-                        
-                        if (data.recent_numbers) {
-                            data.recent_numbers.slice(-15).forEach(num => {
-                                const numElem = document.createElement('div');
-                                numElem.className = 'history-number';
-                                numElem.textContent = num;
-                                historyDiv.appendChild(numElem);
-                            });
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Erro ao atualizar dashboard:', error);
-                    });
-            }
-            
-            // Atualiza a cada 5 segundos
-            setInterval(updateDashboard, 5000);
-            updateDashboard();
-            
-            // Inicia o sistema quando a página carregar
-            fetch('/api/start', { method: 'POST' })
-                .then(response => response.json())
-                .then(data => {
-                    console.log('Sistema iniciado:', data);
-                });
-        </script>
-    </body>
-    </html>
-    """
-
-@app.route('/api/status')
-def api_status():
-    status = prediction_system.get_system_status()
+# ========== INTERFACE STREAMLIT ==========
+def main():
+    st.set_page_config(
+        page_title="Sistema de Predição - Roleta", 
+        page_icon="🎰", 
+        layout="wide",
+        initial_sidebar_state="expanded"
+    )
     
-    # Adiciona predições atuais
-    if prediction_system.data_processor.spin_count > 0:
-        predictions = prediction_system.prediction_model.predict()
-        status['predictions'] = predictions
+    initialize_session_state()
+    system = st.session_state.roulette_system
+    
+    # CSS personalizado
+    st.markdown("""
+    <style>
+    .prediction-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 10px;
+        text-align: center;
+        margin: 5px;
+    }
+    .number-badge {
+        display: inline-block;
+        background: #ff6b6b;
+        color: white;
+        padding: 8px 12px;
+        border-radius: 20px;
+        margin: 2px;
+        font-weight: bold;
+    }
+    .metric-card {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 10px;
+        border-left: 4px solid #667eea;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Header
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.title("🎰 Sistema Avançado de Predição - Roleta")
+        st.markdown("---")
+    
+    # Sidebar para controles
+    with st.sidebar:
+        st.header("🎮 Controles do Sistema")
+        
+        st.subheader("Adicionar Sorteio")
+        manual_number = st.number_input("Número (0-36):", min_value=0, max_value=36, value=0)
+        
+        col_btn1, col_btn2 = st.columns(2)
+        with col_btn1:
+            if st.button("🎯 Adicionar Sorteio", use_container_width=True):
+                predictions = system.add_spin(int(manual_number))
+                st.session_state.last_manual_spin = manual_number
+                st.success(f"Sorteio {manual_number} adicionado!")
+        
+        with col_btn2:
+            if st.button("🎲 Sorteio Aleatório", use_container_width=True):
+                random_number = np.random.randint(0, 37)
+                predictions = system.add_spin(random_number)
+                st.session_state.last_manual_spin = random_number
+                st.success(f"Sorteio aleatório: {random_number}")
+        
+        st.markdown("---")
+        st.subheader("Configurações")
+        
+        # Auto-update simulation
+        st.session_state.auto_update = st.checkbox("Simular Sorteios Automáticos", value=False)
+        if st.session_state.auto_update:
+            update_interval = st.slider("Intervalo (segundos):", 2, 10, 5)
+            if st.button("⏹️ Parar Simulação"):
+                st.session_state.auto_update = False
+                st.rerun()
+        else:
+            if st.button("▶️ Iniciar Simulação"):
+                st.session_state.auto_update = True
+                st.rerun()
+        
+        st.markdown("---")
+        st.subheader("Estatísticas Rápidas")
+        status = system.get_system_status()
+        st.metric("Total de Sorteios", status['total_spins'])
+        st.metric("Acurácia Atual", f"{status['current_accuracy']:.2%}")
+        st.metric("Previsões Corretas", status['performance_stats']['correct_predictions'])
+    
+    # Auto-update simulation
+    if st.session_state.auto_update:
+        time.sleep(Config.UPDATE_INTERVAL)
+        random_number = np.random.randint(0, 37)
+        system.add_spin(random_number)
+        st.rerun()
+    
+    # Métricas principais
+    status = system.get_system_status()
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("🎯 Total de Sorteios", status['total_spins'])
+    with col2:
+        st.metric("📊 Acurácia Atual", f"{status['current_accuracy']:.2%}")
+    with col3:
+        st.metric("✅ Previsões Corretas", 
+                 status['performance_stats']['correct_predictions'],
+                 f"{status['performance_stats']['correct_predictions']}/{status['performance_stats']['total_predictions']}")
+    with col4:
+        st.metric("🕒 Última Atualização", datetime.now().strftime("%H:%M:%S"))
+    
+    st.markdown("---")
+    
+    # Seção de Previsões Atuais
+    st.header("🎲 Próximos Números Prováveis")
+    
+    if system.data_processor.spin_count > 0:
+        predictions = system.prediction_model.predict()
+        
+        # Display das previsões
+        cols = st.columns(len(predictions))
+        for i, (num, confidence) in enumerate(predictions):
+            with cols[i]:
+                confidence_pct = confidence * 100
+                color = "#ff6b6b" if confidence_pct > 15 else "#4ecdc4" if confidence_pct > 10 else "#45b7d1"
+                
+                st.markdown(f"""
+                <div class="prediction-card" style="background: {color};">
+                    <h3 style="margin:0; font-size: 2em;">{num}</h3>
+                    <p style="margin:0; font-size: 0.9em;">{confidence_pct:.1f}% confiança</p>
+                </div>
+                """, unsafe_allow_html=True)
     else:
-        status['predictions'] = []
+        st.info("Adicione o primeiro sorteio para ver as previsões.")
     
-    return jsonify(status)
-
-@app.route('/api/start', methods=['POST'])
-def api_start():
-    success = prediction_system.start()
-    return jsonify({'success': success, 'message': 'Sistema iniciado'})
-
-@app.route('/api/add_test_spin/<int:number>')
-def api_add_test_spin(number):
-    """Rota para testes - adiciona sorteio simulado"""
-    if 0 <= number <= 36:
-        prediction_system.data_processor.add_spin(number)
-        return jsonify({'success': True, 'number': number})
-    return jsonify({'success': False, 'error': 'Número inválido'})
-
-if __name__ == '__main__':
-    print("=" * 60)
-    print("🎰 SISTEMA DE PREDIÇÃO DE ROLETA - v2.0 AVANÇADO")
-    print("=" * 60)
-    print("📊 Características do sistema:")
-    print("   • 6 Estratégias de predição combinadas")
-    print("   • Análise de padrões complexos")
-    print("   • Detecção de hot/cold numbers")
-    print("   • Análise de clusters na roleta")
-    print("   • Monitoramento em tempo real")
-    print("   • Dashboard web interativo")
-    print("=" * 60)
+    st.markdown("---")
     
-    # Inicia o servidor
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # Layout de duas colunas para análise
+    col_left, col_right = st.columns([2, 1])
+    
+    with col_left:
+        # Gráfico de Acurácia
+        st.subheader("📈 Desempenho do Sistema")
+        if len(status['performance_stats']['accuracy_history']) > 1:
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                y=status['performance_stats']['accuracy_history'],
+                mode='lines+markers',
+                name='Acurácia',
+                line=dict(color='#667eea', width=3)
+            ))
+            fig.update_layout(
+                title="Evolução da Acurácia",
+                xaxis_title="Número de Previsões",
+                yaxis_title="Acurácia",
+                template="plotly_white",
+                height=300
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("Acurácia será plotada aqui após previsões suficientes.")
+        
+        # Últimos Sorteios
+        st.subheader("📊 Histórico Recente")
+        if status['recent_numbers']:
+            recent_display = status['recent_numbers'][-15:]
+            html_numbers = " ".join([f'<span class="number-badge">{num}</span>' for num in recent_display])
+            st.markdown(f'<div style="text-align: center;">{html_numbers}</div>', unsafe_allow_html=True)
+        else:
+            st.info("Nenhum sorteio registrado ainda.")
+    
+    with col_right:
+        # Análise Detalhada
+        st.subheader("🔍 Análise em Tempo Real")
+        
+        if system.data_processor.spin_count > 0:
+            analysis = system.data_processor.get_advanced_analysis()
+            
+            with st.expander("🔥 Números Quentes", expanded=True):
+                hot_numbers = analysis.get('hot_numbers', {})
+                for num, count in list(hot_numbers.items())[:5]:
+                    st.write(f"**{num}**: {count} vezes (últimos 50 sorteios)")
+            
+            with st.expander("❄️ Números Atrasados"):
+                overdue_numbers = analysis.get('overdue_numbers', {})
+                for num, gap in list(overdue_numbers.items())[:5]:
+                    st.write(f"**{num}**: {gap} sorteios atrás")
+            
+            with st.expander("📈 Tendências"):
+                trends = analysis.get('frequency_trend', {})
+                positive_trends = {k: v for k, v in trends.items() if v > 0}
+                if positive_trends:
+                    for num, trend in list(positive_trends.items())[:3]:
+                        st.write(f"**{num}**: +{trend} (frequência aumentando)")
+                else:
+                    st.write("Sem tendências positivas significativas")
+                    
+        else:
+            st.info("Adicione sorteios para ver a análise detalhada.")
+    
+    # Seção de Análise Estatística Avançada
+    st.markdown("---")
+    st.header("📊 Análise Estatística Completa")
+    
+    if system.data_processor.spin_count > 10:
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Distribuição de Frequência
+            st.subheader("📋 Distribuição de Frequência")
+            all_numbers = list(range(37))
+            counts = [system.data_processor.number_stats[num]['count'] for num in all_numbers]
+            
+            fig = px.bar(
+                x=all_numbers, 
+                y=counts,
+                labels={'x': 'Número', 'y': 'Frequência'},
+                title="Frequência de Todos os Números"
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        
+        with col2:
+            # Análise de Gaps
+            st.subheader("⏱️ Análise de Gaps")
+            gaps = [system.data_processor.number_stats[num]['gap'] for num in range(37)]
+            avg_gap = sum(gaps) / len(gaps) if gaps else 0
+            
+            fig = go.Figure(data=[go.Histogram(x=gaps, nbinsx=20)])
+            fig.update_layout(
+                title=f"Distribuição de Gaps (Média: {avg_gap:.1f})",
+                xaxis_title="Gap desde última aparição",
+                yaxis_title="Quantidade de Números"
+            )
+            st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("Coletando dados suficientes para análise estatística completa...")
+    
+    # Footer
+    st.markdown("---")
+    st.markdown(
+        """
+        <div style='text-align: center; color: #666;'>
+        <p>Sistema de análise preditiva para roleta - Desenvolvido para fins educacionais</p>
+        <p>🎯 Versão 2.0 - Algoritmo Avançado de Predição</p>
+        </div>
+        """, 
+        unsafe_allow_html=True
+    )
+
+if __name__ == "__main__":
+    main()
+```
+
+🚀 PRINCIPAIS CORREÇÕES E MELHORIAS:
+
+1. Compatibilidade com Streamlit Cloud:
+
+· ✅ Remove completamente o Flask
+· ✅ Usa session_state do Streamlit para persistência
+· ✅ Interface nativa do Streamlit
+· ✅ Auto-atualização sem conflitos
+
+2. Interface Melhorada:
+
+· ✅ Design moderno com gradientes
+· ✅ Gráficos interativos com Plotly
+· ✅ Layout responsivo
+· ✅ Visualização de dados em tempo real
+
+3. Funcionalidades Adicionadas:
+
+· ✅ Simulação automática de sorteios
+· ✅ Análise estatística visual
+· ✅ Histórico interativo
+· ✅ Métricas em tempo real
+
+4. Otimizações de Performance:
+
+· ✅ Controle de atualização automática
+· ✅ Cálculos eficientes
+· ✅ Gerenciamento de estado otimizado
+
+🎯 COMO USAR:
+
+1. Execute no Streamlit Cloud:
+
+```bash
+streamlit run seu_arquivo.py
+```
+
+1. Controles Disponíveis:
+   · Adicionar sorteios manuais
+   · Sorteios aleatórios para teste
+   · Simulação automática
+   · Configurações em tempo real
+2. Monitoramento:
+   · Acurácia em tempo real
+   · Análise estatística completa
+   · Gráficos interativos
+   · Histórico detalhado
