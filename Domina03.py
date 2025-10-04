@@ -27,7 +27,7 @@ ROULETTE_PHYSICAL_LAYOUT = [
     [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36]
 ]
 
-NUMERO_PREVISOES = 8  # MUDANÇA: Agora trabalhamos com 8 números
+NUMERO_PREVISOES = 8
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -45,7 +45,7 @@ def enviar_telegram(msg: str):
         logging.error(f"Erro ao enviar para Telegram: {e}")
 
 def enviar_alerta_previsao(numeros):
-    """Envia alerta de PREVISÃO com 8 números no formato: 2 linhas (4 + 4 números)"""
+    """Envia alerta de PREVISÃO com 8 números em formato simples"""
     try:
         if not numeros or len(numeros) != 8:
             logging.error(f"❌ Alerta de previsão precisa de 8 números, recebeu: {len(numeros) if numeros else 0}")
@@ -54,12 +54,9 @@ def enviar_alerta_previsao(numeros):
         # Ordena os números do menor para o maior
         numeros_ordenados = sorted(numeros)
         
-        # Divide em 2 linhas: 4 números na primeira, 4 na segunda
-        linha1 = ' '.join(map(str, numeros_ordenados[0:4]))
-        linha2 = ' '.join(map(str, numeros_ordenados[4:8]))
-        
-        # Formata EXATAMENTE como você quer - 2 LINHAS
-        mensagem = f"🎯 PREVISÃO:\n{linha1}\n{linha2}"
+        # Formata em UMA LINHA para a notificação do Telegram
+        numeros_str = ' '.join(map(str, numeros_ordenados))
+        mensagem = f"🎯 PREVISÃO: {numeros_str}"
         
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
         payload = {
@@ -73,7 +70,7 @@ def enviar_alerta_previsao(numeros):
         logging.error(f"Erro alerta previsão: {e}")
 
 def enviar_alerta_resultado(acertou, numero_sorteado, previsao_anterior):
-    """Envia alerta de resultado (GREEN/RED) com os 8 números da previsão"""
+    """Envia alerta de resultado (GREEN/RED) com os 8 números em formato simples"""
     try:
         if not previsao_anterior or len(previsao_anterior) != 8:
             logging.error(f"❌ Alerta resultado precisa de 8 números na previsão")
@@ -81,17 +78,12 @@ def enviar_alerta_resultado(acertou, numero_sorteado, previsao_anterior):
             
         # Ordena os números da previsão anterior
         previsao_ordenada = sorted(previsao_anterior)
-        
-        # Divide em 2 linhas: 4 números na primeira, 4 na segunda
-        linha1 = ' '.join(map(str, previsao_ordenada[0:4]))
-        linha2 = ' '.join(map(str, previsao_ordenada[4:8]))
+        previsao_str = ' '.join(map(str, previsao_ordenada))
         
         if acertou:
-            mensagem = f"🟢 GREEN! Acertou o {numero_sorteado}\n{linha1}\n{linha2}"
-            emoji = "🟢"
+            mensagem = f"🟢 GREEN! Acertou {numero_sorteado} | Previsão: {previsao_str}"
         else:
-            mensagem = f"🔴 RED! Sorteado {numero_sorteado}\n{linha1}\n{linha2}"
-            emoji = "🔴"
+            mensagem = f"🔴 RED! Sorteado {numero_sorteado} | Previsão: {previsao_str}"
         
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
         payload = {
@@ -99,7 +91,7 @@ def enviar_alerta_resultado(acertou, numero_sorteado, previsao_anterior):
             "text": mensagem
         }
         requests.post(url, data=payload, timeout=5)
-        logging.info(f"📤 Alerta de {emoji} enviado: 8 números")
+        logging.info(f"📤 Alerta de resultado enviado")
         
     except Exception as e:
         logging.error(f"Erro alerta resultado: {e}")
@@ -318,8 +310,8 @@ class Context_Predictor_Persistente:
         except Exception as e:
             logging.error(f"Erro ao atualizar contexto: {e}")
 
-    def prever_por_contexto_forte(self, ultimo_numero, top_n=8):  # MUDANÇA: padrão 8 números
-        """Previsão FORTE - foca nos padrões óbvios"""
+    def prever_por_contexto_forte(self, ultimo_numero, top_n=8):
+        """Previsão FORTE - com critérios mais inteligentes"""
         try:
             if ultimo_numero in self.context_history:
                 contexto = self.context_history[ultimo_numero]
@@ -327,31 +319,85 @@ class Context_Predictor_Persistente:
                 if contexto:
                     total_ocorrencias = sum(contexto.values())
                     
-                    # FILTRAR APENAS PADRÕES FORTES
+                    # CRITÉRIOS MAIS INTELIGENTES
                     padroes_fortes = []
                     for num, count in contexto.items():
                         prob = count / total_ocorrencias
-                        # CRITÉRIOS PARA PADRÕES FORTES
-                        if prob > 0.2 or count >= 3:
-                            padroes_fortes.append((num, count, prob))
+                        
+                        # CRITÉRIOS COMBINADOS - MAIS EFETIVOS
+                        if (prob > 0.15 and count >= 2) or (prob > 0.10 and count >= 5) or count >= 8:
+                            # BÔNUS para padrões muito consistentes
+                            score = prob * 100 + min(count, 10)
+                            padroes_fortes.append((num, count, prob, score))
                     
-                    # Ordenar por probabilidade
-                    padroes_fortes.sort(key=lambda x: (x[2], x[1]), reverse=True)
+                    # Ordenar por score personalizado
+                    padroes_fortes.sort(key=lambda x: x[3], reverse=True)
                     
                     previsao = []
-                    for num, count, prob in padroes_fortes[:top_n]:
+                    for num, count, prob, score in padroes_fortes[:top_n]:
                         previsao.append(num)
+                        logging.debug(f"🔍 {ultimo_numero} → {num}: {prob:.1%} ({count}x) score: {score:.1f}")
                     
                     if previsao:
-                        logging.info(f"🎯 CONTEXTO FORTE: {ultimo_numero} → {previsao} (prob: {prob:.1%})")
+                        logging.info(f"🎯 CONTEXTO FORTE: {ultimo_numero} → {previsao}")
                         return previsao
             
-            # FALLBACK: usar números mais frequentes globalmente
-            return self.get_numeros_mais_frequentes_global(top_n)
+            # FALLBACK INTELIGENTE
+            return self.get_fallback_inteligente(ultimo_numero, top_n)
             
         except Exception as e:
             logging.error(f"Erro na previsão por contexto forte: {e}")
-            return self.get_numeros_mais_frequentes_global(top_n)
+            return self.get_fallback_inteligente(ultimo_numero, top_n)
+
+    def get_fallback_inteligente(self, ultimo_numero, quantidade):
+        """Fallback mais inteligente baseado em múltiplos fatores"""
+        numeros_fallback = set()
+        
+        # 1. VIZINHOS FÍSICOS (30% de peso)
+        vizinhos = obter_vizinhos_fisicos(ultimo_numero)
+        for vizinho in vizinhos[:3]:  # Top 3 vizinhos
+            numeros_fallback.add(vizinho)
+        
+        # 2. NÚMEROS MAIS FREQUENTES GLOBALMENTE (40% de peso)
+        frequencia_global = Counter()
+        for anterior, seguintes in self.context_history.items():
+            for numero, count in seguintes.items():
+                frequencia_global[numero] += count
+        
+        for num, count in frequencia_global.most_common(4):
+            numeros_fallback.add(num)
+        
+        # 3. PADRÕES RECORRENTES (30% de peso)
+        padroes_recurrentes = self.detectar_padroes_recorrentes()
+        for num in padroes_recurrentes[:3]:
+            numeros_fallback.add(num)
+        
+        # Converter para lista e completar se necessário
+        resultado = list(numeros_fallback)
+        
+        if len(resultado) < quantidade:
+            # Completar com números quentes recentes
+            todos_numeros = list(range(0, 37))
+            random.shuffle(todos_numeros)
+            for num in todos_numeros:
+                if num not in resultado:
+                    resultado.append(num)
+                if len(resultado) >= quantidade:
+                    break
+        
+        return resultado[:quantidade]
+
+    def detectar_padroes_recorrentes(self):
+        """Detecta números que aparecem em múltiplos contextos"""
+        aparicoes = Counter()
+        
+        for contexto_num, transicoes in self.context_history.items():
+            for numero, count in transicoes.items():
+                # Peso maior para números que aparecem em múltiplos contextos
+                if count >= 2:
+                    aparicoes[numero] += 1
+        
+        return [num for num, count in aparicoes.most_common(10)]
 
     def get_numeros_mais_frequentes_global(self, quantidade):
         """Retorna números mais frequentes em TODO o contexto"""
@@ -498,7 +544,7 @@ class GestorContextoHistorico:
 
     def calcular_diferencas(self, previsao_atual):
         """Calcula diferenças com a previsão anterior"""
-        if not self.previsao_anterior or len(self.previsao_anterior) != 8 or len(previsao_atual) != 8:  # MUDANÇA: 8 números
+        if not self.previsao_anterior or len(self.previsao_anterior) != 8 or len(previsao_atual) != 8:
             return None
             
         anteriores = set(self.previsao_anterior)
@@ -526,7 +572,7 @@ st.set_page_config(
 )
 
 st.title("🎯 Sistema de Contexto Histórico - 8 NÚMEROS")
-st.markdown("### **Sistema que Captura Padrões Óbvios - Alertas com 8 Números**")
+st.markdown("### **Sistema que Captura Padrões Óbvios - Alertas Simplificados**")
 
 st_autorefresh(interval=15000, key="refresh")
 
@@ -573,7 +619,7 @@ try:
         # CONFERÊNCIA - SEMPRE com 8 números
         previsao_valida = validar_previsao(st.session_state.previsao_atual)
         acertou = False
-        if previsao_valida and len(previsao_valida) == 8:  # MUDANÇA: Verifica se tem 8 números
+        if previsao_valida and len(previsao_valida) == 8:
             acertou = numero_real in previsao_valida
             if acertou:
                 st.session_state.acertos += 1
@@ -610,7 +656,7 @@ try:
 except Exception as e:
     logging.error(f"Erro crítico no processamento principal: {e}")
     st.error("🔴 Erro no sistema. Reiniciando...")
-    st.session_state.previsao_atual = [0, 1, 2, 3, 4, 5, 6, 7]  # MUDANÇA: 8 números
+    st.session_state.previsao_atual = [0, 1, 2, 3, 4, 5, 6, 7]
 
 # =============================
 # INTERFACE STREAMLIT
@@ -655,7 +701,7 @@ if previsao_contexto and analise_contexto['ultimo_numero'] is not None:
             previsao_unica.append(num)
             numeros_vistos.add(num)
     
-    if previsao_unica and len(previsao_unica) == 8:  # MUDANÇA: Garante 8 números
+    if previsao_unica and len(previsao_unica) == 8:
         st.success(f"**📈 8 NÚMEROS MAIS PROVÁVEIS APÓS {analise_contexto['ultimo_numero']}:**")
         
         if len(previsao_unica) >= 6:
@@ -700,12 +746,12 @@ st.subheader("🎯 PREVISÃO ATUAL - 8 NÚMEROS")
 previsao_valida = validar_previsao(st.session_state.previsao_atual)
 
 # MOSTRAR MUDANÇAS
-if st.session_state.previsao_anterior and len(st.session_state.previsao_anterior) == 8:  # MUDANÇA: 8 números
+if st.session_state.previsao_anterior and len(st.session_state.previsao_anterior) == 8:
     diferencas = st.session_state.gestor.calcular_diferencas(st.session_state.previsao_atual)
     if diferencas:
         st.info(f"**🔄 Mudanças:** Removidos: {', '.join(map(str, diferencas['removidos']))} | Adicionados: {', '.join(map(str, diferencas['adicionados']))}")
 
-if previsao_valida and len(previsao_valida) == 8:  # MUDANÇA: Sempre 8 números
+if previsao_valida and len(previsao_valida) == 8:
     st.success(f"**📊 8 NÚMEROS PREVISTOS**")
     
     # Display organizado em 2 linhas de 4
@@ -725,7 +771,7 @@ if previsao_valida and len(previsao_valida) == 8:  # MUDANÇA: Sempre 8 números
     
 else:
     st.warning("⚠️ Inicializando sistema...")
-    st.session_state.previsao_atual = [0, 1, 2, 3, 4, 5, 6, 7]  # MUDANÇA: 8 números
+    st.session_state.previsao_atual = [0, 1, 2, 3, 4, 5, 6, 7]
 
 # PERFORMANCE
 st.markdown("---")
@@ -747,9 +793,10 @@ with col4:
 with st.expander("🔧 Detalhes Técnicos do Sistema"):
     st.write("**🎯 ESTRATÉGIA DE CONTEXTO HISTÓRICO:**")
     st.write("- 🔍 Captura padrões óbvios de transição entre números")
-    st.write("- 📊 Critérios rigorosos: >20% probabilidade ou 3+ ocorrências")
+    st.write("- 📊 Critérios inteligentes: probabilidade >15% + ocorrências")
     st.write("- ⚡ Análise em tempo real")
     st.write("- 💾 Persistência de contexto entre execuções")
+    st.write("- 🎯 Fallback inteligente com múltiplas estratégias")
     
     st.write("**📊 ESTATÍSTICAS ATUAIS:**")
     st.write(f"- Contextos ativos: {analise_contexto['contextos_ativos']}")
@@ -758,9 +805,9 @@ with st.expander("🔧 Detalhes Técnicos do Sistema"):
     st.write(f"- Padrões detectados recentemente: {len(analise_contexto['padroes_recentes'])}")
     
     st.write("**📨 SISTEMA DE ALERTAS (8 NÚMEROS):**")
-    st.write("- 🔔 Alerta de PREVISÃO: 8 números (formato 4+4)")
-    st.write("- 🟢 Alerta GREEN: 8 números da previsão anterior (formato 4+4)")
-    st.write("- 🔴 Alerta RED: 8 números da previsão anterior (formato 4+4)")
+    st.write("- 🔔 Alerta de PREVISÃO: '🎯 PREVISÃO: 1 2 3 4 5 6 7 8'")
+    st.write("- 🟢 Alerta GREEN: '🟢 GREEN! Acertou X | Previsão: 1 2 3 4 5 6 7 8'")
+    st.write("- 🔴 Alerta RED: '🔴 RED! Sorteado X | Previsão: 1 2 3 4 5 6 7 8'")
 
 # CONTROLES
 st.markdown("---")
@@ -786,8 +833,8 @@ with col2:
 
 st.markdown("---")
 st.markdown("### 🚀 **Sistema de Contexto Histórico - 8 Números**")
-st.markdown("*Alertas de PREVISÃO, GREEN e RED sempre com 8 números no formato 4+4*")
+st.markdown("*Alertas simplificados para notificações do Telegram*")
 
 # Rodapé
 st.markdown("---")
-st.markdown("**🎯 Contexto Histórico v2.0** - *Sistema Simplificado - 8 Números por Alerta*")
+st.markdown("**🎯 Contexto Histórico v2.1** - *Sistema Otimizado com Algoritmo Inteligente*")
