@@ -37,7 +37,7 @@ ROULETTE_PHYSICAL_LAYOUT = [
 ]
 
 NUMERO_PREVISOES = 10
-CICLO_PREVISAO = 1
+CICLO_PREVISAO = 2p
 CONFIANCA_MINIMA = 0.035  # 3.5% de confiança mínima
 
 # Configurar logging
@@ -572,7 +572,7 @@ st.set_page_config(
 st.title("🤖 Sistema Híbrido com IA")
 st.markdown("### **Random Forest + Contexto Tradicional para máxima assertividade**")
 
-st_autorefresh(interval=15000, key="refresh")
+st_autorefresh(interval=8000, key="refresh")
 
 # Inicialização session_state
 defaults = {
