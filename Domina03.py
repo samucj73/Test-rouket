@@ -29,8 +29,8 @@ ROULETTE_PHYSICAL_LAYOUT = [
 ]
 
 NUMERO_PREVISOES = 10
-CICLO_PREVISAO = 1  # Previsão a cada sorteio
-CONFIANCA_MINIMA = 0.10  # 10% de confiança mínima - REALISTA
+CICLO_PREVISAO = 2  # Previsão a cada sorteio
+CONFIANCA_MINIMA = 0.06  # 10% de confiança mínima - REALISTA
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
