@@ -37,7 +37,7 @@ ROULETTE_PHYSICAL_LAYOUT = [
 ]
 
 NUMERO_PREVISOES = 10
-CICLO_PREVISAO = 2p
+CICLO_PREVISAO = 2
 CONFIANCA_MINIMA = 0.035  # 3.5% de confiança mínima
 
 # Configurar logging
