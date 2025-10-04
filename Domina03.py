@@ -509,7 +509,7 @@ class Context_Predictor_Persistente:
 class GestorContextoHistorico:
     def __init__(self):
         self.context_predictor = Context_Predictor_Persistente()
-        self.historico = deque(carregar_historico(), maxlen=1000)
+        self.historico = deque(carregar_historico(), maxlen=10000)
         self.previsao_anterior = None
         self.ultimo_numero_processado = None
         self.padroes_detectados = []
