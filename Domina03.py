@@ -261,7 +261,7 @@ class IAPredictor:
     
     def preparar_dados_treinamento(self, historico, window_size=10):
         """Prepara dados para treinamento da IA"""
-        if len(historico) < window_size + 100:  # Mínimo de dados para treinar
+        if len(historico) < window_size + 2000:  # Mínimo de dados para treinar
             return None, None
         
         numeros = [h['number'] for h in historico]
@@ -306,7 +306,7 @@ class IAPredictor:
             
             # Treinar Random Forest
             self.model = RandomForestClassifier(
-                n_estimators=100,
+                n_estimators=200,
                 max_depth=10,
                 min_samples_split=5,
                 min_samples_leaf=2,
