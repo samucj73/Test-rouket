@@ -1,4 +1,4 @@
-# RoletaHybridIA.py - SISTEMA COM PROBABILIDADES BASEADAS NA MÉDIA REAL (3.5-4%)
+# RoletaHybridIA.py - SISTEMA COM IA (RANDOM FOREST) PARA MELHORAR ASSERTIVIDADE
 import streamlit as st
 import json
 import os
@@ -9,12 +9,20 @@ from streamlit_autorefresh import st_autorefresh
 import logging
 import random
 import numpy as np
+import pandas as pd
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score
+import joblib
 
 # =============================
-# Configurações BASEADAS NA MÉDIA REAL
+# Configurações COM IA
 # =============================
 HISTORICO_PATH = "historico_hybrid_ia.json"
 CONTEXTO_PATH = "contexto_historico.json"
+MODELO_IA_PATH = "modelo_random_forest.pkl"
+SCALER_PATH = "scaler.pkl"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
@@ -29,14 +37,14 @@ ROULETTE_PHYSICAL_LAYOUT = [
 ]
 
 NUMERO_PREVISOES = 10
-CICLO_PREVISAO = 2
-CONFIANCA_MINIMA = 0.03  # 3% de confiança mínima - BASEADA NA MÉDIA REAL
+CICLO_PREVISAO = 1
+CONFIANCA_MINIMA = 0.035  # 3.5% de confiança mínima
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # =============================
-# FUNÇÕES UTILITÁRIAS (MANTIDAS)
+# FUNÇÕES UTILITÁRIAS
 # =============================
 def carregar_historico():
     try:
@@ -161,7 +169,7 @@ def enviar_telegram(msg: str):
     except Exception as e:
         logging.error(f"Erro ao enviar para Telegram: {e}")
 
-def enviar_alerta_previsao(numeros, confianca):
+def enviar_alerta_previsao(numeros, confianca, metodo="IA"):
     """Envia alerta de PREVISÃO com 10 números e nível de confiança"""
     try:
         if not numeros or len(numeros) != 10:
@@ -171,9 +179,9 @@ def enviar_alerta_previsao(numeros, confianca):
         # Ordena os números do menor para o maior
         numeros_ordenados = sorted(numeros)
         
-        # Formata com confiança
+        # Formata com confiança e método
         numeros_str = ' '.join(map(str, numeros_ordenados))
-        mensagem = f"🎯 PN{confianca}%: {numeros_str}"
+        mensagem = f"🎯 PREVISÃO {metodo} {confianca}%: {numeros_str}"
         
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
         payload = {
@@ -181,12 +189,12 @@ def enviar_alerta_previsao(numeros, confianca):
             "text": mensagem
         }
         requests.post(url, data=payload, timeout=5)
-        logging.info(f"📤 Alerta de PREVISÃO enviado: 10 números com {confianca}% confiança")
+        logging.info(f"📤 Alerta de PREVISÃO enviado: 10 números com {confianca}% confiança ({metodo})")
         
     except Exception as e:
         logging.error(f"Erro alerta previsão: {e}")
 
-def enviar_alerta_resultado(acertou, numero_sorteado, previsao_anterior, confianca):
+def enviar_alerta_resultado(acertou, numero_sorteado, previsao_anterior, confianca, metodo="IA"):
     """Envia alerta de resultado (GREEN/RED) com os 10 números da previsão"""
     try:
         if not previsao_anterior or len(previsao_anterior) != 10:
@@ -198,9 +206,9 @@ def enviar_alerta_resultado(acertou, numero_sorteado, previsao_anterior, confian
         previsao_str = ' '.join(map(str, previsao_ordenada))
         
         if acertou:
-            mensagem = f"🟢 GREEN! Acertou {numero_sorteado} | Conf: {confianca}% | Previsão: {previsao_str}"
+            mensagem = f"🟢 GREEN! {metodo} Acertou {numero_sorteado} | Conf: {confianca}% | Previsão: {previsao_str}"
         else:
-            mensagem = f"🔴 RED! Sorteado {numero_sorteado} | Conf: {confianca}% | Previsão: {previsao_str}"
+            mensagem = f"🔴 RED! {metodo} Sorteado {numero_sorteado} | Conf: {confianca}% | Previsão: {previsao_str}"
         
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
         payload = {
@@ -208,370 +216,314 @@ def enviar_alerta_resultado(acertou, numero_sorteado, previsao_anterior, confian
             "text": mensagem
         }
         requests.post(url, data=payload, timeout=5)
-        logging.info(f"📤 Alerta de resultado enviado")
+        logging.info(f"📤 Alerta de resultado enviado ({metodo})")
         
     except Exception as e:
         logging.error(f"Erro alerta resultado: {e}")
 
 # =============================
-# CONTEXT PREDICTOR - BASEADO NA MÉDIA REAL (3.5-4%)
+# IA - RANDOM FOREST PREDICTOR
 # =============================
-class Context_Predictor_Média_Real:
+class IAPredictor:
     def __init__(self):
-        self.context_history = {}
-        self.arquivo_contexto = CONTEXTO_PATH
-        self.ultimos_numeros = deque(maxlen=100)
-        self.carregar_contexto()
+        self.model = None
+        self.scaler = None
+        self.ultimo_treinamento = 0
+        self.acuracia_treinamento = 0
+        self.carregar_modelo()
         
-    def carregar_contexto(self):
-        """Carrega contexto histórico"""
+    def carregar_modelo(self):
+        """Carrega modelo treinado se existir"""
         try:
-            if os.path.exists(self.arquivo_contexto):
-                with open(self.arquivo_contexto, "r") as f:
-                    dados = json.load(f)
-                    
-                contexto_convertido = {}
-                for key_str, valor in dados.items():
-                    try:
-                        key_int = int(key_str)
-                        valor_convertido = {}
-                        for k_str, v in valor.items():
-                            try:
-                                k_int = int(k_str)
-                                valor_convertido[k_int] = v
-                            except (ValueError, TypeError):
-                                continue
-                        contexto_convertido[key_int] = valor_convertido
-                    except (ValueError, TypeError):
-                        continue
-                
-                self.context_history = contexto_convertido
-                logging.info(f"📂 CONTEXTO CARREGADO: {len(self.context_history)} contextos, {self.get_total_transicoes()} transições")
-                
+            if os.path.exists(MODELO_IA_PATH) and os.path.exists(SCALER_PATH):
+                self.model = joblib.load(MODELO_IA_PATH)
+                self.scaler = joblib.load(SCALER_PATH)
+                logging.info("🤖 IA Carregada - Random Forest Pronta")
+                return True
             else:
-                logging.info("🆕 Criando novo contexto histórico")
-                self.context_history = {}
+                logging.info("🤖 IA Não Encontrada - Será treinada quando houver dados suficientes")
+                return False
         except Exception as e:
-            logging.error(f"❌ Erro ao carregar contexto: {e}")
-            self.context_history = {}
-
-    def get_total_transicoes(self):
-        """Calcula total de transições"""
-        return sum(sum(seguintes.values()) for seguintes in self.context_history.values())
+            logging.error(f"Erro ao carregar IA: {e}")
+            return False
     
-    def salvar_contexto(self):
-        """Salva contexto histórico no arquivo"""
+    def salvar_modelo(self):
+        """Salva modelo treinado"""
         try:
-            with open(self.arquivo_contexto, "w") as f:
-                json.dump(self.context_history, f, indent=2)
+            if self.model and self.scaler:
+                joblib.dump(self.model, MODELO_IA_PATH)
+                joblib.dump(self.scaler, SCALER_PATH)
+                logging.info(f"💾 IA Salva - Acurácia: {self.acuracia_treinamento:.2f}%")
+                return True
         except Exception as e:
-            logging.error(f"❌ Erro ao salvar contexto: {e}")
+            logging.error(f"Erro ao salvar IA: {e}")
+        return False
     
-    def atualizar_contexto(self, numero_anterior, numero_atual):
-        """Atualização de contexto"""
+    def preparar_dados_treinamento(self, historico, window_size=10):
+        """Prepara dados para treinamento da IA"""
+        if len(historico) < window_size + 100:  # Mínimo de dados para treinar
+            return None, None
+        
+        numeros = [h['number'] for h in historico]
+        
+        X = []
+        y = []
+        
+        # Criar features: últimos 'window_size' números
+        for i in range(window_size, len(numeros)):
+            features = numeros[i-window_size:i]
+            target = numeros[i]
+            
+            # Adicionar features adicionais
+            features.extend([
+                sum(features) / len(features),  # Média dos últimos
+                max(features),                  # Máximo
+                min(features),                  # Mínimo
+                len(set(features)),             # Números únicos
+                features[-1] - features[-2] if len(features) > 1 else 0,  # Diferença
+            ])
+            
+            X.append(features)
+            y.append(target)
+        
+        return np.array(X), np.array(y)
+    
+    def treinar_modelo(self, historico):
+        """Treina o modelo de Random Forest"""
         try:
-            if numero_anterior is None or numero_atual is None:
-                return
-                
-            if numero_anterior not in self.context_history:
-                self.context_history[numero_anterior] = {}
+            X, y = self.preparar_dados_treinamento(historico)
+            if X is None or len(X) < 100:
+                logging.info("🤖 Dados insuficientes para treinar IA")
+                return False
             
-            self.context_history[numero_anterior][numero_atual] = \
-                self.context_history[numero_anterior].get(numero_atual, 0) + 1
+            # Dividir dados
+            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
             
-            # Atualizar últimos números
-            self.ultimos_numeros.append(numero_atual)
+            # Normalizar dados
+            self.scaler = StandardScaler()
+            X_train_scaled = self.scaler.fit_transform(X_train)
+            X_test_scaled = self.scaler.transform(X_test)
+            
+            # Treinar Random Forest
+            self.model = RandomForestClassifier(
+                n_estimators=100,
+                max_depth=10,
+                min_samples_split=5,
+                min_samples_leaf=2,
+                random_state=42,
+                n_jobs=-1
+            )
+            
+            self.model.fit(X_train_scaled, y_train)
+            
+            # Avaliar
+            y_pred = self.model.predict(X_test_scaled)
+            self.acuracia_treinamento = accuracy_score(y_test, y_pred) * 100
+            
+            self.ultimo_treinamento = time.time()
+            self.salvar_modelo()
+            
+            logging.info(f"🤖 IA Treinada - Acurácia: {self.acuracia_treinamento:.2f}%")
+            return True
             
         except Exception as e:
-            logging.error(f"Erro ao atualizar contexto: {e}")
-
-    def prever_baseado_na_media_real(self, ultimo_numero, top_n=10):
-        """ESTRATÉGIA BASEADA NA MÉDIA REAL - 3.5-4%"""
+            logging.error(f"Erro ao treinar IA: {e}")
+            return False
+    
+    def prever_com_ia(self, ultimos_numeros, top_n=10):
+        """Faz previsão usando IA"""
         try:
-            previsao_final = set()
+            if self.model is None or self.scaler is None:
+                return None, 0
             
-            # 1. PADRÕES ACIMA DA MÉDIA (prob > 3.5%)
-            padroes_acima_media = self.identificar_padroes_acima_media(ultimo_numero)
-            for padrao in padroes_acima_media[:5]:
-                if padrao['proximo'] not in previsao_final:
-                    previsao_final.add(padrao['proximo'])
-                    logging.info(f"📊 PADRÃO ACIMA DA MÉDIA: {ultimo_numero} → {padrao['proximo']} ({padrao['probabilidade']:.1%})")
+            if len(ultimos_numeros) < 10:
+                return None, 0
             
-            # 2. NÚMEROS MAIS FREQUENTES (baseado na média)
-            numeros_frequentes = self.get_numeros_mais_frequentes_global(4)
-            for num in numeros_frequentes:
-                if num not in previsao_final:
-                    previsao_final.add(num)
+            # Preparar features para predição
+            features = ultimos_numeros[-10:]  # Últimos 10 números
             
-            # 3. VIZINHANÇA FÍSICA
-            vizinhos = obter_vizinhos_fisicos(ultimo_numero)
-            for vizinho in vizinhos[:3]:
-                if vizinho not in previsao_final:
-                    previsao_final.add(vizinho)
+            # Adicionar features adicionais
+            features.extend([
+                sum(features) / len(features),  # Média
+                max(features),                  # Máximo
+                min(features),                  # Mínimo
+                len(set(features)),             # Números únicos
+                features[-1] - features[-2] if len(features) > 1 else 0,  # Diferença
+            ])
             
-            # 4. NÚMEROS RECENTES (últimos 20 sorteios)
-            numeros_recentes = self.analisar_ultimos_numeros(3)
-            for num in numeros_recentes:
-                if num not in previsao_final:
-                    previsao_final.add(num)
+            X_pred = np.array([features])
+            X_pred_scaled = self.scaler.transform(X_pred)
             
-            # 5. COMPLETAR ATÉ 10 NÚMEROS
-            if len(previsao_final) < top_n:
-                complemento = self.get_complemento_estatistico(ultimo_numero, top_n - len(previsao_final))
-                for num in complemento:
-                    if num not in previsao_final:
-                        previsao_final.add(num)
+            # Obter probabilidades para todos os números
+            probabilidades = self.model.predict_proba(X_pred_scaled)[0]
             
-            resultado = list(previsao_final)
+            # Ordenar números por probabilidade
+            numeros_ordenados = np.argsort(probabilidades)[::-1]
+            probabilidades_ordenadas = probabilidades[numeros_ordenados]
             
-            # CALCULAR CONFIANÇA BASEADA NA MÉDIA REAL (3.5-4%)
-            media_padroes = self.calcular_media_padroes()
-            confianca_base = max(3.0, min(media_padroes * 1.1, 4.5))  # 10% acima da média, máximo 4.5%
+            # Pegar top N números
+            previsao = numeros_ordenados[:top_n].tolist()
             
-            # Ajuste baseado na quantidade de padrões encontrados
-            if len(padroes_acima_media) > 2:
-                confianca_final = min(confianca_base * 1.2, 5.0)
-            else:
-                confianca_final = confianca_base
-                
-            # Garantir range 3.0-4.5%
-            confianca_final = max(3.0, min(confianca_final, 4.5))
+            # Calcular confiança baseada na probabilidade média do top 10
+            confianca = np.mean(probabilidades_ordenadas[:top_n]) * 100
             
-            logging.info(f"🎯 PREVISÃO BASEADA NA MÉDIA: {ultimo_numero} → {resultado} | Confiança: {confianca_final:.1f}% | Média: {media_padroes:.1f}%")
-            return resultado[:top_n], confianca_final
+            # Ajustar confiança para range realista (3-8%)
+            confianca_ajustada = max(3.0, min(confianca * 2, 8.0))
+            
+            logging.info(f"🤖 PREVISÃO IA: {previsao} | Confiança: {confianca_ajustada:.1f}%")
+            return previsao, confianca_ajustada
             
         except Exception as e:
-            logging.error(f"Erro na previsão baseada na média: {e}")
-            fallback = self.get_complemento_estatistico(ultimo_numero, top_n)
-            media_padroes = self.calcular_media_padroes()
-            return fallback, max(3.0, media_padroes)
-
-    def identificar_padroes_acima_media(self, ultimo_numero):
-        """Identifica padrões com probabilidade acima da média"""
-        padroes_acima_media = []
-        media_global = self.calcular_media_padroes() / 100  # Converter para decimal
+            logging.error(f"Erro na previsão IA: {e}")
+            return None, 0
+    
+    def deve_treinar(self, historico):
+        """Verifica se deve treinar o modelo"""
+        if len(historico) < 500:
+            return False
         
-        # PADRÕES DO ÚLTIMO NÚMERO
-        if ultimo_numero in self.context_history:
-            contexto = self.context_history[ultimo_numero]
-            total = sum(contexto.values())
-            
-            for proximo, count in contexto.items():
-                probabilidade = count / total
-                
-                # CRITÉRIO: prob > média global E count >= 2
-                if probabilidade > media_global and count >= 2:
-                    score = probabilidade * 100
-                    padroes_acima_media.append({
-                        'anterior': ultimo_numero,
-                        'proximo': proximo,
-                        'probabilidade': probabilidade,
-                        'ocorrencias': count,
-                        'score': score
-                    })
+        # Treinar a cada 1000 novos registros ou se não tem modelo
+        if self.model is None:
+            return True
         
-        # PADRÕES GERAIS ACIMA DA MÉDIA
-        for anterior, seguintes in self.context_history.items():
-            if seguintes:
-                total = sum(seguintes.values())
-                for proximo, count in seguintes.items():
-                    probabilidade = count / total
-                    
-                    if probabilidade > media_global and count >= 3:
-                        score = probabilidade * 100
-                        padroes_acima_media.append({
-                            'anterior': anterior,
-                            'proximo': proximo,
-                            'probabilidade': probabilidade,
-                            'ocorrencias': count,
-                            'score': score
-                        })
-        
-        # Ordenar por probabilidade
-        padroes_acima_media.sort(key=lambda x: x['score'], reverse=True)
-        return padroes_acima_media[:8]
-
-    def calcular_media_padroes(self):
-        """Calcula a probabilidade média de todos os padrões"""
-        probabilidades = []
-        
-        for anterior, seguintes in self.context_history.items():
-            if seguintes:
-                total = sum(seguintes.values())
-                for count in seguintes.values():
-                    probabilidade = count / total
-                    probabilidades.append(probabilidade * 100)  # Em percentual
-        
-        if not probabilidades:
-            return 3.5  # Valor padrão se não há dados
-        
-        return np.mean(probabilidades)
-
-    def analisar_ultimos_numeros(self, quantidade):
-        """Analisa os últimos números sorteados"""
-        if len(self.ultimos_numeros) < 5:
-            return []
-        
-        # Pegar os últimos 20 números
-        ultimos = list(self.ultimos_numeros)[-20:]
-        frequencia = Counter(ultimos)
-        
-        return [num for num, count in frequencia.most_common(quantidade)]
-
-    def get_complemento_estatistico(self, ultimo_numero, quantidade):
-        """Complemento baseado em estatísticas reais"""
-        numeros_complemento = set()
-        
-        # Distribuição baseada na frequência real
-        todos_numeros = list(range(0, 37))
-        
-        # Priorizar números que apareceram recentemente
-        if len(self.ultimos_numeros) >= 10:
-            ultimos_20 = list(self.ultimos_numeros)[-20:]
-            frequencia_recente = Counter(ultimos_20)
-            
-            # Pegar números que apareceram mas não são os mais frequentes
-            numeros_medio_frequentes = [num for num, count in frequencia_recente.most_common()[5:15]]
-            for num in numeros_medio_frequentes[:quantidade//2]:
-                numeros_complemento.add(num)
-        
-        # Completar com números aleatórios da roleta
-        random.shuffle(todos_numeros)
-        for num in todos_numeros:
-            if num not in numeros_complemento and len(numeros_complemento) < quantidade:
-                numeros_complemento.add(num)
-        
-        return list(numeros_complemento)[:quantidade]
-
-    def get_numeros_mais_frequentes_global(self, quantidade):
-        """Retorna números mais frequentes"""
-        frequencia_global = Counter()
-        
-        for anterior, seguintes in self.context_history.items():
-            for numero, count in seguintes.items():
-                frequencia_global[numero] += 1
-        
-        numeros_mais_frequentes = [num for num, count in frequencia_global.most_common(quantidade)]
-        
-        if len(numeros_mais_frequentes) < quantidade:
-            todos_numeros = list(range(0, 37))
-            random.shuffle(todos_numeros)
-            for num in todos_numeros:
-                if num not in numeros_mais_frequentes:
-                    numeros_mais_frequentes.append(num)
-                if len(numeros_mais_frequentes) >= quantidade:
-                    break
-        
-        return numeros_mais_frequentes[:quantidade]
-
-    def get_estatisticas_contexto(self):
-        """Estatísticas baseadas na média real"""
-        total_transicoes = self.get_total_transicoes()
-        
-        frequencia_global = self.get_numeros_mais_frequentes_global(3)
-        numeros_mais_frequentes = frequencia_global if frequencia_global else ["Nenhum"]
-        
-        media_padroes = self.calcular_media_padroes()
-        
-        # Contar padrões acima da média
-        padroes_acima_media_count = 0
-        media_decimal = media_padroes / 100
-        
-        for anterior, seguintes in self.context_history.items():
-            if seguintes:
-                total = sum(seguintes.values())
-                for count in seguintes.values():
-                    if count / total > media_decimal:
-                        padroes_acima_media_count += 1
-        
-        return {
-            'contextos_ativos': len(self.context_history),
-            'total_transicoes': total_transicoes,
-            'numeros_mais_frequentes': numeros_mais_frequentes,
-            'media_padroes': media_padroes,
-            'padroes_acima_media': padroes_acima_media_count,
-            'tamanho_historico_recente': len(self.ultimos_numeros)
-        }
+        registros_novos = len(historico) - self.ultimo_treinamento
+        return registros_novos > 1000 or time.time() - self.ultimo_treinamento > 86400  # 1 dia
 
 # =============================
-# GESTOR PRINCIPAL - BASEADO NA MÉDIA REAL
+# SISTEMA HÍBRIDO - IA + CONTEXTO
 # =============================
-class GestorEstrategiaMediaReal:
+class SistemaHibridoIA:
     def __init__(self):
-        self.context_predictor = Context_Predictor_Média_Real()
-        self.historico = deque(carregar_historico(), maxlen=5000)
+        self.ia_predictor = IAPredictor()
+        self.historico = deque(carregar_historico(), maxlen=10000)
         self.previsao_anterior = None
         self.ultimo_numero_processado = None
         self.contador_sorteios = 0
         self.confianca_ultima_previsao = 0
+        self.metodo_ultima_previsao = "CONTEXTO"
         self.acertos_consecutivos = 0
         self.erros_consecutivos = 0
+        self.ultimos_numeros = deque(maxlen=50)
         
-        self.inicializar_contexto_com_historico()
-
-    def inicializar_contexto_com_historico(self):
-        """Inicialização do contexto com histórico existente"""
-        try:
-            if len(self.historico) > 1:
-                numeros = [h['number'] for h in self.historico if h.get('number') is not None]
-                transicoes_adicionadas = 0
-                
-                for i in range(1, len(numeros)):
-                    self.context_predictor.atualizar_contexto(numeros[i-1], numeros[i])
-                    transicoes_adicionadas += 1
-                    self.context_predictor.ultimos_numeros.append(numeros[i])
-                
-                if numeros:
-                    self.ultimo_numero_processado = numeros[-1]
-                
-                media = self.context_predictor.calcular_media_padroes()
-                logging.info(f"🚀 CONTEXTO INICIALIZADO: {transicoes_adicionadas} transições | Média: {media:.1f}%")
-                
-        except Exception as e:
-            logging.error(f"Erro na inicialização do contexto: {e}")
+        # Inicializar últimos números do histórico
+        for registro in list(self.historico)[-50:]:
+            if registro.get('number') is not None:
+                self.ultimos_numeros.append(registro['number'])
+        
+        # Treinar IA se possível
+        if self.ia_predictor.deve_treinar(list(self.historico)):
+            self.ia_predictor.treinar_modelo(list(self.historico))
 
     def adicionar_numero(self, numero_dict):
-        """Adiciona número com análise de padrões"""
+        """Adiciona número e atualiza IA"""
         if isinstance(numero_dict, dict) and numero_dict.get('number') is not None:
             numero_atual = numero_dict['number']
             
-            # ATUALIZAR CONTEXTO
-            if self.ultimo_numero_processado is not None:
-                self.context_predictor.atualizar_contexto(
-                    self.ultimo_numero_processado, 
-                    numero_atual
-                )
-            
             self.ultimo_numero_processado = numero_atual
             self.historico.append(numero_dict)
+            self.ultimos_numeros.append(numero_atual)
             self.contador_sorteios += 1
+            
+            # Verificar se deve treinar IA
+            if self.ia_predictor.deve_treinar(list(self.historico)):
+                logging.info("🤖 Treinando IA com novos dados...")
+                self.ia_predictor.treinar_modelo(list(self.historico))
 
-    def deve_gerar_previsao(self):
-        """Sempre gera previsão a cada sorteio"""
-        return True
-
-    def gerar_previsao_baseada_media(self):
-        """Gera previsão usando média real como base"""
+    def gerar_previsao_hibrida(self):
+        """Gera previsão combinando IA e contexto tradicional"""
         try:
-            if self.ultimo_numero_processado is not None:
-                previsao, confianca = self.context_predictor.prever_baseado_na_media_real(
-                    self.ultimo_numero_processado, 
-                    top_n=10
-                )
-                
-                logging.info(f"🎯 PREVISÃO BASEADA NA MÉDIA: {self.ultimo_numero_processado} → {len(previsao)} números | Confiança: {confianca:.1f}%")
-                return previsao, confianca
-            else:
-                previsao = self.context_predictor.get_numeros_mais_frequentes_global(10)
-                media = self.context_predictor.calcular_media_padroes()
-                return previsao, max(3.0, media)
+            if self.ultimo_numero_processado is None:
+                return self.gerar_previsao_fallback(), 3.5, "FALLBACK"
+            
+            # Tentar previsão da IA primeiro
+            previsao_ia, confianca_ia = self.ia_predictor.prever_com_ia(list(self.ultimos_numeros))
+            
+            if previsao_ia and confianca_ia >= 4.0:
+                logging.info(f"🎯 USANDO IA - Confiança: {confianca_ia:.1f}%")
+                return previsao_ia, confianca_ia, "IA"
+            
+            # Se IA não tem confiança suficiente, usar contexto tradicional
+            previsao_contexto = self.gerar_previsao_contextual()
+            confianca_contexto = self.calcular_confianca_contexto()
+            
+            logging.info(f"🎯 USANDO CONTEXTO - Confiança: {confianca_contexto:.1f}%")
+            return previsao_contexto, confianca_contexto, "CONTEXTO"
             
         except Exception as e:
-            logging.error(f"Erro na previsão baseada na média: {e}")
-            return list(range(0, 10)), 3.5
+            logging.error(f"Erro na previsão híbrida: {e}")
+            return self.gerar_previsao_fallback(), 3.0, "FALLBACK"
+
+    def gerar_previsao_contextual(self):
+        """Gera previsão baseada em contexto tradicional"""
+        try:
+            if not self.ultimos_numeros:
+                return self.gerar_previsao_fallback()
+            
+            ultimo_numero = self.ultimos_numeros[-1]
+            previsao = set()
+            
+            # 1. Vizinhança física
+            vizinhos = obter_vizinhos_fisicos(ultimo_numero)
+            previsao.update(vizinhos[:4])
+            
+            # 2. Números quentes (últimos 20 sorteios)
+            if len(self.ultimos_numeros) >= 10:
+                ultimos_20 = list(self.ultimos_numeros)[-20:]
+                frequencia = Counter(ultimos_20)
+                numeros_quentes = [num for num, count in frequencia.most_common(4)]
+                previsao.update(numeros_quentes)
+            
+            # 3. Números frios (que não aparecem há tempo)
+            if len(self.ultimos_numeros) >= 30:
+                ultimos_30 = set(list(self.ultimos_numeros)[-30:])
+                todos_numeros = set(range(0, 37))
+                numeros_frios = list(todos_numeros - ultimos_30)
+                if numeros_frios:
+                    previsao.update(random.sample(numeros_frios, min(2, len(numeros_frios))))
+            
+            # 4. Completar até 10 números
+            if len(previsao) < 10:
+                complemento = self.gerar_complemento_estatistico(10 - len(previsao))
+                previsao.update(complemento)
+            
+            return list(previsao)[:10]
+            
+        except Exception as e:
+            logging.error(f"Erro na previsão contextual: {e}")
+            return self.gerar_previsao_fallback()
+
+    def calcular_confianca_contexto(self):
+        """Calcula confiança baseada em contexto"""
+        if len(self.ultimos_numeros) < 20:
+            return 3.5
+        
+        # Base de confiança aumenta com mais dados
+        base_confianca = 3.5
+        fator_dados = min(1.5, len(self.ultimos_numeros) / 100)
+        
+        return min(base_confianca * fator_dados, 6.0)
+
+    def gerar_complemento_estatistico(self, quantidade):
+        """Gera complemento estatístico"""
+        if len(self.ultimos_numeros) < 10:
+            return random.sample(range(0, 37), quantidade)
+        
+        # Usar distribuição baseada na frequência
+        frequencia = Counter(self.ultimos_numeros)
+        todos_numeros = list(range(0, 37))
+        
+        # Priorizar números de frequência média
+        numeros_ordenados = sorted(todos_numeros, key=lambda x: frequencia.get(x, 0))
+        meio = len(numeros_ordenados) // 2
+        
+        return numeros_ordenados[meio:meio+quantidade]
+
+    def gerar_previsao_fallback(self):
+        """Previsão de fallback quando não há dados suficientes"""
+        return random.sample(range(0, 37), 10)
 
     def registrar_resultado(self, acertou):
-        """Registra resultado"""
+        """Registra resultado do palpite"""
         if acertou:
             self.acertos_consecutivos += 1
             self.erros_consecutivos = 0
@@ -579,49 +531,52 @@ class GestorEstrategiaMediaReal:
             self.erros_consecutivos += 1
             self.acertos_consecutivos = 0
 
-    def get_analise_media_real(self):
-        """Análise baseada na média real"""
-        estatisticas = self.context_predictor.get_estatisticas_contexto()
+    def get_analise_sistema(self):
+        """Retorna análise completa do sistema"""
+        estatisticas_ia = {
+            'modelo_carregado': self.ia_predictor.model is not None,
+            'acuracia_treinamento': self.ia_predictor.acuracia_treinamento,
+            'ultimo_treinamento': self.ia_predictor.ultimo_treinamento
+        }
         
         previsao_atual = []
         confianca_atual = 0
+        metodo_atual = "NENHUM"
+        
         if self.ultimo_numero_processado is not None:
-            previsao_atual, confianca_atual = self.context_predictor.prever_baseado_na_media_real(
-                self.ultimo_numero_processado, 
-                top_n=10
-            )
+            previsao_atual, confianca_atual, metodo_atual = self.gerar_previsao_hibrida()
         
         return {
-            'contextos_ativos': estatisticas['contextos_ativos'],
-            'total_transicoes': estatisticas['total_transicoes'],
+            'total_registros': len(self.historico),
             'ultimo_numero': self.ultimo_numero_processado,
             'previsao_atual': previsao_atual,
             'confianca_previsao_atual': confianca_atual,
-            'numeros_mais_frequentes': estatisticas['numeros_mais_frequentes'],
-            'media_padroes': estatisticas['media_padroes'],
-            'padroes_acima_media': estatisticas['padroes_acima_media'],
+            'metodo_previsao_atual': metodo_atual,
             'contador_sorteios': self.contador_sorteios,
             'acertos_consecutivos': self.acertos_consecutivos,
-            'erros_consecutivos': self.erros_consecutivos
+            'erros_consecutivos': self.erros_consecutivos,
+            'ia_acuracia': estatisticas_ia['acuracia_treinamento'],
+            'ia_modelo_carregado': estatisticas_ia['modelo_carregado'],
+            'tamanho_historico_recente': len(self.ultimos_numeros)
         }
 
 # =============================
-# STREAMLIT APP - INTERFACE BASEADA NA MÉDIA
+# STREAMLIT APP - INTERFACE COM IA
 # =============================
 st.set_page_config(
-    page_title="Roleta - Baseado na Média Real", 
-    page_icon="📊", 
+    page_title="Roleta - Sistema Híbrido com IA", 
+    page_icon="🤖", 
     layout="centered"
 )
 
-st.title("📊 Sistema Baseado na Média Real")
-st.markdown("### **Previsões com 3.5-4% de confiança - Refletindo a realidade estatística**")
+st.title("🤖 Sistema Híbrido com IA")
+st.markdown("### **Random Forest + Contexto Tradicional para máxima assertividade**")
 
 st_autorefresh(interval=15000, key="refresh")
 
 # Inicialização session_state
 defaults = {
-    "gestor": GestorEstrategiaMediaReal(),
+    "sistema": SistemaHibridoIA(),
     "previsao_atual": [],
     "acertos": 0,
     "erros": 0,
@@ -629,6 +584,7 @@ defaults = {
     "ultimo_timestamp": None,
     "ultimo_numero": None,
     "confianca_atual": 0,
+    "metodo_atual": "CONTEXTO"
 }
 
 for k, v in defaults.items():
@@ -638,7 +594,7 @@ for k, v in defaults.items():
 st.session_state.previsao_atual = validar_previsao(st.session_state.previsao_atual)
 
 # =============================
-# PROCESSAMENTO PRINCIPAL BASEADO NA MÉDIA
+# PROCESSAMENTO PRINCIPAL COM IA
 # =============================
 try:
     resultado = fetch_latest_result()
@@ -654,7 +610,7 @@ try:
         
         salvo_com_sucesso = salvar_historico(numero_dict)
         if salvo_com_sucesso:
-            st.session_state.gestor.adicionar_numero(numero_dict)
+            st.session_state.sistema.adicionar_numero(numero_dict)
         
         st.session_state.ultimo_timestamp = resultado["timestamp"]
         numero_real = resultado["number"]
@@ -667,28 +623,29 @@ try:
             acertou = numero_real in previsao_valida
             if acertou:
                 st.session_state.acertos += 1
-                st.session_state.gestor.registrar_resultado(True)
-                st.success(f"🎯 **GREEN!** Número {numero_real} acertado!")
-                enviar_alerta_resultado(True, numero_real, st.session_state.previsao_atual, st.session_state.confianca_atual)
+                st.session_state.sistema.registrar_resultado(True)
+                st.success(f"🎯 **GREEN!** {st.session_state.metodo_atual} Acertou {numero_real}!")
+                enviar_alerta_resultado(True, numero_real, st.session_state.previsao_atual, 
+                                      st.session_state.confianca_atual, st.session_state.metodo_atual)
             else:
                 st.session_state.erros += 1
-                st.session_state.gestor.registrar_resultado(False)
-                st.error(f"🔴 Número {numero_real} não estava na previsão")
-                enviar_alerta_resultado(False, numero_real, st.session_state.previsao_atual, st.session_state.confianca_atual)
+                st.session_state.sistema.registrar_resultado(False)
+                st.error(f"🔴 {st.session_state.metodo_atual} Errou! Sorteado {numero_real}")
+                enviar_alerta_resultado(False, numero_real, st.session_state.previsao_atual, 
+                                      st.session_state.confianca_atual, st.session_state.metodo_atual)
 
-        # SEMPRE GERAR NOVA PREVISÃO
-        nova_previsao, confianca = st.session_state.gestor.gerar_previsao_baseada_media()
+        # SEMPRE GERAR NOVA PREVISÃO HÍBRIDA
+        nova_previsao, confianca, metodo = st.session_state.sistema.gerar_previsao_hibrida()
         
-        # ACEITA TODAS AS PREVISÕES (já que são baseadas na média real)
         if confianca >= CONFIANCA_MINIMA * 100:
-            st.session_state.previsao_anterior = st.session_state.previsao_atual.copy()
             st.session_state.previsao_atual = validar_previsao(nova_previsao)
             st.session_state.confianca_atual = confianca
+            st.session_state.metodo_atual = metodo
             
-            # ENVIAR ALERTA TELEGRAM PARA TODAS AS PREVISÕES
+            # ENVIAR ALERTA TELEGRAM
             if st.session_state.previsao_atual and len(st.session_state.previsao_atual) == 10:
                 try:
-                    enviar_alerta_previsao(st.session_state.previsao_atual, int(confianca))
+                    enviar_alerta_previsao(st.session_state.previsao_atual, int(confianca), metodo)
                 except Exception as e:
                     logging.error(f"Erro ao enviar alerta de previsão: {e}")
 
@@ -699,44 +656,46 @@ except Exception as e:
     st.error("🔴 Erro no sistema. Reiniciando...")
     st.session_state.previsao_atual = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
     st.session_state.confianca_atual = 3.5
+    st.session_state.metodo_atual = "FALLBACK"
 
 # =============================
-# INTERFACE STREAMLIT BASEADA NA MÉDIA
+# INTERFACE STREAMLIT COM IA
 # =============================
 st.markdown("---")
 
 # STATUS DO SISTEMA
 col1, col2, col3, col4 = st.columns(4)
 with col1:
-    st.metric("🧠 Estratégia", "Média Real")
+    st.metric("🧠 Sistema", "Híbrido IA")
 with col2:
-    st.metric("📊 Histórico", f"{len(st.session_state.gestor.historico)}")
+    st.metric("📊 Histórico", f"{len(st.session_state.sistema.historico)}")
 with col3:
     ultimo_numero = st.session_state.ultimo_numero
     display_numero = ultimo_numero if ultimo_numero is not None else "-"
     st.metric("🎲 Último", display_numero)
 with col4:
-    st.metric("📈 Confiança Alvo", "3.5-4%")
+    st.metric("🤖 Método Atual", st.session_state.metodo_atual)
 
-# ANÁLISE BASEADA NA MÉDIA
-st.subheader("🔍 Análise Baseada na Média Real")
-analise_media = st.session_state.gestor.get_analise_media_real()
+# ANÁLISE DO SISTEMA HÍBRIDO
+st.subheader("🔍 Análise do Sistema Híbrido com IA")
+analise_sistema = st.session_state.sistema.get_analise_sistema()
 
 col1, col2, col3, col4 = st.columns(4)
 with col1:
-    st.metric("🎯 Contextos Ativos", analise_media['contextos_ativos'])
+    st.metric("📈 Registros", analise_sistema['total_registros'])
 with col2:
-    st.metric("📊 Transições", analise_media['total_transicoes'])
+    st.metric("🤖 IA Acurácia", f"{analise_sistema['ia_acuracia']:.1f}%" if analise_sistema['ia_acuracia'] > 0 else "N/A")
 with col3:
-    st.metric("📈 Média Padrões", f"{analise_media['media_padroes']:.1f}%")
+    st.metric("🎯 Método Atual", analise_sistema['metodo_previsao_atual'])
 with col4:
-    st.metric("🔺 Padrões Acima Média", analise_media['padroes_acima_media'])
+    st.metric("📊 Confiança", f"{analise_sistema['confianca_previsao_atual']:.1f}%")
 
 # PREVISÃO ATUAL DO SISTEMA
-previsao_sistema = analise_media['previsao_atual']
-confianca_sistema = analise_media['confianca_previsao_atual']
+previsao_sistema = analise_sistema['previsao_atual']
+confianca_sistema = analise_sistema['confianca_previsao_atual']
+metodo_sistema = analise_sistema['metodo_previsao_atual']
 
-if previsao_sistema and analise_media['ultimo_numero'] is not None:
+if previsao_sistema and analise_sistema['ultimo_numero'] is not None:
     previsao_unica = []
     numeros_vistos = set()
     for num in previsao_sistema:
@@ -745,7 +704,8 @@ if previsao_sistema and analise_media['ultimo_numero'] is not None:
             numeros_vistos.add(num)
     
     if previsao_unica and len(previsao_unica) == 10:
-        st.success(f"**📊 ANÁLISE APÓS {analise_media['ultimo_numero']}:**")
+        emoji_metodo = "🤖" if metodo_sistema == "IA" else "🎯" if metodo_sistema == "CONTEXTO" else "🔄"
+        st.success(f"**{emoji_metodo} PREVISÃO {metodo_sistema} APÓS {analise_sistema['ultimo_numero']}:**")
         
         # Formatação para 10 números (5+5)
         linha1 = previsao_unica[:5]
@@ -754,12 +714,14 @@ if previsao_sistema and analise_media['ultimo_numero'] is not None:
         linha1_str = " | ".join([f"**{num}**" for num in linha1])
         linha2_str = " | ".join([f"**{num}**" for num in linha2])
         
-        st.markdown(f"### 📈 {linha1_str}")
-        st.markdown(f"### 📈 {linha2_str}")
-        st.caption(f"💡 **CONFIANÇA BASEADA NA MÉDIA ({confianca_sistema:.1f}%)** - Média real dos padrões: {analise_media['media_padroes']:.1f}%")
+        st.markdown(f"### {emoji_metodo} {linha1_str}")
+        st.markdown(f"### {emoji_metodo} {linha2_str}")
+        
+        info_ia = f" | IA Treinada: {analise_sistema['ia_acuracia']:.1f}%" if analise_sistema['ia_acuracia'] > 0 else " | IA em Treinamento"
+        st.caption(f"💡 **{metodo_sistema} - CONFIANÇA {confianca_sistema:.1f}%** {info_ia}")
         
 else:
-    st.info("🔄 Calculando média real dos padrões...")
+    st.info("🔄 Inicializando sistema híbrido...")
 
 # PREVISÃO ATUAL OFICIAL
 st.markdown("---")
@@ -768,18 +730,18 @@ st.subheader("🎯 PREVISÃO ATUAL OFICIAL")
 previsao_valida = validar_previsao(st.session_state.previsao_atual)
 
 if previsao_valida and len(previsao_valida) == 10:
-    # Classificação baseada na média
-    if st.session_state.confianca_atual >= 4.0:
-        status = "ACIMA DA MÉDIA"
-        cor = "🟢"
-    elif st.session_state.confianca_atual >= 3.5:
-        status = "NA MÉDIA"
-        cor = "🟡"
+    # Classificação baseada no método e confiança
+    if st.session_state.metodo_atual == "IA":
+        cor = "🤖"
+        status = "INTELIGÊNCIA ARTIFICIAL"
+    elif st.session_state.metodo_atual == "CONTEXTO":
+        cor = "🎯"
+        status = "CONTEXTO TRADICIONAL"
     else:
-        status = "ABAIXO DA MÉDIA" 
-        cor = "🔴"
+        cor = "🔄"
+        status = "SISTEMA FALLBACK"
     
-    st.success(f"**{cor} PREVISÃO ATIVA - {status} ({st.session_state.confianca_atual:.1f}%)**")
+    st.success(f"**{cor} {status} - CONFIANÇA {st.session_state.confianca_atual:.1f}%**")
     
     # Display organizado
     col1, col2 = st.columns(2)
@@ -797,11 +759,11 @@ if previsao_valida and len(previsao_valida) == 10:
     st.write(f"**Lista Completa:** {', '.join(map(str, sorted(previsao_valida)))}")
     
 else:
-    st.warning("⏳ Calculando próxima previsão baseada na média real...")
+    st.warning("⏳ Aguardando próxima previsão do sistema híbrido...")
 
 # PERFORMANCE
 st.markdown("---")
-st.subheader("📊 Performance Realista")
+st.subheader("📊 Performance do Sistema Híbrido")
 
 col1, col2, col3, col4 = st.columns(4)
 with col1:
@@ -815,54 +777,83 @@ with col3:
 with col4:
     st.metric("🔄 Rodadas", st.session_state.contador_rodadas)
 
+# ESTATÍSTICAS DE CONSECUTIVOS
+col1, col2, col3 = st.columns(3)
+with col1:
+    st.metric("✅ Acertos Consecutivos", analise_sistema['acertos_consecutivos'])
+with col2:
+    st.metric("🔴 Erros Consecutivos", analise_sistema['erros_consecutivos'])
+with col3:
+    st.metric("🤖 IA Ativa", "SIM" if analise_sistema['ia_modelo_carregado'] else "NÃO")
+
 # DETALHES TÉCNICOS
-with st.expander("🔧 Detalhes Baseados na Média Real"):
-    st.write("**🎯 ESTRATÉGIA ESTATÍSTICA:**")
-    st.write("- 🔄 Previsões a cada **1 sorteio**")
-    st.write("- 📊 Confiança baseada na **média real dos padrões**")
-    st.write("- 🎯 Foco em **padrões acima da média** (>3.5%)")
-    st.write("- 📈 **Transparência total** nas probabilidades")
-    st.write("- ⚖️ **Range realista**: 3.0-4.5% de confiança")
+with st.expander("🔧 Detalhes do Sistema Híbrido com IA"):
+    st.write("**🤖 ARQUITETURA HÍBRIDA:**")
+    st.write("- 🔄 **Random Forest**: 100 árvores, profundidade 10")
+    st.write("- 🎯 **Contexto Tradicional**: Vizinhança + Estatísticas")
+    st.write("- 📊 **Seleção Automática**: Escolhe o melhor método")
+    st.write("- 💾 **Treinamento Contínuo**: A cada 1000 novos dados")
     
-    st.write("**📊 ESTATÍSTICAS REAIS:**")
-    st.write(f"- Contextos ativos: {analise_media['contextos_ativos']}")
-    st.write(f"- Transições analisadas: {analise_media['total_transicoes']}")
-    st.write(f"- Média real dos padrões: {analise_media['media_padroes']:.1f}%")
-    st.write(f"- Padrões acima da média: {analise_media['padroes_acima_media']}")
-    st.write(f"- Números mais frequentes: {', '.join(map(str, analise_media['numeros_mais_frequentes']))}")
+    st.write("**📊 ESTATÍSTICAS DO SISTEMA:**")
+    st.write(f"- Total de registros: {analise_sistema['total_registros']}")
+    st.write(f"- Método atual: {analise_sistema['metodo_previsao_atual']}")
+    st.write(f"- Acurácia da IA: {analise_sistema['ia_acuracia']:.1f}%" if analise_sistema['ia_acuracia'] > 0 else "- Acurácia da IA: Em treinamento")
+    st.write(f"- IA carregada: {'Sim' if analise_sistema['ia_modelo_carregado'] else 'Não'}")
+    st.write(f"- Acertos consecutivos: {analise_sistema['acertos_consecutivos']}")
+    st.write(f"- Erros consecutivos: {analise_sistema['erros_consecutivos']}")
     
-    st.write("**📨 SISTEMA DE ALERTAS:**")
-    st.write("- 🔔 Alerta de PREVISÃO: Para todas as previsões")
-    st.write("- 🟢 Alerta GREEN: Sempre que acertar")
-    st.write("- 🔴 Alerta RED: Sempre que errar")
+    st.write("**🎯 ESTRATÉGIA DE SELEÇÃO:**")
+    st.write("- 🤖 **IA**: Usada quando confiança ≥ 4%")
+    st.write("- 🎯 **Contexto**: Usado quando IA não atinge confiança")
+    st.write("- 🔄 **Fallback**: Usado quando dados insuficientes")
+    
+    st.write("**📨 SISTEMA DE ALERTAS INTELIGENTE:**")
+    st.write("- 🔔 Alerta de PREVISÃO: Especifica método usado")
+    st.write("- 🟢 Alerta GREEN: Inclui método e confiança")
+    st.write("- 🔴 Alerta RED: Inclui método e confiança")
 
-# CONTROLES
+# CONTROLES AVANÇADOS
 st.markdown("---")
-st.subheader("⚙️ Controles do Sistema")
+st.subheader("⚙️ Controles Avançados do Sistema")
 
-col1, col2 = st.columns(2)
+col1, col2, col3 = st.columns(3)
 with col1:
     if st.button("🔄 Forçar Nova Previsão"):
-        nova_previsao, confianca = st.session_state.gestor.gerar_previsao_baseada_media()
+        nova_previsao, confianca, metodo = st.session_state.sistema.gerar_previsao_hibrida()
         st.session_state.previsao_atual = validar_previsao(nova_previsao)
         st.session_state.confianca_atual = confianca
+        st.session_state.metodo_atual = metodo
         st.rerun()
 
 with col2:
-    if st.button("🗑️ Limpar Histórico"):
+    if st.button("🤖 Treinar IA Agora"):
+        with st.spinner("Treinando IA..."):
+            sucesso = st.session_state.sistema.ia_predictor.treinar_modelo(list(st.session_state.sistema.historico))
+            if sucesso:
+                st.success("IA treinada com sucesso!")
+            else:
+                st.error("Erro ao treinar IA")
+        st.rerun()
+
+with col3:
+    if st.button("🗑️ Limpar Tudo"):
         if os.path.exists(HISTORICO_PATH):
             os.remove(HISTORICO_PATH)
         if os.path.exists(CONTEXTO_PATH):
             os.remove(CONTEXTO_PATH)
-        st.session_state.gestor.historico.clear()
+        if os.path.exists(MODELO_IA_PATH):
+            os.remove(MODELO_IA_PATH)
+        if os.path.exists(SCALER_PATH):
+            os.remove(SCALER_PATH)
+        st.session_state.sistema.historico.clear()
         st.session_state.acertos = 0
         st.session_state.erros = 0
         st.rerun()
 
 st.markdown("---")
-st.markdown("### 📊 **Sistema Baseado na Média Real**")
-st.markdown("*Previsões transparentes com 3.5-4% de confiança refletindo a realidade estatística*")
+st.markdown("### 🤖 **Sistema Híbrido com IA**")
+st.markdown("*Combinação de Random Forest e contexto tradicional para máxima assertividade*")
 
 # Rodapé
 st.markdown("---")
-st.markdown("**📊 Estratégia Média Real v5.0** - *Probabilidades 3.5-4%*")
+st.markdown("**🤖 Sistema Híbrido IA v6.0** - *Random Forest + Contexto Tradicional*")
