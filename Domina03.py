@@ -29,7 +29,7 @@ ROULETTE_PHYSICAL_LAYOUT = [
 ]
 
 NUMERO_PREVISOES = 10
-CICLO_PREVISAO = 3
+CICLO_PREVISAO = 2
 CONFIANCA_MINIMA = 0.03  # 3% de confiança mínima - BASEADA NA MÉDIA REAL
 
 # Configurar logging
@@ -173,7 +173,7 @@ def enviar_alerta_previsao(numeros, confianca):
         
         # Formata com confiança
         numeros_str = ' '.join(map(str, numeros_ordenados))
-        mensagem = f"🎯 PREVISÃO {confianca}%: {numeros_str}"
+        mensagem = f"🎯 PN{confianca}%: {numeros_str}"
         
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
         payload = {
