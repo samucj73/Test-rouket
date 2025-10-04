@@ -35,8 +35,122 @@ CONFIANCA_MINIMA = 0.85  # 85% de confiança mínima
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # =============================
-# UTILITÁRIOS (mantidos iguais)
+# FUNÇÕES UTILITÁRIAS COMPLETAS
 # =============================
+def carregar_historico():
+    try:
+        if os.path.exists(HISTORICO_PATH):
+            with open(HISTORICO_PATH, "r") as f:
+                historico = json.load(f)
+            historico_valido = [h for h in historico if isinstance(h, dict) and 'number' in h and h['number'] is not None]
+            logging.info(f"📁 Histórico carregado: {len(historico_valido)} registros válidos")
+            return historico_valido
+        return []
+    except Exception as e:
+        logging.error(f"Erro ao carregar histórico: {e}")
+        return []
+
+def salvar_historico(numero_dict):
+    try:
+        if not isinstance(numero_dict, dict) or numero_dict.get('number') is None:
+            logging.error("❌ Tentativa de salvar número inválido")
+            return False
+            
+        historico_existente = carregar_historico()
+        timestamp_novo = numero_dict.get("timestamp")
+        
+        ja_existe = any(
+            registro.get("timestamp") == timestamp_novo 
+            for registro in historico_existente 
+            if isinstance(registro, dict)
+        )
+        
+        if not ja_existe:
+            historico_existente.append(numero_dict)
+            with open(HISTORICO_PATH, "w") as f:
+                json.dump(historico_existente, f, indent=2)
+            logging.info(f"✅ Número {numero_dict['number']} salvo no histórico")
+            return True
+        return False
+    except Exception as e:
+        logging.error(f"Erro ao salvar histórico: {e}")
+        return False
+
+def fetch_latest_result():
+    try:
+        response = requests.get(API_URL, headers=HEADERS, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        game_data = data.get("data", {})
+        if not game_data:
+            logging.error("❌ Estrutura da API inválida: data não encontrado")
+            return None
+            
+        result = game_data.get("result", {})
+        if not result:
+            logging.error("❌ Estrutura da API inválida: result não encontrado")
+            return None
+            
+        outcome = result.get("outcome", {})
+        if not outcome:
+            logging.error("❌ Estrutura da API inválida: outcome não encontrado")
+            return None
+            
+        number = outcome.get("number")
+        if number is None:
+            logging.error("❌ Número não encontrado na resposta da API")
+            return None
+            
+        timestamp = game_data.get("startedAt")
+        
+        return {"number": number, "timestamp": timestamp}
+        
+    except requests.exceptions.RequestException as e:
+        logging.error(f"❌ Erro de rede ao buscar resultado: {e}")
+        return None
+    except Exception as e:
+        logging.error(f"❌ Erro inesperado ao buscar resultado: {e}")
+        return None
+
+def obter_vizinhos_fisicos(numero):
+    """Retorna vizinhos físicos na mesa"""
+    if numero == 0:
+        return [32, 15, 19, 4, 21, 2, 25]
+    
+    vizinhos = set()
+    
+    for col_idx, coluna in enumerate(ROULETTE_PHYSICAL_LAYOUT):
+        if numero in coluna:
+            num_idx = coluna.index(numero)
+            
+            if num_idx > 0:
+                vizinhos.add(coluna[num_idx - 1])
+            if num_idx < len(coluna) - 1:
+                vizinhos.add(coluna[num_idx + 1])
+                
+            if col_idx > 0:
+                if num_idx < len(ROULETTE_PHYSICAL_LAYOUT[col_idx - 1]):
+                    vizinhos.add(ROULETTE_PHYSICAL_LAYOUT[col_idx - 1][num_idx])
+            if col_idx < 2:
+                if num_idx < len(ROULETTE_PHYSICAL_LAYOUT[col_idx + 1]):
+                    vizinhos.add(ROULETTE_PHYSICAL_LAYOUT[col_idx + 1][num_idx])
+    
+    return list(vizinhos)
+
+def validar_previsao(previsao):
+    if not previsao or not isinstance(previsao, list):
+        return []
+    
+    previsao_limpa = [
+        num for num in previsao 
+        if num is not None 
+        and isinstance(num, (int, float))
+        and 0 <= num <= 36
+    ]
+    
+    return previsao_limpa
+
 def enviar_telegram(msg: str):
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -97,8 +211,6 @@ def enviar_alerta_resultado(acertou, numero_sorteado, previsao_anterior, confian
         
     except Exception as e:
         logging.error(f"Erro alerta resultado: {e}")
-
-# ... (mantenha todas as outras funções utilitárias iguais: carregar_historico, salvar_historico, fetch_latest_result, obter_vizinhos_fisicos, validar_previsao)
 
 # =============================
 # CONTEXT PREDICTOR - ATUALIZADO PARA CICLOS
