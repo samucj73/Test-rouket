@@ -14,3 +14,4 @@ plotly
 beautifulsoup4
 reportlab
 tensorflow
+psutil
