@@ -16,18 +16,6 @@ class Config:
     TOP_PREDICTIONS = 8
     UPDATE_INTERVAL = 5
 
-# ========== INICIALIZAÇÃO DA SESSÃO ==========
-def initialize_session_state():
-    if 'roulette_system' not in st.session_state:
-        from advanced_roulette_system import RoulettePredictionSystem
-        st.session_state.roulette_system = RoulettePredictionSystem()
-    
-    if 'auto_update' not in st.session_state:
-        st.session_state.auto_update = False
-    
-    if 'last_manual_spin' not in st.session_state:
-        st.session_state.last_manual_spin = None
-
 # ========== SISTEMA DE PREDIÇÃO ==========
 class AdvancedDataProcessor:
     def __init__(self):
@@ -341,6 +329,17 @@ class RoulettePredictionSystem:
             'last_update': datetime.now().isoformat()
         }
 
+# ========== INICIALIZAÇÃO DA SESSÃO ==========
+def initialize_session_state():
+    if 'roulette_system' not in st.session_state:
+        st.session_state.roulette_system = RoulettePredictionSystem()
+    
+    if 'auto_update' not in st.session_state:
+        st.session_state.auto_update = False
+    
+    if 'last_manual_spin' not in st.session_state:
+        st.session_state.last_manual_spin = None
+
 # ========== INTERFACE STREAMLIT ==========
 def main():
     st.set_page_config(
@@ -401,6 +400,7 @@ def main():
                 predictions = system.add_spin(int(manual_number))
                 st.session_state.last_manual_spin = manual_number
                 st.success(f"Sorteio {manual_number} adicionado!")
+                st.rerun()
         
         with col_btn2:
             if st.button("🎲 Sorteio Aleatório", use_container_width=True):
@@ -408,6 +408,7 @@ def main():
                 predictions = system.add_spin(random_number)
                 st.session_state.last_manual_spin = random_number
                 st.success(f"Sorteio aleatório: {random_number}")
+                st.rerun()
         
         st.markdown("---")
         st.subheader("Configurações")
@@ -418,10 +419,6 @@ def main():
             update_interval = st.slider("Intervalo (segundos):", 2, 10, 5)
             if st.button("⏹️ Parar Simulação"):
                 st.session_state.auto_update = False
-                st.rerun()
-        else:
-            if st.button("▶️ Iniciar Simulação"):
-                st.session_state.auto_update = True
                 st.rerun()
         
         st.markdown("---")
@@ -447,9 +444,9 @@ def main():
     with col2:
         st.metric("📊 Acurácia Atual", f"{status['current_accuracy']:.2%}")
     with col3:
-        st.metric("✅ Previsões Corretas", 
-                 status['performance_stats']['correct_predictions'],
-                 f"{status['performance_stats']['correct_predictions']}/{status['performance_stats']['total_predictions']}")
+        correct = status['performance_stats']['correct_predictions']
+        total = status['performance_stats']['total_predictions']
+        st.metric("✅ Previsões Corretas", correct, f"{correct}/{total}")
     with col4:
         st.metric("🕒 Última Atualização", datetime.now().strftime("%H:%M:%S"))
     
@@ -522,13 +519,19 @@ def main():
             
             with st.expander("🔥 Números Quentes", expanded=True):
                 hot_numbers = analysis.get('hot_numbers', {})
-                for num, count in list(hot_numbers.items())[:5]:
-                    st.write(f"**{num}**: {count} vezes (últimos 50 sorteios)")
+                if hot_numbers:
+                    for num, count in list(hot_numbers.items())[:5]:
+                        st.write(f"**{num}**: {count} vezes (últimos 50 sorteios)")
+                else:
+                    st.write("Dados insuficientes")
             
             with st.expander("❄️ Números Atrasados"):
                 overdue_numbers = analysis.get('overdue_numbers', {})
-                for num, gap in list(overdue_numbers.items())[:5]:
-                    st.write(f"**{num}**: {gap} sorteios atrás")
+                if overdue_numbers:
+                    for num, gap in list(overdue_numbers.items())[:5]:
+                        st.write(f"**{num}**: {gap} sorteios atrás")
+                else:
+                    st.write("Dados insuficientes")
             
             with st.expander("📈 Tendências"):
                 trends = analysis.get('frequency_trend', {})
@@ -593,6 +596,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-#```
-
-
