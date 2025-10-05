@@ -437,7 +437,7 @@ class SistemaHibridoV3:
             random.shuffle(viz)
             previsao.extend(viz[:3])
             # numeros quentes (ultimos 30)
-            ult30 = list(self.ultimos_numeros)[-30:]
+            ult30 = list(self.ultimos_numeros)[-12:]
             freq = Counter(ult30)
             quentes = [n for n, c in freq.most_common(4)]
             previsao.extend([n for n in quentes if n not in previsao][:4])
@@ -470,7 +470,7 @@ class SistemaHibridoV3:
             return random.sample(range(0,37), top_n), 0.25
 
     # ---------- IA ----------
-    def prever_ia(self, top_n=12):
+    def prever_ia(self, top_n=20):
         top, probs = self.ia.predict_top_probs(list(self.ultimos_numeros), top_n=top_n)
         if top is None or probs is None:
             return None, 0.0
