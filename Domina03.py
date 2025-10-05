@@ -46,11 +46,11 @@ VERMELHO = {1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36}
 PRETO = {2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35}
 
 # PARÂMETROS OPERACIONAIS
-MIN_DADOS_TREINAMENTO = 25         # dados mínimos para treinar modelo (ajustado para v3)
+MIN_DADOS_TREINAMENTO = 50         # dados mínimos para treinar modelo (ajustado para v3)
 TREINAMENTO_INTERVALO = 5          # treinar incremental a cada X novos registros
 WINDOW_SIZE = 20                    # janela usada para features
 CACHE_INTERVAL = 20                 # segundos para cache de previsão
-CONFIANCA_MINIMA = 0.45             # confiança mínima (0-1) para enviar sinal
+CONFIANCA_MINIMA = 0.32             # confiança mínima (0-1) para enviar sinal
 RELATORIO_RODADAS = 10              # enviar relatório telegram a cada N rodadas
 MAX_HISTORY_LEN = 2000
 
