@@ -410,8 +410,16 @@ def processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n):
         st.warning("⚠️ Nenhum jogo encontrado para a data selecionada.")
 
 def enviar_top_jogos(jogos: list, top_n: int):
-    """Envia os top N jogos para o Telegram."""
-    top_jogos_sorted = sorted(jogos, key=lambda x: x["confianca"], reverse=True)[:top_n]
+    """Envia os top N jogos para o Telegram (somente jogos não finalizados)."""
+    # 🔎 Filtrar apenas jogos que ainda não começaram
+    jogos_filtrados = [j for j in jogos if j["status"] not in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"]]
+
+    if not jogos_filtrados:
+        st.warning("⚠️ Nenhum jogo elegível para o Top Jogos (todos já iniciados ou finalizados).")
+        return
+
+    # Ordenar por confiança e pegar top N
+    top_jogos_sorted = sorted(jogos_filtrados, key=lambda x: x["confianca"], reverse=True)[:top_n]
 
     msg = f"📢 TOP {top_n} Jogos do Dia\n\n"
     for j in top_jogos_sorted:
@@ -423,10 +431,13 @@ def enviar_top_jogos(jogos: list, top_n: int):
             f"💯 Confiança: {j['confianca']:.0f}%\n\n"
         )
 
+    # Envio ao Telegram
     if enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2):
-        st.success(f"🚀 Top {top_n} jogos enviados para o canal!")
+        st.success(f"🚀 Top {top_n} jogos (sem finalizados) enviados para o canal!")
     else:
         st.error("❌ Erro ao enviar top jogos para o Telegram")
+
+
 
 def atualizar_status_partidas():
     """Atualiza o status das partidas em cache."""
