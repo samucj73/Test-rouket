@@ -50,7 +50,7 @@ MIN_DADOS_TREINAMENTO = 100         # dados mínimos para treinar modelo (ajusta
 TREINAMENTO_INTERVALO = 1         # treinar incremental a cada X novos registros
 WINDOW_SIZE = 50                    # janela usada para features
 CACHE_INTERVAL = 20                 # segundos para cache de previsão
-CONFIANCA_MINIMA = 0.32             # confiança mínima (0-1) para enviar sinal
+CONFIANCA_MINIMA = 0.55             # confiança mínima (0-1) para enviar sinal
 RELATORIO_RODADAS = 10              # enviar relatório telegram a cada N rodadas
 MAX_HISTORY_LEN = 2000
 
