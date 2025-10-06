@@ -30,8 +30,8 @@ LOG_CSV_PATH = "logs_resultados.csv"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
-TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
-TELEGRAM_CHAT_ID = "5121457416"
+#TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
+#TELEGRAM_CHAT_ID = "5121457416"
 
 ROULETTE_PHYSICAL_LAYOUT = [
     [1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34],
