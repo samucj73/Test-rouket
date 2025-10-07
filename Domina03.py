@@ -1,4 +1,4 @@
-# RoletaHybridIA.py - SISTEMA ESPECIALISTA 450+ REGISTROS CORRIGIDO
+# RoletaHybridIA.py - SISTEMA ESPECIALISTA COM ROTAÇÃO DINÂMICA E CONTEXTO PERSISTENTE
 import streamlit as st
 import json
 import os
@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import io
 from datetime import datetime
+import random
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -18,6 +19,7 @@ warnings.filterwarnings('ignore')
 # Configurações
 # =============================
 HISTORICO_PATH = "historico_hybrid_ia.json"
+CONTEXTO_PATH = "contexto_historico.json"
 METRICAS_PATH = "metricas_hybrid_ia.json"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
@@ -43,14 +45,14 @@ COLUNA_3 = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36]
 # =============================
 # CONFIGURAÇÃO ESPECIALISTA - 450+ REGISTROS
 # =============================
-MIN_HISTORICO_TREINAMENTO = 12  # 🎯 Ponto de ativação do modo especialista
-NUMERO_PREVISOES = 12
+MIN_HISTORICO_TREINAMENTO = 950
+NUMERO_PREVISOES = 15
 
 # Fases do sistema
 FASE_INICIAL = 50
 FASE_INTERMEDIARIA = 150  
 FASE_AVANCADA = 300
-FASE_ESPECIALISTA = 620
+FASE_ESPECIALISTA = 950
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -66,6 +68,84 @@ def enviar_telegram(msg: str, token=TELEGRAM_TOKEN, chat_id=TELEGRAM_CHAT_ID):
         logging.info(f"📤 Telegram enviado: {msg}")
     except Exception as e:
         logging.error(f"Erro ao enviar para Telegram: {e}")
+
+def enviar_alerta_rapido(numeros):
+    """Envia alerta no formato: 2 linhas (8 + 7 números) ordenados"""
+    try:
+        if not numeros or len(numeros) != 15:
+            return
+            
+        # Ordena os números do menor para o maior
+        numeros_ordenados = sorted(numeros)
+        
+        # Divide em 2 linhas: 8 números na primeira, 7 na segunda
+        linha1 = ' '.join(map(str, numeros_ordenados[0:8]))
+        linha2 = ' '.join(map(str, numeros_ordenados[8:15]))
+        
+        # Formata EXATAMENTE como você quer - 2 LINHAS
+        mensagem = f"N {linha1}\n{linha2}"
+        
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        payload = {
+            "chat_id": TELEGRAM_CHAT_ID, 
+            "text": mensagem
+        }
+        requests.post(url, data=payload, timeout=5)
+        logging.info(f"📤 Alerta enviado no formato 2x (8+7)")
+        
+    except Exception as e:
+        logging.error(f"Erro alerta: {e}")
+
+def enviar_alerta_contextual(numeros):
+    """Envia alerta contextual no formato: 2 linhas (4 + 4 números) ordenados"""
+    try:
+        if not numeros or len(numeros) != 8:
+            return
+            
+        # Ordena os números do menor para o maior
+        numeros_ordenados = sorted(numeros)
+        
+        # Divide em 2 linhas: 4 números na primeira, 4 na segunda
+        linha1 = ' '.join(map(str, numeros_ordenados[0:4]))
+        linha2 = ' '.join(map(str, numeros_ordenados[4:8]))
+        
+        # Formata EXATAMENTE como você quer - 2 LINHAS
+        mensagem = f"C {linha1}\n{linha2}"
+        
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        payload = {
+            "chat_id": TELEGRAM_CHAT_ID, 
+            "text": mensagem
+        }
+        requests.post(url, data=payload, timeout=5)
+        logging.info(f"📤 Alerta CONTEXTUAL enviado: 8 números")
+        
+    except Exception as e:
+        logging.error(f"Erro alerta contextual: {e}")
+
+def enviar_alerta_resultado(acertou, numero_sorteado, previsao_anterior):
+    """Envia alerta de resultado (GREEN/RED)"""
+    try:
+        if acertou:
+            mensagem = f"🟢 GREEN! Número {numero_sorteado} acertado na previsão!"
+            emoji = "🟢"
+        else:
+            mensagem = f"🔴 RED! Número {numero_sorteado} não estava na previsão anterior."
+            emoji = "🔴"
+        
+        # Adiciona informações extras
+        mensagem += f"\n🎯 Previsão anterior: {', '.join(map(str, sorted(previsao_anterior)))}"
+        
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        payload = {
+            "chat_id": TELEGRAM_CHAT_ID, 
+            "text": mensagem
+        }
+        requests.post(url, data=payload, timeout=5)
+        logging.info(f"📤 Alerta de RESULTADO enviado: {emoji}")
+        
+    except Exception as e:
+        logging.error(f"Erro alerta resultado: {e}")
 
 def carregar_historico():
     try:
@@ -220,8 +300,423 @@ def analisar_duzias_colunas(historico):
         "periodo_analisado": periodo_analise
     }
 
+def analisar_padroes_ultimos_20(historico):
+    """Analisa padrões específicos dos últimos 20 números"""
+    numeros = [h['number'] for h in historico if h.get('number') is not None]
+    if len(numeros) < 20:
+        return {}
+    
+    ultimos_20 = numeros[-20:]
+    
+    # Padrão: números que se repetem em intervalos curtos
+    padroes = {
+        'repetidos_3_rodadas': [],
+        'sequencias_vizinhas': [],
+        'alternancia_cores': 0
+    }
+    
+    # Encontrar números que se repetem a cada 3-4 rodadas
+    for i in range(len(ultimos_20) - 4):
+        if ultimos_20[i] == ultimos_20[i+3] or ultimos_20[i] == ultimos_20[i+4]:
+            if ultimos_20[i] not in padroes['repetidos_3_rodadas']:
+                padroes['repetidos_3_rodadas'].append(ultimos_20[i])
+    
+    # Analisar alternância de cores
+    mudancas_cor = 0
+    for i in range(1, len(ultimos_20)):
+        cor_atual = 'vermelho' if ultimos_20[i] in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36] else 'preto'
+        cor_anterior = 'vermelho' if ultimos_20[i-1] in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36] else 'preto'
+        if cor_atual != cor_anterior:
+            mudancas_cor += 1
+    
+    padroes['alternancia_cores'] = mudancas_cor / len(ultimos_20)
+    
+    return padroes
+
 # =============================
-# SISTEMA ESPECIALISTA 450+ CORRIGIDO
+# CONTEXT PREDICTOR CORRIGIDO - CAPTURA PADRÕES ÓBVIOS
+# =============================
+class Context_Predictor_Persistente_Corrigido:
+    def __init__(self):
+        self.context_history = {}
+        self.min_occurrences = 1
+        self.arquivo_contexto = CONTEXTO_PATH
+        self.carregar_contexto()
+        
+    def carregar_contexto(self):
+        """Carrega contexto histórico - CORREÇÃO CRÍTICA"""
+        try:
+            if os.path.exists(self.arquivo_contexto):
+                with open(self.arquivo_contexto, "r") as f:
+                    dados = json.load(f)
+                    
+                # CONVERSÃO MAIS ROBUSTA
+                contexto_convertido = {}
+                for key_str, valor in dados.items():
+                    try:
+                        key_int = int(key_str)
+                        valor_convertido = {}
+                        for k_str, v in valor.items():
+                            try:
+                                k_int = int(k_str)
+                                valor_convertido[k_int] = v
+                            except (ValueError, TypeError):
+                                continue
+                        contexto_convertido[key_int] = valor_convertido
+                    except (ValueError, TypeError):
+                        continue
+                
+                self.context_history = contexto_convertido
+                logging.info(f"📂 CONTEXTO CARREGADO: {len(self.context_history)} contextos, {self.get_total_transicoes()} transições")
+                
+                # ANALISAR PADRÕES ÓBVIOS AO CARREGAR
+                self.analisar_padroes_obvios()
+                
+            else:
+                logging.info("🆕 Criando novo contexto histórico")
+                self.context_history = {}
+        except Exception as e:
+            logging.error(f"❌ Erro ao carregar contexto: {e}")
+            self.context_history = {}
+
+    def analisar_padroes_obvios(self):
+        """Identifica padrões óbvios que se repetem frequentemente"""
+        padroes_fortes = []
+        
+        for anterior, seguintes in self.context_history.items():
+            if seguintes:
+                # Encontrar transições que ocorrem MUITO frequentemente
+                total_transicoes = sum(seguintes.values())
+                for numero, count in seguintes.items():
+                    probabilidade = count / total_transicoes
+                    
+                    # PADRÕES ÓBVIOS: probabilidade > 30% ou ocorrências > 10
+                    if probabilidade > 0.3 or count > 10:
+                        padroes_fortes.append({
+                            'anterior': anterior,
+                            'proximo': numero,
+                            'probabilidade': probabilidade,
+                            'ocorrencias': count
+                        })
+        
+        if padroes_fortes:
+            logging.info(f"🎯 PADRÕES ÓBVIOS DETECTADOS: {len(padroes_fortes)}")
+            for padrao in sorted(padroes_fortes, key=lambda x: x['probabilidade'], reverse=True)[:5]:
+                logging.info(f"   {padrao['anterior']} → {padrao['proximo']} ({padrao['probabilidade']:.1%}, {padrao['ocorrencias']}x)")
+
+    def get_total_transicoes(self):
+        """Calcula total de transições"""
+        return sum(sum(seguintes.values()) for seguintes in self.context_history.values())
+    
+    def salvar_contexto(self):
+        """Salva contexto histórico no arquivo"""
+        try:
+            with open(self.arquivo_contexto, "w") as f:
+                json.dump(self.context_history, f, indent=2)
+            logging.info(f"💾 CONTEXTO SALVO: {len(self.context_history)} contextos, {self.get_total_transicoes()} transições")
+        except Exception as e:
+            logging.error(f"❌ Erro ao salvar contexto: {e}")
+    
+    def atualizar_contexto_aprendizado_ativo(self, numero_anterior, numero_atual):
+        """Atualização de contexto com aprendizado ativo"""
+        try:
+            if numero_anterior is None or numero_atual is None:
+                return
+                
+            # ATUALIZAR CONTEXTO
+            if numero_anterior not in self.context_history:
+                self.context_history[numero_anterior] = {}
+            
+            self.context_history[numero_anterior][numero_atual] = \
+                self.context_history[numero_anterior].get(numero_atual, 0) + 1
+            
+            # APRENDIZADO ATIVO: Reforçar padrões quando detectados
+            self.reforcar_padroes_detectados(numero_anterior, numero_atual)
+            
+            # SALVAR CONTEXTO
+            self.salvar_contexto()
+            
+            logging.debug(f"🔄 Contexto atualizado: {numero_anterior} → {numero_atual}")
+            
+        except Exception as e:
+            logging.error(f"Erro ao atualizar contexto: {e}")
+
+    def reforcar_padroes_detectados(self, anterior, atual):
+        """Reforça padrões quando detecta repetição"""
+        # Se esta transição já existe, aumentar peso
+        if anterior in self.context_history and atual in self.context_history[anterior]:
+            count_atual = self.context_history[anterior][atual]
+            
+            # Reforçar se é um padrão que está se formando
+            if count_atual >= 3:
+                # Aumentar um pouco mais para padrões emergentes
+                self.context_history[anterior][atual] += 1
+                logging.info(f"🎯 REFORÇANDO PADRÃO: {anterior} → {atual} ({count_atual + 1}x)")
+
+    def prever_por_contexto_forte(self, ultimo_numero, top_n=8):
+        """Previsão FORTE - foca nos padrões óbvios"""
+        try:
+            if ultimo_numero in self.context_history:
+                contexto = self.context_history[ultimo_numero]
+                
+                if contexto:
+                    total_ocorrencias = sum(contexto.values())
+                    
+                    # FILTRAR APENAS PADRÕES FORTES
+                    padroes_fortes = []
+                    for num, count in contexto.items():
+                        prob = count / total_ocorrencias
+                        # CRITÉRIOS MAIS RIGOROSOS PARA PADRÕES FORTES
+                        if prob > 0.2 or count >= 5:  # 20%+ de probabilidade OU 5+ ocorrências
+                            padroes_fortes.append((num, count, prob))
+                    
+                    # Ordenar por probabilidade (mais importante que frequência absoluta)
+                    padroes_fortes.sort(key=lambda x: (x[2], x[1]), reverse=True)
+                    
+                    previsao = []
+                    for num, count, prob in padroes_fortes[:top_n]:
+                        previsao.append(num)
+                    
+                    if previsao:
+                        logging.info(f"🎯 CONTEXTO FORTE: {ultimo_numero} → {previsao} (prob: {prob:.1%})")
+                        return previsao
+            
+            # FALLBACK: usar padrões gerais se não há contexto forte
+            return self.get_previsao_inteligente_fallback(ultimo_numero, top_n)
+            
+        except Exception as e:
+            logging.error(f"Erro na previsão por contexto forte: {e}")
+            return self.get_previsao_inteligente_fallback(ultimo_numero, top_n)
+
+    def get_previsao_inteligente_fallback(self, numero, quantidade):
+        """Fallback INTELIGENTE baseado em múltiplas estratégias"""
+        previsao = set()
+        
+        # ESTRATÉGIA 1: NÚMEROS MAIS FREQUENTES NO CONTEXTO GERAL
+        numeros_mais_frequentes = self.get_numeros_mais_frequentes_global()
+        for num in numeros_mais_frequentes[:quantidade//2]:
+            previsao.add(num)
+        
+        # ESTRATÉGIA 2: VIZINHOS FÍSICOS FORTES
+        vizinhos_fortes = self.get_vizinhos_fortes(numero)
+        for vizinho in vizinhos_fortes[:quantidade//3]:
+            previsao.add(vizinho)
+        
+        # ESTRATÉGIA 3: PADRÕES DE SEQUÊNCIA DETECTADOS
+        padroes_sequencia = self.detectar_padroes_sequencia(numero)
+        for num in padroes_sequencia[:quantidade//4]:
+            previsao.add(num)
+        
+        # Completar se necessário
+        if len(previsao) < quantidade:
+            todos_numeros = list(range(0, 37))
+            random.shuffle(todos_numeros)
+            for num in todos_numeros:
+                if len(previsao) < quantidade:
+                    previsao.add(num)
+        
+        return list(previsao)[:quantidade]
+
+    def get_numeros_mais_frequentes_global(self):
+        """Retorna números mais frequentes em TODO o contexto"""
+        frequencia_global = Counter()
+        
+        for anterior, seguintes in self.context_history.items():
+            for numero, count in seguintes.items():
+                frequencia_global[numero] += count
+        
+        return [num for num, count in frequencia_global.most_common(15)]
+
+    def get_vizinhos_fortes(self, numero):
+        """Retorna vizinhos físicos que têm histórico forte"""
+        vizinhos = obter_vizinhos_fisicos(numero)
+        vizinhos_fortes = []
+        
+        for vizinho in vizinhos:
+            # Verificar se este vizinho tem padrões fortes no contexto
+            if vizinho in self.context_history:
+                contexto_vizinho = self.context_history[vizinho]
+                if contexto_vizinho:
+                    total = sum(contexto_vizinho.values())
+                    # Considerar forte se tem alguma transição com > 15% de probabilidade
+                    for num, count in contexto_vizinho.items():
+                        if count / total > 0.15:
+                            vizinhos_fortes.append(vizinho)
+                            break
+        
+        return vizinhos_fortes if vizinhos_fortes else vizinhos
+
+    def detectar_padroes_sequencia(self, numero):
+        """Detecta padrões de sequência no contexto"""
+        padroes = []
+        
+        # Procurar sequências do tipo: A → B → C
+        for contexto_anterior, transicoes in self.context_history.items():
+            if numero in transicoes and contexto_anterior in self.context_history:
+                # Se temos A → B (contexto_anterior → numero) e B → C (numero → ?)
+                transicoes_de_numero = self.context_history.get(numero, {})
+                for proximo, count in transicoes_de_numero.items():
+                    prob = count / sum(transicoes_de_numero.values()) if transicoes_de_numero else 0
+                    if prob > 0.2:  # Sequência forte
+                        padroes.append(proximo)
+        
+        return padroes
+
+    def get_estatisticas_contexto(self):
+        """Estatísticas do contexto"""
+        total_transicoes = self.get_total_transicoes()
+        
+        # Número mais frequente globalmente
+        frequencia_global = self.get_numeros_mais_frequentes_global()
+        numero_mais_frequente = frequencia_global[0] if frequencia_global else "Nenhum"
+        
+        # Exemplo de previsão
+        previsao_exemplo = self.get_exemplo_previsao_corrigido()
+        
+        return {
+            'contextos_ativos': len(self.context_history),
+            'total_transicoes': total_transicoes,
+            'min_occurrences': self.min_occurrences,
+            'numero_mais_frequente': numero_mais_frequente,
+            'previsao_exemplo': previsao_exemplo
+        }
+    
+    def get_exemplo_previsao_corrigido(self):
+        """Exemplo de previsão"""
+        if not self.context_history:
+            return "Aguardando dados..."
+        
+        # Pegar um contexto que tenha previsões
+        for contexto_num in list(self.context_history.keys())[-5:]:
+            if self.context_history[contexto_num]:
+                previsao = self.prever_por_contexto_forte(contexto_num, 8)
+                if previsao:
+                    return f"Após {contexto_num} → {previsao}"
+        
+        return "Sem padrões suficientes"
+
+# =============================
+# SISTEMA DE ROTAÇÃO DINÂMICA CONSERVADOR
+# =============================
+class Dynamic_Rotator_Conservador:
+    def __init__(self):
+        self.ultimas_previsoes = deque(maxlen=10)
+        self.contador_estabilidade = 0
+        
+    def aplicar_rotacao_estrategica(self, previsao_base, historico):
+        """Aplica rotação dinâmica MAIS CONSERVADORA"""
+        try:
+            if len(previsao_base) != 15:
+                return previsao_base
+                
+            # Verificar se precisa de variação (MAIS CONSERVADOR)
+            if self.deve_aplicar_rotacao(previsao_base):
+                return self.rotacionar_previsao_conservador(previsao_base, historico)
+            else:
+                return previsao_base
+                
+        except Exception as e:
+            logging.error(f"Erro na rotação dinâmica: {e}")
+            return previsao_base
+    
+    def deve_aplicar_rotacao(self, previsao_atual):
+        """Decide se deve rotacionar - MAIS CONSERVADOR"""
+        if not self.ultimas_previsoes:
+            self.ultimas_previsoes.append(previsao_atual)
+            return False
+            
+        # Verificar similaridade com previsões anteriores
+        similaridade = self.calcular_similaridade(previsao_atual, self.ultimas_previsoes[-1])
+        
+        # Aumentar limite para 85% e exigir 3 rodadas estáveis
+        if similaridade > 0.85:
+            self.contador_estabilidade += 1
+        else:
+            self.contador_estabilidade = 0
+            
+        # Rotacionar apenas se estável por 3 rodadas ou mais
+        deve_rotacionar = self.contador_estabilidade >= 3
+        
+        self.ultimas_previsoes.append(previsao_atual)
+        return deve_rotacionar
+    
+    def calcular_similaridade(self, previsao1, previsao2):
+        """Calcula similaridade entre duas previsões"""
+        set1 = set(previsao1)
+        set2 = set(previsao2)
+        return len(set1 & set2) / len(set1 | set2)
+    
+    def rotacionar_previsao_conservador(self, previsao_base, historico):
+        """Aplica rotação MAIS CONSERVADORA na previsão"""
+        numeros = [h['number'] for h in historico if h.get('number') is not None]
+        
+        if len(numeros) < 10:
+            return previsao_base
+            
+        # Estratégias de rotação MAIS CONSERVADORAS
+        nova_previsao = self.rotacao_por_frequencia_conservador(previsao_base, numeros)
+        nova_previsao = self.rotacao_por_vizinhanca_conservador(nova_previsao, numeros)
+        
+        logging.info(f"🔄 ROTAÇÃO CONSERVADORA APLICADA")
+        return nova_previsao
+    
+    def rotacao_por_frequencia_conservador(self, previsao_base, numeros):
+        """Rotaciona baseado na frequência recente - MAIS CONSERVADOR"""
+        # Analisar frequência dos últimos 30 números
+        freq_recente = Counter(numeros[-30:])
+        
+        # Encontrar números frequentes não presentes na previsão
+        numeros_quentes = [num for num, count in freq_recente.most_common(8) 
+                          if num not in previsao_base and count >= 2]
+        
+        if numeros_quentes:
+            # Substituir apenas 1 número de menor frequência na previsão
+            freq_na_previsao = {num: freq_recente.get(num, 0) for num in previsao_base}
+            para_remover = sorted(freq_na_previsao.items(), key=lambda x: x[1])[:1]
+            
+            nova_previsao = previsao_base.copy()
+            for num_remover, _ in para_remover:
+                if numeros_quentes and num_remover in nova_previsao:
+                    nova_previsao.remove(num_remover)
+                    novo_num = numeros_quentes[0]
+                    nova_previsao.append(novo_num)
+            
+            return nova_previsao
+        
+        return previsao_base
+    
+    def rotacao_por_vizinhanca_conservador(self, previsao_base, numeros):
+        """Rotaciona baseado em vizinhança física - MAIS CONSERVADOR"""
+        # Focar nos últimos 3 números sorteados
+        ultimos_numeros = numeros[-3:]
+        
+        vizinhos_estrategicos = set()
+        for num in ultimos_numeros:
+            vizinhos = obter_vizinhos_fisicos(num)
+            vizinhos_estrategicos.update(vizinhos)
+        
+        # Filtrar vizinhos não presentes na previsão
+        vizinhos_novos = [v for v in vizinhos_estrategicos if v not in previsao_base]
+        
+        if vizinhos_novos:
+            # Substituir apenas 1 número por um vizinho estratégico
+            nova_previsao = previsao_base.copy()
+            
+            # Remover um número menos promissor (que não é zero e não está nos últimos)
+            numeros_para_remover = [num for num in nova_previsao 
+                                  if num not in ultimos_numeros and num != 0]
+            
+            if numeros_para_remover:
+                num_remover = numeros_para_remover[0]
+                nova_previsao.remove(num_remover)
+                nova_previsao.append(vizinhos_novos[0])
+                
+            return nova_previsao
+        
+        return previsao_base
+
+# =============================
+# SISTEMA ESPECIALISTA 450+ COM ROTAÇÃO CONSERVADORA
 # =============================
 class Pattern_Analyzer_Especialista:
     def __init__(self):
@@ -271,7 +766,7 @@ class Pattern_Analyzer_Especialista:
         tamanhos_ciclo = [7, 15, 30, 50, 75, 100]
         
         for tamanho in tamanhos_ciclo:
-            if len(numeros) >= tamanho * 3:  # Precisa de pelo menos 3 ciclos completos
+            if len(numeros) >= tamanho * 3:
                 ciclos_detectados = []
                 
                 for i in range(len(numeros) - tamanho * 2):
@@ -281,7 +776,7 @@ class Pattern_Analyzer_Especialista:
                     # Similaridade mais sofisticada
                     similaridade = self.calcular_similaridade_avancada(ciclo1, ciclo2)
                     
-                    if similaridade > 0.35:  # Limite mais baixo por ter mais dados
+                    if similaridade > 0.35:
                         proximo_ciclo = numeros[i+tamanho*2:i+tamanho*3] if i+tamanho*3 <= len(numeros) else []
                         
                         ciclos_detectados.append({
@@ -293,7 +788,7 @@ class Pattern_Analyzer_Especialista:
                         })
                 
                 if ciclos_detectados:
-                    ciclos[f'ciclo_{tamanho}'] = ciclos_detectados[:3]  # Top 3 ciclos
+                    ciclos[f'ciclo_{tamanho}'] = ciclos_detectados[:3]
         
         return ciclos
     
@@ -338,7 +833,7 @@ class Pattern_Analyzer_Especialista:
         # Filtrar correlações significativas
         correlacoes_significativas = {}
         for par, count in correlacoes.items():
-            if count >= len(numeros) * 0.02:  # Aparecem juntos em pelo menos 2% das janelas
+            if count >= len(numeros) * 0.02:
                 correlacoes_significativas[par] = {
                     'frequencia': count,
                     'probabilidade': count / (len(numeros) - janela)
@@ -377,10 +872,10 @@ class Pattern_Analyzer_Especialista:
             
             # Processar padrões de intervalo
             for intervalo, numeros in padroes['intervalos'].items():
-                if len(numeros) >= 10:  # Pelo menos 10 ocorrências
+                if len(numeros) >= 10:
                     contagem = Counter(numeros)
                     mais_comum, freq = contagem.most_common(1)[0]
-                    if freq >= len(numeros) * 0.3:  # 30% de frequência
+                    if freq >= len(numeros) * 0.3:
                         padroes['intervalos'][intervalo] = {
                             'numero_mais_comum': mais_comum,
                             'frequencia': freq/len(numeros),
@@ -420,10 +915,10 @@ class Pattern_Analyzer_Especialista:
         
         # Filtrar padrões consistentes
         for seq, resultados in padroes_transicao.items():
-            if len(resultados) >= 5:  # Pelo menos 5 ocorrências
+            if len(resultados) >= 5:
                 contagem = Counter(resultados)
                 mais_comum, freq = contagem.most_common(1)[0]
-                if freq >= len(resultados) * 0.4:  # 40% de consistência
+                if freq >= len(resultados) * 0.4:
                     sequencias[f"transicao_{seq}"] = {
                         'proximo_esperado': mais_comum,
                         'confianca': freq/len(resultados),
@@ -579,9 +1074,11 @@ class Hybrid_IA_450_Plus_Corrigido:
     def __init__(self):
         self.pattern_analyzer = Pattern_Analyzer_Especialista()
         self.xgb_especialista = XGBoost_Especialista()
+        self.dynamic_rotator = Dynamic_Rotator_Conservador()
+        self.ultima_previsao_base = None
         
     def prever_com_historio_longo(self, historico):
-        """Sistema especializado para 450+ registros - CORRIGIDO"""
+        """Sistema especializado com rotação dinâmica CONSERVADORA"""
         historico_size = len(historico)
         
         if historico_size >= MIN_HISTORICO_TREINAMENTO:
@@ -593,170 +1090,165 @@ class Hybrid_IA_450_Plus_Corrigido:
             # 2. Predição especializada
             probs_xgb = self.xgb_especialista.predict_com_450_plus(historico)
             
-            # 3. Combinação inteligente CORRIGIDA
-            previsao_final = self.combinar_previsoes_especialistas_corrigido(analise_profunda, probs_xgb, historico)
+            # 3. Combinação inteligente
+            previsao_base = self.combinar_previsoes_especialistas_corrigida(analise_profunda, probs_xgb, historico)
             
-            logging.info(f"🎯 MODO ESPECIALISTA: {analise_profunda['total_padroes']} padrões detectados → {len(previsao_final)} números")
+            # 4. APLICAR ROTAÇÃO DINÂMICA CONSERVADORA
+            previsao_final = self.dynamic_rotator.aplicar_rotacao_estrategica(previsao_base, historico)
+            self.ultima_previsao_base = previsao_base
+            
+            logging.info(f"🎯 ESPECIALISTA + ROTAÇÃO CONSERVADORA: {analise_profunda['total_padroes']} padrões → {len(previsao_final)} números")
             return previsao_final
         else:
-            # Modo normal para histórico menor
-            return self.prever_com_historio_normal(historico)
-    
-    def combinar_previsoes_especialistas_corrigido(self, analise_profunda, probs_xgb, historico):
-        """Combinação CORRIGIDA para garantir 15 números"""
+            return self.prever_com_historio_normal_melhorado(historico)
+
+    def combinar_previsoes_especialistas_corrigida(self, analise_profunda, probs_xgb, historico):
+        """Combinação CORRIGIDA - MAIS CONSERVADORA E FOCADA"""
         scores_finais = {}
+        numeros = [h['number'] for h in historico if h.get('number') is not None]
         
-        # BASE MAIS ROBUSTA do XGBoost
-        for num, score in probs_xgb.items():
-            scores_finais[num] = score * 1.5  # Aumentar peso do XGBoost
+        # ESTRATÉGIA PRINCIPAL: NÚMEROS RECENTES E FREQUENTES (60% de peso)
+        ultimos_30 = numeros[-30:] if len(numeros) >= 30 else numeros
+        freq_recente = Counter(ultimos_30)
         
-        # Bônus por correlações - MAIS AGRESSIVO
+        for num, count in freq_recente.items():
+            if count >= 2:
+                scores_finais[num] = count * 0.3
+        
+        # ESTRATÉGIA SECUNDÁRIA: VIZINHANÇA FÍSICA (25% de peso)
+        ultimos_5 = numeros[-5:] if len(numeros) >= 5 else numeros
+        vizinhos_estrategicos = set()
+        
+        for num in ultimos_5:
+            vizinhos = obter_vizinhos_fisicos(num)
+            vizinhos_estrategicos.update(vizinhos)
+        
+        for vizinho in vizinhos_estrategicos:
+            scores_finais[vizinho] = scores_finais.get(vizinho, 0) + 0.15
+        
+        # ESTRATÉGIA TERCIÁRIA: CORRELAÇÕES FORTES (15% de peso)
         correlacoes = analise_profunda.get('correlacoes', {})
         for par, info in correlacoes.items():
-            for num in par:
-                scores_finais[num] = scores_finais.get(num, 0) + info['probabilidade'] * 0.4
+            if info['probabilidade'] > 0.1:
+                for num in par:
+                    scores_finais[num] = scores_finais.get(num, 0) + info['probabilidade'] * 0.1
         
-        # Bônus por sequências complexas - MAIS AGRESSIVO
-        sequencias = analise_profunda.get('sequencias_complexas', {})
-        for seq, info in sequencias.items():
-            scores_finais[info['proximo_esperado']] = scores_finais.get(info['proximo_esperado'], 0) + info['confianca'] * 0.6
+        # GARANTIR SELECÃO DE ALTA QUALIDADE
+        return self.selecionar_melhores_numeros(scores_finais, historico)
+
+    def selecionar_melhores_numeros(self, scores_finais, historico):
+        """Seleção MAIS INTELIGENTE dos melhores números"""
+        numeros = [h['number'] for h in historico if h.get('number') is not None]
         
-        # GARANTIR MÍNIMO DE SCORES
-        if len(scores_finais) < 20:
-            self.preencher_scores_faltantes(scores_finais, historico)
-        
-        # Ordenar e selecionar - GARANTIR 15 NÚMEROS
+        # Ordenar por score
         top_numeros = sorted(scores_finais.items(), key=lambda x: x[1], reverse=True)
         
-        # Se não tem 15, completar com estratégia física
-        selecao = [num for num, score in top_numeros[:NUMERO_PREVISOES]]
+        # FASE 1: Pegar os 10 melhores por score
+        selecao = [num for num, score in top_numeros[:10]]
         
-        if len(selecao) < NUMERO_PREVISOES:
-            selecao = self.completar_previsao_estrategica(selecao, historico)
-        
-        # Garantir diversificação CORRIGIDA
-        return self.diversificar_selecao_especialista_corrigida(selecao, historico)
-    
-    def preencher_scores_faltantes(self, scores_finais, historico):
-        """Preenche scores faltantes com estratégia base"""
-        numeros = [h['number'] for h in historico if h.get('number') is not None]
-        
-        # Adicionar números recentes
-        for num in numeros[-10:]:
-            if num not in scores_finais:
-                scores_finais[num] = 0.1
-        
-        # Adicionar vizinhos dos últimos números
-        for num in numeros[-5:]:
-            vizinhos = obter_vizinhos_fisicos(num)
-            for vizinho in vizinhos:
-                if vizinho not in scores_finais:
-                    scores_finais[vizinho] = 0.08
-        
-        # Adicionar números de alta frequência
-        freq = Counter(numeros[-30:])
-        for num, count in freq.most_common(10):
-            if num not in scores_finais and count >= 2:
-                scores_finais[num] = 0.05 * count
-    
-    def completar_previsao_estrategica(self, selecao, historico):
-        """Completa a previsão com números estratégicos"""
-        numeros = [h['number'] for h in historico if h.get('number') is not None]
+        # FASE 2: Adicionar 3 números estratégicos
         analise = analisar_duzias_colunas(historico)
+        selecao.extend(self.adicionar_numeros_estrategicos(analise, selecao))
         
-        # Estratégia baseada nas dúzias e colunas quentes
-        duzias_quentes = analise.get("duzias_quentes", [1, 2, 3])
-        colunas_quentes = analise.get("colunas_quentes", [1, 2, 3])
+        # FASE 3: Adicionar 2 números de fallback inteligente
+        selecao.extend(self.adicionar_fallback_inteligente(numeros, selecao))
         
-        # Adicionar números das dúzias quentes
-        for duzia in duzias_quentes:
-            if duzia == 1:
-                numeros_duzia = PRIMEIRA_DUZIA
-            elif duzia == 2:
-                numeros_duzia = SEGUNDA_DUZIA
-            else:
-                numeros_duzia = TERCEIRA_DUZIA
-            
-            for num in numeros_duzia:
-                if num not in selecao and len(selecao) < NUMERO_PREVISOES:
-                    selecao.append(num)
-                if len(selecao) >= NUMERO_PREVISOES:
-                    break
-        
-        # Adicionar números das colunas quentes
-        for coluna in colunas_quentes:
-            if coluna == 1:
-                numeros_coluna = COLUNA_1
-            elif coluna == 2:
-                numeros_coluna = COLUNA_2
-            else:
-                numeros_coluna = COLUNA_3
-            
-            for num in numeros_coluna:
-                if num not in selecao and len(selecao) < NUMERO_PREVISOES:
-                    selecao.append(num)
-                if len(selecao) >= NUMERO_PREVISOES:
-                    break
-        
-        # Garantir zero
+        # Garantir zero se não estiver presente
         if 0 not in selecao and len(selecao) < NUMERO_PREVISOES:
             selecao.append(0)
         
-        return selecao[:NUMERO_PREVISOES]
-    
-    def diversificar_selecao_especialista_corrigida(self, selecao, historico):
-        """Diversificação CORRIGIDA para garantir qualidade"""
-        # Se já temos 15 números, otimizar a seleção
-        if len(selecao) >= NUMERO_PREVISOES:
-            # Garantir balanceamento entre dúzias
-            return self.otimizar_balanceamento(selecao)
+        # FASE 4: APLICAR BALANCEAMENTO FINAL
+        selecao_balanceada = self.otimizar_balanceamento_final(selecao)
         
-        # Se não, usar estratégia completa
-        return self.completar_previsao_estrategica(selecao, historico)
-    
-    def otimizar_balanceamento(self, selecao):
-        """Otimiza o balanceamento entre as dúzias"""
-        balanceada = []
-        
-        # Garantir representação mínima de cada dúzia
-        min_por_duzia = 3
-        
-        for duzia in [PRIMEIRA_DUZIA, SEGUNDA_DUZIA, TERCEIRA_DUZIA]:
-            contagem = 0
-            for num in selecao:
-                if num in duzia:
-                    balanceada.append(num)
-                    contagem += 1
-                if contagem >= min_por_duzia:
-                    break
-        
-        # Completar com os melhores da seleção original
-        for num in selecao:
-            if num not in balanceada and len(balanceada) < NUMERO_PREVISOES:
-                balanceada.append(num)
-        
-        # Garantir zero se não estiver presente
-        if 0 in selecao and 0 not in balanceada and len(balanceada) < NUMERO_PREVISOES:
-            balanceada.append(0)
-        
-        return balanceada[:NUMERO_PREVISOES]
+        return selecao_balanceada[:NUMERO_PREVISOES]
 
-    def prever_com_historio_normal(self, historico):
-        """Estratégia para histórico menor que 450 - MELHORADA"""
-        numeros = [h['number'] for h in historico if h.get('number') is not None]
+    def otimizar_balanceamento_final(self, selecao):
+        """Otimização FINAL para melhor distribuição entre dúzias"""
+        if len(selecao) != NUMERO_PREVISOES:
+            return selecao
         
-        if len(numeros) < 10:
-            return self.estrategia_inicial_balanceada()
+        # Contar distribuição atual
+        contagem_duzias = {1: 0, 2: 0, 3: 0}
+        for num in selecao:
+            if 1 <= num <= 12:
+                contagem_duzias[1] += 1
+            elif 13 <= num <= 24:
+                contagem_duzias[2] += 1
+            elif 25 <= num <= 36:
+                contagem_duzias[3] += 1
         
-        previsao = set()
-        analise = analisar_duzias_colunas(historico)
+        # Meta ideal: 5 números por dúzia + zero
+        meta_por_duzia = 5
         
-        # Estratégia mais inteligente para histórico médio
-        duzias_quentes = analise.get("duzias_quentes", [2])
-        colunas_quentes = analise.get("colunas_quentes", [2])
+        selecao_balanceada = selecao.copy()
         
-        # Focar na interseção dúzia + coluna quente
-        for duzia in duzias_quentes:
+        # Ajustar 2ª Dúzia (13-24) se necessário
+        if contagem_duzias[2] < 4:
+            numeros_faltantes_2 = [n for n in SEGUNDA_DUZIA if n not in selecao_balanceada]
+            necessarios = min(meta_por_duzia - contagem_duzias[2], len(numeros_faltantes_2))
+            for i in range(necessarios):
+                if numeros_faltantes_2:
+                    # Remover um excesso da 1ª dúzia se possível
+                    excesso_1 = [n for n in selecao_balanceada if n in PRIMEIRA_DUZIA and n not in [0]]
+                    if excesso_1 and contagem_duzias[1] > meta_por_duzia:
+                        num_remover = excesso_1[0]
+                        selecao_balanceada.remove(num_remover)
+                        contagem_duzias[1] -= 1
+                    
+                    # Adicionar da 2ª dúzia
+                    num_adicionar = numeros_faltantes_2[i]
+                    selecao_balanceada.append(num_adicionar)
+                    contagem_duzias[2] += 1
+        
+        # Ajustar 3ª Dúzia (25-36) se necessário
+        if contagem_duzias[3] < 4:
+            numeros_faltantes_3 = [n for n in TERCEIRA_DUZIA if n not in selecao_balanceada]
+            necessarios = min(meta_por_duzia - contagem_duzias[3], len(numeros_faltantes_3))
+            for i in range(necessarios):
+                if numeros_faltantes_3:
+                    # Remover um excesso da 1ª dúzia se possível
+                    excesso_1 = [n for n in selecao_balanceada if n in PRIMEIRA_DUZIA and n not in [0]]
+                    if excesso_1 and contagem_duzias[1] > meta_por_duzia:
+                        num_remover = excesso_1[0]
+                        selecao_balanceada.remove(num_remover)
+                        contagem_duzias[1] -= 1
+                    
+                    # Adicionar da 3ª dúzia
+                    num_adicionar = numeros_faltantes_3[i]
+                    selecao_balanceada.append(num_adicionar)
+                    contagem_duzias[3] += 1
+        
+        # Garantir zero
+        if 0 not in selecao_balanceada:
+            # Remover um número menos estratégico (excesso da 1ª dúzia)
+            excesso_1 = [n for n in selecao_balanceada if n in PRIMEIRA_DUZIA and n not in [0]]
+            if excesso_1:
+                selecao_balanceada.remove(excesso_1[0])
+            selecao_balanceada.append(0)
+        
+        return selecao_balanceada[:NUMERO_PREVISOES]
+
+    def adicionar_numeros_estrategicos(self, analise, selecao_atual):
+        """Adiciona números baseado em análise de dúzias/colunas"""
+        estrategicos = []
+        
+        duzias_quentes = analise.get("duzias_quentes", [])
+        colunas_quentes = analise.get("colunas_quentes", [])
+        
+        # Focar em balancear as dúzias que estão faltando
+        contagem_atual = {1: 0, 2: 0, 3: 0}
+        for num in selecao_atual:
+            if 1 <= num <= 12:
+                contagem_atual[1] += 1
+            elif 13 <= num <= 24:
+                contagem_atual[2] += 1
+            elif 25 <= num <= 36:
+                contagem_atual[3] += 1
+        
+        # Priorizar dúzias que estão com menos representação
+        duzias_prioritarias = sorted([1, 2, 3], key=lambda d: contagem_atual[d])
+        
+        for duzia in duzias_prioritarias[:2]:
             if duzia == 1:
                 numeros_duzia = PRIMEIRA_DUZIA
             elif duzia == 2:
@@ -764,111 +1256,316 @@ class Hybrid_IA_450_Plus_Corrigido:
             else:
                 numeros_duzia = TERCEIRA_DUZIA
             
-            for coluna in colunas_quentes:
-                if coluna == 1:
-                    numeros_coluna = COLUNA_1
-                elif coluna == 2:
-                    numeros_coluna = COLUNA_2
-                else:
-                    numeros_coluna = COLUNA_3
-                
-                # Adicionar interseção
-                interseccao = [n for n in numeros_duzia if n in numeros_coluna]
-                previsao.update(interseccao[:3])
+            # Adicionar números centrais da dúzia
+            numeros_centrais = numeros_duzia[3:9]
+            for num in numeros_centrais:
+                if num not in selecao_atual and num not in estrategicos:
+                    estrategicos.append(num)
+                    if len(estrategicos) >= 3:
+                        return estrategicos
+                    break
         
-        # Adicionar números recentes
+        return estrategicos[:3]
+
+    def adicionar_fallback_inteligente(self, numeros, selecao_atual):
+        """Fallback inteligente baseado em padrões dos últimos 20 números"""
+        fallback = []
+        
+        if len(numeros) < 10:
+            return fallback
+        
+        # Analisar padrões recentes
+        padroes = analisar_padroes_ultimos_20([{'number': n} for n in numeros])
+        
+        # 1. Adicionar números que se repetem em padrão de 3-4 rodadas
+        for num in padroes.get('repetidos_3_rodadas', [])[:2]:
+            if num not in selecao_atual and num not in fallback:
+                fallback.append(num)
+                if len(fallback) >= 2:
+                    return fallback
+        
+        # 2. Se há alta alternância de cores, adicionar números da cor oposta ao último
+        if padroes.get('alternancia_cores', 0) > 0.6 and numeros:
+            ultimo_numero = numeros[-1]
+            ultima_cor_vermelha = ultimo_numero in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]
+            
+            # Adicionar 1 número da cor oposta
+            if ultima_cor_vermelha:
+                # Adicionar preto
+                pretos = [2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35]
+                for preto in pretos:
+                    if preto not in selecao_atual and preto not in fallback:
+                        fallback.append(preto)
+                        break
+            else:
+                # Adicionar vermelho
+                vermelhos = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]
+                for vermelho in vermelhos:
+                    if vermelho not in selecao_atual and vermelho not in fallback:
+                        fallback.append(vermelho)
+                        break
+        
+        return fallback[:2]
+
+    def prever_com_historio_normal_melhorado(self, historico):
+        """Estratégia MELHORADA para histórico menor"""
+        numeros = [h['number'] for h in historico if h.get('number') is not None]
+        
+        if len(numeros) < 15:
+            return self.estrategia_conservadora_inicial()
+        
+        # ESTRATÉGIA SIMPLES MAS EFETIVA
+        previsao = set()
+        
+        # 1. Números mais frequentes nos últimos 20 (40%)
+        freq_20 = Counter(numeros[-20:])
+        for num, count in freq_20.most_common(6):
+            if count >= 2:
+                previsao.add(num)
+        
+        # 2. Últimos 5 números (30%)
         previsao.update(numeros[-5:])
         
-        # Adicionar números frequentes
-        freq = Counter(numeros[-20:])
-        numeros_quentes = [num for num, count in freq.most_common(5) if count >= 2]
-        previsao.update(numeros_quentes)
+        # 3. Vizinhança dos últimos 3 números (20%)
+        for num in numeros[-3:]:
+            vizinhos = obter_vizinhos_fisicos(num)
+            previsao.update(vizinhos[:2])
         
-        # Completar com números balanceados
-        if len(previsao) < NUMERO_PREVISOES:
-            balanceados = [1, 3, 5, 7, 9, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36]
-            for num in balanceados:
-                if num not in previsao and len(previsao) < NUMERO_PREVISOES:
-                    previsao.add(num)
-        
-        previsao.add(0)
+        # 4. Números estratégicos (10%)
+        estrategicos = [0, 2, 5, 8, 11, 17, 20, 26, 29, 32, 35]
+        for num in estrategicos:
+            if len(previsao) < NUMERO_PREVISOES:
+                previsao.add(num)
         
         return list(previsao)[:NUMERO_PREVISOES]
-    
-    def estrategia_inicial_balanceada(self):
-        """Estratégia inicial balanceada - ATUALIZADA"""
-        # Seleção mais diversificada e estratégica
+
+    def estrategia_conservadora_inicial(self):
+        """Estratégia inicial MAIS CONSERVADORA"""
+        # Números estrategicamente distribuídos na roleta
         numeros_estrategicos = [
-            # 1ª Dúzia
-            2, 5, 8, 11,
-            # 2ª Dúzia  
-            13, 16, 19, 22,
-            # 3ª Dúzia
-            25, 28, 31, 34,
-            # Balanceamento
-            1, 7, 0
+            # Centro das três dúzias + zero
+            5, 6, 7, 8,				# 1ª dúzia
+            17, 18, 19, 20,		# 2ª dúzia  
+            29, 30, 31, 32,		# 3ª dúzia
+            0, 2, 11				# Zero + bordas estratégicas
         ]
         return validar_previsao(numeros_estrategicos)[:NUMERO_PREVISOES]
 
 # =============================
-# GESTOR PRINCIPAL CORRIGIDO
+# GESTOR PRINCIPAL CORRIGIDO - CAPTURA PADRÕES ÓBVIOS
 # =============================
 class GestorHybridIA_Especialista_Corrigido:
     def __init__(self):
         self.hybrid_system = Hybrid_IA_450_Plus_Corrigido()
+        self.context_predictor = Context_Predictor_Persistente_Corrigido()  # USAR VERSÃO CORRIGIDA
         self.historico = deque(carregar_historico(), maxlen=1000)
+        self.previsao_anterior = None
+        self.ultimo_numero_processado = None
+        self.padroes_detectados = []  # RASTREAR PADRÕES DETECTADOS
         
-    def adicionar_numero(self, numero_dict):
-        if isinstance(numero_dict, dict) and numero_dict.get('number') is not None:
-            self.historico.append(numero_dict)
-        
-    def gerar_previsao(self):
+        self.inicializar_contexto_com_historico()
+
+    def inicializar_contexto_com_historico(self):
+        """Inicialização MAIS INTELIGENTE do contexto"""
         try:
-            previsao = self.hybrid_system.prever_com_historio_longo(self.historico)
-            previsao_validada = validar_previsao(previsao)
+            if len(self.historico) > 1:
+                numeros = [h['number'] for h in self.historico if h.get('number') is not None]
+                transicoes_adicionadas = 0
+                
+                for i in range(1, len(numeros)):
+                    self.context_predictor.atualizar_contexto_aprendizado_ativo(numeros[i-1], numeros[i])
+                    transicoes_adicionadas += 1
+                
+                logging.info(f"🚀 CONTEXTO INICIALIZADO: {transicoes_adicionadas} transições")
+                
+        except Exception as e:
+            logging.error(f"Erro na inicialização do contexto: {e}")
+
+    def adicionar_numero(self, numero_dict):
+        """Adiciona número com análise de padrões em tempo real"""
+        if isinstance(numero_dict, dict) and numero_dict.get('number') is not None:
+            numero_atual = numero_dict['number']
             
-            # GARANTIR QUE SEMPRE RETORNA 15 NÚMEROS
-            if len(previsao_validada) < NUMERO_PREVISOES:
-                logging.warning(f"⚠️ Previsão com apenas {len(previsao_validada)} números. Completando...")
-                previsao_validada = self.completar_para_15(previsao_validada)
+            # ANALISAR PADRÃO ANTES DE ATUALIZAR
+            if self.ultimo_numero_processado is not None:
+                self.analisar_padrao_em_tempo_real(self.ultimo_numero_processado, numero_atual)
+                
+                # ATUALIZAR CONTEXTO
+                self.context_predictor.atualizar_contexto_aprendizado_ativo(
+                    self.ultimo_numero_processado, 
+                    numero_atual
+                )
             
-            logging.info(f"✅ Previsão gerada: {len(previsao_validada)} números")
-            return previsao_validada
+            self.ultimo_numero_processado = numero_atual
+            self.historico.append(numero_dict)
+
+    def analisar_padrao_em_tempo_real(self, anterior, atual):
+        """Analisa padrões em tempo real para detecção imediata"""
+        # Verificar se é um padrão que já foi visto
+        if anterior in self.context_predictor.context_history:
+            transicoes = self.context_predictor.context_history[anterior]
+            if atual in transicoes:
+                count = transicoes[atual]
+                total = sum(transicoes.values())
+                probabilidade = count / total if total > 0 else 0
+                
+                # LOGAR PADRÕES FORTES
+                if probabilidade > 0.25 or count >= 3:
+                    logging.info(f"🎯 PADRÃO CONFIRMADO: {anterior} → {atual} ({probabilidade:.1%}, {count}x)")
+                    
+                    # Adicionar à lista de padrões detectados
+                    padrao = {
+                        'anterior': anterior,
+                        'atual': atual,
+                        'probabilidade': probabilidade,
+                        'ocorrencias': count
+                    }
+                    self.padroes_detectados.append(padrao)
+                    
+                    # Manter apenas os últimos 20 padrões
+                    self.padroes_detectados = self.padroes_detectados[-20:]
+
+    def gerar_previsao_contextual_forte(self):
+        """Gera previsão com FOCO NOS PADRÕES FORTES"""
+        try:
+            # 1. PRIMEIRO: PREVISÃO POR CONTEXTO FORTE
+            previsao_contexto = []
+            if self.ultimo_numero_processado is not None:
+                previsao_contexto = self.context_predictor.prever_por_contexto_forte(
+                    self.ultimo_numero_processado, 
+                    top_n=10
+                )
+            
+            # 2. SEGUNDO: PREVISÃO DA IA (como complemento)
+            previsao_ia = self.hybrid_system.prever_com_historio_longo(self.historico)
+            
+            # 3. COMBINAÇÃO PRIORIZANDO CONTEXTO FORTE
+            previsao_combinada = self.combinar_previsoes_focada_contexto(
+                previsao_ia, 
+                previsao_contexto
+            )
+            
+            # 4. APLICAR ROTAÇÃO (mais conservadora)
+            previsao_final = self.hybrid_system.dynamic_rotator.aplicar_rotacao_estrategica(
+                previsao_combinada, 
+                self.historico
+            )
+            
+            logging.info(f"🎯 PREVISÃO CONTEXTUAL FORTE: Contexto({len(previsao_contexto)}) + IA({len(previsao_ia)}) → {len(previsao_final)} números")
+            
+            return previsao_final
             
         except Exception as e:
-            logging.error(f"Erro crítico ao gerar previsão: {e}")
-            return [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
-    
-    def completar_para_15(self, previsao):
-        """Garante que sempre retorna 15 números"""
+            logging.error(f"Erro na previsão contextual forte: {e}")
+            return self.hybrid_system.prever_com_historio_longo(self.historico)
+
+    def combinar_previsoes_focada_contexto(self, previsao_ia, previsao_contexto):
+        """Combinação que PRIORIZA O CONTEXTO quando forte"""
+        combinada = set()
+        
+        # SE CONTEXTO É FORTE, USAR COMO BASE
+        if previsao_contexto and len(previsao_contexto) >= 6:
+            logging.info("🎯 USANDO CONTEXTO COMO BASE (forte detectado)")
+            for num in previsao_contexto:
+                if len(combinada) < NUMERO_PREVISOES:
+                    combinada.add(num)
+        else:
+            logging.info("🔄 Contexto fraco, usando IA como base")
+            # Usar IA como base se contexto é fraco
+            for num in previsao_ia[:10]:
+                if len(combinada) < NUMERO_PREVISOES:
+                    combinada.add(num)
+        
+        # COMPLETAR COM IA (se necessário)
+        if len(combinada) < NUMERO_PREVISOES:
+            for num in previsao_ia:
+                if len(combinada) < NUMERO_PREVISOES:
+                    combinada.add(num)
+        
+        # COMPLETAR COM ESTRATÉGIA CONSERVADORA
+        return self.completar_para_15_inteligente(list(combinada))
+
+    def completar_para_15_inteligente(self, previsao):
+        """Completar usando padrões detectados"""
         if len(previsao) >= NUMERO_PREVISOES:
             return previsao[:NUMERO_PREVISOES]
         
         numeros_completos = set(previsao)
         
-        # Adicionar números estratégicos faltantes
-        numeros_estrategicos = [
-            0, 2, 5, 8, 11, 13, 16, 19, 22, 25, 28, 31, 34, 1, 7
-        ]
+        # PRIMEIRO: Usar padrões detectados recentemente
+        for padrao in self.padroes_detectados[-5:]:
+            if padrao['probabilidade'] > 0.3:
+                if padrao['atual'] not in numeros_completos:
+                    numeros_completos.add(padrao['atual'])
+                    if len(numeros_completos) >= NUMERO_PREVISOES:
+                        break
         
-        for num in numeros_estrategicos:
-            if len(numeros_completos) < NUMERO_PREVISOES:
-                numeros_completos.add(num)
-        
-        # Se ainda não tem 15, adicionar sequencial
+        # SEGUNDO: Números estratégicos
         if len(numeros_completos) < NUMERO_PREVISOES:
-            for num in range(0, 37):
-                if len(numeros_completos) < NUMERO_PREVISOES:
+            estrategicos = [0, 2, 5, 8, 11, 17, 20, 26, 29, 32, 35]
+            for num in estrategicos:
+                if num not in numeros_completos:
                     numeros_completos.add(num)
+                    if len(numeros_completos) >= NUMERO_PREVISOES:
+                        break
         
         return list(numeros_completos)[:NUMERO_PREVISOES]
+    
+    def get_analise_contexto_detalhada(self):
+        """Análise detalhada dos padrões de contexto"""
+        estatisticas = self.context_predictor.get_estatisticas_contexto()
+        
+        # Previsão contextual atual
+        previsao_atual = []
+        if self.ultimo_numero_processado is not None:
+            previsao_atual = self.context_predictor.prever_por_contexto_forte(
+                self.ultimo_numero_processado, 
+                top_n=8
+            )
+        
+        # Padrões detectados recentemente
+        padroes_recentes = self.padroes_detectados[-5:] if self.padroes_detectados else []
+        
+        return {
+            'contextos_ativos': estatisticas['contextos_ativos'],
+            'total_transicoes': estatisticas['total_transicoes'],
+            'ultimo_numero': self.ultimo_numero_processado,
+            'previsao_contexto_atual': previsao_atual,
+            'padroes_recentes': padroes_recentes,
+            'numero_mais_frequente': estatisticas['numero_mais_frequente'],
+            'previsao_exemplo': estatisticas['previsao_exemplo']
+        }
+
+    def gerar_previsao(self):
+        """Método legado"""
+        return self.gerar_previsao_contextual_forte()
+        
+    def calcular_diferencas(self, previsao_atual):
+        """Calcula diferenças com a previsão anterior"""
+        if not self.previsao_anterior or len(self.previsao_anterior) != 15 or len(previsao_atual) != 15:
+            return None
+            
+        anteriores = set(self.previsao_anterior)
+        atuais = set(previsao_atual)
+        
+        removidos = anteriores - atuais
+        adicionados = atuais - anteriores
+        
+        if removidos or adicionados:
+            return {
+                'removidos': sorted(removidos),
+                'adicionados': sorted(adicionados),
+                'total_mudancas': len(removidos)
+            }
+        
+        return None
     
     def get_status_sistema(self):
         try:
             historico_size = len(self.historico)
             
             if historico_size < FASE_INICIAL:
-                return "🟡 Coletando Dados", "Estratégia Básica"
+                return "🟡 Coletando Dados", "Estratégia Conservadora"
             elif historico_size < FASE_INTERMEDIARIA:
                 return "🟠 Desenvolvendo", "Estratégia Intermediária"
             elif historico_size < FASE_AVANCADA:
@@ -914,15 +1611,15 @@ class GestorHybridIA_Especialista_Corrigido:
 # STREAMLIT APP
 # =============================
 st.set_page_config(
-    page_title="Roleta - IA Especialista 450+", 
+    page_title="Roleta - IA Especialista com Rotação", 
     page_icon="🎯", 
     layout="centered"
 )
 
-st.title("🎯 Hybrid IA System - ESPECIALISTA 450+ CORRIGIDO")
-st.markdown("### **Sistema Corrigido com Garantia de 15 Números**")
+st.title("🎯 Hybrid IA System - ESPECIALISTA COM DETECÇÃO DE PADRÕES")
+st.markdown("### **Sistema que Captura Padrões Óbvios do Contexto Histórico**")
 
-st_autorefresh(interval=3000, key="refresh")
+st_autorefresh(interval=15000, key="refresh")
 
 # Inicialização session_state
 defaults = {
@@ -935,6 +1632,7 @@ defaults = {
     "ultimo_numero": None,
     "status_ia": "🟡 Inicializando",
     "estrategia_atual": "Aguardando dados",
+    "previsao_anterior": None,
 }
 
 for k, v in defaults.items():
@@ -960,6 +1658,7 @@ try:
         
         salvo_com_sucesso = salvar_historico(numero_dict)
         if salvo_com_sucesso:
+            # AGORA ATUALIZA CONTEXTO E SALVA AUTOMATICAMENTE
             st.session_state.gestor.adicionar_numero(numero_dict)
         
         st.session_state.ultimo_timestamp = resultado["timestamp"]
@@ -971,43 +1670,43 @@ try:
 
         # CONFERÊNCIA
         previsao_valida = validar_previsao(st.session_state.previsao_atual)
+        acertou = False
         if previsao_valida:
             acertou = numero_real in previsao_valida
             if acertou:
                 st.session_state.acertos += 1
                 st.success(f"🎯 **GREEN!** Número {numero_real} acertado!")
-                enviar_telegram(f"🟢 GREEN! Especialista Corrigido acertou {numero_real}!")
+                # ENVIAR ALERTA DE GREEN
+                enviar_alerta_resultado(True, numero_real, st.session_state.previsao_atual)
             else:
                 st.session_state.erros += 1
                 st.error(f"🔴 Número {numero_real} não estava na previsão")
+                # ENVIAR ALERTA DE RED
+                enviar_alerta_resultado(False, numero_real, st.session_state.previsao_atual)
 
-        # GERAR NOVA PREVISÃO
-        nova_previsao = st.session_state.gestor.gerar_previsao()
+        # GERAR NOVA PREVISÃO COM CONTEXTO FORTE
+        nova_previsao = st.session_state.gestor.gerar_previsao_contextual_forte()
+        
+        # CALCULAR MUDANÇAS
+        diferencas = st.session_state.gestor.calcular_diferencas(nova_previsao)
+        st.session_state.previsao_anterior = st.session_state.previsao_atual.copy()
         st.session_state.previsao_atual = validar_previsao(nova_previsao)
         
-        # TELEGRAM - Mensagem especial para modo especialista
-        if st.session_state.previsao_atual and len(st.session_state.gestor.historico) >= 3:
+        # ENVIAR ALERTA TELEGRAM - PREVISÃO PRINCIPAL
+        if st.session_state.previsao_atual and len(st.session_state.previsao_atual) == 15:
             try:
-                analise = st.session_state.gestor.get_analise_detalhada()
-                mensagem = f"🎯 **IA ESPECIALISTA CORRIGIDA - PREVISÃO**\n"
-                
-                if analise["modo_especialista"]:
-                    mensagem += f"🚀 **MODO ESPECIALISTA ATIVO**\n"
-                    mensagem += f"📊 Padrões Detectados: {analise['padroes_detectados']}\n"
-                else:
-                    mensagem += f"📈 Progresso: {analise['historico_total']}/{analise['minimo_especialista']}\n"
-                
-                mensagem += f"🧠 Status: {st.session_state.status_ia}\n"
-                mensagem += f"🎯 Estratégia: {st.session_state.estrategia_atual}\n"
-                mensagem += f"💪 Confiança: {analise['confianca']}\n"
-                mensagem += f"🔢 Último: {numero_real}\n"
-                mensagem += f"📈 Performance: {st.session_state.acertos}G/{st.session_state.erros}R\n"
-                mensagem += f"🔢 Números Previstos: {len(st.session_state.previsao_atual)}\n"
-                mensagem += f"📋 Números: {', '.join(map(str, sorted(st.session_state.previsao_atual)))}"
-                
-                enviar_telegram(mensagem)
+                enviar_alerta_rapido(st.session_state.previsao_atual)
             except Exception as e:
-                logging.error(f"Erro ao enviar Telegram: {e}")
+                logging.error(f"Erro ao enviar alerta principal: {e}")
+
+        # ENVIAR ALERTA TELEGRAM - PREVISÃO CONTEXTUAL (8 NÚMEROS)
+        analise_contexto = st.session_state.gestor.get_analise_contexto_detalhada()
+        previsao_contexto = analise_contexto.get('previsao_contexto_atual', [])
+        if previsao_contexto and len(previsao_contexto) == 8:
+            try:
+                enviar_alerta_contextual(previsao_contexto)
+            except Exception as e:
+                logging.error(f"Erro ao enviar alerta contextual: {e}")
 
         st.session_state.contador_rodadas += 1
 
@@ -1064,11 +1763,98 @@ else:
     st.success(f"🎯 MODO ESPECIALISTA ATIVO - {analise['padroes_detectados']} padrões detectados")
     st.caption("🟢 Sistema analisando padrões complexos de longo prazo")
 
+# NOVA SEÇÃO - PREVISÃO POR CONTEXTO HISTÓRICO COM PADRÕES
+st.markdown("---")
+st.subheader("🔮 PREVISÃO POR CONTEXTO HISTÓRICO - CAPTURA PADRÕES ÓBVIOS")
+
+analise_contexto = st.session_state.gestor.get_analise_contexto_detalhada()
+
+col1, col2, col3, col4 = st.columns(4)
+
+with col1:
+    ultimo_num = analise_contexto['ultimo_numero'] 
+    st.metric("🎯 Último Número", ultimo_num if ultimo_num is not None else "-")
+
+with col2:
+    st.metric("📊 Contextos", analise_contexto['contextos_ativos'])
+
+with col3:
+    st.metric("🔄 Transições", analise_contexto['total_transicoes'])
+
+with col4:
+    st.metric("🔥 Mais Frequente", analise_contexto['numero_mais_frequente'])
+
+# MOSTRAR PREVISÃO CONTEXTUAL ATUAL
+previsao_contexto = analise_contexto['previsao_contexto_atual']
+if previsao_contexto and analise_contexto['ultimo_numero'] is not None:
+    previsao_unica = []
+    numeros_vistos = set()
+    for num in previsao_contexto:
+        if num not in numeros_vistos:
+            previsao_unica.append(num)
+            numeros_vistos.add(num)
+    
+    if previsao_unica:
+        st.success(f"**📈 8 NÚMEROS MAIS PROVÁVEIS APÓS {analise_contexto['ultimo_numero']}:**")
+        
+        # Mostrar com indicação de força
+        if len(previsao_unica) >= 6:
+            emoji = "🎯"
+            força = "ALTA"
+        elif len(previsao_unica) >= 4:
+            emoji = "🔍" 
+            força = "MÉDIA"
+        else:
+            emoji = "🔄"
+            força = "BAIXA"
+        
+        # Dividir em 2 linhas de 4 números cada
+        linha1 = previsao_unica[:4]
+        linha2 = previsao_unica[4:8]
+        
+        linha1_str = " | ".join([f"**{num}**" for num in linha1])
+        linha2_str = " | ".join([f"**{num}**" for num in linha2])
+        
+        st.markdown(f"### {emoji} {linha1_str}")
+        st.markdown(f"### {emoji} {linha2_str}")
+        st.caption(f"💡 **{força} CONFIANÇA** - Baseado em {analise_contexto['total_transicoes']} transições históricas")
+        
+        # MOSTRAR PADRÕES DETECTADOS RECENTEMENTE
+        padroes_recentes = analise_contexto.get('padroes_recentes', [])
+        if padroes_recentes:
+            st.info("**🎯 PADRÕES DETECTADOS RECENTEMENTE:**")
+            for padrao in padroes_recentes:
+                st.write(f"`{padrao['anterior']} → {padrao['atual']}` ({padrao['probabilidade']:.1%}, {padrao['ocorrencias']}x)")
+
+        # Exemplo de previsão de outro contexto
+        if analise_contexto.get('previsao_exemplo'):
+            st.info(f"**Exemplo de padrão:** {analise_contexto['previsao_exemplo']}")
+        
+        # Estatísticas rápidas
+        with st.expander("📊 Estatísticas do Contexto"):
+            st.write(f"**Contextos Ativos:** {analise_contexto['contextos_ativos']}")
+            st.write(f"**Total de Transições:** {analise_contexto['total_transicoes']}")
+            st.write(f"**Número Mais Frequente:** {analise_contexto['numero_mais_frequente']}")
+            
+else:
+    st.info("🔄 Coletando dados contextuais... O sistema está aprendendo padrões.")
+    
+    # Mostrar progresso
+    if analise_contexto['total_transicoes'] > 0:
+        st.progress(min(100, analise_contexto['total_transicoes'] / 100))
+        st.caption(f"📈 Progresso: {analise_contexto['total_transicoes']} transições analisadas")
+
 # PREVISÃO ATUAL
 st.markdown("---")
-st.subheader("🎯 PREVISÃO ATUAL - SISTEMA ESPECIALISTA CORRIGIDO")
+st.subheader("🎯 PREVISÃO ATUAL - SISTEMA COM DETECÇÃO DE PADRÕES")
 
 previsao_valida = validar_previsao(st.session_state.previsao_atual)
+
+# MOSTRAR MUDANÇAS
+if st.session_state.previsao_anterior and len(st.session_state.previsao_anterior) == 15:
+    diferencas = st.session_state.gestor.calcular_diferencas(st.session_state.previsao_atual)
+    if diferencas:
+        st.info(f"**🔄 Mudanças:** Removidos: {', '.join(map(str, diferencas['removidos']))} | Adicionados: {', '.join(map(str, diferencas['adicionados']))}")
 
 if previsao_valida:
     if analise["modo_especialista"]:
@@ -1129,8 +1915,8 @@ with col4:
     st.metric("🔄 Rodadas", st.session_state.contador_rodadas)
 
 # DETALHES TÉCNICOS
-with st.expander("🔧 Detalhes Técnicos do Sistema Especialista Corrigido"):
-    st.write("**🎯 ARQUITETURA ESPECIALISTA 450+ CORRIGIDA:**")
+with st.expander("🔧 Detalhes Técnicos do Sistema com Detecção de Padrões"):
+    st.write("**🎯 ARQUITETURA COM DETECÇÃO ATIVA DE PADRÕES:**")
     
     if analise["modo_especialista"]:
         st.write("✅ **MODO ESPECIALISTA ATIVO**")
@@ -1138,17 +1924,42 @@ with st.expander("🔧 Detalhes Técnicos do Sistema Especialista Corrigido"):
         st.write("- 📈 Correlações entre Números") 
         st.write("- 🕒 Padrões Temporais Avançados")
         st.write("- 🔄 Sequências de Alta Ordem")
-        st.write(f"- 📊 {analise['padroes_detectados']} Padrões Detectados")
-        st.write("✅ **CORREÇÕES IMPLEMENTADAS:**")
-        st.write("- 🎯 Garantia de 15 números")
-        st.write("- ⚖️ Balanceamento entre dúzias")
-        st.write("- 🚀 Pesos otimizados do ensemble")
-        st.write("- 🛡️ Sistema de fallback robusto")
+        st.write("**🎯 DETECÇÃO DE PADRÕES ÓBVIOS:**")
+        st.write("- 🔍 Identificação automática de padrões fortes")
+        st.write("- 📊 Critérios rigorosos: >20% probabilidade ou 5+ ocorrências")
+        st.write("- ⚡ Análise em tempo real")
+        st.write("- 💪 Reforço de aprendizado ativo")
+        st.write("**🔄 SISTEMA DE ROTAÇÃO CONSERVADOR:**")
+        st.write("- 🎯 Rotação apenas após 3 rodadas estáveis")
+        st.write("- 📍 Similaridade mínima de 85% para rotacionar")
+        st.write("- ⚖️ Substituição máxima de 1-2 números")
     else:
         st.write("⏳ **AGUARDANDO DADOS SUFICIENTES**")
         st.write(f"- 📈 Progresso: {historico_atual}/{MIN_HISTORICO_TREINAMENTO}")
         st.write("- 🎯 Ativação automática em 450 registros")
         st.write("- 🔄 Coletando dados para análise profunda")
+    
+    # SEÇÃO DE CONTEXTO
+    st.write("**🔮 SISTEMA DE CONTEXTO HISTÓRICO INTELIGENTE:**")
+    st.write(f"- Contextos ativos: {analise_contexto['contextos_ativos']}")
+    st.write(f"- Transições analisadas: {analise_contexto['total_transicoes']}")
+    st.write(f"- Número mais frequente: {analise_contexto['numero_mais_frequente']}")
+    
+    if analise_contexto['previsao_contexto_atual']:
+        st.write(f"- Previsão atual (8 números): {analise_contexto['previsao_contexto_atual']}")
+    
+    # Padrões detectados
+    padroes_recentes = analise_contexto.get('padroes_recentes', [])
+    if padroes_recentes:
+        st.write("**🎯 PADRÕES RECENTES DETECTADOS:**")
+        for padrao in padroes_recentes:
+            st.write(f"   {padrao['anterior']} → {padrao['atual']} ({padrao['probabilidade']:.1%}, {padrao['ocorrencias']}x)")
+    
+    st.write("**📨 SISTEMA DE ALERTAS TELEGRAM:**")
+    st.write("- 🔔 Alerta Principal: 15 números (formato 8+7)")
+    st.write("- 🔔 Alerta Contextual: 8 números (formato 4+4)") 
+    st.write("- 🟢 Alerta GREEN: Quando acerta o número")
+    st.write("- 🔴 Alerta RED: Quando erra o número")
     
     st.write(f"**📊 Estatísticas:**")
     st.write(f"- Histórico Atual: {historico_atual} registros")
@@ -1163,7 +1974,7 @@ st.subheader("⚙️ Controles do Sistema")
 col1, col2 = st.columns(2)
 with col1:
     if st.button("🔄 Forçar Nova Previsão"):
-        nova_previsao = st.session_state.gestor.gerar_previsao()
+        nova_previsao = st.session_state.gestor.gerar_previsao_contextual_forte()
         st.session_state.previsao_atual = validar_previsao(nova_previsao)
         st.rerun()
 
@@ -1171,15 +1982,17 @@ with col2:
     if st.button("🗑️ Limpar Histórico"):
         if os.path.exists(HISTORICO_PATH):
             os.remove(HISTORICO_PATH)
+        if os.path.exists(CONTEXTO_PATH):
+            os.remove(CONTEXTO_PATH)
         st.session_state.gestor.historico.clear()
         st.session_state.acertos = 0
         st.session_state.erros = 0
         st.rerun()
 
 st.markdown("---")
-st.markdown("### 🚀 **Sistema Especialista Corrigido - Garantia de 15 Números**")
-st.markdown("*Padrões complexos, correlações avançadas e inteligência de longo prazo*")
+st.markdown("### 🚀 **Sistema Especialista com Detecção de Padrões Óbvios**")
+st.markdown("*Captura padrões históricos que se repetem frequentemente*")
 
 # Rodapé
 st.markdown("---")
-st.markdown("**🎯 Hybrid IA System v6.1** - *Especialista 450+ Registros Corrigido*")
+st.markdown("**🎯 Hybrid IA System v14.0** - *Especialista com Detecção Ativa de Padrões, Contexto Inteligente e Sistema Completo de Alertas*")
