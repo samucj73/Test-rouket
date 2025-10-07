@@ -1,4 +1,4 @@
-# RoletaHybridIA_v3.py - SISTEMA HÍBRIDO OTIMIZADO (IA + CONTEXTO) - "Elite Master"
+# RoletaVirtual.py - App Especializado em Previsão por Setores
 import streamlit as st
 import json
 import os
@@ -7,782 +7,575 @@ import requests
 from collections import deque, Counter
 from streamlit_autorefresh import st_autorefresh
 import logging
-import random
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import accuracy_score
-import joblib
-import functools
-import statistics
-import csv
+import io
+from datetime import datetime
+import warnings
+warnings.filterwarnings('ignore')
 
 # =============================
-# CONFIGURAÇÕES GLOBAIS
+# Configurações
 # =============================
-HISTORICO_PATH = "historico_hybrid_ia.json"
-CONTEXTO_PATH = "contexto_historico.json"
-MODELO_IA_PATH = "modelo_random_forest_v3.pkl"
-SCALER_PATH = "scaler_v3.pkl"
-LOG_CSV_PATH = "logs_resultados.csv"
+HISTORICO_PATH = "historico_roleta_virtual.json"
+METRICAS_PATH = "metricas_roleta_virtual.json"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
-#TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
-#TELEGRAM_CHAT_ID = "5121457416"
+# Canal Telegram para Roleta Virtual
+TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
+TELEGRAM_CHAT_ID = "5121457416"
 
-ROULETTE_PHYSICAL_LAYOUT = [
-    [1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34],
-    [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35],
-    [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36]
+ROULETTE_LAYOUT = [
+    0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6,
+    27, 13, 36, 11, 30, 8, 23, 10, 5, 24,
+    16, 33, 1, 20, 14, 31, 9, 22, 18, 29,
+    7, 28, 12, 35, 3, 26
 ]
 
-VERMELHO = {1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36}
-PRETO = {2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35}
-
-MIN_DADOS_TREINAMENTO = 100
-TREINAMENTO_INTERVALO = 1
-WINDOW_SIZE = 50
-CACHE_INTERVAL = 20
-CONFIANCA_MINIMA = 0.32
-RELATORIO_RODADAS = 10
-MAX_HISTORY_LEN = 2000
+# Configurações da Roleta Virtual
+SETOR_SIZE = 5           # Tamanho do setor de previsão
+MIN_HISTORICO = 20       # Mínimo de registros para começar previsões
+MAX_PREVISOES = 8        # Máximo de números na previsão final
 
 # =============================
-# CONFIGURAR LOGGING
+# Utilitários
 # =============================
-def setup_advanced_logging():
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
-    if logger.handlers:
-        logger.handlers = []
-    file_handler = logging.FileHandler('sistema_hibrido_ia_v3.log')
-    file_handler.setLevel(logging.INFO)
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
-    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    file_handler.setFormatter(formatter)
-    console_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
-    logger.addHandler(console_handler)
-
-setup_advanced_logging()
-
-# =============================
-# DECORATOR DE PERFORMANCE
-# =============================
-def timing_decorator(func):
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        start_time = time.time()
-        result = func(*args, **kwargs)
-        end_time = time.time()
-        logging.debug(f"⏱️ {func.__name__} executado em {end_time - start_time:.4f}s")
-        return result
-    return wrapper
-
-# =============================
-# FUNÇÕES UTILITÁRIAS
-# =============================
-@timing_decorator
-def carregar_historico():
+def enviar_telegram(msg: str, token=TELEGRAM_TOKEN, chat_id=TELEGRAM_CHAT_ID):
     try:
-        if os.path.exists(HISTORICO_PATH):
-            with open(HISTORICO_PATH, "r") as f:
-                historico = json.load(f)
-            historico_valido = [h for h in historico if isinstance(h, dict) and 'number' in h and h['number'] is not None]
-            logging.info(f"📁 Histórico carregado: {len(historico_valido)} registros válidos")
-            return historico_valido
-        return []
-    except Exception as e:
-        logging.error(f"Erro ao carregar histórico: {e}")
-        return []
-
-@timing_decorator
-def salvar_historico(numero_dict):
-    try:
-        if not isinstance(numero_dict, dict) or numero_dict.get('number') is None:
-            logging.error("❌ Tentativa de salvar número inválido")
-            return False
-        historico_existente = carregar_historico()
-        timestamp_novo = numero_dict.get("timestamp")
-        ja_existe = any(registro.get("timestamp") == timestamp_novo for registro in historico_existente if isinstance(registro, dict))
-        if not ja_existe:
-            historico_existente.append(numero_dict)
-            with open(HISTORICO_PATH, "w") as f:
-                json.dump(historico_existente, f, indent=2)
-            logging.info(f"✅ Número {numero_dict['number']} salvo no histórico")
-            return True
-        return False
-    except Exception as e:
-        logging.error(f"Erro ao salvar histórico: {e}")
-        return False
-
-@timing_decorator
-def fetch_latest_result():
-    try:
-        response = requests.get(API_URL, headers=HEADERS, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-        game_data = data.get("data", {})
-        if not game_data:
-            logging.error("❌ Estrutura da API inválida: data não encontrado")
-            return None
-        result = game_data.get("result", {})
-        if not result:
-            logging.error("❌ Estrutura da API inválida: result não encontrado")
-            return None
-        outcome = result.get("outcome", {})
-        if not outcome:
-            logging.error("❌ Estrutura da API inválida: outcome não encontrado")
-            return None
-        number = outcome.get("number")
-        if number is None:
-            logging.error("❌ Número não encontrado na resposta da API")
-            return None
-        timestamp = game_data.get("startedAt")
-        return {"number": number, "timestamp": timestamp}
-    except requests.exceptions.RequestException as e:
-        logging.error(f"❌ Erro de rede ao buscar resultado: {e}")
-        return None
-    except Exception as e:
-        logging.error(f"❌ Erro inesperado ao buscar resultado: {e}")
-        return None
-
-@timing_decorator
-def obter_vizinhos_fisicos(numero):
-    if numero == 0:
-        return [32, 15, 19, 4, 21, 2, 25]
-    vizinhos = set()
-    for col_idx, coluna in enumerate(ROULETTE_PHYSICAL_LAYOUT):
-        if numero in coluna:
-            num_idx = coluna.index(numero)
-            if num_idx > 0:
-                vizinhos.add(coluna[num_idx - 1])
-            if num_idx < len(coluna) - 1:
-                vizinhos.add(coluna[num_idx + 1])
-            if col_idx > 0:
-                if num_idx < len(ROULETTE_PHYSICAL_LAYOUT[col_idx - 1]):
-                    vizinhos.add(ROULETTE_PHYSICAL_LAYOUT[col_idx - 1][num_idx])
-            if col_idx < 2:
-                if num_idx < len(ROULETTE_PHYSICAL_LAYOUT[col_idx + 1]):
-                    vizinhos.add(ROULETTE_PHYSICAL_LAYOUT[col_idx + 1][num_idx])
-    return list(vizinhos)
-
-@timing_decorator
-def validar_previsao(previsao):
-    if not previsao or not isinstance(previsao, list):
-        return []
-    previsao_limpa = [int(num) for num in previsao if num is not None and isinstance(num, (int, float)) and 0 <= int(num) <= 36]
-    return previsao_limpa
-
-@timing_decorator
-def enviar_telegram(msg: str):
-    try:
-        if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
-            logging.warning("Telegram não configurado (token/chat_id ausente).")
-            return
-        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-        payload = {"chat_id": TELEGRAM_CHAT_ID, "text": msg}
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        payload = {"chat_id": chat_id, "text": msg}
         requests.post(url, data=payload, timeout=10)
         logging.info(f"📤 Telegram enviado: {msg}")
     except Exception as e:
         logging.error(f"Erro ao enviar para Telegram: {e}")
 
-@timing_decorator
-def enviar_alerta_previsao(numeros, confianca, metodo="IA"):
-    try:
-        if not numeros or len(numeros) < 1:
-            logging.error("❌ Alerta de previsão precisa de números válidos")
-            return
-        numeros_ordenados = sorted(numeros)[:10]
-        numeros_str = ', '.join(map(str, numeros_ordenados))
-        mensagem = f"🎯 NOVO SINAL - ELITE MASTER\n🔹 Método: {metodo}\n🔹 Confiança: {int(confianca*100)}%\n🔹 Números: {numeros_str}\n📊 Acurácia atual: {st.session_state.get('acuracia_geral', 0):.1f}%"
-        enviar_telegram(mensagem)
-    except Exception as e:
-        logging.error(f"Erro alerta previsão: {e}")
+def carregar_historico():
+    """Carrega histórico persistente do arquivo"""
+    if os.path.exists(HISTORICO_PATH):
+        try:
+            with open(HISTORICO_PATH, "r") as f:
+                historico = json.load(f)
+            logging.info(f"📁 Histórico carregado: {len(historico)} registros")
+            return historico
+        except Exception as e:
+            logging.error(f"Erro ao carregar histórico: {e}")
+            return []
+    return []
 
-@timing_decorator
-def enviar_alerta_resultado(acertou, numero_sorteado, previsao_anterior, confianca, metodo="IA"):
+def salvar_historico(numero_dict):
+    """Salva número diretamente da API no arquivo histórico persistente"""
     try:
-        previsao_ordenada = sorted(previsao_anterior) if previsao_anterior else []
-        previsao_str = ', '.join(map(str, previsao_ordenada))
-        if acertou:
-            mensagem = f"🟢 GREEN - ELITE MASTER\n{metodo} acertou {numero_sorteado}\nConfiança: {int(confianca*100)}%\nPrevisão: {previsao_str}"
+        historico_existente = carregar_historico()
+        
+        # Verifica se o número já existe (pelo timestamp)
+        timestamp_novo = numero_dict.get("timestamp")
+        ja_existe = any(registro.get("timestamp") == timestamp_novo for registro in historico_existente)
+        
+        # Só adiciona se for um novo registro
+        if not ja_existe:
+            historico_existente.append(numero_dict)
+            
+            # Salva no arquivo
+            with open(HISTORICO_PATH, "w") as f:
+                json.dump(historico_existente, f, indent=2)
+            
+            logging.info(f"✅ Número {numero_dict['number']} salvo no histórico")
+            return True
         else:
-            mensagem = f"🔴 RED - ELITE MASTER\n{metodo} errou. Sorteado: {numero_sorteado}\nConfiança: {int(confianca*100)}%\nPrevisão: {previsao_str}"
-        enviar_telegram(mensagem)
+            logging.info(f"⏳ Número {numero_dict['number']} já existe no histórico")
+            return False
+            
     except Exception as e:
-        logging.error(f"Erro alerta resultado: {e}")
-
-# =============================
-# IA - RANDOM FOREST PREDICTOR V3
-# =============================
-class IAPredictorV3:
-    """Random Forest com features expandidas e treino incremental"""
-    def __init__(self):
-        self.model = None
-        self.scaler = None
-        self.ultimo_treinamento = 0
-        self.acuracia_treinamento = 0.0
-        self.min_samples_data = MIN_DADOS_TREINAMENTO
-        self._carregar_modelo()
-
-    def _carregar_modelo(self):
-        try:
-            if os.path.exists(MODELO_IA_PATH) and os.path.exists(SCALER_PATH):
-                self.model = joblib.load(MODELO_IA_PATH)
-                self.scaler = joblib.load(SCALER_PATH)
-                logging.info("🤖 IA v3 carregada do disco.")
-                return True
-            logging.info("🤖 IA v3 não encontrada no disco.")
-            return False
-        except Exception as e:
-            logging.error(f"Erro ao carregar modelo IA v3: {e}")
-            return False
-
-    def _salvar_modelo(self):
-        try:
-            if self.model is not None and self.scaler is not None:
-                joblib.dump(self.model, MODELO_IA_PATH)
-                joblib.dump(self.scaler, SCALER_PATH)
-                logging.info("💾 Modelo IA v3 salvo.")
-                return True
-        except Exception as e:
-            logging.error(f"Erro ao salvar modelo: {e}")
+        logging.error(f"Erro ao salvar histórico: {e}")
         return False
 
-    def numero_to_features(self, janela):
-        """
-        Recebe uma lista de últimos N números e gera feature vector:
-        - Para cada posição: número normalizado (0-36), cor (1/-1/0), paridade (0/1), duzia (0,1,2), metade (0/1)
-        - Estatísticas adicionais: média, std, contagem_pares, contagem_vermelho, contagem_preto, ultima_diferenca
-        """
-        # janela: lista de ints
-        features = []
-        for n in janela:
-            n_int = int(n)
-            cor = 1 if n_int in VERMELHO else (-1 if n_int in PRETO else 0)
-            par = 1 if (n_int % 2 == 0) else 0
-            duzia = 0 if n_int == 0 else ((n_int - 1) // 12)
-            metade = 0 if n_int == 0 else (0 if n_int <= 18 else 1)
-            features.extend([n_int, cor, par, duzia, metade])
-        # estatísticas
-        media = float(np.mean(janela)) if len(janela) > 0 else 0.0
-        std = float(np.std(janela)) if len(janela) > 0 else 0.0
-        pares = sum(1 for x in janela if x % 2 == 0)
-        vermelhos = sum(1 for x in janela if x in VERMELHO)
-        pretos = sum(1 for x in janela if x in PRETO)
-        ultima_diff = janela[-1] - janela[-2] if len(janela) > 1 else 0
-        features.extend([media, std, pares, vermelhos, pretos, ultima_diff])
-        return np.array(features, dtype=float)
-
-    @timing_decorator
-    def preparar_dataset(self, historico, window_size=WINDOW_SIZE):
-        """Transforma historico (lista de dicts com 'number') em X, y"""
-        numeros = [h['number'] for h in historico]
-        if len(numeros) < window_size + 30:
-            return None, None
-        X, y = [], []
-        for i in range(window_size, len(numeros)):
-            janela = numeros[i-window_size:i]
-            X.append(self.numero_to_features(janela))
-            y.append(int(numeros[i]))
-        return np.vstack(X), np.array(y, dtype=int)
-
-    @timing_decorator
-    def treinar(self, historico):
-        try:
-            X, y = self.preparar_dataset(historico, WINDOW_SIZE)
-            if X is None or len(X) < 50:
-                logging.info("IA v3: dados insuficientes para treinar.")
-                return False
-            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.15, random_state=42)
-            self.scaler = StandardScaler()
-            X_train_scaled = self.scaler.fit_transform(X_train)
-            X_test_scaled = self.scaler.transform(X_test)
-            self.model = RandomForestClassifier(
-                n_estimators=150,
-                max_depth=None,
-                min_samples_split=4,
-                min_samples_leaf=1,
-                random_state=42,
-                n_jobs=-1,
-                bootstrap=True,
-                max_features='sqrt'
-            )
-            self.model.fit(X_train_scaled, y_train)
-            y_pred = self.model.predict(X_test_scaled)
-            self.acuracia_treinamento = accuracy_score(y_test, y_pred) * 100
-            self.ultimo_treinamento = time.time()
-            self._salvar_modelo()
-            logging.info(f"🤖 IA v3 treinada - Acurácia: {self.acuracia_treinamento:.2f}%")
-            return True
-        except Exception as e:
-            logging.error(f"Erro ao treinar IA v3: {e}")
-            return False
-
-    @timing_decorator
-    def predict_top_probs(self, ultimos_numeros, top_n=12):
-        """Retorna os top_n números ordenados por probabilidade e as probabilidades normalizadas"""
-        try:
-            if self.model is None or self.scaler is None:
-                return None, None
-            if len(ultimos_numeros) < WINDOW_SIZE:
-                return None, None
-            features = self.numero_to_features(list(ultimos_numeros)[-WINDOW_SIZE:])
-            Xp = self.scaler.transform([features])
-            probs = self.model.predict_proba(Xp)[0]  # length 37
-            # predict_proba returns probabilities aligned with model.classes_
-            classes = list(self.model.classes_)
-            # map to full 0..36 probabilities
-            prob_map = {c: probs[i] for i, c in enumerate(classes)}
-            all_probs = np.array([prob_map.get(i, 0.0) for i in range(37)])
-            order = np.argsort(all_probs)[::-1]
-            top = order[:top_n].tolist()
-            top_probs = all_probs[order][:top_n]
-            return top, top_probs
-        except Exception as e:
-            logging.error(f"Erro predict IA v3: {e}")
-            return None, None
-
-    def deve_treinar(self, historico):
-        if len(historico) < self.min_samples_data:
-            return False
-        if self.model is None:
-            return True
-        # Treinar incremental a cada TREINAMENTO_INTERVALO novos registros
-        tempo_desde = time.time() - getattr(self, "ultimo_treinamento", 0)
-        return tempo_desde > 60*30  # ou também por volume - aqui por tempo > 30 min
-
-# =============================
-# SISTEMA HÍBRIDO V3 (IA + CONTEXTO)
-# =============================
-class SistemaHibridoV3:
-    def __init__(self):
-        self.ia = IAPredictorV3()
-        self.historico = deque(carregar_historico(), maxlen=MAX_HISTORY_LEN)
-        self.ultimos_numeros = deque(maxlen=200)  # para análises rápidas
-        self.previsao_atual = []
-        self.confianca_atual = 0.0
-        self.metodo_atual = "NENHUM"
-        self.cache_previsoes = {}
-        self.ultima_previsao_time = 0
-        self.contador_rodadas = 0
-        self.acertos = 0
-        self.erros = 0
-        self.acertos_consecutivos = 0
-        self.erros_consecutivos = 0
-        self.historico_confianca = deque(maxlen=100)
-        # carregar últimos números
-        for r in list(self.historico)[-200:]:
-            if r.get('number') is not None:
-                self.ultimos_numeros.append(int(r['number']))
-        # treinar se necessário
-        try:
-            if len(self.historico) >= MIN_DADOS_TREINAMENTO:
-                self.ia.treinar(list(self.historico))
-        except Exception as e:
-            logging.error(f"Erro ao treinar inicial: {e}")
-
-    # ---------- utilitários ----------
-    def adicionar_numero(self, numero_dict):
-        if not isinstance(numero_dict, dict) or numero_dict.get('number') is None:
-            return
-        numero = int(numero_dict['number'])
-        self.historico.append(numero_dict)
-        self.ultimos_numeros.append(numero)
-        self.contador_rodadas += 1
-        # limpar cache
-        self.cache_previsoes.clear()
-        # grava CSV log parcial
-        self._log_round(numero)
-        # treino incremental se tiver muitos novos dados
-        if len(self.historico) % TREINAMENTO_INTERVALO == 0:
+def salvar_metricas(m):
+    try:
+        hist = []
+        if os.path.exists(METRICAS_PATH):
             try:
-                self.ia.treinar(list(self.historico))
-            except Exception as e:
-                logging.error(f"Erro no treino incremental: {e}")
+                with open(METRICAS_PATH, "r") as f:
+                    hist = json.load(f)
+            except Exception:
+                hist = []
+        hist.append(m)
+        with open(METRICAS_PATH, "w") as f:
+            json.dump(hist, f, indent=2)
+    except Exception as e:
+        logging.error(f"Erro ao salvar métricas: {e}")
 
-    def _log_round(self, numero_real):
-        # escreve linha em CSV com timestamp, numero, previsao atual, confianca, metodo, acertos, erros
-        try:
-            exists = os.path.exists(LOG_CSV_PATH)
-            with open(LOG_CSV_PATH, mode='a', newline='') as f:
-                writer = csv.writer(f)
-                if not exists:
-                    writer.writerow(["timestamp", "numero_real", "previsao", "confianca", "metodo", "acertos", "erros"])
-                writer.writerow([time.time(), numero_real, '|'.join(map(str, self.previsao_atual)), f"{self.confianca_atual:.3f}", self.metodo_atual, self.acertos, self.erros])
-        except Exception as e:
-            logging.error(f"Erro ao logar round: {e}")
+def fetch_latest_result():
+    try:
+        response = requests.get(API_URL, headers=HEADERS, timeout=6)
+        response.raise_for_status()
+        data = response.json()
+        game_data = data.get("data", {})
+        result = game_data.get("result", {})
+        outcome = result.get("outcome", {})
+        number = outcome.get("number")
+        timestamp = game_data.get("startedAt")
+        return {"number": number, "timestamp": timestamp}
+    except Exception as e:
+        logging.error(f"Erro ao buscar resultado: {e}")
+        return None
 
-    # ---------- contexto ----------
-    def gerar_previsao_contextual(self, top_n=10):
-        """Gera previsão contextual combinando vizinhança, quentes e frios, cor/paridade"""
-        try:
-            if len(self.ultimos_numeros) == 0:
-                return random.sample(range(0, 37), top_n), 0.35
-            previsao = []
-            ultimo = self.ultimos_numeros[-1]
-            # vizinhos físicos
-            viz = obter_vizinhos_fisicos(ultimo)
-            random.shuffle(viz)
-            previsao.extend(viz[:3])
-            # numeros quentes (ultimos 30)
-            ult30 = list(self.ultimos_numeros)[-30:]
-            freq = Counter(ult30)
-            quentes = [n for n, c in freq.most_common(4)]
-            previsao.extend([n for n in quentes if n not in previsao][:4])
-            # cor/paridade bias: se 3+ vermelhos seguidos -> priorizar pretos
-            ult5 = list(self.ultimos_numeros)[-5:]
-            cor_sum = sum(1 if x in VERMELHO else -1 if x in PRETO else 0 for x in ult5)
-            candidatos = list(range(37))
-            if cor_sum >= 3:
-                candidatos = list(PRETO)
-            elif cor_sum <= -3:
-                candidatos = list(VERMELHO)
-            # completar com frios (não vistos em ult30)
-            todos = set(range(0,37))
-            frios = list(todos - set(ult30))
-            random.shuffle(frios)
-            # priorizar candidatos que são frios e na cor desejada
-            complement = [n for n in frios if n in candidatos][: (top_n - len(previsao))]
-            previsao.extend(complement)
-            # Se não completar, preencher por frequencia média
-            if len(previsao) < top_n:
-                meio_sorted = sorted(list(todos), key=lambda x: freq.get(x,0))
-                previsao.extend([n for n in meio_sorted if n not in previsao][: (top_n - len(previsao))])
-            previsao = previsao[:top_n]
-            # confiança heurística baseada em quantos itens eram quentes/vidas vizinhas
-            score = (sum(1 for p in previsao if p in quentes) * 0.12) + (len(set(previsao)) / top_n * 0.3)
-            confianca = min(0.85, max(0.25, 0.35 + score))
-            return previsao, confianca
-        except Exception as e:
-            logging.error(f"Erro gerar_previsao_contextual: {e}")
-            return random.sample(range(0,37), top_n), 0.25
+def obter_vizinhos(numero, layout, antes=2, depois=2):
+    """Obtém vizinhos físicos na roleta"""
+    if numero not in layout:
+        return [numero]
+    idx = layout.index(numero)
+    n = len(layout)
+    vizinhos = []
+    for i in range(antes, 0, -1):
+        vizinhos.append(layout[(idx - i) % n])
+    vizinhos.append(numero)
+    for i in range(1, depois + 1):
+        vizinhos.append(layout[(idx + i) % n])
+    return vizinhos
 
-    # ---------- IA ----------
-    def prever_ia(self, top_n=12):
-        top, probs = self.ia.predict_top_probs(list(self.ultimos_numeros), top_n=top_n)
-        if top is None or probs is None:
-            return None, 0.0
-        # converter probs para confiança média dos top
-        confianca = float(np.mean(probs))
-        return top, confianca
+# =============================
+# SISTEMA DE ROLETA VIRTUAL
+# =============================
+class RoletaVirtual:
+    def __init__(self, layout=ROULETTE_LAYOUT, setor_size=SETOR_SIZE):
+        self.layout = layout
+        self.setor_size = setor_size
+        self.setores = self._criar_setores()
+        
+    def _criar_setores(self):
+        """Divide a roleta em setores sobrepostos de 5 números"""
+        setores = []
+        n = len(self.layout)
+        
+        # Cria setores sobrepostos a cada posição
+        for i in range(n):
+            setor = []
+            for j in range(self.setor_size):
+                setor.append(self.layout[(i + j) % n])
+            setores.append(setor)
+        
+        logging.info(f"🎯 Roleta Virtual criada com {len(setores)} setores de {self.setor_size} números")
+        return setores
+    
+    def encontrar_setor_ultimo_numero(self, ultimo_numero):
+        """Encontra todos os setores que contêm o último número"""
+        setores_com_ultimo = []
+        
+        for i, setor in enumerate(self.setores):
+            if ultimo_numero in setor:
+                # Calcula a posição relativa do último número no setor
+                posicao = setor.index(ultimo_numero)
+                setores_com_ultimo.append((i, setor, posicao))
+        
+        return setores_com_ultimo
+    
+    def analisar_historico_setores(self, historico, ultimo_numero):
+        """Analisa qual setor tem maior probabilidade baseado no histórico"""
+        if len(historico) < 10:
+            return []
+            
+        historico_numeros = [h['number'] for h in historico]
+        setores_com_ultimo = self.encontrar_setor_ultimo_numero(ultimo_numero)
+        
+        if not setores_com_ultimo:
+            return []
+        
+        # Analisa a performance de cada setor após o último número
+        performance_setores = {}
+        
+        for idx_setor, setor, pos_ultimo in setores_com_ultimo:
+            acertos = 0
+            total_ocorrencias = 0
+            
+            # Procura no histórico por padrões similares
+            for i in range(len(historico_numeros) - 1):
+                if historico_numeros[i] == ultimo_numero:
+                    # Verifica se o próximo número está neste setor
+                    proximo_numero = historico_numeros[i + 1]
+                    if proximo_numero in setor:
+                        acertos += 1
+                    total_ocorrencias += 1
+            
+            if total_ocorrencias > 0:
+                taxa_acerto = acertos / total_ocorrencias
+                # Bonus para setores onde o último número está mais no centro
+                bonus_posicao = 1.0 - (abs(pos_ultimo - (self.setor_size // 2)) / self.setor_size)
+                performance_setores[idx_setor] = {
+                    'setor': setor,
+                    'taxa_acerto': taxa_acerto,
+                    'score': taxa_acerto * (1.0 + bonus_posicao * 0.3),
+                    'acertos': acertos,
+                    'total': total_ocorrencias
+                }
+        
+        # Ordena por performance e pega o melhor
+        setores_ordenados = sorted(performance_setores.items(), 
+                                 key=lambda x: x[1]['score'], reverse=True)
+        
+        if setores_ordenados:
+            melhor_setor_idx, dados = setores_ordenados[0]
+            melhor_setor = dados['setor']
+            
+            logging.info(f"🎯 Melhor setor: {melhor_setor} (Score: {dados['score']:.3f}, Acertos: {dados['acertos']}/{dados['total']})")
+            return melhor_setor
+        
+        return []
+    
+    def prever_proximo_setor(self, historico):
+        """Previsão principal do sistema de roleta virtual"""
+        if len(historico) < 2:
+            return []
+            
+        ultimo_numero = historico[-1]['number'] if isinstance(historico[-1], dict) else None
+        if ultimo_numero is None:
+            return []
+        
+        # 1. Análise estatística do setor mais provável
+        setor_previsto = self.analisar_historico_setores(historico, ultimo_numero)
+        
+        # 2. Se não encontrou padrão forte, usa fallback baseado na posição física
+        if not setor_previsto:
+            setor_previsto = self.fallback_posicao_fisica(ultimo_numero)
+        
+        return setor_previsto
+    
+    def fallback_posicao_fisica(self, ultimo_numero):
+        """Fallback: setor ao redor do último número + deslocamento estratégico"""
+        if ultimo_numero not in self.layout:
+            return []
+        
+        idx_ultimo = self.layout.index(ultimo_numero)
+        
+        # Deslocamento baseado em estatísticas de roleta (tendência de +2 a +4 posições)
+        deslocamento = 3
+        
+        idx_alvo = (idx_ultimo + deslocamento) % len(self.layout)
+        
+        # Pega setor centrado na posição alvo
+        setor_fallback = []
+        for i in range(self.setor_size):
+            pos = (idx_alvo + i - self.setor_size//2) % len(self.layout)
+            setor_fallback.append(self.layout[pos])
+        
+        logging.info(f"🔄 Fallback: Setor ao redor da posição {idx_alvo} -> {setor_fallback}")
+        return setor_fallback
 
-    # ---------- fusão híbrida (voto ponderado) ----------
-    def prever_hibrida(self, top_n=10):
-        # cache simple
-        cache_key = hash(tuple(self.ultimos_numeros)) if self.ultimos_numeros else 0
-        now = time.time()
-        if cache_key in self.cache_previsoes and (now - self.ultima_previsao_time) < CACHE_INTERVAL:
-            return self.cache_previsoes[cache_key]
-        # obter previsões
-        previsao_ia, conf_ia = self.prever_ia(top_n=12)
-        previsao_ctx, conf_ctx = self.gerar_previsao_contextual(top_n=12)
-        # normalizar confidancas (garantir 0-1)
-        conf_ia = float(conf_ia) if conf_ia is not None else 0.0
-        conf_ctx = float(conf_ctx) if conf_ctx is not None else 0.0
-        # pesos dinâmicos baseados em acuracia móvel (ultimas 50 rodadas)
-        acuracia_movel = self._acuracia_movel(50)
-        peso_ia = 0.6 + 0.2 * (acuracia_movel / 100)   # aumenta se performance boa
-        peso_ctx = 1.0 - peso_ia
-        # construir contagem ponderada
-        contador = Counter()
-        if previsao_ia:
-            for i, n in enumerate(previsao_ia):
-                contador[int(n)] += peso_ia * (1.0 - i*0.02)  # peso decrescente por ranking
-        if previsao_ctx:
-            for i, n in enumerate(previsao_ctx):
-                contador[int(n)] += peso_ctx * (1.0 - i*0.02)
-        # escolher top_n por votos
-        final = [n for n, _ in contador.most_common(top_n)]
-        # calcular confiança combinada
-        # média ponderada das confidências ajustadas pelos pesos e pela diversidade
-        conf_comb = (conf_ia * peso_ia + conf_ctx * peso_ctx) / (peso_ia + peso_ctx)
-        # penalizar caso pouca diversidade (muitos duplicados)
-        diversidade = len(set(final)) / top_n
-        conf_final = max(0.0, min(0.99, conf_comb * (0.6 + 0.4*diversidade)))
-        metodo = "HÍBRIDO" if abs(conf_ia - conf_ctx) < 0.08 else ("IA" if conf_ia > conf_ctx else "CONTEXTO")
-        # cache
-        self.cache_previsoes[cache_key] = (final, conf_final, metodo)
-        self.ultima_previsao_time = now
-        return final, conf_final, metodo
+    def expandir_previsao_com_vizinhos(self, setor_previsto):
+        """Expande o setor previsto incluindo vizinhos físicos"""
+        if not setor_previsto:
+            return setor_previsto
+            
+        previsao_expandida = set(setor_previsto.copy())
+        
+        # Para cada número no setor, adiciona seus vizinhos
+        for numero in setor_previsto:
+            vizinhos = obter_vizinhos(numero, self.layout, antes=1, depois=1)
+            previsao_expandida.update(vizinhos)
+        
+        # Converte para lista e limita o tamanho
+        previsao_final = list(previsao_expandida)
+        if len(previsao_final) > MAX_PREVISOES:
+            # Prioriza números do setor original
+            numeros_prioridade = [n for n in previsao_final if n in setor_previsto]
+            outros_numeros = [n for n in previsao_final if n not in setor_previsto]
+            previsao_final = numeros_prioridade + outros_numeros
+            previsao_final = previsao_final[:MAX_PREVISOES]
+        
+        return previsao_final
 
-    def _acuracia_movel(self, n=50):
-        # calcular acuracia movel a partir do CSV (ultima N linhas) ou de st.session_state
-        try:
-            # preferir estado em memória (se disponível)
-            ac = st.session_state.get('acuracia_geral', None)
-            if ac is not None:
-                return ac
-            # fallback: ler CSV e calcular
-            if os.path.exists(LOG_CSV_PATH):
-                df = pd.read_csv(LOG_CSV_PATH)
-                last = df.tail(n)
-                if len(last) == 0:
-                    return 0.0
-                # considerar sucesso quando numero_real in previsao
-                wins = 0
-                for _, row in last.iterrows():
-                    previs = str(row.get('previsao', ''))
-                    real = int(row.get('numero_real', -1))
-                    if previs and str(real) in previs:
-                        wins += 1
-                return (wins / len(last)) * 100
-            return 0.0
-        except Exception as e:
-            logging.error(f"Erro acuracia_movel: {e}")
-            return 0.0
+# =============================
+# GESTOR DE ESTRATÉGIA PRINCIPAL
+# =============================
+class GestorRoletaVirtual:
+    def __init__(self):
+        self.roleta_virtual = RoletaVirtual()
+        self.historico = deque(carregar_historico(), maxlen=1000)
+        
+    def adicionar_numero(self, numero_dict):
+        self.historico.append(numero_dict)
+        
+    def gerar_previsao(self):
+        """Gera previsão usando apenas a Roleta Virtual"""
+        if len(self.historico) < MIN_HISTORICO:
+            return [], []
+            
+        # 1. Previsão do setor principal
+        setor_previsto = self.roleta_virtual.prever_proximo_setor(self.historico)
+        
+        # 2. Expansão com vizinhos
+        previsao_final = self.roleta_virtual.expandir_previsao_com_vizinhos(setor_previsto)
+        
+        return setor_previsto, previsao_final
 
-    # ---------- decisão de envio ----------
-    def gerar_sinal(self):
-        previsao, confianca, metodo = self.prever_hibrida(top_n=10)
-        # evitar sinal repetido (mesmo conjunto) ou baixa confiança
-        previsao_valida = validar_previsao(previsao)
-        if not previsao_valida:
-            return [], 0.0, "NENHUM"
-        # padrão: confiança deve ser >= CONFIANCA_MINIMA
-        if confianca < CONFIANCA_MINIMA:
-            logging.info(f"Sinal bloqueado por baixa confiança: {confianca:.3f}")
-            return [], confianca, "BAIXA_CONF"
-        # prevenir repetição: comparar com ultima previsao
-        ultima = getattr(self, 'previsao_atual', None)
-        if ultima and set(ultima) == set(previsao_valida):
-            logging.info("Sinal idêntico ao anterior — bloqueado para evitar repetição.")
-            return [], confianca, "REPETIDO"
-        # atualizar estado
-        self.previsao_atual = previsao_valida
-        self.confianca_atual = confianca
-        self.metodo_atual = metodo
-        self.historico_confianca.append(confianca)
-        # enviar telegram e retornar
-        return previsao_valida, confianca, metodo
+# =============================
+# STREAMLIT APP - ROLETA VIRTUAL
+# =============================
+st.set_page_config(
+    page_title="Roleta Virtual - Previsão por Setores", 
+    page_icon="🎯", 
+    layout="centered"
+)
 
-    # ---------- registro de acerto/erro ----------
-    def registrar_resultado(self, numero_real):
-        previs = self.previsao_atual or []
-        acertou = numero_real in previs
-        if acertou:
-            self.acertos += 1
-            self.acertos_consecutivos += 1
-            self.erros_consecutivos = 0
+st.title("🎯 Roleta Virtual - Previsão por Setores")
+st.markdown("### Sistema Inteligente de Previsão por Áreas da Roleta")
+
+# Auto-refresh a cada 3 segundos
+st_autorefresh(interval=3000, key="refresh")
+
+# Inicialização session_state
+defaults = {
+    "gestor": GestorRoletaVirtual(),
+    "setor_previsto": [],
+    "previsao_final": [],
+    "acertos_setor": 0,
+    "erros_setor": 0,
+    "acertos_previsao": 0,
+    "erros_previsao": 0,
+    "contador_rodadas": 0,
+    "ultimo_timestamp_processado": None,
+    "aguardando_novo_sorteio": False,
+}
+
+for k, v in defaults.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
+
+# =============================
+# CAPTURA E PROCESSAMENTO
+# =============================
+resultado = fetch_latest_result()
+
+# Verificação de novo sorteio
+novo_sorteio = False
+if resultado and resultado.get("timestamp"):
+    if (st.session_state.ultimo_timestamp_processado is None or 
+        resultado.get("timestamp") != st.session_state.ultimo_timestamp_processado):
+        novo_sorteio = True
+        logging.info(f"🎲 NOVO SORTEIO: {resultado['number']}")
+
+# Processamento do novo sorteio
+if resultado and novo_sorteio:
+    numero_dict = {"number": resultado["number"], "timestamp": resultado["timestamp"]}
+    
+    # Salva no histórico persistente
+    salvo_com_sucesso = salvar_historico(numero_dict)
+    
+    if salvo_com_sucesso:
+        st.session_state.gestor.adicionar_numero(numero_dict)
+    
+    st.session_state.ultimo_timestamp_processado = resultado["timestamp"]
+    numero_real = numero_dict["number"]
+
+    # =============================
+    # CONFERÊNCIA DE RESULTADOS
+    # =============================
+    # Conferência do SETOR PREVISTO
+    if st.session_state.setor_previsto:
+        if numero_real in st.session_state.setor_previsto:
+            st.session_state.acertos_setor += 1
+            st.success(f"🎯 **ACERTO NO SETOR!** Número {numero_real} estava no setor previsto!")
+            enviar_telegram(f"🎯 ACERTO SETOR! Número {numero_real} estava em {st.session_state.setor_previsto}")
         else:
-            self.erros += 1
-            self.erros_consecutivos += 1
-            self.acertos_consecutivos = 0
-        # salvar resultado no CSV
-        self._log_round(numero_real)
-        # a cada RELATORIO_RODADAS enviar resumo telegram
-        if self.contador_rodadas % RELATORIO_RODADAS == 0:
-            self.enviar_relatorio_periodico()
-        return acertou
+            st.session_state.erros_setor += 1
+            st.error(f"🔴 Setor não acertou. Número {numero_real} não estava em {st.session_state.setor_previsto}")
+    
+    # Conferência da PREVISÃO FINAL
+    if st.session_state.previsao_final:
+        if numero_real in st.session_state.previsao_final:
+            st.session_state.acertos_previsao += 1
+            st.success(f"🟢 **GREEN!** Número {numero_real} estava na previsão final!")
+            enviar_telegram(f"🟢 GREEN! Número {numero_real} estava na previsão: {st.session_state.previsao_final}")
+        else:
+            st.session_state.erros_previsao += 1
+            st.error(f"🔴 Previsão final errou. Número {numero_real} não estava na lista.")
 
-    def enviar_relatorio_periodico(self):
-        try:
-            total = self.acertos + self.erros
-            taxa = (self.acertos / total * 100) if total > 0 else 0.0
-            conf_media = (sum(self.historico_confianca)/len(self.historico_confianca)) if self.historico_confianca else 0.0
-            mensagem = f"📊 RELATÓRIO - ELITE MASTER\n🔸 Rodadas: {self.contador_rodadas}\n🔸 Acertos: {self.acertos}\n🔸 Erros: {self.erros}\n🔸 Taxa: {taxa:.1f}%\n🔸 Confiança média: {conf_media*100:.1f}%"
+    # =============================
+    # GERAÇÃO DE NOVA PREVISÃO
+    # =============================
+    if not st.session_state.aguardando_novo_sorteio:
+        # Gera nova previsão
+        setor_previsto, previsao_final = st.session_state.gestor.gerar_previsao()
+        
+        if setor_previsto:
+            st.session_state.setor_previsto = setor_previsto
+            st.session_state.previsao_final = previsao_final
+            st.session_state.aguardando_novo_sorteio = True
+            
+            # Envia alerta no Telegram
+            mensagem = f"🎯 **NOVA PREVISÃO ROLETA VIRTUAL**\n"
+            mensagem += f"📊 Setor Principal: {', '.join(map(str, sorted(setor_previsto)))}\n"
+            mensagem += f"🎲 Previsão Final: {', '.join(map(str, sorted(previsao_final)))}\n"
+            mensagem += f"📈 Histórico: {len(st.session_state.gestor.historico)} números"
+            
             enviar_telegram(mensagem)
-        except Exception as e:
-            logging.error(f"Erro enviar_relatorio_periodico: {e}")
+            logging.info("🔔 Nova previsão gerada e enviada para Telegram")
 
-    def get_status(self):
-        return {
-            "previsao_atual": self.previsao_atual,
-            "confianca_atual": self.confianca_atual,
-            "metodo_atual": self.metodo_atual,
-            "acertos": self.acertos,
-            "erros": self.erros,
-            "acertos_consecutivos": self.acertos_consecutivos,
-            "erros_consecutivos": self.erros_consecutivos,
-            "contador_rodadas": self.contador_rodadas,
-            "tamanho_historico": len(self.historico)
-        }
+    st.session_state.contador_rodadas += 1
+
+    # Salva métricas
+    metrics = {
+        "timestamp": resultado.get("timestamp"),
+        "numero_real": numero_real,
+        "setor_previsto": st.session_state.setor_previsto,
+        "previsao_final": st.session_state.previsao_final,
+        "acertos_setor": st.session_state.acertos_setor,
+        "erros_setor": st.session_state.erros_setor,
+        "acertos_previsao": st.session_state.acertos_previsao,
+        "erros_previsao": st.session_state.erros_previsao,
+    }
+    salvar_metricas(metrics)
 
 # =============================
-# STREAMLIT APP - INTERFACE (ELITE MASTER)
+# INTERFACE DO USUÁRIO
 # =============================
-st.set_page_config(page_title="Elite Master - Roleta Híbrida IA", page_icon="🤖", layout="centered")
-st.title("🔮 Elite Master — Roleta Híbrida (IA + Contexto) v3.0")
-st.markdown("Combinação avançada de **Random Forest** + análise contextual. Integrado com bot Telegram para envio de sinais e relatórios.")
-
-st_autorefresh(interval=8000, key="refresh")
-
-# session_state init
-if 'sistema' not in st.session_state:
-    st.session_state['sistema'] = SistemaHibridoV3()
-    st.session_state['previsao_atual'] = []
-    st.session_state['confianca_atual'] = 0.0
-    st.session_state['metodo_atual'] = "NENHUM"
-    st.session_state['acertos'] = 0
-    st.session_state['erros'] = 0
-    st.session_state['contador_rodadas'] = 0
-    st.session_state['ultimo_timestamp'] = None
-    st.session_state['ultimo_numero'] = None
-    st.session_state['acuracia_geral'] = 0.0
-
-sistema = st.session_state['sistema']
-
-# Painel lateral - controles
-with st.sidebar:
-    st.header("⚙️ Controles")
-    st.write("Botões rápidos para operar o sistema")
-    if st.button("🔄 Forçar Nova Previsão (Gerar Sinal)"):
-        previsao_valida, conf, metodo = sistema.gerar_sinal()
-        st.session_state['previsao_atual'] = previsao_valida
-        st.session_state['confianca_atual'] = conf
-        st.session_state['metodo_atual'] = metodo
-        if previsao_valida and conf >= CONFIANCA_MINIMA:
-            enviar_alerta_previsao(previsao_valida, conf, metodo)
-        st.experimental_rerun()
-    if st.button("🤖 Treinar IA Agora"):
-        with st.spinner("Treinando IA..."):
-            sucesso = sistema.ia.treinar(list(sistema.historico))
-            if sucesso:
-                st.success(f"IA treinada! Acurácia: {sistema.ia.acuracia_treinamento:.1f}%")
-            else:
-                st.error("Treino falhou ou dados insuficientes.")
-    if st.button("🗑️ Reset Tudo (Histórico + Modelos)"):
-        # apagar arquivos e resetar estados
-        for p in [HISTORICO_PATH, MODELO_IA_PATH, SCALER_PATH, LOG_CSV_PATH]:
-            if os.path.exists(p):
-                os.remove(p)
-        st.session_state.clear()
-        st.experimental_rerun()
-    st.markdown("---")
-    st.write("Configurações")
-    st.write(f"- Confiança mínima: {CONFIANCA_MINIMA*100:.0f}%")
-    st.write(f"- Relatório a cada {RELATORIO_RODADAS} rodadas")
-    st.markdown("---")
-    st.write("Telegram")
-    st.write(f"Token: {'(configurado)' if TELEGRAM_TOKEN else '(não configurado)'}")
-    st.write(f"Chat ID: {'(configurado)' if TELEGRAM_CHAT_ID else '(não configurado)'}")
-
-# Main area - status
-col1, col2, col3 = st.columns([2,2,2])
-with col1:
-    st.metric("📊 Rodadas", sistema.contador_rodadas)
-    st.metric("✅ Acertos", sistema.acertos)
-    st.metric("❌ Erros", sistema.erros)
-with col2:
-    acur_total = (sistema.acertos / (sistema.acertos + sistema.erros) * 100) if (sistema.acertos + sistema.erros) > 0 else 0
-    st.metric("📈 Taxa Acerto", f"{acur_total:.1f}%")
-    st.metric("🔁 Acertos Consecutivos", sistema.acertos_consecutivos)
-    st.metric("🔻 Erros Consecutivos", sistema.erros_consecutivos)
-with col3:
-    st.metric("🤖 IA Treinada", "SIM" if sistema.ia.model is not None else "NÃO")
-    st.metric("🧾 Histórico", len(sistema.historico))
-    st.metric("⏱️ Uptime (approx)", f"{time.time() / 3600:.1f}h")
-
 st.markdown("---")
 
-# Exibe previsão atual gerada
-st.subheader("🎯 Previsão Atual (Oficial)")
-previsao_atual = st.session_state.get('previsao_atual', sistema.previsao_atual)
-confianca_atual = st.session_state.get('confianca_atual', sistema.confianca_atual)
-metodo_atual = st.session_state.get('metodo_atual', sistema.metodo_atual)
+# Status do Sistema
+if resultado and not novo_sorteio:
+    st.info(f"⏳ Aguardando novo sorteio...")
 
-if previsao_atual and len(previsao_atual) == 10:
-    st.success(f"🔹 Método: {metodo_atual}  |  Confiança: {confianca_atual*100:.1f}%")
-    # exibir em duas linhas
-    linha1 = previsao_atual[:5]
-    linha2 = previsao_atual[5:10]
-    st.markdown("### " + " | ".join([f"**{n}**" for n in linha1]))
-    st.markdown("### " + " | ".join([f"**{n}**" for n in linha2]))
+if st.session_state.aguardando_novo_sorteio:
+    st.warning("🔄 Aguardando próximo sorteio para nova previsão...")
+
+# Histórico Recente
+st.subheader("📜 Últimos Números Sorteados")
+ultimos_numeros = [h['number'] for h in list(st.session_state.gestor.historico)[-5:]]
+if ultimos_numeros:
+    st.write(" → ".join(map(str, ultimos_numeros)))
 else:
-    st.info("Nenhuma previsão ativa (ou aguardando confiança suficiente).")
+    st.write("Nenhum número registrado ainda")
 
-# Mostrar histórico dos ultimos números
-st.subheader("🔍 Últimos Resultados")
-ultimos = list(sistema.ultimos_numeros)[-20:][::-1]
-if ultimos:
-    st.write(", ".join(map(str, ultimos)))
+# PREVISÃO ATUAL
+st.markdown("---")
+st.subheader("🎯 PREVISÃO ATUAL")
+
+if st.session_state.setor_previsto:
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.metric("🎯 Setor Principal", f"{len(st.session_state.setor_previsto)} números")
+        st.info(f"**Setor:** {', '.join(map(str, sorted(st.session_state.setor_previsto)))}")
+    
+    with col2:
+        st.metric("🎲 Previsão Final", f"{len(st.session_state.previsao_final)} números")
+        st.success(f"**Previsão:** {', '.join(map(str, sorted(st.session_state.previsao_final)))}")
 else:
-    st.write("Sem resultados ainda.")
+    st.info("🔄 **Aguardando dados suficientes para primeira previsão...**")
+    st.write(f"Necessário: {MIN_HISTORICO} números | Atual: {len(st.session_state.gestor.historico)}")
 
-# Botão de simular chegada de novo resultado manual (para testes)
+# ESTATÍSTICAS DE PERFORMANCE
 st.markdown("---")
-st.subheader("🛠️ Testes / Injeção Manual")
-colA, colB = st.columns(2)
-with colA:
-    numero_manual = st.number_input("Inserir número sorteado (0-36)", min_value=0, max_value=36, value=0, step=1)
-    if st.button("➕ Inserir resultado manual"):
-        timestamp_now = str(time.time())
-        numero_dict = {"number": int(numero_manual), "timestamp": timestamp_now}
-        salvo = salvar_historico(numero_dict)
-        if salvo:
-            sistema.adicionar_numero(numero_dict)
-            # registrar resultado (conferir previsão atual)
-            acertou = sistema.registrar_resultado(int(numero_manual))
-            enviar_alerta_resultado(acertou, int(numero_manual), sistema.previsao_atual, sistema.confianca_atual, sistema.metodo_atual)
-            st.success(f"Resultado {numero_manual} inserido!")
-            # atualizar sessão
-            st.session_state['previsao_atual'] = sistema.previsao_atual
-            st.session_state['confianca_atual'] = sistema.confianca_atual
-            st.session_state['metodo_atual'] = sistema.metodo_atual
-            st.session_state['acertos'] = sistema.acertos
-            st.session_state['erros'] = sistema.erros
-            st.experimental_rerun()
+st.subheader("📊 ESTATÍSTICAS DE PERFORMANCE")
+
+col1, col2, col3, col4 = st.columns(4)
+
+# Estatísticas do SETOR
+acertos_setor = st.session_state.acertos_setor
+erros_setor = st.session_state.erros_setor
+total_setor = acertos_setor + erros_setor
+taxa_setor = (acertos_setor / total_setor * 100) if total_setor > 0 else 0.0
+
+col1.metric("🎯 Acertos Setor", acertos_setor)
+col2.metric("🔴 Erros Setor", erros_setor)
+col3.metric("✅ Taxa Setor", f"{taxa_setor:.1f}%")
+col4.metric("📊 Total Jogadas", total_setor)
+
+# Estatísticas da PREVISÃO FINAL
+acertos_previsao = st.session_state.acertos_previsao
+erros_previsao = st.session_state.erros_previsao
+total_previsao = acertos_previsao + erros_previsao
+taxa_previsao = (acertos_previsao / total_previsao * 100) if total_previsao > 0 else 0.0
+
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("🟢 Greens", acertos_previsao)
+col2.metric("🔴 Reds", erros_previsao)
+col3.metric("✅ Taxa Acerto", f"{taxa_previsao:.1f}%")
+col4.metric("🎯 Precisão", f"{len(st.session_state.previsao_final)} nums" if st.session_state.previsao_final else "0")
+
+# INFORMAÇÕES DO SISTEMA
+st.markdown("---")
+st.subheader("ℹ️ INFORMAÇÕES DO SISTEMA")
+
+col1, col2, col3 = st.columns(3)
+col1.metric("📈 Histórico", f"{len(st.session_state.gestor.historico)} números")
+col2.metric("🔄 Rodadas", st.session_state.contador_rodadas)
+col3.metric("🎯 Tamanho Setor", SETOR_SIZE)
+
+# COMO FUNCIONA
+with st.expander("🔍 **Como funciona a Roleta Virtual?**"):
+    st.markdown("""
+    **🎯 Estratégia de Setores:**
+    - Divide a roleta em **37 setores sobrepostos** de 5 números cada
+    - Analisa **padrões de transição** entre setores no histórico
+    - Identifica o **setor mais provável** após cada número
+    
+    **📊 Método de Previsão:**
+    1. **Análise Estatística**: Encontra setores com melhor performance histórica
+    2. **Posição Física**: Considera a disposição real dos números na roleta
+    3. **Expansão Inteligente**: Inclui vizinhos físicos dos números do setor
+    
+    **🎲 Vantagens:**
+    - Foca em **áreas** ao invés de números isolados
+    - Mais **consistência** que previsões pontuais
+    - **Adaptável** aos padrões recentes da roleta
+    """)
+
+# BOTÃO DE DOWNLOAD
+st.markdown("---")
+st.subheader("📥 EXPORTAR DADOS")
+
+def gerar_download_roleta_virtual():
+    try:
+        historico = carregar_historico()
+        if not historico:
+            return None
+        
+        df = pd.DataFrame(historico)
+        output = io.BytesIO()
+        
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            df.to_excel(writer, sheet_name='Historico_Completo', index=False)
+            
+            stats_data = {
+                'Metrica': ['Total Registros', 'Acertos Setor', 'Erros Setor', 'Taxa Setor', 'Acertos Previsão', 'Erros Previsão', 'Taxa Previsão'],
+                'Valor': [
+                    len(df),
+                    st.session_state.acertos_setor,
+                    st.session_state.erros_setor,
+                    f"{taxa_setor:.1f}%",
+                    st.session_state.acertos_previsao,
+                    st.session_state.erros_previsao,
+                    f"{taxa_previsao:.1f}%"
+                ]
+            }
+            stats_df = pd.DataFrame(stats_data)
+            stats_df.to_excel(writer, sheet_name='Estatisticas', index=False)
+        
+        output.seek(0)
+        return output
+    
+    except Exception as e:
+        logging.error(f"Erro ao gerar download: {e}")
+        return None
+
+if st.button("💾 Exportar Dados Completos", type="primary"):
+    with st.spinner("Gerando arquivo..."):
+        arquivo = gerar_download_roleta_virtual()
+        
+        if arquivo:
+            nome_arquivo = f"roleta_virtual_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+            
+            st.download_button(
+                label="⬇️ Baixar Excel",
+                data=arquivo,
+                file_name=nome_arquivo,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+            st.success("✅ Arquivo gerado com sucesso!")
         else:
-            st.error("Falha ao salvar histórico (provavelmente duplicado).")
-with colB:
-    if st.button("🔮 Gerar sinal (sem enviar Telegram)"):
-        previsao_valida, conf, metodo = sistema.gerar_sinal()
-        st.session_state['previsao_atual'] = previsao_valida
-        st.session_state['confianca_atual'] = conf
-        st.session_state['metodo_atual'] = metodo
-        if previsao_valida:
-            st.write("Previsão:", previsao_valida)
-            st.write(f"Confiança: {conf*100:.1f}%  | Metodo: {metodo}")
-        else:
-            st.info("Nenhum sinal gerado (baixa confiança ou repetido).")
+            st.error("❌ Erro ao gerar arquivo")
 
-# Automatização: buscar resultado real da API (se disponível) - execução principal
+# FOOTER
 st.markdown("---")
-st.subheader("🔄 Processamento Automático (API)")
-try:
-    resultado = fetch_latest_result()
-    novo_sorteio = False
-    if resultado and resultado.get("timestamp"):
-        if st.session_state.get('ultimo_timestamp') is None or resultado.get('timestamp') != st.session_state.get('ultimo_timestamp'):
-            novo_sorteio = True
-    if resultado and novo_sorteio:
-        numero_dict = {"number": int(resultado["number"]), "timestamp": resultado["timestamp"]}
-        salvo = salvar_historico(numero_dict)
-        if salvo:
-            sistema.adicionar_numero(numero_dict)
-        st.session_state['ultimo_timestamp'] = resultado["timestamp"]
-        st.session_state['ultimo_numero'] = resultado["number"]
-        # conferir resultado vs previa
-        previsao_valida = validar_previsao(st.session_state.get('previsao_atual', []))
-        acertou = False
-        if previsao_valida and len(previsao_valida) == 10:
-            acertou = int(resultado["number"]) in previsao_valida
-            sistema.registrar_resultado(int(resultado["number"]))
-            enviar_alerta_resultado(acertou, int(resultado["number"]), previsao_valida, st.session_state.get('confianca_atual', 0.0), st.session_state.get('metodo_atual', 'NENHUM'))
-        # sempre gerar nova previsao após registro
-        nova_previsao, conf, metodo = sistema.gerar_sinal()
-        # se confianca ok envia telegram
-        if nova_previsao and conf >= CONFIANCA_MINIMA:
-            st.session_state['previsao_atual'] = nova_previsao
-            st.session_state['confianca_atual'] = conf
-            st.session_state['metodo_atual'] = metodo
-            enviar_alerta_previsao(nova_previsao, conf, metodo)
-        # atualizar acuracia geral no estado
-        total = sistema.acertos + sistema.erros
-        st.session_state['acuracia_geral'] = (sistema.acertos / total * 100) if total > 0 else 0.0
-        st.session_state['acertos'] = sistema.acertos
-        st.session_state['erros'] = sistema.erros
-        st.experimental_rerun()
-except Exception as e:
-    logging.error(f"Erro no loop automático: {e}")
-    st.warning("⚠️ Erro ao buscar/processar resultado automático (ver logs).")
-
-st.markdown("---")
-st.caption("RoletaHybridIA v3.0 — Elite Master. Use com responsabilidade. Este sistema fornece sinais estatísticos; jogos de azar envolvem risco.")
-
-# fim do arquivo
+st.caption("🎯 **Roleta Virtual** - Sistema Especializado em Previsão por Setores | Desenvolvido para máxima eficiência")
