@@ -1,4 +1,4 @@
-# RoletaHybridIA.py - SISTEMA ESPECIALISTA 450+ COM ALERTAS ESTRATÉGICOS
+# RoletaHybridIA.py - SISTEMA ESPECIALISTA 450+ COM ALERTAS SIMPLES
 import streamlit as st
 import json
 import os
@@ -27,8 +27,8 @@ TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 TELEGRAM_CHAT_ID = "5121457416"
 
 # TELEGRAM - CANAL ALTERNATIVO (ALERTAS ESTRATÉGICOS)
-TELEGRAM_TOKEN_ALTERNATIVO = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY" # SUBSTITUIR PELO TOKEN REAL
-TELEGRAM_CHAT_ID_ALTERNATIVO = "-1002940111195" # SUBSTITUIR PELO CHAT_ID REAL
+TELEGRAM_TOKEN_ALTERNATIVO = "SEU_TOKEN_CANAL_ALTERNATIVO"  # SUBSTITUIR PELO TOKEN REAL
+TELEGRAM_CHAT_ID_ALTERNATIVO = "SEU_CHAT_ID_ALTERNATIVO"    # SUBSTITUIR PELO CHAT_ID REAL
 
 # DISPOSIÇÃO FÍSICA REAL DA ROLETA
 ROULETTE_PHYSICAL_LAYOUT = [
@@ -66,7 +66,11 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 def enviar_telegram(msg: str, token=TELEGRAM_TOKEN, chat_id=TELEGRAM_CHAT_ID):
     try:
         url = f"https://api.telegram.org/bot{token}/sendMessage"
-        payload = {"chat_id": chat_id, "text": msg}
+        payload = {
+            "chat_id": chat_id, 
+            "text": msg,
+            "parse_mode": "Markdown"
+        }
         requests.post(url, data=payload, timeout=10)
         logging.info(f"📤 Telegram enviado: {msg}")
     except Exception as e:
@@ -226,7 +230,7 @@ def analisar_duzias_colunas(historico):
     }
 
 # =============================
-# ESTRATÉGIA DE ALERTAS TELEGRAM - CANAL ALTERNATIVO
+# ESTRATÉGIA DE ALERTAS TELEGRAM - MENSAGENS SIMPLES E ORDENADAS
 # =============================
 def gerar_entrada_estrategica(previsao_completa, historico):
     """Gera entrada estratégica com 5 melhores números + vizinhos"""
@@ -322,62 +326,30 @@ def balancear_entrada(entrada):
     return entrada_balanceada
 
 def enviar_alerta_canal_alternativo(entrada_estrategica, ultimo_numero, historico, performance):
-    """Envia alerta formatado para o canal alternativo do Telegram"""
+    """Envia alerta SIMPLES e ORDENADO para o canal alternativo do Telegram"""
     
     try:
-        # Preparar mensagem
-        analise = st.session_state.gestor.get_analise_detalhada()
+        if not entrada_estrategica:
+            return
         
-        mensagem = "🎯 **ALERTA ESTRATÉGICO - CANAL ALTERNATIVO**\n\n"
+        # MENSAGEM SIMPLES COM EMOJIS E NÚMEROS ORDENADOS
+        mensagem = "🎯 **PREVISÃO ESTRATÉGICA**\n\n"
         
-        # Status do sistema
-        if analise["modo_especialista"]:
-            mensagem += "🚀 **MODO ESPECIALISTA ATIVO**\n"
-        else:
-            mensagem += f"📈 **Progresso: {analise['historico_total']}/{analise['minimo_especialista']}**\n"
+        # Ordenar números do menor para o maior
+        numeros_ordenados = sorted(entrada_estrategica)
+        metade = len(numeros_ordenados) // 2
         
-        # Último resultado
-        if ultimo_numero is not None:
-            # VERIFICAR SE O ÚLTIMO NÚMERO ESTAVA NA ENTRADA ANTERIOR
-            entrada_anterior = st.session_state.get('ultima_entrada_estrategica', [])
-            if ultimo_numero in entrada_anterior:
-                mensagem += f"🟢 **GREEN ANTERIOR: {ultimo_numero}**\n"
-            else:
-                mensagem += f"🔴 **RED ANTERIOR: {ultimo_numero}**\n"
-        else:
-            mensagem += "🔵 **Aguardando primeiro sorteio**\n"
+        linha1 = numeros_ordenados[:metade]
+        linha2 = numeros_ordenados[metade:]
         
-        mensagem += f"📊 Performance: {performance['acertos']}G/{performance['erros']}R "
-        mensagem += f"({performance['taxa_acerto']}%)\n\n"
+        # Formatar primeira linha
+        mensagem += "🔢 "
+        mensagem += " - ".join(map(str, linha1))
         
-        # ENTRADA ESTRATÉGICA ATUAL
-        mensagem += "🎯 **ENTRADA ESTRATÉGICA ATUAL:**\n"
-        
-        # Organizar por dúzias
-        primeira_duzia = [n for n in entrada_estrategica if n in PRIMEIRA_DUZIA]
-        segunda_duzia = [n for n in entrada_estrategica if n in SEGUNDA_DUZIA]
-        terceira_duzia = [n for n in entrada_estrategica if n in TERCEIRA_DUZIA]
-        zero = [0] if 0 in entrada_estrategica else []
-        
-        if primeira_duzia:
-            mensagem += f"1ª Dúzia: {', '.join(map(str, sorted(primeira_duzia)))}\n"
-        if segunda_duzia:
-            mensagem += f"2ª Dúzia: {', '.join(map(str, sorted(segunda_duzia)))}\n"
-        if terceira_duzia:
-            mensagem += f"3ª Dúzia: {', '.join(map(str, sorted(terceira_duzia)))}\n"
-        if zero:
-            mensagem += f"Zero: {zero[0]}\n"
-        
-        mensagem += f"\n🔢 Total: {len(entrada_estrategica)} números\n"
-        
-        # Dica estratégica
-        if len(entrada_estrategica) <= 12:
-            mensagem += "💡 **Estratégia: Entrada FOCADA**\n"
-        else:
-            mensagem += "💡 **Estratégia: Entrada AMPLA**\n"
-        
-        # Timestamp
-        mensagem += f"\n🕒 {datetime.now().strftime('%H:%M:%S')}"
+        # Segunda linha (se houver)
+        if linha2:
+            mensagem += "\n🔢 "
+            mensagem += " - ".join(map(str, linha2))
         
         # ENVIAR PARA TELEGRAM
         enviar_telegram(mensagem, TELEGRAM_TOKEN_ALTERNATIVO, TELEGRAM_CHAT_ID_ALTERNATIVO)
@@ -385,13 +357,13 @@ def enviar_alerta_canal_alternativo(entrada_estrategica, ultimo_numero, historic
         # Salvar entrada atual para verificação futura
         st.session_state.ultima_entrada_estrategica = entrada_estrategica
         
-        logging.info(f"📤 Alerta estratégico enviado: {len(entrada_estrategica)} números")
+        logging.info(f"📤 Alerta simples enviado: {len(entrada_estrategica)} números ordenados")
         
     except Exception as e:
-        logging.error(f"Erro ao enviar alerta estratégico: {e}")
+        logging.error(f"Erro ao enviar alerta simples: {e}")
 
 def verificar_resultado_entrada_anterior(numero_sorteado):
-    """Verifica se o número sorteado estava na entrada anterior"""
+    """Verifica se o número sorteado estava na entrada anterior - MENSAGEM SIMPLES"""
     
     entrada_anterior = st.session_state.get('ultima_entrada_estrategica', [])
     
@@ -399,22 +371,14 @@ def verificar_resultado_entrada_anterior(numero_sorteado):
         return None
     
     if numero_sorteado in entrada_anterior:
-        # GREEN - enviar mensagem de sucesso
-        mensagem_green = f"🎉 **GREEN!** Número {numero_sorteado} acertado na entrada estratégica!\n"
-        mensagem_green += f"📊 Entrada anterior continha {len(entrada_anterior)} números\n"
-        mensagem_green += f"🎯 Estratégia validada!"
-        
+        # GREEN - mensagem simples
+        mensagem_green = f"✅ **GREEN!** {numero_sorteado}"
         enviar_telegram(mensagem_green, TELEGRAM_TOKEN_ALTERNATIVO, TELEGRAM_CHAT_ID_ALTERNATIVO)
-        
         return "GREEN"
     else:
-        # RED - enviar análise do que aconteceu
-        mensagem_red = f"🔴 **RED** - Número {numero_sorteado} não estava na entrada\n"
-        mensagem_red += f"📊 Entrada anterior: {len(entrada_anterior)} números\n"
-        mensagem_red += f"🔍 Analisando padrões para ajuste..."
-        
+        # RED - mensagem simples
+        mensagem_red = f"❌ **RED** {numero_sorteado}"
         enviar_telegram(mensagem_red, TELEGRAM_TOKEN_ALTERNATIVO, TELEGRAM_CHAT_ID_ALTERNATIVO)
-        
         return "RED"
 
 # =============================
@@ -1116,8 +1080,8 @@ st.set_page_config(
     layout="centered"
 )
 
-st.title("🎯 Hybrid IA System - ESPECIALISTA 450+ COM ALERTAS ESTRATÉGICOS")
-st.markdown("### **Sistema Corrigido com Alertas para Canal Alternativo**")
+st.title("🎯 Hybrid IA System - ESPECIALISTA 450+ COM ALERTAS SIMPLES")
+st.markdown("### **Sistema com Mensagens Simplificadas para Telegram**")
 
 st_autorefresh(interval=3000, key="refresh")
 
@@ -1178,7 +1142,6 @@ try:
             if acertou:
                 st.session_state.acertos += 1
                 st.success(f"🎯 **GREEN!** Número {numero_real} acertado!")
-                enviar_telegram(f"🟢 GREEN! Especialista Corrigido acertou {numero_real}!")
             else:
                 st.session_state.erros += 1
                 st.error(f"🔴 Número {numero_real} não estava na previsão")
@@ -1202,7 +1165,7 @@ try:
             'taxa_acerto': f"{taxa_acerto:.1f}%"
         }
         
-        # ENVIAR ALERTA PARA CANAL ALTERNATIVO
+        # ENVIAR ALERTA SIMPLES PARA CANAL ALTERNATIVO
         enviar_alerta_canal_alternativo(
             entrada_estrategica, 
             numero_real, 
@@ -1274,7 +1237,7 @@ else:
 
 # PREVISÃO ATUAL
 st.markdown("---")
-st.subheader("🎯 PREVISÃO ATUAL - SISTEMA ESPECIALISTA CORRIGIDO")
+st.subheader("🎯 PREVISÃO ATUAL - SISTEMA ESPECIALISTA")
 
 previsao_valida = validar_previsao(st.session_state.previsao_atual)
 
@@ -1332,31 +1295,15 @@ entrada_estrategica = gerar_entrada_estrategica(
 if entrada_estrategica:
     st.success(f"**🔔 {len(entrada_estrategica)} NÚMEROS PARA ALERTA TELEGRAM**")
     
-    # Mostrar composição
-    col1, col2, col3 = st.columns(3)
+    # Mostrar como será enviado para o Telegram
+    numeros_ordenados = sorted(entrada_estrategica)
+    metade = len(numeros_ordenados) // 2
     
-    with col1:
-        st.write("**1ª Dúzia:**")
-        nums_duzia1 = [n for n in sorted(entrada_estrategica) if n in PRIMEIRA_DUZIA]
-        for num in nums_duzia1:
-            st.write(f"`{num}`")
+    linha1 = numeros_ordenados[:metade]
+    linha2 = numeros_ordenados[metade:]
     
-    with col2:
-        st.write("**2ª Dúzia:**")
-        nums_duzia2 = [n for n in sorted(entrada_estrategica) if n in SEGUNDA_DUZIA]
-        for num in nums_duzia2:
-            st.write(f"`{num}`")
-    
-    with col3:
-        st.write("**3ª Dúzia:**")
-        nums_duzia3 = [n for n in sorted(entrada_estrategica) if n in TERCEIRA_DUZIA]
-        for num in nums_duzia3:
-            st.write(f"`{num}`")
-        
-        if 0 in entrada_estrategica:
-            st.write("🟢 `0`")
-    
-    st.write(f"**Lista Estratégica:** {', '.join(map(str, sorted(entrada_estrategica)))}")
+    st.write("**📤 Como será enviado para Telegram:**")
+    st.code(f"🎯 PREVISÃO ESTRATÉGICA\n\n🔢 {' - '.join(map(str, linha1))}\n🔢 {' - '.join(map(str, linha2))}", language=None)
     
     # Botão para forçar envio
     if st.button("📤 Enviar Alerta para Telegram"):
@@ -1392,35 +1339,6 @@ with col3:
 with col4:
     st.metric("🔄 Rodadas", st.session_state.contador_rodadas)
 
-# DETALHES TÉCNICOS
-with st.expander("🔧 Detalhes Técnicos do Sistema Especialista Corrigido"):
-    st.write("**🎯 ARQUITETURA ESPECIALISTA 450+ COM ALERTAS:**")
-    
-    if analise["modo_especialista"]:
-        st.write("✅ **MODO ESPECIALISTA ATIVO**")
-        st.write("- 🔍 Análise de Ciclos Complexos")
-        st.write("- 📈 Correlações entre Números") 
-        st.write("- 🕒 Padrões Temporais Avançados")
-        st.write("- 🔄 Sequências de Alta Ordem")
-        st.write(f"- 📊 {analise['padroes_detectados']} Padrões Detectados")
-        st.write("✅ **SISTEMA DE ALERTAS:**")
-        st.write("- 🎯 5 Melhores números + vizinhos físicos")
-        st.write("- 📤 Alertas automáticos para Telegram")
-        st.write("- ✅ Verificação GREEN/RED automática")
-        st.write("- ⚖️ Balanceamento estratégico")
-    else:
-        st.write("⏳ **AGUARDANDO DADOS SUFICIENTES**")
-        st.write(f"- 📈 Progresso: {historico_atual}/{MIN_HISTORICO_TREINAMENTO}")
-        st.write("- 🎯 Ativação automática em 450 registros")
-        st.write("- 🔄 Coletando dados para análise profunda")
-    
-    st.write(f"**📊 Estatísticas:**")
-    st.write(f"- Histórico Atual: {historico_atual} registros")
-    st.write(f"- Confiança: {analise['confianca']}")
-    st.write(f"- Estratégia: {st.session_state.estrategia_atual}")
-    st.write(f"- Números na Previsão: {len(st.session_state.previsao_atual)}")
-    st.write(f"- Última Entrada Estratégica: {len(st.session_state.ultima_entrada_estrategica)} números")
-
 # CONTROLES
 st.markdown("---")
 st.subheader("⚙️ Controles do Sistema")
@@ -1443,9 +1361,9 @@ with col2:
         st.rerun()
 
 st.markdown("---")
-st.markdown("### 🚀 **Sistema Especialista com Alertas Estratégicos**")
-st.markdown("*Padrões complexos + Alertas inteligentes para canal alternativo*")
+st.markdown("### 🚀 **Sistema Especialista com Alertas Simplificados**")
+st.markdown("*Mensagens claras e objetivas para o Telegram*")
 
 # Rodapé
 st.markdown("---")
-st.markdown("**🎯 Hybrid IA System v7.0** - *Especialista 450+ com Alertas Estratégicos*")
+st.markdown("**🎯 Hybrid IA System v7.1** - *Especialista 450+ com Alertas Simplificados*")
