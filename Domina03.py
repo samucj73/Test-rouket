@@ -61,6 +61,114 @@ FASE_ESPECIALISTA = 150
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # =============================
+# NOVAS CLASSES OTIMIZADAS
+# =============================
+
+class SistemaConfianca:
+    def __init__(self):
+        self.confianca = 0.5
+        self.tendencia = "NEUTRA"
+        self.historico_confianca = deque(maxlen=20)
+    
+    def atualizar_confianca(self, acerto):
+        if acerto:
+            self.confianca = min(0.95, self.confianca + 0.05)
+        else:
+            self.confianca = max(0.1, self.confianca - 0.08)
+        
+        self.historico_confianca.append(self.confianca)
+        
+        if self.confianca > 0.7:
+            self.tendencia = "ALTA"
+        elif self.confianca < 0.3:
+            self.tendencia = "BAIXA"
+        else:
+            self.tendencia = "NEUTRA"
+    
+    def get_confianca_categoria(self):
+        if self.confianca > 0.8:
+            return "MUITO ALTA"
+        elif self.confianca > 0.6:
+            return "ALTA"
+        elif self.confianca > 0.4:
+            return "MODERADA"
+        else:
+            return "BAIXA"
+
+class SistemaGestaoRisco:
+    def __init__(self):
+        self.entradas_recentes = deque(maxlen=10)
+        self.resultados_recentes = deque(maxlen=10)
+        self.sequencia_atual = 0
+        self.max_sequencia_negativa = 0
+    
+    def deve_entrar(self, analise_risco, confianca):
+        if analise_risco == "RISCO_ALTO" and confianca < 0.6:
+            return False
+        # Não entrar após 3 vermelhos consecutivos
+        if self.sequencia_atual >= 3:
+            return False
+        return True
+    
+    def calcular_tamanho_aposta(self, confianca, saldo=1000):
+        base = saldo * 0.02  # 2% do saldo
+        if confianca > 0.8:
+            return base * 1.5
+        elif confianca > 0.6:
+            return base
+        else:
+            return base * 0.5
+    
+    def atualizar_sequencia(self, resultado):
+        if resultado == "GREEN":
+            self.sequencia_atual = 0
+        else:
+            self.sequencia_atual += 1
+            self.max_sequencia_negativa = max(self.max_sequencia_negativa, self.sequencia_atual)
+
+class AnalisadorTendenciasAvancado:
+    def __init__(self):
+        self.padroes_detectados = []
+    
+    def detectar_ciclos(self, historico):
+        """Detecta ciclos de repetição mais complexos"""
+        numeros = [h['number'] for h in historico]
+        
+        if len(numeros) < 10:
+            return []
+            
+        ciclos = []
+        for tamanho_ciclo in [3, 5, 8]:
+            for i in range(len(numeros) - tamanho_ciclo):
+                sequencia = numeros[i:i+tamanho_ciclo]
+                if sequencia in ciclos:
+                    continue
+                # Verificar se a sequência se repete
+                for j in range(i + tamanho_ciclo, len(numeros) - tamanho_ciclo):
+                    if numeros[j:j+tamanho_ciclo] == sequencia:
+                        ciclos.append(sequencia)
+                        break
+        
+        return ciclos
+    
+    def analisar_sazonalidade(self, historico):
+        """Analisa padrões sazonais por período do dia"""
+        padroes_horarios = {}
+        for registro in historico[-50:]:  # Últimas 50 entradas
+            if 'timestamp' in registro:
+                try:
+                    hora = datetime.fromisoformat(registro['timestamp'].replace('Z', '+00:00'))
+                    periodo = hora.hour // 6  # Divide o dia em 4 períodos de 6h
+                    if periodo not in padroes_horarios:
+                        padroes_horarios[periodo] = []
+                    padroes_horarios[periodo].append(registro['number'])
+                except:
+                    continue
+        
+        # Retorna números mais frequentes por período
+        return {periodo: Counter(numeros).most_common(3) for periodo, numeros in padroes_horarios.items()}
+
+# =============================
 # UTILITÁRIOS ROBUSTOS
 # =============================
 def enviar_telegram(msg: str, token=TELEGRAM_TOKEN, chat_id=TELEGRAM_CHAT_ID):
@@ -189,6 +297,93 @@ def validar_previsao(previsao):
     ]
     
     return previsao_limpa
+
+# =============================
+# MELHORIAS DE ESTRATÉGIA
+# =============================
+
+def calcular_gale_strategy(entrada_anterior, resultado):
+    """Estratégia de gerenciamento de bancada"""
+    if resultado == "RED":
+        # Analisar se vale a pena dobrar ou mudar estratégia
+        ultimos_resultados = st.session_state.get('ultimos_resultados', [])
+        if len(ultimos_resultados) >= 2 and ultimos_resultados[-2:] == ["RED", "RED"]:
+            return "ALTERAR_ESTRATEGIA"  # Não dobrar após 2 vermelhos seguidos
+        return "DOBRAR_APOSTA"
+    return "MANTER"
+
+def analisar_padroes_horarios(historico):
+    """Detecta padrões baseados em horários específicos"""
+    padroes = {}
+    for registro in historico:
+        if 'timestamp' in registro:
+            try:
+                hora = datetime.fromisoformat(registro['timestamp'].replace('Z', '+00:00'))
+                periodo = hora.hour // 6  # Divide o dia em 4 períodos de 6h
+                if periodo not in padroes:
+                    padroes[periodo] = []
+                padroes[periodo].append(registro['number'])
+            except:
+                continue
+    
+    # Retorna números mais frequentes por período
+    return {periodo: Counter(numeros).most_common(3) for periodo, numeros in padroes.items()}
+
+def otimizar_distribuicao_apostas(nucleo_assertivo):
+    """Otimiza a distribuição dos 8 números estrategicamente"""
+    
+    # Garantir diversificação por características
+    distribuicao = {
+        'coluna_meio': [num for num in nucleo_assertivo if num in COLUNA_2],
+        'vizinhanca': [],
+        'quentes': [],
+        'atrasados': []
+    }
+    
+    # Se faltam números, completar estrategicamente
+    if len(nucleo_assertivo) < 8:
+        complementar = [
+            num for num in [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35]
+            if num not in nucleo_assertivo
+        ]
+        nucleo_assertivo.extend(complementar[:8-len(nucleo_assertivo)])
+    
+    return nucleo_assertivo[:8]
+
+def analisar_risco_entrada(historico, entrada_proposta):
+    """Analisa o risco da entrada proposta"""
+    if len(historico) < 10:
+        return "RISCO_MODERADO"
+    
+    ultimos_10 = [h['number'] for h in historico[-10:]]
+    acertos_previstos = len(set(ultimos_10) & set(entrada_proposta))
+    
+    if acertos_previstos >= 3:
+        return "RISCO_BAIXO"
+    elif acertos_previstos >= 1:
+        return "RISCO_MODERADO"
+    else:
+        return "RISCO_ALTO"
+
+def enviar_alerta_inteligente(entrada_estrategica, confianca, performance):
+    """Envia alertas com base no nível de confiança"""
+    
+    if confianca > 0.8:
+        emoji = "🔥🔥"
+        mensagem_tipo = "OPORTUNIDADE ALTA"
+    elif confianca > 0.6:
+        emoji = "🔥"
+        mensagem_tipo = "BOA OPORTUNIDADE"
+    else:
+        emoji = "⚠️"
+        mensagem_tipo = "OPORTUNIDADE MODERADA"
+    
+    mensagem = f"{emoji} **{mensagem_tipo}** {emoji}\n\n"
+    mensagem += f"🎯 {' • '.join(map(str, sorted(entrada_estrategica)))}\n\n"
+    mensagem += f"📊 Assertividade: {performance['taxa_acerto']}\n"
+    mensagem += f"💪 Confiança: {int(confianca*100)}%"
+    
+    enviar_telegram(mensagem, TELEGRAM_TOKEN_ALTERNATIVO, TELEGRAM_CHAT_ID_ALTERNATIVO)
 
 # =============================
 # ESTRATÉGIA DE ALTA ASSERTIVIDADE
@@ -346,21 +541,9 @@ def enviar_alerta_assertivo(entrada_estrategica, ultimo_numero, historico, perfo
         if not entrada_estrategica:
             return
         
-        # MENSAGEM DIRETA E PODEROSA
-        mensagem = "🎯 **ENTRADA ASSERTIVA** 🎯\n\n"
-        
-        # Ordenar números
-        numeros_ordenados = sorted(entrada_estrategica)
-        
-        # Formato compacto e impactante
-        mensagem += "🔥 " + " • ".join(map(str, numeros_ordenados)) + " 🔥"
-        
-        # Estatísticas de performance
-        mensagem += f"\n\n📊 Assertividade: {performance['taxa_acerto']}"
-        mensagem += f"\n✅ Acertos: {performance['acertos']} | ❌ Erros: {performance['erros']}"
-        
-        # ENVIAR PARA TELEGRAM
-        enviar_telegram(mensagem, TELEGRAM_TOKEN_ALTERNATIVO, TELEGRAM_CHAT_ID_ALTERNATIVO)
+        # Usar sistema de confiança para alerta inteligente
+        confianca = st.session_state.sistema_confianca.confianca
+        enviar_alerta_inteligente(entrada_estrategica, confianca, performance)
         
         # Salvar entrada atual
         st.session_state.ultima_entrada_estrategica = entrada_estrategica
@@ -378,7 +561,14 @@ def verificar_resultado_entrada_anterior(numero_sorteado):
     if not entrada_anterior or numero_sorteado is None:
         return None
     
-    if numero_sorteado in entrada_anterior:
+    # Atualizar sistema de confiança
+    acertou = numero_sorteado in entrada_anterior
+    st.session_state.sistema_confianca.atualizar_confianca(acertou)
+    
+    # Atualizar gestão de risco
+    st.session_state.gestor_risco.atualizar_sequencia("GREEN" if acertou else "RED")
+    
+    if acertou:
         mensagem_green = f"✅ **GREEN!** Acertamos {numero_sorteado}!"
         enviar_telegram(mensagem_green, TELEGRAM_TOKEN_ALTERNATIVO, TELEGRAM_CHAT_ID_ALTERNATIVO)
         return "GREEN"
@@ -393,6 +583,7 @@ def verificar_resultado_entrada_anterior(numero_sorteado):
 class IA_Assertiva:
     def __init__(self):
         self.historico_analises = deque(maxlen=50)
+        self.analisador_tendencias = AnalisadorTendenciasAvancado()
         
     def prever_com_alta_assertividade(self, historico):
         """Sistema PRINCIPAL de previsão assertiva"""
@@ -429,12 +620,18 @@ class IA_Assertiva:
         padroes_temporais = self.detectar_padroes_temporais(historico)
         previsao_final.update(padroes_temporais[:2])
         
+        # 4. ANÁLISE DE CICLOS AVANÇADA
+        ciclos = self.analisador_tendencias.detectar_ciclos(historico)
+        if ciclos:
+            previsao_final.update(ciclos[0][:2])  # Primeiro ciclo detectado
+        
         # GARANTIR TAMANHO MÁXIMO
         return self.otimizar_previsao_assertiva(list(previsao_final), historico)
     
     def modo_assertivo_intermediario(self, historico):
         """Modo INTERMEDIÁRIO otimizado"""
-        return identificar_nucleo_assertivo(historico)
+        nucleo = identificar_nucleo_assertivo(historico)
+        return otimizar_distribuicao_apostas(nucleo)
     
     def modo_assertivo_basico(self, historico):
         """Modo BÁSICO para histórico pequeno"""
@@ -620,7 +817,10 @@ defaults = {
     "status_ia": "🟡 Inicializando",
     "estrategia_atual": "Aguardando dados",
     "ultima_entrada_estrategica": [],
-    "resultado_entrada_anterior": None
+    "resultado_entrada_anterior": None,
+    "sistema_confianca": SistemaConfianca(),
+    "gestor_risco": SistemaGestaoRisco(),
+    "ultimos_resultados": []
 }
 
 for k, v in defaults.items():
@@ -658,6 +858,12 @@ try:
         # VERIFICAR ENTRADA ANTERIOR
         st.session_state.resultado_entrada_anterior = verificar_resultado_entrada_anterior(numero_real)
 
+        # ATUALIZAR HISTÓRICO DE RESULTADOS
+        if st.session_state.resultado_entrada_anterior:
+            st.session_state.ultimos_resultados.append(st.session_state.resultado_entrada_anterior)
+            if len(st.session_state.ultimos_resultados) > 10:
+                st.session_state.ultimos_resultados.pop(0)
+
         # CONFERIR PREVISÃO ANTERIOR
         previsao_valida = validar_previsao(st.session_state.previsao_atual)
         if previsao_valida:
@@ -688,13 +894,22 @@ try:
             'taxa_acerto': f"{taxa_acerto:.1f}%"
         }
         
-        # ENVIAR ALERTA ASSERTIVO
-        enviar_alerta_assertivo(
-            entrada_assertiva, 
-            numero_real, 
-            list(st.session_state.gestor.historico),
-            performance
+        # ENVIAR ALERTA ASSERTIVO APENAS SE CONDIÇÕES SÃO FAVORÁVEIS
+        risco_entrada = analisar_risco_entrada(
+            list(st.session_state.gestor.historico), 
+            entrada_assertiva
         )
+        confianca_atual = st.session_state.sistema_confianca.confianca
+        
+        if st.session_state.gestor_risco.deve_entrar(risco_entrada, confianca_atual):
+            enviar_alerta_assertivo(
+                entrada_assertiva, 
+                numero_real, 
+                list(st.session_state.gestor.historico),
+                performance
+            )
+        else:
+            logging.warning("⏹️ Entrada não enviada - Condições de risco desfavoráveis")
 
         st.session_state.contador_rodadas += 1
 
@@ -740,6 +955,44 @@ with col2:
 with col3:
     st.metric("📈 Padrão", "✅" if analise["padrao_detectado"] else "⏳")
 
+# =============================
+# NOVO DASHBOARD DE RISCO E CONFIANÇA
+# =============================
+st.markdown("---")
+st.subheader("📈 Análise de Risco e Confiança")
+
+# Sistema de confiança
+confianca = st.session_state.sistema_confianca.confianca
+tendencia = st.session_state.sistema_confianca.tendencia
+categoria_confianca = st.session_state.sistema_confianca.get_confianca_categoria()
+
+# Análise de risco da entrada atual
+risco = analisar_risco_entrada(
+    list(st.session_state.gestor.historico), 
+    st.session_state.previsao_atual
+)
+
+col1, col2, col3, col4 = st.columns(4)
+with col1:
+    st.metric("🎯 Confiança", f"{confianca*100:.1f}%")
+with col2:
+    st.metric("📊 Categoria", categoria_confianca)
+with col3:
+    st.metric("⚠️ Risco Atual", risco)
+with col4:
+    st.metric("🔁 Sequência", f"{st.session_state.gestor_risco.sequencia_atual}")
+
+# Barra de progresso de confiança
+st.progress(confianca)
+
+# Recomendação baseada em confiança e risco
+if confianca > 0.7 and risco in ["RISCO_BAIXO", "RISCO_MODERADO"]:
+    st.success("🔥 **CONDIÇÕES IDEAIS** - Entrada recomendada!")
+elif confianca > 0.5 and risco != "RISCO_ALTO":
+    st.info("💡 **CONDIÇÕES BOAS** - Entrada pode ser considerada")
+else:
+    st.warning("⚡ **CONDIÇÕES CAUTELOSAS** - Aguardar melhores oportunidades")
+
 # PREVISÃO ATUAL
 st.markdown("---")
 st.subheader("🎯 PREVISÃO ASSERTIVA ATUAL")
@@ -771,29 +1024,36 @@ entrada_assertiva = gerar_entrada_ultra_assertiva(
 )
 
 if entrada_assertiva:
-    st.success(f"**🔔 {len(entrada_assertiva)} NÚMEROS CONFIRMADOS**")
+    # Verificar condições antes de recomendar entrada
+    risco_entrada = analisar_risco_entrada(list(st.session_state.gestor.historico), entrada_assertiva)
+    deve_entrar = st.session_state.gestor_risco.deve_entrar(risco_entrada, confianca)
     
-    # Mostrar mensagem do Telegram
-    numeros_ordenados = sorted(entrada_assertiva)
-    mensagem_telegram = f"🎯 ENTRADA ASSERTIVA 🎯\n\n🔥 {' • '.join(map(str, numeros_ordenados))} 🔥"
-    
-    st.code(mensagem_telegram, language=None)
-    
-    # Botão de envio
-    if st.button("📤 Enviar Alerta Assertivo"):
-        performance = {
-            'acertos': st.session_state.acertos,
-            'erros': st.session_state.erros,
-            'taxa_acerto': f"{(st.session_state.acertos/(st.session_state.acertos+st.session_state.erros)*100):.1f}%" if (st.session_state.acertos+st.session_state.erros) > 0 else "0%"
-        }
+    if deve_entrar:
+        st.success(f"**🔔 {len(entrada_assertiva)} NÚMEROS CONFIRMADOS**")
         
-        enviar_alerta_assertivo(
-            entrada_assertiva, 
-            st.session_state.ultimo_numero, 
-            list(st.session_state.gestor.historico),
-            performance
-        )
-        st.success("✅ Alerta ASSERTIVO enviado!")
+        # Mostrar mensagem do Telegram
+        numeros_ordenados = sorted(entrada_assertiva)
+        mensagem_telegram = f"🎯 ENTRADA ASSERTIVA 🎯\n\n🔥 {' • '.join(map(str, numeros_ordenados))} 🔥"
+        
+        st.code(mensagem_telegram, language=None)
+        
+        # Botão de envio
+        if st.button("📤 Enviar Alerta Assertivo"):
+            performance = {
+                'acertos': st.session_state.acertos,
+                'erros': st.session_state.erros,
+                'taxa_acerto': f"{(st.session_state.acertos/(st.session_state.acertos+st.session_state.erros)*100):.1f}%" if (st.session_state.acertos+st.session_state.erros) > 0 else "0%"
+            }
+            
+            enviar_alerta_assertivo(
+                entrada_assertiva, 
+                st.session_state.ultimo_numero, 
+                list(st.session_state.gestor.historico),
+                performance
+            )
+            st.success("✅ Alerta ASSERTIVO enviado!")
+    else:
+        st.warning(f"⏹️ Entrada não recomendada - Risco: {risco_entrada}, Confiança: {categoria_confianca}")
 else:
     st.warning("⏳ Gerando entrada assertiva...")
 
@@ -801,7 +1061,7 @@ else:
 st.markdown("---")
 st.subheader("📊 Performance do Sistema")
 
-col1, col2, col3 = st.columns(3)
+col1, col2, col3, col4 = st.columns(4)
 with col1:
     st.metric("✅ Acertos", st.session_state.acertos)
 with col2:
@@ -810,12 +1070,14 @@ with col3:
     total = st.session_state.acertos + st.session_state.erros
     taxa_acerto = (st.session_state.acertos / total * 100) if total > 0 else 0
     st.metric("📈 Assertividade", f"{taxa_acerto:.1f}%")
+with col4:
+    st.metric("🛡️ Máx Sequência", st.session_state.gestor_risco.max_sequencia_negativa)
 
 # CONTROLES
 st.markdown("---")
 st.subheader("⚙️ Controles")
 
-col1, col2 = st.columns(2)
+col1, col2, col3 = st.columns(3)
 with col1:
     if st.button("🔄 Nova Previsão"):
         nova_previsao = st.session_state.gestor.gerar_previsao_assertiva()
@@ -830,12 +1092,25 @@ with col2:
         st.session_state.acertos = 0
         st.session_state.erros = 0
         st.session_state.ultima_entrada_estrategica = []
+        st.session_state.sistema_confianca = SistemaConfianca()
+        st.session_state.gestor_risco = SistemaGestaoRisco()
         st.rerun()
+
+with col3:
+    if st.button("📊 Análise Detalhada"):
+        # Mostrar análise avançada
+        analise_tendencias = st.session_state.gestor.ia_assertiva.analisador_tendencias.detectar_ciclos(
+            list(st.session_state.gestor.historico)
+        )
+        st.info(f"🔍 Ciclos detectados: {len(analise_tendencias)}")
+        
+        padroes_horarios = analisar_padroes_horarios(list(st.session_state.gestor.historico))
+        st.info(f"⏰ Padrões horários: {len(padroes_horarios)} períodos analisados")
 
 st.markdown("---")
 st.markdown("### 🚀 **SISTEMA ASSERTIVO ATIVADO**")
-st.markdown("*Estratégia de 8 números para máxima probabilidade de acerto*")
+st.markdown("*Estratégia de 8 números com gestão de risco inteligente*")
 
 # Rodapé
 st.markdown("---")
-st.markdown("**🎯 Sistema Assertivo v9.0** - *Alta Assertividade com 8 Números*")
+st.markdown("**🎯 Sistema Assertivo v10.0** - *Alta Assertividade com Gestão de Risco*")
