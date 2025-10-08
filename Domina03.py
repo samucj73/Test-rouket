@@ -394,7 +394,7 @@ def analisar_padroes_assertivos(historico):
     numeros = [h['number'] for h in historico if h.get('number') is not None]
     
     if len(numeros) < 10:
-        return {"numeros_quentes": [2, 5, 8, 11, 14, 17, 23, 29], "padrao_atual": "inicial"}
+        return {"numeros_quentes": [], "padrao_atual": "inicial"}
     
     # ANÁLISE DE PADRÕES DE REPETIÇÃO IMEDIATA
     padroes_repeticao = []
@@ -442,7 +442,7 @@ def identificar_nucleo_assertivo(historico):
     numeros = [h['number'] for h in historico if h.get('number') is not None]
     
     if len(numeros) < 5:
-        return [2, 5, 8, 11, 14, 17, 23, 29]
+        return []
     
     analise = analisar_padroes_assertivos(historico)
     
@@ -467,7 +467,7 @@ def identificar_nucleo_assertivo(historico):
     
     # 6. COMPLETAR COM NÚMEROS ESTRATÉGICOS DA COLUNA DO MEIO
     if len(nucleo) < NUMERO_PREVISOES:
-        complemento = [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35]
+        complemento = []
         for num in complemento:
             if len(nucleo) < NUMERO_PREVISOES and num not in nucleo:
                 nucleo.add(num)
@@ -478,7 +478,7 @@ def gerar_entrada_ultra_assertiva(previsao_completa, historico):
     """Estratégia ULTRA ASSERTIVA - Máximo 8 números com alta confiança"""
     
     if not historico:
-        return [2, 5, 8, 11, 14, 17, 23, 29]
+        return []
     
     # USAR APENAS O NÚCLEO ASSERTIVO
     nucleo_assertivo = identificar_nucleo_assertivo(historico)
