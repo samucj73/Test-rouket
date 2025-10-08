@@ -48,7 +48,7 @@ COLUNA_3 = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36]
 # =============================
 # CONFIGURAÇÃO ESPECIALISTA - 450+ REGISTROS
 # =============================
-MIN_HISTORICO_TREINAMENTO = 200
+MIN_HISTORICO_TREINAMENTO = 300
 NUMERO_PREVISOES = 12  # REDUZIDO DE 15 PARA 12
 
 # Fases do sistema
