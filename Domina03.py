@@ -48,7 +48,7 @@ COLUNA_3 = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36]
 # =============================
 # CONFIGURAÇÃO ESPECIALISTA - 450+ REGISTROS
 # =============================
-MIN_HISTORICO_TREINAMENTO = 105 # 🎯 Ponto de ativação do modo especialista
+MIN_HISTORICO_TREINAMENTO = 200 # 🎯 Ponto de ativação do modo especialista
 NUMERO_PREVISOES = 15
 
 # Fases do sistema
@@ -294,7 +294,7 @@ def identificar_melhores_numeros(previsao, historico):
         
         # Fator 4: Números quentes (últimos 50 sorteios)
         freq_quente = numeros_historico[-50:].count(numero)
-        if freq_quente >= 3:
+        if freq_quente >= 5:
             score += 0.25
         
         scores[numero] = score
