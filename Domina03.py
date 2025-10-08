@@ -48,7 +48,7 @@ COLUNA_3 = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36]
 # =============================
 # CONFIGURAÇÃO ESPECIALISTA - ESTRATÉGIA DE ALTA ASSERTIVIDADE
 # =============================
-MIN_HISTORICO_TREINAMENTO = 150  # Reduzido para ativar mais cedo
+MIN_HISTORICO_TREINAMENTO = 410  # Reduzido para ativar mais cedo
 NUMERO_PREVISOES = 8  # REDUZIDO DRAMATICAMENTE PARA MAIOR ASSERTIVIDADE
 
 # Fases do sistema
