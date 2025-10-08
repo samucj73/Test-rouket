@@ -1,4 +1,4 @@
-# RoletaHybridIA.py - SISTEMA ESPECIALISTA 450+ COM ESTRATÉGIA DE ALTA ASSERTIVIDADE
+# RoletaHybridIA.py - SISTEMA ESPECIALISTA 100% BASEADO EM HISTÓRICO
 import streamlit as st
 import json
 import os
@@ -46,10 +46,10 @@ COLUNA_2 = [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35]
 COLUNA_3 = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36]
 
 # =============================
-# CONFIGURAÇÃO ESPECIALISTA - ESTRATÉGIA DE ALTA ASSERTIVIDADE
+# CONFIGURAÇÃO ESPECIALISTA - ESTRATÉGIA 100% BASEADA EM HISTÓRICO
 # =============================
-MIN_HISTORICO_TREINAMENTO = 475  # Reduzido para ativar mais cedo
-NUMERO_PREVISOES = 10  # REDUZIDO DRAMATICAMENTE PARA MAIOR ASSERTIVIDADE
+MIN_HISTORICO_TREINAMENTO = 475
+NUMERO_PREVISOES = 8  # SEMPRE 8 NÚMEROS BASEADOS NO HISTÓRICO
 
 # Fases do sistema
 FASE_INICIAL = 30
@@ -61,7 +61,7 @@ FASE_ESPECIALISTA = 150
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # =============================
-# NOVAS CLASSES OTIMIZADAS
+# SISTEMAS DE SUPORTE
 # =============================
 
 class SistemaConfianca:
@@ -105,13 +105,12 @@ class SistemaGestaoRisco:
     def deve_entrar(self, analise_risco, confianca):
         if analise_risco == "RISCO_ALTO" and confianca < 0.6:
             return False
-        # Não entrar após 3 vermelhos consecutivos
         if self.sequencia_atual >= 3:
             return False
         return True
     
     def calcular_tamanho_aposta(self, confianca, saldo=1000):
-        base = saldo * 0.02  # 2% do saldo
+        base = saldo * 0.02
         if confianca > 0.8:
             return base * 1.5
         elif confianca > 0.6:
@@ -126,50 +125,8 @@ class SistemaGestaoRisco:
             self.sequencia_atual += 1
             self.max_sequencia_negativa = max(self.max_sequencia_negativa, self.sequencia_atual)
 
-class AnalisadorTendenciasAvancado:
-    def __init__(self):
-        self.padroes_detectados = []
-    
-    def detectar_ciclos(self, historico):
-        """Detecta ciclos de repetição mais complexos"""
-        numeros = [h['number'] for h in historico]
-        
-        if len(numeros) < 10:
-            return []
-            
-        ciclos = []
-        for tamanho_ciclo in [3, 5, 8]:
-            for i in range(len(numeros) - tamanho_ciclo):
-                sequencia = numeros[i:i+tamanho_ciclo]
-                if sequencia in ciclos:
-                    continue
-                # Verificar se a sequência se repete
-                for j in range(i + tamanho_ciclo, len(numeros) - tamanho_ciclo):
-                    if numeros[j:j+tamanho_ciclo] == sequencia:
-                        ciclos.append(sequencia)
-                        break
-        
-        return ciclos
-    
-    def analisar_sazonalidade(self, historico):
-        """Analisa padrões sazonais por período do dia"""
-        padroes_horarios = {}
-        for registro in historico[-50:]:  # Últimas 50 entradas
-            if 'timestamp' in registro:
-                try:
-                    hora = datetime.fromisoformat(registro['timestamp'].replace('Z', '+00:00'))
-                    periodo = hora.hour // 6  # Divide o dia em 4 períodos de 6h
-                    if periodo not in padroes_horarios:
-                        padroes_horarios[periodo] = []
-                    padroes_horarios[periodo].append(registro['number'])
-                except:
-                    continue
-        
-        # Retorna números mais frequentes por período
-        return {periodo: Counter(numeros).most_common(3) for periodo, numeros in padroes_horarios.items()}
-
 # =============================
-# UTILITÁRIOS ROBUSTOS
+# UTILITÁRIOS
 # =============================
 def enviar_telegram(msg: str, token=TELEGRAM_TOKEN, chat_id=TELEGRAM_CHAT_ID):
     try:
@@ -261,7 +218,7 @@ def fetch_latest_result():
         return None
 
 def obter_vizinhos_fisicos(numero):
-    """Retorna vizinhos físicos na mesa"""
+    """Retorna vizinhos físicos na mesa baseado no histórico de disposição"""
     if numero == 0:
         return [32, 15, 19, 4, 21, 2, 25]
     
@@ -299,63 +256,182 @@ def validar_previsao(previsao):
     return previsao_limpa
 
 # =============================
-# MELHORIAS DE ESTRATÉGIA
+# ANÁLISES 100% BASEADAS EM HISTÓRICO
 # =============================
 
-def calcular_gale_strategy(entrada_anterior, resultado):
-    """Estratégia de gerenciamento de bancada"""
-    if resultado == "RED":
-        # Analisar se vale a pena dobrar ou mudar estratégia
-        ultimos_resultados = st.session_state.get('ultimos_resultados', [])
-        if len(ultimos_resultados) >= 2 and ultimos_resultados[-2:] == ["RED", "RED"]:
-            return "ALTERAR_ESTRATEGIA"  # Não dobrar após 2 vermelhos seguidos
-        return "DOBRAR_APOSTA"
-    return "MANTER"
-
-def analisar_padroes_horarios(historico):
-    """Detecta padrões baseados em horários específicos"""
-    padroes = {}
-    for registro in historico:
-        if 'timestamp' in registro:
-            try:
-                hora = datetime.fromisoformat(registro['timestamp'].replace('Z', '+00:00'))
-                periodo = hora.hour // 6  # Divide o dia em 4 períodos de 6h
-                if periodo not in padroes:
-                    padroes[periodo] = []
-                padroes[periodo].append(registro['number'])
-            except:
-                continue
+def analisar_padroes_assertivos(historico):
+    """Análise AGGRESSIVA focada em padrões de alta probabilidade BASEADA NO HISTÓRICO"""
     
-    # Retorna números mais frequentes por período
-    return {periodo: Counter(numeros).most_common(3) for periodo, numeros in padroes.items()}
-
-def otimizar_distribuicao_apostas(nucleo_assertivo):
-    """Otimiza a distribuição dos 8 números estrategicamente"""
+    numeros = [h['number'] for h in historico if h.get('number') is not None]
     
-    # Garantir diversificação por características
-    distribuicao = {
-        'coluna_meio': [num for num in nucleo_assertivo if num in COLUNA_2],
-        'vizinhanca': [],
-        'quentes': [],
-        'atrasados': []
+    if len(numeros) < 10:
+        return {"numeros_quentes": [], "padrao_atual": "inicial"}
+    
+    # ANÁLISE DE PADRÕES DE REPETIÇÃO IMEDIATA (baseado no histórico)
+    padroes_repeticao = []
+    for i in range(1, len(numeros)):
+        if numeros[i] == numeros[i-1]:
+            padroes_repeticao.append(numeros[i])
+    
+    # ANÁLISE DE SEQUÊNCIAS DE VIZINHANÇA (baseado no histórico)
+    sequencias_vizinhanca = []
+    for i in range(1, min(6, len(numeros))):
+        vizinhos_anteriores = obter_vizinhos_fisicos(numeros[-i])
+        if numeros[-1] in vizinhos_anteriores:
+            sequencias_vizinhanca.extend(vizinhos_anteriores)
+    
+    # NÚMEROS QUENTES (últimas 15 rodadas - baseado no histórico)
+    ultimos_15 = numeros[-15:] if len(numeros) >= 15 else numeros
+    contagem_recente = Counter(ultimos_15)
+    numeros_quentes = [num for num, count in contagem_recente.most_common(5) if count >= 2]
+    
+    # NÚMEROS COM ATRASO (não saem há mais de 8 rodadas - baseado no histórico)
+    numeros_atrasados = []
+    for num in range(0, 37):
+        if num in numeros:
+            ultima_ocorrencia = len(numeros) - 1 - numeros[::-1].index(num)
+            atraso = len(numeros) - ultima_ocorrencia
+            if atraso > 8:
+                numeros_atrasados.append(num)
+        else:
+            # Se nunca saiu, é um atrasado extremo
+            numeros_atrasados.append(num)
+    
+    # PADRÃO DE ALTERNÂNCIA DE CORES (baseado no histórico)
+    cores_alternadas = []
+    if len(numeros) >= 2:
+        ultima_cor = "preto" if numeros[-1] in [2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35] else "vermelho" if numeros[-1] in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36] else "zero"
+        penultima_cor = "preto" if numeros[-2] in [2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35] else "vermelho" if numeros[-2] in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36] else "zero"
+        
+        if ultima_cor == penultima_cor:
+            # Tendência de mudança de cor
+            if ultima_cor == "vermelho":
+                cores_alternadas = [n for n in range(1,37) if n in [2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35]]
+            else:
+                cores_alternadas = [n for n in range(1,37) if n in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]]
+    
+    return {
+        "numeros_quentes": numeros_quentes[:3],
+        "padroes_repeticao": list(set(padroes_repeticao))[:2],
+        "sequencias_vizinhanca": list(set(sequencias_vizinhanca))[:3],
+        "numeros_atrasados": numeros_atrasados[:3],
+        "cores_alternadas": cores_alternadas[:2],
+        "ultima_cor": ultima_cor if len(numeros) >= 1 else "indefinido",
+        "total_analisado": len(numeros)
     }
+
+def identificar_nucleo_assertivo(historico):
+    """Identifica o núcleo de números com maior probabilidade BASEADO NO HISTÓRICO"""
     
-    # Se faltam números, completar estrategicamente
-    if len(nucleo_assertivo) < 8:
-        complementar = [
-            num for num in [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35]
-            if num not in nucleo_assertivo
-        ]
-        nucleo_assertivo.extend(complementar[:8-len(nucleo_assertivo)])
+    numeros = [h['number'] for h in historico if h.get('number') is not None]
     
-    return nucleo_assertivo[:8]
+    if len(numeros) < 5:
+        # No início, usar os últimos números como base
+        return numeros[-4:] if len(numeros) >= 4 else numeros
+    
+    analise = analisar_padroes_assertivos(historico)
+    
+    nucleo = set()
+    
+    # 1. ADICIONAR NÚMEROS QUENTES (alta prioridade - baseado no histórico)
+    nucleo.update(analise["numeros_quentes"])
+    
+    # 2. ADICIONAR PADRÕES DE REPETIÇÃO (muito forte - baseado no histórico)
+    nucleo.update(analise["padroes_repeticao"])
+    
+    # 3. ADICIONAR SEQUÊNCIAS DE VIZINHANÇA (baseado no histórico)
+    nucleo.update(analise["sequencias_vizinhanca"])
+    
+    # 4. ADICIONAR NÚMEROS ATRASADOS (para diversificação - baseado no histórico)
+    nucleo.update(analise["numeros_atrasados"][:2])
+    
+    # 5. ADICIONAR PADRÃO DE CORES (baseado no histórico)
+    nucleo.update(analise["cores_alternadas"])
+    
+    # 6. GARANTIR ZERO SE ESTIVER QUENTE (baseado no histórico)
+    if numeros.count(0) >= max(1, len(numeros) * 0.05):
+        nucleo.add(0)
+    
+    # 7. SE AINDA PRECISAR DE MAIS NÚMEROS, USAR OS ÚLTIMOS SORTEADOS
+    if len(nucleo) < NUMERO_PREVISOES:
+        ultimos_numeros = numeros[-10:]
+        for num in ultimos_numeros:
+            if len(nucleo) < NUMERO_PREVISOES and num not in nucleo:
+                nucleo.add(num)
+    
+    # 8. SE AINDA PRECISAR, USAR NÚMEROS MAIS FREQUENTES NO HISTÓRICO COMPLETO
+    if len(nucleo) < NUMERO_PREVISOES:
+        frequentes_geral = Counter(numeros).most_common(10)
+        for num, freq in frequentes_geral:
+            if len(nucleo) < NUMERO_PREVISOES and num not in nucleo:
+                nucleo.add(num)
+    
+    return list(nucleo)[:NUMERO_PREVISOES]
+
+def filtrar_por_confirmacao_rapida(historico, numeros_candidatos):
+    """Filtro RÁPIDO baseado em confirmações imediatas DO HISTÓRICO"""
+    
+    if len(numeros_candidatos) <= NUMERO_PREVISOES:
+        return numeros_candidatos
+    
+    numeros = [h['number'] for h in historico if h.get('number') is not None]
+    
+    scores = {}
+    
+    for numero in numeros_candidatos:
+        score = 0
+        
+        # CONFIRMAÇÃO 1: É UM DOS ÚLTIMOS 3 NÚMEROS? (histórico)
+        if numero in numeros[-3:]:
+            score += 3
+        
+        # CONFIRMAÇÃO 2: É VIZINHO DOS ÚLTIMOS 2 NÚMEROS? (histórico)
+        for recente in numeros[-2:]:
+            if numero in obter_vizinhos_fisicos(recente):
+                score += 2
+                break
+        
+        # CONFIRMAÇÃO 3: TEVE REPETIÇÃO RECENTE (últimas 10 rodadas - histórico)
+        if numeros[-10:].count(numero) >= 2:
+            score += 2
+        
+        # CONFIRMAÇÃO 4: ESTÁ NA MESMA COLUNA DOS ÚLTIMOS NÚMEROS? (histórico)
+        ultimas_colunas = []
+        for num in numeros[-3:]:
+            if num in COLUNA_1: 
+                ultimas_colunas.append(1)
+            elif num in COLUNA_2: 
+                ultimas_colunas.append(2)
+            elif num in COLUNA_3: 
+                ultimas_colunas.append(3)
+        
+        if ultimas_colunas:
+            coluna_mais_comum = Counter(ultimas_colunas).most_common(1)[0][0]
+            if (coluna_mais_comum == 1 and numero in COLUNA_1) or \
+               (coluna_mais_comum == 2 and numero in COLUNA_2) or \
+               (coluna_mais_comum == 3 and numero in COLUNA_3):
+                score += 1
+        
+        # CONFIRMAÇÃO 5: É UM NÚMERO QUENTE? (histórico)
+        ultimos_15 = numeros[-15:] if len(numeros) >= 15 else numeros
+        if ultimos_15.count(numero) >= 2:
+            score += 1
+        
+        scores[numero] = score
+    
+    # SELECIONAR OS COM MAIOR SCORE (baseado no histórico)
+    melhores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+    return [num for num, score in melhores][:NUMERO_PREVISOES]
 
 def analisar_risco_entrada(historico, entrada_proposta):
-    """Analisa o risco da entrada proposta"""
+    """Analisa o risco da entrada proposta BASEADO NO HISTÓRICO"""
     if len(historico) < 10:
         return "RISCO_MODERADO"
     
-    ultimos_10 = [h['number'] for h in historico[-10:]]
+    numeros = [h['number'] for h in historico]
+    ultimos_10 = numeros[-10:]
+    
+    # Verificar quantos dos números propostos saíram recentemente
     acertos_previstos = len(set(ultimos_10) & set(entrada_proposta))
     
     if acertos_previstos >= 3:
@@ -366,7 +442,7 @@ def analisar_risco_entrada(historico, entrada_proposta):
         return "RISCO_ALTO"
 
 def enviar_alerta_inteligente(entrada_estrategica, confianca, performance):
-    """Envia alertas com base no nível de confiança"""
+    """Envia alertas com base no nível de confiança BASEADO NO HISTÓRICO"""
     
     if confianca > 0.8:
         emoji = "🔥🔥"
@@ -386,156 +462,25 @@ def enviar_alerta_inteligente(entrada_estrategica, confianca, performance):
     enviar_telegram(mensagem, TELEGRAM_TOKEN_ALTERNATIVO, TELEGRAM_CHAT_ID_ALTERNATIVO)
 
 # =============================
-# ESTRATÉGIA DE ALTA ASSERTIVIDADE
+# ESTRATÉGIA 100% BASEADA EM HISTÓRICO
 # =============================
-def analisar_padroes_assertivos(historico):
-    """Análise AGGRESSIVA focada em padrões de alta probabilidade"""
-    
-    numeros = [h['number'] for h in historico if h.get('number') is not None]
-    
-    if len(numeros) < 10:
-        return {"numeros_quentes": [], "padrao_atual": "inicial"}
-    
-    # ANÁLISE DE PADRÕES DE REPETIÇÃO IMEDIATA
-    padroes_repeticao = []
-    for i in range(1, len(numeros)):
-        if numeros[i] == numeros[i-1]:
-            padroes_repeticao.append(numeros[i])
-    
-    # ANÁLISE DE SEQUÊNCIAS DE VIZINHANÇA
-    sequencias_vizinhanca = []
-    for i in range(1, min(6, len(numeros))):
-        vizinhos_anteriores = obter_vizinhos_fisicos(numeros[-i])
-        if numeros[-1] in vizinhos_anteriores:
-            sequencias_vizinhanca.extend(vizinhos_anteriores)
-    
-    # NÚMEROS QUENTES (últimas 15 rodadas)
-    ultimos_15 = numeros[-15:] if len(numeros) >= 15 else numeros
-    contagem_recente = Counter(ultimos_15)
-    numeros_quentes = [num for num, count in contagem_recente.most_common(5) if count >= 2]
-    
-    # NÚMEROS COM ATRASO (não saem há mais de 8 rodadas)
-    numeros_atrasados = []
-    for num in range(0, 37):
-        if num in numeros:
-            ultima_ocorrencia = len(numeros) - 1 - numeros[::-1].index(num)
-            atraso = len(numeros) - ultima_ocorrencia
-            if atraso > 8:
-                numeros_atrasados.append(num)
-    
-    # PADRÃO DE ALTERNÂNCIA DE CORES (se aplicável)
-    cores_alternadas = []
-    ultima_cor = "preto" if numeros[-1] in [2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35] else "vermelho" if numeros[-1] in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36] else "zero"
-    
-    return {
-        "numeros_quentes": numeros_quentes[:3],
-        "padroes_repeticao": list(set(padroes_repeticao))[:2],
-        "sequencias_vizinhanca": list(set(sequencias_vizinhanca))[:3],
-        "numeros_atrasados": numeros_atrasados[:3],
-        "ultima_cor": ultima_cor,
-        "total_analisado": len(numeros)
-    }
-
-def identificar_nucleo_assertivo(historico):
-    """Identifica o núcleo de números com maior probabilidade REAL"""
-    
-    numeros = [h['number'] for h in historico if h.get('number') is not None]
-    
-    if len(numeros) < 5:
-        return []
-    
-    analise = analisar_padroes_assertivos(historico)
-    
-    nucleo = set()
-    
-    # 1. ADICIONAR NÚMEROS QUENTES (alta prioridade)
-    nucleo.update(analise["numeros_quentes"])
-    
-    # 2. ADICIONAR PADRÕES DE REPETIÇÃO (muito forte)
-    nucleo.update(analise["padroes_repeticao"])
-    
-    # 3. ADICIONAR SEQUÊNCIAS DE VIZINHANÇA
-    nucleo.update(analise["sequencias_vizinhanca"])
-    
-    # 4. ADICIONAR 1-2 NÚMEROS ATRASADOS (para diversificação)
-    if analise["numeros_atrasados"]:
-        nucleo.add(analise["numeros_atrasados"][0])
-    
-    # 5. GARANTIR ZERO SE ESTIVER QUENTE
-    if numeros.count(0) >= max(1, len(numeros) * 0.05):
-        nucleo.add(0)
-    
-    # 6. COMPLETAR COM NÚMEROS ESTRATÉGICOS DA COLUNA DO MEIO
-    if len(nucleo) < NUMERO_PREVISOES:
-        complemento = []
-        for num in complemento:
-            if len(nucleo) < NUMERO_PREVISOES and num not in nucleo:
-                nucleo.add(num)
-    
-    return list(nucleo)[:NUMERO_PREVISOES]
 
 def gerar_entrada_ultra_assertiva(previsao_completa, historico):
-    """Estratégia ULTRA ASSERTIVA - Máximo 8 números com alta confiança"""
+    """Estratégia ULTRA ASSERTIVA - Máximo 8 números com alta confiança BASEADO NO HISTÓRICO"""
     
     if not historico:
         return []
     
-    # USAR APENAS O NÚCLEO ASSERTIVO
+    # USAR APENAS O NÚCLEO ASSERTIVO BASEADO NO HISTÓRICO
     nucleo_assertivo = identificar_nucleo_assertivo(historico)
     
-    # APLICAR FILTRO DE CONFIRMAÇÃO RÁPIDA
+    # APLICAR FILTRO DE CONFIRMAÇÃO RÁPIDA BASEADO NO HISTÓRICO
     entrada_filtrada = filtrar_por_confirmacao_rapida(historico, nucleo_assertivo)
     
     return entrada_filtrada[:NUMERO_PREVISOES]
 
-def filtrar_por_confirmacao_rapida(historico, numeros_candidatos):
-    """Filtro RÁPIDO baseado em confirmações imediatas"""
-    
-    if len(numeros_candidatos) <= NUMERO_PREVISOES:
-        return numeros_candidatos
-    
-    numeros = [h['number'] for h in historico if h.get('number') is not None]
-    
-    scores = {}
-    
-    for numero in numeros_candidatos:
-        score = 0
-        
-        # CONFIRMAÇÃO 1: É UM DOS ÚLTIMOS 3 NÚMEROS?
-        if numero in numeros[-3:]:
-            score += 3
-        
-        # CONFIRMAÇÃO 2: É VIZINHO DOS ÚLTIMOS 2 NÚMEROS?
-        for recente in numeros[-2:]:
-            if numero in obter_vizinhos_fisicos(recente):
-                score += 2
-                break
-        
-        # CONFIRMAÇÃO 3: TEVE REPETIÇÃO RECENTE (últimas 10 rodadas)
-        if numeros[-10:].count(numero) >= 2:
-            score += 2
-        
-        # CONFIRMAÇÃO 4: ESTÁ NA MESMA COLUNA DOS ÚLTIMOS NÚMEROS?
-        ultima_coluna = None
-        for num in numeros[-2:]:
-            if num in COLUNA_1: ultima_coluna = 1
-            elif num in COLUNA_2: ultima_coluna = 2
-            elif num in COLUNA_3: ultima_coluna = 3
-        
-        if ultima_coluna:
-            if (ultima_coluna == 1 and numero in COLUNA_1) or \
-               (ultima_coluna == 2 and numero in COLUNA_2) or \
-               (ultima_coluna == 3 and numero in COLUNA_3):
-                score += 1
-        
-        scores[numero] = score
-    
-    # SELECIONAR OS COM MAIOR SCORE
-    melhores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-    return [num for num, score in melhores if score >= 2][:NUMERO_PREVISOES]
-
 def enviar_alerta_assertivo(entrada_estrategica, ultimo_numero, historico, performance):
-    """Envia alerta ULTRA ASSERTIVO para Telegram"""
+    """Envia alerta ULTRA ASSERTIVO para Telegram BASEADO NO HISTÓRICO"""
     
     try:
         if not entrada_estrategica:
@@ -554,7 +499,7 @@ def enviar_alerta_assertivo(entrada_estrategica, ultimo_numero, historico, perfo
         logging.error(f"Erro ao enviar alerta assertivo: {e}")
 
 def verificar_resultado_entrada_anterior(numero_sorteado):
-    """Verificação RÁPIDA de resultado"""
+    """Verificação RÁPIDA de resultado BASEADO NO HISTÓRICO"""
     
     entrada_anterior = st.session_state.get('ultima_entrada_estrategica', [])
     
@@ -578,15 +523,14 @@ def verificar_resultado_entrada_anterior(numero_sorteado):
         return "RED"
 
 # =============================
-# SISTEMA ESPECIALISTA DE ALTA ASSERTIVIDADE
+# SISTEMA ESPECIALISTA 100% BASEADO EM HISTÓRICO
 # =============================
 class IA_Assertiva:
     def __init__(self):
         self.historico_analises = deque(maxlen=50)
-        self.analisador_tendencias = AnalisadorTendenciasAvancado()
         
     def prever_com_alta_assertividade(self, historico):
-        """Sistema PRINCIPAL de previsão assertiva"""
+        """Sistema PRINCIPAL de previsão assertiva 100% BASEADO EM HISTÓRICO"""
         
         historico_size = len(historico)
         
@@ -599,91 +543,102 @@ class IA_Assertiva:
             return self.modo_assertivo_basico(historico)
     
     def modo_assertivo_avancado(self, historico):
-        """Modo AVANÇADO com análise complexa"""
+        """Modo AVANÇADO com análise complexa BASEADO NO HISTÓRICO"""
         numeros = [h['number'] for h in historico if h.get('number') is not None]
         
-        # ANÁLISE DE PADRÕES COMPLEXOS
+        # ANÁLISE DE PADRÕES COMPLEXOS BASEADO NO HISTÓRICO
         analise = analisar_padroes_assertivos(historico)
         
-        # COMBINAÇÃO ESTRATÉGICA
+        # COMBINAÇÃO ESTRATÉGICA BASEADA NO HISTÓRICO
         previsao_final = set()
         
-        # 1. NÚCLEO PRINCIPAL
+        # 1. NÚCLEO PRINCIPAL (histórico)
         previsao_final.update(analise["numeros_quentes"])
         previsao_final.update(analise["padroes_repeticao"])
+        previsao_final.update(analise["sequencias_vizinhanca"])
         
-        # 2. ANÁLISE DE TENDÊNCIAS
+        # 2. ANÁLISE DE TENDÊNCIAS (histórico)
         tendencias = self.analisar_tendencias_avancadas(numeros)
         previsao_final.update(tendencias[:3])
         
-        # 3. PADRÕES TEMPORAIS
+        # 3. PADRÕES TEMPORAIS (histórico)
         padroes_temporais = self.detectar_padroes_temporais(historico)
         previsao_final.update(padroes_temporais[:2])
         
-        # 4. ANÁLISE DE CICLOS AVANÇADA
-        ciclos = self.analisador_tendencias.detectar_ciclos(historico)
-        if ciclos:
-            previsao_final.update(ciclos[0][:2])  # Primeiro ciclo detectado
+        # 4. COMPLETAR COM NÚMEROS RECENTES (histórico)
+        if len(previsao_final) < NUMERO_PREVISOES:
+            previsao_final.update(numeros[-5:])
         
         # GARANTIR TAMANHO MÁXIMO
         return self.otimizar_previsao_assertiva(list(previsao_final), historico)
     
     def modo_assertivo_intermediario(self, historico):
-        """Modo INTERMEDIÁRIO otimizado"""
+        """Modo INTERMEDIÁRIO otimizado BASEADO NO HISTÓRICO"""
         nucleo = identificar_nucleo_assertivo(historico)
-        return otimizar_distribuicao_apostas(nucleo)
+        return self.otimizar_distribuicao_apostas(nucleo, historico)
     
     def modo_assertivo_basico(self, historico):
-        """Modo BÁSICO para histórico pequeno"""
+        """Modo BÁSICO para histórico pequeno BASEADO NO HISTÓRICO"""
         numeros = [h['number'] for h in historico if h.get('number') is not None]
         
         if len(numeros) < 5:
-            return [2, 5, 8, 11, 14, 17, 23, 29]
+            # No início, usar apenas os números que já saíram
+            return numeros[-NUMERO_PREVISOES:] if len(numeros) >= NUMERO_PREVISOES else numeros
         
-        # ESTRATÉGIA SIMPLES MAS EFETIVA
+        # ESTRATÉGIA SIMPLES MAS EFETIVA BASEADA NO HISTÓRICO
         previsao = set()
         
-        # Últimos números
+        # Últimos números (histórico)
         previsao.update(numeros[-3:])
         
-        # Vizinhos dos últimos
+        # Vizinhos dos últimos (histórico)
         for num in numeros[-2:]:
             previsao.update(obter_vizinhos_fisicos(num)[:2])
         
-        # Completar com estratégicos
-        estrategicos = [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35]
-        for num in estrategicos:
-            if len(previsao) < NUMERO_PREVISOES:
-                previsao.add(num)
+        # Números quentes (histórico)
+        ultimos_10 = numeros[-10:] if len(numeros) >= 10 else numeros
+        contagem_recente = Counter(ultimos_10)
+        numeros_quentes = [num for num, count in contagem_recente.most_common(4) if count >= 2]
+        previsao.update(numeros_quentes)
+        
+        # Completar com números mais frequentes (histórico)
+        if len(previsao) < NUMERO_PREVISOES:
+            frequentes_geral = Counter(numeros).most_common(10)
+            for num, freq in frequentes_geral:
+                if len(previsao) < NUMERO_PREVISOES and num not in previsao:
+                    previsao.add(num)
         
         return list(previsao)[:NUMERO_PREVISOES]
     
     def analisar_tendencias_avancadas(self, numeros):
-        """Análise de tendências complexas"""
+        """Análise de tendências complexas BASEADA NO HISTÓRICO"""
         if len(numeros) < 10:
             return []
         
         tendencias = []
         
-        # Tendência de repetição em ciclos curtos
+        # Tendência de repetição em ciclos curtos (histórico)
         for i in range(len(numeros) - 4):
             if numeros[i] == numeros[i+2]:
                 tendencias.append(numeros[i])
         
-        # Tendência de alternância
+        # Tendência de alternância (histórico)
         for i in range(len(numeros) - 3):
             if (numeros[i] in PRIMEIRA_DUZIA and numeros[i+1] in TERCEIRA_DUZIA and 
                 numeros[i+2] in PRIMEIRA_DUZIA):
                 tendencias.extend([n for n in PRIMEIRA_DUZIA if n not in tendencias][:2])
+            elif (numeros[i] in TERCEIRA_DUZIA and numeros[i+1] in PRIMEIRA_DUZIA and 
+                  numeros[i+2] in TERCEIRA_DUZIA):
+                tendencias.extend([n for n in TERCEIRA_DUZIA if n not in tendencias][:2])
         
         return list(set(tendencias))[:5]
     
     def detectar_padroes_temporais(self, historico):
-        """Detecta padrões baseados em tempo"""
+        """Detecta padrões baseados em tempo BASEADO NO HISTÓRICO"""
         try:
             padroes = []
             
-            # Agrupar por minutos (padrões de horário)
+            # Agrupar por minutos (padrões de horário) - histórico
             for registro in historico[-20:]:
                 if 'timestamp' in registro:
                     try:
@@ -698,16 +653,49 @@ class IA_Assertiva:
         except:
             return []
     
+    def otimizar_distribuicao_apostas(self, nucleo_assertivo, historico):
+        """Otimiza a distribuição dos 8 números estrategicamente BASEADO NO HISTÓRICO"""
+        
+        if len(nucleo_assertivo) >= NUMERO_PREVISOES:
+            return nucleo_assertivo[:NUMERO_PREVISOES]
+        
+        numeros = [h['number'] for h in historico if h.get('number') is not None]
+        
+        # Completar com números baseados no histórico
+        complementar = []
+        
+        # 1. Últimos números sorteados
+        complementar.extend([num for num in numeros[-10:] if num not in nucleo_assertivo])
+        
+        # 2. Números quentes recentes
+        ultimos_15 = numeros[-15:] if len(numeros) >= 15 else numeros
+        contagem_recente = Counter(ultimos_15)
+        numeros_quentes = [num for num, count in contagem_recente.most_common(10) 
+                          if count >= 2 and num not in nucleo_assertivo]
+        complementar.extend(numeros_quentes)
+        
+        # 3. Números com melhor frequência histórica
+        frequentes_geral = Counter(numeros).most_common(15)
+        for num, freq in frequentes_geral:
+            if num not in nucleo_assertivo and num not in complementar:
+                complementar.append(num)
+                if len(nucleo_assertivo) + len(complementar) >= NUMERO_PREVISOES:
+                    break
+        
+        # Combinar e retornar
+        resultado = list(nucleo_assertivo) + complementar
+        return resultado[:NUMERO_PREVISOES]
+    
     def otimizar_previsao_assertiva(self, previsao, historico):
-        """Otimização FINAL da previsão"""
+        """Otimização FINAL da previsão BASEADA NO HISTÓRICO"""
         if len(previsao) <= NUMERO_PREVISOES:
             return previsao
         
-        # FILTRAR PELA ESTRATÉGIA DE CONFIRMAÇÃO
+        # FILTRAR PELA ESTRATÉGIA DE CONFIRMAÇÃO BASEADA NO HISTÓRICO
         return filtrar_por_confirmacao_rapida(historico, previsao)
 
 # =============================
-# GESTOR PRINCIPAL ASSERTIVO
+# GESTOR PRINCIPAL 100% BASEADO EM HISTÓRICO
 # =============================
 class GestorAssertivo:
     def __init__(self):
@@ -723,31 +711,49 @@ class GestorAssertivo:
             previsao = self.ia_assertiva.prever_com_alta_assertividade(self.historico)
             previsao_validada = validar_previsao(previsao)
             
-            # GARANTIR SEMPRE 8 NÚMEROS
+            # GARANTIR SEMPRE 8 NÚMEROS BASEADOS NO HISTÓRICO
             if len(previsao_validada) < NUMERO_PREVISOES:
-                logging.warning(f"⚠️ Previsão com {len(previsao_validada)} números. Completando...")
-                previsao_validada = self.completar_para_8(previsao_validada)
+                logging.warning(f"⚠️ Previsão com {len(previsao_validada)} números. Completando com histórico...")
+                previsao_validada = self.completar_com_historico(previsao_validada)
             
             logging.info(f"✅ Previsão ASSERTIVA gerada: {len(previsao_validada)} números")
             return previsao_validada
             
         except Exception as e:
             logging.error(f"Erro ao gerar previsão: {e}")
-            return [2, 5, 8, 11, 14, 17, 23, 29]
+            # Em caso de erro, usar os últimos números do histórico
+            numeros = [h['number'] for h in self.historico if h.get('number') is not None]
+            return numeros[-NUMERO_PREVISOES:] if len(numeros) >= NUMERO_PREVISOES else numeros
     
-    def completar_para_8(self, previsao):
-        """Completa sempre para 8 números"""
+    def completar_com_historico(self, previsao):
+        """Completa sempre para 8 números USANDO APENAS HISTÓRICO"""
         if len(previsao) >= NUMERO_PREVISOES:
             return previsao[:NUMERO_PREVISOES]
         
         numeros_completos = set(previsao)
+        numeros_historico = [h['number'] for h in self.historico if h.get('number') is not None]
         
-        # NÚMEROS ESTRATÉGICOS DA COLUNA DO MEIO
-        estrategicos = [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35]
+        # COMPLETAR COM NÚMEROS DO HISTÓRICO EM ORDEM DE PRIORIDADE:
         
-        for num in estrategicos:
-            if len(numeros_completos) < NUMERO_PREVISOES:
+        # 1. Últimos números sorteados
+        for num in reversed(numeros_historico):
+            if len(numeros_completos) < NUMERO_PREVISOES and num not in numeros_completos:
                 numeros_completos.add(num)
+        
+        # 2. Números mais frequentes no histórico
+        if len(numeros_completos) < NUMERO_PREVISOES:
+            frequentes = Counter(numeros_historico).most_common(20)
+            for num, count in frequentes:
+                if len(numeros_completos) < NUMERO_PREVISOES and num not in numeros_completos:
+                    numeros_completos.add(num)
+        
+        # 3. Números que são vizinhos de números recentes
+        if len(numeros_completos) < NUMERO_PREVISOES:
+            for num_recente in numeros_historico[-3:]:
+                vizinhos = obter_vizinhos_fisicos(num_recente)
+                for vizinho in vizinhos:
+                    if len(numeros_completos) < NUMERO_PREVISOES and vizinho not in numeros_completos:
+                        numeros_completos.add(vizinho)
         
         return list(numeros_completos)[:NUMERO_PREVISOES]
     
@@ -756,19 +762,19 @@ class GestorAssertivo:
             historico_size = len(self.historico)
             
             if historico_size < FASE_INICIAL:
-                return "🟡 Iniciando", "Estratégia Básica"
+                return "🟡 Iniciando", "Baseado em Histórico"
             elif historico_size < FASE_INTERMEDIARIA:
-                return "🟠 Desenvolvendo", "Análise Intermediária"
+                return "🟠 Desenvolvendo", "Padrões Históricos"
             elif historico_size < FASE_AVANCADA:
-                return "🟢 IA Ativa", "Padrões Detectados"
+                return "🟢 IA Ativa", "Tendências Históricas"
             else:
-                return "🎯 ASSERTIVO", "Alta Probabilidade"
+                return "🎯 ASSERTIVO", "Alta Probabilidade Histórica"
                 
         except:
             return "⚪ Sistema", "Carregando..."
     
     def get_analise_detalhada(self):
-        """Análise simplificada mas efetiva"""
+        """Análise simplificada mas efetiva BASEADA NO HISTÓRICO"""
         if not self.historico:
             return {
                 "modo_assertivo": False,
@@ -786,22 +792,22 @@ class GestorAssertivo:
             "modo_assertivo": modo_assertivo,
             "historico_total": historico_size,
             "confianca": "Alta" if historico_size > 100 else "Média" if historico_size > 50 else "Baixa",
-            "estrategia_ativa": "Núcleo Assertivo",
+            "estrategia_ativa": "Núcleo Histórico",
             "numeros_quentes": analise.get("numeros_quentes", []),
             "padrao_detectado": len(analise.get("padroes_repeticao", [])) > 0
         }
 
 # =============================
-# STREAMLIT APP ASSERTIVO
+# STREAMLIT APP 100% BASEADO EM HISTÓRICO
 # =============================
 st.set_page_config(
-    page_title="Roleta - IA Assertiva", 
+    page_title="Roleta - IA Baseada em Histórico", 
     page_icon="🎯", 
     layout="centered"
 )
 
-st.title("🎯 SISTEMA ASSERTIVO - ALTA PROBABILIDADE")
-st.markdown("### **Estratégia com 8 Números para Máxima Assertividade**")
+st.title("🎯 SISTEMA 100% BASEADO EM HISTÓRICO")
+st.markdown("### **Estratégia com 8 Números Baseada Exclusivamente no Histórico**")
 
 st_autorefresh(interval=3000, key="refresh")
 
@@ -830,7 +836,7 @@ for k, v in defaults.items():
 st.session_state.previsao_atual = validar_previsao(st.session_state.previsao_atual)
 
 # =============================
-# PROCESSAMENTO PRINCIPAL ASSERTIVO
+# PROCESSAMENTO PRINCIPAL 100% BASEADO EM HISTÓRICO
 # =============================
 try:
     resultado = fetch_latest_result()
@@ -875,11 +881,11 @@ try:
                 st.session_state.erros += 1
                 st.error(f"🔴 Número {numero_real} não estava")
 
-        # GERAR NOVA PREVISÃO ASSERTIVA
+        # GERAR NOVA PREVISÃO BASEADA NO HISTÓRICO
         nova_previsao = st.session_state.gestor.gerar_previsao_assertiva()
         st.session_state.previsao_atual = validar_previsao(nova_previsao)
         
-        # GERAR ENTRADA ULTRA ASSERTIVA
+        # GERAR ENTRADA ULTRA ASSERTIVA BASEADA NO HISTÓRICO
         entrada_assertiva = gerar_entrada_ultra_assertiva(
             st.session_state.previsao_atual, 
             list(st.session_state.gestor.historico)
@@ -916,10 +922,12 @@ try:
 except Exception as e:
     logging.error(f"Erro no processamento: {e}")
     st.error("🔴 Reiniciando sistema...")
-    st.session_state.previsao_atual = [2, 5, 8, 11, 14, 17, 23, 29]
+    # Em caso de erro, usar os últimos números do histórico
+    numeros = [h['number'] for h in st.session_state.gestor.historico if h.get('number') is not None]
+    st.session_state.previsao_atual = numeros[-NUMERO_PREVISOES:] if len(numeros) >= NUMERO_PREVISOES else numeros
 
 # =============================
-# INTERFACE STREAMLIT ASSERTIVA
+# INTERFACE STREAMLIT 100% BASEADA EM HISTÓRICO
 # =============================
 st.markdown("---")
 
@@ -944,7 +952,7 @@ if st.session_state.resultado_entrada_anterior:
         st.error(f"❌ **ENTRADA ANTERIOR: RED** {st.session_state.ultimo_numero} não estava")
 
 # ANÁLISE DO SISTEMA
-st.subheader("🔍 Análise Assertiva")
+st.subheader("🔍 Análise Baseada em Histórico")
 analise = st.session_state.gestor.get_analise_detalhada()
 
 col1, col2, col3 = st.columns(3)
@@ -955,18 +963,14 @@ with col2:
 with col3:
     st.metric("📈 Padrão", "✅" if analise["padrao_detectado"] else "⏳")
 
-# =============================
-# NOVO DASHBOARD DE RISCO E CONFIANÇA
-# =============================
+# DASHBOARD DE RISCO E CONFIANÇA
 st.markdown("---")
 st.subheader("📈 Análise de Risco e Confiança")
 
-# Sistema de confiança
 confianca = st.session_state.sistema_confianca.confianca
 tendencia = st.session_state.sistema_confianca.tendencia
 categoria_confianca = st.session_state.sistema_confianca.get_confianca_categoria()
 
-# Análise de risco da entrada atual
 risco = analisar_risco_entrada(
     list(st.session_state.gestor.historico), 
     st.session_state.previsao_atual
@@ -982,7 +986,6 @@ with col3:
 with col4:
     st.metric("🔁 Sequência", f"{st.session_state.gestor_risco.sequencia_atual}")
 
-# Barra de progresso de confiança
 st.progress(confianca)
 
 # Recomendação baseada em confiança e risco
@@ -995,12 +998,12 @@ else:
 
 # PREVISÃO ATUAL
 st.markdown("---")
-st.subheader("🎯 PREVISÃO ASSERTIVA ATUAL")
+st.subheader("🎯 PREVISÃO BASEADA EM HISTÓRICO")
 
 previsao_valida = validar_previsao(st.session_state.previsao_atual)
 
 if previsao_valida:
-    st.success(f"**🔥 {len(previsao_valida)} NÚMEROS SELECIONADOS **")
+    st.success(f"**🔥 {len(previsao_valida)} NÚMEROS SELECIONADOS DO HISTÓRICO **")
     
     # Display IMPACTANTE
     st.markdown(f"### **{'  •  '.join(map(str, sorted(previsao_valida)))}**")
@@ -1011,12 +1014,14 @@ if previsao_valida:
         st.write(f"**Números Quentes:** {', '.join(map(str, analise['numeros_quentes']))}")
     
 else:
-    st.warning("⚠️ Inicializando sistema assertivo...")
-    st.session_state.previsao_atual = [2, 5, 8, 11, 14, 17, 23, 29]
+    st.warning("⚠️ Coletando dados históricos...")
+    # Usar últimos números do histórico como fallback
+    numeros = [h['number'] for h in st.session_state.gestor.historico if h.get('number') is not None]
+    st.session_state.previsao_atual = numeros[-NUMERO_PREVISOES:] if len(numeros) >= NUMERO_PREVISOES else numeros
 
-# ENTRADA ASSERTIVA
+# ENTRADA ASSERTIVA BASEADA EM HISTÓRICO
 st.markdown("---")
-st.subheader("🎯 ENTRADA PARA TELEGRAM")
+st.subheader("🎯 ENTRADA PARA TELEGRAM (Baseada em Histórico)")
 
 entrada_assertiva = gerar_entrada_ultra_assertiva(
     st.session_state.previsao_atual, 
@@ -1029,16 +1034,16 @@ if entrada_assertiva:
     deve_entrar = st.session_state.gestor_risco.deve_entrar(risco_entrada, confianca)
     
     if deve_entrar:
-        st.success(f"**🔔 {len(entrada_assertiva)} NÚMEROS CONFIRMADOS**")
+        st.success(f"**🔔 {len(entrada_assertiva)} NÚMEROS CONFIRMADOS DO HISTÓRICO**")
         
         # Mostrar mensagem do Telegram
         numeros_ordenados = sorted(entrada_assertiva)
-        mensagem_telegram = f"🎯 ENTRADA ASSERTIVA 🎯\n\n🔥 {' • '.join(map(str, numeros_ordenados))} 🔥"
+        mensagem_telegram = f"🎯 ENTRADA BASEADA EM HISTÓRICO 🎯\n\n🔥 {' • '.join(map(str, numeros_ordenados))} 🔥"
         
         st.code(mensagem_telegram, language=None)
         
         # Botão de envio
-        if st.button("📤 Enviar Alerta Assertivo"):
+        if st.button("📤 Enviar Alerta Baseado em Histórico"):
             performance = {
                 'acertos': st.session_state.acertos,
                 'erros': st.session_state.erros,
@@ -1051,11 +1056,11 @@ if entrada_assertiva:
                 list(st.session_state.gestor.historico),
                 performance
             )
-            st.success("✅ Alerta ASSERTIVO enviado!")
+            st.success("✅ Alerta BASEADO EM HISTÓRICO enviado!")
     else:
         st.warning(f"⏹️ Entrada não recomendada - Risco: {risco_entrada}, Confiança: {categoria_confianca}")
 else:
-    st.warning("⏳ Gerando entrada assertiva...")
+    st.warning("⏳ Gerando entrada baseada em histórico...")
 
 # PERFORMANCE
 st.markdown("---")
@@ -1098,19 +1103,18 @@ with col2:
 
 with col3:
     if st.button("📊 Análise Detalhada"):
-        # Mostrar análise avançada
-        analise_tendencias = st.session_state.gestor.ia_assertiva.analisador_tendencias.detectar_ciclos(
-            list(st.session_state.gestor.historico)
-        )
-        st.info(f"🔍 Ciclos detectados: {len(analise_tendencias)}")
-        
-        padroes_horarios = analisar_padroes_horarios(list(st.session_state.gestor.historico))
-        st.info(f"⏰ Padrões horários: {len(padroes_horarios)} períodos analisados")
+        # Mostrar análise avançada baseada em histórico
+        numeros = [h['number'] for h in st.session_state.gestor.historico if h.get('number') is not None]
+        if numeros:
+            st.info(f"🔍 Últimos 10 números: {numeros[-10:]}")
+            st.info(f"📊 Números mais frequentes: {Counter(numeros).most_common(5)}")
+        else:
+            st.info("📊 Histórico ainda vazio")
 
 st.markdown("---")
-st.markdown("### 🚀 **SISTEMA ASSERTIVO ATIVADO**")
-st.markdown("*Estratégia de 8 números com gestão de risco inteligente*")
+st.markdown("### 🚀 **SISTEMA 100% BASEADO EM HISTÓRICO ATIVADO**")
+st.markdown("*Estratégia de 8 números baseada exclusivamente no histórico de sorteios*")
 
 # Rodapé
 st.markdown("---")
-st.markdown("**🎯 Sistema Assertivo v10.0** - *Alta Assertividade com Gestão de Risco*")
+st.markdown("**🎯 Sistema Baseado em Histórico v10.0** - *Zero números fixos, 100% análise histórica*")
