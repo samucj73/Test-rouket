@@ -141,7 +141,7 @@ class FeatureEngineer:
                 len([n for n in janela if n % 2 == 0]),  # Count pares
                 len([n for n in janela if n % 2 == 1]),  # Count ímpare
 
-             ])
+             )
             
             
             # 6. Features de vizinhança
