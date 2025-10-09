@@ -49,7 +49,7 @@ COLUNA_3 = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36]
 # CONFIGURAÇÃO ESPECIALISTA - ESTRATÉGIA 100% BASEADA EM HISTÓRICO
 # =============================
 MIN_HISTORICO_TREINAMENTO = 475
-NUMERO_PREVISOES = 12  # SEMPRE 8 NÚMEROS BASEADOS NO HISTÓRICO
+NUMERO_PREVISOES = 8  # SEMPRE 8 NÚMEROS BASEADOS NO HISTÓRICO
 
 # Fases do sistema
 FASE_INICIAL = 30
@@ -411,6 +411,123 @@ def validar_previsao(previsao):
     return previsao_limpa
 
 # =============================
+# ALERTA SIMPLIFICADO PARA TELEGRAM
+# =============================
+def enviar_alerta_inteligente(entrada_estrategica, confianca, performance):
+    """Envia alerta SUPER SIMPLES apenas com números"""
+    
+    # Ordenar os números
+    numeros_ordenados = sorted(entrada_estrategica)
+    
+    # Dividir em duas linhas (4 números por linha)
+    primeira_linha = '   '.join(map(str, numeros_ordenados[:4]))
+    segunda_linha = '   '.join(map(str, numeros_ordenados[4:]))
+    
+    # Mensagem SUPER SIMPLES - apenas números
+    mensagem = f"{primeira_linha}\n{segunda_linha}"
+    
+    enviar_telegram(mensagem, TELEGRAM_TOKEN_ALTERNATIVO, TELEGRAM_CHAT_ID_ALTERNATIVO)
+
+# =============================
+# ESTRATÉGIA 100% BASEADA EM HISTÓRICO - VERSÃO CORRIGIDA
+# =============================
+
+def gerar_entrada_ultra_assertiva(previsao_completa, historico):
+    """CORREÇÃO: Garantir que a entrada seja EXATAMENTE a previsão"""
+    
+    # SIMPLESMENTE RETORNAR A PREVISÃO - SEM FILTROS EXTRAS
+    previsao_valida = validar_previsao(previsao_completa)
+    
+    if len(previsao_valida) >= 6:  # Pelo menos 6 números válidos
+        return previsao_valida[:NUMERO_PREVISOES]
+    
+    # FALLBACK: usar últimos números do histórico
+    numeros = [h['number'] for h in historico if h.get('number') is not None]
+    if numeros:
+        return numeros[-NUMERO_PREVISOES:] if len(numeros) >= NUMERO_PREVISOES else numeros
+    
+    return [2, 5, 8, 11, 14, 17, 20, 23]  # Fallback final
+
+def enviar_alerta_assertivo(entrada_estrategica, ultimo_numero, historico, performance):
+    """Envia alerta ULTRA SIMPLES para Telegram"""
+    
+    try:
+        if not entrada_estrategica:
+            return
+        
+        # Usar sistema de confiança para alerta inteligente
+        confianca = st.session_state.sistema_confianca.confianca
+        enviar_alerta_inteligente(entrada_estrategica, confianca, performance)
+        
+        # Salvar entrada atual
+        st.session_state.ultima_entrada_estrategica = entrada_estrategica
+        
+        logging.info(f"📤 Alerta SIMPLES enviado: {len(entrada_estrategica)} números")
+        
+    except Exception as e:
+        logging.error(f"Erro ao enviar alerta: {e}")
+
+def verificar_resultado_entrada_anterior(numero_sorteado):
+    """Verificação RÁPIDA de resultado BASEADO NO HISTÓRICO"""
+    
+    entrada_anterior = st.session_state.get('ultima_entrada_estrategica', [])
+    
+    if not entrada_anterior or numero_sorteado is None:
+        return None
+    
+    # Atualizar sistema de confiança
+    acertou = numero_sorteado in entrada_anterior
+    st.session_state.sistema_confianca.atualizar_confianca(acertou)
+    
+    # Atualizar gestão de risco
+    st.session_state.gestor_risco.atualizar_sequencia("GREEN" if acertou else "RED")
+    
+    if acertou:
+        mensagem_green = f"✅ **GREEN!** Acertamos {numero_sorteado}!"
+        enviar_telegram(mensagem_green, TELEGRAM_TOKEN_ALTERNATIVO, TELEGRAM_CHAT_ID_ALTERNATIVO)
+        return "GREEN"
+    else:
+        mensagem_red = f"❌ **RED** {numero_sorteado} não estava"
+        enviar_telegram(mensagem_red, TELEGRAM_TOKEN_ALTERNATIVO, TELEGRAM_CHAT_ID_ALTERNATIVO)
+        return "RED"
+
+# =============================
+# SISTEMA DE RECUPERAÇÃO E RESET
+# =============================
+def verificar_estrategia_recuperacao(historico, ultimos_resultados):
+    """Verifica se devemos ativar estratégia de recuperação"""
+    
+    if len(ultimos_resultados) < 3:
+        return False
+    
+    # Ativar recuperação se tivermos 3 REDs consecutivos
+    if ultimos_resultados[-3:] == ["RED", "RED", "RED"]:
+        return True
+    
+    # Ativar recuperação se taxa de acerto estiver abaixo de 25%
+    total = len(ultimos_resultados)
+    acertos = ultimos_resultados.count("GREEN")
+    taxa = acertos / total if total > 0 else 0
+    
+    return taxa < 0.25
+
+def verificar_reset_sistema(acertos, erros, performance_sequencial):
+    """Reinicia o sistema se performance for catastrófica"""
+    total_geral = acertos + erros
+    total_sequencial = performance_sequencial["acertos"] + performance_sequencial["erros"]
+    
+    if total_geral > 20:
+        taxa_geral = acertos / total_geral
+        taxa_sequencial = performance_sequencial["acertos"] / total_sequencial if total_sequencial > 0 else 0
+        
+        # Se ambas as taxas forem abaixo de 10%, resetar
+        if taxa_geral < 0.1 and taxa_sequencial < 0.1:
+            logging.warning("🔄 PERFORMANCE CATASTRÓFICA - Reiniciando sistema...")
+            return True
+    
+    return False
+
+# =============================
 # ANÁLISES 100% BASEADAS EM HISTÓRICO - VERSÃO MAIS AGRESSIVA
 # =============================
 
@@ -588,125 +705,6 @@ def analisar_risco_entrada(historico, entrada_proposta):
         return "RISCO_MODERADO"
     else:
         return "RISCO_ALTO"
-
-def enviar_alerta_inteligente(entrada_estrategica, confianca, performance):
-    """Envia alertas com base no nível de confiança BASEADO NO HISTÓRICO"""
-    
-    if confianca > 0.8:
-        emoji = "🔥🔥"
-        mensagem_tipo = "OPORTUNIDADE ALTA"
-    elif confianca > 0.6:
-        emoji = "🔥"
-        mensagem_tipo = "BOA OPORTUNIDADE"
-    else:
-        emoji = "⚠️"
-        mensagem_tipo = "OPORTUNIDADE MODERADA"
-    
-    mensagem = f"{emoji} **{mensagem_tipo}** {emoji}\n\n"
-    mensagem += f"🎯 {' • '.join(map(str, sorted(entrada_estrategica)))}\n\n"
-    mensagem += f"📊 Assertividade: {performance['taxa_acerto']}\n"
-    mensagem += f"💪 Confiança: {int(confianca*100)}%"
-    
-    enviar_telegram(mensagem, TELEGRAM_TOKEN_ALTERNATIVO, TELEGRAM_CHAT_ID_ALTERNATIVO)
-
-# =============================
-# ESTRATÉGIA 100% BASEADA EM HISTÓRICO - VERSÃO CORRIGIDA
-# =============================
-
-def gerar_entrada_ultra_assertiva(previsao_completa, historico):
-    """CORREÇÃO: Garantir que a entrada seja EXATAMENTE a previsão"""
-    
-    # SIMPLESMENTE RETORNAR A PREVISÃO - SEM FILTROS EXTRAS
-    previsao_valida = validar_previsao(previsao_completa)
-    
-    if len(previsao_valida) >= 6:  # Pelo menos 6 números válidos
-        return previsao_valida[:NUMERO_PREVISOES]
-    
-    # FALLBACK: usar últimos números do histórico
-    numeros = [h['number'] for h in historico if h.get('number') is not None]
-    if numeros:
-        return numeros[-NUMERO_PREVISOES:] if len(numeros) >= NUMERO_PREVISOES else numeros
-    
-    return [2, 5, 8, 11, 14, 17, 20, 23]  # Fallback final
-
-def enviar_alerta_assertivo(entrada_estrategica, ultimo_numero, historico, performance):
-    """Envia alerta ULTRA ASSERTIVO para Telegram BASEADO NO HISTÓRICO"""
-    
-    try:
-        if not entrada_estrategica:
-            return
-        
-        # Usar sistema de confiança para alerta inteligente
-        confianca = st.session_state.sistema_confianca.confianca
-        enviar_alerta_inteligente(entrada_estrategica, confianca, performance)
-        
-        # Salvar entrada atual
-        st.session_state.ultima_entrada_estrategica = entrada_estrategica
-        
-        logging.info(f"📤 Alerta ASSERTIVO enviado: {len(entrada_estrategica)} números")
-        
-    except Exception as e:
-        logging.error(f"Erro ao enviar alerta assertivo: {e}")
-
-def verificar_resultado_entrada_anterior(numero_sorteado):
-    """Verificação RÁPIDA de resultado BASEADO NO HISTÓRICO"""
-    
-    entrada_anterior = st.session_state.get('ultima_entrada_estrategica', [])
-    
-    if not entrada_anterior or numero_sorteado is None:
-        return None
-    
-    # Atualizar sistema de confiança
-    acertou = numero_sorteado in entrada_anterior
-    st.session_state.sistema_confianca.atualizar_confianca(acertou)
-    
-    # Atualizar gestão de risco
-    st.session_state.gestor_risco.atualizar_sequencia("GREEN" if acertou else "RED")
-    
-    if acertou:
-        mensagem_green = f"✅ **GREEN!** Acertamos {numero_sorteado}!"
-        enviar_telegram(mensagem_green, TELEGRAM_TOKEN_ALTERNATIVO, TELEGRAM_CHAT_ID_ALTERNATIVO)
-        return "GREEN"
-    else:
-        mensagem_red = f"❌ **RED** {numero_sorteado} não estava"
-        enviar_telegram(mensagem_red, TELEGRAM_TOKEN_ALTERNATIVO, TELEGRAM_CHAT_ID_ALTERNATIVO)
-        return "RED"
-
-# =============================
-# SISTEMA DE RECUPERAÇÃO E RESET
-# =============================
-def verificar_estrategia_recuperacao(historico, ultimos_resultados):
-    """Verifica se devemos ativar estratégia de recuperação"""
-    
-    if len(ultimos_resultados) < 3:
-        return False
-    
-    # Ativar recuperação se tivermos 3 REDs consecutivos
-    if ultimos_resultados[-3:] == ["RED", "RED", "RED"]:
-        return True
-    
-    # Ativar recuperação se taxa de acerto estiver abaixo de 25%
-    total = len(ultimos_resultados)
-    acertos = ultimos_resultados.count("GREEN")
-    taxa = acertos / total if total > 0 else 0
-    
-    return taxa < 0.25
-
-def verificar_reset_sistema(acertos, erros, performance_sequencial):
-    """Reinicia o sistema se performance for catastrófica"""
-    total_geral = acertos + erros
-    total_sequencial = performance_sequencial["acertos"] + performance_sequencial["erros"]
-    
-    if total_geral > 20:
-        taxa_geral = acertos / total_geral
-        taxa_sequencial = performance_sequencial["acertos"] / total_sequencial if total_sequencial > 0 else 0
-        
-        # Se ambas as taxas forem abaixo de 10%, resetar
-        if taxa_geral < 0.1 and taxa_sequencial < 0.1:
-            logging.warning("🔄 PERFORMANCE CATASTRÓFICA - Reiniciando sistema...")
-            return True
-    
-    return False
 
 # =============================
 # SISTEMA ESPECIALISTA 100% BASEADO EM HISTÓRICO
@@ -1194,7 +1192,9 @@ if entrada_assertiva:
         
         # Mostrar mensagem do Telegram
         numeros_ordenados = sorted(entrada_assertiva)
-        mensagem_telegram = f"🎯 ENTRADA BASEADA EM HISTÓRICO 🎯\n\n🔥 {' • '.join(map(str, numeros_ordenados))} 🔥"
+        primeira_linha = '   '.join(map(str, numeros_ordenados[:4]))
+        segunda_linha = '   '.join(map(str, numeros_ordenados[4:]))
+        mensagem_telegram = f"{primeira_linha}\n{segunda_linha}"
         
         st.code(mensagem_telegram, language=None)
         
