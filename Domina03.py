@@ -86,7 +86,7 @@ class FeatureEngineer:
         self.label_encoders = {}
         self.feature_names = []
         
-   def criar_features_avancadas(self, historico, window_size=10):
+    def criar_features_avancadas(self, historico, window_size=10):
         """Cria features avançadas para treinamento do XGBoost - VERSÃO CORRIGIDA"""
         if len(historico) < window_size + 5:
             return [], []
