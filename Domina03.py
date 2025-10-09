@@ -86,8 +86,8 @@ class FeatureEngineer:
         self.label_encoders = {}
         self.feature_names = []
         
-    def criar_features_avancadas(self, historico, window_size=10):
-        """Cria features avançadas para treinamento do XGBoost"""
+   def criar_features_avancadas(self, historico, window_size=10):
+        """Cria features avançadas para treinamento do XGBoost - VERSÃO CORRIGIDA"""
         if len(historico) < window_size + 5:
             return [], []
             
@@ -102,49 +102,54 @@ class FeatureEngineer:
             
             feature_row = []
             
-            # 1. Features estatísticas da janela
-            feature_row.extend([
-                np.mean(janela),      # Média
-                np.std(janela),       # Desvio padrão
-                np.median(janela),    # Mediana
-                len(set(janela)),     # Números únicos
-            ])
+            # 1. Features estatísticas da janela - CORREÇÃO APLICADA
+            feature_row.append(np.mean(janela))      # Média
+            feature_row.append(np.std(janela))       # Desvio padrão  
+            feature_row.append(np.median(janela))    # Mediana
+            feature_row.append(len(set(janela)))     # Números únicos
             
-            # 2. Features de tendência
-            feature_row.extend([
-                janela[-1],           # Último número
-                janela[-2] if len(janela) > 1 else 0,  # Penúltimo
-                janela[-1] - janela[-2] if len(janela) > 1 else 0,  # Diferença
-            ])
+            # 2. Features de tendência - CORREÇÃO APLICADA
+            feature_row.append(janela[-1])           # Último número
+            feature_row.append(janela[-2] if len(janela) > 1 else 0)  # Penúltimo
+            feature_row.append(janela[-1] - janela[-2] if len(janela) > 1 else 0)  # Diferença
             
-            # 3. Features de frequência
+            # 3. Features de frequência - CORREÇÃO APLICADA
             contador = Counter(janela)
-            for num in [janela[-1], janela[-2] if len(janela) > 1 else 0]:
-                feature_row.append(contador.get(num, 0))
+            feature_row.append(contador.get(janela[-1], 0))  # Freq último
+            if len(janela) > 1:
+                feature_row.append(contador.get(janela[-2], 0))  # Freq penúltimo
+            else:
+                feature_row.append(0)
             
-            # 4. Features de posição na roleta
+            # 4. Features de posição na roleta - CORREÇÃO APLICADA
             ultimo_num = janela[-1]
-            feature_row.extend([
-                ultimo_num % 2,       # Par/Ímpar
-                1 if ultimo_num == 0 else 0,  # É zero?
-                ultimo_num in PRIMEIRA_DUZIA,
-                ultimo_num in SEGUNDA_DUZIA, 
-                ultimo_num in TERCEIRA_DUZIA,
-                ultimo_num in COLUNA_1,
-                ultimo_num in COLUNA_2,
-                ultimo_num in COLUNA_3,
-            ])
+            feature_row.append(ultimo_num % 2)       # Par/Ímpar
+            feature_row.append(1 if ultimo_num == 0 else 0)  # É zero?
+            feature_row.append(1 if ultimo_num in PRIMEIRA_DUZIA else 0)
+            feature_row.append(1 if ultimo_num in SEGUNDA_DUZIA else 0)
+            feature_row.append(1 if ultimo_num in TERCEIRA_DUZIA else 0)
+            feature_row.append(1 if ultimo_num in COLUNA_1 else 0)
+            feature_row.append(1 if ultimo_num in COLUNA_2 else 0)
+            feature_row.append(1 if ultimo_num in COLUNA_3 else 0)
             
-            # 5. Features de sequência
-            feature_row.extend([
-                sum(1 for j in range(1, min(4, len(janela))) if janela[-j] == janela[-1] else 0,
-                len([n for n in janela if n % 2 == 0]),  # Count pares
-                len([n for n in janela if n % 2 == 1]),  # Count ímpares
-            ])
+            # 5. Features de sequência - CORREÇÃO APLICADA
+            # Sequência de repetição
+            seq_rep = 0
+            for j in range(1, min(4, len(janela))):
+                if janela[-j] == janela[-1]:
+                    seq_rep += 1
+            feature_row.append(seq_rep)
             
-            # 6. Features de vizinhança
+            # Count pares e ímpares
+            count_pares = len([n for n in janela if n % 2 == 0])
+            count_impares = len([n for n in janela if n % 2 == 1])
+            feature_row.append(count_pares)
+            feature_row.append(count_impares)
+            
+            # 6. Features de vizinhança - CORREÇÃO APLICADA
             vizinhos_ultimo = obter_vizinhos_fisicos(ultimo_num)
-            feature_row.append(len(set(vizinhos_ultimo) & set(janela[-5:])))
+            vizinhos_recentes = len(set(vizinhos_ultimo) & set(janela[-5:]))
+            feature_row.append(vizinhos_recentes)
             
             features.append(feature_row)
             targets.append(proximo_numero)
