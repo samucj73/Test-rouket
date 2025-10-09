@@ -67,7 +67,7 @@ COLUNA_3 = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36]
 # CONFIGURAÇÃO ESPECIALISTA - ESTRATÉGIA 100% BASEADA EM HISTÓRICO
 # =============================
 MIN_HISTORICO_TREINAMENTO = 695
-NUMERO_PREVISOES = 12  # SEMPRE 8 NÚMEROS BASEADOS NO HISTÓRICO
+NUMERO_PREVISOES = 8  # SEMPRE 8 NÚMEROS BASEADOS NO HISTÓRICO
 
 # Fases do sistema
 FASE_INICIAL = 30
@@ -384,7 +384,7 @@ class XGBoostPredictor:
             return False
 
     def prever_proximos_numeros(self, historico, top_n=8):
-        """Faz previsão usando XGBoost com features expandidas"""
+        """Faz previsão usando XGBoost com features expandidas - CORREÇÃO: SEM DUPLICATAS"""
         if not XGBOOST_DISPONIVEL or not self.treinado:
             return self._previsao_fallback(historico)
             
@@ -398,31 +398,28 @@ class XGBoostPredictor:
             if len(features) == 0:
                 return self._previsao_fallback(historico)
             
-            # Usar última linha para previsão
             ultimas_features = features[-1].reshape(1, -1)
-            
-            # Obter probabilidades com calibração
             probabilidades = self.model.predict_proba(ultimas_features)[0]
             
-            # Aplicar pesos baseados na importância das features
             importancia = self.model.feature_importances_
-            prob_ponderadas = probabilidades * (1 + importancia.mean())  # Pequeno boost
+            prob_ponderadas = probabilidades * (1 + importancia.mean())
             
-            # Pegar top N números mais prováveis
-            indices_mais_provaveis = np.argsort(prob_ponderadas)[::-1][:top_n*3]
-            
+            # CORREÇÃO: GARANTIR NÚMEROS ÚNICOS
+            indices_mais_provaveis = np.argsort(prob_ponderadas)[::-1]
             previsao = []
+            
             for idx in indices_mais_provaveis:
                 if len(previsao) >= top_n:
                     break
-                if 0 <= idx <= 36:
-                    previsao.append(int(idx))
+                num = int(idx)
+                if 0 <= num <= 36 and num not in previsao:  # CORREÇÃO: EVITAR DUPLICATAS
+                    previsao.append(num)
             
-            # Garantir diversidade na previsão
+            # CORREÇÃO: GARANTIR QUE TENHAMOS top_n NÚMEROS ÚNICOS
             previsao_final = self._garantir_diversidade(previsao, historico, top_n)
             
             self.ultima_previsao = previsao_final
-            logging.info(f"🎯 XGBoost com {len(ultimas_features[0])} features previu: {self.ultima_previsao}")
+            logging.info(f"🎯 XGBoost previu {len(previsao_final)} números ÚNICOS: {self.ultima_previsao}")
             
             return self.ultima_previsao
             
@@ -431,14 +428,17 @@ class XGBoostPredictor:
             return self._previsao_fallback(historico)
     
     def _garantir_diversidade(self, previsao, historico, top_n):
-        """Garante que a previsão tenha números diversificados"""
-        if len(previsao) >= top_n:
-            return previsao[:top_n]
+        """Garante que a previsão tenha números diversificados e ÚNICOS"""
+        # CORREÇÃO: REMOVER DUPLICATAS INICIAIS
+        previsao_unica = list(set(previsao))
+        
+        if len(previsao_unica) >= top_n:
+            return previsao_unica[:top_n]
         
         numeros = [h['number'] for h in historico if h.get('number') is not None]
-        diversificados = set(previsao)
+        diversificados = set(previsao_unica)
         
-        # Adicionar números de diferentes características
+        # Adicionar números de diferentes características SEM DUPLICATAS
         caracteristicas = [
             [n for n in range(1, 37) if n % 2 == 0],  # Pares
             [n for n in range(1, 37) if n % 2 == 1],  # Ímpares
@@ -450,10 +450,18 @@ class XGBoostPredictor:
             for num in caracteristica:
                 if len(diversificados) < top_n and num not in diversificados:
                     diversificados.add(num)
-                    if len(diversificados) >= top_n:
-                        break
+                if len(diversificados) >= top_n:
+                    break
             if len(diversificados) >= top_n:
                 break
+        
+        # CORREÇÃO FINAL: SE AINDA PRECISAR, USAR NÚMEROS ÚNICOS DO HISTÓRICO
+        if len(diversificados) < top_n:
+            for num in reversed(numeros[-20:]):
+                if len(diversificados) < top_n and num not in diversificados:
+                    diversificados.add(num)
+                if len(diversificados) >= top_n:
+                    break
         
         return list(diversificados)[:top_n]
 
@@ -461,24 +469,31 @@ class XGBoostPredictor:
         """Previsão fallback quando XGBoost não está disponível"""
         numeros = [h['number'] for h in historico if h.get('number') is not None]
         if len(numeros) >= NUMERO_PREVISOES:
-            return numeros[-NUMERO_PREVISOES:]
-        return [2, 5, 8, 11, 14, 17, 20, 23]
+            # CORREÇÃO: REMOVER DUPLICATAS NO FALLBACK
+            previsao_unica = []
+            for num in numeros[-NUMERO_PREVISOES:]:
+                if num not in previsao_unica:
+                    previsao_unica.append(num)
+                if len(previsao_unica) >= NUMERO_PREVISOES:
+                    break
+            return previsao_unica
+        return [2, 5, 8, 11, 14, 17, 20, 23]  # Já são únicos
     
     def _completar_previsao(self, previsao, historico, top_n):
         """Completa previsão com números do histórico"""
         numeros = [h['number'] for h in historico if h.get('number') is not None]
         completar = []
         
-        # Adicionar números recentes
+        # Adicionar números recentes SEM DUPLICATAS
         for num in reversed(numeros[-10:]):
-            if len(completar) + len(previsao) < top_n and num not in previsao:
+            if len(completar) + len(previsao) < top_n and num not in previsao and num not in completar:
                 completar.append(num)
         
-        # Adicionar números frequentes
+        # Adicionar números frequentes SEM DUPLICATAS
         if len(completar) + len(previsao) < top_n:
             frequentes = Counter(numeros).most_common(10)
             for num, _ in frequentes:
-                if len(completar) + len(previsao) < top_n and num not in previsao:
+                if len(completar) + len(previsao) < top_n and num not in previsao and num not in completar:
                     completar.append(num)
         
         return completar
@@ -641,27 +656,28 @@ class SistemaPrevisaoSequencial:
         return numeros_mais_frequentes
     
     def gerar_previsao_sequencial(self, historico, ultimo_numero):
-        """Gera previsão MAIS INTELIGENTE baseada em múltiplos fatores"""
+        """Gera previsão MAIS INTELIGENTE baseada em múltiplos fatores - CORREÇÃO: SEM DUPLICATAS"""
         
         if not historico or ultimo_numero is None:
             return []
         
-        # ANALISAR SEQUÊNCIAS HISTÓRICAS
         previsao_sequencial = self.analisar_sequencias_historicas(historico, ultimo_numero)
         
-        # SE NÃO ENCONTROU PADRÕES FORTES, USAR ESTRATÉGIA ALTERNATIVA
         if len(previsao_sequencial) < 6:
             previsao_sequencial = self.estrategia_fallback_agressiva(historico, ultimo_numero)
         
-        # FILTRAR E LIMITAR A 8 NÚMEROS
-        previsao_filtrada = previsao_sequencial[:NUMERO_PREVISOES]
-        self.ultima_previsao = previsao_filtrada
+        # CORREÇÃO: REMOVER DUPLICATAS E LIMITAR A 8 NÚMEROS ÚNICOS
+        previsao_unica = []
+        for num in previsao_sequencial:
+            if num not in previsao_unica and len(previsao_unica) < NUMERO_PREVISOES:
+                previsao_unica.append(num)
         
-        logging.info(f"🎯 Previsão Sequencial GERADA: {previsao_filtrada}")
-        return previsao_filtrada
+        self.ultima_previsao = previsao_unica
+        logging.info(f"🎯 Previsão Sequencial GERADA: {len(previsao_unica)} números ÚNICOS: {previsao_unica}")
+        return previsao_unica
     
     def estrategia_fallback_agressiva(self, historico, ultimo_numero):
-        """Estratégia alternativa AGRESSIVA quando não há padrões claros"""
+        """Estratégia alternativa AGRESSIVA - CORREÇÃO: SEM DUPLICATAS"""
         
         numeros = [h['number'] for h in historico if h.get('number') is not None]
         
@@ -679,18 +695,18 @@ class SistemaPrevisaoSequencial:
         numeros_quentes = [num for num, count in contagem_recente.most_common(8) if count >= 2]
         previsao.update(numeros_quentes)
         
-        # ESTRATÉGIA 3: NÚMEROS DA MESMA CARACTERÍSTICA (par/ímpar, cor, etc)
+        # ESTRATÉGIA 3: NÚMEROS DA MESMA CARACTERÍSTICA
         if ultimo_numero != 0:
             if ultimo_numero % 2 == 0:
                 previsao.update([n for n in range(1, 37) if n % 2 == 0 and n != ultimo_numero][:3])
             else:
                 previsao.update([n for n in range(1, 37) if n % 2 == 1 and n != ultimo_numero][:3])
         
-        # ESTRATÉGIA 4: COMPLETAR COM FREQUENTES
-        if len(previsao) < 6:
-            frequentes = Counter(numeros).most_common(10)
+        # ESTRATÉGIA 4: COMPLETAR COM FREQUENTES ÚNICOS
+        if len(previsao) < NUMERO_PREVISOES:
+            frequentes = Counter(numeros).most_common(15)  # Aumentado para 15
             for num, count in frequentes:
-                if len(previsao) < 8 and num not in previsao:
+                if len(previsao) < NUMERO_PREVISOES and num not in previsao:
                     previsao.add(num)
         
         return list(previsao)
@@ -839,15 +855,22 @@ def obter_vizinhos_fisicos(numero):
     return list(vizinhos)
 
 def validar_previsao(previsao):
+    """Valida e remove duplicatas da previsão"""
     if not previsao or not isinstance(previsao, list):
         return []
     
-    previsao_limpa = [
-        num for num in previsao 
-        if num is not None 
-        and isinstance(num, (int, float))
-        and 0 <= num <= 36
-    ]
+    # CORREÇÃO: REMOVER DUPLICATAS E FILTRAR VÁLIDOS
+    previsao_limpa = []
+    vistos = set()
+    
+    for num in previsao:
+        if (num is not None and 
+            isinstance(num, (int, float)) and 
+            0 <= num <= 36 and 
+            num not in vistos):
+            
+            previsao_limpa.append(int(num))
+            vistos.add(num)
     
     return previsao_limpa
 
@@ -885,7 +908,14 @@ def gerar_entrada_ultra_assertiva(previsao_completa, historico):
     # FALLBACK: usar últimos números do histórico
     numeros = [h['number'] for h in historico if h.get('number') is not None]
     if numeros:
-        return numeros[-NUMERO_PREVISOES:] if len(numeros) >= NUMERO_PREVISOES else numeros
+        # CORREÇÃO: REMOVER DUPLICATAS NO FALLBACK
+        numeros_unicos = []
+        for num in numeros[-NUMERO_PREVISOES*2:]:  # Pegar mais para garantir unicidade
+            if num not in numeros_unicos:
+                numeros_unicos.append(num)
+            if len(numeros_unicos) >= NUMERO_PREVISOES:
+                break
+        return numeros_unicos[:NUMERO_PREVISOES]
     
     return [2, 5, 8, 11, 14, 17, 20, 23]
 
@@ -903,7 +933,7 @@ def enviar_alerta_assertivo(entrada_estrategica, ultimo_numero, historico, perfo
         # Salvar entrada atual
         st.session_state.ultima_entrada_estrategica = entrada_estrategica
         
-        logging.info(f"📤 Alerta SIMPLES enviado: {len(entrada_estrategica)} números")
+        logging.info(f"📤 Alerta SIMPLES enviado: {len(entrada_estrategica)} números ÚNICOS")
         
     except Exception as e:
         logging.error(f"Erro ao enviar alerta: {e}")
@@ -1163,7 +1193,7 @@ class IA_Assertiva:
         # Tentar XGBoost primeiro se tiver histórico suficiente
         if len(historico) >= 150:  # Aumentado mínimo para features expandidas
             if not self.xgboost_predictor.treinado:
-                self.xgboost_predictor.carregar_modelo()
+                self.xgboost_predictor.treinar_modelo(historico)
                 
             if self.xgboost_predictor.treinado:
                 self.modo_xgboost_ativo = True
@@ -1185,11 +1215,11 @@ class IA_Assertiva:
         return self.estrategia_alternativa_agressiva(historico)
     
     def estrategia_alternativa_agressiva(self, historico):
-        """Estratégia alternativa SUPER AGRESSIVA"""
+        """Estratégia alternativa SUPER AGRESSIVA - CORREÇÃO: SEM DUPLICATAS"""
         numeros = [h['number'] for h in historico if h.get('number') is not None]
         
         if len(numeros) < 8:
-            return [2, 5, 8, 11, 14, 17, 20, 23]
+            return [2, 5, 8, 11, 14, 17, 20, 23]  # Já são únicos
         
         previsao = set()
         
@@ -1206,14 +1236,24 @@ class IA_Assertiva:
         numeros_quentes = [num for num, count in contagem_recente.most_common(10) if count >= 2]
         previsao.update(numeros_quentes)
         
-        # ESTRATÉGIA 4: COMPLETAR COM MAIS FREQUENTES
+        # ESTRATÉGIA 4: COMPLETAR COM MAIS FREQUENTES ÚNICOS
         if len(previsao) < NUMERO_PREVISOES:
-            frequentes = Counter(numeros).most_common(15)
+            frequentes = Counter(numeros).most_common(20)  # Aumentado para 20
             for num, count in frequentes:
                 if len(previsao) < NUMERO_PREVISOES and num not in previsao:
                     previsao.add(num)
         
-        return list(previsao)[:NUMERO_PREVISOES]
+        # GARANTIR EXATAMENTE 8 NÚMEROS
+        previsao_lista = list(previsao)
+        if len(previsao_lista) > NUMERO_PREVISOES:
+            return previsao_lista[:NUMERO_PREVISOES]
+        elif len(previsao_lista) < NUMERO_PREVISOES:
+            # Completar com números sequenciais únicos
+            for i in range(1, 37):
+                if len(previsao_lista) < NUMERO_PREVISOES and i not in previsao_lista:
+                    previsao_lista.append(i)
+        
+        return previsao_lista
     
     def get_performance_sequencial(self):
         """Retorna performance do sistema sequencial"""
@@ -1253,44 +1293,59 @@ class GestorAssertivo:
                 logging.warning(f"⚠️ Previsão com {len(previsao_validada)} números. Completando com histórico...")
                 previsao_validada = self.completar_com_historico(previsao_validada)
             
-            logging.info(f"✅ Previsão ASSERTIVA gerada: {len(previsao_validada)} números")
+            logging.info(f"✅ Previsão ASSERTIVA gerada: {len(previsao_validada)} números ÚNICOS")
             return previsao_validada
             
         except Exception as e:
             logging.error(f"Erro ao gerar previsão: {e}")
             # Em caso de erro, usar os últimos números do histórico
             numeros = [h['number'] for h in self.historico if h.get('number') is not None]
-            return numeros[-NUMERO_PREVISOES:] if len(numeros) >= NUMERO_PREVISOES else numeros
+            # CORREÇÃO: REMOVER DUPLICATAS
+            numeros_unicos = []
+            for num in numeros[-NUMERO_PREVISOES*2:]:
+                if num not in numeros_unicos:
+                    numeros_unicos.append(num)
+                if len(numeros_unicos) >= NUMERO_PREVISOES:
+                    break
+            return numeros_unicos[:NUMERO_PREVISOES]
     
     def completar_com_historico(self, previsao):
-        """Completa sempre para 8 números USANDO APENAS HISTÓRICO"""
+        """Completa sempre para 8 números USANDO APENAS HISTÓRICO - CORREÇÃO: SEM DUPLICATAS"""
         if len(previsao) >= NUMERO_PREVISOES:
-            return previsao[:NUMERO_PREVISOES]
+            # CORREÇÃO: REMOVER DUPLICATAS MESMO SE JÁ TEMOS 8+
+            previsao_unica = list(set(previsao))
+            return previsao_unica[:NUMERO_PREVISOES]
         
-        numeros_completos = set(previsao)
+        numeros_completos = set(previsao)  # CORREÇÃO: USAR SET PARA EVITAR DUPLICATAS
         numeros_historico = [h['number'] for h in self.historico if h.get('number') is not None]
         
         # COMPLETAR COM NÚMEROS DO HISTÓRICO EM ORDEM DE PRIORIDADE:
         
-        # 1. Últimos números sorteados
+        # 1. Últimos números sorteados (ÚNICOS)
         for num in reversed(numeros_historico):
             if len(numeros_completos) < NUMERO_PREVISOES and num not in numeros_completos:
                 numeros_completos.add(num)
         
-        # 2. Números mais frequentes no histórico
+        # 2. Números mais frequentes no histórico (ÚNICOS)
         if len(numeros_completos) < NUMERO_PREVISOES:
-            frequentes = Counter(numeros_historico).most_common(20)
+            frequentes = Counter(numeros_historico).most_common(25)  # Aumentado para 25
             for num, count in frequentes:
                 if len(numeros_completos) < NUMERO_PREVISOES and num not in numeros_completos:
                     numeros_completos.add(num)
         
-        # 3. Números que são vizinhos de números recentes
+        # 3. Números que são vizinhos de números recentes (ÚNICOS)
         if len(numeros_completos) < NUMERO_PREVISOES:
             for num_recente in numeros_historico[-3:]:
                 vizinhos = obter_vizinhos_fisicos(num_recente)
                 for vizinho in vizinhos:
                     if len(numeros_completos) < NUMERO_PREVISOES and vizinho not in numeros_completos:
                         numeros_completos.add(vizinho)
+        
+        # 4. ÚLTIMO RECURSO: números sequenciais únicos
+        if len(numeros_completos) < NUMERO_PREVISOES:
+            for i in range(0, 37):
+                if len(numeros_completos) < NUMERO_PREVISOES and i not in numeros_completos:
+                    numeros_completos.add(i)
         
         return list(numeros_completos)[:NUMERO_PREVISOES]
     
@@ -1508,7 +1563,14 @@ except Exception as e:
     st.error("🔴 Reiniciando sistema...")
     # Em caso de erro, usar os últimos números do histórico
     numeros = [h['number'] for h in st.session_state.gestor.historico if h.get('number') is not None]
-    st.session_state.previsao_atual = numeros[-NUMERO_PREVISOES:] if len(numeros) >= NUMERO_PREVISOES else numeros
+    # CORREÇÃO: REMOVER DUPLICATAS
+    numeros_unicos = []
+    for num in numeros[-NUMERO_PREVISOES*2:]:
+        if num not in numeros_unicos:
+            numeros_unicos.append(num)
+        if len(numeros_unicos) >= NUMERO_PREVISOES:
+            break
+    st.session_state.previsao_atual = numeros_unicos[:NUMERO_PREVISOES]
 
 # =============================
 # INTERFACE STREAMLIT 100% BASEADA EM HISTÓRICO COM XGBOOST 50+ FEATURES
@@ -1683,7 +1745,7 @@ previsao_valida = validar_previsao(st.session_state.previsao_atual)
 
 if previsao_valida:
     origem = "XGBoost 50+ Features" if xgboost_status["ativo"] else "Sequencial"
-    st.success(f"**🔥 PREVISÃO VIA {origem.upper()} - {len(previsao_valida)} NÚMEROS **")
+    st.success(f"**🔥 PREVISÃO VIA {origem.upper()} - {len(previsao_valida)} NÚMEROS ÚNICOS**")
     
     # Display IMPACTANTE
     st.markdown(f"### **{'  •  '.join(map(str, sorted(previsao_valida)))}**")
@@ -1721,7 +1783,7 @@ if entrada_assertiva:
     )
     
     if deve_recomendar:
-        st.success(f"**🔔 {len(entrada_assertiva)} NÚMEROS CONFIRMADOS DO HISTÓRICO**")
+        st.success(f"**🔔 {len(entrada_assertiva)} NÚMEROS ÚNICOS CONFIRMADOS DO HISTÓRICO**")
         
         # Mostrar mensagem do Telegram
         numeros_ordenados = sorted(entrada_assertiva)
