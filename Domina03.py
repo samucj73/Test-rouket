@@ -67,7 +67,7 @@ COLUNA_3 = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36]
 # CONFIGURAÇÃO ESPECIALISTA - ESTRATÉGIA 100% BASEADA EM HISTÓRICO
 # =============================
 MIN_HISTORICO_TREINAMENTO = 695
-NUMERO_PREVISOES = 12  # SEMPRE 8 NÚMEROS BASEADOS NO HISTÓRICO
+NUMERO_PREVISOES = 8  # SEMPRE 8 NÚMEROS BASEADOS NO HISTÓRICO
 
 # Fases do sistema
 FASE_INICIAL = 30
@@ -304,38 +304,6 @@ class FeatureEngineer:
         except:
             return FeatureEngineer()
 
-# SEÇÃO DE DIAGNÓSTICO - ADICIONE ESTE CÓDIGO
-st.markdown("---")
-st.subheader("🔍 Diagnóstico do Sistema")
-
-# Verificar status detalhado
-st.write("### 📊 Status Detalhado do Histórico")
-st.write(f"- **Total de registros:** {len(st.session_state.gestor.historico)}")
-st.write(f"- **Registros válidos:** {len([h for h in st.session_state.gestor.historico if h.get('number') is not None])}")
-
-# Verificar se o XGBoost foi treinado
-if hasattr(st.session_state.gestor.ia_assertiva.xgboost_predictor, 'treinado'):
-    st.write(f"- **XGBoost Treinado:** {st.session_state.gestor.ia_assertiva.xgboost_predictor.treinado}")
-    st.write(f"- **Modo XGBoost Ativo:** {st.session_state.gestor.ia_assertiva.modo_xgboost_ativo}")
-
-# Botão de diagnóstico
-if st.button("🔄 Executar Diagnóstico Completo"):
-    with st.spinner("Executando diagnóstico..."):
-        diagnostico = executar_diagnostico_completo(st.session_state.gestor)
-        st.write("### 📋 Resultado do Diagnóstico")
-        for item, status in diagnostico.items():
-            st.write(f"- **{item}:** {status}")
-
-# Botão para forçar ativação do XGBoost
-if st.button("🎯 Forçar Ativação do XGBoost AGORA"):
-    with st.spinner("Forçando ativação do XGBoost..."):
-        sucesso = forcar_ativacao_xgboost(st.session_state.gestor)
-        if sucesso:
-            st.success("✅ XGBoost ativado com sucesso!")
-            st.rerun()
-        else:
-            st.error("❌ Falha na ativação do XGBoost")
-
 # =============================
 # XGBOOST OTIMIZADO PARA +50 FEATURES
 # =============================
@@ -354,7 +322,7 @@ class XGBoostPredictor:
             return False
             
         try:
-            if len(historico) < 995 and not force_retrain:  # Aumentado mínimo
+            if len(historico) < 150 and not force_retrain:  # Aumentado mínimo
                 logging.info("📊 Histórico insuficiente para treinar XGBoost com muitas features")
                 return False
                 
@@ -907,6 +875,167 @@ def validar_previsao(previsao):
     return previsao_limpa
 
 # =============================
+# FUNÇÕES DE DIAGNÓSTICO E CORREÇÃO
+# =============================
+
+def verificar_e_corrigir_session_state():
+    """Verifica e corrige problemas no session_state"""
+    problemas = []
+    
+    # Verificar gestor
+    if 'gestor' not in st.session_state:
+        st.session_state.gestor = GestorAssertivo()
+        problemas.append("✅ Gestor reinicializado")
+    
+    # Verificar outros atributos críticos
+    atributos_criticos = [
+        'previsao_atual', 'acertos', 'erros', 'ultimo_numero',
+        'sistema_confianca', 'gestor_risco'
+    ]
+    
+    for attr in atributos_criticos:
+        if attr not in st.session_state:
+            if attr == 'previsao_atual':
+                st.session_state[attr] = []
+            elif attr in ['acertos', 'erros']:
+                st.session_state[attr] = 0
+            elif attr == 'ultimo_numero':
+                st.session_state[attr] = None
+            elif attr == 'sistema_confianca':
+                st.session_state[attr] = SistemaConfianca()
+            elif attr == 'gestor_risco':
+                st.session_state[attr] = SistemaGestaoRisco()
+            problemas.append(f"✅ {attr} reinicializado")
+    
+    return problemas
+
+def executar_diagnostico_completo(gestor):
+    """Executa diagnóstico completo do sistema"""
+    diagnostico = {}
+    
+    try:
+        # 1. Verificar histórico
+        historico_size = len(gestor.historico)
+        numeros_validos = len([h for h in gestor.historico if h.get('number') is not None])
+        diagnostico["Total de Registros"] = f"{historico_size} (Válidos: {numeros_validos})"
+        
+        # 2. Verificar XGBoost
+        xgb_treinado = gestor.ia_assertiva.xgboost_predictor.treinado
+        modo_ativo = gestor.ia_assertiva.modo_xgboost_ativo
+        diagnostico["XGBoost Treinado"] = xgb_treinado
+        diagnostico["Modo XGBoost Ativo"] = modo_ativo
+        
+        # 3. Verificar se pode treinar
+        pode_treinar = historico_size >= 150 and numeros_validos >= 150
+        diagnostico["Pode Treinar XGBoost"] = pode_treinar
+        
+        # 4. Verificar modelo
+        if hasattr(gestor.ia_assertiva.xgboost_predictor, 'model'):
+            modelo_existe = gestor.ia_assertiva.xgboost_predictor.model is not None
+            diagnostico["Modelo Existe"] = modelo_existe
+        else:
+            diagnostico["Modelo Existe"] = "Atributo não encontrado"
+            
+        # 5. Verificar features
+        if hasattr(gestor.ia_assertiva.xgboost_predictor.feature_engineer, 'feature_names'):
+            num_features = len(gestor.ia_assertiva.xgboost_predictor.feature_engineer.feature_names)
+            diagnostico["Número de Features"] = num_features
+        else:
+            diagnostico["Número de Features"] = "Não disponível"
+            
+        return diagnostico
+        
+    except Exception as e:
+        diagnostico["Erro no Diagnóstico"] = str(e)
+        return diagnostico
+
+def forcar_ativacao_xgboost(gestor):
+    """Força a ativação do XGBoost"""
+    try:
+        logging.info("🎯 FORÇANDO ATIVAÇÃO DO XGBOOST...")
+        
+        # 1. Verificar dados
+        historico_size = len(gestor.historico)
+        numeros_validos = len([h for h in gestor.historico if h.get('number') is not None])
+        
+        if numeros_validos < 100:
+            logging.error(f"❌ Dados insuficientes: {numeros_validos} registros válidos")
+            return False
+        
+        # 2. Tentar carregar modelo existente primeiro
+        try:
+            if os.path.exists(XGB_MODEL_PATH):
+                gestor.ia_assertiva.xgboost_predictor.model = xgb.XGBClassifier()
+                gestor.ia_assertiva.xgboost_predictor.model.load_model(XGB_MODEL_PATH)
+                gestor.ia_assertiva.xgboost_predictor.treinado = True
+                gestor.ia_assertiva.modo_xgboost_ativo = True
+                logging.info("✅ XGBoost carregado do arquivo existente")
+                return True
+        except:
+            logging.warning("📝 Nenhum modelo existente encontrado, treinando novo...")
+        
+        # 3. Treinar novo modelo
+        logging.info("🤖 Iniciando treinamento FORÇADO do XGBoost...")
+        
+        # Usar treinamento direto sem muitas verificações
+        numeros = [h['number'] for h in gestor.historico if h.get('number') is not None]
+        
+        if len(numeros) < 100:
+            return False
+        
+        # Criar features simplificadas para teste rápido
+        features = []
+        targets = []
+        
+        for i in range(20, len(numeros) - 1):
+            feature_row = []
+            janela = numeros[i-20:i]
+            
+            # Features básicas para teste
+            feature_row.append(np.mean(janela))
+            feature_row.append(np.std(janela))
+            feature_row.append(janela[-1])  # último
+            feature_row.append(janela[-2])  # penúltimo
+            feature_row.append(janela[-1] % 2)  # par/ímpar
+            feature_row.append(1 if janela[-1] in PRIMEIRA_DUZIA else 0)
+            feature_row.append(1 if janela[-1] in SEGUNDA_DUZIA else 0)
+            feature_row.append(1 if janela[-1] in TERCEIRA_DUZIA else 0)
+            feature_row.append(1 if janela[-1] in COLUNA_1 else 0)
+            feature_row.append(1 if janela[-1] in COLUNA_2 else 0)
+            feature_row.append(1 if janela[-1] in COLUNA_3 else 0)
+            
+            features.append(feature_row)
+            targets.append(numeros[i])
+        
+        if len(features) < 50:
+            return False
+        
+        # Modelo rápido
+        model = xgb.XGBClassifier(
+            n_estimators=150,
+            max_depth=8,
+            learning_rate=0.1,
+            random_state=42,
+            objective='multi:softprob',
+            num_class=37
+        )
+        
+        model.fit(features, targets)
+        gestor.ia_assertiva.xgboost_predictor.model = model
+        gestor.ia_assertiva.xgboost_predictor.treinado = True
+        gestor.ia_assertiva.modo_xgboost_ativo = True
+        
+        # Salvar modelo
+        model.save_model(XGB_MODEL_PATH)
+        
+        logging.info("✅ XGBoost treinado e ativado com SUCESSO!")
+        return True
+        
+    except Exception as e:
+        logging.error(f"❌ Erro crítico na ativação forçada: {e}")
+        return False
+
+# =============================
 # ALERTA SIMPLIFICADO PARA TELEGRAM
 # =============================
 def enviar_alerta_inteligente(entrada_estrategica, confianca, performance):
@@ -1220,29 +1349,49 @@ class IA_Assertiva:
         self.modo_xgboost_ativo = False
         
     def prever_com_alta_assertividade(self, historico, ultimo_numero=None):
-        """Sistema PRINCIPAL agora com XGBoost"""
+        """Sistema PRINCIPAL - VERSÃO CORRIGIDA COM MELHOR ATIVAÇÃO"""
         
-        # Tentar XGBoost primeiro se tiver histórico suficiente
-        if len(historico) >= 150:  # Aumentado mínimo para features expandidas
-            if not self.xgboost_predictor.treinado:
-                self.xgboost_predictor.treinar_modelo(historico)
-                
-            if self.xgboost_predictor.treinado:
-                self.modo_xgboost_ativo = True
+        # VERIFICAÇÃO MAIS ROBUSTA DO XGBOOST
+        xgb_pronto = (self.xgboost_predictor.treinado and 
+                     hasattr(self.xgboost_predictor, 'model') and 
+                     self.xgboost_predictor.model is not None)
+        
+        if xgb_pronto:
+            self.modo_xgboost_ativo = True
+            try:
                 previsao_xgb = self.xgboost_predictor.prever_proximos_numeros(historico, NUMERO_PREVISOES)
                 if previsao_xgb and len(previsao_xgb) >= 6:
-                    logging.info("🎯 USANDO XGBOOST para previsão")
+                    logging.info("🎯 XGBOOST ATIVO - Previsão via Machine Learning")
                     return previsao_xgb
+                else:
+                    logging.warning("⚠️ XGBoost retornou previsão inválida, usando fallback")
+                    self.modo_xgboost_ativo = False
+            except Exception as e:
+                logging.error(f"❌ Erro no XGBoost: {e}, usando fallback")
+                self.modo_xgboost_ativo = False
         
-        # Fallback para previsão sequencial
+        # VERIFICAR SE DEVE TREINAR XGBOOST (condição mais simples)
+        if not self.xgboost_predictor.treinado and len(historico) >= 100:
+            logging.info("🤖 Tentando treinar XGBoost automaticamente...")
+            try:
+                if self.xgboost_predictor.treinar_modelo(historico, force_retrain=False):
+                    self.modo_xgboost_ativo = True
+                    # Tentar prever com XGBoost recém-treinado
+                    previsao_xgb = self.xgboost_predictor.prever_proximos_numeros(historico, NUMERO_PREVISOES)
+                    if previsao_xgb and len(previsao_xgb) >= 6:
+                        return previsao_xgb
+            except Exception as e:
+                logging.error(f"❌ Treinamento automático falhou: {e}")
+        
+        # FALLBACK PARA PREVISÃO SEQUENCIAL
         self.modo_xgboost_ativo = False
         if ultimo_numero is not None and len(historico) >= 15:
             previsao_seq = self.previsao_sequencial.gerar_previsao_sequencial(historico, ultimo_numero)
             if previsao_seq and len(previsao_seq) >= 6:
-                logging.info(f"🔄 Usando PREVISÃO SEQUENCIAL para {ultimo_numero}")
+                logging.info(f"🔄 PREVISÃO SEQUENCIAL para {ultimo_numero}")
                 return previsao_seq
         
-        # Fallback final
+        # FALLBACK FINAL
         logging.info("📊 Usando estratégia alternativa")
         return self.estrategia_alternativa_agressiva(historico)
     
@@ -1306,6 +1455,79 @@ class GestorAssertivo:
     def treinar_xgboost(self, force_retrain=False):
         """Método para treinar XGBoost"""
         return self.ia_assertiva.xgboost_predictor.treinar_modelo(self.historico, force_retrain)
+    
+    def treinar_xgb_rapido(self):
+        """Treina XGBoost com menos dados usando features simplificadas"""
+        if not XGBOOST_DISPONIVEL:
+            return False
+            
+        try:
+            if len(self.historico) < 50:  # Reduzido mínimo para 50
+                logging.warning("📊 Histórico insuficiente mesmo para treinamento rápido")
+                return False
+                
+            logging.info("⚡ Iniciando treinamento RÁPIDO do XGBoost...")
+            
+            # Usar features básicas para treinamento rápido
+            numeros = [h['number'] for h in self.historico if h.get('number') is not None]
+            
+            if len(numeros) < 50:
+                return False
+            
+            # Criar features simplificadas
+            features = []
+            targets = []
+            
+            for i in range(10, len(numeros) - 1):
+                feature_row = []
+                janela = numeros[i-10:i]
+                
+                # Features básicas apenas
+                feature_row.append(np.mean(janela))
+                feature_row.append(np.std(janela))
+                feature_row.append(janela[-1])  # último
+                feature_row.append(janela[-2])  # penúltimo
+                feature_row.append(janela[-1] % 2)  # par/ímpar
+                feature_row.append(1 if janela[-1] in PRIMEIRA_DUZIA else 0)
+                feature_row.append(1 if janela[-1] in SEGUNDA_DUZIA else 0)
+                feature_row.append(1 if janela[-1] in TERCEIRA_DUZIA else 0)
+                
+                features.append(feature_row)
+                targets.append(numeros[i])
+            
+            if len(features) < 30:
+                return False
+            
+            X_train, X_test, y_train, y_test = train_test_split(
+                features, targets, test_size=0.2, random_state=42
+            )
+            
+            # Modelo mais simples para treinamento rápido
+            self.ia_assertiva.xgboost_predictor.model = xgb.XGBClassifier(
+                n_estimators=100,
+                max_depth=6,
+                learning_rate=0.1,
+                random_state=42,
+                objective='multi:softprob',
+                num_class=37
+            )
+            
+            self.ia_assertiva.xgboost_predictor.model.fit(X_train, y_train)
+            
+            # Avaliação simples
+            y_pred = self.ia_assertiva.xgboost_predictor.model.predict(X_test)
+            accuracy = accuracy_score(y_test, y_pred)
+            
+            logging.info(f"⚡ XGBoost RÁPIDO treinado! Acurácia: {accuracy:.2%}")
+            
+            self.ia_assertiva.xgboost_predictor.treinado = True
+            self.ia_assertiva.modo_xgboost_ativo = True
+            
+            return True
+            
+        except Exception as e:
+            logging.error(f"❌ Erro no treinamento rápido: {e}")
+            return False
     
     def get_status_xgboost(self):
         """Retorna status do XGBoost"""
@@ -1439,28 +1661,54 @@ st.markdown("### **Estratégia com 8 Números Baseada Exclusivamente no Históri
 
 st_autorefresh(interval=3000, key="refresh")
 
-# Inicialização session_state
-defaults = {
-    "gestor": GestorAssertivo(),
-    "previsao_atual": [],
-    "acertos": 0,
-    "erros": 0,
-    "contador_rodadas": 0,
-    "ultimo_timestamp": None,
-    "ultimo_numero": None,
-    "status_ia": "🟡 Inicializando",
-    "estrategia_atual": "Aguardando dados",
-    "ultima_entrada_estrategica": [],
-    "resultado_entrada_anterior": None,
-    "sistema_confianca": SistemaConfianca(),
-    "gestor_risco": SistemaGestaoRisco(),
-    "ultimos_resultados": []
-}
+# =============================
+# INICIALIZAÇÃO CORRIGIDA DO session_state
+# =============================
 
-for k, v in defaults.items():
-    if k not in st.session_state:
-        st.session_state[k] = v
+# Inicialização SEGURA do session_state
+if 'gestor' not in st.session_state:
+    st.session_state.gestor = GestorAssertivo()
 
+if 'previsao_atual' not in st.session_state:
+    st.session_state.previsao_atual = []
+
+if 'acertos' not in st.session_state:
+    st.session_state.acertos = 0
+
+if 'erros' not in st.session_state:
+    st.session_state.erros = 0
+
+if 'contador_rodadas' not in st.session_state:
+    st.session_state.contador_rodadas = 0
+
+if 'ultimo_timestamp' not in st.session_state:
+    st.session_state.ultimo_timestamp = None
+
+if 'ultimo_numero' not in st.session_state:
+    st.session_state.ultimo_numero = None
+
+if 'status_ia' not in st.session_state:
+    st.session_state.status_ia = "🟡 Inicializando"
+
+if 'estrategia_atual' not in st.session_state:
+    st.session_state.estrategia_atual = "Aguardando dados"
+
+if 'ultima_entrada_estrategica' not in st.session_state:
+    st.session_state.ultima_entrada_estrategica = []
+
+if 'resultado_entrada_anterior' not in st.session_state:
+    st.session_state.resultado_entrada_anterior = None
+
+if 'sistema_confianca' not in st.session_state:
+    st.session_state.sistema_confianca = SistemaConfianca()
+
+if 'gestor_risco' not in st.session_state:
+    st.session_state.gestor_risco = SistemaGestaoRisco()
+
+if 'ultimos_resultados' not in st.session_state:
+    st.session_state.ultimos_resultados = []
+
+# Validar previsão atual
 st.session_state.previsao_atual = validar_previsao(st.session_state.previsao_atual)
 
 # =============================
@@ -1641,7 +1889,57 @@ with col2:
 with col3:
     st.metric("📈 Padrão", "✅" if analise["padrao_detectado"] else "⏳")
 
-# NOVA SEÇÃO: XGBOOST - MACHINE LEARNING AVANÇADO
+# NOVA SEÇÃO: DIAGNÓSTICO DO SISTEMA
+st.markdown("---")
+st.subheader("🔍 Diagnóstico do Sistema")
+
+# Verificar e corrigir session_state primeiro
+if st.button("🔧 Verificar e Corrigir Session State"):
+    problemas = verificar_e_corrigir_session_state()
+    if problemas:
+        st.warning("⚠️ Problemas encontrados e corrigidos:")
+        for problema in problemas:
+            st.write(f"- {problema}")
+    else:
+        st.success("✅ Session State OK!")
+
+# Agora podemos acessar st.session_state.gestor com segurança
+if 'gestor' in st.session_state and hasattr(st.session_state.gestor, 'historico'):
+    st.write("### 📊 Status Detalhado do Histórico")
+    historico_size = len(st.session_state.gestor.historico)
+    numeros_validos = len([h for h in st.session_state.gestor.historico if h.get('number') is not None])
+    
+    st.write(f"- **Total de registros:** {historico_size}")
+    st.write(f"- **Registros válidos:** {numeros_validos}")
+    
+    # Verificar XGBoost
+    if hasattr(st.session_state.gestor.ia_assertiva, 'xgboost_predictor'):
+        xgb_treinado = st.session_state.gestor.ia_assertiva.xgboost_predictor.treinado
+        modo_ativo = st.session_state.gestor.ia_assertiva.modo_xgboost_ativo
+        st.write(f"- **XGBoost Treinado:** {xgb_treinado}")
+        st.write(f"- **Modo XGBoost Ativo:** {modo_ativo}")
+    
+    # Botão de diagnóstico completo
+    if st.button("🔄 Executar Diagnóstico Completo"):
+        with st.spinner("Executando diagnóstico..."):
+            diagnostico = executar_diagnostico_completo(st.session_state.gestor)
+            st.write("### 📋 Resultado do Diagnóstico")
+            for item, status in diagnostico.items():
+                st.write(f"- **{item}:** {status}")
+
+    # Botão para forçar ativação do XGBoost
+    if st.button("🎯 Forçar Ativação do XGBoost AGORA"):
+        with st.spinner("Forçando ativação do XGBoost..."):
+            sucesso = forcar_ativacao_xgboost(st.session_state.gestor)
+            if sucesso:
+                st.success("✅ XGBoost ativado com sucesso!")
+                st.rerun()
+            else:
+                st.error("❌ Falha na ativação do XGBoost")
+else:
+    st.error("❌ Gestor não encontrado no session_state. Use o botão de correção acima.")
+
+# SEÇÃO: XGBOOST - MACHINE LEARNING AVANÇADO
 st.markdown("---")
 st.subheader("🤖 IA XGBoost - Machine Learning Avançado (50+ Features)")
 
@@ -1659,6 +1957,44 @@ with col3:
     st.metric("Acertos ML", xgboost_status["performance"]["acertos"])
 with col4:
     st.metric("Assertividade ML", xgboost_status["performance"]["taxa_acerto"])
+
+# NOVA SEÇÃO: ACELERADOR DE TREINAMENTO
+st.markdown("---")
+st.subheader("⚡ Acelerador de Treinamento XGBoost")
+
+if len(st.session_state.gestor.historico) < 150:
+    st.warning(f"📊 **Histórico atual: {len(st.session_state.gestor.historico)}/150 registros**")
+    
+    # Estimativa de tempo restante
+    registros_faltantes = 150 - len(st.session_state.gestor.historico)
+    estimativa_minutos = registros_faltantes * 3  # ~3 minutos por registro
+    
+    st.info(f"""
+    **Para ativar o XGBoost Avançado:**
+    - 📈 **Registros necessários:** {registros_faltantes} a mais
+    - ⏱️ **Estimativa:** ~{estimativa_minutos} minutos
+    - 🎯 **Benefícios:** 50+ features, maior precisão
+    """)
+    
+    # Botão para treinamento com dados limitados
+    if st.button("🚀 Treinar XGBoost com Dados Atuais (Modo Rápido)"):
+        with st.spinner("Treinando XGBoost com dados disponíveis (modo rápido)..."):
+            sucesso = st.session_state.gestor.treinar_xgb_rapido()
+            if sucesso:
+                st.success("✅ XGBoost treinado em modo rápido! Usando features básicas.")
+            else:
+                st.error("❌ Precisa de pelo menos 50 registros para treinamento rápido")
+
+else:
+    st.success("🎉 **Dados suficientes para XGBoost Avançado!**")
+    if not xgboost_status["treinado"]:
+        if st.button("🤖 Ativar XGBoost 50+ Features"):
+            with st.spinner("Ativando XGBoost com 50+ features..."):
+                sucesso = st.session_state.gestor.treinar_xgboost()
+                if sucesso:
+                    st.success("✅ XGBoost Avançado ativado com 50+ features!")
+                else:
+                    st.error("❌ Erro no treinamento avançado")
 
 # Controles XGBoost
 if XGBOOST_DISPONIVEL:
@@ -1921,138 +2257,37 @@ with col3:
         else:
             st.info("📊 Histórico ainda vazio")
 
+# BOTÃO DE EMERGÊNCIA
+st.markdown("---")
+st.subheader("🚨 Controles de Emergência")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    if st.button("🔄 Reiniciar Session State"):
+        # Limpar tudo
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.success("✅ Session State reiniciado!")
+        st.rerun()
+
+with col2:
+    if st.button("📊 Debug Completo"):
+        st.write("### 🐛 Debug do Session State:")
+        for key in st.session_state.keys():
+            try:
+                value = st.session_state[key]
+                if hasattr(value, '__len__'):
+                    st.write(f"- **{key}:** {type(value).__name__} com {len(value)} elementos")
+                else:
+                    st.write(f"- **{key}:** {value}")
+            except:
+                st.write(f"- **{key}:** [ERRO ao acessar]")
+
 st.markdown("---")
 st.markdown("### 🚀 **SISTEMA 100% BASEADO EM HISTÓRICO + XGBOOST 50+ FEATURES ATIVADO**")
 st.markdown("*Estratégia de 8 números baseada exclusivamente no histórico de sorteios com Machine Learning Avançado*")
 
 # Rodapé
 st.markdown("---")
-st.markdown("**🎯 Sistema Baseado em Histórico v14.0** - *XGBoost 50+ Features + Previsão Sequencial + Correções Críticas*")
-
-# ADICIONE ESTAS FUNÇÕES NO FINAL DO CÓDIGO, ANTES DO STREAMLIT APP
-
-def executar_diagnostico_completo(gestor):
-    """Executa diagnóstico completo do sistema"""
-    diagnostico = {}
-    
-    try:
-        # 1. Verificar histórico
-        historico_size = len(gestor.historico)
-        numeros_validos = len([h for h in gestor.historico if h.get('number') is not None])
-        diagnostico["Total de Registros"] = f"{historico_size} (Válidos: {numeros_validos})"
-        
-        # 2. Verificar XGBoost
-        xgb_treinado = gestor.ia_assertiva.xgboost_predictor.treinado
-        modo_ativo = gestor.ia_assertiva.modo_xgboost_ativo
-        diagnostico["XGBoost Treinado"] = xgb_treinado
-        diagnostico["Modo XGBoost Ativo"] = modo_ativo
-        
-        # 3. Verificar se pode treinar
-        pode_treinar = historico_size >= 150 and numeros_validos >= 150
-        diagnostico["Pode Treinar XGBoost"] = pode_treinar
-        
-        # 4. Verificar modelo
-        if hasattr(gestor.ia_assertiva.xgboost_predictor, 'model'):
-            modelo_existe = gestor.ia_assertiva.xgboost_predictor.model is not None
-            diagnostico["Modelo Existe"] = modelo_existe
-        else:
-            diagnostico["Modelo Existe"] = "Atributo não encontrado"
-            
-        # 5. Verificar features
-        if hasattr(gestor.ia_assertiva.xgboost_predictor.feature_engineer, 'feature_names'):
-            num_features = len(gestor.ia_assertiva.xgboost_predictor.feature_engineer.feature_names)
-            diagnostico["Número de Features"] = num_features
-        else:
-            diagnostico["Número de Features"] = "Não disponível"
-            
-        return diagnostico
-        
-    except Exception as e:
-        diagnostico["Erro no Diagnóstico"] = str(e)
-        return diagnostico
-
-def forcar_ativacao_xgboost(gestor):
-    """Força a ativação do XGBoost"""
-    try:
-        logging.info("🎯 FORÇANDO ATIVAÇÃO DO XGBOOST...")
-        
-        # 1. Verificar dados
-        historico_size = len(gestor.historico)
-        numeros_validos = len([h for h in gestor.historico if h.get('number') is not None])
-        
-        if numeros_validos < 100:
-            logging.error(f"❌ Dados insuficientes: {numeros_validos} registros válidos")
-            return False
-        
-        # 2. Tentar carregar modelo existente primeiro
-        try:
-            if os.path.exists(XGB_MODEL_PATH):
-                gestor.ia_assertiva.xgboost_predictor.model = xgb.XGBClassifier()
-                gestor.ia_assertiva.xgboost_predictor.model.load_model(XGB_MODEL_PATH)
-                gestor.ia_assertiva.xgboost_predictor.treinado = True
-                gestor.ia_assertiva.modo_xgboost_ativo = True
-                logging.info("✅ XGBoost carregado do arquivo existente")
-                return True
-        except:
-            logging.warning("📝 Nenhum modelo existente encontrado, treinando novo...")
-        
-        # 3. Treinar novo modelo
-        logging.info("🤖 Iniciando treinamento FORÇADO do XGBoost...")
-        
-        # Usar treinamento direto sem muitas verificações
-        numeros = [h['number'] for h in gestor.historico if h.get('number') is not None]
-        
-        if len(numeros) < 100:
-            return False
-        
-        # Criar features simplificadas para teste rápido
-        features = []
-        targets = []
-        
-        for i in range(20, len(numeros) - 1):
-            feature_row = []
-            janela = numeros[i-20:i]
-            
-            # Features básicas para teste
-            feature_row.append(np.mean(janela))
-            feature_row.append(np.std(janela))
-            feature_row.append(janela[-1])  # último
-            feature_row.append(janela[-2])  # penúltimo
-            feature_row.append(janela[-1] % 2)  # par/ímpar
-            feature_row.append(1 if janela[-1] in PRIMEIRA_DUZIA else 0)
-            feature_row.append(1 if janela[-1] in SEGUNDA_DUZIA else 0)
-            feature_row.append(1 if janela[-1] in TERCEIRA_DUZIA else 0)
-            feature_row.append(1 if janela[-1] in COLUNA_1 else 0)
-            feature_row.append(1 if janela[-1] in COLUNA_2 else 0)
-            feature_row.append(1 if janela[-1] in COLUNA_3 else 0)
-            
-            features.append(feature_row)
-            targets.append(numeros[i])
-        
-        if len(features) < 50:
-            return False
-        
-        # Modelo rápido
-        model = xgb.XGBClassifier(
-            n_estimators=150,
-            max_depth=8,
-            learning_rate=0.1,
-            random_state=42,
-            objective='multi:softprob',
-            num_class=37
-        )
-        
-        model.fit(features, targets)
-        gestor.ia_assertiva.xgboost_predictor.model = model
-        gestor.ia_assertiva.xgboost_predictor.treinado = True
-        gestor.ia_assertiva.modo_xgboost_ativo = True
-        
-        # Salvar modelo
-        model.save_model(XGB_MODEL_PATH)
-        
-        logging.info("✅ XGBoost treinado e ativado com SUCESSO!")
-        return True
-        
-    except Exception as e:
-        logging.error(f"❌ Erro crítico na ativação forçada: {e}")
-        return False
+st.markdown("**🎯 Sistema Baseado em Histórico v14.0** - *XGBoost 50+ Features + Previsão Sequencial + Correções Críticas*")o
