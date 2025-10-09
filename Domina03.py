@@ -769,7 +769,7 @@ class IA_Assertiva:
 class GestorAssertivo:
     def __init__(self):
         self.ia_assertiva = IA_Assertiva()
-        self.historico = deque(carregar_historico(), maxlen=500)
+        self.historico = deque(carregar_historico(), maxlen=5000)
         
     def adicionar_numero(self, numero_dict):
         if isinstance(numero_dict, dict) and numero_dict.get('number') is not None:
