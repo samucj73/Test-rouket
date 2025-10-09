@@ -161,7 +161,7 @@ class SistemaPrevisaoSequencial:
         for i in range(len(numeros) - 1):
             if numeros[i] == numero_atual:
                 # Pegar os PRÓXIMOS 5 números (aumentado de 3 para 5)
-                for j in range(1, min(9p, len(numeros) - i)):
+                for j in range(1, min(9, len(numeros) - i)):
                     sequencias_encontradas.append(numeros[i + j])
         
         # ESTRATÉGIA 2: Padrões de repetição em intervalos específicos
