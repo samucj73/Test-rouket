@@ -139,7 +139,9 @@ class FeatureEngineer:
             feature_row.extend([
                 sum(1 for j in range(1, min(4, len(janela))) if janela[-j] == janela[-1] else 0,
                 len([n for n in janela if n % 2 == 0]),  # Count pares
-                len([n for n in janela if n % 2 == 1]),  # Count ímpares
+                len([n for n in janela if n % 2 == 1]),  # Count ímpare
+
+             ])
             
             
             # 6. Features de vizinhança
