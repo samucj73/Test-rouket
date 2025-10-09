@@ -140,6 +140,89 @@ class SistemaGestaoRisco:
             self.max_sequencia_negativa = max(self.max_sequencia_negativa, self.sequencia_atual)
 
 # =============================
+# NOVO SISTEMA DE PREVISÃO POR SEQUÊNCIA HISTÓRICA
+# =============================
+
+class SistemaPrevisaoSequencial:
+    def __init__(self):
+        self.historico_sequencias = {}
+        self.performance_sequencial = {"acertos": 0, "erros": 0}
+        
+    def analisar_sequencias_historicas(self, historico, numero_atual):
+        """Analisa quais números costumam sair APÓS o número atual no histórico"""
+        
+        numeros = [h['number'] for h in historico if h.get('number') is not None]
+        
+        if len(numeros) < 10:
+            return []
+        
+        sequencias_encontradas = []
+        
+        # Procurar todas as ocorrências do número atual no histórico
+        for i in range(len(numeros) - 1):
+            if numeros[i] == numero_atual:
+                # Pegar os PRÓXIMOS 3 números que saíram após este número
+                if i + 1 < len(numeros):
+                    sequencias_encontradas.append(numeros[i + 1])
+                if i + 2 < len(numeros):
+                    sequencias_encontradas.append(numeros[i + 2])
+                if i + 3 < len(numeros):
+                    sequencias_encontradas.append(numeros[i + 3])
+        
+        # Contar frequência dos números que aparecem após o número atual
+        contador_sequencias = Counter(sequencias_encontradas)
+        
+        # Pegar os 10 números mais frequentes
+        numeros_mais_frequentes = [num for num, count in contador_sequencias.most_common(10)]
+        
+        logging.info(f"🔍 Sequência histórica: Após {numero_atual} saíram {len(sequencias_encontradas)} números, tops: {numeros_mais_frequentes[:5]}")
+        
+        return numeros_mais_frequentes
+    
+    def gerar_previsao_sequencial(self, historico, ultimo_numero):
+        """Gera previsão baseada no que costuma sair após o último número"""
+        
+        if not historico or ultimo_numero is None:
+            return []
+        
+        # Analisar sequências históricas
+        previsao_sequencial = self.analisar_sequencias_historicas(historico, ultimo_numero)
+        
+        # Se não encontrou sequências suficientes, usar fallback
+        if len(previsao_sequencial) < 5:
+            # Fallback: usar números quentes recentes
+            numeros = [h['number'] for h in historico if h.get('number') is not None]
+            if len(numeros) >= 10:
+                contagem_recente = Counter(numeros[-10:])
+                previsao_sequencial = [num for num, count in contagem_recente.most_common(8)]
+        
+        return previsao_sequencial[:NUMERO_PREVISOES]
+    
+    def verificar_acerto_sequencial(self, previsao_sequencial, numero_sorteado):
+        """Verifica se a previsão sequencial acertou"""
+        if not previsao_sequencial or numero_sorteado is None:
+            return None
+        
+        acertou = numero_sorteado in previsao_sequencial
+        if acertou:
+            self.performance_sequencial["acertos"] += 1
+        else:
+            self.performance_sequencial["erros"] += 1
+        
+        return acertou
+    
+    def get_performance_sequencial(self):
+        """Retorna performance do sistema sequencial"""
+        total = self.performance_sequencial["acertos"] + self.performance_sequencial["erros"]
+        taxa = (self.performance_sequencial["acertos"] / total * 100) if total > 0 else 0
+        return {
+            "acertos": self.performance_sequencial["acertos"],
+            "erros": self.performance_sequencial["erros"],
+            "taxa_acerto": f"{taxa:.1f}%",
+            "total_analises": total
+        }
+
+# =============================
 # UTILITÁRIOS
 # =============================
 def enviar_telegram(msg: str, token=TELEGRAM_TOKEN, chat_id=TELEGRAM_CHAT_ID):
@@ -563,12 +646,21 @@ def verificar_estrategia_recuperacao(historico, ultimos_resultados):
 class IA_Assertiva:
     def __init__(self):
         self.historico_analises = deque(maxlen=50)
+        self.previsao_sequencial = SistemaPrevisaoSequencial()
         
-    def prever_com_alta_assertividade(self, historico):
+    def prever_com_alta_assertividade(self, historico, ultimo_numero=None):
         """Sistema PRINCIPAL de previsão assertiva 100% BASEADO EM HISTÓRICO"""
         
         historico_size = len(historico)
         
+        # SEMPRE USAR PREVISÃO SEQUENCIAL SE TIVER ÚLTIMO NÚMERO
+        if ultimo_numero is not None and historico_size >= 10:
+            previsao_seq = self.previsao_sequencial.gerar_previsao_sequencial(historico, ultimo_numero)
+            if previsao_seq:
+                logging.info(f"🎯 Previsão sequencial ativada para {ultimo_numero}")
+                return previsao_seq
+        
+        # Fallback para o sistema original
         if historico_size >= FASE_ESPECIALISTA:
             logging.info(f"🚀 MODO ASSERTIVO ATIVO - {historico_size} registros")
             return self.modo_assertivo_avancado(historico)
@@ -728,6 +820,10 @@ class IA_Assertiva:
         
         # FILTRAR PELA ESTRATÉGIA DE CONFIRMAÇÃO BASEADA NO HISTÓRICO
         return filtrar_por_confirmacao_rapida(historico, previsao)
+    
+    def get_performance_sequencial(self):
+        """Retorna performance do sistema sequencial"""
+        return self.previsao_sequencial.get_performance_sequencial()
 
 # =============================
 # GESTOR PRINCIPAL 100% BASEADO EM HISTÓRICO
@@ -741,9 +837,9 @@ class GestorAssertivo:
         if isinstance(numero_dict, dict) and numero_dict.get('number') is not None:
             self.historico.append(numero_dict)
         
-    def gerar_previsao_assertiva(self):
+    def gerar_previsao_assertiva(self, ultimo_numero=None):
         try:
-            previsao = self.ia_assertiva.prever_com_alta_assertividade(self.historico)
+            previsao = self.ia_assertiva.prever_com_alta_assertividade(self.historico, ultimo_numero)
             previsao_validada = validar_previsao(previsao)
             
             # GARANTIR SEMPRE 8 NÚMEROS BASEADOS NO HISTÓRICO
@@ -831,6 +927,10 @@ class GestorAssertivo:
             "numeros_quentes": analise.get("numeros_quentes", []),
             "padrao_detectado": len(analise.get("padroes_repeticao", [])) > 0
         }
+    
+    def get_performance_sequencial(self):
+        """Retorna performance do sistema sequencial"""
+        return self.ia_assertiva.get_performance_sequencial()
 
 # =============================
 # STREAMLIT APP 100% BASEADO EM HISTÓRICO
@@ -916,8 +1016,19 @@ try:
                 st.session_state.erros += 1
                 st.error(f"🔴 Número {numero_real} não estava")
 
-        # GERAR NOVA PREVISÃO BASEADA NO HISTÓRICO
-        nova_previsao = st.session_state.gestor.gerar_previsao_assertiva()
+        # VERIFICAR ACERTO DA PREVISÃO SEQUENCIAL ANTERIOR
+        if st.session_state.ultimo_numero and len(st.session_state.gestor.historico) > 1:
+            # Usar o penúltimo número para verificar a previsão sequencial
+            numeros_historico = [h['number'] for h in st.session_state.gestor.historico if h.get('number') is not None]
+            if len(numeros_historico) >= 2:
+                penultimo_numero = numeros_historico[-2]
+                # Verificar se a previsão sequencial anterior acertou
+                st.session_state.gestor.ia_assertiva.previsao_sequencial.verificar_acerto_sequencial(
+                    st.session_state.previsao_atual, numero_real
+                )
+
+        # GERAR NOVA PREVISÃO BASEADA NO HISTÓRICO - AGORA COM PREVISÃO SEQUENCIAL
+        nova_previsao = st.session_state.gestor.gerar_previsao_assertiva(st.session_state.ultimo_numero)
         st.session_state.previsao_atual = validar_previsao(nova_previsao)
         
         # GERAR ENTRADA ULTRA ASSERTIVA BASEADA NO HISTÓRICO
@@ -1030,6 +1141,36 @@ with col2:
     st.metric("💪 Confiança", analise["confianca"])
 with col3:
     st.metric("📈 Padrão", "✅" if analise["padrao_detectado"] else "⏳")
+
+# NOVA SEÇÃO: PREVISÃO SEQUENCIAL
+st.markdown("---")
+st.subheader("🔄 PREVISÃO SEQUENCIAL")
+
+performance_sequencial = st.session_state.gestor.get_performance_sequencial()
+
+col1, col2, col3, col4 = st.columns(4)
+with col1:
+    st.metric("🎯 Acertos Seq", performance_sequencial["acertos"])
+with col2:
+    st.metric("❌ Erros Seq", performance_sequencial["erros"])
+with col3:
+    st.metric("📈 Assertividade Seq", performance_sequencial["taxa_acerto"])
+with col4:
+    st.metric("🔍 Análises", performance_sequencial["total_analises"])
+
+# Mostrar análise sequencial atual
+if st.session_state.ultimo_numero is not None and len(st.session_state.gestor.historico) > 10:
+    numeros_historico = [h['number'] for h in st.session_state.gestor.historico if h.get('number') is not None]
+    
+    # Analisar sequências para o último número
+    sequencias = st.session_state.gestor.ia_assertiva.previsao_sequencial.analisar_sequencias_historicas(
+        list(st.session_state.gestor.historico), 
+        st.session_state.ultimo_numero
+    )
+    
+    if sequencias:
+        st.info(f"🔍 **Análise Sequencial para {st.session_state.ultimo_numero}:**")
+        st.write(f"📊 Números que costumam sair após **{st.session_state.ultimo_numero}**: {', '.join(map(str, sequencias[:8]))}")
 
 # DASHBOARD DE RISCO E CONFIANÇA
 st.markdown("---")
@@ -1171,7 +1312,7 @@ st.subheader("⚙️ Controles")
 col1, col2, col3 = st.columns(3)
 with col1:
     if st.button("🔄 Nova Previsão"):
-        nova_previsao = st.session_state.gestor.gerar_previsao_assertiva()
+        nova_previsao = st.session_state.gestor.gerar_previsao_assertiva(st.session_state.ultimo_numero)
         st.session_state.previsao_atual = validar_previsao(nova_previsao)
         st.rerun()
 
@@ -1199,6 +1340,15 @@ with col3:
             analise = analisar_padroes_assertivos(st.session_state.gestor.historico)
             st.info(f"🎯 Números quentes: {analise.get('numeros_quentes', [])}")
             st.info(f"🔄 Padrões repetição: {analise.get('padroes_repeticao', [])}")
+            
+            # Mostrar análise sequencial detalhada
+            if st.session_state.ultimo_numero:
+                sequencias = st.session_state.gestor.ia_assertiva.previsao_sequencial.analisar_sequencias_historicas(
+                    list(st.session_state.gestor.historico), 
+                    st.session_state.ultimo_numero
+                )
+                if sequencias:
+                    st.info(f"🔢 Sequências após {st.session_state.ultimo_numero}: {sequencias}")
         else:
             st.info("📊 Histórico ainda vazio")
 
@@ -1208,4 +1358,4 @@ st.markdown("*Estratégia de 8 números baseada exclusivamente no histórico de 
 
 # Rodapé
 st.markdown("---")
-st.markdown("**🎯 Sistema Baseado em Histórico v10.0** - *Zero números fixos, 100% análise histórica*")
+st.markdown("**🎯 Sistema Baseado em Histórico v11.0** - *Previsão Sequencial + Zero números fixos*")
