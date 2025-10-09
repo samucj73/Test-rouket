@@ -322,7 +322,7 @@ class XGBoostPredictor:
             return False
             
         try:
-            if len(historico) < 150 and not force_retrain:  # Aumentado mínimo
+            if len(historico) < 995 and not force_retrain:  # Aumentado mínimo
                 logging.info("📊 Histórico insuficiente para treinar XGBoost com muitas features")
                 return False
                 
