@@ -1,8 +1,3 @@
-import xgboost as xgb
-from sklearn.preprocessing import LabelEncoder
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score
-import joblib
 # RoletaHybridIA.py - SISTEMA ESPECIALISTA 100% BASEADO EM HISTÓRICO COM XGBOOST
 import streamlit as st
 import json
@@ -22,11 +17,16 @@ warnings.filterwarnings('ignore')
 # =============================
 # NOVAS DEPENDÊNCIAS XGBOOST
 # =============================
-import xgboost as xgb
-from sklearn.preprocessing import LabelEncoder
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score
-import joblib
+try:
+    import xgboost as xgb
+    from sklearn.preprocessing import LabelEncoder
+    from sklearn.model_selection import train_test_split
+    from sklearn.metrics import accuracy_score
+    import joblib
+    XGBOOST_DISPONIVEL = True
+except ImportError:
+    XGBOOST_DISPONIVEL = False
+    logging.warning("XGBoost não disponível - usando métodos tradicionais")
 
 # =============================
 # Configurações
@@ -139,10 +139,8 @@ class FeatureEngineer:
             feature_row.extend([
                 sum(1 for j in range(1, min(4, len(janela))) if janela[-j] == janela[-1] else 0,
                 len([n for n in janela if n % 2 == 0]),  # Count pares
-                len([n for n in janela if n % 2 == 1]),  # Count ímpare
-
-             )
-            
+                len([n for n in janela if n % 2 == 1]),  # Count ímpares
+            ])
             
             # 6. Features de vizinhança
             vizinhos_ultimo = obter_vizinhos_fisicos(ultimo_num)
@@ -165,13 +163,15 @@ class FeatureEngineer:
     
     def salvar_engineer(self):
         """Salva o feature engineer"""
-        joblib.dump(self, FEATURE_ENGINEER_PATH)
+        if XGBOOST_DISPONIVEL:
+            joblib.dump(self, FEATURE_ENGINEER_PATH)
     
     @staticmethod
     def carregar_engineer():
         """Carrega o feature engineer"""
         try:
-            return joblib.load(FEATURE_ENGINEER_PATH)
+            if XGBOOST_DISPONIVEL:
+                return joblib.load(FEATURE_ENGINEER_PATH)
         except:
             return FeatureEngineer()
 
@@ -188,6 +188,10 @@ class XGBoostPredictor:
         
     def treinar_modelo(self, historico, force_retrain=False):
         """Treina o modelo XGBoost com o histórico"""
+        if not XGBOOST_DISPONIVEL:
+            logging.warning("XGBoost não disponível - pulando treinamento")
+            return False
+            
         try:
             if len(historico) < 100 and not force_retrain:
                 logging.info("📊 Histórico insuficiente para treinar XGBoost")
@@ -238,6 +242,9 @@ class XGBoostPredictor:
     
     def carregar_modelo(self):
         """Carrega modelo treinado"""
+        if not XGBOOST_DISPONIVEL:
+            return False
+            
         try:
             if os.path.exists(XGB_MODEL_PATH):
                 self.model = xgb.XGBClassifier()
@@ -252,11 +259,10 @@ class XGBoostPredictor:
     
     def prever_proximos_numeros(self, historico, top_n=8):
         """Faz previsão usando XGBoost"""
-        try:
-            if not self.treinado or self.model is None:
-                if not self.carregar_modelo():
-                    return self._previsao_fallback(historico)
+        if not XGBOOST_DISPONIVEL or not self.treinado:
+            return self._previsao_fallback(historico)
             
+        try:
             numeros = [h['number'] for h in historico if h.get('number') is not None]
             if len(numeros) < 15:
                 return self._previsao_fallback(historico)
@@ -273,13 +279,13 @@ class XGBoostPredictor:
             probabilidades = self.model.predict_proba(ultimas_features)[0]
             
             # Pegar top N números mais prováveis
-            indices_mais_provaveis = np.argsort(probabilidades)[::-1][:top_n*2]  # Pegar mais para filtrar
+            indices_mais_provaveis = np.argsort(probabilidades)[::-1][:top_n*2]
             
             previsao = []
             for idx in indices_mais_provaveis:
                 if len(previsao) >= top_n:
                     break
-                if 0 <= idx <= 36:  # Números válidos da roleta
+                if 0 <= idx <= 36:
                     previsao.append(int(idx))
             
             # Garantir que temos números suficientes
@@ -350,15 +356,15 @@ class XGBoostPredictor:
 
 class SistemaConfianca:
     def __init__(self):
-        self.confianca = 0.7  # AUMENTADO para começar mais otimista
+        self.confianca = 0.7
         self.tendencia = "NEUTRA"
         self.historico_confianca = deque(maxlen=20)
     
     def atualizar_confianca(self, acerto):
         if acerto:
-            self.confianca = min(0.95, self.confianca + 0.15)  # AUMENTO MAIOR
+            self.confianca = min(0.95, self.confianca + 0.15)
         else:
-            self.confianca = max(0.3, self.confianca - 0.08)   # REDUÇÃO MENOR
+            self.confianca = max(0.3, self.confianca - 0.08)
         
         self.historico_confianca.append(self.confianca)
         
@@ -389,30 +395,27 @@ class SistemaGestaoRisco:
     def deve_entrar(self, analise_risco, confianca, historico_size):
         """CRITÉRIOS SUPER AGRESSIVOS"""
         
-        # SEMPRE ENTRAR se risco for BAIXO ou MODERADO
         if analise_risco in ["RISCO_BAIXO", "RISCO_MODERADO"]:
             return True
             
-        # Entrar com risco ALTO se confiança for moderada e histórico grande
         if analise_risco == "RISCO_ALTO" and confianca > 0.4 and historico_size > 30:
             return True
             
-        # NUNCA entrar apenas se sequência for MUITO longa
-        if self.sequencia_atual >= 6:  # Aumentado limite
+        if self.sequencia_atual >= 6:
             return False
             
-        return True  # Por padrão, SEMPRE entrar
+        return True
     
     def calcular_tamanho_aposta(self, confianca, saldo=1000):
         base = saldo * 0.02
         if confianca > 0.7:
-            return base * 2.0  # AUMENTADO
+            return base * 2.0
         elif confianca > 0.5:
             return base * 1.5
         elif confianca > 0.3:
             return base
         else:
-            return base * 0.8  # REDUZIDO mínimo
+            return base * 0.8
     
     def atualizar_sequencia(self, resultado):
         if resultado == "GREEN":
@@ -436,7 +439,7 @@ class SistemaPrevisaoSequencial:
         
         numeros = [h['number'] for h in historico if h.get('number') is not None]
         
-        if len(numeros) < 15:  # Aumentado mínimo para melhor análise
+        if len(numeros) < 15:
             return []
         
         sequencias_encontradas = []
@@ -444,7 +447,6 @@ class SistemaPrevisaoSequencial:
         # ESTRATÉGIA 1: Próximos números APÓS o número atual
         for i in range(len(numeros) - 1):
             if numeros[i] == numero_atual:
-                # Pegar os PRÓXIMOS 5 números (aumentado de 3 para 5)
                 for j in range(1, min(9, len(numeros) - i)):
                     sequencias_encontradas.append(numeros[i + j])
         
@@ -452,7 +454,6 @@ class SistemaPrevisaoSequencial:
         padroes_intervalo = []
         for i in range(len(numeros) - 8):
             if numeros[i] == numero_atual:
-                # Verificar padrões: número atual -> próximo -> próximo
                 if i + 2 < len(numeros):
                     padroes_intervalo.append(numeros[i + 2])
                 if i + 3 < len(numeros):
@@ -460,7 +461,7 @@ class SistemaPrevisaoSequencial:
         
         # ESTRATÉGIA 3: Números que são VIZINHOS dos que saem após
         vizinhos_sequencia = []
-        for num in sequencias_encontradas[:15]:  # Pegar os 10 mais frequentes
+        for num in sequencias_encontradas[:15]:
             vizinhos_sequencia.extend(obter_vizinhos_fisicos(num))
         
         # COMBINAR TODAS AS ESTRATÉGIAS
@@ -476,7 +477,7 @@ class SistemaPrevisaoSequencial:
         for num in sequencias_encontradas:
             contador[num] += 2
         
-        # Pegar os 12 números mais frequentes (aumentado para ter mais opções)
+        # Pegar os 12 números mais frequentes
         numeros_mais_frequentes = [num for num, count in contador.most_common(12)]
         
         logging.info(f"🔍 Sequência histórica APÓS {numero_atual}: {len(sequencias_encontradas)} ocorrências, tops: {numeros_mais_frequentes[:6]}")
@@ -524,9 +525,9 @@ class SistemaPrevisaoSequencial:
         
         # ESTRATÉGIA 3: NÚMEROS DA MESMA CARACTERÍSTICA (par/ímpar, cor, etc)
         if ultimo_numero != 0:
-            if ultimo_numero % 2 == 0:  # Se é par
+            if ultimo_numero % 2 == 0:
                 previsao.update([n for n in range(1, 37) if n % 2 == 0 and n != ultimo_numero][:3])
-            else:  # Se é ímpar
+            else:
                 previsao.update([n for n in range(1, 37) if n % 2 == 1 and n != ultimo_numero][:3])
         
         # ESTRATÉGIA 4: COMPLETAR COM FREQUENTES
@@ -722,7 +723,7 @@ def gerar_entrada_ultra_assertiva(previsao_completa, historico):
     # SIMPLESMENTE RETORNAR A PREVISÃO - SEM FILTROS EXTRAS
     previsao_valida = validar_previsao(previsao_completa)
     
-    if len(previsao_valida) >= 6:  # Pelo menos 6 números válidos
+    if len(previsao_valida) >= 6:
         return previsao_valida[:NUMERO_PREVISOES]
     
     # FALLBACK: usar últimos números do histórico
@@ -730,7 +731,7 @@ def gerar_entrada_ultra_assertiva(previsao_completa, historico):
     if numeros:
         return numeros[-NUMERO_PREVISOES:] if len(numeros) >= NUMERO_PREVISOES else numeros
     
-    return [2, 5, 8, 11, 14, 17, 20, 23]  # Fallback final
+    return [2, 5, 8, 11, 14, 17, 20, 23]
 
 def enviar_alerta_assertivo(entrada_estrategica, ultimo_numero, historico, performance):
     """Envia alerta ULTRA SIMPLES para Telegram"""
@@ -997,7 +998,7 @@ class IA_Assertiva:
     def __init__(self):
         self.historico_analises = deque(maxlen=50)
         self.previsao_sequencial = SistemaPrevisaoSequencial()
-        self.xgboost_predictor = XGBoostPredictor()  # NOVO
+        self.xgboost_predictor = XGBoostPredictor()
         self.modo_xgboost_ativo = False
         
     def prever_com_alta_assertividade(self, historico, ultimo_numero=None):
@@ -1032,7 +1033,7 @@ class IA_Assertiva:
         numeros = [h['number'] for h in historico if h.get('number') is not None]
         
         if len(numeros) < 8:
-            return [2, 5, 8, 11, 14, 17, 20, 23]  # Fallback inicial
+            return [2, 5, 8, 11, 14, 17, 20, 23]
         
         previsao = set()
         
@@ -1288,7 +1289,7 @@ try:
         st.session_state.previsao_atual = validar_previsao(nova_previsao)
         
         # GERAR ENTRADA ULTRA ASSERTIVA (CORREÇÃO CRÍTICA: USAR PREVISÃO DIRETAMENTE)
-        entrada_assertiva = st.session_state.previsao_atual  # USAR DIRETAMENTE A PREVISÃO
+        entrada_assertiva = st.session_state.previsao_atual
         
         # Calcular performance
         total = st.session_state.acertos + st.session_state.erros
@@ -1329,7 +1330,7 @@ try:
                 deve_entrar = False
                 logging.warning("⏹️ Previsão insuficiente - não entrar")
             else:
-                deve_entrar = True  # FORÇAR ENTRADA
+                deve_entrar = True
                 logging.info("🔥 Entrada forçada - Critérios normais")
         
         # ENVIAR ALERTA ASSERTIVO
@@ -1410,23 +1411,26 @@ with col4:
     st.metric("Assertividade ML", xgboost_status["performance"]["taxa_acerto"])
 
 # Controles XGBoost
-col1, col2 = st.columns(2)
-with col1:
-    if st.button("🤖 Treinar XGBoost Agora"):
-        with st.spinner("Treinando modelo de Machine Learning..."):
-            sucesso = st.session_state.gestor.treinar_xgboost()
-            if sucesso:
-                st.success("✅ XGBoost treinado com sucesso!")
-            else:
-                st.error("❌ Falha no treinamento. Mais dados necessários.")
-with col2:
-    if st.button("🔄 Forçar Re-treinamento"):
-        with st.spinner("Re-treinando modelo..."):
-            sucesso = st.session_state.gestor.treinar_xgboost(force_retrain=True)
-            if sucesso:
-                st.success("✅ XGBoost re-treinado!")
-            else:
-                st.warning("⚠️ Verifique se tem dados suficientes")
+if XGBOOST_DISPONIVEL:
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🤖 Treinar XGBoost Agora"):
+            with st.spinner("Treinando modelo de Machine Learning..."):
+                sucesso = st.session_state.gestor.treinar_xgboost()
+                if sucesso:
+                    st.success("✅ XGBoost treinado com sucesso!")
+                else:
+                    st.error("❌ Falha no treinamento. Mais dados necessários.")
+    with col2:
+        if st.button("🔄 Forçar Re-treinamento"):
+            with st.spinner("Re-treinando modelo..."):
+                sucesso = st.session_state.gestor.treinar_xgboost(force_retrain=True)
+                if sucesso:
+                    st.success("✅ XGBoost re-treinado!")
+                else:
+                    st.warning("⚠️ Verifique se tem dados suficientes")
+else:
+    st.warning("⚠️ XGBoost não disponível - usando métodos tradicionais")
 
 # Informações do modelo
 if xgboost_status["treinado"]:
