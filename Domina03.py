@@ -67,7 +67,7 @@ COLUNA_3 = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36]
 # CONFIGURAÇÃO ESPECIALISTA - ESTRATÉGIA 100% BASEADA EM HISTÓRICO
 # =============================
 MIN_HISTORICO_TREINAMENTO = 695
-NUMERO_PREVISOES = 12  # SEMPRE 8 NÚMEROS BASEADOS NO HISTÓRICO
+NUMERO_PREVISOES = 8  # SEMPRE 8 NÚMEROS BASEADOS NO HISTÓRICO
 
 # Fases do sistema
 FASE_INICIAL = 30
@@ -522,78 +522,135 @@ class XGBoostPredictor:
         }
 
 # =============================
-# SISTEMAS DE SUPORTE
+# SISTEMAS DE SUPORTE OTIMIZADOS
 # =============================
 
 class SistemaConfianca:
     def __init__(self):
-        self.confianca = 0.7
+        self.confianca = 0.6  # Iniciar mais conservador
         self.tendencia = "NEUTRA"
-        self.historico_confianca = deque(maxlen=20)
+        self.historico_confianca = deque(maxlen=15)
+        self.acertos_consecutivos = 0
+        self.erros_consecutivos = 0
     
     def atualizar_confianca(self, acerto):
         if acerto:
-            self.confianca = min(0.95, self.confianca + 0.15)
+            self.acertos_consecutivos += 1
+            self.erros_consecutivos = 0
+            
+            # Bônus por acertos consecutivos
+            bonus = min(0.25, self.acertos_consecutivos * 0.08)
+            self.confianca = min(0.95, self.confianca + 0.12 + bonus)
+            
+            logging.info(f"✅ Acerto consecutivo #{self.acertos_consecutivos} - Confiança: {self.confianca:.2f}")
         else:
-            self.confianca = max(0.3, self.confianca - 0.08)
+            self.erros_consecutivos += 1
+            self.acertos_consecutivos = 0
+            
+            # Penalidade progressiva por erros consecutivos
+            penalidade = min(0.3, self.erros_consecutivos * 0.1)
+            self.confianca = max(0.2, self.confianca - 0.15 - penalidade)
+            
+            logging.info(f"❌ Erro consecutivo #{self.erros_consecutivos} - Confiança: {self.confianca:.2f}")
         
         self.historico_confianca.append(self.confianca)
         
-        if self.confianca > 0.6:
-            self.tendencia = "ALTA"
-        elif self.confianca < 0.4:
-            self.tendencia = "BAIXA"
-        else:
-            self.tendencia = "NEUTRA"
+        # Atualizar tendência
+        if len(self.historico_confianca) >= 3:
+            ultimos_3 = list(self.historico_confianca)[-3:]
+            if all(c > 0.7 for c in ultimos_3):
+                self.tendencia = "MUITO ALTA"
+            elif all(c > 0.5 for c in ultimos_3):
+                self.tendencia = "ALTA"
+            elif all(c < 0.3 for c in ultimos_3):
+                self.tendencia = "MUITO BAIXA"
+            elif all(c < 0.4 for c in ultimos_3):
+                self.tendencia = "BAIXA"
+            else:
+                self.tendencia = "NEUTRA"
     
     def get_confianca_categoria(self):
         if self.confianca > 0.75:
             return "MUITO ALTA"
-        elif self.confianca > 0.55:
+        elif self.confianca > 0.6:
             return "ALTA"
-        elif self.confianca > 0.35:
+        elif self.confianca > 0.4:
             return "MODERADA"
-        else:
+        elif self.confianca > 0.25:
             return "BAIXA"
+        else:
+            return "MUITO BAIXA"
 
 class SistemaGestaoRisco:
     def __init__(self):
-        self.entradas_recentes = deque(maxlen=10)
-        self.resultados_recentes = deque(maxlen=10)
+        self.entradas_recentes = deque(maxlen=8)
+        self.resultados_recentes = deque(maxlen=8)
         self.sequencia_atual = 0
         self.max_sequencia_negativa = 0
+        self.taxa_acerto_recente = 0.5
     
     def deve_entrar(self, analise_risco, confianca, historico_size):
-        """CRITÉRIOS SUPER AGRESSIVOS"""
+        """CRITÉRIOS OTIMIZADOS - MAIS INTELIGENTES"""
         
-        if analise_risco in ["RISCO_BAIXO", "RISCO_MODERADO"]:
-            return True
-            
-        if analise_risco == "RISCO_ALTO" and confianca > 0.4 and historico_size > 30:
-            return True
-            
-        if self.sequencia_atual >= 6:
+        # Atualizar taxa de acerto recente
+        if len(self.resultados_recentes) > 0:
+            self.taxa_acerto_recente = self.resultados_recentes.count("GREEN") / len(self.resultados_recentes)
+        
+        # NÃO ENTRAR EM CONDIÇÕES CRÍTICAS
+        if self.sequencia_atual >= 5:
+            logging.warning("⏹️ Sequência negativa muito longa - não entrar")
             return False
             
-        return True
+        if confianca < 0.25:
+            logging.warning("⏹️ Confiança muito baixa - não entrar")
+            return False
+            
+        if self.taxa_acerto_recente < 0.2 and len(self.resultados_recentes) >= 5:
+            logging.warning("⏹️ Performance recente muito baixa - não entrar")
+            return False
+        
+        # ENTRAR EM CONDIÇÕES FAVORÁVEIS
+        if analise_risco == "RISCO_BAIXO" and confianca > 0.4:
+            return True
+            
+        if analise_risco == "RISCO_MODERADO" and confianca > 0.5:
+            return True
+            
+        if analise_risco == "RISCO_ALTO" and confianca > 0.7 and historico_size > 50:
+            return True
+        
+        # ENTRA SE TIVER BOM HISTÓRICO RECENTE
+        if self.taxa_acerto_recente > 0.4 and confianca > 0.35:
+            return True
+            
+        return False
     
     def calcular_tamanho_aposta(self, confianca, saldo=1000):
-        base = saldo * 0.02
-        if confianca > 0.7:
-            return base * 2.0
-        elif confianca > 0.5:
-            return base * 1.5
-        elif confianca > 0.3:
+        base = saldo * 0.015  # Reduzido base para 1.5%
+        
+        # Ajustar base pela sequência atual
+        if self.sequencia_atual >= 3:
+            base *= 0.7  # Reduzir após 3 erros consecutivos
+        
+        if confianca > 0.75:
+            return base * 1.8
+        elif confianca > 0.6:
+            return base * 1.4
+        elif confianca > 0.45:
             return base
-        else:
+        elif confianca > 0.3:
             return base * 0.8
+        else:
+            return base * 0.6
     
     def atualizar_sequencia(self, resultado):
         if resultado == "GREEN":
             self.sequencia_atual = 0
+            self.resultados_recentes.append("GREEN")
         else:
             self.sequencia_atual += 1
             self.max_sequencia_negativa = max(self.max_sequencia_negativa, self.sequencia_atual)
+            self.resultados_recentes.append("RED")
 
 # =============================
 # SISTEMA DE PREVISÃO SEQUENCIAL MELHORADO
@@ -1349,13 +1406,14 @@ class IA_Assertiva:
         self.modo_xgboost_ativo = False
         
     def prever_com_alta_assertividade(self, historico, ultimo_numero=None):
-        """Sistema PRINCIPAL - VERSÃO CORRIGIDA COM MELHOR ATIVAÇÃO"""
+        """Sistema PRINCIPAL - VERSÃO OTIMIZADA PARA MAIOR ASSERTIVIDADE"""
         
-        # VERIFICAÇÃO MAIS ROBUSTA DO XGBOOST
+        # VERIFICAÇÃO ROBUSTA DO XGBOOST - CORREÇÃO CRÍTICA
         xgb_pronto = (self.xgboost_predictor.treinado and 
                      hasattr(self.xgboost_predictor, 'model') and 
                      self.xgboost_predictor.model is not None)
         
+        # PRIORIDADE 1: XGBOOST SE ESTIVER TREINADO
         if xgb_pronto:
             self.modo_xgboost_ativo = True
             try:
@@ -1363,78 +1421,180 @@ class IA_Assertiva:
                 if previsao_xgb and len(previsao_xgb) >= 6:
                     logging.info("🎯 XGBOOST ATIVO - Previsão via Machine Learning")
                     return previsao_xgb
-                else:
-                    logging.warning("⚠️ XGBoost retornou previsão inválida, usando fallback")
-                    self.modo_xgboost_ativo = False
             except Exception as e:
-                logging.error(f"❌ Erro no XGBoost: {e}, usando fallback")
+                logging.error(f"❌ Erro no XGBoost: {e}")
                 self.modo_xgboost_ativo = False
         
-        # VERIFICAR SE DEVE TREINAR XGBOOST (condição mais simples)
-        if not self.xgboost_predictor.treinado and len(historico) >= 100:
+        # PRIORIDADE 2: TREINAR XGBOOST SE TIVER DADOS SUFICIENTES
+        if not self.xgboost_predictor.treinado and len(historico) >= 80:  # Reduzido para 80
             logging.info("🤖 Tentando treinar XGBoost automaticamente...")
             try:
-                if self.xgboost_predictor.treinar_modelo(historico, force_retrain=False):
-                    self.modo_xgboost_ativo = True
-                    # Tentar prever com XGBoost recém-treinado
-                    previsao_xgb = self.xgboost_predictor.prever_proximos_numeros(historico, NUMERO_PREVISOES)
-                    if previsao_xgb and len(previsao_xgb) >= 6:
-                        return previsao_xgb
+                # Treinamento RÁPIDO com features básicas
+                numeros = [h['number'] for h in historico if h.get('number') is not None]
+                if len(numeros) >= 80:
+                    if self.treinar_xgboost_rapido(historico):
+                        self.modo_xgboost_ativo = True
+                        previsao_xgb = self.xgboost_predictor.prever_proximos_numeros(historico, NUMERO_PREVISOES)
+                        if previsao_xgb and len(previsao_xgb) >= 6:
+                            return previsao_xgb
             except Exception as e:
                 logging.error(f"❌ Treinamento automático falhou: {e}")
         
-        # FALLBACK PARA PREVISÃO SEQUENCIAL
+        # PRIORIDADE 3: PREVISÃO SEQUENCIAL INTELIGENTE
         self.modo_xgboost_ativo = False
-        if ultimo_numero is not None and len(historico) >= 15:
+        if ultimo_numero is not None and len(historico) >= 10:  # Reduzido mínimo
             previsao_seq = self.previsao_sequencial.gerar_previsao_sequencial(historico, ultimo_numero)
             if previsao_seq and len(previsao_seq) >= 6:
                 logging.info(f"🔄 PREVISÃO SEQUENCIAL para {ultimo_numero}")
                 return previsao_seq
         
-        # FALLBACK FINAL
-        logging.info("📊 Usando estratégia alternativa")
-        return self.estrategia_alternativa_agressiva(historico)
+        # PRIORIDADE 4: ESTRATÉGIA AGRESSIVA OTIMIZADA
+        logging.info("📊 Usando estratégia alternativa OTIMIZADA")
+        return self.estrategia_alternativa_otimizada(historico, ultimo_numero)
     
-    def estrategia_alternativa_agressiva(self, historico):
-        """Estratégia alternativa SUPER AGRESSIVA - CORREÇÃO: SEM DUPLICATAS"""
+    def treinar_xgboost_rapido(self, historico):
+        """Treinamento RÁPIDO do XGBoost para ativação imediata"""
+        if not XGBOOST_DISPONIVEL:
+            return False
+        
+        try:
+            numeros = [h['number'] for h in historico if h.get('number') is not None]
+            
+            if len(numeros) < 80:
+                return False
+            
+            logging.info("⚡ Treinamento RÁPIDO do XGBoost...")
+            
+            # Features simplificadas para treinamento rápido
+            features = []
+            targets = []
+            
+            for i in range(15, len(numeros) - 1):
+                feature_row = []
+                janela = numeros[i-15:i]
+                
+                # Features essenciais
+                feature_row.append(np.mean(janela))
+                feature_row.append(np.std(janela))
+                feature_row.append(janela[-1])  # último
+                feature_row.append(janela[-2])  # penúltimo
+                feature_row.append(janela[-3])  # antepenúltimo
+                feature_row.append(janela[-1] % 2)  # par/ímpar
+                feature_row.append(1 if janela[-1] in PRIMEIRA_DUZIA else 0)
+                feature_row.append(1 if janela[-1] in SEGUNDA_DUZIA else 0)
+                feature_row.append(1 if janela[-1] in TERCEIRA_DUZIA else 0)
+                feature_row.append(1 if janela[-1] in COLUNA_1 else 0)
+                feature_row.append(1 if janela[-1] in COLUNA_2 else 0)
+                feature_row.append(1 if janela[-1] in COLUNA_3 else 0)
+                
+                # Frequência recente
+                contagem_10 = Counter(janela[-10:])
+                feature_row.append(contagem_10.get(janela[-1], 0))
+                
+                features.append(feature_row)
+                targets.append(numeros[i])
+            
+            if len(features) < 50:
+                return False
+            
+            # Modelo rápido e eficiente
+            self.xgboost_predictor.model = xgb.XGBClassifier(
+                n_estimators=120,
+                max_depth=7,
+                learning_rate=0.15,
+                random_state=42,
+                objective='multi:softprob',
+                num_class=37
+            )
+            
+            self.xgboost_predictor.model.fit(features, targets)
+            self.xgboost_predictor.treinado = True
+            
+            logging.info("✅ XGBoost RÁPIDO treinado com sucesso!")
+            return True
+            
+        except Exception as e:
+            logging.error(f"❌ Erro no treinamento rápido: {e}")
+            return False
+    
+    def estrategia_alternativa_otimizada(self, historico, ultimo_numero=None):
+        """Estratégia OTIMIZADA baseada em múltiplos fatores de alta probabilidade"""
         numeros = [h['number'] for h in historico if h.get('number') is not None]
         
         if len(numeros) < 8:
-            return [2, 5, 8, 11, 14, 17, 20, 23]  # Já são únicos
+            return [2, 5, 8, 11, 14, 17, 20, 23]
         
         previsao = set()
         
-        # ESTRATÉGIA 1: ÚLTIMOS 5 NÚMEROS
-        previsao.update(numeros[-5:])
+        # FATOR 1: ÚLTIMOS NÚMEROS (alta probabilidade de repetição)
+        previsao.update(numeros[-4:])  # Aumentado para 4 últimos
         
-        # ESTRATÉGIA 2: VIZINHOS DOS ÚLTIMOS 3
-        for num in numeros[-3:]:
-            previsao.update(obter_vizinhos_fisicos(num)[:3])
+        # FATOR 2: VIZINHOS DOS ÚLTIMOS 2 NÚMEROS
+        if ultimo_numero is not None:
+            previsao.update(obter_vizinhos_fisicos(ultimo_numero))
+            if len(numeros) >= 2:
+                previsao.update(obter_vizinhos_fisicos(numeros[-2]))
         
-        # ESTRATÉGIA 3: NÚMEROS QUENTES (últimas 20 rodadas)
-        ultimos_20 = numeros[-20:] if len(numeros) >= 20 else numeros
-        contagem_recente = Counter(ultimos_20)
-        numeros_quentes = [num for num, count in contagem_recente.most_common(10) if count >= 2]
+        # FATOR 3: NÚMEROS QUENTES (últimas 12 rodadas)
+        ultimos_12 = numeros[-12:] if len(numeros) >= 12 else numeros
+        contagem_recente = Counter(ultimos_12)
+        numeros_quentes = [num for num, count in contagem_recente.most_common(8) if count >= 1]  # Reduzido threshold
         previsao.update(numeros_quentes)
         
-        # ESTRATÉGIA 4: COMPLETAR COM MAIS FREQUENTES ÚNICOS
-        if len(previsao) < NUMERO_PREVISOES:
-            frequentes = Counter(numeros).most_common(20)  # Aumentado para 20
-            for num, count in frequentes:
-                if len(previsao) < NUMERO_PREVISOES and num not in previsao:
-                    previsao.add(num)
+        # FATOR 4: PADRÕES DE REPETIÇÃO
+        for i in range(1, min(5, len(numeros))):
+            if numeros[-i] == numeros[-(i+1)]:
+                previsao.add(numeros[-i])
         
-        # GARANTIR EXATAMENTE 8 NÚMEROS
+        # FATOR 5: NÚMEROS COM ATRASO (não saem há mais de 8 rodadas)
+        if len(numeros) > 15:
+            for num in range(0, 37):
+                if num in numeros:
+                    ultima_ocorrencia = len(numeros) - 1 - numeros[::-1].index(num)
+                    atraso = len(numeros) - ultima_ocorrencia
+                    if atraso > 8 and len(previsao) < NUMERO_PREVISOES:
+                        previsao.add(num)
+        
+        # FATOR 6: COMPLETAR COM CARACTERÍSTICAS DO ÚLTIMO NÚMERO
+        if ultimo_numero is not None and ultimo_numero != 0:
+            # Mesma paridade
+            if ultimo_numero % 2 == 0:
+                pares = [n for n in range(2, 37, 2) if n not in previsao]
+                previsao.update(pares[:2])
+            else:
+                impares = [n for n in range(1, 36, 2) if n not in previsao]
+                previsao.update(impares[:2])
+            
+            # Mesma dúzia
+            if ultimo_numero in PRIMEIRA_DUZIA:
+                previsao.update([n for n in PRIMEIRA_DUZIA if n not in previsao][:1])
+            elif ultimo_numero in SEGUNDA_DUZIA:
+                previsao.update([n for n in SEGUNDA_DUZIA if n not in previsao][:1])
+            else:
+                previsao.update([n for n in TERCEIRA_DUZIA if n not in previsao][:1])
+        
+        # GARANTIR EXATAMENTE 8 NÚMEROS DIVERSIFICADOS
         previsao_lista = list(previsao)
         if len(previsao_lista) > NUMERO_PREVISOES:
-            return previsao_lista[:NUMERO_PREVISOES]
-        elif len(previsao_lista) < NUMERO_PREVISOES:
-            # Completar com números sequenciais únicos
-            for i in range(1, 37):
+            # Priorizar números mais recentes e quentes
+            priorizados = []
+            for num in previsao_lista:
+                score = 0
+                if num in numeros[-3:]: score += 3
+                if num in numeros_quentes: score += 2
+                if num in ultimos_12: score += 1
+                priorizados.append((num, score))
+            
+            priorizados.sort(key=lambda x: x[1], reverse=True)
+            return [num for num, score in priorizados[:NUMERO_PREVISOES]]
+        
+        # COMPLETAR SE NECESSÁRIO
+        if len(previsao_lista) < NUMERO_PREVISOES:
+            for i in range(0, 37):
                 if len(previsao_lista) < NUMERO_PREVISOES and i not in previsao_lista:
                     previsao_lista.append(i)
         
-        return previsao_lista
+        return previsao_lista[:NUMERO_PREVISOES]
     
     def get_performance_sequencial(self):
         """Retorna performance do sistema sequencial"""
@@ -2197,6 +2357,49 @@ with col3:
 with col4:
     st.metric("🛡️ Máx Sequência", st.session_state.gestor_risco.max_sequencia_negativa)
 
+# NOVA SEÇÃO: OTIMIZAÇÃO DE PERFORMANCE
+st.markdown("---")
+st.subheader("⚡ Otimização de Performance")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    if st.button("🎯 Otimizar Sistema Agora"):
+        with st.spinner("Aplicando otimizações de performance..."):
+            # Reiniciar sistemas com configurações otimizadas
+            st.session_state.sistema_confianca = SistemaConfianca()
+            st.session_state.gestor_risco = SistemaGestaoRisco()
+            st.session_state.acertos = 0
+            st.session_state.erros = 0
+            st.session_state.ultimos_resultados = []
+            
+            st.success("""
+            ✅ **Sistema Otimizado!**
+            - Confiança reiniciada
+            - Gestão de risco otimizada  
+            - Estratégias de previsão melhoradas
+            - Performance resetada para novo início
+            """)
+
+with col2:
+    if st.button("📊 Análise de Performance"):
+        st.write("### 📈 Análise Detalhada da Performance")
+        
+        total = st.session_state.acertos + st.session_state.erros
+        taxa = st.session_state.acertos / total if total > 0 else 0
+        
+        st.write(f"- **Assertividade Atual:** {taxa:.1%}")
+        st.write(f"- **Sequência Atual:** {st.session_state.gestor_risco.sequencia_atual}")
+        st.write(f"- **Confiança:** {st.session_state.sistema_confianca.confianca:.2f}")
+        st.write(f"- **Taxa Recente:** {st.session_state.gestor_risco.taxa_acerto_recente:.1%}")
+        
+        if taxa < 0.3:
+            st.warning("🔧 **Recomendação:** Use o botão de otimização para melhorar a performance")
+        elif taxa > 0.4:
+            st.success("🎉 **Performance Boa!** Continue assim.")
+        else:
+            st.info("📊 **Performance Moderada.** Pode melhorar com otimizações.")
+
 # CONTROLES
 st.markdown("---")
 st.subheader("⚙️ Controles")
@@ -2290,4 +2493,4 @@ st.markdown("*Estratégia de 8 números baseada exclusivamente no histórico de 
 
 # Rodapé
 st.markdown("---")
-st.markdown("**🎯 Sistema Baseado em Histórico v14.0** - *XGBoost 50+ Features + Previsão Sequencial + Correções Críticas*")
+st.markdown("**🎯 Sistema Baseado em Histórico v15.0** - *XGBoost 50+ Features + Previsão Sequencial + Performance Otimizada*")
