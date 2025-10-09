@@ -161,12 +161,12 @@ class SistemaPrevisaoSequencial:
         for i in range(len(numeros) - 1):
             if numeros[i] == numero_atual:
                 # Pegar os PRÓXIMOS 5 números (aumentado de 3 para 5)
-                for j in range(1, min(6, len(numeros) - i)):
+                for j in range(1, min(9p, len(numeros) - i)):
                     sequencias_encontradas.append(numeros[i + j])
         
         # ESTRATÉGIA 2: Padrões de repetição em intervalos específicos
         padroes_intervalo = []
-        for i in range(len(numeros) - 5):
+        for i in range(len(numeros) - 8):
             if numeros[i] == numero_atual:
                 # Verificar padrões: número atual -> próximo -> próximo
                 if i + 2 < len(numeros):
@@ -176,7 +176,7 @@ class SistemaPrevisaoSequencial:
         
         # ESTRATÉGIA 3: Números que são VIZINHOS dos que saem após
         vizinhos_sequencia = []
-        for num in sequencias_encontradas[:10]:  # Pegar os 10 mais frequentes
+        for num in sequencias_encontradas[:15]:  # Pegar os 10 mais frequentes
             vizinhos_sequencia.extend(obter_vizinhos_fisicos(num))
         
         # COMBINAR TODAS AS ESTRATÉGIAS
