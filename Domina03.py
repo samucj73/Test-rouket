@@ -79,7 +79,7 @@ FASE_ESPECIALISTA = 150
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # =============================
-# ENGINEERING DE FEATURES AVANÇADO - 50+ FEATURES
+# ENGINEERING DE FEATURES AVANÇADO - 50+ FEATURES (VERSÃO CORRIGIDA)
 # =============================
 class FeatureEngineer:
     def __init__(self):
@@ -87,7 +87,7 @@ class FeatureEngineer:
         self.feature_names = []
         
     def criar_features_avancadas(self, historico, window_sizes=[5, 10, 15]):
-        """Cria 50+ features avançadas para treinamento do XGBoost"""
+        """Cria 50+ features avançadas para treinamento do XGBoost - VERSÃO CORRIGIDA"""
         if len(historico) < max(window_sizes) + 5:
             return [], []
             
@@ -141,8 +141,11 @@ class FeatureEngineer:
             # === FEATURES DE PADRÕES COMPLEXOS ===
             janela_15 = numeros[i-15:i] if i >= 15 else numeros[:i]
             
-            # 6. Padrões de Repetição
-            repeticoes = sum(1 for j in range(1, min(5, len(janela_15))) if janela_15[-j] == ultimo_num else 0
+            # 6. Padrões de Repetição - CORREÇÃO APLICADA
+            repeticoes = 0
+            for j in range(1, min(5, len(janela_15))):
+                if janela_15[-j] == ultimo_num:
+                    repeticoes += 1
             feature_row.append(repeticoes)
             
             # 7. Frequências Relativas
@@ -180,20 +183,25 @@ class FeatureEngineer:
             else:
                 feature_row.extend([0, 0])
             
-            # 12. Padrões de Série
-            series_par_impar = []
+            # 12. Padrões de Série - CORREÇÃO APLICADA
+            series_par_impar = 0
             for j in range(1, min(6, len(janela_15))):
-                if janela_15[-j] % 2 == janela_15[-(j+1)] % 2 if j < len(janela_15)-1 else False:
-                    series_par_impar.append(1)
+                if j < len(janela_15) and janela_15[-j] % 2 == janela_15[-(j+1)] % 2:
+                    series_par_impar += 1
                 else:
                     break
-            feature_row.append(len(series_par_impar))
+            feature_row.append(series_par_impar)
             
             # === FEATURES DE TENDÊNCIA ===
             # 13. Tendência de Direção
             if len(janela_15) > 5:
                 ultimos_5 = janela_15[-5:]
-                tendencia = sum(1 for j in range(1, len(ultimos_5)) if ultimos_5[j] > ultimos_5[j-1] else -1)
+                tendencia = 0
+                for j in range(1, len(ultimos_5)):
+                    if ultimos_5[j] > ultimos_5[j-1]:
+                        tendencia += 1
+                    else:
+                        tendencia -= 1
                 feature_row.append(tendencia)
             else:
                 feature_row.append(0)
