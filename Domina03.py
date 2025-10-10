@@ -98,7 +98,7 @@ def analisar_padroes_dinamicos(historico):
     }
     
     # 🎯 ANÁLISE DE NÚMEROS QUENTES (últimas 15 rodadas)
-    ultimos_15 = numeros[-15:]
+    ultimos_15 = numeros[-15:] if len(numeros) >= 15 else numeros
     contagem_15 = Counter(ultimos_15)
     padroes['quentes'] = [num for num, count in contagem_15.most_common(10) if count >= 2]
     
@@ -205,7 +205,7 @@ def aplicar_estrategia_recuperacao(gestor, sequencia_negativa):
     # ESTRATÉGIA PARA SEQUÊNCIAS LONGAS (5+)
     if sequencia_negativa >= 5:
         # Foco em números MUITO QUENTES (últimas 8 rodadas)
-        ultimos_8 = numeros[-8:]
+        ultimos_8 = numeros[-8:] if len(numeros) >= 8 else numeros
         contagem_8 = Counter(ultimos_8)
         numeros_muito_quentes = [num for num, count in contagem_8.most_common(6) if count >= 2]
         estrategia_numeros.update(numeros_muito_quentes)
@@ -1226,7 +1226,7 @@ class IA_Assertiva:
         previsao_recuperacao = set()
         
         # 🎯 ESTRATÉGIA 1: NÚMEROS SUPER QUENTES
-        ultimos_10 = numeros[-10:]
+        ultimos_10 = numeros[-10:] if len(numeros) >= 10 else numeros
         contagem_10 = Counter(ultimos_10)
         super_quentes = [num for num, count in contagem_10.most_common(8) if count >= 2]
         previsao_recuperacao.update(super_quentes[:4])  # Top 4 mais quentes
@@ -1544,8 +1544,8 @@ class GestorAssertivo:
             "historico_total": historico_size,
             "confianca": "Alta" if historico_size > 100 else "Média" if historico_size > 50 else "Baixa",
             "estrategia_ativa": "Núcleo Histórico",
-            "numeros_quentes": analise.get("numeros_quentes", []),
-            "padrao_detectado": len(analise.get("padroes_repeticao", [])) > 0
+            "numeros_quentes": analise.get("numeros_quentes", []) if analise else [],
+            "padrao_detectado": len(analise.get("padroes_repeticao", [])) > 0 if analise else False
         }
     
     def get_performance_sequencial(self):
@@ -1725,7 +1725,7 @@ try:
                 return "RISCO_MODERADO"
             
             numeros = [h['number'] for h in historico]
-            ultimos_8 = numeros[-8:]
+            ultimos_8 = numeros[-8:] if len(numeros) >= 8 else numeros
             
             # Verificar quantos dos números propostos saíram recentemente
             acertos_previstos = len(set(ultimos_8) & set(entrada_proposta))
@@ -1902,23 +1902,36 @@ if historico_size >= 10:
     
     with col1:
         st.write("**🔥 Números Quentes:**")
-        if padroes['quentes']:
-            quentes_formatados = [f"{num} ({count}×)" for num, count in 
-                                Counter([h['number'] for h in st.session_state.gestor.historico[-15:] 
-                                        if h.get('number') is not None]).most_common(5)]
-            st.write(", ".join(quentes_formatados))
+        if padroes and padroes['quentes']:
+            # CORREÇÃO: Evitar acesso a índices negativos
+            historico_lista = list(st.session_state.gestor.historico)
+            if len(historico_lista) >= 15:
+                ultimos_15 = historico_lista[-15:]
+            else:
+                ultimos_15 = historico_lista
+                
+            numeros_ultimos_15 = [h['number'] for h in ultimos_15 if h.get('number') is not None]
+            if numeros_ultimos_15:
+                contador_15 = Counter(numeros_ultimos_15)
+                quentes_formatados = []
+                for num in padroes['quentes'][:5]:
+                    count = contador_15.get(num, 0)
+                    quentes_formatados.append(f"{num} ({count}×)")
+                st.write(", ".join(quentes_formatados))
+            else:
+                st.write(", ".join(map(str, padroes['quentes'][:5])))
         else:
             st.write("Padrão não identificado")
         
         st.write("**🔄 Repetições Recentes:**")
-        if padroes['repetidos']:
+        if padroes and padroes['repetidos']:
             st.write(", ".join(map(str, padroes['repetidos'][:3])))
         else:
             st.write("Nenhuma repetição forte")
     
     with col2:
         st.write("**❄️ Números Frios:**")
-        if padroes['frios']:
+        if padroes and padroes['frios']:
             st.write(f"{len(padroes['frios'])} números ausentes")
             if len(padroes['frios']) <= 10:
                 st.write(", ".join(map(str, sorted(padroes['frios'][:8]))))
@@ -1926,7 +1939,7 @@ if historico_size >= 10:
             st.write("Todos números apareceram")
         
         st.write("**🎯 Vizinhança Quente:**")
-        if padroes['vizinhos_quentes']:
+        if padroes and padroes['vizinhos_quentes']:
             st.write(", ".join(map(str, padroes['vizinhos_quentes'][:4])))
         else:
             st.write("Sem vizinhança estratégica")
@@ -2025,13 +2038,19 @@ with col3:
         # Mostrar análise avançada baseada em histórico
         numeros = [h['number'] for h in st.session_state.gestor.historico if h.get('number') is not None]
         if numeros:
-            st.info(f"🔍 Últimos 10 números: {numeros[-10:]}")
+            # CORREÇÃO: Evitar índices negativos
+            if len(numeros) >= 10:
+                st.info(f"🔍 Últimos 10 números: {numeros[-10:]}")
+            else:
+                st.info(f"🔍 Todos os números: {numeros}")
+                
             st.info(f"📊 Números mais frequentes: {Counter(numeros).most_common(5)}")
             
             # Mostrar análise de padrões
             analise = analisar_padroes_dinamicos(st.session_state.gestor.historico)
-            st.info(f"🎯 Números quentes: {analise.get('numeros_quentes', [])}")
-            st.info(f"🔄 Padrões repetição: {analise.get('padroes_repeticao', [])}")
+            if analise:
+                st.info(f"🎯 Números quentes: {analise.get('numeros_quentes', [])}")
+                st.info(f"🔄 Padrões repetição: {analise.get('padroes_repeticao', [])}")
             
             # Mostrar status XGBoost detalhado
             xgboost_status = st.session_state.gestor.get_status_xgboost()
