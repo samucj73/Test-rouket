@@ -39,7 +39,9 @@ defaults = {
     "reds": 0,
     "historico_probs": deque(maxlen=30),
     "nova_entrada": False,
-    "tempo_alerta": 0
+    "tempo_alerta": 0,
+    "greens_terminal": 0,
+    "greens_vizinho": 0
 }
 for k, v in defaults.items():
     if k not in st.session_state:
@@ -166,7 +168,7 @@ if len(historico_numeros) >= 14:
             entrada_expandida, key=lambda n: score_numero(n), reverse=True
         )
 
-        entrada_inteligente = sorted(entrada_classificada[:15])  # 🔹 Ordena do menor ao maior
+        entrada_inteligente = sorted(entrada_classificada[:15])
 
         chave_alerta = f"{dominantes}-{entrada_inteligente}"
         if chave_alerta not in st.session_state.alertas_enviados:
@@ -200,6 +202,20 @@ if st.session_state.entrada_atual:
 
         if resultado == "✅ GREEN":
             st.session_state.greens += 1
+
+            # === Verifica se o green foi terminal ou vizinho ===
+            terminais = [n % 10 for n in historico_numeros[-14:-2]]
+            dominantes = [t for t, _ in Counter(terminais).most_common(2)]
+            numeros_terminais = [n for n in range(37) if n % 10 in dominantes]
+            vizinhos_terminais = set()
+            for n in numeros_terminais:
+                vizinhos_terminais.update(get_vizinhos(n))
+
+            if numero_atual in numeros_terminais:
+                st.session_state.greens_terminal += 1
+            elif numero_atual in vizinhos_terminais:
+                st.session_state.greens_vizinho += 1
+
         else:
             st.session_state.reds += 1
 
@@ -219,8 +235,8 @@ if st.session_state.entrada_atual:
     st.session_state.entrada_atual = []
     st.session_state.entrada_info = None
 
-# === INTERFACE ===
-col1, col2, col3 = st.columns(3)
+# === INTERFACE DE MÉTRICAS ===
+col1, col2, col3, col4, col5 = st.columns(5)
 with col1:
     st.metric("✅ GREENS", st.session_state.greens)
 with col2:
@@ -229,6 +245,17 @@ with col3:
     total = st.session_state.greens + st.session_state.reds
     taxa = (st.session_state.greens / total * 100) if total > 0 else 0
     st.metric("🎯 Taxa de Acerto", f"{taxa:.1f}%")
+with col4:
+    st.metric("🎯 GREEN Terminal", st.session_state.greens_terminal)
+with col5:
+    st.metric("🎯 GREEN Vizinho", st.session_state.greens_vizinho)
+
+# === MÉTRICA DE PROPORÇÃO TERMINAL / VIZINHO ===
+total_greens = st.session_state.greens_terminal + st.session_state.greens_vizinho
+if total_greens > 0:
+    pct_terminal = (st.session_state.greens_terminal / total_greens) * 100
+    pct_vizinho = (st.session_state.greens_vizinho / total_greens) * 100
+    st.info(f"💡 Distribuição dos acertos GREEN → Terminal: {pct_terminal:.1f}% | Vizinho: {pct_vizinho:.1f}%")
 
 # === ALERTA VISUAL DE NOVA ENTRADA ===
 if st.session_state.nova_entrada and time.time() - st.session_state.tempo_alerta < 5:
@@ -236,6 +263,7 @@ if st.session_state.nova_entrada and time.time() - st.session_state.tempo_alerta
 else:
     st.session_state.nova_entrada = False
 
+# === HISTÓRICO E INFORMAÇÕES ===
 st.subheader("📊 Últimos números")
 st.write(list(st.session_state.historico)[-15:])
 
