@@ -109,7 +109,7 @@ class XGBoostRoletaIA:
         
         for i in range(6, len(numeros) - 1):
             feature_row = []
-            janela = numeros[i-12:i]
+            janela = numeros[i-6:i]
             
             # Features básicas
             feature_row.append(np.mean(janela))
