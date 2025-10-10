@@ -90,8 +90,8 @@ class XGBoostRoletaIA:
         self.performance = {"acertos": 0, "erros": 0}
         self.feature_names = []
 
-SISTEMA XGBOOST COMPLETO
-# =============================
+#SISTEMA XGBOOST COMPLETO
+# ==========
 
 class XGBoostRoletaIA:
     def __init__(self):
