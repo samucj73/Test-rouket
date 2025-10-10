@@ -6,35 +6,40 @@ import joblib
 from collections import Counter, deque
 from streamlit_autorefresh import st_autorefresh
 import pandas as pd
+import matplotlib.pyplot as plt
 from sklearn.linear_model import SGDClassifier
 from sklearn.exceptions import NotFittedError
 
 # === CONFIGURAÇÕES ===
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
-CHAT_ID = "-1002932611974"
+CHAT_ID = "5121457416"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 MODELO_PATH = "modelo_incremental.pkl"
 HISTORICO_PATH = "historico.pkl"
 
 # === INICIALIZAÇÃO ===
 st.set_page_config(layout="wide")
-st.title("🎯 Estratégia IA Inteligente (Otimizada e Probabilística)")
+st.title("🎯 Estratégia IA Inteligente - Otimizada e Simplificada")
 
-# Carrega histórico salvo
+# === VARIÁVEIS DE ESTADO ===
 if os.path.exists(HISTORICO_PATH):
     historico_salvo = joblib.load(HISTORICO_PATH)
     st.session_state.historico = deque(historico_salvo, maxlen=200)
 else:
     st.session_state.historico = deque(maxlen=200)
 
-if "ultimo_timestamp" not in st.session_state:
-    st.session_state.ultimo_timestamp = None
-if "entrada_atual" not in st.session_state:
-    st.session_state.entrada_atual = []
-if "entrada_info" not in st.session_state:
-    st.session_state.entrada_info = None
-if "alertas_enviados" not in st.session_state:
-    st.session_state.alertas_enviados = set()
+defaults = {
+    "ultimo_timestamp": None,
+    "entrada_atual": [],
+    "entrada_info": None,
+    "alertas_enviados": set(),
+    "greens": 0,
+    "reds": 0,
+    "historico_probs": deque(maxlen=30),
+}
+for k, v in defaults.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
 
 # === AUTOREFRESH ===
 st_autorefresh(interval=2500, key="refresh")
@@ -75,7 +80,7 @@ def carregar_modelo():
 def salvar_modelo(modelo):
     joblib.dump(modelo, MODELO_PATH)
 
-# === CAPTURA API ===
+# === CAPTURA DA API ===
 try:
     resposta = requests.get(API_URL, timeout=5)
     if resposta.status_code == 200:
@@ -83,15 +88,14 @@ try:
         try:
             numero = int(dados["data"]["result"]["outcome"]["number"])
             timestamp = dados["data"]["settledAt"]
-        except Exception as e:
-            st.error(f"Erro ao extrair número da API: {e}")
+        except Exception:
             numero = None
 
         if numero is not None and timestamp != st.session_state.ultimo_timestamp:
             st.session_state.historico.append(numero)
             st.session_state.ultimo_timestamp = timestamp
-            st.success(f"🎯 Novo número: {numero} - {timestamp}")
             joblib.dump(list(st.session_state.historico), HISTORICO_PATH)
+            st.success(f"🎯 Novo número: {numero}")
     else:
         st.error("Erro ao acessar a API.")
 except Exception as e:
@@ -123,28 +127,22 @@ if len(st.session_state.historico) >= 14:
         modelo.partial_fit(df_X, y, classes=[0, 1])
     except:
         modelo.fit(df_X, y)
-
     salvar_modelo(modelo)
-    st.info("✅ Modelo treinado com histórico!")
 
 # === PREVISÃO E ENTRADA INTELIGENTE ===
 historico_numeros = list(st.session_state.historico)
 
 if len(historico_numeros) >= 14:
     janela = historico_numeros[-14:-2]
-    numero_13 = historico_numeros[-2]
-    numero_14 = historico_numeros[-1]
     X = pd.DataFrame([extrair_features(janela)])
 
     try:
         probs = modelo.predict_proba(X)[0]
         prob = probs[1] if len(probs) > 1 else 0
-    except NotFittedError:
-        st.warning("🔧 IA ainda não treinada.")
+    except Exception:
         prob = 0
-    except Exception as e:
-        st.error(f"Erro na previsão: {e}")
-        prob = 0
+
+    st.session_state.historico_probs.append(prob)
 
     if prob > 0.60 and not st.session_state.entrada_atual:
         terminais = [n % 10 for n in janela]
@@ -154,7 +152,6 @@ if len(historico_numeros) >= 14:
         entrada_principal = [n for n in range(37) if n % 10 in dominantes]
         entrada_expandida = expandir_com_vizinhos(entrada_principal)
 
-        # === NOVO: Entrada Inteligente Probabilística (máx. 15) ===
         historico_recente = list(st.session_state.historico)[-50:]
         contagem_freq = Counter(historico_recente)
 
@@ -164,21 +161,18 @@ if len(historico_numeros) >= 14:
             return freq + (1.5 if n in entrada_principal else 0) + (0.5 if dist <= 2 else 0)
 
         entrada_classificada = sorted(
-            entrada_expandida,
-            key=lambda n: score_numero(n),
-            reverse=True
+            entrada_expandida, key=lambda n: score_numero(n), reverse=True
         )
 
         entrada_inteligente = entrada_classificada[:15]
 
-        chave_alerta = f"{numero_13}-{dominantes}"
+        chave_alerta = f"{dominantes}-{entrada_inteligente}"
         if chave_alerta not in st.session_state.alertas_enviados:
             st.session_state.alertas_enviados.add(chave_alerta)
-            mensagem = (
-                f"🎯 Entrada IA Inteligente (Prob {prob:.2f}):\n"
-                f"Terminais: {dominantes}\n"
-                f"Entrada otimizada (máx 15): {entrada_inteligente}"
-            )
+
+            # === ALERTA SIMPLIFICADO ===
+            numeros_linha = " ".join(str(n) for n in entrada_inteligente)
+            mensagem = f"{numeros_linha}\n{numeros_linha}"
             enviar_telegram(mensagem)
 
         st.session_state.entrada_atual = entrada_inteligente
@@ -194,17 +188,19 @@ if st.session_state.entrada_atual:
     numero_atual = st.session_state.historico[-1]
 
     resultado = "✅ GREEN" if numero_atual in entrada else "❌ RED"
+    if resultado == "✅ GREEN":
+        st.session_state.greens += 1
+    else:
+        st.session_state.reds += 1
+
     cor = "green" if resultado == "✅ GREEN" else "red"
     st.markdown(f"<h3 style='color:{cor}'>{resultado} - Último número: {numero_atual}</h3>", unsafe_allow_html=True)
 
     chave_resultado = f"{numero_atual}-{tuple(sorted(entrada))}"
     if chave_resultado not in st.session_state.alertas_enviados:
         st.session_state.alertas_enviados.add(chave_resultado)
+        enviar_telegram(resultado)
 
-        mensagem_resultado = f"{resultado} 🎯\nNúmero: {numero_atual}\nEntrada: {entrada}"
-        enviar_telegram(mensagem_resultado)
-
-        # Aprendizado incremental
         try:
             janela = list(st.session_state.historico)[-14:-2]
             if len(janela) == 12:
@@ -212,17 +208,33 @@ if st.session_state.entrada_atual:
                 y_novo = [1 if numero_atual in entrada else 0]
                 modelo.partial_fit(X_novo, y_novo, classes=[0, 1])
                 salvar_modelo(modelo)
-                st.success("🔄 IA atualizada com novo feedback!")
         except Exception as e:
-            st.error(f"Erro no feedback de aprendizado: {e}")
+            st.error(f"Erro no feedback: {e}")
 
     st.session_state.entrada_atual = []
     st.session_state.entrada_info = None
 
 # === INTERFACE ===
+col1, col2 = st.columns(2)
+with col1:
+    st.metric("✅ GREENS", st.session_state.greens)
+with col2:
+    st.metric("❌ REDS", st.session_state.reds)
+
 st.subheader("📊 Últimos números")
 st.write(list(st.session_state.historico)[-15:])
 
+# === GRÁFICO DE CONFIANÇA ===
+if st.session_state.historico_probs:
+    st.subheader("📈 Confiança da IA (últimas previsões)")
+    plt.figure(figsize=(6, 3))
+    plt.plot(list(st.session_state.historico_probs), marker='o')
+    plt.title("Evolução da Probabilidade")
+    plt.xlabel("Últimas Rodadas")
+    plt.ylabel("Confiança")
+    plt.grid(True)
+    st.pyplot(plt)
+
 if st.session_state.entrada_info:
-    st.subheader("📥 Entrada atual sugerida pela IA")
+    st.subheader("📥 Entrada atual sugerida")
     st.write(st.session_state.entrada_info)
