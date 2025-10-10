@@ -12,14 +12,14 @@ from sklearn.exceptions import NotFittedError
 
 # === CONFIGURAÇÕES ===
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
-CHAT_ID = "-1002932611974"
+CHAT_ID = "5121457416"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 MODELO_PATH = "modelo_incremental.pkl"
 HISTORICO_PATH = "historico.pkl"
 
 # === INICIALIZAÇÃO ===
 st.set_page_config(layout="wide")
-st.title("🎯 Estratégia IA Inteligente - Versão Estável com Contador Corrigido")
+st.title("🎯 Estratégia IA Inteligente - Versão Final (Alertas Simplificados)")
 
 # === VARIÁVEIS DE ESTADO ===
 if os.path.exists(HISTORICO_PATH):
@@ -172,7 +172,7 @@ if len(historico_numeros) >= 14:
             st.session_state.alertas_enviados.add(chave_alerta)
 
             numeros_linha = " ".join(str(n) for n in entrada_inteligente)
-            mensagem = f"{numeros_linha}\n{numeros_linha}"
+            mensagem = f"{numeros_linha}"  # ✅ agora só uma linha
             enviar_telegram(mensagem)
 
         st.session_state.entrada_atual = entrada_inteligente
@@ -182,25 +182,31 @@ if len(historico_numeros) >= 14:
             "probabilidade": round(prob, 3)
         }
 
-# === FEEDBACK (CORRIGIDO) ===
+# === FEEDBACK (CORRIGIDO E OTIMIZADO) ===
 if st.session_state.entrada_atual:
     entrada = st.session_state.entrada_atual
     numero_atual = st.session_state.historico[-1]
     chave_feedback = f"{numero_atual}-{tuple(sorted(entrada))}"
 
-    # Só processa se ainda não foi contado
     if chave_feedback not in st.session_state.feedbacks_processados:
         resultado = "✅ GREEN" if numero_atual in entrada else "❌ RED"
         cor = "green" if resultado == "✅ GREEN" else "red"
 
-        st.markdown(f"<h3 style='color:{cor}'>{resultado} - Último número: {numero_atual}</h3>", unsafe_allow_html=True)
+        # Mensagem mais clara
+        st.markdown(
+            f"<h3 style='color:{cor}'>{resultado} • Número: {numero_atual}</h3>",
+            unsafe_allow_html=True
+        )
 
+        # Atualiza contador
         if resultado == "✅ GREEN":
             st.session_state.greens += 1
         else:
             st.session_state.reds += 1
 
-        enviar_telegram(resultado)
+        # Mensagem no Telegram com número
+        enviar_telegram(f"{resultado} • Saiu {numero_atual}")
+
         st.session_state.feedbacks_processados.add(chave_feedback)
 
         # Aprendizado incremental
@@ -242,7 +248,3 @@ if st.session_state.historico_probs:
     plt.ylabel("Confiança")
     plt.grid(True)
     st.pyplot(plt)
-
-if st.session_state.entrada_info:
-    st.subheader("📥 Entrada atual sugerida")
-    st.write(st.session_state.entrada_info)
