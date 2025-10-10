@@ -1,4 +1,4 @@
-# RoletaHybridIA.py - SISTEMA ESPECIALISTA COM XGBOOST 50+ FEATURES
+# RoletaHybridIA.py - SISTEMA 100% BASEADO EM HISTÓRICO COM ESTRATÉGIAS DE RECUPERAÇÃO
 import streamlit as st
 import json
 import os
@@ -67,7 +67,7 @@ COLUNA_3 = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36]
 # CONFIGURAÇÃO ESPECIALISTA - ESTRATÉGIA 100% BASEADA EM HISTÓRICO
 # =============================
 MIN_HISTORICO_TREINAMENTO = 695
-NUMERO_PREVISOES = 12  # SEMPRE 8 NÚMEROS BASEADOS NO HISTÓRICO
+NUMERO_PREVISOES = 8  # SEMPRE 8 NÚMEROS BASEADOS NO HISTÓRICO
 
 # Fases do sistema
 FASE_INICIAL = 30
@@ -77,6 +77,161 @@ FASE_ESPECIALISTA = 150
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# =============================
+# ESTRATÉGIAS DINÂMICAS BASEADAS NO HISTÓRICO
+# =============================
+
+def analisar_padroes_dinamicos(historico):
+    """Analisa padrões reais do histórico sem números fixos"""
+    numeros = [h['number'] for h in historico if h.get('number') is not None]
+    
+    if len(numeros) < 10:
+        return None
+    
+    padroes = {
+        'quentes': [],
+        'frios': [], 
+        'repetidos': [],
+        'vizinhos_quentes': [],
+        'ciclos': []
+    }
+    
+    # 🎯 ANÁLISE DE NÚMEROS QUENTES (últimas 15 rodadas)
+    ultimos_15 = numeros[-15:]
+    contagem_15 = Counter(ultimos_15)
+    padroes['quentes'] = [num for num, count in contagem_15.most_common(10) if count >= 2]
+    
+    # 🎯 ANÁLISE DE NÚMEROS FRIOS (ausentes nas últimas rodadas)
+    todos_numeros = set(range(37))
+    numeros_recentes = set(ultimos_15)
+    padroes['frios'] = list(todos_numeros - numeros_recentes)
+    
+    # 🎯 PADRÕES DE REPETIÇÃO (análise temporal)
+    repeticoes_recentes = []
+    for i in range(1, min(8, len(numeros))):
+        if numeros[-i] == numeros[-(i+1)]:
+            repeticoes_recentes.append(numeros[-i])
+    padroes['repetidos'] = repeticoes_recentes
+    
+    # 🎯 VIZINHANÇA INTELIGENTE (apenas de números quentes)
+    vizinhos_estrategicos = set()
+    for num in padroes['quentes'][:5]:  # Top 5 números quentes
+        vizinhos = obter_vizinhos_fisicos(num)
+        # Priorizar vizinhos que também são quentes
+        for vizinho in vizinhos:
+            if vizinho in padroes['quentes']:
+                vizinhos_estrategicos.add(vizinho)
+    padroes['vizinhos_quentes'] = list(vizinhos_estrategicos)
+    
+    return padroes
+
+def gerar_estrategia_recuperacao_dinamica(historico, sequencia_negativa):
+    """Gera estratégia 100% baseada no histórico real"""
+    padroes = analisar_padroes_dinamicos(historico)
+    
+    if not padroes:
+        return None
+    
+    estrategia_numeros = set()
+    
+    # 🚨 ESTRATÉGIA PARA SEQUÊNCIAS LONGAS (5+)
+    if sequencia_negativa >= 5:
+        # FOCO MÁXIMO EM NÚMEROS SUPER QUENTES
+        if padroes['quentes']:
+            estrategia_numeros.update(padroes['quentes'][:4])
+        
+        # REPETIÇÕES RECENTES (padrão mais forte)
+        if padroes['repetidos']:
+            estrategia_numeros.update(padroes['repetidos'][:3])
+        
+        # VIZINHANÇA DE NÚMEROS QUENTES
+        if padroes['vizinhos_quentes']:
+            estrategia_numeros.update(padroes['vizinhos_quentes'][:3])
+    
+    # 🔥 ESTRATÉGIA CRÍTICA (8+ erros)
+    elif sequencia_negativa >= 8:
+        # FOCO ABSOLUTO NOS PADRÕES MAIS FORTES
+        estrategia_numeros.update(padroes['quentes'][:3])
+        estrategia_numeros.update(padroes['repetidos'][:2])
+        
+        # ADICIONAR ALGUNS FRIOS ESTRATÉGICOS (virada de ciclo)
+        if padroes['frios'] and len(estrategia_numeros) < 6:
+            estrategia_numeros.update(padroes['frios'][:2])
+    
+    # 🔄 ESTRATÉGIA PREVENTIVA (3-4 erros)
+    elif sequencia_negativa >= 3:
+        # ESTRATÉGIA BALANCEADA
+        if padroes['quentes']:
+            estrategia_numeros.update(padroes['quentes'][:3])
+        if padroes['vizinhos_quentes']:
+            estrategia_numeros.update(padroes['vizinhos_quentes'][:2])
+    
+    # Converter para lista e limitar
+    estrategia_lista = list(estrategia_numeros)
+    return estrategia_lista[:8] if estrategia_lista else None
+
+# =============================
+# ESTRATÉGIA DE RECUPERAÇÃO AVANÇADA
+# =============================
+
+def ativar_modo_recuperacao_avancado(gestor, sequencia_negativa):
+    """Ativa estratégias especiais para recuperação de sequências negativas"""
+    estrategias = {
+        3: "🔄 Modo Recuperação Leve - Reduzindo exposição",
+        5: "⚠️ Modo Recuperação Moderado - Estratégia conservadora", 
+        7: "🚨 Modo Recuperação Agressivo - Foco em números quentes",
+        8: "🔥 MODO CRÍTICO - Estratégia máxima de recuperação"
+    }
+    
+    estrategia = estrategias.get(sequencia_negativa, "⚡ Modo Normal")
+    logging.info(f"{estrategia} (Sequência: {sequencia_negativa})")
+    
+    # Aplicar estratégias baseadas na sequência
+    if sequencia_negativa >= 5:
+        return aplicar_estrategia_recuperacao(gestor, sequencia_negativa)
+    
+    return None
+
+def aplicar_estrategia_recuperacao(gestor, sequencia_negativa):
+    """Aplica estratégias específicas de recuperação baseadas no histórico"""
+    numeros = [h['number'] for h in gestor.historico if h.get('number') is not None]
+    
+    if len(numeros) < 10:
+        return None
+    
+    estrategia_numeros = set()
+    
+    # ESTRATÉGIA PARA SEQUÊNCIAS LONGAS (5+)
+    if sequencia_negativa >= 5:
+        # Foco em números MUITO QUENTES (últimas 8 rodadas)
+        ultimos_8 = numeros[-8:]
+        contagem_8 = Counter(ultimos_8)
+        numeros_muito_quentes = [num for num, count in contagem_8.most_common(6) if count >= 2]
+        estrategia_numeros.update(numeros_muito_quentes)
+        
+        # Vizinhança dos últimos 3 números
+        for num in numeros[-3:]:
+            estrategia_numeros.update(obter_vizinhos_fisicos(num)[:2])
+        
+        # Padrões de repetição forte
+        for i in range(1, min(4, len(numeros))):
+            if numeros[-i] == numeros[-(i+1)]:
+                estrategia_numeros.add(numeros[-i])
+    
+    # ESTRATÉGIA CRÍTICA (8+ erros)
+    if sequencia_negativa >= 8:
+        # Foco máximo em números RECENTES do histórico
+        estrategia_numeros.update(numeros[-4:])
+        
+        # Adicionar números de alta probabilidade baseados no histórico
+        if len(numeros) > 30:
+            frequentes = Counter(numeros).most_common(8)
+            estrategia_numeros.update([num for num, count in frequentes[:4]])
+    
+    # Limitar a 6 números para foco máximo
+    estrategia_lista = list(estrategia_numeros)
+    return estrategia_lista[:6] if len(estrategia_lista) >= 6 else None
 
 # =============================
 # ENGINEERING DE FEATURES AVANÇADO - 50+ FEATURES (VERSÃO CORRIGIDA)
@@ -589,38 +744,46 @@ class SistemaGestaoRisco:
         self.max_sequencia_negativa = 0
         self.taxa_acerto_recente = 0.5
     
-    def deve_entrar(self, analise_risco, confianca, historico_size):
-        """CRITÉRIOS OTIMIZADOS - MAIS INTELIGENTES"""
+    def deve_entrar(self, analise_risco, confianca, historico_size, sequencia_negativa=None):
+        """CRITÉRIOS SUPER OTIMIZADOS - COM RECUPERAÇÃO INTELIGENTE"""
         
         # Atualizar taxa de acerto recente
         if len(self.resultados_recentes) > 0:
             self.taxa_acerto_recente = self.resultados_recentes.count("GREEN") / len(self.resultados_recentes)
         
-        # NÃO ENTRAR EM CONDIÇÕES CRÍTICAS
+        # 🔴 NÃO ENTRAR EM CONDIÇÕES CRÍTICAS
+        if self.sequencia_atual >= 8:
+            logging.warning("⛔ SEQUÊNCIA CRÍTICA - Não entrar até recuperação")
+            return False
+            
+        if confianca < 0.2:
+            logging.warning("⛔ Confiança extremamente baixa - não entrar")
+            return False
+            
+        if self.taxa_acerto_recente < 0.15 and len(self.resultados_recentes) >= 6:
+            logging.warning("⛔ Performance recente catastrófica - não entrar")
+            return False
+        
+        # 🟡 MODERAÇÃO PARA SEQUÊNCIAS NEGATIVAS
         if self.sequencia_atual >= 5:
-            logging.warning("⏹️ Sequência negativa muito longa - não entrar")
-            return False
-            
-        if confianca < 0.25:
-            logging.warning("⏹️ Confiança muito baixa - não entrar")
-            return False
-            
-        if self.taxa_acerto_recente < 0.2 and len(self.resultados_recentes) >= 5:
-            logging.warning("⏹️ Performance recente muito baixa - não entrar")
-            return False
+            # Apenas entradas de ALTA qualidade
+            if not (analise_risco == "RISCO_BAIXO" and confianca > 0.6):
+                logging.warning("🟡 Sequência negativa - apenas entradas premium")
+                return False
         
-        # ENTRAR EM CONDIÇÕES FAVORÁVEIS
-        if analise_risco == "RISCO_BAIXO" and confianca > 0.4:
+        # 🟢 CONDIÇÕES IDEAIS
+        if analise_risco == "RISCO_BAIXO" and confianca > 0.5:
             return True
             
-        if analise_risco == "RISCO_MODERADO" and confianca > 0.5:
+        if analise_risco == "RISCO_MODERADO" and confianca > 0.65:
             return True
             
-        if analise_risco == "RISCO_ALTO" and confianca > 0.7 and historico_size > 50:
+        if self.taxa_acerto_recente > 0.45 and confianca > 0.4:
             return True
         
-        # ENTRA SE TIVER BOM HISTÓRICO RECENTE
-        if self.taxa_acerto_recente > 0.4 and confianca > 0.35:
+        # 🔄 MODO RECUPERAÇÃO CONTROLADO
+        if self.sequencia_atual >= 3 and confianca > 0.35 and analise_risco != "RISCO_ALTO":
+            logging.info("🔄 Entrada em modo recuperação controlada")
             return True
             
         return False
@@ -932,470 +1095,6 @@ def validar_previsao(previsao):
     return previsao_limpa
 
 # =============================
-# FUNÇÕES DE DIAGNÓSTICO E CORREÇÃO
-# =============================
-
-def verificar_e_corrigir_session_state():
-    """Verifica e corrige problemas no session_state"""
-    problemas = []
-    
-    # Verificar gestor
-    if 'gestor' not in st.session_state:
-        st.session_state.gestor = GestorAssertivo()
-        problemas.append("✅ Gestor reinicializado")
-    
-    # Verificar outros atributos críticos
-    atributos_criticos = [
-        'previsao_atual', 'acertos', 'erros', 'ultimo_numero',
-        'sistema_confianca', 'gestor_risco'
-    ]
-    
-    for attr in atributos_criticos:
-        if attr not in st.session_state:
-            if attr == 'previsao_atual':
-                st.session_state[attr] = []
-            elif attr in ['acertos', 'erros']:
-                st.session_state[attr] = 0
-            elif attr == 'ultimo_numero':
-                st.session_state[attr] = None
-            elif attr == 'sistema_confianca':
-                st.session_state[attr] = SistemaConfianca()
-            elif attr == 'gestor_risco':
-                st.session_state[attr] = SistemaGestaoRisco()
-            problemas.append(f"✅ {attr} reinicializado")
-    
-    return problemas
-
-def executar_diagnostico_completo(gestor):
-    """Executa diagnóstico completo do sistema"""
-    diagnostico = {}
-    
-    try:
-        # 1. Verificar histórico
-        historico_size = len(gestor.historico)
-        numeros_validos = len([h for h in gestor.historico if h.get('number') is not None])
-        diagnostico["Total de Registros"] = f"{historico_size} (Válidos: {numeros_validos})"
-        
-        # 2. Verificar XGBoost
-        xgb_treinado = gestor.ia_assertiva.xgboost_predictor.treinado
-        modo_ativo = gestor.ia_assertiva.modo_xgboost_ativo
-        diagnostico["XGBoost Treinado"] = xgb_treinado
-        diagnostico["Modo XGBoost Ativo"] = modo_ativo
-        
-        # 3. Verificar se pode treinar
-        pode_treinar = historico_size >= 150 and numeros_validos >= 150
-        diagnostico["Pode Treinar XGBoost"] = pode_treinar
-        
-        # 4. Verificar modelo
-        if hasattr(gestor.ia_assertiva.xgboost_predictor, 'model'):
-            modelo_existe = gestor.ia_assertiva.xgboost_predictor.model is not None
-            diagnostico["Modelo Existe"] = modelo_existe
-        else:
-            diagnostico["Modelo Existe"] = "Atributo não encontrado"
-            
-        # 5. Verificar features
-        if hasattr(gestor.ia_assertiva.xgboost_predictor.feature_engineer, 'feature_names'):
-            num_features = len(gestor.ia_assertiva.xgboost_predictor.feature_engineer.feature_names)
-            diagnostico["Número de Features"] = num_features
-        else:
-            diagnostico["Número de Features"] = "Não disponível"
-            
-        return diagnostico
-        
-    except Exception as e:
-        diagnostico["Erro no Diagnóstico"] = str(e)
-        return diagnostico
-
-def forcar_ativacao_xgboost(gestor):
-    """Força a ativação do XGBoost"""
-    try:
-        logging.info("🎯 FORÇANDO ATIVAÇÃO DO XGBOOST...")
-        
-        # 1. Verificar dados
-        historico_size = len(gestor.historico)
-        numeros_validos = len([h for h in gestor.historico if h.get('number') is not None])
-        
-        if numeros_validos < 100:
-            logging.error(f"❌ Dados insuficientes: {numeros_validos} registros válidos")
-            return False
-        
-        # 2. Tentar carregar modelo existente primeiro
-        try:
-            if os.path.exists(XGB_MODEL_PATH):
-                gestor.ia_assertiva.xgboost_predictor.model = xgb.XGBClassifier()
-                gestor.ia_assertiva.xgboost_predictor.model.load_model(XGB_MODEL_PATH)
-                gestor.ia_assertiva.xgboost_predictor.treinado = True
-                gestor.ia_assertiva.modo_xgboost_ativo = True
-                logging.info("✅ XGBoost carregado do arquivo existente")
-                return True
-        except:
-            logging.warning("📝 Nenhum modelo existente encontrado, treinando novo...")
-        
-        # 3. Treinar novo modelo
-        logging.info("🤖 Iniciando treinamento FORÇADO do XGBoost...")
-        
-        # Usar treinamento direto sem muitas verificações
-        numeros = [h['number'] for h in gestor.historico if h.get('number') is not None]
-        
-        if len(numeros) < 100:
-            return False
-        
-        # Criar features simplificadas para teste rápido
-        features = []
-        targets = []
-        
-        for i in range(20, len(numeros) - 1):
-            feature_row = []
-            janela = numeros[i-20:i]
-            
-            # Features básicas para teste
-            feature_row.append(np.mean(janela))
-            feature_row.append(np.std(janela))
-            feature_row.append(janela[-1])  # último
-            feature_row.append(janela[-2])  # penúltimo
-            feature_row.append(janela[-1] % 2)  # par/ímpar
-            feature_row.append(1 if janela[-1] in PRIMEIRA_DUZIA else 0)
-            feature_row.append(1 if janela[-1] in SEGUNDA_DUZIA else 0)
-            feature_row.append(1 if janela[-1] in TERCEIRA_DUZIA else 0)
-            feature_row.append(1 if janela[-1] in COLUNA_1 else 0)
-            feature_row.append(1 if janela[-1] in COLUNA_2 else 0)
-            feature_row.append(1 if janela[-1] in COLUNA_3 else 0)
-            
-            features.append(feature_row)
-            targets.append(numeros[i])
-        
-        if len(features) < 50:
-            return False
-        
-        # Modelo rápido
-        model = xgb.XGBClassifier(
-            n_estimators=150,
-            max_depth=8,
-            learning_rate=0.1,
-            random_state=42,
-            objective='multi:softprob',
-            num_class=37
-        )
-        
-        model.fit(features, targets)
-        gestor.ia_assertiva.xgboost_predictor.model = model
-        gestor.ia_assertiva.xgboost_predictor.treinado = True
-        gestor.ia_assertiva.modo_xgboost_ativo = True
-        
-        # Salvar modelo
-        model.save_model(XGB_MODEL_PATH)
-        
-        logging.info("✅ XGBoost treinado e ativado com SUCESSO!")
-        return True
-        
-    except Exception as e:
-        logging.error(f"❌ Erro crítico na ativação forçada: {e}")
-        return False
-
-# =============================
-# ALERTA SIMPLIFICADO PARA TELEGRAM
-# =============================
-def enviar_alerta_inteligente(entrada_estrategica, confianca, performance):
-    """Envia alerta SUPER SIMPLES apenas com números"""
-    
-    # Ordenar os números
-    numeros_ordenados = sorted(entrada_estrategica)
-    
-    # Dividir em duas linhas (4 números por linha)
-    primeira_linha = '   '.join(map(str, numeros_ordenados[:4]))
-    segunda_linha = '   '.join(map(str, numeros_ordenados[4:]))
-    
-    # Mensagem SUPER SIMPLES - apenas números
-    mensagem = f"{primeira_linha}\n{segunda_linha}"
-    
-    enviar_telegram(mensagem, TELEGRAM_TOKEN_ALTERNATIVO, TELEGRAM_CHAT_ID_ALTERNATIVO)
-
-# =============================
-# ESTRATÉGIA 100% BASEADA EM HISTÓRICO - VERSÃO CORRIGIDA
-# =============================
-
-def gerar_entrada_ultra_assertiva(previsao_completa, historico):
-    """CORREÇÃO: Garantir que a entrada seja EXATAMENTE a previsão"""
-    
-    # SIMPLESMENTE RETORNAR A PREVISÃO - SEM FILTROS EXTRAS
-    previsao_valida = validar_previsao(previsao_completa)
-    
-    if len(previsao_valida) >= 6:
-        return previsao_valida[:NUMERO_PREVISOES]
-    
-    # FALLBACK: usar últimos números do histórico
-    numeros = [h['number'] for h in historico if h.get('number') is not None]
-    if numeros:
-        # CORREÇÃO: REMOVER DUPLICATAS NO FALLBACK
-        numeros_unicos = []
-        for num in numeros[-NUMERO_PREVISOES*2:]:  # Pegar mais para garantir unicidade
-            if num not in numeros_unicos:
-                numeros_unicos.append(num)
-            if len(numeros_unicos) >= NUMERO_PREVISOES:
-                break
-        return numeros_unicos[:NUMERO_PREVISOES]
-    
-    return [2, 5, 8, 11, 14, 17, 20, 23]
-
-def enviar_alerta_assertivo(entrada_estrategica, ultimo_numero, historico, performance):
-    """Envia alerta ULTRA SIMPLES para Telegram"""
-    
-    try:
-        if not entrada_estrategica:
-            return
-        
-        # Usar sistema de confiança para alerta inteligente
-        confianca = st.session_state.sistema_confianca.confianca
-        enviar_alerta_inteligente(entrada_estrategica, confianca, performance)
-        
-        # Salvar entrada atual
-        st.session_state.ultima_entrada_estrategica = entrada_estrategica
-        
-        logging.info(f"📤 Alerta SIMPLES enviado: {len(entrada_estrategica)} números ÚNICOS")
-        
-    except Exception as e:
-        logging.error(f"Erro ao enviar alerta: {e}")
-
-def verificar_resultado_entrada_anterior(numero_sorteado):
-    """Verificação RÁPIDA de resultado BASEADO NO HISTÓRICO"""
-    
-    entrada_anterior = st.session_state.get('ultima_entrada_estrategica', [])
-    
-    if not entrada_anterior or numero_sorteado is None:
-        return None
-    
-    # Atualizar sistema de confiança
-    acertou = numero_sorteado in entrada_anterior
-    st.session_state.sistema_confianca.atualizar_confianca(acertou)
-    
-    # Atualizar gestão de risco
-    st.session_state.gestor_risco.atualizar_sequencia("GREEN" if acertou else "RED")
-    
-    if acertou:
-        mensagem_green = f"✅ **GREEN!** Acertamos {numero_sorteado}!"
-        enviar_telegram(mensagem_green, TELEGRAM_TOKEN_ALTERNATIVO, TELEGRAM_CHAT_ID_ALTERNATIVO)
-        return "GREEN"
-    else:
-        mensagem_red = f"❌ **RED** {numero_sorteado} não estava"
-        enviar_telegram(mensagem_red, TELEGRAM_TOKEN_ALTERNATIVO, TELEGRAM_CHAT_ID_ALTERNATIVO)
-        return "RED"
-
-# =============================
-# SISTEMA DE RECUPERAÇÃO E RESET
-# =============================
-def verificar_estrategia_recuperacao(historico, ultimos_resultados):
-    """Verifica se devemos ativar estratégia de recuperação"""
-    
-    if len(ultimos_resultados) < 3:
-        return False
-    
-    # Ativar recuperação se tivermos 3 REDs consecutivos
-    if ultimos_resultados[-3:] == ["RED", "RED", "RED"]:
-        return True
-    
-    # Ativar recuperação se taxa de acerto estiver abaixo de 25%
-    total = len(ultimos_resultados)
-    acertos = ultimos_resultados.count("GREEN")
-    taxa = acertos / total if total > 0 else 0
-    
-    return taxa < 0.25
-
-def verificar_reset_sistema(acertos, erros, performance_sequencial):
-    """Reinicia o sistema se performance for catastrófica"""
-    total_geral = acertos + erros
-    total_sequencial = performance_sequencial["acertos"] + performance_sequencial["erros"]
-    
-    if total_geral > 20:
-        taxa_geral = acertos / total_geral
-        taxa_sequencial = performance_sequencial["acertos"] / total_sequencial if total_sequencial > 0 else 0
-        
-        # Se ambas as taxas forem abaixo de 10%, resetar
-        if taxa_geral < 0.1 and taxa_sequencial < 0.1:
-            logging.warning("🔄 PERFORMANCE CATASTRÓFICA - Reiniciando sistema...")
-            return True
-    
-    return False
-
-# =============================
-# ANÁLISES 100% BASEADAS EM HISTÓRICO - VERSÃO MAIS AGRESSIVA
-# =============================
-
-def analisar_padroes_assertivos(historico):
-    """Análise AGGRESSIVA focada em padrões de alta probabilidade BASEADA NO HISTÓRICO"""
-    
-    numeros = [h['number'] for h in historico if h.get('number') is not None]
-    
-    if len(numeros) < 5:
-        return {"numeros_quentes": [], "padrao_atual": "inicial"}
-    
-    # ANÁLISE DE PADRÕES DE REPETIÇÃO IMEDIATA (baseado no histórico)
-    padroes_repeticao = []
-    for i in range(1, len(numeros)):
-        if numeros[i] == numeros[i-1]:
-            padroes_repeticao.append(numeros[i])
-    
-    # ANÁLISE DE SEQUÊNCIAS DE VIZINHANÇA (baseado no histórico)
-    sequencias_vizinhanca = []
-    for i in range(1, min(6, len(numeros))):
-        vizinhos_anteriores = obter_vizinhos_fisicos(numeros[-i])
-        if numeros[-1] in vizinhos_anteriores:
-            sequencias_vizinhanca.extend(vizinhos_anteriores)
-    
-    # NÚMEROS QUENTES (últimas 12 rodadas) - baseado no histórico
-    ultimos_12 = numeros[-12:] if len(numeros) >= 12 else numeros
-    contagem_recente = Counter(ultimos_12)
-    numeros_quentes = [num for num, count in contagem_recente.most_common(6) if count >= 2]
-    
-    # NÚMEROS COM ATRASO (não saem há mais de 6 rodadas) - baseado no histórico
-    numeros_atrasados = []
-    for num in range(0, 37):
-        if num in numeros:
-            ultima_ocorrencia = len(numeros) - 1 - numeros[::-1].index(num)
-            atraso = len(numeros) - ultima_ocorrencia
-            if atraso > 6:
-                numeros_atrasados.append(num)
-        else:
-            # Se nunca saiu, é um atrasado extremo
-            numeros_atrasados.append(num)
-    
-    # PADRÃO DE ALTERNÂNCIA DE CORES (baseado no histórico)
-    cores_alternadas = []
-    if len(numeros) >= 2:
-        ultima_cor = "preto" if numeros[-1] in [2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35] else "vermelho" if numeros[-1] in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36] else "zero"
-        penultima_cor = "preto" if numeros[-2] in [2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35] else "vermelho" if numeros[-2] in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36] else "zero"
-        
-        if ultima_cor == penultima_cor:
-            # Tendência de mudança de cor
-            if ultima_cor == "vermelho":
-                cores_alternadas = [n for n in range(1,37) if n in [2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35]]
-            else:
-                cores_alternadas = [n for n in range(1,37) if n in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]]
-    
-    return {
-        "numeros_quentes": numeros_quentes[:4],
-        "padroes_repeticao": list(set(padroes_repeticao))[:3],
-        "sequencias_vizinhanca": list(set(sequencias_vizinhanca))[:4],
-        "numeros_atrasados": numeros_atrasados[:4],
-        "cores_alternadas": cores_alternadas[:3],
-        "ultima_cor": ultima_cor if len(numeros) >= 1 else "indefinido",
-        "total_analisado": len(numeros)
-    }
-
-def identificar_nucleo_assertivo(historico):
-    """Versão MAIS AGRESSIVA do núcleo assertivo"""
-    
-    numeros = [h['number'] for h in historico if h.get('number') is not None]
-    
-    if len(numeros) < 3:
-        return numeros
-    
-    analise = analisar_padroes_assertivos(historico)
-    
-    nucleo = set()
-    
-    # PRIORIDADE MÁXIMA: Números que saíram nas últimas 3 rodadas
-    nucleo.update(numeros[-3:])
-    
-    # ADICIONAR MAIS NÚMEROS QUENTES
-    nucleo.update(analise["numeros_quentes"])
-    
-    # ADICIONAR TODOS OS PADRÕES DE REPETIÇÃO
-    nucleo.update(analise["padroes_repeticao"])
-    
-    # ADICIONAR MAIS SEQUÊNCIAS DE VIZINHANÇA
-    nucleo.update(analise["sequencias_vizinhanca"])
-    
-    # ADICIONAR MAIS NÚMEROS ATRASADOS
-    if analise["numeros_atrasados"]:
-        nucleo.update(analise["numeros_atrasados"][:3])
-    
-    # SE AINDA PRECISAR DE MAIS NÚMEROS, USAR MAIS HISTÓRICO
-    if len(nucleo) < NUMERO_PREVISOES:
-        nucleo.update(numeros[-10:])
-    
-    # GARANTIR QUE SEMPRE TENHAMOS PELO MENOS 5 NÚMEROS
-    if len(nucleo) < 5:
-        frequentes_geral = Counter(numeros).most_common(10)
-        for num, freq in frequentes_geral:
-            if len(nucleo) < 8 and num not in nucleo:
-                nucleo.add(num)
-    
-    return list(nucleo)[:NUMERO_PREVISOES]
-
-def filtrar_por_confirmacao_rapida(historico, numeros_candidatos):
-    """Filtro RÁPIDO baseado em confirmações imediatas DO HISTÓRICO"""
-    
-    if len(numeros_candidatos) <= NUMERO_PREVISOES:
-        return numeros_candidatos
-    
-    numeros = [h['number'] for h in historico if h.get('number') is not None]
-    
-    scores = {}
-    
-    for numero in numeros_candidatos:
-        score = 0
-        
-        # CONFIRMAÇÃO 1: É UM DOS ÚLTIMOS 3 NÚMEROS? (histórico)
-        if numero in numeros[-3:]:
-            score += 3
-        
-        # CONFIRMAÇÃO 2: É VIZINHO DOS ÚLTIMOS 2 NÚMEROS? (histórico)
-        for recente in numeros[-2:]:
-            if numero in obter_vizinhos_fisicos(recente):
-                score += 2
-                break
-        
-        # CONFIRMAÇÃO 3: TEVE REPETIÇÃO RECENTE (últimas 10 rodadas - histórico)
-        if numeros[-10:].count(numero) >= 2:
-            score += 2
-        
-        # CONFIRMAÇÃO 4: ESTÁ NA MESMA COLUNA DOS ÚLTIMOS NÚMEROS? (histórico)
-        ultimas_colunas = []
-        for num in numeros[-3:]:
-            if num in COLUNA_1: 
-                ultimas_colunas.append(1)
-            elif num in COLUNA_2: 
-                ultimas_colunas.append(2)
-            elif num in COLUNA_3: 
-                ultimas_colunas.append(3)
-        
-        if ultimas_colunas:
-            coluna_mais_comum = Counter(ultimas_colunas).most_common(1)[0][0]
-            if (coluna_mais_comum == 1 and numero in COLUNA_1) or \
-               (coluna_mais_comum == 2 and numero in COLUNA_2) or \
-               (coluna_mais_comum == 3 and numero in COLUNA_3):
-                score += 1
-        
-        # CONFIRMAÇÃO 5: É UM NÚMERO QUENTE? (histórico)
-        ultimos_12 = numeros[-12:] if len(numeros) >= 12 else numeros
-        if ultimos_12.count(numero) >= 2:
-            score += 1
-        
-        scores[numero] = score
-    
-    # SELECIONAR OS COM MAIOR SCORE (baseado no histórico)
-    melhores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-    return [num for num, score in melhores][:NUMERO_PREVISOES]
-
-def analisar_risco_entrada(historico, entrada_proposta):
-    """Analisa o risco de forma MAIS OTIMISTA"""
-    if len(historico) < 5:
-        return "RISCO_MODERADO"
-    
-    numeros = [h['number'] for h in historico]
-    ultimos_8 = numeros[-8:]
-    
-    # Verificar quantos dos números propostos saíram recentemente
-    acertos_previstos = len(set(ultimos_8) & set(entrada_proposta))
-    
-    if acertos_previstos >= 2:
-        return "RISCO_BAIXO"
-    elif acertos_previstos >= 1:
-        return "RISCO_MODERADO"
-    else:
-        return "RISCO_ALTO"
-
-# =============================
 # SISTEMA ESPECIALISTA 100% BASEADO EM HISTÓRICO COM XGBOOST
 # =============================
 class IA_Assertiva:
@@ -1516,6 +1215,52 @@ class IA_Assertiva:
         except Exception as e:
             logging.error(f"❌ Erro no treinamento rápido: {e}")
             return False
+
+    def gerar_previsao_recuperacao(self, historico, sequencia_negativa):
+        """Gera previsão OTIMIZADA para recuperação de sequências negativas"""
+        numeros = [h['number'] for h in historico if h.get('number') is not None]
+        
+        if len(numeros) < 8:
+            return None
+        
+        previsao_recuperacao = set()
+        
+        # 🎯 ESTRATÉGIA 1: NÚMEROS SUPER QUENTES
+        ultimos_10 = numeros[-10:]
+        contagem_10 = Counter(ultimos_10)
+        super_quentes = [num for num, count in contagem_10.most_common(8) if count >= 2]
+        previsao_recuperacao.update(super_quentes[:4])  # Top 4 mais quentes
+        
+        # 🎯 ESTRATÉGIA 2: PADRÕES FORTES DE REPETIÇÃO
+        padroes_fortes = []
+        for i in range(1, min(6, len(numeros))):
+            if numeros[-i] == numeros[-(i+1)]:
+                padroes_fortes.append(numeros[-i])
+                if len(padroes_fortes) >= 2:
+                    break
+        
+        previsao_recuperacao.update(padroes_fortes)
+        
+        # 🎯 ESTRATÉGIA 3: VIZINHANÇA INTELIGENTE
+        vizinhos_estrategicos = set()
+        for num in numeros[-3:]:
+            vizinhos = obter_vizinhos_fisicos(num)
+            # Priorizar vizinhos que também são quentes
+            vizinhos_quentes = [v for v in vizinhos if v in super_quentes]
+            vizinhos_estrategicos.update(vizinhos_quentes[:2])
+        
+        previsao_recuperacao.update(vizinhos_estrategicos)
+        
+        # 🎯 ESTRATÉGIA 4: NÚMEROS DE ALTA FREQUÊNCIA HISTÓRICA
+        if len(numeros) > 30:
+            frequentes_historico = Counter(numeros).most_common(8)
+            for num, count in frequentes_historico[:3]:
+                if num not in previsao_recuperacao:
+                    previsao_recuperacao.add(num)
+                    break
+        
+        previsao_lista = list(previsao_recuperacao)
+        return previsao_lista[:8] if len(previsao_lista) >= 6 else None
     
     def estrategia_alternativa_otimizada(self, historico, ultimo_numero=None):
         """Estratégia OTIMIZADA baseada em múltiplos fatores de alta probabilidade"""
@@ -1792,7 +1537,7 @@ class GestorAssertivo:
         historico_size = len(self.historico)
         modo_assertivo = historico_size >= FASE_AVANCADA
         
-        analise = analisar_padroes_assertivos(self.historico)
+        analise = analisar_padroes_dinamicos(self.historico)
         
         return {
             "modo_assertivo": modo_assertivo,
@@ -1894,21 +1639,26 @@ try:
         numero_real = resultado["number"]
         st.session_state.ultimo_numero = numero_real
 
-        # VERIFICAR RESET DO SISTEMA (CORREÇÃO CRÍTICA)
-        if verificar_reset_sistema(st.session_state.acertos, st.session_state.erros, 
-                                  st.session_state.gestor.get_performance_sequencial()):
-            st.session_state.acertos = 0
-            st.session_state.erros = 0
-            st.session_state.sistema_confianca = SistemaConfianca()
-            st.session_state.gestor_risco = SistemaGestaoRisco()
-            st.session_state.ultimos_resultados = []
-            logging.info("✅ Sistema reiniciado devido à performance baixa")
-
         # ATUALIZAR STATUS
         st.session_state.status_ia, st.session_state.estrategia_atual = st.session_state.gestor.get_status_sistema()
 
         # VERIFICAR ENTRADA ANTERIOR
-        st.session_state.resultado_entrada_anterior = verificar_resultado_entrada_anterior(numero_real)
+        entrada_anterior = st.session_state.get('ultima_entrada_estrategica', [])
+        if entrada_anterior and numero_real is not None:
+            acertou = numero_real in entrada_anterior
+            st.session_state.sistema_confianca.atualizar_confianca(acertou)
+            st.session_state.gestor_risco.atualizar_sequencia("GREEN" if acertou else "RED")
+            
+            if acertou:
+                st.session_state.acertos += 1
+                st.session_state.resultado_entrada_anterior = "GREEN"
+                mensagem_green = f"✅ **GREEN!** Acertamos {numero_real}!"
+                enviar_telegram(mensagem_green, TELEGRAM_TOKEN_ALTERNATIVO, TELEGRAM_CHAT_ID_ALTERNATIVO)
+            else:
+                st.session_state.erros += 1
+                st.session_state.resultado_entrada_anterior = "RED"
+                mensagem_red = f"❌ **RED** {numero_real} não estava"
+                enviar_telegram(mensagem_red, TELEGRAM_TOKEN_ALTERNATIVO, TELEGRAM_CHAT_ID_ALTERNATIVO)
 
         # ATUALIZAR HISTÓRICO DE RESULTADOS
         if st.session_state.resultado_entrada_anterior:
@@ -1916,18 +1666,7 @@ try:
             if len(st.session_state.ultimos_resultados) > 10:
                 st.session_state.ultimos_resultados.pop(0)
 
-        # CONFERIR PREVISÃO ANTERIOR
-        previsao_valida = validar_previsao(st.session_state.previsao_atual)
-        if previsao_valida:
-            acertou = numero_real in previsao_valida
-            if acertou:
-                st.session_state.acertos += 1
-                st.success(f"🎯 **ACERTOU!** Número {numero_real} estava na previsão!")
-            else:
-                st.session_state.erros += 1
-                st.error(f"🔴 Número {numero_real} não estava")
-
-        # VERIFICAR ACERTO DA PREVISÃO SEQUENCIAL (CORREÇÃO SIMPLIFICADA)
+        # VERIFICAR ACERTO DA PREVISÃO SEQUENCIAL
         if st.session_state.ultimo_numero:
             st.session_state.gestor.ia_assertiva.previsao_sequencial.verificar_acerto_sequencial(numero_real)
 
@@ -1935,11 +1674,37 @@ try:
         if st.session_state.ultimo_numero and st.session_state.gestor.ia_assertiva.xgboost_predictor.ultima_previsao:
             st.session_state.gestor.ia_assertiva.xgboost_predictor.verificar_acerto(numero_real)
 
-        # GERAR NOVA PREVISÃO BASEADA NO HISTÓRICO
-        nova_previsao = st.session_state.gestor.gerar_previsao_assertiva(st.session_state.ultimo_numero)
-        st.session_state.previsao_atual = validar_previsao(nova_previsao)
-        
-        # GERAR ENTRADA ULTRA ASSERTIVA (CORREÇÃO CRÍTICA: USAR PREVISÃO DIRETAMENTE)
+        # VERIFICAR SEQUÊNCIA NEGATIVA E ATIVAR RECUPERAÇÃO
+        sequencia_negativa = st.session_state.gestor_risco.sequencia_atual
+        modo_recuperacao_avancado = sequencia_negativa >= 5
+
+        if modo_recuperacao_avancado:
+            logging.warning(f"🚨 SEQUÊNCIA NEGATIVA: {sequencia_negativa} - Ativando modo recuperação...")
+            
+            # Gerar previsão especial de recuperação
+            previsao_recuperacao = st.session_state.gestor.ia_assertiva.gerar_previsao_recuperacao(
+                list(st.session_state.gestor.historico), 
+                sequencia_negativa
+            )
+            
+            if previsao_recuperacao and len(previsao_recuperacao) >= 6:
+                st.session_state.previsao_atual = validar_previsao(previsao_recuperacao)
+                st.warning(f"🔧 MODO RECUPERAÇÃO ATIVO - Sequência: {sequencia_negativa}")
+            else:
+                # Estratégia de recuperação alternativa
+                estrategia_recuperacao = aplicar_estrategia_recuperacao(
+                    st.session_state.gestor, 
+                    sequencia_negativa
+                )
+                if estrategia_recuperacao:
+                    st.session_state.previsao_atual = validar_previsao(estrategia_recuperacao)
+
+        # GERAR NOVA PREVISÃO BASEADA NO HISTÓRICO (se não em recuperação)
+        if not modo_recuperacao_avancado or len(st.session_state.previsao_atual) < 6:
+            nova_previsao = st.session_state.gestor.gerar_previsao_assertiva(st.session_state.ultimo_numero)
+            st.session_state.previsao_atual = validar_previsao(nova_previsao)
+
+        # GERAR ENTRADA ULTRA ASSERTIVA (usar previsão diretamente)
         entrada_assertiva = st.session_state.previsao_atual
         
         # Calcular performance
@@ -1951,47 +1716,52 @@ try:
             'taxa_acerto': f"{taxa_acerto:.1f}%"
         }
         
-        # LÓGICA SUPER AGRESSIVA DE DECISÃO (CORREÇÃO CRÍTICA)
+        # LÓGICA DE DECISÃO COM GESTÃO DE RISCO
         confianca_atual = st.session_state.sistema_confianca.confianca
+        
+        # Análise de risco baseada no histórico
+        def analisar_risco_entrada(historico, entrada_proposta):
+            if len(historico) < 5:
+                return "RISCO_MODERADO"
+            
+            numeros = [h['number'] for h in historico]
+            ultimos_8 = numeros[-8:]
+            
+            # Verificar quantos dos números propostos saíram recentemente
+            acertos_previstos = len(set(ultimos_8) & set(entrada_proposta))
+            
+            if acertos_previstos >= 2:
+                return "RISCO_BAIXO"
+            elif acertos_previstos >= 1:
+                return "RISCO_MODERADO"
+            else:
+                return "RISCO_ALTO"
+
         risco_entrada = analisar_risco_entrada(
             list(st.session_state.gestor.historico), 
             entrada_assertiva
         )
         
-        # VERIFICAR SE DEVEMOS ATIVAR MODO RECUPERAÇÃO
-        modo_recuperacao = verificar_estrategia_recuperacao(
-            list(st.session_state.gestor.historico), 
-            st.session_state.ultimos_resultados
-        )
-        
-        # DECISÃO FINAL DE ENTRADA - CRITÉRIOS SUPER AGRESSIVOS (CORREÇÃO)
+        # DECISÃO FINAL DE ENTRADA
         deve_entrar = st.session_state.gestor_risco.deve_entrar(
             risco_entrada, 
             confianca_atual,
-            len(st.session_state.gestor.historico)
+            len(st.session_state.gestor.historico),
+            sequencia_negativa
         )
-        
-        # CORREÇÃO FINAL: SEMPRE ENTRAR EM CONDIÇÕES NORMAIS
-        if not deve_entrar:
-            # APENAS NÃO ENTRAR EM CONDIÇÕES EXTREMAS
-            if risco_entrada == "RISCO_ALTO" and confianca_atual < 0.3 and len(st.session_state.gestor.historico) < 20:
-                deve_entrar = False
-                logging.warning("⏹️ Condições extremas - não entrar")
-            elif len(entrada_assertiva) < 6:
-                deve_entrar = False
-                logging.warning("⏹️ Previsão insuficiente - não entrar")
-            else:
-                deve_entrar = True
-                logging.info("🔥 Entrada forçada - Critérios normais")
         
         # ENVIAR ALERTA ASSERTIVO
         if deve_entrar and entrada_assertiva:
-            enviar_alerta_assertivo(
-                entrada_assertiva, 
-                numero_real, 
-                list(st.session_state.gestor.historico),
-                performance
-            )
+            # Função simplificada de envio
+            def enviar_alerta_inteligente(entrada_estrategica, confianca, performance):
+                numeros_ordenados = sorted(entrada_estrategica)
+                primeira_linha = '   '.join(map(str, numeros_ordenados[:4]))
+                segunda_linha = '   '.join(map(str, numeros_ordenados[4:]))
+                mensagem = f"{primeira_linha}\n{segunda_linha}"
+                enviar_telegram(mensagem, TELEGRAM_TOKEN_ALTERNATIVO, TELEGRAM_CHAT_ID_ALTERNATIVO)
+
+            enviar_alerta_inteligente(entrada_assertiva, confianca_atual, performance)
+            st.session_state.ultima_entrada_estrategica = entrada_assertiva
             logging.info(f"✅ Entrada enviada - Risco: {risco_entrada}, Confiança: {confianca_atual:.2f}")
         else:
             logging.warning(f"⏹️ Entrada não enviada - Risco: {risco_entrada}, Confiança: {confianca_atual:.2f}")
@@ -2000,10 +1770,9 @@ try:
 
 except Exception as e:
     logging.error(f"Erro no processamento: {e}")
-    st.error("🔴 Reiniciando sistema...")
+    st.error("🔴 Erro no processamento - usando fallback...")
     # Em caso de erro, usar os últimos números do histórico
     numeros = [h['number'] for h in st.session_state.gestor.historico if h.get('number') is not None]
-    # CORREÇÃO: REMOVER DUPLICATAS
     numeros_unicos = []
     for num in numeros[-NUMERO_PREVISOES*2:]:
         if num not in numeros_unicos:
@@ -2013,7 +1782,7 @@ except Exception as e:
     st.session_state.previsao_atual = numeros_unicos[:NUMERO_PREVISOES]
 
 # =============================
-# INTERFACE STREAMLIT 100% BASEADA EM HISTÓRICO COM XGBOOST 50+ FEATURES
+# INTERFACE STREAMLIT ATUALIZADA
 # =============================
 st.markdown("---")
 
@@ -2037,7 +1806,79 @@ if st.session_state.resultado_entrada_anterior:
     else:
         st.error(f"❌ **ENTRADA ANTERIOR: RED** {st.session_state.ultimo_numero} não estava")
 
+# SEÇÃO: STATUS DE RECUPERAÇÃO
+st.markdown("---")
+st.subheader("🔄 Status de Recuperação")
+
+sequencia_atual = st.session_state.gestor_risco.sequencia_atual
+confianca_atual = st.session_state.sistema_confianca.confianca
+
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    if sequencia_atual == 0:
+        st.success("✅ **Sequência:** Normal")
+    elif sequencia_atual <= 2:
+        st.info(f"🔸 **Sequência:** {sequencia_atual}")
+    elif sequencia_atual <= 4:
+        st.warning(f"⚠️ **Sequência:** {sequencia_atual}")
+    else:
+        st.error(f"🚨 **Sequência:** {sequencia_atual}")
+
+with col2:
+    if confianca_atual > 0.6:
+        st.success(f"💪 **Confiança:** {confianca_atual:.1%}")
+    elif confianca_atual > 0.4:
+        st.info(f"📊 **Confiança:** {confianca_atual:.1%}")
+    elif confianca_atual > 0.25:
+        st.warning(f"🔻 **Confiança:** {confianca_atual:.1%}")
+    else:
+        st.error(f"⛔ **Confiança:** {confianca_atual:.1%}")
+
+with col3:
+    taxa_recente = st.session_state.gestor_risco.taxa_acerto_recente
+    if taxa_recente > 0.4:
+        st.success(f"📈 **Taxa Recente:** {taxa_recente:.1%}")
+    elif taxa_recente > 0.25:
+        st.info(f"📊 **Taxa Recente:** {taxa_recente:.1%}")
+    else:
+        st.warning(f"🔻 **Taxa Recente:** {taxa_recente:.1%}")
+
+# Botão de recuperação emergencial
+if sequencia_atual >= 5:
+    st.markdown("---")
+    st.error("🚨 **MODO RECUPERAÇÃO NECESSÁRIO**")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("🔄 Ativar Recuperação Emergencial"):
+            with st.spinner("Ativando estratégia de recuperação..."):
+                # Reiniciar com estratégia conservadora
+                st.session_state.sistema_confianca.confianca = 0.5
+                st.session_state.gestor_risco.sequencia_atual = 0
+                st.session_state.ultimos_resultados = st.session_state.ultimos_resultados[-3:]  # Manter apenas últimos 3
+                
+                st.success("""
+                ✅ **Recuperação Ativada!**
+                - Confiança resetada para 50%
+                - Sequência zerada
+                - Estratégia conservadora ativada
+                """)
+    
+    with col2:
+        if st.button("🎯 Gerar Previsão Recuperação"):
+            previsao_rec = st.session_state.gestor.ia_assertiva.gerar_previsao_recuperacao(
+                list(st.session_state.gestor.historico),
+                sequencia_atual
+            )
+            if previsao_rec:
+                st.session_state.previsao_atual = validar_previsao(previsao_rec)
+                st.success(f"🎯 Previsão Recuperação: {sorted(previsao_rec)}")
+                st.rerun()
+
 # ANÁLISE DO SISTEMA
+st.markdown("---")
 st.subheader("🔍 Análise Baseada em Histórico")
 analise = st.session_state.gestor.get_analise_detalhada()
 
@@ -2049,221 +1890,48 @@ with col2:
 with col3:
     st.metric("📈 Padrão", "✅" if analise["padrao_detectado"] else "⏳")
 
-# NOVA SEÇÃO: DIAGNÓSTICO DO SISTEMA
+# SEÇÃO: ANÁLISE DOS PADRÕES ATUAIS
 st.markdown("---")
-st.subheader("🔍 Diagnóstico do Sistema")
+st.subheader("🔍 Análise dos Padrões Atuais")
 
-# Verificar e corrigir session_state primeiro
-if st.button("🔧 Verificar e Corrigir Session State"):
-    problemas = verificar_e_corrigir_session_state()
-    if problemas:
-        st.warning("⚠️ Problemas encontrados e corrigidos:")
-        for problema in problemas:
-            st.write(f"- {problema}")
-    else:
-        st.success("✅ Session State OK!")
-
-# Agora podemos acessar st.session_state.gestor com segurança
-if 'gestor' in st.session_state and hasattr(st.session_state.gestor, 'historico'):
-    st.write("### 📊 Status Detalhado do Histórico")
-    historico_size = len(st.session_state.gestor.historico)
-    numeros_validos = len([h for h in st.session_state.gestor.historico if h.get('number') is not None])
+historico_size = len([h for h in st.session_state.gestor.historico if h.get('number') is not None])
+if historico_size >= 10:
+    padroes = analisar_padroes_dinamicos(st.session_state.gestor.historico)
     
-    st.write(f"- **Total de registros:** {historico_size}")
-    st.write(f"- **Registros válidos:** {numeros_validos}")
-    
-    # Verificar XGBoost
-    if hasattr(st.session_state.gestor.ia_assertiva, 'xgboost_predictor'):
-        xgb_treinado = st.session_state.gestor.ia_assertiva.xgboost_predictor.treinado
-        modo_ativo = st.session_state.gestor.ia_assertiva.modo_xgboost_ativo
-        st.write(f"- **XGBoost Treinado:** {xgb_treinado}")
-        st.write(f"- **Modo XGBoost Ativo:** {modo_ativo}")
-    
-    # Botão de diagnóstico completo
-    if st.button("🔄 Executar Diagnóstico Completo"):
-        with st.spinner("Executando diagnóstico..."):
-            diagnostico = executar_diagnostico_completo(st.session_state.gestor)
-            st.write("### 📋 Resultado do Diagnóstico")
-            for item, status in diagnostico.items():
-                st.write(f"- **{item}:** {status}")
-
-    # Botão para forçar ativação do XGBoost
-    if st.button("🎯 Forçar Ativação do XGBoost AGORA"):
-        with st.spinner("Forçando ativação do XGBoost..."):
-            sucesso = forcar_ativacao_xgboost(st.session_state.gestor)
-            if sucesso:
-                st.success("✅ XGBoost ativado com sucesso!")
-                st.rerun()
-            else:
-                st.error("❌ Falha na ativação do XGBoost")
-else:
-    st.error("❌ Gestor não encontrado no session_state. Use o botão de correção acima.")
-
-# SEÇÃO: XGBOOST - MACHINE LEARNING AVANÇADO
-st.markdown("---")
-st.subheader("🤖 IA XGBoost - Machine Learning Avançado (50+ Features)")
-
-# Status do XGBoost
-xgboost_status = st.session_state.gestor.get_status_xgboost()
-
-col1, col2, col3, col4 = st.columns(4)
-with col1:
-    status_icon = "✅" if xgboost_status["treinado"] else "🔄"
-    st.metric("XGBoost Status", f"{status_icon} {'Treinado' if xgboost_status['treinado'] else 'Treinando'}")
-with col2:
-    modo_icon = "🎯" if xgboost_status["ativo"] else "📊"
-    st.metric("Modo Ativo", f"{modo_icon} {'XGBoost' if xgboost_status['ativo'] else 'Sequencial'}")
-with col3:
-    st.metric("Acertos ML", xgboost_status["performance"]["acertos"])
-with col4:
-    st.metric("Assertividade ML", xgboost_status["performance"]["taxa_acerto"])
-
-# NOVA SEÇÃO: ACELERADOR DE TREINAMENTO
-st.markdown("---")
-st.subheader("⚡ Acelerador de Treinamento XGBoost")
-
-if len(st.session_state.gestor.historico) < 150:
-    st.warning(f"📊 **Histórico atual: {len(st.session_state.gestor.historico)}/150 registros**")
-    
-    # Estimativa de tempo restante
-    registros_faltantes = 150 - len(st.session_state.gestor.historico)
-    estimativa_minutos = registros_faltantes * 3  # ~3 minutos por registro
-    
-    st.info(f"""
-    **Para ativar o XGBoost Avançado:**
-    - 📈 **Registros necessários:** {registros_faltantes} a mais
-    - ⏱️ **Estimativa:** ~{estimativa_minutos} minutos
-    - 🎯 **Benefícios:** 50+ features, maior precisão
-    """)
-    
-    # Botão para treinamento com dados limitados
-    if st.button("🚀 Treinar XGBoost com Dados Atuais (Modo Rápido)"):
-        with st.spinner("Treinando XGBoost com dados disponíveis (modo rápido)..."):
-            sucesso = st.session_state.gestor.treinar_xgb_rapido()
-            if sucesso:
-                st.success("✅ XGBoost treinado em modo rápido! Usando features básicas.")
-            else:
-                st.error("❌ Precisa de pelo menos 50 registros para treinamento rápido")
-
-else:
-    st.success("🎉 **Dados suficientes para XGBoost Avançado!**")
-    if not xgboost_status["treinado"]:
-        if st.button("🤖 Ativar XGBoost 50+ Features"):
-            with st.spinner("Ativando XGBoost com 50+ features..."):
-                sucesso = st.session_state.gestor.treinar_xgboost()
-                if sucesso:
-                    st.success("✅ XGBoost Avançado ativado com 50+ features!")
-                else:
-                    st.error("❌ Erro no treinamento avançado")
-
-# Controles XGBoost
-if XGBOOST_DISPONIVEL:
     col1, col2 = st.columns(2)
-    with col1:
-        if st.button("🤖 Treinar XGBoost Agora"):
-            with st.spinner("Treinando modelo de Machine Learning com 50+ features..."):
-                sucesso = st.session_state.gestor.treinar_xgboost()
-                if sucesso:
-                    st.success("✅ XGBoost treinado com sucesso! (50+ features)")
-                else:
-                    st.error("❌ Falha no treinamento. Mais dados necessários (150+ registros)")
-    with col2:
-        if st.button("🔄 Forçar Re-treinamento"):
-            with st.spinner("Re-treinando modelo com features expandidas..."):
-                sucesso = st.session_state.gestor.treinar_xgboost(force_retrain=True)
-                if sucesso:
-                    st.success("✅ XGBoost re-treinado com features expandidas!")
-                else:
-                    st.warning("⚠️ Verifique se tem dados suficientes (150+ registros)")
-else:
-    st.warning("⚠️ XGBoost não disponível - usando métodos tradicionais")
-
-# Informações do modelo
-if xgboost_status["treinado"]:
-    st.success("""
-    **🎯 XGBoost Avançado Ativo:**
-    - **50+ Features** expandidas
-    - **Multi-janela temporal** (5, 10, 15 rodadas)
-    - **Padrões complexos** capturados
-    - **Feature importance** analisada
-    - **Early stopping** para evitar overfitting
-    """)
-else:
-    st.warning("""
-    **📊 Coletando dados para XGBoost Avançado:**
-    - **Necessário**: 150+ registros no histórico
-    - **Features**: 50+ características analisadas
-    - **Treinamento**: Automático quando dados suficientes
-    - **Fallback**: Estratégia sequencial ativa
-    """)
-
-# SEÇÃO: PREVISÃO SEQUENCIAL
-st.markdown("---")
-st.subheader("🔄 PREVISÃO SEQUENCIAL")
-
-performance_sequencial = st.session_state.gestor.get_performance_sequencial()
-
-col1, col2, col3, col4 = st.columns(4)
-with col1:
-    st.metric("🎯 Acertos Seq", performance_sequencial["acertos"])
-with col2:
-    st.metric("❌ Erros Seq", performance_sequencial["erros"])
-with col3:
-    st.metric("📈 Assertividade Seq", performance_sequencial["taxa_acerto"])
-with col4:
-    st.metric("🔍 Análises", performance_sequencial["total_analises"])
-
-# Mostrar análise sequencial atual
-if st.session_state.ultimo_numero is not None and len(st.session_state.gestor.historico) > 10:
-    # Analisar sequências para o último número
-    sequencias = st.session_state.gestor.ia_assertiva.previsao_sequencial.analisar_sequencias_historicas(
-        list(st.session_state.gestor.historico), 
-        st.session_state.ultimo_numero
-    )
     
-    if sequencias:
-        st.info(f"🔍 **Análise Sequencial para {st.session_state.ultimo_numero}:**")
-        st.write(f"📊 Números que costumam sair após **{st.session_state.ultimo_numero}**: {', '.join(map(str, sequencias[:8]))}")
-
-# DASHBOARD DE RISCO E CONFIANÇA
-st.markdown("---")
-st.subheader("📈 Análise de Risco e Confiança")
-
-confianca = st.session_state.sistema_confianca.confianca
-tendencia = st.session_state.sistema_confianca.tendencia
-categoria_confianca = st.session_state.sistema_confianca.get_confianca_categoria()
-
-risco = analisar_risco_entrada(
-    list(st.session_state.gestor.historico), 
-    st.session_state.previsao_atual
-)
-
-col1, col2, col3, col4 = st.columns(4)
-with col1:
-    st.metric("🎯 Confiança", f"{confianca*100:.1f}%")
-with col2:
-    st.metric("📊 Categoria", categoria_confianca)
-with col3:
-    st.metric("⚠️ Risco Atual", risco)
-with col4:
-    st.metric("🔁 Sequência", f"{st.session_state.gestor_risco.sequencia_atual}")
-
-st.progress(confianca)
-
-# Verificar modo recuperação
-modo_recuperacao = verificar_estrategia_recuperacao(
-    list(st.session_state.gestor.historico), 
-    st.session_state.ultimos_resultados
-)
-
-if modo_recuperacao:
-    st.warning("🔄 **MODO RECUPERAÇÃO ATIVO** - Estratégia mais agressiva")
-elif confianca > 0.7 and risco in ["RISCO_BAIXO", "RISCO_MODERADO"]:
-    st.success("🔥 **CONDIÇÕES IDEAIS** - Entrada recomendada!")
-elif confianca > 0.5 and risco != "RISCO_ALTO":
-    st.info("💡 **CONDIÇÕES BOAS** - Entrada pode ser considerada")
+    with col1:
+        st.write("**🔥 Números Quentes:**")
+        if padroes['quentes']:
+            quentes_formatados = [f"{num} ({count}×)" for num, count in 
+                                Counter([h['number'] for h in st.session_state.gestor.historico[-15:] 
+                                        if h.get('number') is not None]).most_common(5)]
+            st.write(", ".join(quentes_formatados))
+        else:
+            st.write("Padrão não identificado")
+        
+        st.write("**🔄 Repetições Recentes:**")
+        if padroes['repetidos']:
+            st.write(", ".join(map(str, padroes['repetidos'][:3])))
+        else:
+            st.write("Nenhuma repetição forte")
+    
+    with col2:
+        st.write("**❄️ Números Frios:**")
+        if padroes['frios']:
+            st.write(f"{len(padroes['frios'])} números ausentes")
+            if len(padroes['frios']) <= 10:
+                st.write(", ".join(map(str, sorted(padroes['frios'][:8]))))
+        else:
+            st.write("Todos números apareceram")
+        
+        st.write("**🎯 Vizinhança Quente:**")
+        if padroes['vizinhos_quentes']:
+            st.write(", ".join(map(str, padroes['vizinhos_quentes'][:4])))
+        else:
+            st.write("Sem vizinhança estratégica")
 else:
-    st.warning("⚡ **CONDIÇÕES CAUTELOSAS** - Aguardar melhores oportunidades")
+    st.info("📊 Coletando dados para análise de padrões...")
 
 # PREVISÃO ATUAL
 st.markdown("---")
@@ -2272,6 +1940,7 @@ st.subheader("🎯 PREVISÃO BASEADA EM HISTÓRICO")
 previsao_valida = validar_previsao(st.session_state.previsao_atual)
 
 if previsao_valida:
+    xgboost_status = st.session_state.gestor.get_status_xgboost()
     origem = "XGBoost 50+ Features" if xgboost_status["ativo"] else "Sequencial"
     st.success(f"**🔥 PREVISÃO VIA {origem.upper()} - {len(previsao_valida)} NÚMEROS ÚNICOS**")
     
@@ -2286,64 +1955,12 @@ if previsao_valida:
 else:
     st.warning("⚠️ Coletando dados históricos...")
 
-# ENTRADA ASSERTIVA BASEADA EM HISTÓRICO
-st.markdown("---")
-st.subheader("🎯 ENTRADA PARA TELEGRAM (Baseada em Histórico)")
-
-# CORREÇÃO: USAR A PREVISÃO ATUAL DIRETAMENTE
-entrada_assertiva = st.session_state.previsao_atual
-
-if entrada_assertiva:
-    # Verificar condições antes de recomendar entrada
-    risco_entrada = analisar_risco_entrada(list(st.session_state.gestor.historico), entrada_assertiva)
-    confianca_atual = st.session_state.sistema_confianca.confianca
-    modo_recuperacao = verificar_estrategia_recuperacao(
-        list(st.session_state.gestor.historico), 
-        st.session_state.ultimos_resultados
-    )
-    
-    # LÓGICA SUPER FLEXÍVEL PARA RECOMENDAÇÃO NA INTERFACE
-    deve_recomendar = (
-        risco_entrada in ["RISCO_BAIXO", "RISCO_MODERADO"] or 
-        confianca_atual > 0.4 or
-        modo_recuperacao or
-        len(entrada_assertiva) >= 6
-    )
-    
-    if deve_recomendar:
-        st.success(f"**🔔 {len(entrada_assertiva)} NÚMEROS ÚNICOS CONFIRMADOS DO HISTÓRICO**")
-        
-        # Mostrar mensagem do Telegram
-        numeros_ordenados = sorted(entrada_assertiva)
-        primeira_linha = '   '.join(map(str, numeros_ordenados[:4]))
-        segunda_linha = '   '.join(map(str, numeros_ordenados[4:]))
-        mensagem_telegram = f"{primeira_linha}\n{segunda_linha}"
-        
-        st.code(mensagem_telegram, language=None)
-        
-        # Botão de envio
-        if st.button("📤 Enviar Alerta Baseado em Histórico"):
-            performance = {
-                'acertos': st.session_state.acertos,
-                'erros': st.session_state.erros,
-                'taxa_acerto': f"{(st.session_state.acertos/(st.session_state.acertos+st.session_state.erros)*100):.1f}%" if (st.session_state.acertos+st.session_state.erros) > 0 else "0%"
-            }
-            
-            enviar_alerta_assertivo(
-                entrada_assertiva, 
-                st.session_state.ultimo_numero, 
-                list(st.session_state.gestor.historico),
-                performance
-            )
-            st.success("✅ Alerta BASEADO EM HISTÓRICO enviado!")
-    else:
-        st.warning(f"⏹️ Entrada não recomendada - Risco: {risco_entrada}, Confiança: {categoria_confianca}")
-else:
-    st.warning("⏳ Gerando entrada baseada em histórico...")
-
-# PERFORMANCE
+# PERFORMANCE COM ANÁLISE DETALHADA
 st.markdown("---")
 st.subheader("📊 Performance do Sistema")
+
+total = st.session_state.acertos + st.session_state.erros
+taxa_acerto = (st.session_state.acertos / total * 100) if total > 0 else 0
 
 col1, col2, col3, col4 = st.columns(4)
 with col1:
@@ -2351,54 +1968,29 @@ with col1:
 with col2:
     st.metric("❌ Erros", st.session_state.erros)
 with col3:
-    total = st.session_state.acertos + st.session_state.erros
-    taxa_acerto = (st.session_state.acertos / total * 100) if total > 0 else 0
     st.metric("📈 Assertividade", f"{taxa_acerto:.1f}%")
 with col4:
     st.metric("🛡️ Máx Sequência", st.session_state.gestor_risco.max_sequencia_negativa)
 
-# NOVA SEÇÃO: OTIMIZAÇÃO DE PERFORMANCE
-st.markdown("---")
-st.subheader("⚡ Otimização de Performance")
+# ANÁLISE DE PERFORMANCE
+st.write("### 📈 Análise de Tendência")
 
-col1, col2 = st.columns(2)
-
-with col1:
-    if st.button("🎯 Otimizar Sistema Agora"):
-        with st.spinner("Aplicando otimizações de performance..."):
-            # Reiniciar sistemas com configurações otimizadas
-            st.session_state.sistema_confianca = SistemaConfianca()
-            st.session_state.gestor_risco = SistemaGestaoRisco()
-            st.session_state.acertos = 0
-            st.session_state.erros = 0
-            st.session_state.ultimos_resultados = []
-            
-            st.success("""
-            ✅ **Sistema Otimizado!**
-            - Confiança reiniciada
-            - Gestão de risco otimizada  
-            - Estratégias de previsão melhoradas
-            - Performance resetada para novo início
-            """)
-
-with col2:
-    if st.button("📊 Análise de Performance"):
-        st.write("### 📈 Análise Detalhada da Performance")
-        
-        total = st.session_state.acertos + st.session_state.erros
-        taxa = st.session_state.acertos / total if total > 0 else 0
-        
-        st.write(f"- **Assertividade Atual:** {taxa:.1%}")
-        st.write(f"- **Sequência Atual:** {st.session_state.gestor_risco.sequencia_atual}")
-        st.write(f"- **Confiança:** {st.session_state.sistema_confianca.confianca:.2f}")
-        st.write(f"- **Taxa Recente:** {st.session_state.gestor_risco.taxa_acerto_recente:.1%}")
-        
-        if taxa < 0.3:
-            st.warning("🔧 **Recomendação:** Use o botão de otimização para melhorar a performance")
-        elif taxa > 0.4:
-            st.success("🎉 **Performance Boa!** Continue assim.")
-        else:
-            st.info("📊 **Performance Moderada.** Pode melhorar com otimizações.")
+if total >= 10:  # Apenas mostrar análise se tiver dados suficientes
+    if taxa_acerto >= 40:
+        st.success("🎉 **Performance Excelente!** Continue com a estratégia atual.")
+    elif taxa_acerto >= 30:
+        st.info("📊 **Performance Boa.** Pequenos ajustes podem melhorar ainda mais.")
+    elif taxa_acerto >= 20:
+        st.warning("🔧 **Performance Moderada.** Considere usar as estratégias de recuperação.")
+    else:
+        st.error("🚨 **Performance Baixa.** Ative o modo recuperação imediatamente.")
+    
+    # Recomendações baseadas na sequência atual
+    sequencia_atual = st.session_state.gestor_risco.sequencia_atual
+    if sequencia_atual >= 5:
+        st.error(f"🔴 **ALERTA:** Sequência negativa de {sequencia_atual}. Use recuperação emergencial.")
+    elif sequencia_atual >= 3:
+        st.warning(f"🟡 **ATENÇÃO:** Sequência negativa de {sequencia_atual}. Modere entradas.")
 
 # CONTROLES
 st.markdown("---")
@@ -2437,60 +2029,18 @@ with col3:
             st.info(f"📊 Números mais frequentes: {Counter(numeros).most_common(5)}")
             
             # Mostrar análise de padrões
-            analise = analisar_padroes_assertivos(st.session_state.gestor.historico)
+            analise = analisar_padroes_dinamicos(st.session_state.gestor.historico)
             st.info(f"🎯 Números quentes: {analise.get('numeros_quentes', [])}")
             st.info(f"🔄 Padrões repetição: {analise.get('padroes_repeticao', [])}")
             
-            # Mostrar análise sequencial detalhada
-            if st.session_state.ultimo_numero:
-                sequencias = st.session_state.gestor.ia_assertiva.previsao_sequencial.analisar_sequencias_historicas(
-                    list(st.session_state.gestor.historico), 
-                    st.session_state.ultimo_numero
-                )
-                if sequencias:
-                    st.info(f"🔢 Sequências após {st.session_state.ultimo_numero}: {sequencias}")
-                    
             # Mostrar status XGBoost detalhado
             xgboost_status = st.session_state.gestor.get_status_xgboost()
             st.info(f"🤖 XGBoost - Treinado: {xgboost_status['treinado']}, Ativo: {xgboost_status['ativo']}")
-            
-            # Mostrar informações das features
-            if xgboost_status["treinado"]:
-                st.info(f"📈 Features geradas: {len(st.session_state.gestor.ia_assertiva.xgboost_predictor.feature_engineer.feature_names)}")
-        else:
-            st.info("📊 Histórico ainda vazio")
-
-# BOTÃO DE EMERGÊNCIA
-st.markdown("---")
-st.subheader("🚨 Controles de Emergência")
-
-col1, col2 = st.columns(2)
-
-with col1:
-    if st.button("🔄 Reiniciar Session State"):
-        # Limpar tudo
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
-        st.success("✅ Session State reiniciado!")
-        st.rerun()
-
-with col2:
-    if st.button("📊 Debug Completo"):
-        st.write("### 🐛 Debug do Session State:")
-        for key in st.session_state.keys():
-            try:
-                value = st.session_state[key]
-                if hasattr(value, '__len__'):
-                    st.write(f"- **{key}:** {type(value).__name__} com {len(value)} elementos")
-                else:
-                    st.write(f"- **{key}:** {value}")
-            except:
-                st.write(f"- **{key}:** [ERRO ao acessar]")
 
 st.markdown("---")
-st.markdown("### 🚀 **SISTEMA 100% BASEADO EM HISTÓRICO + XGBOOST 50+ FEATURES ATIVADO**")
-st.markdown("*Estratégia de 8 números baseada exclusivamente no histórico de sorteios com Machine Learning Avançado*")
+st.markdown("### 🚀 **SISTEMA 100% BASEADO EM HISTÓRICO + ESTRATÉGIAS DE RECUPERAÇÃO ATIVADAS**")
+st.markdown("*Estratégia de 8 números baseada exclusivamente no histórico de sorteios com Recuperação Inteligente*")
 
 # Rodapé
 st.markdown("---")
-st.markdown("**🎯 Sistema Baseado em Histórico v15.0** - *XGBoost 50+ Features + Previsão Sequencial + Performance Otimizada*")
+st.markdown("**🎯 Sistema Baseado em Histórico v16.0** - *XGBoost 50+ Features + Recuperação Avançada + Performance Otimizada*")
