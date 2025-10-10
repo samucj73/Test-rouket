@@ -101,13 +101,13 @@ class XGBoostRoletaIA:
         """Cria features avançadas para treinamento do XGBoost"""
         numeros = [h['number'] for h in historico if h.get('number') is not None]
         
-        if len(numeros) < 12:
+        if len(numeros) < 6:
             return [], []
             
         features = []
         targets = []
         
-        for i in range(12, len(numeros) - 1):
+        for i in range(6, len(numeros) - 1):
             feature_row = []
             janela = numeros[i-12:i]
             
