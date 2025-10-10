@@ -1,4 +1,4 @@
-# RoletaHybridIA.py - SISTEMA 100% BASEADO EM HISTÓRICO COM ESTRATÉGIAS DE RECUPERAÇÃO
+# RoletaHybridIA.py - SISTEMA 100% BASEADO EM HISTÓRICO COM XGBOOST
 import streamlit as st
 import json
 import os
@@ -15,7 +15,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # =============================
-# NOVAS DEPENDÊNCIAS XGBOOST
+# CONFIGURAÇÃO XGBOOST
 # =============================
 try:
     import xgboost as xgb
@@ -24,9 +24,9 @@ try:
     from sklearn.metrics import accuracy_score
     import joblib
     XGBOOST_DISPONIVEL = True
-except ImportError:
+except ImportError as e:
     XGBOOST_DISPONIVEL = False
-    logging.warning("XGBoost não disponível - usando métodos tradicionais")
+    logging.warning(f"XGBoost não disponível: {e} - usando métodos tradicionais")
 
 # =============================
 # Configurações
@@ -77,6 +77,266 @@ FASE_ESPECIALISTA = 150
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# =============================
+# SISTEMA XGBOOST COMPLETO
+# =============================
+
+class XGBoostRoletaIA:
+    def __init__(self):
+        self.model = None
+        self.treinado = False
+        self.ultima_previsao = []
+        self.performance = {"acertos": 0, "erros": 0}
+        self.feature_names = []
+        
+    def criar_features_avancadas(self, historico):
+        """Cria features avançadas para treinamento do XGBoost"""
+        numeros = [h['number'] for h in historico if h.get('number') is not None]
+        
+        if len(numeros) < 20:
+            return [], []
+            
+        features = []
+        targets = []
+        
+        for i in range(10, len(numeros) - 1):
+            feature_row = []
+            janela = numeros[i-10:i]
+            
+            # Features básicas
+            feature_row.append(np.mean(janela))
+            feature_row.append(np.std(janela))
+            feature_row.append(np.median(janela))
+            
+            # Últimos números
+            feature_row.append(janela[-1])
+            feature_row.append(janela[-2] if len(janela) > 1 else 0)
+            feature_row.append(janela[-3] if len(janela) > 2 else 0)
+            
+            # Diferenças
+            if len(janela) > 1:
+                feature_row.append(janela[-1] - janela[-2])
+            else:
+                feature_row.append(0)
+                
+            # Características do último número
+            ultimo_num = janela[-1]
+            feature_row.append(ultimo_num % 2)  # Par/Ímpar
+            feature_row.append(1 if ultimo_num == 0 else 0)  # Zero
+            
+            # Posicionamento
+            feature_row.append(1 if ultimo_num in PRIMEIRA_DUZIA else 0)
+            feature_row.append(1 if ultimo_num in SEGUNDA_DUZIA else 0)
+            feature_row.append(1 if ultimo_num in TERCEIRA_DUZIA else 0)
+            feature_row.append(1 if ultimo_num in COLUNA_1 else 0)
+            feature_row.append(1 if ultimo_num in COLUNA_2 else 0)
+            feature_row.append(1 if ultimo_num in COLUNA_3 else 0)
+            
+            # Cores
+            vermelhos = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]
+            feature_row.append(1 if ultimo_num in vermelhos else 0)
+            
+            # Frequência recente
+            contagem_10 = Counter(janela[-10:] if len(janela) >= 10 else janela)
+            feature_row.append(contagem_10.get(ultimo_num, 0))
+            
+            # Padrões de repetição
+            repeticoes = 0
+            for j in range(1, min(4, len(janela))):
+                if janela[-j] == ultimo_num:
+                    repeticoes += 1
+            feature_row.append(repeticoes)
+            
+            # Vizinhança
+            vizinhos = obter_vizinhos_fisicos(ultimo_num)
+            feature_row.append(len(set(vizinhos) & set(janela[-5:])))
+            
+            features.append(feature_row)
+            targets.append(numeros[i])
+        
+        self.feature_names = [
+            'media', 'std', 'mediana', 'ultimo', 'penultimo', 'ante_penultimo',
+            'diff_ultimos', 'eh_par', 'eh_zero', 'na_duzia1', 'na_duzia2', 'na_duzia3',
+            'na_coluna1', 'na_coluna2', 'na_coluna3', 'eh_vermelho', 'freq_ultimo',
+            'repeticoes', 'vizinhos_recentes'
+        ]
+        
+        logging.info(f"📊 XGBoost: Geradas {len(features)} amostras com {len(feature_row)} features")
+        return np.array(features), np.array(targets)
+    
+    def treinar_modelo(self, historico, force_retrain=False):
+        """Treina o modelo XGBoost"""
+        if not XGBOOST_DISPONIVEL:
+            logging.warning("XGBoost não disponível - pulando treinamento")
+            return False
+            
+        try:
+            if len(historico) < 50 and not force_retrain:
+                logging.info("📊 Histórico insuficiente para treinar XGBoost")
+                return False
+                
+            logging.info("🤖 Iniciando treinamento do XGBoost...")
+            
+            # Criar features e targets
+            features, targets = self.criar_features_avancadas(historico)
+            
+            if len(features) < 30:
+                logging.warning("📊 Dados insuficientes para treinamento")
+                return False
+            
+            # Dividir dados
+            X_train, X_test, y_train, y_test = train_test_split(
+                features, targets, test_size=0.2, random_state=42
+            )
+            
+            # Configurar modelo
+            self.model = xgb.XGBClassifier(
+                n_estimators=150,
+                max_depth=8,
+                learning_rate=0.1,
+                random_state=42,
+                objective='multi:softprob',
+                num_class=37,
+                n_jobs=-1
+            )
+            
+            # Treinar
+            self.model.fit(X_train, y_train)
+            
+            # Avaliar
+            y_pred = self.model.predict(X_test)
+            accuracy = accuracy_score(y_test, y_pred)
+            
+            logging.info(f"🎯 XGBoost treinado! Acurácia: {accuracy:.2%}")
+            
+            # Salvar modelo
+            self.model.save_model(XGB_MODEL_PATH)
+            self.treinado = True
+            
+            return True
+            
+        except Exception as e:
+            logging.error(f"❌ Erro no treinamento XGBoost: {e}")
+            return False
+
+    def prever_proximos_numeros(self, historico, top_n=8):
+        """Faz previsão usando XGBoost"""
+        if not XGBOOST_DISPONIVEL or not self.treinado:
+            return self._previsao_fallback(historico)
+            
+        try:
+            numeros = [h['number'] for h in historico if h.get('number') is not None]
+            
+            if len(numeros) < 15:
+                return self._previsao_fallback(historico)
+            
+            # Criar features para previsão
+            features, _ = self.criar_features_avancadas(historico)
+            if len(features) == 0:
+                return self._previsao_fallback(historico)
+            
+            ultimas_features = features[-1].reshape(1, -1)
+            probabilidades = self.model.predict_proba(ultimas_features)[0]
+            
+            # Pegar os números mais prováveis
+            indices_mais_provaveis = np.argsort(probabilidades)[::-1]
+            previsao = []
+            
+            for idx in indices_mais_provaveis:
+                if len(previsao) >= top_n:
+                    break
+                num = int(idx)
+                if 0 <= num <= 36 and num not in previsao:
+                    previsao.append(num)
+            
+            # Garantir diversidade
+            previsao_final = self._garantir_diversidade(previsao, historico, top_n)
+            
+            self.ultima_previsao = previsao_final
+            logging.info(f"🎯 XGBoost previu: {self.ultima_previsao}")
+            
+            return self.ultima_previsao
+            
+        except Exception as e:
+            logging.error(f"❌ Erro na previsão XGBoost: {e}")
+            return self._previsao_fallback(historico)
+    
+    def _garantir_diversidade(self, previsao, historico, top_n):
+        """Garante que a previsão tenha números diversificados"""
+        if len(previsao) >= top_n:
+            return previsao[:top_n]
+        
+        numeros = [h['number'] for h in historico if h.get('number') is not None]
+        diversificados = set(previsao)
+        
+        # Adicionar números de diferentes características
+        caracteristicas = [
+            [n for n in range(1, 37) if n % 2 == 0],  # Pares
+            [n for n in range(1, 37) if n % 2 == 1],  # Ímpares
+            PRIMEIRA_DUZIA, SEGUNDA_DUZIA, TERCEIRA_DUZIA,
+            COLUNA_1, COLUNA_2, COLUNA_3
+        ]
+        
+        for caracteristica in caracteristicas:
+            for num in caracteristica:
+                if len(diversificados) < top_n and num not in diversificados:
+                    diversificados.add(num)
+                if len(diversificados) >= top_n:
+                    break
+            if len(diversificados) >= top_n:
+                break
+        
+        return list(diversificados)[:top_n]
+
+    def _previsao_fallback(self, historico):
+        """Previsão fallback quando XGBoost não está disponível"""
+        numeros = [h['number'] for h in historico if h.get('number') is not None]
+        if len(numeros) >= NUMERO_PREVISOES:
+            previsao_unica = []
+            for num in numeros[-NUMERO_PREVISOES:]:
+                if num not in previsao_unica:
+                    previsao_unica.append(num)
+                if len(previsao_unica) >= NUMERO_PREVISOES:
+                    break
+            return previsao_unica
+        return [2, 5, 8, 11, 14, 17, 20, 23]
+    
+    def verificar_acerto(self, numero_sorteado):
+        """Verifica se acertou a previsão"""
+        if not self.ultima_previsao or numero_sorteado is None:
+            return None
+        
+        acertou = numero_sorteado in self.ultima_previsao
+        if acertou:
+            self.performance["acertos"] += 1
+        else:
+            self.performance["erros"] += 1
+        
+        return acertou
+    
+    def get_performance(self):
+        total = self.performance["acertos"] + self.performance["erros"]
+        taxa = (self.performance["acertos"] / total * 100) if total > 0 else 0
+        return {
+            "acertos": self.performance["acertos"],
+            "erros": self.performance["erros"],
+            "taxa_acerto": f"{taxa:.1f}%",
+            "treinado": self.treinado
+        }
+
+    def carregar_modelo(self):
+        """Carrega modelo salvo"""
+        try:
+            if os.path.exists(XGB_MODEL_PATH):
+                self.model = xgb.XGBClassifier()
+                self.model.load_model(XGB_MODEL_PATH)
+                self.treinado = True
+                logging.info("✅ XGBoost carregado do arquivo")
+                return True
+        except Exception as e:
+            logging.error(f"❌ Erro ao carregar XGBoost: {e}")
+        return False
 
 # =============================
 # ESTRATÉGIAS DINÂMICAS BASEADAS NO HISTÓRICO
@@ -232,449 +492,6 @@ def aplicar_estrategia_recuperacao(gestor, sequencia_negativa):
     # Limitar a 6 números para foco máximo
     estrategia_lista = list(estrategia_numeros)
     return estrategia_lista[:6] if len(estrategia_lista) >= 6 else None
-
-# =============================
-# ENGINEERING DE FEATURES AVANÇADO - 50+ FEATURES (VERSÃO CORRIGIDA)
-# =============================
-class FeatureEngineer:
-    def __init__(self):
-        self.label_encoders = {}
-        self.feature_names = []
-        
-    def criar_features_avancadas(self, historico, window_sizes=[5, 10, 15]):
-        """Cria 50+ features avançadas para treinamento do XGBoost - VERSÃO CORRIGIDA"""
-        if len(historico) < max(window_sizes) + 5:
-            return [], []
-            
-        numeros = [h['number'] for h in historico if h.get('number') is not None]
-        features = []
-        targets = []
-        
-        for i in range(max(window_sizes), len(numeros) - 1):
-            feature_row = []
-            proximo_numero = numeros[i]
-            
-            # === FEATURES TEMPORAIS MULTI-JANELA ===
-            for window_size in window_sizes:
-                janela = numeros[i-window_size:i]
-                
-                # 1. Estatísticas Básicas
-                feature_row.append(np.mean(janela))
-                feature_row.append(np.std(janela))
-                feature_row.append(np.median(janela))
-                feature_row.append(np.var(janela))
-                feature_row.append(len(set(janela)) / len(janela))  # Taxa de unicidade
-                
-                # 2. Estatísticas de Ordem
-                feature_row.append(janela[-1])  # Último
-                feature_row.append(janela[-2] if len(janela) > 1 else 0)
-                feature_row.append(janela[-3] if len(janela) > 2 else 0)
-                feature_row.append(janela[-1] - janela[-2] if len(janela) > 1 else 0)
-                feature_row.append(janela[-2] - janela[-3] if len(janela) > 2 else 0)
-            
-            # === FEATURES DE POSIÇÃO E CARACTERÍSTICAS ===
-            ultimo_num = numeros[i-1]
-            
-            # 3. Características do Último Número
-            feature_row.append(ultimo_num % 2)  # Par/Ímpar
-            feature_row.append(1 if ultimo_num == 0 else 0)  # Zero
-            feature_row.append(ultimo_num)  # Valor absoluto
-            
-            # 4. Posicionamento na Roleta
-            feature_row.append(1 if ultimo_num in PRIMEIRA_DUZIA else 0)
-            feature_row.append(1 if ultimo_num in SEGUNDA_DUZIA else 0)
-            feature_row.append(1 if ultimo_num in TERCEIRA_DUZIA else 0)
-            feature_row.append(1 if ultimo_num in COLUNA_1 else 0)
-            feature_row.append(1 if ultimo_num in COLUNA_2 else 0)
-            feature_row.append(1 if ultimo_num in COLUNA_3 else 0)
-            
-            # 5. Características de Cor (European Roulette)
-            vermelhos = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]
-            feature_row.append(1 if ultimo_num in vermelhos else 0)
-            feature_row.append(1 if ultimo_num in [2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35] else 0)
-            
-            # === FEATURES DE PADRÕES COMPLEXOS ===
-            janela_15 = numeros[i-15:i] if i >= 15 else numeros[:i]
-            
-            # 6. Padrões de Repetição - CORREÇÃO APLICADA
-            repeticoes = 0
-            for j in range(1, min(5, len(janela_15))):
-                if janela_15[-j] == ultimo_num:
-                    repeticoes += 1
-            feature_row.append(repeticoes)
-            
-            # 7. Frequências Relativas
-            contador_15 = Counter(janela_15)
-            feature_row.append(contador_15.get(ultimo_num, 0))
-            feature_row.append(contador_15.get(numeros[i-2], 0) if i >= 2 else 0)
-            feature_row.append(contador_15.get(numeros[i-3], 0) if i >= 3 else 0)
-            
-            # 8. Estatísticas de Pares/Ímpares
-            count_pares = len([n for n in janela_15 if n % 2 == 0 and n != 0])
-            count_impares = len([n for n in janela_15 if n % 2 == 1])
-            feature_row.append(count_pares)
-            feature_row.append(count_impares)
-            feature_row.append(count_pares / len(janela_15) if janela_15 else 0)
-            feature_row.append(count_impares / len(janela_15) if janela_15 else 0)
-            
-            # 9. Estatísticas de Baixa/Alta (1-18 vs 19-36)
-            count_baixa = len([n for n in janela_15 if 1 <= n <= 18])
-            count_alta = len([n for n in janela_15 if 19 <= n <= 36])
-            feature_row.append(count_baixa)
-            feature_row.append(count_alta)
-            feature_row.append(count_baixa / len(janela_15) if janela_15 else 0)
-            feature_row.append(count_alta / len(janela_15) if janela_15 else 0)
-            
-            # === FEATURES DE VIZINHANÇA E PROXIMIDADE ===
-            # 10. Vizinhança Física
-            vizinhos = obter_vizinhos_fisicos(ultimo_num)
-            feature_row.append(len(set(vizinhos) & set(janela_15[-10:])))
-            
-            # 11. Distância Numérica
-            if len(janela_15) > 1:
-                distancias = [abs(janela_15[j] - janela_15[j-1]) for j in range(1, len(janela_15))]
-                feature_row.append(np.mean(distancias) if distancias else 0)
-                feature_row.append(np.std(distancias) if distancias else 0)
-            else:
-                feature_row.extend([0, 0])
-            
-            # 12. Padrões de Série - CORREÇÃO APLICADA
-            series_par_impar = 0
-            for j in range(1, min(6, len(janela_15))):
-                if j < len(janela_15) and janela_15[-j] % 2 == janela_15[-(j+1)] % 2:
-                    series_par_impar += 1
-                else:
-                    break
-            feature_row.append(series_par_impar)
-            
-            # === FEATURES DE TENDÊNCIA ===
-            # 13. Tendência de Direção
-            if len(janela_15) > 5:
-                ultimos_5 = janela_15[-5:]
-                tendencia = 0
-                for j in range(1, len(ultimos_5)):
-                    if ultimos_5[j] > ultimos_5[j-1]:
-                        tendencia += 1
-                    else:
-                        tendencia -= 1
-                feature_row.append(tendencia)
-            else:
-                feature_row.append(0)
-            
-            # 14. Volatilidade
-            if len(janela_15) > 2:
-                volatilidade = np.std(janela_15[-10:]) if len(janela_15) >= 10 else np.std(janela_15)
-                feature_row.append(volatilidade)
-            else:
-                feature_row.append(0)
-            
-            # === FEATURES DE ATRASO ===
-            # 15. Atraso de Números Populares
-            numeros_populares = [num for num, count in Counter(numeros[:i]).most_common(5)]
-            for num_pop in numeros_populares[:3]:
-                if num_pop in numeros[:i]:
-                    ultima_pos = len(numeros[:i]) - 1 - numeros[:i][::-1].index(num_pop)
-                    atraso = i - ultima_pos
-                    feature_row.append(min(atraso, 20))  # Limitar a 20
-                else:
-                    feature_row.append(99)  # Nunca saiu
-            
-            # === FEATURES DE SAZONALIDADE ===
-            # 16. Padrões Cíclicos (simulados)
-            feature_row.append(i % 10)  # Ciclo a cada 10 rodadas
-            feature_row.append(i % 20)  # Ciclo a cada 20 rodadas
-            
-            # === FEATURES DE INTERAÇÃO ===
-            # 17. Interação entre características
-            feature_row.append(1 if (ultimo_num % 2 == 0 and ultimo_num in PRIMEIRA_DUZIA) else 0)
-            feature_row.append(1 if (ultimo_num % 2 == 1 and ultimo_num in TERCEIRA_DUZIA) else 0)
-            feature_row.append(1 if (ultimo_num in vermelhos and ultimo_num in COLUNA_2) else 0)
-            
-            features.append(feature_row)
-            targets.append(proximo_numero)
-        
-        # Nomear as features para debug
-        self.feature_names = self._gerar_nomes_features(len(feature_row))
-        
-        logging.info(f"🎯 Geradas {len(feature_row)} features para {len(features)} amostras")
-        return np.array(features), np.array(targets)
-    
-    def _gerar_nomes_features(self, total_features):
-        """Gera nomes descritivos para todas as features"""
-        nomes = []
-        
-        # Features temporais
-        janelas = [5, 10, 15]
-        for janela in janelas:
-            nomes.extend([
-                f'media_{janela}', f'std_{janela}', f'mediana_{janela}', 
-                f'var_{janela}', f'taxa_unicos_{janela}',
-                f'ultimo_{janela}', f'penultimo_{janela}', f'ante_penultimo_{janela}',
-                f'diff_ultimos_{janela}', f'diff_anteriores_{janela}'
-            ])
-        
-        # Características básicas
-        nomes.extend([
-            'eh_par', 'eh_zero', 'valor_absoluto',
-            'na_duzia1', 'na_duzia2', 'na_duzia3',
-            'na_coluna1', 'na_coluna2', 'na_coluna3',
-            'eh_vermelho', 'eh_preto'
-        ])
-        
-        # Padrões complexos
-        nomes.extend([
-            'repeticoes_sequencia', 'freq_ultimo_15', 'freq_penultimo_15', 'freq_ante_penultimo_15',
-            'count_pares_15', 'count_impares_15', 'taxa_pares_15', 'taxa_impares_15',
-            'count_baixa_15', 'count_alta_15', 'taxa_baixa_15', 'taxa_alta_15',
-            'vizinhos_recentes', 'media_distancias', 'std_distancias',
-            'serie_par_impar', 'tendencia_direcao', 'volatilidade'
-        ])
-        
-        # Atrasos
-        nomes.extend(['atraso_popular1', 'atraso_popular2', 'atraso_popular3'])
-        
-        # Sazonalidade
-        nomes.extend(['ciclo_10', 'ciclo_20'])
-        
-        # Interações
-        nomes.extend(['interacao_par_duzia1', 'interacao_impar_duzia3', 'interacao_vermelho_coluna2'])
-        
-        # Garantir que temos nomes para todas as features
-        while len(nomes) < total_features:
-            nomes.append(f'feature_extra_{len(nomes)}')
-        
-        return nomes[:total_features]
-    
-    def salvar_engineer(self):
-        """Salva o feature engineer"""
-        if XGBOOST_DISPONIVEL:
-            joblib.dump(self, FEATURE_ENGINEER_PATH)
-    
-    @staticmethod
-    def carregar_engineer():
-        """Carrega o feature engineer"""
-        try:
-            if XGBOOST_DISPONIVEL:
-                return joblib.load(FEATURE_ENGINEER_PATH)
-        except:
-            return FeatureEngineer()
-
-# =============================
-# XGBOOST OTIMIZADO PARA +50 FEATURES
-# =============================
-class XGBoostPredictor:
-    def __init__(self):
-        self.model = None
-        self.feature_engineer = FeatureEngineer()
-        self.ultima_previsao = []
-        self.performance = {"acertos": 0, "erros": 0}
-        self.treinado = False
-        
-    def treinar_modelo(self, historico, force_retrain=False):
-        """Treina o modelo XGBoost com features expandidas"""
-        if not XGBOOST_DISPONIVEL:
-            logging.warning("XGBoost não disponível - pulando treinamento")
-            return False
-            
-        try:
-            if len(historico) < 150 and not force_retrain:  # Aumentado mínimo
-                logging.info("📊 Histórico insuficiente para treinar XGBoost com muitas features")
-                return False
-                
-            logging.info("🤖 Iniciando treinamento do XGBoost com features expandidas...")
-            
-            # Criar features e targets
-            features, targets = self.feature_engineer.criar_features_avancadas(historico)
-            
-            if len(features) < 80:  # Aumentado mínimo
-                logging.warning("📊 Dados insuficientes para treinamento com muitas features")
-                return False
-            
-            # Dividir dados
-            X_train, X_test, y_train, y_test = train_test_split(
-                features, targets, test_size=0.15, random_state=42  # Menos dados de teste
-            )
-            
-            # Configurar modelo OTIMIZADO para muitas features
-            self.model = xgb.XGBClassifier(
-                n_estimators=300,  # Aumentado
-                max_depth=10,      # Aumentado
-                learning_rate=0.08, # Reduzido
-                subsample=0.8,     # Adicionado
-                colsample_bytree=0.8, # Adicionado
-                random_state=42,
-                objective='multi:softprob',
-                num_class=37,
-                n_jobs=-1  # Usar todos os cores
-            )
-            
-            # Treinar com early stopping
-            self.model.fit(
-                X_train, y_train,
-                eval_set=[(X_test, y_test)],
-                early_stopping_rounds=20,
-                verbose=False
-            )
-            
-            # Avaliar
-            y_pred = self.model.predict(X_test)
-            accuracy = accuracy_score(y_test, y_pred)
-            
-            # Feature importance
-            importancia = self.model.feature_importances_
-            top_features = np.argsort(importancia)[-5:][::-1]
-            
-            logging.info(f"🎯 XGBoost treinado! Acurácia: {accuracy:.2%}")
-            logging.info(f"📊 Top 5 features: {[self.feature_engineer.feature_names[i] for i in top_features]}")
-            
-            # Salvar modelo
-            self.model.save_model(XGB_MODEL_PATH)
-            self.feature_engineer.salvar_engineer()
-            self.treinado = True
-            
-            return True
-            
-        except Exception as e:
-            logging.error(f"❌ Erro no treinamento XGBoost: {e}")
-            return False
-
-    def prever_proximos_numeros(self, historico, top_n=8):
-        """Faz previsão usando XGBoost com features expandidas - CORREÇÃO: SEM DUPLICATAS"""
-        if not XGBOOST_DISPONIVEL or not self.treinado:
-            return self._previsao_fallback(historico)
-            
-        try:
-            numeros = [h['number'] for h in historico if h.get('number') is not None]
-            if len(numeros) < 20:  # Aumentado mínimo
-                return self._previsao_fallback(historico)
-            
-            # Criar features para previsão
-            features, _ = self.feature_engineer.criar_features_avancadas(historico)
-            if len(features) == 0:
-                return self._previsao_fallback(historico)
-            
-            ultimas_features = features[-1].reshape(1, -1)
-            probabilidades = self.model.predict_proba(ultimas_features)[0]
-            
-            importancia = self.model.feature_importances_
-            prob_ponderadas = probabilidades * (1 + importancia.mean())
-            
-            # CORREÇÃO: GARANTIR NÚMEROS ÚNICOS
-            indices_mais_provaveis = np.argsort(prob_ponderadas)[::-1]
-            previsao = []
-            
-            for idx in indices_mais_provaveis:
-                if len(previsao) >= top_n:
-                    break
-                num = int(idx)
-                if 0 <= num <= 36 and num not in previsao:  # CORREÇÃO: EVITAR DUPLICATAS
-                    previsao.append(num)
-            
-            # CORREÇÃO: GARANTIR QUE TENHAMOS top_n NÚMEROS ÚNICOS
-            previsao_final = self._garantir_diversidade(previsao, historico, top_n)
-            
-            self.ultima_previsao = previsao_final
-            logging.info(f"🎯 XGBoost previu {len(previsao_final)} números ÚNICOS: {self.ultima_previsao}")
-            
-            return self.ultima_previsao
-            
-        except Exception as e:
-            logging.error(f"❌ Erro na previsão XGBoost: {e}")
-            return self._previsao_fallback(historico)
-    
-    def _garantir_diversidade(self, previsao, historico, top_n):
-        """Garante que a previsão tenha números diversificados e ÚNICOS"""
-        # CORREÇÃO: REMOVER DUPLICATAS INICIAIS
-        previsao_unica = list(set(previsao))
-        
-        if len(previsao_unica) >= top_n:
-            return previsao_unica[:top_n]
-        
-        numeros = [h['number'] for h in historico if h.get('number') is not None]
-        diversificados = set(previsao_unica)
-        
-        # Adicionar números de diferentes características SEM DUPLICATAS
-        caracteristicas = [
-            [n for n in range(1, 37) if n % 2 == 0],  # Pares
-            [n for n in range(1, 37) if n % 2 == 1],  # Ímpares
-            PRIMEIRA_DUZIA, SEGUNDA_DUZIA, TERCEIRA_DUZIA,
-            COLUNA_1, COLUNA_2, COLUNA_3
-        ]
-        
-        for caracteristica in caracteristicas:
-            for num in caracteristica:
-                if len(diversificados) < top_n and num not in diversificados:
-                    diversificados.add(num)
-                if len(diversificados) >= top_n:
-                    break
-            if len(diversificados) >= top_n:
-                break
-        
-        # CORREÇÃO FINAL: SE AINDA PRECISAR, USAR NÚMEROS ÚNICOS DO HISTÓRICO
-        if len(diversificados) < top_n:
-            for num in reversed(numeros[-20:]):
-                if len(diversificados) < top_n and num not in diversificados:
-                    diversificados.add(num)
-                if len(diversificados) >= top_n:
-                    break
-        
-        return list(diversificados)[:top_n]
-
-    def _previsao_fallback(self, historico):
-        """Previsão fallback quando XGBoost não está disponível"""
-        numeros = [h['number'] for h in historico if h.get('number') is not None]
-        if len(numeros) >= NUMERO_PREVISOES:
-            # CORREÇÃO: REMOVER DUPLICATAS NO FALLBACK
-            previsao_unica = []
-            for num in numeros[-NUMERO_PREVISOES:]:
-                if num not in previsao_unica:
-                    previsao_unica.append(num)
-                if len(previsao_unica) >= NUMERO_PREVISOES:
-                    break
-            return previsao_unica
-        return [2, 5, 8, 11, 14, 17, 20, 23]  # Já são únicos
-    
-    def _completar_previsao(self, previsao, historico, top_n):
-        """Completa previsão com números do histórico"""
-        numeros = [h['number'] for h in historico if h.get('number') is not None]
-        completar = []
-        
-        # Adicionar números recentes SEM DUPLICATAS
-        for num in reversed(numeros[-10:]):
-            if len(completar) + len(previsao) < top_n and num not in previsao and num not in completar:
-                completar.append(num)
-        
-        # Adicionar números frequentes SEM DUPLICATAS
-        if len(completar) + len(previsao) < top_n:
-            frequentes = Counter(numeros).most_common(10)
-            for num, _ in frequentes:
-                if len(completar) + len(previsao) < top_n and num not in previsao and num not in completar:
-                    completar.append(num)
-        
-        return completar
-    
-    def verificar_acerto(self, numero_sorteado):
-        """Verifica se acertou a previsão"""
-        if not self.ultima_previsao or numero_sorteado is None:
-            return None
-        
-        acertou = numero_sorteado in self.ultima_previsao
-        if acertou:
-            self.performance["acertos"] += 1
-        else:
-            self.performance["erros"] += 1
-        
-        return acertou
-    
-    def get_performance(self):
-        total = self.performance["acertos"] + self.performance["erros"]
-        taxa = (self.performance["acertos"] / total * 100) if total > 0 else 0
-        return {
-            "acertos": self.performance["acertos"],
-            "erros": self.performance["erros"],
-            "taxa_acerto": f"{taxa:.1f}%",
-            "treinado": self.treinado
-        }
 
 # =============================
 # SISTEMAS DE SUPORTE OTIMIZADOS
@@ -1101,22 +918,24 @@ class IA_Assertiva:
     def __init__(self):
         self.historico_analises = deque(maxlen=50)
         self.previsao_sequencial = SistemaPrevisaoSequencial()
-        self.xgboost_predictor = XGBoostPredictor()
+        self.xgboost_ia = XGBoostRoletaIA()
         self.modo_xgboost_ativo = False
+        
+        # Tentar carregar modelo XGBoost existente
+        if XGBOOST_DISPONIVEL:
+            self.xgboost_ia.carregar_modelo()
+            if self.xgboost_ia.treinado:
+                self.modo_xgboost_ativo = True
+                logging.info("✅ XGBoost carregado e ativo")
         
     def prever_com_alta_assertividade(self, historico, ultimo_numero=None):
         """Sistema PRINCIPAL - VERSÃO OTIMIZADA PARA MAIOR ASSERTIVIDADE"""
         
-        # VERIFICAÇÃO ROBUSTA DO XGBOOST - CORREÇÃO CRÍTICA
-        xgb_pronto = (self.xgboost_predictor.treinado and 
-                     hasattr(self.xgboost_predictor, 'model') and 
-                     self.xgboost_predictor.model is not None)
-        
         # PRIORIDADE 1: XGBOOST SE ESTIVER TREINADO
-        if xgb_pronto:
+        if self.xgboost_ia.treinado and XGBOOST_DISPONIVEL:
             self.modo_xgboost_ativo = True
             try:
-                previsao_xgb = self.xgboost_predictor.prever_proximos_numeros(historico, NUMERO_PREVISOES)
+                previsao_xgb = self.xgboost_ia.prever_proximos_numeros(historico, NUMERO_PREVISOES)
                 if previsao_xgb and len(previsao_xgb) >= 6:
                     logging.info("🎯 XGBOOST ATIVO - Previsão via Machine Learning")
                     return previsao_xgb
@@ -1125,23 +944,20 @@ class IA_Assertiva:
                 self.modo_xgboost_ativo = False
         
         # PRIORIDADE 2: TREINAR XGBOOST SE TIVER DADOS SUFICIENTES
-        if not self.xgboost_predictor.treinado and len(historico) >= 80:  # Reduzido para 80
+        if not self.xgboost_ia.treinado and len(historico) >= 50 and XGBOOST_DISPONIVEL:
             logging.info("🤖 Tentando treinar XGBoost automaticamente...")
             try:
-                # Treinamento RÁPIDO com features básicas
-                numeros = [h['number'] for h in historico if h.get('number') is not None]
-                if len(numeros) >= 80:
-                    if self.treinar_xgboost_rapido(historico):
-                        self.modo_xgboost_ativo = True
-                        previsao_xgb = self.xgboost_predictor.prever_proximos_numeros(historico, NUMERO_PREVISOES)
-                        if previsao_xgb and len(previsao_xgb) >= 6:
-                            return previsao_xgb
+                if self.xgboost_ia.treinar_modelo(historico):
+                    self.modo_xgboost_ativo = True
+                    previsao_xgb = self.xgboost_ia.prever_proximos_numeros(historico, NUMERO_PREVISOES)
+                    if previsao_xgb and len(previsao_xgb) >= 6:
+                        return previsao_xgb
             except Exception as e:
                 logging.error(f"❌ Treinamento automático falhou: {e}")
         
         # PRIORIDADE 3: PREVISÃO SEQUENCIAL INTELIGENTE
         self.modo_xgboost_ativo = False
-        if ultimo_numero is not None and len(historico) >= 10:  # Reduzido mínimo
+        if ultimo_numero is not None and len(historico) >= 10:
             previsao_seq = self.previsao_sequencial.gerar_previsao_sequencial(historico, ultimo_numero)
             if previsao_seq and len(previsao_seq) >= 6:
                 logging.info(f"🔄 PREVISÃO SEQUENCIAL para {ultimo_numero}")
@@ -1150,71 +966,6 @@ class IA_Assertiva:
         # PRIORIDADE 4: ESTRATÉGIA AGRESSIVA OTIMIZADA
         logging.info("📊 Usando estratégia alternativa OTIMIZADA")
         return self.estrategia_alternativa_otimizada(historico, ultimo_numero)
-    
-    def treinar_xgboost_rapido(self, historico):
-        """Treinamento RÁPIDO do XGBoost para ativação imediata"""
-        if not XGBOOST_DISPONIVEL:
-            return False
-        
-        try:
-            numeros = [h['number'] for h in historico if h.get('number') is not None]
-            
-            if len(numeros) < 80:
-                return False
-            
-            logging.info("⚡ Treinamento RÁPIDO do XGBoost...")
-            
-            # Features simplificadas para treinamento rápido
-            features = []
-            targets = []
-            
-            for i in range(15, len(numeros) - 1):
-                feature_row = []
-                janela = numeros[i-15:i]
-                
-                # Features essenciais
-                feature_row.append(np.mean(janela))
-                feature_row.append(np.std(janela))
-                feature_row.append(janela[-1])  # último
-                feature_row.append(janela[-2])  # penúltimo
-                feature_row.append(janela[-3])  # antepenúltimo
-                feature_row.append(janela[-1] % 2)  # par/ímpar
-                feature_row.append(1 if janela[-1] in PRIMEIRA_DUZIA else 0)
-                feature_row.append(1 if janela[-1] in SEGUNDA_DUZIA else 0)
-                feature_row.append(1 if janela[-1] in TERCEIRA_DUZIA else 0)
-                feature_row.append(1 if janela[-1] in COLUNA_1 else 0)
-                feature_row.append(1 if janela[-1] in COLUNA_2 else 0)
-                feature_row.append(1 if janela[-1] in COLUNA_3 else 0)
-                
-                # Frequência recente
-                contagem_10 = Counter(janela[-10:])
-                feature_row.append(contagem_10.get(janela[-1], 0))
-                
-                features.append(feature_row)
-                targets.append(numeros[i])
-            
-            if len(features) < 50:
-                return False
-            
-            # Modelo rápido e eficiente
-            self.xgboost_predictor.model = xgb.XGBClassifier(
-                n_estimators=120,
-                max_depth=7,
-                learning_rate=0.15,
-                random_state=42,
-                objective='multi:softprob',
-                num_class=37
-            )
-            
-            self.xgboost_predictor.model.fit(features, targets)
-            self.xgboost_predictor.treinado = True
-            
-            logging.info("✅ XGBoost RÁPIDO treinado com sucesso!")
-            return True
-            
-        except Exception as e:
-            logging.error(f"❌ Erro no treinamento rápido: {e}")
-            return False
 
     def gerar_previsao_recuperacao(self, historico, sequencia_negativa):
         """Gera previsão OTIMIZADA para recuperação de sequências negativas"""
@@ -1344,6 +1095,18 @@ class IA_Assertiva:
     def get_performance_sequencial(self):
         """Retorna performance do sistema sequencial"""
         return self.previsao_sequencial.get_performance_sequencial()
+    
+    def get_status_xgboost(self):
+        """Retorna status do XGBoost"""
+        return {
+            "treinado": self.xgboost_ia.treinado,
+            "ativo": self.modo_xgboost_ativo,
+            "performance": self.xgboost_ia.get_performance()
+        }
+    
+    def treinar_xgboost(self, historico, force_retrain=False):
+        """Treina o XGBoost"""
+        return self.xgboost_ia.treinar_modelo(historico, force_retrain)
 
 # =============================
 # GESTOR PRINCIPAL 100% BASEADO EM HISTÓRICO COM XGBOOST
@@ -1359,88 +1122,11 @@ class GestorAssertivo:
         
     def treinar_xgboost(self, force_retrain=False):
         """Método para treinar XGBoost"""
-        return self.ia_assertiva.xgboost_predictor.treinar_modelo(self.historico, force_retrain)
-    
-    def treinar_xgb_rapido(self):
-        """Treina XGBoost com menos dados usando features simplificadas"""
-        if not XGBOOST_DISPONIVEL:
-            return False
-            
-        try:
-            if len(self.historico) < 50:  # Reduzido mínimo para 50
-                logging.warning("📊 Histórico insuficiente mesmo para treinamento rápido")
-                return False
-                
-            logging.info("⚡ Iniciando treinamento RÁPIDO do XGBoost...")
-            
-            # Usar features básicas para treinamento rápido
-            numeros = [h['number'] for h in self.historico if h.get('number') is not None]
-            
-            if len(numeros) < 50:
-                return False
-            
-            # Criar features simplificadas
-            features = []
-            targets = []
-            
-            for i in range(10, len(numeros) - 1):
-                feature_row = []
-                janela = numeros[i-10:i]
-                
-                # Features básicas apenas
-                feature_row.append(np.mean(janela))
-                feature_row.append(np.std(janela))
-                feature_row.append(janela[-1])  # último
-                feature_row.append(janela[-2])  # penúltimo
-                feature_row.append(janela[-1] % 2)  # par/ímpar
-                feature_row.append(1 if janela[-1] in PRIMEIRA_DUZIA else 0)
-                feature_row.append(1 if janela[-1] in SEGUNDA_DUZIA else 0)
-                feature_row.append(1 if janela[-1] in TERCEIRA_DUZIA else 0)
-                
-                features.append(feature_row)
-                targets.append(numeros[i])
-            
-            if len(features) < 30:
-                return False
-            
-            X_train, X_test, y_train, y_test = train_test_split(
-                features, targets, test_size=0.2, random_state=42
-            )
-            
-            # Modelo mais simples para treinamento rápido
-            self.ia_assertiva.xgboost_predictor.model = xgb.XGBClassifier(
-                n_estimators=100,
-                max_depth=6,
-                learning_rate=0.1,
-                random_state=42,
-                objective='multi:softprob',
-                num_class=37
-            )
-            
-            self.ia_assertiva.xgboost_predictor.model.fit(X_train, y_train)
-            
-            # Avaliação simples
-            y_pred = self.ia_assertiva.xgboost_predictor.model.predict(X_test)
-            accuracy = accuracy_score(y_test, y_pred)
-            
-            logging.info(f"⚡ XGBoost RÁPIDO treinado! Acurácia: {accuracy:.2%}")
-            
-            self.ia_assertiva.xgboost_predictor.treinado = True
-            self.ia_assertiva.modo_xgboost_ativo = True
-            
-            return True
-            
-        except Exception as e:
-            logging.error(f"❌ Erro no treinamento rápido: {e}")
-            return False
+        return self.ia_assertiva.treinar_xgboost(self.historico, force_retrain)
     
     def get_status_xgboost(self):
         """Retorna status do XGBoost"""
-        return {
-            "treinado": self.ia_assertiva.xgboost_predictor.treinado,
-            "ativo": self.ia_assertiva.modo_xgboost_ativo,
-            "performance": self.ia_assertiva.xgboost_predictor.get_performance()
-        }
+        return self.ia_assertiva.get_status_xgboost()
         
     def gerar_previsao_assertiva(self, ultimo_numero=None):
         try:
@@ -1553,7 +1239,7 @@ class GestorAssertivo:
         return self.ia_assertiva.get_performance_sequencial()
 
 # =============================
-# STREAMLIT APP 100% BASEADO EM HISTÓRICO COM XGBOOST 50+ FEATURES
+# STREAMLIT APP 100% BASEADO EM HISTÓRICO COM XGBOOST
 # =============================
 st.set_page_config(
     page_title="Roleta - IA Baseada em Histórico", 
@@ -1561,7 +1247,7 @@ st.set_page_config(
     layout="centered"
 )
 
-st.title("🎯 SISTEMA 100% BASEADO EM HISTÓRICO COM XGBOOST 50+ FEATURES")
+st.title("🎯 SISTEMA 100% BASEADO EM HISTÓRICO COM XGBOOST")
 st.markdown("### **Estratégia com 8 Números Baseada Exclusivamente no Histórico + Machine Learning Avançado**")
 
 st_autorefresh(interval=3000, key="refresh")
@@ -1671,8 +1357,8 @@ try:
             st.session_state.gestor.ia_assertiva.previsao_sequencial.verificar_acerto_sequencial(numero_real)
 
         # VERIFICAR ACERTO DO XGBOOST
-        if st.session_state.ultimo_numero and st.session_state.gestor.ia_assertiva.xgboost_predictor.ultima_previsao:
-            st.session_state.gestor.ia_assertiva.xgboost_predictor.verificar_acerto(numero_real)
+        if st.session_state.ultimo_numero:
+            st.session_state.gestor.ia_assertiva.xgboost_ia.verificar_acerto(numero_real)
 
         # VERIFICAR SEQUÊNCIA NEGATIVA E ATIVAR RECUPERAÇÃO
         sequencia_negativa = st.session_state.gestor_risco.sequencia_atual
@@ -1805,6 +1491,46 @@ if st.session_state.resultado_entrada_anterior:
         st.success(f"✅ **ENTRADA ANTERIOR: GREEN!** Acertamos {st.session_state.ultimo_numero}!")
     else:
         st.error(f"❌ **ENTRADA ANTERIOR: RED** {st.session_state.ultimo_numero} não estava")
+
+# SEÇÃO: XGBOOST - MACHINE LEARNING
+st.markdown("---")
+st.subheader("🤖 IA XGBoost - Machine Learning")
+
+xgboost_status = st.session_state.gestor.get_status_xgboost()
+
+col1, col2, col3, col4 = st.columns(4)
+with col1:
+    status_icon = "✅" if xgboost_status["treinado"] else "🔄"
+    st.metric("XGBoost Status", f"{status_icon} {'Treinado' if xgboost_status['treinado'] else 'Treinando'}")
+with col2:
+    modo_icon = "🎯" if xgboost_status["ativo"] else "📊"
+    st.metric("Modo Ativo", f"{modo_icon} {'XGBoost' if xgboost_status['ativo'] else 'Sequencial'}")
+with col3:
+    st.metric("Acertos ML", xgboost_status["performance"]["acertos"])
+with col4:
+    st.metric("Assertividade ML", xgboost_status["performance"]["taxa_acerto"])
+
+# Controles XGBoost
+if XGBOOST_DISPONIVEL:
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🤖 Treinar XGBoost Agora"):
+            with st.spinner("Treinando modelo de Machine Learning..."):
+                sucesso = st.session_state.gestor.treinar_xgboost()
+                if sucesso:
+                    st.success("✅ XGBoost treinado com sucesso!")
+                else:
+                    st.error("❌ Falha no treinamento. Mais dados necessários")
+    with col2:
+        if st.button("🔄 Forçar Re-treinamento"):
+            with st.spinner("Re-treinando modelo..."):
+                sucesso = st.session_state.gestor.treinar_xgboost(force_retrain=True)
+                if sucesso:
+                    st.success("✅ XGBoost re-treinado!")
+                else:
+                    st.warning("⚠️ Verifique se tem dados suficientes")
+else:
+    st.warning("⚠️ XGBoost não disponível - usando métodos tradicionais")
 
 # SEÇÃO: STATUS DE RECUPERAÇÃO
 st.markdown("---")
@@ -1954,7 +1680,7 @@ previsao_valida = validar_previsao(st.session_state.previsao_atual)
 
 if previsao_valida:
     xgboost_status = st.session_state.gestor.get_status_xgboost()
-    origem = "XGBoost 50+ Features" if xgboost_status["ativo"] else "Sequencial"
+    origem = "XGBoost ML" if xgboost_status["ativo"] else "Sequencial"
     st.success(f"**🔥 PREVISÃO VIA {origem.upper()} - {len(previsao_valida)} NÚMEROS ÚNICOS**")
     
     # Display IMPACTANTE
@@ -2057,9 +1783,9 @@ with col3:
             st.info(f"🤖 XGBoost - Treinado: {xgboost_status['treinado']}, Ativo: {xgboost_status['ativo']}")
 
 st.markdown("---")
-st.markdown("### 🚀 **SISTEMA 100% BASEADO EM HISTÓRICO + ESTRATÉGIAS DE RECUPERAÇÃO ATIVADAS**")
-st.markdown("*Estratégia de 8 números baseada exclusivamente no histórico de sorteios com Recuperação Inteligente*")
+st.markdown("### 🚀 **SISTEMA 100% BASEADO EM HISTÓRICO + XGBOOST ML ATIVADO**")
+st.markdown("*Estratégia de 8 números baseada exclusivamente no histórico de sorteios com Machine Learning*")
 
 # Rodapé
 st.markdown("---")
-st.markdown("**🎯 Sistema Baseado em Histórico v16.0** - *XGBoost 50+ Features + Recuperação Avançada + Performance Otimizada*")
+st.markdown("**🎯 Sistema Baseado em Histórico v17.0** - *XGBoost Machine Learning + Recuperação Avançada + Performance Otimizada*")
