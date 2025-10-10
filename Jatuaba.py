@@ -19,7 +19,7 @@ HISTORICO_PATH = "historico.pkl"
 
 # === INICIALIZAÇÃO ===
 st.set_page_config(layout="wide")
-st.title("🎯 Estratégia IA Inteligente - Otimizada e Simplificada")
+st.title("🎯 Estratégia IA Inteligente - Versão Estável com Contador Corrigido")
 
 # === VARIÁVEIS DE ESTADO ===
 if os.path.exists(HISTORICO_PATH):
@@ -33,6 +33,7 @@ defaults = {
     "entrada_atual": [],
     "entrada_info": None,
     "alertas_enviados": set(),
+    "feedbacks_processados": set(),
     "greens": 0,
     "reds": 0,
     "historico_probs": deque(maxlen=30),
@@ -170,7 +171,6 @@ if len(historico_numeros) >= 14:
         if chave_alerta not in st.session_state.alertas_enviados:
             st.session_state.alertas_enviados.add(chave_alerta)
 
-            # === ALERTA SIMPLIFICADO ===
             numeros_linha = " ".join(str(n) for n in entrada_inteligente)
             mensagem = f"{numeros_linha}\n{numeros_linha}"
             enviar_telegram(mensagem)
@@ -182,25 +182,28 @@ if len(historico_numeros) >= 14:
             "probabilidade": round(prob, 3)
         }
 
-# === FEEDBACK ===
+# === FEEDBACK (CORRIGIDO) ===
 if st.session_state.entrada_atual:
     entrada = st.session_state.entrada_atual
     numero_atual = st.session_state.historico[-1]
+    chave_feedback = f"{numero_atual}-{tuple(sorted(entrada))}"
 
-    resultado = "✅ GREEN" if numero_atual in entrada else "❌ RED"
-    if resultado == "✅ GREEN":
-        st.session_state.greens += 1
-    else:
-        st.session_state.reds += 1
+    # Só processa se ainda não foi contado
+    if chave_feedback not in st.session_state.feedbacks_processados:
+        resultado = "✅ GREEN" if numero_atual in entrada else "❌ RED"
+        cor = "green" if resultado == "✅ GREEN" else "red"
 
-    cor = "green" if resultado == "✅ GREEN" else "red"
-    st.markdown(f"<h3 style='color:{cor}'>{resultado} - Último número: {numero_atual}</h3>", unsafe_allow_html=True)
+        st.markdown(f"<h3 style='color:{cor}'>{resultado} - Último número: {numero_atual}</h3>", unsafe_allow_html=True)
 
-    chave_resultado = f"{numero_atual}-{tuple(sorted(entrada))}"
-    if chave_resultado not in st.session_state.alertas_enviados:
-        st.session_state.alertas_enviados.add(chave_resultado)
+        if resultado == "✅ GREEN":
+            st.session_state.greens += 1
+        else:
+            st.session_state.reds += 1
+
         enviar_telegram(resultado)
+        st.session_state.feedbacks_processados.add(chave_feedback)
 
+        # Aprendizado incremental
         try:
             janela = list(st.session_state.historico)[-14:-2]
             if len(janela) == 12:
@@ -211,15 +214,20 @@ if st.session_state.entrada_atual:
         except Exception as e:
             st.error(f"Erro no feedback: {e}")
 
+    # Limpa entrada após processar
     st.session_state.entrada_atual = []
     st.session_state.entrada_info = None
 
 # === INTERFACE ===
-col1, col2 = st.columns(2)
+col1, col2, col3 = st.columns(3)
 with col1:
     st.metric("✅ GREENS", st.session_state.greens)
 with col2:
     st.metric("❌ REDS", st.session_state.reds)
+with col3:
+    total = st.session_state.greens + st.session_state.reds
+    taxa = (st.session_state.greens / total * 100) if total > 0 else 0
+    st.metric("🎯 Taxa de Acerto", f"{taxa:.1f}%")
 
 st.subheader("📊 Últimos números")
 st.write(list(st.session_state.historico)[-15:])
