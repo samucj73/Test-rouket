@@ -68,7 +68,7 @@ VERMELHOS = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]
 # CONFIGURAÇÃO ESPECIALISTA - ESTRATÉGIA 100% BASEADA EM HISTÓRICO
 # =============================
 MIN_HISTORICO_TREINAMENTO = 695
-NUMERO_PREVISOES = 10 # SEMPRE 8 NÚMEROS BASEADOS NO HISTÓRICO
+NUMERO_PREVISOES = 12 # SEMPRE 8 NÚMEROS BASEADOS NO HISTÓRICO
 
 # Fases do sistema
 FASE_INICIAL = 30
@@ -122,7 +122,7 @@ class XGBoostRoletaIA:
             ultimo_num = janela[-1]
 
             # ========== MULTI-JANELAS ==========
-            for tamanho in [6, 12, 24]:
+            for tamanho in [12, 24, 36]:
                 if len(numeros) >= tamanho:
                     j_temp = numeros[max(0, i - tamanho):i]
                     feature_row.append(np.mean(j_temp) / 18)  # Normalizado
