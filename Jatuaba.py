@@ -34,6 +34,11 @@ API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremeli
 MODELO_PATH = "modelo_incremental_v32.pkl"
 HISTORICO_PATH = "historico_v32.pkl"
 
+# Define limiar base inicial para evitar NameError
+LIMIAR_BASE = LIMIAR_BASE_AGRESSIVO if MODO_AGRESSIVO else LIMIAR_BASE_PADRAO
+limiar_adaptado = LIMIAR_BASE
+media_movel_alerts = LIMIAR_BASE
+
 # === INICIALIZAÇÃO UI ===
 st.set_page_config(layout="wide")
 st.title("🎯 Estratégia IA Inteligente - v3.2 (modo agressivo opcional)")
