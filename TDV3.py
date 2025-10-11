@@ -16,7 +16,7 @@ import csv
 # ============ v3.3 ========
 # ==========================
 # Parâmetros ajustáveis (mude aqui para testar rapidamente)
-MODO_AGRESSIVO = False        # True = mais alertas (limiar base menor)
+MODO_AGRESSIVO = True        # True = mais alertas (limiar base menor)
 FEATURE_LEN = 14              # tamanho da janela de features
 HIST_MAXLEN = 1500            # histórico guardado (aumente para estabilidade)
 LIMIAR_BASE_AGRESSIVO = 0.55
