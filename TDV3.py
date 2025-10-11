@@ -33,7 +33,7 @@ LIMIAR_BASE_PADRAO = st.sidebar.number_input("Limiar Base (Padrão)", 0.4, 0.9, 
 LIMIAR_BASE_AGRESSIVO = st.sidebar.number_input("Limiar Base (Agressivo)", 0.4, 0.9, 0.55, step=0.01)
 PESO_TERMINAL = st.sidebar.slider("Peso Terminal", 1.0, 3.0, 1.2, step=0.1)
 PESO_VIZINHO = st.sidebar.slider("Peso Vizinho", 0.2, 2.0, 0.5, step=0.1)
-MOVING_AVG_WINDOW = st.sidebar.slider("Janela da média móvel (alertas)", 3, 15, 5)
+MOVING_AVG_WINDOW = st.sidebar.slider("Janela da média móvel (alertas)", 5, 25, 10)
 
 st.sidebar.markdown("---")
 st.sidebar.info(f"📢 Modo atual: {'Agressivo' if MODO_AGRESSIVO else 'Padrão'}")
