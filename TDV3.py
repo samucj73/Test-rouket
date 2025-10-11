@@ -71,6 +71,9 @@ for k, v in defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
+if "greens_probs" not in st.session_state:
+    st.session_state.greens_probs = []
+
 # Auto-refresh
 from streamlit_autorefresh import st_autorefresh
 st_autorefresh(interval=2500, key="refresh")
