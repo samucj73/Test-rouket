@@ -300,7 +300,7 @@ if st.session_state.nova_entrada and time.time()-st.session_state.tempo_alerta<5
 
 # Últimos números
 st.subheader("📊 Últimos números")
-st.write(list(st.session_state.historico)[-20:])
+st.write(list(st.session_state.historico)[-14:])
 
 # Entrada atual
 if st.session_state.entrada_atual:
