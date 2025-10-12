@@ -94,7 +94,7 @@ def extrair_features(historico):
     return np.array(X, dtype=np.float64), np.array(y, dtype=int)
 
 def treinar_modelo(historico, tipo="duzia"):
-    if len(historico) < 120:
+    if len(historico) < 12:
         return None
     X, y_raw = extrair_features(historico)
     if len(X) == 0:
@@ -108,7 +108,7 @@ def treinar_modelo(historico, tipo="duzia"):
     return modelo
 
 def prever_top2(modelo, historico):
-    if len(historico) < 120:
+    if len(historico) < 12:
         return [], []
 
     X, _ = extrair_features(historico)
