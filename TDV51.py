@@ -38,9 +38,13 @@ MOVING_AVG_WINDOW = st.sidebar.slider("Janela da média móvel (alertas)", 5, 25
 # NOVA CONFIGURAÇÃO: Quantidade de números na previsão
 QTD_NUMEROS_PREVISAO = st.sidebar.selectbox("Quantidade de números na previsão", [6, 8, 12], index=0)
 
+# Configuração da nova estratégia
+ATIVAR_ESTRATEGIA_7_RODADAS = st.sidebar.toggle("Ativar Estratégia 7 Rodadas", value=True)
+
 st.sidebar.markdown("---")
 st.sidebar.info(f"📢 Modo atual: {'Agressivo' if MODO_AGRESSIVO else 'Padrão'}")
 st.sidebar.info(f"🔢 Números na previsão: {QTD_NUMEROS_PREVISAO}")
+st.sidebar.info(f"🎯 Estratégia 7 Rodadas: {'Ativa' if ATIVAR_ESTRATEGIA_7_RODADAS else 'Inativa'}")
 
 # ==========================
 # === INICIALIZAÇÃO UI ====
@@ -70,7 +74,9 @@ defaults = {
     "tempo_alerta": 0,
     "total_alertas": 0,
     "terminais_quentes": {},
-    "probabilidades_numeros": {},  # NOVO: armazena probabilidades individuais
+    "probabilidades_numeros": {},
+    "estrategia_7_entradas": [],  # NOVO: armazena entradas da estratégia das 7 rodadas
+    "historico_estrategia_7": deque(maxlen=50),  # NOVO: histórico da estratégia
 }
 for k, v in defaults.items():
     if k not in st.session_state:
@@ -128,7 +134,7 @@ def carregar_modelo():
     return SGDClassifier(loss='log_loss', max_iter=1000, tol=1e-3, random_state=42)
 
 def salvar_modelo(modelo):
-    joblib.dump(modelo, MODELO_PATH)  # CORREÇÃO: MODELO_PATH em vez de MODELLO_PATH
+    joblib.dump(modelo, MODELO_PATH)
 
 def log_csv(row):
     header = ["timestamp", "evento", "numero", "tipo", "prob_alerta", "limiar", "entrada"]
@@ -137,6 +143,57 @@ def log_csv(row):
         w = csv.writer(f)
         if write_header: w.writerow(header)
         w.writerow(row)
+
+# FUNÇÃO CORRIGIDA: Estratégia das 7 Rodadas (ANÁLISE REVERSA)
+def estrategia_7_rodadas(historico):
+    """
+    Estratégia corrigida (ANÁLISE REVERSA):
+    - Do último número sorteado, volta 7 posições para trás
+    - Pega os terminais da 6ª e 7ª rodadas anteriores (mais antigas)
+    - Compara com os 5 terminais das rodadas mais recentes
+    - Usa os terminais que apareceram MENOS ou NÃO apareceram nos recentes
+    """
+    if len(historico) < 7:
+        return []
+    
+    entradas_estrategia = []
+    
+    # Pega os últimos 7 números (do mais recente para o mais antigo)
+    ultimos_7 = list(historico)[-7:]
+    
+    # Estrutura do grupo (do mais recente para o mais antigo):
+    # [0] = Mais recente (último sorteado)
+    # [1] = 2º mais recente
+    # [2] = 3º mais recente
+    # [3] = 4º mais recente
+    # [4] = 5º mais recente
+    # [5] = 6º mais recente (6ª anterior)
+    # [6] = 7º mais recente (7ª anterior)
+    
+    # 5 rodadas mais RECENTES (posições 0 a 4)
+    cinco_recentes = ultimos_7[0:5]
+    terminais_recentes = [num % 10 for num in cinco_recentes]
+    
+    # 6ª e 7ª rodadas ANTERIORES (mais antigas - posições 5 e 6)
+    sexta_anterior = ultimos_7[5]  # 6ª anterior
+    setima_anterior = ultimos_7[6]  # 7ª anterior
+    
+    terminais_anteriores = [sexta_anterior % 10, setima_anterior % 10]
+    
+    # Contar frequência dos terminais nos RECENTES
+    freq_recentes = Counter(terminais_recentes)
+    
+    # Analisar cada terminal anterior
+    for terminal in terminais_anteriores:
+        freq_terminal = freq_recentes.get(terminal, 0)
+        
+        # Se o terminal não apareceu ou apareceu apenas 1 vez nos 5 recentes
+        if freq_terminal <= 1:
+            # Todos os números com esse terminal são a entrada
+            entrada = [num for num in range(37) if num % 10 == terminal]
+            entradas_estrategia.extend(entrada)
+    
+    return list(set(entradas_estrategia))  # Remove duplicatas
 
 # ==========================
 # === CAPTURA DA API ===
@@ -152,6 +209,20 @@ try:
             st.session_state.ultimo_timestamp = ts
             joblib.dump(list(st.session_state.historico), HISTORICO_PATH)
             st.success(f"🎯 Novo número: {numero}")
+            
+            # NOVO: Executar estratégia das 7 rodadas a cada novo número
+            if ATIVAR_ESTRATEGIA_7_RODADAS and len(st.session_state.historico) >= 7:
+                entrada_estrategia = estrategia_7_rodadas(list(st.session_state.historico))
+                if entrada_estrategia:
+                    st.session_state.estrategia_7_entradas = entrada_estrategia
+                    # Registrar no histórico da estratégia
+                    st.session_state.historico_estrategia_7.append({
+                        "timestamp": time.time(),
+                        "entrada": entrada_estrategia,
+                        "terminais_ativos": list(set([n % 10 for n in entrada_estrategia])),
+                        "numero_analisado": numero,
+                        "analise": f"6ª anterior: {st.session_state.historico[-6] % 10}, 7ª anterior: {st.session_state.historico[-7] % 10}"
+                    })
 except Exception:
     pass
 
@@ -188,6 +259,8 @@ if len(hist) >= FEATURE_LEN + 1:
 LIMIAR_BASE = LIMIAR_BASE_AGRESSIVO if MODO_AGRESSIVO else LIMIAR_BASE_PADRAO
 limiar_adaptado, media_movel_alerts = LIMIAR_BASE, LIMIAR_BASE
 
+entrada_final_combinada = []
+
 if len(hist) >= FEATURE_LEN:
     Xp = pd.DataFrame([extrair_features(hist[-FEATURE_LEN:])]).fillna(0)
     try:
@@ -212,7 +285,7 @@ if len(hist) >= FEATURE_LEN:
         entrada_p = [n for n in range(37) if n % 10 in dom]
         entrada_v = expandir_com_vizinhos(entrada_p)
 
-        # NOVA LÓGICA: Calcular probabilidades individuais para cada número
+        # LÓGICA ORIGINAL: Calcular probabilidades individuais para cada número
         probabilidades_numeros = {}
         hist_r = hist[-100:]
         freq = Counter(hist_r)
@@ -247,17 +320,40 @@ if len(hist) >= FEATURE_LEN:
                                  key=lambda x: x[1], reverse=True)
         
         # Selecionar apenas a quantidade configurada de números
-        entrada_final = [num for num, prob in numeros_ordenados[:QTD_NUMEROS_PREVISAO]]
+        entrada_original = [num for num, prob in numeros_ordenados[:QTD_NUMEROS_PREVISAO]]
         
-        # Armazenar as probabilidades para exibição
-        st.session_state.probabilidades_numeros = dict(numeros_ordenados[:QTD_NUMEROS_PREVISAO])
+        # NOVO: Combinar com estratégia das 7 rodadas se ativa
+        if ATIVAR_ESTRATEGIA_7_RODADAS and st.session_state.estrategia_7_entradas:
+            # Combinar entradas (união das duas estratégias)
+            entrada_combinada = list(set(entrada_original + st.session_state.estrategia_7_entradas))
+            
+            # Recalcular probabilidades para os números combinados
+            probabilidades_combinadas = {}
+            for num in entrada_combinada:
+                if num in probabilidades_numeros:
+                    probabilidades_combinadas[num] = probabilidades_numeros[num]
+                else:
+                    # Para números da estratégia 7, dar uma probabilidade base
+                    terminal = num % 10
+                    freq_num = freq.get(num, 0)
+                    bonus_terminal = st.session_state.terminais_quentes.get(terminal, 0) * 0.35
+                    probabilidades_combinadas[num] = freq_num * 0.8 + bonus_terminal + 1.0  # Bonus por ser da estratégia 7
+            
+            # Ordenar a entrada combinada
+            entrada_combinada_ordenada = sorted(probabilidades_combinadas.items(), 
+                                              key=lambda x: x[1], reverse=True)
+            entrada_final_combinada = [num for num, prob in entrada_combinada_ordenada[:QTD_NUMEROS_PREVISAO]]
+            st.session_state.probabilidades_numeros = dict(entrada_combinada_ordenada[:QTD_NUMEROS_PREVISAO])
+        else:
+            entrada_final_combinada = entrada_original
+            st.session_state.probabilidades_numeros = dict(numeros_ordenados[:QTD_NUMEROS_PREVISAO])
 
-        chave = f"{dom}-{entrada_final}"
+        chave = f"{dom}-{entrada_final_combinada}"
         if chave not in st.session_state.alertas_enviados:
             st.session_state.alertas_enviados.add(chave)
             
-            # CORREÇÃO: Enviar apenas os números, sem probabilidades
-            mensagem = " ".join(str(num) for num in entrada_final)
+            # Enviar apenas os números
+            mensagem = " ".join(str(num) for num in entrada_final_combinada)
             enviar_telegram(mensagem)
             
             st.session_state.nova_entrada = True
@@ -266,14 +362,15 @@ if len(hist) >= FEATURE_LEN:
 
             # ⚡ guarda índice do próximo número para conferência
             st.session_state.entrada_atual = {
-                "entrada": entrada_final,
+                "entrada": entrada_final_combinada,
                 "terminais": dom,
                 "probabilidade": round(prob,3),
                 "probabilidades_individual": st.session_state.probabilidades_numeros,
+                "estrategia_7_ativa": ATIVAR_ESTRATEGIA_7_RODADAS and bool(st.session_state.estrategia_7_entradas),
                 "index_feedback": len(hist)
             }
             st.session_state.alert_probs.append(prob)
-            log_csv([time.time(), "ALERTA", None, None, round(prob,3), round(limiar_adaptado,3), ",".join(map(str,entrada_final))])
+            log_csv([time.time(), "ALERTA", None, None, round(prob,3), round(limiar_adaptado,3), ",".join(map(str,entrada_final_combinada))])
 
 # ==========================
 # === FEEDBACK (confere apenas próximo número) ===
@@ -316,6 +413,15 @@ col3.metric("🎯 Taxa de Acerto", f"{(st.session_state.greens/tot*100 if tot>0 
 col4.metric("🎯 GREEN Terminal", st.session_state.greens_terminal)
 col5.metric("🎯 GREEN Vizinho", st.session_state.greens_vizinho)
 
+# NOVA MÉTRICA: Estratégia 7 Rodadas
+if ATIVAR_ESTRATEGIA_7_RODADAS:
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("🎯 Estratégia 7 Rodadas")
+    st.sidebar.write(f"Entradas ativas: {len(st.session_state.estrategia_7_entradas)}")
+    if st.session_state.estrategia_7_entradas:
+        terminais_ativos = list(set([n % 10 for n in st.session_state.estrategia_7_entradas]))
+        st.sidebar.write(f"Terminais: {terminais_ativos}")
+
 # Distribuição Terminal / Vizinho
 total_g = st.session_state.greens_terminal + st.session_state.greens_vizinho
 if total_g>0:
@@ -338,10 +444,22 @@ st.write(f"Limiar base: {LIMIAR_BASE:.3f} | Limiar adaptado: {limiar_adaptado:.3
 # Nova entrada visual
 if st.session_state.nova_entrada and time.time()-st.session_state.tempo_alerta<5:
     st.markdown("<h3 style='color:orange'>⚙️ Nova entrada IA ativa!</h3>", unsafe_allow_html=True)
+    if st.session_state.entrada_atual and st.session_state.entrada_atual.get("estrategia_7_ativa"):
+        st.markdown("<p style='color:green'>🎯 Estratégia 7 Rodadas Ativa</p>", unsafe_allow_html=True)
 
-# Últimos números
-st.subheader("📊 Últimos números")
-st.write(list(st.session_state.historico)[-14:])
+# Últimos números com ANÁLISE DA ESTRATÉGIA
+st.subheader("📊 Últimos números (Análise Estratégia 7 Rodadas)")
+ultimos_numeros = list(st.session_state.historico)[-14:]
+if len(ultimos_numeros) >= 7:
+    st.write("Últimos 7 números (do mais recente para o mais antigo):")
+    analise_df = pd.DataFrame({
+        "Posição": ["Mais Recente", "2º", "3º", "4º", "5º", "6ª Anterior", "7ª Anterior"],
+        "Número": ultimos_numeros[-7:],
+        "Terminal": [n % 10 for n in ultimos_numeros[-7:]]
+    })
+    st.dataframe(analise_df, use_container_width=True)
+else:
+    st.write(ultimos_numeros)
 
 # Entrada atual com probabilidades ordenadas
 if st.session_state.entrada_atual:
@@ -358,8 +476,19 @@ if st.session_state.entrada_atual:
     
     st.dataframe(prob_df, use_container_width=True)
     
+    # Mostrar estratégias ativas
+    if st.session_state.entrada_atual.get("estrategia_7_ativa"):
+        st.info("🎯 Estratégia 7 Rodadas contribuindo para esta entrada")
+    
     # Também mostrar como lista simples
     st.write("Lista de entrada:", st.session_state.entrada_atual["entrada"])
+
+# NOVA SEÇÃO: Histórico da Estratégia 7 Rodadas
+if ATIVAR_ESTRATEGIA_7_RODADAS and st.session_state.historico_estrategia_7:
+    st.subheader("📈 Histórico Estratégia 7 Rodadas")
+    historico_df = pd.DataFrame(list(st.session_state.historico_estrategia_7)[-10:])
+    if not historico_df.empty:
+        st.dataframe(historico_df[["timestamp", "terminais_ativos", "analise"]], use_container_width=True)
 
 # Histórico de confiança
 if st.session_state.historico_probs:
