@@ -57,7 +57,7 @@ else:
 # Estado padrão
 defaults = {
     "ultimo_timestamp": None,
-    "entrada_atual": None,  # Agora é dict
+    "entrada_atual": None,
     "alertas_enviados": set(),
     "feedbacks_processados": set(),
     "greens": 0,
@@ -128,7 +128,7 @@ def carregar_modelo():
     return SGDClassifier(loss='log_loss', max_iter=1000, tol=1e-3, random_state=42)
 
 def salvar_modelo(modelo):
-    joblib.dump(modelo, MODELLO_PATH)
+    joblib.dump(modelo, MODELO_PATH)  # CORREÇÃO: MODELO_PATH em vez de MODELLO_PATH
 
 def log_csv(row):
     header = ["timestamp", "evento", "numero", "tipo", "prob_alerta", "limiar", "entrada"]
