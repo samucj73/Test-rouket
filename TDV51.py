@@ -16,7 +16,7 @@ import os
 
 # === CONFIGURAÇÕES FIXAS ===
 TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
-CHAT_ID = "-1002979544095"
+#CHAT_ID = "-1002979544095"
 API_URL = "https://api.casinoscores.com/svc-evolution-game-events/api/xxxtremelightningroulette/latest"
 MODELO_PATH = "modelo_incremental_v35.pkl"
 HISTORICO_PATH = "historico_v35.pkl"
