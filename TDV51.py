@@ -256,8 +256,8 @@ if len(hist) >= FEATURE_LEN:
         if chave not in st.session_state.alertas_enviados:
             st.session_state.alertas_enviados.add(chave)
             
-            # Formatar mensagem com números ordenados por probabilidade
-            mensagem = " ".join([f"{num}({prob:.1f})" for num, prob in numeros_ordenados[:QTD_NUMEROS_PREVISAO]])
+            # CORREÇÃO: Enviar apenas os números, sem probabilidades
+            mensagem = " ".join(str(num) for num in entrada_final)
             enviar_telegram(mensagem)
             
             st.session_state.nova_entrada = True
