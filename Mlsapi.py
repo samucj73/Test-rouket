@@ -201,7 +201,8 @@ if "endpoint" in params:
         st.stop()
 
 # ===============================
-# 📊 Dashboard visual
+## ===============================
+# 📊 Dashboard visual corrigido
 # ===============================
 ultima = st.session_state["last_update"].strftime("%d/%m/%Y %H:%M:%S") if st.session_state["last_update"] else "Nunca"
 st.markdown(f"🕒 **Última atualização:** {ultima}")
@@ -209,17 +210,32 @@ st.markdown(f"🕒 **Última atualização:** {ultima}")
 dados_df = pd.DataFrame(st.session_state["dados"])
 
 if not dados_df.empty:
+    # Filtros
     liga_selecionada = st.multiselect("Selecione ligas:", options=list(LIGAS.keys()), default=list(LIGAS.keys()))
     data_selecionada = st.date_input("Filtrar por data:", value=datetime.utcnow().date())
+
     dados_filtrados = dados_df[
         (dados_df["liga"].isin([LIGAS[l] for l in liga_selecionada])) &
         (pd.to_datetime(dados_df["horario"]).dt.date == data_selecionada)
     ]
 
-    for idx, row in dados_filtrados.iterrows():
-        st.markdown(f"### {row['mandante']} vs {row['visitante']}")
-        st.image([row['mandante_logo'], row['visitante_logo']], width=80, caption=[row['mandante'], row['visitante']])
-        st.markdown(f"**Placar:** {row['placar_m']} x {row['placar_v']} | **Status:** {row['status']}")
-        st.markdown("---")
+    if dados_filtrados.empty:
+        st.warning("Nenhuma partida disponível para os filtros selecionados.")
+    else:
+        for idx, row in dados_filtrados.iterrows():
+            st.markdown(f"### {row['mandante']} vs {row['visitante']}")
+            
+            # 🔹 Tratamento de escudos ausentes
+            mandante_logo = row['mandante_logo'] if row['mandante_logo'] else None
+            visitante_logo = row['visitante_logo'] if row['visitante_logo'] else None
+
+            logos = [logo for logo in [mandante_logo, visitante_logo] if logo]
+            captions = [row['mandante'], row['visitante']][:len(logos)]
+
+            if logos:
+                st.image(logos, width=80, caption=captions)
+
+            st.markdown(f"**Placar:** {row['placar_m']} x {row['placar_v']} | **Status:** {row['status']}")
+            st.markdown("---")
 else:
-    st.warning("Nenhum dado disponível no momento.")
+    st.warning("Nenhum dado disponível no momento.") 
