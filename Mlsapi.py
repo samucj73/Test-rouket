@@ -1,88 +1,117 @@
 import streamlit as st
 import requests
-import pandas as pd
-from datetime import datetime
 from bs4 import BeautifulSoup
+import json
+import os
+from datetime import datetime, timedelta
 
-# =====================================
-# ⚽ CONFIGURAÇÕES GERAIS
-# =====================================
+# Configurações iniciais
 st.set_page_config(page_title="⚽ API MLS - Elite", layout="wide")
 st.title("⚽ API MLS - Elite Master")
 
-st.markdown("""
-Esta API coleta automaticamente os **dados mais recentes da MLS (Major League Soccer)** diretamente da ESPN,
-atualizando automaticamente a cada **15 minutos**, sem apps externos.
-""")
+DATA_FILE = "mls.json"
+UPDATE_INTERVAL_MINUTES = 15
+os.makedirs(".", exist_ok=True)
 
-# =====================================
-# 🔄 FUNÇÃO PARA RASPAGEM DA ESPN
-# =====================================
-def buscar_partidas_mls():
-    try:
-        url = "https://www.espn.com/soccer/scoreboard/_/league/usa.1"
-        response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
-        soup = BeautifulSoup(response.text, "html.parser")
+# Função para raspar a página da ESPN MLS
+def fetch_espn_mls():
+    url = "https://www.espn.com/soccer/scoreboard/_/league/usa.1"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    resp = requests.get(url, headers=headers, timeout=15)
+    resp.raise_for_status()
+    soup = BeautifulSoup(resp.text, "html.parser")
 
-        partidas = []
+    matches = []
 
-        blocos = soup.find_all("section", class_="Scoreboard")
-        for bloco in blocos:
-            equipes = bloco.find_all("span", class_="sb-team-short")
-            if len(equipes) != 2:
+    # Cada bloco de partida está dentro de <section class="Scoreboard"> — verificar estrutura real
+    for bloco in soup.select("section.Scoreboard"):
+        try:
+            equipes = bloco.select("span.sb-team-short")
+            if len(equipes) < 2:
                 continue
+            mandante = equipes[0].text.strip()
+            visitante = equipes[1].text.strip()
 
-            time_casa = equipes[0].text.strip()
-            time_fora = equipes[1].text.strip()
+            placares = bloco.select("span.sb-team-score")
+            if len(placares) >= 2:
+                placar_m = placares[0].text.strip()
+                placar_v = placares[1].text.strip()
+                placar = f"{placar_m} - {placar_v}"
+            else:
+                placar = "vs"
 
-            placares = bloco.find_all("span", class_="sb-team-score")
-            placar_casa = placares[0].text.strip() if len(placares) >= 1 else "-"
-            placar_fora = placares[1].text.strip() if len(placares) >= 2 else "-"
+            status_elem = bloco.select_one("span.sb-status-text")
+            status = status_elem.text.strip() if status_elem else "Agendado"
 
-            status = bloco.find("span", class_="sb-status-text")
-            status_text = status.text.strip() if status else "Agendado"
+            hora_elem = bloco.select_one("span.sb-date-time")
+            horario = hora_elem.text.strip() if hora_elem else ""
 
-            hora = bloco.find("span", class_="sb-date-time")
-            hora_text = hora.text.strip() if hora else "-"
-
-            partidas.append({
-                "Casa": time_casa,
-                "Fora": time_fora,
-                "Placar Casa": placar_casa,
-                "Placar Fora": placar_fora,
-                "Status": status_text,
-                "Horário": hora_text
+            matches.append({
+                "mandante": mandante,
+                "visitante": visitante,
+                "horario": horario,
+                "placar": placar,
+                "status": status
             })
+        except Exception as e:
+            # Em caso de falha num bloco, ignorar e continuar
+            print("Erro num bloco:", e)
+            continue
 
-        return pd.DataFrame(partidas) if partidas else None
+    # Salvar local para reutilização
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(matches, f, ensure_ascii=False, indent=2)
 
+    return matches
+
+# Função para carregar dados salvos
+def load_local():
+    if os.path.exists(DATA_FILE):
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return []
+
+# Controle de atualização automática
+if "last_update" not in st.session_state:
+    st.session_state["last_update"] = None
+if "matches" not in st.session_state:
+    st.session_state["matches"] = []
+
+now = datetime.now()
+if (
+    st.session_state["last_update"] is None
+    or (now - st.session_state["last_update"]) > timedelta(minutes=UPDATE_INTERVAL_MINUTES)
+):
+    try:
+        st.session_state["matches"] = fetch_espn_mls()
+        st.session_state["last_update"] = now
     except Exception as e:
         st.error(f"Erro ao buscar dados da MLS (ESPN): {e}")
-        return None
-
-# =====================================
-# ⏰ ATUALIZAÇÃO AUTOMÁTICA (a cada 15 minutos)
-# =====================================
-from streamlit_autorefresh import st_autorefresh
-
-# Atualiza a cada 15 minutos (900 segundos)
-contador = st_autorefresh(interval=15 * 60 * 1000, key="auto_refresh")
-
-if "dados_mls" not in st.session_state or contador == 0:
-    st.session_state["dados_mls"] = buscar_partidas_mls()
-    st.session_state["ultimo_update"] = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-
-dados = st.session_state.get("dados_mls")
-ultima = st.session_state.get("ultimo_update")
-
-# =====================================
-# 🧾 EXIBIÇÃO
-# =====================================
-if dados is not None:
-    st.markdown(f"🕒 **Última atualização:** {ultima} | Atualização automática a cada 15 minutos.")
-    st.dataframe(dados, use_container_width=True)
+        # fallback para dados locais
+        st.session_state["matches"] = load_local()
 else:
-    st.warning("Nenhum dado disponível. Aguarde a atualização automática.")
+    # usar dados locais
+    st.session_state["matches"] = load_local()
 
-st.markdown("---")
-st.markdown("✅ Atualização automática em segundo plano habilitada.")
+# Modo API JSON via query param
+params = st.query_params
+if "endpoint" in params and params["endpoint"][0].lower() == "mls":
+    st.json(st.session_state["matches"])
+    st.stop()
+
+# Interface visual
+st.caption(f"🕒 Última atualização: {st.session_state['last_update'].strftime('%d/%m/%Y %H:%M:%S')} | Atualização a cada {UPDATE_INTERVAL_MINUTES} min")
+
+if not st.session_state["matches"]:
+    st.warning("Nenhum dado disponível. Aguarde a próxima atualização.")
+else:
+    for m in st.session_state["matches"]:
+        st.markdown(f"**{m['mandante']}** vs **{m['visitante']}** — {m['horario']} | {m['placar']} | {m['status']}")
+
+# Botão opcional de atualização manual
+if st.button("🔄 Atualizar agora"):
+    try:
+        st.session_state["matches"] = fetch_espn_mls()
+        st.session_state["last_update"] = datetime.now()
+    except Exception as e:
+        st.error(f"Erro ao atualizar: {e}")
