@@ -14,6 +14,7 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 import time
 from typing import List, Dict, Optional
 import re
+import hashlib
 
 # =============================
 # Configurações e Constantes
@@ -67,6 +68,16 @@ HEADERS = {
 }
 
 # =============================
+# Funções auxiliares para chaves únicas
+# =============================
+def gerar_chave_unica(base_key: str, sufixo: str = "") -> str:
+    """Gera uma chave única para elementos do Streamlit"""
+    chave = f"{base_key}_{sufixo}" if sufixo else base_key
+    # Adiciona um hash para garantir unicidade
+    hash_obj = hashlib.md5(chave.encode())
+    return f"{base_key}_{hash_obj.hexdigest()[:8]}"
+
+# =============================
 # Inicialização do Session State
 # =============================
 def inicializar_session_state():
@@ -89,6 +100,8 @@ def inicializar_session_state():
         st.session_state.filtros_liga = {}
     if 'top_n' not in st.session_state:
         st.session_state.top_n = 5
+    if 'contador_interacao' not in st.session_state:
+        st.session_state.contador_interacao = 0
 
 # =============================
 # Funções utilitárias
@@ -202,7 +215,7 @@ def safe_datetime_range(dt: Optional[datetime], start: datetime, end: datetime) 
 # =============================
 # Componentes de UI Melhorados
 # =============================
-def criar_card_partida(partida: Dict):
+def criar_card_partida(partida: Dict, index: int):
     """Cria um card visual para cada partida"""
     status_config = get_status_config(partida['status'])
     
@@ -278,7 +291,7 @@ def exibir_partidas_por_liga(partidas: List[Dict]):
     ligas_ordenadas = sorted(partidas_por_liga.keys(), 
                            key=lambda x: len(partidas_por_liga[x]), reverse=True)
     
-    for liga in ligas_ordenadas:
+    for liga_index, liga in enumerate(ligas_ordenadas):
         partidas_liga = partidas_por_liga[liga]
         
         # Container da liga
@@ -303,7 +316,7 @@ def exibir_partidas_por_liga(partidas: List[Dict]):
                     index=["Todos", "Agendado", "Ao Vivo", "Finalizado"].index(
                         st.session_state.filtros_liga[liga_key]['status']
                     ),
-                    key=f"status_{liga}"
+                    key=gerar_chave_unica(f"status_select_{liga}", str(liga_index))
                 )
                 st.session_state.filtros_liga[liga_key]['status'] = novo_status
             
@@ -311,12 +324,13 @@ def exibir_partidas_por_liga(partidas: List[Dict]):
                 novo_time = st.text_input(
                     f"Buscar time - {liga}", 
                     value=st.session_state.filtros_liga[liga_key]['time'],
-                    key=f"time_{liga}"
+                    key=gerar_chave_unica(f"time_input_{liga}", str(liga_index))
                 )
                 st.session_state.filtros_liga[liga_key]['time'] = novo_time
             
             with col_filtro3:
-                if st.button(f"🎯 Top 3 - {liga}", key=f"top3_{liga}"):
+                if st.button(f"🎯 Top 3 - {liga}", 
+                           key=gerar_chave_unica(f"top3_btn_{liga}", str(liga_index))):
                     partidas_liga = partidas_liga[:3]
             
             # Aplica filtros
@@ -333,8 +347,8 @@ def exibir_partidas_por_liga(partidas: List[Dict]):
             
             # Exibe partidas
             if partidas_filtradas:
-                for partida in partidas_filtradas:
-                    criar_card_partida(partida)
+                for i, partida in enumerate(partidas_filtradas):
+                    criar_card_partida(partida, i)
             else:
                 st.info(f"ℹ️ Nenhuma partida encontrada para os filtros em {liga}")
             
@@ -367,30 +381,36 @@ def exibir_estatisticas(partidas: List[Dict]):
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.metric("📊 Total de Partidas", total_partidas)
+        st.metric("📊 Total de Partidas", total_partidas, 
+                 key=gerar_chave_unica("metric_total"))
     
     with col2:
-        st.metric("🏆 Ligas", ligas_unicas)
+        st.metric("🏆 Ligas", ligas_unicas,
+                 key=gerar_chave_unica("metric_ligas"))
     
     with col3:
         st.metric("🔴 Ao Vivo", partidas_ao_vivo, 
-                 delta=partidas_ao_vivo if partidas_ao_vivo > 0 else None)
+                 delta=partidas_ao_vivo if partidas_ao_vivo > 0 else None,
+                 key=gerar_chave_unica("metric_aovivo"))
     
     with col4:
         st.metric("⏰ Próximas 3h", len(proximas_3h),
-                 delta=len(proximas_3h) if len(proximas_3h) > 0 else None)
+                 delta=len(proximas_3h) if len(proximas_3h) > 0 else None,
+                 key=gerar_chave_unica("metric_proximas"))
     
     # Gráfico de status simples
     if status_count:
         st.markdown("### 📈 Distribuição por Status")
         status_df = pd.DataFrame(list(status_count.items()), columns=['Status', 'Quantidade'])
-        st.bar_chart(status_df.set_index('Status'))
+        st.bar_chart(status_df.set_index('Status'), 
+                    key=gerar_chave_unica("status_chart"))
 
 def exibir_partidas_lista_compacta(partidas: List[Dict]):
     """Exibe partidas em formato de lista compacta"""
     for i, partida in enumerate(partidas):
         status_config = get_status_config(partida['status'])
-        with st.expander(f"{status_config['emoji']} {partida['home']} vs {partida['away']} - {partida['placar']}"):
+        with st.expander(f"{status_config['emoji']} {partida['home']} vs {partida['away']} - {partida['placar']}", 
+                        key=gerar_chave_unica("expander_partida", str(i))):
             col1, col2 = st.columns(2)
             with col1:
                 st.write(f"**Casa:** {partida['home']}")
@@ -659,6 +679,7 @@ def processar_jogos(data_str: str, ligas_selecionadas: List[str], top_n: int, bu
     st.session_state.busca_hoje = buscar_hoje
     st.session_state.data_ultima_busca = data_str
     st.session_state.top_n = top_n
+    st.session_state.contador_interacao += 1
     
     # Limpa a barra de progresso
     progress_bar.empty()
@@ -698,13 +719,16 @@ def exibir_dados_salvos():
     st.markdown("---")
     col_view1, col_view2, col_view3 = st.columns(3)
     with col_view1:
-        if st.button("📊 Visualização por Liga", use_container_width=True, key="view_liga"):
+        if st.button("📊 Visualização por Liga", use_container_width=True, 
+                   key=gerar_chave_unica("btn_view_liga")):
             st.session_state.modo_exibicao = "liga"
     with col_view2:
-        if st.button("📋 Lista Compacta", use_container_width=True, key="view_lista"):
+        if st.button("📋 Lista Compacta", use_container_width=True, 
+                   key=gerar_chave_unica("btn_view_lista")):
             st.session_state.modo_exibicao = "lista"
     with col_view3:
-        if st.button("🎯 Top Partidas", use_container_width=True, key="view_top"):
+        if st.button("🎯 Top Partidas", use_container_width=True, 
+                   key=gerar_chave_unica("btn_view_top")):
             st.session_state.modo_exibicao = "top"
 
     # Modo de exibição
@@ -727,7 +751,8 @@ def exibir_dados_salvos():
     
     col_tg1, col_tg2 = st.columns([1, 2])
     with col_tg1:
-        if st.button(f"🚀 Enviar Top {top_n} para Telegram", type="primary", use_container_width=True, key="send_tg"):
+        if st.button(f"🚀 Enviar Top {top_n} para Telegram", type="primary", use_container_width=True, 
+                   key=gerar_chave_unica("btn_send_telegram")):
             if st.session_state.busca_hoje:
                 top_msg = f"⚽ TOP {top_n} JOGOS DE HOJE - {datetime.now().strftime('%d/%m/%Y')}\n\n"
             else:
@@ -749,7 +774,8 @@ def exibir_dados_salvos():
         
     # Botão para atualizar dados
     st.markdown("---")
-    if st.button("🔄 Atualizar Dados", use_container_width=True, key="refresh_data"):
+    if st.button("🔄 Atualizar Dados", use_container_width=True, 
+               key=gerar_chave_unica("btn_refresh_data")):
         st.rerun()
 
 # =============================
@@ -768,7 +794,8 @@ def main():
         st.header("⚙️ Configurações")
         
         st.subheader("📊 Exibição")
-        top_n = st.selectbox("Top N Jogos", [3, 5, 10], index=1, key="top_n_select")
+        top_n = st.selectbox("Top N Jogos", [3, 5, 10], index=1, 
+                           key=gerar_chave_unica("select_top_n"))
         st.session_state.top_n = top_n
         
         st.subheader("🏆 Ligas")
@@ -779,7 +806,7 @@ def main():
             options=list(LIGAS_ESPN.keys()),
             default=st.session_state.ultimas_ligas if st.session_state.ultimas_ligas else list(LIGAS_ESPN.keys())[:4],
             label_visibility="collapsed",
-            key="ligas_select"
+            key=gerar_chave_unica("select_ligas")
         )
         
         st.markdown("---")
@@ -787,7 +814,8 @@ def main():
         
         col_util1, col_util2 = st.columns(2)
         with col_util1:
-            if st.button("🧹 Limpar Cache", use_container_width=True, key="clear_cache"):
+            if st.button("🧹 Limpar Cache", use_container_width=True, 
+                       key=gerar_chave_unica("btn_clear_cache")):
                 if os.path.exists(CACHE_JOGOS):
                     os.remove(CACHE_JOGOS)
                 if os.path.exists(ALERTAS_PATH):
@@ -797,7 +825,8 @@ def main():
                 st.rerun()
                 
         with col_util2:
-            if st.button("🔄 Atualizar", use_container_width=True, key="refresh_btn"):
+            if st.button("🔄 Atualizar", use_container_width=True, 
+                       key=gerar_chave_unica("btn_refresh")):
                 if st.session_state.dados_carregados:
                     # Refaz a busca com os mesmos parâmetros
                     if st.session_state.busca_hoje:
@@ -817,17 +846,19 @@ def main():
             "Selecione a data:", 
             value=datetime.today(),
             max_value=datetime.today() + timedelta(days=7),
-            key="data_input"
+            key=gerar_chave_unica("input_data")
         )
     
     with col2:
         st.markdown("### ")
-        btn_buscar = st.button("🔍 Buscar por Data", type="primary", use_container_width=True, key="btn_buscar")
+        btn_buscar = st.button("🔍 Buscar por Data", type="primary", use_container_width=True, 
+                             key=gerar_chave_unica("btn_buscar_data"))
     
     with col3:
         st.markdown("### ")
         btn_hoje = st.button("🎯 Jogos de Hoje", use_container_width=True, 
-                           help="Busca apenas jogos acontecendo hoje", key="btn_hoje")
+                           help="Busca apenas jogos acontecendo hoje", 
+                           key=gerar_chave_unica("btn_buscar_hoje"))
 
     data_str = data_selecionada.strftime("%Y-%m-%d")
 
@@ -861,7 +892,8 @@ def main():
         """)
 
     # Informações de ajuda
-    with st.expander("🎮 Guia Rápido", expanded=False):
+    with st.expander("🎮 Guia Rápido", expanded=False, 
+                   key=gerar_chave_unica("expander_ajuda")):
         col_help1, col_help2 = st.columns(2)
         
         with col_help1:
