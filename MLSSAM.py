@@ -2,6 +2,7 @@ import streamlit as st
 from datetime import datetime, timedelta
 import requests
 import json
+import os
 import io
 import pandas as pd
 from reportlab.lib.pagesizes import letter
@@ -9,148 +10,255 @@ from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 
 # =============================
-# Configurações
+# Configurações e Segurança
 # =============================
-TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
-TELEGRAM_CHAT_ID = "-1003073115320"
-TELEGRAM_CHAT_ID_ALT2 = "-1002754276285"
+API_KEY = os.getenv("FOOTBALL_API_KEY", "9058de85e3324bdb969adc005b5d918a")
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "-1003073115320")
+TELEGRAM_CHAT_ID_ALT2 = os.getenv("TELEGRAM_CHAT_ID_ALT2", "-1002754276285")
+
+HEADERS = {"X-Auth-Token": API_KEY}
+BASE_URL_FD = "https://api.football-data.org/v4"
 BASE_URL_TG = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-BASE_URL_NEW_API = "https://test-rouket-nvgsix9abxckpjrnlfz79b.streamlit.app/"
 
+# Constantes
 ALERTAS_PATH = "alertas.json"
+CACHE_JOGOS = "cache_jogos.json"
+CACHE_CLASSIFICACAO = "cache_classificacao.json"
 CACHE_TIMEOUT = 3600  # 1 hora
+DIAS_PASSADOS = 3
+DIAS_FUTUROS = 2
 
 # =============================
-# Funções de cache
+# Ligas disponíveis
+# =============================
+LIGA_DICT = {
+    "FIFA World Cup": "WC",
+    "UEFA Champions League": "CL", 
+    "Bundesliga": "BL1",
+    "Eredivisie": "DED",
+    "Campeonato Brasileiro Série A": "BSA",
+    "Primera Division": "PD",
+    "Ligue 1": "FL1",
+    "Championship (Inglaterra)": "ELC",
+    "Primeira Liga (Portugal)": "PPL",
+    "European Championship": "EC",
+    "Serie A (Itália)": "SA",
+    "Premier League (Inglaterra)": "PL"
+}
+
+# =============================
+# Cache e JSON
 # =============================
 def carregar_json(caminho: str) -> dict:
     try:
         if os.path.exists(caminho):
-            with open(caminho, "r", encoding="utf-8") as f:
-                return json.load(f)
+            with open(caminho, "r", encoding='utf-8') as f:
+                dados = json.load(f)
+            return dados
     except:
         return {}
     return {}
 
 def salvar_json(caminho: str, dados: dict):
     try:
-        with open(caminho, "w", encoding="utf-8") as f:
+        with open(caminho, "w", encoding='utf-8') as f:
             json.dump(dados, f, ensure_ascii=False, indent=2)
     except:
         pass
 
-def carregar_alertas() -> dict:
-    return carregar_json(ALERTAS_PATH)
-
-def salvar_alertas(alertas: dict):
-    salvar_json(ALERTAS_PATH, alertas)
-
-# =============================
-# Funções utilitárias
-# =============================
-def formatar_data_iso(data_iso: str) -> tuple[str, str]:
-    try:
-        data_jogo = datetime.fromisoformat(data_iso.replace("Z", "+00:00")) - timedelta(hours=3)
-        return data_jogo.strftime("%d/%m/%Y"), data_jogo.strftime("%H:%M")
-    except:
-        return "Data inválida", "Hora inválida"
-
-def abreviar_nome(nome: str, max_len: int = 15) -> str:
-    if len(nome) <= max_len:
-        return nome
-    palavras = nome.split()
-    abreviado = " ".join([p[0] + "." if len(p) > 2 else p for p in palavras])
-    return abreviado[:max_len-3] + "..." if len(abreviado) > max_len else abreviado
+def carregar_cache_jogos(): return carregar_json(CACHE_JOGOS)
+def salvar_cache_jogos(dados): salvar_json(CACHE_JOGOS, dados)
+def carregar_cache_classificacao(): return carregar_json(CACHE_CLASSIFICACAO)
+def salvar_cache_classificacao(dados): salvar_json(CACHE_CLASSIFICACAO, dados)
+def carregar_alertas(): return carregar_json(ALERTAS_PATH)
+def salvar_alertas(alertas): salvar_json(ALERTAS_PATH, alertas)
 
 # =============================
-# Comunicação APIs
+# Comunicação API
 # =============================
 def enviar_telegram(msg: str, chat_id: str = TELEGRAM_CHAT_ID) -> bool:
     try:
-        r = requests.get(BASE_URL_TG, params={"chat_id": chat_id, "text": msg, "parse_mode": "HTML"}, timeout=10)
-        return r.status_code == 200
+        response = requests.get(
+            BASE_URL_TG, 
+            params={"chat_id": chat_id, "text": msg, "parse_mode": "HTML"},
+            timeout=10
+        )
+        return response.status_code == 200
     except:
         return False
 
-def obter_jogos_nova_api(data: str, liga: str | None = None) -> list:
+def obter_dados_api(url: str) -> dict | None:
     try:
-        params = {"data": data}
-        if liga:
-            params["liga"] = liga
-        r = requests.get(BASE_URL_NEW_API, params=params, timeout=10)
+        r = requests.get(url, headers=HEADERS, timeout=10)
         r.raise_for_status()
-        jogos = r.json()
-        return jogos if isinstance(jogos, list) else []
+        return r.json()
     except:
-        return []
+        return None
+
+def obter_classificacao(liga_id: str) -> dict:
+    cache = carregar_cache_classificacao()
+    if liga_id in cache:
+        return cache[liga_id]
+
+    url = f"{BASE_URL_FD}/competitions/{liga_id}/standings"
+    data = obter_dados_api(url)
+    if not data: return {}
+
+    standings = {}
+    for s in data.get("standings", []):
+        if s["type"] != "TOTAL": continue
+        for t in s["table"]:
+            standings[t["team"]["name"]] = {
+                "scored": t.get("goalsFor", 0),
+                "against": t.get("goalsAgainst", 0),
+                "played": t.get("playedGames", 1)
+            }
+    cache[liga_id] = standings
+    salvar_cache_classificacao(cache)
+    return standings
+
+def obter_jogos(liga_id: str, data_selecionada: datetime) -> list:
+    """Busca jogos passados/futuros da liga."""
+    cache = carregar_cache_jogos()
+    jogos_totais = []
+
+    datas = [
+        (data_selecionada - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(DIAS_PASSADOS, 0, -1)
+    ] + [data_selecionada.strftime("%Y-%m-%d")] + [
+        (data_selecionada + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(1, DIAS_FUTUROS + 1)
+    ]
+
+    for data in datas:
+        key = f"{liga_id}_{data}"
+        if key in cache:
+            jogos = cache[key]
+        else:
+            url = f"{BASE_URL_FD}/competitions/{liga_id}/matches?dateFrom={data}&dateTo={data}"
+            data_api = obter_dados_api(url)
+            jogos = data_api.get("matches", []) if data_api else []
+            cache[key] = jogos
+
+        jogos_totais.extend(jogos)
+
+    salvar_cache_jogos(cache)
+    return jogos_totais
 
 # =============================
-# Lógica de tendência
+# Tendência de gols
 # =============================
-def calcular_tendencia(home: str, away: str) -> tuple[float, float, str]:
-    estimativa = 2.2
-    confianca = 70
-    tendencia = "Mais 1.5"
-    return estimativa, confianca, tendencia
+def calcular_tendencia(home: str, away: str, classificacao: dict):
+    dados_home = classificacao.get(home, {"scored":0,"against":0,"played":1})
+    dados_away = classificacao.get(away, {"scored":0,"against":0,"played":1})
+    played_home = max(dados_home["played"],1)
+    played_away = max(dados_away["played"],1)
+    media_home_feitos = dados_home["scored"]/played_home
+    media_home_sofridos = dados_home["against"]/played_home
+    media_away_feitos = dados_away["scored"]/played_away
+    media_away_sofridos = dados_away["against"]/played_away
+    estimativa = ((media_home_feitos+media_away_sofridos)/2 + (media_away_feitos+media_home_sofridos)/2)
+    if estimativa>=3.0:
+        tendencia="Mais 2.5"; confianca=min(95,70+(estimativa-3.0)*10)
+    elif estimativa>=2.0:
+        tendencia="Mais 1.5"; confianca=min(90,60+(estimativa-2.0)*10)
+    else:
+        tendencia="Menos 2.5"; confianca=min(85,55+(2.0-estimativa)*10)
+    return estimativa,confianca,tendencia
 
-def enviar_alerta_telegram(fixture: dict, tendencia: str, estimativa: float, confianca: float):
-    home = fixture.get("mandante", fixture.get("home", "Desconhecido"))
-    away = fixture.get("visitante", fixture.get("away", "Desconhecido"))
-    data_formatada, hora_formatada = formatar_data_iso(fixture.get("horário", datetime.now().isoformat()))
-    competicao = fixture.get("liga", "Desconhecido")
-    status = fixture.get("status", "DESCONHECIDO")
-    placar = None
-    if fixture.get("placar_m") is not None:
-        placar = f"{fixture.get('placar_m')} x {fixture.get('placar_v')}"
-
-    msg = (
-        f"⚽ <b>Alerta de Gols!</b>\n"
-        f"🏟️ {home} vs {away}\n"
-        f"📅 {data_formatada} ⏰ {hora_formatada} (BRT)\n"
-        f"📌 Status: {status}\n"
-    )
-    if placar:
-        msg += f"📊 Placar: <b>{placar}</b>\n"
-    msg += f"📈 Tendência: <b>{tendencia}</b>\n🎯 Estimativa: <b>{estimativa:.2f}</b>\n💯 Confiança: <b>{confianca:.0f}%</b>\n🏆 Liga: {competicao}"
-    enviar_telegram(msg)
-
-def verificar_enviar_alerta(fixture: dict, tendencia: str, estimativa: float, confianca: float):
+# =============================
+# Alertas
+# =============================
+def verificar_enviar_alerta(fixture, tendencia, estimativa, confianca):
     alertas = carregar_alertas()
-    fixture_id = str(fixture.get("id", fixture.get("mandante","")) + "_" + str(fixture.get("visitante","")))
+    fixture_id = str(fixture["id"])
     if fixture_id not in alertas:
-        alertas[fixture_id] = {"tendencia": tendencia, "estimativa": estimativa, "confianca": confianca, "conferido": False}
-        enviar_alerta_telegram(fixture, tendencia, estimativa, confianca)
+        alertas[fixture_id] = {"tendencia":tendencia,"estimativa":estimativa,"confianca":confianca,"conferido":False}
+        enviar_alerta_telegram(fixture,tendencia,estimativa,confianca)
         salvar_alertas(alertas)
 
+def enviar_alerta_telegram(fixture, tendencia, estimativa, confianca):
+    home = fixture["homeTeam"]["name"]
+    away = fixture["awayTeam"]["name"]
+    data_format = datetime.fromisoformat(fixture["utcDate"].replace("Z","+00:00")) - timedelta(hours=3)
+    competicao = fixture.get("competition",{}).get("name","Desconhecido")
+    msg = f"⚽ <b>Alerta de Gols!</b>\n🏟️ {home} vs {away}\n📅 {data_format.strftime('%d/%m/%Y')} ⏰ {data_format.strftime('%H:%M')} BRT\n📈 Tendência: <b>{tendencia}</b>\n🎯 Estimativa: <b>{estimativa:.2f}</b>\n💯 Confiança: <b>{confianca:.0f}%</b>\n🏆 Liga: {competicao}"
+    enviar_telegram(msg)
+
 # =============================
-# Relatório PDF
+# Processamento e Streamlit
 # =============================
-def gerar_relatorio_pdf(jogos_conferidos: list) -> io.BytesIO:
-    buffer = io.BytesIO()
-    pdf = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20)
-    data = [["Jogo","Tendência","Estimativa","Confiança","Placar","Status","Resultado","Hora"]]+jogos_conferidos
-    table = Table(data, repeatRows=1, colWidths=[120,70,60,60,50,70,60,70])
-    style = TableStyle([
-        ('BACKGROUND',(0,0),(-1,0),colors.HexColor("#4B4B4B")),
-        ('TEXTCOLOR',(0,0),(-1,0),colors.white),
-        ('ALIGN',(0,0),(-1,-1),'CENTER'),
-        ('FONTNAME',(0,0),(-1,0),'Helvetica-Bold'),
-        ('FONTSIZE',(0,0),(-1,0),10),
-        ('GRID',(0,0),(-1,-1),0.5,colors.grey)
-    ])
-    table.setStyle(style)
-    pdf.build([table])
-    buffer.seek(0)
-    return buffer
+def processar_jogos_streamlit(data_selecionada, todas_ligas, liga_selecionada, top_n):
+    ligas_busca = LIGA_DICT.values() if todas_ligas else [LIGA_DICT[liga_selecionada]]
+    st.write(f"⏳ Buscando jogos para {data_selecionada.strftime('%d/%m/%Y')}...")
+
+    top_jogos = []
+    progress_bar = st.progress(0)
+    total_ligas = len(ligas_busca)
+
+    for i, liga_id in enumerate(ligas_busca):
+        classificacao = obter_classificacao(liga_id)
+        jogos = obter_jogos(liga_id, data_selecionada)
+
+        for match in jogos:
+            home = match["homeTeam"]["name"]
+            away = match["awayTeam"]["name"]
+            estimativa, confianca, tendencia = calcular_tendencia(home, away, classificacao)
+
+            verificar_enviar_alerta(match, tendencia, estimativa, confianca)
+
+            top_jogos.append({
+                "id": match["id"],
+                "home": home,
+                "away": away,
+                "tendencia": tendencia,
+                "estimativa": estimativa,
+                "confianca": confianca,
+                "liga": match.get("competition", {}).get("name", "Desconhecido"),
+                "hora": datetime.fromisoformat(match["utcDate"].replace("Z", "+00:00")) - timedelta(hours=3),
+                "status": match.get("status", "DESCONHECIDO"),
+            })
+
+        progress_bar.progress((i + 1) / total_ligas)
+
+    if top_jogos:
+        enviar_top_jogos(top_jogos, top_n)
+        st.success(f"✅ Análise concluída! {len(top_jogos)} jogos processados.")
+    else:
+        st.warning("⚠️ Nenhum jogo encontrado para a data selecionada.")
+
+def enviar_top_jogos(jogos: list, top_n: int):
+    jogos_filtrados = [j for j in jogos if j["status"] not in ["FINISHED","IN_PLAY","POSTPONED","SUSPENDED"]]
+    if not jogos_filtrados:
+        st.warning("⚠️ Nenhum jogo elegível para o Top Jogos (todos já iniciados ou finalizados).")
+        return
+
+    top_jogos_sorted = sorted(jogos_filtrados, key=lambda x: x["confianca"], reverse=True)[:top_n]
+
+    msg = f"📢 TOP {top_n} Jogos do Dia\n\n"
+    for j in top_jogos_sorted:
+        hora_format = j["hora"].strftime("%H:%M")
+        msg += (
+            f"🏟️ {j['home']} vs {j['away']}\n"
+            f"🕒 {hora_format} BRT | Liga: {j['liga']} | Status: {j['status']}\n"
+            f"📈 Tendência: {j['tendencia']} | Estimativa: {j['estimativa']:.2f} | "
+            f"💯 Confiança: {j['confianca']:.0f}%\n\n"
+        )
+    enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2)
 
 # =============================
 # Interface Streamlit
 # =============================
 def main():
-    st.set_page_config(page_title="⚽ Alerta de Gols - Nova API", layout="wide")
-    st.title("⚽ Sistema de Alertas Automáticos de Gols - Nova API")
+    st.set_page_config(page_title="⚽ Alerta de Gols", layout="wide")
+    st.title("⚽ Sistema de Alertas Automáticos de Gols")
 
-    col1, col2 = st.columns([2,1])
+    # Sidebar
+    with st.sidebar:
+        st.header("Configurações")
+        top_n = st.selectbox("📊 Jogos no Top", [3,5,10], index=0)
+        st.info("Configure as opções de análise")
+
+    col1,col2 = st.columns([2,1])
     with col1:
         data_selecionada = st.date_input("📅 Data para análise:", value=datetime.today())
     with col2:
@@ -158,62 +266,10 @@ def main():
 
     liga_selecionada = None
     if not todas_ligas:
-        liga_selecionada = st.text_input("📌 Liga específica:")
+        liga_selecionada = st.selectbox("📌 Liga específica:", list(LIGA_DICT.keys()))
 
-    top_n = st.selectbox("📊 Top N Jogos:", [3,5,10], index=0)
-
-    if st.button("🔍 Buscar Partidas", type="primary"):
-        hoje = data_selecionada.strftime("%Y-%m-%d")
-        jogos = obter_jogos_nova_api(hoje, liga_selecionada if not todas_ligas else None)
-        if not jogos:
-            st.warning("Nenhum jogo encontrado.")
-            return
-
-        jogos_conferidos = []
-
-        for jogo in jogos:
-            home = jogo.get("mandante")
-            away = jogo.get("visitante")
-            st.markdown(f"🏟️ **{home} vs {away}**")
-            try:
-                st.image([jogo.get("mandante_logo"), jogo.get("visitante_logo")], width=60,
-                         caption=[home, away])
-            except:
-                pass
-
-            estimativa, confianca, tendencia = calcular_tendencia(home, away)
-            verificar_enviar_alerta(jogo, tendencia, estimativa, confianca)
-
-            # Preparar dados PDF
-            hora = jogo.get("horário", datetime.now().isoformat())
-            placar = f"{jogo.get('placar_m','-')} x {jogo.get('placar_v','-')}" if jogo.get("placar_m") else "-"
-            jogos_conferidos.append([
-                f"{abreviar_nome(home)} vs {abreviar_nome(away)}",
-                tendencia,
-                f"{estimativa:.2f}",
-                f"{confianca:.0f}%",
-                placar,
-                jogo.get("status","DESCONHECIDO"),
-                "⏳ Aguardando",
-                datetime.fromisoformat(hora.replace("Z","+00:00")).strftime("%d/%m %H:%M")
-            ])
-
-        # Top N Jogos
-        top_jogos_msg = f"📢 TOP {top_n} Jogos do Dia\n\n"
-        for j in jogos_conferidos[:top_n]:
-            top_jogos_msg += f"🏟️ {j[0]} | Tendência: {j[1]} | Estimativa: {j[2]} | Conf.: {j[3]}\n"
-        enviar_telegram(top_jogos_msg, TELEGRAM_CHAT_ID_ALT2)
-        st.success(f"✅ Top {top_n} jogos enviados para o Telegram!")
-
-        # PDF
-                # PDF
-        buffer = gerar_relatorio_pdf(jogos_conferidos)
-        st.download_button(
-            "📄 Baixar Relatório PDF",
-            data=buffer,
-            file_name=f"relatorio_jogos_{data_selecionada}.pdf",
-            mime="application/pdf"
-        )
+    if st.button("🔍 Buscar Partidas"):
+        processar_jogos_streamlit(data_selecionada, todas_ligas, liga_selecionada, top_n)
 
 if __name__ == "__main__":
     main()
