@@ -155,9 +155,9 @@ if st.session_state["last_update"] is None or (now - st.session_state["last_upda
     st.success(f"✅ Cache atualizado: {total} partidas")
 
 # ===============================
-# 🌐 API via query params
+# 🌐 API via st.query_params
 # ===============================
-params = st.experimental_get_query_params()
+params = st.query_params
 if "endpoint" in params:
     endpoint = params["endpoint"][0].lower()
     dados = st.session_state["dados"]
@@ -201,7 +201,6 @@ if "endpoint" in params:
         st.stop()
 
 # ===============================
-## ===============================
 # 📊 Dashboard visual corrigido
 # ===============================
 ultima = st.session_state["last_update"].strftime("%d/%m/%Y %H:%M:%S") if st.session_state["last_update"] else "Nunca"
@@ -210,7 +209,6 @@ st.markdown(f"🕒 **Última atualização:** {ultima}")
 dados_df = pd.DataFrame(st.session_state["dados"])
 
 if not dados_df.empty:
-    # Filtros
     liga_selecionada = st.multiselect("Selecione ligas:", options=list(LIGAS.keys()), default=list(LIGAS.keys()))
     data_selecionada = st.date_input("Filtrar por data:", value=datetime.utcnow().date())
 
@@ -238,4 +236,4 @@ if not dados_df.empty:
             st.markdown(f"**Placar:** {row['placar_m']} x {row['placar_v']} | **Status:** {row['status']}")
             st.markdown("---")
 else:
-    st.warning("Nenhum dado disponível no momento.") 
+    st.warning("Nenhum dado disponível no momento.")
