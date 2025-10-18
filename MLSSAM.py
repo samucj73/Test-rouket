@@ -47,6 +47,16 @@ LIGAS_ESPN = {
     "Europa League": "uefa.europa"
 }
 
+# Cores e emojis para status
+STATUS_CONFIG = {
+    "Agendado": {"emoji": "⏰", "color": "#4A90E2"},
+    "Ao Vivo": {"emoji": "🔴", "color": "#E74C3C"},
+    "Halftime": {"emoji": "⏸️", "color": "#F39C12"},
+    "Finalizado": {"emoji": "✅", "color": "#27AE60"},
+    "Adiado": {"emoji": "🚫", "color": "#95A5A6"},
+    "Cancelado": {"emoji": "❌", "color": "#7F8C8D"}
+}
+
 # Headers para simular navegador
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
@@ -68,9 +78,7 @@ def carregar_json(caminho: str) -> dict:
             return dados
     except json.JSONDecodeError as e:
         st.warning(f"⚠️ Arquivo {caminho} corrompido. Criando novo.")
-        # Tenta recuperar o arquivo ou cria um novo
         try:
-            # Backup do arquivo corrompido
             if os.path.exists(caminho):
                 backup_name = f"{caminho}.backup_{int(time.time())}"
                 os.rename(caminho, backup_name)
@@ -115,44 +123,189 @@ def formatar_hora_brasilia(hora_utc: str) -> Optional[datetime]:
         if not hora_utc:
             return None
         
-        # Remove o Z e adiciona o offset UTC
         if hora_utc.endswith('Z'):
             hora_utc = hora_utc[:-1] + '+00:00'
         
         hora_dt = datetime.fromisoformat(hora_utc)
-        # Converte para Brasília (UTC-3)
         hora_brasilia = hora_dt - timedelta(hours=3)
         return hora_brasilia
     except Exception:
         return None
 
+def get_status_config(status: str) -> Dict:
+    """Retorna configuração de cor e emoji para o status"""
+    status_lower = status.lower()
+    for key, config in STATUS_CONFIG.items():
+        if key.lower() in status_lower:
+            return config
+    return {"emoji": "⚫", "color": "#95A5A6"}
+
 # =============================
-# Função para buscar jogos ESPN - CORRIGIDA
+# Componentes de UI Melhorados
+# =============================
+def criar_card_partida(partida: Dict):
+    """Cria um card visual para cada partida"""
+    status_config = get_status_config(partida['status'])
+    
+    # Determina se o placar deve ser destacado
+    placar = partida['placar']
+    if placar != "0 - 0" and partida['status'] != 'Agendado':
+        placar_style = "font-size: 24px; font-weight: bold; color: #E74C3C;"
+    else:
+        placar_style = "font-size: 20px; font-weight: normal; color: #7F8C8D;"
+    
+    with st.container():
+        col1, col2, col3, col4 = st.columns([3, 2, 3, 2])
+        
+        with col1:
+            st.markdown(f"**{partida['home']}**")
+        
+        with col2:
+            st.markdown(f"<div style='text-align: center; {placar_style}'>{placar}</div>", 
+                       unsafe_allow_html=True)
+        
+        with col3:
+            st.markdown(f"**{partida['away']}**")
+        
+        with col4:
+            status_color = status_config['color']
+            st.markdown(
+                f"<div style='background-color: {status_color}; color: white; padding: 4px 8px; "
+                f"border-radius: 12px; text-align: center; font-size: 12px;'>"
+                f"{status_config['emoji']} {partida['status']}</div>", 
+                unsafe_allow_html=True
+            )
+        
+        # Linha inferior com informações adicionais
+        col_info1, col_info2, col_info3 = st.columns([1, 1, 1])
+        with col_info1:
+            st.caption(f"🕒 {partida['hora_formatada']}")
+        with col_info2:
+            st.caption(f"🏆 {partida['liga']}")
+        with col_info3:
+            if partida['hora'] and partida['hora'] > datetime.now():
+                tempo_restante = partida['hora'] - datetime.now()
+                horas = int(tempo_restante.total_seconds() // 3600)
+                minutos = int((tempo_restante.total_seconds() % 3600) // 60)
+                if horas > 0:
+                    st.caption(f"⏳ {horas}h {minutos}min")
+                else:
+                    st.caption(f"⏳ {minutos}min")
+        
+        st.markdown("---")
+
+def exibir_partidas_por_liga(partidas: List[Dict]):
+    """Exibe partidas agrupadas por liga com visual melhorado"""
+    # Agrupa partidas por liga
+    partidas_por_liga = {}
+    for partida in partidas:
+        liga = partida['liga']
+        if liga not in partidas_por_liga:
+            partidas_por_liga[liga] = []
+        partidas_por_liga[liga].append(partida)
+    
+    # Ordena ligas por número de partidas (mais partidas primeiro)
+    ligas_ordenadas = sorted(partidas_por_liga.keys(), 
+                           key=lambda x: len(partidas_por_liga[x]), reverse=True)
+    
+    for liga in ligas_ordenadas:
+        partidas_liga = partidas_por_liga[liga]
+        
+        # Container da liga
+        with st.container():
+            st.markdown(f"### 🏆 {liga}")
+            st.markdown(f"**{len(partidas_liga)} partida(s) encontrada(s)**")
+            
+            # Filtros para a liga
+            col_filtro1, col_filtro2, col_filtro3 = st.columns(3)
+            with col_filtro1:
+                filtrar_status = st.selectbox(
+                    f"Status - {liga}",
+                    ["Todos", "Agendado", "Ao Vivo", "Finalizado"],
+                    key=f"status_{liga}"
+                )
+            with col_filtro2:
+                filtrar_time = st.text_input(f"Buscar time - {liga}", key=f"time_{liga}")
+            with col_filtro3:
+                if st.button(f"🎯 Top 3 - {liga}", key=f"top3_{liga}"):
+                    partidas_liga = partidas_liga[:3]
+            
+            # Aplica filtros
+            if filtrar_status != "Todos":
+                partidas_liga = [p for p in partidas_liga if filtrar_status.lower() in p['status'].lower()]
+            
+            if filtrar_time:
+                partidas_liga = [p for p in partidas_liga 
+                               if filtrar_time.lower() in p['home'].lower() 
+                               or filtrar_time.lower() in p['away'].lower()]
+            
+            # Exibe partidas
+            if partidas_liga:
+                for partida in partidas_liga:
+                    criar_card_partida(partida)
+            else:
+                st.info(f"ℹ️ Nenhuma partida encontrada para os filtros em {liga}")
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+
+def exibir_estatisticas(partidas: List[Dict]):
+    """Exibe estatísticas visuais das partidas"""
+    total_partidas = len(partidas)
+    ligas_unicas = len(set(p['liga'] for p in partidas))
+    
+    # Contagem por status
+    status_count = {}
+    for partida in partidas:
+        status = partida['status']
+        status_count[status] = status_count.get(status, 0) + 1
+    
+    # Partidas ao vivo
+    partidas_ao_vivo = len([p for p in partidas if any(x in p['status'].lower() for x in ['vivo', 'live', 'andamento'])])
+    
+    # Próximas partidas (nas próximas 3 horas)
+    agora = datetime.now()
+    proximas_3h = [p for p in partidas if p['hora'] and agora <= p['hora'] <= agora + timedelta(hours=3)]
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("📊 Total de Partidas", total_partidas)
+    
+    with col2:
+        st.metric("🏆 Ligas", ligas_unicas)
+    
+    with col3:
+        st.metric("🔴 Ao Vivo", partidas_ao_vivo, 
+                 delta=partidas_ao_vivo if partidas_ao_vivo > 0 else None)
+    
+    with col4:
+        st.metric("⏰ Próximas 3h", len(proximas_3h),
+                 delta=len(proximas_3h) if len(proximas_3h) > 0 else None)
+    
+    # Gráfico de status simples
+    if status_count:
+        st.markdown("### 📈 Distribuição por Status")
+        status_df = pd.DataFrame(list(status_count.items()), columns=['Status', 'Quantidade'])
+        st.bar_chart(status_df.set_index('Status'))
+
+# =============================
+# Função para buscar jogos ESPN
 # =============================
 def buscar_jogos_espn(liga_slug: str, data: str) -> List[Dict]:
     """Busca jogos da API da ESPN com tratamento robusto de erros"""
     try:
-        # URL da API - sem parâmetros de data para buscar jogos atuais
         url = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{liga_slug}/scoreboard"
         
-        response = requests.get(
-            url, 
-            headers=HEADERS,
-            timeout=15
-        )
+        response = requests.get(url, headers=HEADERS, timeout=15)
         
-        # Verifica se a resposta é válida
         if response.status_code == 400:
-            st.warning(f"⚠️ API não disponível para {liga_slug}")
             return []
         elif response.status_code == 404:
-            st.warning(f"🔍 Liga {liga_slug} não encontrada")
             return []
             
         response.raise_for_status()
         dados = response.json()
         
-        # Verifica se há eventos
         if not dados.get('events'):
             return []
             
@@ -161,11 +314,9 @@ def buscar_jogos_espn(liga_slug: str, data: str) -> List[Dict]:
 
         for evento in dados.get("events", []):
             try:
-                # Extrai informações básicas
                 hora = evento.get("date", "")
                 hora_dt = formatar_hora_brasilia(hora)
                 
-                # Filtra por data se especificada
                 if hora_dt and data != "all":
                     if hora_dt.date() != data_alvo:
                         continue
@@ -176,7 +327,6 @@ def buscar_jogos_espn(liga_slug: str, data: str) -> List[Dict]:
                 competicao = competicoes[0] if competicoes else {}
                 times = competicao.get("competitors", [])
                 
-                # Processa times e placar
                 if len(times) >= 2:
                     home_team = times[0].get("team", {})
                     away_team = times[1].get("team", {})
@@ -190,12 +340,10 @@ def buscar_jogos_espn(liga_slug: str, data: str) -> List[Dict]:
                     away = "Time Visitante" 
                     placar_home = placar_away = "0"
 
-                # Status do jogo
                 status_info = evento.get("status", {})
                 status_type = status_info.get("type", {})
                 status_desc = status_type.get("description", "Agendado")
                 
-                # Nome da liga
                 liga_nome = competicao.get("league", {}).get("name", liga_slug)
 
                 partidas.append({
@@ -214,21 +362,9 @@ def buscar_jogos_espn(liga_slug: str, data: str) -> List[Dict]:
                 
         return partidas
         
-    except requests.exceptions.RequestException as e:
-        if "404" in str(e):
-            st.warning(f"🔍 Liga {liga_slug} não encontrada na API")
-        elif "400" in str(e):
-            st.warning(f"⚠️ Requisição inválida para {liga_slug}")
-        else:
-            st.error(f"🌐 Erro de rede para {liga_slug}: {str(e)}")
-        return []
     except Exception as e:
-        st.error(f"❌ Erro inesperado em {liga_slug}: {str(e)}")
         return []
 
-# =============================
-# Função para buscar jogos de hoje - NOVA
-# =============================
 def buscar_jogos_hoje(liga_slug: str) -> List[Dict]:
     """Busca jogos de hoje especificamente"""
     try:
@@ -248,7 +384,6 @@ def buscar_jogos_hoje(liga_slug: str) -> List[Dict]:
                 hora = evento.get("date", "")
                 hora_dt = formatar_hora_brasilia(hora)
                 
-                # Filtra apenas jogos de hoje
                 if not hora_dt or hora_dt.date() != hoje:
                     continue
                 
@@ -295,28 +430,12 @@ def buscar_jogos_hoje(liga_slug: str) -> List[Dict]:
         return []
 
 # =============================
-# Funções de cache
+# Função principal de processamento
 # =============================
-def carregar_cache_jogos() -> dict:
-    cache = carregar_json(CACHE_JOGOS)
-    # Limpa cache expirado
-    if cache and "_timestamp" in cache:
-        if time.time() - cache["_timestamp"] > CACHE_TIMEOUT:
-            return {}
-    return cache
-
-def salvar_cache_jogos(dados: dict):
-    dados["_timestamp"] = time.time()
-    salvar_json(CACHE_JOGOS, dados)
-
-# =============================
-# Função para processar jogos - MELHORADA
-# =============================
-def processar_jogos(data_str: str, ligas_selecionadas: List[str], top_n: int, linhas_exibir: int, buscar_hoje: bool = False):
-    """Processa e exibe jogos, com envio para Telegram"""
+def processar_jogos(data_str: str, ligas_selecionadas: List[str], top_n: int, modo_exibicao: str, buscar_hoje: bool = False):
+    """Processa e exibe jogos com interface melhorada"""
     
     progress_container = st.container()
-    results_container = st.container()
     
     with progress_container:
         if buscar_hoje:
@@ -349,70 +468,71 @@ def processar_jogos(data_str: str, ligas_selecionadas: List[str], top_n: int, li
         else:
             status_text.warning(f"⚠️ {liga}: Nenhum jogo encontrado")
         
-        # Pequena pausa para não sobrecarregar a API
         time.sleep(0.5)
     
     if not todas_partidas:
         status_text.error("❌ Nenhum jogo encontrado para os critérios selecionados.")
-        
-        # Sugestões
-        with st.expander("💡 Sugestões"):
-            st.markdown("""
-            **Por que não encontrou jogos?**
-            - 🎯 Tente buscar **Jogos de Hoje** (botão abaixo)
-            - 📅 Muitas ligas não têm jogos em datas futuras
-            - 🌐 A API da ESPN pode estar temporariamente indisponível
-            - 🔄 Tente limpar o cache e buscar novamente
-            
-            **Ligas que geralmente têm jogos:**
-            - Premier League, La Liga, Bundesliga
-            - MLS (Estados Unidos)
-            - Brasileirão Série A/B (temporada)
-            """)
         return
 
     # Ordenar por horário
     todas_partidas.sort(key=lambda x: x['hora'] if x['hora'] else datetime.max)
+    
+    # Limpa a barra de progresso
+    progress_bar.empty()
+    status_text.empty()
 
-    # Preparar dados para exibição
-    with results_container:
-        dados_exibicao = []
-        for p in todas_partidas:
-            dados_exibicao.append({
-                "Liga": p['liga'],
-                "Casa": p['home'][:20],
-                "Placar": p['placar'],
-                "Visitante": p['away'][:20],
-                "Status": p['status'][:15],
-                "Horário": p['hora_formatada']
-            })
+    # Exibe estatísticas
+    st.markdown("---")
+    exibir_estatisticas(todas_partidas)
+    
+    # Seletor de modo de exibição
+    st.markdown("---")
+    col_view1, col_view2, col_view3 = st.columns(3)
+    with col_view1:
+        if st.button("📊 Visualização por Liga", use_container_width=True):
+            st.session_state.modo_exibicao = "liga"
+    with col_view2:
+        if st.button("📋 Lista Compacta", use_container_width=True):
+            st.session_state.modo_exibicao = "lista"
+    with col_view3:
+        if st.button("🎯 Top Partidas", use_container_width=True):
+            st.session_state.modo_exibicao = "top"
 
-        # Exibir tabela
-        df = pd.DataFrame(dados_exibicao)
-        if linhas_exibir < len(df):
-            df_display = df.head(linhas_exibir)
-            st.info(f"📊 Exibindo {linhas_exibir} de {len(todas_partidas)} jogos encontrados")
-        else:
-            df_display = df
-            st.success(f"📊 Exibindo todos os {len(todas_partidas)} jogos encontrados")
+    # Modo de exibição
+    modo = st.session_state.get('modo_exibicao', 'liga')
+    
+    if modo == "liga":
+        st.markdown("## 🏆 Partidas por Liga")
+        exibir_partidas_por_liga(todas_partidas)
         
-        st.dataframe(df_display, use_container_width=True)
+    elif modo == "lista":
+        st.markdown("## 📋 Todas as Partidas")
+        # Lista compacta
+        for i, partida in enumerate(todas_partidas):
+            status_config = get_status_config(partida['status'])
+            with st.expander(f"{status_config['emoji']} {partida['home']} vs {partida['away']} - {partida['placar']}"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.write(f"**Casa:** {partida['home']}")
+                    st.write(f"**Visitante:** {partida['away']}")
+                with col2:
+                    st.write(f"**Status:** {partida['status']}")
+                    st.write(f"**Horário:** {partida['hora_formatada']}")
+                    st.write(f"**Liga:** {partida['liga']}")
+    
+    elif modo == "top":
+        st.markdown(f"## 🎯 Top {top_n} Partidas")
+        partidas_top = todas_partidas[:top_n]
+        for partida in partidas_top:
+            criar_card_partida(partida)
 
-        # Estatísticas
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Total de Jogos", len(todas_partidas))
-        with col2:
-            st.metric("Ligas com Jogos", len(set(p['liga'] for p in todas_partidas)))
-        with col3:
-            jogos_ao_vivo = len([p for p in todas_partidas if p['status'] not in ['Agendado', 'Finalizado']])
-            st.metric("Jogos ao Vivo", jogos_ao_vivo)
-
-        # Botão para enviar para Telegram
-        st.markdown("---")
-        st.subheader("📤 Enviar para Telegram")
-        
-        if st.button(f"🚀 Enviar Top {top_n} Jogos para Telegram", type="primary"):
+    # Botão para enviar para Telegram
+    st.markdown("---")
+    st.subheader("📤 Enviar para Telegram")
+    
+    col_tg1, col_tg2 = st.columns([1, 2])
+    with col_tg1:
+        if st.button(f"🚀 Enviar Top {top_n} para Telegram", type="primary", use_container_width=True):
             if buscar_hoje:
                 top_msg = f"⚽ TOP {top_n} JOGOS DE HOJE - {datetime.now().strftime('%d/%m/%Y')}\n\n"
             else:
@@ -428,13 +548,16 @@ def processar_jogos(data_str: str, ligas_selecionadas: List[str], top_n: int, li
                 st.success(f"✅ Top {top_n} jogos enviados para o Telegram!")
             else:
                 st.error("❌ Falha ao enviar para o Telegram!")
+    
+    with col_tg2:
+        st.info("💡 As partidas serão enviadas no formato compacto para o Telegram")
 
 # =============================
-# Interface Streamlit
+# Interface Streamlight
 # =============================
 def main():
     st.title("⚽ ESPN Soccer - Elite Master")
-    st.markdown("Sistema avançado de monitoramento de partidas de futebol")
+    st.markdown("### Sistema Avançado de Monitoramento de Futebol")
     st.markdown("---")
     
     # Sidebar
@@ -443,7 +566,6 @@ def main():
         
         st.subheader("📊 Exibição")
         top_n = st.selectbox("Top N Jogos", [3, 5, 10], index=0)
-        linhas_exibir = st.slider("Linhas na tabela", 1, 50, 10)
         
         st.subheader("🏆 Ligas")
         st.markdown("Selecione as ligas para buscar:")
@@ -456,33 +578,25 @@ def main():
         )
         
         st.markdown("---")
+        st.subheader("🎨 Personalização")
+        
+        # Tema de cores
+        tema = st.selectbox("Tema de Cores", ["Padrão", "Escuro", "Colorido"])
+        
+        st.markdown("---")
         st.subheader("🛠️ Utilidades")
         
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("🧹 Limpar Cache", use_container_width=True):
-                if os.path.exists(CACHE_JOGOS):
-                    os.remove(CACHE_JOGOS)
-                if os.path.exists(ALERTAS_PATH):
-                    os.remove(ALERTAS_PATH)
-                st.success("✅ Cache limpo!")
-                time.sleep(1)
-                st.rerun()
-                
-        with col2:
-            if st.button("🔄 Testar API", use_container_width=True):
-                test_url = "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard"
-                try:
-                    response = requests.get(test_url, headers=HEADERS, timeout=10)
-                    if response.status_code == 200:
-                        st.success("✅ API ESPN funcionando!")
-                    else:
-                        st.error(f"❌ API retornou status {response.status_code}")
-                except:
-                    st.error("❌ Falha na conexão com API")
+        if st.button("🧹 Limpar Cache", use_container_width=True):
+            if os.path.exists(CACHE_JOGOS):
+                os.remove(CACHE_JOGOS)
+            if os.path.exists(ALERTAS_PATH):
+                os.remove(ALERTAS_PATH)
+            st.success("✅ Cache limpo!")
+            time.sleep(1)
+            st.rerun()
 
     # Conteúdo principal
-    st.subheader("📅 Buscar Jogos")
+    st.subheader("🎯 Buscar Jogos")
     
     col1, col2, col3 = st.columns([2, 1, 1])
     
@@ -509,32 +623,40 @@ def main():
         if not ligas_selecionadas:
             st.warning("⚠️ Selecione pelo menos uma liga.")
         else:
-            processar_jogos(data_str, ligas_selecionadas, top_n, linhas_exibir, buscar_hoje=False)
+            processar_jogos(data_str, ligas_selecionadas, top_n, "liga", buscar_hoje=False)
 
     if btn_hoje:
         if not ligas_selecionadas:
             st.warning("⚠️ Selecione pelo menos uma liga.")
         else:
-            processar_jogos("", ligas_selecionadas, top_n, linhas_exibir, buscar_hoje=True)
+            processar_jogos("", ligas_selecionadas, top_n, "liga", buscar_hoje=True)
 
     # Informações de ajuda
-    with st.expander("ℹ️ Ajuda e Informações", expanded=True):
-        st.markdown("""
-        **📌 Como usar:**
-        1. **Selecione as ligas** no menu lateral
-        2. **Clique em "Jogos de Hoje"** para ver partidas atuais
-        3. **Ou selecione uma data** e clique em "Buscar por Data"
+    with st.expander("🎮 Guia Rápido", expanded=True):
+        col_help1, col_help2 = st.columns(2)
         
-        **🔧 Problemas Comuns:**
-        - ⚠️ **API não disponível**: A ESPN limita dados futuros
-        - 🎯 **Solução**: Use "Jogos de Hoje" para resultados imediatos
-        - 🔄 **Cache corrompido**: Use "Limpar Cache" no menu lateral
+        with col_help1:
+            st.markdown("""
+            **📊 Modos de Visualização:**
+            - **Por Liga**: Partidas agrupadas por campeonato
+            - **Lista Compacta**: Todas em lista expansível  
+            - **Top Partidas**: Apenas as mais relevantes
+            
+            **🎯 Funcionalidades:**
+            - Filtros por status e time
+            - Estatísticas em tempo real
+            - Cards visuais coloridos
+            - Envio para Telegram
+            """)
         
-        **🏆 Ligas Recomendadas para Teste:**
-        - Premier League (eng.1) - Sempre tem jogos
-        - MLS (usa.1) - Temporada longa
-        - Liga MX (mex.1) - Boa cobertura
-        """)
+        with col_help2:
+            st.markdown("""
+            **🔧 Dicas:**
+            - Use **Jogos de Hoje** para resultados atuais
+            - Clique em **Top 3** para ver os principais de cada liga
+            - Filtre por time para encontrar partidas específicas
+            - Monitore jogos **ao vivo** com o status colorido
+            """)
 
 if __name__ == "__main__":
     main()
