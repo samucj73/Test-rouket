@@ -67,6 +67,30 @@ HEADERS = {
 }
 
 # =============================
+# Inicialização do Session State
+# =============================
+def inicializar_session_state():
+    """Inicializa todas as variáveis do session state"""
+    if 'dados_carregados' not in st.session_state:
+        st.session_state.dados_carregados = False
+    if 'todas_partidas' not in st.session_state:
+        st.session_state.todas_partidas = []
+    if 'modo_exibicao' not in st.session_state:
+        st.session_state.modo_exibicao = "liga"
+    if 'ultima_busca' not in st.session_state:
+        st.session_state.ultima_busca = None
+    if 'ultimas_ligas' not in st.session_state:
+        st.session_state.ultimas_ligas = []
+    if 'busca_hoje' not in st.session_state:
+        st.session_state.busca_hoje = False
+    if 'data_ultima_busca' not in st.session_state:
+        st.session_state.data_ultima_busca = None
+    if 'filtros_liga' not in st.session_state:
+        st.session_state.filtros_liga = {}
+    if 'top_n' not in st.session_state:
+        st.session_state.top_n = 5
+
+# =============================
 # Funções utilitárias
 # =============================
 def carregar_json(caminho: str) -> dict:
@@ -262,30 +286,50 @@ def exibir_partidas_por_liga(partidas: List[Dict]):
             st.markdown(f"### 🏆 {liga}")
             st.markdown(f"**{len(partidas_liga)} partida(s) encontrada(s)**")
             
+            # Inicializar filtros para esta liga se não existirem
+            liga_key = f"filtro_{liga}"
+            if liga_key not in st.session_state.filtros_liga:
+                st.session_state.filtros_liga[liga_key] = {
+                    'status': "Todos",
+                    'time': ""
+                }
+            
             # Filtros para a liga
             col_filtro1, col_filtro2, col_filtro3 = st.columns(3)
             with col_filtro1:
-                filtrar_status = st.selectbox(
+                novo_status = st.selectbox(
                     f"Status - {liga}",
                     ["Todos", "Agendado", "Ao Vivo", "Finalizado"],
-                    key=f"status_{liga}_{len(partidas_liga)}"
+                    index=["Todos", "Agendado", "Ao Vivo", "Finalizado"].index(
+                        st.session_state.filtros_liga[liga_key]['status']
+                    ),
+                    key=f"status_{liga}"
                 )
+                st.session_state.filtros_liga[liga_key]['status'] = novo_status
+            
             with col_filtro2:
-                filtrar_time = st.text_input(f"Buscar time - {liga}", key=f"time_{liga}_{len(partidas_liga)}")
+                novo_time = st.text_input(
+                    f"Buscar time - {liga}", 
+                    value=st.session_state.filtros_liga[liga_key]['time'],
+                    key=f"time_{liga}"
+                )
+                st.session_state.filtros_liga[liga_key]['time'] = novo_time
+            
             with col_filtro3:
-                if st.button(f"🎯 Top 3 - {liga}", key=f"top3_{liga}_{len(partidas_liga)}"):
+                if st.button(f"🎯 Top 3 - {liga}", key=f"top3_{liga}"):
                     partidas_liga = partidas_liga[:3]
             
             # Aplica filtros
             partidas_filtradas = partidas_liga.copy()
+            filtro_atual = st.session_state.filtros_liga[liga_key]
             
-            if filtrar_status != "Todos":
-                partidas_filtradas = [p for p in partidas_filtradas if filtrar_status.lower() in p['status'].lower()]
+            if filtro_atual['status'] != "Todos":
+                partidas_filtradas = [p for p in partidas_filtradas if filtro_atual['status'].lower() in p['status'].lower()]
             
-            if filtrar_time:
+            if filtro_atual['time']:
                 partidas_filtradas = [p for p in partidas_filtradas 
-                               if filtrar_time.lower() in p['home'].lower() 
-                               or filtrar_time.lower() in p['away'].lower()]
+                               if filtro_atual['time'].lower() in p['home'].lower() 
+                               or filtro_atual['time'].lower() in p['away'].lower()]
             
             # Exibe partidas
             if partidas_filtradas:
@@ -601,18 +645,54 @@ def processar_jogos(data_str: str, ligas_selecionadas: List[str], top_n: int, bu
     
     if not todas_partidas:
         status_text.error("❌ Nenhum jogo encontrado para os critérios selecionados.")
+        st.session_state.dados_carregados = False
         return
 
     # Ordenar por horário - com tratamento seguro
     todas_partidas.sort(key=lambda x: x['hora'] if is_datetime_valid(x['hora']) else datetime.max)
     
+    # Salva os dados no session state
+    st.session_state.todas_partidas = todas_partidas
+    st.session_state.dados_carregados = True
+    st.session_state.ultima_busca = datetime.now()
+    st.session_state.ultimas_ligas = ligas_selecionadas
+    st.session_state.busca_hoje = buscar_hoje
+    st.session_state.data_ultima_busca = data_str
+    st.session_state.top_n = top_n
+    
     # Limpa a barra de progresso
     progress_bar.empty()
     status_text.empty()
 
+    # Exibe os dados
+    exibir_dados_salvos()
+
+def exibir_dados_salvos():
+    """Exibe os dados salvos no session state"""
+    if not st.session_state.dados_carregados:
+        return
+    
+    todas_partidas = st.session_state.todas_partidas
+    top_n = st.session_state.top_n
+    
     # Exibe estatísticas
     st.markdown("---")
     exibir_estatisticas(todas_partidas)
+    
+    # Informações da última busca
+    col_info1, col_info2, col_info3 = st.columns(3)
+    with col_info1:
+        if st.session_state.busca_hoje:
+            st.info("🎯 **Última busca:** Jogos de Hoje")
+        else:
+            st.info(f"📅 **Última busca:** {datetime.strptime(st.session_state.data_ultima_busca, '%Y-%m-%d').strftime('%d/%m/%Y')}")
+    with col_info2:
+        st.info(f"🏆 **Ligas:** {len(st.session_state.ultimas_ligas)} selecionadas")
+    with col_info3:
+        if st.session_state.ultima_busca:
+            tempo_passado = datetime.now() - st.session_state.ultima_busca
+            minutos = int(tempo_passado.total_seconds() // 60)
+            st.info(f"⏰ **Atualizado:** {minutos} min atrás")
     
     # Seletor de modo de exibição
     st.markdown("---")
@@ -628,7 +708,7 @@ def processar_jogos(data_str: str, ligas_selecionadas: List[str], top_n: int, bu
             st.session_state.modo_exibicao = "top"
 
     # Modo de exibição
-    modo = st.session_state.get('modo_exibicao', 'liga')
+    modo = st.session_state.modo_exibicao
     
     if modo == "liga":
         st.markdown("## 🏆 Partidas por Liga")
@@ -648,10 +728,10 @@ def processar_jogos(data_str: str, ligas_selecionadas: List[str], top_n: int, bu
     col_tg1, col_tg2 = st.columns([1, 2])
     with col_tg1:
         if st.button(f"🚀 Enviar Top {top_n} para Telegram", type="primary", use_container_width=True, key="send_tg"):
-            if buscar_hoje:
+            if st.session_state.busca_hoje:
                 top_msg = f"⚽ TOP {top_n} JOGOS DE HOJE - {datetime.now().strftime('%d/%m/%Y')}\n\n"
             else:
-                top_msg = f"⚽ TOP {top_n} JOGOS - {datetime.strptime(data_str, '%Y-%m-%d').strftime('%d/%m/%Y')}\n\n"
+                top_msg = f"⚽ TOP {top_n} JOGOS - {datetime.strptime(st.session_state.data_ultima_busca, '%Y-%m-%d').strftime('%d/%m/%Y')}\n\n"
             
             for i, p in enumerate(todas_partidas[:top_n], 1):
                 emoji = "🔥" if i == 1 else "⭐" if i <= 3 else "⚽"
@@ -666,6 +746,11 @@ def processar_jogos(data_str: str, ligas_selecionadas: List[str], top_n: int, bu
     
     with col_tg2:
         st.info("💡 As partidas serão enviadas no formato compacto para o Telegram")
+        
+    # Botão para atualizar dados
+    st.markdown("---")
+    if st.button("🔄 Atualizar Dados", use_container_width=True, key="refresh_data"):
+        st.rerun()
 
 # =============================
 # Interface Streamlit
@@ -676,15 +761,15 @@ def main():
     st.markdown("---")
     
     # Inicializar session state
-    if 'modo_exibicao' not in st.session_state:
-        st.session_state.modo_exibicao = "liga"
+    inicializar_session_state()
     
     # Sidebar
     with st.sidebar:
         st.header("⚙️ Configurações")
         
         st.subheader("📊 Exibição")
-        top_n = st.selectbox("Top N Jogos", [3, 5, 10], index=0)
+        top_n = st.selectbox("Top N Jogos", [3, 5, 10], index=1, key="top_n_select")
+        st.session_state.top_n = top_n
         
         st.subheader("🏆 Ligas")
         st.markdown("Selecione as ligas para buscar:")
@@ -692,21 +777,35 @@ def main():
         ligas_selecionadas = st.multiselect(
             "Selecione as ligas:",
             options=list(LIGAS_ESPN.keys()),
-            default=list(LIGAS_ESPN.keys())[:4],
-            label_visibility="collapsed"
+            default=st.session_state.ultimas_ligas if st.session_state.ultimas_ligas else list(LIGAS_ESPN.keys())[:4],
+            label_visibility="collapsed",
+            key="ligas_select"
         )
         
         st.markdown("---")
         st.subheader("🛠️ Utilidades")
         
-        if st.button("🧹 Limpar Cache", use_container_width=True, key="clear_cache"):
-            if os.path.exists(CACHE_JOGOS):
-                os.remove(CACHE_JOGOS)
-            if os.path.exists(ALERTAS_PATH):
-                os.remove(ALERTAS_PATH)
-            st.success("✅ Cache limpo!")
-            time.sleep(1)
-            st.rerun()
+        col_util1, col_util2 = st.columns(2)
+        with col_util1:
+            if st.button("🧹 Limpar Cache", use_container_width=True, key="clear_cache"):
+                if os.path.exists(CACHE_JOGOS):
+                    os.remove(CACHE_JOGOS)
+                if os.path.exists(ALERTAS_PATH):
+                    os.remove(ALERTAS_PATH)
+                st.success("✅ Cache limpo!")
+                time.sleep(1)
+                st.rerun()
+                
+        with col_util2:
+            if st.button("🔄 Atualizar", use_container_width=True, key="refresh_btn"):
+                if st.session_state.dados_carregados:
+                    # Refaz a busca com os mesmos parâmetros
+                    if st.session_state.busca_hoje:
+                        processar_jogos("", st.session_state.ultimas_ligas, st.session_state.top_n, buscar_hoje=True)
+                    else:
+                        processar_jogos(st.session_state.data_ultima_busca, st.session_state.ultimas_ligas, st.session_state.top_n, buscar_hoje=False)
+                else:
+                    st.warning("ℹ️ Nenhum dado para atualizar. Faça uma busca primeiro.")
 
     # Conteúdo principal
     st.subheader("🎯 Buscar Jogos")
@@ -732,7 +831,7 @@ def main():
 
     data_str = data_selecionada.strftime("%Y-%m-%d")
 
-    # Processar ações
+    # Processar ações de busca
     if btn_buscar:
         if not ligas_selecionadas:
             st.warning("⚠️ Selecione pelo menos uma liga.")
@@ -745,8 +844,24 @@ def main():
         else:
             processar_jogos("", ligas_selecionadas, top_n, buscar_hoje=True)
 
+    # Exibir dados salvos se existirem
+    if st.session_state.dados_carregados:
+        exibir_dados_salvos()
+    else:
+        # Mostrar mensagem inicial
+        st.info("""
+        🎯 **Bem-vindo ao ESPN Soccer Elite Master!**
+        
+        Para começar:
+        1. **Selecione as ligas** que deseja monitorar no menu lateral
+        2. **Escolha uma data** ou clique em **"Jogos de Hoje"**
+        3. **Clique em buscar** para carregar as partidas
+        
+        ⚡ **Dica:** Os dados ficarão salvos até você fechar a página!
+        """)
+
     # Informações de ajuda
-    with st.expander("🎮 Guia Rápido", expanded=True):
+    with st.expander("🎮 Guia Rápido", expanded=False):
         col_help1, col_help2 = st.columns(2)
         
         with col_help1:
@@ -770,6 +885,7 @@ def main():
             - Clique em **Top 3** para ver os principais de cada liga
             - Filtre por time para encontrar partidas específicas
             - Monitore jogos **ao vivo** com o status colorido
+            - Os **filtros são mantidos** entre as interações
             """)
 
 if __name__ == "__main__":
