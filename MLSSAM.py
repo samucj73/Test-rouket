@@ -89,8 +89,6 @@ def inicializar_session_state():
         st.session_state.filtros_liga = {}
     if 'top_n' not in st.session_state:
         st.session_state.top_n = 5
-    if 'contador_interacao' not in st.session_state:
-        st.session_state.contador_interacao = 0
 
 # =============================
 # Funções utilitárias
@@ -204,7 +202,7 @@ def safe_datetime_range(dt: Optional[datetime], start: datetime, end: datetime) 
 # =============================
 # Componentes de UI Melhorados
 # =============================
-def criar_card_partida(partida: Dict, index: int):
+def criar_card_partida(partida: Dict):
     """Cria um card visual para cada partida"""
     status_config = get_status_config(partida['status'])
     
@@ -304,22 +302,19 @@ def exibir_partidas_por_liga(partidas: List[Dict]):
                     ["Todos", "Agendado", "Ao Vivo", "Finalizado"],
                     index=["Todos", "Agendado", "Ao Vivo", "Finalizado"].index(
                         st.session_state.filtros_liga[liga_key]['status']
-                    ),
-                    key=f"status_select_{liga}_{liga_index}"
+                    )
                 )
                 st.session_state.filtros_liga[liga_key]['status'] = novo_status
             
             with col_filtro2:
                 novo_time = st.text_input(
                     f"Buscar time - {liga}", 
-                    value=st.session_state.filtros_liga[liga_key]['time'],
-                    key=f"time_input_{liga}_{liga_index}"
+                    value=st.session_state.filtros_liga[liga_key]['time']
                 )
                 st.session_state.filtros_liga[liga_key]['time'] = novo_time
             
             with col_filtro3:
-                if st.button(f"🎯 Top 3 - {liga}", 
-                           key=f"top3_btn_{liga}_{liga_index}"):
+                if st.button(f"🎯 Top 3 - {liga}"):
                     partidas_liga = partidas_liga[:3]
             
             # Aplica filtros
@@ -336,8 +331,8 @@ def exibir_partidas_por_liga(partidas: List[Dict]):
             
             # Exibe partidas
             if partidas_filtradas:
-                for i, partida in enumerate(partidas_filtradas):
-                    criar_card_partida(partida, i)
+                for partida in partidas_filtradas:
+                    criar_card_partida(partida)
             else:
                 st.info(f"ℹ️ Nenhuma partida encontrada para os filtros em {liga}")
             
@@ -393,8 +388,7 @@ def exibir_partidas_lista_compacta(partidas: List[Dict]):
     """Exibe partidas em formato de lista compacta"""
     for i, partida in enumerate(partidas):
         status_config = get_status_config(partida['status'])
-        with st.expander(f"{status_config['emoji']} {partida['home']} vs {partida['away']} - {partida['placar']}", 
-                        key=f"expander_partida_{i}"):
+        with st.expander(f"{status_config['emoji']} {partida['home']} vs {partida['away']} - {partida['placar']}"):
             col1, col2 = st.columns(2)
             with col1:
                 st.write(f"**Casa:** {partida['home']}")
@@ -663,7 +657,6 @@ def processar_jogos(data_str: str, ligas_selecionadas: List[str], top_n: int, bu
     st.session_state.busca_hoje = buscar_hoje
     st.session_state.data_ultima_busca = data_str
     st.session_state.top_n = top_n
-    st.session_state.contador_interacao += 1
     
     # Limpa a barra de progresso
     progress_bar.empty()
@@ -703,16 +696,13 @@ def exibir_dados_salvos():
     st.markdown("---")
     col_view1, col_view2, col_view3 = st.columns(3)
     with col_view1:
-        if st.button("📊 Visualização por Liga", use_container_width=True, 
-                   key="btn_view_liga"):
+        if st.button("📊 Visualização por Liga", use_container_width=True):
             st.session_state.modo_exibicao = "liga"
     with col_view2:
-        if st.button("📋 Lista Compacta", use_container_width=True, 
-                   key="btn_view_lista"):
+        if st.button("📋 Lista Compacta", use_container_width=True):
             st.session_state.modo_exibicao = "lista"
     with col_view3:
-        if st.button("🎯 Top Partidas", use_container_width=True, 
-                   key="btn_view_top"):
+        if st.button("🎯 Top Partidas", use_container_width=True):
             st.session_state.modo_exibicao = "top"
 
     # Modo de exibição
@@ -735,8 +725,7 @@ def exibir_dados_salvos():
     
     col_tg1, col_tg2 = st.columns([1, 2])
     with col_tg1:
-        if st.button(f"🚀 Enviar Top {top_n} para Telegram", type="primary", use_container_width=True, 
-                   key="btn_send_telegram"):
+        if st.button(f"🚀 Enviar Top {top_n} para Telegram", type="primary", use_container_width=True):
             if st.session_state.busca_hoje:
                 top_msg = f"⚽ TOP {top_n} JOGOS DE HOJE - {datetime.now().strftime('%d/%m/%Y')}\n\n"
             else:
@@ -758,8 +747,7 @@ def exibir_dados_salvos():
         
     # Botão para atualizar dados
     st.markdown("---")
-    if st.button("🔄 Atualizar Dados", use_container_width=True, 
-               key="btn_refresh_data"):
+    if st.button("🔄 Atualizar Dados", use_container_width=True):
         st.rerun()
 
 # =============================
@@ -778,8 +766,7 @@ def main():
         st.header("⚙️ Configurações")
         
         st.subheader("📊 Exibição")
-        top_n = st.selectbox("Top N Jogos", [3, 5, 10], index=1, 
-                           key="select_top_n")
+        top_n = st.selectbox("Top N Jogos", [3, 5, 10], index=1)
         st.session_state.top_n = top_n
         
         st.subheader("🏆 Ligas")
@@ -789,8 +776,7 @@ def main():
             "Selecione as ligas:",
             options=list(LIGAS_ESPN.keys()),
             default=st.session_state.ultimas_ligas if st.session_state.ultimas_ligas else list(LIGAS_ESPN.keys())[:4],
-            label_visibility="collapsed",
-            key="select_ligas"
+            label_visibility="collapsed"
         )
         
         st.markdown("---")
@@ -798,8 +784,7 @@ def main():
         
         col_util1, col_util2 = st.columns(2)
         with col_util1:
-            if st.button("🧹 Limpar Cache", use_container_width=True, 
-                       key="btn_clear_cache"):
+            if st.button("🧹 Limpar Cache", use_container_width=True):
                 if os.path.exists(CACHE_JOGOS):
                     os.remove(CACHE_JOGOS)
                 if os.path.exists(ALERTAS_PATH):
@@ -809,8 +794,7 @@ def main():
                 st.rerun()
                 
         with col_util2:
-            if st.button("🔄 Atualizar", use_container_width=True, 
-                       key="btn_refresh"):
+            if st.button("🔄 Atualizar", use_container_width=True):
                 if st.session_state.dados_carregados:
                     # Refaz a busca com os mesmos parâmetros
                     if st.session_state.busca_hoje:
@@ -829,20 +813,17 @@ def main():
         data_selecionada = st.date_input(
             "Selecione a data:", 
             value=datetime.today(),
-            max_value=datetime.today() + timedelta(days=7),
-            key="input_data"
+            max_value=datetime.today() + timedelta(days=7)
         )
     
     with col2:
         st.markdown("### ")
-        btn_buscar = st.button("🔍 Buscar por Data", type="primary", use_container_width=True, 
-                             key="btn_buscar_data")
+        btn_buscar = st.button("🔍 Buscar por Data", type="primary", use_container_width=True)
     
     with col3:
         st.markdown("### ")
         btn_hoje = st.button("🎯 Jogos de Hoje", use_container_width=True, 
-                           help="Busca apenas jogos acontecendo hoje", 
-                           key="btn_buscar_hoje")
+                           help="Busca apenas jogos acontecendo hoje")
 
     data_str = data_selecionada.strftime("%Y-%m-%d")
 
@@ -876,8 +857,7 @@ def main():
         """)
 
     # Informações de ajuda
-    with st.expander("🎮 Guia Rápido", expanded=False, 
-                   key="expander_ajuda"):
+    with st.expander("🎮 Guia Rápido", expanded=False):
         col_help1, col_help2 = st.columns(2)
         
         with col_help1:
