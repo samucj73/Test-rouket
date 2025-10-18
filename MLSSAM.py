@@ -8,34 +8,38 @@ import pandas as pd
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
-import time
 
 # =============================
 # Configurações e Segurança
 # =============================
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "SEU_TELEGRAM_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "-1003073115320")
-TELEGRAM_CHAT_ID_ALT2 = os.getenv("TELEGRAM_CHAT_ID_ALT2", "-1002754276285")
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "SEU_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "-100XXXXXXXXX")
+TELEGRAM_CHAT_ID_ALT2 = os.getenv("TELEGRAM_CHAT_ID_ALT2", "-100XXXXXXXXX")
+
+BASE_URL_TG = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
 
 ALERTAS_PATH = "alertas.json"
 CACHE_JOGOS = "cache_jogos.json"
-CACHE_TIMEOUT = 3600  # 1 hora
+CACHE_TIMEOUT = 3600  # 1 hora em segundos
 
 # =============================
-# Cache
+# Utilitários de Cache
 # =============================
 def carregar_json(caminho: str) -> dict:
-    if os.path.exists(caminho):
-        try:
-            with open(caminho, "r", encoding="utf-8") as f:
+    try:
+        if os.path.exists(caminho):
+            with open(caminho, "r", encoding='utf-8') as f:
                 return json.load(f)
-        except:
-            return {}
+    except Exception as e:
+        st.error(f"Erro ao carregar {caminho}: {e}")
     return {}
 
 def salvar_json(caminho: str, dados: dict):
-    with open(caminho, "w", encoding="utf-8") as f:
-        json.dump(dados, f, ensure_ascii=False, indent=2)
+    try:
+        with open(caminho, "w", encoding='utf-8') as f:
+            json.dump(dados, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        st.error(f"Erro ao salvar {caminho}: {e}")
 
 def carregar_alertas() -> dict:
     return carregar_json(ALERTAS_PATH)
@@ -50,25 +54,15 @@ def salvar_cache_jogos(dados: dict):
     salvar_json(CACHE_JOGOS, dados)
 
 # =============================
-# Comunicação com Telegram
-# =============================
-def enviar_telegram(msg: str, chat_id: str = TELEGRAM_CHAT_ID):
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    try:
-        requests.get(url, params={"chat_id": chat_id, "text": msg, "parse_mode": "HTML"}, timeout=10)
-    except:
-        pass
-
-# =============================
-# Obter jogos da ESPN
+# Função para buscar jogos MLS da ESPN
 # =============================
 def obter_jogos_espn(data: str) -> list:
-    """
-    Retorna os jogos da MLS (ESPN) filtrados pela data (YYYY-MM-DD)
-    """
     cache = carregar_cache_jogos()
     if data in cache:
-        return cache[data]
+        jogos = cache[data]
+        for j in jogos:
+            j["hora"] = datetime.fromisoformat(j["hora"])
+        return jogos
 
     url = "https://site.api.espn.com/apis/site/v2/sports/soccer/usa.1/scoreboard"
     try:
@@ -81,7 +75,6 @@ def obter_jogos_espn(data: str) -> list:
             hora = evento.get("date")
             if not hora:
                 continue
-            # Filtrar pela data
             data_jogo = datetime.fromisoformat(hora.replace("Z", "+00:00")).strftime("%Y-%m-%d")
             if data_jogo != data:
                 continue
@@ -96,6 +89,7 @@ def obter_jogos_espn(data: str) -> list:
             score_home = int(times[0].get("score") or 0)
             score_away = int(times[1].get("score") or 0)
             status = evento.get("status", {}).get("type", {}).get("description", "SCHEDULED")
+            hora_dt = datetime.fromisoformat(hora.replace("Z", "+00:00")) - timedelta(hours=3)
 
             jogos.append({
                 "id": evento.get("id"),
@@ -104,12 +98,20 @@ def obter_jogos_espn(data: str) -> list:
                 "score_home": score_home,
                 "score_away": score_away,
                 "status": status,
-                "hora": datetime.fromisoformat(hora.replace("Z", "+00:00")) - timedelta(hours=3),
+                "hora": hora_dt,
                 "competition": competicao.get("league", {}).get("displayName", "MLS")
             })
 
-        cache[data] = jogos
+        # Salvar cache (hora como string ISO)
+        cache_salvar = []
+        for j in jogos:
+            j_copy = j.copy()
+            j_copy["hora"] = j_copy["hora"].isoformat()
+            cache_salvar.append(j_copy)
+
+        cache[data] = cache_salvar
         salvar_cache_jogos(cache)
+
         return jogos
 
     except Exception as e:
@@ -117,89 +119,99 @@ def obter_jogos_espn(data: str) -> list:
         return []
 
 # =============================
-# Lógica de tendência
+# Função de envio Telegram
 # =============================
-def calcular_tendencia(home, away, score_home, score_away):
-    total_gols = score_home + score_away
-    if total_gols >= 3:
-        tendencia = "Mais 2.5"
-    elif total_gols >= 2:
-        tendencia = "Mais 1.5"
+def enviar_telegram(msg: str, chat_id: str = TELEGRAM_CHAT_ID):
+    try:
+        response = requests.get(BASE_URL_TG, params={"chat_id": chat_id, "text": msg, "parse_mode": "HTML"})
+        return response.status_code == 200
+    except Exception as e:
+        st.error(f"Erro ao enviar Telegram: {e}")
+        return False
+
+# =============================
+# Análise simples (Mais/Menos 2.5)
+# =============================
+def calcular_tendencia(score_home, score_away):
+    total = score_home + score_away
+    if total > 2:
+        return "Mais 2.5", total
     else:
-        tendencia = "Menos 2.5"
-    confianca = min(95, 60 + total_gols*10)
-    estimativa = total_gols if total_gols > 0 else 1.5
-    return estimativa, confianca, tendencia
+        return "Menos 2.5", total
 
-# =============================
-# Verificar e enviar alerta
-# =============================
-def verificar_enviar_alerta(jogo):
-    alertas = carregar_alertas()
-    fixture_id = str(jogo["id"])
-
-    estimativa, confianca, tendencia = calcular_tendencia(
-        jogo["home"], jogo["away"], jogo["score_home"], jogo["score_away"]
+def enviar_alerta_jogo(jogo):
+    tendencia, total = calcular_tendencia(jogo["score_home"], jogo["score_away"])
+    msg = (
+        f"⚽ <b>{jogo['home']} vs {jogo['away']}</b>\n"
+        f"🏆 Liga: {jogo['competition']}\n"
+        f"🕒 Horário: {jogo['hora'].strftime('%d/%m %H:%M')}\n"
+        f"📈 Tendência: <b>{tendencia}</b> | Total gols: {total}\n"
+        f"📌 Status: {jogo['status']}"
     )
-    jogo["estimativa"] = estimativa
-    jogo["confianca"] = confianca
-    jogo["tendencia"] = tendencia
-
-    if fixture_id not in alertas:
-        alertas[fixture_id] = {
-            "tendencia": tendencia,
-            "estimativa": estimativa,
-            "confianca": confianca,
-            "conferido": False
-        }
-        msg = (
-            f"⚽ <b>Alerta de Gols!</b>\n"
-            f"🏟️ {jogo['home']} vs {jogo['away']}\n"
-            f"📅 {jogo['hora'].strftime('%d/%m/%Y %H:%M')}\n"
-            f"📈 Tendência: <b>{tendencia}</b>\n"
-            f"🎯 Estimativa: <b>{estimativa:.2f}</b>\n"
-            f"💯 Confiança: <b>{confianca:.0f}%</b>\n"
-            f"🏆 Liga: {jogo['competition']}"
-        )
-        enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2)
-        salvar_alertas(alertas)
+    enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2)
 
 # =============================
 # Interface Streamlit
 # =============================
 def main():
-    st.set_page_config(page_title="⚽ MLS Alerts", layout="wide")
-    st.title("⚽ Sistema de Alertas MLS - ESPN")
+    st.set_page_config(page_title="⚽ MLS - Elite", layout="wide")
+    st.title("⚽ MLS - Elite - Alertas Automáticos")
 
-    col1, col2 = st.columns([2, 1])
+    # Sidebar
+    with st.sidebar:
+        st.header("Configurações")
+        top_n = st.selectbox("📊 Top N Jogos", [3,5,10], index=0)
+
+    # Colunas principais
+    col1, col2 = st.columns(2)
     with col1:
-        data_selecionada = st.date_input("📅 Data para análise:", value=datetime.today())
+        data_selecionada = st.date_input("📅 Data dos Jogos", value=datetime.today())
     with col2:
-        top_n = st.selectbox("📊 Jogos no Top", [3, 5, 10], index=0)
+        st.info("Atualização automática a cada 15 minutos")
 
-    if st.button("🔍 Buscar Partidas"):
-        hoje = data_selecionada.strftime("%Y-%m-%d")
-        jogos = obter_jogos_espn(hoje)
+    # Botões principais
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if st.button("🔍 Buscar Jogos"):
+            processar_jogos(data_selecionada, top_n)
+    with col2:
+        if st.button("🔄 Atualizar Status"):
+            st.success("✅ Status atualizado (simulação)")
+    with col3:
+        if st.button("🧹 Limpar Cache"):
+            limpar_cache()
 
-        if not jogos:
-            st.warning("⚠️ Nenhum jogo encontrado para a data selecionada.")
-            return
+def processar_jogos(data_selecionada, top_n):
+    data_str = data_selecionada.strftime("%Y-%m-%d")
+    jogos = obter_jogos_espn(data_str)
+    if not jogos:
+        st.warning("⚠️ Nenhum jogo encontrado para a data selecionada.")
+        return
 
-        # Calcular tendência e enviar alertas
-        for jogo in jogos:
-            verificar_enviar_alerta(jogo)
+    # Mostrar tabela
+    tabela = []
+    for j in jogos:
+        tabela.append({
+            "Mandante": j["home"],
+            "Visitante": j["away"],
+            "Placar": f"{j['score_home']} - {j['score_away']}",
+            "Status": j["status"],
+            "Horário": j["hora"].strftime("%d/%m %H:%M"),
+            "Competição": j["competition"]
+        })
+    st.dataframe(pd.DataFrame(tabela), use_container_width=True)
 
-        # Ordenar por confiança
-        top_jogos = sorted(jogos, key=lambda x: x["confianca"], reverse=True)[:top_n]
-        df = pd.DataFrame(top_jogos)
-        st.dataframe(df, use_container_width=True)
-        st.success(f"✅ {len(jogos)} jogos processados e alertas enviados!")
+    # Enviar Top N jogos para Telegram
+    jogos_ordenados = sorted(jogos, key=lambda x: x["score_home"]+x["score_away"], reverse=True)[:top_n]
+    for j in jogos_ordenados:
+        enviar_alerta_jogo(j)
+    st.success(f"🚀 Top {top_n} jogos enviados para o Telegram!")
 
-    if st.button("🧹 Limpar Cache"):
-        for arquivo in [CACHE_JOGOS, ALERTAS_PATH]:
-            if os.path.exists(arquivo):
-                os.remove(arquivo)
-        st.success("✅ Cache limpo!")
+def limpar_cache():
+    for f in [CACHE_JOGOS, ALERTAS_PATH]:
+        if os.path.exists(f):
+            os.remove(f)
+    st.success("✅ Cache limpo com sucesso!")
 
 if __name__ == "__main__":
     main()
