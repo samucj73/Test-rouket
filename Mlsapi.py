@@ -2,25 +2,23 @@ import streamlit as st
 import requests
 import pandas as pd
 from datetime import datetime, timedelta
-from bs4 import BeautifulSoup
 import json
 import os
 
-# ===============================
-# ⚙️ Configurações gerais
-# ===============================
-st.set_page_config(page_title="⚽ API MLS - Elite", layout="wide")
+st.set_page_config(page_title="⚽ API MLS - Elite Master", layout="wide")
 st.title("⚽ API MLS - Elite Master")
 
 DATA_FILE = "mls_cache.json"
 UPDATE_INTERVAL_MINUTES = 15
+DIAS_PASSADOS = 3
+DIAS_FUTUROS = 2
 
 # ===============================
-# 🧩 Função: ESPN API oculta
+# 🔗 Função para buscar dados da ESPN por data
 # ===============================
-def buscar_dados_api():
+def buscar_dados_por_data(data_str):
     try:
-        url = "https://site.api.espn.com/apis/site/v2/sports/soccer/usa.1/scoreboard"
+        url = f"https://site.api.espn.com/apis/site/v2/sports/soccer/usa.1/scoreboard?dates={data_str}"
         headers = {"User-Agent": "Mozilla/5.0"}
         r = requests.get(url, headers=headers, timeout=10)
         r.raise_for_status()
@@ -30,7 +28,11 @@ def buscar_dados_api():
         for event in data.get("events", []):
             competition = event.get("competitions", [{}])[0]
             status = competition.get("status", {}).get("type", {}).get("description", "")
-            horario = competition.get("date", "")[:19].replace("T", " ")
+            horario_utc = competition.get("date", "")
+            horario_local = (
+                datetime.fromisoformat(horario_utc.replace("Z", "+00:00"))
+                - timedelta(hours=3)
+            ).strftime("%d/%m/%Y %H:%M")
 
             teams = competition.get("competitors", [])
             mandante = visitante = placar_m = placar_v = ""
@@ -49,59 +51,31 @@ def buscar_dados_api():
                 "placar_m": placar_m,
                 "placar_v": placar_v,
                 "status": status,
-                "horário": horario
+                "horário": horario_local
             })
         return partidas
     except Exception as e:
-        print("Erro API ESPN:", e)
-        return None
+        print(f"Erro ao buscar dados da data {data_str}: {e}")
+        return []
 
 # ===============================
-# 🧩 Função: Fallback via Scraping
+# 🧠 Buscar dados de várias datas
 # ===============================
-def buscar_dados_scraping():
-    try:
-        url = "https://www.espn.com/soccer/scoreboard/_/league/usa.1"
-        r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
-        soup = BeautifulSoup(r.text, "html.parser")
+def buscar_todas_as_partidas():
+    hoje = datetime.utcnow().date()
+    datas = [
+        (hoje - timedelta(days=i)).strftime("%Y%m%d") for i in range(DIAS_PASSADOS, 0, -1)
+    ] + [hoje.strftime("%Y%m%d")] + [
+        (hoje + timedelta(days=i)).strftime("%Y%m%d") for i in range(1, DIAS_FUTUROS + 1)
+    ]
 
-        partidas = []
-        blocos = soup.select("section.Scoreboard")
-
-        for bloco in blocos:
-            equipes = bloco.select("span.sb-team-short")
-            if len(equipes) < 2:
-                continue
-
-            mandante = equipes[0].text.strip()
-            visitante = equipes[1].text.strip()
-
-            placares = bloco.select("span.sb-team-score")
-            placar_m = placares[0].text.strip() if len(placares) >= 1 else "-"
-            placar_v = placares[1].text.strip() if len(placares) >= 2 else "-"
-
-            status_elem = bloco.select_one("span.sb-status-text")
-            status = status_elem.text.strip() if status_elem else "Agendado"
-
-            hora_elem = bloco.select_one("span.sb-date-time")
-            horario = hora_elem.text.strip() if hora_elem else "-"
-
-            partidas.append({
-                "mandante": mandante,
-                "visitante": visitante,
-                "placar_m": placar_m,
-                "placar_v": placar_v,
-                "status": status,
-                "horário": horario
-            })
-
-        return partidas if partidas else None
-    except Exception as e:
-        print("Erro scraping ESPN:", e)
-        return None
+    todas = []
+    for d in datas:
+        todas.extend(buscar_dados_por_data(d))
+    return todas
 
 # ===============================
-# 💾 Funções auxiliares
+# 💾 Cache local
 # ===============================
 def salvar_cache(dados):
     with open(DATA_FILE, "w", encoding="utf-8") as f:
@@ -126,15 +100,13 @@ if (
     st.session_state["last_update"] is None
     or (now - st.session_state["last_update"]) > timedelta(minutes=UPDATE_INTERVAL_MINUTES)
 ):
-    dados = buscar_dados_api()
-    if not dados:
-        dados = buscar_dados_scraping()
+    dados = buscar_todas_as_partidas()
     if dados:
         salvar_cache(dados)
         st.session_state["dados"] = dados
         st.session_state["last_update"] = now
     else:
-        st.warning("⚠️ Nenhum dado obtido — verifique se há partidas hoje.")
+        st.warning("⚠️ Nenhum dado obtido — verifique se há partidas disponíveis.")
 
 # ===============================
 # 🌐 Endpoint JSON (/api/mls)
@@ -154,19 +126,26 @@ ultima = (
 )
 st.markdown(f"🕒 **Última atualização:** {ultima} | Atualização automática a cada {UPDATE_INTERVAL_MINUTES} minutos.")
 
-dados = st.session_state["dados"]
+dados = pd.DataFrame(st.session_state["dados"])
 
-if not dados:
+if dados.empty:
     st.warning("Nenhum dado disponível no momento.")
 else:
-    df = pd.DataFrame(dados)
-    st.dataframe(df, use_container_width=True)
+    # Colorir status
+    def colorir_status(val):
+        if "Final" in val:
+            return "background-color: #d4edda"
+        elif "Live" in val:
+            return "background-color: #fff3cd"
+        else:
+            return ""
+    st.dataframe(dados.style.applymap(colorir_status, subset=["status"]), use_container_width=True)
 
 # ===============================
-# 🔘 Botão de atualização manual
+# 🔘 Atualização manual
 # ===============================
 if st.button("🔄 Atualizar agora"):
-    dados = buscar_dados_api() or buscar_dados_scraping()
+    dados = buscar_todas_as_partidas()
     if dados:
         salvar_cache(dados)
         st.session_state["dados"] = dados
