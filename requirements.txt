@@ -16,3 +16,5 @@ reportlab
 tensorflow
 psutil
 flask
+fastapi
+httpx
