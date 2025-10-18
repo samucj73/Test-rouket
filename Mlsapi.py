@@ -1,4 +1,6 @@
-import streamlit as st
+# soccer_api.py
+from fastapi import FastAPI, Query
+from fastapi.responses import JSONResponse
 import requests
 import pandas as pd
 from datetime import datetime, timedelta
@@ -8,9 +10,7 @@ import os
 # ===============================
 # ⚙️ Configurações gerais
 # ===============================
-st.set_page_config(page_title="⚽ Soccer API - Elite Master", layout="wide")
-st.title("⚽ Soccer API - Elite Master")
-
+app = FastAPI(title="Soccer API - Elite Master")
 CACHE_DIR = "cache"
 DIAS_FUTUROS = 2
 DIAS_PASSADOS = 7
@@ -48,12 +48,12 @@ def salvar_cache(liga_code, ano, dados):
 
 def carregar_cache(liga_code, ano):
     if os.path.exists(cache_file(liga_code, ano)):
-        with open(cache_file(liga_code, ano), "r", encoding="utf-8") as f:
+        with open(cache_file(liga_code, "r", encoding="utf-8") as f:
             return json.load(f)
     return []
 
 # ===============================
-# 🧠 Buscar dados da ESPN com escudos
+# 🧠 Buscar dados da ESPN
 # ===============================
 def buscar_dados(liga_code, data_str):
     try:
@@ -105,7 +105,7 @@ def buscar_dados(liga_code, data_str):
         return []
 
 # ===============================
-# 🔁 Atualização inteligente
+# 🔁 Atualização de cache
 # ===============================
 def atualizar_cache_rapida():
     hoje = datetime.utcnow().date()
@@ -138,102 +138,56 @@ def carregar_todas_partidas():
     return todas
 
 # ===============================
-# 🔘 Inicialização
+# 📌 Endpoint: listar ligas
 # ===============================
-if "dados" not in st.session_state:
-    st.session_state["dados"] = carregar_todas_partidas()
-if "last_update" not in st.session_state:
-    st.session_state["last_update"] = None
+@app.get("/leagues")
+def get_leagues():
+    return {"count": len(LIGAS), "leagues": list(LIGAS.keys())}
 
-# Atualização automática
-now = datetime.now()
-if st.session_state["last_update"] is None or (now - st.session_state["last_update"]) > timedelta(minutes=15):
-    st.info("🔄 Atualizando partidas recentes...")
+# ===============================
+# 📌 Endpoint: listar partidas
+# ===============================
+@app.get("/matches")
+def get_matches(
+    liga: str = Query(None),
+    data: str = Query(None),
+    time: str = Query(None)
+):
+    dados = carregar_todas_partidas()
+    if liga:
+        liga_code = LIGAS.get(liga)
+        if liga_code:
+            dados = [d for d in dados if d["liga"] == liga_code]
+    if data:
+        dados = [d for d in dados if d["horario"].startswith(data)]
+    if time:
+        dados = [d for d in dados if time.lower() in d["mandante"].lower() or time.lower() in d["visitante"].lower()]
+    return {"count": len(dados), "matches": dados}
+
+# ===============================
+# 📌 Endpoint: partidas futuras
+# ===============================
+@app.get("/upcoming")
+def get_upcoming():
+    agora = datetime.utcnow()
+    dados = carregar_todas_partidas()
+    dados = [d for d in dados if datetime.strptime(d["horario"], "%Y-%m-%d %H:%M") >= agora]
+    return {"count": len(dados), "matches": dados}
+
+# ===============================
+# 📌 Endpoint: partidas passadas
+# ===============================
+@app.get("/results")
+def get_results():
+    agora = datetime.utcnow()
+    dados = carregar_todas_partidas()
+    dados = [d for d in dados if datetime.strptime(d["horario"], "%Y-%m-%d %H:%M") < agora]
+    return {"count": len(dados), "matches": dados}
+
+# ===============================
+# 📌 Endpoint: atualizar cache
+# ===============================
+@app.get("/update")
+def update_cache():
     total = atualizar_cache_rapida()
-    st.session_state["dados"] = carregar_todas_partidas()
-    st.session_state["last_update"] = now
-    st.success(f"✅ Cache atualizado: {total} partidas")
-
-# ===============================
-# 🌐 API via st.query_params
-# ===============================
-params = st.query_params
-if "endpoint" in params:
-    endpoint = params["endpoint"][0].lower()
-    dados = st.session_state["dados"]
-
-    if endpoint == "matches":
-        liga = params.get("liga", [None])[0]
-        data = params.get("data", [None])[0]
-        time = params.get("time", [None])[0]
-        if liga:
-            liga_code = LIGAS.get(liga)
-            if liga_code:
-                dados = [d for d in dados if d["liga"] == liga_code]
-        if data:
-            dados = [d for d in dados if d["horario"].startswith(data)]
-        if time:
-            dados = [d for d in dados if time.lower() in d["mandante"].lower() or time.lower() in d["visitante"].lower()]
-        st.json({"count": len(dados), "matches": dados})
-        st.stop()
-
-    if endpoint == "leagues":
-        st.json({"count": len(LIGAS), "leagues": list(LIGAS.keys())})
-        st.stop()
-
-    if endpoint == "upcoming":
-        agora = datetime.utcnow()
-        dados = [d for d in dados if datetime.strptime(d["horario"], "%Y-%m-%d %H:%M") >= agora]
-        st.json({"count": len(dados), "matches": dados})
-        st.stop()
-
-    if endpoint == "results":
-        agora = datetime.utcnow()
-        dados = [d for d in dados if datetime.strptime(d["horario"], "%Y-%m-%d %H:%M") < agora]
-        st.json({"count": len(dados), "matches": dados})
-        st.stop()
-
-    if endpoint == "update":
-        total = atualizar_cache_rapida()
-        st.session_state["dados"] = carregar_todas_partidas()
-        st.session_state["last_update"] = datetime.now()
-        st.json({"message": f"Cache atualizado com {total} partidas"})
-        st.stop()
-
-# ===============================
-# 📊 Dashboard visual corrigido
-# ===============================
-ultima = st.session_state["last_update"].strftime("%d/%m/%Y %H:%M:%S") if st.session_state["last_update"] else "Nunca"
-st.markdown(f"🕒 **Última atualização:** {ultima}")
-
-dados_df = pd.DataFrame(st.session_state["dados"])
-
-if not dados_df.empty:
-    liga_selecionada = st.multiselect("Selecione ligas:", options=list(LIGAS.keys()), default=list(LIGAS.keys()))
-    data_selecionada = st.date_input("Filtrar por data:", value=datetime.utcnow().date())
-
-    dados_filtrados = dados_df[
-        (dados_df["liga"].isin([LIGAS[l] for l in liga_selecionada])) &
-        (pd.to_datetime(dados_df["horario"]).dt.date == data_selecionada)
-    ]
-
-    if dados_filtrados.empty:
-        st.warning("Nenhuma partida disponível para os filtros selecionados.")
-    else:
-        for idx, row in dados_filtrados.iterrows():
-            st.markdown(f"### {row['mandante']} vs {row['visitante']}")
-            
-            # 🔹 Tratamento de escudos ausentes
-            mandante_logo = row['mandante_logo'] if row['mandante_logo'] else None
-            visitante_logo = row['visitante_logo'] if row['visitante_logo'] else None
-
-            logos = [logo for logo in [mandante_logo, visitante_logo] if logo]
-            captions = [row['mandante'], row['visitante']][:len(logos)]
-
-            if logos:
-                st.image(logos, width=80, caption=captions)
-
-            st.markdown(f"**Placar:** {row['placar_m']} x {row['placar_v']} | **Status:** {row['status']}")
-            st.markdown("---")
-else:
-    st.warning("Nenhum dado disponível no momento.")
+    return {"message": f"Cache atualizado com {total} partidas"}
