@@ -150,6 +150,31 @@ def is_datetime_valid(dt: Optional[datetime]) -> bool:
     except:
         return False
 
+def safe_datetime_compare(dt1: Optional[datetime], dt2: Optional[datetime]) -> bool:
+    """Comparação segura entre datetimes"""
+    if not is_datetime_valid(dt1) or not is_datetime_valid(dt2):
+        return False
+    try:
+        # Remove timezone info para comparação segura
+        dt1_naive = dt1.replace(tzinfo=None) if dt1.tzinfo else dt1
+        dt2_naive = dt2.replace(tzinfo=None) if dt2.tzinfo else dt2
+        return dt1_naive > dt2_naive
+    except:
+        return False
+
+def safe_datetime_range(dt: Optional[datetime], start: datetime, end: datetime) -> bool:
+    """Verifica se um datetime está dentro de um range de forma segura"""
+    if not is_datetime_valid(dt):
+        return False
+    try:
+        # Remove timezone info para comparação segura
+        dt_naive = dt.replace(tzinfo=None) if dt.tzinfo else dt
+        start_naive = start.replace(tzinfo=None) if start.tzinfo else start
+        end_naive = end.replace(tzinfo=None) if end.tzinfo else end
+        return start_naive <= dt_naive <= end_naive
+    except:
+        return False
+
 # =============================
 # Componentes de UI Melhorados
 # =============================
@@ -194,15 +219,22 @@ def criar_card_partida(partida: Dict):
             st.caption(f"🏆 {partida['liga']}")
         with col_info3:
             hora_partida = partida['hora']
-            if is_datetime_valid(hora_partida) and hora_partida > datetime.now():
+            agora = datetime.now()
+            if is_datetime_valid(hora_partida) and safe_datetime_compare(hora_partida, agora):
                 try:
-                    tempo_restante = hora_partida - datetime.now()
+                    # Remove timezone info para cálculo seguro
+                    hora_partida_naive = hora_partida.replace(tzinfo=None) if hora_partida.tzinfo else hora_partida
+                    agora_naive = agora.replace(tzinfo=None) if agora.tzinfo else agora
+                    tempo_restante = hora_partida_naive - agora_naive
+                    
                     horas = int(tempo_restante.total_seconds() // 3600)
                     minutos = int((tempo_restante.total_seconds() % 3600) // 60)
                     if horas > 0:
                         st.caption(f"⏳ {horas}h {minutos}min")
-                    else:
+                    elif minutos > 0:
                         st.caption(f"⏳ {minutos}min")
+                    else:
+                        st.caption("⏳ Agora!")
                 except:
                     st.caption("⏳ --")
         
@@ -236,26 +268,28 @@ def exibir_partidas_por_liga(partidas: List[Dict]):
                 filtrar_status = st.selectbox(
                     f"Status - {liga}",
                     ["Todos", "Agendado", "Ao Vivo", "Finalizado"],
-                    key=f"status_{liga}"
+                    key=f"status_{liga}_{len(partidas_liga)}"
                 )
             with col_filtro2:
-                filtrar_time = st.text_input(f"Buscar time - {liga}", key=f"time_{liga}")
+                filtrar_time = st.text_input(f"Buscar time - {liga}", key=f"time_{liga}_{len(partidas_liga)}")
             with col_filtro3:
-                if st.button(f"🎯 Top 3 - {liga}", key=f"top3_{liga}"):
+                if st.button(f"🎯 Top 3 - {liga}", key=f"top3_{liga}_{len(partidas_liga)}"):
                     partidas_liga = partidas_liga[:3]
             
             # Aplica filtros
+            partidas_filtradas = partidas_liga.copy()
+            
             if filtrar_status != "Todos":
-                partidas_liga = [p for p in partidas_liga if filtrar_status.lower() in p['status'].lower()]
+                partidas_filtradas = [p for p in partidas_filtradas if filtrar_status.lower() in p['status'].lower()]
             
             if filtrar_time:
-                partidas_liga = [p for p in partidas_liga 
+                partidas_filtradas = [p for p in partidas_filtradas 
                                if filtrar_time.lower() in p['home'].lower() 
                                or filtrar_time.lower() in p['away'].lower()]
             
             # Exibe partidas
-            if partidas_liga:
-                for partida in partidas_liga:
+            if partidas_filtradas:
+                for partida in partidas_filtradas:
                     criar_card_partida(partida)
             else:
                 st.info(f"ℹ️ Nenhuma partida encontrada para os filtros em {liga}")
@@ -274,7 +308,7 @@ def exibir_estatisticas(partidas: List[Dict]):
         status_count[status] = status_count.get(status, 0) + 1
     
     # Partidas ao vivo
-    partidas_ao_vivo = len([p for p in partidas if any(x in p['status'].lower() for x in ['vivo', 'live', 'andamento'])])
+    partidas_ao_vivo = len([p for p in partidas if any(x in p['status'].lower() for x in ['vivo', 'live', 'andamento', 'halftime'])])
     
     # Próximas partidas (nas próximas 3 horas) - COM TRATAMENTO SEGURO
     agora = datetime.now()
@@ -283,13 +317,8 @@ def exibir_estatisticas(partidas: List[Dict]):
     
     for partida in partidas:
         hora_partida = partida['hora']
-        if is_datetime_valid(hora_partida):
-            try:
-                # Verificação segura sem comparação encadeada
-                if agora <= hora_partida and hora_partida <= limite_3h:
-                    proximas_3h.append(partida)
-            except (TypeError, ValueError):
-                continue
+        if safe_datetime_range(hora_partida, agora, limite_3h):
+            proximas_3h.append(partida)
     
     col1, col2, col3, col4 = st.columns(4)
     
@@ -365,14 +394,26 @@ def exibir_partidas_top(partidas: List[Dict], top_n: int):
                 st.write(f"**Liga:** {partida['liga']}")
             with col_info3:
                 hora_partida = partida['hora']
-                if is_datetime_valid(hora_partida) and hora_partida > datetime.now():
+                agora = datetime.now()
+                if is_datetime_valid(hora_partida) and safe_datetime_compare(hora_partida, agora):
                     try:
-                        tempo_restante = hora_partida - datetime.now()
+                        # Remove timezone info para cálculo seguro
+                        hora_partida_naive = hora_partida.replace(tzinfo=None) if hora_partida.tzinfo else hora_partida
+                        agora_naive = agora.replace(tzinfo=None) if agora.tzinfo else agora
+                        tempo_restante = hora_partida_naive - agora_naive
+                        
                         horas = int(tempo_restante.total_seconds() // 3600)
                         minutos = int((tempo_restante.total_seconds() % 3600) // 60)
-                        st.write(f"**Inicia em:** {horas}h {minutos}min")
+                        if horas > 0:
+                            st.write(f"**Inicia em:** {horas}h {minutos}min")
+                        elif minutos > 0:
+                            st.write(f"**Inicia em:** {minutos}min")
+                        else:
+                            st.write("**Inicia em:** Agora!")
                     except:
                         st.write("**Inicia em:** --")
+                else:
+                    st.write("**Status:** Em andamento")
             
             st.markdown("---")
 
@@ -656,15 +697,9 @@ def main():
         )
         
         st.markdown("---")
-        st.subheader("🎨 Personalização")
-        
-        # Tema de cores
-        tema = st.selectbox("Tema de Cores", ["Padrão", "Escuro", "Colorido"])
-        
-        st.markdown("---")
         st.subheader("🛠️ Utilidades")
         
-        if st.button("🧹 Limpar Cache", use_container_width=True):
+        if st.button("🧹 Limpar Cache", use_container_width=True, key="clear_cache"):
             if os.path.exists(CACHE_JOGOS):
                 os.remove(CACHE_JOGOS)
             if os.path.exists(ALERTAS_PATH):
@@ -682,7 +717,8 @@ def main():
         data_selecionada = st.date_input(
             "Selecione a data:", 
             value=datetime.today(),
-            max_value=datetime.today() + timedelta(days=7)
+            max_value=datetime.today() + timedelta(days=7),
+            key="data_input"
         )
     
     with col2:
