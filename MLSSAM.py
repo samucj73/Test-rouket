@@ -51,11 +51,9 @@ def carregar_json(caminho: str) -> dict:
         if os.path.exists(caminho):
             with open(caminho, "r", encoding='utf-8') as f:
                 dados = json.load(f)
-            # Checar timeout
-            if caminho == CACHE_JOGOS:
-                if "_timestamp" in dados:
-                    if datetime.now().timestamp() - dados["_timestamp"] > CACHE_TIMEOUT:
-                        return {}
+            if caminho == CACHE_JOGOS and "_timestamp" in dados:
+                if datetime.now().timestamp() - dados["_timestamp"] > CACHE_TIMEOUT:
+                    return {}
             return dados
     except Exception:
         return {}
@@ -125,13 +123,13 @@ def salvar_cache_jogos(dados: dict):
 # =============================
 # Função para processar jogos
 # =============================
-def processar_jogos(data_str, ligas_busca, top_n, linhas_exibir):
+def processar_jogos(data_str, ligas_selecionadas, top_n, linhas_exibir):
     st.info(f"⏳ Buscando jogos para {data_str}...")
     cache = carregar_cache_jogos()
     todas_partidas = []
 
-    for liga in ligas_busca:
-        partidas = buscar_jogos_espn(liga, data_str)
+    for liga in ligas_selecionadas:
+        partidas = buscar_jogos_espn(LIGAS_ESPN[liga], data_str)
         todas_partidas.extend(partidas)
     
     if not todas_partidas:
@@ -148,7 +146,7 @@ def processar_jogos(data_str, ligas_busca, top_n, linhas_exibir):
         df = df.head(linhas_exibir)
     st.dataframe(df, use_container_width=True)
 
-    # Top N jogos (pode ser por horário ou critério que desejar)
+    # Top N jogos
     top_msg = f"📢 TOP {top_n} Jogos do Dia\n\n"
     for p in todas_partidas[:top_n]:
         top_msg += f"🏟️ {p['home']} vs {p['away']} | {p['placar']} | {p['status']} | {p['hora'].strftime('%H:%M') if p['hora'] else '-'}\n"
@@ -166,7 +164,9 @@ def main():
         st.header("Configurações")
         top_n = st.selectbox("📊 Top N Jogos", [3,5,10], index=0)
         linhas_exibir = st.number_input("📄 Linhas a exibir na tabela", min_value=1, max_value=50, value=10, step=1)
-    
+        st.subheader("Selecione as ligas")
+        ligas_selecionadas = st.multiselect("Escolha ligas:", list(LIGAS_ESPN.keys()), default=list(LIGAS_ESPN.keys()))
+
     data_selecionada = st.date_input("📅 Data dos Jogos", value=datetime.today())
     data_str = data_selecionada.strftime("%Y-%m-%d")
 
@@ -174,7 +174,10 @@ def main():
     col1, col2, col3 = st.columns(3)
     with col1:
         if st.button("🔍 Buscar Jogos"):
-            processar_jogos(data_str, LIGAS_ESPN.values(), top_n, linhas_exibir)
+            if ligas_selecionadas:
+                processar_jogos(data_str, ligas_selecionadas, top_n, linhas_exibir)
+            else:
+                st.warning("⚠️ Selecione pelo menos uma liga.")
     with col2:
         if st.button("🔄 Atualizar Status"):
             st.success("✅ Status atualizado (simulação)")
