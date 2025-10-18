@@ -4,17 +4,16 @@ import requests
 from bs4 import BeautifulSoup
 import json
 from datetime import datetime, timedelta
-import time
 
 # =============================
 # Configuração inicial
 # =============================
 st.set_page_config(page_title="API MLS - Elite Master", layout="wide")
 DATA_FILE = "mls.json"
-UPDATE_INTERVAL_MINUTES = 15  # Atualização automática
+UPDATE_INTERVAL_MINUTES = 15  # Atualiza automaticamente a cada 15 minutos
 
 # =============================
-# Função de raspagem do site oficial da MLS
+# Função para raspar dados do site oficial da MLS
 # =============================
 def get_mls_matches():
     url = "https://www.mlssoccer.com/competitions/mls-regular-season/2025/schedule/week-with-matches"
@@ -42,7 +41,6 @@ def get_mls_matches():
             })
         except Exception as e:
             print("Erro ao ler jogo:", e)
-
     return matches
 
 # =============================
@@ -78,31 +76,31 @@ if elapsed > timedelta(minutes=UPDATE_INTERVAL_MINUTES):
     update_data()
 
 # =============================
-# Endpoint da API JSON via URL
+# Endpoint API JSON (agora com st.query_params)
 # =============================
-params = st.experimental_get_query_params()
-if "endpoint" in params and params["endpoint"][0].lower() == "mls":
+params = st.query_params
+if "endpoint" in params and params["endpoint"].lower() == "mls":
     matches = load_matches()
     st.json(matches)
     st.stop()
 
 # =============================
-# Interface visual (painel)
+# Interface visual
 # =============================
 st.title("⚽ API MLS - Elite Master")
-st.markdown("Sistema de coleta automática dos dados oficiais da MLS direto da nuvem 🌎")
+st.markdown("Sistema oficial de coleta automática dos dados da **Major League Soccer (MLS)** direto da nuvem 🌎")
 
 last_update = st.session_state["last_update"].strftime("%d/%m/%Y %H:%M:%S")
-st.info(f"🕒 Última atualização: {last_update} | Atualiza automaticamente a cada 15 minutos")
+st.info(f"🕒 Última atualização: {last_update} | Atualização automática a cada {UPDATE_INTERVAL_MINUTES} minutos")
 
-# Botão manual opcional
+# Botão manual
 if st.button("🔄 Atualizar agora"):
     update_data()
 
-# Exibe partidas salvas
+# Exibir partidas
 matches = load_matches()
 if matches:
-    st.subheader("📅 Partidas MLS - Semana Atual")
+    st.subheader("📅 Partidas da Semana - MLS 2025")
     for match in matches:
         st.markdown(f"""
         🏟️ **{match['mandante']}** vs **{match['visitante']}**  
