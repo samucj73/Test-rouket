@@ -1,7 +1,6 @@
 import streamlit as st
 import requests
 import pandas as pd
-import time
 from datetime import datetime
 from bs4 import BeautifulSoup
 
@@ -13,7 +12,7 @@ st.title("⚽ API MLS - Elite Master")
 
 st.markdown("""
 Esta API coleta automaticamente os **dados mais recentes da MLS (Major League Soccer)** diretamente da ESPN,
-atualizando automaticamente a cada **15 minutos**, sem necessidade de apps externos.
+atualizando automaticamente a cada **15 minutos**, sem apps externos.
 """)
 
 # =====================================
@@ -37,72 +36,53 @@ def buscar_partidas_mls():
             time_fora = equipes[1].text.strip()
 
             placares = bloco.find_all("span", class_="sb-team-score")
-            if len(placares) == 2:
-                placar_casa = placares[0].text.strip()
-                placar_fora = placares[1].text.strip()
-            else:
-                placar_casa = placar_fora = "-"
+            placar_casa = placares[0].text.strip() if len(placares) >= 1 else "-"
+            placar_fora = placares[1].text.strip() if len(placares) >= 2 else "-"
 
-            status = bloco.find("span", class_="sb-status-text").text.strip() if bloco.find("span", class_="sb-status-text") else "Agendado"
-            hora = bloco.find("span", class_="sb-date-time").text.strip() if bloco.find("span", class_="sb-date-time") else "-"
+            status = bloco.find("span", class_="sb-status-text")
+            status_text = status.text.strip() if status else "Agendado"
+
+            hora = bloco.find("span", class_="sb-date-time")
+            hora_text = hora.text.strip() if hora else "-"
 
             partidas.append({
                 "Casa": time_casa,
                 "Fora": time_fora,
                 "Placar Casa": placar_casa,
                 "Placar Fora": placar_fora,
-                "Status": status,
-                "Horário": hora
+                "Status": status_text,
+                "Horário": hora_text
             })
 
-        df = pd.DataFrame(partidas)
-        return df if not df.empty else None
+        return pd.DataFrame(partidas) if partidas else None
 
     except Exception as e:
         st.error(f"Erro ao buscar dados da MLS (ESPN): {e}")
         return None
 
 # =====================================
-# ⏰ ATUALIZAÇÃO AUTOMÁTICA
+# ⏰ ATUALIZAÇÃO AUTOMÁTICA (a cada 15 minutos)
 # =====================================
-ATUALIZACAO_INTERVALO = 15 * 60  # 15 minutos
+from streamlit_autorefresh import st_autorefresh
 
-if "ultimo_update" not in st.session_state:
-    st.session_state["ultimo_update"] = None
+# Atualiza a cada 15 minutos (900 segundos)
+contador = st_autorefresh(interval=15 * 60 * 1000, key="auto_refresh")
 
-if "dados_mls" not in st.session_state:
-    st.session_state["dados_mls"] = None
-
-def atualizar_dados():
+if "dados_mls" not in st.session_state or contador == 0:
     st.session_state["dados_mls"] = buscar_partidas_mls()
     st.session_state["ultimo_update"] = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
 
+dados = st.session_state.get("dados_mls")
+ultima = st.session_state.get("ultimo_update")
+
 # =====================================
-# 🚀 EXECUÇÃO
+# 🧾 EXIBIÇÃO
 # =====================================
-if st.button("🔄 Atualizar agora"):
-    atualizar_dados()
-
-if st.session_state["dados_mls"] is None:
-    atualizar_dados()
-
-dados = st.session_state["dados_mls"]
-ultima = st.session_state["ultimo_update"]
-
 if dados is not None:
-    st.markdown(f"🕒 **Última atualização:** {ultima} | Próxima em 15 minutos automaticamente.")
+    st.markdown(f"🕒 **Última atualização:** {ultima} | Atualização automática a cada 15 minutos.")
     st.dataframe(dados, use_container_width=True)
 else:
     st.warning("Nenhum dado disponível. Aguarde a atualização automática.")
 
-# =====================================
-# ♻️ LOOP DE ATUALIZAÇÃO AUTOMÁTICA
-# =====================================
 st.markdown("---")
-st.markdown("⏳ Atualização automática em segundo plano...")
-
-with st.empty():
-    while True:
-        time.sleep(ATUALIZACAO_INTERVALO)
-        atualizar_dados()
-        st.rerun()
+st.markdown("✅ Atualização automática em segundo plano habilitada.")
