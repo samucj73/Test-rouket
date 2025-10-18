@@ -3,14 +3,10 @@ from datetime import datetime, timedelta
 import requests
 import json
 import os
-import io
 import pandas as pd
-from reportlab.lib.pagesizes import letter
-from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 
 # =============================
-# Configurações e Segurança
+# Configurações
 # =============================
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "SEU_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "-100XXXXXXXXX")
@@ -20,55 +16,55 @@ BASE_URL_TG = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
 
 ALERTAS_PATH = "alertas.json"
 CACHE_JOGOS = "cache_jogos.json"
-CACHE_TIMEOUT = 3600  # 1 hora em segundos
+CACHE_TIMEOUT = 3600  # 1 hora
 
 # =============================
-# Utilitários de Cache
+# Dicionário de ligas ESPN
+# =============================
+LIGAS_ESPN = {
+    "Brasileirão Série A": "bra.1",
+    "Brasileirão Série B": "bra.2",
+    "Premier League (Inglaterra)": "eng.1",
+    "La Liga (Espanha)": "esp.1",
+    "Serie A (Itália)": "ita.1",
+    "Bundesliga (Alemanha)": "ger.1",
+    "Ligue 1 (França)": "fra.1",
+    "Liga MX (México)": "mex.1",
+    "Saudi Pro League (Arábia)": "sau.1",
+    "Copa Libertadores (América do Sul)": "copa.lib",
+    "Copa Sudamericana": "copa.sud"
+}
+
+# =============================
+# Funções de cache
 # =============================
 def carregar_json(caminho: str) -> dict:
-    try:
-        if os.path.exists(caminho):
-            with open(caminho, "r", encoding='utf-8') as f:
-                return json.load(f)
-    except Exception as e:
-        st.error(f"Erro ao carregar {caminho}: {e}")
+    if os.path.exists(caminho):
+        with open(caminho, "r", encoding="utf-8") as f:
+            return json.load(f)
     return {}
 
 def salvar_json(caminho: str, dados: dict):
-    try:
-        with open(caminho, "w", encoding='utf-8') as f:
-            json.dump(dados, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        st.error(f"Erro ao salvar {caminho}: {e}")
-
-def carregar_alertas() -> dict:
-    return carregar_json(ALERTAS_PATH)
-
-def salvar_alertas(alertas: dict):
-    salvar_json(ALERTAS_PATH, alertas)
-
-def carregar_cache_jogos() -> dict:
-    return carregar_json(CACHE_JOGOS)
-
-def salvar_cache_jogos(dados: dict):
-    salvar_json(CACHE_JOGOS, dados)
+    with open(caminho, "w", encoding="utf-8") as f:
+        json.dump(dados, f, ensure_ascii=False, indent=2)
 
 # =============================
-# Função para buscar jogos MLS da ESPN
+# Buscar jogos ESPN por liga e data
 # =============================
-def obter_jogos_espn(data: str) -> list:
-    cache = carregar_cache_jogos()
-    if data in cache:
-        jogos = cache[data]
+def obter_jogos_espn(liga_id: str, data: str) -> list:
+    cache = carregar_json(CACHE_JOGOS)
+    key = f"{liga_id}_{data}"
+    if key in cache:
+        jogos = cache[key]
         for j in jogos:
             j["hora"] = datetime.fromisoformat(j["hora"])
         return jogos
 
-    url = "https://site.api.espn.com/apis/site/v2/sports/soccer/usa.1/scoreboard"
+    url = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{liga_id}/scoreboard"
     try:
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
-        dados = response.json()
+        resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
+        dados = resp.json()
         jogos = []
 
         for evento in dados.get("events", []):
@@ -99,45 +95,38 @@ def obter_jogos_espn(data: str) -> list:
                 "score_away": score_away,
                 "status": status,
                 "hora": hora_dt,
-                "competition": competicao.get("league", {}).get("displayName", "MLS")
+                "competition": competicao.get("league", {}).get("displayName", liga_id)
             })
 
-        # Salvar cache (hora como string ISO)
+        # Salvar cache
         cache_salvar = []
         for j in jogos:
             j_copy = j.copy()
             j_copy["hora"] = j_copy["hora"].isoformat()
             cache_salvar.append(j_copy)
 
-        cache[data] = cache_salvar
-        salvar_cache_jogos(cache)
+        cache[key] = cache_salvar
+        salvar_json(CACHE_JOGOS, cache)
 
         return jogos
-
     except Exception as e:
         st.error(f"Erro ao buscar jogos da ESPN: {e}")
         return []
 
 # =============================
-# Função de envio Telegram
+# Funções de Telegram e tendência
 # =============================
 def enviar_telegram(msg: str, chat_id: str = TELEGRAM_CHAT_ID):
     try:
-        response = requests.get(BASE_URL_TG, params={"chat_id": chat_id, "text": msg, "parse_mode": "HTML"})
-        return response.status_code == 200
+        requests.get(BASE_URL_TG, params={"chat_id": chat_id, "text": msg, "parse_mode": "HTML"})
     except Exception as e:
         st.error(f"Erro ao enviar Telegram: {e}")
-        return False
 
-# =============================
-# Análise simples (Mais/Menos 2.5)
-# =============================
 def calcular_tendencia(score_home, score_away):
     total = score_home + score_away
     if total > 2:
         return "Mais 2.5", total
-    else:
-        return "Menos 2.5", total
+    return "Menos 2.5", total
 
 def enviar_alerta_jogo(jogo):
     tendencia, total = calcular_tendencia(jogo["score_home"], jogo["score_away"])
@@ -154,43 +143,51 @@ def enviar_alerta_jogo(jogo):
 # Interface Streamlit
 # =============================
 def main():
-    st.set_page_config(page_title="⚽ MLS - Elite", layout="wide")
-    st.title("⚽ MLS - Elite - Alertas Automáticos")
+    st.set_page_config(page_title="⚽ ESPN Soccer - Elite", layout="wide")
+    st.title("⚽ ESPN Soccer - Elite - Alertas Automáticos")
 
     # Sidebar
     with st.sidebar:
         st.header("Configurações")
+        todas_ligas = st.checkbox("🌍 Todas as ligas", value=True)
         top_n = st.selectbox("📊 Top N Jogos", [3,5,10], index=0)
+        liga_escolhida = None
+        if not todas_ligas:
+            liga_escolhida = st.selectbox("📌 Escolha a Liga", list(LIGAS_ESPN.keys()))
 
-    # Colunas principais
-    col1, col2 = st.columns(2)
-    with col1:
-        data_selecionada = st.date_input("📅 Data dos Jogos", value=datetime.today())
-    with col2:
-        st.info("Atualização automática a cada 15 minutos")
+    # Data
+    data_selecionada = st.date_input("📅 Data dos Jogos", value=datetime.today())
+    data_str = data_selecionada.strftime("%Y-%m-%d")
 
-    # Botões principais
+    # Botões
     col1, col2, col3 = st.columns(3)
     with col1:
         if st.button("🔍 Buscar Jogos"):
-            processar_jogos(data_selecionada, top_n)
+            ligas_busca = LIGAS_ESPN.values() if todas_ligas else [LIGAS_ESPN[liga_escolhida]]
+            processar_jogos(data_str, ligas_busca, top_n)
     with col2:
         if st.button("🔄 Atualizar Status"):
             st.success("✅ Status atualizado (simulação)")
     with col3:
         if st.button("🧹 Limpar Cache"):
-            limpar_cache()
+            for f in [CACHE_JOGOS, ALERTAS_PATH]:
+                if os.path.exists(f):
+                    os.remove(f)
+            st.success("✅ Cache limpo!")
 
-def processar_jogos(data_selecionada, top_n):
-    data_str = data_selecionada.strftime("%Y-%m-%d")
-    jogos = obter_jogos_espn(data_str)
-    if not jogos:
+def processar_jogos(data_str, ligas_busca, top_n):
+    todos_jogos = []
+    for liga in ligas_busca:
+        jogos = obter_jogos_espn(liga, data_str)
+        todos_jogos.extend(jogos)
+
+    if not todos_jogos:
         st.warning("⚠️ Nenhum jogo encontrado para a data selecionada.")
         return
 
     # Mostrar tabela
     tabela = []
-    for j in jogos:
+    for j in todos_jogos:
         tabela.append({
             "Mandante": j["home"],
             "Visitante": j["away"],
@@ -201,17 +198,11 @@ def processar_jogos(data_selecionada, top_n):
         })
     st.dataframe(pd.DataFrame(tabela), use_container_width=True)
 
-    # Enviar Top N jogos para Telegram
-    jogos_ordenados = sorted(jogos, key=lambda x: x["score_home"]+x["score_away"], reverse=True)[:top_n]
+    # Top N e enviar Telegram
+    jogos_ordenados = sorted(todos_jogos, key=lambda x: x["score_home"]+x["score_away"], reverse=True)[:top_n]
     for j in jogos_ordenados:
         enviar_alerta_jogo(j)
     st.success(f"🚀 Top {top_n} jogos enviados para o Telegram!")
-
-def limpar_cache():
-    for f in [CACHE_JOGOS, ALERTAS_PATH]:
-        if os.path.exists(f):
-            os.remove(f)
-    st.success("✅ Cache limpo com sucesso!")
 
 if __name__ == "__main__":
     main()
