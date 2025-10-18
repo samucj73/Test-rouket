@@ -140,6 +140,16 @@ def get_status_config(status: str) -> Dict:
             return config
     return {"emoji": "⚫", "color": "#95A5A6"}
 
+def is_datetime_valid(dt: Optional[datetime]) -> bool:
+    """Verifica se um datetime é válido e não é muito antigo/futuro"""
+    if not dt:
+        return False
+    try:
+        # Verifica se está em um range razoável (1900-2100)
+        return 1900 <= dt.year <= 2100
+    except:
+        return False
+
 # =============================
 # Componentes de UI Melhorados
 # =============================
@@ -183,14 +193,18 @@ def criar_card_partida(partida: Dict):
         with col_info2:
             st.caption(f"🏆 {partida['liga']}")
         with col_info3:
-            if partida['hora'] and partida['hora'] > datetime.now():
-                tempo_restante = partida['hora'] - datetime.now()
-                horas = int(tempo_restante.total_seconds() // 3600)
-                minutos = int((tempo_restante.total_seconds() % 3600) // 60)
-                if horas > 0:
-                    st.caption(f"⏳ {horas}h {minutos}min")
-                else:
-                    st.caption(f"⏳ {minutos}min")
+            hora_partida = partida['hora']
+            if is_datetime_valid(hora_partida) and hora_partida > datetime.now():
+                try:
+                    tempo_restante = hora_partida - datetime.now()
+                    horas = int(tempo_restante.total_seconds() // 3600)
+                    minutos = int((tempo_restante.total_seconds() % 3600) // 60)
+                    if horas > 0:
+                        st.caption(f"⏳ {horas}h {minutos}min")
+                    else:
+                        st.caption(f"⏳ {minutos}min")
+                except:
+                    st.caption("⏳ --")
         
         st.markdown("---")
 
@@ -249,7 +263,7 @@ def exibir_partidas_por_liga(partidas: List[Dict]):
             st.markdown("<br>", unsafe_allow_html=True)
 
 def exibir_estatisticas(partidas: List[Dict]):
-    """Exibe estatísticas visuais das partidas"""
+    """Exibe estatísticas visuais das partidas com tratamento seguro de datas"""
     total_partidas = len(partidas)
     ligas_unicas = len(set(p['liga'] for p in partidas))
     
@@ -262,9 +276,20 @@ def exibir_estatisticas(partidas: List[Dict]):
     # Partidas ao vivo
     partidas_ao_vivo = len([p for p in partidas if any(x in p['status'].lower() for x in ['vivo', 'live', 'andamento'])])
     
-    # Próximas partidas (nas próximas 3 horas)
+    # Próximas partidas (nas próximas 3 horas) - COM TRATAMENTO SEGURO
     agora = datetime.now()
-    proximas_3h = [p for p in partidas if p['hora'] and agora <= p['hora'] <= agora + timedelta(hours=3)]
+    limite_3h = agora + timedelta(hours=3)
+    proximas_3h = []
+    
+    for partida in partidas:
+        hora_partida = partida['hora']
+        if is_datetime_valid(hora_partida):
+            try:
+                # Verificação segura sem comparação encadeada
+                if agora <= hora_partida and hora_partida <= limite_3h:
+                    proximas_3h.append(partida)
+            except (TypeError, ValueError):
+                continue
     
     col1, col2, col3, col4 = st.columns(4)
     
@@ -287,6 +312,69 @@ def exibir_estatisticas(partidas: List[Dict]):
         st.markdown("### 📈 Distribuição por Status")
         status_df = pd.DataFrame(list(status_count.items()), columns=['Status', 'Quantidade'])
         st.bar_chart(status_df.set_index('Status'))
+
+def exibir_partidas_lista_compacta(partidas: List[Dict]):
+    """Exibe partidas em formato de lista compacta"""
+    for i, partida in enumerate(partidas):
+        status_config = get_status_config(partida['status'])
+        with st.expander(f"{status_config['emoji']} {partida['home']} vs {partida['away']} - {partida['placar']}"):
+            col1, col2 = st.columns(2)
+            with col1:
+                st.write(f"**Casa:** {partida['home']}")
+                st.write(f"**Visitante:** {partida['away']}")
+            with col2:
+                st.write(f"**Status:** {partida['status']}")
+                st.write(f"**Horário:** {partida['hora_formatada']}")
+                st.write(f"**Liga:** {partida['liga']}")
+
+def exibir_partidas_top(partidas: List[Dict], top_n: int):
+    """Exibe apenas as top partidas"""
+    partidas_top = partidas[:top_n]
+    st.markdown(f"### 🎯 Top {top_n} Partidas do Dia")
+    
+    for i, partida in enumerate(partidas_top, 1):
+        # Card especial para top partidas
+        status_config = get_status_config(partida['status'])
+        
+        with st.container():
+            # Header com ranking
+            emoji_ranking = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
+            st.markdown(f"#### {emoji_ranking} **Partida em Destaque**")
+            
+            col1, col2, col3 = st.columns([3, 2, 3])
+            
+            with col1:
+                st.markdown(f"### {partida['home']}")
+                
+            with col2:
+                placar_style = "font-size: 28px; font-weight: bold; color: #E74C3C; text-align: center;"
+                st.markdown(f"<div style='{placar_style}'>{partida['placar']}</div>", 
+                           unsafe_allow_html=True)
+                st.markdown(f"<div style='text-align: center; color: {status_config['color']};'>"
+                           f"{status_config['emoji']} {partida['status']}</div>", 
+                           unsafe_allow_html=True)
+                
+            with col3:
+                st.markdown(f"### {partida['away']}")
+            
+            # Informações adicionais
+            col_info1, col_info2, col_info3 = st.columns(3)
+            with col_info1:
+                st.write(f"**Horário:** {partida['hora_formatada']}")
+            with col_info2:
+                st.write(f"**Liga:** {partida['liga']}")
+            with col_info3:
+                hora_partida = partida['hora']
+                if is_datetime_valid(hora_partida) and hora_partida > datetime.now():
+                    try:
+                        tempo_restante = hora_partida - datetime.now()
+                        horas = int(tempo_restante.total_seconds() // 3600)
+                        minutos = int((tempo_restante.total_seconds() % 3600) // 60)
+                        st.write(f"**Inicia em:** {horas}h {minutos}min")
+                    except:
+                        st.write("**Inicia em:** --")
+            
+            st.markdown("---")
 
 # =============================
 # Função para buscar jogos ESPN
@@ -432,7 +520,7 @@ def buscar_jogos_hoje(liga_slug: str) -> List[Dict]:
 # =============================
 # Função principal de processamento
 # =============================
-def processar_jogos(data_str: str, ligas_selecionadas: List[str], top_n: int, modo_exibicao: str, buscar_hoje: bool = False):
+def processar_jogos(data_str: str, ligas_selecionadas: List[str], top_n: int, buscar_hoje: bool = False):
     """Processa e exibe jogos com interface melhorada"""
     
     progress_container = st.container()
@@ -474,8 +562,8 @@ def processar_jogos(data_str: str, ligas_selecionadas: List[str], top_n: int, mo
         status_text.error("❌ Nenhum jogo encontrado para os critérios selecionados.")
         return
 
-    # Ordenar por horário
-    todas_partidas.sort(key=lambda x: x['hora'] if x['hora'] else datetime.max)
+    # Ordenar por horário - com tratamento seguro
+    todas_partidas.sort(key=lambda x: x['hora'] if is_datetime_valid(x['hora']) else datetime.max)
     
     # Limpa a barra de progresso
     progress_bar.empty()
@@ -489,13 +577,13 @@ def processar_jogos(data_str: str, ligas_selecionadas: List[str], top_n: int, mo
     st.markdown("---")
     col_view1, col_view2, col_view3 = st.columns(3)
     with col_view1:
-        if st.button("📊 Visualização por Liga", use_container_width=True):
+        if st.button("📊 Visualização por Liga", use_container_width=True, key="view_liga"):
             st.session_state.modo_exibicao = "liga"
     with col_view2:
-        if st.button("📋 Lista Compacta", use_container_width=True):
+        if st.button("📋 Lista Compacta", use_container_width=True, key="view_lista"):
             st.session_state.modo_exibicao = "lista"
     with col_view3:
-        if st.button("🎯 Top Partidas", use_container_width=True):
+        if st.button("🎯 Top Partidas", use_container_width=True, key="view_top"):
             st.session_state.modo_exibicao = "top"
 
     # Modo de exibição
@@ -507,24 +595,10 @@ def processar_jogos(data_str: str, ligas_selecionadas: List[str], top_n: int, mo
         
     elif modo == "lista":
         st.markdown("## 📋 Todas as Partidas")
-        # Lista compacta
-        for i, partida in enumerate(todas_partidas):
-            status_config = get_status_config(partida['status'])
-            with st.expander(f"{status_config['emoji']} {partida['home']} vs {partida['away']} - {partida['placar']}"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.write(f"**Casa:** {partida['home']}")
-                    st.write(f"**Visitante:** {partida['away']}")
-                with col2:
-                    st.write(f"**Status:** {partida['status']}")
-                    st.write(f"**Horário:** {partida['hora_formatada']}")
-                    st.write(f"**Liga:** {partida['liga']}")
+        exibir_partidas_lista_compacta(todas_partidas)
     
     elif modo == "top":
-        st.markdown(f"## 🎯 Top {top_n} Partidas")
-        partidas_top = todas_partidas[:top_n]
-        for partida in partidas_top:
-            criar_card_partida(partida)
+        exibir_partidas_top(todas_partidas, top_n)
 
     # Botão para enviar para Telegram
     st.markdown("---")
@@ -532,7 +606,7 @@ def processar_jogos(data_str: str, ligas_selecionadas: List[str], top_n: int, mo
     
     col_tg1, col_tg2 = st.columns([1, 2])
     with col_tg1:
-        if st.button(f"🚀 Enviar Top {top_n} para Telegram", type="primary", use_container_width=True):
+        if st.button(f"🚀 Enviar Top {top_n} para Telegram", type="primary", use_container_width=True, key="send_tg"):
             if buscar_hoje:
                 top_msg = f"⚽ TOP {top_n} JOGOS DE HOJE - {datetime.now().strftime('%d/%m/%Y')}\n\n"
             else:
@@ -553,12 +627,16 @@ def processar_jogos(data_str: str, ligas_selecionadas: List[str], top_n: int, mo
         st.info("💡 As partidas serão enviadas no formato compacto para o Telegram")
 
 # =============================
-# Interface Streamlight
+# Interface Streamlit
 # =============================
 def main():
     st.title("⚽ ESPN Soccer - Elite Master")
     st.markdown("### Sistema Avançado de Monitoramento de Futebol")
     st.markdown("---")
+    
+    # Inicializar session state
+    if 'modo_exibicao' not in st.session_state:
+        st.session_state.modo_exibicao = "liga"
     
     # Sidebar
     with st.sidebar:
@@ -609,12 +687,12 @@ def main():
     
     with col2:
         st.markdown("### ")
-        btn_buscar = st.button("🔍 Buscar por Data", type="primary", use_container_width=True)
+        btn_buscar = st.button("🔍 Buscar por Data", type="primary", use_container_width=True, key="btn_buscar")
     
     with col3:
         st.markdown("### ")
         btn_hoje = st.button("🎯 Jogos de Hoje", use_container_width=True, 
-                           help="Busca apenas jogos acontecendo hoje")
+                           help="Busca apenas jogos acontecendo hoje", key="btn_hoje")
 
     data_str = data_selecionada.strftime("%Y-%m-%d")
 
@@ -623,13 +701,13 @@ def main():
         if not ligas_selecionadas:
             st.warning("⚠️ Selecione pelo menos uma liga.")
         else:
-            processar_jogos(data_str, ligas_selecionadas, top_n, "liga", buscar_hoje=False)
+            processar_jogos(data_str, ligas_selecionadas, top_n, buscar_hoje=False)
 
     if btn_hoje:
         if not ligas_selecionadas:
             st.warning("⚠️ Selecione pelo menos uma liga.")
         else:
-            processar_jogos("", ligas_selecionadas, top_n, "liga", buscar_hoje=True)
+            processar_jogos("", ligas_selecionadas, top_n, buscar_hoje=True)
 
     # Informações de ajuda
     with st.expander("🎮 Guia Rápido", expanded=True):
