@@ -48,7 +48,7 @@ def salvar_cache(liga_code, ano, dados):
 
 def carregar_cache(liga_code, ano):
     if os.path.exists(cache_file(liga_code, ano)):
-        with open(cache_file(liga_code, "r", encoding="utf-8") as f:
+        with open(cache_file(liga_code, ano), "r", encoding="utf-8") as f:
             return json.load(f)
     return []
 
