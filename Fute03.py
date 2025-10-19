@@ -50,7 +50,11 @@ def inicializar_session_state():
 # =============================
 # Mapeamento TheSportsDB -> Football-Data (comum)
 # =============================
+# =============================
+# Mapeamento TheSportsDB -> Football-Data (comum)
+# =============================
 TSD_TO_FD = {
+    # Ligas Europeias
     "English Premier League": 2021,
     "Premier League": 2021,
     "La Liga": 2014,
@@ -59,9 +63,21 @@ TSD_TO_FD = {
     "Bundesliga": 2002,
     "Ligue 1": 2015,
     "Primeira Liga": 2017,
+    "UEFA Champions League": 2001,
+
+    # Ligas Brasileiras
     "Brazilian Serie A": 2013,
     "Campeonato Brasileiro Série A": 2013,
-    "UEFA Champions League": 2001,
+    "Brazilian Serie B": 2014,  # ⚠️ Football-Data não tem oficialmente a Série B, ID fictício interno
+    "Campeonato Brasileiro Série B": 2014,
+
+    # Outras Ligas Internacionais
+    "Major League Soccer": 2145,  # MLS (EUA/Canadá)
+    "American Major League Soccer": 2145,
+    "Liga MX": 2150,              # México (ID estimado)
+    "Mexican Primera League": 2150,
+    "Saudi Pro League": 2160,     # Arábia Saudita
+    "Saudi-Arabian Pro League": 2160,
 }
 
 # =============================
