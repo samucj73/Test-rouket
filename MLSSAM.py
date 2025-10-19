@@ -1,5 +1,5 @@
 # ================================================
-# ⚽ ESPN Soccer - Elite Master
+# ⚽ Soccer Elite Master - TheSportsDB API
 # ================================================
 import streamlit as st
 import requests
@@ -18,7 +18,7 @@ import re
 # =============================
 # Configurações e Constantes
 # =============================
-st.set_page_config(page_title="⚽ ESPN Soccer - Elite", layout="wide")
+st.set_page_config(page_title="⚽ Soccer Elite Master", layout="wide")
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "YOUR_TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "-1003073115320")
@@ -30,40 +30,54 @@ CACHE_JOGOS = "cache_jogos.json"
 CACHE_TIMEOUT = 3600  # 1 hora
 
 # =============================
-# Principais ligas (ESPN) - ATUALIZADO
+# Configurações TheSportsDB API
 # =============================
-LIGAS_ESPN = {
-    "Premier League (Inglaterra)": "eng.1",
-    "La Liga (Espanha)": "esp.1", 
-    "Serie A (Itália)": "ita.1",
-    "Bundesliga (Alemanha)": "ger.1",
-    "Ligue 1 (França)": "fra.1",
-    "MLS (Estados Unidos)": "usa.1",
-    "Brasileirão Série A": "bra.1",
-    "Brasileirão Série B": "bra.2",
-    "Liga MX (México)": "mex.1",
-    "Copa Libertadores": "ccm",
-    "Champions League": "uefa.champions",
-    "Europa League": "uefa.europa"
+THESPORTSDB_API_KEY = os.getenv("THESPORTSDB_API_KEY", "3")  # Chave premium ou 1,2,3 para free
+THESPORTSDB_BASE_URL_V1 = "https://www.thesportsdb.com/api/v1/json"
+THESPORTSDB_BASE_URL_V2 = "https://www.thesportsdb.com/api/v2/json"
+
+# =============================
+# Principais ligas (TheSportsDB)
+# =============================
+LIGAS_THESPORTSDB = {
+    "Premier League (Inglaterra)": "4328",
+    "La Liga (Espanha)": "4335", 
+    "Serie A (Itália)": "4332",
+    "Bundesliga (Alemanha)": "4331",
+    "Ligue 1 (França)": "4334",
+    "MLS (Estados Unidos)": "4346",
+    "Brasileirão Série A": "4375",
+    "Brasileirão Série B": "4376",
+    "Liga MX (México)": "4347",
+    "Copa Libertadores": "4480",
+    "Champions League": "4480",
+    "Europa League": "4481"
+}
+
+# Nomes das ligas para busca
+LIGA_NAMES = {
+    "4328": "English Premier League",
+    "4335": "Spanish La Liga",
+    "4332": "Italian Serie A",
+    "4331": "German Bundesliga",
+    "4334": "French Ligue 1",
+    "4346": "MLS",
+    "4375": "Campeonato Brasileiro Série A",
+    "4376": "Campeonato Brasileiro Série B",
+    "4347": "Liga MX",
+    "4480": "UEFA Champions League",
+    "4481": "UEFA Europa League"
 }
 
 # Cores e emojis para status
 STATUS_CONFIG = {
-    "Agendado": {"emoji": "⏰", "color": "#4A90E2"},
-    "Ao Vivo": {"emoji": "🔴", "color": "#E74C3C"},
-    "Halftime": {"emoji": "⏸️", "color": "#F39C12"},
-    "Finalizado": {"emoji": "✅", "color": "#27AE60"},
-    "Adiado": {"emoji": "🚫", "color": "#95A5A6"},
-    "Cancelado": {"emoji": "❌", "color": "#7F8C8D"}
-}
-
-# Headers para simular navegador
-HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-    'Accept': 'application/json, text/plain, */*',
-    'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
-    'Referer': 'https://www.espn.com.br/',
-    'Origin': 'https://www.espn.com.br'
+    "Not Started": {"emoji": "⏰", "color": "#4A90E2", "desc": "Agendado"},
+    "Live": {"emoji": "🔴", "color": "#E74C3C", "desc": "Ao Vivo"},
+    "Half Time": {"emoji": "⏸️", "color": "#F39C12", "desc": "Intervalo"},
+    "Finished": {"emoji": "✅", "color": "#27AE60", "desc": "Finalizado"},
+    "Postponed": {"emoji": "🚫", "color": "#95A5A6", "desc": "Adiado"},
+    "Cancelled": {"emoji": "❌", "color": "#7F8C8D", "desc": "Cancelado"},
+    "Delayed": {"emoji": "⏳", "color": "#F39C12", "desc": "Atrasado"}
 }
 
 # =============================
@@ -147,10 +161,12 @@ def formatar_hora_brasilia(hora_utc: str) -> Optional[datetime]:
         if not hora_utc:
             return None
         
-        if hora_utc.endswith('Z'):
-            hora_utc = hora_utc[:-1] + '+00:00'
+        # TheSportsDB usa formato: 2024-01-15T19:30:00+00:00
+        if 'T' in hora_utc:
+            hora_dt = datetime.fromisoformat(hora_utc.replace('Z', '+00:00'))
+        else:
+            hora_dt = datetime.strptime(hora_utc, "%Y-%m-%d %H:%M:%S")
         
-        hora_dt = datetime.fromisoformat(hora_utc)
         hora_brasilia = hora_dt - timedelta(hours=3)
         return hora_brasilia
     except Exception:
@@ -162,14 +178,13 @@ def get_status_config(status: str) -> Dict:
     for key, config in STATUS_CONFIG.items():
         if key.lower() in status_lower:
             return config
-    return {"emoji": "⚫", "color": "#95A5A6"}
+    return {"emoji": "⚫", "color": "#95A5A6", "desc": status}
 
 def is_datetime_valid(dt: Optional[datetime]) -> bool:
     """Verifica se um datetime é válido e não é muito antigo/futuro"""
     if not dt:
         return False
     try:
-        # Verifica se está em um range razoável (1900-2100)
         return 1900 <= dt.year <= 2100
     except:
         return False
@@ -179,7 +194,6 @@ def safe_datetime_compare(dt1: Optional[datetime], dt2: Optional[datetime]) -> b
     if not is_datetime_valid(dt1) or not is_datetime_valid(dt2):
         return False
     try:
-        # Remove timezone info para comparação segura
         dt1_naive = dt1.replace(tzinfo=None) if dt1.tzinfo else dt1
         dt2_naive = dt2.replace(tzinfo=None) if dt2.tzinfo else dt2
         return dt1_naive > dt2_naive
@@ -191,7 +205,6 @@ def safe_datetime_range(dt: Optional[datetime], start: datetime, end: datetime) 
     if not is_datetime_valid(dt):
         return False
     try:
-        # Remove timezone info para comparação segura
         dt_naive = dt.replace(tzinfo=None) if dt.tzinfo else dt
         start_naive = start.replace(tzinfo=None) if start.tzinfo else start
         end_naive = end.replace(tzinfo=None) if end.tzinfo else end
@@ -200,11 +213,312 @@ def safe_datetime_range(dt: Optional[datetime], start: datetime, end: datetime) 
         return False
 
 # =============================
+# Funções TheSportsDB API
+# =============================
+def buscar_jogos_thesportsdb(liga_id: str, data: str) -> List[Dict]:
+    """Busca jogos da API TheSportsDB por data específica"""
+    try:
+        # Formatar data para o padrão TheSportsDB (YYYY-MM-DD)
+        if data != "all":
+            data_formatada = data
+        else:
+            data_formatada = datetime.now().strftime("%Y-%m-%d")
+        
+        # Endpoint para buscar eventos por dia
+        url = f"{THESPORTSDB_BASE_URL_V1}/{THESPORTSDB_API_KEY}/eventsday.php"
+        params = {
+            'd': data_formatada,
+            'l': liga_id  # Filtro por liga
+        }
+        
+        response = requests.get(url, params=params, timeout=15)
+        
+        if response.status_code == 400:
+            st.warning(f"⚠️ Requisição inválida para liga {liga_id}")
+            return []
+        elif response.status_code == 404:
+            st.warning(f"🔍 Liga {liga_id} não encontrada")
+            return []
+        elif response.status_code == 429:
+            st.warning("⏰ Limite de requisições excedido. Aguarde um momento.")
+            time.sleep(2)  # Espera 2 segundos antes de continuar
+            return []
+            
+        response.raise_for_status()
+        dados = response.json()
+        
+        partidas = []
+        
+        # Processar eventos da resposta
+        eventos = dados.get('events', [])
+        
+        for evento in eventos:
+            try:
+                # Informações básicas do evento
+                hora = evento.get('strTimestamp', '')
+                hora_dt = formatar_hora_brasilia(hora)
+                
+                hora_format = hora_dt.strftime("%d/%m %H:%M") if hora_dt else "A definir"
+                
+                # Times
+                home_team = evento.get('strHomeTeam', 'Time Casa')
+                away_team = evento.get('strAwayTeam', 'Time Visitante')
+                
+                # Placar
+                home_score = evento.get('intHomeScore', '')
+                away_score = evento.get('intAwayScore', '')
+                
+                if home_score is None or home_score == '':
+                    placar = "0 - 0"
+                else:
+                    placar = f"{home_score} - {away_score}"
+                
+                # Status
+                status = evento.get('strStatus', 'Not Started')
+                status_config = get_status_config(status)
+                
+                # Liga
+                liga_nome = evento.get('strLeague', LIGA_NAMES.get(liga_id, f"Liga {liga_id}"))
+                
+                # Informações adicionais
+                venue = evento.get('strVenue', '')
+                thumb = evento.get('strThumb', '')
+                
+                partidas.append({
+                    "home": home_team,
+                    "away": away_team,
+                    "placar": placar,
+                    "status": status_config['desc'],
+                    "hora": hora_dt,
+                    "hora_formatada": hora_format,
+                    "liga": liga_nome,
+                    "liga_id": liga_id,
+                    "status_original": status,
+                    "venue": venue,
+                    "thumb": thumb,
+                    "event_id": evento.get('idEvent'),
+                    "home_score": home_score,
+                    "away_score": away_score
+                })
+                
+            except Exception as e:
+                st.warning(f"Erro ao processar evento: {str(e)}")
+                continue
+                
+        return partidas
+        
+    except requests.exceptions.RequestException as e:
+        st.error(f"🌐 Erro de rede na TheSportsDB API: {str(e)}")
+        return []
+    except Exception as e:
+        st.error(f"❌ Erro inesperado na TheSportsDB API: {str(e)}")
+        return []
+
+def buscar_jogos_hoje_thesportsdb(liga_id: str) -> List[Dict]:
+    """Busca jogos de hoje especificamente na TheSportsDB"""
+    try:
+        data_hoje = datetime.now().strftime("%Y-%m-%d")
+        return buscar_jogos_thesportsdb(liga_id, data_hoje)
+        
+    except Exception:
+        return []
+
+def buscar_proximos_jogos_liga(liga_id: str) -> List[Dict]:
+    """Busca próximos jogos de uma liga"""
+    try:
+        url = f"{THESPORTSDB_BASE_URL_V1}/{THESPORTSDB_API_KEY}/eventsnextleague.php"
+        params = {
+            'id': liga_id
+        }
+        
+        response = requests.get(url, params=params, timeout=15)
+        
+        if response.status_code != 200:
+            return []
+            
+        dados = response.json()
+        partidas = []
+        
+        eventos = dados.get('events', [])
+        
+        for evento in eventos:
+            try:
+                hora = evento.get('strTimestamp', '')
+                hora_dt = formatar_hora_brasilia(hora)
+                
+                hora_format = hora_dt.strftime("%d/%m %H:%M") if hora_dt else "A definir"
+                
+                home_team = evento.get('strHomeTeam', 'Time Casa')
+                away_team = evento.get('strAwayTeam', 'Time Visitante')
+                
+                status = evento.get('strStatus', 'Not Started')
+                status_config = get_status_config(status)
+                
+                liga_nome = evento.get('strLeague', LIGA_NAMES.get(liga_id, f"Liga {liga_id}"))
+                
+                partidas.append({
+                    "home": home_team,
+                    "away": away_team,
+                    "placar": "0 - 0",  # Jogos futuros
+                    "status": status_config['desc'],
+                    "hora": hora_dt,
+                    "hora_formatada": hora_format,
+                    "liga": liga_nome,
+                    "liga_id": liga_id,
+                    "status_original": status,
+                    "venue": evento.get('strVenue', ''),
+                    "thumb": evento.get('strThumb', ''),
+                    "event_id": evento.get('idEvent')
+                })
+                
+            except Exception:
+                continue
+                
+        return partidas
+        
+    except Exception:
+        return []
+
+def buscar_ultimos_jogos_liga(liga_id: str) -> List[Dict]:
+    """Busca últimos jogos de uma liga"""
+    try:
+        url = f"{THESPORTSDB_BASE_URL_V1}/{THESPORTSDB_API_KEY}/eventspastleague.php"
+        params = {
+            'id': liga_id
+        }
+        
+        response = requests.get(url, params=params, timeout=15)
+        
+        if response.status_code != 200:
+            return []
+            
+        dados = response.json()
+        partidas = []
+        
+        eventos = dados.get('events', [])
+        
+        for evento in eventos:
+            try:
+                hora = evento.get('strTimestamp', '')
+                hora_dt = formatar_hora_brasilia(hora)
+                
+                hora_format = hora_dt.strftime("%d/%m %H:%M") if hora_dt else "A definir"
+                
+                home_team = evento.get('strHomeTeam', 'Time Casa')
+                away_team = evento.get('strAwayTeam', 'Time Visitante')
+                
+                home_score = evento.get('intHomeScore', '0')
+                away_score = evento.get('intAwayScore', '0')
+                
+                placar = f"{home_score} - {away_score}"
+                
+                status = evento.get('strStatus', 'Finished')
+                status_config = get_status_config(status)
+                
+                liga_nome = evento.get('strLeague', LIGA_NAMES.get(liga_id, f"Liga {liga_id}"))
+                
+                partidas.append({
+                    "home": home_team,
+                    "away": away_team,
+                    "placar": placar,
+                    "status": status_config['desc'],
+                    "hora": hora_dt,
+                    "hora_formatada": hora_format,
+                    "liga": liga_nome,
+                    "liga_id": liga_id,
+                    "status_original": status,
+                    "venue": evento.get('strVenue', ''),
+                    "thumb": evento.get('strThumb', ''),
+                    "event_id": evento.get('idEvent'),
+                    "home_score": home_score,
+                    "away_score": away_score
+                })
+                
+            except Exception:
+                continue
+                
+        return partidas
+        
+    except Exception:
+        return []
+
+def buscar_livescores() -> List[Dict]:
+    """Busca jogos ao vivo de todas as ligas"""
+    try:
+        # Para V2 (premium) - usando V1 como fallback
+        if THESPORTSDB_API_KEY in ['1', '2', '3']:
+            # Para free, buscar eventos do dia atual
+            data_hoje = datetime.now().strftime("%Y-%m-%d")
+            url = f"{THESPORTSDB_BASE_URL_V1}/{THESPORTSDB_API_KEY}/eventsday.php"
+            params = {'d': data_hoje}
+        else:
+            # Para premium, usar V2 livescores
+            url = f"{THESPORTSDB_BASE_URL_V2}/{THESPORTSDB_API_KEY}/livescore/all"
+            params = {}
+        
+        response = requests.get(url, params=params, timeout=15)
+        
+        if response.status_code != 200:
+            return []
+            
+        dados = response.json()
+        partidas = []
+        
+        eventos = dados.get('events', [])
+        
+        for evento in eventos:
+            try:
+                status = evento.get('strStatus', '')
+                
+                # Filtrar apenas jogos ao vivo
+                if 'Live' in status or 'Half Time' in status:
+                    hora = evento.get('strTimestamp', '')
+                    hora_dt = formatar_hora_brasilia(hora)
+                    
+                    hora_format = hora_dt.strftime("%H:%M") if hora_dt else "Ao Vivo"
+                    
+                    home_team = evento.get('strHomeTeam', 'Time Casa')
+                    away_team = evento.get('strAwayTeam', 'Time Visitante')
+                    
+                    home_score = evento.get('intHomeScore', '0')
+                    away_score = evento.get('intAwayScore', '0')
+                    
+                    placar = f"{home_score} - {away_score}"
+                    
+                    status_config = get_status_config(status)
+                    liga_nome = evento.get('strLeague', '')
+                    
+                    partidas.append({
+                        "home": home_team,
+                        "away": away_team,
+                        "placar": placar,
+                        "status": status_config['desc'],
+                        "hora": hora_dt,
+                        "hora_formatada": hora_format,
+                        "liga": liga_nome,
+                        "liga_id": evento.get('idLeague', ''),
+                        "status_original": status,
+                        "venue": evento.get('strVenue', ''),
+                        "thumb": evento.get('strThumb', ''),
+                        "event_id": evento.get('idEvent'),
+                        "home_score": home_score,
+                        "away_score": away_score
+                    })
+                
+            except Exception:
+                continue
+                
+        return partidas
+        
+    except Exception:
+        return []
+
+# =============================
 # Componentes de UI Melhorados
 # =============================
 def criar_card_partida(partida: Dict):
     """Cria um card visual para cada partida"""
-    status_config = get_status_config(partida['status'])
+    status_config = get_status_config(partida['status_original'])
     
     # Determina se o placar deve ser destacado
     placar = partida['placar']
@@ -246,7 +560,6 @@ def criar_card_partida(partida: Dict):
             agora = datetime.now()
             if is_datetime_valid(hora_partida) and safe_datetime_compare(hora_partida, agora):
                 try:
-                    # Remove timezone info para cálculo seguro
                     hora_partida_naive = hora_partida.replace(tzinfo=None) if hora_partida.tzinfo else hora_partida
                     agora_naive = agora.replace(tzinfo=None) if agora.tzinfo else agora
                     tempo_restante = hora_partida_naive - agora_naive
@@ -266,7 +579,6 @@ def criar_card_partida(partida: Dict):
 
 def exibir_partidas_por_liga(partidas: List[Dict]):
     """Exibe partidas agrupadas por liga com visual melhorado"""
-    # Agrupa partidas por liga
     partidas_por_liga = {}
     for partida in partidas:
         liga = partida['liga']
@@ -274,19 +586,16 @@ def exibir_partidas_por_liga(partidas: List[Dict]):
             partidas_por_liga[liga] = []
         partidas_por_liga[liga].append(partida)
     
-    # Ordena ligas por número de partidas (mais partidas primeiro)
     ligas_ordenadas = sorted(partidas_por_liga.keys(), 
                            key=lambda x: len(partidas_por_liga[x]), reverse=True)
     
     for liga_index, liga in enumerate(ligas_ordenadas):
         partidas_liga = partidas_por_liga[liga]
         
-        # Container da liga
         with st.container():
             st.markdown(f"### 🏆 {liga}")
             st.markdown(f"**{len(partidas_liga)} partida(s) encontrada(s)**")
             
-            # Inicializar filtros para esta liga se não existirem
             liga_key = f"filtro_{liga}"
             if liga_key not in st.session_state.filtros_liga:
                 st.session_state.filtros_liga[liga_key] = {
@@ -294,7 +603,6 @@ def exibir_partidas_por_liga(partidas: List[Dict]):
                     'time': ""
                 }
             
-            # Filtros para a liga
             col_filtro1, col_filtro2, col_filtro3 = st.columns(3)
             with col_filtro1:
                 novo_status = st.selectbox(
@@ -317,7 +625,6 @@ def exibir_partidas_por_liga(partidas: List[Dict]):
                 if st.button(f"🎯 Top 3 - {liga}"):
                     partidas_liga = partidas_liga[:3]
             
-            # Aplica filtros
             partidas_filtradas = partidas_liga.copy()
             filtro_atual = st.session_state.filtros_liga[liga_key]
             
@@ -329,7 +636,6 @@ def exibir_partidas_por_liga(partidas: List[Dict]):
                                if filtro_atual['time'].lower() in p['home'].lower() 
                                or filtro_atual['time'].lower() in p['away'].lower()]
             
-            # Exibe partidas
             if partidas_filtradas:
                 for partida in partidas_filtradas:
                     criar_card_partida(partida)
@@ -339,20 +645,17 @@ def exibir_partidas_por_liga(partidas: List[Dict]):
             st.markdown("<br>", unsafe_allow_html=True)
 
 def exibir_estatisticas(partidas: List[Dict]):
-    """Exibe estatísticas visuais das partidas com tratamento seguro de datas"""
+    """Exibe estatísticas visuais das partidas"""
     total_partidas = len(partidas)
     ligas_unicas = len(set(p['liga'] for p in partidas))
     
-    # Contagem por status
     status_count = {}
     for partida in partidas:
         status = partida['status']
         status_count[status] = status_count.get(status, 0) + 1
     
-    # Partidas ao vivo
     partidas_ao_vivo = len([p for p in partidas if any(x in p['status'].lower() for x in ['vivo', 'live', 'andamento', 'halftime'])])
     
-    # Próximas partidas (nas próximas 3 horas) - COM TRATAMENTO SEGURO
     agora = datetime.now()
     limite_3h = agora + timedelta(hours=3)
     proximas_3h = []
@@ -378,227 +681,10 @@ def exibir_estatisticas(partidas: List[Dict]):
         st.metric("⏰ Próximas 3h", len(proximas_3h),
                  delta=len(proximas_3h) if len(proximas_3h) > 0 else None)
     
-    # Gráfico de status simples
     if status_count:
         st.markdown("### 📈 Distribuição por Status")
         status_df = pd.DataFrame(list(status_count.items()), columns=['Status', 'Quantidade'])
         st.bar_chart(status_df.set_index('Status'))
-
-def exibir_partidas_lista_compacta(partidas: List[Dict]):
-    """Exibe partidas em formato de lista compacta"""
-    for i, partida in enumerate(partidas):
-        status_config = get_status_config(partida['status'])
-        with st.expander(f"{status_config['emoji']} {partida['home']} vs {partida['away']} - {partida['placar']}"):
-            col1, col2 = st.columns(2)
-            with col1:
-                st.write(f"**Casa:** {partida['home']}")
-                st.write(f"**Visitante:** {partida['away']}")
-            with col2:
-                st.write(f"**Status:** {partida['status']}")
-                st.write(f"**Horário:** {partida['hora_formatada']}")
-                st.write(f"**Liga:** {partida['liga']}")
-
-def exibir_partidas_top(partidas: List[Dict], top_n: int):
-    """Exibe apenas as top partidas"""
-    partidas_top = partidas[:top_n]
-    st.markdown(f"### 🎯 Top {top_n} Partidas do Dia")
-    
-    for i, partida in enumerate(partidas_top, 1):
-        # Card especial para top partidas
-        status_config = get_status_config(partida['status'])
-        
-        with st.container():
-            # Header com ranking
-            emoji_ranking = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
-            st.markdown(f"#### {emoji_ranking} **Partida em Destaque**")
-            
-            col1, col2, col3 = st.columns([3, 2, 3])
-            
-            with col1:
-                st.markdown(f"### {partida['home']}")
-                
-            with col2:
-                placar_style = "font-size: 28px; font-weight: bold; color: #E74C3C; text-align: center;"
-                st.markdown(f"<div style='{placar_style}'>{partida['placar']}</div>", 
-                           unsafe_allow_html=True)
-                st.markdown(f"<div style='text-align: center; color: {status_config['color']};'>"
-                           f"{status_config['emoji']} {partida['status']}</div>", 
-                           unsafe_allow_html=True)
-                
-            with col3:
-                st.markdown(f"### {partida['away']}")
-            
-            # Informações adicionais
-            col_info1, col_info2, col_info3 = st.columns(3)
-            with col_info1:
-                st.write(f"**Horário:** {partida['hora_formatada']}")
-            with col_info2:
-                st.write(f"**Liga:** {partida['liga']}")
-            with col_info3:
-                hora_partida = partida['hora']
-                agora = datetime.now()
-                if is_datetime_valid(hora_partida) and safe_datetime_compare(hora_partida, agora):
-                    try:
-                        # Remove timezone info para cálculo seguro
-                        hora_partida_naive = hora_partida.replace(tzinfo=None) if hora_partida.tzinfo else hora_partida
-                        agora_naive = agora.replace(tzinfo=None) if agora.tzinfo else agora
-                        tempo_restante = hora_partida_naive - agora_naive
-                        
-                        horas = int(tempo_restante.total_seconds() // 3600)
-                        minutos = int((tempo_restante.total_seconds() % 3600) // 60)
-                        if horas > 0:
-                            st.write(f"**Inicia em:** {horas}h {minutos}min")
-                        elif minutos > 0:
-                            st.write(f"**Inicia em:** {minutos}min")
-                        else:
-                            st.write("**Inicia em:** Agora!")
-                    except:
-                        st.write("**Inicia em:** --")
-                else:
-                    st.write("**Status:** Em andamento")
-            
-            st.markdown("---")
-
-# =============================
-# Função para buscar jogos ESPN
-# =============================
-def buscar_jogos_espn(liga_slug: str, data: str) -> List[Dict]:
-    """Busca jogos da API da ESPN com tratamento robusto de erros"""
-    try:
-        url = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{liga_slug}/scoreboard"
-        
-        response = requests.get(url, headers=HEADERS, timeout=15)
-        
-        if response.status_code == 400:
-            return []
-        elif response.status_code == 404:
-            return []
-            
-        response.raise_for_status()
-        dados = response.json()
-        
-        if not dados.get('events'):
-            return []
-            
-        partidas = []
-        data_alvo = datetime.strptime(data, "%Y-%m-%d").date()
-
-        for evento in dados.get("events", []):
-            try:
-                hora = evento.get("date", "")
-                hora_dt = formatar_hora_brasilia(hora)
-                
-                if hora_dt and data != "all":
-                    if hora_dt.date() != data_alvo:
-                        continue
-                
-                hora_format = hora_dt.strftime("%d/%m %H:%M") if hora_dt else "A definir"
-                
-                competicoes = evento.get("competitions", [{}])
-                competicao = competicoes[0] if competicoes else {}
-                times = competicao.get("competitors", [])
-                
-                if len(times) >= 2:
-                    home_team = times[0].get("team", {})
-                    away_team = times[1].get("team", {})
-                    
-                    home = home_team.get("displayName", "Time Casa")
-                    away = away_team.get("displayName", "Time Visitante")
-                    placar_home = times[0].get("score", "0")
-                    placar_away = times[1].get("score", "0")
-                else:
-                    home = "Time Casa"
-                    away = "Time Visitante" 
-                    placar_home = placar_away = "0"
-
-                status_info = evento.get("status", {})
-                status_type = status_info.get("type", {})
-                status_desc = status_type.get("description", "Agendado")
-                
-                liga_nome = competicao.get("league", {}).get("name", liga_slug)
-
-                partidas.append({
-                    "home": home,
-                    "away": away,
-                    "placar": f"{placar_home} - {placar_away}",
-                    "status": status_desc,
-                    "hora": hora_dt,
-                    "hora_formatada": hora_format,
-                    "liga": liga_nome,
-                    "liga_slug": liga_slug
-                })
-                
-            except Exception as e:
-                continue
-                
-        return partidas
-        
-    except Exception as e:
-        return []
-
-def buscar_jogos_hoje(liga_slug: str) -> List[Dict]:
-    """Busca jogos de hoje especificamente"""
-    try:
-        url = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{liga_slug}/scoreboard"
-        
-        response = requests.get(url, headers=HEADERS, timeout=15)
-        
-        if response.status_code != 200:
-            return []
-            
-        dados = response.json()
-        partidas = []
-        hoje = datetime.now().date()
-
-        for evento in dados.get("events", []):
-            try:
-                hora = evento.get("date", "")
-                hora_dt = formatar_hora_brasilia(hora)
-                
-                if not hora_dt or hora_dt.date() != hoje:
-                    continue
-                
-                hora_format = hora_dt.strftime("%H:%M")
-                
-                competicoes = evento.get("competitions", [{}])
-                competicao = competicoes[0] if competicoes else {}
-                times = competicao.get("competitors", [])
-                
-                if len(times) >= 2:
-                    home_team = times[0].get("team", {})
-                    away_team = times[1].get("team", {})
-                    
-                    home = home_team.get("displayName", "Time Casa")
-                    away = away_team.get("displayName", "Time Visitante")
-                    placar_home = times[0].get("score", "0")
-                    placar_away = times[1].get("score", "0")
-                else:
-                    continue
-
-                status_info = evento.get("status", {})
-                status_type = status_info.get("type", {})
-                status_desc = status_type.get("description", "Agendado")
-                
-                liga_nome = competicao.get("league", {}).get("name", liga_slug)
-
-                partidas.append({
-                    "home": home,
-                    "away": away,
-                    "placar": f"{placar_home} - {placar_away}",
-                    "status": status_desc,
-                    "hora": hora_dt,
-                    "hora_formatada": hora_format,
-                    "liga": liga_nome,
-                    "liga_slug": liga_slug
-                })
-                
-            except Exception:
-                continue
-                
-        return partidas
-        
-    except Exception:
-        return []
 
 # =============================
 # Função principal de processamento
@@ -617,7 +703,6 @@ def processar_jogos(data_str: str, ligas_selecionadas: List[str], top_n: int, bu
         progress_bar = st.progress(0)
         status_text = st.empty()
     
-    # Busca dados
     todas_partidas = []
     total_ligas = len(ligas_selecionadas)
     
@@ -626,12 +711,12 @@ def processar_jogos(data_str: str, ligas_selecionadas: List[str], top_n: int, bu
         progress_bar.progress(progress)
         status_text.info(f"🔍 Buscando {liga}... ({i+1}/{total_ligas})")
         
-        liga_slug = LIGAS_ESPN[liga]
+        liga_id = LIGAS_THESPORTSDB[liga]
         
         if buscar_hoje:
-            partidas = buscar_jogos_hoje(liga_slug)
+            partidas = buscar_jogos_hoje_thesportsdb(liga_id)
         else:
-            partidas = buscar_jogos_espn(liga_slug, data_str)
+            partidas = buscar_jogos_thesportsdb(liga_id, data_str)
         
         if partidas:
             todas_partidas.extend(partidas)
@@ -639,17 +724,15 @@ def processar_jogos(data_str: str, ligas_selecionadas: List[str], top_n: int, bu
         else:
             status_text.warning(f"⚠️ {liga}: Nenhum jogo encontrado")
         
-        time.sleep(0.5)
+        time.sleep(0.5)  # Respeitar limites da API
     
     if not todas_partidas:
         status_text.error("❌ Nenhum jogo encontrado para os critérios selecionados.")
         st.session_state.dados_carregados = False
         return
 
-    # Ordenar por horário - com tratamento seguro
     todas_partidas.sort(key=lambda x: x['hora'] if is_datetime_valid(x['hora']) else datetime.max)
     
-    # Salva os dados no session state
     st.session_state.todas_partidas = todas_partidas
     st.session_state.dados_carregados = True
     st.session_state.ultima_busca = datetime.now()
@@ -658,11 +741,9 @@ def processar_jogos(data_str: str, ligas_selecionadas: List[str], top_n: int, bu
     st.session_state.data_ultima_busca = data_str
     st.session_state.top_n = top_n
     
-    # Limpa a barra de progresso
     progress_bar.empty()
     status_text.empty()
 
-    # Exibe os dados
     exibir_dados_salvos()
 
 def exibir_dados_salvos():
@@ -673,11 +754,9 @@ def exibir_dados_salvos():
     todas_partidas = st.session_state.todas_partidas
     top_n = st.session_state.top_n
     
-    # Exibe estatísticas
     st.markdown("---")
     exibir_estatisticas(todas_partidas)
     
-    # Informações da última busca
     col_info1, col_info2, col_info3 = st.columns(3)
     with col_info1:
         if st.session_state.busca_hoje:
@@ -692,7 +771,6 @@ def exibir_dados_salvos():
             minutos = int(tempo_passado.total_seconds() // 60)
             st.info(f"⏰ **Atualizado:** {minutos} min atrás")
     
-    # Seletor de modo de exibição
     st.markdown("---")
     col_view1, col_view2, col_view3 = st.columns(3)
     with col_view1:
@@ -705,21 +783,12 @@ def exibir_dados_salvos():
         if st.button("🎯 Top Partidas", use_container_width=True):
             st.session_state.modo_exibicao = "top"
 
-    # Modo de exibição
     modo = st.session_state.modo_exibicao
     
     if modo == "liga":
         st.markdown("## 🏆 Partidas por Liga")
         exibir_partidas_por_liga(todas_partidas)
-        
-    elif modo == "lista":
-        st.markdown("## 📋 Todas as Partidas")
-        exibir_partidas_lista_compacta(todas_partidas)
     
-    elif modo == "top":
-        exibir_partidas_top(todas_partidas, top_n)
-
-    # Botão para enviar para Telegram
     st.markdown("---")
     st.subheader("📤 Enviar para Telegram")
     
@@ -743,9 +812,8 @@ def exibir_dados_salvos():
                 st.error("❌ Falha ao enviar para o Telegram!")
     
     with col_tg2:
-        st.info("💡 As partidas serão enviadas no formato compacto para o Telegram")
+        st.info("💡 Agora com dados da TheSportsDB API")
         
-    # Botão para atualizar dados
     st.markdown("---")
     if st.button("🔄 Atualizar Dados", use_container_width=True):
         st.rerun()
@@ -754,14 +822,12 @@ def exibir_dados_salvos():
 # Interface Streamlit
 # =============================
 def main():
-    st.title("⚽ ESPN Soccer - Elite Master")
-    st.markdown("### Sistema Avançado de Monitoramento de Futebol")
+    st.title("⚽ Soccer Elite Master - TheSportsDB API")
+    st.markdown("### Sistema Completo com Dados Gratuitos")
     st.markdown("---")
     
-    # Inicializar session state
     inicializar_session_state()
     
-    # Sidebar
     with st.sidebar:
         st.header("⚙️ Configurações")
         
@@ -774,10 +840,43 @@ def main():
         
         ligas_selecionadas = st.multiselect(
             "Selecione as ligas:",
-            options=list(LIGAS_ESPN.keys()),
-            default=st.session_state.ultimas_ligas if st.session_state.ultimas_ligas else list(LIGAS_ESPN.keys())[:4],
+            options=list(LIGAS_THESPORTSDB.keys()),
+            default=st.session_state.ultimas_ligas if st.session_state.ultimas_ligas else list(LIGAS_THESPORTSDB.keys())[:4],
             label_visibility="collapsed"
         )
+        
+        st.markdown("---")
+        st.subheader("🎯 Buscas Especiais")
+        
+        col_esp1, col_esp2 = st.columns(2)
+        with col_esp1:
+            if st.button("🔴 Jogos Ao Vivo", use_container_width=True):
+                partidas_live = buscar_livescores()
+                if partidas_live:
+                    st.session_state.todas_partidas = partidas_live
+                    st.session_state.dados_carregados = True
+                    st.session_state.busca_hoje = True
+                    st.session_state.ultima_busca = datetime.now()
+                    st.rerun()
+                else:
+                    st.warning("ℹ️ Nenhum jogo ao vivo encontrado")
+        
+        with col_esp2:
+            if st.button("📅 Próximos Jogos", use_container_width=True):
+                todas_partidas = []
+                for liga in ligas_selecionadas:
+                    liga_id = LIGAS_THESPORTSDB[liga]
+                    partidas = buscar_proximos_jogos_liga(liga_id)
+                    todas_partidas.extend(partidas)
+                
+                if todas_partidas:
+                    st.session_state.todas_partidas = todas_partidas
+                    st.session_state.dados_carregados = True
+                    st.session_state.busca_hoje = False
+                    st.session_state.ultima_busca = datetime.now()
+                    st.rerun()
+                else:
+                    st.warning("ℹ️ Nenhum próximo jogo encontrado")
         
         st.markdown("---")
         st.subheader("🛠️ Utilidades")
@@ -796,7 +895,6 @@ def main():
         with col_util2:
             if st.button("🔄 Atualizar", use_container_width=True):
                 if st.session_state.dados_carregados:
-                    # Refaz a busca com os mesmos parâmetros
                     if st.session_state.busca_hoje:
                         processar_jogos("", st.session_state.ultimas_ligas, st.session_state.top_n, buscar_hoje=True)
                     else:
@@ -804,7 +902,6 @@ def main():
                 else:
                     st.warning("ℹ️ Nenhum dado para atualizar. Faça uma busca primeiro.")
 
-    # Conteúdo principal
     st.subheader("🎯 Buscar Jogos")
     
     col1, col2, col3 = st.columns([2, 1, 1])
@@ -813,7 +910,7 @@ def main():
         data_selecionada = st.date_input(
             "Selecione a data:", 
             value=datetime.today(),
-            max_value=datetime.today() + timedelta(days=7)
+            max_value=datetime.today() + timedelta(days=365)  # TheSportsDB permite buscar até 1 ano
         )
     
     with col2:
@@ -827,7 +924,6 @@ def main():
 
     data_str = data_selecionada.strftime("%Y-%m-%d")
 
-    # Processar ações de busca
     if btn_buscar:
         if not ligas_selecionadas:
             st.warning("⚠️ Selecione pelo menos uma liga.")
@@ -840,48 +936,71 @@ def main():
         else:
             processar_jogos("", ligas_selecionadas, top_n, buscar_hoje=True)
 
-    # Exibir dados salvos se existirem
     if st.session_state.dados_carregados:
         exibir_dados_salvos()
     else:
-        # Mostrar mensagem inicial
         st.info("""
-        🎯 **Bem-vindo ao ESPN Soccer Elite Master!**
+        🎯 **Bem-vindo ao Soccer Elite Master com TheSportsDB API!**
         
-        Para começar:
-        1. **Selecione as ligas** que deseja monitorar no menu lateral
+        **🚀 Vantagens TheSportsDB:**
+        - ✅ **Completamente GRATUITA** (chaves: 1, 2, 3)
+        - ✅ **Dados de jogos futuros** (até 1 ano)
+        - ✅ **Jogos passados** com históricos completos
+        - ✅ **Livescores em tempo real**
+        - ✅ **Cobertura global** de ligas
+        - ✅ **Imagens e thumbnails** dos eventos
+        
+        **🎯 Funcionalidades:**
+        - Busca por data específica
+        - Jogos de hoje
+        - Jogos ao vivo
+        - Próximos jogos
+        - Histórico de partidas
+        
+        **Para começar:**
+        1. **Selecione as ligas** que deseja monitorar
         2. **Escolha uma data** ou clique em **"Jogos de Hoje"**
-        3. **Clique em buscar** para carregar as partidas
+        3. Use **"Jogos Ao Vivo"** para partidas em andamento
         
-        ⚡ **Dica:** Os dados ficarão salvos até você fechar a página!
+        ⚡ **Dica:** API 100% gratuita com limites generosos!
         """)
 
-    # Informações de ajuda
-    with st.expander("🎮 Guia Rápido", expanded=False):
+    with st.expander("🎮 Guia Rápido - TheSportsDB", expanded=False):
         col_help1, col_help2 = st.columns(2)
         
         with col_help1:
             st.markdown("""
-            **📊 Modos de Visualização:**
-            - **Por Liga**: Partidas agrupadas por campeonato
-            - **Lista Compacta**: Todas em lista expansível  
-            - **Top Partidas**: Apenas as mais relevantes
+            **🔑 Chaves API Gratuitas:**
+            - **1, 2, 3** - Chaves free com 30 req/min
+            - **Premium** - 100 req/min (opcional)
+            - Configure: `THESPORTSDB_API_KEY=1`
             
-            **🎯 Funcionalidades:**
-            - Filtros por status e time
-            - Estatísticas em tempo real
-            - Cards visuais coloridos
-            - Envio para Telegram
+            **📊 Endpoints Principais:**
+            - `eventsday.php` - Jogos por data
+            - `eventsnextleague.php` - Próximos jogos
+            - `eventspastleague.php` - Jogos passados
+            - Livescores - Jogos ao vivo
+            
+            **🏆 Ligas Suportadas:**
+            - Premier League, La Liga, Serie A
+            - Bundesliga, Ligue 1, MLS
+            - Brasileirão A e B
+            - Libertadores, Champions, Europa
             """)
         
         with col_help2:
             st.markdown("""
-            **🔧 Dicas:**
-            - Use **Jogos de Hoje** para resultados atuais
-            - Clique em **Top 3** para ver os principais de cada liga
-            - Filtre por time para encontrar partidas específicas
-            - Monitore jogos **ao vivo** com o status colorido
-            - Os **filtros são mantidos** entre as interações
+            **🎯 Como Usar:**
+            1. **Busca por Data**: Selecione qualquer data futura
+            2. **Jogos de Hoje**: Partidas do dia atual
+            3. **Jogos Ao Vivo**: Partidas em andamento
+            4. **Próximos Jogos**: Próximas partidas agendadas
+            
+            **📈 Próximos Passos:**
+            - Estatísticas avançadas
+            - Histórico de confrontos
+            - Previsões baseadas em dados
+            - Análise de performance
             """)
 
 if __name__ == "__main__":
