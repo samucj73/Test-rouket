@@ -677,8 +677,19 @@ if st.session_state.concursos:
         if not concursos:
             st.info("Capture concursos na seção acima para analisar os padrões.")
         else:
-            janela_lc = st.slider("Concursos a considerar (mais recentes)", 20, min(500, len(concursos)), min(100, len(concursos)), 10)
-            subset = concursos[:janela_lc]  # concursos já estão em ordem do mais recente para trás
+            # CORREÇÃO AQUI: Slider com parâmetros nomeados corretamente
+            max_concursos = min(500, len(concursos))
+            valor_padrao = min(100, len(concursos))
+            
+            janela_lc = st.slider(
+                "Concursos a considerar (mais recentes)", 
+                min_value=20, 
+                max_value=max_concursos, 
+                value=valor_padrao, 
+                step=10
+            )
+            
+            subset = concursos[:janela_lc]
 
             if st.button("🔍 Analisar Padrões Linha×Coluna"):
                 freq_linhas, freq_colunas = contar_padroes_linha_coluna(subset)
