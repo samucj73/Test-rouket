@@ -6,6 +6,7 @@ from collections import Counter
 from catboost import CatBoostClassifier
 import itertools
 import math
+import json
 
 st.set_page_config(page_title="Lotofácil Inteligente", layout="centered")
 
@@ -544,18 +545,37 @@ def sugerir_padroes_futuros(freq_linhas, freq_colunas, n=5):
     return futuros
 
 # =========================
+# FUNÇÕES DE PERSISTÊNCIA
+# =========================
+def salvar_estado():
+    """Salva o estado atual da sessão"""
+    estado = {
+        'concursos': st.session_state.concursos,
+        'cartoes_gerados': st.session_state.cartoes_gerados,
+        'cartoes_gerados_padrao': st.session_state.cartoes_gerados_padrao,
+        'info_ultimo_concurso': st.session_state.info_ultimo_concurso,
+        'combinacoes_combinatorias': st.session_state.combinacoes_combinatorias
+    }
+    return estado
+
+def carregar_estado():
+    """Carrega o estado da sessão (para futuras implementações com arquivo)"""
+    # Por enquanto, apenas inicializa se não existir
+    if "concursos" not in st.session_state:
+        st.session_state.concursos = []
+    if "cartoes_gerados" not in st.session_state:
+        st.session_state.cartoes_gerados = []
+    if "cartoes_gerados_padrao" not in st.session_state:
+        st.session_state.cartoes_gerados_padrao = []
+    if "info_ultimo_concurso" not in st.session_state:
+        st.session_state.info_ultimo_concurso = None
+    if "combinacoes_combinatorias" not in st.session_state:
+        st.session_state.combinacoes_combinatorias = {}
+
+# =========================
 # Streamlit - Estado
 # =========================
-if "concursos" not in st.session_state:
-    st.session_state.concursos = []
-if "cartoes_gerados" not in st.session_state:
-    st.session_state.cartoes_gerados = []
-if "cartoes_gerados_padrao" not in st.session_state:
-    st.session_state.cartoes_gerados_padrao = []
-if "info_ultimo_concurso" not in st.session_state:
-    st.session_state.info_ultimo_concurso = None
-if "combinacoes_combinatorias" not in st.session_state:  # NOVO
-    st.session_state.combinacoes_combinatorias = {}
+carregar_estado()  # Inicializa o estado
 
 st.markdown("<h1 style='text-align: center;'>Lotofácil Inteligente</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center;'>SAMUCJ TECHNOLOGY</p>", unsafe_allow_html=True)
@@ -727,18 +747,17 @@ if st.session_state.concursos:
             
             with col_export2:
                 # NOVO BOTÃO: Baixar Top 10 como Cartões
-                if st.button("🎫 Baixar Top 10 como Cartões"):
-                    conteudo_cartoes = analisador_combinatorio.gerar_conteudo_cartoes(
-                        st.session_state.combinacoes_combinatorias, 
-                        top_n=10
-                    )
-                    
-                    st.download_button(
-                        "📥 Baixar Top 10 Cartões (Formato Cartão)",
-                        data=conteudo_cartoes,
-                        file_name="cartoes_lotofacil_formatados.txt",
-                        mime="text/plain"
-                    )
+                conteudo_cartoes = analisador_combinatorio.gerar_conteudo_cartoes(
+                    st.session_state.combinacoes_combinatorias, 
+                    top_n=10
+                )
+                
+                st.download_button(
+                    "📥 Baixar Top 10 Cartões (Formato Cartão)",
+                    data=conteudo_cartoes,
+                    file_name="cartoes_lotofacil_formatados.txt",
+                    mime="text/plain"
+                )
             
             # NOVO: Visualização dos cartões em formato de matriz
             st.markdown("### 👁️ Visualização dos Cartões (Top 3)")
@@ -806,7 +825,7 @@ if st.session_state.concursos:
                 for i, p in enumerate(futuros, 1):
                     st.write(f"**Padrão Futuro {i}:** Linhas {p['linhas']} | Colunas {p['colunas']}")
 
-    # Aba 6 - Conferência (antiga 5)
+    # Aba 6 - Conferência (ATUALIZADA)
     with abas[5]:
         st.subheader("🎯 Conferência de Cartões")
         if st.session_state.info_ultimo_concurso:
@@ -815,15 +834,57 @@ if st.session_state.concursos:
                 f"<h4 style='text-align: center;'>Último Concurso #{info['numero']} ({info['data']})<br>Dezenas: {info['dezenas']}</h4>",
                 unsafe_allow_html=True
             )
-            if st.button("🔍 Conferir agora"):
-                for i, cartao in enumerate(st.session_state.cartoes_gerados,1):
-                    acertos = len(set(cartao) & set(info['dezenas']))
-                    st.write(f"Jogo {i}: {cartao} - **{acertos} acertos**")
+            
+            if st.button("🔍 Conferir Todos os Cartões"):
+                # Conferir Cartões IA
+                if st.session_state.cartoes_gerados:
+                    st.markdown("### 🧠 Cartões Gerados por IA")
+                    for i, cartao in enumerate(st.session_state.cartoes_gerados, 1):
+                        acertos = len(set(cartao) & set(info['dezenas']))
+                        st.write(f"Jogo {i}: {cartao} - **{acertos} acertos**")
+                
+                # Conferir Cartões por Padrões
                 if st.session_state.cartoes_gerados_padrao:
-                    st.markdown("**Cartões por Padrões:**")
-                    for i, cartao in enumerate(st.session_state.cartoes_gerados_padrao,1):
+                    st.markdown("### 🧩 Cartões por Padrões")
+                    for i, cartao in enumerate(st.session_state.cartoes_gerados_padrao, 1):
                         acertos = len(set(cartao) & set(info['dezenas']))
                         st.write(f"Cartão {i}: {cartao} - **{acertos} acertos**")
+                
+                # NOVO: Conferir Combinações Combinatorias
+                if st.session_state.combinacoes_combinatorias:
+                    st.markdown("### 🔢 Combinações Combinatorias (Top 3 por Tamanho)")
+                    analisador_combinatorio = AnaliseCombinatoria(st.session_state.concursos)
+                    
+                    for tamanho in sorted(st.session_state.combinacoes_combinatorias.keys()):
+                        combinacoes_tamanho = st.session_state.combinacoes_combinatorias[tamanho][:3]  # Top 3
+                        
+                        if combinacoes_tamanho:
+                            st.markdown(f"#### 📊 Combinações com {tamanho} números")
+                            
+                            for idx, (combo, score) in enumerate(combinacoes_tamanho, 1):
+                                acertos = len(set(combo) & set(info['dezenas']))
+                                
+                                # Mostrar cartão formatado
+                                cartao = analisador_combinatorio.formatar_como_cartao(combo)
+                                
+                                col1, col2 = st.columns([2, 1])
+                                with col1:
+                                    st.write(f"**Cartão {idx}** (Score: {score:.1f}) - **{acertos} acertos**")
+                                    for linha in cartao:
+                                        st.code(" ".join(linha))
+                                
+                                with col2:
+                                    # Estatísticas
+                                    pares = sum(1 for n in combo if n % 2 == 0)
+                                    primos = sum(1 for n in combo if n in analisador_combinatorio.primos)
+                                    soma = sum(combo)
+                                    st.write(f"**Estatísticas:**")
+                                    st.write(f"Pares: {pares}")
+                                    st.write(f"Ímpares: {len(combo)-pares}")
+                                    st.write(f"Primos: {primos}")
+                                    st.write(f"Soma: {soma}")
+                                
+                                st.write("---")
 
     # Aba 7 - Conferir Arquivo TXT (antiga 6)
     with abas[6]:
@@ -854,5 +915,26 @@ if st.session_state.concursos:
                             st.write(f"Cartão {i}: {cartao} - **{acertos} acertos**")
             else:
                 st.warning("Nenhum cartão válido foi encontrado no arquivo.")
+
+# Botão para limpar todos os dados (útil para desenvolvimento)
+with st.sidebar:
+    st.markdown("---")
+    st.subheader("⚙️ Gerenciamento de Dados")
+    if st.button("🗑️ Limpar Todos os Dados"):
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.rerun()
+    
+    # Mostrar estatísticas de uso
+    st.markdown("### 📊 Estatísticas da Sessão")
+    if st.session_state.concursos:
+        st.write(f"Concursos carregados: {len(st.session_state.concursos)}")
+    if st.session_state.cartoes_gerados:
+        st.write(f"Cartões IA gerados: {len(st.session_state.cartoes_gerados)}")
+    if st.session_state.cartoes_gerados_padrao:
+        st.write(f"Cartões por padrões: {len(st.session_state.cartoes_gerados_padrao)}")
+    if st.session_state.combinacoes_combinatorias:
+        total_combinacoes = sum(len(combinacoes) for combinacoes in st.session_state.combinacoes_combinatorias.values())
+        st.write(f"Combinações combinatorias: {total_combinacoes}")
 
 st.markdown("<hr><p style='text-align: center;'>SAMUCJ TECHNOLOGY</p>", unsafe_allow_html=True)
