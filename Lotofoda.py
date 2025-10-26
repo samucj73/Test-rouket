@@ -262,6 +262,56 @@ class AnaliseCombinatoria:
             
         return relatorio
 
+    # NOVO MÉTODO: Converter combinação para formato de cartão 5x5
+    def formatar_como_cartao(self, combinacao):
+        """Formata uma combinação como cartão da Lotofácil 5x5"""
+        cartao = []
+        for i in range(5):
+            linha = []
+            for j in range(5):
+                numero = i * 5 + j + 1
+                if numero in combinacao:
+                    linha.append(f"[{numero:2d}]")  # Número marcado
+                else:
+                    linha.append(f" {numero:2d} ")  # Número não marcado
+            cartao.append(linha)
+        return cartao
+
+    # NOVO MÉTODO: Gerar conteúdo para download em formato de cartão
+    def gerar_conteudo_cartoes(self, combinacoes_por_tamanho, top_n=10):
+        """Gera conteúdo formatado como cartões para download"""
+        conteudo = "CARTÕES LOTOFÁCIL - COMBINAÇÕES OTIMIZADAS\n"
+        conteudo += "=" * 50 + "\n\n"
+        
+        for tamanho in sorted(combinacoes_por_tamanho.keys()):
+            combinacoes = combinacoes_por_tamanho[tamanho][:top_n]
+            
+            if not combinacoes:
+                continue
+                
+            conteudo += f"COMBINAÇÕES COM {tamanho} NÚMEROS (Top {top_n})\n"
+            conteudo += "-" * 40 + "\n\n"
+            
+            for idx, (combo, score) in enumerate(combinacoes, 1):
+                conteudo += f"Cartão {idx} (Score: {score:.1f}):\n"
+                cartao = self.formatar_como_cartao(combo)
+                
+                for linha in cartao:
+                    conteudo += " ".join(linha) + "\n"
+                
+                # Adicionar lista dos números selecionados
+                numeros_selecionados = [n for n in combo]
+                conteudo += f"Números: {numeros_selecionados}\n"
+                
+                # Estatísticas do cartão
+                pares = sum(1 for n in combo if n % 2 == 0)
+                primos = sum(1 for n in combo if n in self.primos)
+                soma = sum(combo)
+                conteudo += f"Pares: {pares}, Ímpares: {len(combo)-pares}, Primos: {primos}, Soma: {soma}\n"
+                conteudo += "\n" + "=" * 50 + "\n\n"
+        
+        return conteudo
+
 # =========================
 # IA Avançada com CatBoost
 # =========================
@@ -654,21 +704,70 @@ if st.session_state.concursos:
                     st.write(f"Melhor score: {stats['melhor_score']:.2f}")
                     st.write(f"Pior score: {stats['pior_score']:.2f}")
             
-            # Exportar combinações
+            # NOVO: Exportar combinações em formato de cartão
             st.markdown("### 💾 Exportar Combinações")
-            conteudo_combinacoes = ""
-            for tamanho, combinacoes_list in st.session_state.combinacoes_combinatorias.items():
-                conteudo_combinacoes += f"# Combinações com {tamanho} números\n"
-                for combo, score in combinacoes_list[:20]:  # Top 20 de cada
-                    conteudo_combinacoes += f"{','.join(map(str, combo))} # Score: {score:.1f}\n"
-                conteudo_combinacoes += "\n"
             
-            st.download_button(
-                "📥 Baixar Todas as Combinações",
-                data=conteudo_combinacoes,
-                file_name="combinacoes_otimizadas.txt",
-                mime="text/plain"
-            )
+            col_export1, col_export2 = st.columns(2)
+            
+            with col_export1:
+                # Botão para baixar em formato lista
+                conteudo_combinacoes = ""
+                for tamanho, combinacoes_list in st.session_state.combinacoes_combinatorias.items():
+                    conteudo_combinacoes += f"# Combinações com {tamanho} números\n"
+                    for combo, score in combinacoes_list[:20]:  # Top 20 de cada
+                        conteudo_combinacoes += f"{','.join(map(str, combo))} # Score: {score:.1f}\n"
+                    conteudo_combinacoes += "\n"
+                
+                st.download_button(
+                    "📥 Baixar Todas as Combinações (Lista)",
+                    data=conteudo_combinacoes,
+                    file_name="combinacoes_otimizadas.txt",
+                    mime="text/plain"
+                )
+            
+            with col_export2:
+                # NOVO BOTÃO: Baixar Top 10 como Cartões
+                if st.button("🎫 Baixar Top 10 como Cartões"):
+                    conteudo_cartoes = analisador_combinatorio.gerar_conteudo_cartoes(
+                        st.session_state.combinacoes_combinatorias, 
+                        top_n=10
+                    )
+                    
+                    st.download_button(
+                        "📥 Baixar Top 10 Cartões (Formato Cartão)",
+                        data=conteudo_cartoes,
+                        file_name="cartoes_lotofacil_formatados.txt",
+                        mime="text/plain"
+                    )
+            
+            # NOVO: Visualização dos cartões em formato de matriz
+            st.markdown("### 👁️ Visualização dos Cartões (Top 3)")
+            
+            for tamanho in sorted(st.session_state.combinacoes_combinatorias.keys()):
+                combinacoes_tamanho = st.session_state.combinacoes_combinatorias[tamanho][:3]  # Top 3
+                
+                if combinacoes_tamanho:
+                    st.markdown(f"#### 🎯 Cartões com {tamanho} números")
+                    
+                    for idx, (combo, score) in enumerate(combinacoes_tamanho, 1):
+                        st.write(f"**Cartão {idx}** (Score: {score:.1f})")
+                        
+                        # Criar visualização do cartão
+                        cartao = analisador_combinatorio.formatar_como_cartao(combo)
+                        
+                        # Exibir como tabela formatada
+                        col1, col2, col3 = st.columns([1, 2, 1])
+                        with col2:
+                            for linha in cartao:
+                                st.code(" ".join(linha))
+                        
+                        # Estatísticas do cartão
+                        pares = sum(1 for n in combo if n % 2 == 0)
+                        primos = sum(1 for n in combo if n in analisador_combinatorio.primos)
+                        soma = sum(combo)
+                        
+                        st.write(f"**Estatísticas:** Pares: {pares}, Ímpares: {len(combo)-pares}, Primos: {primos}, Soma: {soma}")
+                        st.write("---")
 
     # Aba 5 - Padrões Linha×Coluna (antiga 4)
     with abas[4]:
