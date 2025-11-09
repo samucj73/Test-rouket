@@ -370,7 +370,7 @@ def verificar_enviar_alerta(fixture: dict, tendencia: str, estimativa: float, co
         salvar_alertas(alertas)
 
 # =============================
-# Funções de geração de imagem (Pillow) - NOVO ESTILO WEST HAM
+# Funções de geração de imagem (Pillow) - NOVO ESTILO WEST HAM MELHORADO
 # =============================
 def baixar_imagem_url(url: str, timeout: int = 8) -> Image.Image | None:
     """Tenta baixar uma imagem e retornar PIL.Image. Retorna None se falhar."""
@@ -409,14 +409,14 @@ def criar_fonte(tamanho):
 def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA DE GOLS") -> io.BytesIO:
     """
     Gera poster no estilo West Ham vs Burnley (IMG_0428.jpeg)
-    Layout limpo e profissional com fundo escuro
+    Layout limpo e profissional com fundo escuro - VERSÃO MELHORADA
     """
-    # Configurações do poster
-    LARGURA = 1200
-    ALTURA_TOPO = 200
-    ALTURA_POR_JOGO = 300
-    PADDING = 60
-    MARGEM_INTERNA = 40
+    # Configurações do poster - AUMENTADO PARA 1800 PIXELS
+    LARGURA = 1800
+    ALTURA_TOPO = 300
+    ALTURA_POR_JOGO = 500  # Aumentado para caber mais informações
+    PADDING = 80
+    MARGEM_INTERNA = 60
     
     jogos_count = len(jogos)
     altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
@@ -425,14 +425,15 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
     img = Image.new("RGB", (LARGURA, altura_total), color=(10, 20, 30))  # Azul escuro
     draw = ImageDraw.Draw(img)
 
-    # Fontes
+    # Fontes AUMENTADAS
     try:
-        FONTE_TITULO = ImageFont.truetype("arial.ttf", 48)
-        FONTE_SUBTITULO = ImageFont.truetype("arial.ttf", 28)
-        FONTE_TIMES = ImageFont.truetype("arial.ttf", 42)
-        FONTE_VS = ImageFont.truetype("arial.ttf", 36)
-        FONTE_INFO = ImageFont.truetype("arial.ttf", 24)
-        FONTE_DETALHES = ImageFont.truetype("arial.ttf", 20)
+        FONTE_TITULO = ImageFont.truetype("arial.ttf", 72)
+        FONTE_SUBTITULO = ImageFont.truetype("arial.ttf", 36)
+        FONTE_TIMES = ImageFont.truetype("arial.ttf", 52)
+        FONTE_VS = ImageFont.truetype("arial.ttf", 48)
+        FONTE_INFO = ImageFont.truetype("arial.ttf", 32)
+        FONTE_DETALHES = ImageFont.truetype("arial.ttf", 28)
+        FONTE_ANALISE = ImageFont.truetype("arial.ttf", 30)
     except:
         # Fallback para fontes padrão
         FONTE_TITULO = ImageFont.load_default()
@@ -441,30 +442,31 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
         FONTE_VS = ImageFont.load_default()
         FONTE_INFO = ImageFont.load_default()
         FONTE_DETALHES = ImageFont.load_default()
+        FONTE_ANALISE = ImageFont.load_default()
 
     # Título PRINCIPAL (estilo imagem)
     titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
     titulo_w = titulo_bbox[2] - titulo_bbox[0]
-    draw.text(((LARGURA - titulo_w) // 2, 80), titulo, font=FONTE_TITULO, fill=(255, 255, 255))
+    draw.text(((LARGURA - titulo_w) // 2, 100), titulo, font=FONTE_TITULO, fill=(255, 255, 255))
 
     # Linha decorativa abaixo do título
-    draw.line([(LARGURA//4, 150), (3*LARGURA//4, 150)], fill=(255, 215, 0), width=3)
+    draw.line([(LARGURA//4, 200), (3*LARGURA//4, 200)], fill=(255, 215, 0), width=4)
 
     y_pos = ALTURA_TOPO
 
     for idx, jogo in enumerate(jogos):
         # Caixa do jogo - estilo minimalista
         x0, y0 = PADDING, y_pos
-        x1, y1 = LARGURA - PADDING, y_pos + ALTURA_POR_JOGO - 20
+        x1, y1 = LARGURA - PADDING, y_pos + ALTURA_POR_JOGO - 30
         
         # Fundo com borda sutil
-        draw.rectangle([x0, y0, x1, y1], fill=(25, 35, 45), outline=(60, 80, 100), width=2)
+        draw.rectangle([x0, y0, x1, y1], fill=(25, 35, 45), outline=(60, 80, 100), width=3)
 
         # Nome da liga (como na imagem)
         liga_text = jogo['liga'].upper()
         liga_bbox = draw.textbbox((0, 0), liga_text, font=FONTE_SUBTITULO)
         liga_w = liga_bbox[2] - liga_bbox[0]
-        draw.text(((LARGURA - liga_w) // 2, y0 + 25), liga_text, font=FONTE_SUBTITULO, fill=(200, 200, 200))
+        draw.text(((LARGURA - liga_w) // 2, y0 + 30), liga_text, font=FONTE_SUBTITULO, fill=(200, 200, 200))
 
         # Data e hora (formato igual à imagem)
         if isinstance(jogo["hora"], datetime):
@@ -476,11 +478,62 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
 
         data_bbox = draw.textbbox((0, 0), data_text, font=FONTE_INFO)
         data_w = data_bbox[2] - data_bbox[0]
-        draw.text(((LARGURA - data_w) // 2, y0 + 65), data_text, font=FONTE_INFO, fill=(150, 200, 255))
+        draw.text(((LARGURA - data_w) // 2, y0 + 80), data_text, font=FONTE_INFO, fill=(150, 200, 255))
 
         hora_bbox = draw.textbbox((0, 0), hora_text, font=FONTE_INFO)
         hora_w = hora_bbox[2] - hora_bbox[0]
-        draw.text(((LARGURA - hora_w) // 2, y0 + 95), hora_text, font=FONTE_INFO, fill=(150, 200, 255))
+        draw.text(((LARGURA - hora_w) // 2, y0 + 120), hora_text, font=FONTE_INFO, fill=(150, 200, 255))
+
+        # ESCUDOS DOS TIMES
+        TAMANHO_ESCUDO = 120
+        espaco_entre_escudos = 100
+        
+        # Calcular posição central para os escudos
+        largura_total_escudos = 2 * TAMANHO_ESCUDO + espaco_entre_escudos
+        x_inicio_escudos = (LARGURA - largura_total_escudos) // 2
+        
+        # Posições dos escudos
+        x_escudo_home = x_inicio_escudos
+        x_escudo_away = x_escudo_home + TAMANHO_ESCUDO + espaco_entre_escudos
+        y_escudos = y0 + 180
+        
+        # Baixar e desenhar escudos
+        escudo_home = baixar_imagem_url(jogo.get("escudo_home", ""))
+        escudo_away = baixar_imagem_url(jogo.get("escudo_away", ""))
+        
+        def desenhar_escudo(imagem, x, y, tamanho):
+            if imagem:
+                try:
+                    # Redimensionar mantendo proporção
+                    imagem.thumbnail((tamanho, tamanho), Image.LANCZOS)
+                    
+                    # Criar máscara circular
+                    mask = Image.new("L", (tamanho, tamanho), 0)
+                    mask_draw = ImageDraw.Draw(mask)
+                    mask_draw.ellipse((0, 0, tamanho, tamanho), fill=255)
+                    
+                    # Calcular offset para centralizar
+                    offset_x = (tamanho - imagem.width) // 2
+                    offset_y = (tamanho - imagem.height) // 2
+                    
+                    # Criar imagem de fundo e colar o escudo
+                    bg = Image.new("RGBA", (tamanho, tamanho), (255, 255, 255, 0))
+                    bg.paste(imagem, (offset_x, offset_y))
+                    
+                    # Aplicar máscara circular
+                    img.paste(bg, (x, y), mask)
+                except Exception as e:
+                    # Placeholder circular em caso de erro
+                    draw.ellipse([x, y, x + tamanho, y + tamanho], fill=(60, 60, 60))
+                    draw.text((x + 15, y + 15), "TM", font=FONTE_INFO, fill=(255, 255, 255))
+            else:
+                # Placeholder circular
+                draw.ellipse([x, y, x + tamanho, y + tamanho], fill=(60, 60, 60))
+                draw.text((x + 15, y + 15), "TM", font=FONTE_INFO, fill=(255, 255, 255))
+
+        # Desenhar escudos
+        desenhar_escudo(escudo_home, x_escudo_home, y_escudos, TAMANHO_ESCUDO)
+        desenhar_escudo(escudo_away, x_escudo_away, y_escudos, TAMANHO_ESCUDO)
 
         # Nomes dos times (centralizados como na imagem)
         home_text = jogo['home']
@@ -492,30 +545,58 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
         home_w = home_bbox[2] - home_bbox[0]
         away_w = away_bbox[2] - away_bbox[0]
         
-        # Posição vertical para os nomes dos times
-        y_teams = y0 + 150
+        # Posição vertical para os nomes dos times (abaixo dos escudos)
+        y_teams = y_escudos + TAMANHO_ESCUDO + 30
         
-        draw.text(((LARGURA - home_w) // 2, y_teams), home_text, font=FONTE_TIMES, fill=(255, 255, 255))
-        draw.text(((LARGURA - away_w) // 2, y_teams + 50), away_text, font=FONTE_TIMES, fill=(255, 255, 255))
+        # Nome do time da casa (alinhado com seu escudo)
+        draw.text((x_escudo_home + (TAMANHO_ESCUDO - home_w) // 2, y_teams), home_text, font=FONTE_TIMES, fill=(255, 255, 255))
+        
+        # Nome do time visitante (alinhado com seu escudo)
+        draw.text((x_escudo_away + (TAMANHO_ESCUDO - away_w) // 2, y_teams), away_text, font=FONTE_TIMES, fill=(255, 255, 255))
 
         # VS centralizado entre os times
         vs_text = "VS"
         vs_bbox = draw.textbbox((0, 0), vs_text, font=FONTE_VS)
         vs_w = vs_bbox[2] - vs_bbox[0]
-        draw.text(((LARGURA - vs_w) // 2, y_teams + 20), vs_text, font=FONTE_VS, fill=(255, 215, 0))
+        draw.text(((LARGURA - vs_w) // 2, y_teams - 10), vs_text, font=FONTE_VS, fill=(255, 215, 0))
 
-        # Informações de análise na parte inferior
-        y_analysis = y_teams + 110
+        # SEÇÃO DE ANÁLISE - MAIS DESTAQUE
+        y_analysis = y_teams + 70
         
-        tendencia_text = f"Tendência: {jogo['tendencia']}"
-        estimativa_text = f"Estimativa: {jogo['estimativa']:.2f} gols"
-        confianca_text = f"Confiança: {jogo['confianca']:.0f}%"
+        # Linha separadora
+        draw.line([(x0 + 50, y_analysis - 10), (x1 - 50, y_analysis - 10)], fill=(100, 130, 160), width=2)
+
+        # Tendência com emoji
+        tendencia_emoji = "📈" if "Mais" in jogo['tendencia'] else "📉" if "Menos" in jogo['tendencia'] else "⚡"
+        tendencia_text = f"{tendencia_emoji} Tendência: {jogo['tendencia']}"
+        
+        # Estimativa de gols
+        estimativa_text = f"⚽ Estimativa: {jogo['estimativa']:.2f} gols"
+        
+        # Confiança
+        confianca_text = f"🎯 Confiança: {jogo['confianca']:.0f}%"
+        
+        # Status do jogo
+        status_text = f"🕒 Status: {jogo['status']}"
 
         # Centralizar cada linha de análise
-        for i, text in enumerate([tendencia_text, estimativa_text, confianca_text]):
-            bbox = draw.textbbox((0, 0), text, font=FONTE_DETALHES)
+        textos_analise = [tendencia_text, estimativa_text, confianca_text, status_text]
+        
+        for i, text in enumerate(textos_analise):
+            bbox = draw.textbbox((0, 0), text, font=FONTE_ANALISE)
             w = bbox[2] - bbox[0]
-            draw.text(((LARGURA - w) // 2, y_analysis + i * 25), text, font=FONTE_DETALHES, fill=(200, 200, 200))
+            
+            # Cores diferentes para cada tipo de informação
+            if "Tendência" in text:
+                cor = (255, 215, 0)  # Dourado
+            elif "Estimativa" in text:
+                cor = (100, 200, 255)  # Azul claro
+            elif "Confiança" in text:
+                cor = (100, 255, 100)  # Verde
+            else:
+                cor = (200, 200, 200)  # Cinza
+                
+            draw.text(((LARGURA - w) // 2, y_analysis + i * 40), text, font=FONTE_ANALISE, fill=cor)
 
         y_pos += ALTURA_POR_JOGO
 
@@ -523,18 +604,18 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
     rodape_text = f"Gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')} - Elite Master System"
     rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_DETALHES)
     rodape_w = rodape_bbox[2] - rodape_bbox[0]
-    draw.text(((LARGURA - rodape_w) // 2, altura_total - 40), rodape_text, font=FONTE_DETALHES, fill=(100, 130, 160))
+    draw.text(((LARGURA - rodape_w) // 2, altura_total - 50), rodape_text, font=FONTE_DETALHES, fill=(100, 130, 160))
 
     # Salvar imagem
     buffer = io.BytesIO()
     img.save(buffer, format="PNG", optimize=True, quality=95)
     buffer.seek(0)
     
-    st.success(f"✅ Poster estilo West Ham gerado com {len(jogos)} jogos")
+    st.success(f"✅ Poster estilo West Ham GERADO com {len(jogos)} jogos - Dimensões: {LARGURA}x{altura_total}")
     return buffer
 
 def enviar_alerta_westham_style(jogos_conf: list, threshold: int, chat_id: str = TELEGRAM_CHAT_ID_ALT2):
-    """Envia alerta no estilo da imagem West Ham vs Burnley"""
+    """Envia alerta no estilo da imagem West Ham vs Burnley - VERSÃO MELHORADA"""
     if not jogos_conf:
         st.warning("⚠️ Nenhum jogo para gerar poster estilo West Ham")
         return
@@ -558,18 +639,26 @@ def enviar_alerta_westham_style(jogos_conf: list, threshold: int, chat_id: str =
                 f"<b>🎯 ALERTA DE GOLS - {data_str}</b>\n\n"
                 f"<b>📋 TOTAL: {len(jogos_data)} JOGOS</b>\n"
                 f"<b>⚽ CONFIANÇA MÍNIMA: {threshold}%</b>\n\n"
-                f"<b>🔮 ANÁLISE PREDITIVA DE GOLS</b>"
+                f"<b>🔮 ANÁLISE PREDITIVA DE GOLS</b>\n"
+                f"<b>📊 MÉDIA DE CONFIANÇA: {sum(j['confianca'] for j in jogos_data) / len(jogos_data):.1f}%</b>\n\n"
+                f"<b>🔥 JOGOS SELECIONADOS PELA INTELIGÊNCIA ARTIFICIAL</b>"
             )
             
             ok = enviar_foto_telegram(poster, caption=caption, chat_id=chat_id)
             
             if ok:
-                st.success(f"🚀 Poster estilo West Ham enviado para {data_str}!")
+                st.success(f"🚀 Poster estilo West Ham ENVIADO para {data_str}!")
+                st.info(f"📊 Estatísticas: {len(jogos_data)} jogos | Confiança média: {sum(j['confianca'] for j in jogos_data) / len(jogos_data):.1f}%")
             else:
                 st.error(f"❌ Falha ao enviar poster para {data_str}")
                 
         except Exception as e:
             st.error(f"Erro ao gerar/enviar poster estilo West Ham: {e}")
+            # Fallback para mensagem de texto
+            msg = f"🔥 Jogos ≥{threshold}% - {data_str} (Erro ao gerar imagem):\n"
+            for j in jogos_data:
+                msg += f"🏟️ {j['home']} vs {j['away']} | {j['tendencia']} | Conf: {j['confianca']:.0f}%\n"
+            enviar_telegram(msg, chat_id=chat_id)
 
 # =============================
 # Função original de geração de imagem (mantida para compatibilidade)
