@@ -368,7 +368,7 @@ def verificar_enviar_alerta(fixture: dict, tendencia: str, estimativa: float, co
         salvar_alertas(alertas)
 
 # =============================
-# Funções de geração de imagem (Pillow) - CORRIGIDA E TESTADA
+# Funções de geração de imagem (Pillow) - COMPLETAMENTE REFAZIDA
 # =============================
 def baixar_imagem_url(url: str, timeout: int = 8) -> Image.Image | None:
     """Tenta baixar uma imagem e retornar PIL.Image. Retorna None se falhar."""
@@ -382,146 +382,148 @@ def baixar_imagem_url(url: str, timeout: int = 8) -> Image.Image | None:
     except Exception:
         return None
 
+def criar_fonte(tamanho):
+    """Tenta criar uma fonte com o tamanho especificado"""
+    try:
+        # Tenta carregar fontes comuns
+        fontes_tentativas = [
+            "arial.ttf",
+            "Arial.ttf", 
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/System/Library/Fonts/Arial.ttf"
+        ]
+        
+        for fonte_path in fontes_tentativas:
+            try:
+                return ImageFont.truetype(fonte_path, tamanho)
+            except:
+                continue
+                
+        # Se nenhuma fonte TTF funcionar, cria uma fonte bitmap
+        return ImageFont.load_default()
+    except:
+        return ImageFont.load_default()
+
 def gerar_poster_elite(jogos: list, titulo: str = "🔥 Jogos de Alta Confiança (Elite Master)") -> io.BytesIO:
     """
     Gera um pôster vertical com a lista de jogos. Retorna BytesIO com PNG.
-    estilo: fundo escuro, escudos grandes, texto claro.
+    COMPLETAMENTE REFAZIDA para garantir tamanhos maiores.
     """
-    # Configurações de estilo - AUMENTADAS SIGNIFICATIVAMENTE
-    largura = 1600  # AUMENTADO para 1600
-    altura_topo = 300  # AUMENTADO para 300
-    altura_por_jogo = 280  # AUMENTADO para 280
-    padding = 60  # AUMENTADO para 60
+    # CONFIGURAÇÕES GIGANTES - FORÇANDO O AUMENTO
+    LARGURA = 1800  # AUMENTADO MASSIVAMENTE
+    ALTURA_TOPO = 350  # AUMENTADO MASSIVAMENTE
+    ALTURA_POR_JOGO = 320  # AUMENTADO MASSIVAMENTE
+    PADDING = 80  # AUMENTADO MASSIVAMENTE
+    
     jogos_count = len(jogos)
-    altura = altura_topo + jogos_count * altura_por_jogo + padding
+    altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
 
-    # Criar canvas
-    img = Image.new("RGB", (largura, altura), color=(18, 18, 20))
+    # Criar canvas gigante
+    img = Image.new("RGB", (LARGURA, altura_total), color=(18, 18, 20))
     draw = ImageDraw.Draw(img)
 
-    # Fonts - TAMANHOS AUMENTADOS SIGNIFICATIVAMENTE
-    try:
-        # Tenta carregar uma fonte TTF se existir - FONTES MUITO MAIORES
-        font_title = ImageFont.truetype("arial.ttf", 80)  # AUMENTADO para 80
-        font_sub = ImageFont.truetype("arial.ttf", 48)    # AUMENTADO para 48
-        font_team = ImageFont.truetype("arial.ttf", 52)   # AUMENTADO para 52
-        font_small = ImageFont.truetype("arial.ttf", 36)  # AUMENTADO para 36
-    except Exception as e:
-        st.error(f"Erro ao carregar fontes: {e}")
-        # Fallback para fontes padrão
+    # FONTES GIGANTES
+    st.info("🔄 Carregando fontes com tamanhos aumentados...")
+    FONTE_TITULO = criar_fonte(90)  # GIGANTE
+    FONTE_SUBTITULO = criar_fonte(55)  # GIGANTE  
+    FONTE_TIMES = criar_fonte(60)  # GIGANTE
+    FONTE_INFO = criar_fonte(42)  # GIGANTE
+
+    # Título PRINCIPAL
+    draw.text((PADDING, 80), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
+    
+    # Subtítulo
+    subtitulo = f"Gerado: {datetime.now().strftime('%Y-%m-%d %H:%M')} - Total: {jogos_count} jogos"
+    draw.text((PADDING, 190), subtitulo, font=FONTE_SUBTITULO, fill=(200, 200, 200))
+
+    y_pos = ALTURA_TOPO
+    TAMANHO_ESCUDO = 220  # ESCUDOS GIGANTES
+
+    for idx, jogo in enumerate(jogos):
+        # Caixa do jogo - MAIOR
+        x0, y0 = PADDING, y_pos + 25
+        x1, y1 = LARGURA - PADDING, y_pos + ALTURA_POR_JOGO - 25
+        
+        # Fundo da caixa do jogo
+        draw.rounded_rectangle([x0, y0, x1, y1], radius=20, fill=(28, 28, 30))
+        
+        # Posição dos escudos
+        x_escudo_esquerdo = x0 + 50
+        y_escudo = y0 + 50
+        
+        # Baixar escudos
+        escudo_home = baixar_imagem_url(jogo.get("escudo_home", ""))
+        escudo_away = baixar_imagem_url(jogo.get("escudo_away", ""))
+        
+        # Função para desenhar escudo redondo
+        def desenhar_escudo(imagem, x, y, tamanho):
+            if imagem:
+                try:
+                    # Redimensionar mantendo proporção
+                    imagem.thumbnail((tamanho, tamanho), Image.LANCZOS)
+                    
+                    # Criar máscara circular
+                    mask = Image.new("L", (tamanho, tamanho), 0)
+                    mask_draw = ImageDraw.Draw(mask)
+                    mask_draw.ellipse((0, 0, tamanho, tamanho), fill=255)
+                    
+                    # Calcular offset para centralizar
+                    offset_x = (tamanho - imagem.width) // 2
+                    offset_y = (tamanho - imagem.height) // 2
+                    
+                    # Criar imagem de fundo e colar o escudo
+                    bg = Image.new("RGBA", (tamanho, tamanho), (255, 255, 255, 0))
+                    bg.paste(imagem, (offset_x, offset_y))
+                    
+                    # Aplicar máscara circular
+                    img.paste(bg, (x, y), mask)
+                except Exception as e:
+                    st.error(f"Erro ao desenhar escudo: {e}")
+            else:
+                # Placeholder circular
+                draw.ellipse([x, y, x + tamanho, y + tamanho], fill=(60, 60, 60))
+                iniciais = "".join([p[0] for p in jogo["home"].split()[:2]]).upper() if "home" in locals() else "TM"
+                try:
+                    bbox = draw.textbbox((0, 0), iniciais, font=FONTE_TIMES)
+                    w = bbox[2] - bbox[0]
+                    h = bbox[3] - bbox[1]
+                    draw.text((x + (tamanho - w)/2, y + (tamanho - h)/2), iniciais, font=FONTE_TIMES, fill=(255, 255, 255))
+                except:
+                    draw.text((x + tamanho//3, y + tamanho//3), iniciais, font=FONTE_TIMES, fill=(255, 255, 255))
+
+        # Desenhar escudo do time da casa (ESQUERDA)
+        desenhar_escudo(escudo_home, x_escudo_esquerdo, y_escudo, TAMANHO_ESCUDO)
+        
+        # Desenhar escudo do time visitante (DIREITA)
+        x_escudo_direito = x_escudo_esquerdo + TAMANHO_ESCUDO + 100
+        desenhar_escudo(escudo_away, x_escudo_direito, y_escudo, TAMANHO_ESCUDO)
+
+        # Nome dos times (CENTRO)
+        x_texto = x_escudo_direito + TAMANHO_ESCUDO + 80
+        texto_times = f"{jogo['home']}  vs  {jogo['away']}"
+        draw.text((x_texto, y0 + 60), texto_times, font=FONTE_TIMES, fill=(255, 255, 255))
+
+        # Informações do jogo
+        info_texto = f"{jogo['liga']} | {jogo['tendencia']} | Estim.: {jogo['estimativa']:.2f} | Conf.: {jogo['confianca']:.0f}%"
+        draw.text((x_texto, y0 + 60 + 80), info_texto, font=FONTE_INFO, fill=(200, 200, 200))
+
+        # Hora do jogo (DIREITA)
+        hora_formatada = jogo["hora"].strftime("%d/%m %H:%M") if isinstance(jogo["hora"], datetime) else str(jogo["hora"])
         try:
-            font_title = ImageFont.load_default()
-            font_sub = ImageFont.load_default()
-            font_team = ImageFont.load_default()
-            font_small = ImageFont.load_default()
+            bbox = draw.textbbox((0, 0), hora_formatada, font=FONTE_TIMES)
+            largura_hora = bbox[2] - bbox[0]
+            draw.text((LARGURA - PADDING - largura_hora - 30, y0 + 65), hora_formatada, font=FONTE_TIMES, fill=(220, 220, 220))
         except:
-            font_title = ImageFont.load_default()
-            font_sub = ImageFont.load_default()
-            font_team = ImageFont.load_default()
-            font_small = ImageFont.load_default()
+            draw.text((LARGURA - PADDING - 250, y0 + 65), hora_formatada, font=FONTE_TIMES, fill=(220, 220, 220))
 
-    # Título - POSIÇÕES AJUSTADAS
-    title_text = titulo
-    draw.text((padding, 60), title_text, font=font_title, fill=(255, 215, 0))  # dourado-ish
-    subtitle = f"Gerado: {datetime.now().strftime('%Y-%m-%d %H:%M')} - Total: {jogos_count} jogos"
-    draw.text((padding, 160), subtitle, font=font_sub, fill=(200, 200, 200))
+        y_pos += ALTURA_POR_JOGO
 
-    y = altura_topo
-    crest_size = 200  # AUMENTADO SIGNIFICATIVAMENTE para 200
-
-    for j in jogos:
-        # boxes e separador sutil - MAIORES
-        box_x0 = padding
-        box_x1 = largura - padding
-        box_y0 = y + 20
-        box_y1 = y + altura_por_jogo - 20
-        draw.rounded_rectangle([(box_x0, box_y0), (box_x1, box_y1)], radius=15, fill=(28,28,30))
-
-        # Tentar baixar escudos
-        esc_home = None
-        esc_away = None
-        if j.get("escudo_home"):
-            esc_home = baixar_imagem_url(j["escudo_home"])
-        if j.get("escudo_away"):
-            esc_away = baixar_imagem_url(j["escudo_away"])
-
-        x_esc_home = box_x0 + 40
-        y_esc = box_y0 + 40
-
-        # Função helper para desenhar imagem redonda com borda
-        def draw_crest(im: Image.Image, pos_x, pos_y, size=crest_size):
-            try:
-                im_thumb = im.copy()
-                im_thumb.thumbnail((size, size), Image.LANCZOS)
-                # criar círculo máscara
-                mask = Image.new("L", im_thumb.size, 0)
-                mask_draw = ImageDraw.Draw(mask)
-                mask_draw.ellipse((0,0,im_thumb.size[0], im_thumb.size[1]), fill=255)
-                # borda
-                bg = Image.new("RGBA", (size, size), (255,255,255,0))
-                offset = ((size - im_thumb.size[0])//2, (size - im_thumb.size[1])//2)
-                bg.paste(im_thumb, offset, im_thumb if im_thumb.mode == "RGBA" else None)
-                img.paste(bg, (pos_x, pos_y), mask.resize(bg.size))
-            except Exception as e:
-                st.error(f"Erro ao desenhar escudo: {e}")
-
-        # Desenhar escudos ou placeholders com iniciais
-        if esc_home:
-            draw_crest(esc_home, x_esc_home, y_esc, size=crest_size)
-        else:
-            # placeholder círculo com iniciais - MAIOR
-            circle_box = (x_esc_home, y_esc, x_esc_home + crest_size, y_esc + crest_size)
-            draw.ellipse(circle_box, fill=(60,60,60))
-            initials = "".join([w[0] for w in j["home"].split()][:2]).upper()
-            try:
-                bbox = draw.textbbox((0, 0), initials, font=font_team)
-                w = bbox[2] - bbox[0]
-                h = bbox[3] - bbox[1]
-                draw.text((x_esc_home + (crest_size - w)/2, y_esc + (crest_size - h)/2), initials, font=font_team, fill=(255,255,255))
-            except:
-                # Fallback se textbbox não funcionar
-                draw.text((x_esc_home + crest_size/3, y_esc + crest_size/3), initials, font=font_team, fill=(255,255,255))
-
-        # away crest
-        x_esc_away = x_esc_home + crest_size + 50
-        if esc_away:
-            draw_crest(esc_away, x_esc_away, y_esc, size=crest_size)
-        else:
-            circle_box = (x_esc_away, y_esc, x_esc_away + crest_size, y_esc + crest_size)
-            draw.ellipse(circle_box, fill=(60,60,60))
-            initials = "".join([w[0] for w in j["away"].split()][:2]).upper()
-            try:
-                bbox = draw.textbbox((0, 0), initials, font=font_team)
-                w = bbox[2] - bbox[0]
-                h = bbox[3] - bbox[1]
-                draw.text((x_esc_away + (crest_size - w)/2, y_esc + (crest_size - h)/2), initials, font=font_team, fill=(255,255,255))
-            except:
-                draw.text((x_esc_away + crest_size/3, y_esc + crest_size/3), initials, font=font_team, fill=(255,255,255))
-
-        # Texto dos times - MAIOR E MAIS ESPAÇADO
-        text_x = x_esc_away + crest_size + 60
-        team_line = f"{j['home']}  vs  {j['away']}"
-        draw.text((text_x, box_y0 + 50), team_line, font=font_team, fill=(255,255,255))
-
-        # Tendência / estimativa / confiança - MAIOR
-        sub_line = f"{j['liga']} | {j['tendencia']} | Estim.: {j['estimativa']:.2f} | Conf.: {j['confianca']:.0f}%"
-        draw.text((text_x, box_y0 + 50 + 70), sub_line, font=font_small, fill=(200,200,200))
-
-        # Hora - MAIOR
-        hora_format = j["hora"].strftime("%d/%m %H:%M") if isinstance(j["hora"], datetime) else str(j["hora"])
-        try:
-            bbox = draw.textbbox((0, 0), hora_format, font=font_team)
-            hora_width = bbox[2] - bbox[0]
-            draw.text((largura - padding - hora_width - 30, box_y0 + 55), hora_format, font=font_team, fill=(220,220,220))
-        except:
-            draw.text((largura - padding - 200, box_y0 + 55), hora_format, font=font_team, fill=(220,220,220))
-
-        y += altura_por_jogo
-
-    # salvar em BytesIO
+    # Salvar imagem
     buffer = io.BytesIO()
-    img.save(buffer, format="PNG", optimize=True)
+    img.save(buffer, format="PNG", optimize=True, quality=95)
     buffer.seek(0)
+    
+    st.success(f"✅ Pôster gerado com {len(jogos)} jogos - Dimensões: {LARGURA}x{altura_total}")
     return buffer
 
 # =============================
@@ -530,6 +532,7 @@ def gerar_poster_elite(jogos: list, titulo: str = "🔥 Jogos de Alta Confiança
 def enviar_alerta_conf_criar_poster(jogos_conf: list, threshold: int, chat_id: str = TELEGRAM_CHAT_ID_ALT2):
     """Gera pôster com Pillow e envia ao Telegram (uma única imagem com todos os jogos)."""
     if not jogos_conf:
+        st.warning("⚠️ Nenhum jogo com confiança suficiente para gerar pôster.")
         return
 
     # Determinar período (datas dos jogos)
@@ -541,6 +544,8 @@ def enviar_alerta_conf_criar_poster(jogos_conf: list, threshold: int, chat_id: s
     data_fim = datas[-1].strftime("%Y-%m-%d") if datas else "-"
     titulo = f"🔥 JOGOS DE ALTA CONFIANÇA (≥{threshold}%)"
 
+    st.info(f"🎨 Gerando pôster com {len(jogos_conf)} jogos...")
+    
     try:
         poster = gerar_poster_elite(jogos_conf, titulo=titulo)
         caption = (
@@ -549,7 +554,10 @@ def enviar_alerta_conf_criar_poster(jogos_conf: list, threshold: int, chat_id: s
             f"<b>⚽ CONFIANÇA MÍNIMA: {threshold}%</b>\n\n"
             f"<b>🎯 JOGOS SELECIONADOS PELA INTELIGÊNCIA ARTIFICIAL</b>"
         )
+        
+        st.info("📤 Enviando pôster para o Telegram...")
         ok = enviar_foto_telegram(poster, caption=caption, chat_id=chat_id)
+        
         if ok:
             st.success("🚀 Pôster de alta confiança enviado ao Telegram!")
         else:
