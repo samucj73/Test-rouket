@@ -412,10 +412,10 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
     # CONFIGURAÇÕES GERAIS
     # =====================
     LARGURA = 2400
-    ALTURA_TOPO = 300
-    ALTURA_POR_JOGO = 700
-    PADDING = 80
-    ESPACO_ENTRE_SECOES = 40
+    ALTURA_TOPO = 600
+    ALTURA_POR_JOGO = 1400
+    PADDING = 160
+    ESPACO_ENTRE_SECOES = 80
 
     jogos_count = len(jogos)
     altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + 200
