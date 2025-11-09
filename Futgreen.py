@@ -1,13 +1,4 @@
-[file name]: IMG_0428.jpeg
-[file content begin]
-INGLATERRA: PREMIER LEAGUE - RODADA 11
 
-08.11.2025 12:00
-
-West Ham    Burnley
-
-
-[file content end]
 
 import streamlit as st
 from datetime import datetime, timedelta
