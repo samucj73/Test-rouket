@@ -370,16 +370,11 @@ def verificar_enviar_alerta(fixture: dict, tendencia: str, estimativa: float, co
         salvar_alertas(alertas)
 
 # =============================
-# Funções de geração de imagem 
-from PIL import Image, ImageDraw, ImageFont
-import io, os, requests, streamlit as st
-from datetime import datetime
-
-# ======================================
-# 🔧 Funções auxiliares (mantidas e otimizadas)
-# ======================================
-def baixar_imagem_url(url: str, timeout: int = 8):
-    """Baixa imagem e retorna PIL.Image. Retorna None se falhar."""
+ # =============================
+# Funções de geração de imagem - VERSÃO PROFISSIONAL ELITE MASTER
+# =============================
+def baixar_imagem_url(url: str, timeout: int = 8) -> Image.Image | None:
+    """Tenta baixar uma imagem e retornar PIL.Image. Retorna None se falhar."""
     if not url:
         return None
     try:
@@ -387,153 +382,214 @@ def baixar_imagem_url(url: str, timeout: int = 8):
         resp.raise_for_status()
         img = Image.open(io.BytesIO(resp.content)).convert("RGBA")
         return img
-    except Exception:
+    except Exception as e:
+        print(f"Erro ao baixar imagem {url}: {e}")
         return None
 
-def criar_fonte(tamanho: int):
-    """Carrega fonte robusta e universal."""
-    fontes = [
+
+def criar_fonte(tamanho: int) -> ImageFont.ImageFont:
+    """Cria fonte com fallback robusto e consistente"""
+    fontes_possiveis = [
         "arialbd.ttf", "arial.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
         "/System/Library/Fonts/Arial Bold.ttf",
         "C:/Windows/Fonts/arialbd.ttf"
     ]
-    for path in fontes:
-        if os.path.exists(path):
-            try:
-                return ImageFont.truetype(path, tamanho)
-            except:
-                continue
+    for fonte in fontes_possiveis:
+        try:
+            if os.path.exists(fonte):
+                return ImageFont.truetype(fonte, tamanho)
+        except:
+            continue
     return ImageFont.load_default()
 
-# ======================================
-# 🖼️ Geração de pôster profissional Elite Master
-# ======================================
+
 def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA DE GOLS") -> io.BytesIO:
     """
-    Cria um pôster profissional com layout limpo, balanceado e totalmente legível.
+    Gera pôster profissional estilo Elite Master — layout limpo, fontes equilibradas e espaçamento automático.
     """
-    # Parâmetros principais
-    LARGURA = 2600
-    ALTURA_TOPO = 450
-    ALTURA_POR_JOGO = 800
-    MARGEM = 120
-    COR_FUNDO = (10, 20, 30)
-    COR_CAIXA = (25, 35, 45)
-    COR_TEXTO = (255, 255, 255)
-    COR_DESTAQUE = (255, 215, 0)
+    # =====================
+    # CONFIGURAÇÕES GERAIS
+    # =====================
+    LARGURA = 2400
+    ALTURA_TOPO = 300
+    ALTURA_POR_JOGO = 700
+    PADDING = 80
+    ESPACO_ENTRE_SECOES = 40
 
-    total_altura = ALTURA_TOPO + len(jogos) * ALTURA_POR_JOGO + 250
-    img = Image.new("RGB", (LARGURA, total_altura), color=COR_FUNDO)
+    jogos_count = len(jogos)
+    altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + 200
+
+    # Cria imagem base
+    img = Image.new("RGB", (LARGURA, altura_total), color=(8, 15, 25))
     draw = ImageDraw.Draw(img)
 
-    # Fontes (hierarquia visual)
-    F_TITULO = criar_fonte(220)
-    F_LIGA = criar_fonte(120)
-    F_DATA = criar_fonte(100)
-    F_TIMES = criar_fonte(130)
-    F_VS = criar_fonte(150)
-    F_ANALISE = criar_fonte(90)
-    F_RODAPE = criar_fonte(70)
+    # FONTES proporcionais e legíveis
+    FONTE_TITULO = criar_fonte(180)
+    FONTE_LIGA = criar_fonte(100)
+    FONTE_INFO = criar_fonte(80)
+    FONTE_TIMES = criar_fonte(120)
+    FONTE_ANALISE = criar_fonte(70)
+    FONTE_RODAPE = criar_fonte(60)
 
-    # ========== TÍTULO ==========
-    titulo = titulo.upper()
-    tw, th = draw.textsize(titulo, font=F_TITULO)
-    draw.text(((LARGURA - tw) // 2, 60), titulo, font=F_TITULO, fill=COR_TEXTO)
-    draw.line([(LARGURA // 4, 60 + th + 30), (3 * LARGURA // 4, 60 + th + 30)], fill=COR_DESTAQUE, width=5)
+    # =====================
+    # TÍTULO PRINCIPAL
+    # =====================
+    titulo_w = draw.textlength(titulo, font=FONTE_TITULO)
+    draw.text(((LARGURA - titulo_w) / 2, 60), titulo, font=FONTE_TITULO, fill=(255, 255, 255))
+    draw.line([(LARGURA * 0.2, 160), (LARGURA * 0.8, 160)], fill=(255, 215, 0), width=5)
 
+    # =====================
+    # BLOCO DE JOGOS
+    # =====================
     y = ALTURA_TOPO
 
-    # ========== BLOCOS DOS JOGOS ==========
     for jogo in jogos:
-        # Caixa
+        # Fundo do bloco
         draw.rounded_rectangle(
-            [MARGEM, y, LARGURA - MARGEM, y + ALTURA_POR_JOGO - 40],
-            radius=60, fill=COR_CAIXA, outline=(60, 80, 100), width=3
+            [PADDING, y, LARGURA - PADDING, y + ALTURA_POR_JOGO - ESPACO_ENTRE_SECOES],
+            radius=25,
+            fill=(20, 30, 45),
+            outline=(70, 90, 120),
+            width=3
         )
 
-        # Nome da liga
-        liga = jogo.get("liga", "").upper()
-        lw, _ = draw.textsize(liga, font=F_LIGA)
-        draw.text(((LARGURA - lw) // 2, y + 40), liga, font=F_LIGA, fill=(180, 180, 180))
+        # Liga
+        liga_text = jogo.get("liga", "").upper()
+        liga_w = draw.textlength(liga_text, font=FONTE_LIGA)
+        draw.text(((LARGURA - liga_w) / 2, y + 30), liga_text, font=FONTE_LIGA, fill=(180, 180, 200))
 
         # Data e hora
-        hora = jogo.get("hora", "")
-        if isinstance(hora, datetime):
-            data_text = hora.strftime("%d/%m/%Y  |  %H:%M BRT")
+        if isinstance(jogo["hora"], datetime):
+            data_text = jogo["hora"].strftime("%d/%m/%Y")
+            hora_text = jogo["hora"].strftime("%H:%M")
         else:
-            data_text = str(hora)
-        dw, _ = draw.textsize(data_text, font=F_DATA)
-        draw.text(((LARGURA - dw) // 2, y + 180), data_text, font=F_DATA, fill=(150, 200, 255))
+            data_text, hora_text = str(jogo["hora"]), ""
 
-        # Escudos
-        TAM = 220
-        ESC_ESPACO = 220
-        x_ini = (LARGURA - (TAM * 2 + ESC_ESPACO)) // 2
-        y_esc = y + 270
+        info_text = f"{data_text}  •  {hora_text}"
+        info_w = draw.textlength(info_text, font=FONTE_INFO)
+        draw.text(((LARGURA - info_w) / 2, y + 140), info_text, font=FONTE_INFO, fill=(120, 180, 255))
 
-        esc_home = baixar_imagem_url(jogo.get("escudo_home", ""))
-        esc_away = baixar_imagem_url(jogo.get("escudo_away", ""))
+        # Escudos e times
+        escudo_home = baixar_imagem_url(jogo.get("escudo_home", ""))
+        escudo_away = baixar_imagem_url(jogo.get("escudo_away", ""))
+        TAM_ESCUDO = 160
+        ESPACO_ESCUDOS = 180
 
-        def desenhar_escudo(escudo, x, y):
-            if escudo:
-                escudo.thumbnail((TAM, TAM))
-                mask = Image.new("L", escudo.size, 0)
-                ImageDraw.Draw(mask).ellipse([(0, 0), escudo.size], fill=255)
-                img.paste(escudo, (x, y), mask)
+        centro_x = LARGURA // 2
+        y_escudos = y + 230
+
+        def desenhar_escudo(imagem, x, y_base):
+            if imagem:
+                try:
+                    imagem.thumbnail((TAM_ESCUDO, TAM_ESCUDO))
+                    mask = Image.new("L", (TAM_ESCUDO, TAM_ESCUDO), 0)
+                    draw_mask = ImageDraw.Draw(mask)
+                    draw_mask.ellipse((0, 0, TAM_ESCUDO, TAM_ESCUDO), fill=255)
+                    img.paste(imagem, (x, y_base), mask)
+                except:
+                    draw.ellipse([x, y_base, x + TAM_ESCUDO, y_base + TAM_ESCUDO], fill=(80, 80, 80))
             else:
-                draw.ellipse([x, y, x + TAM, y + TAM], fill=(50, 50, 50))
+                draw.ellipse([x, y_base, x + TAM_ESCUDO, y_base + TAM_ESCUDO], fill=(80, 80, 80))
 
-        desenhar_escudo(esc_home, x_ini, y_esc)
-        desenhar_escudo(esc_away, x_ini + TAM + ESC_ESPACO, y_esc)
+        # Posições
+        x_home = centro_x - TAM_ESCUDO - ESPACO_ESCUDOS // 2
+        x_away = centro_x + ESPACO_ESCUDOS // 2
+        desenhar_escudo(escudo_home, x_home, y_escudos)
+        desenhar_escudo(escudo_away, x_away, y_escudos)
 
-        # Times e VS
-        home, away = jogo.get("home", ""), jogo.get("away", "")
-        hw, _ = draw.textsize(home, font=F_TIMES)
-        aw, _ = draw.textsize(away, font=F_TIMES)
-        draw.text((x_ini + (TAM - hw) // 2, y_esc + TAM + 40), home, font=F_TIMES, fill=COR_TEXTO)
-        draw.text((x_ini + TAM + ESC_ESPACO + (TAM - aw) // 2, y_esc + TAM + 40), away, font=F_TIMES, fill=COR_TEXTO)
-
+        # VS
         vs_text = "VS"
-        vw, _ = draw.textsize(vs_text, font=F_VS)
-        draw.text(((LARGURA - vw) // 2, y_esc + TAM // 2), vs_text, font=F_VS, fill=COR_DESTAQUE)
+        vs_w = draw.textlength(vs_text, font=FONTE_TIMES)
+        draw.text(((LARGURA - vs_w) / 2, y_escudos + 40), vs_text, font=FONTE_TIMES, fill=(255, 215, 0))
+
+        # Nomes dos times
+        draw.text((x_home, y_escudos + TAM_ESCUDO + 30), jogo["home"], font=FONTE_TIMES, fill=(255, 255, 255))
+        draw.text((x_away, y_escudos + TAM_ESCUDO + 30), jogo["away"], font=FONTE_TIMES, fill=(255, 255, 255))
 
         # Linha separadora
-        draw.line([(MARGEM + 100, y_esc + TAM + 160), (LARGURA - MARGEM - 100, y_esc + TAM + 160)],
-                  fill=(80, 100, 130), width=3)
+        draw.line([(PADDING + 50, y_escudos + TAM_ESCUDO + 100),
+                   (LARGURA - PADDING - 50, y_escudos + TAM_ESCUDO + 100)],
+                  fill=(100, 130, 160), width=2)
 
-        # Análise
-        tendencia = jogo.get("tendencia", "Sem Dados")
-        estimativa = f"{jogo.get('estimativa', 0):.2f}"
-        confianca = f"{jogo.get('confianca', 0):.0f}%"
-        status = jogo.get("status", "-")
-
-        analises = [
-            f"📈 Tendência: {tendencia}",
-            f"⚽ Estimativa: {estimativa} gols",
-            f"🎯 Confiança: {confianca}",
-            f"🕒 Status: {status}"
+        # Dados analíticos
+        tendencia_emoji = "📈" if "Mais" in jogo['tendencia'] else "📉" if "Menos" in jogo['tendencia'] else "⚡"
+        analise = [
+            f"{tendencia_emoji} {jogo['tendencia']}",
+            f"⚽ {jogo['estimativa']:.2f} gols",
+            f"🎯 {jogo['confianca']:.0f}%",
+            f"🕒 {jogo['status']}"
         ]
-        cores = [(255, 215, 0), (100, 200, 255), (120, 255, 120), (200, 200, 200)]
-        for i, (txt, cor) in enumerate(zip(analises, cores)):
-            tw, _ = draw.textsize(txt, font=F_ANALISE)
-            draw.text(((LARGURA - tw) // 2, y_esc + TAM + 220 + i * 80), txt, font=F_ANALISE, fill=cor)
 
+        y_analise = y_escudos + TAM_ESCUDO + 130
+        espacamento_analise = 60
+        for i, texto in enumerate(analise):
+            texto_w = draw.textlength(texto, font=FONTE_ANALISE)
+            draw.text(((LARGURA - texto_w) / 2, y_analise + i * espacamento_analise),
+                      texto, font=FONTE_ANALISE, fill=(200, 220, 255))
+
+        # Próximo bloco
         y += ALTURA_POR_JOGO
 
-    # ========== RODAPÉ ==========
-    rodape = f"Gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')}  |  Elite Master System"
-    rw, _ = draw.textsize(rodape, font=F_RODAPE)
-    draw.text(((LARGURA - rw) // 2, total_altura - 100), rodape, font=F_RODAPE, fill=(150, 180, 200))
+    # =====================
+    # RODAPÉ
+    # =====================
+    rodape_text = f"Gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')} - Elite Master System"
+    rodape_w = draw.textlength(rodape_text, font=FONTE_RODAPE)
+    draw.text(((LARGURA - rodape_w) / 2, altura_total - 80),
+              rodape_text, font=FONTE_RODAPE, fill=(120, 150, 180))
 
-    # Salvar
+    # Salvar em memória
     buffer = io.BytesIO()
     img.save(buffer, format="PNG", optimize=True)
     buffer.seek(0)
 
-    st.success(f"✅ Pôster Elite Master gerado com {len(jogos)} jogos.")
+    st.success(f"✅ Poster profissional gerado ({len(jogos)} jogos)")
     return buffer
 
+
+def enviar_alerta_westham_style(jogos_conf: list, threshold: int, chat_id: str = TELEGRAM_CHAT_ID_ALT2):
+    """Envia alerta no estilo Elite Master (com pôster profissional)"""
+    if not jogos_conf:
+        st.warning("⚠️ Nenhum jogo para gerar poster")
+        return
+
+    try:
+        # Agrupar por data
+        jogos_por_data = {}
+        for jogo in jogos_conf:
+            data = jogo["hora"].date() if isinstance(jogo["hora"], datetime) else datetime.now().date()
+            jogos_por_data.setdefault(data, []).append(jogo)
+
+        for data, jogos_data in jogos_por_data.items():
+            data_str = data.strftime("%d/%m/%Y")
+            titulo = f"ELITE MASTER - {data_str}"
+            st.info(f"🎨 Gerando pôster profissional para {data_str}...")
+
+            poster = gerar_poster_westham_style(jogos_data, titulo=titulo)
+            caption = (
+                f"<b>🎯 ALERTA DE GOLS - {data_str}</b>\n\n"
+                f"<b>📋 TOTAL: {len(jogos_data)} JOGOS</b>\n"
+                f"<b>⚽ CONFIANÇA MÍNIMA: {threshold}%</b>\n\n"
+                f"<b>📊 MÉDIA DE CONFIANÇA: "
+                f"{sum(j['confianca'] for j in jogos_data) / len(jogos_data):.1f}%</b>\n\n"
+                f"<b>🔥 Análise preditiva de gols - Elite Master</b>"
+            )
+
+            st.info("📤 Enviando para o Telegram...")
+            ok = enviar_foto_telegram(poster, caption=caption, chat_id=chat_id)
+
+            if ok:
+                st.success(f"🚀 Poster enviado com sucesso ({data_str})!")
+            else:
+                st.error(f"❌ Falha ao enviar poster ({data_str})")
+
+    except Exception as e:
+        st.error(f"❌ Erro ao gerar/enviar poster: {str(e)}")
+        msg = f"🔥 Jogos ≥{threshold}% (erro na imagem):\n"
+        for j in jogos_conf[:5]:
+            msg += f"🏟️ {j['home']} vs {j['away']} | {j['tendencia']} | Conf: {j['confianca']:.0f}%\n"
+        enviar_telegram(msg, chat_id=chat_id)
 # =============================
 # FUNÇÕES QUE ESTAVAM FALTANDO - ADICIONADAS AGORA
 # =============================
