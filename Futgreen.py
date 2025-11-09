@@ -329,6 +329,29 @@ def verificar_enviar_alerta(fixture: dict, tendencia: str, estimativa: float, co
         salvar_alertas(alertas)
 
 # =============================
+# Alerta: Top 6 jogos com confiança >=70%
+# =============================
+def enviar_alerta_conf70(jogos_conf_70: list):
+    """Envia alerta com os jogos de confiança >= 70% (top 6)."""
+    if not jogos_conf_70:
+        return
+
+    top6 = sorted(jogos_conf_70, key=lambda x: x["confianca"], reverse=True)[:6]
+
+    msg = "🔥 <b>Jogos de Alta Confiança (≥70%)</b>\n\n"
+    for j in top6:
+        hora_format = j["hora"].strftime("%H:%M") if isinstance(j["hora"], datetime) else str(j["hora"])
+        msg += (
+            f"🏟️ {j['home']} vs {j['away']}\n"
+            f"🕒 {hora_format} BRT | Liga: {j['liga']} | Status: {j['status']}\n"
+            f"📈 Tendência: {j['tendencia']} | Estimativa: {j['estimativa']:.2f} | "
+            f"💯 Confiança: {j['confianca']:.0f}%\n\n"
+        )
+
+    msg += "⚽ Apenas jogos com confiança ≥ 70%."
+    enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2)
+
+# =============================
 # Geração de Relatórios
 # =============================
 def gerar_relatorio_pdf(jogos_conferidos: list) -> io.BytesIO:
@@ -378,6 +401,8 @@ def main():
     with st.sidebar:
         st.header("Configurações")
         top_n = st.selectbox("📊 Jogos no Top", [3, 5, 10], index=0)
+        # Checkbox para enviar alerta dos jogos >=70%
+        enviar_alerta_70 = st.checkbox("🚨 Enviar alerta com jogos de confiança ≥ 70%", value=True)
         st.info("Configure as opções de análise")
 
     # Controles principais
@@ -405,7 +430,8 @@ def main():
 
     # Processamento de jogos
     if st.button("🔍 Buscar Partidas", type="primary"):
-        processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n)
+        # passamos o estado do checkbox para a função
+        processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, enviar_alerta_70)
 
     # Botões de ação
     col1, col2, col3 = st.columns(3)
@@ -448,7 +474,7 @@ def main():
     if st.button("🧹 Limpar Histórico de Desempenho"):
         limpar_historico()
 
-def processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n):
+def processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, enviar_alerta_70: bool):
     """Processa e analisa os jogos do dia."""
     hoje = data_selecionada.strftime("%Y-%m-%d")
     ligas_busca = LIGA_DICT.values() if todas_ligas else [LIGA_DICT[liga_selecionada]]
@@ -490,6 +516,15 @@ def processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n):
         st.success(f"✅ Análise concluída! {len(top_jogos)} jogos processados.")
     else:
         st.warning("⚠️ Nenhum jogo encontrado para a data selecionada.")
+
+    # Se habilitado, enviar alerta com até 6 jogos de confiança >= 70%
+    if enviar_alerta_70:
+        jogos_conf_70 = [
+            j for j in top_jogos
+            if j["confianca"] >= 70 and j["status"] not in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"]
+        ]
+        if jogos_conf_70:
+            enviar_alerta_conf70(jogos_conf_70)
 
 def enviar_top_jogos(jogos: list, top_n: int):
     """Envia os top N jogos para o Telegram (somente jogos não finalizados)."""
