@@ -417,10 +417,10 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
     Gera poster no estilo West Ham vs Burnley - VERSÃO CORRIGIDA
     """
     # Configurações aumentadas
-    LARGURA = 1800
+    LARGURA = 1900
     ALTURA_TOPO = 300
-    ALTURA_POR_JOGO = 800  # Aumentado para caber tudo
-    PADDING = 100
+    ALTURA_POR_JOGO = 900  # Aumentado para caber tudo
+    PADDING = 120
     
     jogos_count = len(jogos)
     altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
@@ -430,13 +430,13 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
     draw = ImageDraw.Draw(img)
 
     # Carregar fontes COM TAMANHOS MAIORES
-    FONTE_TITULO = criar_fonte(100)
-    FONTE_SUBTITULO = criar_fonte(62)
+    FONTE_TITULO = criar_fonte(110)
+    FONTE_SUBTITULO = criar_fonte(75)
     FONTE_TIMES = criar_fonte(66)
     FONTE_VS = criar_fonte(62)
     FONTE_INFO = criar_fonte(46)
-    FONTE_DETALHES = criar_fonte(42)
-    FONTE_ANALISE = criar_fonte(50)
+    FONTE_DETALHES = criar_fonte(52)
+    FONTE_ANALISE = criar_fonte(60)
 
     # Título PRINCIPAL
     try:
@@ -457,7 +457,7 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
         x1, y1 = LARGURA - PADDING, y_pos + ALTURA_POR_JOGO - 30
         
         # Fundo com borda
-        draw.rectangle([x0, y0, x1, y1], fill=(25, 35, 45), outline=(60, 80, 100), width=3)
+        draw.rectangle([x0, y0, x1, y1], fill=(25, 35, 45), outline=(60, 80, 100), width=5)
 
         # Nome da liga
         liga_text = jogo['liga'].upper()
