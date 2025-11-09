@@ -430,13 +430,13 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
     draw = ImageDraw.Draw(img)
 
     # Carregar fontes COM TAMANHOS MAIORES
-    FONTE_TITULO = criar_fonte(180)
-    FONTE_SUBTITULO = criar_fonte(90)
-    FONTE_TIMES = criar_fonte(90)
-    FONTE_VS = criar_fonte(90)
-    FONTE_INFO = criar_fonte(90)
-    FONTE_DETALHES = criar_fonte(90)
-    FONTE_ANALISE = criar_fonte(34)
+    FONTE_TITULO = criar_fonte(380)
+    FONTE_SUBTITULO = criar_fonte(190)
+    FONTE_TIMES = criar_fonte(190)
+    FONTE_VS = criar_fonte(190)
+    FONTE_INFO = criar_fonte(190)
+    FONTE_DETALHES = criar_fonte(190)
+    FONTE_ANALISE = criar_fonte(134)
 
     # Título PRINCIPAL
     try:
