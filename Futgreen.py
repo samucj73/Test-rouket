@@ -146,6 +146,17 @@ def registrar_no_historico(resultado: dict):
     historico.append(registro)
     salvar_historico(historico)
 
+def limpar_historico():
+    """Limpa completamente o histórico de desempenho."""
+    if os.path.exists(HISTORICO_PATH):
+        try:
+            os.remove(HISTORICO_PATH)
+            st.success("🧹 Histórico de desempenho limpo com sucesso!")
+        except Exception as e:
+            st.error(f"Erro ao remover histórico: {e}")
+    else:
+        st.info("⚠️ Nenhum histórico encontrado para limpar.")
+
 # =============================
 # Utilitários de Data e Formatação
 # =============================
@@ -411,10 +422,31 @@ def main():
         if st.button("🧹 Limpar Cache"):
             limpar_caches()
 
-    # Botão para calcular desempenho a partir do histórico
+    # Painel de desempenho com opções (período ou últimos N)
     st.markdown("---")
-    if st.button("📈 Calcular Desempenho"):
-        calcular_desempenho()
+    st.subheader("📊 Painel de Desempenho (Histórico)")
+
+    # Opções do usuário para analisar histórico
+    usar_periodo = st.checkbox("🔎 Usar período específico (em vez dos últimos N jogos)", value=False)
+    qtd_default = 50
+    last_n = st.number_input("Últimos N jogos (se período não for usado)", min_value=1, max_value=1000, value=qtd_default, step=1)
+    colp1, colp2 = st.columns(2)
+    with colp1:
+        if usar_periodo:
+            data_inicio = st.date_input("Data inicial", value=(datetime.today() - timedelta(days=30)).date())
+            data_fim = st.date_input("Data final", value=datetime.today().date())
+            if data_fim < data_inicio:
+                st.error("Data final não pode ser anterior à inicial.")
+    with colp2:
+        if st.button("📈 Calcular Desempenho"):
+            if usar_periodo:
+                calcular_desempenho_periodo(data_inicio, data_fim)
+            else:
+                calcular_desempenho(qtd_jogos=last_n)
+
+    # Botão para limpar histórico de desempenho
+    if st.button("🧹 Limpar Histórico de Desempenho"):
+        limpar_historico()
 
 def processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n):
     """Processa e analisa os jogos do dia."""
@@ -680,43 +712,128 @@ def limpar_caches():
 # =============================
 # Cálculo de Desempenho
 # =============================
-def calcular_desempenho():
-    """Calcula o desempenho total das previsões e envia alerta."""
+def _parse_date_str(data_str: str) -> datetime | None:
+    """Tenta parsear 'YYYY-MM-DD HH:MM:SS' ou 'YYYY-MM-DD' e retorna datetime.date."""
+    if not data_str:
+        return None
+    try:
+        # Prefer full datetime
+        return datetime.strptime(data_str, "%Y-%m-%d %H:%M:%S")
+    except Exception:
+        try:
+            return datetime.strptime(data_str, "%Y-%m-%d")
+        except Exception:
+            return None
+
+def calcular_desempenho(qtd_jogos: int = 50):
+    """Calcula desempenho com base nos últimos N jogos do histórico e envia alerta."""
     historico = carregar_historico()
     if not historico:
         st.warning("⚠️ Nenhum jogo conferido ainda.")
         return
-    
-    # Contar greens e reds (apenas resultados com emoji)
-    greens = sum(1 for j in historico if isinstance(j.get("resultado"), str) and "🟢" in j["resultado"])
-    reds = sum(1 for j in historico if isinstance(j.get("resultado"), str) and "🔴" in j["resultado"])
-    total = greens + reds  # contamos apenas jogos com resultado binário
+
+    # selecionar últimos N (preservando ordem cronológica)
+    historico_considerado = historico[-qtd_jogos:] if len(historico) > qtd_jogos else historico[:]
+    # extrair datas para mostrar período
+    datas = []
+    for j in historico_considerado:
+        d = _parse_date_str(j.get("data_conferencia", ""))
+        if d:
+            datas.append(d.date())
+    data_inicio = datas[0].strftime("%Y-%m-%d") if datas else "-"
+    data_fim = datas[-1].strftime("%Y-%m-%d") if datas else "-"
+
+    greens = sum(1 for j in historico_considerado if isinstance(j.get("resultado"), str) and "🟢" in j["resultado"])
+    reds = sum(1 for j in historico_considerado if isinstance(j.get("resultado"), str) and "🔴" in j["resultado"])
+    total = greens + reds
     taxa_acerto = (greens / total * 100) if total > 0 else 0.0
 
     # Exibir no Streamlit
-    st.subheader("📈 Desempenho Geral das Previsões")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("✅ GREENs", greens)
-    col2.metric("❌ REDs", reds)
-    col3.metric("🎯 Taxa de Acerto (%)", f"{taxa_acerto:.1f}%")
+    st.subheader("📈 Desempenho (Últimos N jogos)")
+    st.write(f"📅 Período considerado: {data_inicio} → {data_fim}")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("✅ GREENs", greens)
+    c2.metric("❌ REDs", reds)
+    c3.metric("🎯 Taxa de Acerto (%)", f"{taxa_acerto:.1f}%")
+    st.write(f"📊 Jogos considerados (com resultado): {total} — (analisados: {len(historico_considerado)})")
 
-    # Mostrar tabela com últimos 20 registros
-    df = pd.DataFrame(historico)
+    # Mostrar tabela com os registros considerados
+    df = pd.DataFrame(historico_considerado)
     if not df.empty:
-        st.markdown("Últimos jogos conferidos:")
-        st.dataframe(df.sort_values("data_conferencia", ascending=False).head(20))
+        st.markdown("Registros considerados (mais recentes primeiro):")
+        st.dataframe(df.sort_values("data_conferencia", ascending=False).head(200))
 
-    # Mensagem Telegram resumida
+    # Mensagem para o Telegram
     msg = (
-        f"📊 <b>DESEMPENHO GERAL DAS PREVISÕES</b>\n\n"
-        f"📅 Total de Jogos (com resultado): {total}\n"
+        f"📊 <b>DESEMPENHO DAS PREVISÕES</b>\n\n"
+        f"📅 Período: {data_inicio} → {data_fim}\n"
+        f"📋 Jogos analisados (com resultado): {total}\n"
         f"✅ GREENs: {greens}\n"
         f"❌ REDs: {reds}\n"
-        f"🎯 Taxa de Acerto: <b>{taxa_acerto:.1f}%</b>"
+        f"🎯 Taxa de Acerto: <b>{taxa_acerto:.1f}%</b>\n\n"
+        f"📌 Baseado nos últimos {len(historico_considerado)} registros do histórico."
     )
-
     enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2)
     st.success("📤 Desempenho enviado para o Telegram!")
+
+def calcular_desempenho_periodo(data_inicio: datetime.date, data_fim: datetime.date):
+    """Calcula desempenho filtrando histórico entre duas datas (inclusive)."""
+    historico = carregar_historico()
+    if not historico:
+        st.warning("⚠️ Nenhum jogo conferido ainda.")
+        return
+
+    # Normalizar data_inicio/data_fim para datetime.date
+    if isinstance(data_inicio, datetime):
+        data_inicio = data_inicio.date()
+    if isinstance(data_fim, datetime):
+        data_fim = data_fim.date()
+
+    consider = []
+    for j in historico:
+        d = _parse_date_str(j.get("data_conferencia", ""))
+        if not d:
+            continue
+        d_date = d.date()
+        if data_inicio <= d_date <= data_fim:
+            consider.append(j)
+
+    if not consider:
+        st.info("ℹ️ Nenhum registro no histórico para o período selecionado.")
+        return
+
+    greens = sum(1 for j in consider if isinstance(j.get("resultado"), str) and "🟢" in j["resultado"])
+    reds = sum(1 for j in consider if isinstance(j.get("resultado"), str) and "🔴" in j["resultado"])
+    total = greens + reds
+    taxa_acerto = (greens / total * 100) if total > 0 else 0.0
+
+    # Exibir no Streamlit
+    st.subheader("📈 Desempenho (Período selecionado)")
+    st.write(f"📅 Período considerado: {data_inicio} → {data_fim}")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("✅ GREENs", greens)
+    c2.metric("❌ REDs", reds)
+    c3.metric("🎯 Taxa de Acerto (%)", f"{taxa_acerto:.1f}%")
+    st.write(f"📊 Jogos considerados (com resultado): {total} — (registros encontrados: {len(consider)})")
+
+    # Mostrar tabela
+    df = pd.DataFrame(consider)
+    if not df.empty:
+        st.markdown("Registros no período (mais recentes primeiro):")
+        st.dataframe(df.sort_values("data_conferencia", ascending=False).head(500))
+
+    # Mensagem para o Telegram
+    msg = (
+        f"📊 <b>DESEMPENHO DAS PREVISÕES</b>\n\n"
+        f"📅 Período: {data_inicio} → {data_fim}\n"
+        f"📋 Jogos analisados (com resultado): {total}\n"
+        f"✅ GREENs: {greens}\n"
+        f"❌ REDs: {reds}\n"
+        f"🎯 Taxa de Acerto: <b>{taxa_acerto:.1f}%</b>\n\n"
+        f"📌 Baseado em {len(consider)} registros do histórico no período selecionado."
+    )
+    enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2)
+    st.success("📤 Desempenho do período enviado para o Telegram!")
 
 if __name__ == "__main__":
     main()
