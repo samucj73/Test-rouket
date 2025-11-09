@@ -419,7 +419,7 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
     # Configurações aumentadas
     LARGURA = 1800
     ALTURA_TOPO = 300
-    ALTURA_POR_JOGO = 600  # Aumentado para caber tudo
+    ALTURA_POR_JOGO = 800  # Aumentado para caber tudo
     PADDING = 80
     
     jogos_count = len(jogos)
@@ -430,13 +430,13 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
     draw = ImageDraw.Draw(img)
 
     # Carregar fontes COM TAMANHOS MAIORES
-    FONTE_TITULO = criar_fonte(80)
-    FONTE_SUBTITULO = criar_fonte(42)
-    FONTE_TIMES = criar_fonte(56)
-    FONTE_VS = criar_fonte(52)
-    FONTE_INFO = criar_fonte(36)
-    FONTE_DETALHES = criar_fonte(32)
-    FONTE_ANALISE = criar_fonte(34)
+    FONTE_TITULO = criar_fonte(100)
+    FONTE_SUBTITULO = criar_fonte(62)
+    FONTE_TIMES = criar_fonte(66)
+    FONTE_VS = criar_fonte(62)
+    FONTE_INFO = criar_fonte(46)
+    FONTE_DETALHES = criar_fonte(42)
+    FONTE_ANALISE = criar_fonte(50)
 
     # Título PRINCIPAL
     try:
@@ -491,8 +491,8 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
             draw.text((LARGURA//2 - 40, y0 + 130), hora_text, font=FONTE_INFO, fill=(150, 200, 255))
 
         # ESCUDOS DOS TIMES - AUMENTADOS
-        TAMANHO_ESCUDO = 180
-        espaco_entre_escudos = 120
+        TAMANHO_ESCUDO = 200
+        espaco_entre_escudos = 450
         
         # Calcular posição central
         largura_total_escudos = 2 * TAMANHO_ESCUDO + espaco_entre_escudos
