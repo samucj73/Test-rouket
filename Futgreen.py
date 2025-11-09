@@ -295,55 +295,62 @@ def enviar_alerta_telegram(fixture: dict, tendencia: str, estimativa: float, con
     emoji_tendencia = "📈" if "Mais" in tendencia else "📉" if "Menos" in tendencia else "⚡"
     
     msg = (
-        f"⚽ <b>ALERTA DE GOLS ⚽</b>\n\n"
+        f"🔴🟢 <b>⚽ ALERTA DE GOLS ⚽</b> 🟢🔴\n\n"
         
-        f"🏆 <b>{competicao}</b>\n"
-        f"📅 {data_formatada} ⏰ {hora_formatada} (BRT)\n"
-        f"📌 Status: {status}\n"
+        f"<b>🏆 {competicao.upper()}</b>\n"
+        f"<b>📅 {data_formatada}</b> | <b>⏰ {hora_formatada} BRT</b>\n"
+        f"<b>📌 Status:</b> {status}\n"
     )
     
     if placar:
-        msg += f"📊 <b>PLACAR ATUAL: {placar}</b>\n\n"
+        msg += f"<b>🎯 PLACAR ATUAL: {placar}</b>\n\n"
     else:
         msg += "\n"
     
-    # Card dos times com escudos
+    # Card dos times com escudos - MAIOR E MAIS DESTAQUE
     msg += (
-        f"<b>─────────── PARTIDA ───────────</b>\n\n"
+        f"<b>━━━━━━━━━━━━━━ PARTIDA ━━━━━━━━━━━━━━</b>\n\n"
         
-        f"🏠 <b>{home}</b>\n"
+        f"<b>🏠 CASA:</b>\n"
+        f"<b>🔵 {home}</b>\n"
     )
     
     if escudo_home:
-        msg += f"🖼️ <a href='{escudo_home}'>[Escudo]</a>\n"
+        msg += f"<b>🛡️ ESCUDO:</b> <a href='{escudo_home}'>🔗 VER ESCUDO</a>\n"
     
-    msg += f"\n<b>🆚</b>\n\n"
+    msg += f"\n<b>────────────── 🆚 ──────────────</b>\n\n"
     
     msg += (
-        f"✈️ <b>{away}</b>\n"
+        f"<b>✈️ VISITANTE:</b>\n"
+        f"<b>🔴 {away}</b>\n"
     )
     
     if escudo_away:
-        msg += f"🖼️ <a href='{escudo_away}'>[Escudo]</a>\n"
+        msg += f"<b>🛡️ ESCUDO:</b> <a href='{escudo_away}'>🔗 VER ESCUDO</a>\n"
     
-    msg += f"\n<b>────────── ANÁLISE ──────────</b>\n\n"
+    msg += f"\n<b>━━━━━━━━━━━━━━ ANÁLISE ━━━━━━━━━━━━━━</b>\n\n"
     
-    # Informações de análise
+    # Informações de análise - MAIOR DESTAQUE
     msg += (
-        f"{emoji_tendencia} <b>TENDÊNCIA:</b> {tendencia}\n"
-        f"🎯 <b>ESTIMATIVA:</b> {estimativa:.2f} gols\n"
-        f"💯 <b>CONFIANÇA:</b> {confianca:.0f}%\n\n"
+        f"<b>{emoji_tendencia} TENDÊNCIA DE GOLS:</b>\n"
+        f"<b>🎲 {tendencia.upper()}</b>\n\n"
+        
+        f"<b>📊 ESTIMATIVA DE GOLS:</b>\n"
+        f"<b>⚽ {estimativa:.2f} GOLS</b>\n\n"
+        
+        f"<b>🎯 NÍVEL DE CONFIANÇA:</b>\n"
+        f"<b>💯 {confianca:.0f}%</b>\n\n"
     )
     
-    # Indicador visual de força
+    # Indicador visual de força - MAIOR DESTAQUE
     if confianca >= 80:
-        msg += f"🔥 <b>ALTA CONFIABILIDADE</b> 🔥\n"
+        msg += f"<b>🔥🔥 ALTA CONFIABILIDADE 🔥🔥</b>\n"
     elif confianca >= 60:
-        msg += f"⚡ <b>MÉDIA CONFIABILIDADE</b> ⚡\n"
+        msg += f"<b>⚡⚡ MÉDIA CONFIABILIDADE ⚡⚡</b>\n"
     else:
-        msg += f"⚠️ <b>CONFIABILIDADE MODERADA</b> ⚠️\n"
+        msg += f"<b>⚠️⚠️ CONFIABILIDADE MODERADA ⚠️⚠️</b>\n"
     
-    msg += f"\n<b>─────────────────────────────</b>"
+    msg += f"\n<b>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</b>"
     
     enviar_telegram(msg)
 
@@ -814,30 +821,41 @@ def enviar_resultado_telegram(resultado: dict):
     emoji_resultado = "🟢" if "GREEN" in resultado['resultado'] else "🔴" if "RED" in resultado['resultado'] else "⚪"
     
     msg = (
-        f"📊 <b>RESULTADO CONFERIDO</b> 📊\n\n"
+        f"🔴🟢 <b>📊 RESULTADO CONFERIDO 📊</b> 🟢🔴\n\n"
         
-        f"<b>─────────── PARTIDA ───────────</b>\n\n"
+        f"<b>━━━━━━━━━━━━━━ PARTIDA ━━━━━━━━━━━━━━</b>\n\n"
         
-        f"🏠 <b>{resultado['home']}</b>\n"
-        f"🆚\n" 
-        f"✈️ <b>{resultado['away']}</b>\n\n"
+        f"<b>🏠 CASA:</b>\n"
+        f"<b>🔵 {resultado['home']}</b>\n\n"
         
-        f"<b>────────── RESULTADO ──────────</b>\n\n"
+        f"<b>✈️ VISITANTE:</b>\n"
+        f"<b>🔴 {resultado['away']}</b>\n\n"
         
-        f"📊 <b>PLACAR FINAL: {resultado['placar']}</b>\n"
-        f"⚽ <b>TOTAL DE GOLS: {resultado['total_gols']}</b>\n\n"
+        f"<b>━━━━━━━━━━━━━━ RESULTADO ━━━━━━━━━━━━━━</b>\n\n"
         
-        f"<b>─────────── ANÁLISE ───────────</b>\n\n"
+        f"<b>🎯 PLACAR FINAL:</b>\n"
+        f"<b>🏆 {resultado['placar']}</b>\n\n"
         
-        f"{emoji_tendencia} <b>TENDÊNCIA:</b> {resultado['tendencia']}\n"
-        f"🎯 <b>ESTIMATIVA:</b> {resultado['estimativa']:.2f} gols\n"
-        f"💯 <b>CONFIANÇA:</b> {resultado['confianca']:.0f}%\n\n"
+        f"<b>⚽ TOTAL DE GOLS:</b>\n"
+        f"<b>📈 {resultado['total_gols']} GOLS</b>\n\n"
         
-        f"<b>─────────── VEREDITO ──────────</b>\n\n"
+        f"<b>━━━━━━━━━━━━━━ ANÁLISE ━━━━━━━━━━━━━━</b>\n\n"
         
-        f"{emoji_resultado} <b>RESULTADO: {resultado['resultado']}</b>\n\n"
+        f"<b>{emoji_tendencia} TENDÊNCIA:</b>\n"
+        f"<b>🎲 {resultado['tendencia']}</b>\n\n"
         
-        f"<b>─────────────────────────────</b>"
+        f"<b>📊 ESTIMATIVA:</b>\n"
+        f"<b>⚽ {resultado['estimativa']:.2f} GOLS</b>\n\n"
+        
+        f"<b>🎯 CONFIANÇA:</b>\n"
+        f"<b>💯 {resultado['confianca']:.0f}%</b>\n\n"
+        
+        f"<b>━━━━━━━━━━━━━━ VEREDITO ━━━━━━━━━━━━━━</b>\n\n"
+        
+        f"<b>{emoji_resultado} RESULTADO:</b>\n"
+        f"<b>🎯 {resultado['resultado']}</b>\n\n"
+        
+        f"<b>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</b>"
     )
     enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2)
 
