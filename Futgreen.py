@@ -295,15 +295,15 @@ def enviar_alerta_telegram(fixture: dict, tendencia: str, estimativa: float, con
     emoji_tendencia = "📈" if "Mais" in tendencia else "📉" if "Menos" in tendencia else "⚡"
     
     msg = (
-        f"🔴🟢 <b>⚽ ALERTA DE GOLS ⚽</b> 🟢🔴\n\n"
+        f"<b>🎯 ALERTA DE GOLS 🎯</b>\n\n"
         
-        f"<b>🏆 {competicao.upper()}</b>\n"
+        f"<b>🏆 {competicao}</b>\n"
         f"<b>📅 {data_formatada}</b> | <b>⏰ {hora_formatada} BRT</b>\n"
         f"<b>📌 Status:</b> {status}\n"
     )
     
     if placar:
-        msg += f"<b>🎯 PLACAR ATUAL: {placar}</b>\n\n"
+        msg += f"<b>📊 PLACAR ATUAL: {placar}</b>\n\n"
     else:
         msg += "\n"
     
@@ -316,7 +316,7 @@ def enviar_alerta_telegram(fixture: dict, tendencia: str, estimativa: float, con
     )
     
     if escudo_home:
-        msg += f"<b>🛡️ ESCUDO:</b> <a href='{escudo_home}'>🔗 VER ESCUDO</a>\n"
+        msg += f"<b>🛡️ ESCUDO:</b> <a href='{escudo_home}'>🔗 CLIQUE AQUI PARA VER ESCUDO</a>\n"
     
     msg += f"\n<b>────────────── 🆚 ──────────────</b>\n\n"
     
@@ -326,7 +326,7 @@ def enviar_alerta_telegram(fixture: dict, tendencia: str, estimativa: float, con
     )
     
     if escudo_away:
-        msg += f"<b>🛡️ ESCUDO:</b> <a href='{escudo_away}'>🔗 VER ESCUDO</a>\n"
+        msg += f"<b>🛡️ ESCUDO:</b> <a href='{escudo_away}'>🔗 CLIQUE AQUI PARA VER ESCUDO</a>\n"
     
     msg += f"\n<b>━━━━━━━━━━━━━━ ANÁLISE ━━━━━━━━━━━━━━</b>\n\n"
     
@@ -387,11 +387,11 @@ def gerar_poster_elite(jogos: list, titulo: str = "🔥 Jogos de Alta Confiança
     Gera um pôster vertical com a lista de jogos. Retorna BytesIO com PNG.
     estilo: fundo escuro, escudos grandes, texto claro.
     """
-    # Configurações de estilo
-    largura = 1200
-    altura_topo = 180
-    altura_por_jogo = 160
-    padding = 30
+    # Configurações de estilo - AUMENTADO
+    largura = 1400  # Aumentado
+    altura_topo = 220  # Aumentado
+    altura_por_jogo = 220  # Aumentado para caber escudos maiores
+    padding = 40  # Aumentado
     jogos_count = len(jogos)
     altura = altura_topo + jogos_count * altura_por_jogo + padding
 
@@ -399,14 +399,15 @@ def gerar_poster_elite(jogos: list, titulo: str = "🔥 Jogos de Alta Confiança
     img = Image.new("RGB", (largura, altura), color=(18, 18, 20))
     draw = ImageDraw.Draw(img)
 
-    # Fonts (fallback para load_default)
+    # Fonts (fallback para load_default) - AUMENTADO
     try:
-        # Tenta carregar uma fonte TTF se existir (mais bonita)
-        font_title = ImageFont.truetype("arial.ttf", 48)
-        font_sub = ImageFont.truetype("arial.ttf", 28)
-        font_team = ImageFont.truetype("arial.ttf", 36)
-        font_small = ImageFont.truetype("arial.ttf", 22)
+        # Tenta carregar uma fonte TTF se existir (mais bonita) - FONTES MAIORES
+        font_title = ImageFont.truetype("arial.ttf", 64)  # Aumentado
+        font_sub = ImageFont.truetype("arial.ttf", 36)    # Aumentado
+        font_team = ImageFont.truetype("arial.ttf", 42)   # Aumentado
+        font_small = ImageFont.truetype("arial.ttf", 28)  # Aumentado
     except Exception:
+        # Fallback para fontes padrão (aumentar tamanho)
         font_title = ImageFont.load_default()
         font_sub = ImageFont.load_default()
         font_team = ImageFont.load_default()
@@ -414,20 +415,21 @@ def gerar_poster_elite(jogos: list, titulo: str = "🔥 Jogos de Alta Confiança
 
     # Título
     title_text = titulo
-    draw.text((padding, 30), title_text, font=font_title, fill=(255, 215, 0))  # dourado-ish
+    draw.text((padding, 40), title_text, font=font_title, fill=(255, 215, 0))  # dourado-ish
     subtitle = f"Gerado: {datetime.now().strftime('%Y-%m-%d %H:%M')} - Total: {jogos_count} jogos"
-    draw.text((padding, 95), subtitle, font=font_sub, fill=(200, 200, 200))
+    draw.text((padding, 120), subtitle, font=font_sub, fill=(200, 200, 200))
 
     y = altura_topo
-    crest_size = 120
-    gap_x = 30
+    crest_size = 150  # AUMENTADO - Escudos maiores
+    gap_x = 40  # Aumentado
+
     for j in jogos:
         # boxes e separador sutil
         box_x0 = padding
         box_x1 = largura - padding
-        box_y0 = y + 10
-        box_y1 = y + altura_por_jogo - 10
-        draw.rounded_rectangle([(box_x0, box_y0), (box_x1, box_y1)], radius=10, fill=(28,28,30))
+        box_y0 = y + 15
+        box_y1 = y + altura_por_jogo - 15
+        draw.rounded_rectangle([(box_x0, box_y0), (box_x1, box_y1)], radius=12, fill=(28,28,30))
 
         # Tentar baixar escudos
         esc_home = None
@@ -437,8 +439,8 @@ def gerar_poster_elite(jogos: list, titulo: str = "🔥 Jogos de Alta Confiança
         if j.get("escudo_away"):
             esc_away = baixar_imagem_url(j["escudo_away"])
 
-        x_esc_home = box_x0 + 20
-        y_esc = box_y0 + 15
+        x_esc_home = box_x0 + 25
+        y_esc = box_y0 + 25
 
         # Função helper para desenhar imagem redonda com borda
         def draw_crest(im: Image.Image, pos_x, pos_y, size=crest_size):
@@ -469,7 +471,7 @@ def gerar_poster_elite(jogos: list, titulo: str = "🔥 Jogos de Alta Confiança
             draw.text((x_esc_home + (crest_size - w)/2, y_esc + (crest_size - h)/2), initials, font=font_team, fill=(255,255,255))
 
         # away crest
-        x_esc_away = x_esc_home + crest_size + 20
+        x_esc_away = x_esc_home + crest_size + 30
         if esc_away:
             draw_crest(esc_away, x_esc_away, y_esc, size=crest_size)
         else:
@@ -479,18 +481,18 @@ def gerar_poster_elite(jogos: list, titulo: str = "🔥 Jogos de Alta Confiança
             w, h = draw.textsize(initials, font=font_team)
             draw.text((x_esc_away + (crest_size - w)/2, y_esc + (crest_size - h)/2), initials, font=font_team, fill=(255,255,255))
 
-        # Texto dos times
-        text_x = x_esc_away + crest_size + 30
+        # Texto dos times - MAIOR
+        text_x = x_esc_away + crest_size + 40
         team_line = f"{j['home']}  vs  {j['away']}"
-        draw.text((text_x, box_y0 + 20), team_line, font=font_team, fill=(255,255,255))
+        draw.text((text_x, box_y0 + 25), team_line, font=font_team, fill=(255,255,255))
 
-        # Tendência / estimativa / confiança
+        # Tendência / estimativa / confiança - MAIOR
         sub_line = f"{j['liga']} | {j['tendencia']} | Estim.: {j['estimativa']:.2f} | Conf.: {j['confianca']:.0f}%"
-        draw.text((text_x, box_y0 + 20 + 48), sub_line, font=font_small, fill=(200,200,200))
+        draw.text((text_x, box_y0 + 25 + 55), sub_line, font=font_small, fill=(200,200,200))
 
-        # Hora
+        # Hora - MAIOR
         hora_format = j["hora"].strftime("%d/%m %H:%M") if isinstance(j["hora"], datetime) else str(j["hora"])
-        draw.text((largura - padding - 250, box_y0 + 30), hora_format, font=font_team, fill=(220,220,220))
+        draw.text((largura - padding - 300, box_y0 + 35), hora_format, font=font_team, fill=(220,220,220))
 
         y += altura_por_jogo
 
@@ -515,18 +517,23 @@ def enviar_alerta_conf_criar_poster(jogos_conf: list, threshold: int, chat_id: s
             datas.append(j["hora"].date())
     data_inicio = datas[0].strftime("%Y-%m-%d") if datas else "-"
     data_fim = datas[-1].strftime("%Y-%m-%d") if datas else "-"
-    titulo = f"🔥 Jogos de Alta Confiança (≥{threshold}%)"
+    titulo = f"🔥 JOGOS DE ALTA CONFIANÇA (≥{threshold}%)"
 
     try:
         poster = gerar_poster_elite(jogos_conf, titulo=titulo)
-        caption = f"📅 Período: {data_inicio} → {data_fim}\n📋 Total: {len(jogos_conf)} jogos\n⚽ Confiança mínima: {threshold}%"
+        caption = (
+            f"<b>📅 PERÍODO: {data_inicio} → {data_fim}</b>\n"
+            f"<b>📋 TOTAL: {len(jogos_conf)} JOGOS</b>\n"
+            f"<b>⚽ CONFIANÇA MÍNIMA: {threshold}%</b>\n\n"
+            f"<b>🎯 JOGOS SELECIONADOS PELA INTELIGÊNCIA ARTIFICIAL</b>"
+        )
         ok = enviar_foto_telegram(poster, caption=caption, chat_id=chat_id)
         if ok:
             st.success("🚀 Pôster de alta confiança enviado ao Telegram!")
         else:
             st.error("❌ Falha ao enviar pôster ao Telegram. Tentando enviar mensagem de texto como fallback.")
             # fallback texto
-            msg = f"{titulo}\nPeríodo: {data_inicio} → {data_fim}\nTotal: {len(jogos_conf)} jogos"
+            msg = f"🔥 Jogos ≥{threshold}% (Não foi possível gerar a imagem):\nTotal: {len(jogos_conf)}"
             enviar_telegram(msg, chat_id=chat_id)
     except Exception as e:
         st.error(f"Erro ao gerar/enviar pôster: {e}")
@@ -821,7 +828,7 @@ def enviar_resultado_telegram(resultado: dict):
     emoji_resultado = "🟢" if "GREEN" in resultado['resultado'] else "🔴" if "RED" in resultado['resultado'] else "⚪"
     
     msg = (
-        f"🔴🟢 <b>📊 RESULTADO CONFERIDO 📊</b> 🟢🔴\n\n"
+        f"<b>🎯 RESULTADO CONFERIDO 🎯</b>\n\n"
         
         f"<b>━━━━━━━━━━━━━━ PARTIDA ━━━━━━━━━━━━━━</b>\n\n"
         
