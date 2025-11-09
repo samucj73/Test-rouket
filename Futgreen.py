@@ -417,10 +417,10 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
     Gera poster no estilo West Ham vs Burnley - VERSÃO CORRIGIDA
     """
     # Configurações aumentadas
-    LARGURA = 1800
-    ALTURA_TOPO = 300
-    ALTURA_POR_JOGO = 600  # Aumentado para caber tudo
-    PADDING = 80
+    LARGURA = 2600
+    ALTURA_TOPO = 400
+    ALTURA_POR_JOGO = 900  # Aumentado para caber tudo
+    PADDING = 100
     
     jogos_count = len(jogos)
     altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
@@ -430,12 +430,12 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
     draw = ImageDraw.Draw(img)
 
     # Carregar fontes COM TAMANHOS MAIORES
-    FONTE_TITULO = criar_fonte(80)
-    FONTE_SUBTITULO = criar_fonte(42)
-    FONTE_TIMES = criar_fonte(56)
-    FONTE_VS = criar_fonte(52)
-    FONTE_INFO = criar_fonte(36)
-    FONTE_DETALHES = criar_fonte(32)
+    FONTE_TITULO = criar_fonte(180)
+    FONTE_SUBTITULO = criar_fonte(90)
+    FONTE_TIMES = criar_fonte(90)
+    FONTE_VS = criar_fonte(90)
+    FONTE_INFO = criar_fonte(90)
+    FONTE_DETALHES = criar_fonte(90)
     FONTE_ANALISE = criar_fonte(34)
 
     # Título PRINCIPAL
