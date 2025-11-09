@@ -368,7 +368,7 @@ def verificar_enviar_alerta(fixture: dict, tendencia: str, estimativa: float, co
         salvar_alertas(alertas)
 
 # =============================
-# Funções de geração de imagem (Pillow) - COMPLETAMENTE REFAZIDA
+# Funções de geração de imagem (Pillow) - LAYOUT COMPLETAMENTE REFEITO
 # =============================
 def baixar_imagem_url(url: str, timeout: int = 8) -> Image.Image | None:
     """Tenta baixar uma imagem e retornar PIL.Image. Retorna None se falhar."""
@@ -407,13 +407,13 @@ def criar_fonte(tamanho):
 def gerar_poster_elite(jogos: list, titulo: str = "🔥 Jogos de Alta Confiança (Elite Master)") -> io.BytesIO:
     """
     Gera um pôster vertical com a lista de jogos. Retorna BytesIO com PNG.
-    COMPLETAMENTE REFAZIDA para garantir tamanhos maiores.
+    LAYOUT COMPLETAMENTE REFEITO - INFORMAÇÕES ABAIXO DOS ESCUDOS
     """
-    # CONFIGURAÇÕES GIGANTES - FORÇANDO O AUMENTO
-    LARGURA = 1800  # AUMENTADO MASSIVAMENTE
-    ALTURA_TOPO = 350  # AUMENTADO MASSIVAMENTE
-    ALTURA_POR_JOGO = 320  # AUMENTADO MASSIVAMENTE
-    PADDING = 80  # AUMENTADO MASSIVAMENTE
+    # CONFIGURAÇÕES GIGANTES
+    LARGURA = 2000  # AUMENTADO MASSIVAMENTE
+    ALTURA_TOPO = 400  # AUMENTADO MASSIVAMENTE
+    ALTURA_POR_JOGO = 450  # AUMENTADO MASSIVAMENTE para caber informações abaixo
+    PADDING = 100  # AUMENTADO MASSIVAMENTE
     
     jogos_count = len(jogos)
     altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
@@ -423,33 +423,41 @@ def gerar_poster_elite(jogos: list, titulo: str = "🔥 Jogos de Alta Confiança
     draw = ImageDraw.Draw(img)
 
     # FONTES GIGANTES
-    st.info("🔄 Carregando fontes com tamanhos aumentados...")
-    FONTE_TITULO = criar_fonte(90)  # GIGANTE
-    FONTE_SUBTITULO = criar_fonte(55)  # GIGANTE  
-    FONTE_TIMES = criar_fonte(60)  # GIGANTE
-    FONTE_INFO = criar_fonte(42)  # GIGANTE
+    st.info("🔄 Carregando fontes com tamanhos MASSIVOS...")
+    FONTE_TITULO = criar_fonte(100)  # MASSIVO
+    FONTE_SUBTITULO = criar_fonte(60)  # MASSIVO  
+    FONTE_TIMES = criar_fonte(65)  # MASSIVO
+    FONTE_INFO = criar_fonte(48)  # MASSIVO
+    FONTE_DETALHES = criar_fonte(42)  # MASSIVO
 
     # Título PRINCIPAL
-    draw.text((PADDING, 80), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
+    draw.text((PADDING, 100), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
     
     # Subtítulo
     subtitulo = f"Gerado: {datetime.now().strftime('%Y-%m-%d %H:%M')} - Total: {jogos_count} jogos"
-    draw.text((PADDING, 190), subtitulo, font=FONTE_SUBTITULO, fill=(200, 200, 200))
+    draw.text((PADDING, 220), subtitulo, font=FONTE_SUBTITULO, fill=(200, 200, 200))
 
     y_pos = ALTURA_TOPO
-    TAMANHO_ESCUDO = 220  # ESCUDOS GIGANTES
+    TAMANHO_ESCUDO = 280  # ESCUDOS MASSIVOS
 
     for idx, jogo in enumerate(jogos):
-        # Caixa do jogo - MAIOR
-        x0, y0 = PADDING, y_pos + 25
-        x1, y1 = LARGURA - PADDING, y_pos + ALTURA_POR_JOGO - 25
+        # Caixa do jogo - MUITO MAIOR
+        x0, y0 = PADDING, y_pos + 30
+        x1, y1 = LARGURA - PADDING, y_pos + ALTURA_POR_JOGO - 30
         
         # Fundo da caixa do jogo
-        draw.rounded_rectangle([x0, y0, x1, y1], radius=20, fill=(28, 28, 30))
+        draw.rounded_rectangle([x0, y0, x1, y1], radius=25, fill=(28, 28, 30))
         
-        # Posição dos escudos
-        x_escudo_esquerdo = x0 + 50
-        y_escudo = y0 + 50
+        # CENTRALIZAR OS ESCUDOS NA PARTE SUPERIOR
+        espaco_total = LARGURA - 2 * PADDING
+        espaco_entre_escudos = 150
+        largura_total_escudos = 2 * TAMANHO_ESCUDO + espaco_entre_escudos
+        x_inicio_escudos = PADDING + (espaco_total - largura_total_escudos) // 2
+        
+        # Posição dos escudos (lado a lado)
+        x_escudo_home = x_inicio_escudos
+        x_escudo_away = x_escudo_home + TAMANHO_ESCUDO + espaco_entre_escudos
+        y_escudos = y0 + 60
         
         # Baixar escudos
         escudo_home = baixar_imagem_url(jogo.get("escudo_home", ""))
@@ -482,7 +490,7 @@ def gerar_poster_elite(jogos: list, titulo: str = "🔥 Jogos de Alta Confiança
             else:
                 # Placeholder circular
                 draw.ellipse([x, y, x + tamanho, y + tamanho], fill=(60, 60, 60))
-                iniciais = "".join([p[0] for p in jogo["home"].split()[:2]]).upper() if "home" in locals() else "TM"
+                iniciais = "TM"
                 try:
                     bbox = draw.textbbox((0, 0), iniciais, font=FONTE_TIMES)
                     w = bbox[2] - bbox[0]
@@ -491,30 +499,89 @@ def gerar_poster_elite(jogos: list, titulo: str = "🔥 Jogos de Alta Confiança
                 except:
                     draw.text((x + tamanho//3, y + tamanho//3), iniciais, font=FONTE_TIMES, fill=(255, 255, 255))
 
-        # Desenhar escudo do time da casa (ESQUERDA)
-        desenhar_escudo(escudo_home, x_escudo_esquerdo, y_escudo, TAMANHO_ESCUDO)
+        # Desenhar escudos (lado a lado)
+        desenhar_escudo(escudo_home, x_escudo_home, y_escudos, TAMANHO_ESCUDO)
+        desenhar_escudo(escudo_away, x_escudo_away, y_escudos, TAMANHO_ESCUDO)
+
+        # NOME DOS TIMES (CENTRALIZADO ABAIXO DOS ESCUDOS)
+        y_nomes = y_escudos + TAMANHO_ESCUDO + 40
         
-        # Desenhar escudo do time visitante (DIREITA)
-        x_escudo_direito = x_escudo_esquerdo + TAMANHO_ESCUDO + 100
-        desenhar_escudo(escudo_away, x_escudo_direito, y_escudo, TAMANHO_ESCUDO)
-
-        # Nome dos times (CENTRO)
-        x_texto = x_escudo_direito + TAMANHO_ESCUDO + 80
-        texto_times = f"{jogo['home']}  vs  {jogo['away']}"
-        draw.text((x_texto, y0 + 60), texto_times, font=FONTE_TIMES, fill=(255, 255, 255))
-
-        # Informações do jogo
-        info_texto = f"{jogo['liga']} | {jogo['tendencia']} | Estim.: {jogo['estimativa']:.2f} | Conf.: {jogo['confianca']:.0f}%"
-        draw.text((x_texto, y0 + 60 + 80), info_texto, font=FONTE_INFO, fill=(200, 200, 200))
-
-        # Hora do jogo (DIREITA)
-        hora_formatada = jogo["hora"].strftime("%d/%m %H:%M") if isinstance(jogo["hora"], datetime) else str(jogo["hora"])
+        # Nome do time da casa (esquerda)
+        nome_home = jogo['home']
         try:
-            bbox = draw.textbbox((0, 0), hora_formatada, font=FONTE_TIMES)
-            largura_hora = bbox[2] - bbox[0]
-            draw.text((LARGURA - PADDING - largura_hora - 30, y0 + 65), hora_formatada, font=FONTE_TIMES, fill=(220, 220, 220))
+            bbox_home = draw.textbbox((0, 0), nome_home, font=FONTE_TIMES)
+            w_home = bbox_home[2] - bbox_home[0]
+            x_home = x_escudo_home + (TAMANHO_ESCUDO - w_home) // 2
+            draw.text((x_home, y_nomes), nome_home, font=FONTE_TIMES, fill=(255, 255, 255))
         except:
-            draw.text((LARGURA - PADDING - 250, y0 + 65), hora_formatada, font=FONTE_TIMES, fill=(220, 220, 220))
+            draw.text((x_escudo_home, y_nomes), nome_home, font=FONTE_TIMES, fill=(255, 255, 255))
+
+        # VS (no centro)
+        vs_text = "VS"
+        try:
+            bbox_vs = draw.textbbox((0, 0), vs_text, font=FONTE_TIMES)
+            w_vs = bbox_vs[2] - bbox_vs[0]
+            x_vs = (LARGURA - w_vs) // 2
+            draw.text((x_vs, y_nomes), vs_text, font=FONTE_TIMES, fill=(255, 215, 0))
+        except:
+            draw.text((LARGURA // 2 - 50, y_nomes), vs_text, font=FONTE_TIMES, fill=(255, 215, 0))
+
+        # Nome do time visitante (direita)
+        nome_away = jogo['away']
+        try:
+            bbox_away = draw.textbbox((0, 0), nome_away, font=FONTE_TIMES)
+            w_away = bbox_away[2] - bbox_away[0]
+            x_away = x_escudo_away + (TAMANHO_ESCUDO - w_away) // 2
+            draw.text((x_away, y_nomes), nome_away, font=FONTE_TIMES, fill=(255, 255, 255))
+        except:
+            draw.text((x_escudo_away, y_nomes), nome_away, font=FONTE_TIMES, fill=(255, 255, 255))
+
+        # INFORMAÇÕES DA ANÁLISE (CENTRALIZADO ABAIXO DOS NOMES)
+        y_info = y_nomes + 80
+        
+        # Liga
+        liga_text = f"🏆 {jogo['liga']}"
+        try:
+            bbox_liga = draw.textbbox((0, 0), liga_text, font=FONTE_INFO)
+            w_liga = bbox_liga[2] - bbox_liga[0]
+            x_liga = (LARGURA - w_liga) // 2
+            draw.text((x_liga, y_info), liga_text, font=FONTE_INFO, fill=(200, 200, 255))
+        except:
+            draw.text((PADDING + 100, y_info), liga_text, font=FONTE_INFO, fill=(200, 200, 255))
+
+        # Tendência
+        y_tendencia = y_info + 60
+        tendencia_text = f"📈 {jogo['tendencia']}"
+        try:
+            bbox_tendencia = draw.textbbox((0, 0), tendencia_text, font=FONTE_INFO)
+            w_tendencia = bbox_tendencia[2] - bbox_tendencia[0]
+            x_tendencia = (LARGURA - w_tendencia) // 2
+            draw.text((x_tendencia, y_tendencia), tendencia_text, font=FONTE_INFO, fill=(255, 215, 0))
+        except:
+            draw.text((PADDING + 100, y_tendencia), tendencia_text, font=FONTE_INFO, fill=(255, 215, 0))
+
+        # Estimativa e Confiança
+        y_est_conf = y_tendencia + 60
+        est_conf_text = f"⚽ Estimativa: {jogo['estimativa']:.2f} gols  |  💯 Confiança: {jogo['confianca']:.0f}%"
+        try:
+            bbox_est_conf = draw.textbbox((0, 0), est_conf_text, font=FONTE_DETALHES)
+            w_est_conf = bbox_est_conf[2] - bbox_est_conf[0]
+            x_est_conf = (LARGURA - w_est_conf) // 2
+            draw.text((x_est_conf, y_est_conf), est_conf_text, font=FONTE_DETALHES, fill=(200, 200, 200))
+        except:
+            draw.text((PADDING + 100, y_est_conf), est_conf_text, font=FONTE_DETALHES, fill=(200, 200, 200))
+
+        # Hora do jogo (CENTRALIZADO NA PARTE INFERIOR)
+        y_hora = y_est_conf + 70
+        hora_formatada = jogo["hora"].strftime("%d/%m/%Y %H:%M") if isinstance(jogo["hora"], datetime) else str(jogo["hora"])
+        hora_text = f"🕒 {hora_formatada} BRT"
+        try:
+            bbox_hora = draw.textbbox((0, 0), hora_text, font=FONTE_DETALHES)
+            w_hora = bbox_hora[2] - bbox_hora[0]
+            x_hora = (LARGURA - w_hora) // 2
+            draw.text((x_hora, y_hora), hora_text, font=FONTE_DETALHES, fill=(150, 200, 255))
+        except:
+            draw.text((PADDING + 100, y_hora), hora_text, font=FONTE_DETALHES, fill=(150, 200, 255))
 
         y_pos += ALTURA_POR_JOGO
 
@@ -524,6 +591,7 @@ def gerar_poster_elite(jogos: list, titulo: str = "🔥 Jogos de Alta Confiança
     buffer.seek(0)
     
     st.success(f"✅ Pôster gerado com {len(jogos)} jogos - Dimensões: {LARGURA}x{altura_total}")
+    st.info("🎯 Layout: Escudos acima, informações abaixo - Tudo MASSIVO!")
     return buffer
 
 # =============================
