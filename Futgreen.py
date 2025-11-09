@@ -409,14 +409,13 @@ def criar_fonte(tamanho):
 def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA DE GOLS") -> io.BytesIO:
     """
     Gera poster no estilo West Ham vs Burnley (IMG_0428.jpeg)
-    Layout limpo e profissional com fundo escuro - VERSÃO MELHORADA
+    Layout limpo e profissional com fundo escuro - FONTES PADRONIZADAS E ESCUDOS MAIORES
     """
     # Configurações do poster - AUMENTADO PARA 1800 PIXELS
     LARGURA = 1800
     ALTURA_TOPO = 300
-    ALTURA_POR_JOGO = 500  # Aumentado para caber mais informações
+    ALTURA_POR_JOGO = 550  # Aumentado para caber escudos maiores
     PADDING = 80
-    MARGEM_INTERNA = 60
     
     jogos_count = len(jogos)
     altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
@@ -425,17 +424,18 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
     img = Image.new("RGB", (LARGURA, altura_total), color=(10, 20, 30))  # Azul escuro
     draw = ImageDraw.Draw(img)
 
-    # Fontes AUMENTADAS
+    # FONTES PADRONIZADAS E AUMENTADAS
     try:
-        FONTE_TITULO = ImageFont.truetype("arial.ttf", 72)
-        FONTE_SUBTITULO = ImageFont.truetype("arial.ttf", 36)
-        FONTE_TIMES = ImageFont.truetype("arial.ttf", 52)
-        FONTE_VS = ImageFont.truetype("arial.ttf", 48)
-        FONTE_INFO = ImageFont.truetype("arial.ttf", 32)
-        FONTE_DETALHES = ImageFont.truetype("arial.ttf", 28)
-        FONTE_ANALISE = ImageFont.truetype("arial.ttf", 30)
+        # Tentar carregar fontes comuns
+        FONTE_TITULO = ImageFont.truetype("arial.ttf", 80) if os.path.exists("arial.ttf") else ImageFont.load_default()
+        FONTE_SUBTITULO = ImageFont.truetype("arial.ttf", 42) if os.path.exists("arial.ttf") else ImageFont.load_default()
+        FONTE_TIMES = ImageFont.truetype("arial.ttf", 56) if os.path.exists("arial.ttf") else ImageFont.load_default()
+        FONTE_VS = ImageFont.truetype("arial.ttf", 52) if os.path.exists("arial.ttf") else ImageFont.load_default()
+        FONTE_INFO = ImageFont.truetype("arial.ttf", 36) if os.path.exists("arial.ttf") else ImageFont.load_default()
+        FONTE_DETALHES = ImageFont.truetype("arial.ttf", 32) if os.path.exists("arial.ttf") else ImageFont.load_default()
+        FONTE_ANALISE = ImageFont.truetype("arial.ttf", 34) if os.path.exists("arial.ttf") else ImageFont.load_default()
     except:
-        # Fallback para fontes padrão
+        # Fallback para fontes padrão aumentadas
         FONTE_TITULO = ImageFont.load_default()
         FONTE_SUBTITULO = ImageFont.load_default()
         FONTE_TIMES = ImageFont.load_default()
@@ -447,7 +447,7 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
     # Título PRINCIPAL (estilo imagem)
     titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
     titulo_w = titulo_bbox[2] - titulo_bbox[0]
-    draw.text(((LARGURA - titulo_w) // 2, 100), titulo, font=FONTE_TITULO, fill=(255, 255, 255))
+    draw.text(((LARGURA - titulo_w) // 2, 80), titulo, font=FONTE_TITULO, fill=(255, 255, 255))
 
     # Linha decorativa abaixo do título
     draw.line([(LARGURA//4, 200), (3*LARGURA//4, 200)], fill=(255, 215, 0), width=4)
@@ -478,15 +478,15 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
 
         data_bbox = draw.textbbox((0, 0), data_text, font=FONTE_INFO)
         data_w = data_bbox[2] - data_bbox[0]
-        draw.text(((LARGURA - data_w) // 2, y0 + 80), data_text, font=FONTE_INFO, fill=(150, 200, 255))
+        draw.text(((LARGURA - data_w) // 2, y0 + 85), data_text, font=FONTE_INFO, fill=(150, 200, 255))
 
         hora_bbox = draw.textbbox((0, 0), hora_text, font=FONTE_INFO)
         hora_w = hora_bbox[2] - hora_bbox[0]
-        draw.text(((LARGURA - hora_w) // 2, y0 + 120), hora_text, font=FONTE_INFO, fill=(150, 200, 255))
+        draw.text(((LARGURA - hora_w) // 2, y0 + 130), hora_text, font=FONTE_INFO, fill=(150, 200, 255))
 
-        # ESCUDOS DOS TIMES
-        TAMANHO_ESCUDO = 120
-        espaco_entre_escudos = 100
+        # ESCUDOS DOS TIMES - AUMENTADOS
+        TAMANHO_ESCUDO = 180  # AUMENTADO MASSIVAMENTE
+        espaco_entre_escudos = 120
         
         # Calcular posição central para os escudos
         largura_total_escudos = 2 * TAMANHO_ESCUDO + espaco_entre_escudos
@@ -495,7 +495,7 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
         # Posições dos escudos
         x_escudo_home = x_inicio_escudos
         x_escudo_away = x_escudo_home + TAMANHO_ESCUDO + espaco_entre_escudos
-        y_escudos = y0 + 180
+        y_escudos = y0 + 190  # Ajustado para baixo para dar espaço
         
         # Baixar e desenhar escudos
         escudo_home = baixar_imagem_url(jogo.get("escudo_home", ""))
@@ -525,13 +525,21 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
                 except Exception as e:
                     # Placeholder circular em caso de erro
                     draw.ellipse([x, y, x + tamanho, y + tamanho], fill=(60, 60, 60))
-                    draw.text((x + 15, y + 15), "TM", font=FONTE_INFO, fill=(255, 255, 255))
+                    texto_bbox = draw.textbbox((0, 0), "TM", font=FONTE_INFO)
+                    texto_w = texto_bbox[2] - texto_bbox[0]
+                    texto_h = texto_bbox[3] - texto_bbox[1]
+                    draw.text((x + (tamanho - texto_w)//2, y + (tamanho - texto_h)//2), 
+                             "TM", font=FONTE_INFO, fill=(255, 255, 255))
             else:
                 # Placeholder circular
                 draw.ellipse([x, y, x + tamanho, y + tamanho], fill=(60, 60, 60))
-                draw.text((x + 15, y + 15), "TM", font=FONTE_INFO, fill=(255, 255, 255))
+                texto_bbox = draw.textbbox((0, 0), "TM", font=FONTE_INFO)
+                texto_w = texto_bbox[2] - texto_bbox[0]
+                texto_h = texto_bbox[3] - texto_bbox[1]
+                draw.text((x + (tamanho - texto_w)//2, y + (tamanho - texto_h)//2), 
+                         "TM", font=FONTE_INFO, fill=(255, 255, 255))
 
-        # Desenhar escudos
+        # Desenhar escudos (AGORA MUITO MAIORES)
         desenhar_escudo(escudo_home, x_escudo_home, y_escudos, TAMANHO_ESCUDO)
         desenhar_escudo(escudo_away, x_escudo_away, y_escudos, TAMANHO_ESCUDO)
 
@@ -546,7 +554,7 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
         away_w = away_bbox[2] - away_bbox[0]
         
         # Posição vertical para os nomes dos times (abaixo dos escudos)
-        y_teams = y_escudos + TAMANHO_ESCUDO + 30
+        y_teams = y_escudos + TAMANHO_ESCUDO + 40
         
         # Nome do time da casa (alinhado com seu escudo)
         draw.text((x_escudo_home + (TAMANHO_ESCUDO - home_w) // 2, y_teams), home_text, font=FONTE_TIMES, fill=(255, 255, 255))
@@ -561,7 +569,7 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
         draw.text(((LARGURA - vs_w) // 2, y_teams - 10), vs_text, font=FONTE_VS, fill=(255, 215, 0))
 
         # SEÇÃO DE ANÁLISE - MAIS DESTAQUE
-        y_analysis = y_teams + 70
+        y_analysis = y_teams + 80
         
         # Linha separadora
         draw.line([(x0 + 50, y_analysis - 10), (x1 - 50, y_analysis - 10)], fill=(100, 130, 160), width=2)
@@ -596,7 +604,7 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
             else:
                 cor = (200, 200, 200)  # Cinza
                 
-            draw.text(((LARGURA - w) // 2, y_analysis + i * 40), text, font=FONTE_ANALISE, fill=cor)
+            draw.text(((LARGURA - w) // 2, y_analysis + i * 45), text, font=FONTE_ANALISE, fill=cor)
 
         y_pos += ALTURA_POR_JOGO
 
@@ -612,6 +620,7 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
     buffer.seek(0)
     
     st.success(f"✅ Poster estilo West Ham GERADO com {len(jogos)} jogos - Dimensões: {LARGURA}x{altura_total}")
+    st.info(f"🔄 Escudos: {TAMANHO_ESCUDO}px | Fontes: Padronizadas e Aumentadas")
     return buffer
 
 def enviar_alerta_westham_style(jogos_conf: list, threshold: int, chat_id: str = TELEGRAM_CHAT_ID_ALT2):
