@@ -18,3 +18,4 @@ psutil
 flask
 fastapi
 httpx
+pillow
