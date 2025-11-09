@@ -371,7 +371,7 @@ def verificar_enviar_alerta(fixture: dict, tendencia: str, estimativa: float, co
 
 # =============================
 # =============================
-Funções de geração de imagem CORRIGIDAS
+ # Funções de geração de imagem CORRIGIDAS
 # =============================
 def baixar_imagem_url(url: str, timeout: int = 8) -> Image.Image | None:
     """Tenta baixar uma imagem e retornar PIL.Image. Retorna None se falhar."""
