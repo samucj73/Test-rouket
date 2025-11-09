@@ -371,9 +371,7 @@ def verificar_enviar_alerta(fixture: dict, tendencia: str, estimativa: float, co
 
 # =============================
 # =============================
-# ==============================================================
-#============================
-# Funções de geração de imagem CORRIGIDAS
+Funções de geração de imagem CORRIGIDAS
 # =============================
 def baixar_imagem_url(url: str, timeout: int = 8) -> Image.Image | None:
     """Tenta baixar uma imagem e retornar PIL.Image. Retorna None se falhar."""
@@ -420,10 +418,10 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
     Gera poster no estilo West Ham vs Burnley - VERSÃO CORRIGIDA
     """
     # Configurações aumentadas
-    LARGURA = 2600
-    ALTURA_TOPO = 400
+    LARGURA = 1800
+    ALTURA_TOPO = 300
     ALTURA_POR_JOGO = 900  # Aumentado para caber tudo
-    PADDING = 100
+    PADDING = 200
     
     jogos_count = len(jogos)
     altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
@@ -433,13 +431,13 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
     draw = ImageDraw.Draw(img)
 
     # Carregar fontes COM TAMANHOS MAIORES
-    FONTE_TITULO = criar_fonte(380)
-    FONTE_SUBTITULO = criar_fonte(190)
-    FONTE_TIMES = criar_fonte(190)
-    FONTE_VS = criar_fonte(190)
-    FONTE_INFO = criar_fonte(190)
-    FONTE_DETALHES = criar_fonte(190)
-    FONTE_ANALISE = criar_fonte(134)
+    FONTE_TITULO = criar_fonte(95)
+    FONTE_SUBTITULO = criar_fonte(65)
+    FONTE_TIMES = criar_fonte(60)
+    FONTE_VS = criar_fonte(52)
+    FONTE_INFO = criar_fonte(46)
+    FONTE_DETALHES = criar_fonte(52)
+    FONTE_ANALISE = criar_fonte(60)
 
     # Título PRINCIPAL
     try:
@@ -494,8 +492,8 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
             draw.text((LARGURA//2 - 40, y0 + 130), hora_text, font=FONTE_INFO, fill=(150, 200, 255))
 
         # ESCUDOS DOS TIMES - AUMENTADOS
-        TAMANHO_ESCUDO = 180
-        espaco_entre_escudos = 120
+        TAMANHO_ESCUDO = 200
+        espaco_entre_escudos = 650
         
         # Calcular posição central
         largura_total_escudos = 2 * TAMANHO_ESCUDO + espaco_entre_escudos
@@ -663,9 +661,6 @@ def enviar_alerta_westham_style(jogos_conf: list, threshold: int, chat_id: str =
         for j in jogos_conf[:5]:  # Limitar a 5 jogos para não exceder limite
             msg += f"🏟️ {j['home']} vs {j['away']} | {j['tendencia']} | Conf: {j['confianca']:.0f}%\n"
         enviar_telegram(msg, chat_id=chat_id)
-
-# ======.  
-
 #ajuste esse código para ele formatar imagem com as fontes bem legíveis sem ficar nada descrito por cima de outras coisas de outro anti escritos toda bem formatada e profissional reescreva ela essa trecho desse código aí pra ficar uma formatação da imagem gerada por ele profissional profissional
 # =============================
 # FUNÇÕES QUE ESTAVAM FALTANDO - ADICIONADAS AGORA
