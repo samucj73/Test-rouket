@@ -370,10 +370,16 @@ def verificar_enviar_alerta(fixture: dict, tendencia: str, estimativa: float, co
         salvar_alertas(alertas)
 
 # =============================
-# Funções de geração de imagem CORRIGIDAS
-# =============================
-def baixar_imagem_url(url: str, timeout: int = 8) -> Image.Image | None:
-    """Tenta baixar uma imagem e retornar PIL.Image. Retorna None se falhar."""
+# Funções de geração de imagem 
+from PIL import Image, ImageDraw, ImageFont
+import io, os, requests, streamlit as st
+from datetime import datetime
+
+# ======================================
+# 🔧 Funções auxiliares (mantidas e otimizadas)
+# ======================================
+def baixar_imagem_url(url: str, timeout: int = 8):
+    """Baixa imagem e retorna PIL.Image. Retorna None se falhar."""
     if not url:
         return None
     try:
@@ -381,285 +387,152 @@ def baixar_imagem_url(url: str, timeout: int = 8) -> Image.Image | None:
         resp.raise_for_status()
         img = Image.open(io.BytesIO(resp.content)).convert("RGBA")
         return img
-    except Exception as e:
-        print(f"Erro ao baixar imagem {url}: {e}")
+    except Exception:
         return None
 
-def criar_fonte(tamanho: int) -> ImageFont.ImageFont:
-    """Cria fonte com fallback robusto"""
-    try:
-        # Tentar fontes comuns em diferentes sistemas
-        font_paths = [
-            "arial.ttf", "Arial.ttf", "arialbd.ttf",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "/System/Library/Fonts/Arial.ttf",
-            "C:/Windows/Fonts/arial.ttf"
-        ]
-        
-        for font_path in font_paths:
+def criar_fonte(tamanho: int):
+    """Carrega fonte robusta e universal."""
+    fontes = [
+        "arialbd.ttf", "arial.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/System/Library/Fonts/Arial Bold.ttf",
+        "C:/Windows/Fonts/arialbd.ttf"
+    ]
+    for path in fontes:
+        if os.path.exists(path):
             try:
-                if os.path.exists(font_path):
-                    return ImageFont.truetype(font_path, tamanho)
-            except Exception:
+                return ImageFont.truetype(path, tamanho)
+            except:
                 continue
-        
-        # Se não encontrou nenhuma fonte, criar uma bitmap com tamanho aumentado
-        default_font = ImageFont.load_default()
-        # Não podemos alterar o tamanho da fonte padrão, então retornamos como está
-        return default_font
-        
-    except Exception as e:
-        print(f"Erro ao carregar fonte: {e}")
-        return ImageFont.load_default()
+    return ImageFont.load_default()
 
+# ======================================
+# 🖼️ Geração de pôster profissional Elite Master
+# ======================================
 def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA DE GOLS") -> io.BytesIO:
     """
-    Gera poster no estilo West Ham vs Burnley - VERSÃO CORRIGIDA
+    Cria um pôster profissional com layout limpo, balanceado e totalmente legível.
     """
-    # Configurações aumentadas
+    # Parâmetros principais
     LARGURA = 2600
-    ALTURA_TOPO = 400
-    ALTURA_POR_JOGO = 900  # Aumentado para caber tudo
-    PADDING = 100
-    
-    jogos_count = len(jogos)
-    altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
+    ALTURA_TOPO = 450
+    ALTURA_POR_JOGO = 800
+    MARGEM = 120
+    COR_FUNDO = (10, 20, 30)
+    COR_CAIXA = (25, 35, 45)
+    COR_TEXTO = (255, 255, 255)
+    COR_DESTAQUE = (255, 215, 0)
 
-    # Criar canvas
-    img = Image.new("RGB", (LARGURA, altura_total), color=(10, 20, 30))
+    total_altura = ALTURA_TOPO + len(jogos) * ALTURA_POR_JOGO + 250
+    img = Image.new("RGB", (LARGURA, total_altura), color=COR_FUNDO)
     draw = ImageDraw.Draw(img)
 
-    # Carregar fontes COM TAMANHOS MAIORES
-    FONTE_TITULO = criar_fonte(380)
-    FONTE_SUBTITULO = criar_fonte(190)
-    FONTE_TIMES = criar_fonte(190)
-    FONTE_VS = criar_fonte(190)
-    FONTE_INFO = criar_fonte(190)
-    FONTE_DETALHES = criar_fonte(190)
-    FONTE_ANALISE = criar_fonte(134)
+    # Fontes (hierarquia visual)
+    F_TITULO = criar_fonte(220)
+    F_LIGA = criar_fonte(120)
+    F_DATA = criar_fonte(100)
+    F_TIMES = criar_fonte(130)
+    F_VS = criar_fonte(150)
+    F_ANALISE = criar_fonte(90)
+    F_RODAPE = criar_fonte(70)
 
-    # Título PRINCIPAL
-    try:
-        titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
-        titulo_w = titulo_bbox[2] - titulo_bbox[0]
-        draw.text(((LARGURA - titulo_w) // 2, 80), titulo, font=FONTE_TITULO, fill=(255, 255, 255))
-    except:
-        draw.text((LARGURA//2 - 200, 80), titulo, font=FONTE_TITULO, fill=(255, 255, 255))
+    # ========== TÍTULO ==========
+    titulo = titulo.upper()
+    tw, th = draw.textsize(titulo, font=F_TITULO)
+    draw.text(((LARGURA - tw) // 2, 60), titulo, font=F_TITULO, fill=COR_TEXTO)
+    draw.line([(LARGURA // 4, 60 + th + 30), (3 * LARGURA // 4, 60 + th + 30)], fill=COR_DESTAQUE, width=5)
 
-    # Linha decorativa
-    draw.line([(LARGURA//4, 200), (3*LARGURA//4, 200)], fill=(255, 215, 0), width=4)
+    y = ALTURA_TOPO
 
-    y_pos = ALTURA_TOPO
-
-    for idx, jogo in enumerate(jogos):
-        # Caixa do jogo
-        x0, y0 = PADDING, y_pos
-        x1, y1 = LARGURA - PADDING, y_pos + ALTURA_POR_JOGO - 30
-        
-        # Fundo com borda
-        draw.rectangle([x0, y0, x1, y1], fill=(25, 35, 45), outline=(60, 80, 100), width=3)
+    # ========== BLOCOS DOS JOGOS ==========
+    for jogo in jogos:
+        # Caixa
+        draw.rounded_rectangle(
+            [MARGEM, y, LARGURA - MARGEM, y + ALTURA_POR_JOGO - 40],
+            radius=60, fill=COR_CAIXA, outline=(60, 80, 100), width=3
+        )
 
         # Nome da liga
-        liga_text = jogo['liga'].upper()
-        try:
-            liga_bbox = draw.textbbox((0, 0), liga_text, font=FONTE_SUBTITULO)
-            liga_w = liga_bbox[2] - liga_bbox[0]
-            draw.text(((LARGURA - liga_w) // 2, y0 + 30), liga_text, font=FONTE_SUBTITULO, fill=(200, 200, 200))
-        except:
-            draw.text((LARGURA//2 - 100, y0 + 30), liga_text, font=FONTE_SUBTITULO, fill=(200, 200, 200))
+        liga = jogo.get("liga", "").upper()
+        lw, _ = draw.textsize(liga, font=F_LIGA)
+        draw.text(((LARGURA - lw) // 2, y + 40), liga, font=F_LIGA, fill=(180, 180, 180))
 
         # Data e hora
-        if isinstance(jogo["hora"], datetime):
-            data_text = jogo["hora"].strftime("%d.%m.%Y")
-            hora_text = jogo["hora"].strftime("%H:%M")
+        hora = jogo.get("hora", "")
+        if isinstance(hora, datetime):
+            data_text = hora.strftime("%d/%m/%Y  |  %H:%M BRT")
         else:
-            data_text = str(jogo["hora"])
-            hora_text = ""
+            data_text = str(hora)
+        dw, _ = draw.textsize(data_text, font=F_DATA)
+        draw.text(((LARGURA - dw) // 2, y + 180), data_text, font=F_DATA, fill=(150, 200, 255))
 
-        try:
-            data_bbox = draw.textbbox((0, 0), data_text, font=FONTE_INFO)
-            data_w = data_bbox[2] - data_bbox[0]
-            draw.text(((LARGURA - data_w) // 2, y0 + 85), data_text, font=FONTE_INFO, fill=(150, 200, 255))
-        except:
-            draw.text((LARGURA//2 - 80, y0 + 85), data_text, font=FONTE_INFO, fill=(150, 200, 255))
+        # Escudos
+        TAM = 220
+        ESC_ESPACO = 220
+        x_ini = (LARGURA - (TAM * 2 + ESC_ESPACO)) // 2
+        y_esc = y + 270
 
-        try:
-            hora_bbox = draw.textbbox((0, 0), hora_text, font=FONTE_INFO)
-            hora_w = hora_bbox[2] - hora_bbox[0]
-            draw.text(((LARGURA - hora_w) // 2, y0 + 130), hora_text, font=FONTE_INFO, fill=(150, 200, 255))
-        except:
-            draw.text((LARGURA//2 - 40, y0 + 130), hora_text, font=FONTE_INFO, fill=(150, 200, 255))
+        esc_home = baixar_imagem_url(jogo.get("escudo_home", ""))
+        esc_away = baixar_imagem_url(jogo.get("escudo_away", ""))
 
-        # ESCUDOS DOS TIMES - AUMENTADOS
-        TAMANHO_ESCUDO = 180
-        espaco_entre_escudos = 120
-        
-        # Calcular posição central
-        largura_total_escudos = 2 * TAMANHO_ESCUDO + espaco_entre_escudos
-        x_inicio_escudos = (LARGURA - largura_total_escudos) // 2
-        
-        x_escudo_home = x_inicio_escudos
-        x_escudo_away = x_escudo_home + TAMANHO_ESCUDO + espaco_entre_escudos
-        y_escudos = y0 + 190
-        
-        # Baixar e desenhar escudos
-        escudo_home = baixar_imagem_url(jogo.get("escudo_home", ""))
-        escudo_away = baixar_imagem_url(jogo.get("escudo_away", ""))
-        
-        def desenhar_escudo(imagem, x, y, tamanho):
-            if imagem:
-                try:
-                    # Redimensionar mantendo proporção
-                    imagem.thumbnail((tamanho, tamanho), Image.Resampling.LANCZOS)
-                    
-                    # Criar máscara circular
-                    mask = Image.new("L", (tamanho, tamanho), 0)
-                    mask_draw = ImageDraw.Draw(mask)
-                    mask_draw.ellipse((0, 0, tamanho, tamanho), fill=255)
-                    
-                    # Calcular offset para centralizar
-                    offset_x = (tamanho - imagem.width) // 2
-                    offset_y = (tamanho - imagem.height) // 2
-                    
-                    # Criar imagem de fundo e colar o escudo
-                    bg = Image.new("RGBA", (tamanho, tamanho), (255, 255, 255, 0))
-                    bg.paste(imagem, (offset_x, offset_y))
-                    
-                    # Aplicar máscara circular
-                    img.paste(bg, (x, y), mask)
-                except Exception as e:
-                    # Placeholder circular
-                    draw.ellipse([x, y, x + tamanho, y + tamanho], fill=(60, 60, 60))
-                    draw.text((x + 40, y + 60), "TM", font=FONTE_INFO, fill=(255, 255, 255))
+        def desenhar_escudo(escudo, x, y):
+            if escudo:
+                escudo.thumbnail((TAM, TAM))
+                mask = Image.new("L", escudo.size, 0)
+                ImageDraw.Draw(mask).ellipse([(0, 0), escudo.size], fill=255)
+                img.paste(escudo, (x, y), mask)
             else:
-                # Placeholder circular
-                draw.ellipse([x, y, x + tamanho, y + tamanho], fill=(60, 60, 60))
-                draw.text((x + 40, y + 60), "TM", font=FONTE_INFO, fill=(255, 255, 255))
+                draw.ellipse([x, y, x + TAM, y + TAM], fill=(50, 50, 50))
 
-        # Desenhar escudos
-        desenhar_escudo(escudo_home, x_escudo_home, y_escudos, TAMANHO_ESCUDO)
-        desenhar_escudo(escudo_away, x_escudo_away, y_escudos, TAMANHO_ESCUDO)
+        desenhar_escudo(esc_home, x_ini, y_esc)
+        desenhar_escudo(esc_away, x_ini + TAM + ESC_ESPACO, y_esc)
 
-        # Nomes dos times
-        home_text = jogo['home']
-        away_text = jogo['away']
-        
-        try:
-            home_bbox = draw.textbbox((0, 0), home_text, font=FONTE_TIMES)
-            home_w = home_bbox[2] - home_bbox[0]
-            draw.text((x_escudo_home + (TAMANHO_ESCUDO - home_w) // 2, y_escudos + TAMANHO_ESCUDO + 40), 
-                     home_text, font=FONTE_TIMES, fill=(255, 255, 255))
-        except:
-            draw.text((x_escudo_home, y_escudos + TAMANHO_ESCUDO + 40), home_text, font=FONTE_TIMES, fill=(255, 255, 255))
+        # Times e VS
+        home, away = jogo.get("home", ""), jogo.get("away", "")
+        hw, _ = draw.textsize(home, font=F_TIMES)
+        aw, _ = draw.textsize(away, font=F_TIMES)
+        draw.text((x_ini + (TAM - hw) // 2, y_esc + TAM + 40), home, font=F_TIMES, fill=COR_TEXTO)
+        draw.text((x_ini + TAM + ESC_ESPACO + (TAM - aw) // 2, y_esc + TAM + 40), away, font=F_TIMES, fill=COR_TEXTO)
 
-        try:
-            away_bbox = draw.textbbox((0, 0), away_text, font=FONTE_TIMES)
-            away_w = away_bbox[2] - away_bbox[0]
-            draw.text((x_escudo_away + (TAMANHO_ESCUDO - away_w) // 2, y_escudos + TAMANHO_ESCUDO + 40), 
-                     away_text, font=FONTE_TIMES, fill=(255, 255, 255))
-        except:
-            draw.text((x_escudo_away, y_escudos + TAMANHO_ESCUDO + 40), away_text, font=FONTE_TIMES, fill=(255, 255, 255))
+        vs_text = "VS"
+        vw, _ = draw.textsize(vs_text, font=F_VS)
+        draw.text(((LARGURA - vw) // 2, y_esc + TAM // 2), vs_text, font=F_VS, fill=COR_DESTAQUE)
 
-        # VS centralizado
-        try:
-            vs_bbox = draw.textbbox((0, 0), "VS", font=FONTE_VS)
-            vs_w = vs_bbox[2] - vs_bbox[0]
-            draw.text(((LARGURA - vs_w) // 2, y_escudos + TAMANHO_ESCUDO + 30), 
-                     "VS", font=FONTE_VS, fill=(255, 215, 0))
-        except:
-            draw.text((LARGURA//2 - 20, y_escudos + TAMANHO_ESCUDO + 30), "VS", font=FONTE_VS, fill=(255, 215, 0))
-
-        # SEÇÃO DE ANÁLISE
-        y_analysis = y_escudos + TAMANHO_ESCUDO + 120
-        
         # Linha separadora
-        draw.line([(x0 + 50, y_analysis - 10), (x1 - 50, y_analysis - 10)], fill=(100, 130, 160), width=2)
+        draw.line([(MARGEM + 100, y_esc + TAM + 160), (LARGURA - MARGEM - 100, y_esc + TAM + 160)],
+                  fill=(80, 100, 130), width=3)
 
-        # Informações de análise
-        tendencia_emoji = "📈" if "Mais" in jogo['tendencia'] else "📉" if "Menos" in jogo['tendencia'] else "⚡"
-        textos_analise = [
-            f"{tendencia_emoji} Tendência: {jogo['tendencia']}",
-            f"⚽ Estimativa: {jogo['estimativa']:.2f} gols",
-            f"🎯 Confiança: {jogo['confianca']:.0f}%",
-            f"🕒 Status: {jogo['status']}"
+        # Análise
+        tendencia = jogo.get("tendencia", "Sem Dados")
+        estimativa = f"{jogo.get('estimativa', 0):.2f}"
+        confianca = f"{jogo.get('confianca', 0):.0f}%"
+        status = jogo.get("status", "-")
+
+        analises = [
+            f"📈 Tendência: {tendencia}",
+            f"⚽ Estimativa: {estimativa} gols",
+            f"🎯 Confiança: {confianca}",
+            f"🕒 Status: {status}"
         ]
-        
-        cores = [(255, 215, 0), (100, 200, 255), (100, 255, 100), (200, 200, 200)]
-        
-        for i, (text, cor) in enumerate(zip(textos_analise, cores)):
-            try:
-                bbox = draw.textbbox((0, 0), text, font=FONTE_ANALISE)
-                w = bbox[2] - bbox[0]
-                draw.text(((LARGURA - w) // 2, y_analysis + i * 45), text, font=FONTE_ANALISE, fill=cor)
-            except:
-                draw.text((PADDING + 100, y_analysis + i * 45), text, font=FONTE_ANALISE, fill=cor)
+        cores = [(255, 215, 0), (100, 200, 255), (120, 255, 120), (200, 200, 200)]
+        for i, (txt, cor) in enumerate(zip(analises, cores)):
+            tw, _ = draw.textsize(txt, font=F_ANALISE)
+            draw.text(((LARGURA - tw) // 2, y_esc + TAM + 220 + i * 80), txt, font=F_ANALISE, fill=cor)
 
-        y_pos += ALTURA_POR_JOGO
+        y += ALTURA_POR_JOGO
 
-    # Rodapé
-    rodape_text = f"Gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')} - Elite Master System"
-    try:
-        rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_DETALHES)
-        rodape_w = rodape_bbox[2] - rodape_bbox[0]
-        draw.text(((LARGURA - rodape_w) // 2, altura_total - 50), rodape_text, font=FONTE_DETALHES, fill=(100, 130, 160))
-    except:
-        draw.text((LARGURA//2 - 200, altura_total - 50), rodape_text, font=FONTE_DETALHES, fill=(100, 130, 160))
+    # ========== RODAPÉ ==========
+    rodape = f"Gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')}  |  Elite Master System"
+    rw, _ = draw.textsize(rodape, font=F_RODAPE)
+    draw.text(((LARGURA - rw) // 2, total_altura - 100), rodape, font=F_RODAPE, fill=(150, 180, 200))
 
-    # Salvar imagem
+    # Salvar
     buffer = io.BytesIO()
-    img.save(buffer, format="PNG", optimize=True, quality=95)
+    img.save(buffer, format="PNG", optimize=True)
     buffer.seek(0)
-    
-    st.success(f"✅ Poster estilo West Ham GERADO com {len(jogos)} jogos")
+
+    st.success(f"✅ Pôster Elite Master gerado com {len(jogos)} jogos.")
     return buffer
-
-def enviar_alerta_westham_style(jogos_conf: list, threshold: int, chat_id: str = TELEGRAM_CHAT_ID_ALT2):
-    """Envia alerta no estilo West Ham - VERSÃO CORRIGIDA"""
-    if not jogos_conf:
-        st.warning("⚠️ Nenhum jogo para gerar poster")
-        return
-
-    try:
-        # Agrupar por data
-        jogos_por_data = {}
-        for jogo in jogos_conf:
-            data = jogo["hora"].date() if isinstance(jogo["hora"], datetime) else datetime.now().date()
-            if data not in jogos_por_data:
-                jogos_por_data[data] = []
-            jogos_por_data[data].append(jogo)
-
-        for data, jogos_data in jogos_por_data.items():
-            data_str = data.strftime("%d/%m/%Y")
-            titulo = f"ELITE MASTER - {data_str}"
-            
-            st.info(f"🎨 Gerando poster para {data_str} com {len(jogos_data)} jogos...")
-            
-            poster = gerar_poster_westham_style(jogos_data, titulo=titulo)
-            
-            caption = (
-                f"<b>🎯 ALERTA DE GOLS - {data_str}</b>\n\n"
-                f"<b>📋 TOTAL: {len(jogos_data)} JOGOS</b>\n"
-                f"<b>⚽ CONFIANÇA MÍNIMA: {threshold}%</b>\n\n"
-                f"<b>🔮 ANÁLISE PREDITIVA DE GOLS</b>\n"
-                f"<b>📊 MÉDIA DE CONFIANÇA: {sum(j['confianca'] for j in jogos_data) / len(jogos_data):.1f}%</b>\n\n"
-                f"<b>🔥 JOGOS SELECIONADOS PELA INTELIGÊNCIA ARTIFICIAL</b>"
-            )
-            
-            st.info("📤 Enviando para o Telegram...")
-            ok = enviar_foto_telegram(poster, caption=caption, chat_id=chat_id)
-            
-            if ok:
-                st.success(f"🚀 Poster enviado para {data_str}!")
-            else:
-                st.error(f"❌ Falha ao enviar poster para {data_str}")
-                
-    except Exception as e:
-        st.error(f"❌ Erro crítico ao gerar/enviar poster: {str(e)}")
-        # Fallback para mensagem de texto
-        msg = f"🔥 Jogos ≥{threshold}% (Erro na imagem):\n"
-        for j in jogos_conf[:5]:  # Limitar a 5 jogos para não exceder limite
-            msg += f"🏟️ {j['home']} vs {j['away']} | {j['tendencia']} | Conf: {j['confianca']:.0f}%\n"
-        enviar_telegram(msg, chat_id=chat_id)
 
 # =============================
 # FUNÇÕES QUE ESTAVAM FALTANDO - ADICIONADAS AGORA
