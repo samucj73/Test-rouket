@@ -420,7 +420,7 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
     LARGURA = 1800
     ALTURA_TOPO = 300
     ALTURA_POR_JOGO = 800  # Aumentado para caber tudo
-    PADDING = 80
+    PADDING = 100
     
     jogos_count = len(jogos)
     altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
@@ -492,7 +492,7 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
 
         # ESCUDOS DOS TIMES - AUMENTADOS
         TAMANHO_ESCUDO = 200
-        espaco_entre_escudos = 450
+        espaco_entre_escudos = 650
         
         # Calcular posição central
         largura_total_escudos = 2 * TAMANHO_ESCUDO + espaco_entre_escudos
