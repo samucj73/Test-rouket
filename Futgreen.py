@@ -287,20 +287,64 @@ def enviar_alerta_telegram(fixture: dict, tendencia: str, estimativa: float, con
     gols_away = fixture.get("score", {}).get("fullTime", {}).get("away")
     placar = f"{gols_home} x {gols_away}" if gols_home is not None and gols_away is not None else None
 
+    # Obter URLs dos escudos
+    escudo_home = fixture.get("homeTeam", {}).get("crest", "") or fixture.get("homeTeam", {}).get("logo", "")
+    escudo_away = fixture.get("awayTeam", {}).get("crest", "") or fixture.get("awayTeam", {}).get("logo", "")
+    
+    # Emojis para a tendência
+    emoji_tendencia = "📈" if "Mais" in tendencia else "📉" if "Menos" in tendencia else "⚡"
+    
     msg = (
-        f"⚽ <b>Alerta de Gols!</b>\n"
-        f"🏟️ {home} vs {away}\n"
+        f"⚽ <b>ALERTA DE GOLS ⚽</b>\n\n"
+        
+        f"🏆 <b>{competicao}</b>\n"
         f"📅 {data_formatada} ⏰ {hora_formatada} (BRT)\n"
         f"📌 Status: {status}\n"
     )
+    
     if placar:
-        msg += f"📊 Placar: <b>{placar}</b>\n"
+        msg += f"📊 <b>PLACAR ATUAL: {placar}</b>\n\n"
+    else:
+        msg += "\n"
+    
+    # Card dos times com escudos
     msg += (
-        f"📈 Tendência: <b>{tendencia}</b>\n"
-        f"🎯 Estimativa: <b>{estimativa:.2f} gols</b>\n"
-        f"💯 Confiança: <b>{confianca:.0f}%</b>\n"
-        f"🏆 Liga: {competicao}"
+        f"<b>─────────── PARTIDA ───────────</b>\n\n"
+        
+        f"🏠 <b>{home}</b>\n"
     )
+    
+    if escudo_home:
+        msg += f"🖼️ <a href='{escudo_home}'>[Escudo]</a>\n"
+    
+    msg += f"\n<b>🆚</b>\n\n"
+    
+    msg += (
+        f"✈️ <b>{away}</b>\n"
+    )
+    
+    if escudo_away:
+        msg += f"🖼️ <a href='{escudo_away}'>[Escudo]</a>\n"
+    
+    msg += f"\n<b>────────── ANÁLISE ──────────</b>\n\n"
+    
+    # Informações de análise
+    msg += (
+        f"{emoji_tendencia} <b>TENDÊNCIA:</b> {tendencia}\n"
+        f"🎯 <b>ESTIMATIVA:</b> {estimativa:.2f} gols\n"
+        f"💯 <b>CONFIANÇA:</b> {confianca:.0f}%\n\n"
+    )
+    
+    # Indicador visual de força
+    if confianca >= 80:
+        msg += f"🔥 <b>ALTA CONFIABILIDADE</b> 🔥\n"
+    elif confianca >= 60:
+        msg += f"⚡ <b>MÉDIA CONFIABILIDADE</b> ⚡\n"
+    else:
+        msg += f"⚠️ <b>CONFIABILIDADE MODERADA</b> ⚠️\n"
+    
+    msg += f"\n<b>─────────────────────────────</b>"
+    
     enviar_telegram(msg)
 
 def verificar_enviar_alerta(fixture: dict, tendencia: str, estimativa: float, confianca: float):
@@ -765,12 +809,35 @@ def exibir_resultado_streamlit(resultado: dict):
     """, unsafe_allow_html=True)
 
 def enviar_resultado_telegram(resultado: dict):
+    # Emojis para a tendência
+    emoji_tendencia = "📈" if "Mais" in resultado['tendencia'] else "📉" if "Menos" in resultado['tendencia'] else "⚡"
+    emoji_resultado = "🟢" if "GREEN" in resultado['resultado'] else "🔴" if "RED" in resultado['resultado'] else "⚪"
+    
     msg = (
-        f"📊 <b>Resultado Conferido</b>\n"
-        f"🏟️ {resultado['home']} vs {resultado['away']}\n"
-        f"⚽ Tendência: {resultado['tendencia']} | Estim.: {resultado['estimativa']:.2f} | Conf.: {resultado['confianca']:.0f}%\n"
-        f"📊 Placar Final: <b>{resultado['placar']}</b>\n"
-        f"✅ Resultado: <b>{resultado['resultado']}</b>"
+        f"📊 <b>RESULTADO CONFERIDO</b> 📊\n\n"
+        
+        f"<b>─────────── PARTIDA ───────────</b>\n\n"
+        
+        f"🏠 <b>{resultado['home']}</b>\n"
+        f"🆚\n" 
+        f"✈️ <b>{resultado['away']}</b>\n\n"
+        
+        f"<b>────────── RESULTADO ──────────</b>\n\n"
+        
+        f"📊 <b>PLACAR FINAL: {resultado['placar']}</b>\n"
+        f"⚽ <b>TOTAL DE GOLS: {resultado['total_gols']}</b>\n\n"
+        
+        f"<b>─────────── ANÁLISE ───────────</b>\n\n"
+        
+        f"{emoji_tendencia} <b>TENDÊNCIA:</b> {resultado['tendencia']}\n"
+        f"🎯 <b>ESTIMATIVA:</b> {resultado['estimativa']:.2f} gols\n"
+        f"💯 <b>CONFIANÇA:</b> {resultado['confianca']:.0f}%\n\n"
+        
+        f"<b>─────────── VEREDITO ──────────</b>\n\n"
+        
+        f"{emoji_resultado} <b>RESULTADO: {resultado['resultado']}</b>\n\n"
+        
+        f"<b>─────────────────────────────</b>"
     )
     enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2)
 
