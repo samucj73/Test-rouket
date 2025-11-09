@@ -179,18 +179,14 @@ def abreviar_nome(nome: str, max_len: int = 15) -> str:
 # =============================
 # Comunicação com APIs
 # =============================
-def enviar_telegram(msg: str, chat_id: str = TELEGRAM_CHAT_ID, disable_web_page_preview: bool = True) -> bool:
-    """Envia mensagem para o Telegram com tratamento de erro.
-    disable_web_page_preview: False -> permite preview de imagens (escudos) quando há URLs na mensagem.
-    """
+def enviar_telegram(msg: str, chat_id: str = TELEGRAM_CHAT_ID) -> bool:
+    """Envia mensagem para o Telegram com tratamento de erro."""
     try:
-        params = {
-            "chat_id": chat_id,
-            "text": msg,
-            "parse_mode": "HTML",
-            "disable_web_page_preview": str(disable_web_page_preview).lower()
-        }
-        response = requests.get(BASE_URL_TG, params=params, timeout=10)
+        response = requests.get(
+            BASE_URL_TG, 
+            params={"chat_id": chat_id, "text": msg, "parse_mode": "HTML"},
+            timeout=10
+        )
         return response.status_code == 200
     except requests.RequestException as e:
         st.error(f"Erro ao enviar para Telegram: {e}")
@@ -315,7 +311,7 @@ def enviar_alerta_telegram(fixture: dict, tendencia: str, estimativa: float, con
         f"🏆 Liga: {competicao}"
     )
     
-    enviar_telegram(msg, TELEGRAM_CHAT_ID)
+    enviar_telegram(msg)
 
 def verificar_enviar_alerta(fixture: dict, tendencia: str, estimativa: float, confianca: float):
     """Verifica e envia alerta se necessário."""
@@ -333,57 +329,27 @@ def verificar_enviar_alerta(fixture: dict, tendencia: str, estimativa: float, co
         salvar_alertas(alertas)
 
 # =============================
-# Alerta: Jogos com confiança >=70% (todos)
+# Alerta: Top 6 jogos com confiança >=70%
 # =============================
 def enviar_alerta_conf70(jogos_conf_70: list):
-    """Envia alerta com todos os jogos de confiança >= 70% (inclui escudos se disponível)."""
+    """Envia alerta com os jogos de confiança >= 70% (top 6)."""
     if not jogos_conf_70:
         return
 
-    # Ordenar por confiança desc
-    jogos_sorted = sorted(jogos_conf_70, key=lambda x: x["confianca"], reverse=True)
+    top6 = sorted(jogos_conf_70, key=lambda x: x["confianca"], reverse=True)[:6]
 
-    # Determinar período (datas dos jogos) e total
-    datas = []
-    for j in jogos_sorted:
-        if isinstance(j.get("hora"), datetime):
-            datas.append(j["hora"].date())
-    data_inicio = datas[0].strftime("%Y-%m-%d") if datas else "-"
-    data_fim = datas[-1].strftime("%Y-%m-%d") if datas else "-"
-    total = len(jogos_sorted)
-
-    # Montar mensagem HTML
-    msg = (
-        f"🔥 <b>Jogos de Alta Confiança (≥70%)</b>\n\n"
-        f"📅 Período: {data_inicio} → {data_fim}\n"
-        f"📋 Total: {total} jogos\n\n"
-    )
-
-    for j in jogos_sorted:
+    msg = "🔥 <b>Jogos de Alta Confiança (≥70%)</b>\n\n"
+    for j in top6:
         hora_format = j["hora"].strftime("%H:%M") if isinstance(j["hora"], datetime) else str(j["hora"])
-        esc_home = j.get("escudo_home", "") or ""
-        esc_away = j.get("escudo_away", "") or ""
-
-        # Linha principal com nomes e confiança
         msg += (
-            f"<b>{j['home']}</b> vs <b>{j['away']}</b>\n"
+            f"🏟️ {j['home']} vs {j['away']}\n"
             f"🕒 {hora_format} BRT | Liga: {j['liga']} | Status: {j['status']}\n"
-            f"📈 {j['tendencia']} | Estimativa: {j['estimativa']:.2f} | 💯 Conf.: {j['confianca']:.0f}%\n"
+            f"📈 Tendência: {j['tendencia']} | Estimativa: {j['estimativa']:.2f} | "
+            f"💯 Confiança: {j['confianca']:.0f}%\n\n"
         )
 
-        # Se houver escudos, anexar como links (preview ativo)
-        # Ex.: clicando no link o Telegram costuma gerar o preview com a imagem do crest
-        if esc_home:
-            msg += f'🔗 <a href="{esc_home}">Escudo {j["home"]}</a>  '
-        if esc_away:
-            msg += f'🔗 <a href="{esc_away}">Escudo {j["away"]}</a>'
-
-        msg += "\n\n"
-
-    msg += "⚽ Enviado automaticamente — jogos com confiança ≥ 70%."
-
-    # Enviar com preview habilitado (para mostrar imagens dos escudos quando possível)
-    enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2, disable_web_page_preview=False)
+    msg += "⚽ Apenas jogos com confiança ≥ 70%."
+    enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2)
 
 # =============================
 # Geração de Relatórios
@@ -509,7 +475,7 @@ def main():
         limpar_historico()
 
 def processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, enviar_alerta_70: bool):
-    """Processa e analisa os jogos do dia. Filtra e envia apenas jogos com confiança >=70%."""
+    """Processa e analisa os jogos do dia."""
     hoje = data_selecionada.strftime("%Y-%m-%d")
     ligas_busca = LIGA_DICT.values() if todas_ligas else [LIGA_DICT[liga_selecionada]]
     
@@ -530,16 +496,6 @@ def processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, envi
 
             verificar_enviar_alerta(match, tendencia, estimativa, confianca)
 
-            # tentar extrair escudos/crest de diferentes campos possíveis
-            escudo_home = ""
-            escudo_away = ""
-            try:
-                escudo_home = match.get("homeTeam", {}).get("crest") or match.get("homeTeam", {}).get("logo") or ""
-                escudo_away = match.get("awayTeam", {}).get("crest") or match.get("awayTeam", {}).get("logo") or ""
-            except Exception:
-                escudo_home = ""
-                escudo_away = ""
-
             top_jogos.append({
                 "id": match["id"],
                 "home": home,
@@ -550,29 +506,25 @@ def processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, envi
                 "liga": match.get("competition", {}).get("name", "Desconhecido"),
                 "hora": datetime.fromisoformat(match["utcDate"].replace("Z", "+00:00")) - timedelta(hours=3),
                 "status": match.get("status", "DESCONHECIDO"),
-                "escudo_home": escudo_home,
-                "escudo_away": escudo_away
             })
 
         progress_bar.progress((i + 1) / total_ligas)
 
-    # Agora filtramos globalmente apenas jogos com confiança >= 70 e que não estejam em andamento/terminados
-    jogos_conf_70_global = [
-        j for j in top_jogos
-        if j["confianca"] >= 70 and j["status"] not in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"]
-    ]
-
-    if jogos_conf_70_global:
-        # enviar top (Top N entre os >=70) via enviar_top_jogos
-        enviar_top_jogos(jogos_conf_70_global, top_n)
-        st.success(f"✅ Análise concluída! {len(jogos_conf_70_global)} jogos com confiança ≥70% processados.")
+    # Enviar top jogos
+    if top_jogos:
+        enviar_top_jogos(top_jogos, top_n)
+        st.success(f"✅ Análise concluída! {len(top_jogos)} jogos processados.")
     else:
-        st.warning("⚠️ Nenhum jogo com confiança ≥70% encontrado.")
+        st.warning("⚠️ Nenhum jogo encontrado para a data selecionada.")
 
-    # Se habilitado, enviar alerta com TODOS os jogos de confiança >= 70% (com escudos e período)
+    # Se habilitado, enviar alerta com até 6 jogos de confiança >= 70%
     if enviar_alerta_70:
-        if jogos_conf_70_global:
-            enviar_alerta_conf70(jogos_conf_70_global)
+        jogos_conf_70 = [
+            j for j in top_jogos
+            if j["confianca"] >= 70 and j["status"] not in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"]
+        ]
+        if jogos_conf_70:
+            enviar_alerta_conf70(jogos_conf_70)
 
 def enviar_top_jogos(jogos: list, top_n: int):
     """Envia os top N jogos para o Telegram (somente jogos não finalizados)."""
@@ -586,28 +538,19 @@ def enviar_top_jogos(jogos: list, top_n: int):
     # Ordenar por confiança e pegar top N
     top_jogos_sorted = sorted(jogos_filtrados, key=lambda x: x["confianca"], reverse=True)[:top_n]
 
-    msg = f"📢 TOP {top_n} Jogos do Dia (confiança ≥ 70%)\n\n"
+    msg = f"📢 TOP {top_n} Jogos do Dia\n\n"
     for j in top_jogos_sorted:
-        hora_format = j["hora"].strftime("%H:%M") if isinstance(j["hora"], datetime) else str(j["hora"])
-        esc_home = j.get("escudo_home", "") or ""
-        esc_away = j.get("escudo_away", "") or ""
-
+        hora_format = j["hora"].strftime("%H:%M")
         msg += (
             f"🏟️ {j['home']} vs {j['away']}\n"
             f"🕒 {hora_format} BRT | Liga: {j['liga']} | Status: {j['status']}\n"
             f"📈 Tendência: {j['tendencia']} | Estimativa: {j['estimativa']:.2f} | "
-            f"💯 Confiança: {j['confianca']:.0f}%\n"
+            f"💯 Confiança: {j['confianca']:.0f}%\n\n"
         )
 
-        if esc_home:
-            msg += f'🔗 <a href="{esc_home}">Escudo {j["home"]}</a>  '
-        if esc_away:
-            msg += f'🔗 <a href="{esc_away}">Escudo {j["away"]}</a>'
-        msg += "\n\n"
-
-    # Envio ao Telegram com preview de escudos habilitado
-    if enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2, disable_web_page_preview=False):
-        st.success(f"🚀 Top {top_n} jogos (confiança ≥ 70%) enviados para o canal!")
+    # Envio ao Telegram
+    if enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2):
+        st.success(f"🚀 Top {top_n} jogos (sem finalizados) enviados para o canal!")
     else:
         st.error("❌ Erro ao enviar top jogos para o Telegram")
 
