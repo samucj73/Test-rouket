@@ -437,7 +437,7 @@ def gerar_poster_elite(jogos: list, titulo: str = "🔥 Jogos de Alta Confiança
     draw.text((PADDING, 190), subtitulo, font=FONTE_SUBTITULO, fill=(200, 200, 200))
 
     y_pos = ALTURA_TOPO
-    TAMANHO_ESCUDO = 220  # ESCUDOS GIGANTES
+    TAMANHO_ESCUDO = 200 # ESCUDOS GIGANTES
 
     for idx, jogo in enumerate(jogos):
         # Caixa do jogo - MAIOR
@@ -448,8 +448,8 @@ def gerar_poster_elite(jogos: list, titulo: str = "🔥 Jogos de Alta Confiança
         draw.rounded_rectangle([x0, y0, x1, y1], radius=20, fill=(28, 28, 30))
         
         # Posição dos escudos
-        x_escudo_esquerdo = x0 + 50
-        y_escudo = y0 + 50
+        x_escudo_esquerdo = x0 + 25
+        y_escudo = y0 + 25
         
         # Baixar escudos
         escudo_home = baixar_imagem_url(jogo.get("escudo_home", ""))
@@ -481,7 +481,7 @@ def gerar_poster_elite(jogos: list, titulo: str = "🔥 Jogos de Alta Confiança
                     st.error(f"Erro ao desenhar escudo: {e}")
             else:
                 # Placeholder circular
-                draw.ellipse([x, y, x + tamanho, y + tamanho], fill=(60, 60, 60))
+                draw.ellipse([x, y, x + tamanho, y + tamanho], fill=(80, 80, 80))
                 iniciais = "".join([p[0] for p in jogo["home"].split()[:2]]).upper() if "home" in locals() else "TM"
                 try:
                     bbox = draw.textbbox((0, 0), iniciais, font=FONTE_TIMES)
