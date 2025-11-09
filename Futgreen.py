@@ -1,3 +1,5 @@
+
+
 import streamlit as st
 from datetime import datetime, timedelta
 import requests
@@ -368,7 +370,7 @@ def verificar_enviar_alerta(fixture: dict, tendencia: str, estimativa: float, co
         salvar_alertas(alertas)
 
 # =============================
-# Funções de geração de imagem (Pillow) - LAYOUT COMPLETAMENTE REFEITO
+# Funções de geração de imagem (Pillow) - NOVO ESTILO WEST HAM
 # =============================
 def baixar_imagem_url(url: str, timeout: int = 8) -> Image.Image | None:
     """Tenta baixar uma imagem e retornar PIL.Image. Retorna None se falhar."""
@@ -404,6 +406,174 @@ def criar_fonte(tamanho):
     except:
         return ImageFont.load_default()
 
+def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA DE GOLS") -> io.BytesIO:
+    """
+    Gera poster no estilo West Ham vs Burnley (IMG_0428.jpeg)
+    Layout limpo e profissional com fundo escuro
+    """
+    # Configurações do poster
+    LARGURA = 1200
+    ALTURA_TOPO = 200
+    ALTURA_POR_JOGO = 300
+    PADDING = 60
+    MARGEM_INTERNA = 40
+    
+    jogos_count = len(jogos)
+    altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
+
+    # Criar canvas
+    img = Image.new("RGB", (LARGURA, altura_total), color=(10, 20, 30))  # Azul escuro
+    draw = ImageDraw.Draw(img)
+
+    # Fontes
+    try:
+        FONTE_TITULO = ImageFont.truetype("arial.ttf", 48)
+        FONTE_SUBTITULO = ImageFont.truetype("arial.ttf", 28)
+        FONTE_TIMES = ImageFont.truetype("arial.ttf", 42)
+        FONTE_VS = ImageFont.truetype("arial.ttf", 36)
+        FONTE_INFO = ImageFont.truetype("arial.ttf", 24)
+        FONTE_DETALHES = ImageFont.truetype("arial.ttf", 20)
+    except:
+        # Fallback para fontes padrão
+        FONTE_TITULO = ImageFont.load_default()
+        FONTE_SUBTITULO = ImageFont.load_default()
+        FONTE_TIMES = ImageFont.load_default()
+        FONTE_VS = ImageFont.load_default()
+        FONTE_INFO = ImageFont.load_default()
+        FONTE_DETALHES = ImageFont.load_default()
+
+    # Título PRINCIPAL (estilo imagem)
+    titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
+    titulo_w = titulo_bbox[2] - titulo_bbox[0]
+    draw.text(((LARGURA - titulo_w) // 2, 80), titulo, font=FONTE_TITULO, fill=(255, 255, 255))
+
+    # Linha decorativa abaixo do título
+    draw.line([(LARGURA//4, 150), (3*LARGURA//4, 150)], fill=(255, 215, 0), width=3)
+
+    y_pos = ALTURA_TOPO
+
+    for idx, jogo in enumerate(jogos):
+        # Caixa do jogo - estilo minimalista
+        x0, y0 = PADDING, y_pos
+        x1, y1 = LARGURA - PADDING, y_pos + ALTURA_POR_JOGO - 20
+        
+        # Fundo com borda sutil
+        draw.rectangle([x0, y0, x1, y1], fill=(25, 35, 45), outline=(60, 80, 100), width=2)
+
+        # Nome da liga (como na imagem)
+        liga_text = jogo['liga'].upper()
+        liga_bbox = draw.textbbox((0, 0), liga_text, font=FONTE_SUBTITULO)
+        liga_w = liga_bbox[2] - liga_bbox[0]
+        draw.text(((LARGURA - liga_w) // 2, y0 + 25), liga_text, font=FONTE_SUBTITULO, fill=(200, 200, 200))
+
+        # Data e hora (formato igual à imagem)
+        if isinstance(jogo["hora"], datetime):
+            data_text = jogo["hora"].strftime("%d.%m.%Y")
+            hora_text = jogo["hora"].strftime("%H:%M")
+        else:
+            data_text = str(jogo["hora"])
+            hora_text = ""
+
+        data_bbox = draw.textbbox((0, 0), data_text, font=FONTE_INFO)
+        data_w = data_bbox[2] - data_bbox[0]
+        draw.text(((LARGURA - data_w) // 2, y0 + 65), data_text, font=FONTE_INFO, fill=(150, 200, 255))
+
+        hora_bbox = draw.textbbox((0, 0), hora_text, font=FONTE_INFO)
+        hora_w = hora_bbox[2] - hora_bbox[0]
+        draw.text(((LARGURA - hora_w) // 2, y0 + 95), hora_text, font=FONTE_INFO, fill=(150, 200, 255))
+
+        # Nomes dos times (centralizados como na imagem)
+        home_text = jogo['home']
+        away_text = jogo['away']
+        
+        home_bbox = draw.textbbox((0, 0), home_text, font=FONTE_TIMES)
+        away_bbox = draw.textbbox((0, 0), away_text, font=FONTE_TIMES)
+        
+        home_w = home_bbox[2] - home_bbox[0]
+        away_w = away_bbox[2] - away_bbox[0]
+        
+        # Posição vertical para os nomes dos times
+        y_teams = y0 + 150
+        
+        draw.text(((LARGURA - home_w) // 2, y_teams), home_text, font=FONTE_TIMES, fill=(255, 255, 255))
+        draw.text(((LARGURA - away_w) // 2, y_teams + 50), away_text, font=FONTE_TIMES, fill=(255, 255, 255))
+
+        # VS centralizado entre os times
+        vs_text = "VS"
+        vs_bbox = draw.textbbox((0, 0), vs_text, font=FONTE_VS)
+        vs_w = vs_bbox[2] - vs_bbox[0]
+        draw.text(((LARGURA - vs_w) // 2, y_teams + 20), vs_text, font=FONTE_VS, fill=(255, 215, 0))
+
+        # Informações de análise na parte inferior
+        y_analysis = y_teams + 110
+        
+        tendencia_text = f"Tendência: {jogo['tendencia']}"
+        estimativa_text = f"Estimativa: {jogo['estimativa']:.2f} gols"
+        confianca_text = f"Confiança: {jogo['confianca']:.0f}%"
+
+        # Centralizar cada linha de análise
+        for i, text in enumerate([tendencia_text, estimativa_text, confianca_text]):
+            bbox = draw.textbbox((0, 0), text, font=FONTE_DETALHES)
+            w = bbox[2] - bbox[0]
+            draw.text(((LARGURA - w) // 2, y_analysis + i * 25), text, font=FONTE_DETALHES, fill=(200, 200, 200))
+
+        y_pos += ALTURA_POR_JOGO
+
+    # Rodapé
+    rodape_text = f"Gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')} - Elite Master System"
+    rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_DETALHES)
+    rodape_w = rodape_bbox[2] - rodape_bbox[0]
+    draw.text(((LARGURA - rodape_w) // 2, altura_total - 40), rodape_text, font=FONTE_DETALHES, fill=(100, 130, 160))
+
+    # Salvar imagem
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG", optimize=True, quality=95)
+    buffer.seek(0)
+    
+    st.success(f"✅ Poster estilo West Ham gerado com {len(jogos)} jogos")
+    return buffer
+
+def enviar_alerta_westham_style(jogos_conf: list, threshold: int, chat_id: str = TELEGRAM_CHAT_ID_ALT2):
+    """Envia alerta no estilo da imagem West Ham vs Burnley"""
+    if not jogos_conf:
+        st.warning("⚠️ Nenhum jogo para gerar poster estilo West Ham")
+        return
+
+    # Agrupar por data para posters separados
+    jogos_por_data = {}
+    for jogo in jogos_conf:
+        data = jogo["hora"].date() if isinstance(jogo["hora"], datetime) else "Indefinido"
+        if data not in jogos_por_data:
+            jogos_por_data[data] = []
+        jogos_por_data[data].append(jogo)
+
+    for data, jogos_data in jogos_por_data.items():
+        data_str = data.strftime("%d/%m/%Y") if data != "Indefinido" else "PRÓXIMOS JOGOS"
+        titulo = f"ELITE MASTER - {data_str}"
+        
+        try:
+            poster = gerar_poster_westham_style(jogos_data, titulo=titulo)
+            
+            caption = (
+                f"<b>🎯 ALERTA DE GOLS - {data_str}</b>\n\n"
+                f"<b>📋 TOTAL: {len(jogos_data)} JOGOS</b>\n"
+                f"<b>⚽ CONFIANÇA MÍNIMA: {threshold}%</b>\n\n"
+                f"<b>🔮 ANÁLISE PREDITIVA DE GOLS</b>"
+            )
+            
+            ok = enviar_foto_telegram(poster, caption=caption, chat_id=chat_id)
+            
+            if ok:
+                st.success(f"🚀 Poster estilo West Ham enviado para {data_str}!")
+            else:
+                st.error(f"❌ Falha ao enviar poster para {data_str}")
+                
+        except Exception as e:
+            st.error(f"Erro ao gerar/enviar poster estilo West Ham: {e}")
+
+# =============================
+# Função original de geração de imagem (mantida para compatibilidade)
+# =============================
 def gerar_poster_elite(jogos: list, titulo: str = "🔥 Jogos de Alta Confiança (Elite Master)") -> io.BytesIO:
     """
     Gera um pôster vertical com a lista de jogos. Retorna BytesIO com PNG.
@@ -683,6 +853,7 @@ def main():
         top_n = st.selectbox("📊 Jogos no Top (visualização)", [3, 5, 10], index=0)
         enviar_alerta_70 = st.checkbox("🚨 Enviar alerta com jogos acima do limiar de confiança", value=True)
         threshold = st.slider("Limiar de confiança (%)", min_value=50, max_value=95, value=70, step=1)
+        estilo_poster = st.selectbox("🎨 Estilo do Poster", ["West Ham (Novo)", "Elite Master (Original)"], index=0)
         st.markdown("----")
         st.info("Ajuste o limiar para enviar/mostrar apenas jogos acima da confiança selecionada.")
 
@@ -699,7 +870,7 @@ def main():
 
     # Processamento
     if st.button("🔍 Buscar Partidas", type="primary"):
-        processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, enviar_alerta_70, threshold)
+        processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, enviar_alerta_70, threshold, estilo_poster)
 
     # Ações
     col1, col2, col3 = st.columns(3)
@@ -736,7 +907,7 @@ def main():
     if st.button("🧹 Limpar Histórico de Desempenho"):
         limpar_historico()
 
-def processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, enviar_alerta_enabled: bool, threshold: int):
+def processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, enviar_alerta_enabled: bool, threshold: int, estilo_poster: str):
     hoje = data_selecionada.strftime("%Y-%m-%d")
     ligas_busca = LIGA_DICT.values() if todas_ligas else [LIGA_DICT[liga_selecionada]]
 
@@ -795,7 +966,10 @@ def processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, envi
 
     # Se habilitado, gerar pôster e enviar ao Telegram com todos os jogos ≥ threshold
     if enviar_alerta_enabled and jogos_filtrados_threshold:
-        enviar_alerta_conf_criar_poster(jogos_filtrados_threshold, threshold, chat_id=TELEGRAM_CHAT_ID_ALT2)
+        if estilo_poster == "West Ham (Novo)":
+            enviar_alerta_westham_style(jogos_filtrados_threshold, threshold, chat_id=TELEGRAM_CHAT_ID_ALT2)
+        else:
+            enviar_alerta_conf_criar_poster(jogos_filtrados_threshold, threshold, chat_id=TELEGRAM_CHAT_ID_ALT2)
 
 def enviar_top_jogos(jogos: list, top_n: int):
     jogos_filtrados = [j for j in jogos if j["status"] not in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"]]
