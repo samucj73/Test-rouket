@@ -419,8 +419,8 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
     # Configurações aumentadas
     LARGURA = 1800
     ALTURA_TOPO = 300
-    ALTURA_POR_JOGO = 800  # Aumentado para caber tudo
-    PADDING = 50
+    ALTURA_POR_JOGO = 900  # Aumentado para caber tudo
+    PADDING = 200
     
     jogos_count = len(jogos)
     altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
@@ -430,10 +430,10 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
     draw = ImageDraw.Draw(img)
 
     # Carregar fontes COM TAMANHOS MAIORES
-    FONTE_TITULO = criar_fonte(100)
-    FONTE_SUBTITULO = criar_fonte(70)
-    FONTE_TIMES = criar_fonte(66)
-    FONTE_VS = criar_fonte(62)
+    FONTE_TITULO = criar_fonte(95)
+    FONTE_SUBTITULO = criar_fonte(65)
+    FONTE_TIMES = criar_fonte(60)
+    FONTE_VS = criar_fonte(52)
     FONTE_INFO = criar_fonte(46)
     FONTE_DETALHES = criar_fonte(52)
     FONTE_ANALISE = criar_fonte(60)
