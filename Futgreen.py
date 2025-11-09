@@ -368,7 +368,7 @@ def verificar_enviar_alerta(fixture: dict, tendencia: str, estimativa: float, co
         salvar_alertas(alertas)
 
 # =============================
-# Funções de geração de imagem (Pillow)
+# Funções de geração de imagem (Pillow) - CORRIGIDA
 # =============================
 def baixar_imagem_url(url: str, timeout: int = 8) -> Image.Image | None:
     """Tenta baixar uma imagem e retornar PIL.Image. Retorna None se falhar."""
@@ -387,11 +387,11 @@ def gerar_poster_elite(jogos: list, titulo: str = "🔥 Jogos de Alta Confiança
     Gera um pôster vertical com a lista de jogos. Retorna BytesIO com PNG.
     estilo: fundo escuro, escudos grandes, texto claro.
     """
-    # Configurações de estilo - AUMENTADO
-    largura = 1400  # Aumentado
-    altura_topo = 220  # Aumentado
-    altura_por_jogo = 220  # Aumentado para caber escudos maiores
-    padding = 40  # Aumentado
+    # Configurações de estilo - AUMENTADAS SIGNIFICATIVAMENTE
+    largura = 1500  # AUMENTADO de 1200 para 1500
+    altura_topo = 250  # AUMENTADO de 180 para 250
+    altura_por_jogo = 250  # AUMENTADO de 160 para 250
+    padding = 50  # AUMENTADO de 30 para 50
     jogos_count = len(jogos)
     altura = altura_topo + jogos_count * altura_por_jogo + padding
 
@@ -399,37 +399,50 @@ def gerar_poster_elite(jogos: list, titulo: str = "🔥 Jogos de Alta Confiança
     img = Image.new("RGB", (largura, altura), color=(18, 18, 20))
     draw = ImageDraw.Draw(img)
 
-    # Fonts (fallback para load_default) - AUMENTADO
+    # Fonts - TAMANHOS AUMENTADOS SIGNIFICATIVAMENTE
     try:
-        # Tenta carregar uma fonte TTF se existir (mais bonita) - FONTES MAIORES
-        font_title = ImageFont.truetype("arial.ttf", 64)  # Aumentado
-        font_sub = ImageFont.truetype("arial.ttf", 36)    # Aumentado
-        font_team = ImageFont.truetype("arial.ttf", 42)   # Aumentado
-        font_small = ImageFont.truetype("arial.ttf", 28)  # Aumentado
+        # Tenta carregar uma fonte TTF se existir - FONTES MUITO MAIORES
+        font_title = ImageFont.truetype("arial.ttf", 72)  # AUMENTADO de 48 para 72
+        font_sub = ImageFont.truetype("arial.ttf", 42)    # AUMENTADO de 28 para 42
+        font_team = ImageFont.truetype("arial.ttf", 48)   # AUMENTADO de 36 para 48
+        font_small = ImageFont.truetype("arial.ttf", 32)  # AUMENTADO de 22 para 32
     except Exception:
-        # Fallback para fontes padrão (aumentar tamanho)
-        font_title = ImageFont.load_default()
-        font_sub = ImageFont.load_default()
-        font_team = ImageFont.load_default()
-        font_small = ImageFont.load_default()
+        # Fallback para fontes padrão (usar tamanhos maiores)
+        try:
+            font_title = ImageFont.load_default()
+            font_sub = ImageFont.load_default()
+            font_team = ImageFont.load_default()
+            font_small = ImageFont.load_default()
+            # Forçar tamanhos maiores mesmo no fallback
+            if hasattr(font_title, 'size'):
+                font_title.size = 72
+                font_sub.size = 42
+                font_team.size = 48
+                font_small.size = 32
+        except:
+            # Último fallback
+            font_title = ImageFont.load_default()
+            font_sub = ImageFont.load_default()
+            font_team = ImageFont.load_default()
+            font_small = ImageFont.load_default()
 
-    # Título
+    # Título - POSIÇÕES AJUSTADAS
     title_text = titulo
-    draw.text((padding, 40), title_text, font=font_title, fill=(255, 215, 0))  # dourado-ish
+    draw.text((padding, 50), title_text, font=font_title, fill=(255, 215, 0))  # dourado-ish
     subtitle = f"Gerado: {datetime.now().strftime('%Y-%m-%d %H:%M')} - Total: {jogos_count} jogos"
-    draw.text((padding, 120), subtitle, font=font_sub, fill=(200, 200, 200))
+    draw.text((padding, 140), subtitle, font=font_sub, fill=(200, 200, 200))
 
     y = altura_topo
-    crest_size = 150  # AUMENTADO - Escudos maiores
-    gap_x = 40  # Aumentado
+    crest_size = 180  # AUMENTADO SIGNIFICATIVAMENTE de 120 para 180
+    gap_x = 50  # Aumentado
 
     for j in jogos:
-        # boxes e separador sutil
+        # boxes e separador sutil - MAIORES
         box_x0 = padding
         box_x1 = largura - padding
-        box_y0 = y + 15
-        box_y1 = y + altura_por_jogo - 15
-        draw.rounded_rectangle([(box_x0, box_y0), (box_x1, box_y1)], radius=12, fill=(28,28,30))
+        box_y0 = y + 20
+        box_y1 = y + altura_por_jogo - 20
+        draw.rounded_rectangle([(box_x0, box_y0), (box_x1, box_y1)], radius=15, fill=(28,28,30))
 
         # Tentar baixar escudos
         esc_home = None
@@ -439,8 +452,8 @@ def gerar_poster_elite(jogos: list, titulo: str = "🔥 Jogos de Alta Confiança
         if j.get("escudo_away"):
             esc_away = baixar_imagem_url(j["escudo_away"])
 
-        x_esc_home = box_x0 + 25
-        y_esc = box_y0 + 25
+        x_esc_home = box_x0 + 30
+        y_esc = box_y0 + 35
 
         # Função helper para desenhar imagem redonda com borda
         def draw_crest(im: Image.Image, pos_x, pos_y, size=crest_size):
@@ -463,36 +476,43 @@ def gerar_poster_elite(jogos: list, titulo: str = "🔥 Jogos de Alta Confiança
         if esc_home:
             draw_crest(esc_home, x_esc_home, y_esc, size=crest_size)
         else:
-            # placeholder círculo com iniciais
+            # placeholder círculo com iniciais - MAIOR
             circle_box = (x_esc_home, y_esc, x_esc_home + crest_size, y_esc + crest_size)
             draw.ellipse(circle_box, fill=(60,60,60))
             initials = "".join([w[0] for w in j["home"].split()][:2]).upper()
-            w, h = draw.textsize(initials, font=font_team)
+            # Usar textbbox em vez de textsize para versões mais recentes do Pillow
+            bbox = draw.textbbox((0, 0), initials, font=font_team)
+            w = bbox[2] - bbox[0]
+            h = bbox[3] - bbox[1]
             draw.text((x_esc_home + (crest_size - w)/2, y_esc + (crest_size - h)/2), initials, font=font_team, fill=(255,255,255))
 
         # away crest
-        x_esc_away = x_esc_home + crest_size + 30
+        x_esc_away = x_esc_home + crest_size + 40
         if esc_away:
             draw_crest(esc_away, x_esc_away, y_esc, size=crest_size)
         else:
             circle_box = (x_esc_away, y_esc, x_esc_away + crest_size, y_esc + crest_size)
             draw.ellipse(circle_box, fill=(60,60,60))
             initials = "".join([w[0] for w in j["away"].split()][:2]).upper()
-            w, h = draw.textsize(initials, font=font_team)
+            bbox = draw.textbbox((0, 0), initials, font=font_team)
+            w = bbox[2] - bbox[0]
+            h = bbox[3] - bbox[1]
             draw.text((x_esc_away + (crest_size - w)/2, y_esc + (crest_size - h)/2), initials, font=font_team, fill=(255,255,255))
 
-        # Texto dos times - MAIOR
-        text_x = x_esc_away + crest_size + 40
+        # Texto dos times - MAIOR E MAIS ESPAÇADO
+        text_x = x_esc_away + crest_size + 50
         team_line = f"{j['home']}  vs  {j['away']}"
-        draw.text((text_x, box_y0 + 25), team_line, font=font_team, fill=(255,255,255))
+        draw.text((text_x, box_y0 + 40), team_line, font=font_team, fill=(255,255,255))
 
         # Tendência / estimativa / confiança - MAIOR
         sub_line = f"{j['liga']} | {j['tendencia']} | Estim.: {j['estimativa']:.2f} | Conf.: {j['confianca']:.0f}%"
-        draw.text((text_x, box_y0 + 25 + 55), sub_line, font=font_small, fill=(200,200,200))
+        draw.text((text_x, box_y0 + 40 + 65), sub_line, font=font_small, fill=(200,200,200))
 
         # Hora - MAIOR
         hora_format = j["hora"].strftime("%d/%m %H:%M") if isinstance(j["hora"], datetime) else str(j["hora"])
-        draw.text((largura - padding - 300, box_y0 + 35), hora_format, font=font_team, fill=(220,220,220))
+        bbox = draw.textbbox((0, 0), hora_format, font=font_team)
+        hora_width = bbox[2] - bbox[0]
+        draw.text((largura - padding - hora_width - 20, box_y0 + 45), hora_format, font=font_team, fill=(220,220,220))
 
         y += altura_por_jogo
 
