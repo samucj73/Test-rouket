@@ -494,7 +494,7 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
         ESPACO_ENTRE_ESCUDOS = 650
 
         ## Calcular largura total ocupada pelos dois escudos + espaço entre eles
-          largura_total = 2 * TAMANHO_CIRCULO + ESPACO_ENTRE_ESCUDOS
+        largura_total = 2 * TAMANHO_CIRCULO + ESPACO_ENTRE_ESCUDOS
 
          # Centralizar horizontalmente
           x_inicio = (LARGURA - largura_total) // 2
