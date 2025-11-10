@@ -449,13 +449,13 @@ def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADO
     draw = ImageDraw.Draw(img)
 
     # Carregar fontes
-    FONTE_TITULO = criar_fonte(80)
-    FONTE_SUBTITULO = criar_fonte(60)
-    FONTE_TIMES = criar_fonte(55)
-    FONTE_PLACAR = criar_fonte(120)
-    FONTE_VS = criar_fonte(50)
+    FONTE_TITULO = criar_fonte(100)
+    FONTE_SUBTITULO = criar_fonte(65)
+    FONTE_TIMES = criar_fonte(65)
+    FONTE_PLACAR = criar_fonte(140)
+    FONTE_VS = criar_fonte(70)
     FONTE_INFO = criar_fonte(45)
-    FONTE_ANALISE = criar_fonte(50)
+    FONTE_ANALISE = criar_fonte(65)
     FONTE_RESULTADO = criar_fonte(70)  # Fonte maior para RED/GREEN
 
     # Título PRINCIPAL
@@ -543,8 +543,8 @@ def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADO
 
         # ESCUDOS E PLACAR
         TAMANHO_ESCUDO = 160
-        TAMANHO_QUADRADO = 180
-        ESPACO_ENTRE_ESCUDOS = 400
+        TAMANHO_QUADRADO = 200
+        ESPACO_ENTRE_ESCUDOS = 800
 
         # Calcular posição central
         largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS + 200
