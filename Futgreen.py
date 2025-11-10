@@ -506,31 +506,50 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
         escudo_away = baixar_imagem_url(jogo.get("escudo_away", ""))
 
         def desenhar_escudo_quadrado(imagem, x, y, tamanho_quadrado, tamanho_escudo):
-            # Desenha quadrado branco de fundo
-            draw.rectangle(
-                [x, y, x + tamanho_quadrado, y + tamanho_quadrado],
-                fill=(255, 255, 255),
-                outline=(255, 255, 255)
-            )
+    # Desenha quadrado branco de fundo
+        draw.rectangle(
+        [x, y, x + tamanho_quadrado, y + tamanho_quadrado],
+        fill=(255, 255, 255),
+        outline=(255, 255, 255)
+    )
 
-            if imagem:
-                try:
-                    # Redimensionar escudo mantendo proporção
-                    imagem.thumbnail((tamanho_escudo, tamanho_escudo), Image.Resampling.LANCZOS)
+    if imagem:
+        try:
+            # Redimensionar o escudo proporcionalmente, preenchendo o quadrado (sem sobras)
+            img_ratio = imagem.width / imagem.height
+            quad_ratio = tamanho_escudo / tamanho_escudo
 
-                    # Calcular centralização dentro do quadrado
-                    escudo_x = x + (tamanho_quadrado - imagem.width) // 2
-                    escudo_y = y + (tamanho_quadrado - imagem.height) // 2
-
-                    # Colar escudo sobre o quadrado
-                    img.paste(imagem, (escudo_x, escudo_y), imagem)
-
-                except Exception as e:
-                    print(f"Erro ao carregar escudo: {e}")
+            if img_ratio > quad_ratio:
+                # Imagem mais larga → ajusta largura
+                nova_largura = tamanho_escudo
+                nova_altura = int(tamanho_escudo / img_ratio)
             else:
-                # Caso não haja escudo, desenha placeholder quadrado
-                draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(60, 60, 60))
-                draw.text((x + 80, y + 100), "TM", font=FONTE_INFO, fill=(255, 255, 255))
+                # Imagem mais alta → ajusta altura
+                nova_altura = tamanho_escudo
+                nova_largura = int(tamanho_escudo * img_ratio)
+
+            imagem_redimensionada = imagem.resize((nova_largura, nova_altura), Image.Resampling.LANCZOS)
+
+            # Criar fundo branco quadrado do tamanho exato
+            fundo = Image.new("RGBA", (tamanho_escudo, tamanho_escudo), (255, 255, 255, 255))
+
+            # Centralizar o escudo dentro do fundo
+            offset_x = (tamanho_escudo - nova_largura) // 2
+            offset_y = (tamanho_escudo - nova_altura) // 2
+            fundo.paste(imagem_redimensionada, (offset_x, offset_y), imagem_redimensionada)
+
+            # Calcular posição para centralizar o fundo dentro do quadrado maior
+            escudo_x = x + (tamanho_quadrado - tamanho_escudo) // 2
+            escudo_y = y + (tamanho_quadrado - tamanho_escudo) // 2
+
+            img.paste(fundo, (escudo_x, escudo_y), fundo)
+
+        except Exception as e:
+            print(f"Erro ao carregar escudo: {e}")
+    else:
+        # Caso não haja escudo, desenha placeholder
+        draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(60, 60, 60))
+        draw.text((x + 80, y + 100), "TM", font=FONTE_INFO, fill=(255, 255, 255))
 
         # Desenhar escudos quadrados
         desenhar_escudo_quadrado(escudo_home, x_home, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO)
