@@ -576,12 +576,12 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
         draw.line([(x0 + 80, y_analysis - 20), (x1 - 80, y_analysis - 20)], fill=(100, 130, 160), width=3)
 
         # Informações de análise com mais espaçamento
-        tendencia_emoji = "📈" if "Mais" in jogo['tendencia'] else "📉" if "Menos" in jogo['tendencia'] else "⚡"
+        tendencia_emoji = "" if "Mais" in jogo['tendencia'] else "" if "Menos" in jogo['tendencia'] else "⚡"
         textos_analise = [
             f"{tendencia_emoji} Tendência: {jogo['tendencia']}",
-            f"⚽ Estimativa: {jogo['estimativa']:.2f} gols",
-            f"🎯 Confiança: {jogo['confianca']:.0f}%",
-            f"🕒 Status: {jogo['status']}"
+            f"Estimativa: {jogo['estimativa']:.2f} gols",
+            f"Confiança: {jogo['confianca']:.0f}%",
+           # f"🕒 Status: {jogo['status']}"
         ]
         
         cores = [(255, 215, 0), (100, 200, 255), (100, 255, 100), (200, 200, 200)]
