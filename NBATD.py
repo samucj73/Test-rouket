@@ -12,6 +12,7 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 import time
 from PIL import Image, ImageDraw, ImageFont
 import base64
+import math
 
 # =============================
 # CONFIGURAÇÕES
@@ -714,9 +715,9 @@ def prever_vencedor(home_id: int, away_id: int, window_games: int = 15) -> tuple
     return vencedor, round(confianca, 1), detalhe
 
 # =============================
-# FUNÇÕES DE IMAGEM E ESCUDOS CORRIGIDAS
+# FUNÇÕES DE IMAGEM E ESCUDOS CORRIGIDAS - VERSÃO MELHORADA
 # =============================
-def baixar_escudo_time(time_nome: str, tamanho: tuple = (80, 80)) -> Image.Image:
+def baixar_escudo_time(time_nome: str, tamanho: tuple = (120, 120)) -> Image.Image:
     """Baixa e redimensiona o escudo do time com fallbacks robustos"""
     try:
         # URL do logo do time
@@ -724,170 +725,401 @@ def baixar_escudo_time(time_nome: str, tamanho: tuple = (80, 80)) -> Image.Image
         
         if not logo_url:
             # Fallback: cria escudo padrão com iniciais do time
-            return criar_escudo_fallback(time_nome, tamanho)
+            return criar_escudo_detalhado(time_nome, tamanho)
         
-        # Baixa a imagem
-        resposta = requests.get(logo_url, timeout=10)
-        if resposta.status_code != 200:
-            return criar_escudo_fallback(time_nome, tamanho)
-        
-        # Verifica se é SVG (logos da NBA são SVG)
-        if logo_url.endswith('.svg') or 'svg' in resposta.headers.get('content-type', ''):
-            # Para SVG, usa fallback colorido baseado no nome do time
-            return criar_escudo_colorido(time_nome, tamanho)
-        else:
-            # Para outros formatos (PNG, JPG)
-            img = Image.open(io.BytesIO(resposta.content))
-            # Converte para RGBA se necessário
-            if img.mode != 'RGBA':
-                img = img.convert('RGBA')
-            return img.resize(tamanho, Image.Resampling.LANCZOS)
+        # Para logos SVG da NBA, vamos usar uma abordagem diferente
+        # Criar escudos detalhados baseados nas cores oficiais dos times
+        return criar_escudo_detalhado(time_nome, tamanho)
             
     except Exception as e:
         print(f"Erro ao baixar escudo do {time_nome}: {e}")
-        return criar_escudo_fallback(time_nome, tamanho)
+        return criar_escudo_detalhado(time_nome, tamanho)
 
-def criar_escudo_fallback(time_nome: str, tamanho: tuple) -> Image.Image:
-    """Cria um escudo fallback com as iniciais do time"""
+def criar_escudo_detalhado(time_nome: str, tamanho: tuple) -> Image.Image:
+    """Cria escudo detalhado com cores e designs baseados nos times reais"""
+    largura, altura = tamanho
     img = Image.new('RGBA', tamanho, (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     
-    # Cores baseadas no nome do time
-    cores = {
-        'Lakers': (85, 37, 130),    # Roxo e dourado
-        'Warriors': (29, 66, 138),   # Azul e dourado
-        'Celtics': (0, 122, 51),     # Verde
-        'Bulls': (206, 17, 65),      # Vermelho
-        'Heat': (152, 0, 46),        # Vermelho e preto
-        'Knicks': (0, 107, 182),     # Azul e laranja
-        'default': (255, 125, 0)     # Laranja NBA
+    # Cores e designs detalhados dos times NBA
+    designs_times = {
+        'Lakers': {
+            'cores': [(85, 37, 130), (253, 185, 39)],  # Roxo e dourado
+            'design': 'circulo_duplo',
+            'texto': 'LA'
+        },
+        'Warriors': {
+            'cores': [(29, 66, 138), (255, 199, 44)],  # Azul e dourado
+            'design': 'circulo_ponteado',
+            'texto': 'GSW'
+        },
+        'Celtics': {
+            'cores': [(0, 122, 51), (255, 255, 255)],  # Verde e branco
+            'design': 'circulo_triplo',
+            'texto': 'BOS'
+        },
+        'Bulls': {
+            'cores': [(206, 17, 65), (0, 0, 0)],  # Vermelho e preto
+            'design': 'circulo_duplo',
+            'texto': 'CHI'
+        },
+        'Heat': {
+            'cores': [(152, 0, 46), (255, 255, 255)],  # Vermelho e branco
+            'design': 'circulo_chamas',
+            'texto': 'MIA'
+        },
+        'Knicks': {
+            'cores': [(0, 107, 182), (245, 132, 38)],  # Azul e laranja
+            'design': 'circulo_listras',
+            'texto': 'NYK'
+        },
+        'Cavaliers': {
+            'cores': [(134, 0, 56), (4, 30, 66)],  # Vinho e azul marinho
+            'design': 'circulo_duplo',
+            'texto': 'CLE'
+        },
+        'Spurs': {
+            'cores': [(196, 206, 212), (0, 0, 0)],  # Prata e preto
+            'design': 'circulo_espinhos',
+            'texto': 'SAS'
+        },
+        'Mavericks': {
+            'cores': [(0, 83, 188), (0, 43, 92)],  # Azul
+            'design': 'circulo_estrela',
+            'texto': 'DAL'
+        },
+        'Nets': {
+            'cores': [(0, 0, 0), (255, 255, 255)],  # Preto e branco
+            'design': 'circulo_simples',
+            'texto': 'BKN'
+        },
+        'Raptors': {
+            'cores': [(206, 17, 65), (0, 0, 0)],  # Vermelho e preto
+            'design': 'circulo_duplo',
+            'texto': 'TOR'
+        },
+        'Suns': {
+            'cores': [(229, 95, 32), (0, 0, 0)],  # Laranja e preto
+            'design': 'circulo_raio',
+            'texto': 'PHX'
+        },
+        'Nuggets': {
+            'cores': [(13, 34, 64), (255, 198, 39)],  # Azul e amarelo
+            'design': 'circulo_montanhas',
+            'texto': 'DEN'
+        },
+        'Bucks': {
+            'cores': [(0, 71, 27), (240, 235, 210)],  # Verde e creme
+            'design': 'circulo_chifres',
+            'texto': 'MIL'
+        },
+        '76ers': {
+            'cores': [(0, 107, 182), (237, 23, 76)],  # Azul e vermelho
+            'design': 'circulo_estrelas',
+            'texto': 'PHI'
+        },
+        'Hawks': {
+            'cores': [(225, 68, 52), (0, 0, 0)],  # Vermelho e preto
+            'design': 'circulo_duplo',
+            'texto': 'ATL'
+        },
+        'Hornets': {
+            'cores': [(29, 17, 96), (0, 120, 140)],  # Azul e turquesa
+            'design': 'circulo_listras',
+            'texto': 'CHA'
+        },
+        'Pistons': {
+            'cores': [(200, 16, 46), (0, 0, 0)],  # Vermelho e preto
+            'design': 'circulo_simples',
+            'texto': 'DET'
+        },
+        'Rockets': {
+            'cores': [(206, 17, 65), (0, 0, 0)],  # Vermelho e preto
+            'design': 'circulo_duplo',
+            'texto': 'HOU'
+        },
+        'Pacers': {
+            'cores': [(0, 45, 98), (253, 187, 48)],  # Azul e amarelo
+            'design': 'circulo_duplo',
+            'texto': 'IND'
+        },
+        'Clippers': {
+            'cores': [(200, 16, 46), (0, 0, 0)],  # Vermelho e preto
+            'design': 'circulo_simples',
+            'texto': 'LAC'
+        },
+        'Grizzlies': {
+            'cores': [(93, 118, 169), (0, 0, 0)],  # Azul e preto
+            'design': 'circulo_duplo',
+            'texto': 'MEM'
+        },
+        'Timberwolves': {
+            'cores': [(0, 80, 48), (120, 190, 32)],  # Verde e azul
+            'design': 'circulo_duplo',
+            'texto': 'MIN'
+        },
+        'Pelicans': {
+            'cores': [(0, 43, 92), (225, 58, 62)],  # Azul e vermelho
+            'design': 'circulo_duplo',
+            'texto': 'NOP'
+        },
+        'Thunder': {
+            'cores': [(0, 125, 195), (239, 59, 36)],  # Azul e laranja
+            'design': 'circulo_duplo',
+            'texto': 'OKC'
+        },
+        'Magic': {
+            'cores': [(0, 125, 197), (196, 206, 212)],  # Azul e prata
+            'design': 'circulo_duplo',
+            'texto': 'ORL'
+        },
+        'Trail Blazers': {
+            'cores': [(224, 58, 62), (0, 0, 0)],  # Vermelho e preto
+            'design': 'circulo_duplo',
+            'texto': 'POR'
+        },
+        'Kings': {
+            'cores': [(91, 43, 130), (0, 0, 0)],  # Roxo e preto
+            'design': 'circulo_duplo',
+            'texto': 'SAC'
+        },
+        'Jazz': {
+            'cores': [(0, 43, 92), (0, 0, 0)],  # Azul e preto
+            'design': 'circulo_musica',
+            'texto': 'UTA'
+        },
+        'Wizards': {
+            'cores': [(0, 43, 92), (227, 24, 55)],  # Azul e vermelho
+            'design': 'circulo_duplo',
+            'texto': 'WAS'
+        },
+        'default': {
+            'cores': [(255, 125, 0), (0, 0, 0)],  # Laranja NBA
+            'design': 'circulo_simples',
+            'texto': ''.join([palavra[0].upper() for palavra in time_nome.split()[:2]]) or time_nome[:2].upper()
+        }
     }
     
-    # Encontra a cor do time
-    cor_time = cores['default']
-    for nome, cor in cores.items():
+    # Encontra design do time
+    design_time = designs_times['default']
+    for nome, design in designs_times.items():
         if nome.lower() in time_nome.lower():
-            cor_time = cor
+            design_time = design
             break
     
-    # Desenha círculo
-    draw.ellipse([0, 0, tamanho[0], tamanho[1]], fill=cor_time)
+    cores = design_time['cores']
+    texto = design_time['texto']
+    tipo_design = design_time['design']
     
-    # Adiciona texto com iniciais
+    # Raio do círculo principal
+    raio = min(largura, altura) // 2 - 5
+    centro_x, centro_y = largura // 2, altura // 2
+    
+    # Desenha base do escudo baseado no design
+    if tipo_design == 'circulo_duplo':
+        # Círculo duplo
+        draw.ellipse([centro_x - raio, centro_y - raio, centro_x + raio, centro_y + raio], 
+                    fill=cores[0], outline=cores[1], width=4)
+        draw.ellipse([centro_x - raio + 10, centro_y - raio + 10, centro_x + raio - 10, centro_y + raio - 10], 
+                    fill=None, outline=cores[1], width=2)
+        
+    elif tipo_design == 'circulo_triplo':
+        # Círculo triplo
+        for i in range(3):
+            r = raio - i * 8
+            cor = cores[i % len(cores)] if i < len(cores) else cores[0]
+            draw.ellipse([centro_x - r, centro_y - r, centro_x + r, centro_y + r], 
+                        fill=None, outline=cor, width=3)
+        
+    elif tipo_design == 'circulo_ponteado':
+        # Círculo com efeito pontilhado
+        draw.ellipse([centro_x - raio, centro_y - raio, centro_x + raio, centro_y + raio], 
+                    fill=cores[0])
+        # Adiciona pontos na borda
+        for angulo in range(0, 360, 15):
+            rad = math.radians(angulo)
+            x1 = centro_x + (raio - 5) * math.cos(rad)
+            y1 = centro_y + (raio - 5) * math.sin(rad)
+            x2 = centro_x + raio * math.cos(rad)
+            y2 = centro_y + raio * math.sin(rad)
+            draw.line([x1, y1, x2, y2], fill=cores[1], width=2)
+        
+    elif tipo_design == 'circulo_raio':
+        # Círculo com raios
+        draw.ellipse([centro_x - raio, centro_y - raio, centro_x + raio, centro_y + raio], 
+                    fill=cores[0])
+        for angulo in range(0, 360, 30):
+            rad = math.radians(angulo)
+            x = centro_x + raio * math.cos(rad)
+            y = centro_y + raio * math.sin(rad)
+            draw.line([centro_x, centro_y, x, y], fill=cores[1], width=3)
+        
+    elif tipo_design == 'circulo_estrela':
+        # Círculo com estrela
+        draw.ellipse([centro_x - raio, centro_y - raio, centro_x + raio, centro_y + raio], 
+                    fill=cores[0])
+        # Desenha estrela simples
+        pontos_estrela = []
+        for i in range(5):
+            angulo = math.radians(90 + i * 72)
+            r = raio * 0.6 if i % 2 == 0 else raio * 0.3
+            x = centro_x + r * math.cos(angulo)
+            y = centro_y + r * math.sin(angulo)
+            pontos_estrela.append((x, y))
+        draw.polygon(pontos_estrela, fill=cores[1])
+        
+    elif tipo_design == 'circulo_listras':
+        # Círculo com listras
+        draw.ellipse([centro_x - raio, centro_y - raio, centro_x + raio, centro_y + raio], 
+                    fill=cores[0])
+        for i in range(0, raio * 2, 8):
+            draw.line([centro_x - raio + i, centro_y - raio, centro_x - raio + i, centro_y + raio], 
+                     fill=cores[1], width=2)
+        
+    elif tipo_design == 'circulo_chamas':
+        # Círculo com efeito de chamas
+        draw.ellipse([centro_x - raio, centro_y - raio, centro_x + raio, centro_y + raio], 
+                    fill=cores[0])
+        # Adiciona "chamas" na parte superior
+        for i in range(-20, 20, 5):
+            x = centro_x + i
+            y = centro_y - raio + 10
+            draw.ellipse([x-3, y-5, x+3, y+5], fill=cores[1])
+        
+    elif tipo_design == 'circulo_espinhos':
+        # Círculo com espinhos
+        draw.ellipse([centro_x - raio, centro_y - raio, centro_x + raio, centro_y + raio], 
+                    fill=cores[0])
+        for angulo in range(0, 360, 45):
+            rad = math.radians(angulo)
+            x1 = centro_x + (raio - 5) * math.cos(rad)
+            y1 = centro_y + (raio - 5) * math.sin(rad)
+            x2 = centro_x + (raio + 8) * math.cos(rad)
+            y2 = centro_y + (raio + 8) * math.sin(rad)
+            draw.line([x1, y1, x2, y2], fill=cores[1], width=3)
+        
+    elif tipo_design == 'circulo_montanhas':
+        # Círculo com montanhas
+        draw.ellipse([centro_x - raio, centro_y - raio, centro_x + raio, centro_y + raio], 
+                    fill=cores[0])
+        # Desenha montanhas simples
+        draw.polygon([(centro_x - raio//2, centro_y), (centro_x, centro_y - raio//2), (centro_x + raio//2, centro_y)], 
+                    fill=cores[1])
+        
+    elif tipo_design == 'circulo_chifres':
+        # Círculo com chifres
+        draw.ellipse([centro_x - raio, centro_y - raio, centro_x + raio, centro_y + raio], 
+                    fill=cores[0])
+        # Desenha chifres
+        draw.ellipse([centro_x - raio//2, centro_y - raio//2, centro_x - raio//4, centro_y], fill=cores[1])
+        draw.ellipse([centro_x + raio//4, centro_y - raio//2, centro_x + raio//2, centro_y], fill=cores[1])
+        
+    elif tipo_design == 'circulo_estrelas':
+        # Círculo com estrelas
+        draw.ellipse([centro_x - raio, centro_y - raio, centro_x + raio, centro_y + raio], 
+                    fill=cores[0])
+        # Adiciona estrelas pequenas
+        for i in range(5):
+            angulo = math.radians(i * 72)
+            x = centro_x + (raio * 0.6) * math.cos(angulo)
+            y = centro_y + (raio * 0.6) * math.sin(angulo)
+            draw.ellipse([x-3, y-3, x+3, y+3], fill=cores[1])
+        
+    elif tipo_design == 'circulo_musica':
+        # Círculo com notas musicais (Jazz)
+        draw.ellipse([centro_x - raio, centro_y - raio, centro_x + raio, centro_y + raio], 
+                    fill=cores[0])
+        # Notas musicais simples
+        draw.ellipse([centro_x - 10, centro_y - 15, centro_x, centro_y - 5], fill=cores[1])
+        draw.ellipse([centro_x + 5, centro_y - 10, centro_x + 15, centro_y], fill=cores[1])
+        draw.line([centro_x, centro_y - 15, centro_x, centro_y + 10], fill=cores[1], width=3)
+        draw.line([centro_x + 15, centro_y, centro_x + 15, centro_y + 15], fill=cores[1], width=3)
+        
+    else:  # circulo_simples (default)
+        draw.ellipse([centro_x - raio, centro_y - raio, centro_x + raio, centro_y + raio], 
+                    fill=cores[0], outline=cores[1], width=3)
+    
+    # Adiciona texto centralizado
     try:
-        font = ImageFont.truetype("arial.ttf", 20)
+        # Tamanho da fonte baseado no tamanho do escudo
+        tamanho_fonte = max(14, raio // 3)
+        font = ImageFont.truetype("arial.ttf", tamanho_fonte)
     except:
         font = ImageFont.load_default()
     
-    # Pega as iniciais (2 primeiras letras ou primeira palavra)
-    iniciais = ''.join([palavra[0].upper() for palavra in time_nome.split()[:2]])
-    if len(iniciais) == 0:
-        iniciais = time_nome[:2].upper()
-    
     # Calcula posição do texto
-    bbox = draw.textbbox((0, 0), iniciais, font=font)
+    bbox = draw.textbbox((0, 0), texto, font=font)
     text_width = bbox[2] - bbox[0]
     text_height = bbox[3] - bbox[1]
-    x = (tamanho[0] - text_width) // 2
-    y = (tamanho[1] - text_height) // 2
+    x = centro_x - text_width // 2
+    y = centro_y - text_height // 2
     
-    draw.text((x, y), iniciais, fill=(255, 255, 255), font=font)
+    # Cor do texto (contraste)
+    cor_texto = (255, 255, 255) if sum(cores[0]) < 384 else (0, 0, 0)  # Branco para cores escuras, preto para claras
     
-    return img
-
-def criar_escudo_colorido(time_nome: str, tamanho: tuple) -> Image.Image:
-    """Cria escudo colorido baseado no time"""
-    img = Image.new('RGBA', tamanho, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-    
-    # Cores dos times (baseadas nas cores oficiais)
-    cores_times = {
-        'Lakers': [(85, 37, 130), (253, 185, 39)],  # Roxo e dourado
-        'Warriors': [(29, 66, 138), (255, 199, 44)], # Azul e dourado
-        'Celtics': [(0, 122, 51), (255, 255, 255)],  # Verde e branco
-        'Bulls': [(206, 17, 65), (0, 0, 0)],         # Vermelho e preto
-        'Heat': [(152, 0, 46), (255, 255, 255)],     # Vermelho e branco
-        'Knicks': [(0, 107, 182), (245, 132, 38)],   # Azul e laranja
-        'Cavaliers': [(134, 0, 56), (4, 30, 66)],    # Vinho e ouro
-        'Spurs': [(196, 206, 212), (0, 0, 0)],       # Prata e preto
-        'Mavericks': [(0, 83, 188), (0, 43, 92)],    # Azul
-        'default': [(255, 125, 0), (0, 0, 0)]        # Laranja NBA
-    }
-    
-    # Encontra cores do time
-    cores = cores_times['default']
-    for nome, cor in cores_times.items():
-        if nome.lower() in time_nome.lower():
-            cores = cor
-            break
-    
-    # Desenha círculo com gradiente simples
-    draw.ellipse([0, 0, tamanho[0], tamanho[1]], fill=cores[0])
-    
-    # Adiciona borda
-    draw.ellipse([5, 5, tamanho[0]-5, tamanho[1]-5], fill=None, outline=cores[1], width=3)
+    draw.text((x, y), texto, fill=cor_texto, font=font)
     
     return img
 
 def criar_imagem_alerta_nba(home_team: str, away_team: str, predictions: dict, data_hora: str = "") -> Image.Image:
-    """Cria imagem de alerta estilo NBA com escudos dos times - VERSÃO CORRIGIDA"""
-    # Dimensões da imagem
-    largura, altura = 800, 500  # Aumentei a altura para caber mais informações
+    """Cria imagem de alerta estilo NBA com escudos dos times - VERSÃO GRANDE"""
+    # Dimensões da imagem MAIORES
+    largura, altura = 1000, 600  # Aumentei bastante o tamanho
     img = Image.new('RGB', (largura, altura), color=(13, 17, 23))  # Fundo escuro
     draw = ImageDraw.Draw(img)
     
     try:
         # Tenta carregar fontes (fallback para padrão)
         try:
-            font_large = ImageFont.truetype("arial.ttf", 32)
-            font_medium = ImageFont.truetype("arial.ttf", 22)
-            font_small = ImageFont.truetype("arial.ttf", 16)
-            font_bold = ImageFont.truetype("arialbd.ttf", 26)
+            font_grande = ImageFont.truetype("arial.ttf", 42)
+            font_medio = ImageFont.truetype("arial.ttf", 28)
+            font_pequeno = ImageFont.truetype("arial.ttf", 20)
+            font_negrito = ImageFont.truetype("arialbd.ttf", 32)
         except:
             # Fallback para fontes padrão
-            font_large = ImageFont.load_default()
-            font_medium = ImageFont.load_default()
-            font_small = ImageFont.load_default()
-            font_bold = ImageFont.load_default()
+            font_grande = ImageFont.load_default()
+            font_medio = ImageFont.load_default()
+            font_pequeno = ImageFont.load_default()
+            font_negrito = ImageFont.load_default()
         
-        # Cabeçalho - NBA
-        draw.rectangle([0, 0, largura, 70], fill=(255, 125, 0))  # Laranja NBA
-        draw.text((largura//2, 35), "🏀 NBA ELITE MASTER", fill=(255, 255, 255), 
-                 font=font_bold, anchor="mm")
+        # Cabeçalho - NBA (MAIOR)
+        draw.rectangle([0, 0, largura, 90], fill=(255, 125, 0))  # Laranja NBA
+        draw.text((largura//2, 45), "🏀 NBA ELITE MASTER", fill=(255, 255, 255), 
+                 font=font_negrito, anchor="mm")
         
         if data_hora:
-            draw.text((largura//2, 60), data_hora, fill=(255, 255, 255), 
-                     font=font_small, anchor="mm")
+            draw.text((largura//2, 75), data_hora, fill=(255, 255, 255), 
+                     font=font_pequeno, anchor="mm")
         
-        # Posicionamento dos times
+        # Posicionamento dos times (MAIS ESPAÇO)
         centro_x = largura // 2
-        pos_y = 140
+        pos_y = 180  # Mais abaixo para caber escudos maiores
         
-        # Busca escudos (AGORA COM FALLBACKS ROBUSTOS)
-        home_logo = baixar_escudo_time(home_team, (100, 100))
-        away_logo = baixar_escudo_time(away_team, (100, 100))
+        # Busca escudos (AGORA MAIORES)
+        home_logo = criar_escudo_detalhado(home_team, (140, 140))  # Escudos maiores
+        away_logo = criar_escudo_detalhado(away_team, (140, 140))
         
-        # Posiciona escudos e nomes
-        espacamento = 220
+        # Posiciona escudos e nomes (MAIS ESPAÇO ENTRE ELES)
+        espacamento = 280  # Mais espaço entre os times
         
-        # Time visitante (esquerda)
+        # Time visitante (esquerda) - MAIOR
         if away_logo:
-            img.paste(away_logo, (centro_x - espacamento - 50, pos_y - 50), away_logo)
-        draw.text((centro_x - espacamento, pos_y + 60), away_team, 
-                 fill=(255, 255, 255), font=font_medium, anchor="mm")
+            img.paste(away_logo, (centro_x - espacamento - 70, pos_y - 70), away_logo)
+        draw.text((centro_x - espacamento, pos_y + 80), away_team, 
+                 fill=(255, 255, 255), font=font_medio, anchor="mm")
         
-        # VS no centro
+        # VS no centro (MAIOR)
         draw.text((centro_x, pos_y), "VS", fill=(255, 125, 0), 
-                 font=font_large, anchor="mm")
+                 font=font_grande, anchor="mm")
         
-        # Time da casa (direita)
+        # Time da casa (direita) - MAIOR
         if home_logo:
-            img.paste(home_logo, (centro_x + espacamento - 50, pos_y - 50), home_logo)
-        draw.text((centro_x + espacamento, pos_y + 60), home_team, 
-                 fill=(255, 255, 255), font=font_medium, anchor="mm")
+            img.paste(home_logo, (centro_x + espacamento - 70, pos_y - 70), home_logo)
+        draw.text((centro_x + espacamento, pos_y + 80), home_team, 
+                 fill=(255, 255, 255), font=font_medio, anchor="mm")
         
-        # Previsões - ÁREA EXPANDIDA
-        pos_y_previsoes = 280
+        # Previsões - ÁREA EXPANDIDA E MAIOR
+        pos_y_previsoes = 380
         
         # Total de pontos
         total_pred = predictions.get("total", {})
@@ -904,11 +1136,11 @@ def criar_imagem_alerta_nba(home_team: str, away_team: str, predictions: dict, d
             texto_confianca = f"Confiança: {confianca:.0f}%"
             
             draw.text((centro_x, pos_y_previsoes), texto_total, 
-                     fill=(0, 255, 0), font=font_medium, anchor="mm")
-            draw.text((centro_x, pos_y_previsoes + 25), texto_estimativa, 
-                     fill=(200, 200, 200), font=font_small, anchor="mm")
-            draw.text((centro_x, pos_y_previsoes + 45), texto_confianca, 
-                     fill=cor_confianca, font=font_small, anchor="mm")
+                     fill=(0, 255, 0), font=font_medio, anchor="mm")
+            draw.text((centro_x, pos_y_previsoes + 35), texto_estimativa, 
+                     fill=(200, 200, 200), font=font_pequeno, anchor="mm")
+            draw.text((centro_x, pos_y_previsoes + 60), texto_confianca, 
+                     fill=cor_confianca, font=font_pequeno, anchor="mm")
         
         # Vencedor
         vencedor_pred = predictions.get("vencedor", {})
@@ -924,26 +1156,26 @@ def criar_imagem_alerta_nba(home_team: str, away_team: str, predictions: dict, d
             texto_confianca_venc = f"Confiança: {confianca_venc:.0f}%"
             texto_detalhe = f"{detalhe}"
             
-            draw.text((centro_x, pos_y_previsoes + 80), texto_vencedor, 
-                     fill=(255, 215, 0), font=font_medium, anchor="mm")
-            draw.text((centro_x, pos_y_previsoes + 105), texto_confianca_venc, 
-                     fill=cor_confianca_venc, font=font_small, anchor="mm")
-            draw.text((centro_x, pos_y_previsoes + 125), texto_detalhe, 
-                     fill=(200, 200, 200), font=font_small, anchor="mm")
+            draw.text((centro_x, pos_y_previsoes + 100), texto_vencedor, 
+                     fill=(255, 215, 0), font=font_medio, anchor="mm")
+            draw.text((centro_x, pos_y_previsoes + 135), texto_confianca_venc, 
+                     fill=cor_confianca_venc, font=font_pequeno, anchor="mm")
+            draw.text((centro_x, pos_y_previsoes + 160), texto_detalhe, 
+                     fill=(200, 200, 200), font=font_pequeno, anchor="mm")
         
-        # Rodapé
-        draw.rectangle([0, altura-40, largura, altura], fill=(30, 30, 30))
-        draw.text((centro_x, altura - 20), "ELITE MASTER - Análise com Dados Reais 2024-2025", 
-                 fill=(150, 150, 150), font=font_small, anchor="mm")
+        # Rodapé (MAIOR)
+        draw.rectangle([0, altura-50, largura, altura], fill=(30, 30, 30))
+        draw.text((centro_x, altura - 25), "ELITE MASTER - Análise com Dados Reais 2024-2025", 
+                 fill=(150, 150, 150), font=font_pequeno, anchor="mm")
         
     except Exception as e:
         # Fallback robusto em caso de erro
         print(f"Erro ao criar imagem: {e}")
         draw.rectangle([0, 0, largura, altura], fill=(13, 17, 23))
         draw.text((largura//2, altura//2), f"Erro ao gerar imagem", 
-                 fill=(255, 0, 0), font=font_medium, anchor="mm")
-        draw.text((largura//2, altura//2 + 30), f"{home_team} vs {away_team}", 
-                 fill=(255, 255, 255), font=font_small, anchor="mm")
+                 fill=(255, 0, 0), font=font_medio, anchor="mm")
+        draw.text((largura//2, altura//2 + 40), f"{home_team} vs {away_team}", 
+                 fill=(255, 255, 255), font=font_pequeno, anchor="mm")
     
     return img
 
@@ -1147,7 +1379,7 @@ def verificar_e_enviar_alerta(game: dict, predictions: dict, send_to_telegram: b
 # FUNÇÃO PARA VISUALIZAR IMAGEM DE ALERTA
 # =============================
 def visualizar_imagem_alerta(game: dict, predictions: dict):
-    """Gera e exibe a imagem de alerta no Streamlit"""
+    """Gera e exibe a imagem de alerta no Streamlit - VERSÃO ATUALIZADA"""
     home_team = game.get("home_team", {}).get("full_name", "Casa")
     away_team = game.get("visitor_team", {}).get("full_name", "Visitante")
     
@@ -1164,7 +1396,7 @@ def visualizar_imagem_alerta(game: dict, predictions: dict):
     
     data_hora_formatada = f"{data_str} {hora_str} (BRT)"
     
-    # Gera imagem
+    # Gera imagem COM NOVO TAMANHO
     imagem = criar_imagem_alerta_nba(home_team, away_team, predictions, data_hora_formatada)
     
     # Converte para exibir no Streamlit
@@ -1190,45 +1422,54 @@ def testar_envio_imagem():
     """Função para testar o envio de imagem"""
     st.header("🧪 Testar Envio de Imagem")
     
-    # Dados de teste
-    home_team = "Los Angeles Lakers"
-    away_team = "Golden State Warriors"
+    # Dados de teste com vários times para demonstrar os diferentes escudos
+    times_teste = [
+        ("Los Angeles Lakers", "Golden State Warriors"),
+        ("Boston Celtics", "Miami Heat"),
+        ("Chicago Bulls", "New York Knicks"),
+        ("Dallas Mavericks", "Phoenix Suns")
+    ]
     
-    predictions = {
-        "total": {
-            "estimativa": 225.5,
-            "confianca": 75.0,
-            "tendencia": "Mais 225.5"
-        },
-        "vencedor": {
-            "vencedor": "Casa",
-            "confianca": 68.0,
-            "detalhe": "Ligeira vantagem da casa"
+    for home_team, away_team in times_teste:
+        st.subheader(f"{away_team} @ {home_team}")
+        
+        predictions = {
+            "total": {
+                "estimativa": 225.5,
+                "confianca": 75.0,
+                "tendencia": "Mais 225.5"
+            },
+            "vencedor": {
+                "vencedor": "Casa",
+                "confianca": 68.0,
+                "detalhe": "Ligeira vantagem da casa"
+            }
         }
-    }
+        
+        # Cria e exibe imagem
+        imagem = criar_imagem_alerta_nba(home_team, away_team, predictions, "01/01/2024 20:00 (BRT)")
+        
+        # Converte para exibir no Streamlit
+        buffer = io.BytesIO()
+        imagem.save(buffer, format='PNG')
+        buffer.seek(0)
+        
+        st.image(buffer, caption=f"Preview: {away_team} @ {home_team}", use_column_width=True)
+        
+        # Botão para testar envio individual
+        if st.button(f"🚀 Testar {home_team} vs {away_team}", key=f"test_{home_team}_{away_team}"):
+            with st.spinner(f"Enviando imagem de {home_team} vs {away_team}..."):
+                mensagem_teste = f"🏀 <b>TESTE - Alerta NBA</b>\n🏟️ <b>{away_team} @ {home_team}</b>\n📌 Status: TESTE"
+                
+                sucesso = enviar_imagem_telegram(imagem, mensagem_teste)
+                
+                if sucesso:
+                    st.success("✅ Imagem de teste enviada com sucesso!")
+                else:
+                    st.error("❌ Falha no envio da imagem de teste")
     
-    # Cria e exibe imagem
-    imagem = criar_imagem_alerta_nba(home_team, away_team, predictions, "01/01/2024 20:00 (BRT)")
-    
-    # Converte para exibir no Streamlit
-    buffer = io.BytesIO()
-    imagem.save(buffer, format='PNG')
-    buffer.seek(0)
-    
-    st.image(buffer, caption="Imagem de Teste", use_column_width=True)
-    
-    # Botão para testar envio
-    if st.button("🚀 Testar Envio para Telegram"):
-        with st.spinner("Enviando imagem de teste..."):
-            mensagem_teste = f"🏀 <b>TESTE - Alerta NBA</b>\n🏟️ <b>{away_team} @ {home_team}</b>\n📌 Status: TESTE"
-            
-            sucesso = enviar_imagem_telegram(imagem, mensagem_teste)
-            
-            if sucesso:
-                st.success("✅ Imagem de teste enviada com sucesso!")
-            else:
-                st.error("❌ Falha no envio da imagem de teste")
-                st.info("💡 Verifique: Token do Telegram, Chat ID, Conexão com internet")
+    st.markdown("---")
+    st.info("**🎨 Escudos Personalizados:** Agora cada time tem um design único baseado em suas cores oficiais!")
 
 # =============================
 # EXIBIÇÃO DOS JOGOS ANALISADOS
