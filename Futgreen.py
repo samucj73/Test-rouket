@@ -505,7 +505,7 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
         escudo_home = baixar_imagem_url(jogo.get("escudo_home", ""))
         escudo_away = baixar_imagem_url(jogo.get("escudo_away", ""))
 
-        def desenhar_escudo_quadrado(imagem, x, y, tamanho_quadrado, tamanho_escudo):
+        def desenhar_escudo_quadrado(imagem_logo, x, y, tamanho_quadrado, tamanho_escudo):
     # Desenha quadrado branco de fundo
             draw.rectangle(
         [x, y, x + tamanho_quadrado, y + tamanho_quadrado],
@@ -513,44 +513,49 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
         outline=(255, 255, 255)
     )
 
-    if imagem:
+    if imagem_logo:
         try:
-            # Redimensionar o escudo proporcionalmente, preenchendo o quadrado (sem sobras)
-            img_ratio = imagem.width / imagem.height
-            quad_ratio = tamanho_escudo / tamanho_escudo
+            # Redimensionar proporcionalmente para preencher todo o quadrado (sem sobras)
+            largura, altura = imagem_logo.size
+            proporcao_img = largura / altura
+            proporcao_quadro = tamanho_escudo / tamanho_escudo
 
-            if img_ratio > quad_ratio:
-                # Imagem mais larga → ajusta largura
-                nova_largura = tamanho_escudo
-                nova_altura = int(tamanho_escudo / img_ratio)
+            # Cortar a imagem mantendo o centro
+            if proporcao_img > proporcao_quadro:
+                # Imagem mais larga → corta nas laterais
+                nova_altura = altura
+                nova_largura = int(altura * proporcao_quadro)
+                offset_x = (largura - nova_largura) // 2
+                offset_y = 0
             else:
-                # Imagem mais alta → ajusta altura
-                nova_altura = tamanho_escudo
-                nova_largura = int(tamanho_escudo * img_ratio)
+                # Imagem mais alta → corta em cima e embaixo
+                nova_largura = largura
+                nova_altura = int(largura / proporcao_quadro)
+                offset_x = 0
+                offset_y = (altura - nova_altura) // 2
 
-            imagem_redimensionada = imagem.resize((nova_largura, nova_altura), Image.Resampling.LANCZOS)
+            imagem_cortada = imagem_logo.crop((
+                offset_x, offset_y,
+                offset_x + nova_largura,
+                offset_y + nova_altura
+            ))
 
-            # Criar fundo branco quadrado do tamanho exato
-            fundo = Image.new("RGBA", (tamanho_escudo, tamanho_escudo), (255, 255, 255, 255))
+            # Redimensionar exatamente para o tamanho do escudo
+            imagem_redimensionada = imagem_cortada.resize((tamanho_escudo, tamanho_escudo), Image.Resampling.LANCZOS)
 
-            # Centralizar o escudo dentro do fundo
-            offset_x = (tamanho_escudo - nova_largura) // 2
-            offset_y = (tamanho_escudo - nova_altura) // 2
-            fundo.paste(imagem_redimensionada, (offset_x, offset_y), imagem_redimensionada)
-
-            # Calcular posição para centralizar o fundo dentro do quadrado maior
+            # Calcular posição central no quadrado branco
             escudo_x = x + (tamanho_quadrado - tamanho_escudo) // 2
             escudo_y = y + (tamanho_quadrado - tamanho_escudo) // 2
 
-            img.paste(fundo, (escudo_x, escudo_y), fundo)
+            # Colar o escudo
+            img.paste(imagem_redimensionada, (escudo_x, escudo_y), imagem_redimensionada)
 
         except Exception as e:
-            print(f"Erro ao carregar escudo: {e}")
+            print(f"Erro ao processar escudo: {e}")
     else:
         # Caso não haja escudo, desenha placeholder
         draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(60, 60, 60))
         draw.text((x + 80, y + 100), "TM", font=FONTE_INFO, fill=(255, 255, 255))
-
         # Desenhar escudos quadrados
         desenhar_escudo_quadrado(escudo_home, x_home, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO)
         desenhar_escudo_quadrado(escudo_away, x_away, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO)
