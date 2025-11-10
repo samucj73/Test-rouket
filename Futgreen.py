@@ -1,3 +1,5 @@
+
+
 import streamlit as st
 from datetime import datetime, timedelta
 import requests
@@ -417,8 +419,8 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
     # Configurações aumentadas
     LARGURA = 1800
     ALTURA_TOPO = 300
-    ALTURA_POR_JOGO = 900  # Aumentado para caber tudo
-    PADDING = 100
+    ALTURA_POR_JOGO = 600  # Aumentado para caber tudo
+    PADDING = 80
     
     jogos_count = len(jogos)
     altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
@@ -428,13 +430,13 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
     draw = ImageDraw.Draw(img)
 
     # Carregar fontes COM TAMANHOS MAIORES
-    FONTE_TITULO = criar_fonte(95)
-    FONTE_SUBTITULO = criar_fonte(65)
-    FONTE_TIMES = criar_fonte(60)
+    FONTE_TITULO = criar_fonte(80)
+    FONTE_SUBTITULO = criar_fonte(42)
+    FONTE_TIMES = criar_fonte(56)
     FONTE_VS = criar_fonte(52)
-    FONTE_INFO = criar_fonte(46)
-    FONTE_DETALHES = criar_fonte(52)
-    FONTE_ANALISE = criar_fonte(60)
+    FONTE_INFO = criar_fonte(36)
+    FONTE_DETALHES = criar_fonte(32)
+    FONTE_ANALISE = criar_fonte(34)
 
     # Título PRINCIPAL
     try:
@@ -477,88 +479,86 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
         try:
             data_bbox = draw.textbbox((0, 0), data_text, font=FONTE_INFO)
             data_w = data_bbox[2] - data_bbox[0]
-            draw.text(((LARGURA - data_w) // 2, y0 + 120), data_text, font=FONTE_INFO, fill=(150, 200, 255))
+            draw.text(((LARGURA - data_w) // 2, y0 + 85), data_text, font=FONTE_INFO, fill=(150, 200, 255))
         except:
-            draw.text((LARGURA//2 - 120, y0 + 120), data_text, font=FONTE_INFO, fill=(150, 200, 255))
+            draw.text((LARGURA//2 - 80, y0 + 85), data_text, font=FONTE_INFO, fill=(150, 200, 255))
 
         try:
             hora_bbox = draw.textbbox((0, 0), hora_text, font=FONTE_INFO)
             hora_w = hora_bbox[2] - hora_bbox[0]
-            draw.text(((LARGURA - hora_w) // 2, y0 + 120), hora_text, font=FONTE_INFO, fill=(150, 200, 255))
+            draw.text(((LARGURA - hora_w) // 2, y0 + 130), hora_text, font=FONTE_INFO, fill=(150, 200, 255))
         except:
-            draw.text((LARGURA//2 - 100, y0 + 120), hora_text, font=FONTE_INFO, fill=(150, 200, 255))
+            draw.text((LARGURA//2 - 40, y0 + 130), hora_text, font=FONTE_INFO, fill=(150, 200, 255))
 
-        # ESCUDOS DOS TIMES - CENTRALIZADOS E IGUAIS
-        TAMANHO_ESCUDO = 180       # tamanho final do logotipo dentro do círculo
-        TAMANHO_CIRCULO = 220      # diâmetro do círculo branco (aumente para mais espaço)
-        ESPACO_ENTRE_ESCUDOS = 650
-
+        # ESCUDOS DOS TIMES - AUMENTADOS
+        TAMANHO_ESCUDO = 180
+        espaco_entre_escudos = 120
+        
         # Calcular posição central
-        largura_total = 2 * TAMANHO_CIRCULO + ESPACO_ENTRE_ESCUDOS
-        x_inicio = (LARGURA - largura_total) // 2
-
-        x_home = x_inicio
-        x_away = x_home + TAMANHO_CIRCULO + ESPACO_ENTRE_ESCUDOS
-        y_escudos = y0 + 175
-
-        # Baixar escudos
+        largura_total_escudos = 2 * TAMANHO_ESCUDO + espaco_entre_escudos
+        x_inicio_escudos = (LARGURA - largura_total_escudos) // 2
+        
+        x_escudo_home = x_inicio_escudos
+        x_escudo_away = x_escudo_home + TAMANHO_ESCUDO + espaco_entre_escudos
+        y_escudos = y0 + 190
+        
+        # Baixar e desenhar escudos
         escudo_home = baixar_imagem_url(jogo.get("escudo_home", ""))
         escudo_away = baixar_imagem_url(jogo.get("escudo_away", ""))
-
-        def desenhar_escudo_padronizado(imagem, x, y, tamanho_circulo, tamanho_escudo):
-            # Desenha círculo branco de fundo
-            draw.ellipse(
-                [x, y, x + tamanho_circulo, y + tamanho_circulo],
-                fill=(255, 255, 255),
-                outline=(255, 255, 255)
-            )
-
+        
+        def desenhar_escudo(imagem, x, y, tamanho):
             if imagem:
                 try:
-                    # Redimensionar escudo mantendo proporção
-                    imagem.thumbnail((tamanho_escudo, tamanho_escudo), Image.Resampling.LANCZOS)
-
-                    # Calcular centralização dentro do círculo
-                    escudo_x = x + (tamanho_circulo - imagem.width) // 2
-                    escudo_y = y + (tamanho_circulo - imagem.height) // 2
-
-                    # Colar escudo sobre o círculo
-                    img.paste(imagem, (escudo_x, escudo_y), imagem)
-
+                    # Redimensionar mantendo proporção
+                    imagem.thumbnail((tamanho, tamanho), Image.Resampling.LANCZOS)
+                    
+                    # Criar máscara circular
+                    mask = Image.new("L", (tamanho, tamanho), 0)
+                    mask_draw = ImageDraw.Draw(mask)
+                    mask_draw.ellipse((0, 0, tamanho, tamanho), fill=255)
+                    
+                    # Calcular offset para centralizar
+                    offset_x = (tamanho - imagem.width) // 2
+                    offset_y = (tamanho - imagem.height) // 2
+                    
+                    # Criar imagem de fundo e colar o escudo
+                    bg = Image.new("RGBA", (tamanho, tamanho), (255, 255, 255, 0))
+                    bg.paste(imagem, (offset_x, offset_y))
+                    
+                    # Aplicar máscara circular
+                    img.paste(bg, (x, y), mask)
                 except Exception as e:
-                    print(f"Erro ao carregar escudo: {e}")
+                    # Placeholder circular
+                    draw.ellipse([x, y, x + tamanho, y + tamanho], fill=(60, 60, 60))
+                    draw.text((x + 40, y + 60), "TM", font=FONTE_INFO, fill=(255, 255, 255))
             else:
-                # Caso não haja escudo, desenha placeholder
-                draw.ellipse([x, y, x + tamanho_circulo, y + tamanho_circulo], fill=(60, 60, 60))
-                draw.text((x + 60, y + 85), "TM", font=FONTE_INFO, fill=(255, 255, 255))
+                # Placeholder circular
+                draw.ellipse([x, y, x + tamanho, y + tamanho], fill=(60, 60, 60))
+                draw.text((x + 40, y + 60), "TM", font=FONTE_INFO, fill=(255, 255, 255))
 
-        # Desenhar escudos padronizados
-        desenhar_escudo_padronizado(escudo_home, x_home, y_escudos, TAMANHO_CIRCULO, TAMANHO_ESCUDO)
-        desenhar_escudo_padronizado(escudo_away, x_away, y_escudos, TAMANHO_CIRCULO, TAMANHO_ESCUDO)
+        # Desenhar escudos
+        desenhar_escudo(escudo_home, x_escudo_home, y_escudos, TAMANHO_ESCUDO)
+        desenhar_escudo(escudo_away, x_escudo_away, y_escudos, TAMANHO_ESCUDO)
 
-        # ======================
         # Nomes dos times
-        # ======================
         home_text = jogo['home']
         away_text = jogo['away']
-
+        
         try:
             home_bbox = draw.textbbox((0, 0), home_text, font=FONTE_TIMES)
             home_w = home_bbox[2] - home_bbox[0]
-            draw.text((x_home + (TAMANHO_CIRCULO - home_w)//2, y_escudos + TAMANHO_CIRCULO + 40),
-                      home_text, font=FONTE_TIMES, fill=(255, 255, 255))
+            draw.text((x_escudo_home + (TAMANHO_ESCUDO - home_w) // 2, y_escudos + TAMANHO_ESCUDO + 40), 
+                     home_text, font=FONTE_TIMES, fill=(255, 255, 255))
         except:
-            draw.text((x_home, y_escudos + TAMANHO_CIRCULO + 40),
-                      home_text, font=FONTE_TIMES, fill=(255, 255, 255))
+            draw.text((x_escudo_home, y_escudos + TAMANHO_ESCUDO + 40), home_text, font=FONTE_TIMES, fill=(255, 255, 255))
 
         try:
             away_bbox = draw.textbbox((0, 0), away_text, font=FONTE_TIMES)
             away_w = away_bbox[2] - away_bbox[0]
-            draw.text((x_away + (TAMANHO_CIRCULO - away_w)//2, y_escudos + TAMANHO_CIRCULO + 40),
-                      away_text, font=FONTE_TIMES, fill=(255, 255, 255))
+            draw.text((x_escudo_away + (TAMANHO_ESCUDO - away_w) // 2, y_escudos + TAMANHO_ESCUDO + 40), 
+                     away_text, font=FONTE_TIMES, fill=(255, 255, 255))
         except:
-            draw.text((x_away, y_escudos + TAMANHO_CIRCULO + 40),
-                      away_text, font=FONTE_TIMES, fill=(255, 255, 255))
+            draw.text((x_escudo_away, y_escudos + TAMANHO_ESCUDO + 40), away_text, font=FONTE_TIMES, fill=(255, 255, 255))
 
         # VS centralizado
         try:
@@ -590,9 +590,9 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
             try:
                 bbox = draw.textbbox((0, 0), text, font=FONTE_ANALISE)
                 w = bbox[2] - bbox[0]
-                draw.text(((LARGURA - w) // 2, y_analysis + i * 80), text, font=FONTE_ANALISE, fill=cor)
+                draw.text(((LARGURA - w) // 2, y_analysis + i * 45), text, font=FONTE_ANALISE, fill=cor)
             except:
-                draw.text((PADDING + 100, y_analysis + i * 80), text, font=FONTE_ANALISE, fill=cor)
+                draw.text((PADDING + 100, y_analysis + i * 45), text, font=FONTE_ANALISE, fill=cor)
 
         y_pos += ALTURA_POR_JOGO
 
