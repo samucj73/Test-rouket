@@ -411,8 +411,8 @@ def gerar_poster_elite(jogos: list, titulo: str = "🔥 Jogos de Alta Confiança
     """
     # CONFIGURAÇÕES GIGANTES
     LARGURA = 2000  # AUMENTADO MASSIVAMENTE
-    ALTURA_TOPO = 900  # AUMENTADO MASSIVAMENTE
-    ALTURA_POR_JOGO = 450  # AUMENTADO MASSIVAMENTE para caber informações abaixo
+    ALTURA_TOPO = 350 # AUMENTADO MASSIVAMENTE
+    ALTURA_POR_JOGO = 900 # AUMENTADO MASSIVAMENTE para caber informações abaixo
     PADDING = 100  # AUMENTADO MASSIVAMENTE
     
     jogos_count = len(jogos)
