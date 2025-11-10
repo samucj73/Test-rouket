@@ -507,7 +507,7 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
 
         def desenhar_escudo_quadrado(imagem, x, y, tamanho_quadrado, tamanho_escudo):
     # Desenha quadrado branco de fundo
-        draw.rectangle(
+            draw.rectangle(
         [x, y, x + tamanho_quadrado, y + tamanho_quadrado],
         fill=(255, 255, 255),
         outline=(255, 255, 255)
