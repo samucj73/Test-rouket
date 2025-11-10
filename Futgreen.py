@@ -480,16 +480,16 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
         try:
             data_bbox = draw.textbbox((0, 0), data_text, font=FONTE_INFO)
             data_w = data_bbox[2] - data_bbox[0]
-            draw.text(((LARGURA - data_w) // 2, y0 + 85), data_text, font=FONTE_INFO, fill=(150, 200, 255))
+            draw.text(((LARGURA - data_w) // 2, y0 + 230), data_text, font=FONTE_INFO, fill=(150, 200, 255))
         except:
-            draw.text((LARGURA//2 - 80, y0 + 85), data_text, font=FONTE_INFO, fill=(150, 200, 255))
+            draw.text((LARGURA//2 - 80, y0 + 230), data_text, font=FONTE_INFO, fill=(150, 200, 255))
 
         try:
             hora_bbox = draw.textbbox((0, 0), hora_text, font=FONTE_INFO)
             hora_w = hora_bbox[2] - hora_bbox[0]
-            draw.text(((LARGURA - hora_w) // 2, y0 + 130), hora_text, font=FONTE_INFO, fill=(150, 200, 255))
+            draw.text(((LARGURA - hora_w) // 2, y0 + 230), hora_text, font=FONTE_INFO, fill=(150, 200, 255))
         except:
-            draw.text((LARGURA//2 - 80, y0 + 130), hora_text, font=FONTE_INFO, fill=(150, 200, 255))
+            draw.text((LARGURA//2 - 80, y0 + 230), hora_text, font=FONTE_INFO, fill=(150, 200, 255))
 
         # ESCUDOS DOS TIMES - AUMENTADOS
         TAMANHO_ESCUDO = 200
