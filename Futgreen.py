@@ -497,13 +497,13 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
         largura_total = 2 * TAMANHO_CIRCULO + ESPACO_ENTRE_ESCUDOS
 
          # Centralizar horizontalmente
-          x_inicio = (LARGURA - largura_total) // 2
-          x_home = x_inicio
-          x_away = x_home + TAMANHO_CIRCULO + ESPACO_ENTRE_ESCUDOS
+        x_inicio = (LARGURA - largura_total) // 2
+        x_home = x_inicio
+        x_away = x_home + TAMANHO_CIRCULO + ESPACO_ENTRE_ESCUDOS
 
         # Centralizar verticalmente dentro da área disponível
-         ALTURA_AREA_ESCUDOS = 300  # por exemplo, altura da área onde os escudos devem ficar
-         y_escudos = y0 + (ALTURA_AREA_ESCUDOS - TAMANHO_CIRCULO) // 2
+        ALTURA_AREA_ESCUDOS = 300  # por exemplo, altura da área onde os escudos devem ficar
+        y_escudos = y0 + (ALTURA_AREA_ESCUDOS - TAMANHO_CIRCULO) // 2
 
         # Baixar escudos
         escudo_home = baixar_imagem_url(jogo.get("escudo_home", ""))
