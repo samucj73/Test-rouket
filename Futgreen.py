@@ -415,10 +415,10 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
     Gera poster no estilo West Ham vs Burnley - VERSÃO CORRIGIDA
     """
     # Configurações aumentadas
-    LARGURA = 1850
+    LARGURA = 1800
     ALTURA_TOPO = 300
-    ALTURA_POR_JOGO = 950  # Aumentado para caber tudo
-    PADDING = 80
+    ALTURA_POR_JOGO = 900  # Aumentado para caber tudo
+    PADDING = 100
     
     jogos_count = len(jogos)
     altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
@@ -430,11 +430,11 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
     # Carregar fontes COM TAMANHOS MAIORES
     FONTE_TITULO = criar_fonte(95)
     FONTE_SUBTITULO = criar_fonte(65)
-    FONTE_TIMES = criar_fonte(55)
+    FONTE_TIMES = criar_fonte(60)
     FONTE_VS = criar_fonte(52)
     FONTE_INFO = criar_fonte(46)
     FONTE_DETALHES = criar_fonte(52)
-    FONTE_ANALISE = criar_fonte(55)
+    FONTE_ANALISE = criar_fonte(60)
 
     # Título PRINCIPAL
     try:
@@ -477,33 +477,29 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
         try:
             data_bbox = draw.textbbox((0, 0), data_text, font=FONTE_INFO)
             data_w = data_bbox[2] - data_bbox[0]
-            draw.text(((LARGURA - data_w) // 2, y0 + 90), data_text, font=FONTE_INFO, fill=(150, 200, 255))
+            draw.text(((LARGURA - data_w) // 2, y0 + 120), data_text, font=FONTE_INFO, fill=(150, 200, 255))
         except:
-            draw.text((LARGURA//2 - 90, y0 + 90), data_text, font=FONTE_INFO, fill=(150, 200, 255))
+            draw.text((LARGURA//2 - 120, y0 + 120), data_text, font=FONTE_INFO, fill=(150, 200, 255))
 
         try:
             hora_bbox = draw.textbbox((0, 0), hora_text, font=FONTE_INFO)
             hora_w = hora_bbox[2] - hora_bbox[0]
-            draw.text(((LARGURA - hora_w) // 2, y0 + 90), hora_text, font=FONTE_INFO, fill=(150, 200, 255))
+            draw.text(((LARGURA - hora_w) // 2, y0 + 120), hora_text, font=FONTE_INFO, fill=(150, 200, 255))
         except:
-            draw.text((LARGURA//2 - 90, y0 + 90), hora_text, font=FONTE_INFO, fill=(150, 200, 255))
+            draw.text((LARGURA//2 - 100, y0 + 120), hora_text, font=FONTE_INFO, fill=(150, 200, 255))
 
         # ESCUDOS DOS TIMES - CENTRALIZADOS E IGUAIS
-        TAMANHO_ESCUDO = 200       # tamanho final do logotipo dentro do círculo
-        TAMANHO_CIRCULO = 270      # diâmetro do círculo branco (aumente para mais espaço)
+        TAMANHO_ESCUDO = 180       # tamanho final do logotipo dentro do círculo
+        TAMANHO_CIRCULO = 220      # diâmetro do círculo branco (aumente para mais espaço)
         ESPACO_ENTRE_ESCUDOS = 650
 
-        ## Calcular largura total ocupada pelos dois escudos + espaço entre eles
+        # Calcular posição central
         largura_total = 2 * TAMANHO_CIRCULO + ESPACO_ENTRE_ESCUDOS
-
-         # Centralizar horizontalmente
         x_inicio = (LARGURA - largura_total) // 2
+
         x_home = x_inicio
         x_away = x_home + TAMANHO_CIRCULO + ESPACO_ENTRE_ESCUDOS
-
-        # Centralizar verticalmente dentro da área disponível
-        ALTURA_AREA_ESCUDOS = 300  # por exemplo, altura da área onde os escudos devem ficar
-        y_escudos = y0 + (ALTURA_AREA_ESCUDOS - TAMANHO_CIRCULO) // 2
+        y_escudos = y0 + 175
 
         # Baixar escudos
         escudo_home = baixar_imagem_url(jogo.get("escudo_home", ""))
@@ -577,15 +573,15 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
         y_analysis = y_escudos + TAMANHO_ESCUDO + 120
         
         # Linha separadora
-        draw.line([(x0 + 40, y_analysis - 10), (x1 - 50, y_analysis - 10)], fill=(100, 130, 160), width=2)
+        draw.line([(x0 + 50, y_analysis - 10), (x1 - 50, y_analysis - 10)], fill=(100, 130, 160), width=2)
 
         # Informações de análise
-        tendencia_emoji = "" if "Mais" in jogo['tendencia'] else "" if "Menos" in jogo['tendencia'] else ""
+        tendencia_emoji = "📈" if "Mais" in jogo['tendencia'] else "📉" if "Menos" in jogo['tendencia'] else "⚡"
         textos_analise = [
             f"{tendencia_emoji} Tendência: {jogo['tendencia']}",
-            f" Estimativa: {jogo['estimativa']:.2f} gols",
-            f" Confiança: {jogo['confianca']:.0f}%",
-            f"Status: {jogo['status']}"
+            f"⚽ Estimativa: {jogo['estimativa']:.2f} gols",
+            f"🎯 Confiança: {jogo['confianca']:.0f}%",
+            f"🕒 Status: {jogo['status']}"
         ]
         
         cores = [(255, 215, 0), (100, 200, 255), (100, 255, 100), (200, 200, 200)]
