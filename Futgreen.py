@@ -491,75 +491,79 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
         except:
             draw.text((LARGURA//2 - 100, y0 + 120), hora_text, font=FONTE_INFO, fill=(150, 200, 255))
 
-        # ESCUDOS DOS TIMES - AUMENTADOS
-        TAMANHO_ESCUDO = 200
-        espaco_entre_escudos = 650
-        
-        # Calcular posição central
-        largura_total_escudos = 2 * TAMANHO_ESCUDO + espaco_entre_escudos
-        x_inicio_escudos = (LARGURA - largura_total_escudos) // 2
-        
-        x_escudo_home = x_inicio_escudos
-        x_escudo_away = x_escudo_home + TAMANHO_ESCUDO + espaco_entre_escudos
-        y_escudos = y0 + 190
-        
-        # Baixar e desenhar escudos
-        escudo_home = baixar_imagem_url(jogo.get("escudo_home", ""))
-        escudo_away = baixar_imagem_url(jogo.get("escudo_away", ""))
-        
-        def desenhar_escudo(imagem, x, y, tamanho):
-            if imagem:
-                try:
-                    # Redimensionar mantendo proporção
-                    imagem.thumbnail((tamanho, tamanho), Image.Resampling.LANCZOS)
-                    
-                    # Criar máscara circular
-                    mask = Image.new("L", (tamanho, tamanho), 0)
-                    mask_draw = ImageDraw.Draw(mask)
-                    mask_draw.ellipse((0, 0, tamanho, tamanho), fill=255)
-                    
-                    # Calcular offset para centralizar
-                    offset_x = (tamanho - imagem.width) // 2
-                    offset_y = (tamanho - imagem.height) // 2
-                    
-                    # Criar imagem de fundo e colar o escudo
-                    bg = Image.new("RGBA", (tamanho, tamanho), (255, 255, 255, 0))
-                    bg.paste(imagem, (offset_x, offset_y))
-                    
-                    # Aplicar máscara circular
-                    img.paste(bg, (x, y), mask)
-                except Exception as e:
-                    # Placeholder circular
-                    draw.ellipse([x, y, x + tamanho, y + tamanho], fill=(60, 60, 60))
-                    draw.text((x + 40, y + 60), "TM", font=FONTE_INFO, fill=(255, 255, 255))
-            else:
-                # Placeholder circular
-                draw.ellipse([x, y, x + tamanho, y + tamanho], fill=(60, 60, 60))
-                draw.text((x + 40, y + 60), "TM", font=FONTE_INFO, fill=(255, 255, 255))
+        # ESCUDOS DOS TIMES - CENTRALIZADOS E IGUAIS
+TAMANHO_ESCUDO = 180       # tamanho final do logotipo dentro do círculo
+TAMANHO_CIRCULO = 220      # diâmetro do círculo branco (aumente para mais espaço)
+ESPACO_ENTRE_ESCUDOS = 650
 
-        # Desenhar escudos
-        desenhar_escudo(escudo_home, x_escudo_home, y_escudos, TAMANHO_ESCUDO)
-        desenhar_escudo(escudo_away, x_escudo_away, y_escudos, TAMANHO_ESCUDO)
+# Calcular posição central
+largura_total = 2 * TAMANHO_CIRCULO + ESPACO_ENTRE_ESCUDOS
+x_inicio = (LARGURA - largura_total) // 2
 
-        # Nomes dos times
-        home_text = jogo['home']
-        away_text = jogo['away']
-        
+x_home = x_inicio
+x_away = x_home + TAMANHO_CIRCULO + ESPACO_ENTRE_ESCUDOS
+y_escudos = y0 + 175
+
+# Baixar escudos
+escudo_home = baixar_imagem_url(jogo.get("escudo_home", ""))
+escudo_away = baixar_imagem_url(jogo.get("escudo_away", ""))
+
+def desenhar_escudo_padronizado(imagem, x, y, tamanho_circulo, tamanho_escudo):
+    # Desenha círculo branco de fundo
+    draw.ellipse(
+        [x, y, x + tamanho_circulo, y + tamanho_circulo],
+        fill=(255, 255, 255),
+        outline=(255, 255, 255)
+    )
+
+    if imagem:
         try:
-            home_bbox = draw.textbbox((0, 0), home_text, font=FONTE_TIMES)
-            home_w = home_bbox[2] - home_bbox[0]
-            draw.text((x_escudo_home + (TAMANHO_ESCUDO - home_w) // 2, y_escudos + TAMANHO_ESCUDO + 40), 
-                     home_text, font=FONTE_TIMES, fill=(255, 255, 255))
-        except:
-            draw.text((x_escudo_home, y_escudos + TAMANHO_ESCUDO + 40), home_text, font=FONTE_TIMES, fill=(255, 255, 255))
+            # Redimensionar escudo mantendo proporção
+            imagem.thumbnail((tamanho_escudo, tamanho_escudo), Image.Resampling.LANCZOS)
 
-        try:
-            away_bbox = draw.textbbox((0, 0), away_text, font=FONTE_TIMES)
-            away_w = away_bbox[2] - away_bbox[0]
-            draw.text((x_escudo_away + (TAMANHO_ESCUDO - away_w) // 2, y_escudos + TAMANHO_ESCUDO + 40), 
-                     away_text, font=FONTE_TIMES, fill=(255, 255, 255))
-        except:
-            draw.text((x_escudo_away, y_escudos + TAMANHO_ESCUDO + 40), away_text, font=FONTE_TIMES, fill=(255, 255, 255))
+            # Calcular centralização dentro do círculo
+            escudo_x = x + (tamanho_circulo - imagem.width) // 2
+            escudo_y = y + (tamanho_circulo - imagem.height) // 2
+
+            # Colar escudo sobre o círculo
+            img.paste(imagem, (escudo_x, escudo_y), imagem)
+
+        except Exception as e:
+            print(f"Erro ao carregar escudo: {e}")
+    else:
+        # Caso não haja escudo, desenha placeholder
+        draw.ellipse([x, y, x + tamanho_circulo, y + tamanho_circulo], fill=(60, 60, 60))
+        draw.text((x + 60, y + 85), "TM", font=FONTE_INFO, fill=(255, 255, 255))
+
+# Desenhar escudos padronizados
+desenhar_escudo_padronizado(escudo_home, x_home, y_escudos, TAMANHO_CIRCULO, TAMANHO_ESCUDO)
+desenhar_escudo_padronizado(escudo_away, x_away, y_escudos, TAMANHO_CIRCULO, TAMANHO_ESCUDO)
+
+# ======================
+# Nomes dos times
+# ======================
+home_text = jogo['home']
+away_text = jogo['away']
+
+try:
+    home_bbox = draw.textbbox((0, 0), home_text, font=FONTE_TIMES)
+    home_w = home_bbox[2] - home_bbox[0]
+    draw.text((x_home + (TAMANHO_CIRCULO - home_w)//2, y_escudos + TAMANHO_CIRCULO + 40),
+              home_text, font=FONTE_TIMES, fill=(255, 255, 255))
+except:
+    draw.text((x_home, y_escudos + TAMANHO_CIRCULO + 40),
+              home_text, font=FONTE_TIMES, fill=(255, 255, 255))
+
+try:
+    away_bbox = draw.textbbox((0, 0), away_text, font=FONTE_TIMES)
+    away_w = away_bbox[2] - away_bbox[0]
+    draw.text((x_away + (TAMANHO_CIRCULO - away_w)//2, y_escudos + TAMANHO_CIRCULO + 40),
+              away_text, font=FONTE_TIMES, fill=(255, 255, 255))
+except:
+    draw.text((x_away, y_escudos + TAMANHO_CIRCULO + 40),
+              away_text, font=FONTE_TIMES, fill=(255, 255, 255))
+
+        
 
         # VS centralizado
         try:
