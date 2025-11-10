@@ -428,7 +428,7 @@ def gerar_poster_elite(jogos: list, titulo: str = "🔥 Jogos de Alta Confiança
     FONTE_SUBTITULO = criar_fonte(60)  # MASSIVO  
     FONTE_TIMES = criar_fonte(65)  # MASSIVO
     FONTE_INFO = criar_fonte(48)  # MASSIVO
-    FONTE_DETALHES = criar_fonte(42)  # MASSIVO
+    FONTE_DETALHES = criar_fonte(60)  # MASSIVO
 
     # Título PRINCIPAL
     draw.text((PADDING, 100), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
@@ -450,14 +450,14 @@ def gerar_poster_elite(jogos: list, titulo: str = "🔥 Jogos de Alta Confiança
         
         # CENTRALIZAR OS ESCUDOS NA PARTE SUPERIOR
         espaco_total = LARGURA - 2 * PADDING
-        espaco_entre_escudos = 150
+        espaco_entre_escudos = 800
         largura_total_escudos = 2 * TAMANHO_ESCUDO + espaco_entre_escudos
         x_inicio_escudos = PADDING + (espaco_total - largura_total_escudos) // 2
         
         # Posição dos escudos (lado a lado)
         x_escudo_home = x_inicio_escudos
         x_escudo_away = x_escudo_home + TAMANHO_ESCUDO + espaco_entre_escudos
-        y_escudos = y0 + 60
+        y_escudos = y0 + 180
         
         # Baixar escudos
         escudo_home = baixar_imagem_url(jogo.get("escudo_home", ""))
