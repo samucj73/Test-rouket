@@ -564,7 +564,7 @@ except:
         
 
         # VS centralizado
- try:
+        try:
             vs_bbox = draw.textbbox((0, 0), "VS", font=FONTE_VS)
             vs_w = vs_bbox[2] - vs_bbox[0]
             draw.text(((LARGURA - vs_w) // 2, y_escudos + TAMANHO_ESCUDO + 30), 
