@@ -438,7 +438,7 @@ def gerar_poster_elite(jogos: list, titulo: str = "🔥 Jogos de Alta Confiança
     draw.text((PADDING, 220), subtitulo, font=FONTE_SUBTITULO, fill=(200, 200, 200))
 
     y_pos = ALTURA_TOPO
-    TAMANHO_ESCUDO = 280  # ESCUDOS MASSIVOS
+    TAMANHO_ESCUDO = 400  # ESCUDOS MASSIVOS
 
     for idx, jogo in enumerate(jogos):
         # Caixa do jogo - MUITO MAIOR
