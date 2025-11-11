@@ -847,7 +847,7 @@ def criar_poster_alerta(game: dict, predictions: dict, tipo: str = "previsao") -
     """Cria um pôster estilizado COM FONTE MAIOR, FUNDO BRANCO E CORES ROYAL BLUE"""
     try:
         # Configurações do pôster
-        largura, altura = 600, 680  # Aumentei um pouco para caber fontes maiores
+        largura, altura = 600, 700  # Aumentei um pouco para caber fontes maiores
         img = Image.new('RGB', (largura, altura), color='#ffffff')  # FUNDO BRANCO
         draw = ImageDraw.Draw(img)
         
