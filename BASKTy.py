@@ -784,6 +784,11 @@ def prever_total_points(home_id: int, away_id: int, window_games: int = 15) -> t
         
     return round(estimativa, 1), round(confianca, 1), tendencia
 
+#def prever_vencedor(home_id: int, away_id: int, window_games: int = 15) -> tuple[str, float, str]:
+    #"""Previsão de vencedor baseada
+
+# app_nba_elite_master.py (continuação)
+
 def prever_vencedor(home_id: int, away_id: int, window_games: int = 15) -> tuple[str, float, str]:
     """Previsão de vencedor baseada em dados reais da temporada 2024-2025"""
     home_stats = obter_estatisticas_time_2025(home_id, window_games)
@@ -835,11 +840,11 @@ def prever_vencedor(home_id: int, away_id: int, window_games: int = 15) -> tuple
     return vencedor, round(confianca, 1), detalhe
 
 # =============================
-# SISTEMA DE PÔSTERES PARA ALERTAS
+# SISTEMA DE PÔSTERES PARA ALERTAS - VERSÃO MELHORADA
 # =============================
 
 def criar_poster_alerta(game: dict, predictions: dict, tipo: str = "previsao") -> Image.Image:
-    """Cria um pôster estilizado para alertas"""
+    """Cria um pôster estilizado para alertas - VERSÃO MELHORADA"""
     try:
         # Configurações do pôster
         largura, altura = 800, 1200
@@ -848,16 +853,18 @@ def criar_poster_alerta(game: dict, predictions: dict, tipo: str = "previsao") -
         
         # Tenta carregar fontes (fallback se não encontrar)
         try:
-            fonte_titulo = ImageFont.truetype("arialbd.ttf", 48)
-            fonte_subtitulo = ImageFont.truetype("arial.ttf", 32)
-            fonte_texto = ImageFont.truetype("arial.ttf", 28)
-            fonte_pequena = ImageFont.truetype("arial.ttf", 22)
+            fonte_titulo = ImageFont.truetype("arialbd.ttf", 42)
+            fonte_subtitulo = ImageFont.truetype("arial.ttf", 28)
+            fonte_texto = ImageFont.truetype("arial.ttf", 24)
+            fonte_pequena = ImageFont.truetype("arial.ttf", 20)
+            fonte_grande = ImageFont.truetype("arialbd.ttf", 36)
         except:
             # Fallback para fontes básicas
             fonte_titulo = ImageFont.load_default()
             fonte_subtitulo = ImageFont.load_default()
             fonte_texto = ImageFont.load_default()
             fonte_pequena = ImageFont.load_default()
+            fonte_grande = ImageFont.load_default()
         
         # Cores do tema NBA
         cor_principal = "#1e40af"  # Azul NBA
@@ -866,11 +873,11 @@ def criar_poster_alerta(game: dict, predictions: dict, tipo: str = "previsao") -
         cor_destaque = "#fbbf24"   # Amarelo ouro
         
         # Header - Título
-        draw.rectangle([0, 0, largura, 100], fill=cor_principal)
+        draw.rectangle([0, 0, largura, 80], fill=cor_principal)
         titulo_texto = "🏀 NBA ELITE MASTER"
         bbox_titulo = draw.textbbox((0, 0), titulo_texto, font=fonte_titulo)
         largura_titulo = bbox_titulo[2] - bbox_titulo[0]
-        draw.text(((largura - largura_titulo) // 2, 25), titulo_texto, fill=cor_texto, font=fonte_titulo)
+        draw.text(((largura - largura_titulo) // 2, 20), titulo_texto, fill=cor_texto, font=fonte_titulo)
         
         # Informações do jogo
         home_team = game.get("home_team", {}).get("full_name", "Casa")
@@ -888,7 +895,7 @@ def criar_poster_alerta(game: dict, predictions: dict, tipo: str = "previsao") -
         else:
             data_str, hora_str = "Data não definida", "Horário não definido"
         
-        y_pos = 150
+        y_pos = 120
         
         # Data e horário
         data_hora_texto = f"📅 {data_str} ⏰ {hora_str} BRT"
@@ -896,43 +903,77 @@ def criar_poster_alerta(game: dict, predictions: dict, tipo: str = "previsao") -
         largura_data = bbox_data[2] - bbox_data[0]
         draw.text(((largura - largura_data) // 2, y_pos), data_hora_texto, 
                  fill=cor_destaque, font=fonte_subtitulo)
-        y_pos += 60
+        y_pos += 50
         
-        # Times com escudos
-        col_width = largura // 3
+        # CONFIGURAÇÃO DOS TIMES - LAYOUT MELHORADO
+        escudo_size = (100, 100)  # Escudos menores
+        espacamento = 30
         
-        # Time visitante
+        # Time visitante (TOP)
         try:
-            escudo_away = baixar_escudo_time(away_team, (120, 120))
-            img.paste(escudo_away, (col_width - 60, y_pos), escudo_away)
+            escudo_away = baixar_escudo_time(away_team, escudo_size)
+            pos_x_away = (largura - escudo_size[0]) // 2
+            img.paste(escudo_away, (pos_x_away, y_pos), escudo_away)
         except:
             pass
         
-        bbox_away = draw.textbbox((0, 0), away_team, font=fonte_texto)
+        # Nome e informações do visitante
+        away_text = f"{away_team}"
+        bbox_away = draw.textbbox((0, 0), away_text, font=fonte_texto)
         largura_away = bbox_away[2] - bbox_away[0]
-        draw.text((col_width, y_pos + 140), away_team, fill=cor_texto, font=fonte_texto, anchor="mm")
+        draw.text((largura // 2, y_pos + escudo_size[1] + 15), away_text, 
+                 fill=cor_texto, font=fonte_texto, anchor="mm")
         
-        # VS
-        draw.text((largura//2, y_pos + 60), "VS", fill=cor_destaque, font=fonte_titulo, anchor="mm")
+        # Placar se for resultado
+        if tipo == "resultado":
+            away_score = game.get("visitor_team_score", 0)
+            score_away_text = f"🟢 {away_score} PONTOS"
+            bbox_score_away = draw.textbbox((0, 0), score_away_text, font=fonte_grande)
+            largura_score_away = bbox_score_away[2] - bbox_score_away[0]
+            draw.text((largura // 2, y_pos + escudo_size[1] + 45), score_away_text, 
+                     fill="#22c55e", font=fonte_grande, anchor="mm")
         
-        # Time da casa
+        y_pos += escudo_size[1] + 70
+        
+        # VS centralizado
+        vs_text = "🆚 VS 🆚"
+        bbox_vs = draw.textbbox((0, 0), vs_text, font=fonte_grande)
+        largura_vs = bbox_vs[2] - bbox_vs[0]
+        draw.text((largura // 2, y_pos), vs_text, 
+                 fill=cor_destaque, font=fonte_grande, anchor="mm")
+        y_pos += 50
+        
+        # Time da casa (BOTTOM)
         try:
-            escudo_home = baixar_escudo_time(home_team, (120, 120))
-            img.paste(escudo_home, (2*col_width - 60, y_pos), escudo_home)
+            escudo_home = baixar_escudo_time(home_team, escudo_size)
+            pos_x_home = (largura - escudo_size[0]) // 2
+            img.paste(escudo_home, (pos_x_home, y_pos), escudo_home)
         except:
             pass
         
-        bbox_home = draw.textbbox((0, 0), home_team, font=fonte_texto)
+        # Nome e informações da casa
+        home_text = f"{home_team}"
+        bbox_home = draw.textbbox((0, 0), home_text, font=fonte_texto)
         largura_home = bbox_home[2] - bbox_home[0]
-        draw.text((2*col_width, y_pos + 140), home_team, fill=cor_texto, font=fonte_texto, anchor="mm")
+        draw.text((largura // 2, y_pos + escudo_size[1] + 15), home_text, 
+                 fill=cor_texto, font=fonte_texto, anchor="mm")
         
-        y_pos += 200
+        # Placar se for resultado
+        if tipo == "resultado":
+            home_score = game.get("home_team_score", 0)
+            score_home_text = f"🟢 {home_score} PONTOS"
+            bbox_score_home = draw.textbbox((0, 0), score_home_text, font=fonte_grande)
+            largura_score_home = bbox_score_home[2] - bbox_score_home[0]
+            draw.text((largura // 2, y_pos + escudo_size[1] + 45), score_home_text, 
+                     fill="#22c55e", font=fonte_grande, anchor="mm")
+        
+        y_pos += escudo_size[1] + 80
         
         # Linha divisória
-        draw.line([50, y_pos, largura-50, y_pos], fill=cor_secundaria, width=3)
-        y_pos += 40
+        draw.line([50, y_pos, largura-50, y_pos], fill=cor_secundaria, width=2)
+        y_pos += 30
         
-        # Previsões
+        # Previsões ou Resultados
         if tipo == "previsao":
             # Previsão de Total de Pontos
             total_pred = predictions.get("total", {})
@@ -941,7 +982,7 @@ def criar_poster_alerta(game: dict, predictions: dict, tipo: str = "previsao") -
                 largura_total_titulo = bbox_total_titulo[2] - bbox_total_titulo[0]
                 draw.text(((largura - largura_total_titulo) // 2, y_pos), "🎯 PREVISÃO - TOTAL DE PONTOS", 
                          fill=cor_destaque, font=fonte_subtitulo)
-                y_pos += 50
+                y_pos += 40
                 
                 tendencia = total_pred.get('tendencia', 'N/A')
                 estimativa = total_pred.get('estimativa', 0)
@@ -952,21 +993,21 @@ def criar_poster_alerta(game: dict, predictions: dict, tipo: str = "previsao") -
                 largura_tendencia = bbox_tendencia[2] - bbox_tendencia[0]
                 draw.text(((largura - largura_tendencia) // 2, y_pos), tendencia_texto, 
                          fill=cor_texto, font=fonte_texto)
-                y_pos += 40
+                y_pos += 35
                 
                 estimativa_texto = f"🎯 Estimativa: {estimativa:.1f} pontos"
                 bbox_estimativa = draw.textbbox((0, 0), estimativa_texto, font=fonte_texto)
                 largura_estimativa = bbox_estimativa[2] - bbox_estimativa[0]
                 draw.text(((largura - largura_estimativa) // 2, y_pos), estimativa_texto, 
                          fill=cor_texto, font=fonte_texto)
-                y_pos += 40
+                y_pos += 35
                 
                 confianca_texto = f"💪 Confiança: {confianca:.0f}%"
                 bbox_confianca = draw.textbbox((0, 0), confianca_texto, font=fonte_texto)
                 largura_confianca = bbox_confianca[2] - bbox_confianca[0]
                 draw.text(((largura - largura_confianca) // 2, y_pos), confianca_texto, 
                          fill=cor_texto, font=fonte_texto)
-                y_pos += 60
+                y_pos += 50
             
             # Previsão de Vencedor
             vencedor_pred = predictions.get("vencedor", {})
@@ -975,7 +1016,7 @@ def criar_poster_alerta(game: dict, predictions: dict, tipo: str = "previsao") -
                 largura_vencedor_titulo = bbox_vencedor_titulo[2] - bbox_vencedor_titulo[0]
                 draw.text(((largura - largura_vencedor_titulo) // 2, y_pos), "🏆 PREVISÃO - VENCEDOR", 
                          fill=cor_destaque, font=fonte_subtitulo)
-                y_pos += 50
+                y_pos += 40
                 
                 vencedor = vencedor_pred.get('vencedor', 'N/A')
                 confianca_venc = vencedor_pred.get('confianca', 0)
@@ -986,14 +1027,14 @@ def criar_poster_alerta(game: dict, predictions: dict, tipo: str = "previsao") -
                 largura_vencedor = bbox_vencedor[2] - bbox_vencedor[0]
                 draw.text(((largura - largura_vencedor) // 2, y_pos), vencedor_texto, 
                          fill=cor_texto, font=fonte_texto)
-                y_pos += 40
+                y_pos += 35
                 
                 confianca_venc_texto = f"💪 Confiança: {confianca_venc:.0f}%"
                 bbox_confianca_venc = draw.textbbox((0, 0), confianca_venc_texto, font=fonte_texto)
                 largura_confianca_venc = bbox_confianca_venc[2] - bbox_confianca_venc[0]
                 draw.text(((largura - largura_confianca_venc) // 2, y_pos), confianca_venc_texto, 
                          fill=cor_texto, font=fonte_texto)
-                y_pos += 40
+                y_pos += 35
                 
                 if detalhe:
                     detalhe_texto = f"📈 {detalhe}"
@@ -1013,35 +1054,15 @@ def criar_poster_alerta(game: dict, predictions: dict, tipo: str = "previsao") -
             largura_resultado_titulo = bbox_resultado_titulo[2] - bbox_resultado_titulo[0]
             draw.text(((largura - largura_resultado_titulo) // 2, y_pos), "📊 RESULTADO OFICIAL", 
                      fill=cor_destaque, font=fonte_subtitulo)
-            y_pos += 50
-            
-            # Placar
-            bbox_away_nome = draw.textbbox((0, 0), f"🏀 {away_team}", font=fonte_texto)
-            largura_away_nome = bbox_away_nome[2] - bbox_away_nome[0]
-            draw.text(((largura - largura_away_nome) // 2, y_pos), f"🏀 {away_team}", 
-                     fill=cor_texto, font=fonte_texto)
             y_pos += 40
             
-            placar_texto = f"🆚 {away_score} x {home_score}"
-            bbox_placar = draw.textbbox((0, 0), placar_texto, font=fonte_titulo)
-            largura_placar = bbox_placar[2] - bbox_placar[0]
-            draw.text(((largura - largura_placar) // 2, y_pos), placar_texto, 
-                     fill=cor_destaque, font=fonte_titulo)
-            y_pos += 60
-            
-            bbox_home_nome = draw.textbbox((0, 0), f"🏠 {home_team}", font=fonte_texto)
-            largura_home_nome = bbox_home_nome[2] - bbox_home_nome[0]
-            draw.text(((largura - largura_home_nome) // 2, y_pos), f"🏠 {home_team}", 
-                     fill=cor_texto, font=fonte_texto)
-            y_pos += 60
-            
             # Total de pontos
-            total_texto = f"📈 TOTAL: {total_pontos} PONTOS"
-            bbox_total = draw.textbbox((0, 0), total_texto, font=fonte_texto)
+            total_texto = f"🏀 TOTAL: {total_pontos} PONTOS"
+            bbox_total = draw.textbbox((0, 0), total_texto, font=fonte_grande)
             largura_total = bbox_total[2] - bbox_total[0]
             draw.text(((largura - largura_total) // 2, y_pos), total_texto, 
-                     fill=cor_texto, font=fonte_texto)
-            y_pos += 60
+                     fill="#22c55e", font=fonte_grande)
+            y_pos += 50
             
             # Resultados das previsões
             total_pred = predictions.get("total", {})
@@ -1058,7 +1079,7 @@ def criar_poster_alerta(game: dict, predictions: dict, tipo: str = "previsao") -
                 largura_resultado_total = bbox_resultado_total[2] - bbox_resultado_total[0]
                 draw.text(((largura - largura_resultado_total) // 2, y_pos), resultado_total_texto, 
                          fill=cor_resultado, font=fonte_texto)
-                y_pos += 40
+                y_pos += 35
             
             # Resultado Vencedor
             if vencedor_pred:
@@ -1071,22 +1092,22 @@ def criar_poster_alerta(game: dict, predictions: dict, tipo: str = "previsao") -
                 largura_resultado_vencedor = bbox_resultado_vencedor[2] - bbox_resultado_vencedor[0]
                 draw.text(((largura - largura_resultado_vencedor) // 2, y_pos), resultado_vencedor_texto, 
                          fill=cor_resultado, font=fonte_texto)
-                y_pos += 40
+                y_pos += 35
         
         # Footer
-        y_pos = altura - 80
+        y_pos = altura - 60
         draw.rectangle([0, y_pos, largura, altura], fill=cor_principal)
         
-        footer_texto1 = "🏆 ELITE MASTER - ANÁLISE COM DADOS REAIS 2024-2025"
-        bbox_footer1 = draw.textbbox((0, 0), footer_texto1, font=fonte_pequena)
-        largura_footer1 = bbox_footer1[2] - bbox_footer1[0]
-        draw.text(((largura - largura_footer1) // 2, y_pos + 10), footer_texto1, 
+        footer_texto = "🏆 ELITE MASTER - ANÁLISE COM DADOS REAIS 2024-2025"
+        bbox_footer = draw.textbbox((0, 0), footer_texto, font=fonte_pequena)
+        largura_footer = bbox_footer[2] - bbox_footer[0]
+        draw.text(((largura - largura_footer) // 2, y_pos + 15), footer_texto, 
                  fill=cor_texto, font=fonte_pequena)
         
         footer_texto2 = "📊 Sistema de Previsões NBA"
         bbox_footer2 = draw.textbbox((0, 0), footer_texto2, font=fonte_pequena)
         largura_footer2 = bbox_footer2[2] - bbox_footer2[0]
-        draw.text(((largura - largura_footer2) // 2, y_pos + 40), footer_texto2, 
+        draw.text(((largura - largura_footer2) // 2, y_pos + 35), footer_texto2, 
                  fill=cor_destaque, font=fonte_pequena)
         
         return img
