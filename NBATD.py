@@ -277,82 +277,286 @@ def calcular_tendencia(home: str, away: str, classificacao: dict) -> tuple[float
 
     return estimativa, confianca, tendencia
 
-def enviar_alerta_telegram(fixture: dict, tendencia: str, estimativa: float, confianca: float):
+def gerar_poster_individual_westham(fixture: dict, tendencia: str, estimativa: float, confianca: float) -> io.BytesIO:
+    """
+    Gera poster individual no estilo West Ham para alertas individuais
+    """
+    # Configurações
+    LARGURA = 1800
+    ALTURA = 1200
+    PADDING = 80
+
+    # Criar canvas
+    img = Image.new("RGB", (LARGURA, ALTURA), color=(10, 20, 30))
+    draw = ImageDraw.Draw(img)
+
+    # Carregar fontes
+    FONTE_TITULO = criar_fonte(80)
+    FONTE_SUBTITULO = criar_fonte(60)
+    FONTE_TIMES = criar_fonte(55)
+    FONTE_VS = criar_fonte(45)
+    FONTE_INFO = criar_fonte(40)
+    FONTE_DETALHES = criar_fonte(45)
+    FONTE_ANALISE = criar_fonte(50)
+    FONTE_ALERTA = criar_fonte(70)
+
+    # Título PRINCIPAL - ALERTA
+    titulo_text = "🎯 ALERTA DE GOLS 🎯"
+    try:
+        titulo_bbox = draw.textbbox((0, 0), titulo_text, font=FONTE_ALERTA)
+        titulo_w = titulo_bbox[2] - titulo_bbox[0]
+        draw.text(((LARGURA - titulo_w) // 2, 60), titulo_text, font=FONTE_ALERTA, fill=(255, 215, 0))
+    except:
+        draw.text((LARGURA//2 - 200, 60), titulo_text, font=FONTE_ALERTA, fill=(255, 215, 0))
+
+    # Linha decorativa
+    draw.line([(LARGURA//4, 150), (3*LARGURA//4, 150)], fill=(255, 215, 0), width=4)
+
+    # Informações da partida
     home = fixture["homeTeam"]["name"]
     away = fixture["awayTeam"]["name"]
     data_formatada, hora_formatada = formatar_data_iso(fixture["utcDate"])
     competicao = fixture.get("competition", {}).get("name", "Desconhecido")
     status = fixture.get("status", "DESCONHECIDO")
-    gols_home = fixture.get("score", {}).get("fullTime", {}).get("home")
-    gols_away = fixture.get("score", {}).get("fullTime", {}).get("away")
-    placar = f"{gols_home} x {gols_away}" if gols_home is not None and gols_away is not None else None
 
-    # Obter URLs dos escudos
-    escudo_home = fixture.get("homeTeam", {}).get("crest", "") or fixture.get("homeTeam", {}).get("logo", "")
-    escudo_away = fixture.get("awayTeam", {}).get("crest", "") or fixture.get("awayTeam", {}).get("logo", "")
+    # Nome da liga
+    try:
+        liga_bbox = draw.textbbox((0, 0), competicao.upper(), font=FONTE_SUBTITULO)
+        liga_w = liga_bbox[2] - liga_bbox[0]
+        draw.text(((LARGURA - liga_w) // 2, 180), competicao.upper(), font=FONTE_SUBTITULO, fill=(200, 200, 200))
+    except:
+        draw.text((LARGURA//2 - 150, 180), competicao.upper(), font=FONTE_SUBTITULO, fill=(200, 200, 200))
+
+    # Data e hora
+    data_hora_text = f"{data_formatada} • {hora_formatada} BRT • {status}"
+    try:
+        data_bbox = draw.textbbox((0, 0), data_hora_text, font=FONTE_INFO)
+        data_w = data_bbox[2] - data_bbox[0]
+        draw.text(((LARGURA - data_w) // 2, 260), data_hora_text, font=FONTE_INFO, fill=(150, 200, 255))
+    except:
+        draw.text((LARGURA//2 - 150, 260), data_hora_text, font=FONTE_INFO, fill=(150, 200, 255))
+
+    # ESCUDOS DOS TIMES
+    TAMANHO_ESCUDO = 180
+    TAMANHO_QUADRADO = 220
+    ESPACO_ENTRE_ESCUDOS = 500
+
+    # Calcular posição central
+    largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
+    x_inicio = (LARGURA - largura_total) // 2
+
+    x_home = x_inicio
+    x_away = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
+    y_escudos = 350
+
+    # Baixar escudos
+    escudo_home_url = fixture.get("homeTeam", {}).get("crest") or fixture.get("homeTeam", {}).get("logo", "")
+    escudo_away_url = fixture.get("awayTeam", {}).get("crest") or fixture.get("awayTeam", {}).get("logo", "")
     
-    # Emojis para a tendência
-    emoji_tendencia = "📈" if "Mais" in tendencia else "📉" if "Menos" in tendencia else "⚡"
+    escudo_home = baixar_imagem_url(escudo_home_url)
+    escudo_away = baixar_imagem_url(escudo_away_url)
+
+    def desenhar_escudo_quadrado(logo_img, x, y, tamanho_quadrado, tamanho_escudo):
+        # Fundo branco
+        draw.rectangle(
+            [x, y, x + tamanho_quadrado, y + tamanho_quadrado],
+            fill=(255, 255, 255),
+            outline=(255, 255, 255)
+        )
+
+        if logo_img is None:
+            # Placeholder caso falhe
+            draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(60, 60, 60))
+            draw.text((x + 60, y + 80), "SEM", font=FONTE_INFO, fill=(255, 255, 255))
+            return
+
+        try:
+            logo_img = logo_img.convert("RGBA")
+            largura, altura = logo_img.size
+            proporcao = largura / altura
+
+            # Cortar a imagem centralmente para ficar quadrada
+            if proporcao > 1:  # mais larga
+                nova_altura = altura
+                nova_largura = int(altura)
+                offset_x = (largura - nova_largura) // 2
+                offset_y = 0
+            else:  # mais alta
+                nova_largura = largura
+                nova_altura = int(largura)
+                offset_x = 0
+                offset_y = (altura - nova_altura) // 2
+
+            imagem_cortada = logo_img.crop((offset_x, offset_y, offset_x + nova_largura, offset_y + nova_altura))
+
+            # Redimensionar
+            imagem_final = imagem_cortada.resize((tamanho_escudo, tamanho_escudo), Image.Resampling.LANCZOS)
+
+            # Calcular centralização
+            pos_x = x + (tamanho_quadrado - tamanho_escudo) // 2
+            pos_y = y + (tamanho_quadrado - tamanho_escudo) // 2
+
+            # Colar escudo
+            img.paste(imagem_final, (pos_x, pos_y), imagem_final)
+
+        except Exception as e:
+            print(f"[ERRO ESCUDO] {e}")
+            draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(100, 100, 100))
+            draw.text((x + 60, y + 80), "ERR", font=FONTE_INFO, fill=(255, 255, 255))
+
+    # Desenhar escudos quadrados
+    desenhar_escudo_quadrado(escudo_home, x_home, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO)
+    desenhar_escudo_quadrado(escudo_away, x_away, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO)
+
+    # Nomes dos times
+    home_text = home[:20]  # Limitar tamanho
+    away_text = away[:20]
+
+    try:
+        home_bbox = draw.textbbox((0, 0), home_text, font=FONTE_TIMES)
+        home_w = home_bbox[2] - home_bbox[0]
+        draw.text((x_home + (TAMANHO_QUADRADO - home_w)//2, y_escudos + TAMANHO_QUADRADO + 40),
+                 home_text, font=FONTE_TIMES, fill=(255, 255, 255))
+    except:
+        draw.text((x_home, y_escudos + TAMANHO_QUADRADO + 40),
+                 home_text, font=FONTE_TIMES, fill=(255, 255, 255))
+
+    try:
+        away_bbox = draw.textbbox((0, 0), away_text, font=FONTE_TIMES)
+        away_w = away_bbox[2] - away_bbox[0]
+        draw.text((x_away + (TAMANHO_QUADRADO - away_w)//2, y_escudos + TAMANHO_QUADRADO + 40),
+                 away_text, font=FONTE_TIMES, fill=(255, 255, 255))
+    except:
+        draw.text((x_away, y_escudos + TAMANHO_QUADRADO + 40),
+                 away_text, font=FONTE_TIMES, fill=(255, 255, 255))
+
+    # VS centralizado
+    try:
+        vs_bbox = draw.textbbox((0, 0), "VS", font=FONTE_VS)
+        vs_w = vs_bbox[2] - vs_bbox[0]
+        vs_x = x_home + TAMANHO_QUADRADO + (ESPACO_ENTRE_ESCUDOS - vs_w) // 2
+        draw.text((vs_x, y_escudos + TAMANHO_QUADRADO//2 - 25), 
+                 "VS", font=FONTE_VS, fill=(255, 215, 0))
+    except:
+        vs_x = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS//2 - 25
+        draw.text((vs_x, y_escudos + TAMANHO_QUADRADO//2 - 25), "VS", font=FONTE_VS, fill=(255, 215, 0))
+
+    # SEÇÃO DE ANÁLISE
+    y_analysis = y_escudos + TAMANHO_QUADRADO + 120
+    
+    # Linha separadora
+    draw.line([(PADDING + 50, y_analysis - 20), (LARGURA - PADDING - 50, y_analysis - 20)], 
+             fill=(100, 130, 160), width=3)
+
+    # Informações de análise com destaque
+    tendencia_emoji = "📈" if "Mais" in tendencia else "📉" if "Menos" in tendencia else "⚡"
+    
+    textos_analise = [
+        f"{tendencia_emoji} TENDÊNCIA: {tendencia.upper()}",
+        f"⚽ ESTIMATIVA: {estimativa:.2f} GOLS",
+        f"🎯 CONFIANÇA: {confianca:.0f}%",
+    ]
+    
+    cores = [(255, 215, 0), (100, 200, 255), (100, 255, 100)]
+    
+    for i, (text, cor) in enumerate(zip(textos_analise, cores)):
+        try:
+            bbox = draw.textbbox((0, 0), text, font=FONTE_ANALISE)
+            w = bbox[2] - bbox[0]
+            draw.text(((LARGURA - w) // 2, y_analysis + i * 70), text, font=FONTE_ANALISE, fill=cor)
+        except:
+            draw.text((PADDING + 100, y_analysis + i * 70), text, font=FONTE_ANALISE, fill=cor)
+
+    # Indicador de força da confiança
+    y_indicator = y_analysis + 220
+    if confianca >= 80:
+        indicador_text = "🔥🔥 ALTA CONFIABILIDADE 🔥🔥"
+        cor_indicador = (76, 175, 80)  # Verde
+    elif confianca >= 60:
+        indicador_text = "⚡⚡ MÉDIA CONFIABILIDADE ⚡⚡"
+        cor_indicador = (255, 193, 7)   # Amarelo
+    else:
+        indicador_text = "⚠️⚠️ CONFIABILIDADE MODERADA ⚠️⚠️"
+        cor_indicador = (255, 152, 0)   # Laranja
+
+    try:
+        ind_bbox = draw.textbbox((0, 0), indicador_text, font=FONTE_DETALHES)
+        ind_w = ind_bbox[2] - ind_bbox[0]
+        draw.text(((LARGURA - ind_w) // 2, y_indicator), indicador_text, font=FONTE_DETALHES, fill=cor_indicador)
+    except:
+        draw.text((LARGURA//2 - 200, y_indicator), indicador_text, font=FONTE_DETALHES, fill=cor_indicador)
+
+    # Rodapé
+    rodape_text = f"ELITE MASTER SYSTEM • {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+    try:
+        rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_INFO)
+        rodape_w = rodape_bbox[2] - rodape_bbox[0]
+        draw.text(((LARGURA - rodape_w) // 2, ALTURA - 60), rodape_text, font=FONTE_INFO, fill=(100, 130, 160))
+    except:
+        draw.text((LARGURA//2 - 150, ALTURA - 60), rodape_text, font=FONTE_INFO, fill=(100, 130, 160))
+
+    # Salvar imagem
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG", optimize=True, quality=95)
+    buffer.seek(0)
+    
+    return buffer
+
+def enviar_alerta_telegram(fixture: dict, tendencia: str, estimativa: float, confianca: float):
+    """Envia alerta individual com poster estilo West Ham"""
+    try:
+        # Gerar poster individual
+        poster = gerar_poster_individual_westham(fixture, tendencia, estimativa, confianca)
+        
+        # Criar caption para o Telegram
+        home = fixture["homeTeam"]["name"]
+        away = fixture["awayTeam"]["name"]
+        data_formatada, hora_formatada = formatar_data_iso(fixture["utcDate"])
+        competicao = fixture.get("competition", {}).get("name", "Desconhecido")
+        
+        caption = (
+            f"<b>🎯 ALERTA DE GOLS INDIVIDUAL</b>\n\n"
+            f"<b>🏆 {competicao}</b>\n"
+            f"<b>📅 {data_formatada}</b> | <b>⏰ {hora_formatada} BRT</b>\n\n"
+            f"<b>🏠 {home}</b> vs <b>✈️ {away}</b>\n\n"
+            f"<b>📈 Tendência: {tendencia.upper()}</b>\n"
+            f"<b>⚽ Estimativa: {estimativa:.2f} gols</b>\n"
+            f"<b>🎯 Confiança: {confianca:.0f}%</b>\n\n"
+            f"<b>🔥 ELITE MASTER SYSTEM - ANÁLISE PREDITIVA</b>"
+        )
+        
+        # Enviar foto
+        if enviar_foto_telegram(poster, caption=caption):
+            st.success(f"📤 Alerta individual enviado: {home} vs {away}")
+            return True
+        else:
+            st.error(f"❌ Falha ao enviar alerta individual: {home} vs {away}")
+            return False
+            
+    except Exception as e:
+        st.error(f"❌ Erro ao enviar alerta individual: {str(e)}")
+        # Fallback para mensagem de texto
+        return enviar_alerta_telegram_fallback(fixture, tendencia, estimativa, confianca)
+
+def enviar_alerta_telegram_fallback(fixture: dict, tendencia: str, estimativa: float, confianca: float) -> bool:
+    """Fallback para alerta em texto caso o poster falhe"""
+    home = fixture["homeTeam"]["name"]
+    away = fixture["awayTeam"]["name"]
+    data_formatada, hora_formatada = formatar_data_iso(fixture["utcDate"])
+    competicao = fixture.get("competition", {}).get("name", "Desconhecido")
     
     msg = (
         f"<b>🎯 ALERTA DE GOLS 🎯</b>\n\n"
-        
         f"<b>🏆 {competicao}</b>\n"
-        f"<b>📅 {data_formatada}</b> | <b>⏰ {hora_formatada} BRT</b>\n"
-        f"<b>📌 Status:</b> {status}\n"
+        f"<b>📅 {data_formatada}</b> | <b>⏰ {hora_formatada} BRT</b>\n\n"
+        f"<b>🏠 {home}</b> vs <b>✈️ {away}</b>\n\n"
+        f"<b>📈 Tendência: {tendencia.upper()}</b>\n"
+        f"<b>⚽ Estimativa: {estimativa:.2f} gols</b>\n"
+        f"<b>🎯 Confiança: {confianca:.0f}%</b>\n\n"
+        f"<b>🔥 ELITE MASTER SYSTEM</b>"
     )
     
-    if placar:
-        msg += f"<b>📊 PLACAR ATUAL: {placar}</b>\n\n"
-    else:
-        msg += "\n"
-    
-    # Card dos times com escudos - MAIOR E MAIS DESTAQUE
-    msg += (
-        f"<b>━━━━━━━━━━━━━━ PARTIDA ━━━━━━━━━━━━━━</b>\n\n"
-        
-        f"<b>🏠 CASA:</b>\n"
-        f"<b>🔵 {home}</b>\n"
-    )
-    
-    if escudo_home:
-        msg += f"<b>🛡️ ESCUDO:</b> <a href='{escudo_home}'>🔗 CLIQUE AQUI PARA VER ESCUDO</a>\n"
-    
-    msg += f"\n<b>────────────── 🆚 ──────────────</b>\n\n"
-    
-    msg += (
-        f"<b>✈️ VISITANTE:</b>\n"
-        f"<b>🔴 {away}</b>\n"
-    )
-    
-    if escudo_away:
-        msg += f"<b>🛡️ ESCUDO:</b> <a href='{escudo_away}'>🔗 CLIQUE AQUI PARA VER ESCUDO</a>\n"
-    
-    msg += f"\n<b>━━━━━━━━━━━━━━ ANÁLISE ━━━━━━━━━━━━━━</b>\n\n"
-    
-    # Informações de análise - MAIOR DESTAQUE
-    msg += (
-        f"<b>{emoji_tendencia} TENDÊNCIA DE GOLS:</b>\n"
-        f"<b>🎲 {tendencia.upper()}</b>\n\n"
-        
-        f"<b>📊 ESTIMATIVA DE GOLS:</b>\n"
-        f"<b>⚽ {estimativa:.2f} GOLS</b>\n\n"
-        
-        f"<b>🎯 NÍVEL DE CONFIANÇA:</b>\n"
-        f"<b>💯 {confianca:.0f}%</b>\n\n"
-    )
-    
-    # Indicador visual de força - MAIOR DESTAQUE
-    if confianca >= 80:
-        msg += f"<b>🔥🔥 ALTA CONFIABILIDADE 🔥🔥</b>\n"
-    elif confianca >= 60:
-        msg += f"<b>⚡⚡ MÉDIA CONFIABILIDADE ⚡⚡</b>\n"
-    else:
-        msg += f"<b>⚠️⚠️ CONFIABILIDADE MODERADA ⚠️⚠️</b>\n"
-    
-    msg += f"\n<b>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</b>"
-    
-    enviar_telegram(msg)
+    return enviar_telegram(msg)
 
 def verificar_enviar_alerta(fixture: dict, tendencia: str, estimativa: float, confianca: float):
     alertas = carregar_alertas()
