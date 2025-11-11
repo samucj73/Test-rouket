@@ -847,7 +847,7 @@ def criar_poster_alerta(game: dict, predictions: dict, tipo: str = "previsao") -
     """Cria um pôster estilizado COM PREVISÕES EM COLUNAS LADO A LADO"""
     try:
         # Configurações do pôster
-        largura, altura = 600, 600
+        largura, altura = 600, 680
         img = Image.new('RGB', (largura, altura), color='#0c0c0c')
         draw = ImageDraw.Draw(img)
         
@@ -924,8 +924,8 @@ def criar_poster_alerta(game: dict, predictions: dict, tipo: str = "previsao") -
         away_team = game.get("visitor_team", {}).get("full_name", "Visitante")
         
         # Configurações do layout horizontal
-        escudo_size = (140, 140)
-        espacamento = 80
+        escudo_size = (120, 120)
+        espacamento = 100
         largura_total_teams = (escudo_size[0] * 2) + espacamento + 100
         start_x = (largura - largura_total_teams) // 2
         
