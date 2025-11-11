@@ -451,11 +451,11 @@ def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADO
     # Carregar fontes
     FONTE_TITULO = criar_fonte(100)
     FONTE_SUBTITULO = criar_fonte(65)
-    FONTE_TIMES = criar_fonte(65)
+    FONTE_TIMES = criar_fonte(70)
     FONTE_PLACAR = criar_fonte(100)
     FONTE_VS = criar_fonte(70)
     FONTE_INFO = criar_fonte(45)
-    FONTE_ANALISE = criar_fonte(70)
+    FONTE_ANALISE = criar_fonte(75)
     FONTE_RESULTADO = criar_fonte(70)  # Fonte maior para RED/GREEN
 
     # Título PRINCIPAL
@@ -509,7 +509,7 @@ def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADO
         try:
             badge_bbox = draw.textbbox((0, 0), badge_text, font=FONTE_RESULTADO)
             badge_w = badge_bbox[2] - badge_bbox[0] + 40
-            badge_h = 80
+            badge_h = 90
             badge_x = x1 - badge_w - 20
             badge_y = y0 + 20
             
