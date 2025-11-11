@@ -437,8 +437,8 @@ def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADO
     """
     # Configurações do poster
     LARGURA = 2400
-    ALTURA_TOPO = 350
-    ALTURA_POR_JOGO = 900  # Ajustado para melhor layout
+    ALTURA_TOPO = 400
+    ALTURA_POR_JOGO = 950  # Ajustado para melhor layout
     PADDING = 120
     
     jogos_count = len(jogos)
@@ -455,7 +455,7 @@ def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADO
     FONTE_PLACAR = criar_fonte(100)
     FONTE_VS = criar_fonte(70)
     FONTE_INFO = criar_fonte(45)
-    FONTE_ANALISE = criar_fonte(65)
+    FONTE_ANALISE = criar_fonte(70)
     FONTE_RESULTADO = criar_fonte(70)  # Fonte maior para RED/GREEN
 
     # Título PRINCIPAL
@@ -509,7 +509,7 @@ def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADO
         try:
             badge_bbox = draw.textbbox((0, 0), badge_text, font=FONTE_RESULTADO)
             badge_w = badge_bbox[2] - badge_bbox[0] + 40
-            badge_h = 50
+            badge_h = 80
             badge_x = x1 - badge_w - 20
             badge_y = y0 + 20
             
@@ -543,7 +543,7 @@ def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADO
 
         # ESCUDOS E PLACAR
         TAMANHO_ESCUDO = 200
-        TAMANHO_QUADRADO = 210
+        TAMANHO_QUADRADO = 220
         ESPACO_ENTRE_ESCUDOS = 700
 
         # Calcular posição central
@@ -598,8 +598,8 @@ def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADO
             draw.text((x_placar, y_escudos + 30), placar_text, font=FONTE_PLACAR, fill=(255, 255, 255))
 
         # Nomes dos times
-        home_text = jogo['home'][:20]  # Limitar tamanho do nome
-        away_text = jogo['away'][:20]
+        home_text = jogo['home'][:15]  # Limitar tamanho do nome
+        away_text = jogo['away'][:15]
 
         try:
             home_bbox = draw.textbbox((0, 0), home_text, font=FONTE_TIMES)
@@ -639,9 +639,9 @@ def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADO
             try:
                 bbox = draw.textbbox((0, 0), text, font=FONTE_ANALISE)
                 w = bbox[2] - bbox[0]
-                draw.text(((LARGURA - w) // 2, y_analysis + i * 80), text, font=FONTE_ANALISE, fill=cor)
+                draw.text(((LARGURA - w) // 2, y_analysis + i * 90), text, font=FONTE_ANALISE, fill=cor)
             except:
-                draw.text((PADDING + 100, y_analysis + i * 80), text, font=FONTE_ANALISE, fill=cor)
+                draw.text((PADDING + 100, y_analysis + i * 90), text, font=FONTE_ANALISE, fill=cor)
 
         y_pos += ALTURA_POR_JOGO
 
