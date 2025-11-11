@@ -437,9 +437,9 @@ def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADO
     """
     # Configurações do poster
     LARGURA = 2000
-    ALTURA_TOPO = 300
-    ALTURA_POR_JOGO = 850  # Ajustado para melhor layout
-    PADDING = 100
+    ALTURA_TOPO = 350
+    ALTURA_POR_JOGO = 950  # Ajustado para melhor layout
+    PADDING = 120
     
     jogos_count = len(jogos)
     altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
@@ -542,9 +542,9 @@ def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADO
             draw.text((LARGURA//2 - 150, y0 + 110), data_text, font=FONTE_INFO, fill=(120, 180, 240))
 
         # ESCUDOS E PLACAR
-        TAMANHO_ESCUDO = 160
-        TAMANHO_QUADRADO = 200
-        ESPACO_ENTRE_ESCUDOS = 800
+        TAMANHO_ESCUDO = 200
+        TAMANHO_QUADRADO = 220
+        ESPACO_ENTRE_ESCUDOS = 1400
 
         # Calcular posição central
         largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS + 200
@@ -628,9 +628,9 @@ def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADO
 
         # Informações de análise
         textos_analise = [
-            f"🎯 Previsão: {jogo['tendencia_prevista']}",
-            f"📊 Real: {total_gols} gols | Estimativa: {jogo['estimativa_prevista']:.2f}",
-            f"⚽ Confiança: {jogo['confianca_prevista']:.0f}% | Resultado: {texto_resultado}"
+            f"Previsão: {jogo['tendencia_prevista']}",
+            f"Real: {total_gols} gols | Estimativa: {jogo['estimativa_prevista']:.2f}",
+            f"Confiança: {jogo['confianca_prevista']:.0f}% | Resultado: {texto_resultado}"
         ]
         
         cores = [(255, 255, 255), (200, 220, 255), cor_resultado]
@@ -639,9 +639,9 @@ def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADO
             try:
                 bbox = draw.textbbox((0, 0), text, font=FONTE_ANALISE)
                 w = bbox[2] - bbox[0]
-                draw.text(((LARGURA - w) // 2, y_analysis + i * 65), text, font=FONTE_ANALISE, fill=cor)
+                draw.text(((LARGURA - w) // 2, y_analysis + i * 80), text, font=FONTE_ANALISE, fill=cor)
             except:
-                draw.text((PADDING + 100, y_analysis + i * 65), text, font=FONTE_ANALISE, fill=cor)
+                draw.text((PADDING + 100, y_analysis + i * 80), text, font=FONTE_ANALISE, fill=cor)
 
         y_pos += ALTURA_POR_JOGO
 
