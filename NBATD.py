@@ -542,7 +542,7 @@ def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADO
             draw.text((LARGURA//2 - 150, y0 + 110), data_text, font=FONTE_INFO, fill=(120, 180, 240))
 
         # ESCUDOS E PLACAR
-        TAMANHO_ESCUDO = 260
+        TAMANHO_ESCUDO = 245
         TAMANHO_QUADRADO = 280
         ESPACO_ENTRE_ESCUDOS = 700
 
