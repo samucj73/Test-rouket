@@ -847,17 +847,17 @@ def criar_poster_alerta(game: dict, predictions: dict, tipo: str = "previsao") -
     """Cria um pôster estilizado COM TIMES NA HORIZONTAL"""
     try:
         # Configurações do pôster
-        largura, altura = 600, 600
+        largura, altura = 600, 550
         img = Image.new('RGB', (largura, altura), color='#0c0c0c')
         draw = ImageDraw.Draw(img)
         
         # Tenta carregar fontes
         try:
-            fonte_titulo = ImageFont.truetype("arialbd.ttf", 60)
-            fonte_subtitulo = ImageFont.truetype("arial.ttf", 55)
-            fonte_texto = ImageFont.truetype("arial.ttf", 45)
-            fonte_pequena = ImageFont.truetype("arial.ttf", 44)
-            fonte_grande = ImageFont.truetype("arialbd.ttf", 55)
+            fonte_titulo = ImageFont.truetype("arialbd.ttf", 100)
+            fonte_subtitulo = ImageFont.truetype("arial.ttf", 80)
+            fonte_texto = ImageFont.truetype("arial.ttf", 80)
+            fonte_pequena = ImageFont.truetype("arial.ttf", 80)
+            fonte_grande = ImageFont.truetype("arialbd.ttf", 100)
         except:
             fonte_titulo = ImageFont.load_default()
             fonte_subtitulo = ImageFont.load_default()
