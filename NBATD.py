@@ -436,9 +436,9 @@ def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADO
     Gera poster profissional com resultados finais dos jogos - VERSÃO CORRIGIDA COM RED/GREEN
     """
     # Configurações do poster
-    LARGURA = 1800
+    LARGURA = 2400
     ALTURA_TOPO = 350
-    ALTURA_POR_JOGO = 950  # Ajustado para melhor layout
+    ALTURA_POR_JOGO = 900  # Ajustado para melhor layout
     PADDING = 120
     
     jogos_count = len(jogos)
@@ -452,7 +452,7 @@ def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADO
     FONTE_TITULO = criar_fonte(100)
     FONTE_SUBTITULO = criar_fonte(65)
     FONTE_TIMES = criar_fonte(65)
-    FONTE_PLACAR = criar_fonte(140)
+    FONTE_PLACAR = criar_fonte(100)
     FONTE_VS = criar_fonte(70)
     FONTE_INFO = criar_fonte(45)
     FONTE_ANALISE = criar_fonte(65)
@@ -509,7 +509,7 @@ def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADO
         try:
             badge_bbox = draw.textbbox((0, 0), badge_text, font=FONTE_RESULTADO)
             badge_w = badge_bbox[2] - badge_bbox[0] + 40
-            badge_h = 80
+            badge_h = 50
             badge_x = x1 - badge_w - 20
             badge_y = y0 + 20
             
@@ -543,16 +543,16 @@ def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADO
 
         # ESCUDOS E PLACAR
         TAMANHO_ESCUDO = 200
-        TAMANHO_QUADRADO = 220
+        TAMANHO_QUADRADO = 210
         ESPACO_ENTRE_ESCUDOS = 700
 
         # Calcular posição central
-        largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS + 200
+        largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS 
         x_inicio = (LARGURA - largura_total) // 2
 
         x_home = x_inicio
         x_placar = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS//2 - 100
-        x_away = x_placar + 200
+        x_away = x_placar + 450
 
         y_escudos = y0 + 180
 
