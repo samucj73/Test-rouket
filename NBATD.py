@@ -436,7 +436,7 @@ def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADO
     Gera poster profissional com resultados finais dos jogos - VERSÃO CORRIGIDA COM RED/GREEN
     """
     # Configurações do poster
-    LARGURA = 2000
+    LARGURA = 1800
     ALTURA_TOPO = 350
     ALTURA_POR_JOGO = 950  # Ajustado para melhor layout
     PADDING = 120
@@ -544,7 +544,7 @@ def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADO
         # ESCUDOS E PLACAR
         TAMANHO_ESCUDO = 200
         TAMANHO_QUADRADO = 220
-        ESPACO_ENTRE_ESCUDOS = 1400
+        ESPACO_ENTRE_ESCUDOS = 700
 
         # Calcular posição central
         largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS + 200
