@@ -925,7 +925,7 @@ def criar_poster_alerta(game: dict, predictions: dict, tipo: str = "previsao") -
         
         # Configurações do layout horizontal
         escudo_size = (120, 120)
-        espacamento = 80
+        espacamento = 75
         largura_total_teams = (escudo_size[0] * 2) + espacamento + 100
         start_x = (largura - largura_total_teams) // 2
         
