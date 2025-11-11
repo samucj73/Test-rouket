@@ -331,6 +331,125 @@ def obter_jogos_data(data_str: str) -> list:
     return jogos
 
 # =============================
+# FUNÇÕES DE IMAGEM E ESCUDOS
+# =============================
+def baixar_escudo_time(time_nome: str, tamanho: tuple = (120, 120)) -> Image.Image:
+    """Baixa e converte escudo SVG para PNG com fallbacks"""
+    try:
+        # URL do logo do time
+        logo_url = NBA_LOGOS.get(time_nome, "")
+        
+        if not logo_url:
+            return criar_escudo_fallback(time_nome, tamanho)
+        
+        # Baixa o SVG
+        resposta = requests.get(logo_url, timeout=10)
+        if resposta.status_code != 200:
+            return criar_escudo_fallback(time_nome, tamanho)
+        
+        # Converte SVG para PNG usando cairosvg
+        svg_content = resposta.content
+        
+        # Converte SVG para PNG em memória
+        png_data = cairosvg.svg2png(bytestring=svg_content, output_width=tamanho[0], output_height=tamanho[1])
+        
+        # Converte para PIL Image
+        img = Image.open(io.BytesIO(png_data))
+        
+        # Converte para RGBA se necessário
+        if img.mode != 'RGBA':
+            img = img.convert('RGBA')
+            
+        return img
+            
+    except Exception as e:
+        print(f"Erro ao converter SVG para PNG do {time_nome}: {e}")
+        # Fallback para escudo personalizado
+        return criar_escudo_fallback(time_nome, tamanho)
+
+def criar_escudo_fallback(time_nome: str, tamanho: tuple) -> Image.Image:
+    """Cria um escudo fallback com as iniciais do time"""
+    img = Image.new('RGBA', tamanho, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    
+    # Cores baseadas no nome do time
+    cores = {
+        'Lakers': (85, 37, 130),    # Roxo
+        'Warriors': (29, 66, 138),   # Azul
+        'Celtics': (0, 122, 51),     # Verde
+        'Bulls': (206, 17, 65),      # Vermelho
+        'Heat': (152, 0, 46),        # Vermelho
+        'Knicks': (0, 107, 182),     # Azul
+        'Cavaliers': (134, 0, 56),   # Vinho
+        'Spurs': (196, 206, 212),    # Prata
+        'Mavericks': (0, 83, 188),   # Azul
+        'default': (255, 125, 0)     # Laranja NBA
+    }
+    
+    # Encontra a cor do time
+    cor_time = cores['default']
+    for nome, cor in cores.items():
+        if nome.lower() in time_nome.lower():
+            cor_time = cor
+            break
+    
+    # Desenha círculo do escudo
+    centro_x, centro_y = tamanho[0] // 2, tamanho[1] // 2
+    raio = min(tamanho) // 2 - 10
+    
+    # Círculo de fundo
+    draw.ellipse([centro_x - raio, centro_y - raio, centro_x + raio, centro_y + raio], 
+                fill=cor_time, outline=(50, 50, 50), width=2)
+    
+    # Iniciais do time
+    try:
+        # Pega as 2-3 primeiras letras ou sigla
+        palavras = time_nome.split()
+        if len(palavras) >= 2:
+            iniciais = ''.join([p[0].upper() for p in palavras[:2]])
+        else:
+            iniciais = time_nome[:3].upper()
+        
+        # Tenta carregar fonte, fallback para tamanho fixo
+        try:
+            tamanho_fonte = max(20, raio // 2)
+            fonte = ImageFont.truetype("arial.ttf", tamanho_fonte)
+        except:
+            tamanho_fonte = 30
+            fonte = ImageFont.load_default()
+        
+        # Calcula posição do texto
+        bbox = draw.textbbox((0, 0), iniciais, font=fonte)
+        texto_largura = bbox[2] - bbox[0]
+        texto_altura = bbox[3] - bbox[1]
+        
+        pos_x = centro_x - texto_largura // 2
+        pos_y = centro_y - texto_altura // 2
+        
+        draw.text((pos_x, pos_y), iniciais, fill="white", font=fonte)
+        
+    except Exception:
+        # Fallback extremo - desenha "NBA"
+        draw.text((centro_x-15, centro_y-10), "NBA", fill="white")
+    
+    return img
+
+def image_to_base64(img: Image.Image) -> str:
+    """Converte PIL Image para base64"""
+    buffered = io.BytesIO()
+    img.save(buffered, format="PNG")
+    return base64.b64encode(buffered.getvalue()).decode()
+
+def exibir_escudo_time(time_nome: str, tamanho: tuple = (80, 80)):
+    """Exibe escudo do time no Streamlit"""
+    try:
+        img = baixar_escudo_time(time_nome, tamanho)
+        img_base64 = image_to_base64(img)
+        st.image(f"data:image/png;base64,{img_base64}", width=tamanho[0])
+    except Exception as e:
+        st.error(f"❌ Erro ao carregar escudo: {e}")
+
+# =============================
 # ATUALIZAR RESULTADOS DAS PARTIDAS
 # =============================
 def atualizar_resultados_partidas():
@@ -716,136 +835,600 @@ def prever_vencedor(home_id: int, away_id: int, window_games: int = 15) -> tuple
     return vencedor, round(confianca, 1), detalhe
 
 # =============================
-# FUNÇÕES DE IMAGEM E ESCUDOS COM CONVERSOR SVG PARA PNG
+# ALERTAS E TELEGRAM
 # =============================
-def baixar_escudo_time(time_nome: str, tamanho: tuple = (120, 120)) -> Image.Image:
-    """Baixa e converte escudo SVG para PNG com fallbacks"""
+def enviar_telegram(msg: str, chat_id: str = TELEGRAM_CHAT_ID) -> bool:
     try:
-        # URL do logo do time
-        logo_url = NBA_LOGOS.get(time_nome, "")
-        
-        if not logo_url:
-            return criar_escudo_fallback(time_nome, tamanho)
-        
-        # Baixa o SVG
-        resposta = requests.get(logo_url, timeout=10)
-        if resposta.status_code != 200:
-            return criar_escudo_fallback(time_nome, tamanho)
-        
-        # Converte SVG para PNG usando cairosvg
-        svg_content = resposta.content
-        
-        # Converte SVG para PNG em memória
-        png_data = cairosvg.svg2png(bytestring=svg_content, output_width=tamanho[0], output_height=tamanho[1])
-        
-        # Converte para PIL Image
-        img = Image.open(io.BytesIO(png_data))
-        
-        # Converte para RGBA se necessário
-        if img.mode != 'RGBA':
-            img = img.convert('RGBA')
-            
-        return img
-            
-    except Exception as e:
-        print(f"Erro ao converter SVG para PNG do {time_nome}: {e}")
-        # Fallback para escudo personalizado
-        return criar_escudo_fallback(time_nome, tamanho)
+        resp = requests.get(BASE_URL_TG, params={"chat_id": chat_id, "text": msg, "parse_mode": "HTML"}, timeout=10)
+        return resp.status_code == 200
+    except requests.RequestException:
+        return False
 
-def criar_escudo_fallback(time_nome: str, tamanho: tuple) -> Image.Image:
-    """Cria um escudo fallback com as iniciais do time"""
-    img = Image.new('RGBA', tamanho, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-    
-    # Cores baseadas no nome do time
-    cores = {
-        'Lakers': (85, 37, 130),    # Roxo
-        'Warriors': (29, 66, 138),   # Azul
-        'Celtics': (0, 122, 51),     # Verde
-        'Bulls': (206, 17, 65),      # Vermelho
-        'Heat': (152, 0, 46),        # Vermelho
-        'Knicks': (0, 107, 182),     # Azul
-        'Cavaliers': (134, 0, 56),   # Vinho
-        'Spurs': (196, 206, 212),    # Prata
-        'Mavericks': (0, 83, 188),   # Azul
-        'default': (255, 125, 0)     # Laranja NBA
-    }
-    
-    # Encontra a cor do time
-    cor_time = cores['default']
-    for nome, cor in cores.items():
-        if nome.lower() in time_nome.lower():
-            cor_time = cor
-            break
-    
-    # Desenha círculo do escudo
-    centro_x, centro_y = tamanho[0] // 2, tamanho[1] // 2
-    raio = min(tamanho) // 2 - 10
-    
-    # Círculo de fundo
-    draw.ellipse([centro_x - raio, centro_y - raio, centro_x + raio, centro_y + raio], 
-                fill=cor_time, outline=(50, 50, 50), width=2)
-    
-    # Iniciais do time
+def formatar_msg_alerta(game: dict, predictions: dict) -> str:
     try:
-        # Pega as 2-3 primeiras letras ou sigla
-        palavras = time_nome.split()
-        if len(palavras) >= 2:
-            iniciais = ''.join([p[0].upper() for p in palavras[:2]])
+        home = game.get("home_team", {}).get("full_name", "Casa")
+        away = game.get("visitor_team", {}).get("full_name", "Visitante")
+        
+        data_hora = game.get("datetime") or game.get("date") or ""
+        if data_hora:
+            try:
+                dt = datetime.fromisoformat(data_hora.replace("Z", "+00:00")) - timedelta(hours=3)
+                data_str = dt.strftime("%d/%m/%Y")
+                hora_str = dt.strftime("%H:%M")
+            except:
+                data_str, hora_str = "-", "-"
         else:
-            iniciais = time_nome[:3].upper()
-        
-        # Tenta carregar fonte, fallback para tamanho fixo
-        try:
-            tamanho_fonte = max(20, raio // 2)
-            fonte = ImageFont.truetype("arial.ttf", tamanho_fonte)
-        except:
-            tamanho_fonte = 30
-            fonte = ImageFont.load_default()
-        
-        # Calcula posição do texto
-        bbox = draw.textbbox((0, 0), iniciais, font=fonte)
-        texto_largura = bbox[2] - bbox[0]
-        texto_altura = bbox[3] - bbox[1]
-        
-        pos_x = centro_x - texto_largura // 2
-        pos_y = centro_y - texto_altura // 2
-        
-        draw.text((pos_x, pos_y), iniciais, fill="white", font=fonte)
-        
-    except Exception:
-        # Fallback extremo - desenha "NBA"
-        draw.text((centro_x-15, centro_y-10), "NBA", fill="white")
-    
-    return img
+            data_str, hora_str = "-", "-"
 
-def image_to_base64(img: Image.Image) -> str:
-    """Converte PIL Image para base64"""
-    buffered = io.BytesIO()
-    img.save(buffered, format="PNG")
-    return base64.b64encode(buffered.getvalue()).decode()
+        msg = f"🏀 <b>Alerta NBA - {data_str} {hora_str} (BRT)</b>\n"
+        msg += f"🏟️ {home} vs {away}\n"
+        msg += f"📌 Status: {game.get('status', 'SCHEDULED')}\n\n"
 
-def exibir_escudo_time(time_nome: str, tamanho: tuple = (80, 80)):
-    """Exibe escudo do time no Streamlit"""
-    try:
-        img = baixar_escudo_time(time_nome, tamanho)
-        img_base64 = image_to_base64(img)
-        st.image(f"data:image/png;base64,{img_base64}", width=tamanho[0])
+        total_pred = predictions.get("total", {})
+        if total_pred:
+            msg += f"📈 <b>Total Pontos</b>: {total_pred.get('tendencia', 'N/A')}\n"
+            msg += f"   📊 Estimativa: <b>{total_pred.get('estimativa', 0):.1f}</b> | Confiança: {total_pred.get('confianca', 0):.0f}%\n\n"
+
+        vencedor_pred = predictions.get("vencedor", {})
+        if vencedor_pred:
+            msg += f"🎯 <b>Vencedor</b>: {vencedor_pred.get('vencedor', 'N/A')}\n"
+            msg += f"   💪 Confiança: {vencedor_pred.get('confianca', 0):.0f}% | {vencedor_pred.get('detalhe', '')}\n"
+
+        msg += "\n🏆 <b>Elite Master</b> - Análise com Dados Reais 2024-2025"
+        return msg
     except Exception as e:
-        st.error(f"❌ Erro ao carregar escudo: {e}")
+        return f"⚠️ Erro ao formatar: {e}"
+
+def verificar_e_enviar_alerta(game: dict, predictions: dict, send_to_telegram: bool = False):
+    alertas = carregar_alertas()
+    fid = str(game.get("id"))
+    
+    if fid not in alertas:
+        alertas[fid] = {
+            "game_id": fid,
+            "game_data": game,
+            "predictions": predictions,
+            "timestamp": datetime.now().isoformat(),
+            "enviado_telegram": send_to_telegram,
+            "conferido": False,
+            "alerta_resultado_enviado": False
+        }
+        salvar_alertas(alertas)
+        
+        msg = formatar_msg_alerta(game, predictions)
+        
+        # Se marcado para enviar ao Telegram, envia
+        if send_to_telegram:
+            if enviar_telegram(msg):
+                alertas[fid]["enviado_telegram"] = True
+                salvar_alertas(alertas)
+                return True
+            else:
+                return False
+        return True
+    return False
 
 # =============================
-# INTERFACE STREAMLOT
+# ALERTA DE RESULTADOS CONFERIDOS
+# =============================
+def enviar_alerta_resultados_conferidos():
+    """Envia alerta com resumo dos resultados conferidos (Green/Red)"""
+    alertas = carregar_alertas()
+    
+    # Filtra apenas jogos conferidos
+    jogos_conferidos = []
+    for alerta_id, alerta in alertas.items():
+        if alerta.get("conferido", False) and not alerta.get("alerta_resultado_enviado", False):
+            jogos_conferidos.append((alerta_id, alerta))
+    
+    if not jogos_conferidos:
+        st.info("ℹ️ Nenhum jogo conferido novo para alerta.")
+        return 0
+    
+    st.info(f"📤 Preparando alerta para {len(jogos_conferidos)} jogos conferidos...")
+    
+    # Constroi mensagem consolidada
+    mensagem = f"🏀 <b>RESULTADOS CONFERIDOS - {datetime.now().strftime('%d/%m/%Y')}</b>\n\n"
+    mensagem += "📊 <i>Resumo dos jogos analisados</i>\n\n"
+    
+    greens_total = 0
+    greens_vencedor = 0
+    total_jogos = len(jogos_conferidos)
+    
+    for alerta_id, alerta in jogos_conferidos:
+        game_data = alerta.get("game_data", {})
+        predictions = alerta.get("predictions", {})
+        
+        home_team = game_data.get("home_team", {}).get("full_name", "Casa")
+        away_team = game_data.get("visitor_team", {}).get("full_name", "Visitante")
+        home_score = game_data.get("home_team_score", 0)
+        away_score = game_data.get("visitor_team_score", 0)
+        
+        total_pontos = home_score + away_score
+        
+        # Determina resultado do Total
+        total_pred = predictions.get("total", {})
+        tendencia_total = total_pred.get("tendencia", "")
+        resultado_total = "⚪ INDEFINIDO"
+        
+        if "Mais" in tendencia_total:
+            try:
+                limite = float(tendencia_total.split()[-1])
+                resultado_total = "🟢 GREEN" if total_pontos > limite else "🔴 RED"
+                if resultado_total == "🟢 GREEN":
+                    greens_total += 1
+            except:
+                resultado_total = "⚪ INDEFINIDO"
+        elif "Menos" in tendencia_total:
+            try:
+                limite = float(tendencia_total.split()[-1])
+                resultado_total = "🟢 GREEN" if total_pontos < limite else "🔴 RED"
+                if resultado_total == "🟢 GREEN":
+                    greens_total += 1
+            except:
+                resultado_total = "⚪ INDEFINIDO"
+        
+        # Determina resultado do Vencedor
+        vencedor_pred = predictions.get("vencedor", {})
+        vencedor_previsto = vencedor_pred.get("vencedor", "")
+        resultado_vencedor = "⚪ INDEFINIDO"
+        
+        if vencedor_previsto == "Casa" and home_score > away_score:
+            resultado_vencedor = "🟢 GREEN"
+            greens_vencedor += 1
+        elif vencedor_previsto == "Visitante" and away_score > home_score:
+            resultado_vencedor = "🟢 GREEN"
+            greens_vencedor += 1
+        elif vencedor_previsto == "Empate" and home_score == away_score:
+            resultado_vencedor = "🟢 GREEN"
+            greens_vencedor += 1
+        elif vencedor_previsto in ["Casa", "Visitante", "Empate"]:
+            resultado_vencedor = "🔴 RED"
+        
+        # Adiciona jogo à mensagem
+        mensagem += f"🏟️ <b>{home_team} vs {away_team}</b>\n"
+        mensagem += f"   📊 Placar: <b>{home_score} x {away_score}</b>\n"
+        mensagem += f"   🏀 Total: {total_pontos} pts | Previsão: {tendencia_total} | <b>{resultado_total}</b>\n"
+        mensagem += f"   🎯 Vencedor: Previsão: {vencedor_previsto} | <b>{resultado_vencedor}</b>\n\n"
+        
+        # Marca como alerta enviado
+        alertas[alerta_id]["alerta_resultado_enviado"] = True
+    
+    # Adiciona resumo final
+    mensagem += "📈 <b>RESUMO FINAL</b>\n"
+    mensagem += f"✅ <b>Total de Pontos:</b> {greens_total}/{total_jogos} Greens\n"
+    mensagem += f"✅ <b>Vencedor:</b> {greens_vencedor}/{total_jogos} Greens\n"
+    
+    taxa_acerto_total = (greens_total / total_jogos) * 100 if total_jogos > 0 else 0
+    taxa_acerto_vencedor = (greens_vencedor / total_jogos) * 100 if total_jogos > 0 else 0
+    taxa_geral = ((greens_total + greens_vencedor) / (total_jogos * 2)) * 100 if total_jogos > 0 else 0
+    
+    mensagem += f"🎯 <b>Taxa de Acerto:</b>\n"
+    mensagem += f"   📊 Total: {taxa_acerto_total:.1f}%\n"
+    mensagem += f"   🏆 Vencedor: {taxa_acerto_vencedor:.1f}%\n"
+    mensagem += f"   ⭐ Geral: {taxa_geral:.1f}%\n\n"
+    
+    mensagem += "🏆 <b>Elite Master - Resultados Conferidos</b>"
+    
+    # Envia para o canal alternativo
+    if enviar_telegram(mensagem, TELEGRAM_CHAT_ID_ALT2):
+        # Salva as alterações nos alertas
+        salvar_alertas(alertas)
+        st.success(f"✅ Alerta de resultados enviado! {total_jogos} jogos conferidos.")
+        return total_jogos
+    else:
+        st.error("❌ Erro ao enviar alerta de resultados.")
+        return 0
+
+def enviar_alerta_individual_resultado(alerta_id: str, alerta: dict):
+    """Envia alerta individual para um jogo conferido"""
+    game_data = alerta.get("game_data", {})
+    predictions = alerta.get("predictions", {})
+    
+    home_team = game_data.get("home_team", {}).get("full_name", "Casa")
+    away_team = game_data.get("visitor_team", {}).get("full_name", "Visitante")
+    home_score = game_data.get("home_team_score", 0)
+    away_score = game_data.get("visitor_team_score", 0)
+    
+    total_pontos = home_score + away_score
+    
+    # Determina resultado do Total
+    total_pred = predictions.get("total", {})
+    tendencia_total = total_pred.get("tendencia", "")
+    resultado_total = "⚪ INDEFINIDO"
+    
+    if "Mais" in tendencia_total:
+        try:
+            limite = float(tendencia_total.split()[-1])
+            resultado_total = "🟢 GREEN" if total_pontos > limite else "🔴 RED"
+        except:
+            resultado_total = "⚪ INDEFINIDO"
+    elif "Menos" in tendencia_total:
+        try:
+            limite = float(tendencia_total.split()[-1])
+            resultado_total = "🟢 GREEN" if total_pontos < limite else "🔴 RED"
+        except:
+            resultado_total = "⚪ INDEFINIDO"
+    
+    # Determina resultado do Vencedor
+    vencedor_pred = predictions.get("vencedor", {})
+    vencedor_previsto = vencedor_pred.get("vencedor", "")
+    resultado_vencedor = "⚪ INDEFINIDO"
+    
+    if vencedor_previsto == "Casa" and home_score > away_score:
+        resultado_vencedor = "🟢 GREEN"
+    elif vencedor_previsto == "Visitante" and away_score > home_score:
+        resultado_vencedor = "🟢 GREEN"
+    elif vencedor_previsto == "Empate" and home_score == away_score:
+        resultado_vencedor = "🟢 GREEN"
+    elif vencedor_previsto in ["Casa", "Visitante", "Empate"]:
+        resultado_vencedor = "🔴 RED"
+    
+    # Constroi mensagem individual
+    mensagem = f"🏀 <b>RESULTADO INDIVIDUAL</b>\n\n"
+    mensagem += f"🏟️ <b>{home_team} vs {away_team}</b>\n"
+    mensagem += f"📊 Placar: <b>{home_score} x {away_score}</b>\n"
+    mensagem += f"🏀 Total de Pontos: <b>{total_pontos}</b>\n\n"
+    
+    mensagem += f"📈 <b>Total de Pontos</b>\n"
+    mensagem += f"   Previsão: {tendencia_total}\n"
+    mensagem += f"   Resultado: <b>{resultado_total}</b>\n\n"
+    
+    mensagem += f"🎯 <b>Vencedor</b>\n"
+    mensagem += f"   Previsão: {vencedor_previsto}\n"
+    mensagem += f"   Resultado: <b>{resultado_vencedor}</b>\n\n"
+    
+    mensagem += "🏆 <b>Elite Master - Resultado Individual</b>"
+    
+    # Envia para o canal alternativo
+    if enviar_telegram(mensagem, TELEGRAM_CHAT_ID_ALT2):
+        return True
+    else:
+        return False
+
+# =============================
+# SISTEMA TOP 4 MELHORES JOGOS
+# =============================
+def calcular_pontuacao_jogo(jogo: dict, times_stats: dict) -> float:
+    """Calcula pontuação para ranking dos melhores jogos"""
+    home_team_id = jogo["home_team"]["id"]
+    visitor_team_id = jogo["visitor_team"]["id"]
+    
+    # Obtém estatísticas dos times
+    home_stats = times_stats.get(home_team_id, {})
+    visitor_stats = times_stats.get(visitor_team_id, {})
+    
+    if not home_stats or not visitor_stats:
+        return 0
+    
+    # Fatores para cálculo da pontuação:
+    # 1. Potencial ofensivo (média de pontos dos dois times)
+    ofensiva_total = home_stats.get("pts_for_avg", 0) + visitor_stats.get("pts_for_avg", 0)
+    
+    # 2. Competitividade (diferença pequena na taxa de vitórias)
+    diff_win_rate = abs(home_stats.get("win_rate", 0) - visitor_stats.get("win_rate", 0))
+    fator_competitividade = 1.0 - (diff_win_rate * 0.5)  # Times com win_rate similar = jogos mais disputados
+    
+    # 3. Potencial de pontos totais (over/under implícito)
+    pontos_totais_esperados = home_stats.get("pts_for_avg", 0) + visitor_stats.get("pts_for_avg", 0)
+    
+    # Pontuação final
+    pontuacao = (ofensiva_total * 0.4) + (fator_competitividade * 30) + (pontos_totais_esperados * 0.3)
+    
+    return pontuacao
+
+def obter_top4_melhores_jogos(data_str: str) -> list:
+    """Retorna os 4 melhores jogos do dia baseado em estatísticas"""
+    jogos = obter_jogos_data(data_str)
+    
+    if not jogos:
+        return []
+    
+    # Obtém estatísticas de todos os times envolvidos
+    times_stats = {}
+    times_cache = obter_times()
+    
+    for jogo in jogos:
+        for team_type in ["home_team", "visitor_team"]:
+            team_id = jogo[team_type]["id"]
+            if team_id not in times_stats:
+                times_stats[team_id] = obter_estatisticas_time_2025(team_id)
+    
+    # Calcula pontuação para cada jogo
+    jogos_com_pontuacao = []
+    for jogo in jogos:
+        pontuacao = calcular_pontuaacao_jogo(jogo, times_stats)
+        
+        # Obtém nomes completos dos times
+        home_team_name = times_cache.get(jogo["home_team"]["id"], {}).get("full_name", jogo["home_team"]["name"])
+        visitor_team_name = times_cache.get(jogo["visitor_team"]["id"], {}).get("full_name", jogo["visitor_team"]["name"])
+        
+        jogos_com_pontuacao.append({
+            "jogo": jogo,
+            "pontuacao": pontuacao,
+            "home_team_name": home_team_name,
+            "visitor_team_name": visitor_team_name,
+            "home_stats": times_stats.get(jogo["home_team"]["id"], {}),
+            "visitor_stats": times_stats.get(jogo["visitor_team"]["id"], {})
+        })
+    
+    # Ordena por pontuação (decrescente) e pega top 4
+    jogos_com_pontuacao.sort(key=lambda x: x["pontuacao"], reverse=True)
+    return jogos_com_pontuacao[:4]
+
+def enviar_alerta_top4_jogos(data_str: str):
+    """Envia alerta com os 4 melhores jogos do dia para o canal alternativo"""
+    top4_jogos = obter_top4_melhores_jogos(data_str)
+    
+    if not top4_jogos:
+        mensagem = f"🏀 <b>TOP 4 JOGOS - {data_str}</b>\n\n"
+        mensagem += "⚠️ Nenhum jogo encontrado para hoje."
+        enviar_telegram(mensagem, TELEGRAM_CHAT_ID_ALT2)
+        return
+    
+    # Constroi mensagem formatada
+    mensagem = f"🏀 <b>TOP 4 MELHORES JOGOS - {data_str}</b>\n\n"
+    mensagem += "⭐ <i>Jogos mais promissores do dia</i> ⭐\n\n"
+    
+    for i, jogo_info in enumerate(top4_jogos, 1):
+        home_team = jogo_info["home_team_name"]
+        visitor_team = jogo_info["visitor_team_name"]
+        home_stats = jogo_info["home_stats"]
+        visitor_stats = jogo_info["visitor_stats"]
+        
+        # Emojis para ranking
+        emojis = ["🥇", "🥈", "🥉", "4️⃣"]
+        
+        mensagem += f"{emojis[i-1]} <b>{visitor_team} @ {home_team}</b>\n"
+        
+        # Adiciona estatísticas relevantes
+        if home_stats and visitor_stats:
+            total_esperado = home_stats.get("pts_for_avg", 0) + visitor_stats.get("pts_for_avg", 0)
+            mensagem += f"   📊 Total Esperado: <b>{total_esperado:.1f} pts</b>\n"
+            mensagem += f"   🏆 Competitividade: <b>{(1 - abs(home_stats.get('win_rate',0) - visitor_stats.get('win_rate',0)))*100:.0f}%</b>\n"
+        
+        mensagem += "\n"
+    
+    mensagem += "📈 <i>Baseado em estatísticas ofensivas e competitividade</i>\n"
+    mensagem += "#Top4Jogos #NBA"
+    
+    # Envia para o canal alternativo
+    enviar_telegram(mensagem, TELEGRAM_CHAT_ID_ALT2)
+    st.success("✅ Alerta Top 4 Jogos enviado para canal alternativo!")
+
+# =============================
+# EXIBIÇÃO DOS JOGOS ANALISADOS
+# =============================
+def exibir_jogos_analisados():
+    st.header("📈 Jogos Analisados")
+    
+    alertas = carregar_alertas()
+    if not alertas:
+        st.info("Nenhum jogo analisado ainda.")
+        return
+    
+    alertas_ordenados = sorted(
+        alertas.items(), 
+        key=lambda x: x[1].get("timestamp", ""), 
+        reverse=True
+    )
+    
+    st.subheader(f"🎯 {len(alertas_ordenados)} Jogos Analisados")
+    
+    for alerta_id, alerta in alertas_ordenados:
+        game_data = alerta.get("game_data", {})
+        predictions = alerta.get("predictions", {})
+        
+        home_team = game_data.get("home_team", {}).get("full_name", "Casa")
+        away_team = game_data.get("visitor_team", {}).get("full_name", "Visitante")
+        status = game_data.get("status", "SCHEDULED")
+        
+        total_pred = predictions.get("total", {})
+        vencedor_pred = predictions.get("vencedor", {})
+        
+        # Card do jogo com escudos
+        with st.expander(f"🏀 {home_team} vs {away_team} - {status}", expanded=False):
+            col1, col2, col3 = st.columns([1, 2, 1])
+            
+            with col1:
+                exibir_escudo_time(home_team, (80, 80))
+            
+            with col2:
+                st.write("**📊 Total de Pontos**")
+                st.write(f"Tendência: {total_pred.get('tendencia', 'N/A')}")
+                st.write(f"Estimativa: {total_pred.get('estimativa', 0):.1f}")
+                st.write(f"Confiança: {total_pred.get('confianca', 0):.0f}%")
+                
+                st.write("**🎯 Vencedor**")
+                st.write(f"Previsão: {vencedor_pred.get('vencedor', 'N/A')}")
+                st.write(f"Confiança: {vencedor_pred.get('confianca', 0):.0f}%")
+                st.write(f"Detalhe: {vencedor_pred.get('detalhe', '')}")
+            
+            with col3:
+                exibir_escudo_time(away_team, (80, 80))
+            
+            if alerta.get("enviado_telegram", False):
+                st.success("📤 Enviado para Telegram")
+            else:
+                st.info("📝 Salvo localmente")
+            
+            timestamp = alerta.get("timestamp", "")
+            if timestamp:
+                try:
+                    dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                    st.caption(f"Analisado em: {dt.strftime('%d/%m/%Y %H:%M')}")
+                except:
+                    pass
+
+# =============================
+# CONFERÊNCIA DE RESULTADOS
+# =============================
+def conferir_resultados():
+    st.header("📊 Conferência de Resultados")
+    
+    # Botões de ação para conferência
+    col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
+    
+    with col1:
+        st.subheader("Jogos Finalizados")
+    
+    with col2:
+        if st.button("🔄 Atualizar Resultados", type="primary", use_container_width=True):
+            with st.spinner("Atualizando resultados das partidas..."):
+                jogos_atualizados = atualizar_resultados_partidas()
+                if jogos_atualizados > 0:
+                    st.success(f"✅ {jogos_atualizados} jogos atualizados!")
+                    st.rerun()
+    
+    with col3:
+        if st.button("✅ Conferir Jogos", type="secondary", use_container_width=True):
+            with st.spinner("Conferindo jogos finalizados..."):
+                jogos_conferidos = conferir_jogos_finalizados()
+                if jogos_conferidos > 0:
+                    st.success(f"✅ {jogos_conferidos} jogos conferidos!")
+                    st.rerun()
+                else:
+                    st.info("ℹ️ Nenhum jogo novo para conferir.")
+    
+    with col4:
+        if st.button("📤 Alerta Resultados", type="secondary", use_container_width=True):
+            with st.spinner("Enviando alerta de resultados conferidos..."):
+                jogos_alertados = enviar_alerta_resultados_conferidos()
+                if jogos_alertados > 0:
+                    st.success(f"✅ Alerta para {jogos_alertados} jogos enviado!")
+                else:
+                    st.info("ℹ️ Nenhum jogo novo para alerta.")
+    
+    alertas = carregar_alertas()
+    if not alertas:
+        st.info("Nenhum alerta salvo para conferência.")
+        return
+    
+    jogos_para_conferir = []
+    for alerta_id, alerta in alertas.items():
+        game_data = alerta.get("game_data", {})
+        status = game_data.get("status", "").upper()
+        
+        if status in ["FINAL", "FINAL/OT"]:
+            jogos_para_conferir.append((alerta_id, alerta))
+    
+    if not jogos_para_conferir:
+        st.info("Nenhum jogo finalizado para conferência.")
+        return
+    
+    st.subheader(f"🎯 {len(jogos_para_conferir)} Jogos Finalizados")
+    
+    for alerta_id, alerta in jogos_para_conferir:
+        game_data = alerta.get("game_data", {})
+        predictions = alerta.get("predictions", {})
+        
+        home_team = game_data.get("home_team", {}).get("full_name", "Casa")
+        away_team = game_data.get("visitor_team", {}).get("full_name", "Visitante")
+        home_score = game_data.get("home_team_score", 0)
+        away_score = game_data.get("visitor_team_score", 0)
+        status = game_data.get("status", "")
+        
+        total_pontos = home_score + away_score
+        
+        # Determina resultado do Total
+        total_pred = predictions.get("total", {})
+        tendencia_total = total_pred.get("tendencia", "")
+        resultado_total = "⏳ Aguardando"
+        
+        if "Mais" in tendencia_total:
+            try:
+                limite = float(tendencia_total.split()[-1])
+                resultado_total = "🟢 GREEN" if total_pontos > limite else "🔴 RED"
+            except:
+                resultado_total = "⚪ INDEFINIDO"
+        elif "Menos" in tendencia_total:
+            try:
+                limite = float(tendencia_total.split()[-1])
+                resultado_total = "🟢 GREEN" if total_pontos < limite else "🔴 RED"
+            except:
+                resultado_total = "⚪ INDEFINIDO"
+        
+        # Determina resultado do Vencedor
+        vencedor_pred = predictions.get("vencedor", {})
+        vencedor_previsto = vencedor_pred.get("vencedor", "")
+        resultado_vencedor = "⏳ Aguardando"
+        
+        if vencedor_previsto == "Casa" and home_score > away_score:
+            resultado_vencedor = "🟢 GREEN"
+        elif vencedor_previsto == "Visitante" and away_score > home_score:
+            resultado_vencedor = "🟢 GREEN"
+        elif vencedor_previsto == "Empate" and home_score == away_score:
+            resultado_vencedor = "🟢 GREEN"
+        elif vencedor_previsto in ["Casa", "Visitante", "Empate"]:
+            resultado_vencedor = "🔴 RED"
+        else:
+            resultado_vencedor = "⚪ INDEFINIDO"
+        
+        # Exibe card do jogo com escudos
+        col1, col2, col3, col4 = st.columns([1, 3, 2, 1])
+        
+        with col1:
+            exibir_escudo_time(home_team, (60, 60))
+        
+        with col2:
+            st.write(f"**{home_team}** vs **{away_team}**")
+            st.write(f"📊 **Placar:** {home_score} x {away_score}")
+            st.write(f"🏀 **Total:** {total_pontos} pontos")
+            st.write(f"**Status:** {status}")
+        
+        with col3:
+            st.write(f"**Total:** {tendencia_total}")
+            st.write(f"**Resultado:** {resultado_total}")
+            st.write(f"**Vencedor:** {resultado_vencedor}")
+        
+        with col4:
+            exibir_escudo_time(away_team, (60, 60))
+        
+        # Botões de ação
+        col_btn1, col_btn2 = st.columns(2)
+        
+        with col_btn1:
+            if not alerta.get("conferido", False):
+                if st.button("✅ Confirmar", key=f"conf_{alerta_id}", use_container_width=True):
+                    # Atualiza estatísticas quando confirma
+                    if resultado_total in ["🟢 GREEN", "🔴 RED"] and resultado_vencedor in ["🟢 GREEN", "🔴 RED"]:
+                        atualizar_estatisticas(resultado_total, resultado_vencedor)
+                    
+                    alertas[alerta_id]["conferido"] = True
+                    
+                    # Envia alerta individual
+                    if enviar_alerta_individual_resultado(alerta_id, alertas[alerta_id]):
+                        st.success("✅ Conferido e alerta enviado!")
+                    else:
+                        st.error("✅ Conferido, mas erro no alerta.")
+                    
+                    salvar_alertas(alertas)
+                    st.rerun()
+            else:
+                st.success("✅ Conferido")
+        
+        with col_btn2:
+            if alerta.get("conferido", False):
+                if st.button("📤 Reenviar Alerta", key=f"alert_{alerta_id}", use_container_width=True):
+                    if enviar_alerta_individual_resultado(alerta_id, alerta):
+                        st.success("✅ Alerta reenviado!")
+                    else:
+                        st.error("❌ Erro ao reenviar alerta.")
+        
+        st.markdown("---")
+
+# =============================
+# INTERFACE STREAMLIT MELHORADA
 # =============================
 def main():
     st.set_page_config(
-        page_title="NBA Elite AI - Sistema de Previsões",
+        page_title="🏀 NBA Elite AI - Sistema de Previsões",
         page_icon="🏀",
         layout="wide",
         initial_sidebar_state="expanded"
     )
     
-    # CSS customizado
+    # CSS customizado do primeiro código
     st.markdown("""
     <style>
     .main-header {
@@ -888,7 +1471,7 @@ def main():
     
     st.markdown('<h1 class="main-header">🏀 NBA Elite AI - Sistema de Previsões</h1>', unsafe_allow_html=True)
     
-    # Sidebar
+    # Sidebar melhorada
     with st.sidebar:
         st.header("⚙️ Configurações")
         
@@ -916,6 +1499,27 @@ def main():
             help="Confiança mínima para considerar uma previsão válida"
         )
         
+        st.subheader("⭐ Top 4 Jogos")
+        data_str = data_jogos.strftime("%Y-%m-%d")
+        
+        if st.button("🚀 Enviar Top 4 Melhores Jogos", type="primary", use_container_width=True):
+            with st.spinner("Buscando melhores jogos e enviando alerta..."):
+                enviar_alerta_top4_jogos(data_str)
+        
+        if st.button("👀 Visualizar Top 4 Jogos", type="secondary", use_container_width=True):
+            top4_jogos = obter_top4_melhores_jogos(data_str)
+            
+            if top4_jogos:
+                st.sidebar.success(f"🎯 Top 4 Jogos para {data_jogos.strftime('%d/%m/%Y')}:")
+                for i, jogo_info in enumerate(top4_jogos, 1):
+                    home_team = jogo_info["home_team_name"]
+                    visitor_team = jogo_info["visitor_team_name"]
+                    pontuacao = jogo_info["pontuacao"]
+                    st.sidebar.write(f"{i}. {visitor_team} @ {home_team}")
+                    st.sidebar.write(f"   Pontuação: {pontuacao:.1f}")
+            else:
+                st.sidebar.warning("Nenhum jogo encontrado para esta data.")
+        
         st.subheader("🔄 Atualizações")
         col1, col2 = st.columns(2)
         
@@ -929,401 +1533,268 @@ def main():
                 with st.spinner("Conferindo jogos finalizados..."):
                     conferir_jogos_finalizados()
         
+        st.subheader("📤 Alertas")
+        if st.button("📤 Alerta Resultados", use_container_width=True):
+            with st.spinner("Enviando alerta de resultados conferidos..."):
+                jogos_alertados = enviar_alerta_resultados_conferidos()
+                if jogos_alertados > 0:
+                    st.success(f"✅ Alerta para {jogos_alertados} jogos!")
+                else:
+                    st.info("ℹ️ Nenhum jogo novo para alerta.")
+        
         st.subheader("📊 Estatísticas")
         if st.button("🧹 Limpar Estatísticas", use_container_width=True):
             limpar_estatisticas()
             st.success("Estatísticas limpas!")
-    
+            st.rerun()
+        
+        st.subheader("🧹 Limpeza")
+        if st.button("🗑️ Limpar Cache", type="secondary", use_container_width=True):
+            for f in [CACHE_GAMES, CACHE_STATS, ALERTAS_PATH]:
+                try:
+                    if os.path.exists(f):
+                        os.remove(f)
+                        st.success(f"🗑️ {f} removido")
+                except:
+                    pass
+            st.rerun()
+
     # Abas principais
-    tab1, tab2, tab3, tab4 = st.tabs([
-        "🎯 Previsões do Dia", 
-        "📊 Estatísticas", 
-        "📋 Jogos Salvos",
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "🎯 Análise do Dia", 
+        "📈 Jogos Analisados", 
+        "✅ Conferência",
+        "📊 Estatísticas",
         "ℹ️ Sobre"
     ])
     
     with tab1:
-        exibir_previsoes_dia(data_jogos, janela_jogos, limite_confianca)
+        exibir_aba_analise_melhorada(data_jogos, janela_jogos, limite_confianca)
     
     with tab2:
-        exibir_estatisticas()
+        exibir_jogos_analisados()
     
     with tab3:
-        exibir_jogos_salvos()
+        conferir_resultados()
     
     with tab4:
+        exibir_estatisticas()
+    
+    with tab5:
         exibir_info_sobre()
 
-def exibir_previsoes_dia(data_jogos, janela_jogos, limite_confianca):
-    """Exibe previsões para os jogos do dia selecionado"""
-    st.header(f"🎯 Previsões para {data_jogos.strftime('%d/%m/%Y')}")
+def exibir_aba_analise_melhorada(data_sel: date, janela: int, limite_confianca: int):
+    """Exibe análise dos jogos com interface melhorada"""
+    st.header(f"🎯 Análise com Dados Reais 2024-2025 - {data_sel.strftime('%d/%m/%Y')}")
     
-    # Busca jogos da data selecionada
-    data_str = data_jogos.strftime("%Y-%m-%d")
+    col1, col2, col3 = st.columns([2, 1, 1])
+    with col1:
+        top_n = st.slider("Número de jogos para analisar", 1, 15, 5)
+    with col2:
+        st.write("")
+        st.write("")
+        enviar_auto = st.checkbox("Enviar automaticamente para Telegram", value=True)
+    with col3:
+        st.write("")
+        st.write("")
+        if st.button("🚀 ANALISAR JOGOS", type="primary", use_container_width=True):
+            analisar_jogos_com_dados_2025_melhorado(data_sel, top_n, janela, enviar_auto, limite_confianca)
+
+def analisar_jogos_com_dados_2025_melhorado(data_sel: date, top_n: int, janela: int, enviar_auto: bool, limite_confianca: int):
+    """Versão melhorada da análise com interface do primeiro código"""
+    data_str = data_sel.strftime("%Y-%m-%d")
+    
+    progress_placeholder = st.empty()
+    results_placeholder = st.empty()
+    
+    with progress_placeholder:
+        st.info(f"🔍 Buscando dados reais para {data_sel.strftime('%d/%m/%Y')}...")
+        st.success("📊 Analisando com dados da temporada 2024-2025")
+        if enviar_auto:
+            st.warning("📤 Alertas serão enviados para Telegram")
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+    
+    # Busca jogos
     jogos = obter_jogos_data(data_str)
     
     if not jogos:
-        st.warning(f"❌ Nenhum jogo encontrado para {data_jogos.strftime('%d/%m/%Y')}")
+        st.error("❌ Nenhum jogo encontrado para esta data")
         return
     
-    # Filtra apenas jogos agendados ou em andamento
-    jogos_filtrados = []
-    for jogo in jogos:
-        status = jogo.get("status", "").upper()
-        if status in ["SCHEDULED", "IN PROGRESS", "1ST QTR", "2ND QTR", "3RD QTR", "4TH QTR"]:
-            jogos_filtrados.append(jogo)
+    jogos = jogos[:top_n]
     
-    if not jogos_filtrados:
-        st.info(f"ℹ️ Todos os jogos de {data_jogos.strftime('%d/%m/%Y')} já foram finalizados")
+    status_text.text(f"📊 Analisando {len(jogos)} jogos com dados 2024-2025...")
+    
+    resultados = []
+    alertas_enviados = 0
+    
+    with results_placeholder:
+        st.subheader(f"🎯 Análise com Dados Reais 2024-2025")
         
-        # Mostra jogos finalizados para referência
-        st.subheader("📋 Jogos Finalizados (Apenas Consulta)")
-        for jogo in jogos:
-            exibir_jogo_finalizado(jogo)
-        return
-    
-    st.success(f"✅ {len(jogos_filtrados)} jogos encontrados para análise")
-    
-    # Processa cada jogo
-    for jogo in jogos_filtrados:
-        exibir_previsao_jogo(jogo, janela_jogos, limite_confianca)
-
-def exibir_jogo_finalizado(jogo):
-    """Exibe informações de um jogo já finalizado"""
-    home_team = jogo.get("home_team", {}).get("full_name", "Time Casa")
-    away_team = jogo.get("visitor_team", {}).get("full_name", "Time Visitante")
-    home_score = jogo.get("home_team_score", 0)
-    away_score = jogo.get("visitor_team_score", 0)
-    status = jogo.get("status", "Finalizado")
-    
-    col1, col2, col3 = st.columns([2, 1, 2])
-    
-    with col1:
-        st.write(f"**{home_team}**")
-        exibir_escudo_time(home_team, (60, 60))
-    
-    with col2:
-        st.write("**VS**")
-        st.write(f"**{home_score} - {away_score}**")
-        st.caption(status)
-    
-    with col3:
-        st.write(f"**{away_team}**")
-        exibir_escudo_time(away_team, (60, 60))
-
-def exibir_previsao_jogo(jogo, janela_jogos, limite_confianca):
-    """Exibe previsões detalhadas para um jogo específico"""
-    home_team = jogo.get("home_team", {})
-    away_team = jogo.get("visitor_team", {})
-    
-    home_id = home_team.get("id")
-    away_id = away_team.get("id")
-    home_nome = home_team.get("full_name", "Time Casa")
-    away_nome = away_team.get("full_name", "Time Visitante")
-    
-    st.markdown("---")
-    
-    # Header do jogo com escudos
-    col1, col2, col3 = st.columns([2, 1, 2])
-    
-    with col1:
-        st.subheader(home_nome)
-        exibir_escudo_time(home_nome, (100, 100))
-        
-        # Estatísticas do time da casa
-        home_stats = obter_estatisticas_time_2025(home_id, janela_jogos)
-        st.caption(f"Win Rate: {home_stats['win_rate']:.1%}")
-        st.caption(f"PPG: {home_stats['pts_for_avg']:.1f}")
-        st.caption(f"Últimos {home_stats['games']} jogos")
-    
-    with col2:
-        st.markdown("<h2 style='text-align: center;'>VS</h2>", unsafe_allow_html=True)
-        
-        # Status e horário
-        status = jogo.get("status", "Agendado")
-        st.write(f"**Status:** {status}")
-        
-        hora_jogo = jogo.get("date", "")
-        if hora_jogo:
+        for i, jogo in enumerate(jogos):
+            progress = (i + 1) / len(jogos)
+            progress_bar.progress(progress)
+            
+            home_team = jogo['home_team']['full_name']
+            away_team = jogo['visitor_team']['full_name']
+            status_text.text(f"🔍 Analisando: {home_team} vs {away_team} ({i+1}/{len(jogos)})")
+            
+            home_id = jogo["home_team"]["id"]
+            away_id = jogo["visitor_team"]["id"]
+            
             try:
-                hora_dt = datetime.fromisoformat(hora_jogo.replace('Z', '+00:00'))
-                st.write(f"**Horário:** {hora_dt.strftime('%H:%M')}")
-            except:
-                st.write(f"**Horário:** {hora_jogo[:10]}")
-    
-    with col3:
-        st.subheader(away_nome)
-        exibir_escudo_time(away_nome, (100, 100))
-        
-        # Estatísticas do time visitante
-        away_stats = obter_estatisticas_time_2025(away_id, janela_jogos)
-        st.caption(f"Win Rate: {away_stats['win_rate']:.1%}")
-        st.caption(f"PPG: {away_stats['pts_for_avg']:.1f}")
-        st.caption(f"Últimos {away_stats['games']} jogos")
-    
-    # Previsões
-    col_pred1, col_pred2 = st.columns(2)
-    
-    with col_pred1:
-        # Previsão Total de Pontos
-        total_estimado, confianca_total, tendencia_total = prever_total_points(
-            home_id, away_id, janela_jogos
-        )
-        
-        st.markdown(f"""
-        <div class="prediction-card">
-            <h3>📊 Total de Pontos</h3>
-            <p><strong>Estimativa:</strong> {total_estimado} pontos</p>
-            <p><strong>Confiança:</strong> {confianca_total}%</p>
-            <p><strong>Tendência:</strong> {tendencia_total}</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col_pred2:
-        # Previsão Vencedor
-        vencedor, confianca_vencedor, detalhe_vencedor = prever_vencedor(
-            home_id, away_id, janela_jogos
-        )
-        
-        st.markdown(f"""
-        <div class="prediction-card">
-            <h3>🏆 Vencedor</h3>
-            <p><strong>Previsão:</strong> {vencedor}</p>
-            <p><strong>Confiança:</strong> {confianca_vencedor}%</p>
-            <p><strong>Detalhe:</strong> {detalhe_vencedor}</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # Alertas baseados na confiança
-    alertas_ativos = []
-    
-    if confianca_total >= limite_confianca:
-        alertas_ativos.append(f"🎯 **Total de Pontos**: {tendencia_total} (Conf: {confianca_total}%)")
-    
-    if confianca_vencedor >= limite_confianca:
-        alertas_ativos.append(f"🏆 **Vencedor**: {vencedor} (Conf: {confianca_vencedor}%)")
-    
-    # Botão para salvar alerta
-    if alertas_ativos:
-        st.markdown("<div class='green-alert'>", unsafe_allow_html=True)
-        st.subheader("🚨 Alertas Ativos")
-        
-        for alerta in alertas_ativos:
-            st.write(f"✅ {alerta}")
-        
-        alerta_id = f"{home_nome}_{away_nome}_{data_jogos.strftime('%Y%m%d')}"
-        
-        col_salvar, col_telegram = st.columns(2)
-        
-        with col_salvar:
-            if st.button("💾 Salvar Alerta", key=f"save_{alerta_id}"):
-                salvar_alerta_jogo(jogo, alertas_ativos, total_estimado, vencedor)
-                st.success("Alerta salvo com sucesso!")
-        
-        with col_telegram:
-            if st.button("📤 Enviar Telegram", key=f"tg_{alerta_id}"):
-                if enviar_alerta_telegram(jogo, alertas_ativos, total_estimado, vencedor):
-                    st.success("Alerta enviado para Telegram!")
+                # Previsões com dados reais 2024-2025
+                total_estim, total_conf, total_tend = prever_total_points(home_id, away_id, janela)
+                vencedor, vencedor_conf, vencedor_detalhe = prever_vencedor(home_id, away_id, janela)
+                
+                predictions = {
+                    "total": {
+                        "estimativa": total_estim, 
+                        "confianca": total_conf, 
+                        "tendencia": total_tend
+                    },
+                    "vencedor": {
+                        "vencedor": vencedor,
+                        "confianca": vencedor_conf,
+                        "detalhe": vencedor_detalhe
+                    }
+                }
+                
+                # Verifica se atende ao limite de confiança
+                alertas_ativos = []
+                if total_conf >= limite_confianca:
+                    alertas_ativos.append(f"🎯 **Total de Pontos**: {total_tend} (Conf: {total_conf}%)")
+                
+                if vencedor_conf >= limite_confianca:
+                    alertas_ativos.append(f"🏆 **Vencedor**: {vencedor} (Conf: {vencedor_conf}%)")
+                
+                # Envia alerta se houver alertas ativos
+                enviado = False
+                if alertas_ativos and enviar_auto:
+                    enviado = verificar_e_enviar_alerta(jogo, predictions, True)
+                    if enviado:
+                        alertas_enviados += 1
+                elif alertas_ativos:
+                    enviado = verificar_e_enviar_alerta(jogo, predictions, False)
+                
+                # Exibe resultado com interface melhorada
+                st.markdown("---")
+                
+                # Header do jogo com escudos
+                col1, col2, col3 = st.columns([2, 1, 2])
+                
+                with col1:
+                    st.subheader(home_team)
+                    exibir_escudo_time(home_team, (100, 100))
+                    
+                    # Estatísticas do time da casa
+                    home_stats = obter_estatisticas_time_2025(home_id, janela)
+                    st.caption(f"Win Rate: {home_stats['win_rate']:.1%}")
+                    st.caption(f"PPG: {home_stats['pts_for_avg']:.1f}")
+                    st.caption(f"Últimos {home_stats['games']} jogos")
+                
+                with col2:
+                    st.markdown("<h2 style='text-align: center;'>VS</h2>", unsafe_allow_html=True)
+                    
+                    # Status e horário
+                    status = jogo.get("status", "Agendado")
+                    st.write(f"**Status:** {status}")
+                    
+                    hora_jogo = jogo.get("date", "")
+                    if hora_jogo:
+                        try:
+                            hora_dt = datetime.fromisoformat(hora_jogo.replace('Z', '+00:00'))
+                            st.write(f"**Horário:** {hora_dt.strftime('%H:%M')}")
+                        except:
+                            st.write(f"**Horário:** {hora_jogo[:10]}")
+                
+                with col3:
+                    st.subheader(away_team)
+                    exibir_escudo_time(away_team, (100, 100))
+                    
+                    # Estatísticas do time visitante
+                    away_stats = obter_estatisticas_time_2025(away_id, janela)
+                    st.caption(f"Win Rate: {away_stats['win_rate']:.1%}")
+                    st.caption(f"PPG: {away_stats['pts_for_avg']:.1f}")
+                    st.caption(f"Últimos {away_stats['games']} jogos")
+                
+                # Previsões em cards
+                col_pred1, col_pred2 = st.columns(2)
+                
+                with col_pred1:
+                    st.markdown(f"""
+                    <div class="prediction-card">
+                        <h3>📊 Total de Pontos</h3>
+                        <p><strong>Estimativa:</strong> {total_estim} pontos</p>
+                        <p><strong>Confiança:</strong> {total_conf}%</p>
+                        <p><strong>Tendência:</strong> {total_tend}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                with col_pred2:
+                    st.markdown(f"""
+                    <div class="prediction-card">
+                        <h3>🏆 Vencedor</h3>
+                        <p><strong>Previsão:</strong> {vencedor}</p>
+                        <p><strong>Confiança:</strong> {vencedor_conf}%</p>
+                        <p><strong>Detalhe:</strong> {vencedor_detalhe}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                # Alertas baseados na confiança
+                if alertas_ativos:
+                    st.markdown("<div class='green-alert'>", unsafe_allow_html=True)
+                    st.subheader("🚨 Alertas Ativos")
+                    
+                    for alerta in alertas_ativos:
+                        st.write(f"✅ {alerta}")
+                    
+                    if not enviado:
+                        col_salvar, col_telegram = st.columns(2)
+                        
+                        with col_salvar:
+                            if st.button("💾 Salvar Alerta", key=f"save_{jogo['id']}"):
+                                verificar_e_enviar_alerta(jogo, predictions, False)
+                                st.success("Alerta salvo com sucesso!")
+                        
+                        with col_telegram:
+                            if st.button("📤 Enviar Telegram", key=f"tg_{jogo['id']}"):
+                                if verificar_e_enviar_alerta(jogo, predictions, True):
+                                    st.success("Alerta enviado para Telegram!")
+                                else:
+                                    st.error("Erro ao enviar para Telegram")
+                    else:
+                        st.success("📤 Alerta enviado para Telegram")
+                    
+                    st.markdown("</div>", unsafe_allow_html=True)
                 else:
-                    st.error("Erro ao enviar para Telegram")
-        
-        st.markdown("</div>", unsafe_allow_html=True)
-    else:
-        st.markdown("<div class='red-alert'>", unsafe_allow_html=True)
-        st.write("🔍 **Confiança insuficiente** para gerar alertas")
-        st.write(f"Limite requerido: {limite_confianca}%")
-        st.write(f"Total: {confianca_total}% | Vencedor: {confianca_vencedor}%")
-        st.markdown("</div>", unsafe_allow_html=True)
-
-def salvar_alerta_jogo(jogo, alertas_ativos, total_estimado, vencedor):
-    """Salva um alerta para o jogo"""
-    alertas = carregar_alertas()
-    
-    alerta_id = f"{jogo['id']}_{int(time.time())}"
-    
-    alertas[alerta_id] = {
-        "game_data": jogo,
-        "alertas": alertas_ativos,
-        "total_estimado": total_estimado,
-        "vencedor_previsto": vencedor,
-        "data_criacao": datetime.now().isoformat(),
-        "conferido": False
-    }
-    
-    salvar_alertas(alertas)
-
-def enviar_alerta_telegram(jogo, alertas_ativos, total_estimado, vencedor) -> bool:
-    """Envia alerta para o Telegram"""
-    try:
-        home_team = jogo.get("home_team", {}).get("full_name", "Time Casa")
-        away_team = jogo.get("visitor_team", {}).get("full_name", "Time Visitante")
-        
-        mensagem = f"🏀 *ALERTA NBA - {home_team} vs {away_team}*\n\n"
-        
-        for alerta in alertas_ativos:
-            mensagem += f"✅ {alerta}\n"
-        
-        mensagem += f"\n📊 Total Estimado: {total_estimado} pontos"
-        mensagem += f"\n🏆 Vencedor Previsto: {vencedor}"
-        mensagem += f"\n\n⏰ {datetime.now().strftime('%d/%m/%Y %H:%M')}"
-        
-        # Tenta enviar para o chat principal
-        params = {
-            "chat_id": TELEGRAM_CHAT_ID,
-            "text": mensagem,
-            "parse_mode": "Markdown"
-        }
-        
-        response = requests.post(BASE_URL_TG, json=params, timeout=10)
-        
-        if response.status_code == 200:
-            return True
-        else:
-            # Fallback para chat alternativo
-            params["chat_id"] = TELEGRAM_CHAT_ID_ALT2
-            response_fallback = requests.post(BASE_URL_TG, json=params, timeout=10)
-            return response_fallback.status_code == 200
-            
-    except Exception as e:
-        st.error(f"Erro ao enviar para Telegram: {e}")
-        return False
-
-def exibir_jogos_salvos():
-    """Exibe todos os jogos salvos com alertas"""
-    st.header("📋 Jogos Salvos com Alertas")
-    
-    alertas = carregar_alertas()
-    
-    if not alertas:
-        st.info("ℹ️ Nenhum jogo salvo com alertas")
-        return
-    
-    # Filtros
-    col_filtro1, col_filtro2, col_filtro3 = st.columns(3)
-    
-    with col_filtro1:
-        filtrar_conferidos = st.checkbox("Mostrar apenas não conferidos")
-    
-    with col_filtro2:
-        filtrar_data = st.date_input("Filtrar por data")
-    
-    with col_filtro3:
-        if st.button("🗑️ Limpar Todos", type="secondary"):
-            salvar_alertas({})
-            st.success("Todos os alertas foram removidos!")
-            st.rerun()
-    
-    # Lista de jogos
-    for alerta_id, alerta in alertas.items():
-        game_data = alerta.get("game_data", {})
-        conferido = alerta.get("conferido", False)
-        
-        # Aplica filtros
-        if filtrar_conferidos and conferido:
-            continue
-        
-        # Filtro por data
-        try:
-            data_jogo = datetime.fromisoformat(game_data.get("date", "")).date()
-            if filtrar_data and data_jogo != filtrar_data:
+                    st.markdown("<div class='red-alert'>", unsafe_allow_html=True)
+                    st.write("🔍 **Confiança insuficiente** para gerar alertas")
+                    st.write(f"Limite requerido: {limite_confianca}%")
+                    st.write(f"Total: {total_conf}% | Vencedor: {vencedor_conf}%")
+                    st.markdown("</div>", unsafe_allow_html=True)
+                
+                resultados.append({
+                    "jogo": jogo,
+                    "predictions": predictions
+                })
+                
+            except Exception as e:
+                st.error(f"❌ Erro ao analisar {home_team} vs {away_team}: {e}")
                 continue
-        except:
-            pass
-        
-        exibir_jogo_salvo(alerta_id, alerta)
-
-def exibir_jogo_salvo(alerta_id, alerta):
-    """Exibe um jogo salvo individual"""
-    game_data = alerta.get("game_data", {})
-    alertas_ativos = alerta.get("alertas", [])
-    conferido = alerta.get("conferido", False)
     
-    home_team = game_data.get("home_team", {}).get("full_name", "Time Casa")
-    away_team = game_data.get("visitor_team", {}).get("full_name", "Time Visitante")
-    home_score = game_data.get("home_team_score", "N/A")
-    away_score = game_data.get("visitor_team_score", "N/A")
-    status = game_data.get("status", "Desconhecido")
+    progress_placeholder.empty()
     
-    # Determina cor do card baseado no status
-    if conferido:
-        card_class = "green-alert"
-    elif status.upper() in ["FINAL", "FINAL/OT"]:
-        card_class = "prediction-card"
-    else:
-        card_class = "team-card"
-    
-    st.markdown(f"<div class='{card_class}'>", unsafe_allow_html=True)
-    
-    col1, col2, col3 = st.columns([3, 1, 1])
-    
-    with col1:
-        st.subheader(f"{home_team} vs {away_team}")
-        
-        # Alertas
-        for alerta_texto in alertas_ativos:
-            st.write(f"• {alerta_texto}")
-        
-        # Resultado se disponível
-        if str(home_score).isdigit() and str(away_score).isdigit():
-            st.write(f"**Resultado:** {home_score} - {away_score}")
-            
-            # Verifica acertos/erros
-            if conferido:
-                resultado_total, resultado_vencedor = calcular_resultados_alerta(alerta)
-                st.write(f"**Total:** {resultado_total} | **Vencedor:** {resultado_vencedor}")
-        
-        st.write(f"**Status:** {status}")
-        st.write(f"**Salvo em:** {alerta.get('data_criacao', 'N/A')}")
-    
-    with col2:
-        if status.upper() in ["FINAL", "FINAL/OT"] and not conferido:
-            if st.button("✅ Conferir", key=f"conf_{alerta_id}"):
-                alertas = carregar_alertas()
-                alertas[alerta_id]["conferido"] = True
-                
-                # Calcula e atualiza estatísticas
-                resultado_total, resultado_vencedor = calcular_resultados_alerta(alertas[alerta_id])
-                atualizar_estatisticas(resultado_total, resultado_vencedor)
-                
-                salvar_alertas(alertas)
-                st.success("Jogo conferido!")
-                st.rerun()
-    
-    with col3:
-        if st.button("🗑️ Remover", key=f"del_{alerta_id}"):
-            alertas = carregar_alertas()
-            alertas.pop(alerta_id, None)
-            salvar_alertas(alertas)
-            st.success("Alerta removido!")
-            st.rerun()
-    
-    st.markdown("</div>", unsafe_allow_html=True)
-
-def calcular_resultados_alerta(alerta):
-    """Calcula se as previsões foram acertadas"""
-    game_data = alerta.get("game_data", {})
-    total_estimado = alerta.get("total_estimado", 0)
-    vencedor_previsto = alerta.get("vencedor_previsto", "")
-    
-    home_score = game_data.get("home_team_score", 0)
-    away_score = game_data.get("visitor_team_score", 0)
-    
-    # Verifica total de pontos (margem de ±5 pontos)
-    total_real = home_score + away_score
-    diferenca_total = abs(total_real - total_estimado)
-    resultado_total = "🟢 GREEN" if diferenca_total <= 5 else "🔴 RED"
-    
-    # Verifica vencedor
-    if home_score > away_score:
-        vencedor_real = "Casa"
-    elif away_score > home_score:
-        vencedor_real = "Visitante"
-    else:
-        vencedor_real = "Empate"
-    
-    resultado_vencedor = "🟢 GREEN" if vencedor_previsto == vencedor_real else "🔴 RED"
-    
-    return resultado_total, resultado_vencedor
+    # Resumo final
+    st.success(f"✅ Análise com dados 2024-2025 concluída!")
+    st.info(f"""
+    **📊 Resumo da Análise:**
+    - 🏀 {len(resultados)} jogos analisados com dados 2024-2025
+    - 📤 {alertas_enviados} alertas enviados para Telegram
+    - 📈 Estatísticas baseadas na temporada atual
+    - 💾 Dados salvos para conferência futura
+    """)
 
 def exibir_info_sobre():
     """Exibe informações sobre o sistema"""
@@ -1349,6 +1820,7 @@ def exibir_info_sobre():
     3. **Sistema de Alertas**: Notificações para apostas com alta confiança
     4. **Estatísticas de Desempenho**: Acompanhamento de acertos/erros
     5. **Integração Telegram**: Alertas automáticos via mensagem
+    6. **Top 4 Jogos**: Seleção dos melhores jogos do dia
     
     ### 🔧 Tecnologias
     
@@ -1377,5 +1849,8 @@ def exibir_info_sobre():
     with col3:
         st.metric("Telegram Bot", "✅ Pronto", "2 chats")
 
+# =============================
+# EXECUÇÃO PRINCIPAL
+# =============================
 if __name__ == "__main__":
     main()
