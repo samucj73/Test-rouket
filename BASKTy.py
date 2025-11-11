@@ -835,20 +835,48 @@ def prever_vencedor(home_id: int, away_id: int, window_games: int = 15) -> tuple
     return vencedor, round(confianca, 1), detalhe
 
 # =============================
-# ALERTAS E TELEGRAM
+# SISTEMA DE PÔSTERES PARA ALERTAS
 # =============================
-def enviar_telegram(msg: str, chat_id: str = TELEGRAM_CHAT_ID) -> bool:
-    try:
-        resp = requests.get(BASE_URL_TG, params={"chat_id": chat_id, "text": msg, "parse_mode": "HTML"}, timeout=10)
-        return resp.status_code == 200
-    except requests.RequestException:
-        return False
 
-def formatar_msg_alerta(game: dict, predictions: dict) -> str:
+def criar_poster_alerta(game: dict, predictions: dict, tipo: str = "previsao") -> Image.Image:
+    """Cria um pôster estilizado para alertas"""
     try:
-        home = game.get("home_team", {}).get("full_name", "Casa")
-        away = game.get("visitor_team", {}).get("full_name", "Visitante")
+        # Configurações do pôster
+        largura, altura = 800, 1200
+        img = Image.new('RGB', (largura, altura), color='#0c0c0c')
+        draw = ImageDraw.Draw(img)
         
+        # Tenta carregar fontes (fallback se não encontrar)
+        try:
+            fonte_titulo = ImageFont.truetype("arialbd.ttf", 48)
+            fonte_subtitulo = ImageFont.truetype("arial.ttf", 32)
+            fonte_texto = ImageFont.truetype("arial.ttf", 28)
+            fonte_pequena = ImageFont.truetype("arial.ttf", 22)
+        except:
+            # Fallback para fontes básicas
+            fonte_titulo = ImageFont.load_default()
+            fonte_subtitulo = ImageFont.load_default()
+            fonte_texto = ImageFont.load_default()
+            fonte_pequena = ImageFont.load_default()
+        
+        # Cores do tema NBA
+        cor_principal = "#1e40af"  # Azul NBA
+        cor_secundaria = "#dc2626"  # Vermelho
+        cor_texto = "#ffffff"
+        cor_destaque = "#fbbf24"   # Amarelo ouro
+        
+        # Header - Título
+        draw.rectangle([0, 0, largura, 100], fill=cor_principal)
+        titulo_texto = "🏀 NBA ELITE MASTER"
+        bbox_titulo = draw.textbbox((0, 0), titulo_texto, font=fonte_titulo)
+        largura_titulo = bbox_titulo[2] - bbox_titulo[0]
+        draw.text(((largura - largura_titulo) // 2, 25), titulo_texto, fill=cor_texto, font=fonte_titulo)
+        
+        # Informações do jogo
+        home_team = game.get("home_team", {}).get("full_name", "Casa")
+        away_team = game.get("visitor_team", {}).get("full_name", "Visitante")
+        
+        # Data e hora
         data_hora = game.get("datetime") or game.get("date") or ""
         if data_hora:
             try:
@@ -856,30 +884,293 @@ def formatar_msg_alerta(game: dict, predictions: dict) -> str:
                 data_str = dt.strftime("%d/%m/%Y")
                 hora_str = dt.strftime("%H:%M")
             except:
-                data_str, hora_str = "-", "-"
+                data_str, hora_str = "Data não definida", "Horário não definido"
         else:
-            data_str, hora_str = "-", "-"
-
-        msg = f"🏀 <b>Alerta NBA - {data_str} {hora_str} (BRT)</b>\n"
-        msg += f"🏟️ {home} vs {away}\n"
-        msg += f"📌 Status: {game.get('status', 'SCHEDULED')}\n\n"
-
-        total_pred = predictions.get("total", {})
-        if total_pred:
-            msg += f"📈 <b>Total Pontos</b>: {total_pred.get('tendencia', 'N/A')}\n"
-            msg += f"   📊 Estimativa: <b>{total_pred.get('estimativa', 0):.1f}</b> | Confiança: {total_pred.get('confianca', 0):.0f}%\n\n"
-
-        vencedor_pred = predictions.get("vencedor", {})
-        if vencedor_pred:
-            msg += f"🎯 <b>Vencedor</b>: {vencedor_pred.get('vencedor', 'N/A')}\n"
-            msg += f"   💪 Confiança: {vencedor_pred.get('confianca', 0):.0f}% | {vencedor_pred.get('detalhe', '')}\n"
-
-        msg += "\n🏆 <b>Elite Master</b> - Análise com Dados Reais 2024-2025"
-        return msg
+            data_str, hora_str = "Data não definida", "Horário não definido"
+        
+        y_pos = 150
+        
+        # Data e horário
+        data_hora_texto = f"📅 {data_str} ⏰ {hora_str} BRT"
+        bbox_data = draw.textbbox((0, 0), data_hora_texto, font=fonte_subtitulo)
+        largura_data = bbox_data[2] - bbox_data[0]
+        draw.text(((largura - largura_data) // 2, y_pos), data_hora_texto, 
+                 fill=cor_destaque, font=fonte_subtitulo)
+        y_pos += 60
+        
+        # Times com escudos
+        col_width = largura // 3
+        
+        # Time visitante
+        try:
+            escudo_away = baixar_escudo_time(away_team, (120, 120))
+            img.paste(escudo_away, (col_width - 60, y_pos), escudo_away)
+        except:
+            pass
+        
+        bbox_away = draw.textbbox((0, 0), away_team, font=fonte_texto)
+        largura_away = bbox_away[2] - bbox_away[0]
+        draw.text((col_width, y_pos + 140), away_team, fill=cor_texto, font=fonte_texto, anchor="mm")
+        
+        # VS
+        draw.text((largura//2, y_pos + 60), "VS", fill=cor_destaque, font=fonte_titulo, anchor="mm")
+        
+        # Time da casa
+        try:
+            escudo_home = baixar_escudo_time(home_team, (120, 120))
+            img.paste(escudo_home, (2*col_width - 60, y_pos), escudo_home)
+        except:
+            pass
+        
+        bbox_home = draw.textbbox((0, 0), home_team, font=fonte_texto)
+        largura_home = bbox_home[2] - bbox_home[0]
+        draw.text((2*col_width, y_pos + 140), home_team, fill=cor_texto, font=fonte_texto, anchor="mm")
+        
+        y_pos += 200
+        
+        # Linha divisória
+        draw.line([50, y_pos, largura-50, y_pos], fill=cor_secundaria, width=3)
+        y_pos += 40
+        
+        # Previsões
+        if tipo == "previsao":
+            # Previsão de Total de Pontos
+            total_pred = predictions.get("total", {})
+            if total_pred:
+                bbox_total_titulo = draw.textbbox((0, 0), "🎯 PREVISÃO - TOTAL DE PONTOS", font=fonte_subtitulo)
+                largura_total_titulo = bbox_total_titulo[2] - bbox_total_titulo[0]
+                draw.text(((largura - largura_total_titulo) // 2, y_pos), "🎯 PREVISÃO - TOTAL DE PONTOS", 
+                         fill=cor_destaque, font=fonte_subtitulo)
+                y_pos += 50
+                
+                tendencia = total_pred.get('tendencia', 'N/A')
+                estimativa = total_pred.get('estimativa', 0)
+                confianca = total_pred.get('confianca', 0)
+                
+                tendencia_texto = f"📊 {tendencia}"
+                bbox_tendencia = draw.textbbox((0, 0), tendencia_texto, font=fonte_texto)
+                largura_tendencia = bbox_tendencia[2] - bbox_tendencia[0]
+                draw.text(((largura - largura_tendencia) // 2, y_pos), tendencia_texto, 
+                         fill=cor_texto, font=fonte_texto)
+                y_pos += 40
+                
+                estimativa_texto = f"🎯 Estimativa: {estimativa:.1f} pontos"
+                bbox_estimativa = draw.textbbox((0, 0), estimativa_texto, font=fonte_texto)
+                largura_estimativa = bbox_estimativa[2] - bbox_estimativa[0]
+                draw.text(((largura - largura_estimativa) // 2, y_pos), estimativa_texto, 
+                         fill=cor_texto, font=fonte_texto)
+                y_pos += 40
+                
+                confianca_texto = f"💪 Confiança: {confianca:.0f}%"
+                bbox_confianca = draw.textbbox((0, 0), confianca_texto, font=fonte_texto)
+                largura_confianca = bbox_confianca[2] - bbox_confianca[0]
+                draw.text(((largura - largura_confianca) // 2, y_pos), confianca_texto, 
+                         fill=cor_texto, font=fonte_texto)
+                y_pos += 60
+            
+            # Previsão de Vencedor
+            vencedor_pred = predictions.get("vencedor", {})
+            if vencedor_pred:
+                bbox_vencedor_titulo = draw.textbbox((0, 0), "🏆 PREVISÃO - VENCEDOR", font=fonte_subtitulo)
+                largura_vencedor_titulo = bbox_vencedor_titulo[2] - bbox_vencedor_titulo[0]
+                draw.text(((largura - largura_vencedor_titulo) // 2, y_pos), "🏆 PREVISÃO - VENCEDOR", 
+                         fill=cor_destaque, font=fonte_subtitulo)
+                y_pos += 50
+                
+                vencedor = vencedor_pred.get('vencedor', 'N/A')
+                confianca_venc = vencedor_pred.get('confianca', 0)
+                detalhe = vencedor_pred.get('detalhe', '')
+                
+                vencedor_texto = f"🎯 {vencedor}"
+                bbox_vencedor = draw.textbbox((0, 0), vencedor_texto, font=fonte_texto)
+                largura_vencedor = bbox_vencedor[2] - bbox_vencedor[0]
+                draw.text(((largura - largura_vencedor) // 2, y_pos), vencedor_texto, 
+                         fill=cor_texto, font=fonte_texto)
+                y_pos += 40
+                
+                confianca_venc_texto = f"💪 Confiança: {confianca_venc:.0f}%"
+                bbox_confianca_venc = draw.textbbox((0, 0), confianca_venc_texto, font=fonte_texto)
+                largura_confianca_venc = bbox_confianca_venc[2] - bbox_confianca_venc[0]
+                draw.text(((largura - largura_confianca_venc) // 2, y_pos), confianca_venc_texto, 
+                         fill=cor_texto, font=fonte_texto)
+                y_pos += 40
+                
+                if detalhe:
+                    detalhe_texto = f"📈 {detalhe}"
+                    bbox_detalhe = draw.textbbox((0, 0), detalhe_texto, font=fonte_pequena)
+                    largura_detalhe = bbox_detalhe[2] - bbox_detalhe[0]
+                    draw.text(((largura - largura_detalhe) // 2, y_pos), detalhe_texto, 
+                             fill=cor_texto, font=fonte_pequena)
+                    y_pos += 40
+        
+        elif tipo == "resultado":
+            # Resultados com Green/Red
+            home_score = game.get("home_team_score", 0)
+            away_score = game.get("visitor_team_score", 0)
+            total_pontos = home_score + away_score
+            
+            bbox_resultado_titulo = draw.textbbox((0, 0), "📊 RESULTADO OFICIAL", font=fonte_subtitulo)
+            largura_resultado_titulo = bbox_resultado_titulo[2] - bbox_resultado_titulo[0]
+            draw.text(((largura - largura_resultado_titulo) // 2, y_pos), "📊 RESULTADO OFICIAL", 
+                     fill=cor_destaque, font=fonte_subtitulo)
+            y_pos += 50
+            
+            # Placar
+            bbox_away_nome = draw.textbbox((0, 0), f"🏀 {away_team}", font=fonte_texto)
+            largura_away_nome = bbox_away_nome[2] - bbox_away_nome[0]
+            draw.text(((largura - largura_away_nome) // 2, y_pos), f"🏀 {away_team}", 
+                     fill=cor_texto, font=fonte_texto)
+            y_pos += 40
+            
+            placar_texto = f"🆚 {away_score} x {home_score}"
+            bbox_placar = draw.textbbox((0, 0), placar_texto, font=fonte_titulo)
+            largura_placar = bbox_placar[2] - bbox_placar[0]
+            draw.text(((largura - largura_placar) // 2, y_pos), placar_texto, 
+                     fill=cor_destaque, font=fonte_titulo)
+            y_pos += 60
+            
+            bbox_home_nome = draw.textbbox((0, 0), f"🏠 {home_team}", font=fonte_texto)
+            largura_home_nome = bbox_home_nome[2] - bbox_home_nome[0]
+            draw.text(((largura - largura_home_nome) // 2, y_pos), f"🏠 {home_team}", 
+                     fill=cor_texto, font=fonte_texto)
+            y_pos += 60
+            
+            # Total de pontos
+            total_texto = f"📈 TOTAL: {total_pontos} PONTOS"
+            bbox_total = draw.textbbox((0, 0), total_texto, font=fonte_texto)
+            largura_total = bbox_total[2] - bbox_total[0]
+            draw.text(((largura - largura_total) // 2, y_pos), total_texto, 
+                     fill=cor_texto, font=fonte_texto)
+            y_pos += 60
+            
+            # Resultados das previsões
+            total_pred = predictions.get("total", {})
+            vencedor_pred = predictions.get("vencedor", {})
+            
+            # Resultado Total
+            if total_pred:
+                tendencia_total = total_pred.get('tendencia', '')
+                resultado_total = calcular_resultado_total(total_pontos, tendencia_total)
+                cor_resultado = "#22c55e" if "GREEN" in resultado_total else "#ef4444"
+                
+                resultado_total_texto = f"🎯 TOTAL: {resultado_total}"
+                bbox_resultado_total = draw.textbbox((0, 0), resultado_total_texto, font=fonte_texto)
+                largura_resultado_total = bbox_resultado_total[2] - bbox_resultado_total[0]
+                draw.text(((largura - largura_resultado_total) // 2, y_pos), resultado_total_texto, 
+                         fill=cor_resultado, font=fonte_texto)
+                y_pos += 40
+            
+            # Resultado Vencedor
+            if vencedor_pred:
+                vencedor_previsto = vencedor_pred.get('vencedor', '')
+                resultado_vencedor = calcular_resultado_vencedor(home_score, away_score, vencedor_previsto)
+                cor_resultado = "#22c55e" if "GREEN" in resultado_vencedor else "#ef4444"
+                
+                resultado_vencedor_texto = f"🏆 VENCEDOR: {resultado_vencedor}"
+                bbox_resultado_vencedor = draw.textbbox((0, 0), resultado_vencedor_texto, font=fonte_texto)
+                largura_resultado_vencedor = bbox_resultado_vencedor[2] - bbox_resultado_vencedor[0]
+                draw.text(((largura - largura_resultado_vencedor) // 2, y_pos), resultado_vencedor_texto, 
+                         fill=cor_resultado, font=fonte_texto)
+                y_pos += 40
+        
+        # Footer
+        y_pos = altura - 80
+        draw.rectangle([0, y_pos, largura, altura], fill=cor_principal)
+        
+        footer_texto1 = "🏆 ELITE MASTER - ANÁLISE COM DADOS REAIS 2024-2025"
+        bbox_footer1 = draw.textbbox((0, 0), footer_texto1, font=fonte_pequena)
+        largura_footer1 = bbox_footer1[2] - bbox_footer1[0]
+        draw.text(((largura - largura_footer1) // 2, y_pos + 10), footer_texto1, 
+                 fill=cor_texto, font=fonte_pequena)
+        
+        footer_texto2 = "📊 Sistema de Previsões NBA"
+        bbox_footer2 = draw.textbbox((0, 0), footer_texto2, font=fonte_pequena)
+        largura_footer2 = bbox_footer2[2] - bbox_footer2[0]
+        draw.text(((largura - largura_footer2) // 2, y_pos + 40), footer_texto2, 
+                 fill=cor_destaque, font=fonte_pequena)
+        
+        return img
+        
     except Exception as e:
-        return f"⚠️ Erro ao formatar: {e}"
+        print(f"Erro ao criar pôster: {e}")
+        return criar_poster_fallback(game, predictions, tipo)
+
+def criar_poster_fallback(game: dict, predictions: dict, tipo: str) -> Image.Image:
+    """Cria um pôster fallback simplificado"""
+    largura, altura = 600, 800
+    img = Image.new('RGB', (largura, altura), color='#1e3a8a')
+    draw = ImageDraw.Draw(img)
+    
+    home_team = game.get("home_team", {}).get("full_name", "Casa")
+    away_team = game.get("visitor_team", {}).get("full_name", "Visitante")
+    
+    draw.text((largura//2, 100), "🏀 NBA ELITE MASTER", fill="white", anchor="mm")
+    draw.text((largura//2, 200), f"{away_team} @ {home_team}", fill="white", anchor="mm")
+    
+    if tipo == "previsao":
+        draw.text((largura//2, 300), "📊 PREVISÕES DO DIA", fill="yellow", anchor="mm")
+    else:
+        draw.text((largura//2, 300), "📊 RESULTADOS", fill="yellow", anchor="mm")
+    
+    draw.text((largura//2, 500), "🏆 Sistema de Previsões", fill="white", anchor="mm")
+    draw.text((largura//2, 550), "📈 Dados Reais 2024-2025", fill="white", anchor="mm")
+    
+    return img
+
+def calcular_resultado_total(total_pontos: int, tendencia: str) -> str:
+    """Calcula se a previsão de total foi Green ou Red"""
+    if "Mais" in tendencia:
+        try:
+            limite = float(tendencia.split()[-1])
+            return "🟢 GREEN" if total_pontos > limite else "🔴 RED"
+        except:
+            return "⚪ INDEFINIDO"
+    elif "Menos" in tendencia:
+        try:
+            limite = float(tendencia.split()[-1])
+            return "🟢 GREEN" if total_pontos < limite else "🔴 RED"
+        except:
+            return "⚪ INDEFINIDO"
+    return "⚪ INDEFINIDO"
+
+def calcular_resultado_vencedor(home_score: int, away_score: int, vencedor_previsto: str) -> str:
+    """Calcula se a previsão de vencedor foi Green ou Red"""
+    if vencedor_previsto == "Casa" and home_score > away_score:
+        return "🟢 GREEN"
+    elif vencedor_previsto == "Visitante" and away_score > home_score:
+        return "🟢 GREEN"
+    elif vencedor_previsto == "Empate" and home_score == away_score:
+        return "🟢 GREEN"
+    elif vencedor_previsto in ["Casa", "Visitante", "Empate"]:
+        return "🔴 RED"
+    return "⚪ INDEFINIDO"
+
+def enviar_poster_telegram(poster_img: Image.Image, chat_id: str = TELEGRAM_CHAT_ID) -> bool:
+    """Envia o pôster como imagem para o Telegram"""
+    try:
+        # Converte a imagem para bytes
+        img_byte_arr = io.BytesIO()
+        poster_img.save(img_byte_arr, format='PNG')
+        img_byte_arr.seek(0)
+        
+        # Envia para o Telegram
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto"
+        files = {'photo': ('poster.png', img_byte_arr, 'image/png')}
+        data = {'chat_id': chat_id}
+        
+        response = requests.post(url, files=files, data=data, timeout=30)
+        return response.status_code == 200
+        
+    except Exception as e:
+        print(f"Erro ao enviar pôster: {e}")
+        return False
+
+# =============================
+# SISTEMA DE ALERTAS APENAS COM PÔSTERES
+# =============================
 
 def verificar_e_enviar_alerta(game: dict, predictions: dict, send_to_telegram: bool = False):
+    """Sistema de alertas APENAS com pôsteres - versão simplificada"""
     alertas = carregar_alertas()
     fid = str(game.get("id"))
     
@@ -889,33 +1180,53 @@ def verificar_e_enviar_alerta(game: dict, predictions: dict, send_to_telegram: b
             "game_data": game,
             "predictions": predictions,
             "timestamp": datetime.now().isoformat(),
-            "enviado_telegram": send_to_telegram,
+            "enviado_telegram": False,
             "conferido": False,
-            "alerta_resultado_enviado": False
+            "alerta_resultado_enviado": False,
+            "poster_enviado": False
         }
         salvar_alertas(alertas)
         
-        msg = formatar_msg_alerta(game, predictions)
-        
-        # Se marcado para enviar ao Telegram, envia
+        # SEMPRE envia apenas o pôster, não envia mensagem textual
         if send_to_telegram:
-            if enviar_telegram(msg):
-                alertas[fid]["enviado_telegram"] = True
-                salvar_alertas(alertas)
-                return True
-            else:
+            try:
+                # Cria e envia pôster de previsão
+                poster = criar_poster_alerta(game, predictions, "previsao")
+                
+                # Envia apenas o pôster
+                if enviar_poster_telegram(poster):
+                    alertas[fid]["poster_enviado"] = True
+                    alertas[fid]["enviado_telegram"] = True
+                    salvar_alertas(alertas)
+                    return True
+                else:
+                    return False
+                    
+            except Exception as e:
+                print(f"Erro no sistema de pôster: {e}")
                 return False
         return True
     return False
 
-# =============================
-# ALERTA DE RESULTADOS CONFERIDOS
-# =============================
+def enviar_alerta_resultado_individual(alerta_id: str, alerta: dict):
+    """Envia alerta individual de resultado APENAS com pôster"""
+    game_data = alerta.get("game_data", {})
+    predictions = alerta.get("predictions", {})
+    
+    # Cria pôster de resultado
+    poster = criar_poster_alerta(game_data, predictions, "resultado")
+    
+    # Envia APENAS o pôster, sem mensagem textual
+    if enviar_poster_telegram(poster, TELEGRAM_CHAT_ID_ALT2):
+        return True
+    
+    return False
+
 def enviar_alerta_resultados_conferidos():
-    """Envia alerta com resumo dos resultados conferidos (Green/Red)"""
+    """Versão atualizada - envia APENAS pôsteres para resultados"""
     alertas = carregar_alertas()
     
-    # Filtra apenas jogos conferidos
+    # Filtra apenas jogos conferidos sem alerta de resultado
     jogos_conferidos = []
     for alerta_id, alerta in alertas.items():
         if alerta.get("conferido", False) and not alerta.get("alerta_resultado_enviado", False):
@@ -925,170 +1236,35 @@ def enviar_alerta_resultados_conferidos():
         st.info("ℹ️ Nenhum jogo conferido novo para alerta.")
         return 0
     
-    st.info(f"📤 Preparando alerta para {len(jogos_conferidos)} jogos conferidos...")
+    st.info(f"📤 Preparando pôsteres para {len(jogos_conferidos)} jogos conferidos...")
     
-    # Constroi mensagem consolidada
-    mensagem = f"🏀 <b>RESULTADOS CONFERIDOS - {datetime.now().strftime('%d/%m/%Y')}</b>\n\n"
-    mensagem += "📊 <i>Resumo dos jogos analisados</i>\n\n"
-    
-    greens_total = 0
-    greens_vencedor = 0
-    total_jogos = len(jogos_conferidos)
+    alertas_enviados = 0
     
     for alerta_id, alerta in jogos_conferidos:
-        game_data = alerta.get("game_data", {})
-        predictions = alerta.get("predictions", {})
+        # Envia APENAS o pôster individual para cada jogo
+        if enviar_alerta_resultado_individual(alerta_id, alerta):
+            alertas[alerta_id]["alerta_resultado_enviado"] = True
+            alertas_enviados += 1
+            st.success(f"✅ Pôster de resultado enviado para jogo {alerta_id}")
+        else:
+            st.error(f"❌ Erro ao enviar pôster para jogo {alerta_id}")
         
-        home_team = game_data.get("home_team", {}).get("full_name", "Casa")
-        away_team = game_data.get("visitor_team", {}).get("full_name", "Visitante")
-        home_score = game_data.get("home_team_score", 0)
-        away_score = game_data.get("visitor_team_score", 0)
-        
-        total_pontos = home_score + away_score
-        
-        # Determina resultado do Total
-        total_pred = predictions.get("total", {})
-        tendencia_total = total_pred.get("tendencia", "")
-        resultado_total = "⚪ INDEFINIDO"
-        
-        if "Mais" in tendencia_total:
-            try:
-                limite = float(tendencia_total.split()[-1])
-                resultado_total = "🟢 GREEN" if total_pontos > limite else "🔴 RED"
-                if resultado_total == "🟢 GREEN":
-                    greens_total += 1
-            except:
-                resultado_total = "⚪ INDEFINIDO"
-        elif "Menos" in tendencia_total:
-            try:
-                limite = float(tendencia_total.split()[-1])
-                resultado_total = "🟢 GREEN" if total_pontos < limite else "🔴 RED"
-                if resultado_total == "🟢 GREEN":
-                    greens_total += 1
-            except:
-                resultado_total = "⚪ INDEFINIDO"
-        
-        # Determina resultado do Vencedor
-        vencedor_pred = predictions.get("vencedor", {})
-        vencedor_previsto = vencedor_pred.get("vencedor", "")
-        resultado_vencedor = "⚪ INDEFINIDO"
-        
-        if vencedor_previsto == "Casa" and home_score > away_score:
-            resultado_vencedor = "🟢 GREEN"
-            greens_vencedor += 1
-        elif vencedor_previsto == "Visitante" and away_score > home_score:
-            resultado_vencedor = "🟢 GREEN"
-            greens_vencedor += 1
-        elif vencedor_previsto == "Empate" and home_score == away_score:
-            resultado_vencedor = "🟢 GREEN"
-            greens_vencedor += 1
-        elif vencedor_previsto in ["Casa", "Visitante", "Empate"]:
-            resultado_vencedor = "🔴 RED"
-        
-        # Adiciona jogo à mensagem
-        mensagem += f"🏟️ <b>{home_team} vs {away_team}</b>\n"
-        mensagem += f"   📊 Placar: <b>{home_score} x {away_score}</b>\n"
-        mensagem += f"   🏀 Total: {total_pontos} pts | Previsão: {tendencia_total} | <b>{resultado_total}</b>\n"
-        mensagem += f"   🎯 Vencedor: Previsão: {vencedor_previsto} | <b>{resultado_vencedor}</b>\n\n"
-        
-        # Marca como alerta enviado
-        alertas[alerta_id]["alerta_resultado_enviado"] = True
+        # Pequena pausa entre envios
+        time.sleep(2)
     
-    # Adiciona resumo final
-    mensagem += "📈 <b>RESUMO FINAL</b>\n"
-    mensagem += f"✅ <b>Total de Pontos:</b> {greens_total}/{total_jogos} Greens\n"
-    mensagem += f"✅ <b>Vencedor:</b> {greens_vencedor}/{total_jogos} Greens\n"
+    # NÃO envia mensagem consolidada final - apenas os pôsteres individuais
     
-    taxa_acerto_total = (greens_total / total_jogos) * 100 if total_jogos > 0 else 0
-    taxa_acerto_vencedor = (greens_vencedor / total_jogos) * 100 if total_jogos > 0 else 0
-    taxa_geral = ((greens_total + greens_vencedor) / (total_jogos * 2)) * 100 if total_jogos > 0 else 0
-    
-    mensagem += f"🎯 <b>Taxa de Acerto:</b>\n"
-    mensagem += f"   📊 Total: {taxa_acerto_total:.1f}%\n"
-    mensagem += f"   🏆 Vencedor: {taxa_acerto_vencedor:.1f}%\n"
-    mensagem += f"   ⭐ Geral: {taxa_geral:.1f}%\n\n"
-    
-    mensagem += "🏆 <b>Elite Master - Resultados Conferidos</b>"
-    
-    # Envia para o canal alternativo
-    if enviar_telegram(mensagem, TELEGRAM_CHAT_ID_ALT2):
-        # Salva as alterações nos alertas
+    if alertas_enviados > 0:
         salvar_alertas(alertas)
-        st.success(f"✅ Alerta de resultados enviado! {total_jogos} jogos conferidos.")
-        return total_jogos
-    else:
-        st.error("❌ Erro ao enviar alerta de resultados.")
-        return 0
-
-def enviar_alerta_individual_resultado(alerta_id: str, alerta: dict):
-    """Envia alerta individual para um jogo conferido"""
-    game_data = alerta.get("game_data", {})
-    predictions = alerta.get("predictions", {})
+        st.success(f"🎉 {alertas_enviados} pôsteres de resultado enviados!")
+        return alertas_enviados
     
-    home_team = game_data.get("home_team", {}).get("full_name", "Casa")
-    away_team = game_data.get("visitor_team", {}).get("full_name", "Visitante")
-    home_score = game_data.get("home_team_score", 0)
-    away_score = game_data.get("visitor_team_score", 0)
-    
-    total_pontos = home_score + away_score
-    
-    # Determina resultado do Total
-    total_pred = predictions.get("total", {})
-    tendencia_total = total_pred.get("tendencia", "")
-    resultado_total = "⚪ INDEFINIDO"
-    
-    if "Mais" in tendencia_total:
-        try:
-            limite = float(tendencia_total.split()[-1])
-            resultado_total = "🟢 GREEN" if total_pontos > limite else "🔴 RED"
-        except:
-            resultado_total = "⚪ INDEFINIDO"
-    elif "Menos" in tendencia_total:
-        try:
-            limite = float(tendencia_total.split()[-1])
-            resultado_total = "🟢 GREEN" if total_pontos < limite else "🔴 RED"
-        except:
-            resultado_total = "⚪ INDEFINIDO"
-    
-    # Determina resultado do Vencedor
-    vencedor_pred = predictions.get("vencedor", {})
-    vencedor_previsto = vencedor_pred.get("vencedor", "")
-    resultado_vencedor = "⚪ INDEFINIDO"
-    
-    if vencedor_previsto == "Casa" and home_score > away_score:
-        resultado_vencedor = "🟢 GREEN"
-    elif vencedor_previsto == "Visitante" and away_score > home_score:
-        resultado_vencedor = "🟢 GREEN"
-    elif vencedor_previsto == "Empate" and home_score == away_score:
-        resultado_vencedor = "🟢 GREEN"
-    elif vencedor_previsto in ["Casa", "Visitante", "Empate"]:
-        resultado_vencedor = "🔴 RED"
-    
-    # Constroi mensagem individual
-    mensagem = f"🏀 <b>RESULTADO INDIVIDUAL</b>\n\n"
-    mensagem += f"🏟️ <b>{home_team} vs {away_team}</b>\n"
-    mensagem += f"📊 Placar: <b>{home_score} x {away_score}</b>\n"
-    mensagem += f"🏀 Total de Pontos: <b>{total_pontos}</b>\n\n"
-    
-    mensagem += f"📈 <b>Total de Pontos</b>\n"
-    mensagem += f"   Previsão: {tendencia_total}\n"
-    mensagem += f"   Resultado: <b>{resultado_total}</b>\n\n"
-    
-    mensagem += f"🎯 <b>Vencedor</b>\n"
-    mensagem += f"   Previsão: {vencedor_previsto}\n"
-    mensagem += f"   Resultado: <b>{resultado_vencedor}</b>\n\n"
-    
-    mensagem += "🏆 <b>Elite Master - Resultado Individual</b>"
-    
-    # Envia para o canal alternativo
-    if enviar_telegram(mensagem, TELEGRAM_CHAT_ID_ALT2):
-        return True
-    else:
-        return False
+    return 0
 
 # =============================
-# SISTEMA TOP 4 MELHORES JOGOS
+# SISTEMA TOP 4 MELHORES JOGOS - ATUALIZADO COM PÔSTERES
 # =============================
+
 def calcular_pontuacao_jogo(jogo: dict, times_stats: dict) -> float:
     """Calcula pontuação para ranking dos melhores jogos"""
     home_team_id = jogo["home_team"]["id"]
@@ -1109,11 +1285,13 @@ def calcular_pontuacao_jogo(jogo: dict, times_stats: dict) -> float:
     diff_win_rate = abs(home_stats.get("win_rate", 0) - visitor_stats.get("win_rate", 0))
     fator_competitividade = 1.0 - (diff_win_rate * 0.5)  # Times com win_rate similar = jogos mais disputados
     
-    # 3. Potencial de pontos totais (over/under implícito)
-    pontos_totais_esperados = home_stats.get("pts_for_avg", 0) + visitor_stats.get("pts_for_avg", 0)
+    # 3. Consistência dos times
+    home_consistencia = min(20, abs(home_stats.get("pts_diff_avg", 0)) * 2)
+    visitor_consistencia = min(20, abs(visitor_stats.get("pts_diff_avg", 0)) * 2)
+    fator_consistencia = (home_consistencia + visitor_consistencia) / 2
     
     # Pontuação final
-    pontuacao = (ofensiva_total * 0.4) + (fator_competitividade * 30) + (pontos_totais_esperados * 0.3)
+    pontuacao = (ofensiva_total * 0.3) + (fator_competitividade * 40) + fator_consistencia
     
     return pontuacao
 
@@ -1137,19 +1315,46 @@ def obter_top4_melhores_jogos(data_str: str) -> list:
     # Calcula pontuação para cada jogo
     jogos_com_pontuacao = []
     for jogo in jogos:
-        pontuacao = calcular_pontuaacao_jogo(jogo, times_stats)
+        pontuacao = calcular_pontuacao_jogo(jogo, times_stats)
         
         # Obtém nomes completos dos times
         home_team_name = times_cache.get(jogo["home_team"]["id"], {}).get("full_name", jogo["home_team"]["name"])
         visitor_team_name = times_cache.get(jogo["visitor_team"]["id"], {}).get("full_name", jogo["visitor_team"]["name"])
+        
+        # Calcula previsões para o jogo
+        home_id = jogo["home_team"]["id"]
+        visitor_id = jogo["visitor_team"]["id"]
+        
+        try:
+            total_estim, total_conf, total_tend = prever_total_points(home_id, visitor_id)
+            vencedor, vencedor_conf, vencedor_detalhe = prever_vencedor(home_id, visitor_id)
+            
+            predictions = {
+                "total": {
+                    "estimativa": total_estim,
+                    "confianca": total_conf,
+                    "tendencia": total_tend
+                },
+                "vencedor": {
+                    "vencedor": vencedor,
+                    "confianca": vencedor_conf,
+                    "detalhe": vencedor_detalhe
+                }
+            }
+        except Exception as e:
+            predictions = {
+                "total": {"estimativa": 0, "confianca": 0, "tendencia": "N/A"},
+                "vencedor": {"vencedor": "N/A", "confianca": 0, "detalhe": "Erro na previsão"}
+            }
         
         jogos_com_pontuacao.append({
             "jogo": jogo,
             "pontuacao": pontuacao,
             "home_team_name": home_team_name,
             "visitor_team_name": visitor_team_name,
-            "home_stats": times_stats.get(jogo["home_team"]["id"], {}),
-            "visitor_stats": times_stats.get(jogo["visitor_team"]["id"], {})
+            "home_stats": times_stats.get(home_id, {}),
+            "visitor_stats": times_stats.get(visitor_id, {}),
+            "predictions": predictions
         })
     
     # Ordena por pontuação (decrescente) e pega top 4
@@ -1157,44 +1362,40 @@ def obter_top4_melhores_jogos(data_str: str) -> list:
     return jogos_com_pontuacao[:4]
 
 def enviar_alerta_top4_jogos(data_str: str):
-    """Envia alerta com os 4 melhores jogos do dia para o canal alternativo"""
+    """Envia alerta com os 4 melhores jogos do dia APENAS com pôsteres"""
     top4_jogos = obter_top4_melhores_jogos(data_str)
     
     if not top4_jogos:
-        mensagem = f"🏀 <b>TOP 4 JOGOS - {data_str}</b>\n\n"
-        mensagem += "⚠️ Nenhum jogo encontrado para hoje."
-        enviar_telegram(mensagem, TELEGRAM_CHAT_ID_ALT2)
+        # Envia um pôster informando que não há jogos
+        jogo_vazio = {
+            "home_team": {"full_name": "Nenhum"},
+            "visitor_team": {"full_name": "Jogo"},
+            "date": data_str,
+            "status": "NO_GAMES"
+        }
+        predictions_vazio = {
+            "total": {"estimativa": 0, "confianca": 0, "tendencia": "Nenhum jogo hoje"},
+            "vencedor": {"vencedor": "N/A", "confianca": 0, "detalhe": "Sem jogos disponíveis"}
+        }
+        
+        poster = criar_poster_alerta(jogo_vazio, predictions_vazio, "previsao")
+        enviar_poster_telegram(poster, TELEGRAM_CHAT_ID_ALT2)
         return
     
-    # Constroi mensagem formatada
-    mensagem = f"🏀 <b>TOP 4 MELHORES JOGOS - {data_str}</b>\n\n"
-    mensagem += "⭐ <i>Jogos mais promissores do dia</i> ⭐\n\n"
-    
+    # Envia um pôster individual para CADA jogo do Top 4
     for i, jogo_info in enumerate(top4_jogos, 1):
-        home_team = jogo_info["home_team_name"]
-        visitor_team = jogo_info["visitor_team_name"]
-        home_stats = jogo_info["home_stats"]
-        visitor_stats = jogo_info["visitor_stats"]
+        jogo = jogo_info["jogo"]
+        predictions = jogo_info["predictions"]
         
-        # Emojis para ranking
-        emojis = ["🥇", "🥈", "🥉", "4️⃣"]
+        # Envia pôster individual para cada jogo
+        poster = criar_poster_alerta(jogo, predictions, "previsao")
+        if enviar_poster_telegram(poster, TELEGRAM_CHAT_ID_ALT2):
+            st.success(f"✅ Pôster Top {i} enviado: {jogo_info['visitor_team_name']} @ {jogo_info['home_team_name']}")
+        else:
+            st.error(f"❌ Erro ao enviar pôster Top {i}")
         
-        mensagem += f"{emojis[i-1]} <b>{visitor_team} @ {home_team}</b>\n"
-        
-        # Adiciona estatísticas relevantes
-        if home_stats and visitor_stats:
-            total_esperado = home_stats.get("pts_for_avg", 0) + visitor_stats.get("pts_for_avg", 0)
-            mensagem += f"   📊 Total Esperado: <b>{total_esperado:.1f} pts</b>\n"
-            mensagem += f"   🏆 Competitividade: <b>{(1 - abs(home_stats.get('win_rate',0) - visitor_stats.get('win_rate',0)))*100:.0f}%</b>\n"
-        
-        mensagem += "\n"
-    
-    mensagem += "📈 <i>Baseado em estatísticas ofensivas e competitividade</i>\n"
-    mensagem += "#Top4Jogos #NBA"
-    
-    # Envia para o canal alternativo
-    enviar_telegram(mensagem, TELEGRAM_CHAT_ID_ALT2)
-    st.success("✅ Alerta Top 4 Jogos enviado para canal alternativo!")
+        # Pequena pausa entre envios
+        time.sleep(2)
 
 # =============================
 # EXIBIÇÃO DOS JOGOS ANALISADOS
@@ -1247,10 +1448,10 @@ def exibir_jogos_analisados():
             with col3:
                 exibir_escudo_time(away_team, (80, 80))
             
-            if alerta.get("enviado_telegram", False):
-                st.success("📤 Enviado para Telegram")
+            if alerta.get("poster_enviado", False):
+                st.success("🖼️ Pôster enviado para Telegram")
             else:
-                st.info("📝 Salvo localmente")
+                st.info("💾 Salvo localmente")
             
             timestamp = alerta.get("timestamp", "")
             if timestamp:
@@ -1291,11 +1492,11 @@ def conferir_resultados():
                     st.info("ℹ️ Nenhum jogo novo para conferir.")
     
     with col4:
-        if st.button("📤 Alerta Resultados", type="secondary", use_container_width=True):
-            with st.spinner("Enviando alerta de resultados conferidos..."):
+        if st.button("📤 Enviar Pôsteres", type="secondary", use_container_width=True):
+            with st.spinner("Enviando pôsteres de resultados..."):
                 jogos_alertados = enviar_alerta_resultados_conferidos()
                 if jogos_alertados > 0:
-                    st.success(f"✅ Alerta para {jogos_alertados} jogos enviado!")
+                    st.success(f"✅ {jogos_alertados} pôsteres enviados!")
                 else:
                     st.info("ℹ️ Nenhum jogo novo para alerta.")
     
@@ -1396,11 +1597,11 @@ def conferir_resultados():
                     
                     alertas[alerta_id]["conferido"] = True
                     
-                    # Envia alerta individual
-                    if enviar_alerta_individual_resultado(alerta_id, alertas[alerta_id]):
-                        st.success("✅ Conferido e alerta enviado!")
+                    # Envia pôster individual
+                    if enviar_alerta_resultado_individual(alerta_id, alertas[alerta_id]):
+                        st.success("✅ Conferido e pôster enviado!")
                     else:
-                        st.error("✅ Conferido, mas erro no alerta.")
+                        st.error("✅ Conferido, mas erro no pôster.")
                     
                     salvar_alertas(alertas)
                     st.rerun()
@@ -1409,17 +1610,96 @@ def conferir_resultados():
         
         with col_btn2:
             if alerta.get("conferido", False):
-                if st.button("📤 Reenviar Alerta", key=f"alert_{alerta_id}", use_container_width=True):
-                    if enviar_alerta_individual_resultado(alerta_id, alerta):
-                        st.success("✅ Alerta reenviado!")
+                if st.button("🖼️ Reenviar Pôster", key=f"poster_{alerta_id}", use_container_width=True):
+                    if enviar_alerta_resultado_individual(alerta_id, alerta):
+                        st.success("✅ Pôster reenviado!")
                     else:
-                        st.error("❌ Erro ao reenviar alerta.")
+                        st.error("❌ Erro ao reenviar pôster.")
         
         st.markdown("---")
 
 # =============================
-# INTERFACE STREAMLIT MELHORADA
+# TESTE DO SISTEMA DE PÔSTERES
 # =============================
+
+def testar_sistema_posteres():
+    """Função para testar a geração de pôsteres"""
+    st.header("🎨 Teste do Sistema de Pôsteres")
+    
+    # Cria um exemplo de jogo e previsões
+    jogo_exemplo = {
+        "id": 1,
+        "home_team": {"full_name": "Los Angeles Lakers"},
+        "visitor_team": {"full_name": "Golden State Warriors"},
+        "date": "2024-12-25T20:00:00Z",
+        "status": "SCHEDULED"
+    }
+    
+    predictions_exemplo = {
+        "total": {
+            "estimativa": 228.5,
+            "confianca": 72.5,
+            "tendencia": "Mais 225.5"
+        },
+        "vencedor": {
+            "vencedor": "Casa",
+            "confianca": 68.0,
+            "detalhe": "Ligeira vantagem da casa"
+        }
+    }
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("🖼️ Gerar Pôster de Previsão"):
+            poster = criar_poster_alerta(jogo_exemplo, predictions_exemplo, "previsao")
+            st.image(poster, caption="Pôster de Previsão", use_column_width=True)
+            
+            # Opção para baixar
+            buf = io.BytesIO()
+            poster.save(buf, format='PNG')
+            st.download_button(
+                "📥 Baixar Pôster",
+                buf.getvalue(),
+                "poster_previsao.png",
+                "image/png"
+            )
+    
+    with col2:
+        # Exemplo com resultado
+        jogo_resultado = jogo_exemplo.copy()
+        jogo_resultado["home_team_score"] = 115
+        jogo_resultado["visitor_team_score"] = 108
+        jogo_resultado["status"] = "FINAL"
+        
+        if st.button("📊 Gerar Pôster de Resultado"):
+            poster = criar_poster_alerta(jogo_resultado, predictions_exemplo, "resultado")
+            st.image(poster, caption="Pôster de Resultado", use_column_width=True)
+            
+            buf = io.BytesIO()
+            poster.save(buf, format='PNG')
+            st.download_button(
+                "📥 Baixar Pôster",
+                buf.getvalue(),
+                "poster_resultado.png",
+                "image/png"
+            )
+    
+    # Teste de envio para Telegram
+    st.subheader("📤 Teste de Envio para Telegram")
+    
+    if st.button("🚀 Enviar Pôster de Teste para Telegram"):
+        with st.spinner("Enviando pôster..."):
+            poster = criar_poster_alerta(jogo_exemplo, predictions_exemplo, "previsao")
+            if enviar_poster_telegram(poster, TELEGRAM_CHAT_ID_ALT2):
+                st.success("✅ Pôster enviado com sucesso!")
+            else:
+                st.error("❌ Erro ao enviar pôster")
+
+# =============================
+# INTERFACE STREAMLIT PRINCIPAL
+# =============================
+
 def main():
     st.set_page_config(
         page_title="🏀 NBA Elite AI - Sistema de Previsões",
@@ -1428,7 +1708,7 @@ def main():
         initial_sidebar_state="expanded"
     )
     
-    # CSS customizado do primeiro código
+    # CSS customizado
     st.markdown("""
     <style>
     .main-header {
@@ -1502,8 +1782,8 @@ def main():
         st.subheader("⭐ Top 4 Jogos")
         data_str = data_jogos.strftime("%Y-%m-%d")
         
-        if st.button("🚀 Enviar Top 4 Melhores Jogos", type="primary", use_container_width=True):
-            with st.spinner("Buscando melhores jogos e enviando alerta..."):
+        if st.button("🚀 Enviar Top 4 Pôsteres", type="primary", use_container_width=True):
+            with st.spinner("Buscando melhores jogos e enviando pôsteres..."):
                 enviar_alerta_top4_jogos(data_str)
         
         if st.button("👀 Visualizar Top 4 Jogos", type="secondary", use_container_width=True):
@@ -1534,11 +1814,11 @@ def main():
                     conferir_jogos_finalizados()
         
         st.subheader("📤 Alertas")
-        if st.button("📤 Alerta Resultados", use_container_width=True):
-            with st.spinner("Enviando alerta de resultados conferidos..."):
+        if st.button("📤 Enviar Pôsteres Resultados", use_container_width=True):
+            with st.spinner("Enviando pôsteres de resultados conferidos..."):
                 jogos_alertados = enviar_alerta_resultados_conferidos()
                 if jogos_alertados > 0:
-                    st.success(f"✅ Alerta para {jogos_alertados} jogos!")
+                    st.success(f"✅ {jogos_alertados} pôsteres enviados!")
                 else:
                     st.info("ℹ️ Nenhum jogo novo para alerta.")
         
@@ -1547,6 +1827,10 @@ def main():
             limpar_estatisticas()
             st.success("Estatísticas limpas!")
             st.rerun()
+        
+        st.subheader("🎨 Testes")
+        if st.button("🖼️ Testar Pôsteres", use_container_width=True):
+            st.session_state.show_testes = True
         
         st.subheader("🧹 Limpeza")
         if st.button("🗑️ Limpar Cache", type="secondary", use_container_width=True):
@@ -1565,7 +1849,7 @@ def main():
         "📈 Jogos Analisados", 
         "✅ Conferência",
         "📊 Estatísticas",
-        "ℹ️ Sobre"
+        "🎨 Testes Pôsteres"
     ])
     
     with tab1:
@@ -1581,7 +1865,7 @@ def main():
         exibir_estatisticas()
     
     with tab5:
-        exibir_info_sobre()
+        testar_sistema_posteres()
 
 def exibir_aba_analise_melhorada(data_sel: date, janela: int, limite_confianca: int):
     """Exibe análise dos jogos com interface melhorada"""
@@ -1593,7 +1877,7 @@ def exibir_aba_analise_melhorada(data_sel: date, janela: int, limite_confianca: 
     with col2:
         st.write("")
         st.write("")
-        enviar_auto = st.checkbox("Enviar automaticamente para Telegram", value=True)
+        enviar_auto = st.checkbox("Enviar pôsteres automaticamente", value=True)
     with col3:
         st.write("")
         st.write("")
@@ -1611,7 +1895,7 @@ def analisar_jogos_com_dados_2025_melhorado(data_sel: date, top_n: int, janela: 
         st.info(f"🔍 Buscando dados reais para {data_sel.strftime('%d/%m/%Y')}...")
         st.success("📊 Analisando com dados da temporada 2024-2025")
         if enviar_auto:
-            st.warning("📤 Alertas serão enviados para Telegram")
+            st.warning("🖼️ Pôsteres serão enviados para Telegram")
         progress_bar = st.progress(0)
         status_text = st.empty()
     
@@ -1669,7 +1953,7 @@ def analisar_jogos_com_dados_2025_melhorado(data_sel: date, top_n: int, janela: 
                 if vencedor_conf >= limite_confianca:
                     alertas_ativos.append(f"🏆 **Vencedor**: {vencedor} (Conf: {vencedor_conf}%)")
                 
-                # Envia alerta se houver alertas ativos
+                # Envia pôster se houver alertas ativos
                 enviado = False
                 if alertas_ativos and enviar_auto:
                     enviado = verificar_e_enviar_alerta(jogo, predictions, True)
@@ -1759,13 +2043,13 @@ def analisar_jogos_com_dados_2025_melhorado(data_sel: date, top_n: int, janela: 
                                 st.success("Alerta salvo com sucesso!")
                         
                         with col_telegram:
-                            if st.button("📤 Enviar Telegram", key=f"tg_{jogo['id']}"):
+                            if st.button("🖼️ Enviar Pôster", key=f"tg_{jogo['id']}"):
                                 if verificar_e_enviar_alerta(jogo, predictions, True):
-                                    st.success("Alerta enviado para Telegram!")
+                                    st.success("Pôster enviado para Telegram!")
                                 else:
-                                    st.error("Erro ao enviar para Telegram")
+                                    st.error("Erro ao enviar pôster")
                     else:
-                        st.success("📤 Alerta enviado para Telegram")
+                        st.success("🖼️ Pôster enviado para Telegram")
                     
                     st.markdown("</div>", unsafe_allow_html=True)
                 else:
@@ -1791,63 +2075,10 @@ def analisar_jogos_com_dados_2025_melhorado(data_sel: date, top_n: int, janela: 
     st.info(f"""
     **📊 Resumo da Análise:**
     - 🏀 {len(resultados)} jogos analisados com dados 2024-2025
-    - 📤 {alertas_enviados} alertas enviados para Telegram
+    - 🖼️ {alertas_enviados} pôsteres enviados para Telegram
     - 📈 Estatísticas baseadas na temporada atual
     - 💾 Dados salvos para conferência futura
     """)
-
-def exibir_info_sobre():
-    """Exibe informações sobre o sistema"""
-    st.header("ℹ️ Sobre o NBA Elite AI")
-    
-    st.markdown("""
-    ## 🏀 Sistema de Previsões NBA
-    
-    Este sistema utiliza **inteligência artificial** e **análise de dados** para gerar previsões 
-    precisas sobre jogos da NBA baseado em dados reais da temporada 2024-2025.
-    
-    ### 📊 Metodologia
-    
-    - **Dados em Tempo Real**: Utiliza a API BallDon'tLie para dados atualizados
-    - **Estatísticas da Temporada**: Análise dos últimos 15 jogos de cada time
-    - **Machine Learning**: Algoritmos de previsão baseados em performance histórica
-    - **Vantagem de Casa**: Considera o fator casa nos cálculos
-    
-    ### 🎯 Funcionalidades
-    
-    1. **Previsão de Total de Pontos**: Estimativa do total de pontos do jogo
-    2. **Previsão de Vencedor**: Análise de probabilidade de vitória
-    3. **Sistema de Alertas**: Notificações para apostas com alta confiança
-    4. **Estatísticas de Desempenho**: Acompanhamento de acertos/erros
-    5. **Integração Telegram**: Alertas automáticos via mensagem
-    6. **Top 4 Jogos**: Seleção dos melhores jogos do dia
-    
-    ### 🔧 Tecnologias
-    
-    - **Python** com Streamlit para interface
-    - **APIs NBA** para dados em tempo real
-    - **PIL + CairoSVG** para processamento de imagens
-    - **Análise Estatística** avançada
-    
-    ### 📈 Confiabilidade
-    
-    O sistema é constantemente atualizado e calibrado com base nos resultados reais,
-    garantindo melhorias contínuas na precisão das previsões.
-    """)
-    
-    # Status do sistema
-    st.subheader("🟢 Status do Sistema")
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.metric("API BallDon'tLie", "✅ Online", "Conectado")
-    
-    with col2:
-        st.metric("Cache de Dados", "✅ Ativo", "24h")
-    
-    with col3:
-        st.metric("Telegram Bot", "✅ Pronto", "2 chats")
 
 # =============================
 # EXECUÇÃO PRINCIPAL
