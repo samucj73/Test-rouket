@@ -847,7 +847,7 @@ def criar_poster_alerta(game: dict, predictions: dict, tipo: str = "previsao") -
     """Cria um pôster estilizado COM TIMES NA HORIZONTAL"""
     try:
         # Configurações do pôster
-        largura, altura = 600, 550
+        largura, altura = 600, 580
         img = Image.new('RGB', (largura, altura), color='#0c0c0c')
         draw = ImageDraw.Draw(img)
         
