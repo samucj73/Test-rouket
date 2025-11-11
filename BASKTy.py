@@ -853,11 +853,11 @@ def criar_poster_alerta(game: dict, predictions: dict, tipo: str = "previsao") -
         
         # Tenta carregar fontes
         try:
-            fonte_titulo = ImageFont.truetype("arialbd.ttf", 100)
-            fonte_subtitulo = ImageFont.truetype("arial.ttf", 80)
-            fonte_texto = ImageFont.truetype("arial.ttf", 80)
-            fonte_pequena = ImageFont.truetype("arial.ttf", 80)
-            fonte_grande = ImageFont.truetype("arialbd.ttf", 100)
+            fonte_titulo = ImageFont.truetype("arialbd.ttf", 180)
+            fonte_subtitulo = ImageFont.truetype("arial.ttf", 120)
+            fonte_texto = ImageFont.truetype("arial.ttf", 120)
+            fonte_pequena = ImageFont.truetype("arial.ttf", 120)
+            fonte_grande = ImageFont.truetype("arialbd.ttf", 180)
         except:
             fonte_titulo = ImageFont.load_default()
             fonte_subtitulo = ImageFont.load_default()
