@@ -847,17 +847,17 @@ def criar_poster_alerta(game: dict, predictions: dict, tipo: str = "previsao") -
     """Cria um pôster estilizado COM PREVISÕES EM COLUNAS LADO A LADO"""
     try:
         # Configurações do pôster
-        largura, altura = 600, 800
+        largura, altura = 600, 600
         img = Image.new('RGB', (largura, altura), color='#0c0c0c')
         draw = ImageDraw.Draw(img)
         
         # Tenta carregar fontes
         try:
-            fonte_titulo = ImageFont.truetype("arialbd.ttf", 24)
-            fonte_subtitulo = ImageFont.truetype("arial.ttf", 20)
-            fonte_texto = ImageFont.truetype("arial.ttf", 18)
-            fonte_pequena = ImageFont.truetype("arial.ttf", 16)
-            fonte_grande = ImageFont.truetype("arialbd.ttf", 22)
+            fonte_titulo = ImageFont.truetype("arialbd.ttf", 220)
+            fonte_subtitulo = ImageFont.truetype("arial.ttf", 180)
+            fonte_texto = ImageFont.truetype("arial.ttf", 180)
+            fonte_pequena = ImageFont.truetype("arial.ttf", 160)
+            fonte_grande = ImageFont.truetype("arialbd.ttf", 220)
         except:
             fonte_titulo = ImageFont.load_default()
             fonte_subtitulo = ImageFont.load_default()
@@ -893,7 +893,7 @@ def criar_poster_alerta(game: dict, predictions: dict, tipo: str = "previsao") -
         y_pos += 120
         
         # CAMPEONATO E DATA
-        campeonato_texto = "NBA - TEMPORADA 2024-2025"
+        campeonato_texto = "NBA - TEMPORADA 2025-2026"
         bbox_camp = draw.textbbox((0, 0), campeonato_texto, font=fonte_subtitulo)
         largura_camp = bbox_camp[2] - bbox_camp[0]
         draw.text(((largura - largura_camp) // 2, y_pos), campeonato_texto, 
@@ -924,8 +924,8 @@ def criar_poster_alerta(game: dict, predictions: dict, tipo: str = "previsao") -
         away_team = game.get("visitor_team", {}).get("full_name", "Visitante")
         
         # Configurações do layout horizontal
-        escudo_size = (80, 80)
-        espacamento = 30
+        escudo_size = (140, 140)
+        espacamento = 80
         largura_total_teams = (escudo_size[0] * 2) + espacamento + 100
         start_x = (largura - largura_total_teams) // 2
         
