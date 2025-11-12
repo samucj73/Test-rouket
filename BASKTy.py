@@ -1031,9 +1031,9 @@ def criar_poster_alerta(game: dict, predictions: dict, tipo: str = "previsao") -
                          fill=cor_texto, font=fonte_texto)
                 
                 # Confiança
-                confianca_texto = f"Confiança: {confianca:.0f}%"
-                draw.text((margem + 20, y_pos + 100), confianca_texto, 
-                         fill=cor_texto, font=fonte_texto)
+                #confianca_texto = f"Confiança: {confianca:.0f}%"
+                #draw.text((margem + 20, y_pos + 100), confianca_texto, 
+                         #fill=cor_texto, font=fonte_texto)
             
             # COLUNA 2: VENCEDOR (DIREITA)
             vencedor_pred = predictions.get("vencedor", {})
