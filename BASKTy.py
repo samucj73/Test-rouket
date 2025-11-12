@@ -858,11 +858,11 @@ def criar_poster_alerta(game: dict, predictions: dict, tipo: str = "previsao") -
             fonte_pequena = ImageFont.truetype("arial.ttf", 216)
             fonte_grande = ImageFont.truetype("arialbd.ttf", 222)
         except:
-            fonte_titulo = ImageFont.load_default()
-            fonte_subtitulo = ImageFont.load_default()
-            fonte_texto = ImageFont.load_default()
-            fonte_pequena = ImageFont.load_default()
-            fonte_grande = ImageFont.load_default()
+            fonte_titulo = ImageFont.load_default(size=100)
+            fonte_subtitulo = ImageFont.load_default(size=90)
+            fonte_texto = ImageFont.load_default(size=90)
+            fonte_pequena = ImageFont.load_default(size=80)
+            fonte_grande = ImageFont.load_default(size=120)
         
         # Cores do tema
         cor_principal = "#1e3a8a"
