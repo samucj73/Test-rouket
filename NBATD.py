@@ -558,7 +558,7 @@ def enviar_alerta_telegram_fallback(fixture: dict, tendencia: str, estimativa: f
     
     return enviar_telegram(msg)
 
-def verificar_enviar_alerta(fixture: dict, tendencia: str, estimativa: float, confianca: float):
+def verificar_enviar_alerta(fixture: dict, tendencia: str, estimativa: float, confianca: float, alerta_individual: bool):
     alertas = carregar_alertas()
     fixture_id = str(fixture["id"])
     if fixture_id not in alertas:
@@ -568,14 +568,16 @@ def verificar_enviar_alerta(fixture: dict, tendencia: str, estimativa: float, co
             "confianca": confianca,
             "conferido": False
         }
-        enviar_alerta_telegram(fixture, tendencia, estimativa, confianca)
+        # Só envia alerta individual se a checkbox estiver ativada
+        if alerta_individual:
+            enviar_alerta_telegram(fixture, tendencia, estimativa, confianca)
         salvar_alertas(alertas)
 
 # =============================
 # SISTEMA DE ALERTAS DE RESULTADOS COM POSTERS RED/GREEN
 # =============================
 
-def verificar_resultados_finais():
+def verificar_resultados_finais(alerta_resultados: bool):
     """Verifica resultados finais dos jogos e envia alertas"""
     alertas = carregar_alertas()
     if not alertas:
@@ -627,11 +629,15 @@ def verificar_resultados_finais():
         except Exception as e:
             st.error(f"Erro ao verificar jogo {fixture_id}: {e}")
     
-    # Enviar alertas em lote se houver resultados
-    if jogos_com_resultado:
+    # Enviar alertas em lote se houver resultados E a checkbox estiver ativada
+    if jogos_com_resultado and alerta_resultados:
         enviar_alerta_resultados_poster(jogos_com_resultado)
         salvar_alertas(alertas)
         st.success(f"✅ {resultados_enviados} resultados processados e alertas enviados!")
+    elif jogos_com_resultado:
+        st.info(f"ℹ️ {resultados_enviados} resultados encontrados, mas alerta de resultados desativado")
+        # Apenas marca como conferido sem enviar alerta
+        salvar_alertas(alertas)
     else:
         st.info("ℹ️ Nenhum novo resultado final encontrado.")
 
@@ -1269,8 +1275,12 @@ def enviar_alerta_westham_style(jogos_conf: list, threshold: int, chat_id: str =
 # FUNÇÕES PRINCIPAIS
 # =============================
 
-def enviar_top_jogos(jogos: list, top_n: int):
+def enviar_top_jogos(jogos: list, top_n: int, alerta_top_jogos: bool):
     """Envia os top jogos para o Telegram"""
+    if not alerta_top_jogos:
+        st.info("ℹ️ Alerta de Top Jogos desativado")
+        return
+        
     jogos_filtrados = [j for j in jogos if j["status"] not in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"]]
     if not jogos_filtrados:
         st.warning("⚠️ Nenhum jogo elegível para o Top Jogos (todos já iniciados ou finalizados).")
@@ -1420,15 +1430,32 @@ def main():
     st.set_page_config(page_title="⚽ Alerta de Gols", layout="wide")
     st.title("⚽ Sistema de Alertas Automáticos de Gols")
 
-    # Sidebar
+    # Sidebar - CONFIGURAÇÕES DE ALERTAS
     with st.sidebar:
-        st.header("Configurações")
+        st.header("🔔 Configurações de Alertas")
+        
+        # Checkboxes para cada tipo de alerta
+        alerta_individual = st.checkbox("🎯 Alertas Individuais", value=True, 
+                                       help="Envia alerta individual para cada jogo com confiança alta")
+        
+        alerta_poster = st.checkbox("📊 Alertas com Poster", value=True,
+                                   help="Envia poster com múltiplos jogos acima do limiar")
+        
+        alerta_top_jogos = st.checkbox("🏆 Top Jogos", value=True,
+                                      help="Envia lista dos top jogos do dia")
+        
+        alerta_resultados = st.checkbox("🏁 Resultados Finais", value=True,
+                                       help="Envia alerta de resultados com sistema RED/GREEN")
+        
+        st.markdown("----")
+        
+        st.header("Configurações Gerais")
         top_n = st.selectbox("📊 Jogos no Top", [3, 5, 10], index=0)
-        enviar_alerta_70 = st.checkbox("🚨 Enviar alerta com jogos acima do limiar", value=True)
         threshold = st.slider("Limiar de confiança (%)", 50, 95, 70, 1)
         estilo_poster = st.selectbox("🎨 Estilo do Poster", ["West Ham (Novo)", "Elite Master (Original)"], index=0)
+        
         st.markdown("----")
-        st.info("Ajuste o limiar para enviar/mostrar apenas jogos acima da confiança selecionada.")
+        st.info("Ative/desative cada tipo de alerta conforme sua necessidade")
 
     # Controles principais
     col1, col2 = st.columns([2, 1])
@@ -1443,9 +1470,10 @@ def main():
 
     # Processamento
     if st.button("🔍 Buscar Partidas", type="primary"):
-        processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, enviar_alerta_70, threshold, estilo_poster)
+        processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, threshold, estilo_poster, 
+                       alerta_individual, alerta_poster, alerta_top_jogos)
 
-    # Ações - ATUALIZADO COM NOVO BOTÃO
+    # Ações - ATUALIZADO COM CHECKBOXES
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         if st.button("🔄 Atualizar Status"):
@@ -1455,7 +1483,7 @@ def main():
             conferir_resultados()
     with col3:
         if st.button("🏁 Verificar Resultados Finais", type="secondary"):
-            verificar_resultados_finais()
+            verificar_resultados_finais(alerta_resultados)
     with col4:
         if st.button("🧹 Limpar Cache"):
             limpar_caches()
@@ -1481,7 +1509,8 @@ def main():
     if st.button("🧹 Limpar Histórico"):
         limpar_historico()
 
-def processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, enviar_alerta_enabled: bool, threshold: int, estilo_poster: str):
+def processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, threshold, estilo_poster, 
+                   alerta_individual: bool, alerta_poster: bool, alerta_top_jogos: bool):
     hoje = data_selecionada.strftime("%Y-%m-%d")
     ligas_busca = LIGA_DICT.values() if todas_ligas else [LIGA_DICT[liga_selecionada]]
 
@@ -1499,7 +1528,8 @@ def processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, envi
             away = match["awayTeam"]["name"]
             estimativa, confianca, tendencia = calcular_tendencia(home, away, classificacao)
 
-            verificar_enviar_alerta(match, tendencia, estimativa, confianca)
+            # Só envia alerta individual se a checkbox estiver ativada
+            verificar_enviar_alerta(match, tendencia, estimativa, confianca, alerta_individual)
 
             # Extrair escudos
             escudo_home = ""
@@ -1532,16 +1562,19 @@ def processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, envi
     ]
 
     if jogos_filtrados_threshold:
-        enviar_top_jogos(jogos_filtrados_threshold, top_n)
+        # Envia top jogos apenas se a checkbox estiver ativada
+        enviar_top_jogos(jogos_filtrados_threshold, top_n, alerta_top_jogos)
         st.success(f"✅ {len(jogos_filtrados_threshold)} jogos com confiança ≥{threshold}%")
         
-        # ENVIAR ALERTA DE IMAGEM
-        if enviar_alerta_enabled:
+        # ENVIAR ALERTA DE IMAGEM apenas se a checkbox estiver ativada
+        if alerta_poster:
             st.info("🚨 Enviando alerta de imagem...")
             if estilo_poster == "West Ham (Novo)":
                 enviar_alerta_westham_style(jogos_filtrados_threshold, threshold)
             else:
                 enviar_alerta_conf_criar_poster(jogos_filtrados_threshold, threshold)
+        else:
+            st.info("ℹ️ Alerta com Poster desativado")
     else:
         st.warning(f"⚠️ Nenhum jogo com confiança ≥{threshold}%")
 
