@@ -846,7 +846,7 @@ def criar_poster_alerta(game: dict, predictions: dict, tipo: str = "previsao") -
     """Cria um pôster estilizado COM PREVISÕES EM COLUNAS LADO A LADO"""
     try:
         # Configurações do pôster
-        largura, altura = 600, 690
+        largura, altura = 600, 730
         img = Image.new('RGB', (largura, altura), color='#0c0c0c')
         draw = ImageDraw.Draw(img)
         
