@@ -1060,10 +1060,10 @@ def criar_poster_alerta(game: dict, predictions: dict, tipo: str = "previsao") -
                          fill=cor_texto, font=fonte_texto)
                 
                 # Detalhe (se couber)
-                if detalhe and len(detalhe) < 30:  # Só mostra se for curto
-                    detalhe_texto = f"Detalhe: {detalhe}"
-                    draw.text((meio_x + 20, y_pos + 100), detalhe_texto, 
-                             fill=cor_texto, font=fonte_pequena)
+                #if detalhe and len(detalhe) < 30:  # Só mostra se for curto
+                    #detalhe_texto = f"Detalhe: {detalhe}"
+                    #draw.text((meio_x + 20, y_pos + 100), detalhe_texto, 
+                             #fill=cor_texto, font=fonte_pequena)
             
             y_pos += altura_previsao + 20
         
