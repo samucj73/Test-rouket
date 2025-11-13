@@ -849,7 +849,7 @@ def criar_poster_alerta(game: dict, predictions: dict, tipo: str = "previsao") -
     """Cria um pôster no estilo West Games - Formato Horizontal"""
     try:
         # Configurações do pôster (formato horizontal)
-        largura, altura = 800, 400
+        largura, altura = 800, 600
         img = Image.new('RGB', (largura, altura), color='#0c0c0c')
         draw = ImageDraw.Draw(img)
         
@@ -863,12 +863,12 @@ def criar_poster_alerta(game: dict, predictions: dict, tipo: str = "previsao") -
             fonte_resultado = ImageFont.truetype("arialbd.ttf", 32)
         except:
             # Fallback para fontes padrão
-            fonte_titulo = ImageFont.load_default()
-            fonte_subtitulo = ImageFont.load_default()
-            fonte_texto = ImageFont.load_default()
-            fonte_pequena = ImageFont.load_default()
-            fonte_grande = ImageFont.load_default()
-            fonte_resultado = ImageFont.load_default()
+            fonte_titulo = ImageFont.load_default(size=30)
+            fonte_subtitulo = ImageFont.load_default(size=28)
+            fonte_texto = ImageFont.load_default(size=20)
+            fonte_pequena = ImageFont.load_default(size=20)
+            fonte_grande = ImageFont.load_default(size=18)
+            fonte_resultado = ImageFont.load_default(size=32)
         
         # Cores do tema West Games
         cor_fundo = "#0c0c0c"
