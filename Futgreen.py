@@ -1095,7 +1095,7 @@ def gerar_poster_individual_westham(fixture: dict, tendencia: str, estimativa: f
     """
     # Configurações
     LARGURA = 1800
-    ALTURA = 1300
+    ALTURA = 1200
     PADDING = 80
 
     # Criar canvas
@@ -1275,9 +1275,9 @@ def gerar_poster_individual_westham(fixture: dict, tendencia: str, estimativa: f
         try:
             bbox = draw.textbbox((0, 0), text, font=FONTE_ANALISE)
             w = bbox[2] - bbox[0]
-            draw.text(((LARGURA - w) // 2, y_analysis + i * 70), text, font=FONTE_ANALISE, fill=cor)
+            draw.text(((LARGURA - w) // 2, y_analysis + i * 85), text, font=FONTE_ANALISE, fill=cor)
         except:
-            draw.text((PADDING + 100, y_analysis + i * 70), text, font=FONTE_ANALISE, fill=cor)
+            draw.text((PADDING + 100, y_analysis + i * 85), text, font=FONTE_ANALISE, fill=cor)
 
     # Indicador de força da confiança
     y_indicator = y_analysis + 220
