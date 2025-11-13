@@ -1095,7 +1095,7 @@ def gerar_poster_individual_westham(fixture: dict, tendencia: str, estimativa: f
     """
     # Configurações
     LARGURA = 1800
-    ALTURA = 1200
+    ALTURA = 1300
     PADDING = 80
 
     # Criar canvas
@@ -1149,7 +1149,7 @@ def gerar_poster_individual_westham(fixture: dict, tendencia: str, estimativa: f
         draw.text((LARGURA//2 - 150, 260), data_hora_text, font=FONTE_INFO, fill=(150, 200, 255))
 
     # ESCUDOS DOS TIMES
-    TAMANHO_ESCUDO = 180
+    TAMANHO_ESCUDO = 220
     TAMANHO_QUADRADO = 250
     ESPACO_ENTRE_ESCUDOS = 600
 
