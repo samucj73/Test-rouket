@@ -60,94 +60,130 @@ LIGA_DICT = {
 }
 
 # =============================
-# Utilitários de Cache e Persistência - EXPANDIDOS
+# Utilitários de Cache e Persistência - COM PERSISTÊNCIA ROBUSTA
 # =============================
-def carregar_json(caminho: str) -> dict:
+def garantir_diretorio():
+    """Garante que o diretório de trabalho existe para os arquivos de persistência"""
     try:
-        if os.path.exists(caminho):
-            with open(caminho, "r", encoding='utf-8') as f:
+        os.makedirs("data", exist_ok=True)
+        return "data/"
+    except:
+        return ""
+
+def carregar_json(caminho: str) -> dict:
+    """Carrega JSON com persistência robusta e tratamento de erros"""
+    try:
+        caminho_completo = garantir_diretorio() + caminho
+        
+        if os.path.exists(caminho_completo):
+            with open(caminho_completo, "r", encoding='utf-8') as f:
                 dados = json.load(f)
+            
+            # Verificar expiração do cache apenas para caches temporários
             if caminho in [CACHE_JOGOS, CACHE_CLASSIFICACAO]:
                 agora = datetime.now().timestamp()
                 if isinstance(dados, dict) and '_timestamp' in dados:
                     if agora - dados['_timestamp'] > CACHE_TIMEOUT:
+                        st.info(f"ℹ️ Cache expirado para {caminho}, recarregando...")
                         return {}
                 else:
-                    if agora - os.path.getmtime(caminho) > CACHE_TIMEOUT:
+                    # Se não tem timestamp, verifica pela data de modificação do arquivo
+                    if agora - os.path.getmtime(caminho_completo) > CACHE_TIMEOUT:
+                        st.info(f"ℹ️ Cache antigo para {caminho}, recarregando...")
                         return {}
+            
             return dados
+        else:
+            # Se o arquivo não existe, cria um dicionário vazio
+            dados_vazios = {}
+            salvar_json(caminho, dados_vazios)
+            return dados_vazios
+            
     except (json.JSONDecodeError, IOError) as e:
-        st.error(f"Erro ao carregar {caminho}: {e}")
-    return {}
+        st.warning(f"⚠️ Erro ao carregar {caminho}, criando novo: {e}")
+        # Se há erro, retorna dicionário vazio e tenta salvar um novo
+        dados_vazios = {}
+        salvar_json(caminho, dados_vazios)
+        return dados_vazios
 
 def salvar_json(caminho: str, dados: dict):
+    """Salva JSON com persistência robusta"""
     try:
+        caminho_completo = garantir_diretorio() + caminho
+        
+        # Adicionar timestamp apenas para caches temporários
         if caminho in [CACHE_JOGOS, CACHE_CLASSIFICACAO]:
             if isinstance(dados, dict):
                 dados['_timestamp'] = datetime.now().timestamp()
-        with open(caminho, "w", encoding='utf-8') as f:
+        
+        # Garantir que o diretório existe
+        os.makedirs(os.path.dirname(caminho_completo) if os.path.dirname(caminho_completo) else ".", exist_ok=True)
+        
+        with open(caminho_completo, "w", encoding='utf-8') as f:
             json.dump(dados, f, ensure_ascii=False, indent=2)
+        
+        return True
     except IOError as e:
-        st.error(f"Erro ao salvar {caminho}: {e}")
+        st.error(f"❌ Erro crítico ao salvar {caminho}: {e}")
+        return False
 
-# Funções para alertas das novas previsões
+# Funções para alertas das novas previsões - COM PERSISTÊNCIA
 def carregar_alertas_ambas_marcam() -> dict:
     return carregar_json(ALERTAS_AMBAS_MARCAM_PATH)
 
 def salvar_alertas_ambas_marcam(alertas: dict):
-    salvar_json(ALERTAS_AMBAS_MARCAM_PATH, alertas)
+    return salvar_json(ALERTAS_AMBAS_MARCAM_PATH, alertas)
 
 def carregar_alertas_cartoes() -> dict:
     return carregar_json(ALERTAS_CARTOES_PATH)
 
 def salvar_alertas_cartoes(alertas: dict):
-    salvar_json(ALERTAS_CARTOES_PATH, alertas)
+    return salvar_json(ALERTAS_CARTOES_PATH, alertas)
 
 def carregar_alertas_escanteios() -> dict:
     return carregar_json(ALERTAS_ESCANTEIOS_PATH)
 
 def salvar_alertas_escanteios(alertas: dict):
-    salvar_json(ALERTAS_ESCANTEIOS_PATH, alertas)
+    return salvar_json(ALERTAS_ESCANTEIOS_PATH, alertas)
 
 def carregar_alertas() -> dict:
     return carregar_json(ALERTAS_PATH)
 
 def salvar_alertas(alertas: dict):
-    salvar_json(ALERTAS_PATH, alertas)
+    return salvar_json(ALERTAS_PATH, alertas)
 
 def carregar_cache_jogos() -> dict:
     return carregar_json(CACHE_JOGOS)
 
 def salvar_cache_jogos(dados: dict):
-    salvar_json(CACHE_JOGOS, dados)
+    return salvar_json(CACHE_JOGOS, dados)
 
 def carregar_cache_classificacao() -> dict:
     return carregar_json(CACHE_CLASSIFICACAO)
 
 def salvar_cache_classificacao(dados: dict):
-    salvar_json(CACHE_CLASSIFICACAO, dados)
+    return salvar_json(CACHE_CLASSIFICACAO, dados)
 
 # =============================
-# Histórico de Conferências - EXPANDIDO
+# Histórico de Conferências - COM PERSISTÊNCIA
 # =============================
 def carregar_historico(caminho: str = HISTORICO_PATH) -> list:
-    if os.path.exists(caminho):
-        try:
-            with open(caminho, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return []
-    return []
+    """Carrega histórico com persistência robusta"""
+    dados = carregar_json(caminho)
+    if isinstance(dados, list):
+        return dados
+    elif isinstance(dados, dict):
+        # Se por acaso foi salvo como dict, converte para list
+        return list(dados.values()) if dados else []
+    else:
+        return []
 
 def salvar_historico(historico: list, caminho: str = HISTORICO_PATH):
-    try:
-        with open(caminho, "w", encoding="utf-8") as f:
-            json.dump(historico, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        st.error(f"Erro ao salvar histórico {caminho}: {e}")
+    """Salva histórico mantendo a estrutura de lista"""
+    return salvar_json(caminho, historico)
 
 def registrar_no_historico(resultado: dict, tipo: str = "gols"):
-    """Registra no histórico específico para cada tipo de previsão"""
+    """Registra no histórico específico para cada tipo de previsão com persistência"""
     if not resultado:
         return
         
@@ -184,10 +220,15 @@ def registrar_no_historico(resultado: dict, tipo: str = "gols"):
         registro["limiar_escanteios"] = resultado.get("limiar_escanteios", 0)
     
     historico.append(registro)
+    
+    # Manter apenas os últimos 1000 registros para evitar arquivos muito grandes
+    if len(historico) > 1000:
+        historico = historico[-1000:]
+    
     salvar_historico(historico, caminho)
 
 def limpar_historico(tipo: str = "todos"):
-    """Faz backup e limpa histórico específico ou todos"""
+    """Faz backup e limpa histórico específico ou todos com persistência"""
     caminhos = {
         "gols": HISTORICO_PATH,
         "ambas_marcam": HISTORICO_AMBAS_MARCAM_PATH,
@@ -198,33 +239,41 @@ def limpar_historico(tipo: str = "todos"):
     if tipo == "todos":
         historicos_limpos = 0
         for nome, caminho in caminhos.items():
-            if os.path.exists(caminho):
+            historico = carregar_historico(caminho)
+            if historico:
                 try:
                     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    backup_name = f"historico_{nome}_backup_{ts}.json"
-                    with open(caminho, "rb") as f_src:
-                        with open(backup_name, "wb") as f_bak:
-                            f_bak.write(f_src.read())
-                    os.remove(caminho)
+                    backup_name = f"data/historico_{nome}_backup_{ts}.json"
+                    salvar_json(backup_name, historico)
+                    
+                    # Limpa o histórico atual
+                    salvar_historico([], caminho)
                     historicos_limpos += 1
+                    st.success(f"✅ Histórico {nome} limpo. Backup: {backup_name}")
                 except Exception as e:
                     st.error(f"Erro ao limpar {nome}: {e}")
+            else:
+                st.info(f"ℹ️ Histórico {nome} já está vazio")
         st.success(f"🧹 Todos os históricos limpos. {historicos_limpos} backups criados.")
     else:
         caminho = caminhos.get(tipo)
-        if caminho and os.path.exists(caminho):
-            try:
-                ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-                backup_name = f"historico_{tipo}_backup_{ts}.json"
-                with open(caminho, "rb") as f_src:
-                    with open(backup_name, "wb") as f_bak:
-                        f_bak.write(f_src.read())
-                os.remove(caminho)
-                st.success(f"🧹 Histórico {tipo} limpo. Backup: {backup_name}")
-            except Exception as e:
-                st.error(f"Erro ao limpar histórico {tipo}: {e}")
+        if caminho:
+            historico = carregar_historico(caminho)
+            if historico:
+                try:
+                    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    backup_name = f"data/historico_{tipo}_backup_{ts}.json"
+                    salvar_json(backup_name, historico)
+                    
+                    # Limpa o histórico atual
+                    salvar_historico([], caminho)
+                    st.success(f"🧹 Histórico {tipo} limpo. Backup: {backup_name}")
+                except Exception as e:
+                    st.error(f"Erro ao limpar histórico {tipo}: {e}")
+            else:
+                st.info(f"⚠️ Histórico {tipo} já está vazio")
         else:
-            st.info(f"⚠️ Nenhum histórico encontrado para {tipo}")
+            st.error(f"❌ Tipo de histórico inválido: {tipo}")
 
 # =============================
 # Utilitários de Data e Formatação
@@ -1622,14 +1671,27 @@ def conferir_resultados():
         st.info("ℹ️ Nenhum novo resultado para conferir.")
 
 def limpar_caches():
-    """Limpar caches do sistema"""
+    """Limpar caches do sistema - AGORA COM BACKUP"""
     try:
         arquivos_limpos = 0
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
         for cache_file in [CACHE_JOGOS, CACHE_CLASSIFICACAO, ALERTAS_PATH]:
             if os.path.exists(cache_file):
+                # Fazer backup antes de limpar
+                backup_name = f"data/backup_{cache_file.replace('.json', '')}_{timestamp}.json"
+                try:
+                    with open(cache_file, 'r', encoding='utf-8') as f_src:
+                        dados = f_src.read()
+                    with open(backup_name, 'w', encoding='utf-8') as f_bak:
+                        f_bak.write(dados)
+                except:
+                    pass
+                
                 os.remove(cache_file)
                 arquivos_limpos += 1
-        st.success(f"✅ {arquivos_limpos} caches limpos com sucesso!")
+        
+        st.success(f"✅ {arquivos_limpos} caches limpos com sucesso! Backups criados.")
     except Exception as e:
         st.error(f"❌ Erro ao limpar caches: {e}")
 
