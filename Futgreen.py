@@ -429,7 +429,7 @@ def calcular_previsao_cartoes(home: str, away: str, estatisticas_time: dict) -> 
     media_cartoes_away = dados_away.get("cartoes_media", 2.3)
     
     # Total estimado de cartões
-    total_estimado = media_cartoes_home + media_cartoes_away
+    total_estimado = media_cartoes_home + media_cartoes_away - 1
     
     # Fator de intensidade do jogo (derbys, jogos decisivos têm mais cartões)
     fator_intensidade = 1.0  # Base, poderia ser ajustado por tipo de competição
@@ -467,7 +467,7 @@ def calcular_previsao_escanteios(home: str, away: str, estatisticas_time: dict) 
     media_escanteios_away = dados_away.get("escanteios_media", 5.0)
     
     # Total estimado de escanteios
-    total_estimado = media_escanteios_home + media_escanteios_away
+    total_estimado = media_escanteios_home + media_escanteios_away - 2
     
     # Fator ofensivo (times que atacam mais têm mais escanteios)
     fator_ofensivo = 1.1  # Poderia ser calculado baseado em finalizações/gols
@@ -1103,17 +1103,17 @@ def gerar_poster_individual_westham(fixture: dict, tendencia: str, estimativa: f
     draw = ImageDraw.Draw(img)
 
     # Carregar fontes
-    FONTE_TITULO = criar_fonte(80)
+    FONTE_TITULO = criar_fonte(95)
     FONTE_SUBTITULO = criar_fonte(60)
-    FONTE_TIMES = criar_fonte(55)
-    FONTE_VS = criar_fonte(45)
-    FONTE_INFO = criar_fonte(40)
-    FONTE_DETALHES = criar_fonte(45)
-    FONTE_ANALISE = criar_fonte(50)
-    FONTE_ALERTA = criar_fonte(70)
+    FONTE_TIMES = criar_fonte(65)
+    FONTE_VS = criar_fonte(55)
+    FONTE_INFO = criar_fonte(45)
+    FONTE_DETALHES = criar_fonte(55)
+    FONTE_ANALISE = criar_fonte(60)
+    FONTE_ALERTA = criar_fonte(90)
 
     # Título PRINCIPAL - ALERTA
-    titulo_text = "🎯 ALERTA DE GOLS 🎯"
+    titulo_text = " ALERTA DE GOLS "
     try:
         titulo_bbox = draw.textbbox((0, 0), titulo_text, font=FONTE_ALERTA)
         titulo_w = titulo_bbox[2] - titulo_bbox[0]
@@ -1150,8 +1150,8 @@ def gerar_poster_individual_westham(fixture: dict, tendencia: str, estimativa: f
 
     # ESCUDOS DOS TIMES
     TAMANHO_ESCUDO = 180
-    TAMANHO_QUADRADO = 220
-    ESPACO_ENTRE_ESCUDOS = 500
+    TAMANHO_QUADRADO = 250
+    ESPACO_ENTRE_ESCUDOS = 600
 
     # Calcular posição central
     largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
@@ -1261,12 +1261,12 @@ def gerar_poster_individual_westham(fixture: dict, tendencia: str, estimativa: f
              fill=(100, 130, 160), width=3)
 
     # Informações de análise com destaque
-    tendencia_emoji = "📈" if "Mais" in tendencia else "📉" if "Menos" in tendencia else "⚡"
+    tendencia_emoji = "" if "Mais" in tendencia else "" if "Menos" in tendencia else "⚡"
     
     textos_analise = [
         f"{tendencia_emoji} TENDÊNCIA: {tendencia.upper()}",
-        f"⚽ ESTIMATIVA: {estimativa:.2f} GOLS",
-        f"🎯 CONFIANÇA: {confianca:.0f}%",
+        f" ESTIMATIVA: {estimativa:.2f} GOLS",
+        f" CONFIANÇA: {confianca:.0f}%",
     ]
     
     cores = [(255, 215, 0), (100, 200, 255), (100, 255, 100)]
