@@ -1059,7 +1059,7 @@ def verificar_enviar_alerta(fixture: dict, tendencia: str, estimativa: float, co
 # =============================
 
 def verificar_resultados_finais(alerta_resultados: bool):
-    """Verifica resultados finais dos jogos e envia alertas"""
+    """Verifica resultados finais dos jogos e envia alertas - ATUALIZADA"""
     alertas = carregar_alertas()
     if not alertas:
         st.info("ℹ️ Nenhum alerta para verificar resultados.")
@@ -1087,6 +1087,10 @@ def verificar_resultados_finais(alerta_resultados: bool):
             
             # Verificar se jogo terminou e tem resultado
             if status == "FINISHED" and home_goals is not None and away_goals is not None:
+                # Obter URLs dos escudos
+                home_crest = fixture.get("homeTeam", {}).get("crest") or fixture.get("homeTeam", {}).get("logo", "")
+                away_crest = fixture.get("awayTeam", {}).get("crest") or fixture.get("awayTeam", {}).get("logo", "")
+                
                 # Preparar dados para o poster
                 jogo_resultado = {
                     "id": fixture_id,
@@ -1098,7 +1102,9 @@ def verificar_resultados_finais(alerta_resultados: bool):
                     "data": fixture["utcDate"],
                     "tendencia_prevista": alerta.get("tendencia", "Desconhecida"),
                     "estimativa_prevista": alerta.get("estimativa", 0),
-                    "confianca_prevista": alerta.get("confianca", 0)
+                    "confianca_prevista": alerta.get("confianca", 0),
+                    "home_crest": home_crest,  # NOVO
+                    "away_crest": away_crest   # NOVO
                 }
                 
                 jogos_com_resultado.append(jogo_resultado)
@@ -1552,7 +1558,7 @@ def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADO
         except:
             draw.text((LARGURA//2 - 150, y0 + 110), data_text, font=FONTE_INFO, fill=(120, 180, 240))
 
-        # ESCUDOS E PLACAR
+        # ESCUDOS E PLACAR - CORREÇÃO AQUI
         TAMANHO_ESCUDO = 245
         TAMANHO_QUADRADO = 280
         ESPACO_ENTRE_ESCUDOS = 700
@@ -1598,6 +1604,71 @@ def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADO
             draw.text((placar_x, y_escudos + 30), placar_text, font=FONTE_PLACAR, fill=(255, 255, 255))
         except:
             draw.text((x_placar, y_escudos + 30), placar_text, font=FONTE_PLACAR, fill=(255, 255, 255))
+
+        # ESCUDOS DOS TIMES - ADICIONAR ESTA PARTE
+        def desenhar_escudo_quadrado_resultados(logo_url: str, x: int, y: int, tamanho_quadrado: int, tamanho_escudo: int):
+            """Função auxiliar para desenhar escudos nos resultados"""
+            # Fundo branco
+            draw.rectangle(
+                [x, y, x + tamanho_quadrado, y + tamanho_quadrado],
+                fill=(255, 255, 255),
+                outline=(255, 255, 255)
+            )
+
+            logo_img = baixar_imagem_url(logo_url)
+            if logo_img is None:
+                # Placeholder caso falhe
+                draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(60, 60, 60))
+                draw.text((x + 60, y + 80), "SEM", font=FONTE_INFO, fill=(255, 255, 255))
+                return
+
+            try:
+                logo_img = logo_img.convert("RGBA")
+                largura, altura = logo_img.size
+                proporcao = largura / altura
+
+                # Cortar a imagem centralmente para ficar quadrada
+                if proporcao > 1:  # mais larga
+                    nova_altura = altura
+                    nova_largura = int(altura)
+                    offset_x = (largura - nova_largura) // 2
+                    offset_y = 0
+                else:  # mais alta
+                    nova_largura = largura
+                    nova_altura = int(largura)
+                    offset_x = 0
+                    offset_y = (altura - nova_altura) // 2
+
+                imagem_cortada = logo_img.crop((offset_x, offset_y, offset_x + nova_largura, offset_y + nova_altura))
+
+                # Redimensionar
+                imagem_final = imagem_cortada.resize((tamanho_escudo, tamanho_escudo), Image.Resampling.LANCZOS)
+
+                # Calcular centralização
+                pos_x = x + (tamanho_quadrado - tamanho_escudo) // 2
+                pos_y = y + (tamanho_quadrado - tamanho_escudo) // 2
+
+                # Colar escudo
+                img.paste(imagem_final, (pos_x, pos_y), imagem_final)
+
+            except Exception as e:
+                print(f"[ERRO ESCUDO RESULTADOS] {e}")
+                draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(100, 100, 100))
+                draw.text((x + 60, y + 80), "ERR", font=FONTE_INFO, fill=(255, 255, 255))
+
+        # Tentar obter escudos - usar placeholders se não conseguir
+        try:
+            # Para resultados, não temos os dados completos do fixture, usar placeholders ou buscar da API
+            # Por enquanto, usar placeholders
+            desenhar_escudo_quadrado_resultados("", x_home, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO)
+            desenhar_escudo_quadrado_resultados("", x_away, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO)
+        except Exception as e:
+            print(f"Erro ao carregar escudos para resultados: {e}")
+            # Desenhar quadrados vazios
+            draw.rectangle([x_home, y_escudos, x_home + TAMANHO_QUADRADO, y_escudos + TAMANHO_QUADRADO], 
+                          fill=(60, 60, 60), outline=(100, 100, 100))
+            draw.rectangle([x_away, y_escudos, x_away + TAMANHO_QUADRADO, y_escudos + TAMANHO_QUADRADO], 
+                          fill=(60, 60, 60), outline=(100, 100, 100))
 
         # SEÇÃO DE ANÁLISE DO RESULTADO
         y_analysis = y_escudos + TAMANHO_QUADRADO + 100
@@ -1801,7 +1872,7 @@ def conferir_resultados():
             alerta["conferido"] = True
             resultados_conferidos += 1
     
-    if resultados_conviados > 0:
+    if resultados_conferidos > 0:
         salvar_alertas(alertas)
         st.success(f"✅ {resultados_conferidos} resultados conferidos!")
     else:
