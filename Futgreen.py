@@ -1558,7 +1558,7 @@ def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADO
         except:
             draw.text((LARGURA//2 - 150, y0 + 110), data_text, font=FONTE_INFO, fill=(120, 180, 240))
 
-        # ESCUDOS E PLACAR - CORREÇÃO AQUI
+        # ESCUDOS E PLACAR - USANDO A FUNÇÃO EXISTENTE
         TAMANHO_ESCUDO = 245
         TAMANHO_QUADRADO = 280
         ESPACO_ENTRE_ESCUDOS = 700
@@ -1605,9 +1605,8 @@ def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADO
         except:
             draw.text((x_placar, y_escudos + 30), placar_text, font=FONTE_PLACAR, fill=(255, 255, 255))
 
-        # ESCUDOS DOS TIMES - ADICIONAR ESTA PARTE
-        def desenhar_escudo_quadrado_resultados(logo_url: str, x: int, y: int, tamanho_quadrado: int, tamanho_escudo: int):
-            """Função auxiliar para desenhar escudos nos resultados"""
+        # USAR A FUNÇÃO EXISTENTE PARA DESENHAR ESCUDOS
+        def desenhar_escudo_quadrado(logo_img, x, y, tamanho_quadrado, tamanho_escudo):
             # Fundo branco
             draw.rectangle(
                 [x, y, x + tamanho_quadrado, y + tamanho_quadrado],
@@ -1615,7 +1614,6 @@ def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADO
                 outline=(255, 255, 255)
             )
 
-            logo_img = baixar_imagem_url(logo_url)
             if logo_img is None:
                 # Placeholder caso falhe
                 draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(60, 60, 60))
@@ -1652,23 +1650,17 @@ def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADO
                 img.paste(imagem_final, (pos_x, pos_y), imagem_final)
 
             except Exception as e:
-                print(f"[ERRO ESCUDO RESULTADOS] {e}")
+                print(f"[ERRO ESCUDO] {e}")
                 draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(100, 100, 100))
                 draw.text((x + 60, y + 80), "ERR", font=FONTE_INFO, fill=(255, 255, 255))
 
-        # Tentar obter escudos - usar placeholders se não conseguir
-        try:
-            # Para resultados, não temos os dados completos do fixture, usar placeholders ou buscar da API
-            # Por enquanto, usar placeholders
-            desenhar_escudo_quadrado_resultados("", x_home, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO)
-            desenhar_escudo_quadrado_resultados("", x_away, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO)
-        except Exception as e:
-            print(f"Erro ao carregar escudos para resultados: {e}")
-            # Desenhar quadrados vazios
-            draw.rectangle([x_home, y_escudos, x_home + TAMANHO_QUADRADO, y_escudos + TAMANHO_QUADRADO], 
-                          fill=(60, 60, 60), outline=(100, 100, 100))
-            draw.rectangle([x_away, y_escudos, x_away + TAMANHO_QUADRADO, y_escudos + TAMANHO_QUADRADO], 
-                          fill=(60, 60, 60), outline=(100, 100, 100))
+        # Baixar e desenhar escudos - USANDO AS URLS SALVAS
+        escudo_home = baixar_imagem_url(jogo.get('home_crest', ''))
+        escudo_away = baixar_imagem_url(jogo.get('away_crest', ''))
+
+        # Desenhar escudos quadrados
+        desenhar_escudo_quadrado(escudo_home, x_home, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO)
+        desenhar_escudo_quadrado(escudo_away, x_away, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO)
 
         # SEÇÃO DE ANÁLISE DO RESULTADO
         y_analysis = y_escudos + TAMANHO_QUADRADO + 100
