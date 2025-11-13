@@ -190,7 +190,7 @@ def salvar_historico(historico: list, caminho: str = HISTORICO_PATH):
     return salvar_json(caminho, historico)
 
 def registrar_no_historico(resultado: dict, tipo: str = "gols"):
-    """Registras no histórico específico para cada tipo de previsão com persistência"""
+    """Registra no histórico específico para cada tipo de previsão com persistência"""
     if not resultado:
         return
         
@@ -631,8 +631,8 @@ def verificar_enviar_alerta_escanteios(fixture: dict, estimativa: float, confian
     """Sistema de alertas para previsão de Escanteios"""
     alertas = carregar_alertas_escanteios()
     fixture_id = str(fixture["id"])
-
-if fixture_id not in alertas and confianca >= 50:  # Limiar para escanteios
+    
+    if fixture_id not in alertas and confianca >= 50:  # Limiar para escanteios
         alertas[fixture_id] = {
             "tendencia": tendencia,
             "estimativa": estimativa,
@@ -757,9 +757,7 @@ def verificar_resultados_ambas_marcam(alerta_resultados: bool):
                     "probabilidade_prevista": alerta.get("probabilidade", 0),
                     "confianca_prevista": alerta.get("confianca", 0),
                     "ambas_marcaram": ambas_marcaram,
-                    "previsao_correta": previsao_correta,
-                    "escudo_home": fixture.get("homeTeam", {}).get("crest", ""),
-                    "escudo_away": fixture.get("awayTeam", {}).get("crest", "")
+                    "previsao_correta": previsao_correta
                 }
                 
                 jogos_com_resultado.append(jogo_resultado)
@@ -822,9 +820,7 @@ def verificar_resultados_cartoes(alerta_resultados: bool):
                         "estimativa_prevista": alerta.get("estimativa", 0),
                         "confianca_prevista": alerta.get("confianca", 0),
                         "previsao_correta": previsao_correta,
-                        "limiar_cartoes": limiar,
-                        "escudo_home": fixture.get("homeTeam", {}).get("crest", ""),
-                        "escudo_away": fixture.get("awayTeam", {}).get("crest", "")
+                        "limiar_cartoes": limiar
                     }
                     
                     jogos_com_resultado.append(jogo_resultado)
@@ -887,9 +883,7 @@ def verificar_resultados_escanteios(alerta_resultados: bool):
                         "estimativa_prevista": alerta.get("estimativa", 0),
                         "confianca_prevista": alerta.get("confianca", 0),
                         "previsao_correta": previsao_correta,
-                        "limiar_escanteios": limiar,
-                        "escudo_home": fixture.get("homeTeam", {}).get("crest", ""),
-                        "escudo_away": fixture.get("awayTeam", {}).get("crest", "")
+                        "limiar_escanteios": limiar
                     }
                     
                     jogos_com_resultado.append(jogo_resultado)
@@ -1104,9 +1098,7 @@ def verificar_resultados_finais(alerta_resultados: bool):
                     "data": fixture["utcDate"],
                     "tendencia_prevista": alerta.get("tendencia", "Desconhecida"),
                     "estimativa_prevista": alerta.get("estimativa", 0),
-                    "confianca_prevista": alerta.get("confianca", 0),
-                    "escudo_home": fixture.get("homeTeam", {}).get("crest") or fixture.get("homeTeam", {}).get("logo", ""),
-                    "escudo_away": fixture.get("awayTeam", {}).get("crest") or fixture.get("awayTeam", {}).get("logo", "")
+                    "confianca_prevista": alerta.get("confianca", 0)
                 }
                 
                 jogos_com_resultado.append(jogo_resultado)
@@ -1129,7 +1121,7 @@ def verificar_resultados_finais(alerta_resultados: bool):
         st.info("ℹ️ Nenhum novo resultado final encontrado.")
 
 # =============================
-# Funções de geração de imagem CORRIGIDAS
+# Funções de geração de imagem
 # =============================
 def baixar_imagem_url(url: str, timeout: int = 8) -> Image.Image | None:
     """Tenta baixar uma imagem e retornar PIL.Image. Retorna None se falhar."""
@@ -1168,71 +1160,6 @@ def criar_fonte(tamanho: int) -> ImageFont.ImageFont:
     except Exception as e:
         print(f"Erro ao carregar fonte: {e}")
         return ImageFont.load_default()
-
-def desenhar_escudo_quadrado_resultado(draw, logo_img, x, y, tamanho_quadrado, tamanho_escudo):
-    """Desenha escudo dentro de um quadrado branco para resultados - VERSÃO CORRIGIDA"""
-    # Fundo branco quadrado
-    draw.rectangle(
-        [x, y, x + tamanho_quadrado, y + tamanho_quadrado],
-        fill=(255, 255, 255),
-        outline=(220, 220, 220),
-        width=3
-    )
-
-    if logo_img is None:
-        # Placeholder caso falhe
-        draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(60, 60, 60))
-        try:
-            # Tentar usar fonte menor para placeholder
-            fonte_placeholder = criar_fonte(24)
-            draw.text((x + 20, y + 35), "SEM", font=fonte_placeholder, fill=(255, 255, 255))
-        except:
-            pass
-        return
-
-    try:
-        logo_img = logo_img.convert("RGBA")
-        largura, altura = logo_img.size
-        proporcao = largura / altura
-
-        # Redimensionar mantendo a proporção para caber no quadrado
-        if proporcao > 1:  # mais larga
-            nova_largura = tamanho_escudo
-            nova_altura = int(tamanho_escudo / proporcao)
-        else:  # mais alta
-            nova_altura = tamanho_escudo
-            nova_largura = int(tamanho_escudo * proporcao)
-
-        imagem_redimensionada = logo_img.resize((nova_largura, nova_altura), Image.Resampling.LANCZOS)
-
-        # Calcular centralização
-        pos_x = x + (tamanho_quadrado - nova_largura) // 2
-        pos_y = y + (tamanho_quadrado - nova_altura) // 2
-
-        # CORREÇÃO PRINCIPAL: Criar uma imagem temporária com fundo transparente
-        # e depois compor sobre o canvas principal
-        img_temp = Image.new("RGBA", (tamanho_quadrado, tamanho_quadrado), (255, 255, 255, 0))
-        
-        # Colar o escudo redimensionado na imagem temporária
-        img_temp.paste(imagem_redimensionada, ((tamanho_quadrado - nova_largura) // 2, 
-                                              (tamanho_quadrado - nova_altura) // 2), 
-                      imagem_redimensionada)
-        
-        # Converter para RGB para compatibilidade com o canvas principal
-        img_temp_rgb = Image.new("RGB", img_temp.size, (255, 255, 255))
-        img_temp_rgb.paste(img_temp, mask=img_temp.split()[3])  # Usar canal alpha como máscara
-        
-        return img_temp_rgb
-
-    except Exception as e:
-        print(f"[ERRO ESCUDO] {e}")
-        draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(100, 100, 100))
-        try:
-            fonte_placeholder = criar_fonte(24)
-            draw.text((x + 20, y + 35), "ERR", font=fonte_placeholder, fill=(255, 255, 255))
-        except:
-            pass
-        return None
 
 def gerar_poster_individual_westham(fixture: dict, tendencia: str, estimativa: float, confianca: float) -> io.BytesIO:
     """
@@ -1313,9 +1240,57 @@ def gerar_poster_individual_westham(fixture: dict, tendencia: str, estimativa: f
     escudo_home = baixar_imagem_url(escudo_home_url)
     escudo_away = baixar_imagem_url(escudo_away_url)
 
+    def desenhar_escudo_quadrado(logo_img, x, y, tamanho_quadrado, tamanho_escudo):
+        # Fundo branco
+        draw.rectangle(
+            [x, y, x + tamanho_quadrado, y + tamanho_quadrado],
+            fill=(255, 255, 255),
+            outline=(255, 255, 255)
+        )
+
+        if logo_img is None:
+            # Placeholder caso falhe
+            draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(60, 60, 60))
+            draw.text((x + 60, y + 80), "SEM", font=FONTE_INFO, fill=(255, 255, 255))
+            return
+
+        try:
+            logo_img = logo_img.convert("RGBA")
+            largura, altura = logo_img.size
+            proporcao = largura / altura
+
+            # Cortar a imagem centralmente para ficar quadrada
+            if proporcao > 1:  # mais larga
+                nova_altura = altura
+                nova_largura = int(altura)
+                offset_x = (largura - nova_largura) // 2
+                offset_y = 0
+            else:  # mais alta
+                nova_largura = largura
+                nova_altura = int(largura)
+                offset_x = 0
+                offset_y = (altura - nova_altura) // 2
+
+            imagem_cortada = logo_img.crop((offset_x, offset_y, offset_x + nova_largura, offset_y + nova_altura))
+
+            # Redimensionar
+            imagem_final = imagem_cortada.resize((tamanho_escudo, tamanho_escudo), Image.Resampling.LANCZOS)
+
+            # Calcular centralização
+            pos_x = x + (tamanho_quadrado - tamanho_escudo) // 2
+            pos_y = y + (tamanho_quadrado - tamanho_escudo) // 2
+
+            # Colar escudo
+            img.paste(imagem_final, (pos_x, pos_y), imagem_final)
+
+        except Exception as e:
+            print(f"[ERRO ESCUDO] {e}")
+            draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(100, 100, 100))
+            draw.text((x + 60, y + 80), "ERR", font=FONTE_INFO, fill=(255, 255, 255))
+
     # Desenhar escudos quadrados
-    desenhar_escudo_quadrado_resultado(draw, escudo_home, x_home, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO)
-    desenhar_escudo_quadrado_resultado(draw, escudo_away, x_away, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO)
+    desenhar_escudo_quadrado(escudo_home, x_home, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO)
+    desenhar_escudo_quadrado(escudo_away, x_away, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO)
 
     # Nomes dos times
     home_text = home[:20]  # Limitar tamanho
@@ -1469,7 +1444,7 @@ def enviar_alerta_telegram_fallback(fixture: dict, tendencia: str, estimativa: f
 
 def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADOS OFICIAIS") -> io.BytesIO:
     """
-    Gera poster profissional com resultados finais dos jogos - VERSÃO CORRIGIDA COM ESCUDOS
+    Gera poster profissional com resultados finais dos jogos
     """
     # Configurações do poster
     LARGURA = 2400
@@ -1577,9 +1552,9 @@ def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADO
         except:
             draw.text((LARGURA//2 - 150, y0 + 110), data_text, font=FONTE_INFO, fill=(120, 180, 240))
 
-        # ESCUDOS E PLACAR - CORREÇÃO AQUI
-        TAMANHO_ESCUDO = 220
-        TAMANHO_QUADRADO = 250
+        # ESCUDOS E PLACAR
+        TAMANHO_ESCUDO = 245
+        TAMANHO_QUADRADO = 280
         ESPACO_ENTRE_ESCUDOS = 700
 
         # Calcular posição central
@@ -1591,53 +1566,6 @@ def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADO
         x_away = x_placar + 450
 
         y_escudos = y0 + 180
-
-        # Baixar escudos
-        escudo_home = baixar_imagem_url(jogo.get("escudo_home", ""))
-        escudo_away = baixar_imagem_url(jogo.get("escudo_away", ""))
-
-        # CORREÇÃO: Desenhar escudos diretamente no canvas
-        # Desenhar quadrados primeiro
-        draw.rectangle([x_home, y_escudos, x_home + TAMANHO_QUADRADO, y_escudos + TAMANHO_QUADRADO], 
-                      fill=(255, 255, 255), outline=(220, 220, 220), width=3)
-        draw.rectangle([x_away, y_escudos, x_away + TAMANHO_QUADRADO, y_escudos + TAMANHO_QUADRADO], 
-                      fill=(255, 255, 255), outline=(220, 220, 220), width=3)
-
-        # Processar e colar escudos
-        for i, (escudo, x_pos) in enumerate([(escudo_home, x_home), (escudo_away, x_away)]):
-            if escudo:
-                try:
-                    escudo = escudo.convert("RGBA")
-                    largura, altura = escudo.size
-                    proporcao = largura / altura
-
-                    # Redimensionar mantendo proporção
-                    if proporcao > 1:
-                        nova_largura = TAMANHO_ESCUDO
-                        nova_altura = int(TAMANHO_ESCUDO / proporcao)
-                    else:
-                        nova_altura = TAMANHO_ESCUDO
-                        nova_largura = int(TAMANHO_ESCUDO * proporcao)
-
-                    escudo_redim = escudo.resize((nova_largura, nova_altura), Image.Resampling.LANCZOS)
-
-                    # Calcular posição centralizada
-                    pos_x = x_pos + (TAMANHO_QUADRADO - nova_largura) // 2
-                    pos_y = y_escudos + (TAMANHO_QUADRADO - nova_altura) // 2
-
-                    # Colar diretamente no canvas principal
-                    img.paste(escudo_redim, (pos_x, pos_y), escudo_redim)
-                    
-                except Exception as e:
-                    print(f"Erro ao processar escudo: {e}")
-                    # Desenhar placeholder em caso de erro
-                    draw.rectangle([x_pos, y_escudos, x_pos + TAMANHO_QUADRADO, y_escudos + TAMANHO_QUADRADO], 
-                                  fill=(100, 100, 100))
-                    try:
-                        fonte_placeholder = criar_fonte(24)
-                        draw.text((x_pos + 20, y_escudos + 35), "SEM", font=fonte_placeholder, fill=(255, 255, 255))
-                    except:
-                        pass
 
         # Nomes dos times
         home_text = jogo['home'][:15]
@@ -1667,9 +1595,9 @@ def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADO
             placar_bbox = draw.textbbox((0, 0), placar_text, font=FONTE_PLACAR)
             placar_w = placar_bbox[2] - placar_bbox[0]
             placar_x = x_placar + (200 - placar_w) // 2
-            draw.text((placar_x, y_escudos + 80), placar_text, font=FONTE_PLACAR, fill=(255, 255, 255))
+            draw.text((placar_x, y_escudos + 30), placar_text, font=FONTE_PLACAR, fill=(255, 255, 255))
         except:
-            draw.text((x_placar, y_escudos + 80), placar_text, font=FONTE_PLACAR, fill=(255, 255, 255))
+            draw.text((x_placar, y_escudos + 30), placar_text, font=FONTE_PLACAR, fill=(255, 255, 255))
 
         # SEÇÃO DE ANÁLISE DO RESULTADO
         y_analysis = y_escudos + TAMANHO_QUADRADO + 100
@@ -1711,11 +1639,11 @@ def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADO
     img.save(buffer, format="PNG", optimize=True, quality=95)
     buffer.seek(0)
     
-    st.success(f"✅ Poster de resultados GERADO com {len(jogos)} jogos - ESCUDOS CORRIGIDOS")
+    st.success(f"✅ Poster de resultados GERADO com {len(jogos)} jogos - Sistema RED/GREEN")
     return buffer
 
 def enviar_alerta_resultados_poster(jogos_com_resultado: list):
-    """Envia alerta de resultados com poster para o Telegram - VERSÃO ATUALIZADA COM ESCUDOS"""
+    """Envia alerta de resultados com poster para o Telegram"""
     if not jogos_com_resultado:
         st.warning("⚠️ Nenhum resultado para enviar")
         return
@@ -1873,7 +1801,7 @@ def conferir_resultados():
             alerta["conferido"] = True
             resultados_conferidos += 1
     
-    if resultados_conferidos > 0:
+    if resultados_conviados > 0:
         salvar_alertas(alertas)
         st.success(f"✅ {resultados_conferidos} resultados conferidos!")
     else:
