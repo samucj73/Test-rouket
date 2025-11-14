@@ -66,9 +66,15 @@ def carregar_sessao():
             with open(SESSION_DATA_PATH, 'rb') as f:
                 session_data = pickle.load(f)
             
-            # ✅ VERIFICAÇÃO DE SEGURANÇA
+            # ✅ VERIFICAÇÃO DE SEGURANÇA MELHORADA
             if not isinstance(session_data, dict):
-                logging.error("❌ Dados de sessão corrompidos")
+                logging.error("❌ Dados de sessão corrompidos - não é um dicionário")
+                return False
+                
+            # Verificar se as chaves essenciais existem
+            chaves_essenciais = ['historico', 'sistema_acertos', 'sistema_erros']
+            if not all(chave in session_data for chave in chaves_essenciais):
+                logging.error("❌ Dados de sessão incompletos")
                 return False
                 
             # Restaurar dados básicos
@@ -516,26 +522,32 @@ class MLRoletaOtimizada:
 
     def _build_and_train_model(self, X_train, y_train, X_val=None, y_val=None, seed=0):
         try:
-            from catboost import CatBoostClassifier
-            model = CatBoostClassifier(
-                iterations=1500,
-                learning_rate=0.05,
-                depth=10,
-                l2_leaf_reg=5,
-                bagging_temperature=0.8,
-                random_strength=1.0,
-                loss_function='MultiClass',
-                eval_metric='MultiClass',
-                random_seed=seed,
-                use_best_model=True,
-                early_stopping_rounds=100,
-                verbose=False
-            )
-            if X_val is not None and y_val is not None:
-                model.fit(X_train, y_train, eval_set=(X_val, y_val), verbose=False)
-            else:
-                model.fit(X_train, y_train, verbose=False)
-            return model, "CatBoost"
+            # Tentar importar CatBoost
+            try:
+                from catboost import CatBoostClassifier
+                model = CatBoostClassifier(
+                    iterations=1500,
+                    learning_rate=0.05,
+                    depth=10,
+                    l2_leaf_reg=5,
+                    bagging_temperature=0.8,
+                    random_strength=1.0,
+                    loss_function='MultiClass',
+                    eval_metric='MultiClass',
+                    random_seed=seed,
+                    use_best_model=True,
+                    early_stopping_rounds=100,
+                    verbose=False
+                )
+                if X_val is not None and y_val is not None:
+                    model.fit(X_train, y_train, eval_set=(X_val, y_val), verbose=False)
+                else:
+                    model.fit(X_train, y_train, verbose=False)
+                return model, "CatBoost"
+            except ImportError:
+                # CatBoost não está disponível, usar RandomForest
+                raise Exception("CatBoost não disponível")
+                
         except Exception as e:
             logging.warning(f"CatBoost não disponível ou falha ({e}). Usando RandomForest como fallback.")
             from sklearn.ensemble import RandomForestClassifier
@@ -1257,7 +1269,7 @@ class EstrategiaML:
             'padroes_detectados': []  # Padrões identificados
         }
         
-        # ✅ CORREÇÃO: Chamar método corretamente
+        # ✅ CORREÇÃO: Inicializar métricas corretamente (apenas uma chamada)
         self.adicionar_metricas_padroes()
 
     def adicionar_metricas_padroes(self):
