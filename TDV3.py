@@ -159,43 +159,67 @@ def enviar_previsao_super_simplificada(previsao):
         
         if 'Zonas' in nome_estrategia:
             # Mensagem super simplificada para Zonas - apenas o número da zona
-            zona = previsao.get('zona', '')
-            # Mostrar número do núcleo
-            if zona == 'Vermelha':
-                mensagem = "📍 Núcleo 7"
-            elif zona == 'Azul':
-                mensagem = "📍 Núcleo 10"
-            elif zona == 'Amarela':
-                mensagem = "📍 Núcleo 2"
+            zonas_envolvidas = previsao.get('zonas_envolvidas', [])
+            if len(zonas_envolvidas) > 1:
+                # Mostrar ambas as zonas para apostas duplas
+                zona1 = zonas_envolvidas[0]
+                zona2 = zonas_envolvidas[1]
+                
+                # Converter nomes das zonas para números dos núcleos
+                nucleo1 = "7" if zona1 == 'Vermelha' else "10" if zona1 == 'Azul' else "2"
+                nucleo2 = "7" if zona2 == 'Vermelha' else "10" if zona2 == 'Azul' else "2"
+                
+                mensagem = f"📍 Núcleos {nucleo1} + {nucleo2}"
             else:
-                mensagem = f"📍 Núcleo {zona}"
+                zona = previsao.get('zona', '')
+                # Mostrar número do núcleo
+                if zona == 'Vermelha':
+                    mensagem = "📍 Núcleo 7"
+                elif zona == 'Azul':
+                    mensagem = "📍 Núcleo 10"
+                elif zona == 'Amarela':
+                    mensagem = "📍 Núcleo 2"
+                else:
+                    mensagem = f"📍 Núcleo {zona}"
             
         elif 'Machine Learning' in nome_estrategia or 'ML' in nome_estrategia or 'CatBoost' in nome_estrategia:
             # CORREÇÃO: Verificar múltiplas possibilidades do nome ML
-            zona_ml = previsao.get('zona_ml', '')
-            
-            # NOVA LÓGICA: Verificar se há números específicos na previsão
-            numeros_apostar = previsao.get('numeros_apostar', [])
-            
-            # Verificar se o número 2 está nos números para apostar
-            if 2 in numeros_apostar:
-                mensagem = "🤖 Zona 2"
-            # Verificar se o número 7 está nos números para apostar
-            elif 7 in numeros_apostar:
-                mensagem = "🤖 Zona 7"
-            # Verificar se o número 10 está nos números para apostar
-            elif 10 in numeros_apostar:
-                mensagem = "🤖 Zona 10"
+            zonas_envolvidas = previsao.get('zonas_envolvidas', [])
+            if len(zonas_envolvidas) > 1:
+                # Mostrar ambas as zonas para apostas duplas
+                zona1 = zonas_envolvidas[0]
+                zona2 = zonas_envolvidas[1]
+                
+                # Converter nomes das zonas para números dos núcleos
+                nucleo1 = "7" if zona1 == 'Vermelha' else "10" if zona1 == 'Azul' else "2"
+                nucleo2 = "7" if zona2 == 'Vermelha' else "10" if zona2 == 'Azul' else "2"
+                
+                mensagem = f"🤖 Núcleos {nucleo1} + {nucleo2}"
             else:
-                # Fallback para a lógica original
-                if zona_ml == 'Vermelha':
-                    mensagem = "🤖 Zona 7"
-                elif zona_ml == 'Azul':
-                    mensagem = "🤖 Zona 10"  
-                elif zona_ml == 'Amarela':
+                zona_ml = previsao.get('zona_ml', '')
+                
+                # NOVA LÓGICA: Verificar se há números específicos na previsão
+                numeros_apostar = previsao.get('numeros_apostar', [])
+                
+                # Verificar se o número 2 está nos números para apostar
+                if 2 in numeros_apostar:
                     mensagem = "🤖 Zona 2"
+                # Verificar se o número 7 está nos números para apostar
+                elif 7 in numeros_apostar:
+                    mensagem = "🤖 Zona 7"
+                # Verificar se o número 10 está nos números para apostar
+                elif 10 in numeros_apostar:
+                    mensagem = "🤖 Zona 10"
                 else:
-                    mensagem = f"🤖 Zona {zona_ml}"
+                    # Fallback para a lógica original
+                    if zona_ml == 'Vermelha':
+                        mensagem = "🤖 Zona 7"
+                    elif zona_ml == 'Azul':
+                        mensagem = "🤖 Zona 10"  
+                    elif zona_ml == 'Amarela':
+                        mensagem = "🤖 Zona 2"
+                    else:
+                        mensagem = f"🤖 Zona {zona_ml}"
             
         else:
             # Mensagem para Midas
@@ -219,26 +243,60 @@ def enviar_resultado_super_simplificado(numero_real, acerto, nome_estrategia, zo
         if acerto:
             if 'Zonas' in nome_estrategia and zona_acertada:
                 # CORREÇÃO: Mostrar número do núcleo em vez do nome da zona
-                if zona_acertada == 'Vermelha':
-                    nucleo = "7"
-                elif zona_acertada == 'Azul':
-                    nucleo = "10"
-                elif zona_acertada == 'Amarela':
-                    nucleo = "2"
+                if '+' in zona_acertada:
+                    # Múltiplas zonas acertadas
+                    zonas = zona_acertada.split('+')
+                    nucleos = []
+                    for zona in zonas:
+                        if zona == 'Vermelha':
+                            nucleos.append("7")
+                        elif zona == 'Azul':
+                            nucleos.append("10")
+                        elif zona == 'Amarela':
+                            nucleos.append("2")
+                        else:
+                            nucleos.append(zona)
+                    nucleo_str = "+".join(nucleos)
+                    mensagem = f"✅ Acerto Núcleos {nucleo_str}\n🎲 Número: {numero_real}"
                 else:
-                    nucleo = zona_acertada
-                mensagem = f"✅ Acerto Núcleo {nucleo}\n🎲 Número: {numero_real}"
+                    # Apenas uma zona
+                    if zona_acertada == 'Vermelha':
+                        nucleo = "7"
+                    elif zona_acertada == 'Azul':
+                        nucleo = "10"
+                    elif zona_acertada == 'Amarela':
+                        nucleo = "2"
+                    else:
+                        nucleo = zona_acertada
+                    mensagem = f"✅ Acerto Núcleo {nucleo}\n🎲 Número: {numero_real}"
             elif 'ML' in nome_estrategia and zona_acertada:
                 # CORREÇÃO: Mostrar número do núcleo em vez do nome da zona
-                if zona_acertada == 'Vermelha':
-                    nucleo = "7"
-                elif zona_acertada == 'Azul':
-                    nucleo = "10"
-                elif zona_acertada == 'Amarela':
-                    nucleo = "2"
+                if '+' in zona_acertada:
+                    # Múltiplas zonas acertadas
+                    zonas = zona_acertada.split('+')
+                    nucleos = []
+                    for zona in zonas:
+                        if zona == 'Vermelha':
+                            nucleos.append("7")
+                        elif zona == 'Azul':
+                            nucleos.append("10")
+                        elif zona == 'Amarela':
+                            nucleos.append("2")
+                        else:
+                            nucleos.append(zona)
+                    nucleo_str = "+".join(nucleos)
+                    mensagem = f"✅ Acerto Núcleos {nucleo_str}\n🎲 Número: {numero_real}"
                 else:
-                    nucleo = zona_acertada
-                mensagem = f"✅ Acerto Núcleo {nucleo}\n🎲 Número: {numero_real}"
+                    # Apenas uma zona
+                    if zona_acertada == 'Vermelha':
+                        nucleo = "7"
+                    elif zona_acertada == 'Azul':
+                        nucleo = "10"
+                    elif zona_acertada == 'Amarela':
+                        nucleo = "2"
+                    else:
+                        nucleo = zona_acertada
+                    mensagem = f"✅ Acerto Núcleo {nucleo}\n🎲 Número: {numero_real}"
             else:
                 mensagem = f"✅ Acerto\n🎲 Número: {numero_real}"
         else:
@@ -793,7 +851,7 @@ class MLRoletaOtimizada:
         }
 
 # =============================
-# ESTRATÉGIA DAS ZONAS ATUALIZADA - OTIMIZADA E CORRIGIDA
+# ESTRATÉGIA DAS ZONAS ATUALIZADA - COM INVERSÃO PARA SEGUNDA MELHOR
 # =============================
 class EstrategiaZonasOtimizada:
     def __init__(self):
@@ -940,29 +998,87 @@ class EstrategiaZonasOtimizada:
         
         return None
 
-    def analisar_zonas(self):
+    def get_zonas_rankeadas(self):
+        """Retorna todas as zonas rankeadas por score (melhor para pior)"""
         if len(self.historico) < 15:
             return None
             
-        zona_alvo = self.get_zona_mais_quente()
+        zonas_score = {}
         
-        if zona_alvo:
-            numeros_apostar = self.numeros_zonas[zona_alvo]
-            
-            confianca = self.calcular_confianca_ultra(zona_alvo)
-            score = self.get_zona_score(zona_alvo)
-            
-            gatilho = f'Zona {zona_alvo} - Score: {score:.1f} | Perf: {self.stats_zonas[zona_alvo]["performance_media"]:.1f}% | Thr: {self.get_threshold_dinamico(zona_alvo)}'
-            
-            return {
-                'nome': f'Zona {zona_alvo}',
-                'numeros_apostar': numeros_apostar,
-                'gatilho': gatilho,
-                'confianca': confianca,
-                'zona': zona_alvo
-            }
+        for zona in self.zonas.keys():
+            score = self.get_zona_score(zona)
+            zonas_score[zona] = score
         
-        return None
+        # Ordenar zonas por score (melhor primeiro)
+        zonas_rankeadas = sorted(zonas_score.items(), key=lambda x: x[1], reverse=True)
+        return zonas_rankeadas
+
+    def analisar_zonas_com_inversao(self):
+        """Versão com inversão para segunda melhor zona"""
+        if len(self.historico) < 15:
+            return None
+            
+        zonas_rankeadas = self.get_zonas_rankeadas()
+        if not zonas_rankeadas:
+            return None
+        
+        # Pegar a melhor zona
+        zona_primaria, score_primario = zonas_rankeadas[0]
+        
+        # Verificar se a melhor zona atinge o threshold
+        threshold_primario = self.get_threshold_dinamico(zona_primaria)
+        if score_primario < threshold_primario:
+            return None
+        
+        # Pegar a segunda melhor zona
+        if len(zonas_rankeadas) > 1:
+            zona_secundaria, score_secundario = zonas_rankeadas[1]
+            
+            # Verificar se a segunda zona também atinge um threshold mínimo
+            threshold_secundario = threshold_primario - 5  # Threshold mais baixo para segunda zona
+            if score_secundario >= threshold_secundario:
+                # COMBINAÇÃO: Juntar números das duas melhores zonas
+                numeros_primarios = self.numeros_zonas[zona_primaria]
+                numeros_secundarios = self.numeros_zonas[zona_secundaria]
+                
+                # Remover duplicatas (caso haja sobreposição)
+                numeros_combinados = list(set(numeros_primarios + numeros_secundarios))
+                
+                confianca_primaria = self.calcular_confianca_ultra(zona_primaria)
+                confianca_secundaria = self.calcular_confianca_ultra(zona_secundaria)
+                
+                gatilho = f'Zona {zona_primaria} (Score: {score_primario:.1f}) + Zona {zona_secundaria} (Score: {score_secundario:.1f}) | Perf: {self.stats_zonas[zona_primaria]["performance_media"]:.1f}%'
+                
+                return {
+                    'nome': f'Zonas Duplas - {zona_primaria} + {zona_secundaria}',
+                    'numeros_apostar': numeros_combinados,
+                    'gatilho': gatilho,
+                    'confianca': f'{confianca_primaria}+{confianca_secundaria}',
+                    'zona': f'{zona_primaria}+{zona_secundaria}',
+                    'zonas_envolvidas': [zona_primaria, zona_secundaria],
+                    'tipo': 'dupla'
+                }
+        
+        # Se não há segunda zona válida, retornar apenas a primeira
+        numeros_apostar = self.numeros_zonas[zona_primaria]
+        confianca = self.calcular_confianca_ultra(zona_primaria)
+        score = self.get_zona_score(zona_primaria)
+        
+        gatilho = f'Zona {zona_primaria} - Score: {score:.1f} | Perf: {self.stats_zonas[zona_primaria]["performance_media"]:.1f}% | Thr: {self.get_threshold_dinamico(zona_primaria)}'
+        
+        return {
+            'nome': f'Zona {zona_primaria}',
+            'numeros_apostar': numeros_apostar,
+            'gatilho': gatilho,
+            'confianca': confianca,
+            'zona': zona_primaria,
+            'zonas_envolvidas': [zona_primaria],
+            'tipo': 'unica'
+        }
+
+    def analisar_zonas(self):
+        """Mantém compatibilidade com método original, mas usa a nova lógica"""
+        return self.analisar_zonas_com_inversao()
 
     def calcular_confianca_ultra(self, zona):
         if len(self.historico) < 10:
@@ -1549,6 +1665,137 @@ class EstrategiaML:
         elif valor >= 0.45: return 'Baixa'
         else: return 'Muito Baixa'
 
+    def analisar_distribuicao_zonas_rankeadas(self, top_25_numeros):
+        """Retorna zonas rankeadas por distribuição"""
+        contagem_zonas = {}
+        
+        for zona, numeros in self.numeros_zonas_ml.items():
+            count = sum(1 for num in top_25_numeros if num in numeros)
+            contagem_zonas[zona] = count
+        
+        if not contagem_zonas:
+            return None
+            
+        # Ordenar zonas por contagem (melhor primeiro)
+        zonas_rankeadas = sorted(contagem_zonas.items(), key=lambda x: x[1], reverse=True)
+        return zonas_rankeadas
+
+    def analisar_ml_com_inversao(self):
+        """Versão ML com inversão para segunda melhor zona"""
+        if len(self.historico) < 10:
+            return None
+
+        if not self.ml.is_trained:
+            return None
+
+        historico_numeros = self.extrair_numeros_historico()
+
+        if len(historico_numeros) < 10:
+            return None
+
+        previsao_ml, msg_ml = self.ml.prever_proximo_numero(historico_numeros, top_k=25)
+        
+        if previsao_ml:
+            top_25_numeros = [num for num, prob in previsao_ml[:25]]
+            
+            distribuicao_zonas = self.analisar_distribuicao_zonas_rankeadas(top_25_numeros)
+            
+            if not distribuicao_zonas:
+                return None
+                
+            # NOVO: Aplicar padrões sequenciais na distribuição
+            distribuicao_dict = dict(distribuicao_zonas)
+            distribuicao_ajustada = self.aplicar_padroes_na_previsao(distribuicao_dict)
+            
+            # Re-ranquear após ajuste de padrões
+            zonas_rankeadas_ajustadas = sorted(distribuicao_ajustada.items(), key=lambda x: x[1], reverse=True)
+            
+            # Pegar as duas melhores zonas
+            zona_primaria, contagem_primaria = zonas_rankeadas_ajustadas[0]
+            
+            # Verificar se zona primária tem contagem mínima
+            if contagem_primaria < 7:  # Mínimo de 7 números na zona
+                return None
+            
+            # Verificar se há segunda zona válida
+            zona_secundaria = None
+            contagem_secundaria = 0
+            
+            if len(zonas_rankeadas_ajustadas) > 1:
+                zona_secundaria, contagem_secundaria = zonas_rankeadas_ajustadas[1]
+                
+                # Segunda zona precisa ter pelo menos 5 números
+                if contagem_secundaria >= 5:
+                    # COMBINAÇÃO: Juntar números das duas melhores zonas
+                    numeros_primarios = self.numeros_zonas_ml[zona_primaria]
+                    numeros_secundarios = self.numeros_zonas_ml[zona_secundaria]
+                    
+                    # Remover duplicatas
+                    numeros_combinados = list(set(numeros_primarios + numeros_secundarios))
+                    
+                    confianca = self.calcular_confianca_com_padroes(distribuicao_ajustada, zona_primaria)
+                    
+                    # Adicionar informação sobre padrões aplicados
+                    padroes_aplicados = [p for p in self.sequencias_padroes['padroes_detectados'] 
+                                       if p['zona'] in [zona_primaria, zona_secundaria] and 
+                                       len(self.historico) - p['detectado_em'] <= 15]
+                    
+                    gatilho_extra = ""
+                    if padroes_aplicados:
+                        gatilho_extra = f" | Padrões: {len(padroes_aplicados)}"
+                    
+                    contagem_original_primaria = distribuicao_dict[zona_primaria]
+                    contagem_original_secundaria = distribuicao_dict.get(zona_secundaria, 0)
+                    
+                    gatilho = f'ML CatBoost - Zona {zona_primaria} ({contagem_original_primaria}→{contagem_primaria}/25) + Zona {zona_secundaria} ({contagem_original_secundaria}→{contagem_secundaria}/25){gatilho_extra}'
+                    
+                    return {
+                        'nome': 'Machine Learning - CatBoost (Duplo)',
+                        'numeros_apostar': numeros_combinados,
+                        'gatilho': gatilho,
+                        'confianca': confianca,
+                        'previsao_ml': previsao_ml,
+                        'zona_ml': f'{zona_primaria}+{zona_secundaria}',
+                        'distribuicao': distribuicao_ajustada,
+                        'padroes_aplicados': len(padroes_aplicados),
+                        'zonas_envolvidas': [zona_primaria, zona_secundaria],
+                        'tipo': 'dupla'
+                    }
+            
+            # Se não há segunda zona válida, retornar apenas a primeira
+            numeros_zona = self.numeros_zonas_ml[zona_primaria]
+            contagem_original = distribuicao_dict[zona_primaria]
+            contagem_ajustada = contagem_primaria
+            
+            confianca = self.calcular_confianca_com_padroes(distribuicao_ajustada, zona_primaria)
+            
+            padroes_aplicados = [p for p in self.sequencias_padroes['padroes_detectados'] 
+                               if p['zona'] == zona_primaria and 
+                               len(self.historico) - p['detectado_em'] <= 15]
+            
+            gatilho_extra = ""
+            if padroes_aplicados:
+                gatilho_extra = f" | Padrões: {len(padroes_aplicados)}"
+            
+            return {
+                'nome': 'Machine Learning - CatBoost',
+                'numeros_apostar': numeros_zona,
+                'gatilho': f'ML CatBoost - Zona {zona_primaria} ({contagem_original}→{contagem_ajustada}/25){gatilho_extra}',
+                'confianca': confianca,
+                'previsao_ml': previsao_ml,
+                'zona_ml': zona_primaria,
+                'distribuicao': distribuicao_ajustada,
+                'padroes_aplicados': len(padroes_aplicados),
+                'zonas_envolvidas': [zona_primaria],
+                'tipo': 'unica'
+            }
+        
+        return None
+
+    def analisar_ml(self):
+        """Mantém compatibilidade com método original, mas usa a nova lógica"""
+        return self.analisar_ml_com_inversao()
+
     def treinar_automatico(self):
         historico_numeros = self.extrair_numeros_historico()
         
@@ -1570,60 +1817,6 @@ class EstrategiaML:
             elif isinstance(item, (int, float)):
                 historico_numeros.append(int(item))
         return historico_numeros
-
-    def analisar_ml(self):
-        if len(self.historico) < 10:
-            return None
-
-        if not self.ml.is_trained:
-            return None
-
-        historico_numeros = self.extrair_numeros_historico()
-
-        if len(historico_numeros) < 10:
-            return None
-
-        previsao_ml, msg_ml = self.ml.prever_proximo_numero(historico_numeros, top_k=25)
-        
-        if previsao_ml:
-            top_25_numeros = [num for num, prob in previsao_ml[:25]]
-            
-            distribuicao_zonas = self.analisar_distribuicao_zonas(top_25_numeros)
-            
-            # NOVO: Aplicar padrões sequenciais na distribuição
-            if distribuicao_zonas:
-                distribuicao_ajustada = self.aplicar_padroes_na_previsao(distribuicao_zonas)
-                
-                # Usar a distribuição ajustada para determinar a zona vencedora
-                zona_vencedora = max(distribuicao_ajustada, key=distribuicao_ajustada.get)
-                numeros_zona = self.numeros_zonas_ml[zona_vencedora]
-                contagem_original = distribuicao_zonas[zona_vencedora]
-                contagem_ajustada = distribuicao_ajustada[zona_vencedora]
-                
-                # NOVO: Usar confiança com padrões
-                confianca = self.calcular_confianca_com_padroes(distribuicao_ajustada, zona_vencedora)
-                
-                # Adicionar informação sobre padrões aplicados
-                padroes_aplicados = [p for p in self.sequencias_padroes['padroes_detectados'] 
-                                   if p['zona'] == zona_vencedora and 
-                                   len(self.historico) - p['detectado_em'] <= 15]
-                
-                gatilho_extra = ""
-                if padroes_aplicados:
-                    gatilho_extra = f" | Padrões: {len(padroes_aplicados)}"
-                
-                return {
-                    'nome': 'Machine Learning - CatBoost',
-                    'numeros_apostar': numeros_zona,
-                    'gatilho': f'ML CatBoost - Zona {zona_vencedora} ({contagem_original}→{contagem_ajustada}/25){gatilho_extra}',
-                    'confianca': confianca,
-                    'previsao_ml': previsao_ml,
-                    'zona_ml': zona_vencedora,
-                    'distribuicao': distribuicao_ajustada,
-                    'padroes_aplicados': len(padroes_aplicados)
-                }
-        
-        return None
 
     def analisar_distribuicao_zonas(self, top_25_numeros):
         contagem_zonas = {}
@@ -1853,22 +2046,41 @@ class SistemaRoletaCompleto:
         self.contador_sorteios_global += 1
             
         if self.previsao_ativa:
-            acerto = numero_real in self.previsao_ativa['numeros_apostar']
+            # VERIFICAÇÃO DE ACERTO PARA MÚLTIPLAS ZONAS
+            acerto = False
+            zonas_acertadas = []
             nome_estrategia = self.previsao_ativa['nome']
             
-            # Verifica qual zona/núcleo acertou (se acertou)
-            zona_acertada = None
-            if acerto:
-                if 'Zonas' in nome_estrategia:
-                    for zona, numeros in self.estrategia_zonas.numeros_zonas.items():
-                        if numero_real in numeros:
-                            zona_acertada = zona
-                            break
-                elif 'ML' in nome_estrategia:
-                    for zona, numeros in self.estrategia_ml.numeros_zonas_ml.items():
-                        if numero_real in numeros:
-                            zona_acertada = zona
-                            break
+            # Verificar se o número está em qualquer uma das zonas envolvidas
+            zonas_envolvidas = self.previsao_ativa.get('zonas_envolvidas', [])
+            if not zonas_envolvidas:
+                # Fallback para lógica antiga
+                acerto = numero_real in self.previsao_ativa['numeros_apostar']
+                if acerto:
+                    # Descobrir qual zona acertou
+                    if 'Zonas' in nome_estrategia:
+                        for zona, numeros in self.estrategia_zonas.numeros_zonas.items():
+                            if numero_real in numeros:
+                                zonas_acertadas.append(zona)
+                                break
+                    elif 'ML' in nome_estrategia:
+                        for zona, numeros in self.estrategia_ml.numeros_zonas_ml.items():
+                            if numero_real in numeros:
+                                zonas_acertadas.append(zona)
+                                break
+            else:
+                # Nova lógica para múltiplas zonas
+                for zona in zonas_envolvidas:
+                    if 'Zonas' in nome_estrategia:
+                        numeros_zona = self.estrategia_zonas.numeros_zonas[zona]
+                    elif 'ML' in nome_estrategia:
+                        numeros_zona = self.estrategia_ml.numeros_zonas_ml[zona]
+                    else:
+                        continue
+                    
+                    if numero_real in numeros_zona:
+                        acerto = True
+                        zonas_acertadas.append(zona)
             
             # Verifica e aplica rotação automática se necessário
             rotacionou = self.rotacionar_estrategia_automaticamente(acerto, nome_estrategia)
@@ -1884,7 +2096,8 @@ class SistemaRoletaCompleto:
                 self.erros += 1
             
             # Envia resultado super simplificado
-            enviar_resultado_super_simplificado(numero_real, acerto, nome_estrategia, zona_acertada)
+            zona_acertada_str = "+".join(zonas_acertadas) if zonas_acertadas else None
+            enviar_resultado_super_simplificado(numero_real, acerto, nome_estrategia, zona_acertada_str)
             
             self.historico_desempenho.append({
                 'numero': numero_real,
@@ -1892,7 +2105,9 @@ class SistemaRoletaCompleto:
                 'estrategia': nome_estrategia,
                 'previsao': self.previsao_ativa['numeros_apostar'],
                 'rotacionou': rotacionou,
-                'zona_acertada': zona_acertada
+                'zona_acertada': zona_acertada_str,
+                'zonas_envolvidas': zonas_envolvidas,
+                'tipo_aposta': self.previsao_ativa.get('tipo', 'unica')
             })
             
             self.previsao_ativa = None
@@ -2253,6 +2468,7 @@ with st.sidebar.expander("📊 Informações das Estratégias"):
         st.write("- 📊 Histórico: 70 números (35 → 70)")
         st.write("- 🎯 Múltiplas janelas: Curto(12) Médio(24) Longo(48)")
         st.write("- 📈 Threshold dinâmico por performance")
+        st.write("- 🔄 **INVERSÃO AUTOMÁTICA:** Combina as 2 melhores zonas quando possível")
         for zona, dados in info_zonas.items():
             st.write(f"**Zona {zona}** (Núcleo: {dados['central']})")
             st.write(f"Descrição: {dados['descricao']}")
@@ -2279,6 +2495,7 @@ with st.sidebar.expander("📊 Informações das Estratégias"):
         st.write("- **Zonas**: 6 antes + 6 depois (13 números/zona)")
         st.write("- **Threshold**: Mínimo 7 números na mesma zona")
         st.write("- **Saída**: Zona com maior concentração")
+        st.write("- 🔄 **INVERSÃO AUTOMÁTICA:** Combina as 2 melhores zonas quando possível")
         
         info_zonas_ml = st.session_state.sistema.estrategia_ml.get_info_zonas_ml()
         for zona, dados in info_zonas_ml.items():
@@ -2361,29 +2578,56 @@ if sistema.previsao_ativa:
     st.success(f"**{previsao['nome']}**")
     
     if 'Zonas' in previsao['nome']:
-        zona = previsao.get('zona', '')
-        # CORREÇÃO: Mostrar número do núcleo
-        if zona == 'Vermelha':
-            nucleo = "7"
-        elif zona == 'Azul':
-            nucleo = "10"
-        elif zona == 'Amarela':
-            nucleo = "2"
+        zonas_envolvidas = previsao.get('zonas_envolvidas', [])
+        if len(zonas_envolvidas) > 1:
+            # Aposta dupla
+            zona1 = zonas_envolvidas[0]
+            zona2 = zonas_envolvidas[1]
+            
+            # Converter nomes das zonas para números dos núcleos
+            nucleo1 = "7" if zona1 == 'Vermelha' else "10" if zona1 == 'Azul' else "2"
+            nucleo2 = "7" if zona2 == 'Vermelha' else "10" if zona2 == 'Azul' else "2"
+            
+            st.write(f"**📍 Núcleos Combinados:** {nucleo1} + {nucleo2}")
+            st.info("🔄 **ESTRATÉGIA DUPLA:** Investindo nas 2 melhores zonas")
         else:
-            nucleo = zona
-        st.write(f"**📍 Núcleo:** {nucleo}")
+            zona = previsao.get('zona', '')
+            # CORREÇÃO: Mostrar número do núcleo
+            if zona == 'Vermelha':
+                nucleo = "7"
+            elif zona == 'Azul':
+                nucleo = "10"
+            elif zona == 'Amarela':
+                nucleo = "2"
+            else:
+                nucleo = zona
+            st.write(f"**📍 Núcleo:** {nucleo}")
+            
     elif 'ML' in previsao['nome']:
-        zona_ml = previsao.get('zona_ml', '')
-        # CORREÇÃO: Mostrar número do núcleo
-        if zona_ml == 'Vermelha':
-            nucleo = "7"
-        elif zona_ml == 'Azul':
-            nucleo = "10"
-        elif zona_ml == 'Amarela':
-            nucleo = "2"
+        zonas_envolvidas = previsao.get('zonas_envolvidas', [])
+        if len(zonas_envolvidas) > 1:
+            # Aposta dupla
+            zona1 = zonas_envolvidas[0]
+            zona2 = zonas_envolvidas[1]
+            
+            # Converter nomes das zonas para números dos núcleos
+            nucleo1 = "7" if zona1 == 'Vermelha' else "10" if zona1 == 'Azul' else "2"
+            nucleo2 = "7" if zona2 == 'Vermelha' else "10" if zona2 == 'Azul' else "2"
+            
+            st.write(f"**🤖 Núcleos Combinados:** {nucleo1} + {nucleo2}")
+            st.info("🔄 **ESTRATÉGIA DUPLA:** Investindo nas 2 melhores zonas")
         else:
-            nucleo = zona_ml
-        st.write(f"**🤖 Núcleo:** {nucleo}")
+            zona_ml = previsao.get('zona_ml', '')
+            # CORREÇÃO: Mostrar número do núcleo
+            if zona_ml == 'Vermelha':
+                nucleo = "7"
+            elif zona_ml == 'Azul':
+                nucleo = "10"
+            elif zona_ml == 'Amarela':
+                nucleo = "2"
+            else:
+                nucleo = zona_ml
+            st.write(f"**🤖 Núcleo:** {nucleo}")
     
     st.write(f"**🔢 Números para apostar ({len(previsao['numeros_apostar'])}):**")
     st.write(", ".join(map(str, sorted(previsao['numeros_apostar']))))
@@ -2391,6 +2635,13 @@ if sistema.previsao_ativa:
     # NOVO: Mostrar informações de padrões para ML
     if 'ML' in previsao['nome'] and previsao.get('padroes_aplicados', 0) > 0:
         st.info(f"🔍 **Padrões aplicados:** {previsao['padroes_aplicados']} padrões sequenciais detectados")
+    
+    # Mostrar tipo de aposta
+    tipo_aposta = previsao.get('tipo', 'unica')
+    if tipo_aposta == 'dupla':
+        st.success("🎯 **APOSTA DUPLA:** Maior cobertura com 2 zonas combinadas")
+    else:
+        st.info("🎯 **APOSTA SIMPLES:** Foco em uma zona principal")
     
     st.info("⏳ Aguardando próximo sorteio para conferência...")
 else:
@@ -2447,20 +2698,38 @@ if sistema.historico_desempenho:
         zona_info = ""
         if resultado['acerto'] and resultado.get('zona_acertada'):
             # CORREÇÃO: Mostrar número do núcleo
-            if resultado['zona_acertada'] == 'Vermelha':
-                nucleo = "7"
-            elif resultado['zona_acertada'] == 'Azul':
-                nucleo = "10"
-            elif resultado['zona_acertada'] == 'Amarela':
-                nucleo = "2"
+            if '+' in resultado['zona_acertada']:
+                # Múltiplas zonas acertadas
+                zonas = resultado['zona_acertada'].split('+')
+                nucleos = []
+                for zona in zonas:
+                    if zona == 'Vermelha':
+                        nucleos.append("7")
+                    elif zona == 'Azul':
+                        nucleos.append("10")
+                    elif zona == 'Amarela':
+                        nucleos.append("2")
+                    else:
+                        nucleos.append(zona)
+                nucleo_str = "+".join(nucleos)
+                zona_info = f" (Núcleos {nucleo_str})"
             else:
-                nucleo = resultado['zona_acertada']
+                # Apenas uma zona
+                if resultado['zona_acertada'] == 'Vermelha':
+                    nucleo = "7"
+                elif resultado['zona_acertada'] == 'Azul':
+                    nucleo = "10"
+                elif resultado['zona_acertada'] == 'Amarela':
+                    nucleo = "2"
+                else:
+                    nucleo = resultado['zona_acertada']
+                zona_info = f" (Núcleo {nucleo})"
                 
-            if 'Zonas' in resultado['estrategia']:
-                zona_info = f" (Núcleo {nucleo})"
-            elif 'ML' in resultado['estrategia']:
-                zona_info = f" (Núcleo {nucleo})"
-        st.write(f"{emoji}{rotacao_emoji} {resultado['estrategia']}: Número {resultado['numero']}{zona_info}")
+        tipo_aposta_info = ""
+        if resultado.get('tipo_aposta') == 'dupla':
+            tipo_aposta_info = " [DUPLA]"
+        
+        st.write(f"{emoji}{rotacao_emoji} {resultado['estrategia']}{tipo_aposta_info}: Número {resultado['numero']}{zona_info}")
 
 # Download histórico
 if os.path.exists(HISTORICO_PATH):
