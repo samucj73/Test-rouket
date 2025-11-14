@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🏀 Elite Master - Alerta NBA</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .poster {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 800px;
+            width: 100%;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            border: 3px solid #2c3e50;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 25px;
+            border-bottom: 2px solid #dee2e6;
+            padding-bottom: 15px;
+        }
+        
+        .header h2 {
+            margin: 0;
+            color: #2c3e50;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        
+        .header p {
+            margin: 8px 0;
+            color: #7f8c8d;
+            font-size: 16px;
+            font-weight: 500;
+        }
+        
+        .teams-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        
+        .team {
+            text-align: center;
+            flex: 1;
+        }
+        
+        .team-logo {
+            height: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 15px;
+        }
+        
+        .team-logo div {
+            font-size: 48px;
+            color: #7f8c8d;
+        }
+        
+        .team-name {
+            margin: 0;
+            color: #2c3e50;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        
+        .team-score {
+            font-size: 24px;
+            font-weight: bold;
+            color: #e74c3c;
+            margin-top: 8px;
+        }
+        
+        .vs-section {
+            text-align: center;
+            flex: 1;
+        }
+        
+        .vs-text {
+            font-size: 36px;
+            font-weight: bold;
+            color: #34495e;
+            margin: 15px 0;
+        }
+        
+        .score-box {
+            font-size: 32px;
+            font-weight: bold;
+            color: #2c3e50;
+            background: rgba(52, 152, 219, 0.1);
+            padding: 10px 20px;
+            border-radius: 10px;
+            display: inline-block;
+        }
+        
+        .predictions {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+        
+        .prediction-card {
+            background: rgba(255,255,255,0.9);
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border: 2px solid #ecf0f1;
+        }
+        
+        .prediction-card h4 {
+            margin: 0 0 12px 0;
+            color: #2c3e50;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        
+        .footer {
+            text-align: center;
+            border-top: 1px solid #dee2e6;
+            padding-top: 15px;
+        }
+        
+        .footer p {
+            margin: 0;
+            color: #7f8c8d;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="poster">
+        <!-- Cabeçalho do Poster -->
+        <div class="header">
+            <h2>🏀 ALERTA NBA ELITE MASTER</h2>
+            <p>Análise com Dados Reais 2024-2025 | ⏰ AGENDADO</p>
+        </div>
+
+        <!-- Confronto dos Times -->
+        <div class="teams-container">
+            <!-- Time Visitante -->
+            <div class="team">
+                <div class="team-logo">
+                    <div>🏀</div>
+                </div>
+                <h3 class="team-name">Atlanta Hawks</h3>
+                <div class="team-score">0</div>
+            </div>
+
+            <!-- VS e Placar -->
+            <div class="vs-section">
+                <div class="vs-text">VS</div>
+                <div class="score-box">? - ?</div>
+            </div>
+
+            <!-- Time da Casa -->
+            <div class="team">
+                <div class="team-logo">
+                    <div>🏀</div>
+                </div>
+                <h3 class="team-name">Utah Jazz</h3>
+                <div class="team-score">0</div>
+            </div>
+        </div>
+
+        <!-- Previsões -->
+        <div class="predictions">
+            <!-- Total de Pontos -->
+            <div class="prediction-card">
+                <h4>📊 TOTAL PONTOS</h4>
+                <div style="font-size: 18px; font-weight: bold; color: #3498db; margin-bottom: 8px;">Mais 230.5</div>
+                <div style="font-size: 14px; color: #7f8c8d;">Est: 232.5</div>
+                <div style="font-size: 14px; color: #7f8c8d;">Conf: 80%</div>
+            </div>
+
+            <!-- Vencedor -->
+            <div class="prediction-card">
+                <h4>🎯 VENCEDOR</h4>
+                <div style="font-size: 18px; font-weight: bold; color: #e67e22; margin-bottom: 8px;">Visitante</div>
+                <div style="font-size: 14px; color: #7f8c8d;">Conf: 74%</div>
+                <div style="font-size: 12px; color: #95a5a6; margin-top: 5px;">Visitante favorito (60.0%)</div>
+            </div>
+
+            <!-- 1º Quarto -->
+            <div class="prediction-card">
+                <h4>⏱️ 1º QUARTO</h4>
+                <div style="font-size: 18px; font-weight: bold; color: #9b59b6; margin-bottom: 8px;">Mais 56.5</div>
+                <div style="font-size: 14px; color: #7f8c8d;">Est: 56.2</div>
+                <div style="font-size: 14px; color: #7f8c8d;">Conf: 68%</div>
+            </div>
+        </div>
+
+        <!-- Rodapé -->
+        <div class="footer">
+            <p>🏆 Elite Master | 📅 14/11/2025 01:04 | 🔄 Dados em Tempo Real</p>
+        </div>
+    </div>
+</body>
+</html>
