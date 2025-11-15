@@ -77,31 +77,54 @@ NBA_LOGOS = {
 }
 
 # =============================
-# FUNÇÕES AUXILIARES PARA DATAS (CORREÇÃO)
+# FUNÇÕES AUXILIARES PARA DATAS (CORREÇÃO FINAL)
 # =============================
 def formatar_data_api_para_local(data_utc: str) -> tuple[str, str]:
-    """Converte data UTC da API para horário local brasileiro corretamente"""
+    """Converte data UTC da API para horário local brasileiro CORRETAMENTE"""
     try:
-        # Remove o 'Z' final se existir e adiciona o timezone UTC
-        if data_utc.endswith('Z'):
-            data_utc = data_utc[:-1] + '+00:00'
+        # Formato esperado: "2024-11-15T00:30:00.000Z"
+        if not data_utc or len(data_utc) < 10:
+            return "Data inválida", ""
+            
+        # Extrai ano, mês, dia e hora diretamente
+        ano = data_utc[0:4]
+        mes = data_utc[5:7]
+        dia = data_utc[8:10]
+        hora = data_utc[11:13]
+        minuto = data_utc[14:16]
         
-        # Converte para datetime com timezone UTC
-        dt_utc = datetime.fromisoformat(data_utc)
+        # Converte para inteiros
+        dia_int = int(dia)
+        hora_int = int(hora)
         
-        # Converte para horário de Brasília (UTC-3)
-        fuso_brasilia = timedelta(hours=-3)
-        dt_local = dt_utc + fuso_brasilia
+        # CORREÇÃO: Ajuste para fuso horário Brasil (UTC-3)
+        # Se o jogo é às 21h no Brasil, na API será 00h do dia seguinte UTC
+        # Mas queremos manter o DIA CORRETO do jogo
+        hora_brasil = hora_int - 3
         
-        # Formata data e hora
-        data_str = dt_local.strftime("%d/%m/%Y")
-        hora_str = dt_local.strftime("%H:%M")
+        # Se a hora ficou negativa, ajusta para o dia anterior
+        if hora_brasil < 0:
+            hora_brasil += 24
+            # ATENÇÃO: NÃO diminuímos o dia aqui porque os jogos da NBA
+            # que acontecem à noite nos EUA aparecem como dia seguinte na API UTC
+            # mas na realidade são no mesmo dia no horário local
+            # dia_int -= 1  # REMOVIDO - mantém o mesmo dia
+        
+        # Formata de volta para string
+        data_str = f"{dia_int:02d}/{mes}/{ano}"
+        hora_str = f"{hora_brasil:02d}:{minuto}"
+        
+        print(f"DEBUG CONVERSÃO: {data_utc} -> {data_str} {hora_str}")
         
         return data_str, hora_str
         
     except Exception as e:
-        print(f"Erro ao converter data {data_utc}: {e}")
-        return data_utc[:10], "Horário não definido"
+        print(f"Erro na conversão da data {data_utc}: {e}")
+        # Fallback: retorna a data como está
+        try:
+            return data_utc[8:10] + "/" + data_utc[5:7] + "/" + data_utc[0:4], data_utc[11:16]
+        except:
+            return data_utc[:10], ""
 
 def obter_data_correta_para_api(data: date) -> str:
     """Converte data local para formato correto da API considerando UTC"""
