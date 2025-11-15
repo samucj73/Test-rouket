@@ -77,6 +77,39 @@ NBA_LOGOS = {
 }
 
 # =============================
+# FUNÇÕES AUXILIARES PARA DATAS (CORREÇÃO)
+# =============================
+def formatar_data_api_para_local(data_utc: str) -> tuple[str, str]:
+    """Converte data UTC da API para horário local brasileiro corretamente"""
+    try:
+        # Remove o 'Z' final se existir e adiciona o timezone UTC
+        if data_utc.endswith('Z'):
+            data_utc = data_utc[:-1] + '+00:00'
+        
+        # Converte para datetime com timezone UTC
+        dt_utc = datetime.fromisoformat(data_utc)
+        
+        # Converte para horário de Brasília (UTC-3)
+        fuso_brasilia = timedelta(hours=-3)
+        dt_local = dt_utc + fuso_brasilia
+        
+        # Formata data e hora
+        data_str = dt_local.strftime("%d/%m/%Y")
+        hora_str = dt_local.strftime("%H:%M")
+        
+        return data_str, hora_str
+        
+    except Exception as e:
+        print(f"Erro ao converter data {data_utc}: {e}")
+        return data_utc[:10], "Horário não definido"
+
+def obter_data_correta_para_api(data: date) -> str:
+    """Converte data local para formato correto da API considerando UTC"""
+    # A API espera datas em UTC, então precisamos garantir que busca os jogos do dia correto
+    data_str = data.strftime("%Y-%m-%d")
+    return data_str
+
+# =============================
 # CACHE E IO
 # =============================
 def carregar_json(caminho: str) -> dict:
@@ -288,9 +321,10 @@ def obter_times():
     return teams
 
 # =============================
-# BUSCA DE JOGOS REAIS
+# BUSCA DE JOGOS REAIS - VERSÃO CORRIGIDA
 # =============================
 def obter_jogos_data(data_str: str) -> list:
+    """BUSCA DE JOGOS REAIS - VERSÃO CORRIGIDA"""
     cache = carregar_cache_games()
     key = f"games_{data_str}"
     
@@ -317,7 +351,14 @@ def obter_jogos_data(data_str: str) -> list:
         if not data_chunk:
             break
             
-        jogos.extend(data_chunk)
+        # Filtra jogos que realmente pertencem à data solicitada
+        jogos_do_dia = []
+        for jogo in data_chunk:
+            data_jogo = jogo.get("date", "")
+            if data_jogo.startswith(data_str):
+                jogos_do_dia.append(jogo)
+        
+        jogos.extend(jogos_do_dia)
         
         meta = resp.get("meta", {})
         total_pages = meta.get("total_pages", 1)
@@ -328,6 +369,19 @@ def obter_jogos_data(data_str: str) -> list:
 
     cache[key] = jogos
     salvar_cache_games(cache)
+    
+    # Log para debug
+    if jogos:
+        st.success(f"✅ Encontrados {len(jogos)} jogos para {data_str}")
+        for jogo in jogos[:3]:  # Mostra apenas os primeiros 3 para debug
+            data_jogo = jogo.get("date", "")
+            home_team = jogo.get("home_team", {}).get("full_name", "Casa")
+            away_team = jogo.get("visitor_team", {}).get("full_name", "Visitante")
+            data_formatada, hora_formatada = formatar_data_api_para_local(data_jogo)
+            st.write(f"📅 {home_team} vs {away_team} - {data_formatada} {hora_formatada}")
+    else:
+        st.warning(f"⚠️ Nenhum jogo encontrado para {data_str}")
+    
     return jogos
 
 # =============================
@@ -784,11 +838,6 @@ def prever_total_points(home_id: int, away_id: int, window_games: int = 15) -> t
         
     return round(estimativa, 1), round(confianca, 1), tendencia
 
-#def prever_vencedor(home_id: int, away_id: int, window_games: int = 15) -> tuple[str, float, str]:
-    #"""Previsão de vencedor baseada
-
-# app_nba_elite_master.py (continuação)
-
 def prever_vencedor(home_id: int, away_id: int, window_games: int = 15) -> tuple[str, float, str]:
     """Previsão de vencedor baseada em dados reais da temporada 2024-2025"""
     home_stats = obter_estatisticas_time_2025(home_id, window_games)
@@ -843,7 +892,7 @@ def prever_vencedor(home_id: int, away_id: int, window_games: int = 15) -> tuple
 # SISTEMA DE PÔSTERES PARA ALERTAS - VERSÃO MELHORADA
 # =============================
 def criar_poster_alerta(game: dict, predictions: dict, tipo: str = "previsao") -> Image.Image:
-    """Cria um pôster estilizado COM PREVISÕES EM COLUNAS LADO A LADO"""
+    """Cria um pôster estilizado COM PREVISÕES EM COLUNAS LADO A LADO E DATAS CORRIGIDAS"""
     try:
         # Configurações do pôster
         largura, altura = 600, 630
@@ -898,19 +947,15 @@ def criar_poster_alerta(game: dict, predictions: dict, tipo: str = "previsao") -
         draw.text(((largura - largura_camp) // 2, y_pos), campeonato_texto, 
                  fill=cor_texto, font=fonte_subtitulo)
         
-        # Data do jogo
+        # Data do jogo - VERSÃO CORRIGIDA
         data_jogo = game.get("date", "")
         if data_jogo:
-            try:
-                dt = datetime.fromisoformat(data_jogo.replace("Z", "+00:00")) - timedelta(hours=3)
-                data_str = dt.strftime("%d/%m/%Y")
-                hora_str = dt.strftime("%H:%M")
-            except:
-                data_str, hora_str = data_jogo[:10], "Horário não definido"
+            data_str, hora_str = formatar_data_api_para_local(data_jogo)
+            data_jogo_texto = f"{data_str} {hora_str}"
         else:
             data_str, hora_str = "Data não definida", "Horário não definido"
+            data_jogo_texto = "Data não definida"
         
-        data_jogo_texto = f"{data_str} {hora_str}"
         bbox_data_jogo = draw.textbbox((0, 0), data_jogo_texto, font=fonte_texto)
         largura_data_jogo = bbox_data_jogo[2] - bbox_data_jogo[0]
         draw.text(((largura - largura_data_jogo) // 2, y_pos + 30), data_jogo_texto, 
@@ -1031,9 +1076,9 @@ def criar_poster_alerta(game: dict, predictions: dict, tipo: str = "previsao") -
                          fill=cor_texto, font=fonte_texto)
                 
                 # Confiança
-                #confianca_texto = f"Confiança: {confianca:.0f}%"
-                #draw.text((margem + 20, y_pos + 100), confianca_texto, 
-                         #fill=cor_texto, font=fonte_texto)
+                confianca_texto = f"Confiança: {confianca:.0f}%"
+                draw.text((margem + 20, y_pos + 100), confianca_texto, 
+                         fill=cor_texto, font=fonte_texto)
             
             # COLUNA 2: VENCEDOR (DIREITA)
             vencedor_pred = predictions.get("vencedor", {})
@@ -1060,10 +1105,10 @@ def criar_poster_alerta(game: dict, predictions: dict, tipo: str = "previsao") -
                          fill=cor_texto, font=fonte_texto)
                 
                 # Detalhe (se couber)
-                #if detalhe and len(detalhe) < 30:  # Só mostra se for curto
-                    #detalhe_texto = f"Detalhe: {detalhe}"
-                    #draw.text((meio_x + 20, y_pos + 100), detalhe_texto, 
-                             #fill=cor_texto, font=fonte_pequena)
+                if detalhe and len(detalhe) < 30:  # Só mostra se for curto
+                    detalhe_texto = f"Detalhe: {detalhe}"
+                    draw.text((meio_x + 20, y_pos + 100), detalhe_texto, 
+                             fill=cor_texto, font=fonte_pequena)
             
             y_pos += altura_previsao + 20
         
@@ -1184,16 +1229,6 @@ def criar_poster_fallback_colunas(game: dict, predictions: dict, tipo: str) -> I
     
     return img
 
-
-
-
-        
-   
-
-
-
-
-
 def calcular_resultado_total(total_pontos: int, tendencia: str) -> str:
     """Calcula se a previsão de total foi Green ou Red"""
     if "Mais" in tendencia:
@@ -1221,7 +1256,6 @@ def calcular_resultado_vencedor(home_score: int, away_score: int, vencedor_previ
     elif vencedor_previsto in ["Casa", "Visitante", "Empate"]:
         return "🔴 RED"
     return "⚪ INDEFINIDO"
-
 
 def enviar_poster_telegram(poster_img: Image.Image, chat_id: str = TELEGRAM_CHAT_ID) -> bool:
     """Envia o pôster como imagem para o Telegram"""
@@ -1840,6 +1874,9 @@ def main():
             max_value=date.today() + timedelta(days=7)
         )
         
+        # CONVERSÃO CORRETA DA DATA PARA A API
+        data_str_api = obter_data_correta_para_api(data_jogos)
+        
         st.subheader("🔧 Parâmetros")
         janela_jogos = st.slider(
             "Janela de jogos para análise:",
@@ -1858,14 +1895,13 @@ def main():
         )
         
         st.subheader("⭐ Top 4 Jogos")
-        data_str = data_jogos.strftime("%Y-%m-%d")
         
         if st.button("🚀 Enviar Top 4 Pôsteres", type="primary", use_container_width=True):
             with st.spinner("Buscando melhores jogos e enviando pôsteres..."):
-                enviar_alerta_top4_jogos(data_str)
+                enviar_alerta_top4_jogos(data_str_api)
         
         if st.button("👀 Visualizar Top 4 Jogos", type="secondary", use_container_width=True):
-            top4_jogos = obter_top4_melhores_jogos(data_str)
+            top4_jogos = obter_top4_melhores_jogos(data_str_api)
             
             if top4_jogos:
                 st.sidebar.success(f"🎯 Top 4 Jogos para {data_jogos.strftime('%d/%m/%Y')}:")
@@ -1931,7 +1967,7 @@ def main():
     ])
     
     with tab1:
-        exibir_aba_analise_melhorada(data_jogos, janela_jogos, limite_confianca)
+        exibir_aba_analise_melhorada(data_jogos, data_str_api, janela_jogos, limite_confianca)
     
     with tab2:
         exibir_jogos_analisados()
@@ -1945,7 +1981,7 @@ def main():
     with tab5:
         testar_sistema_posteres()
 
-def exibir_aba_analise_melhorada(data_sel: date, janela: int, limite_confianca: int):
+def exibir_aba_analise_melhorada(data_sel: date, data_str_api: str, janela: int, limite_confianca: int):
     """Exibe análise dos jogos com interface melhorada"""
     st.header(f"🎯 Análise com Dados Reais 2024-2025 - {data_sel.strftime('%d/%m/%Y')}")
     
@@ -1960,12 +1996,10 @@ def exibir_aba_analise_melhorada(data_sel: date, janela: int, limite_confianca: 
         st.write("")
         st.write("")
         if st.button("🚀 ANALISAR JOGOS", type="primary", use_container_width=True):
-            analisar_jogos_com_dados_2025_melhorado(data_sel, top_n, janela, enviar_auto, limite_confianca)
+            analisar_jogos_com_dados_2025_melhorado(data_sel, data_str_api, top_n, janela, enviar_auto, limite_confianca)
 
-def analisar_jogos_com_dados_2025_melhorado(data_sel: date, top_n: int, janela: int, enviar_auto: bool, limite_confianca: int):
+def analisar_jogos_com_dados_2025_melhorado(data_sel: date, data_str_api: str, top_n: int, janela: int, enviar_auto: bool, limite_confianca: int):
     """Versão melhorada da análise com interface do primeiro código"""
-    data_str = data_sel.strftime("%Y-%m-%d")
-    
     progress_placeholder = st.empty()
     results_placeholder = st.empty()
     
@@ -1977,8 +2011,8 @@ def analisar_jogos_com_dados_2025_melhorado(data_sel: date, top_n: int, janela: 
         progress_bar = st.progress(0)
         status_text = st.empty()
     
-    # Busca jogos
-    jogos = obter_jogos_data(data_str)
+    # Busca jogos com data corrigida
+    jogos = obter_jogos_data(data_str_api)
     
     if not jogos:
         st.error("❌ Nenhum jogo encontrado para esta data")
@@ -2065,11 +2099,8 @@ def analisar_jogos_com_dados_2025_melhorado(data_sel: date, top_n: int, janela: 
                     
                     hora_jogo = jogo.get("date", "")
                     if hora_jogo:
-                        try:
-                            hora_dt = datetime.fromisoformat(hora_jogo.replace('Z', '+00:00'))
-                            st.write(f"**Horário:** {hora_dt.strftime('%H:%M')}")
-                        except:
-                            st.write(f"**Horário:** {hora_jogo[:10]}")
+                        data_str, hora_str = formatar_data_api_para_local(hora_jogo)
+                        st.write(f"**Horário:** {hora_str}")
                 
                 with col3:
                     st.subheader(away_team)
