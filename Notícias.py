@@ -594,4 +594,4 @@ def exibir_noticias(noticias: list, categoria: str, enviar_auto: bool):
         st.warning("⚠️ Nenhuma notícia encontrada para os critérios selecionados")
 
 if __name__ == "__main__":
-    main(
+    main()
