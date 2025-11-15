@@ -1127,6 +1127,244 @@ def verificar_resultados_finais(alerta_resultados: bool):
         st.info("ℹ️ Nenhum novo resultado final encontrado.")
 
 # =============================
+# NOVAS FUNÇÕES PARA ALERTAS COMPOSTOS
+# =============================
+
+def gerar_poster_multiplos_jogos(jogos: list, titulo: str = "ELITE MASTER - ALERTAS DO DIA") -> io.BytesIO:
+    """
+    Gera poster profissional com múltiplos jogos para alertas compostos
+    """
+    # Configurações do poster
+    LARGURA = 2400
+    ALTURA_TOPO = 400
+    ALTURA_POR_JOGO = 650  # Reduzido para caber mais jogos
+    PADDING = 100
+    
+    jogos_count = len(jogos)
+    altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
+
+    # Criar canvas
+    img = Image.new("RGB", (LARGURA, altura_total), color=(13, 25, 35))
+    draw = ImageDraw.Draw(img)
+
+    # Carregar fontes
+    FONTE_TITULO = criar_fonte(90)
+    FONTE_SUBTITULO = criar_fonte(55)
+    FONTE_TIMES = criar_fonte(50)
+    FONTE_VS = criar_fonte(45)
+    FONTE_INFO = criar_fonte(35)
+    FONTE_ANALISE = criar_fonte(45)
+    FONTE_CONFIANCA = criar_fonte(40)
+
+    # Título PRINCIPAL
+    try:
+        titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
+        titulo_w = titulo_bbox[2] - titulo_bbox[0]
+        draw.text(((LARGURA - titulo_w) // 2, 80), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
+    except:
+        draw.text((LARGURA//2 - 300, 80), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
+
+    # Data atual
+    data_atual = datetime.now().strftime("%d/%m/%Y")
+    data_text = f"DATA DE ANÁLISE: {data_atual}"
+    try:
+        data_bbox = draw.textbbox((0, 0), data_text, font=FONTE_SUBTITULO)
+        data_w = data_bbox[2] - data_bbox[0]
+        draw.text(((LARGURA - data_w) // 2, 180), data_text, font=FONTE_SUBTITULO, fill=(150, 200, 255))
+    except:
+        draw.text((LARGURA//2 - 150, 180), data_text, font=FONTE_SUBTITULO, fill=(150, 200, 255))
+
+    # Linha decorativa
+    draw.line([(LARGURA//4, 220), (3*LARGURA//4, 220)], fill=(255, 215, 0), width=4)
+
+    y_pos = ALTURA_TOPO
+
+    for idx, jogo in enumerate(jogos):
+        # Caixa do jogo
+        x0, y0 = PADDING, y_pos
+        x1, y1 = LARGURA - PADDING, y_pos + ALTURA_POR_JOGO - 30
+        
+        # Fundo com borda
+        draw.rectangle([x0, y0, x1, y1], fill=(25, 40, 55), outline=(100, 130, 160), width=4)
+
+        # Informações básicas
+        liga_text = jogo['liga'].upper()
+        try:
+            liga_bbox = draw.textbbox((0, 0), liga_text, font=FONTE_SUBTITULO)
+            liga_w = liga_bbox[2] - liga_bbox[0]
+            draw.text(((LARGURA - liga_w) // 2, y0 + 30), liga_text, font=FONTE_SUBTITULO, fill=(170, 190, 210))
+        except:
+            draw.text((LARGURA//2 - 150, y0 + 30), liga_text, font=FONTE_SUBTITULO, fill=(170, 190, 210))
+
+        # Horário
+        hora_format = jogo["hora"].strftime("%H:%M") if isinstance(jogo["hora"], datetime) else str(jogo["hora"])
+        hora_text = f"HORÁRIO: {hora_format} BRT"
+        try:
+            hora_bbox = draw.textbbox((0, 0), hora_text, font=FONTE_INFO)
+            hora_w = hora_bbox[2] - hora_bbox[0]
+            draw.text(((LARGURA - hora_w) // 2, y0 + 80), hora_text, font=FONTE_INFO, fill=(120, 180, 240))
+        except:
+            draw.text((LARGURA//2 - 100, y0 + 80), hora_text, font=FONTE_INFO, fill=(120, 180, 240))
+
+        # Times
+        home_text = jogo['home'][:18]  # Limitar tamanho
+        away_text = jogo['away'][:18]
+        
+        # Posicionar times
+        x_home = PADDING + 100
+        x_vs = LARGURA // 2
+        x_away = LARGURA - PADDING - 400
+        
+        # Nome dos times
+        draw.text((x_home, y0 + 140), home_text, font=FONTE_TIMES, fill=(255, 255, 255))
+        draw.text((x_away, y0 + 140), away_text, font=FONTE_TIMES, fill=(255, 255, 255))
+        
+        # VS centralizado
+        try:
+            vs_bbox = draw.textbbox((0, 0), "VS", font=FONTE_VS)
+            vs_w = vs_bbox[2] - vs_bbox[0]
+            draw.text((x_vs - vs_w//2, y0 + 140), "VS", font=FONTE_VS, fill=(255, 215, 0))
+        except:
+            draw.text((x_vs - 25, y0 + 140), "VS", font=FONTE_VS, fill=(255, 215, 0))
+
+        # Análise
+        y_analysis = y0 + 220
+        
+        textos_analise = [
+            f"TENDÊNCIA: {jogo['tendencia'].upper()}",
+            f"ESTIMATIVA: {jogo['estimativa']:.2f} GOLS",
+            f"CONFIANÇA: {jogo['confianca']:.0f}%"
+        ]
+        
+        cores = [(255, 215, 0), (100, 200, 255), (100, 255, 100)]
+        
+        for i, (text, cor) in enumerate(zip(textos_analise, cores)):
+            try:
+                bbox = draw.textbbox((0, 0), text, font=FONTE_ANALISE)
+                w = bbox[2] - bbox[0]
+                draw.text(((LARGURA - w) // 2, y_analysis + i * 60), text, font=FONTE_ANALISE, fill=cor)
+            except:
+                draw.text((PADDING + 100, y_analysis + i * 60), text, font=FONTE_ANALISE, fill=cor)
+
+        # Indicador de força
+        y_indicator = y_analysis + 200
+        if jogo['confianca'] >= 80:
+            indicador_text = "🔥 ALTA CONFIABILIDADE 🔥"
+            cor_indicador = (76, 175, 80)
+        elif jogo['confianca'] >= 60:
+            indicador_text = "⚡ CONFIABILIDADE MÉDIA ⚡"
+            cor_indicador = (255, 193, 7)
+        else:
+            indicador_text = "⚠️ CONFIABILIDADE MODERADA ⚠️"
+            cor_indicador = (255, 152, 0)
+
+        try:
+            ind_bbox = draw.textbbox((0, 0), indicador_text, font=FONTE_CONFIANCA)
+            ind_w = ind_bbox[2] - ind_bbox[0]
+            draw.text(((LARGURA - ind_w) // 2, y_indicator), indicador_text, font=FONTE_CONFIANCA, fill=cor_indicador)
+        except:
+            draw.text((LARGURA//2 - 150, y_indicator), indicador_text, font=FONTE_CONFIANCA, fill=cor_indicador)
+
+        y_pos += ALTURA_POR_JOGO
+
+    # Rodapé
+    rodape_text = f"ELITE MASTER SYSTEM • Gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+    try:
+        rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_INFO)
+        rodape_w = rodape_bbox[2] - rodape_bbox[0]
+        draw.text(((LARGURA - rodape_w) // 2, altura_total - 50), rodape_text, font=FONTE_INFO, fill=(100, 130, 160))
+    except:
+        draw.text((LARGURA//2 - 200, altura_total - 50), rodape_text, font=FONTE_INFO, fill=(100, 130, 160))
+
+    # Salvar imagem
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG", optimize=True, quality=95)
+    buffer.seek(0)
+    
+    return buffer
+
+def enviar_alerta_composto_poster(jogos_conf: list, threshold: int):
+    """Envia alerta composto com poster para múltiplos jogos"""
+    if not jogos_conf:
+        st.warning("⚠️ Nenhum jogo para gerar poster composto")
+        return False
+
+    try:
+        # Agrupar por data
+        jogos_por_data = {}
+        for jogo in jogos_conf:
+            data_jogo = jogo["hora"].date() if isinstance(jogo["hora"], datetime) else datetime.now().date()
+            if data_jogo not in jogos_por_data:
+                jogos_por_data[data_jogo] = []
+            jogos_por_data[data_jogo].append(jogo)
+
+        enviados = 0
+        for data, jogos_data in jogos_por_data.items():
+            data_str = data.strftime("%d/%m/%Y")
+            titulo = f"ELITE MASTER - ALERTAS {data_str}"
+            
+            st.info(f"🎨 Gerando poster composto para {data_str} com {len(jogos_data)} jogos...")
+            
+            # Ordenar por confiança
+            jogos_data_sorted = sorted(jogos_data, key=lambda x: x['confianca'], reverse=True)
+            
+            # Gerar poster
+            poster = gerar_poster_multiplos_jogos(jogos_data_sorted, titulo=titulo)
+            
+            # Calcular estatísticas
+            total_jogos = len(jogos_data)
+            confianca_media = sum(j['confianca'] for j in jogos_data) / total_jogos
+            jogos_alta_conf = sum(1 for j in jogos_data if j['confianca'] >= 80)
+            
+            caption = (
+                f"<b>🎯 ALERTAS DE GOLS - {data_str}</b>\n\n"
+                f"<b>📋 TOTAL DE JOGOS ANALISADOS: {total_jogos}</b>\n"
+                f"<b>🎯 CONFIANÇA MÉDIA: {confianca_media:.1f}%</b>\n"
+                f"<b>🔥 JOGOS ALTA CONFIANÇA: {jogos_alta_conf}</b>\n\n"
+                f"<b>📊 CRITÉRIOS DA ANÁLISE:</b>\n"
+                f"<b>• Limiar mínimo: {threshold}% de confiança</b>\n"
+                f"<b>• Dados estatísticos em tempo real</b>\n"
+                f"<b>• Análise preditiva avançada</b>\n\n"
+                f"<b>⚽ ELITE MASTER SYSTEM - ANÁLISE CONFIÁVEL</b>"
+            )
+            
+            st.info("📤 Enviando poster composto para o Telegram...")
+            ok = enviar_foto_telegram(poster, caption=caption, chat_id=TELEGRAM_CHAT_ID_ALT2)
+            
+            if ok:
+                st.success(f"🚀 Poster composto enviado para {data_str}!")
+                enviados += 1
+            else:
+                st.error(f"❌ Falha ao enviar poster composto para {data_str}")
+                
+        return enviados > 0
+        
+    except Exception as e:
+        st.error(f"❌ Erro crítico ao gerar/enviar poster composto: {str(e)}")
+        # Fallback para mensagem de texto
+        return enviar_alerta_composto_texto(jogos_conf)
+
+def enviar_alerta_composto_texto(jogos_conf: list) -> bool:
+    """Fallback para alerta composto em texto"""
+    try:
+        msg = "<b>🎯 ALERTAS COMPOSTOS - JOGOS DO DIA</b>\n\n"
+        
+        for jogo in sorted(jogos_conf, key=lambda x: x['confianca'], reverse=True)[:10]:  # Limitar a 10 jogos
+            hora_format = jogo["hora"].strftime("%H:%M") if isinstance(jogo["hora"], datetime) else str(jogo["hora"])
+            msg += (
+                f"🏟️ <b>{jogo['home']}</b> vs <b>{jogo['away']}</b>\n"
+                f"🕒 {hora_format} BRT | {jogo['liga']}\n"
+                f"📈 {jogo['tendencia']} | ⚽ {jogo['estimativa']:.2f} | 💯 {jogo['confianca']:.0f}%\n\n"
+            )
+        
+        msg += "<b>🔥 ELITE MASTER SYSTEM - ANÁLISE PREDITIVA</b>"
+        
+        return enviar_telegram(msg, chat_id=TELEGRAM_CHAT_ID_ALT2)
+    except Exception as e:
+        st.error(f"❌ Erro no fallback de texto: {e}")
+        return False
+
+# =============================
 # Funções de geração de imagem
 # =============================
 def baixar_imagem_url(url: str, timeout: int = 8) -> Image.Image | None:
@@ -2014,7 +2252,7 @@ def processar_jogos_avancado(data_selecionada, todas_ligas, liga_selecionada, to
                            threshold, threshold_ambas_marcam, threshold_cartoes, threshold_escanteios,
                            estilo_poster, alerta_individual, alerta_poster, alerta_top_jogos,
                            alerta_ambas_marcam, alerta_cartoes, alerta_escanteios):
-    """Processamento AVANÇADO com dados REAIS da API"""
+    """Processamento AVANÇADO com dados REAIS da API - CORRIGIDO"""
     
     hoje = data_selecionada.strftime("%Y-%m-%d")
     ligas_busca = LIGA_DICT.values() if todas_ligas else [LIGA_DICT[liga_selecionada]]
@@ -2041,11 +2279,28 @@ def processar_jogos_avancado(data_selecionada, todas_ligas, liga_selecionada, to
             
             # PREVISÃO ORIGINAL - GOLS
             estimativa, confianca, tendencia = calcular_tendencia(home_name, away_name, classificacao)
-            if confianca >= threshold:
+            
+            # Dados para previsão original de gols
+            jogo_data = {
+                "id": match["id"],
+                "home": home_name,
+                "away": away_name,
+                "tendencia": tendencia,
+                "estimativa": estimativa,
+                "confianca": confianca,
+                "liga": match.get("competition", {}).get("name", "Desconhecido"),
+                "hora": datetime.fromisoformat(match["utcDate"].replace("Z", "+00:00")) - timedelta(hours=3),
+                "status": match.get("status", "DESCONHECIDO"),
+                "fixture": match  # Manter fixture completa para alertas individuais
+            }
+            
+            top_jogos_gols.append(jogo_data)
+            
+            # Enviar alertas individuais se ativado
+            if alerta_individual and confianca >= threshold:
                 verificar_enviar_alerta(match, tendencia, estimativa, confianca, alerta_individual)
 
             # NOVAS PREVISÕES COM DADOS REAIS
-            
             # Ambas Marcam
             if alerta_ambas_marcam:
                 prob_ambas, conf_ambas, tend_ambas = calcular_previsao_ambas_marcam_real(
@@ -2084,29 +2339,18 @@ def processar_jogos_avancado(data_selecionada, todas_ligas, liga_selecionada, to
                         "liga": match.get("competition", {}).get("name", "Desconhecido"),
                         "hora": datetime.fromisoformat(match["utcDate"].replace("Z", "+00:00")) - timedelta(hours=3)
                     })
-
-            # Dados para previsão original de gols
-            top_jogos_gols.append({
-                "id": match["id"],
-                "home": home_name,
-                "away": away_name,
-                "tendencia": tendencia,
-                "estimativa": estimativa,
-                "confianca": confianca,
-                "liga": match.get("competition", {}).get("name", "Desconhecido"),
-                "hora": datetime.fromisoformat(match["utcDate"].replace("Z", "+00:00")) - timedelta(hours=3),
-                "status": match.get("status", "DESCONHECIDO")
-            })
         
         progress_bar.progress((i + 1) / total_ligas)
 
     # Resultados e Estatísticas
     st.success("✅ Processamento AVANÇADO concluído!")
     
+    # Filtrar jogos de gols por threshold
+    jogos_gols_filtrados = [j for j in top_jogos_gols if j["confianca"] >= threshold]
+    
     # Mostrar estatísticas detalhadas
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        jogos_gols_filtrados = [j for j in top_jogos_gols if j["confianca"] >= threshold]
         st.metric("🎯 Jogos Gols", len(jogos_gols_filtrados))
     with col2:
         st.metric("⚽ Ambas Marcam", len(top_jogos_ambas_marcam))
@@ -2115,15 +2359,26 @@ def processar_jogos_avancado(data_selecionada, todas_ligas, liga_selecionada, to
     with col4:
         st.metric("🔄 Escanteios", len(top_jogos_escanteios))
 
-    # Enviar alertas
+    # ENVIAR ALERTAS COMPOSTOS - CORREÇÃO PRINCIPAL
+    if alerta_poster and jogos_gols_filtrados:
+        st.info("📤 Enviando alertas compostos com poster...")
+        sucesso_poster = enviar_alerta_composto_poster(jogos_gols_filtrados, threshold)
+        if sucesso_poster:
+            st.success("🚀 Alertas compostos enviados com sucesso!")
+        else:
+            st.error("❌ Falha ao enviar alertas compostos")
+        
+    # Enviar outros alertas
     if alerta_top_jogos and jogos_gols_filtrados:
         enviar_top_jogos(jogos_gols_filtrados, top_n, alerta_top_jogos)
-        
-    if alerta_poster and jogos_gols_filtrados:
-        enviar_alerta_conf_criar_poster(jogos_gols_filtrados, threshold)
 
     # Mostrar resumo dos alertas
     st.subheader("📋 Resumo dos Alertas Gerados")
+    
+    if jogos_gols_filtrados:
+        st.write(f"**🎯 Gols (≥{threshold}%):** {len(jogos_gols_filtrados)} jogos")
+        for jogo in sorted(jogos_gols_filtrados, key=lambda x: x['confianca'], reverse=True)[:3]:
+            st.write(f"  - {jogo['home']} vs {jogo['away']} | {jogo['tendencia']} | Conf: {jogo['confianca']:.0f}%")
     
     if top_jogos_ambas_marcam:
         st.write(f"**⚽ Ambas Marcam:** {len(top_jogos_ambas_marcam)} jogos")
