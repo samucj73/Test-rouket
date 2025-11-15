@@ -71,7 +71,7 @@ def carregar_sessao():
                 logging.error("❌ Dados de sessão corrompidos - não é um dicionário")
                 return False
                 
-            # Verificar se as chaves essenciais existem
+            # Verificar se as chaves essenciais existen
             chaves_essenciais = ['historico', 'sistema_acertos', 'sistema_erros']
             if not all(chave in session_data for chave in chaves_essenciais):
                 logging.error("❌ Dados de sessão incompletos")
@@ -156,6 +156,7 @@ def enviar_previsao_super_simplificada(previsao):
     """Envia notificação de previsão super simplificada"""
     try:
         nome_estrategia = previsao['nome']
+        numeros_apostar = sorted(previsao['numeros_apostar'])
         
         if 'Zonas' in nome_estrategia:
             # Mensagem super simplificada para Zonas - apenas o número da zona
@@ -230,12 +231,42 @@ def enviar_previsao_super_simplificada(previsao):
         
         if 'telegram_token' in st.session_state and 'telegram_chat_id' in st.session_state:
             if st.session_state.telegram_token and st.session_state.telegram_chat_id:
+                # 🔔 NOVO: Enviar alerta alternativo simplificado
+                enviar_alerta_numeros_simplificado(previsao)
                 enviar_telegram(f"🔔 PREVISÃO\n{mensagem}")
                 
         # Salvar sessão após nova previsão
         salvar_sessao()
     except Exception as e:
         logging.error(f"Erro ao enviar previsão: {e}")
+
+# 🔔 NOVA FUNÇÃO: Alerta alternativo simplificado com números
+def enviar_alerta_numeros_simplificado(previsao):
+    """Envia alerta alternativo super simplificado com os números para apostar"""
+    try:
+        nome_estrategia = previsao['nome']
+        numeros_apostar = sorted(previsao['numeros_apostar'])
+        
+        # Formatar números em duas linhas
+        metade = len(numeros_apostar) // 2
+        linha1 = " ".join(map(str, numeros_apostar[:metade]))
+        linha2 = " ".join(map(str, numeros_apostar[metade:]))
+        
+        # Mensagem super simplificada
+        if 'Zonas' in nome_estrategia:
+            emoji = "📍"
+        elif 'ML' in nome_estrategia:
+            emoji = "🤖"
+        else:
+            emoji = "💰"
+            
+        mensagem_simplificada = f"{emoji} APOSTAR AGORA\n{linha1}\n{linha2}"
+        
+        enviar_telegram(mensagem_simplificada)
+        logging.info("🔔 Alerta simplificado enviado para Telegram")
+        
+    except Exception as e:
+        logging.error(f"Erro ao enviar alerta simplificado: {e}")
 
 def enviar_resultado_super_simplificado(numero_real, acerto, nome_estrategia, zona_acertada=None):
     """Envia notificação de resultado super simplificado"""
@@ -308,11 +339,28 @@ def enviar_resultado_super_simplificado(numero_real, acerto, nome_estrategia, zo
         if 'telegram_token' in st.session_state and 'telegram_chat_id' in st.session_state:
             if st.session_state.telegram_token and st.session_state.telegram_chat_id:
                 enviar_telegram(f"📢 RESULTADO\n{mensagem}")
+                # 🔔 NOVO: Enviar alerta de conferência simplificado
+                enviar_alerta_conferencia_simplificado(numero_real, acerto, nome_estrategia)
                 
         # Salvar sessão após resultado
         salvar_sessao()
     except Exception as e:
         logging.error(f"Erro ao enviar resultado: {e}")
+
+# 🔔 NOVA FUNÇÃO: Alerta de conferência simplificado
+def enviar_alerta_conferencia_simplificado(numero_real, acerto, nome_estrategia):
+    """Envia alerta de conferência super simplificado"""
+    try:
+        if acerto:
+            mensagem = f"🎉 ACERTOU! {numero_real}"
+        else:
+            mensagem = f"💥 ERROU! {numero_real}"
+            
+        enviar_telegram(mensagem)
+        logging.info("🔔 Alerta de conferência enviado para Telegram")
+        
+    except Exception as e:
+        logging.error(f"Erro ao enviar alerta de conferência: {e}")
 
 def enviar_rotacao_automatica(estrategia_anterior, estrategia_nova):
     """Envia notificação de rotação automática"""
@@ -2513,6 +2561,45 @@ with st.sidebar.expander("🔔 Configurações do Telegram", expanded=False):
                 st.error(f"❌ Erro ao enviar mensagem: {e}")
         else:
             st.error("❌ Preencha token e chat ID primeiro")
+
+# Configurações dos Alertas Alternativos
+with st.sidebar.expander("🔔 Alertas Alternativos", expanded=False):
+    st.write("**Alertas Simplificados do Telegram**")
+    
+    st.info("""
+    **📱 Alertas Ativados:**
+    - 🔔 **Alerta de Aposta:** Números em 2 linhas
+    - 📢 **Alerta de Resultado:** Confirmação simples
+    - 🎯 **Previsão Detalhada:** Mensagem completa
+    """)
+    
+    # Opção para desativar alertas alternativos
+    alertas_alternativos = st.checkbox(
+        "Ativar Alertas Simplificados", 
+        value=True,
+        help="Envia alertas super simples junto com os detalhados"
+    )
+    
+    if not alertas_alternativos:
+        st.warning("⚠️ Alertas simplificados desativados")
+    
+    # Teste dos alertas simplificados
+    if st.button("Testar Alertas Simplificados"):
+        if st.session_state.telegram_token and st.session_state.telegram_chat_id:
+            # Simular uma previsão de teste
+            previsao_teste = {
+                'nome': 'Zonas Teste',
+                'numeros_apostar': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+                'zonas_envolvidas': ['Vermelha']
+            }
+            
+            try:
+                enviar_alerta_numeros_simplificado(previsao_teste)
+                st.success("✅ Alerta simplificado de teste enviado!")
+            except Exception as e:
+                st.error(f"❌ Erro: {e}")
+        else:
+            st.error("❌ Configure o Telegram primeiro")
 
 # Seleção de Estratégia
 estrategia = st.sidebar.selectbox(
