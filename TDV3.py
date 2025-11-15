@@ -156,100 +156,163 @@ def enviar_previsao_super_simplificada(previsao):
     """Envia notificação de previsão super simplificada"""
     try:
         nome_estrategia = previsao['nome']
-        numeros_apostar = previsao['numeros_apostar']
-        
-        # ✅ FORMATAR 15 NÚMEROS EM DUAS LINHAS
-        if len(numeros_apostar) > 8:
-            linha1 = numeros_apostar[:8]
-            linha2 = numeros_apostar[8:15] if len(numeros_apostar) > 15 else numeros_apostar[8:]
-            numeros_str = f"{' '.join(map(str, linha1))}\n{' '.join(map(str, linha2))}"
-        else:
-            numeros_str = ' '.join(map(str, numeros_apostar))
         
         if 'Zonas' in nome_estrategia:
+            # Mensagem super simplificada para Zonas - apenas o número da zona
             zonas_envolvidas = previsao.get('zonas_envolvidas', [])
             if len(zonas_envolvidas) > 1:
+                # Mostrar ambas as zonas para apostas duplas
                 zona1 = zonas_envolvidas[0]
                 zona2 = zonas_envolvidas[1]
+                
+                # Converter nomes das zonas para números dos núcleos
                 nucleo1 = "7" if zona1 == 'Vermelha' else "10" if zona1 == 'Azul' else "2"
                 nucleo2 = "7" if zona2 == 'Vermelha' else "10" if zona2 == 'Azul' else "2"
-                mensagem = f"📍 Núcleos {nucleo1} + {nucleo2}\n🎯 Números:\n{numeros_str}"
+                
+                mensagem = f"📍 Núcleos {nucleo1} + {nucleo2}"
             else:
                 zona = previsao.get('zona', '')
-                nucleo = "7" if zona == 'Vermelha' else "10" if zona == 'Azul' else "2"
-                mensagem = f"📍 Núcleo {nucleo}\n🎯 Números:\n{numeros_str}"
+                # Mostrar número do núcleo
+                if zona == 'Vermelha':
+                    mensagem = "📍 Núcleo 7"
+                elif zona == 'Azul':
+                    mensagem = "📍 Núcleo 10"
+                elif zona == 'Amarela':
+                    mensagem = "📍 Núcleo 2"
+                else:
+                    mensagem = f"📍 Núcleo {zona}"
             
         elif 'Machine Learning' in nome_estrategia or 'ML' in nome_estrategia or 'CatBoost' in nome_estrategia:
+            # CORREÇÃO: Verificar múltiplas possibilidades do nome ML
             zonas_envolvidas = previsao.get('zonas_envolvidas', [])
             if len(zonas_envolvidas) > 1:
+                # Mostrar ambas as zonas para apostas duplas
                 zona1 = zonas_envolvidas[0]
                 zona2 = zonas_envolvidas[1]
+                
+                # Converter nomes das zonas para números dos núcleos
                 nucleo1 = "7" if zona1 == 'Vermelha' else "10" if zona1 == 'Azul' else "2"
                 nucleo2 = "7" if zona2 == 'Vermelha' else "10" if zona2 == 'Azul' else "2"
-                mensagem = f"🤖 Núcleos {nucleo1} + {nucleo2}\n🎯 Números:\n{numeros_str}"
+                
+                mensagem = f"🤖 Núcleos {nucleo1} + {nucleo2}"
             else:
                 zona_ml = previsao.get('zona_ml', '')
-                nucleo = "7" if zona_ml == 'Vermelha' else "10" if zona_ml == 'Azul' else "2"
-                mensagem = f"🤖 Núcleo {nucleo}\n🎯 Números:\n{numeros_str}"
+                
+                # NOVA LÓGICA: Verificar se há números específicos na previsão
+                numeros_apostar = previsao.get('numeros_apostar', [])
+                
+                # Verificar se o número 2 está nos números para apostar
+                if 2 in numeros_apostar:
+                    mensagem = "🤖 Zona 2"
+                # Verificar se o número 7 está nos números para apostar
+                elif 7 in numeros_apostar:
+                    mensagem = "🤖 Zona 7"
+                # Verificar se o número 10 está nos números para apostar
+                elif 10 in numeros_apostar:
+                    mensagem = "🤖 Zona 10"
+                else:
+                    # Fallback para a lógica original
+                    if zona_ml == 'Vermelha':
+                        mensagem = "🤖 Zona 7"
+                    elif zona_ml == 'Azul':
+                        mensagem = "🤖 Zona 10"  
+                    elif zona_ml == 'Amarela':
+                        mensagem = "🤖 Zona 2"
+                    else:
+                        mensagem = f"🤖 Zona {zona_ml}"
             
         else:
-            mensagem = f"💰 {previsao['nome']}\n🎯 Números:\n{numeros_str}"
+            # Mensagem para Midas
+            mensagem = f"💰 {previsao['nome']}"
         
-        # ✅ ENVIAR NOTIFICAÇÃO
-        st.toast(f"🎯 Nova Previsão - {nome_estrategia}", icon="🔥")
-        st.warning(f"🔔 PREVISÃO ATIVA\n{mensagem}")
+        st.toast(f"🎯 Nova Previsão", icon="🔥")
+        st.warning(f"🔔 {mensagem}")
         
-        # ✅ ENVIAR PARA TELEGRAM SE CONFIGURADO
         if 'telegram_token' in st.session_state and 'telegram_chat_id' in st.session_state:
             if st.session_state.telegram_token and st.session_state.telegram_chat_id:
-                enviar_telegram(f"🔔 NOVA PREVISÃO - {nome_estrategia}\n{mensagem}")
+                enviar_telegram(f"🔔 PREVISÃO\n{mensagem}")
                 
-        # ✅ SALVAR SESSÃO
+        # Salvar sessão após nova previsão
         salvar_sessao()
-        
     except Exception as e:
-        logging.error(f"❌ Erro ao enviar previsão: {e}")
-        st.error(f"❌ Erro no alerta: {e}")
+        logging.error(f"Erro ao enviar previsão: {e}")
 
 def enviar_resultado_super_simplificado(numero_real, acerto, nome_estrategia, zona_acertada=None):
     """Envia notificação de resultado super simplificado"""
     try:
         if acerto:
-            if zona_acertada:
+            if 'Zonas' in nome_estrategia and zona_acertada:
+                # CORREÇÃO: Mostrar número do núcleo em vez do nome da zona
                 if '+' in zona_acertada:
+                    # Múltiplas zonas acertadas
                     zonas = zona_acertada.split('+')
                     nucleos = []
                     for zona in zonas:
-                        nucleo = "7" if zona == 'Vermelha' else "10" if zona == 'Azul' else "2"
-                        nucleos.append(nucleo)
+                        if zona == 'Vermelha':
+                            nucleos.append("7")
+                        elif zona == 'Azul':
+                            nucleos.append("10")
+                        elif zona == 'Amarela':
+                            nucleos.append("2")
+                        else:
+                            nucleos.append(zona)
                     nucleo_str = "+".join(nucleos)
-                    mensagem = f"✅ ACERTO! Núcleos {nucleo_str}\n🎲 Número sorteado: {numero_real}"
+                    mensagem = f"✅ Acerto Núcleos {nucleo_str}\n🎲 Número: {numero_real}"
                 else:
-                    nucleo = "7" if zona_acertada == 'Vermelha' else "10" if zona_acertada == 'Azul' else "2"
-                    mensagem = f"✅ ACERTO! Núcleo {nucleo}\n🎲 Número sorteado: {numero_real}"
+                    # Apenas uma zona
+                    if zona_acertada == 'Vermelha':
+                        nucleo = "7"
+                    elif zona_acertada == 'Azul':
+                        nucleo = "10"
+                    elif zona_acertada == 'Amarela':
+                        nucleo = "2"
+                    else:
+                        nucleo = zona_acertada
+                    mensagem = f"✅ Acerto Núcleo {nucleo}\n🎲 Número: {numero_real}"
+            elif 'ML' in nome_estrategia and zona_acertada:
+                # CORREÇÃO: Mostrar número do núcleo em vez do nome da zona
+                if '+' in zona_acertada:
+                    # Múltiplas zonas acertadas
+                    zonas = zona_acertada.split('+')
+                    nucleos = []
+                    for zona in zonas:
+                        if zona == 'Vermelha':
+                            nucleos.append("7")
+                        elif zona == 'Azul':
+                            nucleos.append("10")
+                        elif zona == 'Amarela':
+                            nucleos.append("2")
+                        else:
+                            nucleos.append(zona)
+                    nucleo_str = "+".join(nucleos)
+                    mensagem = f"✅ Acerto Núcleos {nucleo_str}\n🎲 Número: {numero_real}"
+                else:
+                    # Apenas uma zona
+                    if zona_acertada == 'Vermelha':
+                        nucleo = "7"
+                    elif zona_acertada == 'Azul':
+                        nucleo = "10"
+                    elif zona_acertada == 'Amarela':
+                        nucleo = "2"
+                    else:
+                        nucleo = zona_acertada
+                    mensagem = f"✅ Acerto Núcleo {nucleo}\n🎲 Número: {numero_real}"
             else:
-                mensagem = f"✅ ACERTO!\n🎲 Número sorteado: {numero_real}"
+                mensagem = f"✅ Acerto\n🎲 Número: {numero_real}"
         else:
-            mensagem = f"❌ ERRO\n🎲 Número sorteado: {numero_real}"
+            mensagem = f"❌ Erro\n🎲 Número: {numero_real}"
         
-        # ✅ ENVIAR NOTIFICAÇÃO
-        st.toast(f"🎲 Resultado - {'Acerto' if acerto else 'Erro'}", icon="✅" if acerto else "❌")
-        if acerto:
-            st.success(f"📢 RESULTADO\n{mensagem}")
-        else:
-            st.error(f"📢 RESULTADO\n{mensagem}")
+        st.toast(f"🎲 Resultado", icon="✅" if acerto else "❌")
+        st.success(f"📢 {mensagem}") if acerto else st.error(f"📢 {mensagem}")
         
-        # ✅ ENVIAR PARA TELEGRAM
         if 'telegram_token' in st.session_state and 'telegram_chat_id' in st.session_state:
             if st.session_state.telegram_token and st.session_state.telegram_chat_id:
-                enviar_telegram(f"📢 RESULTADO - {nome_estrategia}\n{mensagem}")
+                enviar_telegram(f"📢 RESULTADO\n{mensagem}")
                 
-        # ✅ SALVAR SESSÃO
+        # Salvar sessão após resultado
         salvar_sessao()
-        
     except Exception as e:
-        logging.error(f"❌ Erro ao enviar resultado: {e}")
-        st.error(f"❌ Erro no resultado: {e}")
+        logging.error(f"Erro ao enviar resultado: {e}")
 
 def enviar_rotacao_automatica(estrategia_anterior, estrategia_nova):
     """Envia notificação de rotação automática"""
@@ -269,13 +332,9 @@ def enviar_rotacao_automatica(estrategia_anterior, estrategia_nova):
 def enviar_telegram(mensagem):
     """Envia mensagem para o Telegram"""
     try:
-        token = st.session_state.get('telegram_token', '')
-        chat_id = st.session_state.get('telegram_chat_id', '')
+        token = st.session_state.telegram_token
+        chat_id = st.session_state.telegram_chat_id
         
-        if not token or not chat_id:
-            logging.warning("⚠️ Token ou Chat ID do Telegram não configurado")
-            return
-            
         url = f"https://api.telegram.org/bot{token}/sendMessage"
         payload = {
             "chat_id": chat_id,
@@ -285,11 +344,11 @@ def enviar_telegram(mensagem):
         
         response = requests.post(url, json=payload, timeout=10)
         if response.status_code == 200:
-            logging.info("✅ Mensagem enviada para Telegram com sucesso")
+            logging.info("Mensagem enviada para Telegram com sucesso")
         else:
-            logging.error(f"❌ Erro ao enviar para Telegram: {response.status_code} - {response.text}")
+            logging.error(f"Erro ao enviar para Telegram: {response.status_code}")
     except Exception as e:
-        logging.error(f"❌ Erro na conexão com Telegram: {e}")
+        logging.error(f"Erro na conexão com Telegram: {e}")
 
 # =============================
 # CONFIGURAÇÕES
@@ -2171,36 +2230,46 @@ class SistemaRoletaCompleto:
             
         self.contador_sorteios_global += 1
             
-        # ✅ PRIMEIRO: Processar o número nas estratégias
-        self.estrategia_zonas.adicionar_numero(numero_real)
-        self.estrategia_midas.adicionar_numero(numero_real)
-        self.estrategia_ml.adicionar_numero(numero_real)
-        
-        # ✅ DEPOIS: Verificar se há previsão ativa para conferir
         if self.previsao_ativa:
+            # VERIFICAÇÃO DE ACERTO PARA MÚLTIPLAS ZONAS
             acerto = False
             zonas_acertadas = []
             nome_estrategia = self.previsao_ativa['nome']
-            numeros_apostar = self.previsao_ativa['numeros_apostar']
             
-            # ✅ VERIFICAÇÃO SIMPLIFICADA E CORRETA
-            acerto = numero_real in numeros_apostar
+            # Verificar se o número está em qualquer uma das zonas envolvidas
+            zonas_envolvidas = self.previsao_ativa.get('zonas_envolvidas', [])
+            if not zonas_envolvidas:
+                # Fallback para lógica antiga
+                acerto = numero_real in self.previsao_ativa['numeros_apostar']
+                if acerto:
+                    # Descobrir qual zona acertou
+                    if 'Zonas' in nome_estrategia:
+                        for zona, numeros in self.estrategia_zonas.numeros_zonas.items():
+                            if numero_real in numeros:
+                                zonas_acertadas.append(zona)
+                                break
+                    elif 'ML' in nome_estrategia:
+                        for zona, numeros in self.estrategia_ml.numeros_zonas_ml.items():
+                            if numero_real in numeros:
+                                zonas_acertadas.append(zona)
+                                break
+            else:
+                # Nova lógica para múltiplas zonas
+                for zona in zonas_envolvidas:
+                    if 'Zonas' in nome_estrategia:
+                        numeros_zona = self.estrategia_zonas.numeros_zonas[zona]
+                    elif 'ML' in nome_estrategia:
+                        numeros_zona = self.estrategia_ml.numeros_zonas_ml[zona]
+                    else:
+                        continue
+                    
+                    if numero_real in numeros_zona:
+                        acerto = True
+                        zonas_acertadas.append(zona)
             
-            # ✅ DETECTAR ZONAS ACERTADAS
-            if acerto:
-                if 'Zonas' in nome_estrategia:
-                    for zona, numeros in self.estrategia_zonas.numeros_zonas.items():
-                        if numero_real in numeros:
-                            zonas_acertadas.append(zona)
-                elif 'ML' in nome_estrategia:
-                    for zona, numeros in self.estrategia_ml.numeros_zonas_ml.items():
-                        if numero_real in numeros:
-                            zonas_acertadas.append(zona)
-            
-            # ✅ APLICAR ROTAÇÃO AUTOMÁTICA
+            # Verifica e aplica rotação automática se necessário
             rotacionou = self.rotacionar_estrategia_automaticamente(acerto, nome_estrategia)
             
-            # ✅ ATUALIZAR ESTATÍSTICAS
             if nome_estrategia not in self.estrategias_contador:
                 self.estrategias_contador[nome_estrategia] = {'acertos': 0, 'total': 0}
             
@@ -2211,7 +2280,7 @@ class SistemaRoletaCompleto:
             else:
                 self.erros += 1
             
-            # ✅ ENVIAR RESULTADO
+            # Envia resultado super simplificado
             zona_acertada_str = "+".join(zonas_acertadas) if zonas_acertadas else None
             enviar_resultado_super_simplificado(numero_real, acerto, nome_estrategia, zona_acertada_str)
             
@@ -2219,16 +2288,19 @@ class SistemaRoletaCompleto:
                 'numero': numero_real,
                 'acerto': acerto,
                 'estrategia': nome_estrategia,
-                'previsao': numeros_apostar,
+                'previsao': self.previsao_ativa['numeros_apostar'],
                 'rotacionou': rotacionou,
                 'zona_acertada': zona_acertada_str,
-                'zonas_envolvidas': self.previsao_ativa.get('zonas_envolvidas', []),
+                'zonas_envolvidas': zonas_envolvidas,
                 'tipo_aposta': self.previsao_ativa.get('tipo', 'unica')
             })
             
             self.previsao_ativa = None
         
-        # ✅ FINALMENTE: Gerar nova previsão
+        self.estrategia_zonas.adicionar_numero(numero_real)
+        self.estrategia_midas.adicionar_numero(numero_real)
+        self.estrategia_ml.adicionar_numero(numero_real)
+        
         nova_estrategia = None
         
         if self.estrategia_selecionada == "Zonas":
