@@ -149,8 +149,8 @@ def testar_newsapi():
     except Exception as e:
         return False, f"❌ NewsAPI erro: {e}"
 
-def obter_noticias_newsapi(termo: str, limite: int = 5) -> list:
-    """Obtém notícias da NewsAPI com um termo específico"""
+def obter_noticias_newsapi(termo: str, limite: int = 5, data_inicio: str = None, data_fim: str = None) -> list:
+    """Obtém notícias da NewsAPI com um termo específico e filtro de data"""
     noticias = []
     
     try:
@@ -161,6 +161,12 @@ def obter_noticias_newsapi(termo: str, limite: int = 5) -> list:
             'pageSize': limite,
             'apiKey': NEWS_API_KEY
         }
+        
+        # Adicionar filtro de data se fornecido
+        if data_inicio:
+            params['from'] = data_inicio
+        if data_fim:
+            params['to'] = data_fim
         
         response = requests.get(f"{BASE_URL_NEWS}/everything", params=params, timeout=10)
         
@@ -189,15 +195,30 @@ def obter_noticias_newsapi(termo: str, limite: int = 5) -> list:
     
     return noticias
 
-def obter_noticias_esportivas(ligas_selecionadas: list = None, limite: int = 10) -> list:
+def obter_noticias_esportivas(ligas_selecionadas: list = None, limite: int = 10, data_inicio: str = None, data_fim: str = None) -> list:
     """
-    Obtém notícias esportivas filtradas por ligas
+    Obtém notícias esportivas filtradas por ligas e data
     """
     if ligas_selecionadas is None:
         ligas_selecionadas = []
     
+    # Criar chave de cache incluindo as datas
+    cache_key_parts = []
+    if ligas_selecionadas:
+        cache_key_parts.append('_'.join(ligas_selecionadas))
+    else:
+        cache_key_parts.append('todas')
+    
+    cache_key_parts.append(str(limite))
+    
+    if data_inicio:
+        cache_key_parts.append(f"de_{data_inicio}")
+    if data_fim:
+        cache_key_parts.append(f"ate_{data_fim}")
+    
+    cache_key = '_'.join(cache_key_parts)
+    
     cache = carregar_json(CACHE_NOTICIAS)
-    cache_key = f"{'_'.join(ligas_selecionadas)}_{limite}" if ligas_selecionadas else f"todas_{limite}"
     
     # Verificar cache (30 minutos para notícias)
     if cache_key in cache:
@@ -219,7 +240,7 @@ def obter_noticias_esportivas(ligas_selecionadas: list = None, limite: int = 10)
         # Se nenhuma liga selecionada, buscar notícias gerais
         if not ligas_selecionadas:
             # Notícias gerais de futebol
-            noticias_gerais = obter_noticias_newsapi("futebol OR football", limite=8)
+            noticias_gerais = obter_noticias_newsapi("futebol OR football", limite=8, data_inicio=data_inicio, data_fim=data_fim)
             noticias.extend(noticias_gerais)
         else:
             # Buscar notícias específicas por liga
@@ -227,7 +248,7 @@ def obter_noticias_esportivas(ligas_selecionadas: list = None, limite: int = 10)
                 if liga in LIGAS_DICT:
                     # Usar o primeiro termo da lista para busca
                     termo_principal = LIGAS_DICT[liga][0]
-                    noticias_liga = obter_noticias_newsapi(termo_principal, limite=4)
+                    noticias_liga = obter_noticias_newsapi(termo_principal, limite=4, data_inicio=data_inicio, data_fim=data_fim)
                     
                     # Marcar a categoria correta
                     for noticia in noticias_liga:
@@ -448,12 +469,12 @@ def main():
     
     # Header
     st.title("📰 ELITE MASTER NEWS")
-    st.markdown("### Sistema de Seleção de Notícias por Liga")
-    st.markdown("**Selecione as ligas e escolha quais notícias enviar**")
+    st.markdown("### Sistema de Seleção de Notícias por Liga e Data")
+    st.markdown("**Selecione as ligas, datas e escolha quais notícias enviar**")
     
     st.markdown("---")
     
-    # Sidebar - Seleção de Ligas
+    # Sidebar - Seleção de Ligas e Data
     with st.sidebar:
         st.header("🏆 Seleção de Ligas")
         
@@ -473,6 +494,40 @@ def main():
         nba_selecionada = st.checkbox("NBA", value=False, key="liga_nba")
         if nba_selecionada:
             ligas_selecionadas.append("NBA")
+        
+        st.markdown("---")
+        
+        st.header("📅 Filtro por Data")
+        
+        # Opções de data
+        opcao_data = st.radio(
+            "Período das notícias:",
+            ["Hoje", "Últimos 7 dias", "Personalizado"],
+            index=0
+        )
+        
+        data_inicio = None
+        data_fim = None
+        
+        if opcao_data == "Hoje":
+            data_inicio = datetime.now().strftime('%Y-%m-%d')
+            data_fim = datetime.now().strftime('%Y-%m-%d')
+            st.info(f"🔍 Buscando notícias de: {data_inicio}")
+            
+        elif opcao_data == "Últimos 7 dias":
+            data_inicio = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
+            data_fim = datetime.now().strftime('%Y-%m-%d')
+            st.info(f"🔍 Buscando notícias de: {data_inicio} até {data_fim}")
+            
+        elif opcao_data == "Personalizado":
+            col_data1, col_data2 = st.columns(2)
+            with col_data1:
+                data_inicio = st.date_input("Data inicial", value=datetime.now() - timedelta(days=7))
+            with col_data2:
+                data_fim = st.date_input("Data final", value=datetime.now())
+            
+            data_inicio = data_inicio.strftime('%Y-%m-%d')
+            data_fim = data_fim.strftime('%Y-%m-%d')
         
         st.markdown("---")
         
@@ -504,6 +559,8 @@ def main():
             else:
                 st.session_state.ligas_selecionadas = ligas_selecionadas
                 st.session_state.limite_noticias = limite_noticias
+                st.session_state.data_inicio = data_inicio
+                st.session_state.data_fim = data_fim
                 # Limpar seleções anteriores
                 if 'noticias_selecionadas' in st.session_state:
                     st.session_state.noticias_selecionadas = []
@@ -532,19 +589,34 @@ def main():
     if 'ligas_selecionadas' in st.session_state:
         ligas_selecionadas = st.session_state.ligas_selecionadas
         limite_noticias = st.session_state.get('limite_noticias', 10)
+        data_inicio = st.session_state.get('data_inicio')
+        data_fim = st.session_state.get('data_fim')
         
-        with st.spinner(f"🔍 Buscando {limite_noticias} notícias para {', '.join(ligas_selecionadas)}..."):
-            noticias = obter_noticias_esportivas(ligas_selecionadas, limite_noticias)
+        # Mostrar informações do filtro
+        info_filtro = f"para {', '.join(ligas_selecionadas)}"
+        if data_inicio and data_fim:
+            if data_inicio == data_fim:
+                info_filtro += f" no dia {data_inicio}"
+            else:
+                info_filtro += f" de {data_inicio} até {data_fim}"
+        
+        with st.spinner(f"🔍 Buscando {limite_noticias} notícias {info_filtro}..."):
+            noticias = obter_noticias_esportivas(
+                ligas_selecionadas, 
+                limite_noticias, 
+                data_inicio, 
+                data_fim
+            )
             
             if noticias:
-                st.success(f"✅ {len(noticias)} notícias encontradas!")
+                st.success(f"✅ {len(noticias)} notícias encontradas {info_filtro}!")
                 
                 # Inicializar session state para notícias selecionadas
                 if 'noticias_selecionadas' not in st.session_state:
                     st.session_state.noticias_selecionadas = []
                 
                 # Estatísticas
-                col_stats1, col_stats2, col_stats3 = st.columns(3)
+                col_stats1, col_stats2, col_stats3, col_stats4 = st.columns(4)
                 with col_stats1:
                     oficiais = sum(1 for n in noticias if n.get('prioridade') == 'alta')
                     st.metric("🔴 Notícias Oficiais", oficiais)
@@ -552,6 +624,14 @@ def main():
                     st.metric("📰 Total de Notícias", len(noticias))
                 with col_stats3:
                     st.metric("🏆 Ligas Selecionadas", len(ligas_selecionadas))
+                with col_stats4:
+                    # Contar notícias por período
+                    if data_inicio:
+                        hoje = datetime.now().strftime('%Y-%m-%d')
+                        if data_inicio == hoje:
+                            st.metric("📅 Período", "Hoje")
+                        else:
+                            st.metric("📅 Período", f"{data_inicio}")
                 
                 st.markdown("---")
                 
@@ -619,17 +699,18 @@ def main():
                     st.info("ℹ️ Selecione algumas notícias usando as checkboxes para habilitar o envio")
                 
             else:
-                st.error("❌ Nenhuma notícia encontrada para as ligas selecionadas")
-                st.info("💡 Dica: Tente selecionar diferentes ligas ou testar as APIs no menu lateral")
+                st.error("❌ Nenhuma notícia encontrada para os critérios selecionados")
+                st.info("💡 Dica: Tente selecionar diferentes ligas, ajustar as datas ou testar as APIs no menu lateral")
     
     else:
         # Tela inicial
         st.info("🎯 **Como usar:**")
         st.markdown("""
         1. **🏆 Selecione as ligas** na sidebar que você quer acompanhar
-        2. **🔍 Clique em 'Buscar Notícias'** para carregar as notícias
-        3. **✅ Marque as notícias** que você quer enviar usando as checkboxes
-        4. **🚀 Clique em 'Enviar Selecionadas'** para enviar para o Telegram
+        2. **📅 Escolha o período** das notícias (Hoje, Últimos 7 dias ou Personalizado)
+        3. **🔍 Clique em 'Buscar Notícias'** para carregar as notícias
+        4. **✅ Marque as notícias** que você quer enviar usando as checkboxes
+        5. **🚀 Clique em 'Enviar Selecionadas'** para enviar para o Telegram
         
         **💡 Dica:** Use o botão **'Testar APIs'** na sidebar para verificar se as APIs estão funcionando!
         """)
