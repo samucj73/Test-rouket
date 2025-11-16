@@ -1334,9 +1334,9 @@ def gerar_poster_multiplos_jogos(jogos: list, titulo: str = "ELITE MASTER - ALER
             try:
                 bbox = draw.textbbox((0, 0), text, font=FONTE_ANALISE)
                 w = bbox[2] - bbox[0]
-                draw.text(((LARGURA - w) // 2, y_analysis + i * 45), text, font=FONTE_ANALISE, fill=cor)
+                draw.text(((LARGURA - w) // 2, y_analysis + i * 90), text, font=FONTE_ANALISE, fill=cor)
             except:
-                draw.text((PADDING + 100, y_analysis + i * 45), text, font=FONTE_ANALISE, fill=cor)
+                draw.text((PADDING + 100, y_analysis + i * 90), text, font=FONTE_ANALISE, fill=cor)
 
         # Indicador de força
         y_indicator = y_analysis + 150
