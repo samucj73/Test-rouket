@@ -745,7 +745,7 @@ def enviar_alerta_telegram_ambas_marcam(fixture: dict, tendencia: str, probabili
         f"<b>📅 {data_formatada}</b> | <b>⏰ {hora_formatada} BRT</b>\n\n"
         f"<b>🏠 {home}</b> vs <b>✈️ {away}</b>\n\n"
         f"<b>{emoji} Previsão: {tendencia}</b>\n"
-        f"<b>📊 Probabilidade: {probabilidade:.1f}%</b>\n"
+        #f"<b>📊 Probabilidade: {probabilidade:.1f}%</b>\n"
         f"<b>🎯 Confiança: {confianca:.0f}%</b>\n\n"
         f"<b>⚽ ELITE MASTER - ANÁLISE AMBAS MARCAM</b>"
     )
@@ -769,7 +769,7 @@ def enviar_alerta_telegram_cartoes(fixture: dict, tendencia: str, estimativa: fl
         f"<b>🏠 {home}</b> vs <b>✈️ {away}</b>\n\n"
         f"<b>📈 Tendência: {tendencia}</b>\n"
         f"<b>🟨 Estimativa: {estimativa:.1f} cartões</b>\n"
-        f"<b>🎯 Confiança: {confianca:.0f}%</b>\n\n"
+        #f"<b>🎯 Confiança: {confianca:.0f}%</b>\n\n"
         f"<b>⚽ ELITE MASTER - ANÁLISE DE CARTÕES</b>"
     )
     
@@ -792,7 +792,7 @@ def enviar_alerta_telegram_escanteios(fixture: dict, tendencia: str, estimativa:
         f"<b>🏠 {home}</b> vs <b>✈️ {away}</b>\n\n"
         f"<b>📈 Tendência: {tendencia}</b>\n"
         f"<b>🔄 Estimativa: {estimativa:.1f} escanteios</b>\n"
-        f"<b>🎯 Confiança: {confianca:.0f}%</b>\n\n"
+        #f"<b>🎯 Confiança: {confianca:.0f}%</b>\n\n"
         f"<b>⚽ ELITE MASTER - ANÁLISE DE ESCANTEIOS</b>"
     )
     
@@ -1052,8 +1052,8 @@ def gerar_poster_resultados_generico(jogos: list, titulo: str, tipo: str) -> io.
     """
     # Configurações do poster
     LARGURA = 2400
-    ALTURA_TOPO = 350
-    ALTURA_POR_JOGO = 900
+    ALTURA_TOPO = 400
+    ALTURA_POR_JOGO = 950
     PADDING = 80
     
     jogos_count = len(jogos)
@@ -1064,13 +1064,13 @@ def gerar_poster_resultados_generico(jogos: list, titulo: str, tipo: str) -> io.
     draw = ImageDraw.Draw(img)
 
     # Carregar fontes
-    FONTE_TITULO = criar_fonte(90)
-    FONTE_SUBTITULO = criar_fonte(65)
-    FONTE_TIMES = criar_fonte(60)
-    FONTE_PLACAR = criar_fonte(80)
-    FONTE_INFO = criar_fonte(45)
-    FONTE_ANALISE = criar_fonte(55)
-    FONTE_RESULTADO = criar_fonte(65)
+    FONTE_TITULO = criar_fonte(95)
+    FONTE_SUBTITULO = criar_fonte(70)
+    FONTE_TIMES = criar_fonte(65)
+    FONTE_PLACAR = criar_fonte(85)
+    FONTE_INFO = criar_fonte(50)
+    FONTE_ANALISE = criar_fonte(60)
+    FONTE_RESULTADO = criar_fonte(70)
 
     # === TOPO DO POSTER ===
     titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
@@ -1107,7 +1107,7 @@ def gerar_poster_resultados_generico(jogos: list, titulo: str, tipo: str) -> io.
         try:
             badge_bbox = draw.textbbox((0, 0), badge_text, font=FONTE_RESULTADO)
             badge_w = badge_bbox[2] - badge_bbox[0] + 40
-            badge_h = 80
+            badge_h = 90
             badge_x = x1 - badge_w - 20
             badge_y = y0 + 20
             
@@ -1131,9 +1131,9 @@ def gerar_poster_resultados_generico(jogos: list, titulo: str, tipo: str) -> io.
         away_text = jogo['away'][:18]
         
         # ESCUDOS
-        TAMANHO_ESCUDO = 180
-        TAMANHO_QUADRADO = 200
-        ESPACO_ENTRE_ESCUDOS = 600
+        TAMANHO_ESCUDO = 200
+        TAMANHO_QUADRADO = 220
+        ESPACO_ENTRE_ESCUDOS = 700
         
         largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
         x_inicio = (LARGURA - largura_total) // 2
@@ -1538,7 +1538,7 @@ def gerar_poster_multiplos_jogos(jogos: list, titulo: str = "ELITE MASTER - ALER
     # Configurações do poster
     LARGURA = 2400
     ALTURA_TOPO = 350
-    ALTURA_POR_JOGO = 850
+    ALTURA_POR_JOGO = 900
     PADDING = 60
     
     jogos_count = len(jogos)
