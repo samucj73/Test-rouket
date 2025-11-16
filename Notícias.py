@@ -4,14 +4,15 @@ import requests
 import json
 import os
 import io
+import feedparser  # NOVA DEPENDÊNCIA
 
 # =============================
 # Configurações
 # =============================
 
 # APIs
-NEWS_API_KEY = "2bac9541659c4450921136a9c2e9acbe"  # Sua NewsAPI key
-FOOTBALL_API_KEY = "9058de85e3324bdb969adc005b5d918a"  # Football-Data.org
+NEWS_API_KEY = "2bac9541659c4450921136a9c2e9acbe"
+FOOTBALL_API_KEY = "9058de85e3324bdb969adc005b5d918a"
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID_ALT2", "-1002754276285")
 
@@ -25,17 +26,36 @@ HEADERS_FOOTBALL = {"X-Auth-Token": FOOTBALL_API_KEY}
 CACHE_NOTICIAS = "cache_noticias.json"
 CACHE_TIMEOUT = 1800  # 30 minutos em segundos
 
-# Dicionário de Ligas para Filtro
+# =============================
+# SISTEMA DE MÚLTIPLAS FONTES
+# =============================
+
+# Dicionário de Fontes RSS Esportivas
+RSS_FEEDS = {
+    'UOL Esporte': 'https://rss.uol.com.br/feed/esporte.xml',
+    'ESPN Brasil': 'https://www.espn.com.br/espn/rss/news',
+    'Terra Esportes': 'https://rss.terra.com.br/0,,EI0,00.xml',
+    'R7 Esportes': 'https://www.r7.com/r7/esportes/rss.xml',
+    'CB Esportes': 'https://www.correiobraziliense.com.br/rss/editoria/esportes.xml',
+    'Gazeta Esportiva': 'https://www.gazetaesportiva.com/feed/',
+    'GE Globo Esporte': 'https://ge.globo.com/rss/futebol/futebol-internacional/futebol-ingles/',
+    'OneFootball': 'https://onefootball.com/pt-br/feed',
+}
+
+# Dicionário de Ligas para Filtro (EXPANDIDO)
 LIGAS_DICT = {
-    "Premier League": ["Premier League", "English Premier League", "EPL"],
-    "La Liga": ["La Liga", "LaLiga", "Spanish La Liga"],
-    "Bundesliga": ["Bundesliga", "German Bundesliga"],
-    "Serie A": ["Serie A", "Serie A TIM", "Italian Serie A"],
-    "Ligue 1": ["Ligue 1", "French Ligue 1"],
+    "Premier League": ["Premier League", "English Premier League", "EPL", "Manchester", "Liverpool", "Arsenal", "Chelsea"],
+    "La Liga": ["La Liga", "LaLiga", "Spanish La Liga", "Barcelona", "Real Madrid", "Atletico"],
+    "Bundesliga": ["Bundesliga", "German Bundesliga", "Bayern", "Dortmund"],
+    "Serie A": ["Serie A", "Serie A TIM", "Italian Serie A", "Juventus", "Milan", "Inter"],
+    "Ligue 1": ["Ligue 1", "French Ligue 1", "PSG", "Messi", "Mbappé"],
     "Champions League": ["Champions League", "UEFA Champions League", "UCL"],
     "Europa League": ["Europa League", "UEFA Europa League"],
-    "Campeonato Brasileiro": ["Brasileirão", "Campeonato Brasileiro", "Brasileiro Série A"],
-    "NBA": ["NBA", "National Basketball Association"]
+    "Campeonato Brasileiro": ["Brasileirão", "Campeonato Brasileiro", "Brasileiro Série A", "Flamengo", "Palmeiras", "Corinthians", "São Paulo"],
+    "Libertadores": ["Libertadores", "Copa Libertadores"],
+    "Copa do Brasil": ["Copa do Brasil", "Copa do Brasil"],
+    "NBA": ["NBA", "National Basketball Association", "Lakers", "Warriors", "LeBron"],
+    "Fórmula 1": ["Fórmula 1", "F1", "Formula 1", "Hamilton", "Verstappen"],
 }
 
 # =============================
@@ -97,6 +117,222 @@ def salvar_json(caminho: str, dados: dict):
         return False
 
 # =============================
+# FUNÇÕES DE MÚLTIPLAS FONTES
+# =============================
+
+def obter_noticias_rss(feed_url: str, fonte: str, limite: int = 5) -> list:
+    """Obtém notícias de feeds RSS"""
+    noticias = []
+    try:
+        feed = feedparser.parse(feed_url)
+        
+        for entry in feed.entries[:limite]:
+            # Verificar se é uma notícia esportiva relevante
+            if is_noticia_esportiva(entry.title):
+                noticias.append({
+                    'titulo': entry.title,
+                    'descricao': entry.get('summary', entry.get('description', 'Sem descrição disponível')),
+                    'url': entry.link,
+                    'imagem': obter_imagem_rss(entry),
+                    'fonte': fonte,
+                    'data': entry.get('published', datetime.now().isoformat()),
+                    'categoria': classificar_noticia(entry.title),
+                    'prioridade': 'media',
+                    'id': f"rss_{hash(entry.link)}"
+                })
+                
+    except Exception as e:
+        st.warning(f"⚠️ Erro no RSS {fonte}: {e}")
+    
+    return noticias
+
+def is_noticia_esportiva(titulo: str) -> bool:
+    """Verifica se a notícia é realmente esportiva"""
+    if not titulo:
+        return False
+        
+    titulo_lower = titulo.lower()
+    
+    # Palavras-chave esportivas
+    keywords_esportes = [
+        'futebol', 'football', 'bola', 'gol', 'jogo', 'time', 'clube',
+        'campeonato', 'liga', 'torneio', 'partida', 'estádio',
+        'flamengo', 'palmeiras', 'corinthians', 'são paulo', 'santos',
+        'brasileirão', 'libertadores', 'copa do brasil',
+        'premier league', 'la liga', 'bundesliga', 'serie a',
+        'champions league', 'europa league',
+        'nba', 'basquete', 'basketball',
+        'fórmula 1', 'f1', 'corrida', 'grand prix'
+    ]
+    
+    return any(keyword in titulo_lower for keyword in keywords_esportives)
+
+def classificar_noticia(titulo: str) -> str:
+    """Classifica a notícia em uma categoria específica"""
+    titulo_lower = titulo.lower()
+    
+    for liga, keywords in LIGAS_DICT.items():
+        if any(keyword.lower() in titulo_lower for keyword in keywords):
+            return liga
+    
+    # Classificação padrão
+    if any(time in titulo_lower for time in ['flamengo', 'palmeiras', 'corinthians', 'são paulo']):
+        return "Campeonato Brasileiro"
+    elif 'nba' in titulo_lower or 'basquete' in titulo_lower:
+        return "NBA"
+    elif 'fórmula 1' in titulo_lower or 'f1' in titulo_lower:
+        return "Fórmula 1"
+    
+    return "Esportes Gerais"
+
+def obter_imagem_rss(entry) -> str:
+    """Extrai imagem do feed RSS"""
+    try:
+        # Tentar diferentes métodos de extração de imagem
+        if hasattr(entry, 'media_content') and entry.media_content:
+            return entry.media_content[0]['url']
+        elif hasattr(entry, 'links'):
+            for link in entry.links:
+                if link.get('type', '').startswith('image/'):
+                    return link.href
+        elif hasattr(entry, 'enclosures'):
+            for enclosure in entry.enclosures:
+                if enclosure.get('type', '').startswith('image/'):
+                    return enclosure.href
+    except:
+        pass
+    
+    return ""
+
+def obter_noticias_multifonte(ligas_selecionadas: list, limite_total: int = 15) -> list:
+    """Obtém notícias de múltiplas fontes"""
+    todas_noticias = []
+    
+    # 1. Buscar da NewsAPI (prioridade)
+    st.info("📡 Conectando com NewsAPI...")
+    for liga in ligas_selecionadas[:3]:  # Limitar para não exceder rate limit
+        if liga in LIGAS_DICT:
+            termo = LIGAS_DICT[liga][0]
+            noticias_api = obter_noticias_newsapi(termo, limite=5)
+            todas_noticias.extend(noticias_api)
+    
+    # 2. Buscar de feeds RSS
+    st.info("📡 Coletando de feeds RSS...")
+    progresso = st.progress(0)
+    fontes_rss = list(RSS_FEEDS.items())
+    
+    for i, (fonte, url) in enumerate(fontes_rss):
+        progresso.progress((i + 1) / len(fontes_rss))
+        noticias_rss = obter_noticias_rss(url, fonte, limite=3)
+        todas_noticias.extend(noticias_rss)
+    
+    progresso.empty()
+    
+    # 3. Filtrar e classificar notícias
+    noticias_filtradas = filtrar_noticias_por_liga(todas_noticias, ligas_selecionadas)
+    
+    # 4. Remover duplicatas
+    noticias_unicas = remover_duplicatas(noticias_filtradas)
+    
+    # 5. Ordenar por relevância e data
+    noticias_ordenadas = ordenar_noticias(noticias_unicas)
+    
+    return noticias_ordenadas[:limite_total]
+
+def filtrar_noticias_por_liga(noticias: list, ligas_selecionadas: list) -> list:
+    """Filtra notícias baseado nas ligas selecionadas"""
+    if not ligas_selecionadas:
+        return noticias
+    
+    noticias_filtradas = []
+    
+    for noticia in noticias:
+        # Se a notícia já tem uma categoria definida que está nas selecionadas
+        if noticia['categoria'] in ligas_selecionadas:
+            noticias_filtradas.append(noticia)
+            continue
+        
+        # Verificar se o título contém palavras-chave das ligas selecionadas
+        titulo_lower = noticia['titulo'].lower()
+        for liga in ligas_selecionadas:
+            if liga in LIGAS_DICT:
+                keywords = [k.lower() for k in LIGAS_DICT[liga]]
+                if any(keyword in titulo_lower for keyword in keywords):
+                    noticia['categoria'] = liga  # Reclassificar
+                    noticias_filtradas.append(noticia)
+                    break
+    
+    return noticias_filtradas
+
+def remover_duplicatas(noticias: list) -> list:
+    """Remove notícias duplicadas baseado no título e URL"""
+    noticias_unicas = []
+    titulos_vistos = set()
+    urls_vistos = set()
+    
+    for noticia in noticias:
+        titulo_simplificado = noticia['titulo'].lower().strip()[:100]
+        url_simplificado = noticia['url'].split('?')[0]  # Remove parâmetros
+        
+        if (titulo_simplificado not in titulos_vistos and 
+            url_simplificado not in urls_vistos):
+            
+            noticias_unicas.append(noticia)
+            titulos_vistos.add(titulo_simplificado)
+            urls_vistos.add(url_simplificado)
+    
+    return noticias_unicas
+
+def ordenar_noticias(noticias: list) -> list:
+    """Ordena notícias por prioridade e data"""
+    def peso_prioridade(noticia):
+        prioridades = {'alta': 0, 'media': 1, 'baixa': 2}
+        return prioridades.get(noticia.get('prioridade', 'media'), 1)
+    
+    def peso_fonte(noticia):
+        fontes_prioritarias = ['NewsAPI', 'ESPN Brasil', 'GE Globo Esporte']
+        return 0 if noticia['fonte'] in fontes_prioritarias else 1
+    
+    # Ordenar por: prioridade > fonte > data
+    noticias.sort(key=lambda x: (
+        peso_prioridade(x),
+        peso_fonte(x),
+        x['data']
+    ), reverse=True)
+    
+    return noticias
+
+def filtrar_por_data(noticias: list, data_inicio: str, data_fim: str = None) -> list:
+    """Filtra notícias por data de publicação"""
+    if not data_inicio:
+        return noticias
+    
+    noticias_filtradas = []
+    data_inicio_obj = datetime.strptime(data_inicio, '%Y-%m-%d')
+    data_fim_obj = datetime.strptime(data_fim, '%Y-%m-%d') if data_fim else datetime.now()
+    
+    for noticia in noticias:
+        try:
+            # Tentar parsear a data da notícia
+            if 'T' in noticia['data']:
+                data_noticia = datetime.fromisoformat(noticia['data'].replace('Z', '+00:00'))
+            else:
+                # Tentar outros formatos comuns de RSS
+                try:
+                    data_noticia = datetime.strptime(noticia['data'], '%a, %d %b %Y %H:%M:%S %z')
+                except:
+                    data_noticia = datetime.strptime(noticia['data'], '%Y-%m-%d %H:%M:%S')
+            
+            if data_inicio_obj <= data_noticia.replace(tzinfo=None) <= data_fim_obj:
+                noticias_filtradas.append(noticia)
+                
+        except:
+            # Se não conseguir parsear a data, inclui por segurança
+            noticias_filtradas.append(noticia)
+    
+    return noticias_filtradas
+
+# =============================
 # Sistema de Notícias Esportivas
 # =============================
 
@@ -105,12 +341,10 @@ def obter_noticias_football_data() -> list:
     noticias = []
     
     try:
-        # A API Football-Data.org não tem endpoint de notícias público
-        # Vamos usar as competições para criar notícias simuladas
         response = requests.get(f"{BASE_URL_FOOTBALL}/competitions", headers=HEADERS_FOOTBALL, timeout=10)
         if response.status_code == 200:
             data = response.json()
-            competicoes = data.get('competitions', [])[:5]  # Pegar 5 competições
+            competicoes = data.get('competitions', [])[:5]
             
             for comp in competicoes:
                 noticias.append({
@@ -132,7 +366,6 @@ def obter_noticias_football_data() -> list:
 def testar_newsapi():
     """Testa a conexão com a NewsAPI"""
     try:
-        # Testar com um termo simples primeiro
         params = {
             'q': 'futebol',
             'language': 'pt',
@@ -183,7 +416,7 @@ def obter_noticias_newsapi(termo: str, limite: int = 5, data_inicio: str = None,
                             'imagem': article.get('urlToImage', ''),
                             'fonte': article.get('source', {}).get('name', 'NewsAPI'),
                             'data': article.get('publishedAt', datetime.now().isoformat()),
-                            'categoria': 'Futebol',
+                            'categoria': classificar_noticia(article['title']),
                             'prioridade': 'media',
                             'id': f"newsapi_{hash(article.get('url', ''))}"
                         })
@@ -197,100 +430,45 @@ def obter_noticias_newsapi(termo: str, limite: int = 5, data_inicio: str = None,
 
 def obter_noticias_esportivas(ligas_selecionadas: list = None, limite: int = 10, data_inicio: str = None, data_fim: str = None) -> list:
     """
-    Obtém notícias esportivas filtradas por ligas e data
+    Obtém notícias esportivas de múltiplas fontes
     """
     if ligas_selecionadas is None:
         ligas_selecionadas = []
     
-    # Criar chave de cache incluindo as datas
-    cache_key_parts = []
-    if ligas_selecionadas:
-        cache_key_parts.append('_'.join(ligas_selecionadas))
-    else:
-        cache_key_parts.append('todas')
-    
-    cache_key_parts.append(str(limite))
-    
-    if data_inicio:
-        cache_key_parts.append(f"de_{data_inicio}")
-    if data_fim:
-        cache_key_parts.append(f"ate_{data_fim}")
-    
-    cache_key = '_'.join(cache_key_parts)
+    # Criar chave de cache
+    cache_key = f"{'_'.join(ligas_selecionadas)}_{limite}_{data_inicio}_{data_fim}"
     
     cache = carregar_json(CACHE_NOTICIAS)
     
-    # Verificar cache (30 minutos para notícias)
+    # Verificar cache
     if cache_key in cache:
         cache_data = cache[cache_key]
         if datetime.now().timestamp() - cache_data.get('_timestamp', 0) < CACHE_TIMEOUT:
+            st.success("💾 Usando notícias em cache (30min)")
             return cache_data.get('noticias', [])
     
-    noticias = []
-    
-    try:
-        # Testar NewsAPI primeiro
-        status, mensagem = testar_newsapi()
-        st.sidebar.info(mensagem)
+    # Buscar notícias
+    with st.spinner("🔄 Buscando notícias de múltiplas fontes..."):
+        noticias = obter_noticias_multifonte(ligas_selecionadas, limite)
         
-        # Obter notícias do Football-Data.org
-        noticias_football = obter_noticias_football_data()
-        noticias.extend(noticias_football)
+        # Aplicar filtro de data se necessário
+        if data_inicio:
+            noticias = filtrar_por_data(noticias, data_inicio, data_fim)
         
-        # Se nenhuma liga selecionada, buscar notícias gerais
-        if not ligas_selecionadas:
-            # Notícias gerais de futebol
-            noticias_gerais = obter_noticias_newsapi("futebol OR football", limite=8, data_inicio=data_inicio, data_fim=data_fim)
-            noticias.extend(noticias_gerais)
-        else:
-            # Buscar notícias específicas por liga
-            for liga in ligas_selecionadas:
-                if liga in LIGAS_DICT:
-                    # Usar o primeiro termo da lista para busca
-                    termo_principal = LIGAS_DICT[liga][0]
-                    noticias_liga = obter_noticias_newsapi(termo_principal, limite=4, data_inicio=data_inicio, data_fim=data_fim)
-                    
-                    # Marcar a categoria correta
-                    for noticia in noticias_liga:
-                        noticia['categoria'] = liga
-                    
-                    noticias.extend(noticias_liga)
-        
-        # Se ainda não temos notícias, usar fallback
+        # Se não encontrou notícias, usar fallback
         if not noticias:
-            st.warning("⚠️ Nenhuma notícia encontrada nas APIs, usando conteúdo de fallback")
+            st.warning("⚠️ Nenhuma notícia encontrada, usando conteúdo de fallback")
             noticias = obter_noticias_fallback(ligas_selecionadas)
-        
-        # Remover duplicatas baseado no título
-        noticias_unicas = []
-        titulos_vistos = set()
-        for noticia in noticias:
-            if noticia['titulo'] and noticia['titulo'] not in titulos_vistos:
-                noticias_unicas.append(noticia)
-                titulos_vistos.add(noticia['titulo'])
-        
-        # Ordenar por prioridade e data (mais recentes primeiro)
-        noticias_unicas.sort(key=lambda x: (
-            {'alta': 0, 'media': 1}.get(x.get('prioridade', 'media'), 2),
-            x['data']
-        ), reverse=True)
-        
-        # Limitar ao número solicitado
-        noticias_unicas = noticias_unicas[:limite]
         
         # Salvar no cache
         cache[cache_key] = {
-            'noticias': noticias_unicas,
-            '_timestamp': datetime.now().timestamp()
+            'noticias': noticias,
+            '_timestamp': datetime.now().timestamp(),
+            'total_fontes': len(RSS_FEEDS) + 1
         }
         salvar_json(CACHE_NOTICIAS, cache)
         
-        return noticias_unicas
-        
-    except Exception as e:
-        st.error(f"❌ Erro ao obter notícias: {e}")
-        # Retornar notícias de fallback
-        return obter_noticias_fallback(ligas_selecionadas)
+        return noticias
 
 def obter_noticias_fallback(ligas_selecionadas: list = None) -> list:
     """Notícias de fallback quando as APIs falham"""
@@ -482,7 +660,8 @@ def main():
         ligas_futebol = [
             "Premier League", "La Liga", "Bundesliga", 
             "Serie A", "Ligue 1", "Champions League",
-            "Europa League", "Campeonato Brasileiro"
+            "Europa League", "Campeonato Brasileiro",
+            "Libertadores", "Copa do Brasil"
         ]
         
         ligas_selecionadas = []
@@ -494,6 +673,38 @@ def main():
         nba_selecionada = st.checkbox("NBA", value=False, key="liga_nba")
         if nba_selecionada:
             ligas_selecionadas.append("NBA")
+            
+        st.subheader("🏎️ Fórmula 1")
+        f1_selecionada = st.checkbox("Fórmula 1", value=False, key="liga_f1")
+        if f1_selecionada:
+            ligas_selecionadas.append("Fórmula 1")
+        
+        st.markdown("---")
+        
+        st.header("🌐 Fontes de Notícias")
+        
+        st.info(f"📡 **Fontes ativas:** {len(RSS_FEEDS) + 1}")
+        
+        with st.expander("Ver todas as fontes"):
+            st.write("**APIs:**")
+            st.write("• NewsAPI (Internacional)")
+            st.write("• Football-Data.org")
+            
+            st.write("**RSS Brasileiros:**")
+            for fonte in RSS_FEEDS.keys():
+                st.write(f"• {fonte}")
+        
+        # Seletor de fontes preferidas
+        fontes_preferidas = st.multiselect(
+            "Fontes preferidas (opcional):",
+            options=list(RSS_FEEDS.keys()),
+            default=["ESPN Brasil", "UOL Esporte", "GE Globo Esporte"]
+        )
+        
+        # Atualizar RSS_FEEDS baseado nas preferências
+        global RSS_FEEDS
+        if fontes_preferidas:
+            RSS_FEEDS = {k: v for k, v in RSS_FEEDS.items() if k in fontes_preferidas}
         
         st.markdown("---")
         
@@ -707,10 +918,11 @@ def main():
         st.info("🎯 **Como usar:**")
         st.markdown("""
         1. **🏆 Selecione as ligas** na sidebar que você quer acompanhar
-        2. **📅 Escolha o período** das notícias (Hoje, Últimos 7 dias ou Personalizado)
-        3. **🔍 Clique em 'Buscar Notícias'** para carregar as notícias
-        4. **✅ Marque as notícias** que você quer enviar usando as checkboxes
-        5. **🚀 Clique em 'Enviar Selecionadas'** para enviar para o Telegram
+        2. **🌐 Escolha as fontes preferidas** (opcional)
+        3. **📅 Escolha o período** das notícias (Hoje, Últimos 7 dias ou Personalizado)
+        4. **🔍 Clique em 'Buscar Notícias'** para carregar as notícias
+        5. **✅ Marque as notícias** que você quer enviar usando as checkboxes
+        6. **🚀 Clique em 'Enviar Selecionadas'** para enviar para o Telegram
         
         **💡 Dica:** Use o botão **'Testar APIs'** na sidebar para verificar se as APIs estão funcionando!
         """)
@@ -726,7 +938,7 @@ def exibir_detalhes_noticia(noticia: dict, numero: int):
             st.write(f"**Prioridade:** {prioridade_color} {noticia.get('prioridade', 'media').upper()}")
             
             # Categoria e fonte
-            emoji = "⚽" if "futebol" in noticia['categoria'].lower() else "🏀" if "nba" in noticia['categoria'].lower() else "📰"
+            emoji = "⚽" if "futebol" in noticia['categoria'].lower() else "🏀" if "nba" in noticia['categoria'].lower() else "🏎️" if "fórmula" in noticia['categoria'].lower() else "📰"
             st.write(f"**Categoria:** {emoji} {noticia['categoria']}")
             st.write(f"**Fonte:** {noticia['fonte']}")
             
