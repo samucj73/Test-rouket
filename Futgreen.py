@@ -1610,7 +1610,7 @@ def gerar_poster_multiplos_jogos(jogos: list, titulo: str = "ELITE MASTER - ALER
         TAMANHO_ESCUDO = 160
         TAMANHO_QUADRADO = 180
         ESPACO_ENTRE_ESCUDOS = 550
-        ALTURA_SECAO_TIMES = 280
+        ALTURA_SECAO_TIMES = 400
 
         # Calcular posição central para escudos
         largura_total_escudos = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
