@@ -297,10 +297,20 @@ def limpar_historico(tipo: str = "todos"):
 # Utilitários de Data e Formatação
 # =============================
 def formatar_data_iso(data_iso: str) -> tuple[str, str]:
+    """Formata data ISO de forma robusta - CORRIGIDA"""
     try:
-        data_jogo = datetime.fromisoformat(data_iso.replace("Z", "+00:00")) - timedelta(hours=3)
-        return data_jogo.strftime("%d/%m/%Y"), data_jogo.strftime("%H:%M")
-    except ValueError:
+        # Remover 'Z' e converter para datetime com timezone UTC
+        if data_iso.endswith('Z'):
+            data_iso = data_iso[:-1] + '+00:00'
+        
+        data_utc = datetime.fromisoformat(data_iso)
+        
+        # Converter para horário de Brasília (UTC-3)
+        data_brasilia = data_utc - timedelta(hours=3)
+        
+        return data_brasilia.strftime("%d/%m/%Y"), data_brasilia.strftime("%H:%M")
+    except (ValueError, TypeError) as e:
+        st.warning(f"⚠️ Erro ao formatar data {data_iso}: {e}")
         return "Data inválida", "Hora inválida"
 
 def abreviar_nome(nome: str, max_len: int = 15) -> str:
@@ -718,10 +728,13 @@ def verificar_enviar_alerta_escanteios(fixture: dict, estimativa: float, confian
 # =============================
 
 def enviar_alerta_telegram_ambas_marcam(fixture: dict, tendencia: str, probabilidade: float, confianca: float) -> bool:
-    """Envia alerta individual para Ambas Marcam"""
+    """Envia alerta individual para Ambas Marcam - CORRIGIDA"""
     home = fixture["homeTeam"]["name"]
     away = fixture["awayTeam"]["name"]
+    
+    # CORREÇÃO: Garantir que a data seja formatada corretamente
     data_formatada, hora_formatada = formatar_data_iso(fixture["utcDate"])
+    
     competicao = fixture.get("competition", {}).get("name", "Desconhecido")
     
     emoji = "✅" if "SIM" in tendencia else "⚠️" if "PROVÁVEL" in tendencia else "❌"
@@ -740,10 +753,13 @@ def enviar_alerta_telegram_ambas_marcam(fixture: dict, tendencia: str, probabili
     return enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2)
 
 def enviar_alerta_telegram_cartoes(fixture: dict, tendencia: str, estimativa: float, confianca: float) -> bool:
-    """Envia alerta individual para Cartões"""
+    """Envia alerta individual para Cartões - CORRIGIDA"""
     home = fixture["homeTeam"]["name"]
     away = fixture["awayTeam"]["name"]
+    
+    # CORREÇÃO: Garantir formatação correta da data
     data_formatada, hora_formatada = formatar_data_iso(fixture["utcDate"])
+    
     competicao = fixture.get("competition", {}).get("name", "Desconhecido")
     
     msg = (
@@ -760,10 +776,13 @@ def enviar_alerta_telegram_cartoes(fixture: dict, tendencia: str, estimativa: fl
     return enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2)
 
 def enviar_alerta_telegram_escanteios(fixture: dict, tendencia: str, estimativa: float, confianca: float) -> bool:
-    """Envia alerta individual para Escanteios"""
+    """Envia alerta individual para Escanteios - CORRIGIDA"""
     home = fixture["homeTeam"]["name"]
     away = fixture["awayTeam"]["name"]
+    
+    # CORREÇÃO: Garantir formatação correta da data
     data_formatada, hora_formatada = formatar_data_iso(fixture["utcDate"])
+    
     competicao = fixture.get("competition", {}).get("name", "Desconhecido")
     
     msg = (
@@ -1570,9 +1589,19 @@ def gerar_poster_multiplos_jogos(jogos: list, titulo: str = "ELITE MASTER - ALER
         liga_w = liga_bbox[2] - liga_bbox[0]
         draw.text(((LARGURA - liga_w) // 2, y0 + 25), liga_text, font=FONTE_SUBTITULO, fill=(170, 190, 210))
 
-        # === LINHA 2: HORÁRIO ===
-        hora_format = jogo["hora"].strftime("%H:%M") if isinstance(jogo["hora"], datetime) else str(jogo["hora"])
-        hora_text = f"HORÁRIO: {hora_format} BRT"
+        # === LINHA 2: HORÁRIO - CORREÇÃO ===
+        # Usar hora_formatada se disponível, caso contrário formatar
+        if 'hora_formatada' in jogo and 'data_formatada' in jogo:
+            hora_text = f"HORÁRIO: {jogo['hora_formatada']} BRT | DATA: {jogo['data_formatada']}"
+        else:
+            # Fallback: tentar formatar a hora existente
+            try:
+                hora_format = jogo["hora"].strftime("%H:%M") if isinstance(jogo["hora"], datetime) else str(jogo["hora"])
+                data_format = jogo["hora"].strftime("%d/%m/%Y") if isinstance(jogo["hora"], datetime) else "Data inválida"
+                hora_text = f"HORÁRIO: {hora_format} BRT | DATA: {data_format}"
+            except:
+                hora_text = "HORÁRIO: Não disponível"
+        
         hora_bbox = draw.textbbox((0, 0), hora_text, font=FONTE_INFO)
         hora_w = hora_bbox[2] - hora_bbox[0]
         draw.text(((LARGURA - hora_w) // 2, y0 + 90), hora_text, font=FONTE_INFO, fill=(120, 180, 240))
@@ -1788,13 +1817,22 @@ def enviar_alerta_composto_poster(jogos_conf: list, threshold: int):
 def enviar_alerta_composto_texto(jogos_conf: list) -> bool:
     """Fallback para alerta composto em texto"""
     try:
-        msg = "<b>🎯 ALERTAS COMPOSTOS - JOGOS DO DIA</b>\n\n"
+        msg = f"🔥 Jogos ≥{threshold}% (Estilo Original):\n\n"
         
-        for jogo in sorted(jogos_conf, key=lambda x: x['confianca'], reverse=True)[:10]:  # Limitar a 10 jogos
-            hora_format = jogo["hora"].strftime("%H:%M") if isinstance(jogo["hora"], datetime) else str(jogo["hora"])
+        for jogo in jogos_conf:
+            # CORREÇÃO: Usar dados formatados se disponíveis
+            if 'hora_formatada' in jogo and 'data_formatada' in jogo:
+                hora_text = jogo['hora_formatada']
+                data_text = jogo['data_formatada']
+            else:
+                hora_format = jogo["hora"].strftime("%H:%M") if isinstance(jogo["hora"], datetime) else str(jogo["hora"])
+                data_format = jogo["hora"].strftime("%d/%m/%Y") if isinstance(jogo["hora"], datetime) else "Data inválida"
+                hora_text = hora_format
+                data_text = data_format
+                
             msg += (
                 f"🏟️ <b>{jogo['home']}</b> vs <b>{jogo['away']}</b>\n"
-                f"🕒 {hora_format} BRT | {jogo['liga']}\n"
+                f"🕒 {hora_text} BRT | {data_text} | {jogo['liga']}\n"
                 f"📈 {jogo['tendencia']} | ⚽ {jogo['estimativa']:.2f} | 💯 {jogo['confianca']:.0f}%\n\n"
             )
         
@@ -2452,10 +2490,19 @@ def enviar_top_jogos(jogos: list, top_n: int, alerta_top_jogos: bool):
     msg = f"📢 TOP {top_n} Jogos do Dia (confiança alta)\n\n"
     
     for j in top_jogos_sorted:
-        hora_format = j["hora"].strftime("%H:%M") if isinstance(j["hora"], datetime) else str(j["hora"])
+        # CORREÇÃO: Usar dados formatados se disponíveis
+        if 'hora_formatada' in j and 'data_formatada' in j:
+            hora_text = j['hora_formatada']
+            data_text = j['data_formatada']
+        else:
+            hora_format = j["hora"].strftime("%H:%M") if isinstance(j["hora"], datetime) else str(j["hora"])
+            data_format = j["hora"].strftime("%d/%m/%Y") if isinstance(j["hora"], datetime) else "Data inválida"
+            hora_text = hora_format
+            data_text = data_format
+            
         msg += (
             f"🏟️ {j['home']} vs {j['away']}\n"
-            f"🕒 {hora_format} BRT | Liga: {j['liga']} | Status: {j['status']}\n"
+            f"🕒 {hora_text} BRT | {data_text} | Liga: {j['liga']} | Status: {j['status']}\n"
             f"📈 Tendência: {j['tendencia']} | Estimativa: {j['estimativa']:.2f} | "
             f"💯 Confiança: {j['confianca']:.0f}%\n\n"
         )
@@ -2680,10 +2727,14 @@ def processar_jogos_avancado(data_selecionada, todas_ligas, liga_selecionada, to
             home_name = home_team["name"]
             away_name = away_team["name"]
             
+            # CORREÇÃO: Formatar data/hora UMA VEZ e reutilizar
+            data_formatada, hora_formatada = formatar_data_iso(match["utcDate"])
+            hora_datetime = datetime.fromisoformat(match["utcDate"].replace("Z", "+00:00")) - timedelta(hours=3)
+            
             # PREVISÃO ORIGINAL - GOLS
             estimativa, confianca, tendencia = calcular_tendencia(home_name, away_name, classificacao)
             
-            # Dados para previsão original de gols
+            # Dados para previsão original de gols - CORRIGIDO
             jogo_data = {
                 "id": match["id"],
                 "home": home_name,
@@ -2692,9 +2743,11 @@ def processar_jogos_avancado(data_selecionada, todas_ligas, liga_selecionada, to
                 "estimativa": estimativa,
                 "confianca": confianca,
                 "liga": match.get("competition", {}).get("name", "Desconhecido"),
-                "hora": datetime.fromisoformat(match["utcDate"].replace("Z", "+00:00")) - timedelta(hours=3),
+                "hora": hora_datetime,  # CORREÇÃO: Usar datetime já calculado
+                "data_formatada": data_formatada,  # NOVO: Adicionar data formatada
+                "hora_formatada": hora_formatada,  # NOVO: Adicionar hora formatada
                 "status": match.get("status", "DESCONHECIDO"),
-                "fixture": match  # 🔥 IMPORTANTE: Manter fixture completa para os escudos
+                "fixture": match  # Manter fixture completa
             }
             
             top_jogos_gols.append(jogo_data)
@@ -2703,7 +2756,7 @@ def processar_jogos_avancado(data_selecionada, todas_ligas, liga_selecionada, to
             if alerta_individual and confianca >= threshold:
                 verificar_enviar_alerta(match, tendencia, estimativa, confianca, alerta_individual)
 
-            # NOVAS PREVISÕES COM DADOS REAIS
+            # NOVAS PREVISÕES COM DADOS REAIS - CORRIGIDAS
             # Ambas Marcam
             if alerta_ambas_marcam:
                 prob_ambas, conf_ambas, tend_ambas = calcular_previsao_ambas_marcam_real(
@@ -2711,36 +2764,54 @@ def processar_jogos_avancado(data_selecionada, todas_ligas, liga_selecionada, to
                 if conf_ambas >= threshold_ambas_marcam:
                     verificar_enviar_alerta_ambas_marcam(match, prob_ambas, conf_ambas, tend_ambas, alerta_ambas_marcam)
                     top_jogos_ambas_marcam.append({
-                        "home": home_name, "away": away_name, "probabilidade": prob_ambas,
-                        "confianca": conf_ambas, "tendencia": tend_ambas,
+                        "home": home_name, 
+                        "away": away_name, 
+                        "probabilidade": prob_ambas,
+                        "confianca": conf_ambas, 
+                        "tendencia": tend_ambas,
                         "liga": match.get("competition", {}).get("name", "Desconhecido"),
-                        "hora": datetime.fromisoformat(match["utcDate"].replace("Z", "+00:00")) - timedelta(hours=3)
+                        "hora": hora_datetime,  # CORREÇÃO: Usar datetime consistente
+                        "data_formatada": data_formatada,  # NOVO
+                        "hora_formatada": hora_formatada,  # NOVO
+                        "fixture": match  # NOVO: Manter fixture para escudos
                     })
 
-            # Cartões COM DADOS REAIS
+            # Cartões COM DADOS REAIS - CORRIGIDO
             if alerta_cartoes:
                 est_cartoes, conf_cartoes, tend_cartoes = calcular_previsao_cartoes_real(
                     home_team, away_team, liga_id)
                 if conf_cartoes >= threshold_cartoes:
                     verificar_enviar_alerta_cartoes(match, est_cartoes, conf_cartoes, tend_cartoes, alerta_cartoes)
                     top_jogos_cartoes.append({
-                        "home": home_name, "away": away_name, "estimativa": est_cartoes,
-                        "confianca": conf_cartoes, "tendencia": tend_cartoes,
+                        "home": home_name, 
+                        "away": away_name, 
+                        "estimativa": est_cartoes,
+                        "confianca": conf_cartoes, 
+                        "tendencia": tend_cartoes,
                         "liga": match.get("competition", {}).get("name", "Desconhecido"),
-                        "hora": datetime.fromisoformat(match["utcDate"].replace("Z", "+00:00")) - timedelta(hours=3)
+                        "hora": hora_datetime,  # CORREÇÃO
+                        "data_formatada": data_formatada,  # NOVO
+                        "hora_formatada": hora_formatada,  # NOVO
+                        "fixture": match  # NOVO
                     })
 
-            # Escanteios COM DADOS REAIS
+            # Escanteios COM DADOS REAIS - CORRIGIDO
             if alerta_escanteios:
                 est_escanteios, conf_escanteios, tend_escanteios = calcular_previsao_escanteios_real(
                     home_team, away_team, liga_id)
                 if conf_escanteios >= threshold_escanteios:
                     verificar_enviar_alerta_escanteios(match, est_escanteios, conf_escanteios, tend_escanteios, alerta_escanteios)
                     top_jogos_escanteios.append({
-                        "home": home_name, "away": away_name, "estimativa": est_escanteios,
-                        "confianca": conf_escanteios, "tendencia": tend_escanteios,
+                        "home": home_name, 
+                        "away": away_name, 
+                        "estimativa": est_escanteios,
+                        "confianca": conf_escanteios, 
+                        "tendencia": tend_escanteios,
                         "liga": match.get("competition", {}).get("name", "Desconhecido"),
-                        "hora": datetime.fromisoformat(match["utcDate"].replace("Z", "+00:00")) - timedelta(hours=3)
+                        "hora": hora_datetime,  # CORREÇÃO
+                        "data_formatada": data_formatada,  # NOVO
+                        "hora_formatada": hora_formatada,  # NOVO
+                        "fixture": match  # NOVO
                     })
         
         progress_bar.progress((i + 1) / total_ligas)
@@ -2805,17 +2876,30 @@ def enviar_alerta_conf_criar_poster(jogos_conf: list, threshold: int, chat_id: s
         
     try:
         msg = f"🔥 Jogos ≥{threshold}% (Estilo Original):\n\n"
+        
         for j in jogos_conf:
-            hora_format = j["hora"].strftime("%H:%M") if isinstance(j["hora"], datetime) else str(j["hora"])
+            # CORREÇÃO: Usar dados formatados se disponíveis
+            if 'hora_formatada' in j and 'data_formatada' in j:
+                hora_text = j['hora_formatada']
+                data_text = j['data_formatada']
+            else:
+                hora_format = j["hora"].strftime("%H:%M") if isinstance(j["hora"], datetime) else str(j["hora"])
+                data_format = j["hora"].strftime("%d/%m/%Y") if isinstance(j["hora"], datetime) else "Data inválida"
+                hora_text = hora_format
+                data_text = data_format
+                
             msg += (
                 f"🏟️ {j['home']} vs {j['away']}\n"
-                f"🕒 {hora_format} BRT | {j['liga']}\n"
+                f"🕒 {hora_text} BRT | {data_text} | {j['liga']}\n"
                 f"📈 {j['tendencia']} | ⚽ {j['estimativa']:.2f} | 💯 {j['confianca']:.0f}%\n\n"
             )
-        enviar_telegram(msg, chat_id=chat_id)
-        st.success("📤 Alerta enviado (formato texto)")
+        
+        msg += "<b>🔥 ELITE MASTER SYSTEM - ANÁLISE PREDITIVA</b>"
+        
+        return enviar_telegram(msg, chat_id=chat_id)
     except Exception as e:
-        st.error(f"Erro no fallback: {e}")
+        st.error(f"Erro no fallback de texto: {e}")
+        return False
 
 # =============================
 # Interface Streamlight ATUALIZADA
