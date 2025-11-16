@@ -1136,8 +1136,8 @@ def gerar_poster_multiplos_jogos(jogos: list, titulo: str = "ELITE MASTER - ALER
     """
     # Configurações do poster
     LARGURA = 2400
-    ALTURA_TOPO = 400
-    ALTURA_POR_JOGO = 750  # Aumentado para caber escudos
+    ALTURA_TOPO = 550
+    ALTURA_POR_JOGO = 700  # Aumentado para caber escudos
     PADDING = 100
     
     jogos_count = len(jogos)
@@ -1148,21 +1148,21 @@ def gerar_poster_multiplos_jogos(jogos: list, titulo: str = "ELITE MASTER - ALER
     draw = ImageDraw.Draw(img)
 
     # Carregar fontes
-    FONTE_TITULO = criar_fonte(90)
-    FONTE_SUBTITULO = criar_fonte(55)
-    FONTE_TIMES = criar_fonte(45)
-    FONTE_VS = criar_fonte(40)
-    FONTE_INFO = criar_fonte(35)
-    FONTE_ANALISE = criar_fonte(40)
-    FONTE_CONFIANCA = criar_fonte(35)
+    FONTE_TITULO = criar_fonte(120)
+    FONTE_SUBTITULO = criar_fonte(90)
+    FONTE_TIMES = criar_fonte(75)
+    FONTE_VS = criar_fonte(75)
+    FONTE_INFO = criar_fonte(60)
+    FONTE_ANALISE = criar_fonte(70)
+    FONTE_CONFIANCA = criar_fonte(70)
 
     # Título PRINCIPAL
     try:
         titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
         titulo_w = titulo_bbox[2] - titulo_bbox[0]
-        draw.text(((LARGURA - titulo_w) // 2, 80), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
+        draw.text(((LARGURA - titulo_w) // 2, 90), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
     except:
-        draw.text((LARGURA//2 - 300, 80), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
+        draw.text((LARGURA//2 - 300, 90), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
 
     # Data atual
     data_atual = datetime.now().strftime("%d/%m/%Y")
@@ -1207,7 +1207,7 @@ def gerar_poster_multiplos_jogos(jogos: list, titulo: str = "ELITE MASTER - ALER
             draw.text((LARGURA//2 - 100, y0 + 80), hora_text, font=FONTE_INFO, fill=(120, 180, 240))
 
         # ESCUDOS DOS TIMES - NOVO: ADICIONANDO ESCUDOS
-        TAMANHO_ESCUDO = 190
+        TAMANHO_ESCUDO = 210
         TAMANHO_QUADRADO = 230
         ESPACO_ENTRE_ESCUDOS = 700
 
