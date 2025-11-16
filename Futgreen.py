@@ -1136,8 +1136,8 @@ def gerar_poster_multiplos_jogos(jogos: list, titulo: str = "ELITE MASTER - ALER
     """
     # Configurações do poster
     LARGURA = 2400
-    ALTURA_TOPO = 550
-    ALTURA_POR_JOGO = 700  # Aumentado para caber escudos
+    ALTURA_TOPO = 400
+    ALTURA_POR_JOGO = 850  # Aumentado para caber escudos
     PADDING = 100
     
     jogos_count = len(jogos)
