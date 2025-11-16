@@ -4,7 +4,7 @@ import requests
 import json
 import os
 import io
-import feedparser  # NOVA DEPENDÊNCIA
+import feedparser
 
 # =============================
 # Configurações
@@ -24,7 +24,7 @@ HEADERS_FOOTBALL = {"X-Auth-Token": FOOTBALL_API_KEY}
 
 # Constantes
 CACHE_NOTICIAS = "cache_noticias.json"
-CACHE_TIMEOUT = 1800  # 30 minutos em segundos
+CACHE_TIMEOUT = 1800
 
 # =============================
 # SISTEMA DE MÚLTIPLAS FONTES
@@ -42,7 +42,7 @@ RSS_FEEDS = {
     'OneFootball': 'https://onefootball.com/pt-br/feed',
 }
 
-# Dicionário de Ligas para Filtro (EXPANDIDO)
+# Dicionário de Ligas para Filtro
 LIGAS_DICT = {
     "Premier League": ["Premier League", "English Premier League", "EPL", "Manchester", "Liverpool", "Arsenal", "Chelsea"],
     "La Liga": ["La Liga", "LaLiga", "Spanish La Liga", "Barcelona", "Real Madrid", "Atletico"],
@@ -165,7 +165,7 @@ def is_noticia_esportiva(titulo: str) -> bool:
         'fórmula 1', 'f1', 'corrida', 'grand prix'
     ]
     
-    return any(keyword in titulo_lower for keyword in keywords_esportives)
+    return any(keyword in titulo_lower for keyword in keywords_esportes)
 
 def classificar_noticia(titulo: str) -> str:
     """Classifica a notícia em uma categoria específica"""
@@ -218,15 +218,11 @@ def obter_noticias_multifonte(ligas_selecionadas: list, limite_total: int = 15) 
     
     # 2. Buscar de feeds RSS
     st.info("📡 Coletando de feeds RSS...")
-    progresso = st.progress(0)
     fontes_rss = list(RSS_FEEDS.items())
     
     for i, (fonte, url) in enumerate(fontes_rss):
-        progresso.progress((i + 1) / len(fontes_rss))
         noticias_rss = obter_noticias_rss(url, fonte, limite=3)
         todas_noticias.extend(noticias_rss)
-    
-    progresso.empty()
     
     # 3. Filtrar e classificar notícias
     noticias_filtradas = filtrar_noticias_por_liga(todas_noticias, ligas_selecionadas)
@@ -321,7 +317,11 @@ def filtrar_por_data(noticias: list, data_inicio: str, data_fim: str = None) -> 
                 try:
                     data_noticia = datetime.strptime(noticia['data'], '%a, %d %b %Y %H:%M:%S %z')
                 except:
-                    data_noticia = datetime.strptime(noticia['data'], '%Y-%m-%d %H:%M:%S')
+                    try:
+                        data_noticia = datetime.strptime(noticia['data'], '%Y-%m-%d %H:%M:%S')
+                    except:
+                        # Se não conseguir parsear, usar data atual
+                        data_noticia = datetime.now()
             
             if data_inicio_obj <= data_noticia.replace(tzinfo=None) <= data_fim_obj:
                 noticias_filtradas.append(noticia)
@@ -557,7 +557,7 @@ def enviar_noticia_individual(noticia: dict, chat_id: str = TELEGRAM_CHAT_ID) ->
         except:
             data_formatada = "Hoje"
         
-        emoji = "⚽" if "futebol" in noticia['categoria'].lower() else "🏀" if "nba" in noticia['categoria'].lower() else "📰"
+        emoji = "⚽" if "futebol" in noticia['categoria'].lower() else "🏀" if "nba" in noticia['categoria'].lower() else "🏎️" if "fórmula" in noticia['categoria'].lower() else "📰"
         
         # Adicionar badge de prioridade
         prioridade_badge = "🔴 OFICIAL" if noticia.get('prioridade') == 'alta' else "🟡 MÍDIA"
@@ -694,17 +694,22 @@ def main():
             for fonte in RSS_FEEDS.keys():
                 st.write(f"• {fonte}")
         
-        # Seletor de fontes preferidas
+        # Seletor de fontes preferidas (usando session state)
         fontes_preferidas = st.multiselect(
             "Fontes preferidas (opcional):",
             options=list(RSS_FEEDS.keys()),
             default=["ESPN Brasil", "UOL Esporte", "GE Globo Esporte"]
         )
         
-        # Atualizar RSS_FEEDS baseado nas preferências
-        global RSS_FEEDS
+        # Usar session state para gerenciar fontes
+        if 'fontes_ativas' not in st.session_state:
+            st.session_state.fontes_ativas = RSS_FEEDS.copy()
+        
+        # Atualizar fontes ativas baseado nas preferências
         if fontes_preferidas:
-            RSS_FEEDS = {k: v for k, v in RSS_FEEDS.items() if k in fontes_preferidas}
+            st.session_state.fontes_ativas = {k: v for k, v in RSS_FEEDS.items() if k in fontes_preferidas}
+        else:
+            st.session_state.fontes_ativas = RSS_FEEDS.copy()
         
         st.markdown("---")
         
@@ -812,6 +817,7 @@ def main():
                 info_filtro += f" de {data_inicio} até {data_fim}"
         
         with st.spinner(f"🔍 Buscando {limite_noticias} notícias {info_filtro}..."):
+            # Usar fontes ativas do session state
             noticias = obter_noticias_esportivas(
                 ligas_selecionadas, 
                 limite_noticias, 
