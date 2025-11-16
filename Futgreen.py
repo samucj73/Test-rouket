@@ -1207,9 +1207,9 @@ def gerar_poster_multiplos_jogos(jogos: list, titulo: str = "ELITE MASTER - ALER
             draw.text((LARGURA//2 - 100, y0 + 80), hora_text, font=FONTE_INFO, fill=(120, 180, 240))
 
         # ESCUDOS DOS TIMES - NOVO: ADICIONANDO ESCUDOS
-        TAMANHO_ESCUDO = 80
-        TAMANHO_QUADRADO = 100
-        ESPACO_ENTRE_ESCUDOS = 400
+        TAMANHO_ESCUDO = 190
+        TAMANHO_QUADRADO = 230
+        ESPACO_ENTRE_ESCUDOS = 700
 
         # Calcular posição central para escudos
         largura_total_escudos = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
@@ -1366,7 +1366,7 @@ def gerar_poster_multiplos_jogos(jogos: list, titulo: str = "ELITE MASTER - ALER
         rodape_w = rodape_bbox[2] - rodape_bbox[0]
         draw.text(((LARGURA - rodape_w) // 2, altura_total - 50), rodape_text, font=FONTE_INFO, fill=(100, 130, 160))
     except:
-        draw.text((LARGURA//2 - 200, altura_total - 50), rodape_text, font=FONTE_INFO, fill=(100, 130, 160))
+        draw.text((LARGURA//2 - 200, altura_total - 85), rodape_text, font=FONTE_INFO, fill=(100, 130, 160))
 
     # Salvar imagem
     buffer = io.BytesIO()
