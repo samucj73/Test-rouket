@@ -1533,12 +1533,12 @@ def verificar_resultados_finais(alerta_resultados: bool):
 # =============================
 def gerar_poster_multiplos_jogos(jogos: list, titulo: str = "ELITE MASTER - ALERTAS DO DIA") -> io.BytesIO:
     """
-    Gera poster profissional com múltiplos jogos para alertas compostos - VERSÃO CORRIGIDA
+    Gera poster profissional com múltiplos jogos para alertas compostos - VERSÃO COM MAIS ESPAÇO VERTICAL
     """
     # Configurações do poster
     LARGURA = 2400
     ALTURA_TOPO = 350
-    ALTURA_POR_JOGO = 850
+    ALTURA_POR_JOGO = 1050  # Aumentei para 1050 (200px a mais que o original)
     PADDING = 60
     
     jogos_count = len(jogos)
@@ -1558,7 +1558,6 @@ def gerar_poster_multiplos_jogos(jogos: list, titulo: str = "ELITE MASTER - ALER
     FONTE_CONFIANCA = criar_fonte(55)
 
     # === TOPO DO POSTER ===
-    # Título PRINCIPAL
     titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
     titulo_w = titulo_bbox[2] - titulo_bbox[0]
     draw.text(((LARGURA - titulo_w) // 2, 60), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
@@ -1583,18 +1582,16 @@ def gerar_poster_multiplos_jogos(jogos: list, titulo: str = "ELITE MASTER - ALER
         # Fundo com borda
         draw.rectangle([x0, y0, x1, y1], fill=(25, 40, 55), outline=(100, 130, 160), width=3)
 
-        # === LINHA 1: LIGA ===
+        # === LINHA 1: LIGA === (MAIS ESPAÇO DO TOPO)
         liga_text = jogo['liga'].upper()
         liga_bbox = draw.textbbox((0, 0), liga_text, font=FONTE_SUBTITULO)
         liga_w = liga_bbox[2] - liga_bbox[0]
-        draw.text(((LARGURA - liga_w) // 2, y0 + 25), liga_text, font=FONTE_SUBTITULO, fill=(170, 190, 210))
+        draw.text(((LARGURA - liga_w) // 2, y0 + 50), liga_text, font=FONTE_SUBTITULO, fill=(170, 190, 210))  # +50px do topo
 
-        # === LINHA 2: HORÁRIO - CORREÇÃO ===
-        # Usar hora_formatada se disponível, caso contrário formatar
+        # === LINHA 2: HORÁRIO === (MAIS ESPAÇO DA LIGA)
         if 'hora_formatada' in jogo and 'data_formatada' in jogo:
             hora_text = f"HORÁRIO: {jogo['hora_formatada']} BRT | DATA: {jogo['data_formatada']}"
         else:
-            # Fallback: tentar formatar a hora existente
             try:
                 hora_format = jogo["hora"].strftime("%H:%M") if isinstance(jogo["hora"], datetime) else str(jogo["hora"])
                 data_format = jogo["hora"].strftime("%d/%m/%Y") if isinstance(jogo["hora"], datetime) else "Data inválida"
@@ -1604,18 +1601,17 @@ def gerar_poster_multiplos_jogos(jogos: list, titulo: str = "ELITE MASTER - ALER
         
         hora_bbox = draw.textbbox((0, 0), hora_text, font=FONTE_INFO)
         hora_w = hora_bbox[2] - hora_bbox[0]
-        draw.text(((LARGURA - hora_w) // 2, y0 + 90), hora_text, font=FONTE_INFO, fill=(120, 180, 240))
+        draw.text(((LARGURA - hora_w) // 2, y0 + 140), hora_text, font=FONTE_INFO, fill=(120, 180, 240))  # +140px do topo (90px após a liga)
 
-        # === SEÇÃO TIMES E ESCUDOS ===
+        # === SEÇÃO TIMES E ESCUDOS === (MAIS ESPAÇO DO HORÁRIO)
         TAMANHO_ESCUDO = 160
         TAMANHO_QUADRADO = 180
         ESPACO_ENTRE_ESCUDOS = 550
-        ALTURA_SECAO_TIMES = 400
 
-        # Calcular posição central para escudos
+        # Calcular posição central para escudos - MAIS ESPAÇO DO HORÁRIO
         largura_total_escudos = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
         x_inicio_escudos = (LARGURA - largura_total_escudos) // 2
-        y_escudos = y0 + 140
+        y_escudos = y0 + 220  # +220px do topo (80px após o horário)
 
         x_home_escudo = x_inicio_escudos
         x_away_escudo = x_home_escudo + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
@@ -1671,18 +1667,18 @@ def gerar_poster_multiplos_jogos(jogos: list, titulo: str = "ELITE MASTER - ALER
         desenhar_escudo_quadrado_compacto(escudo_home, x_home_escudo, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO)
         desenhar_escudo_quadrado_compacto(escudo_away, x_away_escudo, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO)
 
-        # === NOMES DOS TIMES (centralizados abaixo dos escudos) ===
-        home_text = jogo['home'][:16]  # Limitar tamanho
+        # === NOMES DOS TIMES === (MAIS ESPAÇO DOS ESCUDOS)
+        home_text = jogo['home'][:16]
         away_text = jogo['away'][:16]
         
         home_bbox = draw.textbbox((0, 0), home_text, font=FONTE_TIMES)
         home_w = home_bbox[2] - home_bbox[0]
-        draw.text((x_home_escudo + (TAMANHO_QUADRADO - home_w)//2, y_escudos + TAMANHO_QUADRADO + 15), 
+        draw.text((x_home_escudo + (TAMANHO_QUADRADO - home_w)//2, y_escudos + TAMANHO_QUADRADO + 40),  # +40px após escudos
                  home_text, font=FONTE_TIMES, fill=(255, 255, 255))
 
         away_bbox = draw.textbbox((0, 0), away_text, font=FONTE_TIMES)
         away_w = away_bbox[2] - away_bbox[0]
-        draw.text((x_away_escudo + (TAMANHO_QUADRADO - away_w)//2, y_escudos + TAMANHO_QUADRADO + 15), 
+        draw.text((x_away_escudo + (TAMANHO_QUADRADO - away_w)//2, y_escudos + TAMANHO_QUADRADO + 40),  # +40px após escudos
                  away_text, font=FONTE_TIMES, fill=(255, 255, 255))
         
         # === VS CENTRALIZADO ===
@@ -1692,8 +1688,8 @@ def gerar_poster_multiplos_jogos(jogos: list, titulo: str = "ELITE MASTER - ALER
         vs_y = y_escudos + TAMANHO_QUADRADO//2 - 20
         draw.text((vs_x, vs_y), "VS", font=FONTE_VS, fill=(255, 215, 0))
 
-        # === SEÇÃO ANÁLISE (organizada em linha única) ===
-        y_analysis = y_escudos + TAMANHO_QUADRADO + 80
+        # === SEÇÃO ANÁLISE === (MAIS ESPAÇO DOS NOMES DOS TIMES)
+        y_analysis = y_escudos + TAMANHO_QUADRADO + 120  # +120px após nomes dos times
         
         # Dividir a largura em 3 colunas iguais
         largura_coluna = (LARGURA - 2 * PADDING) // 3
@@ -1717,8 +1713,8 @@ def gerar_poster_multiplos_jogos(jogos: list, titulo: str = "ELITE MASTER - ALER
             x_centro = x_pos + (largura_coluna - w) // 2
             draw.text((x_centro, y_analysis), text, font=FONTE_ANALISE, fill=cor)
 
-        # === INDICADOR DE FORÇA ===
-        y_indicator = y_analysis + 70
+        # === INDICADOR DE FORÇA === (MAIS ESPAÇO DA ANÁLISE)
+        y_indicator = y_analysis + 100  # +100px após análise
         
         if jogo['confianca'] >= 80:
             indicador_text = "🔥 ALTA CONFIABILIDADE 🔥"
@@ -1752,6 +1748,7 @@ def gerar_poster_multiplos_jogos(jogos: list, titulo: str = "ELITE MASTER - ALER
     buffer.seek(0)
     
     return buffer
+
 
 def enviar_alerta_composto_poster(jogos_conf: list, threshold: int):
     """Envia alerta composto com poster para múltiplos jogos"""
