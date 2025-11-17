@@ -2692,17 +2692,22 @@ def calcular_desempenho_escanteios(qtd_jogos: int = 50):
     st.success(f"✅ Desempenho Escanteios: {acertos}/{total_jogos} acertos ({taxa_acerto:.1f}%)")
 
 # =============================
-# PROCESSAMENTO PRINCIPAL ATUALIZADO
+# PROCESSAMENTO PRINCIPAL ATUALIZADO - COM SELEÇÃO MÚLTIPLA
 # =============================
 
-def processar_jogos_avancado(data_selecionada, todas_ligas, liga_selecionada, top_n, 
+def processar_jogos_avancado(data_selecionada, todas_ligas, ligas_selecionadas, top_n, 
                            threshold, threshold_ambas_marcam, threshold_cartoes, threshold_escanteios,
                            estilo_poster, alerta_individual, alerta_poster, alerta_top_jogos,
                            alerta_ambas_marcam, alerta_cartoes, alerta_escanteios):
-    """Processamento AVANÇADO com dados REAIS da API - CORRIGIDO"""
+    """Processamento AVANÇADO com dados REAIS da API - ATUALIZADO PARA SELEÇÃO MÚLTIPLA"""
     
     hoje = data_selecionada.strftime("%Y-%m-%d")
-    ligas_busca = LIGA_DICT.values() if todas_ligas else [LIGA_DICT[liga_selecionada]]
+    
+    # DETERMINAR QUAIS LIGAS USAR - MODIFICADO PARA MÚLTIPLAS LIGAS
+    if todas_ligas:
+        ligas_busca = list(LIGA_DICT.values())
+    else:
+        ligas_busca = [LIGA_DICT[liga] for liga in ligas_selecionadas]
 
     st.write(f"⏳ Buscando jogos com análise AVANÇADA para {data_selecionada.strftime('%d/%m/%Y')}...")
     
@@ -2899,7 +2904,7 @@ def enviar_alerta_conf_criar_poster(jogos_conf: list, threshold: int, chat_id: s
         return False
 
 # =============================
-# Interface Streamlight ATUALIZADA
+# Interface Streamlight ATUALIZADA - COM SELEÇÃO MÚLTIPLA
 # =============================
 def main():
     st.set_page_config(page_title="⚽ Alerta de Gols", layout="wide")
@@ -2942,23 +2947,31 @@ def main():
         st.markdown("----")
         st.info("Ative/desative cada tipo de alerta conforme sua necessidade")
 
-    # Controles principais
+    # Controles principais - COM SELEÇÃO MÚLTIPLA
     col1, col2 = st.columns([2, 1])
     with col1:
         data_selecionada = st.date_input("📅 Data para análise:", value=datetime.today())
     with col2:
         todas_ligas = st.checkbox("🌍 Todas as ligas", value=True)
 
-    liga_selecionada = None
+    ligas_selecionadas = []
     if not todas_ligas:
-        liga_selecionada = st.selectbox("📌 Liga específica:", list(LIGA_DICT.keys()))
+        ligas_selecionadas = st.multiselect(
+            "📌 Selecione as ligas:",
+            options=list(LIGA_DICT.keys()),
+            default=["Premier League (Inglaterra)", "Campeonato Brasileiro Série A"],
+            help="Selecione uma ou mais ligas"
+        )
 
     # Processamento
     if st.button("🔍 Buscar Partidas", type="primary"):
-        processar_jogos_avancado(data_selecionada, todas_ligas, liga_selecionada, top_n, 
-                               threshold, threshold_ambas_marcam, threshold_cartoes, threshold_escanteios,
-                               "West Ham (Novo)", alerta_individual, alerta_poster, alerta_top_jogos,
-                               alerta_ambas_marcam, alerta_cartoes, alerta_escanteios)
+        if not todas_ligas and not ligas_selecionadas:
+            st.error("❌ Selecione pelo menos uma liga ou marque 'Todas as ligas'")
+        else:
+            processar_jogos_avancado(data_selecionada, todas_ligas, ligas_selecionadas, top_n, 
+                                   threshold, threshold_ambas_marcam, threshold_cartoes, threshold_escanteios,
+                                   "West Ham (Novo)", alerta_individual, alerta_poster, alerta_top_jogos,
+                                   alerta_ambas_marcam, alerta_cartoes, alerta_escanteios)
 
     # Ações - EXPANDIDAS COM NOVAS PREVISÕES
     col1, col2, col3, col4 = st.columns(4)
