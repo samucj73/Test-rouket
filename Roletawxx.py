@@ -47,7 +47,11 @@ def salvar_sessao():
             'ml_contador_sorteios': st.session_state.sistema.estrategia_ml.contador_sorteios,
             'ml_sequencias_padroes': st.session_state.sistema.estrategia_ml.sequencias_padroes,
             'ml_metricas_padroes': st.session_state.sistema.estrategia_ml.metricas_padroes,
-            'estrategia_selecionada': st.session_state.sistema.estrategia_selecionada
+            'estrategia_selecionada': st.session_state.sistema.estrategia_selecionada,
+            # NOVO: Dados das combinações dinâmicas
+            'sistema_historico_combinacoes': st.session_state.sistema.historico_combinacoes,
+            'sistema_combinacoes_quentes': st.session_state.sistema.combinacoes_quentes,
+            'sistema_combinacoes_frias': st.session_state.sistema.combinacoes_frias
         }
         
         with open(SESSION_DATA_PATH, 'wb') as f:
@@ -97,6 +101,11 @@ def carregar_sessao():
                 st.session_state.sistema.sequencia_erros = session_data.get('sistema_sequencia_erros', 0)
                 st.session_state.sistema.ultima_estrategia_erro = session_data.get('sistema_ultima_estrategia_erro', '')
                 st.session_state.sistema.estrategia_selecionada = session_data.get('estrategia_selecionada', 'Zonas')
+                
+                # NOVO: Restaurar dados das combinações dinâmicas
+                st.session_state.sistema.historico_combinacoes = session_data.get('sistema_historico_combinacoes', {})
+                st.session_state.sistema.combinacoes_quentes = session_data.get('sistema_combinacoes_quentes', [])
+                st.session_state.sistema.combinacoes_frias = session_data.get('sistema_combinacoes_frias', [])
                 
                 # Restaurar estratégia Zonas
                 zonas_historico = session_data.get('zonas_historico', [])
@@ -167,6 +176,15 @@ def enviar_previsao_super_simplificada(previsao):
                 nucleo1 = "7" if zonas_envolvidas[0] == 'Vermelha' else "10" if zonas_envolvidas[0] == 'Azul' else "2"
                 nucleo2 = "7" if zonas_envolvidas[1] == 'Vermelha' else "10" if zonas_envolvidas[1] == 'Azul' else "2"
                 mensagem = f"🔥 NÚCLEOS {nucleo1}+{nucleo2} - CONFIANÇA {confianca.upper()}"
+                
+                # 🎯 DESTACAR COMBINAÇÕES COM BOM HISTÓRICO
+                sistema = st.session_state.sistema
+                combinacao = tuple(sorted(zonas_envolvidas))
+                if hasattr(sistema, 'combinacoes_quentes') and combinacao in sistema.combinacoes_quentes:
+                    dados = sistema.historico_combinacoes.get(combinacao, {})
+                    eff = dados.get('eficiencia', 0)
+                    mensagem += f" 🏆 COMBO EFICIENTE ({eff:.1f}%)"
+                    
             else:
                 zona = previsao.get('zona', '')
                 nucleo = "7" if zona == 'Vermelha' else "10" if zona == 'Azul' else "2"
@@ -1018,7 +1036,7 @@ class MLRoletaOtimizada:
         }
 
 # =============================
-# ESTRATÉGIA DAS ZONAS ATUALIZADA - COM INVERSÃO PARA SEGUNDA MELHOR E SELEÇÃO INTELIGENTE
+# ESTRATÉGIA DAS ZONAS ATUALIZADA - COM APRENDIZADO DINÂMICO DE COMBINAÇÕES
 # =============================
 class EstrategiaZonasOtimizada:
     def __init__(self):
@@ -1063,7 +1081,7 @@ class EstrategiaZonasOtimizada:
         }
         
         # NOVO: Threshold base dinâmico
-        self.threshold_base = 28
+        self.threshold_base = 22  # Reduzido para mais assertividade
         
         # 🎯 NOVO: Sistema de seleção inteligente
         self.sistema_selecao = SistemaSelecaoInteligente()
@@ -1099,29 +1117,25 @@ class EstrategiaZonasOtimizada:
     def get_threshold_dinamico(self, zona):
         """Calcula threshold dinâmico baseado na performance da zona - VERSÃO MAIS AGRESSIVA"""
         if zona not in self.stats_zonas:
-            return self.threshold_base
+            return 20  # Mais baixo que antes
         
         perf = self.stats_zonas[zona]['performance_media']
         sequencia = self.stats_zonas[zona]['sequencia_atual']
         
-        # 🎯 NOVO: Threshold mais agressivo para zonas quentes
-        if perf > 45 and sequencia >= 2:    # Zona muito quente com sequência
-            return self.threshold_base - 8   # 20 - Muito sensível
-        elif perf > 40:                     # Zona muito quente
-            return self.threshold_base - 5   # 23
-        elif perf > 35 and sequencia >= 1:  # Zona quente com sequência
-            return self.threshold_base - 3   # 25
-        elif perf > 30:                     # Zona quente
-            return self.threshold_base - 2   # 26
-        elif perf < 15:                     # Zona muito fria  
-            return self.threshold_base + 8   # 36 - Muito conservador
-        elif perf < 20:                     # Zona fria
-            return self.threshold_base + 5   # 33
-        else:                               # Performance normal
-            return self.threshold_base
+        # 🎯 THRESHOLDS MAIS BAIXOS PARA MAIS PREVISÕES
+        if perf > 35 and sequencia >= 1:  
+            return 18  # Muito sensível para zonas quentes
+        elif perf > 30:
+            return 20
+        elif perf > 25:
+            return 22
+        elif perf < 15:
+            return 28  # Conservador para zonas frias
+        else:
+            return 24  # Default mais baixo
 
     def get_zona_mais_quente(self):
-        if len(self.historico) < 15:
+        if len(self.historico) < 10:  # Reduzido para resposta mais rápida
             return None
             
         zonas_score = {}
@@ -1179,7 +1193,7 @@ class EstrategiaZonasOtimizada:
 
     def get_zonas_rankeadas(self):
         """Retorna todas as zonas rankeadas por score (melhor para pior)"""
-        if len(self.historico) < 15:
+        if len(self.historico) < 10:  # Reduzido para resposta mais rápida
             return None
             
         zonas_score = {}
@@ -1193,8 +1207,8 @@ class EstrategiaZonasOtimizada:
         return zonas_rankeadas
 
     def analisar_zonas_com_inversao(self):
-        """Versão com inversão para segunda melhor zona E SELEÇÃO INTELIGENTE - VERSÃO MAIS AGRESSIVA"""
-        if len(self.historico) < 12:  # Aumentado de 15 para 12
+        """Versão com aprendizado dinâmico de combinações"""
+        if len(self.historico) < 10:  # Reduzido para resposta mais rápida
             return None
             
         zonas_rankeadas = self.get_zonas_rankeadas()
@@ -1204,68 +1218,94 @@ class EstrategiaZonasOtimizada:
         # Pegar a melhor zona
         zona_primaria, score_primario = zonas_rankeadas[0]
         
-        # 🎯 NOVO: Threshold mais baixo para zona primária
-        threshold_primario = self.get_threshold_dinamico(zona_primaria) - 2
+        # 🎯 THRESHOLD DINÂMICO MAIS BAIXO
+        threshold_base = 22
         
-        if score_primario < threshold_primario:
+        if score_primario < threshold_base:
             return None
         
-        # Pegar a segunda melhor zona
-        if len(zonas_rankeadas) > 1:
-            zona_secundaria, score_secundario = zonas_rankeadas[1]
-            
-            # 🎯 NOVO: Condição mais flexível para segunda zona
-            threshold_secundario = threshold_primario - 3  # Threshold mais baixo para segunda zona
-            
-            if score_secundario >= threshold_secundario:
-                # COMBINAÇÃO: Juntar números das duas melhores zonas
-                numeros_primarios = self.numeros_zonas[zona_primaria]
-                numeros_secundarios = self.numeros_zonas[zona_secundaria]
-                
-                # Remover duplicatas (caso haja sobreposição)
-                numeros_combinados = list(set(numeros_primarios + numeros_secundarios))
-                
-                # 🎯 APLICAÇÃO DA SELEÇÃO INTELIGENTE
-                if len(numeros_combinados) > 15:
-                    numeros_combinados = self.sistema_selecao.selecionar_melhores_15_numeros(
-                        numeros_combinados, self.historico, "Zonas"
-                    )
-                
-                confianca_primaria = self.calcular_confianca_ultra(zona_primaria)
-                confianca_secundaria = self.calcular_confianca_ultra(zona_secundaria)
-                
-                gatilho = f'Zona {zona_primaria} (Score: {score_primario:.1f}) + Zona {zona_secundaria} (Score: {score_secundario:.1f}) | Perf: {self.stats_zonas[zona_primaria]["performance_media"]:.1f}% | SEL: {len(numeros_combinados)} números'
-                
-                return {
-                    'nome': f'Zonas Duplas - {zona_primaria} + {zona_secundaria}',
-                    'numeros_apostar': numeros_combinados,
-                    'gatilho': gatilho,
-                    'confianca': f'{confianca_primaria}+{confianca_secundaria}',
-                    'zona': f'{zona_primaria}+{zona_secundaria}',
-                    'zonas_envolvidas': [zona_primaria, zona_secundaria],
-                    'tipo': 'dupla',
-                    'selecao_inteligente': True
-                }
+        # 🎯 VERIFICAR COMBINAÇÃO RECOMENDADA DO SISTEMA
+        sistema = st.session_state.sistema
+        combinacao_recomendada = sistema.get_combinacao_recomendada()
         
-        # Se não há segunda zona válida, retornar apenas a primeira COM SELEÇÃO
-        numeros_apostar = self.numeros_zonas[zona_primaria]
+        # Se há combinação recomendada, tentar usá-la
+        if combinacao_recomendada and zona_primaria in combinacao_recomendada:
+            zona_secundaria = [z for z in combinacao_recomendada if z != zona_primaria][0]
+            
+            # Verificar se a zona secundária está nas rankeadas
+            zonas_secundarias_disponiveis = [z for z, s in zonas_rankeadas if z == zona_secundaria]
+            if zonas_secundarias_disponiveis:
+                return self.criar_previsao_dupla(zona_primaria, zona_secundaria, "RECOMENDADA")
+        
+        # 🎯 BUSCAR SEGUNDA MELHOR ZONA NORMALMENTE
+        if len(zonas_rankeadas) > 1:
+            for i in range(1, min(3, len(zonas_rankeadas))):  # Verificar 2ª e 3ª
+                zona_secundaria, score_secundario = zonas_rankeadas[i]
+                combinacao_teste = tuple(sorted([zona_primaria, zona_secundaria]))
+                
+                # 🎯 EVITAR COMBINAÇÕES FRIA
+                if sistema.deve_evitar_combinacao(combinacao_teste):
+                    continue
+                
+                threshold_secundario = threshold_base - 4
+                
+                if score_secundario >= threshold_secundario:
+                    return self.criar_previsao_dupla(zona_primaria, zona_secundaria, "RANQUEADA")
+        
+        # 🎯 SE NENHUMA COMBINAÇÃO BOA, RETORNAR APENAS PRIMÁRIA
+        return self.criar_previsao_unica(zona_primaria)
+
+    def criar_previsao_dupla(self, zona_primaria, zona_secundaria, tipo):
+        """Cria previsão para combinação dupla"""
+        numeros_primarios = self.numeros_zonas[zona_primaria]
+        numeros_secundarios = self.numeros_zonas[zona_secundaria]
+        
+        numeros_combinados = list(set(numeros_primarios + numeros_secundarios))
         
         # 🎯 APLICAÇÃO DA SELEÇÃO INTELIGENTE
+        if len(numeros_combinados) > 15:
+            numeros_combinados = self.sistema_selecao.selecionar_melhores_15_numeros(
+                numeros_combinados, self.historico, "Zonas"
+            )
+        
+        # 🎯 CALCULAR EFICIÊNCIA DA COMBINAÇÃO
+        sistema = st.session_state.sistema
+        combinacao = tuple(sorted([zona_primaria, zona_secundaria]))
+        dados_combinacao = sistema.historico_combinacoes.get(combinacao, {})
+        eficiencia = dados_combinacao.get('eficiencia', 0)
+        total = dados_combinacao.get('total', 0)
+        
+        info_eficiencia = ""
+        if total > 0:
+            info_eficiencia = f" | Eff: {eficiencia:.1f}% ({dados_combinacao.get('acertos', 0)}/{total})"
+        
+        gatilho = f'Zona {zona_primaria} + {zona_secundaria} - {tipo}{info_eficiencia}'
+        
+        return {
+            'nome': f'Zonas Duplas - {zona_primaria} + {zona_secundaria}',
+            'numeros_apostar': numeros_combinados,
+            'gatilho': gatilho,
+            'confianca': self.calcular_confianca_ultra(zona_primaria),
+            'zona': f'{zona_primaria}+{zona_secundaria}',
+            'zonas_envolvidas': [zona_primaria, zona_secundaria],
+            'tipo': 'dupla',
+            'selecao_inteligente': True
+        }
+
+    def criar_previsao_unica(self, zona_primaria):
+        """Cria previsão para zona única"""
+        numeros_apostar = self.numeros_zonas[zona_primaria]
+        
         if len(numeros_apostar) > 15:
             numeros_apostar = self.sistema_selecao.selecionar_melhores_15_numeros(
                 numeros_apostar, self.historico, "Zonas"
             )
         
-        confianca = self.calcular_confianca_ultra(zona_primaria)
-        score = self.get_zona_score(zona_primaria)
-        
-        gatilho = f'Zona {zona_primaria} - Score: {score:.1f} | Perf: {self.stats_zonas[zona_primaria]["performance_media"]:.1f}% | Thr: {self.get_threshold_dinamico(zona_primaria)} | SEL: {len(numeros_apostar)} números'
-        
         return {
             'nome': f'Zona {zona_primaria}',
             'numeros_apostar': numeros_apostar,
-            'gatilho': gatilho,
-            'confianca': confianca,
+            'gatilho': f'Zona {zona_primaria} - Única',
+            'confianca': self.calcular_confianca_ultra(zona_primaria),
             'zona': zona_primaria,
             'zonas_envolvidas': [zona_primaria],
             'tipo': 'unica',
@@ -2235,10 +2275,10 @@ class EstrategiaML:
             'eficiencia_por_tipo': {},
             'historico_validacao': []
         }
-        logging.info("🔄 Padrões sequenciais e métricas zerados")
+        logging.info("🔄 Padrões sequenciais e métricas zerados"
 
 # =============================
-# SISTEMA DE GESTÃO ATUALIZADO COM ROTAÇÃO AUTOMÁTICA
+# SISTEMA DE GESTÃO ATUALIZADO COM APRENDIZADO DINÂMICO DE COMBINAÇÕES
 # =============================
 class SistemaRoletaCompleto:
     def __init__(self):
@@ -2257,6 +2297,11 @@ class SistemaRoletaCompleto:
         # Sistema de rotação automática
         self.sequencia_erros = 0
         self.ultima_estrategia_erro = ""
+        
+        # 🎯 NOVO: Sistema de combinações dinâmicas
+        self.historico_combinacoes = {}  # Combinações dinâmicas
+        self.combinacoes_quentes = []    # Combinações com bom desempenho recente
+        self.combinacoes_frias = []      # Combinações com mau desempenho recente
 
     def set_estrategia(self, estrategia):
         self.estrategia_selecionada = estrategia
@@ -2264,6 +2309,106 @@ class SistemaRoletaCompleto:
 
     def treinar_modelo_ml(self, historico_completo=None):
         return self.estrategia_ml.treinar_modelo_ml(historico_completo)
+
+    def atualizar_desempenho_combinacao(self, zonas_envolvidas, acerto):
+        """Atualiza desempenho de combinações de forma dinâmica"""
+        if len(zonas_envolvidas) > 1:
+            combinacao = tuple(sorted(zonas_envolvidas))
+            
+            # Inicializar se não existe
+            if combinacao not in self.historico_combinacoes:
+                self.historico_combinacoes[combinacao] = {
+                    'acertos': 0, 
+                    'total': 0, 
+                    'eficiencia': 0.0,
+                    'ultimo_jogo': len(self.historico_desempenho),
+                    'sequencia_acertos': 0,
+                    'sequencia_erros': 0
+                }
+            
+            dados = self.historico_combinacoes[combinacao]
+            dados['total'] += 1
+            dados['ultimo_jogo'] = len(self.historico_desempenho)
+            
+            if acerto:
+                dados['acertos'] += 1
+                dados['sequencia_acertos'] += 1
+                dados['sequencia_erros'] = 0
+            else:
+                dados['sequencia_erros'] += 1
+                dados['sequencia_acertos'] = 0
+            
+            # Calcular eficiência
+            if dados['total'] > 0:
+                dados['eficiencia'] = (dados['acertos'] / dados['total']) * 100
+            
+            # 🎯 ATUALIZAR LISTAS DINÂMICAS
+            self.atualizar_combinacoes_quentes_frias()
+    
+    def atualizar_combinacoes_quentes_frias(self):
+        """Atualiza dinamicamente as combinações quentes e frias"""
+        # Resetar listas
+        self.combinacoes_quentes = []
+        self.combinacoes_frias = []
+        
+        # Analisar apenas combinações com pelo menos 2 tentativas
+        combinacoes_ativas = {k: v for k, v in self.historico_combinacoes.items() 
+                             if v['total'] >= 2}
+        
+        for combinacao, dados in combinacoes_ativas.items():
+            eficiencia = dados['eficiencia']
+            total_jogos = dados['total']
+            sequencia_acertos = dados['sequencia_acertos']
+            
+            # 🎯 CRITÉRIOS PARA COMBINAÇÃO QUENTE
+            if (eficiencia >= 50 or 
+                (eficiencia >= 40 and total_jogos >= 3) or
+                sequencia_acertos >= 2):
+                self.combinacoes_quentes.append(combinacao)
+            
+            # 🎯 CRITÉRIOS PARA COMBINAÇÃO FRIA
+            elif (eficiencia < 25 and total_jogos >= 3) or dados['sequencia_erros'] >= 2:
+                self.combinacoes_frias.append(combinacao)
+    
+    def get_combinacao_recomendada(self):
+        """Retorna a melhor combinação baseada em desempenho recente"""
+        if not self.combinacoes_quentes:
+            return None
+        
+        # 🎯 PRIORIZAR COMBINAÇÕES COM SEQUÊNCIA DE ACERTOS
+        combinacoes_com_sequencia = [
+            (combo, dados) for combo, dados in self.historico_combinacoes.items()
+            if combo in self.combinacoes_quentes and dados['sequencia_acertos'] >= 1
+        ]
+        
+        if combinacoes_com_sequencia:
+            # Ordenar por sequência de acertos (maior primeiro)
+            combinacoes_com_sequencia.sort(key=lambda x: x[1]['sequencia_acertos'], reverse=True)
+            return combinacoes_com_sequencia[0][0]
+        
+        # 🎯 SE NÃO HÁ SEQUÊNCIA, USAR EFICIÊNCIA
+        combinacoes_eficientes = [
+            (combo, dados) for combo, dados in self.historico_combinacoes.items()
+            if combo in self.combinacoes_quentes
+        ]
+        
+        if combinacoes_eficientes:
+            combinacoes_eficientes.sort(key=lambda x: x[1]['eficiencia'], reverse=True)
+            return combinacoes_eficientes[0][0]
+        
+        return None
+    
+    def deve_evitar_combinacao(self, combinacao):
+        """Verifica se deve evitar uma combinação específica"""
+        if combinacao in self.combinacoes_frias:
+            return True
+        
+        # 🎯 EVITAR COMBINAÇÕES COM MAU DESEMPENHO HISTÓRICO
+        dados = self.historico_combinacoes.get(combinacao, {})
+        if dados and dados.get('total', 0) >= 3 and dados.get('eficiencia', 0) < 20:
+            return True
+            
+        return False
 
     def calcular_performance_estrategias(self):
         """Calcula performance recente das estratégias"""
@@ -2288,50 +2433,57 @@ class SistemaRoletaCompleto:
         
         return performance
 
-    def rotacionar_estrategia_automaticamente(self, acerto, nome_estrategia):
-        """Rotaciona automaticamente entre estratégias - VERSÃO MAIS ASSERTIVA"""
+    def rotacionar_estrategia_automaticamente(self, acerto, nome_estrategia, zonas_envolvidas):
+        """Rotação baseada em desempenho de combinações específicas"""
+        
+        # Atualizar desempenho da combinação
+        self.atualizar_desempenho_combinacao(zonas_envolvidas, acerto)
+        
         if acerto:
-            # Se acertou, zera a sequência de erros
             self.sequencia_erros = 0
             self.ultima_estrategia_erro = ""
-            return False  # Não rotaciona
+            return False
+        
         else:
-            # Se errou
             self.sequencia_erros += 1
             self.ultima_estrategia_erro = nome_estrategia
             
-            # 🎯 MAIS AGRESSIVO: Rotação após 1 erro em certas condições
-            historico_recente = self.historico_desempenho[-3:] if len(self.historico_desempenho) >= 3 else []
+            # 🎯 ROTAÇÃO RÁPIDA PARA COMBINAÇÕES FRIA
+            if len(zonas_envolvidas) > 1:
+                combinacao = tuple(sorted(zonas_envolvidas))
+                
+                if combinacao in self.combinacoes_frias and self.sequencia_erros >= 1:
+                    logging.info(f"🚫 Combinação fria detectada: {combinacao} - Rotacionando")
+                    return self.aplicar_rotacao_inteligente()
             
-            # Condição EXTRA: Se teve 3 erros nos últimos 4 jogos, rotaciona mesmo com 1 erro
-            if len(historico_recente) >= 2:
-                erros_recentes = sum(1 for r in historico_recente if not r['acerto'])
-                if erros_recentes >= 2:  # 2 erros nos últimos 3 jogos
-                    self.sequencia_erros = 2  # Força rotação
-            
-            # Rotação após 2 erros seguidos (ou forçada pela condição acima)
+            # 🎯 ROTAÇÃO PARA MÁ PERFORMANCE GERAL
             if self.sequencia_erros >= 2:
-                estrategia_atual = self.estrategia_selecionada
+                return self.aplicar_rotacao_inteligente()
                 
-                # 🎯 ROTAÇÃO MAIS INTELIGENTE baseada em performance
-                performance_zonas = self.calcular_performance_estrategias()
-                
-                if estrategia_atual == "Zonas":
-                    nova_estrategia = "ML" if performance_zonas.get("ML", 0) > 40 else "Zonas"
-                elif estrategia_atual == "ML":
-                    nova_estrategia = "Zonas" if performance_zonas.get("Zonas", 0) > 40 else "ML"
-                else:
-                    nova_estrategia = "Zonas"
-                
-                # Aplica a rotação
-                self.estrategia_selecionada = nova_estrategia
-                self.sequencia_erros = 0  # Zera a sequência após rotação
-                
-                enviar_rotacao_automatica(estrategia_atual, nova_estrategia)
-                logging.info(f"🔄 ROTAÇÃO AUTOMÁTICA AGRESSIVA: {estrategia_atual} → {nova_estrategia}")
-                
-                return True  # Rotacionou
-            return False  # Não rotacionou ainda
+            return False
+
+    def aplicar_rotacao_inteligente(self):
+        """Aplica rotação baseada em aprendizado contínuo"""
+        estrategia_atual = self.estrategia_selecionada
+        
+        # 🎯 SE HÁ COMBINAÇÕES QUENTES, MANTER NA ESTRATÉGIA
+        if self.combinacoes_quentes and estrategia_atual == "Zonas":
+            logging.info(f"🎯 MANTENDO ZONAS - {len(self.combinacoes_quentes)} combinações quentes")
+            self.sequencia_erros = 0
+            return False
+        
+        # Rotação normal
+        if estrategia_atual == "Zonas":
+            nova_estrategia = "ML"
+        else:
+            nova_estrategia = "Zonas"
+        
+        self.estrategia_selecionada = nova_estrategia
+        self.sequencia_erros = 0
+        
+        enviar_rotacao_automatica(estrategia_atual, nova_estrategia)
+        logging.info(f"🔄 ROTAÇÃO: {estrategia_atual} → {nova_estrategia}")
+        return True
 
     def processar_novo_numero(self, numero):
         if isinstance(numero, dict) and 'number' in numero:
@@ -2378,8 +2530,11 @@ class SistemaRoletaCompleto:
                         acerto = True
                         zonas_acertadas.append(zona)
             
+            # 🎯 ATUALIZAR DESEMPENHO DA COMBINAÇÃO
+            self.atualizar_desempenho_combinacao(zonas_envolvidas, acerto)
+            
             # Verifica e aplica rotação automática se necessário
-            rotacionou = self.rotacionar_estrategia_automaticamente(acerto, nome_estrategia)
+            rotacionou = self.rotacionar_estrategia_automaticamente(acerto, nome_estrategia, zonas_envolvidas)
             
             if nome_estrategia not in self.estrategias_contador:
                 self.estrategias_contador[nome_estrategia] = {'acertos': 0, 'total': 0}
@@ -2434,6 +2589,11 @@ class SistemaRoletaCompleto:
         self.contador_sorteios_global = 0
         self.sequencia_erros = 0
         self.ultima_estrategia_erro = ""
+        
+        # 🎯 ZERAR COMBINAÇÕES DINÂMICAS
+        self.historico_combinacoes = {}
+        self.combinacoes_quentes = []
+        self.combinacoes_frias = []
         
         # Zerar estatísticas das estratégias
         self.estrategia_zonas.zerar_estatisticas()
@@ -2515,6 +2675,30 @@ def fetch_latest_result():
         return None
 
 # =============================
+# FUNÇÃO PARA MOSTRAR COMBINAÇÕES DINÂMICAS
+# =============================
+def mostrar_combinacoes_dinamicas():
+    """Mostra as combinações quentes e frias atuais"""
+    sistema = st.session_state.sistema
+    
+    if hasattr(sistema, 'combinacoes_quentes') and sistema.combinacoes_quentes:
+        st.sidebar.subheader("🔥 Combinações Quentes")
+        for combo in sistema.combinacoes_quentes:
+            dados = sistema.historico_combinacoes.get(combo, {})
+            eff = dados.get('eficiencia', 0)
+            total = dados.get('total', 0)
+            seq = dados.get('sequencia_acertos', 0)
+            st.sidebar.write(f"🎯 {combo[0]}+{combo[1]}: {eff:.1f}% ({seq}✓)")
+    
+    if hasattr(sistema, 'combinacoes_frias') and sistema.combinacoes_frias:
+        st.sidebar.subheader("❌ Combinações Frias")
+        for combo in sistema.combinacoes_frias:
+            dados = sistema.historico_combinacoes.get(combo, {})
+            eff = dados.get('eficiencia', 0)
+            total = dados.get('total', 0)
+            st.sidebar.write(f"🚫 {combo[0]}+{combo[1]}: {eff:.1f}%")
+
+# =============================
 # APLICAÇÃO STREAMLIT ATUALIZADA
 # =============================
 st.set_page_config(page_title="IA Roleta — Multi-Estratégias", layout="centered")
@@ -2544,6 +2728,9 @@ if "telegram_chat_id" not in st.session_state and not sessao_carregada:
 
 # Sidebar - Configurações Avançadas
 st.sidebar.title("⚙️ Configurações")
+
+# 🎯 NOVO: Mostrar combinações dinâmicas
+mostrar_combinacoes_dinamicas()
 
 # Gerenciamento de Sessão
 with st.sidebar.expander("💾 Gerenciamento de Sessão", expanded=False):
@@ -2803,7 +2990,7 @@ with st.sidebar.expander("📊 Informações das Estratégias"):
         st.write("- 📊 Histórico: 70 números (35 → 70)")
         st.write("- 🎯 Múltiplas janelas: Curto(12) Médio(24) Longo(48)")
         st.write("- 📈 Threshold dinâmico por performance")
-        st.write("- 🔄 **INVERSÃO AUTOMÁTICA:** Combina as 2 melhores zonas quando possível")
+        st.write("- 🔄 **APRENDIZADO DINÂMICO:** Combinações que funcionam no momento")
         st.write("- 🎯 **SELEÇÃO INTELIGENTE:** Máximo 15 números selecionados automaticamente")
         for zona, dados in info_zonas.items():
             st.write(f"**Zona {zona}** (Núcleo: {dados['central']})")
@@ -2831,7 +3018,7 @@ with st.sidebar.expander("📊 Informações das Estratégias"):
         st.write("- **Zonas**: 6 antes + 6 depois (13 números/zona)")
         st.write("- **Threshold**: Mínimo 7 números na mesma zona")
         st.write("- **Saída**: Zona com maior concentração")
-        st.write("- 🔄 **INVERSÃO AUTOMÁTICA:** Combina as 2 melhores zonas quando possível")
+        st.write("- 🔄 **APRENDIZADO DINÂMICO:** Combinações que funcionam no momento")
         st.write("- 🎯 **SELEÇÃO INTELIGENTE:** Máximo 15 números selecionados automaticamente")
         
         info_zonas_ml = st.session_state.sistema.estrategia_ml.get_info_zonas_ml()
@@ -2931,6 +3118,15 @@ if sistema.previsao_ativa:
             nucleo2 = "7" if zona2 == 'Vermelha' else "10" if zona2 == 'Azul' else "2"
             
             st.write(f"**📍 Núcleos Combinados:** {nucleo1} + {nucleo2}")
+            
+            # 🎯 MOSTRAR EFICIÊNCIA DA COMBINAÇÃO
+            combinacao = tuple(sorted([zona1, zona2]))
+            dados_combinacao = sistema.historico_combinacoes.get(combinacao, {})
+            if dados_combinacao:
+                eff = dados_combinacao.get('eficiencia', 0)
+                total = dados_combinacao.get('total', 0)
+                st.info(f"🏆 **Eficiência da Combinação:** {eff:.1f}% ({dados_combinacao.get('acertos', 0)}/{total})")
+            
             st.info("🔄 **ESTRATÉGIA DUPLA:** Investindo nas 2 melhores zonas")
         else:
             zona = previsao.get('zona', '')
