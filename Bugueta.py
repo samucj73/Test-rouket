@@ -13,6 +13,7 @@ from sklearn.utils import resample
 import joblib
 from streamlit_autorefresh import st_autorefresh
 import pickle
+from datetime import datetime
 
 # =============================
 # CONFIGURAÇÕES DE PERSISTÊNCIA
@@ -181,8 +182,126 @@ def limpar_sessao():
         logging.error(f"❌ Erro ao limpar sessão: {e}")
 
 # =============================
-# CONFIGURAÇÕES DE NOTIFICAÇÃO
+# CONFIGURAÇÕES DE NOTIFICAÇÃO - COM CANAL AUXILIAR
 # =============================
+def enviar_telegram_mensagem(mensagem, chat_id=None):
+    """Envia mensagem para o Telegram - Versão genérica"""
+    try:
+        token = st.session_state.telegram_token
+        if not token:
+            return
+            
+        if chat_id is None:
+            chat_id = st.session_state.telegram_chat_id
+            
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        payload = {
+            "chat_id": chat_id,
+            "text": mensagem,
+            "parse_mode": "HTML"
+        }
+        
+        response = requests.post(url, json=payload, timeout=10)
+        if response.status_code == 200:
+            logging.info(f"Mensagem enviada para Telegram (chat: {chat_id})")
+        else:
+            logging.error(f"Erro ao enviar para Telegram: {response.status_code}")
+    except Exception as e:
+        logging.error(f"Erro na conexão com Telegram: {e}")
+
+def enviar_telegram(mensagem):
+    """Envia mensagem para o Telegram (chat principal)"""
+    enviar_telegram_mensagem(mensagem, st.session_state.telegram_chat_id)
+
+def enviar_para_canal_auxiliar(previsao):
+    """🆕 ENVIA ALERTA DOS 15 NÚMEROS PARA O CANAL AUXILIAR"""
+    try:
+        nome_estrategia = previsao['nome']
+        numeros_apostar = sorted(previsao['numeros_apostar'])
+        
+        # Formatar os 15 números em linhas
+        metade = len(numeros_apostar) // 2
+        linha1 = " ".join(map(str, numeros_apostar[:metade]))
+        linha2 = " ".join(map(str, numeros_apostar[metade:]))
+        
+        # Determinar emoji baseado na estratégia
+        if 'Zonas' in nome_estrategia:
+            emoji = "🔥"
+            tipo = "ZONAS"
+        elif 'ML' in nome_estrategia:
+            emoji = "🤖" 
+            tipo = "MACHINE LEARNING"
+        else:
+            emoji = "💰"
+            tipo = "MIDAS"
+            
+        # Mensagem para o canal auxiliar
+        mensagem_auxiliar = (
+            f"{emoji} *APOSTAR AGORA - {tipo}*\n"
+            f"🎯 *15 NÚMEROS SELECIONADOS:*\n"
+            f"`{linha1}`\n"
+            f"`{linha2}`\n"
+            f"📊 *Confiança:* {previsao.get('confianca', 'ALTA')}\n"
+            f"⏰ *Hora:* {datetime.now().strftime('%H:%M:%S')}"
+        )
+        
+        # 🆕 CHAT ID FIXO DO CANAL AUXILIAR
+        chat_id_auxiliar = "-1002932611974"
+        
+        enviar_telegram_mensagem(mensagem_auxiliar, chat_id_auxiliar)
+        logging.info("🔔 Alerta dos 15 números enviado para canal auxiliar")
+        
+    except Exception as e:
+        logging.error(f"Erro ao enviar para canal auxiliar: {e}")
+
+def enviar_resultado_para_canal_auxiliar(numero_real, acerto, nome_estrategia, zona_acertada=None):
+    """🆕 ENVIA RESULTADO PARA O CANAL AUXILIAR"""
+    try:
+        if acerto:
+            emoji = "🎉"
+            resultado_texto = "ACERTOU"
+            
+            if zona_acertada:
+                if '+' in zona_acertada:
+                    zonas = zona_acertada.split('+')
+                    nucleos = []
+                    for zona in zonas:
+                        if zona == 'Vermelha': nucleos.append("7")
+                        elif zona == 'Azul': nucleos.append("10") 
+                        elif zona == 'Amarela': nucleos.append("2")
+                        else: nucleos.append(zona)
+                    nucleo_str = "+".join(nucleos)
+                    detalhe = f"Núcleos {nucleo_str}"
+                else:
+                    if zona_acertada == 'Vermelha': nucleo = "7"
+                    elif zona_acertada == 'Azul': nucleo = "10"
+                    elif zona_acertada == 'Amarela': nucleo = "2"
+                    else: nucleo = zona_acertada
+                    detalhe = f"Núcleo {nucleo}"
+            else:
+                detalhe = "Acerto direto"
+        else:
+            emoji = "💥"
+            resultado_texto = "ERROU"
+            detalhe = "Número fora da previsão"
+        
+        mensagem_auxiliar = (
+            f"{emoji} *RESULTADO - {resultado_texto}*\n"
+            f"🎲 *Número Sorteado:* `{numero_real}`\n"
+            f"📋 *Estratégia:* {nome_estrategia}\n"
+            f"🎯 *Detalhe:* {detalhe}\n"
+            f"⏰ *Hora:* {datetime.now().strftime('%H:%M:%S')}"
+        )
+        
+        # 🆕 CHAT ID FIXO DO CANAL AUXILIAR
+        chat_id_auxiliar = "-1002932611974"
+        
+        enviar_telegram_mensagem(mensagem_auxiliar, chat_id_auxiliar)
+        logging.info("🔔 Resultado enviado para canal auxiliar")
+        
+    except Exception as e:
+        logging.error(f"Erro ao enviar resultado para canal auxiliar: {e}")
+
 def enviar_previsao_super_simplificada(previsao):
     """Envia notificação de previsão super simplificada"""
     try:
@@ -229,10 +348,16 @@ def enviar_previsao_super_simplificada(previsao):
         st.toast(f"🎯 PREVISÃO CONFIRMADA", icon="🔥")
         st.warning(f"🔔 {mensagem}")
         
-        if 'telegram_token' in st.session_state and 'telegram_chat_id' in st.session_state:
-            if st.session_state.telegram_token and st.session_state.telegram_chat_id:
-                enviar_alerta_numeros_simplificado(previsao)
-                enviar_telegram(f"🚨 PREVISÃO ATIVA\n{mensagem}\n💎 CONFIANÇA: {previsao.get('confianca', 'ALTA')}")
+        # 🆕 ENVIAR PARA CANAL AUXILIAR - ALERTA DOS 15 NÚMEROS
+        if 'telegram_token' in st.session_state:
+            if st.session_state.telegram_token:
+                # Enviar alerta principal para o chat principal (se configurado)
+                if st.session_state.telegram_chat_id:
+                    enviar_alerta_numeros_simplificado(previsao)
+                    enviar_telegram(f"🚨 PREVISÃO ATIVA\n{mensagem}\n💎 CONFIANÇA: {previsao.get('confianca', 'ALTA')}")
+                
+                # 🆕 SEMPRE enviar para o canal auxiliar
+                enviar_para_canal_auxiliar(previsao)
                 
         salvar_sessao()
     except Exception as e:
@@ -272,50 +397,34 @@ def enviar_resultado_super_simplificado(numero_real, acerto, nome_estrategia, zo
                     zonas = zona_acertada.split('+')
                     nucleos = []
                     for zona in zonas:
-                        if zona == 'Vermelha':
-                            nucleos.append("7")
-                        elif zona == 'Azul':
-                            nucleos.append("10")
-                        elif zona == 'Amarela':
-                            nucleos.append("2")
-                        else:
-                            nucleos.append(zona)
+                        if zona == 'Vermelha': nucleos.append("7")
+                        elif zona == 'Azul': nucleos.append("10")
+                        elif zona == 'Amarela': nucleos.append("2")
+                        else: nucleos.append(zona)
                     nucleo_str = "+".join(nucleos)
                     mensagem = f"✅ Acerto Núcleos {nucleo_str}\n🎲 Número: {numero_real}"
                 else:
-                    if zona_acertada == 'Vermelha':
-                        nucleo = "7"
-                    elif zona_acertada == 'Azul':
-                        nucleo = "10"
-                    elif zona_acertada == 'Amarela':
-                        nucleo = "2"
-                    else:
-                        nucleo = zona_acertada
+                    if zona_acertada == 'Vermelha': nucleo = "7"
+                    elif zona_acertada == 'Azul': nucleo = "10"
+                    elif zona_acertada == 'Amarela': nucleo = "2"
+                    else: nucleo = zona_acertada
                     mensagem = f"✅ Acerto Núcleo {nucleo}\n🎲 Número: {numero_real}"
             elif 'ML' in nome_estrategia and zona_acertada:
                 if '+' in zona_acertada:
                     zonas = zona_acertada.split('+')
                     nucleos = []
                     for zona in zonas:
-                        if zona == 'Vermelha':
-                            nucleos.append("7")
-                        elif zona == 'Azul':
-                            nucleos.append("10")
-                        elif zona == 'Amarela':
-                            nucleos.append("2")
-                        else:
-                            nucleos.append(zona)
+                        if zona == 'Vermelha': nucleos.append("7")
+                        elif zona == 'Azul': nucleos.append("10")
+                        elif zona == 'Amarela': nucleos.append("2")
+                        else: nucleos.append(zona)
                     nucleo_str = "+".join(nucleos)
                     mensagem = f"✅ Acerto Núcleos {nucleo_str}\n🎲 Número: {numero_real}"
                 else:
-                    if zona_acertada == 'Vermelha':
-                        nucleo = "7"
-                    elif zona_acertada == 'Azul':
-                        nucleo = "10"
-                    elif zona_acertada == 'Amarela':
-                        nucleo = "2"
-                    else:
-                        nucleo = zona_acertada
+                    if zona_acertada == 'Vermelha': nucleo = "7"
+                    elif zona_acertada == 'Azul': nucleo = "10")
+                    elif zona_acertada == 'Amarela': nucleo = "2"
+                    else: nucleo = zona_acertada
                     mensagem = f"✅ Acerto Núcleo {nucleo}\n🎲 Número: {numero_real}"
             else:
                 mensagem = f"✅ Acerto\n🎲 Número: {numero_real}"
@@ -325,10 +434,16 @@ def enviar_resultado_super_simplificado(numero_real, acerto, nome_estrategia, zo
         st.toast(f"🎲 Resultado", icon="✅" if acerto else "❌")
         st.success(f"📢 {mensagem}") if acerto else st.error(f"📢 {mensagem}")
         
-        if 'telegram_token' in st.session_state and 'telegram_chat_id' in st.session_state:
-            if st.session_state.telegram_token and st.session_state.telegram_chat_id:
-                enviar_telegram(f"📢 RESULTADO\n{mensagem}")
-                enviar_alerta_conferencia_simplificado(numero_real, acerto, nome_estrategia)
+        # 🆕 ENVIAR PARA CANAL AUXILIAR - RESULTADO
+        if 'telegram_token' in st.session_state:
+            if st.session_state.telegram_token:
+                # Enviar para chat principal (se configurado)
+                if st.session_state.telegram_chat_id:
+                    enviar_telegram(f"📢 RESULTADO\n{mensagem}")
+                    enviar_alerta_conferencia_simplificado(numero_real, acerto, nome_estrategia)
+                
+                # 🆕 SEMPRE enviar para o canal auxiliar
+                enviar_resultado_para_canal_auxiliar(numero_real, acerto, nome_estrategia, zona_acertada)
                 
         salvar_sessao()
     except Exception as e:
@@ -394,27 +509,6 @@ def enviar_rotacao_por_acertos_combinacoes(combinacao_anterior, combinacao_nova)
                 
     except Exception as e:
         logging.error(f"Erro ao enviar rotação por acertos: {e}")
-
-def enviar_telegram(mensagem):
-    """Envia mensagem para o Telegram"""
-    try:
-        token = st.session_state.telegram_token
-        chat_id = st.session_state.telegram_chat_id
-        
-        url = f"https://api.telegram.org/bot{token}/sendMessage"
-        payload = {
-            "chat_id": chat_id,
-            "text": mensagem,
-            "parse_mode": "HTML"
-        }
-        
-        response = requests.post(url, json=payload, timeout=10)
-        if response.status_code == 200:
-            logging.info("Mensagem enviada para Telegram com sucesso")
-        else:
-            logging.error(f"Erro ao enviar para Telegram: {response.status_code}")
-    except Exception as e:
-        logging.error(f"Erro na conexão com Telegram: {e}")
 
 # =============================
 # SISTEMA DE DETECÇÃO DE TENDÊNCIAS
@@ -3795,25 +3889,17 @@ if sistema.historico_desempenho:
                 zonas = resultado['zona_acertada'].split('+')
                 nucleos = []
                 for zona in zonas:
-                    if zona == 'Vermelha':
-                        nucleos.append("7")
-                    elif zona == 'Azul':
-                        nucleos.append("10")
-                    elif zona == 'Amarela':
-                        nucleos.append("2")
-                    else:
-                        nucleos.append(zona)
+                    if zona == 'Vermelha': nucleos.append("7")
+                    elif zona == 'Azul': nucleos.append("10")
+                    elif zona == 'Amarela': nucleos.append("2")
+                    else: nucleos.append(zona)
                 nucleo_str = "+".join(nucleos)
                 zona_info = f" (Núcleos {nucleo_str})"
             else:
-                if resultado['zona_acertada'] == 'Vermelha':
-                    nucleo = "7"
-                elif resultado['zona_acertada'] == 'Azul':
-                    nucleo = "10"
-                elif resultado['zona_acertada'] == 'Amarela':
-                    nucleo = "2"
-                else:
-                    nucleo = resultado['zona_acertada']
+                if resultado['zona_acertada'] == 'Vermelha': nucleo = "7"
+                elif resultado['zona_acertada'] == 'Azul': nucleo = "10"
+                elif resultado['zona_acertada'] == 'Amarela': nucleo = "2"
+                else: nucleo = resultado['zona_acertada']
                 zona_info = f" (Núcleo {nucleo})"
                 
         tipo_aposta_info = ""
