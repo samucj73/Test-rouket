@@ -16,6 +16,12 @@ import pickle
 from datetime import datetime
 
 # =============================
+# CONFIGURAÇÕES INICIAIS
+# =============================
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# =============================
 # CONFIGURAÇÕES DE PERSISTÊNCIA
 # =============================
 SESSION_DATA_PATH = "session_data.pkl"
@@ -24,9 +30,23 @@ ML_MODEL_PATH = "ml_roleta_model.pkl"
 SCALER_PATH = "ml_scaler.pkl"
 META_PATH = "ml_meta.pkl"
 
+# =============================
+# VERIFICAÇÃO DE DEPENDÊNCIAS
+# =============================
+try:
+    from catboost import CatBoostClassifier
+    CATBOOST_DISPONIVEL = True
+except ImportError:
+    CATBOOST_DISPONIVEL = False
+    logging.warning("CatBoost não disponível. Usando RandomForest como fallback.")
+
 def salvar_sessao():
     """Salva todos os dados da sessão em arquivo"""
     try:
+        if 'sistema' not in st.session_state:
+            logging.error("❌ Sistema não inicializado para salvar sessão")
+            return False
+            
         session_data = {
             'historico': st.session_state.historico,
             'telegram_token': st.session_state.telegram_token,
@@ -92,6 +112,11 @@ def carregar_sessao():
             if not all(chave in session_data for chave in chaves_essenciais):
                 logging.error("❌ Dados de sessão incompletos")
                 return False
+                
+            # INICIALIZAÇÃO SEGURA DO SISTEMA
+            if 'sistema' not in st.session_state:
+                st.session_state.sistema = SistemaRoletaCompleto()
+                logging.info("✅ Sistema inicializado do zero durante carregamento")
                 
             st.session_state.historico = session_data.get('historico', [])
             st.session_state.telegram_token = session_data.get('telegram_token', '')
@@ -181,18 +206,34 @@ def limpar_sessao():
     except Exception as e:
         logging.error(f"❌ Erro ao limpar sessão: {e}")
 
+def criar_backup_automatico():
+    """Cria backup automático da sessão"""
+    try:
+        if os.path.exists(SESSION_DATA_PATH):
+            backup_path = f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pkl"
+            import shutil
+            shutil.copy2(SESSION_DATA_PATH, backup_path)
+            logging.info(f"✅ Backup criado: {backup_path}")
+    except Exception as e:
+        logging.error(f"❌ Erro ao criar backup: {e}")
+
 # =============================
 # CONFIGURAÇÕES DE NOTIFICAÇÃO - COM CANAL AUXILIAR
 # =============================
 def enviar_telegram_mensagem(mensagem, chat_id=None):
-    """Envia mensagem para o Telegram - Versão genérica"""
+    """Envia mensagem para o Telegram - Versão genérica com timeout"""
     try:
-        token = st.session_state.telegram_token
+        token = st.session_state.get('telegram_token', '')
         if not token:
-            return
+            logging.warning("❌ Token do Telegram não configurado")
+            return False
             
         if chat_id is None:
-            chat_id = st.session_state.telegram_chat_id
+            chat_id = st.session_state.get('telegram_chat_id', '')
+            
+        if not chat_id:
+            logging.warning("❌ Chat ID do Telegram não configurado")
+            return False
             
         url = f"https://api.telegram.org/bot{token}/sendMessage"
         payload = {
@@ -203,15 +244,19 @@ def enviar_telegram_mensagem(mensagem, chat_id=None):
         
         response = requests.post(url, json=payload, timeout=10)
         if response.status_code == 200:
-            logging.info(f"Mensagem enviada para Telegram (chat: {chat_id})")
+            logging.info(f"✅ Mensagem enviada para Telegram (chat: {chat_id})")
+            return True
         else:
-            logging.error(f"Erro ao enviar para Telegram: {response.status_code}")
+            logging.error(f"❌ Erro Telegram: {response.status_code} - {response.text}")
+            return False
+            
     except Exception as e:
-        logging.error(f"Erro na conexão com Telegram: {e}")
+        logging.error(f"❌ Erro na conexão com Telegram: {e}")
+        return False
 
 def enviar_telegram(mensagem):
     """Envia mensagem para o Telegram (chat principal)"""
-    enviar_telegram_mensagem(mensagem, st.session_state.telegram_chat_id)
+    return enviar_telegram_mensagem(mensagem, st.session_state.telegram_chat_id)
 
 def enviar_para_canal_auxiliar(previsao):
     """🆕 ENVIA ALERTA DOS 15 NÚMEROS PARA O CANAL AUXILIAR"""
@@ -237,22 +282,18 @@ def enviar_para_canal_auxiliar(previsao):
             
         # Mensagem para o canal auxiliar
         mensagem_auxiliar = (
-            #f"{emoji} *APOSTAR AGORA - {tipo}*\n"
-            #f"🎯 *15 NÚMEROS SELECIONADOS:*\n"
             f"`{linha1}`\n"
             f"`{linha2}`\n"
-            #f"📊 *Confiança:* {previsao.get('confianca', 'ALTA')}\n"
-            #f"⏰ *Hora:* {datetime.now().strftime('%H:%M:%S')}"
         )
         
         # 🆕 CHAT ID FIXO DO CANAL AUXILIAR
         chat_id_auxiliar = "-1002932611974"
         
-        enviar_telegram_mensagem(mensagem_auxiliar, chat_id_auxiliar)
-        logging.info("🔔 Alerta dos 15 números enviado para canal auxiliar")
+        return enviar_telegram_mensagem(mensagem_auxiliar, chat_id_auxiliar)
         
     except Exception as e:
-        logging.error(f"Erro ao enviar para canal auxiliar: {e}")
+        logging.error(f"❌ Erro ao enviar para canal auxiliar: {e}")
+        return False
 
 def enviar_resultado_para_canal_auxiliar(numero_real, acerto, nome_estrategia, zona_acertada=None):
     """🆕 ENVIA RESULTADO PARA O CANAL AUXILIAR"""
@@ -288,19 +329,16 @@ def enviar_resultado_para_canal_auxiliar(numero_real, acerto, nome_estrategia, z
         mensagem_auxiliar = (
             f"{emoji} *RESULTADO - {resultado_texto}*\n"
             f"🎲 *Número Sorteado:* `{numero_real}`\n"
-            #f"📋 *Estratégia:* {nome_estrategia}\n"
-            #f"🎯 *Detalhe:* {detalhe}\n"
-            #f"⏰ *Hora:* {datetime.now().strftime('%H:%M:%S')}"
         )
         
         # 🆕 CHAT ID FIXO DO CANAL AUXILIAR
         chat_id_auxiliar = "-1002932611974"
         
-        enviar_telegram_mensagem(mensagem_auxiliar, chat_id_auxiliar)
-        logging.info("🔔 Resultado enviado para canal auxiliar")
+        return enviar_telegram_mensagem(mensagem_auxiliar, chat_id_auxiliar)
         
     except Exception as e:
-        logging.error(f"Erro ao enviar resultado para canal auxiliar: {e}")
+        logging.error(f"❌ Erro ao enviar resultado para canal auxiliar: {e}")
+        return False
 
 def enviar_previsao_super_simplificada(previsao):
     """Envia notificação de previsão super simplificada"""
@@ -361,7 +399,7 @@ def enviar_previsao_super_simplificada(previsao):
                 
         salvar_sessao()
     except Exception as e:
-        logging.error(f"Erro ao enviar previsão: {e}")
+        logging.error(f"❌ Erro ao enviar previsão: {e}")
 
 def enviar_alerta_numeros_simplificado(previsao):
     """Envia alerta alternativo super simplificado com os números para apostar"""
@@ -382,11 +420,11 @@ def enviar_alerta_numeros_simplificado(previsao):
             
         mensagem_simplificada = f"{emoji} APOSTAR AGORA\n{linha1}\n{linha2}"
         
-        enviar_telegram(mensagem_simplificada)
-        logging.info("🔔 Alerta simplificado enviado para Telegram")
+        return enviar_telegram(mensagem_simplificada)
         
     except Exception as e:
-        logging.error(f"Erro ao enviar alerta simplificado: {e}")
+        logging.error(f"❌ Erro ao enviar alerta simplificado: {e}")
+        return False
 
 def enviar_resultado_super_simplificado(numero_real, acerto, nome_estrategia, zona_acertada=None):
     """Envia notificação de resultado super simplificado"""
@@ -447,7 +485,7 @@ def enviar_resultado_super_simplificado(numero_real, acerto, nome_estrategia, zo
                 
         salvar_sessao()
     except Exception as e:
-        logging.error(f"Erro ao enviar resultado: {e}")
+        logging.error(f"❌ Erro ao enviar resultado: {e}")
 
 def enviar_alerta_conferencia_simplificado(numero_real, acerto, nome_estrategia):
     """Envia alerta de conferência super simplificado"""
@@ -457,11 +495,11 @@ def enviar_alerta_conferencia_simplificado(numero_real, acerto, nome_estrategia)
         else:
             mensagem = f"💥 ERROU! {numero_real}"
             
-        enviar_telegram(mensagem)
-        logging.info("🔔 Alerta de conferência enviado para Telegram")
+        return enviar_telegram(mensagem)
         
     except Exception as e:
-        logging.error(f"Erro ao enviar alerta de conferência: {e}")
+        logging.error(f"❌ Erro ao enviar alerta de conferência: {e}")
+        return False
 
 def enviar_rotacao_automatica(estrategia_anterior, estrategia_nova):
     """Envia notificação de rotação automática"""
@@ -473,10 +511,11 @@ def enviar_rotacao_automatica(estrategia_anterior, estrategia_nova):
         
         if 'telegram_token' in st.session_state and 'telegram_chat_id' in st.session_state:
             if st.session_state.telegram_token and st.session_state.telegram_chat_id:
-                enviar_telegram(f"🔄 ROTAÇÃO\n{mensagem}")
+                return enviar_telegram(f"🔄 ROTAÇÃO\n{mensagem}")
                 
     except Exception as e:
-        logging.error(f"Erro ao enviar rotação: {e}")
+        logging.error(f"❌ Erro ao enviar rotação: {e}")
+        return False
 
 # NOVA FUNÇÃO: Notificação para rotação por 3 acertos
 def enviar_rotacao_por_acertos_combinacoes(combinacao_anterior, combinacao_nova):
@@ -505,10 +544,11 @@ def enviar_rotacao_por_acertos_combinacoes(combinacao_anterior, combinacao_nova)
         
         if 'telegram_token' in st.session_state and 'telegram_chat_id' in st.session_state:
             if st.session_state.telegram_token and st.session_state.telegram_chat_id:
-                enviar_telegram(f"🎯 ROTAÇÃO POR ACERTOS\n{mensagem}")
+                return enviar_telegram(f"🎯 ROTAÇÃO POR ACERTOS\n{mensagem}")
                 
     except Exception as e:
-        logging.error(f"Erro ao enviar rotação por acertos: {e}")
+        logging.error(f"❌ Erro ao enviar rotação por acertos: {e}")
+        return False
 
 # =============================
 # SISTEMA DE DETECÇÃO DE TENDÊNCIAS
@@ -538,32 +578,36 @@ class SistemaTendencias:
             'mensagem': str
         }
         """
-        if not zonas_rankeadas or len(zonas_rankeadas) < 2:
-            return self._criar_resposta_tendencia("aguardando", None, "Aguardando dados suficientes")
-        
-        zona_top1, score_top1 = zonas_rankeadas[0]
-        zona_top2, score_top2 = zonas_rankeadas[1] if len(zonas_rankeadas) > 1 else (None, 0)
-        
-        # Registrar zona dominante atual
-        self.historico_zonas_dominantes.append(zona_top1)
-        
-        # 1. VERIFICAR SE TENDÊNCIA ESTÁ SE FORMANDO
-        if self.estado_tendencia in ["aguardando", "formando"]:
-            return self._analisar_formacao_tendencia(zona_top1, zona_top2, score_top1, zonas_rankeadas)
-        
-        # 2. VERIFICAR SE TENDÊNCIA ESTÁ ATIVA
-        elif self.estado_tendencia == "ativa":
-            return self._analisar_tendencia_ativa(zona_top1, zona_top2, acerto_ultima, zona_acertada)
-        
-        # 3. VERIFICAR SE TENDÊNCIA ESTÁ ENFRAQUECENDO
-        elif self.estado_tendencia == "enfraquecendo":
-            return self._analisar_tendencia_enfraquecendo(zona_top1, zona_top2, acerto_ultima, zona_acertada)
-        
-        # 4. VERIFICAR SE TENDÊNCIA ESTÁ MORTA
-        elif self.estado_tendencia == "morta":
-            return self._analisar_reinicio_tendencia(zona_top1, zonas_rankeadas)
-        
-        return self._criar_resposta_tendencia("aguardando", None, "Estado não reconhecido")
+        try:
+            if not zonas_rankeadas or len(zonas_rankeadas) < 2:
+                return self._criar_resposta_tendencia("aguardando", None, "Aguardando dados suficientes")
+            
+            zona_top1, score_top1 = zonas_rankeadas[0]
+            zona_top2, score_top2 = zonas_rankeadas[1] if len(zonas_rankeadas) > 1 else (None, 0)
+            
+            # Registrar zona dominante atual
+            self.historico_zonas_dominantes.append(zona_top1)
+            
+            # 1. VERIFICAR SE TENDÊNCIA ESTÁ SE FORMANDO
+            if self.estado_tendencia in ["aguardando", "formando"]:
+                return self._analisar_formacao_tendencia(zona_top1, zona_top2, score_top1, zonas_rankeadas)
+            
+            # 2. VERIFICAR SE TENDÊNCIA ESTÁ ATIVA
+            elif self.estado_tendencia == "ativa":
+                return self._analisar_tendencia_ativa(zona_top1, zona_top2, acerto_ultima, zona_acertada)
+            
+            # 3. VERIFICAR SE TENDÊNCIA ESTÁ ENFRAQUECENDO
+            elif self.estado_tendencia == "enfraquecendo":
+                return self._analisar_tendencia_enfraquecendo(zona_top1, zona_top2, acerto_ultima, zona_acertada)
+            
+            # 4. VERIFICAR SE TENDÊNCIA ESTÁ MORTA
+            elif self.estado_tendencia == "morta":
+                return self._analisar_reinicio_tendencia(zona_top1, zonas_rankeadas)
+            
+            return self._criar_resposta_tendencia("aguardando", None, "Estado não reconhecido")
+        except Exception as e:
+            logging.error(f"❌ Erro na análise de tendência: {e}")
+            return self._criar_resposta_tendencia("aguardando", None, f"Erro na análise: {str(e)}")
     
     def _analisar_formacao_tendencia(self, zona_top1, zona_top2, score_top1, zonas_rankeadas):
         """Etapa 2 do fluxograma - Formação da Tendência"""
@@ -1161,8 +1205,7 @@ class MLRoletaOtimizada:
 
     def _build_and_train_model(self, X_train, y_train, X_val=None, y_val=None, seed=0):
         try:
-            try:
-                from catboost import CatBoostClassifier
+            if CATBOOST_DISPONIVEL:
                 model = CatBoostClassifier(
                     iterations=1500,
                     learning_rate=0.05,
@@ -1182,11 +1225,22 @@ class MLRoletaOtimizada:
                 else:
                     model.fit(X_train, y_train, verbose=False)
                 return model, "CatBoost"
-            except ImportError:
-                raise Exception("CatBoost não disponível")
+            else:
+                # Fallback para RandomForest
+                from sklearn.ensemble import RandomForestClassifier
+                model = RandomForestClassifier(
+                    n_estimators=400,
+                    max_depth=20,
+                    min_samples_split=3,
+                    min_samples_leaf=2,
+                    random_state=seed,
+                    n_jobs=-1
+                )
+                model.fit(X_train, y_train)
+                return model, "RandomForest"
                 
         except Exception as e:
-            logging.warning(f"CatBoost não disponível ou falha ({e}). Usando RandomForest como fallback.")
+            logging.warning(f"Erro no treinamento do modelo ({e}). Usando RandomForest como fallback.")
             from sklearn.ensemble import RandomForestClassifier
             model = RandomForestClassifier(
                 n_estimators=400,
@@ -1329,18 +1383,37 @@ class MLRoletaOtimizada:
             return False, f"Erro no treinamento: {str(e)}"
 
     def carregar_modelo(self):
+        """Carrega modelo com tratamento de erro robusto"""
         try:
-            if os.path.exists(ML_MODEL_PATH) and os.path.exists(SCALER_PATH):
+            if (os.path.exists(ML_MODEL_PATH) and 
+                os.path.exists(SCALER_PATH) and 
+                os.path.getsize(ML_MODEL_PATH) > 0):
+                
                 data = joblib.load(ML_MODEL_PATH)
                 self.models = data.get('models', [])
                 self.scaler = joblib.load(SCALER_PATH)
+                
                 if os.path.exists(META_PATH):
                     self.meta = joblib.load(META_PATH)
+                else:
+                    self.meta = {}
+                    
                 self.is_trained = len(self.models) > 0
+                logging.info(f"✅ Modelo ML carregado: {len(self.models)} modelos")
                 return True
-            return False
+            else:
+                logging.warning("⚠️ Arquivos de modelo não encontrados ou vazios")
+                return False
         except Exception as e:
-            logging.error(f"[carregar_modelo] Erro: {e}")
+            logging.error(f"❌ Erro ao carregar modelo: {e}")
+            # Limpar arquivos corrompidos
+            try:
+                if os.path.exists(ML_MODEL_PATH):
+                    os.remove(ML_MODEL_PATH)
+                if os.path.exists(SCALER_PATH):
+                    os.remove(SCALER_PATH)
+            except:
+                pass
             return False
 
     def _ensemble_predict_proba(self, X_scaled):
@@ -1428,7 +1501,7 @@ class MLRoletaOtimizada:
         }
 
 # =============================
-# ESTRATÉGIA DAS ZONAS ATUALIZADA - COM APRENDIZADO DINÂMICO DE COMBINAÇões
+# ESTRATÉGIA DAS ZONAS ATUALIZADA - COM APRENDIZADO DINÂMICO DE COMBINAÇÕES
 # =============================
 class EstrategiaZonasOtimizada:
     def __init__(self):
@@ -2607,8 +2680,15 @@ class SistemaRoletaCompleto:
         self.sistema_tendencias = SistemaTendencias()
 
     def set_estrategia(self, estrategia):
-        self.estrategia_selecionada = estrategia
-        salvar_sessao()
+        """Define estratégia com validação"""
+        if estrategia in ["Zonas", "Midas", "ML"]:
+            self.estrategia_selecionada = estrategia
+            logging.info(f"🔄 Estratégia alterada para: {estrategia}")
+            salvar_sessao()
+            return True
+        else:
+            logging.error(f"❌ Estratégia inválida: {estrategia}")
+            return False
 
     def treinar_modelo_ml(self, historico_completo=None):
         return self.estrategia_ml.treinar_modelo_ml(historico_completo)
@@ -2952,127 +3032,144 @@ class SistemaRoletaCompleto:
         return True
 
     def processar_novo_numero(self, numero):
-        if isinstance(numero, dict) and 'number' in numero:
-            numero_real = numero['number']
-        else:
-            numero_real = numero
-            
-        self.contador_sorteios_global += 1
-            
-        if self.previsao_ativa:
-            # VERIFICAÇÃO DE ACERTO PARA MÚLTIPLAS ZONAS
-            acerto = False
-            zonas_acertadas = []
-            nome_estrategia = self.previsao_ativa['nome']
-            
-            # Verificar se o número está em qualquer uma das zonas envolvidas
-            zonas_envolvidas = self.previsao_ativa.get('zonas_envolvidas', [])
-            if not zonas_envolvidas:
-                # Fallback para lógica antiga
-                acerto = numero_real in self.previsao_ativa['numeros_apostar']
+        """Processa novo número com tratamento de erro robusto"""
+        try:
+            # EXTRAÇÃO SEGURA DO NÚMERO
+            if isinstance(numero, dict) and 'number' in numero:
+                numero_real = numero['number']
+            elif isinstance(numero, (int, float)):
+                numero_real = int(numero)
+            else:
+                logging.error(f"❌ Formato de número inválido: {type(numero)}")
+                return
+                
+            # VALIDAÇÃO DO NÚMERO
+            if not (0 <= numero_real <= 36):
+                logging.error(f"❌ Número fora do range: {numero_real}")
+                return
+                
+            self.contador_sorteios_global += 1
+                
+            if self.previsao_ativa:
+                # VERIFICAÇÃO DE ACERTO PARA MÚLTIPLAS ZONAS
+                acerto = False
+                zonas_acertadas = []
+                nome_estrategia = self.previsao_ativa['nome']
+                
+                # Verificar se o número está em qualquer uma das zonas envolvidas
+                zonas_envolvidas = self.previsao_ativa.get('zonas_envolvidas', [])
+                if not zonas_envolvidas:
+                    # Fallback para lógica antiga
+                    acerto = numero_real in self.previsao_ativa['numeros_apostar']
+                    if acerto:
+                        # Descobrir qual zona acertou
+                        if 'Zonas' in nome_estrategia:
+                            for zona, numeros in self.estrategia_zonas.numeros_zonas.items():
+                                if numero_real in numeros:
+                                    zonas_acertadas.append(zona)
+                                    break
+                        elif 'ML' in nome_estrategia:
+                            for zona, numeros in self.estrategia_ml.numeros_zonas_ml.items():
+                                if numero_real in numeros:
+                                    zonas_acertadas.append(zona)
+                                    break
+                else:
+                    # Nova lógica para múltiplas zonas
+                    for zona in zonas_envolvidas:
+                        if 'Zonas' in nome_estrategia:
+                            numeros_zona = self.estrategia_zonas.numeros_zonas[zona]
+                        elif 'ML' in nome_estrategia:
+                            numeros_zona = self.estrategia_ml.numeros_zonas_ml[zona]
+                        else:
+                            continue
+                        
+                        if numero_real in numeros_zona:
+                            acerto = True
+                            zonas_acertadas.append(zona)
+                
+                # 🎯 ATUALIZAR DESEMPENHO DA COMBINAÇÃO
+                self.atualizar_desempenho_combinacao(zonas_envolvidas, acerto)
+                
+                # 🎯 ATUALIZAR ANÁLISE DE TENDÊNCIAS
+                self.atualizar_analise_tendencias(numero_real, zonas_acertadas[0] if zonas_acertadas else None, acerto)
+                
+                # Verifica e aplica rotação automática se necessário
+                rotacionou = self.rotacionar_estrategia_automaticamente(acerto, nome_estrategia, zonas_envolvidas)
+                
+                if nome_estrategia not in self.estrategias_contador:
+                    self.estrategias_contador[nome_estrategia] = {'acertos': 0, 'total': 0}
+                
+                self.estrategias_contador[nome_estrategia]['total'] += 1
                 if acerto:
-                    # Descobrir qual zona acertou
-                    if 'Zonas' in nome_estrategia:
-                        for zona, numeros in self.estrategia_zonas.numeros_zonas.items():
-                            if numero_real in numeros:
-                                zonas_acertadas.append(zona)
-                                break
-                    elif 'ML' in nome_estrategia:
-                        for zona, numeros in self.estrategia_ml.numeros_zonas_ml.items():
-                            if numero_real in numeros:
-                                zonas_acertadas.append(zona)
-                                break
-            else:
-                # Nova lógica para múltiplas zonas
-                for zona in zonas_envolvidas:
-                    if 'Zonas' in nome_estrategia:
-                        numeros_zona = self.estrategia_zonas.numeros_zonas[zona]
-                    elif 'ML' in nome_estrategia:
-                        numeros_zona = self.estrategia_ml.numeros_zonas_ml[zona]
-                    else:
-                        continue
-                    
-                    if numero_real in numeros_zona:
-                        acerto = True
-                        zonas_acertadas.append(zona)
+                    self.estrategias_contador[nome_estrategia]['acertos'] += 1
+                    self.acertos += 1
+                else:
+                    self.erros += 1
+                
+                # Envia resultado super simplificado
+                zona_acertada_str = "+".join(zonas_acertadas) if zonas_acertadas else None
+                enviar_resultado_super_simplificado(numero_real, acerto, nome_estrategia, zona_acertada_str)
+                
+                self.historico_desempenho.append({
+                    'numero': numero_real,
+                    'acerto': acerto,
+                    'estrategia': nome_estrategia,
+                    'previsao': self.previsao_ativa['numeros_apostar'],
+                    'rotacionou': rotacionou,
+                    'zona_acertada': zona_acertada_str,
+                    'zonas_envolvidas': zonas_envolvidas,
+                    'tipo_aposta': self.previsao_ativa.get('tipo', 'unica'),
+                    'sequencia_acertos': self.sequencia_acertos,
+                    'sequencia_erros': self.sequencia_erros,
+                    'ultima_combinacao_acerto': self.ultima_combinacao_acerto.copy()
+                })
+                
+                self.previsao_ativa = None
             
-            # 🎯 ATUALIZAR DESEMPENHO DA COMBINAÇÃO
-            self.atualizar_desempenho_combinacao(zonas_envolvidas, acerto)
+            self.estrategia_zonas.adicionar_numero(numero_real)
+            self.estrategia_midas.adicionar_numero(numero_real)
+            self.estrategia_ml.adicionar_numero(numero_real)
             
-            # 🎯 ATUALIZAR ANÁLISE DE TENDÊNCIAS
-            self.atualizar_analise_tendencias(numero_real, zonas_acertadas[0] if zonas_acertadas else None, acerto)
+            nova_estrategia = None
             
-            # Verifica e aplica rotação automática se necessário
-            rotacionou = self.rotacionar_estrategia_automaticamente(acerto, nome_estrategia, zonas_envolvidas)
+            if self.estrategia_selecionada == "Zonas":
+                nova_estrategia = self.estrategia_zonas.analisar_zonas()
+            elif self.estrategia_selecionada == "Midas":
+                nova_estrategia = self.estrategia_midas.analisar_midas()
+            elif self.estrategia_selecionada == "ML":
+                nova_estrategia = self.estrategia_ml.analisar_ml()
             
-            if nome_estrategia not in self.estrategias_contador:
-                self.estrategias_contador[nome_estrategia] = {'acertos': 0, 'total': 0}
-            
-            self.estrategias_contador[nome_estrategia]['total'] += 1
-            if acerto:
-                self.estrategias_contador[nome_estrategia]['acertos'] += 1
-                self.acertos += 1
-            else:
-                self.erros += 1
-            
-            # Envia resultado super simplificado
-            zona_acertada_str = "+".join(zonas_acertadas) if zonas_acertadas else None
-            enviar_resultado_super_simplificado(numero_real, acerto, nome_estrategia, zona_acertada_str)
-            
-            self.historico_desempenho.append({
-                'numero': numero_real,
-                'acerto': acerto,
-                'estrategia': nome_estrategia,
-                'previsao': self.previsao_ativa['numeros_apostar'],
-                'rotacionou': rotacionou,
-                'zona_acertada': zona_acertada_str,
-                'zonas_envolvidas': zonas_envolvidas,
-                'tipo_aposta': self.previsao_ativa.get('tipo', 'unica'),
-                'sequencia_acertos': self.sequencia_acertos,
-                'sequencia_erros': self.sequencia_erros,
-                'ultima_combinacao_acerto': self.ultima_combinacao_acerto.copy()
-            })
-            
-            self.previsao_ativa = None
-        
-        self.estrategia_zonas.adicionar_numero(numero_real)
-        self.estrategia_midas.adicionar_numero(numero_real)
-        self.estrategia_ml.adicionar_numero(numero_real)
-        
-        nova_estrategia = None
-        
-        if self.estrategia_selecionada == "Zonas":
-            nova_estrategia = self.estrategia_zonas.analisar_zonas()
-        elif self.estrategia_selecionada == "Midas":
-            nova_estrategia = self.estrategia_midas.analisar_midas()
-        elif self.estrategia_selecionada == "ML":
-            nova_estrategia = self.estrategia_ml.analisar_ml()
-        
-        if nova_estrategia:
-            self.previsao_ativa = nova_estrategia
-            enviar_previsao_super_simplificada(nova_estrategia)
+            if nova_estrategia:
+                self.previsao_ativa = nova_estrategia
+                enviar_previsao_super_simplificada(nova_estrategia)
+                
+        except Exception as e:
+            logging.error(f"❌ Erro crítico no processamento do número: {e}")
 
     def atualizar_analise_tendencias(self, numero, zona_acertada=None, acerto_ultima=False):
-        """Atualiza a análise de tendências"""
+        """Atualiza a análise de tendências com tratamento de erro"""
         try:
             # Obter zonas rankeadas atuais
             zonas_rankeadas = self.estrategia_zonas.get_zonas_rankeadas()
             if not zonas_rankeadas:
                 return
             
+            # Validar dados das zonas
+            zonas_validas = [(z, s) for z, s in zonas_rankeadas if z in ['Vermelha', 'Azul', 'Amarela']]
+            if not zonas_validas:
+                return
+                
             # Analisar tendência
             analise_tendencia = self.sistema_tendencias.analisar_tendencia(
-                zonas_rankeadas, acerto_ultima, zona_acertada
+                zonas_validas, acerto_ultima, zona_acertada
             )
             
             # Registrar no histórico
-            self.sistema_tendencias.historico_tendencias.append(analise_tendencia)
-            
-            # 🚨 NOTIFICAÇÕES AUTOMÁTICAS BASEADAS NA TENDÊNCIA
-            self.enviar_notificacoes_tendencia(analise_tendencia)
-            
+            if analise_tendencia:
+                self.sistema_tendencias.historico_tendencias.append(analise_tendencia)
+                
         except Exception as e:
-            logging.error(f"Erro na análise de tendências: {e}")
+            logging.error(f"❌ Erro na análise de tendências: {e}")
 
     def enviar_notificacoes_tendencia(self, analise_tendencia):
         """Envia notificações baseadas no estado da tendência"""
@@ -3253,7 +3350,7 @@ def salvar_resultado_em_arquivo(historico, caminho=HISTORICO_PATH):
         with open(caminho, "w") as f:
             json.dump(historico, f, indent=2)
     except Exception as e:
-        logging.error(f"Erro ao salvar histórico: {e}")
+        logging.error(f"❌ Erro ao salvar histórico: {e}")
 
 def fetch_latest_result():
     try:
@@ -3267,7 +3364,7 @@ def fetch_latest_result():
         timestamp = game_data.get("startedAt")
         return {"number": number, "timestamp": timestamp}
     except Exception as e:
-        logging.error(f"Erro ao buscar resultado: {e}")
+        logging.error(f"❌ Erro ao buscar resultado: {e}")
         return None
 
 # =============================
@@ -3321,11 +3418,12 @@ def enviar_alerta_tendencia(analise_tendencia):
 st.set_page_config(page_title="IA Roleta — Multi-Estratégias", layout="centered")
 st.title("🎯 IA Roleta — Sistema Multi-Estratégias")
 
-# Inicialização com persistência
+# Inicialização com persistência - CORREÇÃO APLICADA
 if "sistema" not in st.session_state:
     st.session_state.sistema = SistemaRoletaCompleto()
+    logging.info("✅ Sistema inicializado do zero")
 
-# Tentar carregar sessão salva
+# Tentar carregar sessão salva APÓS a inicialização
 sessao_carregada = carregar_sessao()
 
 if "historico" not in st.session_state:
@@ -3343,6 +3441,11 @@ if "telegram_token" not in st.session_state and not sessao_carregada:
 if "telegram_chat_id" not in st.session_state and not sessao_carregada:
     st.session_state.telegram_chat_id = ""
 
+# Backup automático
+if st.session_state.get('contador_backup', 0) % 50 == 0:
+    criar_backup_automatico()
+st.session_state.contador_backup = st.session_state.get('contador_backup', 0) + 1
+
 # Sidebar - Configurações Avançadas
 st.sidebar.title("⚙️ Configurações")
 
@@ -3357,8 +3460,10 @@ with st.sidebar.expander("💾 Gerenciamento de Sessão", expanded=False):
     
     with col1:
         if st.button("💾 Salvar Sessão", use_container_width=True):
-            salvar_sessao()
-            st.success("✅ Sessão salva!")
+            if salvar_sessao():
+                st.success("✅ Sessão salva!")
+            else:
+                st.error("❌ Erro ao salvar sessão")
             
     with col2:
         if st.button("🔄 Carregar Sessão", use_container_width=True):
@@ -3396,6 +3501,8 @@ with st.sidebar.expander("💾 Gerenciamento de Sessão", expanded=False):
             st.error("🗑️ Todos os dados foram limpos!")
             st.stop()
 
+# ... (o restante do código da interface permanece igual)
+
 # Configurações do Telegram
 with st.sidebar.expander("🔔 Configurações do Telegram", expanded=False):
     st.write("Configure as notificações do Telegram")
@@ -3422,12 +3529,16 @@ with st.sidebar.expander("🔔 Configurações do Telegram", expanded=False):
     if st.button("Testar Conexão Telegram"):
         if telegram_token and telegram_chat_id:
             try:
-                enviar_telegram("🔔 Teste de conexão - IA Roleta funcionando!")
-                st.success("✅ Mensagem de teste enviada para Telegram!")
+                if enviar_telegram("🔔 Teste de conexão - IA Roleta funcionando!"):
+                    st.success("✅ Mensagem de teste enviada para Telegram!")
+                else:
+                    st.error("❌ Falha ao enviar mensagem de teste")
             except Exception as e:
                 st.error(f"❌ Erro ao enviar mensagem: {e}")
         else:
             st.error("❌ Preencha token e chat ID primeiro")
+
+# ... (o restante do código da interface permanece igual)
 
 # Configurações dos Alertas Alternativos
 with st.sidebar.expander("🔔 Alertas Alternativos", expanded=False):
@@ -3458,12 +3569,16 @@ with st.sidebar.expander("🔔 Alertas Alternativos", expanded=False):
             }
             
             try:
-                enviar_alerta_numeros_simplificado(previsao_teste)
-                st.success("✅ Alerta simplificado de teste enviado!")
+                if enviar_alerta_numeros_simplificado(previsao_teste):
+                    st.success("✅ Alerta simplificado de teste enviado!")
+                else:
+                    st.error("❌ Falha ao enviar alerta simplificado")
             except Exception as e:
                 st.error(f"❌ Erro: {e}")
         else:
             st.error("❌ Configure o Telegram primeiro")
+
+# ... (o restante do código da interface permanece igual)
 
 # Seleção de Estratégia
 estrategia = st.sidebar.selectbox(
@@ -3474,8 +3589,8 @@ estrategia = st.sidebar.selectbox(
 
 # Aplicar estratégia selecionada
 if estrategia != st.session_state.sistema.estrategia_selecionada:
-    st.session_state.sistema.set_estrategia(estrategia)
-    st.toast(f"🔄 Estratégia alterada para: {estrategia}")
+    if st.session_state.sistema.set_estrategia(estrategia):
+        st.toast(f"🔄 Estratégia alterada para: {estrategia}")
 
 # Status da Rotação Automática - ATUALIZADO
 with st.sidebar.expander("🔄 Rotação Automática", expanded=True):
@@ -3519,6 +3634,8 @@ with st.sidebar.expander("🔄 Rotação Automática", expanded=True):
         st.success(f"🔄 Rotação forçada: {estrategia_atual} → {nova_estrategia}")
         st.rerun()
 
+# ... (o restante do código permanece igual)
+
 # Treinamento ML
 with st.sidebar.expander("🧠 Treinamento ML", expanded=False):
     numeros_disponiveis = 0
@@ -3535,7 +3652,7 @@ with st.sidebar.expander("🧠 Treinamento ML", expanded=False):
     st.write(f"📊 **Números disponíveis:** {numeros_disponiveis}")
     st.write(f"🎯 **Mínimo necessário:** 200 números")
     st.write(f"🔄 **Treinamento automático:** A cada 15 sorteios")
-    st.write(f"🤖 **Modelo:** CatBoost (mais preciso)")
+    st.write(f"🤖 **Modelo:** {'CatBoost' if CATBOOST_DISPONIVEL else 'RandomForest'} (mais preciso)")
     st.write(f"🎯 **Ensemble:** 3 modelos")
     
     if numeros_disponiveis > 0:
@@ -3553,7 +3670,7 @@ with st.sidebar.expander("🧠 Treinamento ML", expanded=False):
         st.success("✨ **Pronto para treinar!**")
         
         if st.button("🚀 Treinar Modelo ML", type="primary", use_container_width=True):
-            with st.spinner("Treinando modelo ML com CatBoost... Isso pode levar alguns segundos"):
+            with st.spinner("Treinando modelo ML... Isso pode levar alguns segundos"):
                 try:
                     success, message = st.session_state.sistema.treinar_modelo_ml(numeros_lista)
                     if success:
@@ -3585,6 +3702,8 @@ with st.sidebar.expander("🧠 Treinamento ML", expanded=False):
     else:
         st.info("🤖 ML aguardando treinamento")
 
+# ... (o restante do código permanece igual)
+
 # Estatísticas de Padrões ML
 with st.sidebar.expander("🔍 Estatísticas de Padrões ML", expanded=False):
     if st.session_state.sistema.estrategia_selecionada == "ML":
@@ -3603,6 +3722,8 @@ with st.sidebar.expander("🔍 Estatísticas de Padrões ML", expanded=False):
                 st.rerun()
     else:
         st.info("🔍 Ative a estratégia ML para ver estatísticas de padrões")
+
+# ... (o restante do código permanece igual)
 
 # Informações sobre as Estratégias
 with st.sidebar.expander("📊 Informações das Estratégias"):
@@ -3634,7 +3755,7 @@ with st.sidebar.expander("📊 Informações das Estratégias"):
     
     elif estrategia == "ML":
         st.write("**🤖 Estratégia Machine Learning - CATBOOST OTIMIZADO:**")
-        st.write("- **Modelo**: CatBoost (Gradient Boosting)")
+        st.write("- **Modelo**: {'CatBoost' if CATBOOST_DISPONIVEL else 'RandomForest'} (Gradient Boosting)")
         st.write("- **Ensemble**: 3 modelos")
         st.write("- **Amostras mínimas**: 200")
         st.write("- **Histórico máximo**: 1000 números")
@@ -3654,6 +3775,8 @@ with st.sidebar.expander("📊 Informações das Estratégias"):
             st.write(f"Total: {dados['quantidade']} números")
             st.write("---")
 
+# ... (o restante do código permanece igual)
+
 # Análise detalhada
 with st.sidebar.expander(f"🔍 Análise - {estrategia}", expanded=False):
     if estrategia == "Zonas":
@@ -3664,6 +3787,8 @@ with st.sidebar.expander(f"🔍 Análise - {estrategia}", expanded=False):
         analise = "🎯 Estratégia Midas ativa\nAnalisando padrões de terminais..."
     
     st.text(analise)
+
+# ... (o restante do código permanece igual)
 
 # Entrada manual
 st.subheader("✍️ Inserir Sorteios")
@@ -3680,7 +3805,7 @@ if st.button("Adicionar") and entrada:
         st.success(f"{len(nums)} números adicionados!")
         st.rerun()
     except Exception as e:
-        st.error(f"Erro: {e}")
+        st.error(f"❌ Erro: {e}")
 
 # Atualização automática
 st_autorefresh(interval=3000, key="refresh")
@@ -3703,9 +3828,18 @@ if resultado and resultado.get("timestamp") and resultado["timestamp"] != ultimo
 # Interface principal
 st.subheader("🔁 Últimos Números")
 if st.session_state.historico:
-    ultimos_10 = st.session_state.historico[-10:]
-    numeros_str = " ".join(str(item['number'] if isinstance(item, dict) else item) for item in ultimos_10)
-    st.write(numeros_str)
+    try:
+        ultimos_10 = st.session_state.historico[-10:]
+        numeros = []
+        for item in ultimos_10:
+            if isinstance(item, dict) and 'number' in item:
+                numeros.append(str(item['number']))
+            elif isinstance(item, (int, float)):
+                numeros.append(str(int(item)))
+        numeros_str = " ".join(numeros)
+        st.write(numeros_str)
+    except Exception as e:
+        st.error(f"❌ Erro ao exibir histórico: {e}")
 else:
     st.write("Nenhum número registrado")
 
@@ -3914,5 +4048,5 @@ if os.path.exists(HISTORICO_PATH):
         conteudo = f.read()
     st.download_button("📥 Baixar histórico", data=conteudo, file_name="historico_roleta.json")
 
-# ✅ CORREÇÃO FINAL: Salvar sessão
+# ✅ CORREÇÃO FINAL: Salvar sessão ao final
 salvar_sessao()
