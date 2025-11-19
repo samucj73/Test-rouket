@@ -422,7 +422,7 @@ def enviar_resultado_super_simplificado(numero_real, acerto, nome_estrategia, zo
                     mensagem = f"✅ Acerto Núcleos {nucleo_str}\n🎲 Número: {numero_real}"
                 else:
                     if zona_acertada == 'Vermelha': nucleo = "7"
-                    elif zona_acertada == 'Azul': nucleo = "10")
+                    elif zona_acertada == 'Azul': nucleo = "10"
                     elif zona_acertada == 'Amarela': nucleo = "2"
                     else: nucleo = zona_acertada
                     mensagem = f"✅ Acerto Núcleo {nucleo}\n🎲 Número: {numero_real}"
