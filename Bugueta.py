@@ -238,11 +238,11 @@ def enviar_para_canal_auxiliar(previsao):
         # Mensagem para o canal auxiliar
         mensagem_auxiliar = (
             f"{emoji} *APOSTAR AGORA - {tipo}*\n"
-            f"🎯 *15 NÚMEROS SELECIONADOS:*\n"
+            #f"🎯 *15 NÚMEROS SELECIONADOS:*\n"
             f"`{linha1}`\n"
             f"`{linha2}`\n"
-            f"📊 *Confiança:* {previsao.get('confianca', 'ALTA')}\n"
-            f"⏰ *Hora:* {datetime.now().strftime('%H:%M:%S')}"
+            #f"📊 *Confiança:* {previsao.get('confianca', 'ALTA')}\n"
+            #f"⏰ *Hora:* {datetime.now().strftime('%H:%M:%S')}"
         )
         
         # 🆕 CHAT ID FIXO DO CANAL AUXILIAR
@@ -288,9 +288,9 @@ def enviar_resultado_para_canal_auxiliar(numero_real, acerto, nome_estrategia, z
         mensagem_auxiliar = (
             f"{emoji} *RESULTADO - {resultado_texto}*\n"
             f"🎲 *Número Sorteado:* `{numero_real}`\n"
-            f"📋 *Estratégia:* {nome_estrategia}\n"
-            f"🎯 *Detalhe:* {detalhe}\n"
-            f"⏰ *Hora:* {datetime.now().strftime('%H:%M:%S')}"
+            #f"📋 *Estratégia:* {nome_estrategia}\n"
+            #f"🎯 *Detalhe:* {detalhe}\n"
+            #f"⏰ *Hora:* {datetime.now().strftime('%H:%M:%S')}"
         )
         
         # 🆕 CHAT ID FIXO DO CANAL AUXILIAR
