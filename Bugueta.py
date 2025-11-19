@@ -226,14 +226,14 @@ def enviar_para_canal_auxiliar(previsao):
         
         # Determinar emoji baseado na estratégia
         if 'Zonas' in nome_estrategia:
-            #emoji = "🔥"
-            #tipo = "ZONAS"
-       # elif 'ML' in nome_estrategia:
-           # emoji = "🤖" 
-          #  tipo = "MACHINE LEARNING"
-     #   else:
-          #  emoji = "💰"
-         #   tipo = "MIDAS"
+            emoji = "🔥"
+            tipo = "ZONAS"
+        elif 'ML' in nome_estrategia:
+            emoji = "🤖" 
+            tipo = "MACHINE LEARNING"
+        else:
+            emoji = "💰"
+            tipo = "MIDAS"
             
         # Mensagem para o canal auxiliar
         mensagem_auxiliar = (
