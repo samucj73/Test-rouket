@@ -2898,8 +2898,8 @@ def get_estatisticas(self):
             'combinacoes_frias': len(self.combinacoes_frias),
             'tendencias_estado': self.sistema_tendencias.estado_tendencia
         }
-
-    def get_analise_completa(self):
+    
+def get_analise_completa(self):
         """Retorna análise completa de todas as estratégias"""
         analise = "🎯 ANÁLISE COMPLETA DO SISTEMA\n"
         analise += "=" * 50 + "\n"
@@ -2932,8 +2932,8 @@ def get_estatisticas(self):
         analise += f"🔄 Operações: {resumo_tendencias['contadores']['operacoes']}\n"
         
         return analise
-
-    def zerar_estatisticas(self):
+    
+def zerar_estatisticas(self):
         """Zera todas as estatísticas do sistema"""
         self.acertos = 0
         self.erros = 0
