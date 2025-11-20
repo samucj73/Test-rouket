@@ -215,7 +215,7 @@ def enviar_previsao_super_simplificada(previsao):
         linha1 = " ".join(map(str, numeros_apostar[:metade]))
         linha2 = " ".join(map(str, numeros_apostar[metade:]))
         
-        mensagem = f"🎯 APOSTAR AGORA (10 NÚMEROS)\n{linha1}\n{linha2}"
+        mensagem = f"🎯)\n{linha1}\n{linha2}"
         
         # Alertas locais
         st.toast("🎯 PREVISÃO CONFIRMADA - 10 NÚMEROS", icon="🔥")
