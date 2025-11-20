@@ -2818,8 +2818,10 @@ def processar_novo_numero(self, numero):
             self.estrategia_ml.treinar_automatico()
         
         salvar_sessao()
+    
 
-     def gerar_previsao(self):
+
+def gerar_previsao(self):
         """Gera previsão baseada na estratégia selecionada"""
         
         # 🎯 PRIMEIRO: Verificar sistema de tendências
