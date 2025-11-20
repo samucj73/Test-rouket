@@ -2866,8 +2866,8 @@ def gerar_previsao(self):
             return previsao
         
         return None
-
-    def get_estatisticas(self):
+    
+def get_estatisticas(self):
         """Retorna estatísticas completas do sistema"""
         total_tentativas = self.acertos + self.erros
         percentual_acertos = (self.acertos / total_tentativas * 100) if total_tentativas > 0 else 0
