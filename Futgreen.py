@@ -1809,9 +1809,9 @@ def enviar_alerta_composto_poster(jogos_conf: list, threshold: int):
     except Exception as e:
         st.error(f"❌ Erro crítico ao gerar/enviar poster composto: {str(e)}")
         # Fallback para mensagem de texto
-        return enviar_alerta_composto_texto(jogos_conf)
+        return enviar_alerta_composto_texto(jogos_conf, threshold)
 
-def enviar_alerta_composto_texto(jogos_conf: list) -> bool:
+def enviar_alerta_composto_texto(jogos_conf: list, threshold: int) -> bool:
     """Fallback para alerta composto em texto"""
     try:
         msg = f"🔥 Jogos ≥{threshold}% (Estilo Original):\n\n"
@@ -2697,7 +2697,7 @@ def calcular_desempenho_escanteios(qtd_jogos: int = 50):
 
 def processar_jogos_avancado(data_selecionada, todas_ligas, ligas_selecionadas, top_n, 
                            threshold, threshold_ambas_marcam, threshold_cartoes, threshold_escanteios,
-                           estilo_poster, alerta_individual, alerta_poster, alerta_top_jogos,
+                           alerta_individual, alerta_poster, alerta_top_jogos,
                            alerta_ambas_marcam, alerta_cartoes, alerta_escanteios):
     """Processamento AVANÇADO com dados REAIS da API - ATUALIZADO PARA SELEÇÃO MÚLTIPLA"""
     
@@ -2871,38 +2871,6 @@ def processar_jogos_avancado(data_selecionada, todas_ligas, ligas_selecionadas, 
         for jogo in sorted(top_jogos_escanteios, key=lambda x: x['confianca'], reverse=True)[:3]:
             st.write(f"  - {jogo['home']} vs {jogo['away']} | {jogo['tendencia']} | Conf: {jogo['confianca']:.0f}%")
 
-def enviar_alerta_conf_criar_poster(jogos_conf: list, threshold: int, chat_id: str = TELEGRAM_CHAT_ID_ALT2):
-    """Função fallback para o estilo original"""
-    if not jogos_conf:
-        return
-        
-    try:
-        msg = f"🔥 Jogos ≥{threshold}% (Estilo Original):\n\n"
-        
-        for j in jogos_conf:
-            # CORREÇÃO: Usar dados formatados se disponíveis
-            if 'hora_formatada' in j and 'data_formatada' in j:
-                hora_text = j['hora_formatada']
-                data_text = j['data_formatada']
-            else:
-                hora_format = j["hora"].strftime("%H:%M") if isinstance(j["hora"], datetime) else str(j["hora"])
-                data_format = j["hora"].strftime("%d/%m/%Y") if isinstance(j["hora"], datetime) else "Data inválida"
-                hora_text = hora_format
-                data_text = data_format
-                
-            msg += (
-                f"🏟️ {j['home']} vs {j['away']}\n"
-                f"🕒 {hora_text} BRT | {data_text} | {j['liga']}\n"
-                f"📈 {j['tendencia']} | ⚽ {j['estimativa']:.2f} | 💯 {j['confianca']:.0f}%\n\n"
-            )
-        
-        msg += "<b>🔥 ELITE MASTER SYSTEM - ANÁLISE PREDITIVA</b>"
-        
-        return enviar_telegram(msg, chat_id=chat_id)
-    except Exception as e:
-        st.error(f"Erro no fallback de texto: {e}")
-        return False
-
 # =============================
 # Interface Streamlight ATUALIZADA - COM SELEÇÃO MÚLTIPLA
 # =============================
@@ -2970,7 +2938,7 @@ def main():
         else:
             processar_jogos_avancado(data_selecionada, todas_ligas, ligas_selecionadas, top_n, 
                                    threshold, threshold_ambas_marcam, threshold_cartoes, threshold_escanteios,
-                                   "West Ham (Novo)", alerta_individual, alerta_poster, alerta_top_jogos,
+                                   alerta_individual, alerta_poster, alerta_top_jogos,
                                    alerta_ambas_marcam, alerta_cartoes, alerta_escanteios)
 
     # Ações - EXPANDIDAS COM NOVAS PREVISÕES
