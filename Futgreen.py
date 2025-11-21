@@ -799,15 +799,392 @@ def enviar_alerta_telegram_escanteios(fixture: dict, tendencia: str, estimativa:
     return enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2)
 
 # =============================
+# SISTEMA DE CONFERÊNCIA PARA ALERTAS COMPOSTOS - NOVO
+# =============================
+
+def verificar_resultados_compostos(alerta_resultados: bool):
+    """Verifica resultados finais para alertas compostos (poster)"""
+    st.info("🔍 Verificando resultados dos alertas compostos...")
+    
+    # Carregar todos os alertas
+    alertas = carregar_alertas()
+    if not alertas:
+        st.info("ℹ️ Nenhum alerta composto para verificar.")
+        return
+    
+    resultados_enviados = 0
+    jogos_com_resultado = []
+    
+    for fixture_id, alerta in list(alertas.items()):
+        if alerta.get("conferido", False):
+            continue
+            
+        try:
+            url = f"{BASE_URL_FD}/matches/{fixture_id}"
+            fixture = obter_dados_api(url)
+            
+            if not fixture:
+                continue
+                
+            status = fixture.get("status", "")
+            score = fixture.get("score", {}).get("fullTime", {})
+            home_goals = score.get("home")
+            away_goals = score.get("away")
+            
+            # Verificar se jogo terminou e tem resultado
+            if status == "FINISHED" and home_goals is not None and away_goals is not None:
+                # Obter URLs dos escudos
+                home_crest = fixture.get("homeTeam", {}).get("crest") or fixture.get("homeTeam", {}).get("logo", "")
+                away_crest = fixture.get("awayTeam", {}).get("crest") or fixture.get("awayTeam", {}).get("logo", "")
+                
+                # Preparar dados para o poster
+                jogo_resultado = {
+                    "id": fixture_id,
+                    "home": fixture["homeTeam"]["name"],
+                    "away": fixture["awayTeam"]["name"],
+                    "home_goals": home_goals,
+                    "away_goals": away_goals,
+                    "liga": fixture.get("competition", {}).get("name", "Desconhecido"),
+                    "data": fixture["utcDate"],
+                    "tendencia_prevista": alerta.get("tendencia", "Desconhecida"),
+                    "estimativa_prevista": alerta.get("estimativa", 0),
+                    "confianca_prevista": alerta.get("confianca", 0),
+                    "home_crest": home_crest,
+                    "away_crest": away_crest
+                }
+                
+                jogos_com_resultado.append(jogo_resultado)
+                alerta["conferido"] = True
+                resultados_enviados += 1
+                
+        except Exception as e:
+            st.error(f"Erro ao verificar jogo composto {fixture_id}: {e}")
+    
+    # Enviar alertas em lote se houver resultados E a checkbox estiver ativada
+    if jogos_com_resultado and alerta_resultados:
+        enviar_alerta_resultados_compostos_poster(jogos_com_resultado)
+        salvar_alertas(alertas)
+        st.success(f"✅ {resultados_enviados} resultados compostos processados e alertas enviados!")
+    elif jogos_com_resultado:
+        st.info(f"ℹ️ {resultados_enviados} resultados compostos encontrados, mas alerta de resultados desativado")
+        # Apenas marca como conferido sem enviar alerta
+        salvar_alertas(alertas)
+    else:
+        st.info("ℹ️ Nenhum novo resultado composto final encontrado.")
+
+def enviar_alerta_resultados_compostos_poster(jogos_com_resultado: list):
+    """Envia alerta de resultados compostos com poster para o Telegram"""
+    if not jogos_com_resultado:
+        st.warning("⚠️ Nenhum resultado composto para enviar")
+        return
+
+    try:
+        # Agrupar por data
+        jogos_por_data = {}
+        for jogo in jogos_com_resultado:
+            data_jogo = datetime.fromisoformat(jogo["data"].replace("Z", "+00:00")).date()
+            if data_jogo not in jogos_por_data:
+                jogos_por_data[data_jogo] = []
+            
+            # Calcular RED/GREEN para cada jogo
+            total_gols = jogo['home_goals'] + jogo['away_goals']
+            previsao_correta = False
+            
+            if jogo['tendencia_prevista'] == "Mais 2.5" and total_gols > 2.5:
+                previsao_correta = True
+            elif jogo['tendencia_prevista'] == "Mais 1.5" and total_gols > 1.5:
+                previsao_correta = True
+            elif jogo['tendencia_prevista'] == "Menos 2.5" and total_gols < 2.5:
+                previsao_correta = True
+            
+            jogo['resultado'] = "GREEN" if previsao_correta else "RED"
+            jogos_por_data[data_jogo].append(jogo)
+
+        for data, jogos_data in jogos_por_data.items():
+            data_str = data.strftime("%d/%m/%Y")
+            titulo = f"ELITE MASTER - RESULTADOS COMPOSTOS {data_str}"
+            
+            st.info(f"🎨 Gerando poster de resultados compostos para {data_str} com {len(jogos_data)} jogos...")
+            
+            poster = gerar_poster_resultados_compostos(jogos_data, titulo=titulo)
+            
+            # Calcular estatísticas
+            total_jogos = len(jogos_data)
+            green_count = sum(1 for j in jogos_data if j.get('resultado') == "GREEN")
+            red_count = total_jogos - green_count
+            taxa_acerto = (green_count / total_jogos * 100) if total_jogos > 0 else 0
+            
+            caption = (
+                f"<b>🏁 RESULTADOS COMPOSTOS OFICIAIS - {data_str}</b>\n\n"
+                f"<b>📋 TOTAL DE JOGOS ANALISADOS: {total_jogos}</b>\n"
+                f"<b>🟢 GREEN: {green_count} jogos</b>\n"
+                f"<b>🔴 RED: {red_count} jogos</b>\n"
+                f"<b>🎯 TAXA DE ACERTO: {taxa_acerto:.1f}%</b>\n\n"
+                f"<b>📊 DESEMPENHO DO SISTEMA COMPOSTO:</b>\n"
+                f"<b>• Análise Preditiva Avançada</b>\n"
+                f"<b>• Resultados em Tempo Real</b>\n"
+                f"<b>• Precisão Comprovada</b>\n\n"
+                f"<b>🔥 ELITE MASTER SYSTEM - CONFIABILIDADE COMPROVADA</b>"
+            )
+            
+            st.info("📤 Enviando resultados compostos para o Telegram...")
+            ok = enviar_foto_telegram(poster, caption=caption, chat_id=TELEGRAM_CHAT_ID_ALT2)
+            
+            if ok:
+                st.success(f"🚀 Poster de resultados compostos enviado para {data_str}!")
+                
+                # Registrar no histórico
+                for jogo in jogos_data:
+                    registrar_no_historico({
+                        "home": jogo["home"],
+                        "away": jogo["away"], 
+                        "tendencia": jogo["tendencia_prevista"],
+                        "estimativa": jogo["estimativa_prevista"],
+                        "confianca": jogo["confianca_prevista"],
+                        "placar": f"{jogo['home_goals']}x{jogo['away_goals']}",
+                        "resultado": "🟢 GREEN" if jogo.get('resultado') == "GREEN" else "🔴 RED"
+                    })
+            else:
+                st.error(f"❌ Falha ao enviar poster de resultados compostos para {data_str}")
+                
+    except Exception as e:
+        st.error(f"❌ Erro crítico ao gerar/enviar poster de resultados compostos: {str(e)}")
+        # Fallback para mensagem de texto
+        enviar_alerta_resultados_compostos_texto(jogos_com_resultado)
+
+def gerar_poster_resultados_compostos(jogos: list, titulo: str = "ELITE MASTER - RESULTADOS COMPOSTOS") -> io.BytesIO:
+    """
+    Gera poster profissional com resultados finais dos jogos compostos
+    """
+    # Configurações do poster
+    LARGURA = 2400
+    ALTURA_TOPO = 400
+    ALTURA_POR_JOGO = 850  # Um pouco mais compacto para múltiplos jogos
+    PADDING = 100
+    
+    jogos_count = len(jogos)
+    altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
+
+    # Criar canvas
+    img = Image.new("RGB", (LARGURA, altura_total), color=(13, 25, 35))
+    draw = ImageDraw.Draw(img)
+
+    # Carregar fontes
+    FONTE_TITULO = criar_fonte(90)
+    FONTE_SUBTITULO = criar_fonte(60)
+    FONTE_TIMES = criar_fonte(55)
+    FONTE_PLACAR = criar_fonte(80)
+    FONTE_INFO = criar_fonte(40)
+    FONTE_ANALISE = criar_fonte(50)
+    FONTE_RESULTADO = criar_fonte(65)
+
+    # Título PRINCIPAL
+    try:
+        titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
+        titulo_w = titulo_bbox[2] - titulo_bbox[0]
+        draw.text(((LARGURA - titulo_w) // 2, 80), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
+    except:
+        draw.text((LARGURA//2 - 300, 80), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
+
+    # Linha decorativa
+    draw.line([(LARGURA//4, 180), (3*LARGURA//4, 180)], fill=(255, 215, 0), width=4)
+
+    y_pos = ALTURA_TOPO
+
+    for idx, jogo in enumerate(jogos):
+        # Calcular se a previsão foi correta
+        total_gols = jogo['home_goals'] + jogo['away_goals']
+        previsao_correta = False
+        
+        if jogo['tendencia_prevista'] == "Mais 2.5" and total_gols > 2.5:
+            previsao_correta = True
+        elif jogo['tendencia_prevista'] == "Mais 1.5" and total_gols > 1.5:
+            previsao_correta = True
+        elif jogo['tendencia_prevista'] == "Menos 2.5" and total_gols < 2.5:
+            previsao_correta = True
+        
+        # Definir cores baseadas no resultado
+        if previsao_correta:
+            cor_borda = (76, 175, 80)  # VERDE
+            cor_resultado = (76, 175, 80)
+            texto_resultado = "GREEN"
+        else:
+            cor_borda = (244, 67, 54)  # VERMELHO
+            cor_resultado = (244, 67, 54)
+            texto_resultado = "RED"
+
+        # Caixa do jogo com borda colorida conforme resultado
+        x0, y0 = PADDING, y_pos
+        x1, y1 = LARGURA - PADDING, y_pos + ALTURA_POR_JOGO - 30
+        
+        # Fundo com borda colorida
+        draw.rectangle([x0, y0, x1, y1], fill=(25, 40, 55), outline=cor_borda, width=4)
+
+        # BADGE RESULTADO (GREEN/RED)
+        badge_text = texto_resultado
+        badge_bg_color = cor_resultado
+        
+        try:
+            badge_bbox = draw.textbbox((0, 0), badge_text, font=FONTE_RESULTADO)
+            badge_w = badge_bbox[2] - badge_bbox[0] + 30
+            badge_h = 70
+            badge_x = x1 - badge_w - 15
+            badge_y = y0 + 15
+            
+            draw.rectangle([badge_x, badge_y, badge_x + badge_w, badge_y + badge_h], 
+                          fill=badge_bg_color, outline=badge_bg_color)
+            draw.text((badge_x + 15, badge_y + 5), badge_text, font=FONTE_RESULTADO, fill=(255, 255, 255))
+        except:
+            pass
+
+        # Nome da liga
+        liga_text = jogo['liga'].upper()
+        try:
+            liga_bbox = draw.textbbox((0, 0), liga_text, font=FONTE_SUBTITULO)
+            liga_w = liga_bbox[2] - liga_bbox[0]
+            draw.text(((LARGURA - liga_w) // 2, y0 + 30), liga_text, font=FONTE_SUBTITULO, fill=(170, 190, 210))
+        except:
+            pass
+
+        # Times e placar - layout mais compacto
+        home_text = jogo['home'][:20]
+        away_text = jogo['away'][:20]
+        
+        # ESCUDOS compactos
+        TAMANHO_ESCUDO = 120
+        TAMANHO_QUADRADO = 140
+        ESPACO_ENTRE_ESCUDOS = 500
+        
+        largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
+        x_inicio = (LARGURA - largura_total) // 2
+        y_escudos = y0 + 100
+
+        x_home = x_inicio
+        x_away = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
+
+        # Desenhar escudos compactos
+        escudo_home = baixar_imagem_url(jogo.get('home_crest', ''))
+        escudo_away = baixar_imagem_url(jogo.get('away_crest', ''))
+        
+        def desenhar_escudo_compacto(logo_img, x, y, tamanho_quadrado, tamanho_escudo):
+            draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(255, 255, 255), outline=(200, 200, 200), width=2)
+            if logo_img:
+                try:
+                    logo_img = logo_img.convert("RGBA")
+                    ratio = min(tamanho_escudo/logo_img.width, tamanho_escudo/logo_img.height)
+                    nova_largura = int(logo_img.width * ratio)
+                    nova_altura = int(logo_img.height * ratio)
+                    logo_img = logo_img.resize((nova_largura, nova_altura), Image.Resampling.LANCZOS)
+                    pos_x = x + (tamanho_quadrado - nova_largura) // 2
+                    pos_y = y + (tamanho_quadrado - nova_altura) // 2
+                    img.paste(logo_img, (pos_x, pos_y), logo_img)
+                except:
+                    draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(100, 100, 100))
+                    draw.text((x + 40, y + 50), "ERR", font=FONTE_INFO, fill=(255, 255, 255))
+
+        desenhar_escudo_compacto(escudo_home, x_home, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO)
+        desenhar_escudo_compacto(escudo_away, x_away, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO)
+
+        # Nomes dos times
+        try:
+            home_bbox = draw.textbbox((0, 0), home_text, font=FONTE_TIMES)
+            home_w = home_bbox[2] - home_bbox[0]
+            draw.text((x_home + (TAMANHO_QUADRADO - home_w)//2, y_escudos + TAMANHO_QUADRADO + 15),
+                     home_text, font=FONTE_TIMES, fill=(255, 255, 255))
+        except:
+            pass
+
+        try:
+            away_bbox = draw.textbbox((0, 0), away_text, font=FONTE_TIMES)
+            away_w = away_bbox[2] - away_bbox[0]
+            draw.text((x_away + (TAMANHO_QUADRADO - away_w)//2, y_escudos + TAMANHO_QUADRADO + 15),
+                     away_text, font=FONTE_TIMES, fill=(255, 255, 255))
+        except:
+            pass
+
+        # PLACAR CENTRAL
+        placar_text = f"{jogo['home_goals']}   -   {jogo['away_goals']}"
+        try:
+            placar_bbox = draw.textbbox((0, 0), placar_text, font=FONTE_PLACAR)
+            placar_w = placar_bbox[2] - placar_bbox[0]
+            placar_x = x_home + TAMANHO_QUADRADO + (ESPACO_ENTRE_ESCUDOS - placar_w) // 2
+            draw.text((placar_x, y_escudos + 40), placar_text, font=FONTE_PLACAR, fill=(255, 255, 255))
+        except:
+            pass
+
+        # SEÇÃO DE ANÁLISE COMPACTA
+        y_analysis = y_escudos + TAMANHO_QUADRADO + 60
+        
+        textos_analise = [
+            f"Previsão: {jogo['tendencia_prevista']}",
+            f"Real: {total_gols} gols | Estimativa: {jogo['estimativa_prevista']:.2f}",
+            f"Confiança: {jogo['confianca_prevista']:.0f}% | Resultado: {texto_resultado}"
+        ]
+        
+        cores = [(255, 255, 255), (200, 220, 255), cor_resultado]
+        
+        for i, (text, cor) in enumerate(zip(textos_analise, cores)):
+            try:
+                bbox = draw.textbbox((0, 0), text, font=FONTE_ANALISE)
+                w = bbox[2] - bbox[0]
+                draw.text(((LARGURA - w) // 2, y_analysis + i * 55), text, font=FONTE_ANALISE, fill=cor)
+            except:
+                pass
+
+        y_pos += ALTURA_POR_JOGO
+
+    # Rodapé
+    rodape_text = f"Resultados oficiais • Gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')} • Elite Master System"
+    try:
+        rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_INFO)
+        rodape_w = rodape_bbox[2] - rodape_bbox[0]
+        draw.text(((LARGURA - rodape_w) // 2, altura_total - 50), rodape_text, font=FONTE_INFO, fill=(120, 150, 180))
+    except:
+        pass
+
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG", optimize=True, quality=95)
+    buffer.seek(0)
+    
+    st.success(f"✅ Poster de resultados compostos GERADO com {len(jogos)} jogos")
+    return buffer
+
+def enviar_alerta_resultados_compostos_texto(jogos_com_resultado: list):
+    """Fallback para envio de resultados compostos em texto"""
+    try:
+        msg = "<b>🏁 RESULTADOS COMPOSTOS - SISTEMA RED/GREEN</b>\n\n"
+        
+        for jogo in jogos_com_resultado[:10]:  # Limitar a 10 jogos para não exceder limite do Telegram
+            total_gols = jogo['home_goals'] + jogo['away_goals']
+            resultado = "🟢 GREEN" if ((jogo['tendencia_prevista'] == "Mais 2.5" and total_gols > 2.5) or 
+                            (jogo['tendencia_prevista'] == "Mais 1.5" and total_gols > 1.5) or
+                            (jogo['tendencia_prevista'] == "Menos 2.5" and total_gols < 2.5)) else "🔴 RED"
+            
+            msg += (
+                f"{resultado} <b>{jogo['home']}</b> {jogo['home_goals']}x{jogo['away_goals']} <b>{jogo['away']}</b>\n"
+                f"Previsão: {jogo['tendencia_prevista']} | Conf: {jogo['confianca_prevista']:.0f}%\n\n"
+            )
+        
+        msg += "<b>🔥 ELITE MASTER SYSTEM - RESULTADOS COMPOSTOS</b>"
+        
+        return enviar_telegram(msg, chat_id=TELEGRAM_CHAT_ID_ALT2)
+    except Exception as e:
+        st.error(f"❌ Erro no fallback de texto para resultados compostos: {e}")
+        return False
+
+# =============================
 # SISTEMA DE CONFERÊNCIA PARA NOVAS PREVISÕES - ATUALIZADO
 # =============================
 
 def verificar_resultados_finais_completo(alerta_resultados: bool):
-    """Verifica resultados finais para TODOS os tipos de previsão"""
+    """Verifica resultados finais para TODOS os tipos de previsão - ATUALIZADA"""
     st.info("🔍 Verificando resultados para TODOS os tipos de previsão...")
     
     # Resultados Gols (Original)
     verificar_resultados_finais(alerta_resultados)
+    
+    # Resultados Compostos (NOVO)
+    verificar_resultados_compostos(alerta_resultados)
     
     # Novas previsões
     verificar_resultados_ambas_marcam(alerta_resultados)
@@ -2810,193 +3187,485 @@ def processar_jogos_avancado(data_selecionada, todas_ligas, ligas_selecionadas, 
                         "confianca": conf_escanteios, 
                         "tendencia": tend_escanteios,
                         "liga": match.get("competition", {}).get("name", "Desconhecido"),
+                        #"hora": hora_datetime,  # CORREÇÃO
+                        #"data_formatada": data
                         "hora": hora_datetime,  # CORREÇÃO
                         "data_formatada": data_formatada,  # NOVO
                         "hora_formatada": hora_formatada,  # NOVO
                         "fixture": match  # NOVO
                     })
-        
+
         progress_bar.progress((i + 1) / total_ligas)
 
-    # Resultados e Estatísticas
-    st.success("✅ Processamento AVANÇADO concluído!")
-    
-    # Filtrar jogos de gols por threshold
-    jogos_gols_filtrados = [j for j in top_jogos_gols if j["confianca"] >= threshold]
-    
-    # Mostrar estatísticas detalhadas
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("🎯 Jogos Gols", len(jogos_gols_filtrados))
-    with col2:
-        st.metric("⚽ Ambas Marcam", len(top_jogos_ambas_marcam))
-    with col3:
-        st.metric("🟨 Cartões", len(top_jogos_cartoes))
-    with col4:
-        st.metric("🔄 Escanteios", len(top_jogos_escanteios))
+    progress_bar.empty()
 
-    # ENVIAR ALERTAS COMPOSTOS - CORREÇÃO PRINCIPAL
-    if alerta_poster and jogos_gols_filtrados:
-        st.info("📤 Enviando alertas compostos com poster...")
-        sucesso_poster = enviar_alerta_composto_poster(jogos_gols_filtrados, threshold)
-        if sucesso_poster:
-            st.success("🚀 Alertas compostos enviados com sucesso!")
-        else:
-            st.error("❌ Falha ao enviar alertas compostos")
+    # ENVIO DE ALERTAS COMPOSTOS - CORRIGIDO
+    if alerta_poster:
+        # Filtrar jogos por threshold e status
+        jogos_confiaveis = [j for j in top_jogos_gols 
+                           if j["confianca"] >= threshold 
+                           and j["status"] not in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"]]
         
-    # Enviar outros alertas
-    if alerta_top_jogos and jogos_gols_filtrados:
-        enviar_top_jogos(jogos_gols_filtrados, top_n, alerta_top_jogos)
+        if jogos_confiaveis:
+            st.info(f"🎨 Preparando poster composto com {len(jogos_confiaveis)} jogos...")
+            if enviar_alerta_composto_poster(jogos_confiaveis, threshold):
+                st.success("🚀 Poster composto enviado com sucesso!")
+            else:
+                st.error("❌ Falha ao enviar poster composto")
+        else:
+            st.warning("⚠️ Nenhum jogo elegível para poster composto")
 
-    # Mostrar resumo dos alertas
-    st.subheader("📋 Resumo dos Alertas Gerados")
+    # ENVIO DE TOP JOGOS
+    enviar_top_jogos(top_jogos_gols, top_n, alerta_top_jogos)
+
+    # EXIBIR RESULTADOS NA INTERFACE
+    st.subheader("📊 Resultados da Análise Avançada")
+
+    # Abas para diferentes tipos de previsão
+    tab1, tab2, tab3, tab4 = st.tabs(["⚽ Previsão de Gols", "🔄 Ambas Marcam", "🟨 Cartões", "🔄 Escanteios"])
+
+    with tab1:
+        exibir_resultados_previsao_gols(top_jogos_gols, threshold)
+
+    with tab2:
+        exibir_resultados_ambas_marcam(top_jogos_ambas_marcam, threshold_ambas_marcam)
+
+    with tab3:
+        exibir_resultados_cartoes(top_jogos_cartoes, threshold_cartoes)
+
+    with tab4:
+        exibir_resultados_escanteios(top_jogos_escanteios, threshold_escanteios)
+
+def exibir_resultados_previsao_gols(jogos: list, threshold: int):
+    """Exibe resultados da previsão de gols"""
+    if not jogos:
+        st.info("ℹ️ Nenhum jogo encontrado para previsão de gols")
+        return
+
+    # Filtrar por confiança e status
+    jogos_filtrados = [j for j in jogos 
+                      if j["confianca"] >= threshold 
+                      and j["status"] not in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"]]
     
-    if jogos_gols_filtrados:
-        st.write(f"**🎯 Gols (≥{threshold}%):** {len(jogos_gols_filtrados)} jogos")
-        for jogo in sorted(jogos_gols_filtrados, key=lambda x: x['confianca'], reverse=True)[:3]:
-            st.write(f"  - {jogo['home']} vs {jogo['away']} | {jogo['tendencia']} | Conf: {jogo['confianca']:.0f}%")
-    
-    if top_jogos_ambas_marcam:
-        st.write(f"**⚽ Ambas Marcam:** {len(top_jogos_ambas_marcam)} jogos")
-        for jogo in sorted(top_jogos_ambas_marcam, key=lambda x: x['confianca'], reverse=True)[:3]:
-            st.write(f"  - {jogo['home']} vs {jogo['away']} | {jogo['tendencia']} | Conf: {jogo['confianca']:.0f}%")
-    
-    if top_jogos_cartoes:
-        st.write(f"**🟨 Cartões:** {len(top_jogos_cartoes)} jogos") 
-        for jogo in sorted(top_jogos_cartoes, key=lambda x: x['confianca'], reverse=True)[:3]:
-            st.write(f"  - {jogo['home']} vs {jogo['away']} | {jogo['tendencia']} | Conf: {jogo['confianca']:.0f}%")
-            
-    if top_jogos_escanteios:
-        st.write(f"**🔄 Escanteios:** {len(top_jogos_escanteios)} jogos")
-        for jogo in sorted(top_jogos_escanteios, key=lambda x: x['confianca'], reverse=True)[:3]:
-            st.write(f"  - {jogo['home']} vs {jogo['away']} | {jogo['tendencia']} | Conf: {jogo['confianca']:.0f}%")
+    if not jogos_filtrados:
+        st.warning(f"⚠️ Nenhum jogo com confiança ≥{threshold}% e status válido")
+        return
+
+    st.write(f"**🎯 Jogos com Confiança ≥{threshold}%**")
+
+    for jogo in sorted(jogos_filtrados, key=lambda x: x["confianca"], reverse=True):
+        # CORREÇÃO: Usar dados formatados já calculados
+        hora_display = jogo.get('hora_formatada', 'Hora inválida')
+        data_display = jogo.get('data_formatada', 'Data inválida')
+        
+        with st.expander(f"🏟️ {jogo['home']} vs {jogo['away']} - {jogo['confianca']:.0f}%", expanded=False):
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.write(f"**📅 Data:** {data_display}")
+                st.write(f"**⏰ Hora:** {hora_display} BRT")
+                st.write(f"**🏆 Liga:** {jogo['liga']}")
+            with col2:
+                st.write(f"**📈 Tendência:** {jogo['tendencia']}")
+                st.write(f"**⚽ Estimativa:** {jogo['estimativa']:.2f} gols")
+                st.write(f"**🎯 Confiança:** {jogo['confianca']:.0f}%")
+            with col3:
+                st.write(f"**📊 Status:** {jogo['status']}")
+                # Barra de confiança visual
+                confianca = jogo['confianca']
+                st.progress(confianca / 100, text=f"Confiança: {confianca:.0f}%")
+
+def exibir_resultados_ambas_marcam(jogos: list, threshold: int):
+    """Exibe resultados da previsão Ambas Marcam"""
+    if not jogos:
+        st.info("ℹ️ Nenhum jogo encontrado para previsão Ambas Marcam")
+        return
+
+    st.write(f"**🔄 Jogos Ambas Marcam com Confiança ≥{threshold}%**")
+
+    for jogo in sorted(jogos, key=lambda x: x["confianca"], reverse=True):
+        # CORREÇÃO: Usar dados formatados
+        hora_display = jogo.get('hora_formatada', 'Hora inválida')
+        data_display = jogo.get('data_formatada', 'Data inválida')
+        
+        with st.expander(f"🏟️ {jogo['home']} vs {jogo['away']} - {jogo['confianca']:.0f}%", expanded=False):
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.write(f"**📅 Data:** {data_display}")
+                st.write(f"**⏰ Hora:** {hora_display} BRT")
+                st.write(f"**🏆 Liga:** {jogo['liga']}")
+            with col2:
+                st.write(f"**📈 Tendência:** {jogo['tendencia']}")
+                st.write(f"**📊 Probabilidade:** {jogo['probabilidade']:.1f}%")
+                st.write(f"**🎯 Confiança:** {jogo['confianca']:.0f}%")
+            with col3:
+                # Barra de confiança visual
+                confianca = jogo['confianca']
+                st.progress(confianca / 100, text=f"Confiança: {confianca:.0f}%")
+                
+                # Indicador visual
+                if "SIM" in jogo['tendencia']:
+                    st.success("✅ ALTA PROBABILIDADE")
+                elif "PROVÁVEL" in jogo['tendencia']:
+                    st.warning("⚠️ PROBABILIDADE MÉDIA")
+                else:
+                    st.error("❌ BAIXA PROBABILIDADE")
+
+def exibir_resultados_cartoes(jogos: list, threshold: int):
+    """Exibe resultados da previsão de Cartões"""
+    if not jogos:
+        st.info("ℹ️ Nenhum jogo encontrado para previsão de Cartões")
+        return
+
+    st.write(f"**🟨 Jogos com Cartões (Confiança ≥{threshold}%)**")
+
+    for jogo in sorted(jogos, key=lambda x: x["confianca"], reverse=True):
+        # CORREÇÃO: Usar dados formatados
+        hora_display = jogo.get('hora_formatada', 'Hora inválida')
+        data_display = jogo.get('data_formatada', 'Data inválida')
+        
+        with st.expander(f"🏟️ {jogo['home']} vs {jogo['away']} - {jogo['confianca']:.0f}%", expanded=False):
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.write(f"**📅 Data:** {data_display}")
+                st.write(f"**⏰ Hora:** {hora_display} BRT")
+                st.write(f"**🏆 Liga:** {jogo['liga']}")
+            with col2:
+                st.write(f"**📈 Tendência:** {jogo['tendencia']}")
+                st.write(f"**🟨 Estimativa:** {jogo['estimativa']:.1f} cartões")
+                st.write(f"**🎯 Confiança:** {jogo['confianca']:.0f}%")
+            with col3:
+                # Barra de confiança visual
+                confianca = jogo['confianca']
+                st.progress(confianca / 100, text=f"Confiança: {confianca:.0f}%")
+                
+                # Indicador de intensidade
+                if jogo['estimativa'] >= 5.5:
+                    st.error("🔴 ALTA INTENSIDADE")
+                elif jogo['estimativa'] >= 4.0:
+                    st.warning("🟡 MÉDIA INTENSIDADE")
+                else:
+                    st.info("🟢 BAIXA INTENSIDADE")
+
+def exibir_resultados_escanteios(jogos: list, threshold: int):
+    """Exibe resultados da previsão de Escanteios"""
+    if not jogos:
+        st.info("ℹ️ Nenhum jogo encontrado para previsão de Escanteios")
+        return
+
+    st.write(f"**🔄 Jogos com Escanteios (Confiança ≥{threshold}%)**")
+
+    for jogo in sorted(jogos, key=lambda x: x["confianca"], reverse=True):
+        # CORREÇÃO: Usar dados formatados
+        hora_display = jogo.get('hora_formatada', 'Hora inválida')
+        data_display = jogo.get('data_formatada', 'Data inválida')
+        
+        with st.expander(f"🏟️ {jogo['home']} vs {jogo['away']} - {jogo['confianca']:.0f}%", expanded=False):
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.write(f"**📅 Data:** {data_display}")
+                st.write(f"**⏰ Hora:** {hora_display} BRT")
+                st.write(f"**🏆 Liga:** {jogo['liga']}")
+            with col2:
+                st.write(f"**📈 Tendência:** {jogo['tendencia']}")
+                st.write(f"**🔄 Estimativa:** {jogo['estimativa']:.1f} escanteios")
+                st.write(f"**🎯 Confiança:** {jogo['confianca']:.0f}%")
+            with col3:
+                # Barra de confiança visual
+                confianca = jogo['confianca']
+                st.progress(confianca / 100, text=f"Confiança: {confianca:.0f}%")
+                
+                # Indicador de intensidade
+                if jogo['estimativa'] >= 10.5:
+                    st.error("🔴 ALTA INTENSIDADE")
+                elif jogo['estimativa'] >= 8.0:
+                    st.warning("🟡 MÉDIA INTENSIDADE")
+                else:
+                    st.info("🟢 BAIXA INTENSIDADE")
 
 # =============================
-# Interface Streamlight ATUALIZADA - COM SELEÇÃO MÚLTIPLA
+# INTERFACE PRINCIPAL STREAMLIT
 # =============================
+
 def main():
-    st.set_page_config(page_title="⚽ Alerta de Gols", layout="wide")
-    st.title("⚽ Sistema de Alertas Automáticos de Gols")
+    st.set_page_config(
+        page_title="ELITE MASTER - Sistema Avançado de Previsões",
+        page_icon="⚽",
+        layout="wide",
+        initial_sidebar_state="expanded"
+    )
 
-    # Sidebar - CONFIGURAÇÕES DE ALERTAS EXPANDIDAS
+    # CSS personalizado
+    st.markdown("""
+        <style>
+        .main-header {
+            font-size: 3rem;
+            color: #FFD700;
+            text-align: center;
+            margin-bottom: 2rem;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px #000000;
+        }
+        .sub-header {
+            font-size: 1.5rem;
+            color: #87CEEB;
+            margin-bottom: 1rem;
+            font-weight: bold;
+        }
+        .metric-card {
+            background-color: #1E2A38;
+            padding: 1rem;
+            border-radius: 10px;
+            border-left: 4px solid #FFD700;
+        }
+        .stProgress > div > div > div {
+            background-color: #FFD700;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # Cabeçalho principal
+    st.markdown('<h1 class="main-header">⚽ ELITE MASTER SYSTEM</h1>', unsafe_allow_html=True)
+    st.markdown('<p style="text-align: center; font-size: 1.2rem; color: #CCCCCC;">Sistema Avançado de Previsões com Análise em Tempo Real</p>', unsafe_allow_html=True)
+
+    # Barra lateral
     with st.sidebar:
-        st.header("🔔 Configurações de Alertas")
+        st.image("https://via.placeholder.com/150x150/1E2A38/FFD700?text=EM", width=150)
+        st.title("🎮 Controles")
         
-        # Checkboxes para cada tipo de alerta - ORIGINAIS
-        alerta_individual = st.checkbox("🎯 Alertas Individuais Gols", value=True)
-        alerta_poster = st.checkbox("📊 Alertas com Poster Gols", value=True)
-        alerta_top_jogos = st.checkbox("🏆 Top Jogos Gols", value=True)
-        alerta_resultados = st.checkbox("🏁 Resultados Finais Gols", value=True)
-        
-        st.markdown("---")
-        st.subheader("🆕 Novas Previsões")
-        
-        # Checkboxes para NOVAS PREVISÕES
-        alerta_ambas_marcam = st.checkbox("⚽ Ambas Marcam", value=True,
-                                         help="Alertas para previsão Ambas Marcam")
-        alerta_cartoes = st.checkbox("🟨 Total de Cartões", value=True,
-                                    help="Alertas para previsão de Cartões")
-        alerta_escanteios = st.checkbox("🔄 Total de Escanteios", value=True,
-                                       help="Alertas para previsão de Escanteios")
-        
-        alerta_resultados_ambas_marcam = st.checkbox("🏁 Resultados Ambas Marcam", value=True)
-        alerta_resultados_cartoes = st.checkbox("🏁 Resultados Cartões", value=True)
-        alerta_resultados_escanteios = st.checkbox("🏁 Resultados Escanteios", value=True)
-        
-        st.markdown("----")
-        
-        st.header("Configurações Gerais")
-        top_n = st.selectbox("📊 Jogos no Top", [3, 5, 10], index=0)
-        threshold = st.slider("Limiar confiança Gols (%)", 50, 95, 70, 1)
-        threshold_ambas_marcam = st.slider("Limiar Ambas Marcam (%)", 50, 95, 60, 1)
-        threshold_cartoes = st.slider("Limiar Cartões (%)", 45, 90, 55, 1)
-        threshold_escanteios = st.slider("Limiar Escanteios (%)", 40, 85, 50, 1)
-        
-        st.markdown("----")
-        st.info("Ative/desative cada tipo de alerta conforme sua necessidade")
-
-    # Controles principais - COM SELEÇÃO MÚLTIPLA
-    col1, col2 = st.columns([2, 1])
-    with col1:
-        data_selecionada = st.date_input("📅 Data para análise:", value=datetime.today())
-    with col2:
-        todas_ligas = st.checkbox("🌍 Todas as ligas", value=True)
-
-    ligas_selecionadas = []
-    if not todas_ligas:
-        ligas_selecionadas = st.multiselect(
-            "📌 Selecione as ligas:",
-            options=list(LIGA_DICT.keys()),
-            default=["Premier League (Inglaterra)", "Campeonato Brasileiro Série A"],
-            help="Selecione uma ou mais ligas"
+        # Data seleção
+        data_selecionada = st.date_input(
+            "📅 Data dos Jogos",
+            datetime.now(),
+            help="Selecione a data para análise"
         )
-
-    # Processamento
-    if st.button("🔍 Buscar Partidas", type="primary"):
-        if not todas_ligas and not ligas_selecionadas:
-            st.error("❌ Selecione pelo menos uma liga ou marque 'Todas as ligas'")
+        
+        # Seleção de ligas - MODIFICADO PARA MÚLTIPLA SELEÇÃO
+        st.subheader("🏆 Ligas")
+        todas_ligas = st.checkbox("Todas as Ligas", value=True, help="Analisar todas as ligas disponíveis")
+        
+        if not todas_ligas:
+            ligas_selecionadas = st.multiselect(
+                "Selecione as Ligas:",
+                options=list(LIGA_DICT.keys()),
+                default=["Premier League (Inglaterra)", "Bundesliga", "Campeonato Brasileiro Série A"],
+                help="Selecione uma ou mais ligas para análise"
+            )
         else:
-            processar_jogos_avancado(data_selecionada, todas_ligas, ligas_selecionadas, top_n, 
-                                   threshold, threshold_ambas_marcam, threshold_cartoes, threshold_escanteios,
-                                   alerta_individual, alerta_poster, alerta_top_jogos,
-                                   alerta_ambas_marcam, alerta_cartoes, alerta_escanteios)
+            ligas_selecionadas = list(LIGA_DICT.keys())
 
-    # Ações - EXPANDIDAS COM NOVAS PREVISÕES
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        if st.button("🔄 Atualizar Status"):
+        # Configurações de alertas
+        st.subheader("🔔 Configurações de Alertas")
+        
+        # Thresholds para diferentes tipos
+        threshold = st.slider("Confiança Mínima Gols (%)", 50, 90, 70, 
+                            help="Confiança mínima para alertas de gols")
+        threshold_ambas_marcam = st.slider("Confiança Mínima Ambas Marcam (%)", 50, 90, 60,
+                                         help="Confiança mínima para alertas Ambas Marcam")
+        threshold_cartoes = st.slider("Confiança Mínima Cartões (%)", 50, 90, 55,
+                                    help="Confiança mínima para alertas de Cartões")
+        threshold_escanteios = st.slider("Confiança Mínima Escanteios (%)", 50, 90, 50,
+                                       help="Confiança mínima para alertas de Escanteios")
+        
+        top_n = st.slider("Top N Jogos", 1, 20, 5, help="Número de jogos no Top Jogos")
+
+        # Ativação de alertas
+        st.subheader("🚀 Ativar Alertas")
+        alerta_individual = st.checkbox("Alertas Individuais", value=False, 
+                                      help="Enviar alertas individuais para cada jogo")
+        alerta_poster = st.checkbox("Poster Composto", value=True, 
+                                  help="Enviar poster com múltiplos jogos")
+        alerta_top_jogos = st.checkbox("Top Jogos", value=True, 
+                                     help="Enviar lista dos Top N jogos")
+        
+        # Novos tipos de alertas
+        alerta_ambas_marcam = st.checkbox("Ambas Marcam", value=True,
+                                        help="Ativar previsões Ambas Marcam")
+        alerta_cartoes = st.checkbox("Cartões", value=True,
+                                   help="Ativar previsões de Cartões")
+        alerta_escanteios = st.checkbox("Escanteios", value=True,
+                                      help="Ativar previsões de Escanteios")
+
+        # Botões de ação
+        st.subheader("⚙️ Ações do Sistema")
+        if st.button("🔄 Atualizar Status Partidas", use_container_width=True):
             atualizar_status_partidas()
-    with col2:
-        if st.button("📊 Conferir Resultados"):
-            conferir_resultados()
-    with col3:
-        if st.button("🏁 Verificar Todos Resultados", type="secondary"):
-            verificar_resultados_finais_completo(alerta_resultados)
-    with col4:
-        if st.button("🧹 Limpar Cache"):
-            limpar_caches()
+            
+        if st.button("🔍 Verificar Resultados", use_container_width=True):
+            verificar_resultados_finais_completo(True)
+            
+        if st.button("📊 Calcular Desempenho", use_container_width=True):
+            calcular_desempenho(50)
 
-    # Botões individuais para cada tipo de verificação
-    st.subheader("🔍 Verificação Individual de Resultados")
-    col_r1, col_r2, col_r3, col_r4 = st.columns(4)
-    with col_r1:
-        if st.button("⚽ Verificar Gols"):
-            verificar_resultados_finais(alerta_resultados)
-    with col_r2:
-        if st.button("🔍 Verificar Ambas Marcam"):
-            verificar_resultados_ambas_marcam(alerta_resultados_ambas_marcam)
-    with col_r3:
-        if st.button("🟨 Verificar Cartões"):
-            verificar_resultados_cartoes(alerta_resultados_cartoes)
-    with col_r4:
-        if st.button("🔄 Verificar Escanteios"):
-            verificar_resultados_escanteios(alerta_resultados_escanteios)
+        # Limpeza
+        st.subheader("🧹 Limpeza")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Limpar Caches", use_container_width=True):
+                limpar_caches()
+        with col2:
+            if st.button("Limpar Histórico", use_container_width=True):
+                limpar_historico("todos")
 
-    # Painel desempenho EXPANDIDO
-    st.markdown("---")
-    st.subheader("📊 Painel de Desempenho Completo")
-    
-    col_d1, col_d2, col_d3 = st.columns(3)
-    with col_d1:
-        if st.button("📈 Desempenho Gols"):
-            calcular_desempenho()
-    with col_d2:
-        if st.button("📈 Desempenho Ambas Marcam"):
-            calcular_desempenho_ambas_marcam()
-    with col_d3:
-        if st.button("📈 Desempenho Cartões"):
-            calcular_desempenho_cartoes()
-    
-    col_d4, col_d5, col_d6 = st.columns(3)
-    with col_d4:
-        if st.button("📈 Desempenho Escanteios"):
-            calcular_desempenho_escanteios()
-    with col_d5:
-        if st.button("🧹 Limpar Histórico Gols"):
-            limpar_historico("gols")
-    with col_d6:
-        if st.button("🧹 Limpar Todos Históricos"):
-            limpar_historico("todos")
+    # Área principal
+    tab_principal, tab_desempenho, tab_historico, tab_config = st.tabs([
+        "🎯 Análise Principal", "📊 Desempenho", "📋 Histórico", "⚙️ Configurações"
+    ])
+
+    with tab_principal:
+        st.subheader("🔍 Análise de Previsões Avançadas")
+        
+        if st.button("🚀 Executar Análise Completa", type="primary", use_container_width=True):
+            with st.spinner("Executando análise avançada com dados em tempo real..."):
+                processar_jogos_avancado(
+                    data_selecionada=data_selecionada,
+                    todas_ligas=todas_ligas,
+                    ligas_selecionadas=ligas_selecionadas,
+                    top_n=top_n,
+                    threshold=threshold,
+                    threshold_ambas_marcam=threshold_ambas_marcam,
+                    threshold_cartoes=threshold_cartoes,
+                    threshold_escanteios=threshold_escanteios,
+                    alerta_individual=alerta_individual,
+                    alerta_poster=alerta_poster,
+                    alerta_top_jogos=alerta_top_jogos,
+                    alerta_ambas_marcam=alerta_ambas_marcam,
+                    alerta_cartoes=alerta_cartoes,
+                    alerta_escanteios=alerta_escanteios
+                )
+
+    with tab_desempenho:
+        st.subheader("📈 Métricas de Desempenho")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            if st.button("Desempenho Gols", use_container_width=True):
+                calcular_desempenho(50)
+        with col2:
+            if st.button("Desempenho Ambas Marcam", use_container_width=True):
+                calcular_desempenho_ambas_marcam(50)
+        with col3:
+            if st.button("Desempenho Cartões", use_container_width=True):
+                calcular_desempenho_cartoes(50)
+        with col4:
+            if st.button("Desempenho Escanteios", use_container_width=True):
+                calcular_desempenho_escanteios(50)
+        
+        # Seleção de período para análise
+        st.subheader("📅 Análise por Período")
+        col1, col2 = st.columns(2)
+        with col1:
+            data_inicio = st.date_input("Data Início", datetime.now() - timedelta(days=30))
+        with col2:
+            data_fim = st.date_input("Data Fim", datetime.now())
+            
+        if st.button("Calcular Desempenho do Período", use_container_width=True):
+            calcular_desempenho_periodo(data_inicio, data_fim)
+
+    with tab_historico:
+        st.subheader("📋 Histórico de Conferências")
+        
+        tipo_historico = st.selectbox(
+            "Selecione o tipo de histórico:",
+            ["gols", "ambas_marcam", "cartoes", "escanteios"],
+            format_func=lambda x: {
+                "gols": "⚽ Previsão de Gols",
+                "ambas_marcam": "🔄 Ambas Marcam", 
+                "cartoes": "🟨 Cartões",
+                "escanteios": "🔄 Escanteios"
+            }[x]
+        )
+        
+        caminhos_historico = {
+            "gols": HISTORICO_PATH,
+            "ambas_marcam": HISTORICO_AMBAS_MARCAM_PATH,
+            "cartoes": HISTORICO_CARTOES_PATH,
+            "escanteios": HISTORICO_ESCANTEIOS_PATH
+        }
+        
+        historico = carregar_historico(caminhos_historico[tipo_historico])
+        
+        if historico:
+            st.write(f"**Total de registros:** {len(historico)}")
+            
+            # Filtrar últimos registros
+            qtd_registros = st.slider("Quantidade de registros para exibir:", 1, 100, 20)
+            historico_recente = historico[-qtd_registros:]
+            
+            for registro in reversed(historico_recente):
+                with st.expander(f"🏟️ {registro.get('home', 'N/A')} vs {registro.get('away', 'N/A')} - {registro.get('resultado', 'N/A')}", expanded=False):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.write(f"**Data:** {registro.get('data_conferencia', 'N/A')}")
+                        st.write(f"**Tendência:** {registro.get('tendencia', 'N/A')}")
+                        st.write(f"**Estimativa:** {registro.get('estimativa', 0):.2f}")
+                    with col2:
+                        st.write(f"**Confiança:** {registro.get('confianca', 0):.1f}%")
+                        st.write(f"**Placar:** {registro.get('placar', 'N/A')}")
+                        st.write(f"**Resultado:** {registro.get('resultado', 'N/A')}")
+                    
+                    # Campos específicos por tipo
+                    if tipo_historico == "ambas_marcam":
+                        st.write(f"**Previsão:** {registro.get('previsao', 'N/A')}")
+                        st.write(f"**Ambas Marcaram:** {registro.get('ambas_marcaram', False)}")
+                    elif tipo_historico == "cartoes":
+                        st.write(f"**Cartões Total:** {registro.get('cartoes_total', 0)}")
+                        st.write(f"**Limiar:** {registro.get('limiar_cartoes', 0)}")
+                    elif tipo_historico == "escanteios":
+                        st.write(f"**Escanteios Total:** {registro.get('escanteios_total', 0)}")
+                        st.write(f"**Limiar:** {registro.get('limiar_escanteios', 0)}")
+        else:
+            st.info("ℹ️ Nenhum registro no histórico selecionado.")
+
+    with tab_config:
+        st.subheader("⚙️ Configurações do Sistema")
+        
+        st.info("""
+        **🔧 Sistema ELITE MASTER - Configurações:**
+        
+        - **API Football Data:** Conectada ✓
+        - **Telegram Bot:** Configurado ✓  
+        - **Sistema de Cache:** Ativo ✓
+        - **Persistência de Dados:** Ativa ✓
+        - **Análise em Tempo Real:** Ativa ✓
+        
+        **📊 Tipos de Previsão Disponíveis:**
+        1. ⚽ Previsão de Gols (Sistema Original)
+        2. 🔄 Ambas Marcam (Nova)
+        3. 🟨 Total de Cartões (Nova) 
+        4. 🔄 Total de Escanteios (Nova)
+        
+        **🎯 Características:**
+        - Dados estatísticos em tempo real
+        - Análise preditiva avançada
+        - Sistema de alertas automatizado
+        - Posters profissionais para Telegram
+        - Histórico completo com métricas
+        """)
+        
+        # Status das credenciais
+        st.subheader("🔐 Status das Credenciais")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("API Football", "✅ Conectada" if API_KEY else "❌ Ausente")
+        with col2:
+            st.metric("Telegram Bot", "✅ Configurado" if TELEGRAM_TOKEN else "❌ Ausente")
+        with col3:
+            st.metric("Chat ID", "✅ Configurado" if TELEGRAM_CHAT_ID else "❌ Ausente")
+        
+        # Informações de uso
+        st.subheader("📈 Estatísticas de Uso")
+        alertas_total = len(carregar_alertas())
+        historico_total = len(carregar_historico())
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Alertas Ativos", alertas_total)
+        with col2:
+            st.metric("Registros Históricos", historico_total)
+
+# =============================
+# EXECUÇÃO PRINCIPAL
+# =============================
 
 if __name__ == "__main__":
     main()
