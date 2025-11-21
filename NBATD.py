@@ -11,7 +11,6 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 
 # Pillow
 from PIL import Image, ImageDraw, ImageFont, ImageOps
-import logging
 
 # =============================
 # Configurações e Segurança
@@ -55,46 +54,23 @@ LIGA_DICT = {
 }
 
 # =============================
-# Configuração de Logging
-# =============================
-def setup_logging():
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler('sistema_alertas.log'),
-            logging.StreamHandler()
-        ]
-    )
-
-setup_logging()
-
-# =============================
 # Utilitários de Cache e Persistência
 # =============================
 def carregar_json(caminho: str) -> dict:
-    """Carrega JSON - VERSÃO CORRIGIDA"""
     try:
         if os.path.exists(caminho):
             with open(caminho, "r", encoding='utf-8') as f:
                 dados = json.load(f)
-            
-            # Verificar se não está vazio
-            if not dados:
-                return {}
-                
             if caminho in [CACHE_JOGOS, CACHE_CLASSIFICACAO]:
                 agora = datetime.now().timestamp()
                 if isinstance(dados, dict) and '_timestamp' in dados:
                     if agora - dados['_timestamp'] > CACHE_TIMEOUT:
                         return {}
                 else:
-                    # Se não tem timestamp, verificar modificação do arquivo
                     if agora - os.path.getmtime(caminho) > CACHE_TIMEOUT:
                         return {}
             return dados
-    except (json.JSONDecodeError, IOError, Exception) as e:
-        logging.error(f"Erro ao carregar {caminho}: {e}")
+    except (json.JSONDecodeError, IOError) as e:
         st.error(f"Erro ao carregar {caminho}: {e}")
     return {}
 
@@ -106,7 +82,6 @@ def salvar_json(caminho: str, dados: dict):
         with open(caminho, "w", encoding='utf-8') as f:
             json.dump(dados, f, ensure_ascii=False, indent=2)
     except IOError as e:
-        logging.error(f"Erro ao salvar {caminho}: {e}")
         st.error(f"Erro ao salvar {caminho}: {e}")
 
 def carregar_alertas() -> dict:
@@ -135,8 +110,7 @@ def carregar_historico() -> list:
         try:
             with open(HISTORICO_PATH, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except Exception as e:
-            logging.error(f"Erro ao carregar histórico: {e}")
+        except Exception:
             return []
     return []
 
@@ -145,7 +119,6 @@ def salvar_historico(historico: list):
         with open(HISTORICO_PATH, "w", encoding="utf-8") as f:
             json.dump(historico, f, ensure_ascii=False, indent=2)
     except Exception as e:
-        logging.error(f"Erro ao salvar histórico: {e}")
         st.error(f"Erro ao salvar histórico: {e}")
 
 def registrar_no_historico(resultado: dict):
@@ -178,7 +151,6 @@ def limpar_historico():
             os.remove(HISTORICO_PATH)
             st.success(f"🧹 Histórico limpo. Backup salvo: {backup_name}")
         except Exception as e:
-            logging.error(f"Erro ao limpar/hacer backup do histórico: {e}")
             st.error(f"Erro ao limpar/hacer backup do histórico: {e}")
     else:
         st.info("⚠️ Nenhum histórico encontrado para limpar.")
@@ -187,19 +159,10 @@ def limpar_historico():
 # Utilitários de Data e Formatação
 # =============================
 def formatar_data_iso(data_iso: str) -> tuple[str, str]:
-    """Formata data ISO - VERSÃO CORRIGIDA"""
     try:
-        # Converter para datetime com timezone awareness
-        if data_iso.endswith('Z'):
-            data_iso = data_iso.replace('Z', '+00:00')
-        
-        data_utc = datetime.fromisoformat(data_iso)
-        # Converter para horário de Brasília (UTC-3)
-        data_brasilia = data_utc - timedelta(hours=3)
-        
-        return data_brasilia.strftime("%d/%m/%Y"), data_brasilia.strftime("%H:%M")
-    except ValueError as e:
-        logging.error(f"Erro ao formatar data {data_iso}: {e}")
+        data_jogo = datetime.fromisoformat(data_iso.replace("Z", "+00:00")) - timedelta(hours=3)
+        return data_jogo.strftime("%d/%m/%Y"), data_jogo.strftime("%H:%M")
+    except ValueError:
         return "Data inválida", "Hora inválida"
 
 def abreviar_nome(nome: str, max_len: int = 15) -> str:
@@ -208,24 +171,6 @@ def abreviar_nome(nome: str, max_len: int = 15) -> str:
     palavras = nome.split()
     abreviado = " ".join([p[0] + "." if len(p) > 2 else p for p in palavras])
     return abreviado[:max_len-3] + "..." if len(abreviado) > max_len else abreviado
-
-# =============================
-# Validação de Dados
-# =============================
-def validar_dados_jogo(match: dict) -> bool:
-    """Valida se os dados do jogo são válidos"""
-    required_fields = ['id', 'homeTeam', 'awayTeam', 'utcDate']
-    
-    for field in required_fields:
-        if field not in match:
-            logging.warning(f"Campo {field} faltando no jogo")
-            return False
-            
-    if 'name' not in match['homeTeam'] or 'name' not in match['awayTeam']:
-        logging.warning("Nomes dos times faltando")
-        return False
-        
-    return True
 
 # =============================
 # Comunicação com APIs
@@ -241,7 +186,6 @@ def enviar_telegram(msg: str, chat_id: str = TELEGRAM_CHAT_ID, disable_web_page_
         response = requests.get(f"{BASE_URL_TG}/sendMessage", params=params, timeout=10)
         return response.status_code == 200
     except requests.RequestException as e:
-        logging.error(f"Erro ao enviar para Telegram: {e}")
         st.error(f"Erro ao enviar para Telegram: {e}")
         return False
 
@@ -254,20 +198,15 @@ def enviar_foto_telegram(photo_bytes: io.BytesIO, caption: str = "", chat_id: st
         resp = requests.post(f"{BASE_URL_TG}/sendPhoto", data=data, files=files, timeout=15)
         return resp.status_code == 200
     except requests.RequestException as e:
-        logging.error(f"Erro ao enviar foto para Telegram: {e}")
         st.error(f"Erro ao enviar foto para Telegram: {e}")
         return False
 
-def obter_dados_api(url: str, timeout: int = 15) -> dict | None:
+def obter_dados_api(url: str, timeout: int = 10) -> dict | None:
     try:
         response = requests.get(url, headers=HEADERS, timeout=timeout)
         response.raise_for_status()
         return response.json()
-    except requests.exceptions.Timeout:
-        logging.error(f"Timeout na requisição: {url}")
-        return None
     except requests.RequestException as e:
-        logging.error(f"Erro na requisição API {url}: {e}")
         st.error(f"Erro na requisição API: {e}")
         return None
 
@@ -313,10 +252,8 @@ def obter_jogos(liga_id: str, data: str) -> list:
 # Lógica de Análise e Alertas
 # =============================
 def calcular_tendencia(home: str, away: str, classificacao: dict) -> tuple[float, float, str]:
-    """Calcula tendência - VERSÃO CORRIGIDA"""
     dados_home = classificacao.get(home, {"scored": 0, "against": 0, "played": 1})
     dados_away = classificacao.get(away, {"scored": 0, "against": 0, "played": 1})
-    
     played_home = max(dados_home["played"], 1)
     played_away = max(dados_away["played"], 1)
 
@@ -325,23 +262,20 @@ def calcular_tendencia(home: str, away: str, classificacao: dict) -> tuple[float
     media_away_feitos = dados_away["scored"] / played_away
     media_away_sofridos = dados_away["against"] / played_away
 
-    # Cálculo mais preciso da estimativa
-    estimativa_home = (media_home_feitos + media_away_sofridos) / 2
-    estimativa_away = (media_away_feitos + media_home_sofridos) / 2
-    estimativa_total = estimativa_home + estimativa_away
+    estimativa = ((media_home_feitos + media_away_sofridos) / 2 +
+                  (media_away_feitos + media_home_sofridos) / 2)
 
-    # Lógica de tendência corrigida
-    if estimativa_total >= 3.0:
+    if estimativa >= 3.0:
         tendencia = "Mais 2.5"
-        confianca = min(95, 70 + (estimativa_total - 3.0) * 12)
-    elif estimativa_total >= 2.0:
+        confianca = min(95, 70 + (estimativa - 3.0) * 10)
+    elif estimativa >= 2.0:
         tendencia = "Mais 1.5"
-        confianca = min(90, 60 + (estimativa_total - 2.0) * 10)
+        confianca = min(90, 60 + (estimativa - 2.0) * 10)
     else:
         tendencia = "Menos 2.5"
-        confianca = min(85, 50 + (2.5 - estimativa_total) * 15)
+        confianca = min(85, 55 + (2.0 - estimativa) * 10)
 
-    return round(estimativa_total, 2), round(confianca, 1), tendencia
+    return estimativa, confianca, tendencia
 
 def gerar_poster_individual_westham(fixture: dict, tendencia: str, estimativa: float, confianca: float) -> io.BytesIO:
     """
@@ -466,7 +400,7 @@ def gerar_poster_individual_westham(fixture: dict, tendencia: str, estimativa: f
             img.paste(imagem_final, (pos_x, pos_y), imagem_final)
 
         except Exception as e:
-            logging.error(f"Erro ao processar escudo: {e}")
+            print(f"[ERRO ESCUDO] {e}")
             draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(100, 100, 100))
             draw.text((x + 60, y + 80), "ERR", font=FONTE_INFO, fill=(255, 255, 255))
 
@@ -600,7 +534,6 @@ def enviar_alerta_telegram(fixture: dict, tendencia: str, estimativa: float, con
             return False
             
     except Exception as e:
-        logging.error(f"Erro ao enviar alerta individual: {str(e)}")
         st.error(f"❌ Erro ao enviar alerta individual: {str(e)}")
         # Fallback para mensagem de texto
         return enviar_alerta_telegram_fallback(fixture, tendencia, estimativa, confianca)
@@ -645,7 +578,7 @@ def verificar_enviar_alerta(fixture: dict, tendencia: str, estimativa: float, co
 # =============================
 
 def verificar_resultados_finais(alerta_resultados: bool):
-    """Verifica resultados finais dos jogos e envia alertas - VERSÃO CORRIGIDA"""
+    """Verifica resultados finais dos jogos e envia alertas"""
     alertas = carregar_alertas()
     if not alertas:
         st.info("ℹ️ Nenhum alerta para verificar resultados.")
@@ -655,41 +588,38 @@ def verificar_resultados_finais(alerta_resultados: bool):
     jogos_com_resultado = []
     
     for fixture_id, alerta in list(alertas.items()):
-        # Pular se já foi conferido
         if alerta.get("conferido", False):
             continue
             
+        # Buscar dados atualizados do jogo
         try:
             url = f"{BASE_URL_FD}/matches/{fixture_id}"
-            fixture_data = obter_dados_api(url)
+            fixture = obter_dados_api(url)
             
-            if not fixture_data:
+            if not fixture:
                 continue
                 
-            match = fixture_data.get('match', fixture_data)  # Algumas APIs usam 'match'
-            status = match.get("status", "")
-            score = match.get("score", {}).get("fullTime", {})
+            status = fixture.get("status", "")
+            score = fixture.get("score", {}).get("fullTime", {})
             home_goals = score.get("home")
             away_goals = score.get("away")
             
-            # Verificar se jogo terminou e tem resultado válido
-            if (status == "FINISHED" and 
-                home_goals is not None and 
-                away_goals is not None):
-                
+            # Verificar se jogo terminou e tem resultado
+            if status == "FINISHED" and home_goals is not None and away_goals is not None:
+                # Preparar dados para o poster
                 jogo_resultado = {
                     "id": fixture_id,
-                    "home": match["homeTeam"]["name"],
-                    "away": match["awayTeam"]["name"],
+                    "home": fixture["homeTeam"]["name"],
+                    "away": fixture["awayTeam"]["name"],
                     "home_goals": home_goals,
                     "away_goals": away_goals,
-                    "liga": match.get("competition", {}).get("name", "Desconhecido"),
-                    "data": match["utcDate"],
+                    "liga": fixture.get("competition", {}).get("name", "Desconhecido"),
+                    "data": fixture["utcDate"],
                     "tendencia_prevista": alerta.get("tendencia", "Desconhecida"),
                     "estimativa_prevista": alerta.get("estimativa", 0),
                     "confianca_prevista": alerta.get("confianca", 0),
-                    "escudo_home": match.get("homeTeam", {}).get("crest") or "",
-                    "escudo_away": match.get("awayTeam", {}).get("crest") or ""
+                    "escudo_home": fixture.get("homeTeam", {}).get("crest") or fixture.get("homeTeam", {}).get("logo", ""),
+                    "escudo_away": fixture.get("awayTeam", {}).get("crest") or fixture.get("awayTeam", {}).get("logo", "")
                 }
                 
                 jogos_com_resultado.append(jogo_resultado)
@@ -697,7 +627,6 @@ def verificar_resultados_finais(alerta_resultados: bool):
                 resultados_enviados += 1
                 
         except Exception as e:
-            logging.error(f"Erro ao verificar jogo {fixture_id}: {e}")
             st.error(f"Erro ao verificar jogo {fixture_id}: {e}")
     
     # Enviar alertas em lote se houver resultados E a checkbox estiver ativada
@@ -861,7 +790,6 @@ def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADO
                 img.paste(logo_img, (pos_x, pos_y), logo_img)
 
             except Exception as e:
-                logging.error(f"Erro ao desenhar escudo resultado: {e}")
                 draw.ellipse([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(100, 100, 100))
                 draw.text((x + 50, y + 65), "ERR", font=FONTE_INFO, fill=(255, 255, 255))
 
@@ -1020,7 +948,6 @@ def enviar_alerta_resultados_poster(jogos_com_resultado: list):
                 st.error(f"❌ Falha ao enviar poster de resultados para {data_str}")
                 
     except Exception as e:
-        logging.error(f"Erro crítico ao gerar/enviar poster de resultados: {str(e)}")
         st.error(f"❌ Erro crítico ao gerar/enviar poster de resultados: {str(e)}")
         # Fallback para mensagem de texto
         msg = f"🏁 RESULTADOS OFICIAIS - SISTEMA RED/GREEN:\n\n"
@@ -1036,31 +963,22 @@ def enviar_alerta_resultados_poster(jogos_com_resultado: list):
 # Funções de geração de imagem
 # =============================
 def baixar_imagem_url(url: str, timeout: int = 8) -> Image.Image | None:
-    """Tenta baixar uma imagem - VERSÃO CORRIGIDA"""
-    if not url or url == "":
+    """Tenta baixar uma imagem e retornar PIL.Image. Retorna None se falhar."""
+    if not url:
         return None
-        
     try:
         resp = requests.get(url, timeout=timeout, stream=True)
         resp.raise_for_status()
-        
-        # Verificar se é realmente uma imagem
-        content_type = resp.headers.get('content-type', '')
-        if not content_type.startswith('image/'):
-            logging.warning(f"URL não é uma imagem: {content_type}")
-            return None
-            
-        img = Image.open(io.BytesIO(resp.content))
-        return img.convert("RGBA")
-        
+        img = Image.open(io.BytesIO(resp.content)).convert("RGBA")
+        return img
     except Exception as e:
-        logging.error(f"Erro ao baixar imagem {url}: {e}")
+        print(f"Erro ao baixar imagem {url}: {e}")
         return None
 
 def criar_fonte(tamanho: int) -> ImageFont.ImageFont:
-    """Cria fonte com fallback robusto - VERSÃO CORRIGIDA"""
+    """Cria fonte com fallback robusto"""
     try:
-        # Tentar fontes do sistema
+        # Tentar fontes comuns em diferentes sistemas
         font_paths = [
             "arial.ttf", "Arial.ttf", "arialbd.ttf",
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
@@ -1075,11 +993,11 @@ def criar_fonte(tamanho: int) -> ImageFont.ImageFont:
             except Exception:
                 continue
         
-        # Fallback para fonte padrão do PIL
+        # Se não encontrou nenhuma fonte, criar uma bitmap
         return ImageFont.load_default()
         
     except Exception as e:
-        logging.error(f"Erro ao carregar fonte: {e}")
+        print(f"Erro ao carregar fonte: {e}")
         return ImageFont.load_default()
 
 def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA DE GOLS") -> io.BytesIO:
@@ -1221,7 +1139,7 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
                 img.paste(imagem_final, (pos_x, pos_y), imagem_final)
 
             except Exception as e:
-                logging.error(f"Erro ao processar escudo West Ham: {e}")
+                print(f"[ERRO ESCUDO] {e}")
                 draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(100, 100, 100))
                 draw.text((x + 70, y + 90), "ERR", font=FONTE_INFO, fill=(255, 255, 255))
 
@@ -1346,7 +1264,6 @@ def enviar_alerta_westham_style(jogos_conf: list, threshold: int, chat_id: str =
                 st.error(f"❌ Falha ao enviar poster para {data_str}")
                 
     except Exception as e:
-        logging.error(f"Erro crítico ao gerar/enviar poster West Ham: {str(e)}")
         st.error(f"❌ Erro crítico ao gerar/enviar poster: {str(e)}")
         # Fallback para mensagem de texto
         msg = f"🔥 Jogos ≥{threshold}% (Erro na imagem):\n"
@@ -1404,7 +1321,6 @@ def atualizar_status_partidas():
                 cache_jogos[key] = data_api["matches"]
                 mudou = True
         except Exception as e:
-            logging.error(f"Erro ao atualizar liga {key}: {e}")
             st.error(f"Erro ao atualizar liga {key}: {e}")
             
     if mudou:
@@ -1443,7 +1359,6 @@ def limpar_caches():
                 arquivos_limpos += 1
         st.success(f"✅ {arquivos_limpos} caches limpos com sucesso!")
     except Exception as e:
-        logging.error(f"Erro ao limpar caches: {e}")
         st.error(f"❌ Erro ao limpar caches: {e}")
 
 def calcular_desempenho(qtd_jogos: int = 50):
@@ -1609,10 +1524,6 @@ def processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, thre
         jogos = obter_jogos(liga_id, hoje)
 
         for match in jogos:
-            # Validar dados do jogo
-            if not validar_dados_jogo(match):
-                continue
-                
             home = match["homeTeam"]["name"]
             away = match["awayTeam"]["name"]
             estimativa, confianca, tendencia = calcular_tendencia(home, away, classificacao)
@@ -1684,7 +1595,6 @@ def enviar_alerta_conf_criar_poster(jogos_conf: list, threshold: int, chat_id: s
         enviar_telegram(msg, chat_id=chat_id)
         st.success("📤 Alerta enviado (formato texto)")
     except Exception as e:
-        logging.error(f"Erro no fallback de poster: {e}")
         st.error(f"Erro no fallback: {e}")
 
 if __name__ == "__main__":
