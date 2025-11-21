@@ -2428,7 +2428,7 @@ class EstrategiaML:
             'eficiencia_por_tipo': {},
             'historico_validacao': []
         }
-        logging.info("🔄 Padrões sequenciais e métricas zerados"
+        logging.info("🔄 Padrões sequenciais e métricas zerados")
 
 # =============================
 # SISTEMA DE GESTÃO ATUALIZADO COM ROTAÇÃO POR 3 ACERTOS EM COMBINAÇÕES - CORRIGIDO
