@@ -3187,8 +3187,6 @@ def processar_jogos_avancado(data_selecionada, todas_ligas, ligas_selecionadas, 
                         "confianca": conf_escanteios, 
                         "tendencia": tend_escanteios,
                         "liga": match.get("competition", {}).get("name", "Desconhecido"),
-                        #"hora": hora_datetime,  # CORREÇÃO
-                        #"data_formatada": data
                         "hora": hora_datetime,  # CORREÇÃO
                         "data_formatada": data_formatada,  # NOVO
                         "hora_formatada": hora_formatada,  # NOVO
