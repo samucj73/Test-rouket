@@ -42,6 +42,7 @@ ALERTAS_PATH = "alertas.json"
 ALERTAS_AMBAS_MARCAM_PATH = "alertas_ambas_marcam.json"
 ALERTAS_CARTOES_PATH = "alertas_cartoes.json"
 ALERTAS_ESCANTEIOS_PATH = "alertas_escanteios.json"
+ALERTAS_COMPOSTOS_PATH = "alertas_compostos.json"  # NOVO
 CACHE_JOGOS = "cache_jogos.json"
 CACHE_CLASSIFICACAO = "cache_classificacao.json"
 CACHE_ESTATISTICAS = "cache_estatisticas.json"
@@ -52,6 +53,7 @@ HISTORICO_PATH = "historico_conferencias.json"
 HISTORICO_AMBAS_MARCAM_PATH = "historico_ambas_marcam.json"
 HISTORICO_CARTOES_PATH = "historico_cartoes.json"
 HISTORICO_ESCANTEIOS_PATH = "historico_escanteios.json"
+HISTORICO_COMPOSTOS_PATH = "historico_compostos.json"  # NOVO
 
 # =============================
 # Dicionário de Ligas
@@ -183,6 +185,497 @@ def salvar_cache_estatisticas(dados: dict):
     return salvar_json(CACHE_ESTATISTICAS, dados)
 
 # =============================
+# NOVAS FUNÇÕES PARA ALERTAS COMPOSTOS TEMPORÁRIOS
+# =============================
+
+def carregar_alertas_compostos() -> dict:
+    """Carrega alertas compostos com verificação de expiração (24h)"""
+    alertas = carregar_json(ALERTAS_COMPOSTOS_PATH)
+    
+    # Verificar e remover alertas expirados (mais de 24 horas)
+    agora = datetime.now()
+    alertas_validos = {}
+    
+    for alerta_id, alerta in alertas.items():
+        data_criacao = datetime.fromisoformat(alerta.get("data_criacao", "2000-01-01T00:00:00"))
+        if agora - data_criacao < timedelta(hours=24):
+            alertas_validos[alerta_id] = alerta
+        else:
+            st.info(f"ℹ️ Alerta composto {alerta_id} expirado (24h) e removido")
+    
+    # Se houve remoção, salvar a versão atualizada
+    if len(alertas_validos) != len(alertas):
+        salvar_alertas_compostos(alertas_validos)
+    
+    return alertas_validos
+
+def salvar_alertas_compostos(alertas: dict):
+    """Salva alertas compostos com timestamp"""
+    return salvar_json(ALERTAS_COMPOSTOS_PATH, alertas)
+
+def salvar_alerta_composto_para_conferencia(jogos_conf: list, threshold: int, poster_enviado: bool = True):
+    """Salva um alerta composto para futura conferência (24h)"""
+    try:
+        alertas = carregar_alertas_compostos()
+        
+        # Criar ID único baseado no timestamp
+        alerta_id = f"composto_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        
+        # Preparar dados dos jogos para conferência
+        jogos_para_salvar = []
+        for jogo in jogos_conf:
+            jogos_para_salvar.append({
+                "fixture_id": jogo.get("id", ""),
+                "home": jogo["home"],
+                "away": jogo["away"],
+                "liga": jogo["liga"],
+                "tendencia": jogo["tendencia"],
+                "estimativa": jogo["estimativa"],
+                "confianca": jogo["confianca"],
+                "data_jogo": jogo.get("hora").isoformat() if isinstance(jogo.get("hora"), datetime) else datetime.now().isoformat(),
+                "conferido": False,
+                "resultado": None,
+                "placar_final": None,
+                "previsao_correta": None
+            })
+        
+        # Salvar alerta composto
+        alertas[alerta_id] = {
+            "data_criacao": datetime.now().isoformat(),
+            "data_expiracao": (datetime.now() + timedelta(hours=24)).isoformat(),
+            "total_jogos": len(jogos_para_salvar),
+            "threshold": threshold,
+            "poster_enviado": poster_enviado,
+            "jogos": jogos_para_salvar,
+            "conferido": False,
+            "estatisticas": None
+        }
+        
+        salvar_alertas_compostos(alertas)
+        st.success(f"✅ Alerta composto salvo para conferência (24h). ID: {alerta_id}")
+        return alerta_id
+        
+    except Exception as e:
+        st.error(f"❌ Erro ao salvar alerta composto: {e}")
+        return None
+
+# =============================
+# SISTEMA DE ALERTAS COMPOSTOS DE RESULTADOS
+# =============================
+
+def enviar_alerta_composto_resultados_poster(alerta_id: str, alerta_data: dict):
+    """Envia alerta composto de RESULTS com poster para o Telegram"""
+    try:
+        jogos = alerta_data.get("jogos", [])
+        if not jogos:
+            st.warning(f"⚠️ Nenhum jogo no alerta composto {alerta_id}")
+            return False
+
+        # Filtrar apenas jogos conferidos com resultados
+        jogos_com_resultado = [j for j in jogos if j.get("conferido", False) and j.get("placar_final")]
+        
+        if not jogos_com_resultado:
+            st.warning(f"⚠️ Nenhum resultado final no alerta composto {alerta_id}")
+            return False
+
+        # Agrupar por data do jogo (não do alerta)
+        jogos_por_data = {}
+        for jogo in jogos_com_resultado:
+            try:
+                # Usar a data do jogo em vez da data do alerta
+                data_jogo_str = jogo.get("data_jogo", "")
+                if data_jogo_str:
+                    data_jogo = datetime.fromisoformat(data_jogo_str).date()
+                else:
+                    data_jogo = datetime.now().date()
+                    
+                if data_jogo not in jogos_por_data:
+                    jogos_por_data[data_jogo] = []
+                jogos_por_data[data_jogo].append(jogo)
+            except:
+                continue
+
+        enviados = 0
+        for data, jogos_data in jogos_por_data.items():
+            data_str = data.strftime("%d/%m/%Y")
+            titulo = f"ELITE MASTER - RESULTADOS COMPOSTOS {data_str}"
+            
+            st.info(f"🎨 Gerando poster de RESULTADOS compostos para {data_str} com {len(jogos_data)} jogos...")
+            
+            # Preparar dados para o poster de resultados
+            jogos_para_poster = []
+            for jogo_salvo in jogos_data:
+                # Extrair placar do formato "XxY"
+                placar = jogo_salvo.get("placar_final", "0x0")
+                home_goals, away_goals = placar.split('x') if 'x' in placar else (0, 0)
+                
+                jogo_para_poster = {
+                    "id": jogo_salvo.get("fixture_id", ""),
+                    "home": jogo_salvo["home"],
+                    "away": jogo_salvo["away"],
+                    "home_goals": int(home_goals),
+                    "away_goals": int(away_goals),
+                    "liga": jogo_salvo["liga"],
+                    "data": jogo_salvo.get("data_jogo", datetime.now().isoformat()),
+                    "tendencia_prevista": jogo_salvo["tendencia"],
+                    "estimativa_prevista": jogo_salvo["estimativa"],
+                    "confianca_prevista": jogo_salvo["confianca"],
+                    "resultado": jogo_salvo.get("resultado", "PENDENTE")
+                }
+                jogos_para_poster.append(jogo_para_poster)
+            
+            # Gerar poster de resultados
+            poster = gerar_poster_resultados_compostos(jogos_para_poster, titulo=titulo)
+            
+            # Calcular estatísticas do alerta composto
+            total_jogos = len(jogos_data)
+            green_count = sum(1 for j in jogos_data if j.get("resultado") == "GREEN")
+            red_count = total_jogos - green_count
+            taxa_acerto = (green_count / total_jogos * 100) if total_jogos > 0 else 0
+            
+            # Estatísticas do alerta original (se disponível)
+            stats_alerta = alerta_data.get("estatisticas", {})
+            green_count_alerta = stats_alerta.get("green_count", green_count)
+            red_count_alerta = stats_alerta.get("red_count", red_count)
+            taxa_acerto_alerta = stats_alerta.get("taxa_acerto", taxa_acerto)
+            
+            caption = (
+                f"<b>🏁 RESULTADOS OFICIAIS - ALERTA COMPOSTO</b>\n\n"
+                f"<b>📅 DATA DOS JOGOS: {data_str}</b>\n"
+                f"<b>📋 TOTAL DE JOGOS: {total_jogos}</b>\n"
+                f"<b>🟢 GREEN: {green_count} jogos</b>\n"
+                f"<b>🔴 RED: {red_count} jogos</b>\n"
+                f"<b>🎯 TAXA DE ACERTO: {taxa_acerto:.1f}%</b>\n\n"
+                f"<b>📊 DESEMPENHO DO ALERTA COMPOSTO:</b>\n"
+                f"<b>• Threshold Original: {alerta_data.get('threshold', 0)}%</b>\n"
+                f"<b>• Confiança Média: {sum(j.get('confianca', 0) for j in jogos_data) / len(jogos_data):.1f}%</b>\n"
+                f"<b>• Previsões Validadas</b>\n"
+                f"<b>• Resultados Oficiais</b>\n\n"
+                f"<b>🔥 ELITE MASTER - SISTEMA COMPOSTO VERIFICADO</b>"
+            )
+            
+            st.info("📤 Enviando poster de RESULTADOS compostos para o Telegram...")
+            ok = enviar_foto_telegram(poster, caption=caption, chat_id=TELEGRAM_CHAT_ID_ALT2)
+            
+            if ok:
+                st.success(f"🚀 Poster de RESULTADOS compostos enviado para {data_str}!")
+                
+                # Registrar no histórico de resultados compostos
+                for jogo in jogos_data:
+                    registrar_no_historico({
+                        "home": jogo["home"],
+                        "away": jogo["away"],
+                        "tendencia": jogo["tendencia"],
+                        "estimativa": jogo["estimativa"],
+                        "confianca": jogo["confianca"],
+                        "placar": jogo.get("placar_final", "-"),
+                        "resultado": "🟢 GREEN" if jogo.get("resultado") == "GREEN" else "🔴 RED"
+                    }, "compostos")
+                
+                enviados += 1
+            else:
+                st.error(f"❌ Falha ao enviar poster de resultados compostos para {data_str}")
+                
+        return enviados > 0
+        
+    except Exception as e:
+        st.error(f"❌ Erro crítico ao gerar/enviar poster de resultados compostos: {str(e)}")
+        # Fallback para mensagem de texto
+        return enviar_alerta_composto_resultados_texto(alerta_id, alerta_data)
+
+def enviar_alerta_composto_resultados_texto(alerta_id: str, alerta_data: dict) -> bool:
+    """Fallback para alerta de resultados compostos em texto"""
+    try:
+        jogos = alerta_data.get("jogos", [])
+        jogos_com_resultado = [j for j in jogos if j.get("conferido", False) and j.get("placar_final")]
+        
+        if not jogos_com_resultado:
+            return False
+            
+        msg = f"<b>🏁 RESULTADOS OFICIAIS - ALERTA COMPOSTO {alerta_id}</b>\n\n"
+        
+        # Agrupar por data
+        jogos_por_data = {}
+        for jogo in jogos_com_resultado:
+            try:
+                data_jogo = datetime.fromisoformat(jogo.get("data_jogo", "")).date()
+                if data_jogo not in jogos_por_data:
+                    jogos_por_data[data_jogo] = []
+                jogos_por_data[data_jogo].append(jogo)
+            except:
+                continue
+        
+        for data, jogos_data in jogos_por_data.items():
+            data_str = data.strftime("%d/%m/%Y")
+            msg += f"<b>📅 {data_str}</b>\n\n"
+            
+            for jogo in jogos_data[:10]:  # Limitar a 10 por mensagem
+                resultado = "🟢 GREEN" if jogo.get("resultado") == "GREEN" else "🔴 RED"
+                msg += (
+                    f"{resultado} <b>{jogo['home']}</b> {jogo.get('placar_final', '0x0')} <b>{jogo['away']}</b>\n"
+                    f"Previsão: {jogo['tendencia']} | Conf: {jogo['confianca']:.0f}%\n\n"
+                )
+            
+            # Estatísticas
+            total_jogos = len(jogos_data)
+            green_count = sum(1 for j in jogos_data if j.get("resultado") == "GREEN")
+            taxa_acerto = (green_count / total_jogos * 100) if total_jogos > 0 else 0
+            
+            msg += (
+                f"<b>📊 ESTATÍSTICAS {data_str}:</b>\n"
+                f"<b>🟢 GREEN: {green_count}</b> | <b>🔴 RED: {total_jogos - green_count}</b>\n"
+                f"<b>🎯 TAXA DE ACERTO: {taxa_acerto:.1f}%</b>\n\n"
+            )
+        
+        msg += "<b>🔥 ELITE MASTER - SISTEMA COMPOSTO VERIFICADO</b>"
+        
+        return enviar_telegram(msg, chat_id=TELEGRAM_CHAT_ID_ALT2)
+        
+    except Exception as e:
+        st.error(f"❌ Erro no fallback de texto para resultados compostos: {e}")
+        return False
+
+def verificar_resultados_alertas_compostos(alerta_resultados: bool):
+    """Verifica resultados dos alertas compostos salvos - ATUALIZADA COM ENVIO DE RESULTADOS"""
+    st.info("🔍 Verificando resultados de alertas compostos salvos...")
+    
+    alertas = carregar_alertas_compostos()
+    if not alertas:
+        st.info("ℹ️ Nenhum alerta composto salvo para verificar.")
+        return
+    
+    alertas_conferidos = 0
+    alertas_com_resultados = []
+    
+    for alerta_id, alerta in list(alertas.items()):
+        if alerta.get("conferido", False):
+            # Se já estava conferido, pular
+            continue
+            
+        jogos_alerta = alerta.get("jogos", [])
+        todos_jogos_conferidos = True
+        algum_jogo_novo = False
+        
+        for jogo_salvo in jogos_alerta:
+            if jogo_salvo.get("conferido", False):
+                continue
+                
+            fixture_id = jogo_salvo.get("fixture_id")
+            if not fixture_id:
+                continue
+                
+            try:
+                url = f"{BASE_URL_FD}/matches/{fixture_id}"
+                fixture = obter_dados_api(url)
+                
+                if not fixture:
+                    todos_jogos_conferidos = False
+                    continue
+                    
+                status = fixture.get("status", "")
+                score = fixture.get("score", {}).get("fullTime", {})
+                home_goals = score.get("home")
+                away_goals = score.get("away")
+                
+                # Verificar se jogo terminou e tem resultado
+                if status == "FINISHED" and home_goals is not None and away_goals is not None:
+                    # Calcular se previsão foi correta
+                    total_gols = home_goals + away_goals
+                    previsao_correta = False
+                    
+                    if jogo_salvo['tendencia'] == "Mais 2.5" and total_gols > 2.5:
+                        previsao_correta = True
+                    elif jogo_salvo['tendencia'] == "Mais 1.5" and total_gols > 1.5:
+                        previsao_correta = True
+                    elif jogo_salvo['tendencia'] == "Menos 2.5" and total_gols < 2.5:
+                        previsao_correta = True
+                    
+                    # Atualizar jogo salvo
+                    jogo_salvo["conferido"] = True
+                    jogo_salvo["resultado"] = "GREEN" if previsao_correta else "RED"
+                    jogo_salvo["placar_final"] = f"{home_goals}x{away_goals}"
+                    jogo_salvo["previsao_correta"] = previsao_correta
+                    jogo_salvo["total_gols"] = total_gols
+                    algum_jogo_novo = True
+                    
+                else:
+                    todos_jogos_conferidos = False
+                    
+            except Exception as e:
+                st.error(f"Erro ao verificar jogo composto {fixture_id}: {e}")
+                todos_jogos_conferidos = False
+        
+        # Se todos os jogos deste alerta foram conferidos, marcar o alerta como conferido
+        if todos_jogos_conferidos:
+            alerta["conferido"] = True
+            
+            # Calcular estatísticas do alerta
+            jogos_conferidos = [j for j in jogos_alerta if j.get("conferido", False)]
+            if jogos_conferidos:
+                total_jogos = len(jogos_conferidos)
+                green_count = sum(1 for j in jogos_conferidos if j.get("resultado") == "GREEN")
+                taxa_acerto = (green_count / total_jogos * 100) if total_jogos > 0 else 0
+                
+                alerta["estatisticas"] = {
+                    "total_jogos": total_jogos,
+                    "green_count": green_count,
+                    "red_count": total_jogos - green_count,
+                    "taxa_acerto": taxa_acerto,
+                    "data_conferencia": datetime.now().isoformat()
+                }
+            
+            alertas_conferidos += 1
+            alertas_com_resultados.append((alerta_id, alerta))
+        
+        # Se houve algum jogo novo com resultado, atualizar o alerta
+        if algum_jogo_novo:
+            alerta["jogos"] = jogos_alerta
+            salvar_alertas_compostos(alertas)
+    
+    # ENVIO DE ALERTAS DE RESULTADOS COMPOSTOS - NOVO
+    if alertas_com_resultados and alerta_resultados:
+        st.info(f"🎯 Enviando {len(alertas_com_resultados)} alertas de resultados compostos...")
+        
+        for alerta_id, alerta_data in alertas_com_resultados:
+            if enviar_alerta_composto_resultados_poster(alerta_id, alerta_data):
+                st.success(f"✅ Alerta de resultados compostos enviado: {alerta_id}")
+            else:
+                st.error(f"❌ Falha ao enviar alerta de resultados compostos: {alerta_id}")
+                
+        st.success(f"🚀 {len(alertas_com_resultados)} alertas de resultados compostos processados!")
+    
+    elif alertas_com_resultados:
+        st.info(f"ℹ️ {len(alertas_com_resultados)} alertas compostos prontos para resultados, mas envio desativado")
+    
+    if alertas_conferidos > 0:
+        st.success(f"✅ {alertas_conferidos} alertas compostos totalmente conferidos!")
+    
+    return len(alertas_com_resultados) > 0
+
+def exibir_alertas_compostos_salvos():
+    """Exibe interface para visualizar alertas compostos salvos"""
+    alertas = carregar_alertas_compostos()
+    
+    if not alertas:
+        st.info("ℹ️ Nenhum alerta composto salvo no momento.")
+        return
+    
+    st.subheader("📋 Alertas Compostos Salvos (24h)")
+    
+    for alerta_id, alerta in alertas.items():
+        data_criacao = datetime.fromisoformat(alerta.get("data_criacao", ""))
+        data_expiracao = datetime.fromisoformat(alerta.get("data_expiracao", ""))
+        tempo_restante = data_expiracao - datetime.now()
+        horas_restantes = max(0, tempo_restante.total_seconds() / 3600)
+        
+        status = "✅ Conferido" if alerta.get("conferido", False) else "⏳ Aguardando"
+        
+        with st.expander(f"📊 Alerta {alerta_id} - {status} - {horas_restantes:.1f}h restantes", expanded=False):
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.write(f"**Data Criação:** {data_criacao.strftime('%d/%m/%Y %H:%M')}")
+                st.write(f"**Expira em:** {data_expiracao.strftime('%d/%m/%Y %H:%M')}")
+                st.write(f"**Threshold:** {alerta.get('threshold', 0)}%")
+                
+            with col2:
+                st.write(f"**Total Jogos:** {alerta.get('total_jogos', 0)}")
+                st.write(f"**Poster Enviado:** {'✅ Sim' if alerta.get('poster_enviado') else '❌ Não'}")
+                st.write(f"**Status:** {status}")
+                
+            with col3:
+                if alerta.get("estatisticas"):
+                    stats = alerta["estatisticas"]
+                    st.write(f"**🟢 GREEN:** {stats.get('green_count', 0)}")
+                    st.write(f"**🔴 RED:** {stats.get('red_count', 0)}")
+                    st.write(f"**🎯 Taxa Acerto:** {stats.get('taxa_acerto', 0):.1f}%")
+            
+            # Lista de jogos
+            st.write("**🎯 Jogos Incluídos:**")
+            jogos = alerta.get("jogos", [])
+            
+            for i, jogo in enumerate(jogos):
+                cor_status = "🟢" if jogo.get("resultado") == "GREEN" else "🔴" if jogo.get("resultado") == "RED" else "⚪"
+                status_jogo = jogo.get("resultado", "Aguardando") if jogo.get("conferido") else "⏳ Pendente"
+                
+                col_j1, col_j2, col_j3 = st.columns([2, 2, 1])
+                
+                with col_j1:
+                    st.write(f"{cor_status} **{jogo['home']} vs {jogo['away']}**")
+                    st.write(f"🏆 {jogo['liga']}")
+                    
+                with col_j2:
+                    st.write(f"📈 {jogo['tendencia']}")
+                    st.write(f"🎯 {jogo['confianca']:.0f}%")
+                    
+                with col_j3:
+                    st.write(f"**{status_jogo}**")
+                    if jogo.get("placar_final"):
+                        st.write(f"🔢 {jogo['placar_final']}")
+            
+            # Botão para forçar conferência deste alerta
+            if st.button(f"🔄 Conferir Agora", key=f"conferir_{alerta_id}"):
+                with st.spinner("Conferindo resultados..."):
+                    # Lógica de conferência específica para este alerta
+                    jogos_atualizados = 0
+                    for jogo_salvo in jogos:
+                        if jogo_salvo.get("conferido", False):
+                            continue
+                            
+                        fixture_id = jogo_salvo.get("fixture_id")
+                        if fixture_id:
+                            url = f"{BASE_URL_FD}/matches/{fixture_id}"
+                            fixture = obter_dados_api(url)
+                            
+                            if fixture and fixture.get("status") == "FINISHED":
+                                score = fixture.get("score", {}).get("fullTime", {})
+                                home_goals = score.get("home")
+                                away_goals = score.get("away")
+                                
+                                if home_goals is not None and away_goals is not None:
+                                    total_gols = home_goals + away_goals
+                                    previsao_correta = False
+                                    
+                                    if jogo_salvo['tendencia'] == "Mais 2.5" and total_gols > 2.5:
+                                        previsao_correta = True
+                                    elif jogo_salvo['tendencia'] == "Mais 1.5" and total_gols > 1.5:
+                                        previsao_correta = True
+                                    elif jogo_salvo['tendencia'] == "Menos 2.5" and total_gols < 2.5:
+                                        previsao_correta = True
+                                    
+                                    jogo_salvo["conferido"] = True
+                                    jogo_salvo["resultado"] = "GREEN" if previsao_correta else "RED"
+                                    jogo_salvo["placar_final"] = f"{home_goals}x{away_goals}"
+                                    jogo_salvo["previsao_correta"] = previsao_correta
+                                    jogos_atualizados += 1
+                    
+                    if jogos_atualizados > 0:
+                        # Verificar se todos os jogos foram conferidos
+                        todos_conferidos = all(jogo.get("conferido", False) for jogo in jogos)
+                        if todos_conferidos:
+                            alerta["conferido"] = True
+                            
+                            # Calcular estatísticas
+                            jogos_conferidos = [j for j in jogos if j.get("conferido", False)]
+                            total_jogos = len(jogos_conferidos)
+                            green_count = sum(1 for j in jogos_conferidos if j.get("resultado") == "GREEN")
+                            taxa_acerto = (green_count / total_jogos * 100) if total_jogos > 0 else 0
+                            
+                            alerta["estatisticas"] = {
+                                "total_jogos": total_jogos,
+                                "green_count": green_count,
+                                "red_count": total_jogos - green_count,
+                                "taxa_acerto": taxa_acerto,
+                                "data_conferencia": datetime.now().isoformat()
+                            }
+                        
+                        salvar_alertas_compostos(alertas)
+                        st.success(f"✅ {jogos_atualizados} jogos conferidos!")
+                        st.rerun()
+                    else:
+                        st.info("ℹ️ Nenhum novo resultado encontrado para este alerta.")
+
+# =============================
 # Histórico de Conferências - COM PERSISTÊNCIA
 # =============================
 def carregar_historico(caminho: str = HISTORICO_PATH) -> list:
@@ -209,7 +702,8 @@ def registrar_no_historico(resultado: dict, tipo: str = "gols"):
         "gols": HISTORICO_PATH,
         "ambas_marcam": HISTORICO_AMBAS_MARCAM_PATH,
         "cartoes": HISTORICO_CARTOES_PATH,
-        "escanteios": HISTORICO_ESCANTEIOS_PATH
+        "escanteios": HISTORICO_ESCANTEIOS_PATH,
+        "compostos": HISTORICO_COMPOSTOS_PATH  # NOVO
     }
     
     caminho = caminhos_historico.get(tipo, HISTORICO_PATH)
@@ -236,6 +730,8 @@ def registrar_no_historico(resultado: dict, tipo: str = "gols"):
     elif tipo == "escanteios":
         registro["escanteios_total"] = resultado.get("escanteios_total", 0)
         registro["limiar_escanteios"] = resultado.get("limiar_escanteios", 0)
+    elif tipo == "compostos":
+        registro["alerta_id"] = resultado.get("alerta_id", "")
     
     historico.append(registro)
     
@@ -251,7 +747,8 @@ def limpar_historico(tipo: str = "todos"):
         "gols": HISTORICO_PATH,
         "ambas_marcam": HISTORICO_AMBAS_MARCAM_PATH,
         "cartoes": HISTORICO_CARTOES_PATH,
-        "escanteios": HISTORICO_ESCANTEIOS_PATH
+        "escanteios": HISTORICO_ESCANTEIOS_PATH,
+        "compostos": HISTORICO_COMPOSTOS_PATH  # NOVO
     }
     
     if tipo == "todos":
@@ -1185,6 +1682,9 @@ def verificar_resultados_finais_completo(alerta_resultados: bool):
     
     # Resultados Compostos (NOVO)
     verificar_resultados_compostos(alerta_resultados)
+    
+    # Alertas Compostos Salvos (NOVO)
+    verificar_resultados_alertas_compostos(alerta_resultados)
     
     # Novas previsões
     verificar_resultados_ambas_marcam(alerta_resultados)
@@ -2128,7 +2628,7 @@ def gerar_poster_multiplos_jogos(jogos: list, titulo: str = "ELITE MASTER - ALER
 
 
 def enviar_alerta_composto_poster(jogos_conf: list, threshold: int):
-    """Envia alerta composto com poster para múltiplos jogos"""
+    """Envia alerta composto com poster para múltiplos jogos - ATUALIZADA COM SALVAMENTO"""
     if not jogos_conf:
         st.warning("⚠️ Nenhum jogo para gerar poster composto")
         return False
@@ -2176,7 +2676,12 @@ def enviar_alerta_composto_poster(jogos_conf: list, threshold: int):
             ok = enviar_foto_telegram(poster, caption=caption, chat_id=TELEGRAM_CHAT_ID_ALT2)
             
             if ok:
-                st.success(f"🚀 Poster composto enviado para {data_str}!")
+                # SALVAR ALERTA COMPOSTO PARA FUTURA CONFERÊNCIA - NOVO
+                alerta_id = salvar_alerta_composto_para_conferencia(jogos_data, threshold, poster_enviado=True)
+                if alerta_id:
+                    st.success(f"🚀 Poster composto enviado e salvo para conferência (24h)! ID: {alerta_id}")
+                else:
+                    st.success(f"🚀 Poster composto enviado para {data_str}!")
                 enviados += 1
             else:
                 st.error(f"❌ Falha ao enviar poster composto para {data_str}")
@@ -3381,7 +3886,7 @@ def exibir_resultados_escanteios(jogos: list, threshold: int):
                     st.info("🟢 BAIXA INTENSIDADE")
 
 # =============================
-# INTERFACE PRINCIPAL STREAMLIT
+# INTERFACE PRINCIPAL STREAMLIT - ATUALIZADA
 # =============================
 
 def main():
@@ -3512,6 +4017,24 @@ def main():
     with tab_principal:
         st.subheader("🔍 Análise de Previsões Avançadas")
         
+        # NOVA SEÇÃO: Alertas Compostos Salvos
+        st.markdown("---")
+        st.subheader("📊 Alertas Compostos Salvos")
+        
+        # Botão para ver alertas compostos salvos
+        if st.button("👀 Visualizar Alertas Compostos Salvos", use_container_width=True):
+            exibir_alertas_compostos_salvos()
+        
+        # Botão para verificar resultados de alertas compostos
+        if st.button("🔍 Verificar Resultados Compostos", use_container_width=True):
+            with st.spinner("Verificando resultados de alertas compostos..."):
+                resultados_encontrados = verificar_resultados_alertas_compostos(True)
+                if resultados_encontrados:
+                    st.success("✅ Verificação de alertas compostos concluída!")
+                else:
+                    st.info("ℹ️ Nenhum novo resultado em alertas compostos")
+        
+        # Botão principal de análise (existente)
         if st.button("🚀 Executar Análise Completa", type="primary", use_container_width=True):
             with st.spinner("Executando análise avançada com dados em tempo real..."):
                 processar_jogos_avancado(
@@ -3564,12 +4087,13 @@ def main():
         
         tipo_historico = st.selectbox(
             "Selecione o tipo de histórico:",
-            ["gols", "ambas_marcam", "cartoes", "escanteios"],
+            ["gols", "ambas_marcam", "cartoes", "escanteios", "compostos"],
             format_func=lambda x: {
                 "gols": "⚽ Previsão de Gols",
                 "ambas_marcam": "🔄 Ambas Marcam", 
                 "cartoes": "🟨 Cartões",
-                "escanteios": "🔄 Escanteios"
+                "escanteios": "🔄 Escanteios",
+                "compostos": "📊 Alertas Compostos"  # NOVO
             }[x]
         )
         
@@ -3577,7 +4101,8 @@ def main():
             "gols": HISTORICO_PATH,
             "ambas_marcam": HISTORICO_AMBAS_MARCAM_PATH,
             "cartoes": HISTORICO_CARTOES_PATH,
-            "escanteios": HISTORICO_ESCANTEIOS_PATH
+            "escanteios": HISTORICO_ESCANTEIOS_PATH,
+            "compostos": HISTORICO_COMPOSTOS_PATH  # NOVO
         }
         
         historico = carregar_historico(caminhos_historico[tipo_historico])
@@ -3611,6 +4136,8 @@ def main():
                     elif tipo_historico == "escanteios":
                         st.write(f"**Escanteios Total:** {registro.get('escanteios_total', 0)}")
                         st.write(f"**Limiar:** {registro.get('limiar_escanteios', 0)}")
+                    elif tipo_historico == "compostos":
+                        st.write(f"**Alerta ID:** {registro.get('alerta_id', 'N/A')}")
         else:
             st.info("ℹ️ Nenhum registro no histórico selecionado.")
 
@@ -3631,6 +4158,7 @@ def main():
         2. 🔄 Ambas Marcam (Nova)
         3. 🟨 Total de Cartões (Nova) 
         4. 🔄 Total de Escanteios (Nova)
+        5. 📊 Alertas Compostos (24h) - NOVO
         
         **🎯 Características:**
         - Dados estatísticos em tempo real
@@ -3638,6 +4166,7 @@ def main():
         - Sistema de alertas automatizado
         - Posters profissionais para Telegram
         - Histórico completo com métricas
+        - Alertas compostos salvos por 24h
         """)
         
         # Status das credenciais
@@ -3654,11 +4183,14 @@ def main():
         st.subheader("📈 Estatísticas de Uso")
         alertas_total = len(carregar_alertas())
         historico_total = len(carregar_historico())
+        alertas_compostos = len(carregar_alertas_compostos())
         
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
         with col1:
             st.metric("Alertas Ativos", alertas_total)
         with col2:
+            st.metric("Alertas Compostos", alertas_compostos)
+        with col3:
             st.metric("Registros Históricos", historico_total)
 
 # =============================
