@@ -350,16 +350,24 @@ def salvar_alertas_compostos(alertas: dict):
     return salvar_json(ALERTAS_COMPOSTOS_PATH, alertas)
 
 def salvar_alerta_composto_para_conferencia(jogos_conf: list, threshold: int, poster_enviado: bool = True):
-    """Salva um alerta composto para futura conferência (24h)"""
+    """Salva um alerta composto para futura conferência (24h) - VERSÃO ATUALIZADA COM ESCUDOS"""
     try:
         alertas = carregar_alertas_compostos()
         
         # Criar ID único baseado no timestamp
         alerta_id = f"composto_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         
-        # Preparar dados dos jogos para conferência
+        # Preparar dados dos jogos para conferência - AGORA COM ESCUDOS
         jogos_para_salvar = []
         for jogo in jogos_conf:
+            # Obter URLs dos escudos do fixture
+            home_crest = ""
+            away_crest = ""
+            if 'fixture' in jogo:
+                fixture = jogo['fixture']
+                home_crest = fixture.get("homeTeam", {}).get("crest") or fixture.get("homeTeam", {}).get("logo", "")
+                away_crest = fixture.get("awayTeam", {}).get("crest") or fixture.get("awayTeam", {}).get("logo", "")
+            
             jogos_para_salvar.append({
                 "fixture_id": jogo.get("id", ""),
                 "home": jogo["home"],
@@ -372,7 +380,9 @@ def salvar_alerta_composto_para_conferencia(jogos_conf: list, threshold: int, po
                 "conferido": False,
                 "resultado": None,
                 "placar_final": None,
-                "previsao_correta": None
+                "previsao_correta": None,
+                "home_crest": home_crest,  # NOVO: salvar escudo home
+                "away_crest": away_crest   # NOVO: salvar escudo away
             })
         
         # Salvar alerta composto
@@ -396,11 +406,11 @@ def salvar_alerta_composto_para_conferencia(jogos_conf: list, threshold: int, po
         return None
 
 # =============================
-# SISTEMA DE ALERTAS COMPOSTOS DE RESULTADOS
+# SISTEMA DE ALERTAS COMPOSTOS DE RESULTADOS - VERSÃO CORRIGIDA
 # =============================
 
 def enviar_alerta_composto_resultados_poster(alerta_id: str, alerta_data: dict):
-    """Envia alerta composto de RESULTS com poster para o Telegram"""
+    """Envia alerta composto de RESULTS com poster para o Telegram - VERSÃO CORRIGIDA"""
     try:
         jogos = alerta_data.get("jogos", [])
         if not jogos:
@@ -414,7 +424,7 @@ def enviar_alerta_composto_resultados_poster(alerta_id: str, alerta_data: dict):
             st.warning(f"⚠️ Nenhum resultado final no alerta composto {alerta_id}")
             return False
 
-        # Agrupar por data do jogo (não do alerta)
+        # Agrupar por data do jogo
         jogos_por_data = {}
         for jogo in jogos_com_resultado:
             try:
@@ -438,15 +448,30 @@ def enviar_alerta_composto_resultados_poster(alerta_id: str, alerta_data: dict):
             
             st.info(f"🎨 Gerando poster de RESULTADOS compostos para {data_str} com {len(jogos_data)} jogos...")
             
-            # Preparar dados para o poster de resultados
+            # Preparar dados para o poster de resultados COMPOSTOS - BUSCAR ESCUDOS
             jogos_para_poster = []
             for jogo_salvo in jogos_data:
+                # Obter dados atualizados do jogo para pegar os escudos
+                fixture_id = jogo_salvo.get("fixture_id")
+                home_crest = ""
+                away_crest = ""
+                
+                if fixture_id:
+                    try:
+                        url = f"{BASE_URL_FD}/matches/{fixture_id}"
+                        fixture = obter_dados_api_com_rate_limit(url)
+                        if fixture:
+                            home_crest = fixture.get("homeTeam", {}).get("crest") or fixture.get("homeTeam", {}).get("logo", "")
+                            away_crest = fixture.get("awayTeam", {}).get("crest") or fixture.get("awayTeam", {}).get("logo", "")
+                    except Exception as e:
+                        st.warning(f"⚠️ Não foi possível obter escudos para o jogo {fixture_id}: {e}")
+                
                 # Extrair placar do formato "XxY"
                 placar = jogo_salvo.get("placar_final", "0x0")
                 home_goals, away_goals = placar.split('x') if 'x' in placar else (0, 0)
                 
                 jogo_para_poster = {
-                    "id": jogo_salvo.get("fixture_id", ""),
+                    "id": fixture_id or "",
                     "home": jogo_salvo["home"],
                     "away": jogo_salvo["away"],
                     "home_goals": int(home_goals),
@@ -456,12 +481,14 @@ def enviar_alerta_composto_resultados_poster(alerta_id: str, alerta_data: dict):
                     "tendencia_prevista": jogo_salvo["tendencia"],
                     "estimativa_prevista": jogo_salvo["estimativa"],
                     "confianca_prevista": jogo_salvo["confianca"],
-                    "resultado": jogo_salvo.get("resultado", "PENDENTE")
+                    "resultado": jogo_salvo.get("resultado", "PENDENTE"),
+                    "home_crest": home_crest,  # NOVO: escudo do time da casa
+                    "away_crest": away_crest   # NOVO: escudo do time visitante
                 }
                 jogos_para_poster.append(jogo_para_poster)
             
-            # Gerar poster de resultados
-            poster = gerar_poster_resultados_compostos(jogos_para_poster, titulo=titulo)
+            # Gerar poster de resultados COMPOSTOS com escudos
+            poster = gerar_poster_resultados_compostos_com_escudos(jogos_para_poster, titulo=titulo)
             
             # Calcular estatísticas do alerta composto
             total_jogos = len(jogos_data)
@@ -505,7 +532,8 @@ def enviar_alerta_composto_resultados_poster(alerta_id: str, alerta_data: dict):
                         "estimativa": jogo["estimativa"],
                         "confianca": jogo["confianca"],
                         "placar": jogo.get("placar_final", "-"),
-                        "resultado": "🟢 GREEN" if jogo.get("resultado") == "GREEN" else "🔴 RED"
+                        "resultado": "🟢 GREEN" if jogo.get("resultado") == "GREEN" else "🔴 RED",
+                        "alerta_id": alerta_id  # NOVO: identificar o alerta composto
                     }, "compostos")
                 
                 enviados += 1
@@ -518,6 +546,207 @@ def enviar_alerta_composto_resultados_poster(alerta_id: str, alerta_data: dict):
         st.error(f"❌ Erro crítico ao gerar/enviar poster de resultados compostos: {str(e)}")
         # Fallback para mensagem de texto
         return enviar_alerta_composto_resultados_texto(alerta_id, alerta_data)
+
+def gerar_poster_resultados_compostos_com_escudos(jogos: list, titulo: str = "ELITE MASTER - RESULTADOS COMPOSTOS") -> io.BytesIO:
+    """
+    Gera poster profissional com resultados finais dos jogos compostos - COM ESCUDOS
+    """
+    # Configurações do poster - MESMO ESTILO DOS OUTROS
+    LARGURA = 2400
+    ALTURA_TOPO = 400
+    ALTURA_POR_JOGO = 900  # Um pouco mais compacto para múltiplos jogos
+    PADDING = 100
+    
+    jogos_count = len(jogos)
+    altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
+
+    # Criar canvas
+    img = Image.new("RGB", (LARGURA, altura_total), color=(13, 25, 35))
+    draw = ImageDraw.Draw(img)
+
+    # Carregar fontes - MESMO ESTILO DOS OUTROS POSTERS
+    FONTE_TITULO = criar_fonte(90)
+    FONTE_SUBTITULO = criar_fonte(60)
+    FONTE_TIMES = criar_fonte(55)
+    FONTE_PLACAR = criar_fonte(80)
+    FONTE_INFO = criar_fonte(40)
+    FONTE_ANALISE = criar_fonte(50)
+    FONTE_RESULTADO = criar_fonte(65)
+
+    # Título PRINCIPAL - MESMO ESTILO
+    try:
+        titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
+        titulo_w = titulo_bbox[2] - titulo_bbox[0]
+        draw.text(((LARGURA - titulo_w) // 2, 80), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
+    except:
+        draw.text((LARGURA//2 - 300, 80), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
+
+    # Linha decorativa
+    draw.line([(LARGURA//4, 180), (3*LARGURA//4, 180)], fill=(255, 215, 0), width=4)
+
+    y_pos = ALTURA_TOPO
+
+    for idx, jogo in enumerate(jogos):
+        # Calcular se a previsão foi correta
+        total_gols = jogo['home_goals'] + jogo['away_goals']
+        previsao_correta = False
+        
+        if jogo['tendencia_prevista'] == "Mais 2.5" and total_gols > 2.5:
+            previsao_correta = True
+        elif jogo['tendencia_prevista'] == "Mais 1.5" and total_gols > 1.5:
+            previsao_correta = True
+        elif jogo['tendencia_prevista'] == "Menos 2.5" and total_gols < 2.5:
+            previsao_correta = True
+        
+        # Definir cores baseadas no resultado - MESMO ESTILO
+        if previsao_correta:
+            cor_borda = (76, 175, 80)  # VERDE
+            cor_resultado = (76, 175, 80)
+            texto_resultado = "GREEN"
+        else:
+            cor_borda = (244, 67, 54)  # VERMELHO
+            cor_resultado = (244, 67, 54)
+            texto_resultado = "RED"
+
+        # Caixa do jogo com borda colorida conforme resultado - MESMO ESTILO
+        x0, y0 = PADDING, y_pos
+        x1, y1 = LARGURA - PADDING, y_pos + ALTURA_POR_JOGO - 30
+        
+        # Fundo com borda colorida
+        draw.rectangle([x0, y0, x1, y1], fill=(25, 40, 55), outline=cor_borda, width=4)
+
+        # BADGE RESULTADO (GREEN/RED) - MESMO ESTILO
+        badge_text = texto_resultado
+        badge_bg_color = cor_resultado
+        
+        try:
+            badge_bbox = draw.textbbox((0, 0), badge_text, font=FONTE_RESULTADO)
+            badge_w = badge_bbox[2] - badge_bbox[0] + 30
+            badge_h = 70
+            badge_x = x1 - badge_w - 15
+            badge_y = y0 + 15
+            
+            draw.rectangle([badge_x, badge_y, badge_x + badge_w, badge_y + badge_h], 
+                          fill=badge_bg_color, outline=badge_bg_color)
+            draw.text((badge_x + 15, badge_y + 5), badge_text, font=FONTE_RESULTADO, fill=(255, 255, 255))
+        except:
+            pass
+
+        # Nome da liga - MESMO ESTILO
+        liga_text = jogo['liga'].upper()
+        try:
+            liga_bbox = draw.textbbox((0, 0), liga_text, font=FONTE_SUBTITULO)
+            liga_w = liga_bbox[2] - liga_bbox[0]
+            draw.text(((LARGURA - liga_w) // 2, y0 + 30), liga_text, font=FONTE_SUBTITULO, fill=(170, 190, 210))
+        except:
+            pass
+
+        # Times e placar - layout mais compacto COM ESCUDOS
+        home_text = jogo['home'][:20]
+        away_text = jogo['away'][:20]
+        
+        # ESCUDOS compactos - AGORA COM ESCUDOS REAIS
+        TAMANHO_ESCUDO = 120
+        TAMANHO_QUADRADO = 140
+        ESPACO_ENTRE_ESCUDOS = 500
+        
+        largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
+        x_inicio = (LARGURA - largura_total) // 2
+        y_escudos = y0 + 100
+
+        x_home = x_inicio
+        x_away = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
+
+        # Desenhar escudos compactos - USANDO ESCUDOS REAIS
+        escudo_home = baixar_imagem_url(jogo.get('home_crest', ''))
+        escudo_away = baixar_imagem_url(jogo.get('away_crest', ''))
+        
+        def desenhar_escudo_compacto(logo_img, x, y, tamanho_quadrado, tamanho_escudo):
+            draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(255, 255, 255), outline=(200, 200, 200), width=2)
+            if logo_img:
+                try:
+                    logo_img = logo_img.convert("RGBA")
+                    ratio = min(tamanho_escudo/logo_img.width, tamanho_escudo/logo_img.height)
+                    nova_largura = int(logo_img.width * ratio)
+                    nova_altura = int(logo_img.height * ratio)
+                    logo_img = logo_img.resize((nova_largura, nova_altura), Image.Resampling.LANCZOS)
+                    pos_x = x + (tamanho_quadrado - nova_largura) // 2
+                    pos_y = y + (tamanho_quadrado - nova_altura) // 2
+                    img.paste(logo_img, (pos_x, pos_y), logo_img)
+                except:
+                    draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(100, 100, 100))
+                    draw.text((x + 40, y + 50), "ERR", font=FONTE_INFO, fill=(255, 255, 255))
+            else:
+                # Placeholder se não tiver escudo
+                draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(100, 100, 100))
+                draw.text((x + 40, y + 50), "?", font=FONTE_INFO, fill=(255, 255, 255))
+
+        desenhar_escudo_compacto(escudo_home, x_home, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO)
+        desenhar_escudo_compacto(escudo_away, x_away, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO)
+
+        # Nomes dos times
+        try:
+            home_bbox = draw.textbbox((0, 0), home_text, font=FONTE_TIMES)
+            home_w = home_bbox[2] - home_bbox[0]
+            draw.text((x_home + (TAMANHO_QUADRADO - home_w)//2, y_escudos + TAMANHO_QUADRADO + 15),
+                     home_text, font=FONTE_TIMES, fill=(255, 255, 255))
+        except:
+            pass
+
+        try:
+            away_bbox = draw.textbbox((0, 0), away_text, font=FONTE_TIMES)
+            away_w = away_bbox[2] - away_bbox[0]
+            draw.text((x_away + (TAMANHO_QUADRADO - away_w)//2, y_escudos + TAMANHO_QUADRADO + 15),
+                     away_text, font=FONTE_TIMES, fill=(255, 255, 255))
+        except:
+            pass
+
+        # PLACAR CENTRAL - MESMO ESTILO
+        placar_text = f"{jogo['home_goals']}   -   {jogo['away_goals']}"
+        try:
+            placar_bbox = draw.textbbox((0, 0), placar_text, font=FONTE_PLACAR)
+            placar_w = placar_bbox[2] - placar_bbox[0]
+            placar_x = x_home + TAMANHO_QUADRADO + (ESPACO_ENTRE_ESCUDOS - placar_w) // 2
+            draw.text((placar_x, y_escudos + 40), placar_text, font=FONTE_PLACAR, fill=(255, 255, 255))
+        except:
+            pass
+
+        # SEÇÃO DE ANÁLISE COMPACTA - MESMO ESTILO
+        y_analysis = y_escudos + TAMANHO_QUADRADO + 60
+        
+        textos_analise = [
+            f"Previsão: {jogo['tendencia_prevista']}",
+            f"Real: {total_gols} gols | Estimativa: {jogo['estimativa_prevista']:.2f}",
+            f"Confiança: {jogo['confianca_prevista']:.0f}% | Resultado: {texto_resultado}"
+        ]
+        
+        cores = [(255, 255, 255), (200, 220, 255), cor_resultado]
+        
+        for i, (text, cor) in enumerate(zip(textos_analise, cores)):
+            try:
+                bbox = draw.textbbox((0, 0), text, font=FONTE_ANALISE)
+                w = bbox[2] - bbox[0]
+                draw.text(((LARGURA - w) // 2, y_analysis + i * 55), text, font=FONTE_ANALISE, fill=cor)
+            except:
+                pass
+
+        y_pos += ALTURA_POR_JOGO
+
+    # Rodapé - MESMO ESTILO
+    rodape_text = f"Resultados oficiais • Gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')} • Elite Master System"
+    try:
+        rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_INFO)
+        rodape_w = rodape_bbox[2] - rodape_bbox[0]
+        draw.text(((LARGURA - rodape_w) // 2, altura_total - 50), rodape_text, font=FONTE_INFO, fill=(120, 150, 180))
+    except:
+        pass
+
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG", optimize=True, quality=95)
+    buffer.seek(0)
+    
+    st.success(f"✅ Poster de resultados compostos GERADO com {len(jogos)} jogos")
+    return buffer
 
 def enviar_alerta_composto_resultados_texto(alerta_id: str, alerta_data: dict) -> bool:
     """Fallback para alerta de resultados compostos em texto"""
@@ -1562,7 +1791,7 @@ def enviar_alerta_resultados_compostos_poster(jogos_com_resultado: list):
             
             st.info(f"🎨 Gerando poster de resultados compostos para {data_str} com {len(jogos_data)} jogos...")
             
-            poster = gerar_poster_resultados_compostos(jogos_data, titulo=titulo)
+            poster = gerar_poster_resultados_compostos_com_escudos(jogos_data, titulo=titulo)
             
             # Calcular estatísticas
             total_jogos = len(jogos_data)
@@ -1607,203 +1836,6 @@ def enviar_alerta_resultados_compostos_poster(jogos_com_resultado: list):
         st.error(f"❌ Erro crítico ao gerar/enviar poster de resultados compostos: {str(e)}")
         # Fallback para mensagem de texto
         enviar_alerta_resultados_compostos_texto(jogos_com_resultado)
-
-def gerar_poster_resultados_compostos(jogos: list, titulo: str = "ELITE MASTER - RESULTADOS COMPOSTOS") -> io.BytesIO:
-    """
-    Gera poster profissional com resultados finais dos jogos compostos
-    """
-    # Configurações do poster
-    LARGURA = 2400
-    ALTURA_TOPO = 400
-    ALTURA_POR_JOGO = 850  # Um pouco mais compacto para múltiplos jogos
-    PADDING = 100
-    
-    jogos_count = len(jogos)
-    altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
-
-    # Criar canvas
-    img = Image.new("RGB", (LARGURA, altura_total), color=(13, 25, 35))
-    draw = ImageDraw.Draw(img)
-
-    # Carregar fontes
-    FONTE_TITULO = criar_fonte(90)
-    FONTE_SUBTITULO = criar_fonte(60)
-    FONTE_TIMES = criar_fonte(55)
-    FONTE_PLACAR = criar_fonte(80)
-    FONTE_INFO = criar_fonte(40)
-    FONTE_ANALISE = criar_fonte(50)
-    FONTE_RESULTADO = criar_fonte(65)
-
-    # Título PRINCIPAL
-    try:
-        titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
-        titulo_w = titulo_bbox[2] - titulo_bbox[0]
-        draw.text(((LARGURA - titulo_w) // 2, 80), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
-    except:
-        draw.text((LARGURA//2 - 300, 80), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
-
-    # Linha decorativa
-    draw.line([(LARGURA//4, 180), (3*LARGURA//4, 180)], fill=(255, 215, 0), width=4)
-
-    y_pos = ALTURA_TOPO
-
-    for idx, jogo in enumerate(jogos):
-        # Calcular se a previsão foi correta
-        total_gols = jogo['home_goals'] + jogo['away_goals']
-        previsao_correta = False
-        
-        if jogo['tendencia_prevista'] == "Mais 2.5" and total_gols > 2.5:
-            previsao_correta = True
-        elif jogo['tendencia_prevista'] == "Mais 1.5" and total_gols > 1.5:
-            previsao_correta = True
-        elif jogo['tendencia_prevista'] == "Menos 2.5" and total_gols < 2.5:
-            previsao_correta = True
-        
-        # Definir cores baseadas no resultado
-        if previsao_correta:
-            cor_borda = (76, 175, 80)  # VERDE
-            cor_resultado = (76, 175, 80)
-            texto_resultado = "GREEN"
-        else:
-            cor_borda = (244, 67, 54)  # VERMELHO
-            cor_resultado = (244, 67, 54)
-            texto_resultado = "RED"
-
-        # Caixa do jogo com borda colorida conforme resultado
-        x0, y0 = PADDING, y_pos
-        x1, y1 = LARGURA - PADDING, y_pos + ALTURA_POR_JOGO - 30
-        
-        # Fundo com borda colorida
-        draw.rectangle([x0, y0, x1, y1], fill=(25, 40, 55), outline=cor_borda, width=4)
-
-        # BADGE RESULTADO (GREEN/RED)
-        badge_text = texto_resultado
-        badge_bg_color = cor_resultado
-        
-        try:
-            badge_bbox = draw.textbbox((0, 0), badge_text, font=FONTE_RESULTADO)
-            badge_w = badge_bbox[2] - badge_bbox[0] + 30
-            badge_h = 70
-            badge_x = x1 - badge_w - 15
-            badge_y = y0 + 15
-            
-            draw.rectangle([badge_x, badge_y, badge_x + badge_w, badge_y + badge_h], 
-                          fill=badge_bg_color, outline=badge_bg_color)
-            draw.text((badge_x + 15, badge_y + 5), badge_text, font=FONTE_RESULTADO, fill=(255, 255, 255))
-        except:
-            pass
-
-        # Nome da liga
-        liga_text = jogo['liga'].upper()
-        try:
-            liga_bbox = draw.textbbox((0, 0), liga_text, font=FONTE_SUBTITULO)
-            liga_w = liga_bbox[2] - liga_bbox[0]
-            draw.text(((LARGURA - liga_w) // 2, y0 + 30), liga_text, font=FONTE_SUBTITULO, fill=(170, 190, 210))
-        except:
-            pass
-
-        # Times e placar - layout mais compacto
-        home_text = jogo['home'][:20]
-        away_text = jogo['away'][:20]
-        
-        # ESCUDOS compactos
-        TAMANHO_ESCUDO = 120
-        TAMANHO_QUADRADO = 140
-        ESPACO_ENTRE_ESCUDOS = 500
-        
-        largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
-        x_inicio = (LARGURA - largura_total) // 2
-        y_escudos = y0 + 100
-
-        x_home = x_inicio
-        x_away = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
-
-        # Desenhar escudos compactos
-        escudo_home = baixar_imagem_url(jogo.get('home_crest', ''))
-        escudo_away = baixar_imagem_url(jogo.get('away_crest', ''))
-        
-        def desenhar_escudo_compacto(logo_img, x, y, tamanho_quadrado, tamanho_escudo):
-            draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(255, 255, 255), outline=(200, 200, 200), width=2)
-            if logo_img:
-                try:
-                    logo_img = logo_img.convert("RGBA")
-                    ratio = min(tamanho_escudo/logo_img.width, tamanho_escudo/logo_img.height)
-                    nova_largura = int(logo_img.width * ratio)
-                    nova_altura = int(logo_img.height * ratio)
-                    logo_img = logo_img.resize((nova_largura, nova_altura), Image.Resampling.LANCZOS)
-                    pos_x = x + (tamanho_quadrado - nova_largura) // 2
-                    pos_y = y + (tamanho_quadrado - nova_altura) // 2
-                    img.paste(logo_img, (pos_x, pos_y), logo_img)
-                except:
-                    draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(100, 100, 100))
-                    draw.text((x + 40, y + 50), "ERR", font=FONTE_INFO, fill=(255, 255, 255))
-
-        desenhar_escudo_compacto(escudo_home, x_home, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO)
-        desenhar_escudo_compacto(escudo_away, x_away, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO)
-
-        # Nomes dos times
-        try:
-            home_bbox = draw.textbbox((0, 0), home_text, font=FONTE_TIMES)
-            home_w = home_bbox[2] - home_bbox[0]
-            draw.text((x_home + (TAMANHO_QUADRADO - home_w)//2, y_escudos + TAMANHO_QUADRADO + 15),
-                     home_text, font=FONTE_TIMES, fill=(255, 255, 255))
-        except:
-            pass
-
-        try:
-            away_bbox = draw.textbbox((0, 0), away_text, font=FONTE_TIMES)
-            away_w = away_bbox[2] - away_bbox[0]
-            draw.text((x_away + (TAMANHO_QUADRADO - away_w)//2, y_escudos + TAMANHO_QUADRADO + 15),
-                     away_text, font=FONTE_TIMES, fill=(255, 255, 255))
-        except:
-            pass
-
-        # PLACAR CENTRAL
-        placar_text = f"{jogo['home_goals']}   -   {jogo['away_goals']}"
-        try:
-            placar_bbox = draw.textbbox((0, 0), placar_text, font=FONTE_PLACAR)
-            placar_w = placar_bbox[2] - placar_bbox[0]
-            placar_x = x_home + TAMANHO_QUADRADO + (ESPACO_ENTRE_ESCUDOS - placar_w) // 2
-            draw.text((placar_x, y_escudos + 40), placar_text, font=FONTE_PLACAR, fill=(255, 255, 255))
-        except:
-            pass
-
-        # SEÇÃO DE ANÁLISE COMPACTA
-        y_analysis = y_escudos + TAMANHO_QUADRADO + 60
-        
-        textos_analise = [
-            f"Previsão: {jogo['tendencia_prevista']}",
-            f"Real: {total_gols} gols | Estimativa: {jogo['estimativa_prevista']:.2f}",
-            f"Confiança: {jogo['confianca_prevista']:.0f}% | Resultado: {texto_resultado}"
-        ]
-        
-        cores = [(255, 255, 255), (200, 220, 255), cor_resultado]
-        
-        for i, (text, cor) in enumerate(zip(textos_analise, cores)):
-            try:
-                bbox = draw.textbbox((0, 0), text, font=FONTE_ANALISE)
-                w = bbox[2] - bbox[0]
-                draw.text(((LARGURA - w) // 2, y_analysis + i * 55), text, font=FONTE_ANALISE, fill=cor)
-            except:
-                pass
-
-        y_pos += ALTURA_POR_JOGO
-
-    # Rodapé
-    rodape_text = f"Resultados oficiais • Gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')} • Elite Master System"
-    try:
-        rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_INFO)
-        rodape_w = rodape_bbox[2] - rodape_bbox[0]
-        draw.text(((LARGURA - rodape_w) // 2, altura_total - 50), rodape_text, font=FONTE_INFO, fill=(120, 150, 180))
-    except:
-        pass
-
-    buffer = io.BytesIO()
-    img.save(buffer, format="PNG", optimize=True, quality=95)
-    buffer.seek(0)
-    
-    st.success(f"✅ Poster de resultados compostos GERADO com {len(jogos)} jogos")
-    return buffer
 
 def enviar_alerta_resultados_compostos_texto(jogos_com_resultado: list):
     """Fallback para envio de resultados compostos em texto"""
