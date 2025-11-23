@@ -436,27 +436,27 @@ def enviar_alerta_composto_resultados_texto(alerta_id: str, alerta_data: dict) -
         return False
 
 def verificar_resultados_alertas_compostos(alerta_resultados: bool):
-    """Verifica resultados dos alertas compostos salvos - ATUALIZADA COM ENVIO DE RESULTADOS"""
+    """Verifica resultados dos alertas compostos salvos - VERSÃO CORRIGIDA"""
     st.info("🔍 Verificando resultados de alertas compostos salvos...")
     
     alertas = carregar_alertas_compostos()
     if not alertas:
         st.info("ℹ️ Nenhum alerta composto salvo para verificar.")
-        return
+        return False
     
     alertas_conferidos = 0
     alertas_com_resultados = []
     
     for alerta_id, alerta in list(alertas.items()):
         if alerta.get("conferido", False):
-            # Se já estava conferido, pular
             continue
             
         jogos_alerta = alerta.get("jogos", [])
         todos_jogos_conferidos = True
-        algum_jogo_novo = False
+        algum_jogo_atualizado = False
         
         for jogo_salvo in jogos_alerta:
+            # Se já foi conferido, pular
             if jogo_salvo.get("conferido", False):
                 continue
                 
@@ -496,13 +496,16 @@ def verificar_resultados_alertas_compostos(alerta_resultados: bool):
                     jogo_salvo["placar_final"] = f"{home_goals}x{away_goals}"
                     jogo_salvo["previsao_correta"] = previsao_correta
                     jogo_salvo["total_gols"] = total_gols
-                    algum_jogo_novo = True
+                    algum_jogo_atualizado = True
+                    
+                    st.info(f"✅ Jogo conferido: {jogo_salvo['home']} {home_goals}x{away_goals} {jogo_salvo['away']} - {jogo_salvo['resultado']}")
                     
                 else:
                     todos_jogos_conferidos = False
+                    st.info(f"⏳ Jogo pendente: {jogo_salvo['home']} vs {jogo_salvo['away']} - Status: {status}")
                     
             except Exception as e:
-                st.error(f"Erro ao verificar jogo composto {fixture_id}: {e}")
+                st.error(f"❌ Erro ao verificar jogo composto {fixture_id}: {e}")
                 todos_jogos_conferidos = False
         
         # Se todos os jogos deste alerta foram conferidos, marcar o alerta como conferido
@@ -526,23 +529,31 @@ def verificar_resultados_alertas_compostos(alerta_resultados: bool):
             
             alertas_conferidos += 1
             alertas_com_resultados.append((alerta_id, alerta))
+            st.success(f"🎯 Alerta composto {alerta_id} totalmente conferido! GREEN: {green_count}/{total_jogos}")
         
-        # Se houve algum jogo novo com resultado, atualizar o alerta
-        if algum_jogo_novo:
+        # Se houve algum jogo atualizado, salvar as alterações
+        if algum_jogo_atualizado:
             alerta["jogos"] = jogos_alerta
             salvar_alertas_compostos(alertas)
+            st.info(f"💾 Alterações salvas para alerta {alerta_id}")
     
-    # ENVIO DE ALERTAS DE RESULTADOS COMPOSTOS - NOVO
+    # ENVIO DE ALERTAS DE RESULTADOS COMPOSTOS
+    resultados_enviados = 0
     if alertas_com_resultados and alerta_resultados:
         st.info(f"🎯 Enviando {len(alertas_com_resultados)} alertas de resultados compostos...")
         
         for alerta_id, alerta_data in alertas_com_resultados:
-            if enviar_alerta_composto_resultados_poster(alerta_id, alerta_data):
-                st.success(f"✅ Alerta de resultados compostos enviado: {alerta_id}")
-            else:
-                st.error(f"❌ Falha ao enviar alerta de resultados compostos: {alerta_id}")
+            try:
+                if enviar_alerta_composto_resultados_poster(alerta_id, alerta_data):
+                    st.success(f"✅ Alerta de resultados compostos enviado: {alerta_id}")
+                    resultados_enviados += 1
+                else:
+                    st.error(f"❌ Falha ao enviar alerta de resultados compostos: {alerta_id}")
+            except Exception as e:
+                st.error(f"❌ Erro ao enviar alerta {alerta_id}: {e}")
                 
-        st.success(f"🚀 {len(alertas_com_resultados)} alertas de resultados compostos processados!")
+        if resultados_enviados > 0:
+            st.success(f"🚀 {resultados_enviados} alertas de resultados compostos enviados!")
     
     elif alertas_com_resultados:
         st.info(f"ℹ️ {len(alertas_com_resultados)} alertas compostos prontos para resultados, mas envio desativado")
@@ -550,7 +561,24 @@ def verificar_resultados_alertas_compostos(alerta_resultados: bool):
     if alertas_conferidos > 0:
         st.success(f"✅ {alertas_conferidos} alertas compostos totalmente conferidos!")
     
-    return len(alertas_com_resultados) > 0
+    return resultados_enviados > 0
+
+def debug_alertas_compostos():
+    """Função de debug para verificar o estado dos alertas compostos"""
+    st.subheader("🐛 Debug - Alertas Compostos")
+    
+    alertas = carregar_alertas_compostos()
+    st.write(f"Total de alertas compostos: {len(alertas)}")
+    
+    for alerta_id, alerta in alertas.items():
+        with st.expander(f"Alerta: {alerta_id}", expanded=False):
+            st.json(alerta)  # Mostra toda a estrutura do alerta
+            
+            jogos = alerta.get("jogos", [])
+            st.write(f"Total de jogos: {len(jogos)}")
+            
+            for jogo in jogos:
+                st.write(f"- {jogo['home']} vs {jogo['away']} | Conferido: {jogo.get('conferido', False)} | Resultado: {jogo.get('resultado', 'N/A')}")
 
 def exibir_alertas_compostos_salvos():
     """Exibe interface para visualizar alertas compostos salvos"""
@@ -4021,18 +4049,21 @@ def main():
         st.markdown("---")
         st.subheader("📊 Alertas Compostos Salvos")
         
-        # Botão para ver alertas compostos salvos
-        if st.button("👀 Visualizar Alertas Compostos Salvos", use_container_width=True):
-            exibir_alertas_compostos_salvos()
-        
-        # Botão para verificar resultados de alertas compostos
-        if st.button("🔍 Verificar Resultados Compostos", use_container_width=True):
-            with st.spinner("Verificando resultados de alertas compostos..."):
-                resultados_encontrados = verificar_resultados_alertas_compostos(True)
-                if resultados_encontrados:
-                    st.success("✅ Verificação de alertas compostos concluída!")
-                else:
-                    st.info("ℹ️ Nenhum novo resultado em alertas compostos")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            if st.button("👀 Visualizar Alertas Compostos Salvos", use_container_width=True):
+                exibir_alertas_compostos_salvos()
+        with col2:
+            if st.button("🔍 Verificar Resultados Compostos", use_container_width=True):
+                with st.spinner("Verificando resultados de alertas compostos..."):
+                    resultados_encontrados = verificar_resultados_alertas_compostos(True)
+                    if resultados_encontrados:
+                        st.success("✅ Verificação de alertas compostos concluída!")
+                    else:
+                        st.info("ℹ️ Nenhum novo resultado em alertas compostos")
+        with col3:
+            if st.button("🐛 Debug Alertas Compostos", use_container_width=True):
+                debug_alertas_compostos()
         
         # Botão principal de análise (existente)
         if st.button("🚀 Executar Análise Completa", type="primary", use_container_width=True):
