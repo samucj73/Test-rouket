@@ -2672,8 +2672,8 @@ def gerar_poster_multiplos_jogos(jogos: list, titulo: str = "ELITE MASTER - ALER
         draw.text(((LARGURA - hora_w) // 2, y0 + 140), hora_text, font=FONTE_INFO, fill=(120, 180, 240))  # +140px do topo (90px após a liga)
 
         # === SEÇÃO TIMES E ESCUDOS === (MAIS ESPAÇO DO HORÁRIO)
-        TAMANHO_ESCUDO = 180
-        TAMANHO_QUADRADO = 200
+        TAMANHO_ESCUDO = 200
+        TAMANHO_QUADRADO = 220
         ESPACO_ENTRE_ESCUDOS = 600
 
         # Calcular posição central para escudos - MAIS ESPAÇO DO HORÁRIO
@@ -2757,7 +2757,7 @@ def gerar_poster_multiplos_jogos(jogos: list, titulo: str = "ELITE MASTER - ALER
         draw.text((vs_x, vs_y), "VS", font=FONTE_VS, fill=(255, 215, 0))
 
         # === SEÇÃO ANÁLISE === (MAIS ESPAÇO DOS NOMES DOS TIMES)
-        y_analysis = y_escudos + TAMANHO_QUADRADO + 140  # +120px após nomes dos times
+        y_analysis = y_escudos + TAMANHO_QUADRADO + 160  # +120px após nomes dos times
         
         # Dividir a largura em 3 colunas iguais
         largura_coluna = (LARGURA - 2 * PADDING) // 3
