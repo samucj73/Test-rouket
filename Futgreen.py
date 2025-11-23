@@ -554,7 +554,7 @@ def gerar_poster_resultados_compostos_com_escudos(jogos: list, titulo: str = "EL
     # Configurações do poster - MESMO ESTILO DOS OUTROS
     LARGURA = 2400
     ALTURA_TOPO = 400
-    ALTURA_POR_JOGO = 900  # Um pouco mais compacto para múltiplos jogos
+    ALTURA_POR_JOGO = 870  # Um pouco mais compacto para múltiplos jogos
     PADDING = 100
     
     jogos_count = len(jogos)
@@ -577,12 +577,12 @@ def gerar_poster_resultados_compostos_com_escudos(jogos: list, titulo: str = "EL
     try:
         titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
         titulo_w = titulo_bbox[2] - titulo_bbox[0]
-        draw.text(((LARGURA - titulo_w) // 2, 80), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
+        draw.text(((LARGURA - titulo_w) // 2, 90), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
     except:
-        draw.text((LARGURA//2 - 300, 85), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
+        draw.text((LARGURA//2 - 300, 90), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
 
     # Linha decorativa
-    draw.line([(LARGURA//4, 180), (3*LARGURA//4, 180)], fill=(255, 215, 0), width=4)
+    draw.line([(LARGURA//4, 200), (3*LARGURA//4, 200)], fill=(255, 215, 0), width=4)
 
     y_pos = ALTURA_TOPO
 
@@ -622,7 +622,7 @@ def gerar_poster_resultados_compostos_com_escudos(jogos: list, titulo: str = "EL
         try:
             badge_bbox = draw.textbbox((0, 0), badge_text, font=FONTE_RESULTADO)
             badge_w = badge_bbox[2] - badge_bbox[0] + 30
-            badge_h = 85
+            badge_h = 90
             badge_x = x1 - badge_w - 15
             badge_y = y0 + 20
             
@@ -646,8 +646,8 @@ def gerar_poster_resultados_compostos_com_escudos(jogos: list, titulo: str = "EL
         away_text = jogo['away'][:20]
         
         # ESCUDOS compactos - AGORA COM ESCUDOS REAIS
-        TAMANHO_ESCUDO = 180
-        TAMANHO_QUADRADO = 200
+        TAMANHO_ESCUDO = 190
+        TAMANHO_QUADRADO = 205
         ESPACO_ENTRE_ESCUDOS = 700
         
         largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
@@ -726,7 +726,7 @@ def gerar_poster_resultados_compostos_com_escudos(jogos: list, titulo: str = "EL
             try:
                 bbox = draw.textbbox((0, 0), text, font=FONTE_ANALISE)
                 w = bbox[2] - bbox[0]
-                draw.text(((LARGURA - w) // 2, y_analysis + i * 90), text, font=FONTE_ANALISE, fill=cor)
+                draw.text(((LARGURA - w) // 2, y_analysis + i * 100), text, font=FONTE_ANALISE, fill=cor)
             except:
                 pass
 
