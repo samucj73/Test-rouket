@@ -637,7 +637,7 @@ def gerar_poster_resultados_compostos_com_escudos(jogos: list, titulo: str = "EL
         try:
             liga_bbox = draw.textbbox((0, 0), liga_text, font=FONTE_SUBTITULO)
             liga_w = liga_bbox[2] - liga_bbox[0]
-            draw.text(((LARGURA - liga_w) // 2, y0 + 30), liga_text, font=FONTE_SUBTITULO, fill=(170, 190, 210))
+            draw.text(((LARGURA - liga_w) // 2, y0 + 40), liga_text, font=FONTE_SUBTITULO, fill=(170, 190, 210))
         except:
             pass
 
@@ -646,9 +646,9 @@ def gerar_poster_resultados_compostos_com_escudos(jogos: list, titulo: str = "EL
         away_text = jogo['away'][:20]
         
         # ESCUDOS compactos - AGORA COM ESCUDOS REAIS
-        TAMANHO_ESCUDO = 120
-        TAMANHO_QUADRADO = 140
-        ESPACO_ENTRE_ESCUDOS = 500
+        TAMANHO_ESCUDO = 160
+        TAMANHO_QUADRADO = 180
+        ESPACO_ENTRE_ESCUDOS = 700
         
         largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
         x_inicio = (LARGURA - largura_total) // 2
@@ -688,7 +688,7 @@ def gerar_poster_resultados_compostos_com_escudos(jogos: list, titulo: str = "EL
         try:
             home_bbox = draw.textbbox((0, 0), home_text, font=FONTE_TIMES)
             home_w = home_bbox[2] - home_bbox[0]
-            draw.text((x_home + (TAMANHO_QUADRADO - home_w)//2, y_escudos + TAMANHO_QUADRADO + 15),
+            draw.text((x_home + (TAMANHO_QUADRADO - home_w)//2, y_escudos + TAMANHO_QUADRADO + 25),
                      home_text, font=FONTE_TIMES, fill=(255, 255, 255))
         except:
             pass
@@ -712,7 +712,7 @@ def gerar_poster_resultados_compostos_com_escudos(jogos: list, titulo: str = "EL
             pass
 
         # SEÇÃO DE ANÁLISE COMPACTA - MESMO ESTILO
-        y_analysis = y_escudos + TAMANHO_QUADRADO + 60
+        y_analysis = y_escudos + TAMANHO_QUADRADO + 90
         
         textos_analise = [
             f"Previsão: {jogo['tendencia_prevista']}",
@@ -726,7 +726,7 @@ def gerar_poster_resultados_compostos_com_escudos(jogos: list, titulo: str = "EL
             try:
                 bbox = draw.textbbox((0, 0), text, font=FONTE_ANALISE)
                 w = bbox[2] - bbox[0]
-                draw.text(((LARGURA - w) // 2, y_analysis + i * 55), text, font=FONTE_ANALISE, fill=cor)
+                draw.text(((LARGURA - w) // 2, y_analysis + i * 85), text, font=FONTE_ANALISE, fill=cor)
             except:
                 pass
 
