@@ -444,7 +444,7 @@ def enviar_alerta_composto_resultados_poster(alerta_id: str, alerta_data: dict):
         enviados = 0
         for data, jogos_data in jogos_por_data.items():
             data_str = data.strftime("%d/%m/%Y")
-            titulo = f"ELITE MASTER - RESULTADOS COMPOSTOS {data_str}"
+            titulo = f"ELITE MASTER - RESULTADOS {data_str}"
             
             st.info(f"🎨 Gerando poster de RESULTADOS compostos para {data_str} com {len(jogos_data)} jogos...")
             
@@ -565,13 +565,13 @@ def gerar_poster_resultados_compostos_com_escudos(jogos: list, titulo: str = "EL
     draw = ImageDraw.Draw(img)
 
     # Carregar fontes - MESMO ESTILO DOS OUTROS POSTERS
-    FONTE_TITULO = criar_fonte(90)
-    FONTE_SUBTITULO = criar_fonte(60)
-    FONTE_TIMES = criar_fonte(55)
-    FONTE_PLACAR = criar_fonte(80)
-    FONTE_INFO = criar_fonte(40)
-    FONTE_ANALISE = criar_fonte(50)
-    FONTE_RESULTADO = criar_fonte(65)
+    FONTE_TITULO = criar_fonte(100)
+    FONTE_SUBTITULO = criar_fonte(80)
+    FONTE_TIMES = criar_fonte(75)
+    FONTE_PLACAR = criar_fonte(85)
+    FONTE_INFO = criar_fonte(55)
+    FONTE_ANALISE = criar_fonte(75)
+    FONTE_RESULTADO = criar_fonte(75)
 
     # Título PRINCIPAL - MESMO ESTILO
     try:
@@ -579,7 +579,7 @@ def gerar_poster_resultados_compostos_com_escudos(jogos: list, titulo: str = "EL
         titulo_w = titulo_bbox[2] - titulo_bbox[0]
         draw.text(((LARGURA - titulo_w) // 2, 80), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
     except:
-        draw.text((LARGURA//2 - 300, 80), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
+        draw.text((LARGURA//2 - 300, 85), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
 
     # Linha decorativa
     draw.line([(LARGURA//4, 180), (3*LARGURA//4, 180)], fill=(255, 215, 0), width=4)
@@ -622,9 +622,9 @@ def gerar_poster_resultados_compostos_com_escudos(jogos: list, titulo: str = "EL
         try:
             badge_bbox = draw.textbbox((0, 0), badge_text, font=FONTE_RESULTADO)
             badge_w = badge_bbox[2] - badge_bbox[0] + 30
-            badge_h = 70
+            badge_h = 85
             badge_x = x1 - badge_w - 15
-            badge_y = y0 + 15
+            badge_y = y0 + 20
             
             draw.rectangle([badge_x, badge_y, badge_x + badge_w, badge_y + badge_h], 
                           fill=badge_bg_color, outline=badge_bg_color)
@@ -646,8 +646,8 @@ def gerar_poster_resultados_compostos_com_escudos(jogos: list, titulo: str = "EL
         away_text = jogo['away'][:20]
         
         # ESCUDOS compactos - AGORA COM ESCUDOS REAIS
-        TAMANHO_ESCUDO = 160
-        TAMANHO_QUADRADO = 180
+        TAMANHO_ESCUDO = 180
+        TAMANHO_QUADRADO = 200
         ESPACO_ENTRE_ESCUDOS = 700
         
         largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
@@ -726,7 +726,7 @@ def gerar_poster_resultados_compostos_com_escudos(jogos: list, titulo: str = "EL
             try:
                 bbox = draw.textbbox((0, 0), text, font=FONTE_ANALISE)
                 w = bbox[2] - bbox[0]
-                draw.text(((LARGURA - w) // 2, y_analysis + i * 85), text, font=FONTE_ANALISE, fill=cor)
+                draw.text(((LARGURA - w) // 2, y_analysis + i * 90), text, font=FONTE_ANALISE, fill=cor)
             except:
                 pass
 
