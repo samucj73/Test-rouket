@@ -5,6 +5,7 @@ import json
 import os
 import io
 import pandas as pd
+import time
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
@@ -54,6 +55,141 @@ HISTORICO_AMBAS_MARCAM_PATH = "historico_ambas_marcam.json"
 HISTORICO_CARTOES_PATH = "historico_cartoes.json"
 HISTORICO_ESCANTEIOS_PATH = "historico_escanteios.json"
 HISTORICO_COMPOSTOS_PATH = "historico_compostos.json"  # NOVO
+
+# =============================
+# SISTEMA DE RATE LIMIT AUTOMÁTICO
+# =============================
+
+RATE_LIMIT_CACHE = "rate_limit_cache.json"
+RATE_LIMIT_CALLS_PER_MINUTE = 8  # Limite conservador para a API
+RATE_LIMIT_WAIT_TIME = 70  # Segundos para esperar (1 minuto + margem)
+
+class RateLimitManager:
+    """Gerenciador de Rate Limit automático para a API"""
+    
+    def __init__(self):
+        self.cache_file = RATE_LIMIT_CACHE
+        self.calls_per_minute = RATE_LIMIT_CALLS_PER_MINUTE
+        self.wait_time = RATE_LIMIT_WAIT_TIME
+        self._ensure_cache()
+    
+    def _ensure_cache(self):
+        """Garante que o cache de rate limit existe"""
+        try:
+            if not os.path.exists(self.cache_file):
+                cache_data = {
+                    "last_reset": datetime.now().timestamp(),
+                    "call_count": 0,
+                    "last_call_time": 0,
+                    "pause_until": 0
+                }
+                with open(self.cache_file, 'w') as f:
+                    json.dump(cache_data, f)
+        except Exception:
+            pass
+    
+    def _load_cache(self):
+        """Carrega o cache de rate limit"""
+        try:
+            with open(self.cache_file, 'r') as f:
+                return json.load(f)
+        except:
+            return {
+                "last_reset": datetime.now().timestamp(),
+                "call_count": 0,
+                "last_call_time": 0,
+                "pause_until": 0
+            }
+    
+    def _save_cache(self, cache_data):
+        """Salva o cache de rate limit"""
+        try:
+            with open(self.cache_file, 'w') as f:
+                json.dump(cache_data, f)
+        except Exception:
+            pass
+    
+    def check_rate_limit(self):
+        """Verifica e aplica o rate limit automaticamente"""
+        cache = self._load_cache()
+        now = datetime.now().timestamp()
+        
+        # Verificar se estamos em pausa forçada
+        if now < cache.get("pause_until", 0):
+            wait_remaining = cache["pause_until"] - now
+            st.warning(f"⏳ Rate limit: Aguardando {wait_remaining:.1f}s...")
+            time.sleep(wait_remaining)
+            # Recarregar cache após espera
+            cache = self._load_cache()
+            now = datetime.now().timestamp()
+        
+        # Verificar se precisa resetar o contador (a cada minuto)
+        if now - cache["last_reset"] > 60:  # Mais de 1 minuto
+            cache["last_reset"] = now
+            cache["call_count"] = 0
+        
+        # Verificar se excedeu o limite
+        if cache["call_count"] >= self.calls_per_minute:
+            time_since_reset = now - cache["last_reset"]
+            wait_time = max(60 - time_since_reset + 1, 1)  # Esperar pelo menos 1 segundo
+            
+            st.warning(f"🚫 Rate limit atingido! Aguardando {wait_time:.1f}s...")
+            time.sleep(wait_time)
+            
+            # Resetar após espera
+            cache["last_reset"] = datetime.now().timestamp()
+            cache["call_count"] = 0
+            now = cache["last_reset"]
+        
+        # Atualizar contador
+        cache["call_count"] += 1
+        cache["last_call_time"] = now
+        
+        self._save_cache(cache)
+        
+        # Pequena pausa entre chamadas para distribuir melhor
+        time.sleep(0.5)
+        
+        return True
+
+# Instância global do gerenciador de rate limit
+rate_limit_manager = RateLimitManager()
+
+def obter_dados_api_com_rate_limit(url: str, timeout: int = 15) -> dict | None:
+    """
+    Versão da função de API com rate limit automático
+    """
+    try:
+        # Aplicar rate limit antes de cada chamada
+        rate_limit_manager.check_rate_limit()
+        
+        response = requests.get(url, headers=HEADERS, timeout=timeout)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.Timeout:
+        st.error(f"⏰ Timeout na requisição API: {url}")
+        return None
+    except requests.exceptions.RequestException as e:
+        # Verificar se é erro de rate limit da API
+        if hasattr(e, 'response') and e.response is not None:
+            if e.response.status_code == 429:
+                st.error("🚫 Rate Limit da API atingido! Aguardando 70s...")
+                # Pausa forçada no cache
+                cache = rate_limit_manager._load_cache()
+                cache["pause_until"] = datetime.now().timestamp() + RATE_LIMIT_WAIT_TIME
+                rate_limit_manager._save_cache(cache)
+                time.sleep(RATE_LIMIT_WAIT_TIME)
+                # Tentar novamente após espera
+                return obter_dados_api_com_rate_limit(url, timeout)
+            elif e.response.status_code == 404:
+                st.warning(f"⚠️ Recurso não encontrado: {url}")
+                return None
+            elif e.response.status_code >= 500:
+                st.error(f"🔴 Erro do servidor: {e.response.status_code}")
+                return None
+        
+        st.error(f"❌ Erro na requisição API: {e}")
+        return None
 
 # =============================
 # Dicionário de Ligas
@@ -466,7 +602,7 @@ def verificar_resultados_alertas_compostos(alerta_resultados: bool):
                 
             try:
                 url = f"{BASE_URL_FD}/matches/{fixture_id}"
-                fixture = obter_dados_api(url)
+                fixture = obter_dados_api_com_rate_limit(url)
                 
                 if not fixture:
                     todos_jogos_conferidos = False
@@ -653,7 +789,7 @@ def exibir_alertas_compostos_salvos():
                         fixture_id = jogo_salvo.get("fixture_id")
                         if fixture_id:
                             url = f"{BASE_URL_FD}/matches/{fixture_id}"
-                            fixture = obter_dados_api(url)
+                            fixture = obter_dados_api_com_rate_limit(url)
                             
                             if fixture and fixture.get("status") == "FINISHED":
                                 score = fixture.get("score", {}).get("fullTime", {})
@@ -932,13 +1068,8 @@ def enviar_foto_telegram(photo_bytes: io.BytesIO, caption: str = "", chat_id: st
         return False
 
 def obter_dados_api(url: str, timeout: int = 10) -> dict | None:
-    try:
-        response = requests.get(url, headers=HEADERS, timeout=timeout)
-        response.raise_for_status()
-        return response.json()
-    except requests.RequestException as e:
-        st.error(f"Erro na requisição API: {e}")
-        return None
+    """Função original mantida para compatibilidade - agora usa rate limit"""
+    return obter_dados_api_com_rate_limit(url, timeout)
 
 def obter_classificacao(liga_id: str) -> dict:
     cache = carregar_cache_classificacao()
@@ -946,7 +1077,7 @@ def obter_classificacao(liga_id: str) -> dict:
         return cache[liga_id]
 
     url = f"{BASE_URL_FD}/competitions/{liga_id}/standings"
-    data = obter_dados_api(url)
+    data = obter_dados_api_com_rate_limit(url)
     if not data:
         return {}
 
@@ -972,7 +1103,7 @@ def obter_jogos(liga_id: str, data: str) -> list:
         return cache[key]
 
     url = f"{BASE_URL_FD}/competitions/{liga_id}/matches?dateFrom={data}&dateTo={data}"
-    data_api = obter_dados_api(url)
+    data_api = obter_dados_api_com_rate_limit(url)
     jogos = data_api.get("matches", []) if data_api else []
     cache[key] = jogos
     salvar_cache_jogos(cache)
@@ -995,7 +1126,7 @@ def obter_estatisticas_time_real(time_id: str, liga_id: str) -> dict:
     try:
         # Tentar obter estatísticas do time na competição
         url = f"{BASE_URL_FD}/competitions/{liga_id}/teams"
-        data = obter_dados_api(url)
+        data = obter_dados_api_com_rate_limit(url)
         
         estatisticas = {
             "cartoes_media": 2.8,
@@ -1039,7 +1170,7 @@ def obter_estatisticas_partida(fixture_id: str) -> dict:
     """
     try:
         url = f"{BASE_URL_FD}/matches/{fixture_id}"
-        data = obter_dados_api(url)
+        data = obter_dados_api_com_rate_limit(url)
         
         if not data:
             return {}
@@ -1346,7 +1477,7 @@ def verificar_resultados_compostos(alerta_resultados: bool):
             
         try:
             url = f"{BASE_URL_FD}/matches/{fixture_id}"
-            fixture = obter_dados_api(url)
+            fixture = obter_dados_api_com_rate_limit(url)
             
             if not fixture:
                 continue
@@ -1737,7 +1868,7 @@ def verificar_resultados_ambas_marcam(alerta_resultados: bool):
             
         try:
             url = f"{BASE_URL_FD}/matches/{fixture_id}"
-            fixture = obter_dados_api(url)
+            fixture = obter_dados_api_com_rate_limit(url)
             
             if not fixture:
                 continue
@@ -1829,7 +1960,7 @@ def verificar_resultados_cartoes(alerta_resultados: bool):
                 
                 # Obter dados básicos do jogo
                 url = f"{BASE_URL_FD}/matches/{fixture_id}"
-                fixture = obter_dados_api(url)
+                fixture = obter_dados_api_com_rate_limit(url)
                 
                 if fixture:
                     jogo_resultado = {
@@ -1901,7 +2032,7 @@ def verificar_resultados_escanteios(alerta_resultados: bool):
                 
                 # Obter dados básicos do jogo
                 url = f"{BASE_URL_FD}/matches/{fixture_id}"
-                fixture = obter_dados_api(url)
+                fixture = obter_dados_api_com_rate_limit(url)
                 
                 if fixture:
                     jogo_resultado = {
@@ -2382,7 +2513,7 @@ def verificar_resultados_finais(alerta_resultados: bool):
         # Buscar dados atualizados do jogo
         try:
             url = f"{BASE_URL_FD}/matches/{fixture_id}"
-            fixture = obter_dados_api(url)
+            fixture = obter_dados_api_com_rate_limit(url)
             
             if not fixture:
                 continue
@@ -3431,7 +3562,7 @@ def atualizar_status_partidas():
         try:
             liga_id, data = key.split("_", 1)
             url = f"{BASE_URL_FD}/competitions/{liga_id}/matches?dateFrom={data}&dateTo={data}"
-            data_api = obter_dados_api(url)
+            data_api = obter_dados_api_com_rate_limit(url)
             
             if data_api and "matches" in data_api:
                 cache_jogos[key] = data_api["matches"]
