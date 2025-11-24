@@ -2628,14 +2628,14 @@ def gerar_poster_multiplos_jogos(jogos: list, titulo: str = "ELITE MASTER - ALER
     # === TOPO DO POSTER ===
     titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
     titulo_w = titulo_bbox[2] - titulo_bbox[0]
-    draw.text(((LARGURA - titulo_w) // 2, 85), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
+    draw.text(((LARGURA - titulo_w) // 2, 60), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
 
     # Data atual
     data_atual = datetime.now().strftime("%d/%m/%Y")
     data_text = f"DATA DE ANÁLISE: {data_atual}"
     data_bbox = draw.textbbox((0, 0), data_text, font=FONTE_SUBTITULO)
     data_w = data_bbox[2] - data_bbox[0]
-    draw.text(((LARGURA - data_w) // 2, 170), data_text, font=FONTE_SUBTITULO, fill=(150, 200, 255))
+    draw.text(((LARGURA - data_w) // 2, 160), data_text, font=FONTE_SUBTITULO, fill=(150, 200, 255))
 
     # Linha decorativa
     draw.line([(LARGURA//4, 240), (3*LARGURA//4, 240)], fill=(255, 215, 0), width=4)
