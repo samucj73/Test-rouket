@@ -553,9 +553,9 @@ def gerar_poster_resultados_compostos_com_escudos(jogos: list, titulo: str = "EL
     """
     # Configurações do poster - MESMO ESTILO DOS OUTROS
     LARGURA = 2400
-    ALTURA_TOPO = 400
+    ALTURA_TOPO = 300
     ALTURA_POR_JOGO = 900  # Um pouco mais compacto para múltiplos jogos
-    PADDING = 80
+    PADDING = 120
     
     jogos_count = len(jogos)
     altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
@@ -577,9 +577,9 @@ def gerar_poster_resultados_compostos_com_escudos(jogos: list, titulo: str = "EL
     try:
         titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
         titulo_w = titulo_bbox[2] - titulo_bbox[0]
-        draw.text(((LARGURA - titulo_w) // 2, 90), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
+        draw.text(((LARGURA - titulo_w) // 2, 80), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
     except:
-        draw.text((LARGURA//2 - 300, 90), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
+        draw.text((LARGURA//2 - 300, 80), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
 
     # Linha decorativa
     draw.line([(LARGURA//4, 200), (3*LARGURA//4, 200)], fill=(255, 215, 0), width=4)
@@ -637,7 +637,7 @@ def gerar_poster_resultados_compostos_com_escudos(jogos: list, titulo: str = "EL
         try:
             liga_bbox = draw.textbbox((0, 0), liga_text, font=FONTE_SUBTITULO)
             liga_w = liga_bbox[2] - liga_bbox[0]
-            draw.text(((LARGURA - liga_w) // 2, y0 + 30), liga_text, font=FONTE_SUBTITULO, fill=(170, 190, 210))
+            draw.text(((LARGURA - liga_w) // 2, y0 + 45), liga_text, font=FONTE_SUBTITULO, fill=(170, 190, 210))
         except:
             pass
 
@@ -646,8 +646,8 @@ def gerar_poster_resultados_compostos_com_escudos(jogos: list, titulo: str = "EL
         away_text = jogo['away'][:20]
         
         # ESCUDOS compactos - AGORA COM ESCUDOS REAIS
-        TAMANHO_ESCUDO = 190
-        TAMANHO_QUADRADO = 200
+        TAMANHO_ESCUDO = 180
+        TAMANHO_QUADRADO = 190
         ESPACO_ENTRE_ESCUDOS = 800
         
         largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
