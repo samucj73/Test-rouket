@@ -1,5 +1,5 @@
 import streamlit as st
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import requests
 import json
 import os
@@ -60,12 +60,12 @@ HISTORICO_COMPOSTOS_PATH = "historico_compostos.json"
 HISTORICO_COMPOSTOS_AVANCADOS_PATH = "historico_compostos_avancados.json"  # NOVO
 
 # =============================
-# SISTEMA DE RATE LIMIT AUTOMÁTICO
+# SISTEMA DE RATE LIMIT AUTOMÁTICO - ATUALIZADO
 # =============================
 
 RATE_LIMIT_CACHE = "rate_limit_cache.json"
-RATE_LIMIT_CALLS_PER_MINUTE = 8  # Limite conservador para a API
-RATE_LIMIT_WAIT_TIME = 70  # Segundos para esperar (1 minuto + margem)
+RATE_LIMIT_CALLS_PER_MINUTE = 9  # Ajustado para 9 (API permite 10)
+RATE_LIMIT_WAIT_TIME = 65  # Segundos para esperar (1 minuto + 5s margem)
 
 class RateLimitManager:
     """Gerenciador de Rate Limit automático para a API"""
@@ -160,38 +160,42 @@ rate_limit_manager = RateLimitManager()
 
 def obter_dados_api_com_rate_limit(url: str, timeout: int = 15) -> dict | None:
     """
-    Versão da função de API com rate limit automático
+    Versão MELHORADA da função de API com rate limit automático e melhor tratamento de erro
     """
     try:
-        # Aplicar rate limit antes de cada chamada
         rate_limit_manager.check_rate_limit()
         
+        st.info(f"🌐 Fazendo requisição para: {url.split('/')[-1]}")  # Log simplificado
+        
         response = requests.get(url, headers=HEADERS, timeout=timeout)
-        response.raise_for_status()
-        return response.json()
+        
+        if response.status_code == 200:
+            return response.json()
+        elif response.status_code == 429:
+            st.error("🚫 Rate Limit da API atingido! Aguardando 65s...")
+            cache = rate_limit_manager._load_cache()
+            cache["pause_until"] = datetime.now().timestamp() + 65
+            rate_limit_manager._save_cache(cache)
+            time.sleep(65)
+            return obter_dados_api_com_rate_limit(url, timeout)
+        elif response.status_code == 403:
+            st.error("🔒 Acesso proibido. Verifique sua API Key.")
+            return None
+        elif response.status_code == 404:
+            st.warning(f"📭 Recurso não encontrado: {url}")
+            return None
+        else:
+            st.error(f"❌ Erro HTTP {response.status_code}: {response.text}")
+            return None
+            
     except requests.exceptions.Timeout:
-        st.error(f"⏰ Timeout na requisição API: {url}")
+        st.error(f"⏰ Timeout na requisição: {url}")
         return None
     except requests.exceptions.RequestException as e:
-        # Verificar se é erro de rate limit da API
-        if hasattr(e, 'response') and e.response is not None:
-            if e.response.status_code == 429:
-                st.error("🚫 Rate Limit da API atingido! Aguardando 70s...")
-                # Pausa forçada no cache
-                cache = rate_limit_manager._load_cache()
-                cache["pause_until"] = datetime.now().timestamp() + RATE_LIMIT_WAIT_TIME
-                rate_limit_manager._save_cache(cache)
-                time.sleep(RATE_LIMIT_WAIT_TIME)
-                # Tentar novamente após espera
-                return obter_dados_api_com_rate_limit(url, timeout)
-            elif e.response.status_code == 404:
-                st.warning(f"⚠️ Recurso não encontrado: {url}")
-                return None
-            elif e.response.status_code >= 500:
-                st.error(f"🔴 Erro do servidor: {e.response.status_code}")
-                return None
-        
-        st.error(f"❌ Erro na requisição API: {e}")
+        st.error(f"🌐 Erro de rede: {e}")
+        return None
+    except json.JSONDecodeError as e:
+        st.error(f"📄 Erro ao decodificar JSON: {e}")
         return None
 
 # =============================
@@ -1731,20 +1735,21 @@ def limpar_historico(tipo: str = "todos"):
             st.error(f"❌ Tipo de histórico inválido: {tipo}")
 
 # =============================
-# Utilitários de Data e Formatação
+# Utilitários de Data e Formatação - CORRIGIDOS
 # =============================
 def formatar_data_iso(data_iso: str) -> tuple[str, str]:
     """Formata data ISO de forma robusta - CORRIGIDA"""
     try:
-        # Remover 'Z' e converter para datetime com timezone UTC
+        # Converter string ISO para datetime com timezone
         if data_iso.endswith('Z'):
-            data_iso = data_iso[:-1] + '+00:00'
-        
-        data_utc = datetime.fromisoformat(data_iso)
-        
-        # Converter para horário de Brasília (UTC-3)
-        data_brasilia = data_utc - timedelta(hours=3)
-        
+            data_utc = datetime.fromisoformat(data_iso[:-1] + '+00:00').replace(tzinfo=timezone.utc)
+        else:
+            data_utc = datetime.fromisoformat(data_iso)
+
+        # Converter UTC para horário de Brasília (UTC-3)
+        brasilia_tz = timezone(timedelta(hours=-3))
+        data_brasilia = data_utc.astimezone(brasilia_tz)
+
         return data_brasilia.strftime("%d/%m/%Y"), data_brasilia.strftime("%H:%M")
     except (ValueError, TypeError) as e:
         st.warning(f"⚠️ Erro ao formatar data {data_iso}: {e}")
@@ -1847,14 +1852,20 @@ def obter_dados_api(url: str, timeout: int = 10) -> dict | None:
     """Função original mantida para compatibilidade - agora usa rate limit"""
     return obter_dados_api_com_rate_limit(url, timeout)
 
+# =============================
+# FUNÇÕES DE API MELHORADAS
+# =============================
+
 def obter_classificacao(liga_id: str) -> dict:
+    """Obtém classificação com tratamento de erro melhorado"""
     cache = carregar_cache_classificacao()
-    if liga_id in cache:
+    if liga_id in cache and cache[liga_id]:  # Só usar cache se não estiver vazio
         return cache[liga_id]
 
     url = f"{BASE_URL_FD}/competitions/{liga_id}/standings"
     data = obter_dados_api_com_rate_limit(url)
     if not data:
+        st.error(f"❌ Erro ao obter classificação para {liga_id}")
         return {}
 
     standings = {}
@@ -1868,21 +1879,41 @@ def obter_classificacao(liga_id: str) -> dict:
                 "against": t.get("goalsAgainst", 0),
                 "played": t.get("playedGames", 1)
             }
-    cache[liga_id] = standings
-    salvar_cache_classificacao(cache)
+    
+    # Só salva no cache se obteve dados válidos
+    if standings:
+        cache[liga_id] = standings
+        salvar_cache_classificacao(cache)
+    
     return standings
 
 def obter_jogos(liga_id: str, data: str) -> list:
+    """Obtém jogos com tratamento de erro melhorado - VERSÃO CORRIGIDA"""
     cache = carregar_cache_jogos()
     key = f"{liga_id}_{data}"
-    if key in cache:
+    
+    # Verificar se o cache é válido (não é resultado de erro anterior)
+    if key in cache and cache[key]:  # Só usar cache se não estiver vazio
         return cache[key]
 
     url = f"{BASE_URL_FD}/competitions/{liga_id}/matches?dateFrom={data}&dateTo={data}"
     data_api = obter_dados_api_com_rate_limit(url)
-    jogos = data_api.get("matches", []) if data_api else []
-    cache[key] = jogos
-    salvar_cache_jogos(cache)
+    
+    if not data_api:
+        st.error(f"❌ Erro ao obter jogos para {liga_id} em {data}")
+        return []  # Retorna vazio em caso de erro
+    
+    if "matches" not in data_api:
+        st.warning(f"⚠️ Resposta inesperada da API para {liga_id}: {data_api}")
+        return []
+    
+    jogos = data_api.get("matches", [])
+    
+    # Só salva no cache se obteve dados válidos
+    if jogos:
+        cache[key] = jogos
+        salvar_cache_jogos(cache)
+    
     return jogos
 
 # =============================
@@ -2620,7 +2651,6 @@ def gerar_poster_resultados_generico(jogos: list, titulo: str, tipo: str) -> io.
                     ratio = min(tamanho_escudo/logo_img.width, tamanho_escudo/logo_img.height)
                     nova_largura = int(logo_img.width * ratio)
                     nova_altura = int(logo_img.height * ratio)
-                   #logo_img = logo_img.resize((nova_largura, nova_
                     logo_img = logo_img.resize((nova_largura, nova_altura), Image.Resampling.LANCZOS)
                     pos_x = x + (tamanho_quadrado - nova_largura) // 2
                     pos_y = y + (tamanho_quadrado - nova_altura) // 2
@@ -3491,6 +3521,34 @@ def enviar_alerta_telegram(fixture: dict, tendencia: str, estimativa: float, con
     return enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2)
 
 # =============================
+# NOVA FUNÇÃO DE DEBUG PARA API
+# =============================
+
+def debug_api_connection():
+    """Função para debug da conexão com a API"""
+    st.header("🔧 Debug da Conexão API")
+    
+    # Testar conexão básica
+    test_url = f"{BASE_URL_FD}/competitions/PL"  # Premier League
+    st.write(f"Testando URL: {test_url}")
+    
+    response = obter_dados_api_com_rate_limit(test_url)
+    if response:
+        st.success("✅ Conexão com API bem-sucedida!")
+        st.json(response.get("name", "Resposta recebida"))
+    else:
+        st.error("❌ Falha na conexão com API")
+        
+    # Testar obtenção de jogos
+    st.subheader("Teste de Obtenção de Jogos")
+    hoje = datetime.now().strftime("%Y-%m-%d")
+    jogos_pl = obter_jogos("PL", hoje)
+    st.write(f"Jogos encontrados para hoje: {len(jogos_pl)}")
+    
+    for jogo in jogos_pl[:3]:  # Mostrar apenas os 3 primeiros
+        st.write(f"- {jogo.get('homeTeam', {}).get('name', 'N/A')} vs {jogo.get('awayTeam', {}).get('name', 'N/A')}")
+
+# =============================
 # INTERFACE PRINCIPAL STREAMLIT
 # =============================
 
@@ -4015,10 +4073,12 @@ def main():
                     st.write(f"**{tipo.upper()}:** {stats['total']} previsões | {stats['green']} GREEN | {stats['taxa']:.1f}% acerto")
             
             st.subheader("🐛 Debug do Sistema")
+            if st.button("🔧 Testar Conexão com API"):
+                debug_api_connection()
+            
             if st.button("Verificar Rate Limit"):
                 cache = rate_limit_manager._load_cache()
                 st.json(cache)
 
 if __name__ == "__main__":
     main()
-
