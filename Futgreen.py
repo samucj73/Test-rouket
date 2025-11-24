@@ -637,7 +637,7 @@ def gerar_poster_resultados_compostos_com_escudos(jogos: list, titulo: str = "EL
         try:
             liga_bbox = draw.textbbox((0, 0), liga_text, font=FONTE_SUBTITULO)
             liga_w = liga_bbox[2] - liga_bbox[0]
-            draw.text(((LARGURA - liga_w) // 2, y0 + 40), liga_text, font=FONTE_SUBTITULO, fill=(170, 190, 210))
+            draw.text(((LARGURA - liga_w) // 2, y0 + 80), liga_text, font=FONTE_SUBTITULO, fill=(170, 190, 210))
         except:
             pass
 
@@ -647,7 +647,7 @@ def gerar_poster_resultados_compostos_com_escudos(jogos: list, titulo: str = "EL
         
         # ESCUDOS compactos - AGORA COM ESCUDOS REAIS
         TAMANHO_ESCUDO = 190
-        TAMANHO_QUADRADO = 205
+        TAMANHO_QUADRADO = 200
         ESPACO_ENTRE_ESCUDOS = 700
         
         largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
@@ -2628,7 +2628,7 @@ def gerar_poster_multiplos_jogos(jogos: list, titulo: str = "ELITE MASTER - ALER
     # === TOPO DO POSTER ===
     titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
     titulo_w = titulo_bbox[2] - titulo_bbox[0]
-    draw.text(((LARGURA - titulo_w) // 2, 60), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
+    draw.text(((LARGURA - titulo_w) // 2, 85), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
 
     # Data atual
     data_atual = datetime.now().strftime("%d/%m/%Y")
@@ -2654,7 +2654,7 @@ def gerar_poster_multiplos_jogos(jogos: list, titulo: str = "ELITE MASTER - ALER
         liga_text = jogo['liga'].upper()
         liga_bbox = draw.textbbox((0, 0), liga_text, font=FONTE_SUBTITULO)
         liga_w = liga_bbox[2] - liga_bbox[0]
-        draw.text(((LARGURA - liga_w) // 2, y0 + 50), liga_text, font=FONTE_SUBTITULO, fill=(170, 190, 210))  # +50px do topo
+        draw.text(((LARGURA - liga_w) // 2, y0 + 80), liga_text, font=FONTE_SUBTITULO, fill=(170, 190, 210))  # +50px do topo
 
         # === LINHA 2: HORÁRIO === (MAIS ESPAÇO DA LIGA)
         if 'hora_formatada' in jogo and 'data_formatada' in jogo:
