@@ -553,8 +553,8 @@ def gerar_poster_resultados_compostos_com_escudos(jogos: list, titulo: str = "EL
     """
     # Configurações do poster - MESMO ESTILO DOS OUTROS
     LARGURA = 2400
-    ALTURA_TOPO = 300
-    ALTURA_POR_JOGO = 900  # Um pouco mais compacto para múltiplos jogos
+    ALTURA_TOPO = 400
+    ALTURA_POR_JOGO = 950  # Um pouco mais compacto para múltiplos jogos
     PADDING = 120
     
     jogos_count = len(jogos)
