@@ -554,8 +554,8 @@ def gerar_poster_resultados_compostos_com_escudos(jogos: list, titulo: str = "EL
     # Configurações do poster - MESMO ESTILO DOS OUTROS
     LARGURA = 2400
     ALTURA_TOPO = 400
-    ALTURA_POR_JOGO = 870  # Um pouco mais compacto para múltiplos jogos
-    PADDING = 100
+    ALTURA_POR_JOGO = 900  # Um pouco mais compacto para múltiplos jogos
+    PADDING = 80
     
     jogos_count = len(jogos)
     altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
@@ -637,7 +637,7 @@ def gerar_poster_resultados_compostos_com_escudos(jogos: list, titulo: str = "EL
         try:
             liga_bbox = draw.textbbox((0, 0), liga_text, font=FONTE_SUBTITULO)
             liga_w = liga_bbox[2] - liga_bbox[0]
-            draw.text(((LARGURA - liga_w) // 2, y0 + 80), liga_text, font=FONTE_SUBTITULO, fill=(170, 190, 210))
+            draw.text(((LARGURA - liga_w) // 2, y0 + 30), liga_text, font=FONTE_SUBTITULO, fill=(170, 190, 210))
         except:
             pass
 
@@ -648,7 +648,7 @@ def gerar_poster_resultados_compostos_com_escudos(jogos: list, titulo: str = "EL
         # ESCUDOS compactos - AGORA COM ESCUDOS REAIS
         TAMANHO_ESCUDO = 190
         TAMANHO_QUADRADO = 200
-        ESPACO_ENTRE_ESCUDOS = 700
+        ESPACO_ENTRE_ESCUDOS = 800
         
         largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
         x_inicio = (LARGURA - largura_total) // 2
