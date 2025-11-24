@@ -2654,7 +2654,7 @@ def gerar_poster_multiplos_jogos(jogos: list, titulo: str = "ELITE MASTER - ALER
         liga_text = jogo['liga'].upper()
         liga_bbox = draw.textbbox((0, 0), liga_text, font=FONTE_SUBTITULO)
         liga_w = liga_bbox[2] - liga_bbox[0]
-        draw.text(((LARGURA - liga_w) // 2, y0 + 80), liga_text, font=FONTE_SUBTITULO, fill=(170, 190, 210))  # +50px do topo
+        draw.text(((LARGURA - liga_w) // 2, y0 + 40), liga_text, font=FONTE_SUBTITULO, fill=(170, 190, 210))  # +50px do topo
 
         # === LINHA 2: HORÁRIO === (MAIS ESPAÇO DA LIGA)
         if 'hora_formatada' in jogo and 'data_formatada' in jogo:
@@ -2674,7 +2674,7 @@ def gerar_poster_multiplos_jogos(jogos: list, titulo: str = "ELITE MASTER - ALER
         # === SEÇÃO TIMES E ESCUDOS === (MAIS ESPAÇO DO HORÁRIO)
         TAMANHO_ESCUDO = 200
         TAMANHO_QUADRADO = 220
-        ESPACO_ENTRE_ESCUDOS = 600
+        ESPACO_ENTRE_ESCUDOS = 700
 
         # Calcular posição central para escudos - MAIS ESPAÇO DO HORÁRIO
         largura_total_escudos = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
