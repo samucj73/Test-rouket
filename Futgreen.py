@@ -624,7 +624,7 @@ def gerar_poster_resultados_compostos_com_escudos(jogos: list, titulo: str = "EL
             badge_w = badge_bbox[2] - badge_bbox[0] + 30
             badge_h = 90
             badge_x = x1 - badge_w - 15
-            badge_y = y0 + 20
+            badge_y = y0 + 40
             
             draw.rectangle([badge_x, badge_y, badge_x + badge_w, badge_y + badge_h], 
                           fill=badge_bg_color, outline=badge_bg_color)
@@ -652,7 +652,7 @@ def gerar_poster_resultados_compostos_com_escudos(jogos: list, titulo: str = "EL
         
         largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
         x_inicio = (LARGURA - largura_total) // 2
-        y_escudos = y0 + 100
+        y_escudos = y0 + 140
 
         x_home = x_inicio
         x_away = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
