@@ -555,7 +555,7 @@ def gerar_poster_resultados_compostos_com_escudos(jogos: list, titulo: str = "EL
     LARGURA = 2400
     ALTURA_TOPO = 400
     ALTURA_POR_JOGO = 950  # Um pouco mais compacto para múltiplos jogos
-    PADDING = 120
+    PADDING = 60
     
     jogos_count = len(jogos)
     altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
@@ -652,7 +652,7 @@ def gerar_poster_resultados_compostos_com_escudos(jogos: list, titulo: str = "EL
         
         largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
         x_inicio = (LARGURA - largura_total) // 2
-        y_escudos = y0 + 140
+        y_escudos = y0 + 230
 
         x_home = x_inicio
         x_away = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
