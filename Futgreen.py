@@ -2767,7 +2767,7 @@ def gerar_poster_multiplos_jogos(jogos: list, titulo: str = "ELITE MASTER - ALER
 
         textos_analise = [
             f"TENDÊNCIA: {jogo['tendencia'].upper()}",
-            f"ESTIMATIVA: {jogo['estimativa']:.2f} GOLS", 
+            f" ESTIMATIVA: {jogo['estimativa']:.2f} GOLS", 
             f"CONFIANÇA: {jogo['confianca']:.0f}%"
         ]
         
