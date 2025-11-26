@@ -1499,12 +1499,11 @@ def obter_top4_melhores_jogos(data_str: str) -> list:
 # =============================
 # SISTEMA DE ALERTA TOP 4 COMPACTO
 # =============================
-
 def criar_poster_top4_compacto(jogos_top4: list) -> Image.Image:
     """Cria um pôster compacto com os 4 melhores jogos do dia"""
     try:
         # Configurações do pôster compacto
-        largura, altura = 600, 900
+        largura, altura = 600, 1000  # Aumentei a altura para caber o cabeçalho
         img = Image.new('RGB', (largura, altura), color='#0c0c0c')
         draw = ImageDraw.Draw(img)
         
@@ -1515,12 +1514,14 @@ def criar_poster_top4_compacto(jogos_top4: list) -> Image.Image:
             fonte_texto = ImageFont.truetype("arial.ttf", 16)
             fonte_pequena = ImageFont.truetype("arial.ttf", 14)
             fonte_destaque = ImageFont.truetype("arialbd.ttf", 16)
+            fonte_cabecalho = ImageFont.truetype("arial.ttf", 15)
         except:
             fonte_titulo = ImageFont.load_default(size=28)
             fonte_subtitulo = ImageFont.load_default(size=18)
             fonte_texto = ImageFont.load_default(size=16)
             fonte_pequena = ImageFont.load_default(size=14)
             fonte_destaque = ImageFont.load_default(size=16)
+            fonte_cabecalho = ImageFont.load_default(size=15)
         
         # Cores do tema
         cor_principal = "#1e3a8a"
@@ -1529,10 +1530,11 @@ def criar_poster_top4_compacto(jogos_top4: list) -> Image.Image:
         cor_verde = "#22c55e"
         cor_cinza = "#6b7280"
         cor_fundo_card = "#1f2937"
+        cor_info = "#60a5fa"
         
         y_pos = 20
         
-        # HEADER
+        # HEADER PRINCIPAL
         draw.rectangle([0, y_pos, largura, y_pos + 80], fill=cor_principal)
         titulo_texto = "ELITE MASTER - TOP 4 JOGOS DO DIA"
         bbox_titulo = draw.textbbox((0, 0), titulo_texto, font=fonte_titulo)
@@ -1549,6 +1551,45 @@ def criar_poster_top4_compacto(jogos_top4: list) -> Image.Image:
                  fill=cor_cinza, font=fonte_pequena)
         
         y_pos += 120
+        
+        # CABEÇALHO INFORMATIVO - DESCRIÇÃO DO ALERTA
+        cabecalho_rect_height = 80
+        draw.rectangle([20, y_pos, largura-20, y_pos + cabecalho_rect_height], 
+                      fill="#1e3a8a", outline=cor_destaque, width=2)
+        
+        # Textos do cabeçalho informativo
+        textos_cabecalho = [
+            "🎯 ALERTA TOP 4 JOGOS COMPOSTOS 🎯",
+            "Análise baseada em dados estatísticos da temporada 2024-2025",
+            "Tendências de apostas: Total de Pontos e Vencedor",
+            "Confiança mínima: 60% | Dados atualizados em tempo real"
+        ]
+        
+        for i, texto in enumerate(textos_cabecalho):
+            bbox_texto = draw.textbbox((0, 0), texto, font=fonte_cabecalho)
+            largura_texto = bbox_texto[2] - bbox_texto[0]
+            
+            if i == 0:  # Primeira linha (título)
+                draw.text(((largura - largura_texto) // 2, y_pos + 15), texto, 
+                         fill=cor_destaque, font=fonte_cabecalho)
+            else:  # Linhas subsequentes
+                draw.text(((largura - largura_texto) // 2, y_pos + 25 + (i * 15)), texto, 
+                         fill=cor_texto, font=fonte_cabecalho)
+        
+        y_pos += cabecalho_rect_height + 20
+        
+        # LEGENDA DAS INFORMAÇÕES
+        info_legenda = [
+            "📊 TOTAL PTS: Tendência de pontos totais do jogo",
+            "🏆 VENCEDOR: Previsão do time vencedor", 
+            "🎯 CONF: Nível de confiança da previsão"
+        ]
+        
+        for i, legenda in enumerate(info_legenda):
+            draw.text((50, y_pos + (i * 18)), legenda, 
+                     fill=cor_info, font=fonte_pequena)
+        
+        y_pos += 60
         
         # Para cada jogo no top 4
         altura_jogo = 150  # Altura de cada card de jogo
@@ -1659,7 +1700,7 @@ def criar_poster_top4_compacto(jogos_top4: list) -> Image.Image:
         footer_y = altura - 40
         draw.rectangle([0, footer_y, largura, altura], fill=cor_principal)
         
-        footer_texto = "TOP 4 JOGOS NBA - SISTEMA ELITE MASTER - DADOS 2024-2025"
+        footer_texto = "TOP 4 JOGOS NBA - ANÁLISE ESTATÍSTICA - TENDÊNCIAS DE APOSTAS - DADOS 2024-2025"
         bbox_footer = draw.textbbox((0, 0), footer_texto, font=fonte_pequena)
         largura_footer = bbox_footer[2] - bbox_footer[0]
         draw.text(((largura - largura_footer) // 2, footer_y + 12), footer_texto, 
@@ -1675,211 +1716,6 @@ def criar_poster_top4_compacto(jogos_top4: list) -> Image.Image:
         draw.text((300, 200), "Erro ao gerar pôster Top 4", fill='white', anchor="mm")
         return img
 
-def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
-    """Cria um pôster de resultado para o Top 4 mostrando Green/Red"""
-    try:
-        # Configurações do pôster compacto
-        largura, altura = 600, 900
-        img = Image.new('RGB', (largura, altura), color='#0c0c0c')
-        draw = ImageDraw.Draw(img)
-        
-        # Tenta carregar fontes
-        try:
-            fonte_titulo = ImageFont.truetype("arialbd.ttf", 28)
-            fonte_subtitulo = ImageFont.truetype("arial.ttf", 18)
-            fonte_texto = ImageFont.truetype("arial.ttf", 16)
-            fonte_pequena = ImageFont.truetype("arial.ttf", 14)
-            fonte_destaque = ImageFont.truetype("arialbd.ttf", 16)
-        except:
-            fonte_titulo = ImageFont.load_default(size=28)
-            fonte_subtitulo = ImageFont.load_default(size=18)
-            fonte_texto = ImageFont.load_default(size=16)
-            fonte_pequena = ImageFont.load_default(size=14)
-            fonte_destaque = ImageFont.load_default(size=16)
-        
-        # Cores do tema
-        cor_principal = "#1e3a8a"
-        cor_destaque = "#fbbf24"
-        cor_texto = "#ffffff"
-        cor_verde = "#22c55e"
-        cor_vermelho = "#ef4444"
-        cor_cinza = "#6b7280"
-        cor_fundo_card = "#1f2937"
-        
-        y_pos = 20
-        
-        # HEADER
-        draw.rectangle([0, y_pos, largura, y_pos + 80], fill=cor_principal)
-        titulo_texto = "ELITE MASTER - RESULTADO TOP 4"
-        bbox_titulo = draw.textbbox((0, 0), titulo_texto, font=fonte_titulo)
-        largura_titulo = bbox_titulo[2] - bbox_titulo[0]
-        draw.text(((largura - largura_titulo) // 2, y_pos + 25), titulo_texto, 
-                 fill=cor_destaque, font=fonte_titulo)
-        
-        # Data dos jogos
-        data_jogos = alerta_top4.get("data_jogos", "")
-        data_texto = f"Jogos do dia {data_jogos}"
-        bbox_data = draw.textbbox((0, 0), data_texto, font=fonte_pequena)
-        largura_data = bbox_data[2] - bbox_data[0]
-        draw.text(((largura - largura_data) // 2, y_pos + 90), data_texto, 
-                 fill=cor_cinza, font=fonte_pequena)
-        
-        y_pos += 120
-        
-        # Para cada jogo no top 4
-        altura_jogo = 150  # Altura de cada card de jogo
-        espacamento = 20   # Espaço entre jogos
-        
-        for i, jogo_data in enumerate(alerta_top4["jogos"]):
-            if i >= 4:  # Limita a 4 jogos
-                break
-                
-            jogo = jogo_data["jogo"]
-            predictions = jogo_data["predictions"]
-            resultado_total = jogo_data.get("resultado_total", None)
-            resultado_vencedor = jogo_data.get("resultado_vencedor", None)
-            
-            # Container do jogo
-            draw.rectangle([30, y_pos, largura-30, y_pos + altura_jogo], 
-                          fill=cor_fundo_card, outline=cor_principal, width=2)
-            
-            # Número do jogo no ranking
-            draw.ellipse([45, y_pos + 15, 75, y_pos + 45], fill=cor_destaque, outline=cor_principal)
-            draw.text((60, y_pos + 30), str(i+1), fill=cor_principal, font=fonte_destaque, anchor="mm")
-            
-            # Times e escudos - layout compacto
-            home_team = jogo.get("home_team", {}).get("full_name", "Casa")
-            away_team = jogo.get("visitor_team", {}).get("full_name", "Visitante")
-            
-            # Escudos pequenos
-            escudo_size = (40, 40)
-            try:
-                # Visitante (esquerda)
-                escudo_away = baixar_escudo_time(away_team, escudo_size)
-                img.paste(escudo_away, (85, y_pos + 15), escudo_away)
-                
-                # Casa (direita)
-                escudo_home = baixar_escudo_time(home_team, escudo_size)
-                img.paste(escudo_home, (largura-85-escudo_size[0], y_pos + 15), escudo_home)
-            except:
-                pass
-            
-            # Nomes dos times (abreviados se necessário)
-            def abreviar_nome(nome):
-                if len(nome) > 15:
-                    partes = nome.split()
-                    if len(partes) >= 2:
-                        return partes[0][0] + ". " + " ".join(partes[1:])
-                    return nome[:12] + "..."
-                return nome
-            
-            away_abreviado = abreviar_nome(away_team)
-            home_abreviado = abreviar_nome(home_team)
-            
-            # Nomes dos times
-            draw.text((85 + escudo_size[0]//2, y_pos + 60), away_abreviado, 
-                     fill=cor_texto, font=fonte_pequena, anchor="mm")
-            draw.text((largura-85-escudo_size[0]//2, y_pos + 60), home_abreviado, 
-                     fill=cor_texto, font=fonte_pequena, anchor="mm")
-            
-            # VS no meio
-            draw.text((largura//2, y_pos + 30), "VS", 
-                     fill=cor_destaque, font=fonte_subtitulo, anchor="mm")
-            
-            # Previsões em colunas compactas
-            coluna_largura = (largura - 180) // 2
-            coluna_x1 = 100  # Primeira coluna
-            coluna_x2 = coluna_x1 + coluna_largura + 20  # Segunda coluna
-            
-            # Coluna 1: Total de Pontos
-            total_pred = predictions.get("total", {})
-            if total_pred:
-                tendencia = total_pred.get('tendencia', 'N/A')
-                estimativa = total_pred.get('estimativa', 0)
-                confianca = total_pred.get('confianca', 0)
-                
-                draw.text((coluna_x1, y_pos + 80), "TOTAL PTS", 
-                         fill=cor_destaque, font=fonte_pequena)
-                draw.text((coluna_x1, y_pos + 95), f"{tendencia}", 
-                         fill=cor_texto, font=fonte_pequena)
-                draw.text((coluna_x1, y_pos + 110), f"Est: {estimativa:.1f} | {confianca:.0f}%", 
-                         fill=cor_texto, font=fonte_pequena)
-                
-                # Resultado (Green/Red)
-                if resultado_total == "Green":
-                    cor_resultado = cor_verde
-                    texto_resultado = "🟢 GREEN"
-                elif resultado_total == "Red":
-                    cor_resultado = cor_vermelho
-                    texto_resultado = "🔴 RED"
-                else:
-                    cor_resultado = cor_cinza
-                    texto_resultado = "⚪ PENDENTE"
-                
-                draw.text((coluna_x1, y_pos + 125), texto_resultado, 
-                         fill=cor_resultado, font=fonte_pequena)
-            
-            # Coluna 2: Vencedor
-            vencedor_pred = predictions.get("vencedor", {})
-            if vencedor_pred:
-                vencedor = vencedor_pred.get('vencedor', 'N/A')
-                confianca_venc = vencedor_pred.get('confianca', 0)
-                
-                # Abrevia o vencedor se necessário
-                if vencedor == "Casa":
-                    vencedor_abreviado = "CASA"
-                elif vencedor == "Visitante":
-                    vencedor_abreviado = "VISIT"
-                else:
-                    vencedor_abreviado = vencedor[:8]
-                
-                draw.text((coluna_x2, y_pos + 80), "VENCEDOR", 
-                         fill=cor_destaque, font=fonte_pequena)
-                draw.text((coluna_x2, y_pos + 95), f"{vencedor_abreviado}", 
-                         fill=cor_texto, font=fonte_pequena)
-                draw.text((coluna_x2, y_pos + 110), f"Conf: {confianca_venc:.0f}%", 
-                         fill=cor_texto, font=fonte_pequena)
-                
-                # Resultado (Green/Red)
-                if resultado_vencedor == "Green":
-                    cor_resultado = cor_verde
-                    texto_resultado = "🟢 GREEN"
-                elif resultado_vencedor == "Red":
-                    cor_resultado = cor_vermelho
-                    texto_resultado = "🔴 RED"
-                else:
-                    cor_resultado = cor_cinza
-                    texto_resultado = "⚪ PENDENTE"
-                
-                draw.text((coluna_x2, y_pos + 125), texto_resultado, 
-                         fill=cor_resultado, font=fonte_pequena)
-            
-            # Linha divisória entre jogos (exceto no último)
-            if i < min(3, len(alerta_top4["jogos"])-1):
-                draw.line([50, y_pos + altura_jogo - 5, largura-50, y_pos + altura_jogo - 5], 
-                         fill=cor_principal, width=1)
-            
-            y_pos += altura_jogo
-        
-        # FOOTER
-        footer_y = altura - 40
-        draw.rectangle([0, footer_y, largura, altura], fill=cor_principal)
-        
-        footer_texto = "RESULTADO TOP 4 - SISTEMA ELITE MASTER"
-        bbox_footer = draw.textbbox((0, 0), footer_texto, font=fonte_pequena)
-        largura_footer = bbox_footer[2] - bbox_footer[0]
-        draw.text(((largura - largura_footer) // 2, footer_y + 12), footer_texto, 
-                 fill=cor_texto, font=fonte_pequena)
-        
-        return img
-        
-    except Exception as e:
-        print(f"Erro ao criar pôster top4 resultado: {e}")
-        # Fallback simples
-        img = Image.new('RGB', (600, 400), color='#0c0c0c')
-        draw = ImageDraw.Draw(img)
-        draw.text((300, 200), "Erro ao gerar pôster Resultado Top 4", fill='white', anchor="mm")
-        return img
 
 def salvar_alerta_top4(jogos_top4: list, data_str: str):
     """Salva um alerta Top 4 no arquivo de alertas"""
