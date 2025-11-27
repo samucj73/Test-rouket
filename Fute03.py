@@ -9,6 +9,9 @@ import pandas as pd
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
+import base64
+from PIL import Image
+import time
 
 # =============================
 # CONFIGURAÇÕES (coloque suas chaves)
@@ -28,6 +31,7 @@ BASE_URL_TG = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
 ALERTAS_PATH = "alertas.json"
 CACHE_JOGOS = "cache_jogos.json"
 CACHE_CLASSIFICACAO = "cache_classificacao.json"
+CACHE_POSTERS = "cache_posters.json"
 
 # =============================
 # Inicialização do Session State
@@ -46,10 +50,9 @@ def inicializar_session_state():
         st.session_state.data_ultima_busca = None
     if 'resultados_conferidos' not in st.session_state:
         st.session_state.resultados_conferidos = []
+    if 'posters_cache' not in st.session_state:
+        st.session_state.posters_cache = {}
 
-# =============================
-# Mapeamento TheSportsDB -> Football-Data (comum)
-# =============================
 # =============================
 # Mapeamento TheSportsDB -> Football-Data (comum)
 # =============================
@@ -68,15 +71,15 @@ TSD_TO_FD = {
     # Ligas Brasileiras
     "Brazilian Serie A": 2013,
     "Campeonato Brasileiro Série A": 2013,
-    "Brazilian Serie B": 2014,  # ⚠️ Football-Data não tem oficialmente a Série B, ID fictício interno
+    "Brazilian Serie B": 2014,
     "Campeonato Brasileiro Série B": 2014,
 
     # Outras Ligas Internacionais
-    "Major League Soccer": 2145,  # MLS (EUA/Canadá)
+    "Major League Soccer": 2145,
     "American Major League Soccer": 2145,
-    "Liga MX": 2150,              # México (ID estimado)
+    "Liga MX": 2150,
     "Mexican Primera League": 2150,
-    "Saudi Pro League": 2160,     # Arábia Saudita
+    "Saudi Pro League": 2160,
     "Saudi-Arabian Pro League": 2160,
 }
 
@@ -113,6 +116,81 @@ def carregar_cache_classificacao():
 
 def salvar_cache_classificacao(dados):
     salvar_json(CACHE_CLASSIFICACAO, dados)
+
+def carregar_cache_posters():
+    return carregar_json(CACHE_POSTERS)
+
+def salvar_cache_posters(dados):
+    salvar_json(CACHE_POSTERS, dados)
+
+# =============================
+# Funções para Posters
+# =============================
+def obter_poster_time(nome_time):
+    """Obtém poster do time do TheSportsDB"""
+    cache = carregar_cache_posters()
+    
+    if nome_time in cache:
+        return cache[nome_time]
+    
+    try:
+        # Buscar time por nome
+        url = f"{BASE_URL_TSD}/searchteams.php"
+        params = {"t": nome_time}
+        r = requests.get(url, params=params, timeout=10)
+        r.raise_for_status()
+        teams = r.json().get("teams", [])
+        
+        if teams:
+            poster_url = teams[0].get("strTeamBadge") or teams[0].get("strTeamLogo") or ""
+            if poster_url:
+                cache[nome_time] = poster_url
+                salvar_cache_posters(cache)
+                return poster_url
+    except Exception as e:
+        st.warning(f"Erro ao buscar poster para {nome_time}: {e}")
+    
+    return ""
+
+def obter_poster_liga(nome_liga):
+    """Obtém poster da liga do TheSportsDB"""
+    cache = carregar_cache_posters()
+    cache_key = f"liga_{nome_liga}"
+    
+    if cache_key in cache:
+        return cache[cache_key]
+    
+    try:
+        # Buscar todas as ligas
+        url = f"{BASE_URL_TSD}/all_leagues.php"
+        r = requests.get(url, timeout=10)
+        r.raise_for_status()
+        ligas = r.json().get("leagues", [])
+        
+        for liga in ligas:
+            if liga.get("strLeague") == nome_liga:
+                poster_url = liga.get("strBadge") or liga.get("strLogo") or ""
+                if poster_url:
+                    cache[cache_key] = poster_url
+                    salvar_cache_posters(cache)
+                    return poster_url
+    except Exception as e:
+        st.warning(f"Erro ao buscar poster da liga {nome_liga}: {e}")
+    
+    return ""
+
+def baixar_imagem_url(url):
+    """Baixa imagem da URL e converte para base64"""
+    try:
+        if not url:
+            return None
+            
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            return base64.b64encode(response.content).decode()
+    except Exception:
+        pass
+    return None
 
 # =============================
 # Envio Telegram
@@ -335,6 +413,11 @@ def buscar_e_analisar_jogos(data_selecionada, ligas_selecionadas, ligas_fd_escol
             date_event = e.get("dateEvent") or e.get("dateEventLocal") or data_str
             time_event = e.get("strTime") or e.get("strTimeLocal") or ""
             
+            # Buscar posters
+            poster_home = obter_poster_time(home)
+            poster_away = obter_poster_time(away)
+            poster_liga = obter_poster_liga(liga_nome)
+            
             fd_id = None
             for key_name, fd_id_val in TSD_TO_FD.items():
                 if key_name.lower() in liga_nome.lower() or liga_nome.lower() in key_name.lower():
@@ -363,7 +446,10 @@ def buscar_e_analisar_jogos(data_selecionada, ligas_selecionadas, ligas_fd_escol
                         "liga": liga_nome,
                         "hora": hora_brt,
                         "origem": "FD",
-                        "data_brt": data_brt
+                        "data_brt": data_brt,
+                        "poster_home": poster_home,
+                        "poster_away": poster_away,
+                        "poster_liga": poster_liga
                     }
                     total_jogos.append(jogo_info)
                     continue
@@ -386,7 +472,10 @@ def buscar_e_analisar_jogos(data_selecionada, ligas_selecionadas, ligas_fd_escol
                 "liga": liga_nome,
                 "hora": hora_brt,
                 "origem": "TSD",
-                "data_brt": data_brt
+                "data_brt": data_brt,
+                "poster_home": poster_home,
+                "poster_away": poster_away,
+                "poster_liga": poster_liga
             }
             total_jogos.append(jogo_info)
 
@@ -402,6 +491,12 @@ def buscar_e_analisar_jogos(data_selecionada, ligas_selecionadas, ligas_fd_escol
             away = m.get("awayTeam", {}).get("name", "Desconhecido")
             utc = m.get("utcDate")
             data_brt, hora_brt = parse_time_iso_to_brt(utc)
+            
+            # Buscar posters para times FD
+            poster_home = obter_poster_time(home)
+            poster_away = obter_poster_time(away)
+            poster_liga = obter_poster_liga(m.get("competition", {}).get("name","FD"))
+            
             estimativa, confianca, tendencia = calcular_tendencia_fd(home, away, classificacao)
             
             jogo_info = {
@@ -411,7 +506,10 @@ def buscar_e_analisar_jogos(data_selecionada, ligas_selecionadas, ligas_fd_escol
                 "liga": m.get("competition", {}).get("name","FD"),
                 "hora": hora_brt,
                 "origem": "FD",
-                "data_brt": data_brt
+                "data_brt": data_brt,
+                "poster_home": poster_home,
+                "poster_away": poster_away,
+                "poster_liga": poster_liga
             }
             total_jogos.append(jogo_info)
 
@@ -434,15 +532,119 @@ def enviar_alertas_individualmente(jogos):
     return alertas_enviados
 
 def enviar_top_consolidado(top_jogos):
-    """Envia top jogos consolidado"""
+    """Envia top jogos consolidado com posters"""
     if not top_jogos:
         return False
         
-    mensagem = "📢 *TOP Jogos Consolidados*\n\n"
-    for t in top_jogos:
-        mensagem += f"🏟️ {t['liga']}\n🏆 {t['home']} x {t['away']}\nTendência: {t['tendencia']} | Conf.: {t['confianca']}%\n\n"
+    mensagem = "🏆 *TOP JOGOS CONSOLIDADOS* 🏆\n\n"
+    
+    for i, jogo in enumerate(top_jogos, 1):
+        # Emoji baseado na posição
+        emoji_posicao = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"][i-1] if i <= 5 else "🔹"
+        
+        # Emoji para tendência
+        emoji_tendencia = "🔥" if jogo['tendencia'] == "Mais 2.5" else "⚡" if jogo['tendencia'] == "Mais 1.5" else "🛡️"
+        
+        mensagem += (
+            f"{emoji_posicao} *{jogo['home']}* 🆚 *{jogo['away']}*\n"
+            f"🏆 {jogo['liga']} | 🕐 {jogo['hora']}\n"
+            f"{emoji_tendencia} *{jogo['tendencia']}* | 📊 {jogo['estimativa']:.1f} gols | ✅ {jogo['confianca']}%\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        )
+    
+    mensagem += f"\n📅 *Data:* {top_jogos[0]['data_brt'] if top_jogos else 'N/A'}"
+    mensagem += f"\n🎯 *Total de jogos analisados:* {len(st.session_state.jogos_encontrados)}"
     
     return enviar_telegram(mensagem, TELEGRAM_CHAT_ID_ALT2)
+
+def criar_poster_top_jogos(top_jogos):
+    """Cria um poster visual para os top jogos"""
+    if not top_jogos:
+        return None
+        
+    try:
+        # Criar DataFrame para exibição
+        dados = []
+        for i, jogo in enumerate(top_jogos, 1):
+            dados.append({
+                "Pos": f"{i}°",
+                "Jogo": f"{jogo['home']} vs {jogo['away']}",
+                "Liga": jogo['liga'],
+                "Horário": jogo['hora'],
+                "Tendência": jogo['tendencia'],
+                "Estimativa": f"{jogo['estimativa']:.1f}",
+                "Confiança": f"{jogo['confianca']}%"
+            })
+        
+        df = pd.DataFrame(dados)
+        return df
+    except Exception as e:
+        st.error(f"Erro ao criar poster: {e}")
+        return None
+
+# =============================
+# Funções para Conferência de Resultados
+# =============================
+def buscar_resultados_jogos(data_selecionada):
+    """Busca resultados dos jogos para conferência"""
+    data_str = data_selecionada.strftime("%Y-%m-%d")
+    resultados = []
+    
+    try:
+        # Buscar jogos finalizados do football-data
+        for liga_id in [2021, 2014, 2019, 2002, 2015, 2013]:  # Principais ligas
+            url = f"{BASE_URL_FD}/competitions/{liga_id}/matches?dateFrom={data_str}&dateTo={data_str}&status=FINISHED"
+            resp = requests.get(url, headers=HEADERS_FD, timeout=10)
+            if resp.status_code == 200:
+                jogos = resp.json().get("matches", [])
+                for jogo in jogos:
+                    if jogo.get("status") == "FINISHED":
+                        home_team = jogo.get("homeTeam", {}).get("name", "")
+                        away_team = jogo.get("awayTeam", {}).get("name", "")
+                        score = jogo.get("score", {})
+                        full_time = score.get("fullTime", {})
+                        home_goals = full_time.get("home", 0)
+                        away_goals = full_time.get("away", 0)
+                        total_gols = home_goals + away_goals
+                        
+                        resultados.append({
+                            "home": home_team,
+                            "away": away_team,
+                            "placar": f"{home_goals}-{away_goals}",
+                            "total_gols": total_gols,
+                            "tendencia_real": "Mais 2.5" if total_gols > 2.5 else "Menos 2.5",
+                            "liga": jogo.get("competition", {}).get("name", "")
+                        })
+    except Exception as e:
+        st.warning(f"Erro ao buscar resultados: {e}")
+    
+    return resultados
+
+def comparar_previsao_real(jogos_previstos, resultados_reais):
+    """Compara previsões com resultados reais"""
+    comparacao = []
+    
+    for jogo_prev in jogos_previstos:
+        # Buscar resultado correspondente
+        resultado_correspondente = None
+        for resultado in resultados_reais:
+            if (jogo_prev['home'].lower() in resultado['home'].lower() or 
+                resultado['home'].lower() in jogo_prev['home'].lower()):
+                resultado_correspondente = resultado
+                break
+        
+        if resultado_correspondente:
+            acerto = "✅" if jogo_prev['tendencia'] == resultado_correspondente['tendencia_real'] else "❌"
+            comparacao.append({
+                "Jogo": f"{jogo_prev['home']} x {jogo_prev['away']}",
+                "Previsão": jogo_prev['tendencia'],
+                "Real": resultado_correspondente['tendencia_real'],
+                "Placar": resultado_correspondente['placar'],
+                "Resultado": acerto,
+                "Confiança": f"{jogo_prev['confianca']}%"
+            })
+    
+    return comparacao
 
 # =============================
 # UI e Lógica principal
@@ -510,7 +712,7 @@ def main():
         st.rerun()
 
     st.markdown("---")
-    col1, col2, col3 = st.columns([1,1,1])
+    col1, col2, col3, col4 = st.columns([1,1,1,1])
     
     with col1:
         buscar_btn = st.button("🔍 Buscar partidas e analisar", type="primary")
@@ -522,6 +724,9 @@ def main():
     with col3:
         enviar_top_btn = st.button("📊 Enviar Top Consolidado", 
                                  disabled=not st.session_state.busca_realizada)
+    
+    with col4:
+        conferir_btn = st.button("📈 Conferir Resultados")
 
     # =================================================================================
     # BUSCAR PARTIDAS
@@ -548,8 +753,17 @@ def main():
                 with st.container():
                     col1, col2, col3 = st.columns([3, 2, 1])
                     with col1:
-                        st.write(f"**{jogo['home']}** vs **{jogo['away']}**")
-                        st.write(f"🏆 {jogo['liga']} | 🕐 {jogo['hora']} | 📊 {jogo['origem']}")
+                        # Exibir posters se disponíveis
+                        col_img1, col_img2, col_text = st.columns([1,1,3])
+                        with col_img1:
+                            if jogo.get('poster_home'):
+                                st.image(jogo['poster_home'], width=30)
+                        with col_img2:
+                            if jogo.get('poster_away'):
+                                st.image(jogo['poster_away'], width=30)
+                        with col_text:
+                            st.write(f"**{jogo['home']}** vs **{jogo['away']}**")
+                            st.write(f"🏆 {jogo['liga']} | 🕐 {jogo['hora']} | 📊 {jogo['origem']}")
                     with col2:
                         st.write(f"🎯 {jogo['tendencia']}")
                         st.write(f"📈 Estimativa: {jogo['estimativa']} | ✅ Confiança: {jogo['confianca']}%")
@@ -558,11 +772,36 @@ def main():
                             st.success("🏆 TOP")
                     st.divider()
             
-            # Exibir top jogos
+            # Exibir top jogos com poster
             if top_jogos:
                 st.subheader("🏆 Top 5 Jogos (Maior Confiança)")
+                
+                # Criar poster visual
+                poster_df = criar_poster_top_jogos(top_jogos)
+                if poster_df is not None:
+                    st.dataframe(poster_df, use_container_width=True)
+                
+                # Exibir detalhes dos top jogos
                 for i, jogo in enumerate(top_jogos, 1):
-                    st.info(f"{i}. **{jogo['home']}** vs **{jogo['away']}** - {jogo['tendencia']} ({jogo['confianca']}% confiança)")
+                    emoji_posicao = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"][i-1]
+                    
+                    with st.expander(f"{emoji_posicao} {jogo['home']} vs {jogo['away']} - {jogo['confianca']}% confiança"):
+                        col1, col2, col3 = st.columns([1,2,1])
+                        with col1:
+                            if jogo.get('poster_home'):
+                                st.image(jogo['poster_home'], width=80)
+                            st.write(f"**{jogo['home']}**")
+                        with col2:
+                            st.write("**VS**")
+                            st.write(f"🏆 **{jogo['liga']}**")
+                            st.write(f"🕐 **{jogo['hora']}**")
+                            st.write(f"🎯 **Tendência:** {jogo['tendencia']}")
+                            st.write(f"📊 **Estimativa:** {jogo['estimativa']} gols")
+                            st.write(f"✅ **Confiança:** {jogo['confianca']}%")
+                        with col3:
+                            if jogo.get('poster_away'):
+                                st.image(jogo['poster_away'], width=80)
+                            st.write(f"**{jogo['away']}**")
         else:
             st.warning("⚠️ Nenhum jogo encontrado para os critérios selecionados.")
 
@@ -586,19 +825,62 @@ def main():
         with st.spinner("Enviando top consolidado..."):
             if enviar_top_consolidado(st.session_state.top_jogos):
                 st.success("✅ Top consolidado enviado com sucesso!")
+                
+                # Mostrar preview da mensagem
+                st.subheader("📋 Preview do Top Consolidado")
+                poster_df = criar_poster_top_jogos(st.session_state.top_jogos)
+                if poster_df is not None:
+                    st.dataframe(poster_df, use_container_width=True)
             else:
                 st.error("❌ Erro ao enviar top consolidado")
 
     # =================================================================================
-    # CONFERÊNCIA DE RESULTADOS (mantida do código original)
+    # CONFERÊNCIA DE RESULTADOS
     # =================================================================================
-    st.markdown("---")
-    conferir_btn = st.button("📊 Conferir resultados (usar alertas salvo)")
-    
     if conferir_btn:
-        # ... (manter a lógica original de conferência)
-        st.info("Conferindo resultados dos alertas salvos...")
-        # Sua lógica original de conferência aqui
+        with st.spinner("Buscando resultados para conferência..."):
+            # Buscar resultados reais
+            resultados_reais = buscar_resultados_jogos(data_selecionada)
+            
+            if resultados_reais:
+                st.success(f"✅ {len(resultados_reais)} resultados encontrados!")
+                
+                # Comparar com previsões se houver busca anterior
+                if st.session_state.busca_realizada:
+                    comparacao = comparar_previsao_real(st.session_state.jogos_encontrados, resultados_reais)
+                    
+                    if comparacao:
+                        st.subheader("📊 Comparação: Previsão vs Realidade")
+                        
+                        # Calcular estatísticas
+                        total_jogos = len(comparacao)
+                        acertos = sum(1 for item in comparacao if item["Resultado"] == "✅")
+                        taxa_acerto = (acertos / total_jogos) * 100 if total_jogos > 0 else 0
+                        
+                        # Exibir métricas
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Total de Jogos", total_jogos)
+                        with col2:
+                            st.metric("Acertos", acertos)
+                        with col3:
+                            st.metric("Taxa de Acerto", f"{taxa_acerto:.1f}%")
+                        
+                        # Exibir tabela de comparação
+                        comparacao_df = pd.DataFrame(comparacao)
+                        st.dataframe(comparacao_df, use_container_width=True)
+                        
+                        # Salvar resultados conferidos
+                        st.session_state.resultados_conferidos = comparacao
+                    else:
+                        st.warning("⚠️ Nenhuma correspondência encontrada entre previsões e resultados.")
+                
+                # Exibir todos os resultados encontrados
+                with st.expander("📋 Ver Todos os Resultados Encontrados"):
+                    resultados_df = pd.DataFrame(resultados_reais)
+                    st.dataframe(resultados_df, use_container_width=True)
+            else:
+                st.warning("⚠️ Nenhum resultado encontrado para a data selecionada.")
 
 if __name__ == "__main__":
     main()
