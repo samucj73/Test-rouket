@@ -64,168 +64,226 @@ def enviar_imagem_telegram(image_bytes, caption, chat_id=TELEGRAM_CHAT_ID):
     try:
         files = {'photo': image_bytes}
         data = {'chat_id': chat_id, 'caption': caption, 'parse_mode': 'Markdown'}
-        response = requests.post(BASE_URL_TG_PHOTO, files=files, data=data, timeout=10)
+        response = requests.post(BASE_URL_TG_PHOTO, files=files, data=data, timeout=15)
         return response.status_code == 200
     except Exception as e:
         st.warning(f"Erro ao enviar imagem Telegram: {e}")
         return False
 
 # =============================
-# Geração de Imagens
+# Geração de Imagens - MELHORADO
 # =============================
-def obter_escudo_time(nome_time, liga_id):
-    """Tenta obter o escudo do time da API do OpenLigaDB"""
+def obter_escudo_time(nome_time, liga_id, temporada):
+    """Obtém o escudo do time da API do OpenLigaDB de forma mais robusta"""
     try:
-        # Primeiro busca o timeID
-        times_url = f"{OPENLIGA_BASE}/getavailableteams/{liga_id}/2024"
+        # Busca todos os times da liga/temporada
+        times_url = f"{OPENLIGA_BASE}/getavailableteams/{liga_id}/{temporada}"
         response = requests.get(times_url, timeout=10)
+        
         if response.status_code == 200:
             times = response.json()
             for time in times:
-                if time.get('teamName') == nome_time:
+                team_name = time.get('teamName', '')
+                # Busca por correspondência exata ou parcial
+                if nome_time.lower() in team_name.lower() or team_name.lower() in nome_time.lower():
                     icon_url = time.get('teamIconUrl')
                     if icon_url:
                         # Baixa a imagem
                         img_response = requests.get(icon_url, timeout=10)
                         if img_response.status_code == 200:
-                            return Image.open(io.BytesIO(img_response.content))
+                            return Image.open(io.BytesIO(img_response.content)).convert("RGBA")
+        
+        # Fallback: tenta buscar times da liga atual
+        times_url_current = f"{OPENLIGA_BASE}/getavailableteams/{liga_id}/2024"
+        response_current = requests.get(times_url_current, timeout=10)
+        if response_current.status_code == 200:
+            times = response_current.json()
+            for time in times:
+                team_name = time.get('teamName', '')
+                if nome_time.lower() in team_name.lower() or team_name.lower() in nome_time.lower():
+                    icon_url = time.get('teamIconUrl')
+                    if icon_url:
+                        img_response = requests.get(icon_url, timeout=10)
+                        if img_response.status_code == 200:
+                            return Image.open(io.BytesIO(img_response.content)).convert("RGBA")
+        
         return None
-    except Exception:
+    except Exception as e:
+        st.warning(f"Erro ao buscar escudo para {nome_time}: {e}")
         return None
 
-def criar_imagem_alerta(jogo, faixa, cor_fundo):
-    """Cria imagem de alerta com escudos dos times"""
-    largura, altura = 800, 400
+def criar_fonte(tamanho):
+    """Tenta carregar fonte, fallback para padrão"""
+    try:
+        return ImageFont.truetype("arial.ttf", tamanho)
+    except:
+        try:
+            return ImageFont.truetype("arialbd.ttf", tamanho)
+        except:
+            # Fallback para fonte padrão do PIL (pode ser pequena, mas funciona)
+            return ImageFont.load_default()
+
+def criar_imagem_alerta_partida(jogo):
+    """Cria imagem de alerta UMA PARTIDA com todas as probabilidades"""
+    largura, altura = 1000, 600  # Aumentado para caber mais informações
+    
+    # Cor de fundo base - azul escuro profissional
+    cor_fundo = "#1e3a8a"
     
     # Cria imagem base
     imagem = Image.new('RGB', (largura, altura), color=cor_fundo)
     draw = ImageDraw.Draw(imagem)
     
-    try:
-        # Tenta carregar fonte, fallback para padrão
-        fonte_titulo = ImageFont.truetype("arial.ttf", 36)
-        fonte_time = ImageFont.truetype("arial.ttf", 28)
-        fonte_detalhes = ImageFont.truetype("arial.ttf", 20)
-    except:
-        fonte_titulo = ImageFont.load_default()
-        fonte_time = ImageFont.load_default()
-        fonte_detalhes = ImageFont.load_default()
+    # Fontes MAIORES
+    fonte_titulo = criar_fonte(42)
+    fonte_time = criar_fonte(36)
+    fonte_detalhes = criar_fonte(28)
+    fonte_probabilidades = criar_fonte(32)
+    fonte_confianca = criar_fonte(26)
     
-    # Título
-    titulo = f"⚽ ALERTA +{faixa} GOLS"
-    draw.text((largura//2, 40), titulo, fill='white', font=fonte_titulo, anchor='mm')
+    # Título PRINCIPAL
+    titulo = f"⚽ ALERTA DE JOGO - {jogo['competicao']}"
+    draw.text((largura//2, 50), titulo, fill='white', font=fonte_titulo, anchor='mm')
     
     # Linha divisória
-    draw.line([(50, 80), (largura-50, 80)], fill='white', width=2)
+    draw.line([(50, 100), (largura-50, 100)], fill='white', width=3)
     
-    # Times
-    home_escudo = obter_escudo_time(jogo['home'], jogo['liga_id'])
-    away_escudo = obter_escudo_time(jogo['away'], jogo['liga_id'])
+    # Times e Escudos
+    home_escudo = obter_escudo_time(jogo['home'], jogo['liga_id'], jogo['temporada'])
+    away_escudo = obter_escudo_time(jogo['away'], jogo['liga_id'], jogo['temporada'])
     
-    # Posicionamento dos escudos
-    escudo_size = 80
-    y_pos = 150
+    # Posicionamento dos escudos (MAIORES)
+    escudo_size = 120
+    y_pos = 220
     
     # Home (esquerda)
     if home_escudo:
         home_escudo = home_escudo.resize((escudo_size, escudo_size))
-        imagem.paste(home_escudo, (200, y_pos-40))
-    draw.text((200, y_pos+50), jogo['home'], fill='white', font=fonte_time, anchor='mm')
+        # Cria fundo branco para o escudo
+        escudo_bg = Image.new('RGB', (escudo_size, escudo_size), 'white')
+        escudo_bg.paste(home_escudo, (0, 0), home_escudo)
+        imagem.paste(escudo_bg, (200, y_pos-60))
     
-    # VS
-    draw.text((largura//2, y_pos), "VS", fill='white', font=fonte_time, anchor='mm')
+    draw.text((200, y_pos+70), jogo['home'][:20], fill='white', font=fonte_time, anchor='mm')
+    
+    # VS (maior)
+    draw.text((largura//2, y_pos), "VS", fill='white', font=fonte_titulo, anchor='mm')
     
     # Away (direita)
     if away_escudo:
         away_escudo = away_escudo.resize((escudo_size, escudo_size))
-        imagem.paste(away_escudo, (largura-200, y_pos-40))
-    draw.text((largura-200, y_pos+50), jogo['away'], fill='white', font=fonte_time, anchor='mm')
+        escudo_bg = Image.new('RGB', (escudo_size, escudo_size), 'white')
+        escudo_bg.paste(away_escudo, (0, 0), away_escudo)
+        imagem.paste(escudo_bg, (largura-200, y_pos-60))
     
-    # Detalhes
-    detalhes_y = 250
-    prob_key = f"prob_{faixa.replace('.', '_')}"
-    conf_key = f"conf_{faixa.replace('.', '_')}"
+    draw.text((largura-200, y_pos+70), jogo['away'][:20], fill='white', font=fonte_time, anchor='mm')
     
+    # Informações do jogo
+    info_y = 350
     info_lines = [
-        f"🏆 {jogo['competicao']} | ⏰ {jogo['hora']}",
-        f"📊 Est. Total: {jogo['estimativa']:.2f} gols",
-        f"🎯 Prob. +{faixa}: {jogo[prob_key]:.1f}% | Conf: {jogo[conf_key]:.0f}%"
+        f"🏆 {jogo['competicao']}",
+        f"⏰ {jogo['hora']} BRT | 📅 {datetime.now().strftime('%d/%m/%Y')}",
+        f"📊 Estatística: {jogo['estimativa']:.2f} gols totais esperados"
     ]
     
     for i, line in enumerate(info_lines):
-        draw.text((largura//2, detalhes_y + i*30), line, fill='white', font=fonte_detalhes, anchor='mm')
+        draw.text((largura//2, info_y + i*40), line, fill='white', font=fonte_detalhes, anchor='mm')
+    
+    # Probabilidades por faixa - LAYOUT HORIZONTAL
+    prob_y = 480
+    col_width = largura // 3
+    
+    # +1.5 Gols
+    draw.rectangle([50, prob_y-30, col_width-50, prob_y+80], fill='#1f77b4', outline='white', width=2)
+    draw.text((col_width//2, prob_y), "+1.5 GOLS", fill='white', font=fonte_probabilidades, anchor='mm')
+    draw.text((col_width//2, prob_y+30), f"{jogo['prob_1_5']:.1f}%", fill='white', font=fonte_probabilidades, anchor='mm')
+    draw.text((col_width//2, prob_y+55), f"Conf: {jogo['conf_1_5']:.0f}%", fill='white', font=fonte_confianca, anchor='mm')
+    
+    # +2.5 Gols  
+    draw.rectangle([col_width+50, prob_y-30, 2*col_width-50, prob_y+80], fill='#ff7f0e', outline='white', width=2)
+    draw.text((col_width + col_width//2, prob_y), "+2.5 GOLS", fill='white', font=fonte_probabilidades, anchor='mm')
+    draw.text((col_width + col_width//2, prob_y+30), f"{jogo['prob_2_5']:.1f}%", fill='white', font=fonte_probabilidades, anchor='mm')
+    draw.text((col_width + col_width//2, prob_y+55), f"Conf: {jogo['conf_2_5']:.0f}%", fill='white', font=fonte_confianca, anchor='mm')
+    
+    # +3.5 Gols
+    draw.rectangle([2*col_width+50, prob_y-30, largura-50, prob_y+80], fill='#2ca02c', outline='white', width=2)
+    draw.text((2*col_width + col_width//2, prob_y), "+3.5 GOLS", fill='white', font=fonte_probabilidades, anchor='mm')
+    draw.text((2*col_width + col_width//2, prob_y+30), f"{jogo['prob_3_5']:.1f}%", fill='white', font=fonte_probabilidades, anchor='mm')
+    draw.text((2*col_width + col_width//2, prob_y+55), f"Conf: {jogo['conf_3_5']:.0f}%", fill='white', font=fonte_confianca, anchor='mm')
     
     # Rodapé
-    draw.text((largura//2, altura-30), f"📅 {datetime.now().strftime('%d/%m/%Y %H:%M')}", 
-              fill='white', font=fonte_detalhes, anchor='mm')
+    draw.text((largura//2, altura-30), "🔔 ALERTA AUTOMÁTICO - ANÁLISE ESTATÍSTICA", 
+              fill='white', font=fonte_confianca, anchor='mm')
     
     return imagem
 
-def criar_imagem_resultado(jogo, resultado_info, faixa):
-    """Cria imagem de resultado com escudos"""
-    largura, altura = 800, 400
+def criar_imagem_resultado_partida(jogo, resultado_info):
+    """Cria imagem de resultado para UMA PARTIDA"""
+    largura, altura = 900, 500
     
     # Define cor baseada no resultado
     if "GREEN" in resultado_info.get('resultado', ''):
-        cor_fundo = '#00aa00'  # Verde
+        cor_fundo = '#15803d'  # Verde mais escuro
     else:
-        cor_fundo = '#aa0000'  # Vermelho
+        cor_fundo = '#dc2626'  # Vermelho mais escuro
     
     imagem = Image.new('RGB', (largura, altura), color=cor_fundo)
     draw = ImageDraw.Draw(imagem)
     
-    try:
-        fonte_titulo = ImageFont.truetype("arial.ttf", 36)
-        fonte_time = ImageFont.truetype("arial.ttf", 28)
-        fonte_resultado = ImageFont.truetype("arial.ttf", 48)
-        fonte_detalhes = ImageFont.truetype("arial.ttf", 20)
-    except:
-        fonte_titulo = ImageFont.load_default()
-        fonte_time = ImageFont.load_default()
-        fonte_resultado = ImageFont.load_default()
-        fonte_detalhes = ImageFont.load_default()
+    # Fontes MAIORES
+    fonte_titulo = criar_fonte(38)
+    fonte_time = criar_fonte(32)
+    fonte_resultado = criar_fonte(48)
+    fonte_detalhes = criar_fonte(26)
     
     # Título
-    titulo = f"✅ RESULTADO +{faixa} GOLS"
+    titulo = f"✅ RESULTADO CONFIRMADO"
     draw.text((largura//2, 40), titulo, fill='white', font=fonte_titulo, anchor='mm')
     
     # Times e escudos
-    home_escudo = obter_escudo_time(resultado_info['home'], jogo['liga_id'])
-    away_escudo = obter_escudo_time(resultado_info['away'], jogo['liga_id'])
+    home_escudo = obter_escudo_time(resultado_info['home'], jogo['liga_id'], jogo['temporada'])
+    away_escudo = obter_escudo_time(resultado_info['away'], jogo['liga_id'], jogo['temporada'])
     
-    escudo_size = 80
-    y_pos = 120
+    escudo_size = 100
+    y_pos = 140
     
     # Home
     if home_escudo:
         home_escudo = home_escudo.resize((escudo_size, escudo_size))
-        imagem.paste(home_escudo, (150, y_pos-40))
-    draw.text((150, y_pos+50), resultado_info['home'][:15], fill='white', font=fonte_time, anchor='mm')
+        escudo_bg = Image.new('RGB', (escudo_size, escudo_size), 'white')
+        escudo_bg.paste(home_escudo, (0, 0), home_escudo)
+        imagem.paste(escudo_bg, (200, y_pos-50))
+    draw.text((200, y_pos+60), resultado_info['home'][:15], fill='white', font=fonte_time, anchor='mm')
     
-    # Placar
+    # Placar (MAIOR)
     score = resultado_info.get('score', '? x ?')
     draw.text((largura//2, y_pos), score, fill='white', font=fonte_resultado, anchor='mm')
     
     # Away
     if away_escudo:
         away_escudo = away_escudo.resize((escudo_size, escudo_size))
-        imagem.paste(away_escudo, (largura-150, y_pos-40))
-    draw.text((largura-150, y_pos+50), resultado_info['away'][:15], fill='white', font=fonte_time, anchor='mm')
+        escudo_bg = Image.new('RGB', (escudo_size, escudo_size), 'white')
+        escudo_bg.paste(away_escudo, (0, 0), away_escudo)
+        imagem.paste(escudo_bg, (largura-200, y_pos-50))
+    draw.text((largura-200, y_pos+60), resultado_info['away'][:15], fill='white', font=fonte_time, anchor='mm')
     
     # Resultado da aposta
-    resultado_y = 220
+    resultado_y = 250
     draw.text((largura//2, resultado_y), resultado_info['resultado'], fill='white', font=fonte_titulo, anchor='mm')
     
-    # Detalhes
-    detalhes_y = 280
+    # Detalhes da aposta
+    detalhes_y = 320
+    faixa_aposta = resultado_info['aposta'].replace('+', '')
+    total_gols = resultado_info.get('total_gols', '?')
+    
     detalhes = [
-        f"🎯 Aposta: +{faixa} gols | Total: {resultado_info.get('total_gols', '?')} gols",
+        f"🎯 Aposta: +{faixa_aposta} gols | Total Marcado: {total_gols} gols",
         f"🏆 {jogo['competicao']}",
         f"📅 {datetime.now().strftime('%d/%m/%Y %H:%M')}"
     ]
     
     for i, line in enumerate(detalhes):
-        draw.text((largura//2, detalhes_y + i*30), line, fill='white', font=fonte_detalhes, anchor='mm')
+        draw.text((largura//2, detalhes_y + i*35), line, fill='white', font=fonte_detalhes, anchor='mm')
     
     return imagem
 
@@ -498,12 +556,8 @@ with aba[0]:
     data_selecionada = st.date_input("📅 Data dos jogos:", value=datetime.today().date())
     hoje_str = data_selecionada.strftime("%Y-%m-%d")
     
-    enviar_imagens = st.checkbox("📸 Enviar alertas com imagens", value=True)
-    cores_faixas = {
-        "1.5": "#1f77b4",  # Azul
-        "2.5": "#ff7f0e",  # Laranja  
-        "3.5": "#2ca02c"   # Verde
-    }
+    enviar_imagens = st.checkbox("📸 Enviar alertas com imagens (UM POR PARTIDA)", value=True)
+    st.markdown("**🆕 NOVO: Agora cada partida tem sua própria imagem com TODAS as probabilidades!**")
 
     st.markdown("**Obs:** as listas são agora *distintas*: um jogo/time selecionado em +1.5 não será repetido em +2.5 ou +3.5 (prioridade: +1.5 → +2.5 → +3.5).")
 
@@ -579,14 +633,14 @@ with aba[0]:
                     enviar_telegram(msg, TELEGRAM_CHAT_ID)
                     enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2)
                     
-                    # Envia imagens se habilitado
+                    # Envia imagens se habilitado - AGORA UMA IMAGEM POR PARTIDA
                     if enviar_imagens:
                         for j in top_15:
-                            imagem = criar_imagem_alerta(j, "1.5", cores_faixas["1.5"])
+                            imagem = criar_imagem_alerta_partida(j)
                             img_bytes = io.BytesIO()
                             imagem.save(img_bytes, format='PNG')
                             img_bytes.seek(0)
-                            caption = f"⚡ *ALERTA +1.5 GOLS*\n*{j['home']} x {j['away']}*\n⏰ {j['hora']} BRT"
+                            caption = f"⚡ *ALERTA +1.5 GOLS*\n*{j['home']} x {j['away']}*\n⏰ {j['hora']} BRT | P(+1.5): {j['prob_1_5']:.1f}%"
                             enviar_imagem_telegram(img_bytes, caption, TELEGRAM_CHAT_ID)
                             enviar_imagem_telegram(img_bytes, caption, TELEGRAM_CHAT_ID_ALT2)
 
@@ -600,11 +654,11 @@ with aba[0]:
                     
                     if enviar_imagens:
                         for j in top_25:
-                            imagem = criar_imagem_alerta(j, "2.5", cores_faixas["2.5"])
+                            imagem = criar_imagem_alerta_partida(j)
                             img_bytes = io.BytesIO()
                             imagem.save(img_bytes, format='PNG')
                             img_bytes.seek(0)
-                            caption = f"⚡ *ALERTA +2.5 GOLS*\n*{j['home']} x {j['away']}*\n⏰ {j['hora']} BRT"
+                            caption = f"⚡ *ALERTA +2.5 GOLS*\n*{j['home']} x {j['away']}*\n⏰ {j['hora']} BRT | P(+2.5): {j['prob_2_5']:.1f}%"
                             enviar_imagem_telegram(img_bytes, caption, TELEGRAM_CHAT_ID)
                             enviar_imagem_telegram(img_bytes, caption, TELEGRAM_CHAT_ID_ALT2)
 
@@ -618,11 +672,11 @@ with aba[0]:
                     
                     if enviar_imagens:
                         for j in top_35:
-                            imagem = criar_imagem_alerta(j, "3.5", cores_faixas["3.5"])
+                            imagem = criar_imagem_alerta_partida(j)
                             img_bytes = io.BytesIO()
                             imagem.save(img_bytes, format='PNG')
                             img_bytes.seek(0)
-                            caption = f"⚡ *ALERTA +3.5 GOLS*\n*{j['home']} x {j['away']}*\n⏰ {j['hora']} BRT"
+                            caption = f"⚡ *ALERTA +3.5 GOLS*\n*{j['home']} x {j['away']}*\n⏰ {j['hora']} BRT | P(+3.5): {j['prob_3_5']:.1f}%"
                             enviar_imagem_telegram(img_bytes, caption, TELEGRAM_CHAT_ID)
                             enviar_imagem_telegram(img_bytes, caption, TELEGRAM_CHAT_ID_ALT2)
 
@@ -730,9 +784,9 @@ with aba[2]:
                             "score": score
                         })
                         
-                        # Envia imagem de resultado se habilitado
+                        # Envia imagem de resultado se habilitado - AGORA UMA IMAGEM POR PARTIDA
                         if enviar_imagens_resultados and info.get("total_gols") is not None:
-                            imagem = criar_imagem_resultado(j, info, threshold_label)
+                            imagem = criar_imagem_resultado_partida(j, info)
                             img_bytes = io.BytesIO()
                             imagem.save(img_bytes, format='PNG')
                             img_bytes.seek(0)
@@ -793,29 +847,10 @@ with aba[2]:
 
 # ---------- NOVA ABA: Alertas com Imagens ----------
 with aba[3]:
-    st.subheader("🖼️ Visualizar Alertas com Imagens")
-    st.markdown("Pré-visualize como ficarão os alertas com imagens para cada faixa de gols")
+    st.subheader("🖼️ Visualizar Alertas com Imagens - NOVO FORMATO")
+    st.markdown("**🆕 AGORA: Cada partida tem sua própria imagem com TODAS as probabilidades!**")
     
-    # Exemplo de visualização
-    st.write("### 🎨 Cores das Faixas:")
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.color_picker("+1.5 Gols", "#1f77b4", disabled=True)
-        st.info("**Azul** - +1.5 Gols")
-        
-    with col2:
-        st.color_picker("+2.5 Gols", "#ff7f0e", disabled=True)  
-        st.warning("**Laranja** - +2.5 Gols")
-        
-    with col3:
-        st.color_picker("+3.5 Gols", "#2ca02c", disabled=True)
-        st.success("**Verde** - +3.5 Gols")
-    
-    # Exemplo de imagem de alerta
-    st.write("### 📸 Exemplo de Alerta com Imagem:")
-    
-    # Cria uma imagem de exemplo
+    # Criar exemplo de jogo para demonstração
     exemplo_jogo = {
         "home": "Bayern Munich",
         "away": "Borussia Dortmund", 
@@ -828,55 +863,57 @@ with aba[3]:
         "conf_1_5": 78,
         "conf_2_5": 65,
         "conf_3_5": 52,
-        "liga_id": "bl1"
+        "liga_id": "bl1",
+        "temporada": "2024"
     }
     
+    st.write("### 📸 Exemplo de Alerta por Partida (NOVO):")
+    
+    # Criar e mostrar imagem de exemplo
+    imagem_exemplo = criar_imagem_alerta_partida(exemplo_jogo)
+    st.image(imagem_exemplo, use_column_width=True, caption="🎯 ALERTA POR PARTIDA - Todas as probabilidades em uma imagem")
+    
+    st.write("### 🎨 Características do Novo Formato:")
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        st.write("**+1.5 Gols**")
-        imagem_exemplo_15 = criar_imagem_alerta(exemplo_jogo, "1.5", "#1f77b4")
-        st.image(imagem_exemplo_15, use_column_width=True)
+        st.info("""
+        **📊 Todas as Faixas**
+        - +1.5 Gols
+        - +2.5 Gols  
+        - +3.5 Gols
+        """)
         
     with col2:
-        st.write("**+2.5 Gols**") 
-        imagem_exemplo_25 = criar_imagem_alerta(exemplo_jogo, "2.5", "#ff7f0e")
-        st.image(imagem_exemplo_25, use_column_width=True)
+        st.success("""
+        **👥 Escudos dos Times**
+        - Busca automática na API
+        - Fallback robusto
+        - Visual profissional
+        """)
         
     with col3:
-        st.write("**+3.5 Gols**")
-        imagem_exemplo_35 = criar_imagem_alerta(exemplo_jogo, "3.5", "#2ca02c")
-        st.image(imagem_exemplo_35, use_column_width=True)
+        st.warning("""
+        **📈 Informações Completas**
+        - Probabilidades
+        - Confiança
+        - Estatísticas
+        - Horário
+        """)
     
-    # Exemplo de imagem de resultado
-    st.write("### ✅ Exemplo de Resultado com Imagem:")
+    # Exemplo de resultado
+    st.write("### ✅ Exemplo de Resultado por Partida:")
     
-    resultado_exemplo_green = {
+    resultado_exemplo = {
         "home": "Bayern Munich",
         "away": "Borussia Dortmund",
         "resultado": "🟢 GREEN", 
         "score": "3 x 2",
-        "total_gols": 5
+        "total_gols": 5,
+        "aposta": "+2.5"
     }
     
-    resultado_exemplo_red = {
-        "home": "Bayer Leverkusen", 
-        "away": "RB Leipzig",
-        "resultado": "🔴 RED",
-        "score": "1 x 0", 
-        "total_gols": 1
-    }
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.write("**🟢 GREEN**")
-        imagem_green = criar_imagem_resultado(exemplo_jogo, resultado_exemplo_green, "2.5")
-        st.image(imagem_green, use_column_width=True)
-        
-    with col2:
-        st.write("**🔴 RED**")
-        imagem_red = criar_imagem_resultado(exemplo_jogo, resultado_exemplo_red, "2.5")  
-        st.image(imagem_red, use_column_width=True)
+    imagem_resultado = criar_imagem_resultado_partida(exemplo_jogo, resultado_exemplo)
+    st.image(imagem_resultado, use_column_width=True, caption="✅ RESULTADO POR PARTIDA - Confirmação visual do resultado")
 
 # Fim do arquivo
