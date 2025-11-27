@@ -5,6 +5,9 @@ import requests
 import os
 import json
 import math
+from PIL import Image, ImageDraw, ImageFont
+import io
+import base64
 
 # =============================
 # Configurações OpenLigaDB + Telegram
@@ -20,6 +23,7 @@ TELEGRAM_TOKEN = "7900056631:AAHjG6iCDqQdGTfJI6ce0AZ0E2ilV2fV9RY"
 TELEGRAM_CHAT_ID = "-1003073115320"
 TELEGRAM_CHAT_ID_ALT2 = "-1002932611974"
 BASE_URL_TG = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+BASE_URL_TG_PHOTO = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto"
 
 ALERTAS_PATH = "alertas.json"
 TOP3_PATH = "top3.json"
@@ -56,6 +60,175 @@ def enviar_telegram(msg, chat_id=TELEGRAM_CHAT_ID):
     except Exception as e:
         st.warning(f"Erro ao enviar Telegram: {e}")
 
+def enviar_imagem_telegram(image_bytes, caption, chat_id=TELEGRAM_CHAT_ID):
+    try:
+        files = {'photo': image_bytes}
+        data = {'chat_id': chat_id, 'caption': caption, 'parse_mode': 'Markdown'}
+        response = requests.post(BASE_URL_TG_PHOTO, files=files, data=data, timeout=10)
+        return response.status_code == 200
+    except Exception as e:
+        st.warning(f"Erro ao enviar imagem Telegram: {e}")
+        return False
+
+# =============================
+# Geração de Imagens
+# =============================
+def obter_escudo_time(nome_time, liga_id):
+    """Tenta obter o escudo do time da API do OpenLigaDB"""
+    try:
+        # Primeiro busca o timeID
+        times_url = f"{OPENLIGA_BASE}/getavailableteams/{liga_id}/2024"
+        response = requests.get(times_url, timeout=10)
+        if response.status_code == 200:
+            times = response.json()
+            for time in times:
+                if time.get('teamName') == nome_time:
+                    icon_url = time.get('teamIconUrl')
+                    if icon_url:
+                        # Baixa a imagem
+                        img_response = requests.get(icon_url, timeout=10)
+                        if img_response.status_code == 200:
+                            return Image.open(io.BytesIO(img_response.content))
+        return None
+    except Exception:
+        return None
+
+def criar_imagem_alerta(jogo, faixa, cor_fundo):
+    """Cria imagem de alerta com escudos dos times"""
+    largura, altura = 800, 400
+    
+    # Cria imagem base
+    imagem = Image.new('RGB', (largura, altura), color=cor_fundo)
+    draw = ImageDraw.Draw(imagem)
+    
+    try:
+        # Tenta carregar fonte, fallback para padrão
+        fonte_titulo = ImageFont.truetype("arial.ttf", 36)
+        fonte_time = ImageFont.truetype("arial.ttf", 28)
+        fonte_detalhes = ImageFont.truetype("arial.ttf", 20)
+    except:
+        fonte_titulo = ImageFont.load_default()
+        fonte_time = ImageFont.load_default()
+        fonte_detalhes = ImageFont.load_default()
+    
+    # Título
+    titulo = f"⚽ ALERTA +{faixa} GOLS"
+    draw.text((largura//2, 40), titulo, fill='white', font=fonte_titulo, anchor='mm')
+    
+    # Linha divisória
+    draw.line([(50, 80), (largura-50, 80)], fill='white', width=2)
+    
+    # Times
+    home_escudo = obter_escudo_time(jogo['home'], jogo['liga_id'])
+    away_escudo = obter_escudo_time(jogo['away'], jogo['liga_id'])
+    
+    # Posicionamento dos escudos
+    escudo_size = 80
+    y_pos = 150
+    
+    # Home (esquerda)
+    if home_escudo:
+        home_escudo = home_escudo.resize((escudo_size, escudo_size))
+        imagem.paste(home_escudo, (200, y_pos-40))
+    draw.text((200, y_pos+50), jogo['home'], fill='white', font=fonte_time, anchor='mm')
+    
+    # VS
+    draw.text((largura//2, y_pos), "VS", fill='white', font=fonte_time, anchor='mm')
+    
+    # Away (direita)
+    if away_escudo:
+        away_escudo = away_escudo.resize((escudo_size, escudo_size))
+        imagem.paste(away_escudo, (largura-200, y_pos-40))
+    draw.text((largura-200, y_pos+50), jogo['away'], fill='white', font=fonte_time, anchor='mm')
+    
+    # Detalhes
+    detalhes_y = 250
+    prob_key = f"prob_{faixa.replace('.', '_')}"
+    conf_key = f"conf_{faixa.replace('.', '_')}"
+    
+    info_lines = [
+        f"🏆 {jogo['competicao']} | ⏰ {jogo['hora']}",
+        f"📊 Est. Total: {jogo['estimativa']:.2f} gols",
+        f"🎯 Prob. +{faixa}: {jogo[prob_key]:.1f}% | Conf: {jogo[conf_key]:.0f}%"
+    ]
+    
+    for i, line in enumerate(info_lines):
+        draw.text((largura//2, detalhes_y + i*30), line, fill='white', font=fonte_detalhes, anchor='mm')
+    
+    # Rodapé
+    draw.text((largura//2, altura-30), f"📅 {datetime.now().strftime('%d/%m/%Y %H:%M')}", 
+              fill='white', font=fonte_detalhes, anchor='mm')
+    
+    return imagem
+
+def criar_imagem_resultado(jogo, resultado_info, faixa):
+    """Cria imagem de resultado com escudos"""
+    largura, altura = 800, 400
+    
+    # Define cor baseada no resultado
+    if "GREEN" in resultado_info.get('resultado', ''):
+        cor_fundo = '#00aa00'  # Verde
+    else:
+        cor_fundo = '#aa0000'  # Vermelho
+    
+    imagem = Image.new('RGB', (largura, altura), color=cor_fundo)
+    draw = ImageDraw.Draw(imagem)
+    
+    try:
+        fonte_titulo = ImageFont.truetype("arial.ttf", 36)
+        fonte_time = ImageFont.truetype("arial.ttf", 28)
+        fonte_resultado = ImageFont.truetype("arial.ttf", 48)
+        fonte_detalhes = ImageFont.truetype("arial.ttf", 20)
+    except:
+        fonte_titulo = ImageFont.load_default()
+        fonte_time = ImageFont.load_default()
+        fonte_resultado = ImageFont.load_default()
+        fonte_detalhes = ImageFont.load_default()
+    
+    # Título
+    titulo = f"✅ RESULTADO +{faixa} GOLS"
+    draw.text((largura//2, 40), titulo, fill='white', font=fonte_titulo, anchor='mm')
+    
+    # Times e escudos
+    home_escudo = obter_escudo_time(resultado_info['home'], jogo['liga_id'])
+    away_escudo = obter_escudo_time(resultado_info['away'], jogo['liga_id'])
+    
+    escudo_size = 80
+    y_pos = 120
+    
+    # Home
+    if home_escudo:
+        home_escudo = home_escudo.resize((escudo_size, escudo_size))
+        imagem.paste(home_escudo, (150, y_pos-40))
+    draw.text((150, y_pos+50), resultado_info['home'][:15], fill='white', font=fonte_time, anchor='mm')
+    
+    # Placar
+    score = resultado_info.get('score', '? x ?')
+    draw.text((largura//2, y_pos), score, fill='white', font=fonte_resultado, anchor='mm')
+    
+    # Away
+    if away_escudo:
+        away_escudo = away_escudo.resize((escudo_size, escudo_size))
+        imagem.paste(away_escudo, (largura-150, y_pos-40))
+    draw.text((largura-150, y_pos+50), resultado_info['away'][:15], fill='white', font=fonte_time, anchor='mm')
+    
+    # Resultado da aposta
+    resultado_y = 220
+    draw.text((largura//2, resultado_y), resultado_info['resultado'], fill='white', font=fonte_titulo, anchor='mm')
+    
+    # Detalhes
+    detalhes_y = 280
+    detalhes = [
+        f"🎯 Aposta: +{faixa} gols | Total: {resultado_info.get('total_gols', '?')} gols",
+        f"🏆 {jogo['competicao']}",
+        f"📅 {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+    ]
+    
+    for i, line in enumerate(detalhes):
+        draw.text((largura//2, detalhes_y + i*30), line, fill='white', font=fonte_detalhes, anchor='mm')
+    
+    return imagem
+
 # =============================
 # OpenLigaDB helpers
 # =============================
@@ -73,7 +246,6 @@ def obter_jogos_liga_temporada(liga_id, temporada):
 def calcular_media_gols_times(jogos_hist):
     stats = {}
     for j in jogos_hist:
-        # estrutura OpenLigaDB: team1/team2, matchResults -> resultTypeID==2 é final
         home = j.get("team1", {}).get("teamName")
         away = j.get("team2", {}).get("teamName")
         placar = None
@@ -98,24 +270,20 @@ def calcular_media_gols_times(jogos_hist):
     return medias
 
 def media_gols_confrontos_diretos_openliga(home, away, jogos_hist, max_jogos=5):
-    # busca confrontos diretos na lista de jogos_hist (mesma liga/temporada)
     confrontos = []
     for j in jogos_hist:
         t1 = j.get("team1", {}).get("teamName")
         t2 = j.get("team2", {}).get("teamName")
         if {t1, t2} == {home, away}:
-            # pegar placar final se houver
             for r in j.get("matchResults", []):
                 if r.get("resultTypeID") == 2:
                     gols = (r.get("pointsTeam1", 0), r.get("pointsTeam2", 0))
                     total = gols[0] + gols[1]
-                    # use a data string como peso (mais recente = maior)
                     data_str = j.get("matchDateTimeUTC") or j.get("matchDateTime")
                     confrontos.append((data_str, total))
                     break
     if not confrontos:
         return {"media_gols": 0, "total_jogos": 0}
-    # ordena por data desc e pega max_jogos mais recentes
     confrontos = sorted(confrontos, key=lambda x: x[0] or "", reverse=True)[:max_jogos]
     total_pontos, total_peso = 0, 0
     for idx, (_, total) in enumerate(confrontos):
@@ -129,7 +297,6 @@ def parse_data_openliga_to_datetime(s):
     if not s:
         return None
     try:
-        # exemplos: "2024-08-23T20:30:00Z" ou "2024-08-23T20:30:00+00:00"
         if s.endswith("Z"):
             s2 = s.replace("Z", "+00:00")
         else:
@@ -137,7 +304,6 @@ def parse_data_openliga_to_datetime(s):
         return datetime.fromisoformat(s2)
     except Exception:
         try:
-            # fallback simples
             return datetime.strptime(s[:19], "%Y-%m-%dT%H:%M:%S")
         except Exception:
             return None
@@ -157,7 +323,6 @@ def filtrar_jogos_por_data(jogos_all, data_obj: date):
 # Estatística / Poisson
 # =============================
 def calcular_estimativa_consolidada(media_h2h, media_casa, media_fora, peso_h2h=0.3):
-    # similar à sua função anterior: combina médias (marcados/sofridos) para estimativa total
     media_casa_marcados = media_casa.get("media_gols_marcados", 1.5)
     media_casa_sofridos = media_casa.get("media_gols_sofridos", 1.2)
     media_fora_marcados = media_fora.get("media_gols_marcados", 1.4)
@@ -170,14 +335,12 @@ def calcular_estimativa_consolidada(media_h2h, media_casa, media_fora, peso_h2h=
     return round(estimativa_final, 2)
 
 def poisson_cdf(k, lam):
-    # P(X <= k)
     s = 0.0
     for i in range(0, k+1):
         s += (lam**i) / math.factorial(i)
     return math.exp(-lam) * s
 
 def prob_over_k(estimativa, threshold): 
-    # threshold: 1.5 -> prob of >=2 (k=1); 2.5 -> >=3 (k=2); 3.5 -> >=4 (k=3)
     if threshold == 1.5:
         k = 1
     elif threshold == 2.5:
@@ -190,8 +353,7 @@ def prob_over_k(estimativa, threshold):
     return max(0.0, min(1.0, p))
 
 def confidence_from_prob(prob):
-    # transforma prob (0..1) em % de confiança (30..95)
-    conf = 50 + (prob - 0.5) * 100  # prob=0.5 => 50; prob=1 => 100
+    conf = 50 + (prob - 0.5) * 100
     conf = max(30, min(95, conf))
     return round(conf, 0)
 
@@ -199,14 +361,8 @@ def confidence_from_prob(prob):
 # Conferência via OpenLigaDB (reconsulta)
 # =============================
 def conferir_jogo_openliga(fixture_id, liga_id, temporada, tipo_threshold):
-    """
-    fixture_id: matchID do OpenLigaDB (int ou str)
-    liga_id, temporada: para reconsultar a temporada correta
-    tipo_threshold: "1.5"/"2.5"/"3.5"
-    """
     try:
         jogos = obter_jogos_liga_temporada(liga_id, temporada)
-        # procurar match com matchID == fixture_id
         match = None
         for j in jogos:
             if str(j.get("matchID")) == str(fixture_id):
@@ -216,7 +372,6 @@ def conferir_jogo_openliga(fixture_id, liga_id, temporada, tipo_threshold):
             return None
         home = match.get("team1", {}).get("teamName")
         away = match.get("team2", {}).get("teamName")
-        # procurar placar final
         final = None
         for r in match.get("matchResults", []):
             if r.get("resultTypeID") == 2:
@@ -228,7 +383,8 @@ def conferir_jogo_openliga(fixture_id, liga_id, temporada, tipo_threshold):
                 "away": away,
                 "total_gols": None,
                 "aposta": f"+{tipo_threshold}",
-                "resultado": "Em andamento / sem resultado"
+                "resultado": "Em andamento / sem resultado",
+                "score": "? x ?"
             }
         total = final[0] + final[1]
         if tipo_threshold == "1.5":
@@ -252,19 +408,10 @@ def conferir_jogo_openliga(fixture_id, liga_id, temporada, tipo_threshold):
 # Helpers para selecionar Top3 distintos entre faixas
 # =============================
 def selecionar_top3_distintos(partidas_info, max_por_faixa=3, prefer_best_fit=True):
-    """
-    Seleciona Tops para +2.5, +1.5 e +3.5 garantindo:
-      - prioridade: +2.5 -> +1.5 -> +3.5
-      - não repetir fixture_id entre faixas
-      - evita repetir times (home/away) entre faixas quando possível
-      - prefere alocar a partida na faixa onde ela tem a maior probabilidade (se prefer_best_fit=True)
-      - se não houver candidatos suficientes, relaxa a restrição de times para preencher vagas
-    Retorna (top_15, top_25, top_35) — mesmo ordem de retorno que você usava antes.
-    """
     if not partidas_info:
         return [], [], []
 
-    base = list(partidas_info)  # cópia
+    base = list(partidas_info)
 
     def get_num(d, k):
         v = d.get(k, 0)
@@ -274,7 +421,6 @@ def selecionar_top3_distintos(partidas_info, max_por_faixa=3, prefer_best_fit=Tr
             return 0.0
 
     def sort_key(match, prob_key):
-        # ordena por (probabilidade, confiança, estimativa)
         prob = get_num(match, prob_key)
         conf = get_num(match, prob_key.replace("prob", "conf"))
         est = get_num(match, "estimativa")
@@ -284,39 +430,29 @@ def selecionar_top3_distintos(partidas_info, max_por_faixa=3, prefer_best_fit=Tr
     selected_teams = set()
 
     def safe_team_names(m):
-        # retorna nomes de times coerentes para comparar (evita None)
         return str(m.get("home", "")).strip(), str(m.get("away", "")).strip()
 
     def allocate(prefix, other_prefixes):
-        """
-        Aloca até max_por_faixa partidas para a faixa indicada por `prefix` (ex: '2_5'),
-        preferindo partidas cuja probabilidade para essa faixa seja >= das outras faixas.
-        """
         nonlocal base, selected_ids, selected_teams
         prob_key = f"prob_{prefix}"
         conf_key = f"conf_{prefix}"
 
-        # candidatos que ainda não foram selecionados por fixture_id
         candidatos = [m for m in base if str(m.get("fixture_id")) not in selected_ids]
 
-        # preferred = candidatos cuja prob_{prefix} >= prob_{other} para todos os outros
         preferred = []
         if prefer_best_fit:
             for m in candidatos:
                 cur = get_num(m, prob_key)
                 others = [get_num(m, f"prob_{o}") for o in other_prefixes]
-                # se cur é maior ou igual aos outros, consideramos "melhor encaixe"
                 if cur >= max(others):
                     preferred.append(m)
 
-        # ordena preferred e o restante pelos critérios
         preferred_sorted = sorted(preferred, key=lambda x: sort_key(x, prob_key), reverse=True)
         remaining = [m for m in candidatos if m not in preferred_sorted]
         remaining_sorted = sorted(remaining, key=lambda x: sort_key(x, prob_key), reverse=True)
 
         chosen = []
 
-        # helper para tentar adicionar respeitando unicidade de times
         def try_add_list(lst, respect_teams=True):
             nonlocal chosen, selected_ids, selected_teams
             for m in lst:
@@ -328,24 +464,19 @@ def selecionar_top3_distintos(partidas_info, max_por_faixa=3, prefer_best_fit=Tr
                 home, away = safe_team_names(m)
                 if respect_teams and (home in selected_teams or away in selected_teams):
                     continue
-                # adiciona
                 chosen.append(m)
                 selected_ids.add(fid)
                 selected_teams.add(home)
                 selected_teams.add(away)
 
-        # 1) tenta preferred respeitando times
         try_add_list(preferred_sorted, respect_teams=True)
-        # 2) se ainda faltam, tenta remaining respeitando times
         if len(chosen) < max_por_faixa:
             try_add_list(remaining_sorted, respect_teams=True)
-        # 3) se ainda faltam, relaxa restrição de times (mas mantém não-repetir fixture_id)
         if len(chosen) < max_por_faixa:
             try_add_list(preferred_sorted + remaining_sorted, respect_teams=False)
 
         return chosen
 
-    # Ordem de alocação: +2.5 primeiro, depois +1.5, por último +3.5
     top_25 = allocate("2_5", other_prefixes=["1_5", "3_5"])
     top_15 = allocate("1_5", other_prefixes=["2_5", "3_5"])
     top_35 = allocate("3_5", other_prefixes=["2_5", "1_5"])
@@ -358,7 +489,7 @@ def selecionar_top3_distintos(partidas_info, max_por_faixa=3, prefer_best_fit=Tr
 st.set_page_config(page_title="⚽ Alertas Top3 (OpenLigaDB) - Alemanha", layout="wide")
 st.title("⚽ Alertas Top3 por Faixa (+1.5 / +2.5 / +3.5) — OpenLigaDB (Alemanha)")
 
-aba = st.tabs(["⚡ Gerar & Enviar Top3 (pré-jogo)", "📊 Jogos Históricos", "🎯 Conferência Top3 (pós-jogo)"])
+aba = st.tabs(["⚡ Gerar & Enviar Top3 (pré-jogo)", "📊 Jogos Históricos", "🎯 Conferência Top3 (pós-jogo)", "🖼️ Alertas com Imagens"])
 
 # ---------- ABA 1: Gerar & Enviar Top3 ----------
 with aba[0]:
@@ -366,12 +497,18 @@ with aba[0]:
     temporada_hist = st.selectbox("📅 Temporada (para médias):", ["2022", "2023", "2024", "2025"], index=2)
     data_selecionada = st.date_input("📅 Data dos jogos:", value=datetime.today().date())
     hoje_str = data_selecionada.strftime("%Y-%m-%d")
+    
+    enviar_imagens = st.checkbox("📸 Enviar alertas com imagens", value=True)
+    cores_faixas = {
+        "1.5": "#1f77b4",  # Azul
+        "2.5": "#ff7f0e",  # Laranja  
+        "3.5": "#2ca02c"   # Verde
+    }
 
     st.markdown("**Obs:** as listas são agora *distintas*: um jogo/time selecionado em +1.5 não será repetido em +2.5 ou +3.5 (prioridade: +1.5 → +2.5 → +3.5).")
 
     if st.button("🔍 Buscar jogos do dia e enviar Top3 (cada faixa uma mensagem)"):
         with st.spinner("Buscando jogos e calculando probabilidades..."):
-            # coletar jogos e médias por liga
             jogos_por_liga = {}
             medias_por_liga = {}
             for liga_nome, liga_id in ligas_openliga.items():
@@ -379,13 +516,11 @@ with aba[0]:
                 jogos_por_liga[liga_id] = jogos_hist
                 medias_por_liga[liga_id] = calcular_media_gols_times(jogos_hist)
 
-            # agregar jogos do dia (todas ligas)
             jogos_do_dia = []
             for liga_nome, liga_id in ligas_openliga.items():
                 jogos_hist = jogos_por_liga.get(liga_id, [])
                 filtrados = filtrar_jogos_por_data(jogos_hist, data_selecionada)
                 for j in filtrados:
-                    # adicione infos de liga/temporada para rechecagem futura
                     j["_liga_id"] = liga_id
                     j["_liga_nome"] = liga_nome
                     j["_temporada"] = temporada_hist
@@ -394,7 +529,6 @@ with aba[0]:
             if not jogos_do_dia:
                 st.info("Nenhum jogo encontrado para essa data nas ligas selecionadas.")
             else:
-                # calcula estimativas e probabilidades
                 partidas_info = []
                 for match in jogos_do_dia:
                     home = match.get("team1", {}).get("teamName")
@@ -434,11 +568,9 @@ with aba[0]:
                         "temporada": match.get("_temporada")
                     })
 
-                # --- Seleciona Top3 distintos usando a função de prioridade ---
                 top_15, top_25, top_35 = selecionar_top3_distintos(partidas_info, max_por_faixa=3)
 
                 # --- Envia 3 mensagens separadas (uma por faixa) ---
-                # Mensagem +1.5
                 if top_15:
                     msg = f"🔔 *TOP 3 +1.5 GOLS — {hoje_str}*\n\n"
                     for idx, j in enumerate(top_15, start=1):
@@ -446,8 +578,18 @@ with aba[0]:
                                 f"   • Est: {j['estimativa']:.2f} gols | P(+1.5): *{j['prob_1_5']:.1f}%* | Conf: *{j['conf_1_5']:.0f}%*\n")
                     enviar_telegram(msg, TELEGRAM_CHAT_ID)
                     enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2)
+                    
+                    # Envia imagens se habilitado
+                    if enviar_imagens:
+                        for j in top_15:
+                            imagem = criar_imagem_alerta(j, "1.5", cores_faixas["1.5"])
+                            img_bytes = io.BytesIO()
+                            imagem.save(img_bytes, format='PNG')
+                            img_bytes.seek(0)
+                            caption = f"⚡ *ALERTA +1.5 GOLS*\n*{j['home']} x {j['away']}*\n⏰ {j['hora']} BRT"
+                            enviar_imagem_telegram(img_bytes, caption, TELEGRAM_CHAT_ID)
+                            enviar_imagem_telegram(img_bytes, caption, TELEGRAM_CHAT_ID_ALT2)
 
-                # Mensagem +2.5
                 if top_25:
                     msg = f"🔔 *TOP 3 +2.5 GOLS — {hoje_str}*\n\n"
                     for idx, j in enumerate(top_25, start=1):
@@ -455,8 +597,17 @@ with aba[0]:
                                 f"   • Est: {j['estimativa']:.2f} gols | P(+2.5): *{j['prob_2_5']:.1f}%* | Conf: *{j['conf_2_5']:.0f}%*\n")
                     enviar_telegram(msg, TELEGRAM_CHAT_ID)
                     enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2)
+                    
+                    if enviar_imagens:
+                        for j in top_25:
+                            imagem = criar_imagem_alerta(j, "2.5", cores_faixas["2.5"])
+                            img_bytes = io.BytesIO()
+                            imagem.save(img_bytes, format='PNG')
+                            img_bytes.seek(0)
+                            caption = f"⚡ *ALERTA +2.5 GOLS*\n*{j['home']} x {j['away']}*\n⏰ {j['hora']} BRT"
+                            enviar_imagem_telegram(img_bytes, caption, TELEGRAM_CHAT_ID)
+                            enviar_imagem_telegram(img_bytes, caption, TELEGRAM_CHAT_ID_ALT2)
 
-                # Mensagem +3.5
                 if top_35:
                     msg = f"🔔 *TOP 3 +3.5 GOLS — {hoje_str}*\n\n"
                     for idx, j in enumerate(top_35, start=1):
@@ -464,8 +615,17 @@ with aba[0]:
                                 f"   • Est: {j['estimativa']:.2f} gols | P(+3.5): *{j['prob_3_5']:.1f}%* | Conf: *{j['conf_3_5']:.0f}%*\n")
                     enviar_telegram(msg, TELEGRAM_CHAT_ID)
                     enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2)
+                    
+                    if enviar_imagens:
+                        for j in top_35:
+                            imagem = criar_imagem_alerta(j, "3.5", cores_faixas["3.5"])
+                            img_bytes = io.BytesIO()
+                            imagem.save(img_bytes, format='PNG')
+                            img_bytes.seek(0)
+                            caption = f"⚡ *ALERTA +3.5 GOLS*\n*{j['home']} x {j['away']}*\n⏰ {j['hora']} BRT"
+                            enviar_imagem_telegram(img_bytes, caption, TELEGRAM_CHAT_ID)
+                            enviar_imagem_telegram(img_bytes, caption, TELEGRAM_CHAT_ID_ALT2)
 
-                # salva o lote Top3 (persistente)
                 top3_list = carregar_top3()
                 novo_top = {
                     "data_envio": hoje_str,
@@ -515,6 +675,7 @@ with aba[1]:
 with aba[2]:
     st.subheader("🎯 Conferência dos Top 3 enviados — enviar conferência por faixa (cada faixa uma mensagem)")
     top3_salvos = carregar_top3()
+    enviar_imagens_resultados = st.checkbox("📸 Enviar imagens de resultados", value=True, key="resultados_img")
 
     if not top3_salvos:
         st.info("Nenhum Top 3 registrado ainda. Gere e envie um Top 3 na aba 'Gerar & Enviar Top3'.")
@@ -529,13 +690,6 @@ with aba[2]:
 
         if st.button("🔄 Rechecar resultados agora e enviar conferência (uma mensagem por faixa)"):
             with st.spinner("Conferindo resultados e enviando mensagens..."):
-                detalhes_1_5 = []
-                detalhes_2_5 = []
-                detalhes_3_5 = []
-                greens_1_5 = reds_1_5 = 0
-                greens_2_5 = reds_2_5 = 0
-                greens_3_5 = reds_3_5 = 0
-
                 # função auxiliar para processar uma lista e retornar mensagem e resumo
                 def processar_lista_e_mandar(lista_top, threshold_label):
                     detalhes_local = []
@@ -572,8 +726,20 @@ with aba[2]:
                             "away": info["away"],
                             "aposta": info["aposta"],
                             "total_gols": info["total_gols"],
-                            "resultado": resultado_text
+                            "resultado": resultado_text,
+                            "score": score
                         })
+                        
+                        # Envia imagem de resultado se habilitado
+                        if enviar_imagens_resultados and info.get("total_gols") is not None:
+                            imagem = criar_imagem_resultado(j, info, threshold_label)
+                            img_bytes = io.BytesIO()
+                            imagem.save(img_bytes, format='PNG')
+                            img_bytes.seek(0)
+                            caption = f"✅ *RESULTADO +{threshold_label}*\n*{info['home']} {score} {info['away']}*\n{resultado_text}"
+                            enviar_imagem_telegram(img_bytes, caption, TELEGRAM_CHAT_ID)
+                            enviar_imagem_telegram(img_bytes, caption, TELEGRAM_CHAT_ID_ALT2)
+                        
                         if "GREEN" in resultado_text:
                             greens += 1
                         else:
@@ -603,8 +769,6 @@ with aba[2]:
         # também manter a opção de simplesmente re-checar (sem enviar telegram)
         if st.button("🔎 Rechecar resultados aqui (sem enviar Telegram)"):
             with st.spinner("Conferindo resultados localmente..."):
-                detalhes, resumo = [], {"greens":0,"reds":0}
-                # Processa +1.5 e +2.5 e +3.5 e imprime
                 for label, lista in [("1.5", lote.get("top_1_5", [])), ("2.5", lote.get("top_2_5", [])), ("3.5", lote.get("top_3_5", []))]:
                     st.write(f"### Conferência +{label}")
                     for j in lista:
@@ -626,5 +790,93 @@ with aba[2]:
             with open(nome_arquivo, "w", encoding="utf-8") as f:
                 json.dump(lote, f, ensure_ascii=False, indent=2)
             st.success(f"Lote exportado: {nome_arquivo}")
+
+# ---------- NOVA ABA: Alertas com Imagens ----------
+with aba[3]:
+    st.subheader("🖼️ Visualizar Alertas com Imagens")
+    st.markdown("Pré-visualize como ficarão os alertas com imagens para cada faixa de gols")
+    
+    # Exemplo de visualização
+    st.write("### 🎨 Cores das Faixas:")
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.color_picker("+1.5 Gols", "#1f77b4", disabled=True)
+        st.info("**Azul** - +1.5 Gols")
+        
+    with col2:
+        st.color_picker("+2.5 Gols", "#ff7f0e", disabled=True)  
+        st.warning("**Laranja** - +2.5 Gols")
+        
+    with col3:
+        st.color_picker("+3.5 Gols", "#2ca02c", disabled=True)
+        st.success("**Verde** - +3.5 Gols")
+    
+    # Exemplo de imagem de alerta
+    st.write("### 📸 Exemplo de Alerta com Imagem:")
+    
+    # Cria uma imagem de exemplo
+    exemplo_jogo = {
+        "home": "Bayern Munich",
+        "away": "Borussia Dortmund", 
+        "competicao": "Bundesliga (Alemanha)",
+        "hora": "17:30",
+        "estimativa": 3.2,
+        "prob_1_5": 85.4,
+        "prob_2_5": 67.8, 
+        "prob_3_5": 45.2,
+        "conf_1_5": 78,
+        "conf_2_5": 65,
+        "conf_3_5": 52,
+        "liga_id": "bl1"
+    }
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.write("**+1.5 Gols**")
+        imagem_exemplo_15 = criar_imagem_alerta(exemplo_jogo, "1.5", "#1f77b4")
+        st.image(imagem_exemplo_15, use_column_width=True)
+        
+    with col2:
+        st.write("**+2.5 Gols**") 
+        imagem_exemplo_25 = criar_imagem_alerta(exemplo_jogo, "2.5", "#ff7f0e")
+        st.image(imagem_exemplo_25, use_column_width=True)
+        
+    with col3:
+        st.write("**+3.5 Gols**")
+        imagem_exemplo_35 = criar_imagem_alerta(exemplo_jogo, "3.5", "#2ca02c")
+        st.image(imagem_exemplo_35, use_column_width=True)
+    
+    # Exemplo de imagem de resultado
+    st.write("### ✅ Exemplo de Resultado com Imagem:")
+    
+    resultado_exemplo_green = {
+        "home": "Bayern Munich",
+        "away": "Borussia Dortmund",
+        "resultado": "🟢 GREEN", 
+        "score": "3 x 2",
+        "total_gols": 5
+    }
+    
+    resultado_exemplo_red = {
+        "home": "Bayer Leverkusen", 
+        "away": "RB Leipzig",
+        "resultado": "🔴 RED",
+        "score": "1 x 0", 
+        "total_gols": 1
+    }
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.write("**🟢 GREEN**")
+        imagem_green = criar_imagem_resultado(exemplo_jogo, resultado_exemplo_green, "2.5")
+        st.image(imagem_green, use_column_width=True)
+        
+    with col2:
+        st.write("**🔴 RED**")
+        imagem_red = criar_imagem_resultado(exemplo_jogo, resultado_exemplo_red, "2.5")  
+        st.image(imagem_red, use_column_width=True)
 
 # Fim do arquivo
