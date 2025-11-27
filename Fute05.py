@@ -71,36 +71,48 @@ def enviar_imagem_telegram(image_bytes, caption, chat_id=TELEGRAM_CHAT_ID):
         return False
 
 # =============================
-# Geração de Imagens - MELHORADO
+# Geração de Imagens - SISTEMA CORRIGIDO
 # =============================
 def obter_escudo_time(nome_time, liga_id, temporada):
-    """Obtém o escudo do time da API do OpenLigaDB de forma mais robusta"""
+    """Obtém o escudo do time da API do OpenLigaDB - Versão Corrigida"""
     try:
-        # Busca todos os times da liga/temporada
+        # Primeiro, busca todos os times disponíveis para a liga/temporada
         times_url = f"{OPENLIGA_BASE}/getavailableteams/{liga_id}/{temporada}"
         response = requests.get(times_url, timeout=10)
         
         if response.status_code == 200:
             times = response.json()
+            
+            # Procura pelo time com correspondência exata ou parcial
+            time_encontrado = None
             for time in times:
                 team_name = time.get('teamName', '')
-                # Busca por correspondência exata ou parcial
-                if nome_time.lower() in team_name.lower() or team_name.lower() in nome_time.lower():
-                    icon_url = time.get('teamIconUrl')
-                    if icon_url:
-                        # Baixa a imagem
-                        img_response = requests.get(icon_url, timeout=10)
-                        if img_response.status_code == 200:
-                            return Image.open(io.BytesIO(img_response.content)).convert("RGBA")
+                
+                # Verifica correspondência exata
+                if nome_time.lower() == team_name.lower():
+                    time_encontrado = time
+                    break
+                # Verifica correspondência parcial
+                elif nome_time.lower() in team_name.lower():
+                    time_encontrado = time
+                    # Continua procurando por correspondência exata
+                
+            if time_encontrado:
+                icon_url = time_encontrado.get('teamIconUrl')
+                if icon_url:
+                    # Baixa a imagem
+                    img_response = requests.get(icon_url, timeout=10)
+                    if img_response.status_code == 200:
+                        return Image.open(io.BytesIO(img_response.content)).convert("RGBA")
         
-        # Fallback: tenta buscar times da liga atual
+        # Fallback: tenta buscar da temporada atual
         times_url_current = f"{OPENLIGA_BASE}/getavailableteams/{liga_id}/2024"
         response_current = requests.get(times_url_current, timeout=10)
+        
         if response_current.status_code == 200:
             times = response_current.json()
             for time in times:
-                team_name = time.get('teamName', '')
-                if nome_time.lower() in team_name.lower() or team_name.lower() in nome_time.lower():
+                if nome_time.lower() in time.get('teamName', '').lower():
                     icon_url = time.get('teamIconUrl')
                     if icon_url:
                         img_response = requests.get(icon_url, timeout=10)
@@ -108,9 +120,69 @@ def obter_escudo_time(nome_time, liga_id, temporada):
                             return Image.open(io.BytesIO(img_response.content)).convert("RGBA")
         
         return None
+        
     except Exception as e:
-        st.warning(f"Erro ao buscar escudo para {nome_time}: {e}")
+        st.error(f"Erro ao buscar escudo para {nome_time}: {str(e)}")
         return None
+
+def criar_escudo_generico(nome_time):
+    """Cria um escudo genérico com as iniciais do time"""
+    # Cores baseadas no nome do time (hash simples)
+    cores = {
+        'red': ['#dc2626', '#ef4444', '#fecaca'],
+        'blue': ['#1d4ed8', '#3b82f6', '#dbeafe'],
+        'green': ['#16a34a', '#22c55e', '#dcfce7'],
+        'yellow': ['#ca8a04', '#eab308', '#fef9c3'],
+        'purple': ['#7e22ce', '#a855f7', '#f3e8ff']
+    }
+    
+    # Seleciona cor base baseada no nome
+    cor_chave = list(cores.keys())[hash(nome_time) % len(cores)]
+    paleta = cores[cor_chave]
+    
+    # Cria imagem do escudo
+    tamanho = 120
+    imagem = Image.new('RGBA', (tamanho, tamanho), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(imagem)
+    
+    # Desenha círculo do escudo
+    draw.ellipse([0, 0, tamanho, tamanho], fill=paleta[0], outline=paleta[1], width=3)
+    
+    # Adiciona iniciais
+    try:
+        fonte = ImageFont.truetype("arial.ttf", 40)
+    except:
+        fonte = ImageFont.load_default()
+    
+    iniciais = ''.join([palavra[0].upper() for palavra in nome_time.split()[:2]])
+    if not iniciais:
+        iniciais = nome_time[:2].upper()
+    
+    # Centraliza as iniciais
+    bbox = draw.textbbox((0, 0), iniciais, font=fonte)
+    texto_largura = bbox[2] - bbox[0]
+    texto_altura = bbox[3] - bbox[1]
+    x = (tamanho - texto_largura) / 2
+    y = (tamanho - texto_altura) / 2
+    
+    draw.text((x, y), iniciais, fill='white', font=fonte)
+    
+    return imagem
+
+def obter_escudo_time_com_fallback(nome_time, liga_id, temporada):
+    """Versão com fallback para escudos genéricos baseados em cores"""
+    try:
+        # Tenta a busca normal primeiro
+        escudo = obter_escudo_time(nome_time, liga_id, temporada)
+        if escudo:
+            return escudo
+        
+        # Fallback: cria um escudo genérico com as iniciais do time
+        return criar_escudo_generico(nome_time)
+        
+    except Exception as e:
+        st.error(f"Erro no fallback: {e}")
+        return criar_escudo_generico(nome_time)
 
 def criar_fonte(tamanho):
     """Tenta carregar fonte, fallback para padrão"""
@@ -148,9 +220,9 @@ def criar_imagem_alerta_partida(jogo):
     # Linha divisória
     draw.line([(50, 100), (largura-50, 100)], fill='white', width=3)
     
-    # Times e Escudos
-    home_escudo = obter_escudo_time(jogo['home'], jogo['liga_id'], jogo['temporada'])
-    away_escudo = obter_escudo_time(jogo['away'], jogo['liga_id'], jogo['temporada'])
+    # Times e Escudos - COM FALLBACK
+    home_escudo = obter_escudo_time_com_fallback(jogo['home'], jogo['liga_id'], jogo['temporada'])
+    away_escudo = obter_escudo_time_com_fallback(jogo['away'], jogo['liga_id'], jogo['temporada'])
     
     # Posicionamento dos escudos (MAIORES)
     escudo_size = 120
@@ -240,9 +312,9 @@ def criar_imagem_resultado_partida(jogo, resultado_info):
     titulo = f"✅ RESULTADO CONFIRMADO"
     draw.text((largura//2, 40), titulo, fill='white', font=fonte_titulo, anchor='mm')
     
-    # Times e escudos
-    home_escudo = obter_escudo_time(resultado_info['home'], jogo['liga_id'], jogo['temporada'])
-    away_escudo = obter_escudo_time(resultado_info['away'], jogo['liga_id'], jogo['temporada'])
+    # Times e escudos - COM FALLBACK
+    home_escudo = obter_escudo_time_com_fallback(resultado_info['home'], jogo['liga_id'], jogo['temporada'])
+    away_escudo = obter_escudo_time_com_fallback(resultado_info['away'], jogo['liga_id'], jogo['temporada'])
     
     escudo_size = 100
     y_pos = 140
@@ -547,7 +619,7 @@ def selecionar_top3_distintos(partidas_info, max_por_faixa=3, prefer_best_fit=Tr
 st.set_page_config(page_title="⚽ Alertas Top3 (OpenLigaDB) - Alemanha", layout="wide")
 st.title("⚽ Alertas Top3 por Faixa (+1.5 / +2.5 / +3.5) — OpenLigaDB (Alemanha)")
 
-aba = st.tabs(["⚡ Gerar & Enviar Top3 (pré-jogo)", "📊 Jogos Históricos", "🎯 Conferência Top3 (pós-jogo)", "🖼️ Alertas com Imagens"])
+aba = st.tabs(["⚡ Gerar & Enviar Top3 (pré-jogo)", "📊 Jogos Históricos", "🎯 Conferência Top3 (pós-jogo)", "🖼️ Alertas com Imagens", "🔍 Depuração Escudos"])
 
 # ---------- ABA 1: Gerar & Enviar Top3 ----------
 with aba[0]:
@@ -845,7 +917,7 @@ with aba[2]:
                 json.dump(lote, f, ensure_ascii=False, indent=2)
             st.success(f"Lote exportado: {nome_arquivo}")
 
-# ---------- NOVA ABA: Alertas com Imagens ----------
+# ---------- ABA 4: Alertas com Imagens ----------
 with aba[3]:
     st.subheader("🖼️ Visualizar Alertas com Imagens - NOVO FORMATO")
     st.markdown("**🆕 AGORA: Cada partida tem sua própria imagem com TODAS as probabilidades!**")
@@ -915,5 +987,82 @@ with aba[3]:
     
     imagem_resultado = criar_imagem_resultado_partida(exemplo_jogo, resultado_exemplo)
     st.image(imagem_resultado, use_column_width=True, caption="✅ RESULTADO POR PARTIDA - Confirmação visual do resultado")
+
+# ---------- ABA 5: Depuração de Escudos ----------
+with aba[4]:
+    st.subheader("🔍 Depuração - Busca de Escudos")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        time_teste = st.text_input("Time para teste:", "Bayern Munich")
+        liga_teste = st.selectbox("Liga para teste:", list(ligas_openliga.keys()))
+        liga_id_teste = ligas_openliga[liga_teste]
+        temporada_teste = st.selectbox("Temporada:", ["2022", "2023", "2024", "2025"], index=2)
+    
+    with col2:
+        st.write("### 🎯 Teste Rápido")
+        if st.button("🔍 Testar Busca de Escudo"):
+            with st.spinner("Buscando escudo..."):
+                escudo = obter_escudo_time(time_teste, liga_id_teste, temporada_teste)
+                
+                if escudo:
+                    st.success("✅ Escudo encontrado via API!")
+                    st.image(escudo, caption=f"Escudo do {time_teste}", width=150)
+                    
+                    # Mostra informações da imagem
+                    st.write(f"**Formato:** {escudo.format}")
+                    st.write(f"**Tamanho:** {escudo.size}")
+                    st.write(f"**Modo:** {escudo.mode}")
+                else:
+                    st.error("❌ Escudo não encontrado na API")
+                    st.info("🔄 Criando escudo genérico...")
+                    escudo_generico = criar_escudo_generico(time_teste)
+                    st.image(escudo_generico, caption=f"Escudo Genérico - {time_teste}", width=150)
+        
+        if st.button("🔄 Testar com Fallback"):
+            escudo_fallback = obter_escudo_time_com_fallback(time_teste, liga_id_teste, temporada_teste)
+            st.image(escudo_fallback, caption=f"Escudo com Fallback - {time_teste}", width=150)
+            st.success("✅ Escudo com fallback criado!")
+
+    # Testa a API diretamente
+    st.markdown("---")
+    st.subheader("📡 Teste Direto da API OpenLigaDB")
+    
+    if st.button("🌐 Consultar API de Times"):
+        try:
+            times_url = f"{OPENLIGA_BASE}/getavailableteams/{liga_id_teste}/{temporada_teste}"
+            st.write(f"**URL da API:** `{times_url}`")
+            
+            response = requests.get(times_url, timeout=10)
+            
+            if response.status_code == 200:
+                times = response.json()
+                st.success(f"✅ API respondeu! Total de times: {len(times)}")
+                
+                # Filtra times que correspondem ao nome pesquisado
+                times_correspondentes = [t for t in times if time_teste.lower() in t.get('teamName', '').lower()]
+                
+                if times_correspondentes:
+                    st.write(f"**Times correspondentes a '{time_teste}':**")
+                    for time in times_correspondentes:
+                        st.write(f"- **{time.get('teamName')}**")
+                        st.write(f"  - ID: {time.get('teamId')}")
+                        st.write(f"  - Escudo: {time.get('teamIconUrl', 'N/A')}")
+                        if time.get('teamIconUrl'):
+                            st.image(time.get('teamIconUrl'), width=50, caption="Escudo")
+                else:
+                    st.warning(f"❌ Nenhum time encontrado com '{time_teste}'")
+                
+                # Lista todos os times disponíveis (primeiros 10)
+                st.write("**Todos os times disponíveis (primeiros 10):**")
+                for time in times[:10]:
+                    st.write(f"- {time.get('teamName')}")
+                    
+            else:
+                st.error(f"❌ Erro na API: {response.status_code}")
+                
+        except Exception as e:
+            st.error(f"💥 Erro no teste da API: {e}")
 
 # Fim do arquivo
