@@ -1385,6 +1385,37 @@ def enviar_alerta_westham_style(jogos_conf: list, threshold: int, chat_id: str =
 # FUNÇÕES PRINCIPAIS
 # =============================
 
+def debug_jogos_dia(data_selecionada, todas_ligas, liga_selecionada):
+    """Função de debug para verificar os jogos retornados pela API"""
+    hoje = data_selecionada.strftime("%Y-%m-%d")
+    ligas_busca = LIGA_DICT.values() if todas_ligas else [LIGA_DICT[liga_selecionada]]
+    
+    st.write("🔍 **DEBUG DETALHADO - JOGOS DA API**")
+    
+    for liga_id in ligas_busca:
+        jogos = obter_jogos(liga_id, hoje)
+        st.write(f"**Liga {liga_id}:** {len(jogos)} jogos encontrados")
+        
+        for i, match in enumerate(jogos):
+            try:
+                home = match["homeTeam"]["name"]
+                away = match["awayTeam"]["name"]
+                data_utc = match["utcDate"]
+                status = match.get("status", "DESCONHECIDO")
+                
+                # Converter para horário correto
+                hora_corrigida = formatar_data_iso_para_datetime(data_utc)
+                data_br = hora_corrigida.strftime("%d/%m/%Y")
+                hora_br = hora_corrigida.strftime("%H:%M")
+                
+                st.write(f"  {i+1}. {home} vs {away}")
+                st.write(f"     UTC: {data_utc}")
+                st.write(f"     BR: {data_br} {hora_br} | Status: {status}")
+                st.write(f"     Competição: {match.get('competition', {}).get('name', 'Desconhecido')}")
+                
+            except Exception as e:
+                st.write(f"  {i+1}. ERRO ao processar jogo: {e}")
+
 def enviar_top_jogos(jogos: list, top_n: int, alerta_top_jogos: bool):
     """Envia os top jogos para o Telegram"""
     if not alerta_top_jogos:
@@ -1580,6 +1611,10 @@ def main():
     if not todas_ligas:
         liga_selecionada = st.selectbox("📌 Liga específica:", list(LIGA_DICT.keys()))
 
+    # BOTÃO DE DEBUG - ADICIONE ESTE
+    if st.button("🐛 Debug Jogos (API)", type="secondary"):
+        debug_jogos_dia(data_selecionada, todas_ligas, liga_selecionada)
+
     # Processamento
     if st.button("🔍 Buscar Partidas", type="primary"):
         processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, threshold, estilo_poster, 
@@ -1627,6 +1662,10 @@ def processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, thre
     ligas_busca = LIGA_DICT.values() if todas_ligas else [LIGA_DICT[liga_selecionada]]
 
     st.write(f"⏳ Buscando jogos para {data_selecionada.strftime('%d/%m/%Y')}...")
+    
+    # DEBUG: Mostrar data exata sendo buscada
+    st.write(f"🔍 DEBUG: Buscando data '{hoje}' nas ligas: {list(ligas_busca)}")
+    
     top_jogos = []
     progress_bar = st.progress(0)
     total_ligas = len(ligas_busca)
@@ -1634,15 +1673,28 @@ def processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, thre
     for i, liga_id in enumerate(ligas_busca):
         classificacao = obter_classificacao(liga_id)
         jogos = obter_jogos(liga_id, hoje)
+        
+        # DEBUG: Mostrar jogos encontrados por liga
+        st.write(f"📊 Liga {liga_id}: {len(jogos)} jogos encontrados")
 
         for match in jogos:
             # Validar dados do jogo
             if not validar_dados_jogo(match):
+                st.write(f"   ⚠️ Jogo inválido pulado")
                 continue
                 
             home = match["homeTeam"]["name"]
             away = match["awayTeam"]["name"]
             estimativa, confianca, tendencia = calcular_tendencia(home, away, classificacao)
+
+            # DEBUG: Mostrar cada jogo processado
+            data_utc = match["utcDate"]
+            hora_corrigida = formatar_data_iso_para_datetime(data_utc)
+            data_br = hora_corrigida.strftime("%d/%m/%Y")
+            hora_br = hora_corrigida.strftime("%H:%M")
+            
+            st.write(f"   ✅ {home} vs {away}")
+            st.write(f"      🕒 {data_br} {hora_br} | Confiança: {confianca:.1f}% | Status: {match.get('status', 'DESCONHECIDO')}")
 
             # Só envia alerta individual se a checkbox estiver ativada
             verificar_enviar_alerta(match, tendencia, estimativa, confianca, alerta_individual)
@@ -1656,9 +1708,6 @@ def processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, thre
             except Exception:
                 pass
 
-            # CORREÇÃO: Usar a nova função com timezone correto
-            hora_corrigida = formatar_data_iso_para_datetime(match["utcDate"])
-            
             top_jogos.append({
                 "id": match["id"],
                 "home": home,
@@ -1667,27 +1716,44 @@ def processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, thre
                 "estimativa": estimativa,
                 "confianca": confianca,
                 "liga": match.get("competition", {}).get("name", "Desconhecido"),
-                "hora": hora_corrigida,  # AGORA COM TIMEZONE CORRETO
+                "hora": hora_corrigida,
                 "status": match.get("status", "DESCONHECIDO"),
                 "escudo_home": escudo_home,
                 "escudo_away": escudo_away
             })
         progress_bar.progress((i + 1) / total_ligas)
 
-    # DEBUG: Mostrar horários
-    st.write("🔍 Horários processados (com fuso correto):")
+    # DEBUG COMPLETO: Mostrar todos os jogos processados
+    st.write("🔍 **DEBUG FINAL - TODOS OS JOGOS PROCESSADOS:**")
     for jogo in top_jogos:
         data_str = jogo["hora"].strftime("%d/%m/%Y")
         hora_str = jogo["hora"].strftime("%H:%M")
-        st.write(f"📅 {jogo['home']} vs {jogo['away']}: {data_str} às {hora_str}")
+        st.write(f"📅 {jogo['home']} vs {jogo['away']}: {data_str} {hora_str} | Conf: {jogo['confianca']:.1f}% | Status: {jogo['status']}")
 
-    # Filtrar por limiar
+    # Filtrar por limiar - DEBUG DETALHADO
+    st.write("🔍 **DEBUG FILTRO POR LIMIAR:**")
     jogos_filtrados_threshold = [
         j for j in top_jogos
         if j["confianca"] >= threshold and j["status"] not in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"]
     ]
+    
+    st.write(f"📊 Total de jogos: {len(top_jogos)}")
+    st.write(f"📊 Jogos com confiança ≥{threshold}%: {len(jogos_filtrados_threshold)}")
+    st.write(f"📊 Status excluídos: FINISHED, IN_PLAY, POSTPONED, SUSPENDED")
+    
+    # Mostrar jogos excluídos por status
+    jogos_excluidos_status = [j for j in top_jogos if j["status"] in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"]]
+    if jogos_excluidos_status:
+        st.write("🚫 **Jogos excluídos por status:**")
+        for jogo in jogos_excluidos_status:
+            st.write(f"   ❌ {jogo['home']} vs {jogo['away']} - Status: {jogo['status']}")
 
     if jogos_filtrados_threshold:
+        # Mostrar jogos que passaram no filtro
+        st.write("✅ **Jogos que passaram no filtro:**")
+        for jogo in jogos_filtrados_threshold:
+            st.write(f"   🟢 {jogo['home']} vs {jogo['away']} - Conf: {jogo['confianca']:.1f}%")
+        
         # Envia top jogos apenas se a checkbox estiver ativada
         enviar_top_jogos(jogos_filtrados_threshold, top_n, alerta_top_jogos)
         st.success(f"✅ {len(jogos_filtrados_threshold)} jogos com confiança ≥{threshold}%")
@@ -1703,6 +1769,20 @@ def processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, thre
             st.info("ℹ️ Alerta com Poster desativado")
     else:
         st.warning(f"⚠️ Nenhum jogo com confiança ≥{threshold}%")
+        
+        # DEBUG: Mostrar por que não há jogos
+        if top_jogos:
+            st.write("🔍 **Razão para nenhum jogo passar:**")
+            for jogo in top_jogos:
+                motivo = ""
+                if jogo["confianca"] < threshold:
+                    motivo = f"Confiança baixa ({jogo['confianca']:.1f}% < {threshold}%)"
+                elif jogo["status"] in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"]:
+                    motivo = f"Status: {jogo['status']}"
+                else:
+                    motivo = "DEVERIA PASSAR - VERIFICAR"
+                
+                st.write(f"   ❌ {jogo['home']} vs {jogo['away']}: {motivo}")
 
 def enviar_alerta_conf_criar_poster(jogos_conf: list, threshold: int, chat_id: str = TELEGRAM_CHAT_ID_ALT2):
     """Função fallback para o estilo original"""
