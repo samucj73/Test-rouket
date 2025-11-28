@@ -336,6 +336,32 @@ def obter_jogos(liga_id: str, data: str) -> list:
     salvar_cache_jogos(cache)
     return jogos
 
+def obter_jogos_brasileirao(liga_id: str, data_hoje: str) -> list:
+    """Busca jogos do Brasileirão considerando o fuso horário"""
+    # Buscar jogos do dia atual E do dia seguinte (para pegar jogos que viram a meia-noite no UTC)
+    data_amanha = (datetime.strptime(data_hoje, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+    
+    jogos_hoje = obter_jogos(liga_id, data_hoje)
+    jogos_amanha = obter_jogos(liga_id, data_amanha)
+    
+    todos_jogos = jogos_hoje + jogos_amanha
+    
+    # Filtrar apenas os jogos que são realmente do dia de hoje no horário de Brasília
+    jogos_filtrados = []
+    for match in todos_jogos:
+        if not validar_dados_jogo(match):
+            continue
+            
+        data_utc = match["utcDate"]
+        hora_brasilia = formatar_data_iso_para_datetime(data_utc)
+        data_brasilia = hora_brasilia.strftime("%Y-%m-%d")
+        
+        # Manter apenas jogos do dia de hoje no horário de Brasília
+        if data_brasilia == data_hoje:
+            jogos_filtrados.append(match)
+    
+    return jogos_filtrados
+
 # =============================
 # Lógica de Análise e Alertas
 # =============================
@@ -1393,7 +1419,11 @@ def debug_jogos_dia(data_selecionada, todas_ligas, liga_selecionada):
     st.write("🔍 **DEBUG DETALHADO - JOGOS DA API**")
     
     for liga_id in ligas_busca:
-        jogos = obter_jogos(liga_id, hoje)
+        if liga_id == "BSA":  # Apenas para o Brasileirão
+            jogos = obter_jogos_brasileirao(liga_id, hoje)
+        else:
+            jogos = obter_jogos(liga_id, hoje)
+            
         st.write(f"**Liga {liga_id}:** {len(jogos)} jogos encontrados")
         
         for i, match in enumerate(jogos):
@@ -1663,24 +1693,24 @@ def processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, thre
 
     st.write(f"⏳ Buscando jogos para {data_selecionada.strftime('%d/%m/%Y')}...")
     
-    # DEBUG: Mostrar data exata sendo buscada
-    st.write(f"🔍 DEBUG: Buscando data '{hoje}' nas ligas: {list(ligas_busca)}")
-    
     top_jogos = []
     progress_bar = st.progress(0)
     total_ligas = len(ligas_busca)
 
     for i, liga_id in enumerate(ligas_busca):
         classificacao = obter_classificacao(liga_id)
-        jogos = obter_jogos(liga_id, hoje)
         
-        # DEBUG: Mostrar jogos encontrados por liga
-        st.write(f"📊 Liga {liga_id}: {len(jogos)} jogos encontrados")
+        # CORREÇÃO: Para o Brasileirão usar busca especial que considera fuso horário
+        if liga_id == "BSA":  # Campeonato Brasileiro
+            jogos = obter_jogos_brasileirao(liga_id, hoje)
+            st.write(f"📊 Liga BSA: {len(jogos)} jogos encontrados (com correção de fuso horário)")
+        else:
+            jogos = obter_jogos(liga_id, hoje)
+            st.write(f"📊 Liga {liga_id}: {len(jogos)} jogos encontrados")
 
         for match in jogos:
             # Validar dados do jogo
             if not validar_dados_jogo(match):
-                st.write(f"   ⚠️ Jogo inválido pulado")
                 continue
                 
             home = match["homeTeam"]["name"]
@@ -1739,17 +1769,9 @@ def processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, thre
     
     st.write(f"📊 Total de jogos: {len(top_jogos)}")
     st.write(f"📊 Jogos com confiança ≥{threshold}%: {len(jogos_filtrados_threshold)}")
-    st.write(f"📊 Status excluídos: FINISHED, IN_PLAY, POSTPONED, SUSPENDED")
     
-    # Mostrar jogos excluídos por status
-    jogos_excluidos_status = [j for j in top_jogos if j["status"] in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"]]
-    if jogos_excluidos_status:
-        st.write("🚫 **Jogos excluídos por status:**")
-        for jogo in jogos_excluidos_status:
-            st.write(f"   ❌ {jogo['home']} vs {jogo['away']} - Status: {jogo['status']}")
-
+    # Mostrar jogos que passaram no filtro
     if jogos_filtrados_threshold:
-        # Mostrar jogos que passaram no filtro
         st.write("✅ **Jogos que passaram no filtro:**")
         for jogo in jogos_filtrados_threshold:
             st.write(f"   🟢 {jogo['home']} vs {jogo['away']} - Conf: {jogo['confianca']:.1f}%")
