@@ -1,5 +1,5 @@
 import streamlit as st
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import requests
 import json
 import os
@@ -184,23 +184,50 @@ def limpar_historico():
         st.info("⚠️ Nenhum histórico encontrado para limpar.")
 
 # =============================
-# Utilitários de Data e Formatação
+# Utilitários de Data e Formatação - CORRIGIDOS
 # =============================
 def formatar_data_iso(data_iso: str) -> tuple[str, str]:
-    """Formata data ISO - VERSÃO CORRIGIDA"""
+    """Formata data ISO - VERSÃO CORRIGIDA COM FUSO HORÁRIO"""
     try:
         # Converter para datetime com timezone awareness
         if data_iso.endswith('Z'):
             data_iso = data_iso.replace('Z', '+00:00')
         
+        # Criar datetime com timezone UTC
         data_utc = datetime.fromisoformat(data_iso)
+        
+        # Se não tem timezone, assumir UTC
+        if data_utc.tzinfo is None:
+            data_utc = data_utc.replace(tzinfo=timezone.utc)
+        
         # Converter para horário de Brasília (UTC-3)
-        data_brasilia = data_utc - timedelta(hours=3)
+        fuso_brasilia = timezone(timedelta(hours=-3))
+        data_brasilia = data_utc.astimezone(fuso_brasilia)
         
         return data_brasilia.strftime("%d/%m/%Y"), data_brasilia.strftime("%H:%M")
     except ValueError as e:
         logging.error(f"Erro ao formatar data {data_iso}: {e}")
         return "Data inválida", "Hora inválida"
+
+def formatar_data_iso_para_datetime(data_iso: str) -> datetime:
+    """Converte string ISO para datetime com fuso correto - VERSÃO CORRIGIDA"""
+    try:
+        if data_iso.endswith('Z'):
+            data_iso = data_iso.replace('Z', '+00:00')
+        
+        data_utc = datetime.fromisoformat(data_iso)
+        
+        # Se não tem timezone, assumir UTC
+        if data_utc.tzinfo is None:
+            data_utc = data_utc.replace(tzinfo=timezone.utc)
+        
+        # Converter para horário de Brasília
+        fuso_brasilia = timezone(timedelta(hours=-3))
+        return data_utc.astimezone(fuso_brasilia)
+        
+    except Exception as e:
+        logging.error(f"Erro ao converter data {data_iso}: {e}")
+        return datetime.now()
 
 def abreviar_nome(nome: str, max_len: int = 15) -> str:
     if len(nome) <= max_len:
@@ -1629,6 +1656,9 @@ def processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, thre
             except Exception:
                 pass
 
+            # CORREÇÃO: Usar a nova função com timezone correto
+            hora_corrigida = formatar_data_iso_para_datetime(match["utcDate"])
+            
             top_jogos.append({
                 "id": match["id"],
                 "home": home,
@@ -1637,12 +1667,19 @@ def processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, thre
                 "estimativa": estimativa,
                 "confianca": confianca,
                 "liga": match.get("competition", {}).get("name", "Desconhecido"),
-                "hora": datetime.fromisoformat(match["utcDate"].replace("Z", "+00:00")) - timedelta(hours=3),
+                "hora": hora_corrigida,  # AGORA COM TIMEZONE CORRETO
                 "status": match.get("status", "DESCONHECIDO"),
                 "escudo_home": escudo_home,
                 "escudo_away": escudo_away
             })
         progress_bar.progress((i + 1) / total_ligas)
+
+    # DEBUG: Mostrar horários
+    st.write("🔍 Horários processados (com fuso correto):")
+    for jogo in top_jogos:
+        data_str = jogo["hora"].strftime("%d/%m/%Y")
+        hora_str = jogo["hora"].strftime("%H:%M")
+        st.write(f"📅 {jogo['home']} vs {jogo['away']}: {data_str} às {hora_str}")
 
     # Filtrar por limiar
     jogos_filtrados_threshold = [
