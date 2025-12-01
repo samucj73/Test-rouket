@@ -77,51 +77,41 @@ NBA_LOGOS = {
 }
 
 # =============================
-# FUNÇÕES AUXILIARES PARA DATAS (CORREÇÃO FINAL)
+# FUNÇÕES AUXILIARES PARA DATAS
 # =============================
 def formatar_data_api_para_local(data_utc: str) -> tuple[str, str]:
-    """Converte data UTC da API para horário local brasileiro CORRETAMENTE"""
+    """Converte data UTC da API para horário local brasileiro"""
     try:
-        # Formato esperado: "2024-11-15T00:30:00.000Z"
         if not data_utc or len(data_utc) < 10:
             return "Data inválida", ""
             
-        # Extrai ano, mês, dia e hora diretamente
         ano = data_utc[0:4]
         mes = data_utc[5:7]
         dia = data_utc[8:10]
         hora = data_utc[11:13]
         minuto = data_utc[14:16]
         
-        # Converte para inteiros
         dia_int = int(dia)
         hora_int = int(hora)
         
-        # CORREÇÃO: Ajuste para fuso horário Brasil (UTC-3)
-        # Se o jogo é às 21h no Brasil, na API será 00h do dia seguinte UTC
-        # Mas queremos manter o DIA CORRETO do jogo
         hora_brasil = hora_int - 3
         
-        # Se a hora ficou negativa, ajusta para o dia anterior
         if hora_brasil < 0:
             hora_brasil += 24
         
-        # Formata de volta para string
         data_str = f"{dia_int:02d}/{mes}/{ano}"
         hora_str = f"{hora_brasil:02d}:{minuto}"
         
         return data_str, hora_str
         
     except Exception as e:
-        print(f"Erro na conversão da data {data_utc}: {e}")
-        # Fallback: retorna a data como está
         try:
             return data_utc[8:10] + "/" + data_utc[5:7] + "/" + data_utc[0:4], data_utc[11:16]
         except:
             return data_utc[:10], ""
 
 def obter_data_correta_para_api(data: date) -> str:
-    """Converte data local para formato correto da API considerando UTC"""
+    """Converte data local para formato correto da API"""
     data_str = data.strftime("%Y-%m-%d")
     return data_str
 
@@ -191,7 +181,6 @@ def atualizar_estatisticas(resultado_total: str, resultado_vencedor: str):
     """Atualiza as estatísticas baseado nos resultados"""
     stats = carregar_estatisticas()
     
-    # Atualiza estatísticas de Total de Pontos
     if resultado_total == "🟢 GREEN":
         stats["total_pontos"]["acertos"] += 1
         stats["total_pontos"]["total"] += 1
@@ -199,7 +188,6 @@ def atualizar_estatisticas(resultado_total: str, resultado_vencedor: str):
         stats["total_pontos"]["erros"] += 1
         stats["total_pontos"]["total"] += 1
     
-    # Atualiza estatísticas de Vencedor
     if resultado_vencedor == "🟢 GREEN":
         stats["vencedor"]["acertos"] += 1
         stats["vencedor"]["total"] += 1
@@ -252,7 +240,6 @@ def exibir_estatisticas():
         taxa_geral = (stats['total_pontos']['acertos'] + stats['vencedor']['acertos']) / max((stats['total_pontos']['total'] + stats['vencedor']['total']), 1) * 100
         st.write(f"**Taxa Geral:** {taxa_geral:.1f}%")
     
-    # Estatísticas detalhadas
     st.subheader("📋 Detalhamento por Categoria")
     
     col1, col2 = st.columns(2)
@@ -271,7 +258,6 @@ def exibir_estatisticas():
         st.write(f"📊 Total: {stats['vencedor']['total']}")
         st.write(f"🎯 Taxa: {calcular_taxa_acerto(stats['vencedor']['acertos'], stats['vencedor']['total']):.1f}%")
     
-    # Data da última atualização
     if stats["data_ultima_atualizacao"]:
         try:
             dt = datetime.fromisoformat(stats["data_ultima_atualizacao"])
@@ -307,7 +293,6 @@ def balldontlie_get(path: str, params: dict | None = None, timeout: int = REQUES
         LAST_REQUEST_TIME = time.time()
         
         if resp.status_code == 429:
-            st.error("🚨 RATE LIMIT ATINGIDO! Aguardando 60 segundos...")
             time.sleep(60)
             resp = requests.get(url, headers=HEADERS_BDL, params=params, timeout=timeout)
             LAST_REQUEST_TIME = time.time()
@@ -326,7 +311,6 @@ def obter_times():
     if "teams" in cache and cache["teams"]:
         return cache["teams"]
     
-    st.info("📥 Buscando dados dos times...")
     data = balldontlie_get("teams")
     if not data or "data" not in data:
         return {}
@@ -337,17 +321,19 @@ def obter_times():
     return teams
 
 # =============================
-# BUSCA DE JOGOS REAIS - VERSÃO CORRIGIDA
+# BUSCA DE JOGOS - SOMENTE QUANDO SOLICITADO
 # =============================
-def obter_jogos_data(data_str: str) -> list:
-    """BUSCA DE JOGOS REAIS - VERSÃO CORRIGIDA"""
+def obter_jogos_data(data_str: str, mostrar_mensagem: bool = False) -> list:
+    """Busca jogos apenas quando explicitamente chamado"""
     cache = carregar_cache_games()
     key = f"games_{data_str}"
     
     if key in cache and cache[key]:
         return cache[key]
 
-    st.info(f"📥 Buscando jogos para {data_str}...")
+    if mostrar_mensagem:
+        st.info(f"📥 Buscando jogos para {data_str}...")
+    
     jogos = []
     page = 1
     max_pages = 2
@@ -367,7 +353,6 @@ def obter_jogos_data(data_str: str) -> list:
         if not data_chunk:
             break
             
-        # Filtra jogos que realmente pertencem à data solicitada
         jogos_do_dia = []
         for jogo in data_chunk:
             data_jogo = jogo.get("date", "")
@@ -386,13 +371,40 @@ def obter_jogos_data(data_str: str) -> list:
     cache[key] = jogos
     salvar_cache_games(cache)
     
-    # Log para debug
-    if jogos:
-        st.success(f"✅ Encontrados {len(jogos)} jogos para {data_str}")
-    else:
-        st.warning(f"⚠️ Nenhum jogo encontrado para {data_str}")
+    if mostrar_mensagem:
+        if jogos:
+            st.success(f"✅ Encontrados {len(jogos)} jogos para {data_str}")
+        else:
+            st.warning(f"⚠️ Nenhum jogo encontrado para {data_str}")
     
     return jogos
+
+def buscar_jogos_data(data_str: str):
+    """Função específica para buscar jogos com feedback ao usuário"""
+    with st.spinner(f"🔍 Buscando jogos para {data_str}..."):
+        jogos = obter_jogos_data(data_str, mostrar_mensagem=True)
+    
+    if jogos:
+        # Armazena os jogos encontrados na sessão
+        st.session_state.jogos_encontrados = jogos
+        st.session_state.data_jogos = data_str
+        
+        # Mostra resumo dos jogos encontrados
+        st.success(f"✅ {len(jogos)} jogos encontrados!")
+        
+        for jogo in jogos[:3]:  # Mostra apenas os primeiros 3
+            home_team = jogo.get("home_team", {}).get("full_name", "Casa")
+            away_team = jogo.get("visitor_team", {}).get("full_name", "Visitante")
+            data_jogo = jogo.get("date", "")
+            data_formatada, hora_formatada = formatar_data_api_para_local(data_jogo)
+            st.write(f"🏀 {away_team} @ {home_team} - {data_formatada} {hora_formatada}")
+        
+        if len(jogos) > 3:
+            st.write(f"... e mais {len(jogos) - 3} jogos")
+    else:
+        st.error("❌ Nenhum jogo encontrado para esta data")
+        if 'jogos_encontrados' in st.session_state:
+            del st.session_state.jogos_encontrados
 
 # =============================
 # FUNÇÕES DE IMAGEM E ESCUDOS
@@ -400,35 +412,26 @@ def obter_jogos_data(data_str: str) -> list:
 def baixar_escudo_time(time_nome: str, tamanho: tuple = (120, 120)) -> Image.Image:
     """Baixa e converte escudo SVG para PNG com fallbacks"""
     try:
-        # URL do logo do time
         logo_url = NBA_LOGOS.get(time_nome, "")
         
         if not logo_url:
             return criar_escudo_fallback(time_nome, tamanho)
         
-        # Baixa o SVG
         resposta = requests.get(logo_url, timeout=10)
         if resposta.status_code != 200:
             return criar_escudo_fallback(time_nome, tamanho)
         
-        # Converte SVG para PNG usando cairosvg
         svg_content = resposta.content
-        
-        # Converte SVG para PNG em memória
         png_data = cairosvg.svg2png(bytestring=svg_content, output_width=tamanho[0], output_height=tamanho[1])
         
-        # Converte para PIL Image
         img = Image.open(io.BytesIO(png_data))
         
-        # Converte para RGBA se necessário
         if img.mode != 'RGBA':
             img = img.convert('RGBA')
             
         return img
             
     except Exception as e:
-        print(f"Erro ao converter SVG para PNG do {time_nome}: {e}")
-        # Fallback para escudo personalizado
         return criar_escudo_fallback(time_nome, tamanho)
 
 def criar_escudo_fallback(time_nome: str, tamanho: tuple) -> Image.Image:
@@ -436,45 +439,38 @@ def criar_escudo_fallback(time_nome: str, tamanho: tuple) -> Image.Image:
     img = Image.new('RGBA', tamanho, (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     
-    # Cores baseadas no nome do time
     cores = {
-        'Lakers': (85, 37, 130),    # Roxo
-        'Warriors': (29, 66, 138),   # Azul
-        'Celtics': (0, 122, 51),     # Verde
-        'Bulls': (206, 17, 65),      # Vermelho
-        'Heat': (152, 0, 46),        # Vermelho
-        'Knicks': (0, 107, 182),     # Azul
-        'Cavaliers': (134, 0, 56),   # Vinho
-        'Spurs': (196, 206, 212),    # Prata
-        'Mavericks': (0, 83, 188),   # Azul
-        'default': (255, 125, 0)     # Laranja NBA
+        'Lakers': (85, 37, 130),
+        'Warriors': (29, 66, 138),
+        'Celtics': (0, 122, 51),
+        'Bulls': (206, 17, 65),
+        'Heat': (152, 0, 46),
+        'Knicks': (0, 107, 182),
+        'Cavaliers': (134, 0, 56),
+        'Spurs': (196, 206, 212),
+        'Mavericks': (0, 83, 188),
+        'default': (255, 125, 0)
     }
     
-    # Encontra a cor do time
     cor_time = cores['default']
     for nome, cor in cores.items():
         if nome.lower() in time_nome.lower():
             cor_time = cor
             break
     
-    # Desenha círculo do escudo
     centro_x, centro_y = tamanho[0] // 2, tamanho[1] // 2
     raio = min(tamanho) // 2 - 10
     
-    # Círculo de fundo
     draw.ellipse([centro_x - raio, centro_y - raio, centro_x + raio, centro_y + raio], 
                 fill=cor_time, outline=(50, 50, 50), width=2)
     
-    # Iniciais do time
     try:
-        # Pega as 2-3 primeiras letras ou sigla
         palavras = time_nome.split()
         if len(palavras) >= 2:
             iniciais = ''.join([p[0].upper() for p in palavras[:2]])
         else:
             iniciais = time_nome[:3].upper()
         
-        # Tenta carregar fonte, fallback para tamanho fixo
         try:
             tamanho_fonte = max(20, raio // 2)
             fonte = ImageFont.truetype("arial.ttf", tamanho_fonte)
@@ -482,7 +478,6 @@ def criar_escudo_fallback(time_nome: str, tamanho: tuple) -> Image.Image:
             tamanho_fonte = 30
             fonte = ImageFont.load_default()
         
-        # Calcula posição do texto
         bbox = draw.textbbox((0, 0), iniciais, font=fonte)
         texto_largura = bbox[2] - bbox[0]
         texto_altura = bbox[3] - bbox[1]
@@ -493,7 +488,6 @@ def criar_escudo_fallback(time_nome: str, tamanho: tuple) -> Image.Image:
         draw.text((pos_x, pos_y), iniciais, fill="white", font=fonte)
         
     except Exception:
-        # Fallback extremo - desenha "NBA"
         draw.text((centro_x-15, centro_y-10), "NBA", fill="white")
     
     return img
@@ -541,32 +535,23 @@ def atualizar_resultados_partidas():
         if not game_id:
             continue
         
-        # Busca dados atualizados do jogo específico
         status_text.text(f"📡 Buscando dados do jogo {i+1}/{total_jogos}...")
         
         resp = balldontlie_get(f"games/{game_id}")
         if resp and "data" in resp:
             jogo_atualizado = resp["data"]
             
-            # Atualiza os dados do jogo no alerta
             alertas[alerta_id]["game_data"] = jogo_atualizado
             
-            # Verifica se o status mudou
             status_antigo = game_data.get("status", "")
             status_novo = jogo_atualizado.get("status", "")
             
             if status_antigo != status_novo:
                 st.success(f"✅ Jogo {game_id}: {status_antigo} → {status_novo}")
                 jogos_atualizados += 1
-            else:
-                st.write(f"ℹ️ Jogo {game_id}: Status mantido ({status_novo})")
-        else:
-            st.error(f"❌ Erro ao buscar jogo {game_id}")
         
-        # Pequena pausa para evitar rate limit
         time.sleep(0.5)
     
-    # Salva os alertas atualizados
     if jogos_atualizados > 0:
         salvar_alertas(alertas)
         st.success(f"🎉 Atualização concluída! {jogos_atualizados} jogos atualizados.")
@@ -598,20 +583,13 @@ def conferir_jogos_finalizados():
         game_data = alerta.get("game_data", {})
         status = game_data.get("status", "").upper()
         
-        # Verifica se o jogo está finalizado
         if status in ["FINAL", "FINAL/OT"]:
             jogos_finalizados += 1
             
-            # Se ainda não foi conferido, marca como conferido
             if not alerta.get("conferido", False):
                 alertas[alerta_id]["conferido"] = True
                 jogos_conferidos += 1
-                
-                home_team = game_data.get("home_team", {}).get("full_name", "Casa")
-                away_team = game_data.get("visitor_team", {}).get("full_name", "Visitante")
-                st.success(f"✅ Conferido: {home_team} vs {away_team}")
     
-    # Salva as alterações se houver jogos conferidos
     if jogos_conferidos > 0:
         salvar_alertas(alertas)
         st.success(f"🎉 Conferência concluída! {jogos_conferidos} jogos marcados como conferidos.")
@@ -633,9 +611,8 @@ def obter_estatisticas_time_2025(team_id: int, window_games: int = 15) -> dict:
         if cached_data.get("games", 0) > 0:
             return cached_data
 
-    # Busca jogos da temporada 2024-2025 (season=2024 na API)
-    start_date = "2024-10-01"  # Início da temporada 2024-2025
-    end_date = "2025-06-30"    # Fim da temporada regular
+    start_date = "2024-10-01"
+    end_date = "2025-06-30"
     
     games = []
     page = 1
@@ -648,7 +625,7 @@ def obter_estatisticas_time_2025(team_id: int, window_games: int = 15) -> dict:
             "page": page,
             "start_date": start_date,
             "end_date": end_date,
-            "seasons[]": 2024  # Temporada 2024-2025
+            "seasons[]": 2024
         }
         
         resp = balldontlie_get("games", params=params)
@@ -664,7 +641,6 @@ def obter_estatisticas_time_2025(team_id: int, window_games: int = 15) -> dict:
             
         page += 1
 
-    # Filtra apenas jogos finalizados com placar válido
     games_validos = []
     for game in games:
         try:
@@ -680,16 +656,13 @@ def obter_estatisticas_time_2025(team_id: int, window_games: int = 15) -> dict:
         except Exception:
             continue
 
-    # Ordena por data (mais recentes primeiro) e limita pela janela
     try:
         games_validos.sort(key=lambda x: x.get("date", ""), reverse=True)
         games_validos = games_validos[:window_games]
     except Exception:
         games_validos = games_validos[:window_games]
 
-    # Se não encontrou jogos válidos, usa fallback com dados da temporada atual
     if not games_validos:
-        # Busca dados dos últimos 90 dias como fallback
         end_date = date.today()
         start_date = end_date - timedelta(days=90)
         
@@ -713,7 +686,6 @@ def obter_estatisticas_time_2025(team_id: int, window_games: int = 15) -> dict:
             games_fallback.extend(resp["data"])
             page += 1
         
-        # Filtra jogos válidos do fallback
         for game in games_fallback:
             try:
                 status = game.get("status", "").upper()
@@ -728,18 +700,15 @@ def obter_estatisticas_time_2025(team_id: int, window_games: int = 15) -> dict:
             except Exception:
                 continue
         
-        # Ordena e limita novamente
         try:
             games_validos.sort(key=lambda x: x.get("date", ""), reverse=True)
             games_validos = games_validos[:window_games]
         except Exception:
             games_validos = games_validos[:window_games]
 
-    # Calcula estatísticas
     if not games_validos:
-        # Fallback para médias gerais da NBA 2024-2025
         stats = {
-            "pts_for_avg": 114.5,  # Média atualizada da NBA
+            "pts_for_avg": 114.5,
             "pts_against_avg": 114.5,
             "games": 0,
             "pts_diff_avg": 0.0,
@@ -800,15 +769,12 @@ def prever_total_points(home_id: int, away_id: int, window_games: int = 15) -> t
     home_stats = obter_estatisticas_time_2025(home_id, window_games)
     away_stats = obter_estatisticas_time_2025(away_id, window_games)
     
-    # Usa dados reais ou fallback se não houver dados suficientes
     home_avg = home_stats["pts_for_avg"]
     away_avg = away_stats["pts_for_avg"]
     
-    # Ajuste para vantagem de casa
     home_advantage = 2.5
     estimativa = home_avg + away_avg + home_advantage
     
-    # Calcula confiança baseada na quantidade de dados
     home_games = home_stats["games"]
     away_games = away_stats["games"]
     min_games = min(home_games, away_games)
@@ -820,15 +786,13 @@ def prever_total_points(home_id: int, away_id: int, window_games: int = 15) -> t
     elif min_games > 0:
         confianca = 55.0
     else:
-        confianca = 45.0  # Dados insuficientes
+        confianca = 45.0
     
-    # Ajusta confiança baseado na consistência dos times
     home_consistency = min(10, home_stats.get("pts_diff_avg", 0) * 0.5)
     away_consistency = min(10, away_stats.get("pts_diff_avg", 0) * 0.5)
     confianca += (home_consistency + away_consistency)
     confianca = min(85.0, max(40.0, confianca))
     
-    # Determina tendência baseada em dados reais
     if estimativa >= 235:
         tendencia = "Mais 235.5"
     elif estimativa >= 230:
@@ -851,23 +815,19 @@ def prever_vencedor(home_id: int, away_id: int, window_games: int = 15) -> tuple
     home_stats = obter_estatisticas_time_2025(home_id, window_games)
     away_stats = obter_estatisticas_time_2025(away_id, window_games)
     
-    # Calcula vantagem baseada em performance histórica
     home_win_rate = home_stats["win_rate"]
     away_win_rate = away_stats["win_rate"]
     home_pts_diff = home_stats["pts_diff_avg"]
     away_pts_diff = away_stats["pts_diff_avg"]
     
-    # Vantagem de jogar em casa (NBA: ~3-4 pontos)
-    home_advantage = 0.1  # ~10% de aumento na win rate
+    home_advantage = 0.1
     
-    # Calcula probabilidade
     home_strength = home_win_rate + home_pts_diff * 0.01
     away_strength = away_win_rate + away_pts_diff * 0.01
     
     home_prob = home_strength / (home_strength + away_strength) + home_advantage
     away_prob = 1 - home_prob
     
-    # Determina vencedor e confiança
     if home_prob > 0.6:
         vencedor = "Casa"
         confianca = min(85.0, home_prob * 100)
@@ -889,7 +849,6 @@ def prever_vencedor(home_id: int, away_id: int, window_games: int = 15) -> tuple
         confianca = 50.0
         detalhe = "Jogo muito equilibrado"
     
-    # Ajusta confiança baseada na quantidade de dados
     min_games = min(home_stats["games"], away_stats["games"])
     if min_games < 5:
         confianca = max(40.0, confianca * 0.8)
@@ -897,405 +856,13 @@ def prever_vencedor(home_id: int, away_id: int, window_games: int = 15) -> tuple
     return vencedor, round(confianca, 1), detalhe
 
 # =============================
-# SISTEMA DE PÔSTERES PARA ALERTAS - VERSÃO MELHORADA
-# =============================
-def criar_poster_alerta(game: dict, predictions: dict, tipo: str = "previsao") -> Image.Image:
-    """Cria um pôster estilizado COM PREVISÕES EM COLUNAS LADO A LADO E DATAS CORRIGIDAS"""
-    try:
-        # Configurações do pôster
-        largura, altura = 600, 630
-        img = Image.new('RGB', (largura, altura), color='#0c0c0c')
-        draw = ImageDraw.Draw(img)
-        
-        # Tenta carregar fontes
-        try:
-            fonte_titulo = ImageFont.truetype("arialbd.ttf", 25)
-            fonte_subtitulo = ImageFont.truetype("arial.ttf", 20)
-            fonte_texto = ImageFont.truetype("arial.ttf", 20)
-            fonte_pequena = ImageFont.truetype("arial.ttf", 18)
-            fonte_grande = ImageFont.truetype("arialbd.ttf", 25)
-        except:
-            fonte_titulo = ImageFont.load_default(size=25)
-            fonte_subtitulo = ImageFont.load_default(size=20)
-            fonte_texto = ImageFont.load_default(size=20)
-            fonte_pequena = ImageFont.load_default(size=18)
-            fonte_grande = ImageFont.load_default(size=25)
-        
-        # Cores do tema
-        cor_principal = "#1e3a8a"
-        cor_destaque = "#fbbf24"
-        cor_texto = "#ffffff"
-        cor_verde = "#22c55e"
-        cor_cinza = "#6b7280"
-        
-        y_pos = 20
-        
-        # HEADER
-        draw.rectangle([0, y_pos, largura, y_pos + 60], fill=cor_principal)
-        titulo_texto = "ELITE MASTER"
-        bbox_titulo = draw.textbbox((0, 0), titulo_texto, font=fonte_titulo)
-        largura_titulo = bbox_titulo[2] - bbox_titulo[0]
-        draw.text(((largura - largura_titulo) // 2, y_pos + 20), titulo_texto, 
-                 fill=cor_destaque, font=fonte_titulo)
-        
-        # Data de geração
-        data_geracao = datetime.now().strftime("%d/%m/%Y %H:%M")
-        data_texto = f"Gerado em {data_geracao} - Elite Master System"
-        bbox_data = draw.textbbox((0, 0), data_texto, font=fonte_pequena)
-        largura_data = bbox_data[2] - bbox_data[0]
-        draw.text(((largura - largura_data) // 2, y_pos + 80), data_texto, 
-                 fill=cor_cinza, font=fonte_pequena)
-        
-        y_pos += 120
-        
-        # CAMPEONATO E DATA
-        campeonato_texto = "NBA - TEMPORADA 2025-2026"
-        bbox_camp = draw.textbbox((0, 0), campeonato_texto, font=fonte_subtitulo)
-        largura_camp = bbox_camp[2] - bbox_camp[0]
-        draw.text(((largura - largura_camp) // 2, y_pos), campeonato_texto, 
-                 fill=cor_texto, font=fonte_subtitulo)
-        
-        # Data do jogo - VERSÃO CORRIGIDA
-        data_jogo = game.get("date", "")
-        if data_jogo:
-            data_str, hora_str = formatar_data_api_para_local(data_jogo)
-            data_jogo_texto = f"{data_str} {hora_str}"
-        else:
-            data_str, hora_str = "Data não definida", "Horário não definido"
-            data_jogo_texto = "Data não definida"
-        
-        bbox_data_jogo = draw.textbbox((0, 0), data_jogo_texto, font=fonte_texto)
-        largura_data_jogo = bbox_data_jogo[2] - bbox_data_jogo[0]
-        draw.text(((largura - largura_data_jogo) // 2, y_pos + 30), data_jogo_texto, 
-                 fill=cor_destaque, font=fonte_texto)
-        
-        y_pos += 80
-        
-        # CONFRONTO DOS TIMES - FORMATO HORIZONTAL
-        home_team = game.get("home_team", {}).get("full_name", "Casa")
-        away_team = game.get("visitor_team", {}).get("full_name", "Visitante")
-        
-        # Configurações do layout horizontal
-        escudo_size = (95, 95)
-        espacamento = 70
-        largura_total_teams = (escudo_size[0] * 2) + espacamento + 100
-        start_x = (largura - largura_total_teams) // 2
-        
-        # Time visitante (ESQUERDA)
-        try:
-            escudo_away = baixar_escudo_time(away_team, escudo_size)
-            img.paste(escudo_away, (start_x, y_pos), escudo_away)
-        except:
-            pass
-        
-        # Nome visitante
-        away_text = f"{away_team}"
-        bbox_away = draw.textbbox((0, 0), away_text, font=fonte_texto)
-        largura_away = bbox_away[2] - bbox_away[0]
-        draw.text((start_x + escudo_size[0] // 2, y_pos + escudo_size[1] + 15), away_text, 
-                 fill=cor_texto, font=fonte_texto, anchor="mm")
-        
-        # VS centralizado
-        vs_x = start_x + escudo_size[0] + espacamento
-        vs_text = "VS"
-        bbox_vs = draw.textbbox((0, 0), vs_text, font=fonte_grande)
-        draw.text((vs_x + 50 // 2, y_pos + escudo_size[1] // 2), vs_text, 
-                 fill=cor_destaque, font=fonte_grande, anchor="mm")
-        
-        # Time da casa (DIREITA)
-        home_x = vs_x + 50 + espacamento
-        try:
-            escudo_home = baixar_escudo_time(home_team, escudo_size)
-            img.paste(escudo_home, (home_x, y_pos), escudo_home)
-        except:
-            pass
-        
-        # Nome casa
-        home_text = f"{home_team}"
-        bbox_home = draw.textbbox((0, 0), home_text, font=fonte_texto)
-        largura_home = bbox_home[2] - bbox_home[0]
-        draw.text((home_x + escudo_size[0] // 2, y_pos + escudo_size[1] + 15), home_text, 
-                 fill=cor_texto, font=fonte_texto, anchor="mm")
-        
-        y_pos += escudo_size[1] + 50
-        
-        # Se for resultado, mostrar placar abaixo dos nomes
-        if tipo == "resultado":
-            home_score = game.get("home_team_score", 0)
-            away_score = game.get("visitor_team_score", 0)
-            
-            # Placar visitante
-            placar_away_text = f"{away_score}"
-            draw.text((start_x + escudo_size[0] // 2, y_pos), placar_away_text, 
-                     fill=cor_destaque, font=fonte_grande, anchor="mm")
-            
-            # Separador
-            separador_text = "×"
-            draw.text((vs_x + 50 // 2, y_pos), separador_text, 
-                     fill=cor_texto, font=fonte_texto, anchor="mm")
-            
-            # Placar casa
-            placar_home_text = f"{home_score}"
-            draw.text((home_x + escudo_size[0] // 2, y_pos), placar_home_text, 
-                     fill=cor_destaque, font=fonte_grande, anchor="mm")
-            
-            y_pos += 40
-        
-        y_pos += 40
-        
-        # PREVISÕES EM DUAS COLUNAS LADO A LADO
-        if tipo == "previsao":
-            # Configuração das colunas
-            margem = 40
-            largura_coluna = (largura - (margem * 3)) // 2  # 3 margens (esq, meio, dir)
-            altura_previsao = 140
-            
-            # Container principal para as duas previsões
-            draw.rectangle([margem, y_pos, largura - margem, y_pos + altura_previsao], 
-                          fill="#1f2937", outline=cor_principal, width=2)
-            
-            # Linha divisória entre as colunas
-            meio_x = largura // 2
-            draw.line([meio_x, y_pos + 10, meio_x, y_pos + altura_previsao - 10], 
-                     fill=cor_principal, width=1)
-            
-            # COLUNA 1: TOTAL DE PONTOS (ESQUERDA)
-            total_pred = predictions.get("total", {})
-            if total_pred:
-                tendencia = total_pred.get('tendencia', 'N/A')
-                estimativa = total_pred.get('estimativa', 0)
-                confianca = total_pred.get('confianca', 0)
-                
-                # Título da coluna
-                titulo_total = "TOTAL DE PONTOS"
-                bbox_titulo_total = draw.textbbox((0, 0), titulo_total, font=fonte_subtitulo)
-                largura_titulo_total = bbox_titulo_total[2] - bbox_titulo_total[0]
-                draw.text((margem + largura_coluna // 2, y_pos + 20), titulo_total, 
-                         fill=cor_destaque, font=fonte_subtitulo, anchor="mm")
-                
-                # Tendência
-                tendencia_texto = f"Tendência: {tendencia}"
-                draw.text((margem + 20, y_pos + 50), tendencia_texto, 
-                         fill=cor_texto, font=fonte_texto)
-                
-                # Estimativa
-                estimativa_texto = f"Estimativa: {estimativa:.1f}"
-                draw.text((margem + 20, y_pos + 75), estimativa_texto, 
-                         fill=cor_texto, font=fonte_texto)
-                
-                # Confiança
-                confianca_texto = f"Confiança: {confianca:.0f}%"
-                draw.text((margem + 20, y_pos + 100), confianca_texto, 
-                         fill=cor_texto, font=fonte_texto)
-            
-            # COLUNA 2: VENCEDOR (DIREITA)
-            vencedor_pred = predictions.get("vencedor", {})
-            if vencedor_pred:
-                vencedor = vencedor_pred.get('vencedor', 'N/A')
-                confianca_venc = vencedor_pred.get('confianca', 0)
-                detalhe = vencedor_pred.get('detalhe', '')
-                
-                # Título da coluna
-                titulo_vencedor = "VENCEDOR"
-                bbox_titulo_vencedor = draw.textbbox((0, 0), titulo_vencedor, font=fonte_subtitulo)
-                largura_titulo_vencedor = bbox_titulo_vencedor[2] - bbox_titulo_vencedor[0]
-                draw.text((meio_x + largura_coluna // 2, y_pos + 20), titulo_vencedor, 
-                         fill=cor_destaque, font=fonte_subtitulo, anchor="mm")
-                
-                # Vencedor
-                vencedor_texto = f"Previsão: {vencedor}"
-                draw.text((meio_x + 20, y_pos + 50), vencedor_texto, 
-                         fill=cor_texto, font=fonte_texto)
-                
-                # Confiança
-                confianca_venc_texto = f"Confiança: {confianca_venc:.0f}%"
-                draw.text((meio_x + 20, y_pos + 75), confianca_venc_texto, 
-                         fill=cor_texto, font=fonte_texto)
-                
-                # Detalhe (se couber)
-                if detalhe and len(detalhe) < 30:  # Só mostra se for curto
-                    detalhe_texto = f"Detalhe: {detalhe}"
-                    draw.text((meio_x + 20, y_pos + 100), detalhe_texto, 
-                             fill=cor_texto, font=fonte_pequena)
-            
-            y_pos += altura_previsao + 20
-        
-        elif tipo == "resultado":
-            # RESULTADOS EM DUAS COLUNAS
-            home_score = game.get("home_team_score", 0)
-            away_score = game.get("visitor_team_score", 0)
-            total_pontos = home_score + away_score
-            
-            # Configuração das colunas para resultados
-            margem = 40
-            largura_coluna = (largura - (margem * 3)) // 2
-            altura_resultado = 120
-            
-            draw.rectangle([margem, y_pos, largura - margem, y_pos + altura_resultado], 
-                          fill="#1f2937", outline=cor_principal, width=2)
-            
-            # Linha divisória
-            meio_x = largura // 2
-            draw.line([meio_x, y_pos + 10, meio_x, y_pos + altura_resultado - 10], 
-                     fill=cor_principal, width=1)
-            
-            # COLUNA 1: RESULTADO TOTAL
-            total_pred = predictions.get("total", {})
-            if total_pred:
-                tendencia_total = total_pred.get('tendencia', '')
-                resultado_total = calcular_resultado_total(total_pontos, tendencia_total)
-                cor_resultado = cor_verde if "GREEN" in resultado_total else "#ef4444"
-                
-                titulo_total = "TOTAL DE PONTOS"
-                bbox_titulo_total = draw.textbbox((0, 0), titulo_total, font=fonte_subtitulo)
-                draw.text((margem + largura_coluna // 2, y_pos + 20), titulo_total, 
-                         fill=cor_destaque, font=fonte_subtitulo, anchor="mm")
-                
-                resultado_texto = f"Resultado: {resultado_total}"
-                draw.text((margem + 20, y_pos + 50), resultado_texto, 
-                         fill=cor_resultado, font=fonte_texto)
-                
-                pontos_texto = f"Pontos: {total_pontos}"
-                draw.text((margem + 20, y_pos + 80), pontos_texto, 
-                         fill=cor_texto, font=fonte_texto)
-            
-            # COLUNA 2: RESULTADO VENCEDOR
-            vencedor_pred = predictions.get("vencedor", {})
-            if vencedor_pred:
-                vencedor_previsto = vencedor_pred.get('vencedor', '')
-                resultado_vencedor = calcular_resultado_vencedor(home_score, away_score, vencedor_previsto)
-                cor_resultado = cor_verde if "GREEN" in resultado_vencedor else "#ef4444"
-                
-                titulo_vencedor = "VENCEDOR"
-                bbox_titulo_vencedor = draw.textbbox((0, 0), titulo_vencedor, font=fonte_subtitulo)
-                draw.text((meio_x + largura_coluna // 2, y_pos + 20), titulo_vencedor, 
-                         fill=cor_destaque, font=fonte_subtitulo, anchor="mm")
-                
-                resultado_texto = f"Resultado: {resultado_vencedor}"
-                draw.text((meio_x + 20, y_pos + 50), resultado_texto, 
-                         fill=cor_resultado, font=fonte_texto)
-                
-                placar_texto = f"Placar: {away_score}-{home_score}"
-                draw.text((meio_x + 20, y_pos + 80), placar_texto, 
-                         fill=cor_texto, font=fonte_texto)
-            
-            y_pos += altura_resultado + 20
-        
-        # FOOTER
-        footer_y = altura - 40
-        draw.rectangle([0, footer_y, largura, altura], fill=cor_principal)
-        
-        footer_texto = "Sistema de Previsões NBA - Dados 2024-2025"
-        bbox_footer = draw.textbbox((0, 0), footer_texto, font=fonte_pequena)
-        largura_footer = bbox_footer[2] - bbox_footer[0]
-        draw.text(((largura - largura_footer) // 2, footer_y + 12), footer_texto, 
-                 fill=cor_texto, font=fonte_pequena)
-        
-        return img
-        
-    except Exception as e:
-        print(f"Erro ao criar pôster: {e}")
-        return criar_poster_fallback_colunas(game, predictions, tipo)
-
-def criar_poster_fallback_colunas(game: dict, predictions: dict, tipo: str) -> Image.Image:
-    """Fallback com colunas lado a lado"""
-    largura, altura = 600, 500
-    img = Image.new('RGB', (largura, altura), color='#0c0c0c')
-    draw = ImageDraw.Draw(img)
-    
-    # Header
-    draw.rectangle([0, 0, largura, 60], fill='#1e3a8a')
-    draw.text((largura//2, 30), "ELITE MASTER", fill='#fbbf24', anchor="mm")
-    
-    # Times na horizontal
-    home_team = game.get("home_team", {}).get("full_name", "Casa")
-    away_team = game.get("visitor_team", {}).get("full_name", "Visitante")
-    
-    draw.text((150, 120), away_team, fill='white', anchor="mm")
-    draw.text((largura//2, 120), "VS", fill='#fbbf24', anchor="mm")
-    draw.text((450, 120), home_team, fill='white', anchor="mm")
-    
-    # Previsões em colunas
-    draw.rectangle([50, 180, largura-50, 300], fill='#1f2937', outline='#1e3a8a')
-    draw.line([largura//2, 190, largura//2, 290], fill='#1e3a8a')
-    
-    # Coluna esquerda - Total
-    total_pred = predictions.get("total", {})
-    if total_pred:
-        draw.text((100, 200), "TOTAL", fill='#fbbf24', anchor="mm")
-        draw.text((100, 230), f"{total_pred.get('tendencia', 'N/A')}", fill='white', anchor="mm")
-        draw.text((100, 260), f"{total_pred.get('confianca', 0)}%", fill='white', anchor="mm")
-    
-    # Coluna direita - Vencedor
-    vencedor_pred = predictions.get("vencedor", {})
-    if vencedor_pred:
-        draw.text((500, 200), "VENCEDOR", fill='#fbbf24', anchor="mm")
-        draw.text((500, 230), f"{vencedor_pred.get('vencedor', 'N/A')}", fill='white', anchor="mm")
-        draw.text((500, 260), f"{vencedor_pred.get('confianca', 0)}%", fill='white', anchor="mm")
-    
-    draw.text((largura//2, 350), "Sistema NBA 2024-2025", fill='white', anchor="mm")
-    
-    return img
-
-def calcular_resultado_total(total_pontos: int, tendencia: str) -> str:
-    """Calcula se a previsão de total foi Green ou Red"""
-    if "Mais" in tendencia:
-        try:
-            limite = float(tendencia.split()[-1])
-            return "🟢 GREEN" if total_pontos > limite else "🔴 RED"
-        except:
-            return "⚪ INDEFINIDO"
-    elif "Menos" in tendencia:
-        try:
-            limite = float(tendencia.split()[-1])
-            return "🟢 GREEN" if total_pontos < limite else "🔴 RED"
-        except:
-            return "⚪ INDEFINIDO"
-    return "⚪ INDEFINIDO"
-
-def calcular_resultado_vencedor(home_score: int, away_score: int, vencedor_previsto: str) -> str:
-    """Calcula se a previsão de vencedor foi Green ou Red"""
-    if vencedor_previsto == "Casa" and home_score > away_score:
-        return "🟢 GREEN"
-    elif vencedor_previsto == "Visitante" and away_score > home_score:
-        return "🟢 GREEN"
-    elif vencedor_previsto == "Empate" and home_score == away_score:
-        return "🟢 GREEN"
-    elif vencedor_previsto in ["Casa", "Visitante", "Empate"]:
-        return "🔴 RED"
-    return "⚪ INDEFINIDO"
-
-def enviar_poster_telegram(poster_img: Image.Image, chat_id: str = TELEGRAM_CHAT_ID) -> bool:
-    """Envia o pôster como imagem para o Telegram"""
-    try:
-        # Converte a imagem para bytes
-        img_byte_arr = io.BytesIO()
-        poster_img.save(img_byte_arr, format='PNG')
-        img_byte_arr.seek(0)
-        
-        # Envia para o Telegram
-        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto"
-        files = {'photo': ('poster.png', img_byte_arr, 'image/png')}
-        data = {'chat_id': chat_id}
-        
-        response = requests.post(url, files=files, data=data, timeout=30)
-        return response.status_code == 200
-        
-    except Exception as e:
-        print(f"Erro ao enviar pôster: {e}")
-        return False
-
-# =============================
-# SISTEMA DE ALERTAS APENAS COM PÔSTERES - MODIFICADO (SEM AUTOMAÇÃO)
+# SISTEMA DE ALERTAS APENAS COM PÔSTERES
 # =============================
 
 def verificar_e_enviar_alerta(game: dict, predictions: dict, send_to_telegram: bool = False):
     """Sistema de alertas APENAS com pôsteres - INICIADO APENAS PELO USUÁRIO"""
     alertas = carregar_alertas()
     fid = str(game.get("id"))
-    
-    # SEMPRE começa sem enviar para Telegram - só envia quando usuário clicar
-    enviar_agora = False
     
     if fid not in alertas:
         alertas[fid] = {
@@ -1309,22 +876,12 @@ def verificar_e_enviar_alerta(game: dict, predictions: dict, send_to_telegram: b
             "poster_enviado": False
         }
         salvar_alertas(alertas)
-        
-        # NÃO envia automaticamente - só quando o usuário pedir
-        if send_to_telegram:
-            enviar_agora = True
-    
-    # Se já existe, verifica se precisa enviar
-    elif send_to_telegram:
-        enviar_agora = True
     
     # Envia apenas se o usuário solicitou
-    if enviar_agora:
+    if send_to_telegram:
         try:
-            # Cria e envia pôster de previsão
             poster = criar_poster_alerta(game, predictions, "previsao")
             
-            # Envia apenas o pôster
             if enviar_poster_telegram(poster):
                 alertas[fid]["poster_enviado"] = True
                 alertas[fid]["enviado_telegram"] = True
@@ -1344,10 +901,8 @@ def enviar_alerta_resultado_individual(alerta_id: str, alerta: dict):
     game_data = alerta.get("game_data", {})
     predictions = alerta.get("predictions", {})
     
-    # Cria pôster de resultado
     poster = criar_poster_alerta(game_data, predictions, "resultado")
     
-    # Envia APENAS o pôster, sem mensagem textual
     if enviar_poster_telegram(poster, TELEGRAM_CHAT_ID_ALT2):
         return True
     
@@ -1357,7 +912,6 @@ def enviar_alerta_resultados_conferidos():
     """Versão atualizada - envia APENAS pôsteres para resultados"""
     alertas = carregar_alertas()
     
-    # Filtra apenas jogos conferidos sem alerta de resultado
     jogos_conferidos = []
     for alerta_id, alerta in alertas.items():
         if alerta.get("conferido", False) and not alerta.get("alerta_resultado_enviado", False):
@@ -1372,15 +926,11 @@ def enviar_alerta_resultados_conferidos():
     alertas_enviados = 0
     
     for alerta_id, alerta in jogos_conferidos:
-        # Envia APENAS o pôster individual para cada jogo
         if enviar_alerta_resultado_individual(alerta_id, alerta):
             alertas[alerta_id]["alerta_resultado_enviado"] = True
             alertas_enviados += 1
             st.success(f"✅ Pôster de resultado enviado para jogo {alerta_id}")
-        else:
-            st.error(f"❌ Erro ao enviar pôster para jogo {alerta_id}")
         
-        # Pequena pausa entre envios
         time.sleep(2)
     
     if alertas_enviados > 0:
@@ -1391,7 +941,7 @@ def enviar_alerta_resultados_conferidos():
     return 0
 
 # =============================
-# SISTEMA TOP 4 MELHORES JOGOS - ATUALIZADO COM PÔSTERES
+# SISTEMA TOP 4 MELHORES JOGOS
 # =============================
 
 def calcular_pontuacao_jogo(jogo: dict, times_stats: dict) -> float:
@@ -1399,39 +949,32 @@ def calcular_pontuacao_jogo(jogo: dict, times_stats: dict) -> float:
     home_team_id = jogo["home_team"]["id"]
     visitor_team_id = jogo["visitor_team"]["id"]
     
-    # Obtém estatísticas dos times
     home_stats = times_stats.get(home_team_id, {})
     visitor_stats = times_stats.get(visitor_team_id, {})
     
     if not home_stats or not visitor_stats:
         return 0
     
-    # Fatores para cálculo da pontuação:
-    # 1. Potencial ofensivo (média de pontos dos dois times)
     ofensiva_total = home_stats.get("pts_for_avg", 0) + visitor_stats.get("pts_for_avg", 0)
     
-    # 2. Competitividade (diferença pequena na taxa de vitórias)
     diff_win_rate = abs(home_stats.get("win_rate", 0) - visitor_stats.get("win_rate", 0))
-    fator_competitividade = 1.0 - (diff_win_rate * 0.5)  # Times com win_rate similar = jogos mais disputados
+    fator_competitividade = 1.0 - (diff_win_rate * 0.5)
     
-    # 3. Consistência dos times
     home_consistencia = min(20, abs(home_stats.get("pts_diff_avg", 0)) * 2)
     visitor_consistencia = min(20, abs(visitor_stats.get("pts_diff_avg", 0)) * 2)
     fator_consistencia = (home_consistencia + visitor_consistencia) / 2
     
-    # Pontuação final
     pontuacao = (ofensiva_total * 0.3) + (fator_competitividade * 40) + fator_consistencia
     
     return pontuacao
 
 def obter_top4_melhores_jogos(data_str: str) -> list:
     """Retorna os 4 melhores jogos do dia baseado em estatísticas"""
-    jogos = obter_jogos_data(data_str)
+    jogos = obter_jogos_data(data_str, mostrar_mensagem=False)
     
     if not jogos:
         return []
     
-    # Obtém estatísticas de todos os times envolvidos
     times_stats = {}
     times_cache = obter_times()
     
@@ -1441,16 +984,13 @@ def obter_top4_melhores_jogos(data_str: str) -> list:
             if team_id not in times_stats:
                 times_stats[team_id] = obter_estatisticas_time_2025(team_id)
     
-    # Calcula pontuação para cada jogo
     jogos_com_pontuacao = []
     for jogo in jogos:
         pontuacao = calcular_pontuacao_jogo(jogo, times_stats)
         
-        # Obtém nomes completos dos times
         home_team_name = times_cache.get(jogo["home_team"]["id"], {}).get("full_name", jogo["home_team"]["name"])
         visitor_team_name = times_cache.get(jogo["visitor_team"]["id"], {}).get("full_name", jogo["visitor_team"]["name"])
         
-        # Calcula previsões para o jogo
         home_id = jogo["home_team"]["id"]
         visitor_id = jogo["visitor_team"]["id"]
         
@@ -1486,7 +1026,6 @@ def obter_top4_melhores_jogos(data_str: str) -> list:
             "predictions": predictions
         })
     
-    # Ordena por pontuação (decrescente) e pega top 4
     jogos_com_pontuacao.sort(key=lambda x: x["pontuacao"], reverse=True)
     return jogos_com_pontuacao[:4]
 
@@ -1497,12 +1036,10 @@ def obter_top4_melhores_jogos(data_str: str) -> list:
 def criar_poster_top4_compacto(jogos_top4: list) -> Image.Image:
     """Cria um pôster compacto com os 4 melhores jogos do dia"""
     try:
-        # Configurações do pôster compacto
         largura, altura = 600, 1000
         img = Image.new('RGB', (largura, altura), color='#0c0c0c')
         draw = ImageDraw.Draw(img)
         
-        # Tenta carregar fontes
         try:
             fonte_titulo = ImageFont.truetype("arialbd.ttf", 28)
             fonte_subtitulo = ImageFont.truetype("arial.ttf", 18)
@@ -1518,7 +1055,6 @@ def criar_poster_top4_compacto(jogos_top4: list) -> Image.Image:
             fonte_destaque = ImageFont.load_default(size=16)
             fonte_cabecalho = ImageFont.load_default(size=15)
         
-        # Cores do tema
         cor_principal = "#1e3a8a"
         cor_destaque = "#fbbf24"
         cor_texto = "#ffffff"
@@ -1529,7 +1065,6 @@ def criar_poster_top4_compacto(jogos_top4: list) -> Image.Image:
         
         y_pos = 20
         
-        # HEADER PRINCIPAL
         draw.rectangle([0, y_pos, largura, y_pos + 80], fill=cor_principal)
         titulo_texto = "ELITE MASTER - TOP 4 JOGOS DO DIA"
         bbox_titulo = draw.textbbox((0, 0), titulo_texto, font=fonte_titulo)
@@ -1537,7 +1072,6 @@ def criar_poster_top4_compacto(jogos_top4: list) -> Image.Image:
         draw.text(((largura - largura_titulo) // 2, y_pos + 25), titulo_texto, 
                  fill=cor_destaque, font=fonte_titulo)
         
-        # Data de geração
         data_geracao = datetime.now().strftime("%d/%m/%Y %H:%M")
         data_texto = f"Gerado em {data_geracao} - Sistema Elite Master"
         bbox_data = draw.textbbox((0, 0), data_texto, font=fonte_pequena)
@@ -1547,12 +1081,10 @@ def criar_poster_top4_compacto(jogos_top4: list) -> Image.Image:
         
         y_pos += 120
         
-        # CABEÇALHO INFORMATIVO - DESCRIÇÃO DO ALERTA
         cabecalho_rect_height = 80
         draw.rectangle([20, y_pos, largura-20, y_pos + cabecalho_rect_height], 
                       fill="#1e3a8a", outline=cor_destaque, width=2)
         
-        # Textos do cabeçalho informativo
         textos_cabecalho = [
             "🎯 ALERTA TOP 4 JOGOS COMPOSTOS 🎯",
             "Análise baseada em dados estatísticos da temporada 2024-2025",
@@ -1564,16 +1096,15 @@ def criar_poster_top4_compacto(jogos_top4: list) -> Image.Image:
             bbox_texto = draw.textbbox((0, 0), texto, font=fonte_cabecalho)
             largura_texto = bbox_texto[2] - bbox_texto[0]
             
-            if i == 0:  # Primeira linha (título)
+            if i == 0:
                 draw.text(((largura - largura_texto) // 2, y_pos + 15), texto, 
                          fill=cor_destaque, font=fonte_cabecalho)
-            else:  # Linhas subsequentes
+            else:
                 draw.text(((largura - largura_texto) // 2, y_pos + 25 + (i * 15)), texto, 
                          fill=cor_texto, font=fonte_cabecalho)
         
         y_pos += cabecalho_rect_height + 20
         
-        # LEGENDA DAS INFORMAÇÕES
         info_legenda = [
             "📊 TOTAL PTS: Tendência de pontos totais do jogo",
             "🏆 VENCEDOR: Previsão do time vencedor", 
@@ -1586,7 +1117,6 @@ def criar_poster_top4_compacto(jogos_top4: list) -> Image.Image:
         
         y_pos += 60
         
-        # Para cada jogo no top 4
         altura_jogo = 150
         espacamento = 20
         
@@ -1597,19 +1127,15 @@ def criar_poster_top4_compacto(jogos_top4: list) -> Image.Image:
             jogo = jogo_info["jogo"]
             predictions = jogo_info["predictions"]
             
-            # Container do jogo
             draw.rectangle([30, y_pos, largura-30, y_pos + altura_jogo], 
                           fill=cor_fundo_card, outline=cor_principal, width=2)
             
-            # Número do jogo no ranking
             draw.ellipse([45, y_pos + 15, 75, y_pos + 45], fill=cor_destaque, outline=cor_principal)
             draw.text((60, y_pos + 30), str(i+1), fill=cor_principal, font=fonte_destaque, anchor="mm")
             
-            # Times e escudos
             home_team = jogo.get("home_team", {}).get("full_name", "Casa")
             away_team = jogo.get("visitor_team", {}).get("full_name", "Visitante")
             
-            # Escudos pequenos
             escudo_size = (40, 40)
             try:
                 escudo_away = baixar_escudo_time(away_team, escudo_size)
@@ -1620,7 +1146,6 @@ def criar_poster_top4_compacto(jogos_top4: list) -> Image.Image:
             except:
                 pass
             
-            # Nomes dos times (abreviados se necessário)
             def abreviar_nome(nome):
                 if len(nome) > 15:
                     partes = nome.split()
@@ -1632,22 +1157,18 @@ def criar_poster_top4_compacto(jogos_top4: list) -> Image.Image:
             away_abreviado = abreviar_nome(away_team)
             home_abreviado = abreviar_nome(home_team)
             
-            # Nomes dos times
             draw.text((85 + escudo_size[0]//2, y_pos + 60), away_abreviado, 
                      fill=cor_texto, font=fonte_pequena, anchor="mm")
             draw.text((largura-85-escudo_size[0]//2, y_pos + 60), home_abreviado, 
                      fill=cor_texto, font=fonte_pequena, anchor="mm")
             
-            # VS no meio
             draw.text((largura//2, y_pos + 30), "VS", 
                      fill=cor_destaque, font=fonte_subtitulo, anchor="mm")
             
-            # Previsões em colunas compactas
             coluna_largura = (largura - 180) // 2
             coluna_x1 = 100
             coluna_x2 = coluna_x1 + coluna_largura + 20
             
-            # Coluna 1: Total de Pontos
             total_pred = predictions.get("total", {})
             if total_pred:
                 tendencia = total_pred.get('tendencia', 'N/A')
@@ -1661,13 +1182,11 @@ def criar_poster_top4_compacto(jogos_top4: list) -> Image.Image:
                 draw.text((coluna_x1, y_pos + 110), f"Est: {estimativa:.1f} | {confianca:.0f}%", 
                          fill=cor_texto, font=fonte_pequena)
             
-            # Coluna 2: Vencedor
             vencedor_pred = predictions.get("vencedor", {})
             if vencedor_pred:
                 vencedor = vencedor_pred.get('vencedor', 'N/A')
                 confianca_venc = vencedor_pred.get('confianca', 0)
                 
-                # Abrevia o vencedor se necessário
                 if vencedor == "Casa":
                     vencedor_abreviado = "CASA"
                 elif vencedor == "Visitante":
@@ -1682,14 +1201,12 @@ def criar_poster_top4_compacto(jogos_top4: list) -> Image.Image:
                 draw.text((coluna_x2, y_pos + 110), f"Conf: {confianca_venc:.0f}%", 
                          fill=cor_texto, font=fonte_pequena)
             
-            # Linha divisória entre jogos (exceto no último)
             if i < min(3, len(jogos_top4)-1):
                 draw.line([50, y_pos + altura_jogo - 5, largura-50, y_pos + altura_jogo - 5], 
                          fill=cor_principal, width=1)
             
             y_pos += altura_jogo
         
-        # FOOTER
         footer_y = altura - 40
         draw.rectangle([0, footer_y, largura, altura], fill=cor_principal)
         
@@ -1703,7 +1220,6 @@ def criar_poster_top4_compacto(jogos_top4: list) -> Image.Image:
         
     except Exception as e:
         print(f"Erro ao criar pôster top4 compacto: {e}")
-        # Fallback simples
         img = Image.new('RGB', (600, 400), color='#0c0c0c')
         draw = ImageDraw.Draw(img)
         draw.text((300, 200), "Erro ao gerar pôster Top 4", fill='white', anchor="mm")
@@ -1712,12 +1228,10 @@ def criar_poster_top4_compacto(jogos_top4: list) -> Image.Image:
 def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
     """Cria um pôster de resultado para o Top 4 mostrando Green/Red"""
     try:
-        # Configurações do pôster compacto
         largura, altura = 600, 1000
         img = Image.new('RGB', (largura, altura), color='#0c0c0c')
         draw = ImageDraw.Draw(img)
         
-        # Tenta carregar fontes
         try:
             fonte_titulo = ImageFont.truetype("arialbd.ttf", 28)
             fonte_subtitulo = ImageFont.truetype("arial.ttf", 18)
@@ -1733,7 +1247,6 @@ def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
             fonte_destaque = ImageFont.load_default(size=16)
             fonte_cabecalho = ImageFont.load_default(size=15)
         
-        # Cores do tema
         cor_principal = "#1e3a8a"
         cor_destaque = "#fbbf24"
         cor_texto = "#ffffff"
@@ -1745,7 +1258,6 @@ def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
         
         y_pos = 20
         
-        # HEADER PRINCIPAL
         draw.rectangle([0, y_pos, largura, y_pos + 80], fill=cor_principal)
         titulo_texto = "ELITE MASTER - RESULTADO TOP 4"
         bbox_titulo = draw.textbbox((0, 0), titulo_texto, font=fonte_titulo)
@@ -1753,7 +1265,6 @@ def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
         draw.text(((largura - largura_titulo) // 2, y_pos + 25), titulo_texto, 
                  fill=cor_destaque, font=fonte_titulo)
         
-        # Data dos jogos
         data_jogos = alerta_top4.get("data_jogos", "")
         data_texto = f"Resultados dos jogos do dia {data_jogos}"
         bbox_data = draw.textbbox((0, 0), data_texto, font=fonte_pequena)
@@ -1763,12 +1274,10 @@ def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
         
         y_pos += 120
         
-        # CABEÇALHO INFORMATIVO - DESCRIÇÃO DOS RESULTADOS
         cabecalho_rect_height = 80
         draw.rectangle([20, y_pos, largura-20, y_pos + cabecalho_rect_height], 
                       fill="#1e3a8a", outline=cor_destaque, width=2)
         
-        # Textos do cabeçalho informativo
         textos_cabecalho = [
             "📊 RESULTADO OFICIAL - TOP 4 JOGOS COMPOSTOS 📊",
             "Conferência baseada nos resultados reais dos jogos",
@@ -1780,16 +1289,15 @@ def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
             bbox_texto = draw.textbbox((0, 0), texto, font=fonte_cabecalho)
             largura_texto = bbox_texto[2] - bbox_texto[0]
             
-            if i == 0:  # Primeira linha (título)
+            if i == 0:
                 draw.text(((largura - largura_texto) // 2, y_pos + 15), texto, 
                          fill=cor_destaque, font=fonte_cabecalho)
-            else:  # Linhas subsequentes
+            else:
                 draw.text(((largura - largura_texto) // 2, y_pos + 25 + (i * 15)), texto, 
                          fill=cor_texto, font=fonte_cabecalho)
         
         y_pos += cabecalho_rect_height + 20
         
-        # Para cada jogo no top 4
         altura_jogo = 150
         espacamento = 20
         
@@ -1802,19 +1310,15 @@ def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
             resultado_total = jogo_data.get("resultado_total", None)
             resultado_vencedor = jogo_data.get("resultado_vencedor", None)
             
-            # Container do jogo
             draw.rectangle([30, y_pos, largura-30, y_pos + altura_jogo], 
                           fill=cor_fundo_card, outline=cor_principal, width=2)
             
-            # Número do jogo no ranking
             draw.ellipse([45, y_pos + 15, 75, y_pos + 45], fill=cor_destaque, outline=cor_principal)
             draw.text((60, y_pos + 30), str(i+1), fill=cor_principal, font=fonte_destaque, anchor="mm")
             
-            # Times e escudos
             home_team = jogo.get("home_team", {}).get("full_name", "Casa")
             away_team = jogo.get("visitor_team", {}).get("full_name", "Visitante")
             
-            # Escudos pequenos
             escudo_size = (40, 40)
             try:
                 escudo_away = baixar_escudo_time(away_team, escudo_size)
@@ -1825,7 +1329,6 @@ def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
             except:
                 pass
             
-            # Nomes dos times (abreviados se necessário)
             def abreviar_nome(nome):
                 if len(nome) > 15:
                     partes = nome.split()
@@ -1837,22 +1340,18 @@ def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
             away_abreviado = abreviar_nome(away_team)
             home_abreviado = abreviar_nome(home_team)
             
-            # Nomes dos times
             draw.text((85 + escudo_size[0]//2, y_pos + 60), away_abreviado, 
                      fill=cor_texto, font=fonte_pequena, anchor="mm")
             draw.text((largura-85-escudo_size[0]//2, y_pos + 60), home_abreviado, 
                      fill=cor_texto, font=fonte_pequena, anchor="mm")
             
-            # VS no meio
             draw.text((largura//2, y_pos + 30), "VS", 
                      fill=cor_destaque, font=fonte_subtitulo, anchor="mm")
             
-            # Previsões em colunas compactas
             coluna_largura = (largura - 180) // 2
             coluna_x1 = 100
             coluna_x2 = coluna_x1 + coluna_largura + 20
             
-            # Coluna 1: Total de Pontos
             total_pred = predictions.get("total", {})
             if total_pred:
                 tendencia = total_pred.get('tendencia', 'N/A')
@@ -1866,7 +1365,6 @@ def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
                 draw.text((coluna_x1, y_pos + 110), f"Est: {estimativa:.1f} | {confianca:.0f}%", 
                          fill=cor_texto, font=fonte_pequena)
                 
-                # Resultado (Green/Red)
                 if resultado_total == "Green":
                     cor_resultado = cor_verde
                     texto_resultado = "🟢 GREEN"
@@ -1880,13 +1378,11 @@ def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
                 draw.text((coluna_x1, y_pos + 125), texto_resultado, 
                          fill=cor_resultado, font=fonte_pequena)
             
-            # Coluna 2: Vencedor
             vencedor_pred = predictions.get("vencedor", {})
             if vencedor_pred:
                 vencedor = vencedor_pred.get('vencedor', 'N/A')
                 confianca_venc = vencedor_pred.get('confianca', 0)
                 
-                # Abrevia o vencedor se necessário
                 if vencedor == "Casa":
                     vencedor_abreviado = "CASA"
                 elif vencedor == "Visitante":
@@ -1901,7 +1397,6 @@ def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
                 draw.text((coluna_x2, y_pos + 110), f"Conf: {confianca_venc:.0f}%", 
                          fill=cor_texto, font=fonte_pequena)
                 
-                # Resultado (Green/Red)
                 if resultado_vencedor == "Green":
                     cor_resultado = cor_verde
                     texto_resultado = "🟢 GREEN"
@@ -1915,14 +1410,12 @@ def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
                 draw.text((coluna_x2, y_pos + 125), texto_resultado, 
                          fill=cor_resultado, font=fonte_pequena)
             
-            # Linha divisória entre jogos (exceto no último)
             if i < min(3, len(alerta_top4["jogos"])-1):
                 draw.line([50, y_pos + altura_jogo - 5, largura-50, y_pos + altura_jogo - 5], 
                          fill=cor_principal, width=1)
             
             y_pos += altura_jogo
         
-        # FOOTER
         footer_y = altura - 40
         draw.rectangle([0, footer_y, largura, altura], fill=cor_principal)
         
@@ -1936,20 +1429,333 @@ def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
         
     except Exception as e:
         print(f"Erro ao criar pôster top4 resultado: {e}")
-        # Fallback simples
         img = Image.new('RGB', (600, 400), color='#0c0c0c')
         draw = ImageDraw.Draw(img)
         draw.text((300, 200), "Erro ao gerar pôster Resultado Top 4", fill='white', anchor="mm")
         return img
 
+def enviar_poster_telegram(poster_img: Image.Image, chat_id: str = TELEGRAM_CHAT_ID) -> bool:
+    """Envia o pôster como imagem para o Telegram"""
+    try:
+        img_byte_arr = io.BytesIO()
+        poster_img.save(img_byte_arr, format='PNG')
+        img_byte_arr.seek(0)
+        
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto"
+        files = {'photo': ('poster.png', img_byte_arr, 'image/png')}
+        data = {'chat_id': chat_id}
+        
+        response = requests.post(url, files=files, data=data, timeout=30)
+        return response.status_code == 200
+        
+    except Exception as e:
+        print(f"Erro ao enviar pôster: {e}")
+        return False
+
+# =============================
+# FUNÇÕES PARA CRIAÇÃO DE PÔSTERES INDIVIDUAIS
+# =============================
+
+def criar_poster_alerta(game: dict, predictions: dict, tipo: str = "previsao") -> Image.Image:
+    """Cria um pôster estilizado para alertas individuais"""
+    try:
+        largura, altura = 600, 630
+        img = Image.new('RGB', (largura, altura), color='#0c0c0c')
+        draw = ImageDraw.Draw(img)
+        
+        try:
+            fonte_titulo = ImageFont.truetype("arialbd.ttf", 25)
+            fonte_subtitulo = ImageFont.truetype("arial.ttf", 20)
+            fonte_texto = ImageFont.truetype("arial.ttf", 20)
+            fonte_pequena = ImageFont.truetype("arial.ttf", 18)
+            fonte_grande = ImageFont.truetype("arialbd.ttf", 25)
+        except:
+            fonte_titulo = ImageFont.load_default(size=25)
+            fonte_subtitulo = ImageFont.load_default(size=20)
+            fonte_texto = ImageFont.load_default(size=20)
+            fonte_pequena = ImageFont.load_default(size=18)
+            fonte_grande = ImageFont.load_default(size=25)
+        
+        cor_principal = "#1e3a8a"
+        cor_destaque = "#fbbf24"
+        cor_texto = "#ffffff"
+        cor_verde = "#22c55e"
+        cor_cinza = "#6b7280"
+        
+        y_pos = 20
+        
+        draw.rectangle([0, y_pos, largura, y_pos + 60], fill=cor_principal)
+        titulo_texto = "ELITE MASTER"
+        bbox_titulo = draw.textbbox((0, 0), titulo_texto, font=fonte_titulo)
+        largura_titulo = bbox_titulo[2] - bbox_titulo[0]
+        draw.text(((largura - largura_titulo) // 2, y_pos + 20), titulo_texto, 
+                 fill=cor_destaque, font=fonte_titulo)
+        
+        data_geracao = datetime.now().strftime("%d/%m/%Y %H:%M")
+        data_texto = f"Gerado em {data_geracao} - Elite Master System"
+        bbox_data = draw.textbbox((0, 0), data_texto, font=fonte_pequena)
+        largura_data = bbox_data[2] - bbox_data[0]
+        draw.text(((largura - largura_data) // 2, y_pos + 80), data_texto, 
+                 fill=cor_cinza, font=fonte_pequena)
+        
+        y_pos += 120
+        
+        campeonato_texto = "NBA - TEMPORADA 2025-2026"
+        bbox_camp = draw.textbbox((0, 0), campeonato_texto, font=fonte_subtitulo)
+        largura_camp = bbox_camp[2] - bbox_camp[0]
+        draw.text(((largura - largura_camp) // 2, y_pos), campeonato_texto, 
+                 fill=cor_texto, font=fonte_subtitulo)
+        
+        data_jogo = game.get("date", "")
+        if data_jogo:
+            data_str, hora_str = formatar_data_api_para_local(data_jogo)
+            data_jogo_texto = f"{data_str} {hora_str}"
+        else:
+            data_jogo_texto = "Data não definida"
+        
+        bbox_data_jogo = draw.textbbox((0, 0), data_jogo_texto, font=fonte_texto)
+        largura_data_jogo = bbox_data_jogo[2] - bbox_data_jogo[0]
+        draw.text(((largura - largura_data_jogo) // 2, y_pos + 30), data_jogo_texto, 
+                 fill=cor_destaque, font=fonte_texto)
+        
+        y_pos += 80
+        
+        home_team = game.get("home_team", {}).get("full_name", "Casa")
+        away_team = game.get("visitor_team", {}).get("full_name", "Visitante")
+        
+        escudo_size = (95, 95)
+        espacamento = 70
+        largura_total_teams = (escudo_size[0] * 2) + espacamento + 100
+        start_x = (largura - largura_total_teams) // 2
+        
+        try:
+            escudo_away = baixar_escudo_time(away_team, escudo_size)
+            img.paste(escudo_away, (start_x, y_pos), escudo_away)
+        except:
+            pass
+        
+        away_text = f"{away_team}"
+        bbox_away = draw.textbbox((0, 0), away_text, font=fonte_texto)
+        largura_away = bbox_away[2] - bbox_away[0]
+        draw.text((start_x + escudo_size[0] // 2, y_pos + escudo_size[1] + 15), away_text, 
+                 fill=cor_texto, font=fonte_texto, anchor="mm")
+        
+        vs_x = start_x + escudo_size[0] + espacamento
+        vs_text = "VS"
+        bbox_vs = draw.textbbox((0, 0), vs_text, font=fonte_grande)
+        draw.text((vs_x + 50 // 2, y_pos + escudo_size[1] // 2), vs_text, 
+                 fill=cor_destaque, font=fonte_grande, anchor="mm")
+        
+        home_x = vs_x + 50 + espacamento
+        try:
+            escudo_home = baixar_escudo_time(home_team, escudo_size)
+            img.paste(escudo_home, (home_x, y_pos), escudo_home)
+        except:
+            pass
+        
+        home_text = f"{home_team}"
+        bbox_home = draw.textbbox((0, 0), home_text, font=fonte_texto)
+        largura_home = bbox_home[2] - bbox_home[0]
+        draw.text((home_x + escudo_size[0] // 2, y_pos + escudo_size[1] + 15), home_text, 
+                 fill=cor_texto, font=fonte_texto, anchor="mm")
+        
+        y_pos += escudo_size[1] + 50
+        
+        if tipo == "resultado":
+            home_score = game.get("home_team_score", 0)
+            away_score = game.get("visitor_team_score", 0)
+            
+            placar_away_text = f"{away_score}"
+            draw.text((start_x + escudo_size[0] // 2, y_pos), placar_away_text, 
+                     fill=cor_destaque, font=fonte_grande, anchor="mm")
+            
+            separador_text = "×"
+            draw.text((vs_x + 50 // 2, y_pos), separador_text, 
+                     fill=cor_texto, font=fonte_texto, anchor="mm")
+            
+            placar_home_text = f"{home_score}"
+            draw.text((home_x + escudo_size[0] // 2, y_pos), placar_home_text, 
+                     fill=cor_destaque, font=fonte_grande, anchor="mm")
+            
+            y_pos += 40
+        
+        y_pos += 40
+        
+        if tipo == "previsao":
+            margem = 40
+            largura_coluna = (largura - (margem * 3)) // 2
+            altura_previsao = 140
+            
+            draw.rectangle([margem, y_pos, largura - margem, y_pos + altura_previsao], 
+                          fill="#1f2937", outline=cor_principal, width=2)
+            
+            meio_x = largura // 2
+            draw.line([meio_x, y_pos + 10, meio_x, y_pos + altura_previsao - 10], 
+                     fill=cor_principal, width=1)
+            
+            total_pred = predictions.get("total", {})
+            if total_pred:
+                tendencia = total_pred.get('tendencia', 'N/A')
+                estimativa = total_pred.get('estimativa', 0)
+                confianca = total_pred.get('confianca', 0)
+                
+                titulo_total = "TOTAL DE PONTOS"
+                bbox_titulo_total = draw.textbbox((0, 0), titulo_total, font=fonte_subtitulo)
+                largura_titulo_total = bbox_titulo_total[2] - bbox_titulo_total[0]
+                draw.text((margem + largura_coluna // 2, y_pos + 20), titulo_total, 
+                         fill=cor_destaque, font=fonte_subtitulo, anchor="mm")
+                
+                tendencia_texto = f"Tendência: {tendencia}"
+                draw.text((margem + 20, y_pos + 50), tendencia_texto, 
+                         fill=cor_texto, font=fonte_texto)
+                
+                estimativa_texto = f"Estimativa: {estimativa:.1f}"
+                draw.text((margem + 20, y_pos + 75), estimativa_texto, 
+                         fill=cor_texto, font=fonte_texto)
+                
+                confianca_texto = f"Confiança: {confianca:.0f}%"
+                draw.text((margem + 20, y_pos + 100), confianca_texto, 
+                         fill=cor_texto, font=fonte_texto)
+            
+            vencedor_pred = predictions.get("vencedor", {})
+            if vencedor_pred:
+                vencedor = vencedor_pred.get('vencedor', 'N/A')
+                confianca_venc = vencedor_pred.get('confianca', 0)
+                detalhe = vencedor_pred.get('detalhe', '')
+                
+                titulo_vencedor = "VENCEDOR"
+                bbox_titulo_vencedor = draw.textbbox((0, 0), titulo_vencedor, font=fonte_subtitulo)
+                largura_titulo_vencedor = bbox_titulo_vencedor[2] - bbox_titulo_vencedor[0]
+                draw.text((meio_x + largura_coluna // 2, y_pos + 20), titulo_vencedor, 
+                         fill=cor_destaque, font=fonte_subtitulo, anchor="mm")
+                
+                vencedor_texto = f"Previsão: {vencedor}"
+                draw.text((meio_x + 20, y_pos + 50), vencedor_texto, 
+                         fill=cor_texto, font=fonte_texto)
+                
+                confianca_venc_texto = f"Confiança: {confianca_venc:.0f}%"
+                draw.text((meio_x + 20, y_pos + 75), confianca_venc_texto, 
+                         fill=cor_texto, font=fonte_texto)
+                
+                if detalhe and len(detalhe) < 30:
+                    detalhe_texto = f"Detalhe: {detalhe}"
+                    draw.text((meio_x + 20, y_pos + 100), detalhe_texto, 
+                             fill=cor_texto, font=fonte_pequena)
+            
+            y_pos += altura_previsao + 20
+        
+        elif tipo == "resultado":
+            home_score = game.get("home_team_score", 0)
+            away_score = game.get("visitor_team_score", 0)
+            total_pontos = home_score + away_score
+            
+            margem = 40
+            largura_coluna = (largura - (margem * 3)) // 2
+            altura_resultado = 120
+            
+            draw.rectangle([margem, y_pos, largura - margem, y_pos + altura_resultado], 
+                          fill="#1f2937", outline=cor_principal, width=2)
+            
+            meio_x = largura // 2
+            draw.line([meio_x, y_pos + 10, meio_x, y_pos + altura_resultado - 10], 
+                     fill=cor_principal, width=1)
+            
+            total_pred = predictions.get("total", {})
+            if total_pred:
+                tendencia_total = total_pred.get('tendencia', '')
+                
+                titulo_total = "TOTAL DE PONTOS"
+                bbox_titulo_total = draw.textbbox((0, 0), titulo_total, font=fonte_subtitulo)
+                draw.text((margem + largura_coluna // 2, y_pos + 20), titulo_total, 
+                         fill=cor_destaque, font=fonte_subtitulo, anchor="mm")
+                
+                resultado_texto = "🟢 GREEN" if total_pontos > 225.5 else "🔴 RED"
+                draw.text((margem + 20, y_pos + 50), resultado_texto, 
+                         fill=cor_verde if "GREEN" in resultado_texto else "#ef4444", font=fonte_texto)
+                
+                pontos_texto = f"Pontos: {total_pontos}"
+                draw.text((margem + 20, y_pos + 80), pontos_texto, 
+                         fill=cor_texto, font=fonte_texto)
+            
+            vencedor_pred = predictions.get("vencedor", {})
+            if vencedor_pred:
+                vencedor_previsto = vencedor_pred.get('vencedor', '')
+                
+                titulo_vencedor = "VENCEDOR"
+                bbox_titulo_vencedor = draw.textbbox((0, 0), titulo_vencedor, font=fonte_subtitulo)
+                draw.text((meio_x + largura_coluna // 2, y_pos + 20), titulo_vencedor, 
+                         fill=cor_destaque, font=fonte_subtitulo, anchor="mm")
+                
+                resultado_texto = "🟢 GREEN" if (vencedor_previsto == "Casa" and home_score > away_score) or (vencedor_previsto == "Visitante" and away_score > home_score) else "🔴 RED"
+                draw.text((meio_x + 20, y_pos + 50), resultado_texto, 
+                         fill=cor_verde if "GREEN" in resultado_texto else "#ef4444", font=fonte_texto)
+                
+                placar_texto = f"Placar: {away_score}-{home_score}"
+                draw.text((meio_x + 20, y_pos + 80), placar_texto, 
+                         fill=cor_texto, font=fonte_texto)
+            
+            y_pos += altura_resultado + 20
+        
+        footer_y = altura - 40
+        draw.rectangle([0, footer_y, largura, altura], fill=cor_principal)
+        
+        footer_texto = "Sistema de Previsões NBA - Dados 2024-2025"
+        bbox_footer = draw.textbbox((0, 0), footer_texto, font=fonte_pequena)
+        largura_footer = bbox_footer[2] - bbox_footer[0]
+        draw.text(((largura - largura_footer) // 2, footer_y + 12), footer_texto, 
+                 fill=cor_texto, font=fonte_pequena)
+        
+        return img
+        
+    except Exception as e:
+        print(f"Erro ao criar pôster: {e}")
+        return criar_poster_fallback_colunas(game, predictions, tipo)
+
+def criar_poster_fallback_colunas(game: dict, predictions: dict, tipo: str) -> Image.Image:
+    """Fallback com colunas lado a lado"""
+    largura, altura = 600, 500
+    img = Image.new('RGB', (largura, altura), color='#0c0c0c')
+    draw = ImageDraw.Draw(img)
+    
+    draw.rectangle([0, 0, largura, 60], fill='#1e3a8a')
+    draw.text((largura//2, 30), "ELITE MASTER", fill='#fbbf24', anchor="mm")
+    
+    home_team = game.get("home_team", {}).get("full_name", "Casa")
+    away_team = game.get("visitor_team", {}).get("full_name", "Visitante")
+    
+    draw.text((150, 120), away_team, fill='white', anchor="mm")
+    draw.text((largura//2, 120), "VS", fill='#fbbf24', anchor="mm")
+    draw.text((450, 120), home_team, fill='white', anchor="mm")
+    
+    draw.rectangle([50, 180, largura-50, 300], fill='#1f2937', outline='#1e3a8a')
+    draw.line([largura//2, 190, largura//2, 290], fill='#1e3a8a')
+    
+    total_pred = predictions.get("total", {})
+    if total_pred:
+        draw.text((100, 200), "TOTAL", fill='#fbbf24', anchor="mm")
+        draw.text((100, 230), f"{total_pred.get('tendencia', 'N/A')}", fill='white', anchor="mm")
+        draw.text((100, 260), f"{total_pred.get('confianca', 0)}%", fill='white', anchor="mm")
+    
+    vencedor_pred = predictions.get("vencedor", {})
+    if vencedor_pred:
+        draw.text((500, 200), "VENCEDOR", fill='#fbbf24', anchor="mm")
+        draw.text((500, 230), f"{vencedor_pred.get('vencedor', 'N/A')}", fill='white', anchor="mm")
+        draw.text((500, 260), f"{vencedor_pred.get('confianca', 0)}%", fill='white', anchor="mm")
+    
+    draw.text((largura//2, 350), "Sistema NBA 2024-2025", fill='white', anchor="mm")
+    
+    return img
+
+# =============================
+# FUNÇÕES PARA GESTÃO DE ALERTAS TOP4
+# =============================
+
 def salvar_alerta_top4(jogos_top4: list, data_str: str):
     """Salva um alerta Top 4 no arquivo de alertas"""
     alertas = carregar_alertas()
     
-    # Gera um ID único para o alerta Top 4
     alerta_id = f"top4_{int(datetime.now().timestamp())}"
     
-    # Prepara a estrutura do alerta Top 4
     alerta = {
         "tipo": "top4",
         "timestamp": datetime.now().isoformat(),
@@ -1995,7 +1801,6 @@ def enviar_alerta_top4_compacto(data_str: str, jogos_selecionados: list = None):
     top4_jogos = obter_top4_melhores_jogos(data_str)
     
     if not top4_jogos:
-        # Envia pôster informando que não há jogos
         jogo_vazio = {
             "home_team": {"full_name": "Nenhum jogo"},
             "visitor_team": {"full_name": "encontrado hoje"},
@@ -2018,18 +1823,14 @@ def enviar_alerta_top4_compacto(data_str: str, jogos_selecionados: list = None):
         enviar_poster_telegram(poster, TELEGRAM_CHAT_ID_ALT2)
         return
     
-    # Se não foram especificados jogos selecionados, usa todos os 4
     if jogos_selecionados is None:
         jogos_selecionados = top4_jogos
     else:
-        # Filtra apenas os jogos selecionados
         jogos_selecionados = [jogo for jogo in top4_jogos if jogo in jogos_selecionados]
     
-    # Cria e envia o pôster compacto
     poster = criar_poster_top4_compacto(jogos_selecionados)
     
     if enviar_poster_telegram(poster, TELEGRAM_CHAT_ID_ALT2):
-        # Salva o alerta Top 4
         salvar_alerta_top4(jogos_selecionados, data_str)
         st.success(f"✅ Pôster Top 4 compacto enviado com {len(jogos_selecionados)} jogos!")
         return True
@@ -2051,15 +1852,12 @@ def verificar_e_conferir_top4_automaticamente():
     alertas_conferidos = 0
     
     for alerta_id, alerta in alertas_top4.items():
-        # Pula se já foi conferido
         if alerta.get("conferido", False):
             continue
         
-        # Pula se não for do tipo top4
         if alerta.get("tipo") != "top4":
             continue
         
-        # Verifica se todos os jogos estão finalizados
         todos_finalizados = True
         todos_conferidos = True
         
@@ -2073,23 +1871,19 @@ def verificar_e_conferir_top4_automaticamente():
             if not jogo_data.get("conferido", False):
                 todos_conferidos = False
         
-        # Se todos estão finalizados mas não conferidos, faz conferência automática
         if todos_finalizados and not todos_conferidos:
             st.info(f"🔄 Conferindo automaticamente Top 4 {alerta_id}...")
             
-            # Busca dados atualizados de cada jogo
             for jogo_data in alerta["jogos"]:
                 jogo = jogo_data.get("jogo", {})
                 game_id = jogo.get("id")
                 
                 if game_id:
-                    # Busca dados atualizados
                     resp = balldontlie_get(f"games/{game_id}")
                     if resp and "data" in resp:
                         jogo_atualizado = resp["data"]
                         jogo_data["jogo"] = jogo_atualizado
                         
-                        # Calcula resultados automaticamente
                         home_score = jogo_atualizado.get("home_team_score", 0)
                         away_score = jogo_atualizado.get("visitor_team_score", 0)
                         total_pontos = home_score + away_score
@@ -2098,7 +1892,6 @@ def verificar_e_conferir_top4_automaticamente():
                         total_pred = predictions.get("total", {})
                         vencedor_pred = predictions.get("vencedor", {})
                         
-                        # Calcula resultado do Total
                         tendencia_total = total_pred.get("tendencia", "")
                         if "Mais" in tendencia_total:
                             try:
@@ -2113,7 +1906,6 @@ def verificar_e_conferir_top4_automaticamente():
                             except:
                                 jogo_data["resultado_total"] = None
                         
-                        # Calcula resultado do Vencedor
                         vencedor_previsto = vencedor_pred.get("vencedor", "")
                         if vencedor_previsto == "Casa" and home_score > away_score:
                             jogo_data["resultado_vencedor"] = "Green"
@@ -2124,10 +1916,8 @@ def verificar_e_conferir_top4_automaticamente():
                         elif vencedor_previsto in ["Casa", "Visitante", "Empate"]:
                             jogo_data["resultado_vencedor"] = "Red"
                         
-                        # Marca como conferido
                         jogo_data["conferido"] = True
             
-            # Atualiza estatísticas com os resultados
             for jogo_data in alerta["jogos"]:
                 resultado_total = jogo_data.get("resultado_total")
                 resultado_vencedor = jogo_data.get("resultado_vencedor")
@@ -2142,11 +1932,9 @@ def verificar_e_conferir_top4_automaticamente():
                 elif resultado_vencedor == "Red":
                     atualizar_estatisticas("⚪ INDEFINIDO", "🔴 RED")
             
-            # Marca o alerta como conferido
             alerta["conferido"] = True
             atualizar_alerta_top4(alerta_id, alerta)
             
-            # Envia o pôster de resultado automaticamente
             try:
                 poster = criar_poster_top4_resultado(alerta)
                 if enviar_poster_telegram(poster, TELEGRAM_CHAT_ID_ALT2):
@@ -2177,12 +1965,10 @@ def conferir_alertas_top4():
     for alerta_id, alerta in alertas_top4.items():
         st.subheader(f"Alerta Top 4 - {alerta.get('data_jogos', 'Data não especificada')}")
         
-        # Verifica se a estrutura do alerta está correta
         if "jogos" not in alerta:
             st.error(f"Estrutura inválida do alerta {alerta_id}")
             continue
             
-        # Exibe cada jogo do alerta
         for i, jogo_data in enumerate(alerta["jogos"]):
             if i >= 4:
                 break
@@ -2202,7 +1988,6 @@ def conferir_alertas_top4():
                 total_pred = predictions.get("total", {})
                 st.write(f"**Total:** {total_pred.get('tendencia', 'N/A')}")
                 
-                # Seleção de resultado para Total
                 resultado_total = jogo_data.get("resultado_total", None)
                 options_total = ["🟢 GREEN", "🔴 RED", "⚪ PENDENTE"]
                 index_total = 2
@@ -2218,7 +2003,6 @@ def conferir_alertas_top4():
                     key=f"total_{alerta_id}_{i}"
                 )
                 
-                # Converte para Green/Red
                 if novo_resultado_total == "🟢 GREEN":
                     jogo_data["resultado_total"] = "Green"
                 elif novo_resultado_total == "🔴 RED":
@@ -2230,7 +2014,6 @@ def conferir_alertas_top4():
                 vencedor_pred = predictions.get("vencedor", {})
                 st.write(f"**Vencedor:** {vencedor_pred.get('vencedor', 'N/A')}")
                 
-                # Seleção de resultado para Vencedor
                 resultado_vencedor = jogo_data.get("resultado_vencedor", None)
                 options_vencedor = ["🟢 GREEN", "🔴 RED", "⚪ PENDENTE"]
                 index_vencedor = 2
@@ -2246,7 +2029,6 @@ def conferir_alertas_top4():
                     key=f"vencedor_{alerta_id}_{i}"
                 )
                 
-                # Converte para Green/Red
                 if novo_resultado_vencedor == "🟢 GREEN":
                     jogo_data["resultado_vencedor"] = "Green"
                 elif novo_resultado_vencedor == "🔴 RED":
@@ -2255,19 +2037,16 @@ def conferir_alertas_top4():
                     jogo_data["resultado_vencedor"] = None
             
             with col4:
-                # Marcar jogo como conferido
                 jogo_conferido = jogo_data.get("conferido", False)
                 if st.checkbox("Conferido", value=jogo_conferido, key=f"conferido_{alerta_id}_{i}"):
                     jogo_data["conferido"] = True
                 else:
                     jogo_data["conferido"] = False
         
-        # Botões de ação para o alerta inteiro
         col_btn1, col_btn2, col_btn3 = st.columns(3)
         
         with col_btn1:
             if st.button("💾 Salvar Conferência", key=f"save_{alerta_id}"):
-                # Atualiza o alerta
                 atualizar_alerta_top4(alerta_id, alerta)
                 st.success("Conferência salva!")
         
@@ -2280,15 +2059,12 @@ def conferir_alertas_top4():
                     st.error(f"Erro ao gerar pré-visualização: {e}")
         
         with col_btn3:
-            # Verifica se todos os jogos estão conferidos
             todos_conferidos = all(jogo.get("conferido", False) for jogo in alerta["jogos"])
             if todos_conferidos:
                 if st.button("📤 Enviar Resultado", key=f"send_{alerta_id}"):
-                    # Envia o pôster de resultado
                     try:
                         poster = criar_poster_top4_resultado(alerta)
                         if enviar_poster_telegram(poster, TELEGRAM_CHAT_ID_ALT2):
-                            # Marca o alerta como conferido e enviado
                             alerta["conferido"] = True
                             alerta["enviado_telegram"] = True
                             atualizar_alerta_top4(alerta_id, alerta)
@@ -2301,90 +2077,6 @@ def conferir_alertas_top4():
                 st.warning("Conferir todos os jogos antes de enviar.")
         
         st.markdown("---")
-
-def exibir_interface_top4_compacto(data_str_api: str):
-    """Exibe interface para seleção e envio do Top 4 compacto"""
-    st.sidebar.subheader("🏆 TOP 4 - Alerta Compacto")
-    
-    # Busca os top 4 jogos
-    top4_jogos = obter_top4_melhores_jogos(data_str_api)
-    
-    if not top4_jogos:
-        st.sidebar.warning("Nenhum jogo encontrado para análise.")
-        return
-    
-    st.sidebar.write("**Selecione os jogos para o alerta:**")
-    
-    # Checkboxes para seleção individual
-    jogos_selecionados = []
-    for i, jogo_info in enumerate(top4_jogos):
-        home_team = jogo_info["home_team_name"]
-        visitor_team = jogo_info["visitor_team_name"]
-        
-        # Calcula pontuação para exibição
-        pontuacao = jogo_info.get("pontuacao", 0)
-        
-        col1, col2 = st.sidebar.columns([3, 1])
-        with col1:
-            if st.sidebar.checkbox(
-                f"{visitor_team} @ {home_team}", 
-                value=True,
-                key=f"top4_{i}"
-            ):
-                jogos_selecionados.append(jogo_info)
-        
-        with col2:
-            st.sidebar.write(f"`{pontuacao:.1f}`")
-    
-    # Botões de ação
-    col_btn1, col_btn2 = st.sidebar.columns(2)
-    
-    with col_btn1:
-        if st.button("🖼️ Visualizar Pôster", key="viz_top4", use_container_width=True):
-            if jogos_selecionados:
-                poster = criar_poster_top4_compacto(jogos_selecionados)
-                st.image(poster, caption="Pré-visualização do Pôster Top 4", use_column_width=True)
-                
-                # Opção para baixar
-                buf = io.BytesIO()
-                poster.save(buf, format='PNG')
-                st.download_button(
-                    "📥 Baixar Pôster",
-                    buf.getvalue(),
-                    f"top4_compacto_{datetime.now().strftime('%Y%m%d_%H%M')}.png",
-                    "image/png"
-                )
-            else:
-                st.warning("Selecione pelo menos um jogo.")
-    
-    with col_btn2:
-        if st.button("🚀 Enviar Alerta", type="primary", key="env_top4", use_container_width=True):
-            if jogos_selecionados:
-                with st.spinner("Enviando alerta compacto..."):
-                    if enviar_alerta_top4_compacto(data_str_api, jogos_selecionados):
-                        st.success("Alerta Top 4 enviado com sucesso!")
-                    else:
-                        st.error("Erro ao enviar alerta.")
-            else:
-                st.warning("Selecione pelo menos um jogo.")
-    
-    # Exibe detalhes dos jogos selecionados
-    if jogos_selecionados:
-        st.sidebar.markdown("---")
-        st.sidebar.write(f"**📋 {len(jogos_selecionados)} jogos selecionados:**")
-        
-        for jogo_info in jogos_selecionados:
-            home_team = jogo_info["home_team_name"]
-            visitor_team = jogo_info["visitor_team_name"]
-            predictions = jogo_info["predictions"]
-            
-            total_pred = predictions.get("total", {})
-            vencedor_pred = predictions.get("vencedor", {})
-            
-            st.sidebar.write(f"• **{visitor_team}** @ **{home_team}**")
-            st.sidebar.write(f"  📊 {total_pred.get('tendencia', 'N/A')}")
-            st.sidebar.write(f"  🏆 {vencedor_pred.get('vencedor', 'N/A')}")
-            st.sidebar.write("")
 
 # =============================
 # EXIBIÇÃO DOS JOGOS ANALISADOS
@@ -2416,7 +2108,6 @@ def exibir_jogos_analisados():
         total_pred = predictions.get("total", {})
         vencedor_pred = predictions.get("vencedor", {})
         
-        # Card do jogo com escudos
         with st.expander(f"🏀 {home_team} vs {away_team} - {status}", expanded=False):
             col1, col2, col3 = st.columns([1, 2, 1])
             
@@ -2456,7 +2147,6 @@ def exibir_jogos_analisados():
 def conferir_resultados():
     st.header("📊 Conferência de Resultados")
     
-    # Botões de ação para conferência
     col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
     
     with col1:
@@ -2520,7 +2210,6 @@ def conferir_resultados():
         
         total_pontos = home_score + away_score
         
-        # Determina resultado do Total
         total_pred = predictions.get("total", {})
         tendencia_total = total_pred.get("tendencia", "")
         resultado_total = "⏳ Aguardando"
@@ -2538,7 +2227,6 @@ def conferir_resultados():
             except:
                 resultado_total = "⚪ INDEFINIDO"
         
-        # Determina resultado do Vencedor
         vencedor_pred = predictions.get("vencedor", {})
         vencedor_previsto = vencedor_pred.get("vencedor", "")
         resultado_vencedor = "⏳ Aguardando"
@@ -2554,7 +2242,6 @@ def conferir_resultados():
         else:
             resultado_vencedor = "⚪ INDEFINIDO"
         
-        # Exibe card do jogo com escudos
         col1, col2, col3, col4 = st.columns([1, 3, 2, 1])
         
         with col1:
@@ -2574,19 +2261,16 @@ def conferir_resultados():
         with col4:
             exibir_escudo_time(away_team, (60, 60))
         
-        # Botões de ação
         col_btn1, col_btn2 = st.columns(2)
         
         with col_btn1:
             if not alerta.get("conferido", False):
                 if st.button("✅ Confirmar", key=f"conf_{alerta_id}", use_container_width=True):
-                    # Atualiza estatísticas quando confirma
                     if resultado_total in ["🟢 GREEN", "🔴 RED"] and resultado_vencedor in ["🟢 GREEN", "🔴 RED"]:
                         atualizar_estatisticas(resultado_total, resultado_vencedor)
                     
                     alertas[alerta_id]["conferido"] = True
                     
-                    # Envia pôster individual
                     if enviar_alerta_resultado_individual(alerta_id, alertas[alerta_id]):
                         st.success("✅ Conferido e pôster enviado!")
                     else:
@@ -2615,7 +2299,6 @@ def testar_sistema_posteres():
     """Função para testar a geração de pôsteres"""
     st.header("🎨 Teste do Sistema de Pôsteres")
     
-    # Cria um exemplo de jogo e previsões
     jogo_exemplo = {
         "id": 1,
         "home_team": {"full_name": "Los Angeles Lakers"},
@@ -2644,7 +2327,6 @@ def testar_sistema_posteres():
             poster = criar_poster_alerta(jogo_exemplo, predictions_exemplo, "previsao")
             st.image(poster, caption="Pôster de Previsão", use_column_width=True)
             
-            # Opção para baixar
             buf = io.BytesIO()
             poster.save(buf, format='PNG')
             st.download_button(
@@ -2655,7 +2337,6 @@ def testar_sistema_posteres():
             )
     
     with col2:
-        # Exemplo com resultado
         jogo_resultado = jogo_exemplo.copy()
         jogo_resultado["home_team_score"] = 115
         jogo_resultado["visitor_team_score"] = 108
@@ -2674,7 +2355,6 @@ def testar_sistema_posteres():
                 "image/png"
             )
     
-    # Teste de envio para Telegram
     st.subheader("📤 Teste de Envio para Telegram")
     
     if st.button("🚀 Enviar Pôster de Teste para Telegram"):
@@ -2697,7 +2377,6 @@ def main():
         initial_sidebar_state="expanded"
     )
     
-    # CSS customizado
     st.markdown("""
     <style>
     .main-header {
@@ -2740,7 +2419,7 @@ def main():
     
     st.markdown('<h1 class="main-header">🏀 NBA Elite AI - Sistema de Previsões</h1>', unsafe_allow_html=True)
     
-    # Sidebar melhorada
+    # Sidebar
     with st.sidebar:
         st.header("⚙️ Configurações")
         
@@ -2751,8 +2430,11 @@ def main():
             max_value=date.today() + timedelta(days=7)
         )
         
-        # CONVERSÃO CORRETA DA DATA PARA A API
         data_str_api = obter_data_correta_para_api(data_jogos)
+        
+        st.subheader("🔍 Buscar Jogos")
+        if st.button("🔎 Buscar Jogos da Data", type="primary", use_container_width=True):
+            buscar_jogos_data(data_str_api)
         
         st.subheader("🔧 Parâmetros")
         janela_jogos = st.slider(
@@ -2773,20 +2455,80 @@ def main():
         
         st.subheader("⭐ Top 4 Jogos")
         
-        # NOVA SEÇÃO TOP 4 COMPACTO
-        exibir_interface_top4_compacto(data_str_api)
-        
-        # Botão rápido para enviar todos os 4 jogos
-        if st.sidebar.button("🚀 Enviar Top 4 Completo", type="secondary", use_container_width=True):
-            with st.spinner("Enviando Top 4 completo..."):
-                top4_jogos = obter_top4_melhores_jogos(data_str_api)
-                if top4_jogos:
-                    if enviar_alerta_top4_compacto(data_str_api, top4_jogos):
-                        st.sidebar.success("Top 4 completo enviado!")
-                    else:
-                        st.sidebar.error("Erro ao enviar Top 4.")
-                else:
-                    st.sidebar.warning("Nenhum jogo encontrado.")
+        # Seção Top 4 - SÓ APARECE SE JÁ HOUVER JOGOS ENCONTRADOS
+        if 'jogos_encontrados' in st.session_state and st.session_state.jogos_encontrados:
+            top4_jogos = obter_top4_melhores_jogos(data_str_api)
+            
+            if top4_jogos:
+                st.sidebar.write("**Selecione os jogos para o alerta:**")
+                
+                jogos_selecionados = []
+                for i, jogo_info in enumerate(top4_jogos):
+                    home_team = jogo_info["home_team_name"]
+                    visitor_team = jogo_info["visitor_team_name"]
+                    
+                    pontuacao = jogo_info.get("pontuacao", 0)
+                    
+                    col1, col2 = st.sidebar.columns([3, 1])
+                    with col1:
+                        if st.sidebar.checkbox(
+                            f"{visitor_team} @ {home_team}", 
+                            value=True,
+                            key=f"top4_{i}"
+                        ):
+                            jogos_selecionados.append(jogo_info)
+                    
+                    with col2:
+                        st.sidebar.write(f"`{pontuacao:.1f}`")
+                
+                col_btn1, col_btn2 = st.sidebar.columns(2)
+                
+                with col_btn1:
+                    if st.button("🖼️ Visualizar Pôster", key="viz_top4", use_container_width=True):
+                        if jogos_selecionados:
+                            poster = criar_poster_top4_compacto(jogos_selecionados)
+                            st.image(poster, caption="Pré-visualização do Pôster Top 4", use_column_width=True)
+                            
+                            buf = io.BytesIO()
+                            poster.save(buf, format='PNG')
+                            st.download_button(
+                                "📥 Baixar Pôster",
+                                buf.getvalue(),
+                                f"top4_compacto_{datetime.now().strftime('%Y%m%d_%H%M')}.png",
+                                "image/png"
+                            )
+                        else:
+                            st.warning("Selecione pelo menos um jogo.")
+                
+                with col_btn2:
+                    if st.button("🚀 Enviar Alerta", type="primary", key="env_top4", use_container_width=True):
+                        if jogos_selecionados:
+                            with st.spinner("Enviando alerta compacto..."):
+                                if enviar_alerta_top4_compacto(data_str_api, jogos_selecionados):
+                                    st.success("Alerta Top 4 enviado com sucesso!")
+                                else:
+                                    st.error("Erro ao enviar alerta.")
+                        else:
+                            st.warning("Selecione pelo menos um jogo.")
+                
+                if jogos_selecionados:
+                    st.sidebar.markdown("---")
+                    st.sidebar.write(f"**📋 {len(jogos_selecionados)} jogos selecionados:**")
+                    
+                    for jogo_info in jogos_selecionados:
+                        home_team = jogo_info["home_team_name"]
+                        visitor_team = jogo_info["visitor_team_name"]
+                        predictions = jogo_info["predictions"]
+                        
+                        total_pred = predictions.get("total", {})
+                        vencedor_pred = predictions.get("vencedor", {})
+                        
+                        st.sidebar.write(f"• **{visitor_team}** @ **{home_team}**")
+                        st.sidebar.write(f"  📊 {total_pred.get('tendencia', 'N/A')}")
+                        st.sidebar.write(f"  🏆 {vencedor_pred.get('vencedor', 'N/A')}")
+                        st.sidebar.write("")
+        else:
+            st.sidebar.info("ℹ️ Busque jogos primeiro para ver o Top 4")
         
         st.subheader("🔄 Conferência Automática")
         if st.button("🤖 Conferir Top 4 Automaticamente", use_container_width=True):
@@ -2841,7 +2583,7 @@ def main():
                     pass
             st.rerun()
 
-    # Abas principais - ATUALIZADO com nova aba
+    # Abas principais
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "🎯 Análise do Dia", 
         "📈 Jogos Analisados", 
@@ -2873,9 +2615,16 @@ def exibir_aba_analise_melhorada(data_sel: date, data_str_api: str, janela: int,
     """Exibe análise dos jogos com interface melhorada"""
     st.header(f"🎯 Análise com Dados Reais 2024-2025 - {data_sel.strftime('%d/%m/%Y')}")
     
+    # Verifica se já há jogos encontrados
+    if 'jogos_encontrados' not in st.session_state:
+        st.info("ℹ️ Clique em 'Buscar Jogos da Data' na sidebar para começar")
+        return
+    
+    jogos = st.session_state.jogos_encontrados
+    
     col1, col2 = st.columns([2, 1])
     with col1:
-        top_n = st.slider("Número de jogos para analisar", 1, 15, 5)
+        top_n = st.slider("Número de jogos para analisar", 1, min(15, len(jogos)), min(5, len(jogos)))
     with col2:
         st.write("")
         st.write("")
@@ -2883,24 +2632,26 @@ def exibir_aba_analise_melhorada(data_sel: date, data_str_api: str, janela: int,
             analisar_jogos_com_dados_2025_melhorado(data_sel, data_str_api, top_n, janela, limite_confianca)
 
 def analisar_jogos_com_dados_2025_melhorado(data_sel: date, data_str_api: str, top_n: int, janela: int, limite_confianca: int):
-    """Versão melhorada da análise com interface do primeiro código - SEM AUTOMAÇÃO"""
+    """Versão melhorada da análise - SEM AUTOMAÇÃO"""
     progress_placeholder = st.empty()
     results_placeholder = st.empty()
     
     with progress_placeholder:
-        st.info(f"🔍 Buscando dados reais para {data_sel.strftime('%d/%m/%Y')}...")
+        st.info(f"🔍 Analisando jogos para {data_sel.strftime('%d/%m/%Y')}...")
         st.success("📊 Analisando com dados da temporada 2024-2025")
         progress_bar = st.progress(0)
         status_text = st.empty()
     
-    # Busca jogos com data corrigida
-    jogos = obter_jogos_data(data_str_api)
-    
-    if not jogos:
-        st.error("❌ Nenhum jogo encontrado para esta data")
+    # Usa os jogos já encontrados
+    if 'jogos_encontrados' not in st.session_state:
+        st.error("❌ Nenhum jogo encontrado. Busque jogos primeiro.")
         return
     
-    jogos = jogos[:top_n]
+    jogos = st.session_state.jogos_encontrados[:top_n]
+    
+    if not jogos:
+        st.error("❌ Nenhum jogo para analisar")
+        return
     
     status_text.text(f"📊 Analisando {len(jogos)} jogos com dados 2024-2025...")
     
@@ -2921,7 +2672,6 @@ def analisar_jogos_com_dados_2025_melhorado(data_sel: date, data_str_api: str, t
             away_id = jogo["visitor_team"]["id"]
             
             try:
-                # Previsões com dados reais 2024-2025
                 total_estim, total_conf, total_tend = prever_total_points(home_id, away_id, janela)
                 vencedor, vencedor_conf, vencedor_detalhe = prever_vencedor(home_id, away_id, janela)
                 
@@ -2938,7 +2688,6 @@ def analisar_jogos_com_dados_2025_melhorado(data_sel: date, data_str_api: str, t
                     }
                 }
                 
-                # Verifica se atende ao limite de confiança
                 alertas_ativos = []
                 if total_conf >= limite_confianca:
                     alertas_ativos.append(f"🎯 **Total de Pontos**: {total_tend} (Conf: {total_conf}%)")
@@ -2946,17 +2695,14 @@ def analisar_jogos_com_dados_2025_melhorado(data_sel: date, data_str_api: str, t
                 if vencedor_conf >= limite_confianca:
                     alertas_ativos.append(f"🏆 **Vencedor**: {vencedor} (Conf: {vencedor_conf}%)")
                 
-                # Exibe resultado com interface melhorada
                 st.markdown("---")
                 
-                # Header do jogo com escudos
                 col1, col2, col3 = st.columns([2, 1, 2])
                 
                 with col1:
                     st.subheader(home_team)
                     exibir_escudo_time(home_team, (100, 100))
                     
-                    # Estatísticas do time da casa
                     home_stats = obter_estatisticas_time_2025(home_id, janela)
                     st.caption(f"Win Rate: {home_stats['win_rate']:.1%}")
                     st.caption(f"PPG: {home_stats['pts_for_avg']:.1f}")
@@ -2965,7 +2711,6 @@ def analisar_jogos_com_dados_2025_melhorado(data_sel: date, data_str_api: str, t
                 with col2:
                     st.markdown("<h2 style='text-align: center;'>VS</h2>", unsafe_allow_html=True)
                     
-                    # Status e horário
                     status = jogo.get("status", "Agendado")
                     st.write(f"**Status:** {status}")
                     
@@ -2978,13 +2723,11 @@ def analisar_jogos_com_dados_2025_melhorado(data_sel: date, data_str_api: str, t
                     st.subheader(away_team)
                     exibir_escudo_time(away_team, (100, 100))
                     
-                    # Estatísticas do time visitante
                     away_stats = obter_estatisticas_time_2025(away_id, janela)
                     st.caption(f"Win Rate: {away_stats['win_rate']:.1%}")
                     st.caption(f"PPG: {away_stats['pts_for_avg']:.1f}")
                     st.caption(f"Últimos {away_stats['games']} jogos")
                 
-                # Previsões em cards
                 col_pred1, col_pred2 = st.columns(2)
                 
                 with col_pred1:
@@ -3007,7 +2750,6 @@ def analisar_jogos_com_dados_2025_melhorado(data_sel: date, data_str_api: str, t
                     </div>
                     """, unsafe_allow_html=True)
                 
-                # Alertas baseados na confiança
                 if alertas_ativos:
                     st.markdown("<div class='green-alert'>", unsafe_allow_html=True)
                     st.subheader("🚨 Alertas Ativos")
@@ -3015,7 +2757,6 @@ def analisar_jogos_com_dados_2025_melhorado(data_sel: date, data_str_api: str, t
                     for alerta in alertas_ativos:
                         st.write(f"✅ {alerta}")
                     
-                    # Botões de ação - AGORA APENAS INICIADOS PELO USUÁRIO
                     col_salvar, col_telegram = st.columns(2)
                     
                     with col_salvar:
@@ -3039,7 +2780,6 @@ def analisar_jogos_com_dados_2025_melhorado(data_sel: date, data_str_api: str, t
                     st.write(f"Limite requerido: {limite_confianca}%")
                     st.write(f"Total: {total_conf}% | Vencedor: {vencedor_conf}%")
                     
-                    # Mesmo sem alertas ativos, usuário pode salvar manualmente
                     col_salvar_manual, col_telegram_manual = st.columns(2)
                     
                     with col_salvar_manual:
@@ -3069,7 +2809,6 @@ def analisar_jogos_com_dados_2025_melhorado(data_sel: date, data_str_api: str, t
     
     progress_placeholder.empty()
     
-    # Resumo final
     st.success(f"✅ Análise com dados 2024-2025 concluída!")
     st.info(f"""
     **📊 Resumo da Análise:**
