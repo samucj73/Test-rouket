@@ -105,16 +105,10 @@ def formatar_data_api_para_local(data_utc: str) -> tuple[str, str]:
         # Se a hora ficou negativa, ajusta para o dia anterior
         if hora_brasil < 0:
             hora_brasil += 24
-            # ATENÇÃO: NÃO diminuímos o dia aqui porque os jogos da NBA
-            # que acontecem à noite nos EUA aparecem como dia seguinte na API UTC
-            # mas na realidade são no mesmo dia no horário local
-            # dia_int -= 1  # REMOVIDO - mantém o mesmo dia
         
         # Formata de volta para string
         data_str = f"{dia_int:02d}/{mes}/{ano}"
         hora_str = f"{hora_brasil:02d}:{minuto}"
-        
-        print(f"DEBUG CONVERSÃO: {data_utc} -> {data_str} {hora_str}")
         
         return data_str, hora_str
         
@@ -128,7 +122,6 @@ def formatar_data_api_para_local(data_utc: str) -> tuple[str, str]:
 
 def obter_data_correta_para_api(data: date) -> str:
     """Converte data local para formato correto da API considerando UTC"""
-    # A API espera datas em UTC, então precisamos garantir que busca os jogos do dia correto
     data_str = data.strftime("%Y-%m-%d")
     return data_str
 
@@ -396,12 +389,6 @@ def obter_jogos_data(data_str: str) -> list:
     # Log para debug
     if jogos:
         st.success(f"✅ Encontrados {len(jogos)} jogos para {data_str}")
-        for jogo in jogos[:3]:  # Mostra apenas os primeiros 3 para debug
-            data_jogo = jogo.get("date", "")
-            home_team = jogo.get("home_team", {}).get("full_name", "Casa")
-            away_team = jogo.get("visitor_team", {}).get("full_name", "Visitante")
-            data_formatada, hora_formatada = formatar_data_api_para_local(data_jogo)
-            st.write(f"📅 {home_team} vs {away_team} - {data_formatada} {hora_formatada}")
     else:
         st.warning(f"⚠️ Nenhum jogo encontrado para {data_str}")
     
@@ -653,8 +640,6 @@ def obter_estatisticas_time_2025(team_id: int, window_games: int = 15) -> dict:
     games = []
     page = 1
     max_pages = 3
-    
-    st.info(f"📊 Buscando estatísticas 2024-2025 do time {team_id}...")
     
     while page <= max_pages:
         params = {
@@ -1301,13 +1286,16 @@ def enviar_poster_telegram(poster_img: Image.Image, chat_id: str = TELEGRAM_CHAT
         return False
 
 # =============================
-# SISTEMA DE ALERTAS APENAS COM PÔSTERES
+# SISTEMA DE ALERTAS APENAS COM PÔSTERES - MODIFICADO (SEM AUTOMAÇÃO)
 # =============================
 
 def verificar_e_enviar_alerta(game: dict, predictions: dict, send_to_telegram: bool = False):
-    """Sistema de alertas APENAS com pôsteres - versão simplificada"""
+    """Sistema de alertas APENAS com pôsteres - INICIADO APENAS PELO USUÁRIO"""
     alertas = carregar_alertas()
     fid = str(game.get("id"))
+    
+    # SEMPRE começa sem enviar para Telegram - só envia quando usuário clicar
+    enviar_agora = False
     
     if fid not in alertas:
         alertas[fid] = {
@@ -1322,26 +1310,34 @@ def verificar_e_enviar_alerta(game: dict, predictions: dict, send_to_telegram: b
         }
         salvar_alertas(alertas)
         
-        # SEMPRE envia apenas o pôster, não envia mensagem textual
+        # NÃO envia automaticamente - só quando o usuário pedir
         if send_to_telegram:
-            try:
-                # Cria e envia pôster de previsão
-                poster = criar_poster_alerta(game, predictions, "previsao")
-                
-                # Envia apenas o pôster
-                if enviar_poster_telegram(poster):
-                    alertas[fid]["poster_enviado"] = True
-                    alertas[fid]["enviado_telegram"] = True
-                    salvar_alertas(alertas)
-                    return True
-                else:
-                    return False
-                    
-            except Exception as e:
-                print(f"Erro no sistema de pôster: {e}")
+            enviar_agora = True
+    
+    # Se já existe, verifica se precisa enviar
+    elif send_to_telegram:
+        enviar_agora = True
+    
+    # Envia apenas se o usuário solicitou
+    if enviar_agora:
+        try:
+            # Cria e envia pôster de previsão
+            poster = criar_poster_alerta(game, predictions, "previsao")
+            
+            # Envia apenas o pôster
+            if enviar_poster_telegram(poster):
+                alertas[fid]["poster_enviado"] = True
+                alertas[fid]["enviado_telegram"] = True
+                salvar_alertas(alertas)
+                return True
+            else:
                 return False
-        return True
-    return False
+                
+        except Exception as e:
+            print(f"Erro no sistema de pôster: {e}")
+            return False
+    
+    return True
 
 def enviar_alerta_resultado_individual(alerta_id: str, alerta: dict):
     """Envia alerta individual de resultado APENAS com pôster"""
@@ -1386,8 +1382,6 @@ def enviar_alerta_resultados_conferidos():
         
         # Pequena pausa entre envios
         time.sleep(2)
-    
-    # NÃO envia mensagem consolidada final - apenas os pôsteres individuais
     
     if alertas_enviados > 0:
         salvar_alertas(alertas)
@@ -2043,6 +2037,133 @@ def enviar_alerta_top4_compacto(data_str: str, jogos_selecionados: list = None):
         st.error("❌ Erro ao enviar pôster Top 4 compacto")
         return False
 
+# =============================
+# FUNÇÃO DE CONFERÊNCIA AUTOMÁTICA DO TOP 4
+# =============================
+
+def verificar_e_conferir_top4_automaticamente():
+    """Verifica automaticamente se todos os jogos de um alerta Top 4 estão finalizados e gera resultado"""
+    alertas_top4 = carregar_alertas_top4()
+    
+    if not alertas_top4:
+        return 0
+    
+    alertas_conferidos = 0
+    
+    for alerta_id, alerta in alertas_top4.items():
+        # Pula se já foi conferido
+        if alerta.get("conferido", False):
+            continue
+        
+        # Pula se não for do tipo top4
+        if alerta.get("tipo") != "top4":
+            continue
+        
+        # Verifica se todos os jogos estão finalizados
+        todos_finalizados = True
+        todos_conferidos = True
+        
+        for jogo_data in alerta["jogos"]:
+            jogo = jogo_data.get("jogo", {})
+            status = jogo.get("status", "").upper()
+            
+            if status not in ["FINAL", "FINAL/OT"]:
+                todos_finalizados = False
+            
+            if not jogo_data.get("conferido", False):
+                todos_conferidos = False
+        
+        # Se todos estão finalizados mas não conferidos, faz conferência automática
+        if todos_finalizados and not todos_conferidos:
+            st.info(f"🔄 Conferindo automaticamente Top 4 {alerta_id}...")
+            
+            # Busca dados atualizados de cada jogo
+            for jogo_data in alerta["jogos"]:
+                jogo = jogo_data.get("jogo", {})
+                game_id = jogo.get("id")
+                
+                if game_id:
+                    # Busca dados atualizados
+                    resp = balldontlie_get(f"games/{game_id}")
+                    if resp and "data" in resp:
+                        jogo_atualizado = resp["data"]
+                        jogo_data["jogo"] = jogo_atualizado
+                        
+                        # Calcula resultados automaticamente
+                        home_score = jogo_atualizado.get("home_team_score", 0)
+                        away_score = jogo_atualizado.get("visitor_team_score", 0)
+                        total_pontos = home_score + away_score
+                        
+                        predictions = jogo_data.get("predictions", {})
+                        total_pred = predictions.get("total", {})
+                        vencedor_pred = predictions.get("vencedor", {})
+                        
+                        # Calcula resultado do Total
+                        tendencia_total = total_pred.get("tendencia", "")
+                        if "Mais" in tendencia_total:
+                            try:
+                                limite = float(tendencia_total.split()[-1])
+                                jogo_data["resultado_total"] = "Green" if total_pontos > limite else "Red"
+                            except:
+                                jogo_data["resultado_total"] = None
+                        elif "Menos" in tendencia_total:
+                            try:
+                                limite = float(tendencia_total.split()[-1])
+                                jogo_data["resultado_total"] = "Green" if total_pontos < limite else "Red"
+                            except:
+                                jogo_data["resultado_total"] = None
+                        
+                        # Calcula resultado do Vencedor
+                        vencedor_previsto = vencedor_pred.get("vencedor", "")
+                        if vencedor_previsto == "Casa" and home_score > away_score:
+                            jogo_data["resultado_vencedor"] = "Green"
+                        elif vencedor_previsto == "Visitante" and away_score > home_score:
+                            jogo_data["resultado_vencedor"] = "Green"
+                        elif vencedor_previsto == "Empate" and home_score == away_score:
+                            jogo_data["resultado_vencedor"] = "Green"
+                        elif vencedor_previsto in ["Casa", "Visitante", "Empate"]:
+                            jogo_data["resultado_vencedor"] = "Red"
+                        
+                        # Marca como conferido
+                        jogo_data["conferido"] = True
+            
+            # Atualiza estatísticas com os resultados
+            for jogo_data in alerta["jogos"]:
+                resultado_total = jogo_data.get("resultado_total")
+                resultado_vencedor = jogo_data.get("resultado_vencedor")
+                
+                if resultado_total == "Green":
+                    atualizar_estatisticas("🟢 GREEN", "⚪ INDEFINIDO")
+                elif resultado_total == "Red":
+                    atualizar_estatisticas("🔴 RED", "⚪ INDEFINIDO")
+                
+                if resultado_vencedor == "Green":
+                    atualizar_estatisticas("⚪ INDEFINIDO", "🟢 GREEN")
+                elif resultado_vencedor == "Red":
+                    atualizar_estatisticas("⚪ INDEFINIDO", "🔴 RED")
+            
+            # Marca o alerta como conferido
+            alerta["conferido"] = True
+            atualizar_alerta_top4(alerta_id, alerta)
+            
+            # Envia o pôster de resultado automaticamente
+            try:
+                poster = criar_poster_top4_resultado(alerta)
+                if enviar_poster_telegram(poster, TELEGRAM_CHAT_ID_ALT2):
+                    alerta["enviado_telegram"] = True
+                    atualizar_alerta_top4(alerta_id, alerta)
+                    st.success(f"✅ Pôster de resultado Top 4 enviado automaticamente!")
+            except Exception as e:
+                st.error(f"❌ Erro ao enviar pôster de resultado: {e}")
+            
+            alertas_conferidos += 1
+    
+    return alertas_conferidos
+
+# =============================
+# CONFERÊNCIA DE ALERTAS TOP 4
+# =============================
+
 def conferir_alertas_top4():
     """Interface para conferência dos alertas Top 4"""
     st.header("✅ Conferência - Alertas Top 4")
@@ -2667,6 +2788,16 @@ def main():
                 else:
                     st.sidebar.warning("Nenhum jogo encontrado.")
         
+        st.subheader("🔄 Conferência Automática")
+        if st.button("🤖 Conferir Top 4 Automaticamente", use_container_width=True):
+            with st.spinner("Conferindo Top 4 automaticamente..."):
+                alertas_conferidos = verificar_e_conferir_top4_automaticamente()
+                if alertas_conferidos > 0:
+                    st.success(f"✅ {alertas_conferidos} alertas Top 4 conferidos automaticamente!")
+                    st.rerun()
+                else:
+                    st.info("ℹ️ Nenhum Top 4 pendente para conferência automática.")
+        
         st.subheader("🔄 Atualizações")
         col1, col2 = st.columns(2)
         
@@ -2742,29 +2873,23 @@ def exibir_aba_analise_melhorada(data_sel: date, data_str_api: str, janela: int,
     """Exibe análise dos jogos com interface melhorada"""
     st.header(f"🎯 Análise com Dados Reais 2024-2025 - {data_sel.strftime('%d/%m/%Y')}")
     
-    col1, col2, col3 = st.columns([2, 1, 1])
+    col1, col2 = st.columns([2, 1])
     with col1:
         top_n = st.slider("Número de jogos para analisar", 1, 15, 5)
     with col2:
         st.write("")
         st.write("")
-        enviar_auto = st.checkbox("Enviar pôsteres automaticamente", value=True)
-    with col3:
-        st.write("")
-        st.write("")
         if st.button("🚀 ANALISAR JOGOS", type="primary", use_container_width=True):
-            analisar_jogos_com_dados_2025_melhorado(data_sel, data_str_api, top_n, janela, enviar_auto, limite_confianca)
+            analisar_jogos_com_dados_2025_melhorado(data_sel, data_str_api, top_n, janela, limite_confianca)
 
-def analisar_jogos_com_dados_2025_melhorado(data_sel: date, data_str_api: str, top_n: int, janela: int, enviar_auto: bool, limite_confianca: int):
-    """Versão melhorada da análise com interface do primeiro código"""
+def analisar_jogos_com_dados_2025_melhorado(data_sel: date, data_str_api: str, top_n: int, janela: int, limite_confianca: int):
+    """Versão melhorada da análise com interface do primeiro código - SEM AUTOMAÇÃO"""
     progress_placeholder = st.empty()
     results_placeholder = st.empty()
     
     with progress_placeholder:
         st.info(f"🔍 Buscando dados reais para {data_sel.strftime('%d/%m/%Y')}...")
         st.success("📊 Analisando com dados da temporada 2024-2025")
-        if enviar_auto:
-            st.warning("🖼️ Pôsteres serão enviados para Telegram")
         progress_bar = st.progress(0)
         status_text = st.empty()
     
@@ -2780,7 +2905,6 @@ def analisar_jogos_com_dados_2025_melhorado(data_sel: date, data_str_api: str, t
     status_text.text(f"📊 Analisando {len(jogos)} jogos com dados 2024-2025...")
     
     resultados = []
-    alertas_enviados = 0
     
     with results_placeholder:
         st.subheader(f"🎯 Análise com Dados Reais 2024-2025")
@@ -2821,15 +2945,6 @@ def analisar_jogos_com_dados_2025_melhorado(data_sel: date, data_str_api: str, t
                 
                 if vencedor_conf >= limite_confianca:
                     alertas_ativos.append(f"🏆 **Vencedor**: {vencedor} (Conf: {vencedor_conf}%)")
-                
-                # Envia pôster se houver alertas ativos
-                enviado = False
-                if alertas_ativos and enviar_auto:
-                    enviado = verificar_e_enviar_alerta(jogo, predictions, True)
-                    if enviado:
-                        alertas_enviados += 1
-                elif alertas_ativos:
-                    enviado = verificar_e_enviar_alerta(jogo, predictions, False)
                 
                 # Exibe resultado com interface melhorada
                 st.markdown("---")
@@ -2900,22 +3015,22 @@ def analisar_jogos_com_dados_2025_melhorado(data_sel: date, data_str_api: str, t
                     for alerta in alertas_ativos:
                         st.write(f"✅ {alerta}")
                     
-                    if not enviado:
-                        col_salvar, col_telegram = st.columns(2)
-                        
-                        with col_salvar:
-                            if st.button("💾 Salvar Alerta", key=f"save_{jogo['id']}"):
-                                verificar_e_enviar_alerta(jogo, predictions, False)
+                    # Botões de ação - AGORA APENAS INICIADOS PELO USUÁRIO
+                    col_salvar, col_telegram = st.columns(2)
+                    
+                    with col_salvar:
+                        if st.button("💾 Salvar Alerta", key=f"save_{jogo['id']}"):
+                            if verificar_e_enviar_alerta(jogo, predictions, False):
                                 st.success("Alerta salvo com sucesso!")
-                        
-                        with col_telegram:
-                            if st.button("🖼️ Enviar Pôster", key=f"tg_{jogo['id']}"):
-                                if verificar_e_enviar_alerta(jogo, predictions, True):
-                                    st.success("Pôster enviado para Telegram!")
-                                else:
-                                    st.error("Erro ao enviar pôster")
-                    else:
-                        st.success("🖼️ Pôster enviado para Telegram")
+                            else:
+                                st.error("Erro ao salvar alerta")
+                    
+                    with col_telegram:
+                        if st.button("🖼️ Enviar Pôster", key=f"tg_{jogo['id']}"):
+                            if verificar_e_enviar_alerta(jogo, predictions, True):
+                                st.success("Pôster enviado para Telegram!")
+                            else:
+                                st.error("Erro ao enviar pôster")
                     
                     st.markdown("</div>", unsafe_allow_html=True)
                 else:
@@ -2923,6 +3038,24 @@ def analisar_jogos_com_dados_2025_melhorado(data_sel: date, data_str_api: str, t
                     st.write("🔍 **Confiança insuficiente** para gerar alertas")
                     st.write(f"Limite requerido: {limite_confianca}%")
                     st.write(f"Total: {total_conf}% | Vencedor: {vencedor_conf}%")
+                    
+                    # Mesmo sem alertas ativos, usuário pode salvar manualmente
+                    col_salvar_manual, col_telegram_manual = st.columns(2)
+                    
+                    with col_salvar_manual:
+                        if st.button("💾 Salvar Manualmente", key=f"save_manual_{jogo['id']}"):
+                            if verificar_e_enviar_alerta(jogo, predictions, False):
+                                st.success("Alerta salvo manualmente!")
+                            else:
+                                st.error("Erro ao salvar alerta")
+                    
+                    with col_telegram_manual:
+                        if st.button("🖼️ Enviar Pôster Manual", key=f"tg_manual_{jogo['id']}"):
+                            if verificar_e_enviar_alerta(jogo, predictions, True):
+                                st.success("Pôster enviado manualmente!")
+                            else:
+                                st.error("Erro ao enviar pôster")
+                    
                     st.markdown("</div>", unsafe_allow_html=True)
                 
                 resultados.append({
@@ -2941,7 +3074,6 @@ def analisar_jogos_com_dados_2025_melhorado(data_sel: date, data_str_api: str, t
     st.info(f"""
     **📊 Resumo da Análise:**
     - 🏀 {len(resultados)} jogos analisados com dados 2024-2025
-    - 🖼️ {alertas_enviados} pôsteres enviados para Telegram
     - 📈 Estatísticas baseadas na temporada atual
     - 💾 Dados salvos para conferência futura
     """)
