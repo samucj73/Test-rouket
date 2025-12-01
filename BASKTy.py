@@ -1081,13 +1081,13 @@ def criar_poster_top4_compacto(jogos_top4: list) -> Image.Image:
         
         y_pos += 120
         
-        cabecalho_rect_height = 80
+        cabecalho_rect_height = 95
         draw.rectangle([20, y_pos, largura-20, y_pos + cabecalho_rect_height], 
                       fill="#1e3a8a", outline=cor_destaque, width=2)
         
         textos_cabecalho = [
             "🎯 ALERTA TOP 4 JOGOS COMPOSTOS 🎯",
-            "Análise baseada em dados estatísticos da temporada 2024-2025",
+            "Análise baseada em dados estatísticos da temporada 2025-2026",
             "Tendências de apostas: Total de Pontos e Vencedor",
             "Confiança mínima: 60% | Dados atualizados em tempo real"
         ]
@@ -1210,7 +1210,7 @@ def criar_poster_top4_compacto(jogos_top4: list) -> Image.Image:
         footer_y = altura - 40
         draw.rectangle([0, footer_y, largura, altura], fill=cor_principal)
         
-        footer_texto = "TOP 4 JOGOS NBA - ANÁLISE ESTATÍSTICA - TENDÊNCIAS DE APOSTAS - DADOS 2024-2025"
+        footer_texto = "TOP 4 JOGOS NBA - ANÁLISE ESTATÍSTICA - TENDÊNCIAS DE APOSTAS - DADOS 2025-2026"
         bbox_footer = draw.textbbox((0, 0), footer_texto, font=fonte_pequena)
         largura_footer = bbox_footer[2] - bbox_footer[0]
         draw.text(((largura - largura_footer) // 2, footer_y + 12), footer_texto, 
