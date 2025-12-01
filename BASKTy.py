@@ -1036,7 +1036,7 @@ def obter_top4_melhores_jogos(data_str: str) -> list:
 def criar_poster_top4_compacto(jogos_top4: list) -> Image.Image:
     """Cria um pôster compacto com os 4 melhores jogos do dia"""
     try:
-        largura, altura = 650, 1000
+        largura, altura = 600, 1000
         img = Image.new('RGB', (largura, altura), color='#0c0c0c')
         draw = ImageDraw.Draw(img)
         
@@ -1081,7 +1081,7 @@ def criar_poster_top4_compacto(jogos_top4: list) -> Image.Image:
         
         y_pos += 120
         
-        cabecalho_rect_height = 90
+        cabecalho_rect_height = 80
         draw.rectangle([20, y_pos, largura-20, y_pos + cabecalho_rect_height], 
                       fill="#1e3a8a", outline=cor_destaque, width=2)
         
