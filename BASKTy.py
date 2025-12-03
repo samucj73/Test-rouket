@@ -1710,10 +1710,10 @@ def criar_poster_top4_compacto(jogos_top4: list) -> Image.Image:
         return img
 
 def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
-    """Cria um pôster de resultado para o Top 4 mostrando Green/Red"""
+    """Cria um pôster de resultado para o Top 4 mostrando Green/Red COM PLACARES"""
     try:
         # Configurações do pôster compacto
-        largura, altura = 600, 1000
+        largura, altura = 600, 1100  # Aumentei a altura para acomodar os placares
         img = Image.new('RGB', (largura, altura), color='#0c0c0c')
         draw = ImageDraw.Draw(img)
         
@@ -1725,6 +1725,7 @@ def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
             fonte_pequena = ImageFont.truetype("arial.ttf", 14)
             fonte_destaque = ImageFont.truetype("arialbd.ttf", 16)
             fonte_cabecalho = ImageFont.truetype("arial.ttf", 15)
+            fonte_placar = ImageFont.truetype("arialbd.ttf", 20)  # Fonte para placar
         except:
             fonte_titulo = ImageFont.load_default(size=28)
             fonte_subtitulo = ImageFont.load_default(size=18)
@@ -1732,6 +1733,7 @@ def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
             fonte_pequena = ImageFont.load_default(size=14)
             fonte_destaque = ImageFont.load_default(size=16)
             fonte_cabecalho = ImageFont.load_default(size=15)
+            fonte_placar = ImageFont.load_default(size=20)
         
         # Cores do tema
         cor_principal = "#1e3a8a"
@@ -1742,6 +1744,7 @@ def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
         cor_cinza = "#6b7280"
         cor_fundo_card = "#1f2937"
         cor_info = "#60a5fa"
+        cor_placar = "#fbbf24"  # Cor especial para placares
         
         y_pos = 20
         
@@ -1790,7 +1793,7 @@ def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
         y_pos += cabecalho_rect_height + 20
         
         # Para cada jogo no top 4
-        altura_jogo = 150
+        altura_jogo = 170  # Aumentei para 170 para acomodar os placares
         espacamento = 20
         
         for i, jogo_data in enumerate(alerta_top4["jogos"]):
@@ -1847,6 +1850,27 @@ def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
             draw.text((largura//2, y_pos + 30), "VS", 
                      fill=cor_destaque, font=fonte_subtitulo, anchor="mm")
             
+            # PLACAR - NOVA SEÇÃO ADICIONADA
+            home_score = jogo.get("home_team_score", 0)
+            away_score = jogo.get("visitor_team_score", 0)
+            
+            # Placar centralizado
+            placar_texto = f"{away_score} - {home_score}"
+            bbox_placar = draw.textbbox((0, 0), placar_texto, font=fonte_placar)
+            largura_placar = bbox_placar[2] - bbox_placar[0]
+            draw.text((largura//2, y_pos + 65), placar_texto,
+                     fill=cor_placar, font=fonte_placar, anchor="mm")
+            
+            # Total de pontos
+            total_pontos = home_score + away_score
+            total_texto = f"Total: {total_pontos} pts"
+            bbox_total = draw.textbbox((0, 0), total_texto, font=fonte_pequena)
+            largura_total = bbox_total[2] - bbox_total[0]
+            draw.text((largura//2, y_pos + 85), total_texto,
+                     fill=cor_texto, font=fonte_pequena, anchor="mm")
+            
+            y_pos_temp = y_pos + 100  # Posição para as previsões
+            
             # Previsões em colunas compactas
             coluna_largura = (largura - 180) // 2
             coluna_x1 = 100
@@ -1859,11 +1883,11 @@ def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
                 estimativa = total_pred.get('estimativa', 0)
                 confianca = total_pred.get('confianca', 0)
                 
-                draw.text((coluna_x1, y_pos + 80), "TOTAL PTS", 
+                draw.text((coluna_x1, y_pos_temp), "TOTAL PTS", 
                          fill=cor_destaque, font=fonte_pequena)
-                draw.text((coluna_x1, y_pos + 95), f"{tendencia}", 
+                draw.text((coluna_x1, y_pos_temp + 15), f"{tendencia}", 
                          fill=cor_texto, font=fonte_pequena)
-                draw.text((coluna_x1, y_pos + 110), f"Est: {estimativa:.1f} | {confianca:.0f}%", 
+                draw.text((coluna_x1, y_pos_temp + 30), f"Est: {estimativa:.1f} | {confianca:.0f}%", 
                          fill=cor_texto, font=fonte_pequena)
                 
                 # Resultado (Green/Red)
@@ -1877,7 +1901,7 @@ def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
                     cor_resultado = cor_cinza
                     texto_resultado = "⚪ PENDENTE"
                 
-                draw.text((coluna_x1, y_pos + 125), texto_resultado, 
+                draw.text((coluna_x1, y_pos_temp + 45), texto_resultado, 
                          fill=cor_resultado, font=fonte_pequena)
             
             # Coluna 2: Vencedor
@@ -1894,11 +1918,11 @@ def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
                 else:
                     vencedor_abreviado = vencedor[:8]
                 
-                draw.text((coluna_x2, y_pos + 80), "VENCEDOR", 
+                draw.text((coluna_x2, y_pos_temp), "VENCEDOR", 
                          fill=cor_destaque, font=fonte_pequena)
-                draw.text((coluna_x2, y_pos + 95), f"{vencedor_abreviado}", 
+                draw.text((coluna_x2, y_pos_temp + 15), f"{vencedor_abreviado}", 
                          fill=cor_texto, font=fonte_pequena)
-                draw.text((coluna_x2, y_pos + 110), f"Conf: {confianca_venc:.0f}%", 
+                draw.text((coluna_x2, y_pos_temp + 30), f"Conf: {confianca_venc:.0f}%", 
                          fill=cor_texto, font=fonte_pequena)
                 
                 # Resultado (Green/Red)
@@ -1912,7 +1936,7 @@ def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
                     cor_resultado = cor_cinza
                     texto_resultado = "⚪ PENDENTE"
                 
-                draw.text((coluna_x2, y_pos + 125), texto_resultado, 
+                draw.text((coluna_x2, y_pos_temp + 45), texto_resultado, 
                          fill=cor_resultado, font=fonte_pequena)
             
             # Linha divisória entre jogos (exceto no último)
