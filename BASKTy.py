@@ -1548,13 +1548,13 @@ def criar_poster_top4_compacto(jogos_top4: list) -> Image.Image:
         y_pos += 120
         
         # CABEÇALHO INFORMATIVO - DESCRIÇÃO DO ALERTA
-        cabecalho_rect_height = 80
+        cabecalho_rect_height = 98
         draw.rectangle([20, y_pos, largura-20, y_pos + cabecalho_rect_height], 
                       fill="#1e3a8a", outline=cor_destaque, width=2)
         
         # Textos do cabeçalho informativo
         textos_cabecalho = [
-            "🎯 ALERTA TOP 4 JOGOS COMPOSTOS 🎯",
+            "ALERTA TOP 4 JOGOS COMPOSTOS ",
             "Análise baseada em dados estatísticos da temporada 2024-2025",
             "Tendências de apostas: Total de Pontos e Vencedor",
             "Confiança mínima: 60% | Dados atualizados em tempo real"
@@ -1571,13 +1571,13 @@ def criar_poster_top4_compacto(jogos_top4: list) -> Image.Image:
                 draw.text(((largura - largura_texto) // 2, y_pos + 25 + (i * 15)), texto, 
                          fill=cor_texto, font=fonte_cabecalho)
         
-        y_pos += cabecalho_rect_height + 20
+        y_pos += cabecalho_rect_height + 22
         
         # LEGENDA DAS INFORMAÇÕES
         info_legenda = [
-            "📊 TOTAL PTS: Tendência de pontos totais do jogo",
-            "🏆 VENCEDOR: Previsão do time vencedor", 
-            "🎯 CONF: Nível de confiança da previsão"
+            " TOTAL PTS: Tendência de pontos totais do jogo",
+            " VENCEDOR: Previsão do time vencedor", 
+            " CONF: Nível de confiança da previsão"
         ]
         
         for i, legenda in enumerate(info_legenda):
@@ -1610,7 +1610,7 @@ def criar_poster_top4_compacto(jogos_top4: list) -> Image.Image:
             away_team = jogo.get("visitor_team", {}).get("full_name", "Visitante")
             
             # Escudos pequenos
-            escudo_size = (40, 40)
+            escudo_size = (45, 45)
             try:
                 escudo_away = baixar_escudo_time(away_team, escudo_size)
                 img.paste(escudo_away, (85, y_pos + 15), escudo_away)
@@ -1746,10 +1746,10 @@ def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
         cor_info = "#60a5fa"
         cor_placar = "#fbbf24"  # Cor especial para placares
         
-        y_pos = 20
+        y_pos = 22
         
         # HEADER PRINCIPAL
-        draw.rectangle([0, y_pos, largura, y_pos + 80], fill=cor_principal)
+        draw.rectangle([0, y_pos, largura, y_pos + 97], fill=cor_principal)
         titulo_texto = "ELITE MASTER - RESULTADO TOP 4"
         bbox_titulo = draw.textbbox((0, 0), titulo_texto, font=fonte_titulo)
         largura_titulo = bbox_titulo[2] - bbox_titulo[0]
@@ -1767,15 +1767,15 @@ def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
         y_pos += 120
         
         # CABEÇALHO INFORMATIVO - DESCRIÇÃO DOS RESULTADOS
-        cabecalho_rect_height = 80
+        cabecalho_rect_height = 98
         draw.rectangle([20, y_pos, largura-20, y_pos + cabecalho_rect_height], 
                       fill="#1e3a8a", outline=cor_destaque, width=2)
         
         # Textos do cabeçalho informativo
         textos_cabecalho = [
-            "📊 RESULTADO OFICIAL - TOP 4 JOGOS COMPOSTOS 📊",
+            " RESULTADO OFICIAL - TOP 4 JOGOS NBA ",
             "Conferência baseada nos resultados reais dos jogos",
-            "🟢 GREEN: Previsão correta | 🔴 RED: Previsão incorreta",
+            " GREEN: Previsão correta |  RED: Previsão incorreta",
             "Sistema de análise estatística - Elite Master"
         ]
         
@@ -1818,7 +1818,7 @@ def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
             away_team = jogo.get("visitor_team", {}).get("full_name", "Visitante")
             
             # Escudos pequenos
-            escudo_size = (40, 40)
+            escudo_size = (45, 45)
             try:
                 escudo_away = baixar_escudo_time(away_team, escudo_size)
                 img.paste(escudo_away, (85, y_pos + 15), escudo_away)
@@ -1858,7 +1858,7 @@ def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
             placar_texto = f"{away_score} - {home_score}"
             bbox_placar = draw.textbbox((0, 0), placar_texto, font=fonte_placar)
             largura_placar = bbox_placar[2] - bbox_placar[0]
-            draw.text((largura//2, y_pos + 65), placar_texto,
+            draw.text((largura//2, y_pos + 85), placar_texto,
                      fill=cor_placar, font=fonte_placar, anchor="mm")
             
             # Total de pontos
