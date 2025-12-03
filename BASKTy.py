@@ -1841,7 +1841,7 @@ def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
             home_abreviado = abreviar_nome(home_team)
             
             # Nomes dos times
-            draw.text((85 + escudo_size[0]//2, y_pos + 60), away_abreviado, 
+            draw.text((85 + escudo_size[0]//2, y_pos + 65), away_abreviado, 
                      fill=cor_texto, font=fonte_pequena, anchor="mm")
             draw.text((largura-85-escudo_size[0]//2, y_pos + 60), home_abreviado, 
                      fill=cor_texto, font=fonte_pequena, anchor="mm")
@@ -1858,7 +1858,7 @@ def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
             placar_texto = f"{away_score} - {home_score}"
             bbox_placar = draw.textbbox((0, 0), placar_texto, font=fonte_placar)
             largura_placar = bbox_placar[2] - bbox_placar[0]
-            draw.text((largura//2, y_pos + 85), placar_texto,
+            draw.text((largura//2, y_pos + 60), placar_texto,
                      fill=cor_placar, font=fonte_placar, anchor="mm")
             
             # Total de pontos
