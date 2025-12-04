@@ -484,7 +484,7 @@ def calcular_tendencia_completa(home: str, away: str, classificacao: dict) -> di
     # SEGUINDO SUAS ESPECIFICAÇÕES:
     # ============================================================
     
-    # Determinar categoria principal baseada na estimativa
+    # Determinar categoria principal baseada APENAS na estimativa
     if estimativa_total <= 1.9:
         # Até 1.9 gols → Under 1.5
         tendencia_principal = "UNDER 1.5"
@@ -561,39 +561,19 @@ def calcular_tendencia_completa(home: str, away: str, classificacao: dict) -> di
     confianca = max(10, min(95, round(confianca, 1)))
     
     # ============================================================
-    # VERIFICAÇÃO FINAL: Escolher a melhor tendência baseada em confiança
+    # RESULTADO FINAL BASEADO APENAS NA ESTIMATIVA
+    # NÃO ESCOLHE PELA CONFIANÇA MAIS ALTA
     # ============================================================
     
-    # Listar todas as tendências possíveis com seus valores
-    tendencias_possiveis = [
-        (tendencia_principal, probabilidade, confianca, tipo_aposta),  # Já classificada pela estimativa
-        
-        # Verificar outras possibilidades com alta confiança
-        ("OVER 2.5", resultados["over_25"]["probabilidade"], resultados["over_25"]["confianca"], "over"),
-        ("UNDER 2.5", resultados["under_25"]["probabilidade"], resultados["under_25"]["confianca"], "under"),
-        ("OVER 1.5", resultados["over_15"]["probabilidade"], resultados["over_15"]["confianca"], "over"),
-        ("UNDER 1.5", resultados["under_15"]["probabilidade"], resultados["under_15"]["confianca"], "under"),
-        ("OVER 3.5", resultados["over_35"]["probabilidade"], resultados["over_35"]["confianca"], "over")
-    ]
-    
-    # Ordenar por confiança (e depois por probabilidade)
-    tendencias_ordenadas = sorted(tendencias_possiveis, key=lambda x: (x[2], x[1]), reverse=True)
-    
-    # Escolher a tendência com maior confiança
-    tendencia_final = tendencias_ordenadas[0][0]
-    probabilidade_final = tendencias_ordenadas[0][1]
-    confianca_final = tendencias_ordenadas[0][2]
-    tipo_aposta_final = tendencias_ordenadas[0][3]
-    
     # Log para debugging
-    logging.info(f"Classificação final: {home} vs {away} - Est: {estimativa_total:.2f} - {tendencia_final} - Conf: {confianca_final:.1f}%")
+    logging.info(f"Classificação final: {home} vs {away} - Est: {estimativa_total:.2f} - {tendencia_principal} - Conf: {confianca:.1f}%")
     
     return {
-        "tendencia": tendencia_final,
+        "tendencia": tendencia_principal,  # Baseada APENAS na estimativa
         "estimativa": round(estimativa_total, 2),
-        "probabilidade": probabilidade_final,
-        "confianca": confianca_final,
-        "tipo_aposta": tipo_aposta_final,
+        "probabilidade": probabilidade,
+        "confianca": confianca,
+        "tipo_aposta": tipo_aposta,
         "detalhes": {
             "over_25_prob": round(resultados["over_25"]["probabilidade"], 1),
             "under_25_prob": round(resultados["under_25"]["probabilidade"], 1),
