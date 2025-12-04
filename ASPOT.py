@@ -367,10 +367,10 @@ def obter_jogos_brasileirao(liga_id: str, data_hoje: str) -> list:
     return jogos_filtrados
 
 # =============================
-# Lógica de Análise e Alertas - ATUALIZADA COM UNDER E OVER SEPARADOS
+# Lógica de Análise e Alertas - ATUALIZADA COM NOVAS REGRAS
 # =============================
 def calcular_tendencia_completa(home: str, away: str, classificacao: dict) -> dict:
-    """Calcula tendências completas com UNDER e OVER separados - VERSÃO ATUALIZADA"""
+    """Calcula tendências completas com UNDER e OVER separados - VERSÃO ATUALIZADA COM TODAS AS REGRAS"""
     dados_home = classificacao.get(home, {"scored": 0, "against": 0, "played": 1, "wins": 0, "draws": 0, "losses": 0})
     dados_away = classificacao.get(away, {"scored": 0, "against": 0, "played": 1, "wins": 0, "draws": 0, "losses": 0})
     
@@ -398,7 +398,10 @@ def calcular_tendencia_completa(home: str, away: str, classificacao: dict) -> di
     away_under_25 = (dados_away.get("under_25_rate", 0.5) if "under_25_rate" in dados_away else 
                     max(0.3, 1 - (media_away_feitos + media_away_sofridos) / 3.5))
     
-    # Lógica de tendência CORRIGIDA para UNDER e OVER
+    # ============================================================
+    # CÁLCULO DAS PROBABILIDADES PARA TODAS AS OPÇÕES
+    # ============================================================
+    
     resultados = {
         "estimativa_total": round(estimativa_total, 2),
         "over_25": {
@@ -420,10 +423,19 @@ def calcular_tendencia_completa(home: str, away: str, classificacao: dict) -> di
             "tendencia": "Under 1.5",
             "probabilidade": 0,
             "confianca": 0
+        },
+        "over_35": {
+            "tendencia": "Over 3.5",
+            "probabilidade": 0,
+            "confianca": 0
         }
     }
     
-    # CÁLCULO PARA OVER 2.5
+    # ============================================================
+    # CÁLCULOS DETALHADOS PARA CADA TIPO DE APOSTA
+    # ============================================================
+    
+    # 1. CÁLCULO PARA OVER 2.5
     if estimativa_total >= 2.8:
         resultados["over_25"]["probabilidade"] = min(95, 65 + (estimativa_total - 2.8) * 15)
         resultados["over_25"]["confianca"] = min(90, 60 + (estimativa_total - 2.8) * 10)
@@ -434,30 +446,11 @@ def calcular_tendencia_completa(home: str, away: str, classificacao: dict) -> di
         resultados["over_25"]["probabilidade"] = max(5, 30 * (estimativa_total / 2.5))
         resultados["over_25"]["confianca"] = max(10, 25 * (estimativa_total / 2.5))
     
-    # CÁLCULO PARA UNDER 2.5 (OPOSTO AO OVER 2.5)
+    # 2. CÁLCULO PARA UNDER 2.5 (OPOSTO AO OVER 2.5)
     resultados["under_25"]["probabilidade"] = 100 - resultados["over_25"]["probabilidade"]
-    resultados["under_25"]["confianca"] = resultados["over_25"]["confianca"]  # Mesma confiança, probabilidade oposta
+    resultados["under_25"]["confianca"] = resultados["over_25"]["confianca"]
     
-    # Ajuste baseado em clean sheets e estatísticas defensivas
-    ajuste_defensivo = (home_clean_sheets + away_clean_sheets) / 2
-    if ajuste_defensivo > 0.4:  # Times com boa defesa
-        resultados["under_25"]["probabilidade"] += 15
-        resultados["under_25"]["confianca"] += 10
-        resultados["over_25"]["probabilidade"] -= 10
-        resultados["over_25"]["confianca"] -= 5
-    
-    # Ajuste baseado em histórico de under
-    ajuste_historico_under = (home_under_25 + away_under_25) / 2
-    if ajuste_historico_under > 0.6:
-        resultados["under_25"]["probabilidade"] += 10
-        resultados["under_25"]["confianca"] += 8
-    
-    # Garantir limites
-    for key in ["over_25", "under_25"]:
-        resultados[key]["probabilidade"] = max(1, min(99, resultados[key]["probabilidade"]))
-        resultados[key]["confianca"] = max(10, min(95, resultados[key]["confianca"]))
-    
-    # CÁLCULO PARA OVER 1.5
+    # 3. CÁLCULO PARA OVER 1.5
     if estimativa_total >= 1.8:
         resultados["over_15"]["probabilidade"] = min(95, 75 + (estimativa_total - 1.8) * 12)
         resultados["over_15"]["confianca"] = min(90, 70 + (estimativa_total - 1.8) * 10)
@@ -468,53 +461,150 @@ def calcular_tendencia_completa(home: str, away: str, classificacao: dict) -> di
         resultados["over_15"]["probabilidade"] = max(10, 40 * (estimativa_total / 1.5))
         resultados["over_15"]["confianca"] = max(15, 35 * (estimativa_total / 1.5))
     
-    # CÁLCULO PARA UNDER 1.5
+    # 4. CÁLCULO PARA UNDER 1.5
     resultados["under_15"]["probabilidade"] = 100 - resultados["over_15"]["probabilidade"]
     resultados["under_15"]["confianca"] = resultados["over_15"]["confianca"]
     
-    # Determinar a tendência PRINCIPAL (com maior confiança)
+    # 5. CÁLCULO PARA OVER 3.5
+    if estimativa_total >= 3.8:
+        resultados["over_35"]["probabilidade"] = min(95, 70 + (estimativa_total - 3.8) * 12)
+        resultados["over_35"]["confianca"] = min(90, 65 + (estimativa_total - 3.8) * 10)
+    elif estimativa_total >= 3.5:
+        resultados["over_35"]["probabilidade"] = min(85, 55 + (estimativa_total - 3.5) * 15)
+        resultados["over_35"]["confianca"] = min(80, 50 + (estimativa_total - 3.5) * 12)
+    elif estimativa_total >= 3.1:
+        resultados["over_35"]["probabilidade"] = min(70, 35 + (estimativa_total - 3.1) * 12)
+        resultados["over_35"]["confianca"] = min(65, 30 + (estimativa_total - 3.1) * 10)
+    else:
+        resultados["over_35"]["probabilidade"] = max(5, 20 * (estimativa_total / 3.1))
+        resultados["over_35"]["confianca"] = max(10, 15 * (estimativa_total / 3.1))
+    
+    # ============================================================
+    # LÓGICA DE CLASSIFICAÇÃO PRINCIPAL BASEADA NA ESTIMATIVA
+    # SEGUINDO SUAS ESPECIFICAÇÕES:
+    # ============================================================
+    
+    # Determinar categoria principal baseada na estimativa
+    if estimativa_total <= 1.9:
+        # Até 1.9 gols → Under 1.5
+        tendencia_principal = "UNDER 1.5"
+        tipo_aposta = "under"
+        probabilidade = resultados["under_15"]["probabilidade"]
+        confianca = resultados["under_15"]["confianca"]
+        
+    elif 2.0 <= estimativa_total <= 2.5:
+        # Entre 2.0 e 2.5 gols → Under 2.5
+        tendencia_principal = "UNDER 2.5"
+        tipo_aposta = "under"
+        probabilidade = resultados["under_25"]["probabilidade"]
+        confianca = resultados["under_25"]["confianca"]
+        
+    elif 2.6 <= estimativa_total <= 3.0:
+        # Entre 2.6 e 3.0 gols → Over 2.5
+        tendencia_principal = "OVER 2.5"
+        tipo_aposta = "over"
+        probabilidade = resultados["over_25"]["probabilidade"]
+        confianca = resultados["over_25"]["confianca"]
+        
+    else:  # estimativa_total >= 3.1
+        # 3.1 gols ou mais → Over 3.5
+        tendencia_principal = "OVER 3.5"
+        tipo_aposta = "over"
+        probabilidade = resultados["over_35"]["probabilidade"]
+        confianca = resultados["over_35"]["confianca"]
+    
+    # ============================================================
+    # AJUSTES BASEADOS EM ESTATÍSTICAS ADICIONAIS
+    # ============================================================
+    
+    # Ajuste baseado em clean sheets e estatísticas defensivas
+    ajuste_defensivo = (home_clean_sheets + away_clean_sheets) / 2
+    if ajuste_defensivo > 0.4:  # Times com boa defesa
+        if tipo_aposta == "under":
+            resultados["under_25"]["probabilidade"] += 10
+            resultados["under_25"]["confianca"] += 8
+            resultados["under_15"]["probabilidade"] += 12
+            resultados["under_15"]["confianca"] += 10
+            
+            # Ajustar a probabilidade principal se for under
+            if tendencia_principal in ["UNDER 1.5", "UNDER 2.5"]:
+                probabilidade += 10
+                confianca += 8
+        else:
+            # Reduzir probabilidade de over se times têm boa defesa
+            resultados["over_25"]["probabilidade"] = max(5, resultados["over_25"]["probabilidade"] - 8)
+            resultados["over_35"]["probabilidade"] = max(5, resultados["over_35"]["probabilidade"] - 10)
+            
+            if tendencia_principal in ["OVER 2.5", "OVER 3.5"]:
+                probabilidade = max(10, probabilidade - 8)
+    
+    # Ajuste baseado em histórico de under
+    ajuste_historico_under = (home_under_25 + away_under_25) / 2
+    if ajuste_historico_under > 0.6:
+        if tipo_aposta == "under":
+            resultados["under_25"]["probabilidade"] += 8
+            resultados["under_25"]["confianca"] += 6
+            probabilidade += 5
+            confianca += 4
+    
+    # ============================================================
+    # GARANTIR LIMITES E ARREDONDAMENTOS
+    # ============================================================
+    
+    # Garantir limites para todas as probabilidades
+    for key in ["over_25", "under_25", "over_15", "under_15", "over_35"]:
+        resultados[key]["probabilidade"] = max(1, min(99, round(resultados[key]["probabilidade"], 1)))
+        resultados[key]["confianca"] = max(10, min(95, round(resultados[key]["confianca"], 1)))
+    
+    # Garantir limites para a tendência principal
+    probabilidade = max(1, min(99, round(probabilidade, 1)))
+    confianca = max(10, min(95, round(confianca, 1)))
+    
+    # ============================================================
+    # VERIFICAÇÃO FINAL: Escolher a melhor tendência baseada em confiança
+    # ============================================================
+    
+    # Listar todas as tendências possíveis com seus valores
     tendencias_possiveis = [
+        (tendencia_principal, probabilidade, confianca, tipo_aposta),  # Já classificada pela estimativa
+        
+        # Verificar outras possibilidades com alta confiança
         ("OVER 2.5", resultados["over_25"]["probabilidade"], resultados["over_25"]["confianca"], "over"),
         ("UNDER 2.5", resultados["under_25"]["probabilidade"], resultados["under_25"]["confianca"], "under"),
         ("OVER 1.5", resultados["over_15"]["probabilidade"], resultados["over_15"]["confianca"], "over"),
-        ("UNDER 1.5", resultados["under_15"]["probabilidade"], resultados["under_15"]["confianca"], "under")
+        ("UNDER 1.5", resultados["under_15"]["probabilidade"], resultados["under_15"]["confianca"], "under"),
+        ("OVER 3.5", resultados["over_35"]["probabilidade"], resultados["over_35"]["confianca"], "over")
     ]
     
-    # Ordenar por confiança e depois por probabilidade
+    # Ordenar por confiança (e depois por probabilidade)
     tendencias_ordenadas = sorted(tendencias_possiveis, key=lambda x: (x[2], x[1]), reverse=True)
     
-    tendencia_principal = tendencias_ordenadas[0][0]
-    tipo_aposta = tendencias_ordenadas[0][3]  # "over" ou "under"
+    # Escolher a tendência com maior confiança
+    tendencia_final = tendencias_ordenadas[0][0]
+    probabilidade_final = tendencias_ordenadas[0][1]
+    confianca_final = tendencias_ordenadas[0][2]
+    tipo_aposta_final = tendencias_ordenadas[0][3]
     
-    # Selecionar os valores da tendência principal
-    if "OVER 2.5" in tendencia_principal:
-        probabilidade = resultados["over_25"]["probabilidade"]
-        confianca = resultados["over_25"]["confianca"]
-    elif "UNDER 2.5" in tendencia_principal:
-        probabilidade = resultados["under_25"]["probabilidade"]
-        confianca = resultados["under_25"]["confianca"]
-    elif "OVER 1.5" in tendencia_principal:
-        probabilidade = resultados["over_15"]["probabilidade"]
-        confianca = resultados["over_15"]["confianca"]
-    else:  # UNDER 1.5
-        probabilidade = resultados["under_15"]["probabilidade"]
-        confianca = resultados["under_15"]["confianca"]
+    # Log para debugging
+    logging.info(f"Classificação final: {home} vs {away} - Est: {estimativa_total:.2f} - {tendencia_final} - Conf: {confianca_final:.1f}%")
     
     return {
-        "tendencia": tendencia_principal,
-        "estimativa": estimativa_total,
-        "probabilidade": round(probabilidade, 1),
-        "confianca": round(confianca, 1),
-        "tipo_aposta": tipo_aposta,
+        "tendencia": tendencia_final,
+        "estimativa": round(estimativa_total, 2),
+        "probabilidade": probabilidade_final,
+        "confianca": confianca_final,
+        "tipo_aposta": tipo_aposta_final,
         "detalhes": {
             "over_25_prob": round(resultados["over_25"]["probabilidade"], 1),
             "under_25_prob": round(resultados["under_25"]["probabilidade"], 1),
             "over_15_prob": round(resultados["over_15"]["probabilidade"], 1),
             "under_15_prob": round(resultados["under_15"]["probabilidade"], 1),
+            "over_35_prob": round(resultados["over_35"]["probabilidade"], 1),
             "over_25_conf": round(resultados["over_25"]["confianca"], 1),
             "under_25_conf": round(resultados["under_25"]["confianca"], 1),
             "over_15_conf": round(resultados["over_15"]["confianca"], 1),
-            "under_15_conf": round(resultados["under_15"]["confianca"], 1)
+            "under_15_conf": round(resultados["under_15"]["confianca"], 1),
+            "over_35_conf": round(resultados["over_35"]["confianca"], 1)
         }
     }
 
