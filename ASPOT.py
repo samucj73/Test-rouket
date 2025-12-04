@@ -367,10 +367,10 @@ def obter_jogos_brasileirao(liga_id: str, data_hoje: str) -> list:
     return jogos_filtrados
 
 # =============================
-# Lógica de Análise e Alertas - ATUALIZADA COM NOVAS REGRAS
+# Lógica de Análise e Alertas - ATUALIZADA COM NOVA LÓGICA INTELIGENTE
 # =============================
 def calcular_tendencia_completa(home: str, away: str, classificacao: dict) -> dict:
-    """Calcula tendências completas com UNDER e OVER separados - VERSÃO ATUALIZADA COM TODAS AS REGRAS"""
+    """Calcula tendências completas com análise multivariada - VERSÃO INTELIGENTE COMPLETA"""
     dados_home = classificacao.get(home, {"scored": 0, "against": 0, "played": 1, "wins": 0, "draws": 0, "losses": 0})
     dados_away = classificacao.get(away, {"scored": 0, "against": 0, "played": 1, "wins": 0, "draws": 0, "losses": 0})
     
@@ -383,209 +383,320 @@ def calcular_tendencia_completa(home: str, away: str, classificacao: dict) -> di
     media_away_feitos = dados_away["scored"] / played_away
     media_away_sofridos = dados_away["against"] / played_away
 
-    # Cálculo mais preciso da estimativa
-    estimativa_home = (media_home_feitos + media_away_sofridos) / 2
-    estimativa_away = (media_away_feitos + media_home_sofridos) / 2
+    # Cálculo de estimativa mais inteligente
+    estimativa_home = (media_home_feitos * 0.6 + media_away_sofridos * 0.4)  # 60% do ataque, 40% da defesa adversária
+    estimativa_away = (media_away_feitos * 0.4 + media_home_sofridos * 0.6)  # 40% do ataque, 60% da defesa adversária
     estimativa_total = estimativa_home + estimativa_away
     
-    # Estatísticas para UNDER
-    home_clean_sheets = (played_home - (dados_home["against"] / max(media_home_sofridos, 0.1))) / played_home if played_home > 0 else 0
-    away_clean_sheets = (played_away - (dados_away["against"] / max(media_away_sofridos, 0.1))) / played_away if played_away > 0 else 0
-    
-    # Percentual de jogos com menos de 2.5 gols
-    home_under_25 = (dados_home.get("under_25_rate", 0.5) if "under_25_rate" in dados_home else 
-                    max(0.3, 1 - (media_home_feitos + media_home_sofridos) / 3.5))
-    away_under_25 = (dados_away.get("under_25_rate", 0.5) if "under_25_rate" in dados_away else 
-                    max(0.3, 1 - (media_away_feitos + media_away_sofridos) / 3.5))
-    
     # ============================================================
-    # CÁLCULO DAS PROBABILIDADES PARA TODAS AS OPÇÕES
+    # ANÁLISE MULTIVARIADA PARA DEFINIR TENDÊNCIA
     # ============================================================
     
-    resultados = {
-        "estimativa_total": round(estimativa_total, 2),
-        "over_25": {
-            "tendencia": "Over 2.5",
-            "probabilidade": 0,
-            "confianca": 0
-        },
-        "under_25": {
-            "tendencia": "Under 2.5",
-            "probabilidade": 0,
-            "confianca": 0
-        },
-        "over_15": {
-            "tendencia": "Over 1.5",
-            "probabilidade": 0,
-            "confianca": 0
-        },
-        "under_15": {
-            "tendencia": "Under 1.5",
-            "probabilidade": 0,
-            "confianca": 0
-        },
-        "over_35": {
-            "tendencia": "Over 3.5",
-            "probabilidade": 0,
-            "confianca": 0
+    # 1. ANÁLISE DE EQUILÍBRIO OFENSIVO/DEFENSIVO
+    home_balance = media_home_feitos - media_home_sofridos
+    away_balance = media_away_feitos - media_away_sofridos
+    
+    # Classificação dos times
+    home_defensivo = home_balance < -0.3
+    away_defensivo = away_balance < -0.3
+    home_ofensivo = home_balance > 0.3
+    away_ofensivo = away_balance > 0.3
+    home_equilibrado = not home_defensivo and not home_ofensivo
+    away_equilibrado = not away_defensivo and not away_ofensivo
+    
+    # 2. ANÁLISE DE CONFRONTO
+    # Jogo entre dois times defensivos
+    if home_defensivo and away_defensivo:
+        ajuste_defensivo = 0.8  # Muito defensivo
+        tipo_confronto = "DEFENSIVO_DEFENSIVO"
+    # Jogo entre dois times ofensivos
+    elif home_ofensivo and away_ofensivo:
+        ajuste_defensivo = 0.2  # Muito ofensivo
+        tipo_confronto = "OFENSIVO_OFENSIVO"
+    # Jogo misto
+    else:
+        ajuste_defensivo = 0.5
+        tipo_confronto = "MISTO"
+    
+    # 3. ANÁLISE DE RENDIMENTO EM CASA/FORA
+    fator_casa = 1.15  # Time da casa tem vantagem
+    fator_fora = 0.85  # Time visitante tem desvantagem
+    
+    estimativa_ajustada_home = estimativa_home * fator_casa
+    estimativa_ajustada_away = estimativa_away * fator_fora
+    estimativa_total_ajustada = estimativa_ajustada_home + estimativa_ajustada_away
+    
+    # 4. ANÁLISE DE TENDÊNCIA HISTÓRICA (se disponível)
+    home_under_25_rate = dados_home.get("under_25_rate", 0.5)
+    away_under_25_rate = dados_away.get("under_25_rate", 0.5)
+    media_under_25 = (home_under_25_rate + away_under_25_rate) / 2
+    
+    home_under_15_rate = dados_home.get("under_15_rate", 0.3)
+    away_under_15_rate = dados_away.get("under_15_rate", 0.3)
+    media_under_15 = (home_under_15_rate + away_under_15_rate) / 2
+    
+    home_over_15_rate = dados_home.get("over_15_rate", 0.7)
+    away_over_15_rate = dados_away.get("over_15_rate", 0.7)
+    media_over_15 = (home_over_15_rate + away_over_15_rate) / 2
+    
+    # ============================================================
+    # CÁLCULO DE SCORES PARA TODAS AS OPÇÕES
+    # ============================================================
+    
+    # FATOR 1: Estimativa de gols ajustada
+    fator_estimativa = min(2.0, estimativa_total_ajustada / 3.0)  # Normalizado para 0-2
+    
+    # FATOR 2: Estilo dos times (defensivo/ofensivo)
+    fator_estilo = 1.0 - ajuste_defensivo  # Valores mais altos favorecem OVER
+    
+    # FATOR 3: Histórico de Under/Over
+    fator_historico_under = (media_under_25 * 0.5 + media_under_15 * 0.5)
+    fator_historico_over = (media_over_15 * 0.7 + (1 - media_under_25) * 0.3)
+    
+    # FATOR 4: Confronto direto de características
+    fator_confronto = 1.0
+    if tipo_confronto == "DEFENSIVO_DEFENSIVO":
+        fator_confronto = 0.6  # Forte tendência UNDER
+    elif tipo_confronto == "OFENSIVO_OFENSIVO":
+        fator_confronto = 1.4  # Forte tendência OVER
+    elif (home_defensivo and away_ofensivo) or (home_ofensivo and away_defensivo):
+        fator_confronto = 1.0  # Equilíbrio
+    
+    # CÁLCULO DOS SCORES (0-1 scale)
+    # Over 3.5: precisa de sinais MUITO fortes
+    score_over_35 = max(0.05, (
+        fator_estimativa * 0.6 + 
+        fator_estilo * 0.2 + 
+        (1 - fator_historico_under) * 0.1 + 
+        max(0, fator_confronto - 1.0) * 0.1
+    ) - 0.3)
+    
+    # Over 2.5: precisa de sinais fortes
+    score_over_25 = (
+        fator_estimativa * 0.4 + 
+        fator_estilo * 0.3 + 
+        (1 - fator_historico_under) * 0.2 + 
+        max(0, fator_confronto - 1.0) * 0.1
+    )
+    
+    # Over 1.5: mais comum, menos restritivo
+    score_over_15 = min(0.95, (
+        fator_estimativa * 0.5 + 
+        fator_estilo * 0.2 + 
+        fator_historico_over * 0.2 + 
+        min(1.2, fator_confronto) * 0.1
+    ))
+    
+    # Under 2.5: oposto do Over 2.5
+    score_under_25 = 1.0 - score_over_25
+    
+    # Under 1.5: oposto do Over 1.5
+    score_under_15 = 1.0 - score_over_15
+    
+    # ============================================================
+    # LÓGICA DECISÓRIA INTELIGENTE COM TODAS AS OPÇÕES
+    # ============================================================
+    
+    # Definir limiares ajustados
+    limiar_under_15 = 0.65  # 65% de chance para UNDER 1.5
+    limiar_under_25 = 0.60  # 60% de chance para UNDER 2.5
+    limiar_over_15 = 0.70   # 70% de chance para OVER 1.5
+    limiar_over_25 = 0.60   # 60% de chance para OVER 2.5
+    limiar_over_35 = 0.55   # 55% de chance para OVER 3.5
+    
+    # DECISÃO 1: UNDER 1.5 (prioridade máxima se sinais fortes)
+    if (score_under_15 > limiar_under_15 or 
+        media_under_15 > 0.7 or 
+        (home_defensivo and away_defensivo and estimativa_total_ajustada < 1.8) or
+        estimativa_total_ajustada < 1.6):
+        tendencia_principal = "UNDER 1.5"
+        tipo_aposta = "under"
+        probabilidade_base = score_under_15 * 100
+        decisao = "DEFENSIVO_EXTREMO_OU_ESTIMATIVA_BAIXA"
+        
+    # DECISÃO 2: UNDER 2.5
+    elif (score_under_25 > limiar_under_25 or
+          media_under_25 > 0.65 or
+          estimativa_total_ajustada < 2.3):
+        tendencia_principal = "UNDER 2.5"
+        tipo_aposta = "under"
+        probabilidade_base = score_under_25 * 100
+        decisao = "TENDENCIA_UNDER_FORTE"
+        
+    # DECISÃO 3: OVER 3.5 (apenas se sinais MUITO fortes)
+    elif (score_over_35 > limiar_over_35 and
+          estimativa_total_ajustada > 3.4 and
+          (home_ofensivo or away_ofensivo) and
+          tipo_confronto == "OFENSIVO_OFENSIVO"):
+        tendencia_principal = "OVER 3.5"
+        tipo_aposta = "over"
+        probabilidade_base = score_over_35 * 100
+        decisao = "OFENSIVO_EXTREMO"
+        
+    # DECISÃO 4: OVER 2.5
+    elif (score_over_25 > limiar_over_25 or
+          estimativa_total_ajustada > 2.8):
+        tendencia_principal = "OVER 2.5"
+        tipo_aposta = "over"
+        probabilidade_base = score_over_25 * 100
+        decisao = "TENDENCIA_OVER_FORTE"
+        
+    # DECISÃO 5: OVER 1.5 (jogos com estimativa moderada)
+    elif (score_over_15 > limiar_over_15 or
+          media_over_15 > 0.75 or
+          estimativa_total_ajustada > 1.9):
+        tendencia_principal = "OVER 1.5"
+        tipo_aposta = "over"
+        probabilidade_base = score_over_15 * 100
+        decisao = "TENDENCIA_OVER_MODERADA"
+        
+    # DECISÃO 6: FALLBACK para a estimativa pura
+    else:
+        # Lógica baseada apenas na estimativa ajustada
+        if estimativa_total_ajustada < 1.5:
+            tendencia_principal = "UNDER 1.5"
+            tipo_aposta = "under"
+            probabilidade_base = 65.0
+            decisao = "FALLBACK_ESTIMATIVA_BAIXISSIMA"
+        elif estimativa_total_ajustada < 2.0:
+            tendencia_principal = "OVER 1.5"
+            tipo_aposta = "over"
+            probabilidade_base = 60.0
+            decisao = "FALLBACK_ESTIMATIVA_BAIXA"
+        elif estimativa_total_ajustada < 2.6:
+            tendencia_principal = "UNDER 2.5"
+            tipo_aposta = "under"
+            probabilidade_base = 62.0
+            decisao = "FALLBACK_ESTIMATIVA_MODERADA_UNDER"
+        elif estimativa_total_ajustada < 3.2:
+            tendencia_principal = "OVER 2.5"
+            tipo_aposta = "over"
+            probabilidade_base = 65.0
+            decisao = "FALLBACK_ESTIMATIVA_MODERADA_OVER"
+        else:
+            tendencia_principal = "OVER 3.5"
+            tipo_aposta = "over"
+            probabilidade_base = 58.0
+            decisao = "FALLBACK_ESTIMATIVA_ALTA"
+    
+    # ============================================================
+    # CÁLCULO DA CONFIANÇA BASEADA NA CONCORDÂNCIA
+    # ============================================================
+    
+    # Verificar concordância entre sinais
+    sinais = []
+    
+    # Sinal 1: Estimativa
+    if (tipo_aposta == "under" and estimativa_total_ajustada < 2.5) or \
+       (tipo_aposta == "over" and estimativa_total_ajustada > 1.5):
+        sinais.append("ESTIMATIVA")
+    
+    # Sinal 2: Estilo dos times
+    if (tipo_aposta == "under" and ajuste_defensivo > 0.6) or \
+       (tipo_aposta == "over" and ajuste_defensivo < 0.4):
+        sinais.append("ESTILO")
+    
+    # Sinal 3: Histórico
+    if tipo_aposta == "under":
+        hist_relevante = max(media_under_15, media_under_25)
+        if hist_relevante > 0.6:
+            sinais.append("HISTORICO")
+    else:  # over
+        hist_relevante = media_over_15 if tendencia_principal == "OVER 1.5" else (1 - media_under_25)
+        if hist_relevante > 0.6:
+            sinais.append("HISTORICO")
+    
+    # Sinal 4: Tipo de confronto
+    if (tipo_aposta == "under" and tipo_confronto == "DEFENSIVO_DEFENSIVO") or \
+       (tipo_aposta == "over" and tipo_confronto == "OFENSIVO_OFENSIVO"):
+        sinais.append("CONFRONTO")
+    
+    # Calcular confiança baseada na concordância
+    total_sinais_possiveis = 4
+    sinais_concordantes = len(sinais)
+    concordancia_percent = sinais_concordantes / total_sinais_possiveis
+    
+    # Confiança base
+    confianca_base = 50 + (concordancia_percent * 40)  # 50-90%
+    
+    # Ajustar pela força da probabilidade
+    if probabilidade_base > 80:
+        confianca_ajustada = min(95, confianca_base * 1.2)
+    elif probabilidade_base > 70:
+        confianca_ajustada = min(90, confianca_base * 1.1)
+    elif probabilidade_base > 60:
+        confianca_ajustada = confianca_base
+    else:
+        confianca_ajustada = max(40, confianca_base * 0.9)
+    
+    # Ajustar pela distância do limiar decisivo
+    if "FALLBACK" in decisao:
+        confianca_ajustada = confianca_ajustada * 0.8  # Reduz confiança no fallback
+    
+    # Limites finais
+    probabilidade_final = max(1, min(99, round(probabilidade_base, 1)))
+    confianca_final = max(20, min(95, round(confianca_ajustada, 1)))
+    
+    # ============================================================
+    # DETALHES COMPLETOS PARA DEBUG E TRANSPARÊNCIA
+    # ============================================================
+    
+    detalhes = {
+        # Probabilidades de cada opção
+        "over_35_prob": round(score_over_35 * 100, 1),
+        "over_25_prob": round(score_over_25 * 100, 1),
+        "over_15_prob": round(score_over_15 * 100, 1),
+        "under_25_prob": round(score_under_25 * 100, 1),
+        "under_15_prob": round(score_under_15 * 100, 1),
+        
+        # Confianças de cada opção
+        "over_35_conf": round(confianca_final * score_over_35, 1),
+        "over_25_conf": round(confianca_final * score_over_25, 1),
+        "over_15_conf": round(confianca_final * score_over_15, 1),
+        "under_25_conf": round(confianca_final * score_under_25, 1),
+        "under_15_conf": round(confianca_final * score_under_15, 1),
+        
+        # Análise detalhada para debug
+        "analise_detalhada": {
+            "estimativa_ajustada": round(estimativa_total_ajustada, 2),
+            "estimativa_crua": round(estimativa_total, 2),
+            "home_defensivo": home_defensivo,
+            "away_defensivo": away_defensivo,
+            "home_ofensivo": home_ofensivo,
+            "away_ofensivo": away_ofensivo,
+            "tipo_confronto": tipo_confronto,
+            "media_under_15": round(media_under_15, 3),
+            "media_under_25": round(media_under_25, 3),
+            "media_over_15": round(media_over_15, 3),
+            "sinais_concordantes": sinais_concordantes,
+            "sinais": sinais,
+            "decisao": decisao,
+            "score_over_15": round(score_over_15, 3),
+            "score_over_25": round(score_over_25, 3),
+            "score_over_35": round(score_over_35, 3),
+            "score_under_15": round(score_under_15, 3),
+            "score_under_25": round(score_under_25, 3),
         }
     }
     
-    # ============================================================
-    # CÁLCULOS DETALHADOS PARA CADA TIPO DE APOSTA
-    # ============================================================
-    
-    # 1. CÁLCULO PARA OVER 2.5
-    if estimativa_total >= 2.8:
-        resultados["over_25"]["probabilidade"] = min(95, 65 + (estimativa_total - 2.8) * 15)
-        resultados["over_25"]["confianca"] = min(90, 60 + (estimativa_total - 2.8) * 10)
-    elif estimativa_total >= 2.5:
-        resultados["over_25"]["probabilidade"] = min(85, 50 + (estimativa_total - 2.5) * 20)
-        resultados["over_25"]["confianca"] = min(80, 45 + (estimativa_total - 2.5) * 15)
-    else:
-        resultados["over_25"]["probabilidade"] = max(5, 30 * (estimativa_total / 2.5))
-        resultados["over_25"]["confianca"] = max(10, 25 * (estimativa_total / 2.5))
-    
-    # 2. CÁLCULO PARA UNDER 2.5 (OPOSTO AO OVER 2.5)
-    resultados["under_25"]["probabilidade"] = 100 - resultados["over_25"]["probabilidade"]
-    resultados["under_25"]["confianca"] = resultados["over_25"]["confianca"]
-    
-    # 3. CÁLCULO PARA OVER 1.5
-    if estimativa_total >= 1.8:
-        resultados["over_15"]["probabilidade"] = min(95, 75 + (estimativa_total - 1.8) * 12)
-        resultados["over_15"]["confianca"] = min(90, 70 + (estimativa_total - 1.8) * 10)
-    elif estimativa_total >= 1.5:
-        resultados["over_15"]["probabilidade"] = min(85, 60 + (estimativa_total - 1.5) * 15)
-        resultados["over_15"]["confianca"] = min(80, 55 + (estimativa_total - 1.5) * 12)
-    else:
-        resultados["over_15"]["probabilidade"] = max(10, 40 * (estimativa_total / 1.5))
-        resultados["over_15"]["confianca"] = max(15, 35 * (estimativa_total / 1.5))
-    
-    # 4. CÁLCULO PARA UNDER 1.5
-    resultados["under_15"]["probabilidade"] = 100 - resultados["over_15"]["probabilidade"]
-    resultados["under_15"]["confianca"] = resultados["over_15"]["confianca"]
-    
-    # 5. CÁLCULO PARA OVER 3.5
-    if estimativa_total >= 3.8:
-        resultados["over_35"]["probabilidade"] = min(95, 70 + (estimativa_total - 3.8) * 12)
-        resultados["over_35"]["confianca"] = min(90, 65 + (estimativa_total - 3.8) * 10)
-    elif estimativa_total >= 3.5:
-        resultados["over_35"]["probabilidade"] = min(85, 55 + (estimativa_total - 3.5) * 15)
-        resultados["over_35"]["confianca"] = min(80, 50 + (estimativa_total - 3.5) * 12)
-    elif estimativa_total >= 3.1:
-        resultados["over_35"]["probabilidade"] = min(70, 35 + (estimativa_total - 3.1) * 12)
-        resultados["over_35"]["confianca"] = min(65, 30 + (estimativa_total - 3.1) * 10)
-    else:
-        resultados["over_35"]["probabilidade"] = max(5, 20 * (estimativa_total / 3.1))
-        resultados["over_35"]["confianca"] = max(10, 15 * (estimativa_total / 3.1))
-    
-    # ============================================================
-    # LÓGICA DE CLASSIFICAÇÃO PRINCIPAL BASEADA NA ESTIMATIVA
-    # SEGUINDO SUAS ESPECIFICAÇÕES:
-    # ============================================================
-    
-    # Determinar categoria principal baseada APENAS na estimativa
-    if estimativa_total <= 1.9:
-        # Até 1.9 gols → Under 1.5
-        tendencia_principal = "UNDER 1.5"
-        tipo_aposta = "under"
-        probabilidade = resultados["under_15"]["probabilidade"]
-        confianca = resultados["under_15"]["confianca"]
-        
-    elif 2.0 <= estimativa_total <= 2.5:
-        # Entre 2.0 e 2.5 gols → Under 2.5
-        tendencia_principal = "UNDER 2.5"
-        tipo_aposta = "under"
-        probabilidade = resultados["under_25"]["probabilidade"]
-        confianca = resultados["under_25"]["confianca"]
-        
-    elif 2.6 <= estimativa_total <= 3.0:
-        # Entre 2.6 e 3.0 gols → Over 2.5
-        tendencia_principal = "OVER 2.5"
-        tipo_aposta = "over"
-        probabilidade = resultados["over_25"]["probabilidade"]
-        confianca = resultados["over_25"]["confianca"]
-        
-    else:  # estimativa_total >= 3.1
-        # 3.1 gols ou mais → Over 3.5
-        tendencia_principal = "OVER 3.5"
-        tipo_aposta = "over"
-        probabilidade = resultados["over_35"]["probabilidade"]
-        confianca = resultados["over_35"]["confianca"]
-    
-    # ============================================================
-    # AJUSTES BASEADOS EM ESTATÍSTICAS ADICIONAIS
-    # ============================================================
-    
-    # Ajuste baseado em clean sheets e estatísticas defensivas
-    ajuste_defensivo = (home_clean_sheets + away_clean_sheets) / 2
-    if ajuste_defensivo > 0.4:  # Times com boa defesa
-        if tipo_aposta == "under":
-            resultados["under_25"]["probabilidade"] += 10
-            resultados["under_25"]["confianca"] += 8
-            resultados["under_15"]["probabilidade"] += 12
-            resultados["under_15"]["confianca"] += 10
-            
-            # Ajustar a probabilidade principal se for under
-            if tendencia_principal in ["UNDER 1.5", "UNDER 2.5"]:
-                probabilidade += 10
-                confianca += 8
-        else:
-            # Reduzir probabilidade de over se times têm boa defesa
-            resultados["over_25"]["probabilidade"] = max(5, resultados["over_25"]["probabilidade"] - 8)
-            resultados["over_35"]["probabilidade"] = max(5, resultados["over_35"]["probabilidade"] - 10)
-            
-            if tendencia_principal in ["OVER 2.5", "OVER 3.5"]:
-                probabilidade = max(10, probabilidade - 8)
-    
-    # Ajuste baseado em histórico de under
-    ajuste_historico_under = (home_under_25 + away_under_25) / 2
-    if ajuste_historico_under > 0.6:
-        if tipo_aposta == "under":
-            resultados["under_25"]["probabilidade"] += 8
-            resultados["under_25"]["confianca"] += 6
-            probabilidade += 5
-            confianca += 4
-    
-    # ============================================================
-    # GARANTIR LIMITES E ARREDONDAMENTOS
-    # ============================================================
-    
-    # Garantir limites para todas as probabilidades
-    for key in ["over_25", "under_25", "over_15", "under_15", "over_35"]:
-        resultados[key]["probabilidade"] = max(1, min(99, round(resultados[key]["probabilidade"], 1)))
-        resultados[key]["confianca"] = max(10, min(95, round(resultados[key]["confianca"], 1)))
-    
-    # Garantir limites para a tendência principal
-    probabilidade = max(1, min(99, round(probabilidade, 1)))
-    confianca = max(10, min(95, round(confianca, 1)))
-    
-    # ============================================================
-    # RESULTADO FINAL BASEADO APENAS NA ESTIMATIVA
-    # NÃO ESCOLHE PELA CONFIANÇA MAIS ALTA
-    # ============================================================
-    
     # Log para debugging
-    logging.info(f"Classificação final: {home} vs {away} - Est: {estimativa_total:.2f} - {tendencia_principal} - Conf: {confianca:.1f}%")
+    logging.info(
+        f"ANÁLISE INTELIGENTE: {home} vs {away} | "
+        f"Est: {estimativa_total_ajustada:.2f} | "
+        f"Tend: {tendencia_principal} | "
+        f"Prob: {probabilidade_final:.1f}% | "
+        f"Conf: {confianca_final:.1f}% | "
+        f"Sinais: {sinais_concordantes}/4 | "
+        f"Decisão: {decisao}"
+    )
     
     return {
-        "tendencia": tendencia_principal,  # Baseada APENAS na estimativa
-        "estimativa": round(estimativa_total, 2),
-        "probabilidade": probabilidade,
-        "confianca": confianca,
+        "tendencia": tendencia_principal,
+        "estimativa": round(estimativa_total_ajustada, 2),
+        "probabilidade": probabilidade_final,
+        "confianca": confianca_final,
         "tipo_aposta": tipo_aposta,
-        "detalhes": {
-            "over_25_prob": round(resultados["over_25"]["probabilidade"], 1),
-            "under_25_prob": round(resultados["under_25"]["probabilidade"], 1),
-            "over_15_prob": round(resultados["over_15"]["probabilidade"], 1),
-            "under_15_prob": round(resultados["under_15"]["probabilidade"], 1),
-            "over_35_prob": round(resultados["over_35"]["probabilidade"], 1),
-            "over_25_conf": round(resultados["over_25"]["confianca"], 1),
-            "under_25_conf": round(resultados["under_25"]["confianca"], 1),
-            "over_15_conf": round(resultados["over_15"]["confianca"], 1),
-            "under_15_conf": round(resultados["under_15"]["confianca"], 1),
-            "over_35_conf": round(resultados["over_35"]["confianca"], 1)
-        }
+        "detalhes": detalhes
     }
 
 def gerar_poster_individual_westham(fixture: dict, analise: dict) -> io.BytesIO:
