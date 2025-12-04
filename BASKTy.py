@@ -1495,10 +1495,10 @@ def obter_top4_melhores_jogos(data_str: str) -> list:
 # =============================
 
 def criar_poster_top4_compacto(jogos_top4: list) -> Image.Image:
-    """Cria um pôster compacto com os 4 melhores jogos do dia"""
+    """Cria um pôster compacto com os 4 melhores jogos do dia - COM DATA E HORÁRIO"""
     try:
         # Configurações do pôster compacto
-        largura, altura = 600, 1000
+        largura, altura = 600, 1050  # Aumentei a altura para 1050 para acomodar data/horário
         img = Image.new('RGB', (largura, altura), color='#0c0c0c')
         draw = ImageDraw.Draw(img)
         
@@ -1587,7 +1587,7 @@ def criar_poster_top4_compacto(jogos_top4: list) -> Image.Image:
         y_pos += 60
         
         # Para cada jogo no top 4
-        altura_jogo = 150
+        altura_jogo = 175  # Aumentei de 150 para 175 para acomodar data/horário
         espacamento = 20
         
         for i, jogo_info in enumerate(jogos_top4):
@@ -1597,6 +1597,14 @@ def criar_poster_top4_compacto(jogos_top4: list) -> Image.Image:
             jogo = jogo_info["jogo"]
             predictions = jogo_info["predictions"]
             
+            # DATA E HORÁRIO DO JOGO - NOVA SEÇÃO
+            data_jogo = jogo.get("date", "")
+            if data_jogo:
+                data_str, hora_str = formatar_data_api_para_local(data_jogo)
+                data_horario_texto = f"{data_str} - {hora_str}"
+            else:
+                data_horario_texto = "Data não definida"
+            
             # Container do jogo
             draw.rectangle([30, y_pos, largura-30, y_pos + altura_jogo], 
                           fill=cor_fundo_card, outline=cor_principal, width=2)
@@ -1604,6 +1612,10 @@ def criar_poster_top4_compacto(jogos_top4: list) -> Image.Image:
             # Número do jogo no ranking
             draw.ellipse([45, y_pos + 15, 75, y_pos + 45], fill=cor_destaque, outline=cor_principal)
             draw.text((60, y_pos + 30), str(i+1), fill=cor_principal, font=fonte_destaque, anchor="mm")
+            
+            # Data e Horário do Jogo (acima dos escudos)
+            draw.text((largura//2, y_pos + 10), data_horario_texto, 
+                     fill=cor_info, font=fonte_pequena, anchor="mm")
             
             # Times e escudos
             home_team = jogo.get("home_team", {}).get("full_name", "Casa")
@@ -1613,10 +1625,10 @@ def criar_poster_top4_compacto(jogos_top4: list) -> Image.Image:
             escudo_size = (45, 45)
             try:
                 escudo_away = baixar_escudo_time(away_team, escudo_size)
-                img.paste(escudo_away, (85, y_pos + 15), escudo_away)
+                img.paste(escudo_away, (85, y_pos + 35), escudo_away)  # Ajustado para y_pos + 35
                 
                 escudo_home = baixar_escudo_time(home_team, escudo_size)
-                img.paste(escudo_home, (largura-85-escudo_size[0], y_pos + 15), escudo_home)
+                img.paste(escudo_home, (largura-85-escudo_size[0], y_pos + 35), escudo_home)
             except:
                 pass
             
@@ -1633,19 +1645,21 @@ def criar_poster_top4_compacto(jogos_top4: list) -> Image.Image:
             home_abreviado = abreviar_nome(home_team)
             
             # Nomes dos times
-            draw.text((85 + escudo_size[0]//2, y_pos + 60), away_abreviado, 
+            draw.text((85 + escudo_size[0]//2, y_pos + 80), away_abreviado, 
                      fill=cor_texto, font=fonte_pequena, anchor="mm")
-            draw.text((largura-85-escudo_size[0]//2, y_pos + 60), home_abreviado, 
+            draw.text((largura-85-escudo_size[0]//2, y_pos + 80), home_abreviado, 
                      fill=cor_texto, font=fonte_pequena, anchor="mm")
             
             # VS no meio
-            draw.text((largura//2, y_pos + 30), "VS", 
+            draw.text((largura//2, y_pos + 50), "VS", 
                      fill=cor_destaque, font=fonte_subtitulo, anchor="mm")
             
             # Previsões em colunas compactas
             coluna_largura = (largura - 180) // 2
             coluna_x1 = 100
             coluna_x2 = coluna_x1 + coluna_largura + 20
+            
+            y_pos_previsoes = y_pos + 95  # Ajustado para mais abaixo
             
             # Coluna 1: Total de Pontos
             total_pred = predictions.get("total", {})
@@ -1654,11 +1668,11 @@ def criar_poster_top4_compacto(jogos_top4: list) -> Image.Image:
                 estimativa = total_pred.get('estimativa', 0)
                 confianca = total_pred.get('confianca', 0)
                 
-                draw.text((coluna_x1, y_pos + 80), "TOTAL PTS", 
+                draw.text((coluna_x1, y_pos_previsoes), "TOTAL PTS", 
                          fill=cor_destaque, font=fonte_pequena)
-                draw.text((coluna_x1, y_pos + 95), f"{tendencia}", 
+                draw.text((coluna_x1, y_pos_previsoes + 15), f"{tendencia}", 
                          fill=cor_texto, font=fonte_pequena)
-                draw.text((coluna_x1, y_pos + 110), f"Est: {estimativa:.1f} | {confianca:.0f}%", 
+                draw.text((coluna_x1, y_pos_previsoes + 30), f"Est: {estimativa:.1f} | {confianca:.0f}%", 
                          fill=cor_texto, font=fonte_pequena)
             
             # Coluna 2: Vencedor
@@ -1675,11 +1689,11 @@ def criar_poster_top4_compacto(jogos_top4: list) -> Image.Image:
                 else:
                     vencedor_abreviado = vencedor[:8]
                 
-                draw.text((coluna_x2, y_pos + 80), "VENCEDOR", 
+                draw.text((coluna_x2, y_pos_previsoes), "VENCEDOR", 
                          fill=cor_destaque, font=fonte_pequena)
-                draw.text((coluna_x2, y_pos + 95), f"{vencedor_abreviado}", 
+                draw.text((coluna_x2, y_pos_previsoes + 15), f"{vencedor_abreviado}", 
                          fill=cor_texto, font=fonte_pequena)
-                draw.text((coluna_x2, y_pos + 110), f"Conf: {confianca_venc:.0f}%", 
+                draw.text((coluna_x2, y_pos_previsoes + 30), f"Conf: {confianca_venc:.0f}%", 
                          fill=cor_texto, font=fonte_pequena)
             
             # Linha divisória entre jogos (exceto no último)
@@ -1710,10 +1724,10 @@ def criar_poster_top4_compacto(jogos_top4: list) -> Image.Image:
         return img
 
 def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
-    """Cria um pôster de resultado para o Top 4 mostrando Green/Red COM PLACARES"""
+    """Cria um pôster de resultado para o Top 4 mostrando Green/Red COM PLACARES E DATA/HORÁRIO"""
     try:
         # Configurações do pôster compacto
-        largura, altura = 600, 1100  # Aumentei a altura para acomodar os placares
+        largura, altura = 600, 1150  # Aumentei a altura para 1150 para acomodar data/horário
         img = Image.new('RGB', (largura, altura), color='#0c0c0c')
         draw = ImageDraw.Draw(img)
         
@@ -1793,7 +1807,7 @@ def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
         y_pos += cabecalho_rect_height + 20
         
         # Para cada jogo no top 4
-        altura_jogo = 170  # Aumentei para 170 para acomodar os placares
+        altura_jogo = 185  # Aumentei de 170 para 185 para acomodar data/horário
         espacamento = 20
         
         for i, jogo_data in enumerate(alerta_top4["jogos"]):
@@ -1805,6 +1819,14 @@ def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
             resultado_total = jogo_data.get("resultado_total", None)
             resultado_vencedor = jogo_data.get("resultado_vencedor", None)
             
+            # DATA E HORÁRIO DO JOGO - NOVA SEÇÃO
+            data_jogo = jogo.get("date", "")
+            if data_jogo:
+                data_str, hora_str = formatar_data_api_para_local(data_jogo)
+                data_horario_texto = f"{data_str} - {hora_str}"
+            else:
+                data_horario_texto = "Data não definida"
+            
             # Container do jogo
             draw.rectangle([30, y_pos, largura-30, y_pos + altura_jogo], 
                           fill=cor_fundo_card, outline=cor_principal, width=2)
@@ -1812,6 +1834,10 @@ def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
             # Número do jogo no ranking
             draw.ellipse([45, y_pos + 15, 75, y_pos + 45], fill=cor_destaque, outline=cor_principal)
             draw.text((60, y_pos + 30), str(i+1), fill=cor_principal, font=fonte_destaque, anchor="mm")
+            
+            # Data e Horário do Jogo (acima dos escudos)
+            draw.text((largura//2, y_pos + 10), data_horario_texto, 
+                     fill=cor_info, font=fonte_pequena, anchor="mm")
             
             # Times e escudos
             home_team = jogo.get("home_team", {}).get("full_name", "Casa")
@@ -1821,10 +1847,10 @@ def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
             escudo_size = (45, 45)
             try:
                 escudo_away = baixar_escudo_time(away_team, escudo_size)
-                img.paste(escudo_away, (85, y_pos + 15), escudo_away)
+                img.paste(escudo_away, (85, y_pos + 35), escudo_away)  # Ajustado para y_pos + 35
                 
                 escudo_home = baixar_escudo_time(home_team, escudo_size)
-                img.paste(escudo_home, (largura-85-escudo_size[0], y_pos + 15), escudo_home)
+                img.paste(escudo_home, (largura-85-escudo_size[0], y_pos + 35), escudo_home)
             except:
                 pass
             
@@ -1841,13 +1867,13 @@ def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
             home_abreviado = abreviar_nome(home_team)
             
             # Nomes dos times
-            draw.text((85 + escudo_size[0]//2, y_pos + 65), away_abreviado, 
+            draw.text((85 + escudo_size[0]//2, y_pos + 80), away_abreviado, 
                      fill=cor_texto, font=fonte_pequena, anchor="mm")
-            draw.text((largura-85-escudo_size[0]//2, y_pos + 60), home_abreviado, 
+            draw.text((largura-85-escudo_size[0]//2, y_pos + 80), home_abreviado, 
                      fill=cor_texto, font=fonte_pequena, anchor="mm")
             
             # VS no meio
-            draw.text((largura//2, y_pos + 30), "VS", 
+            draw.text((largura//2, y_pos + 50), "VS", 
                      fill=cor_destaque, font=fonte_subtitulo, anchor="mm")
             
             # PLACAR - NOVA SEÇÃO ADICIONADA
@@ -1858,7 +1884,7 @@ def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
             placar_texto = f"{away_score} - {home_score}"
             bbox_placar = draw.textbbox((0, 0), placar_texto, font=fonte_placar)
             largura_placar = bbox_placar[2] - bbox_placar[0]
-            draw.text((largura//2, y_pos + 60), placar_texto,
+            draw.text((largura//2, y_pos + 70), placar_texto,
                      fill=cor_placar, font=fonte_placar, anchor="mm")
             
             # Total de pontos
@@ -1866,10 +1892,10 @@ def criar_poster_top4_resultado(alerta_top4: dict) -> Image.Image:
             total_texto = f"Total: {total_pontos} pts"
             bbox_total = draw.textbbox((0, 0), total_texto, font=fonte_pequena)
             largura_total = bbox_total[2] - bbox_total[0]
-            draw.text((largura//2, y_pos + 85), total_texto,
+            draw.text((largura//2, y_pos + 95), total_texto,
                      fill=cor_texto, font=fonte_pequena, anchor="mm")
             
-            y_pos_temp = y_pos + 100  # Posição para as previsões
+            y_pos_temp = y_pos + 110  # Ajustado para mais abaixo
             
             # Previsões em colunas compactas
             coluna_largura = (largura - 180) // 2
