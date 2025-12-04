@@ -2018,7 +2018,7 @@ def main():
         # Dois cursores para intervalo de confiança
         col_min, col_max = st.columns(2)
         with col_min:
-            min_conf = st.slider("Confiança Mínima (%)", 50, 95, 70, 1)
+            min_conf = st.slider("Confiança Mínima (%)", 10, 95, 70, 1)
         with col_max:
             max_conf = st.slider("Confiança Máxima (%)", min_conf, 95, 95, 1)
         
