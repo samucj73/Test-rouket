@@ -50,6 +50,7 @@ def salvar_sessao():
             # NOVO: Dados da estratégia Fibonacci
             'fibonacci_historico': list(st.session_state.sistema.estrategia_fibonacci.historico),
             'fibonacci_stats': st.session_state.sistema.estrategia_fibonacci.stats,
+            'fibonacci_sequencias': st.session_state.sistema.estrategia_fibonacci.sequencias_detectadas,
             'estrategia_selecionada': st.session_state.sistema.estrategia_selecionada
         }
         
@@ -133,11 +134,12 @@ def carregar_sessao():
                 
                 # NOVO: Restaurar estratégia Fibonacci
                 fibonacci_historico = session_data.get('fibonacci_historico', [])
-                st.session_state.sistema.estrategia_fibonacci.historico = deque(fibonacci_historico, maxlen=30)
+                st.session_state.sistema.estrategia_fibonacci.historico = deque(fibonacci_historico, maxlen=50)
                 st.session_state.sistema.estrategia_fibonacci.stats = session_data.get('fibonacci_stats', {
                     'acertos': 0, 'tentativas': 0, 'sequencia_atual': 0, 'sequencia_maxima': 0,
                     'performance_media': 0, 'fibonacci_hits': 0, 'streak_positivo': 0, 'streak_negativo': 0
                 })
+                st.session_state.sistema.estrategia_fibonacci.sequencias_detectadas = session_data.get('fibonacci_sequencias', [])
             
             logging.info("✅ Sessão carregada com sucesso")
             return True
@@ -298,10 +300,10 @@ def enviar_resultado_super_simplificado(numero_real, acerto, nome_estrategia, de
         if acerto:
             if 'Fibonacci' in nome_estrategia:
                 # Mensagem específica para Fibonacci
-                if detalhes_acerto == "Fibonacci":
-                    mensagem = f"✅ Acerto Fibonacci!\n🎲 Número: {numero_real} (é Fibonacci)"
+                if detalhes_acerto and 'Fib' in detalhes_acerto:
+                    mensagem = f"✅ Acerto Fibonacci!\n🎲 Número: {numero_real} {detalhes_acerto}"
                 else:
-                    mensagem = f"✅ Acerto (não-Fibonacci)\n🎲 Número: {numero_real}"
+                    mensagem = f"✅ Acerto\n🎲 Número: {numero_real}"
             elif 'Zonas' in nome_estrategia and detalhes_acerto:
                 # CORREÇÃO: Mostrar número do núcleo em vez do nome da zona
                 if '+' in detalhes_acerto:
@@ -2239,19 +2241,16 @@ class EstrategiaML:
         logging.info("🔄 Padrões sequenciais e métricas zerados")
 
 # =============================
-# ESTRATÉGIA FIBONACCI - SEQUÊNCIA NUMÉRICA (NOVA)
+# ESTRATÉGIA FIBONACCI - SEQUÊNCIA DINÂMICA NOS RESULTADOS (MODIFICADA)
 # =============================
 class EstrategiaFibonacci:
     def __init__(self):
         self.roleta = RoletaInteligente()
-        self.historico = deque(maxlen=30)  # Histórico de 30 números
-        self.nome = "Fibonacci Sequence Strategy"
+        self.historico = deque(maxlen=50)  # Histórico maior para análise de sequências
+        self.nome = "Fibonacci Dynamic Sequence"
         
-        # Sequência de Fibonacci até 34 (próximo seria 55 > 36)
-        self.fibonacci_sequence = [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]
-        
-        # Números Fibonacci únicos na roleta
-        self.numeros_fibonacci = list(set(self.fibonacci_sequence))  # Remove duplicatas
+        # Sequência de Fibonacci para análise de padrões
+        self.sequencia_fibonacci = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89]
         
         # Estatísticas
         self.stats = {
@@ -2262,181 +2261,277 @@ class EstrategiaFibonacci:
             'performance_media': 0,
             'fibonacci_hits': 0,
             'streak_positivo': 0,
-            'streak_negativo': 0
+            'streak_negativo': 0,
+            'padroes_detectados': 0,
+            'padroes_acertados': 0
         }
         
-        # 🎯 NOVO: Sistema de seleção inteligente
+        # 🎯 Sistema de seleção inteligente
         self.sistema_selecao = SistemaSelecaoInteligente()
         
         # Configurações
         self.config = {
-            'min_historico': 10,
+            'min_historico': 15,
             'max_numeros_apostar': 15,
             'threshold_confianca': 0.6,
-            'use_fibonacci_neighbors': True
+            'analisar_intervalos': True,
+            'analisar_retracoes': True,
+            'analisar_extensoes': True
         }
+        
+        # Sequências Fibonacci detectadas
+        self.sequencias_detectadas = []
 
     def adicionar_numero(self, numero):
-        """Adiciona um novo número ao histórico"""
+        """Adiciona um novo número ao histórico e analisa padrões Fibonacci"""
         self.historico.append(numero)
-        resultado = self.atualizar_stats(numero)
+        
+        # Analisar padrões Fibonacci após adicionar número
+        if len(self.historico) >= 8:
+            self.analisar_padroes_fibonacci()
+        
         # Salvar sessão após adicionar número
         if 'sistema' in st.session_state:
             salvar_sessao()
-        return resultado
-
-    def atualizar_stats(self, ultimo_numero):
-        """Atualiza estatísticas baseadas no último número"""
-        acertou = False
         
-        # Verificar se o número é um número Fibonacci
-        if ultimo_numero in self.numeros_fibonacci:
-            self.stats['acertos'] += 1
-            self.stats['fibonacci_hits'] += 1
-            self.stats['sequencia_atual'] += 1
-            self.stats['streak_positivo'] += 1
-            self.stats['streak_negativo'] = 0
+        return None
+
+    def analisar_padroes_fibonacci(self):
+        """Analisa padrões Fibonacci nos resultados históricos"""
+        if len(self.historico) < 8:
+            return
+        
+        historico_lista = list(self.historico)
+        
+        # 1. Análise de intervalos Fibonacci (distância entre números iguais)
+        self.analisar_intervalos_fibonacci(historico_lista)
+        
+        # 2. Análise de retrações Fibonacci (movimentos de preço)
+        self.analisar_retracoes_fibonacci(historico_lista)
+        
+        # 3. Análise de extensões Fibonacci
+        self.analisar_extensoes_fibonacci(historico_lista)
+
+    def analisar_intervalos_fibonacci(self, historico):
+        """Analisa se os números aparecem em intervalos Fibonacci"""
+        if len(historico) < 10:
+            return
+        
+        # Verificar últimos 15 números
+        ultimos_15 = historico[-15:]
+        
+        for i in range(len(ultimos_15) - 2):
+            for j in range(i + 1, len(ultimos_15)):
+                if ultimos_15[i] == ultimos_15[j]:
+                    intervalo = j - i
+                    
+                    # Verificar se o intervalo é um número Fibonacci
+                    if intervalo in self.sequencia_fibonacci:
+                        padrao = {
+                            'tipo': 'intervalo_fibonacci',
+                            'numero': ultimos_15[i],
+                            'intervalo': intervalo,
+                            'posicao_inicial': len(historico) - 15 + i,
+                            'posicao_final': len(historico) - 15 + j,
+                            'forca': 0.7,
+                            'detectado_em': len(self.historico) - 1
+                        }
+                        
+                        # Verificar se é um padrão novo
+                        if not self.padrao_existe(padrao):
+                            self.sequencias_detectadas.append(padrao)
+                            self.stats['padroes_detectados'] += 1
+                            logging.info(f"🎯 Padrão Fibonacci: Número {ultimos_15[i]} aparece a cada {intervalo} jogos")
+
+    def analisar_retracoes_fibonacci(self, historico):
+        """Analisa retrações Fibonacci nos valores dos números"""
+        if len(historico) < 8:
+            return
+        
+        # Pegar os últimos 8 números
+        ultimos_8 = historico[-8:]
+        
+        # Encontrar máximo e mínimo na janela
+        max_val = max(ultimos_8)
+        min_val = min(ultimos_8)
+        
+        # Calcular diferença
+        diff = max_val - min_val
+        
+        if diff > 0:
+            # Calcular níveis de retração Fibonacci
+            niveis_retracao = {
+                '23.6%': min_val + diff * 0.236,
+                '38.2%': min_val + diff * 0.382,
+                '50.0%': min_val + diff * 0.5,
+                '61.8%': min_val + diff * 0.618,
+                '78.6%': min_val + diff * 0.786
+            }
             
-            if self.stats['sequencia_atual'] > self.stats['sequencia_maxima']:
-                self.stats['sequencia_maxima'] = self.stats['sequencia_atual']
+            # Verificar se números recentes estão próximos dos níveis Fibonacci
+            for nivel, valor in niveis_retracao.items():
+                for num in ultimos_8[-3:]:  # Últimos 3 números
+                    if abs(num - valor) <= 2:  # Margem de 2 números
+                        padrao = {
+                            'tipo': 'retracao_fibonacci',
+                            'nivel': nivel,
+                            'valor_alvo': valor,
+                            'numero_real': num,
+                            'forca': 0.65,
+                            'detectado_em': len(self.historico) - 1
+                        }
+                        
+                        if not self.padrao_existe(padrao):
+                            self.sequencias_detectadas.append(padrao)
+                            self.stats['padroes_detectados'] += 1
+                            logging.info(f"🎯 Retração Fibonacci: Nível {nivel} no número {num}")
+
+    def analisar_extensoes_fibonacci(self, historico):
+        """Analisa extensões Fibonacci (projeções)"""
+        if len(historico) < 10:
+            return
+        
+        # Pegar sequência de 4 números para análise
+        sequencia = historico[-4:]
+        
+        # Calcular diferenças
+        diff1 = abs(sequencia[1] - sequencia[0])
+        diff2 = abs(sequencia[2] - sequencia[1])
+        
+        if diff1 > 0 and diff2 > 0:
+            # Verificar proporções Fibonacci
+            proporcao = diff2 / diff1 if diff1 != 0 else 0
             
-            acertou = True
-        else:
-            self.stats['sequencia_atual'] = 0
-            self.stats['streak_negativo'] += 1
-            self.stats['streak_positivo'] = 0
-        
-        self.stats['tentativas'] += 1
-        
-        if self.stats['tentativas'] > 0:
-            self.stats['performance_media'] = (
-                self.stats['acertos'] / self.stats['tentativas'] * 100
-            )
-        
-        return acertou
+            # Proporções Fibonacci comuns: 0.618, 1.618, 2.618
+            proporcoes_fib = [0.618, 1.0, 1.618, 2.618]
+            
+            for prop_fib in proporcoes_fib:
+                if abs(proporcao - prop_fib) < 0.3:  # Margem de 30%
+                    # Prever próximo número baseado na proporção
+                    ultimo_num = sequencia[2]
+                    penultimo_num = sequencia[1]
+                    
+                    if proporcao > 1:
+                        # Extensão para cima
+                        previsao = ultimo_num + int((ultimo_num - penultimo_num) * proporcao)
+                    else:
+                        # Retração
+                        previsao = ultimo_num - int((penultimo_num - ultimo_num) * proporcao)
+                    
+                    # Garantir que está dentro dos limites da roleta
+                    previsao = max(0, min(36, previsao))
+                    
+                    padrao = {
+                        'tipo': 'extensao_fibonacci',
+                        'proporcao': proporcao,
+                        'previsao': previsao,
+                        'forca': 0.6,
+                        'detectado_em': len(self.historico) - 1
+                    }
+                    
+                    if not self.padrao_existe(padrao):
+                        self.sequencias_detectadas.append(padrao)
+                        self.stats['padroes_detectados'] += 1
+                        logging.info(f"🎯 Extensão Fibonacci: Proporção {proporcao:.3f}, prevendo número {previsao}")
 
-    def get_vizinhos_fibonacci(self, numero_base, raio=2):
-        """Retorna vizinhos de números Fibonacci próximos na roda"""
-        if numero_base not in self.roleta.race:
-            return []
-        
-        posicao = self.roleta.race.index(numero_base)
-        vizinhos = []
-        
-        for offset in range(-raio, raio + 1):
-            if offset != 0:  # Exclui o próprio número
-                vizinho = self.roleta.race[(posicao + offset) % len(self.roleta.race)]
-                if vizinho in self.numeros_fibonacci:
-                    vizinhos.append(vizinho)
-        
-        return vizinhos
+    def padrao_existe(self, novo_padrao):
+        """Verifica se padrão similar já foi detectado recentemente"""
+        for padrao in self.sequencias_detectadas[-10:]:
+            if (padrao['tipo'] == novo_padrao['tipo'] and 
+                len(self.historico) - padrao['detectado_em'] < 20):
+                return True
+        return False
 
-    def calcular_confianca_fibonacci(self, historico_recente):
-        """Calcula confiança baseada em padrões Fibonacci recentes"""
-        if len(historico_recente) < self.config['min_historico']:
+    def calcular_confianca_fibonacci(self):
+        """Calcula confiança baseada nos padrões Fibonacci detectados"""
+        if len(self.historico) < self.config['min_historico']:
             return 'Baixa'
         
-        # 1. Frequência de números Fibonacci no histórico recente
-        count_fibonacci = sum(1 for n in historico_recente if n in self.numeros_fibonacci)
-        freq_fibonacci = count_fibonacci / len(historico_recente)
+        # Baseada em padrões recentes
+        padroes_recentes = [p for p in self.sequencias_detectadas 
+                          if len(self.historico) - p['detectado_em'] <= 10]
         
-        # 2. Tendência temporal
-        if len(historico_recente) >= 10:
-            metade_inicial = historico_recente[:5]
-            metade_final = historico_recente[5:]
-            
-            count_inicial = sum(1 for n in metade_inicial if n in self.numeros_fibonacci)
-            count_final = sum(1 for n in metade_final if n in self.numeros_fibonacci)
-            
-            if count_final > count_inicial:
-                bonus_tendencia = 0.2
-            elif count_final == count_inicial:
-                bonus_tendencia = 0.1
-            else:
-                bonus_tendencia = 0.0
-        else:
-            bonus_tendencia = 0.0
+        if not padroes_recentes:
+            return 'Baixa'
         
-        # 3. Sequência atual de números Fibonacci
-        bonus_sequencia = min(self.stats['sequencia_atual'] * 0.1, 0.3)
+        # Contar padrões por tipo
+        tipos_padroes = {}
+        for padrao in padroes_recentes:
+            tipo = padrao['tipo']
+            tipos_padroes[tipo] = tipos_padroes.get(tipo, 0) + 1
         
-        # 4. Performance histórica
-        if self.stats['tentativas'] > 20:
-            perf_bonus = min(self.stats['performance_media'] / 100, 0.3)
-        else:
-            perf_bonus = 0.1
+        # Calcular confiança baseada em quantidade e força dos padrões
+        confianca_total = 0
+        peso_total = 0
         
-        # Calcular confiança total
-        confianca_total = (freq_fibonacci * 0.4 + 
-                          bonus_tendencia + 
-                          bonus_sequencia + 
-                          perf_bonus)
+        for padrao in padroes_recentes:
+            peso = padrao.get('forca', 0.5)
+            confianca_total += peso
+            peso_total += 1
+        
+        if peso_total == 0:
+            return 'Baixa'
+        
+        confianca_media = confianca_total / peso_total
+        
+        # Ajustar pela quantidade de padrões
+        ajuste_quantidade = min(len(padroes_recentes) * 0.1, 0.3)
+        confianca_final = confianca_media + ajuste_quantidade
         
         # Converter para texto
-        if confianca_total >= 0.8:
+        if confianca_final >= 0.8:
             return 'Excelente'
-        elif confianca_total >= 0.7:
+        elif confianca_final >= 0.7:
             return 'Muito Alta'
-        elif confianca_total >= 0.6:
+        elif confianca_final >= 0.6:
             return 'Alta'
-        elif confianca_total >= 0.5:
+        elif confianca_final >= 0.5:
             return 'Média'
         else:
             return 'Baixa'
 
-    def detectar_padroes_fibonacci(self, historico_recente):
-        """Detecta padrões Fibonacci específicos no histórico"""
-        padroes_detectados = []
+    def gerar_numeros_aposta(self):
+        """Gera números para apostar baseados nos padrões Fibonacci detectados"""
+        numeros_candidatos = set()
         
-        if len(historico_recente) < 8:
-            return padroes_detectados
+        # Padrões recentes (últimos 15 números)
+        padroes_recentes = [p for p in self.sequencias_detectadas 
+                          if len(self.historico) - p['detectado_em'] <= 15]
         
-        # 1. Padrão: Sequência de Fibonacci consecutiva
-        for i in range(len(historico_recente) - 3):
-            janela = historico_recente[i:i+4]
-            if all(n in self.numeros_fibonacci for n in janela):
-                padroes_detectados.append({
-                    'tipo': 'fibonacci_consecutivo',
-                    'forca': 0.8,
-                    'posicao': i,
-                    'janela': janela
-                })
-        
-        # 2. Padrão: Alternância Fibonacci/não-Fibonacci
-        for i in range(len(historico_recente) - 5):
-            janela = historico_recente[i:i+6]
-            padrao_esperado = [
-                True, False, True, False, True, False  # F, NF, F, NF, F, NF
-            ]
+        for padrao in padroes_recentes:
+            if padrao['tipo'] == 'intervalo_fibonacci':
+                # Adicionar o número que aparece em intervalos Fibonacci
+                numero = padrao.get('numero')
+                if numero is not None:
+                    numeros_candidatos.add(numero)
+                    
+                    # Adicionar vizinhos físicos
+                    vizinhos = self.roleta.get_vizinhos_fisicos(numero, raio=2)
+                    numeros_candidatos.update(vizinhos)
             
-            padrao_real = [n in self.numeros_fibonacci for n in janela]
+            elif padrao['tipo'] == 'retracao_fibonacci':
+                # Adicionar número próximo ao nível de retração
+                numero = padrao.get('numero_real')
+                if numero is not None:
+                    numeros_candidatos.add(numero)
             
-            if padrao_real == padrao_esperado:
-                padroes_detectados.append({
-                    'tipo': 'alternancia_fibonacci',
-                    'forca': 0.7,
-                    'posicao': i,
-                    'janela': janela
-                })
+            elif padrao['tipo'] == 'extensao_fibonacci':
+                # Adicionar previsão de extensão
+                previsao = padrao.get('previsao')
+                if previsao is not None:
+                    numeros_candidatos.add(previsao)
         
-        return padroes_detectados
-
-    def gerar_numeros_aposta(self, historico_recente, padroes_detectados):
-        """Gera números para apostar baseados em Fibonacci e padrões detectados"""
-        numeros_base = self.numeros_fibonacci.copy()
+        # Se não houver padrões suficientes, usar números baseados em tendência
+        if len(numeros_candidatos) < 5 and len(self.historico) >= 10:
+            # Adicionar números quentes recentes
+            ultimos_10 = list(self.historico)[-10:]
+            contagem = Counter(ultimos_10)
+            numeros_quentes = [num for num, count in contagem.most_common(3)]
+            numeros_candidatos.update(numeros_quentes)
         
-        # Adicionar vizinhos de números Fibonacci se configurado
-        if self.config['use_fibonacci_neighbors']:
-            for fib_num in self.numeros_fibonacci:
-                vizinhos = self.get_vizinhos_fibonacci(fib_num, raio=1)
-                numeros_base.extend(vizinhos)
-        
-        # Remover duplicatas
-        numeros_base = list(set(numeros_base))
-        
-        # Remover números que saíram recentemente (últimos 5)
-        numeros_recentes = historico_recente[-5:] if len(historico_recente) >= 5 else historico_recente
-        numeros_filtrados = [n for n in numeros_base if n not in numeros_recentes]
+        # Remover números que saíram recentemente (últimos 3)
+        numeros_recentes = list(self.historico)[-3:] if len(self.historico) >= 3 else []
+        numeros_filtrados = [n for n in numeros_candidatos if n not in numeros_recentes]
         
         # Se ainda tiver muitos números, aplicar seleção inteligente
         if len(numeros_filtrados) > self.config['max_numeros_apostar']:
@@ -2451,45 +2546,39 @@ class EstrategiaFibonacci:
         if len(self.historico) < self.config['min_historico']:
             return None
         
-        historico_recente = list(self.historico)[-15:]  # Últimos 15 números
-        
-        # Detectar padrões Fibonacci
-        padroes_detectados = self.detectar_padroes_fibonacci(historico_recente)
-        
         # Gerar números para apostar
-        numeros_apostar = self.gerar_numeros_aposta(historico_recente, padroes_detectados)
+        numeros_apostar = self.gerar_numeros_aposta()
         
         if not numeros_apostar:
             return None
         
         # Calcular confiança
-        confianca = self.calcular_confianca_fibonacci(historico_recente)
+        confianca = self.calcular_confianca_fibonacci()
         
         # Se confiança muito baixa, não recomendar aposta
-        if confianca in ['Baixa', 'Muito Baixa'] and len(padroes_detectados) == 0:
+        if confianca in ['Baixa', 'Muito Baixa']:
             return None
         
-        # Construir gatilho informativo
-        count_fib_recente = sum(1 for n in historico_recente if n in self.numeros_fibonacci)
-        percent_fib = (count_fib_recente / len(historico_recente)) * 100
+        # Padrões recentes
+        padroes_recentes = [p for p in self.sequencias_detectadas 
+                          if len(self.historico) - p['detectado_em'] <= 15]
         
-        gatilho = f'Fibonacci: {count_fib_recente}/{len(historico_recente)} ({percent_fib:.1f}%) | '
+        # Construir gatilho informativo
+        gatilho = f'Fibonacci: {len(padroes_recentes)} padrões detectados | '
         gatilho += f'Conf: {confianca} | '
-        gatilho += f'Padrões: {len(padroes_detectados)} | '
         gatilho += f'Números: {len(numeros_apostar)}'
         
         return {
-            'nome': 'Fibonacci Sequence Strategy',
+            'nome': 'Fibonacci Dynamic Sequence',
             'numeros_apostar': numeros_apostar,
             'gatilho': gatilho,
             'confianca': confianca,
-            'padroes_detectados': len(padroes_detectados),
+            'padroes_detectados': len(padroes_recentes),
             'tipo': 'fibonacci',
             'selecao_inteligente': len(numeros_apostar) <= 15,
             'detalhes': {
-                'fibonacci_numbers': self.numeros_fibonacci,
-                'padroes': [p['tipo'] for p in padroes_detectados],
-                'performance': f"{self.stats['performance_media']:.1f}%"
+                'padroes_ativos': len(padroes_recentes),
+                'historico_analisado': len(self.historico)
             }
         }
 
@@ -2498,59 +2587,64 @@ class EstrategiaFibonacci:
         if len(self.historico) == 0:
             return "📊 Aguardando dados para análise Fibonacci..."
         
-        historico_recente = list(self.historico)[-20:] if len(self.historico) >= 20 else list(self.historico)
-        count_fib = sum(1 for n in historico_recente if n in self.numeros_fibonacci)
-        percent_fib = (count_fib / len(historico_recente)) * 100
+        padroes_recentes = [p for p in self.sequencias_detectadas 
+                          if len(self.historico) - p['detectado_em'] <= 20]
         
-        analise = "🎯 ANÁLISE FIBONACCI - SEQUÊNCIA DE OURO\n"
-        analise += "=" * 50 + "\n"
-        analise += f"📊 Números Fibonacci: {sorted(self.numeros_fibonacci)}\n"
-        analise += f"📈 Frequência esperada: {len(self.numeros_fibonacci)}/37 = {(len(self.numeros_fibonacci)/37)*100:.1f}%\n"
-        analise += "=" * 50 + "\n"
+        analise = "🎯 ANÁLISE FIBONACCI - SEQUÊNCIA DINÂMICA\n"
+        analise += "=" * 60 + "\n"
+        analise += "📊 TEORIA: Análise de padrões Fibonacci nos resultados\n"
+        analise += "🎯 PADRÕES ANALISADOS: Intervalos, Retrações, Extensões\n"
+        analise += "=" * 60 + "\n"
         
-        analise += f"\n📊 ESTATÍSTICAS ATUAIS:\n"
-        analise += f"✅ Acertos Fibonacci: {self.stats['acertos']}/{self.stats['tentativas']} ({self.stats['performance_media']:.1f}%)\n"
-        analise += f"📈 Sequência atual: {self.stats['sequencia_atual']} (Máx: {self.stats['sequencia_maxima']})\n"
-        analise += f"🔥 Streak positivo: {self.stats['streak_positivo']}\n"
-        analise += f"💤 Streak negativo: {self.stats['streak_negativo']}\n"
-        analise += f"🎯 Hits Fibonacci: {self.stats['fibonacci_hits']}\n"
+        analise += f"\n📊 ESTATÍSTICAS:\n"
+        analise += f"📈 Histórico analisado: {len(self.historico)} números\n"
+        analise += f"🔍 Padrões detectados: {len(self.sequencias_detectadas)}\n"
+        analise += f"🎯 Padrões ativos: {len(padroes_recentes)}\n"
         
-        analise += f"\n📈 ANÁLISE RECENTE (últimos {len(historico_recente)} números):\n"
-        analise += f"🔢 Fibonacci recentes: {count_fib}/{len(historico_recente)} ({percent_fib:.1f}%)\n"
-        
-        # Detectar padrões
-        padroes = self.detectar_padroes_fibonacci(historico_recente)
-        if padroes:
-            analise += f"\n🔍 PADRÕES DETECTADOS ({len(padroes)}):\n"
-            for padrao in padroes[:3]:  # Mostrar apenas 3 principais
-                analise += f"   • {padrao['tipo']}: força {padrao['forca']:.2f}\n"
+        if padroes_recentes:
+            analise += f"\n🔍 PADRÕES RECENTES (últimos 20 números):\n"
+            for padrao in padroes_recentes[-5:]:  # Mostrar últimos 5 padrões
+                idade = len(self.historico) - padrao['detectado_em']
+                
+                if padrao['tipo'] == 'intervalo_fibonacci':
+                    analise += f"   • Intervalo {padrao['intervalo']} para número {padrao['numero']} (há {idade} jogos)\n"
+                elif padrao['tipo'] == 'retracao_fibonacci':
+                    analise += f"   • Retração {padrao['nivel']} no número {padrao['numero_real']} (há {idade} jogos)\n"
+                elif padrao['tipo'] == 'extensao_fibonacci':
+                    analise += f"   • Extensão {padrao['proporcao']:.3f} prevendo {padrao['previsao']} (há {idade} jogos)\n"
         else:
-            analise += f"\n⚠️  Nenhum padrão Fibonacci detectado\n"
+            analise += f"\n⚠️  Nenhum padrão Fibonacci detectado recentemente\n"
         
-        # Análise de tendência
-        if len(historico_recente) >= 10:
-            primeira_metade = historico_recente[:len(historico_recente)//2]
-            segunda_metade = historico_recente[len(historico_recente)//2:]
+        # Distribuição por tipo de padrão
+        if padroes_recentes:
+            tipos = {}
+            for padrao in padroes_recentes:
+                tipo = padrao['tipo']
+                tipos[tipo] = tipos.get(tipo, 0) + 1
             
-            fib_primeira = sum(1 for n in primeira_metade if n in self.numeros_fibonacci)
-            fib_segunda = sum(1 for n in segunda_metade if n in self.numeros_fibonacci)
-            
-            tendencia = "↗️ CRESCENTE" if fib_segunda > fib_primeira else "↘️ DECRESCENTE" if fib_segunda < fib_primeira else "➡️ ESTÁVEL"
-            analise += f"\n📊 TENDÊNCIA: {tendencia}\n"
-            analise += f"   Primeira metade: {fib_primeira}/{len(primeira_metade)} ({fib_primeira/len(primeira_metade)*100:.1f}%)\n"
-            analise += f"   Segunda metade:  {fib_segunda}/{len(segunda_metade)} ({fib_segunda/len(segunda_metade)*100:.1f}%)\n"
+            analise += f"\n📊 DISTRIBUIÇÃO DOS PADRÕES:\n"
+            for tipo, count in tipos.items():
+                porcentagem = (count / len(padroes_recentes)) * 100
+                tipo_nome = tipo.replace('_fibonacci', '').title()
+                analise += f"   • {tipo_nome}: {count} ({porcentagem:.1f}%)\n"
+        
+        # Últimos números analisados
+        if len(self.historico) >= 10:
+            analise += f"\n🔢 ÚLTIMOS NÚMEROS ANALISADOS:\n"
+            ultimos_10 = list(self.historico)[-10:]
+            analise += f"   {' '.join(map(str, ultimos_10))}\n"
         
         # Recomendação
-        confianca = self.calcular_confianca_fibonacci(historico_recente)
+        confianca = self.calcular_confianca_fibonacci()
         analise += f"\n💡 RECOMENDAÇÃO:\n"
         analise += f"🎯 Confiança: {confianca}\n"
         
         if confianca in ['Excelente', 'Muito Alta']:
-            analise += "✅ **CONDIÇÕES IDEIAS** - Aposta Fibonacci recomendada!\n"
+            analise += "✅ **PADRÕES FORTES DETECTADOS** - Aposta Fibonacci recomendada!\n"
         elif confianca in ['Alta', 'Média']:
-            analise += "🎯 **CONDIÇÕES BOAS** - Aposta moderada recomendada\n"
+            analise += "🎯 **PADRÕES MODERADOS** - Aposta cautelosa recomendada\n"
         else:
-            analise += "⚠️  **CONDIÇÕES FRACAS** - Aguardar padrão mais forte\n"
+            analise += "⚠️  **PADRÕES FRACOS** - Aguardar mais dados\n"
         
         # Previsão atual
         previsao = self.analisar_fibonacci()
@@ -2559,6 +2653,7 @@ class EstrategiaFibonacci:
             analise += f"🎯 Estratégia: {previsao['nome']}\n"
             analise += f"🔢 Números sugeridos: {len(previsao['numeros_apostar'])}\n"
             analise += f"📊 {previsao['gatilho']}\n"
+            analise += f"🎲 Números: {', '.join(map(str, sorted(previsao['numeros_apostar'])))}"
         else:
             analise += "\n⏸️  Nenhuma previsão ativa no momento\n"
         
@@ -2574,16 +2669,19 @@ class EstrategiaFibonacci:
             'performance_media': 0,
             'fibonacci_hits': 0,
             'streak_positivo': 0,
-            'streak_negativo': 0
+            'streak_negativo': 0,
+            'padroes_detectados': 0,
+            'padroes_acertados': 0
         }
+        self.sequencias_detectadas = []
         logging.info("📊 Estatísticas Fibonacci zeradas")
 
     def get_info_fibonacci(self):
         """Retorna informações sobre a estratégia Fibonacci"""
         return {
             'nome': self.nome,
-            'numeros_fibonacci': self.numeros_fibonacci,
-            'sequence': self.fibonacci_sequence,
+            'teoria': 'Análise de padrões Fibonacci nos resultados históricos',
+            'padroes_analisados': ['Intervalos Fibonacci', 'Retrações Fibonacci', 'Extensões Fibonacci'],
             'config': self.config
         }
 
@@ -2669,9 +2767,16 @@ class SistemaRoletaCompleto:
             # Verificar se o número está nos números para apostar
             acerto = numero_real in self.previsao_ativa['numeros_apostar']
             
-            # Para Fibonacci, verificar se é número Fibonacci
-            if 'Fibonacci' in nome_estrategia:
-                detalhes_acerto = "Fibonacci" if numero_real in self.estrategia_fibonacci.numeros_fibonacci else "Não-Fibonacci"
+            # Para Fibonacci, verificar se há padrão Fibonacci envolvido
+            if 'Fibonacci' in nome_estrategia and acerto:
+                # Verificar se o número corresponde a algum padrão Fibonacci recente
+                padroes_recentes = [p for p in self.estrategia_fibonacci.sequencias_detectadas 
+                                  if len(self.estrategia_fibonacci.historico) - p['detectado_em'] <= 5]
+                
+                for padrao in padroes_recentes:
+                    if padrao.get('numero') == numero_real or padrao.get('numero_real') == numero_real or padrao.get('previsao') == numero_real:
+                        detalhes_acerto = f"Fib:{padrao['tipo']}"
+                        break
             
             # Verifica e aplica rotação automática se necessário
             rotacionou = self.rotacionar_estrategia_automaticamente(acerto, nome_estrategia)
@@ -2683,6 +2788,10 @@ class SistemaRoletaCompleto:
             if acerto:
                 self.estrategias_contador[nome_estrategia]['acertos'] += 1
                 self.acertos += 1
+                
+                # Atualizar estatísticas Fibonacci se aplicável
+                if 'Fibonacci' in nome_estrategia and detalhes_acerto:
+                    self.estrategia_fibonacci.stats['fibonacci_hits'] += 1
             else:
                 self.erros += 1
             
@@ -2950,7 +3059,7 @@ with st.sidebar.expander("🔔 Alertas Alternativos", expanded=False):
             # Simular uma previsão de teste
             previsao_teste = {
                 'nome': 'Fibonacci Teste',
-                'numeros_apostar': [0, 1, 2, 3, 5, 8, 13, 21, 34],
+                'numeros_apostar': [5, 8, 13, 21],
                 'zonas_envolvidas': []
             }
             
@@ -3148,31 +3257,29 @@ with st.sidebar.expander("📊 Informações das Estratégias"):
             
     elif estrategia == "Fibonacci":  # NOVA SEÇÃO
         info_fib = st.session_state.sistema.estrategia_fibonacci.get_info_fibonacci()
-        st.write("**🎯 Estratégia Fibonacci:**")
-        st.write("**CONCEITO:** Sequência matemática de Fibonacci (0, 1, 1, 2, 3, 5, 8, 13, 21, 34)")
-        st.write("**MATEMÁTICA:**")
-        st.write("- 🔢 **Números Fibonacci:** 0, 1, 2, 3, 5, 8, 13, 21, 34")
-        st.write("- 📊 **Frequência esperada:** 9/37 = 24.3%")
-        st.write("- 🌟 **Golden Ratio:** φ ≈ 1.618 (proporção áurea)")
+        st.write("**🎯 ESTRATÉGIA FIBONACCI DINÂMICA:**")
+        st.write("**TEORIA:** Análise de padrões Fibonacci NOS RESULTADOS HISTÓRICOS")
+        st.write("**MÉTODO:** Observa a sequência de números que vão saindo na roleta")
         
-        st.write("**PADRÕES DETECTADOS:**")
-        st.write("- 🔄 **Sequências consecutivas** de números Fibonacci")
-        st.write("- ↔️ **Alternância** Fibonacci/não-Fibonacci")
+        st.write("**PADRÕES ANALISADOS:**")
+        st.write("- 🔄 **Intervalos Fibonacci**: Números que aparecem a cada 1, 2, 3, 5, 8, 13, 21 jogos")
+        st.write("- 📉 **Retrações Fibonacci**: Níveis de 23.6%, 38.2%, 50%, 61.8%, 78.6% entre máximos e mínimos")
+        st.write("- 📈 **Extensões Fibonacci**: Proporções de 0.618, 1.618, 2.618 entre movimentos")
         
-        st.write("**ESTRATÉGIA:**")
-        st.write("- 🎯 Apostar em números Fibonacci")
-        st.write("- 🔍 Detectar padrões sequenciais")
-        st.write("- 📊 Análise de tendência temporal")
+        st.write("**ANÁLISE:**")
+        st.write("- 🎯 Detecta padrões matemáticos NATURAIS nos resultados")
+        st.write("- 🔍 Baseada na teoria de Fibonacci aplicada a sequências aleatórias")
+        st.write("- 📊 Usa proporção áurea (φ ≈ 1.618) para identificar retrações e extensões")
         st.write("- 🎯 **SELEÇÃO INTELIGENTE:** Máximo 15 números selecionados")
         
         st.write("**CONFIGURAÇÃO:**")
         st.write(f"- 📊 Histórico mínimo: {info_fib['config']['min_historico']} números")
         st.write(f"- 🎯 Máximo números: {info_fib['config']['max_numeros_apostar']}")
-        st.write(f"- 📈 Threshold: {info_fib['config']['threshold_confianca'] * 100}%")
         
-        st.write("**📊 NÚMEROS FIBONACCI:**")
-        st.write(f"{', '.join(map(str, sorted(info_fib['numeros_fibonacci'])))}")
-        st.write(f"Total: {len(info_fib['numeros_fibonacci'])} números")
+        st.write("**VANTAGEM:**")
+        st.write("✅ **Não usa números fixos** - Analisa os resultados que estão saindo")
+        st.write("✅ **Detecta padrões matemáticos** naturais em sequências aleatórias")
+        st.write("✅ **Adapta-se dinamicamente** aos resultados recentes")
 
 # Análise detalhada
 with st.sidebar.expander(f"🔍 Análise - {estrategia}", expanded=False):
@@ -3254,15 +3361,13 @@ if sistema.previsao_ativa:
         st.info("📊 **Critérios:** Frequência + Posição + Vizinhança + Tendência")
     
     if 'Fibonacci' in previsao['nome']:
-        st.write("**🎯 ESTRATÉGIA FIBONACCI:** Números da sequência matemática")
+        st.write("**🎯 ESTRATÉGIA FIBONACCI DINÂMICA:** Análise matemática dos resultados")
         
         # Mostrar detalhes Fibonacci
         if 'detalhes' in previsao:
             detalhes = previsao['detalhes']
-            st.write(f"**🔢 Números Fibonacci:** {', '.join(map(str, detalhes['fibonacci_numbers']))}")
-            if detalhes['padroes']:
-                st.write(f"**🔍 Padrões detectados:** {', '.join(detalhes['padroes'])}")
-            st.write(f"**📊 Performance:** {detalhes['performance']}")
+            st.write(f"**📊 Padrões ativos:** {detalhes['padroes_ativos']}")
+            st.write(f"**📈 Histórico analisado:** {detalhes['historico_analisado']} números")
             
     elif 'Zonas' in previsao['nome']:
         zonas_envolvidas = previsao.get('zonas_envolvidas', [])
@@ -3280,123 +3385,349 @@ if sistema.previsao_ativa:
         else:
             zona = previsao.get('zona', '')
             # CORREÇÃO: Mostrar número do núcleo
-            if zona == 'Vermelha':
-                nucleo = "7"
+           if zona == 'Vermelha':
+                st.write(f"**📍 Núcleo:** 7 (Zona Vermelha)")
             elif zona == 'Azul':
-                nucleo = "10"
+                st.write(f"**📍 Núcleo:** 10 (Zona Azul)")  
             elif zona == 'Amarela':
-                nucleo = "2"
+                st.write(f"**📍 Núcleo:** 2 (Zona Amarela)")
             else:
-                nucleo = zona
-            st.write(f"**📍 Núcleo:** {nucleo}")
-            
-    elif 'ML' in previsao['nome']:
-        zonas_envolvidas = previsao.get('zonas_envolvidas', [])
-        if len(zonas_envolvidas) > 1:
-            # Aposta dupla
-            zona1 = zonas_envolvidas[0]
-            zona2 = zonas_envolvidas[1]
-            
-            # Converter nomes das zonas para números dos núcleos
-            nucleo1 = "7" if zona1 == 'Vermelha' else "10" if zona1 == 'Azul' else "2"
-            nucleo2 = "7" if zona2 == 'Vermelha' else "10" if zona2 == 'Azul' else "2"
-            
-            st.write(f"**🤖 Núcleos Combinados:** {nucleo1} + {nucleo2}")
-            st.info("🔄 **ESTRATÉGIA DUPLA:** Investindo nas 2 melhores zonas")
+                st.write(f"**📍 Núcleo:** {zona}")
+                
+    elif 'ML' in previsao['nome'] or 'Machine Learning' in previsao['nome']:
+        zona_ml = previsao.get('zona_ml', '')
+        if '+' in str(zona_ml):
+            # Aposta dupla ML
+            zonas = str(zona_ml).split('+')
+            nucleos = []
+            for zona in zonas:
+                if zona == 'Vermelha':
+                    nucleos.append("7")
+                elif zona == 'Azul':
+                    nucleos.append("10")
+                elif zona == 'Amarela':
+                    nucleos.append("2")
+                else:
+                    nucleos.append(zona)
+            nucleo_str = "+".join(nucleos)
+            st.write(f"**🤖 Núcleos ML:** {nucleo_str}")
+            st.info("🔄 **ESTRATÉGIA DUPLA:** ML combinou 2 zonas com alta probabilidade")
         else:
-            zona_ml = previsao.get('zona_ml', '')
-            # CORREÇÃO: Mostrar número do núcleo
-            if zona_ml == 'Vermelha':
-                nucleo = "7"
-            elif zona_ml == 'Azul':
-                nucleo = "10"
-            elif zona_ml == 'Amarela':
-                nucleo = "2"
+            # CORREÇÃO: Verificar números específicos na previsão
+            numeros_apostar = previsao.get('numeros_apostar', [])
+            
+            if 2 in numeros_apostar:
+                st.write(f"**🤖 Núcleo ML:** 2 (Zona Amarela)")
+            elif 7 in numeros_apostar:
+                st.write(f"**🤖 Núcleo ML:** 7 (Zona Vermelha)")
+            elif 10 in numeros_apostar:
+                st.write(f"**🤖 Núcleo ML:** 10 (Zona Azul)")
             else:
-                nucleo = zona_ml
-            st.write(f"**🤖 Núcleo:** {nucleo}")
-    
-    st.write(f"**🔢 Números para apostar ({len(previsao['numeros_apostar'])}):**")
-    st.write(", ".join(map(str, sorted(previsao['numeros_apostar']))))
-    
-    # NOVO: Mostrar informações de padrões para ML
-    if 'ML' in previsao['nome'] and previsao.get('padroes_aplicados', 0) > 0:
-        st.info(f"🔍 **Padrões aplicados:** {previsao['padroes_aplicados']} padrões sequenciais detectados")
-    
-    # Mostrar tipo de aposta
-    tipo_aposta = previsao.get('tipo', 'unica')
-    if tipo_aposta == 'dupla':
-        st.success("🎯 **APOSTA DUPLA:** Maior cobertura com 2 zonas combinadas")
+                if zona_ml == 'Vermelha':
+                    st.write(f"**🤖 Núcleo ML:** 7 (Zona Vermelha)")
+                elif zona_ml == 'Azul':
+                    st.write(f"**🤖 Núcleo ML:** 10 (Zona Azul)")  
+                elif zona_ml == 'Amarela':
+                    st.write(f"**🤖 Núcleo ML:** 2 (Zona Amarela)")
+                else:
+                    st.write(f"**🤖 Núcleo ML:** {zona_ml}")
+                    
+        # Mostrar padrões aplicados se houver
+        if previsao.get('padroes_aplicados', 0) > 0:
+            st.info(f"🔍 **PADRÕES DETECTADOS:** {previsao['padroes_aplicados']} padrões aplicados na previsão")
     else:
-        st.info("🎯 **APOSTA SIMPLES:** Foco em uma zona principal")
+        st.write(f"**💰 Estratégia:** Midas - Padrões de terminais")
     
-    st.info("⏳ Aguardando próximo sorteio para conferência...")
+    st.write(f"**🎲 Números para apostar ({len(previsao['numeros_apostar'])}):**")
+    
+    # Formatar os números em colunas para melhor visualização
+    numeros = sorted(previsao['numeros_apostar'])
+    if len(numeros) > 10:
+        # Dividir em 2 colunas
+        metade = len(numeros) // 2
+        col1, col2 = st.columns(2)
+        with col1:
+            st.write(" ".join(map(str, numeros[:metade])))
+        with col2:
+            st.write(" ".join(map(str, numeros[metade:])))
+    else:
+        st.write(" ".join(map(str, numeros)))
+    
+    st.write(f"**📊 Confiança:** {previsao.get('confianca', 'N/A')}")
+    st.write(f"**📝 Gatilho:** {previsao.get('gatilho', 'N/A')}")
+    
+    # Botão para forçar nova previsão
+    if st.button("🔄 Gerar Nova Previsão", key="gerar_nova"):
+        sistema.previsao_ativa = None
+        # Processar o último número novamente para gerar nova previsão
+        if st.session_state.historico:
+            ultimo_numero = st.session_state.historico[-1]
+            sistema.processar_novo_numero(ultimo_numero)
+        st.rerun()
 else:
-    st.info(f"🎲 Analisando padrões ({estrategia})...")
+    st.warning("⚠️ Nenhuma previsão ativa no momento")
+    
+    if st.button("🔍 Analisar Novamente"):
+        if st.session_state.historico:
+            ultimo_numero = st.session_state.historico[-1]
+            sistema.processar_novo_numero(ultimo_numero)
+            st.rerun()
+        else:
+            st.error("❌ Nenhum histórico disponível para análise")
 
-# Desempenho
-st.subheader("📈 Desempenho")
-
-total = sistema.acertos + sistema.erros
-taxa = (sistema.acertos / total * 100) if total > 0 else 0.0
-
+# Estatísticas de Desempenho
+st.subheader("📊 Estatísticas de Desempenho")
 col1, col2, col3, col4 = st.columns(4)
-col1.metric("🟢 Acertos", sistema.acertos)
-col2.metric("🔴 Erros", sistema.erros)
-col3.metric("📊 Total", total)
-col4.metric("✅ Taxa", f"{taxa:.1f}%")
+with col1:
+    st.metric("✅ Acertos", sistema.acertos)
+with col2:
+    st.metric("❌ Erros", sistema.erros)
+with col3:
+    total = sistema.acertos + sistema.erros
+    percentual = (sistema.acertos / total * 100) if total > 0 else 0
+    st.metric("📈 % de Acerto", f"{percentual:.1f}%")
+with col4:
+    st.metric("🎯 Precisão Estratégia", f"{sistema.estrategia_selecionada}")
 
-# Botões de gerenciamento de estatísticas na seção de desempenho
-st.write("**Gerenciar Estatísticas:**")
-col5, col6 = st.columns(2)
+# Estatísticas por Estratégia
+if sistema.estrategias_contador:
+    st.write("**📈 Desempenho por Estratégia:**")
+    
+    estrategias_dados = []
+    for nome, dados in sistema.estrategias_contador.items():
+        total = dados['total']
+        acertos = dados['acertos']
+        percentual = (acertos / total * 100) if total > 0 else 0
+        
+        # Adicionar emoji baseado no nome da estratégia
+        if 'Zonas' in nome:
+            emoji = "📍"
+        elif 'ML' in nome or 'Machine Learning' in nome:
+            emoji = "🤖"
+        elif 'Fibonacci' in nome:
+            emoji = "🎯"
+        elif 'Midas' in nome:
+            emoji = "💰"
+        else:
+            emoji = "🎲"
+            
+        estrategias_dados.append({
+            'Estratégia': f"{emoji} {nome}",
+            'Acertos': acertos,
+            'Total': total,
+            '%': f"{percentual:.1f}%"
+        })
+    
+    if estrategias_dados:
+        # Ordenar por percentual de acerto
+        estrategias_dados.sort(key=lambda x: float(x['%'].replace('%', '')), reverse=True)
+        
+        # Mostrar como tabela
+        for estrategia_data in estrategias_dados:
+            col_e1, col_e2, col_e3, col_e4 = st.columns([3, 1, 1, 1])
+            with col_e1:
+                st.write(estrategia_data['Estratégia'])
+            with col_e2:
+                st.write(f"✅ {estrategia_data['Acertos']}")
+            with col_e3:
+                st.write(f"📊 {estrategia_data['Total']}")
+            with col_e4:
+                percentual = float(estrategia_data['%'].replace('%', ''))
+                if percentual >= 50:
+                    st.success(f"📈 {estrategia_data['%']}")
+                elif percentual >= 40:
+                    st.info(f"📊 {estrategia_data['%']}")
+                else:
+                    st.warning(f"📉 {estrategia_data['%']}")
 
-with col5:
-    if st.button("🔄 Reset Recente", help="Mantém apenas os últimos 10 resultados", use_container_width=True):
-        st.session_state.sistema.reset_recente_estatisticas()
-        st.success("✅ Estatísticas recentes resetadas!")
+# Histórico Recente
+st.subheader("📋 Histórico Recente de Resultados")
+if sistema.historico_desempenho:
+    # Pegar últimos 10 resultados
+    ultimos_resultados = sistema.historico_desempenho[-10:] if len(sistema.historico_desempenho) >= 10 else sistema.historico_desempenho
+    
+    for resultado in reversed(ultimos_resultados):
+        col_r1, col_r2, col_r3, col_r4 = st.columns([2, 1, 3, 2])
+        with col_r1:
+            # Emoji baseado na estratégia
+            estrategia_nome = resultado['estrategia']
+            if 'Zonas' in estrategia_nome:
+                emoji = "📍"
+            elif 'ML' in estrategia_nome or 'Machine Learning' in estrategia_nome:
+                emoji = "🤖"
+            elif 'Fibonacci' in estrategia_nome:
+                emoji = "🎯"
+            elif 'Midas' in estrategia_nome:
+                emoji = "💰"
+            else:
+                emoji = "🎲"
+            st.write(f"{emoji} {estrategia_nome}")
+        with col_r2:
+            if resultado['acerto']:
+                st.success(f"✅ {resultado['numero']}")
+            else:
+                st.error(f"❌ {resultado['numero']}")
+        with col_r3:
+            # Mostrar tipo de aposta
+            tipo_aposta = resultado.get('tipo_aposta', 'unica')
+            if tipo_aposta == 'dupla':
+                st.info("🔄 Aposta Dupla")
+            elif tipo_aposta == 'fibonacci':
+                st.info("🎯 Fibonacci")
+            else:
+                st.write("🎯 Aposta Única")
+            
+            # Mostrar detalhes se houver
+            if resultado.get('detalhes'):
+                st.caption(f"({resultado['detalhes']})")
+        with col_r4:
+            if resultado.get('rotacionou'):
+                st.warning("🔄 Rotacionou")
+else:
+    st.info("📝 Nenhum resultado registrado ainda")
+
+# Botões de Controle
+st.subheader("🎮 Controles")
+col_c1, col_c2, col_c3 = st.columns(3)
+
+with col_c1:
+    if st.button("🔄 Atualizar Agora", use_container_width=True):
+        # Buscar novo resultado da API
+        resultado = fetch_latest_result()
+        if resultado and resultado.get("number") is not None:
+            st.session_state.historico.append(resultado)
+            sistema.processar_novo_numero(resultado)
+            salvar_resultado_em_arquivo(st.session_state.historico)
+            salvar_sessao()
+            st.success(f"✅ Número {resultado['number']} adicionado!")
+            st.rerun()
+        else:
+            st.error("❌ Nenhum novo resultado disponível")
+
+with col_c2:
+    if st.button("📊 Ver Análise Detalhada", use_container_width=True):
+        # Alternar visão expandida da análise
+        st.session_state['show_analise_detalhada'] = not st.session_state.get('show_analise_detalhada', False)
         st.rerun()
 
-with col6:
-    if st.button("🗑️ Zerar Tudo", type="secondary", help="Zera TODAS as estatísticas", use_container_width=True):
-        if st.checkbox("Confirmar zerar TODAS as estatísticas"):
-            st.session_state.sistema.zerar_estatisticas_desempenho()
-            st.error("🗑️ Todas as estatísticas foram zeradas!")
+with col_c3:
+    if st.button("🎯 Forçar Nova Análise", use_container_width=True):
+        if st.session_state.historico:
+            ultimo_numero = st.session_state.historico[-1]
+            sistema.processar_novo_numero(ultimo_numero)
+            st.success("✅ Nova análise realizada!")
             st.rerun()
-
-# Análise detalhada por estratégia
-if sistema.estrategias_contador:
-    st.write("**📊 Performance por Estratégia:**")
-    for nome, dados in sistema.estrategias_contador.items():
-        # ✅ CORREÇÃO: Verificar se dados é um dicionário válido
-        if isinstance(dados, dict) and 'total' in dados and dados['total'] > 0:
-            taxa_estrategia = (dados['acertos'] / dados['total'] * 100)
-            cor = "🟢" if taxa_estrategia >= 50 else "🟡" if taxa_estrategia >= 30 else "🔴"
-            st.write(f"{cor} {nome}: {dados['acertos']}/{dados['total']} ({taxa_estrategia:.1f}%)")
         else:
-            # Se dados não for um dicionário válido, mostrar informação básica
-            st.write(f"⚠️ {nome}: Dados de performance não disponíveis")
+            st.error("❌ Nenhum histórico disponível")
 
-# Últimas conferências
-if sistema.historico_desempenho:
-    st.write("**🔍 Últimas 5 Conferências:**")
-    for i, resultado in enumerate(sistema.historico_desempenho[-5:]):
-        emoji = "🎉" if resultado['acerto'] else "❌"
-        rotacao_emoji = " 🔄" if resultado.get('rotacionou', False) else ""
-        detalhes_info = ""
-        if resultado.get('detalhes'):
-            detalhes_info = f" ({resultado['detalhes']})"
+# Análise Detalhada Expandida
+if st.session_state.get('show_analise_detalhada', False):
+    st.subheader("🔍 Análise Detalhada Expandida")
+    
+    tab1, tab2, tab3, tab4 = st.tabs(["📊 Sistema", "📍 Zonas", "🤖 ML", "🎯 Fibonacci"])
+    
+    with tab1:
+        st.write("**📈 ESTATÍSTICAS DO SISTEMA:**")
+        st.write(f"- **Total de sorteios processados:** {sistema.contador_sorteios_global}")
+        st.write(f"- **Histórico de desempenho:** {len(sistema.historico_desempenho)} resultados registrados")
+        st.write(f"- **Previsão ativa:** {'Sim' if sistema.previsao_ativa else 'Não'}")
         
-        tipo_aposta_info = ""
-        if resultado.get('tipo_aposta') == 'dupla':
-            tipo_aposta_info = " [DUPLA]"
+        st.write("**🔄 SISTEMA DE ROTAÇÃO:**")
+        status = sistema.get_status_rotacao()
+        st.write(f"- **Estratégia atual:** {status['estrategia_atual']}")
+        st.write(f"- **Erros seguidos:** {status['sequencia_erros']}/2")
+        st.write(f"- **Próxima rotação em:** {status['proxima_rotacao_em']} erro(s)")
+        st.write(f"- **Última estratégia com erro:** {status['ultima_estrategia_erro'] or 'Nenhuma'}")
         
-        st.write(f"{emoji}{rotacao_emoji} {resultado['estrategia']}{tipo_aposta_info}: Número {resultado['numero']}{detalhes_info}")
+        st.write("**📊 DESEMPENHO GERAL:**")
+        st.write(f"- **Acertos:** {sistema.acertos}")
+        st.write(f"- **Erros:** {sistema.erros}")
+        st.write(f"- **Percentual de acerto:** {(sistema.acertos/(sistema.acertos+sistema.erros)*100):.1f}%" if (sistema.acertos+sistema.erros) > 0 else "0%")
+    
+    with tab2:
+        analise_zonas = sistema.estrategia_zonas.get_analise_detalhada()
+        st.text(analise_zonas)
+        
+        # Informações adicionais das zonas
+        info_zonas = sistema.estrategia_zonas.get_info_zonas()
+        st.write("**🔢 CONFIGURAÇÃO DAS ZONAS:**")
+        for zona, dados in info_zonas.items():
+            st.write(f"**Zona {zona}** (Centro: {dados['central']})")
+            st.write(f"Números: {', '.join(map(str, dados['numeros']))}")
+            st.write(f"Quantidade: {dados['quantidade']} números")
+            st.write("---")
+    
+    with tab3:
+        analise_ml = sistema.estrategia_ml.get_analise_ml()
+        st.text(analise_ml)
+        
+        # Estatísticas de padrões ML
+        if sistema.estrategia_selecionada == "ML":
+            estatisticas_padroes = sistema.estrategia_ml.get_estatisticas_padroes()
+            st.write("**🔍 ESTATÍSTICAS DE PADRÕES ML:**")
+            st.text(estatisticas_padroes)
+            
+        # Status do modelo ML
+        ml_status = sistema.estrategia_ml.ml.resumo_meta()
+        st.write("**🤖 STATUS DO MODELO ML:**")
+        st.write(f"- **Treinado:** {ml_status['is_trained']}")
+        st.write(f"- **Treinamentos realizados:** {ml_status['contador_treinamento']}")
+        if ml_status['meta']:
+            if 'last_accuracy' in ml_status['meta']:
+                st.write(f"- **Última acurácia:** {ml_status['meta']['last_accuracy']:.2%}")
+            if 'trained_on' in ml_status['meta']:
+                st.write(f"- **Último treino com:** {ml_status['meta']['trained_on']} números")
+        
+        st.write(f"- **Próximo treino automático em:** {15 - sistema.estrategia_ml.contador_sorteios} sorteios")
+        st.write(f"- **Tamanho do ensemble:** {len(sistema.estrategia_ml.ml.models)} modelos")
+        
+        # Tipos de modelos no ensemble
+        if sistema.estrategia_ml.ml.models:
+            tipos = []
+            for modelo in sistema.estrategia_ml.ml.models:
+                if hasattr(modelo, 'iterations'):
+                    tipos.append("CatBoost")
+                else:
+                    tipos.append("RandomForest")
+            st.write(f"- **Modelos:** {', '.join(tipos)}")
+    
+    with tab4:
+        # NOVA: Análise detalhada Fibonacci
+        analise_fib = sistema.estrategia_fibonacci.get_analise_detalhada()
+        st.text(analise_fib)
+        
+        # Estatísticas Fibonacci
+        stats_fib = sistema.estrategia_fibonacci.stats
+        st.write("**📊 ESTATÍSTICAS FIBONACCI:**")
+        st.write(f"- **Acertos Fibonacci:** {stats_fib['fibonacci_hits']}")
+        st.write(f"- **Padrões detectados:** {stats_fib['padroes_detectados']}")
+        st.write(f"- **Padrões acertados:** {stats_fib['padroes_acertados']}")
+        if stats_fib['padroes_detectados'] > 0:
+            eficiencia = (stats_fib['padroes_acertados'] / stats_fib['padroes_detectados']) * 100
+            st.write(f"- **Eficiência padrões:** {eficiencia:.1f}%")
+        
+        # Sequência Fibonacci usada
+        st.write("**🔢 SEQUÊNCIA FIBONACCI USADA:**")
+        st.write(f"{', '.join(map(str, sistema.estrategia_fibonacci.sequencia_fibonacci))}")
+        
+        # Configurações
+        config_fib = sistema.estrategia_fibonacci.config
+        st.write("**⚙️ CONFIGURAÇÕES FIBONACCI:**")
+        st.write(f"- **Histórico mínimo:** {config_fib['min_historico']} números")
+        st.write(f"- **Máximo números para apostar:** {config_fib['max_numeros_apostar']}")
+        st.write(f"- **Threshold confiança:** {config_fib['threshold_confianca']}")
+        st.write(f"- **Analisar intervalos:** {config_fib['analisar_intervalos']}")
+        st.write(f"- **Analisar retrações:** {config_fib['analisar_retracoes']}")
+        st.write(f"- **Analisar extensões:** {config_fib['analisar_extensoes']}")
 
-# Download histórico
-if os.path.exists(HISTORICO_PATH):
-    with open(HISTORICO_PATH, "r") as f:
-        conteudo = f.read()
-    st.download_button("📥 Baixar histórico", data=conteudo, file_name="historico_roleta.json")
+# Footer
+st.divider()
+st.caption("🎯 **IA Roleta - Sistema Multi-Estratégias** v6.0 | 🔄 **Rotação Automática** | 🎯 **Fibonacci Dinâmico** | 🤖 **ML CatBoost** | 📍 **Zonas Ultra** | 💰 **Midas**")
+st.caption("⚠️ **Uso Educacional** - Sistema de análise probabilística para estudo de padrões em jogos de roleta")
 
-# ✅ CORREÇÃO FINAL: Salvar sessão
-salvar_sessao()
+# Variáveis de sessão necessárias
+if 'show_analise_detalhada' not in st.session_state:
+    st.session_state.show_analise_detalhada = False
+
+# Atualizar página a cada 3 segundos
+st_autorefresh(interval=3000, key="streamlit_refresh") 
