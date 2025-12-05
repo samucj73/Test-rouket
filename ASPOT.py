@@ -12,8 +12,6 @@ import time
 from collections import deque
 from threading import Lock
 import threading
-import hashlib
-from functools import lru_cache
 
 # Pillow
 from PIL import Image, ImageDraw, ImageFont, ImageOps
@@ -61,268 +59,7 @@ LIGA_DICT = {
 }
 
 # =============================
-# Configurações de Cache Inteligente
-# =============================
-
-CACHE_CONFIG = {
-    "jogos": {
-        "ttl": 1800,  # 30 minutos para jogos
-        "max_size": 200
-    },
-    "classificacao": {
-        "ttl": 43200,  # 12 horas para classificação
-        "max_size": 100
-    },
-    "match_details": {
-        "ttl": 3600,  # 1 hora para detalhes de partida
-        "max_size": 300
-    },
-    "competitions": {
-        "ttl": 604800,  # 7 dias para competições
-        "max_size": 50
-    },
-    "teams": {
-        "ttl": 259200,  # 3 dias para times
-        "max_size": 200
-    }
-}
-
-# Caminhos para cache persistente
-CACHE_PATHS = {
-    "jogos": "cache_jogos_persistent.json",
-    "classificacao": "cache_classificacao_persistent.json",
-    "match_details": "cache_match_details_persistent.json",
-    "competitions": "cache_competitions.json",
-    "teams": "cache_teams.json"
-}
-
-# =============================
-# Sistema de Cache Persistente
-# =============================
-
-class PersistentSmartCache:
-    """Cache inteligente com TTL, tamanho máximo e persistência em disco"""
-    def __init__(self, cache_type: str, persist_path: str = None):
-        self.cache = {}
-        self.timestamps = {}
-        self.access_counts = {}  # Para LRU (Least Recently Used)
-        self.config = CACHE_CONFIG.get(cache_type, {"ttl": 3600, "max_size": 100})
-        self.lock = threading.Lock()
-        self.persist_path = persist_path
-        self.last_persist = time.time()
-        self.persist_interval = 300  # Persistir a cada 5 minutos
-        
-        # Carregar do disco se existir
-        if persist_path and os.path.exists(persist_path):
-            self._load_from_disk()
-    
-    def _load_from_disk(self):
-        """Carrega cache do disco"""
-        try:
-            with open(self.persist_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                self.cache = data.get('cache', {})
-                self.timestamps = data.get('timestamps', {})
-                self.access_counts = data.get('access_counts', {})
-                self._clean_expired()
-                logging.info(f"✅ Cache carregado de {self.persist_path}: {len(self.cache)} entradas")
-        except Exception as e:
-            logging.warning(f"⚠️ Erro ao carregar cache de {self.persist_path}: {e}")
-    
-    def _save_to_disk(self):
-        """Salva cache no disco"""
-        try:
-            with self.lock:
-                data = {
-                    'cache': self.cache,
-                    'timestamps': self.timestamps,
-                    'access_counts': self.access_counts,
-                    '_version': '1.0',
-                    '_last_saved': time.time()
-                }
-                with open(self.persist_path, 'w', encoding='utf-8') as f:
-                    json.dump(data, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            logging.warning(f"⚠️ Erro ao salvar cache em {self.persist_path}: {e}")
-    
-    def _clean_expired(self):
-        """Remove entradas expiradas do cache"""
-        agora = time.time()
-        expired_keys = []
-        
-        for key, timestamp in self.timestamps.items():
-            if agora - timestamp > self.config["ttl"]:
-                expired_keys.append(key)
-        
-        for key in expired_keys:
-            self.cache.pop(key, None)
-            self.timestamps.pop(key, None)
-            self.access_counts.pop(key, None)
-        
-        if expired_keys:
-            logging.info(f"🧹 {len(expired_keys)} entradas expiradas removidas do cache")
-    
-    def get(self, key: str):
-        """Obtém valor do cache se ainda for válido"""
-        with self.lock:
-            # Persistir periodicamente
-            if self.persist_path and time.time() - self.last_persist > self.persist_interval:
-                self._save_to_disk()
-                self.last_persist = time.time()
-            
-            if key not in self.cache:
-                return None
-            
-            # Verificar expiração
-            timestamp = self.timestamps.get(key, 0)
-            agora = time.time()
-            
-            if agora - timestamp > self.config["ttl"]:
-                # Expirou, remove do cache
-                self.cache.pop(key, None)
-                self.timestamps.pop(key, None)
-                self.access_counts.pop(key, None)
-                return None
-            
-            # Atualizar contagem de acesso (LRU)
-            self.access_counts[key] = self.access_counts.get(key, 0) + 1
-            
-            return self.cache[key]
-    
-    def set(self, key: str, value):
-        """Armazena valor no cache"""
-        with self.lock:
-            # Verifica se precisa limpar (LRU + tamanho)
-            if len(self.cache) >= self.config["max_size"]:
-                self._evict_oldest()
-            
-            self.cache[key] = value
-            self.timestamps[key] = time.time()
-            self.access_counts[key] = self.access_counts.get(key, 0) + 1
-            
-            # Persistir se necessário
-            if self.persist_path:
-                self._save_to_disk()
-    
-    def _evict_oldest(self):
-        """Remove entradas mais antigas usando política LRU"""
-        if not self.access_counts:
-            return
-        
-        # Encontrar a chave menos recentemente usada
-        oldest_key = min(self.access_counts.items(), key=lambda x: x[1])[0]
-        
-        # Remover
-        self.cache.pop(oldest_key, None)
-        self.timestamps.pop(oldest_key, None)
-        self.access_counts.pop(oldest_key, None)
-        
-        logging.info(f"🗑️ Entrada removida do cache (LRU): {oldest_key[:50]}...")
-    
-    def clear(self):
-        """Limpa todo o cache"""
-        with self.lock:
-            self.cache.clear()
-            self.timestamps.clear()
-            self.access_counts.clear()
-            if self.persist_path and os.path.exists(self.persist_path):
-                os.remove(self.persist_path)
-                logging.info(f"🧹 Cache persistente limpo: {self.persist_path}")
-    
-    def get_stats(self):
-        """Retorna estatísticas do cache"""
-        with self.lock:
-            total = len(self.cache)
-            agora = time.time()
-            expired = sum(1 for ts in self.timestamps.values() if agora - ts > self.config["ttl"])
-            total_hits = sum(self.access_counts.values())
-            hit_rate = total_hits / max(total, 1)
-            
-            return {
-                "total_entries": total,
-                "expired_entries": expired,
-                "max_size": self.config["max_size"],
-                "ttl": self.config["ttl"],
-                "total_hits": total_hits,
-                "average_hits": round(hit_rate, 2),
-                "persisted": self.persist_path is not None
-            }
-
-class HierarchicalCache:
-    """Cache hierárquico com memória rápida e disco persistente"""
-    def __init__(self, name: str):
-        self.name = name
-        self.memory_cache = {}  # Cache em memória (muito rápido)
-        self.memory_timestamps = {}
-        self.memory_ttl = 60  # 1 minuto para cache de memória
-        self.persistent_cache = PersistentSmartCache(name, CACHE_PATHS.get(name))
-        self.lock = threading.Lock()
-    
-    def get(self, key: str):
-        """Obtém do cache hierárquico"""
-        with self.lock:
-            # Primeiro tenta memória
-            if key in self.memory_cache:
-                timestamp = self.memory_timestamps.get(key, 0)
-                if time.time() - timestamp < self.memory_ttl:
-                    logging.debug(f"✅ Cache MEMÓRIA hit: {key[:50]}...")
-                    return self.memory_cache[key]
-            
-            # Se não estiver na memória, tenta persistente
-            value = self.persistent_cache.get(key)
-            if value:
-                # Armazena em memória para acesso futuro rápido
-                self.memory_cache[key] = value
-                self.memory_timestamps[key] = time.time()
-                logging.debug(f"✅ Cache PERSISTENTE hit: {key[:50]}...")
-            
-            return value
-    
-    def set(self, key: str, value):
-        """Armazena em ambos os caches"""
-        with self.lock:
-            # Armazena em memória
-            self.memory_cache[key] = value
-            self.memory_timestamps[key] = time.time()
-            
-            # Armazena persistente
-            self.persistent_cache.set(key, value)
-            
-            logging.debug(f"💾 Cache salvo: {key[:50]}...")
-    
-    def clear_memory(self):
-        """Limpa apenas cache de memória"""
-        with self.lock:
-            count = len(self.memory_cache)
-            self.memory_cache.clear()
-            self.memory_timestamps.clear()
-            logging.info(f"🧹 Cache de memória limpo: {count} entradas removidas")
-    
-    def clear(self):
-        """Limpa ambos os caches"""
-        with self.lock:
-            self.clear_memory()
-            self.persistent_cache.clear()
-    
-    def get_stats(self):
-        """Estatísticas combinadas"""
-        mem_stats = {
-            "memory_entries": len(self.memory_cache),
-            "memory_ttl": self.memory_ttl
-        }
-        pers_stats = self.persistent_cache.get_stats()
-        
-        return {**mem_stats, **pers_stats}
-
-# Inicializar caches hierárquicos
-jogos_cache = HierarchicalCache("jogos")
-classificacao_cache = HierarchicalCache("classificacao")
-match_cache = HierarchicalCache("match_details")
-competitions_cache = HierarchicalCache("competitions")
-teams_cache = HierarchicalCache("teams")
-
-# =============================
-# Sistema de Rate Limiting
+# Sistema de Rate Limiting e Cache
 # =============================
 
 class RateLimiter:
@@ -374,14 +111,77 @@ class RateLimiter:
 # Instância global do rate limiter
 rate_limiter = RateLimiter()
 
+# Configurações de cache inteligente
+CACHE_CONFIG = {
+    "jogos": {
+        "ttl": 3600,  # 1 hora para jogos
+        "max_size": 100  # Máximo de 100 entradas
+    },
+    "classificacao": {
+        "ttl": 86400,  # 24 horas para classificação
+        "max_size": 50  # Máximo de 50 ligas
+    },
+    "match_details": {
+        "ttl": 1800,  # 30 minutos para detalhes de partida
+        "max_size": 200  # Máximo de 200 partidas
+    }
+}
+
+class SmartCache:
+    """Cache inteligente com TTL e tamanho máximo"""
+    def __init__(self, cache_type: str):
+        self.cache = {}
+        self.timestamps = {}
+        self.config = CACHE_CONFIG.get(cache_type, {"ttl": 3600, "max_size": 100})
+        self.lock = threading.Lock()
+        
+    def get(self, key: str):
+        """Obtém valor do cache se ainda for válido"""
+        with self.lock:
+            if key not in self.cache:
+                return None
+                
+            timestamp = self.timestamps.get(key, 0)
+            agora = time.time()
+            
+            if agora - timestamp > self.config["ttl"]:
+                # Expirou, remove do cache
+                del self.cache[key]
+                del self.timestamps[key]
+                return None
+                
+            return self.cache[key]
+    
+    def set(self, key: str, value):
+        """Armazena valor no cache"""
+        with self.lock:
+            # Limpa cache se exceder tamanho máximo
+            if len(self.cache) >= self.config["max_size"]:
+                # Remove o mais antigo
+                oldest_key = min(self.timestamps.items(), key=lambda x: x[1])[0]
+                del self.cache[oldest_key]
+                del self.timestamps[oldest_key]
+            
+            self.cache[key] = value
+            self.timestamps[key] = time.time()
+    
+    def clear(self):
+        """Limpa todo o cache"""
+        with self.lock:
+            self.cache.clear()
+            self.timestamps.clear()
+
+# Inicializar caches
+jogos_cache = SmartCache("jogos")
+classificacao_cache = SmartCache("classificacao")
+match_cache = SmartCache("match_details")
+
 class APIMonitor:
     """Monitora uso da API"""
     def __init__(self):
         self.total_requests = 0
         self.failed_requests = 0
         self.rate_limit_hits = 0
-        self.cache_hits = 0
-        self.cache_misses = 0
         self.start_time = time.time()
         self.lock = threading.Lock()
         
@@ -394,32 +194,16 @@ class APIMonitor:
             if was_rate_limited:
                 self.rate_limit_hits += 1
     
-    def log_cache_hit(self):
-        """Registra um cache hit"""
-        with self.lock:
-            self.cache_hits += 1
-    
-    def log_cache_miss(self):
-        """Registra um cache miss"""
-        with self.lock:
-            self.cache_misses += 1
-    
     def get_stats(self):
         """Retorna estatísticas"""
         with self.lock:
             elapsed = time.time() - self.start_time
             requests_per_min = (self.total_requests / elapsed * 60) if elapsed > 0 else 0
             
-            total_cache = self.cache_hits + self.cache_misses
-            cache_hit_rate = (self.cache_hits / total_cache * 100) if total_cache > 0 else 0
-            
             return {
                 "total_requests": self.total_requests,
                 "failed_requests": self.failed_requests,
                 "rate_limit_hits": self.rate_limit_hits,
-                "cache_hits": self.cache_hits,
-                "cache_misses": self.cache_misses,
-                "cache_hit_rate": round(cache_hit_rate, 1),
                 "requests_per_minute": round(requests_per_min, 2),
                 "success_rate": round((1 - self.failed_requests / max(self.total_requests, 1)) * 100, 1),
                 "uptime_minutes": round(elapsed / 60, 1)
@@ -431,8 +215,6 @@ class APIMonitor:
             self.total_requests = 0
             self.failed_requests = 0
             self.rate_limit_hits = 0
-            self.cache_hits = 0
-            self.cache_misses = 0
             self.start_time = time.time()
 
 # Instância global do monitor
@@ -640,42 +422,7 @@ def validar_dados_jogo(match: dict) -> bool:
     return True
 
 # =============================
-# Funções de Cache para Competições e Times
-# =============================
-def obter_competicao_info(competition_id: str) -> dict:
-    """Obtém informações da competição com cache de longa duração"""
-    cached = competitions_cache.get(competition_id)
-    if cached:
-        api_monitor.log_cache_hit()
-        return cached
-    
-    api_monitor.log_cache_miss()
-    url = f"{BASE_URL_FD}/competitions/{competition_id}"
-    data = obter_dados_api(url)
-    
-    if data:
-        competitions_cache.set(competition_id, data)
-    
-    return data or {}
-
-def obter_time_info(team_id: str) -> dict:
-    """Obtém informações do time com cache"""
-    cached = teams_cache.get(team_id)
-    if cached:
-        api_monitor.log_cache_hit()
-        return cached
-    
-    api_monitor.log_cache_miss()
-    url = f"{BASE_URL_FD}/teams/{team_id}"
-    data = obter_dados_api(url)
-    
-    if data:
-        teams_cache.set(team_id, data)
-    
-    return data or {}
-
-# =============================
-# Comunicação com APIs com Cache
+# Comunicação com APIs
 # =============================
 def enviar_telegram(msg: str, chat_id: str = TELEGRAM_CHAT_ID, disable_web_page_preview: bool = True) -> bool:
     try:
@@ -766,11 +513,9 @@ def obter_classificacao(liga_id: str) -> dict:
     # Verifica cache primeiro
     cached = classificacao_cache.get(liga_id)
     if cached:
-        api_monitor.log_cache_hit()
         logging.info(f"📊 Classificação da liga {liga_id} obtida do cache")
         return cached
     
-    api_monitor.log_cache_miss()
     url = f"{BASE_URL_FD}/competitions/{liga_id}/standings"
     data = obter_dados_api(url)
     if not data:
@@ -794,24 +539,19 @@ def obter_classificacao(liga_id: str) -> dict:
     return standings
 
 def obter_jogos(liga_id: str, data: str) -> list:
-    """Obtém jogos com cache hierárquico"""
+    """Obtém jogos com cache inteligente"""
     key = f"{liga_id}_{data}"
     
     # Verifica cache primeiro
     cached = jogos_cache.get(key)
     if cached:
-        api_monitor.log_cache_hit()
-        logging.info(f"⚽ Jogos {key} obtidos do cache (hierárquico)")
+        logging.info(f"⚽ Jogos {key} obtidos do cache")
         return cached
     
-    api_monitor.log_cache_miss()
     url = f"{BASE_URL_FD}/competitions/{liga_id}/matches?dateFrom={data}&dateTo={data}"
     data_api = obter_dados_api(url)
     jogos = data_api.get("matches", []) if data_api else []
-    
-    # Armazena em cache hierárquico
     jogos_cache.set(key, jogos)
-    
     return jogos
 
 def obter_detalhes_partida(fixture_id: str) -> dict | None:
@@ -819,10 +559,8 @@ def obter_detalhes_partida(fixture_id: str) -> dict | None:
     # Verifica cache primeiro
     cached = match_cache.get(fixture_id)
     if cached:
-        api_monitor.log_cache_hit()
         return cached
     
-    api_monitor.log_cache_miss()
     url = f"{BASE_URL_FD}/matches/{fixture_id}"
     data = obter_dados_api(url)
     
@@ -856,36 +594,6 @@ def obter_jogos_brasileirao(liga_id: str, data_hoje: str) -> list:
             jogos_filtrados.append(match)
     
     return jogos_filtrados
-
-# =============================
-# Cache para Funções de Análise
-# =============================
-
-def calcular_tendencia_com_cache(home: str, away: str, classificacao: dict) -> dict:
-    """Wrapper com cache para cálculos de tendência"""
-    # Cria hash da classificação para usar como chave
-    class_hash = hashlib.md5(
-        json.dumps(classificacao, sort_keys=True).encode()
-    ).hexdigest()
-    
-    # Tenta cache primeiro
-    cache_key = f"tendencia_{home}_{away}_{class_hash}"
-    cached = match_cache.get(cache_key)
-    
-    if cached:
-        api_monitor.log_cache_hit()
-        logging.info(f"✅ Cache HIT para tendência: {home} vs {away}")
-        return cached
-    
-    api_monitor.log_cache_miss()
-    # Calcula se não tiver cache
-    logging.info(f"🔄 Cache MISS para tendência: {home} vs {away}")
-    resultado = calcular_tendencia_completa(home, away, classificacao)
-    
-    # Armazena no cache (TTL menor para cálculos)
-    match_cache.set(cache_key, resultado)
-    
-    return resultado
 
 # =============================
 # Lógica de Análise e Alertas - ATUALIZADA COM NOVA LÓGICA INTELIGENTE
@@ -1219,61 +927,6 @@ def calcular_tendencia_completa(home: str, away: str, classificacao: dict) -> di
         "tipo_aposta": tipo_aposta,
         "detalhes": detalhes
     }
-
-# =============================
-# FUNÇÕES DE GERAÇÃO DE IMAGEM (mantidas originais)
-# =============================
-
-def baixar_imagem_url(url: str, timeout: int = 8) -> Image.Image | None:
-    """Tenta baixar uma imagem - VERSÃO CORRIGIDA"""
-    if not url or url == "":
-        return None
-        
-    try:
-        resp = requests.get(url, timeout=timeout, stream=True)
-        resp.raise_for_status()
-        
-        # Verificar se é realmente uma imagem
-        content_type = resp.headers.get('content-type', '')
-        if not content_type.startswith('image/'):
-            logging.warning(f"URL não é uma imagem: {content_type}")
-            return None
-            
-        img = Image.open(io.BytesIO(resp.content))
-        return img.convert("RGBA")
-        
-    except Exception as e:
-        logging.error(f"Erro ao baixar imagem {url}: {e}")
-        return None
-
-def criar_fonte(tamanho: int) -> ImageFont.ImageFont:
-    """Cria fonte com fallback robusto - VERSÃO CORRIGIDA"""
-    try:
-        # Tentar fontes do sistema
-        font_paths = [
-            "arial.ttf", "Arial.ttf", "arialbd.ttf",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "/System/Library/Fonts/Arial.ttf",
-            "C:/Windows/Fonts/arial.ttf"
-        ]
-        
-        for font_path in font_paths:
-            try:
-                if os.path.exists(font_path):
-                    return ImageFont.truetype(font_path, tamanho)
-            except Exception:
-                continue
-        
-        # Fallback para fonte padrão do PIL
-        return ImageFont.load_default()
-        
-    except Exception as e:
-        logging.error(f"Erro ao carregar fonte: {e}")
-        return ImageFont.load_default()
-
-# =============================
-# FUNÇÕES DE POSTER E ALERTAS (mantidas originais)
-# =============================
 
 def gerar_poster_individual_westham(fixture: dict, analise: dict) -> io.BytesIO:
     """
@@ -1633,7 +1286,7 @@ def verificar_enviar_alerta(fixture: dict, analise: dict, alerta_individual: boo
         salvar_alertas(alertas)
 
 # =============================
-# SISTEMA DE ALERTAS DE RESULTADOS COM POSTERS RED/GREEN (mantido original)
+# SISTEMA DE ALERTAS DE RESULTADOS COM POSTERS RED/GREEN
 # =============================
 
 def verificar_resultados_finais(alerta_resultados: bool):
@@ -1652,8 +1305,8 @@ def verificar_resultados_finais(alerta_resultados: bool):
             continue
             
         try:
-            # Usa cache para detalhes da partida
-            fixture_data = obter_detalhes_partida(fixture_id)
+            url = f"{BASE_URL_FD}/matches/{fixture_id}"
+            fixture_data = obter_dados_api(url)
             
             if not fixture_data:
                 continue
@@ -1837,7 +1490,7 @@ def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADO
 
         y_escudos = y0 + 180
 
-        # Baixar escudos (com cache para imagens)
+        # Baixar escudos
         escudo_home = baixar_imagem_url(jogo.get("escudo_home", ""))
         escudo_away = baixar_imagem_url(jogo.get("escudo_away", ""))
 
@@ -1877,7 +1530,7 @@ def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADO
             placar_x = x_placar + (200 - placar_w) // 2
             draw.text((placar_x, y_escudos + 30), placar_text, font=FONTE_PLACAR, fill=(255, 255, 255))
         except:
-            draw.text((x_placar, y_escudos + 30), placar_text, font=FONTE_PLACar, fill=(255, 255, 255))
+            draw.text((x_placar, y_escudos + 30), placar_text, font=FONTE_PLACAR, fill=(255, 255, 255))
 
         # Nomes dos times
         home_text = jogo['home'][:15]  # Limitar tamanho do nome
@@ -2052,8 +1705,54 @@ def enviar_alerta_resultados_poster(jogos_com_resultado: list):
         enviar_telegram(msg, chat_id=TELEGRAM_CHAT_ID_ALT2)
 
 # =============================
-# Funções de geração de imagem (mantidas originais)
+# Funções de geração de imagem
 # =============================
+def baixar_imagem_url(url: str, timeout: int = 8) -> Image.Image | None:
+    """Tenta baixar uma imagem - VERSÃO CORRIGIDA"""
+    if not url or url == "":
+        return None
+        
+    try:
+        resp = requests.get(url, timeout=timeout, stream=True)
+        resp.raise_for_status()
+        
+        # Verificar se é realmente uma imagem
+        content_type = resp.headers.get('content-type', '')
+        if not content_type.startswith('image/'):
+            logging.warning(f"URL não é uma imagem: {content_type}")
+            return None
+            
+        img = Image.open(io.BytesIO(resp.content))
+        return img.convert("RGBA")
+        
+    except Exception as e:
+        logging.error(f"Erro ao baixar imagem {url}: {e}")
+        return None
+
+def criar_fonte(tamanho: int) -> ImageFont.ImageFont:
+    """Cria fonte com fallback robusto - VERSÃO CORRIGIDA"""
+    try:
+        # Tentar fontes do sistema
+        font_paths = [
+            "arial.ttf", "Arial.ttf", "arialbd.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/System/Library/Fonts/Arial.ttf",
+            "C:/Windows/Fonts/arial.ttf"
+        ]
+        
+        for font_path in font_paths:
+            try:
+                if os.path.exists(font_path):
+                    return ImageFont.truetype(font_path, tamanho)
+            except Exception:
+                continue
+        
+        # Fallback para fonte padrão do PIL
+        return ImageFont.load_default()
+        
+    except Exception as e:
+        logging.error(f"Erro ao carregar fonte: {e}")
+        return ImageFont.load_default()
 
 def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA DE GOLS") -> io.BytesIO:
     """
@@ -2371,7 +2070,7 @@ def enviar_alerta_westham_style(jogos_conf: list, min_conf: int, max_conf: int, 
         enviar_telegram(msg, chat_id=chat_id)
 
 # =============================
-# FUNÇÕES PRINCIPAIS (mantidas originais)
+# FUNÇÕES PRINCIPAIS
 # =============================
 
 def debug_jogos_dia(data_selecionada, todas_ligas, liga_selecionada):
@@ -2459,31 +2158,30 @@ def enviar_top_jogos(jogos: list, top_n: int, alerta_top_jogos: bool, min_conf: 
 
 def atualizar_status_partidas():
     """Atualiza o status das partidas no cache"""
-    # Limpa cache de memória e força atualização das partidas
-    match_cache.clear_memory()
-    jogos_cache.clear_memory()
+    cache_jogos = carregar_cache_jogos()
+    mudou = False
     
-    st.info("🔄 Atualizando status das partidas...")
-    
-    # Itera pelas chaves do cache persistente
-    stats = match_cache.persistent_cache.get_stats()
-    total_entradas = stats.get("total_entries", 0)
-    
-    if total_entradas == 0:
-        st.info("ℹ️ Nenhuma partida em cache para atualizar.")
-        return
-    
-    progress_bar = st.progress(0)
-    atualizadas = 0
-    
-    # Para cada partida no cache, busca atualização
-    # Nota: Em um sistema real, você pode querer limitar isso
-    # ou fazer de forma mais inteligente
-    
-    progress_bar.progress(1.0)
-    st.success(f"✅ Status das partidas atualizado! Cache de memória limpo.")
-    
-    logging.info(f"🔄 Cache de {total_entradas} partidas atualizado")
+    for key in list(cache_jogos.keys()):
+        if key == "_timestamp":
+            continue
+            
+        try:
+            liga_id, data = key.split("_", 1)
+            url = f"{BASE_URL_FD}/competitions/{liga_id}/matches?dateFrom={data}&dateTo={data}"
+            data_api = obter_dados_api(url)
+            
+            if data_api and "matches" in data_api:
+                cache_jogos[key] = data_api["matches"]
+                mudou = True
+        except Exception as e:
+            logging.error(f"Erro ao atualizar liga {key}: {e}")
+            st.error(f"Erro ao atualizar liga {key}: {e}")
+            
+    if mudou:
+        salvar_cache_jogos(cache_jogos)
+        st.success("✅ Status das partidas atualizado!")
+    else:
+        st.info("ℹ️ Nenhuma atualização disponível.")
 
 def conferir_resultados():
     """Conferir resultados dos jogos"""
@@ -2513,15 +2211,7 @@ def limpar_caches():
             if os.path.exists(cache_file):
                 os.remove(cache_file)
                 arquivos_limpos += 1
-        
-        # Limpar caches hierárquicos
-        jogos_cache.clear()
-        classificacao_cache.clear()
-        match_cache.clear()
-        competitions_cache.clear()
-        teams_cache.clear()
-        
-        st.success(f"✅ {arquivos_limpos} caches antigos e todos os caches hierárquicos limpos!")
+        st.success(f"✅ {arquivos_limpos} caches limpos com sucesso!")
     except Exception as e:
         logging.error(f"Erro ao limpar caches: {e}")
         st.error(f"❌ Erro ao limpar caches: {e}")
@@ -2637,69 +2327,6 @@ def calcular_desempenho_periodo(data_inicio, data_fim):
         st.metric("📉 Under", f"{under_green}/{under_total}", f"{taxa_under:.1f}%")
 
 # =============================
-# Função de Gerenciamento de Cache
-# =============================
-
-def gerenciar_cache():
-    """Interface para gerenciamento de cache"""
-    st.subheader("🗂️ Gerenciamento de Cache")
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        if st.button("📊 Status Cache"):
-            cache_stats = {}
-            for name, cache in [
-                ("Jogos", jogos_cache),
-                ("Classificação", classificacao_cache),
-                ("Detalhes Partida", match_cache),
-                ("Competições", competitions_cache),
-                ("Times", teams_cache)
-            ]:
-                stats = cache.get_stats()
-                cache_stats[name] = stats
-            
-            st.write("**📈 Estatísticas de Cache:**")
-            for name, stats in cache_stats.items():
-                st.write(f"**{name}:**")
-                st.write(f"- Memória: {stats.get('memory_entries', 0)} entradas")
-                st.write(f"- Persistente: {stats.get('total_entries', 0)} entradas")
-                if 'total_hits' in stats:
-                    st.write(f"- Total Hits: {stats.get('total_hits', 0)}")
-                if 'average_hits' in stats:
-                    st.write(f"- Média Hits: {stats.get('average_hits', 0)}")
-                st.write(f"- TTL: {stats.get('ttl', 'N/A')}s")
-                st.write("---")
-    
-    with col2:
-        if st.button("🧹 Limpar Cache Memória"):
-            jogos_cache.clear_memory()
-            classificacao_cache.clear_memory()
-            match_cache.clear_memory()
-            competitions_cache.clear_memory()
-            teams_cache.clear_memory()
-            st.success("✅ Cache de memória limpo!")
-    
-    with col3:
-        if st.button("🗑️ Limpar Cache Persistente"):
-            jogos_cache.clear()
-            classificacao_cache.clear()
-            match_cache.clear()
-            competitions_cache.clear()
-            teams_cache.clear()
-            st.success("✅ Cache persistente limpo!")
-    
-    # Otimização automática de cache
-    if st.button("⚡ Otimizar Cache"):
-        st.info("🔧 Otimizando cache...")
-        
-        # Limpar entradas expiradas de todos os caches
-        for cache in [jogos_cache, classificacao_cache, match_cache, competitions_cache, teams_cache]:
-            cache.persistent_cache._clean_expired()
-        
-        st.success("✅ Cache otimizado! Entradas expiradas removidas.")
-
-# =============================
 # Interface Streamlit com Monitoramento
 # =============================
 def main():
@@ -2741,26 +2368,6 @@ def main():
         tipo_filtro = st.selectbox("🔍 Filtrar por Tipo", ["Todos", "Apenas Over", "Apenas Under"], index=0)
         
         st.markdown("----")
-        
-        # Botão de gerenciamento de cache
-        if st.button("🛠️ Gerenciar Cache", key="gerenciar_cache"):
-            gerenciar_cache()
-        
-        # Mostrar estatísticas de cache na sidebar
-        st.markdown("----")
-        st.subheader("📈 Estatísticas de Cache")
-        
-        cache_stats = jogos_cache.get_stats()
-        memory_entries = cache_stats.get('memory_entries', 0)
-        total_entries = cache_stats.get('total_entries', 0)
-        
-        st.metric("Cache Jogos", 
-                 f"{memory_entries}/{total_entries}",
-                 "Memória/Persistido")
-        
-        cache_hit_rate = api_monitor.get_stats().get('cache_hit_rate', 0)
-        st.metric("Taxa de Cache Hit", f"{cache_hit_rate}%")
-        
         st.info(f"Intervalo de confiança: {min_conf}% a {max_conf}%")
         st.info(f"Filtro: {tipo_filtro}")
 
@@ -2815,49 +2422,31 @@ def main():
     with col_mon4:
         st.metric("Rate Limit Hits", stats["rate_limit_hits"])
 
-    # Estatísticas de cache
-    col_cache1, col_cache2, col_cache3, col_cache4 = st.columns(4)
-    
-    with col_cache1:
-        st.metric("Cache Hits", stats["cache_hits"])
-    with col_cache2:
-        st.metric("Cache Misses", stats["cache_misses"])
-    with col_cache3:
-        st.metric("Taxa de Cache Hit", f"{stats['cache_hit_rate']}%")
-    with col_cache4:
-        if st.button("🔄 Resetar Monitor"):
-            api_monitor.reset()
-            st.success("✅ Monitor resetado!")
+    if st.button("🔄 Resetar Monitor"):
+        api_monitor.reset()
+        st.success("✅ Monitor resetado!")
 
     # Painel de cache
     st.subheader("🗂️ Status do Cache")
 
-    col_cache_status1, col_cache_status2, col_cache_status3 = st.columns(3)
+    col_cache1, col_cache2, col_cache3 = st.columns(3)
 
-    with col_cache_status1:
-        cache_jogos_stats = jogos_cache.get_stats()
-        st.metric("Cache de Jogos", 
-                 f"{cache_jogos_stats.get('memory_entries', 0)}/{cache_jogos_stats.get('total_entries', 0)}",
-                 "Memória/Persistido")
+    with col_cache1:
+        cache_jogos_size = len(jogos_cache.cache)
+        st.metric("Cache de Jogos", f"{cache_jogos_size}/{jogos_cache.config['max_size']}")
 
-    with col_cache_status2:
-        cache_class_stats = classificacao_cache.get_stats()
-        st.metric("Cache de Classificação", 
-                 f"{cache_class_stats.get('memory_entries', 0)}/{cache_class_stats.get('total_entries', 0)}",
-                 "Memória/Persistido")
+    with col_cache2:
+        cache_class_size = len(classificacao_cache.cache)
+        st.metric("Cache de Classificação", f"{cache_class_size}/{classificacao_cache.config['max_size']}")
 
-    with col_cache_status3:
-        cache_match_stats = match_cache.get_stats()
-        st.metric("Cache de Partidas", 
-                 f"{cache_match_stats.get('memory_entries', 0)}/{cache_match_stats.get('total_entries', 0)}",
-                 "Memória/Persistido")
+    with col_cache3:
+        cache_match_size = len(match_cache.cache)
+        st.metric("Cache de Partidas", f"{cache_match_size}/{match_cache.config['max_size']}")
 
     if st.button("🧹 Limpar Caches Inteligentes"):
         jogos_cache.clear()
         classificacao_cache.clear()
         match_cache.clear()
-        competitions_cache.clear()
-        teams_cache.clear()
         st.success("✅ Todos os caches inteligentes limpos!")
 
     # Painel desempenho
@@ -2884,13 +2473,12 @@ def main():
     # Adicionar dicas de uso
     with st.expander("💡 Dicas para evitar rate limit"):
         st.markdown("""
-        1. **Use o cache**: O sistema armazena dados por 30 min - 7 dias
+        1. **Use o cache**: O sistema armazena dados por 1-24 horas
         2. **Evite buscas frequentes**: Não atualize mais que 1x por minuto
         3. **Use datas específicas**: Evite buscar intervalos muito grandes
         4. **Monitore os limites**: Fique atento ao contador de requests
         5. **Priorize ligas**: Analise uma liga por vez quando possível
         6. **Use o filtro por confiança**: Reduz a quantidade de jogos analisados
-        7. **O sistema usa cache hierárquico**: Memória (1 min) + Disco (dias)
         """)
 
 def processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, min_conf, max_conf, estilo_poster, 
@@ -2904,7 +2492,7 @@ def processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, min_
     progress_bar = st.progress(0)
     total_ligas = len(ligas_busca)
 
-    # Pré-busca todas as classificações primeiro (uma por liga) - com cache
+    # Pré-busca todas as classificações primeiro (uma por liga)
     classificacoes = {}
     for liga_id in ligas_busca:
         classificacoes[liga_id] = obter_classificacao(liga_id)
@@ -2933,8 +2521,8 @@ def processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, min_
                 home = match["homeTeam"]["name"]
                 away = match["awayTeam"]["name"]
                 
-                # Usar função de análise com cache
-                analise = calcular_tendencia_com_cache(home, away, classificacao)
+                # Usar nova função de análise completa
+                analise = calcular_tendencia_completa(home, away, classificacao)
 
                 # DEBUG: Mostrar cada jogo processado
                 data_utc = match["utcDate"]
@@ -3108,3 +2696,4 @@ def enviar_alerta_conf_criar_poster(jogos_conf: list, min_conf: int, max_conf: i
 
 if __name__ == "__main__":
     main()
+     #Analise o código acima e coloque persistência e Cache para evitar chamadas desnecessárias a ApI
