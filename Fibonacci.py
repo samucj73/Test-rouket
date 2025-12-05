@@ -3385,7 +3385,7 @@ if sistema.previsao_ativa:
         else:
             zona = previsao.get('zona', '')
             # CORREÇÃO: Mostrar número do núcleo
-           if zona == 'Vermelha':
+            if zona == 'Vermelha':
                 st.write(f"**📍 Núcleo:** 7 (Zona Vermelha)")
             elif zona == 'Azul':
                 st.write(f"**📍 Núcleo:** 10 (Zona Azul)")  
