@@ -8,6 +8,10 @@ import pandas as pd
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
+import time
+from collections import deque
+from threading import Lock
+import threading
 
 # Pillow
 from PIL import Image, ImageDraw, ImageFont, ImageOps
@@ -53,6 +57,168 @@ LIGA_DICT = {
     "Serie A (Itália)": "SA",
     "Premier League (Inglaterra)": "PL"
 }
+
+# =============================
+# Sistema de Rate Limiting e Cache
+# =============================
+
+class RateLimiter:
+    """Controla rate limiting para a API"""
+    _instance = None
+    _lock = Lock()
+    
+    def __new__(cls):
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = super().__new__(cls)
+                cls._instance._init()
+            return cls._instance
+    
+    def _init(self):
+        self.requests = deque(maxlen=10)  # 10 requests por minuto
+        self.lock = threading.Lock()
+        self.last_request_time = 0
+        self.min_interval = 6.0  # 6 segundos entre requests (10/min)
+        self.backoff_factor = 1.5
+        self.max_retries = 3
+        
+    def wait_if_needed(self):
+        """Espera se necessário para respeitar rate limit"""
+        with self.lock:
+            now = time.time()
+            
+            # Remove requests antigos (mais de 1 minuto)
+            while self.requests and now - self.requests[0] > 60:
+                self.requests.popleft()
+            
+            # Se já temos 10 requests no último minuto, espera
+            if len(self.requests) >= 10:
+                wait_time = 60 - (now - self.requests[0])
+                if wait_time > 0:
+                    logging.info(f"⏳ Rate limit atingido. Esperando {wait_time:.1f} segundos...")
+                    time.sleep(wait_time + 0.1)
+                    now = time.time()
+            
+            # Verifica intervalo mínimo entre requests
+            time_since_last = now - self.last_request_time
+            if time_since_last < self.min_interval:
+                wait_time = self.min_interval - time_since_last
+                time.sleep(wait_time)
+            
+            self.requests.append(now)
+            self.last_request_time = now
+
+# Instância global do rate limiter
+rate_limiter = RateLimiter()
+
+# Configurações de cache inteligente
+CACHE_CONFIG = {
+    "jogos": {
+        "ttl": 3600,  # 1 hora para jogos
+        "max_size": 100  # Máximo de 100 entradas
+    },
+    "classificacao": {
+        "ttl": 86400,  # 24 horas para classificação
+        "max_size": 50  # Máximo de 50 ligas
+    },
+    "match_details": {
+        "ttl": 1800,  # 30 minutos para detalhes de partida
+        "max_size": 200  # Máximo de 200 partidas
+    }
+}
+
+class SmartCache:
+    """Cache inteligente com TTL e tamanho máximo"""
+    def __init__(self, cache_type: str):
+        self.cache = {}
+        self.timestamps = {}
+        self.config = CACHE_CONFIG.get(cache_type, {"ttl": 3600, "max_size": 100})
+        self.lock = threading.Lock()
+        
+    def get(self, key: str):
+        """Obtém valor do cache se ainda for válido"""
+        with self.lock:
+            if key not in self.cache:
+                return None
+                
+            timestamp = self.timestamps.get(key, 0)
+            agora = time.time()
+            
+            if agora - timestamp > self.config["ttl"]:
+                # Expirou, remove do cache
+                del self.cache[key]
+                del self.timestamps[key]
+                return None
+                
+            return self.cache[key]
+    
+    def set(self, key: str, value):
+        """Armazena valor no cache"""
+        with self.lock:
+            # Limpa cache se exceder tamanho máximo
+            if len(self.cache) >= self.config["max_size"]:
+                # Remove o mais antigo
+                oldest_key = min(self.timestamps.items(), key=lambda x: x[1])[0]
+                del self.cache[oldest_key]
+                del self.timestamps[oldest_key]
+            
+            self.cache[key] = value
+            self.timestamps[key] = time.time()
+    
+    def clear(self):
+        """Limpa todo o cache"""
+        with self.lock:
+            self.cache.clear()
+            self.timestamps.clear()
+
+# Inicializar caches
+jogos_cache = SmartCache("jogos")
+classificacao_cache = SmartCache("classificacao")
+match_cache = SmartCache("match_details")
+
+class APIMonitor:
+    """Monitora uso da API"""
+    def __init__(self):
+        self.total_requests = 0
+        self.failed_requests = 0
+        self.rate_limit_hits = 0
+        self.start_time = time.time()
+        self.lock = threading.Lock()
+        
+    def log_request(self, success: bool, was_rate_limited: bool = False):
+        """Registra uma requisição"""
+        with self.lock:
+            self.total_requests += 1
+            if not success:
+                self.failed_requests += 1
+            if was_rate_limited:
+                self.rate_limit_hits += 1
+    
+    def get_stats(self):
+        """Retorna estatísticas"""
+        with self.lock:
+            elapsed = time.time() - self.start_time
+            requests_per_min = (self.total_requests / elapsed * 60) if elapsed > 0 else 0
+            
+            return {
+                "total_requests": self.total_requests,
+                "failed_requests": self.failed_requests,
+                "rate_limit_hits": self.rate_limit_hits,
+                "requests_per_minute": round(requests_per_min, 2),
+                "success_rate": round((1 - self.failed_requests / max(self.total_requests, 1)) * 100, 1),
+                "uptime_minutes": round(elapsed / 60, 1)
+            }
+    
+    def reset(self):
+        """Reseta estatísticas"""
+        with self.lock:
+            self.total_requests = 0
+            self.failed_requests = 0
+            self.rate_limit_hits = 0
+            self.start_time = time.time()
+
+# Instância global do monitor
+api_monitor = APIMonitor()
 
 # =============================
 # Configuração de Logging
@@ -286,24 +452,70 @@ def enviar_foto_telegram(photo_bytes: io.BytesIO, caption: str = "", chat_id: st
         st.error(f"Erro ao enviar foto para Telegram: {e}")
         return False
 
+def obter_dados_api_com_retry(url: str, timeout: int = 15, max_retries: int = 3) -> dict | None:
+    """Obtém dados da API com rate limiting e retry automático"""
+    for attempt in range(max_retries):
+        try:
+            # Aplica rate limiting antes de cada request
+            rate_limiter.wait_if_needed()
+            
+            logging.info(f"🔗 Request {attempt+1}/{max_retries}: {url}")
+            
+            response = requests.get(url, headers=HEADERS, timeout=timeout)
+            
+            # Verifica rate limit na resposta
+            if response.status_code == 429:  # Too Many Requests
+                api_monitor.log_request(False, True)
+                retry_after = int(response.headers.get('Retry-After', 60))
+                logging.warning(f"⏳ Rate limit da API. Esperando {retry_after} segundos...")
+                time.sleep(retry_after)
+                continue
+                
+            response.raise_for_status()
+            
+            # Log de sucesso
+            api_monitor.log_request(True)
+            
+            # Verifica se temos requests restantes
+            remaining = response.headers.get('X-Requests-Remaining', 'unknown')
+            reset_time = response.headers.get('X-RequestCounter-Reset', 'unknown')
+            logging.info(f"✅ Request OK. Restantes: {remaining}, Reset: {reset_time}s")
+            
+            return response.json()
+            
+        except requests.exceptions.Timeout:
+            logging.error(f"⌛ Timeout na tentativa {attempt+1} para {url}")
+            api_monitor.log_request(False)
+            
+            if attempt < max_retries - 1:
+                wait_time = 2 ** attempt  # Exponential backoff
+                logging.info(f"⏳ Esperando {wait_time}s antes de retry...")
+                time.sleep(wait_time)
+                
+        except requests.RequestException as e:
+            logging.error(f"❌ Erro na tentativa {attempt+1} para {url}: {e}")
+            api_monitor.log_request(False)
+            
+            if attempt < max_retries - 1:
+                wait_time = 2 ** attempt  # Exponential backoff
+                time.sleep(wait_time)
+            else:
+                st.error(f"❌ Falha após {max_retries} tentativas: {e}")
+                return None
+                
+    return None
+
 def obter_dados_api(url: str, timeout: int = 15) -> dict | None:
-    try:
-        response = requests.get(url, headers=HEADERS, timeout=timeout)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.Timeout:
-        logging.error(f"Timeout na requisição: {url}")
-        return None
-    except requests.RequestException as e:
-        logging.error(f"Erro na requisição API {url}: {e}")
-        st.error(f"Erro na requisição API: {e}")
-        return None
+    return obter_dados_api_com_retry(url, timeout, max_retries=3)
 
 def obter_classificacao(liga_id: str) -> dict:
-    cache = carregar_cache_classificacao()
-    if liga_id in cache:
-        return cache[liga_id]
-
+    """Obtém classificação com cache inteligente"""
+    # Verifica cache primeiro
+    cached = classificacao_cache.get(liga_id)
+    if cached:
+        logging.info(f"📊 Classificação da liga {liga_id} obtida do cache")
+        return cached
+    
     url = f"{BASE_URL_FD}/competitions/{liga_id}/standings"
     data = obter_dados_api(url)
     if not data:
@@ -323,22 +535,39 @@ def obter_classificacao(liga_id: str) -> dict:
                 "draws": t.get("draw", 0),
                 "losses": t.get("lost", 0)
             }
-    cache[liga_id] = standings
-    salvar_cache_classificacao(cache)
+    classificacao_cache.set(liga_id, standings)
     return standings
 
 def obter_jogos(liga_id: str, data: str) -> list:
-    cache = carregar_cache_jogos()
+    """Obtém jogos com cache inteligente"""
     key = f"{liga_id}_{data}"
-    if key in cache:
-        return cache[key]
-
+    
+    # Verifica cache primeiro
+    cached = jogos_cache.get(key)
+    if cached:
+        logging.info(f"⚽ Jogos {key} obtidos do cache")
+        return cached
+    
     url = f"{BASE_URL_FD}/competitions/{liga_id}/matches?dateFrom={data}&dateTo={data}"
     data_api = obter_dados_api(url)
     jogos = data_api.get("matches", []) if data_api else []
-    cache[key] = jogos
-    salvar_cache_jogos(cache)
+    jogos_cache.set(key, jogos)
     return jogos
+
+def obter_detalhes_partida(fixture_id: str) -> dict | None:
+    """Obtém detalhes de uma partida específica com cache"""
+    # Verifica cache primeiro
+    cached = match_cache.get(fixture_id)
+    if cached:
+        return cached
+    
+    url = f"{BASE_URL_FD}/matches/{fixture_id}"
+    data = obter_dados_api(url)
+    
+    if data:
+        match_cache.set(fixture_id, data)
+    
+    return data
 
 def obter_jogos_brasileirao(liga_id: str, data_hoje: str) -> list:
     """Busca jogos do Brasileirão considerando o fuso horário"""
@@ -2098,7 +2327,7 @@ def calcular_desempenho_periodo(data_inicio, data_fim):
         st.metric("📉 Under", f"{under_green}/{under_total}", f"{taxa_under:.1f}%")
 
 # =============================
-# Interface Streamlit
+# Interface Streamlit com Monitoramento
 # =============================
 def main():
     st.set_page_config(page_title="⚽ Alerta de Gols Over/Under", layout="wide")
@@ -2177,6 +2406,49 @@ def main():
         if st.button("🧹 Limpar Cache"):
             limpar_caches()
 
+    # Painel de monitoramento da API
+    st.markdown("---")
+    st.subheader("📊 Monitoramento da API")
+
+    col_mon1, col_mon2, col_mon3, col_mon4 = st.columns(4)
+
+    stats = api_monitor.get_stats()
+    with col_mon1:
+        st.metric("Total Requests", stats["total_requests"])
+    with col_mon2:
+        st.metric("Taxa de Sucesso", f"{stats['success_rate']}%")
+    with col_mon3:
+        st.metric("Requests/min", stats["requests_per_minute"])
+    with col_mon4:
+        st.metric("Rate Limit Hits", stats["rate_limit_hits"])
+
+    if st.button("🔄 Resetar Monitor"):
+        api_monitor.reset()
+        st.success("✅ Monitor resetado!")
+
+    # Painel de cache
+    st.subheader("🗂️ Status do Cache")
+
+    col_cache1, col_cache2, col_cache3 = st.columns(3)
+
+    with col_cache1:
+        cache_jogos_size = len(jogos_cache.cache)
+        st.metric("Cache de Jogos", f"{cache_jogos_size}/{jogos_cache.config['max_size']}")
+
+    with col_cache2:
+        cache_class_size = len(classificacao_cache.cache)
+        st.metric("Cache de Classificação", f"{cache_class_size}/{classificacao_cache.config['max_size']}")
+
+    with col_cache3:
+        cache_match_size = len(match_cache.cache)
+        st.metric("Cache de Partidas", f"{cache_match_size}/{match_cache.config['max_size']}")
+
+    if st.button("🧹 Limpar Caches Inteligentes"):
+        jogos_cache.clear()
+        classificacao_cache.clear()
+        match_cache.clear()
+        st.success("✅ Todos os caches inteligentes limpos!")
+
     # Painel desempenho
     st.markdown("---")
     st.subheader("📊 Painel de Desempenho")
@@ -2198,6 +2470,17 @@ def main():
     if st.button("🧹 Limpar Histórico"):
         limpar_historico()
 
+    # Adicionar dicas de uso
+    with st.expander("💡 Dicas para evitar rate limit"):
+        st.markdown("""
+        1. **Use o cache**: O sistema armazena dados por 1-24 horas
+        2. **Evite buscas frequentes**: Não atualize mais que 1x por minuto
+        3. **Use datas específicas**: Evite buscar intervalos muito grandes
+        4. **Monitore os limites**: Fique atento ao contador de requests
+        5. **Priorize ligas**: Analise uma liga por vez quando possível
+        6. **Use o filtro por confiança**: Reduz a quantidade de jogos analisados
+        """)
+
 def processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, min_conf, max_conf, estilo_poster, 
                    alerta_individual: bool, alerta_poster: bool, alerta_top_jogos: bool, tipo_filtro: str):
     hoje = data_selecionada.strftime("%Y-%m-%d")
@@ -2209,8 +2492,13 @@ def processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, min_
     progress_bar = st.progress(0)
     total_ligas = len(ligas_busca)
 
+    # Pré-busca todas as classificações primeiro (uma por liga)
+    classificacoes = {}
+    for liga_id in ligas_busca:
+        classificacoes[liga_id] = obter_classificacao(liga_id)
+    
     for i, liga_id in enumerate(ligas_busca):
-        classificacao = obter_classificacao(liga_id)
+        classificacao = classificacoes[liga_id]
         
         # CORREÇÃO: Para o Brasileirão usar busca especial que considera fuso horário
         if liga_id == "BSA":  # Campeonato Brasileiro
@@ -2220,64 +2508,74 @@ def processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, min_
             jogos = obter_jogos(liga_id, hoje)
             st.write(f"📊 Liga {liga_id}: {len(jogos)} jogos encontrados")
 
-        for match in jogos:
-            # Validar dados do jogo
-            if not validar_dados_jogo(match):
-                continue
-                
-            home = match["homeTeam"]["name"]
-            away = match["awayTeam"]["name"]
+        # Processa em batch para evitar muitos requests seguidos
+        batch_size = 5
+        for j in range(0, len(jogos), batch_size):
+            batch = jogos[j:j+batch_size]
             
-            # Usar nova função de análise completa
-            analise = calcular_tendencia_completa(home, away, classificacao)
-
-            # DEBUG: Mostrar cada jogo processado
-            data_utc = match["utcDate"]
-            hora_corrigida = formatar_data_iso_para_datetime(data_utc)
-            data_br = hora_corrigida.strftime("%d/%m/%Y")
-            hora_br = hora_corrigida.strftime("%H:%M")
-            
-            tipo_emoji = "📈" if analise["tipo_aposta"] == "over" else "📉"
-            
-            st.write(f"   {tipo_emoji} {home} vs {away}")
-            st.write(f"      🕒 {data_br} {hora_br} | {analise['tendencia']}")
-            st.write(f"      ⚽ Estimativa: {analise['estimativa']:.2f} | 🎯 Prob: {analise['probabilidade']:.0f}% | 🔍 Conf: {analise['confianca']:.0f}%")
-            st.write(f"      Status: {match.get('status', 'DESCONHECIDO')}")
-
-            # Só envia alerta individual se a checkbox estiver ativada E se estiver no intervalo
-            if min_conf <= analise["confianca"] <= max_conf:
-                # Aplicar filtro por tipo
-                if tipo_filtro == "Todos" or \
-                   (tipo_filtro == "Apenas Over" and analise["tipo_aposta"] == "over") or \
-                   (tipo_filtro == "Apenas Under" and analise["tipo_aposta"] == "under"):
+            for match in batch:
+                # Validar dados do jogo
+                if not validar_dados_jogo(match):
+                    continue
                     
-                    verificar_enviar_alerta(match, analise, alerta_individual, min_conf, max_conf)
+                home = match["homeTeam"]["name"]
+                away = match["awayTeam"]["name"]
+                
+                # Usar nova função de análise completa
+                analise = calcular_tendencia_completa(home, away, classificacao)
 
-            # Extrair escudos
-            escudo_home = ""
-            escudo_away = ""
-            try:
-                escudo_home = match.get("homeTeam", {}).get("crest") or match.get("homeTeam", {}).get("logo") or ""
-                escudo_away = match.get("awayTeam", {}).get("crest") or match.get("awayTeam", {}).get("logo") or ""
-            except Exception:
-                pass
+                # DEBUG: Mostrar cada jogo processado
+                data_utc = match["utcDate"]
+                hora_corrigida = formatar_data_iso_para_datetime(data_utc)
+                data_br = hora_corrigida.strftime("%d/%m/%Y")
+                hora_br = hora_corrigida.strftime("%H:%M")
+                
+                tipo_emoji = "📈" if analise["tipo_aposta"] == "over" else "📉"
+                
+                st.write(f"   {tipo_emoji} {home} vs {away}")
+                st.write(f"      🕒 {data_br} {hora_br} | {analise['tendencia']}")
+                st.write(f"      ⚽ Estimativa: {analise['estimativa']:.2f} | 🎯 Prob: {analise['probabilidade']:.0f}% | 🔍 Conf: {analise['confianca']:.0f}%")
+                st.write(f"      Status: {match.get('status', 'DESCONHECIDO')}")
 
-            top_jogos.append({
-                "id": match["id"],
-                "home": home,
-                "away": away,
-                "tendencia": analise["tendencia"],
-                "estimativa": analise["estimativa"],
-                "probabilidade": analise["probabilidade"],
-                "confianca": analise["confianca"],
-                "tipo_aposta": analise["tipo_aposta"],
-                "liga": match.get("competition", {}).get("name", "Desconhecido"),
-                "hora": hora_corrigida,
-                "status": match.get("status", "DESCONHECIDO"),
-                "escudo_home": escudo_home,
-                "escudo_away": escudo_away,
-                "detalhes": analise["detalhes"]
-            })
+                # Só envia alerta individual se a checkbox estiver ativada E se estiver no intervalo
+                if min_conf <= analise["confianca"] <= max_conf:
+                    # Aplicar filtro por tipo
+                    if tipo_filtro == "Todos" or \
+                       (tipo_filtro == "Apenas Over" and analise["tipo_aposta"] == "over") or \
+                       (tipo_filtro == "Apenas Under" and analise["tipo_aposta"] == "under"):
+                        
+                        verificar_enviar_alerta(match, analise, alerta_individual, min_conf, max_conf)
+
+                # Extrair escudos
+                escudo_home = ""
+                escudo_away = ""
+                try:
+                    escudo_home = match.get("homeTeam", {}).get("crest") or match.get("homeTeam", {}).get("logo") or ""
+                    escudo_away = match.get("awayTeam", {}).get("crest") or match.get("awayTeam", {}).get("logo") or ""
+                except Exception:
+                    pass
+
+                top_jogos.append({
+                    "id": match["id"],
+                    "home": home,
+                    "away": away,
+                    "tendencia": analise["tendencia"],
+                    "estimativa": analise["estimativa"],
+                    "probabilidade": analise["probabilidade"],
+                    "confianca": analise["confianca"],
+                    "tipo_aposta": analise["tipo_aposta"],
+                    "liga": match.get("competition", {}).get("name", "Desconhecido"),
+                    "hora": hora_corrigida,
+                    "status": match.get("status", "DESCONHECIDO"),
+                    "escudo_home": escudo_home,
+                    "escudo_away": escudo_away,
+                    "detalhes": analise["detalhes"]
+                })
+            
+            # Pequena pausa entre batches para respeitar rate limit
+            if j + batch_size < len(jogos):
+                time.sleep(0.5)
+        
         progress_bar.progress((i + 1) / total_ligas)
 
     # DEBUG COMPLETO: Mostrar todos os jogos processados
