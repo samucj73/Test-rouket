@@ -40,6 +40,9 @@ CACHE_TIMEOUT = 3600  # 1 hora em segundos
 # Histórico de conferências
 HISTORICO_PATH = "historico_conferencias.json"
 
+# NOVO: Arquivo para salvar alertas TOP
+ALERTAS_TOP_PATH = "alertas_top.json"
+
 # =============================
 # Dicionário de Ligas
 # =============================
@@ -412,6 +415,43 @@ def carregar_cache_classificacao() -> dict:
 def salvar_cache_classificacao(dados: dict):
     salvar_json(CACHE_CLASSIFICACAO, dados)
 
+# NOVA FUNÇÃO: Carregar alertas TOP
+def carregar_alertas_top() -> dict:
+    """Carrega os alertas TOP que foram gerados"""
+    return carregar_json(ALERTAS_TOP_PATH)
+
+# NOVA FUNÇÃO: Salvar alertas TOP
+def salvar_alertas_top(alertas_top: dict):
+    """Salva os alertas TOP para conferência posterior"""
+    salvar_json(ALERTAS_TOP_PATH, alertas_top)
+
+# NOVA FUNÇÃO: Adicionar alerta TOP
+def adicionar_alerta_top(jogo: dict, data_busca: str):
+    """Adiciona um jogo aos alertas TOP salvos"""
+    alertas_top = carregar_alertas_top()
+    
+    # Criar chave única
+    chave = f"{jogo['id']}_{data_busca}"
+    
+    alertas_top[chave] = {
+        "id": jogo["id"],
+        "home": jogo["home"],
+        "away": jogo["away"],
+        "tendencia": jogo["tendencia"],
+        "estimativa": jogo["estimativa"],
+        "probabilidade": jogo["probabilidade"],
+        "confianca": jogo["confianca"],
+        "tipo_aposta": jogo["tipo_aposta"],
+        "liga": jogo["liga"],
+        "hora": jogo["hora"].isoformat() if isinstance(jogo["hora"], datetime) else str(jogo["hora"]),
+        "data_busca": data_busca,
+        "data_hora_busca": datetime.now().isoformat(),
+        "conferido": False,
+        "resultado": None
+    }
+    
+    salvar_alertas_top(alertas_top)
+
 # =============================
 # Histórico de Conferências
 # =============================
@@ -468,6 +508,120 @@ def limpar_historico():
             st.error(f"Erro ao limpar/hacer backup do histórico: {e}")
     else:
         st.info("⚠️ Nenhum histórico encontrado para limpar.")
+
+# NOVA FUNÇÃO: Conferir resultados dos alertas TOP
+def conferir_resultados_top():
+    """Conferir resultados dos alertas TOP salvos"""
+    alertas_top = carregar_alertas_top()
+    if not alertas_top:
+        st.info("ℹ️ Nenhum alerta TOP para conferir.")
+        return
+        
+    resultados_conferidos = 0
+    jogos_com_resultado = []
+    
+    for chave, alerta in list(alertas_top.items()):
+        # Pular se já foi conferido
+        if alerta.get("conferido", False):
+            continue
+            
+        try:
+            fixture_id = alerta["id"]
+            url = f"{BASE_URL_FD}/matches/{fixture_id}"
+            fixture_data = obter_dados_api(url)
+            
+            if not fixture_data:
+                continue
+                
+            match = fixture_data.get('match', fixture_data)
+            status = match.get("status", "")
+            score = match.get("score", {}).get("fullTime", {})
+            home_goals = score.get("home")
+            away_goals = score.get("away")
+            
+            # Verificar se jogo terminou e tem resultado válido
+            if (status == "FINISHED" and 
+                home_goals is not None and 
+                away_goals is not None):
+                
+                # Calcular resultado (GREEN/RED)
+                total_gols = home_goals + away_goals
+                previsao_correta = False
+                
+                # Verificar para Over 2.5
+                if alerta["tendencia"] == "OVER 2.5" and total_gols > 2.5:
+                    previsao_correta = True
+                # Verificar para Under 2.5
+                elif alerta["tendencia"] == "UNDER 2.5" and total_gols < 2.5:
+                    previsao_correta = True
+                # Verificar para Over 1.5
+                elif alerta["tendencia"] == "OVER 1.5" and total_gols > 1.5:
+                    previsao_correta = True
+                # Verificar para Under 1.5
+                elif alerta["tendencia"] == "UNDER 1.5" and total_gols < 1.5:
+                    previsao_correta = True
+                
+                # Atualizar alerta
+                alerta["conferido"] = True
+                alerta["resultado"] = "GREEN" if previsao_correta else "RED"
+                alerta["placar"] = f"{home_goals}x{away_goals}"
+                alerta["total_gols"] = total_gols
+                alerta["data_conferencia"] = datetime.now().isoformat()
+                
+                resultados_conferidos += 1
+                
+        except Exception as e:
+            logging.error(f"Erro ao conferir alerta TOP {chave}: {e}")
+            st.error(f"Erro ao conferir alerta TOP {chave}: {e}")
+    
+    if resultados_conferidos > 0:
+        salvar_alertas_top(alertas_top)
+        st.success(f"✅ {resultados_conferidos} alertas TOP conferidos!")
+        
+        # Mostrar estatísticas
+        calcular_desempenho_alertas_top()
+    else:
+        st.info("ℹ️ Nenhum novo resultado para conferir nos alertas TOP.")
+
+# NOVA FUNÇÃO: Calcular desempenho dos alertas TOP
+def calcular_desempenho_alertas_top():
+    """Calcula o desempenho dos alertas TOP"""
+    alertas_top = carregar_alertas_top()
+    if not alertas_top:
+        st.warning("⚠️ Nenhum alerta TOP encontrado.")
+        return
+        
+    # Filtrar apenas os que foram conferidos
+    alertas_conferidos = [a for a in alertas_top.values() if a.get("conferido", False)]
+    
+    if not alertas_conferidos:
+        st.info("ℹ️ Nenhum alerta TOP conferido ainda.")
+        return
+        
+    total_alertas = len(alertas_conferidos)
+    green_count = sum(1 for a in alertas_conferidos if a.get("resultado") == "GREEN")
+    red_count = total_alertas - green_count
+    taxa_acerto = (green_count / total_alertas * 100) if total_alertas > 0 else 0
+    
+    # Separar Over e Under
+    over_alertas = [a for a in alertas_conferidos if a.get("tipo_aposta") == "over"]
+    under_alertas = [a for a in alertas_conferidos if a.get("tipo_aposta") == "under"]
+    
+    over_green = sum(1 for a in over_alertas if a.get("resultado") == "GREEN")
+    under_green = sum(1 for a in under_alertas if a.get("resultado") == "GREEN")
+    
+    st.success(f"📊 Desempenho dos Alertas TOP:")
+    st.write(f"**Total de Alertas Conferidos:** {total_alertas}")
+    st.write(f"**🟢 GREEN:** {green_count} ({taxa_acerto:.1f}%)")
+    st.write(f"**🔴 RED:** {red_count} ({100 - taxa_acerto:.1f}%)")
+    
+    if over_alertas:
+        taxa_over = (over_green / len(over_alertas) * 100) if len(over_alertas) > 0 else 0
+        st.write(f"**📈 OVER:** {over_green}/{len(over_alertas)} ({taxa_over:.1f}%)")
+    
+    if under_alertas:
+        taxa_under = (under_green / len(under_alertas) * 100) if len(under_alertas) > 0 else 0
+        st.write(f"**📉 UNDER:** {under_green}/{len(under_alertas)} ({taxa_under:.1f}%)")
 
 # =============================
 # Utilitários de Data e Formatação - CORRIGIDOS
@@ -2461,7 +2615,7 @@ def enviar_alerta_conf_criar_poster(jogos_conf: list, min_conf: int, max_conf: i
 # Função Principal para Top Jogos (ATUALIZADA)
 # =============================
 def enviar_top_jogos(jogos: list, top_n: int, alerta_top_jogos: bool, min_conf: int, max_conf: int, 
-                    formato_top_jogos: str = "Ambos"):
+                    formato_top_jogos: str = "Ambos", data_busca: str = None):
     """Envia os top jogos para o Telegram com opção de formato"""
     if not alerta_top_jogos:
         st.info("ℹ️ Alerta de Top Jogos desativado")
@@ -2480,11 +2634,16 @@ def enviar_top_jogos(jogos: list, top_n: int, alerta_top_jogos: bool, min_conf: 
         
     top_jogos_sorted = sorted(jogos_filtrados, key=lambda x: x["confianca"], reverse=True)[:top_n]
     
+    # NOVO: Salvar os alertas TOP para conferência posterior
+    for jogo in top_jogos_sorted:
+        adicionar_alerta_top(jogo, data_busca or datetime.now().strftime("%Y-%m-%d"))
+    
     # Separar Over e Under para estatísticas
     over_jogos = [j for j in top_jogos_sorted if j.get('tipo_aposta') == "over"]
     under_jogos = [j for j in top_jogos_sorted if j.get('tipo_aposta') == "under"]
     
     st.info(f"📊 Enviando TOP {len(top_jogos_sorted)} jogos - Formato: {formato_top_jogos}")
+    st.info(f"💾 Salvando {len(top_jogos_sorted)} alertas TOP para conferência futura")
     
     # ENVIAR TEXTO (se solicitado)
     if formato_top_jogos in ["Texto", "Ambos"]:
@@ -2638,10 +2797,16 @@ def verificar_resultados_finais(alerta_resultados: bool):
 # =============================
 # FUNÇÕES PRINCIPAIS
 # =============================
-def debug_jogos_dia(data_selecionada, todas_ligas, liga_selecionada):
+def debug_jogos_dia(data_selecionada, ligas_selecionadas, todas_ligas=False):
     """Função de debug para verificar os jogos retornados pela API"""
     hoje = data_selecionada.strftime("%Y-%m-%d")
-    ligas_busca = LIGA_DICT.values() if todas_ligas else [LIGA_DICT[liga_selecionada]]
+    
+    # Se "Todas as ligas" estiver selecionada, usar todas as ligas
+    if todas_ligas:
+        ligas_busca = list(LIGA_DICT.values())
+    else:
+        # Usar apenas as ligas selecionadas
+        ligas_busca = [LIGA_DICT[liga_nome] for liga_nome in ligas_selecionadas]
     
     st.write("🔍 **DEBUG DETALHADO - JOGOS DA API**")
     
@@ -2673,11 +2838,19 @@ def debug_jogos_dia(data_selecionada, todas_ligas, liga_selecionada):
             except Exception as e:
                 st.write(f"  {i+1}. ERRO ao processar jogo: {e}")
 
-def processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, min_conf, max_conf, estilo_poster, 
+def processar_jogos(data_selecionada, ligas_selecionadas, todas_ligas, top_n, min_conf, max_conf, estilo_poster, 
                    alerta_individual: bool, alerta_poster: bool, alerta_top_jogos: bool, 
                    formato_top_jogos: str, tipo_filtro: str):
     hoje = data_selecionada.strftime("%Y-%m-%d")
-    ligas_busca = LIGA_DICT.values() if todas_ligas else [LIGA_DICT[liga_selecionada]]
+    
+    # Se "Todas as ligas" estiver selecionada, usar todas as ligas
+    if todas_ligas:
+        ligas_busca = list(LIGA_DICT.values())
+        st.write(f"🌍 Analisando TODAS as {len(ligas_busca)} ligas disponíveis")
+    else:
+        # Usar apenas as ligas selecionadas
+        ligas_busca = [LIGA_DICT[liga_nome] for liga_nome in ligas_selecionadas]
+        st.write(f"📌 Analisando {len(ligas_busca)} ligas selecionadas: {', '.join(ligas_selecionadas)}")
 
     st.write(f"⏳ Buscando jogos para {data_selecionada.strftime('%d/%m/%Y')}...")
     
@@ -2813,7 +2986,7 @@ def processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, min_
             st.write(f"   {tipo_emoji} {jogo['home']} vs {jogo['away']} - {jogo['tendencia']} - Conf: {jogo['confianca']:.1f}%")
         
         # Envia top jogos com opção de formato
-        enviar_top_jogos(jogos_filtrados, top_n, alerta_top_jogos, min_conf, max_conf, formato_top_jogos)
+        enviar_top_jogos(jogos_filtrados, top_n, alerta_top_jogos, min_conf, max_conf, formato_top_jogos, data_busca=hoje)
         st.success(f"✅ {len(jogos_filtrados)} jogos com confiança entre {min_conf}% e {max_conf}% ({tipo_filtro})")
         
         # ENVIAR ALERTA DE IMAGEM apenas se a checkbox estiver ativada
@@ -2900,7 +3073,7 @@ def limpar_caches():
     """Limpar caches do sistema"""
     try:
         arquivos_limpos = 0
-        for cache_file in [CACHE_JOGOS, CACHE_CLASSIFICACAO, ALERTAS_PATH]:
+        for cache_file in [CACHE_JOGOS, CACHE_CLASSIFICACAO, ALERTAS_PATH, ALERTAS_TOP_PATH]:
             if os.path.exists(cache_file):
                 os.remove(cache_file)
                 arquivos_limpos += 1
@@ -3080,21 +3253,37 @@ def main():
     with col2:
         todas_ligas = st.checkbox("🌍 Todas as ligas", value=True)
 
-    liga_selecionada = None
+    # NOVA SELEÇÃO: Seleção múltipla de ligas (apenas se "Todas as ligas" NÃO estiver marcada)
+    ligas_selecionadas = []
     if not todas_ligas:
-        liga_selecionada = st.selectbox("📌 Liga específica:", list(LIGA_DICT.keys()))
+        ligas_selecionadas = st.multiselect(
+            "📌 Selecionar ligas (múltipla escolha):",
+            options=list(LIGA_DICT.keys()),
+            default=["Campeonato Brasileiro Série A", "Premier League (Inglaterra)"]
+        )
+        
+        if not ligas_selecionadas:
+            st.warning("⚠️ Selecione pelo menos uma liga")
+        else:
+            st.info(f"📋 {len(ligas_selecionadas)} ligas selecionadas: {', '.join(ligas_selecionadas)}")
 
     # BOTÃO DE DEBUG
     if st.button("🐛 Debug Jogos (API)", type="secondary"):
-        debug_jogos_dia(data_selecionada, todas_ligas, liga_selecionada)
+        if todas_ligas:
+            debug_jogos_dia(data_selecionada, [], todas_ligas=True)
+        else:
+            debug_jogos_dia(data_selecionada, ligas_selecionadas, todas_ligas=False)
 
     # Processamento
     if st.button("🔍 Buscar Partidas", type="primary"):
-        processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, min_conf, max_conf, estilo_poster, 
-                       alerta_individual, alerta_poster, alerta_top_jogos, formato_top_jogos, tipo_filtro)
+        if not todas_ligas and not ligas_selecionadas:
+            st.error("❌ Selecione pelo menos uma liga ou marque 'Todas as ligas'")
+        else:
+            processar_jogos(data_selecionada, ligas_selecionadas, todas_ligas, top_n, min_conf, max_conf, estilo_poster, 
+                           alerta_individual, alerta_poster, alerta_top_jogos, formato_top_jogos, tipo_filtro)
 
     # Ações
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
         if st.button("🔄 Atualizar Status"):
             atualizar_status_partidas()
@@ -3107,6 +3296,9 @@ def main():
     with col4:
         if st.button("🧹 Limpar Cache"):
             limpar_caches()
+    with col5:
+        if st.button("🏆 Conferir Alertas TOP", type="secondary"):
+            conferir_resultados_top()
 
     # Painel de monitoramento da API
     st.markdown("---")
@@ -3160,6 +3352,11 @@ def main():
     # Painel desempenho
     st.markdown("---")
     st.subheader("📊 Painel de Desempenho")
+    
+    # Botão para calcular desempenho dos alertas TOP
+    if st.button("📈 Calcular Desempenho Alertas TOP"):
+        calcular_desempenho_alertas_top()
+    
     usar_periodo = st.checkbox("🔎 Usar período específico", value=False)
     qtd_default = 50
     last_n = st.number_input("Últimos N jogos", 1, 1000, qtd_default, 1)
@@ -3169,7 +3366,7 @@ def main():
             data_inicio = st.date_input("Data inicial", value=(datetime.today() - timedelta(days=30)).date())
             data_fim = st.date_input("Data final", value=datetime.today().date())
     with colp2:
-        if st.button("📈 Calcular Desempenho"):
+        if st.button("📈 Calcular Desempenho Histórico"):
             if usar_periodo:
                 calcular_desempenho_periodo(data_inicio, data_fim)
             else:
