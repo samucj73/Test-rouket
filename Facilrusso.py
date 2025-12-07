@@ -1670,7 +1670,7 @@ if st.session_state.concursos:
             st.info("Capture concursos na seção acima para analisar os padrões.")
         else:
             max_concursos = min(500, len(concursos))
-            valor_padrao = min(100, len(concursos))
+            valor_padrao = min(10, len(concursos))
             janela_lc = st.slider(
                 "Concursos a considerar (mais recentes)", 
                 min_value=10, 
