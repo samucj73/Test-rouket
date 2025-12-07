@@ -1405,248 +1405,262 @@ if st.session_state.concursos:
             )
 
     # NOVA ABA 6 - CARTÕES COM REGRAS ESPECÍFICAS (AGORA AUTOMÁTICO)
-    with abas[5]:
-        st.subheader("🎰 CARTÕES COM REGRAS ESPECÍFICAS")
-        st.markdown("""
-        **Regras EXATAS da imagem:**
+    # NOVA ABA 6 - CARTÕES COM REGRAS ESPECÍFICAS (AGORA AUTOMÁTICO)
+with abas[5]:
+    st.subheader("🎰 CARTÕES COM REGRAS ESPECÍFICAS")
+    st.markdown("""
+    **Regras EXATAS da imagem:**
+    
+    | Tipo | Linhas Permitidas | Exemplo Válido | Total Números |
+    |------|-------------------|----------------|---------------|
+    | **1** | Máximo 1 linha   | 1×15 = 15      | 15 números    |
+    | **2** | 1 a 2 linhas     | 2×8 = 16*      | 15-16 números |
+    | **3** | 1 a 3 linhas     | 3×5 = 15       | 15 números    |
+    | **4** | 1 a 2 linhas     | 4×4 = 16*      | 15-16 números |
+    | **5** | Máximo 1 linha   | 5×3 = 15       | 15 números    |
+    
+    *Ajustado para dar exatamente 15 números
+    
+    **💡 COMO FUNCIONA:**
+    1. Sistema escolhe automaticamente 1-5 dezenas por linha
+    2. Escolhe 1-3 linhas (dentro das regras)
+    3. Distribui os **15 melhores números** nessas linhas
+    4. **Cada linha segue exatamente a regra escolhida**
+    5. **Soma total: SEMPRE 15 números** (cartão completo)
+    """)
+    
+    # Inicializar gerador
+    gerador_regras = GeradorCartoesRegrasEspecificas(probs)
+    
+    # Mostrar estatísticas atuais
+    st.markdown("### 📊 Análise das Probabilidades para Decisão")
+    
+    col_stat1, col_stat2 = st.columns(2)
+    
+    with col_stat1:
+        # Estatísticas básicas
+        valores_prob = [prob for _, prob in probs.items()]
+        media = np.mean(valores_prob)
+        desvio = np.std(valores_prob)
         
-        | Tipo | Linhas Permitidas | Exemplo Válido | Total Números |
-        |------|-------------------|----------------|---------------|
-        | **1** | Máximo 1 linha   | 1×15 = 15      | 15 números    |
-        | **2** | 1 a 2 linhas     | 2×8 = 16*      | 15-16 números |
-        | **3** | 1 a 3 linhas     | 3×5 = 15       | 15 números    |
-        | **4** | 1 a 2 linhas     | 4×4 = 16*      | 15-16 números |
-        | **5** | Máximo 1 linha   | 5×3 = 15       | 15 números    |
+        st.metric("Média probabilidade", f"{media:.2%}")
+        st.metric("Desvio padrão", f"{desvio:.4f}")
+        st.metric("Variação", f"{(desvio/media)*100:.1f}%")
         
-        *Ajustado para dar exatamente 15 números
+        # Top números
+        numeros_ordenados = sorted(probs.items(), key=lambda x: x[1], reverse=True)
+        st.write("**Top 3 mais prováveis:**")
+        for i, (num, prob) in enumerate(numeros_ordenados[:3], 1):
+            st.write(f"{i}. Número {num}: {prob:.2%}")
+    
+    with col_stat2:
+        # Distribuição por faixas
+        baixas = sum(1 for prob in valores_prob if prob < 0.4)
+        medias = sum(1 for prob in valores_prob if 0.4 <= prob <= 0.6)
+        altas = sum(1 for prob in valores_prob if prob > 0.6)
         
-        **💡 COMO FUNCIONA:**
-        1. Sistema escolhe automaticamente 1-5 dezenas por linha
-        2. Escolhe 1-3 linhas (dentro das regras)
-        3. Distribui os **15 melhores números** nessas linhas
-        4. **Cada linha segue exatamente a regra escolhida**
-        5. **Soma total: SEMPRE 15 números** (cartão completo)
-        """)
+        st.metric("Baixas (<40%)", baixas)
+        st.metric("Médias (40-60%)", medias)
+        st.metric("Altas (>60%)", altas)
         
-        # Inicializar gerador
-        gerador_regras = GeradorCartoesRegrasEspecificas(probs)
+        # Força dos tops
+        top5_avg = np.mean([prob for _, prob in numeros_ordenados[:5]])
+        top10_avg = np.mean([prob for _, prob in numeros_ordenados[:10]])
+        st.metric("Média top 5", f"{top5_avg:.2%}")
+        st.metric("Média top 10", f"{top10_avg:.2%}")
+    
+    # Botão para gerar
+    st.markdown("### 🎯 Gerar Cartão com Distribuição por Regras")
+    
+    if st.button("🚀 Gerar Cartão com Regras Específicas", type="primary"):
+        try:
+            with st.spinner("Calculando melhor distribuição dos 15 números..."):
+                # Gerar cartão completo
+                resultado = gerador_regras.gerar_cartao_completo()
+                
+                # Salvar no session state
+                st.session_state.cartoes_regras_especificas = {
+                    "resultado": resultado,
+                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                }
+                
+                st.success("✅ Cartão gerado com sucesso!")
+                
+                # Mostrar decisão
+                tipo = resultado["tipo_dezenas"]
+                linhas = resultado["num_linhas"]
+                regra = gerador_regras.regras[tipo]
+                
+                st.info(f"""
+                **📋 DECISÃO DO SISTEMA:**
+                - **Regra aplicada:** {regra['nome']}
+                - **Números por linha:** {tipo}
+                - **Total de linhas:** {linhas}
+                - **Total números:** {tipo} × {linhas} = {tipo * linhas}
+                - **Combinação:** {tipo} dezenas × {linhas} linhas
+                """)
         
-        # Mostrar estatísticas atuais
-        st.markdown("### 📊 Análise das Probabilidades para Decisão")
+        except Exception as e:
+            st.error(f"❌ Erro: {str(e)}")
+    
+    # CORREÇÃO AQUI: Verificar se o resultado existe corretamente
+    if st.session_state.get('cartoes_regras_especificas'):
+        dados = st.session_state.cartoes_regras_especificas
         
-        col_stat1, col_stat2 = st.columns(2)
+        # CORREÇÃO: Usar get() para evitar KeyError
+        resultado = dados.get("resultado")
         
-        with col_stat1:
-            # Estatísticas básicas
-            valores_prob = [prob for _, prob in probs.items()]
-            media = np.mean(valores_prob)
-            desvio = np.std(valores_prob)
-            
-            st.metric("Média probabilidade", f"{media:.2%}")
-            st.metric("Desvio padrão", f"{desvio:.4f}")
-            st.metric("Variação", f"{(desvio/media)*100:.1f}%")
-            
-            # Top números
-            numeros_ordenados = sorted(probs.items(), key=lambda x: x[1], reverse=True)
-            st.write("**Top 3 mais prováveis:**")
-            for i, (num, prob) in enumerate(numeros_ordenados[:3], 1):
-                st.write(f"{i}. Número {num}: {prob:.2%}")
-        
-        with col_stat2:
-            # Distribuição por faixas
-            baixas = sum(1 for prob in valores_prob if prob < 0.4)
-            medias = sum(1 for prob in valores_prob if 0.4 <= prob <= 0.6)
-            altas = sum(1 for prob in valores_prob if prob > 0.6)
-            
-            st.metric("Baixas (<40%)", baixas)
-            st.metric("Médias (40-60%)", medias)
-            st.metric("Altas (>60%)", altas)
-            
-            # Força dos tops
-            top5_avg = np.mean([prob for _, prob in numeros_ordenados[:5]])
-            top10_avg = np.mean([prob for _, prob in numeros_ordenados[:10]])
-            st.metric("Média top 5", f"{top5_avg:.2%}")
-            st.metric("Média top 10", f"{top10_avg:.2%}")
-        
-        # Botão para gerar
-        st.markdown("### 🎯 Gerar Cartão com Distribuição por Regras")
-        
-        if st.button("🚀 Gerar Cartão com Regras Específicas", type="primary"):
-            try:
-                with st.spinner("Calculando melhor distribuição dos 15 números..."):
-                    # Gerar cartão completo
-                    resultado = gerador_regras.gerar_cartao_completo()
-                    
-                    # Salvar no session state
-                    st.session_state.cartoes_regras_especificas = {
-                        "resultado": resultado,
-                        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    }
-                    
-                    st.success("✅ Cartão gerado com sucesso!")
-                    
-                    # Mostrar decisão
-                    tipo = resultado["tipo_dezenas"]
-                    linhas = resultado["num_linhas"]
-                    regra = gerador_regras.regras[tipo]
-                    
-                    st.info(f"""
-                    **📋 DECISÃO DO SISTEMA:**
-                    - **Regra aplicada:** {regra['nome']}
-                    - **Números por linha:** {tipo}
-                    - **Total de linhas:** {linhas}
-                    - **Total números:** {tipo} × {linhas} = {tipo * linhas}
-                    - **Combinação:** {tipo} dezenas × {linhas} linhas
-                    """)
-            
-            except Exception as e:
-                st.error(f"❌ Erro: {str(e)}")
-        
-        # Mostrar resultados
-        if "cartoes_regras_especificas" in st.session_state:
-            dados = st.session_state.cartoes_regras_especificas
-            resultado = dados["resultado"]
-            tipo = resultado["tipo_dezenas"]
-            linhas = resultado["num_linhas"]
-            regra = gerador_regras.regras[tipo]
+        if resultado:
+            tipo = resultado.get("tipo_dezenas", 0)
+            linhas = resultado.get("num_linhas", 0)
+            regra = gerador_regras.regras.get(tipo, {"nome": "Desconhecida"})
             
             st.markdown(f"### 🎰 CARTÃO GERADO: {regra['nome']} × {linhas} Linhas")
             
             # Cartão visual
             st.markdown("#### Cartão da Lotofácil (L1, L2... = Linha da regra):")
-            cartao_completo = resultado["cartao_completo"]
+            cartao_completo = resultado.get("cartao_completo", [])
             
-            # Criar visualização bonita
-            for linha_cartao in cartao_completo:
-                col1, col2, col3, col4, col5 = st.columns(5)
-                cols = [col1, col2, col3, col4, col5]
+            if cartao_completo:
+                # Criar visualização bonita
+                for linha_cartao in cartao_completo:
+                    col1, col2, col3, col4, col5 = st.columns(5)
+                    cols = [col1, col2, col3, col4, col5]
+                    
+                    for idx, celula in enumerate(linha_cartao):
+                        with cols[idx]:
+                            if "[" in celula:  # Número marcado
+                                if "L" in celula:  # Tem indicação de linha
+                                    num = celula.split("L")[0].replace("[", "").replace("]", "").strip()
+                                    linha_num = celula.split("L")[1]
+                                    st.markdown(f"<div style='background-color: #4CAF50; color: white; padding: 10px; border-radius: 5px; text-align: center;'>"
+                                              f"<strong>{num}</strong><br><small>L{linha_num}</small></div>", 
+                                              unsafe_allow_html=True)
+                                else:
+                                    num = celula.replace("[", "").replace("]", "").strip()
+                                    st.markdown(f"<div style='background-color: #2196F3; color: white; padding: 10px; border-radius: 5px; text-align: center;'>"
+                                              f"<strong>{num}</strong></div>", 
+                                              unsafe_allow_html=True)
+                            else:  # Número não marcado
+                                num = celula.strip()
+                                st.markdown(f"<div style='background-color: #f5f5f5; padding: 10px; border-radius: 5px; text-align: center; color: #666;'>"
+                                          f"{num}</div>", 
+                                          unsafe_allow_html=True)
+            
+                # Detalhes das linhas
+                distribuicao = resultado.get("distribuicao", [])
+                if distribuicao:
+                    st.markdown("#### 📋 Distribuição Detalhada das Linhas:")
+                    
+                    for dist in distribuicao:
+                        with st.expander(f"Linha {dist.get('linha', '?')}: {dist.get('numeros', [])}", expanded=True):
+                            col_lin1, col_lin2, col_lin3 = st.columns(3)
+                            
+                            with col_lin1:
+                                st.metric("Pares", dist.get("pares", 0))
+                                st.metric("Ímpares", dist.get("impares", 0))
+                            
+                            with col_lin2:
+                                st.metric("Primos", dist.get("primos", 0))
+                                st.metric("Soma", dist.get("soma", 0))
+                            
+                            with col_lin3:
+                                st.metric("Prob. média", f"{dist.get('probabilidade_media', 0):.2%}")
+                                st.metric("Prob. total", f"{dist.get('probabilidade_total', 0):.2%}")
+                            
+                            # Probabilidades individuais
+                            numeros_linha = dist.get("numeros", [])
+                            if numeros_linha:
+                                st.markdown("**Probabilidades dos números:**")
+                                for num in numeros_linha:
+                                    prob = probs.get(num, 0)
+                                    st.progress(prob, text=f"Número {num}: {prob:.2%}")
                 
-                for idx, celula in enumerate(linha_cartao):
-                    with cols[idx]:
-                        if "[" in celula:  # Número marcado
-                            if "L" in celula:  # Tem indicação de linha
-                                num = celula.split("L")[0].replace("[", "").replace("]", "").strip()
-                                linha_num = celula.split("L")[1]
-                                st.markdown(f"<div style='background-color: #4CAF50; color: white; padding: 10px; border-radius: 5px; text-align: center;'>"
-                                          f"<strong>{num}</strong><br><small>L{linha_num}</small></div>", 
-                                          unsafe_allow_html=True)
-                            else:
-                                num = celula.replace("[", "").replace("]", "").strip()
-                                st.markdown(f"<div style='background-color: #2196F3; color: white; padding: 10px; border-radius: 5px; text-align: center;'>"
-                                          f"<strong>{num}</strong></div>", 
-                                          unsafe_allow_html=True)
-                        else:  # Número não marcado
-                            num = celula.strip()
-                            st.markdown(f"<div style='background-color: #f5f5f5; padding: 10px; border-radius: 5px; text-align: center; color: #666;'>"
-                                      f"{num}</div>", 
-                                      unsafe_allow_html=True)
-            
-            # Detalhes das linhas
-            st.markdown("#### 📋 Distribuição Detalhada das Linhas:")
-            
-            for dist in resultado["distribuicao"]:
-                with st.expander(f"Linha {dist['linha']}: {dist['numeros']}", expanded=True):
-                    col_lin1, col_lin2, col_lin3 = st.columns(3)
+                # Estatísticas gerais
+                melhores_15 = resultado.get("melhores_15", [])
+                if melhores_15:
+                    st.markdown("#### 📊 Estatísticas Gerais do Cartão:")
                     
-                    with col_lin1:
-                        st.metric("Pares", dist["pares"])
-                        st.metric("Ímpares", dist["impares"])
+                    todos_numeros = melhores_15
+                    pares_total = sum(1 for n in todos_numeros if n % 2 == 0)
+                    primos_total = sum(1 for n in todos_numeros if n in {2,3,5,7,11,13,17,19,23})
+                    soma_total = sum(todos_numeros)
+                    prob_media_total = np.mean([probs.get(n, 0) for n in todos_numeros])
                     
-                    with col_lin2:
-                        st.metric("Primos", dist["primos"])
-                        st.metric("Soma", dist["soma"])
+                    col_ger1, col_ger2, col_ger3, col_ger4 = st.columns(4)
                     
-                    with col_lin3:
-                        st.metric("Prob. média", f"{dist['probabilidade_media']:.2%}")
-                        st.metric("Prob. total", f"{dist['probabilidade_total']:.2%}")
+                    with col_ger1:
+                        st.metric("Pares totais", pares_total)
+                        st.metric("Ímpares totais", 15 - pares_total)
                     
-                    # Probabilidades individuais
-                    st.markdown("**Probabilidades dos números:**")
-                    for num in dist["numeros"]:
-                        prob = probs.get(num, 0)
-                        st.progress(prob, text=f"Número {num}: {prob:.2%}")
-            
-            # Estatísticas gerais
-            st.markdown("#### 📊 Estatísticas Gerais do Cartão:")
-            
-            todos_numeros = resultado["melhores_15"]
-            pares_total = sum(1 for n in todos_numeros if n % 2 == 0)
-            primos_total = sum(1 for n in todos_numeros if n in {2,3,5,7,11,13,17,19,23})
-            soma_total = sum(todos_numeros)
-            prob_media_total = np.mean([probs.get(n, 0) for n in todos_numeros])
-            
-            col_ger1, col_ger2, col_ger3, col_ger4 = st.columns(4)
-            
-            with col_ger1:
-                st.metric("Pares totais", pares_total)
-                st.metric("Ímpares totais", 15 - pares_total)
-            
-            with col_ger2:
-                st.metric("Primos totais", primos_total)
-                st.metric("Não primos", 15 - primos_total)
-            
-            with col_ger3:
-                st.metric("Soma total", soma_total)
-                st.metric("Média por número", f"{soma_total/15:.1f}")
-            
-            with col_ger4:
-                st.metric("Prob. média total", f"{prob_media_total:.2%}")
-                st.metric("Força do cartão", f"{(prob_media_total/0.5-1)*100:.1f}%")
-            
-            # Download
-            st.markdown("### 💾 Exportar Cartão")
-            
-            conteudo = gerador_regras.formatar_para_download(resultado)
-            
-            st.download_button(
-                "📥 Baixar Cartão Completo",
-                data=conteudo,
-                file_name=f"cartao_regras_{tipo}dezenas_{linhas}linhas.txt",
-                mime="text/plain"
-            )
+                    with col_ger2:
+                        st.metric("Primos totais", primos_total)
+                        st.metric("Não primos", 15 - primos_total)
+                    
+                    with col_ger3:
+                        st.metric("Soma total", soma_total)
+                        st.metric("Média por número", f"{soma_total/15:.1f}")
+                    
+                    with col_ger4:
+                        st.metric("Prob. média total", f"{prob_media_total:.2%}")
+                        st.metric("Força do cartão", f"{(prob_media_total/0.5-1)*100:.1f}%")
+                    
+                    # Download
+                    st.markdown("### 💾 Exportar Cartão")
+                    
+                    conteudo = gerador_regras.formatar_para_download(resultado)
+                    
+                    st.download_button(
+                        "📥 Baixar Cartão Completo",
+                        data=conteudo,
+                        file_name=f"cartao_regras_{tipo}dezenas_{linhas}linhas.txt",
+                        mime="text/plain"
+                    )
+        else:
+            st.info("Clique no botão acima para gerar um cartão com regras específicas.")
+    
+    # Explicação completa
+    with st.expander("📚 Explicação Detalhada do Sistema"):
+        st.markdown("""
+        **🎯 OBJETIVO DO SISTEMA:**
+        Criar cartões da Lotofácil com **EXATAMENTE 15 NÚMEROS** distribuídos 
+        em linhas que seguem **EXATAMENTE AS REGRAS DA IMAGEM**.
         
-        # Explicação completa
-        with st.expander("📚 Explicação Detalhada do Sistema"):
-            st.markdown("""
-            **🎯 OBJETIVO DO SISTEMA:**
-            Criar cartões da Lotofácil com **EXATAMENTE 15 NÚMEROS** distribuídos 
-            em linhas que seguem **EXATAMENTE AS REGRAS DA IMAGEM**.
-            
-            **🔢 COMO FUNCIONA:**
-            
-            1. **ANÁLISE ESTATÍSTICA:**
-               - Sistema analisa as probabilidades de todos os 25 números
-               - Calcula média, desvio padrão, distribuição
-               - Identifica números "fortes", "médios" e "fracos"
-            
-            2. **DECISÃO DA REGRA:**
-               - **1 Dezena:** Quando há 1 número MUITO forte
-               - **2 Dezenas:** Quando há 2 números muito fortes  
-               - **3 Dezenas:** Quando há 3 números bem destacados
-               - **4 Dezenas:** Quando há 4-5 números consistentes
-               - **5 Dezenas:** Quando muitos números têm probabilidade similar
-            
-            3. **DISTRIBUIÇÃO DOS 15 NÚMEROS:**
-               - Pega os **15 números mais prováveis**
-               - Divide em linhas com número fixo de números (1-5)
-               - **Exemplo (3 Dezenas × 5 Linhas):**
-                 - Linha 1: 3 números (1-3 mais prováveis)
-                 - Linha 2: 3 números (4-6 mais prováveis)
-                 - Linha 3: 3 números (7-9 mais prováveis)
-                 - Linha 4: 3 números (10-12 mais prováveis)
-                 - Linha 5: 3 números (13-15 mais prováveis)
-            
-            4. **CARTÃO FINAL:**
-               - **Total: SEMPRE 15 números** (cartão completo jogável)
-               - **Cada linha segue a regra escolhida**
-               - **Visualização mostra em qual linha cada número está**
-            
-            **📈 BENEFÍCIOS:**
-            - Cartões **completamente jogáveis** (15 números)
-            - Distribuição **estatisticamente otimizada**
-            - **Transparência total** na decisão do sistema
-            - **Flexibilidade** para diferentes situações estatísticas
-            """)
+        **🔢 COMO FUNCIONA:**
+        
+        1. **ANÁLISE ESTATÍSTICA:**
+           - Sistema analisa as probabilidades de todos os 25 números
+           - Calcula média, desvio padrão, distribuição
+           - Identifica números "fortes", "médios" e "fracos"
+        
+        2. **DECISÃO DA REGRA:**
+           - **1 Dezena:** Quando há 1 número MUITO forte
+           - **2 Dezenas:** Quando há 2 números muito fortes  
+           - **3 Dezenas:** Quando há 3 números bem destacados
+           - **4 Dezenas:** Quando há 4-5 números consistentes
+           - **5 Dezenas:** Quando muitos números têm probabilidade similar
+        
+        3. **DISTRIBUIÇÃO DOS 15 NÚMEROS:**
+           - Pega os **15 números mais prováveis**
+           - Divide em linhas com número fixo de números (1-5)
+           - **Exemplo (3 Dezenas × 5 Linhas):**
+             - Linha 1: 3 números (1-3 mais prováveis)
+             - Linha 2: 3 números (4-6 mais prováveis)
+             - Linha 3: 3 números (7-9 mais prováveis)
+             - Linha 4: 3 números (10-12 mais prováveis)
+             - Linha 5: 3 números (13-15 mais prováveis)
+        
+        4. **CARTÃO FINAL:**
+           - **Total: SEMPRE 15 números** (cartão completo jogável)
+           - **Cada linha segue a regra escolhida**
+           - **Visualização mostra em qual linha cada número está**
+        
+        **📈 BENEFÍCIOS:**
+        - Cartões **completamente jogáveis** (15 números)
+        - Distribuição **estatisticamente otimizada**
+        - **Transparência total** na decisão do sistema
+        - **Flexibilidade** para diferentes situações estatísticas
+        """)
 
     # Aba 7 - Padrões Linha×Coluna (original)
     with abas[6]:
