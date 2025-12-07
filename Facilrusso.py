@@ -1407,9 +1407,9 @@ if st.session_state.concursos:
     # NOVA ABA 6 - CARTÕES COM REGRAS ESPECÍFICAS (AGORA AUTOMÁTICO)
     # NOVA ABA 6 - CARTÕES COM REGRAS ESPECÍFICAS (AGORA AUTOMÁTICO)
     with abas[5]:
-    st.subheader("🎰 CARTÕES COM REGRAS ESPECÍFICAS")
-    st.markdown("""
-    **Regras EXATAS da imagem:**
+        st.subheader("🎰 CARTÕES COM REGRAS ESPECÍFICAS")
+        st.markdown("""
+        **Regras EXATAS da imagem:**
     
     | Tipo | Linhas Permitidas | Exemplo Válido | Total Números |
     |------|-------------------|----------------|---------------|
