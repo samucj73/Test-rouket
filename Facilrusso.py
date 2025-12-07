@@ -7,6 +7,7 @@ from catboost import CatBoostClassifier
 import itertools
 import math
 import json
+from datetime import datetime  # ADICIONADO: importação faltando
 
 st.set_page_config(page_title="Lotofácil Inteligente", layout="centered")
 
@@ -59,9 +60,6 @@ def capturar_ultimos_resultados(qtd=250):
 
 # =========================
 # NOVA CLASSE: Gerador de Cartões com Regras Específicas
-# =========================
-# =========================
-# NOVA CLASSE: Gerador de Cartões com Regras Específicas (VERSÃO CORRETA)
 # =========================
 class GeradorCartoesRegrasEspecificas:
     def __init__(self, probabilidades):
@@ -1124,6 +1122,9 @@ with st.expander("📥 Capturar Concursos"):
                 st.error("Não foi possível capturar concursos.")
 
 # --- Abas principais ---
+# Variável abas precisa ser definida antes de ser usada
+abas = []
+
 if st.session_state.concursos:
     ia = LotoFacilIA(st.session_state.concursos)
     probs = ia.prever_proximo()
@@ -1404,7 +1405,6 @@ if st.session_state.concursos:
             )
 
     # NOVA ABA 6 - CARTÕES COM REGRAS ESPECÍFICAS (AGORA AUTOMÁTICO)
-    # NOVA ABA 6 - CARTÕES COM REGRAS ESPECÍFICAS (VERSÃO CORRETA)
     with abas[5]:
         st.subheader("🎰 CARTÕES COM REGRAS ESPECÍFICAS")
         st.markdown("""
@@ -1647,7 +1647,6 @@ if st.session_state.concursos:
             - **Transparência total** na decisão do sistema
             - **Flexibilidade** para diferentes situações estatísticas
             """)
-   
 
     # Aba 7 - Padrões Linha×Coluna (original)
     with abas[6]:
@@ -1659,7 +1658,6 @@ if st.session_state.concursos:
             max_concursos = min(500, len(concursos))
             valor_padrao = min(100, len(concursos))
             janela_lc = st.slider(
-               # "Concursos a consider
                 "Concursos a considerar (mais recentes)", 
                 min_value=20, 
                 max_value=max_concursos, 
@@ -1683,186 +1681,183 @@ if st.session_state.concursos:
                 futuros = sugerir_padroes_futuros(freq_linhas, freq_colunas, n=5)
                 for i, p in enumerate(futuros, 1):
                     st.write(f"**Padrão Futuro {i}:** Linhas {p['linhas']} | Colunas {p['colunas']}")
-    
 
     # Aba 8 - Conferência (ATUALIZADA com nova estratégia)
-    # Aba 8 - Conferência (ATUALIZADA com nova estratégia)
-with abas[7]:
-    st.subheader("🎯 Conferência de Cartões")
-    if st.session_state.info_ultimo_concurso:
-        info = st.session_state.info_ultimo_concurso
-        st.markdown(
-            f"<h4 style='text-align: center;'>Último Concurso #{info['numero']} ({info['data']})<br>Dezenas: {info['dezenas']}</h4>",
-            unsafe_allow_html=True
-        )
-        
-        if st.button("🔍 Conferir Todos os Cartões"):
-            # Conferir Cartões IA
-            if st.session_state.cartoes_gerados:
-                st.markdown("### 🧠 Cartões Gerados por IA")
-                for i, cartao in enumerate(st.session_state.cartoes_gerados, 1):
-                    acertos = len(set(cartao) & set(info['dezenas']))
-                    st.write(f"Jogo {i}: {cartao} - **{acertos} acertos**")
+    with abas[7]:
+        st.subheader("🎯 Conferência de Cartões")
+        if st.session_state.info_ultimo_concurso:
+            info = st.session_state.info_ultimo_concurso
+            st.markdown(
+                f"<h4 style='text-align: center;'>Último Concurso #{info['numero']} ({info['data']})<br>Dezenas: {info['dezenas']}</h4>",
+                unsafe_allow_html=True
+            )
             
-            # Conferir Cartões por Padrões
-            if st.session_state.cartoes_gerados_padrao:
-                st.markdown("### 🧩 Cartões por Padrões")
-                for i, cartao in enumerate(st.session_state.cartoes_gerados_padrao, 1):
-                    acertos = len(set(cartao) & set(info['dezenas']))
-                    st.write(f"Cartão {i}: {cartao} - **{acertos} acertos**")
-            
-            # Conferir Combinações Combinatorias
-            if st.session_state.combinacoes_combinatorias:
-                st.markdown("### 🔢 Combinações Combinatorias (Top 3 por Tamanho)")
-                analisador_combinatorio = AnaliseCombinatoria(st.session_state.concursos)
+            if st.button("🔍 Conferir Todos os Cartões"):
+                # Conferir Cartões IA
+                if st.session_state.cartoes_gerados:
+                    st.markdown("### 🧠 Cartões Gerados por IA")
+                    for i, cartao in enumerate(st.session_state.cartoes_gerados, 1):
+                        acertos = len(set(cartao) & set(info['dezenas']))
+                        st.write(f"Jogo {i}: {cartao} - **{acertos} acertos**")
                 
-                for tamanho in sorted(st.session_state.combinacoes_combinatorias.keys()):
-                    combinacoes_tamanho = st.session_state.combinacoes_combinatorias[tamanho][:3]
-                    if combinacoes_tamanho:
-                        st.markdown(f"#### 📊 Combinações com {tamanho} números")
-                        for idx, (combo, score) in enumerate(combinacoes_tamanho, 1):
-                            acertos = len(set(combo) & set(info['dezenas']))
-                            col1, col2 = st.columns([2, 1])
-                            with col1:
-                                st.write(f"**Cartão {idx}** (Score: {score:.1f}) - **{acertos} acertos**")
-                                cartao = analisador_combinatorio.formatar_como_cartao(combo)
-                                for linha in cartao:
-                                    st.code(" ".join(linha))
-                            with col2:
+                # Conferir Cartões por Padrões
+                if st.session_state.cartoes_gerados_padrao:
+                    st.markdown("### 🧩 Cartões por Padrões")
+                    for i, cartao in enumerate(st.session_state.cartoes_gerados_padrao, 1):
+                        acertos = len(set(cartao) & set(info['dezenas']))
+                        st.write(f"Cartão {i}: {cartao} - **{acertos} acertos**")
+                
+                # Conferir Combinações Combinatorias
+                if st.session_state.combinacoes_combinatorias:
+                    st.markdown("### 🔢 Combinações Combinatorias (Top 3 por Tamanho)")
+                    analisador_combinatorio = AnaliseCombinatoria(st.session_state.concursos)
+                    
+                    for tamanho in sorted(st.session_state.combinacoes_combinatorias.keys()):
+                        combinacoes_tamanho = st.session_state.combinacoes_combinatorias[tamanho][:3]
+                        if combinacoes_tamanho:
+                            st.markdown(f"#### 📊 Combinações com {tamanho} números")
+                            for idx, (combo, score) in enumerate(combinacoes_tamanho, 1):
+                                acertos = len(set(combo) & set(info['dezenas']))
+                                col1, col2 = st.columns([2, 1])
+                                with col1:
+                                    st.write(f"**Cartão {idx}** (Score: {score:.1f}) - **{acertos} acertos**")
+                                    cartao = analisador_combinatorio.formatar_como_cartao(combo)
+                                    for linha in cartao:
+                                        st.code(" ".join(linha))
+                                with col2:
+                                    pares = sum(1 for n in combo if n % 2 == 0)
+                                    primos = sum(1 for n in combo if n in analisador_combinatorio.primos)
+                                    soma = sum(combo)
+                                    st.write(f"**Estatísticas:**")
+                                    st.write(f"Pares: {pares}")
+                                    st.write(f"Ímpares: {len(combo)-pares}")
+                                    st.write(f"Primos: {primos}")
+                                    st.write(f"Soma: {soma}")
+                                st.write("---")
+                
+                # Conferir Combinações da Estratégia
+                if st.session_state.combinacoes_estrategia:
+                    st.markdown("### 🎯 Combinações da Estratégia de Grupos")
+                    estrategia = EstrategiaGrupos(probs, st.session_state.concursos)
+                    
+                    for i, combo in enumerate(st.session_state.combinacoes_estrategia, 1):
+                        acertos = len(set(combo) & set(info['dezenas']))
+                        
+                        with st.expander(f"Combinação {i}: {acertos} acertos - {combo}"):
+                            # Cartão formatado
+                            st.markdown("#### Cartão:")
+                            cartao = estrategia.formatar_como_cartao(combo)
+                            for linha in cartao:
+                                st.code(" ".join(linha))
+                            
+                            # Estatísticas
+                            col_e1, col_e2 = st.columns(2)
+                            with col_e1:
                                 pares = sum(1 for n in combo if n % 2 == 0)
-                                primos = sum(1 for n in combo if n in analisador_combinatorio.primos)
+                                primos = sum(1 for n in combo if n in {2,3,5,7,11,13,17,19,23})
                                 soma = sum(combo)
-                                st.write(f"**Estatísticas:**")
-                                st.write(f"Pares: {pares}")
-                                st.write(f"Ímpares: {len(combo)-pares}")
-                                st.write(f"Primos: {primos}")
-                                st.write(f"Soma: {soma}")
-                            st.write("---")
-            
-            # Conferir Combinações da Estratégia
-            if st.session_state.combinacoes_estrategia:
-                st.markdown("### 🎯 Combinações da Estratégia de Grupos")
-                estrategia = EstrategiaGrupos(probs, st.session_state.concursos)
+                                st.metric("Pares", pares)
+                                st.metric("Ímpares", 15 - pares)
+                                st.metric("Primos", primos)
+                                st.metric("Soma", soma)
+                            
+                            with col_e2:
+                                # Distribuição por grupos
+                                if st.session_state.info_estrategia:
+                                    grupo_a = (st.session_state.info_estrategia['grupo_a']['fixas'] + 
+                                              st.session_state.info_estrategia['grupo_a']['grupo_a1'] + 
+                                              st.session_state.info_estrategia['grupo_a']['grupo_a2'])
+                                    grupo_b = (st.session_state.info_estrategia['grupo_b']['fixas'] + 
+                                              st.session_state.info_estrategia['grupo_b']['grupo_b1'] + 
+                                              st.session_state.info_estrategia['grupo_b']['grupo_b2'])
+                                    
+                                    grupo_a_count = sum(1 for n in combo if n in grupo_a)
+                                    grupo_b_count = 15 - grupo_a_count
+                                    
+                                    st.metric("Grupo A", grupo_a_count)
+                                    st.metric("Grupo B", grupo_b_count)
+                                    
+                                    # Acertos por grupo
+                                    acertos_a = len(set(combo) & set(grupo_a) & set(info['dezenas']))
+                                    acertos_b = len(set(combo) & set(grupo_b) & set(info['dezenas']))
+                                    st.metric("Acertos Grupo A", acertos_a)
+                                    st.metric("Acertos Grupo B", acertos_b)
                 
-                for i, combo in enumerate(st.session_state.combinacoes_estrategia, 1):
-                    acertos = len(set(combo) & set(info['dezenas']))
+                # NOVO: Conferir Cartões com Regras Específicas
+                if "cartoes_regras_especificas" in st.session_state:
+                    dados = st.session_state.cartoes_regras_especificas
+                    resultado = dados.get("resultado", {})
                     
-                    with st.expander(f"Combinação {i}: {acertos} acertos - {combo}"):
-                        # Cartão formatado
-                        st.markdown("#### Cartão:")
-                        cartao = estrategia.formatar_como_cartao(combo)
-                        for linha in cartao:
-                            st.code(" ".join(linha))
+                    if resultado and "melhores_15" in resultado:
+                        todos_numeros = resultado["melhores_15"]
+                        tipo_dezenas = resultado.get("tipo_dezenas", 0)
+                        num_linhas = resultado.get("num_linhas", 0)
+                        linhas = resultado.get("linhas", [])
                         
-                        # Estatísticas
-                        col_e1, col_e2 = st.columns(2)
-                        with col_e1:
-                            pares = sum(1 for n in combo if n % 2 == 0)
-                            primos = sum(1 for n in combo if n in {2,3,5,7,11,13,17,19,23})
-                            soma = sum(combo)
-                            st.metric("Pares", pares)
-                            st.metric("Ímpares", 15 - pares)
-                            st.metric("Primos", primos)
-                            st.metric("Soma", soma)
+                        st.markdown("### 🎰 Cartões com Regras Específicas")
                         
-                        with col_e2:
-                            # Distribuição por grupos
-                            if st.session_state.info_estrategia:
-                                grupo_a = (st.session_state.info_estrategia['grupo_a']['fixas'] + 
-                                          st.session_state.info_estrategia['grupo_a']['grupo_a1'] + 
-                                          st.session_state.info_estrategia['grupo_a']['grupo_a2'])
-                                grupo_b = (st.session_state.info_estrategia['grupo_b']['fixas'] + 
-                                          st.session_state.info_estrategia['grupo_b']['grupo_b1'] + 
-                                          st.session_state.info_estrategia['grupo_b']['grupo_b2'])
-                                
-                                grupo_a_count = sum(1 for n in combo if n in grupo_a)
-                                grupo_b_count = 15 - grupo_a_count
-                                
-                                st.metric("Grupo A", grupo_a_count)
-                                st.metric("Grupo B", grupo_b_count)
-                                
-                                # Acertos por grupo
-                                acertos_a = len(set(combo) & set(grupo_a) & set(info['dezenas']))
-                                acertos_b = len(set(combo) & set(grupo_b) & set(info['dezenas']))
-                                st.metric("Acertos Grupo A", acertos_a)
-                                st.metric("Acertos Grupo B", acertos_b)
-            
-            # NOVO: Conferir Cartões com Regras Específicas (ESTRUTURA CORRIGIDA)
-            if "cartoes_regras_especificas" in st.session_state:
-                dados = st.session_state.cartoes_regras_especificas
-                resultado = dados.get("resultado", {})
-                
-                if resultado and "melhores_15" in resultado:
-                    todos_numeros = resultado["melhores_15"]
-                    tipo_dezenas = resultado.get("tipo_dezenas", 0)
-                    num_linhas = resultado.get("num_linhas", 0)
-                    linhas = resultado.get("linhas", [])
-                    
-                    st.markdown("### 🎰 Cartões com Regras Específicas")
-                    
-                    # Conferir cartão completo (15 números)
-                    acertos_completo = len(set(todos_numeros) & set(info['dezenas']))
-                    
-                    with st.expander(f"Cartão Completo ({tipo_dezenas} dezenas × {num_linhas} linhas): {acertos_completo} acertos", expanded=True):
-                        # Mostrar as linhas individualmente
-                        st.markdown("#### 📋 Análise por Linhas:")
+                        # Conferir cartão completo (15 números)
+                        acertos_completo = len(set(todos_numeros) & set(info['dezenas']))
                         
-                        for idx, linha in enumerate(linhas, 1):
-                            acertos_linha = len(set(linha) & set(info['dezenas']))
+                        with st.expander(f"Cartão Completo ({tipo_dezenas} dezenas × {num_linhas} linhas): {acertos_completo} acertos", expanded=True):
+                            # Mostrar as linhas individualmente
+                            st.markdown("#### 📋 Análise por Linhas:")
                             
-                            col_l1, col_l2, col_l3 = st.columns([3, 2, 2])
+                            for idx, linha in enumerate(linhas, 1):
+                                acertos_linha = len(set(linha) & set(info['dezenas']))
+                                
+                                col_l1, col_l2, col_l3 = st.columns([3, 2, 2])
+                                
+                                with col_l1:
+                                    st.write(f"**Linha {idx}:** {linha}")
+                                    st.write(f"Acertos na linha: **{acertos_linha}**")
+                                
+                                with col_l2:
+                                    pares = sum(1 for n in linha if n % 2 == 0)
+                                    primos = sum(1 for n in linha if n in {2,3,5,7,11,13,17,19,23})
+                                    st.write(f"Pares: {pares}")
+                                    st.write(f"Primos: {primos}")
+                                
+                                with col_l3:
+                                    # Mostrar quais números acertaram
+                                    acertos_numeros = sorted(set(linha) & set(info['dezenas']))
+                                    if acertos_numeros:
+                                        st.write(f"**Números acertados:**")
+                                        for num in acertos_numeros:
+                                            st.write(f"• {num}")
+                                
+                                st.markdown("---")
                             
-                            with col_l1:
-                                st.write(f"**Linha {idx}:** {linha}")
-                                st.write(f"Acertos na linha: **{acertos_linha}**")
+                            # Estatísticas gerais
+                            st.markdown("#### 📊 Estatísticas do Cartão Completo:")
                             
-                            with col_l2:
-                                pares = sum(1 for n in linha if n % 2 == 0)
-                                primos = sum(1 for n in linha if n in {2,3,5,7,11,13,17,19,23})
-                                st.write(f"Pares: {pares}")
-                                st.write(f"Primos: {primos}")
+                            col_c1, col_c2, col_c3 = st.columns(3)
                             
-                            with col_l3:
-                                # Mostrar quais números acertaram
-                                acertos_numeros = sorted(set(linha) & set(info['dezenas']))
+                            with col_c1:
+                                pares_total = sum(1 for n in todos_numeros if n % 2 == 0)
+                                primos_total = sum(1 for n in todos_numeros if n in {2,3,5,7,11,13,17,19,23})
+                                st.metric("Acertos totais", acertos_completo)
+                                st.metric("Pares totais", pares_total)
+                                st.metric("Primos totais", primos_total)
+                            
+                            with col_c2:
+                                soma_total = sum(todos_numeros)
+                                media_acertos = acertos_completo / 15 * 100
+                                st.metric("Soma total", soma_total)
+                                st.metric("Taxa de acerto", f"{media_acertos:.1f}%")
+                            
+                            with col_c3:
+                                # Números acertados
+                                acertos_numeros = sorted(set(todos_numeros) & set(info['dezenas']))
                                 if acertos_numeros:
-                                    st.write(f"**Números acertados:**")
-                                    for num in acertos_numeros:
-                                        st.write(f"• {num}")
-                            
-                            st.markdown("---")
-                        
-                        # Estatísticas gerais
-                        st.markdown("#### 📊 Estatísticas do Cartão Completo:")
-                        
-                        col_c1, col_c2, col_c3 = st.columns(3)
-                        
-                        with col_c1:
-                            pares_total = sum(1 for n in todos_numeros if n % 2 == 0)
-                            primos_total = sum(1 for n in todos_numeros if n in {2,3,5,7,11,13,17,19,23})
-                            st.metric("Acertos totais", acertos_completo)
-                            st.metric("Pares totais", pares_total)
-                            st.metric("Primos totais", primos_total)
-                        
-                        with col_c2:
-                            soma_total = sum(todos_numeros)
-                            media_acertos = acertos_completo / 15 * 100
-                            st.metric("Soma total", soma_total)
-                            st.metric("Taxa de acerto", f"{media_acertos:.1f}%")
-                        
-                        with col_c3:
-                            # Números acertados
-                            acertos_numeros = sorted(set(todos_numeros) & set(info['dezenas']))
-                            if acertos_numeros:
-                                st.write("**Números acertados:**")
-                                st.write(acertos_numeros)
-                            
-                            # Números que não saíram
-                            erros_numeros = sorted(set(todos_numeros) - set(info['dezenas']))
-                            if erros_numeros:
-                                st.write("**Números não sorteados:**")
-                                st.write(erros_numeros)
-    
+                                    st.write("**Números acertados:**")
+                                    st.write(acertos_numeros)
+                                
+                                # Números que não saíram
+                                erros_numeros = sorted(set(todos_numeros) - set(info['dezenas']))
+                                if erros_numeros:
+                                    st.write("**Números não sorteados:**")
+                                    st.write(erros_numeros)
 
     # Aba 9 - Conferir Arquivo TXT (original)
     with abas[8]:
@@ -1894,7 +1889,7 @@ with abas[7]:
             else:
                 st.warning("Nenhum cartão válido foi encontrado no arquivo.")
 
-# Botão para limpar todos os dados
+# Botão para limpar todos os dados (FORA DO BLOCO CONDICIONAL)
 with st.sidebar:
     st.markdown("---")
     st.subheader("⚙️ Gerenciamento de Dados")
@@ -1905,18 +1900,18 @@ with st.sidebar:
     
     # Mostrar estatísticas de uso
     st.markdown("### 📊 Estatísticas da Sessão")
-    if st.session_state.concursos:
+    if st.session_state.get('concursos'):
         st.write(f"Concursos carregados: {len(st.session_state.concursos)}")
-    if st.session_state.cartoes_gerados:
+    if st.session_state.get('cartoes_gerados'):
         st.write(f"Cartões IA gerados: {len(st.session_state.cartoes_gerados)}")
-    if st.session_state.cartoes_gerados_padrao:
+    if st.session_state.get('cartoes_gerados_padrao'):
         st.write(f"Cartões por padrões: {len(st.session_state.cartoes_gerados_padrao)}")
-    if st.session_state.combinacoes_combinatorias:
+    if st.session_state.get('combinacoes_combinatorias'):
         total_combinacoes = sum(len(combinacoes) for combinacoes in st.session_state.combinacoes_combinatorias.values())
         st.write(f"Combinações combinatorias: {total_combinacoes}")
-    if st.session_state.combinacoes_estrategia:
+    if st.session_state.get('combinacoes_estrategia'):
         st.write(f"Combinações estratégia: {len(st.session_state.combinacoes_estrategia)}")
-    if "cartoes_regras_especificas" in st.session_state and st.session_state.cartoes_regras_especificas:
+    if st.session_state.get('cartoes_regras_especificas'):
         resultado = st.session_state.cartoes_regras_especificas.get("resultado", {})
         if resultado:
             tipo = resultado.get("tipo_dezenas", 0)
