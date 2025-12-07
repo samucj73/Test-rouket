@@ -1290,7 +1290,7 @@ def verificar_enviar_alerta(fixture: dict, analise: dict, alerta_individual: boo
 # =============================
 
 def verificar_resultados_finais(alerta_resultados: bool):
-    """Verifica resultados finais dos jogos e envia alertas - VERSÃO CORRIGIDA"""
+    """Verifica resultados finais dos jogos e envia alertas - VERSÃO CORRIGIDA COM LOTES DE 4 JOGOS"""
     alertas = carregar_alertas()
     if not alertas:
         st.info("ℹ️ Nenhum alerta para verificar resultados.")
@@ -1347,11 +1347,17 @@ def verificar_resultados_finais(alerta_resultados: bool):
             logging.error(f"Erro ao verificar jogo {fixture_id}: {e}")
             st.error(f"Erro ao verificar jogo {fixture_id}: {e}")
     
-    # Enviar alertas em lote se houver resultados E a checkbox estiver ativada
+    # Enviar alertas em lotes de 4 jogos se houver resultados E a checkbox estiver ativada
     if jogos_com_resultado and alerta_resultados:
-        enviar_alerta_resultados_poster(jogos_com_resultado)
+        # Dividir jogos em lotes de 4
+        lotes_jogos = [jogos_com_resultado[i:i+4] for i in range(0, len(jogos_com_resultado), 4)]
+        
+        for i, lote in enumerate(lotes_jogos):
+            st.info(f"📤 Enviando lote {i+1}/{len(lotes_jogos)} com {len(lote)} jogos...")
+            enviar_alerta_resultados_poster(lote, lote_num=i+1, total_lotes=len(lotes_jogos))
+        
         salvar_alertas(alertas)
-        st.success(f"✅ {resultados_enviados} resultados processados e alertas enviados!")
+        st.success(f"✅ {resultados_enviados} resultados processados e enviados em {len(lotes_jogos)} lotes!")
     elif jogos_com_resultado:
         st.info(f"ℹ️ {resultados_enviados} resultados encontrados, mas alerta de resultados desativado")
         # Apenas marca como conferido sem enviar alerta
@@ -1599,14 +1605,14 @@ def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADO
     st.success(f"✅ Poster de resultados GERADO com {len(jogos)} jogos - Sistema RED/GREEN - FUNDO QUADRADO")
     return buffer
 
-def enviar_alerta_resultados_poster(jogos_com_resultado: list):
-    """Envia alerta de resultados com poster para o Telegram - VERSÃO ATUALIZADA COM RED/GREEN"""
+def enviar_alerta_resultados_poster(jogos_com_resultado: list, lote_num: int = 1, total_lotes: int = 1):
+    """Envia alerta de resultados com poster para o Telegram - VERSÃO ATUALIZADA COM LOTES DE 4 JOGOS"""
     if not jogos_com_resultado:
         st.warning("⚠️ Nenhum resultado para enviar")
         return
 
     try:
-        # Agrupar por data
+        # Agrupar por data (máximo 4 jogos por data)
         jogos_por_data = {}
         for jogo in jogos_com_resultado:
             data_jogo = datetime.fromisoformat(jogo["data"].replace("Z", "+00:00")).date()
@@ -1635,27 +1641,31 @@ def enviar_alerta_resultados_poster(jogos_com_resultado: list):
 
         for data, jogos_data in jogos_por_data.items():
             data_str = data.strftime("%d/%m/%Y")
-            titulo = f"ELITE MASTER - RESULTADOS {data_str}"
             
-            st.info(f"🎨 Gerando poster de resultados para {data_str} com {len(jogos_data)} jogos...")
+            # Limitar a 4 jogos por poster
+            jogos_para_poster = jogos_data[:4]
             
-            poster = gerar_poster_resultados(jogos_data, titulo=titulo)
+            titulo = f"ELITE MASTER - RESULTADOS {data_str} (Lote {lote_num}/{total_lotes})"
+            
+            st.info(f"🎨 Gerando poster de resultados para {data_str} com {len(jogos_para_poster)} jogos (Lote {lote_num}/{total_lotes})...")
+            
+            poster = gerar_poster_resultados(jogos_para_poster, titulo=titulo)
             
             # Calcular estatísticas ATUALIZADAS
-            total_jogos = len(jogos_data)
-            green_count = sum(1 for j in jogos_data if j.get('resultado') == "GREEN")
+            total_jogos = len(jogos_para_poster)
+            green_count = sum(1 for j in jogos_para_poster if j.get('resultado') == "GREEN")
             red_count = total_jogos - green_count
             taxa_acerto = (green_count / total_jogos * 100) if total_jogos > 0 else 0
             
             # Separar Over e Under
-            over_count = sum(1 for j in jogos_data if j.get('tipo_aposta') == "over")
-            under_count = sum(1 for j in jogos_data if j.get('tipo_aposta') == "under")
-            over_green = sum(1 for j in jogos_data if j.get('tipo_aposta') == "over" and j.get('resultado') == "GREEN")
-            under_green = sum(1 for j in jogos_data if j.get('tipo_aposta') == "under" and j.get('resultado') == "GREEN")
+            over_count = sum(1 for j in jogos_para_poster if j.get('tipo_aposta') == "over")
+            under_count = sum(1 for j in jogos_para_poster if j.get('tipo_aposta') == "under")
+            over_green = sum(1 for j in jogos_para_poster if j.get('tipo_aposta') == "over" and j.get('resultado') == "GREEN")
+            under_green = sum(1 for j in jogos_para_poster if j.get('tipo_aposta') == "under" and j.get('resultado') == "GREEN")
             
             caption = (
-                f"<b>🏁 RESULTADOS OFICIAIS - {data_str}</b>\n\n"
-                f"<b>📋 TOTAL DE JOGOS: {total_jogos}</b>\n"
+                f"<b>🏁 RESULTADOS OFICIAIS - {data_str} (Lote {lote_num}/{total_lotes})</b>\n\n"
+                f"<b>📋 JOGOS NESTE LOTE: {total_jogos}</b>\n"
                 f"<b>🟢 GREEN: {green_count} jogos</b>\n"
                 f"<b>🔴 RED: {red_count} jogos</b>\n"
                 f"<b>🎯 TAXA DE ACERTO: {taxa_acerto:.1f}%</b>\n\n"
@@ -1665,14 +1675,14 @@ def enviar_alerta_resultados_poster(jogos_com_resultado: list):
                 f"<b>🔥 ELITE MASTER SYSTEM - CONFIABILIDADE COMPROVADA</b>"
             )
             
-            st.info("📤 Enviando resultados para o Telegram...")
+            st.info(f"📤 Enviando lote {lote_num}/{total_lotes} para o Telegram...")
             ok = enviar_foto_telegram(poster, caption=caption, chat_id=TELEGRAM_CHAT_ID_ALT2)
             
             if ok:
-                st.success(f"🚀 Poster de resultados enviado para {data_str}!")
+                st.success(f"🚀 Lote {lote_num}/{total_lotes} enviado para {data_str}!")
                 
                 # Registrar no histórico
-                for jogo in jogos_data:
+                for jogo in jogos_para_poster:
                     registrar_no_historico({
                         "home": jogo["home"],
                         "away": jogo["away"], 
@@ -1684,15 +1694,19 @@ def enviar_alerta_resultados_poster(jogos_com_resultado: list):
                         "resultado": "🟢 GREEN" if jogo.get('resultado') == "GREEN" else "🔴 RED",
                         "tipo_aposta": jogo.get("tipo_aposta", "desconhecido")
                     })
+                
+                # Pequena pausa entre lotes para evitar sobrecarga
+                if lote_num < total_lotes:
+                    time.sleep(2)
             else:
-                st.error(f"❌ Falha ao enviar poster de resultados para {data_str}")
+                st.error(f"❌ Falha ao enviar lote {lote_num}/{total_lotes} para {data_str}")
                 
     except Exception as e:
         logging.error(f"Erro crítico ao gerar/enviar poster de resultados: {str(e)}")
         st.error(f"❌ Erro crítico ao gerar/enviar poster de resultados: {str(e)}")
         # Fallback para mensagem de texto
-        msg = f"🏁 RESULTADOS OFICIAIS - SISTEMA RED/GREEN:\n\n"
-        for j in jogos_com_resultado[:5]:
+        msg = f"🏁 RESULTADOS OFICIAIS - SISTEMA RED/GREEN (Lote {lote_num}/{total_lotes}):\n\n"
+        for j in jogos_com_resultado[:4]:
             total_gols = j['home_goals'] + j['away_goals']
             resultado = "🟢 GREEN" if (
                 (j['tendencia_prevista'] == "OVER 2.5" and total_gols > 2.5) or 
@@ -2696,4 +2710,3 @@ def enviar_alerta_conf_criar_poster(jogos_conf: list, min_conf: int, max_conf: i
 
 if __name__ == "__main__":
     main()
-     #Analise o código acima e coloque persistência e Cache para evitar chamadas desnecessárias a ApI
