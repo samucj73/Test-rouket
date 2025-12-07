@@ -447,7 +447,8 @@ def adicionar_alerta_top(jogo: dict, data_busca: str):
         "data_busca": data_busca,
         "data_hora_busca": datetime.now().isoformat(),
         "conferido": False,
-        "resultado": None
+        "resultado": None,
+        "alerta_enviado": False  # NOVO: Flag para controlar se alerta foi enviado
     }
     
     salvar_alertas_top(alertas_top)
@@ -509,7 +510,93 @@ def limpar_historico():
     else:
         st.info("⚠️ Nenhum histórico encontrado para limpar.")
 
+# =============================
+# NOVA FUNÇÃO: Enviar alerta quando todos os Top N foram conferidos
+# =============================
+def enviar_alerta_top_conferidos():
+    """Envia alerta quando todos os jogos do Top N foram conferidos"""
+    alertas_top = carregar_alertas_top()
+    if not alertas_top:
+        return False
+    
+    # Separar alertas por data de busca
+    alertas_por_data = {}
+    for chave, alerta in alertas_top.items():
+        data_busca = alerta.get("data_busca")
+        if data_busca not in alertas_por_data:
+            alertas_por_data[data_busca] = []
+        alertas_por_data[data_busca].append(alerta)
+    
+    alertas_enviados = []
+    
+    for data_busca, alertas in alertas_por_data.items():
+        # Verificar se todos os alertas desta data foram conferidos
+        todos_conferidos = all(a.get("conferido", False) for a in alertas)
+        ja_enviado = any(a.get("alerta_enviado", False) for a in alertas)
+        
+        if todos_conferidos and not ja_enviado and len(alertas) > 0:
+            # Calcular estatísticas
+            total_alertas = len(alertas)
+            green_count = sum(1 for a in alertas if a.get("resultado") == "GREEN")
+            red_count = total_alertas - green_count
+            taxa_acerto = (green_count / total_alertas * 100) if total_alertas > 0 else 0
+            
+            # Separar Over e Under
+            over_alertas = [a for a in alertas if a.get("tipo_aposta") == "over"]
+            under_alertas = [a for a in alertas if a.get("tipo_aposta") == "under"]
+            
+            over_green = sum(1 for a in over_alertas if a.get("resultado") == "GREEN")
+            under_green = sum(1 for a in under_alertas if a.get("resultado") == "GREEN")
+            
+            # Criar mensagem
+            data_formatada = datetime.strptime(data_busca, "%Y-%m-%d").strftime("%d/%m/%Y")
+            
+            msg = (
+                f"🏁 <b>RELATÓRIO DE CONFERÊNCIA - TOP {total_alertas} JOGOS ({data_formatada})</b>\n\n"
+                f"<b>📊 RESUMO GERAL:</b>\n"
+                f"<b>• Total de Alertas:</b> {total_alertas}\n"
+                f"<b>• 🟢 GREEN:</b> {green_count} ({taxa_acerto:.1f}%)\n"
+                f"<b>• 🔴 RED:</b> {red_count} ({100 - taxa_acerto:.1f}%)\n\n"
+                f"<b>📈 DESEMPENHO OVER:</b>\n"
+                f"<b>• Alertas:</b> {len(over_alertas)}\n"
+                f"<b>• GREEN:</b> {over_green} ({over_green/max(len(over_alertas),1)*100:.0f}%)\n\n"
+                f"<b>📉 DESEMPENHO UNDER:</b>\n"
+                f"<b>• Alertas:</b> {len(under_alertas)}\n"
+                f"<b>• GREEN:</b> {under_green} ({under_green/max(len(under_alertas),1)*100:.0f}%)\n\n"
+            )
+            
+            # Adicionar detalhes dos jogos
+            msg += "<b>🎯 DETALHES DOS JOGOS:</b>\n"
+            for i, alerta in enumerate(alertas, 1):
+                resultado_emoji = "🟢" if alerta.get("resultado") == "GREEN" else "🔴"
+                tipo_emoji = "📈" if alerta.get("tipo_aposta") == "over" else "📉"
+                placar = alerta.get("placar", "0x0")
+                tendencia = alerta.get("tendencia", "")
+                confianca = alerta.get("confianca", 0)
+                
+                msg += (
+                    f"<b>{i}. {resultado_emoji} {tipo_emoji} {alerta['home']} {placar} {alerta['away']}</b>\n"
+                    f"   <i>{tendencia} | Conf: {confianca:.0f}%</i>\n"
+                )
+            
+            msg += "\n<b>🔥 ELITE MASTER SYSTEM - CONFERÊNCIA AUTOMÁTICA</b>"
+            
+            # Enviar para Telegram
+            if enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2):
+                # Marcar como alerta enviado
+                for chave_alerta in list(alertas_top.keys()):
+                    if alertas_top[chave_alerta].get("data_busca") == data_busca:
+                        alertas_top[chave_alerta]["alerta_enviado"] = True
+                
+                salvar_alertas_top(alertas_top)
+                alertas_enviados.append(data_busca)
+                st.success(f"📤 Relatório de conferência enviado para {data_formatada}!")
+    
+    return len(alertas_enviados) > 0
+
+# =============================
 # NOVA FUNÇÃO: Conferir resultados dos alertas TOP
+# =============================
 def conferir_resultados_top():
     """Conferir resultados dos alertas TOP salvos"""
     alertas_top = carregar_alertas_top()
@@ -569,6 +656,7 @@ def conferir_resultados_top():
                 alerta["data_conferencia"] = datetime.now().isoformat()
                 
                 resultados_conferidos += 1
+                jogos_com_resultado.append(alerta)
                 
         except Exception as e:
             logging.error(f"Erro ao conferir alerta TOP {chave}: {e}")
@@ -580,10 +668,20 @@ def conferir_resultados_top():
         
         # Mostrar estatísticas
         calcular_desempenho_alertas_top()
+        
+        # Mostrar detalhes dos jogos conferidos
+        if jogos_com_resultado:
+            st.subheader("🎯 Jogos Conferidos Agora:")
+            for jogo in jogos_com_resultado:
+                resultado_emoji = "🟢" if jogo.get("resultado") == "GREEN" else "🔴"
+                tipo_emoji = "📈" if jogo.get("tipo_aposta") == "over" else "📉"
+                st.write(f"{resultado_emoji} {tipo_emoji} {jogo['home']} {jogo['placar']} {jogo['away']}")
     else:
         st.info("ℹ️ Nenhum novo resultado para conferir nos alertas TOP.")
 
+# =============================
 # NOVA FUNÇÃO: Calcular desempenho dos alertas TOP
+# =============================
 def calcular_desempenho_alertas_top():
     """Calcula o desempenho dos alertas TOP"""
     alertas_top = carregar_alertas_top()
@@ -622,6 +720,35 @@ def calcular_desempenho_alertas_top():
     if under_alertas:
         taxa_under = (under_green / len(under_alertas) * 100) if len(under_alertas) > 0 else 0
         st.write(f"**📉 UNDER:** {under_green}/{len(under_alertas)} ({taxa_under:.1f}%)")
+
+# =============================
+# NOVA FUNÇÃO: Verificar se há conjuntos completos para reportar
+# =============================
+def verificar_conjuntos_completos():
+    """Verifica se há conjuntos de Top N completos para reportar"""
+    alertas_top = carregar_alertas_top()
+    if not alertas_top:
+        return []
+    
+    # Agrupar por data de busca
+    datas_completas = []
+    alertas_por_data = {}
+    
+    for chave, alerta in alertas_top.items():
+        data_busca = alerta.get("data_busca")
+        if data_busca not in alertas_por_data:
+            alertas_por_data[data_busca] = []
+        alertas_por_data[data_busca].append(alerta)
+    
+    for data_busca, alertas in alertas_por_data.items():
+        # Verificar se todos foram conferidos mas alerta ainda não foi enviado
+        todos_conferidos = all(a.get("conferido", False) for a in alertas)
+        ja_enviado = any(a.get("alerta_enviado", False) for a in alertas)
+        
+        if todos_conferidos and not ja_enviado:
+            datas_completas.append(data_busca)
+    
+    return datas_completas
 
 # =============================
 # Utilitários de Data e Formatação - CORRIGIDOS
@@ -3213,7 +3340,11 @@ def main():
         alerta_top_jogos = st.checkbox("🏆 Top Jogos", value=True,
                                       help="Envia lista dos top jogos do dia")
         
-        # NOVA OPÇÃO: Formato do Top Jogos
+        # NOVA OPÇÃO: Alerta automático de conferência
+        alerta_conferencia_auto = st.checkbox("🤖 Alerta Auto Conferência", value=True,
+                                             help="Envia alerta automático quando todos os Top N forem conferidos")
+        
+        # Formato do Top Jogos
         formato_top_jogos = st.selectbox(
             "📋 Formato do Top Jogos",
             ["Ambos", "Texto", "Poster"],
@@ -3245,6 +3376,8 @@ def main():
         st.info(f"Intervalo de confiança: {min_conf}% a {max_conf}%")
         st.info(f"Filtro: {tipo_filtro}")
         st.info(f"Formato Top Jogos: {formato_top_jogos}")
+        if alerta_conferencia_auto:
+            st.info("🤖 Alerta automático: ATIVADO")
 
     # Controles principais
     col1, col2 = st.columns([2, 1])
@@ -3274,6 +3407,22 @@ def main():
         else:
             debug_jogos_dia(data_selecionada, ligas_selecionadas, todas_ligas=False)
 
+    # NOVO: Botão para verificar conjuntos completos
+    if st.button("🔍 Verificar Conjuntos Completos", type="secondary"):
+        datas_completas = verificar_conjuntos_completos()
+        if datas_completas:
+            st.success(f"✅ Encontrados {len(datas_completas)} conjuntos completos para reportar:")
+            for data in datas_completas:
+                data_formatada = datetime.strptime(data, "%Y-%m-%d").strftime("%d/%m/%Y")
+                st.write(f"📅 {data_formatada}")
+            
+            if st.button("📤 Enviar Alertas de Conferência"):
+                enviou = enviar_alerta_top_conferidos()
+                if enviou:
+                    st.success("✅ Alertas de conferência enviados!")
+        else:
+            st.info("ℹ️ Nenhum conjunto completo para reportar.")
+
     # Processamento
     if st.button("🔍 Buscar Partidas", type="primary"):
         if not todas_ligas and not ligas_selecionadas:
@@ -3297,8 +3446,13 @@ def main():
         if st.button("🧹 Limpar Cache"):
             limpar_caches()
     with col5:
-        if st.button("🏆 Conferir Alertas TOP", type="secondary"):
+        if st.button("🏆 Conferir Alertas TOP", type="primary"):
             conferir_resultados_top()
+            # Verificar se deve enviar alerta automático
+            if alerta_conferencia_auto:
+                enviou = enviar_alerta_top_conferidos()
+                if enviou:
+                    st.success("🤖 Alerta automático de conferência enviado!")
 
     # Painel de monitoramento da API
     st.markdown("---")
