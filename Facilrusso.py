@@ -60,6 +60,9 @@ def capturar_ultimos_resultados(qtd=250):
 # =========================
 # NOVA CLASSE: Gerador de Cartões com Regras Específicas
 # =========================
+# =========================
+# NOVA CLASSE: Gerador de Cartões com Regras Específicas (VERSÃO CORRETA)
+# =========================
 class GeradorCartoesRegrasEspecificas:
     def __init__(self, probabilidades):
         self.probabilidades = probabilidades
@@ -67,250 +70,322 @@ class GeradorCartoesRegrasEspecificas:
         
         # Definir as regras específicas da imagem
         self.regras = {
-            1: {"min": 1, "max": 1, "nome": "1 Dezena"},
-            2: {"min": 1, "max": 2, "nome": "2 Dezenas"},
-            3: {"min": 1, "max": 3, "nome": "3 Dezenas"},
-            4: {"min": 1, "max": 2, "nome": "4 Dezenas"},
-            5: {"min": 1, "max": 1, "nome": "5 Dezenas"}
+            1: {"min": 1, "max": 1, "nome": "1 Dezena", "total_numeros": 1},
+            2: {"min": 1, "max": 2, "nome": "2 Dezenas", "total_numeros": 2},
+            3: {"min": 1, "max": 3, "nome": "3 Dezenas", "total_numeros": 3},
+            4: {"min": 1, "max": 2, "nome": "4 Dezenas", "total_numeros": 4},
+            5: {"min": 1, "max": 1, "nome": "5 Dezenas", "total_numeros": 5}
         }
     
-    def determinar_tipo_dezenas_automatico(self):
+    def determinar_tipo_automatico(self):
         """
-        Determina automaticamente quantas dezenas usar baseado nas estatísticas
+        Determina automaticamente quantas dezenas por linha usar
+        baseado nas estatísticas
         """
         # Ordenar números por probabilidade
         numeros_ordenados = sorted(self.probabilidades.items(), 
                                   key=lambda x: x[1], 
                                   reverse=True)
         
-        # Calcular a média das probabilidades
         valores_probabilidade = [prob for _, prob in numeros_ordenados]
-        media_probabilidade = np.mean(valores_probabilidade)
-        desvio_padrao = np.std(valores_probabilidade)
+        media = np.mean(valores_probabilidade)
+        desvio = np.std(valores_probabilidade)
         
-        # Análise da distribuição de probabilidades
-        top_5_prob = [prob for _, prob in numeros_ordenados[:5]]
-        bottom_5_prob = [prob for _, prob in numeros_ordenados[-5:]]
+        # Top números
+        top1_prob = numeros_ordenados[0][1]
+        top5_prob_avg = np.mean([prob for _, prob in numeros_ordenados[:5]])
         
-        # Decidir baseado na distribuição:
-        # 1. Se há pouca variação (todos números com probabilidades similares)
-        if desvio_padrao < 0.05:  # Baixa variação
-            # Escolher 3 dezenas (mais equilibrado)
-            return 3
+        # Decisão baseada na distribuição:
         
-        # 2. Se há alguns números MUITO mais prováveis
-        elif max(top_5_prob) > media_probabilidade + (desvio_padrao * 1.5):
-            # Se top 2-3 números são muito mais prováveis
-            if top_5_prob[0] > top_5_prob[3] * 1.5:
-                return 1  # Focar no número mais provável
-            elif top_5_prob[0] > top_5_prob[3] * 1.3:
-                return 2  # Usar os 2 mais prováveis
+        # 1. Se há 1 número MUITO destacado
+        if top1_prob > media + (desvio * 2.5):
+            return 1  # 1 Dezena - foco no número mais forte
+        
+        # 2. Se há 2 números muito fortes
+        elif numeros_ordenados[1][1] > media + (desvio * 1.8):
+            return 2  # 2 Dezenas - par forte
+        
+        # 3. Se há 3 números bem destacados
+        elif numeros_ordenados[2][1] > media + (desvio * 1.2):
+            return 3  # 3 Dezenas - trio forte
+        
+        # 4. Se há 4-5 números consistentes
+        elif top5_prob_avg > media:
+            if desvio < 0.07:  # Baixa variação
+                return 5  # 5 Dezenas - muitos números consistentes
             else:
-                return 3  # Usar vários números prováveis
-        
-        # 3. Se há muitos números com probabilidade similar alta
-        elif media_probabilidade > 0.55:
-            return 5  # Usar mais números (5)
-        
-        # 4. Se há equilíbrio geral
-        elif 0.45 <= media_probabilidade <= 0.55:
-            return 4  # Usar 4 números
+                return 4  # 4 Dezenas - grupo consistente
         
         # 5. Padrão default
         else:
-            # Analisar distribuição dos últimos concursos
-            return 3  # Default para 3 dezenas
+            return 3  # 3 Dezenas - opção mais equilibrada
     
     def determinar_num_linhas_automatico(self, tipo_dezenas):
         """
-        Determina automaticamente quantas linhas gerar baseado nas regras
+        Determina quantas linhas gerar baseado no tipo de dezenas
+        e nas estatísticas
         """
         regra = self.regras[tipo_dezenas]
         
-        # Se só pode ter 1 linha (1 ou 5 dezenas)
+        # Se só pode ter 1 linha
         if regra["min"] == regra["max"]:
             return 1
         
-        # Para 2, 3 ou 4 dezenas, decidir baseado nas estatísticas
+        # Calcular consistência das probabilidades
+        valores_probabilidade = [prob for _, prob in self.probabilidades.items()]
+        desvio = np.std(valores_probabilidade)
+        
         if tipo_dezenas == 2:
             # Para 2 dezenas: 1 ou 2 linhas
-            # Se os 2 números mais prováveis forem MUITO mais prováveis que os outros
             numeros_ordenados = sorted(self.probabilidades.items(), 
                                       key=lambda x: x[1], 
                                       reverse=True)
-            prob_top2 = numeros_ordenados[0][1] + numeros_ordenados[1][1]
-            prob_next3 = sum(prob for _, prob in numeros_ordenados[2:5])
-            
-            if prob_top2 > prob_next3 * 1.2:
-                return 2  # Gerar 2 linhas com os mesmos números principais
+            # Se os 4 primeiros são muito fortes, fazer 2 linhas
+            top4_avg = np.mean([prob for _, prob in numeros_ordenados[:4]])
+            if top4_avg > np.mean(valores_probabilidade) * 1.15:
+                return 2
             else:
-                return 1  # Apenas 1 linha
+                return 1
         
         elif tipo_dezenas == 3:
             # Para 3 dezenas: 1, 2 ou 3 linhas
-            # Baseado na consistência dos números
-            valores_probabilidade = [prob for _, prob in self.probabilidades.items()]
-            desvio_padrao = np.std(valores_probabilidade)
-            
-            if desvio_padrao < 0.06:
-                return 3  # Alta consistência, gerar 3 linhas
-            elif desvio_padrao < 0.1:
-                return 2  # Média consistência, gerar 2 linhas
+            if desvio < 0.06:
+                return 3  # Alta consistência
+            elif desvio < 0.1:
+                return 2  # Média consistência
             else:
-                return 1  # Baixa consistência, gerar 1 linha
+                return 1  # Baixa consistência
         
         elif tipo_dezenas == 4:
             # Para 4 dezenas: 1 ou 2 linhas
-            # Similar à lógica das 2 dezenas
             numeros_ordenados = sorted(self.probabilidades.items(), 
                                       key=lambda x: x[1], 
                                       reverse=True)
-            prob_top4 = sum(prob for _, prob in numeros_ordenados[:4])
-            prob_next4 = sum(prob for _, prob in numeros_ordenados[4:8])
-            
-            if prob_top4 > prob_next4 * 1.1:
-                return 2  # Gerar 2 linhas
+            # Se os 8 primeiros são bons, fazer 2 linhas
+            top8_avg = np.mean([prob for _, prob in numeros_ordenados[:8]])
+            if top8_avg > np.mean(valores_probabilidade) * 1.1:
+                return 2
             else:
-                return 1  # Apenas 1 linha
+                return 1
         
-        return regra["min"]  # Default para o mínimo
+        return regra["min"]  # Default
     
-    def validar_configuracao(self, tipo_dezenas, num_linhas):
-        """Valida se a configuração está dentro das regras da imagem"""
-        if tipo_dezenas not in self.regras:
-            raise ValueError(f"Tipo {tipo_dezenas} inválido. Use valores de 1 a 5.")
-        
-        regra = self.regras[tipo_dezenas]
-        if num_linhas < regra["min"] or num_linhas > regra["max"]:
-            raise ValueError(
-                f"Para {tipo_dezenas} dezena(s): "
-                f"Permitido {regra['min']} a {regra['max']} linha(s). "
-                f"Você selecionou {num_linhas}."
-            )
-        return True
-    
-    def gerar_linha_estatistica(self, tipo_dezenas, linha_numero):
-        """
-        Gera uma linha com base nas estatísticas/probabilidades
-        linha_numero: qual linha está sendo gerada (1ª, 2ª, 3ª)
-        """
-        # Ordenar números por probabilidade (mais prováveis primeiro)
+    def selecionar_melhores_numeros(self, quantidade):
+        """Seleciona a quantidade especificada de melhores números"""
         numeros_ordenados = sorted(self.probabilidades.items(), 
                                   key=lambda x: x[1], 
                                   reverse=True)
-        
-        # Estratégia diferente para cada linha
-        if linha_numero == 1:
-            # Primeira linha: números mais prováveis
-            numeros_selecionados = [n for n, _ in numeros_ordenados[:tipo_dezenas]]
-        
-        elif linha_numero == 2:
-            # Segunda linha: mistura de prováveis e médios
-            inicio = tipo_dezenas // 2
-            fim = inicio + tipo_dezenas
-            numeros_selecionados = [n for n, _ in numeros_ordenados[inicio:fim]]
-        
-        elif linha_numero == 3:
-            # Terceira linha: números médios com alguns prováveis
-            meio = len(numeros_ordenados) // 2 - tipo_dezenas // 2
-            fim = meio + tipo_dezenas
-            numeros_selecionados = [n for n, _ in numeros_ordenados[meio:fim]]
-            
-            # Adicionar 1-2 números muito prováveis
-            if tipo_dezenas >= 3:
-                numeros_selecionados[0] = numeros_ordenados[0][0]
-        
-        return sorted(numeros_selecionados)
+        return [n for n, _ in numeros_ordenados[:quantidade]]
     
-    def gerar_cartao_automatico(self):
+    def distribuir_15_numeros_em_linhas(self, tipo_dezenas, num_linhas):
         """
-        Gera um cartão COMPLETAMENTE AUTOMÁTICO baseado nas estatísticas
+        Distribui 15 números em linhas seguindo exatamente as regras
+        
+        Cada linha tem 'tipo_dezenas' números
+        Total de linhas: 'num_linhas'
+        Total números: tipo_dezenas × num_linhas = 15
         """
-        # 1. Determinar tipo de dezenas automaticamente
-        tipo_dezenas = self.determinar_tipo_dezenas_automatico()
+        # Verificar se a combinação é válida
+        total_numeros = tipo_dezenas * num_linhas
+        if total_numeros != 15:
+            raise ValueError(f"Combinação inválida: {tipo_dezenas} dezenas × {num_linhas} linhas = {total_numeros} números (deveria ser 15)")
         
-        # 2. Determinar número de linhas automaticamente
-        num_linhas = self.determinar_num_linhas_automatico(tipo_dezenas)
+        # Selecionar os 15 melhores números
+        melhores_15 = self.selecionar_melhores_numeros(15)
         
-        # 3. Validar configuração
-        self.validar_configuracao(tipo_dezenas, num_linhas)
-        
-        # 4. Gerar as linhas
-        cartao = []
+        # Distribuir em linhas
+        linhas = []
         for i in range(num_linhas):
-            linha = self.gerar_linha_estatistica(tipo_dezenas, i + 1)
-            cartao.append(linha)
+            inicio = i * tipo_dezenas
+            fim = inicio + tipo_dezenas
+            linha = melhores_15[inicio:fim]
+            linhas.append(sorted(linha))
         
         return {
             "tipo_dezenas": tipo_dezenas,
             "num_linhas": num_linhas,
-            "cartao": cartao
+            "melhores_15": melhores_15,
+            "linhas": linhas,
+            "distribuicao": self.calcular_distribuicao(linhas)
         }
     
-    def formatar_linha_cartao(self, linha, tipo_dezenas):
-        """Formata uma linha como cartão da Lotofácil 5x5"""
-        cartao = []
-        for i in range(5):
-            linha_cartao = []
-            for j in range(5):
-                numero = i * 5 + j + 1
-                if numero in linha:
-                    linha_cartao.append(f"[{numero:2d}]")
-                else:
-                    linha_cartao.append(f" {numero:2d} ")
-            cartao.append(linha_cartao)
-        return cartao
+    def encontrar_combinacao_valida(self):
+        """
+        Encontra uma combinação válida de tipo_dezenas × num_linhas = 15
+        que siga as regras da imagem
+        """
+        combinacoes_validas = []
+        
+        # Gerar todas combinações possíveis que dão 15 números
+        for tipo in [1, 2, 3, 4, 5]:
+            regra = self.regras[tipo]
+            for linhas in range(regra["min"], regra["max"] + 1):
+                if tipo * linhas == 15:
+                    combinacoes_validas.append((tipo, linhas))
+        
+        # Se não encontrou combinação exata, usar a mais próxima
+        if not combinacoes_validas:
+            # Encontrar a combinação mais próxima de 15
+            melhor_combinacao = None
+            menor_diferenca = float('inf')
+            
+            for tipo in [1, 2, 3, 4, 5]:
+                regra = self.regras[tipo]
+                for linhas in range(regra["min"], regra["max"] + 1):
+                    total = tipo * linhas
+                    diferenca = abs(15 - total)
+                    if diferenca < menor_diferenca:
+                        menor_diferenca = diferenca
+                        melhor_combinacao = (tipo, linhas, total)
+            
+            # Usar a melhor combinação encontrada
+            tipo, linhas, total = melhor_combinacao
+            
+            # Ajustar: se total < 15, adicionar números extras
+            # se total > 15, remover alguns números
+            return tipo, linhas, total
+        
+        # Escolher a melhor combinação baseado nas estatísticas
+        # Prioridade: 3×5, 5×3, 1×15, etc.
+        combinacoes_priorizadas = [(3, 5), (5, 3), (1, 15), (15, 1)]
+        
+        for priorizada in combinacoes_priorizadas:
+            if priorizada in combinacoes_validas:
+                return priorizada[0], priorizada[1], 15
+        
+        # Se não encontrou priorizada, pegar a primeira
+        tipo, linhas = combinacoes_validas[0]
+        return tipo, linhas, 15
     
-    def gerar_conteudo_download(self, resultado):
-        """Gera conteúdo para download"""
-        tipo_dezenas = resultado["tipo_dezenas"]
-        num_linhas = resultado["num_linhas"]
-        cartao = resultado["cartao"]
-        
-        regra = self.regras[tipo_dezenas]
-        
-        conteudo = f"LOTOFÁCIL - CARTÕES COM REGRAS ESPECÍFICAS\n"
-        conteudo += "=" * 60 + "\n"
-        conteudo += f"Tipo determinado automaticamente: {regra['nome']}\n"
-        conteudo += f"Número de linhas: {num_linhas}\n"
-        conteudo += f"Regra aplicada: {regra['nome']} - Permitido {regra['min']} a {regra['max']} linha(s)\n"
-        conteudo += "=" * 60 + "\n\n"
-        
-        for idx, linha in enumerate(cartao, 1):
-            conteudo += f"Linha {idx}: {linha}\n"
-            
-            # Formatar como cartão
-            cartao_formatado = self.formatar_linha_cartao(linha, tipo_dezenas)
-            for linha_cartao in cartao_formatado:
-                conteudo += " ".join(linha_cartao) + "\n"
-            
+    def calcular_distribuicao(self, linhas):
+        """Calcula distribuição estatística das linhas"""
+        distribuicao = []
+        for i, linha in enumerate(linhas, 1):
             # Estatísticas da linha
             pares = sum(1 for n in linha if n % 2 == 0)
             primos = sum(1 for n in linha if n in {2,3,5,7,11,13,17,19,23})
             soma = sum(linha)
+            prob_media = np.mean([self.probabilidades.get(n, 0) for n in linha])
+            prob_total = sum([self.probabilidades.get(n, 0) for n in linha])
             
-            # Probabilidades da linha
-            prob_media = np.mean([self.probabilidades[n] for n in linha])
-            
-            conteudo += f"Pares: {pares} | Ímpares: {tipo_dezenas - pares} "
-            conteudo += f"| Primos: {primos} | Soma: {soma} | Prob. média: {prob_media:.2%}\n"
-            conteudo += "-" * 60 + "\n\n"
+            distribuicao.append({
+                "linha": i,
+                "numeros": linha,
+                "pares": pares,
+                "impares": len(linha) - pares,
+                "primos": primos,
+                "soma": soma,
+                "probabilidade_media": prob_media,
+                "probabilidade_total": prob_total
+            })
         
-        # Adicionar análise da decisão automática
-        conteudo += "\n" + "=" * 60 + "\n"
-        conteudo += "ANÁLISE DA DECISÃO AUTOMÁTICA:\n"
-        conteudo += "=" * 60 + "\n"
+        return distribuicao
+    
+    def gerar_cartao_completo(self):
+        """
+        Gera um cartão completo com 15 números distribuídos em linhas
+        que seguem exatamente as regras da imagem
+        """
+        # 1. Determinar tipo automaticamente
+        tipo_dezenas = self.determinar_tipo_automatico()
+        
+        # 2. Determinar número de linhas automaticamente
+        num_linhas = self.determinar_num_linhas_automatico(tipo_dezenas)
+        
+        # 3. Verificar se a combinação dá 15 números
+        total_numeros = tipo_dezenas * num_linhas
+        
+        if total_numeros != 15:
+            # Encontrar combinação válida
+            tipo_dezenas, num_linhas, total_numeros = self.encontrar_combinacao_valida()
+        
+        # 4. Distribuir os 15 números em linhas
+        resultado = self.distribuir_15_numeros_em_linhas(tipo_dezenas, num_linhas)
+        
+        # 5. Calcular cartão completo (todos os 25 números)
+        todos_numeros = list(range(1, 26))
+        numeros_marcados = resultado["melhores_15"]
+        
+        cartao_completo = []
+        for i in range(5):
+            linha_cartao = []
+            for j in range(5):
+                numero = i * 5 + j + 1
+                if numero in numeros_marcados:
+                    # Verificar em qual linha da regra está
+                    linha_regra = None
+                    for idx, linha_nums in enumerate(resultado["linhas"]):
+                        if numero in linha_nums:
+                            linha_regra = idx + 1
+                            break
+                    
+                    if linha_regra:
+                        linha_cartao.append(f"[{numero:2d}]L{linha_regra}")
+                    else:
+                        linha_cartao.append(f"[{numero:2d}]   ")
+                else:
+                    linha_cartao.append(f" {numero:2d}   ")
+            cartao_completo.append(linha_cartao)
+        
+        resultado["cartao_completo"] = cartao_completo
+        
+        return resultado
+    
+    def formatar_para_download(self, resultado):
+        """Formata resultado para download"""
+        tipo = resultado["tipo_dezenas"]
+        linhas = resultado["num_linhas"]
+        regra = self.regras[tipo]
+        
+        conteudo = "=" * 70 + "\n"
+        conteudo += "LOTOFÁCIL - CARTÃO COM REGRAS ESPECÍFICAS\n"
+        conteudo += "=" * 70 + "\n\n"
+        
+        conteudo += f"REGRAS APLICADAS:\n"
+        conteudo += f"- Tipo: {regra['nome']}\n"
+        conteudo += f"- Linhas: {linhas}\n"
+        conteudo += f"- Números por linha: {tipo}\n"
+        conteudo += f"- Total números: {tipo * linhas}\n"
+        conteudo += f"- Regra: {regra['nome']} - {regra['min']} a {regra['max']} linha(s)\n\n"
+        
+        conteudo += "MELHORES 15 NÚMEROS (ORDENADOS POR PROBABILIDADE):\n"
+        for i, num in enumerate(resultado["melhores_15"], 1):
+            prob = self.probabilidades.get(num, 0)
+            conteudo += f"{i:2d}. Número {num:2d}: {prob:.2%}\n"
+        
+        conteudo += "\n" + "=" * 70 + "\n"
+        conteudo += "DISTRIBUIÇÃO NAS LINHAS:\n"
+        conteudo += "=" * 70 + "\n\n"
+        
+        for dist in resultado["distribuicao"]:
+            conteudo += f"LINHA {dist['linha']} ({len(dist['numeros'])} números):\n"
+            conteudo += f"Números: {dist['numeros']}\n"
+            conteudo += f"Pares: {dist['pares']} | Ímpares: {dist['impares']} "
+            conteudo += f"| Primos: {dist['primos']} | Soma: {dist['soma']}\n"
+            conteudo += f"Prob. média: {dist['probabilidade_media']:.2%} | Prob. total: {dist['probabilidade_total']:.2%}\n\n"
+        
+        conteudo += "=" * 70 + "\n"
+        conteudo += "CARTÃO COMPLETO DA LOTOFÁCIL (L1, L2, ... = Linha da regra):\n"
+        conteudo += "=" * 70 + "\n\n"
+        
+        for linha in resultado["cartao_completo"]:
+            conteudo += " ".join(linha) + "\n"
         
         # Estatísticas gerais
-        valores_probabilidade = [prob for _, prob in self.probabilidades.items()]
-        conteudo += f"Média de probabilidade: {np.mean(valores_probabilidade):.2%}\n"
-        conteudo += f"Desvio padrão: {np.std(valores_probabilidade):.4f}\n"
+        conteudo += "\n" + "=" * 70 + "\n"
+        conteudo += "ESTATÍSTICAS GERAIS DO CARTÃO:\n"
+        conteudo += "=" * 70 + "\n\n"
         
-        # Top números
-        numeros_ordenados = sorted(self.probabilidades.items(), 
-                                  key=lambda x: x[1], 
-                                  reverse=True)
-        conteudo += f"Top {tipo_dezenas} números mais prováveis: {[n for n, _ in numeros_ordenados[:tipo_dezenas]]}\n"
+        todos_numeros = resultado["melhores_15"]
+        pares_total = sum(1 for n in todos_numeros if n % 2 == 0)
+        primos_total = sum(1 for n in todos_numeros if n in {2,3,5,7,11,13,17,19,23})
+        soma_total = sum(todos_numeros)
+        prob_media_total = np.mean([self.probabilidades.get(n, 0) for n in todos_numeros])
+        
+        conteudo += f"Pares totais: {pares_total} | Ímpares: {15 - pares_total}\n"
+        conteudo += f"Primos totais: {primos_total}\n"
+        conteudo += f"Soma total: {soma_total}\n"
+        conteudo += f"Probabilidade média total: {prob_media_total:.2%}\n"
         
         return conteudo
 
@@ -1329,168 +1404,250 @@ if st.session_state.concursos:
             )
 
     # NOVA ABA 6 - CARTÕES COM REGRAS ESPECÍFICAS (AGORA AUTOMÁTICO)
+    # NOVA ABA 6 - CARTÕES COM REGRAS ESPECÍFICAS (VERSÃO CORRETA)
     with abas[5]:
         st.subheader("🎰 CARTÕES COM REGRAS ESPECÍFICAS")
         st.markdown("""
-        **Regras baseadas na imagem fornecida:**
+        **Regras EXATAS da imagem:**
         
-        | Tipo de Dezenas | Número de Linhas Permitidas |
-        |----------------|----------------------------|
-        | **1 Dezena**   | Máximo 1 linha            |
-        | **2 Dezenas**  | 1 a 2 linhas              |
-        | **3 Dezenas**  | 1 a 3 linhas              |
-        | **4 Dezenas**  | 1 a 2 linhas              |
-        | **5 Dezenas**  | Máximo 1 linha            |
+        | Tipo | Linhas Permitidas | Exemplo Válido | Total Números |
+        |------|-------------------|----------------|---------------|
+        | **1** | Máximo 1 linha   | 1×15 = 15      | 15 números    |
+        | **2** | 1 a 2 linhas     | 2×8 = 16*      | 15-16 números |
+        | **3** | 1 a 3 linhas     | 3×5 = 15       | 15 números    |
+        | **4** | 1 a 2 linhas     | 4×4 = 16*      | 15-16 números |
+        | **5** | Máximo 1 linha   | 5×3 = 15       | 15 números    |
         
-        **💡 DECISÃO AUTOMÁTICA:** O sistema decide quantas dezenas e linhas usar com base nas estatísticas!
+        *Ajustado para dar exatamente 15 números
+        
+        **💡 COMO FUNCIONA:**
+        1. Sistema escolhe automaticamente 1-5 dezenas por linha
+        2. Escolhe 1-3 linhas (dentro das regras)
+        3. Distribui os **15 melhores números** nessas linhas
+        4. **Cada linha segue exatamente a regra escolhida**
+        5. **Soma total: SEMPRE 15 números** (cartão completo)
         """)
         
-        # Inicializar gerador com as probabilidades do seu código
+        # Inicializar gerador
         gerador_regras = GeradorCartoesRegrasEspecificas(probs)
         
-        # Análise das estatísticas atuais
-        st.markdown("### 📊 Análise das Probabilidades Atuais")
+        # Mostrar estatísticas atuais
+        st.markdown("### 📊 Análise das Probabilidades para Decisão")
         
-        col_analise1, col_analise2 = st.columns(2)
+        col_stat1, col_stat2 = st.columns(2)
         
-        with col_analise1:
-            # Calcular estatísticas básicas
-            valores_probabilidade = [prob for _, prob in probs.items()]
-            media_prob = np.mean(valores_probabilidade)
-            desvio_prob = np.std(valores_probabilidade)
+        with col_stat1:
+            # Estatísticas básicas
+            valores_prob = [prob for _, prob in probs.items()]
+            media = np.mean(valores_prob)
+            desvio = np.std(valores_prob)
             
-            st.metric("Média de probabilidade", f"{media_prob:.2%}")
-            st.metric("Desvio padrão", f"{desvio_prob:.4f}")
+            st.metric("Média probabilidade", f"{media:.2%}")
+            st.metric("Desvio padrão", f"{desvio:.4f}")
+            st.metric("Variação", f"{(desvio/media)*100:.1f}%")
             
             # Top números
             numeros_ordenados = sorted(probs.items(), key=lambda x: x[1], reverse=True)
-            top5 = [f"{n} ({prob:.1%})" for n, prob in numeros_ordenados[:5]]
-            st.write("**Top 5 números mais prováveis:**")
-            for item in top5:
-                st.write(f"- {item}")
+            st.write("**Top 3 mais prováveis:**")
+            for i, (num, prob) in enumerate(numeros_ordenados[:3], 1):
+                st.write(f"{i}. Número {num}: {prob:.2%}")
         
-        with col_analise2:
-            # Distribuição
-            baixas_prob = sum(1 for prob in valores_probabilidade if prob < 0.4)
-            medias_prob = sum(1 for prob in valores_probabilidade if 0.4 <= prob <= 0.6)
-            altas_prob = sum(1 for prob in valores_probabilidade if prob > 0.6)
+        with col_stat2:
+            # Distribuição por faixas
+            baixas = sum(1 for prob in valores_prob if prob < 0.4)
+            medias = sum(1 for prob in valores_prob if 0.4 <= prob <= 0.6)
+            altas = sum(1 for prob in valores_prob if prob > 0.6)
             
-            st.metric("Probabilidades baixas (<40%)", baixas_prob)
-            st.metric("Probabilidades médias (40-60%)", medias_prob)
-            st.metric("Probabilidades altas (>60%)", altas_prob)
+            st.metric("Baixas (<40%)", baixas)
+            st.metric("Médias (40-60%)", medias)
+            st.metric("Altas (>60%)", altas)
             
-            # Variação
-            variacao = (max(valores_probabilidade) - min(valores_probabilidade)) / media_prob
-            st.metric("Variação relativa", f"{variacao:.1%}")
+            # Força dos tops
+            top5_avg = np.mean([prob for _, prob in numeros_ordenados[:5]])
+            top10_avg = np.mean([prob for _, prob in numeros_ordenados[:10]])
+            st.metric("Média top 5", f"{top5_avg:.2%}")
+            st.metric("Média top 10", f"{top10_avg:.2%}")
         
-        # Botão para gerar automaticamente
-        st.markdown("### 🎲 Gerar Cartão Automaticamente")
+        # Botão para gerar
+        st.markdown("### 🎯 Gerar Cartão com Distribuição por Regras")
         
-        if st.button("🚀 Gerar Cartão com Decisão Automática", type="primary"):
+        if st.button("🚀 Gerar Cartão com Regras Específicas", type="primary"):
             try:
-                with st.spinner("Analisando estatísticas e gerando cartão..."):
-                    # Gerar cartão automaticamente
-                    resultado = gerador_regras.gerar_cartao_automatico()
+                with st.spinner("Calculando melhor distribuição dos 15 números..."):
+                    # Gerar cartão completo
+                    resultado = gerador_regras.gerar_cartao_completo()
                     
                     # Salvar no session state
                     st.session_state.cartoes_regras_especificas = {
                         "resultado": resultado,
-                        "probabilidades": probs
+                        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     }
                     
-                    st.success("Cartão gerado automaticamente com sucesso!")
+                    st.success("✅ Cartão gerado com sucesso!")
                     
-                    # Mostrar decisão tomada
+                    # Mostrar decisão
+                    tipo = resultado["tipo_dezenas"]
+                    linhas = resultado["num_linhas"]
+                    regra = gerador_regras.regras[tipo]
+                    
                     st.info(f"""
-                    **Decisão do sistema:**
-                    - **Tipo de dezenas:** {resultado['tipo_dezenas']} ({gerador_regras.regras[resultado['tipo_dezenas']]['nome']})
-                    - **Número de linhas:** {resultado['num_linhas']}
-                    - **Regra aplicada:** {gerador_regras.regras[resultado['tipo_dezenas']]['nome']} - Permitido {gerador_regras.regras[resultado['tipo_dezenas']]['min']} a {gerador_regras.regras[resultado['tipo_dezenas']]['max']} linha(s)
+                    **📋 DECISÃO DO SISTEMA:**
+                    - **Regra aplicada:** {regra['nome']}
+                    - **Números por linha:** {tipo}
+                    - **Total de linhas:** {linhas}
+                    - **Total números:** {tipo} × {linhas} = {tipo * linhas}
+                    - **Combinação:** {tipo} dezenas × {linhas} linhas
                     """)
             
             except Exception as e:
-                st.error(f"❌ Erro ao gerar cartão: {str(e)}")
+                st.error(f"❌ Erro: {str(e)}")
         
-        # Mostrar cartão gerado
+        # Mostrar resultados
         if "cartoes_regras_especificas" in st.session_state:
             dados = st.session_state.cartoes_regras_especificas
             resultado = dados["resultado"]
-            cartao = resultado["cartao"]
-            tipo_dezenas = resultado["tipo_dezenas"]
-            num_linhas = resultado["num_linhas"]
+            tipo = resultado["tipo_dezenas"]
+            linhas = resultado["num_linhas"]
+            regra = gerador_regras.regras[tipo]
             
-            st.markdown("### 📋 Cartão Gerado Automaticamente")
+            st.markdown(f"### 🎰 CARTÃO GERADO: {regra['nome']} × {linhas} Linhas")
             
-            # Mostrar cada linha do cartão
-            for idx, linha in enumerate(cartao, 1):
-                with st.expander(f"Linha {idx}: {linha}", expanded=True):
-                    # Mostrar cartão formatado
-                    st.markdown("#### Visualização do Cartão:")
-                    cartao_formatado = gerador_regras.formatar_linha_cartao(linha, tipo_dezenas)
-                    for linha_cartao in cartao_formatado:
-                        st.code(" ".join(linha_cartao))
+            # Cartão visual
+            st.markdown("#### Cartão da Lotofácil (L1, L2... = Linha da regra):")
+            cartao_completo = resultado["cartao_completo"]
+            
+            # Criar visualização bonita
+            for linha_cartao in cartao_completo:
+                col1, col2, col3, col4, col5 = st.columns(5)
+                cols = [col1, col2, col3, col4, col5]
+                
+                for idx, celula in enumerate(linha_cartao):
+                    with cols[idx]:
+                        if "[" in celula:  # Número marcado
+                            if "L" in celula:  # Tem indicação de linha
+                                num = celula.split("L")[0].replace("[", "").replace("]", "").strip()
+                                linha_num = celula.split("L")[1]
+                                st.markdown(f"<div style='background-color: #4CAF50; color: white; padding: 10px; border-radius: 5px; text-align: center;'>"
+                                          f"<strong>{num}</strong><br><small>L{linha_num}</small></div>", 
+                                          unsafe_allow_html=True)
+                            else:
+                                num = celula.replace("[", "").replace("]", "").strip()
+                                st.markdown(f"<div style='background-color: #2196F3; color: white; padding: 10px; border-radius: 5px; text-align: center;'>"
+                                          f"<strong>{num}</strong></div>", 
+                                          unsafe_allow_html=True)
+                        else:  # Número não marcado
+                            num = celula.strip()
+                            st.markdown(f"<div style='background-color: #f5f5f5; padding: 10px; border-radius: 5px; text-align: center; color: #666;'>"
+                                      f"{num}</div>", 
+                                      unsafe_allow_html=True)
+            
+            # Detalhes das linhas
+            st.markdown("#### 📋 Distribuição Detalhada das Linhas:")
+            
+            for dist in resultado["distribuicao"]:
+                with st.expander(f"Linha {dist['linha']}: {dist['numeros']}", expanded=True):
+                    col_lin1, col_lin2, col_lin3 = st.columns(3)
                     
-                    # Estatísticas da linha
-                    col1, col2, col3, col4 = st.columns(4)
+                    with col_lin1:
+                        st.metric("Pares", dist["pares"])
+                        st.metric("Ímpares", dist["impares"])
                     
-                    with col1:
-                        pares = sum(1 for n in linha if n % 2 == 0)
-                        st.metric("Pares", pares)
+                    with col_lin2:
+                        st.metric("Primos", dist["primos"])
+                        st.metric("Soma", dist["soma"])
                     
-                    with col2:
-                        impares = len(linha) - pares
-                        st.metric("Ímpares", impares)
+                    with col_lin3:
+                        st.metric("Prob. média", f"{dist['probabilidade_media']:.2%}")
+                        st.metric("Prob. total", f"{dist['probabilidade_total']:.2%}")
                     
-                    with col3:
-                        primos = sum(1 for n in linha if n in {2,3,5,7,11,13,17,19,23})
-                        st.metric("Primos", primos)
-                    
-                    with col4:
-                        soma = sum(linha)
-                        st.metric("Soma", soma)
-                    
-                    # Probabilidades dos números
-                    st.markdown("#### Probabilidades dos Números:")
-                    for num in linha:
+                    # Probabilidades individuais
+                    st.markdown("**Probabilidades dos números:**")
+                    for num in dist["numeros"]:
                         prob = probs.get(num, 0)
                         st.progress(prob, text=f"Número {num}: {prob:.2%}")
             
-            # Botão para download
+            # Estatísticas gerais
+            st.markdown("#### 📊 Estatísticas Gerais do Cartão:")
+            
+            todos_numeros = resultado["melhores_15"]
+            pares_total = sum(1 for n in todos_numeros if n % 2 == 0)
+            primos_total = sum(1 for n in todos_numeros if n in {2,3,5,7,11,13,17,19,23})
+            soma_total = sum(todos_numeros)
+            prob_media_total = np.mean([probs.get(n, 0) for n in todos_numeros])
+            
+            col_ger1, col_ger2, col_ger3, col_ger4 = st.columns(4)
+            
+            with col_ger1:
+                st.metric("Pares totais", pares_total)
+                st.metric("Ímpares totais", 15 - pares_total)
+            
+            with col_ger2:
+                st.metric("Primos totais", primos_total)
+                st.metric("Não primos", 15 - primos_total)
+            
+            with col_ger3:
+                st.metric("Soma total", soma_total)
+                st.metric("Média por número", f"{soma_total/15:.1f}")
+            
+            with col_ger4:
+                st.metric("Prob. média total", f"{prob_media_total:.2%}")
+                st.metric("Força do cartão", f"{(prob_media_total/0.5-1)*100:.1f}%")
+            
+            # Download
             st.markdown("### 💾 Exportar Cartão")
             
-            conteudo = gerador_regras.gerar_conteudo_download(resultado)
+            conteudo = gerador_regras.formatar_para_download(resultado)
             
             st.download_button(
-                "📥 Baixar Cartão em TXT",
+                "📥 Baixar Cartão Completo",
                 data=conteudo,
-                file_name=f"cartao_auto_{tipo_dezenas}dezenas_{num_linhas}linhas.txt",
+                file_name=f"cartao_regras_{tipo}dezenas_{linhas}linhas.txt",
                 mime="text/plain"
             )
         
-        # Seção de ajuda
-        with st.expander("ℹ️ Como funciona a decisão automática"):
+        # Explicação completa
+        with st.expander("📚 Explicação Detalhada do Sistema"):
             st.markdown("""
-            **Algoritmo de decisão:**
+            **🎯 OBJETIVO DO SISTEMA:**
+            Criar cartões da Lotofácil com **EXATAMENTE 15 NÚMEROS** distribuídos 
+            em linhas que seguem **EXATAMENTE AS REGRAS DA IMAGEM**.
             
-            1. **Análise das probabilidades:**
-               - Calcula média e desvio padrão das probabilidades
-               - Analisa distribuição (baixas, médias, altas)
+            **🔢 COMO FUNCIONA:**
             
-            2. **Decisão do tipo de dezenas (1-5):**
-               - **Baixa variação** → 3 dezenas (equilibrado)
-               - **Números muito prováveis** → 1-2 dezenas (foco)
-               - **Muitos números prováveis** → 4-5 dezenas (abrangente)
+            1. **ANÁLISE ESTATÍSTICA:**
+               - Sistema analisa as probabilidades de todos os 25 números
+               - Calcula média, desvio padrão, distribuição
+               - Identifica números "fortes", "médios" e "fracos"
             
-            3. **Decisão do número de linhas:**
-               - Segue as regras da imagem
-               - **Consistência alta** → mais linhas
-               - **Consistência baixa** → menos linhas
+            2. **DECISÃO DA REGRA:**
+               - **1 Dezena:** Quando há 1 número MUITO forte
+               - **2 Dezenas:** Quando há 2 números muito fortes  
+               - **3 Dezenas:** Quando há 3 números bem destacados
+               - **4 Dezenas:** Quando há 4-5 números consistentes
+               - **5 Dezenas:** Quando muitos números têm probabilidade similar
             
-            **Regras automáticas:**
-            - O sistema NÃO permite violar as regras da imagem
-            - Cada decisão é baseada nas estatísticas atuais
-            - As linhas são geradas estrategicamente
+            3. **DISTRIBUIÇÃO DOS 15 NÚMEROS:**
+               - Pega os **15 números mais prováveis**
+               - Divide em linhas com número fixo de números (1-5)
+               - **Exemplo (3 Dezenas × 5 Linhas):**
+                 - Linha 1: 3 números (1-3 mais prováveis)
+                 - Linha 2: 3 números (4-6 mais prováveis)
+                 - Linha 3: 3 números (7-9 mais prováveis)
+                 - Linha 4: 3 números (10-12 mais prováveis)
+                 - Linha 5: 3 números (13-15 mais prováveis)
+            
+            4. **CARTÃO FINAL:**
+               - **Total: SEMPRE 15 números** (cartão completo jogável)
+               - **Cada linha segue a regra escolhida**
+               - **Visualização mostra em qual linha cada número está**
+            
+            **📈 BENEFÍCIOS:**
+            - Cartões **completamente jogáveis** (15 números)
+            - Distribuição **estatisticamente otimizada**
+            - **Transparência total** na decisão do sistema
+            - **Flexibilidade** para diferentes situações estatísticas
             """)
+   
 
     # Aba 7 - Padrões Linha×Coluna (original)
     with abas[6]:
@@ -1526,6 +1683,7 @@ if st.session_state.concursos:
                 futuros = sugerir_padroes_futuros(freq_linhas, freq_colunas, n=5)
                 for i, p in enumerate(futuros, 1):
                     st.write(f"**Padrão Futuro {i}:** Linhas {p['linhas']} | Colunas {p['colunas']}")
+    
 
     # Aba 8 - Conferência (ATUALIZADA com nova estratégia)
     with abas[7]:
