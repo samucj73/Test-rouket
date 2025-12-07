@@ -1673,7 +1673,7 @@ if st.session_state.concursos:
             valor_padrao = min(100, len(concursos))
             janela_lc = st.slider(
                 "Concursos a considerar (mais recentes)", 
-                min_value=20, 
+                min_value=10, 
                 max_value=max_concursos, 
                 value=valor_padrao, 
                 step=10
