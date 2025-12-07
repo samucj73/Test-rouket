@@ -58,7 +58,132 @@ def capturar_ultimos_resultados(qtd=250):
         return [], None
 
 # =========================
-# NOVA CLASSE: Estratégia de Grupos (Baseada no documento)
+# NOVA CLASSE: Gerador de Cartões com Regras Específicas
+# =========================
+class GeradorCartoesRegrasEspecificas:
+    def __init__(self, probabilidades):
+        self.probabilidades = probabilidades
+        self.numeros = list(range(1, 26))
+        
+        # Definir as regras específicas da imagem
+        self.regras = {
+            1: {"min": 1, "max": 1, "nome": "1 Dezena"},
+            2: {"min": 1, "max": 2, "nome": "2 Dezenas"},
+            3: {"min": 1, "max": 3, "nome": "3 Dezenas"},
+            4: {"min": 1, "max": 2, "nome": "4 Dezenas"},
+            5: {"min": 1, "max": 1, "nome": "5 Dezenas"}
+        }
+    
+    def validar_configuracao(self, tipo_dezenas, num_linhas):
+        """Valida se a configuração está dentro das regras da imagem"""
+        if tipo_dezenas not in self.regras:
+            raise ValueError(f"Tipo {tipo_dezenas} inválido. Use valores de 1 a 5.")
+        
+        regra = self.regras[tipo_dezenas]
+        if num_linhas < regra["min"] or num_linhas > regra["max"]:
+            raise ValueError(
+                f"Para {tipo_dezenas} dezena(s): "
+                f"Permitido {regra['min']} a {regra['max']} linha(s). "
+                f"Você selecionou {num_linhas}."
+            )
+        return True
+    
+    def gerar_linha_estatistica(self, tipo_dezenas):
+        """Gera uma linha com base nas estatísticas/probabilidades"""
+        # Ordenar números por probabilidade (mais prováveis primeiro)
+        numeros_ordenados = sorted(self.probabilidades.items(), 
+                                  key=lambda x: x[1], 
+                                  reverse=True)
+        
+        # Pegar os N números mais prováveis, onde N = tipo_dezenas
+        numeros_selecionados = [n for n, _ in numeros_ordenados[:tipo_dezenas]]
+        
+        return sorted(numeros_selecionados)
+    
+    def gerar_linha_aleatoria(self, tipo_dezenas):
+        """Gera uma linha aleatória (alternativa)"""
+        return sorted(random.sample(self.numeros, tipo_dezenas))
+    
+    def gerar_cartao_estatistico(self, tipo_dezenas, num_linhas):
+        """Gera um cartão usando estatísticas"""
+        self.validar_configuracao(tipo_dezenas, num_linhas)
+        
+        cartao = []
+        for _ in range(num_linhas):
+            linha = self.gerar_linha_estatistica(tipo_dezenas)
+            cartao.append(linha)
+        
+        return cartao
+    
+    def gerar_cartao_aleatorio(self, tipo_dezenas, num_linhas):
+        """Gera um cartão aleatório"""
+        self.validar_configuracao(tipo_dezenas, num_linhas)
+        
+        cartao = []
+        for _ in range(num_linhas):
+            linha = self.gerar_linha_aleatoria(tipo_dezenas)
+            cartao.append(linha)
+        
+        return cartao
+    
+    def gerar_cartao_misto(self, tipo_dezenas, num_linhas):
+        """Gera um cartão misto (metade estatística, metade aleatória)"""
+        self.validar_configuracao(tipo_dezenas, num_linhas)
+        
+        cartao = []
+        for i in range(num_linhas):
+            if i % 2 == 0:
+                linha = self.gerar_linha_estatistica(tipo_dezenas)
+            else:
+                linha = self.gerar_linha_aleatoria(tipo_dezenas)
+            cartao.append(linha)
+        
+        return cartao
+    
+    def formatar_linha_cartao(self, linha, tipo_dezenas):
+        """Formata uma linha como cartão da Lotofácil 5x5"""
+        cartao = []
+        for i in range(5):
+            linha_cartao = []
+            for j in range(5):
+                numero = i * 5 + j + 1
+                if numero in linha:
+                    linha_cartao.append(f"[{numero:2d}]")
+                else:
+                    linha_cartao.append(f" {numero:2d} ")
+            cartao.append(linha_cartao)
+        return cartao
+    
+    def gerar_conteudo_download(self, cartao, tipo_dezenas, metodo):
+        """Gera conteúdo para download"""
+        conteudo = f"LOTOFÁCIL - CARTÕES COM {tipo_dezenas} DEZENA(S)\n"
+        conteudo += "=" * 50 + "\n"
+        conteudo += f"Método de geração: {metodo}\n"
+        conteudo += f"Regra aplicada: {self.regras[tipo_dezenas]['nome']}\n"
+        conteudo += f"Número de linhas: {len(cartao)}\n"
+        conteudo += "=" * 50 + "\n\n"
+        
+        for idx, linha in enumerate(cartao, 1):
+            conteudo += f"Linha {idx}: {linha}\n"
+            
+            # Formatar como cartão
+            cartao_formatado = self.formatar_linha_cartao(linha, tipo_dezenas)
+            for linha_cartao in cartao_formatado:
+                conteudo += " ".join(linha_cartao) + "\n"
+            
+            # Estatísticas da linha
+            pares = sum(1 for n in linha if n % 2 == 0)
+            primos = sum(1 for n in linha if n in {2,3,5,7,11,13,17,19,23})
+            soma = sum(linha)
+            
+            conteudo += f"Pares: {pares} | Ímpares: {tipo_dezenas - pares} "
+            conteudo += f"| Primos: {primos} | Soma: {soma}\n"
+            conteudo += "-" * 50 + "\n\n"
+        
+        return conteudo
+
+# =========================
+# CLASSE ORIGINAL: Estratégia de Grupos (Baseada no documento)
 # =========================
 class EstrategiaGrupos:
     def __init__(self, probabilidades, concursos):
@@ -737,7 +862,7 @@ def sugerir_padroes_futuros(freq_linhas, freq_colunas, n=5):
     return futuros
 
 # =========================
-# FUNÇÕES DE PERSISTÊNCIA (ORIGINAL)
+# FUNÇÕES DE PERSISTÊNCIA (ATUALIZADA)
 # =========================
 def salvar_estado():
     estado = {
@@ -746,7 +871,8 @@ def salvar_estado():
         'cartoes_gerados_padrao': st.session_state.cartoes_gerados_padrao,
         'info_ultimo_concurso': st.session_state.info_ultimo_concurso,
         'combinacoes_combinatorias': st.session_state.combinacoes_combinatorias,
-        'combinacoes_estrategia': st.session_state.get('combinacoes_estrategia', [])  # NOVO
+        'combinacoes_estrategia': st.session_state.get('combinacoes_estrategia', []),
+        'cartoes_regras_especificas': st.session_state.get('cartoes_regras_especificas', {})  # NOVO
     }
     return estado
 
@@ -761,10 +887,12 @@ def carregar_estado():
         st.session_state.info_ultimo_concurso = None
     if "combinacoes_combinatorias" not in st.session_state:
         st.session_state.combinacoes_combinatorias = {}
-    if "combinacoes_estrategia" not in st.session_state:  # NOVO
+    if "combinacoes_estrategia" not in st.session_state:
         st.session_state.combinacoes_estrategia = []
-    if "info_estrategia" not in st.session_state:  # NOVO
+    if "info_estrategia" not in st.session_state:
         st.session_state.info_estrategia = {}
+    if "cartoes_regras_especificas" not in st.session_state:  # NOVO
+        st.session_state.cartoes_regras_especificas = {}
 
 # =========================
 # Streamlit - Estado
@@ -796,13 +924,14 @@ if st.session_state.concursos:
     quentes_frios = ia.quentes_frios()
     pares_impares_primos = ia.pares_impares_primos()
 
-    # NOVA ABA ADICIONADA: Estratégia de Grupos
+    # ABAS PRINCIPAIS (ATUALIZADO COM NOVA ABA)
     abas = st.tabs([
         "📊 Estatísticas", 
         "🧠 Gerar Cartões", 
         "🧩 Gerar Cartões por Padrões",
         "🔢 Análises Combinatórias",
-        "🎯 ESTRATÉGIA DE GRUPOS",  # NOVA ABA
+        "🎯 ESTRATÉGIA DE GRUPOS",
+        "🎰 CARTÕES COM REGRAS ESPECÍFICAS",  # NOVA ABA
         "📐 Padrões Linha×Coluna",
         "✅ Conferência", 
         "📤 Conferir Arquivo TXT"
@@ -932,7 +1061,7 @@ if st.session_state.concursos:
                     mime="text/plain"
                 )
 
-    # NOVA ABA 5 - ESTRATÉGIA DE GRUPOS
+    # Aba 5 - ESTRATÉGIA DE GRUPOS (original)
     with abas[4]:
         st.subheader("🎯 ESTRATÉGIA DE GRUPOS A/B")
         st.markdown("""
@@ -1067,8 +1196,162 @@ if st.session_state.concursos:
                 mime="text/plain"
             )
 
-    # Aba 6 - Padrões Linha×Coluna (original)
+    # NOVA ABA 6 - CARTÕES COM REGRAS ESPECÍFICAS
     with abas[5]:
+        st.subheader("🎰 CARTÕES COM REGRAS ESPECÍFICAS")
+        st.markdown("""
+        **Regras baseadas na imagem fornecida:**
+        
+        | Tipo de Dezenas | Número de Linhas Permitidas |
+        |----------------|----------------------------|
+        | **1 Dezena**   | Máximo 1 linha            |
+        | **2 Dezenas**  | 1 a 2 linhas              |
+        | **3 Dezenas**  | 1 a 3 linhas              |
+        | **4 Dezenas**  | 1 a 2 linhas              |
+        | **5 Dezenas**  | Máximo 1 linha            |
+        
+        **Geração baseada nas estatísticas do seu sistema!**
+        """)
+        
+        # Inicializar gerador com as probabilidades do seu código
+        gerador_regras = GeradorCartoesRegrasEspecificas(probs)
+        
+        # Configuração do tipo de cartão
+        col_tipo, col_linhas = st.columns(2)
+        
+        with col_tipo:
+            tipo_dezenas = st.selectbox(
+                "Selecione o tipo de dezenas:",
+                options=[1, 2, 3, 4, 5],
+                format_func=lambda x: f"{x} Dezena{'s' if x > 1 else ''}",
+                help="Quantidade de números por linha"
+            )
+        
+        with col_linhas:
+            # Obter limites da regra
+            regra = gerador_regras.regras[tipo_dezenas]
+            
+            # Criar slider com limites específicos
+            num_linhas = st.slider(
+                f"Número de linhas (permitido: {regra['min']} a {regra['max']}):",
+                min_value=regra["min"],
+                max_value=regra["max"],
+                value=regra["min"],
+                help=f"Regra: {regra['nome']} - Permitido {regra['min']} a {regra['max']} linha(s)"
+            )
+        
+        # Método de geração
+        metodo_geracao = st.radio(
+            "Método de geração:",
+            options=["Estatístico", "Aleatório", "Misto"],
+            horizontal=True,
+            help="""
+            • **Estatístico**: Baseado nas probabilidades calculadas\n
+            • **Aleatório**: Seleção completamente aleatória\n
+            • **Misto**: Alterna entre estatístico e aleatório
+            """
+        )
+        
+        # Botão para gerar
+        if st.button("🎲 Gerar Cartões com Regras Específicas", type="primary"):
+            try:
+                with st.spinner(f"Gerando {num_linhas} linha(s) com {tipo_dezenas} dezena(s)..."):
+                    # Gerar cartão baseado no método selecionado
+                    if metodo_geracao == "Estatístico":
+                        cartao = gerador_regras.gerar_cartao_estatistico(tipo_dezenas, num_linhas)
+                    elif metodo_geracao == "Aleatório":
+                        cartao = gerador_regras.gerar_cartao_aleatorio(tipo_dezenas, num_linhas)
+                    else:  # Misto
+                        cartao = gerador_regras.gerar_cartao_misto(tipo_dezenas, num_linhas)
+                    
+                    # Salvar no session state
+                    st.session_state.cartoes_regras_especificas = {
+                        "tipo": tipo_dezenas,
+                        "linhas": num_linhas,
+                        "metodo": metodo_geracao,
+                        "cartao": cartao
+                    }
+                    
+                    st.success(f"Cartão gerado com sucesso!")
+            
+            except ValueError as e:
+                st.error(f"❌ {e}")
+        
+        # Mostrar cartão gerado
+        if "cartoes_regras_especificas" in st.session_state:
+            dados = st.session_state.cartoes_regras_especificas
+            cartao = dados["cartao"]
+            
+            st.markdown("### 📋 Cartão Gerado")
+            
+            # Mostrar cada linha do cartão
+            for idx, linha in enumerate(cartao, 1):
+                with st.expander(f"Linha {idx}: {linha}", expanded=True):
+                    # Mostrar cartão formatado
+                    st.markdown("#### Visualização do Cartão:")
+                    cartao_formatado = gerador_regras.formatar_linha_cartao(linha, dados["tipo"])
+                    for linha_cartao in cartao_formatado:
+                        st.code(" ".join(linha_cartao))
+                    
+                    # Estatísticas da linha
+                    col1, col2, col3, col4 = st.columns(4)
+                    
+                    with col1:
+                        pares = sum(1 for n in linha if n % 2 == 0)
+                        st.metric("Pares", pares)
+                    
+                    with col2:
+                        impares = len(linha) - pares
+                        st.metric("Ímpares", impares)
+                    
+                    with col3:
+                        primos = sum(1 for n in linha if n in {2,3,5,7,11,13,17,19,23})
+                        st.metric("Primos", primos)
+                    
+                    with col4:
+                        soma = sum(linha)
+                        st.metric("Soma", soma)
+                    
+                    # Probabilidades dos números
+                    st.markdown("#### Probabilidades dos Números:")
+                    for num in linha:
+                        prob = probs.get(num, 0)
+                        st.progress(prob, text=f"Número {num}: {prob:.2%}")
+            
+            # Botão para download
+            st.markdown("### 💾 Exportar Cartão")
+            
+            conteudo = gerador_regras.gerar_conteudo_download(
+                cartao, 
+                dados["tipo"], 
+                dados["metodo"]
+            )
+            
+            st.download_button(
+                "📥 Baixar Cartão em TXT",
+                data=conteudo,
+                file_name=f"cartao_{dados['tipo']}dezenas_{len(cartao)}linhas.txt",
+                mime="text/plain"
+            )
+        
+        # Seção de ajuda
+        with st.expander("ℹ️ Como usar esta aba"):
+            st.markdown("""
+            1. **Selecione o tipo de dezenas** (1 a 5) - Quantos números por linha
+            2. **Ajuste o número de linhas** - O slider já limita conforme as regras
+            3. **Escolha o método de geração**:
+               - *Estatístico*: Usa as probabilidades do seu sistema
+               - *Aleatório*: Seleção completamente aleatória
+               - *Misto*: Combina ambos os métodos
+            
+            **Regras automáticas:**
+            - O sistema não permitirá violar as regras da imagem
+            - As probabilidades são atualizadas conforme seus concursos
+            - Cada linha é gerada individualmente
+            """)
+
+    # Aba 7 - Padrões Linha×Coluna (original)
+    with abas[6]:
         st.subheader("📐 Padrões de Linhas × Colunas")
         concursos = st.session_state.concursos
         if not concursos:
@@ -1101,8 +1384,8 @@ if st.session_state.concursos:
                 for i, p in enumerate(futuros, 1):
                     st.write(f"**Padrão Futuro {i}:** Linhas {p['linhas']} | Colunas {p['colunas']}")
 
-    # Aba 7 - Conferência (ATUALIZADA com nova estratégia)
-    with abas[6]:
+    # Aba 8 - Conferência (ATUALIZADA com nova estratégia)
+    with abas[7]:
         st.subheader("🎯 Conferência de Cartões")
         if st.session_state.info_ultimo_concurso:
             info = st.session_state.info_ultimo_concurso
@@ -1154,7 +1437,7 @@ if st.session_state.concursos:
                                     st.write(f"Soma: {soma}")
                                 st.write("---")
                 
-                # NOVO: Conferir Combinações da Estratégia
+                # Conferir Combinações da Estratégia
                 if st.session_state.combinacoes_estrategia:
                     st.markdown("### 🎯 Combinações da Estratégia de Grupos")
                     estrategia = EstrategiaGrupos(probs, st.session_state.concursos)
@@ -1201,9 +1484,51 @@ if st.session_state.concursos:
                                     acertos_b = len(set(combo) & set(grupo_b) & set(info['dezenas']))
                                     st.metric("Acertos Grupo A", acertos_a)
                                     st.metric("Acertos Grupo B", acertos_b)
+                
+                # NOVO: Conferir Cartões com Regras Específicas
+                if "cartoes_regras_especificas" in st.session_state:
+                    dados = st.session_state.cartoes_regras_especificas
+                    cartao = dados["cartao"]
+                    
+                    st.markdown("### 🎰 Cartões com Regras Específicas")
+                    
+                    for idx, linha in enumerate(cartao, 1):
+                        acertos = len(set(linha) & set(info['dezenas']))
+                        
+                        with st.expander(f"Linha {idx} ({dados['tipo']} dezenas): {acertos} acertos - {linha}"):
+                            # Cartão formatado
+                            st.markdown("#### Cartão:")
+                            cartao_formatado = GeradorCartoesRegrasEspecificas(probs).formatar_linha_cartao(linha, dados["tipo"])
+                            for linha_cartao in cartao_formatado:
+                                st.code(" ".join(linha_cartao))
+                            
+                            # Estatísticas
+                            col_r1, col_r2 = st.columns(2)
+                            
+                            with col_r1:
+                                pares = sum(1 for n in linha if n % 2 == 0)
+                                primos = sum(1 for n in linha if n in {2,3,5,7,11,13,17,19,23})
+                                soma = sum(linha)
+                                
+                                st.metric("Pares", pares)
+                                st.metric("Ímpares", len(linha) - pares)
+                                st.metric("Primos", primos)
+                                st.metric("Soma", soma)
+                            
+                            with col_r2:
+                                # Mostrar quais números acertaram
+                                acertos_numeros = sorted(set(linha) & set(info['dezenas']))
+                                st.metric("Acertos", acertos)
+                                if acertos_numeros:
+                                    st.write(f"**Números acertados:** {acertos_numeros}")
+                                
+                                # Mostrar números que não saíram
+                                erros_numeros = sorted(set(linha) - set(info['dezenas']))
+                                if erros_numeros:
+                                    st.write(f"**Números não sorteados:** {erros_numeros}")
 
-    # Aba 8 - Conferir Arquivo TXT (original)
-    with abas[7]:
+    # Aba 9 - Conferir Arquivo TXT (original)
+    with abas[8]:
         st.subheader("📤 Conferir Cartões de um Arquivo TXT")
         uploaded_file = st.file_uploader("Faça upload do arquivo TXT com os cartões (15 dezenas separadas por vírgula)", type="txt")
         if uploaded_file:
@@ -1252,7 +1577,10 @@ with st.sidebar:
     if st.session_state.combinacoes_combinatorias:
         total_combinacoes = sum(len(combinacoes) for combinacoes in st.session_state.combinacoes_combinatorias.values())
         st.write(f"Combinações combinatorias: {total_combinacoes}")
-    if st.session_state.combinacoes_estrategia:  # NOVO
+    if st.session_state.combinacoes_estrategia:
         st.write(f"Combinações estratégia: {len(st.session_state.combinacoes_estrategia)}")
+    if "cartoes_regras_especificas" in st.session_state and st.session_state.cartoes_regras_especificas:
+        dados = st.session_state.cartoes_regras_especificas
+        st.write(f"Cartões regras específicas: {len(dados.get('cartao', []))} linha(s)")
 
 st.markdown("<hr><p style='text-align: center;'>SAMUCJ TECHNOLOGY</p>", unsafe_allow_html=True)
