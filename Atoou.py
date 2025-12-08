@@ -1463,7 +1463,7 @@ def gerar_poster_individual_westham(fixture: dict, analise: dict) -> io.BytesIO:
     FONTE_ESTATISTICAS = criar_fonte(35)
 
     # Título PRINCIPAL - ALERTA
-    tipo_alerta = "🎯 ALERTA OVER" if analise["tipo_aposta"] == "over" else "🛡️ ALERTA UNDER"
+    tipo_alerta = "🎯 ALERTA " if analise["tipo_aposta"] == "over" else "🛡️ ALERTA UNDER"
     titulo_text = f"{tipo_alerta} DE GOLS"
     try:
         titulo_bbox = draw.textbbox((0, 0), titulo_text, font=FONTE_ALERTA)
@@ -1504,7 +1504,7 @@ def gerar_poster_individual_westham(fixture: dict, analise: dict) -> io.BytesIO:
     # ESCUDOS DOS TIMES
     TAMANHO_ESCUDO = 180
     TAMANHO_QUADRADO = 220
-    ESPACO_ENTRE_ESCUDOS = 500
+    ESPACO_ENTRE_ESCUDOS = 600
 
     # Calcular posição central
     largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
@@ -1614,14 +1614,14 @@ def gerar_poster_individual_westham(fixture: dict, analise: dict) -> io.BytesIO:
              fill=(100, 130, 160), width=3)
 
     # Tendência principal com destaque
-    tendencia_emoji = "📈" if analise["tipo_aposta"] == "over" else "📉"
+    tendencia_emoji = "" if analise["tipo_aposta"] == "over" else "📉"
     cor_tendencia = (255, 215, 0) if analise["tipo_aposta"] == "over" else (100, 200, 255)
     
     textos_analise = [
         f"{tendencia_emoji} TENDÊNCIA: {analise['tendencia']}",
-        f"⚽ ESTIMATIVA: {analise['estimativa']:.2f} GOLS",
-        f"🎯 PROBABILIDADE: {analise['probabilidade']:.0f}%",
-        f"🔍 CONFIANÇA: {analise['confianca']:.0f}%"
+        f" ESTIMATIVA: {analise['estimativa']:.2f} GOLS",
+        f" PROBABILIDADE: {analise['probabilidade']:.0f}%",
+        f" CONFIANÇA: {analise['confianca']:.0f}%"
     ]
     
     cores = [cor_tendencia, (100, 200, 255), (100, 255, 100), (255, 193, 7)]
@@ -1892,7 +1892,7 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
                  fill=(100, 130, 160), width=2)
 
         # Tipo de aposta com emoji
-        tipo_emoji = "📈 OVER" if jogo.get('tipo_aposta') == "over" else "📉 UNDER"
+        tipo_emoji = "OVER" if jogo.get('tipo_aposta') == "over" else "UNDER"
         cor_tipo = (76, 175, 80) if jogo.get('tipo_aposta') == "over" else (255, 87, 34)
         
         textos_analise = [
@@ -1933,7 +1933,7 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
         y_pos += ALTURA_POR_JOGO
 
     # Rodapé
-    rodape_text = f"🎯 ELITE MASTER SYSTEM - Análise Preditiva | {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+    rodape_text = f" ELITE MASTER SYSTEM - Análise Preditiva | {datetime.now().strftime('%d/%m/%Y %H:%M')}"
     try:
         rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_INFO)
         rodape_w = rodape_bbox[2] - rodape_bbox[0]
