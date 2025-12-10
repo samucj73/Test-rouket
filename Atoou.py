@@ -1897,9 +1897,9 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
         
         textos_analise = [
             f"{tipo_emoji} {jogo['tendencia']}",
-            f"⚽ Estimativa: {jogo['estimativa']:.2f} gols",
-            f"🎯 Probabilidade: {jogo['probabilidade']:.0f}%",
-            f"💯 Confiança: {jogo['confianca']:.0f}%"
+            f" Estimativa: {jogo['estimativa']:.2f} gols",
+            f" Probabilidade: {jogo['probabilidade']:.0f}%",
+            f" Confiança: {jogo['confianca']:.0f}%"
         ]
         
         for i, text in enumerate(textos_analise):
@@ -2208,7 +2208,7 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA
     st.success(f"✅ Poster estilo West Ham GERADO com {len(jogos)} jogos")
     return buffer
 
-def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADOS OFICIAIS") -> io.BytesIO:
+def gerar_poster_resultados(jogos: list, titulo: str = "- RESULTADOS OFICIAIS") -> io.BytesIO:
     """
     Gera poster profissional com resultados finais dos jogos - VERSÃO ATUALIZADA COM FUNDO QUADRADO
     """
@@ -2451,7 +2451,7 @@ def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADO
 # =============================
 # FUNÇÃO AUXILIAR: Gerar poster de resultados com limite de jogos
 # =============================
-def gerar_poster_resultados_limitado(jogos: list, titulo: str = "ELITE MASTER - RESULTADOS", max_jogos: int = 3) -> io.BytesIO:
+def gerar_poster_resultados_limitado(jogos: list, titulo: str = "- RESULTADOS", max_jogos: int = 3) -> io.BytesIO:
     """
     Gera poster profissional com resultados finais - VERSÃO COM LIMITE DE JOGOS
     """
