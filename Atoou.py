@@ -2449,6 +2449,252 @@ def gerar_poster_resultados(jogos: list, titulo: str = "ELITE MASTER - RESULTADO
     return buffer
 
 # =============================
+# FUNÇÃO AUXILIAR: Gerar poster de resultados com limite de jogos
+# =============================
+def gerar_poster_resultados_limitado(jogos: list, titulo: str = "ELITE MASTER - RESULTADOS", max_jogos: int = 3) -> io.BytesIO:
+    """
+    Gera poster profissional com resultados finais - VERSÃO COM LIMITE DE JOGOS
+    """
+    # Limitar o número de jogos
+    jogos_limitados = jogos[:max_jogos]
+    
+    # Configurações do poster (igual à versão original, mas com altura ajustável)
+    LARGURA = 2400
+    ALTURA_TOPO = 400
+    ALTURA_POR_JOGO = 950
+    PADDING = 120
+    
+    jogos_count = len(jogos_limitados)
+    altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
+
+    # Criar canvas
+    img = Image.new("RGB", (LARGURA, altura_total), color=(13, 25, 35))
+    draw = ImageDraw.Draw(img)
+
+    # Carregar fontes
+    FONTE_TITULO = criar_fonte(100)
+    FONTE_SUBTITULO = criar_fonte(65)
+    FONTE_TIMES = criar_fonte(70)
+    FONTE_PLACAR = criar_fonte(100)
+    FONTE_VS = criar_fonte(70)
+    FONTE_INFO = criar_fonte(45)
+    FONTE_ANALISE = criar_fonte(75)
+    FONTE_RESULTADO = criar_fonte(70)
+
+    # Título PRINCIPAL com indicação de lote
+    lote_text = f"LOTE {titulo.split('-')[-1].strip()}" if "LOTE" not in titulo else titulo
+    try:
+        titulo_bbox = draw.textbbox((0, 0), lote_text, font=FONTE_TITULO)
+        titulo_w = titulo_bbox[2] - titulo_bbox[0]
+        draw.text(((LARGURA - titulo_w) // 2, 80), lote_text, font=FONTE_TITULO, fill=(255, 215, 0))
+    except:
+        draw.text((LARGURA//2 - 300, 80), lote_text, font=FONTE_TITULO, fill=(255, 215, 0))
+
+    # Linha decorativa
+    draw.line([(LARGURA//4, 180), (3*LARGURA//4, 180)], fill=(255, 215, 0), width=4)
+
+    y_pos = ALTURA_TOPO
+
+    for idx, jogo in enumerate(jogos_limitados):
+        # Calcular se a previsão foi correta
+        total_gols = jogo['home_goals'] + jogo['away_goals']
+        previsao_correta = False
+        
+        # Verificar para Over 2.5
+        if jogo['tendencia_prevista'] == "OVER 2.5" and total_gols > 2.5:
+            previsao_correta = True
+        # Verificar para Under 2.5
+        elif jogo['tendencia_prevista'] == "UNDER 2.5" and total_gols < 2.5:
+            previsao_correta = True
+        # Verificar para Over 1.5
+        elif jogo['tendencia_prevista'] == "OVER 1.5" and total_gols > 1.5:
+            previsao_correta = True
+        # Verificar para Under 1.5
+        elif jogo['tendencia_prevista'] == "UNDER 1.5" and total_gols < 1.5:
+            previsao_correta = True
+        
+        # Definir cores baseadas no resultado
+        if previsao_correta:
+            cor_borda = (76, 175, 80)  # VERDE
+            cor_resultado = (76, 175, 80)
+            texto_resultado = "GREEN"
+        else:
+            cor_borda = (244, 67, 54)  # VERMELHO
+            cor_resultado = (244, 67, 54)
+            texto_resultado = "RED"
+
+        # Caixa do jogo com borda colorida conforme resultado
+        x0, y0 = PADDING, y_pos
+        x1, y1 = LARGURA - PADDING, y_pos + ALTURA_POR_JOGO - 40
+        
+        # Fundo com borda colorida
+        draw.rectangle([x0, y0, x1, y1], fill=(25, 40, 55), outline=cor_borda, width=6)
+
+        # BADGE RESULTADO (GREEN/RED)
+        badge_text = texto_resultado
+        badge_bg_color = cor_resultado
+        badge_text_color = (255, 255, 255)
+        
+        # Calcular tamanho do badge
+        try:
+            badge_bbox = draw.textbbox((0, 0), badge_text, font=FONTE_RESULTADO)
+            badge_w = badge_bbox[2] - badge_bbox[0] + 40
+            badge_h = 90
+            badge_x = x1 - badge_w - 20
+            badge_y = y0 + 20
+            
+            # Desenhar badge
+            draw.rectangle([badge_x, badge_y, badge_x + badge_w, badge_y + badge_h], 
+                          fill=badge_bg_color, outline=badge_bg_color)
+            draw.text((badge_x + 20, badge_y + 10), badge_text, font=FONTE_RESULTADO, fill=badge_text_color)
+        except:
+            draw.rectangle([x1 - 180, y0 + 20, x1 - 20, y0 + 100], fill=badge_bg_color)
+            draw.text((x1 - 160, y0 + 30), badge_text, font=FONTE_RESULTADO, fill=badge_text_color)
+
+        # Nome da liga
+        liga_text = jogo['liga'].upper()
+        try:
+            liga_bbox = draw.textbbox((0, 0), liga_text, font=FONTE_SUBTITULO)
+            liga_w = liga_bbox[2] - liga_bbox[0]
+            draw.text(((LARGURA - liga_w) // 2, y0 + 40), liga_text, font=FONTE_SUBTITULO, fill=(170, 190, 210))
+        except:
+            draw.text((LARGURA//2 - 150, y0 + 40), liga_text, font=FONTE_SUBTITULO, fill=(170, 190, 210))
+
+        # Data do jogo
+        data_formatada, hora_formatada = formatar_data_iso(jogo["data"])
+        data_text = f"{data_formatada} • {hora_formatada} BRT"
+        try:
+            data_bbox = draw.textbbox((0, 0), data_text, font=FONTE_INFO)
+            data_w = data_bbox[2] - data_bbox[0]
+            draw.text(((LARGURA - data_w) // 2, y0 + 110), data_text, font=FONTE_INFO, fill=(120, 180, 240))
+        except:
+            draw.text((LARGURA//2 - 150, y0 + 110), data_text, font=FONTE_INFO, fill=(120, 180, 240))
+
+        # ESCUDOS E PLACAR
+        TAMANHO_ESCUDO = 245
+        TAMANHO_QUADRADO = 280
+        ESPACO_ENTRE_ESCUDOS = 700
+
+        # Calcular posição central
+        largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS 
+        x_inicio = (LARGURA - largura_total) // 2
+
+        x_home = x_inicio
+        x_placar = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS//2 - 100
+        x_away = x_placar + 450
+
+        y_escudos = y0 + 180
+
+        # Baixar escudos COM CACHE
+        escudo_home = baixar_escudo_com_cache(jogo['home'], jogo.get("escudo_home", ""))
+        escudo_away = baixar_escudo_com_cache(jogo['away'], jogo.get("escudo_away", ""))
+
+        def desenhar_escudo_quadrado_resultado(logo_img, x, y, tamanho_quadrado, tamanho_escudo):
+            # Fundo QUADRADO BRANCO
+            draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], 
+                         fill=(255, 255, 255), outline=(220, 220, 220), width=3)
+
+            if logo_img is None:
+                draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(80, 80, 80))
+                draw.text((x + 50, y + 65), "SEM", font=FONTE_INFO, fill=(255, 255, 255))
+                return
+
+            try:
+                logo_img = logo_img.convert("RGBA")
+                logo_img = logo_img.resize((tamanho_escudo, tamanho_escudo), Image.Resampling.LANCZOS)
+                
+                pos_x = x + (tamanho_quadrado - tamanho_escudo) // 2
+                pos_y = y + (tamanho_quadrado - tamanho_escudo) // 2
+
+                img.paste(logo_img, (pos_x, pos_y), logo_img)
+
+            except Exception as e:
+                logging.error(f"Erro ao desenhar escudo resultado: {e}")
+                draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(100, 100, 100))
+                draw.text((x + 50, y + 65), "ERR", font=FONTE_INFO, fill=(255, 255, 255))
+
+        # Desenhar escudos com fundo QUADRADO
+        desenhar_escudo_quadrado_resultado(escudo_home, x_home, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO)
+        desenhar_escudo_quadrado_resultado(escudo_away, x_away, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO)
+
+        # PLACAR CENTRAL
+        placar_text = f"{jogo['home_goals']}   -   {jogo['away_goals']}"
+        try:
+            placar_bbox = draw.textbbox((0, 0), placar_text, font=FONTE_PLACAR)
+            placar_w = placar_bbox[2] - placar_bbox[0]
+            placar_x = x_placar + (200 - placar_w) // 2
+            draw.text((placar_x, y_escudos + 30), placar_text, font=FONTE_PLACAR, fill=(255, 255, 255))
+        except:
+            draw.text((x_placar, y_escudos + 30), placar_text, font=FONTE_PLACAR, fill=(255, 255, 255))
+
+        # Nomes dos times
+        home_text = jogo['home'][:15]
+        away_text = jogo['away'][:15]
+
+        try:
+            home_bbox = draw.textbbox((0, 0), home_text, font=FONTE_TIMES)
+            home_w = home_bbox[2] - home_bbox[0]
+            draw.text((x_home + (TAMANHO_QUADRADO - home_w)//2, y_escudos + TAMANHO_QUADRADO + 20),
+                     home_text, font=FONTE_TIMES, fill=(255, 255, 255))
+        except:
+            draw.text((x_home, y_escudos + TAMANHO_QUADRADO + 20),
+                     home_text, font=FONTE_TIMES, fill=(255, 255, 255))
+
+        try:
+            away_bbox = draw.textbbox((0, 0), away_text, font=FONTE_TIMES)
+            away_w = away_bbox[2] - away_bbox[0]
+            draw.text((x_away + (TAMANHO_QUADRADO - away_w)//2, y_escudos + TAMANHO_QUADRADO + 20),
+                     away_text, font=FONTE_TIMES, fill=(255, 255, 255))
+        except:
+            draw.text((x_away, y_escudos + TAMANHO_QUADRADO + 20),
+                     away_text, font=FONTE_TIMES, fill=(255, 255, 255))
+
+        # SEÇÃO DE ANÁLISE DO RESULTADO
+        y_analysis = y_escudos + TAMANHO_QUADRADO + 100
+        
+        # Linha separadora
+        draw.line([(x0 + 50, y_analysis - 10), (x1 - 50, y_analysis - 10)], 
+                 fill=(100, 130, 160), width=2)
+
+        # Informações de análise
+        tipo_aposta_emoji = "📈" if jogo.get('tipo_aposta') == "over" else "📉"
+        
+        textos_analise = [
+            f"{tipo_aposta_emoji} {jogo['tendencia_prevista']}",
+            f"Real: {total_gols} gols | Estimativa: {jogo['estimativa_prevista']:.2f}",
+            f"Prob: {jogo['probabilidade_prevista']:.0f}% | Conf: {jogo['confianca_prevista']:.0f}% | Resultado: {texto_resultado}"
+        ]
+        
+        cores = [(255, 255, 255), (200, 220, 255), cor_resultado]
+        
+        for i, (text, cor) in enumerate(zip(textos_analise, cores)):
+            try:
+                bbox = draw.textbbox((0, 0), text, font=FONTE_ANALISE)
+                w = bbox[2] - bbox[0]
+                draw.text(((LARGURA - w) // 2, y_analysis + i * 90), text, font=FONTE_ANALISE, fill=cor)
+            except:
+                draw.text((PADDING + 100, y_analysis + i * 90), text, font=FONTE_ANALISE, fill=cor)
+
+        y_pos += ALTURA_POR_JOGO
+
+    # Rodapé com indicador de lote
+    rodape_text = f"Partidas {len(jogos_limitados)}/{len(jogos)} • Gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')} • Elite Master System"
+    try:
+        rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_INFO)
+        rodape_w = rodape_bbox[2] - rodape_bbox[0]
+        draw.text(((LARGURA - rodape_w) // 2, altura_total - 60), rodape_text, font=FONTE_INFO, fill=(120, 150, 180))
+    except:
+        draw.text((LARGURA//2 - 300, altura_total - 60), rodape_text, font=FONTE_INFO, fill=(120, 150, 180))
+
+    # Salvar imagem
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG", optimize=True, quality=95)
+    buffer.seek(0)
+    
+    st.success(f"✅ Poster de resultados gerado com {len(jogos_limitados)} jogos (máx: {max_jogos})")
+    return buffer
+
+# =============================
 # Funções de Envio de Alertas
 # =============================
 def enviar_alerta_telegram(fixture: dict, analise: dict):
@@ -2595,8 +2841,11 @@ def enviar_alerta_westham_style(jogos_conf: list, min_conf: int, max_conf: int, 
             msg += f"{tipo_emoji} {j['home']} vs {j['away']} | {j['tendencia']} | Conf: {j['confianca']:.0f}%\n"
         enviar_telegram(msg, chat_id=chat_id)
 
-def enviar_alerta_resultados_poster(jogos_com_resultado: list):
-    """Envia alerta de resultados com poster para o Telegram - VERSÃO ATUALIZADA COM RED/GREEN"""
+# =============================
+# FUNÇÃO MODIFICADA: Enviar alerta de resultados com limite de partidas
+# =============================
+def enviar_alerta_resultados_poster(jogos_com_resultado: list, max_jogos_por_alerta: int = 3):
+    """Envia alerta de resultados com poster para o Telegram - VERSÃO COM LIMITE DE PARTIDAS"""
     if not jogos_com_resultado:
         st.warning("⚠️ Nenhum resultado para enviar")
         return
@@ -2629,76 +2878,168 @@ def enviar_alerta_resultados_poster(jogos_com_resultado: list):
             jogo['resultado'] = "GREEN" if previsao_correta else "RED"
             jogos_por_data[data_jogo].append(jogo)
 
+        # Contador de alertas enviados
+        alertas_enviados = 0
+        
         for data, jogos_data in jogos_por_data.items():
             data_str = data.strftime("%d/%m/%Y")
-            titulo = f"ELITE MASTER - RESULTADOS {data_str}"
             
-            st.info(f"🎨 Gerando poster de resultados para {data_str} com {len(jogos_data)} jogos...")
+            # Dividir jogos em lotes de no máximo max_jogos_por_alerta
+            lotes = [jogos_data[i:i + max_jogos_por_alerta] 
+                    for i in range(0, len(jogos_data), max_jogos_por_alerta)]
             
-            poster = gerar_poster_resultados(jogos_data, titulo=titulo)
+            st.info(f"📊 {len(jogos_data)} jogos encontrados para {data_str} - Serão enviados em {len(lotes)} lote(s)")
             
-            # Calcular estatísticas ATUALIZADAS
-            total_jogos = len(jogos_data)
-            green_count = sum(1 for j in jogos_data if j.get('resultado') == "GREEN")
-            red_count = total_jogos - green_count
-            taxa_acerto = (green_count / total_jogos * 100) if total_jogos > 0 else 0
-            
-            # Separar Over e Under
-            over_count = sum(1 for j in jogos_data if j.get('tipo_aposta') == "over")
-            under_count = sum(1 for j in jogos_data if j.get('tipo_aposta') == "under")
-            over_green = sum(1 for j in jogos_data if j.get('tipo_aposta') == "over" and j.get('resultado') == "GREEN")
-            under_green = sum(1 for j in jogos_data if j.get('tipo_aposta') == "under" and j.get('resultado') == "GREEN")
-            
-            caption = (
-                f"<b>🏁 RESULTADOS OFICIAIS - {data_str}</b>\n\n"
-                f"<b>📋 TOTAL DE JOGOS: {total_jogos}</b>\n"
-                f"<b>🟢 GREEN: {green_count} jogos</b>\n"
-                f"<b>🔴 RED: {red_count} jogos</b>\n"
-                f"<b>🎯 TAXA DE ACERTO: {taxa_acerto:.1f}%</b>\n\n"
-                f"<b>📊 DESEMPENHO POR TIPO:</b>\n"
-                f"<b>📈 Over: {over_green}/{over_count} ({over_green/max(over_count,1)*100:.0f}%)</b>\n"
-                f"<b>📉 Under: {under_green}/{under_count} ({under_green/max(under_count,1)*100:.0f}%)</b>\n\n"
-                f"<b>🔥 ELITE MASTER SYSTEM - CONFIABILIDADE COMPROVADA</b>"
-            )
-            
-            st.info("📤 Enviando resultados para o Telegram...")
-            ok = enviar_foto_telegram(poster, caption=caption, chat_id=TELEGRAM_CHAT_ID_ALT2)
-            
-            if ok:
-                st.success(f"🚀 Poster de resultados enviado para {data_str}!")
+            for lote_idx, lote in enumerate(lotes):
+                lote_num = lote_idx + 1
+                titulo = f"ELITE MASTER - RESULTADOS {data_str} - LOTE {lote_num}/{len(lotes)}"
                 
-                # Registrar no histórico
-                for jogo in jogos_data:
-                    registrar_no_historico({
-                        "home": jogo["home"],
-                        "away": jogo["away"], 
-                        "tendencia": jogo["tendencia_prevista"],
-                        "estimativa": jogo["estimativa_prevista"],
-                        "confianca": jogo["confianca_prevista"],
-                        "probabilidade": jogo["probabilidade_prevista"],
-                        "placar": f"{jogo['home_goals']}x{jogo['away_goals']}",
-                        "resultado": "🟢 GREEN" if jogo.get('resultado') == "GREEN" else "🔴 RED",
-                        "tipo_aposta": jogo.get("tipo_aposta", "desconhecido")
-                    })
-            else:
-                st.error(f"❌ Falha ao enviar poster de resultados para {data_str}")
+                st.info(f"🎨 Gerando poster para lote {lote_num} com {len(lote)} jogos...")
+                
+                # Gerar poster com limite de jogos
+                poster = gerar_poster_resultados_limitado(lote, titulo=titulo, max_jogos=max_jogos_por_alerta)
+                
+                # Calcular estatísticas APENAS para este lote
+                total_jogos_lote = len(lote)
+                green_count_lote = sum(1 for j in lote if j.get('resultado') == "GREEN")
+                red_count_lote = total_jogos_lote - green_count_lote
+                taxa_acerto_lote = (green_count_lote / total_jogos_lote * 100) if total_jogos_lote > 0 else 0
+                
+                # Separar Over e Under no lote
+                over_count_lote = sum(1 for j in lote if j.get('tipo_aposta') == "over")
+                under_count_lote = sum(1 for j in lote if j.get('tipo_aposta') == "under")
+                over_green_lote = sum(1 for j in lote if j.get('tipo_aposta') == "over" and j.get('resultado') == "GREEN")
+                under_green_lote = sum(1 for j in lote if j.get('tipo_aposta') == "under" and j.get('resultado') == "GREEN")
+                
+                # Calcular estatísticas totais (todos os lotes desta data)
+                total_jogos_data = len(jogos_data)
+                green_count_data = sum(1 for j in jogos_data if j.get('resultado') == "GREEN")
+                taxa_acerto_data = (green_count_data / total_jogos_data * 100) if total_jogos_data > 0 else 0
+                
+                caption = (
+                    f"<b>🏁 RESULTADOS OFICIAIS - {data_str}</b>\n"
+                    f"<b>📦 LOTE {lote_num}/{len(lotes)}</b>\n\n"
+                    
+                    f"<b>📋 ESTATÍSTICAS DO LOTE:</b>\n"
+                    f"<b>• Jogos: {total_jogos_lote}</b>\n"
+                    f"<b>• 🟢 GREEN: {green_count_lote}</b>\n"
+                    f"<b>• 🔴 RED: {red_count_lote}</b>\n"
+                    f"<b>• 🎯 Acerto: {taxa_acerto_lote:.1f}%</b>\n\n"
+                    
+                    f"<b>📊 DESEMPENHO POR TIPO (LOTE):</b>\n"
+                    f"<b>• 📈 Over: {over_green_lote}/{over_count_lote} " 
+                    f"({over_green_lote/max(over_count_lote,1)*100:.0f}%)</b>\n"
+                    f"<b>• 📉 Under: {under_green_lote}/{under_count_lote} "
+                    f"({under_green_lote/max(under_count_lote,1)*100:.0f}%)</b>\n\n"
+                    
+                    f"<b>📈 ESTATÍSTICAS TOTAIS ({data_str}):</b>\n"
+                    f"<b>• Total de Jogos: {total_jogos_data}</b>\n"
+                    f"<b>• 🟢 GREEN: {green_count_data}</b>\n"
+                    f"<b>• 🎯 Acerto Total: {taxa_acerto_data:.1f}%</b>\n\n"
+                    
+                    f"<b>🔥 ELITE MASTER SYSTEM - CONFIABILIDADE COMPROVADA</b>"
+                )
+                
+                st.info(f"📤 Enviando lote {lote_num} para o Telegram...")
+                ok = enviar_foto_telegram(poster, caption=caption, chat_id=TELEGRAM_CHAT_ID_ALT2)
+                
+                if ok:
+                    st.success(f"🚀 Lote {lote_num}/{len(lotes)} enviado para {data_str}!")
+                    alertas_enviados += 1
+                    
+                    # Registrar no histórico
+                    for jogo in lote:
+                        registrar_no_historico({
+                            "home": jogo["home"],
+                            "away": jogo["away"], 
+                            "tendencia": jogo["tendencia_prevista"],
+                            "estimativa": jogo["estimativa_prevista"],
+                            "confianca": jogo["confianca_prevista"],
+                            "probabilidade": jogo["probabilidade_prevista"],
+                            "placar": f"{jogo['home_goals']}x{jogo['away_goals']}",
+                            "resultado": "🟢 GREEN" if jogo.get('resultado') == "GREEN" else "🔴 RED",
+                            "tipo_aposta": jogo.get("tipo_aposta", "desconhecido")
+                        })
+                    
+                    # Pequena pausa entre lotes para evitar sobrecarga
+                    if lote_idx < len(lotes) - 1:
+                        time.sleep(2)
+                else:
+                    st.error(f"❌ Falha ao enviar lote {lote_num} para {data_str}")
+        
+        if alertas_enviados > 0:
+            st.success(f"✅ Total de {alertas_enviados} alertas de resultados enviados com sucesso!")
                 
     except Exception as e:
         logging.error(f"Erro crítico ao gerar/enviar poster de resultados: {str(e)}")
         st.error(f"❌ Erro crítico ao gerar/enviar poster de resultados: {str(e)}")
         # Fallback para mensagem de texto
-        msg = f"🏁 RESULTADOS OFICIAIS - SISTEMA RED/GREEN:\n\n"
-        for j in jogos_com_resultado[:5]:
-            total_gols = j['home_goals'] + j['away_goals']
-            resultado = "🟢 GREEN" if (
-                (j['tendencia_prevista'] == "OVER 2.5" and total_gols > 2.5) or 
-                (j['tendencia_prevista'] == "UNDER 2.5" and total_gols < 2.5) or
-                (j['tendencia_prevista'] == "OVER 1.5" and total_gols > 1.5) or
-                (j['tendencia_prevista'] == "UNDER 1.5" and total_gols < 1.5)
-            ) else "🔴 RED"
-            tipo_emoji = "📈" if j.get('tipo_aposta') == "over" else "📉"
-            msg += f"{resultado} {tipo_emoji} {j['home']} {j['home_goals']}x{j['away_goals']} {j['away']}\n"
-        enviar_telegram(msg, chat_id=TELEGRAM_CHAT_ID_ALT2)
+        enviar_resultados_fallback(jogos_com_resultado)
+
+# =============================
+# FUNÇÃO FALLBACK modificada para resultados
+# =============================
+def enviar_resultados_fallback(jogos_com_resultado: list, max_jogos_por_alerta: int = 5):
+    """Fallback para mensagem de texto com limite de jogos por alerta"""
+    if not jogos_com_resultado:
+        return
+        
+    # Agrupar por data
+    jogos_por_data = {}
+    for jogo in jogos_com_resultado:
+        data_jogo = datetime.fromisoformat(jogo["data"].replace("Z", "+00:00")).date()
+        if data_jogo not in jogos_por_data:
+            jogos_por_data[data_jogo] = []
+        jogos_por_data[data_jogo].append(jogo)
+    
+    for data, jogos_data in jogos_por_data.items():
+        data_str = data.strftime("%d/%m/%Y")
+        
+        # Dividir em lotes
+        lotes = [jogos_data[i:i + max_jogos_por_alerta] 
+                for i in range(0, len(jogos_data), max_jogos_por_alerta)]
+        
+        for lote_idx, lote in enumerate(lotes):
+            lote_num = lote_idx + 1
+            
+            msg = f"<b>🏁 RESULTADOS OFICIAIS - {data_str}</b>\n"
+            msg += f"<b>📦 LOTE {lote_num}/{len(lotes)}</b>\n\n"
+            
+            for j in lote:
+                total_gols = j['home_goals'] + j['away_goals']
+                resultado = "🟢 GREEN" if (
+                    (j['tendencia_prevista'] == "OVER 2.5" and total_gols > 2.5) or 
+                    (j['tendencia_prevista'] == "UNDER 2.5" and total_gols < 2.5) or
+                    (j['tendencia_prevista'] == "OVER 1.5" and total_gols > 1.5) or
+                    (j['tendencia_prevista'] == "UNDER 1.5" and total_gols < 1.5)
+                ) else "🔴 RED"
+                tipo_emoji = "📈" if j.get('tipo_aposta') == "over" else "📉"
+                msg += f"{resultado} {tipo_emoji} {j['home']} {j['home_goals']}x{j['away_goals']} {j['away']}\n"
+            
+            # Adicionar estatísticas do lote
+            total_jogos_lote = len(lote)
+            green_count_lote = sum(1 for j in lote if "🟢 GREEN" in str(j.get('resultado', '')))
+            taxa_acerto_lote = (green_count_lote / total_jogos_lote * 100) if total_jogos_lote > 0 else 0
+            
+            msg += f"\n<b>📊 LOTE {lote_num}:</b> {green_count_lote}/{total_jogos_lote} GREEN ({taxa_acerto_lote:.1f}%)\n"
+            
+            enviar_telegram(msg, chat_id=TELEGRAM_CHAT_ID_ALT2)
+            
+            # Pausa entre lotes
+            if lote_idx < len(lotes) - 1:
+                time.sleep(2)
+        
+        # Enviar resumo final da data
+        total_jogos_data = len(jogos_data)
+        green_count_data = sum(1 for j in jogos_data if "🟢 GREEN" in str(j.get('resultado', '')))
+        taxa_acerto_data = (green_count_data / total_jogos_data * 100) if total_jogos_data > 0 else 0
+        
+        resumo_msg = f"<b>📈 RESUMO FINAL - {data_str}</b>\n"
+        resumo_msg += f"<b>Total: {total_jogos_data} jogos</b>\n"
+        resumo_msg += f"<b>🟢 GREEN: {green_count_data} ({taxa_acerto_data:.1f}%)</b>\n"
+        resumo_msg += f"<b>🔥 ELITE MASTER SYSTEM</b>"
+        
+        enviar_telegram(resumo_msg, chat_id=TELEGRAM_CHAT_ID_ALT2)
 
 def enviar_alerta_conf_criar_poster(jogos_conf: list, min_conf: int, max_conf: int, chat_id: str = TELEGRAM_CHAT_ID_ALT2):
     """Função fallback para o estilo original"""
@@ -2911,7 +3252,8 @@ def verificar_resultados_finais(alerta_resultados: bool):
     
     # Enviar alertas em lote se houver resultados E a checkbox estiver ativada
     if jogos_com_resultado and alerta_resultados:
-        enviar_alerta_resultados_poster(jogos_com_resultado)
+        # USAR A NOVA VERSÃO COM LIMITE DE PARTIDAS
+        enviar_alerta_resultados_poster(jogos_com_resultado, max_jogos_por_alerta=3)
         salvar_alertas(alertas)
         st.success(f"✅ {resultados_enviados} resultados processados e alertas enviados!")
     elif jogos_com_resultado:
