@@ -2472,7 +2472,7 @@ def gerar_poster_resultados_limitado(jogos: list, titulo: str = "- RESULTADOS", 
     draw = ImageDraw.Draw(img)
 
     # Carregar fontes
-    FONTE_TITULO = criar_fonte(100)
+    FONTE_TITULO = criar_fonte(90)
     FONTE_SUBTITULO = criar_fonte(65)
     FONTE_TIMES = criar_fonte(70)
     FONTE_PLACAR = criar_fonte(100)
@@ -2657,7 +2657,7 @@ def gerar_poster_resultados_limitado(jogos: list, titulo: str = "- RESULTADOS", 
                  fill=(100, 130, 160), width=2)
 
         # Informações de análise
-        tipo_aposta_emoji = "📈" if jogo.get('tipo_aposta') == "over" else "📉"
+        tipo_aposta_emoji = "+" if jogo.get('tipo_aposta') == "over" else "-"
         
         textos_analise = [
             f"{tipo_aposta_emoji} {jogo['tendencia_prevista']}",
