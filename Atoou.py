@@ -1707,7 +1707,7 @@ def gerar_poster_individual_westham(fixture: dict, analise: dict) -> io.BytesIO:
     
     return buffer
 
-def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo: str = "ELITE MASTER - TOP JOGOS DO DIA") -> io.BytesIO:
+def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo: str = " - TOP JOGOS DO DIA") -> io.BytesIO:
     """
     Gera poster profissional para os Top Jogos com escudos e estatísticas
     """
@@ -1892,7 +1892,7 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
                  fill=(100, 130, 160), width=2)
 
         # Tipo de aposta com emoji
-        tipo_emoji = "OVER" if jogo.get('tipo_aposta') == "over" else "UNDER"
+        tipo_emoji = "+" if jogo.get('tipo_aposta') == "over" else "-"
         cor_tipo = (76, 175, 80) if jogo.get('tipo_aposta') == "over" else (255, 87, 34)
         
         textos_analise = [
@@ -1949,7 +1949,7 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
     st.success(f"✅ Poster TOP {len(top_jogos)} Jogos gerado com sucesso!")
     return buffer
 
-def gerar_poster_westham_style(jogos: list, titulo: str = "ELITE MASTER - ALERTA DE GOLS") -> io.BytesIO:
+def gerar_poster_westham_style(jogos: list, titulo: str = "- ALERTA DE GOLS") -> io.BytesIO:
     """
     Gera poster no estilo West Ham vs Burnley
     """
