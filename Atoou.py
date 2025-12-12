@@ -1707,15 +1707,15 @@ def gerar_poster_individual_westham(fixture: dict, analise: dict) -> io.BytesIO:
     
     return buffer
 
-def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo: str = " - TOP JOGOS DO DIA") -> io.BytesIO:
+def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo: str = "** TOP JOGOS DO DIA **") -> io.BytesIO:
     """
     Gera poster profissional para os Top Jogos com escudos e estatísticas
     """
     # Configurações
     LARGURA = 2200
     ALTURA_TOPO = 300
-    ALTURA_POR_JOGO = 950
-    PADDING = 100
+    ALTURA_POR_JOGO = 910
+    PADDING = 80
     
     jogos_count = len(top_jogos)
     altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
@@ -1726,11 +1726,11 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
 
     # Carregar fontes
     FONTE_TITULO = criar_fonte(90)
-    FONTE_SUBTITULO = criar_fonte(60)
+    FONTE_SUBTITULO = criar_fonte(65)
     FONTE_TIMES = criar_fonte(55)
     FONTE_VS = criar_fonte(45)
-    FONTE_INFO = criar_fonte(40)
-    FONTE_ANALISE = criar_fonte(50)
+    FONTE_INFO = criar_fonte(45)
+    FONTE_ANALISE = criar_fonte(55)
     FONTE_RANKING = criar_fonte(70)
     FONTE_ESTATISTICAS = criar_fonte(35)
 
@@ -1806,7 +1806,7 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
         # ESCUDOS DOS TIMES (COM CACHE)
         TAMANHO_ESCUDO = 180
         TAMANHO_QUADRADO = 220
-        ESPACO_ENTRE_ESCUDOS = 600
+        ESPACO_ENTRE_ESCUDOS = 700
 
         # Calcular posição central
         largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
@@ -1949,7 +1949,7 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
     st.success(f"✅ Poster TOP {len(top_jogos)} Jogos gerado com sucesso!")
     return buffer
 
-def gerar_poster_westham_style(jogos: list, titulo: str = "- ALERTA DE GOLS") -> io.BytesIO:
+def gerar_poster_westham_style(jogos: list, titulo: str = " ALERTA DE GOLS") -> io.BytesIO:
     """
     Gera poster no estilo West Ham vs Burnley
     """
@@ -2208,15 +2208,15 @@ def gerar_poster_westham_style(jogos: list, titulo: str = "- ALERTA DE GOLS") ->
     st.success(f"✅ Poster estilo West Ham GERADO com {len(jogos)} jogos")
     return buffer
 
-def gerar_poster_resultados(jogos: list, titulo: str = "- RESULTADOS OFICIAIS") -> io.BytesIO:
+def gerar_poster_resultados(jogos: list, titulo: str = " ** RESULTADOS OFICIAIS ** ") -> io.BytesIO:
     """
     Gera poster profissional com resultados finais dos jogos - VERSÃO ATUALIZADA COM FUNDO QUADRADO
     """
     # Configurações do poster
-    LARGURA = 2400
+    LARGURA = 2200
     ALTURA_TOPO = 400
-    ALTURA_POR_JOGO = 950  # Ajustado para melhor layout
-    PADDING = 120
+    ALTURA_POR_JOGO = 900  # Ajustado para melhor layout
+    PADDING = 80
     
     jogos_count = len(jogos)
     altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
