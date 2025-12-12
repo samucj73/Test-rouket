@@ -209,10 +209,12 @@ class AnaliseCiclos:
     - Expõe: numeros_presentes_no_ciclo, numeros_faltantes, concursos_no_ciclo (lista), tamanho, status (normal/atrasado)
     - Gera 5 cartoes priorizando dezenas faltantes e atrasadas no ciclo
     """
-    def __init__(self, concursos):
+    def __init__(self, concursos, concursos_info=None):
         self.concursos = concursos  # espera lista: [mais recente, ...]
+        self.concursos_info = concursos_info or {}  # Dicionário com informações dos concursos
         self.TODAS = set(range(1,26))
-        self.ciclo_concursos = []  # lista de concursos (cada concurso = lista de 15 dezenas) pertencentes ao ciclo (do mais recente ao mais antigo)
+        self.ciclo_concursos = []  # lista de concursos (cada concurso = lista de 15 dezenas) pertencentes ao ciclo (do mais recente para o mais antigo)
+        self.ciclo_concursos_info = []  # Informações dos concursos no ciclo
         self.numeros_presentes = set()
         self.numeros_faltantes = set(self.TODAS)
         self.tamanho = 0  # número de concursos no ciclo
@@ -222,14 +224,28 @@ class AnaliseCiclos:
     def analisar(self):
         """Detecta o ciclo dinâmico atual: acumula concursos até todas as 25 dezenas aparecerem ou acabar dados."""
         self.ciclo_concursos = []
+        self.ciclo_concursos_info = []
         self.numeros_presentes = set()
         self.numeros_faltantes = set(self.TODAS)
         self.iniciar_indice = None
+        
         # percorre do mais recente (0) para o mais antigo
         for idx, concurso in enumerate(self.concursos):
             if not concurso:
                 continue
             self.ciclo_concursos.append(concurso)
+            
+            # Armazenar informações do concurso, se disponíveis
+            if idx in self.concursos_info:
+                self.ciclo_concursos_info.append(self.concursos_info[idx])
+            else:
+                # Criar informações básicas se não houver
+                self.ciclo_concursos_info.append({
+                    "indice": idx,
+                    "numero_concurso": f"Concurso {len(self.concursos) - idx}",
+                    "dezenas": concurso
+                })
+            
             self.numeros_presentes.update(concurso)
             self.numeros_faltantes = self.TODAS - self.numeros_presentes
             # marca o índice mais antigo que foi considerado até agora
@@ -257,7 +273,8 @@ class AnaliseCiclos:
             "numeros_presentes": sorted(list(self.numeros_presentes)),
             "numeros_faltantes": sorted(list(self.numeros_faltantes)),
             "inicio_indice": self.iniciar_indice,
-            "status": self.status()
+            "status": self.status(),
+            "concursos_analisados": self.ciclo_concursos_info
         }
     
     def contar_atrasos_no_ciclo(self):
@@ -359,6 +376,20 @@ class AnaliseCiclos:
                 cartoes.append(novo)
         
         return cartoes
+    
+    def obter_concursos_no_ciclo_formatados(self):
+        """Retorna uma lista formatada dos concursos analisados no ciclo"""
+        concursos_formatados = []
+        for i, info in enumerate(self.ciclo_concursos_info):
+            dezenas = self.ciclo_concursos[i] if i < len(self.ciclo_concursos) else []
+            concursos_formatados.append({
+                "ordem": i + 1,
+                "indice_original": info.get("indice", i),
+                "numero_concurso": info.get("numero_concurso", f"Concurso {i+1}"),
+                "dezenas": dezenas,
+                "data": info.get("data", "Data não disponível")
+            })
+        return concursos_formatados
 
 # =========================
 # CLASSE: Análise Combinatória
@@ -902,6 +933,8 @@ def carregar_estado():
         st.session_state.cartoes_ciclos = []
     if "analise_ciclos" not in st.session_state:
         st.session_state.analise_ciclos = None
+    if "concursos_info" not in st.session_state:
+        st.session_state.concursos_info = {}
 
 st.markdown("<h1 style='text-align: center;'>Lotofácil Inteligente</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center;'>SAMUCJ TECHNOLOGY</p>", unsafe_allow_html=True)
@@ -919,6 +952,21 @@ with st.expander("📥 Capturar Concursos"):
             if concursos:
                 st.session_state.concursos = concursos
                 st.session_state.info_ultimo_concurso = info
+                
+                # Criar informações dos concursos para exibição
+                concursos_info = {}
+                total_concursos = len(concursos)
+                for idx, concurso in enumerate(concursos):
+                    # índice 0 = mais recente
+                    numero_concurso = total_concursos - idx
+                    concursos_info[idx] = {
+                        "indice": idx,
+                        "numero_concurso": f"Concurso {numero_concurso}",
+                        "posicao": f"{idx+1}º mais recente" if idx == 0 else f"{idx+1}º após o mais recente",
+                        "dezenas": concurso
+                    }
+                st.session_state.concursos_info = concursos_info
+                
                 st.success(f"{len(concursos)} concursos capturados com sucesso!")
                 
                 # Limpar dados antigos ao capturar novos concursos
@@ -946,7 +994,10 @@ if st.session_state.concursos:
     analise_sf = AnaliseSequenciaFalha(st.session_state.concursos)
     # Inicializar análise de ciclos (dinâmico)
     if st.session_state.analise_ciclos is None:
-        st.session_state.analise_ciclos = AnaliseCiclos(st.session_state.concursos)
+        st.session_state.analise_ciclos = AnaliseCiclos(
+            st.session_state.concursos, 
+            st.session_state.concursos_info
+        )
     analise_ciclos = st.session_state.analise_ciclos
     
     # NOVA ABA: Análise de Sequência/Falha
@@ -1305,47 +1356,167 @@ if st.session_state.concursos:
     with abas[8]:
         st.subheader("🔁 Ciclos da Lotofácil (Ciclo Dinâmico)")
         st.write("Ciclo detectado com base nos concursos mais recentes (do mais recente para o mais antigo).")
+        
+        # Mostrar estatísticas do ciclo
         resumo = analise_ciclos.resumo()
-        col1, col2 = st.columns([2,3])
+        
+        col1, col2, col3 = st.columns(3)
         with col1:
             st.metric("Status do Ciclo", resumo["status"])
-            st.metric("Concursos no Ciclo", resumo["tamanho"])
-            st.write(f"Índice mais antigo incluído: {resumo['inicio_indice']}")
         with col2:
+            st.metric("Concursos no Ciclo", resumo["tamanho"])
+        with col3:
+            st.metric("Dezenas Faltantes", len(resumo["numeros_faltantes"]))
+        
+        # Expander para detalhes do ciclo
+        with st.expander("📋 Detalhes do Ciclo", expanded=True):
             st.write("### 🔍 Dezenas já saídas no ciclo (presentes)")
             st.write(resumo["numeros_presentes"])
+            
             st.write("### ❗ Dezenas faltantes para fechar o ciclo")
-            st.write(resumo["numeros_faltantes"])
+            if resumo["numeros_faltantes"]:
+                st.write(resumo["numeros_faltantes"])
+                st.info(f"**Total de {len(resumo['numeros_faltantes'])} dezenas faltantes** para completar o ciclo de 25 números.")
+            else:
+                st.success("✅ **Ciclo completo!** Todas as 25 dezenas já saíram neste ciclo.")
+        
+        # NOVA SEÇÃO: Concursos Analisados no Ciclo
+        with st.expander("📊 Concursos Analisados no Ciclo", expanded=True):
+            st.write("### 🗂️ Concursos considerados para formação do ciclo atual")
+            st.write("(Ordenados do mais recente para o mais antigo)")
+            
+            concursos_no_ciclo = analise_ciclos.obter_concursos_no_ciclo_formatados()
+            
+            if concursos_no_ciclo:
+                # Criar DataFrame para exibição
+                dados_concursos = []
+                for concurso_info in concursos_no_ciclo:
+                    dados_concursos.append({
+                        "Ordem": concurso_info["ordem"],
+                        "Concurso": concurso_info["numero_concurso"],
+                        "Posição": f"{concurso_info['ordem']}º mais recente",
+                        "Dezenas": ", ".join(str(d) for d in concurso_info["dezenas"]),
+                        "Total Dezenas": len(concurso_info["dezenas"])
+                    })
+                
+                df_concursos = pd.DataFrame(dados_concursos)
+                st.dataframe(df_concursos, hide_index=True, use_container_width=True)
+                
+                # Estatísticas dos concursos no ciclo
+                st.write("### 📈 Estatísticas dos Concursos no Ciclo")
+                col_stat1, col_stat2, col_stat3 = st.columns(3)
+                with col_stat1:
+                    st.metric("Total Concursos", len(concursos_no_ciclo))
+                with col_stat2:
+                    # Média de dezenas por concurso (deve ser 15)
+                    media_dezenas = np.mean([len(c["dezenas"]) for c in concursos_no_ciclo])
+                    st.metric("Média Dezenas/Concurso", f"{media_dezenas:.1f}")
+                with col_stat3:
+                    # Dezenas únicas totais
+                    dezenas_unicas = len(resumo["numeros_presentes"])
+                    st.metric("Dezenas Únicas", dezenas_unicas)
+                
+                # Gráfico de evolução do ciclo
+                st.write("### 📊 Evolução das Dezenas por Concurso")
+                dezenas_acumuladas = []
+                dezenas_unicas_acum = []
+                for i, concurso_info in enumerate(concursos_no_ciclo, 1):
+                    dezenas_ate_agora = set()
+                    for j in range(i):
+                        dezenas_ate_agora.update(concursos_no_ciclo[j-1]["dezenas"])
+                    dezenas_acumuladas.append(len(concursos_no_ciclo[i-1]["dezenas"]))
+                    dezenas_unicas_acum.append(len(dezenas_ate_agora))
+                
+                evolucao_df = pd.DataFrame({
+                    "Concurso": [f"Concurso {i}" for i in range(1, len(concursos_no_ciclo)+1)],
+                    "Dezenas no Concurso": dezenas_acumuladas,
+                    "Dezenas Únicas Acumuladas": dezenas_unicas_acum
+                })
+                
+                st.line_chart(evolucao_df.set_index("Concurso"))
+                
+            else:
+                st.warning("Nenhum concurso foi analisado para o ciclo.")
         
         st.markdown("---")
-        if st.button("🔄 Reanalisar Ciclo"):
-            st.session_state.analise_ciclos = AnaliseCiclos(st.session_state.concursos)
-            analise_ciclos = st.session_state.analise_ciclos
-            st.session_state.resultado_ciclos = analise_ciclos.resumo()
-            st.session_state.cartoes_ciclos = []
-            st.success("Ciclo reanalisado!")
+        st.subheader("🎯 Gerar Cartões Baseados no Ciclo")
         
-        if st.button("🎯 Gerar 5 Cartões — Estratégia Ciclos"):
-            cartoes_ciclo = analise_ciclos.gerar_5_cartoes_ciclo(n_cartoes=5, seed=random.randint(1,999999))
-            st.session_state.cartoes_ciclos = cartoes_ciclo
-            st.session_state.resultado_ciclos = analise_ciclos.resumo()
-            st.success("5 cartões gerados com prioridade nas dezenas faltantes do ciclo!")
+        col_btn1, col_btn2 = st.columns(2)
+        with col_btn1:
+            if st.button("🔄 Reanalisar Ciclo", use_container_width=True):
+                st.session_state.analise_ciclos = AnaliseCiclos(
+                    st.session_state.concursos, 
+                    st.session_state.concursos_info
+                )
+                analise_ciclos = st.session_state.analise_ciclos
+                st.session_state.resultado_ciclos = analise_ciclos.resumo()
+                st.session_state.cartoes_ciclos = []
+                st.success("Ciclo reanalisado com sucesso!")
+                st.rerun()
         
-        if st.session_state.resultado_ciclos:
-            res = st.session_state.resultado_ciclos
-            st.write("### Resumo armazenado:")
-            st.write(res)
+        with col_btn2:
+            if st.button("🎯 Gerar 5 Cartões — Estratégia Ciclos", use_container_width=True):
+                cartoes_ciclo = analise_ciclos.gerar_5_cartoes_ciclo(n_cartoes=5, seed=random.randint(1,999999))
+                st.session_state.cartoes_ciclos = cartoes_ciclo
+                st.session_state.resultado_ciclos = analise_ciclos.resumo()
+                st.success("5 cartões gerados com prioridade nas dezenas faltantes do ciclo!")
         
+        # Mostrar cartões gerados
         if st.session_state.cartoes_ciclos:
-            st.subheader("📋 Cartões gerados (Ciclos)")
-            for i, c in enumerate(st.session_state.cartoes_ciclos,1):
+            st.subheader("📋 Cartões Gerados (Priorizando Dezenas do Ciclo)")
+            
+            # Tabela de estatísticas dos cartões
+            stats_cartoes = []
+            for i, c in enumerate(st.session_state.cartoes_ciclos, 1):
                 pares = sum(1 for n in c if n%2==0)
                 primos = sum(1 for n in c if n in {2,3,5,7,11,13,17,19,23})
-                st.write(f"Cartão {i}: {c}  → Pares: {pares}, Primos: {primos}")
+                soma = sum(c)
+                faltantes_incluidos = len(set(c) & set(resumo["numeros_faltantes"]))
+                
+                stats_cartoes.append({
+                    "Cartão": i,
+                    "Dezenas": ", ".join(str(n) for n in c),
+                    "Pares": pares,
+                    "Primos": primos,
+                    "Soma": soma,
+                    "Faltantes Incluídos": faltantes_incluidos
+                })
             
+            # Exibir como DataFrame
+            df_cartoes = pd.DataFrame(stats_cartoes)
+            st.dataframe(df_cartoes, hide_index=True, use_container_width=True)
+            
+            # Detalhes expandidos de cada cartão
+            with st.expander("🔍 Ver Detalhes dos Cartões"):
+                for i, c in enumerate(st.session_state.cartoes_ciclos, 1):
+                    pares = sum(1 for n in c if n%2==0)
+                    primos = sum(1 for n in c if n in {2,3,5,7,11,13,17,19,23})
+                    soma = sum(c)
+                    faltantes_incluidos = set(c) & set(resumo["numeros_faltantes"])
+                    
+                    col_c1, col_c2 = st.columns([3, 2])
+                    with col_c1:
+                        st.write(f"**Cartão {i}:** {c}")
+                    with col_c2:
+                        st.write(f"**Estatísticas:**")
+                        st.write(f"- Pares: {pares}")
+                        st.write(f"- Primos: {primos}")
+                        st.write(f"- Soma: {soma}")
+                        if faltantes_incluidos:
+                            st.write(f"- Faltantes incluídos: {len(faltantes_incluidos)}")
+                            st.write(f"  ({', '.join(str(n) for n in sorted(faltantes_incluidos))})")
+                    
+                    st.write("---")
+            
+            # Botão para exportar
             st.subheader("💾 Exportar Cartões do Ciclo")
             conteudo_ciclos = "\n".join(",".join(str(n) for n in cartao) for cartao in st.session_state.cartoes_ciclos)
-            st.download_button("📥 Baixar Cartões do Ciclo", data=conteudo_ciclos, file_name="cartoes_ciclo_lotofacil.txt", mime="text/plain")
+            st.download_button(
+                "📥 Baixar Cartões do Ciclo", 
+                data=conteudo_ciclos, 
+                file_name="cartoes_ciclo_lotofacil.txt", 
+                mime="text/plain"
+            )
     
 # Sidebar - Gerenciamento de Dados
 with st.sidebar:
@@ -1370,5 +1541,13 @@ with st.sidebar:
         st.write(f"Combinações combinatorias: {total_combinacoes}")
     if st.session_state.cartoes_ciclos:
         st.write(f"Cartões Ciclos gerados: {len(st.session_state.cartoes_ciclos)}")
+    
+    # Informações sobre o ciclo atual na sidebar
+    if st.session_state.analise_ciclos:
+        st.markdown("### 🔁 Informações do Ciclo Atual")
+        ciclo_resumo = st.session_state.analise_ciclos.resumo()
+        st.write(f"**Status:** {ciclo_resumo['status']}")
+        st.write(f"**Concursos analisados:** {ciclo_resumo['tamanho']}")
+        st.write(f"**Dezenas faltantes:** {len(ciclo_resumo['numeros_faltantes'])}")
 
 st.markdown("<hr><p style='text-align: center;'>SAMUCJ TECHNOLOGY</p>", unsafe_allow_html=True)
