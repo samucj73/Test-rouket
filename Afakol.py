@@ -199,17 +199,18 @@ class AnaliseSequenciaFalha:
         return jogos
 
 # =========================
-# NOVA CLASSE: AnaliseCiclos (Ciclo Dinâmico Real)
+# NOVA CLASSE: AnaliseCiclos (Ciclo Dinâmico Real) - MODIFICADA
 # =========================
 class AnaliseCiclos:
     """
     Implementa o ciclo dinâmico:
     - Recebe concursos (lista, onde index 0 = concurso mais recente)
-    - Percorre do mais recente para o mais antigo acumulando dezenas até todas as 25 sejam vistas
+    - Permite definir um limite de concursos para analisar
+    - Percorre do mais recente para o mais antigo acumulando dezenas até todas as 25 sejam vistas ou atingir o limite
     - Expõe: numeros_presentes_no_ciclo, numeros_faltantes, concursos_no_ciclo (lista), tamanho, status (normal/atrasado)
     - Gera 5 cartoes priorizando dezenas faltantes e atrasadas no ciclo
     """
-    def __init__(self, concursos, concursos_info=None):
+    def __init__(self, concursos, concursos_info=None, limite_concursos=None):
         self.concursos = concursos  # espera lista: [mais recente, ...]
         self.concursos_info = concursos_info or {}  # Dicionário com informações dos concursos
         self.TODAS = set(range(1,26))
@@ -219,18 +220,24 @@ class AnaliseCiclos:
         self.numeros_faltantes = set(self.TODAS)
         self.tamanho = 0  # número de concursos no ciclo
         self.iniciar_indice = None  # indice do concurso mais antigo que entrou no ciclo (0 = mais recente)
+        self.limite_concursos = limite_concursos  # Novo: limite de concursos a analisar
         self.analisar()
     
     def analisar(self):
-        """Detecta o ciclo dinâmico atual: acumula concursos até todas as 25 dezenas aparecerem ou acabar dados."""
+        """Detecta o ciclo dinâmico atual: acumula concursos até todas as 25 dezenas aparecerem ou atingir o limite."""
         self.ciclo_concursos = []
         self.ciclo_concursos_info = []
         self.numeros_presentes = set()
         self.numeros_faltantes = set(self.TODAS)
         self.iniciar_indice = None
         
+        # Determinar o limite máximo de concursos a analisar
+        max_concursos = len(self.concursos)
+        if self.limite_concursos is not None:
+            max_concursos = min(self.limite_concursos, len(self.concursos))
+        
         # percorre do mais recente (0) para o mais antigo
-        for idx, concurso in enumerate(self.concursos):
+        for idx, concurso in enumerate(self.concursos[:max_concursos]):
             if not concurso:
                 continue
             self.ciclo_concursos.append(concurso)
@@ -250,21 +257,26 @@ class AnaliseCiclos:
             self.numeros_faltantes = self.TODAS - self.numeros_presentes
             # marca o índice mais antigo que foi considerado até agora
             self.iniciar_indice = idx
+            
             if not self.numeros_faltantes:  # ciclo fechado
                 break
+        
         self.tamanho = len(self.ciclo_concursos)
     
     def status(self):
         """Define estado do ciclo"""
         if not self.numeros_faltantes:
             return "Fechado"
-        # heurística: se já passou de 4 concursos e ainda faltam dezenas -> atrasado
-        if self.tamanho >= 4 and len(self.numeros_faltantes) >= 1:
-            return "Atrasado"
-        # se tamanho 1-3 -> normal (ainda dentro de uma janela curta)
-        if 1 <= self.tamanho <= 3:
+        
+        # Definir status baseado no tamanho do ciclo
+        if self.tamanho <= 3:
             return "Normal"
-        return "Aberto"
+        elif 4 <= self.tamanho <= 6:
+            return "Em Andamento"
+        elif 7 <= self.tamanho <= 10:
+            return "Atrasado"
+        else:
+            return "Muito Atrasado"
     
     def resumo(self):
         """Retorna um resumo do ciclo atual."""
@@ -274,7 +286,9 @@ class AnaliseCiclos:
             "numeros_faltantes": sorted(list(self.numeros_faltantes)),
             "inicio_indice": self.iniciar_indice,
             "status": self.status(),
-            "concursos_analisados": self.ciclo_concursos_info
+            "concursos_analisados": self.ciclo_concursos_info,
+            "limite_concursos": self.limite_concursos,
+            "ciclo_completo": len(self.numeros_faltantes) == 0
         }
     
     def contar_atrasos_no_ciclo(self):
@@ -292,19 +306,27 @@ class AnaliseCiclos:
                 atraso[n] = self.tamanho
         return atraso
     
-    def gerar_5_cartoes_ciclo(self, n_cartoes=5, seed=None):
+    def gerar_5_cartoes_ciclo(self, n_cartoes=5, seed=None, incluir_todas_faltantes=False):
         """
         Gera n_cartoes=5 cartoes de 15 dezenas priorizando:
         1) Dezenas faltantes (incluir todas nas primeiras combinações quando possível)
         2) Dezenas com maior atraso dentro do ciclo
         3) Dezenas frequentes no ciclo (para balancear)
         4) Equilíbrio pares/impares e primos
+        
+        Parâmetro novo: incluir_todas_faltantes - força a inclusão de todas as dezenas faltantes nos cartões
         """
         if seed is not None:
             random.seed(seed)
+        
         atraso = self.contar_atrasos_no_ciclo()
         # listas ordenadas por prioridade
         faltantes = sorted(list(self.numeros_faltantes))
+        
+        # Se o usuário quiser incluir todas as faltantes, distribuímos entre os cartões
+        if incluir_todas_faltantes and faltantes:
+            return self._gerar_cartoes_com_todas_faltantes(faltantes, n_cartoes, atraso)
+        
         # ordena por atraso decrescente (maior atraso primeiro) -> ou seja, mais "pedidos"
         ordenado_por_atraso = sorted(list(self.TODAS), key=lambda x: atraso[x], reverse=True)
         # frequência dentro do ciclo - para completar
@@ -317,11 +339,12 @@ class AnaliseCiclos:
         cartoes = []
         base_universe = list(self.TODAS)
         attempts = 0
+        
         while len(cartoes) < n_cartoes and attempts < 500:
             attempts += 1
             card = set()
+            
             # incluir algumas faltantes sempre que existirem (distribuir entre os cartões)
-            # estratégia: se faltantes <=15, tentamos incluir todas no primeiro cartão e distribuir nas demais
             if faltantes:
                 # tentamos incluir uma porção das faltantes
                 take_falt = min(len(faltantes), random.randint(1, min(8, len(faltantes))))
@@ -350,32 +373,107 @@ class AnaliseCiclos:
                     card.add(cand)
             
             # checar paridade e primos; ajustar até obter equilíbrio mínimo
-            pares = sum(1 for n in card if n%2==0)
-            if pares < 6:
-                # trocar um ímpar por um par disponível
-                poss_pares = [n for n in base_universe if n%2==0 and n not in card]
-                poss_impares = [n for n in card if n%2==1]
-                if poss_pares and poss_impares:
-                    card.remove(random.choice(poss_impares))
-                    card.add(random.choice(poss_pares))
-            elif pares > 10:
-                poss_impares = [n for n in base_universe if n%2==1 and n not in card]
-                poss_pares_in = [n for n in card if n%2==0]
-                if poss_impares and poss_pares_in:
-                    card.remove(random.choice(poss_pares_in))
-                    card.add(random.choice(poss_impares))
+            self._ajustar_equilibrio(card, base_universe)
             
             cartao_sorted = sorted(list(card))
             if cartao_sorted not in cartoes:
                 cartoes.append(cartao_sorted)
         
-        # garantir que são 5 cartoes distintos
+        # garantir que são n_cartoes cartoes distintos
         while len(cartoes) < n_cartoes:
             novo = sorted(random.sample(base_universe, 15))
             if novo not in cartoes:
                 cartoes.append(novo)
         
         return cartoes
+    
+    def _gerar_cartoes_com_todas_faltantes(self, faltantes, n_cartoes, atraso):
+        """Gera cartões garantindo que todas as dezenas faltantes sejam incluídas"""
+        base_universe = list(self.TODAS)
+        cartoes = []
+        
+        # Ordenar por atraso
+        ordenado_por_atraso = sorted(list(self.TODAS), key=lambda x: atraso[x], reverse=True)
+        
+        # Se há muitas faltantes (>15), não podemos incluí-las todas em um único cartão
+        # Nesse caso, distribuímos entre os cartões
+        if len(faltantes) > 15:
+            # Distribuir as faltantes entre os cartões
+            for i in range(n_cartoes):
+                card = set()
+                # Pegar uma parte das faltantes para este cartão
+                inicio = (i * len(faltantes)) // n_cartoes
+                fim = ((i + 1) * len(faltantes)) // n_cartoes
+                faltantes_para_cartao = faltantes[inicio:fim]
+                
+                if faltantes_para_cartao:
+                    card.update(faltantes_para_cartao)
+                
+                # Completar com números de alto atraso
+                needed = 15 - len(card)
+                candidatos_atraso = [n for n in ordenado_por_atraso if n not in card]
+                if candidatos_atraso and needed > 0:
+                    to_add = min(needed, len(candidatos_atraso))
+                    escolha = random.sample(candidatos_atraso[:max(10, to_add)], to_add)
+                    card.update(escolha)
+                
+                # Completar se necessário
+                while len(card) < 15:
+                    cand = random.choice([n for n in base_universe if n not in card])
+                    card.add(cand)
+                
+                self._ajustar_equilibrio(card, base_universe)
+                cartoes.append(sorted(list(card)))
+        else:
+            # Se há 15 ou menos faltantes, podemos incluí-las todas no primeiro cartão
+            # e distribuir nos demais
+            for i in range(n_cartoes):
+                card = set()
+                
+                if i == 0:
+                    # Primeiro cartão inclui todas as faltantes
+                    card.update(faltantes)
+                else:
+                    # Outros cartões incluem algumas faltantes
+                    if faltantes:
+                        take_falt = min(len(faltantes), random.randint(1, len(faltantes)//2))
+                        escolhidas_falt = random.sample(faltantes, take_falt)
+                        card.update(escolhidas_falt)
+                
+                # Completar
+                needed = 15 - len(card)
+                if needed > 0:
+                    candidatos_atraso = [n for n in ordenado_por_atraso if n not in card]
+                    if candidatos_atraso:
+                        to_add = min(needed, len(candidatos_atraso))
+                        escolha = random.sample(candidatos_atraso[:max(10, to_add)], to_add)
+                        card.update(escolha)
+                
+                while len(card) < 15:
+                    cand = random.choice([n for n in base_universe if n not in card])
+                    card.add(cand)
+                
+                self._ajustar_equilibrio(card, base_universe)
+                cartoes.append(sorted(list(card)))
+        
+        return cartoes
+    
+    def _ajustar_equilibrio(self, card, base_universe):
+        """Ajusta o equilíbrio de pares/ímpares no cartão"""
+        pares = sum(1 for n in card if n%2==0)
+        if pares < 6:
+            # trocar um ímpar por um par disponível
+            poss_pares = [n for n in base_universe if n%2==0 and n not in card]
+            poss_impares = [n for n in card if n%2==1]
+            if poss_pares and poss_impares:
+                card.remove(random.choice(poss_impares))
+                card.add(random.choice(poss_pares))
+        elif pares > 10:
+            poss_impares = [n for n in base_universe if n%2==1 and n not in card]
+            poss_pares_in = [n for n in card if n%2==0]
+            if poss_impares and poss_pares_in:
+                card.remove(random.choice(poss_pares_in))
+                card.add(random.choice(poss_impares))
     
     def obter_concursos_no_ciclo_formatados(self):
         """Retorna uma lista formatada dos concursos analisados no ciclo"""
@@ -935,6 +1033,8 @@ def carregar_estado():
         st.session_state.analise_ciclos = None
     if "concursos_info" not in st.session_state:
         st.session_state.concursos_info = {}
+    if "limite_ciclos" not in st.session_state:
+        st.session_state.limite_ciclos = None  # Novo: limite de concursos para análise de ciclos
 
 st.markdown("<h1 style='text-align: center;'>Lotofácil Inteligente</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center;'>SAMUCJ TECHNOLOGY</p>", unsafe_allow_html=True)
@@ -978,6 +1078,7 @@ with st.expander("📥 Capturar Concursos"):
                 st.session_state.cartoes_gerados = []
                 st.session_state.cartoes_gerados_padrao = []
                 st.session_state.combinacoes_combinatorias = {}
+                st.session_state.limite_ciclos = None
             else:
                 st.error("Não foi possível capturar concursos.")
 
@@ -992,13 +1093,6 @@ if st.session_state.concursos:
     
     # Inicializar análise de sequência/falha
     analise_sf = AnaliseSequenciaFalha(st.session_state.concursos)
-    # Inicializar análise de ciclos (dinâmico)
-    if st.session_state.analise_ciclos is None:
-        st.session_state.analise_ciclos = AnaliseCiclos(
-            st.session_state.concursos, 
-            st.session_state.concursos_info
-        )
-    analise_ciclos = st.session_state.analise_ciclos
     
     # NOVA ABA: Análise de Sequência/Falha
     abas = st.tabs([
@@ -1352,171 +1446,261 @@ if st.session_state.concursos:
             else:
                 st.warning("Nenhum cartão válido foi encontrado no arquivo.")
 
-    # Aba 9 - Ciclos da Lotofácil (nova)
+    # Aba 9 - Ciclos da Lotofácil (nova) - MODIFICADA
     with abas[8]:
         st.subheader("🔁 Ciclos da Lotofácil (Ciclo Dinâmico)")
-        st.write("Ciclo detectado com base nos concursos mais recentes (do mais recente para o mais antigo).")
+        st.write("Analise os ciclos de dezenas nos concursos mais recentes.")
         
-        # Mostrar estatísticas do ciclo
-        resumo = analise_ciclos.resumo()
+        # Configuração do limite de concursos
+        st.markdown("### ⚙️ Configuração da Análise de Ciclos")
         
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Status do Ciclo", resumo["status"])
-        with col2:
-            st.metric("Concursos no Ciclo", resumo["tamanho"])
-        with col3:
-            st.metric("Dezenas Faltantes", len(resumo["numeros_faltantes"]))
+        col_config1, col_config2 = st.columns([2, 1])
         
-        # Expander para detalhes do ciclo
-        with st.expander("📋 Detalhes do Ciclo", expanded=True):
-            st.write("### 🔍 Dezenas já saídas no ciclo (presentes)")
-            st.write(resumo["numeros_presentes"])
+        with col_config1:
+            # Slider para escolher quantos concursos analisar
+            max_concursos_disponiveis = len(st.session_state.concursos)
+            limite_ciclos = st.slider(
+                "Número de concursos anteriores para análise:",
+                min_value=3,
+                max_value=min(50, max_concursos_disponiveis),
+                value=st.session_state.limite_ciclos or 10,
+                step=1,
+                help="Quantos concursos mais recentes analisar para detectar o ciclo atual"
+            )
             
-            st.write("### ❗ Dezenas faltantes para fechar o ciclo")
-            if resumo["numeros_faltantes"]:
-                st.write(resumo["numeros_faltantes"])
-                st.info(f"**Total de {len(resumo['numeros_faltantes'])} dezenas faltantes** para completar o ciclo de 25 números.")
-            else:
-                st.success("✅ **Ciclo completo!** Todas as 25 dezenas já saíram neste ciclo.")
+            # Opção para incluir todas as dezenas faltantes
+            incluir_todas_faltantes = st.checkbox(
+                "Forçar inclusão de todas as dezenas faltantes nos cartões",
+                value=False,
+                help="Se marcado, garantirá que todas as dezenas que ainda não saíram no ciclo sejam incluídas nos cartões gerados"
+            )
         
-        # NOVA SEÇÃO: Concursos Analisados no Ciclo
-        with st.expander("📊 Concursos Analisados no Ciclo", expanded=True):
-            st.write("### 🗂️ Concursos considerados para formação do ciclo atual")
-            st.write("(Ordenados do mais recente para o mais antigo)")
+        with col_config2:
+            st.metric("Concursos Disponíveis", max_concursos_disponiveis)
+            if limite_ciclos:
+                st.metric("Concursos a Analisar", limite_ciclos)
+        
+        # Botão para aplicar configurações e analisar
+        if st.button("🔍 Analisar Ciclos com Nova Configuração", type="primary"):
+            st.session_state.limite_ciclos = limite_ciclos
+            st.session_state.analise_ciclos = AnaliseCiclos(
+                st.session_state.concursos, 
+                st.session_state.concursos_info,
+                limite_ciclos
+            )
+            st.session_state.resultado_ciclos = None
+            st.session_state.cartoes_ciclos = []
+            st.success(f"Ciclos analisados com os últimos {limite_ciclos} concursos!")
+        
+        # Mostrar estatísticas do ciclo se existir
+        if st.session_state.analise_ciclos:
+            analise_ciclos = st.session_state.analise_ciclos
+            resumo = analise_ciclos.resumo()
             
-            concursos_no_ciclo = analise_ciclos.obter_concursos_no_ciclo_formatados()
+            st.markdown("### 📊 Resultados da Análise de Ciclos")
             
-            if concursos_no_ciclo:
-                # Criar DataFrame para exibição
-                dados_concursos = []
-                for concurso_info in concursos_no_ciclo:
-                    dados_concursos.append({
-                        "Ordem": concurso_info["ordem"],
-                        "Concurso": concurso_info["numero_concurso"],
-                        "Posição": f"{concurso_info['ordem']}º mais recente",
-                        "Dezenas": ", ".join(str(d) for d in concurso_info["dezenas"]),
-                        "Total Dezenas": len(concurso_info["dezenas"])
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Status do Ciclo", resumo["status"])
+            with col2:
+                st.metric("Concursos Analisados", resumo["tamanho"])
+            with col3:
+                st.metric("Dezenas Presentes", len(resumo["numeros_presentes"]))
+            with col4:
+                st.metric("Dezenas Faltantes", len(resumo["numeros_faltantes"]))
+            
+            # Detalhes do ciclo
+            with st.expander("📋 Detalhes do Ciclo", expanded=True):
+                st.write("### 🔍 Dezenas já saídas no ciclo (presentes)")
+                st.write(resumo["numeros_presentes"])
+                
+                st.write("### ❗ Dezenas faltantes para fechar o ciclo")
+                if resumo["numeros_faltantes"]:
+                    st.write(resumo["numeros_faltantes"])
+                    faltantes_percent = (len(resumo['numeros_faltantes']) / 25) * 100
+                    st.info(f"**Total de {len(resumo['numeros_faltantes'])} dezenas faltantes** ({faltantes_percent:.1f}%) para completar o ciclo de 25 números.")
+                else:
+                    st.success("✅ **Ciclo completo!** Todas as 25 dezenas já saíram neste ciclo.")
+                
+                # Informação sobre o limite
+                if resumo.get("limite_concursos"):
+                    st.write(f"**Limite de análise:** {resumo['limite_concursos']} concursos")
+                    if not resumo["ciclo_completo"] and resumo["tamanho"] >= resumo["limite_concursos"]:
+                        st.warning(f"⚠️ O ciclo não foi completado dentro do limite de {resumo['limite_concursos']} concursos analisados.")
+            
+            # Concursos Analisados no Ciclo
+            with st.expander("📊 Concursos Analisados no Ciclo", expanded=True):
+                st.write(f"### 🗂️ Concursos considerados (últimos {limite_ciclos if st.session_state.limite_ciclos else resumo['tamanho']})")
+                st.write("(Ordenados do mais recente para o mais antigo)")
+                
+                concursos_no_ciclo = analise_ciclos.obter_concursos_no_ciclo_formatados()
+                
+                if concursos_no_ciclo:
+                    # Criar DataFrame para exibição
+                    dados_concursos = []
+                    for concurso_info in concursos_no_ciclo:
+                        dados_concursos.append({
+                            "Ordem": concurso_info["ordem"],
+                            "Concurso": concurso_info["numero_concurso"],
+                            "Posição": f"{concurso_info['ordem']}º mais recente",
+                            "Dezenas": ", ".join(str(d) for d in concurso_info["dezenas"]),
+                            "Total Dezenas": len(concurso_info["dezenas"])
+                        })
+                    
+                    df_concursos = pd.DataFrame(dados_concursos)
+                    st.dataframe(df_concursos, hide_index=True, use_container_width=True)
+                    
+                    # Estatísticas dos concursos no ciclo
+                    st.write("### 📈 Estatísticas dos Concursos no Ciclo")
+                    col_stat1, col_stat2, col_stat3 = st.columns(3)
+                    with col_stat1:
+                        st.metric("Total Concursos", len(concursos_no_ciclo))
+                    with col_stat2:
+                        # Média de dezenas por concurso (deve ser 15)
+                        media_dezenas = np.mean([len(c["dezenas"]) for c in concursos_no_ciclo])
+                        st.metric("Média Dezenas/Concurso", f"{media_dezenas:.1f}")
+                    with col_stat3:
+                        # Dezenas únicas totais
+                        dezenas_unicas = len(resumo["numeros_presentes"])
+                        st.metric("Dezenas Únicas", dezenas_unicas)
+                    
+                    # Gráfico de evolução do ciclo
+                    st.write("### 📊 Evolução das Dezenas por Concurso")
+                    dezenas_acumuladas = []
+                    dezenas_unicas_acum = []
+                    for i, concurso_info in enumerate(concursos_no_ciclo, 1):
+                        dezenas_ate_agora = set()
+                        for j in range(i):
+                            dezenas_ate_agora.update(concursos_no_ciclo[j-1]["dezenas"])
+                        dezenas_acumuladas.append(len(concursos_no_ciclo[i-1]["dezenas"]))
+                        dezenas_unicas_acum.append(len(dezenas_ate_agora))
+                    
+                    evolucao_df = pd.DataFrame({
+                        "Concurso": [f"Concurso {i}" for i in range(1, len(concursos_no_ciclo)+1)],
+                        "Dezenas no Concurso": dezenas_acumuladas,
+                        "Dezenas Únicas Acumuladas": dezenas_unicas_acum
                     })
-                
-                df_concursos = pd.DataFrame(dados_concursos)
-                st.dataframe(df_concursos, hide_index=True, use_container_width=True)
-                
-                # Estatísticas dos concursos no ciclo
-                st.write("### 📈 Estatísticas dos Concursos no Ciclo")
-                col_stat1, col_stat2, col_stat3 = st.columns(3)
-                with col_stat1:
-                    st.metric("Total Concursos", len(concursos_no_ciclo))
-                with col_stat2:
-                    # Média de dezenas por concurso (deve ser 15)
-                    media_dezenas = np.mean([len(c["dezenas"]) for c in concursos_no_ciclo])
-                    st.metric("Média Dezenas/Concurso", f"{media_dezenas:.1f}")
-                with col_stat3:
-                    # Dezenas únicas totais
-                    dezenas_unicas = len(resumo["numeros_presentes"])
-                    st.metric("Dezenas Únicas", dezenas_unicas)
-                
-                # Gráfico de evolução do ciclo
-                st.write("### 📊 Evolução das Dezenas por Concurso")
-                dezenas_acumuladas = []
-                dezenas_unicas_acum = []
-                for i, concurso_info in enumerate(concursos_no_ciclo, 1):
-                    dezenas_ate_agora = set()
-                    for j in range(i):
-                        dezenas_ate_agora.update(concursos_no_ciclo[j-1]["dezenas"])
-                    dezenas_acumuladas.append(len(concursos_no_ciclo[i-1]["dezenas"]))
-                    dezenas_unicas_acum.append(len(dezenas_ate_agora))
-                
-                evolucao_df = pd.DataFrame({
-                    "Concurso": [f"Concurso {i}" for i in range(1, len(concursos_no_ciclo)+1)],
-                    "Dezenas no Concurso": dezenas_acumuladas,
-                    "Dezenas Únicas Acumuladas": dezenas_unicas_acum
-                })
-                
-                st.line_chart(evolucao_df.set_index("Concurso"))
-                
-            else:
-                st.warning("Nenhum concurso foi analisado para o ciclo.")
-        
-        st.markdown("---")
-        st.subheader("🎯 Gerar Cartões Baseados no Ciclo")
-        
-        col_btn1, col_btn2 = st.columns(2)
-        with col_btn1:
-            if st.button("🔄 Reanalisar Ciclo", use_container_width=True):
-                st.session_state.analise_ciclos = AnaliseCiclos(
-                    st.session_state.concursos, 
-                    st.session_state.concursos_info
-                )
-                analise_ciclos = st.session_state.analise_ciclos
-                st.session_state.resultado_ciclos = analise_ciclos.resumo()
-                st.session_state.cartoes_ciclos = []
-                st.success("Ciclo reanalisado com sucesso!")
-                st.rerun()
-        
-        with col_btn2:
-            if st.button("🎯 Gerar 5 Cartões — Estratégia Ciclos", use_container_width=True):
-                cartoes_ciclo = analise_ciclos.gerar_5_cartoes_ciclo(n_cartoes=5, seed=random.randint(1,999999))
-                st.session_state.cartoes_ciclos = cartoes_ciclo
-                st.session_state.resultado_ciclos = analise_ciclos.resumo()
-                st.success("5 cartões gerados com prioridade nas dezenas faltantes do ciclo!")
-        
-        # Mostrar cartões gerados
-        if st.session_state.cartoes_ciclos:
-            st.subheader("📋 Cartões Gerados (Priorizando Dezenas do Ciclo)")
+                    
+                    st.line_chart(evolucao_df.set_index("Concurso"))
+                    
+                else:
+                    st.warning("Nenhum concurso foi analisado para o ciclo.")
             
-            # Tabela de estatísticas dos cartões
-            stats_cartoes = []
-            for i, c in enumerate(st.session_state.cartoes_ciclos, 1):
-                pares = sum(1 for n in c if n%2==0)
-                primos = sum(1 for n in c if n in {2,3,5,7,11,13,17,19,23})
-                soma = sum(c)
-                faltantes_incluidos = len(set(c) & set(resumo["numeros_faltantes"]))
+            st.markdown("---")
+            st.subheader("🎯 Gerar Cartões Baseados no Ciclo")
+            
+            col_btn1, col_btn2 = st.columns(2)
+            with col_btn1:
+                if st.button("🔄 Reanalisar Ciclo", use_container_width=True):
+                    st.session_state.analise_ciclos = AnaliseCiclos(
+                        st.session_state.concursos, 
+                        st.session_state.concursos_info,
+                        st.session_state.limite_ciclos or limite_ciclos
+                    )
+                    analise_ciclos = st.session_state.analise_ciclos
+                    st.session_state.resultado_ciclos = analise_ciclos.resumo()
+                    st.session_state.cartoes_ciclos = []
+                    st.success("Ciclo reanalisado com sucesso!")
+                    st.rerun()
+            
+            with col_btn2:
+                if st.button("🎯 Gerar 5 Cartões — Estratégia Ciclos", use_container_width=True):
+                    cartoes_ciclo = analise_ciclos.gerar_5_cartoes_ciclo(
+                        n_cartoes=5, 
+                        seed=random.randint(1,999999),
+                        incluir_todas_faltantes=incluir_todas_faltantes
+                    )
+                    st.session_state.cartoes_ciclos = cartoes_ciclo
+                    st.session_state.resultado_ciclos = analise_ciclos.resumo()
+                    st.success("5 cartões gerados com prioridade nas dezenas do ciclo!")
+            
+            # Mostrar cartões gerados
+            if st.session_state.cartoes_ciclos:
+                st.subheader("📋 Cartões Gerados (Priorizando Dezenas do Ciclo)")
                 
-                stats_cartoes.append({
-                    "Cartão": i,
-                    "Dezenas": ", ".join(str(n) for n in c),
-                    "Pares": pares,
-                    "Primos": primos,
-                    "Soma": soma,
-                    "Faltantes Incluídos": faltantes_incluidos
-                })
-            
-            # Exibir como DataFrame
-            df_cartoes = pd.DataFrame(stats_cartoes)
-            st.dataframe(df_cartoes, hide_index=True, use_container_width=True)
-            
-            # Detalhes expandidos de cada cartão
-            with st.expander("🔍 Ver Detalhes dos Cartões"):
+                if incluir_todas_faltantes and resumo["numeros_faltantes"]:
+                    st.info(f"✅ Configuração ativa: Incluindo todas as {len(resumo['numeros_faltantes'])} dezenas faltantes nos cartões.")
+                
+                # Tabela de estatísticas dos cartões
+                stats_cartoes = []
                 for i, c in enumerate(st.session_state.cartoes_ciclos, 1):
                     pares = sum(1 for n in c if n%2==0)
                     primos = sum(1 for n in c if n in {2,3,5,7,11,13,17,19,23})
                     soma = sum(c)
-                    faltantes_incluidos = set(c) & set(resumo["numeros_faltantes"])
+                    faltantes_incluidos = len(set(c) & set(resumo["numeros_faltantes"]))
+                    presentes_incluidos = len(set(c) & set(resumo["numeros_presentes"]))
                     
-                    col_c1, col_c2 = st.columns([3, 2])
-                    with col_c1:
-                        st.write(f"**Cartão {i}:** {c}")
-                    with col_c2:
-                        st.write(f"**Estatísticas:**")
-                        st.write(f"- Pares: {pares}")
-                        st.write(f"- Primos: {primos}")
-                        st.write(f"- Soma: {soma}")
+                    stats_cartoes.append({
+                        "Cartão": i,
+                        "Dezenas": ", ".join(str(n) for n in c),
+                        "Pares": pares,
+                        "Primos": primos,
+                        "Soma": soma,
+                        "Faltantes Incluídos": faltantes_incluidos,
+                        "Presentes Incluídos": presentes_incluidos
+                    })
+                
+                # Exibir como DataFrame
+                df_cartoes = pd.DataFrame(stats_cartoes)
+                st.dataframe(df_cartoes, hide_index=True, use_container_width=True)
+                
+                # Detalhes expandidos de cada cartão
+                with st.expander("🔍 Ver Detalhes dos Cartões"):
+                    for i, c in enumerate(st.session_state.cartoes_ciclos, 1):
+                        pares = sum(1 for n in c if n%2==0)
+                        primos = sum(1 for n in c if n in {2,3,5,7,11,13,17,19,23})
+                        soma = sum(c)
+                        faltantes_incluidos = set(c) & set(resumo["numeros_faltantes"])
+                        presentes_incluidos = set(c) & set(resumo["numeros_presentes"])
+                        
+                        col_c1, col_c2 = st.columns([3, 2])
+                        with col_c1:
+                            st.write(f"**Cartão {i}:** {c}")
+                        with col_c2:
+                            st.write(f"**Estatísticas:**")
+                            st.write(f"- Pares: {pares}")
+                            st.write(f"- Primos: {primos}")
+                            st.write(f"- Soma: {soma}")
+                            st.write(f"- Faltantes: {len(faltantes_incluidos)}/{len(resumo['numeros_faltantes'])}")
+                            st.write(f"- Presentes: {len(presentes_incluidos)}/{len(resumo['numeros_presentes'])}")
+                        
                         if faltantes_incluidos:
-                            st.write(f"- Faltantes incluídos: {len(faltantes_incluidos)}")
-                            st.write(f"  ({', '.join(str(n) for n in sorted(faltantes_incluidos))})")
-                    
-                    st.write("---")
+                            st.write(f"**Dezenas faltantes incluídas:** {', '.join(str(n) for n in sorted(faltantes_incluidos))}")
+                        
+                        st.write("---")
+                
+                # Botão para exportar
+                st.subheader("💾 Exportar Cartões do Ciclo")
+                conteudo_ciclos = "\n".join(",".join(str(n) for n in cartao) for cartao in st.session_state.cartoes_ciclos)
+                st.download_button(
+                    "📥 Baixar Cartões do Ciclo", 
+                    data=conteudo_ciclos, 
+                    file_name=f"cartoes_ciclo_{limite_ciclos}_concursos.txt", 
+                    mime="text/plain"
+                )
+        else:
+            st.info("👆 Configure e analise os ciclos usando o botão acima.")
             
-            # Botão para exportar
-            st.subheader("💾 Exportar Cartões do Ciclo")
-            conteudo_ciclos = "\n".join(",".join(str(n) for n in cartao) for cartao in st.session_state.cartoes_ciclos)
-            st.download_button(
-                "📥 Baixar Cartões do Ciclo", 
-                data=conteudo_ciclos, 
-                file_name="cartoes_ciclo_lotofacil.txt", 
-                mime="text/plain"
-            )
+            # Exemplo de como funciona
+            with st.expander("ℹ️ Como funciona a análise de ciclos?"):
+                st.write("""
+                **Análise de Ciclos da Lotofácil:**
+                
+                1. **Coleta de dados**: Analisa os concursos mais recentes (você escolhe quantos)
+                2. **Detecção de ciclo**: Verifica quantos concursos são necessários para que todas as 25 dezenas apareçam pelo menos uma vez
+                3. **Identificação**: Separa as dezenas que já saíram (presentes) e as que ainda não saíram (faltantes) no ciclo atual
+                4. **Geração de cartões**: Cria jogos priorizando as dezenas faltantes e as que têm maior atraso
+                
+                **Benefícios:**
+                - Identifica dezenas "atrasadas" que têm maior probabilidade de sair
+                - Ajuda a diversificar os jogos incluindo dezenas que estão em falta
+                - Fornece uma visão dinâmica do comportamento das dezenas ao longo do tempo
+                
+                **Recomendações:**
+                - Analise entre 5 e 25 concursos para um bom equilíbrio
+                - Se o ciclo estiver "Atrasado", as dezenas faltantes têm alta prioridade
+                - Use a opção "Incluir todas as faltantes" para garantir cobertura máxima
+                """)
     
 # Sidebar - Gerenciamento de Dados
 with st.sidebar:
@@ -1549,5 +1733,7 @@ with st.sidebar:
         st.write(f"**Status:** {ciclo_resumo['status']}")
         st.write(f"**Concursos analisados:** {ciclo_resumo['tamanho']}")
         st.write(f"**Dezenas faltantes:** {len(ciclo_resumo['numeros_faltantes'])}")
+        if st.session_state.limite_ciclos:
+            st.write(f"**Limite configurado:** {st.session_state.limite_ciclos} concursos")
 
 st.markdown("<hr><p style='text-align: center;'>SAMUCJ TECHNOLOGY</p>", unsafe_allow_html=True)
