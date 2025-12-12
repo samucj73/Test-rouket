@@ -1124,8 +1124,8 @@ if st.session_state.concursos:
                             st.code(f"Score: {score:.1f} → {combo}")
             
             # Exportar combinações
-            st.markdown("### 💾 Exporta
-r Combinações")
+            st.markdown("### 💾 Exportar Combinações")
+#r Combinações")
             
             col_export1, col_export2 = st.columns(2)
             
