@@ -629,8 +629,9 @@ class LotoFacilIA:
             if len(self.X) > 0 and len(self.Y) > 0:
                 try:
                     self.treinar_modelos()
-                except Exception:
+                except Exception as e:
                     # Em ambiente com pouco dado ou CatBoost ausente, ignorar treinamento
+                    st.warning(f"CatBoost não pôde ser carregado: {e}")
                     self.models = {}
 
     def matriz_binaria(self):
@@ -730,10 +731,13 @@ class LotoFacilIA:
 
     def treinar_modelos(self):
         for i, n in enumerate(self.numeros):
-            model = CatBoostClassifier(iterations=600, verbose=0, random_state=42)
-            y = self.Y[:,i]
-            model.fit(self.X, y)
-            self.models[n] = model
+            try:
+                model = CatBoostClassifier(iterations=600, verbose=0, random_state=42)
+                y = self.Y[:,i]
+                model.fit(self.X, y)
+                self.models[n] = model
+            except Exception as e:
+                st.warning(f"Erro ao treinar modelo para número {n}: {e}")
 
     def prever_proximo(self):
         if not self.models:
@@ -745,8 +749,11 @@ class LotoFacilIA:
         ultima = self.gerar_features()[-1].reshape(1,-1)
         probabilidades = {}
         for n in self.numeros:
-            prob = self.models[n].predict_proba(ultima)[0][1]
-            probabilidades[n] = prob
+            try:
+                prob = self.models[n].predict_proba(ultima)[0][1]
+                probabilidades[n] = prob
+            except:
+                probabilidades[n] = 0.5
         return probabilidades
 
     def gerar_5_jogos(self, probabilidades):
@@ -893,6 +900,8 @@ def carregar_estado():
         st.session_state.resultado_ciclos = None
     if "cartoes_ciclos" not in st.session_state:
         st.session_state.cartoes_ciclos = []
+    if "analise_ciclos" not in st.session_state:
+        st.session_state.analise_ciclos = None
 
 st.markdown("<h1 style='text-align: center;'>Lotofácil Inteligente</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center;'>SAMUCJ TECHNOLOGY</p>", unsafe_allow_html=True)
@@ -917,6 +926,10 @@ with st.expander("📥 Capturar Concursos"):
                 st.session_state.jogos_sequencia_falha = []
                 st.session_state.resultado_ciclos = None
                 st.session_state.cartoes_ciclos = []
+                st.session_state.analise_ciclos = None
+                st.session_state.cartoes_gerados = []
+                st.session_state.cartoes_gerados_padrao = []
+                st.session_state.combinacoes_combinatorias = {}
             else:
                 st.error("Não foi possível capturar concursos.")
 
@@ -932,7 +945,9 @@ if st.session_state.concursos:
     # Inicializar análise de sequência/falha
     analise_sf = AnaliseSequenciaFalha(st.session_state.concursos)
     # Inicializar análise de ciclos (dinâmico)
-    analise_ciclos = AnaliseCiclos(st.session_state.concursos)
+    if st.session_state.analise_ciclos is None:
+        st.session_state.analise_ciclos = AnaliseCiclos(st.session_state.concursos)
+    analise_ciclos = st.session_state.analise_ciclos
     
     # NOVA ABA: Análise de Sequência/Falha
     abas = st.tabs([
@@ -1125,7 +1140,6 @@ if st.session_state.concursos:
             
             # Exportar combinações
             st.markdown("### 💾 Exportar Combinações")
-#r Combinações")
             
             col_export1, col_export2 = st.columns(2)
             
@@ -1305,9 +1319,11 @@ if st.session_state.concursos:
         
         st.markdown("---")
         if st.button("🔄 Reanalisar Ciclo"):
-            analise_ciclos = AnaliseCiclos(st.session_state.concursos)
+            st.session_state.analise_ciclos = AnaliseCiclos(st.session_state.concursos)
+            analise_ciclos = st.session_state.analise_ciclos
             st.session_state.resultado_ciclos = analise_ciclos.resumo()
-            st.experimental_rerun()
+            st.session_state.cartoes_ciclos = []
+            st.success("Ciclo reanalisado!")
         
         if st.button("🎯 Gerar 5 Cartões — Estratégia Ciclos"):
             cartoes_ciclo = analise_ciclos.gerar_5_cartoes_ciclo(n_cartoes=5, seed=random.randint(1,999999))
@@ -1350,8 +1366,7 @@ with st.sidebar:
     if st.session_state.cartoes_gerados_padrao:
         st.write(f"Cartões por padrões: {len(st.session_state.cartoes_gerados_padrao)}")
     if st.session_state.combinacoes_combinatorias:
-        total_combinacoes = sum(len(combinacoes) for combinacoes in st.session_state.combinacoes_combinatoria
-s.values()) if st.session_state.combinacoes_combinatoria else 0
+        total_combinacoes = sum(len(combinacoes) for combinacoes in st.session_state.combinacoes_combinatorias.values())
         st.write(f"Combinações combinatorias: {total_combinacoes}")
     if st.session_state.cartoes_ciclos:
         st.write(f"Cartões Ciclos gerados: {len(st.session_state.cartoes_ciclos)}")
