@@ -1,3 +1,4 @@
+
 import streamlit as st
 from datetime import datetime, timedelta, timezone
 import requests
@@ -150,68 +151,34 @@ def salvar_apostas(apostas: list):
     }
     salvar_json(APOSTAS_PATH, dados)
 
-def criar_dados_aposta_exemplo() -> list:
-    """Cria dados de exemplo para apostas"""
-    return [
-        {
-            "id": 1,
-            "market": "Mais de 2,5 • Total de Gols",
-            "odds": 1.39,
-            "teams": "Stuttgart - Maccabi Tel Aviv FC",
-            "date": "11/12/2025 • 14:45",
-            "result": "won",
-            "selected": True
-        },
-        {
-            "id": 2,
-            "market": "Mais de 2,5 • Total de Gols",
-            "odds": 1.80,
-            "teams": "Dínamo Zagreb - Betis",
-            "date": "11/12/2025 • 14:45",
-            "result": "won",
-            "selected": True
-        },
-        {
-            "id": 3,
-            "market": "Mais de 2,5 • Total de Gols",
-            "odds": 1.58,
-            "teams": "Freiburg - FC RB Salzburg",
-            "date": "11/12/2025 • 17:00",
-            "result": "lost",
-            "selected": False
-        },
-        {
-            "id": 4,
-            "market": "Mais de 2,5 • Total de Gols",
-            "odds": 1.58,
-            "teams": "FC Basel 1893 - Aston Villa",
-            "date": "11/12/2025 • 17:00",
-            "result": "won",
-            "selected": True
-        }
-    ]
-
-def converter_jogos_para_apostas(jogos_processados: list):
-    """Converte jogos processados em formato de apostas"""
-    if not jogos_processados:
-        return criar_dados_aposta_exemplo()
+def converter_top_jogos_para_apostas(top_jogos: list, top_n: int = 5):
+    """Converte os top jogos em formato de apostas estilo 'Minhas Apostas'"""
+    if not top_jogos:
+        return []
     
     apostas = []
     
-    for i, jogo in enumerate(jogos_processados[:8]):  # Limitar a 8 jogos
-        # Determinar resultado fictício baseado na confiança
+    # Ordenar por confiança e pegar apenas os N melhores
+    jogos_ordenados = sorted(top_jogos, key=lambda x: x.get("confianca", 0), reverse=True)
+    top_jogos_selecionados = jogos_ordenados[:top_n]
+    
+    for i, jogo in enumerate(top_jogos_selecionados):
+        # Criar odds baseada na confiança (quanto maior a confiança, menor as odds)
         confianca = jogo.get("confianca", 50)
-        resultado = "won" if confianca > 65 else "lost"
         
-        # Criar odds baseada na confiança
-        odds_base = 1.3 + (confianca / 100) * 0.7
-        odds = round(odds_base, 2)
+        # Fórmula: odds entre 1.20 e 2.00, inversamente proporcional à confiança
+        odds_base = 2.0 - (confianca / 100) * 0.8
+        odds = round(max(1.20, min(2.00, odds_base)), 2)
         
         # Formatar data
         if isinstance(jogo.get("hora"), datetime):
             data_str = jogo["hora"].strftime("%d/%m/%Y • %H:%M")
         else:
             data_str = datetime.now().strftime("%d/%m/%Y • %H:%M")
+        
+        # Determinar resultado baseado na tendência (simulação)
+        tendencia = jogo.get("tendencia", "")
+        resultado = "won" if "Mais" in tendencia else "lost"  # Simplificação
         
         aposta = {
             "id": i + 1,
@@ -220,7 +187,11 @@ def converter_jogos_para_apostas(jogos_processados: list):
             "teams": f"{jogo.get('home', 'Time A')} - {jogo.get('away', 'Time B')}",
             "date": data_str,
             "result": resultado,
-            "selected": resultado == "won"  # Selecionar automaticamente as ganhas
+            "selected": True,  # Todos selecionados por padrão
+            "liga": jogo.get("liga", "Desconhecido"),
+            "confianca_original": confianca,
+            "tendencia_original": tendencia,
+            "estimativa_original": jogo.get("estimativa", 0)
         }
         apostas.append(aposta)
     
@@ -1507,10 +1478,10 @@ def enviar_alerta_westham_style(jogos_conf: list, threshold: int, chat_id: str =
         enviar_telegram(msg, chat_id=chat_id)
 
 # =============================
-# NOVO: Sistema de Alertas de Apostas
+# NOVO: Sistema de Alertas de Apostas - Estilo "Minhas Apostas"
 # =============================
 def render_bet_alert_css():
-    """Renderiza o CSS para o alerta de apostas"""
+    """Renderiza o CSS para o alerta de apostas estilo 'Minhas Apostas'"""
     return """
     <style>
     /* Estilos para o Alerta de Apostas */
@@ -1530,22 +1501,22 @@ def render_bet_alert_css():
         transition: opacity 0.3s ease;
     }
     
+    .alert-bet-container.show {
+        opacity: 1;
+    }
+    
     .alert-bet-box {
         width: 100%;
         max-width: 850px;
-        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        background: #0f172a;
         border-radius: 16px;
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
         overflow: hidden;
-        border: 1px solid #33334d;
+        border: 1px solid #1e293b;
         max-height: 85vh;
         overflow-y: auto;
         transform: scale(0.95);
         transition: transform 0.3s ease;
-    }
-    
-    .alert-bet-container.show {
-        opacity: 1;
     }
     
     .alert-bet-container.show .alert-bet-box {
@@ -1553,9 +1524,9 @@ def render_bet_alert_css():
     }
     
     .alert-bet-header {
-        background: linear-gradient(90deg, #2d4263 0%, #191919 100%);
+        background: #1e293b;
         padding: 20px;
-        border-bottom: 2px solid #c84b31;
+        border-bottom: 2px solid #c2410c;
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -1574,7 +1545,7 @@ def render_bet_alert_css():
     }
     
     .alert-bet-title i {
-        color: #ecdb2c;
+        color: #f59e0b;
     }
     
     .alert-bet-close {
@@ -1587,39 +1558,42 @@ def render_bet_alert_css():
     }
     
     .alert-bet-close:hover {
-        color: #c84b31;
+        color: #c2410c;
     }
     
     .alert-bet-body {
         padding: 25px;
     }
     
-    /* Estilos dos jogos para apostas */
+    /* Estilos dos jogos para apostas - Estilo da imagem */
     .bet-games-list {
         margin-bottom: 30px;
     }
     
     .bet-game-item {
-        background: rgba(40, 40, 60, 0.7);
-        border-radius: 12px;
-        padding: 18px;
-        margin-bottom: 15px;
-        border-left: 4px solid #2d4263;
+        background: #1e293b;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 12px;
+        border-left: 4px solid #3b82f6;
         transition: all 0.3s;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
     }
     
     .bet-game-item:hover {
-        background: rgba(50, 50, 75, 0.8);
+        background: #334155;
         transform: translateY(-2px);
     }
     
     .bet-game-item.selected {
-        border-left-color: #4CAF50;
-        background: rgba(60, 80, 60, 0.3);
+        border-left-color: #10b981;
+        background: rgba(16, 185, 129, 0.1);
     }
     
     .bet-game-item.lost {
-        border-left-color: #c84b31;
+        border-left-color: #ef4444;
     }
     
     .bet-game-info {
@@ -1628,91 +1602,96 @@ def render_bet_alert_css():
     
     .bet-game-market {
         font-weight: 600;
-        color: #ecdb2c;
-        font-size: 16px;
-        margin-bottom: 5px;
+        color: #f59e0b;
+        font-size: 14px;
+        margin-bottom: 4px;
     }
     
     .bet-game-teams {
-        font-size: 18px;
+        font-size: 16px;
         font-weight: 600;
-        margin-bottom: 5px;
+        margin-bottom: 4px;
         color: #ffffff;
     }
     
     .bet-game-date {
-        font-size: 14px;
-        color: #a0a0c0;
+        font-size: 12px;
+        color: #94a3b8;
     }
     
     .bet-game-odds {
-        font-size: 22px;
+        font-size: 20px;
         font-weight: 700;
-        color: #4CAF50;
+        color: #10b981;
         margin-right: 20px;
+        min-width: 60px;
+        text-align: right;
     }
     
     .bet-game-checkbox {
-        width: 24px;
-        height: 24px;
-        accent-color: #4CAF50;
+        width: 20px;
+        height: 20px;
+        accent-color: #10b981;
         cursor: pointer;
     }
     
     .bet-result-badge {
         display: inline-block;
-        padding: 4px 10px;
-        border-radius: 20px;
-        font-size: 12px;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 11px;
         font-weight: 600;
-        margin-top: 8px;
+        margin-top: 6px;
     }
     
     .bet-won {
-        background-color: rgba(76, 175, 80, 0.2);
-        color: #4CAF50;
+        background-color: rgba(16, 185, 129, 0.2);
+        color: #10b981;
     }
     
     .bet-lost {
-        background-color: rgba(200, 75, 49, 0.2);
-        color: #c84b31;
+        background-color: rgba(239, 68, 68, 0.2);
+        color: #ef4444;
     }
     
     /* Controles da aposta */
     .bet-controls-panel {
-        background: rgba(30, 30, 50, 0.8);
+        background: #1e293b;
         border-radius: 12px;
-        padding: 25px;
+        padding: 20px;
         margin-top: 20px;
     }
     
     .bet-controls-title {
-        font-size: 18px;
+        font-size: 16px;
         font-weight: 600;
-        margin-bottom: 20px;
+        margin-bottom: 16px;
         color: #ffffff;
-        border-bottom: 1px solid #444;
-        padding-bottom: 10px;
+        border-bottom: 1px solid #334155;
+        padding-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
     }
     
     .bet-amount-container {
         display: flex;
         flex-direction: column;
-        margin-bottom: 25px;
+        margin-bottom: 20px;
     }
     
     .bet-amount-label {
-        font-size: 16px;
-        margin-bottom: 10px;
+        font-size: 14px;
+        margin-bottom: 8px;
         color: #e0e0e0;
     }
     
     .bet-amount-input {
-        background: rgba(20, 20, 35, 0.9);
-        border: 2px solid #444466;
+        background: #0f172a;
+        border: 2px solid #334155;
         border-radius: 8px;
-        padding: 15px 15px 15px 50px;
-        font-size: 18px;
+        padding: 12px 12px 12px 40px;
+        font-size: 16px;
         color: #ffffff;
         width: 100%;
         transition: border-color 0.3s;
@@ -1720,88 +1699,100 @@ def render_bet_alert_css():
     
     .bet-amount-input:focus {
         outline: none;
-        border-color: #4CAF50;
+        border-color: #10b981;
     }
     
     .bet-summary-grid {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
-        gap: 20px;
-        margin-top: 20px;
+        gap: 16px;
+        margin-top: 16px;
     }
     
     .bet-summary-item {
-        background: rgba(20, 20, 35, 0.9);
-        border-radius: 10px;
-        padding: 20px;
+        background: #0f172a;
+        border-radius: 8px;
+        padding: 16px;
         text-align: center;
     }
     
     .bet-summary-label {
-        font-size: 14px;
-        color: #a0a0c0;
-        margin-bottom: 8px;
+        font-size: 12px;
+        color: #94a3b8;
+        margin-bottom: 6px;
     }
     
     .bet-summary-value {
-        font-size: 26px;
+        font-size: 20px;
         font-weight: 700;
-        color: #ecdb2c;
+        color: #f59e0b;
     }
     
     .bet-summary-value.total {
-        color: #4CAF50;
-        font-size: 28px;
+        color: #10b981;
+        font-size: 22px;
     }
     
     .bet-actions {
         display: flex;
         justify-content: space-between;
-        margin-top: 30px;
-        gap: 15px;
+        margin-top: 24px;
+        gap: 12px;
     }
     
     .bet-action-btn {
         flex: 1;
-        padding: 18px;
+        padding: 14px;
         border: none;
-        border-radius: 10px;
-        font-size: 18px;
+        border-radius: 8px;
+        font-size: 16px;
         font-weight: 600;
         cursor: pointer;
         transition: all 0.3s;
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 10px;
+        gap: 8px;
     }
     
     .bet-confirm-btn {
-        background: linear-gradient(90deg, #2d4263 0%, #4CAF50 100%);
+        background: linear-gradient(90deg, #10b981 0%, #059669 100%);
         color: white;
     }
     
     .bet-cancel-btn {
-        background: rgba(60, 60, 80, 0.8);
+        background: #334155;
         color: #e0e0e0;
     }
     
     .bet-action-btn:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     }
     
     .bet-confirm-btn:hover {
-        background: linear-gradient(90deg, #375a8c 0%, #5cd860 100%);
+        background: linear-gradient(90deg, #34d399 0%, #10b981 100%);
     }
     
     .bet-cancel-btn:hover {
-        background: rgba(80, 80, 100, 0.9);
+        background: #475569;
     }
     
-    .bet-selected-count {
-        color: #4CAF50;
-        font-weight: 700;
+    .currency-prefix {
+        position: relative;
+        display: inline-block;
+        width: 100%;
+    }
+    
+    .currency-prefix::before {
+        content: "R$";
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #94a3b8;
+        font-weight: 600;
+        z-index: 1;
     }
     
     /* Responsividade */
@@ -1813,11 +1804,16 @@ def render_bet_alert_css():
         .bet-game-item {
             flex-direction: column;
             align-items: flex-start;
+            gap: 8px;
         }
         
         .bet-game-odds {
-            margin-top: 10px;
+            margin-top: 8px;
             margin-right: 0;
+            align-self: flex-start;
+        }
+        
+        .bet-game-checkbox {
             align-self: flex-end;
         }
         
@@ -1833,14 +1829,14 @@ def render_bet_alert_css():
     """
 
 def render_bet_alert_html():
-    """Renderiza o HTML do alerta de apostas"""
+    """Renderiza o HTML do alerta de apostas estilo 'Minhas Apostas'"""
     return """
     <div class="alert-bet-container" id="betAlertContainer">
         <div class="alert-bet-box">
             <div class="alert-bet-header">
                 <div class="alert-bet-title">
-                    <i class="fas fa-bullseye"></i>
-                    Minhas Apostas - Jogos Selecionados
+                    <i class="fas fa-coins"></i>
+                    Minhas Apostas - Top Jogos Selecionados
                 </div>
                 <button class="alert-bet-close" id="betAlertClose">
                     <i class="fas fa-times"></i>
@@ -1858,9 +1854,8 @@ def render_bet_alert_html():
                     </div>
                     
                     <div class="bet-amount-container">
-                        <label class="bet-amount-label">Valor da Aposta (R$)</label>
-                        <div style="position: relative;">
-                            <span style="position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: #a0a0c0; font-weight: 600; z-index: 1;">R$</span>
+                        <label class="bet-amount-label">Valor da Aposta</label>
+                        <div class="currency-prefix">
                             <input type="number" class="bet-amount-input" id="betAmountInput" min="1" max="10000" value="20.00" step="0.01">
                         </div>
                     </div>
@@ -1892,7 +1887,7 @@ def render_bet_alert_html():
                             <i class="fas fa-check-circle"></i> Confirmar Aposta
                         </button>
                         <button class="bet-action-btn bet-cancel-btn" id="betCancel">
-                            <i class="fas fa-times-circle"></i> Cancelar
+                            <i class="fas fa-times-circle"></i> Fechar
                         </button>
                     </div>
                 </div>
@@ -1912,53 +1907,11 @@ def render_bet_alert_js():
         
         // Inicializar con dados
         init: function(gamesData) {
-            this.games = gamesData || this.getDefaultGames();
+            this.games = gamesData || [];
             this.betAmount = 20.00;
             this.setupEventListeners();
             this.renderGames();
             this.updateCalculations();
-        },
-        
-        // Obter jogos padrão
-        getDefaultGames: function() {
-            return [
-                {
-                    id: 1,
-                    market: "Mais de 2,5 • Total de Gols",
-                    odds: 1.39,
-                    teams: "Stuttgart - Maccabi Tel Aviv FC",
-                    date: "11/12/2025 • 14:45",
-                    result: "won",
-                    selected: true
-                },
-                {
-                    id: 2,
-                    market: "Mais de 2,5 • Total de Gols",
-                    odds: 1.80,
-                    teams: "Dínamo Zagreb - Betis",
-                    date: "11/12/2025 • 14:45",
-                    result: "won",
-                    selected: true
-                },
-                {
-                    id: 3,
-                    market: "Mais de 2,5 • Total de Gols",
-                    odds: 1.58,
-                    teams: "Freiburg - FC RB Salzburg",
-                    date: "11/12/2025 • 17:00",
-                    result: "lost",
-                    selected: false
-                },
-                {
-                    id: 4,
-                    market: "Mais de 2,5 • Total de Gols",
-                    odds: 1.58,
-                    teams: "FC Basel 1893 - Aston Villa",
-                    date: "11/12/2025 • 17:00",
-                    result: "won",
-                    selected: true
-                }
-            ];
         },
         
         // Mostrar alerta
@@ -1993,10 +1946,10 @@ def render_bet_alert_js():
                 confirmBtn.onclick = () => this.confirmBet();
             }
             
-            // Cancelar
+            // Cancelar/Fechar
             const cancelBtn = document.getElementById('betCancel');
             if (cancelBtn) {
-                cancelBtn.onclick = () => this.cancelBet();
+                cancelBtn.onclick = () => this.hide();
             }
             
             // Valor da aposta
@@ -2023,6 +1976,11 @@ def render_bet_alert_js():
             
             gamesList.innerHTML = '';
             
+            if (this.games.length === 0) {
+                gamesList.innerHTML = '<div style="text-align: center; color: #94a3b8; padding: 20px;">Nenhum jogo disponível para apostas.</div>';
+                return;
+            }
+            
             this.games.forEach(game => {
                 const gameItem = document.createElement('div');
                 gameItem.className = `bet-game-item ${game.selected ? 'selected' : ''} ${game.result === 'lost' ? 'lost' : ''}`;
@@ -2046,17 +2004,19 @@ def render_bet_alert_js():
                 checkbox.onchange = (e) => {
                     const gameId = parseInt(e.target.dataset.id);
                     const game = this.games.find(g => g.id === gameId);
-                    game.selected = e.target.checked;
-                    
-                    // Atualizar classe do item
-                    const gameItem = e.target.closest('.bet-game-item');
-                    if (e.target.checked) {
-                        gameItem.classList.add('selected');
-                    } else {
-                        gameItem.classList.remove('selected');
+                    if (game) {
+                        game.selected = e.target.checked;
+                        
+                        // Atualizar classe do item
+                        const gameItem = e.target.closest('.bet-game-item');
+                        if (e.target.checked) {
+                            gameItem.classList.add('selected');
+                        } else {
+                            gameItem.classList.remove('selected');
+                        }
+                        
+                        this.updateCalculations();
                     }
-                    
-                    this.updateCalculations();
                 };
             });
         },
@@ -2089,31 +2049,25 @@ def render_bet_alert_js():
             const totalOddsValue = parseFloat(document.getElementById('totalOdds').textContent);
             const totalWinningsValue = parseFloat(document.getElementById('totalWinnings').textContent);
             
-            // Enviar para Streamlit
-            const event = new CustomEvent('betConfirmed', {
-                detail: {
-                    jogos: selectedGames,
-                    valor: this.betAmount,
-                    cota: totalOddsValue,
-                    ganhos: totalWinningsValue
-                }
-            });
-            document.dispatchEvent(event);
-            
-            alert(`✅ Aposta confirmada!\\n\\nJogos selecionados: ${selectedGames.length}\\nValor da aposta: R$ ${this.betAmount.toFixed(2)}\\nCota total: ${totalOddsValue.toFixed(2)}\\nGanhos potenciais: R$ ${totalWinningsValue.toFixed(2)}`);
-            
-            this.hide();
-        },
-        
-        // Cancelar aposta
-        cancelBet: function() {
-            if (confirm('Deseja cancelar a seleção atual?')) {
-                this.games.forEach(game => game.selected = false);
-                document.getElementById('betAmountInput').value = '20.00';
-                this.betAmount = 20.00;
-                this.renderGames();
-                this.updateCalculations();
+            if (selectedGames.length === 0) {
+                alert('⚠️ Selecione pelo menos um jogo para apostar!');
+                return;
             }
+            
+            const message = `✅ Aposta confirmada!
+
+📊 Resumo da Aposta:
+• Jogos selecionados: ${selectedGames.length}
+• Valor da aposta: R$ ${this.betAmount.toFixed(2)}
+• Cota total: ${totalOddsValue.toFixed(2)}
+• Ganhos potenciais: R$ ${totalWinningsValue.toFixed(2)}
+
+🔥 Boa sorte!`;
+            
+            alert(message);
+            
+            // Opcional: Enviar para o backend ou salvar
+            this.hide();
         }
     };
     
@@ -2127,45 +2081,24 @@ def render_bet_alert_js():
     document.addEventListener('DOMContentLoaded', function() {
         // Esconder inicialmente
         document.getElementById('betAlertContainer').style.display = 'none';
-        
-        // Listener para eventos de aposta confirmada
-        document.addEventListener('betConfirmed', function(e) {
-            console.log('Aposta confirmada:', e.detail);
-            // Aqui você poderia enviar os dados para o Streamlit via WebSocket ou outro método
-        });
     });
     </script>
     """
 
-def show_bet_alert_streamlit(apostas_data=None):
+def show_bet_alert_streamlit(apostas_data):
     """Exibe o alerta de apostas no Streamlit"""
     # Renderizar CSS, HTML e JS
     st.markdown(render_bet_alert_css(), unsafe_allow_html=True)
     st.markdown(render_bet_alert_html(), unsafe_allow_html=True)
     st.markdown(render_bet_alert_js(), unsafe_allow_html=True)
     
-    # Carregar apostas ou usar exemplo
-    if apostas_data is None:
-        apostas_data = carregar_apostas()
-        if not apostas_data:
-            apostas_data = criar_dados_aposta_exemplo()
-            salvar_apostas(apostas_data)
-    
-    # Criar um container para o botão
-    with st.container():
-        col1, col2 = st.columns([1, 3])
-        with col1:
-            if st.button("💰 Minhas Apostas", key="show_bet_alert_main", type="primary"):
-                # Usar JavaScript para mostrar o alerta
-                js_code = f"""
-                <script>
-                window.showBetAlert({json.dumps(apostas_data)});
-                </script>
-                """
-                st.components.v1.html(js_code, height=0)
-                
-                # Mostrar mensagem no Streamlit
-                st.success("📊 Painel de apostas aberto! Verifique a janela do navegador.")
+    # Usar JavaScript para mostrar o alerta
+    js_code = f"""
+    <script>
+    window.showBetAlert({json.dumps(apostas_data)});
+    </script>
+    """
+    st.components.v1.html(js_code, height=0)
 
 # =============================
 # FUNÇÕES PRINCIPAIS
@@ -2206,9 +2139,9 @@ def debug_jogos_dia(data_selecionada, todas_ligas, liga_selecionada):
             except Exception as e:
                 st.write(f"  {i+1}. ERRO ao processar jogo: {e}")
 
-def enviar_top_jogos(jogos: list, top_n: int, alerta_top_jogos: bool):
-    """Envia os top jogos para o Telegram"""
-    if not alerta_top_jogos:
+def enviar_top_jogos(jogos: list, top_n: int, alerta_top_jogos: bool, show_bet_alert: bool = False):
+    """Envia os top jogos para o Telegram e opcionalmente mostra alerta de apostas"""
+    if not alerta_top_jogos and not show_bet_alert:
         st.info("ℹ️ Alerta de Top Jogos desativado")
         return
         
@@ -2218,21 +2151,40 @@ def enviar_top_jogos(jogos: list, top_n: int, alerta_top_jogos: bool):
         return
         
     top_jogos_sorted = sorted(jogos_filtrados, key=lambda x: x["confianca"], reverse=True)[:top_n]
-    msg = f"📢 TOP {top_n} Jogos do Dia (confiança alta)\n\n"
     
-    for j in top_jogos_sorted:
-        hora_format = j["hora"].strftime("%H:%M") if isinstance(j["hora"], datetime) else str(j["hora"])
-        msg += (
-            f"🏟️ {j['home']} vs {j['away']}\n"
-            f"🕒 {hora_format} BRT | Liga: {j['liga']} | Status: {j['status']}\n"
-            f"📈 Tendência: {j['tendencia']} | Estimativa: {j['estimativa']:.2f} | "
-            f"💯 Confiança: {j['confianca']:.0f}%\n\n"
-        )
+    # Mostrar alerta de apostas se solicitado
+    if show_bet_alert and top_jogos_sorted:
+        # Converter os top jogos em apostas
+        apostas = converter_top_jogos_para_apostas(top_jogos_sorted, top_n)
         
-    if enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2, disable_web_page_preview=True):
-        st.success(f"🚀 Top {top_n} jogos enviados para o canal!")
-    else:
-        st.error("❌ Erro ao enviar top jogos para o Telegram")
+        # Mostrar alerta de apostas
+        show_bet_alert_streamlit(apostas)
+        
+        # Mostrar mensagem no Streamlit
+        st.success(f"💰 Mostrando {len(apostas)} apostas dos top {top_n} jogos!")
+        
+        # Opcional: Salvar as apostas
+        salvar_apostas(apostas)
+    
+    # Enviar para Telegram apenas se a checkbox estiver ativada
+    if alerta_top_jogos:
+        msg = f"📢 TOP {top_n} Jogos do Dia (confiança alta)\n\n"
+        
+        for j in top_jogos_sorted:
+            hora_format = j["hora"].strftime("%H:%M") if isinstance(j["hora"], datetime) else str(j["hora"])
+            msg += (
+                f"🏟️ {j['home']} vs {j['away']}\n"
+                f"🕒 {hora_format} BRT | Liga: {j['liga']} | Status: {j['status']}\n"
+                f"📈 Tendência: {j['tendencia']} | Estimativa: {j['estimativa']:.2f} | "
+                f"💯 Confiança: {j['confianca']:.0f}%\n\n"
+            )
+            
+        if enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2, disable_web_page_preview=True):
+            st.success(f"🚀 Top {top_n} jogos enviados para o canal!")
+        else:
+            st.error("❌ Erro ao enviar top jogos para o Telegram")
+    elif show_bet_alert:
+        st.info(f"📊 Top {top_n} jogos convertidos em apostas!")
 
 def atualizar_status_partidas():
     """Atualiza o status das partidas no cache"""
@@ -2380,9 +2332,9 @@ def main():
         alerta_resultados = st.checkbox("🏁 Resultados Finais", value=True,
                                        help="Envia alerta de resultados con sistema RED/GREEN")
         
-        # NOVO: Checkbox para alerta de apostas
-        alerta_apostas = st.checkbox("💰 Alertas de Apostas", value=True,
-                                    help="Mostra painel de apostas con cálculo de ganhos")
+        # NOVO: Checkbox para alerta de apostas dos Top Jogos
+        alerta_apostas_top = st.checkbox("💰 Apostas dos Top Jogos", value=True,
+                                        help="Mostra alerta de apostas com os top jogos do dia")
         
         st.markdown("----")
         
@@ -2393,11 +2345,6 @@ def main():
         
         st.markdown("----")
         st.info("Ative/desative cada tipo de alerta conforme sua necessidade")
-        
-        # NOVO: Botão para gerenciar apostas na sidebar
-        if st.button("💰 Gerenciar Apostas", key="sidebar_bet_manage", type="primary"):
-            # Inicializar e mostrar alerta de apostas
-            show_bet_alert_streamlit()
 
     # Controles principais
     col1, col2 = st.columns([2, 1])
@@ -2414,12 +2361,17 @@ def main():
     if st.button("🐛 Debug Jogos (API)", type="secondary"):
         debug_jogos_dia(data_selecionada, todas_ligas, liga_selecionada)
 
-    # Processamento
+    # Processamento principal
     if st.button("🔍 Buscar Partidas", type="primary"):
-        processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, threshold, estilo_poster, 
-                       alerta_individual, alerta_poster, alerta_top_jogos)
+        # Processar jogos e coletar resultados
+        top_jogos = processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, threshold, estilo_poster, 
+                                   alerta_individual, alerta_poster, alerta_top_jogos, alerta_apostas_top)
+        
+        # Mostrar alerta de apostas se solicitado
+        if alerta_apostas_top and top_jogos:
+            # Aqui já será tratado dentro da função enviar_top_jogos
 
-    # Ações - ATUALIZADO CON CHECKBOXES
+    # Ações
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         if st.button("🔄 Atualizar Status"):
@@ -2434,41 +2386,28 @@ def main():
         if st.button("🧹 Limpar Cache"):
             limpar_caches()
 
-    # NOVO: Seção de Apostas na interface principal
+    # Botão para visualizar apostas salvas
     st.markdown("---")
-    st.subheader("💰 Gestão de Apostas")
-    
-    col_bet1, col_bet2, col_bet3 = st.columns(3)
+    col_bet1, col_bet2 = st.columns(2)
     with col_bet1:
-        if st.button("🎰 Abrir Painel de Apostas", key="open_bet_panel", type="primary"):
-            show_bet_alert_streamlit()
-    
-    with col_bet2:
-        if st.button("📊 Carregar Apostas Salvas", key="load_saved_bets"):
+        if st.button("📋 Ver Apostas Salvas", key="view_saved_bets"):
             apostas = carregar_apostas()
             if apostas:
-                st.success(f"✅ {len(apostas)} apostas carregadas!")
+                st.success(f"📊 {len(apostas)} apostas carregadas!")
+                
                 # Mostrar resumo
-                for aposta in apostas[:3]:  # Mostrar apenas as 3 primeiras
-                    st.write(f"• {aposta.get('teams', 'Desconhecido')} - {aposta.get('odds', 0):.2f}")
+                for aposta in apostas[:5]:
+                    with st.expander(f"🎯 {aposta.get('teams', 'Desconhecido')}"):
+                        st.write(f"**Mercado:** {aposta.get('market', 'N/A')}")
+                        st.write(f"**Odds:** {aposta.get('odds', 0):.2f}")
+                        st.write(f"**Data:** {aposta.get('date', 'N/A')}")
+                        st.write(f"**Resultado:** {'✅ Ganhas' if aposta.get('result') == 'won' else '❌ Perdidas'}")
+                
+                # Botão para mostrar alerta com apostas salvas
+                if st.button("👁️ Mostrar Alerta de Apostas", key="show_saved_bets_alert"):
+                    show_bet_alert_streamlit(apostas)
             else:
                 st.info("ℹ️ Nenhuma aposta salva encontrada.")
-    
-    with col_bet3:
-        if st.button("🔄 Converter Jogos em Apostas", key="convert_to_bets"):
-            # Exemplo: converter os últimos jogos processados em apostas
-            # Na prática, você poderia carregar jogos reais aqui
-            jogos_exemplo = [
-                {
-                    "home": "Time A",
-                    "away": "Time B",
-                    "confianca": 75,
-                    "hora": datetime.now()
-                }
-            ]
-            apostas_convertidas = converter_jogos_para_apostas(jogos_exemplo)
-            salvar_apostas(apostas_convertidas)
-            st.success(f"✅ {len(apostas_convertidas)} jogos convertidos em apostas!")
 
     # Painel desempenho
     st.markdown("---")
@@ -2492,7 +2431,7 @@ def main():
         limpar_historico()
 
 def processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, threshold, estilo_poster, 
-                   alerta_individual: bool, alerta_poster: bool, alerta_top_jogos: bool):
+                   alerta_individual: bool, alerta_poster: bool, alerta_top_jogos: bool, alerta_apostas_top: bool = False):
     hoje = data_selecionada.strftime("%Y-%m-%d")
     ligas_busca = LIGA_DICT.values() if todas_ligas else [LIGA_DICT[liga_selecionada]]
 
@@ -2581,8 +2520,8 @@ def processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, thre
         for jogo in jogos_filtrados_threshold:
             st.write(f"   🟢 {jogo['home']} vs {jogo['away']} - Conf: {jogo['confianca']:.1f}%")
         
-        # Envia top jogos apenas se a checkbox estiver ativada
-        enviar_top_jogos(jogos_filtrados_threshold, top_n, alerta_top_jogos)
+        # Envia top jogos (e mostra alerta de apostas se solicitado)
+        enviar_top_jogos(jogos_filtrados_threshold, top_n, alerta_top_jogos, alerta_apostas_top)
         st.success(f"✅ {len(jogos_filtrados_threshold)} jogos con confiança ≥{threshold}%")
         
         # ENVIAR ALERTA DE IMAGEM apenas se a checkbox estiver ativada
@@ -2610,6 +2549,8 @@ def processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, thre
                     motivo = "DEVERIA PASSAR - VERIFICAR"
                 
                 st.write(f"   ❌ {jogo['home']} vs {jogo['away']}: {motivo}")
+    
+    return jogos_filtrados_threshold
 
 def enviar_alerta_conf_criar_poster(jogos_conf: list, threshold: int, chat_id: str = TELEGRAM_CHAT_ID_ALT2):
     """Função fallback para o estilo original"""
