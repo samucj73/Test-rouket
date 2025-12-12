@@ -2311,6 +2311,9 @@ def calcular_desempenho_periodo(data_inicio, data_fim):
 # =============================
 # Interface Streamlit
 # =============================
+# =============================
+# Interface Streamlit
+# =============================
 def main():
     st.set_page_config(page_title="⚽ Alerta de Gols", layout="wide")
     st.title("⚽ Sistema de Alertas Automáticos de Gols")
@@ -2369,10 +2372,15 @@ def main():
         
         # Mostrar alerta de apostas se solicitado
         if alerta_apostas_top and top_jogos:
-            # Aqui já será tratado dentro da função enviar_top_jogos
+            # Converter os top jogos em apostas
+            apostas = converter_top_jogos_para_apostas(top_jogos, top_n)
+            if apostas:
+                # Mostrar alerta de apostas
+                show_bet_alert_streamlit(apostas)
+                st.success(f"💰 {len(apostas)} apostas criadas dos top {top_n} jogos!")
 
     # Ações
-          col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         if st.button("🔄 Atualizar Status"):
             atualizar_status_partidas()
@@ -2415,6 +2423,7 @@ def main():
     usar_periodo = st.checkbox("🔎 Usar período específico", value=False, key="use_period")
     qtd_default = 50
     last_n = st.number_input("Últimos N jogos", 1, 1000, qtd_default, 1, key="last_n_games")
+    
     colp1, colp2 = st.columns(2)
     with colp1:
         if usar_periodo:
@@ -2429,6 +2438,195 @@ def main():
 
     if st.button("🧹 Limpar Histórico", key="clear_history"):
         limpar_historico()
+
+# =============================
+# FUNÇÕES PRINCIPAIS
+# =============================
+
+def debug_jogos_dia(data_selecionada, todas_ligas, liga_selecionada):
+    """Função de debug para verificar os jogos retornados pela API"""
+    hoje = data_selecionada.strftime("%Y-%m-%d")
+    ligas_busca = LIGA_DICT.values() if todas_ligas else [LIGA_DICT[liga_selecionada]]
+    
+    st.write("🔍 **DEBUG DETALHADO - JOGOS DA API**")
+    
+    for liga_id in ligas_busca:
+        if liga_id == "BSA":  # Apenas para o Brasileirão
+            jogos = obter_jogos_brasileirao(liga_id, hoje)
+        else:
+            jogos = obter_jogos(liga_id, hoje)
+            
+        st.write(f"**Liga {liga_id}:** {len(jogos)} jogos encontrados")
+        
+        for i, match in enumerate(jogos):
+            try:
+                home = match["homeTeam"]["name"]
+                away = match["awayTeam"]["name"]
+                data_utc = match["utcDate"]
+                status = match.get("status", "DESCONHECIDO")
+                
+                # Converter para horário correto
+                hora_corrigida = formatar_data_iso_para_datetime(data_utc)
+                data_br = hora_corrigida.strftime("%d/%m/%Y")
+                hora_br = hora_corrigida.strftime("%H:%M")
+                
+                st.write(f"  {i+1}. {home} vs {away}")
+                st.write(f"     UTC: {data_utc}")
+                st.write(f"     BR: {data_br} {hora_br} | Status: {status}")
+                st.write(f"     Competição: {match.get('competition', {}).get('name', 'Desconhecido')}")
+                
+            except Exception as e:
+                st.write(f"  {i+1}. ERRO ao processar jogo: {e}")
+
+def enviar_top_jogos(jogos: list, top_n: int, alerta_top_jogos: bool):
+    """Envia os top jogos para o Telegram"""
+    if not alerta_top_jogos:
+        st.info("ℹ️ Alerta de Top Jogos desativado")
+        return
+        
+    jogos_filtrados = [j for j in jogos if j["status"] not in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"]]
+    if not jogos_filtrados:
+        st.warning("⚠️ Nenhum jogo elegível para o Top Jogos (todos já iniciados ou finalizados).")
+        return
+        
+    top_jogos_sorted = sorted(jogos_filtrados, key=lambda x: x["confianca"], reverse=True)[:top_n]
+    msg = f"📢 TOP {top_n} Jogos do Dia (confiança alta)\n\n"
+    
+    for j in top_jogos_sorted:
+        hora_format = j["hora"].strftime("%H:%M") if isinstance(j["hora"], datetime) else str(j["hora"])
+        msg += (
+            f"🏟️ {j['home']} vs {j['away']}\n"
+            f"🕒 {hora_format} BRT | Liga: {j['liga']} | Status: {j['status']}\n"
+            f"📈 Tendência: {j['tendencia']} | Estimativa: {j['estimativa']:.2f} | "
+            f"💯 Confiança: {j['confianca']:.0f}%\n\n"
+        )
+        
+    if enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2, disable_web_page_preview=True):
+        st.success(f"🚀 Top {top_n} jogos enviados para o canal!")
+    else:
+        st.error("❌ Erro ao enviar top jogos para o Telegram")
+
+def atualizar_status_partidas():
+    """Atualiza o status das partidas no cache"""
+    cache_jogos = carregar_cache_jogos()
+    mudou = False
+    
+    for key in list(cache_jogos.keys()):
+        if key == "_timestamp":
+            continue
+            
+        try:
+            liga_id, data = key.split("_", 1)
+            url = f"{BASE_URL_FD}/competitions/{liga_id}/matches?dateFrom={data}&dateTo={data}"
+            data_api = obter_dados_api(url)
+            
+            if data_api and "matches" in data_api:
+                cache_jogos[key] = data_api["matches"]
+                mudou = True
+        except Exception as e:
+            logging.error(f"Erro ao atualizar liga {key}: {e}")
+            st.error(f"Erro ao atualizar liga {key}: {e}")
+            
+    if mudou:
+        salvar_cache_jogos(cache_jogos)
+        st.success("✅ Status das partidas atualizado!")
+    else:
+        st.info("ℹ️ Nenhuma atualização disponível.")
+
+def conferir_resultados():
+    """Conferir resultados dos jogos"""
+    alertas = carregar_alertas()
+    if not alertas:
+        st.info("ℹ️ Nenhum alerta para conferir.")
+        return
+        
+    st.info("🔍 Conferindo resultados...")
+    resultados_conferidos = 0
+    for fixture_id, alerta in alertas.items():
+        if not alerta.get("conferido", False):
+            alerta["conferido"] = True
+            resultados_conferidos += 1
+    
+    if resultados_conferidos > 0:
+        salvar_alertas(alertas)
+        st.success(f"✅ {resultados_conferidos} resultados conferidos!")
+    else:
+        st.info("ℹ️ Nenhum novo resultado para conferir.")
+
+def limpar_caches():
+    """Limpar caches do sistema"""
+    try:
+        arquivos_limpos = 0
+        for cache_file in [CACHE_JOGOS, CACHE_CLASSIFICACAO, ALERTAS_PATH, APOSTAS_PATH]:
+            if os.path.exists(cache_file):
+                os.remove(cache_file)
+                arquivos_limpos += 1
+        st.success(f"✅ {arquivos_limpos} caches limpos con sucesso!")
+    except Exception as e:
+        logging.error(f"Erro ao limpar caches: {e}")
+        st.error(f"❌ Erro ao limpar caches: {e}")
+
+def calcular_desempenho(qtd_jogos: int = 50):
+    """Calcular desempenho das previsões"""
+    historico = carregar_historico()
+    if not historico:
+        st.warning("⚠️ Nenhum jogo conferido ainda.")
+        return
+        
+    st.info(f"📊 Calculando desempenho dos últimos {qtd_jogos} jogos...")
+    
+    historico_recente = historico[-qtd_jogos:] if len(historico) > qtd_jogos else historico
+    
+    if not historico_recente:
+        st.warning("⚠️ Histórico insuficiente para cálculo.")
+        return
+        
+    total_jogos = len(historico_recente)
+    st.success(f"✅ Desempenho calculado para {total_jogos} jogos!")
+    
+    # Métricas básicas
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total de Jogos", total_jogos)
+    with col2:
+        st.metric("Período Analisado", f"Últimos {qtd_jogos}")
+    with col3:
+        st.metric("Taxa de Confiança Média", f"{sum(h.get('confianca', 0) for h in historico_recente) / total_jogos:.1f}%")
+
+def calcular_desempenho_periodo(data_inicio, data_fim):
+    """Calcular desempenho por período"""
+    st.info(f"📊 Calculando desempenho de {data_inicio} a {data_fim}...")
+    
+    historico = carregar_historico()
+    if not historico:
+        st.warning("⚠️ Nenhum jogo conferido ainda.")
+        return
+        
+    # Filtrar histórico por período
+    historico_periodo = []
+    for registro in historico:
+        try:
+            data_registro = datetime.strptime(registro.get("data_conferencia", ""), "%Y-%m-%d %H:%M:%S").date()
+            if data_inicio <= data_registro <= data_fim:
+                historico_periodo.append(registro)
+        except:
+            continue
+            
+    if not historico_periodo:
+        st.warning(f"⚠️ Nenhum jogo encontrado no período {data_inicio} a {data_fim}.")
+        return
+        
+    total_jogos = len(historico_periodo)
+    st.success(f"✅ Desempenho do período calculado! {total_jogos} jogos analisados.")
+    
+    # Métricas do período
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Jogos no Período", total_jogos)
+    with col2:
+        st.metric("Dias Analisados", (data_fim - data_inicio).days)
+    with col3:
+        st.metric("Confiança Média", f"{sum(h.get('confianca', 0) for h in historico_periodo) / total_jogos:.1f}%")
 
 def processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, threshold, estilo_poster, 
                    alerta_individual: bool, alerta_poster: bool, alerta_top_jogos: bool, alerta_apostas_top: bool = False):
@@ -2520,8 +2718,8 @@ def processar_jogos(data_selecionada, todas_ligas, liga_selecionada, top_n, thre
         for jogo in jogos_filtrados_threshold:
             st.write(f"   🟢 {jogo['home']} vs {jogo['away']} - Conf: {jogo['confianca']:.1f}%")
         
-        # Envia top jogos (e mostra alerta de apostas se solicitado)
-        enviar_top_jogos(jogos_filtrados_threshold, top_n, alerta_top_jogos, alerta_apostas_top)
+        # Envia top jogos para o Telegram
+        enviar_top_jogos(jogos_filtrados_threshold, top_n, alerta_top_jogos)
         st.success(f"✅ {len(jogos_filtrados_threshold)} jogos con confiança ≥{threshold}%")
         
         # ENVIAR ALERTA DE IMAGEM apenas se a checkbox estiver ativada
