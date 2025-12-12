@@ -2372,7 +2372,7 @@ def main():
             # Aqui já será tratado dentro da função enviar_top_jogos
 
     # Ações
-    col1, col2, col3, col4 = st.columns(4)
+          col1, col2, col3, col4 = st.columns(4)
     with col1:
         if st.button("🔄 Atualizar Status"):
             atualizar_status_partidas()
