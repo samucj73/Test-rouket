@@ -1,4 +1,3 @@
-
 import streamlit as st
 import requests
 import numpy as np
@@ -87,7 +86,7 @@ def capturar_ultimos_resultados(qtd=250):
 # =========================
 class EstrategiasAvancadas:
     def __init__(self, concursos):
-        self.concursos = concursos
+        self.concursos = concursos if concursos else []
         self.numeros = list(range(1, 26))
         self.primos = {2, 3, 5, 7, 11, 13, 17, 19, 23}
         self.fibonacci = {1, 2, 3, 5, 8, 13, 21}
@@ -102,8 +101,13 @@ class EstrategiasAvancadas:
     
     def analise_raiz_digital(self):
         """Analisa padrões de raiz digital nos concursos"""
+        if not self.concursos:
+            return {i: 0 for i in range(1, 10)}
+        
         resultados = []
-        for concurso in self.concursos[:100]:  # Últimos 100 concursos
+        concursos_analisar = self.concursos[:min(100, len(self.concursos))]
+        
+        for concurso in concursos_analisar:
             raizes = [self.calcular_raiz_digital(n) for n in concurso]
             contagem = Counter(raizes)
             resultados.append(contagem)
@@ -114,7 +118,8 @@ class EstrategiasAvancadas:
             for raiz, count in resultado.items():
                 distribuicao_media[raiz] += count
         for raiz in distribuicao_media:
-            distribuicao_media[raiz] /= len(resultados)
+            if len(resultados) > 0:
+                distribuicao_media[raiz] /= len(resultados)
         
         return distribuicao_media
     
@@ -128,8 +133,13 @@ class EstrategiasAvancadas:
             'Q4': [19, 20, 24, 25]                          # Inferior direito
         }
         
+        if not self.concursos:
+            return quadrantes, {k: 0 for k in quadrantes.keys()}, []
+        
         distribuicoes = []
-        for concurso in self.concursos[:50]:
+        concursos_analisar = self.concursos[:min(50, len(self.concursos))]
+        
+        for concurso in concursos_analisar:
             dist = {}
             for q_name, q_nums in quadrantes.items():
                 dist[q_name] = len([n for n in concurso if n in q_nums])
@@ -138,7 +148,8 @@ class EstrategiasAvancadas:
         # Calcular médias
         medias = {}
         for q_name in quadrantes.keys():
-            medias[q_name] = np.mean([d[q_name] for d in distribuicoes])
+            valores = [d[q_name] for d in distribuicoes]
+            medias[q_name] = np.mean(valores) if valores else 0
         
         return quadrantes, medias, distribuicoes
     
@@ -168,9 +179,14 @@ class EstrategiasAvancadas:
         """Analisa padrões de repetição em intervalos fixos"""
         padroes = {}
         
+        if not self.concursos:
+            return padroes
+        
+        concursos_analisar = self.concursos[:min(100, len(self.concursos))]
+        
         for n in self.numeros:
             posicoes = []
-            for i, concurso in enumerate(self.concursos[:100]):
+            for i, concurso in enumerate(concursos_analisar):
                 if n in concurso:
                     posicoes.append(i)
             
@@ -181,7 +197,7 @@ class EstrategiasAvancadas:
                     'frequencia': len(posicoes),
                     'intervalo_medio': intervalo_medio,
                     'ultimo_sorteio': posicoes[0] if posicoes else 100,
-                    'atraso': 100 - posicoes[0] if posicoes else 100
+                    'atraso': (len(concursos_analisar) - posicoes[0]) if posicoes else 100
                 }
         
         return padroes
@@ -190,8 +206,13 @@ class EstrategiasAvancadas:
         """Analisa correlação entre pares de números"""
         matriz_correlacao = np.zeros((25, 25))
         
-        # Contar co-ocorrências nos últimos 100 concursos
-        for concurso in self.concursos[:100]:
+        if not self.concursos:
+            return matriz_correlacao
+        
+        # Contar co-ocorrências nos últimos concursos
+        concursos_analisar = self.concursos[:min(100, len(self.concursos))]
+        
+        for concurso in concursos_analisar:
             for i in range(len(concurso)):
                 for j in range(i+1, len(concurso)):
                     n1, n2 = concurso[i] - 1, concurso[j] - 1
@@ -200,14 +221,14 @@ class EstrategiasAvancadas:
         
         # Normalizar pela frequência individual
         freq_individual = {n: 0 for n in self.numeros}
-        for concurso in self.concursos[:100]:
+        for concurso in concursos_analisar:
             for n in concurso:
                 freq_individual[n] += 1
         
         for i in range(25):
             for j in range(25):
                 if i != j and freq_individual[i+1] > 0 and freq_individual[j+1] > 0:
-                    esperado = (freq_individual[i+1] * freq_individual[j+1]) / 100
+                    esperado = (freq_individual[i+1] * freq_individual[j+1]) / len(concursos_analisar)
                     if esperado > 0:
                         matriz_correlacao[i][j] = matriz_correlacao[i][j] / esperado
         
@@ -217,8 +238,13 @@ class EstrategiasAvancadas:
         """Identifica combinações de números que raramente saem juntas"""
         todas_combinacoes = {}
         
+        if not self.concursos:
+            return []
+        
+        concursos_analisar = self.concursos[:min(limite_concursos, len(self.concursos))]
+        
         # Gerar todas combinações possíveis de tamanho especificado
-        for concurso in self.concursos[:limite_concursos]:
+        for concurso in concursos_analisar:
             for comb in itertools.combinations(sorted(concurso), tamanho):
                 comb_key = tuple(sorted(comb))
                 todas_combinacoes[comb_key] = todas_combinacoes.get(comb_key, 0) + 1
@@ -232,9 +258,15 @@ class EstrategiasAvancadas:
         """Analisa gaps (intervalos) entre aparições de cada número"""
         gaps_por_numero = {n: [] for n in self.numeros}
         
+        if not self.concursos:
+            return {n: {'media': 0, 'mediana': 0, 'desvio': 0, 'max': 0, 'min': 0} 
+                    for n in self.numeros}
+        
+        concursos_analisar = self.concursos[:min(100, len(self.concursos))]
+        
         for n in self.numeros:
             ultima_posicao = None
-            for i, concurso in enumerate(self.concursos[:100]):
+            for i, concurso in enumerate(concursos_analisar):
                 if n in concurso:
                     if ultima_posicao is not None:
                         gaps_por_numero[n].append(i - ultima_posicao)
@@ -248,8 +280,8 @@ class EstrategiasAvancadas:
                     'media': np.mean(gaps_por_numero[n]),
                     'mediana': np.median(gaps_por_numero[n]),
                     'desvio': np.std(gaps_por_numero[n]),
-                    'max': max(gaps_por_numero[n]),
-                    'min': min(gaps_por_numero[n])
+                    'max': max(gaps_por_numero[n]) if gaps_por_numero[n] else 0,
+                    'min': min(gaps_por_numero[n]) if gaps_por_numero[n] else 0
                 }
             else:
                 estatisticas[n] = {'media': 0, 'mediana': 0, 'desvio': 0, 'max': 0, 'min': 0}
@@ -258,6 +290,9 @@ class EstrategiasAvancadas:
     
     def analise_padrao_repeticao(self):
         """Analisa padrão de repetição entre concursos consecutivos"""
+        if len(self.concursos) < 2:
+            return {'media': 0, 'mediana': 0, 'desvio': 0, 'min': 0, 'max': 0, 'moda': 0}, []
+        
         repeticoes = []
         
         for i in range(len(self.concursos) - 1):
@@ -282,6 +317,9 @@ class EstrategiasAvancadas:
     
     def calcular_entropia(self, janela=20):
         """Calcula entropia (grau de aleatoriedade) dos resultados"""
+        if len(self.concursos) < janela:
+            return []
+        
         entropias = []
         
         for i in range(len(self.concursos) - janela + 1):
@@ -298,7 +336,11 @@ class EstrategiasAvancadas:
             probabilidades = [freq[n] / total_sorteios for n in self.numeros]
             
             # Calcular entropia de Shannon
-            entropia = -sum(p * math.log2(p) for p in probabilidades if p > 0)
+            entropia = 0
+            for p in probabilidades:
+                if p > 0:
+                    entropia += p * math.log2(p)
+            entropia = -entropia
             entropias.append(entropia)
         
         return entropias
@@ -324,8 +366,12 @@ class EstrategiasAvancadas:
         
         # Completar se necessário
         while len(cartao) < 15:
-            n = random.choice([num for num in self.numeros if num not in cartao])
-            cartao.add(n)
+            numeros_restantes = [num for num in self.numeros if num not in cartao]
+            if numeros_restantes:
+                n = random.choice(numeros_restantes)
+                cartao.add(n)
+            else:
+                break
         
         return sorted(list(cartao))
     
@@ -336,19 +382,26 @@ class EstrategiasAvancadas:
         # Distribuição ideal baseada nas médias históricas
         distribuicao_ideal = {}
         total = sum(medias.values())
-        for q_name, media in medias.items():
-            distribuicao_ideal[q_name] = round((media / total) * 15)
+        if total > 0:
+            for q_name, media in medias.items():
+                distribuicao_ideal[q_name] = max(1, round((media / total) * 15))
+        else:
+            # Distribuição uniforme se não houver dados
+            for q_name in quadrantes.keys():
+                distribuicao_ideal[q_name] = 4
         
         # Ajustar para total 15
-        while sum(distribuicao_ideal.values()) != 15:
-            if sum(distribuicao_ideal.values()) < 15:
+        total_atual = sum(distribuicao_ideal.values())
+        while total_atual != 15 and total_atual > 0:
+            if total_atual < 15:
                 # Adicionar ao quadrante com maior média
-                q_max = max(medias, key=medias.get)
+                q_max = max(medias, key=medias.get) if medias else list(quadrantes.keys())[0]
                 distribuicao_ideal[q_max] += 1
             else:
                 # Remover do quadrante com menor média
-                q_min = min(medias, key=medias.get)
-                distribuicao_ideal[q_min] -= 1
+                q_min = min(medias, key=medias.get) if medias else list(quadrantes.keys())[0]
+                distribuicao_ideal[q_min] = max(1, distribuicao_ideal[q_min] - 1)
+            total_atual = sum(distribuicao_ideal.values())
         
         cartao = set()
         for q_name, quantidade in distribuicao_ideal.items():
@@ -356,6 +409,17 @@ class EstrategiasAvancadas:
             if len(numeros_quadrante) >= quantidade:
                 selecionados = random.sample(numeros_quadrante, quantidade)
                 cartao.update(selecionados)
+            elif numeros_quadrante:
+                cartao.update(numeros_quadrante)
+        
+        # Completar se necessário
+        while len(cartao) < 15:
+            numeros_restantes = [num for num in self.numeros if num not in cartao]
+            if numeros_restantes:
+                n = random.choice(numeros_restantes)
+                cartao.add(n)
+            else:
+                break
         
         return sorted(list(cartao))
     
@@ -374,15 +438,27 @@ class EstrategiasAvancadas:
         cartao = set()
         
         # Adicionar 10 dos top 15
-        cartao.update(random.sample(numeros_top[:15], 10))
+        if len(numeros_top) >= 15:
+            cartao.update(random.sample(numeros_top[:15], min(10, len(numeros_top[:15]))))
+        else:
+            cartao.update(numeros_top)
         
         # Adicionar 3 dos próximos 5 (para diversificação)
         if len(numeros_top) > 15:
-            cartao.update(random.sample(numeros_top[15:20], 3))
+            cartao.update(random.sample(numeros_top[15:20], min(3, len(numeros_top[15:20]))))
         
-        # Adicionar 2 números aleatórios (para surpresa)
+        # Adicionar números aleatórios (para surpresa)
         numeros_restantes = [n for n in self.numeros if n not in cartao]
-        cartao.update(random.sample(numeros_restantes, 2))
+        if numeros_restantes:
+            cartao.update(random.sample(numeros_restantes, min(2, len(numeros_restantes))))
+        
+        # Garantir 15 números
+        while len(cartao) < 15:
+            numeros_restantes = [n for n in self.numeros if n not in cartao]
+            if numeros_restantes:
+                cartao.add(random.choice(numeros_restantes))
+            else:
+                break
         
         return sorted(list(cartao))
     
@@ -393,36 +469,53 @@ class EstrategiasAvancadas:
         # Classificar números por atraso vs intervalo médio
         numeros_promissores = []
         for n, dados in padroes.items():
-            if dados['atraso'] >= dados['intervalo_medio'] * 0.8:
+            if dados.get('intervalo_medio', 0) > 0:
                 # Número está "atrasado" para sair
-                score = dados['atraso'] / max(dados['intervalo_medio'], 1)
-                numeros_promissores.append((n, score))
+                atraso = dados.get('atraso', 100)
+                intervalo_medio = dados.get('intervalo_medio', 10)
+                if atraso >= intervalo_medio * 0.8:
+                    score = atraso / max(intervalo_medio, 1)
+                    numeros_promissores.append((n, score))
         
         # Ordenar por score (mais atrasados primeiro)
         numeros_promissores.sort(key=lambda x: x[1], reverse=True)
         
-        # Selecionar números
         cartao = set()
-        if len(numeros_promissores) >= 10:
-            # Adicionar 10 números mais atrasados
+        if numeros_promissores:
+            # Adicionar até 10 números mais atrasados
             for i in range(min(10, len(numeros_promissores))):
                 cartao.add(numeros_promissores[i][0])
         else:
-            # Se não houver muitos atrasados, complementar
-            cartao.update([n for n, _ in numeros_promissores[:len(numeros_promissores)]])
+            # Se não houver atrasados, adicionar aleatórios
+            cartao.update(random.sample(self.numeros, min(10, len(self.numeros))))
         
-        # Completar com números quentes
-        freq = Counter()
-        for concurso in self.concursos[:20]:
-            for n in concurso:
-                freq[n] += 1
+        # Adicionar números quentes se houver concursos
+        if self.concursos:
+            freq = Counter()
+            concursos_analisar = self.concursos[:min(20, len(self.concursos))]
+            for concurso in concursos_analisar:
+                for n in concurso:
+                    freq[n] += 1
+            
+            numeros_quentes = sorted(freq.items(), key=lambda x: x[1], reverse=True)[:10]
+            numeros_quentes_lista = [n for n, _ in numeros_quentes]
+            
+            # Filtrar números quentes que não estão no cartão
+            numeros_quentes_disponiveis = [num for num in numeros_quentes_lista if num not in cartao]
+            
+            while len(cartao) < 15 and numeros_quentes_disponiveis:
+                n = random.choice(numeros_quentes_disponiveis)
+                cartao.add(n)
+                numeros_quentes_disponiveis.remove(n)
         
-        numeros_quentes = sorted(freq.items(), key=lambda x: x[1], reverse=True)[:10]
-        numeros_quentes_lista = [n for n, _ in numeros_quentes]
-        
+        # Completar se necessário
         while len(cartao) < 15:
-            n = random.choice([num for num in numeros_quentes_lista if num not in cartao])
-            cartao.add(n)
+            numeros_restantes = [num for num in self.numeros if num not in cartao]
+            if numeros_restantes:
+                n = random.choice(numeros_restantes)
+                cartao.add(n)
+            else:
+                break
         
         return sorted(list(cartao))
     
@@ -445,16 +538,19 @@ class EstrategiasAvancadas:
         # Adicionar alguns pares correlacionados
         for (n1, n2), _ in pares_correlacionados[:3]:
             if len(cartao) < 13:  # Deixar espaço para outros números
-                cartao.add(n1)
-                cartao.add(n2)
+                if n1 not in cartao:
+                    cartao.add(n1)
+                if n2 not in cartao:
+                    cartao.add(n2)
+        
+        # Se não houver pares correlacionados, começar com alguns números aleatórios
+        if len(cartao) == 0:
+            cartao.update(random.sample(self.numeros, min(5, len(self.numeros))))
         
         # Adicionar números independentes (baixa correlação com os já escolhidos)
         numeros_restantes = [n for n in self.numeros if n not in cartao]
         
-        while len(cartao) < 15:
-            if not numeros_restantes:
-                break
-            
+        while len(cartao) < 15 and numeros_restantes:
             # Escolher número com menor correlação média com os já selecionados
             melhores = []
             for n in numeros_restantes:
@@ -467,10 +563,20 @@ class EstrategiasAvancadas:
                 melhores.append((n, correl_media))
             
             # Escolher número com menor correlação média
-            melhores.sort(key=lambda x: x[1])
             if melhores:
+                melhores.sort(key=lambda x: x[1])
                 cartao.add(melhores[0][0])
                 numeros_restantes.remove(melhores[0][0])
+            else:
+                break
+        
+        # Completar se necessário
+        while len(cartao) < 15:
+            numeros_restantes = [num for num in self.numeros if num not in cartao]
+            if numeros_restantes:
+                cartao.add(random.choice(numeros_restantes))
+            else:
+                break
         
         return sorted(list(cartao))
     
@@ -482,25 +588,35 @@ class EstrategiasAvancadas:
         
         # Adicionar algumas combinações raras
         for comb, _ in combinacoes_raras[:2]:  # 2 combinações de 3 números = 6 números
-            cartao.update(comb)
+            for n in comb:
+                if n not in cartao:
+                    cartao.add(n)
         
-        # Completar com estratégia balanceada
-        freq = Counter()
-        for concurso in self.concursos[:30]:
-            for n in concurso:
-                freq[n] += 1
-        
-        # Adicionar números quentes
-        numeros_quentes = sorted(freq.items(), key=lambda x: x[1], reverse=True)
-        for n, _ in numeros_quentes:
-            if len(cartao) >= 15:
-                break
-            if n not in cartao:
+        # Completar com estratégia balanceada se houver concursos
+        if self.concursos:
+            freq = Counter()
+            concursos_analisar = self.concursos[:min(30, len(self.concursos))]
+            for concurso in concursos_analisar:
+                for n in concurso:
+                    freq[n] += 1
+            
+            # Adicionar números quentes
+            numeros_quentes = sorted(freq.items(), key=lambda x: x[1], reverse=True)
+            for n, _ in numeros_quentes:
+                if len(cartao) >= 15:
+                    break
+                if n not in cartao:
+                    cartao.add(n)
+        else:
+            # Se não houver concursos, adicionar aleatórios
+            while len(cartao) < 15:
+                n = random.choice([num for num in self.numeros if num not in cartao])
                 cartao.add(n)
         
         # Garantir equilíbrio par/ímpar
         pares = sum(1 for n in cartao if n % 2 == 0)
-        while pares < 6 or pares > 9:
+        tentativas = 0
+        while (pares < 6 or pares > 9) and tentativas < 10:
             if pares < 6:
                 # Trocar ímpar por par
                 impares_no_cartao = [n for n in cartao if n % 2 == 1]
@@ -517,6 +633,7 @@ class EstrategiasAvancadas:
                     cartao.add(random.choice(impares_fora))
             
             pares = sum(1 for n in cartao if n % 2 == 0)
+            tentativas += 1
         
         return sorted(list(cartao))
     
@@ -529,7 +646,8 @@ class EstrategiasAvancadas:
         for n, stats in estatisticas_gaps.items():
             if stats['media'] > 0:
                 # Quanto mais próximo do gap médio, melhor
-                diff = abs(100 - stats['atraso'] - stats['media'])
+                atraso = 100  # Valor padrão se não houver dados
+                diff = abs(atraso - stats['media'])
                 score = 1 / (diff + 1)  # Quanto menor a diferença, maior o score
                 numeros_otimos.append((n, score))
         
@@ -538,24 +656,32 @@ class EstrategiasAvancadas:
         
         cartao = set()
         
-        # Adicionar 8 números com gaps mais próximos da média
-        for i in range(min(8, len(numeros_otimos))):
-            cartao.add(numeros_otimos[i][0])
+        # Adicionar até 8 números com gaps mais próximos da média
+        if numeros_otimos:
+            for i in range(min(8, len(numeros_otimos))):
+                cartao.add(numeros_otimos[i][0])
+        else:
+            # Se não houver análise de gaps, adicionar aleatórios
+            cartao.update(random.sample(self.numeros, min(8, len(self.numeros))))
         
-        # Adicionar 4 números Fibonacci se disponíveis
+        # Adicionar números Fibonacci se disponíveis
         fibonacci_disponiveis = [n for n in self.fibonacci if n not in cartao]
         if fibonacci_disponiveis:
             cartao.update(random.sample(fibonacci_disponiveis, min(3, len(fibonacci_disponiveis))))
         
-        # Adicionar 3 números primos se disponíveis
+        # Adicionar números primos se disponíveis
         primos_disponiveis = [n for n in self.primos if n not in cartao]
         if primos_disponiveis:
             cartao.update(random.sample(primos_disponiveis, min(3, len(primos_disponiveis))))
         
         # Completar se necessário
         while len(cartao) < 15:
-            n = random.choice([num for num in self.numeros if num not in cartao])
-            cartao.add(n)
+            numeros_restantes = [num for num in self.numeros if num not in cartao]
+            if numeros_restantes:
+                n = random.choice(numeros_restantes)
+                cartao.add(n)
+            else:
+                break
         
         return sorted(list(cartao))
     
@@ -578,7 +704,7 @@ class EstrategiasAvancadas:
                 periodos_alta_entropia.extend(self.concursos[periodo_inicio:periodo_fim])
         
         if not periodos_alta_entropia:
-            periodos_alta_entropia = self.concursos[:30]
+            periodos_alta_entropia = self.concursos[:min(30, len(self.concursos))]
         
         # Analisar números que aparecem em períodos de alta entropia
         freq_alta_entropia = Counter()
@@ -589,12 +715,12 @@ class EstrategiasAvancadas:
         # Selecionar números
         cartao = set()
         
-        # Adicionar 10 números mais frequentes em alta entropia
+        # Adicionar números mais frequentes em alta entropia
         top_alta_entropia = sorted(freq_alta_entropia.items(), key=lambda x: x[1], reverse=True)[:15]
-        for n, _ in top_alta_entropia[:10]:
+        for n, _ in top_alta_entropia[:min(10, len(top_alta_entropia))]:
             cartao.add(n)
         
-        # Adicionar 5 números menos frequentes (para diversidade)
+        # Adicionar números menos frequentes (para diversidade)
         todos_numeros = set(self.numeros)
         numeros_nao_usados = todos_numeros - cartao
         
@@ -607,8 +733,12 @@ class EstrategiasAvancadas:
         
         # Completar se necessário
         while len(cartao) < 15:
-            n = random.choice([num for num in self.numeros if num not in cartao])
-            cartao.add(n)
+            numeros_restantes = [num for num in self.numeros if num not in cartao]
+            if numeros_restantes:
+                n = random.choice(numeros_restantes)
+                cartao.add(n)
+            else:
+                break
         
         return sorted(list(cartao))
 
@@ -617,7 +747,7 @@ class EstrategiasAvancadas:
 # =========================
 class SistemaGeracaoHibrida:
     def __init__(self, concursos):
-        self.concursos = concursos
+        self.concursos = concursos if concursos else []
         self.numeros = list(range(1, 26))
         self.estrategias = EstrategiasAvancadas(concursos)
         
@@ -625,128 +755,119 @@ class SistemaGeracaoHibrida:
         """Gera um portfolio diversificado usando múltiplas estratégias"""
         portfolio = []
         
-        # 1. Estratégia de Raiz Digital
-        portfolio.append({
-            'nome': 'Raiz Digital Balanceada',
-            'cartao': self.estrategias.gerar_cartao_estrategia_raiz_digital(),
-            'estrategia': 'raiz_digital'
-        })
+        # Lista de estratégias disponíveis
+        estrategias_disponiveis = [
+            ('Raiz Digital Balanceada', self.estrategias.gerar_cartao_estrategia_raiz_digital, 'raiz_digital'),
+            ('Distribuição por Quadrantes', self.estrategias.gerar_cartao_estrategia_quadrantes, 'quadrantes'),
+            ('Média Móvel Ponderada', lambda: self.estrategias.gerar_cartao_estrategia_media_movel(), 'media_movel'),
+            ('Análise de Sazonalidade', self.estrategias.gerar_cartao_estrategia_sazonalidade, 'sazonalidade'),
+            ('Otimização por Correlação', self.estrategias.gerar_cartao_estrategia_correlacao, 'correlacao'),
+            ('Combinações Raras', self.estrategias.gerar_cartao_estrategia_combinacoes_raras, 'combinacoes_raras'),
+            ('Análise de Gaps', self.estrategias.gerar_cartao_estrategia_gaps, 'gaps'),
+            ('Maximização de Entropia', lambda: self.estrategias.gerar_cartao_estrategia_entropia(), 'entropia'),
+            ('Híbrida Inteligente', self.gerar_cartao_hibrido, 'hibrida'),
+            ('Aleatória Otimizada', self.gerar_cartao_aleatorio_otimizado, 'aleatoria_otimizada')
+        ]
         
-        # 2. Estratégia de Quadrantes
-        portfolio.append({
-            'nome': 'Distribuição por Quadrantes',
-            'cartao': self.estrategias.gerar_cartao_estrategia_quadrantes(),
-            'estrategia': 'quadrantes'
-        })
+        # Gerar cartões para cada estratégia
+        for nome, funcao_geracao, estrategia_key in estrategias_disponiveis[:n_cartoes]:
+            try:
+                cartao = funcao_geracao()
+                if cartao and len(cartao) == 15:
+                    portfolio.append({
+                        'nome': nome,
+                        'cartao': cartao,
+                        'estrategia': estrategia_key
+                    })
+            except Exception as e:
+                st.warning(f"Erro na estratégia {nome}: {e}")
+                # Se falhar, gera um cartão aleatório otimizado
+                portfolio.append({
+                    'nome': f"{nome} (Alternativa)",
+                    'cartao': self.gerar_cartao_aleatorio_otimizado(),
+                    'estrategia': estrategia_key
+                })
         
-        # 3. Estratégia de Média Móvel
-        portfolio.append({
-            'nome': 'Média Móvel Ponderada',
-            'cartao': self.estrategias.gerar_cartao_estrategia_media_movel(),
-            'estrategia': 'media_movel'
-        })
-        
-        # 4. Estratégia de Sazonalidade
-        portfolio.append({
-            'nome': 'Análise de Sazonalidade',
-            'cartao': self.estrategias.gerar_cartao_estrategia_sazonalidade(),
-            'estrategia': 'sazonalidade'
-        })
-        
-        # 5. Estratégia de Correlação
-        portfolio.append({
-            'nome': 'Otimização por Correlação',
-            'cartao': self.estrategias.gerar_cartao_estrategia_correlacao(),
-            'estrategia': 'correlacao'
-        })
-        
-        # 6. Estratégia de Combinações Raras
-        portfolio.append({
-            'nome': 'Combinações Raras',
-            'cartao': self.estrategias.gerar_cartao_estrategia_combinacoes_raras(),
-            'estrategia': 'combinacoes_raras'
-        })
-        
-        # 7. Estratégia de Gaps
-        portfolio.append({
-            'nome': 'Análise de Gaps',
-            'cartao': self.estrategias.gerar_cartao_estrategia_gaps(),
-            'estrategia': 'gaps'
-        })
-        
-        # 8. Estratégia de Entropia
-        portfolio.append({
-            'nome': 'Maximização de Entropia',
-            'cartao': self.estrategias.gerar_cartao_estrategia_entropia(),
-            'estrategia': 'entropia'
-        })
-        
-        # 9. Estratégia Híbrida (combinação de várias)
-        portfolio.append({
-            'nome': 'Híbrida Inteligente',
-            'cartao': self.gerar_cartao_hibrido(),
-            'estrategia': 'hibrida'
-        })
-        
-        # 10. Estratégia Aleatória Otimizada
-        portfolio.append({
-            'nome': 'Aleatória Otimizada',
-            'cartao': self.gerar_cartao_aleatorio_otimizado(),
-            'estrategia': 'aleatoria_otimizada'
-        })
-        
-        return portfolio[:n_cartoes]
+        return portfolio
     
     def gerar_cartao_hibrido(self):
         """Combina as melhores características de múltiplas estratégias"""
-        cartoes_parciais = []
-        
-        # Gerar cartões parciais com diferentes estratégias
-        cartoes_parciais.append(set(self.estrategias.gerar_cartao_estrategia_media_movel()))
-        cartoes_parciais.append(set(self.estrategias.gerar_cartao_estrategia_sazonalidade()))
-        cartoes_parciais.append(set(self.estrategias.gerar_cartao_estrategia_correlacao()))
-        
-        # Encontrar interseção (números recomendados por múltiplas estratégias)
-        interseccao = set.intersection(*cartoes_parciais[:2])
-        
-        cartao_final = set()
-        
-        # Adicionar interseção (máximo 8 números)
-        if interseccao:
-            cartao_final.update(list(interseccao)[:8])
-        
-        # Adicionar números únicos de cada estratégia
-        todos_numeros = set()
-        for c in cartoes_parciais:
-            todos_numeros.update(c)
-        
-        numeros_unicos = todos_numeros - cartao_final
-        
-        # Selecionar números únicos com base em frequência
-        freq = Counter()
-        for concurso in self.concursos[:30]:
-            for n in concurso:
-                freq[n] += 1
-        
-        numeros_unicos_lista = list(numeros_unicos)
-        numeros_unicos_lista.sort(key=lambda x: freq[x], reverse=True)
-        
-        # Adicionar números únicos até completar 15
-        for n in numeros_unicos_lista:
-            if len(cartao_final) >= 15:
-                break
-            cartao_final.add(n)
-        
-        # Completar se necessário
-        while len(cartao_final) < 15:
-            n = random.choice([num for num in self.numeros if num not in cartao_final])
-            cartao_final.add(n)
-        
-        return sorted(list(cartao_final))
+        try:
+            cartoes_parciais = []
+            
+            # Gerar cartões parciais com diferentes estratégias
+            estrategias_para_hibrido = [
+                self.estrategias.gerar_cartao_estrategia_media_movel,
+                self.estrategias.gerar_cartao_estrategia_sazonalidade,
+                self.estrategias.gerar_cartao_estrategia_correlacao
+            ]
+            
+            for estrategia in estrategias_para_hibrido:
+                try:
+                    cartoes_parciais.append(set(estrategia()))
+                except:
+                    continue
+            
+            # Se não conseguiu gerar cartões parciais, retorna aleatório otimizado
+            if len(cartoes_parciais) < 2:
+                return self.gerar_cartao_aleatorio_otimizado()
+            
+            # Encontrar interseção (números recomendados por múltiplas estratégias)
+            interseccao = set.intersection(*cartoes_parciais[:2])
+            
+            cartao_final = set()
+            
+            # Adicionar interseção (máximo 8 números)
+            if interseccao:
+                cartao_final.update(list(interseccao)[:8])
+            
+            # Adicionar números únicos de cada estratégia
+            todos_numeros = set()
+            for c in cartoes_parciais:
+                todos_numeros.update(c)
+            
+            numeros_unicos = todos_numeros - cartao_final
+            
+            # Selecionar números únicos com base em frequência se houver concursos
+            if self.concursos:
+                freq = Counter()
+                concursos_analisar = self.concursos[:min(30, len(self.concursos))]
+                for concurso in concursos_analisar:
+                    for n in concurso:
+                        freq[n] += 1
+                
+                numeros_unicos_lista = list(numeros_unicos)
+                numeros_unicos_lista.sort(key=lambda x: freq.get(x, 0), reverse=True)
+            else:
+                numeros_unicos_lista = list(numeros_unicos)
+                random.shuffle(numeros_unicos_lista)
+            
+            # Adicionar números únicos até completar 15
+            for n in numeros_unicos_lista:
+                if len(cartao_final) >= 15:
+                    break
+                cartao_final.add(n)
+            
+            # Completar se necessário
+            while len(cartao_final) < 15:
+                numeros_restantes = [num for num in self.numeros if num not in cartao_final]
+                if numeros_restantes:
+                    n = random.choice(numeros_restantes)
+                    cartao_final.add(n)
+                else:
+                    break
+            
+            return sorted(list(cartao_final))
+            
+        except Exception:
+            return self.gerar_cartao_aleatorio_otimizado()
     
     def gerar_cartao_aleatorio_otimizado(self):
         """Gera cartão aleatório mas com restrições estatísticas"""
-        while True:
+        tentativas = 0
+        max_tentativas = 1000
+        
+        while tentativas < max_tentativas:
             cartao = sorted(random.sample(self.numeros, 15))
             
             # Verificar restrições
@@ -763,6 +884,11 @@ class SistemaGeracaoHibrida:
             
             if criterios_ok:
                 return cartao
+            
+            tentativas += 1
+        
+        # Se não encontrou após muitas tentativas, retorna qualquer um
+        return sorted(random.sample(self.numeros, 15))
     
     def analisar_performance_estrategias(self, concursos_teste=50):
         """Analisa performance histórica das estratégias"""
@@ -796,24 +922,23 @@ class SistemaGeracaoHibrida:
                     continue
                     
                 estrategia_temp = EstrategiasAvancadas(concursos_base)
+                sistema_temp = SistemaGeracaoHibrida(concursos_base)
                 
-                # Temporariamente substituir a função de geração
-                if nome == 'raiz_digital':
-                    cartao = estrategia_temp.gerar_cartao_estrategia_raiz_digital()
-                elif nome == 'quadrantes':
-                    cartao = estrategia_temp.gerar_cartao_estrategia_quadrantes()
-                elif nome == 'sazonalidade':
-                    cartao = estrategia_temp.gerar_cartao_estrategia_sazonalidade()
-                elif nome == 'correlacao':
-                    cartao = estrategia_temp.gerar_cartao_estrategia_correlacao()
-                elif nome == 'combinacoes_raras':
-                    cartao = estrategia_temp.gerar_cartao_estrategia_combinacoes_raras()
-                elif nome == 'gaps':
-                    cartao = estrategia_temp.gerar_cartao_estrategia_gaps()
-                else:
-                    # Para outras estratégias, usar função original
-                    sistema_temp = SistemaGeracaoHibrida(concursos_base)
-                    if nome == 'hibrida':
+                # Tentar gerar cartão com a estratégia
+                try:
+                    if nome == 'raiz_digital':
+                        cartao = estrategia_temp.gerar_cartao_estrategia_raiz_digital()
+                    elif nome == 'quadrantes':
+                        cartao = estrategia_temp.gerar_cartao_estrategia_quadrantes()
+                    elif nome == 'sazonalidade':
+                        cartao = estrategia_temp.gerar_cartao_estrategia_sazonalidade()
+                    elif nome == 'correlacao':
+                        cartao = estrategia_temp.gerar_cartao_estrategia_correlacao()
+                    elif nome == 'combinacoes_raras':
+                        cartao = estrategia_temp.gerar_cartao_estrategia_combinacoes_raras()
+                    elif nome == 'gaps':
+                        cartao = estrategia_temp.gerar_cartao_estrategia_gaps()
+                    elif nome == 'hibrida':
                         cartao = sistema_temp.gerar_cartao_hibrido()
                     elif nome == 'aleatoria_otimizada':
                         cartao = sistema_temp.gerar_cartao_aleatorio_otimizado()
@@ -823,16 +948,19 @@ class SistemaGeracaoHibrida:
                         cartao = estrategia_temp.gerar_cartao_estrategia_entropia()
                     else:
                         continue
-                
-                # Testar em concursos futuros
-                acertos_periodo = []
-                for i in range(inicio + 30, min(inicio + 30 + concursos_teste, len(self.concursos))):
-                    concurso_real = set(self.concursos[i])
-                    acertos = len(set(cartao).intersection(concurso_real))
-                    acertos_periodo.append(acertos)
-                
-                if acertos_periodo:
-                    acertos_totais.extend(acertos_periodo)
+                    
+                    # Testar em concursos futuros
+                    acertos_periodo = []
+                    for i in range(inicio + 30, min(inicio + 30 + concursos_teste, len(self.concursos))):
+                        concurso_real = set(self.concursos[i])
+                        acertos = len(set(cartao).intersection(concurso_real))
+                        acertos_periodo.append(acertos)
+                    
+                    if acertos_periodo:
+                        acertos_totais.extend(acertos_periodo)
+                        
+                except Exception:
+                    continue
             
             if acertos_totais:
                 resultados[nome] = {
@@ -846,16 +974,19 @@ class SistemaGeracaoHibrida:
         return resultados
 
 # =========================
-# NOVA CLASSE: AnaliseSequenciaFalha (mantida para compatibilidade)
+# CLASSE: AnaliseSequenciaFalha
 # =========================
 class AnaliseSequenciaFalha:
     def __init__(self, concursos):
-        self.concursos = concursos
+        self.concursos = concursos if concursos else []
         self.numeros = list(range(1, 26))
         
     def calcular_sequencias(self):
         """Retorna uma lista com contagem de sequências de acertos por posição."""
         sequencias = [0] * 25
+        if not self.concursos:
+            return sequencias
+            
         for jogo in self.concursos:
             for num in jogo:
                 sequencias[num - 1] += 1
@@ -864,6 +995,9 @@ class AnaliseSequenciaFalha:
     def calcular_falhas(self):
         """Retorna quantas vezes cada número NÃO apareceu."""
         falhas = [0] * 25
+        if not self.concursos:
+            return falhas
+            
         for linha in self.concursos:
             presentes = set(linha)
             for n in range(1, 26):
@@ -902,7 +1036,11 @@ class AnaliseSequenciaFalha:
             combo = set(random.sample(melhores, 8) + random.sample(retorno, 7))
             
             while len(combo) < 15:
-                combo.add(random.choice([n for n in range(1, 26) if n not in combo]))
+                numeros_restantes = [n for n in range(1, 26) if n not in combo]
+                if numeros_restantes:
+                    combo.add(random.choice(numeros_restantes))
+                else:
+                    break
             
             jogos.append(sorted(list(combo)))
         
@@ -913,7 +1051,7 @@ class AnaliseSequenciaFalha:
 # =========================
 class AnaliseCiclos:
     def __init__(self, concursos, concursos_info=None, limite_concursos=None):
-        self.concursos = concursos
+        self.concursos = concursos if concursos else []
         self.concursos_info = concursos_info or {}
         self.TODAS = set(range(1,26))
         self.ciclo_concursos = []
@@ -931,6 +1069,9 @@ class AnaliseCiclos:
         self.numeros_presentes = set()
         self.numeros_faltantes = set(self.TODAS)
         self.iniciar_indice = None
+        
+        if not self.concursos:
+            return
         
         max_concursos = len(self.concursos)
         if self.limite_concursos is not None:
@@ -970,48 +1111,6 @@ class AnaliseCiclos:
         }
 
 # =========================
-# CLASSE: LotoFacilIA (CatBoost)
-# =========================
-class LotoFacilIA:
-    def __init__(self, concursos):
-        self.concursos = concursos
-        self.numeros = list(range(1,26))
-        self.primos = {2,3,5,7,11,13,17,19,23}
-        self.models = {}
-        if len(concursos) > 1:
-            self.X = self.gerar_features()[:-1] if len(concursos) > 1 else np.array([])
-            self.Y = self.matriz_binaria()[1:] if len(concursos) > 1 else np.array([])
-            if len(self.X) > 0 and len(self.Y) > 0:
-                try:
-                    self.treinar_modelos()
-                except Exception as e:
-                    st.warning(f"CatBoost não pôde ser carregado: {e}")
-                    self.models = {}
-
-    def matriz_binaria(self):
-        return np.array([[1 if n in jogo else 0 for n in self.numeros] for jogo in self.concursos])
-
-    def prever_proximo(self):
-        if not self.models:
-            freq = self.frequencia(janela=50)
-            maxf = max(freq.values()) if freq else 1
-            probs = {n: (freq.get(n,0)/maxf if maxf>0 else 0.5) for n in self.numeros}
-            return probs
-        
-        ultima = self.gerar_features()[-1].reshape(1,-1)
-        probabilidades = {}
-        for n in self.numeros:
-            try:
-                prob = self.models[n].predict_proba(ultima)[0][1]
-                probabilidades[n] = prob
-            except:
-                probabilidades[n] = 0.5
-        
-        return probabilidades
-
-    # Métodos restantes mantidos por brevidade...
-
-# =========================
 # Streamlit Interface
 # =========================
 def carregar_estado():
@@ -1027,9 +1126,14 @@ def carregar_estado():
     
     for estado in estados:
         if estado not in st.session_state:
-            if estado == "portfolio_estrategias":
+            if estado in ["portfolio_estrategias", "cartoes_ciclos", "jogos_sequencia_falha", 
+                          "cartoes_gerados", "cartoes_gerados_padrao"]:
                 st.session_state[estado] = []
             elif estado == "performance_estrategias":
+                st.session_state[estado] = {}
+            elif estado == "combinacoes_combinatorias":
+                st.session_state[estado] = {}
+            elif estado == "concursos_info":
                 st.session_state[estado] = {}
             else:
                 st.session_state[estado] = None
@@ -1066,15 +1170,25 @@ with st.expander("📥 Capturar Concursos"):
                 
                 # Limpar dados antigos
                 estados_para_limpar = [
-                    "tabela_sequencia_falha", "jogos_sequencia_falha", 
-                    "resultado_ciclos", "cartoes_ciclos", "analise_ciclos",
-                    "cartoes_gerados", "cartoes_gerados_padrao", 
-                    "combinacoes_combinatorias", "limite_ciclos",
-                    "portfolio_estrategias", "performance_estrategias"
+                    "tabela_sequencia_falha", "resultado_ciclos", 
+                    "analise_ciclos", "limite_ciclos"
                 ]
                 
                 for estado in estados_para_limpar:
-                    st.session_state[estado] = None if "portfolio" not in estado and "performance" not in estado else []
+                    st.session_state[estado] = None
+                    
+                # Limpar listas
+                listas_para_limpar = [
+                    "portfolio_estrategias", "cartoes_ciclos", 
+                    "jogos_sequencia_falha", "cartoes_gerados", 
+                    "cartoes_gerados_padrao"
+                ]
+                
+                for lista in listas_para_limpar:
+                    st.session_state[lista] = []
+                    
+                st.session_state.performance_estrategias = {}
+                st.session_state.combinacoes_combinatorias = {}
             else:
                 st.error("Não foi possível capturar concursos.")
 
@@ -1106,25 +1220,31 @@ if st.session_state.concursos:
         col_config1, col_config2 = st.columns(2)
         
         with col_config1:
-            n_cartoes = st.slider("Número de cartões a gerar:", 1, 20, 10)
-            incluir_analise = st.checkbox("Incluir análise de performance", value=True)
+            n_cartoes = st.slider("Número de cartões a gerar:", 1, 10, 5)
         
         with col_config2:
             if st.button("📊 Analisar Performance das Estratégias", use_container_width=True):
                 with st.spinner("Analisando performance histórica..."):
-                    performance = sistema_hibrido.analisar_performance_estrategias(concursos_teste=30)
-                    st.session_state.performance_estrategias = performance
-                    st.success("Análise de performance concluída!")
+                    try:
+                        performance = sistema_hibrido.analisar_performance_estrategias(concursos_teste=30)
+                        st.session_state.performance_estrategias = performance
+                        st.success("Análise de performance concluída!")
+                    except Exception as e:
+                        st.error(f"Erro na análise: {e}")
         
         # Botão principal de geração
         if st.button("🎯 Gerar Portfolio de Estratégias", type="primary", use_container_width=True):
             with st.spinner("Gerando cartões com múltiplas estratégias..."):
-                portfolio = sistema_hibrido.gerar_portfolio_estrategias(n_cartoes)
-                st.session_state.portfolio_estrategias = portfolio
-                st.success(f"{len(portfolio)} cartões gerados com sucesso!")
+                try:
+                    portfolio = sistema_hibrido.gerar_portfolio_estrategias(n_cartoes)
+                    st.session_state.portfolio_estrategias = portfolio
+                    st.success(f"{len(portfolio)} cartões gerados com sucesso!")
+                except Exception as e:
+                    st.error(f"Erro ao gerar portfolio: {e}")
+                    st.session_state.portfolio_estrategias = []
         
         # Mostrar performance das estratégias
-        if st.session_state.performance_estrategias:
+        if st.session_state.performance_estrategias and len(st.session_state.performance_estrategias) > 0:
             st.subheader("📈 Performance Histórica das Estratégias")
             
             # Converter para DataFrame
@@ -1139,46 +1259,37 @@ if st.session_state.concursos:
                     'Amostras': dados['amostras']
                 })
             
-            df_performance = pd.DataFrame(dados_performance)
-            st.dataframe(df_performance.sort_values('Média Acertos', ascending=False), 
-                        hide_index=True, use_container_width=True)
+            if dados_performance:
+                df_performance = pd.DataFrame(dados_performance)
+                st.dataframe(df_performance.sort_values('Média Acertos', ascending=False), 
+                            hide_index=True, use_container_width=True)
         
         # Mostrar portfolio gerado
-        if st.session_state.portfolio_estrategias:
+        if st.session_state.portfolio_estrategias and len(st.session_state.portfolio_estrategias) > 0:
             st.subheader("🎰 Portfolio de Cartões Gerados")
             
-            # Agrupar por estratégia
-            estrategias_agrupadas = {}
-            for item in st.session_state.portfolio_estrategias:
-                estrategia = item['estrategia']
-                if estrategia not in estrategias_agrupadas:
-                    estrategias_agrupadas[estrategia] = []
-                estrategias_agrupadas[estrategia].append(item)
-            
-            # Mostrar cada estratégia
-            for estrategia, itens in estrategias_agrupadas.items():
-                with st.expander(f"📋 {estrategia.replace('_', ' ').title()} ({len(itens)} cartões)", expanded=True):
-                    for i, item in enumerate(itens):
-                        cartao = item['cartao']
-                        
-                        # Calcular estatísticas
-                        pares = sum(1 for n in cartao if n % 2 == 0)
-                        primos = sum(1 for n in cartao if n in {2,3,5,7,11,13,17,19,23})
-                        soma = sum(cartao)
-                        fibonacci = sum(1 for n in cartao if n in {1,2,3,5,8,13,21})
-                        
-                        col1, col2, col3 = st.columns([3, 2, 1])
-                        with col1:
-                            st.write(f"**Cartão {i+1}:** {cartao}")
-                        with col2:
-                            st.write(f"**Estatísticas:**")
-                            st.write(f"- Pares: {pares}")
-                            st.write(f"- Primos: {primos}")
-                            st.write(f"- Fibonacci: {fibonacci}")
-                        with col3:
-                            st.write(f"- Soma: {soma}")
-                        
-                        st.write("---")
+            # Mostrar cada cartão
+            for i, item in enumerate(st.session_state.portfolio_estrategias):
+                cartao = item['cartao']
+                
+                # Calcular estatísticas
+                pares = sum(1 for n in cartao if n % 2 == 0)
+                primos = sum(1 for n in cartao if n in {2,3,5,7,11,13,17,19,23})
+                soma = sum(cartao)
+                fibonacci = sum(1 for n in cartao if n in {1,2,3,5,8,13,21})
+                
+                col1, col2, col3 = st.columns([3, 2, 1])
+                with col1:
+                    st.write(f"**{item['nome']}:** {cartao}")
+                with col2:
+                    st.write(f"**Estatísticas:**")
+                    st.write(f"- Pares: {pares}")
+                    st.write(f"- Primos: {primos}")
+                    st.write(f"- Fibonacci: {fibonacci}")
+                with col3:
+                    st.write(f"- Soma: {soma}")
+                
+                st.write("---")
             
             # Botões de exportação
             st.subheader("💾 Exportar Portfolio")
@@ -1215,15 +1326,16 @@ if st.session_state.concursos:
                         'Soma': soma
                     })
                 
-                df_csv = pd.DataFrame(dados_csv)
-                csv_content = df_csv.to_csv(index=False)
-                
-                st.download_button(
-                    "📊 Baixar como CSV",
-                    data=csv_content,
-                    file_name="portfolio_estrategias.csv",
-                    mime="text/csv"
-                )
+                if dados_csv:
+                    df_csv = pd.DataFrame(dados_csv)
+                    csv_content = df_csv.to_csv(index=False)
+                    
+                    st.download_button(
+                        "📊 Baixar como CSV",
+                        data=csv_content,
+                        file_name="portfolio_estrategias.csv",
+                        mime="text/csv"
+                    )
         
         # Seção de explicação das estratégias
         with st.expander("📚 Explicação das Estratégias", expanded=False):
@@ -1270,19 +1382,6 @@ if st.session_state.concursos:
             - Aleatoriedade com restrições estatísticas
             - Garante equilíbrio básico
             """)
-    
-    # Outras abas mantidas...
-    with abas[0]:
-        st.subheader("📊 Estatísticas Gerais")
-        # ... (conteúdo existente)
-    
-    with abas[1]:
-        st.subheader("🧠 Geração de Cartões por Inteligência Artificial")
-        # ... (conteúdo existente)
-    
-    with abas[2]:
-        st.subheader("📈 Método Sequência/Falha")
-        # ... (conteúdo existente)
 
 # Sidebar
 with st.sidebar:
