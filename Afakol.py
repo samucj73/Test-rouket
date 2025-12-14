@@ -1,4 +1,5 @@
 
+
 import streamlit as st
 import requests
 import numpy as np
@@ -972,6 +973,10 @@ class LotoFacilIA:
         return unicos
 
 # =========================
+# ESTRATÉGIA FIBONACCI
+# =========================
+
+# =========================
 # ESTRATÉGIA FIBONACCI - CORRIGIDA
 # =========================
 class EstrategiaFibonacci:
@@ -1344,338 +1349,6 @@ class EstrategiaFibonacci:
         
         return relatorio
 
-# =========================
-# ESTRATÉGIA COMBINADA
-# =========================
-class EstrategiaCombinada:
-    def __init__(self, concursos):
-        self.concursos = concursos
-        self.numeros = list(range(1, 26))
-        
-        # Conjuntos especiais
-        self.fibonacci = [1, 2, 3, 5, 8, 13, 21]
-        self.primos = [2, 3, 5, 7, 11, 13, 17, 19, 23]
-        
-        # Números da borda (primeira e última linha do cartão 5x5)
-        self.borda = list(range(1, 6)) + list(range(21, 26))  # Linhas 1 e 5
-        
-        # Números pares e ímpares
-        self.pares = [n for n in self.numeros if n % 2 == 0]
-        self.impares = [n for n in self.numeros if n % 2 == 1]
-        
-        # Números do centro (não borda)
-        self.centro = [n for n in self.numeros if n not in self.borda]
-        
-    def analisar_estatisticas(self):
-        """Analisa estatísticas para otimizar a geração"""
-        if not self.concursos:
-            return {}
-            
-        janela = min(50, len(self.concursos))
-        concursos_recentes = self.concursos[:janela]
-        
-        stats = {
-            'freq_borda': {n: 0 for n in self.borda},
-            'freq_fib': {n: 0 for n in self.fibonacci},
-            'freq_primos': {n: 0 for n in self.primos}
-        }
-        
-        for concurso in concursos_recentes:
-            for n in concurso:
-                if n in self.borda:
-                    stats['freq_borda'][n] += 1
-                if n in self.fibonacci:
-                    stats['freq_fib'][n] += 1
-                if n in self.primos:
-                    stats['freq_primos'][n] += 1
-        
-        return stats
-    
-    def gerar_cartao_com_regras(self, usar_estatisticas=True):
-        """Gera um cartão seguindo as regras específicas"""
-        max_tentativas = 1000  # Limite para evitar loop infinito
-        stats = self.analisar_estatisticas() if usar_estatisticas else {}
-        
-        for tentativa in range(max_tentativas):
-            cartao = set()
-            
-            # REGRA 1: 10 números da borda
-            if usar_estatisticas and stats:
-                # Ordenar borda por frequência (mais frequentes primeiro)
-                borda_ordenada = sorted(self.borda, key=lambda x: stats['freq_borda'][x], reverse=True)
-                selecao_borda = random.sample(borda_ordenada[:15], 10)  # Pegar dos mais frequentes
-            else:
-                selecao_borda = random.sample(self.borda, 10)
-            
-            cartao.update(selecao_borda)
-            
-            # REGRA 2: 7 números pares NO TOTAL (incluindo os da borda)
-            pares_atuais = sum(1 for n in cartao if n in self.pares)
-            pares_faltam = max(0, 7 - pares_atuais)
-            
-            # Adicionar pares se necessário
-            if pares_faltam > 0:
-                pares_disponiveis = [n for n in self.pares if n not in cartao]
-                if len(pares_disponiveis) >= pares_faltam:
-                    pares_adicionar = random.sample(pares_disponiveis, pares_faltam)
-                    cartao.update(pares_adicionar)
-            
-            # REGRA 3: 2 números ímpares NO TOTAL
-            impares_atuais = sum(1 for n in cartao if n in self.impares)
-            impares_faltam = max(0, 2 - impares_atuais)
-            
-            # Adicionar ímpares se necessário
-            if impares_faltam > 0:
-                impares_disponiveis = [n for n in self.impares if n not in cartao]
-                if len(impares_disponiveis) >= impares_faltam:
-                    impares_adicionar = random.sample(impares_disponiveis, impares_faltam)
-                    cartao.update(impares_adicionar)
-            
-            # REGRA 4: 6 números primos NO TOTAL
-            primos_atuais = sum(1 for n in cartao if n in self.primos)
-            primos_faltam = max(0, 6 - primos_atuais)
-            
-            # Adicionar primos se necessário
-            if primos_faltam > 0:
-                primos_disponiveis = [n for n in self.primos if n not in cartao]
-                if usar_estatisticas and stats:
-                    # Ordenar primos por frequência
-                    primos_ordenados = sorted(primos_disponiveis, key=lambda x: stats['freq_primos'][x], reverse=True)
-                    if len(primos_ordenados) >= primos_faltam:
-                        primos_adicionar = random.sample(primos_ordenados[:10], primos_faltam)
-                        cartao.update(primos_adicionar)
-                else:
-                    if len(primos_disponiveis) >= primos_faltam:
-                        primos_adicionar = random.sample(primos_disponiveis, primos_faltam)
-                        cartao.update(primos_adicionar)
-            
-            # REGRA 5: 4 números Fibonacci NO TOTAL
-            fib_atuais = sum(1 for n in cartao if n in self.fibonacci)
-            fib_faltam = max(0, 4 - fib_atuais)
-            
-            # Adicionar Fibonacci se necessário
-            if fib_faltam > 0:
-                fib_disponiveis = [n for n in self.fibonacci if n not in cartao]
-                if usar_estatisticas and stats:
-                    # Ordenar Fibonacci por frequência
-                    fib_ordenados = sorted(fib_disponiveis, key=lambda x: stats['freq_fib'][x], reverse=True)
-                    if len(fib_ordenados) >= fib_faltam:
-                        fib_adicionar = random.sample(fib_ordenados[:5], fib_faltam)
-                        cartao.update(fib_adicionar)
-                else:
-                    if len(fib_disponiveis) >= fib_faltam:
-                        fib_adicionar = random.sample(fib_disponiveis, fib_faltam)
-                        cartao.update(fib_adicionar)
-            
-            # Completar com números aleatórios para ter 15 números
-            while len(cartao) < 15:
-                candidatos = [n for n in self.numeros if n not in cartao]
-                if not candidatos:
-                    break
-                cartao.add(random.choice(candidatos))
-            
-            # Converter para lista ordenada
-            cartao_lista = sorted(list(cartao))
-            
-            # Verificar todas as regras
-            if self.validar_regras(cartao_lista):
-                return cartao_lista
-        
-        # Se não conseguiu gerar com as regras, retorna um cartão padrão
-        return sorted(random.sample(self.numeros, 15))
-    
-    def validar_regras(self, cartao):
-        """Valida se o cartão atende a todas as regras"""
-        if len(cartao) != 15:
-            return False
-        
-        if len(set(cartao)) != 15:
-            return False
-        
-        # Contar quantos de cada categoria
-        borda_count = sum(1 for n in cartao if n in self.borda)
-        pares_count = sum(1 for n in cartao if n in self.pares)
-        impares_count = sum(1 for n in cartao if n in self.impares)
-        primos_count = sum(1 for n in cartao if n in self.primos)
-        fib_count = sum(1 for n in cartao if n in self.fibonacci)
-        
-        # Verificar regras
-        return (
-            borda_count == 10 and
-            pares_count == 7 and
-            impares_count == 2 and
-            primos_count == 6 and
-            fib_count == 4
-        )
-    
-    def gerar_cartoes_combinados(self, n_cartoes=10, estrategia="estatistica"):
-        """Gera múltiplos cartões seguindo as regras"""
-        cartoes = []
-        
-        for _ in range(n_cartoes * 3):  # Tentar mais vezes
-            if estrategia == "estatistica":
-                cartao = self.gerar_cartao_com_regras(usar_estatisticas=True)
-            elif estrategia == "aleatoria":
-                cartao = self.gerar_cartao_com_regras(usar_estatisticas=False)
-            elif estrategia == "balanceada":
-                cartao = self.gerar_cartao_balanceado()
-            
-            # Verificar se é único e válido
-            if self.validar_regras(cartao) and cartao not in cartoes:
-                cartoes.append(cartao)
-            
-            if len(cartoes) >= n_cartoes:
-                break
-        
-        # Se não gerou cartões suficientes, completar
-        while len(cartoes) < n_cartoes:
-            cartao = self.gerar_cartao_com_regras(usar_estatisticas=True)
-            if self.validar_regras(cartao) and cartao not in cartoes:
-                cartoes.append(cartao)
-        
-        return cartoes[:n_cartoes]
-    
-    def gerar_cartao_balanceado(self):
-        """Gera um cartão com abordagem mais balanceada"""
-        max_tentativas = 500
-        
-        for _ in range(max_tentativas):
-            # Começar com borda (10 números)
-            borda_selecionada = random.sample(self.borda, 10)
-            
-            # Escolher 2 ímpares (podem ser da borda ou não)
-            impares_disponiveis = [n for n in self.impares if n not in borda_selecionada]
-            if len(impares_disponiveis) >= 2:
-                impares_selecionados = random.sample(impares_disponiveis, 2)
-            else:
-                impares_selecionados = random.sample(self.impares, 2)
-            
-            # Escolher Fibonacci (4 no total, podem sobrepor)
-            fib_disponiveis = self.fibonacci
-            fib_selecionados = random.sample(fib_disponiveis, 4)
-            
-            # Escolher primos (6 no total, podem sobrepor)
-            primos_disponiveis = self.primos
-            primos_selecionados = random.sample(primos_disponiveis, 6)
-            
-            # Combinar tudo
-            todos_numeros = borda_selecionada + impares_selecionados + fib_selecionados + primos_selecionados
-            cartao_set = set(todos_numeros)
-            
-            # Completar se necessário
-            while len(cartao_set) < 15:
-                candidatos = [n for n in self.numeros if n not in cartao_set]
-                if not candidatos:
-                    break
-                cartao_set.add(random.choice(candidatos))
-            
-            cartao_lista = sorted(list(cartao_set))
-            
-            # Ajustar para atender exatamente às regras
-            cartao_ajustado = self.ajustar_para_regras(cartao_lista)
-            
-            if self.validar_regras(cartao_ajustado):
-                return cartao_ajustado
-        
-        return sorted(random.sample(self.numeros, 15))
-    
-    def ajustar_para_regras(self, cartao):
-        """Ajusta um cartão para atender exatamente às regras"""
-        cartao_set = set(cartao)
-        
-        # Ajustar borda
-        borda_atual = [n for n in cartao_set if n in self.borda]
-        if len(borda_atual) > 10:
-            # Remover borda excessiva
-            remover = random.sample(borda_atual, len(borda_atual) - 10)
-            cartao_set.difference_update(remover)
-        elif len(borda_atual) < 10:
-            # Adicionar borda
-            borda_faltante = [n for n in self.borda if n not in cartao_set]
-            if len(borda_faltante) >= (10 - len(borda_atual)):
-                adicionar = random.sample(borda_faltante, 10 - len(borda_atual))
-                cartao_set.update(adicionar)
-        
-        # Ajustar pares/ímpares
-        pares_atual = [n for n in cartao_set if n in self.pares]
-        impares_atual = [n for n in cartao_set if n in self.impares]
-        
-        # Primeiro ajustar ímpares para ter exatamente 2
-        if len(impares_atual) > 2:
-            remover_impares = random.sample(impares_atual, len(impares_atual) - 2)
-            cartao_set.difference_update(remover_impares)
-            # Adicionar pares no lugar
-            pares_faltante = [n for n in self.pares if n not in cartao_set]
-            if len(pares_faltante) >= len(remover_impares):
-                cartao_set.update(random.sample(pares_faltante, len(remover_impares)))
-        
-        elif len(impares_atual) < 2:
-            impares_faltante = [n for n in self.impares if n not in cartao_set]
-            if len(impares_faltante) >= (2 - len(impares_atual)):
-                adicionar_impares = random.sample(impares_faltante, 2 - len(impares_atual))
-                cartao_set.update(adicionar_impares)
-                # Remover pares equivalentes
-                pares_para_remover = random.sample([n for n in cartao_set if n in self.pares], 2 - len(impares_atual))
-                cartao_set.difference_update(pares_para_remover)
-        
-        # Ajustar primos para 6
-        primos_atual = [n for n in cartao_set if n in self.primos]
-        if len(primos_atual) > 6:
-            remover_primos = random.sample(primos_atual, len(primos_atual) - 6)
-            cartao_set.difference_update(remover_primos)
-        elif len(primos_atual) < 6:
-            primos_faltante = [n for n in self.primos if n not in cartao_set]
-            if len(primos_faltante) >= (6 - len(primos_atual)):
-                adicionar_primos = random.sample(primos_faltante, 6 - len(primos_atual))
-                cartao_set.update(adicionar_primos)
-                # Remover não-primos equivalentes
-                nao_primos = [n for n in cartao_set if n not in self.primos]
-                if len(nao_primos) >= (6 - len(primos_atual)):
-                    remover_nao_primos = random.sample(nao_primos, 6 - len(primos_atual))
-                    cartao_set.difference_update(remover_nao_primos)
-        
-        # Ajustar Fibonacci para 4
-        fib_atual = [n for n in cartao_set if n in self.fibonacci]
-        if len(fib_atual) > 4:
-            remover_fib = random.sample(fib_atual, len(fib_atual) - 4)
-            cartao_set.difference_update(remover_fib)
-        elif len(fib_atual) < 4:
-            fib_faltante = [n for n in self.fibonacci if n not in cartao_set]
-            if len(fib_faltante) >= (4 - len(fib_atual)):
-                adicionar_fib = random.sample(fib_faltante, 4 - len(fib_atual))
-                cartao_set.update(adicionar_fib)
-                # Remover não-fib equivalentes
-                nao_fib = [n for n in cartao_set if n not in self.fibonacci]
-                if len(nao_fib) >= (4 - len(fib_atual)):
-                    remover_nao_fib = random.sample(nao_fib, 4 - len(fib_atual))
-                    cartao_set.difference_update(remover_nao_fib)
-        
-        # Garantir 15 números
-        while len(cartao_set) > 15:
-            cartao_set.remove(random.choice(list(cartao_set)))
-        
-        while len(cartao_set) < 15:
-            candidatos = [n for n in self.numeros if n not in cartao_set]
-            if candidatos:
-                cartao_set.add(random.choice(candidatos))
-            else:
-                break
-        
-        return sorted(list(cartao_set))
-    
-    def obter_estatisticas_cartao(self, cartao):
-        """Retorna estatísticas detalhadas de um cartão"""
-        return {
-            'borda': sum(1 for n in cartao if n in self.borda),
-            'pares': sum(1 for n in cartao if n in self.pares),
-            'impares': sum(1 for n in cartao if n in self.impares),
-            'primos': sum(1 for n in cartao if n in self.primos),
-            'fibonacci': sum(1 for n in cartao if n in self.fibonacci),
-            'numeros_borda': [n for n in cartao if n in self.borda],
-            'numeros_fibonacci': [n for n in cartao if n in self.fibonacci],
-            'numeros_primos': [n for n in cartao if n in self.primos],
-            'total_numeros': len(cartao)
-        }
 
 # =========================
 # PADRÕES LINHA×COLUNA
@@ -1746,10 +1419,6 @@ def carregar_estado():
         st.session_state.cartoes_fibonacci = []
     if "relatorio_fibonacci" not in st.session_state:
         st.session_state.relatorio_fibonacci = None
-    if "cartoes_combinados" not in st.session_state:
-        st.session_state.cartoes_combinados = []
-    if "estrategia_combinada" not in st.session_state:
-        st.session_state.estrategia_combinada = None
 
 st.markdown("<h1 style='text-align: center;'>Lotofácil Inteligente</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center;'>SAMUCJ TECHNOLOGY</p>", unsafe_allow_html=True)
@@ -1796,8 +1465,6 @@ with st.expander("📥 Capturar Concursos"):
                 st.session_state.limite_ciclos = None
                 st.session_state.cartoes_fibonacci = []
                 st.session_state.relatorio_fibonacci = None
-                st.session_state.cartoes_combinados = []
-                st.session_state.estrategia_combinada = None
             else:
                 st.error("Não foi possível capturar concursos.")
 
@@ -1822,7 +1489,6 @@ if st.session_state.concursos:
         "🧩 Gerar Cartões por Padrões",
         "📐 Padrões Linha×Coluna",
         "🎯 Estratégia Fibonacci",
-        "🔄 Estratégia Combinada",  # NOVA ABA
         "✅ Conferência", 
         "📤 Conferir Arquivo TXT",
         "🔁 Ciclos da Lotofácil"
@@ -2257,164 +1923,8 @@ if st.session_state.concursos:
             - Cartões únicos e balanceados
             """)
 
-    # Aba 8 - Estratégia Combinada (nova)
+    # Aba 8 - Conferência
     with abas[7]:
-        st.subheader("🔄 Estratégia Combinada")
-        st.write("Gera cartões seguindo regras específicas:")
-        st.markdown("""
-        **Regras obrigatórias por cartão:**
-        - 10 números da **borda** (linhas 1 e 5 do cartão 5x5)
-        - 7 números **pares** no total
-        - 2 números **ímpares** no total  
-        - 6 números **primos** no total
-        - 4 números **Fibonacci** no total
-        - Total: 15 números únicos por cartão
-        """)
-        
-        # Inicializar estratégia combinada
-        estrategia_combinada = EstrategiaCombinada(st.session_state.concursos)
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("### 🔢 Conjuntos de Números")
-            st.write(f"**Borda (10 números):** {estrategia_combinada.borda}")
-            st.write(f"**Fibonacci (7 números):** {estrategia_combinada.fibonacci}")
-            st.write(f"**Primos (9 números):** {estrategia_combinada.primos}")
-            st.write(f"**Pares (12 números):** {estrategia_combinada.pares[:12]}...")
-            st.write(f"**Ímpares (13 números):** {estrategia_combinada.impares[:13]}...")
-        
-        with col2:
-            st.markdown("### ⚙️ Configuração")
-            estrategia = st.selectbox(
-                "Selecione a estratégia de geração:",
-                ["estatistica", "aleatoria", "balanceada"],
-                format_func=lambda x: {
-                    "estatistica": "Baseada em estatísticas",
-                    "aleatoria": "Aleatória com regras",
-                    "balanceada": "Balanceada otimizada"
-                }[x],
-                key="combinada_estrategia"
-            )
-            
-            n_cartoes = st.slider("Número de cartões a gerar:", 1, 20, 10, key="combinada_cartoes")
-            
-            # Opção para mostrar detalhes
-            mostrar_detalhes = st.checkbox("Mostrar detalhes de cada cartão", value=True, key="combinada_detalhes")
-        
-        st.markdown("---")
-        st.markdown("### 🎰 Gerar Cartões com Regras Combinadas")
-        
-        if st.button("🚀 Gerar Cartões com Estratégia Combinada", type="primary"):
-            with st.spinner(f"Gerando {n_cartoes} cartões com regras combinadas..."):
-                cartoes_combinados = estrategia_combinada.gerar_cartoes_combinados(n_cartoes, estrategia)
-                st.session_state.cartoes_combinados = cartoes_combinados
-                st.session_state.estrategia_combinada = estrategia_combinada
-                st.success(f"{len(cartoes_combinados)} cartões gerados com sucesso!")
-        
-        # Mostrar cartões gerados
-        if hasattr(st.session_state, 'cartoes_combinados') and st.session_state.cartoes_combinados:
-            cartoes_combinados = st.session_state.cartoes_combinados
-            
-            st.markdown(f"### 📋 Cartões Gerados ({n_cartoes} cartões)")
-            
-            # Estatísticas gerais
-            stats_gerais = {
-                'borda': 0,
-                'pares': 0,
-                'impares': 0,
-                'primos': 0,
-                'fibonacci': 0,
-                'cartoes_validos': 0
-            }
-            
-            for cartao in cartoes_combinados:
-                stats = estrategia_combinada.obter_estatisticas_cartao(cartao)
-                if estrategia_combinada.validar_regras(cartao):
-                    stats_gerais['cartoes_validos'] += 1
-                stats_gerais['borda'] += stats['borda']
-                stats_gerais['pares'] += stats['pares']
-                stats_gerais['impares'] += stats['impares']
-                stats_gerais['primos'] += stats['primos']
-                stats_gerais['fibonacci'] += stats['fibonacci']
-            
-            # Médias
-            if cartoes_combinados:
-                st.markdown("#### 📊 Médias por Cartão")
-                col_avg1, col_avg2, col_avg3, col_avg4, col_avg5 = st.columns(5)
-                with col_avg1:
-                    st.metric("Borda", f"{stats_gerais['borda']/len(cartoes_combinados):.1f}", "10 alvo")
-                with col_avg2:
-                    st.metric("Pares", f"{stats_gerais['pares']/len(cartoes_combinados):.1f}", "7 alvo")
-                with col_avg3:
-                    st.metric("Ímpares", f"{stats_gerais['impares']/len(cartoes_combinados):.1f}", "2 alvo")
-                with col_avg4:
-                    st.metric("Primos", f"{stats_gerais['primos']/len(cartoes_combinados):.1f}", "6 alvo")
-                with col_avg5:
-                    st.metric("Fibonacci", f"{stats_gerais['fibonacci']/len(cartoes_combinados):.1f}", "4 alvo")
-            
-            # Tabela de cartões
-            if mostrar_detalhes:
-                st.markdown("#### 📋 Detalhes dos Cartões")
-                for i, cartao in enumerate(cartoes_combinados, 1):
-                    stats = estrategia_combinada.obter_estatisticas_cartao(cartao)
-                    
-                    col_c1, col_c2 = st.columns([3, 2])
-                    with col_c1:
-                        st.write(f"**Cartão {i}:** {cartao}")
-                        if estrategia_combinada.validar_regras(cartao):
-                            st.success("✅ Atende a todas as regras")
-                        else:
-                            st.warning("⚠️ Não atende a todas as regras")
-                    
-                    with col_c2:
-                        st.write(f"**Estatísticas:**")
-                        st.write(f"- Borda: {stats['borda']}/10")
-                        st.write(f"- Pares: {stats['pares']}/7")
-                        st.write(f"- Ímpares: {stats['impares']}/2")
-                        st.write(f"- Primos: {stats['primos']}/6")
-                        st.write(f"- Fibonacci: {stats['fibonacci']}/4")
-                    
-                    # Mostrar números específicos se solicitado
-                    with st.expander(f"Ver números específicos do Cartão {i}"):
-                        col_s1, col_s2, col_s3 = st.columns(3)
-                        with col_s1:
-                            st.write(f"**Borda:** {stats['numeros_borda']}")
-                        with col_s2:
-                            st.write(f"**Fibonacci:** {stats['numeros_fibonacci']}")
-                        with col_s3:
-                            st.write(f"**Primos:** {stats['numeros_primos']}")
-                    
-                    st.write("---")
-            else:
-                # Versão compacta
-                st.markdown("#### 📋 Lista Compacta de Cartões")
-                for i, cartao in enumerate(cartoes_combinados, 1):
-                    stats = estrategia_combinada.obter_estatisticas_cartao(cartao)
-                    status = "✅" if estrategia_combinada.validar_regras(cartao) else "⚠️"
-                    st.write(f"{status} **Cartão {i}:** {cartao}")
-            
-            # Exportar cartões
-            st.markdown("### 💾 Exportar Cartões Combinados")
-            conteudo_combinado = "\n".join(",".join(str(n) for n in cartao) for cartao in cartoes_combinados)
-            st.download_button(
-                "📥 Baixar Cartões Combinados", 
-                data=conteudo_combinado, 
-                file_name=f"cartoes_combinados_{estrategia}.txt", 
-                mime="text/plain"
-            )
-            
-            # Adicionar estatísticas de exportação
-            st.info(f"""
-            **Resumo da geração:**
-            - Total de cartões: {len(cartoes_combinados)}
-            - Cartões válidos: {stats_gerais['cartoes_validos']}/{len(cartoes_combinados)}
-            - Estratégia: {estrategia.replace('_', ' ').title()}
-            - Regras aplicadas: Borda (10), Pares (7), Ímpares (2), Primos (6), Fibonacci (4)
-            """)
-
-    # Aba 9 - Conferência
-    with abas[8]:
         st.subheader("🎯 Conferência de Cartões")
         if st.session_state.info_ultimo_concurso:
             info = st.session_state.info_ultimo_concurso
@@ -2453,14 +1963,6 @@ if st.session_state.concursos:
                         fib_no_cartao = [num for num in cartao if num in [1,2,3,5,8,13,21]]
                         st.write(f"Cartão {i}: {cartao} - **{acertos} acertos** (Fibonacci: {len(fib_no_cartao)})")
                 
-                # Cartões Combinados
-                if hasattr(st.session_state, 'cartoes_combinados') and st.session_state.cartoes_combinados:
-                    st.markdown("### 🔄 Cartões Combinados")
-                    for i, cartao in enumerate(st.session_state.cartoes_combinados, 1):
-                        acertos = len(set(cartao) & set(info['dezenas']))
-                        stats = EstrategiaCombinada(st.session_state.concursos).obter_estatisticas_cartao(cartao)
-                        st.write(f"Cartão {i}: {cartao} - **{acertos} acertos** (Borda: {stats['borda']}, Fib: {stats['fibonacci']})")
-                
                 # Combinações Combinatorias
                 if st.session_state.combinacoes_combinatorias:
                     st.markdown("### 🔢 Combinações Combinatorias (Top 3 por Tamanho)")
@@ -2478,8 +1980,8 @@ if st.session_state.concursos:
                                 st.write(f"{combo}")
                                 st.write("---")
 
-    # Aba 10 - Conferir Arquivo TXT
-    with abas[9]:
+    # Aba 9 - Conferir Arquivo TXT
+    with abas[8]:
         st.subheader("📤 Conferir Cartões de um Arquivo TXT")
         uploaded_file = st.file_uploader("Faça upload do arquivo TXT com os cartões (15 dezenas separadas por vírgula)", type="txt")
         if uploaded_file:
@@ -2508,8 +2010,8 @@ if st.session_state.concursos:
             else:
                 st.warning("Nenhum cartão válido foi encontrado no arquivo.")
 
-    # Aba 11 - Ciclos da Lotofácil
-    with abas[10]:
+    # Aba 10 - Ciclos da Lotofácil
+    with abas[9]:
         st.subheader("🔁 Ciclos da Lotofácil (Ciclo Dinâmico)")
         st.write("Analise os ciclos de dezenas nos concursos mais recentes.")
         
@@ -2787,8 +2289,6 @@ with st.sidebar:
         st.write(f"Combinações combinatorias: {total_combinacoes}")
     if hasattr(st.session_state, 'cartoes_fibonacci') and st.session_state.cartoes_fibonacci:
         st.write(f"Cartões Fibonacci: {len(st.session_state.cartoes_fibonacci)}")
-    if hasattr(st.session_state, 'cartoes_combinados') and st.session_state.cartoes_combinados:
-        st.write(f"Cartões Combinados: {len(st.session_state.cartoes_combinados)}")
     if st.session_state.cartoes_ciclos:
         st.write(f"Cartões Ciclos gerados: {len(st.session_state.cartoes_ciclos)}")
     
