@@ -1,3 +1,4 @@
+
 import streamlit as st
 import requests
 import numpy as np
@@ -971,6 +972,306 @@ class LotoFacilIA:
         return unicos
 
 # =========================
+# ESTRATÉGIA FIBONACCI
+# =========================
+class EstrategiaFibonacci:
+    def __init__(self, concursos):
+        self.concursos = concursos
+        self.fibonacci = [1, 2, 3, 5, 8, 13, 21]
+        self.numeros = list(range(1, 26))
+        
+    def analisar_fibonacci(self):
+        """Analisa estatísticas das dezenas Fibonacci nos concursos recentes"""
+        if not self.concursos:
+            return {}
+            
+        # Analisar últimos 50 concursos (ou menos se não houver)
+        janela = min(50, len(self.concursos))
+        concursos_recentes = self.concursos[:janela]
+        
+        # Estatísticas das dezenas Fibonacci
+        stats = {
+            'frequencia_fib': {num: 0 for num in self.fibonacci},
+            'media_por_concurso': [],
+            'ultima_aparicao': {num: 0 for num in self.fibonacci},
+            'atraso_fib': {num: 0 for num in self.fibonacci}
+        }
+        
+        # Calcular frequência e última aparição
+        for idx, concurso in enumerate(concursos_recentes):
+            fib_no_concurso = [num for num in concurso if num in self.fibonacci]
+            stats['media_por_concurso'].append(len(fib_no_concurso))
+            
+            for num in self.fibonacci:
+                if num in concurso:
+                    stats['frequencia_fib'][num] += 1
+                    stats['ultima_aparicao'][num] = idx
+        
+        # Calcular atraso (concursos desde a última aparição)
+        for num in self.fibonacci:
+            if stats['ultima_aparicao'][num] > 0:
+                stats['atraso_fib'][num] = stats['ultima_aparicao'][num]
+            else:
+                stats['atraso_fib'][num] = janela  # Nunca apareceu na janela
+        
+        # Calcular estatísticas gerais
+        stats['media_geral'] = np.mean(stats['media_por_concurso']) if stats['media_por_concurso'] else 0
+        stats['moda_geral'] = max(set(stats['media_por_concurso']), key=stats['media_por_concurso'].count) if stats['media_por_concurso'] else 0
+        stats['min_geral'] = min(stats['media_por_concurso']) if stats['media_por_concurso'] else 0
+        stats['max_geral'] = max(stats['media_por_concurso']) if stats['media_por_concurso'] else 0
+        
+        return stats
+    
+    def gerar_cartoes_fibonacci(self, n_cartoes=10, usar_estatisticas=True):
+        """Gera cartões usando estratégia Fibonacci com 4 ou 5 números Fibonacci"""
+        cartoes = []
+        
+        # Obter estatísticas se solicitado
+        stats = self.analisar_fibonacci() if usar_estatisticas else {}
+        
+        for _ in range(n_cartoes * 2):  # Gerar mais para garantir diversidade
+            # Escolher 4 ou 5 números Fibonacci
+            qtd_fib = random.choice([4, 5])
+            
+            if usar_estatisticas and stats:
+                # Priorizar Fibonacci com maior atraso ou menor frequência
+                fib_ordenados = sorted(
+                    self.fibonacci, 
+                    key=lambda x: (stats['atraso_fib'][x], -stats['frequencia_fib'][x]), 
+                    reverse=True
+                )
+                fib_selecionadas = random.sample(fib_ordenados[:5], qtd_fib)
+            else:
+                # Seleção aleatória pura
+                fib_selecionadas = random.sample(self.fibonacci, qtd_fib)
+            
+            # Dezenas não-Fibonacci
+            nao_fib = [num for num in self.numeros if num not in self.fibonacci]
+            
+            # Se estiver usando estatísticas, obter frequência dos não-Fibonacci
+            if usar_estatisticas and self.concursos:
+                # Calcular frequência dos não-Fibonacci nos últimos concursos
+                janela = min(30, len(self.concursos))
+                freq_nao_fib = Counter()
+                for concurso in self.concursos[:janela]:
+                    for num in concurso:
+                        if num in nao_fib:
+                            freq_nao_fib[num] += 1
+                
+                # Ordenar não-Fibonacci por frequência (mais frequentes primeiro)
+                nao_fib_ordenados = sorted(nao_fib, key=lambda x: freq_nao_fib[x], reverse=True)
+                
+                # Selecionar não-Fibonacci: 60% dos mais frequentes, 40% aleatórios
+                qtd_nao_fib = 15 - qtd_fib
+                qtd_frequentes = int(qtd_nao_fib * 0.6)
+                qtd_aleatorios = qtd_nao_fib - qtd_frequentes
+                
+                # Selecionar dos mais frequentes
+                if len(nao_fib_ordenados) >= qtd_frequentes:
+                    selecao_frequentes = random.sample(nao_fib_ordenados[:15], qtd_frequentes)
+                else:
+                    selecao_frequentes = nao_fib_ordenados[:qtd_frequentes]
+                
+                # Selecionar aleatórios para completar
+                restantes = [num for num in nao_fib if num not in selecao_frequentes]
+                if restantes and qtd_aleatorios > 0:
+                    if len(restantes) >= qtd_aleatorios:
+                        selecao_aleatorios = random.sample(restantes, qtd_aleatorios)
+                    else:
+                        selecao_aleatorios = restantes
+                    
+                    selecao_nao_fib = selecao_frequentes + selecao_aleatorios
+                else:
+                    selecao_nao_fib = selecao_frequentes
+                
+                # Completar se necessário
+                while len(selecao_nao_fib) < qtd_nao_fib:
+                    candidatos = [num for num in nao_fib if num not in selecao_nao_fib]
+                    if candidatos:
+                        selecao_nao_fib.append(random.choice(candidatos))
+                    else:
+                        break
+            else:
+                # Seleção aleatória simples
+                qtd_nao_fib = 15 - qtd_fib
+                selecao_nao_fib = random.sample(nao_fib, qtd_nao_fib)
+            
+            # Combinar e ordenar
+            cartao = sorted(fib_selecionadas + selecao_nao_fib)
+            
+            # Validar equilíbrio de pares/ímpares
+            pares = sum(1 for n in cartao if n % 2 == 0)
+            if 6 <= pares <= 9:  # Faixa ideal para Lotofácil
+                cartoes.append(cartao)
+            
+            # Parar quando tiver cartões suficientes
+            if len(cartoes) >= n_cartoes:
+                break
+        
+        # Garantir número exato de cartões
+        while len(cartoes) < n_cartoes:
+            # Fallback: geração simples
+            qtd_fib = random.choice([4, 5])
+            fib_selecionadas = random.sample(self.fibonacci, qtd_fib)
+            nao_fib = [num for num in self.numeros if num not in self.fibonacci]
+            selecao_nao_fib = random.sample(nao_fib, 15 - qtd_fib)
+            cartao = sorted(fib_selecionadas + selecao_nao_fib)
+            
+            # Verificar se é único
+            if cartao not in cartoes:
+                cartoes.append(cartao)
+        
+        return cartoes[:n_cartoes]
+    
+    def gerar_cartoes_fibonacci_estrategia(self, estrategia="padrao", n_cartoes=10):
+        """Gera cartões com diferentes estratégias Fibonacci"""
+        cartoes = []
+        
+        if estrategia == "padrao":
+            # Estratégia padrão: 4-5 Fibonacci + estatísticas
+            return self.gerar_cartoes_fibonacci(n_cartoes, usar_estatisticas=True)
+        
+        elif estrategia == "fibonacci_quentes":
+            # Foca nos Fibonacci mais frequentes
+            stats = self.analisar_fibonacci()
+            fib_ordenados = sorted(
+                self.fibonacci, 
+                key=lambda x: stats['frequencia_fib'][x], 
+                reverse=True
+            )
+            
+            for _ in range(n_cartoes):
+                qtd_fib = random.choice([4, 5])
+                fib_selecionadas = random.sample(fib_ordenados[:5], qtd_fib)
+                
+                # Complementar com números quentes não-Fibonacci
+                nao_fib = [num for num in self.numeros if num not in self.fibonacci]
+                
+                # Calcular frequência dos não-Fibonacci
+                janela = min(30, len(self.concursos))
+                freq_nao_fib = Counter()
+                for concurso in self.concursos[:janela]:
+                    for num in concurso:
+                        if num in nao_fib:
+                            freq_nao_fib[num] += 1
+                
+                nao_fib_ordenados = sorted(nao_fib, key=lambda x: freq_nao_fib[x], reverse=True)
+                selecao_nao_fib = random.sample(nao_fib_ordenados[:15], 15 - qtd_fib)
+                
+                cartao = sorted(fib_selecionadas + selecao_nao_fib)
+                cartoes.append(cartao)
+        
+        elif estrategia == "fibonacci_atrasados":
+            # Foca nos Fibonacci com maior atraso
+            stats = self.analisar_fibonacci()
+            fib_ordenados = sorted(
+                self.fibonacci, 
+                key=lambda x: stats['atraso_fib'][x], 
+                reverse=True
+            )
+            
+            for _ in range(n_cartoes):
+                qtd_fib = random.choice([4, 5])
+                fib_selecionadas = random.sample(fib_ordenados[:5], qtd_fib)
+                
+                # Complementar com números atrasados não-Fibonacci
+                nao_fib = [num for num in self.numeros if num not in self.fibonacci]
+                
+                # Calcular atraso dos não-Fibonacci
+                atraso_nao_fib = {num: 0 for num in nao_fib}
+                for num in nao_fib:
+                    for idx, concurso in enumerate(self.concursos):
+                        if num in concurso:
+                            atraso_nao_fib[num] = idx
+                            break
+                    else:
+                        atraso_nao_fib[num] = len(self.concursos)
+                
+                nao_fib_ordenados = sorted(nao_fib, key=lambda x: atraso_nao_fib[x], reverse=True)
+                selecao_nao_fib = random.sample(nao_fib_ordenados[:15], 15 - qtd_fib)
+                
+                cartao = sorted(fib_selecionadas + selecao_nao_fib)
+                cartoes.append(cartao)
+        
+        elif estrategia == "fibonacci_balanceado":
+            # Balanceia entre Fibonacci e não-Fibonacci baseado em estatísticas
+            for _ in range(n_cartoes):
+                qtd_fib = random.choice([4, 5])
+                
+                # Selecionar Fibonacci: 2-3 quentes, 2-3 atrasados
+                stats = self.analisar_fibonacci()
+                
+                fib_quentes = sorted(self.fibonacci, key=lambda x: stats['frequencia_fib'][x], reverse=True)[:4]
+                fib_atrasados = sorted(self.fibonacci, key=lambda x: stats['atraso_fib'][x], reverse=True)[:4]
+                
+                # Misturar estratégias
+                if qtd_fib == 4:
+                    fib_selecionadas = random.sample(fib_quentes[:3], 2) + random.sample(fib_atrasados[:3], 2)
+                else:  # qtd_fib == 5
+                    fib_selecionadas = random.sample(fib_quentes[:3], 2) + random.sample(fib_atrasados[:3], 3)
+                
+                # Complementar com mix de estatísticas
+                nao_fib = [num for num in self.numeros if num not in self.fibonacci]
+                
+                # Misturar não-Fibonacci: 50% quentes, 50% atrasados
+                qtd_nao_fib = 15 - qtd_fib
+                qtd_quentes = qtd_nao_fib // 2
+                qtd_atrasados = qtd_nao_fib - qtd_quentes
+                
+                # Calcular frequência e atraso
+                janela = min(30, len(self.concursos))
+                freq_nao_fib = Counter()
+                atraso_nao_fib = {}
+                
+                for num in nao_fib:
+                    atraso_nao_fib[num] = len(self.concursos)
+                    for idx, concurso in enumerate(self.concursos):
+                        if num in concurso:
+                            freq_nao_fib[num] += 1
+                            if idx < atraso_nao_fib[num]:
+                                atraso_nao_fib[num] = idx
+                
+                nao_fib_quentes = sorted(nao_fib, key=lambda x: freq_nao_fib[x], reverse=True)[:15]
+                nao_fib_atrasados = sorted(nao_fib, key=lambda x: atraso_nao_fib[x], reverse=True)[:15]
+                
+                selecao_quentes = random.sample(nao_fib_quentes, min(qtd_quentes, len(nao_fib_quentes)))
+                selecao_atrasados = random.sample(nao_fib_atrasados, min(qtd_atrasados, len(nao_fib_atrasados)))
+                
+                cartao = sorted(fib_selecionadas + selecao_quentes + selecao_atrasados)
+                
+                # Ajustar tamanho se necessário
+                if len(cartao) > 15:
+                    cartao = sorted(random.sample(cartao, 15))
+                elif len(cartao) < 15:
+                    faltam = 15 - len(cartao)
+                    complemento = random.sample([n for n in self.numeros if n not in cartao], faltam)
+                    cartao = sorted(cartao + complemento)
+                
+                cartoes.append(cartao)
+        
+        return cartoes[:n_cartoes]
+    
+    def obter_relatorio_fibonacci(self):
+        """Retorna relatório completo da análise Fibonacci"""
+        stats = self.analisar_fibonacci()
+        
+        relatorio = {
+            'dezenas_fibonacci': self.fibonacci,
+            'estatisticas_gerais': {
+                'media_fibonacci_por_concurso': stats.get('media_geral', 0),
+                'moda_fibonacci_por_concurso': stats.get('moda_geral', 0),
+                'min_fibonacci_por_concurso': stats.get('min_geral', 0),
+                'max_fibonacci_por_concurso': stats.get('max_geral', 0),
+                'concursos_analisados': min(50, len(self.concursos))
+            },
+            'frequencia_individual': stats.get('frequencia_fib', {}),
+            'atraso_individual': stats.get('atraso_fib', {}),
+            'distribuicao_historica': stats.get('media_por_concurso', [])
+        }
+        
+        return relatorio
+
+# =========================
 # PADRÕES LINHA×COLUNA
 # =========================
 LINHAS = [
@@ -1035,6 +1336,10 @@ def carregar_estado():
         st.session_state.concursos_info = {}
     if "limite_ciclos" not in st.session_state:
         st.session_state.limite_ciclos = None  # Novo: limite de concursos para análise de ciclos
+    if "cartoes_fibonacci" not in st.session_state:
+        st.session_state.cartoes_fibonacci = []
+    if "relatorio_fibonacci" not in st.session_state:
+        st.session_state.relatorio_fibonacci = None
 
 st.markdown("<h1 style='text-align: center;'>Lotofácil Inteligente</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center;'>SAMUCJ TECHNOLOGY</p>", unsafe_allow_html=True)
@@ -1079,6 +1384,8 @@ with st.expander("📥 Capturar Concursos"):
                 st.session_state.cartoes_gerados_padrao = []
                 st.session_state.combinacoes_combinatorias = {}
                 st.session_state.limite_ciclos = None
+                st.session_state.cartoes_fibonacci = []
+                st.session_state.relatorio_fibonacci = None
             else:
                 st.error("Não foi possível capturar concursos.")
 
@@ -1094,17 +1401,18 @@ if st.session_state.concursos:
     # Inicializar análise de sequência/falha
     analise_sf = AnaliseSequenciaFalha(st.session_state.concursos)
     
-    # NOVA ABA: Análise de Sequência/Falha
+    # Abas
     abas = st.tabs([
         "📊 Estatísticas", 
         "🧠 Gerar Cartões IA", 
-        "📈 Método Sequência/Falha",  # NOVA ABA
+        "📈 Método Sequência/Falha",
         "🔢 Análises Combinatórias",
         "🧩 Gerar Cartões por Padrões",
         "📐 Padrões Linha×Coluna",
+        "🎯 Estratégia Fibonacci",
         "✅ Conferência", 
         "📤 Conferir Arquivo TXT",
-        "🔁 Ciclos da Lotofácil"  # nova aba no final (índice 8)
+        "🔁 Ciclos da Lotofácil"
     ])
 
     # Aba 1 - Estatísticas
@@ -1152,7 +1460,7 @@ if st.session_state.concursos:
             conteudo = "\n".join(",".join(str(n) for n in cartao) for cartao in st.session_state.cartoes_gerados)
             st.download_button("💾 Baixar Arquivo", data=conteudo, file_name="cartoes_lotofacil_ia.txt", mime="text/plain")
 
-    # NOVA ABA 3 - Método Sequência/Falha
+    # Aba 3 - Método Sequência/Falha
     with abas[2]:
         st.subheader("📈 Análise de Sequência e Falha (Método da Tabela)")
         
@@ -1367,8 +1675,177 @@ if st.session_state.concursos:
                 for i, p in enumerate(futuros, 1):
                     st.write(f"**Padrão Futuro {i}:** Linhas {p['linhas']} | Colunas {p['colunas']}")
 
-    # Aba 7 - Conferência
+    # Aba 7 - Estratégia Fibonacci
     with abas[6]:
+        st.subheader("🎯 Estratégia Fibonacci")
+        st.write("Gera cartões usando as 7 dezenas de Fibonacci (01, 02, 03, 05, 08, 13, 21) com 4 ou 5 dessas por jogo.")
+        
+        # Inicializar estratégia Fibonacci
+        estrategia_fib = EstrategiaFibonacci(st.session_state.concursos)
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("### 🔢 Dezenas Fibonacci")
+            st.write(f"**7 Dezenas Fibonacci:** {estrategia_fib.fibonacci}")
+            
+            if st.button("📊 Analisar Estatísticas Fibonacci"):
+                with st.spinner("Analisando desempenho das dezenas Fibonacci..."):
+                    relatorio = estrategia_fib.obter_relatorio_fibonacci()
+                    st.session_state.relatorio_fibonacci = relatorio
+                    st.success("Análise Fibonacci concluída!")
+        
+        with col2:
+            st.markdown("### 🎯 Configuração")
+            estrategia = st.selectbox(
+                "Selecione a estratégia de geração:",
+                ["padrao", "fibonacci_quentes", "fibonacci_atrasados", "fibonacci_balanceado"],
+                format_func=lambda x: {
+                    "padrao": "Padrão (4-5 Fibonacci + estatísticas)",
+                    "fibonacci_quentes": "Fibonacci Quentes + Não-Fibonacci Quentes",
+                    "fibonacci_atrasados": "Fibonacci Atrasados + Não-Fibonacci Atrasados",
+                    "fibonacci_balanceado": "Balanceado (mistura de estratégias)"
+                }[x]
+            )
+            
+            n_cartoes = st.slider("Número de cartões a gerar:", 1, 20, 10)
+        
+        # Mostrar relatório Fibonacci se existir
+        if hasattr(st.session_state, 'relatorio_fibonacci') and st.session_state.relatorio_fibonacci:
+            relatorio = st.session_state.relatorio_fibonacci
+            
+            st.markdown("### 📈 Estatísticas das Dezenas Fibonacci")
+            
+            # Tabela de frequência e atraso
+            dados_tabela = []
+            for num in estrategia_fib.fibonacci:
+                dados_tabela.append({
+                    "Número": num,
+                    "Frequência (últimos 50)": relatorio['frequencia_individual'].get(num, 0),
+                    "Atraso (concursos)": relatorio['atraso_individual'].get(num, 0),
+                    "Status": "🔥 Quente" if relatorio['frequencia_individual'].get(num, 0) > 10 else 
+                             "⚠️ Média" if relatorio['frequencia_individual'].get(num, 0) > 5 else 
+                             "❄️ Frio"
+                })
+            
+            df_fib = pd.DataFrame(dados_tabela)
+            st.dataframe(df_fib, hide_index=True)
+            
+            # Estatísticas gerais
+            st.markdown("#### 📊 Estatísticas Gerais dos Fibonacci")
+            col_stat1, col_stat2, col_stat3, col_stat4 = st.columns(4)
+            with col_stat1:
+                st.metric("Média por concurso", f"{relatorio['estatisticas_gerais']['media_fibonacci_por_concurso']:.1f}")
+            with col_stat2:
+                st.metric("Moda (mais comum)", relatorio['estatisticas_gerais']['moda_fibonacci_por_concurso'])
+            with col_stat3:
+                st.metric("Mínimo por concurso", relatorio['estatisticas_gerais']['min_fibonacci_por_concurso'])
+            with col_stat4:
+                st.metric("Máximo por concurso", relatorio['estatisticas_gerais']['max_fibonacci_por_concurso'])
+            
+            # Distribuição histórica
+            if relatorio['distribuicao_historica']:
+                st.markdown("#### 📊 Distribuição Histórica de Fibonacci por Concurso")
+                dist_df = pd.DataFrame({
+                    'Concursos': list(range(1, len(relatorio['distribuicao_historica'])+1)),
+                    'Fibonacci no Concurso': relatorio['distribuicao_historica']
+                })
+                st.bar_chart(dist_df.set_index('Concursos'))
+        
+        st.markdown("---")
+        st.markdown("### 🎰 Gerar Cartões Fibonacci")
+        
+        if st.button("🚀 Gerar Cartões com Estratégia Fibonacci", type="primary"):
+            with st.spinner(f"Gerando {n_cartoes} cartões com estratégia Fibonacci..."):
+                if estrategia == "padrao":
+                    cartoes_fib = estrategia_fib.gerar_cartoes_fibonacci(n_cartoes, usar_estatisticas=True)
+                else:
+                    cartoes_fib = estrategia_fib.gerar_cartoes_fibonacci_estrategia(estrategia, n_cartoes)
+                
+                st.session_state.cartoes_fibonacci = cartoes_fib
+                st.success(f"{len(cartoes_fib)} cartões Fibonacci gerados com sucesso!")
+        
+        # Mostrar cartões gerados
+        if hasattr(st.session_state, 'cartoes_fibonacci') and st.session_state.cartoes_fibonacci:
+            cartoes_fib = st.session_state.cartoes_fibonacci
+            
+            st.markdown(f"### 📋 Cartões Gerados ({estrategia.replace('_', ' ').title()})")
+            
+            # Estatísticas dos cartões
+            stats_cartoes = []
+            for i, cartao in enumerate(cartoes_fib, 1):
+                # Contar Fibonacci no cartão
+                fib_no_cartao = [num for num in cartao if num in estrategia_fib.fibonacci]
+                qtd_fib = len(fib_no_cartao)
+                
+                # Outras estatísticas
+                pares = sum(1 for n in cartao if n % 2 == 0)
+                primos = sum(1 for n in cartao if n in {2,3,5,7,11,13,17,19,23})
+                soma = sum(cartao)
+                
+                stats_cartoes.append({
+                    "Cartão": i,
+                    "Dezenas": ", ".join(str(n) for n in cartao),
+                    "Fibonacci": qtd_fib,
+                    "Fibonacci Lista": ", ".join(str(n) for n in fib_no_cartao),
+                    "Pares": pares,
+                    "Primos": primos,
+                    "Soma": soma
+                })
+            
+            # Exibir como DataFrame
+            df_cartoes_fib = pd.DataFrame(stats_cartoes)
+            st.dataframe(df_cartoes_fib, hide_index=True, use_container_width=True)
+            
+            # Detalhes expandidos
+            with st.expander("🔍 Ver Detalhes de Cada Cartão"):
+                for i, cartao in enumerate(cartoes_fib, 1):
+                    fib_no_cartao = [num for num in cartao if num in estrategia_fib.fibonacci]
+                    qtd_fib = len(fib_no_cartao)
+                    pares = sum(1 for n in cartao if n % 2 == 0)
+                    primos = sum(1 for n in cartao if n in {2,3,5,7,11,13,17,19,23})
+                    soma = sum(cartao)
+                    
+                    col_c1, col_c2 = st.columns([3, 2])
+                    with col_c1:
+                        st.write(f"**Cartão {i}:** {cartao}")
+                        st.write(f"**Fibonacci ({qtd_fib}):** {fib_no_cartao}")
+                    with col_c2:
+                        st.write(f"**Estatísticas:**")
+                        st.write(f"- Fibonacci: {qtd_fib}/15")
+                        st.write(f"- Pares/Ímpares: {pares}/{15-pares}")
+                        st.write(f"- Primos: {primos}")
+                        st.write(f"- Soma: {soma}")
+                    
+                    # Verificar se segue a regra (4 ou 5 Fibonacci)
+                    if qtd_fib in [4, 5]:
+                        st.success(f"✅ Segue a regra: {qtd_fib} números Fibonacci")
+                    else:
+                        st.warning(f"⚠️ Não segue a regra: {qtd_fib} números Fibonacci (deveria ser 4 ou 5)")
+                    
+                    st.write("---")
+            
+            # Exportar cartões
+            st.markdown("### 💾 Exportar Cartões Fibonacci")
+            conteudo_fib = "\n".join(",".join(str(n) for n in cartao) for cartao in cartoes_fib)
+            st.download_button(
+                "📥 Baixar Cartões Fibonacci", 
+                data=conteudo_fib, 
+                file_name=f"cartoes_fibonacci_{estrategia}.txt", 
+                mime="text/plain"
+            )
+            
+            # Adicionar estatísticas de exportação
+            st.info(f"""
+            **Resumo da geração:**
+            - Total de cartões: {len(cartoes_fib)}
+            - Estratégia: {estrategia.replace('_', ' ').title()}
+            - Fibonacci por cartão: 4 ou 5 (regra da estratégia)
+            - Cartões únicos e balanceados
+            """)
+
+    # Aba 8 - Conferência
+    with abas[7]:
         st.subheader("🎯 Conferência de Cartões")
         if st.session_state.info_ultimo_concurso:
             info = st.session_state.info_ultimo_concurso
@@ -1399,6 +1876,14 @@ if st.session_state.concursos:
                         acertos = len(set(cartao) & set(info['dezenas']))
                         st.write(f"Cartão {i}: {cartao} - **{acertos} acertos**")
                 
+                # Cartões Fibonacci
+                if hasattr(st.session_state, 'cartoes_fibonacci') and st.session_state.cartoes_fibonacci:
+                    st.markdown("### 🎯 Cartões Fibonacci")
+                    for i, cartao in enumerate(st.session_state.cartoes_fibonacci, 1):
+                        acertos = len(set(cartao) & set(info['dezenas']))
+                        fib_no_cartao = [num for num in cartao if num in [1,2,3,5,8,13,21]]
+                        st.write(f"Cartão {i}: {cartao} - **{acertos} acertos** (Fibonacci: {len(fib_no_cartao)})")
+                
                 # Combinações Combinatorias
                 if st.session_state.combinacoes_combinatorias:
                     st.markdown("### 🔢 Combinações Combinatorias (Top 3 por Tamanho)")
@@ -1416,8 +1901,8 @@ if st.session_state.concursos:
                                 st.write(f"{combo}")
                                 st.write("---")
 
-    # Aba 8 - Conferir Arquivo TXT
-    with abas[7]:
+    # Aba 9 - Conferir Arquivo TXT
+    with abas[8]:
         st.subheader("📤 Conferir Cartões de um Arquivo TXT")
         uploaded_file = st.file_uploader("Faça upload do arquivo TXT com os cartões (15 dezenas separadas por vírgula)", type="txt")
         if uploaded_file:
@@ -1446,8 +1931,8 @@ if st.session_state.concursos:
             else:
                 st.warning("Nenhum cartão válido foi encontrado no arquivo.")
 
-    # Aba 9 - Ciclos da Lotofácil (nova) - MODIFICADA
-    with abas[8]:
+    # Aba 10 - Ciclos da Lotofácil
+    with abas[9]:
         st.subheader("🔁 Ciclos da Lotofácil (Ciclo Dinâmico)")
         st.write("Analise os ciclos de dezenas nos concursos mais recentes.")
         
@@ -1723,6 +2208,8 @@ with st.sidebar:
     if st.session_state.combinacoes_combinatorias:
         total_combinacoes = sum(len(combinacoes) for combinacoes in st.session_state.combinacoes_combinatorias.values())
         st.write(f"Combinações combinatorias: {total_combinacoes}")
+    if hasattr(st.session_state, 'cartoes_fibonacci') and st.session_state.cartoes_fibonacci:
+        st.write(f"Cartões Fibonacci: {len(st.session_state.cartoes_fibonacci)}")
     if st.session_state.cartoes_ciclos:
         st.write(f"Cartões Ciclos gerados: {len(st.session_state.cartoes_ciclos)}")
     
