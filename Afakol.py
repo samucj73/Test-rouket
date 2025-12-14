@@ -974,6 +974,10 @@ class LotoFacilIA:
 # =========================
 # ESTRATÉGIA FIBONACCI
 # =========================
+
+# =========================
+# ESTRATÉGIA FIBONACCI - CORRIGIDA
+# =========================
 class EstrategiaFibonacci:
     def __init__(self, concursos):
         self.concursos = concursos
@@ -1029,7 +1033,7 @@ class EstrategiaFibonacci:
         # Obter estatísticas se solicitado
         stats = self.analisar_fibonacci() if usar_estatisticas else {}
         
-        for _ in range(n_cartoes * 2):  # Gerar mais para garantir diversidade
+        for _ in range(n_cartoes * 3):  # Gerar mais para garantir diversidade e exclusividade
             # Escolher 4 ou 5 números Fibonacci
             qtd_fib = random.choice([4, 5])
             
@@ -1066,14 +1070,17 @@ class EstrategiaFibonacci:
                 qtd_frequentes = int(qtd_nao_fib * 0.6)
                 qtd_aleatorios = qtd_nao_fib - qtd_frequentes
                 
-                # Selecionar dos mais frequentes
+                # Selecionar dos mais frequentes (garantindo não repetição)
+                selecao_frequentes = []
                 if len(nao_fib_ordenados) >= qtd_frequentes:
-                    selecao_frequentes = random.sample(nao_fib_ordenados[:15], qtd_frequentes)
-                else:
-                    selecao_frequentes = nao_fib_ordenados[:qtd_frequentes]
+                    candidatos = [n for n in nao_fib_ordenados[:20] if n not in fib_selecionadas]
+                    if len(candidatos) >= qtd_frequentes:
+                        selecao_frequentes = random.sample(candidatos, qtd_frequentes)
+                    else:
+                        selecao_frequentes = candidatos
                 
-                # Selecionar aleatórios para completar
-                restantes = [num for num in nao_fib if num not in selecao_frequentes]
+                # Selecionar aleatórios para completar (garantindo não repetição)
+                restantes = [num for num in nao_fib if num not in fib_selecionadas and num not in selecao_frequentes]
                 if restantes and qtd_aleatorios > 0:
                     if len(restantes) >= qtd_aleatorios:
                         selecao_aleatorios = random.sample(restantes, qtd_aleatorios)
@@ -1084,42 +1091,67 @@ class EstrategiaFibonacci:
                 else:
                     selecao_nao_fib = selecao_frequentes
                 
-                # Completar se necessário
+                # Completar se necessário (garantindo não repetição)
                 while len(selecao_nao_fib) < qtd_nao_fib:
-                    candidatos = [num for num in nao_fib if num not in selecao_nao_fib]
+                    candidatos = [num for num in nao_fib if num not in fib_selecionadas and num not in selecao_nao_fib]
                     if candidatos:
                         selecao_nao_fib.append(random.choice(candidatos))
                     else:
+                        # Se não houver mais candidatos únicos, reiniciar
                         break
             else:
-                # Seleção aleatória simples
+                # Seleção aleatória simples (garantindo não repetição)
                 qtd_nao_fib = 15 - qtd_fib
-                selecao_nao_fib = random.sample(nao_fib, qtd_nao_fib)
+                candidatos_nao_fib = [num for num in nao_fib if num not in fib_selecionadas]
+                if len(candidatos_nao_fib) >= qtd_nao_fib:
+                    selecao_nao_fib = random.sample(candidatos_nao_fib, qtd_nao_fib)
+                else:
+                    selecao_nao_fib = candidatos_nao_fib
             
             # Combinar e ordenar
             cartao = sorted(fib_selecionadas + selecao_nao_fib)
             
+            # Verificar se tem 15 números únicos
+            if len(set(cartao)) != 15:
+                continue  # Pular cartões com números repetidos
+            
             # Validar equilíbrio de pares/ímpares
             pares = sum(1 for n in cartao if n % 2 == 0)
             if 6 <= pares <= 9:  # Faixa ideal para Lotofácil
-                cartoes.append(cartao)
+                # Verificar se cartão é único (não repetido)
+                if cartao not in cartoes:
+                    cartoes.append(cartao)
             
             # Parar quando tiver cartões suficientes
             if len(cartoes) >= n_cartoes:
                 break
         
-        # Garantir número exato de cartões
+        # Garantir número exato de cartões (com números únicos)
         while len(cartoes) < n_cartoes:
-            # Fallback: geração simples
+            # Fallback: geração simples com garantia de números únicos
             qtd_fib = random.choice([4, 5])
             fib_selecionadas = random.sample(self.fibonacci, qtd_fib)
             nao_fib = [num for num in self.numeros if num not in self.fibonacci]
-            selecao_nao_fib = random.sample(nao_fib, 15 - qtd_fib)
-            cartao = sorted(fib_selecionadas + selecao_nao_fib)
+            candidatos_nao_fib = [num for num in nao_fib if num not in fib_selecionadas]
             
-            # Verificar se é único
-            if cartao not in cartoes:
-                cartoes.append(cartao)
+            if len(candidatos_nao_fib) >= (15 - qtd_fib):
+                selecao_nao_fib = random.sample(candidatos_nao_fib, 15 - qtd_fib)
+                cartao = sorted(fib_selecionadas + selecao_nao_fib)
+                
+                # Verificar exclusividade e não repetição
+                if len(set(cartao)) == 15 and cartao not in cartoes:
+                    cartoes.append(cartao)
+            else:
+                # Se não houver números suficientes, usar todos os disponíveis
+                cartao = sorted(fib_selecionadas + candidatos_nao_fib)
+                # Completar com números aleatórios únicos
+                while len(cartao) < 15:
+                    candidato = random.choice([n for n in self.numeros if n not in cartao])
+                    cartao.append(candidato)
+                cartao = sorted(cartao)
+                
+                if len(set(cartao)) == 15 and cartao not in cartoes:
+                    cartoes.append(cartao)
         
         return cartoes[:n_cartoes]
     
@@ -1140,7 +1172,7 @@ class EstrategiaFibonacci:
                 reverse=True
             )
             
-            for _ in range(n_cartoes):
+            for _ in range(n_cartoes * 2):  # Gerar mais para garantir números únicos
                 qtd_fib = random.choice([4, 5])
                 fib_selecionadas = random.sample(fib_ordenados[:5], qtd_fib)
                 
@@ -1156,10 +1188,16 @@ class EstrategiaFibonacci:
                             freq_nao_fib[num] += 1
                 
                 nao_fib_ordenados = sorted(nao_fib, key=lambda x: freq_nao_fib[x], reverse=True)
-                selecao_nao_fib = random.sample(nao_fib_ordenados[:15], 15 - qtd_fib)
                 
-                cartao = sorted(fib_selecionadas + selecao_nao_fib)
-                cartoes.append(cartao)
+                # Selecionar não-Fibonacci únicos
+                candidatos_quentes = [n for n in nao_fib_ordenados[:20] if n not in fib_selecionadas]
+                if len(candidatos_quentes) >= (15 - qtd_fib):
+                    selecao_nao_fib = random.sample(candidatos_quentes, 15 - qtd_fib)
+                    cartao = sorted(fib_selecionadas + selecao_nao_fib)
+                    
+                    # Verificar exclusividade
+                    if len(set(cartao)) == 15 and cartao not in cartoes:
+                        cartoes.append(cartao)
         
         elif estrategia == "fibonacci_atrasados":
             # Foca nos Fibonacci com maior atraso
@@ -1170,7 +1208,7 @@ class EstrategiaFibonacci:
                 reverse=True
             )
             
-            for _ in range(n_cartoes):
+            for _ in range(n_cartoes * 2):  # Gerar mais para garantir números únicos
                 qtd_fib = random.choice([4, 5])
                 fib_selecionadas = random.sample(fib_ordenados[:5], qtd_fib)
                 
@@ -1188,14 +1226,20 @@ class EstrategiaFibonacci:
                         atraso_nao_fib[num] = len(self.concursos)
                 
                 nao_fib_ordenados = sorted(nao_fib, key=lambda x: atraso_nao_fib[x], reverse=True)
-                selecao_nao_fib = random.sample(nao_fib_ordenados[:15], 15 - qtd_fib)
                 
-                cartao = sorted(fib_selecionadas + selecao_nao_fib)
-                cartoes.append(cartao)
+                # Selecionar não-Fibonacci únicos
+                candidatos_atrasados = [n for n in nao_fib_ordenados[:20] if n not in fib_selecionadas]
+                if len(candidatos_atrasados) >= (15 - qtd_fib):
+                    selecao_nao_fib = random.sample(candidatos_atrasados, 15 - qtd_fib)
+                    cartao = sorted(fib_selecionadas + selecao_nao_fib)
+                    
+                    # Verificar exclusividade
+                    if len(set(cartao)) == 15 and cartao not in cartoes:
+                        cartoes.append(cartao)
         
         elif estrategia == "fibonacci_balanceado":
             # Balanceia entre Fibonacci e não-Fibonacci baseado em estatísticas
-            for _ in range(n_cartoes):
+            for _ in range(n_cartoes * 3):  # Gerar mais para garantir números únicos
                 qtd_fib = random.choice([4, 5])
                 
                 # Selecionar Fibonacci: 2-3 quentes, 2-3 atrasados
@@ -1206,15 +1250,29 @@ class EstrategiaFibonacci:
                 
                 # Misturar estratégias
                 if qtd_fib == 4:
-                    fib_selecionadas = random.sample(fib_quentes[:3], 2) + random.sample(fib_atrasados[:3], 2)
+                    # Selecionar 2 quentes e 2 atrasados
+                    selecao_quentes = random.sample(fib_quentes[:3], 2)
+                    selecao_atrasados = random.sample(fib_atrasados[:3], 2)
+                    fib_selecionadas = selecao_quentes + selecao_atrasados
                 else:  # qtd_fib == 5
-                    fib_selecionadas = random.sample(fib_quentes[:3], 2) + random.sample(fib_atrasados[:3], 3)
+                    # Selecionar 2 quentes e 3 atrasados
+                    selecao_quentes = random.sample(fib_quentes[:3], 2)
+                    selecao_atrasados = random.sample(fib_atrasados[:3], 3)
+                    fib_selecionadas = selecao_quentes + selecao_atrasados
+                
+                # Garantir que não há Fibonacci repetidos
+                fib_selecionadas = list(set(fib_selecionadas))
+                if len(fib_selecionadas) < min(qtd_fib, 4):
+                    # Se perdeu números, completar
+                    while len(fib_selecionadas) < min(qtd_fib, 4):
+                        candidato = random.choice([n for n in self.fibonacci if n not in fib_selecionadas])
+                        fib_selecionadas.append(candidato)
                 
                 # Complementar com mix de estatísticas
                 nao_fib = [num for num in self.numeros if num not in self.fibonacci]
                 
                 # Misturar não-Fibonacci: 50% quentes, 50% atrasados
-                qtd_nao_fib = 15 - qtd_fib
+                qtd_nao_fib = 15 - len(fib_selecionadas)
                 qtd_quentes = qtd_nao_fib // 2
                 qtd_atrasados = qtd_nao_fib - qtd_quentes
                 
@@ -1231,15 +1289,24 @@ class EstrategiaFibonacci:
                             if idx < atraso_nao_fib[num]:
                                 atraso_nao_fib[num] = idx
                 
-                nao_fib_quentes = sorted(nao_fib, key=lambda x: freq_nao_fib[x], reverse=True)[:15]
-                nao_fib_atrasados = sorted(nao_fib, key=lambda x: atraso_nao_fib[x], reverse=True)[:15]
+                nao_fib_quentes = sorted(nao_fib, key=lambda x: freq_nao_fib[x], reverse=True)[:20]
+                nao_fib_atrasados = sorted(nao_fib, key=lambda x: atraso_nao_fib[x], reverse=True)[:20]
                 
-                selecao_quentes = random.sample(nao_fib_quentes, min(qtd_quentes, len(nao_fib_quentes)))
-                selecao_atrasados = random.sample(nao_fib_atrasados, min(qtd_atrasados, len(nao_fib_atrasados)))
+                # Selecionar quentes únicos
+                candidatos_quentes = [n for n in nao_fib_quentes if n not in fib_selecionadas]
+                selecao_quentes = []
+                if len(candidatos_quentes) >= qtd_quentes:
+                    selecao_quentes = random.sample(candidatos_quentes, min(qtd_quentes, len(candidatos_quentes)))
+                
+                # Selecionar atrasados únicos
+                candidatos_atrasados = [n for n in nao_fib_atrasados if n not in fib_selecionadas and n not in selecao_quentes]
+                selecao_atrasados = []
+                if len(candidatos_atrasados) >= qtd_atrasados:
+                    selecao_atrasados = random.sample(candidatos_atrasados, min(qtd_atrasados, len(candidatos_atrasados)))
                 
                 cartao = sorted(fib_selecionadas + selecao_quentes + selecao_atrasados)
                 
-                # Ajustar tamanho se necessário
+                # Ajustar tamanho se necessário (garantindo exclusividade)
                 if len(cartao) > 15:
                     cartao = sorted(random.sample(cartao, 15))
                 elif len(cartao) < 15:
@@ -1247,7 +1314,17 @@ class EstrategiaFibonacci:
                     complemento = random.sample([n for n in self.numeros if n not in cartao], faltam)
                     cartao = sorted(cartao + complemento)
                 
-                cartoes.append(cartao)
+                # Verificar se tem números únicos e não é repetido
+                if len(set(cartao)) == 15 and cartao not in cartoes:
+                    cartoes.append(cartao)
+                
+                # Parar quando tiver cartões suficientes
+                if len(cartoes) >= n_cartoes:
+                    break
+        
+        # Se não gerou cartões suficientes, completar com método padrão
+        if len(cartoes) < n_cartoes:
+            cartoes.extend(self.gerar_cartoes_fibonacci(n_cartoes - len(cartoes), usar_estatisticas=True))
         
         return cartoes[:n_cartoes]
     
@@ -1270,6 +1347,7 @@ class EstrategiaFibonacci:
         }
         
         return relatorio
+
 
 # =========================
 # PADRÕES LINHA×COLUNA
