@@ -1,3 +1,4 @@
+
 import streamlit as st
 from datetime import datetime, timedelta, timezone
 import requests
@@ -44,30 +45,21 @@ HISTORICO_PATH = "historico_conferencias.json"
 ALERTAS_TOP_PATH = "alertas_top.json"
 
 # =============================
-# Dicionário de Ligas com Perfis
+# Dicionário de Ligas
 # =============================
 LIGA_DICT = {
-    "FIFA World Cup": {"id": "WC", "perfil": "ofensivo", "over_25_rate": 0.52},
-    "UEFA Champions League": {"id": "CL", "perfil": "ofensivo", "over_25_rate": 0.54},
-    "Bundesliga": {"id": "BL1", "perfil": "ofensivo", "over_25_rate": 0.58},
-    "Eredivisie": {"id": "DED", "perfil": "ofensivo", "over_25_rate": 0.57},
-    "Campeonato Brasileiro Série A": {"id": "BSA", "perfil": "defensivo", "over_25_rate": 0.48},
-    "Primera Division": {"id": "PD", "perfil": "moderado", "over_25_rate": 0.50},
-    "Ligue 1": {"id": "FL1", "perfil": "defensivo", "over_25_rate": 0.47},
-    "Championship (Inglaterra)": {"id": "ELC", "perfil": "moderado", "over_25_rate": 0.49},
-    "Primeira Liga (Portugal)": {"id": "PPL", "perfil": "defensivo", "over_25_rate": 0.45},
-    "European Championship": {"id": "EC", "perfil": "moderado", "over_25_rate": 0.51},
-    "Serie A (Itália)": {"id": "SA", "perfil": "defensivo", "over_25_rate": 0.45},
-    "Premier League (Inglaterra)": {"id": "PL", "perfil": "moderado", "over_25_rate": 0.52}
-}
-
-# Thresholds otimizados (baseado em 60.9% de acerto)
-THRESHOLDS = {
-    "over_25": 0.68,  # 68% mínimo para Over 2.5
-    "over_35": 0.62,  # 62% mínimo para Over 3.5
-    "under_25": 0.65, # 65% mínimo para Under 2.5
-    "under_15": 0.70, # 70% mínimo para Under 1.5
-    "over_15": 0.65   # 65% mínimo para Over 1.5
+    "FIFA World Cup": "WC",
+    "UEFA Champions League": "CL",
+    "Bundesliga": "BL1",
+    "Eredivisie": "DED",
+    "Campeonato Brasileiro Série A": "BSA",
+    "Primera Division": "PD",
+    "Ligue 1": "FL1",
+    "Championship (Inglaterra)": "ELC",
+    "Primeira Liga (Portugal)": "PPL",
+    "European Championship": "EC",
+    "Serie A (Itália)": "SA",
+    "Premier League (Inglaterra)": "PL"
 }
 
 # =============================
@@ -499,7 +491,7 @@ def registrar_no_historico(resultado: dict):
         "tipo_aposta": resultado.get("tipo_aposta", "DESCONHECIDO")
     }
     historico.append(registro)
-    salvar_historico(registro)
+    salvar_historico(historico)
 
 def limpar_historico():
     """Faz backup e limpa histórico."""
@@ -1087,251 +1079,278 @@ def baixar_imagem_url(url: str, timeout: int = 8) -> Image.Image | None:
         return None
 
 # =============================
-# Lógica de Análise OTIMIZADA
+# Lógica de Análise e Alertas - FUNÇÃO ATUALIZADA
 # =============================
-def calcular_tendencia_otimizada(home: str, away: str, classificacao: dict, liga_nome: str = "Desconhecido") -> dict:
-    """Versão OTIMIZADA com thresholds mais rigorosos e ajuste por liga"""
+def calcular_tendencia_completa(home: str, away: str, classificacao: dict) -> dict:
+    """Calcula tendências com foco em análise defensiva e ajuste conservador"""
+    dados_home = classificacao.get(home, {
+        "scored": 0, "against": 0, "played": 1, 
+        "wins": 0, "draws": 0, "losses": 0
+    })
+    dados_away = classificacao.get(away, {
+        "scored": 0, "against": 0, "played": 1, 
+        "wins": 0, "draws": 0, "losses": 0
+    })
     
-    # Obter dados dos times
-    dados_home = classificacao.get(home, {"scored": 0, "against": 0, "played": 1, "wins": 0, "draws": 0, "losses": 0})
-    dados_away = classificacao.get(away, {"scored": 0, "against": 0, "played": 1, "wins": 0, "draws": 0, "losses": 0})
-    
+    # Garantir que não vamos dividir por zero
     played_home = max(dados_home["played"], 1)
     played_away = max(dados_away["played"], 1)
+
+    # ============================================================
+    # 1. CÁLCULO CONSERVADOR DE MÉDIAS
+    # ============================================================
     
-    # Estatísticas básicas CONSERVADORAS
+    # Médias de gols (com ajuste conservador)
     media_home_feitos = dados_home["scored"] / played_home
     media_home_sofridos = dados_home["against"] / played_home
     media_away_feitos = dados_away["scored"] / played_away
     media_away_sofridos = dados_away["against"] / played_away
     
-    # Estimativa MAIS CONSERVADORA (70% peso ataque próprio, 30% defesa adversária)
-    estimativa_home = (media_home_feitos * 0.70) + (media_away_sofridos * 0.30)
-    estimativa_away = (media_away_feitos * 0.70) + (media_home_sofridos * 0.30)
-    estimativa_total = estimativa_home + estimativa_away
+    # ============================================================
+    # 2. ANÁLISE DEFENSIVA PRIORITÁRIA (SUBSOLO)
+    # ============================================================
     
-    # ============================================
-    # NOVO: AJUSTE POR LIGA
-    # ============================================
+    # Taxa de jogos UNDER 2.5 baseada em estatísticas defensivas
+    # Fórmula: (gols sofridos baixos + gols feitos baixos) / 2
     
-    # Obter perfil da liga
-    liga_info = next((info for name, info in LIGA_DICT.items() if info["id"] == liga_nome or name == liga_nome), 
-                    {"perfil": "moderado", "over_25_rate": 0.50})
+    # Fator defensivo do time da casa (0-1, onde 1 é muito defensivo)
+    fator_def_home = 1 - min(1.0, media_home_feitos / 1.5) * 0.7  # Penaliza times que fazem muitos gols
+    fator_def_home += min(1.0, media_home_sofridos / 1.2) * 0.3   # Beneficia times que sofrem poucos gols
     
-    liga_perfil = liga_info.get("perfil", "moderado")
-    liga_over_25_rate = liga_info.get("over_25_rate", 0.50)
+    # Fator defensivo do time visitante
+    fator_def_away = 1 - min(1.0, media_away_feitos / 1.3) * 0.6  # Visitante normalmente ataca menos
+    fator_def_away += min(1.0, media_away_sofridos / 1.1) * 0.4
     
-    # Ajustar estimativa baseado no perfil da liga
-    ajuste_liga = 1.0
-    if liga_perfil == "ofensivo":
-        ajuste_liga = 1.08  # +8% para ligas ofensivas
-    elif liga_perfil == "defensivo":
-        ajuste_liga = 0.92  # -8% para ligas defensivas
+    # Fator defensivo geral do confronto
+    fator_defensivo = (fator_def_home + fator_def_away) / 2
     
-    estimativa_total_ajustada = estimativa_total * ajuste_liga
+    # ============================================================
+    # 3. ESTIMATIVA CONSERVADORA DE GOLS
+    # ============================================================
     
-    # ============================================
-    # ANÁLISE DE PERFIL DOS TIMES
-    # ============================================
+    # Estimativa ajustada para baixo (conservadora)
+    estimativa_home = (media_home_feitos * 0.4 + media_away_sofridos * 0.3) * 0.9  # Reduz 10%
+    estimativa_away = (media_away_feitos * 0.3 + media_home_sofridos * 0.4) * 0.85  # Reduz 15%
     
-    home_balance = media_home_feitos - media_home_sofridos
-    away_balance = media_away_feitos - media_away_sofridos
+    # Ajuste por fator casa/fora (mais conservador)
+    fator_casa = 1.1  # Aumento modesto para time da casa
+    fator_fora = 0.9   # Redução modesta para visitante
     
-    # Classificação mais rigorosa
-    home_defensivo = home_balance < -0.4  # Aumentado de -0.3 para -0.4
-    away_defensivo = away_balance < -0.4
-    home_ofensivo = home_balance > 0.4    # Aumentado de 0.3 para 0.4
-    away_ofensivo = away_balance > 0.4
+    estimativa_ajustada_home = estimativa_home * fator_casa
+    estimativa_ajustada_away = estimativa_away * fator_fora
+    estimativa_total = estimativa_ajustada_home + estimativa_ajustada_away
     
-    # ============================================
-    # SISTEMA DE PONTUAÇÃO POR FAIXA DE GOLS
-    # ============================================
+    # ============================================================
+    # 4. CLASSIFICAÇÃO DO TIPO DE CONFRONTO
+    # ============================================================
     
-    # Probabilidades para cada faixa (inicializadas em 0)
-    probabilidades = {
-        "under_15": 0,       # menos de 1.5 gols
-        "over_15_under_25": 0,  # entre 1.5 e 2.5
-        "over_25_under_35": 0,  # entre 2.5 e 3.5
-        "over_35": 0          # mais de 3.5
-    }
+    # Classificar baseado em estatísticas defensivas
+    is_defensivo_home = media_home_feitos < 1.0 and media_home_sofridos < 1.0
+    is_defensivo_away = media_away_feitos < 1.0 and media_away_sofridos < 1.0
+    is_ofensivo_home = media_home_feitos > 1.5 or media_home_sofridos > 1.5
+    is_ofensivo_away = media_away_feitos > 1.5 or media_away_sofridos > 1.5
     
-    # FATOR 1: Estimativa de gols (peso 40%)
-    if estimativa_total_ajustada < 1.5:
-        probabilidades["under_15"] += 40
-    elif estimativa_total_ajustada < 2.0:
-        probabilidades["under_15"] += 20
-        probabilidades["over_15_under_25"] += 20
-    elif estimativa_total_ajustada < 2.5:
-        probabilidades["over_15_under_25"] += 40
-    elif estimativa_total_ajustada < 3.0:
-        probabilidades["over_25_under_35"] += 40
+    # Tipo de confronto
+    if is_defensivo_home and is_defensivo_away:
+        tipo_confronto = "DEFENSIVO_DEFENSIVO"
+        ajuste_over = 0.3  # Muito baixo para Over
+        ajuste_under = 0.7  # Alto para Under
+    elif is_ofensivo_home and is_ofensivo_away:
+        tipo_confronto = "OFENSIVO_OFENSIVO"
+        ajuste_over = 0.7  # Alto para Over
+        ajuste_under = 0.3  # Baixo para Under
+    elif (is_defensivo_home and is_ofensivo_away) or (is_ofensivo_home and is_defensivo_away):
+        tipo_confronto = "MISTO_EQUILIBRADO"
+        ajuste_over = 0.5
+        ajuste_under = 0.5
     else:
-        probabilidades["over_35"] += 40
+        tipo_confronto = "NEUTRO"
+        ajuste_over = 0.4
+        ajuste_under = 0.6  # Leve tendência para Under por padrão
     
-    # FATOR 2: Perfil dos times (peso 30%)
-    if home_defensivo and away_defensivo:
-        probabilidades["under_15"] += 25
-        probabilidades["over_15_under_25"] += 5
-    elif home_ofensivo and away_ofensivo:
-        probabilidades["over_25_under_35"] += 25
-        probabilidades["over_35"] += 5
-    elif (home_defensivo and away_ofensivo) or (home_ofensivo and away_defensivo):
-        probabilidades["over_15_under_25"] += 30
-    else:  # times equilibrados
-        probabilidades["over_15_under_25"] += 15
-        probabilidades["over_25_under_35"] += 15
+    # ============================================================
+    # 5. CÁLCULO DE PROBABILIDADES COM VIÉS DEFENSIVO
+    # ============================================================
     
-    # FATOR 3: Média da liga (peso 20%)
-    if liga_over_25_rate < 0.45:  # Liga defensiva
-        probabilidades["under_15"] += 10
-        probabilidades["over_15_under_25"] += 10
-    elif liga_over_25_rate > 0.55:  # Liga ofensiva
-        probabilidades["over_25_under_35"] += 10
-        probabilidades["over_35"] += 10
-    else:  # Liga média
-        probabilidades["over_15_under_25"] += 10
-        probabilidades["over_25_under_35"] += 10
+    # Probabilidade base para Under 2.5
+    # Base: fator defensivo + ajuste de confronto + estimativa baixa
+    prob_under_25_base = min(0.9, max(0.3, 
+        (fator_defensivo * 0.4) +                    # Fator defensivo
+        (ajuste_under * 0.3) +                       # Tipo de confronto
+        (max(0, 2.5 - estimativa_total) / 2.5 * 0.3) # Distância da estimativa do limiar
+    ))
     
-    # FATOR 4: Confronto direto (peso 10%)
-    if media_home_feitos < 1.0 and media_away_feitos < 1.0:
-        probabilidades["under_15"] += 10
-    elif media_home_feitos > 1.8 and media_away_feitos > 1.8:
-        probabilidades["over_35"] += 10
-    else:
-        probabilidades["over_15_under_25"] += 5
-        probabilidades["over_25_under_35"] += 5
+    # Probabilidade para Over 2.5 (oposto do Under)
+    prob_over_25_base = 1 - prob_under_25_base
     
-    # ============================================
-    # DECISÃO FINAL COM THRESHOLDS ALTOS
-    # ============================================
+    # Probabilidade para Under 1.5 (jogos muito defensivos)
+    prob_under_15_base = min(0.8, max(0.1,
+        (fator_defensivo * 0.5) +                    # Fator defensivo mais importante
+        (ajuste_under * 0.3) +                       # Tipo de confronto
+        (max(0, 1.5 - estimativa_total) / 1.5 * 0.2) # Distância da estimativa
+    ))
     
-    # Determinar a maior probabilidade
-    max_prob = max(probabilidades.values())
+    # Probabilidade para Over 1.5
+    prob_over_15_base = 1 - prob_under_15_base
     
-    # THRESHOLDS OTIMIZADOS (baseado em 60.9% de acerto)
-    limiar_over_25 = THRESHOLDS["over_25"] * 100  # 68%
-    limiar_over_35 = THRESHOLDS["over_35"] * 100  # 62%
-    limiar_under_25 = THRESHOLDS["under_25"] * 100  # 65%
-    limiar_under_15 = THRESHOLDS["under_15"] * 100  # 70%
-    limiar_over_15 = THRESHOLDS["over_15"] * 100  # 65%
+    # ============================================================
+    # 6. DECISÃO INTELIGENTE COM THRESHOLDS ELEVADOS
+    # ============================================================
     
-    # DECISÕES HIERÁRQUICAS (da mais conservadora para a menos)
-    tendencia_principal = ""
-    tipo_aposta = ""
-    probabilidade_final = max_prob
+    # THRESHOLDS CONSERVADORES (baseado nos seus resultados de 60.9%)
+    THRESHOLD_UNDER_15 = 0.70  # 70% de chance para Under 1.5
+    THRESHOLD_UNDER_25 = 0.65  # 65% de chance para Under 2.5
+    THRESHOLD_OVER_25 = 0.68   # 68% de chance para Over 2.5 (alto para ser seletivo)
+    THRESHOLD_OVER_15 = 0.75   # 75% de chance para Over 1.5
     
-    # 1. UNDER 1.5 (mais conservador - alta confiança necessária)
-    if probabilidades["under_15"] >= limiar_under_15:
+    # DECISÃO 1: UNDER 1.5 (prioridade máxima se defensivo)
+    if (prob_under_15_base > THRESHOLD_UNDER_15 and 
+        estimativa_total < 1.8 and 
+        (is_defensivo_home or is_defensivo_away)):
+        
         tendencia_principal = "UNDER 1.5"
         tipo_aposta = "under"
-    
-    # 2. UNDER 2.5
-    elif probabilidades["over_15_under_25"] >= limiar_under_25 and estimativa_total_ajustada < 2.3:
+        probabilidade_base = prob_under_15_base * 100
+        decisao = "DEFENSIVO_FORTE"
+        
+    # DECISÃO 2: UNDER 2.5 (segunda prioridade)
+    elif (prob_under_25_base > THRESHOLD_UNDER_25 and 
+          estimativa_total < 2.3):
+        
         tendencia_principal = "UNDER 2.5"
         tipo_aposta = "under"
-    
-    # 3. OVER 1.5
-    elif probabilidades["over_15_under_25"] >= limiar_over_15 and estimativa_total_ajustada > 1.8:
-        tendencia_principal = "OVER 1.5"
-        tipo_aposta = "over"
-    
-    # 4. OVER 2.5 (threshold mais alto!)
-    elif probabilidades["over_25_under_35"] >= limiar_over_25:
+        probabilidade_base = prob_under_25_base * 100
+        decisao = "TENDENCIA_UNDER"
+        
+    # DECISÃO 3: OVER 2.5 (apenas se sinais MUITO fortes)
+    elif (prob_over_25_base > THRESHOLD_OVER_25 and 
+          estimativa_total > 2.8 and 
+          (is_ofensivo_home or is_ofensivo_away)):
+        
         tendencia_principal = "OVER 2.5"
         tipo_aposta = "over"
-    
-    # 5. OVER 3.5 (threshold mais alto!)
-    elif probabilidades["over_35"] >= limiar_over_35:
-        tendencia_principal = "OVER 3.5"
+        probabilidade_base = prob_over_25_base * 100
+        decisao = "OFENSIVO_FORTE"
+        
+    # DECISÃO 4: OVER 1.5 (apenas se moderadamente ofensivo)
+    elif (prob_over_15_base > THRESHOLD_OVER_15 and 
+          estimativa_total > 1.9):
+        
+        tendencia_principal = "OVER 1.5"
         tipo_aposta = "over"
-    
-    # FALLBACK: Baseado apenas na estimativa
+        probabilidade_base = prob_over_15_base * 100
+        decisao = "TENDENCIA_OVER_MODERADA"
+        
+    # DECISÃO 5: FALLBACK PARA UNDER 2.5 (default conservador)
     else:
-        if estimativa_total_ajustada < 1.8:
-            tendencia_principal = "UNDER 2.5"
-            tipo_aposta = "under"
-            probabilidade_final = 60.0
-        elif estimativa_total_ajustada < 2.3:
-            tendencia_principal = "OVER 1.5"
-            tipo_aposta = "over"
-            probabilidade_final = 62.0
-        elif estimativa_total_ajustada < 2.8:
-            tendencia_principal = "UNDER 2.5"
-            tipo_aposta = "under"
-            probabilidade_final = 65.0
-        else:
-            tendencia_principal = "OVER 2.5"
-            tipo_aposta = "over"
-            probabilidade_final = 63.0
+        # Se nenhum critério forte, vai para UNDER 2.5 por padrão
+        tendencia_principal = "UNDER 2.5"
+        tipo_aposta = "under"
+        probabilidade_base = max(55, prob_under_25_base * 100)
+        decisao = "FALLBACK_CONSERVADOR"
     
-    # Calcular confiança baseada na concordância dos fatores
-    fatores_concordantes = 0
-    total_fatores = 4
+    # ============================================================
+    # 7. CÁLCULO DA CONFIANÇA (BASEADO NA CONCORDÂNCIA)
+    # ============================================================
     
-    # Verificar concordância
-    if (tipo_aposta == "under" and estimativa_total_ajustada < 2.5) or \
-       (tipo_aposta == "over" and estimativa_total_ajustada > 2.0):
-        fatores_concordantes += 1
+    # Contar sinais positivos
+    sinais_positivos = 0
+    total_sinais = 4
     
-    if (tipo_aposta == "under" and (home_defensivo or away_defensivo)) or \
-       (tipo_aposta == "over" and (home_ofensivo or away_ofensivo)):
-        fatores_concordantes += 1
+    # Sinal 1: Estimativa concorda com tendência
+    if (tipo_aposta == "under" and estimativa_total < 2.5) or \
+       (tipo_aposta == "over" and estimativa_total > 1.5):
+        sinais_positivos += 1
     
-    if (tipo_aposta == "under" and liga_perfil == "defensivo") or \
-       (tipo_aposta == "over" and liga_perfil == "ofensivo"):
-        fatores_concordantes += 1
+    # Sinal 2: Fator defensivo concorda
+    if (tipo_aposta == "under" and fator_defensivo > 0.6) or \
+       (tipo_aposta == "over" and fator_defensivo < 0.4):
+        sinais_positivos += 1
     
-    # Confiança base (50%) + concordância (até 40%)
-    confianca_base = 50 + (fatores_concordantes / total_fatores * 40)
+    # Sinal 3: Tipo de confronto concorda
+    if (tipo_aposta == "under" and tipo_confronto == "DEFENSIVO_DEFENSIVO") or \
+       (tipo_aposta == "over" and tipo_confronto == "OFENSIVO_OFENSIVO"):
+        sinais_positivos += 1
     
-    # Ajustar pela força da probabilidade
-    if probabilidade_final > 80:
-        confianca_final = min(95, confianca_base * 1.2)
-    elif probabilidade_final > 70:
-        confianca_final = min(90, confianca_base * 1.1)
-    elif probabilidade_final > 60:
-        confianca_final = confianca_base
+    # Sinal 4: Probabilidade base alta
+    if probabilidade_base > 65:
+        sinais_positivos += 1
+    
+    # Calcular confiança base
+    concordancia = sinais_positivos / total_sinais
+    confianca_base = 50 + (concordancia * 40)  # 50-90%
+    
+    # Ajustar confiança pela força da probabilidade
+    if probabilidade_base > 75:
+        confianca_ajustada = min(95, confianca_base * 1.15)
+    elif probabilidade_base > 65:
+        confianca_ajustada = min(90, confianca_base * 1.08)
+    elif probabilidade_base > 55:
+        confianca_ajustada = confianca_base
     else:
-        confianca_final = max(40, confianca_base * 0.9)
+        confianca_ajustada = max(40, confianca_base * 0.9)
+    
+    # Reduzir confiança no fallback
+    if "FALLBACK" in decisao:
+        confianca_ajustada = confianca_ajustada * 0.85
     
     # Limites finais
-    probabilidade_final = max(1, min(99, round(probabilidade_final, 1)))
-    confianca_final = max(20, min(95, round(confianca_final, 1)))
+    probabilidade_final = max(1, min(99, round(probabilidade_base, 1)))
+    confianca_final = max(20, min(95, round(confianca_ajustada, 1)))
     
-    # Log detalhado
+    # ============================================================
+    # 8. LOG DE DEBUG PARA TRANSPARÊNCIA
+    # ============================================================
+    
+    detalhes = {
+        # Probabilidades de cada opção
+        "over_25_prob": round(prob_over_25_base * 100, 1),
+        "under_25_prob": round(prob_under_25_base * 100, 1),
+        "over_15_prob": round(prob_over_15_base * 100, 1),
+        "under_15_prob": round(prob_under_15_base * 100, 1),
+        
+        # Análise detalhada
+        "analise_detalhada": {
+            "estimativa_total": round(estimativa_total, 2),
+            "fator_defensivo": round(fator_defensivo, 3),
+            "tipo_confronto": tipo_confronto,
+            "home_defensivo": is_defensivo_home,
+            "away_defensivo": is_defensivo_away,
+            "home_ofensivo": is_ofensivo_home,
+            "away_ofensivo": is_ofensivo_away,
+            "media_home_feitos": round(media_home_feitos, 2),
+            "media_home_sofridos": round(media_home_sofridos, 2),
+            "media_away_feitos": round(media_away_feitos, 2),
+            "media_away_sofridos": round(media_away_sofridos, 2),
+            "sinais_positivos": sinais_positivos,
+            "decisao": decisao
+        }
+    }
+    
+    # Log para debugging
     logging.info(
-        f"ANÁLISE OTIMIZADA: {home} vs {away} | "
-        f"Liga: {liga_perfil} | "
-        f"Est: {estimativa_total_ajustada:.2f} (Ajustado) | "
+        f"ANÁLISE CONSERVADORA: {home} vs {away} | "
+        f"Est: {estimativa_total:.2f} | "
+        f"Tipo: {tipo_confronto} | "
+        f"Def: {fator_defensivo:.2f} | "
         f"Tend: {tendencia_principal} | "
         f"Prob: {probabilidade_final:.1f}% | "
         f"Conf: {confianca_final:.1f}% | "
-        f"Fatores: {fatores_concordantes}/{total_fatores}"
+        f"Sinais: {sinais_positivos}/{total_sinais} | "
+        f"Decisão: {decisao}"
     )
     
     return {
         "tendencia": tendencia_principal,
-        "estimativa": round(estimativa_total_ajustada, 2),
+        "estimativa": round(estimativa_total, 2),
         "probabilidade": probabilidade_final,
         "confianca": confianca_final,
         "tipo_aposta": tipo_aposta,
-        "detalhes": {
-            "probabilidades": probabilidades,
-            "home_balance": round(home_balance, 2),
-            "away_balance": round(away_balance, 2),
-            "perfil_home": "DEFENSIVO" if home_defensivo else "OFENSIVO" if home_ofensivo else "EQUILIBRADO",
-            "perfil_away": "DEFENSIVO" if away_defensivo else "OFENSIVO" if away_ofensivo else "EQUILIBRADO",
-            "estimativa_home": round(estimativa_home, 2),
-            "estimativa_away": round(estimativa_away, 2),
-            "ajuste_liga": ajuste_liga,
-            "liga_perfil": liga_perfil,
-            "liga_over_25_rate": liga_over_25_rate,
-            "fatores_concordantes": fatores_concordantes
-        }
+        "detalhes": detalhes
     }
 
 # =============================
-# Funções de Geração de Posters (mantidas iguais)
+# Funções de Geração de Posters
 # =============================
 def criar_fonte(tamanho: int) -> ImageFont.ImageFont:
     """Cria fonte com fallback robusto - VERSÃO CORRIGIDA"""
@@ -1570,13 +1589,13 @@ def gerar_poster_individual_westham(fixture: dict, analise: dict) -> io.BytesIO:
     y_stats = y_estatisticas + 60
     
     col1_stats = [
-        f"Over 2.5: {analise['detalhes']['probabilidades']['over_25_under_35'] + analise['detalhes']['probabilidades']['over_35']:.0f}%",
-        f"Under 2.5: {analise['detalhes']['probabilidades']['under_15'] + analise['detalhes']['probabilidades']['over_15_under_25']:.0f}%"
+        f"Over 2.5: {analise['detalhes']['over_25_prob']}% (Conf: {analise['detalhes']['over_25_conf']}%)",
+        f"Under 2.5: {analise['detalhes']['under_25_prob']}% (Conf: {analise['detalhes']['under_25_conf']}%)"
     ]
     
     col2_stats = [
-        f"Perfil Liga: {analise['detalhes']['liga_perfil'].upper()}",
-        f"Fatores Concordantes: {analise['detalhes']['fatores_concordantes']}/4"
+        f"Over 1.5: {analise['detalhes']['over_15_prob']}% (Conf: {analise['detalhes']['over_15_conf']}%)",
+        f"Under 1.5: {analise['detalhes']['under_15_prob']}% (Conf: {analise['detalhes']['under_15_conf']}%)"
     ]
     
     # Coluna 1
@@ -1612,7 +1631,7 @@ def gerar_poster_individual_westham(fixture: dict, analise: dict) -> io.BytesIO:
         draw.text((LARGURA//2 - 200, y_indicator), indicador_text, font=FONTE_DETALHES, fill=cor_indicador)
 
     # Rodapé
-    rodape_text = f"ELITE MASTER SYSTEM OTIMIZADO • {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+    rodape_text = f"ELITE MASTER SYSTEM • {datetime.now().strftime('%d/%m/%Y %H:%M')}"
     try:
         rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_INFO)
         rodape_w = rodape_bbox[2] - rodape_bbox[0]
@@ -1831,16 +1850,16 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
             except:
                 draw.text((PADDING + 100, y_analysis + i * 70), text, font=FONTE_ANALISE, fill=cor_tipo)
 
-        # Estatísticas detalhadas
+        # Estatísticas detalhadas (se disponíveis)
         if 'detalhes' in jogo:
             y_stats = y_analysis + 280
             detalhes = jogo['detalhes']
             
             stats_text = [
-                f"Perfil Liga: {detalhes.get('liga_perfil', 'moderado')}",
-                f"Fatores Concordantes: {detalhes.get('fatores_concordantes', 0)}/4",
-                f"Home: {detalhes.get('perfil_home', 'EQUILIBRADO')}",
-                f"Away: {detalhes.get('perfil_away', 'EQUILIBRADO')}"
+                f"Over 2.5: {detalhes.get('over_25_prob', 0):.0f}%",
+                f"Under 2.5: {detalhes.get('under_25_prob', 0):.0f}%",
+                f"Over 1.5: {detalhes.get('over_15_prob', 0):.0f}%",
+                f"Under 1.5: {detalhes.get('under_15_prob', 0):.0f}%"
             ]
             
             # Distribuir em duas colunas
@@ -1853,7 +1872,7 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
         y_pos += ALTURA_POR_JOGO
 
     # Rodapé
-    rodape_text = f" ELITE MASTER SYSTEM OTIMIZADO - Análise Preditiva | {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+    rodape_text = f" ELITE MASTER SYSTEM - Análise Preditiva | {datetime.now().strftime('%d/%m/%Y %H:%M')}"
     try:
         rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_INFO)
         rodape_w = rodape_bbox[2] - rodape_bbox[0]
@@ -2092,13 +2111,13 @@ def gerar_poster_westham_style(jogos: list, titulo: str = " ALERTA DE GOLS") -> 
             detalhes = jogo['detalhes']
             
             col1_stats = [
-                f"Perfil Liga: {detalhes.get('liga_perfil', 'moderado')}",
-                f"Fatores Concordantes: {detalhes.get('fatores_concordantes', 0)}/4"
+                f"Over 2.5: {detalhes.get('over_25_prob', 0):.0f}%",
+                f"Under 2.5: {detalhes.get('under_25_prob', 0):.0f}%"
             ]
             
             col2_stats = [
-                f"Home: {detalhes.get('perfil_home', 'EQUILIBRADO')}",
-                f"Away: {detalhes.get('perfil_away', 'EQUILIBRADO')}"
+                f"Over 1.5: {detalhes.get('over_15_prob', 0):.0f}%",
+                f"Under 1.5: {detalhes.get('under_15_prob', 0):.0f}%"
             ]
             
             # Coluna 1
@@ -2112,7 +2131,7 @@ def gerar_poster_westham_style(jogos: list, titulo: str = " ALERTA DE GOLS") -> 
         y_pos += ALTURA_POR_JOGO
 
     # Rodapé
-    rodape_text = f"Gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')} - Elite Master System OTIMIZADO"
+    rodape_text = f"Gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')} - Elite Master System"
     try:
         rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_DETALHES)
         rodape_w = rodape_bbox[2] - rodape_bbox[0]
@@ -2352,7 +2371,7 @@ def gerar_poster_resultados(jogos: list, titulo: str = " ** RESULTADOS OFICIAIS 
         y_pos += ALTURA_POR_JOGO
 
     # Rodapé
-    rodape_text = f"Resultados oficiais • Gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')} • Elite Master System OTIMIZADO"
+    rodape_text = f"Resultados oficiais • Gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')} • Elite Master System"
     try:
         rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_INFO)
         rodape_w = rodape_bbox[2] - rodape_bbox[0]
@@ -2598,7 +2617,7 @@ def gerar_poster_resultados_limitado(jogos: list, titulo: str = "- RESULTADOS", 
         y_pos += ALTURA_POR_JOGO
 
     # Rodapé com indicador de lote
-    rodape_text = f"Partidas {len(jogos_limitados)}/{len(jogos)} • Gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')} • Elite Master System OTIMIZADO"
+    rodape_text = f"Partidas {len(jogos_limitados)}/{len(jogos)} • Gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')} • Elite Master System"
     try:
         rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_INFO)
         rodape_w = rodape_bbox[2] - rodape_bbox[0]
@@ -2615,7 +2634,7 @@ def gerar_poster_resultados_limitado(jogos: list, titulo: str = "- RESULTADOS", 
     return buffer
 
 # =============================
-# Funções de Envio de Alertas (mantidas iguais com pequenos ajustes)
+# Funções de Envio de Alertas
 # =============================
 def enviar_alerta_telegram(fixture: dict, analise: dict):
     """Envia alerta individual com poster estilo West Ham"""
@@ -2640,12 +2659,12 @@ def enviar_alerta_telegram(fixture: dict, analise: dict):
             f"<b>⚽ Estimativa: {analise['estimativa']:.2f} gols</b>\n"
             f"<b>🎯 Probabilidade: {analise['probabilidade']:.0f}%</b>\n"
             f"<b>🔍 Confiança: {analise['confianca']:.0f}%</b>\n\n"
-            f"<b>📊 Sistema OTIMIZADO (v2.0):</b>\n"
-            f"<b>• Perfil Liga: {analise['detalhes'].get('liga_perfil', 'moderado').upper()}</b>\n"
-            f"<b>• Fatores Concordantes: {analise['detalhes'].get('fatores_concordantes', 0)}/4</b>\n"
-            f"<b>• Home: {analise['detalhes'].get('perfil_home', 'EQUILIBRADO')}</b>\n"
-            f"<b>• Away: {analise['detalhes'].get('perfil_away', 'EQUILIBRADO')}</b>\n\n"
-            f"<b>🔥 ELITE MASTER SYSTEM OTIMIZADO - ANÁLISE PREDITIVA AVANÇADA</b>"
+            f"<b>📊 Estatísticas Detalhadas:</b>\n"
+            f"<b>• Over 2.5: {analise['detalhes']['over_25_prob']}%</b>\n"
+            f"<b>• Under 2.5: {analise['detalhes']['under_25_prob']}%</b>\n"
+            f"<b>• Over 1.5: {analise['detalhes']['over_15_prob']}%</b>\n"
+            f"<b>• Under 1.5: {analise['detalhes']['under_15_prob']}%</b>\n\n"
+            f"<b>🔥 ELITE MASTER SYSTEM - ANÁLISE PREDITIVA COMPLETA</b>"
         )
         
         # Enviar foto
@@ -2672,16 +2691,15 @@ def enviar_alerta_telegram_fallback(fixture: dict, analise: dict) -> bool:
     tipo_emoji = "🎯" if analise["tipo_aposta"] == "over" else "🛡️"
     
     msg = (
-        f"<b>{tipo_emoji} ALERTA {analise['tipo_aposta'].upper()} DE GOLS (OTIMIZADO)</b>\n\n"
+        f"<b>{tipo_emoji} ALERTA {analise['tipo_aposta'].upper()} DE GOLS</b>\n\n"
         f"<b>🏆 {competicao}</b>\n"
         f"<b>📅 {data_formatada}</b> | <b>⏰ {hora_formatada} BRT</b>\n\n"
         f"<b>🏠 {home}</b> vs <b>✈️ {away}</b>\n\n"
         f"<b>📈 Tendência: {analise['tendencia']}</b>\n"
         f"<b>⚽ Estimativa: {analise['estimativa']:.2f} gols</b>\n"
         f"<b>🎯 Probabilidade: {analise['probabilidade']:.0f}%</b>\n"
-        f"<b>🔍 Confiança: {analise['confianca']:.0f}%</b>\n"
-        f"<b>📊 Sistema: v2.0 OTIMIZADO</b>\n\n"
-        f"<b>🔥 ELITE MASTER SYSTEM OTIMIZADO</b>"
+        f"<b>🔍 Confiança: {analise['confianca']:.0f}%</b>\n\n"
+        f"<b>🔥 ELITE MASTER SYSTEM</b>"
     )
     
     return enviar_telegram(msg)
@@ -2699,8 +2717,7 @@ def verificar_enviar_alerta(fixture: dict, analise: dict, alerta_individual: boo
             "confianca": analise["confianca"],
             "tipo_aposta": analise["tipo_aposta"],
             "detalhes": analise["detalhes"],
-            "conferido": False,
-            "sistema": "OTIMIZADO v2.0"  # Nova flag para identificar sistema
+            "conferido": False
         }
         # Só envia alerta individual se a checkbox estiver ativada
         if alerta_individual:
@@ -2724,7 +2741,7 @@ def enviar_alerta_westham_style(jogos_conf: list, min_conf: int, max_conf: int, 
 
         for data, jogos_data in jogos_por_data.items():
             data_str = data.strftime("%d/%m/%Y")
-            titulo = f"ELITE MASTER OTIMIZADO - {data_str}"
+            titulo = f"ELITE MASTER - {data_str}"
             
             st.info(f"🎨 Gerando poster para {data_str} com {len(jogos_data)} jogos...")
             
@@ -2735,15 +2752,14 @@ def enviar_alerta_westham_style(jogos_conf: list, min_conf: int, max_conf: int, 
             under_count = sum(1 for j in jogos_data if j.get('tipo_aposta') == "under")
             
             caption = (
-                f"<b>🎯 ALERTA DE GOLS - SISTEMA OTIMIZADO - {data_str}</b>\n\n"
+                f"<b>🎯 ALERTA DE GOLS - {data_str}</b>\n\n"
                 f"<b>📋 TOTAL: {len(jogos_data)} JOGOS</b>\n"
                 f"<b>📈 Over: {over_count} jogos</b>\n"
                 f"<b>📉 Under: {under_count} jogos</b>\n"
                 f"<b>⚽ INTERVALO DE CONFIANÇA: {min_conf}% - {max_conf}%</b>\n\n"
-                f"<b>🔮 SISTEMA OTIMIZADO v2.0 - THRESHOLDS ELEVADOS</b>\n"
-                f"<b>🎯 Over 2.5: ≥{THRESHOLDS['over_25']*100}% | Under 2.5: ≥{THRESHOLDS['under_25']*100}%</b>\n"
+                f"<b>🔮 ANÁLISE PREDITIVA DE GOLS (OVER/UNDER)</b>\n"
                 f"<b>📊 MÉDIA DE CONFIANÇA: {sum(j['confianca'] for j in jogos_data) / len(jogos_data):.1f}%</b>\n\n"
-                f"<b>🔥 JOGOS SELECIONADOS PELA INTELIGÊNCIA ARTIFICIAL AVANÇADA</b>"
+                f"<b>🔥 JOGOS SELECIONADOS PELA INTELIGÊNCIA ARTIFICIAL</b>"
             )
             
             st.info("📤 Enviando para o Telegram...")
@@ -2758,7 +2774,7 @@ def enviar_alerta_westham_style(jogos_conf: list, min_conf: int, max_conf: int, 
         logging.error(f"Erro crítico ao gerar/enviar poster West Ham: {str(e)}")
         st.error(f"❌ Erro crítico ao gerar/enviar poster: {str(e)}")
         # Fallback para mensagem de texto
-        msg = f"🔥 Jogos com confiança entre {min_conf}% e {max_conf}% (Sistema OTIMIZADO) (Erro na imagem):\n"
+        msg = f"🔥 Jogos com confiança entre {min_conf}% e {max_conf}% (Erro na imagem):\n"
         for j in jogos_conf[:5]:
             tipo_emoji = "📈" if j.get('tipo_aposta') == "over" else "📉"
             msg += f"{tipo_emoji} {j['home']} vs {j['away']} | {j['tendencia']} | Conf: {j['confianca']:.0f}%\n"
@@ -2815,7 +2831,7 @@ def enviar_alerta_resultados_poster(jogos_com_resultado: list, max_jogos_por_ale
             
             for lote_idx, lote in enumerate(lotes):
                 lote_num = lote_idx + 1
-                titulo = f"ELITE MASTER OTIMIZADO - RESULTADOS {data_str} - LOTE {lote_num}/{len(lotes)}"
+                titulo = f"ELITE MASTER - RESULTADOS {data_str} - LOTE {lote_num}/{len(lotes)}"
                 
                 st.info(f"🎨 Gerando poster para lote {lote_num} com {len(lote)} jogos...")
                 
@@ -2840,7 +2856,7 @@ def enviar_alerta_resultados_poster(jogos_com_resultado: list, max_jogos_por_ale
                 taxa_acerto_data = (green_count_data / total_jogos_data * 100) if total_jogos_data > 0 else 0
                 
                 caption = (
-                    f"<b>🏁 RESULTADOS OFICIAIS - SISTEMA OTIMIZADO - {data_str}</b>\n"
+                    f"<b>🏁 RESULTADOS OFICIAIS - {data_str}</b>\n"
                     f"<b>📦 LOTE {lote_num}/{len(lotes)}</b>\n\n"
                     
                     f"<b>📋 ESTATÍSTICAS DO LOTE:</b>\n"
@@ -2860,7 +2876,7 @@ def enviar_alerta_resultados_poster(jogos_com_resultado: list, max_jogos_por_ale
                     f"<b>• 🟢 GREEN: {green_count_data}</b>\n"
                     f"<b>• 🎯 Acerto Total: {taxa_acerto_data:.1f}%</b>\n\n"
                     
-                    f"<b>🔥 ELITE MASTER SYSTEM OTIMIZADO - CONFIABILIDADE COMPROVADA v2.0</b>"
+                    f"<b>🔥 ELITE MASTER SYSTEM - CONFIABILIDADE COMPROVADA</b>"
                 )
                 
                 st.info(f"📤 Enviando lote {lote_num} para o Telegram...")
@@ -2881,8 +2897,7 @@ def enviar_alerta_resultados_poster(jogos_com_resultado: list, max_jogos_por_ale
                             "probabilidade": jogo["probabilidade_prevista"],
                             "placar": f"{jogo['home_goals']}x{jogo['away_goals']}",
                             "resultado": "🟢 GREEN" if jogo.get('resultado') == "GREEN" else "🔴 RED",
-                            "tipo_aposta": jogo.get("tipo_aposta", "desconhecido"),
-                            "sistema": "OTIMIZADO v2.0"
+                            "tipo_aposta": jogo.get("tipo_aposta", "desconhecido")
                         })
                     
                     # Pequena pausa entre lotes para evitar sobrecarga
@@ -2926,7 +2941,7 @@ def enviar_resultados_fallback(jogos_com_resultado: list, max_jogos_por_alerta: 
         for lote_idx, lote in enumerate(lotes):
             lote_num = lote_idx + 1
             
-            msg = f"<b>🏁 RESULTADOS OFICIAIS - SISTEMA OTIMIZADO - {data_str}</b>\n"
+            msg = f"<b>🏁 RESULTADOS OFICIAIS - {data_str}</b>\n"
             msg += f"<b>📦 LOTE {lote_num}/{len(lotes)}</b>\n\n"
             
             for j in lote:
@@ -2961,7 +2976,7 @@ def enviar_resultados_fallback(jogos_com_resultado: list, max_jogos_por_alerta: 
         resumo_msg = f"<b>📈 RESUMO FINAL - {data_str}</b>\n"
         resumo_msg += f"<b>Total: {total_jogos_data} jogos</b>\n"
         resumo_msg += f"<b>🟢 GREEN: {green_count_data} ({taxa_acerto_data:.1f}%)</b>\n"
-        resumo_msg += f"<b>🔥 ELITE MASTER SYSTEM OTIMIZADO v2.0</b>"
+        resumo_msg += f"<b>🔥 ELITE MASTER SYSTEM</b>"
         
         enviar_telegram(resumo_msg, chat_id=TELEGRAM_CHAT_ID_ALT2)
 
@@ -2975,7 +2990,7 @@ def enviar_alerta_conf_criar_poster(jogos_conf: list, min_conf: int, max_conf: i
         over_jogos = [j for j in jogos_conf if j.get('tipo_aposta') == "over"]
         under_jogos = [j for j in jogos_conf if j.get('tipo_aposta') == "under"]
         
-        msg = f"🔥 Jogos com confiança {min_conf}%-{max_conf}% (Sistema OTIMIZADO v2.0):\n\n"
+        msg = f"🔥 Jogos com confiança {min_conf}%-{max_conf}% (Estilo Original):\n\n"
         
         if over_jogos:
             msg += f"📈 <b>OVER ({len(over_jogos)} jogos):</b>\n\n"
@@ -2984,8 +2999,7 @@ def enviar_alerta_conf_criar_poster(jogos_conf: list, min_conf: int, max_conf: i
                 msg += (
                     f"🏟️ {j['home']} vs {j['away']}\n"
                     f"🕒 {hora_format} BRT | {j['liga']}\n"
-                    f"📈 {j['tendencia']} | ⚽ {j['estimativa']:.2f} | 🎯 {j['probabilidade']:.0f}% | 💯 {j['confianca']:.0f}%\n"
-                    f"🔧 Sistema: OTIMIZADO | Perfil Liga: {j['detalhes'].get('liga_perfil', 'moderado')}\n\n"
+                    f"📈 {j['tendencia']} | ⚽ {j['estimativa']:.2f} | 🎯 {j['probabilidade']:.0f}% | 💯 {j['confianca']:.0f}%\n\n"
                 )
         
         if under_jogos:
@@ -2995,12 +3009,11 @@ def enviar_alerta_conf_criar_poster(jogos_conf: list, min_conf: int, max_conf: i
                 msg += (
                     f"🏟️ {j['home']} vs {j['away']}\n"
                     f"🕒 {hora_format} BRT | {j['liga']}\n"
-                    f"📉 {j['tendencia']} | ⚽ {j['estimativa']:.2f} | 🎯 {j['probabilidade']:.0f}% | 💯 {j['confianca']:.0f}%\n"
-                    f"🔧 Sistema: OTIMIZADO | Perfil Liga: {j['detalhes'].get('liga_perfil', 'moderado')}\n\n"
+                    f"📉 {j['tendencia']} | ⚽ {j['estimativa']:.2f} | 🎯 {j['probabilidade']:.0f}% | 💯 {j['confianca']:.0f}%\n\n"
                 )
         
         enviar_telegram(msg, chat_id=chat_id)
-        st.success("📤 Alerta enviado (formato texto) - SISTEMA OTIMIZADO")
+        st.success("📤 Alerta enviado (formato texto)")
     except Exception as e:
         logging.error(f"Erro no fallback de poster: {e}")
         st.error(f"Erro no fallback: {e}")
@@ -3036,12 +3049,12 @@ def enviar_top_jogos(jogos: list, top_n: int, alerta_top_jogos: bool, min_conf: 
     over_jogos = [j for j in top_jogos_sorted if j.get('tipo_aposta') == "over"]
     under_jogos = [j for j in top_jogos_sorted if j.get('tipo_aposta') == "under"]
     
-    st.info(f"📊 Enviando TOP {len(top_jogos_sorted)} jogos - Sistema OTIMIZADO - Formato: {formato_top_jogos}")
+    st.info(f"📊 Enviando TOP {len(top_jogos_sorted)} jogos - Formato: {formato_top_jogos}")
     st.info(f"💾 Salvando {len(top_jogos_sorted)} alertas TOP para conferência futura")
     
     # ENVIAR TEXTO (se solicitado)
     if formato_top_jogos in ["Texto", "Ambos"]:
-        msg = f"📢 TOP {top_n} Jogos do Dia - SISTEMA OTIMIZADO v2.0 (confiança: {min_conf}%-{max_conf}%)\n\n"
+        msg = f"📢 TOP {top_n} Jogos do Dia (confiança: {min_conf}%-{max_conf}%)\n\n"
         
         if over_jogos:
             msg += f"📈 <b>OVER ({len(over_jogos)} jogos):</b>\n"
@@ -3051,8 +3064,7 @@ def enviar_top_jogos(jogos: list, top_n: int, alerta_top_jogos: bool, min_conf: 
                     f"🏟️ {j['home']} vs {j['away']}\n"
                     f"🕒 {hora_format} BRT | Liga: {j['liga']} | Status: {j['status']}\n"
                     f"📈 {j['tendencia']} | ⚽ {j['estimativa']:.2f} | "
-                    f"🎯 {j['probabilidade']:.0f}% | 💯 {j['confianca']:.0f}%\n"
-                    f"🔧 Perfil Liga: {j['detalhes'].get('liga_perfil', 'moderado')} | Fatores: {j['detalhes'].get('fatores_concordantes', 0)}/4\n\n"
+                    f"🎯 {j['probabilidade']:.0f}% | 💯 {j['confianca']:.0f}%\n\n"
                 )
         
         if under_jogos:
@@ -3063,8 +3075,7 @@ def enviar_top_jogos(jogos: list, top_n: int, alerta_top_jogos: bool, min_conf: 
                     f"🏟️ {j['home']} vs {j['away']}\n"
                     f"🕒 {hora_format} BRT | Liga: {j['liga']} | Status: {j['status']}\n"
                     f"📉 {j['tendencia']} | ⚽ {j['estimativa']:.2f} | "
-                    f"🎯 {j['probabilidade']:.0f}% | 💯 {j['confianca']:.0f}%\n"
-                    f"🔧 Perfil Liga: {j['detalhes'].get('liga_perfil', 'moderado')} | Fatores: {j['detalhes'].get('fatores_concordantes', 0)}/4\n\n"
+                    f"🎯 {j['probabilidade']:.0f}% | 💯 {j['confianca']:.0f}%\n\n"
                 )
         
         if enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2, disable_web_page_preview=True):
@@ -3078,8 +3089,7 @@ def enviar_top_jogos(jogos: list, top_n: int, alerta_top_jogos: bool, min_conf: 
             st.info(f"🎨 Gerando poster para TOP {len(top_jogos_sorted)} jogos...")
             
             # Gerar poster
-            poster = gerar_poster_top_jogos(top_jogos_sorted, min_conf, max_conf, 
-                                          f"** TOP {len(top_jogos_sorted)} JOGOS - SISTEMA OTIMIZADO **")
+            poster = gerar_poster_top_jogos(top_jogos_sorted, min_conf, max_conf)
             
             # Calcular estatísticas para caption
             total_jogos = len(top_jogos_sorted)
@@ -3087,16 +3097,14 @@ def enviar_top_jogos(jogos: list, top_n: int, alerta_top_jogos: bool, min_conf: 
             
             # Criar caption
             caption = (
-                f"<b>🏆 TOP {len(top_jogos_sorted)} JOGOS DO DIA - SISTEMA OTIMIZADO v2.0 🏆</b>\n\n"
+                f"<b>🏆 TOP {len(top_jogos_sorted)} JOGOS DO DIA 🏆</b>\n\n"
                 f"<b>🎯 Intervalo de Confiança: {min_conf}% - {max_conf}%</b>\n"
                 f"<b>📈 Over: {len(over_jogos)} jogos</b>\n"
                 f"<b>📉 Under: {len(under_jogos)} jogos</b>\n"
-                f"<b>⚽ Confiança Média: {confianca_media:.1f}%</b>\n"
-                f"<b>🔧 Sistema: OTIMIZADO com ajuste por liga</b>\n"
-                f"<b>🎯 Thresholds: Over 2.5 ≥{THRESHOLDS['over_25']*100}% | Under 2.5 ≥{THRESHOLDS['under_25']*100}%</b>\n\n"
+                f"<b>⚽ Confiança Média: {confianca_media:.1f}%</b>\n\n"
                 f"<b>🔥 JOGOS COM MAIOR POTENCIAL DO DIA</b>\n"
                 f"<b>⭐ Ordenados por nível de confiança</b>\n\n"
-                f"<b>🎯 ELITE MASTER SYSTEM OTIMIZADO - SELEÇÃO INTELIGENTE AVANÇADA</b>"
+                f"<b>🎯 ELITE MASTER SYSTEM - SELEÇÃO INTELIGENTE</b>"
             )
             
             # Enviar poster
@@ -3115,7 +3123,7 @@ def enviar_top_jogos(jogos: list, top_n: int, alerta_top_jogos: bool, min_conf: 
                 st.info("🔄 Tentando fallback para texto...")
                 enviar_telegram(
                     f"⚠️ Erro ao gerar poster dos TOP jogos. Seguem os {len(top_jogos_sorted)} jogos em texto:\n\n" +
-                    "\n".join([f"• {j['home']} vs {j['away']} - {j['tendencia']} ({j['confianca']:.0f}%) - {j['detalhes'].get('liga_perfil', 'moderado')}" 
+                    "\n".join([f"• {j['home']} vs {j['away']} - {j['tendencia']} ({j['confianca']:.0f}%)" 
                               for j in top_jogos_sorted[:10]]),
                     TELEGRAM_CHAT_ID_ALT2
                 )
@@ -3170,8 +3178,7 @@ def verificar_resultados_finais(alerta_resultados: bool):
                     "confianca_prevista": alerta.get("confianca", 0),
                     "tipo_aposta": alerta.get("tipo_aposta", "desconhecido"),
                     "escudo_home": match.get("homeTeam", {}).get("crest") or "",
-                    "escudo_away": match.get("awayTeam", {}).get("crest") or "",
-                    "sistema": alerta.get("sistema", "OTIMIZADO v2.0")
+                    "escudo_away": match.get("awayTeam", {}).get("crest") or ""
                 }
                 
                 jogos_com_resultado.append(jogo_resultado)
@@ -3196,7 +3203,7 @@ def verificar_resultados_finais(alerta_resultados: bool):
         st.info("ℹ️ Nenhum novo resultado final encontrado.")
 
 # =============================
-# FUNÇÕES PRINCIPAIS (ATUALIZADAS)
+# FUNÇÕES PRINCIPAIS
 # =============================
 def debug_jogos_dia(data_selecionada, ligas_selecionadas, todas_ligas=False):
     """Função de debug para verificar os jogos retornados pela API"""
@@ -3204,21 +3211,20 @@ def debug_jogos_dia(data_selecionada, ligas_selecionadas, todas_ligas=False):
     
     # Se "Todas as ligas" estiver selecionada, usar todas as ligas
     if todas_ligas:
-        ligas_busca = [info["id"] for info in LIGA_DICT.values()]
+        ligas_busca = list(LIGA_DICT.values())
     else:
         # Usar apenas as ligas selecionadas
-        ligas_busca = [LIGA_DICT[liga_nome]["id"] for liga_nome in ligas_selecionadas]
+        ligas_busca = [LIGA_DICT[liga_nome] for liga_nome in ligas_selecionadas]
     
     st.write("🔍 **DEBUG DETALHADO - JOGOS DA API**")
     
     for liga_id in ligas_busca:
-        liga_nome = next((name for name, info in LIGA_DICT.items() if info["id"] == liga_id), liga_id)
         if liga_id == "BSA":  # Apenas para o Brasileirão
             jogos = obter_jogos_brasileirao(liga_id, hoje)
         else:
             jogos = obter_jogos(liga_id, hoje)
             
-        st.write(f"**Liga {liga_nome} ({liga_id}):** {len(jogos)} jogos encontrados")
+        st.write(f"**Liga {liga_id}:** {len(jogos)} jogos encontrados")
         
         for i, match in enumerate(jogos):
             try:
@@ -3247,18 +3253,14 @@ def processar_jogos(data_selecionada, ligas_selecionadas, todas_ligas, top_n, mi
     
     # Se "Todas as ligas" estiver selecionada, usar todas as ligas
     if todas_ligas:
-        ligas_busca = [info["id"] for info in LIGA_DICT.values()]
-        st.write(f"🌍 Analisando TODAS as {len(ligas_busca)} ligas disponíveis (SISTEMA OTIMIZADO v2.0)")
+        ligas_busca = list(LIGA_DICT.values())
+        st.write(f"🌍 Analisando TODAS as {len(ligas_busca)} ligas disponíveis")
     else:
         # Usar apenas as ligas selecionadas
-        ligas_busca = [LIGA_DICT[liga_nome]["id"] for liga_nome in ligas_selecionadas]
-        st.write(f"📌 Analisando {len(ligas_busca)} ligas selecionadas (SISTEMA OTIMIZADO v2.0):")
-        for liga_nome in ligas_selecionadas:
-            liga_info = LIGA_DICT[liga_nome]
-            st.write(f"  • {liga_nome} - Perfil: {liga_info['perfil']} - Over 2.5 rate: {liga_info['over_25_rate']:.2f}")
+        ligas_busca = [LIGA_DICT[liga_nome] for liga_nome in ligas_selecionadas]
+        st.write(f"📌 Analisando {len(ligas_busca)} ligas selecionadas: {', '.join(ligas_selecionadas)}")
 
     st.write(f"⏳ Buscando jogos para {data_selecionada.strftime('%d/%m/%Y')}...")
-    st.write(f"🎯 Thresholds OTIMIZADOS: Over 2.5 ≥{THRESHOLDS['over_25']*100}% | Under 2.5 ≥{THRESHOLDS['under_25']*100}%")
     
     top_jogos = []
     progress_bar = st.progress(0)
@@ -3271,15 +3273,14 @@ def processar_jogos(data_selecionada, ligas_selecionadas, todas_ligas, top_n, mi
     
     for i, liga_id in enumerate(ligas_busca):
         classificacao = classificacoes[liga_id]
-        liga_nome = next((name for name, info in LIGA_DICT.items() if info["id"] == liga_id), f"Liga {liga_id}")
         
         # CORREÇÃO: Para o Brasileirão usar busca especial que considera fuso horário
         if liga_id == "BSA":  # Campeonato Brasileiro
             jogos = obter_jogos_brasileirao(liga_id, hoje)
-            st.write(f"📊 {liga_nome} (BSA): {len(jogos)} jogos encontrados (com correção de fuso horário)")
+            st.write(f"📊 Liga BSA: {len(jogos)} jogos encontrados (com correção de fuso horário)")
         else:
             jogos = obter_jogos(liga_id, hoje)
-            st.write(f"📊 {liga_nome} ({liga_id}): {len(jogos)} jogos encontrados")
+            st.write(f"📊 Liga {liga_id}: {len(jogos)} jogos encontrados")
 
         # Processa em batch para evitar muitos requests seguidos
         batch_size = 5
@@ -3294,8 +3295,8 @@ def processar_jogos(data_selecionada, ligas_selecionadas, todas_ligas, top_n, mi
                 home = match["homeTeam"]["name"]
                 away = match["awayTeam"]["name"]
                 
-                # Usar NOVA função de análise OTIMIZADA
-                analise = calcular_tendencia_otimizada(home, away, classificacao, liga_nome)
+                # Usar nova função de análise completa
+                analise = calcular_tendencia_completa(home, away, classificacao)
 
                 # DEBUG: Mostrar cada jogo processado
                 data_utc = match["utcDate"]
@@ -3308,7 +3309,6 @@ def processar_jogos(data_selecionada, ligas_selecionadas, todas_ligas, top_n, mi
                 st.write(f"   {tipo_emoji} {home} vs {away}")
                 st.write(f"      🕒 {data_br} {hora_br} | {analise['tendencia']}")
                 st.write(f"      ⚽ Estimativa: {analise['estimativa']:.2f} | 🎯 Prob: {analise['probabilidade']:.0f}% | 🔍 Conf: {analise['confianca']:.0f}%")
-                st.write(f"      📊 Perfil Liga: {analise['detalhes']['liga_perfil']} | Fatores: {analise['detalhes']['fatores_concordantes']}/4")
                 st.write(f"      Status: {match.get('status', 'DESCONHECIDO')}")
 
                 # Só envia alerta individual se a checkbox estiver ativada E se estiver no intervalo
@@ -3353,12 +3353,12 @@ def processar_jogos(data_selecionada, ligas_selecionadas, todas_ligas, top_n, mi
         progress_bar.progress((i + 1) / total_ligas)
 
     # DEBUG COMPLETO: Mostrar todos os jogos processados
-    st.write("🔍 **DEBUG FINAL - TODOS OS JOGOS PROCESSADOS (SISTEMA OTIMIZADO):**")
+    st.write("🔍 **DEBUG FINAL - TODOS OS JOGOS PROCESSADOS:**")
     for jogo in top_jogos:
         data_str = jogo["hora"].strftime("%d/%m/%Y")
         hora_str = jogo["hora"].strftime("%H:%M")
         tipo_emoji = "📈" if jogo['tipo_aposta'] == "over" else "📉"
-        st.write(f"{tipo_emoji} {jogo['home']} vs {jogo['away']}: {data_str} {hora_str} | {jogo['tendencia']} | Conf: {jogo['confianca']:.1f}% | Perfil Liga: {jogo['detalhes']['liga_perfil']} | Fatores: {jogo['detalhes']['fatores_concordantes']}/4")
+        st.write(f"{tipo_emoji} {jogo['home']} vs {jogo['away']}: {data_str} {hora_str} | {jogo['tendencia']} | Conf: {jogo['confianca']:.1f}% | Status: {jogo['status']}")
 
     # Filtrar por intervalo de confiança e tipo
     st.write(f"🔍 **DEBUG FILTRO POR INTERVALO ({min_conf}% - {max_conf}%) e TIPO ({tipo_filtro}):**")
@@ -3376,7 +3376,7 @@ def processar_jogos(data_selecionada, ligas_selecionadas, todas_ligas, top_n, mi
     elif tipo_filtro == "Apenas Under":
         jogos_filtrados = [j for j in jogos_filtrados if j["tipo_aposta"] == "under"]
     
-    st.write(f"📊 Total de jogos analisados: {len(top_jogos)}")
+    st.write(f"📊 Total de jogos: {len(top_jogos)}")
     st.write(f"📊 Jogos após filtros: {len(jogos_filtrados)}")
     
     # Separar Over e Under para estatísticas
@@ -3386,33 +3386,26 @@ def processar_jogos(data_selecionada, ligas_selecionadas, todas_ligas, top_n, mi
     st.write(f"📈 Over: {len(over_jogos)} jogos")
     st.write(f"📉 Under: {len(under_jogos)} jogos")
     
-    # Mostrar estatísticas por perfil de liga
-    if jogos_filtrados:
-        st.write("📊 **ESTATÍSTICAS POR PERFIL DE LIGA:**")
-        ligas_stats = {}
-        for jogo in jogos_filtrados:
-            perfil = jogo['detalhes'].get('liga_perfil', 'moderado')
-            if perfil not in ligas_stats:
-                ligas_stats[perfil] = {"total": 0, "over": 0, "under": 0}
-            ligas_stats[perfil]["total"] += 1
-            if jogo["tipo_aposta"] == "over":
-                ligas_stats[perfil]["over"] += 1
-            else:
-                ligas_stats[perfil]["under"] += 1
-        
-        for perfil, stats in ligas_stats.items():
-            st.write(f"  • {perfil.upper()}: {stats['total']} jogos (Over: {stats['over']}, Under: {stats['under']})")
+    # MONITORAMENTO: Mostrar distribuição Over/Under
+    total_over = sum(1 for j in top_jogos if j["tipo_aposta"] == "over")
+    total_under = sum(1 for j in top_jogos if j["tipo_aposta"] == "under")
+    st.write(f"📊 DISTRIBUIÇÃO TOTAL: Over: {total_over} | Under: {total_under}")
+    if total_over > 0 and total_under > 0:
+        ratio = total_under / total_over
+        st.write(f"📊 RÁCIO Under/Over: {ratio:.2f}")
+        if ratio < 0.8:
+            st.warning("⚠️ Ainda muito Over! Considere ajustar thresholds.")
     
     # Mostrar jogos que passaram no filtro
     if jogos_filtrados:
         st.write(f"✅ **Jogos no intervalo {min_conf}%-{max_conf}% ({tipo_filtro}):**")
         for jogo in jogos_filtrados:
             tipo_emoji = "📈" if jogo['tipo_aposta'] == "over" else "📉"
-            st.write(f"   {tipo_emoji} {jogo['home']} vs {jogo['away']} - {jogo['tendencia']} - Conf: {jogo['confianca']:.1f}% - {jogo['detalhes']['liga_perfil']}")
+            st.write(f"   {tipo_emoji} {jogo['home']} vs {jogo['away']} - {jogo['tendencia']} - Conf: {jogo['confianca']:.1f}%")
         
         # Envia top jogos com opção de formato
         enviar_top_jogos(jogos_filtrados, top_n, alerta_top_jogos, min_conf, max_conf, formato_top_jogos, data_busca=hoje)
-        st.success(f"✅ {len(jogos_filtrados)} jogos com confiança entre {min_conf}% e {max_conf}% ({tipo_filtro}) - SISTEMA OTIMIZADO")
+        st.success(f"✅ {len(jogos_filtrados)} jogos com confiança entre {min_conf}% e {max_conf}% ({tipo_filtro})")
         
         # ENVIAR ALERTA DE IMAGEM apenas se a checkbox estiver ativada
         if alerta_poster:
@@ -3618,11 +3611,11 @@ def calcular_desempenho_periodo(data_inicio, data_fim):
         st.metric("📉 Under", f"{under_green}/{under_total}", f"{taxa_under:.1f}%")
 
 # =============================
-# Interface Streamlit com Monitoramento (ATUALIZADA)
+# Interface Streamlit com Monitoramento
 # =============================
 def main():
-    st.set_page_config(page_title="⚽ Alerta de Gols Over/Under OTIMIZADO", layout="wide")
-    st.title("⚽ Sistema de Alertas Automáticos Over/Under - SISTEMA OTIMIZADO v2.0")
+    st.set_page_config(page_title="⚽ Alerta de Gols Over/Under", layout="wide")
+    st.title("⚽ Sistema de Alertas Automáticos Over/Under")
 
     # Sidebar - CONFIGURAÇÕES DE ALERTAS
     with st.sidebar:
@@ -3655,17 +3648,7 @@ def main():
         
         st.markdown("----")
         
-        st.header("⚙️ Configurações do Sistema OTIMIZADO")
-        
-        # Mostrar thresholds otimizados
-        st.info(f"""
-        **Thresholds OTIMIZADOS:**
-        - Over 2.5: ≥{THRESHOLDS['over_25']*100}%
-        - Under 2.5: ≥{THRESHOLDS['under_25']*100}%
-        - Over 1.5: ≥{THRESHOLDS['over_15']*100}%
-        - Under 1.5: ≥{THRESHOLDS['under_15']*100}%
-        """)
-        
+        st.header("Configurações Gerais")
         top_n = st.selectbox("📊 Jogos no Top", [3, 5, 10], index=0)
         
         # Dois cursores para intervalo de confiança
@@ -3681,7 +3664,6 @@ def main():
         tipo_filtro = st.selectbox("🔍 Filtrar por Tipo", ["Todos", "Apenas Over", "Apenas Under"], index=0)
         
         st.markdown("----")
-        st.info(f"**SISTEMA OTIMIZADO v2.0 ATIVADO**")
         st.info(f"Intervalo de confiança: {min_conf}% a {max_conf}%")
         st.info(f"Filtro: {tipo_filtro}")
         st.info(f"Formato Top Jogos: {formato_top_jogos}")
@@ -3707,10 +3689,7 @@ def main():
         if not ligas_selecionadas:
             st.warning("⚠️ Selecione pelo menos uma liga")
         else:
-            st.info(f"📋 {len(ligas_selecionadas)} ligas selecionadas:")
-            for liga in ligas_selecionadas:
-                info = LIGA_DICT[liga]
-                st.write(f"  • {liga} - Perfil: {info['perfil']} - Over 2.5 rate: {info['over_25_rate']:.2f}")
+            st.info(f"📋 {len(ligas_selecionadas)} ligas selecionadas: {', '.join(ligas_selecionadas)}")
 
     # BOTÃO DE DEBUG
     if st.button("🐛 Debug Jogos (API)", type="secondary"):
@@ -3736,7 +3715,7 @@ def main():
             st.info("ℹ️ Nenhum conjunto completo para reportar.")
 
     # Processamento
-    if st.button("🔍 Buscar Partidas (SISTEMA OTIMIZADO)", type="primary"):
+    if st.button("🔍 Buscar Partidas", type="primary"):
         if not todas_ligas and not ligas_selecionadas:
             st.error("❌ Selecione pelo menos uma liga ou marque 'Todas as ligas'")
         else:
@@ -3817,7 +3796,7 @@ def main():
 
     # Painel desempenho
     st.markdown("---")
-    st.subheader("📊 Painel de Desempenho - SISTEMA OTIMIZADO")
+    st.subheader("📊 Painel de Desempenho")
     
     # Botão para calcular desempenho dos alertas TOP
     if st.button("📈 Calcular Desempenho Alertas TOP"):
@@ -3841,42 +3820,15 @@ def main():
     if st.button("🧹 Limpar Histórico"):
         limpar_historico()
 
-    # Adicionar informações do sistema otimizado
-    with st.expander("ℹ️ Sobre o Sistema OTIMIZADO v2.0"):
+    # Adicionar dicas de uso
+    with st.expander("💡 Dicas para evitar rate limit"):
         st.markdown("""
-        ## 🚀 SISTEMA OTIMIZADO v2.0
-        
-        **Principais Melhorias Implementadas:**
-        
-        1. **Thresholds Elevados:**
-           - Over 2.5: ≥68% (antes: 60%)
-           - Under 2.5: ≥65% (antes: 60%)
-           - Over 1.5: ≥65%
-           - Under 1.5: ≥70%
-        
-        2. **Ajuste por Perfil de Liga:**
-           - **Ligas Ofensivas** (+8% estimativa): Bundesliga, Eredivisie
-           - **Ligas Defensivas** (-8% estimativa): Série A Italiana, Brasileirão, Liga Portuguesa
-           - **Ligas Moderadas**: Premier League, La Liga
-        
-        3. **Sistema de Pontuação por Faixa de Gols:**
-           - Under 1.5: <1.5 gols
-           - Over 1.5 / Under 2.5: 1.5-2.5 gols  
-           - Over 2.5 / Under 3.5: 2.5-3.5 gols
-           - Over 3.5: >3.5 gols
-        
-        4. **Análise Multifatorial:**
-           - Estimativa de gols (40%)
-           - Perfil dos times (30%)
-           - Média da liga (20%)
-           - Confronto direto (10%)
-        
-        5. **Thresholds Dinâmicos:**
-           - Baseados no seu histórico de 60.9% de acerto
-           - Foco em reduzir falsos Over 2.5
-           - Maior seletividade geral
-        
-        **Objetivo:** Aumentar a taxa de acerto para 65%+ reduzindo os falsos positivos.
+        1. **Use o cache**: O sistema armazena dados por 1-24 horas
+        2. **Evite buscas frequentes**: Não atualize mais que 1x por minuto
+        3. **Use datas específicas**: Evite buscar intervalos muito grandes
+        4. **Monitore os limites**: Fique atento ao contador de requests
+        5. **Priorize ligas**: Analise uma liga por vez quando possível
+        6. **Use o filtro por confiança**: Reduz a quantidade de jogos analisados
         """)
 
 if __name__ == "__main__":
