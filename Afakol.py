@@ -1,5 +1,3 @@
-
-
 import streamlit as st
 import requests
 import numpy as np
@@ -201,7 +199,7 @@ class AnaliseSequenciaFalha:
         return jogos
 
 # =========================
-# NOVA CLASSE: AnaliseCiclos (Ciclo Dinâmico Real) - MODIFICADA
+# CLASSE: AnaliseCiclos (Ciclo Dinâmico Real) - MODIFICADA
 # =========================
 class AnaliseCiclos:
     """
@@ -310,172 +308,240 @@ class AnaliseCiclos:
     
     def gerar_5_cartoes_ciclo(self, n_cartoes=5, seed=None, incluir_todas_faltantes=False):
         """
-        Gera n_cartoes=5 cartoes de 15 dezenas priorizando:
+        Gera n_cartoes=5 cartoes de 15 dezenas garantindo que sejam DISTINTOS.
+        Prioridades:
         1) Dezenas faltantes (incluir todas nas primeiras combinações quando possível)
         2) Dezenas com maior atraso dentro do ciclo
-        3) Dezenas frequentes no ciclo (para balancear)
-        4) Equilíbrio pares/impares e primos
-        
-        Parâmetro novo: incluir_todas_faltantes - força a inclusão de todas as dezenas faltantes nos cartões
+        3) Diversidade entre os cartões
+        4) Equilíbrio pares/impares
         """
         if seed is not None:
             random.seed(seed)
         
         atraso = self.contar_atrasos_no_ciclo()
-        # listas ordenadas por prioridade
         faltantes = sorted(list(self.numeros_faltantes))
+        todas_dezenas = list(range(1, 26))
         
-        # Se o usuário quiser incluir todas as faltantes, distribuímos entre os cartões
+        # Ordenar números por atraso (maior atraso primeiro)
+        ordenado_por_atraso = sorted(todas_dezenas, key=lambda x: atraso[x], reverse=True)
+        
+        cartoes = []
+        tentativas_max = n_cartoes * 50  # Limite para evitar loop infinito
+        tentativas = 0
+        
+        # Se o usuário quiser incluir todas as faltantes
         if incluir_todas_faltantes and faltantes:
-            return self._gerar_cartoes_com_todas_faltantes(faltantes, n_cartoes, atraso)
+            # Estratégia 1: Distribuir todas as faltantes entre os cartões
+            return self._gerar_cartoes_distribuindo_faltantes(faltantes, n_cartoes, atraso)
         
-        # ordena por atraso decrescente (maior atraso primeiro) -> ou seja, mais "pedidos"
-        ordenado_por_atraso = sorted(list(self.TODAS), key=lambda x: atraso[x], reverse=True)
-        # frequência dentro do ciclo - para completar
-        freq = Counter()
-        for concurso in self.ciclo_concursos:
-            for n in concurso:
-                freq[n] += 1
-        ordenado_por_freq = sorted(list(self.TODAS), key=lambda x: freq.get(x,0), reverse=True)
-        
-        cartoes = []
-        base_universe = list(self.TODAS)
-        attempts = 0
-        
-        while len(cartoes) < n_cartoes and attempts < 500:
-            attempts += 1
-            card = set()
+        # Estratégia normal: garantir 5 cartões distintos
+        while len(cartoes) < n_cartoes and tentativas < tentativas_max:
+            tentativas += 1
+            cartao_set = set()
             
-            # incluir algumas faltantes sempre que existirem (distribuir entre os cartões)
+            # 1. Incluir algumas dezenas faltantes (30-40% do cartão)
             if faltantes:
-                # tentamos incluir uma porção das faltantes
-                take_falt = min(len(faltantes), random.randint(1, min(8, len(faltantes))))
-                escolhidas_falt = random.sample(faltantes, take_falt)
-                card.update(escolhidas_falt)
+                max_faltantes = min(len(faltantes), random.randint(4, 6))  # 4-6 faltantes
+                faltantes_escolhidas = random.sample(faltantes, max_faltantes)
+                cartao_set.update(faltantes_escolhidas)
             
-            # adicionar números de alto atraso
-            needed = 15 - len(card)
-            candidatos_atraso = [n for n in ordenado_por_atraso if n not in card]
-            if candidatos_atraso:
-                to_add = min(needed, max(0, int(needed * 0.6)))
-                escolha = random.sample(candidatos_atraso[:20], to_add) if len(candidatos_atraso[:20]) >= to_add else random.sample(candidatos_atraso, to_add)
-                card.update(escolha)
+            # 2. Adicionar números com maior atraso (não-faltantes)
+            # Filtrar números que não são faltantes e não estão no cartão
+            numeros_nao_faltantes = [n for n in ordenado_por_atraso if n not in faltantes]
+            numeros_disponiveis = [n for n in numeros_nao_faltantes if n not in cartao_set]
             
-            # completar por frequência
-            needed = 15 - len(card)
-            candidatos_freq = [n for n in ordenado_por_freq if n not in card]
-            if candidatos_freq:
-                choose_freq = random.sample(candidatos_freq[:20], min(needed, len(candidatos_freq[:20])))
-                card.update(choose_freq)
+            if numeros_disponiveis:
+                # Adicionar 4-6 números de alto atraso
+                qtd_atraso = random.randint(4, 6)
+                qtd_atraso = min(qtd_atraso, len(numeros_disponiveis))
+                if qtd_atraso > 0:
+                    atraso_escolhidos = random.sample(numeros_disponiveis[:15], qtd_atraso)
+                    cartao_set.update(atraso_escolhidos)
             
-            # se ainda faltar, completar aleatoriamente buscando equilíbrio par/impar
-            while len(card) < 15:
-                cand = random.choice(base_universe)
-                if cand not in card:
-                    card.add(cand)
+            # 3. Completar com números aleatórios (garantindo diversidade)
+            # Verificar quais cartões já foram gerados para evitar similaridade excessiva
+            numeros_restantes = [n for n in todas_dezenas if n not in cartao_set]
             
-            # checar paridade e primos; ajustar até obter equilíbrio mínimo
-            self._ajustar_equilibrio(card, base_universe)
+            while len(cartao_set) < 15 and numeros_restantes:
+                # Priorizar números que não apareceram muito nos cartões anteriores
+                if cartoes:
+                    # Contar frequência nos cartões existentes
+                    freq_cartoes = Counter()
+                    for c in cartoes:
+                        freq_cartoes.update(c)
+                    
+                    # Ordenar números restantes por menor frequência primeiro (para diversificar)
+                    numeros_restantes.sort(key=lambda x: freq_cartoes[x])
+                
+                # Escolher um número dos restantes
+                escolha = random.choice(numeros_restantes[:10]) if len(numeros_restantes) >= 10 else random.choice(numeros_restantes)
+                cartao_set.add(escolha)
+                numeros_restantes = [n for n in todas_dezenas if n not in cartao_set]
             
-            cartao_sorted = sorted(list(card))
-            if cartao_sorted not in cartoes:
-                cartoes.append(cartao_sorted)
+            # 4. Ajustar equilíbrio de pares/ímpares
+            self._ajustar_equilibrio(cartao_set, todas_dezenas)
+            
+            # 5. Converter para lista ordenada
+            cartao_ordenado = sorted(list(cartao_set))
+            
+            # 6. Verificar se é distinto dos cartões já gerados
+            if self._cartao_eh_distinto(cartao_ordenado, cartoes, limite_similaridade=10):
+                cartoes.append(cartao_ordenado)
         
-        # garantir que são n_cartoes cartoes distintos
+        # Se não conseguiu gerar cartões suficientes, completar com cartões aleatórios mas distintos
         while len(cartoes) < n_cartoes:
-            novo = sorted(random.sample(base_universe, 15))
-            if novo not in cartoes:
-                cartoes.append(novo)
+            cartao_novo = sorted(random.sample(todas_dezenas, 15))
+            
+            # Ajustar equilíbrio
+            pares = sum(1 for n in cartao_novo if n % 2 == 0)
+            if pares < 6 or pares > 9:
+                # Regerar até ter equilíbrio
+                cartao_novo = self._gerar_cartao_balanceado(todas_dezenas)
+            
+            if self._cartao_eh_distinto(cartao_novo, cartoes, limite_similaridade=10):
+                cartoes.append(cartao_novo)
         
-        return cartoes
+        return cartoes[:n_cartoes]
     
-    def _gerar_cartoes_com_todas_faltantes(self, faltantes, n_cartoes, atraso):
-        """Gera cartões garantindo que todas as dezenas faltantes sejam incluídas"""
-        base_universe = list(self.TODAS)
+    def _gerar_cartoes_distribuindo_faltantes(self, faltantes, n_cartoes, atraso):
+        """Estratégia especial quando queremos incluir todas as faltantes"""
+        todas_dezenas = list(range(1, 26))
+        ordenado_por_atraso = sorted(todas_dezenas, key=lambda x: atraso[x], reverse=True)
+        
         cartoes = []
         
-        # Ordenar por atraso
-        ordenado_por_atraso = sorted(list(self.TODAS), key=lambda x: atraso[x], reverse=True)
-        
-        # Se há muitas faltantes (>15), não podemos incluí-las todas em um único cartão
-        # Nesse caso, distribuímos entre os cartões
-        if len(faltantes) > 15:
-            # Distribuir as faltantes entre os cartões
+        # Se há 15 ou menos faltantes, podemos distribuir uniformemente
+        if len(faltantes) <= 15:
+            # Calcular quantas faltantes por cartão
+            faltantes_por_cartao = max(1, len(faltantes) // n_cartoes)
+            
             for i in range(n_cartoes):
-                card = set()
-                # Pegar uma parte das faltantes para este cartão
-                inicio = (i * len(faltantes)) // n_cartoes
-                fim = ((i + 1) * len(faltantes)) // n_cartoes
-                faltantes_para_cartao = faltantes[inicio:fim]
+                cartao_set = set()
                 
-                if faltantes_para_cartao:
-                    card.update(faltantes_para_cartao)
+                # Determinar quais faltantes este cartão recebe
+                inicio_idx = i * faltantes_por_cartao
+                fim_idx = inicio_idx + faltantes_por_cartao if i < n_cartoes - 1 else len(faltantes)
+                
+                if inicio_idx < len(faltantes):
+                    faltantes_do_cartao = faltantes[inicio_idx:fim_idx]
+                    cartao_set.update(faltantes_do_cartao)
                 
                 # Completar com números de alto atraso
-                needed = 15 - len(card)
-                candidatos_atraso = [n for n in ordenado_por_atraso if n not in card]
-                if candidatos_atraso and needed > 0:
-                    to_add = min(needed, len(candidatos_atraso))
-                    escolha = random.sample(candidatos_atraso[:max(10, to_add)], to_add)
-                    card.update(escolha)
+                numeros_nao_faltantes = [n for n in ordenado_por_atraso if n not in faltantes]
+                numeros_disponiveis = [n for n in numeros_nao_faltantes if n not in cartao_set]
                 
-                # Completar se necessário
-                while len(card) < 15:
-                    cand = random.choice([n for n in base_universe if n not in card])
-                    card.add(cand)
+                qtd_necessaria = 15 - len(cartao_set)
+                if numeros_disponiveis and qtd_necessaria > 0:
+                    qtd_escolher = min(qtd_necessaria, len(numeros_disponiveis))
+                    complemento = random.sample(numeros_disponiveis[:20], qtd_escolher)
+                    cartao_set.update(complemento)
                 
-                self._ajustar_equilibrio(card, base_universe)
-                cartoes.append(sorted(list(card)))
-        else:
-            # Se há 15 ou menos faltantes, podemos incluí-las todas no primeiro cartão
-            # e distribuir nos demais
-            for i in range(n_cartoes):
-                card = set()
+                # Completar se ainda faltar
+                while len(cartao_set) < 15:
+                    candidatos = [n for n in todas_dezenas if n not in cartao_set]
+                    if candidatos:
+                        cartao_set.add(random.choice(candidatos))
                 
-                if i == 0:
-                    # Primeiro cartão inclui todas as faltantes
-                    card.update(faltantes)
-                else:
-                    # Outros cartões incluem algumas faltantes
-                    if faltantes:
-                        take_falt = min(len(faltantes), random.randint(1, len(faltantes)//2))
-                        escolhidas_falt = random.sample(faltantes, take_falt)
-                        card.update(escolhidas_falt)
-                
-                # Completar
-                needed = 15 - len(card)
-                if needed > 0:
-                    candidatos_atraso = [n for n in ordenado_por_atraso if n not in card]
-                    if candidatos_atraso:
-                        to_add = min(needed, len(candidatos_atraso))
-                        escolha = random.sample(candidatos_atraso[:max(10, to_add)], to_add)
-                        card.update(escolha)
-                
-                while len(card) < 15:
-                    cand = random.choice([n for n in base_universe if n not in card])
-                    card.add(cand)
-                
-                self._ajustar_equilibrio(card, base_universe)
-                cartoes.append(sorted(list(card)))
+                # Ajustar equilíbrio
+                self._ajustar_equilibrio(cartao_set, todas_dezenas)
+                cartoes.append(sorted(list(cartao_set)))
         
-        return cartoes
+        else:
+            # Mais de 15 faltantes: cada cartão foca em um subconjunto diferente
+            for i in range(n_cartoes):
+                cartao_set = set()
+                
+                # Escolher 6-8 faltantes diferentes para cada cartão
+                qtd_faltantes = random.randint(6, 8)
+                faltantes_escolhidas = random.sample(faltantes, qtd_faltantes)
+                cartao_set.update(faltantes_escolhidas)
+                
+                # Completar com outros números
+                while len(cartao_set) < 15:
+                    # Misturar: alguns de alto atraso, alguns aleatórios
+                    if random.random() < 0.7 and len(cartao_set) < 12:
+                        # Adicionar número de alto atraso
+                        numeros_alto_atraso = [n for n in ordenado_por_atraso[:15] if n not in cartao_set]
+                        if numeros_alto_atraso:
+                            cartao_set.add(random.choice(numeros_alto_atraso[:5]))
+                    else:
+                        # Adicionar número aleatório
+                        candidatos = [n for n in todas_dezenas if n not in cartao_set]
+                        if candidatos:
+                            cartao_set.add(random.choice(candidatos))
+                
+                # Ajustar equilíbrio
+                self._ajustar_equilibrio(cartao_set, todas_dezenas)
+                cartao_ordenado = sorted(list(cartao_set))
+                
+                # Garantir que não é muito similar aos anteriores
+                if self._cartao_eh_distinto(cartao_ordenado, cartoes, limite_similaridade=9):
+                    cartoes.append(cartao_ordenado)
+        
+        # Garantir exatamente n_cartoes distintos
+        cartoes_distintos = []
+        for cartao in cartoes:
+            if self._cartao_eh_distinto(cartao, cartoes_distintos, limite_similaridade=10):
+                cartoes_distintos.append(cartao)
+        
+        while len(cartoes_distintos) < n_cartoes:
+            cartao_novo = self._gerar_cartao_balanceado(todas_dezenas)
+            if self._cartao_eh_distinto(cartao_novo, cartoes_distintos, limite_similaridade=10):
+                cartoes_distintos.append(cartao_novo)
+        
+        return cartoes_distintos[:n_cartoes]
     
-    def _ajustar_equilibrio(self, card, base_universe):
+    def _cartao_eh_distinto(self, cartao_novo, cartoes_existentes, limite_similaridade=10):
+        """
+        Verifica se um cartão é suficientemente distinto dos cartões existentes.
+        limite_similaridade: número máximo de dezenas em comum para considerar distinto.
+        """
+        if not cartoes_existentes:
+            return True
+        
+        for cartao_existente in cartoes_existentes:
+            # Contar quantas dezenas em comum
+            dezenas_comuns = len(set(cartao_novo) & set(cartao_existente))
+            
+            # Se tiver mais de 'limite_similaridade' dezenas em comum, não é suficientemente distinto
+            if dezenas_comuns > limite_similaridade:
+                return False
+        
+        return True
+    
+    def _gerar_cartao_balanceado(self, todas_dezenas):
+        """Gera um cartão balanceado com equilíbrio de pares/ímpares"""
+        while True:
+            cartao = sorted(random.sample(todas_dezenas, 15))
+            pares = sum(1 for n in cartao if n % 2 == 0)
+            primos = sum(1 for n in cartao if n in {2,3,5,7,11,13,17,19,23})
+            
+            # Critérios de balanceamento para Lotofácil
+            if 6 <= pares <= 9 and 3 <= primos <= 7:
+                return cartao
+    
+    def _ajustar_equilibrio(self, cartao_set, todas_dezenas):
         """Ajusta o equilíbrio de pares/ímpares no cartão"""
-        pares = sum(1 for n in card if n%2==0)
+        pares = sum(1 for n in cartao_set if n % 2 == 0)
+        
+        # Balancear para ter entre 6 e 9 pares (ideal para Lotofácil)
         if pares < 6:
-            # trocar um ímpar por um par disponível
-            poss_pares = [n for n in base_universe if n%2==0 and n not in card]
-            poss_impares = [n for n in card if n%2==1]
-            if poss_pares and poss_impares:
-                card.remove(random.choice(poss_impares))
-                card.add(random.choice(poss_pares))
-        elif pares > 10:
-            poss_impares = [n for n in base_universe if n%2==1 and n not in card]
-            poss_pares_in = [n for n in card if n%2==0]
-            if poss_impares and poss_pares_in:
-                card.remove(random.choice(poss_pares_in))
-                card.add(random.choice(poss_impares))
+            # Trocar um ímpar por um par
+            impares_no_cartao = [n for n in cartao_set if n % 2 == 1]
+            pares_fora_cartao = [n for n in todas_dezenas if n % 2 == 0 and n not in cartao_set]
+            
+            if impares_no_cartao and pares_fora_cartao:
+                cartao_set.remove(random.choice(impares_no_cartao))
+                cartao_set.add(random.choice(pares_fora_cartao))
+        
+        elif pares > 9:
+            # Trocar um par por um ímpar
+            pares_no_cartao = [n for n in cartao_set if n % 2 == 0]
+            impares_fora_cartao = [n for n in todas_dezenas if n % 2 == 1 and n not in cartao_set]
+            
+            if pares_no_cartao and impares_fora_cartao:
+                cartao_set.remove(random.choice(pares_no_cartao))
+                cartao_set.add(random.choice(impares_fora_cartao))
     
     def obter_concursos_no_ciclo_formatados(self):
         """Retorna uma lista formatada dos concursos analisados no ciclo"""
@@ -974,10 +1040,6 @@ class LotoFacilIA:
 
 # =========================
 # ESTRATÉGIA FIBONACCI
-# =========================
-
-# =========================
-# ESTRATÉGIA FIBONACCI - CORRIGIDA
 # =========================
 class EstrategiaFibonacci:
     def __init__(self, concursos):
@@ -2181,6 +2243,29 @@ if st.session_state.concursos:
             # Mostrar cartões gerados
             if st.session_state.cartoes_ciclos:
                 st.subheader("📋 Cartões Gerados (Priorizando Dezenas do Ciclo)")
+                
+                # Verificar se os cartões são distintos
+                cartoes_unicos = []
+                cartoes_vistos = set()
+                
+                for cartao in st.session_state.cartoes_ciclos:
+                    cartao_tupla = tuple(cartao)
+                    if cartao_tupla not in cartoes_vistos:
+                        cartoes_vistos.add(cartao_tupla)
+                        cartoes_unicos.append(cartao)
+                
+                if len(cartoes_unicos) < len(st.session_state.cartoes_ciclos):
+                    st.warning(f"⚠️ {len(st.session_state.cartoes_ciclos) - len(cartoes_unicos)} cartões duplicados foram removidos.")
+                    st.session_state.cartoes_ciclos = cartoes_unicos
+                
+                # Se ainda não tem 5 cartões distintos, completar
+                while len(st.session_state.cartoes_ciclos) < 5:
+                    novo_cartao = sorted(random.sample(range(1, 26), 15))
+                    if tuple(novo_cartao) not in cartoes_vistos:
+                        cartoes_vistos.add(tuple(novo_cartao))
+                        st.session_state.cartoes_ciclos.append(novo_cartao)
+                
+                st.success(f"✅ Gerados {len(st.session_state.cartoes_ciclos)} cartões distintos!")
                 
                 if incluir_todas_faltantes and resumo["numeros_faltantes"]:
                     st.info(f"✅ Configuração ativa: Incluindo todas as {len(resumo['numeros_faltantes'])} dezenas faltantes nos cartões.")
