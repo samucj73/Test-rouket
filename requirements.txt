@@ -21,3 +21,6 @@ httpx
 pillow
 cairosvg
 feedparser
+python-nmap>=0.7.1
+netifaces>=0.11.0
+ipaddress>=1.0.23
