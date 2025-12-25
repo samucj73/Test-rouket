@@ -1,3 +1,4 @@
+
 import streamlit as st
 import requests
 import numpy as np
@@ -7,6 +8,8 @@ from collections import Counter
 from catboost import CatBoostClassifier
 import json
 import io
+import math
+from itertools import combinations
 
 st.set_page_config(page_title="Lotofácil Inteligente", layout="centered")
 
@@ -77,6 +80,210 @@ def capturar_ultimos_resultados(qtd=250):
     except Exception as e:
         st.error(f"Erro ao acessar API: {type(e).__name__}: {e}")
         return [], None
+
+# =========================
+# NOVA CLASSE: FechamentoLotofacil
+# =========================
+class FechamentoLotofacil:
+    def __init__(self, concursos=None):
+        self.numeros = list(range(1, 26))
+        self.concursos = concursos or []
+        self.primos = {2, 3, 5, 7, 11, 13, 17, 19, 23}
+    
+    def analisar_grupos_otimos(self, tamanho_grupo=18, analise_concursos=30):
+        """Analisa estatísticas para sugerir grupos ótimos para fechamento"""
+        if not self.concursos or len(self.concursos) < 10:
+            return []
+        
+        analise_concursos = min(analise_concursos, len(self.concursos))
+        concursos_recentes = self.concursos[:analise_concursos]
+        
+        # Calcular frequências
+        freq = Counter()
+        for concurso in concursos_recentes:
+            for num in concurso:
+                freq[num] += 1
+        
+        # Ordenar por frequência
+        numeros_ordenados = sorted(freq.items(), key=lambda x: x[1], reverse=True)
+        
+        # Sugerir grupos: 60% dos mais frequentes + 40% com maior atraso
+        top_frequentes = [n for n, _ in numeros_ordenados[:15]]
+        
+        # Calcular atraso
+        atraso = {}
+        for num in self.numeros:
+            atraso[num] = analise_concursos
+            for i, concurso in enumerate(concursos_recentes):
+                if num in concurso:
+                    atraso[num] = i
+                    break
+        
+        maiores_atrasos = sorted(atraso.items(), key=lambda x: x[1], reverse=True)[:10]
+        top_atrasados = [n for n, _ in maiores_atrasos]
+        
+        # Combinar grupos
+        grupos_sugeridos = []
+        
+        # Grupo 1: Balanceado (frequentes + atrasados)
+        grupo1 = list(set(top_frequentes[:10] + top_atrasados[:8]))
+        if len(grupo1) < tamanho_grupo:
+            # Completar com números restantes
+            restantes = [n for n in self.numeros if n not in grupo1]
+            grupo1.extend(random.sample(restantes, tamanho_grupo - len(grupo1)))
+        grupos_sugeridos.append(sorted(grupo1[:tamanho_grupo]))
+        
+        # Grupo 2: Focado em Fibonacci
+        fibonacci = [1, 2, 3, 5, 8, 13, 21]
+        grupo2 = fibonacci.copy()
+        # Adicionar números complementares baseados em frequência
+        complementares = [n for n in top_frequentes if n not in grupo2]
+        grupo2.extend(complementares[:tamanho_grupo - len(grupo2)])
+        grupos_sugeridos.append(sorted(grupo2[:tamanho_grupo]))
+        
+        return grupos_sugeridos
+    
+    def gerar_fechamento_18_15(self, numeros_escolhidos, max_jogos=80, estrategia="cobertura"):
+        """
+        Fechamento de 18 números, gerando combinações otimizadas de 15.
+        - 'numeros_escolhidos': lista de 18 números escolhidos pelo usuário ou pela IA.
+        - 'max_jogos': limite de combinações a gerar.
+        - 'estrategia': 'cobertura' ou 'estatistica'
+        """
+        if len(numeros_escolhidos) != 18:
+            st.warning(f"Fechamento precisa de exatamente 18 números. Recebidos: {len(numeros_escolhidos)}")
+            return []
+        
+        jogos = set()
+        
+        if estrategia == "cobertura":
+            # Estratégia de cobertura sistemática
+            # Garantir que cada número apareça em aproximadamente X jogos
+            for i in range(max_jogos * 2):
+                # Selecionar base fixa de 12 números com bom histórico
+                base_fixa = random.sample(numeros_escolhidos, 12)
+                
+                # Completar com 3 números variáveis
+                complemento = random.sample([n for n in numeros_escolhidos if n not in base_fixa], 3)
+                
+                jogo = sorted(base_fixa + complemento)
+                
+                # Validar estatísticas do jogo
+                if self._validar_jogo_fechamento(jogo):
+                    jogos.add(tuple(jogo))
+                
+                if len(jogos) >= max_jogos:
+                    break
+        
+        elif estrategia == "estatistica":
+            # Estratégia baseada em estatísticas dos últimos concursos
+            if len(self.concursos) >= 10:
+                # Analisar padrões dos últimos concursos
+                for _ in range(max_jogos * 3):
+                    # Priorizar números que seguem padrões recentes
+                    jogo = self._gerar_jogo_estatistico(numeros_escolhidos)
+                    
+                    if jogo and self._validar_jogo_fechamento(jogo):
+                        jogos.add(tuple(jogo))
+                    
+                    if len(jogos) >= max_jogos:
+                        break
+        
+        # Se não gerou jogos suficientes, completar com combinações aleatórias válidas
+        while len(jogos) < min(max_jogos, 50):
+            jogo = sorted(random.sample(numeros_escolhidos, 15))
+            if self._validar_jogo_fechamento(jogo):
+                jogos.add(tuple(jogo))
+        
+        return [list(j) for j in jogos][:max_jogos]
+    
+    def _validar_jogo_fechamento(self, jogo):
+        """Valida um jogo para fechamento com critérios rigorosos"""
+        if len(jogo) != 15 or len(set(jogo)) != 15:
+            return False
+        
+        pares = sum(1 for n in jogo if n % 2 == 0)
+        if not (6 <= pares <= 9):
+            return False
+        
+        primos = sum(1 for n in jogo if n in self.primos)
+        if not (3 <= primos <= 7):
+            return False
+        
+        soma = sum(jogo)
+        if not (170 <= soma <= 210):
+            return False
+        
+        # Verificar distribuição por faixas
+        faixa1 = sum(1 for n in jogo if 1 <= n <= 8)    # Baixos
+        faixa2 = sum(1 for n in jogo if 9 <= n <= 16)   # Médios
+        faixa3 = sum(1 for n in jogo if 17 <= n <= 25)  # Altos
+        
+        if not (4 <= faixa1 <= 7 and 4 <= faixa2 <= 7 and 4 <= faixa3 <= 7):
+            return False
+        
+        return True
+    
+    def _gerar_jogo_estatistico(self, numeros_disponiveis):
+        """Gera jogo baseado em estatísticas dos últimos concursos"""
+        if len(self.concursos) < 10:
+            return sorted(random.sample(numeros_disponiveis, 15))
+        
+        # Analisar últimos 10 concursos
+        ultimos_10 = self.concursos[:10]
+        
+        # Calcular padrões de pares/ímpares
+        pares_historico = []
+        for concurso in ultimos_10:
+            pares_historico.append(sum(1 for n in concurso if n % 2 == 0))
+        
+        media_pares = int(np.mean(pares_historico))
+        pares_alvo = max(6, min(9, media_pares))
+        
+        # Gerar jogo seguindo padrões
+        tentativas = 0
+        while tentativas < 100:
+            jogo = sorted(random.sample(numeros_disponiveis, 15))
+            pares = sum(1 for n in jogo if n % 2 == 0)
+            
+            if pares == pares_alvo and self._validar_jogo_fechamento(jogo):
+                return jogo
+            
+            tentativas += 1
+        
+        return None
+    
+    def calcular_cobertura_teorica(self, numeros_escolhidos, jogos_gerados):
+        """Calcula cobertura teórica dos jogos gerados"""
+        if not jogos_gerados:
+            return {"cobertura": 0, "numeros_cobertura": {}}
+        
+        # Contar quantas vezes cada número aparece
+        contagem_numeros = Counter()
+        for jogo in jogos_gerados:
+            contagem_numeros.update(jogo)
+        
+        # Calcular estatísticas de cobertura
+        total_numeros = len(numeros_escolhidos)
+        cobertura_por_numero = {}
+        
+        for num in numeros_escolhidos:
+            freq = contagem_numeros.get(num, 0)
+            percentual = (freq / len(jogos_gerados)) * 100
+            cobertura_por_numero[num] = {
+                "frequencia": freq,
+                "percentual": round(percentual, 1)
+            }
+        
+        # Cobertura média
+        cobertura_media = np.mean([cobertura_por_numero[n]["percentual"] for n in numeros_escolhidos])
+        
+        return {
+            "cobertura_media": round(cobertura_media, 1),
+            "cobertura_por_numero": cobertura_por_numero,
+            "total_jogos": len(jogos_gerados),
+            "total_numeros_cobertos": total_numeros
+        }
 
 # =========================
 # NOVA FUNÇÃO: Análise de Sequência e Falha (Método da Tabela Lotofácil)
@@ -199,6 +406,125 @@ class AnaliseSequenciaFalha:
         return jogos
 
 # =========================
+# NOVA FUNÇÃO: Análise Estatística Avançada
+# =========================
+class AnaliseEstatisticaAvancada:
+    def __init__(self, concursos):
+        self.concursos = concursos
+        self.numeros = list(range(1, 26))
+        self.primos = {2, 3, 5, 7, 11, 13, 17, 19, 23}
+    
+    def enriquecer_features(self, concursos_recentes):
+        """Adiciona novos padrões estatísticos aos dados de treinamento."""
+        if len(concursos_recentes) < 2:
+            return np.array([])
+        
+        features_avancados = []
+        
+        for i in range(len(concursos_recentes)-1):
+            feat = []
+            concurso_atual = concursos_recentes[i]
+            
+            # 1. Distribuição por quadrantes
+            q1 = sum(1 for n in concurso_atual if 1 <= n <= 6)   # Quadrante 1
+            q2 = sum(1 for n in concurso_atual if 7 <= n <= 13)  # Quadrante 2
+            q3 = sum(1 for n in concurso_atual if 14 <= n <= 19) # Quadrante 3
+            q4 = sum(1 for n in concurso_atual if 20 <= n <= 25) # Quadrante 4
+            
+            feat.extend([q1, q2, q3, q4])
+            
+            # 2. Números das pontas (1, 5, 21, 25)
+            pontas = sum(1 for n in concurso_atual if n in [1, 5, 21, 25])
+            feat.append(pontas)
+            
+            # 3. Consecutivos máximos
+            max_consec = self._max_consecutivos(concurso_atual)
+            feat.append(max_consec)
+            
+            # 4. Distância média entre números
+            distancia_media = self._distancia_media(concurso_atual)
+            feat.append(distancia_media)
+            
+            # 5. Variação do concurso anterior (se disponível)
+            if i > 0:
+                concurso_anterior = concursos_recentes[i-1]
+                repetidos = len(set(concurso_atual) & set(concurso_anterior))
+                feat.append(repetidos)
+            else:
+                feat.append(0)
+            
+            features_avancados.append(feat)
+        
+        return np.array(features_avancados)
+    
+    def _max_consecutivos(self, concurso):
+        """Calcula o máximo de números consecutivos no concurso."""
+        sorted_nums = sorted(concurso)
+        max_seq = 1
+        current_seq = 1
+        
+        for i in range(1, len(sorted_nums)):
+            if sorted_nums[i] == sorted_nums[i-1] + 1:
+                current_seq += 1
+                max_seq = max(max_seq, current_seq)
+            else:
+                current_seq = 1
+        
+        return max_seq
+    
+    def _distancia_media(self, concurso):
+        """Calcula a distância média entre números sorteados."""
+        sorted_nums = sorted(concurso)
+        if len(sorted_nums) <= 1:
+            return 0
+        
+        distancias = [sorted_nums[i+1] - sorted_nums[i] for i in range(len(sorted_nums)-1)]
+        return np.mean(distancias)
+    
+    def analisar_padroes_sazonais(self, janela=30):
+        """Analisa padrões sazonais nos concursos."""
+        if len(self.concursos) < janela:
+            return {}
+        
+        concursos_janela = self.concursos[:janela]
+        
+        # Padrões por dia da semana (se tiver datas)
+        padroes = {
+            "media_pares": [],
+            "media_primos": [],
+            "media_soma": [],
+            "numeros_quentes_janela": [],
+            "numeros_frios_janela": []
+        }
+        
+        for concurso in concursos_janela:
+            pares = sum(1 for n in concurso if n % 2 == 0)
+            primos = sum(1 for n in concurso if n in self.primos)
+            soma = sum(concurso)
+            
+            padroes["media_pares"].append(pares)
+            padroes["media_primos"].append(primos)
+            padroes["media_soma"].append(soma)
+        
+        # Calcular números quentes e frios na janela
+        freq = Counter()
+        for concurso in concursos_janela:
+            freq.update(concurso)
+        
+        quentes = sorted(freq.items(), key=lambda x: x[1], reverse=True)[:10]
+        frios = sorted(freq.items(), key=lambda x: x[1])[:10]
+        
+        padroes["numeros_quentes_janela"] = [n for n, _ in quentes]
+        padroes["numeros_frios_janela"] = [n for n, _ in frios]
+        
+        # Calcular médias
+        padroes["media_pares_final"] = np.mean(padroes["media_pares"])
+        padroes["media_primos_final"] = np.mean(padroes["media_primos"])
+        padroes["media_soma_final"] = np.mean(padroes["media_soma"])
+        
+        return padroes
+
+# =========================
 # CLASSE: AnaliseCiclos (Ciclo Dinâmico Real) - MODIFICADA
 # =========================
 class AnaliseCiclos:
@@ -235,6 +561,10 @@ class AnaliseCiclos:
         max_concursos = len(self.concursos)
         if self.limite_concursos is not None:
             max_concursos = min(self.limite_concursos, len(self.concursos))
+        
+        # Ajustar mínimo para 10 concursos
+        if max_concursos < 10:
+            max_concursos = min(10, len(self.concursos))
         
         # percorre do mais recente (0) para o mais antigo
         for idx, concurso in enumerate(self.concursos[:max_concursos]):
@@ -820,7 +1150,7 @@ class LotoFacilIA:
         self.numeros = list(range(1,26))
         self.primos = {2,3,5,7,11,13,17,19,23}
         self.models = {}
-        if len(concursos) > 1:
+        if len(concursos) > 10:  # Ajustado para mínimo de 10 concursos
             self.X = self.gerar_features()[:-1] if len(concursos) > 1 else np.array([])
             self.Y = self.matriz_binaria()[1:] if len(concursos) > 1 else np.array([])
             if len(self.X) > 0 and len(self.Y) > 0:
@@ -836,6 +1166,8 @@ class LotoFacilIA:
 
     def frequencia(self, janela=10):
         janela = min(janela, max(1, len(self.concursos)-1))
+        if janela < 10:  # Garantir mínimo de 10 concursos
+            janela = min(10, len(self.concursos))
         freq = {n:0 for n in self.numeros}
         # considerar os concursos mais recentes (índice 0 é mais recente)
         if len(self.concursos) <= 1:
@@ -880,6 +1212,8 @@ class LotoFacilIA:
 
     def interacoes(self, janela=50):
         janela = min(janela, max(1, len(self.concursos)-1))
+        if janela < 10:
+            janela = min(10, len(self.concursos))
         matriz = np.zeros((25,25), dtype=int)
         # usar concursos mais recentes: índices 0..janela-1
         for jogo in self.concursos[0:janela]:
@@ -911,9 +1245,9 @@ class LotoFacilIA:
 
     def gerar_features(self):
         features = []
-        if len(self.concursos) < 2:
+        if len(self.concursos) < 10:  # Ajustado para mínimo de 10
             return np.array([])
-        freq = self.frequencia(janela=len(self.concursos)-1)
+        freq = self.frequencia(janela=min(50, len(self.concursos)-1))
         gaps = self.gap_medio()
         for jogo in self.concursos:
             f = []
@@ -927,6 +1261,8 @@ class LotoFacilIA:
         return np.array(features)
 
     def treinar_modelos(self):
+        if len(self.concursos) < 10:  # Ajustado para mínimo de 10
+            return
         for i, n in enumerate(self.numeros):
             try:
                 model = CatBoostClassifier(iterations=600, verbose=0, random_state=42)
@@ -939,7 +1275,7 @@ class LotoFacilIA:
     def prever_proximo(self):
         if not self.models:
             # fallback: usar frequencias normalizadas
-            freq = self.frequencia(janela=50)
+            freq = self.frequencia(janela=min(50, len(self.concursos)))
             maxf = max(freq.values()) if freq else 1
             probs = {n: (freq.get(n,0)/maxf if maxf>0 else 0.5) for n in self.numeros}
             return probs
@@ -993,7 +1329,8 @@ class LotoFacilIA:
                 return cartao
 
     def gerar_cartoes_por_padroes(self, n_jogos=5, janela=10):
-        janela = min(janela, len(self.concursos))
+        if janela < 10:
+            janela = min(10, len(self.concursos))
         ultimos = self.concursos[0:janela]
         freq = {n:0 for n in self.numeros}
         for jogo in ultimos:
@@ -1052,8 +1389,10 @@ class EstrategiaFibonacci:
         if not self.concursos:
             return {}
             
-        # Analisar últimos 50 concursos (ou menos se não houver)
+        # Analisar últimos concursos (mínimo 10)
         janela = min(50, len(self.concursos))
+        if janela < 10:
+            janela = min(10, len(self.concursos))
         concursos_recentes = self.concursos[:janela]
         
         # Estatísticas das dezenas Fibonacci
@@ -1119,6 +1458,8 @@ class EstrategiaFibonacci:
             if usar_estatisticas and self.concursos:
                 # Calcular frequência dos não-Fibonacci nos últimos concursos
                 janela = min(30, len(self.concursos))
+                if janela < 10:
+                    janela = min(10, len(self.concursos))
                 freq_nao_fib = Counter()
                 for concurso in self.concursos[:janela]:
                     for num in concurso:
@@ -1244,6 +1585,8 @@ class EstrategiaFibonacci:
                 
                 # Calcular frequência dos não-Fibonacci
                 janela = min(30, len(self.concursos))
+                if janela < 10:
+                    janela = min(10, len(self.concursos))
                 freq_nao_fib = Counter()
                 for concurso in self.concursos[:janela]:
                     for num in concurso:
@@ -1341,6 +1684,8 @@ class EstrategiaFibonacci:
                 
                 # Calcular frequência e atraso
                 janela = min(30, len(self.concursos))
+                if janela < 10:
+                    janela = min(10, len(self.concursos))
                 freq_nao_fib = Counter()
                 atraso_nao_fib = {}
                 
@@ -1476,11 +1821,18 @@ def carregar_estado():
     if "concursos_info" not in st.session_state:
         st.session_state.concursos_info = {}
     if "limite_ciclos" not in st.session_state:
-        st.session_state.limite_ciclos = None  # Novo: limite de concursos para análise de ciclos
+        st.session_state.limite_ciclos = None
     if "cartoes_fibonacci" not in st.session_state:
         st.session_state.cartoes_fibonacci = []
     if "relatorio_fibonacci" not in st.session_state:
         st.session_state.relatorio_fibonacci = None
+    # NOVOS: Fechamento
+    if "fechamento_gerado" not in st.session_state:
+        st.session_state.fechamento_gerado = []
+    if "grupos_fechamento" not in st.session_state:
+        st.session_state.grupos_fechamento = []
+    if "analise_estatistica_avancada" not in st.session_state:
+        st.session_state.analise_estatistica_avancada = None
 
 st.markdown("<h1 style='text-align: center;'>Lotofácil Inteligente</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center;'>SAMUCJ TECHNOLOGY</p>", unsafe_allow_html=True)
@@ -1527,11 +1879,18 @@ with st.expander("📥 Capturar Concursos"):
                 st.session_state.limite_ciclos = None
                 st.session_state.cartoes_fibonacci = []
                 st.session_state.relatorio_fibonacci = None
+                st.session_state.fechamento_gerado = []
+                st.session_state.grupos_fechamento = []
+                st.session_state.analise_estatistica_avancada = None
             else:
                 st.error("Não foi possível capturar concursos.")
 
 # --- Abas principais ---
 if st.session_state.concursos:
+    # Verificar se tem pelo menos 10 concursos
+    if len(st.session_state.concursos) < 10:
+        st.warning("⚠️ São necessários pelo menos 10 concursos para análises precisas. Capture mais concursos.")
+    
     # Inicializar todas as análises
     ia = LotoFacilIA(st.session_state.concursos)
     probs = ia.prever_proximo()
@@ -1542,7 +1901,13 @@ if st.session_state.concursos:
     # Inicializar análise de sequência/falha
     analise_sf = AnaliseSequenciaFalha(st.session_state.concursos)
     
-    # Abas
+    # Inicializar análise estatística avançada
+    analise_estatistica = AnaliseEstatisticaAvancada(st.session_state.concursos)
+    
+    # Inicializar fechamento
+    fechamento = FechamentoLotofacil(st.session_state.concursos)
+    
+    # Abas atualizadas com nova aba de fechamento
     abas = st.tabs([
         "📊 Estatísticas", 
         "🧠 Gerar Cartões IA", 
@@ -1551,6 +1916,7 @@ if st.session_state.concursos:
         "🧩 Gerar Cartões por Padrões",
         "📐 Padrões Linha×Coluna",
         "🎯 Estratégia Fibonacci",
+        "🎲 Fechamentos Matemáticos",  # NOVA ABA
         "✅ Conferência", 
         "📤 Conferir Arquivo TXT",
         "🔁 Ciclos da Lotofácil"
@@ -1565,7 +1931,7 @@ if st.session_state.concursos:
         
         col1, col2 = st.columns(2)
         with col1:
-            st.write("**Frequência últimos 50 concursos:**")
+            st.write("**Frequência últimos concursos:**")
             freq = ia.frequencia()
             freq_df = pd.DataFrame(list(freq.items()), columns=["Número", "Frequência"])
             freq_df = freq_df.sort_values("Frequência", ascending=False)
@@ -1581,9 +1947,12 @@ if st.session_state.concursos:
     # Aba 2 - Gerar Cartões IA
     with abas[1]:
         st.subheader("🧠 Geração de Cartões por Inteligência Artificial")
-        if st.button("🚀 Gerar 5 Cartões com IA"):
-            st.session_state.cartoes_gerados = jogos_gerados
-            st.success("5 Cartões gerados com sucesso pela IA!")
+        if len(st.session_state.concursos) >= 10:
+            if st.button("🚀 Gerar 5 Cartões com IA"):
+                st.session_state.cartoes_gerados = jogos_gerados
+                st.success("5 Cartões gerados com sucesso pela IA!")
+        else:
+            st.warning("São necessários pelo menos 10 concursos para gerar cartões com IA")
         
         if st.session_state.cartoes_gerados:
             st.write("### 📋 Cartões Gerados")
@@ -1768,7 +2137,7 @@ if st.session_state.concursos:
     # Aba 5 - Gerar Cartões por Padrões
     with abas[4]:
         st.subheader("🧩 Geração de Cartões com Base em Padrões")
-        janela_padrao = st.slider("Janela (nº de concursos recentes)", 5, 100, 10, 5)
+        janela_padrao = st.slider("Janela (nº de concursos recentes)", 10, 100, 20, 5)
         if st.button("🚀 Gerar 5 Cartões por Padrões"):
             cartoes_padrao = ia.gerar_cartoes_por_padroes(n_jogos=5, janela=janela_padrao)
             st.session_state.cartoes_gerados_padrao = cartoes_padrao
@@ -1792,7 +2161,7 @@ if st.session_state.concursos:
             
             janela_lc = st.slider(
                 "Concursos a considerar (mais recentes)", 
-                min_value=20, 
+                min_value=10,  # Ajustado para mínimo 10
                 max_value=max_concursos, 
                 value=valor_padrao, 
                 step=10
@@ -1862,7 +2231,7 @@ if st.session_state.concursos:
             for num in estrategia_fib.fibonacci:
                 dados_tabela.append({
                     "Número": num,
-                    "Frequência (últimos 50)": relatorio['frequencia_individual'].get(num, 0),
+                    "Frequência (últimos concursos)": relatorio['frequencia_individual'].get(num, 0),
                     "Atraso (concursos)": relatorio['atraso_individual'].get(num, 0),
                     "Status": "🔥 Quente" if relatorio['frequencia_individual'].get(num, 0) > 10 else 
                              "⚠️ Média" if relatorio['frequencia_individual'].get(num, 0) > 5 else 
@@ -1985,8 +2354,204 @@ if st.session_state.concursos:
             - Cartões únicos e balanceados
             """)
 
-    # Aba 8 - Conferência
+    # Aba 8 - Fechamentos Matemáticos (NOVA ABA)
     with abas[7]:
+        st.subheader("🎲 Fechamentos Matemáticos - Desdobramentos")
+        st.write("Gere múltiplos cartões a partir de um grupo maior de números (ex: 18 números) para aumentar a cobertura e garantia de acertos.")
+        
+        if len(st.session_state.concursos) < 10:
+            st.warning("⚠️ São necessários pelo menos 10 concursos para análises precisas de fechamento.")
+        
+        col_config1, col_config2 = st.columns(2)
+        
+        with col_config1:
+            st.markdown("### ⚙️ Configuração do Fechamento")
+            
+            # Opção: usar grupos sugeridos ou personalizados
+            modo_grupo = st.radio(
+                "Selecione o modo de escolha dos números:",
+                ["Usar grupos sugeridos pela IA", "Inserir números manualmente"]
+            )
+            
+            tamanho_grupo = st.slider(
+                "Tamanho do grupo de números para fechamento:",
+                min_value=16,
+                max_value=20,
+                value=18,
+                step=1,
+                help="Quantos números selecionar para gerar os cartões de 15 números"
+            )
+            
+            max_jogos = st.slider(
+                "Número máximo de jogos a gerar:",
+                min_value=10,
+                max_value=200,
+                value=80,
+                step=10
+            )
+            
+            estrategia_fechamento = st.selectbox(
+                "Estratégia de geração:",
+                ["cobertura", "estatistica"],
+                format_func=lambda x: "Cobertura sistemática" if x == "cobertura" else "Baseada em estatísticas"
+            )
+        
+        with col_config2:
+            st.markdown("### 📊 Análise para Sugestões")
+            
+            if st.button("🔍 Analisar para Sugestões de Grupos"):
+                with st.spinner("Analisando estatísticas para sugestões de grupos..."):
+                    grupos_sugeridos = fechamento.analisar_grupos_otimos(tamanho_grupo, analise_concursos=30)
+                    st.session_state.grupos_fechamento = grupos_sugeridos
+                    st.success(f"{len(grupos_sugeridos)} grupos sugeridos gerados!")
+        
+        # Mostrar grupos sugeridos
+        if st.session_state.grupos_fechamento:
+            st.markdown("### 🎯 Grupos Sugeridos para Fechamento")
+            
+            for i, grupo in enumerate(st.session_state.grupos_fechamento, 1):
+                col_g1, col_g2 = st.columns([3, 1])
+                with col_g1:
+                    st.write(f"**Grupo {i} ({len(grupo)} números):** {grupo}")
+                with col_g2:
+                    if st.button(f"Usar Grupo {i}", key=f"usar_grupo_{i}"):
+                        grupo_selecionado = grupo
+        
+        # Seleção de números manual
+        if modo_grupo == "Inserir números manualmente":
+            st.markdown("### ✍️ Inserir Números Manualmente")
+            numeros_manuais = st.multiselect(
+                f"Selecione {tamanho_grupo} números (1-25):",
+                options=list(range(1, 26)),
+                default=list(range(1, tamanho_grupo + 1)) if tamanho_grupo <= 25 else list(range(1, 26))
+            )
+            
+            if len(numeros_manuais) != tamanho_grupo:
+                st.warning(f"Selecione exatamente {tamanho_grupo} números. Atual: {len(numeros_manuais)}")
+                grupo_selecionado = None
+            else:
+                grupo_selecionado = sorted(numeros_manuais)
+        
+        # Gerar fechamento
+        st.markdown("---")
+        st.markdown("### 🚀 Gerar Fechamento")
+        
+        col_gerar1, col_gerar2 = st.columns(2)
+        
+        with col_gerar1:
+            if st.button("🎲 Gerar Fechamento", type="primary", use_container_width=True):
+                if 'grupo_selecionado' in locals() and grupo_selecionado:
+                    with st.spinner(f"Gerando fechamento de {len(grupo_selecionado)} números para {max_jogos} jogos..."):
+                        jogos_fechamento = fechamento.gerar_fechamento_18_15(
+                            grupo_selecionado, 
+                            max_jogos, 
+                            estrategia_fechamento
+                        )
+                        st.session_state.fechamento_gerado = jogos_fechamento
+                        
+                        # Calcular cobertura
+                        cobertura = fechamento.calcular_cobertura_teorica(grupo_selecionado, jogos_fechamento)
+                        st.session_state.cobertura_fechamento = cobertura
+                        
+                        st.success(f"Fechamento gerado com {len(jogos_fechamento)} jogos!")
+                else:
+                    st.error("Selecione um grupo de números primeiro")
+        
+        with col_gerar2:
+            if st.button("🔄 Limpar Fechamento", use_container_width=True):
+                st.session_state.fechamento_gerado = []
+                st.session_state.cobertura_fechamento = None
+                st.success("Fechamento limpo!")
+        
+        # Mostrar resultados do fechamento
+        if st.session_state.fechamento_gerado:
+            jogos_fechamento = st.session_state.fechamento_gerado
+            
+            st.markdown(f"### 📋 Fechamento Gerado ({len(jogos_fechamento)} jogos)")
+            
+            # Estatísticas do fechamento
+            if hasattr(st.session_state, 'cobertura_fechamento') and st.session_state.cobertura_fechamento:
+                cobertura = st.session_state.cobertura_fechamento
+                
+                st.markdown("#### 📊 Estatísticas de Cobertura")
+                
+                col_cob1, col_cob2, col_cob3 = st.columns(3)
+                with col_cob1:
+                    st.metric("Cobertura Média", f"{cobertura['cobertura_media']}%")
+                with col_cob2:
+                    st.metric("Total de Jogos", cobertura['total_jogos'])
+                with col_cob3:
+                    st.metric("Números Cobertos", cobertura['total_numeros_cobertos'])
+                
+                # Tabela de cobertura por número
+                with st.expander("📈 Ver Cobertura Detalhada por Número"):
+                    dados_cobertura = []
+                    for num, info in cobertura['cobertura_por_numero'].items():
+                        dados_cobertura.append({
+                            "Número": num,
+                            "Frequência": info['frequencia'],
+                            "Cobertura (%)": info['percentual'],
+                            "Status": "✅ Boa" if info['percentual'] >= 50 else "⚠️ Média" if info['percentual'] >= 30 else "❌ Baixa"
+                        })
+                    
+                    df_cobertura = pd.DataFrame(dados_cobertura)
+                    df_cobertura = df_cobertura.sort_values("Cobertura (%)", ascending=False)
+                    st.dataframe(df_cobertura, hide_index=True)
+            
+            # Lista de jogos
+            st.markdown("#### 🎯 Jogos do Fechamento")
+            
+            # Mostrar primeiros 10 jogos
+            for i, jogo in enumerate(jogos_fechamento[:10], 1):
+                col_j1, col_j2 = st.columns([3, 2])
+                with col_j1:
+                    st.write(f"**Jogo {i}:** {jogo}")
+                with col_j2:
+                    pares = sum(1 for n in jogo if n % 2 == 0)
+                    primos = sum(1 for n in jogo if n in {2,3,5,7,11,13,17,19,23})
+                    soma = sum(jogo)
+                    st.write(f"Pares: {pares}, Primos: {primos}, Soma: {soma}")
+            
+            if len(jogos_fechamento) > 10:
+                st.info(f"Mostrando 10 de {len(jogos_fechamento)} jogos. Use o botão de exportar para ver todos.")
+            
+            # Exportar fechamento
+            st.markdown("### 💾 Exportar Fechamento")
+            
+            conteudo_fechamento = f"FECHAMENTO LOTOFÁCIL - {len(grupo_selecionado)} NÚMEROS PARA {len(jogos_fechamento)} JOGOS\n"
+            conteudo_fechamento += "=" * 60 + "\n\n"
+            conteudo_fechamento += f"Grupo de números: {', '.join(map(str, grupo_selecionado))}\n"
+            conteudo_fechamento += f"Tamanho do grupo: {len(grupo_selecionado)} números\n"
+            conteudo_fechamento += f"Total de jogos gerados: {len(jogos_fechamento)}\n"
+            conteudo_fechamento += f"Estratégia: {estrategia_fechamento}\n\n"
+            conteudo_fechamento += "JOGOS:\n" + "-" * 40 + "\n\n"
+            
+            for i, jogo in enumerate(jogos_fechamento, 1):
+                conteudo_fechamento += f"Jogo {i}: {','.join(map(str, jogo))}\n"
+            
+            st.download_button(
+                "📥 Baixar Fechamento Completo", 
+                data=conteudo_fechamento,
+                file_name=f"fechamento_lotofacil_{len(grupo_selecionado)}numeros.txt",
+                mime="text/plain"
+            )
+            
+            # Informações sobre a estratégia
+            st.info(f"""
+            **Resumo do Fechamento:**
+            - Números no grupo: {len(grupo_selecionado)}
+            - Jogos gerados: {len(jogos_fechamento)}
+            - Cobertura média: {cobertura['cobertura_media'] if 'cobertura' in locals() else 'N/A'}%
+            - Estratégia: {estrategia_fechamento}
+            
+            **Vantagens do fechamento:**
+            1. Maior garantia de acertos (11-14 pontos)
+            2. Cobertura mais ampla dos números escolhidos
+            3. Redução do risco de sair sem prêmio
+            """)
+
+    # Aba 9 - Conferência
+    with abas[8]:
         st.subheader("🎯 Conferência de Cartões")
         if st.session_state.info_ultimo_concurso:
             info = st.session_state.info_ultimo_concurso
@@ -2041,9 +2606,19 @@ if st.session_state.concursos:
                                 st.write(f"**Cartão {idx}** (Score: {score:.1f}) - **{acertos} acertos**")
                                 st.write(f"{combo}")
                                 st.write("---")
+                
+                # Fechamentos
+                if st.session_state.fechamento_gerado:
+                    st.markdown("### 🎲 Fechamentos Gerados")
+                    for i, cartao in enumerate(st.session_state.fechamento_gerado[:5], 1):
+                        acertos = len(set(cartao) & set(info['dezenas']))
+                        st.write(f"Fechamento Jogo {i}: {cartao} - **{acertos} acertos**")
+                    
+                    if len(st.session_state.fechamento_gerado) > 5:
+                        st.info(f"Mostrando 5 de {len(st.session_state.fechamento_gerado)} jogos do fechamento")
 
-    # Aba 9 - Conferir Arquivo TXT
-    with abas[8]:
+    # Aba 10 - Conferir Arquivo TXT
+    with abas[9]:
         st.subheader("📤 Conferir Cartões de um Arquivo TXT")
         uploaded_file = st.file_uploader("Faça upload do arquivo TXT com os cartões (15 dezenas separadas por vírgula)", type="txt")
         if uploaded_file:
@@ -2072,8 +2647,8 @@ if st.session_state.concursos:
             else:
                 st.warning("Nenhum cartão válido foi encontrado no arquivo.")
 
-    # Aba 10 - Ciclos da Lotofácil
-    with abas[9]:
+    # Aba 11 - Ciclos da Lotofácil
+    with abas[10]:
         st.subheader("🔁 Ciclos da Lotofácil (Ciclo Dinâmico)")
         st.write("Analise os ciclos de dezenas nos concursos mais recentes.")
         
@@ -2087,9 +2662,9 @@ if st.session_state.concursos:
             max_concursos_disponiveis = len(st.session_state.concursos)
             limite_ciclos = st.slider(
                 "Número de concursos anteriores para análise:",
-                min_value=3,
+                min_value=10,  # Ajustado para mínimo 10
                 max_value=min(50, max_concursos_disponiveis),
-                value=st.session_state.limite_ciclos or 10,
+                value=st.session_state.limite_ciclos or 15,
                 step=1,
                 help="Quantos concursos mais recentes analisar para detectar o ciclo atual"
             )
@@ -2346,7 +2921,7 @@ if st.session_state.concursos:
                 - Fornece uma visão dinâmica do comportamento das dezenas ao longo do tempo
                 
                 **Recomendações:**
-                - Analise entre 5 e 25 concursos para um bom equilíbrio
+                - Analise entre 10 e 25 concursos para um bom equilíbrio
                 - Se o ciclo estiver "Atrasado", as dezenas faltantes têm alta prioridade
                 - Use a opção "Incluir todas as faltantes" para garantir cobertura máxima
                 """)
@@ -2376,6 +2951,8 @@ with st.sidebar:
         st.write(f"Cartões Fibonacci: {len(st.session_state.cartoes_fibonacci)}")
     if st.session_state.cartoes_ciclos:
         st.write(f"Cartões Ciclos gerados: {len(st.session_state.cartoes_ciclos)}")
+    if st.session_state.fechamento_gerado:
+        st.write(f"Fechamentos gerados: {len(st.session_state.fechamento_gerado)}")
     
     # Informações sobre o ciclo atual na sidebar
     if st.session_state.analise_ciclos:
