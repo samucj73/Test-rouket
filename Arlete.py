@@ -649,7 +649,7 @@ class SistemaTendencias:
         """Detecta se a tendência morreu completamente"""
         
         # 1. Dois erros seguidos
-        if self.contador_erros_tendencia >= 2:
+        if self.contador_erros_tendencia >= 3:
             return True
         
         # 2. Zona dominante sumiu dos primeiros lugares
