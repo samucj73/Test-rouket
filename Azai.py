@@ -2698,51 +2698,173 @@ class SistemaRoletaCompleto:
         return performance
 
     def rotacionar_estrategia_automaticamente(self, acerto, nome_estrategia, zonas_envolvidas):
+        """ROTAÇÃO AUTOMÁTICA CORRIGIDA - Função principal com as correções"""
         self.atualizar_desempenho_combinacao(zonas_envolvidas, acerto)
         
         if acerto:
             self.sequencia_acertos += 1
             self.sequencia_erros = 0
             
+            # ROTAÇÃO POR ACERTOS - CORREÇÃO APLICADA
             if len(zonas_envolvidas) > 1:
                 combinacao_atual = tuple(sorted(zonas_envolvidas))
                 
-                if self.sequencia_acertos >= 3:
-                    ultimos_3_acertos = []
-                    for resultado in reversed(self.historico_desempenho[-3:]):
-                        if resultado['acerto'] and resultado.get('zonas_envolvidas'):
-                            ultima_combinacao = tuple(sorted(resultado['zonas_envolvidas']))
-                            ultimos_3_acertos.append(ultima_combinacao)
+                # Verificar se temos dados dessa combinação
+                dados_combinacao = self.historico_combinacoes.get(combinacao_atual, {})
+                sequencia_acertos_combinacao = dados_combinacao.get('sequencia_acertos', 0)
+                
+                # Se tem 3 acertos seguidos na MESMA combinação
+                if sequencia_acertos_combinacao >= 3:
+                    logging.info(f"🎯 3 ACERTOS SEGUIDOS detectados na combinação {combinacao_atual} - Rotacionando!")
                     
-                    if (len(ultimos_3_acertos) >= 3 and 
-                        all(combo == combinacao_atual for combo in ultimos_3_acertos)):
+                    # Zerar a sequência de acertos desta combinação
+                    if combinacao_atual in self.historico_combinacoes:
+                        self.historico_combinacoes[combinacao_atual]['sequencia_acertos'] = 0
+                    
+                    # Buscar alternativas
+                    combinacoes_alternativas = self.get_combinacoes_alternativas(combinacao_atual)
+                    
+                    if not combinacoes_alternativas:
+                        logging.info(f"⚠️ Nenhuma combinação alternativa disponível para {combinacao_atual}")
+                        return False
+                    
+                    # Escolher a melhor alternativa
+                    combinacao_escolhida = self.escolher_melhor_combinacao_alternativa(combinacoes_alternativas)
+                    
+                    if not combinacao_escolhida:
+                        logging.info(f"⚠️ Não foi possível escolher combinação alternativa")
+                        return False
+                    
+                    # Criar previsão com a nova combinação
+                    success = self.criar_previsao_com_combinacao(combinacao_escolhida)
+                    
+                    if success:
+                        # Resetar sequência global de acertos
+                        self.sequencia_acertos = 0
                         
-                        logging.info(f"🎯 3 ACERTOS SEGUIDOS detectados na combinação {combinacao_atual} - Rotacionando")
-                        return self.aplicar_rotacao_por_acertos_combinacoes(combinacao_atual)
-        
+                        # Enviar notificação
+                        enviar_rotacao_por_acertos_combinacoes(combinacao_atual, combinacao_escolhida)
+                        logging.info(f"🔄 ROTAÇÃO POR ACERTOS aplicada: {combinacao_atual} → {combinacao_escolhida}")
+                        return True
+            
             return False
-        
-        else:
+            
+        else:  # ERRO
             self.sequencia_erros += 1
             self.sequencia_acertos = 0
             self.ultima_estrategia_erro = nome_estrategia
             
+            # ROTAÇÃO POR ERROS - FUNCIONANDO CORRETAMENTE
             if len(zonas_envolvidas) > 1:
                 combinacao_atual = tuple(sorted(zonas_envolvidas))
                 
                 if self.sequencia_erros >= 2:
                     logging.info(f"🚨 REGRA UNIVERSAL ATIVADA: 2 erros seguidos na combinação {combinacao_atual}")
                     
+                    # Adicionar à lista fria se não estiver
                     if combinacao_atual not in self.combinacoes_frias:
                         self.combinacoes_frias.append(combinacao_atual)
                         logging.info(f"📝 Combinação {combinacao_atual} adicionada à lista fria")
                     
+                    # Tentar rotação inteligente
                     return self.aplicar_rotacao_inteligente()
-        
+            
+            # Se não for combinação dupla ou não teve 2 erros, verificar estratégia
             if self.sequencia_erros >= 2:
                 return self.aplicar_rotacao_inteligente()
                 
             return False
+
+    def aplicar_rotacao_inteligente(self):
+        """Rotação inteligente após 2 erros - CORREÇÃO APLICADA"""
+        estrategia_atual = self.estrategia_selecionada
+        
+        # Se está em Zonas e teve 2 erros
+        if estrategia_atual == "Zonas" and self.sequencia_erros >= 2:
+            logging.info(f"🚨 APLICANDO ROTAÇÃO INTELIGENTE - Estratégia: {estrategia_atual}, Erros: {self.sequencia_erros}")
+            
+            # Tentar trocar de combinação primeiro
+            if self.previsao_ativa and self.previsao_ativa.get('zonas_envolvidas'):
+                combinacao_atual = tuple(sorted(self.previsao_ativa['zonas_envolvidas']))
+                logging.info(f"🔍 Procurando combinação alternativa para {combinacao_atual}")
+                
+                # Obter combinações disponíveis (evitando a atual e as frias)
+                combinacoes_disponiveis = []
+                for combo in self.todas_combinacoes_zonas:
+                    combo_tuple = tuple(sorted(combo))
+                    
+                    if combo_tuple == combinacao_atual:
+                        continue
+                        
+                    if combo_tuple in self.combinacoes_frias:
+                        logging.info(f"  ⚠️ Combinação {combo_tuple} está na lista fria - pulando")
+                        continue
+                        
+                    # Verificar se teve bom desempenho recente
+                    dados_combo = self.historico_combinacoes.get(combo_tuple, {})
+                    eficiencia = dados_combo.get('eficiencia', 0)
+                    total = dados_combo.get('total', 0)
+                    
+                    if total == 0:  # Nunca foi testada
+                        combinacoes_disponiveis.append(combo_tuple)
+                        logging.info(f"  ✅ Combinação {combo_tuple} nunca testada - adicionando")
+                    elif eficiencia >= 30:  # Boa eficiência
+                        combinacoes_disponiveis.append(combo_tuple)
+                        logging.info(f"  ✅ Combinação {combo_tuple} tem {eficiencia:.1f}% - adicionando")
+                    else:
+                        logging.info(f"  ⚠️ Combinação {combo_tuple} tem baixa eficiência ({eficiencia:.1f}%)")
+                
+                # Se encontrou combinações disponíveis
+                if combinacoes_disponiveis:
+                    # Escolher a melhor
+                    melhor_combinacao = self.escolher_melhor_combinacao_alternativa(combinacoes_disponiveis)
+                    
+                    if melhor_combinacao:
+                        success = self.criar_previsao_com_combinacao(melhor_combinacao)
+                        
+                        if success:
+                            self.sequencia_erros = 0
+                            
+                            # Enviar notificação
+                            def zona_para_nucleo(zona):
+                                if zona == 'Vermelha': return "7"
+                                elif zona == 'Azul': return "10"
+                                elif zona == 'Amarela': return "2"
+                                return zona
+                            
+                            antigo_nucleo1 = zona_para_nucleo(combinacao_atual[0])
+                            antigo_nucleo2 = zona_para_nucleo(combinacao_atual[1])
+                            novo_nucleo1 = zona_para_nucleo(melhor_combinacao[0])
+                            novo_nucleo2 = zona_para_nucleo(melhor_combinacao[1])
+                            
+                            enviar_rotacao_por_2_erros(combinacao_atual, melhor_combinacao)
+                            
+                            enviar_rotacao_automatica(
+                                f"Zonas {antigo_nucleo1}+{antigo_nucleo2}",
+                                f"Zonas {novo_nucleo1}+{novo_nucleo2}"
+                            )
+                            logging.info(f"🔄 ROTAÇÃO APLICADA: {combinacao_atual} → {melhor_combinacao}")
+                            return True
+                
+                # Se não conseguiu trocar combinação, trocar para ML
+                logging.info(f"⚠️ Não foi possível trocar combinação - mudando para ML")
+            
+            # Trocar para ML
+            self.estrategia_selecionada = "ML"
+            self.sequencia_erros = 0
+            enviar_rotacao_automatica("Zonas", "ML")
+            logging.info(f"🔄 ROTAÇÃO: Zonas → ML")
+            return True
+        
+        # Se está em ML e teve 2 erros, voltar para Zonas
+        elif estrategia_atual == "ML" and self.sequencia_erros >= 2:
+            self.estrategia_selecionada = "Zonas"
+            self.sequencia_erros = 0
+            enviar_rotacao_automatica("ML", "Zonas")
+            logging.info(f"🔄 ROTAÇÃO: ML → Zonas")
+            return True
+        
+        return False
 
     def aplicar_rotacao_por_acertos_combinacoes(self, combinacao_atual):
         combinacoes_alternativas = self.get_combinacoes_alternativas(combinacao_atual)
@@ -2765,77 +2887,6 @@ class SistemaRoletaCompleto:
             
             enviar_rotacao_por_acertos_combinacoes(combinacao_atual, combinacao_escolhida)
             logging.info(f"🔄 ROTAÇÃO POR ACERTOS: {combinacao_atual} → {combinacao_escolhida}")
-            return True
-        
-        return False
-
-    def aplicar_rotacao_inteligente(self):
-        estrategia_atual = self.estrategia_selecionada
-        
-        if estrategia_atual == "Zonas" and self.sequencia_erros >= 2:
-            if self.previsao_ativa and self.previsao_ativa.get('zonas_envolvidas'):
-                combinacao_atual = tuple(sorted(self.previsao_ativa['zonas_envolvidas']))
-                
-                logging.info(f"🚨 PROCURANDO COMBINAÇÃO ALTERNATIVA para {combinacao_atual} (2 erros seguidos)")
-                
-                combinacoes_disponiveis = []
-                
-                for combo in self.todas_combinacoes_zonas:
-                    combo_tuple = tuple(sorted(combo))
-                    
-                    if combo_tuple == combinacao_atual:
-                        continue
-                        
-                    if combo_tuple in self.combinacoes_frias:
-                        continue
-                    
-                    combinacoes_disponiveis.append(combo_tuple)
-                
-                if not combinacoes_disponiveis:
-                    for combo in self.todas_combinacoes_zonas:
-                        combo_tuple = tuple(sorted(combo))
-                        if combo_tuple != combinacao_atual:
-                            combinacoes_disponiveis.append(combo_tuple)
-                
-                if combinacoes_disponiveis:
-                    combinacao_escolhida = combinacoes_disponiveis[0]
-                    
-                    success = self.criar_previsao_com_combinacao(combinacao_escolhida)
-                    
-                    if success:
-                        self.sequencia_erros = 0
-                        
-                        def zona_para_nucleo(zona):
-                            if zona == 'Vermelha': return "7"
-                            elif zona == 'Azul': return "10"
-                            elif zona == 'Amarela': return "2"
-                            return zona
-                        
-                        antigo_nucleo1 = zona_para_nucleo(combinacao_atual[0])
-                        antigo_nucleo2 = zona_para_nucleo(combinacao_atual[1])
-                        novo_nucleo1 = zona_para_nucleo(combinacao_escolhida[0])
-                        novo_nucleo2 = zona_para_nucleo(combinacao_escolhida[1])
-                        
-                        enviar_rotacao_por_2_erros(combinacao_atual, combinacao_escolhida)
-                        
-                        enviar_rotacao_automatica(
-                            f"Zonas {antigo_nucleo1}+{antigo_nucleo2}",
-                            f"Zonas {novo_nucleo1}+{novo_nucleo2}"
-                        )
-                        logging.info(f"🔄 ROTAÇÃO UNIVERSAL: {combinacao_atual} → {combinacao_escolhida}")
-                        return True
-            
-            self.estrategia_selecionada = "ML"
-            self.sequencia_erros = 0
-            enviar_rotacao_automatica("Zonas", "ML")
-            logging.info(f"🔄 ROTAÇÃO: Zonas → ML (não foi possível trocar combinação)")
-            return True
-        
-        elif estrategia_atual == "ML" and self.sequencia_erros >= 2:
-            self.estrategia_selecionada = "Zonas"
-            self.sequencia_erros = 0
-            enviar_rotacao_automatica("ML", "Zonas")
-            logging.info(f"🔄 ROTAÇÃO: ML → Zonas")
             return True
         
         return False
@@ -2889,6 +2940,36 @@ class SistemaRoletaCompleto:
         
         return False
 
+    def get_debug_rotacao(self):
+        """Retorna informações detalhadas para debug da rotação"""
+        debug_info = {
+            'estrategia_atual': self.estrategia_selecionada,
+            'sequencia_erros': self.sequencia_erros,
+            'sequencia_acertos': self.sequencia_acertos,
+            'previsao_ativa': bool(self.previsao_ativa),
+            'historico_desempenho_tamanho': len(self.historico_desempenho),
+            'combinacoes_registradas': len(self.historico_combinacoes)
+        }
+        
+        if self.previsao_ativa:
+            debug_info['previsao_tipo'] = self.previsao_ativa.get('nome', 'Desconhecido')
+            debug_info['zonas_envolvidas'] = self.previsao_ativa.get('zonas_envolvidas', [])
+        
+        # Sequências por combinação
+        sequencias_combinacoes = {}
+        for combo, dados in self.historico_combinacoes.items():
+            if dados.get('total', 0) > 0:
+                sequencias_combinacoes[str(combo)] = {
+                    'sequencia_acertos': dados.get('sequencia_acertos', 0),
+                    'sequencia_erros': dados.get('sequencia_erros', 0),
+                    'eficiencia': dados.get('eficiencia', 0),
+                    'total': dados.get('total', 0)
+                }
+        
+        debug_info['sequencias_combinacoes'] = sequencias_combinacoes
+        
+        return debug_info
+
     def processar_novo_numero(self, numero):
         try:
             if isinstance(numero, dict) and 'number' in numero:
@@ -2897,7 +2978,20 @@ class SistemaRoletaCompleto:
                 numero_real = numero
                 
             self.contador_sorteios_global += 1
-                
+            
+            # ATUALIZAR SEQUÊNCIAS DE ACERTOS POR COMBINAÇÃO ANTES DE VERIFICAR ROTAÇÃO
+            if self.previsao_ativa and len(self.previsao_ativa.get('zonas_envolvidas', [])) > 1:
+                combinacao_atual = tuple(sorted(self.previsao_ativa['zonas_envolvidas']))
+                if combinacao_atual not in self.historico_combinacoes:
+                    self.historico_combinacoes[combinacao_atual] = {
+                        'acertos': 0, 
+                        'total': 0, 
+                        'eficiencia': 0.0,
+                        'ultimo_jogo': len(self.historico_desempenho),
+                        'sequencia_acertos': 0,
+                        'sequencia_erros': 0
+                    }
+                    
             if self.previsao_ativa:
                 acerto = False
                 zonas_acertadas = []
@@ -3428,6 +3522,26 @@ with st.sidebar.expander("🔄 Rotação Automática", expanded=True):
         st.session_state.sistema.sequencia_acertos = 0
         st.success(f"🔄 Rotação forçada: {estrategia_atual} → {nova_estrategia}")
         st.rerun()
+    
+    # Debug da Rotação
+    with st.sidebar.expander("🐛 Debug - Rotação", expanded=False):
+        if st.button("🔍 Ver Debug Rotação"):
+            debug_info = st.session_state.sistema.get_debug_rotacao()
+            st.json(debug_info)
+        
+        if st.button("📋 Log Rotação", use_container_width=True):
+            # Mostrar últimas 5 rotações
+            rotacoes = []
+            for i, resultado in enumerate(st.session_state.sistema.historico_desempenho[-10:]):
+                if resultado.get('rotacionou', False):
+                    rotacoes.append(f"Rodada {len(st.session_state.sistema.historico_desempenho)-i}: {resultado}")
+            
+            if rotacoes:
+                st.write("Últimas rotações:")
+                for rotacao in rotacoes[-5:]:
+                    st.write(rotacao)
+            else:
+                st.write("Nenhuma rotação recente registrada")
 
 # Treinamento ML
 with st.sidebar.expander("🧠 Treinamento ML", expanded=False):
