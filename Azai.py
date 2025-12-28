@@ -31,6 +31,25 @@ ML_MODEL_PATH = "ml_roleta_model.pkl"
 SCALER_PATH = "ml_scaler.pkl"
 META_PATH = "ml_meta.pkl"
 
+# =============================
+# CONFIGURAÇÕES DE NOTIFICAÇÃO - CHECKBOXES
+# =============================
+def inicializar_config_alertas():
+    """Inicializa configurações de alertas se não existirem"""
+    if 'alertas_config' not in st.session_state:
+        st.session_state.alertas_config = {
+            'alertas_previsao': True,
+            'alertas_resultado': True,
+            'alertas_rotacao': True,
+            'alertas_tendencia': True,
+            'alertas_treinamento': True,
+            'alertas_erros': True,
+            'alertas_acertos': True
+        }
+
+# Chama a função na inicialização
+inicializar_config_alertas()
+
 def salvar_sessao():
     """Salva todos os dados da sessão em arquivo"""
     try:
@@ -45,6 +64,15 @@ def salvar_sessao():
             'historico': st.session_state.get('historico', []),
             'telegram_token': st.session_state.get('telegram_token', ''),
             'telegram_chat_id': st.session_state.get('telegram_chat_id', ''),
+            'alertas_config': st.session_state.get('alertas_config', {
+                'alertas_previsao': True,
+                'alertas_resultado': True,
+                'alertas_rotacao': True,
+                'alertas_tendencia': True,
+                'alertas_treinamento': True,
+                'alertas_erros': True,
+                'alertas_acertos': True
+            }),
             'sistema_acertos': sistema.acertos,
             'sistema_erros': sistema.erros,
             'sistema_estrategias_contador': sistema.estrategias_contador,
@@ -113,6 +141,15 @@ def carregar_sessao():
         st.session_state.historico = session_data.get('historico', [])
         st.session_state.telegram_token = session_data.get('telegram_token', '')
         st.session_state.telegram_chat_id = session_data.get('telegram_chat_id', '')
+        st.session_state.alertas_config = session_data.get('alertas_config', {
+            'alertas_previsao': True,
+            'alertas_resultado': True,
+            'alertas_rotacao': True,
+            'alertas_tendencia': True,
+            'alertas_treinamento': True,
+            'alertas_erros': True,
+            'alertas_acertos': True
+        })
         
         if 'sistema' not in st.session_state:
             st.session_state.sistema = SistemaRoletaCompleto()
@@ -233,6 +270,11 @@ def limpar_sessao():
 def enviar_previsao_super_simplificada(previsao):
     """Envia notificação de previsão super simplificada"""
     try:
+        # Verificar se alertas de previsão estão ativados
+        if 'alertas_config' in st.session_state:
+            if not st.session_state.alertas_config.get('alertas_previsao', True):
+                return
+        
         if not previsao:
             return
             
@@ -286,7 +328,9 @@ def enviar_previsao_super_simplificada(previsao):
         st.warning(f"🔔 {mensagem}")
         
         if all(key in st.session_state for key in ['telegram_token', 'telegram_chat_id']):
-            if st.session_state.telegram_token and st.session_state.telegram_chat_id:
+            if (st.session_state.telegram_token and st.session_state.telegram_chat_id and 
+                'alertas_config' in st.session_state and 
+                st.session_state.alertas_config.get('alertas_previsao', True)):
                 enviar_alerta_numeros_simplificado(previsao)
                 enviar_telegram(f"🚨 PREVISÃO ATIVA\n{mensagem}\n💎 CONFIANÇA: {previsao.get('confianca', 'ALTA')}")
                 
@@ -331,6 +375,17 @@ def enviar_alerta_numeros_simplificado(previsao):
 def enviar_resultado_super_simplificado(numero_real, acerto, nome_estrategia, zona_acertada=None):
     """Envia notificação de resultado super simplificada"""
     try:
+        # Verificar se alertas de resultado estão ativados
+        if 'alertas_config' in st.session_state:
+            if not st.session_state.alertas_config.get('alertas_resultado', True):
+                return
+        
+        # Verificar se alertas específicos por tipo estão ativados
+        if acerto and not st.session_state.alertas_config.get('alertas_acertos', True):
+            return
+        if not acerto and not st.session_state.alertas_config.get('alertas_erros', True):
+            return
+            
         if acerto:
             if 'Zonas' in nome_estrategia and zona_acertada:
                 if '+' in zona_acertada:
@@ -395,9 +450,16 @@ def enviar_resultado_super_simplificado(numero_real, acerto, nome_estrategia, zo
             st.error(f"📢 {mensagem}")
         
         if all(key in st.session_state for key in ['telegram_token', 'telegram_chat_id']):
-            if st.session_state.telegram_token and st.session_state.telegram_chat_id:
-                enviar_telegram(f"📢 RESULTADO\n{mensagem}")
-                enviar_alerta_conferencia_simplificado(numero_real, acerto, nome_estrategia)
+            if (st.session_state.telegram_token and st.session_state.telegram_chat_id and 
+                'alertas_config' in st.session_state):
+                
+                # Verificar se alertas de resultado estão ativados
+                if st.session_state.alertas_config.get('alertas_resultado', True):
+                    # Verificar se alertas específicos por tipo estão ativados
+                    if (acerto and st.session_state.alertas_config.get('alertas_acertos', True)) or \
+                       (not acerto and st.session_state.alertas_config.get('alertas_erros', True)):
+                        enviar_telegram(f"📢 RESULTADO\n{mensagem}")
+                        enviar_alerta_conferencia_simplificado(numero_real, acerto, nome_estrategia)
                 
         salvar_sessao()
         
@@ -421,13 +483,20 @@ def enviar_alerta_conferencia_simplificado(numero_real, acerto, nome_estrategia)
 def enviar_rotacao_automatica(estrategia_anterior, estrategia_nova):
     """Envia notificação de rotação automática"""
     try:
+        # Verificar se alertas de rotação estão ativados
+        if 'alertas_config' in st.session_state:
+            if not st.session_state.alertas_config.get('alertas_rotacao', True):
+                return
+                
         mensagem = f"🔄 ROTAÇÃO AUTOMÁTICA\n{estrategia_anterior} → {estrategia_nova}"
         
         st.toast("🔄 Rotação Automática", icon="🔄")
         st.warning(f"🔄 {mensagem}")
         
         if all(key in st.session_state for key in ['telegram_token', 'telegram_chat_id']):
-            if st.session_state.telegram_token and st.session_state.telegram_chat_id:
+            if (st.session_state.telegram_token and st.session_state.telegram_chat_id and 
+                'alertas_config' in st.session_state and 
+                st.session_state.alertas_config.get('alertas_rotacao', True)):
                 enviar_telegram(f"🔄 ROTAÇÃO\n{mensagem}")
                 
     except Exception as e:
@@ -436,6 +505,11 @@ def enviar_rotacao_automatica(estrategia_anterior, estrategia_nova):
 def enviar_rotacao_por_acertos_combinacoes(combinacao_anterior, combinacao_nova):
     """Envia notificação de rotação por acertos em combinações"""
     try:
+        # Verificar se alertas de rotação estão ativados
+        if 'alertas_config' in st.session_state:
+            if not st.session_state.alertas_config.get('alertas_rotacao', True):
+                return
+                
         def combo_para_nucleos(combo):
             nucleos = []
             for zona in combo:
@@ -458,7 +532,9 @@ def enviar_rotacao_por_acertos_combinacoes(combinacao_anterior, combinacao_nova)
         st.success(f"🎯 {mensagem}")
         
         if all(key in st.session_state for key in ['telegram_token', 'telegram_chat_id']):
-            if st.session_state.telegram_token and st.session_state.telegram_chat_id:
+            if (st.session_state.telegram_token and st.session_state.telegram_chat_id and 
+                'alertas_config' in st.session_state and 
+                st.session_state.alertas_config.get('alertas_rotacao', True)):
                 enviar_telegram(f"🎯 ROTAÇÃO POR ACERTOS\n{mensagem}")
                 
     except Exception as e:
@@ -467,6 +543,11 @@ def enviar_rotacao_por_acertos_combinacoes(combinacao_anterior, combinacao_nova)
 def enviar_rotacao_por_2_erros(combinacao_antiga, combinacao_nova):
     """Envia notificação de rotação por 2 erros seguidos"""
     try:
+        # Verificar se alertas de rotação estão ativados
+        if 'alertas_config' in st.session_state:
+            if not st.session_state.alertas_config.get('alertas_rotacao', True):
+                return
+                
         def combo_para_nucleos(combo):
             nucleos = []
             for zona in combo:
@@ -489,11 +570,57 @@ def enviar_rotacao_por_2_erros(combinacao_antiga, combinacao_nova):
         st.warning(f"🚨 {mensagem}")
         
         if all(key in st.session_state for key in ['telegram_token', 'telegram_chat_id']):
-            if st.session_state.telegram_token and st.session_state.telegram_chat_id:
+            if (st.session_state.telegram_token and st.session_state.telegram_chat_id and 
+                'alertas_config' in st.session_state and 
+                st.session_state.alertas_config.get('alertas_rotacao', True)):
                 enviar_telegram(f"🚨 ROTAÇÃO POR 2 ERROS\n{mensagem}")
                 
     except Exception as e:
         logging.error(f"Erro ao enviar rotação por 2 erros: {e}")
+
+def enviar_alerta_tendencia(analise_tendencia):
+    """Envia alerta de tendência na interface"""
+    estado = analise_tendencia['estado']
+    zona = analise_tendencia['zona_dominante']
+    mensagem = analise_tendencia['mensagem']
+    
+    # Verificar se alertas de tendência estão ativados
+    if 'alertas_config' in st.session_state:
+        if not st.session_state.alertas_config.get('alertas_tendencia', True):
+            return
+    
+    if estado == "ativa" and analise_tendencia['acao'] == "operar":
+        st.toast("🎯 TENDÊNCIA CONFIRMADA - OPERAR!", icon="🔥")
+        st.success(f"📈 {mensagem}")
+        
+        # Enviar para Telegram se configurado
+        if all(key in st.session_state for key in ['telegram_token', 'telegram_chat_id']):
+            if (st.session_state.telegram_token and st.session_state.telegram_chat_id and 
+                'alertas_config' in st.session_state and 
+                st.session_state.alertas_config.get('alertas_tendencia', True)):
+                enviar_telegram(f"🎯 TENDÊNCIA CONFIRMADA\n📍 Zona: {zona}\n📈 Estado: {estado}\n💡 Ação: OPERAR\n📊 {mensagem}")
+        
+    elif estado == "enfraquecendo":
+        st.toast("⚠️ TENDÊNCIA ENFRAQUECENDO", icon="⚠️")
+        st.warning(f"📉 {mensagem}")
+        
+        # Enviar para Telegram se configurado
+        if all(key in st.session_state for key in ['telegram_token', 'telegram_chat_id']):
+            if (st.session_state.telegram_token and st.session_state.telegram_chat_id and 
+                'alertas_config' in st.session_state and 
+                st.session_state.alertas_config.get('alertas_tendencia', True)):
+                enviar_telegram(f"⚠️ TENDÊNCIA ENFRAQUECENDO\n📍 Zona: {zona}\n📈 Estado: {estado}\n💡 Ação: AGUARDAR\n📊 {mensagem}")
+        
+    elif estado == "morta":
+        st.toast("🟥 TENDÊNCIA MORTA - PARAR", icon="🛑")
+        st.error(f"💀 {mensagem}")
+        
+        # Enviar para Telegram se configurado
+        if all(key in st.session_state for key in ['telegram_token', 'telegram_chat_id']):
+            if (st.session_state.telegram_token and st.session_state.telegram_chat_id and 
+                'alertas_config' in st.session_state and 
+                st.session_state.alertas_config.get('alertas_tendencia', True)):
+                enviar_telegram(f"🟥 TENDÊNCIA MORTA\n📈 Estado: {estado}\n💡 Ação: PARAR\n📊 {mensagem}")
 
 def enviar_telegram(mensagem):
     """Envia mensagem para o Telegram"""
@@ -843,6 +970,48 @@ class SistemaTendencias:
             },
             'historico_zonas': list(self.historico_zonas_dominantes)
         }
+    
+    def enviar_notificacoes_tendencia(self, analise_tendencia):
+        estado = analise_tendencia['estado']
+        mensagem = analise_tendencia['mensagem']
+        zona = analise_tendencia['zona_dominante']
+        
+        # Verificar configurações de alertas
+        if 'alertas_config' not in st.session_state:
+            return
+        
+        alertas_config = st.session_state.alertas_config
+        
+        # Verificar se alertas de tendência estão ativados
+        if not alertas_config.get('alertas_tendencia', True):
+            return
+        
+        if estado == "ativa" and analise_tendencia['acao'] == "operar":
+            # Verificar se alertas do Telegram estão configurados e ativados
+            if all(key in st.session_state for key in ['telegram_token', 'telegram_chat_id']):
+                if st.session_state.telegram_token and st.session_state.telegram_chat_id:
+                    enviar_telegram(f"🎯 TENDÊNCIA CONFIRMADA\n"
+                                  f"📍 Zona: {zona}\n"
+                                  f"📈 Estado: {estado}\n"
+                                  f"💡 Ação: OPERAR\n"
+                                  f"📊 {mensagem}")
+            
+        elif estado == "enfraquecendo":
+            if all(key in st.session_state for key in ['telegram_token', 'telegram_chat_id']):
+                if st.session_state.telegram_token and st.session_state.telegram_chat_id:
+                    enviar_telegram(f"⚠️ TENDÊNCIA ENFRAQUECENDO\n"
+                                  f"📍 Zona: {zona}\n"
+                                  f"📈 Estado: {estado}\n"
+                                  f"💡 Ação: AGUARDAR\n"
+                                  f"📊 {mensagem}")
+            
+        elif estado == "morta":
+            if all(key in st.session_state for key in ['telegram_token', 'telegram_chat_id']):
+                if st.session_state.telegram_token and st.session_state.telegram_chat_id:
+                    enviar_telegram(f"🟥 TENDÊNCIA MORTA\n"
+                                  f"📈 Estado: {estado}\n"
+                                  f"💡 Ação: PARAR\n"
+                                  f"📊 {mensagem}")
 
 # =============================
 # CONFIGURAÇÕES
@@ -2352,6 +2521,12 @@ class EstrategiaML:
                 success, message = self.ml.treinar_modelo_corrigido(historico_numeros)
                 if success:
                     logging.info(f"✅ Treinamento automático ML: {message}")
+                    
+                    # Enviar notificação de treinamento se ativado
+                    if 'alertas_config' in st.session_state and st.session_state.alertas_config.get('alertas_treinamento', True):
+                        if all(key in st.session_state for key in ['telegram_token', 'telegram_chat_id']):
+                            if st.session_state.telegram_token and st.session_state.telegram_chat_id:
+                                enviar_telegram(f"🧠 TREINAMENTO ML COMPLETO\n{message}")
                 else:
                     logging.warning(f"⚠️ Treinamento automático falhou: {message}")
             except Exception as e:
@@ -2402,6 +2577,13 @@ class EstrategiaML:
         
         if len(historico_numeros) >= self.ml.min_training_samples:
             success, message = self.ml.treinar_modelo_corrigido(historico_numeros)
+            
+            # Enviar notificação de treinamento se ativado
+            if success and 'alertas_config' in st.session_state and st.session_state.alertas_config.get('alertas_treinamento', True):
+                if all(key in st.session_state for key in ['telegram_token', 'telegram_chat_id']):
+                    if st.session_state.telegram_token and st.session_state.telegram_chat_id:
+                        enviar_telegram(f"🧠 TREINAMENTO ML COMPLETO\n{message}")
+            
             return success, message
         else:
             return False, f"Histórico insuficiente: {len(historico_numeros)}/{self.ml.min_training_samples} números"
@@ -3239,84 +3421,13 @@ class SistemaRoletaCompleto:
             
             self.sistema_tendencias.historico_tendencias.append(analise_tendencia)
             
-            self.enviar_notificacoes_tendencia(analise_tendencia)
+            # Enviar notificações de tendência
+            if 'alertas_config' in st.session_state and st.session_state.alertas_config.get('alertas_tendencia', True):
+                self.sistema_tendencias.enviar_notificacoes_tendencia(analise_tendencia)
+                enviar_alerta_tendencia(analise_tendencia)
             
         except Exception as e:
             logging.error(f"Erro na análise de tendências: {e}")
-
-    def enviar_notificacoes_tendencia(self, analise_tendencia):
-        estado = analise_tendencia['estado']
-        mensagem = analise_tendencia['mensagem']
-        zona = analise_tendencia['zona_dominante']
-        
-        if estado == "ativa" and analise_tendencia['acao'] == "operar":
-            enviar_telegram(f"🎯 TENDÊNCIA CONFIRMADA\n"
-                          f"📍 Zona: {zona}\n"
-                          f"📈 Estado: {estado}\n"
-                          f"💡 Ação: OPERAR\n"
-                          f"📊 {mensagem}")
-            
-        elif estado == "enfraquecendo":
-            enviar_telegram(f"⚠️ TENDÊNCIA ENFRAQUECENDO\n"
-                          f"📍 Zona: {zona}\n"
-                          f"📈 Estado: {estado}\n"
-                          f"💡 Ação: AGUARDAR\n"
-                          f"📊 {mensagem}")
-            
-        elif estado == "morta":
-            enviar_telegram(f"🟥 TENDÊNCIA MORTA\n"
-                          f"📈 Estado: {estado}\n"
-                          f"💡 Ação: PARAR\n"
-                          f"📊 {mensagem}")
-
-    def get_analise_tendencias_completa(self):
-        analise = "🎯 SISTEMA DE DETECÇÃO DE TENDÊNCIAS\n"
-        analise += "=" * 60 + "\n"
-        
-        resumo = self.sistema_tendencias.get_resumo_tendencia()
-        
-        analise += f"📊 ESTADO ATUAL: {resumo['estado'].upper()}\n"
-        analise += f"📍 ZONA ATIVA: {resumo['zona_ativa'] or 'Nenhuma'}\n"
-        analise += f"🎯 CONTADORES: {resumo['contadores']['acertos']} acertos, {resumo['contadores']['erros']} erros\n"
-        analise += f"📈 CONFIRMAÇÕES: {resumo['contadores']['confirmacoes']}\n"
-        analise += f"🔄 OPERAÇÕES: {resumo['contadores']['operacoes']}\n"
-        
-        analise += "\n📋 HISTÓRICO RECENTE DE ZONAS:\n"
-        for i, zona in enumerate(resumo['historico_zonas'][-8:]):
-            analise += f"  {i+1:2d}. {zona}\n"
-        
-        if self.sistema_tendencias.historico_tendencias:
-            ultima = self.sistema_tendencias.historico_tendencias[-1]
-            analise += f"\n📝 ÚLTIMA ANÁLISE:\n"
-            analise += f"  Estado: {ultima['estado']}\n"
-            analise += f"  Confiança: {ultima['confianca']:.0%}\n"
-            analise += f"  Ação: {ultima['acao'].upper()}\n"
-            analise += f"  Mensagem: {ultima['mensagem']}\n"
-        
-        analise += "\n💡 RECOMENDAÇÃO DO FLUXOGRAMA:\n"
-        estado = resumo['estado']
-        if estado == "aguardando":
-            analise += "  👀 Observar últimas 10-20 rodadas\n"
-            analise += "  🎯 Identificar zona dupla mais forte\n"
-        elif estado == "formando":
-            analise += "  📈 Tendência se formando\n"
-            analise += "  ⏳ Aguardar confirmação (1-2 acertos)\n"
-        elif estado == "ativa":
-            analise += "  🔥 TENDÊNCIA CONFIRMADA\n"
-            analise += "  💰 Operar por 2-4 jogadas no máximo\n"
-            analise += "  🎯 Apostar na zona dominante\n"
-            analise += "  ⛔ Parar ao primeiro erro\n"
-        elif estado == "enfraquecendo":
-            analise += "  ⚠️ TENDÊNCIA ENFRAQUECENDO\n"
-            analise += "  🚫 Evitar novas entradas\n"
-            analise += "  👀 Observar sinais de morte\n"
-        elif estado == "morta":
-            analise += "  🟥 TENDÊNCIA MORTA\n"
-            analise += "  🛑 PARAR OPERAÇÕES\n"
-            analise += "  🔄 Aguardar 10-20 rodadas\n"
-            analise += "  📊 Observar novo padrão\n"
-        
-        return analise
 
     def zerar_estatisticas_desempenho(self):
         self.acertos = 0
@@ -3394,6 +3505,55 @@ class SistemaRoletaCompleto:
             'combinacoes_frias': len(self.combinacoes_frias)
         }
 
+    def get_analise_tendencias_completa(self):
+        analise = "🎯 SISTEMA DE DETECÇÃO DE TENDÊNCIAS\n"
+        analise += "=" * 60 + "\n"
+        
+        resumo = self.sistema_tendencias.get_resumo_tendencia()
+        
+        analise += f"📊 ESTADO ATUAL: {resumo['estado'].upper()}\n"
+        analise += f"📍 ZONA ATIVA: {resumo['zona_ativa'] or 'Nenhuma'}\n"
+        analise += f"🎯 CONTADORES: {resumo['contadores']['acertos']} acertos, {resumo['contadores']['erros']} erros\n"
+        analise += f"📈 CONFIRMAÇÕES: {resumo['contadores']['confirmacoes']}\n"
+        analise += f"🔄 OPERAÇÕES: {resumo['contadores']['operacoes']}\n"
+        
+        analise += "\n📋 HISTÓRICO RECENTE DE ZONAS:\n"
+        for i, zona in enumerate(resumo['historico_zonas'][-8:]):
+            analise += f"  {i+1:2d}. {zona}\n"
+        
+        if self.sistema_tendencias.historico_tendencias:
+            ultima = self.sistema_tendencias.historico_tendencias[-1]
+            analise += f"\n📝 ÚLTIMA ANÁLISE:\n"
+            analise += f"  Estado: {ultima['estado']}\n"
+            analise += f"  Confiança: {ultima['confianca']:.0%}\n"
+            analise += f"  Ação: {ultima['acao'].upper()}\n"
+            analise += f"  Mensagem: {ultima['mensagem']}\n"
+        
+        analise += "\n💡 RECOMENDAÇÃO DO FLUXOGRAMA:\n"
+        estado = resumo['estado']
+        if estado == "aguardando":
+            analise += "  👀 Observar últimas 10-20 rodadas\n"
+            analise += "  🎯 Identificar zona dupla mais forte\n"
+        elif estado == "formando":
+            analise += "  📈 Tendência se formando\n"
+            analise += "  ⏳ Aguardar confirmação (1-2 acertos)\n"
+        elif estado == "ativa":
+            analise += "  🔥 TENDÊNCIA CONFIRMADA\n"
+            analise += "  💰 Operar por 2-4 jogadas no máximo\n"
+            analise += "  🎯 Apostar na zona dominante\n"
+            analise += "  ⛔ Parar ao primeiro erro\n"
+        elif estado == "enfraquecendo":
+            analise += "  ⚠️ TENDÊNCIA ENFRAQUECENDO\n"
+            analise += "  🚫 Evitar novas entradas\n"
+            analise += "  👀 Observar sinais de morte\n"
+        elif estado == "morta":
+            analise += "  🟥 TENDÊNCIA MORTA\n"
+            analise += "  🛑 PARAR OPERAÇÕES\n"
+            analise += "  🔄 Aguardar 10-20 rodadas\n"
+            analise += "  📊 Observar novo padrão\n"
+        
+        return analise
+
 # =============================
 # FUNÇÕES AUXILIARES
 # =============================
@@ -3447,26 +3607,6 @@ def mostrar_combinacoes_dinamicas():
             eff = dados.get('eficiencia', 0)
             total = dados.get('total', 0)
             st.sidebar.write(f"🚫 {combo[0]}+{combo[1]}: {eff:.1f}%")
-
-# =============================
-# FUNÇÃO DE ALERTA DE TENDÊNCIA
-# =============================
-def enviar_alerta_tendencia(analise_tendencia):
-    estado = analise_tendencia['estado']
-    zona = analise_tendencia['zona_dominante']
-    mensagem = analise_tendencia['mensagem']
-    
-    if estado == "ativa" and analise_tendencia['acao'] == "operar":
-        st.toast("🎯 TENDÊNCIA CONFIRMADA - OPERAR!", icon="🔥")
-        st.success(f"📈 {mensagem}")
-        
-    elif estado == "enfraquecendo":
-        st.toast("⚠️ TENDÊNCIA ENFRAQUECENDO", icon="⚠️")
-        st.warning(f"📉 {mensagem}")
-        
-    elif estado == "morta":
-        st.toast("🟥 TENDÊNCIA MORTA - PARAR", icon="🛑")
-        st.error(f"💀 {mensagem}")
 
 # =============================
 # APLICAÇÃO STREAMLIT PRINCIPAL
@@ -3547,6 +3687,117 @@ with st.sidebar.expander("💾 Gerenciamento de Sessão", expanded=False):
             limpar_sessao()
             st.error("🗑️ Todos os dados foram limpos!")
             st.stop()
+
+# Configurações dos Alertas - Checkboxes
+with st.sidebar.expander("🔔 Configuração de Alertas", expanded=False):
+    st.write("**Selecione quais alertas deseja receber:**")
+    
+    # Usar o estado salvo ou valores padrão
+    alertas_config = st.session_state.get('alertas_config', {
+        'alertas_previsao': True,
+        'alertas_resultado': True,
+        'alertas_rotacao': True,
+        'alertas_tendencia': True,
+        'alertas_treinamento': True,
+        'alertas_erros': True,
+        'alertas_acertos': True
+    })
+    
+    # Checkboxes individuais
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        alertas_previsao = st.checkbox(
+            "🎯 Previsões", 
+            value=alertas_config.get('alertas_previsao', True),
+            help="Alertas de novas previsões"
+        )
+        
+        alertas_resultado = st.checkbox(
+            "📊 Resultados", 
+            value=alertas_config.get('alertas_resultado', True),
+            help="Alertas de resultados dos sorteios"
+        )
+        
+        alertas_rotacao = st.checkbox(
+            "🔄 Rotações", 
+            value=alertas_config.get('alertas_rotacao', True),
+            help="Alertas de rotação automática"
+        )
+        
+        alertas_tendencia = st.checkbox(
+            "📈 Tendências", 
+            value=alertas_config.get('alertas_tendencia', True),
+            help="Alertas de mudança de tendência"
+        )
+    
+    with col2:
+        alertas_treinamento = st.checkbox(
+            "🧠 Treinamentos", 
+            value=alertas_config.get('alertas_treinamento', True),
+            help="Alertas de treinamento ML"
+        )
+        
+        alertas_acertos = st.checkbox(
+            "✅ Acertos", 
+            value=alertas_config.get('alertas_acertos', True),
+            help="Alertas quando acertar"
+        )
+        
+        alertas_erros = st.checkbox(
+            "❌ Erros", 
+            value=alertas_config.get('alertas_erros', True),
+            help="Alertas quando errar"
+        )
+    
+    # Botões para seleção rápida
+    st.write("**Seleção Rápida:**")
+    col_btn1, col_btn2, col_btn3 = st.columns(3)
+    
+    with col_btn1:
+        if st.button("✅ Todos", use_container_width=True):
+            st.session_state.alertas_config = {
+                'alertas_previsao': True,
+                'alertas_resultado': True,
+                'alertas_rotacao': True,
+                'alertas_tendencia': True,
+                'alertas_treinamento': True,
+                'alertas_erros': True,
+                'alertas_acertos': True
+            }
+            st.success("✅ Todos os alertas ativados!")
+            st.rerun()
+    
+    with col_btn2:
+        if st.button("❌ Nenhum", use_container_width=True):
+            st.session_state.alertas_config = {
+                'alertas_previsao': False,
+                'alertas_resultado': False,
+                'alertas_rotacao': False,
+                'alertas_tendencia': False,
+                'alertas_treinamento': False,
+                'alertas_erros': False,
+                'alertas_acertos': False
+            }
+            st.warning("❌ Todos os alertas desativados!")
+            st.rerun()
+    
+    with col_btn3:
+        if st.button("💾 Salvar", use_container_width=True):
+            # Atualizar configurações
+            st.session_state.alertas_config = {
+                'alertas_previsao': alertas_previsao,
+                'alertas_resultado': alertas_resultado,
+                'alertas_rotacao': alertas_rotacao,
+                'alertas_tendencia': alertas_tendencia,
+                'alertas_treinamento': alertas_treinamento,
+                'alertas_erros': alertas_erros,
+                'alertas_acertos': alertas_acertos
+            }
+            
+            # Salvar na sessão
+            salvar_sessao()
+            st.success("✅ Configurações de alertas salvas!")
 
 # Configurações do Telegram
 with st.sidebar.expander("🔔 Configurações do Telegram", expanded=False):
