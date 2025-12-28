@@ -2188,7 +2188,7 @@ class EstrategiaMidas:
                 return {
                     'nome': 'Padrão do Cinco',
                     'numeros_apostar': [5, 15, 25, 35],
-                    'gatilho': f'Terminal 5 ativado ({count_cinco)x)',
+                    'gatilho': f'Terminal 5 ativado ({count_cinco}x)',
                     'confianca': 'Média'
                 }
 
