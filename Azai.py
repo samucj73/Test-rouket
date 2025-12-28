@@ -1,3 +1,4 @@
+
 import streamlit as st
 import json
 import os
@@ -1023,8 +1024,8 @@ class SistemaSelecaoInteligente:
     def __init__(self):
         self.roleta = RoletaInteligente()
         
-    def selecionar_melhores_15_numeros(self, numeros_candidatos, historico, estrategia_tipo="Zonas"):
-        if len(numeros_candidatos) <= 15:
+    def selecionar_melhores_10_numeros(self, numeros_candidatos, historico, estrategia_tipo="Zonas"):
+        if len(numeros_candidatos) <= 10:
             return numeros_candidatos
             
         scores = {}
@@ -1032,10 +1033,10 @@ class SistemaSelecaoInteligente:
             scores[numero] = self.calcular_score_numero(numero, historico, estrategia_tipo)
         
         numeros_ordenados = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-        melhores_15 = [num for num, score in numeros_ordenados[:15]]
+        melhores_10 = [num for num, score in numeros_ordenados[:10]]
         
-        logging.info(f"🎯 Seleção Inteligente: {len(numeros_candidatos)} → 15 números")
-        return melhores_15
+        logging.info(f"🎯 Seleção Inteligente: {len(numeros_candidatos)} → 10 números")
+        return melhores_10
     
     def calcular_score_numero(self, numero, historico, estrategia_tipo):
         try:
@@ -1864,8 +1865,8 @@ class EstrategiaZonasOtimizada:
         
         numeros_combinados = list(set(numeros_primarios + numeros_secundarios))
         
-        if len(numeros_combinados) > 15:
-            numeros_combinados = self.sistema_selecao.selecionar_melhores_15_numeros(
+        if len(numeros_combinados) > 10:
+            numeros_combinados = self.sistema_selecao.selecionar_melhores_10_numeros(
                 numeros_combinados, self.historico, "Zonas"
             )
         
@@ -1896,8 +1897,8 @@ class EstrategiaZonasOtimizada:
     def criar_previsao_unica(self, zona_primaria):
         numeros_apostar = self.numeros_zonas[zona_primaria]
         
-        if len(numeros_apostar) > 15:
-            numeros_apostar = self.sistema_selecao.selecionar_melhores_15_numeros(
+        if len(numeros_apostar) > 10:
+            numeros_apostar = self.sistema_selecao.selecionar_melhores_10_numeros(
                 numeros_apostar, self.historico, "Zonas"
             )
         
@@ -2481,8 +2482,8 @@ class EstrategiaML:
         
         numeros_combinados = list(set(numeros_combinados))
         
-        if len(numeros_combinados) > 15:
-            numeros_combinados = self.sistema_selecao.selecionar_melhores_15_numeros(
+        if len(numeros_combinados) > 10:
+            numeros_combinados = self.sistema_selecao.selecionar_melhores_10_numeros(
                 numeros_combinados, self.historico, "ML-Corrigido"
             )
         
@@ -4034,7 +4035,7 @@ with st.sidebar.expander("📊 Informações das Estratégias"):
         st.write("- 🎯 Múltiplas janelas: Curto(12) Médio(24) Longo(48)")
         st.write("- 📈 Threshold dinâmico por performance")
         st.write("- 🔄 **APRENDIZADO DINÂMICO:** Combinações que funcionam no momento")
-        st.write("- 🎯 **SELEÇÃO INTELIGENTE:** Máximo 15 números selecionados automaticamente")
+        st.write("- 🎯 **SELEÇÃO INTELIGENTE:** Máximo 10 números selecionados automaticamente")
         st.write("- 🚨 **REGRA UNIVERSAL:** Qualquer combinação com 2 erros seguidos → Troca imediata")
         for zona, dados in info_zonas.items():
             st.write(f"**Zona {zona}** (Núcleo: {dados['central']})")
@@ -4061,7 +4062,7 @@ with st.sidebar.expander("📊 Informações das Estratégias"):
         st.write("- **Zonas**: 6 antes + 6 depois (13 números/zona)")
         st.write("- **Saída**: 2 zonas com maior probabilidade")
         st.write("- 🔄 **APRENDIZADO DINÂMICO:** Combinações que funcionam no momento")
-        st.write("- 🎯 **SELEÇÃO INTELIGENTE:** Máximo 15 números selecionados automaticamente")
+        st.write("- 🎯 **SELEÇÃO INTELIGENTE:** Máximo 10 números selecionados automaticamente")
         
         info_zonas_ml = st.session_state.sistema.estrategia_ml.get_info_zonas_ml()
         for zona, dados in info_zonas_ml.items():
@@ -4176,7 +4177,7 @@ if sistema.previsao_ativa:
     st.success(f"**{previsao['nome']}**")
     
     if previsao.get('selecao_inteligente', False):
-        st.success("🎯 **SELEÇÃO INTELIGENTE ATIVA** - 15 melhores números selecionados")
+        st.success("🎯 **SELEÇÃO INTELIGENTE ATIVA** - 10 melhores números selecionados")
         st.info("📊 **Critérios:** Frequência + Posição + Vizinhança + Tendência")
     
     if 'Zonas' in previsao['nome']:
