@@ -364,7 +364,7 @@ def enviar_alerta_numeros_simplificado(previsao):
         else:
             emoji = "💰"
             
-        mensagem_simplificada = f"{emoji} APOSTAR \n{linha1}\n{linha2}"
+        mensagem_simplificada = f"{emoji} APOSTAR AGORA\n{linha1}\n{linha2}"
         
         enviar_telegram(mensagem_simplificada)
         logging.info("🔔 Alerta simplificado enviado para Telegram")
