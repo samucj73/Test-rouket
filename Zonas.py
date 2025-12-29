@@ -632,6 +632,40 @@ def salvar_resultado_em_arquivo(historico):
         logging.error(f"Erro ao salvar histórico: {e}")
 
 # =============================
+# FUNÇÃO DEBUG PARA API
+# =============================
+def testar_api():
+    """Testa a conexão com a API e mostra resultados"""
+    st.write("🧪 **TESTE DA API**")
+    
+    try:
+        # Testar conexão
+        response = requests.get(API_URL, headers=HEADERS, timeout=10)
+        st.write(f"Status: {response.status_code}")
+        
+        if response.status_code == 200:
+            data = response.json()
+            st.write(f"Tipo de dados: {type(data)}")
+            
+            if isinstance(data, list):
+                st.write(f"Quantidade de itens: {len(data)}")
+                
+                # Mostrar últimos 3 resultados
+                for i, item in enumerate(data[:3]):
+                    st.write(f"Item {i+1}:")
+                    st.write(f"  Resultado: {item.get('result', {}).get('number', 'N/A')}")
+                    st.write(f"  Timestamp: {item.get('timestamp', 'N/A')}")
+            
+            elif isinstance(data, dict):
+                st.write("Estrutura do JSON:")
+                st.json(data)
+        else:
+            st.error(f"Erro na API: {response.status_code}")
+            
+    except Exception as e:
+        st.error(f"Erro ao testar API: {e}")
+
+# =============================
 # SISTEMA DE DETECÇÃO DE TENDÊNCIAS
 # =============================
 class SistemaTendencias:
@@ -2758,9 +2792,6 @@ class SistemaRoletaCompleto:
             # Adicionar ao histórico
             self.sistema_tendencias.historico_tendencias.append(analise_tendencia)
             
-            # Enviar notificações se aplicável
-            self.sistema_tendencias.enviar_notificacoes_tendencia(analise_tendencia)
-            
             # Construir análise detalhada
             analise = "📈 ANÁLISE DE TENDÊNCIAS - SISTEMA INTELIGENTE\n"
             analise += "=" * 60 + "\n"
@@ -3300,6 +3331,22 @@ with st.sidebar.expander(f"🔍 Análise - Zonas", expanded=False):
     analise = st.session_state.sistema.estrategia_zonas.get_analise_detalhada()
     st.text(analise)
 
+# Debug da API
+with st.sidebar.expander("🔧 Debug API", expanded=False):
+    if st.button("Testar Conexão API"):
+        testar_api()
+    
+    # Mostrar últimos 5 números capturados
+    if st.session_state.historico:
+        st.write("📋 Últimos capturados:")
+        for i, item in enumerate(st.session_state.historico[-5:]):
+            if isinstance(item, dict):
+                numero = item.get('number', 'N/A')
+                fonte = item.get('source', 'manual')
+                st.write(f"{i+1}. {numero} ({fonte})")
+    else:
+        st.write("Nenhum número capturado ainda")
+
 # INTERFACE STREAMLIT PARA OTIMIZAÇÃO
 with st.sidebar.expander("🤖 OTIMIZAÇÃO DINÂMICA 90%", expanded=True):
     st.write("**Sistema de Aprendizado por Reforço**")
@@ -3356,6 +3403,18 @@ with st.sidebar.expander("🤖 OTIMIZAÇÃO DINÂMICA 90%", expanded=True):
 # CONTEÚDO PRINCIPAL
 # =============================
 
+# Testar API na inicialização
+if 'api_tested' not in st.session_state:
+    st.session_state.api_tested = False
+
+if not st.session_state.api_tested:
+    resultado = fetch_latest_result()
+    if resultado:
+        st.sidebar.success(f"✅ API conectada! Último número: {resultado.get('number')}")
+    else:
+        st.sidebar.error("❌ API não retornou dados. Verifique conexão ou URL.")
+    st.session_state.api_tested = True
+
 # Entrada manual
 st.subheader("✍️ Inserir Sorteios")
 entrada = st.text_input("Digite números (0-36) separados por espaço:")
@@ -3363,7 +3422,7 @@ if st.button("Adicionar") and entrada:
     try:
         nums = [int(n) for n in entrada.split() if n.isdigit() and 0 <= int(n) <= 36]
         for n in nums:
-            item = {"number": n, "timestamp": f"manual_{len(st.session_state.historico)}"}
+            item = {"number": n, "timestamp": f"manual_{len(st.session_state.historico)}", "source": "manual"}
             st.session_state.historico.append(item)
             st.session_state.sistema.processar_novo_numero(n)
         salvar_resultado_em_arquivo(st.session_state.historico)
@@ -3376,20 +3435,65 @@ if st.button("Adicionar") and entrada:
 # Atualização automática
 st_autorefresh(interval=3000, key="refresh")
 
+# DEBUG: Mostrar status da API
+if st.checkbox("🔍 Mostrar Debug API", key="debug_api"):
+    resultado_test = fetch_latest_result()
+    if resultado_test:
+        st.json(resultado_test)
+    else:
+        st.error("❌ API não retornou dados")
+
 # Buscar resultado da API
 resultado = fetch_latest_result()
-if st.session_state.historico:
-    ultimo_ts = st.session_state.historico[-1].get("timestamp") if st.session_state.historico else None
-else:
-    ultimo_ts = None
 
-if resultado and resultado.get("timestamp") and resultado["timestamp"] != ultimo_ts:
-    numero_atual = resultado.get("number")
-    if numero_atual is not None:
+if resultado:
+    # DEBUG: Mostrar o que a API retornou
+    st.sidebar.info(f"📡 API: {resultado.get('number', 'N/A')} - {resultado.get('timestamp', 'N/A')}")
+    
+    if st.session_state.historico:
+        # Obter último resultado do histórico
+        ultimo_item = st.session_state.historico[-1]
+        ultimo_numero_historico = ultimo_item.get('number') if isinstance(ultimo_item, dict) else ultimo_item
+        ultimo_timestamp_historico = ultimo_item.get('timestamp') if isinstance(ultimo_item, dict) else None
+        
+        # Obter dados do novo resultado
+        novo_numero = resultado.get('number')
+        novo_timestamp = resultado.get('timestamp')
+        
+        # Verificar se é um novo resultado
+        novo_resultado = False
+        
+        # Se o número é diferente
+        if novo_numero != ultimo_numero_historico:
+            novo_resultado = True
+        
+        # Se o timestamp é diferente (para API que sempre retorna timestamps únicos)
+        elif novo_timestamp and ultimo_timestamp_historico and novo_timestamp != ultimo_timestamp_historico:
+            novo_resultado = True
+        
+        # Se não temos timestamp, usar timestamp atual
+        elif not ultimo_timestamp_historico and novo_timestamp:
+            novo_resultado = True
+        
+        if novo_resultado:
+            st.session_state.historico.append(resultado)
+            st.session_state.sistema.processar_novo_numero(resultado)
+            salvar_resultado_em_arquivo(st.session_state.historico)
+            salvar_sessao()
+            
+            # Mostrar notificação
+            st.sidebar.success(f"🎲 Novo: {novo_numero}")
+            
+            # Atualizar a página para mostrar novo número
+            st.rerun()
+    
+    else:
+        # Primeiro resultado - sempre adicionar
         st.session_state.historico.append(resultado)
         st.session_state.sistema.processar_novo_numero(resultado)
         salvar_resultado_em_arquivo(st.session_state.historico)
         salvar_sessao()
+        st.sidebar.success(f"🎲 Primeiro: {resultado.get('number')}")
 
 # Interface principal
 st.subheader("🔁 Últimos Números")
@@ -3397,6 +3501,12 @@ if st.session_state.historico:
     ultimos_10 = st.session_state.historico[-10:]
     numeros_str = " ".join(str(item['number'] if isinstance(item, dict) else item) for item in ultimos_10)
     st.write(numeros_str)
+    
+    # Mostrar fonte dos números
+    st.caption("📌 **Fontes:** " + ", ".join([
+        f"{item.get('source', 'manual')}:{item['number'] if isinstance(item, dict) else item}" 
+        for item in ultimos_10[-5:]
+    ]))
 else:
     st.write("Nenhum número registrado")
 
