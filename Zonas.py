@@ -2140,8 +2140,8 @@ class SistemaOtimizacaoDinamica:
         }
         
         # Estatísticas do aprendizado
-        estatisticas_aprendizado = self.aprendizado.get_estatisticas_aprendizado()
-        resumo['estat
+       # estatisticas_aprendizado = self.aprendizado.get_estatisticas_aprendizado()
+      #  resumo['estat
 #######################
 # =============================
 # INTERFACE STREAMLIT PARA OTIMIZAÇÃO
