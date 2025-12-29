@@ -1,3 +1,4 @@
+
 import streamlit as st
 import json
 import os
@@ -50,7 +51,7 @@ def inicializar_config_alertas():
 inicializar_config_alertas()
 
 def salvar_sessao():
-    """Salva todos os dados da sessão em arquivo"""
+    """Salva dados essenciais da sessão em arquivo - VERSÃO SIMPLIFICADA"""
     try:
         if 'sistema' not in st.session_state:
             logging.warning("❌ Sistema não está na sessão")
@@ -58,7 +59,7 @@ def salvar_sessao():
             
         sistema = st.session_state.sistema
         
-        # Coletar dados basicos primeiro
+        # Coletar apenas dados essenciais
         session_data = {
             'historico': st.session_state.get('historico', []),
             'telegram_token': st.session_state.get('telegram_token', ''),
@@ -72,6 +73,7 @@ def salvar_sessao():
                 'alertas_erros': True,
                 'alertas_acertos': True
             }),
+            # Dados básicos do sistema
             'sistema_acertos': sistema.acertos,
             'sistema_erros': sistema.erros,
             'sistema_estrategias_contador': sistema.estrategias_contador,
@@ -86,23 +88,11 @@ def salvar_sessao():
             'sistema_historico_combinacoes': sistema.historico_combinacoes,
             'sistema_combinacoes_quentes': sistema.combinacoes_quentes,
             'sistema_combinacoes_frias': sistema.combinacoes_frias,
-            'sistema_contador_otimizacoes_aplicadas': sistema.contador_otimizacoes_aplicadas if hasattr(sistema, 'contador_otimizacoes_aplicadas') else 0,
         }
         
-        # Adicionar dados da estratégia Zonas se existir
-        if hasattr(sistema, 'estrategia_zonas'):
-            session_data['zonas_historico'] = list(sistema.estrategia_zonas.historico)
-            session_data['zonas_stats'] = sistema.estrategia_zonas.stats_zonas
-            
-        if hasattr(sistema, 'sistema_tendencias'):
-            session_data['sistema_tendencias_historico'] = list(sistema.sistema_tendencias.historico_tendencias)
-            session_data['sistema_tendencias_estado'] = sistema.sistema_tendencias.estado_tendencia
-            session_data['sistema_tendencias_ativa'] = sistema.sistema_tendencias.tendencia_ativa
-            session_data['sistema_tendencias_confirmacoes'] = sistema.sistema_tendencias.contador_confirmacoes
-            session_data['sistema_tendencias_acertos'] = sistema.sistema_tendencias.contador_acertos_tendencia
-            session_data['sistema_tendencias_erros'] = sistema.sistema_tendencias.contador_erros_tendencia
-            session_data['sistema_tendencias_operacoes'] = sistema.sistema_tendencias.rodadas_operando
-            session_data['sistema_tendencias_historico_zonas'] = list(sistema.sistema_tendencias.historico_zonas_dominantes)
+        # Adicionar contador de otimizações se existir
+        if hasattr(sistema, 'contador_otimizacoes_aplicadas'):
+            session_data['sistema_contador_otimizacoes_aplicadas'] = sistema.contador_otimizacoes_aplicadas
         
         with open(SESSION_DATA_PATH, 'wb') as f:
             pickle.dump(session_data, f, protocol=pickle.HIGHEST_PROTOCOL)
@@ -115,7 +105,7 @@ def salvar_sessao():
         return False
 
 def carregar_sessao():
-    """Carrega todos os dados da sessão do arquivo"""
+    """Carrega todos os dados da sessão do arquivo - VERSÃO CORRIGIDA"""
     try:
         if not os.path.exists(SESSION_DATA_PATH):
             logging.info("ℹ️  Nenhuma sessão salva encontrada")
@@ -127,74 +117,65 @@ def carregar_sessao():
         if not isinstance(session_data, dict):
             logging.error("❌ Dados de sessão corrompidos")
             return False
-            
-        # Inicializar config de alertas primeiro
-        inicializar_config_alertas()
         
-        # Carregar dados básicos
+        # GARANTIR que o sistema existe antes de tentar carregar dados
+        if 'sistema' not in st.session_state:
+            st.session_state.sistema = SistemaRoletaCompleto()
+        
+        # Carregar dados básicos primeiro
         st.session_state.historico = session_data.get('historico', [])
         st.session_state.telegram_token = session_data.get('telegram_token', '')
         st.session_state.telegram_chat_id = session_data.get('telegram_chat_id', '')
         
-        # Carregar configurações de alertas (se existirem)
-        if 'alertas_config' in session_data:
-            st.session_state.alertas_config = session_data['alertas_config']
+        # Carregar configurações de alertas
+        st.session_state.alertas_config = session_data.get('alertas_config', {
+            'alertas_previsao': True,
+            'alertas_resultado': True,
+            'alertas_rotacao': True,
+            'alertas_tendencia': True,
+            'alertas_treinamento': True,
+            'alertas_erros': True,
+            'alertas_acertos': True
+        })
         
-        if 'sistema' not in st.session_state:
-            st.session_state.sistema = SistemaRoletaCompleto()
-            
         sistema = st.session_state.sistema
         
-        # Carregar dados do sistema
-        sistema.acertos = session_data.get('sistema_acertos', 0)
-        sistema.erros = session_data.get('sistema_erros', 0)
-        sistema.estrategias_contador = session_data.get('sistema_estrategias_contador', {})
-        sistema.historico_desempenho = session_data.get('sistema_historico_desempenho', [])
-        sistema.contador_sorteios_global = session_data.get('sistema_contador_sorteios_global', 0)
-        sistema.sequencia_erros = session_data.get('sistema_sequencia_erros', 0)
-        sistema.ultima_estrategia_erro = session_data.get('sistema_ultima_estrategia_erro', '')
-        sistema.sequencia_acertos = session_data.get('sistema_sequencia_acertos', 0)
-        sistema.ultima_combinacao_acerto = session_data.get('sistema_ultima_combinacao_acerto', [])
-        sistema.historico_combinacoes_acerto = session_data.get('sistema_historico_combinacoes_acerto', [])
-        sistema.estrategia_selecionada = session_data.get('estrategia_selecionada', 'Zonas')
-        sistema.historico_combinacoes = session_data.get('sistema_historico_combinacoes', {})
-        sistema.combinacoes_quentes = session_data.get('sistema_combinacoes_quentes', [])
-        sistema.combinacoes_frias = session_data.get('sistema_combinacoes_frias', [])
-        sistema.contador_otimizacoes_aplicadas = session_data.get('sistema_contador_otimizacoes_aplicadas', 0)
+        # VERIFICAR se o sistema tem os atributos necessários
+        atributos_necessarios = [
+            'acertos', 'erros', 'estrategias_contador', 'historico_desempenho',
+            'contador_sorteios_global', 'sequencia_erros', 'ultima_estrategia_erro',
+            'sequencia_acertos', 'ultima_combinacao_acerto', 'historico_combinacoes_acerto',
+            'estrategia_selecionada', 'historico_combinacoes', 'combinacoes_quentes',
+            'combinacoes_frias'
+        ]
         
-        # Carregar dados da estratégia Zonas
-        if hasattr(sistema, 'estrategia_zonas'):
-            zonas_historico = session_data.get('zonas_historico', [])
-            sistema.estrategia_zonas.historico = deque(zonas_historico, maxlen=70)
-            sistema.estrategia_zonas.stats_zonas = session_data.get('zonas_stats', {
-                'Vermelha': {'acertos': 0, 'tentativas': 0, 'sequencia_atual': 0, 'sequencia_maxima': 0, 'performance_media': 0},
-                'Azul': {'acertos': 0, 'tentativas': 0, 'sequencia_atual': 0, 'sequencia_maxima': 0, 'performance_media': 0},
-                'Amarela': {'acertos': 0, 'tentativas': 0, 'sequencia_atual': 0, 'sequencia_maxima': 0, 'performance_media': 0}
-            })
-            
-            # Reconstruir números das zonas
-            for zona, central in sistema.estrategia_zonas.zonas.items():
-                qtd = sistema.estrategia_zonas.quantidade_zonas.get(zona, 6)
-                sistema.estrategia_zonas.numeros_zonas[zona] = sistema.estrategia_zonas.roleta.get_vizinhos_zona(central, qtd)
+        # Carregar apenas dados que existem na sessão
+        for attr in atributos_necessarios:
+            session_key = f'sistema_{attr}' if not attr.startswith('sistema_') else attr
+            if session_key in session_data:
+                setattr(sistema, attr.replace('sistema_', ''), session_data[session_key])
         
-        if hasattr(sistema, 'sistema_tendencias'):
-            tendencias_historico = session_data.get('sistema_tendencias_historico', [])
-            sistema.sistema_tendencias.historico_tendencias = deque(tendencias_historico, maxlen=50)
-            sistema.sistema_tendencias.estado_tendencia = session_data.get('sistema_tendencias_estado', 'aguardando')
-            sistema.sistema_tendencias.tendencia_ativa = session_data.get('sistema_tendencias_ativa', None)
-            sistema.sistema_tendencias.contador_confirmacoes = session_data.get('sistema_tendencias_confirmacoes', 0)
-            sistema.sistema_tendencias.contador_acertos_tendencia = session_data.get('sistema_tendencias_acertos', 0)
-            sistema.sistema_tendencias.contador_erros_tendencia = session_data.get('sistema_tendencias_erros', 0)
-            sistema.sistema_tendencias.rodadas_operando = session_data.get('sistema_tendencias_operacoes', 0)
-            
-            tendencias_historico_zonas = session_data.get('sistema_tendencias_historico_zonas', [])
-            sistema.sistema_tendencias.historico_zonas_dominantes = deque(tendencias_historico_zonas, maxlen=10)
+        # Carregar contador de otimizações se existir
+        if 'sistema_contador_otimizacoes_aplicadas' in session_data:
+            sistema.contador_otimizacoes_aplicadas = session_data['sistema_contador_otimizacoes_aplicadas']
+        
+        # GARANTIR que os sistemas internos estão inicializados
+        if not hasattr(sistema, 'estrategia_zonas'):
+            sistema.estrategia_zonas = EstrategiaZonasOtimizada()
+        
+        if not hasattr(sistema, 'sistema_tendencias'):
+            sistema.sistema_tendencias = SistemaTendencias()
+        
+        if not hasattr(sistema, 'sistema_otimizacao'):
+            sistema.sistema_otimizacao = SistemaOtimizacaoDinamica()
         
         logging.info(f"✅ Sessão carregada: {sistema.acertos} acertos, {sistema.erros} erros")
         return True
         
     except Exception as e:
         logging.error(f"❌ Erro ao carregar sessão: {e}", exc_info=True)
+        # Se falhar, criar sistema novo
+        st.session_state.sistema = SistemaRoletaCompleto()
         return False
 
 def limpar_sessao():
@@ -216,6 +197,62 @@ def limpar_sessao():
         
     except Exception as e:
         logging.error(f"❌ Erro ao limpar sessão: {e}")
+
+def limpar_sessao_confirmada():
+    """Limpa todos os dados da sessão com confirmação - VERSÃO SEGURA"""
+    try:
+        # Solicitar confirmação
+        if st.checkbox("⚠️ **ATENÇÃO:** Isso irá remover TODOS os dados. Confirmar?"):
+            if st.button("🗑️ CONFIRMAR LIMPEZA TOTAL", type="primary"):
+                # Limpar apenas os dados da sessão, manter configurações básicas
+                configs = {
+                    'telegram_token': st.session_state.get('telegram_token', ''),
+                    'telegram_chat_id': st.session_state.get('telegram_chat_id', ''),
+                    'alertas_config': st.session_state.get('alertas_config', {
+                        'alertas_previsao': True,
+                        'alertas_resultado': True,
+                        'alertas_rotacao': True,
+                        'alertas_tendencia': True,
+                        'alertas_treinamento': True,
+                        'alertas_erros': True,
+                        'alertas_acertos': True
+                    })
+                }
+                
+                # Listar chaves a remover
+                chaves_para_remover = []
+                for chave in st.session_state.keys():
+                    if chave not in ['telegram_token', 'telegram_chat_id', 'alertas_config']:
+                        chaves_para_remover.append(chave)
+                
+                # Remover chaves
+                for chave in chaves_para_remover:
+                    del st.session_state[chave]
+                
+                # Recriar sistema
+                st.session_state.sistema = SistemaRoletaCompleto()
+                st.session_state.historico = []
+                
+                # Restaurar configurações
+                st.session_state.telegram_token = configs['telegram_token']
+                st.session_state.telegram_chat_id = configs['telegram_chat_id']
+                st.session_state.alertas_config = configs['alertas_config']
+                
+                # Tentar remover arquivos
+                arquivos = [SESSION_DATA_PATH, HISTORICO_PATH, ML_MODEL_PATH, SCALER_PATH, META_PATH]
+                for arquivo in arquivos:
+                    if os.path.exists(arquivo):
+                        try:
+                            os.remove(arquivo)
+                            logging.info(f"🗑️ Removido: {arquivo}")
+                        except Exception as e:
+                            logging.warning(f"⚠️ Não foi possível remover {arquivo}: {e}")
+                
+                st.success("✅ Sessão limpa com sucesso! Sistema reinicializado.")
+                st.rerun()
+    except Exception as e:
+        logging.error(f"❌ Erro ao limpar sessão: {e}")
+        st.error(f"Erro ao limpar sessão: {e}")
 
 # =============================
 # CONFIGURAÇÕES DE NOTIFICAÇÃO
@@ -2163,6 +2200,7 @@ class SistemaOtimizacaoDinamica:
 # =============================
 class SistemaRoletaCompleto:
     def __init__(self):
+        # Inicializar TUDO explicitamente
         self.estrategia_zonas = EstrategiaZonasOtimizada()
         self.previsao_ativa = None
         self.historico_desempenho = []
@@ -2189,12 +2227,13 @@ class SistemaRoletaCompleto:
             ['Azul', 'Amarela']
         ]
         
+        # Inicializar sistemas internos
         self.sistema_tendencias = SistemaTendencias()
-        
-        # ===== NOVO: SISTEMA DE APRENDIZADO POR REFORÇO =====
         self.sistema_otimizacao = SistemaOtimizacaoDinamica()
         self.ultima_otimizacao = None
-        self.contador_otimizacoes_aplicadas = 0
+        self.contador_otimizacoes_aplicadas = 0  # GARANTIR que este atributo existe
+        
+        logging.info("✅ Sistema Roleta Completo inicializado com todos os atributos")
 
     def set_estrategia(self, estrategia):
         self.estrategia_selecionada = estrategia
@@ -2666,6 +2705,8 @@ class SistemaRoletaCompleto:
             self.contador_sorteios_global += 1
             
             # Processar resultado da previsão anterior
+            resultado_para_otimizacao = None  # Inicializar como None
+            
             if self.previsao_ativa:
                 acerto = False
                 zonas_acertadas = []
@@ -2686,9 +2727,19 @@ class SistemaRoletaCompleto:
                         if numero_real in numeros_zona:
                             acerto = True
                             zonas_acertadas.append(zona)
-                
+            
                 # Atualizar análise de tendências
                 self.atualizar_analise_tendencias(numero_real, zonas_acertadas[0] if zonas_acertadas else None, acerto)
+                
+                # Criar resultado para otimização ANTES de tentar rotação
+                resultado_para_otimizacao = {
+                    'numero': numero_real,
+                    'acerto': acerto,
+                    'estrategia': nome_estrategia,
+                    'previsao': self.previsao_ativa['numeros_apostar'],
+                    'zona_acertada': "+".join(zonas_acertadas) if zonas_acertadas else None,
+                    'zonas_envolvidas': zonas_envolvidas
+                }
                 
                 # Tentar rotação automática
                 rotacionou = self.rotacionar_estrategia_automaticamente(acerto, nome_estrategia, zonas_envolvidas)
@@ -2704,26 +2755,17 @@ class SistemaRoletaCompleto:
                 else:
                     self.erros += 1
                 
-                # Criar resultado para otimização
-                resultado_para_otimizacao = {
-                    'numero': numero_real,
-                    'acerto': acerto,
-                    'estrategia': nome_estrategia,
-                    'previsao': self.previsao_ativa['numeros_apostar'],
-                    'zona_acertada': "+".join(zonas_acertadas) if zonas_acertadas else None,
-                    'zonas_envolvidas': zonas_envolvidas
-                }
-                
-                # Processar com otimização dinâmica
-                otimizacao = self.processar_com_otimizacao(resultado_para_otimizacao)
+                # Processar com otimização dinâmica se houver resultado
+                if resultado_para_otimizacao:
+                    otimizacao = self.processar_com_otimizacao(resultado_para_otimizacao)
+                    
+                    # Mostrar otimização se existir
+                    if otimizacao and otimizacao.get('alerta'):
+                        st.warning(f"⚠️ {otimizacao['alerta']}")
                 
                 # Enviar notificação de resultado
                 zona_acertada_str = "+".join(zonas_acertadas) if zonas_acertadas else None
                 enviar_resultado_super_simplificado(numero_real, acerto, nome_estrategia, zona_acertada_str)
-                
-                # Mostrar otimização se existir
-                if otimizacao and otimizacao.get('alerta'):
-                    st.warning(f"⚠️ {otimizacao['alerta']}")
                 
                 # Registrar no histórico
                 self.historico_desempenho.append({
@@ -2743,7 +2785,7 @@ class SistemaRoletaCompleto:
                 
                 self.previsao_ativa = None
             
-            # Adicionar número às estratégias
+            # SEMPRE adicionar número às estratégias (mesmo sem previsão anterior)
             self.estrategia_zonas.adicionar_numero(numero_real)
             
             # Gerar nova previsão
@@ -2978,22 +3020,30 @@ def mostrar_combinacoes_dinamicas():
         
     sistema = st.session_state.sistema
     
-    if hasattr(sistema, 'combinacoes_quentes') and sistema.combinacoes_quentes:
-        st.sidebar.subheader("🔥 Combinações Quentes")
-        for combo in sistema.combinacoes_quentes[:3]:
-            dados = sistema.historico_combinacoes.get(combo, {})
-            eff = dados.get('eficiencia', 0)
-            total = dados.get('total', 0)
-            seq = dados.get('sequencia_acertos', 0)
-            st.sidebar.write(f"🎯 {combo[0]}+{combo[1]}: {eff:.1f}% ({seq}✓)")
-    
-    if hasattr(sistema, 'combinacoes_frias') and sistema.combinacoes_frias:
-        st.sidebar.subheader("❌ Combinações Frias")
-        for combo in sistema.combinacoes_frias[:3]:
-            dados = sistema.historico_combinacoes.get(combo, {})
-            eff = dados.get('eficiencia', 0)
-            total = dados.get('total', 0)
-            st.sidebar.write(f"🚫 {combo[0]}+{combo[1]}: {eff:.1f}%")
+    # VERIFICAR se os atributos existem antes de usar
+    try:
+        if (hasattr(sistema, 'combinacoes_quentes') and 
+            hasattr(sistema, 'combinacoes_frias') and
+            hasattr(sistema, 'historico_combinacoes')):
+            
+            if sistema.combinacoes_quentes:
+                st.sidebar.subheader("🔥 Combinações Quentes")
+                for combo in sistema.combinacoes_quentes[:3]:
+                    if hasattr(combo, '__len__'):
+                        dados = sistema.historico_combinacoes.get(combo, {})
+                        eff = dados.get('eficiencia', 0)
+                        seq = dados.get('sequencia_acertos', 0)
+                        st.sidebar.write(f"🎯 {combo[0]}+{combo[1]}: {eff:.1f}% ({seq}✓)")
+            
+            if sistema.combinacoes_frias:
+                st.sidebar.subheader("❌ Combinações Frias")
+                for combo in sistema.combinacoes_frias[:3]:
+                    if hasattr(combo, '__len__'):
+                        dados = sistema.historico_combinacoes.get(combo, {})
+                        eff = dados.get('eficiencia', 0)
+                        st.sidebar.write(f"🚫 {combo[0]}+{combo[1]}: {eff:.1f}%")
+    except Exception as e:
+        logging.error(f"Erro ao mostrar combinações dinâmicas: {e}")
 
 # =============================
 # FUNÇÃO PARA VERIFICAR INTEGRIDADE DA SESSÃO
@@ -3027,49 +3077,6 @@ def verificar_integridade_sessao():
     return len(problemas) == 0, problemas
 
 # =============================
-# LIMPEZA SEGURA DE SESSÃO
-# =============================
-def limpar_sessao_confirmada():
-    """Limpa todos os dados da sessão com confirmação"""
-    try:
-        # Guardar apenas alguns dados de configuração
-        telegram_token = st.session_state.get('telegram_token', '')
-        telegram_chat_id = st.session_state.get('telegram_chat_id', '')
-        
-        # Limpar session state
-        for key in list(st.session_state.keys()):
-            if key not in ['telegram_token', 'telegram_chat_id']:
-                del st.session_state[key]
-        
-        # Restaurar configurações
-        if telegram_token:
-            st.session_state.telegram_token = telegram_token
-        if telegram_chat_id:
-            st.session_state.telegram_chat_id = telegram_chat_id
-        
-        # Reinicializar
-        inicializar_config_alertas()
-        st.session_state.sistema = SistemaRoletaCompleto()
-        st.session_state.historico = []
-        
-        # Remover arquivos
-        arquivos = [SESSION_DATA_PATH, HISTORICO_PATH, ML_MODEL_PATH, SCALER_PATH, META_PATH]
-        for arquivo in arquivos:
-            if os.path.exists(arquivo):
-                try:
-                    os.remove(arquivo)
-                    logging.info(f"🗑️ Removido: {arquivo}")
-                except:
-                    pass
-        
-        st.success("✅ Sessão limpa com sucesso! Sistema reinicializado.")
-        st.rerun()
-        
-    except Exception as e:
-        logging.error(f"❌ Erro ao limpar sessão: {e}")
-        st.error(f"Erro ao limpar sessão: {e}")
-
-# =============================
 # APLICAÇÃO STREAMLIT PRINCIPAL
 # =============================
 st.set_page_config(page_title="IA Roleta — Zonas Otimizadas", layout="centered")
@@ -3078,39 +3085,37 @@ st.title("🎯 IA Roleta — Sistema Zonas Otimizado + AI")
 # 1. Primeiro inicializar config de alertas
 inicializar_config_alertas()
 
-# 2. Tentar carregar sessão salva
-sessao_carregada = False
-if os.path.exists(SESSION_DATA_PATH):
-    try:
-        sessao_carregada = carregar_sessao()
-        if sessao_carregada:
-            st.toast("✅ Sessão carregada com sucesso", icon="✅")
-    except Exception as e:
-        logging.error(f"❌ Erro ao carregar sessão: {e}")
-        sessao_carregada = False
-
-# 3. Só então inicializar o sistema se necessário
+# 2. VERIFICAÇÃO MELHORADA - Carregar ou criar sistema de forma segura
 if "sistema" not in st.session_state:
-    if sessao_carregada and 'sistema' in st.session_state:
-        # Sistema já foi carregado na função carregar_sessao()
-        logging.info("✅ Sistema carregado da sessão")
+    # Tentar carregar sessão primeiro
+    if os.path.exists(SESSION_DATA_PATH):
+        try:
+            carregar_sessao()
+            if 'sistema' in st.session_state:
+                logging.info("✅ Sistema carregado da sessão")
+            else:
+                # Se carregar_sessao não criou o sistema, criar novo
+                st.session_state.sistema = SistemaRoletaCompleto()
+                logging.info("🆕 Sistema criado após falha no carregamento")
+        except Exception as e:
+            logging.error(f"❌ Erro ao carregar sessão: {e}")
+            st.session_state.sistema = SistemaRoletaCompleto()
     else:
         st.session_state.sistema = SistemaRoletaCompleto()
-        logging.info("🆕 Sistema criado do zero")
 
 if "historico" not in st.session_state:
-    if not sessao_carregada and os.path.exists(HISTORICO_PATH):
+    if os.path.exists(HISTORICO_PATH):
         try:
             with open(HISTORICO_PATH, "r") as f:
                 st.session_state.historico = json.load(f)
         except:
             st.session_state.historico = []
-    elif not sessao_carregada:
+    else:
         st.session_state.historico = []
 
-if "telegram_token" not in st.session_state and not sessao_carregada:
+if "telegram_token" not in st.session_state:
     st.session_state.telegram_token = ""
-if "telegram_chat_id" not in st.session_state and not sessao_carregada:
+if "telegram_chat_id" not in st.session_state:
     st.session_state.telegram_chat_id = ""
 
 # Verificar integridade da sessão
@@ -3174,9 +3179,6 @@ with st.sidebar.expander("🤖 OTIMIZAÇÃO DINÂMICA 90%", expanded=True):
     st.write("• 🎯 Otimização dinâmica de combinações")
     st.write("• ⚡ Adaptação automática à mesa")
 
-# Restante do código da aplicação Streamlit continua aqui...
-# (A interface do usuário permanece a mesma)
-
 # Sidebar - Configurações Avançadas
 st.sidebar.title("⚙️ Configurações")
 
@@ -3224,10 +3226,7 @@ with st.sidebar.expander("💾 Gerenciamento de Sessão", expanded=False):
     st.write("---")
     
     if st.button("🗑️ Limpar TODOS os Dados", type="secondary", use_container_width=True):
-        if st.checkbox("Confirmar limpeza total de todos os dados"):
-            limpar_sessao()
-            st.error("🗑️ Todos os dados foram limpos!")
-            st.stop()
+        limpar_sessao_confirmada()
 
 # Configurações dos Alertas - Checkboxes
 with st.sidebar.expander("🔔 Configuração de Alertas", expanded=False):
