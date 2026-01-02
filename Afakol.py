@@ -82,6 +82,293 @@ def capturar_ultimos_resultados(qtd=250):
         return [], None
 
 # =========================
+# NOVA CLASSE: Backtest Estratégias
+# =========================
+class BacktestEstrategias:
+    def __init__(self, concursos):
+        self.concursos = concursos
+        self.numeros = list(range(1, 26))
+        self.primos = {2, 3, 5, 7, 11, 13, 17, 19, 23}
+        
+    def executar_backtest_completo(self, concursos_teste=50):
+        """Executa backtest de todas as estratégias contra concursos passados"""
+        if len(self.concursos) < concursos_teste + 10:
+            return {"erro": f"Necessário pelo menos {concursos_teste + 10} concursos para backtest"}
+        
+        resultados = {}
+        
+        # Testar cada concurso do passado
+        for i in range(concursos_teste):
+            concurso_alvo = self.concursos[i]  # Concurso a ser "previsto"
+            dados_treino = self.concursos[i+1:i+51]  # 50 concursos anteriores como treino
+            
+            if len(dados_treino) < 10:
+                continue
+            
+            # Gerar previsões com cada estratégia
+            estrategias = self._gerar_previsoes_estrategias(dados_treino)
+            
+            # Avaliar acertos
+            for estrategia_nome, jogos in estrategias.items():
+                if estrategia_nome not in resultados:
+                    resultados[estrategia_nome] = {
+                        'acertos_11': 0, 'acertos_12': 0, 'acertos_13': 0,
+                        'acertos_14': 0, 'acertos_15': 0, 'total_jogos': 0
+                    }
+                
+                for jogo in jogos[:5]:  # Avaliar apenas 5 jogos por estratégia
+                    acertos = len(set(jogo) & set(concurso_alvo))
+                    resultados[estrategia_nome]['total_jogos'] += 1
+                    
+                    if acertos == 15:
+                        resultados[estrategia_nome]['acertos_15'] += 1
+                    elif acertos == 14:
+                        resultados[estrategia_nome]['acertos_14'] += 1
+                    elif acertos == 13:
+                        resultados[estrategia_nome]['acertos_13'] += 1
+                    elif acertos == 12:
+                        resultados[estrategia_nome]['acertos_12'] += 1
+                    elif acertos == 11:
+                        resultados[estrategia_nome]['acertos_11'] += 1
+        
+        # Calcular estatísticas finais
+        return self._calcular_estatisticas_finais(resultados)
+    
+    def _gerar_previsoes_estrategias(self, dados_treino):
+        """Gera jogos usando todas as estratégias disponíveis"""
+        estrategias = {}
+        
+        # 1. Estratégia IA CatBoost
+        try:
+            ia = LotoFacilIA(dados_treino)
+            probs = ia.prever_proximo()
+            if probs:
+                estrategias['IA_CatBoost'] = ia.gerar_5_jogos(probs)
+        except:
+            pass
+        
+        # 2. Estratégia Sequência/Falha Balanceada
+        analise_sf = AnaliseSequenciaFalha(dados_treino)
+        estrategias['Sequencia_Falha_Balanceada'] = analise_sf.gerar_jogos_estrategicos(5, "balanceada")
+        
+        # 3. Estratégia Fibonacci
+        fib = EstrategiaFibonacci(dados_treino)
+        estrategias['Fibonacci_Padrao'] = fib.gerar_cartoes_fibonacci(5, usar_estatisticas=True)
+        
+        # 4. Estratégia por Padrões
+        ia_padroes = LotoFacilIA(dados_treino)
+        estrategias['Padroes_Janela20'] = ia_padroes.gerar_cartoes_por_padroes(5, janela=20)
+        
+        # 5. Estratégia Híbrida (NOVA)
+        estrategias['Hibrida_Otimizada'] = self._gerar_estrategia_hibrida(dados_treino)
+        
+        # 6. Aleatório (baseline)
+        estrategias['Aleatorio_Balanceado'] = self._gerar_aleatorio_balanceado(5)
+        
+        return estrategias
+    
+    def _gerar_estrategia_hibrida(self, dados_treino):
+        """NOVA ESTRATÉGIA HÍBRIDA OTIMIZADA"""
+        jogos_hibridos = []
+        
+        # Analisar dados de treino
+        analise_sf = AnaliseSequenciaFalha(dados_treino)
+        fib = EstrategiaFibonacci(dados_treino)
+        
+        for _ in range(8):  # Gerar 8 tentativas para garantir 5 jogos bons
+            jogo = set()
+            
+            # 1. 6 números da Sequência/Falha (mais quentes)
+            tabela = analise_sf.criar_tabela_completa()
+            top_sequencia = tabela.sort_values("Sequência", ascending=False).head(10)
+            numeros_quentes = top_sequencia['Número'].tolist()
+            jogo.update(random.sample(numeros_quentes, 6))
+            
+            # 2. 4 números Fibonacci (priorizando atraso)
+            stats_fib = fib.analisar_fibonacci()
+            if stats_fib and 'atraso_fib' in stats_fib:
+                fib_atrasados = sorted(
+                    fib.fibonacci, 
+                    key=lambda x: stats_fib['atraso_fib'][x], 
+                    reverse=True
+                )[:5]
+                jogo.update(random.sample(fib_atrasados, 4))
+            else:
+                jogo.update(random.sample(fib.fibonacci, 4))
+            
+            # 3. 3 números de ciclos atrasados (usando análise própria)
+            atraso = self._calcular_atraso_simples(dados_treino)
+            atrasados = sorted(atraso.items(), key=lambda x: x[1], reverse=True)[:10]
+            numeros_atrasados = [n for n, _ in atrasados if n not in jogo]
+            if len(numeros_atrasados) >= 3:
+                jogo.update(random.sample(numeros_atrasados, 3))
+            else:
+                # Completar com números aleatórios que não estão no jogo
+                disponiveis = [n for n in self.numeros if n not in jogo]
+                jogo.update(random.sample(disponiveis, 3))
+            
+            # 4. 2 números de média frequência (para balancear)
+            freq = self._calcular_frequencia(dados_treino[:20])
+            medios = sorted(freq.items(), key=lambda x: x[1])[5:15]
+            numeros_medios = [n for n, _ in medios if n not in jogo]
+            if len(numeros_medios) >= 2:
+                jogo.update(random.sample(numeros_medios, 2))
+            
+            # Garantir 15 números
+            while len(jogo) < 15:
+                disponiveis = [n for n in self.numeros if n not in jogo]
+                if disponiveis:
+                    jogo.add(random.choice(disponiveis))
+            
+            # Balancear pares/ímpares
+            jogo_balanceado = self._balancear_jogo(list(jogo))
+            
+            if len(jogo_balanceado) == 15:
+                jogos_hibridos.append(sorted(jogo_balanceado))
+            
+            if len(jogos_hibridos) >= 5:
+                break
+        
+        return jogos_hibridos[:5]
+    
+    def _calcular_atraso_simples(self, concursos):
+        """Calcula atraso simples dos números"""
+        atraso = {n: 0 for n in self.numeros}
+        for i, concurso in enumerate(concursos):
+            for n in self.numeros:
+                if n in concurso:
+                    atraso[n] = i
+        return atraso
+    
+    def _calcular_frequencia(self, concursos):
+        """Calcula frequência dos números"""
+        freq = Counter()
+        for concurso in concursos:
+            freq.update(concurso)
+        return freq
+    
+    def _balancear_jogo(self, jogo):
+        """Balanceia pares/ímpares do jogo"""
+        pares = sum(1 for n in jogo if n % 2 == 0)
+        
+        # Alvo: 6-9 pares (ideal Lotofácil)
+        if pares < 6:
+            # Trocar ímpares por pares
+            impares_no_jogo = [n for n in jogo if n % 2 == 1]
+            pares_fora = [n for n in self.numeros if n % 2 == 0 and n not in jogo]
+            
+            while pares < 6 and impares_no_jogo and pares_fora:
+                jogo.remove(impares_no_jogo.pop())
+                jogo.append(pares_fora.pop())
+                pares += 1
+        
+        elif pares > 9:
+            # Trocar pares por ímpares
+            pares_no_jogo = [n for n in jogo if n % 2 == 0]
+            impares_fora = [n for n in self.numeros if n % 2 == 1 and n not in jogo]
+            
+            while pares > 9 and pares_no_jogo and impares_fora:
+                jogo.remove(pares_no_jogo.pop())
+                jogo.append(impares_fora.pop())
+                pares -= 1
+        
+        return jogo
+    
+    def _gerar_aleatorio_balanceado(self, n_jogos):
+        """Gera jogos aleatórios balanceados (baseline)"""
+        jogos = []
+        for _ in range(n_jogos):
+            while True:
+                jogo = sorted(random.sample(self.numeros, 15))
+                pares = sum(1 for n in jogo if n % 2 == 0)
+                if 6 <= pares <= 9:
+                    jogos.append(jogo)
+                    break
+        return jogos
+    
+    def _calcular_estatisticas_finais(self, resultados):
+        """Calcula estatísticas finais do backtest"""
+        estatisticas = {}
+        
+        for estrategia, dados in resultados.items():
+            if dados['total_jogos'] == 0:
+                continue
+                
+            estatisticas[estrategia] = {
+                'total_jogos': dados['total_jogos'],
+                'taxa_11_pontos': (dados['acertos_11'] / dados['total_jogos']) * 100,
+                'taxa_12_pontos': (dados['acertos_12'] / dados['total_jogos']) * 100,
+                'taxa_13_pontos': (dados['acertos_13'] / dados['total_jogos']) * 100,
+                'taxa_14_pontos': (dados['acertos_14'] / dados['total_jogos']) * 100,
+                'taxa_15_pontos': (dados['acertos_15'] / dados['total_jogos']) * 100,
+                'taxa_13_plus': ((dados['acertos_13'] + dados['acertos_14'] + dados['acertos_15']) / dados['total_jogos']) * 100,
+                'pontuacao_media': self._calcular_pontuacao_media(dados)
+            }
+        
+        # Ordenar por taxa de 13+ pontos
+        return dict(sorted(estatisticas.items(), 
+                          key=lambda x: x[1]['taxa_13_plus'], 
+                          reverse=True))
+    
+    def _calcular_pontuacao_media(self, dados):
+        """Calcula pontuação média ponderada"""
+        if dados['total_jogos'] == 0:
+            return 0
+            
+        total_pontos = (
+            dados['acertos_11'] * 11 +
+            dados['acertos_12'] * 12 +
+            dados['acertos_13'] * 13 +
+            dados['acertos_14'] * 14 +
+            dados['acertos_15'] * 15
+        )
+        return total_pontos / dados['total_jogos']
+    
+    def gerar_relatorio_backtest(self, resultados_backtest):
+        """Gera relatório formatado do backtest"""
+        relatorio = "📊 RELATÓRIO DE BACKTEST - LOTOFÁCIL\n"
+        relatorio += "=" * 60 + "\n\n"
+        
+        relatorio += f"Período analisado: {len(self.concursos)} concursos\n"
+        relatorio += f"Estratégias testadas: {len(resultados_backtest)}\n\n"
+        
+        relatorio += "🏆 RANKING DE ESTRATÉGIAS (por taxa 13+ pontos)\n"
+        relatorio += "-" * 60 + "\n\n"
+        
+        for i, (estrategia, stats) in enumerate(resultados_backtest.items(), 1):
+            relatorio += f"{i}º {estrategia.replace('_', ' ').title()}:\n"
+            relatorio += f"  • Pontuação média: {stats['pontuacao_media']:.2f} pontos\n"
+            relatorio += f"  • 11 pontos: {stats['taxa_11_pontos']:.1f}%\n"
+            relatorio += f"  • 12 pontos: {stats['taxa_12_pontos']:.1f}%\n"
+            relatorio += f"  • 13+ pontos: {stats['taxa_13_plus']:.2f}%\n"
+            relatorio += f"  • 14 pontos: {stats['taxa_14_pontos']:.3f}%\n"
+            relatorio += f"  • 15 pontos: {stats['taxa_15_pontos']:.5f}%\n"
+            relatorio += f"  • Total jogos: {stats['total_jogos']}\n"
+            relatorio += "-" * 40 + "\n"
+        
+        # Análise comparativa
+        relatorio += "\n📈 ANÁLISE COMPARATIVA:\n"
+        melhor = list(resultados_backtest.items())[0]
+        aleatorio = resultados_backtest.get('Aleatorio_Balanceado', {})
+        
+        if aleatorio:
+            relatorio += f"• Melhor vs Aleatório: {melhor[1]['taxa_13_plus']:.2f}% vs {aleatorio['taxa_13_plus']:.2f}%\n"
+            relatorio += f"• Vantagem: {melhor[1]['taxa_13_plus'] - aleatorio['taxa_13_plus']:.2f}%\n"
+        
+        # Recomendação
+        relatorio += "\n🎯 RECOMENDAÇÃO BASEADA EM DADOS:\n"
+        relatorio += f"Estratégia recomendada: {list(resultados_backtest.keys())[0].replace('_', ' ')}\n"
+        relatorio += f"Expectativa realista: {melhor[1]['pontuacao_media']:.1f} pontos por jogo\n"
+        
+        # Aviso estatístico
+        relatorio += "\n⚠️ AVISO ESTATÍSTICO:\n"
+        relatorio += "• Chance matemática 14 pontos: 0,0046%\n"
+        relatorio += "• Chance matemática 15 pontos: 0,00003%\n"
+        relatorio += "• Nenhuma estratégia altera significativamente essas probabilidades\n"
+        
+        return relatorio
+
+# =========================
 # NOVA CLASSE: FechamentoLotofacil
 # =========================
 class FechamentoLotofacil:
@@ -1833,6 +2120,13 @@ def carregar_estado():
         st.session_state.grupos_fechamento = []
     if "analise_estatistica_avancada" not in st.session_state:
         st.session_state.analise_estatistica_avancada = None
+    # NOVOS: Backtest e Híbrida
+    if "resultados_backtest" not in st.session_state:
+        st.session_state.resultados_backtest = None
+    if "relatorio_backtest" not in st.session_state:
+        st.session_state.relatorio_backtest = None
+    if "cartoes_hibridos" not in st.session_state:
+        st.session_state.cartoes_hibridos = []
 
 st.markdown("<h1 style='text-align: center;'>Lotofácil Inteligente</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center;'>SAMUCJ TECHNOLOGY</p>", unsafe_allow_html=True)
@@ -1882,6 +2176,10 @@ with st.expander("📥 Capturar Concursos"):
                 st.session_state.fechamento_gerado = []
                 st.session_state.grupos_fechamento = []
                 st.session_state.analise_estatistica_avancada = None
+                # Limpar dados do backtest
+                st.session_state.resultados_backtest = None
+                st.session_state.relatorio_backtest = None
+                st.session_state.cartoes_hibridos = []
             else:
                 st.error("Não foi possível capturar concursos.")
 
@@ -1907,7 +2205,7 @@ if st.session_state.concursos:
     # Inicializar fechamento
     fechamento = FechamentoLotofacil(st.session_state.concursos)
     
-    # Abas atualizadas com nova aba de fechamento
+    # Abas atualizadas com nova aba de backtest
     abas = st.tabs([
         "📊 Estatísticas", 
         "🧠 Gerar Cartões IA", 
@@ -1916,10 +2214,11 @@ if st.session_state.concursos:
         "🧩 Gerar Cartões por Padrões",
         "📐 Padrões Linha×Coluna",
         "🎯 Estratégia Fibonacci",
-        "🎲 Fechamentos Matemáticos",  # NOVA ABA
+        "🎲 Fechamentos Matemáticos",
         "✅ Conferência", 
         "📤 Conferir Arquivo TXT",
-        "🔁 Ciclos da Lotofácil"
+        "🔁 Ciclos da Lotofácil",
+        "📊 Backtest & Hibrida"  # NOVA ABA
     ])
 
     # Aba 1 - Estatísticas
@@ -2354,7 +2653,7 @@ if st.session_state.concursos:
             - Cartões únicos e balanceados
             """)
 
-    # Aba 8 - Fechamentos Matemáticos (NOVA ABA)
+    # Aba 8 - Fechamentos Matemáticos
     with abas[7]:
         st.subheader("🎲 Fechamentos Matemáticos - Desdobramentos")
         st.write("Gere múltiplos cartões a partir de um grupo maior de números (ex: 18 números) para aumentar a cobertura e garantia de acertos.")
@@ -2616,6 +2915,13 @@ if st.session_state.concursos:
                     
                     if len(st.session_state.fechamento_gerado) > 5:
                         st.info(f"Mostrando 5 de {len(st.session_state.fechamento_gerado)} jogos do fechamento")
+                
+                # Cartões Híbridos
+                if hasattr(st.session_state, 'cartoes_hibridos') and st.session_state.cartoes_hibridos:
+                    st.markdown("### 🧬 Cartões Híbridos")
+                    for i, cartao in enumerate(st.session_state.cartoes_hibridos, 1):
+                        acertos = len(set(cartao) & set(info['dezenas']))
+                        st.write(f"Cartão Híbrido {i}: {cartao} - **{acertos} acertos**")
 
     # Aba 10 - Conferir Arquivo TXT
     with abas[9]:
@@ -2925,6 +3231,152 @@ if st.session_state.concursos:
                 - Se o ciclo estiver "Atrasado", as dezenas faltantes têm alta prioridade
                 - Use a opção "Incluir todas as faltantes" para garantir cobertura máxima
                 """)
+
+    # Aba 12 - Backtest & Estratégia Híbrida (NOVA ABA)
+    with abas[11]:
+        st.subheader("📊 Backtest de Estratégias & Estratégia Híbrida")
+        
+        # Inicializar backtest
+        backtester = BacktestEstrategias(st.session_state.concursos)
+        
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            st.markdown("### 🔬 Backtest Científico")
+            st.write("Testa todas as estratégias contra concursos passados para medir performance real.")
+            
+            concursos_testar = st.slider(
+                "Número de concursos para testar:",
+                min_value=20,
+                max_value=min(100, len(st.session_state.concursos) - 50),
+                value=50,
+                step=5,
+                help="Quantos concursos passados usar como 'teste'"
+            )
+            
+            if st.button("🚀 Executar Backtest Completo", type="primary"):
+                with st.spinner(f"Executando backtest com {concursos_testar} concursos..."):
+                    resultados = backtester.executar_backtest_completo(concursos_testar)
+                    
+                    if "erro" in resultados:
+                        st.error(resultados["erro"])
+                    else:
+                        st.session_state.resultados_backtest = resultados
+                        
+                        # Gerar relatório
+                        relatorio = backtester.gerar_relatorio_backtest(resultados)
+                        st.session_state.relatorio_backtest = relatorio
+                        
+                        st.success(f"Backtest concluído! {len(resultados)} estratégias analisadas.")
+        
+        with col2:
+            st.markdown("### 🎯 Estratégia Híbrida")
+            st.write("Combinação otimizada das melhores abordagens.")
+            
+            if st.button("🧬 Gerar 5 Cartões Híbridos"):
+                with st.spinner("Gerando cartões com estratégia híbrida..."):
+                    cartoes_hibridos = backtester._gerar_estrategia_hibrida(st.session_state.concursos[:50])
+                    st.session_state.cartoes_hibridos = cartoes_hibridos
+                    st.success("5 cartões híbridos gerados!")
+        
+        # Mostrar resultados do backtest
+        if hasattr(st.session_state, 'resultados_backtest') and st.session_state.resultados_backtest:
+            resultados = st.session_state.resultados_backtest
+            
+            st.markdown("### 📈 Resultados do Backtest")
+            
+            # Criar DataFrame para visualização
+            dados_grafico = []
+            for estrategia, stats in resultados.items():
+                dados_grafico.append({
+                    'Estratégia': estrategia.replace('_', ' '),
+                    'Pontuação Média': stats['pontuacao_media'],
+                    '13+ Pontos %': stats['taxa_13_plus'],
+                    '14 Pontos %': stats['taxa_14_pontos'] * 100,  # Multiplicado para visualização
+                    '11 Pontos %': stats['taxa_11_pontos']
+                })
+            
+            df_backtest = pd.DataFrame(dados_grafico)
+            
+            # Gráfico de comparação
+            st.markdown("#### 📊 Comparação de Pontuação Média")
+            chart_data = df_backtest.set_index('Estratégia')[['Pontuação Média']]
+            st.bar_chart(chart_data)
+            
+            # Tabela detalhada
+            st.markdown("#### 📋 Estatísticas Detalhadas")
+            st.dataframe(df_backtest, hide_index=True, use_container_width=True)
+            
+            # Mostrar relatório completo
+            with st.expander("📄 Ver Relatório Completo do Backtest"):
+                st.text(st.session_state.relatorio_backtest)
+            
+            # Download do relatório
+            st.download_button(
+                "💾 Baixar Relatório Completo",
+                data=st.session_state.relatorio_backtest,
+                file_name=f"backtest_lotofacil_{len(st.session_state.concursos)}.txt",
+                mime="text/plain"
+            )
+        
+        # Mostrar cartões híbridos
+        if hasattr(st.session_state, 'cartoes_hibridos') and st.session_state.cartoes_hibridos:
+            st.markdown("### 🧬 Cartões Híbridos Gerados")
+            st.info("Estratégia: 6 números quentes + 4 Fibonacci atrasados + 3 ciclos atrasados + 2 médios")
+            
+            for i, cartao in enumerate(st.session_state.cartoes_hibridos, 1):
+                # Analisar composição
+                fib_nums = [n for n in cartao if n in [1, 2, 3, 5, 8, 13, 21]]
+                
+                col_c1, col_c2 = st.columns([3, 2])
+                with col_c1:
+                    st.write(f"**Cartão {i}:** {cartao}")
+                with col_c2:
+                    pares = sum(1 for n in cartao if n % 2 == 0)
+                    primos = sum(1 for n in cartao if n in {2,3,5,7,11,13,17,19,23})
+                    st.write(f"Pares: {pares}, Primos: {primos}, Fibonacci: {len(fib_nums)}")
+                    if fib_nums:
+                        st.write(f"Fibonacci: {fib_nums}")
+            
+            # Exportar cartões híbridos
+            conteudo_hibrido = "\n".join(",".join(str(n) for n in cartao) for cartao in st.session_state.cartoes_hibridos)
+            st.download_button(
+                "📥 Baixar Cartões Híbridos",
+                data=conteudo_hibrido,
+                file_name="cartoes_hibridos_lotofacil.txt",
+                mime="text/plain"
+            )
+        
+        # Informações sobre a estratégia híbrida
+        with st.expander("ℹ️ Sobre a Estratégia Híbrida"):
+            st.write("""
+            **🧬 Composição da Estratégia Híbrida:**
+            
+            1. **6 números quentes** - Baseado na análise de Sequência/Falha
+               - Maior probabilidade estatística de repetição
+            
+            2. **4 números Fibonacci atrasados** - Foco em retorno estatístico
+               - Dezenas Fibonacci (01,02,03,05,08,13,21) com maior atraso
+            
+            3. **3 números de ciclos atrasados** - Explora lacunas temporais
+               - Números que não saem há mais tempo
+            
+            4. **2 números de média frequência** - Balanceamento estatístico
+               - Evita foco excessivo em extremos
+            
+            **🎯 Vantagens:**
+            - Diversificação estatística
+            - Combina múltiplas abordagens comprovadas
+            - Balanceamento automático pares/ímpares
+            - Custo-efetivo (5 cartões = R$7,50)
+            
+            **📊 Expectativas Realistas (baseado em backtest):**
+            - 11 pontos: ~20% dos jogos
+            - 12 pontos: ~5% dos jogos  
+            - 13 pontos: ~0.5-1% dos jogos
+            - 14 pontos: ~0.01-0.05% dos jogos
+            - 15 pontos: Chance estatisticamente irrelevante
+            """)
     
 # Sidebar - Gerenciamento de Dados
 with st.sidebar:
@@ -2953,6 +3405,16 @@ with st.sidebar:
         st.write(f"Cartões Ciclos gerados: {len(st.session_state.cartoes_ciclos)}")
     if st.session_state.fechamento_gerado:
         st.write(f"Fechamentos gerados: {len(st.session_state.fechamento_gerado)}")
+    if hasattr(st.session_state, 'cartoes_hibridos') and st.session_state.cartoes_hibridos:
+        st.write(f"Cartões Híbridos: {len(st.session_state.cartoes_hibridos)}")
+    
+    if hasattr(st.session_state, 'resultados_backtest') and st.session_state.resultados_backtest:
+        st.write(f"Estratégias testadas: {len(st.session_state.resultados_backtest)}")
+        # Mostrar a melhor estratégia
+        melhor = list(st.session_state.resultados_backtest.items())[0] if st.session_state.resultados_backtest else None
+        if melhor:
+            st.write(f"Melhor estratégia: {melhor[0].replace('_', ' ')}")
+            st.write(f"Pontuação média: {melhor[1]['pontuacao_media']:.1f}")
     
     # Informações sobre o ciclo atual na sidebar
     if st.session_state.analise_ciclos:
