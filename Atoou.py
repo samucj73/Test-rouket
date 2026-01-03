@@ -2010,7 +2010,7 @@ def gerar_poster_individual_westham(fixture: dict, analise: dict) -> io.BytesIO:
             w = bbox[2] - bbox[0]
             draw.text((LARGURA - PADDING - 100 - w, y_stats + i * 45), stat, font=FONTE_ESTATISTICAS, fill=(180, 220, 255))
         except:
-            draw.text((LARGURA - PADDING - 300, y_stats + i * 45), stat, font=FONTE_ESTATISTICas, fill=(180, 220, 255))
+            draw.text((LARGURA - PADDING - 300, y_stats + i * 45), stat, font=FONTE_ESTATISTICAS, fill=(180, 220, 255))
 
     y_indicator = y_estatisticas + 160
     if analise["confianca"] >= 80:
@@ -2179,7 +2179,7 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
                      home_text, font=FONTE_TIMES, fill=(255, 255, 255))
         except:
             draw.text((x_home, y_escudos + TAMANHO_QUADRADO + 30),
-                     home_text, font=FONTE_TIMes, fill=(255, 255, 255))
+                     home_text, font=FONTE_TIMES, fill=(255, 255, 255))
 
         try:
             away_bbox = draw.textbbox((0, 0), away_text, font=FONTE_TIMES)
@@ -2475,7 +2475,7 @@ def gerar_poster_westham_style(jogos: list, titulo: str = " ALERTA DE GOLS") -> 
         rodape_w = rodape_bbox[2] - rodape_bbox[0]
         draw.text(((LARGURA - rodape_w) // 2, altura_total - 70), rodape_text, font=FONTE_DETALHES, fill=(100, 130, 160))
     except:
-        draw.text((LARGURA//2 - 250, altura_total - 70), rodape_text, font=FONTE_DETALHes, fill=(100, 130, 160))
+        draw.text((LARGURA//2 - 250, altura_total - 70), rodape_text, font=FONTE_DETALHES, fill=(100, 130, 160))
 
     buffer = io.BytesIO()
     img.save(buffer, format="PNG", optimize=True, quality=95)
@@ -3534,26 +3534,27 @@ def processar_jogos_otimizada(data_selecionada, ligas_selecionadas, todas_ligas,
     # ============================================================
     
     classificacoes = {}
-    with ThreadPoolExecutor(max_workers=3) as executor:
-        future_to_liga = {executor.submit(obter_classificacao, liga_id): liga_id for liga_id in ligas_busca}
-        
-        for future in as_completed(future_to_liga):
-            liga_id = future_to_liga[future]
-            try:
-                classificacoes[liga_id] = future.result(timeout=10)
-            except TimeoutError:
-                logging.warning(f"Timeout ao buscar classificação da liga {liga_id}")
-                classificacoes[liga_id] = {}
-            except Exception as e:
-                logging.error(f"Erro ao buscar classificação da liga {liga_id}: {e}")
-                classificacoes[liga_id] = {}
+    if total_ligas > 0:  # Adicionar verificação
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            future_to_liga = {executor.submit(obter_classificacao, liga_id): liga_id for liga_id in ligas_busca}
+            
+            for future in as_completed(future_to_liga):
+                liga_id = future_to_liga[future]
+                try:
+                    classificacoes[liga_id] = future.result(timeout=10)
+                except TimeoutError:
+                    logging.warning(f"Timeout ao buscar classificação da liga {liga_id}")
+                    classificacoes[liga_id] = {}
+                except Exception as e:
+                    logging.error(f"Erro ao buscar classificação da liga {liga_id}: {e}")
+                    classificacoes[liga_id] = {}
     
     # ============================================================
     # OTIMIZAÇÃO 2: Processamento em batch inteligente
     # ============================================================
     
     for i, liga_id in enumerate(ligas_busca):
-        classificacao = classificacoes[liga_id]
+        classificacao = classificacoes.get(liga_id, {})
         
         if liga_id == "BSA":
             jogos = obter_jogos_brasileirao(liga_id, hoje)
@@ -3578,13 +3579,27 @@ def processar_jogos_otimizada(data_selecionada, ligas_selecionadas, todas_ligas,
         
         st.write(f"📊 Liga {liga_id}: {len(jogos_validos)}/{len(jogos)} jogos válidos")
         
+        if not jogos_validos:  # Adicionar verificação
+            progress_bar.progress((i + 1) / total_ligas)
+            continue
+        
         # Processamento paralelo por batch
         batch_size = min(10, len(jogos_validos))
+        
+        # CORREÇÃO: Verificar se batch_size é maior que 0
+        if batch_size <= 0:
+            progress_bar.progress((i + 1) / total_ligas)
+            continue
+            
         for j in range(0, len(jogos_validos), batch_size):
             batch = jogos_validos[j:j+batch_size]
             batch_results = []
             
-            with ThreadPoolExecutor(max_workers=batch_size) as executor:
+            # CORREÇÃO: Usar ThreadPoolExecutor apenas se houver batch
+            if not batch:
+                continue
+                
+            with ThreadPoolExecutor(max_workers=min(batch_size, len(batch))) as executor:
                 future_to_match = {}
                 for match in batch:
                     home = match["homeTeam"]["name"]
@@ -3673,7 +3688,11 @@ def processar_jogos_otimizada(data_selecionada, ligas_selecionadas, todas_ligas,
     
     st.write(f"📊 Total processado: {len(top_jogos)} jogos")
     st.write(f"✅ Após filtros: {len(jogos_filtrados)} jogos")
-    st.write(f"📈 Over: {len(over_jogos)} | 📉 Under: {len(under_jogos)}")
+    
+    if top_jogos:  # Adicionar verificação
+        st.write(f"📈 Over: {len(over_jogos)} | 📉 Under: {len(under_jogos)}")
+    else:
+        st.write("📈 Over: 0 | 📉 Under: 0")
     
     # Processar alertas
     if jogos_filtrados:
@@ -3987,7 +4006,12 @@ def inicializar_sistema_otimizado():
 # =============================
 def main():
     # Inicializar sistema otimizado
-    inicializar_sistema_otimizado()
+    try:
+        inicializar_sistema_otimizado()
+    except Exception as e:
+        st.error(f"❌ Erro ao inicializar sistema: {e}")
+        logging.error(f"Erro na inicialização: {e}")
+        return  # Saia se a inicialização falhar
     
     st.set_page_config(page_title="⚽ Alerta de Gols Over/Under", layout="wide")
     st.title("⚽ Sistema de Alertas Automáticos Over/Under")
