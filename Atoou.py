@@ -3191,7 +3191,7 @@ def enviar_top_jogos(jogos: list, top_n: int, alerta_top_jogos: bool, min_conf: 
                 )
 
 # =============================
-# SISTEMA DE ALERTAS DE RESULTADOS - VERSÃO CORRIGIDA
+# SISTEMA DE ALERTAS DE RESULTADOS
 # =============================
 def verificar_resultados_finais(alerta_resultados: bool):
     """Verifica resultados finais dos jogos e envia alertas - VERSÃO CORRIGIDA"""
@@ -3204,6 +3204,7 @@ def verificar_resultados_finais(alerta_resultados: bool):
     jogos_com_resultado = []
     
     for fixture_id, alerta in list(alertas.items()):
+        # Pular se já foi conferido
         if alerta.get("conferido", False):
             continue
             
@@ -3214,30 +3215,16 @@ def verificar_resultados_finais(alerta_resultados: bool):
             if not fixture_data:
                 continue
                 
-            match = fixture_data.get('match', fixture_data)
+            match = fixture_data.get('match', fixture_data)  # Algumas APIs usam 'match'
             status = match.get("status", "")
             score = match.get("score", {}).get("fullTime", {})
             home_goals = score.get("home")
             away_goals = score.get("away")
             
+            # Verificar se jogo terminou e tem resultado válido
             if (status == "FINISHED" and 
                 home_goals is not None and 
                 away_goals is not None):
-                
-                total_gols = home_goals + away_goals
-                previsao_correta = False
-                
-                tendencia = alerta.get("tendencia", "")
-                
-                # Verificar se a previsão estava correta
-                if tendencia == "OVER 2.5" and total_gols > 2.5:
-                    previsao_correta = True
-                elif tendencia == "UNDER 2.5" and total_gols < 2.5:
-                    previsao_correta = True
-                elif tendencia == "OVER 1.5" and total_gols > 1.5:
-                    previsao_correta = True
-                elif tendencia == "UNDER 1.5" and total_gols < 1.5:
-                    previsao_correta = True
                 
                 jogo_resultado = {
                     "id": fixture_id,
@@ -3253,67 +3240,29 @@ def verificar_resultados_finais(alerta_resultados: bool):
                     "confianca_prevista": alerta.get("confianca", 0),
                     "tipo_aposta": alerta.get("tipo_aposta", "desconhecido"),
                     "escudo_home": match.get("homeTeam", {}).get("crest") or "",
-                    "escudo_away": match.get("awayTeam", {}).get("crest") or "",
-                    "resultado": "GREEN" if previsao_correta else "RED"  # <-- ADICIONADO
+                    "escudo_away": match.get("awayTeam", {}).get("crest") or ""
                 }
                 
-                # ATUALIZE o alerta com o resultado
-                alerta["conferido"] = True
-                alerta["resultado"] = "GREEN" if previsao_correta else "RED"  # <-- ADICIONADO
-                alerta["placar"] = f"{home_goals}x{away_goals}"  # <-- ADICIONADO
-                alerta["total_gols"] = total_gols  # <-- ADICIONADO
-                alerta["data_conferencia"] = datetime.now().isoformat()  # <-- ADICIONADO
-                
                 jogos_com_resultado.append(jogo_resultado)
+                alerta["conferido"] = True
                 resultados_enviados += 1
-                
-                # Registrar no histórico
-                registrar_no_historico({
-                    "home": match["homeTeam"]["name"],
-                    "away": match["awayTeam"]["name"],
-                    "tendencia": alerta.get("tendencia", "Desconhecida"),
-                    "estimativa": alerta.get("estimativa", 0),
-                    "confianca": alerta.get("confianca", 0),
-                    "probabilidade": alerta.get("probabilidade", 0),
-                    "placar": f"{home_goals}x{away_goals}",
-                    "resultado": "🟢 GREEN" if previsao_correta else "🔴 RED",
-                    "tipo_aposta": alerta.get("tipo_aposta", "desconhecido")
-                })
                 
         except Exception as e:
             logging.error(f"Erro ao verificar jogo {fixture_id}: {e}")
             st.error(f"Erro ao verificar jogo {fixture_id}: {e}")
     
-    # SEMPRE salve os alertas atualizados, mesmo se não enviar notificação
-    if resultados_enviados > 0:
-        salvar_alertas(alertas)  # IMPORTANTE: Salvar aqui também!
-    
+    # Enviar alertas em lote se houver resultados E a checkbox estiver ativada
     if jogos_com_resultado and alerta_resultados:
+        # USAR A NOVA VERSÃO COM LIMITE DE PARTIDAS
         enviar_alerta_resultados_poster(jogos_com_resultado, max_jogos_por_alerta=3)
+        salvar_alertas(alertas)
         st.success(f"✅ {resultados_enviados} resultados processados e alertas enviados!")
     elif jogos_com_resultado:
         st.info(f"ℹ️ {resultados_enviados} resultados encontrados, mas alerta de resultados desativado")
+        # Apenas marca como conferido sem enviar alerta
+        salvar_alertas(alertas)
     else:
         st.info("ℹ️ Nenhum novo resultado final encontrado.")
-
-# =============================
-# FUNÇÃO NOVA: Verificar status dos alertas
-# =============================
-def verificar_status_alertas():
-    """Verifica quantos alertas estão pendentes de conferência"""
-    # Alertas regulares
-    alertas = carregar_alertas()
-    alertas_top = carregar_alertas_top()
-    
-    pendentes_regular = sum(1 for a in alertas.values() if not a.get("conferido", False))
-    pendentes_top = sum(1 for a in alertas_top.values() if not a.get("conferido", False))
-    
-    if pendentes_regular > 0 or pendentes_top > 0:
-        st.warning(f"⚠️ Alertas pendentes: {pendentes_regular} regulares + {pendentes_top} TOP")
-        return True
-    else:
-        st.success("✅ Todos os alertas já foram conferidos!")
-        return False
 
 # =============================
 # FUNÇÕES PRINCIPAIS
@@ -3826,7 +3775,7 @@ def main():
                            alerta_individual, alerta_poster, alerta_top_jogos, formato_top_jogos, tipo_filtro)
 
     # Ações
-    col1, col2, col3, col4, col5, col6 = st.columns(6)  # <-- Mudar de 5 para 6 colunas
+    col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
         if st.button("🔄 Atualizar Status"):
             atualizar_status_partidas()
@@ -3842,37 +3791,11 @@ def main():
     with col5:
         if st.button("🏆 Conferir Alertas TOP", type="primary"):
             conferir_resultados_top()
+            # Verificar se deve enviar alerta automático
             if alerta_conferencia_auto:
                 enviou = enviar_alerta_top_conferidos()
                 if enviou:
                     st.success("🤖 Alerta automático de conferência enviado!")
-    with col6:  # <-- NOVA COLUNA
-        if st.button("🔍 Status Alertas"):
-            verificar_status_alertas()
-
-    # Adicione esta seção ANTES do painel de monitoramento
-    st.markdown("---")
-    st.subheader("📋 Status dos Alertas")
-    
-    col_status1, col_status2 = st.columns(2)
-    
-    with col_status1:
-        if st.button("🔄 Conferir TODOS Alertas", type="primary"):
-            # Conferir alertas regulares
-            verificar_resultados_finais(alerta_resultados)
-            
-            # Conferir alertas TOP
-            conferir_resultados_top()
-            
-            # Verificar se há conjuntos completos
-            if alerta_conferencia_auto:
-                enviou = enviar_alerta_top_conferidos()
-                if enviou:
-                    st.success("🤖 Alertas de conferência enviados!")
-    
-    with col_status2:
-        if st.button("📊 Ver Desempenho Atual"):
-            calcular_desempenho_alertas_top()
 
     # Painel de monitoramento da API
     st.markdown("---")
