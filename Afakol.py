@@ -1,4 +1,3 @@
-
 import streamlit as st
 import requests
 import numpy as np
@@ -82,6 +81,436 @@ def capturar_ultimos_resultados(qtd=250):
         return [], None
 
 # =========================
+# NOVA CLASSE: Estratégia Quântica
+# =========================
+class EstrategiaQuantica:
+    def __init__(self, concursos):
+        self.concursos = concursos
+        self.numeros = list(range(1, 26))
+        self.primos = {2, 3, 5, 7, 11, 13, 17, 19, 23}
+        self.estados_quanticos = {}
+        
+    def calcular_funcao_onda(self, janela=30):
+        """Calcula a função de onda quântica para cada número"""
+        if len(self.concursos) < janela:
+            janela = len(self.concursos)
+        
+        concursos_recentes = self.concursos[:janela]
+        
+        # 1. Probabilidade clássica (frequência)
+        freq = Counter()
+        for concurso in concursos_recentes:
+            freq.update(concurso)
+        
+        prob_classica = {n: freq[n] / janela for n in self.numeros}
+        
+        # 2. Interferência quântica (interações entre números)
+        matriz_interferencia = np.zeros((25, 25))
+        total_pares = 0
+        
+        for concurso in concursos_recentes:
+            for i in range(len(concurso)):
+                for j in range(i+1, len(concurso)):
+                    a = concurso[i] - 1
+                    b = concurso[j] - 1
+                    matriz_interferencia[a][b] += 1
+                    matriz_interferencia[b][a] += 1
+                    total_pares += 1
+        
+        # 3. Superposição quântica (estados possíveis)
+        superposicao = {}
+        for n in self.numeros:
+            # Estado base: probabilidade clássica
+            estado_base = prob_classica[n]
+            
+            # Interferência: soma das interações normalizadas
+            idx = n - 1
+            interferencia = np.sum(matriz_interferencia[idx]) / (total_pares * 24) if total_pares > 0 else 0
+            
+            # Entrelaçamento quântico (correlação com números anteriores)
+            entrelacamento = self._calcular_entrelacamento(n, concursos_recentes)
+            
+            # Função de onda quântica combinada
+            funcao_onda = (
+                0.4 * estado_base +      # Componente clássica
+                0.3 * interferencia +    # Componente de interferência
+                0.3 * entrelacamento     # Componente de entrelaçamento
+            )
+            
+            superposicao[n] = funcao_onda
+        
+        # Normalizar para soma = 1
+        total = sum(superposicao.values())
+        superposicao = {n: superposicao[n]/total for n in self.numeros}
+        
+        return superposicao
+    
+    def _calcular_entrelacamento(self, numero, concursos_recentes):
+        """Calcula o nível de entrelaçamento quântico com outros números"""
+        if len(concursos_recentes) < 2:
+            return 0.5
+        
+        # Padrões de co-ocorrência temporal
+        padroes = []
+        for i in range(len(concursos_recentes)-1):
+            concurso_atual = set(concursos_recentes[i])
+            concurso_proximo = set(concursos_recentes[i+1])
+            
+            if numero in concurso_atual:
+                # Quais números do concurso atual também aparecem no próximo?
+                entrelacados = len(concurso_atual.intersection(concurso_proximo))
+                padroes.append(entrelacados / 15)
+        
+        return np.mean(padroes) if padroes else 0.5
+    
+    def calcular_tunelamento_quantico(self, concursos_recentes):
+        """Identifica números que podem 'tunelar' de frios para quentes"""
+        if len(concursos_recentes) < 20:
+            return {}
+        
+        # Divide os concursos em duas metades temporais
+        metade1 = concursos_recentes[:len(concursos_recentes)//2]
+        metade2 = concursos_recentes[len(concursos_recentes)//2:]
+        
+        # Calcula frequência em cada metade
+        freq1 = Counter()
+        freq2 = Counter()
+        
+        for concurso in metade1:
+            freq1.update(concurso)
+        
+        for concurso in metade2:
+            freq2.update(concurso)
+        
+        # Identifica tunelamento: números que eram frios e ficaram quentes
+        tunelamento = {}
+        for n in self.numeros:
+            f1 = freq1[n] / len(metade1) if metade1 else 0
+            f2 = freq2[n] / len(metade2) if metade2 else 0
+            
+            if f1 < 0.3 and f2 > 0.7:  # Tunelou de frio para quente
+                tunelamento[n] = f2 - f1
+            elif f1 > 0.7 and f2 < 0.3:  # Tunelou de quente para frio
+                tunelamento[n] = f1 - f2
+        
+        return tunelamento
+    
+    def gerar_cartoes_quanticos(self, n_cartoes=5, usar_superposicao=True):
+        """Gera cartões usando princípios quânticos"""
+        if len(self.concursos) < 10:
+            return []
+        
+        janela = min(30, len(self.concursos))
+        concursos_recentes = self.concursos[:janela]
+        
+        # Calcula diferentes aspectos quânticos
+        funcao_onda = self.calcular_funcao_onda(janela)
+        tunelamento = self.calcular_tunelamento_quantico(concursos_recentes)
+        
+        # Calcula incerteza quântica (Heisenberg)
+        incerteza = self._calcular_incerteza_quantica(concursos_recentes)
+        
+        cartoes = []
+        
+        for _ in range(n_cartoes * 3):  # Gerar extra para garantir qualidade
+            cartao = set()
+            
+            if usar_superposicao:
+                # 1. Seleciona números baseados na função de onda
+                probabilidades = list(funcao_onda.values())
+                numeros_selecionados = np.random.choice(
+                    self.numeros, 
+                    size=min(8, len(self.numeros)), 
+                    p=probabilidades,
+                    replace=False
+                )
+                cartao.update(numeros_selecionados)
+            
+            # 2. Adiciona números com tunelamento quântico
+            if tunelamento:
+                tunelamento_ordenados = sorted(tunelamento.items(), key=lambda x: x[1], reverse=True)
+                n_tunelamento = min(3, len(tunelamento_ordenados))
+                for n, _ in tunelamento_ordenados[:n_tunelamento]:
+                    if n not in cartao:
+                        cartao.add(n)
+            
+            # 3. Adiciona números com alta incerteza (potencial quântico)
+            if incerteza:
+                incerteza_ordenados = sorted(incerteza.items(), key=lambda x: x[1], reverse=True)
+                n_incerteza = min(2, len(incerteza_ordenados))
+                for n, _ in incerteza_ordenados[:n_incerteza]:
+                    if n not in cartao:
+                        cartao.add(n)
+            
+            # 4. Completar com princípio de complementaridade (pares/ímpares balanceados)
+            self._aplicar_complementaridade(cartao)
+            
+            # 5. Garantir 15 números
+            while len(cartao) < 15:
+                numeros_disponiveis = [n for n in self.numeros if n not in cartao]
+                if not numeros_disponiveis:
+                    break
+                
+                # Usa probabilidade quântica residual
+                probs_residuais = [funcao_onda.get(n, 0.01) for n in numeros_disponiveis]
+                probs_residuais = np.array(probs_residuais)
+                probs_residuais = probs_residuais / probs_residuais.sum()
+                
+                escolha = np.random.choice(numeros_disponiveis, p=probs_residuals)
+                cartao.add(escolha)
+            
+            # Verificar se tem 15 números únicos
+            if len(cartao) == 15:
+                cartao_ordenado = sorted(list(cartao))
+                
+                # Validação quântica: deve ter distribuição adequada
+                if self._validar_cartao_quantico(cartao_ordenado):
+                    cartoes.append(cartao_ordenado)
+            
+            if len(cartoes) >= n_cartoes:
+                break
+        
+        return cartoes[:n_cartoes]
+    
+    def _calcular_incerteza_quantica(self, concursos_recentes):
+        """Calcula a incerteza quântica (princípio de Heisenberg)"""
+        if len(concursos_recentes) < 10:
+            return {}
+        
+        incerteza = {}
+        
+        for n in self.numeros:
+            posicoes = []
+            for concurso in concursos_recentes:
+                if n in concurso:
+                    # Posição no concurso (normalizada)
+                    pos = concurso.index(n) / 14.0
+                    posicoes.append(pos)
+            
+            if len(posicoes) >= 2:
+                # Desvio padrão das posições = incerteza
+                incerteza[n] = np.std(posicoes) if posicoes else 0.5
+            else:
+                incerteza[n] = 0.7  # Alta incerteza para números pouco frequentes
+        
+        return incerteza
+    
+    def _aplicar_complementaridade(self, cartao):
+        """Aplica princípio de complementaridade (pares/ímpares como propriedades complementares)"""
+        pares_no_cartao = [n for n in cartao if n % 2 == 0]
+        impares_no_cartao = [n for n in cartao if n % 2 == 1]
+        
+        # Princípio quântico: não se pode medir ambas propriedades simultaneamente com precisão absoluta
+        # Mas em Lotofácil, precisamos de um equilíbrio
+        alvo_pares = 7  # Valor quântico médio
+        
+        if len(pares_no_cartao) < 6:
+            # Adiciona mais pares
+            pares_disponiveis = [n for n in range(2, 26, 2) if n not in cartao]
+            if pares_disponiveis:
+                qtd_adicionar = min(6 - len(pares_no_cartao), len(pares_disponiveis))
+                novos_pares = random.sample(pares_disponiveis, qtd_adicionar)
+                cartao.update(novos_pares)
+                
+                # Remove ímpares para manter 15 números
+                while len(cartao) > 15 and impares_no_cartao:
+                    cartao.remove(impares_no_cartao.pop())
+        
+        elif len(pares_no_cartao) > 8:
+            # Remove alguns pares
+            qtd_remover = min(len(pares_no_cartao) - 8, len(pares_no_cartao))
+            for _ in range(qtd_remover):
+                if pares_no_cartao:
+                    cartao.remove(pares_no_cartao.pop())
+            
+            # Adiciona ímpares
+            impares_disponiveis = [n for n in range(1, 26, 2) if n not in cartao]
+            while len(cartao) < 15 and impares_disponiveis:
+                cartao.add(impares_disponiveis.pop())
+    
+    def _validar_cartao_quantico(self, cartao):
+        """Valida cartão com critérios quânticos"""
+        if len(cartao) != 15 or len(set(cartao)) != 15:
+            return False
+        
+        # Princípio de não-localidade: números devem estar bem distribuídos
+        distribuicao = self._verificar_distribuicao_quantica(cartao)
+        if not distribuicao:
+            return False
+        
+        # Princípio de superposição: não muitos números consecutivos
+        consecutivos = self._contar_consecutivos_quanticos(cartao)
+        if consecutivos > 5:  # Limite quântico
+            return False
+        
+        return True
+    
+    def _verificar_distribuicao_quantica(self, cartao):
+        """Verifica distribuição quântica (números não devem estar agrupados)"""
+        # Divide em quadrantes quânticos 5x5
+        quadrantes = [
+            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+            [14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25]
+        ]
+        
+        contagem_quadrantes = [0, 0]
+        for n in cartao:
+            if n in quadrantes[0]:
+                contagem_quadrantes[0] += 1
+            else:
+                contagem_quadrantes[1] += 1
+        
+        # Distribuição quântica ideal: não muito concentrado
+        return 5 <= contagem_quadrantes[0] <= 10 and 5 <= contagem_quadrantes[1] <= 10
+    
+    def _contar_consecutivos_quanticos(self, cartao):
+        """Conta sequências consecutivas (evitar agrupamento clássico)"""
+        cartao_sorted = sorted(cartao)
+        max_consecutivos = 0
+        consecutivos_atual = 1
+        
+        for i in range(1, len(cartao_sorted)):
+            if cartao_sorted[i] == cartao_sorted[i-1] + 1:
+                consecutivos_atual += 1
+                max_consecutivos = max(max_consecutivos, consecutivos_atual)
+            else:
+                consecutivos_atual = 1
+        
+        return max_consecutivos
+    
+    def analisar_estados_quanticos(self, janela=30):
+        """Retorna análise completa dos estados quânticos"""
+        if len(self.concursos) < 10:
+            return {}
+        
+        concursos_recentes = self.concursos[:min(janela, len(self.concursos))]
+        
+        analise = {
+            "funcao_onda": self.calcular_funcao_onda(janela),
+            "tunelamento": self.calcular_tunelamento_quantico(concursos_recentes),
+            "incerteza": self._calcular_incerteza_quantica(concursos_recentes),
+            "entrelacamento": self._analisar_entrelacamento_completo(concursos_recentes),
+            "concursos_analisados": len(concursos_recentes)
+        }
+        
+        # Classifica números por estado quântico
+        analise["classificacao_quantica"] = self._classificar_numeros_quanticos(analise)
+        
+        return analise
+    
+    def _analisar_entrelacamento_completo(self, concursos_recentes):
+        """Análise completa de entrelaçamento quântico"""
+        if len(concursos_recentes) < 10:
+            return {}
+        
+        matriz_entrelacamento = np.zeros((25, 25))
+        
+        for concurso in concursos_recentes:
+            for i in range(len(concurso)):
+                for j in range(i+1, len(concurso)):
+                    a = concurso[i] - 1
+                    b = concurso[j] - 1
+                    matriz_entrelacamento[a][b] += 1
+                    matriz_entrelacamento[b][a] += 1
+        
+        # Pares mais entrelaçados
+        pares_entrelacados = []
+        for i in range(25):
+            for j in range(i+1, 25):
+                if matriz_entrelacamento[i][j] > 0:
+                    pares_entrelacados.append({
+                        "par": (i+1, j+1),
+                        "forca": matriz_entrelacamento[i][j] / len(concursos_recentes)
+                    })
+        
+        # Ordena por força de entrelaçamento
+        pares_entrelacados.sort(key=lambda x: x["forca"], reverse=True)
+        
+        return {
+            "matriz": matriz_entrelacamento,
+            "top_pares": pares_entrelacados[:10],
+            "media_entrelacamento": np.mean(matriz_entrelacamento) / len(concursos_recentes)
+        }
+    
+    def _classificar_numeros_quanticos(self, analise):
+        """Classifica números por estado quântico"""
+        classificacao = {}
+        
+        for n in self.numeros:
+            estado = {
+                "numero": n,
+                "amplitude_onda": analise["funcao_onda"].get(n, 0),
+                "tunelamento": analise["tunelamento"].get(n, 0),
+                "incerteza": analise["incerteza"].get(n, 0),
+                "estado": "INDETERMINADO"
+            }
+            
+            # Determina estado quântico
+            amplitude = estado["amplitude_onda"]
+            tunel = abs(estado["tunelamento"])
+            incerteza = estado["incerteza"]
+            
+            if amplitude > 0.05 and tunel > 0.3:
+                estado["estado"] = "TUNELAMENTO ATIVO"
+            elif amplitude > 0.04 and incerteza < 0.3:
+                estado["estado"] = "ESTÁVEL"
+            elif amplitude < 0.03 and incerteza > 0.6:
+                estado["estado"] = "SUPERPOSIÇÃO"
+            elif amplitude > 0.06:
+                estado["estado"] = "COLAPSADO"
+            else:
+                estado["estado"] = "ENTRELAÇADO"
+            
+            classificacao[n] = estado
+        
+        return classificacao
+    
+    def gerar_relatorio_quantico(self, analise):
+        """Gera relatório completo da análise quântica"""
+        relatorio = "📊 RELATÓRIO DE ANÁLISE QUÂNTICA - LOTOFÁCIL\n"
+        relatorio += "=" * 70 + "\n\n"
+        
+        relatorio += f"Concursos analisados: {analise['concursos_analisados']}\n"
+        relatorio += f"Números em tunelamento: {len(analise['tunelamento'])}\n"
+        relatorio += f"Média de entrelaçamento: {analise['entrelacamento']['media_entrelacamento']:.3f}\n\n"
+        
+        relatorio += "🎯 TOP 10 NÚMEROS POR AMPLITUDE QUÂNTICA\n"
+        relatorio += "-" * 50 + "\n"
+        
+        onda_ordenada = sorted(analise["funcao_onda"].items(), key=lambda x: x[1], reverse=True)
+        for n, amplitude in onda_ordenada[:10]:
+            estado = analise["classificacao_quantica"][n]["estado"]
+            relatorio += f"{n:2d} → Amplitude: {amplitude:.4f} | Estado: {estado}\n"
+        
+        relatorio += "\n🌀 PARES MAIS ENTRELAÇADOS (CORRELAÇÃO QUÂNTICA)\n"
+        relatorio += "-" * 50 + "\n"
+        
+        for par_info in analise["entrelacamento"]["top_pares"]:
+            par = par_info["par"]
+            forca = par_info["forca"]
+            relatorio += f"{par[0]:2d} ↔ {par[1]:2d} | Força: {forca:.3f}\n"
+        
+        relatorio += "\n⚡ NÚMEROS EM TUNELAMENTO QUÂNTICO\n"
+        relatorio += "-" * 50 + "\n"
+        
+        if analise["tunelamento"]:
+            tunel_ordenado = sorted(analise["tunelamento"].items(), key=lambda x: abs(x[1]), reverse=True)
+            for n, taxa in tunel_ordenado[:10]:
+                direcao = "QUENTE ← FRIO" if taxa > 0 else "FRIO ← QUENTE"
+                relatorio += f"{n:2d} → Taxa: {abs(taxa):.3f} | Direção: {direcao}\n"
+        else:
+            relatorio += "Nenhum tunelamento significativo detectado\n"
+        
+        relatorio += "\n🎲 RECOMENDAÇÕES QUÂNTICAS\n"
+        relatorio += "-" * 50 + "\n"
+        relatorio += "1. Priorize números com alta amplitude quântica\n"
+        relatorio += "2. Inclua pares entrelaçados nos mesmos cartões\n"
+        relatorio += "3. Considere números em tunelamento ativo\n"
+        relatorio += "4. Balanceie entre estabilidade e superposição\n"
+        
+        return relatorio
+
+# =========================
 # NOVA CLASSE: Backtest Estratégias
 # =========================
 class BacktestEstrategias:
@@ -159,10 +588,14 @@ class BacktestEstrategias:
         ia_padroes = LotoFacilIA(dados_treino)
         estrategias['Padroes_Janela20'] = ia_padroes.gerar_cartoes_por_padroes(5, janela=20)
         
-        # 5. Estratégia Híbrida (NOVA)
+        # 5. Estratégia Híbrida
         estrategias['Hibrida_Otimizada'] = self._gerar_estrategia_hibrida(dados_treino)
         
-        # 6. Aleatório (baseline)
+        # 6. Estratégia Quântica (NOVA)
+        quantica = EstrategiaQuantica(dados_treino)
+        estrategias['Quantica_Avancada'] = quantica.gerar_cartoes_quanticos(5, usar_superposicao=True)
+        
+        # 7. Aleatório (baseline)
         estrategias['Aleatorio_Balanceado'] = self._gerar_aleatorio_balanceado(5)
         
         return estrategias
@@ -1138,7 +1571,7 @@ class AnaliseCiclos:
                 return cartao
     
     def _ajustar_equilibrio(self, cartao_set, todas_dezenas):
-        """Ajusta o equilíbrio de pares/ímpares no cartão"""
+        """Ajusta o equilibro de pares/ímpares no cartão"""
         pares = sum(1 for n in cartao_set if n % 2 == 0)
         
         # Balancear para ter entre 6 e 9 pares (ideal para Lotofácil)
@@ -2127,6 +2560,13 @@ def carregar_estado():
         st.session_state.relatorio_backtest = None
     if "cartoes_hibridos" not in st.session_state:
         st.session_state.cartoes_hibridos = []
+    # NOVO: Estratégia Quântica
+    if "analise_quantica" not in st.session_state:
+        st.session_state.analise_quantica = None
+    if "cartoes_quantica" not in st.session_state:
+        st.session_state.cartoes_quantica = []
+    if "relatorio_quantico" not in st.session_state:
+        st.session_state.relatorio_quantico = None
 
 st.markdown("<h1 style='text-align: center;'>Lotofácil Inteligente</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center;'>SAMUCJ TECHNOLOGY</p>", unsafe_allow_html=True)
@@ -2180,8 +2620,10 @@ with st.expander("📥 Capturar Concursos"):
                 st.session_state.resultados_backtest = None
                 st.session_state.relatorio_backtest = None
                 st.session_state.cartoes_hibridos = []
-            else:
-                st.error("Não foi possível capturar concursos.")
+                # Limpar dados quânticos
+                st.session_state.analise_quantica = None
+                st.session_state.cartoes_quantica = []
+                st.session_state.relatorio_quantico = None
 
 # --- Abas principais ---
 if st.session_state.concursos:
@@ -2205,7 +2647,10 @@ if st.session_state.concursos:
     # Inicializar fechamento
     fechamento = FechamentoLotofacil(st.session_state.concursos)
     
-    # Abas atualizadas com nova aba de backtest
+    # Inicializar estratégia quântica
+    estrategia_quantica = EstrategiaQuantica(st.session_state.concursos)
+    
+    # Abas atualizadas com nova aba de estatística quântica
     abas = st.tabs([
         "📊 Estatísticas", 
         "🧠 Gerar Cartões IA", 
@@ -2218,7 +2663,8 @@ if st.session_state.concursos:
         "✅ Conferência", 
         "📤 Conferir Arquivo TXT",
         "🔁 Ciclos da Lotofácil",
-        "📊 Backtest & Hibrida"  # NOVA ABA
+        "📊 Backtest & Hibrida",
+        "⚛️ Estatística Quântica"  # NOVA ABA
     ])
 
     # Aba 1 - Estatísticas
@@ -2922,6 +3368,13 @@ if st.session_state.concursos:
                     for i, cartao in enumerate(st.session_state.cartoes_hibridos, 1):
                         acertos = len(set(cartao) & set(info['dezenas']))
                         st.write(f"Cartão Híbrido {i}: {cartao} - **{acertos} acertos**")
+                
+                # Cartões Quânticos
+                if hasattr(st.session_state, 'cartoes_quantica') and st.session_state.cartoes_quantica:
+                    st.markdown("### ⚛️ Cartões Quânticos")
+                    for i, cartao in enumerate(st.session_state.cartoes_quantica, 1):
+                        acertos = len(set(cartao) & set(info['dezenas']))
+                        st.write(f"Cartão Quântico {i}: {cartao} - **{acertos} acertos**")
 
     # Aba 10 - Conferir Arquivo TXT
     with abas[9]:
@@ -3232,7 +3685,7 @@ if st.session_state.concursos:
                 - Use a opção "Incluir todas as faltantes" para garantir cobertura máxima
                 """)
 
-    # Aba 12 - Backtest & Estratégia Híbrida (NOVA ABA)
+    # Aba 12 - Backtest & Estratégia Híbrida
     with abas[11]:
         st.subheader("📊 Backtest de Estratégias & Estratégia Híbrida")
         
@@ -3377,7 +3830,275 @@ if st.session_state.concursos:
             - 14 pontos: ~0.01-0.05% dos jogos
             - 15 pontos: Chance estatisticamente irrelevante
             """)
-    
+
+    # Aba 13 - Estatística Quântica (NOVA ABA)
+    with abas[12]:
+        st.subheader("⚛️ Estatística Quântica - Probabilidade Quântica")
+        st.write("Estratégia baseada em princípios quânticos: função de onda, tunelamento quântico, entrelaçamento e superposição.")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("### 🎯 Configuração da Análise Quântica")
+            
+            janela_quantica = st.slider(
+                "Janela de concursos para análise quântica:",
+                min_value=10,
+                max_value=min(50, len(st.session_state.concursos)),
+                value=30,
+                step=5,
+                help="Quantos concursos recentes usar para calcular a função de onda quântica"
+            )
+            
+            usar_superposicao = st.checkbox(
+                "Usar superposição quântica",
+                value=True,
+                help="Inclui princípio de superposição na geração de cartões"
+            )
+            
+            n_cartoes_quantica = st.slider(
+                "Número de cartões quânticos a gerar:",
+                min_value=1,
+                max_value=10,
+                value=5
+            )
+        
+        with col2:
+            st.markdown("### 📊 Princípios Quânticos Aplicados")
+            st.info("""
+            **⚛️ Princípios Implementados:**
+            
+            1. **Função de Onda Quântica**: Calcula amplitude de probabilidade para cada número
+            2. **Tunelamento Quântico**: Identifica números que "tunelem" de frios para quentes
+            3. **Entrelaçamento**: Analisa correlações entre números (pares quânticos)
+            4. **Superposição**: Números podem estar em múltiplos estados simultaneamente
+            5. **Incerteza de Heisenberg**: Considera posição e momento (frequência vs atraso)
+            """)
+        
+        st.markdown("---")
+        
+        # Botão para análise quântica
+        col_analise1, col_analise2 = st.columns(2)
+        
+        with col_analise1:
+            if st.button("🔬 Analisar Estados Quânticos", type="primary"):
+                with st.spinner(f"Analisando estados quânticos com {janela_quantica} concursos..."):
+                    analise = estrategia_quantica.analisar_estados_quanticos(janela_quantica)
+                    st.session_state.analise_quantica = analise
+                    
+                    # Gerar relatório
+                    relatorio = estrategia_quantica.gerar_relatorio_quantico(analise)
+                    st.session_state.relatorio_quantico = relatorio
+                    
+                    st.success("Análise quântica concluída!")
+        
+        with col_analise2:
+            if st.button("⚡ Gerar Cartões Quânticos"):
+                with st.spinner("Gerando cartões com princípios quânticos..."):
+                    cartoes_quantica = estrategia_quantica.gerar_cartoes_quanticos(
+                        n_cartoes_quantica, 
+                        usar_superposicao=usar_superposicao
+                    )
+                    st.session_state.cartoes_quantica = cartoes_quantica
+                    st.success(f"{len(cartoes_quantica)} cartões quânticos gerados!")
+        
+        # Mostrar análise quântica se existir
+        if hasattr(st.session_state, 'analise_quantica') and st.session_state.analise_quantica:
+            analise = st.session_state.analise_quantica
+            
+            st.markdown("### 📈 Análise dos Estados Quânticos")
+            
+            # Métricas principais
+            col_q1, col_q2, col_q3, col_q4 = st.columns(4)
+            with col_q1:
+                st.metric("Concursos Analisados", analise['concursos_analisados'])
+            with col_q2:
+                st.metric("Números em Tunelamento", len(analise['tunelamento']))
+            with col_q3:
+                st.metric("Média Entrelaçamento", f"{analise['entrelacamento']['media_entrelacamento']:.3f}")
+            with col_q4:
+                # Contar estados quânticos
+                estados = Counter()
+                for n in range(1, 26):
+                    if n in analise['classificacao_quantica']:
+                        estados[analise['classificacao_quantica'][n]['estado']] += 1
+                st.metric("Estados Diferentes", len(estados))
+            
+            # Gráfico de função de onda
+            st.markdown("#### 📊 Função de Onda Quântica (Top 15)")
+            onda_ordenada = sorted(analise["funcao_onda"].items(), key=lambda x: x[1], reverse=True)[:15]
+            
+            df_onda = pd.DataFrame(onda_ordenada, columns=['Número', 'Amplitude'])
+            st.bar_chart(df_onda.set_index('Número'))
+            
+            # Tabela de estados quânticos
+            st.markdown("#### 🎯 Estados Quânticos dos Números")
+            
+            dados_estados = []
+            for n in range(1, 26):
+                if n in analise['classificacao_quantica']:
+                    estado = analise['classificacao_quantica'][n]
+                    dados_estados.append({
+                        "Número": n,
+                        "Amplitude": estado['amplitude_onda'],
+                        "Tunelamento": estado['tunelamento'],
+                        "Incerteza": estado['incerteza'],
+                        "Estado Quântico": estado['estado'],
+                        "Status": "🔥" if estado['amplitude_onda'] > 0.045 else 
+                                 "⚡" if estado['tunelamento'] > 0.3 else 
+                                 "🌀" if estado['incerteza'] > 0.6 else "⚪"
+                    })
+            
+            df_estados = pd.DataFrame(dados_estados)
+            st.dataframe(df_estados, hide_index=True, use_container_width=True)
+            
+            # Pares entrelaçados
+            st.markdown("#### 🔗 Pares Mais Entrelaçados (Correlação Quântica)")
+            
+            if analise['entrelacamento']['top_pares']:
+                dados_pares = []
+                for par_info in analise['entrelacamento']['top_pares'][:10]:
+                    dados_pares.append({
+                        "Par": f"{par_info['par'][0]} ↔ {par_info['par'][1]}",
+                        "Força": par_info['forca']
+                    })
+                
+                df_pares = pd.DataFrame(dados_pares)
+                st.dataframe(df_pares, hide_index=True)
+            else:
+                st.info("Nenhum par significativamente entrelaçado encontrado.")
+            
+            # Mostrar relatório completo
+            with st.expander("📄 Ver Relatório Quântico Completo"):
+                st.text(st.session_state.relatorio_quantico)
+        
+        # Mostrar cartões quânticos gerados
+        if hasattr(st.session_state, 'cartoes_quantica') and st.session_state.cartoes_quantica:
+            cartoes_quantica = st.session_state.cartoes_quantica
+            
+            st.markdown("### ⚛️ Cartões Gerados com Princípios Quânticos")
+            
+            # Estatísticas dos cartões
+            stats_cartoes_q = []
+            for i, cartao in enumerate(cartoes_quantica, 1):
+                # Analisar características quânticas
+                funcao_onda_total = 0
+                if st.session_state.analise_quantica:
+                    for n in cartao:
+                        funcao_onda_total += st.session_state.analise_quantica['funcao_onda'].get(n, 0)
+                
+                pares = sum(1 for n in cartao if n % 2 == 0)
+                primos = sum(1 for n in cartao if n in {2,3,5,7,11,13,17,19,23})
+                soma = sum(cartao)
+                
+                stats_cartoes_q.append({
+                    "Cartão": i,
+                    "Dezenas": ", ".join(str(n) for n in cartao),
+                    "Pares": pares,
+                    "Primos": primos,
+                    "Soma": soma,
+                    "Amplitude Total": f"{funcao_onda_total:.3f}" if st.session_state.analise_quantica else "N/A"
+                })
+            
+            # Exibir como DataFrame
+            df_cartoes_q = pd.DataFrame(stats_cartoes_q)
+            st.dataframe(df_cartoes_q, hide_index=True, use_container_width=True)
+            
+            # Detalhes expandidos
+            with st.expander("🔍 Ver Análise Quântica de Cada Cartão"):
+                if st.session_state.analise_quantica:
+                    for i, cartao in enumerate(cartoes_quantica, 1):
+                        col_qc1, col_qc2 = st.columns([3, 2])
+                        with col_qc1:
+                            st.write(f"**Cartão Quântico {i}:** {cartao}")
+                            
+                            # Estados quânticos dos números no cartão
+                            estados_no_cartao = []
+                            for n in cartao:
+                                if n in st.session_state.analise_quantica['classificacao_quantica']:
+                                    estado = st.session_state.analise_quantica['classificacao_quantica'][n]
+                                    estados_no_cartao.append(f"{n}({estado['estado'][:3]})")
+                            
+                            st.write(f"**Estados quânticos:** {', '.join(estados_no_cartao)}")
+                        
+                        with col_qc2:
+                            # Métricas quânticas
+                            funcao_onda_total = sum(st.session_state.analise_quantica['funcao_onda'].get(n, 0) for n in cartao)
+                            tunelamento_total = sum(abs(st.session_state.analise_quantica['tunelamento'].get(n, 0)) for n in cartao)
+                            
+                            st.write(f"**Métricas quânticas:**")
+                            st.write(f"- Amplitude total: {funcao_onda_total:.3f}")
+                            st.write(f"- Tunelamento total: {tunelamento_total:.3f}")
+                            st.write(f"- Pares: {sum(1 for n in cartao if n % 2 == 0)}")
+                            st.write(f"- Primos: {sum(1 for n in cartao if n in {2,3,5,7,11,13,17,19,23})}")
+                        
+                        st.write("---")
+                else:
+                    st.info("Execute a análise quântica primeiro para ver detalhes.")
+            
+            # Exportar cartões quânticos
+            st.markdown("### 💾 Exportar Cartões Quânticos")
+            conteudo_quantico = f"CARTÕES QUÂNTICOS LOTOFÁCIL - {len(cartoes_quantica)} CARTÕES\n"
+            conteudo_quantico += "=" * 60 + "\n\n"
+            conteudo_quantico += f"Princípios aplicados: Função de onda, Tunelamento, Entrelaçamento\n"
+            conteudo_quantico += f"Superposição ativada: {usar_superposicao}\n"
+            conteudo_quantico += f"Concursos analisados: {janela_quantica}\n\n"
+            conteudo_quantico += "CARTÕES:\n" + "-" * 40 + "\n\n"
+            
+            for i, cartao in enumerate(cartoes_quantica, 1):
+                conteudo_quantico += f"Cartão {i}: {','.join(map(str, cartao))}\n"
+            
+            st.download_button(
+                "📥 Baixar Cartões Quânticos",
+                data=conteudo_quantico,
+                file_name=f"cartoes_quanticos_lotofacil_{janela_quantica}.txt",
+                mime="text/plain"
+            )
+            
+            # Informações sobre a estratégia quântica
+            with st.expander("ℹ️ Sobre a Estratégia Quântica"):
+                st.write("""
+                **⚛️ Fundamentos da Estratégia Quântica:**
+                
+                1. **Função de Onda Quântica**: 
+                   - Cada número tem uma amplitude de probabilidade
+                   - Combina frequência clássica, interferência e entrelaçamento
+                   - Normalizada para soma total = 1 (como probabilidade quântica)
+                
+                2. **Tunelamento Quântico**:
+                   - Identifica números que "tunelem" entre estados frio/quente
+                   - Explora transições repentinas no espaço de estados
+                   - Baseado na mecânica quântica de barreiras potenciais
+                
+                3. **Entrelaçamento Quântico**:
+                   - Analisa correlações não-locais entre números
+                   - Pares de números que tendem a sair juntos
+                   - Explora "ação fantasma à distância" estatística
+                
+                4. **Superposição**:
+                   - Números podem estar em múltiplos estados simultaneamente
+                   - Combina características de números quentes e frios
+                   - Explora a natureza dual onda-partícula das probabilidades
+                
+                5. **Princípio da Incerteza**:
+                   - Considera tanto frequência (posição) quanto atraso (momento)
+                   - Números com alta incerteza têm maior potencial quântico
+                   - Balanceamento entre certeza clássica e potencial quântico
+                
+                **🎯 Vantagens da Abordagem Quântica:**
+                - Modela complexidades não-lineares do sistema
+                - Captura transições abruptas (tunelamento)
+                - Considera correlações não-locais (entrelaçamento)
+                - Mais flexível que modelos clássicos
+                - Explora o espaço de probabilidade de forma mais completa
+                
+                **⚠️ Limitações Importantes:**
+                - Aplicação metafórica dos princípios quânticos
+                - Não altera probabilidades matemáticas fundamentais
+                - Resultados dependem da qualidade dos dados históricos
+                - Ainda sujeito à aleatoriedade intrínseca dos sorteios
+                """)
+
 # Sidebar - Gerenciamento de Dados
 with st.sidebar:
     st.markdown("---")
@@ -3407,6 +4128,8 @@ with st.sidebar:
         st.write(f"Fechamentos gerados: {len(st.session_state.fechamento_gerado)}")
     if hasattr(st.session_state, 'cartoes_hibridos') and st.session_state.cartoes_hibridos:
         st.write(f"Cartões Híbridos: {len(st.session_state.cartoes_hibridos)}")
+    if hasattr(st.session_state, 'cartoes_quantica') and st.session_state.cartoes_quantica:
+        st.write(f"Cartões Quânticos: {len(st.session_state.cartoes_quantica)}")
     
     if hasattr(st.session_state, 'resultados_backtest') and st.session_state.resultados_backtest:
         st.write(f"Estratégias testadas: {len(st.session_state.resultados_backtest)}")
@@ -3425,5 +4148,21 @@ with st.sidebar:
         st.write(f"**Dezenas faltantes:** {len(ciclo_resumo['numeros_faltantes'])}")
         if st.session_state.limite_ciclos:
             st.write(f"**Limite configurado:** {st.session_state.limite_ciclos} concursos")
+    
+    # Informações quânticas na sidebar
+    if hasattr(st.session_state, 'analise_quantica') and st.session_state.analise_quantica:
+        st.markdown("### ⚛️ Informações Quânticas")
+        analise = st.session_state.analise_quantica
+        st.write(f"**Números em tunelamento:** {len(analise['tunelamento'])}")
+        st.write(f"**Pares entrelaçados:** {len(analise['entrelacamento']['top_pares'])}")
+        
+        # Contar estados quânticos
+        if 'classificacao_quantica' in analise:
+            estados = Counter()
+            for n in range(1, 26):
+                if n in analise['classificacao_quantica']:
+                    estados[analise['classificacao_quantica'][n]['estado']] += 1
+            estado_mais_comum = estados.most_common(1)[0] if estados else ("N/A", 0)
+            st.write(f"**Estado predominante:** {estado_mais_comum[0]}")
 
 st.markdown("<hr><p style='text-align: center;'>SAMUCJ TECHNOLOGY</p>", unsafe_allow_html=True)
