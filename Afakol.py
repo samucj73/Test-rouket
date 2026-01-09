@@ -83,6 +83,8 @@ def capturar_ultimos_resultados(qtd=250):
 # =========================
 # NOVA CLASSE: Estratégia Quântica
 # =========================
+# NOVA CLASSE: Estratégia Quântica
+# =========================
 class EstrategiaQuantica:
     def __init__(self, concursos):
         self.concursos = concursos
@@ -256,7 +258,8 @@ class EstrategiaQuantica:
                 probs_residuais = np.array(probs_residuais)
                 probs_residuais = probs_residuais / probs_residuais.sum()
                 
-                escolha = np.random.choice(numeros_disponiveis, p=probs_residuals)
+                # CORREÇÃO AQUI: mudar probs_residuals para probs_residuais
+                escolha = np.random.choice(numeros_disponiveis, p=probs_residuais)  # CORRIGIDO
                 cartao.add(escolha)
             
             # Verificar se tem 15 números únicos
@@ -509,6 +512,7 @@ class EstrategiaQuantica:
         relatorio += "4. Balanceie entre estabilidade e superposição\n"
         
         return relatorio
+
 
 # =========================
 # NOVA CLASSE: Backtest Estratégias
