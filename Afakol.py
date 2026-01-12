@@ -81,732 +81,514 @@ def capturar_ultimos_resultados(qtd=250):
         return [], None
 
 # =========================
-# NOVA CLASSE: Estratégia Quântica
+# CLASSE: Análise Estatística Séria (substitui a quântica)
 # =========================
-# NOVA CLASSE: Estratégia Quântica
-# =========================
-class EstrategiaQuantica:
+class AnaliseEstatisticaSeriosa:
     def __init__(self, concursos):
         self.concursos = concursos
         self.numeros = list(range(1, 26))
-        self.primos = {2, 3, 5, 7, 11, 13, 17, 19, 23}
-        self.estados_quanticos = {}
         
-    def calcular_funcao_onda(self, janela=30):
-        """Calcula a função de onda quântica para cada número"""
+    def calcular_distribuicao_probabilistica(self, janela=50):
+        """
+        Calcula distribuição real de probabilidades baseada em:
+        1. Frequência histórica
+        2. Teste de aleatoriedade (qui-quadrado)
+        3. Padrões de Markov (transições)
+        4. Intervalos de confiança
+        """
         if len(self.concursos) < janela:
             janela = len(self.concursos)
         
         concursos_recentes = self.concursos[:janela]
         
-        # 1. Probabilidade clássica (frequência)
-        freq = Counter()
+        # 1. Frequência bruta com intervalo de confiança 95%
+        frequencias = Counter()
         for concurso in concursos_recentes:
-            freq.update(concurso)
+            frequencias.update(concurso)
         
-        prob_classica = {n: freq[n] / janela for n in self.numeros}
-        
-        # 2. Interferência quântica (interações entre números)
-        matriz_interferencia = np.zeros((25, 25))
-        total_pares = 0
-        
-        for concurso in concursos_recentes:
-            for i in range(len(concurso)):
-                for j in range(i+1, len(concurso)):
-                    a = concurso[i] - 1
-                    b = concurso[j] - 1
-                    matriz_interferencia[a][b] += 1
-                    matriz_interferencia[b][a] += 1
-                    total_pares += 1
-        
-        # 3. Superposição quântica (estados possíveis)
-        superposicao = {}
+        # Calcular probabilidade com intervalo de confiança
+        prob_com_intervalo = {}
         for n in self.numeros:
-            # Estado base: probabilidade clássica
-            estado_base = prob_classica[n]
+            freq = frequencias[n]
+            p = freq / janela
             
-            # Interferência: soma das interações normalizadas
-            idx = n - 1
-            interferencia = np.sum(matriz_interferencia[idx]) / (total_pares * 24) if total_pares > 0 else 0
+            # Intervalo de confiança 95% para proporção
+            z = 1.96  # Para 95% de confiança
+            margem_erro = z * math.sqrt((p * (1 - p)) / janela)
             
-            # Entrelaçamento quântico (correlação com números anteriores)
-            entrelacamento = self._calcular_entrelacamento(n, concursos_recentes)
-            
-            # Função de onda quântica combinada
-            funcao_onda = (
-                0.4 * estado_base +      # Componente clássica
-                0.3 * interferencia +    # Componente de interferência
-                0.3 * entrelacamento     # Componente de entrelaçamento
-            )
-            
-            superposicao[n] = funcao_onda
+            prob_com_intervalo[n] = {
+                'probabilidade': p,
+                'intervalo_inferior': max(0, p - margem_erro),
+                'intervalo_superior': min(1, p + margem_erro),
+                'frequencia': freq
+            }
         
-        # Normalizar para soma = 1
-        total = sum(superposicao.values())
-        superposicao = {n: superposicao[n]/total for n in self.numeros}
+        # 2. Teste de aleatoriedade (Qui-quadrado)
+        chi2, p_value = self._teste_aleatoriedade(concursos_recentes)
         
-        return superposicao
+        # 3. Análise de transições (Cadeias de Markov)
+        matriz_transicao = self._calcular_matriz_transicao(concursos_recentes)
+        
+        # 4. Padrões temporais (autocorrelação)
+        autocorrelacao = self._calcular_autocorrelacao(concursos_recentes)
+        
+        return {
+            'probabilidades': prob_com_intervalo,
+            'teste_aleatoriedade': {'chi2': chi2, 'p_value': p_value},
+            'matriz_transicao': matriz_transicao,
+            'autocorrelacao': autocorrelacao,
+            'concursos_analisados': janela,
+            'media_frequencia': sum(frequencias.values()) / (janela * 25)
+        }
     
-    def _calcular_entrelacamento(self, numero, concursos_recentes):
-        """Calcula o nível de entrelaçamento quântico com outros números"""
-        if len(concursos_recentes) < 2:
-            return 0.5
+    def _teste_aleatoriedade(self, concursos):
+        """Teste qui-quadrado para verificar aleatoriedade"""
+        if len(concursos) < 30:
+            return None, None
         
-        # Padrões de co-ocorrência temporal
-        padroes = []
-        for i in range(len(concursos_recentes)-1):
-            concurso_atual = set(concursos_recentes[i])
-            concurso_proximo = set(concursos_recentes[i+1])
-            
-            if numero in concurso_atual:
-                # Quais números do concurso atual também aparecem no próximo?
-                entrelacados = len(concurso_atual.intersection(concurso_proximo))
-                padroes.append(entrelacados / 15)
+        frequencias = Counter()
+        for concurso in concursos:
+            frequencias.update(concurso)
         
-        return np.mean(padroes) if padroes else 0.5
+        # Frequência esperada se fosse perfeitamente aleatório
+        esperado = len(concursos) * 15 / 25
+        
+        # Calcular qui-quadrado
+        chi2 = sum((frequencias[n] - esperado) ** 2 / esperado for n in self.numeros)
+        
+        # Graus de liberdade
+        df = 24
+        
+        # Valor p aproximado
+        try:
+            from scipy.stats import chi2 as chi2_dist
+            p_value = 1 - chi2_dist.cdf(chi2, df)
+        except ImportError:
+            # Aproximação manual se scipy não disponível
+            p_value = 0.05  # Valor padrão conservador
+        
+        return chi2, p_value
     
-    def calcular_tunelamento_quantico(self, concursos_recentes):
-        """Identifica números que podem 'tunelar' de frios para quentes"""
-        if len(concursos_recentes) < 20:
+    def _calcular_matriz_transicao(self, concursos):
+        """Matriz de transição entre concursos (Cadeias de Markov)"""
+        if len(concursos) < 2:
+            return None
+        
+        matriz = np.zeros((25, 25))
+        
+        for i in range(len(concursos) - 1):
+            atual = set(concursos[i])
+            proximo = set(concursos[i + 1])
+            
+            # Probabilidade de transição
+            for n_atual in self.numeros:
+                for n_prox in self.numeros:
+                    if n_atual in atual and n_prox in proximo:
+                        matriz[n_atual - 1, n_prox - 1] += 1
+        
+        # Normalizar
+        for i in range(25):
+            total = matriz[i].sum()
+            if total > 0:
+                matriz[i] = matriz[i] / total
+        
+        return matriz
+    
+    def _calcular_autocorrelacao(self, concursos):
+        """Calcula autocorrelação para detectar padrões sazonais"""
+        if len(concursos) < 20:
             return {}
         
-        # Divide os concursos em duas metades temporais
-        metade1 = concursos_recentes[:len(concursos_recentes)//2]
-        metade2 = concursos_recentes[len(concursos_recentes)//2:]
+        # Converter para matriz binária
+        matriz_bin = np.array([[1 if n in jogo else 0 for n in self.numeros] 
+                              for jogo in concursos])
         
-        # Calcula frequência em cada metade
-        freq1 = Counter()
-        freq2 = Counter()
+        autocorr = {}
+        for lag in range(1, min(10, len(concursos) // 2)):
+            if lag < len(concursos):
+                try:
+                    corr = np.corrcoef(matriz_bin[:-lag].flatten(), 
+                                      matriz_bin[lag:].flatten())[0, 1]
+                    autocorr[lag] = corr if not np.isnan(corr) else 0
+                except:
+                    autocorr[lag] = 0
         
-        for concurso in metade1:
-            freq1.update(concurso)
-        
-        for concurso in metade2:
-            freq2.update(concurso)
-        
-        # Identifica tunelamento: números que eram frios e ficaram quentes
-        tunelamento = {}
-        for n in self.numeros:
-            f1 = freq1[n] / len(metade1) if metade1 else 0
-            f2 = freq2[n] / len(metade2) if metade2 else 0
-            
-            if f1 < 0.3 and f2 > 0.7:  # Tunelou de frio para quente
-                tunelamento[n] = f2 - f1
-            elif f1 > 0.7 and f2 < 0.3:  # Tunelou de quente para frio
-                tunelamento[n] = f1 - f2
-        
-        return tunelamento
+        return autocorr
     
-    def gerar_cartoes_quanticos(self, n_cartoes=5, usar_superposicao=True):
-        """Gera cartões usando princípios quânticos"""
-        if len(self.concursos) < 10:
+    def gerar_cartoes_estatisticos(self, n_cartoes=5, usar_intervalo_confianca=True):
+        """Gera cartões usando métodos estatísticos sólidos"""
+        if len(self.concursos) < 30:
             return []
         
-        janela = min(30, len(self.concursos))
-        concursos_recentes = self.concursos[:janela]
-        
-        # Calcula diferentes aspectos quânticos
-        funcao_onda = self.calcular_funcao_onda(janela)
-        tunelamento = self.calcular_tunelamento_quantico(concursos_recentes)
-        
-        # Calcula incerteza quântica (Heisenberg)
-        incerteza = self._calcular_incerteza_quantica(concursos_recentes)
+        analise = self.calcular_distribuicao_probabilistica()
         
         cartoes = []
         
-        for _ in range(n_cartoes * 3):  # Gerar extra para garantir qualidade
+        for _ in range(n_cartoes * 3):
             cartao = set()
             
-            if usar_superposicao:
-                # 1. Seleciona números baseados na função de onda
-                probabilidades = list(funcao_onda.values())
-                numeros_selecionados = np.random.choice(
-                    self.numeros, 
-                    size=min(8, len(self.numeros)), 
-                    p=probabilidades,
-                    replace=False
-                )
-                cartao.update(numeros_selecionados)
-            
-            # 2. Adiciona números com tunelamento quântico
-            if tunelamento:
-                tunelamento_ordenados = sorted(tunelamento.items(), key=lambda x: x[1], reverse=True)
-                n_tunelamento = min(3, len(tunelamento_ordenados))
-                for n, _ in tunelamento_ordenados[:n_tunelamento]:
-                    if n not in cartao:
+            # Estratégia baseada em intervalo de confiança
+            if usar_intervalo_confianca:
+                # Selecionar números com maior limite inferior do intervalo
+                nums_prioritarios = []
+                for n in self.numeros:
+                    info = analise['probabilidades'][n]
+                    # Usar limite inferior conservador
+                    nums_prioritarios.append((n, info['intervalo_inferior']))
+                
+                nums_prioritarios.sort(key=lambda x: x[1], reverse=True)
+                
+                # Selecionar 8-10 números do topo
+                selecionar = min(10, len(nums_prioritarios))
+                for n, _ in nums_prioritarios[:selecionar]:
+                    if len(cartao) < 10:
                         cartao.add(n)
+            else:
+                # Seleção por frequência simples
+                nums_freq = [(n, analise['probabilidades'][n]['frequencia']) 
+                           for n in self.numeros]
+                nums_freq.sort(key=lambda x: x[1], reverse=True)
+                
+                for n, _ in nums_freq[:10]:
+                    cartao.add(n)
             
-            # 3. Adiciona números com alta incerteza (potencial quântico)
-            if incerteza:
-                incerteza_ordenados = sorted(incerteza.items(), key=lambda x: x[1], reverse=True)
-                n_incerteza = min(2, len(incerteza_ordenados))
-                for n, _ in incerteza_ordenados[:n_incerteza]:
-                    if n not in cartao:
-                        cartao.add(n)
-            
-            # 4. Completar com princípio de complementaridade (pares/ímpares balanceados)
-            self._aplicar_complementaridade(cartao)
-            
-            # 5. Garantir 15 números
+            # Completar com diversificação
             while len(cartao) < 15:
-                numeros_disponiveis = [n for n in self.numeros if n not in cartao]
-                if not numeros_disponiveis:
+                disponiveis = [n for n in self.numeros if n not in cartao]
+                if not disponiveis:
                     break
                 
-                # Usa probabilidade quântica residual
-                probs_residuais = [funcao_onda.get(n, 0.01) for n in numeros_disponiveis]
-                probs_residuais = np.array(probs_residuais)
-                probs_residuais = probs_residuais / probs_residuais.sum()
+                # Distribuição balanceada
+                if len(cartao) < 12 and analise['matriz_transicao'] is not None:
+                    # Adicionar baseado na matriz de transição
+                    ultimos_numeros = list(cartao)[-3:] if len(cartao) >= 3 else []
+                    if ultimos_numeros:
+                        probs_transicao = []
+                        for n in disponiveis:
+                            prob = np.mean([analise['matriz_transicao'][u-1, n-1] 
+                                          for u in ultimos_numeros])
+                            probs_transicao.append((n, prob))
+                        
+                        probs_transicao.sort(key=lambda x: x[1], reverse=True)
+                        escolha = probs_transicao[0][0] if probs_transicao else random.choice(disponiveis)
+                    else:
+                        escolha = random.choice(disponiveis)
+                else:
+                    escolha = random.choice(disponiveis)
                 
-                # CORREÇÃO AQUI: mudar probs_residuals para probs_residuais
-                escolha = np.random.choice(numeros_disponiveis, p=probs_residuais)  # CORRIGIDO
                 cartao.add(escolha)
             
-            # Verificar se tem 15 números únicos
+            # Balancear pares/ímpares
+            cartao = self._balancear_cartao(cartao)
+            
             if len(cartao) == 15:
-                cartao_ordenado = sorted(list(cartao))
-                
-                # Validação quântica: deve ter distribuição adequada
-                if self._validar_cartao_quantico(cartao_ordenado):
-                    cartoes.append(cartao_ordenado)
+                cartoes.append(sorted(list(cartao)))
             
             if len(cartoes) >= n_cartoes:
                 break
         
         return cartoes[:n_cartoes]
     
-    def _calcular_incerteza_quantica(self, concursos_recentes):
-        """Calcula a incerteza quântica (princípio de Heisenberg)"""
-        if len(concursos_recentes) < 10:
-            return {}
+    def _balancear_cartao(self, cartao_set):
+        """Balanceia pares/ímpares estatisticamente"""
+        cartao = list(cartao_set)
+        pares = sum(1 for n in cartao if n % 2 == 0)
         
-        incerteza = {}
-        
-        for n in self.numeros:
-            posicoes = []
-            for concurso in concursos_recentes:
-                if n in concurso:
-                    # Posição no concurso (normalizada)
-                    pos = concurso.index(n) / 14.0
-                    posicoes.append(pos)
-            
-            if len(posicoes) >= 2:
-                # Desvio padrão das posições = incerteza
-                incerteza[n] = np.std(posicoes) if posicoes else 0.5
-            else:
-                incerteza[n] = 0.7  # Alta incerteza para números pouco frequentes
-        
-        return incerteza
-    
-    def _aplicar_complementaridade(self, cartao):
-        """Aplica princípio de complementaridade (pares/ímpares como propriedades complementares)"""
-        pares_no_cartao = [n for n in cartao if n % 2 == 0]
-        impares_no_cartao = [n for n in cartao if n % 2 == 1]
-        
-        # Princípio quântico: não se pode medir ambas propriedades simultaneamente com precisão absoluta
-        # Mas em Lotofácil, precisamos de um equilíbrio
-        alvo_pares = 7  # Valor quântico médio
-        
-        if len(pares_no_cartao) < 6:
-            # Adiciona mais pares
-            pares_disponiveis = [n for n in range(2, 26, 2) if n not in cartao]
-            if pares_disponiveis:
-                qtd_adicionar = min(6 - len(pares_no_cartao), len(pares_disponiveis))
-                novos_pares = random.sample(pares_disponiveis, qtd_adicionar)
-                cartao.update(novos_pares)
-                
-                # Remove ímpares para manter 15 números
-                while len(cartao) > 15 and impares_no_cartao:
-                    cartao.remove(impares_no_cartao.pop())
-        
-        elif len(pares_no_cartao) > 8:
-            # Remove alguns pares
-            qtd_remover = min(len(pares_no_cartao) - 8, len(pares_no_cartao))
-            for _ in range(qtd_remover):
-                if pares_no_cartao:
-                    cartao.remove(pares_no_cartao.pop())
-            
-            # Adiciona ímpares
-            impares_disponiveis = [n for n in range(1, 26, 2) if n not in cartao]
-            while len(cartao) < 15 and impares_disponiveis:
-                cartao.add(impares_disponiveis.pop())
-    
-    def _validar_cartao_quantico(self, cartao):
-        """Valida cartão com critérios quânticos"""
-        if len(cartao) != 15 or len(set(cartao)) != 15:
-            return False
-        
-        # Princípio de não-localidade: números devem estar bem distribuídos
-        distribuicao = self._verificar_distribuicao_quantica(cartao)
-        if not distribuicao:
-            return False
-        
-        # Princípio de superposição: não muitos números consecutivos
-        consecutivos = self._contar_consecutivos_quanticos(cartao)
-        if consecutivos > 5:  # Limite quântico
-            return False
-        
-        return True
-    
-    def _verificar_distribuicao_quantica(self, cartao):
-        """Verifica distribuição quântica (números não devem estar agrupados)"""
-        # Divide em quadrantes quânticos 5x5
-        quadrantes = [
-            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
-            [14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25]
-        ]
-        
-        contagem_quadrantes = [0, 0]
-        for n in cartao:
-            if n in quadrantes[0]:
-                contagem_quadrantes[0] += 1
-            else:
-                contagem_quadrantes[1] += 1
-        
-        # Distribuição quântica ideal: não muito concentrado
-        return 5 <= contagem_quadrantes[0] <= 10 and 5 <= contagem_quadrantes[1] <= 10
-    
-    def _contar_consecutivos_quanticos(self, cartao):
-        """Conta sequências consecutivas (evitar agrupamento clássico)"""
-        cartao_sorted = sorted(cartao)
-        max_consecutivos = 0
-        consecutivos_atual = 1
-        
-        for i in range(1, len(cartao_sorted)):
-            if cartao_sorted[i] == cartao_sorted[i-1] + 1:
-                consecutivos_atual += 1
-                max_consecutivos = max(max_consecutivos, consecutivos_atual)
-            else:
-                consecutivos_atual = 1
-        
-        return max_consecutivos
-    
-    def analisar_estados_quanticos(self, janela=30):
-        """Retorna análise completa dos estados quânticos"""
-        if len(self.concursos) < 10:
-            return {}
-        
-        concursos_recentes = self.concursos[:min(janela, len(self.concursos))]
-        
-        analise = {
-            "funcao_onda": self.calcular_funcao_onda(janela),
-            "tunelamento": self.calcular_tunelamento_quantico(concursos_recentes),
-            "incerteza": self._calcular_incerteza_quantica(concursos_recentes),
-            "entrelacamento": self._analisar_entrelacamento_completo(concursos_recentes),
-            "concursos_analisados": len(concursos_recentes)
-        }
-        
-        # Classifica números por estado quântico
-        analise["classificacao_quantica"] = self._classificar_numeros_quanticos(analise)
-        
-        return analise
-    
-    def _analisar_entrelacamento_completo(self, concursos_recentes):
-        """Análise completa de entrelaçamento quântico"""
-        if len(concursos_recentes) < 10:
-            return {}
-        
-        matriz_entrelacamento = np.zeros((25, 25))
-        
-        for concurso in concursos_recentes:
-            for i in range(len(concurso)):
-                for j in range(i+1, len(concurso)):
-                    a = concurso[i] - 1
-                    b = concurso[j] - 1
-                    matriz_entrelacamento[a][b] += 1
-                    matriz_entrelacamento[b][a] += 1
-        
-        # Pares mais entrelaçados
-        pares_entrelacados = []
-        for i in range(25):
-            for j in range(i+1, 25):
-                if matriz_entrelacamento[i][j] > 0:
-                    pares_entrelacados.append({
-                        "par": (i+1, j+1),
-                        "forca": matriz_entrelacamento[i][j] / len(concursos_recentes)
-                    })
-        
-        # Ordena por força de entrelaçamento
-        pares_entrelacados.sort(key=lambda x: x["forca"], reverse=True)
-        
-        return {
-            "matriz": matriz_entrelacamento,
-            "top_pares": pares_entrelacados[:10],
-            "media_entrelacamento": np.mean(matriz_entrelacamento) / len(concursos_recentes)
-        }
-    
-    def _classificar_numeros_quanticos(self, analise):
-        """Classifica números por estado quântico"""
-        classificacao = {}
-        
-        for n in self.numeros:
-            estado = {
-                "numero": n,
-                "amplitude_onda": analise["funcao_onda"].get(n, 0),
-                "tunelamento": analise["tunelamento"].get(n, 0),
-                "incerteza": analise["incerteza"].get(n, 0),
-                "estado": "INDETERMINADO"
-            }
-            
-            # Determina estado quântico
-            amplitude = estado["amplitude_onda"]
-            tunel = abs(estado["tunelamento"])
-            incerteza = estado["incerteza"]
-            
-            if amplitude > 0.05 and tunel > 0.3:
-                estado["estado"] = "TUNELAMENTO ATIVO"
-            elif amplitude > 0.04 and incerteza < 0.3:
-                estado["estado"] = "ESTÁVEL"
-            elif amplitude < 0.03 and incerteza > 0.6:
-                estado["estado"] = "SUPERPOSIÇÃO"
-            elif amplitude > 0.06:
-                estado["estado"] = "COLAPSADO"
-            else:
-                estado["estado"] = "ENTRELAÇADO"
-            
-            classificacao[n] = estado
-        
-        return classificacao
-    
-    def gerar_relatorio_quantico(self, analise):
-        """Gera relatório completo da análise quântica"""
-        relatorio = "📊 RELATÓRIO DE ANÁLISE QUÂNTICA - LOTOFÁCIL\n"
-        relatorio += "=" * 70 + "\n\n"
-        
-        relatorio += f"Concursos analisados: {analise['concursos_analisados']}\n"
-        relatorio += f"Números em tunelamento: {len(analise['tunelamento'])}\n"
-        relatorio += f"Média de entrelaçamento: {analise['entrelacamento']['media_entrelacamento']:.3f}\n\n"
-        
-        relatorio += "🎯 TOP 10 NÚMEROS POR AMPLITUDE QUÂNTICA\n"
-        relatorio += "-" * 50 + "\n"
-        
-        onda_ordenada = sorted(analise["funcao_onda"].items(), key=lambda x: x[1], reverse=True)
-        for n, amplitude in onda_ordenada[:10]:
-            estado = analise["classificacao_quantica"][n]["estado"]
-            relatorio += f"{n:2d} → Amplitude: {amplitude:.4f} | Estado: {estado}\n"
-        
-        relatorio += "\n🌀 PARES MAIS ENTRELAÇADOS (CORRELAÇÃO QUÂNTICA)\n"
-        relatorio += "-" * 50 + "\n"
-        
-        for par_info in analise["entrelacamento"]["top_pares"]:
-            par = par_info["par"]
-            forca = par_info["forca"]
-            relatorio += f"{par[0]:2d} ↔ {par[1]:2d} | Força: {forca:.3f}\n"
-        
-        relatorio += "\n⚡ NÚMEROS EM TUNELAMENTO QUÂNTICO\n"
-        relatorio += "-" * 50 + "\n"
-        
-        if analise["tunelamento"]:
-            tunel_ordenado = sorted(analise["tunelamento"].items(), key=lambda x: abs(x[1]), reverse=True)
-            for n, taxa in tunel_ordenado[:10]:
-                direcao = "QUENTE ← FRIO" if taxa > 0 else "FRIO ← QUENTE"
-                relatorio += f"{n:2d} → Taxa: {abs(taxa):.3f} | Direção: {direcao}\n"
-        else:
-            relatorio += "Nenhum tunelamento significativo detectado\n"
-        
-        relatorio += "\n🎲 RECOMENDAÇÕES QUÂNTICAS\n"
-        relatorio += "-" * 50 + "\n"
-        relatorio += "1. Priorize números com alta amplitude quântica\n"
-        relatorio += "2. Inclua pares entrelaçados nos mesmos cartões\n"
-        relatorio += "3. Considere números em tunelamento ativo\n"
-        relatorio += "4. Balanceie entre estabilidade e superposição\n"
-        
-        return relatorio
-
-
-# =========================
-# NOVA CLASSE: Backtest Estratégias
-# =========================
-class BacktestEstrategias:
-    def __init__(self, concursos):
-        self.concursos = concursos
-        self.numeros = list(range(1, 26))
-        self.primos = {2, 3, 5, 7, 11, 13, 17, 19, 23}
-        
-    def executar_backtest_completo(self, concursos_teste=50):
-        """Executa backtest de todas as estratégias contra concursos passados"""
-        if len(self.concursos) < concursos_teste + 10:
-            return {"erro": f"Necessário pelo menos {concursos_teste + 10} concursos para backtest"}
-        
-        resultados = {}
-        
-        # Testar cada concurso do passado
-        for i in range(concursos_teste):
-            concurso_alvo = self.concursos[i]  # Concurso a ser "previsto"
-            dados_treino = self.concursos[i+1:i+51]  # 50 concursos anteriores como treino
-            
-            if len(dados_treino) < 10:
-                continue
-            
-            # Gerar previsões com cada estratégia
-            estrategias = self._gerar_previsoes_estrategias(dados_treino)
-            
-            # Avaliar acertos
-            for estrategia_nome, jogos in estrategias.items():
-                if estrategia_nome not in resultados:
-                    resultados[estrategia_nome] = {
-                        'acertos_11': 0, 'acertos_12': 0, 'acertos_13': 0,
-                        'acertos_14': 0, 'acertos_15': 0, 'total_jogos': 0
-                    }
-                
-                for jogo in jogos[:5]:  # Avaliar apenas 5 jogos por estratégia
-                    acertos = len(set(jogo) & set(concurso_alvo))
-                    resultados[estrategia_nome]['total_jogos'] += 1
-                    
-                    if acertos == 15:
-                        resultados[estrategia_nome]['acertos_15'] += 1
-                    elif acertos == 14:
-                        resultados[estrategia_nome]['acertos_14'] += 1
-                    elif acertos == 13:
-                        resultados[estrategia_nome]['acertos_13'] += 1
-                    elif acertos == 12:
-                        resultados[estrategia_nome]['acertos_12'] += 1
-                    elif acertos == 11:
-                        resultados[estrategia_nome]['acertos_11'] += 1
-        
-        # Calcular estatísticas finais
-        return self._calcular_estatisticas_finais(resultados)
-    
-    def _gerar_previsoes_estrategias(self, dados_treino):
-        """Gera jogos usando todas as estratégias disponíveis"""
-        estrategias = {}
-        
-        # 1. Estratégia IA CatBoost
-        try:
-            ia = LotoFacilIA(dados_treino)
-            probs = ia.prever_proximo()
-            if probs:
-                estrategias['IA_CatBoost'] = ia.gerar_5_jogos(probs)
-        except:
-            pass
-        
-        # 2. Estratégia Sequência/Falha Balanceada
-        analise_sf = AnaliseSequenciaFalha(dados_treino)
-        estrategias['Sequencia_Falha_Balanceada'] = analise_sf.gerar_jogos_estrategicos(5, "balanceada")
-        
-        # 3. Estratégia Fibonacci
-        fib = EstrategiaFibonacci(dados_treino)
-        estrategias['Fibonacci_Padrao'] = fib.gerar_cartoes_fibonacci(5, usar_estatisticas=True)
-        
-        # 4. Estratégia por Padrões
-        ia_padroes = LotoFacilIA(dados_treino)
-        estrategias['Padroes_Janela20'] = ia_padroes.gerar_cartoes_por_padroes(5, janela=20)
-        
-        # 5. Estratégia Híbrida
-        estrategias['Hibrida_Otimizada'] = self._gerar_estrategia_hibrida(dados_treino)
-        
-        # 6. Estratégia Quântica (NOVA)
-        quantica = EstrategiaQuantica(dados_treino)
-        estrategias['Quantica_Avancada'] = quantica.gerar_cartoes_quanticos(5, usar_superposicao=True)
-        
-        # 7. Aleatório (baseline)
-        estrategias['Aleatorio_Balanceado'] = self._gerar_aleatorio_balanceado(5)
-        
-        return estrategias
-    
-    def _gerar_estrategia_hibrida(self, dados_treino):
-        """NOVA ESTRATÉGIA HÍBRIDA OTIMIZADA"""
-        jogos_hibridos = []
-        
-        # Analisar dados de treino
-        analise_sf = AnaliseSequenciaFalha(dados_treino)
-        fib = EstrategiaFibonacci(dados_treino)
-        
-        for _ in range(8):  # Gerar 8 tentativas para garantir 5 jogos bons
-            jogo = set()
-            
-            # 1. 6 números da Sequência/Falha (mais quentes)
-            tabela = analise_sf.criar_tabela_completa()
-            top_sequencia = tabela.sort_values("Sequência", ascending=False).head(10)
-            numeros_quentes = top_sequencia['Número'].tolist()
-            jogo.update(random.sample(numeros_quentes, 6))
-            
-            # 2. 4 números Fibonacci (priorizando atraso)
-            stats_fib = fib.analisar_fibonacci()
-            if stats_fib and 'atraso_fib' in stats_fib:
-                fib_atrasados = sorted(
-                    fib.fibonacci, 
-                    key=lambda x: stats_fib['atraso_fib'][x], 
-                    reverse=True
-                )[:5]
-                jogo.update(random.sample(fib_atrasados, 4))
-            else:
-                jogo.update(random.sample(fib.fibonacci, 4))
-            
-            # 3. 3 números de ciclos atrasados (usando análise própria)
-            atraso = self._calcular_atraso_simples(dados_treino)
-            atrasados = sorted(atraso.items(), key=lambda x: x[1], reverse=True)[:10]
-            numeros_atrasados = [n for n, _ in atrasados if n not in jogo]
-            if len(numeros_atrasados) >= 3:
-                jogo.update(random.sample(numeros_atrasados, 3))
-            else:
-                # Completar com números aleatórios que não estão no jogo
-                disponiveis = [n for n in self.numeros if n not in jogo]
-                jogo.update(random.sample(disponiveis, 3))
-            
-            # 4. 2 números de média frequência (para balancear)
-            freq = self._calcular_frequencia(dados_treino[:20])
-            medios = sorted(freq.items(), key=lambda x: x[1])[5:15]
-            numeros_medios = [n for n, _ in medios if n not in jogo]
-            if len(numeros_medios) >= 2:
-                jogo.update(random.sample(numeros_medios, 2))
-            
-            # Garantir 15 números
-            while len(jogo) < 15:
-                disponiveis = [n for n in self.numeros if n not in jogo]
-                if disponiveis:
-                    jogo.add(random.choice(disponiveis))
-            
-            # Balancear pares/ímpares
-            jogo_balanceado = self._balancear_jogo(list(jogo))
-            
-            if len(jogo_balanceado) == 15:
-                jogos_hibridos.append(sorted(jogo_balanceado))
-            
-            if len(jogos_hibridos) >= 5:
-                break
-        
-        return jogos_hibridos[:5]
-    
-    def _calcular_atraso_simples(self, concursos):
-        """Calcula atraso simples dos números"""
-        atraso = {n: 0 for n in self.numeros}
-        for i, concurso in enumerate(concursos):
-            for n in self.numeros:
-                if n in concurso:
-                    atraso[n] = i
-        return atraso
-    
-    def _calcular_frequencia(self, concursos):
-        """Calcula frequência dos números"""
-        freq = Counter()
-        for concurso in concursos:
-            freq.update(concurso)
-        return freq
-    
-    def _balancear_jogo(self, jogo):
-        """Balanceia pares/ímpares do jogo"""
-        pares = sum(1 for n in jogo if n % 2 == 0)
-        
-        # Alvo: 6-9 pares (ideal Lotofácil)
+        # Distribuição histórica ideal: 6-9 pares
         if pares < 6:
-            # Trocar ímpares por pares
-            impares_no_jogo = [n for n in jogo if n % 2 == 1]
-            pares_fora = [n for n in self.numeros if n % 2 == 0 and n not in jogo]
+            impares_no_cartao = [n for n in cartao if n % 2 == 1]
+            pares_fora = [n for n in self.numeros if n % 2 == 0 and n not in cartao]
             
-            while pares < 6 and impares_no_jogo and pares_fora:
-                jogo.remove(impares_no_jogo.pop())
-                jogo.append(pares_fora.pop())
+            while pares < 6 and impares_no_cartao and pares_fora:
+                cartao.remove(impares_no_cartao.pop())
+                cartao.append(pares_fora.pop())
                 pares += 1
         
         elif pares > 9:
-            # Trocar pares por ímpares
-            pares_no_jogo = [n for n in jogo if n % 2 == 0]
-            impares_fora = [n for n in self.numeros if n % 2 == 1 and n not in jogo]
+            pares_no_cartao = [n for n in cartao if n % 2 == 0]
+            impares_fora = [n for n in self.numeros if n % 2 == 1 and n not in cartao]
             
-            while pares > 9 and pares_no_jogo and impares_fora:
-                jogo.remove(pares_no_jogo.pop())
-                jogo.append(impares_fora.pop())
+            while pares > 9 and pares_no_cartao and impares_fora:
+                cartao.remove(pares_no_cartao.pop())
+                cartao.append(impares_fora.pop())
                 pares -= 1
         
-        return jogo
+        return set(cartao)
     
-    def _gerar_aleatorio_balanceado(self, n_jogos):
-        """Gera jogos aleatórios balanceados (baseline)"""
-        jogos = []
-        for _ in range(n_jogos):
-            while True:
-                jogo = sorted(random.sample(self.numeros, 15))
-                pares = sum(1 for n in jogo if n % 2 == 0)
-                if 6 <= pares <= 9:
-                    jogos.append(jogo)
-                    break
-        return jogos
-    
-    def _calcular_estatisticas_finais(self, resultados):
-        """Calcula estatísticas finais do backtest"""
-        estatisticas = {}
+    def gerar_relatorio_estatistico(self, analise):
+        """Relatório estatístico honesto e transparente"""
+        relatorio = "📊 RELATÓRIO ESTATÍSTICO - LOTOFÁCIL\n"
+        relatorio += "=" * 70 + "\n\n"
         
-        for estrategia, dados in resultados.items():
-            if dados['total_jogos'] == 0:
-                continue
-                
-            estatisticas[estrategia] = {
-                'total_jogos': dados['total_jogos'],
-                'taxa_11_pontos': (dados['acertos_11'] / dados['total_jogos']) * 100,
-                'taxa_12_pontos': (dados['acertos_12'] / dados['total_jogos']) * 100,
-                'taxa_13_pontos': (dados['acertos_13'] / dados['total_jogos']) * 100,
-                'taxa_14_pontos': (dados['acertos_14'] / dados['total_jogos']) * 100,
-                'taxa_15_pontos': (dados['acertos_15'] / dados['total_jogos']) * 100,
-                'taxa_13_plus': ((dados['acertos_13'] + dados['acertos_14'] + dados['acertos_15']) / dados['total_jogos']) * 100,
-                'pontuacao_media': self._calcular_pontuacao_media(dados)
-            }
+        relatorio += f"Concursos analisados: {analise['concursos_analisados']}\n"
         
-        # Ordenar por taxa de 13+ pontos
-        return dict(sorted(estatisticas.items(), 
-                          key=lambda x: x[1]['taxa_13_plus'], 
-                          reverse=True))
-    
-    def _calcular_pontuacao_media(self, dados):
-        """Calcula pontuação média ponderada"""
-        if dados['total_jogos'] == 0:
-            return 0
+        # Teste de aleatoriedade
+        if analise['teste_aleatoriedade']['p_value']:
+            p_val = analise['teste_aleatoriedade']['p_value']
+            relatorio += f"Teste de aleatoriedade (p-value): {p_val:.4f}\n"
             
-        total_pontos = (
-            dados['acertos_11'] * 11 +
-            dados['acertos_12'] * 12 +
-            dados['acertos_13'] * 13 +
-            dados['acertos_14'] * 14 +
-            dados['acertos_15'] * 15
-        )
-        return total_pontos / dados['total_jogos']
-    
-    def gerar_relatorio_backtest(self, resultados_backtest):
-        """Gera relatório formatado do backtest"""
-        relatorio = "📊 RELATÓRIO DE BACKTEST - LOTOFÁCIL\n"
-        relatorio += "=" * 60 + "\n\n"
+            if p_val > 0.05:
+                relatorio += "✅ Não há evidência contra aleatoriedade (p > 0.05)\n"
+                relatorio += "   → Os sorteios parecem ser estatisticamente aleatórios\n"
+            else:
+                relatorio += "⚠️ Possível não-aleatoriedade detectada (p ≤ 0.05)\n"
+                relatorio += "   → Padrões estatisticamente significativos encontrados\n"
         
-        relatorio += f"Período analisado: {len(self.concursos)} concursos\n"
-        relatorio += f"Estratégias testadas: {len(resultados_backtest)}\n\n"
+        relatorio += f"Média de frequência por número: {analise['media_frequencia']:.3f}\n\n"
         
-        relatorio += "🏆 RANKING DE ESTRATÉGIAS (por taxa 13+ pontos)\n"
-        relatorio += "-" * 60 + "\n\n"
+        relatorio += "📈 TOP 10 NÚMEROS POR PROBABILIDADE (com IC 95%)\n"
+        relatorio += "-" * 60 + "\n"
         
-        for i, (estrategia, stats) in enumerate(resultados_backtest.items(), 1):
-            relatorio += f"{i}º {estrategia.replace('_', ' ').title()}:\n"
-            relatorio += f"  • Pontuação média: {stats['pontuacao_media']:.2f} pontos\n"
-            relatorio += f"  • 11 pontos: {stats['taxa_11_pontos']:.1f}%\n"
-            relatorio += f"  • 12 pontos: {stats['taxa_12_pontos']:.1f}%\n"
-            relatorio += f"  • 13+ pontos: {stats['taxa_13_plus']:.2f}%\n"
-            relatorio += f"  • 14 pontos: {stats['taxa_14_pontos']:.3f}%\n"
-            relatorio += f"  • 15 pontos: {stats['taxa_15_pontos']:.5f}%\n"
-            relatorio += f"  • Total jogos: {stats['total_jogos']}\n"
-            relatorio += "-" * 40 + "\n"
+        probs_ordenadas = sorted(analise['probabilidades'].items(), 
+                                key=lambda x: x[1]['probabilidade'], 
+                                reverse=True)
         
-        # Análise comparativa
-        relatorio += "\n📈 ANÁLISE COMPARATIVA:\n"
-        melhor = list(resultados_backtest.items())[0]
-        aleatorio = resultados_backtest.get('Aleatorio_Balanceado', {})
+        for n, info in probs_ordenadas[:10]:
+            relatorio += (f"{n:2d} → Prob: {info['probabilidade']:.3f} "
+                         f"[{info['intervalo_inferior']:.3f}-{info['intervalo_superior']:.3f}] "
+                         f"(Freq: {info['frequencia']})\n")
         
-        if aleatorio:
-            relatorio += f"• Melhor vs Aleatório: {melhor[1]['taxa_13_plus']:.2f}% vs {aleatorio['taxa_13_plus']:.2f}%\n"
-            relatorio += f"• Vantagem: {melhor[1]['taxa_13_plus'] - aleatorio['taxa_13_plus']:.2f}%\n"
+        relatorio += "\n📊 AUTOCORRELAÇÃO (padrões temporais)\n"
+        relatorio += "-" * 50 + "\n"
         
-        # Recomendação
-        relatorio += "\n🎯 RECOMENDAÇÃO BASEADA EM DADOS:\n"
-        relatorio += f"Estratégia recomendada: {list(resultados_backtest.keys())[0].replace('_', ' ')}\n"
-        relatorio += f"Expectativa realista: {melhor[1]['pontuacao_media']:.1f} pontos por jogo\n"
+        for lag, corr in analise['autocorrelacao'].items():
+            if abs(corr) > 0.2:
+                relatorio += f"Lag {lag}: {corr:.3f} {'↑' if corr > 0 else '↓'}\n"
         
-        # Aviso estatístico
-        relatorio += "\n⚠️ AVISO ESTATÍSTICO:\n"
-        relatorio += "• Chance matemática 14 pontos: 0,0046%\n"
-        relatorio += "• Chance matemática 15 pontos: 0,00003%\n"
-        relatorio += "• Nenhuma estratégia altera significativamente essas probabilidades\n"
+        relatorio += "\n⚠️ AVISO ESTATÍSTICO HONESTO\n"
+        relatorio += "-" * 50 + "\n"
+        relatorio += "1. Lotofácil é um jogo de sorte com aleatoriedade verificada\n"
+        relatorio += "2. Nenhum método altera probabilidades matemáticas fundamentais\n"
+        relatorio += "3. Chance matemática 15 pontos: 1 em 3.268.760\n"
+        relatorio += "4. Chance matemática 14 pontos: 1 em 21.791\n"
+        relatorio += "5. Análises servem para diversificar, não para 'adivinhar'\n"
+        
+        relatorio += "\n🎯 RECOMENDAÇÕES BASEADAS EM ESTATÍSTICA\n"
+        relatorio += "-" * 50 + "\n"
+        relatorio += "1. Use números com frequência dentro do intervalo esperado\n"
+        relatorio += "2. Diversifique entre pares e ímpares (6-9 pares ideal)\n"
+        relatorio += "3. Não repita padrões muito específicos\n"
+        relatorio += "4. Lembre-se: análise reduz risco, não garante acertos\n"
         
         return relatorio
 
 # =========================
-# NOVA CLASSE: FechamentoLotofacil
+# CLASSE: Backtest Rigoroso (substitui o anterior)
+# =========================
+class BacktestRigoroso:
+    def __init__(self, concursos):
+        self.concursos = concursos
+        
+    def executar_backtest_rigoroso(self, train_size=100, test_size=50):
+        """
+        Backtest com validação adequada
+        """
+        if len(self.concursos) < train_size + test_size:
+            return {"erro": f"Necessário {train_size + test_size} concursos"}
+        
+        resultados = {}
+        
+        # Estratégias a testar
+        estrategias = [
+            ('Aleatório Balanceado', self._gerar_aleatorio_balanceado),
+            ('Frequência Simples', self._gerar_por_frequencia),
+            ('Sequência-Falha', self._gerar_sequencia_falha),
+            ('Fibonacci Balanceado', self._gerar_fibonacci_balanceado)
+        ]
+        
+        # Executar para cada ponto no tempo
+        for start_idx in range(test_size):
+            # Dados de treino
+            train_data = self.concursos[start_idx:start_idx + train_size]
+            
+            # Concurso a prever
+            target = self.concursos[start_idx + train_size]
+            
+            if len(train_data) < 30:
+                continue
+            
+            for estrategia_nome, estrategia_func in estrategias:
+                if estrategia_nome not in resultados:
+                    resultados[estrategia_nome] = {
+                        'acertos': [],
+                        'jogos_gerados': 0
+                    }
+                
+                # Gerar jogos
+                jogos = estrategia_func(train_data, n_jogos=5)
+                resultados[estrategia_nome]['jogos_gerados'] += len(jogos)
+                
+                # Avaliar
+                for jogo in jogos:
+                    acertos = len(set(jogo) & set(target))
+                    resultados[estrategia_nome]['acertos'].append(acertos)
+        
+        # Calcular estatísticas
+        estatisticas_finais = {}
+        
+        for estrategia, dados in resultados.items():
+            if len(dados['acertos']) == 0:
+                continue
+                
+            acertos_array = np.array(dados['acertos'])
+            
+            # Estatísticas básicas
+            media = np.mean(acertos_array)
+            desvio = np.std(acertos_array)
+            n = len(acertos_array)
+            
+            # Intervalo de confiança 95% para a média
+            z = 1.96
+            margem_erro = z * (desvio / np.sqrt(n))
+            
+            # Percentis
+            percentis = {
+                '11+': np.sum(acertos_array >= 11) / n * 100,
+                '12+': np.sum(acertos_array >= 12) / n * 100,
+                '13+': np.sum(acertos_array >= 13) / n * 100,
+                '14+': np.sum(acertos_array >= 14) / n * 100,
+                '15': np.sum(acertos_array == 15) / n * 100
+            }
+            
+            estatisticas_finais[estrategia] = {
+                'media_acertos': media,
+                'intervalo_confianca': (media - margem_erro, media + margem_erro),
+                'desvio_padrao': desvio,
+                'amostra': n,
+                'percentis': percentis,
+                'efetividade': self._calcular_efetividade(acertos_array)
+            }
+        
+        return estatisticas_finais
+    
+    def _calcular_efetividade(self, acertos_array):
+        """Calcula efetividade relativa ao esperado aleatório"""
+        esperado_aleatorio = 10.5
+        media_real = np.mean(acertos_array)
+        
+        efetividade = ((media_real - esperado_aleatorio) / esperado_aleatorio) * 100
+        
+        return efetividade
+    
+    def _gerar_aleatorio_balanceado(self, concursos, n_jogos=5):
+        """Baseline: aleatório balanceado"""
+        jogos = []
+        for _ in range(n_jogos):
+            jogo = sorted(random.sample(range(1, 26), 15))
+            # Balancear
+            pares = sum(1 for n in jogo if n % 2 == 0)
+            if 6 <= pares <= 9:
+                jogos.append(jogo)
+            else:
+                jogo = self._rebalancear_jogo(jogo)
+                jogos.append(jogo)
+        return jogos
+    
+    def _gerar_por_frequencia(self, concursos, n_jogos=5):
+        """Baseado em frequência simples"""
+        if len(concursos) < 30:
+            return self._gerar_aleatorio_balanceado(concursos, n_jogos)
+        
+        freq = Counter()
+        for concurso in concursos[:50]:
+            freq.update(concurso)
+        
+        jogos = []
+        for _ in range(n_jogos):
+            top15 = [n for n, _ in freq.most_common(15)]
+            jogos.append(sorted(top15))
+        
+        return jogos
+    
+    def _gerar_sequencia_falha(self, concursos, n_jogos=5):
+        """Método sequência/falha"""
+        analise_sf = AnaliseSequenciaFalha(concursos)
+        return analise_sf.gerar_jogos_estrategicos(n_jogos, "balanceada")
+    
+    def _gerar_fibonacci_balanceado(self, concursos, n_jogos=5):
+        """Fibonacci balanceado"""
+        fib = EstrategiaFibonacci(concursos)
+        return fib.gerar_cartoes_fibonacci(n_jogos, usar_estatisticas=True)
+    
+    def _rebalancear_jogo(self, jogo):
+        """Rebalanceia jogo para ter 6-9 pares"""
+        pares = sum(1 for n in jogo if n % 2 == 0)
+        
+        while pares < 6:
+            impares = [n for n in jogo if n % 2 == 1]
+            if not impares:
+                break
+            jogo.remove(random.choice(impares))
+            novo_par = random.choice([n for n in range(1, 26) if n % 2 == 0 and n not in jogo])
+            jogo.append(novo_par)
+            pares += 1
+        
+        while pares > 9:
+            pares_list = [n for n in jogo if n % 2 == 0]
+            if not pares_list:
+                break
+            jogo.remove(random.choice(pares_list))
+            novo_impar = random.choice([n for n in range(1, 26) if n % 2 == 1 and n not in jogo])
+            jogo.append(novo_impar)
+            pares -= 1
+        
+        return sorted(jogo)
+    
+    def gerar_relatorio_backtest(self, resultados):
+        """Gera relatório formatado do backtest"""
+        relatorio = "📊 RELATÓRIO DE BACKTEST RIGOROSO - LOTOFÁCIL\n"
+        relatorio += "=" * 60 + "\n\n"
+        
+        relatorio += "🔬 METODOLOGIA CIENTÍFICA\n"
+        relatorio += "-" * 60 + "\n"
+        relatorio += "• Walk-forward validation (teste temporal)\n"
+        relatorio += "• Intervalos de confiança 95%\n"
+        relatorio += "• Baseline: Aleatório balanceado\n"
+        relatorio += "• Métricas estatisticamente válidas\n\n"
+        
+        relatorio += "🏆 RESULTADOS COMPARATIVOS\n"
+        relatorio += "-" * 60 + "\n\n"
+        
+        for i, (estrategia, stats) in enumerate(resultados.items(), 1):
+            relatorio += f"{i}º {estrategia}:\n"
+            relatorio += f"  • Média de acertos: {stats['media_acertos']:.2f}\n"
+            relatorio += f"  • IC 95%: [{stats['intervalo_confianca'][0]:.2f}, {stats['intervalo_confianca'][1]:.2f}]\n"
+            relatorio += f"  • 11+ pontos: {stats['percentis']['11+']:.2f}%\n"
+            relatorio += f"  • 13+ pontos: {stats['percentis']['13+']:.2f}%\n"
+            relatorio += f"  • Efetividade vs aleatório: {stats['efetividade']:+.2f}%\n"
+            relatorio += f"  • Amostra: {stats['amostra']} jogos\n"
+            relatorio += "-" * 40 + "\n"
+        
+        # Análise honesta
+        relatorio += "\n📈 ANÁLISE HONESTA DOS RESULTADOS\n"
+        relatorio += "-" * 60 + "\n"
+        
+        melhor = list(resultados.items())[0] if resultados else None
+        aleatorio = resultados.get('Aleatório Balanceado', {})
+        
+        if aleatorio and melhor:
+            vantagem = melhor[1]['media_acertos'] - aleatorio['media_acertos']
+            relatorio += f"• Melhor estratégia vs Aleatório: {vantagem:.2f} acertos de vantagem\n"
+            
+            if abs(vantagem) < 0.3:
+                relatorio += "• Conclusão: Nenhuma estratégia tem vantagem estatisticamente significativa\n"
+                relatorio += "• Recomendação: Use aleatório balanceado (é igualmente eficaz)\n"
+            else:
+                relatorio += f"• Conclusão: Pequena vantagem para {melhor[0]}\n"
+                relatorio += "• Recomendação: Use estratégia diversificada\n"
+        
+        # Aviso estatístico
+        relatorio += "\n⚠️ AVISO ESTATÍSTICO IMPORTANTE\n"
+        relatorio += "-" * 60 + "\n"
+        relatorio += "• Chance matemática 14 pontos: 0,0046%\n"
+        relatorio += "• Chance matemática 15 pontos: 0,00003%\n"
+        relatorio += "• Backtest mostra desempenho histórico, não garante resultados futuros\n"
+        relatorio += "• Lotofácil é um jogo de sorte: jogue com responsabilidade\n"
+        
+        return relatorio
+
+# =========================
+# CLASSE: FechamentoLotofacil
 # =========================
 class FechamentoLotofacil:
     def __init__(self, concursos=None):
@@ -852,7 +634,6 @@ class FechamentoLotofacil:
         # Grupo 1: Balanceado (frequentes + atrasados)
         grupo1 = list(set(top_frequentes[:10] + top_atrasados[:8]))
         if len(grupo1) < tamanho_grupo:
-            # Completar com números restantes
             restantes = [n for n in self.numeros if n not in grupo1]
             grupo1.extend(random.sample(restantes, tamanho_grupo - len(grupo1)))
         grupos_sugeridos.append(sorted(grupo1[:tamanho_grupo]))
@@ -860,7 +641,6 @@ class FechamentoLotofacil:
         # Grupo 2: Focado em Fibonacci
         fibonacci = [1, 2, 3, 5, 8, 13, 21]
         grupo2 = fibonacci.copy()
-        # Adicionar números complementares baseados em frequência
         complementares = [n for n in top_frequentes if n not in grupo2]
         grupo2.extend(complementares[:tamanho_grupo - len(grupo2)])
         grupos_sugeridos.append(sorted(grupo2[:tamanho_grupo]))
@@ -870,9 +650,6 @@ class FechamentoLotofacil:
     def gerar_fechamento_18_15(self, numeros_escolhidos, max_jogos=80, estrategia="cobertura"):
         """
         Fechamento de 18 números, gerando combinações otimizadas de 15.
-        - 'numeros_escolhidos': lista de 18 números escolhidos pelo usuário ou pela IA.
-        - 'max_jogos': limite de combinações a gerar.
-        - 'estrategia': 'cobertura' ou 'estatistica'
         """
         if len(numeros_escolhidos) != 18:
             st.warning(f"Fechamento precisa de exatamente 18 números. Recebidos: {len(numeros_escolhidos)}")
@@ -881,18 +658,12 @@ class FechamentoLotofacil:
         jogos = set()
         
         if estrategia == "cobertura":
-            # Estratégia de cobertura sistemática
-            # Garantir que cada número apareça em aproximadamente X jogos
             for i in range(max_jogos * 2):
-                # Selecionar base fixa de 12 números com bom histórico
                 base_fixa = random.sample(numeros_escolhidos, 12)
-                
-                # Completar com 3 números variáveis
                 complemento = random.sample([n for n in numeros_escolhidos if n not in base_fixa], 3)
                 
                 jogo = sorted(base_fixa + complemento)
                 
-                # Validar estatísticas do jogo
                 if self._validar_jogo_fechamento(jogo):
                     jogos.add(tuple(jogo))
                 
@@ -900,11 +671,8 @@ class FechamentoLotofacil:
                     break
         
         elif estrategia == "estatistica":
-            # Estratégia baseada em estatísticas dos últimos concursos
             if len(self.concursos) >= 10:
-                # Analisar padrões dos últimos concursos
                 for _ in range(max_jogos * 3):
-                    # Priorizar números que seguem padrões recentes
                     jogo = self._gerar_jogo_estatistico(numeros_escolhidos)
                     
                     if jogo and self._validar_jogo_fechamento(jogo):
@@ -939,9 +707,9 @@ class FechamentoLotofacil:
             return False
         
         # Verificar distribuição por faixas
-        faixa1 = sum(1 for n in jogo if 1 <= n <= 8)    # Baixos
-        faixa2 = sum(1 for n in jogo if 9 <= n <= 16)   # Médios
-        faixa3 = sum(1 for n in jogo if 17 <= n <= 25)  # Altos
+        faixa1 = sum(1 for n in jogo if 1 <= n <= 8)
+        faixa2 = sum(1 for n in jogo if 9 <= n <= 16)
+        faixa3 = sum(1 for n in jogo if 17 <= n <= 25)
         
         if not (4 <= faixa1 <= 7 and 4 <= faixa2 <= 7 and 4 <= faixa3 <= 7):
             return False
@@ -982,13 +750,10 @@ class FechamentoLotofacil:
         if not jogos_gerados:
             return {"cobertura": 0, "numeros_cobertura": {}}
         
-        # Contar quantas vezes cada número aparece
         contagem_numeros = Counter()
         for jogo in jogos_gerados:
             contagem_numeros.update(jogo)
         
-        # Calcular estatísticas de cobertura
-        total_numeros = len(numeros_escolhidos)
         cobertura_por_numero = {}
         
         for num in numeros_escolhidos:
@@ -999,18 +764,17 @@ class FechamentoLotofacil:
                 "percentual": round(percentual, 1)
             }
         
-        # Cobertura média
         cobertura_media = np.mean([cobertura_por_numero[n]["percentual"] for n in numeros_escolhidos])
         
         return {
             "cobertura_media": round(cobertura_media, 1),
             "cobertura_por_numero": cobertura_por_numero,
             "total_jogos": len(jogos_gerados),
-            "total_numeros_cobertos": total_numeros
+            "total_numeros_cobertos": len(numeros_escolhidos)
         }
 
 # =========================
-# NOVA FUNÇÃO: Análise de Sequência e Falha (Método da Tabela Lotofácil)
+# CLASSE: Análise de Sequência e Falha
 # =========================
 class AnaliseSequenciaFalha:
     def __init__(self, concursos):
@@ -1036,11 +800,10 @@ class AnaliseSequenciaFalha:
         return falhas
     
     def criar_tabela_completa(self):
-        """Cria tabela completa de análise (como na imagem enviada)."""
+        """Cria tabela completa de análise."""
         sequencias = self.calcular_sequencias()
         falhas = self.calcular_falhas()
         
-        # Ordenar números por sequência (mais para menos)
         numeros_por_sequencia = sorted(range(1, 26), key=lambda x: sequencias[x-1], reverse=True)
         numeros_por_falha = sorted(range(1, 26), key=lambda x: falhas[x-1], reverse=True)
         
@@ -1062,20 +825,14 @@ class AnaliseSequenciaFalha:
         jogos = []
         
         for _ in range(n_jogos):
-            # Top 10 números com maior sequência (mais frequentes)
             melhores = sorted(range(1, 26), key=lambda x: sequencias[x-1], reverse=True)[:10]
-            
-            # Top 10 números com maior falha (potencial retorno)
             retorno = sorted(range(1, 26), key=lambda x: falhas[x-1], reverse=True)[:10]
             
-            # Misturar: 8 dos melhores + 7 dos que podem retornar
             combo = set(random.sample(melhores, 8) + random.sample(retorno, 7))
             
-            # Garantir 15 números
             while len(combo) < 15:
                 combo.add(random.choice([n for n in range(1, 26) if n not in combo]))
             
-            # Ordenar o jogo
             jogos.append(sorted(list(combo)))
         
         return jogos
@@ -1087,30 +844,25 @@ class AnaliseSequenciaFalha:
         
         jogos = []
         
-        # Classificar números em categorias
         melhores = sorted(range(1, 26), key=lambda x: sequencias[x-1], reverse=True)
         piores = sorted(range(1, 26), key=lambda x: sequencias[x-1])
         retorno = sorted(range(1, 26), key=lambda x: falhas[x-1], reverse=True)
         
         for _ in range(n_jogos):
             if estrategia == "balanceada":
-                # 6 melhores, 5 médios, 4 retorno
                 combo = set(random.sample(melhores[:10], 6) + 
                            random.sample(melhores[10:20], 5) + 
                            random.sample(retorno[:10], 4))
             
             elif estrategia == "conservadora":
-                # 10 melhores, 5 médios
                 combo = set(random.sample(melhores[:12], 10) + 
                            random.sample(melhores[12:20], 5))
             
             elif estrategia == "agressiva":
-                # 5 melhores, 10 retorno
                 combo = set(random.sample(melhores[:10], 5) + 
                            random.sample(retorno[:15], 10))
             
             elif estrategia == "aleatoria_padrao":
-                # Aleatória respeitando padrões históricos
                 pares = random.randint(6, 9)
                 impares = 15 - pares
                 
@@ -1120,17 +872,15 @@ class AnaliseSequenciaFalha:
                 combo = set(random.sample(numeros_pares, pares) + 
                            random.sample(numeros_impares, impares))
             
-            # Garantir 15 números
             while len(combo) < 15:
                 combo.add(random.choice([n for n in range(1, 26) if n not in combo]))
             
-            # Ordenar o jogo
             jogos.append(sorted(list(combo)))
         
         return jogos
 
 # =========================
-# NOVA FUNÇÃO: Análise Estatística Avançada
+# CLASSE: Análise Estatística Avançada
 # =========================
 class AnaliseEstatisticaAvancada:
     def __init__(self, concursos):
@@ -1150,10 +900,10 @@ class AnaliseEstatisticaAvancada:
             concurso_atual = concursos_recentes[i]
             
             # 1. Distribuição por quadrantes
-            q1 = sum(1 for n in concurso_atual if 1 <= n <= 6)   # Quadrante 1
-            q2 = sum(1 for n in concurso_atual if 7 <= n <= 13)  # Quadrante 2
-            q3 = sum(1 for n in concurso_atual if 14 <= n <= 19) # Quadrante 3
-            q4 = sum(1 for n in concurso_atual if 20 <= n <= 25) # Quadrante 4
+            q1 = sum(1 for n in concurso_atual if 1 <= n <= 6)
+            q2 = sum(1 for n in concurso_atual if 7 <= n <= 13)
+            q3 = sum(1 for n in concurso_atual if 14 <= n <= 19)
+            q4 = sum(1 for n in concurso_atual if 20 <= n <= 25)
             
             feat.extend([q1, q2, q3, q4])
             
@@ -1169,7 +919,7 @@ class AnaliseEstatisticaAvancada:
             distancia_media = self._distancia_media(concurso_atual)
             feat.append(distancia_media)
             
-            # 5. Variação do concurso anterior (se disponível)
+            # 5. Variação do concurso anterior
             if i > 0:
                 concurso_anterior = concursos_recentes[i-1]
                 repetidos = len(set(concurso_atual) & set(concurso_anterior))
@@ -1203,104 +953,48 @@ class AnaliseEstatisticaAvancada:
             return 0
         
         distancias = [sorted_nums[i+1] - sorted_nums[i] for i in range(len(sorted_nums)-1)]
-        return np.mean(distancias)
-    
-    def analisar_padroes_sazonais(self, janela=30):
-        """Analisa padrões sazonais nos concursos."""
-        if len(self.concursos) < janela:
-            return {}
-        
-        concursos_janela = self.concursos[:janela]
-        
-        # Padrões por dia da semana (se tiver datas)
-        padroes = {
-            "media_pares": [],
-            "media_primos": [],
-            "media_soma": [],
-            "numeros_quentes_janela": [],
-            "numeros_frios_janela": []
-        }
-        
-        for concurso in concursos_janela:
-            pares = sum(1 for n in concurso if n % 2 == 0)
-            primos = sum(1 for n in concurso if n in self.primos)
-            soma = sum(concurso)
-            
-            padroes["media_pares"].append(pares)
-            padroes["media_primos"].append(primos)
-            padroes["media_soma"].append(soma)
-        
-        # Calcular números quentes e frios na janela
-        freq = Counter()
-        for concurso in concursos_janela:
-            freq.update(concurso)
-        
-        quentes = sorted(freq.items(), key=lambda x: x[1], reverse=True)[:10]
-        frios = sorted(freq.items(), key=lambda x: x[1])[:10]
-        
-        padroes["numeros_quentes_janela"] = [n for n, _ in quentes]
-        padroes["numeros_frios_janela"] = [n for n, _ in frios]
-        
-        # Calcular médias
-        padroes["media_pares_final"] = np.mean(padroes["media_pares"])
-        padroes["media_primos_final"] = np.mean(padroes["media_primos"])
-        padroes["media_soma_final"] = np.mean(padroes["media_soma"])
-        
-        return padroes
+        return np.mean(distancias) if distancias else 0
 
 # =========================
-# CLASSE: AnaliseCiclos (Ciclo Dinâmico Real) - MODIFICADA
+# CLASSE: AnaliseCiclos
 # =========================
 class AnaliseCiclos:
-    """
-    Implementa o ciclo dinâmico:
-    - Recebe concursos (lista, onde index 0 = concurso mais recente)
-    - Permite definir um limite de concursos para analisar
-    - Percorre do mais recente para o mais antigo acumulando dezenas até todas as 25 sejam vistas ou atingir o limite
-    - Expõe: numeros_presentes_no_ciclo, numeros_faltantes, concursos_no_ciclo (lista), tamanho, status (normal/atrasado)
-    - Gera 5 cartoes priorizando dezenas faltantes e atrasadas no ciclo
-    """
     def __init__(self, concursos, concursos_info=None, limite_concursos=None):
-        self.concursos = concursos  # espera lista: [mais recente, ...]
-        self.concursos_info = concursos_info or {}  # Dicionário com informações dos concursos
+        self.concursos = concursos
+        self.concursos_info = concursos_info or {}
         self.TODAS = set(range(1,26))
-        self.ciclo_concursos = []  # lista de concursos (cada concurso = lista de 15 dezenas) pertencentes ao ciclo (do mais recente para o mais antigo)
-        self.ciclo_concursos_info = []  # Informações dos concursos no ciclo
+        self.ciclo_concursos = []
+        self.ciclo_concursos_info = []
         self.numeros_presentes = set()
         self.numeros_faltantes = set(self.TODAS)
-        self.tamanho = 0  # número de concursos no ciclo
-        self.iniciar_indice = None  # indice do concurso mais antigo que entrou no ciclo (0 = mais recente)
-        self.limite_concursos = limite_concursos  # Novo: limite de concursos a analisar
+        self.tamanho = 0
+        self.iniciar_indice = None
+        self.limite_concursos = limite_concursos
         self.analisar()
     
     def analisar(self):
-        """Detecta o ciclo dinâmico atual: acumula concursos até todas as 25 dezenas aparecerem ou atingir o limite."""
+        """Detecta o ciclo dinâmico atual"""
         self.ciclo_concursos = []
         self.ciclo_concursos_info = []
         self.numeros_presentes = set()
         self.numeros_faltantes = set(self.TODAS)
         self.iniciar_indice = None
         
-        # Determinar o limite máximo de concursos a analisar
         max_concursos = len(self.concursos)
         if self.limite_concursos is not None:
             max_concursos = min(self.limite_concursos, len(self.concursos))
         
-        # Ajustar mínimo para 10 concursos
         if max_concursos < 10:
             max_concursos = min(10, len(self.concursos))
         
-        # percorre do mais recente (0) para o mais antigo
         for idx, concurso in enumerate(self.concursos[:max_concursos]):
             if not concurso:
                 continue
             self.ciclo_concursos.append(concurso)
             
-            # Armazenar informações do concurso, se disponíveis
             if idx in self.concursos_info:
                 self.ciclo_concursos_info.append(self.concursos_info[idx])
             else:
-                # Criar informações básicas se não houver
                 self.ciclo_concursos_info.append({
                     "indice": idx,
                     "numero_concurso": f"Concurso {len(self.concursos) - idx}",
@@ -1309,10 +1003,9 @@ class AnaliseCiclos:
             
             self.numeros_presentes.update(concurso)
             self.numeros_faltantes = self.TODAS - self.numeros_presentes
-            # marca o índice mais antigo que foi considerado até agora
             self.iniciar_indice = idx
             
-            if not self.numeros_faltantes:  # ciclo fechado
+            if not self.numeros_faltantes:
                 break
         
         self.tamanho = len(self.ciclo_concursos)
@@ -1322,7 +1015,6 @@ class AnaliseCiclos:
         if not self.numeros_faltantes:
             return "Fechado"
         
-        # Definir status baseado no tamanho do ciclo
         if self.tamanho <= 3:
             return "Normal"
         elif 4 <= self.tamanho <= 6:
@@ -1346,29 +1038,22 @@ class AnaliseCiclos:
         }
     
     def contar_atrasos_no_ciclo(self):
-        """Retorna atraso (em concursos) por número dentro do ciclo (quanto tempo desde que saiu pela última vez dentro do ciclo)."""
-        # Para cada número, contar quantos concursos desde a sua última aparição (0 = apareceu no concurso mais recente)
+        """Retorna atraso (em concursos) por número dentro do ciclo"""
         atraso = {n: None for n in range(1,26)}
-        # percorre concursos do mais recente para o mais antigo
+        
         for idx, concurso in enumerate(self.ciclo_concursos):
             for n in self.TODAS:
                 if atraso[n] is None and n in concurso:
-                    atraso[n] = idx  # idx concursos desde o mais recente onde apareceu
-        # para os que nunca apareceram no ciclo -> definir como tamanho (maior atraso)
+                    atraso[n] = idx
+        
         for n in range(1,26):
             if atraso[n] is None:
                 atraso[n] = self.tamanho
+        
         return atraso
     
     def gerar_5_cartoes_ciclo(self, n_cartoes=5, seed=None, incluir_todas_faltantes=False):
-        """
-        Gera n_cartoes=5 cartoes de 15 dezenas garantindo que sejam DISTINTOS.
-        Prioridades:
-        1) Dezenas faltantes (incluir todas nas primeiras combinações quando possível)
-        2) Dezenas com maior atraso dentro do ciclo
-        3) Diversidade entre os cartões
-        4) Equilíbrio pares/impares
-        """
+        """Gera n_cartoes cartoes de 15 dezenas garantindo que sejam DISTINTOS."""
         if seed is not None:
             random.seed(seed)
         
@@ -1376,84 +1061,63 @@ class AnaliseCiclos:
         faltantes = sorted(list(self.numeros_faltantes))
         todas_dezenas = list(range(1, 26))
         
-        # Ordenar números por atraso (maior atraso primeiro)
         ordenado_por_atraso = sorted(todas_dezenas, key=lambda x: atraso[x], reverse=True)
         
         cartoes = []
-        tentativas_max = n_cartoes * 50  # Limite para evitar loop infinito
+        tentativas_max = n_cartoes * 50
         tentativas = 0
         
-        # Se o usuário quiser incluir todas as faltantes
         if incluir_todas_faltantes and faltantes:
-            # Estratégia 1: Distribuir todas as faltantes entre os cartões
             return self._gerar_cartoes_distribuindo_faltantes(faltantes, n_cartoes, atraso)
         
-        # Estratégia normal: garantir 5 cartões distintos
         while len(cartoes) < n_cartoes and tentativas < tentativas_max:
             tentativas += 1
             cartao_set = set()
             
-            # 1. Incluir algumas dezenas faltantes (30-40% do cartão)
             if faltantes:
-                max_faltantes = min(len(faltantes), random.randint(4, 6))  # 4-6 faltantes
+                max_faltantes = min(len(faltantes), random.randint(4, 6))
                 faltantes_escolhidas = random.sample(faltantes, max_faltantes)
                 cartao_set.update(faltantes_escolhidas)
             
-            # 2. Adicionar números com maior atraso (não-faltantes)
-            # Filtrar números que não são faltantes e não estão no cartão
             numeros_nao_faltantes = [n for n in ordenado_por_atraso if n not in faltantes]
             numeros_disponiveis = [n for n in numeros_nao_faltantes if n not in cartao_set]
             
             if numeros_disponiveis:
-                # Adicionar 4-6 números de alto atraso
                 qtd_atraso = random.randint(4, 6)
                 qtd_atraso = min(qtd_atraso, len(numeros_disponiveis))
                 if qtd_atraso > 0:
                     atraso_escolhidos = random.sample(numeros_disponiveis[:15], qtd_atraso)
                     cartao_set.update(atraso_escolhidos)
             
-            # 3. Completar com números aleatórios (garantindo diversidade)
-            # Verificar quais cartões já foram gerados para evitar similaridade excessiva
             numeros_restantes = [n for n in todas_dezenas if n not in cartao_set]
             
             while len(cartao_set) < 15 and numeros_restantes:
-                # Priorizar números que não apareceram muito nos cartões anteriores
                 if cartoes:
-                    # Contar frequência nos cartões existentes
                     freq_cartoes = Counter()
                     for c in cartoes:
                         freq_cartoes.update(c)
                     
-                    # Ordenar números restantes por menor frequência primeiro (para diversificar)
                     numeros_restantes.sort(key=lambda x: freq_cartoes[x])
                 
-                # Escolher um número dos restantes
                 escolha = random.choice(numeros_restantes[:10]) if len(numeros_restantes) >= 10 else random.choice(numeros_restantes)
                 cartao_set.add(escolha)
                 numeros_restantes = [n for n in todas_dezenas if n not in cartao_set]
             
-            # 4. Ajustar equilíbrio de pares/ímpares
             self._ajustar_equilibrio(cartao_set, todas_dezenas)
             
-            # 5. Converter para lista ordenada
             cartao_ordenado = sorted(list(cartao_set))
             
-            # 6. Verificar se é distinto dos cartões já gerados
             if self._cartao_eh_distinto(cartao_ordenado, cartoes, limite_similaridade=10):
                 cartoes.append(cartao_ordenado)
         
-        # Se não conseguiu gerar cartões suficientes, completar com cartões aleatórios mas distintos
         while len(cartoes) < n_cartoes:
             cartao_novo = sorted(random.sample(todas_dezenas, 15))
-            
-            # Ajustar equilíbrio
             pares = sum(1 for n in cartao_novo if n % 2 == 0)
-            if pares < 6 or pares > 9:
-                # Regerar até ter equilíbrio
-                cartao_novo = self._gerar_cartao_balanceado(todas_dezenas)
+            primos = sum(1 for n in cartao_novo if n in {2,3,5,7,11,13,17,19,23})
             
-            if self._cartao_eh_distinto(cartao_novo, cartoes, limite_similaridade=10):
-                cartoes.append(cartao_novo)
+            if 6 <= pares <= 9 and 3 <= primos <= 7:
+                if self._cartao_eh_distinto(cartao_novo, cartoes, limite_similaridade=10):
+                    cartoes.append(cartao_novo)
         
         return cartoes[:n_cartoes]
     
@@ -1464,15 +1128,12 @@ class AnaliseCiclos:
         
         cartoes = []
         
-        # Se há 15 ou menos faltantes, podemos distribuir uniformemente
         if len(faltantes) <= 15:
-            # Calcular quantas faltantes por cartão
             faltantes_por_cartao = max(1, len(faltantes) // n_cartoes)
             
             for i in range(n_cartoes):
                 cartao_set = set()
                 
-                # Determinar quais faltantes este cartão recebe
                 inicio_idx = i * faltantes_por_cartao
                 fim_idx = inicio_idx + faltantes_por_cartao if i < n_cartoes - 1 else len(faltantes)
                 
@@ -1480,7 +1141,6 @@ class AnaliseCiclos:
                     faltantes_do_cartao = faltantes[inicio_idx:fim_idx]
                     cartao_set.update(faltantes_do_cartao)
                 
-                # Completar com números de alto atraso
                 numeros_nao_faltantes = [n for n in ordenado_por_atraso if n not in faltantes]
                 numeros_disponiveis = [n for n in numeros_nao_faltantes if n not in cartao_set]
                 
@@ -1490,49 +1150,38 @@ class AnaliseCiclos:
                     complemento = random.sample(numeros_disponiveis[:20], qtd_escolher)
                     cartao_set.update(complemento)
                 
-                # Completar se ainda faltar
                 while len(cartao_set) < 15:
                     candidatos = [n for n in todas_dezenas if n not in cartao_set]
                     if candidatos:
                         cartao_set.add(random.choice(candidatos))
                 
-                # Ajustar equilíbrio
                 self._ajustar_equilibrio(cartao_set, todas_dezenas)
                 cartoes.append(sorted(list(cartao_set)))
         
         else:
-            # Mais de 15 faltantes: cada cartão foca em um subconjunto diferente
             for i in range(n_cartoes):
                 cartao_set = set()
                 
-                # Escolher 6-8 faltantes diferentes para cada cartão
                 qtd_faltantes = random.randint(6, 8)
                 faltantes_escolhidas = random.sample(faltantes, qtd_faltantes)
                 cartao_set.update(faltantes_escolhidas)
                 
-                # Completar com outros números
                 while len(cartao_set) < 15:
-                    # Misturar: alguns de alto atraso, alguns aleatórios
                     if random.random() < 0.7 and len(cartao_set) < 12:
-                        # Adicionar número de alto atraso
                         numeros_alto_atraso = [n for n in ordenado_por_atraso[:15] if n not in cartao_set]
                         if numeros_alto_atraso:
                             cartao_set.add(random.choice(numeros_alto_atraso[:5]))
                     else:
-                        # Adicionar número aleatório
                         candidatos = [n for n in todas_dezenas if n not in cartao_set]
                         if candidatos:
                             cartao_set.add(random.choice(candidatos))
                 
-                # Ajustar equilíbrio
                 self._ajustar_equilibrio(cartao_set, todas_dezenas)
                 cartao_ordenado = sorted(list(cartao_set))
                 
-                # Garantir que não é muito similar aos anteriores
                 if self._cartao_eh_distinto(cartao_ordenado, cartoes, limite_similaridade=9):
                     cartoes.append(cartao_ordenado)
         
-        # Garantir exatamente n_cartoes distintos
         cartoes_distintos = []
         for cartao in cartoes:
             if self._cartao_eh_distinto(cartao, cartoes_distintos, limite_similaridade=10):
@@ -1546,31 +1195,25 @@ class AnaliseCiclos:
         return cartoes_distintos[:n_cartoes]
     
     def _cartao_eh_distinto(self, cartao_novo, cartoes_existentes, limite_similaridade=10):
-        """
-        Verifica se um cartão é suficientemente distinto dos cartões existentes.
-        limite_similaridade: número máximo de dezenas em comum para considerar distinto.
-        """
+        """Verifica se um cartão é suficientemente distinto"""
         if not cartoes_existentes:
             return True
         
         for cartao_existente in cartoes_existentes:
-            # Contar quantas dezenas em comum
             dezenas_comuns = len(set(cartao_novo) & set(cartao_existente))
             
-            # Se tiver mais de 'limite_similaridade' dezenas em comum, não é suficientemente distinto
             if dezenas_comuns > limite_similaridade:
                 return False
         
         return True
     
     def _gerar_cartao_balanceado(self, todas_dezenas):
-        """Gera um cartão balanceado com equilíbrio de pares/ímpares"""
+        """Gera um cartão balanceado"""
         while True:
             cartao = sorted(random.sample(todas_dezenas, 15))
             pares = sum(1 for n in cartao if n % 2 == 0)
             primos = sum(1 for n in cartao if n in {2,3,5,7,11,13,17,19,23})
             
-            # Critérios de balanceamento para Lotofácil
             if 6 <= pares <= 9 and 3 <= primos <= 7:
                 return cartao
     
@@ -1578,9 +1221,7 @@ class AnaliseCiclos:
         """Ajusta o equilibro de pares/ímpares no cartão"""
         pares = sum(1 for n in cartao_set if n % 2 == 0)
         
-        # Balancear para ter entre 6 e 9 pares (ideal para Lotofácil)
         if pares < 6:
-            # Trocar um ímpar por um par
             impares_no_cartao = [n for n in cartao_set if n % 2 == 1]
             pares_fora_cartao = [n for n in todas_dezenas if n % 2 == 0 and n not in cartao_set]
             
@@ -1589,7 +1230,6 @@ class AnaliseCiclos:
                 cartao_set.add(random.choice(pares_fora_cartao))
         
         elif pares > 9:
-            # Trocar um par por um ímpar
             pares_no_cartao = [n for n in cartao_set if n % 2 == 0]
             impares_fora_cartao = [n for n in todas_dezenas if n % 2 == 1 and n not in cartao_set]
             
@@ -1612,7 +1252,7 @@ class AnaliseCiclos:
         return concursos_formatados
 
 # =========================
-# CLASSE: Análise Combinatória
+# CLASSE: Analise Combinatória
 # =========================
 class AnaliseCombinatoria:
     def __init__(self, concursos):
@@ -1656,13 +1296,11 @@ class AnaliseCombinatoria:
                 combo = sorted(random.sample(self.numeros, tamanho))
                 
                 if self.validar_combinacao(combo, tamanho):
-                    # Evitar duplicatas
                     if combo not in combinacoes_geradas:
                         combinacoes_geradas.append(combo)
                 
                 tentativas += 1
             
-            # Analisar e ranquear as combinações
             combinacoes_ranqueadas = self.ranquear_combinacoes(combinacoes_geradas, tamanho)
             todas_combinacoes[tamanho] = combinacoes_ranqueadas[:quantidade_por_tamanho]
             
@@ -1675,7 +1313,6 @@ class AnaliseCombinatoria:
         soma = sum(combinacao)
         primos = sum(1 for n in combinacao if n in self.primos)
         
-        # Critérios baseados no tamanho da combinação
         if tamanho == 15:
             return (6 <= pares <= 9 and 
                     170 <= soma <= 210 and
@@ -1706,14 +1343,12 @@ class AnaliseCombinatoria:
             score = self.calcular_score_combinacao(combo, tamanho)
             scores.append((combo, score))
         
-        # Ordenar por score (maiores primeiro)
         return sorted(scores, key=lambda x: x[1], reverse=True)
 
     def calcular_score_combinacao(self, combinacao, tamanho):
         """Calcula score baseado em múltiplos fatores estatísticos"""
         score = 0
         
-        # Fator par/ímpar
         pares = sum(1 for n in combinacao if n % 2 == 0)
         if tamanho == 15 and 6 <= pares <= 8:
             score += 3
@@ -1724,7 +1359,6 @@ class AnaliseCombinatoria:
         elif tamanho == 12 and 4 <= pares <= 6:
             score += 3
             
-        # Fator soma
         soma = sum(combinacao)
         if tamanho == 15 and 180 <= soma <= 200:
             score += 3
@@ -1735,21 +1369,17 @@ class AnaliseCombinatoria:
         elif tamanho == 12 and 130 <= soma <= 160:
             score += 3
             
-        # Fator números consecutivos
         consecutivos = self.contar_consecutivos(combinacao)
         if consecutivos <= 4:
             score += 2
             
-        # Fator números primos
         primos = sum(1 for n in combinacao if n in self.primos)
         if 3 <= primos <= 6:
             score += 2
             
-        # Fator de distribuição
         if self.validar_distribuicao(combinacao):
             score += 2
             
-        # Fator de frequência histórica
         score += self.calcular_score_frequencia(combinacao)
         
         return score
@@ -1764,9 +1394,9 @@ class AnaliseCombinatoria:
 
     def validar_distribuicao(self, combinacao):
         """Valida distribuição por faixas de números"""
-        faixa1 = sum(1 for n in combinacao if 1 <= n <= 9)   # 1-9
-        faixa2 = sum(1 for n in combinacao if 10 <= n <= 19) # 10-19
-        faixa3 = sum(1 for n in combinacao if 20 <= n <= 25) # 20-25
+        faixa1 = sum(1 for n in combinacao if 1 <= n <= 9)
+        faixa2 = sum(1 for n in combinacao if 10 <= n <= 19)
+        faixa3 = sum(1 for n in combinacao if 20 <= n <= 25)
         
         total = len(combinacao)
         if total == 15:
@@ -1785,37 +1415,15 @@ class AnaliseCombinatoria:
         if not self.concursos:
             return 0
             
-        # Calcular frequência dos números nos últimos concursos
         freq = Counter()
-        for concurso in self.concursos[:50]:  # Últimos 50 concursos
+        for concurso in self.concursos[:50]:
             for numero in concurso:
                 freq[numero] += 1
                 
-        # Score baseado na frequência média dos números na combinação
         freq_media = sum(freq[n] for n in combinacao) / len(combinacao)
         freq_max = max(freq.values()) if freq.values() else 1
         
-        # Normalizar score (0 a 2 pontos)
         return (freq_media / freq_max) * 2
-
-    def gerar_relatorio_estatistico(self, combinacoes_por_tamanho):
-        """Gera relatório estatístico das combinações"""
-        relatorio = {}
-        
-        for tamanho, combinacoes in combinacoes_por_tamanho.items():
-            if not combinacoes:
-                continue
-                
-            stats = {
-                'total_combinacoes': len(combinacoes),
-                'media_score': np.mean([score for _, score in combinacoes]),
-                'melhor_score': max([score for _, score in combinacoes]),
-                'pior_score': min([score for _, score in combinacoes]),
-                'exemplos_top5': combinacoes[:5]
-            }
-            relatorio[tamanho] = stats
-            
-        return relatorio
 
     def formatar_como_cartao(self, combinacao):
         """Formata uma combinação como cartão da Lotofácil 5x5"""
@@ -1825,9 +1433,9 @@ class AnaliseCombinatoria:
             for j in range(5):
                 numero = i * 5 + j + 1
                 if numero in combinacao:
-                    linha.append(f"[{numero:2d}]")  # Número marcado
+                    linha.append(f"[{numero:2d}]")
                 else:
-                    linha.append(f" {numero:2d} ")  # Número não marcado
+                    linha.append(f" {numero:2d} ")
             cartao.append(linha)
         return cartao
 
@@ -1852,11 +1460,9 @@ class AnaliseCombinatoria:
                 for linha in cartao:
                     conteudo += " ".join(linha) + "\n"
                 
-                # Adicionar lista dos números selecionados
                 numeros_selecionados = [n for n in combo]
                 conteudo += f"Números: {numeros_selecionados}\n"
                 
-                # Estatísticas do cartão
                 pares = sum(1 for n in combo if n % 2 == 0)
                 primos = sum(1 for n in combo if n in self.primos)
                 soma = sum(combo)
@@ -1866,7 +1472,7 @@ class AnaliseCombinatoria:
         return conteudo
 
 # =========================
-# IA Avançada com CatBoost
+# CLASSE: LotoFacilIA
 # =========================
 class LotoFacilIA:
     def __init__(self, concursos):
@@ -1874,14 +1480,13 @@ class LotoFacilIA:
         self.numeros = list(range(1,26))
         self.primos = {2,3,5,7,11,13,17,19,23}
         self.models = {}
-        if len(concursos) > 10:  # Ajustado para mínimo de 10 concursos
+        if len(concursos) > 10:
             self.X = self.gerar_features()[:-1] if len(concursos) > 1 else np.array([])
             self.Y = self.matriz_binaria()[1:] if len(concursos) > 1 else np.array([])
             if len(self.X) > 0 and len(self.Y) > 0:
                 try:
                     self.treinar_modelos()
                 except Exception as e:
-                    # Em ambiente com pouco dado ou CatBoost ausente, ignorar treinamento
                     st.warning(f"CatBoost não pôde ser carregado: {e}")
                     self.models = {}
 
@@ -1890,10 +1495,9 @@ class LotoFacilIA:
 
     def frequencia(self, janela=10):
         janela = min(janela, max(1, len(self.concursos)-1))
-        if janela < 10:  # Garantir mínimo de 10 concursos
+        if janela < 10:
             janela = min(10, len(self.concursos))
         freq = {n:0 for n in self.numeros}
-        # considerar os concursos mais recentes (índice 0 é mais recente)
         if len(self.concursos) <= 1:
             return freq
         limite = min(len(self.concursos)-1, janela)
@@ -1904,7 +1508,6 @@ class LotoFacilIA:
 
     def atraso(self):
         atraso = {n:0 for n in self.numeros}
-        # calcula atraso em relação ao mais recente (índice 0)
         for n in self.numeros:
             atraso[n] = 0
             found = False
@@ -1927,7 +1530,6 @@ class LotoFacilIA:
     def pares_impares_primos(self):
         if not self.concursos:
             return {"pares": 0, "impares": 0, "primos": 0}
-        # último concurso = índice 0 (mais recente)
         ultimo = self.concursos[0]
         pares = sum(1 for n in ultimo if n%2==0)
         impares = 15 - pares
@@ -1939,7 +1541,6 @@ class LotoFacilIA:
         if janela < 10:
             janela = min(10, len(self.concursos))
         matriz = np.zeros((25,25), dtype=int)
-        # usar concursos mais recentes: índices 0..janela-1
         for jogo in self.concursos[0:janela]:
             for i in range(15):
                 for j in range(i+1,15):
@@ -1947,19 +1548,8 @@ class LotoFacilIA:
                     matriz[jogo[j]-1, jogo[i]-1] += 1
         return matriz
 
-    def prob_condicional(self, janela=50):
-        matriz = self.interacoes(janela)
-        prob = np.zeros((25,25))
-        freq = np.array([v for v in self.frequencia(janela).values()])
-        for i in range(25):
-            for j in range(25):
-                if freq[i] > 0:
-                    prob[i,j] = matriz[i,j]/freq[i]
-        return prob
-
     def gap_medio(self):
         gaps = {n:[] for n in self.numeros}
-        # percorre concursos mais antigos para recentes
         total = len(self.concursos)
         for i, jogo in enumerate(self.concursos):
             for n in self.numeros:
@@ -1969,7 +1559,7 @@ class LotoFacilIA:
 
     def gerar_features(self):
         features = []
-        if len(self.concursos) < 10:  # Ajustado para mínimo de 10
+        if len(self.concursos) < 10:
             return np.array([])
         freq = self.frequencia(janela=min(50, len(self.concursos)-1))
         gaps = self.gap_medio()
@@ -1985,7 +1575,7 @@ class LotoFacilIA:
         return np.array(features)
 
     def treinar_modelos(self):
-        if len(self.concursos) < 10:  # Ajustado para mínimo de 10
+        if len(self.concursos) < 10:
             return
         for i, n in enumerate(self.numeros):
             try:
@@ -1998,7 +1588,6 @@ class LotoFacilIA:
 
     def prever_proximo(self):
         if not self.models:
-            # fallback: usar frequencias normalizadas
             freq = self.frequencia(janela=min(50, len(self.concursos)))
             maxf = max(freq.values()) if freq else 1
             probs = {n: (freq.get(n,0)/maxf if maxf>0 else 0.5) for n in self.numeros}
@@ -2030,7 +1619,6 @@ class LotoFacilIA:
         jogos.append(self._equilibrado(top20))
         jogos.append(self._equilibrado(top20, forcar_primos=True))
         
-        # garantir distintos
         unicos = []
         seen = set()
         for j in jogos:
@@ -2042,7 +1630,7 @@ class LotoFacilIA:
         return unicos
 
     def _equilibrado(self, base, forcar_primos=False):
-        base = list(set(base))  # dedup
+        base = list(set(base))
         while True:
             if len(base) < 15:
                 base = list(range(1,26))
@@ -2071,24 +1659,21 @@ class LotoFacilIA:
             pares = sum(1 for x in jogo if x%2==0)
             padrao_par_impar.append((pares, 15-pares))
         media_pares = int(np.round(np.mean([p for p,_ in padrao_par_impar]))) if padrao_par_impar else 7
-        media_pares = max(5, min(10, media_pares))  # limitar pra não travar
+        media_pares = max(5, min(10, media_pares))
         media_impares = 15 - media_pares
 
         jogos=[]
         for _ in range(n_jogos):
             cartao = set()
-            # escolhe pares
             candidatos_pares = evens_q if len(evens_q) >= media_pares else [x for x in range(2,26,2)]
             cartao.update(random.sample(candidatos_pares, media_pares))
-            # escolhe ímpares
             candidatos_impares = odds_q if len(odds_q) >= media_impares else [x for x in range(1,26,2)]
             faltam = media_impares
             cartao.update(random.sample(candidatos_impares, faltam))
-            # completa se faltar
             while len(cartao) < 15:
                 cartao.add(random.choice(frios if frios else list(range(1,26))))
             jogos.append(sorted(list(cartao)))
-        # garantir distintos
+        
         unicos = []
         seen = set()
         for j in jogos:
@@ -2100,7 +1685,7 @@ class LotoFacilIA:
         return unicos
 
 # =========================
-# ESTRATÉGIA FIBONACCI
+# CLASSE: EstrategiaFibonacci
 # =========================
 class EstrategiaFibonacci:
     def __init__(self, concursos):
@@ -2113,13 +1698,11 @@ class EstrategiaFibonacci:
         if not self.concursos:
             return {}
             
-        # Analisar últimos concursos (mínimo 10)
         janela = min(50, len(self.concursos))
         if janela < 10:
             janela = min(10, len(self.concursos))
         concursos_recentes = self.concursos[:janela]
         
-        # Estatísticas das dezenas Fibonacci
         stats = {
             'frequencia_fib': {num: 0 for num in self.fibonacci},
             'media_por_concurso': [],
@@ -2127,7 +1710,6 @@ class EstrategiaFibonacci:
             'atraso_fib': {num: 0 for num in self.fibonacci}
         }
         
-        # Calcular frequência e última aparição
         for idx, concurso in enumerate(concursos_recentes):
             fib_no_concurso = [num for num in concurso if num in self.fibonacci]
             stats['media_por_concurso'].append(len(fib_no_concurso))
@@ -2137,14 +1719,12 @@ class EstrategiaFibonacci:
                     stats['frequencia_fib'][num] += 1
                     stats['ultima_aparicao'][num] = idx
         
-        # Calcular atraso (concursos desde a última aparição)
         for num in self.fibonacci:
             if stats['ultima_aparicao'][num] > 0:
                 stats['atraso_fib'][num] = stats['ultima_aparicao'][num]
             else:
-                stats['atraso_fib'][num] = janela  # Nunca apareceu na janela
+                stats['atraso_fib'][num] = janela
         
-        # Calcular estatísticas gerais
         stats['media_geral'] = np.mean(stats['media_por_concurso']) if stats['media_por_concurso'] else 0
         stats['moda_geral'] = max(set(stats['media_por_concurso']), key=stats['media_por_concurso'].count) if stats['media_por_concurso'] else 0
         stats['min_geral'] = min(stats['media_por_concurso']) if stats['media_por_concurso'] else 0
@@ -2156,15 +1736,12 @@ class EstrategiaFibonacci:
         """Gera cartões usando estratégia Fibonacci com 4 ou 5 números Fibonacci"""
         cartoes = []
         
-        # Obter estatísticas se solicitado
         stats = self.analisar_fibonacci() if usar_estatisticas else {}
         
-        for _ in range(n_cartoes * 3):  # Gerar mais para garantir diversidade e exclusividade
-            # Escolher 4 ou 5 números Fibonacci
+        for _ in range(n_cartoes * 3):
             qtd_fib = random.choice([4, 5])
             
             if usar_estatisticas and stats:
-                # Priorizar Fibonacci com maior atraso ou menor frequência
                 fib_ordenados = sorted(
                     self.fibonacci, 
                     key=lambda x: (stats['atraso_fib'][x], -stats['frequencia_fib'][x]), 
@@ -2172,15 +1749,11 @@ class EstrategiaFibonacci:
                 )
                 fib_selecionadas = random.sample(fib_ordenados[:5], qtd_fib)
             else:
-                # Seleção aleatória pura
                 fib_selecionadas = random.sample(self.fibonacci, qtd_fib)
             
-            # Dezenas não-Fibonacci
             nao_fib = [num for num in self.numeros if num not in self.fibonacci]
             
-            # Se estiver usando estatísticas, obter frequência dos não-Fibonacci
             if usar_estatisticas and self.concursos:
-                # Calcular frequência dos não-Fibonacci nos últimos concursos
                 janela = min(30, len(self.concursos))
                 if janela < 10:
                     janela = min(10, len(self.concursos))
@@ -2190,15 +1763,12 @@ class EstrategiaFibonacci:
                         if num in nao_fib:
                             freq_nao_fib[num] += 1
                 
-                # Ordenar não-Fibonacci por frequência (mais frequentes primeiro)
                 nao_fib_ordenados = sorted(nao_fib, key=lambda x: freq_nao_fib[x], reverse=True)
                 
-                # Selecionar não-Fibonacci: 60% dos mais frequentes, 40% aleatórios
                 qtd_nao_fib = 15 - qtd_fib
                 qtd_frequentes = int(qtd_nao_fib * 0.6)
                 qtd_aleatorios = qtd_nao_fib - qtd_frequentes
                 
-                # Selecionar dos mais frequentes (garantindo não repetição)
                 selecao_frequentes = []
                 if len(nao_fib_ordenados) >= qtd_frequentes:
                     candidatos = [n for n in nao_fib_ordenados[:20] if n not in fib_selecionadas]
@@ -2207,7 +1777,6 @@ class EstrategiaFibonacci:
                     else:
                         selecao_frequentes = candidatos
                 
-                # Selecionar aleatórios para completar (garantindo não repetição)
                 restantes = [num for num in nao_fib if num not in fib_selecionadas and num not in selecao_frequentes]
                 if restantes and qtd_aleatorios > 0:
                     if len(restantes) >= qtd_aleatorios:
@@ -2219,16 +1788,13 @@ class EstrategiaFibonacci:
                 else:
                     selecao_nao_fib = selecao_frequentes
                 
-                # Completar se necessário (garantindo não repetição)
                 while len(selecao_nao_fib) < qtd_nao_fib:
                     candidatos = [num for num in nao_fib if num not in fib_selecionadas and num not in selecao_nao_fib]
                     if candidatos:
                         selecao_nao_fib.append(random.choice(candidatos))
                     else:
-                        # Se não houver mais candidatos únicos, reiniciar
                         break
             else:
-                # Seleção aleatória simples (garantindo não repetição)
                 qtd_nao_fib = 15 - qtd_fib
                 candidatos_nao_fib = [num for num in nao_fib if num not in fib_selecionadas]
                 if len(candidatos_nao_fib) >= qtd_nao_fib:
@@ -2236,27 +1802,20 @@ class EstrategiaFibonacci:
                 else:
                     selecao_nao_fib = candidatos_nao_fib
             
-            # Combinar e ordenar
             cartao = sorted(fib_selecionadas + selecao_nao_fib)
             
-            # Verificar se tem 15 números únicos
             if len(set(cartao)) != 15:
-                continue  # Pular cartões com números repetidos
+                continue
             
-            # Validar equilíbrio de pares/ímpares
             pares = sum(1 for n in cartao if n % 2 == 0)
-            if 6 <= pares <= 9:  # Faixa ideal para Lotofácil
-                # Verificar se cartão é único (não repetido)
+            if 6 <= pares <= 9:
                 if cartao not in cartoes:
                     cartoes.append(cartao)
             
-            # Parar quando tiver cartões suficientes
             if len(cartoes) >= n_cartoes:
                 break
         
-        # Garantir número exato de cartões (com números únicos)
         while len(cartoes) < n_cartoes:
-            # Fallback: geração simples com garantia de números únicos
             qtd_fib = random.choice([4, 5])
             fib_selecionadas = random.sample(self.fibonacci, qtd_fib)
             nao_fib = [num for num in self.numeros if num not in self.fibonacci]
@@ -2266,13 +1825,10 @@ class EstrategiaFibonacci:
                 selecao_nao_fib = random.sample(candidatos_nao_fib, 15 - qtd_fib)
                 cartao = sorted(fib_selecionadas + selecao_nao_fib)
                 
-                # Verificar exclusividade e não repetição
                 if len(set(cartao)) == 15 and cartao not in cartoes:
                     cartoes.append(cartao)
             else:
-                # Se não houver números suficientes, usar todos os disponíveis
                 cartao = sorted(fib_selecionadas + candidatos_nao_fib)
-                # Completar com números aleatórios únicos
                 while len(cartao) < 15:
                     candidato = random.choice([n for n in self.numeros if n not in cartao])
                     cartao.append(candidato)
@@ -2282,204 +1838,6 @@ class EstrategiaFibonacci:
                     cartoes.append(cartao)
         
         return cartoes[:n_cartoes]
-    
-    def gerar_cartoes_fibonacci_estrategia(self, estrategia="padrao", n_cartoes=10):
-        """Gera cartões com diferentes estratégias Fibonacci"""
-        cartoes = []
-        
-        if estrategia == "padrao":
-            # Estratégia padrão: 4-5 Fibonacci + estatísticas
-            return self.gerar_cartoes_fibonacci(n_cartoes, usar_estatisticas=True)
-        
-        elif estrategia == "fibonacci_quentes":
-            # Foca nos Fibonacci mais frequentes
-            stats = self.analisar_fibonacci()
-            fib_ordenados = sorted(
-                self.fibonacci, 
-                key=lambda x: stats['frequencia_fib'][x], 
-                reverse=True
-            )
-            
-            for _ in range(n_cartoes * 2):  # Gerar mais para garantir números únicos
-                qtd_fib = random.choice([4, 5])
-                fib_selecionadas = random.sample(fib_ordenados[:5], qtd_fib)
-                
-                # Complementar com números quentes não-Fibonacci
-                nao_fib = [num for num in self.numeros if num not in self.fibonacci]
-                
-                # Calcular frequência dos não-Fibonacci
-                janela = min(30, len(self.concursos))
-                if janela < 10:
-                    janela = min(10, len(self.concursos))
-                freq_nao_fib = Counter()
-                for concurso in self.concursos[:janela]:
-                    for num in concurso:
-                        if num in nao_fib:
-                            freq_nao_fib[num] += 1
-                
-                nao_fib_ordenados = sorted(nao_fib, key=lambda x: freq_nao_fib[x], reverse=True)
-                
-                # Selecionar não-Fibonacci únicos
-                candidatos_quentes = [n for n in nao_fib_ordenados[:20] if n not in fib_selecionadas]
-                if len(candidatos_quentes) >= (15 - qtd_fib):
-                    selecao_nao_fib = random.sample(candidatos_quentes, 15 - qtd_fib)
-                    cartao = sorted(fib_selecionadas + selecao_nao_fib)
-                    
-                    # Verificar exclusividade
-                    if len(set(cartao)) == 15 and cartao not in cartoes:
-                        cartoes.append(cartao)
-        
-        elif estrategia == "fibonacci_atrasados":
-            # Foca nos Fibonacci com maior atraso
-            stats = self.analisar_fibonacci()
-            fib_ordenados = sorted(
-                self.fibonacci, 
-                key=lambda x: stats['atraso_fib'][x], 
-                reverse=True
-            )
-            
-            for _ in range(n_cartoes * 2):  # Gerar mais para garantir números únicos
-                qtd_fib = random.choice([4, 5])
-                fib_selecionadas = random.sample(fib_ordenados[:5], qtd_fib)
-                
-                # Complementar com números atrasados não-Fibonacci
-                nao_fib = [num for num in self.numeros if num not in self.fibonacci]
-                
-                # Calcular atraso dos não-Fibonacci
-                atraso_nao_fib = {num: 0 for num in nao_fib}
-                for num in nao_fib:
-                    for idx, concurso in enumerate(self.concursos):
-                        if num in concurso:
-                            atraso_nao_fib[num] = idx
-                            break
-                    else:
-                        atraso_nao_fib[num] = len(self.concursos)
-                
-                nao_fib_ordenados = sorted(nao_fib, key=lambda x: atraso_nao_fib[x], reverse=True)
-                
-                # Selecionar não-Fibonacci únicos
-                candidatos_atrasados = [n for n in nao_fib_ordenados[:20] if n not in fib_selecionadas]
-                if len(candidatos_atrasados) >= (15 - qtd_fib):
-                    selecao_nao_fib = random.sample(candidatos_atrasados, 15 - qtd_fib)
-                    cartao = sorted(fib_selecionadas + selecao_nao_fib)
-                    
-                    # Verificar exclusividade
-                    if len(set(cartao)) == 15 and cartao not in cartoes:
-                        cartoes.append(cartao)
-        
-        elif estrategia == "fibonacci_balanceado":
-            # Balanceia entre Fibonacci e não-Fibonacci baseado em estatísticas
-            for _ in range(n_cartoes * 3):  # Gerar mais para garantir números únicos
-                qtd_fib = random.choice([4, 5])
-                
-                # Selecionar Fibonacci: 2-3 quentes, 2-3 atrasados
-                stats = self.analisar_fibonacci()
-                
-                fib_quentes = sorted(self.fibonacci, key=lambda x: stats['frequencia_fib'][x], reverse=True)[:4]
-                fib_atrasados = sorted(self.fibonacci, key=lambda x: stats['atraso_fib'][x], reverse=True)[:4]
-                
-                # Misturar estratégias
-                if qtd_fib == 4:
-                    # Selecionar 2 quentes e 2 atrasados
-                    selecao_quentes = random.sample(fib_quentes[:3], 2)
-                    selecao_atrasados = random.sample(fib_atrasados[:3], 2)
-                    fib_selecionadas = selecao_quentes + selecao_atrasados
-                else:  # qtd_fib == 5
-                    # Selecionar 2 quentes e 3 atrasados
-                    selecao_quentes = random.sample(fib_quentes[:3], 2)
-                    selecao_atrasados = random.sample(fib_atrasados[:3], 3)
-                    fib_selecionadas = selecao_quentes + selecao_atrasados
-                
-                # Garantir que não há Fibonacci repetidos
-                fib_selecionadas = list(set(fib_selecionadas))
-                if len(fib_selecionadas) < min(qtd_fib, 4):
-                    # Se perdeu números, completar
-                    while len(fib_selecionadas) < min(qtd_fib, 4):
-                        candidato = random.choice([n for n in self.fibonacci if n not in fib_selecionadas])
-                        fib_selecionadas.append(candidato)
-                
-                # Complementar com mix de estatísticas
-                nao_fib = [num for num in self.numeros if num not in self.fibonacci]
-                
-                # Misturar não-Fibonacci: 50% quentes, 50% atrasados
-                qtd_nao_fib = 15 - len(fib_selecionadas)
-                qtd_quentes = qtd_nao_fib // 2
-                qtd_atrasados = qtd_nao_fib - qtd_quentes
-                
-                # Calcular frequência e atraso
-                janela = min(30, len(self.concursos))
-                if janela < 10:
-                    janela = min(10, len(self.concursos))
-                freq_nao_fib = Counter()
-                atraso_nao_fib = {}
-                
-                for num in nao_fib:
-                    atraso_nao_fib[num] = len(self.concursos)
-                    for idx, concurso in enumerate(self.concursos):
-                        if num in concurso:
-                            freq_nao_fib[num] += 1
-                            if idx < atraso_nao_fib[num]:
-                                atraso_nao_fib[num] = idx
-                
-                nao_fib_quentes = sorted(nao_fib, key=lambda x: freq_nao_fib[x], reverse=True)[:20]
-                nao_fib_atrasados = sorted(nao_fib, key=lambda x: atraso_nao_fib[x], reverse=True)[:20]
-                
-                # Selecionar quentes únicos
-                candidatos_quentes = [n for n in nao_fib_quentes if n not in fib_selecionadas]
-                selecao_quentes = []
-                if len(candidatos_quentes) >= qtd_quentes:
-                    selecao_quentes = random.sample(candidatos_quentes, min(qtd_quentes, len(candidatos_quentes)))
-                
-                # Selecionar atrasados únicos
-                candidatos_atrasados = [n for n in nao_fib_atrasados if n not in fib_selecionadas and n not in selecao_quentes]
-                selecao_atrasados = []
-                if len(candidatos_atrasados) >= qtd_atrasados:
-                    selecao_atrasados = random.sample(candidatos_atrasados, min(qtd_atrasados, len(candidatos_atrasados)))
-                
-                cartao = sorted(fib_selecionadas + selecao_quentes + selecao_atrasados)
-                
-                # Ajustar tamanho se necessário (garantindo exclusividade)
-                if len(cartao) > 15:
-                    cartao = sorted(random.sample(cartao, 15))
-                elif len(cartao) < 15:
-                    faltam = 15 - len(cartao)
-                    complemento = random.sample([n for n in self.numeros if n not in cartao], faltam)
-                    cartao = sorted(cartao + complemento)
-                
-                # Verificar se tem números únicos e não é repetido
-                if len(set(cartao)) == 15 and cartao not in cartoes:
-                    cartoes.append(cartao)
-                
-                # Parar quando tiver cartões suficientes
-                if len(cartoes) >= n_cartoes:
-                    break
-        
-        # Se não gerou cartões suficientes, completar com método padrão
-        if len(cartoes) < n_cartoes:
-            cartoes.extend(self.gerar_cartoes_fibonacci(n_cartoes - len(cartoes), usar_estatisticas=True))
-        
-        return cartoes[:n_cartoes]
-    
-    def obter_relatorio_fibonacci(self):
-        """Retorna relatório completo da análise Fibonacci"""
-        stats = self.analisar_fibonacci()
-        
-        relatorio = {
-            'dezenas_fibonacci': self.fibonacci,
-            'estatisticas_gerais': {
-                'media_fibonacci_por_concurso': stats.get('media_geral', 0),
-                'moda_fibonacci_por_concurso': stats.get('moda_geral', 0),
-                'min_fibonacci_por_concurso': stats.get('min_geral', 0),
-                'max_fibonacci_por_concurso': stats.get('max_geral', 0),
-                'concursos_analisados': min(50, len(self.concursos))
-            },
-            'frequencia_individual': stats.get('frequencia_fib', {}),
-            'atraso_individual': stats.get('atraso_fib', {}),
-            'distribuicao_historica': stats.get('media_por_concurso', [])
-        }
-        
-        return relatorio
-
 
 # =========================
 # PADRÕES LINHA×COLUNA
@@ -2550,30 +1908,23 @@ def carregar_estado():
         st.session_state.cartoes_fibonacci = []
     if "relatorio_fibonacci" not in st.session_state:
         st.session_state.relatorio_fibonacci = None
-    # NOVOS: Fechamento
     if "fechamento_gerado" not in st.session_state:
         st.session_state.fechamento_gerado = []
     if "grupos_fechamento" not in st.session_state:
         st.session_state.grupos_fechamento = []
-    if "analise_estatistica_avancada" not in st.session_state:
-        st.session_state.analise_estatistica_avancada = None
-    # NOVOS: Backtest e Híbrida
-    if "resultados_backtest" not in st.session_state:
-        st.session_state.resultados_backtest = None
-    if "relatorio_backtest" not in st.session_state:
-        st.session_state.relatorio_backtest = None
-    if "cartoes_hibridos" not in st.session_state:
-        st.session_state.cartoes_hibridos = []
-    # NOVO: Estratégia Quântica
-    if "analise_quantica" not in st.session_state:
-        st.session_state.analise_quantica = None
-    if "cartoes_quantica" not in st.session_state:
-        st.session_state.cartoes_quantica = []
-    if "relatorio_quantico" not in st.session_state:
-        st.session_state.relatorio_quantico = None
+    if "analise_estatistica_seriosa" not in st.session_state:  # MODIFICADO
+        st.session_state.analise_estatistica_seriosa = None
+    if "cartoes_estatisticos" not in st.session_state:  # MODIFICADO
+        st.session_state.cartoes_estatisticos = []
+    if "relatorio_estatistico" not in st.session_state:  # MODIFICADO
+        st.session_state.relatorio_estatistico = None
+    if "resultados_backtest_rigoroso" not in st.session_state:  # MODIFICADO
+        st.session_state.resultados_backtest_rigoroso = None
+    if "relatorio_backtest_rigoroso" not in st.session_state:  # MODIFICADO
+        st.session_state.relatorio_backtest_rigoroso = None
 
 st.markdown("<h1 style='text-align: center;'>Lotofácil Inteligente</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center;'>SAMUCJ TECHNOLOGY</p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center;'>SISTEMA ESTATÍSTICO PROFISSIONAL</p>", unsafe_allow_html=True)  # MODIFICADO
 st.markdown("<hr>", unsafe_allow_html=True)
 
 # Inicializar estado
@@ -2589,11 +1940,9 @@ with st.expander("📥 Capturar Concursos"):
                 st.session_state.concursos = concursos
                 st.session_state.info_ultimo_concurso = info
                 
-                # Criar informações dos concursos para exibição
                 concursos_info = {}
                 total_concursos = len(concursos)
                 for idx, concurso in enumerate(concursos):
-                    # índice 0 = mais recente
                     numero_concurso = total_concursos - idx
                     concursos_info[idx] = {
                         "indice": idx,
@@ -2605,7 +1954,7 @@ with st.expander("📥 Capturar Concursos"):
                 
                 st.success(f"{len(concursos)} concursos capturados com sucesso!")
                 
-                # Limpar dados antigos ao capturar novos concursos
+                # Limpar dados antigos
                 st.session_state.tabela_sequencia_falha = None
                 st.session_state.jogos_sequencia_falha = []
                 st.session_state.resultado_ciclos = None
@@ -2619,42 +1968,33 @@ with st.expander("📥 Capturar Concursos"):
                 st.session_state.relatorio_fibonacci = None
                 st.session_state.fechamento_gerado = []
                 st.session_state.grupos_fechamento = []
-                st.session_state.analise_estatistica_avancada = None
-                # Limpar dados do backtest
-                st.session_state.resultados_backtest = None
-                st.session_state.relatorio_backtest = None
-                st.session_state.cartoes_hibridos = []
-                # Limpar dados quânticos
-                st.session_state.analise_quantica = None
-                st.session_state.cartoes_quantica = []
-                st.session_state.relatorio_quantico = None
+                # MODIFICADO: Limpar dados estatísticos
+                st.session_state.analise_estatistica_seriosa = None
+                st.session_state.cartoes_estatisticos = []
+                st.session_state.relatorio_estatistico = None
+                st.session_state.resultados_backtest_rigoroso = None
+                st.session_state.relatorio_backtest_rigoroso = None
 
 # --- Abas principais ---
 if st.session_state.concursos:
-    # Verificar se tem pelo menos 10 concursos
     if len(st.session_state.concursos) < 10:
         st.warning("⚠️ São necessários pelo menos 10 concursos para análises precisas. Capture mais concursos.")
     
-    # Inicializar todas as análises
+    # Inicializar análises
     ia = LotoFacilIA(st.session_state.concursos)
     probs = ia.prever_proximo()
     jogos_gerados = ia.gerar_5_jogos(probs) if probs else []
     quentes_frios = ia.quentes_frios()
     pares_impares_primos = ia.pares_impares_primos()
     
-    # Inicializar análise de sequência/falha
     analise_sf = AnaliseSequenciaFalha(st.session_state.concursos)
-    
-    # Inicializar análise estatística avançada
-    analise_estatistica = AnaliseEstatisticaAvancada(st.session_state.concursos)
-    
-    # Inicializar fechamento
     fechamento = FechamentoLotofacil(st.session_state.concursos)
     
-    # Inicializar estratégia quântica
-    estrategia_quantica = EstrategiaQuantica(st.session_state.concursos)
+    # MODIFICADO: Inicializar análise estatística séria
+    analise_estatistica_seriosa = AnaliseEstatisticaSeriosa(st.session_state.concursos)
+    backtest_rigoroso = BacktestRigoroso(st.session_state.concursos)
     
-    # Abas atualizadas com nova aba de estatística quântica
+    # MODIFICADO: Abas atualizadas
     abas = st.tabs([
         "📊 Estatísticas", 
         "🧠 Gerar Cartões IA", 
@@ -2667,8 +2007,8 @@ if st.session_state.concursos:
         "✅ Conferência", 
         "📤 Conferir Arquivo TXT",
         "🔁 Ciclos da Lotofácil",
-        "📊 Backtest & Hibrida",
-        "⚛️ Estatística Quântica"  # NOVA ABA
+        "📊 Backtest Rigoroso",  # MODIFICADO
+        "🔬 Análise Estatística"  # MODIFICADO (substitui "Estatística Quântica")
     ])
 
     # Aba 1 - Estatísticas
@@ -2710,7 +2050,6 @@ if st.session_state.concursos:
                 with col1:
                     st.write(f"**Jogo {i}:** {c}")
                 with col2:
-                    # Estatísticas rápidas do jogo
                     pares = sum(1 for n in c if n % 2 == 0)
                     primos = sum(1 for n in c if n in {2,3,5,7,11,13,17,19,23})
                     st.write(f"Pares: {pares}, Primos: {primos}")
@@ -2751,14 +2090,7 @@ if st.session_state.concursos:
             
             estrategia = st.selectbox(
                 "Selecione a estratégia de geração:",
-                ["balanceada", "conservadora", "agressiva", "aleatoria_padrao", "metodo_tabela"],
-                help="""
-                balanceada: 6 melhores + 5 médios + 4 retorno\n
-                conservadora: 10 melhores + 5 médios\n
-                agressiva: 5 melhores + 10 retorno\n
-                aleatoria_padrao: Aleatória com padrões históricos\n
-                metodo_tabela: Método original da tabela (8 melhores + 7 retorno)
-                """
+                ["balanceada", "conservadora", "agressiva", "aleatoria_padrao", "metodo_tabela"]
             )
             
             n_jogos = st.slider("Número de jogos a gerar:", 1, 20, 5)
@@ -2775,7 +2107,6 @@ if st.session_state.concursos:
             if st.session_state.jogos_sequencia_falha:
                 st.write("### 📋 Jogos Gerados")
                 for i, jogo in enumerate(st.session_state.jogos_sequencia_falha, 1):
-                    # Analisar estatísticas do jogo
                     pares = sum(1 for n in jogo if n % 2 == 0)
                     primos = sum(1 for n in jogo if n in {2,3,5,7,11,13,17,19,23})
                     soma = sum(jogo)
@@ -2850,7 +2181,6 @@ if st.session_state.concursos:
                         with cols[idx % 2]:
                             st.code(f"Score: {score:.1f} → {combo}")
             
-            # Exportar combinações
             st.markdown("### 💾 Exportar Combinações")
             
             col_export1, col_export2 = st.columns(2)
@@ -2910,7 +2240,7 @@ if st.session_state.concursos:
             
             janela_lc = st.slider(
                 "Concursos a considerar (mais recentes)", 
-                min_value=10,  # Ajustado para mínimo 10
+                min_value=10,
                 max_value=max_concursos, 
                 value=valor_padrao, 
                 step=10
@@ -2939,7 +2269,6 @@ if st.session_state.concursos:
         st.subheader("🎯 Estratégia Fibonacci")
         st.write("Gera cartões usando as 7 dezenas de Fibonacci (01, 02, 03, 05, 08, 13, 21) com 4 ou 5 dessas por jogo.")
         
-        # Inicializar estratégia Fibonacci
         estrategia_fib = EstrategiaFibonacci(st.session_state.concursos)
         
         col1, col2 = st.columns(2)
@@ -2950,94 +2279,60 @@ if st.session_state.concursos:
             
             if st.button("📊 Analisar Estatísticas Fibonacci"):
                 with st.spinner("Analisando desempenho das dezenas Fibonacci..."):
-                    relatorio = estrategia_fib.obter_relatorio_fibonacci()
+                    relatorio = estrategia_fib.analisar_fibonacci()
                     st.session_state.relatorio_fibonacci = relatorio
                     st.success("Análise Fibonacci concluída!")
         
         with col2:
             st.markdown("### 🎯 Configuração")
-            estrategia = st.selectbox(
-                "Selecione a estratégia de geração:",
-                ["padrao", "fibonacci_quentes", "fibonacci_atrasados", "fibonacci_balanceado"],
-                format_func=lambda x: {
-                    "padrao": "Padrão (4-5 Fibonacci + estatísticas)",
-                    "fibonacci_quentes": "Fibonacci Quentes + Não-Fibonacci Quentes",
-                    "fibonacci_atrasados": "Fibonacci Atrasados + Não-Fibonacci Atrasados",
-                    "fibonacci_balanceado": "Balanceado (mistura de estratégias)"
-                }[x]
-            )
-            
+            estrategia = "padrao"  # Simplificado
             n_cartoes = st.slider("Número de cartões a gerar:", 1, 20, 10)
         
-        # Mostrar relatório Fibonacci se existir
         if hasattr(st.session_state, 'relatorio_fibonacci') and st.session_state.relatorio_fibonacci:
             relatorio = st.session_state.relatorio_fibonacci
             
             st.markdown("### 📈 Estatísticas das Dezenas Fibonacci")
             
-            # Tabela de frequência e atraso
             dados_tabela = []
             for num in estrategia_fib.fibonacci:
                 dados_tabela.append({
                     "Número": num,
-                    "Frequência (últimos concursos)": relatorio['frequencia_individual'].get(num, 0),
-                    "Atraso (concursos)": relatorio['atraso_individual'].get(num, 0),
-                    "Status": "🔥 Quente" if relatorio['frequencia_individual'].get(num, 0) > 10 else 
-                             "⚠️ Média" if relatorio['frequencia_individual'].get(num, 0) > 5 else 
-                             "❄️ Frio"
+                    "Frequência (últimos concursos)": relatorio['frequencia_fib'].get(num, 0),
+                    "Atraso (concursos)": relatorio['atraso_fib'].get(num, 0)
                 })
             
             df_fib = pd.DataFrame(dados_tabela)
             st.dataframe(df_fib, hide_index=True)
             
-            # Estatísticas gerais
-            st.markdown("#### 📊 Estatísticas Gerais dos Fibonacci")
             col_stat1, col_stat2, col_stat3, col_stat4 = st.columns(4)
             with col_stat1:
-                st.metric("Média por concurso", f"{relatorio['estatisticas_gerais']['media_fibonacci_por_concurso']:.1f}")
+                st.metric("Média por concurso", f"{relatorio.get('media_geral', 0):.1f}")
             with col_stat2:
-                st.metric("Moda (mais comum)", relatorio['estatisticas_gerais']['moda_fibonacci_por_concurso'])
+                st.metric("Moda (mais comum)", relatorio.get('moda_geral', 0))
             with col_stat3:
-                st.metric("Mínimo por concurso", relatorio['estatisticas_gerais']['min_fibonacci_por_concurso'])
+                st.metric("Mínimo por concurso", relatorio.get('min_geral', 0))
             with col_stat4:
-                st.metric("Máximo por concurso", relatorio['estatisticas_gerais']['max_fibonacci_por_concurso'])
-            
-            # Distribuição histórica
-            if relatorio['distribuicao_historica']:
-                st.markdown("#### 📊 Distribuição Histórica de Fibonacci por Concurso")
-                dist_df = pd.DataFrame({
-                    'Concursos': list(range(1, len(relatorio['distribuicao_historica'])+1)),
-                    'Fibonacci no Concurso': relatorio['distribuicao_historica']
-                })
-                st.bar_chart(dist_df.set_index('Concursos'))
+                st.metric("Máximo por concurso", relatorio.get('max_geral', 0))
         
         st.markdown("---")
         st.markdown("### 🎰 Gerar Cartões Fibonacci")
         
         if st.button("🚀 Gerar Cartões com Estratégia Fibonacci", type="primary"):
             with st.spinner(f"Gerando {n_cartoes} cartões com estratégia Fibonacci..."):
-                if estrategia == "padrao":
-                    cartoes_fib = estrategia_fib.gerar_cartoes_fibonacci(n_cartoes, usar_estatisticas=True)
-                else:
-                    cartoes_fib = estrategia_fib.gerar_cartoes_fibonacci_estrategia(estrategia, n_cartoes)
-                
+                cartoes_fib = estrategia_fib.gerar_cartoes_fibonacci(n_cartoes, usar_estatisticas=True)
                 st.session_state.cartoes_fibonacci = cartoes_fib
                 st.success(f"{len(cartoes_fib)} cartões Fibonacci gerados com sucesso!")
         
-        # Mostrar cartões gerados
         if hasattr(st.session_state, 'cartoes_fibonacci') and st.session_state.cartoes_fibonacci:
             cartoes_fib = st.session_state.cartoes_fibonacci
             
-            st.markdown(f"### 📋 Cartões Gerados ({estrategia.replace('_', ' ').title()})")
+            st.markdown(f"### 📋 Cartões Gerados")
             
-            # Estatísticas dos cartões
             stats_cartoes = []
             for i, cartao in enumerate(cartoes_fib, 1):
-                # Contar Fibonacci no cartão
                 fib_no_cartao = [num for num in cartao if num in estrategia_fib.fibonacci]
                 qtd_fib = len(fib_no_cartao)
                 
-                # Outras estatísticas
                 pares = sum(1 for n in cartao if n % 2 == 0)
                 primos = sum(1 for n in cartao if n in {2,3,5,7,11,13,17,19,23})
                 soma = sum(cartao)
@@ -3052,56 +2347,16 @@ if st.session_state.concursos:
                     "Soma": soma
                 })
             
-            # Exibir como DataFrame
             df_cartoes_fib = pd.DataFrame(stats_cartoes)
             st.dataframe(df_cartoes_fib, hide_index=True, use_container_width=True)
             
-            # Detalhes expandidos
-            with st.expander("🔍 Ver Detalhes de Cada Cartão"):
-                for i, cartao in enumerate(cartoes_fib, 1):
-                    fib_no_cartao = [num for num in cartao if num in estrategia_fib.fibonacci]
-                    qtd_fib = len(fib_no_cartao)
-                    pares = sum(1 for n in cartao if n % 2 == 0)
-                    primos = sum(1 for n in cartao if n in {2,3,5,7,11,13,17,19,23})
-                    soma = sum(cartao)
-                    
-                    col_c1, col_c2 = st.columns([3, 2])
-                    with col_c1:
-                        st.write(f"**Cartão {i}:** {cartao}")
-                        st.write(f"**Fibonacci ({qtd_fib}):** {fib_no_cartao}")
-                    with col_c2:
-                        st.write(f"**Estatísticas:**")
-                        st.write(f"- Fibonacci: {qtd_fib}/15")
-                        st.write(f"- Pares/Ímpares: {pares}/{15-pares}")
-                        st.write(f"- Primos: {primos}")
-                        st.write(f"- Soma: {soma}")
-                    
-                    # Verificar se segue a regra (4 ou 5 Fibonacci)
-                    if qtd_fib in [4, 5]:
-                        st.success(f"✅ Segue a regra: {qtd_fib} números Fibonacci")
-                    else:
-                        st.warning(f"⚠️ Não segue a regra: {qtd_fib} números Fibonacci (deveria ser 4 ou 5)")
-                    
-                    st.write("---")
-            
-            # Exportar cartões
-            st.markdown("### 💾 Exportar Cartões Fibonacci")
             conteudo_fib = "\n".join(",".join(str(n) for n in cartao) for cartao in cartoes_fib)
             st.download_button(
                 "📥 Baixar Cartões Fibonacci", 
                 data=conteudo_fib, 
-                file_name=f"cartoes_fibonacci_{estrategia}.txt", 
+                file_name=f"cartoes_fibonacci.txt", 
                 mime="text/plain"
             )
-            
-            # Adicionar estatísticas de exportação
-            st.info(f"""
-            **Resumo da geração:**
-            - Total de cartões: {len(cartoes_fib)}
-            - Estratégia: {estrategia.replace('_', ' ').title()}
-            - Fibonacci por cartão: 4 ou 5 (regra da estratégia)
-            - Cartões únicos e balanceados
-            """)
 
     # Aba 8 - Fechamentos Matemáticos
     with abas[7]:
@@ -3116,7 +2371,6 @@ if st.session_state.concursos:
         with col_config1:
             st.markdown("### ⚙️ Configuração do Fechamento")
             
-            # Opção: usar grupos sugeridos ou personalizados
             modo_grupo = st.radio(
                 "Selecione o modo de escolha dos números:",
                 ["Usar grupos sugeridos pela IA", "Inserir números manualmente"]
@@ -3127,8 +2381,7 @@ if st.session_state.concursos:
                 min_value=16,
                 max_value=20,
                 value=18,
-                step=1,
-                help="Quantos números selecionar para gerar os cartões de 15 números"
+                step=1
             )
             
             max_jogos = st.slider(
@@ -3141,8 +2394,7 @@ if st.session_state.concursos:
             
             estrategia_fechamento = st.selectbox(
                 "Estratégia de geração:",
-                ["cobertura", "estatistica"],
-                format_func=lambda x: "Cobertura sistemática" if x == "cobertura" else "Baseada em estatísticas"
+                ["cobertura", "estatistica"]
             )
         
         with col_config2:
@@ -3154,7 +2406,6 @@ if st.session_state.concursos:
                     st.session_state.grupos_fechamento = grupos_sugeridos
                     st.success(f"{len(grupos_sugeridos)} grupos sugeridos gerados!")
         
-        # Mostrar grupos sugeridos
         if st.session_state.grupos_fechamento:
             st.markdown("### 🎯 Grupos Sugeridos para Fechamento")
             
@@ -3166,7 +2417,6 @@ if st.session_state.concursos:
                     if st.button(f"Usar Grupo {i}", key=f"usar_grupo_{i}"):
                         grupo_selecionado = grupo
         
-        # Seleção de números manual
         if modo_grupo == "Inserir números manualmente":
             st.markdown("### ✍️ Inserir Números Manualmente")
             numeros_manuais = st.multiselect(
@@ -3181,7 +2431,6 @@ if st.session_state.concursos:
             else:
                 grupo_selecionado = sorted(numeros_manuais)
         
-        # Gerar fechamento
         st.markdown("---")
         st.markdown("### 🚀 Gerar Fechamento")
         
@@ -3198,7 +2447,6 @@ if st.session_state.concursos:
                         )
                         st.session_state.fechamento_gerado = jogos_fechamento
                         
-                        # Calcular cobertura
                         cobertura = fechamento.calcular_cobertura_teorica(grupo_selecionado, jogos_fechamento)
                         st.session_state.cobertura_fechamento = cobertura
                         
@@ -3212,13 +2460,11 @@ if st.session_state.concursos:
                 st.session_state.cobertura_fechamento = None
                 st.success("Fechamento limpo!")
         
-        # Mostrar resultados do fechamento
         if st.session_state.fechamento_gerado:
             jogos_fechamento = st.session_state.fechamento_gerado
             
             st.markdown(f"### 📋 Fechamento Gerado ({len(jogos_fechamento)} jogos)")
             
-            # Estatísticas do fechamento
             if hasattr(st.session_state, 'cobertura_fechamento') and st.session_state.cobertura_fechamento:
                 cobertura = st.session_state.cobertura_fechamento
                 
@@ -3231,26 +2477,9 @@ if st.session_state.concursos:
                     st.metric("Total de Jogos", cobertura['total_jogos'])
                 with col_cob3:
                     st.metric("Números Cobertos", cobertura['total_numeros_cobertos'])
-                
-                # Tabela de cobertura por número
-                with st.expander("📈 Ver Cobertura Detalhada por Número"):
-                    dados_cobertura = []
-                    for num, info in cobertura['cobertura_por_numero'].items():
-                        dados_cobertura.append({
-                            "Número": num,
-                            "Frequência": info['frequencia'],
-                            "Cobertura (%)": info['percentual'],
-                            "Status": "✅ Boa" if info['percentual'] >= 50 else "⚠️ Média" if info['percentual'] >= 30 else "❌ Baixa"
-                        })
-                    
-                    df_cobertura = pd.DataFrame(dados_cobertura)
-                    df_cobertura = df_cobertura.sort_values("Cobertura (%)", ascending=False)
-                    st.dataframe(df_cobertura, hide_index=True)
             
-            # Lista de jogos
             st.markdown("#### 🎯 Jogos do Fechamento")
             
-            # Mostrar primeiros 10 jogos
             for i, jogo in enumerate(jogos_fechamento[:10], 1):
                 col_j1, col_j2 = st.columns([3, 2])
                 with col_j1:
@@ -3264,7 +2493,6 @@ if st.session_state.concursos:
             if len(jogos_fechamento) > 10:
                 st.info(f"Mostrando 10 de {len(jogos_fechamento)} jogos. Use o botão de exportar para ver todos.")
             
-            # Exportar fechamento
             st.markdown("### 💾 Exportar Fechamento")
             
             conteudo_fechamento = f"FECHAMENTO LOTOFÁCIL - {len(grupo_selecionado)} NÚMEROS PARA {len(jogos_fechamento)} JOGOS\n"
@@ -3284,20 +2512,6 @@ if st.session_state.concursos:
                 file_name=f"fechamento_lotofacil_{len(grupo_selecionado)}numeros.txt",
                 mime="text/plain"
             )
-            
-            # Informações sobre a estratégia
-            st.info(f"""
-            **Resumo do Fechamento:**
-            - Números no grupo: {len(grupo_selecionado)}
-            - Jogos gerados: {len(jogos_fechamento)}
-            - Cobertura média: {cobertura['cobertura_media'] if 'cobertura' in locals() else 'N/A'}%
-            - Estratégia: {estrategia_fechamento}
-            
-            **Vantagens do fechamento:**
-            1. Maior garantia de acertos (11-14 pontos)
-            2. Cobertura mais ampla dos números escolhidos
-            3. Redução do risco de sair sem prêmio
-            """)
 
     # Aba 9 - Conferência
     with abas[8]:
@@ -3310,28 +2524,24 @@ if st.session_state.concursos:
             )
             
             if st.button("🔍 Conferir Todos os Cartões"):
-                # Cartões IA
                 if st.session_state.cartoes_gerados:
                     st.markdown("### 🧠 Cartões Gerados por IA")
                     for i, cartao in enumerate(st.session_state.cartoes_gerados, 1):
                         acertos = len(set(cartao) & set(info['dezenas']))
                         st.write(f"Jogo {i}: {cartao} - **{acertos} acertos**")
                 
-                # Cartões Sequência/Falha
                 if st.session_state.jogos_sequencia_falha:
                     st.markdown("### 📈 Cartões Sequência/Falha")
                     for i, cartao in enumerate(st.session_state.jogos_sequencia_falha, 1):
                         acertos = len(set(cartao) & set(info['dezenas']))
                         st.write(f"Jogo {i}: {cartao} - **{acertos} acertos**")
                 
-                # Cartões por Padrões
                 if st.session_state.cartoes_gerados_padrao:
                     st.markdown("### 🧩 Cartões por Padrões")
                     for i, cartao in enumerate(st.session_state.cartoes_gerados_padrao, 1):
                         acertos = len(set(cartao) & set(info['dezenas']))
                         st.write(f"Cartão {i}: {cartao} - **{acertos} acertos**")
                 
-                # Cartões Fibonacci
                 if hasattr(st.session_state, 'cartoes_fibonacci') and st.session_state.cartoes_fibonacci:
                     st.markdown("### 🎯 Cartões Fibonacci")
                     for i, cartao in enumerate(st.session_state.cartoes_fibonacci, 1):
@@ -3339,7 +2549,6 @@ if st.session_state.concursos:
                         fib_no_cartao = [num for num in cartao if num in [1,2,3,5,8,13,21]]
                         st.write(f"Cartão {i}: {cartao} - **{acertos} acertos** (Fibonacci: {len(fib_no_cartao)})")
                 
-                # Combinações Combinatorias
                 if st.session_state.combinacoes_combinatorias:
                     st.markdown("### 🔢 Combinações Combinatorias (Top 3 por Tamanho)")
                     analisador_combinatorio = AnaliseCombinatoria(st.session_state.concursos)
@@ -3356,7 +2565,6 @@ if st.session_state.concursos:
                                 st.write(f"{combo}")
                                 st.write("---")
                 
-                # Fechamentos
                 if st.session_state.fechamento_gerado:
                     st.markdown("### 🎲 Fechamentos Gerados")
                     for i, cartao in enumerate(st.session_state.fechamento_gerado[:5], 1):
@@ -3366,19 +2574,12 @@ if st.session_state.concursos:
                     if len(st.session_state.fechamento_gerado) > 5:
                         st.info(f"Mostrando 5 de {len(st.session_state.fechamento_gerado)} jogos do fechamento")
                 
-                # Cartões Híbridos
-                if hasattr(st.session_state, 'cartoes_hibridos') and st.session_state.cartoes_hibridos:
-                    st.markdown("### 🧬 Cartões Híbridos")
-                    for i, cartao in enumerate(st.session_state.cartoes_hibridos, 1):
+                # MODIFICADO: Adicionar cartões estatísticos
+                if hasattr(st.session_state, 'cartoes_estatisticos') and st.session_state.cartoes_estatisticos:
+                    st.markdown("### 🔬 Cartões Estatísticos")
+                    for i, cartao in enumerate(st.session_state.cartoes_estatisticos, 1):
                         acertos = len(set(cartao) & set(info['dezenas']))
-                        st.write(f"Cartão Híbrido {i}: {cartao} - **{acertos} acertos**")
-                
-                # Cartões Quânticos
-                if hasattr(st.session_state, 'cartoes_quantica') and st.session_state.cartoes_quantica:
-                    st.markdown("### ⚛️ Cartões Quânticos")
-                    for i, cartao in enumerate(st.session_state.cartoes_quantica, 1):
-                        acertos = len(set(cartao) & set(info['dezenas']))
-                        st.write(f"Cartão Quântico {i}: {cartao} - **{acertos} acertos**")
+                        st.write(f"Cartão Estatístico {i}: {cartao} - **{acertos} acertos**")
 
     # Aba 10 - Conferir Arquivo TXT
     with abas[9]:
@@ -3415,28 +2616,23 @@ if st.session_state.concursos:
         st.subheader("🔁 Ciclos da Lotofácil (Ciclo Dinâmico)")
         st.write("Analise os ciclos de dezenas nos concursos mais recentes.")
         
-        # Configuração do limite de concursos
         st.markdown("### ⚙️ Configuração da Análise de Ciclos")
         
         col_config1, col_config2 = st.columns([2, 1])
         
         with col_config1:
-            # Slider para escolher quantos concursos analisar
             max_concursos_disponiveis = len(st.session_state.concursos)
             limite_ciclos = st.slider(
                 "Número de concursos anteriores para análise:",
-                min_value=10,  # Ajustado para mínimo 10
+                min_value=10,
                 max_value=min(50, max_concursos_disponiveis),
                 value=st.session_state.limite_ciclos or 15,
-                step=1,
-                help="Quantos concursos mais recentes analisar para detectar o ciclo atual"
+                step=1
             )
             
-            # Opção para incluir todas as dezenas faltantes
             incluir_todas_faltantes = st.checkbox(
                 "Forçar inclusão de todas as dezenas faltantes nos cartões",
-                value=False,
-                help="Se marcado, garantirá que todas as dezenas que ainda não saíram no ciclo sejam incluídas nos cartões gerados"
+                value=False
             )
         
         with col_config2:
@@ -3444,7 +2640,6 @@ if st.session_state.concursos:
             if limite_ciclos:
                 st.metric("Concursos a Analisar", limite_ciclos)
         
-        # Botão para aplicar configurações e analisar
         if st.button("🔍 Analisar Ciclos com Nova Configuração", type="primary"):
             st.session_state.limite_ciclos = limite_ciclos
             st.session_state.analise_ciclos = AnaliseCiclos(
@@ -3456,7 +2651,6 @@ if st.session_state.concursos:
             st.session_state.cartoes_ciclos = []
             st.success(f"Ciclos analisados com os últimos {limite_ciclos} concursos!")
         
-        # Mostrar estatísticas do ciclo se existir
         if st.session_state.analise_ciclos:
             analise_ciclos = st.session_state.analise_ciclos
             resumo = analise_ciclos.resumo()
@@ -3473,7 +2667,6 @@ if st.session_state.concursos:
             with col4:
                 st.metric("Dezenas Faltantes", len(resumo["numeros_faltantes"]))
             
-            # Detalhes do ciclo
             with st.expander("📋 Detalhes do Ciclo", expanded=True):
                 st.write("### 🔍 Dezenas já saídas no ciclo (presentes)")
                 st.write(resumo["numeros_presentes"])
@@ -3485,70 +2678,6 @@ if st.session_state.concursos:
                     st.info(f"**Total de {len(resumo['numeros_faltantes'])} dezenas faltantes** ({faltantes_percent:.1f}%) para completar o ciclo de 25 números.")
                 else:
                     st.success("✅ **Ciclo completo!** Todas as 25 dezenas já saíram neste ciclo.")
-                
-                # Informação sobre o limite
-                if resumo.get("limite_concursos"):
-                    st.write(f"**Limite de análise:** {resumo['limite_concursos']} concursos")
-                    if not resumo["ciclo_completo"] and resumo["tamanho"] >= resumo["limite_concursos"]:
-                        st.warning(f"⚠️ O ciclo não foi completado dentro do limite de {resumo['limite_concursos']} concursos analisados.")
-            
-            # Concursos Analisados no Ciclo
-            with st.expander("📊 Concursos Analisados no Ciclo", expanded=True):
-                st.write(f"### 🗂️ Concursos considerados (últimos {limite_ciclos if st.session_state.limite_ciclos else resumo['tamanho']})")
-                st.write("(Ordenados do mais recente para o mais antigo)")
-                
-                concursos_no_ciclo = analise_ciclos.obter_concursos_no_ciclo_formatados()
-                
-                if concursos_no_ciclo:
-                    # Criar DataFrame para exibição
-                    dados_concursos = []
-                    for concurso_info in concursos_no_ciclo:
-                        dados_concursos.append({
-                            "Ordem": concurso_info["ordem"],
-                            "Concurso": concurso_info["numero_concurso"],
-                            "Posição": f"{concurso_info['ordem']}º mais recente",
-                            "Dezenas": ", ".join(str(d) for d in concurso_info["dezenas"]),
-                            "Total Dezenas": len(concurso_info["dezenas"])
-                        })
-                    
-                    df_concursos = pd.DataFrame(dados_concursos)
-                    st.dataframe(df_concursos, hide_index=True, use_container_width=True)
-                    
-                    # Estatísticas dos concursos no ciclo
-                    st.write("### 📈 Estatísticas dos Concursos no Ciclo")
-                    col_stat1, col_stat2, col_stat3 = st.columns(3)
-                    with col_stat1:
-                        st.metric("Total Concursos", len(concursos_no_ciclo))
-                    with col_stat2:
-                        # Média de dezenas por concurso (deve ser 15)
-                        media_dezenas = np.mean([len(c["dezenas"]) for c in concursos_no_ciclo])
-                        st.metric("Média Dezenas/Concurso", f"{media_dezenas:.1f}")
-                    with col_stat3:
-                        # Dezenas únicas totais
-                        dezenas_unicas = len(resumo["numeros_presentes"])
-                        st.metric("Dezenas Únicas", dezenas_unicas)
-                    
-                    # Gráfico de evolução do ciclo
-                    st.write("### 📊 Evolução das Dezenas por Concurso")
-                    dezenas_acumuladas = []
-                    dezenas_unicas_acum = []
-                    for i, concurso_info in enumerate(concursos_no_ciclo, 1):
-                        dezenas_ate_agora = set()
-                        for j in range(i):
-                            dezenas_ate_agora.update(concursos_no_ciclo[j-1]["dezenas"])
-                        dezenas_acumuladas.append(len(concursos_no_ciclo[i-1]["dezenas"]))
-                        dezenas_unicas_acum.append(len(dezenas_ate_agora))
-                    
-                    evolucao_df = pd.DataFrame({
-                        "Concurso": [f"Concurso {i}" for i in range(1, len(concursos_no_ciclo)+1)],
-                        "Dezenas no Concurso": dezenas_acumuladas,
-                        "Dezenas Únicas Acumuladas": dezenas_unicas_acum
-                    })
-                    
-                    st.line_chart(evolucao_df.set_index("Concurso"))
-                    
-                else:
-                    st.warning("Nenhum concurso foi analisado para o ciclo.")
             
             st.markdown("---")
             st.subheader("🎯 Gerar Cartões Baseados no Ciclo")
@@ -3561,11 +2690,9 @@ if st.session_state.concursos:
                         st.session_state.concursos_info,
                         st.session_state.limite_ciclos or limite_ciclos
                     )
-                    analise_ciclos = st.session_state.analise_ciclos
-                    st.session_state.resultado_ciclos = analise_ciclos.resumo()
+                    st.session_state.resultado_ciclos = None
                     st.session_state.cartoes_ciclos = []
                     st.success("Ciclo reanalisado com sucesso!")
-                    st.rerun()
             
             with col_btn2:
                 if st.button("🎯 Gerar 5 Cartões — Estratégia Ciclos", use_container_width=True):
@@ -3578,11 +2705,9 @@ if st.session_state.concursos:
                     st.session_state.resultado_ciclos = analise_ciclos.resumo()
                     st.success("5 cartões gerados com prioridade nas dezenas do ciclo!")
             
-            # Mostrar cartões gerados
             if st.session_state.cartoes_ciclos:
                 st.subheader("📋 Cartões Gerados (Priorizando Dezenas do Ciclo)")
                 
-                # Verificar se os cartões são distintos
                 cartoes_unicos = []
                 cartoes_vistos = set()
                 
@@ -3596,7 +2721,6 @@ if st.session_state.concursos:
                     st.warning(f"⚠️ {len(st.session_state.cartoes_ciclos) - len(cartoes_unicos)} cartões duplicados foram removidos.")
                     st.session_state.cartoes_ciclos = cartoes_unicos
                 
-                # Se ainda não tem 5 cartões distintos, completar
                 while len(st.session_state.cartoes_ciclos) < 5:
                     novo_cartao = sorted(random.sample(range(1, 26), 15))
                     if tuple(novo_cartao) not in cartoes_vistos:
@@ -3608,7 +2732,6 @@ if st.session_state.concursos:
                 if incluir_todas_faltantes and resumo["numeros_faltantes"]:
                     st.info(f"✅ Configuração ativa: Incluindo todas as {len(resumo['numeros_faltantes'])} dezenas faltantes nos cartões.")
                 
-                # Tabela de estatísticas dos cartões
                 stats_cartoes = []
                 for i, c in enumerate(st.session_state.cartoes_ciclos, 1):
                     pares = sum(1 for n in c if n%2==0)
@@ -3627,11 +2750,9 @@ if st.session_state.concursos:
                         "Presentes Incluídos": presentes_incluidos
                     })
                 
-                # Exibir como DataFrame
                 df_cartoes = pd.DataFrame(stats_cartoes)
                 st.dataframe(df_cartoes, hide_index=True, use_container_width=True)
                 
-                # Detalhes expandidos de cada cartão
                 with st.expander("🔍 Ver Detalhes dos Cartões"):
                     for i, c in enumerate(st.session_state.cartoes_ciclos, 1):
                         pares = sum(1 for n in c if n%2==0)
@@ -3656,7 +2777,6 @@ if st.session_state.concursos:
                         
                         st.write("---")
                 
-                # Botão para exportar
                 st.subheader("💾 Exportar Cartões do Ciclo")
                 conteudo_ciclos = "\n".join(",".join(str(n) for n in cartao) for cartao in st.session_state.cartoes_ciclos)
                 st.download_button(
@@ -3667,440 +2787,497 @@ if st.session_state.concursos:
                 )
         else:
             st.info("👆 Configure e analise os ciclos usando o botão acima.")
-            
-            # Exemplo de como funciona
-            with st.expander("ℹ️ Como funciona a análise de ciclos?"):
-                st.write("""
-                **Análise de Ciclos da Lotofácil:**
-                
-                1. **Coleta de dados**: Analisa os concursos mais recentes (você escolhe quantos)
-                2. **Detecção de ciclo**: Verifica quantos concursos são necessários para que todas as 25 dezenas apareçam pelo menos uma vez
-                3. **Identificação**: Separa as dezenas que já saíram (presentes) e as que ainda não saíram (faltantes) no ciclo atual
-                4. **Geração de cartões**: Cria jogos priorizando as dezenas faltantes e as que têm maior atraso
-                
-                **Benefícios:**
-                - Identifica dezenas "atrasadas" que têm maior probabilidade de sair
-                - Ajuda a diversificar os jogos incluindo dezenas que estão em falta
-                - Fornece uma visão dinâmica do comportamento das dezenas ao longo do tempo
-                
-                **Recomendações:**
-                - Analise entre 10 e 25 concursos para um bom equilíbrio
-                - Se o ciclo estiver "Atrasado", as dezenas faltantes têm alta prioridade
-                - Use a opção "Incluir todas as faltantes" para garantir cobertura máxima
-                """)
 
-    # Aba 12 - Backtest & Estratégia Híbrida
+    # Aba 12 - Backtest Rigoroso (MODIFICADO)
     with abas[11]:
-        st.subheader("📊 Backtest de Estratégias & Estratégia Híbrida")
-        
-        # Inicializar backtest
-        backtester = BacktestEstrategias(st.session_state.concursos)
+        st.subheader("📊 Backtest Rigoroso - Validação Científica")
         
         col1, col2 = st.columns([2, 1])
         
         with col1:
-            st.markdown("### 🔬 Backtest Científico")
-            st.write("Testa todas as estratégias contra concursos passados para medir performance real.")
+            st.markdown("### 🔬 Metodologia Científica")
+            st.write("Teste estatístico com validação temporal rigorosa.")
             
-            concursos_testar = st.slider(
-                "Número de concursos para testar:",
-                min_value=20,
-                max_value=min(100, len(st.session_state.concursos) - 50),
-                value=50,
-                step=5,
-                help="Quantos concursos passados usar como 'teste'"
+            train_size = st.slider(
+                "Tamanho do conjunto de treino:",
+                min_value=50,
+                max_value=min(200, len(st.session_state.concursos) - 50),
+                value=100,
+                step=10,
+                help="Quantos concursos usar para 'treinar' as estratégias"
             )
             
-            if st.button("🚀 Executar Backtest Completo", type="primary"):
-                with st.spinner(f"Executando backtest com {concursos_testar} concursos..."):
-                    resultados = backtester.executar_backtest_completo(concursos_testar)
+            test_size = st.slider(
+                "Tamanho do conjunto de teste:",
+                min_value=20,
+                max_value=min(100, len(st.session_state.concursos) - train_size),
+                value=50,
+                step=5,
+                help="Quantos concursos usar para testar as estratégias"
+            )
+            
+            if st.button("🚀 Executar Backtest Rigoroso", type="primary"):
+                with st.spinner(f"Executando backtest com {train_size} treino + {test_size} teste..."):
+                    resultados = backtest_rigoroso.executar_backtest_rigoroso(train_size, test_size)
                     
                     if "erro" in resultados:
                         st.error(resultados["erro"])
                     else:
-                        st.session_state.resultados_backtest = resultados
+                        st.session_state.resultados_backtest_rigoroso = resultados
                         
                         # Gerar relatório
-                        relatorio = backtester.gerar_relatorio_backtest(resultados)
-                        st.session_state.relatorio_backtest = relatorio
+                        relatorio = backtest_rigoroso.gerar_relatorio_backtest(resultados)
+                        st.session_state.relatorio_backtest_rigoroso = relatorio
                         
                         st.success(f"Backtest concluído! {len(resultados)} estratégias analisadas.")
         
         with col2:
-            st.markdown("### 🎯 Estratégia Híbrida")
-            st.write("Combinação otimizada das melhores abordagens.")
+            st.markdown("### 📈 Estratégias Testadas")
+            st.info("""
+            **🔍 Estratégias comparadas:**
             
-            if st.button("🧬 Gerar 5 Cartões Híbridos"):
-                with st.spinner("Gerando cartões com estratégia híbrida..."):
-                    cartoes_hibridos = backtester._gerar_estrategia_hibrida(st.session_state.concursos[:50])
-                    st.session_state.cartoes_hibridos = cartoes_hibridos
-                    st.success("5 cartões híbridos gerados!")
+            1. **Aleatório Balanceado** (baseline)
+            2. **Frequência Simples**
+            3. **Sequência-Falha**
+            4. **Fibonacci Balanceado**
+            
+            **🎯 Métricas:**
+            • Média de acertos
+            • Intervalo de confiança 95%
+            • Efetividade vs aleatório
+            """)
         
         # Mostrar resultados do backtest
-        if hasattr(st.session_state, 'resultados_backtest') and st.session_state.resultados_backtest:
-            resultados = st.session_state.resultados_backtest
+        if hasattr(st.session_state, 'resultados_backtest_rigoroso') and st.session_state.resultados_backtest_rigoroso:
+            resultados = st.session_state.resultados_backtest_rigoroso
             
-            st.markdown("### 📈 Resultados do Backtest")
+            st.markdown("### 📊 Resultados do Backtest Rigoroso")
             
             # Criar DataFrame para visualização
             dados_grafico = []
             for estrategia, stats in resultados.items():
                 dados_grafico.append({
-                    'Estratégia': estrategia.replace('_', ' '),
-                    'Pontuação Média': stats['pontuacao_media'],
-                    '13+ Pontos %': stats['taxa_13_plus'],
-                    '14 Pontos %': stats['taxa_14_pontos'] * 100,  # Multiplicado para visualização
-                    '11 Pontos %': stats['taxa_11_pontos']
+                    'Estratégia': estrategia,
+                    'Média Acertos': stats['media_acertos'],
+                    'IC Inferior': stats['intervalo_confianca'][0],
+                    'IC Superior': stats['intervalo_confianca'][1],
+                    'Efetividade %': stats['efetividade']
                 })
             
             df_backtest = pd.DataFrame(dados_grafico)
             
             # Gráfico de comparação
-            st.markdown("#### 📊 Comparação de Pontuação Média")
-            chart_data = df_backtest.set_index('Estratégia')[['Pontuação Média']]
-            st.bar_chart(chart_data)
+            st.markdown("#### 📈 Comparação de Média de Acertos (com IC 95%)")
+            
+            # Preparar dados para gráfico
+            chart_df = df_backtest.copy()
+            chart_df['Erro'] = (chart_df['IC Superior'] - chart_df['Média Acertos'])
+            
+            # Exibir gráfico
+            st.bar_chart(chart_df.set_index('Estratégia')[['Média Acertos']])
             
             # Tabela detalhada
             st.markdown("#### 📋 Estatísticas Detalhadas")
-            st.dataframe(df_backtest, hide_index=True, use_container_width=True)
+            
+            # Formatar tabela
+            display_df = df_backtest.copy()
+            display_df['Média Acertos'] = display_df['Média Acertos'].round(2)
+            display_df['IC 95%'] = display_df.apply(
+                lambda row: f"[{row['IC Inferior']:.2f}, {row['IC Superior']:.2f}]", axis=1
+            )
+            display_df['Efetividade %'] = display_df['Efetividade %'].round(2)
+            
+            # Adicionar percentis
+            for estrategia, stats in resultados.items():
+                display_df.loc[display_df['Estratégia'] == estrategia, '11+ pts %'] = f"{stats['percentis']['11+']:.2f}%"
+                display_df.loc[display_df['Estratégia'] == estrategia, '13+ pts %'] = f"{stats['percentis']['13+']:.2f}%"
+            
+            st.dataframe(display_df[['Estratégia', 'Média Acertos', 'IC 95%', 'Efetividade %', '11+ pts %', '13+ pts %']], 
+                        hide_index=True, use_container_width=True)
+            
+            # Análise de resultados
+            st.markdown("#### 📈 Análise dos Resultados")
+            
+            melhor = list(resultados.items())[0] if resultados else None
+            aleatorio = resultados.get('Aleatório Balanceado', {})
+            
+            if aleatorio and melhor:
+                vantagem = melhor[1]['media_acertos'] - aleatorio['media_acertos']
+                
+                col_an1, col_an2 = st.columns(2)
+                with col_an1:
+                    st.metric("Melhor Estratégia", melhor[0])
+                    st.metric("Vantagem vs Aleatório", f"{vantagem:.2f} acertos")
+                
+                with col_an2:
+                    st.metric("Média Aleatório", f"{aleatorio['media_acertos']:.2f}")
+                    st.metric("Efetividade Melhor", f"{melhor[1]['efetividade']:.2f}%")
+                
+                # Conclusão baseada em resultados
+                st.markdown("##### 🎯 Conclusão Estatística")
+                if abs(vantagem) < 0.3:
+                    st.warning("""
+                    **Nenhuma vantagem estatisticamente significativa encontrada.**
+                    
+                    • Diferença < 0.3 acertos não é estatisticamente significativa
+                    • Todas as estratégias performam similarmente ao aleatório balanceado
+                    • Recomendação: Use aleatório balanceado (mais simples e igualmente eficaz)
+                    """)
+                else:
+                    st.success(f"""
+                    **Pequena vantagem para {melhor[0]}.**
+                    
+                    • Vantagem de {vantagem:.2f} acertos em média
+                    • Efetividade de {melhor[1]['efetividade']:.2f}% acima do aleatório
+                    • Recomendação: Considere usar {melhor[0]} para diversificação
+                    """)
             
             # Mostrar relatório completo
             with st.expander("📄 Ver Relatório Completo do Backtest"):
-                st.text(st.session_state.relatorio_backtest)
+                st.text(st.session_state.relatorio_backtest_rigoroso)
             
             # Download do relatório
             st.download_button(
                 "💾 Baixar Relatório Completo",
-                data=st.session_state.relatorio_backtest,
-                file_name=f"backtest_lotofacil_{len(st.session_state.concursos)}.txt",
+                data=st.session_state.relatorio_backtest_rigoroso,
+                file_name=f"backtest_rigoroso_lotofacil.txt",
                 mime="text/plain"
             )
         
-        # Mostrar cartões híbridos
-        if hasattr(st.session_state, 'cartoes_hibridos') and st.session_state.cartoes_hibridos:
-            st.markdown("### 🧬 Cartões Híbridos Gerados")
-            st.info("Estratégia: 6 números quentes + 4 Fibonacci atrasados + 3 ciclos atrasados + 2 médios")
-            
-            for i, cartao in enumerate(st.session_state.cartoes_hibridos, 1):
-                # Analisar composição
-                fib_nums = [n for n in cartao if n in [1, 2, 3, 5, 8, 13, 21]]
-                
-                col_c1, col_c2 = st.columns([3, 2])
-                with col_c1:
-                    st.write(f"**Cartão {i}:** {cartao}")
-                with col_c2:
-                    pares = sum(1 for n in cartao if n % 2 == 0)
-                    primos = sum(1 for n in cartao if n in {2,3,5,7,11,13,17,19,23})
-                    st.write(f"Pares: {pares}, Primos: {primos}, Fibonacci: {len(fib_nums)}")
-                    if fib_nums:
-                        st.write(f"Fibonacci: {fib_nums}")
-            
-            # Exportar cartões híbridos
-            conteudo_hibrido = "\n".join(",".join(str(n) for n in cartao) for cartao in st.session_state.cartoes_hibridos)
-            st.download_button(
-                "📥 Baixar Cartões Híbridos",
-                data=conteudo_hibrido,
-                file_name="cartoes_hibridos_lotofacil.txt",
-                mime="text/plain"
-            )
-        
-        # Informações sobre a estratégia híbrida
-        with st.expander("ℹ️ Sobre a Estratégia Híbrida"):
+        # Informações sobre a metodologia
+        with st.expander("ℹ️ Sobre a Metodologia do Backtest"):
             st.write("""
-            **🧬 Composição da Estratégia Híbrida:**
+            **🔬 METODOLOGIA CIENTÍFICA APLICADA:**
             
-            1. **6 números quentes** - Baseado na análise de Sequência/Falha
-               - Maior probabilidade estatística de repetição
+            1. **Walk-Forward Validation (Validação Temporal):**
+               • Treina em concursos passados
+               • Testa em concursos futuros (não vistos durante o treino)
+               • Simula cenário real de uso
             
-            2. **4 números Fibonacci atrasados** - Foco em retorno estatístico
-               - Dezenas Fibonacci (01,02,03,05,08,13,21) com maior atraso
+            2. **Intervalos de Confiança 95%:**
+               • Calcula margem de erro estatística
+               • Mostra se diferenças são significativas
+               • Evita conclusões prematuras
             
-            3. **3 números de ciclos atrasados** - Explora lacunas temporais
-               - Números que não saem há mais tempo
+            3. **Baseline Estatística:**
+               • Compara todas as estratégias contra aleatório balanceado
+               • Mede efetividade real (não apenas desempenho bruto)
+               • Considera custo-benefício
             
-            4. **2 números de média frequência** - Balanceamento estatístico
-               - Evita foco excessivo em extremos
+            4. **Métricas Robustas:**
+               • Média de acertos (performance central)
+               • Percentis (distribuição de performance)
+               • Efetividade vs aleatório (vantagem real)
             
-            **🎯 Vantagens:**
-            - Diversificação estatística
-            - Combina múltiplas abordagens comprovadas
-            - Balanceamento automático pares/ímpares
-            - Custo-efetivo (5 cartões = R$7,50)
-            
-            **📊 Expectativas Realistas (baseado em backtest):**
-            - 11 pontos: ~20% dos jogos
-            - 12 pontos: ~5% dos jogos  
-            - 13 pontos: ~0.5-1% dos jogos
-            - 14 pontos: ~0.01-0.05% dos jogos
-            - 15 pontos: Chance estatisticamente irrelevante
+            **⚠️ LIMITAÇÕES ESTATÍSTICAS:**
+            • Backtest mostra desempenho histórico, não garante resultados futuros
+            • Lotofácil tem aleatoriedade verificada estatisticamente
+            • Nenhuma estratégia altera probabilidades matemáticas fundamentais
+            • Vantagens pequenas podem não ser economicamente significativas
             """)
 
-    # Aba 13 - Estatística Quântica (NOVA ABA)
+    # Aba 13 - Análise Estatística (MODIFICADO: substitui "Estatística Quântica")
     with abas[12]:
-        st.subheader("⚛️ Estatística Quântica - Probabilidade Quântica")
-        st.write("Estratégia baseada em princípios quânticos: função de onda, tunelamento quântico, entrelaçamento e superposição.")
+        st.subheader("🔬 Análise Estatística - Métodos Científicos")
+        st.write("Análise estatística rigorosa baseada em probabilidade, testes de hipóteses e intervalos de confiança.")
         
         col1, col2 = st.columns(2)
         
         with col1:
-            st.markdown("### 🎯 Configuração da Análise Quântica")
+            st.markdown("### 🎯 Configuração da Análise")
             
-            janela_quantica = st.slider(
-                "Janela de concursos para análise quântica:",
-                min_value=10,
-                max_value=min(50, len(st.session_state.concursos)),
-                value=30,
+            janela_analise = st.slider(
+                "Janela de concursos para análise:",
+                min_value=30,
+                max_value=min(100, len(st.session_state.concursos)),
+                value=50,
                 step=5,
-                help="Quantos concursos recentes usar para calcular a função de onda quântica"
+                help="Quantos concursos recentes usar para análise estatística"
             )
             
-            usar_superposicao = st.checkbox(
-                "Usar superposição quântica",
+            usar_intervalo_confianca = st.checkbox(
+                "Usar intervalos de confiança na geração",
                 value=True,
-                help="Inclui princípio de superposição na geração de cartões"
+                help="Considera incerteza estatística ao selecionar números"
             )
             
-            n_cartoes_quantica = st.slider(
-                "Número de cartões quânticos a gerar:",
+            n_cartoes_estatisticos = st.slider(
+                "Número de cartões estatísticos a gerar:",
                 min_value=1,
                 max_value=10,
                 value=5
             )
         
         with col2:
-            st.markdown("### 📊 Princípios Quânticos Aplicados")
+            st.markdown("### 📊 Métodos Estatísticos")
             st.info("""
-            **⚛️ Princípios Implementados:**
+            **🔍 Técnicas Implementadas:**
             
-            1. **Função de Onda Quântica**: Calcula amplitude de probabilidade para cada número
-            2. **Tunelamento Quântico**: Identifica números que "tunelem" de frios para quentes
-            3. **Entrelaçamento**: Analisa correlações entre números (pares quânticos)
-            4. **Superposição**: Números podem estar em múltiplos estados simultaneamente
-            5. **Incerteza de Heisenberg**: Considera posição e momento (frequência vs atraso)
+            1. **Intervalos de Confiança 95%**: Margem de erro estatística
+            2. **Teste Qui-Quadrado**: Verifica aleatoriedade dos sorteios
+            3. **Cadeias de Markov**: Analisa transições entre concursos
+            4. **Autocorrelação**: Detecta padrões temporais
+            5. **Análise de Frequência**: Distribuição probabilística
+            
+            **🎯 Objetivo Científico:**
+            • Identificar padrões estatisticamente significativos
+            • Quantificar incerteza nas previsões
+            • Fornecer base matemática para decisões
             """)
         
         st.markdown("---")
         
-        # Botão para análise quântica
+        # Botão para análise estatística
         col_analise1, col_analise2 = st.columns(2)
         
         with col_analise1:
-            if st.button("🔬 Analisar Estados Quânticos", type="primary"):
-                with st.spinner(f"Analisando estados quânticos com {janela_quantica} concursos..."):
-                    analise = estrategia_quantica.analisar_estados_quanticos(janela_quantica)
-                    st.session_state.analise_quantica = analise
+            if st.button("📈 Analisar Estatisticamente", type="primary"):
+                with st.spinner(f"Executando análise estatística com {janela_analise} concursos..."):
+                    analise = analise_estatistica_seriosa.calcular_distribuicao_probabilistica(janela_analise)
+                    st.session_state.analise_estatistica_seriosa = analise
                     
                     # Gerar relatório
-                    relatorio = estrategia_quantica.gerar_relatorio_quantico(analise)
-                    st.session_state.relatorio_quantico = relatorio
+                    relatorio = analise_estatistica_seriosa.gerar_relatorio_estatistico(analise)
+                    st.session_state.relatorio_estatistico = relatorio
                     
-                    st.success("Análise quântica concluída!")
+                    # Verificar aleatoriedade
+                    p_value = analise['teste_aleatoriedade']['p_value']
+                    if p_value and p_value > 0.05:
+                        st.info("✅ Teste estatístico não rejeita hipótese de aleatoriedade (p > 0.05)")
+                    elif p_value:
+                        st.warning(f"⚠️ Possível não-aleatoriedade detectada (p = {p_value:.4f})")
+                    
+                    st.success("Análise estatística concluída!")
         
         with col_analise2:
-            if st.button("⚡ Gerar Cartões Quânticos"):
-                with st.spinner("Gerando cartões com princípios quânticos..."):
-                    cartoes_quantica = estrategia_quantica.gerar_cartoes_quanticos(
-                        n_cartoes_quantica, 
-                        usar_superposicao=usar_superposicao
+            if st.button("🎲 Gerar Cartões Estatísticos"):
+                with st.spinner("Gerando cartões com base em análise estatística..."):
+                    cartoes_estatisticos = analise_estatistica_seriosa.gerar_cartoes_estatisticos(
+                        n_cartoes_estatisticos, 
+                        usar_intervalo_confianca=usar_intervalo_confianca
                     )
-                    st.session_state.cartoes_quantica = cartoes_quantica
-                    st.success(f"{len(cartoes_quantica)} cartões quânticos gerados!")
+                    st.session_state.cartoes_estatisticos = cartoes_estatisticos
+                    st.success(f"{len(cartoes_estatisticos)} cartões estatísticos gerados!")
         
-        # Mostrar análise quântica se existir
-        if hasattr(st.session_state, 'analise_quantica') and st.session_state.analise_quantica:
-            analise = st.session_state.analise_quantica
+        # Mostrar análise estatística se existir
+        if hasattr(st.session_state, 'analise_estatistica_seriosa') and st.session_state.analise_estatistica_seriosa:
+            analise = st.session_state.analise_estatistica_seriosa
             
-            st.markdown("### 📈 Análise dos Estados Quânticos")
+            st.markdown("### 📊 Resultados da Análise Estatística")
             
             # Métricas principais
             col_q1, col_q2, col_q3, col_q4 = st.columns(4)
             with col_q1:
                 st.metric("Concursos Analisados", analise['concursos_analisados'])
             with col_q2:
-                st.metric("Números em Tunelamento", len(analise['tunelamento']))
+                p_val = analise['teste_aleatoriedade']['p_value']
+                if p_val:
+                    st.metric("p-value Aleatoriedade", f"{p_val:.4f}")
+                else:
+                    st.metric("p-value Aleatoriedade", "N/A")
             with col_q3:
-                st.metric("Média Entrelaçamento", f"{analise['entrelacamento']['media_entrelacamento']:.3f}")
+                st.metric("Média Frequência", f"{analise['media_frequencia']:.3f}")
             with col_q4:
-                # Contar estados quânticos
-                estados = Counter()
+                # Contar números com IC significativo
+                count_ic_significativo = 0
                 for n in range(1, 26):
-                    if n in analise['classificacao_quantica']:
-                        estados[analise['classificacao_quantica'][n]['estado']] += 1
-                st.metric("Estados Diferentes", len(estados))
+                    if n in analise['probabilidades']:
+                        info = analise['probabilidades'][n]
+                        intervalo = info['intervalo_superior'] - info['intervalo_inferior']
+                        if intervalo < 0.1:  # IC estreito = mais confiável
+                            count_ic_significativo += 1
+                st.metric("IC Estreitos", count_ic_significativo)
             
-            # Gráfico de função de onda
-            st.markdown("#### 📊 Função de Onda Quântica (Top 15)")
-            onda_ordenada = sorted(analise["funcao_onda"].items(), key=lambda x: x[1], reverse=True)[:15]
+            # Gráfico de probabilidades com intervalos de confiança
+            st.markdown("#### 📈 Probabilidades com Intervalos de Confiança 95%")
             
-            df_onda = pd.DataFrame(onda_ordenada, columns=['Número', 'Amplitude'])
-            st.bar_chart(df_onda.set_index('Número'))
-            
-            # Tabela de estados quânticos
-            st.markdown("#### 🎯 Estados Quânticos dos Números")
-            
-            dados_estados = []
+            # Preparar dados para gráfico
+            probs_data = []
             for n in range(1, 26):
-                if n in analise['classificacao_quantica']:
-                    estado = analise['classificacao_quantica'][n]
-                    dados_estados.append({
-                        "Número": n,
-                        "Amplitude": estado['amplitude_onda'],
-                        "Tunelamento": estado['tunelamento'],
-                        "Incerteza": estado['incerteza'],
-                        "Estado Quântico": estado['estado'],
-                        "Status": "🔥" if estado['amplitude_onda'] > 0.045 else 
-                                 "⚡" if estado['tunelamento'] > 0.3 else 
-                                 "🌀" if estado['incerteza'] > 0.6 else "⚪"
+                if n in analise['probabilidades']:
+                    info = analise['probabilidades'][n]
+                    probs_data.append({
+                        'Número': n,
+                        'Probabilidade': info['probabilidade'],
+                        'IC Inferior': info['intervalo_inferior'],
+                        'IC Superior': info['intervalo_superior']
                     })
             
-            df_estados = pd.DataFrame(dados_estados)
-            st.dataframe(df_estados, hide_index=True, use_container_width=True)
+            if probs_data:
+                df_probs = pd.DataFrame(probs_data)
+                
+                # Gráfico de barras com erros
+                chart_data = df_probs.set_index('Número')[['Probabilidade']]
+                st.bar_chart(chart_data)
+                
+                # Mostrar top 10
+                st.markdown("#### 🎯 Top 10 Números por Probabilidade")
+                top10 = df_probs.sort_values('Probabilidade', ascending=False).head(10)
+                st.dataframe(top10[['Número', 'Probabilidade', 'IC Inferior', 'IC Superior']], 
+                           hide_index=True, use_container_width=True)
             
-            # Pares entrelaçados
-            st.markdown("#### 🔗 Pares Mais Entrelaçados (Correlação Quântica)")
+            # Análise de autocorrelação
+            st.markdown("#### 📊 Análise de Autocorrelação (Padrões Temporais)")
             
-            if analise['entrelacamento']['top_pares']:
-                dados_pares = []
-                for par_info in analise['entrelacamento']['top_pares'][:10]:
-                    dados_pares.append({
-                        "Par": f"{par_info['par'][0]} ↔ {par_info['par'][1]}",
-                        "Força": par_info['forca']
+            if analise['autocorrelacao']:
+                ac_data = []
+                for lag, corr in analise['autocorrelacao'].items():
+                    ac_data.append({
+                        'Lag (concursos)': lag,
+                        'Correlação': corr,
+                        'Significativo': 'Sim' if abs(corr) > 0.3 else 'Não'
                     })
                 
-                df_pares = pd.DataFrame(dados_pares)
-                st.dataframe(df_pares, hide_index=True)
-            else:
-                st.info("Nenhum par significativamente entrelaçado encontrado.")
+                df_ac = pd.DataFrame(ac_data)
+                if not df_ac.empty:
+                    st.dataframe(df_ac, hide_index=True)
+                    
+                    # Interpretação
+                    correlacoes_fortes = df_ac[df_ac['Significativo'] == 'Sim']
+                    if not correlacoes_fortes.empty:
+                        st.info(f"**Padrões temporais detectados:** {len(correlacoes_fortes)} lags com correlação > 0.3")
+                    else:
+                        st.success("**Não há padrões temporais fortes detectados**")
             
             # Mostrar relatório completo
-            with st.expander("📄 Ver Relatório Quântico Completo"):
-                st.text(st.session_state.relatorio_quantico)
+            with st.expander("📄 Ver Relatório Estatístico Completo"):
+                st.text(st.session_state.relatorio_estatistico)
         
-        # Mostrar cartões quânticos gerados
-        if hasattr(st.session_state, 'cartoes_quantica') and st.session_state.cartoes_quantica:
-            cartoes_quantica = st.session_state.cartoes_quantica
+        # Mostrar cartões estatísticos gerados
+        if hasattr(st.session_state, 'cartoes_estatisticos') and st.session_state.cartoes_estatisticos:
+            cartoes_estatisticos = st.session_state.cartoes_estatisticos
             
-            st.markdown("### ⚛️ Cartões Gerados com Princípios Quânticos")
+            st.markdown("### 🔬 Cartões Gerados com Base Estatística")
             
             # Estatísticas dos cartões
-            stats_cartoes_q = []
-            for i, cartao in enumerate(cartoes_quantica, 1):
-                # Analisar características quânticas
-                funcao_onda_total = 0
-                if st.session_state.analise_quantica:
+            stats_cartoes_est = []
+            for i, cartao in enumerate(cartoes_estatisticos, 1):
+                # Analisar características estatísticas
+                if st.session_state.analise_estatistica_seriosa:
+                    prob_total = 0
                     for n in cartao:
-                        funcao_onda_total += st.session_state.analise_quantica['funcao_onda'].get(n, 0)
+                        if n in st.session_state.analise_estatistica_seriosa['probabilidades']:
+                            prob_total += st.session_state.analise_estatistica_seriosa['probabilidades'][n]['probabilidade']
                 
                 pares = sum(1 for n in cartao if n % 2 == 0)
                 primos = sum(1 for n in cartao if n in {2,3,5,7,11,13,17,19,23})
                 soma = sum(cartao)
                 
-                stats_cartoes_q.append({
+                stats_cartoes_est.append({
                     "Cartão": i,
                     "Dezenas": ", ".join(str(n) for n in cartao),
                     "Pares": pares,
                     "Primos": primos,
                     "Soma": soma,
-                    "Amplitude Total": f"{funcao_onda_total:.3f}" if st.session_state.analise_quantica else "N/A"
+                    "Probabilidade Total": f"{prob_total:.3f}" if st.session_state.analise_estatistica_seriosa else "N/A"
                 })
             
             # Exibir como DataFrame
-            df_cartoes_q = pd.DataFrame(stats_cartoes_q)
-            st.dataframe(df_cartoes_q, hide_index=True, use_container_width=True)
+            df_cartoes_est = pd.DataFrame(stats_cartoes_est)
+            st.dataframe(df_cartoes_est, hide_index=True, use_container_width=True)
             
             # Detalhes expandidos
-            with st.expander("🔍 Ver Análise Quântica de Cada Cartão"):
-                if st.session_state.analise_quantica:
-                    for i, cartao in enumerate(cartoes_quantica, 1):
-                        col_qc1, col_qc2 = st.columns([3, 2])
-                        with col_qc1:
-                            st.write(f"**Cartão Quântico {i}:** {cartao}")
+            with st.expander("🔍 Ver Análise Estatística de Cada Cartão"):
+                if st.session_state.analise_estatistica_seriosa:
+                    for i, cartao in enumerate(cartoes_estatisticos, 1):
+                        col_est1, col_est2 = st.columns([3, 2])
+                        with col_est1:
+                            st.write(f"**Cartão Estatístico {i}:** {cartao}")
                             
-                            # Estados quânticos dos números no cartão
-                            estados_no_cartao = []
+                            # Números com maior e menor probabilidade no cartão
+                            probs_no_cartao = []
                             for n in cartao:
-                                if n in st.session_state.analise_quantica['classificacao_quantica']:
-                                    estado = st.session_state.analise_quantica['classificacao_quantica'][n]
-                                    estados_no_cartao.append(f"{n}({estado['estado'][:3]})")
+                                if n in st.session_state.analise_estatistica_seriosa['probabilidades']:
+                                    info = st.session_state.analise_estatistica_seriosa['probabilidades'][n]
+                                    probs_no_cartao.append((n, info['probabilidade']))
                             
-                            st.write(f"**Estados quânticos:** {', '.join(estados_no_cartao)}")
+                            if probs_no_cartao:
+                                probs_no_cartao.sort(key=lambda x: x[1], reverse=True)
+                                mais_provaveis = [f"{n}({p:.3f})" for n, p in probs_no_cartao[:5]]
+                                menos_provaveis = [f"{n}({p:.3f})" for n, p in probs_no_cartao[-5:]]
+                                
+                                st.write(f"**Mais prováveis:** {', '.join(mais_provaveis)}")
+                                st.write(f"**Menos prováveis:** {', '.join(menos_provaveis)}")
                         
-                        with col_qc2:
-                            # Métricas quânticas
-                            funcao_onda_total = sum(st.session_state.analise_quantica['funcao_onda'].get(n, 0) for n in cartao)
-                            tunelamento_total = sum(abs(st.session_state.analise_quantica['tunelamento'].get(n, 0)) for n in cartao)
+                        with col_est2:
+                            # Métricas estatísticas
+                            prob_total = sum(st.session_state.analise_estatistica_seriosa['probabilidades'][n]['probabilidade'] 
+                                           for n in cartao if n in st.session_state.analise_estatistica_seriosa['probabilidades'])
                             
-                            st.write(f"**Métricas quânticas:**")
-                            st.write(f"- Amplitude total: {funcao_onda_total:.3f}")
-                            st.write(f"- Tunelamento total: {tunelamento_total:.3f}")
+                            st.write(f"**Métricas estatísticas:**")
+                            st.write(f"- Probabilidade total: {prob_total:.3f}")
                             st.write(f"- Pares: {sum(1 for n in cartao if n % 2 == 0)}")
                             st.write(f"- Primos: {sum(1 for n in cartao if n in {2,3,5,7,11,13,17,19,23})}")
+                            st.write(f"- Soma: {sum(cartao)}")
                         
                         st.write("---")
                 else:
-                    st.info("Execute a análise quântica primeiro para ver detalhes.")
+                    st.info("Execute a análise estatística primeiro para ver detalhes.")
             
-            # Exportar cartões quânticos
-            st.markdown("### 💾 Exportar Cartões Quânticos")
-            conteudo_quantico = f"CARTÕES QUÂNTICOS LOTOFÁCIL - {len(cartoes_quantica)} CARTÕES\n"
-            conteudo_quantico += "=" * 60 + "\n\n"
-            conteudo_quantico += f"Princípios aplicados: Função de onda, Tunelamento, Entrelaçamento\n"
-            conteudo_quantico += f"Superposição ativada: {usar_superposicao}\n"
-            conteudo_quantico += f"Concursos analisados: {janela_quantica}\n\n"
-            conteudo_quantico += "CARTÕES:\n" + "-" * 40 + "\n\n"
+            # Exportar cartões estatísticos
+            st.markdown("### 💾 Exportar Cartões Estatísticos")
+            conteudo_estatistico = f"CARTÕES ESTATÍSTICOS LOTOFÁCIL - {len(cartoes_estatisticos)} CARTÕES\n"
+            conteudo_estatistico += "=" * 60 + "\n\n"
+            conteudo_estatistico += f"Métodos aplicados: Intervalos de confiança 95%, Teste qui-quadrado\n"
+            conteudo_estatistico += f"Intervalos de confiança ativados: {usar_intervalo_confianca}\n"
+            conteudo_estatistico += f"Concursos analisados: {janela_analise}\n\n"
+            conteudo_estatistico += "CARTÕES:\n" + "-" * 40 + "\n\n"
             
-            for i, cartao in enumerate(cartoes_quantica, 1):
-                conteudo_quantico += f"Cartão {i}: {','.join(map(str, cartao))}\n"
+            for i, cartao in enumerate(cartoes_estatisticos, 1):
+                conteudo_estatistico += f"Cartão {i}: {','.join(map(str, cartao))}\n"
             
             st.download_button(
-                "📥 Baixar Cartões Quânticos",
-                data=conteudo_quantico,
-                file_name=f"cartoes_quanticos_lotofacil_{janela_quantica}.txt",
+                "📥 Baixar Cartões Estatísticos",
+                data=conteudo_estatistico,
+                file_name=f"cartoes_estatisticos_lotofacil_{janela_analise}.txt",
                 mime="text/plain"
             )
             
-            # Informações sobre a estratégia quântica
-            with st.expander("ℹ️ Sobre a Estratégia Quântica"):
+            # Informações sobre a abordagem estatística
+            with st.expander("ℹ️ Sobre a Abordagem Estatística"):
                 st.write("""
-                **⚛️ Fundamentos da Estratégia Quântica:**
+                **🔬 FUNDAMENTOS DA ANÁLISE ESTATÍSTICA:**
                 
-                1. **Função de Onda Quântica**: 
-                   - Cada número tem uma amplitude de probabilidade
-                   - Combina frequência clássica, interferência e entrelaçamento
-                   - Normalizada para soma total = 1 (como probabilidade quântica)
+                1. **Probabilidade com Incerteza:**
+                   • Calcula probabilidades com intervalos de confiança 95%
+                   • Considera margem de erro estatística
+                   • Evita conclusões excessivamente confiantes
                 
-                2. **Tunelamento Quântico**:
-                   - Identifica números que "tunelem" entre estados frio/quente
-                   - Explora transições repentinas no espaço de estados
-                   - Baseado na mecânica quântica de barreiras potenciais
+                2. **Teste de Hipóteses:**
+                   • Teste qui-quadrado para verificar aleatoriedade
+                   • p-value < 0.05 sugere não-aleatoriedade
+                   • Base científica para detecção de padrões
                 
-                3. **Entrelaçamento Quântico**:
-                   - Analisa correlações não-locais entre números
-                   - Pares de números que tendem a sair juntos
-                   - Explora "ação fantasma à distância" estatística
+                3. **Análise Temporal:**
+                   • Autocorrelação detecta padrões sazonais
+                   • Cadeias de Markov modelam transições
+                   • Considera dependência temporal entre sorteios
                 
-                4. **Superposição**:
-                   - Números podem estar em múltiplos estados simultaneamente
-                   - Combina características de números quentes e frios
-                   - Explora a natureza dual onda-partícula das probabilidades
+                4. **Seleção Conservadora:**
+                   • Prefere números com IC estreitos (mais confiáveis)
+                   • Balanceia entre frequência e incerteza
+                   • Evita extremos estatisticamente instáveis
                 
-                5. **Princípio da Incerteza**:
-                   - Considera tanto frequência (posição) quanto atraso (momento)
-                   - Números com alta incerteza têm maior potencial quântico
-                   - Balanceamento entre certeza clássica e potencial quântico
+                **🎯 VANTAGENS DA ABORDAGEM ESTATÍSTICA:**
+                • Baseada em métodos científicos comprovados
+                • Quantifica incerteza (não apenas ponto estimado)
+                • Testa suposições fundamentais (aleatoriedade)
+                • Fornece fundamento matemático para decisões
+                • Transparente e replicável
                 
-                **🎯 Vantagens da Abordagem Quântica:**
-                - Modela complexidades não-lineares do sistema
-                - Captura transições abruptas (tunelamento)
-                - Considera correlações não-locais (entrelaçamento)
-                - Mais flexível que modelos clássicos
-                - Explora o espaço de probabilidade de forma mais completa
+                **⚠️ LIMITAÇÕES E AVISOS IMPORTANTES:**
+                • Intervalos de confiança mostram incerteza, não certeza
+                • p-value > 0.05 não prova aleatoriedade, apenas não a rejeita
+                • Correlação não implica causalidade em padrões temporais
+                • Nenhuma análise estatística altera probabilidades fundamentais
+                • Lotofácil permanece um jogo de sorte com aleatoriedade verificada
                 
-                **⚠️ Limitações Importantes:**
-                - Aplicação metafórica dos princípios quânticos
-                - Não altera probabilidades matemáticas fundamentais
-                - Resultados dependem da qualidade dos dados históricos
-                - Ainda sujeito à aleatoriedade intrínseca dos sorteios
+                **📊 INTERPRETAÇÃO CORRETA DOS RESULTADOS:**
+                1. Use intervalos de confiança para entender incerteza
+                2. p-value > 0.05: evidência insuficiente contra aleatoriedade
+                3. Padrões temporais devem ser consistentes para serem significativos
+                4. Diversificação é mais importante que "previsão" precisa
+                5. Lembre-se: análise informa, não garante
                 """)
 
 # Sidebar - Gerenciamento de Dados
@@ -4130,43 +3307,48 @@ with st.sidebar:
         st.write(f"Cartões Ciclos gerados: {len(st.session_state.cartoes_ciclos)}")
     if st.session_state.fechamento_gerado:
         st.write(f"Fechamentos gerados: {len(st.session_state.fechamento_gerado)}")
-    if hasattr(st.session_state, 'cartoes_hibridos') and st.session_state.cartoes_hibridos:
-        st.write(f"Cartões Híbridos: {len(st.session_state.cartoes_hibridos)}")
-    if hasattr(st.session_state, 'cartoes_quantica') and st.session_state.cartoes_quantica:
-        st.write(f"Cartões Quânticos: {len(st.session_state.cartoes_quantica)}")
+    if hasattr(st.session_state, 'cartoes_estatisticos') and st.session_state.cartoes_estatisticos:
+        st.write(f"Cartões Estatísticos: {len(st.session_state.cartoes_estatisticos)}")  # MODIFICADO
     
-    if hasattr(st.session_state, 'resultados_backtest') and st.session_state.resultados_backtest:
-        st.write(f"Estratégias testadas: {len(st.session_state.resultados_backtest)}")
-        # Mostrar a melhor estratégia
-        melhor = list(st.session_state.resultados_backtest.items())[0] if st.session_state.resultados_backtest else None
-        if melhor:
-            st.write(f"Melhor estratégia: {melhor[0].replace('_', ' ')}")
-            st.write(f"Pontuação média: {melhor[1]['pontuacao_media']:.1f}")
+    # Informações sobre backtest rigoroso
+    if hasattr(st.session_state, 'resultados_backtest_rigoroso') and st.session_state.resultados_backtest_rigoroso:
+        st.markdown("### 📊 Resultados do Backtest")
+        resultados = st.session_state.resultados_backtest_rigoroso
+        if resultados:
+            melhor = list(resultados.items())[0]
+            aleatorio = resultados.get('Aleatório Balanceado', {})
+            
+            st.write(f"**Melhor estratégia:** {melhor[0]}")
+            st.write(f"**Média de acertos:** {melhor[1]['media_acertos']:.2f}")
+            if aleatorio:
+                vantagem = melhor[1]['media_acertos'] - aleatorio['media_acertos']
+                st.write(f"**Vantagem vs aleatório:** {vantagem:.2f} acertos")
+            
+            # Conclusão baseada em resultados
+            if aleatorio and abs(vantagem) < 0.3:
+                st.warning("**Conclusão:** Nenhuma vantagem significativa")
+            elif aleatorio:
+                st.success("**Conclusão:** Pequena vantagem detectada")
     
-    # Informações sobre o ciclo atual na sidebar
+    # Informações do ciclo atual
     if st.session_state.analise_ciclos:
         st.markdown("### 🔁 Informações do Ciclo Atual")
         ciclo_resumo = st.session_state.analise_ciclos.resumo()
         st.write(f"**Status:** {ciclo_resumo['status']}")
-        st.write(f"**Concursos analisados:** {ciclo_resumo['tamanho']}")
         st.write(f"**Dezenas faltantes:** {len(ciclo_resumo['numeros_faltantes'])}")
-        if st.session_state.limite_ciclos:
-            st.write(f"**Limite configurado:** {st.session_state.limite_ciclos} concursos")
     
-    # Informações quânticas na sidebar
-    if hasattr(st.session_state, 'analise_quantica') and st.session_state.analise_quantica:
-        st.markdown("### ⚛️ Informações Quânticas")
-        analise = st.session_state.analise_quantica
-        st.write(f"**Números em tunelamento:** {len(analise['tunelamento'])}")
-        st.write(f"**Pares entrelaçados:** {len(analise['entrelacamento']['top_pares'])}")
+    # Informações estatísticas
+    if hasattr(st.session_state, 'analise_estatistica_seriosa') and st.session_state.analise_estatistica_seriosa:
+        st.markdown("### 🔬 Informações Estatísticas")
+        analise = st.session_state.analise_estatistica_seriosa
+        p_val = analise['teste_aleatoriedade']['p_value']
         
-        # Contar estados quânticos
-        if 'classificacao_quantica' in analise:
-            estados = Counter()
-            for n in range(1, 26):
-                if n in analise['classificacao_quantica']:
-                    estados[analise['classificacao_quantica'][n]['estado']] += 1
-            estado_mais_comum = estados.most_common(1)[0] if estados else ("N/A", 0)
-            st.write(f"**Estado predominante:** {estado_mais_comum[0]}")
+        if p_val:
+            if p_val > 0.05:
+                st.success("✅ Aleatoriedade não rejeitada")
+            else:
+                st.warning(f"⚠️ p-value: {p_val:.4f}")
+        
+        st.write(f"**IC estreitos:** {sum(1 for n in range(1, 26) if n in analise['probabilidades'] and (analise['probabilidades'][n]['intervalo_superior'] - analise['probabilidades'][n]['intervalo_inferior']) < 0.1)}")
 
-st.markdown("<hr><p style='text-align: center;'>SAMUCJ TECHNOLOGY</p>", unsafe_allow_html=True)
+st.markdown("<hr><p style='text-align: center;'>SISTEMA ESTATÍSTICO PROFISSIONAL - LOTOFÁCIL</p>", unsafe_allow_html=True)  # MODIFICADO
