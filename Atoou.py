@@ -2268,30 +2268,7 @@ def gerar_poster_gols_ht(jogos_ht, config):
 # =============================
 # Funções de Geração de Posters - VERSÃO ATUALIZADA COM NOVAS ANÁLISES
 # =============================
-def criar_fonte(tamanho: int) -> ImageFont.ImageFont:
-    """Cria fonte com fallback robusto - VERSÃO CORRIGIDA"""
-    try:
-        # Tentar fontes do sistema
-        font_paths = [
-            "arial.ttf", "Arial.ttf", "arialbd.ttf",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "/System/Library/Fonts/Arial.ttf",
-            "C:/Windows/Fonts/arial.ttf"
-        ]
-        
-        for font_path in font_paths:
-            try:
-                if os.path.exists(font_path):
-                    return ImageFont.truetype(font_path, tamanho)
-            except Exception:
-                continue
-        
-        # Fallback para fonte padrão do PIL
-        return ImageFont.load_default()
-        
-    except Exception as e:
-        logging.error(f"Erro ao carregar fonte: {e}")
-        return ImageFont.load_default()
+
 
 def gerar_poster_individual_westham(fixture: dict, analise: dict) -> io.BytesIO:
     """
