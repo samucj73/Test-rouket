@@ -1543,6 +1543,324 @@ def calcular_tendencia_completa(home: str, away: str, classificacao: dict) -> di
     }
 
 # =============================
+# NOVAS FUNÇÕES: Processamento específico por tipo de análise
+# =============================
+
+def filtrar_por_tipo_analise(jogos, tipo_analise, config):
+    """Filtra jogos baseado no tipo de análise selecionado"""
+    jogos_filtrados = []
+    
+    if tipo_analise == "Over/Under de Gols":
+        min_conf = config.get("min_conf", 70)
+        max_conf = config.get("max_conf", 95)
+        tipo_filtro = config.get("tipo_filtro", "Todos")
+        
+        # Filtrar por intervalo de confiança e tipo
+        jogos_filtrados = [
+            j for j in jogos
+            if min_conf <= j["confianca"] <= max_conf and 
+            j["status"] not in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"]
+        ]
+        
+        # Aplicar filtro por tipo
+        if tipo_filtro == "Apenas Over":
+            jogos_filtrados = [j for j in jogos_filtrados if j["tipo_aposta"] == "over"]
+        elif tipo_filtro == "Apenas Under":
+            jogos_filtrados = [j for j in jogos_filtrados if j["tipo_aposta"] == "under"]
+    
+    elif tipo_analise == "Favorito (Vitória)":
+        min_conf_vitoria = config.get("min_conf_vitoria", 65)
+        filtro_favorito = config.get("filtro_favorito", "Todos")
+        
+        for jogo in jogos:
+            if 'detalhes' in jogo and 'vitoria' in jogo['detalhes']:
+                vitoria_data = jogo['detalhes']['vitoria']
+                confianca_vitoria = vitoria_data['confianca_vitoria']
+                favorito = vitoria_data['favorito']
+                
+                # Verificar confiança mínima
+                if confianca_vitoria >= min_conf_vitoria:
+                    # Aplicar filtro de favorito
+                    if (filtro_favorito == "Todos" or
+                        (filtro_favorito == "Casa" and favorito == "home") or
+                        (filtro_favorito == "Fora" and favorito == "away") or
+                        (filtro_favorito == "Empate" and favorito == "draw")):
+                        
+                        # Adicionar informações específicas de favorito
+                        jogo['tipo_alerta'] = 'favorito'
+                        jogo['confianca_vitoria'] = confianca_vitoria
+                        jogo['favorito'] = favorito
+                        jogo['prob_vitoria'] = vitoria_data[f'{favorito}_win'] if favorito != 'draw' else vitoria_data['draw']
+                        
+                        jogos_filtrados.append(jogo)
+    
+    elif tipo_analise == "Gols HT (Primeiro Tempo)":
+        min_conf_ht = config.get("min_conf_ht", 60)
+        tipo_ht = config.get("tipo_ht", "OVER 0.5 HT")
+        
+        for jogo in jogos:
+            if 'detalhes' in jogo and 'gols_ht' in jogo['detalhes']:
+                ht_data = jogo['detalhes']['gols_ht']
+                confianca_ht = ht_data['confianca_ht']
+                tendencia_ht = ht_data['tendencia_ht']
+                
+                # Verificar se a tendência HT corresponde ao tipo selecionado
+                if (confianca_ht >= min_conf_ht and 
+                    (tipo_ht == "Todos" or tendencia_ht == tipo_ht)):
+                    
+                    # Adicionar informações específicas de HT
+                    jogo['tipo_alerta'] = 'ht'
+                    jogo['confianca_ht'] = confianca_ht
+                    jogo['tendencia_ht'] = tendencia_ht
+                    jogo['estimativa_ht'] = ht_data['estimativa_total_ht']
+                    
+                    jogos_filtrados.append(jogo)
+    
+    return jogos_filtrados
+
+# =============================
+# NOVAS FUNÇÕES: Geradores de poster específicos
+# =============================
+
+def gerar_poster_favorito(jogos_favorito, config):
+    """Gera poster específico para alertas de Favorito (Vitória)"""
+    # Configurações
+    LARGURA = 1800
+    ALTURA = 1350
+    PADDING = 80
+
+    # Criar canvas
+    img = Image.new("RGB", (LARGURA, ALTURA), color=(10, 20, 30))
+    draw = ImageDraw.Draw(img)
+
+    # Carregar fontes
+    FONTE_TITULO = criar_fonte(80)
+    FONTE_SUBTITULO = criar_fonte(60)
+    FONTE_TIMES = criar_fonte(55)
+    FONTE_VS = criar_fonte(45)
+    FONTE_INFO = criar_fonte(40)
+    FONTE_DETALHES = criar_fonte(45)
+    FONTE_ANALISE = criar_fonte(50)
+    FONTE_ALERTA = criar_fonte(70)
+    FONTE_ESTATISTICAS = criar_fonte(35)
+    FONTE_SECTION = criar_fonte(55)
+
+    # Título PRINCIPAL - ALERTA DE FAVORITO
+    titulo_text = "🏆 ALERTA DE FAVORITO (VITÓRIA)"
+    try:
+        titulo_bbox = draw.textbbox((0, 0), titulo_text, font=FONTE_ALERTA)
+        titulo_w = titulo_bbox[2] - titulo_bbox[0]
+        draw.text(((LARGURA - titulo_w) // 2, 60), titulo_text, font=FONTE_ALERTA, fill=(255, 215, 0))
+    except:
+        draw.text((LARGURA//2 - 200, 60), titulo_text, font=FONTE_ALERTA, fill=(255, 215, 0))
+
+    # Linha decorativa
+    draw.line([(LARGURA//4, 150), (3*LARGURA//4, 150)], fill=(255, 215, 0), width=4)
+
+    # Informações gerais
+    min_conf_vitoria = config.get("min_conf_vitoria", 65)
+    filtro_favorito = config.get("filtro_favorito", "Todos")
+    
+    subtitulo = f"Confiança Mínima: {min_conf_vitoria}% | Filtro: {filtro_favorito}"
+    try:
+        sub_bbox = draw.textbbox((0, 0), subtitulo, font=FONTE_SUBTITULO)
+        sub_w = sub_bbox[2] - sub_bbox[0]
+        draw.text(((LARGURA - sub_w) // 2, 180), subtitulo, font=FONTE_SUBTITULO, fill=(200, 200, 200))
+    except:
+        draw.text((LARGURA//2 - 150, 180), subtitulo, font=FONTE_SUBTITULO, fill=(200, 200, 200))
+
+    y_pos = 280
+
+    for idx, jogo in enumerate(jogos_favorito):
+        if idx >= 5:  # Limitar a 5 jogos por poster
+            break
+            
+        # Caixa do jogo
+        x0, y0 = PADDING, y_pos
+        x1, y1 = LARGURA - PADDING, y_pos + 200
+        
+        # Cor baseada no favorito
+        if jogo['favorito'] == "home":
+            cor_borda = (76, 175, 80)  # Verde para casa
+        elif jogo['favorito'] == "away":
+            cor_borda = (33, 150, 243)  # Azul para fora
+        else:
+            cor_borda = (255, 193, 7)  # Amarelo para empate
+        
+        draw.rectangle([x0, y0, x1, y1], fill=(25, 35, 45), outline=cor_borda, width=3)
+        
+        # Nome da liga
+        liga_text = jogo['liga'][:30].upper()
+        draw.text((x0 + 20, y0 + 20), liga_text, font=FONTE_INFO, fill=(180, 200, 220))
+        
+        # Times
+        home = jogo['home'][:20]
+        away = jogo['away'][:20]
+        
+        draw.text((x0 + 50, y0 + 70), home, font=FONTE_TIMES, fill=(255, 255, 255))
+        draw.text((x1 - 250, y0 + 70), away, font=FONTE_TIMES, fill=(255, 255, 255))
+        
+        # VS
+        draw.text(((LARGURA - 50) // 2, y0 + 70), "VS", font=FONTE_VS, fill=(255, 215, 0))
+        
+        # Informações de favorito
+        favorito_emoji = "🏠" if jogo['favorito'] == "home" else "✈️" if jogo['favorito'] == "away" else "🤝"
+        favorito_text = f"{favorito_emoji} FAVORITO: {jogo['prob_vitoria']}% | Confiança: {jogo['confianca_vitoria']:.1f}%"
+        
+        draw.text((x0 + 50, y0 + 130), favorito_text, font=FONTE_DETALHES, fill=cor_borda)
+        
+        # Data e hora
+        if isinstance(jogo["hora"], datetime):
+            hora_text = jogo["hora"].strftime("%d/%m/%Y %H:%M")
+        else:
+            hora_text = str(jogo["hora"])
+        
+        draw.text((x1 - 300, y0 + 130), hora_text, font=FONTE_INFO, fill=(150, 200, 255))
+        
+        y_pos += 220
+
+    # Rodapé
+    rodape_text = f"ELITE MASTER SYSTEM • Análise de Favoritos • {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+    try:
+        rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_INFO)
+        rodape_w = rodape_bbox[2] - rodape_bbox[0]
+        draw.text(((LARGURA - rodape_w) // 2, ALTURA - 60), rodape_text, font=FONTE_INFO, fill=(100, 130, 160))
+    except:
+        draw.text((LARGURA//2 - 150, ALTURA - 60), rodape_text, font=FONTE_INFO, fill=(100, 130, 160))
+
+    # Salvar imagem
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG", optimize=True, quality=95)
+    buffer.seek(0)
+    
+    return buffer
+
+def gerar_poster_gols_ht(jogos_ht, config):
+    """Gera poster específico para alertas de Gols HT (Primeiro Tempo)"""
+    # Configurações
+    LARGURA = 1800
+    ALTURA = 1350
+    PADDING = 80
+
+    # Criar canvas
+    img = Image.new("RGB", (LARGURA, ALTURA), color=(10, 20, 30))
+    draw = ImageDraw.Draw(img)
+
+    # Carregar fontes
+    FONTE_TITULO = criar_fonte(80)
+    FONTE_SUBTITULO = criar_fonte(60)
+    FONTE_TIMES = criar_fonte(55)
+    FONTE_VS = criar_fonte(45)
+    FONTE_INFO = criar_fonte(40)
+    FONTE_DETALHES = criar_fonte(45)
+    FONTE_ANALISE = criar_fonte(50)
+    FONTE_ALERTA = criar_fonte(70)
+    FONTE_ESTATISTICAS = criar_fonte(35)
+    FONTE_SECTION = criar_fonte(55)
+
+    # Título PRINCIPAL - ALERTA DE GOLS HT
+    titulo_text = "⏰ ALERTA DE GOLS NO PRIMEIRO TEMPO (HT)"
+    try:
+        titulo_bbox = draw.textbbox((0, 0), titulo_text, font=FONTE_ALERTA)
+        titulo_w = titulo_bbox[2] - titulo_bbox[0]
+        draw.text(((LARGURA - titulo_w) // 2, 60), titulo_text, font=FONTE_ALERTA, fill=(100, 200, 255))
+    except:
+        draw.text((LARGURA//2 - 200, 60), titulo_text, font=FONTE_ALERTA, fill=(100, 200, 255))
+
+    # Linha decorativa
+    draw.line([(LARGURA//4, 150), (3*LARGURA//4, 150)], fill=(100, 200, 255), width=4)
+
+    # Informações gerais
+    min_conf_ht = config.get("min_conf_ht", 60)
+    tipo_ht = config.get("tipo_ht", "OVER 0.5 HT")
+    
+    subtitulo = f"Confiança Mínima: {min_conf_ht}% | Tipo: {tipo_ht}"
+    try:
+        sub_bbox = draw.textbbox((0, 0), subtitulo, font=FONTE_SUBTITULO)
+        sub_w = sub_bbox[2] - sub_bbox[0]
+        draw.text(((LARGURA - sub_w) // 2, 180), subtitulo, font=FONTE_SUBTITULO, fill=(200, 200, 200))
+    except:
+        draw.text((LARGURA//2 - 150, 180), subtitulo, font=FONTE_SUBTITULO, fill=(200, 200, 200))
+
+    y_pos = 280
+
+    for idx, jogo in enumerate(jogos_ht):
+        if idx >= 5:  # Limitar a 5 jogos por poster
+            break
+            
+        # Caixa do jogo
+        x0, y0 = PADDING, y_pos
+        x1, y1 = LARGURA - PADDING, y_pos + 200
+        
+        # Cor baseada no tipo de HT
+        if "OVER" in jogo['tendencia_ht']:
+            cor_borda = (76, 175, 80)  # Verde para OVER
+        else:
+            cor_borda = (255, 87, 34)  # Laranja para UNDER
+        
+        draw.rectangle([x0, y0, x1, y1], fill=(25, 35, 45), outline=cor_borda, width=3)
+        
+        # Nome da liga
+        liga_text = jogo['liga'][:30].upper()
+        draw.text((x0 + 20, y0 + 20), liga_text, font=FONTE_INFO, fill=(180, 200, 220))
+        
+        # Times
+        home = jogo['home'][:20]
+        away = jogo['away'][:20]
+        
+        draw.text((x0 + 50, y0 + 70), home, font=FONTE_TIMES, fill=(255, 255, 255))
+        draw.text((x1 - 250, y0 + 70), away, font=FONTE_TIMES, fill=(255, 255, 255))
+        
+        # VS
+        draw.text(((LARGURA - 50) // 2, y0 + 70), "VS", font=FONTE_VS, fill=(255, 215, 0))
+        
+        # Informações de HT
+        ht_emoji = "📈" if "OVER" in jogo['tendencia_ht'] else "📉"
+        ht_text = f"{ht_emoji} {jogo['tendencia_ht']} | Estimativa: {jogo['estimativa_ht']:.2f} gols | Confiança: {jogo['confianca_ht']:.1f}%"
+        
+        draw.text((x0 + 50, y0 + 130), ht_text, font=FONTE_DETALHES, fill=cor_borda)
+        
+        # Data e hora
+        if isinstance(jogo["hora"], datetime):
+            hora_text = jogo["hora"].strftime("%d/%m/%Y %H:%M")
+        else:
+            hora_text = str(jogo["hora"])
+        
+        draw.text((x1 - 300, y0 + 130), hora_text, font=FONTE_INFO, fill=(150, 200, 255))
+        
+        y_pos += 220
+
+    # Rodapé
+    rodape_text = f"ELITE MASTER SYSTEM • Análise HT • {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+    try:
+        rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_INFO)
+        rodape_w = rodape_bbox[2] - rodape_bbox[0]
+        draw.text(((LARGURA - rodape_w) // 2, ALTURA - 60), rodape_text, font=FONTE_INFO, fill=(100, 130, 160))
+    except:
+        draw.text((LARGURA//2 - 150, ALTURA - 60), rodape_text, font=FONTE_INFO, fill=(100, 130, 160))
+
+    # Salvar imagem
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG", optimize=True, quality=95)
+    buffer.seek(0)
+    
+    return buffer
+
+def gerar_poster_por_tipo(jogos, tipo_analise, config):
+    """Gera poster específico para cada tipo de análise"""
+    if tipo_analise == "Over/Under de Gols":
+        # Usar função existente de poster Over/Under
+        min_conf = config.get("min_conf", 70)
+        max_conf = config.get("max_conf", 95)
+        return gerar_poster_westham_style(jogos, titulo=f"ALERTA OVER/UNDER - {min_conf}%-{max_conf}%")
+    
+    elif tipo_analise == "Favorito (Vitória)":
+        return gerar_poster_favorito(jogos, config)
+    
+    elif tipo_analise == "Gols HT (Primeiro Tempo)":
+        return gerar_poster_gols_ht(jogos, config)
+
+# =============================
 # Funções de Geração de Posters - VERSÃO ATUALIZADA COM NOVAS ANÁLISES
 # =============================
 def criar_fonte(tamanho: int) -> ImageFont.ImageFont:
@@ -1604,7 +1922,7 @@ def gerar_poster_individual_westham(fixture: dict, analise: dict) -> io.BytesIO:
         cor_titulo = (255, 215, 0) if analise["tipo_aposta"] == "over" else (100, 200, 255)
         draw.text(((LARGURA - titulo_w) // 2, 60), titulo_text, font=FONTE_ALERTA, fill=cor_titulo)
     except:
-        draw.text((LARGURA//2 - 200, 60), titulo_text, font=FONTE_ALERTA, fill=(255, 215, 0))
+        draw.text((LARGURA//2 - 200, 60), titulo_text, font=FONTE_ALERTA, fill=cor_titulo)
 
     # Linha decorativa
     cor_linha = (255, 215, 0) if analise["tipo_aposta"] == "over" else (100, 200, 255)
@@ -1722,7 +2040,7 @@ def gerar_poster_individual_westham(fixture: dict, analise: dict) -> io.BytesIO:
     try:
         away_bbox = draw.textbbox((0, 0), away_text, font=FONTE_TIMES)
         away_w = away_bbox[2] - away_bbox[0]
-        draw.text((x_away + (TAMANHO_QUADRADO - away_w)//2, y_escudos + TAMANHO_QUADRADO + 40),
+        draw.text((x_away + (TAMANHO_QUADRado - away_w)//2, y_escudos + TAMANHO_QUADRADO + 40),
                  away_text, font=FONTE_TIMES, fill=(255, 255, 255))
     except:
         draw.text((x_away, y_escudos + TAMANHO_QUADRADO + 40),
@@ -3851,7 +4169,7 @@ def debug_jogos_dia(data_selecionada, ligas_selecionadas, todas_ligas=False):
 
 def processar_jogos(data_selecionada, ligas_selecionadas, todas_ligas, top_n, min_conf, max_conf, estilo_poster, 
                    alerta_individual: bool, alerta_poster: bool, alerta_top_jogos: bool, 
-                   formato_top_jogos: str, tipo_filtro: str):
+                   formato_top_jogos: str, tipo_filtro: str, tipo_analise: str, config_analise: dict):
     hoje = data_selecionada.strftime("%Y-%m-%d")
     
     # Se "Todas as ligas" estiver selecionada, usar todas as ligas
@@ -3926,7 +4244,7 @@ def processar_jogos(data_selecionada, ligas_selecionadas, todas_ligas, top_n, mi
                 st.write(f"      Status: {match.get('status', 'DESCONHECIDO')}")
 
                 # Só envia alerta individual se a checkbox estiver ativada E se estiver no intervalo
-                if min_conf <= analise["confianca"] <= max_conf:
+                if tipo_analise == "Over/Under de Gols" and min_conf <= analise["confianca"] <= max_conf:
                     # Aplicar filtro por tipo
                     if tipo_filtro == "Todos" or \
                        (tipo_filtro == "Apenas Over" and analise["tipo_aposta"] == "over") or \
@@ -3966,6 +4284,9 @@ def processar_jogos(data_selecionada, ligas_selecionadas, todas_ligas, top_n, mi
         
         progress_bar.progress((i + 1) / total_ligas)
 
+    # Filtrar por tipo de análise
+    jogos_filtrados = filtrar_por_tipo_analise(top_jogos, tipo_analise, config_analise)
+
     # DEBUG COMPLETO: Mostrar todos os jogos processados
     st.write("🔍 **DEBUG FINAL - TODOS OS JOGOS PROCESSADOS:**")
     for jogo in top_jogos:
@@ -3991,92 +4312,79 @@ def processar_jogos(data_selecionada, ligas_selecionadas, todas_ligas, top_n, mi
         
         st.write(info_line)
 
-    # Filtrar por intervalo de confiança e tipo
-    st.write(f"🔍 **DEBUG FILTRO POR INTERVALO ({min_conf}% - {max_conf}%) e TIPO ({tipo_filtro}):**")
-    
     # Aplicar filtros
-    jogos_filtrados = [
-        j for j in top_jogos
-        if min_conf <= j["confianca"] <= max_conf and 
-           j["status"] not in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"]
-    ]
+    st.write(f"🔍 **DEBUG FILTRO POR INTERVALO e TIPO DE ANÁLISE ({tipo_analise}):**")
     
-    # Aplicar filtro por tipo
-    if tipo_filtro == "Apenas Over":
-        jogos_filtrados = [j for j in jogos_filtrados if j["tipo_aposta"] == "over"]
-    elif tipo_filtro == "Apenas Under":
-        jogos_filtrados = [j for j in jogos_filtrados if j["tipo_aposta"] == "under"]
-    
+    # Mostrar estatísticas do filtro
     st.write(f"📊 Total de jogos: {len(top_jogos)}")
     st.write(f"📊 Jogos após filtros: {len(jogos_filtrados)}")
     
     # Separar Over e Under para estatísticas
-    over_jogos = [j for j in jogos_filtrados if j["tipo_aposta"] == "over"]
-    under_jogos = [j for j in jogos_filtrados if j["tipo_aposta"] == "under"]
+    over_jogos = [j for j in jogos_filtrados if j.get("tipo_aposta") == "over"]
+    under_jogos = [j for j in jogos_filtrados if j.get("tipo_aposta") == "under"]
     
     st.write(f"📈 Over: {len(over_jogos)} jogos")
     st.write(f"📉 Under: {len(under_jogos)} jogos")
     
     # Mostrar jogos que passaram no filtro
     if jogos_filtrados:
-        st.write(f"✅ **Jogos no intervalo {min_conf}%-{max_conf}% ({tipo_filtro}):**")
+        st.write(f"✅ **Jogos filtrados por {tipo_analise}:**")
         for jogo in jogos_filtrados:
-            tipo_emoji = "📈" if jogo['tipo_aposta'] == "over" else "📉"
+            tipo_emoji = "📈" if jogo.get('tipo_aposta') == "over" else "📉"
             
             # Informações básicas
-            info_line = f"   {tipo_emoji} {jogo['home']} vs {jogo['away']} - {jogo['tendencia']} - Conf: {jogo['confianca']:.1f}%"
+            info_line = f"   {tipo_emoji} {jogo['home']} vs {jogo['away']} - {jogo.get('tendencia', 'N/A')}"
             
-            # Adicionar análises extras
-            extra_info = []
-            if 'detalhes' in jogo:
-                if 'vitoria' in jogo['detalhes']:
-                    v = jogo['detalhes']['vitoria']
-                    extra_info.append(f"Fav: {v['confianca_vitoria']:.1f}%")
-                if 'gols_ht' in jogo['detalhes']:
-                    ht = jogo['detalhes']['gols_ht']
-                    extra_info.append(f"HT: {ht['confianca_ht']:.1f}%")
-            
-            if extra_info:
-                info_line += f" | {' | '.join(extra_info)}"
+            # Adicionar informações específicas do tipo de análise
+            if tipo_analise == "Favorito (Vitória)" and 'confianca_vitoria' in jogo:
+                info_line += f" | 🏆 Favorito: {jogo['favorito']} ({jogo['confianca_vitoria']:.1f}%)"
+            elif tipo_analise == "Gols HT (Primeiro Tempo)" and 'tendencia_ht' in jogo:
+                info_line += f" | ⏰ {jogo['tendencia_ht']} ({jogo.get('confianca_ht', 0):.1f}%)"
+            else:
+                info_line += f" | Conf: {jogo.get('confianca', 0):.1f}%"
             
             st.write(info_line)
         
         # Envia top jogos com opção de formato
-        enviar_top_jogos(jogos_filtrados, top_n, alerta_top_jogos, min_conf, max_conf, formato_top_jogos, data_busca=hoje)
-        st.success(f"✅ {len(jogos_filtrados)} jogos com confiança entre {min_conf}% e {max_conf}% ({tipo_filtro})")
+        if tipo_analise == "Over/Under de Gols":
+            enviar_top_jogos(jogos_filtrados, top_n, alerta_top_jogos, min_conf, max_conf, formato_top_jogos, data_busca=hoje)
+        st.success(f"✅ {len(jogos_filtrados)} jogos filtrados por {tipo_analise}")
         
         # ENVIAR ALERTA DE IMAGEM apenas se a checkbox estiver ativada
         if alerta_poster:
             st.info("🚨 Enviando alerta de imagem...")
-            if estilo_poster == "West Ham (Novo)":
-                enviar_alerta_westham_style(jogos_filtrados, min_conf, max_conf)
+            if tipo_analise == "Over/Under de Gols":
+                if estilo_poster == "West Ham (Novo)":
+                    enviar_alerta_westham_style(jogos_filtrados, min_conf, max_conf)
+                else:
+                    enviar_alerta_conf_criar_poster(jogos_filtrados, min_conf, max_conf)
             else:
-                enviar_alerta_conf_criar_poster(jogos_filtrados, min_conf, max_conf)
+                # Enviar poster específico para o tipo de análise
+                try:
+                    poster = gerar_poster_por_tipo(jogos_filtrados, tipo_analise, config_analise)
+                    caption = f"<b>🎯 ALERTA DE {tipo_analise.upper()}</b>\n"
+                    caption += f"<b>📋 Total: {len(jogos_filtrados)} jogos</b>\n\n"
+                    
+                    if tipo_analise == "Favorito (Vitória)":
+                        caption += f"<b>🏆 Confiança Mínima: {config_analise.get('min_conf_vitoria', 65)}%</b>\n"
+                        caption += f"<b>🎯 Filtro: {config_analise.get('filtro_favorito', 'Todos')}</b>\n"
+                    elif tipo_analise == "Gols HT (Primeiro Tempo)":
+                        caption += f"<b>⏰ Confiança Mínima: {config_analise.get('min_conf_ht', 60)}%</b>\n"
+                        caption += f"<b>🎯 Tipo: {config_analise.get('tipo_ht', 'OVER 0.5 HT')}</b>\n"
+                    
+                    caption += f"\n<b>🔥 ELITE MASTER SYSTEM - ANÁLISE AVANÇADA</b>"
+                    
+                    if enviar_foto_telegram(poster, caption=caption, chat_id=TELEGRAM_CHAT_ID_ALT2):
+                        st.success(f"✅ Poster de {tipo_analise} enviado!")
+                    else:
+                        st.error("❌ Erro ao enviar poster")
+                except Exception as e:
+                    logging.error(f"Erro ao gerar poster para {tipo_analise}: {e}")
+                    st.error(f"❌ Erro ao gerar poster: {e}")
         else:
             st.info("ℹ️ Alerta com Poster desativado")
     else:
-        st.warning(f"⚠️ Nenhum jogo com confiança entre {min_conf}% e {max_conf}% ({tipo_filtro})")
-        
-        # DEBUG: Mostrar por que não há jogos
-        if top_jogos:
-            st.write("🔍 **Razão para nenhum jogo passar:**")
-            for jogo in top_jogos:
-                motivo = ""
-                if jogo["confianca"] < min_conf:
-                    motivo = f"Confiança baixa ({jogo['confianca']:.1f}% < {min_conf}%)"
-                elif jogo["confianca"] > max_conf:
-                    motivo = f"Confiança alta demais ({jogo['confianca']:.1f}% > {max_conf}%)"
-                elif jogo["status"] in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"]:
-                    motivo = f"Status: {jogo['status']}"
-                elif tipo_filtro == "Apenas Over" and jogo["tipo_aposta"] != "over":
-                    motivo = f"Tipo errado ({jogo['tipo_aposta']} != over)"
-                elif tipo_filtro == "Apenas Under" and jogo["tipo_aposta"] != "under":
-                    motivo = f"Tipo errado ({jogo['tipo_aposta']} != under)"
-                else:
-                    motivo = "DEVERIA PASSAR - VERIFICAR"
-                
-                tipo_emoji = "📈" if jogo['tipo_aposta'] == "over" else "📉"
-                st.write(f"   ❌ {tipo_emoji} {jogo['home']} vs {jogo['away']}: {motivo}")
+        st.warning(f"⚠️ Nenhum jogo encontrado para {tipo_analise}")
 
 def atualizar_status_partidas():
     """Atualiza o status das partidas no cache"""
@@ -4259,7 +4567,54 @@ def main():
     with st.sidebar:
         st.header("🔔 Configurações de Alertas")
         
+        # NOVO: Seleção do tipo de análise
+        st.subheader("🎯 Tipo de Análise Principal")
+        tipo_analise = st.selectbox(
+            "Selecione o tipo de alerta:",
+            ["Over/Under de Gols", "Favorito (Vitória)", "Gols HT (Primeiro Tempo)"],
+            index=0,
+            help="Escolha qual tipo de análise deseja priorizar nos alertas"
+        )
+        
+        # Configurações específicas baseadas no tipo de análise
+        config_analise = {}
+        
+        if tipo_analise == "Over/Under de Gols":
+            # Configurações existentes para Over/Under
+            tipo_filtro = st.selectbox("🔍 Filtrar por Tipo", ["Todos", "Apenas Over", "Apenas Under"], index=0)
+            min_conf = st.slider("Confiança Mínima (%)", 10, 95, 70, 1)
+            max_conf = st.slider("Confiança Máxima (%)", min_conf, 95, 95, 1)
+            
+            config_analise = {
+                "tipo_filtro": tipo_filtro,
+                "min_conf": min_conf,
+                "max_conf": max_conf
+            }
+            
+        elif tipo_analise == "Favorito (Vitória)":
+            # Configurações específicas para Favorito
+            st.info("🎯 Alertas baseados na probabilidade de vitória")
+            min_conf_vitoria = st.slider("Confiança Mínima Vitória (%)", 50, 95, 65, 1)
+            filtro_favorito = st.selectbox("Filtrar Favorito:", ["Todos", "Casa", "Fora", "Empate"], index=0)
+            
+            config_analise = {
+                "min_conf_vitoria": min_conf_vitoria,
+                "filtro_favorito": filtro_favorito
+            }
+            
+        elif tipo_analise == "Gols HT (Primeiro Tempo)":
+            # Configurações específicas para Gols HT
+            st.info("⏰ Alertas baseados em gols no primeiro tempo")
+            min_conf_ht = st.slider("Confiança Mínima HT (%)", 50, 95, 60, 1)
+            tipo_ht = st.selectbox("Tipo de HT:", ["OVER 0.5 HT", "OVER 1.5 HT", "UNDER 0.5 HT", "UNDER 1.5 HT"], index=0)
+            
+            config_analise = {
+                "min_conf_ht": min_conf_ht,
+                "tipo_ht": tipo_ht
+            }
+        
         # Checkboxes para cada tipo de alerta
+        st.subheader("📨 Tipos de Envio")
         alerta_individual = st.checkbox("🎯 Alertas Individuais", value=True, 
                                        help="Envia alerta individual para cada jogo com confiança alta")
         
@@ -4289,21 +4644,20 @@ def main():
         st.header("Configurações Gerais")
         top_n = st.selectbox("📊 Jogos no Top", [3, 5, 10], index=0)
         
-        # Dois cursores para intervalo de confiança
-        col_min, col_max = st.columns(2)
-        with col_min:
-            min_conf = st.slider("Confiança Mínima (%)", 10, 95, 70, 1)
-        with col_max:
-            max_conf = st.slider("Confiança Máxima (%)", min_conf, 95, 95, 1)
-        
         estilo_poster = st.selectbox("🎨 Estilo do Poster", ["West Ham (Novo)", "Elite Master (Original)"], index=0)
         
-        # Filtro por tipo de aposta
-        tipo_filtro = st.selectbox("🔍 Filtrar por Tipo", ["Todos", "Apenas Over", "Apenas Under"], index=0)
-        
         st.markdown("----")
-        st.info(f"Intervalo de confiança: {min_conf}% a {max_conf}%")
-        st.info(f"Filtro: {tipo_filtro}")
+        st.info(f"Tipo de Análise: {tipo_analise}")
+        if tipo_analise == "Over/Under de Gols":
+            st.info(f"Intervalo de confiança: {min_conf}% a {max_conf}%")
+            st.info(f"Filtro: {tipo_filtro}")
+        elif tipo_analise == "Favorito (Vitória)":
+            st.info(f"Confiança Mínima: {config_analise.get('min_conf_vitoria', 65)}%")
+            st.info(f"Filtro Favorito: {config_analise.get('filtro_favorito', 'Todos')}")
+        elif tipo_analise == "Gols HT (Primeiro Tempo)":
+            st.info(f"Confiança Mínima: {config_analise.get('min_conf_ht', 60)}%")
+            st.info(f"Tipo HT: {config_analise.get('tipo_ht', 'OVER 0.5 HT')}")
+        
         st.info(f"Formato Top Jogos: {formato_top_jogos}")
         if alerta_conferencia_auto:
             st.info("🤖 Alerta automático: ATIVADO")
@@ -4357,11 +4711,17 @@ def main():
         if not todas_ligas and not ligas_selecionadas:
             st.error("❌ Selecione pelo menos uma liga ou marque 'Todas as ligas'")
         else:
-            processar_jogos(data_selecionada, ligas_selecionadas, todas_ligas, top_n, min_conf, max_conf, estilo_poster, 
-                           alerta_individual, alerta_poster, alerta_top_jogos, formato_top_jogos, tipo_filtro)
+            # Passar tipo_filtro apenas para Over/Under de Gols
+            tipo_filtro_passar = tipo_filtro if tipo_analise == "Over/Under de Gols" else "Todos"
+            processar_jogos(data_selecionada, ligas_selecionadas, todas_ligas, top_n, 
+                          config_analise.get("min_conf", 70), 
+                          config_analise.get("max_conf", 95), 
+                          estilo_poster, 
+                          alerta_individual, alerta_poster, alerta_top_jogos, 
+                          formato_top_jogos, tipo_filtro_passar, tipo_analise, config_analise)
 
     # Ações
-    col1, col2, col3, col4, col5, col6 = st.columns(6)  # <-- Mudar de 5 para 6 colunas
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
     with col1:
         if st.button("🔄 Atualizar Status"):
             atualizar_status_partidas()
@@ -4381,7 +4741,7 @@ def main():
                 enviou = enviar_alerta_top_conferidos()
                 if enviou:
                     st.success("🤖 Alerta automático de conferência enviado!")
-    with col6:  # <-- NOVA COLUNA
+    with col6:
         if st.button("🔍 Status Alertas"):
             verificar_status_alertas()
 
