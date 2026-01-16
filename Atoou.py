@@ -751,6 +751,122 @@ def verificar_conjuntos_completos():
     return datas_completas
 
 # =============================
+# NOVAS FUNÇÕES DE ANÁLISE DE VITÓRIA E GOLS HT
+# =============================
+
+def calcular_probabilidade_vitoria(home: str, away: str, classificacao: dict) -> dict:
+    """Calcula probabilidade de vitória, empate e derrota"""
+    dados_home = classificacao.get(home, {"wins": 0, "draws": 0, "losses": 0, "played": 1, "scored": 0, "against": 0})
+    dados_away = classificacao.get(away, {"wins": 0, "draws": 0, "losses": 0, "played": 1, "scored": 0, "against": 0})
+    
+    played_home = max(dados_home["played"], 1)
+    played_away = max(dados_away["played"], 1)
+    
+    # Estatísticas básicas
+    win_rate_home = dados_home["wins"] / played_home
+    win_rate_away = dados_away["wins"] / played_away
+    draw_rate_home = dados_home["draws"] / played_home
+    draw_rate_away = dados_away["draws"] / played_away
+    
+    # Fator casa/fora
+    fator_casa = 1.2  # Time da casa tem vantagem
+    fator_fora = 0.8  # Time visitante tem desvantagem
+    
+    # Cálculo base
+    prob_home = (win_rate_home * fator_casa + (1 - win_rate_away) * fator_fora) / 2 * 100
+    prob_away = (win_rate_away * fator_fora + (1 - win_rate_home) * fator_casa) / 2 * 100
+    prob_draw = ((draw_rate_home + draw_rate_away) / 2) * 100
+    
+    # Considerar diferença de gols
+    media_gols_home = dados_home["scored"] / played_home
+    media_gols_against_home = dados_home["against"] / played_home
+    media_gols_away = dados_away["scored"] / played_away
+    media_gols_against_away = dados_away["against"] / played_away
+    
+    # Ajustar com base na força ofensiva/defensiva
+    forca_home = (media_gols_home - media_gols_against_home) * 5
+    forca_away = (media_gols_away - media_gols_against_away) * 5
+    
+    prob_home += forca_home
+    prob_away += forca_away
+    
+    # Normalizar para somar 100%
+    total = prob_home + prob_away + prob_draw
+    if total > 0:
+        prob_home = (prob_home / total) * 100
+        prob_away = (prob_away / total) * 100
+        prob_draw = (prob_draw / total) * 100
+    
+    # Garantir limites
+    prob_home = max(1, min(99, prob_home))
+    prob_away = max(1, min(99, prob_away))
+    prob_draw = max(1, min(99, prob_draw))
+    
+    # Determinar favorito
+    if prob_home > prob_away and prob_home > prob_draw:
+        favorito = "home"
+    elif prob_away > prob_home and prob_away > prob_draw:
+        favorito = "away"
+    else:
+        favorito = "draw"
+    
+    return {
+        "home_win": round(prob_home, 1),
+        "away_win": round(prob_away, 1),
+        "draw": round(prob_draw, 1),
+        "favorito": favorito,
+        "confianca_vitoria": round(max(prob_home, prob_away, prob_draw), 1)
+    }
+
+def calcular_probabilidade_gols_ht(home: str, away: str, classificacao: dict) -> dict:
+    """Calcula probabilidade de gols no primeiro tempo (HT)"""
+    dados_home = classificacao.get(home, {"scored": 0, "against": 0, "played": 1})
+    dados_away = classificacao.get(away, {"scored": 0, "against": 0, "played": 1})
+    
+    played_home = max(dados_home["played"], 1)
+    played_away = max(dados_away["played"], 1)
+    
+    # Estatísticas básicas
+    media_gols_home = dados_home["scored"] / played_home
+    media_gols_away = dados_away["scored"] / played_away
+    media_gols_against_home = dados_home["against"] / played_home
+    media_gols_against_away = dados_away["against"] / played_away
+    
+    # Estimativa de gols no primeiro tempo (aproximadamente 45% dos gols totais)
+    fator_ht = 0.45
+    
+    estimativa_home_ht = (media_gols_home * fator_ht)
+    estimativa_away_ht = (media_gols_away * fator_ht)
+    estimativa_total_ht = estimativa_home_ht + estimativa_away_ht
+    
+    # Probabilidades de gols HT
+    prob_over_05_ht = min(95, max(5, (estimativa_total_ht / 0.5) * 30))
+    prob_over_15_ht = min(90, max(5, (estimativa_total_ht / 1.5) * 40))
+    prob_btts_ht = min(85, max(5, ((media_gols_home * media_gols_away) * 60)))
+    
+    # Determinar tendência HT
+    if estimativa_total_ht > 1.2:
+        tendencia_ht = "OVER 1.5 HT"
+        confianca_ht = min(95, estimativa_total_ht * 25)
+    elif estimativa_total_ht > 0.7:
+        tendencia_ht = "OVER 0.5 HT"
+        confianca_ht = min(95, estimativa_total_ht * 35)
+    else:
+        tendencia_ht = "UNDER 0.5 HT"
+        confianca_ht = min(95, (1 - estimativa_total_ht) * 40)
+    
+    return {
+        "estimativa_total_ht": round(estimativa_total_ht, 2),
+        "tendencia_ht": tendencia_ht,
+        "confianca_ht": round(confianca_ht, 1),
+        "over_05_ht": round(prob_over_05_ht, 1),
+        "over_15_ht": round(prob_over_15_ht, 1),
+        "btts_ht": round(prob_btts_ht, 1),
+        "home_gols_ht": round(estimativa_home_ht, 2),
+        "away_gols_ht": round(estimativa_away_ht, 2)
+    }
+
+# =============================
 # Utilitários de Data e Formatação - CORRIGIDOS
 # =============================
 def formatar_data_iso(data_iso: str) -> tuple[str, str]:
@@ -1078,10 +1194,10 @@ def baixar_imagem_url(url: str, timeout: int = 8) -> Image.Image | None:
         return None
 
 # =============================
-# Lógica de Análise e Alertas
+# Lógica de Análise e Alertas - VERSÃO ATUALIZADA COM NOVAS ANÁLISES
 # =============================
 def calcular_tendencia_completa(home: str, away: str, classificacao: dict) -> dict:
-    """Calcula tendências completas com análise multivariada - VERSÃO INTELIGENTE COMPLETA"""
+    """Calcula tendências completas com análise multivariada - VERSÃO ATUALIZADA COM VITÓRIA E HT"""
     dados_home = classificacao.get(home, {"scored": 0, "against": 0, "played": 1, "wins": 0, "draws": 0, "losses": 0})
     dados_away = classificacao.get(away, {"scored": 0, "against": 0, "played": 1, "wins": 0, "draws": 0, "losses": 0})
     
@@ -1349,6 +1465,16 @@ def calcular_tendencia_completa(home: str, away: str, classificacao: dict) -> di
     confianca_final = max(20, min(95, round(confianca_ajustada, 1)))
     
     # ============================================================
+    # ADICIONAR ANÁLISES DE VITÓRIA E GOLS HT
+    # ============================================================
+    
+    # Calcular probabilidade de vitória
+    vitoria_analise = calcular_probabilidade_vitoria(home, away, classificacao)
+    
+    # Calcular probabilidade de gols HT
+    ht_analise = calcular_probabilidade_gols_ht(home, away, classificacao)
+    
+    # ============================================================
     # DETALHES COMPLETOS PARA DEBUG E TRANSPARÊNCIA
     # ============================================================
     
@@ -1366,6 +1492,12 @@ def calcular_tendencia_completa(home: str, away: str, classificacao: dict) -> di
         "over_15_conf": round(confianca_final * score_over_15, 1),
         "under_25_conf": round(confianca_final * score_under_25, 1),
         "under_15_conf": round(confianca_final * score_under_15, 1),
+        
+        # Análise de vitória
+        "vitoria": vitoria_analise,
+        
+        # Análise de gols HT
+        "gols_ht": ht_analise,
         
         # Análise detalhada para debug
         "analise_detalhada": {
@@ -1392,13 +1524,13 @@ def calcular_tendencia_completa(home: str, away: str, classificacao: dict) -> di
     
     # Log para debugging
     logging.info(
-        f"ANÁLISE INTELIGENTE: {home} vs {away} | "
+        f"ANÁLISE COMPLETA: {home} vs {away} | "
         f"Est: {estimativa_total_ajustada:.2f} | "
         f"Tend: {tendencia_principal} | "
         f"Prob: {probabilidade_final:.1f}% | "
         f"Conf: {confianca_final:.1f}% | "
-        f"Sinais: {sinais_concordantes}/4 | "
-        f"Decisão: {decisao}"
+        f"Vitória: {vitoria_analise['favorito']} ({vitoria_analise['confianca_vitoria']:.1f}%) | "
+        f"HT: {ht_analise['tendencia_ht']} ({ht_analise['confianca_ht']:.1f}%)"
     )
     
     return {
@@ -1411,7 +1543,7 @@ def calcular_tendencia_completa(home: str, away: str, classificacao: dict) -> di
     }
 
 # =============================
-# Funções de Geração de Posters
+# Funções de Geração de Posters - VERSÃO ATUALIZADA COM NOVAS ANÁLISES
 # =============================
 def criar_fonte(tamanho: int) -> ImageFont.ImageFont:
     """Cria fonte com fallback robusto - VERSÃO CORRIGIDA"""
@@ -1440,11 +1572,11 @@ def criar_fonte(tamanho: int) -> ImageFont.ImageFont:
 
 def gerar_poster_individual_westham(fixture: dict, analise: dict) -> io.BytesIO:
     """
-    Gera poster individual no estilo West Ham para alertas individuais
+    Gera poster individual no estilo West Ham com análises completas
     """
     # Configurações
     LARGURA = 1800
-    ALTURA = 1200
+    ALTURA = 1350  # Aumentada para incluir mais análises
     PADDING = 80
 
     # Criar canvas
@@ -1461,6 +1593,7 @@ def gerar_poster_individual_westham(fixture: dict, analise: dict) -> io.BytesIO:
     FONTE_ANALISE = criar_fonte(50)
     FONTE_ALERTA = criar_fonte(70)
     FONTE_ESTATISTICAS = criar_fonte(35)
+    FONTE_SECTION = criar_fonte(55)  # Nova fonte para seções
 
     # Título PRINCIPAL - ALERTA
     tipo_alerta = "🎯 ALERTA " if analise["tipo_aposta"] == "over" else "🛡️ ALERTA UNDER"
@@ -1512,7 +1645,7 @@ def gerar_poster_individual_westham(fixture: dict, analise: dict) -> io.BytesIO:
 
     x_home = x_inicio
     x_away = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
-    y_escudos = 350
+    y_escudos = 320
 
     # Baixar escudos COM CACHE
     escudo_home_url = fixture.get("homeTeam", {}).get("crest") or fixture.get("homeTeam", {}).get("logo", "")
@@ -1634,11 +1767,115 @@ def gerar_poster_individual_westham(fixture: dict, analise: dict) -> io.BytesIO:
         except:
             draw.text((PADDING + 100, y_analysis + i * 70), text, font=FONTE_ANALISE, fill=cor)
 
-    # ESTATÍSTICAS DETALHADAS
-    y_estatisticas = y_analysis + 280
+    # NOVA SEÇÃO: ANÁLISE DE VITÓRIA
+    y_vitoria = y_analysis + 280
+    
+    # Título seção vitória
+    vitoria_title = "🏆 PROBABILIDADE DE VITÓRIA"
+    try:
+        title_bbox = draw.textbbox((0, 0), vitoria_title, font=FONTE_SECTION)
+        title_w = title_bbox[2] - title_bbox[0]
+        draw.text(((LARGURA - title_w) // 2, y_vitoria), vitoria_title, font=FONTE_SECTION, fill=(255, 215, 0))
+    except:
+        draw.text((LARGURA//2 - 200, y_vitoria), vitoria_title, font=FONTE_SECTION, fill=(255, 215, 0))
+    
+    # Dados de vitória
+    vitoria_data = analise['detalhes']['vitoria']
+    home_win = vitoria_data['home_win']
+    away_win = vitoria_data['away_win']
+    draw_prob = vitoria_data['draw']
+    favorito = vitoria_data['favorito']
+    
+    # Determinar cores
+    cor_home = (76, 175, 80) if favorito == "home" else (180, 180, 180)
+    cor_away = (76, 175, 80) if favorito == "away" else (180, 180, 180)
+    cor_draw = (76, 175, 80) if favorito == "draw" else (180, 180, 180)
+    
+    y_vitoria_content = y_vitoria + 70
+    
+    # Home win
+    home_text = f"🏠 {home}: {home_win}%"
+    try:
+        home_bbox = draw.textbbox((0, 0), home_text, font=FONTE_DETALHES)
+        home_w = home_bbox[2] - home_bbox[0]
+        draw.text(((LARGURA - home_w) // 2 - 300, y_vitoria_content), home_text, font=FONTE_DETALHES, fill=cor_home)
+    except:
+        draw.text((PADDING + 100, y_vitoria_content), home_text, font=FONTE_DETALHES, fill=cor_home)
+    
+    # Draw
+    draw_text = f"🤝 EMPATE: {draw_prob}%"
+    try:
+        draw_bbox = draw.textbbox((0, 0), draw_text, font=FONTE_DETALHES)
+        draw_w = draw_bbox[2] - draw_bbox[0]
+        draw.text(((LARGURA - draw_w) // 2, y_vitoria_content), draw_text, font=FONTE_DETALHES, fill=cor_draw)
+    except:
+        draw.text((LARGURA//2 - 100, y_vitoria_content), draw_text, font=FONTE_DETALHES, fill=cor_draw)
+    
+    # Away win
+    away_text = f"✈️ {away}: {away_win}%"
+    try:
+        away_bbox = draw.textbbox((0, 0), away_text, font=FONTE_DETALHES)
+        away_w = away_bbox[2] - away_bbox[0]
+        draw.text(((LARGURA - away_w) // 2 + 300, y_vitoria_content), away_text, font=FONTE_DETALHES, fill=cor_away)
+    except:
+        draw.text((LARGURA - PADDING - 400, y_vitoria_content), away_text, font=FONTE_DETALHES, fill=cor_away)
+
+    # NOVA SEÇÃO: ANÁLISE DE GOLS HT
+    y_ht = y_vitoria + 140
+    
+    # Título seção HT
+    ht_title = "⏰ PROBABILIDADE DE GOLS NO PRIMEIRO TEMPO"
+    try:
+        ht_bbox = draw.textbbox((0, 0), ht_title, font=FONTE_SECTION)
+        ht_w = ht_bbox[2] - ht_bbox[0]
+        draw.text(((LARGURA - ht_w) // 2, y_ht), ht_title, font=FONTE_SECTION, fill=(100, 200, 255))
+    except:
+        draw.text((LARGURA//2 - 250, y_ht), ht_title, font=FONTE_SECTION, fill=(100, 200, 255))
+    
+    # Dados HT
+    ht_data = analise['detalhes']['gols_ht']
+    tendencia_ht = ht_data['tendencia_ht']
+    confianca_ht = ht_data['confianca_ht']
+    over_05_ht = ht_data['over_05_ht']
+    over_15_ht = ht_data['over_15_ht']
+    btts_ht = ht_data['btts_ht']
+    
+    y_ht_content = y_ht + 70
+    
+    # Tendência HT principal
+    ht_main_text = f"{tendencia_ht} - {confianca_ht}%"
+    try:
+        ht_main_bbox = draw.textbbox((0, 0), ht_main_text, font=FONTE_DETALHES)
+        ht_main_w = ht_main_bbox[2] - ht_main_bbox[0]
+        draw.text(((LARGURA - ht_main_w) // 2, y_ht_content), ht_main_text, font=FONTE_DETALHES, fill=(255, 193, 7))
+    except:
+        draw.text((LARGURA//2 - 150, y_ht_content), ht_main_text, font=FONTE_DETALHES, fill=(255, 193, 7))
+    
+    # Estatísticas HT detalhadas
+    y_ht_stats = y_ht_content + 50
+    
+    ht_stats_texts = [
+        f"Over 0.5 HT: {over_05_ht}%",
+        f"Over 1.5 HT: {over_15_ht}%",
+        f"Ambos marcam HT: {btts_ht}%"
+    ]
+    
+    # Distribuir em três colunas
+    for i, text in enumerate(ht_stats_texts):
+        try:
+            bbox = draw.textbbox((0, 0), text, font=FONTE_ESTATISTICAS)
+            w = bbox[2] - bbox[0]
+            x_pos = PADDING + 200 + i * 500
+            draw.text((x_pos, y_ht_stats), text, font=FONTE_ESTATISTICAS, fill=(180, 220, 255))
+        except:
+            x_pos = PADDING + 200 + i * 500
+            draw.text((x_pos, y_ht_stats), text, font=FONTE_ESTATISTICAS, fill=(180, 220, 255))
+
+    # ESTATÍSTICAS DETALHADAS (OVER/UNDER)
+    y_estatisticas = y_ht_stats + 50
     
     # Título estatísticas
-    stats_title = "📊 ESTATÍSTICAS DETALHADAS"
+    stats_title = "📊 ESTATÍSTICAS OVER/UNDER"
     try:
         title_bbox = draw.textbbox((0, 0), stats_title, font=FONTE_DETALHES)
         title_w = title_bbox[2] - title_bbox[0]
@@ -1709,12 +1946,12 @@ def gerar_poster_individual_westham(fixture: dict, analise: dict) -> io.BytesIO:
 
 def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo: str = "** TOP JOGOS DO DIA **") -> io.BytesIO:
     """
-    Gera poster profissional para os Top Jogos com escudos e estatísticas
+    Gera poster profissional para os Top Jogos com escudos e estatísticas COMPLETAS
     """
     # Configurações
     LARGURA = 2200
     ALTURA_TOPO = 300
-    ALTURA_POR_JOGO = 910
+    ALTURA_POR_JOGO = 1000  # Aumentado para incluir mais análises
     PADDING = 80
     
     jogos_count = len(top_jogos)
@@ -1733,6 +1970,7 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
     FONTE_ANALISE = criar_fonte(55)
     FONTE_RANKING = criar_fonte(70)
     FONTE_ESTATISTICAS = criar_fonte(35)
+    FONTE_SMALL = criar_fonte(30)  # Nova fonte menor para mais detalhes
 
     # Título PRINCIPAL
     try:
@@ -1911,9 +2149,56 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
             except:
                 draw.text((PADDING + 100, y_analysis + i * 70), text, font=FONTE_ANALISE, fill=cor_tipo)
 
+        # NOVA SEÇÃO: ANÁLISE DE VITÓRIA RESUMIDA
+        y_vitoria = y_analysis + 280
+        
+        if 'detalhes' in jogo and 'vitoria' in jogo['detalhes']:
+            vitoria_data = jogo['detalhes']['vitoria']
+            
+            # Determinar favorito
+            favorito = vitoria_data['favorito']
+            if favorito == "home":
+                vitoria_text = f"🏆 FAVORITO: {jogo['home']} ({vitoria_data['home_win']}%)"
+                cor_vitoria = (76, 175, 80)
+            elif favorito == "away":
+                vitoria_text = f"🏆 FAVORITO: {jogo['away']} ({vitoria_data['away_win']}%)"
+                cor_vitoria = (76, 175, 80)
+            else:
+                vitoria_text = f"🏆 FAVORITO: EMPATE ({vitoria_data['draw']}%)"
+                cor_vitoria = (255, 193, 7)
+            
+            draw.text((x0 + 100, y_vitoria), vitoria_text, font=FONTE_ESTATISTICAS, fill=cor_vitoria)
+            
+            # Probabilidades de vitória
+            vitoria_stats = [
+                f"🏠 {vitoria_data['home_win']}%",
+                f"🤝 {vitoria_data['draw']}%", 
+                f"✈️ {vitoria_data['away_win']}%"
+            ]
+            
+            for i, stat in enumerate(vitoria_stats):
+                draw.text((x0 + 150 + i * 300, y_vitoria + 40), stat, font=FONTE_SMALL, fill=(200, 220, 255))
+
+        # NOVA SEÇÃO: GOLS HT RESUMIDO
+        y_ht = y_vitoria + 80
+        
+        if 'detalhes' in jogo and 'gols_ht' in jogo['detalhes']:
+            ht_data = jogo['detalhes']['gols_ht']
+            ht_text = f"⏰ {ht_data['tendencia_ht']} ({ht_data['confianca_ht']}%)"
+            draw.text((x0 + 100, y_ht), ht_text, font=FONTE_ESTATISTICAS, fill=(100, 200, 255))
+            
+            # Estatísticas HT
+            ht_stats = [
+                f"Over 0.5 HT: {ht_data['over_05_ht']}%",
+                f"Over 1.5 HT: {ht_data['over_15_ht']}%"
+            ]
+            
+            for i, stat in enumerate(ht_stats):
+                draw.text((x0 + 150 + i * 400, y_ht + 40), stat, font=FONTE_SMALL, fill=(180, 220, 255))
+
         # Estatísticas detalhadas (se disponíveis)
         if 'detalhes' in jogo:
-            y_stats = y_analysis + 280
+            y_stats = y_ht + 80
             detalhes = jogo['detalhes']
             
             stats_text = [
@@ -1956,7 +2241,7 @@ def gerar_poster_westham_style(jogos: list, titulo: str = " ALERTA DE GOLS") -> 
     # Configurações
     LARGURA = 2000
     ALTURA_TOPO = 350
-    ALTURA_POR_JOGO = 1050  # Aumentado para incluir mais estatísticas
+    ALTURA_POR_JOGO = 1150  # Aumentado para incluir mais estatísticas
     PADDING = 120
     
     jogos_count = len(jogos)
@@ -2158,8 +2443,61 @@ def gerar_poster_westham_style(jogos: list, titulo: str = " ALERTA DE GOLS") -> 
             except:
                 draw.text((PADDING + 120, y_analysis + i * 90), text, font=FONTE_ANALISE, fill=cor)
 
-        # ESTATÍSTICAS DETALHADAS
-        y_stats = y_analysis + 360
+        # NOVA SEÇÃO: ANÁLISE DE VITÓRIA
+        y_vitoria = y_analysis + 360
+        
+        if 'detalhes' in jogo and 'vitoria' in jogo['detalhes']:
+            vitoria_data = jogo['detalhes']['vitoria']
+            
+            # Título vitória
+            vitoria_title = "🏆 Probabilidade de Vitória:"
+            draw.text((x0 + 100, y_vitoria), vitoria_title, font=FONTE_DETALHES, fill=(200, 200, 200))
+            
+            # Dados vitória
+            y_vitoria_content = y_vitoria + 60
+            
+            home_text = f"🏠 {jogo['home']}: {vitoria_data['home_win']}%"
+            draw_text = f"🤝 Empate: {vitoria_data['draw']}%"
+            away_text = f"✈️ {jogo['away']}: {vitoria_data['away_win']}%"
+            
+            # Destacar favorito
+            favorito = vitoria_data['favorito']
+            cor_home = (76, 175, 80) if favorito == "home" else (180, 180, 180)
+            cor_draw = (76, 175, 80) if favorito == "draw" else (180, 180, 180)
+            cor_away = (76, 175, 80) if favorito == "away" else (180, 180, 180)
+            
+            draw.text((x0 + 120, y_vitoria_content), home_text, font=FONTE_ESTATISTICAS, fill=cor_home)
+            draw.text((x0 + 500, y_vitoria_content), draw_text, font=FONTE_ESTATISTICAS, fill=cor_draw)
+            draw.text((x0 + 880, y_vitoria_content), away_text, font=FONTE_ESTATISTICAS, fill=cor_away)
+
+        # NOVA SEÇÃO: ANÁLISE DE GOLS HT
+        y_ht = y_vitoria + 100
+        
+        if 'detalhes' in jogo and 'gols_ht' in jogo['detalhes']:
+            ht_data = jogo['detalhes']['gols_ht']
+            
+            # Título HT
+            ht_title = "⏰ Primeiro Tempo:"
+            draw.text((x0 + 100, y_ht), ht_title, font=FONTE_DETALHES, fill=(200, 200, 200))
+            
+            # Dados HT
+            y_ht_content = y_ht + 60
+            
+            ht_main = f"{ht_data['tendencia_ht']} ({ht_data['confianca_ht']}%)"
+            draw.text((x0 + 120, y_ht_content), ht_main, font=FONTE_ESTATISTICAS, fill=(100, 200, 255))
+            
+            # Estatísticas HT
+            ht_stats = [
+                f"Over 0.5 HT: {ht_data['over_05_ht']}%",
+                f"Over 1.5 HT: {ht_data['over_15_ht']}%",
+                f"Ambos HT: {ht_data['btts_ht']}%"
+            ]
+            
+            for i, stat in enumerate(ht_stats):
+                draw.text((x0 + 400 + i * 350, y_ht_content), stat, font=FONTE_ESTATISTICAS, fill=(180, 220, 255))
+
+        # ESTATÍSTICAS DETALHADAS (OVER/UNDER)
+        y_stats = y_ht + 100
         
         # Título estatísticas
         stats_title = "📊 Estatísticas Detalhadas:"
@@ -2215,7 +2553,7 @@ def gerar_poster_resultados(jogos: list, titulo: str = " ** RESULTADOS OFICIAIS 
     # Configurações do poster
     LARGURA = 2200
     ALTURA_TOPO = 400
-    ALTURA_POR_JOGO = 900  # Ajustado para melhor layout
+    ALTURA_POR_JOGO = 950  # Ajustado para melhor layout
     PADDING = 80
     
     jogos_count = len(jogos)
@@ -2695,15 +3033,15 @@ def gerar_poster_resultados_limitado(jogos: list, titulo: str = "- RESULTADOS", 
     return buffer
 
 # =============================
-# Funções de Envio de Alertas
+# Funções de Envio de Alertas - VERSÃO ATUALIZADA COM NOVAS ANÁLISES
 # =============================
 def enviar_alerta_telegram(fixture: dict, analise: dict):
-    """Envia alerta individual com poster estilo West Ham"""
+    """Envia alerta individual com poster estilo West Ham e análises completas"""
     try:
-        # Gerar poster individual
+        # Gerar poster individual com análises completas
         poster = gerar_poster_individual_westham(fixture, analise)
         
-        # Criar caption para o Telegram
+        # Criar caption para o Telegram com todas as análises
         home = fixture["homeTeam"]["name"]
         away = fixture["awayTeam"]["name"]
         data_formatada, hora_formatada = formatar_data_iso(fixture["utcDate"])
@@ -2711,6 +3049,7 @@ def enviar_alerta_telegram(fixture: dict, analise: dict):
         
         tipo_emoji = "🎯" if analise["tipo_aposta"] == "over" else "🛡️"
         
+        # Caption principal
         caption = (
             f"<b>{tipo_emoji} ALERTA {analise['tipo_aposta'].upper()} DE GOLS</b>\n\n"
             f"<b>🏆 {competicao}</b>\n"
@@ -2720,7 +3059,41 @@ def enviar_alerta_telegram(fixture: dict, analise: dict):
             f"<b>⚽ Estimativa: {analise['estimativa']:.2f} gols</b>\n"
             f"<b>🎯 Probabilidade: {analise['probabilidade']:.0f}%</b>\n"
             f"<b>🔍 Confiança: {analise['confianca']:.0f}%</b>\n\n"
-            f"<b>📊 Estatísticas Detalhadas:</b>\n"
+        )
+        
+        # Adicionar análise de vitória se disponível
+        if 'vitoria' in analise['detalhes']:
+            vitoria = analise['detalhes']['vitoria']
+            favorito = vitoria['favorito']
+            if favorito == "home":
+                fav_text = f"{home} ({vitoria['home_win']}%)"
+            elif favorito == "away":
+                fav_text = f"{away} ({vitoria['away_win']}%)"
+            else:
+                fav_text = f"EMPATE ({vitoria['draw']}%)"
+            
+            caption += (
+                f"<b>🏆 PROBABILIDADE DE VITÓRIA</b>\n"
+                f"<b>• Favorito: {fav_text}</b>\n"
+                f"<b>• {home}: {vitoria['home_win']}%</b>\n"
+                f"<b>• Empate: {vitoria['draw']}%</b>\n"
+                f"<b>• {away}: {vitoria['away_win']}%</b>\n\n"
+            )
+        
+        # Adicionar análise de gols HT se disponível
+        if 'gols_ht' in analise['detalhes']:
+            ht = analise['detalhes']['gols_ht']
+            caption += (
+                f"<b>⏰ PRIMEIRO TEMPO (HT)</b>\n"
+                f"<b>• Tendência: {ht['tendencia_ht']} ({ht['confianca_ht']}%)</b>\n"
+                f"<b>• Over 0.5 HT: {ht['over_05_ht']}%</b>\n"
+                f"<b>• Over 1.5 HT: {ht['over_15_ht']}%</b>\n"
+                f"<b>• Ambos marcam HT: {ht['btts_ht']}%</b>\n\n"
+            )
+        
+        # Adicionar estatísticas detalhadas
+        caption += (
+            f"<b>📊 ESTATÍSTICAS DETALHADAS:</b>\n"
             f"<b>• Over 2.5: {analise['detalhes']['over_25_prob']}%</b>\n"
             f"<b>• Under 2.5: {analise['detalhes']['under_25_prob']}%</b>\n"
             f"<b>• Over 1.5: {analise['detalhes']['over_15_prob']}%</b>\n"
@@ -2751,6 +3124,7 @@ def enviar_alerta_telegram_fallback(fixture: dict, analise: dict) -> bool:
     
     tipo_emoji = "🎯" if analise["tipo_aposta"] == "over" else "🛡️"
     
+    # Mensagem base
     msg = (
         f"<b>{tipo_emoji} ALERTA {analise['tipo_aposta'].upper()} DE GOLS</b>\n\n"
         f"<b>🏆 {competicao}</b>\n"
@@ -2760,8 +3134,29 @@ def enviar_alerta_telegram_fallback(fixture: dict, analise: dict) -> bool:
         f"<b>⚽ Estimativa: {analise['estimativa']:.2f} gols</b>\n"
         f"<b>🎯 Probabilidade: {analise['probabilidade']:.0f}%</b>\n"
         f"<b>🔍 Confiança: {analise['confianca']:.0f}%</b>\n\n"
-        f"<b>🔥 ELITE MASTER SYSTEM</b>"
     )
+    
+    # Adicionar análise de vitória se disponível
+    if 'vitoria' in analise['detalhes']:
+        vitoria = analise['detalhes']['vitoria']
+        msg += (
+            f"<b>🏆 VITÓRIA:</b>\n"
+            f"<b>• {home}: {vitoria['home_win']}%</b>\n"
+            f"<b>• Empate: {vitoria['draw']}%</b>\n"
+            f"<b>• {away}: {vitoria['away_win']}%</b>\n\n"
+        )
+    
+    # Adicionar análise de gols HT se disponível
+    if 'gols_ht' in analise['detalhes']:
+        ht = analise['detalhes']['gols_ht']
+        msg += (
+            f"<b>⏰ PRIMEIRO TEMPO:</b>\n"
+            f"<b>• {ht['tendencia_ht']} ({ht['confianca_ht']}%)</b>\n"
+            f"<b>• Over 0.5 HT: {ht['over_05_ht']}%</b>\n"
+            f"<b>• Over 1.5 HT: {ht['over_15_ht']}%</b>\n\n"
+        )
+    
+    msg += f"<b>🔥 ELITE MASTER SYSTEM</b>"
     
     return enviar_telegram(msg)
 
@@ -2786,7 +3181,7 @@ def verificar_enviar_alerta(fixture: dict, analise: dict, alerta_individual: boo
         salvar_alertas(alertas)
 
 def enviar_alerta_westham_style(jogos_conf: list, min_conf: int, max_conf: int, chat_id: str = TELEGRAM_CHAT_ID_ALT2):
-    """Envia alerta no estilo West Ham"""
+    """Envia alerta no estilo West Ham com análises completas"""
     if not jogos_conf:
         st.warning("⚠️ Nenhum jogo para gerar poster")
         return
@@ -2812,13 +3207,32 @@ def enviar_alerta_westham_style(jogos_conf: list, min_conf: int, max_conf: int, 
             over_count = sum(1 for j in jogos_data if j.get('tipo_aposta') == "over")
             under_count = sum(1 for j in jogos_data if j.get('tipo_aposta') == "under")
             
+            # Calcular estatísticas de vitória
+            home_fav_count = sum(1 for j in jogos_data if 'detalhes' in j and 'vitoria' in j['detalhes'] and j['detalhes']['vitoria']['favorito'] == "home")
+            away_fav_count = sum(1 for j in jogos_data if 'detalhes' in j and 'vitoria' in j['detalhes'] and j['detalhes']['vitoria']['favorito'] == "away")
+            draw_fav_count = sum(1 for j in jogos_data if 'detalhes' in j and 'vitoria' in j['detalhes'] and j['detalhes']['vitoria']['favorito'] == "draw")
+            
+            # Calcular estatísticas HT
+            ht_over_count = sum(1 for j in jogos_data if 'detalhes' in j and 'gols_ht' in j['detalhes'] and "OVER" in j['detalhes']['gols_ht']['tendencia_ht'])
+            ht_under_count = sum(1 for j in jogos_data if 'detalhes' in j and 'gols_ht' in j['detalhes'] and "UNDER" in j['detalhes']['gols_ht']['tendencia_ht'])
+            
             caption = (
                 f"<b>🎯 ALERTA DE GOLS - {data_str}</b>\n\n"
                 f"<b>📋 TOTAL: {len(jogos_data)} JOGOS</b>\n"
                 f"<b>📈 Over: {over_count} jogos</b>\n"
                 f"<b>📉 Under: {under_count} jogos</b>\n"
                 f"<b>⚽ INTERVALO DE CONFIANÇA: {min_conf}% - {max_conf}%</b>\n\n"
-                f"<b>🔮 ANÁLISE PREDITIVA DE GOLS (OVER/UNDER)</b>\n"
+                
+                f"<b>🏆 ANÁLISE DE VITÓRIA</b>\n"
+                f"<b>• Casa favorita: {home_fav_count} jogos</b>\n"
+                f"<b>• Fora favorita: {away_fav_count} jogos</b>\n"
+                f"<b>• Empate favorito: {draw_fav_count} jogos</b>\n\n"
+                
+                f"<b>⏰ PRIMEIRO TEMPO (HT)</b>\n"
+                f"<b>• Tendência Over HT: {ht_over_count} jogos</b>\n"
+                f"<b>• Tendência Under HT: {ht_under_count} jogos</b>\n\n"
+                
+                f"<b>🔮 ANÁLISE PREDITIVA COMPLETA</b>\n"
                 f"<b>📊 MÉDIA DE CONFIANÇA: {sum(j['confianca'] for j in jogos_data) / len(jogos_data):.1f}%</b>\n\n"
                 f"<b>🔥 JOGOS SELECIONADOS PELA INTELIGÊNCIA ARTIFICIAL</b>"
             )
@@ -3057,20 +3471,44 @@ def enviar_alerta_conf_criar_poster(jogos_conf: list, min_conf: int, max_conf: i
             msg += f"📈 <b>OVER ({len(over_jogos)} jogos):</b>\n\n"
             for j in over_jogos:
                 hora_format = j["hora"].strftime("%H:%M") if isinstance(j["hora"], datetime) else str(j["hora"])
+                
+                # Adicionar análises extras se disponíveis
+                analise_extras = ""
+                if 'detalhes' in j and 'vitoria' in j['detalhes']:
+                    v = j['detalhes']['vitoria']
+                    analise_extras += f"🏆 Favorito: {j['home'] if v['favorito']=='home' else j['away'] if v['favorito']=='away' else 'EMPATE'} ({max(v['home_win'], v['away_win'], v['draw'])}%) | "
+                
+                if 'detalhes' in j and 'gols_ht' in j['detalhes']:
+                    ht = j['detalhes']['gols_ht']
+                    analise_extras += f"⏰ {ht['tendencia_ht']} ({ht['confianca_ht']}%)"
+                
                 msg += (
                     f"🏟️ {j['home']} vs {j['away']}\n"
                     f"🕒 {hora_format} BRT | {j['liga']}\n"
-                    f"📈 {j['tendencia']} | ⚽ {j['estimativa']:.2f} | 🎯 {j['probabilidade']:.0f}% | 💯 {j['confianca']:.0f}%\n\n"
+                    f"📈 {j['tendencia']} | ⚽ {j['estimativa']:.2f} | 🎯 {j['probabilidade']:.0f}% | 💯 {j['confianca']:.0f}%\n"
+                    f"{analise_extras}\n\n"
                 )
         
         if under_jogos:
             msg += f"📉 <b>UNDER ({len(under_jogos)} jogos):</b>\n\n"
             for j in under_jogos:
                 hora_format = j["hora"].strftime("%H:%M") if isinstance(j["hora"], datetime) else str(j["hora"])
+                
+                # Adicionar análises extras se disponíveis
+                analise_extras = ""
+                if 'detalhes' in j and 'vitoria' in j['detalhes']:
+                    v = j['detalhes']['vitoria']
+                    analise_extras += f"🏆 Favorito: {j['home'] if v['favorito']=='home' else j['away'] if v['favorito']=='away' else 'EMPATE'} ({max(v['home_win'], v['away_win'], v['draw'])}%) | "
+                
+                if 'detalhes' in j and 'gols_ht' in j['detalhes']:
+                    ht = j['detalhes']['gols_ht']
+                    analise_extras += f"⏰ {ht['tendencia_ht']} ({ht['confianca_ht']}%)"
+                
                 msg += (
                     f"🏟️ {j['home']} vs {j['away']}\n"
                     f"🕒 {hora_format} BRT | {j['liga']}\n"
-                    f"📉 {j['tendencia']} | ⚽ {j['estimativa']:.2f} | 🎯 {j['probabilidade']:.0f}% | 💯 {j['confianca']:.0f}%\n\n"
+                    f"📉 {j['tendencia']} | ⚽ {j['estimativa']:.2f} | 🎯 {j['probabilidade']:.0f}% | 💯 {j['confianca']:.0f}%\n"
+                    f"{analise_extras}\n\n"
                 )
         
         enviar_telegram(msg, chat_id=chat_id)
@@ -3110,6 +3548,14 @@ def enviar_top_jogos(jogos: list, top_n: int, alerta_top_jogos: bool, min_conf: 
     over_jogos = [j for j in top_jogos_sorted if j.get('tipo_aposta') == "over"]
     under_jogos = [j for j in top_jogos_sorted if j.get('tipo_aposta') == "under"]
     
+    # Calcular estatísticas de vitória e HT
+    home_fav_count = sum(1 for j in top_jogos_sorted if 'detalhes' in j and 'vitoria' in j['detalhes'] and j['detalhes']['vitoria']['favorito'] == "home")
+    away_fav_count = sum(1 for j in top_jogos_sorted if 'detalhes' in j and 'vitoria' in j['detalhes'] and j['detalhes']['vitoria']['favorito'] == "away")
+    draw_fav_count = sum(1 for j in top_jogos_sorted if 'detalhes' in j and 'vitoria' in j['detalhes'] and j['detalhes']['vitoria']['favorito'] == "draw")
+    
+    ht_over_count = sum(1 for j in top_jogos_sorted if 'detalhes' in j and 'gols_ht' in j['detalhes'] and "OVER" in j['detalhes']['gols_ht']['tendencia_ht'])
+    ht_under_count = sum(1 for j in top_jogos_sorted if 'detalhes' in j and 'gols_ht' in j['detalhes'] and "UNDER" in j['detalhes']['gols_ht']['tendencia_ht'])
+    
     st.info(f"📊 Enviando TOP {len(top_jogos_sorted)} jogos - Formato: {formato_top_jogos}")
     st.info(f"💾 Salvando {len(top_jogos_sorted)} alertas TOP para conferência futura")
     
@@ -3117,26 +3563,61 @@ def enviar_top_jogos(jogos: list, top_n: int, alerta_top_jogos: bool, min_conf: 
     if formato_top_jogos in ["Texto", "Ambos"]:
         msg = f"📢 TOP {top_n} Jogos do Dia (confiança: {min_conf}%-{max_conf}%)\n\n"
         
+        # Adicionar estatísticas gerais
+        msg += f"<b>📊 ESTATÍSTICAS GERAIS:</b>\n"
+        msg += f"<b>• Total de Jogos: {len(top_jogos_sorted)}</b>\n"
+        msg += f"<b>• 📈 Over: {len(over_jogos)} jogos</b>\n"
+        msg += f"<b>• 📉 Under: {len(under_jogos)} jogos</b>\n"
+        msg += f"<b>• 🏆 Casa favorita: {home_fav_count}</b>\n"
+        msg += f"<b>• 🏆 Fora favorita: {away_fav_count}</b>\n"
+        msg += f"<b>• 🏆 Empate favorito: {draw_fav_count}</b>\n"
+        msg += f"<b>• ⏰ Over HT: {ht_over_count}</b>\n"
+        msg += f"<b>• ⏰ Under HT: {ht_under_count}</b>\n\n"
+        
         if over_jogos:
             msg += f"📈 <b>OVER ({len(over_jogos)} jogos):</b>\n"
             for j in over_jogos:
                 hora_format = j["hora"].strftime("%H:%M") if isinstance(j["hora"], datetime) else str(j["hora"])
+                
+                # Adicionar análises extras
+                analise_extras = ""
+                if 'detalhes' in j and 'vitoria' in j['detalhes']:
+                    v = j['detalhes']['vitoria']
+                    analise_extras += f"🏆 {j['home'] if v['favorito']=='home' else j['away'] if v['favorito']=='away' else 'EMPATE'} | "
+                
+                if 'detalhes' in j and 'gols_ht' in j['detalhes']:
+                    ht = j['detalhes']['gols_ht']
+                    analise_extras += f"⏰ {ht['tendencia_ht']}"
+                
                 msg += (
                     f"🏟️ {j['home']} vs {j['away']}\n"
                     f"🕒 {hora_format} BRT | Liga: {j['liga']} | Status: {j['status']}\n"
                     f"📈 {j['tendencia']} | ⚽ {j['estimativa']:.2f} | "
-                    f"🎯 {j['probabilidade']:.0f}% | 💯 {j['confianca']:.0f}%\n\n"
+                    f"🎯 {j['probabilidade']:.0f}% | 💯 {j['confianca']:.0f}%\n"
+                    f"{analise_extras}\n\n"
                 )
         
         if under_jogos:
             msg += f"📉 <b>UNDER ({len(under_jogos)} jogos):</b>\n"
             for j in under_jogos:
                 hora_format = j["hora"].strftime("%H:%M") if isinstance(j["hora"], datetime) else str(j["hora"])
+                
+                # Adicionar análises extras
+                analise_extras = ""
+                if 'detalhes' in j and 'vitoria' in j['detalhes']:
+                    v = j['detalhes']['vitoria']
+                    analise_extras += f"🏆 {j['home'] if v['favorito']=='home' else j['away'] if v['favorito']=='away' else 'EMPATE'} | "
+                
+                if 'detalhes' in j and 'gols_ht' in j['detalhes']:
+                    ht = j['detalhes']['gols_ht']
+                    analise_extras += f"⏰ {ht['tendencia_ht']}"
+                
                 msg += (
                     f"🏟️ {j['home']} vs {j['away']}\n"
                     f"🕒 {hora_format} BRT | Liga: {j['liga']} | Status: {j['status']}\n"
                     f"📉 {j['tendencia']} | ⚽ {j['estimativa']:.2f} | "
-                    f"🎯 {j['probabilidade']:.0f}% | 💯 {j['confianca']:.0f}%\n\n"
+                    f"🎯 {j['probabilidade']:.0f}% | 💯 {j['confianca']:.0f}%\n"
+                    f"{analise_extras}\n\n"
                 )
         
         if enviar_telegram(msg, TELEGRAM_CHAT_ID_ALT2, disable_web_page_preview=True):
@@ -3163,9 +3644,19 @@ def enviar_top_jogos(jogos: list, top_n: int, alerta_top_jogos: bool, min_conf: 
                 f"<b>📈 Over: {len(over_jogos)} jogos</b>\n"
                 f"<b>📉 Under: {len(under_jogos)} jogos</b>\n"
                 f"<b>⚽ Confiança Média: {confianca_media:.1f}%</b>\n\n"
+                
+                f"<b>🏆 ANÁLISE DE VITÓRIA</b>\n"
+                f"<b>• Casa favorita: {home_fav_count} jogos</b>\n"
+                f"<b>• Fora favorita: {away_fav_count} jogos</b>\n"
+                f"<b>• Empate favorito: {draw_fav_count} jogos</b>\n\n"
+                
+                f"<b>⏰ PRIMEIRO TEMPO (HT)</b>\n"
+                f"<b>• Tendência Over HT: {ht_over_count} jogos</b>\n"
+                f"<b>• Tendência Under HT: {ht_under_count} jogos</b>\n\n"
+                
                 f"<b>🔥 JOGOS COM MAIOR POTENCIAL DO DIA</b>\n"
                 f"<b>⭐ Ordenados por nível de confiança</b>\n\n"
-                f"<b>🎯 ELITE MASTER SYSTEM - SELEÇÃO INTELIGENTE</b>"
+                f"<b>🎯 ELITE MASTER SYSTEM - ANÁLISE COMPLETA</b>"
             )
             
             # Enviar poster
@@ -3407,7 +3898,7 @@ def processar_jogos(data_selecionada, ligas_selecionadas, todas_ligas, top_n, mi
                 home = match["homeTeam"]["name"]
                 away = match["awayTeam"]["name"]
                 
-                # Usar nova função de análise completa
+                # Usar nova função de análise completa com vitória e HT
                 analise = calcular_tendencia_completa(home, away, classificacao)
 
                 # DEBUG: Mostrar cada jogo processado
@@ -3421,6 +3912,17 @@ def processar_jogos(data_selecionada, ligas_selecionadas, todas_ligas, top_n, mi
                 st.write(f"   {tipo_emoji} {home} vs {away}")
                 st.write(f"      🕒 {data_br} {hora_br} | {analise['tendencia']}")
                 st.write(f"      ⚽ Estimativa: {analise['estimativa']:.2f} | 🎯 Prob: {analise['probabilidade']:.0f}% | 🔍 Conf: {analise['confianca']:.0f}%")
+                
+                # Mostrar análise de vitória se disponível
+                if 'vitoria' in analise['detalhes']:
+                    v = analise['detalhes']['vitoria']
+                    st.write(f"      🏆 Favorito: {home if v['favorito']=='home' else away if v['favorito']=='away' else 'EMPATE'} ({v['confianca_vitoria']:.1f}%)")
+                
+                # Mostrar análise de HT se disponível
+                if 'gols_ht' in analise['detalhes']:
+                    ht = analise['detalhes']['gols_ht']
+                    st.write(f"      ⏰ HT: {ht['tendencia_ht']} ({ht['confianca_ht']:.1f}%)")
+                
                 st.write(f"      Status: {match.get('status', 'DESCONHECIDO')}")
 
                 # Só envia alerta individual se a checkbox estiver ativada E se estiver no intervalo
@@ -3470,7 +3972,24 @@ def processar_jogos(data_selecionada, ligas_selecionadas, todas_ligas, top_n, mi
         data_str = jogo["hora"].strftime("%d/%m/%Y")
         hora_str = jogo["hora"].strftime("%H:%M")
         tipo_emoji = "📈" if jogo['tipo_aposta'] == "over" else "📉"
-        st.write(f"{tipo_emoji} {jogo['home']} vs {jogo['away']}: {data_str} {hora_str} | {jogo['tendencia']} | Conf: {jogo['confianca']:.1f}% | Status: {jogo['status']}")
+        
+        # Informações básicas
+        info_line = f"{tipo_emoji} {jogo['home']} vs {jogo['away']}: {data_str} {hora_str} | {jogo['tendencia']} | Conf: {jogo['confianca']:.1f}% | Status: {jogo['status']}"
+        
+        # Adicionar análises extras se disponíveis
+        extra_info = []
+        if 'detalhes' in jogo:
+            if 'vitoria' in jogo['detalhes']:
+                v = jogo['detalhes']['vitoria']
+                extra_info.append(f"Fav: {jogo['home'] if v['favorito']=='home' else jogo['away'] if v['favorito']=='away' else 'EMPATE'}")
+            if 'gols_ht' in jogo['detalhes']:
+                ht = jogo['detalhes']['gols_ht']
+                extra_info.append(f"HT: {ht['tendencia_ht']}")
+        
+        if extra_info:
+            info_line += f" | {' | '.join(extra_info)}"
+        
+        st.write(info_line)
 
     # Filtrar por intervalo de confiança e tipo
     st.write(f"🔍 **DEBUG FILTRO POR INTERVALO ({min_conf}% - {max_conf}%) e TIPO ({tipo_filtro}):**")
@@ -3503,7 +4022,24 @@ def processar_jogos(data_selecionada, ligas_selecionadas, todas_ligas, top_n, mi
         st.write(f"✅ **Jogos no intervalo {min_conf}%-{max_conf}% ({tipo_filtro}):**")
         for jogo in jogos_filtrados:
             tipo_emoji = "📈" if jogo['tipo_aposta'] == "over" else "📉"
-            st.write(f"   {tipo_emoji} {jogo['home']} vs {jogo['away']} - {jogo['tendencia']} - Conf: {jogo['confianca']:.1f}%")
+            
+            # Informações básicas
+            info_line = f"   {tipo_emoji} {jogo['home']} vs {jogo['away']} - {jogo['tendencia']} - Conf: {jogo['confianca']:.1f}%"
+            
+            # Adicionar análises extras
+            extra_info = []
+            if 'detalhes' in jogo:
+                if 'vitoria' in jogo['detalhes']:
+                    v = jogo['detalhes']['vitoria']
+                    extra_info.append(f"Fav: {v['confianca_vitoria']:.1f}%")
+                if 'gols_ht' in jogo['detalhes']:
+                    ht = jogo['detalhes']['gols_ht']
+                    extra_info.append(f"HT: {ht['confianca_ht']:.1f}%")
+            
+            if extra_info:
+                info_line += f" | {' | '.join(extra_info)}"
+            
+            st.write(info_line)
         
         # Envia top jogos com opção de formato
         enviar_top_jogos(jogos_filtrados, top_n, alerta_top_jogos, min_conf, max_conf, formato_top_jogos, data_busca=hoje)
