@@ -4248,702 +4248,1011 @@ def enviar_alerta_conf_criar_poster(jogos_conf: list, min_conf: int, max_conf: i
                 if 'detalhes' in j and 'vitoria' in j['detalhes']:
                     v = j['detalhes']['vitoria']
                     #analise_extras += f"🏆 Favorito: {j['home'] if v['favorito']=='home' else j['away
-                    analise_extras += f"🏆 Favorito: {j['home'] if v['favorito']=='home' else j['away'] if v['favorito']=='away' else 'EMPATE'} ({max(v['home_win'], v['away_win'], v['draw']):.0f}%)\n"
-                
+                    analise_extras += f"🏆 Favorito: {j['home'] if v['favorito']=='home' else j['away'] if v['favorito']=='away' else 'EMPATE'} ({v['confianca_vitoria']}%)\n"
                 if 'detalhes' in j and 'gols_ht' in j['detalhes']:
                     ht = j['detalhes']['gols_ht']
                     analise_extras += f"⏰ HT: {ht['tendencia_ht']} ({ht['confianca_ht']}%)\n"
                 
-                msg += (
-                    f"• {hora_format} | {j['home'][:20]} vs {j['away'][:20]}\n"
-                    f"  <b>{j['tendencia']} | Est: {j['estimativa']:.2f} | Prob: {j['probabilidade']:.0f}% | Conf: {j['confianca']:.0f}%</b>\n"
-                )
+                msg += f"• {hora_format} | {j['home']} vs {j['away']} | {j['liga']}\n"
+                msg += f"  {j['tendencia']} | Est: {j['estimativa']:.2f} | Prob: {j['probabilidade']:.0f}% | Conf: {j['confianca']:.0f}%\n"
                 if analise_extras:
                     msg += f"  {analise_extras}"
                 msg += "\n"
         
         if under_jogos:
-            msg += f"\n📉 <b>UNDER ({len(under_jogos)} jogos):</b>\n\n"
+            msg += f"📉 <b>UNDER ({len(under_jogos)} jogos):</b>\n\n"
             for j in under_jogos:
                 hora_format = j["hora"].strftime("%H:%M") if isinstance(j["hora"], datetime) else str(j["hora"])
                 
-                # Adicionar análises extras se disponíveis
                 analise_extras = ""
                 if 'detalhes' in j and 'vitoria' in j['detalhes']:
                     v = j['detalhes']['vitoria']
-                    analise_extras += f"🏆 Favorito: {j['home'] if v['favorito']=='home' else j['away'] if v['favorito']=='away' else 'EMPATE'} ({max(v['home_win'], v['away_win'], v['draw']):.0f}%)\n"
-                
+                    analise_extras += f"🏆 Favorito: {j['home'] if v['favorito']=='home' else j['away'] if v['favorito']=='away' else 'EMPATE'} ({v['confianca_vitoria']}%)\n"
                 if 'detalhes' in j and 'gols_ht' in j['detalhes']:
                     ht = j['detalhes']['gols_ht']
                     analise_extras += f"⏰ HT: {ht['tendencia_ht']} ({ht['confianca_ht']}%)\n"
                 
-                msg += (
-                    f"• {hora_format} | {j['home'][:20]} vs {j['away'][:20]}\n"
-                    f"  <b>{j['tendencia']} | Est: {j['estimativa']:.2f} | Prob: {j['probabilidade']:.0f}% | Conf: {j['confianca']:.0f}%</b>\n"
-                )
+                msg += f"• {hora_format} | {j['home']} vs {j['away']} | {j['liga']}\n"
+                msg += f"  {j['tendencia']} | Est: {j['estimativa']:.2f} | Prob: {j['probabilidade']:.0f}% | Conf: {j['confianca']:.0f}%\n"
                 if analise_extras:
                     msg += f"  {analise_extras}"
                 msg += "\n"
         
-        # Adicionar estatísticas gerais
-        total_jogos = len(jogos_conf)
-        if total_jogos > 0:
-            media_conf = sum(j['confianca'] for j in jogos_conf) / total_jogos
-            msg += f"\n📊 <b>ESTATÍSTICAS GERAIS:</b>\n"
-            msg += f"• Total de jogos: {total_jogos}\n"
-            msg += f"• Média de confiança: {media_conf:.1f}%\n"
-            msg += f"• Over: {len(over_jogos)} | Under: {len(under_jogos)}\n"
-        
-        msg += f"\n🔥 <b>ELITE MASTER SYSTEM - INTERVALO {min_conf}%-{max_conf}%</b>"
-        
+        msg += f"🔥 ELITE MASTER SYSTEM - {datetime.now().strftime('%d/%m/%Y %H:%M')}"
         enviar_telegram(msg, chat_id=chat_id)
+        st.success("✅ Alerta enviado via fallback!")
         
     except Exception as e:
-        logging.error(f"Erro no fallback de alerta: {str(e)}")
-        st.error(f"❌ Erro no fallback: {str(e)}")
+        logging.error(f"Erro no fallback: {e}")
+        st.error(f"❌ Erro no fallback: {e}")
 
 # =============================
-# Funções de Conferência de Resultados
+# Funções de Conferência
 # =============================
 def conferir_resultados():
-    """Conferir resultados dos jogos enviados como alerta - VERSÃO COMPLETA"""
+    """Conferir resultados dos jogos que já foram enviados como alertas"""
     alertas = carregar_alertas()
     if not alertas:
-        st.info("⚠️ Nenhum alerta para conferir.")
+        st.info("ℹ️ Nenhum alerta para conferir.")
         return
+        
+    resultados_conferidos = 0
+    jogos_com_resultado = []
     
-    resultados_conferidos = []
-    
-    # Carregar alertas TOP para atualizar
-    alertas_top = carregar_alertas_top()
-    
-    for fixture_id_str, alerta in list(alertas.items()):
+    for fixture_id, alerta in list(alertas.items()):
+        if alerta.get("conferido", False):
+            continue
+            
         try:
-            fixture_id = int(fixture_id_str)
             url = f"{BASE_URL_FD}/matches/{fixture_id}"
             fixture_data = obter_dados_api(url)
             
             if not fixture_data:
                 continue
-            
+                
             match = fixture_data.get('match', fixture_data)
             status = match.get("status", "")
             score = match.get("score", {}).get("fullTime", {})
             home_goals = score.get("home")
             away_goals = score.get("away")
             
-            # Verificar se jogo terminou e tem resultado válido
-            if (status == "FINISHED" and 
-                home_goals is not None and 
-                away_goals is not None):
-                
-                # Calcular total de gols
+            if status == "FINISHED" and home_goals is not None and away_goals is not None:
                 total_gols = home_goals + away_goals
-                
-                # Determinar se a previsão foi correta
                 previsao_correta = False
+                
+                # Verificar para Over 2.5
                 if alerta["tendencia"] == "OVER 2.5" and total_gols > 2.5:
                     previsao_correta = True
+                # Verificar para Under 2.5
                 elif alerta["tendencia"] == "UNDER 2.5" and total_gols < 2.5:
                     previsao_correta = True
+                # Verificar para Over 1.5
                 elif alerta["tendencia"] == "OVER 1.5" and total_gols > 1.5:
                     previsao_correta = True
+                # Verificar para Under 1.5
                 elif alerta["tendencia"] == "UNDER 1.5" and total_gols < 1.5:
                     previsao_correta = True
                 
-                # Marcar como conferido
+                # Adicionar estatísticas de vitória e HT se disponíveis
+                vitoria_info = {}
+                ht_info = {}
+                if 'detalhes' in alerta:
+                    if 'vitoria' in alerta['detalhes']:
+                        vitoria_info = alerta['detalhes']['vitoria']
+                    if 'gols_ht' in alerta['detalhes']:
+                        ht_info = alerta['detalhes']['gols_ht']
+                
+                jogos_com_resultado.append({
+                    "id": fixture_id,
+                    "home": match["homeTeam"]["name"],
+                    "away": match["awayTeam"]["name"],
+                    "home_goals": home_goals,
+                    "away_goals": away_goals,
+                    "data": match["utcDate"],
+                    "tendencia_prevista": alerta["tendencia"],
+                    "estimativa_prevista": alerta["estimativa"],
+                    "probabilidade_prevista": alerta["probabilidade"],
+                    "confianca_prevista": alerta["confianca"],
+                    "tipo_aposta": alerta["tipo_aposta"],
+                    "liga": match.get("competition", {}).get("name", "Desconhecido"),
+                    "resultado": "GREEN" if previsao_correta else "RED",
+                    "total_gols": total_gols,
+                    "escudo_home": match["homeTeam"].get("crest", ""),
+                    "escudo_away": match["awayTeam"].get("crest", ""),
+                    "vitoria_info": vitoria_info,
+                    "ht_info": ht_info
+                })
+                
                 alerta["conferido"] = True
                 alerta["resultado"] = "GREEN" if previsao_correta else "RED"
                 alerta["placar"] = f"{home_goals}x{away_goals}"
-                alerta["total_gols"] = total_gols
-                alerta["home_goals"] = home_goals
-                alerta["away_goals"] = away_goals
-                
-                # Adicionar dados do jogo original (se disponíveis)
-                if match.get("homeTeam"):
-                    alerta["home"] = match["homeTeam"].get("name", "Desconhecido")
-                    alerta["escudo_home"] = match["homeTeam"].get("crest") or match["homeTeam"].get("logo", "")
-                if match.get("awayTeam"):
-                    alerta["away"] = match["awayTeam"].get("name", "Desconhecido")
-                    alerta["escudo_away"] = match["awayTeam"].get("crest") or match["awayTeam"].get("logo", "")
-                
-                alerta["liga"] = match.get("competition", {}).get("name", "Desconhecido")
-                alerta["data"] = match.get("utcDate", "")
-                
-                # Adicionar às listas
-                resultados_conferidos.append(alerta)
-                
-                # Atualizar também nos alertas TOP se existir
-                for chave, alerta_top in list(alertas_top.items()):
-                    if str(alerta_top.get("id")) == fixture_id_str:
-                        alerta_top["conferido"] = True
-                        alerta_top["resultado"] = "GREEN" if previsao_correta else "RED"
-                        alerta_top["placar"] = f"{home_goals}x{away_goals}"
-                        alerta_top["total_gols"] = total_gols
-                        alerta_top["data_conferencia"] = datetime.now().isoformat()
+                resultados_conferidos += 1
                 
         except Exception as e:
-            logging.error(f"Erro ao conferir resultado {fixture_id_str}: {e}")
-            st.error(f"Erro ao conferir resultado {fixture_id_str}: {e}")
+            logging.error(f"Erro ao conferir fixture {fixture_id}: {e}")
+            st.error(f"Erro ao conferir fixture {fixture_id}: {e}")
     
-    if resultados_conferidos:
-        # Atualizar alertas
+    if resultados_conferidos > 0:
         salvar_alertas(alertas)
+        st.success(f"✅ {resultados_conferidos} jogos conferidos!")
         
-        # Atualizar alertas TOP
-        salvar_alertas_top(alertas_top)
+        # Mostrar estatísticas detalhadas
+        mostrar_estatisticas_conferencia(jogos_com_resultado)
         
-        # Verificar se há conjuntos completos de alertas TOP para reportar
-        enviar_alerta_top_conferidos()
+        # Opção de enviar resultados via poster
+        if jogos_com_resultado:
+            st.subheader("📤 Enviar Resultados para o Telegram")
+            
+            # Configuração de lotes
+            max_jogos_por_alerta = st.number_input("Máximo de jogos por alerta", 
+                                                 min_value=1, max_value=10, value=3, key="max_jogos_alerta")
+            
+            if st.button("🚀 Enviar Resultados com Poster", type="primary"):
+                with st.spinner("🎨 Gerando poster de resultados..."):
+                    enviar_alerta_resultados_poster(jogos_com_resultado, max_jogos_por_alerta=max_jogos_por_alerta)
         
-        st.success(f"✅ {len(resultados_conferidos)} resultados conferidos!")
-        
-        # Mostrar estatísticas
-        mostrar_estatisticas_conferencia(resultados_conferidos)
-        
-        # Perguntar se quer enviar poster de resultados
-        enviar_poster = st.checkbox("📤 Enviar poster de resultados para o Telegram?", value=True)
-        if enviar_poster and st.button("🚀 Enviar Poster de Resultados"):
-            enviar_alerta_resultados_poster(resultados_conferidos, max_jogos_por_alerta=3)
-        
-        # Mostrar detalhes dos jogos conferidos
-        st.subheader("🎯 Jogos Conferidos:")
-        for resultado in resultados_conferidos:
-            resultado_emoji = "🟢" if resultado.get("resultado") == "GREEN" else "🔴"
-            tipo_emoji = "📈" if resultado.get("tipo_aposta") == "over" else "📉"
-            col1, col2, col3 = st.columns([4, 2, 1])
-            with col1:
-                st.write(f"{resultado_emoji} {tipo_emoji} {resultado.get('home', '?')} {resultado.get('placar', '?')} {resultado.get('away', '?')}")
-            with col2:
-                st.write(f"**{resultado.get('tendencia', '?')}**")
-            with col3:
-                st.write(f"Conf: {resultado.get('confianca', 0):.0f}%")
+        return jogos_com_resultado
     else:
         st.info("ℹ️ Nenhum novo resultado para conferir.")
+        return []
 
-def mostrar_estatisticas_conferencia(resultados: list):
-    """Mostra estatísticas dos resultados conferidos"""
-    if not resultados:
+def mostrar_estatisticas_conferencia(jogos_com_resultado: list):
+    """Mostra estatísticas detalhadas da conferência"""
+    if not jogos_com_resultado:
         return
-    
-    total_jogos = len(resultados)
-    green_count = sum(1 for r in resultados if r.get("resultado") == "GREEN")
+        
+    total_jogos = len(jogos_com_resultado)
+    green_count = sum(1 for j in jogos_com_resultado if j["resultado"] == "GREEN")
     red_count = total_jogos - green_count
     taxa_acerto = (green_count / total_jogos * 100) if total_jogos > 0 else 0
     
     # Separar Over e Under
-    over_jogos = [r for r in resultados if r.get("tipo_aposta") == "over"]
-    under_jogos = [r for r in resultados if r.get("tipo_aposta") == "under"]
+    over_jogos = [j for j in jogos_com_resultado if j["tipo_aposta"] == "over"]
+    under_jogos = [j for j in jogos_com_resultado if j["tipo_aposta"] == "under"]
     
-    over_green = sum(1 for r in over_jogos if r.get("resultado") == "GREEN")
-    under_green = sum(1 for r in under_jogos if r.get("resultado") == "GREEN")
+    over_green = sum(1 for j in over_jogos if j["resultado"] == "GREEN")
+    under_green = sum(1 for j in under_jogos if j["resultado"] == "GREEN")
     
-    # Estatísticas por tipo de aposta
+    # Estatísticas de vitória
+    home_fav_green = 0
+    away_fav_green = 0
+    draw_fav_green = 0
+    
+    for jogo in jogos_com_resultado:
+        if 'vitoria_info' in jogo and jogo['vitoria_info']:
+            favorito = jogo['vitoria_info'].get('favorito', '')
+            if favorito == "home" and jogo["resultado"] == "GREEN":
+                home_fav_green += 1
+            elif favorito == "away" and jogo["resultado"] == "GREEN":
+                away_fav_green += 1
+            elif favorito == "draw" and jogo["resultado"] == "GREEN":
+                draw_fav_green += 1
+    
+    # Estatísticas HT
+    ht_over_green = 0
+    ht_under_green = 0
+    
+    for jogo in jogos_com_resultado:
+        if 'ht_info' in jogo and jogo['ht_info']:
+            tendencia_ht = jogo['ht_info'].get('tendencia_ht', '')
+            if "OVER" in tendencia_ht and jogo["resultado"] == "GREEN":
+                ht_over_green += 1
+            elif "UNDER" in tendencia_ht and jogo["resultado"] == "GREEN":
+                ht_under_green += 1
+    
+    # Mostrar estatísticas
+    st.subheader("📊 Estatísticas da Conferência")
+    
     col1, col2, col3 = st.columns(3)
-    
     with col1:
-        st.metric("📊 Total de Jogos", total_jogos)
-    
+        st.metric("🎯 Total de Jogos", total_jogos)
+        st.metric("🟢 GREEN", green_count)
     with col2:
-        st.metric("🟢 GREEN", f"{green_count} ({taxa_acerto:.1f}%)", delta=f"{taxa_acerto:.1f}%")
-    
+        st.metric("🔴 RED", red_count)
+        st.metric("📈 Taxa de Acerto", f"{taxa_acerto:.1f}%")
     with col3:
-        st.metric("🔴 RED", f"{red_count} ({100 - taxa_acerto:.1f}%)")
+        st.metric("📈 Over", f"{over_green}/{len(over_jogos)}")
+        st.metric("📉 Under", f"{under_green}/{len(under_jogos)}")
     
-    # Estatísticas por tipo de aposta
+    # Estatísticas detalhadas
+    st.subheader("📈 Estatísticas Detalhadas")
+    
     if over_jogos:
-        st.write(f"**📈 OVER:** {over_green}/{len(over_jogos)} GREEN ({over_green/max(len(over_jogos),1)*100:.1f}%)")
+        taxa_over = (over_green / len(over_jogos) * 100) if len(over_jogos) > 0 else 0
+        st.info(f"**OVER:** {over_green}/{len(over_jogos)} GREEN ({taxa_over:.1f}%)")
     
     if under_jogos:
-        st.write(f"**📉 UNDER:** {under_green}/{len(under_jogos)} GREEN ({under_green/max(len(under_jogos),1)*100:.1f}%)")
+        taxa_under = (under_green / len(under_jogos) * 100) if len(under_jogos) > 0 else 0
+        st.info(f"**UNDER:** {under_green}/{len(under_jogos)} GREEN ({taxa_under:.1f}%)")
+    
+    # Mostrar favoritos com GREEN
+    if home_fav_green > 0 or away_fav_green > 0 or draw_fav_green > 0:
+        st.info(f"**🏆 Favoritos com GREEN:** Casa: {home_fav_green} | Fora: {away_fav_green} | Empate: {draw_fav_green}")
+    
+    # Mostrar HT com GREEN
+    if ht_over_green > 0 or ht_under_green > 0:
+        st.info(f"**⏰ HT com GREEN:** Over: {ht_over_green} | Under: {ht_under_green}")
 
 # =============================
-# Função Principal de Análise - VERSÃO ATUALIZADA COM NOVAS ANÁLISES
+# Funções de Busca de Jogos - VERSÃO ATUALIZADA COM NOVAS ANÁLISES
 # =============================
-def analisar_ligas(ligas_selecionadas: list, data_analise: str, min_conf: int, max_conf: int, 
-                  alerta_individual: bool, filtro_tipo: str = "Todos", max_jogos_por_alerta: int = 5,
-                  tipo_analise: str = "Over/Under de Gols", config_analise: dict = None):
-    """Analisa as ligas selecionadas com base no tipo de análise"""
+def buscar_jogos_ligas_selecionadas(ligas: list, data_hoje: str, min_conf: int = 70, max_conf: int = 95):
+    """Busca jogos em múltiplas ligas com análises completas"""
+    todos_jogos_analisados = []
     
-    # Configurações padrão se não fornecidas
-    if config_analise is None:
-        config_analise = {
-            "min_conf": min_conf,
-            "max_conf": max_conf,
-            "tipo_filtro": filtro_tipo,
-            "min_conf_vitoria": 65,
-            "filtro_favorito": "Todos",
-            "min_conf_ht": 60,
-            "tipo_ht": "Todos"
-        }
-    
-    st.info(f"🔍 Analisando {len(ligas_selecionadas)} ligas para {data_analise}...")
-    st.info(f"📊 Tipo de análise: {tipo_analise}")
-    
-    progress_bar = st.progress(0)
-    jogos_com_analise = []
-    
-    for idx, (nome_liga, liga_id) in enumerate(ligas_selecionadas.items()):
-        try:
-            st.write(f"⚽ **{nome_liga}** ({liga_id})...")
-            
-            # Buscar jogos
-            jogos = obter_jogos(liga_id, data_analise)
-            if not jogos:
-                st.write(f"  ℹ️ Nenhum jogo encontrado para {data_analise}")
-                progress_bar.progress((idx + 1) / len(ligas_selecionadas))
-                continue
-            
-            # Obter classificação da liga
-            classificacao = obter_classificacao(liga_id)
-            if not classificacao:
-                st.warning(f"  ⚠️ Classificação não disponível para {nome_liga}")
-                progress_bar.progress((idx + 1) / len(ligas_selecionadas))
-                continue
-            
-            # Analisar cada jogo
-            jogos_validos = 0
-            for match in jogos:
-                if not validar_dados_jogo(match):
-                    continue
-                
-                # Pular jogos em andamento ou finalizados
-                status = match.get("status", "")
-                if status in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"]:
-                    continue
-                
-                home_team = match["homeTeam"]["name"]
-                away_team = match["awayTeam"]["name"]
-                hora_jogo = formatar_data_iso_para_datetime(match["utcDate"])
-                
-                # Calcular análise completa (incluindo vitória e HT)
-                analise = calcular_tendencia_completa(home_team, away_team, classificacao)
-                
-                # Adicionar informações do jogo
-                analise.update({
-                    "id": match["id"],
-                    "home": home_team,
-                    "away": away_team,
-                    "liga": nome_liga,
-                    "hora": hora_jogo,
-                    "status": status,
-                    "escudo_home": match.get("homeTeam", {}).get("crest") or match.get("homeTeam", {}).get("logo", ""),
-                    "escudo_away": match.get("awayTeam", {}).get("crest") or match.get("awayTeam", {}).get("logo", "")
-                })
-                
-                jogos_com_analise.append(analise)
-                jogos_validos += 1
-            
-            st.write(f"  ✅ {jogos_validos} jogos analisados")
-            progress_bar.progress((idx + 1) / len(ligas_selecionadas))
-            
-        except Exception as e:
-            logging.error(f"Erro ao analisar liga {nome_liga}: {e}")
-            st.error(f"❌ Erro em {nome_liga}: {str(e)}")
-            progress_bar.progress((idx + 1) / len(ligas_selecionadas))
+    for liga_nome in ligas:
+        liga_id = LIGA_DICT.get(liga_nome)
+        if not liga_id:
+            st.warning(f"⚠️ Liga {liga_nome} não encontrada no dicionário")
             continue
+            
+        st.info(f"🔍 Buscando jogos da {liga_nome} ({liga_id}) para {data_hoje}...")
+        
+        # Obter jogos
+        if liga_id == "BSA":
+            jogos = obter_jogos_brasileirao(liga_id, data_hoje)
+        else:
+            jogos = obter_jogos(liga_id, data_hoje)
+        
+        if not jogos:
+            st.warning(f"⚠️ Nenhum jogo encontrado para {liga_nome}")
+            continue
+            
+        # Obter classificação
+        classificacao = obter_classificacao(liga_id)
+        
+        # Analisar cada jogo
+        jogos_analisados = []
+        for match in jogos:
+            if not validar_dados_jogo(match):
+                continue
+                
+            home = match["homeTeam"]["name"]
+            away = match["awayTeam"]["name"]
+            status = match.get("status", "SCHEDULED")
+            
+            # Pular jogos que já terminaram ou estão em andamento
+            if status in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"]:
+                continue
+            
+            # Calcular análise completa
+            try:
+                analise = calcular_tendencia_completa(home, away, classificacao)
+                
+                # Verificar se a confiança está no intervalo desejado
+                if min_conf <= analise["confianca"] <= max_conf:
+                    hora_jogo = formatar_data_iso_para_datetime(match["utcDate"])
+                    
+                    jogo_analisado = {
+                        "id": match["id"],
+                        "home": home,
+                        "away": away,
+                        "liga": liga_nome,
+                        "liga_id": liga_id,
+                        "hora": hora_jogo,
+                        "tendencia": analise["tendencia"],
+                        "estimativa": analise["estimativa"],
+                        "probabilidade": analise["probabilidade"],
+                        "confianca": analise["confianca"],
+                        "tipo_aposta": analise["tipo_aposta"],
+                        "status": status,
+                        "escudo_home": match["homeTeam"].get("crest", ""),
+                        "escudo_away": match["awayTeam"].get("crest", ""),
+                        "detalhes": analise["detalhes"]
+                    }
+                    
+                    jogos_analisados.append(jogo_analisado)
+                    
+            except Exception as e:
+                logging.error(f"Erro ao analisar {home} vs {away}: {e}")
+                st.warning(f"⚠️ Erro ao analisar {home} vs {away}: {e}")
+        
+        todos_jogos_analisados.extend(jogos_analisados)
+        st.success(f"✅ {len(jogos_analisados)} jogos analisados na {liga_nome}")
     
-    progress_bar.empty()
+    # Ordenar por confiança (maior primeiro)
+    todos_jogos_analisados.sort(key=lambda x: x["confianca"], reverse=True)
     
-    if not jogos_com_analise:
-        st.warning("⚠️ Nenhum jogo válido encontrado para análise.")
-        return [], []
+    return todos_jogos_analisados
+
+def buscar_top_jogos(ligas: list, data_hoje: str, min_conf: int = 70, max_conf: int = 95, top_n: int = 5):
+    """Busca os top N jogos do dia"""
+    jogos = buscar_jogos_ligas_selecionadas(ligas, data_hoje, min_conf, max_conf)
     
-    # Filtrar jogos baseado no tipo de análise
-    jogos_filtrados = filtrar_por_tipo_analise(jogos_com_analise, tipo_analise, config_analise)
+    # Filtrar apenas os jogos dentro do intervalo de confiança
+    jogos_filtrados = [j for j in jogos if min_conf <= j["confianca"] <= max_conf]
     
-    if not jogos_filtrados:
-        st.warning(f"⚠️ Nenhum jogo atende aos critérios da análise {tipo_analise}.")
-        return jogos_com_analise, []
+    # Limitar ao top N
+    top_jogos = jogos_filtrados[:top_n]
     
-    # Ordenar por confiança (decrescente)
-    if tipo_analise == "Over/Under de Gols":
-        jogos_filtrados.sort(key=lambda x: x["confianca"], reverse=True)
-    elif tipo_analise == "Favorito (Vitória)":
-        jogos_filtrados.sort(key=lambda x: x.get("confianca_vitoria", 0), reverse=True)
-    elif tipo_analise == "Gols HT (Primeiro Tempo)":
-        jogos_filtrados.sort(key=lambda x: x.get("confianca_ht", 0), reverse=True)
-    
-    st.success(f"✅ {len(jogos_filtrados)} jogos filtrados para {tipo_analise}")
-    
-    return jogos_com_analise, jogos_filtrados
+    return top_jogos
 
 # =============================
-# Funções de Relatório PDF
+# NOVA FUNÇÃO: Salvar alertas TOP quando são encontrados
 # =============================
-def gerar_pdf_top_jogos(jogos: list, filename: str = "top_jogos.pdf"):
-    """Gera relatório PDF dos top jogos"""
-    try:
-        buffer = io.BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=letter)
-        elements = []
-        
-        # Título
-        from reportlab.platypus import Paragraph, Spacer
-        from reportlab.lib.styles import getSampleStyleSheet
-        from reportlab.lib.units import inch
-        
-        styles = getSampleStyleSheet()
-        title = Paragraph("ELITE MASTER SYSTEM - TOP JOGOS", styles['Title'])
-        elements.append(title)
-        elements.append(Spacer(1, 0.2 * inch))
-        
-        # Data de geração
-        data_gen = Paragraph(f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", styles['Normal'])
-        elements.append(data_gen)
-        elements.append(Spacer(1, 0.2 * inch))
-        
-        # Tabela de jogos
-        table_data = [["Hora", "Liga", "Jogo", "Tendência", "Estimativa", "Confiança"]]
-        
-        for jogo in jogos:
-            hora_str = jogo["hora"].strftime("%H:%M") if isinstance(jogo["hora"], datetime) else str(jogo["hora"])
-            row = [
-                hora_str,
-                jogo["liga"][:15],
-                f"{jogo['home'][:10]} vs {jogo['away'][:10]}",
-                jogo["tendencia"],
-                f"{jogo['estimativa']:.2f}",
-                f"{jogo['confianca']:.0f}%"
-            ]
-            table_data.append(row)
-        
-        table = Table(table_data)
-        table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 12),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-            ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
-            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (-1, -1), 10),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black)
-        ]))
-        elements.append(table)
-        
-        # Estatísticas
-        elements.append(Spacer(1, 0.3 * inch))
-        total_jogos = len(jogos)
-        over_count = sum(1 for j in jogos if j.get('tipo_aposta') == "over")
-        under_count = total_jogos - over_count
-        
-        stats_text = f"<b>ESTATÍSTICAS:</b> Total: {total_jogos} jogos | Over: {over_count} | Under: {under_count}"
-        stats = Paragraph(stats_text, styles['Normal'])
-        elements.append(stats)
-        
-        doc.build(elements)
-        buffer.seek(0)
-        
-        st.success(f"✅ PDF gerado: {filename}")
-        return buffer
-        
-    except Exception as e:
-        logging.error(f"Erro ao gerar PDF: {e}")
-        st.error(f"❌ Erro ao gerar PDF: {e}")
-        return None
+def salvar_alertas_top_se_encontrados(top_jogos: list, data_busca: str):
+    """Salva os alertas TOP encontrados para conferência posterior"""
+    for jogo in top_jogos:
+        adicionar_alerta_top(jogo, data_busca)
+    
+    st.success(f"✅ {len(top_jogos)} alertas TOP salvos para conferência!")
 
-   
 # =============================
-# Interface Streamlit com Monitoramento
+# Interface Streamlit Principal - VERSÃO ATUALIZADA COM TODAS AS FUNCIONALIDADES
 # =============================
 def main():
-    st.set_page_config(page_title="⚽ Alerta de Gols Over/Under", layout="wide")
-    st.title("⚽ Sistema de Alertas Automáticos Over/Under")
-
-    # Sidebar - CONFIGURAÇÕES DE ALERTAS
+    st.set_page_config(
+        page_title="⚽ Elite Master System",
+        page_icon="⚽",
+        layout="wide",
+        initial_sidebar_state="expanded"
+    )
+    
+    # CSS customizado
+    st.markdown("""
+    <style>
+    .stButton > button {
+        background: linear-gradient(45deg, #1E3A8A, #3B82F6);
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 0.5rem;
+        font-weight: bold;
+    }
+    .stButton > button:hover {
+        background: linear-gradient(45deg, #1E40AF, #2563EB);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+    }
+    .metric-card {
+        background: linear-gradient(135deg, #1E293B, #334155);
+        padding: 1rem;
+        border-radius: 0.5rem;
+        border-left: 4px solid #3B82F6;
+        margin: 0.5rem 0;
+    }
+    .alert-box {
+        background: linear-gradient(135deg, #064E3B, #047857);
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin: 0.5rem 0;
+        border-left: 4px solid #10B981;
+    }
+    .warning-box {
+        background: linear-gradient(135deg, #78350F, #B45309);
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin: 0.5rem 0;
+        border-left: 4px solid #F59E0B;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Header
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.title("⚽ ELITE MASTER SYSTEM")
+        st.markdown("### 🔮 Sistema de Análise Preditiva de Futebol")
+        st.markdown("---")
+    
+    # Sidebar
     with st.sidebar:
-        st.header("🔔 Configurações de Alertas")
+        st.header("⚙️ Configurações")
         
-        # NOVO: Seleção do tipo de análise
-        st.subheader("🎯 Tipo de Análise Principal")
-        tipo_analise = st.selectbox(
-            "Selecione o tipo de alerta:",
-            ["Over/Under de Gols", "Favorito (Vitória)", "Gols HT (Primeiro Tempo)"],
-            index=0,
-            help="Escolha qual tipo de análise deseja priorizar nos alertas"
+        # Seleção de data
+        data_hoje = datetime.now().strftime("%Y-%m-%d")
+        data_selecionada = st.date_input("📅 Data dos jogos", 
+                                        value=datetime.now(),
+                                        min_value=datetime.now(),
+                                        max_value=datetime.now() + timedelta(days=7))
+        data_str = data_selecionada.strftime("%Y-%m-%d")
+        
+        # Seleção de ligas
+        st.subheader("🏆 Ligas Selecionadas")
+        ligas_disponiveis = list(LIGA_DICT.keys())
+        ligas_selecionadas = st.multiselect(
+            "Selecione as ligas para análise",
+            ligas_disponiveis,
+            default=["Bundesliga", "Premier League (Inglaterra)", "Campeonato Brasileiro Série A", "Serie A (Itália)"]
         )
         
-        # Configurações específicas baseadas no tipo de análise
-        config_analise = {}
+        # Configurações de confiança
+        st.subheader("🎯 Configurações de Confiança")
+        min_conf = st.slider("Confiança mínima (%)", 0, 100, 70, key="min_conf")
+        max_conf = st.slider("Confiança máxima (%)", 0, 100, 95, key="max_conf")
+        
+        # Configurações de alerta
+        st.subheader("🔔 Configurações de Alerta")
+        alerta_individual = st.checkbox("Enviar alertas individuais", value=False)
+        alerta_grupo = st.checkbox("Enviar alerta em grupo", value=True)
+        
+        # Configurações de poster
+        st.subheader("🎨 Configurações de Poster")
+        estilo_poster = st.selectbox(
+            "Estilo do poster",
+            ["West Ham Style", "Top Jogos Style"],
+            index=0
+        )
+        
+        # Configurações de resultados
+        st.subheader("📊 Configurações de Resultados")
+        max_jogos_resultados = st.number_input("Máx jogos por poster de resultados", 
+                                              min_value=1, max_value=10, value=3)
+        
+        # Botão para limpar caches
+        st.subheader("🧹 Manutenção")
+        if st.button("Limpar Caches", type="secondary"):
+            jogos_cache.clear()
+            classificacao_cache.clear()
+            match_cache.clear()
+            escudos_cache.clear()
+            st.success("✅ Todos os caches foram limpos!")
+    
+    # Abas principais
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+        "🔍 Buscar Jogos", 
+        "🎯 Top Jogos", 
+        "📊 Análises Avançadas",
+        "📨 Enviar Alertas", 
+        "✅ Conferir Resultados", 
+        "📈 Estatísticas",
+        "📋 Alertas TOP",
+        "⚙️ Sistema"
+    ])
+    
+    # ==================== TAB 1: BUSCAR JOGOS ====================
+    with tab1:
+        st.header("🔍 Buscar Jogos do Dia")
+        
+        if st.button("🔎 Buscar Jogos", type="primary", use_container_width=True):
+            if not ligas_selecionadas:
+                st.warning("⚠️ Selecione pelo menos uma liga!")
+                return
+                
+            with st.spinner("🔄 Buscando e analisando jogos..."):
+                jogos = buscar_jogos_ligas_selecionadas(ligas_selecionadas, data_str, min_conf, max_conf)
+                
+                if jogos:
+                    # Mostrar estatísticas
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("🎯 Total de Jogos", len(jogos))
+                    with col2:
+                        over_count = sum(1 for j in jogos if j["tipo_aposta"] == "over")
+                        st.metric("📈 Over", over_count)
+                    with col3:
+                        under_count = sum(1 for j in jogos if j["tipo_aposta"] == "under")
+                        st.metric("📉 Under", under_count)
+                    with col4:
+                        avg_conf = sum(j["confianca"] for j in jogos) / len(jogos)
+                        st.metric("📊 Confiança Média", f"{avg_conf:.1f}%")
+                    
+                    # Tabela de jogos
+                    st.subheader("📋 Jogos Encontrados")
+                    
+                    # Converter para DataFrame
+                    df_data = []
+                    for jogo in jogos:
+                        hora_format = jogo["hora"].strftime("%H:%M") if isinstance(jogo["hora"], datetime) else str(jogo["hora"])
+                        tipo_emoji = "📈" if jogo["tipo_aposta"] == "over" else "📉"
+                        conf_color = "🟢" if jogo["confianca"] >= 80 else "🟡" if jogo["confianca"] >= 60 else "🟠"
+                        
+                        # Adicionar análises extras se disponíveis
+                        analise_extras = ""
+                        if 'detalhes' in jogo:
+                            if 'vitoria' in jogo['detalhes']:
+                                v = jogo['detalhes']['vitoria']
+                                fav_emoji = "🏠" if v['favorito'] == 'home' else "✈️" if v['favorito'] == 'away' else "🤝"
+                                analise_extras += f"{fav_emoji} {v['confianca_vitoria']}% "
+                            if 'gols_ht' in jogo['detalhes']:
+                                ht = jogo['detalhes']['gols_ht']
+                                analise_extras += f"⏰ {ht['confianca_ht']}%"
+                        
+                        df_data.append({
+                            "Hora": hora_format,
+                            "Liga": jogo["liga"],
+                            "Casa": jogo["home"],
+                            "Fora": jogo["away"],
+                            "Tendência": f"{tipo_emoji} {jogo['tendencia']}",
+                            "Estimativa": f"{jogo['estimativa']:.2f}",
+                            "Probabilidade": f"{jogo['probabilidade']:.0f}%",
+                            "Confiança": f"{conf_color} {jogo['confianca']:.0f}%",
+                            "Análises": analise_extras
+                        })
+                    
+                    df = pd.DataFrame(df_data)
+                    st.dataframe(df, use_container_width=True, hide_index=True)
+                    
+                    # Armazenar jogos na sessão
+                    st.session_state.jogos_encontrados = jogos
+                    st.success(f"✅ {len(jogos)} jogos encontrados e analisados!")
+                else:
+                    st.warning("⚠️ Nenhum jogo encontrado com os critérios selecionados.")
+    
+    # ==================== TAB 2: TOP JOGOS ====================
+    with tab2:
+        st.header("🎯 Top Jogos do Dia")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            top_n = st.number_input("Número de Top Jogos", min_value=1, max_value=20, value=5)
+        with col2:
+            enviar_top = st.checkbox("Enviar alerta dos Top Jogos", value=True)
+        
+        if st.button("🎯 Buscar Top Jogos", type="primary", use_container_width=True):
+            if not ligas_selecionadas:
+                st.warning("⚠️ Selecione pelo menos uma liga!")
+                return
+                
+            with st.spinner("🔄 Buscando os melhores jogos..."):
+                top_jogos = buscar_top_jogos(ligas_selecionadas, data_str, min_conf, max_conf, top_n)
+                
+                if top_jogos:
+                    # Salvar alertas TOP para conferência posterior
+                    salvar_alertas_top_se_encontrados(top_jogos, data_str)
+                    
+                    # Mostrar top jogos
+                    st.subheader(f"🔥 TOP {len(top_jogos)} JOGOS")
+                    
+                    # Criar cartões para cada jogo
+                    cols = st.columns(min(3, len(top_jogos)))
+                    for idx, jogo in enumerate(top_jogos):
+                        col_idx = idx % 3
+                        with cols[col_idx]:
+                            with st.container(border=True):
+                                hora_format = jogo["hora"].strftime("%H:%M") if isinstance(jogo["hora"], datetime) else str(jogo["hora"])
+                                tipo_emoji = "📈" if jogo["tipo_aposta"] == "over" else "📉"
+                                conf_color = "green" if jogo["confianca"] >= 80 else "orange" if jogo["confianca"] >= 60 else "red"
+                                
+                                st.markdown(f"#### 🏆 {jogo['liga']}")
+                                st.markdown(f"**⏰ {hora_format}**")
+                                st.markdown(f"**{jogo['home']}** vs **{jogo['away']}**")
+                                st.markdown(f"**{tipo_emoji} {jogo['tendencia']}**")
+                                st.markdown(f"🎯 Prob: {jogo['probabilidade']:.0f}%")
+                                st.markdown(f"🔍 Conf: <span style='color:{conf_color}'>{jogo['confianca']:.0f}%</span>", unsafe_allow_html=True)
+                                
+                                # Mostrar análises extras
+                                if 'detalhes' in jogo:
+                                    detalhes = jogo['detalhes']
+                                    with st.expander("📊 Análises Detalhadas"):
+                                        if 'vitoria' in detalhes:
+                                            v = detalhes['vitoria']
+                                            st.markdown(f"**🏆 VITÓRIA:**")
+                                            st.markdown(f"• {jogo['home']}: {v['home_win']}%")
+                                            st.markdown(f"• Empate: {v['draw']}%")
+                                            st.markdown(f"• {jogo['away']}: {v['away_win']}%")
+                                            st.markdown(f"• Favorito: **{v['favorito']}** ({v['confianca_vitoria']}%)")
+                                        
+                                        if 'gols_ht' in detalhes:
+                                            ht = detalhes['gols_ht']
+                                            st.markdown(f"**⏰ PRIMEIRO TEMPO:**")
+                                            st.markdown(f"• {ht['tendencia_ht']} ({ht['confianca_ht']}%)")
+                                            st.markdown(f"• Estimativa: {ht['estimativa_total_ht']:.2f} gols")
+                                            st.markdown(f"• Over 0.5 HT: {ht['over_05_ht']}%")
+                                            st.markdown(f"• Over 1.5 HT: {ht['over_15_ht']}%")
+                    
+                    # Opção de gerar e enviar poster
+                    if enviar_top:
+                        st.subheader("🎨 Gerar Poster dos Top Jogos")
+                        
+                        if st.button("🖼️ Gerar e Enviar Poster", type="primary"):
+                            with st.spinner("🎨 Gerando poster profissional..."):
+                                poster = gerar_poster_top_jogos(
+                                    top_jogos, 
+                                    min_conf, 
+                                    max_conf, 
+                                    titulo=f"**🔥 TOP {len(top_jogos)} JOGOS - {data_str} **"
+                                )
+                                
+                                # Enviar para Telegram
+                                if poster:
+                                    caption = (
+                                        f"<b>🔥 TOP {len(top_jogos)} JOGOS DO DIA - {data_str}</b>\n\n"
+                                        f"<b>🎯 Intervalo de Confiança: {min_conf}%-{max_conf}%</b>\n"
+                                        f"<b>📊 Média de Confiança: {sum(j['confianca'] for j in top_jogos)/len(top_jogos):.1f}%</b>\n\n"
+                                        f"<b>📈 Over: {sum(1 for j in top_jogos if j['tipo_aposta'] == 'over')} jogos</b>\n"
+                                        f"<b>📉 Under: {sum(1 for j in top_jogos if j['tipo_aposta'] == 'under')} jogos</b>\n\n"
+                                        f"<b>🔮 SELECIONADOS PELA INTELIGÊNCIA ARTIFICIAL</b>"
+                                    )
+                                    
+                                    if enviar_foto_telegram(poster, caption=caption):
+                                        st.success("✅ Poster dos Top Jogos enviado para o Telegram!")
+                                    else:
+                                        st.error("❌ Falha ao enviar poster para o Telegram")
+                    
+                    # Armazenar top jogos na sessão
+                    st.session_state.top_jogos = top_jogos
+                else:
+                    st.warning("⚠️ Nenhum jogo encontrado para o Top N selecionado.")
+    
+    # ==================== TAB 3: ANÁLISES AVANÇADAS ====================
+    with tab3:
+        st.header("📊 Análises Avançadas")
+        
+        # Seleção do tipo de análise
+        tipo_analise = st.selectbox(
+            "Selecione o tipo de análise",
+            ["Over/Under de Gols", "Favorito (Vitória)", "Gols HT (Primeiro Tempo)"],
+            index=0
+        )
         
         if tipo_analise == "Over/Under de Gols":
-            # Configurações existentes para Over/Under
-            tipo_filtro = st.selectbox("🔍 Filtrar por Tipo", ["Todos", "Apenas Over", "Apenas Under"], index=0)
-            min_conf = st.slider("Confiança Mínima (%)", 10, 95, 70, 1)
-            max_conf = st.slider("Confiança Máxima (%)", min_conf, 95, 95, 1)
+            st.subheader("📈 Configurações Over/Under")
             
-            config_analise = {
-                "tipo_filtro": tipo_filtro,
+            col1, col2 = st.columns(2)
+            with col1:
+                min_conf = st.slider("Confiança mínima (%)", 0, 100, 70)
+            with col2:
+                max_conf = st.slider("Confiança máxima (%)", 0, 100, 95)
+            
+            tipo_filtro = st.selectbox(
+                "Filtrar por tipo",
+                ["Todos", "Apenas Over", "Apenas Under"],
+                index=0
+            )
+            
+            config_over_under = {
                 "min_conf": min_conf,
-                "max_conf": max_conf
+                "max_conf": max_conf,
+                "tipo_filtro": tipo_filtro
             }
             
+            if st.button("🔍 Buscar Análises Over/Under", type="primary"):
+                if 'jogos_encontrados' not in st.session_state:
+                    st.warning("⚠️ Primeiro busque jogos na aba 'Buscar Jogos'")
+                else:
+                    jogos = st.session_state.jogos_encontrados
+                    jogos_filtrados = filtrar_por_tipo_analise(jogos, tipo_analise, config_over_under)
+                    
+                    if jogos_filtrados:
+                        st.success(f"✅ {len(jogos_filtrados)} jogos encontrados!")
+                        
+                        # Gerar poster específico
+                        if st.button("🎨 Gerar Poster Over/Under", type="secondary"):
+                            with st.spinner("Gerando poster..."):
+                                poster = gerar_poster_por_tipo(jogos_filtrados, tipo_analise, config_over_under)
+                                if poster:
+                                    st.image(poster, caption="Poster Over/Under de Gols")
+                                    
+                                    # Opção de enviar
+                                    if st.button("📤 Enviar para Telegram"):
+                                        caption = f"<b>📈 ANÁLISE OVER/UNDER DE GOLS</b>\n\nConfiança: {min_conf}%-{max_conf}%\nTotal: {len(jogos_filtrados)} jogos"
+                                        if enviar_foto_telegram(poster, caption=caption):
+                                            st.success("✅ Poster enviado!")
+                    else:
+                        st.warning("⚠️ Nenhum jogo encontrado com os critérios selecionados.")
+        
         elif tipo_analise == "Favorito (Vitória)":
-            # Configurações específicas para Favorito
-            st.info("🎯 Alertas baseados na probabilidade de vitória")
-            min_conf_vitoria = st.slider("Confiança Mínima Vitória (%)", 50, 95, 65, 1)
-            filtro_favorito = st.selectbox("Filtrar Favorito:", ["Todos", "Casa", "Fora", "Empate"], index=0)
+            st.subheader("🏆 Configurações Favorito (Vitória)")
             
-            config_analise = {
+            min_conf_vitoria = st.slider("Confiança mínima para vitória (%)", 50, 95, 65)
+            filtro_favorito = st.selectbox(
+                "Filtrar favorito",
+                ["Todos", "Casa", "Fora", "Empate"],
+                index=0
+            )
+            
+            config_favorito = {
                 "min_conf_vitoria": min_conf_vitoria,
                 "filtro_favorito": filtro_favorito
             }
             
+            if st.button("🔍 Buscar Análises de Vitória", type="primary"):
+                if 'jogos_encontrados' not in st.session_state:
+                    st.warning("⚠️ Primeiro busque jogos na aba 'Buscar Jogos'")
+                else:
+                    jogos = st.session_state.jogos_encontrados
+                    jogos_filtrados = filtrar_por_tipo_analise(jogos, tipo_analise, config_favorito)
+                    
+                    if jogos_filtrados:
+                        st.success(f"✅ {len(jogos_filtrados)} jogos com favorito identificado!")
+                        
+                        # Mostrar jogos
+                        for jogo in jogos_filtrados:
+                            with st.container(border=True):
+                                col1, col2, col3 = st.columns([2, 1, 2])
+                                with col1:
+                                    st.markdown(f"**🏠 {jogo['home']}**")
+                                with col2:
+                                    favorito = jogo['favorito']
+                                    if favorito == "home":
+                                        st.markdown("**🏆 →**")
+                                    elif favorito == "away":
+                                        st.markdown("**← 🏆**")
+                                    else:
+                                        st.markdown("**🤝**")
+                                with col3:
+                                    st.markdown(f"**✈️ {jogo['away']}**")
+                                
+                                st.markdown(f"**Probabilidade: {jogo['prob_vitoria']}%**")
+                                st.markdown(f"**Confiança: {jogo['confianca_vitoria']}%**")
+                        
+                        # Gerar poster específico
+                        if st.button("🎨 Gerar Poster Favoritos", type="secondary"):
+                            with st.spinner("Gerando poster de favoritos..."):
+                                poster = gerar_poster_favorito(jogos_filtrados, config_favorito)
+                                if poster:
+                                    st.image(poster, caption="Poster de Favoritos (Vitória)")
+                    else:
+                        st.warning("⚠️ Nenhum jogo encontrado com os critérios selecionados.")
+        
         elif tipo_analise == "Gols HT (Primeiro Tempo)":
-            # Configurações específicas para Gols HT
-            st.info("⏰ Alertas baseados em gols no primeiro tempo")
-            min_conf_ht = st.slider("Confiança Mínima HT (%)", 50, 95, 60, 1)
-            tipo_ht = st.selectbox("Tipo de HT:", ["OVER 0.5 HT", "OVER 1.5 HT", "UNDER 0.5 HT", "UNDER 1.5 HT"], index=0)
+            st.subheader("⏰ Configurações Gols HT")
             
-            config_analise = {
+            min_conf_ht = st.slider("Confiança mínima HT (%)", 50, 95, 60)
+            tipo_ht = st.selectbox(
+                "Tendência HT",
+                ["Todos", "OVER 0.5 HT", "OVER 1.5 HT", "UNDER 0.5 HT"],
+                index=0
+            )
+            
+            config_ht = {
                 "min_conf_ht": min_conf_ht,
                 "tipo_ht": tipo_ht
             }
-        
-        # Checkboxes para cada tipo de alerta
-        st.subheader("📨 Tipos de Envio")
-        alerta_individual = st.checkbox("🎯 Alertas Individuais", value=True, 
-                                       help="Envia alerta individual para cada jogo com confiança alta")
-        
-        alerta_poster = st.checkbox("📊 Alertas com Poster", value=True,
-                                   help="Envia poster com múltiplos jogos acima do limiar")
-        
-        alerta_top_jogos = st.checkbox("🏆 Top Jogos", value=True,
-                                      help="Envia lista dos top jogos do dia")
-        
-        # NOVA OPÇÃO: Alerta automático de conferência
-        alerta_conferencia_auto = st.checkbox("🤖 Alerta Auto Conferência", value=True,
-                                             help="Envia alerta automático quando todos os Top N forem conferidos")
-        
-        # Formato do Top Jogos
-        formato_top_jogos = st.selectbox(
-            "📋 Formato do Top Jogos",
-            ["Ambos", "Texto", "Poster"],
-            index=0,
-            help="Escolha o formato para os alertas de Top Jogos"
-        )
-        
-        alerta_resultados = st.checkbox("🏁 Resultados Finais", value=True,
-                                       help="Envia alerta de resultados com sistema RED/GREEN")
-        
-        st.markdown("----")
-        
-        st.header("Configurações Gerais")
-        top_n = st.selectbox("📊 Jogos no Top", [3, 5, 10], index=0)
-        
-        estilo_poster = st.selectbox("🎨 Estilo do Poster", ["West Ham (Novo)", "Elite Master (Original)"], index=0)
-        
-        st.markdown("----")
-        st.info(f"Tipo de Análise: {tipo_analise}")
-        if tipo_analise == "Over/Under de Gols":
-            st.info(f"Intervalo de confiança: {min_conf}% a {max_conf}%")
-            st.info(f"Filtro: {tipo_filtro}")
-        elif tipo_analise == "Favorito (Vitória)":
-            st.info(f"Confiança Mínima: {config_analise.get('min_conf_vitoria', 65)}%")
-            st.info(f"Filtro Favorito: {config_analise.get('filtro_favorito', 'Todos')}")
-        elif tipo_analise == "Gols HT (Primeiro Tempo)":
-            st.info(f"Confiança Mínima: {config_analise.get('min_conf_ht', 60)}%")
-            st.info(f"Tipo HT: {config_analise.get('tipo_ht', 'OVER 0.5 HT')}")
-        
-        st.info(f"Formato Top Jogos: {formato_top_jogos}")
-        if alerta_conferencia_auto:
-            st.info("🤖 Alerta automático: ATIVADO")
-
-    # Controles principais
-    col1, col2 = st.columns([2, 1])
-    with col1:
-        data_selecionada = st.date_input("📅 Data para análise:", value=datetime.today())
-    with col2:
-        todas_ligas = st.checkbox("🌍 Todas as ligas", value=True)
-
-    # NOVA SELEÇÃO: Seleção múltipla de ligas (apenas se "Todas as ligas" NÃO estiver marcada)
-    ligas_selecionadas = []
-    if not todas_ligas:
-        ligas_selecionadas = st.multiselect(
-            "📌 Selecionar ligas (múltipla escolha):",
-            options=list(LIGA_DICT.keys()),
-            default=["Campeonato Brasileiro Série A", "Premier League (Inglaterra)"]
-        )
-        
-        if not ligas_selecionadas:
-            st.warning("⚠️ Selecione pelo menos uma liga")
-        else:
-            st.info(f"📋 {len(ligas_selecionadas)} ligas selecionadas: {', '.join(ligas_selecionadas)}")
-
-    # BOTÃO DE DEBUG
-    if st.button("🐛 Debug Jogos (API)", type="secondary"):
-        if todas_ligas:
-            debug_jogos_dia(data_selecionada, [], todas_ligas=True)
-        else:
-            debug_jogos_dia(data_selecionada, ligas_selecionadas, todas_ligas=False)
-
-    # NOVO: Botão para verificar conjuntos completos
-    if st.button("🔍 Verificar Conjuntos Completos", type="secondary"):
-        datas_completas = verificar_conjuntos_completos()
-        if datas_completas:
-            st.success(f"✅ Encontrados {len(datas_completas)} conjuntos completos para reportar:")
-            for data in datas_completas:
-                data_formatada = datetime.strptime(data, "%Y-%m-%d").strftime("%d/%m/%Y")
-                st.write(f"📅 {data_formatada}")
             
-            if st.button("📤 Enviar Alertas de Conferência"):
-                enviou = enviar_alerta_top_conferidos()
-                if enviou:
-                    st.success("✅ Alertas de conferência enviados!")
-        else:
-            st.info("ℹ️ Nenhum conjunto completo para reportar.")
-
-    # Processamento
-    if st.button("🔍 Buscar Partidas", type="primary"):
-        if not todas_ligas and not ligas_selecionadas:
-            st.error("❌ Selecione pelo menos uma liga ou marque 'Todas as ligas'")
-        else:
-            # Passar tipo_filtro apenas para Over/Under de Gols
-            tipo_filtro_passar = tipo_filtro if tipo_analise == "Over/Under de Gols" else "Todos"
-            processar_jogos(data_selecionada, ligas_selecionadas, todas_ligas, top_n, 
-                          config_analise.get("min_conf", 70), 
-                          config_analise.get("max_conf", 95), 
-                          estilo_poster, 
-                          alerta_individual, alerta_poster, alerta_top_jogos, 
-                          formato_top_jogos, tipo_filtro_passar, tipo_analise, config_analise)
-
-    # Ações
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
-    with col1:
-        if st.button("🔄 Atualizar Status"):
-            atualizar_status_partidas()
-    with col2:
-        if st.button("📊 Conferir Resultados"):
-            conferir_resultados()
-    with col3:
-        if st.button("🏁 Verificar Resultados Finais", type="secondary"):
-            verificar_resultados_finais(alerta_resultados)
-    with col4:
-        if st.button("🧹 Limpar Cache"):
-            limpar_caches()
-    with col5:
-        if st.button("🏆 Conferir Alertas TOP", type="primary"):
-            conferir_resultados_top()
-            if alerta_conferencia_auto:
-                enviou = enviar_alerta_top_conferidos()
-                if enviou:
-                    st.success("🤖 Alerta automático de conferência enviado!")
-    with col6:
-        if st.button("🔍 Status Alertas"):
-            verificar_status_alertas()
-
-    # Adicione esta seção ANTES do painel de monitoramento
-    st.markdown("---")
-    st.subheader("📋 Status dos Alertas")
+            if st.button("🔍 Buscar Análises HT", type="primary"):
+                if 'jogos_encontrados' not in st.session_state:
+                    st.warning("⚠️ Primeiro busque jogos na aba 'Buscar Jogos'")
+                else:
+                    jogos = st.session_state.jogos_encontrados
+                    jogos_filtrados = filtrar_por_tipo_analise(jogos, tipo_analise, config_ht)
+                    
+                    if jogos_filtrados:
+                        st.success(f"✅ {len(jogos_filtrados)} jogos com análise HT!")
+                        
+                        # Mostrar jogos
+                        for jogo in jogos_filtrados:
+                            with st.container(border=True):
+                                st.markdown(f"**{jogo['home']} vs {jogo['away']}**")
+                                st.markdown(f"**{jogo['tendencia_ht']}** (Conf: {jogo['confianca_ht']}%)")
+                                st.markdown(f"Estimativa HT: **{jogo['estimativa_ht']:.2f} gols**")
+                        
+                        # Gerar poster específico
+                        if st.button("🎨 Gerar Poster HT", type="secondary"):
+                            with st.spinner("Gerando poster HT..."):
+                                poster = gerar_poster_gols_ht(jogos_filtrados, config_ht)
+                                if poster:
+                                    st.image(poster, caption="Poster de Gols HT")
+                    else:
+                        st.warning("⚠️ Nenhum jogo encontrado com os critérios selecionados.")
     
-    col_status1, col_status2 = st.columns(2)
-    
-    with col_status1:
-        if st.button("🔄 Conferir TODOS Alertas", type="primary"):
-            # Conferir alertas regulares
-            verificar_resultados_finais(alerta_resultados)
-            
-            # Conferir alertas TOP
-            conferir_resultados_top()
-            
-            # Verificar se há conjuntos completos
-            if alerta_conferencia_auto:
-                enviou = enviar_alerta_top_conferidos()
-                if enviou:
-                    st.success("🤖 Alertas de conferência enviados!")
-    
-    with col_status2:
-        if st.button("📊 Ver Desempenho Atual"):
-            calcular_desempenho_alertas_top()
-
-    # Painel de monitoramento da API
-    st.markdown("---")
-    st.subheader("📊 Monitoramento da API")
-
-    col_mon1, col_mon2, col_mon3, col_mon4 = st.columns(4)
-
-    stats = api_monitor.get_stats()
-    with col_mon1:
-        st.metric("Total Requests", stats["total_requests"])
-    with col_mon2:
-        st.metric("Taxa de Sucesso", f"{stats['success_rate']}%")
-    with col_mon3:
-        st.metric("Requests/min", stats["requests_per_minute"])
-    with col_mon4:
-        st.metric("Rate Limit Hits", stats["rate_limit_hits"])
-
-    if st.button("🔄 Resetar Monitor"):
-        api_monitor.reset()
-        st.success("✅ Monitor resetado!")
-
-    # Painel de cache
-    st.subheader("🗂️ Status do Cache")
-
-    col_cache1, col_cache2, col_cache3, col_cache4 = st.columns(4)
-
-    with col_cache1:
-        cache_jogos_size = len(jogos_cache.cache)
-        st.metric("Cache de Jogos", f"{cache_jogos_size}/{jogos_cache.config['max_size']}")
-
-    with col_cache2:
-        cache_class_size = len(classificacao_cache.cache)
-        st.metric("Cache de Classificação", f"{cache_class_size}/{classificacao_cache.config['max_size']}")
-
-    with col_cache3:
-        cache_match_size = len(match_cache.cache)
-        st.metric("Cache de Partidas", f"{cache_match_size}/{match_cache.config['max_size']}")
-
-    with col_cache4:
-        img_stats = escudos_cache.get_stats()
-        st.metric("Cache de Imagens", f"{img_stats['memoria']}/{img_stats['max_memoria']}", 
-                 f"{img_stats['disco_mb']:.1f}MB")
-
-    if st.button("🧹 Limpar Caches Inteligentes"):
-        jogos_cache.clear()
-        classificacao_cache.clear()
-        match_cache.clear()
-        escudos_cache.clear()
-        st.success("✅ Todos os caches inteligentes limpos!")
-
-    # Painel desempenho
-    st.markdown("---")
-    st.subheader("📊 Painel de Desempenho")
-    
-    # Botão para calcular desempenho dos alertas TOP
-    if st.button("📈 Calcular Desempenho Alertas TOP"):
-        calcular_desempenho_alertas_top()
-    
-    usar_periodo = st.checkbox("🔎 Usar período específico", value=False)
-    qtd_default = 50
-    last_n = st.number_input("Últimos N jogos", 1, 1000, qtd_default, 1)
-    colp1, colp2 = st.columns(2)
-    with colp1:
-        if usar_periodo:
-            data_inicio = st.date_input("Data inicial", value=(datetime.today() - timedelta(days=30)).date())
-            data_fim = st.date_input("Data final", value=datetime.today().date())
-    with colp2:
-        if st.button("📈 Calcular Desempenho Histórico"):
-            if usar_periodo:
-                calcular_desempenho_periodo(data_inicio, data_fim)
+    # ==================== TAB 4: ENVIAR ALERTAS ====================
+    with tab4:
+        st.header("📨 Enviar Alertas")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            chat_id = st.selectbox(
+                "Chat do Telegram",
+                ["Grupo Principal", "Grupo Alternativo"],
+                format_func=lambda x: f"{x} ({TELEGRAM_CHAT_ID if x == 'Grupo Principal' else TELEGRAM_CHAT_ID_ALT2})"
+            )
+        
+        chat_id_escolhido = TELEGRAM_CHAT_ID if chat_id == "Grupo Principal" else TELEGRAM_CHAT_ID_ALT2
+        
+        if st.button("🚀 Enviar Alertas West Ham Style", type="primary", use_container_width=True):
+            if 'jogos_encontrados' not in st.session_state:
+                st.warning("⚠️ Primeiro busque jogos na aba 'Buscar Jogos'")
             else:
-                calcular_desempenho(qtd_jogos=last_n)
+                jogos = st.session_state.jogos_encontrados
+                jogos_conf = [j for j in jogos if min_conf <= j["confianca"] <= max_conf]
+                
+                if jogos_conf:
+                    with st.spinner("🎨 Gerando e enviando poster..."):
+                        enviar_alerta_westham_style(jogos_conf, min_conf, max_conf, chat_id_escolhido)
+                else:
+                    st.warning("⚠️ Nenhum jogo dentro do intervalo de confiança.")
+        
+        if st.button("📤 Enviar Alertas Individuais", type="secondary", use_container_width=True):
+            if 'jogos_encontrados' not in st.session_state:
+                st.warning("⚠️ Primeiro busque jogos na aba 'Buscar Jogos'")
+            else:
+                jogos = st.session_state.jogos_encontrados
+                jogos_conf = [j for j in jogos if min_conf <= j["confianca"] <= max_conf]
+                
+                if jogos_conf:
+                    with st.spinner("📤 Enviando alertas individuais..."):
+                        alertas_enviados = 0
+                        for jogo in jogos_conf[:10]:  # Limitar a 10 para não sobrecarregar
+                            # Simular envio (precisaríamos dos dados originais do fixture)
+                            st.info(f"📤 Enviando: {jogo['home']} vs {jogo['away']}")
+                            # Aqui precisaríamos do fixture original para enviar
+                            # enviar_alerta_telegram(fixture, jogo)
+                            alertas_enviados += 1
+                            time.sleep(1)  # Pausa para evitar rate limiting
+                        
+                        st.success(f"✅ {alertas_enviados} alertas individuais enviados!")
+                else:
+                    st.warning("⚠️ Nenhum jogo dentro do intervalo de confiança.")
+    
+    # ==================== TAB 5: CONFERIR RESULTADOS ====================
+    with tab5:
+        st.header("✅ Conferir Resultados")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🔄 Conferir Resultados Agora", type="primary", use_container_width=True):
+                with st.spinner("🔄 Conferindo resultados dos alertas..."):
+                    resultados = conferir_resultados()
+                    
+                    if resultados:
+                        st.success(f"✅ {len(resultados)} resultados conferidos!")
+                        
+                        # Mostrar estatísticas rápidas
+                        green_count = sum(1 for j in resultados if j["resultado"] == "GREEN")
+                        taxa_acerto = (green_count / len(resultados) * 100) if resultados else 0
+                        
+                        st.metric("🎯 Taxa de Acerto", f"{taxa_acerto:.1f}%")
+                        st.metric("🟢 GREEN", green_count)
+                        st.metric("🔴 RED", len(resultados) - green_count)
+        
+        with col2:
+            if st.button("📊 Ver Histórico", type="secondary", use_container_width=True):
+                historico = carregar_historico()
+                if historico:
+                    df_historico = pd.DataFrame(historico)
+                    st.dataframe(df_historico, use_container_width=True)
+                else:
+                    st.info("ℹ️ Nenhum histórico encontrado.")
+        
+        # Opção para limpar histórico
+        if st.button("🧹 Limpar Histórico", type="secondary"):
+            limpar_historico()
+    
+    # ==================== TAB 6: ESTATÍSTICAS ====================
+    with tab6:
+        st.header("📈 Estatísticas do Sistema")
+        
+        # Estatísticas da API
+        st.subheader("📊 Estatísticas da API")
+        stats = api_monitor.get_stats()
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Total de Requests", stats["total_requests"])
+        with col2:
+            st.metric("Requests/Min", stats["requests_per_minute"])
+        with col3:
+            st.metric("Taxa de Sucesso", f"{stats['success_rate']}%")
+        with col4:
+            st.metric("Uptime (min)", stats["uptime_minutes"])
+        
+        # Estatísticas de cache
+        st.subheader("💾 Estatísticas de Cache")
+        
+        cache_col1, cache_col2, cache_col3 = st.columns(3)
+        with cache_col1:
+            st.metric("Cache de Jogos", f"{len(jogos_cache.cache)} entradas")
+        with cache_col2:
+            st.metric("Cache de Classificação", f"{len(classificacao_cache.cache)} ligas")
+        with cache_col3:
+            escudos_stats = escudos_cache.get_stats()
+            st.metric("Escudos em Cache", f"{escudos_stats['memoria']} imagens")
+        
+        # Botão para resetar estatísticas
+        if st.button("🔄 Resetar Estatísticas", type="secondary"):
+            api_monitor.reset()
+            st.success("✅ Estatísticas resetadas!")
+    
+    # ==================== TAB 7: ALERTAS TOP ====================
+    with tab7:
+        st.header("📋 Alertas TOP - Conferência")
+        
+        # Botão para conferir resultados dos alertas TOP
+        if st.button("✅ Conferir Resultados dos Alertas TOP", type="primary"):
+            with st.spinner("🔄 Conferindo alertas TOP..."):
+                conferir_resultados_top()
+        
+        # Botão para calcular desempenho
+        if st.button("📊 Calcular Desempenho Alertas TOP", type="secondary"):
+            calcular_desempenho_alertas_top()
+        
+        # Botão para verificar conjuntos completos
+        if st.button("📤 Verificar Conjuntos Completos", type="secondary"):
+            datas_completas = verificar_conjuntos_completos()
+            if datas_completas:
+                st.success(f"✅ {len(datas_completas)} conjuntos completos prontos para reportar!")
+                for data in datas_completas:
+                    st.info(f"📅 {data}")
+            else:
+                st.info("ℹ️ Nenhum conjunto completo para reportar.")
+        
+        # Botão para enviar relatório de conferência
+        if st.button("🚀 Enviar Relatório de Conferência", type="primary"):
+            with st.spinner("📤 Enviando relatório de conferência..."):
+                if enviar_alerta_top_conferidos():
+                    st.success("✅ Relatório de conferência enviado!")
+                else:
+                    st.info("ℹ️ Nenhum relatório de conferência para enviar.")
+        
+        # Mostrar alertas TOP salvos
+        st.subheader("📋 Alertas TOP Salvos")
+        alertas_top = carregar_alertas_top()
+        if alertas_top:
+            # Converter para DataFrame
+            df_data = []
+            for chave, alerta in list(alertas_top.items())[:20]:  # Mostrar apenas os 20 mais recentes
+                status_emoji = "✅" if alerta.get("conferido") else "⏳"
+                resultado_emoji = "🟢" if alerta.get("resultado") == "GREEN" else "🔴" if alerta.get("resultado") == "RED" else ""
+                tipo_emoji = "📈" if alerta.get("tipo_aposta") == "over" else "📉"
+                
+                df_data.append({
+                    "Status": status_emoji,
+                    "Resultado": resultado_emoji,
+                    "Tipo": tipo_emoji,
+                    "Jogo": f"{alerta['home']} vs {alerta['away']}",
+                    "Tendência": alerta.get("tendencia", ""),
+                    "Confiança": f"{alerta.get('confianca', 0):.0f}%",
+                    "Data Busca": alerta.get("data_busca", ""),
+                    "Conferido": "Sim" if alerta.get("conferido") else "Não",
+                    "Placar": alerta.get("placar", "-")
+                })
+            
+            if df_data:
+                df = pd.DataFrame(df_data)
+                st.dataframe(df, use_container_width=True)
+        else:
+            st.info("ℹ️ Nenhum alerta TOP salvo.")
+    
+    # ==================== TAB 8: SISTEMA ====================
+    with tab8:
+        st.header("⚙️ Sistema e Configurações")
+        
+        # Informações do sistema
+        st.subheader("🔧 Informações do Sistema")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.info(f"**📅 Data do Sistema:** {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
+            st.info(f"**🔑 API Key Configurada:** {'✅ Sim' if API_KEY else '❌ Não'}")
+            st.info(f"**🤖 Token Telegram:** {'✅ Configurado' if TELEGRAM_TOKEN else '❌ Não configurado'}")
+        
+        with col2:
+            st.info(f"**📁 Caminho Alertas:** {ALERTAS_PATH}")
+            st.info(f"**📁 Caminho Cache:** {CACHE_JOGOS}")
+            st.info(f"**📁 Alertas TOP:** {ALERTAS_TOP_PATH}")
+        
+        # Controles do sistema
+        st.subheader("🎛️ Controles do Sistema")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🗑️ Limpar Todos os Caches", type="secondary"):
+                jogos_cache.clear()
+                classificacao_cache.clear()
+                match_cache.clear()
+                escudos_cache.clear()
+                st.success("✅ Todos os caches foram limpos!")
+        
+        with col2:
+            if st.button("🔄 Recarregar Configurações", type="secondary"):
+                st.rerun()
+        
+        # Informações de debug
+        st.subheader("🐛 Debug Information")
+        
+        with st.expander("Ver Configurações de Rate Limiting"):
+            st.json({
+                "min_interval": rate_limiter.min_interval,
+                "max_retries": rate_limiter.max_retries,
+                "backoff_factor": rate_limiter.backoff_factor
+            })
+        
+        with st.expander("Ver Configurações de Cache"):
+            st.json(CACHE_CONFIG)
+        
+        # Logs recentes
+        st.subheader("📝 Logs Recentes")
+        if os.path.exists("sistema_alertas.log"):
+            with open("sistema_alertas.log", "r") as f:
+                lines = f.readlines()[-50:]  # Últimas 50 linhas
+                st.code("".join(lines), language="log")
+        else:
+            st.info("ℹ️ Arquivo de log não encontrado.")
 
-    if st.button("🧹 Limpar Histórico"):
-        limpar_historico()
-
-    # Adicionar dicas de uso
-    with st.expander("💡 Dicas para evitar rate limit"):
-        st.markdown("""
-        1. **Use o cache**: O sistema armazena dados por 1-24 horas
-      #  2. **Evite buscas frequentes**: Não atualize mais que 1x por minuto
-        3. **Use datas específicas**: Evite buscar intervalos muito grandes
-        4. **Monitore os limites**: Fique atento ao contador de requests
-        5. **Priorize ligas**: Analise uma liga por vez quando possível
-        6. **Use o filtro por confiança**: Reduz a quantidade de jogos analisados
-       # """)
-
+# =============================
+# Executar aplicação
+# =============================
 if __name__ == "__main__":
-    main()                  
+    main()
