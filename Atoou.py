@@ -2995,7 +2995,7 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
             draw.text((analise_x + 350, analise_y + 20), tendencia_text, 
                      font=FONTE_ANALISE, fill=(255, 255, 255))
         except:
-            draw.text((analise_x + 350, analise_y + 20), tendencia_text, 
+            draw.text((analise_x + 350, analise_y + 40), tendencia_text, 
                      font=FONTE_ANALISE, fill=(255, 255, 255))
 
         # Estatísticas em linha
