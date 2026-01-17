@@ -2976,7 +2976,7 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
 
         # Título da seção
         tipo_emoji = "+" if jogo.get('tipo_aposta') == "over" else "-"
-        titulo_analise = f"{tipo_emoji} ANÁLISE"
+        titulo_analise = f"{tipo_emoji} "
         
         try:
             titulo_analise_bbox = draw.textbbox((0, 0), titulo_analise, font=FONTE_SECTION)
@@ -2984,7 +2984,7 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
             draw.text((analise_x + 30, analise_y + 25), titulo_analise, 
                      font=FONTE_SECTION, fill=cor_principal)
         except:
-            draw.text((analise_x + 45, analise_y + 25), titulo_analise, 
+            draw.text((analise_x + 60, analise_y + 40), titulo_analise, 
                      font=FONTE_SECTION, fill=cor_principal)
 
         # Tendência principal
