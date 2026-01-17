@@ -1621,7 +1621,6 @@ def filtrar_por_tipo_analise(jogos, tipo_analise, config):
 
 # =============================
 # =============================
-# =============================
 # NOVAS FUNÇÕES: Geradores de poster específicos - DIAGRAMAÇÃO OTIMIZADA
 # =============================
 
@@ -1666,11 +1665,12 @@ def gerar_poster_favorito(jogos_favorito, config):
     FONTE_TITULO = criar_fonte(95)  # Aumentado
     FONTE_SUBTITULO = criar_fonte(70)  # Aumentado
     FONTE_TIMES = criar_fonte(80)  # Aumentado
-    FONTE_VS = criar_fonte(80, bold=True)  # Aumentado e negrito
+    FONTE_VS = criar_fonte(80)  # Aumentado
     FONTE_INFO = criar_fonte(48)  # Aumentado
-    FONTE_ANALISE = criar_fonte(90, bold=True)  # Aumentado e negrito
-    FONTE_RANKING = criar_fonte(80, bold=True)  # Aumentado
+    FONTE_ANALISE = criar_fonte(90)  # Aumentado
+    FONTE_RANKING = criar_fonte(80)  # Aumentado
     FONTE_ESTATISTICAS = criar_fonte(40)  # Aumentado
+    FONTE_EMOJI = criar_fonte(70)  # Para emojis
 
     # CABEÇALHO ESTILIZADO
     # Fundo cabeçalho
@@ -1682,7 +1682,7 @@ def gerar_poster_favorito(jogos_favorito, config):
         titulo_bbox = draw.textbbox((0, 0), titulo_text, font=FONTE_TITULO)
         titulo_w = titulo_bbox[2] - titulo_bbox[0]
         # Sombra do título
-        draw.text(((LARGURA - titulo_w) // 2 + 3, 83), titulo_text, font=FONTE_TITULO, fill=(0, 0, 0, 100))
+        draw.text(((LARGURA - titulo_w) // 2 + 3, 83), titulo_text, font=FONTE_TITULO, fill=(0, 0, 0))
         # Título principal
         draw.text(((LARGURA - titulo_w) // 2, 80), titulo_text, font=FONTE_TITULO, fill=(255, 215, 0))
     except:
@@ -1703,7 +1703,7 @@ def gerar_poster_favorito(jogos_favorito, config):
     # Linha decorativa com gradiente
     for i in range(4):
         draw.line([(LARGURA//4, 260 + i), (3*LARGURA//4, 260 + i)], 
-                 fill=(255, 215, 0, 200 - i*50), width=1)
+                 fill=(255, 215, 0), width=1)
 
     y_pos = ALTURA_TOPO
 
@@ -1721,13 +1721,13 @@ def gerar_poster_favorito(jogos_favorito, config):
         # Cor baseada no favorito
         if jogo.get('favorito') == "home":
             cor_borda = (46, 204, 113)  # Verde vibrante para casa
-            cor_fundo = (25, 45, 60, 200)
+            cor_fundo = (25, 45, 60)
         elif jogo.get('favorito') == "away":
             cor_borda = (52, 152, 219)  # Azul vibrante para fora
-            cor_fundo = (30, 40, 65, 200)
+            cor_fundo = (30, 40, 65)
         else:
             cor_borda = (241, 196, 15)  # Amarelo vibrante para empate
-            cor_fundo = (40, 35, 55, 200)
+            cor_fundo = (40, 35, 55)
         
         # Caixa principal
         draw.rectangle([x0, y0, x1, y1], fill=cor_fundo, outline=cor_borda, width=8)
@@ -1762,7 +1762,7 @@ def gerar_poster_favorito(jogos_favorito, config):
             liga_w = liga_bbox[2] - liga_bbox[0]
             # Sombra do texto
             draw.text(((LARGURA - liga_w) // 2 + 2, y0 + 55 + 2), liga_text, 
-                     font=FONTE_SUBTITULO, fill=(0, 0, 0, 150))
+                     font=FONTE_SUBTITULO, fill=(0, 0, 0))
             # Texto principal
             draw.text(((LARGURA - liga_w) // 2, y0 + 55), liga_text, 
                      font=FONTE_SUBTITULO, fill=(255, 255, 255))
@@ -1901,7 +1901,7 @@ def gerar_poster_favorito(jogos_favorito, config):
         analise_y = y_analysis - 20
         
         draw.rounded_rectangle([analise_x, analise_y, analise_x + analise_width, analise_y + analise_height],
-                             radius=20, fill=(30, 40, 60, 220), outline=cor_borda, width=4)
+                             radius=20, fill=(30, 40, 60), outline=cor_borda, width=4)
 
         # Informações de vitória - PRINCIPAL E GRANDE
         favorito = jogo.get('favorito', 'desconhecido')
@@ -1909,28 +1909,27 @@ def gerar_poster_favorito(jogos_favorito, config):
         prob_vitoria = jogo.get('prob_vitoria', 0)
         
         if favorito == "home":
-            favorito_text = f"🏠 FAVORITO: CASA • {prob_vitoria}% de chance"
+            favorito_text = f"🏠 FAVORITO: CASA • {prob_vitoria}%"
             cor_favorito = (46, 204, 113)
             emoji = "🏠"
         elif favorito == "away":
-            favorito_text = f"✈️ FAVORITO: FORA • {prob_vitoria}% de chance"
+            favorito_text = f"✈️ FAVORITO: FORA • {prob_vitoria}%"
             cor_favorito = (52, 152, 219)
             emoji = "✈️"
         else:
-            favorito_text = f"🤝 FAVORITO: EMPATE • {prob_vitoria}% de chance"
+            favorito_text = f"🤝 FAVORITO: EMPATE • {prob_vitoria}%"
             cor_favorito = (241, 196, 15)
             emoji = "🤝"
         
         # Texto da análise (centralizado na caixa)
         try:
             # Emoji grande separado
-            emoji_size = 70
             emoji_x = analise_x + 40
-            emoji_y = analise_y + (analise_height - emoji_size)//2
-            draw.text((emoji_x, emoji_y), emoji, font=criar_fonte(emoji_size), fill=cor_favorito)
+            emoji_y = analise_y + (analise_height - 70)//2
+            draw.text((emoji_x, emoji_y), emoji, font=FONTE_EMOJI, fill=cor_favorito)
             
             # Texto da análise
-            analise_text = f"FAVORITO: {jogo.get('home' if favorito == 'home' else 'away' if favorito == 'away' else 'EMPATE').upper()}"
+            analise_text = f"FAVORITO: {jogo.get('home' if favorito == 'home' else 'away' if favorito == 'away' else 'EMPATE')}"
             text_bbox = draw.textbbox((0, 0), analise_text, font=FONTE_ANALISE)
             text_w = text_bbox[2] - text_bbox[0]
             text_h = text_bbox[3] - text_bbox[1]
@@ -1939,7 +1938,7 @@ def gerar_poster_favorito(jogos_favorito, config):
             text_y = analise_y + (analise_height - text_h)//2
             
             # Sombra do texto
-            draw.text((text_x + 2, text_y + 2), analise_text, font=FONTE_ANALISE, fill=(0, 0, 0, 150))
+            draw.text((text_x + 2, text_y + 2), analise_text, font=FONTE_ANALISE, fill=(0, 0, 0))
             # Texto principal
             draw.text((text_x, text_y), analise_text, font=FONTE_ANALISE, fill=cor_favorito)
             
@@ -1954,7 +1953,7 @@ def gerar_poster_favorito(jogos_favorito, config):
             draw.text((percent_x, percent_y), percent_text, font=FONTE_ANALISE, fill=(255, 255, 255))
             
         except:
-            # Fallback
+            # Fallback - texto simples centralizado
             try:
                 fav_bbox = draw.textbbox((0, 0), favorito_text, font=FONTE_ANALISE)
                 fav_w = fav_bbox[2] - fav_bbox[0]
@@ -1986,12 +1985,9 @@ def gerar_poster_favorito(jogos_favorito, config):
         rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_INFO)
         rodape_w = rodape_bbox[2] - rodape_bbox[0]
         
-        # Efeito de movimento no rodapé (texto que rola)
-        for i in range(3):
-            opacity = 100 - i * 30
-            offset_x = i * 5
-            draw.text(((LARGURA - rodape_w) // 2 + offset_x, altura_total - 55), 
-                     rodape_text, font=FONTE_INFO, fill=(120, 150, 180, opacity))
+        # Texto do rodapé centralizado
+        draw.text(((LARGURA - rodape_w) // 2, altura_total - 55), 
+                 rodape_text, font=FONTE_INFO, fill=(120, 150, 180))
     except:
         draw.text((LARGURA//2 - 350, altura_total - 55), rodape_text, font=FONTE_INFO, fill=(120, 150, 180))
 
@@ -2001,6 +1997,327 @@ def gerar_poster_favorito(jogos_favorito, config):
     buffer.seek(0)
     
     st.success(f"✅ Poster Favorito gerado com {jogos_count} jogos!")
+    return buffer
+
+
+def gerar_poster_gols_ht(jogos_ht, config):
+    """Gera poster específico para alertas de Gols HT (Primeiro Tempo) com escudos - DIAGRAMAÇÃO OTIMIZADA"""
+    # Configurações OTIMIZADAS
+    LARGURA = 2200
+    ALTURA_TOPO = 350
+    ALTURA_POR_JOGO = 850
+    PADDING = 100
+    
+    jogos_count = len(jogos_ht[:5])
+    altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING + 50
+
+    # Criar canvas
+    img = Image.new("RGB", (LARGURA, altura_total), color=(10, 20, 35))
+    draw = ImageDraw.Draw(img)
+    
+    # Gradiente sutil no fundo
+    for i in range(altura_total):
+        alpha = i / altura_total
+        r = int(10 + 15 * alpha)
+        g = int(20 + 10 * alpha)
+        b = int(35 + 20 * alpha)
+        draw.line([(0, i), (LARGURA, i)], fill=(r, g, b))
+
+    # Fontes AUMENTADAS
+    FONTE_TITULO = criar_fonte(95)
+    FONTE_SUBTITULO = criar_fonte(70)
+    FONTE_TIMES = criar_fonte(80)
+    FONTE_VS = criar_fonte(80)
+    FONTE_INFO = criar_fonte(48)
+    FONTE_ANALISE = criar_fonte(90)
+    FONTE_RANKING = criar_fonte(80)
+    FONTE_ESTATISTICAS = criar_fonte(40)
+    FONTE_EMOJI = criar_fonte(70)
+
+    # CABEÇALHO
+    draw.rectangle([0, 0, LARGURA, ALTURA_TOPO - 50], fill=(20, 35, 70), outline=None)
+    
+    # Título PRINCIPAL
+    titulo_text = "⏰ ALERTA DE GOLS NO PRIMEIRO TEMPO ⏰"
+    try:
+        titulo_bbox = draw.textbbox((0, 0), titulo_text, font=FONTE_TITULO)
+        titulo_w = titulo_bbox[2] - titulo_bbox[0]
+        draw.text(((LARGURA - titulo_w) // 2 + 3, 83), titulo_text, font=FONTE_TITULO, fill=(0, 0, 0))
+        draw.text(((LARGURA - titulo_w) // 2, 80), titulo_text, font=FONTE_TITULO, fill=(100, 200, 255))
+    except:
+        draw.text((LARGURA//2 - 350, 80), titulo_text, font=FONTE_TITULO, fill=(100, 200, 255))
+
+    # Informações gerais
+    min_conf_ht = config.get("min_conf_ht", 60)
+    tipo_ht = config.get("tipo_ht", "OVER 0.5 HT")
+    
+    subtitulo = f"🎯 Confiança Mínima: {min_conf_ht}% | 🔍 Tipo: {tipo_ht}"
+    try:
+        sub_bbox = draw.textbbox((0, 0), subtitulo, font=FONTE_SUBTITULO)
+        sub_w = sub_bbox[2] - sub_bbox[0]
+        draw.text(((LARGURA - sub_w) // 2, 180), subtitulo, font=FONTE_SUBTITULO, fill=(180, 220, 255))
+    except:
+        draw.text((LARGURA//2 - 300, 180), subtitulo, font=FONTE_SUBTITULO, fill=(180, 220, 255))
+
+    # Linha decorativa
+    for i in range(4):
+        draw.line([(LARGURA//4, 260 + i), (3*LARGURA//4, 260 + i)], 
+                 fill=(100, 200, 255), width=1)
+
+    y_pos = ALTURA_TOPO
+
+    for idx, jogo in enumerate(jogos_ht[:5]):
+        # Caixa do jogo
+        x0, y0 = PADDING, y_pos
+        x1, y1 = LARGURA - PADDING, y_pos + ALTURA_POR_JOGO - 40
+        
+        # Sombra
+        shadow_offset = 8
+        draw.rectangle([x0 + shadow_offset, y0 + shadow_offset, 
+                       x1 + shadow_offset, y1 + shadow_offset], 
+                      fill=(0, 0, 0, 100))
+        
+        # Cor baseada no tipo de HT
+        if "OVER" in jogo.get('tendencia_ht', ''):
+            cor_borda = (76, 175, 80)  # Verde para OVER
+            cor_fundo = (25, 45, 50)
+        else:
+            cor_borda = (255, 87, 34)  # Laranja para UNDER
+            cor_fundo = (45, 35, 40)
+        
+        draw.rectangle([x0, y0, x1, y1], fill=cor_fundo, outline=cor_borda, width=8)
+        
+        # TOP BADGE
+        rank_text = f"TOP {idx + 1}"
+        try:
+            rank_bbox = draw.textbbox((0, 0), rank_text, font=FONTE_RANKING)
+            rank_w = rank_bbox[2] - rank_bbox[0]
+            rank_h = rank_bbox[3] - rank_bbox[1]
+            rank_x = x0 + 40
+            rank_y = y0 + 25
+            
+            badge_width = rank_w + 60
+            badge_height = rank_h + 30
+            
+            draw.rounded_rectangle([rank_x, rank_y, rank_x + badge_width, rank_y + badge_height],
+                                 radius=20, fill=cor_borda, outline=(255, 255, 255), width=3)
+            
+            draw.text((rank_x + (badge_width - rank_w)//2, rank_y + (badge_height - rank_h)//2 - 5),
+                     rank_text, font=FONTE_RANKING, fill=(255, 255, 255))
+        except:
+            pass
+
+        # Nome da liga
+        liga_text = jogo.get('liga', 'Desconhecido').upper()
+        try:
+            liga_bbox = draw.textbbox((0, 0), liga_text, font=FONTE_SUBTITULO)
+            liga_w = liga_bbox[2] - liga_bbox[0]
+            draw.text(((LARGURA - liga_w) // 2 + 2, y0 + 55 + 2), liga_text, 
+                     font=FONTE_SUBTITULO, fill=(0, 0, 0))
+            draw.text(((LARGURA - liga_w) // 2, y0 + 55), liga_text, 
+                     font=FONTE_SUBTITULO, fill=(255, 255, 255))
+        except:
+            draw.text((LARGURA//2 - 150, y0 + 55), liga_text, font=FONTE_SUBTITULO, fill=(255, 255, 255))
+
+        # Data e hora
+        if isinstance(jogo.get("hora"), datetime):
+            data_text = jogo["hora"].strftime("%d/%m/%Y")
+            hora_text = jogo["hora"].strftime("%H:%M") + " BRT"
+        else:
+            data_text = str(jogo.get("hora", ""))
+            hora_text = ""
+        
+        data_hora_text = f"📅 {data_text} • 🕐 {hora_text}"
+        try:
+            dh_bbox = draw.textbbox((0, 0), data_hora_text, font=FONTE_INFO)
+            dh_w = dh_bbox[2] - dh_bbox[0]
+            draw.text(((LARGURA - dh_w) // 2, y0 + 130), data_hora_text, 
+                     font=FONTE_INFO, fill=(150, 200, 255))
+        except:
+            draw.text((LARGURA//2 - 200, y0 + 130), data_hora_text, 
+                     font=FONTE_INFO, fill=(150, 200, 255))
+
+        # ÁREA DOS TIMES
+        TAMANHO_ESCUDO = 280
+        TAMANHO_QUADRADO = 320
+        ESPACO_ENTRE_ESCUDOS = 650
+
+        largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
+        x_inicio = (LARGURA - largura_total) // 2
+
+        x_home = x_inicio
+        x_away = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
+        y_escudos = y0 + 190
+
+        # Baixar escudos
+        escudo_home = baixar_escudo_com_cache(jogo.get('home', ''), jogo.get('escudo_home', ''))
+        escudo_away = baixar_escudo_com_cache(jogo.get('away', ''), jogo.get('escudo_away', ''))
+
+        def desenhar_escudo_ht(logo_img, x, y, tamanho_quadrado, tamanho_escudo, team_name):
+            draw.rounded_rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado],
+                                 radius=10, fill=(240, 240, 240), outline=(200, 200, 200), width=3)
+
+            if logo_img is None:
+                inicial = team_name[:1].upper() if team_name else "T"
+                draw.rounded_rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado],
+                                     radius=10, fill=(60, 70, 90))
+                try:
+                    bbox = draw.textbbox((0, 0), inicial, font=FONTE_TIMES)
+                    w = bbox[2] - bbox[0]
+                    h = bbox[3] - bbox[1]
+                    draw.text((x + (tamanho_quadrado - w)//2, y + (tamanho_quadrado - h)//2), 
+                             inicial, font=FONTE_TIMES, fill=(255, 255, 255))
+                except:
+                    pass
+                return
+
+            try:
+                logo_img = logo_img.resize((tamanho_escudo, tamanho_escudo), Image.Resampling.LANCZOS)
+                pos_x = x + (tamanho_quadrado - tamanho_escudo) // 2
+                pos_y = y + (tamanho_quadrado - tamanho_escudo) // 2
+                img.paste(logo_img, (pos_x, pos_y), logo_img)
+            except Exception as e:
+                logging.error(f"Erro ao desenhar escudo HT: {e}")
+
+        desenhar_escudo_ht(escudo_home, x_home, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo.get('home', ''))
+        desenhar_escudo_ht(escudo_away, x_away, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo.get('away', ''))
+
+        # Nomes dos times
+        home_text = jogo.get('home', '')[:18]
+        away_text = jogo.get('away', '')[:18]
+
+        try:
+            home_bbox = draw.textbbox((0, 0), home_text, font=FONTE_TIMES)
+            home_w = home_bbox[2] - home_bbox[0]
+            draw.text((x_home + (TAMANHO_QUADRADO - home_w)//2, y_escudos + TAMANHO_QUADRADO + 40),
+                     home_text, font=FONTE_TIMES, fill=(255, 255, 255))
+        except:
+            draw.text((x_home, y_escudos + TAMANHO_QUADRADO + 40),
+                     home_text, font=FONTE_TIMES, fill=(255, 255, 255))
+
+        try:
+            away_bbox = draw.textbbox((0, 0), away_text, font=FONTE_TIMES)
+            away_w = away_bbox[2] - away_bbox[0]
+            draw.text((x_away + (TAMANHO_QUADRADO - away_w)//2, y_escudos + TAMANHO_QUADRADO + 40),
+                     away_text, font=FONTE_TIMES, fill=(255, 255, 255))
+        except:
+            draw.text((x_away, y_escudos + TAMANHO_QUADRADO + 40),
+                     away_text, font=FONTE_TIMES, fill=(255, 255, 255))
+
+        # VS estilizado
+        vs_x = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS//2
+        vs_y = y_escudos + TAMANHO_QUADRADO//2 - 20
+        
+        circle_radius = 45
+        draw.ellipse([vs_x - circle_radius, vs_y - circle_radius,
+                     vs_x + circle_radius, vs_y + circle_radius],
+                    fill=(30, 40, 60), outline=(100, 200, 255), width=4)
+        
+        try:
+            vs_bbox = draw.textbbox((0, 0), "VS", font=FONTE_VS)
+            vs_w = vs_bbox[2] - vs_bbox[0]
+            vs_h = vs_bbox[3] - vs_bbox[1]
+            draw.text((vs_x - vs_w//2, vs_y - vs_h//2), 
+                     "VS", font=FONTE_VS, fill=(100, 200, 255))
+        except:
+            draw.text((vs_x - 25, vs_y - 20), "VS", font=FONTE_VS, fill=(100, 200, 255))
+
+        # ANÁLISE PRINCIPAL HT
+        y_analysis = y_escudos + TAMANHO_QUADRADO + 130
+        
+        analise_width = x1 - x0 - 100
+        analise_height = 120
+        analise_x = x0 + 50
+        analise_y = y_analysis - 20
+        
+        draw.rounded_rectangle([analise_x, analise_y, analise_x + analise_width, analise_y + analise_height],
+                             radius=20, fill=(30, 40, 60), outline=cor_borda, width=4)
+
+        # Informações HT
+        tendencia_ht = jogo.get('tendencia_ht', 'DESCONHECIDO')
+        confianca_ht = jogo.get('confianca_ht', 0)
+        estimativa_ht = jogo.get('estimativa_ht', 0)
+        
+        if "OVER" in tendencia_ht:
+            ht_text = f"📈 {tendencia_ht}"
+            cor_ht = (76, 175, 80)
+            emoji = "📈"
+        else:
+            ht_text = f"📉 {tendencia_ht}"
+            cor_ht = (255, 87, 34)
+            emoji = "📉"
+        
+        try:
+            # Emoji
+            emoji_x = analise_x + 40
+            emoji_y = analise_y + (analise_height - 70)//2
+            draw.text((emoji_x, emoji_y), emoji, font=FONTE_EMOJI, fill=cor_ht)
+            
+            # Texto principal
+            analise_text = f"{tendencia_ht}"
+            text_bbox = draw.textbbox((0, 0), analise_text, font=FONTE_ANALISE)
+            text_w = text_bbox[2] - text_bbox[0]
+            text_h = text_bbox[3] - text_bbox[1]
+            
+            text_x = analise_x + 130
+            text_y = analise_y + (analise_height - text_h)//2
+            
+            draw.text((text_x + 2, text_y + 2), analise_text, font=FONTE_ANALISE, fill=(0, 0, 0))
+            draw.text((text_x, text_y), analise_text, font=FONTE_ANALISE, fill=cor_ht)
+            
+            # Estimativa de gols
+            gols_text = f"{estimativa_ht:.2f} gols"
+            gols_bbox = draw.textbbox((0, 0), gols_text, font=FONTE_ANALISE)
+            gols_w = gols_bbox[2] - gols_bbox[0]
+            
+            gols_x = analise_x + analise_width - gols_w - 60
+            gols_y = analise_y + (analise_height - text_h)//2
+            
+            draw.text((gols_x, gols_y), gols_text, font=FONTE_ANALISE, fill=(255, 255, 255))
+            
+        except:
+            # Fallback
+            try:
+                ht_bbox = draw.textbbox((0, 0), ht_text, font=FONTE_ANALISE)
+                ht_w = ht_bbox[2] - ht_bbox[0]
+                draw.text((analise_x + (analise_width - ht_w)//2, analise_y + 30), 
+                         ht_text, font=FONTE_ANALISE, fill=cor_ht)
+            except:
+                draw.text((analise_x + 20, analise_y + 30), ht_text, font=FONTE_ANALISE, fill=cor_ht)
+
+        # Confiança HT
+        conf_text = f"🔍 Confiança: {confianca_ht:.1f}%"
+        draw.text((analise_x + 40, analise_y + analise_height + 20), 
+                 conf_text, font=FONTE_ESTATISTICAS, fill=(255, 215, 0))
+
+        # Separador
+        y_pos += ALTURA_POR_JOGO
+        if idx < jogos_count - 1:
+            separator_y = y_pos - 20
+            draw.line([(x0 + 100, separator_y), (x1 - 100, separator_y)], 
+                     fill=(60, 80, 100), width=2)
+
+    # RODAPÉ
+    rodape_height = 80
+    draw.rectangle([0, altura_total - rodape_height, LARGURA, altura_total], 
+                  fill=(15, 25, 45), outline=None)
+    
+    rodape_text = f"⚽ ELITE MASTER SYSTEM • Análise de Primeiro Tempo • {datetime.now().strftime('%d/%m/%Y %H:%M')} ⚽"
+    
+    try:
+        rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_INFO)
+        rodape_w = rodape_bbox[2] - rodape_bbox[0]
+        draw.text(((LARGURA - rodape_w) // 2, altura_total - 55), 
+                 rodape_text, font=FONTE_INFO, fill=(120, 150, 180))
+    except:
+        draw.text((LARGURA//2 - 350, altura_total - 55), rodape_text, font=FONTE_INFO, fill=(120, 150, 180))
+
+    # Salvar imagem
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG", optimize=True, quality=95)
+    buffer.seek(0)
+    
+    st.success(f"✅ Poster HT gerado com {jogos_count} jogos!")
     return buffer
 
 
