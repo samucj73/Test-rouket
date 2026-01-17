@@ -2186,7 +2186,7 @@ def gerar_poster_gols_ht(jogos_ht, config):
 # =============================
 # Funções de Geração de Posters - VERSÃO ATUALIZADA COM NOVAS ANÁLISES
 # =============================
-def criar_fonte(tamanho: int) -> ImageFont.ImageFont:
+#def criar_fonte(tamanho: int) -> ImageFont.ImageFont:
     # ... continuação do código ...
 
 # =============================
