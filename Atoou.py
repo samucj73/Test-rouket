@@ -5315,7 +5315,7 @@ def main():
     with st.expander("💡 Dicas para evitar rate limit"):
         st.markdown("""
         1. **Use o cache**: O sistema armazena dados por 1-24 horas
-        2. **Evite buscas frequentes**: Não atualize mais que 1x por minuto
+      #  2. **Evite buscas frequentes**: Não atualize mais que 1x por minuto
         3. **Use datas específicas**: Evite buscar intervalos muito grandes
         4. **Monitore os limites**: Fique atento ao contador de requests
         5. **Priorize ligas**: Analise uma liga por vez quando possível
