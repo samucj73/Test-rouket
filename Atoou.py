@@ -2968,7 +2968,7 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
         # Caixa da análise principal
         analise_width = x1 - x0 - 120
         analise_height = 140
-        analise_x = x0 + 60
+        analise_x = x0 + 90
         analise_y = y_analise_principal
         
         draw.rounded_rectangle([analise_x, analise_y, analise_x + analise_width, analise_y + analise_height],
