@@ -4247,7 +4247,7 @@ def enviar_alerta_conf_criar_poster(jogos_conf: list, min_conf: int, max_conf: i
                 analise_extras = ""
                 if 'detalhes' in j and 'vitoria' in j['detalhes']:
                     v = j['detalhes']['vitoria']
-                    analise_extras += f"🏆 Favorito: {j['home'] if v['favorito']=='home' else j['away
+                    #analise_extras += f"🏆 Favorito: {j['home'] if v['favorito']=='home' else j['away
                     analise_extras += f"🏆 Favorito: {j['home'] if v['favorito']=='home' else j['away'] if v['favorito']=='away' else 'EMPATE'} ({max(v['home_win'], v['away_win'], v['draw']):.0f}%)\n"
                 
                 if 'detalhes' in j and 'gols_ht' in j['detalhes']:
