@@ -5320,7 +5320,7 @@ def main():
         4. **Monitore os limites**: Fique atento ao contador de requests
         5. **Priorize ligas**: Analise uma liga por vez quando possível
         6. **Use o filtro por confiança**: Reduz a quantidade de jogos analisados
-        """)
+       # """)
 
 if __name__ == "__main__":
     main()
