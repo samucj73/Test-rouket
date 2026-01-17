@@ -2963,10 +2963,10 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
             draw.text((vs_x - 30, vs_y - 25), "VS", font=FONTE_VS, fill=(255, 215, 0))
 
         # ===== SEÇÃO 3: ANÁLISE PRINCIPAL (Over/Under) =====
-        y_analise_principal = y_escudos + TAMANHO_QUADRADO + 130
+        y_analise_principal = y_escudos + TAMANHO_QUADRADO + 160
         
         # Caixa da análise principal
-        analise_width = x1 - x0 - 120
+        analise_width = x1 - x0 - 150
         analise_height = 140
         analise_x = x0 + 90
         analise_y = y_analise_principal
@@ -2981,7 +2981,7 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
         try:
             titulo_analise_bbox = draw.textbbox((0, 0), titulo_analise, font=FONTE_SECTION)
             titulo_analise_w = titulo_analise_bbox[2] - titulo_analise_bbox[0]
-            draw.text((analise_x + 30, analise_y + 25), titulo_analise, 
+            draw.text((analise_x + 55, analise_y + 50), titulo_analise, 
                      font=FONTE_SECTION, fill=cor_principal)
         except:
             draw.text((analise_x + 60, analise_y + 40), titulo_analise, 
