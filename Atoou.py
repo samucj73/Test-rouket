@@ -2738,7 +2738,7 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
     # Configurações
     LARGURA = 2400
     ALTURA_TOPO = 400
-    ALTURA_POR_JOGO = 1300  # Mais espaço para melhor organização
+    ALTURA_POR_JOGO = 1200  # Mais espaço para melhor organização
     PADDING = 100
     
     jogos_count = len(top_jogos[:5])  # Limitar a 5 jogos
@@ -2858,7 +2858,7 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
             data_text = str(jogo.get("hora", ""))
             hora_text = ""
         
-        data_hora_text = f"📅 {data_text} • 🕐 {hora_text}"
+        data_hora_text = f" {data_text} •  {hora_text}"
         try:
             dh_bbox = draw.textbbox((0, 0), data_hora_text, font=FONTE_INFO)
             dh_w = dh_bbox[2] - dh_bbox[0]
@@ -2870,7 +2870,7 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
 
         # ===== SEÇÃO 2: TIMES E ESCUDOS =====
         TAMANHO_ESCUDO = 300
-        TAMANHO_QUADRADO = 340
+        TAMANHO_QUADRADO = 330
         ESPACO_ENTRE_ESCUDOS = 700
         
         largura_total_escudos = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
@@ -2931,7 +2931,7 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
             draw.text((x_home + (TAMANHO_QUADRADO - home_w)//2, y_escudos + TAMANHO_QUADRADO + 50),
                      home_text, font=FONTE_TIMES, fill=(255, 255, 255))
         except:
-            draw.text((x_home, y_escudos + TAMANHO_QUADRADO + 50),
+            draw.text((x_home, y_escudos + TAMANHO_QUADRADO + 55),
                      home_text, font=FONTE_TIMES, fill=(255, 255, 255))
 
         try:
@@ -2976,7 +2976,7 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
 
         # Título da seção
         tipo_emoji = "+" if jogo.get('tipo_aposta') == "over" else "-"
-        titulo_analise = f"{tipo_emoji} ANÁLISE PRINCIPAL"
+        titulo_analise = f"{tipo_emoji} ANÁLISE"
         
         try:
             titulo_analise_bbox = draw.textbbox((0, 0), titulo_analise, font=FONTE_SECTION)
@@ -2984,7 +2984,7 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
             draw.text((analise_x + 30, analise_y + 25), titulo_analise, 
                      font=FONTE_SECTION, fill=cor_principal)
         except:
-            draw.text((analise_x + 30, analise_y + 25), titulo_analise, 
+            draw.text((analise_x + 45, analise_y + 25), titulo_analise, 
                      font=FONTE_SECTION, fill=cor_principal)
 
         # Tendência principal
@@ -3028,7 +3028,7 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
                                  radius=15, fill=(35, 45, 70), outline=(255, 193, 7), width=4)
             
             # Título
-            draw.text((col1_x + 30, y_analises_adicionais + 20), "🏆 FAVORITO", 
+            draw.text((col1_x + 30, y_analises_adicionais + 20), " FAVORITO", 
                      font=FONTE_SECTION, fill=(255, 193, 7))
             
             # Informações
@@ -3059,7 +3059,7 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
                      prob_text, font=FONTE_ESTATISTICAS, fill=(255, 193, 7))
 
         # COLUNA 2: HT
-        col2_x = col1_x + col_width + 35
+        col2_x = col1_x + col_width + 45
         
         if 'detalhes' in jogo and 'gols_ht' in jogo['detalhes']:
             ht_data = jogo['detalhes']['gols_ht']
