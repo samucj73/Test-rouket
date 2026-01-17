@@ -2730,7 +2730,7 @@ def gerar_poster_individual_westham(fixture: dict, analise: dict) -> io.BytesIO:
     return buffer
 
 #def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo: str = "** TOP JOGOS DO DIA **") -> io.BytesIO:
-def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo: str = "🏆 TOP JOGOS DO DIA 🏆") -> io.BytesIO:
+def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo: str = " ** TOP JOGOS DO DIA **") -> io.BytesIO:
     """
     Gera poster profissional para os Top Jogos - VERSÃO COM DIAGRAMAÇÃO OTIMIZADA
     Layout organizado em 3 seções principais: Over/Under, Favorito e HT
@@ -2759,14 +2759,14 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
     # Carregar fontes OTIMIZADAS
     FONTE_TITULO = criar_fonte(110)      # Título principal
     FONTE_SUBTITULO = criar_fonte(75)    # Subtítulo
-    FONTE_TIMES = criar_fonte(85)        # Nomes dos times
+    FONTE_TIMES = criar_fonte(80)        # Nomes dos times
     FONTE_VS = criar_fonte(80)           # VS
     FONTE_INFO = criar_fonte(50)         # Informações gerais
-    FONTE_ANALISE = criar_fonte(90)      # Análise principal
-    FONTE_RANKING = criar_fonte(90)      # Ranking TOP
+    FONTE_ANALISE = criar_fonte(85)      # Análise principal
+    FONTE_RANKING = criar_fonte(85)      # Ranking TOP
     FONTE_ESTATISTICAS = criar_fonte(48) # Estatísticas
-    FONTE_SECTION = criar_fonte(65)      # Seções (Favorito, HT)
-    FONTE_EMOJI = criar_fonte(70)        # Emojis
+    FONTE_SECTION = criar_fonte(60)      # Seções (Favorito, HT)
+    FONTE_EMOJI = criar_fonte(65)        # Emojis
 
     # ================= CABEÇALHO =================
     draw.rectangle([0, 0, LARGURA, ALTURA_TOPO - 50], fill=(25, 40, 65), outline=None)
@@ -2784,7 +2784,7 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
         draw.text((LARGURA//2 - 400, 85), titulo_text, font=FONTE_TITULO, fill=(255, 215, 0))
 
     # Subtítulo informativo
-    subtitulo = f" Confiança: {min_conf}%-{max_conf}% • 🔥 Top {jogos_count} Jogos • 📊 Ordenados por Confiança"
+    subtitulo = f" Confiança: {min_conf}%-{max_conf}% •  Top {jogos_count} Jogos •  Ordenados por Confiança"
     try:
         sub_bbox = draw.textbbox((0, 0), subtitulo, font=FONTE_SUBTITULO)
         sub_w = sub_bbox[2] - sub_bbox[0]
@@ -2870,7 +2870,7 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
 
         # ===== SEÇÃO 2: TIMES E ESCUDOS =====
         TAMANHO_ESCUDO = 300
-        TAMANHO_QUADRADO = 330
+        TAMANHO_QUADRADO = 320
         ESPACO_ENTRE_ESCUDOS = 700
         
         largura_total_escudos = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
@@ -2999,7 +2999,7 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
                      font=FONTE_ANALISE, fill=(255, 255, 255))
 
         # Estatísticas em linha
-        y_stats = analise_y + 80
+        y_stats = analise_y + 90
         stats = [
             f" Estimativa: {jogo.get('estimativa', 0):.2f}",
             f" Probabilidade: {jogo.get('probabilidade', 0):.0f}%",
@@ -3011,92 +3011,7 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
             draw.text((x_stat, y_stats), stat, font=FONTE_ESTATISTICAS, fill=(200, 220, 255))
 
         # ===== SEÇÃO 4: ANÁLISES ADICIONAIS (Favorito e HT) =====
-        y_analises_adicionais = analise_y + analise_height + 40
         
-        # Largura para cada coluna
-        col_width = (analise_width - 35) // 2
-        
-        # COLUNA 1: FAVORITO
-        col1_x = analise_x
-        
-        if 'detalhes' in jogo and 'vitoria' in jogo['detalhes']:
-            vitoria_data = jogo['detalhes']['vitoria']
-            
-            # Caixa do favorito
-            fav_height = 120
-            draw.rounded_rectangle([col1_x, y_analises_adicionais, col1_x + col_width, y_analises_adicionais + fav_height],
-                                 radius=15, fill=(35, 45, 70), outline=(255, 193, 7), width=4)
-            
-            # Título
-            draw.text((col1_x + 30, y_analises_adicionais + 20), " FAVORITO", 
-                     font=FONTE_SECTION, fill=(255, 193, 7))
-            
-            # Informações
-            favorito = vitoria_data['favorito']
-            if favorito == "home":
-                fav_text = jogo.get('home', '')
-                fav_emoji = ""
-                fav_prob = _data['home_win']
-            elif favorito == "away":
-                fav_text = jogo.get('away', '')
-                fav_emoji = ""
-                fav_prob = vitoria_data['away_win']
-            else:
-                fav_text = "EMPATE"
-                fav_emoji = ""
-                fav_prob = vitoria_data['draw']
-            
-            # Nome do favorito
-            fav_display = f"{fav_emoji} {abreviar_nome(fav_text, 15)}"
-            draw.text((col1_x + 40, y_analises_adicionais + 60), fav_display, 
-                     font=FONTE_ESTATISTICAS, fill=(255, 255, 255))
-            
-            # Probabilidade
-            prob_text = f"{fav_prob:.0f}%"
-            prob_bbox = draw.textbbox((0, 0), prob_text, font=FONTE_ESTATISTICAS)
-            prob_w = prob_bbox[2] - prob_bbox[0]
-            draw.text((col1_x + col_width - prob_w - 40, y_analises_adicionais + 60), 
-                     prob_text, font=FONTE_ESTATISTICAS, fill=(255, 193, 7))
-
-        # COLUNA 2: HT
-        col2_x = col1_x + col_width + 45
-        
-        if 'detalhes' in jogo and 'gols_ht' in jogo['detalhes']:
-            ht_data = jogo['detalhes']['gols_ht']
-            
-            # Caixa do HT
-            ht_height = 120
-            draw.rounded_rectangle([col2_x, y_analises_adicionais, col2_x + col_width, y_analises_adicionais + ht_height],
-                                 radius=15, fill=(35, 45, 70), outline=(100, 200, 255), width=4)
-            
-            # Título
-            draw.text((col2_x + 30, y_analises_adicionais + 20), "⏰ PRIMEIRO TEMPO", 
-                     font=FONTE_SECTION, fill=(100, 200, 255))
-            
-            # Tendência HT
-            ht_tendencia = ht_data['tendencia_ht']
-            draw.text((col2_x + 40, y_analises_adicionais + 60), ht_tendencia, 
-                     font=FONTE_ESTATISTICAS, fill=(255, 255, 255))
-            
-            # Confiança HT
-            conf_ht_text = f"{ht_data['confianca_ht']:.0f}%"
-            conf_bbox = draw.textbbox((0, 0), conf_ht_text, font=FONTE_ESTATISTICAS)
-            conf_w = conf_bbox[2] - conf_bbox[0]
-            draw.text((col2_x + col_width - conf_w - 40, y_analises_adicionais + 60), 
-                     conf_ht_text, font=FONTE_ESTATISTICAS, fill=(100, 200, 255))
-
-        # Separador entre jogos
-        y_pos += ALTURA_POR_JOGO
-        if idx < jogos_count - 1:
-            separator_y = y_pos - 30
-            draw.line([(x0 + 100, separator_y), (x1 - 100, separator_y)], 
-                     fill=(60, 80, 110), width=3)
-            
-            # Pontilhado decorativo
-            for i in range(x0 + 120, x1 - 120, 25):
-                if i % 50 == 0:
-                    draw.line([(i, separator_y - 5), (i, separator_y + 5)], 
-                             fill=(100, 150, 200), width=2)
 
     # ================= RODAPÉ =================
     rodape_height = 90
