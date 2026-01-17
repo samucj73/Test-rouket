@@ -2737,8 +2737,8 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
     """
     # Configurações
     LARGURA = 2400
-    ALTURA_TOPO = 350
-    ALTURA_POR_JOGO = 950  # Mais espaço para melhor organização
+    ALTURA_TOPO = 400
+    ALTURA_POR_JOGO = 1300  # Mais espaço para melhor organização
     PADDING = 100
     
     jogos_count = len(top_jogos[:5])  # Limitar a 5 jogos
@@ -2772,7 +2772,7 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
     draw.rectangle([0, 0, LARGURA, ALTURA_TOPO - 50], fill=(25, 40, 65), outline=None)
     
     # Título PRINCIPAL
-    titulo_text = "🏆 TOP JOGOS DO DIA 🏆"
+    titulo_text = " ** TOP JOGOS DO DIA **"
     try:
         titulo_bbox = draw.textbbox((0, 0), titulo_text, font=FONTE_TITULO)
         titulo_w = titulo_bbox[2] - titulo_bbox[0]
@@ -2784,7 +2784,7 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
         draw.text((LARGURA//2 - 400, 85), titulo_text, font=FONTE_TITULO, fill=(255, 215, 0))
 
     # Subtítulo informativo
-    subtitulo = f"🎯 Confiança: {min_conf}%-{max_conf}% • 🔥 Top {jogos_count} Jogos • 📊 Ordenados por Confiança"
+    subtitulo = f" Confiança: {min_conf}%-{max_conf}% • 🔥 Top {jogos_count} Jogos • 📊 Ordenados por Confiança"
     try:
         sub_bbox = draw.textbbox((0, 0), subtitulo, font=FONTE_SUBTITULO)
         sub_w = sub_bbox[2] - sub_bbox[0]
@@ -2975,7 +2975,7 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
                              radius=20, fill=(30, 40, 60), outline=cor_principal, width=5)
 
         # Título da seção
-        tipo_emoji = "📈" if jogo.get('tipo_aposta') == "over" else "📉"
+        tipo_emoji = "+" if jogo.get('tipo_aposta') == "over" else "-"
         titulo_analise = f"{tipo_emoji} ANÁLISE PRINCIPAL"
         
         try:
@@ -3001,9 +3001,9 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
         # Estatísticas em linha
         y_stats = analise_y + 80
         stats = [
-            f"⚽ Estimativa: {jogo.get('estimativa', 0):.2f}",
-            f"🎯 Probabilidade: {jogo.get('probabilidade', 0):.0f}%",
-            f"🔍 Confiança: {jogo.get('confianca', 0):.0f}%"
+            f" Estimativa: {jogo.get('estimativa', 0):.2f}",
+            f" Probabilidade: {jogo.get('probabilidade', 0):.0f}%",
+            f" Confiança: {jogo.get('confianca', 0):.0f}%"
         ]
         
         for i, stat in enumerate(stats):
@@ -3014,7 +3014,7 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
         y_analises_adicionais = analise_y + analise_height + 40
         
         # Largura para cada coluna
-        col_width = (analise_width - 30) // 2
+        col_width = (analise_width - 35) // 2
         
         # COLUNA 1: FAVORITO
         col1_x = analise_x
@@ -3035,15 +3035,15 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
             favorito = vitoria_data['favorito']
             if favorito == "home":
                 fav_text = jogo.get('home', '')
-                fav_emoji = "🏠"
-                fav_prob = vitoria_data['home_win']
+                fav_emoji = ""
+                fav_prob = _data['home_win']
             elif favorito == "away":
                 fav_text = jogo.get('away', '')
-                fav_emoji = "✈️"
+                fav_emoji = ""
                 fav_prob = vitoria_data['away_win']
             else:
                 fav_text = "EMPATE"
-                fav_emoji = "🤝"
+                fav_emoji = ""
                 fav_prob = vitoria_data['draw']
             
             # Nome do favorito
@@ -3059,7 +3059,7 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
                      prob_text, font=FONTE_ESTATISTICAS, fill=(255, 193, 7))
 
         # COLUNA 2: HT
-        col2_x = col1_x + col_width + 30
+        col2_x = col1_x + col_width + 35
         
         if 'detalhes' in jogo and 'gols_ht' in jogo['detalhes']:
             ht_data = jogo['detalhes']['gols_ht']
@@ -3103,7 +3103,7 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
     draw.rectangle([0, altura_total - rodape_height, LARGURA, altura_total], 
                   fill=(20, 30, 45), outline=None)
     
-    rodape_text = f"⚽ ELITE MASTER SYSTEM • Análise Completa • {datetime.now().strftime('%d/%m/%Y %H:%M')} ⚽"
+    rodape_text = f" ELITE MASTER SYSTEM • Análise Completa • {datetime.now().strftime('%d/%m/%Y %H:%M')} ⚽"
     
     try:
         rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_INFO)
