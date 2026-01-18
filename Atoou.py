@@ -212,6 +212,9 @@ class ImageCache:
     
     def get(self, team_name: str, crest_url: str) -> bytes | None:
         """Obtém escudo do cache"""
+        if not crest_url:
+            return None
+            
         key = self._generate_key(team_name, crest_url)
         
         with self.lock:
@@ -239,6 +242,9 @@ class ImageCache:
     
     def set(self, team_name: str, crest_url: str, img_bytes: bytes):
         """Armazena escudo no cache"""
+        if not crest_url or not img_bytes:
+            return
+            
         key = self._generate_key(team_name, crest_url)
         
         with self.lock:
@@ -468,6 +474,8 @@ class Jogo:
         self.utc_date = match_data.get("utcDate")
         self.status = match_data.get("status", "DESCONHECIDO")
         self.competition = match_data.get("competition", {}).get("name", "Desconhecido")
+        
+        # Escudos dos times
         self.home_crest = match_data.get("homeTeam", {}).get("crest") or match_data.get("homeTeam", {}).get("logo", "")
         self.away_crest = match_data.get("awayTeam", {}).get("crest") or match_data.get("awayTeam", {}).get("logo", "")
         
@@ -1121,6 +1129,7 @@ class APIClient:
         self.jogos_cache = SmartCache("jogos")
         self.classificacao_cache = SmartCache("classificacao")
         self.match_cache = SmartCache("match_details")
+        self.image_cache = ImageCache()
     
     def obter_dados_api_com_retry(self, url: str, timeout: int = 15, max_retries: int = 3) -> dict | None:
         """Obtém dados da API com rate limiting e retry automático"""
@@ -1254,6 +1263,38 @@ class APIClient:
             self.match_cache.set(fixture_id, data)
         return data
     
+    def baixar_escudo_time(self, team_name: str, crest_url: str) -> bytes | None:
+        """Baixa o escudo do time da URL fornecida"""
+        if not crest_url:
+            logging.warning(f"❌ URL do escudo vazia para {team_name}")
+            return None
+        
+        try:
+            # Verificar primeiro no cache
+            cached = self.image_cache.get(team_name, crest_url)
+            if cached:
+                return cached
+            
+            # Baixar da URL
+            logging.info(f"⬇️ Baixando escudo de {team_name}: {crest_url}")
+            response = requests.get(crest_url, timeout=10)
+            response.raise_for_status()
+            
+            img_bytes = response.content
+            
+            # Salvar no cache
+            self.image_cache.set(team_name, crest_url, img_bytes)
+            
+            logging.info(f"✅ Escudo de {team_name} baixado e armazenado no cache")
+            return img_bytes
+            
+        except requests.RequestException as e:
+            logging.error(f"❌ Erro ao baixar escudo de {team_name}: {e}")
+            return None
+        except Exception as e:
+            logging.error(f"❌ Erro inesperado ao baixar escudo de {team_name}: {e}")
+            return None
+    
     @staticmethod
     def validar_dados_jogo(match: dict) -> bool:
         """Valida se os dados do jogo são válidos"""
@@ -1336,6 +1377,9 @@ class TelegramClient:
 
 class PosterGenerator:
     """Gera posters para os alertas"""
+    
+    def __init__(self, api_client: APIClient):
+        self.api_client = api_client
     
     @staticmethod
     def criar_fonte(tamanho: int) -> ImageFont.ImageFont:
@@ -1443,16 +1487,38 @@ class PosterGenerator:
             x_away = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
             y_escudos = y0 + 250
 
-            escudo_home = ImageCache().get(jogo['home'], jogo.get('escudo_home', ''))
-            escudo_away = ImageCache().get(jogo['away'], jogo.get('escudo_away', ''))
+            # Baixar escudos usando o APIClient
+            home_crest_url = jogo.get('escudo_home', '')
+            away_crest_url = jogo.get('escudo_away', '')
             
-            if escudo_home:
-                escudo_home = Image.open(io.BytesIO(escudo_home)).convert("RGBA")
-            if escudo_away:
-                escudo_away = Image.open(io.BytesIO(escudo_away)).convert("RGBA")
+            escudo_home_bytes = None
+            escudo_away_bytes = None
+            
+            if home_crest_url:
+                escudo_home_bytes = self.api_client.baixar_escudo_time(jogo['home'], home_crest_url)
+            
+            if away_crest_url:
+                escudo_away_bytes = self.api_client.baixar_escudo_time(jogo['away'], away_crest_url)
+            
+            # Converter bytes para imagens PIL
+            escudo_home_img = None
+            escudo_away_img = None
+            
+            if escudo_home_bytes:
+                try:
+                    escudo_home_img = Image.open(io.BytesIO(escudo_home_bytes)).convert("RGBA")
+                except Exception as e:
+                    logging.error(f"Erro ao abrir escudo do {jogo['home']}: {e}")
+            
+            if escudo_away_bytes:
+                try:
+                    escudo_away_img = Image.open(io.BytesIO(escudo_away_bytes)).convert("RGBA")
+                except Exception as e:
+                    logging.error(f"Erro ao abrir escudo do {jogo['away']}: {e}")
 
-            self._desenhar_escudo_quadrado(draw, img, escudo_home, x_home, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo['home'])
-            self._desenhar_escudo_quadrado(draw, img, escudo_away, x_away, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo['away'])
+            # Desenhar escudos
+            self._desenhar_escudo_quadrado(draw, img, escudo_home_img, x_home, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo['home'])
+            self._desenhar_escudo_quadrado(draw, img, escudo_away_img, x_away, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo['away'])
 
             home_text = jogo['home']
             away_text = jogo['away']
@@ -1653,17 +1719,38 @@ class PosterGenerator:
             x_away = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
             y_escudos = y0 + 150
 
-            # Escudos
-            escudo_home = ImageCache().get(jogo['home'], jogo.get('escudo_home', ''))
-            escudo_away = ImageCache().get(jogo['away'], jogo.get('escudo_away', ''))
+            # Baixar escudos usando o APIClient
+            home_crest_url = jogo.get('escudo_home', '')
+            away_crest_url = jogo.get('escudo_away', '')
             
-            if escudo_home:
-                escudo_home = Image.open(io.BytesIO(escudo_home)).convert("RGBA")
-            if escudo_away:
-                escudo_away = Image.open(io.BytesIO(escudo_away)).convert("RGBA")
+            escudo_home_bytes = None
+            escudo_away_bytes = None
+            
+            if home_crest_url:
+                escudo_home_bytes = self.api_client.baixar_escudo_time(jogo['home'], home_crest_url)
+            
+            if away_crest_url:
+                escudo_away_bytes = self.api_client.baixar_escudo_time(jogo['away'], away_crest_url)
+            
+            # Converter bytes para imagens PIL
+            escudo_home_img = None
+            escudo_away_img = None
+            
+            if escudo_home_bytes:
+                try:
+                    escudo_home_img = Image.open(io.BytesIO(escudo_home_bytes)).convert("RGBA")
+                except Exception as e:
+                    logging.error(f"Erro ao abrir escudo do {jogo['home']}: {e}")
+            
+            if escudo_away_bytes:
+                try:
+                    escudo_away_img = Image.open(io.BytesIO(escudo_away_bytes)).convert("RGBA")
+                except Exception as e:
+                    logging.error(f"Erro ao abrir escudo do {jogo['away']}: {e}")
 
-            self._desenhar_escudo_quadrado(draw, img, escudo_home, x_home, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo['home'])
-            self._desenhar_escudo_quadrado(draw, img, escudo_away, x_away, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo['away'])
+            # Desenhar escudos
+            self._desenhar_escudo_quadrado(draw, img, escudo_home_img, x_home, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo['home'])
+            self._desenhar_escudo_quadrado(draw, img, escudo_away_img, x_away, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo['away'])
 
             # Nomes dos times
             home_text = jogo['home']
@@ -1795,38 +1882,84 @@ class PosterGenerator:
         )
 
         if logo_img is None:
+            # Desenhar placeholder com as iniciais do time
             draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(60, 60, 60))
-            draw.text((x + 70, y + 90), "SEM", font=self.criar_fonte(50), fill=(255, 255, 255))
+            
+            # Pegar as iniciais do time
+            if team_name:
+                iniciais = ''.join([palavra[0].upper() for palavra in team_name.split()[:2]])
+                if len(iniciais) > 3:
+                    iniciais = iniciais[:3]
+            else:
+                iniciais = "SEM"
+            
+            try:
+                bbox = draw.textbbox((0, 0), iniciais, font=self.criar_fonte(50))
+                w = bbox[2] - bbox[0]
+                h = bbox[3] - bbox[1]
+                draw.text((x + (tamanho_quadrado - w)//2, y + (tamanho_quadrado - h)//2), 
+                         iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
+            except:
+                draw.text((x + 70, y + 90), iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
             return
 
         try:
             logo_img = logo_img.convert("RGBA")
             largura, altura = logo_img.size
+            
+            # Calcular para manter proporção
             proporcao = largura / altura
-
+            
             if proporcao > 1:
-                nova_altura = altura
-                nova_largura = int(altura)
-                offset_x = (largura - nova_largura) // 2
-                offset_y = 0
+                # Imagem mais larga que alta
+                nova_altura = tamanho_escudo
+                nova_largura = int(tamanho_escudo * proporcao)
+                if nova_largura > tamanho_escudo:
+                    # Redimensionar mantendo proporção
+                    nova_largura = tamanho_escudo
+                    nova_altura = int(tamanho_escudo / proporcao)
             else:
-                nova_largura = largura
-                nova_altura = int(largura)
-                offset_x = 0
-                offset_y = (altura - nova_altura) // 2
+                # Imagem mais alta que larga
+                nova_largura = tamanho_escudo
+                nova_altura = int(tamanho_escudo / proporcao)
+                if nova_altura > tamanho_escudo:
+                    nova_altura = tamanho_escudo
+                    nova_largura = int(tamanho_escudo * proporcao)
+            
+            # Redimensionar a imagem
+            imagem_redimensionada = logo_img.resize((nova_largura, nova_altura), Image.Resampling.LANCZOS)
+            
+            # Calcular posição para centralizar
+            pos_x = x + (tamanho_quadrado - nova_largura) // 2
+            pos_y = y + (tamanho_quadrado - nova_altura) // 2
 
-            imagem_cortada = logo_img.crop((offset_x, offset_y, offset_x + nova_largura, offset_y + nova_altura))
-            imagem_final = imagem_cortada.resize((tamanho_escudo, tamanho_escudo), Image.Resampling.LANCZOS)
-
-            pos_x = x + (tamanho_quadrado - tamanho_escudo) // 2
-            pos_y = y + (tamanho_quadrado - tamanho_escudo) // 2
-
-            img.paste(imagem_final, (pos_x, pos_y), imagem_final)
+            # Criar uma imagem branca de fundo
+            fundo = Image.new("RGBA", (tamanho_quadrado, tamanho_quadrado), (255, 255, 255, 255))
+            fundo.paste(imagem_redimensionada, (pos_x - x, pos_y - y), imagem_redimensionada)
+            
+            # Colar a imagem composta
+            img.paste(fundo, (x, y), fundo)
 
         except Exception as e:
-            logging.error(f"Erro ao processar escudo: {e}")
+            logging.error(f"Erro ao processar escudo de {team_name}: {e}")
+            # Fallback: desenhar placeholder
             draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(100, 100, 100))
-            draw.text((x + 70, y + 90), "ERR", font=self.criar_fonte(50), fill=(255, 255, 255))
+            
+            if team_name:
+                iniciais = ''.join([palavra[0].upper() for palavra in team_name.split()[:2]])
+                if len(iniciais) > 3:
+                    iniciais = iniciais[:3]
+            else:
+                iniciais = "ERR"
+            
+            try:
+                bbox = draw.textbbox((0, 0), iniciais, font=self.criar_fonte(50))
+                w = bbox[2] - bbox[0]
+                h = bbox[3] - bbox[1]
+                draw.text((x + (tamanho_quadrado - w)//2, y + (tamanho_quadrado - h)//2), 
+                         iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
+            except:
+                draw.text((x + 70, y + 90), iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
 
 # =============================
 # SISTEMA PRINCIPAL
@@ -1841,8 +1974,8 @@ class SistemaAlertasFutebol:
         self.api_monitor = APIMonitor()
         self.api_client = APIClient(self.rate_limiter, self.api_monitor)
         self.telegram_client = TelegramClient()
-        self.poster_generator = PosterGenerator()
-        self.image_cache = ImageCache()
+        self.poster_generator = PosterGenerator(self.api_client)
+        self.image_cache = self.api_client.image_cache
         
         # Inicializar logging
         self._setup_logging()
@@ -2128,11 +2261,15 @@ class SistemaAlertasFutebol:
                 ht_home_goals = half_time.get("home", 0)
                 ht_away_goals = half_time.get("away", 0)
                 
+                # Obter URLs dos escudos
+                home_crest = match_data.get("homeTeam", {}).get("crest") or ""
+                away_crest = match_data.get("awayTeam", {}).get("crest") or ""
+                
                 # Criar objeto Jogo com os dados do alerta
                 jogo = Jogo({
                     "id": fixture_id,
-                    "homeTeam": {"name": alerta.get("home", "")},
-                    "awayTeam": {"name": alerta.get("away", "")},
+                    "homeTeam": {"name": alerta.get("home", ""), "crest": home_crest},
+                    "awayTeam": {"name": alerta.get("away", ""), "crest": away_crest},
                     "utcDate": alerta.get("hora", ""),
                     "competition": {"name": alerta.get("liga", "")},
                     "status": status
@@ -2236,75 +2373,47 @@ class SistemaAlertasFutebol:
             for i in range(0, len(jogos_lista), batch_size):
                 batch = jogos_lista[i:i+batch_size]
                 
-                # Preparar mensagem para o lote
-                if tipo_alerta == "over_under":
-                    titulo = f"📊 RESULTADOS OVER/UNDER - Lote {i//batch_size + 1}"
-                    msg = f"<b>{titulo}</b>\n\n"
+                # Gerar poster para o lote
+                try:
+                    if tipo_alerta == "over_under":
+                        titulo = f"📊 RESULTADOS OVER/UNDER - Lote {i//batch_size + 1}"
+                    elif tipo_alerta == "favorito":
+                        titulo = f"🏆 RESULTADOS FAVORITOS - Lote {i//batch_size + 1}"
+                    elif tipo_alerta == "gols_ht":
+                        titulo = f"⏰ RESULTADOS GOLS HT - Lote {i//batch_size + 1}"
                     
-                    for jogo in batch:
-                        resultado = jogo.get("resultado", "PENDENTE")
-                        resultado_emoji = "✅" if resultado == "GREEN" else "❌" if resultado == "RED" else "⏳"
-                        
-                        msg += (
-                            f"{resultado_emoji} <b>{jogo['home']} {jogo.get('home_goals', '?')}-{jogo.get('away_goals', '?')} {jogo['away']}</b>\n"
-                            f"📈 {jogo['tendencia']} | Est: {jogo['estimativa']:.2f} | Prob: {jogo['probabilidade']:.0f}%\n"
-                            f"🎯 Resultado: {resultado} | Conf: {jogo['confianca']:.0f}%\n\n"
-                        )
-                
-                elif tipo_alerta == "favorito":
-                    titulo = f"🏆 RESULTADOS FAVORITOS - Lote {i//batch_size + 1}"
-                    msg = f"<b>{titulo}</b>\n\n"
+                    # Gerar poster
+                    poster = self.poster_generator.gerar_poster_resultados(batch, tipo_alerta)
                     
-                    for jogo in batch:
-                        resultado = jogo.get("resultado_favorito", "PENDENTE")
-                        resultado_emoji = "✅" if resultado == "GREEN" else "❌" if resultado == "RED" else "⏳"
-                        favorito = jogo.get('favorito', '')
-                        favorito_text = jogo['home'] if favorito == "home" else jogo['away'] if favorito == "away" else "EMPATE"
-                        
-                        msg += (
-                            f"{resultado_emoji} <b>{jogo['home']} {jogo.get('home_goals', '?')}-{jogo.get('away_goals', '?')} {jogo['away']}</b>\n"
-                            f"🏆 Favorito: {favorito_text} | Conf: {jogo.get('confianca_vitoria', 0):.0f}%\n"
-                            f"🎯 Resultado: {resultado}\n\n"
-                        )
-                
-                elif tipo_alerta == "gols_ht":
-                    titulo = f"⏰ RESULTADOS GOLS HT - Lote {i//batch_size + 1}"
-                    msg = f"<b>{titulo}</b>\n\n"
+                    # Preparar caption
+                    if tipo_alerta == "over_under":
+                        greens = sum(1 for j in batch if j.get("resultado") == "GREEN")
+                        reds = sum(1 for j in batch if j.get("resultado") == "RED")
+                    elif tipo_alerta == "favorito":
+                        greens = sum(1 for j in batch if j.get("resultado_favorito") == "GREEN")
+                        reds = sum(1 for j in batch if j.get("resultado_favorito") == "RED")
+                    elif tipo_alerta == "gols_ht":
+                        greens = sum(1 for j in batch if j.get("resultado_ht") == "GREEN")
+                        reds = sum(1 for j in batch if j.get("resultado_ht") == "RED")
                     
-                    for jogo in batch:
-                        resultado = jogo.get("resultado_ht", "PENDENTE")
-                        resultado_emoji = "✅" if resultado == "GREEN" else "❌" if resultado == "RED" else "⏳"
-                        
-                        msg += (
-                            f"{resultado_emoji} <b>{jogo['home']} {jogo.get('home_goals', '?')}-{jogo.get('away_goals', '?')} {jogo['away']}</b>\n"
-                            f"⏰ {jogo.get('tendencia_ht', 'N/A')} | Est HT: {jogo.get('estimativa_total_ht', 0):.2f}\n"
-                            f"🎯 Resultado HT: {resultado} (HT: {jogo.get('ht_home_goals', '?')}-{jogo.get('ht_away_goals', '?')})\n\n"
-                        )
-                
-                # Adicionar estatísticas do lote
-                if tipo_alerta == "over_under":
-                    greens = sum(1 for j in batch if j.get("resultado") == "GREEN")
-                    reds = sum(1 for j in batch if j.get("resultado") == "RED")
-                elif tipo_alerta == "favorito":
-                    greens = sum(1 for j in batch if j.get("resultado_favorito") == "GREEN")
-                    reds = sum(1 for j in batch if j.get("resultado_favorito") == "RED")
-                elif tipo_alerta == "gols_ht":
-                    greens = sum(1 for j in batch if j.get("resultado_ht") == "GREEN")
-                    reds = sum(1 for j in batch if j.get("resultado_ht") == "RED")
-                
-                total = greens + reds
-                if total > 0:
-                    taxa_acerto = (greens / total) * 100
-                    msg += f"📊 <b>LOTE {i//batch_size + 1}:</b> {greens}✅ {reds}❌ | <b>ACERTO: {taxa_acerto:.1f}%</b>\n\n"
-                
-                msg += f"🔥 <b>ELITE MASTER SYSTEM</b>"
-                
-                # Enviar mensagem do lote
-                if self.telegram_client.enviar_mensagem(msg, self.config.TELEGRAM_CHAT_ID_ALT2):
-                    st.success(f"📤 Lote {i//batch_size + 1} de resultados {tipo_alerta} enviado ({len(batch)} jogos)")
-                
-                # Esperar 2 segundos entre lotes para não sobrecarregar
-                time.sleep(2)
+                    total = greens + reds
+                    if total > 0:
+                        taxa_acerto = (greens / total) * 100
+                        caption = f"<b>{titulo}</b>\n\n"
+                        caption += f"<b>📊 LOTE {i//batch_size + 1}: {greens}✅ {reds}❌</b>\n"
+                        caption += f"<b>🎯 TAXA DE ACERTO: {taxa_acerto:.1f}%</b>\n\n"
+                        caption += f"<b>🔥 ELITE MASTER SYSTEM - RESULTADOS CONFIRMADOS</b>"
+                    
+                    # Enviar poster
+                    if self.telegram_client.enviar_foto(poster, caption=caption):
+                        st.success(f"🖼️ Lote {i//batch_size + 1} de resultados {tipo_alerta} enviado ({len(batch)} jogos)")
+                    
+                    # Esperar 2 segundos entre lotes
+                    time.sleep(2)
+                    
+                except Exception as e:
+                    logging.error(f"Erro ao gerar/enviar poster do lote {i//batch_size + 1}: {e}")
+                    st.error(f"❌ Erro no lote {i//batch_size + 1}: {e}")
             
             # Após enviar todos os lotes, enviar um resumo final
             if jogos_lista:
@@ -2387,7 +2496,9 @@ class SistemaAlertasFutebol:
                 "home": jogo.home_team,
                 "away": jogo.away_team,
                 "liga": jogo.competition,
-                "hora": jogo.get_hora_brasilia_datetime().isoformat()
+                "hora": jogo.get_hora_brasilia_datetime().isoformat(),
+                "escudo_home": jogo.home_crest,
+                "escudo_away": jogo.away_crest
             }
             
             if alerta_individual:
@@ -2844,6 +2955,11 @@ class SistemaAlertasFutebol:
         except Exception as e:
             logging.error(f"Erro no envio de alerta original: {e}")
             st.error(f"Erro no envio: {e}")
+
+# 
+
+#+=+=+=+=+=+=+=+=+=+++=+=
+
 
 # =============================
 # INTERFACE STREAMLIT
