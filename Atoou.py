@@ -310,6 +310,17 @@ class DataStorage:
     """Gerencia armazenamento e recuperação de dados"""
     
     @staticmethod
+    def _serialize_for_json(obj):
+        """Converte objetos datetime para strings ISO para serialização JSON"""
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        elif isinstance(obj, dict):
+            return {k: DataStorage._serialize_for_json(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [DataStorage._serialize_for_json(item) for item in obj]
+        return obj
+    
+    @staticmethod
     def carregar_json(caminho: str) -> dict:
         """Carrega JSON do arquivo"""
         try:
@@ -338,11 +349,15 @@ class DataStorage:
     def salvar_json(caminho: str, dados: dict):
         """Salva dados no arquivo JSON"""
         try:
+            # Serializar objetos datetime para strings ISO
+            dados_serializados = DataStorage._serialize_for_json(dados)
+            
             if caminho in [ConfigManager.CACHE_JOGOS, ConfigManager.CACHE_CLASSIFICACAO]:
-                if isinstance(dados, dict):
-                    dados['_timestamp'] = datetime.now().timestamp()
+                if isinstance(dados_serializados, dict):
+                    dados_serializados['_timestamp'] = datetime.now().timestamp()
+            
             with open(caminho, "w", encoding='utf-8') as f:
-                json.dump(dados, f, ensure_ascii=False, indent=2)
+                json.dump(dados_serializados, f, ensure_ascii=False, indent=2)
         except IOError as e:
             logging.error(f"Erro ao salvar {caminho}: {e}")
             st.error(f"Erro ao salvar {caminho}: {e}")
@@ -625,7 +640,7 @@ class Jogo:
             "confianca": self.confianca,
             "tipo_aposta": self.tipo_aposta,
             "liga": self.competition,
-            "hora": self.get_hora_brasilia_datetime(),
+            "hora": self.get_hora_brasilia_datetime().isoformat(),
             "status": self.status,
             "escudo_home": self.home_crest,
             "escudo_away": self.away_crest,
@@ -2062,9 +2077,10 @@ class SistemaAlertasFutebol:
                     taxa_acerto = (greens / total) * 100
                     st.metric("⏰ Gols HT", f"{greens}✅ {reds}❌", f"{taxa_acerto:.1f}% acerto")
         
-        # Botão para enviar alertas de resultados
-        if st.button("🚨 Enviar Alertas de Resultados", type="primary"):
-            self._enviar_alertas_resultados(resultados_totais, data_selecionada)
+        # Enviar alertas de resultados automaticamente em lotes de 3
+        if any(resultados_totais.values()):
+            st.info("🚨 Enviando alertas de resultados automaticamente...")
+            self._enviar_alertas_resultados_automaticos(resultados_totais, data_selecionada)
     
     def _conferir_resultados_tipo(self, tipo_alerta: str, data_busca: str) -> dict:
         """Conferir resultados para um tipo específico de alerta"""
@@ -2205,167 +2221,123 @@ class SistemaAlertasFutebol:
         
         return jogos_com_resultados
     
-    def _enviar_alertas_resultados(self, resultados_totais: dict, data_selecionada):
-        """Enviar alertas de resultados para o Telegram"""
+    def _enviar_alertas_resultados_automaticos(self, resultados_totais: dict, data_selecionada):
+        """Enviar alertas de resultados automaticamente em lotes de 3"""
         data_str = data_selecionada.strftime("%d/%m/%Y")
         
-        # Enviar resultados para cada tipo
         for tipo_alerta, resultados in resultados_totais.items():
             if not resultados:
                 continue
             
-            # Preparar mensagem de texto
-            if tipo_alerta == "over_under":
-                titulo = f"📊 RESULTADOS OVER/UNDER - {data_str}"
-                msg = f"<b>{titulo}</b>\n\n"
-                
-                greens = []
-                reds = []
-                
-                for fixture_id, resultado in resultados.items():
-                    if resultado.get("resultado") == "GREEN":
-                        greens.append(resultado)
-                    elif resultado.get("resultado") == "RED":
-                        reds.append(resultado)
-                
-                if greens:
-                    msg += f"✅ <b>GREEN ({len(greens)}):</b>\n\n"
-                    for jogo in greens:
-                        msg += (
-                            f"🏟️ {jogo['home']} {jogo.get('home_goals', '?')}-{jogo.get('away_goals', '?')} {jogo['away']}\n"
-                            f"📈 {jogo['tendencia']} | Est: {jogo['estimativa']:.2f} | Prob: {jogo['probabilidade']:.0f}%\n\n"
-                        )
-                
-                if reds:
-                    msg += f"❌ <b>RED ({len(reds)}):</b>\n\n"
-                    for jogo in reds:
-                        msg += (
-                            f"🏟️ {jogo['home']} {jogo.get('home_goals', '?')}-{jogo.get('away_goals', '?')} {jogo['away']}\n"
-                            f"📈 {jogo['tendencia']} | Est: {jogo['estimativa']:.2f} | Prob: {jogo['probabilidade']:.0f}%\n\n"
-                        )
-                
-                total = len(greens) + len(reds)
-                if total > 0:
-                    taxa_acerto = (len(greens) / total) * 100
-                    msg += f"📈 <b>ESTATÍSTICAS:</b> {len(greens)}✅ {len(reds)}❌ | <b>ACERTO: {taxa_acerto:.1f}%</b>\n\n"
-                
-                msg += f"🔥 <b>ELITE MASTER SYSTEM</b>"
-                
-            elif tipo_alerta == "favorito":
-                titulo = f"🏆 RESULTADOS FAVORITOS - {data_str}"
-                msg = f"<b>{titulo}</b>\n\n"
-                
-                greens = []
-                reds = []
-                
-                for fixture_id, resultado in resultados.items():
-                    if resultado.get("resultado_favorito") == "GREEN":
-                        greens.append(resultado)
-                    elif resultado.get("resultado_favorito") == "RED":
-                        reds.append(resultado)
-                
-                if greens:
-                    msg += f"✅ <b>GREEN ({len(greens)}):</b>\n\n"
-                    for jogo in greens:
-                        favorito = jogo.get('favorito', '')
-                        favorito_text = jogo['home'] if favorito == "home" else jogo['away'] if favorito == "away" else "EMPATE"
-                        msg += (
-                            f"🏟️ {jogo['home']} {jogo.get('home_goals', '?')}-{jogo.get('away_goals', '?')} {jogo['away']}\n"
-                            f"🏆 Favorito: {favorito_text} | Conf: {jogo.get('confianca_vitoria', 0):.0f}%\n\n"
-                        )
-                
-                if reds:
-                    msg += f"❌ <b>RED ({len(reds)}):</b>\n\n"
-                    for jogo in reds:
-                        favorito = jogo.get('favorito', '')
-                        favorito_text = jogo['home'] if favorito == "home" else jogo['away'] if favorito == "away" else "EMPATE"
-                        msg += (
-                            f"🏟️ {jogo['home']} {jogo.get('home_goals', '?')}-{jogo.get('away_goals', '?')} {jogo['away']}\n"
-                            f"🏆 Favorito: {favorito_text} | Conf: {jogo.get('confianca_vitoria', 0):.0f}%\n\n"
-                        )
-                
-                total = len(greens) + len(reds)
-                if total > 0:
-                    taxa_acerto = (len(greens) / total) * 100
-                    msg += f"📈 <b>ESTATÍSTICAS:</b> {len(greens)}✅ {len(reds)}❌ | <b>ACERTO: {taxa_acerto:.1f}%</b>\n\n"
-                
-                msg += f"🔥 <b>ELITE MASTER SYSTEM</b>"
-                
-            elif tipo_alerta == "gols_ht":
-                titulo = f"⏰ RESULTADOS GOLS HT - {data_str}"
-                msg = f"<b>{titulo}</b>\n\n"
-                
-                greens = []
-                reds = []
-                
-                for fixture_id, resultado in resultados.items():
-                    if resultado.get("resultado_ht") == "GREEN":
-                        greens.append(resultado)
-                    elif resultado.get("resultado_ht") == "RED":
-                        reds.append(resultado)
-                
-                if greens:
-                    msg += f"✅ <b>GREEN ({len(greens)}):</b>\n\n"
-                    for jogo in greens:
-                        msg += (
-                            f"🏟️ {jogo['home']} {jogo.get('home_goals', '?')}-{jogo.get('away_goals', '?')} {jogo['away']}\n"
-                            f"⏰ {jogo.get('tendencia_ht', '')} | Est HT: {jogo.get('estimativa_total_ht', 0):.2f} | Conf HT: {jogo.get('confianca_ht', 0):.0f}%\n"
-                            f"📊 HT: {jogo.get('ht_home_goals', '?')}-{jogo.get('ht_away_goals', '?')} | FT: {jogo.get('home_goals', '?')}-{jogo.get('away_goals', '?')}\n\n"
-                        )
-                
-                if reds:
-                    msg += f"❌ <b>RED ({len(reds)}):</b>\n\n"
-                    for jogo in reds:
-                        msg += (
-                            f"🏟️ {jogo['home']} {jogo.get('home_goals', '?')}-{jogo.get('away_goals', '?')} {jogo['away']}\n"
-                            f"⏰ {jogo.get('tendencia_ht', '')} | Est HT: {jogo.get('estimativa_total_ht', 0):.2f} | Conf HT: {jogo.get('confianca_ht', 0):.0f}%\n"
-                            f"📊 HT: {jogo.get('ht_home_goals', '?')}-{jogo.get('ht_away_goals', '?')} | FT: {jogo.get('home_goals', '?')}-{jogo.get('away_goals', '?')}\n\n"
-                        )
-                
-                total = len(greens) + len(reds)
-                if total > 0:
-                    taxa_acerto = (len(greens) / total) * 100
-                    msg += f"📈 <b>ESTATÍSTICAS:</b> {len(greens)}✅ {len(reds)}❌ | <b>ACERTO: {taxa_acerto:.1f}%</b>\n\n"
-                
-                msg += f"🔥 <b>ELITE MASTER SYSTEM</b>"
+            jogos_lista = list(resultados.values())
             
-            # Enviar mensagem de texto
+            # Dividir em lotes de 3 jogos
+            batch_size = 3
+            for i in range(0, len(jogos_lista), batch_size):
+                batch = jogos_lista[i:i+batch_size]
+                
+                # Preparar mensagem para o lote
+                if tipo_alerta == "over_under":
+                    titulo = f"📊 RESULTADOS OVER/UNDER - Lote {i//batch_size + 1}"
+                    msg = f"<b>{titulo}</b>\n\n"
+                    
+                    for jogo in batch:
+                        resultado = jogo.get("resultado", "PENDENTE")
+                        resultado_emoji = "✅" if resultado == "GREEN" else "❌" if resultado == "RED" else "⏳"
+                        
+                        msg += (
+                            f"{resultado_emoji} <b>{jogo['home']} {jogo.get('home_goals', '?')}-{jogo.get('away_goals', '?')} {jogo['away']}</b>\n"
+                            f"📈 {jogo['tendencia']} | Est: {jogo['estimativa']:.2f} | Prob: {jogo['probabilidade']:.0f}%\n"
+                            f"🎯 Resultado: {resultado} | Conf: {jogo['confianca']:.0f}%\n\n"
+                        )
+                
+                elif tipo_alerta == "favorito":
+                    titulo = f"🏆 RESULTADOS FAVORITOS - Lote {i//batch_size + 1}"
+                    msg = f"<b>{titulo}</b>\n\n"
+                    
+                    for jogo in batch:
+                        resultado = jogo.get("resultado_favorito", "PENDENTE")
+                        resultado_emoji = "✅" if resultado == "GREEN" else "❌" if resultado == "RED" else "⏳"
+                        favorito = jogo.get('favorito', '')
+                        favorito_text = jogo['home'] if favorito == "home" else jogo['away'] if favorito == "away" else "EMPATE"
+                        
+                        msg += (
+                            f"{resultado_emoji} <b>{jogo['home']} {jogo.get('home_goals', '?')}-{jogo.get('away_goals', '?')} {jogo['away']}</b>\n"
+                            f"🏆 Favorito: {favorito_text} | Conf: {jogo.get('confianca_vitoria', 0):.0f}%\n"
+                            f"🎯 Resultado: {resultado}\n\n"
+                        )
+                
+                elif tipo_alerta == "gols_ht":
+                    titulo = f"⏰ RESULTADOS GOLS HT - Lote {i//batch_size + 1}"
+                    msg = f"<b>{titulo}</b>\n\n"
+                    
+                    for jogo in batch:
+                        resultado = jogo.get("resultado_ht", "PENDENTE")
+                        resultado_emoji = "✅" if resultado == "GREEN" else "❌" if resultado == "RED" else "⏳"
+                        
+                        msg += (
+                            f"{resultado_emoji} <b>{jogo['home']} {jogo.get('home_goals', '?')}-{jogo.get('away_goals', '?')} {jogo['away']}</b>\n"
+                            f"⏰ {jogo.get('tendencia_ht', 'N/A')} | Est HT: {jogo.get('estimativa_total_ht', 0):.2f}\n"
+                            f"🎯 Resultado HT: {resultado} (HT: {jogo.get('ht_home_goals', '?')}-{jogo.get('ht_away_goals', '?')})\n\n"
+                        )
+                
+                # Adicionar estatísticas do lote
+                if tipo_alerta == "over_under":
+                    greens = sum(1 for j in batch if j.get("resultado") == "GREEN")
+                    reds = sum(1 for j in batch if j.get("resultado") == "RED")
+                elif tipo_alerta == "favorito":
+                    greens = sum(1 for j in batch if j.get("resultado_favorito") == "GREEN")
+                    reds = sum(1 for j in batch if j.get("resultado_favorito") == "RED")
+                elif tipo_alerta == "gols_ht":
+                    greens = sum(1 for j in batch if j.get("resultado_ht") == "GREEN")
+                    reds = sum(1 for j in batch if j.get("resultado_ht") == "RED")
+                
+                total = greens + reds
+                if total > 0:
+                    taxa_acerto = (greens / total) * 100
+                    msg += f"📊 <b>LOTE {i//batch_size + 1}:</b> {greens}✅ {reds}❌ | <b>ACERTO: {taxa_acerto:.1f}%</b>\n\n"
+                
+                msg += f"🔥 <b>ELITE MASTER SYSTEM</b>"
+                
+                # Enviar mensagem do lote
+                if self.telegram_client.enviar_mensagem(msg, self.config.TELEGRAM_CHAT_ID_ALT2):
+                    st.success(f"📤 Lote {i//batch_size + 1} de resultados {tipo_alerta} enviado ({len(batch)} jogos)")
+                
+                # Esperar 2 segundos entre lotes para não sobrecarregar
+                time.sleep(2)
+            
+            # Após enviar todos os lotes, enviar um resumo final
+            if jogos_lista:
+                self._enviar_resumo_final(tipo_alerta, jogos_lista, data_str)
+    
+    def _enviar_resumo_final(self, tipo_alerta: str, jogos_lista: list, data_str: str):
+        """Enviar resumo final após todos os lotes"""
+        if tipo_alerta == "over_under":
+            titulo = f"📊 RESUMO FINAL OVER/UNDER - {data_str}"
+            greens = sum(1 for j in jogos_lista if j.get("resultado") == "GREEN")
+            reds = sum(1 for j in jogos_lista if j.get("resultado") == "RED")
+        elif tipo_alerta == "favorito":
+            titulo = f"🏆 RESUMO FINAL FAVORITOS - {data_str}"
+            greens = sum(1 for j in jogos_lista if j.get("resultado_favorito") == "GREEN")
+            reds = sum(1 for j in jogos_lista if j.get("resultado_favorito") == "RED")
+        elif tipo_alerta == "gols_ht":
+            titulo = f"⏰ RESUMO FINAL GOLS HT - {data_str}"
+            greens = sum(1 for j in jogos_lista if j.get("resultado_ht") == "GREEN")
+            reds = sum(1 for j in jogos_lista if j.get("resultado_ht") == "RED")
+        
+        total = greens + reds
+        if total > 0:
+            taxa_acerto = (greens / total) * 100
+            
+            msg = f"<b>{titulo}</b>\n\n"
+            msg += f"<b>📋 TOTAL DE JOGOS: {len(jogos_lista)}</b>\n"
+            msg += f"<b>✅ GREEN: {greens} jogos</b>\n"
+            msg += f"<b>❌ RED: {reds} jogos</b>\n"
+            msg += f"<b>🎯 TAXA DE ACERTO FINAL: {taxa_acerto:.1f}%</b>\n\n"
+            msg += f"<b>🔥 ELITE MASTER SYSTEM - ANÁLISE CONFIRMADA</b>"
+            
             if self.telegram_client.enviar_mensagem(msg, self.config.TELEGRAM_CHAT_ID_ALT2):
-                st.success(f"📤 Resultados {tipo_alerta} enviados!")
-            
-            # Gerar e enviar poster
-            try:
-                if resultados:
-                    jogos_lista = list(resultados.values())
-                    poster = self.poster_generator.gerar_poster_resultados(jogos_lista, tipo_alerta)
-                    
-                    caption = f"<b>{titulo}</b>\n\n"
-                    caption += f"<b>📊 TOTAL: {len(jogos_lista)} JOGOS CONFERIDOS</b>\n"
-                    
-                    # Adicionar estatísticas
-                    if tipo_alerta == "over_under":
-                        greens = sum(1 for j in jogos_lista if j.get("resultado") == "GREEN")
-                        reds = sum(1 for j in jogos_lista if j.get("resultado") == "RED")
-                    elif tipo_alerta == "favorito":
-                        greens = sum(1 for j in jogos_lista if j.get("resultado_favorito") == "GREEN")
-                        reds = sum(1 for j in jogos_lista if j.get("resultado_favorito") == "RED")
-                    elif tipo_alerta == "gols_ht":
-                        greens = sum(1 for j in jogos_lista if j.get("resultado_ht") == "GREEN")
-                        reds = sum(1 for j in jogos_lista if j.get("resultado_ht") == "RED")
-                    
-                    total = greens + reds
-                    if total > 0:
-                        taxa_acerto = (greens / total) * 100
-                        caption += f"<b>✅ GREEN: {greens} | ❌ RED: {reds}</b>\n"
-                        caption += f"<b>🎯 TAXA DE ACERTO: {taxa_acerto:.1f}%</b>\n\n"
-                    
-                    caption += f"<b>🔥 ELITE MASTER SYSTEM - ANÁLISE CONFIRMADA</b>"
-                    
-                    if self.telegram_client.enviar_foto(poster, caption=caption):
-                        st.success(f"🖼️ Poster de resultados {tipo_alerta} enviado!")
-            except Exception as e:
-                logging.error(f"Erro ao gerar poster de resultados {tipo_alerta}: {e}")
-                st.error(f"❌ Erro ao gerar poster de resultados: {e}")
+                st.success(f"📊 Resumo final {tipo_alerta} enviado!")
     
     def _verificar_enviar_alerta(self, jogo: Jogo, match_data: dict, analise: dict, alerta_individual: bool, min_conf: int, max_conf: int, tipo_alerta: str):
         """Verifica e envia alerta individual"""
