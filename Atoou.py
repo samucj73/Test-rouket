@@ -3802,6 +3802,173 @@ def gerar_poster_gols_ht(jogos_ht, config):
     
     st.success(f"✅ Poster HT gerado com {jogos_count} jogos!")
     return buffer
+    # =============================
+# NOVA FUNÇÃO: Visualizar pôster antes de enviar
+# =============================
+def visualizar_poster_antes_de_enviar(poster_buffer, titulo="Pré-visualização do Pôster"):
+    """Exibe o pôster gerado antes do envio"""
+    try:
+        # Converter BytesIO para imagem
+        poster_buffer.seek(0)
+        image = Image.open(poster_buffer)
+        
+        # Redimensionar para visualização
+        max_width = 800
+        if image.width > max_width:
+            ratio = max_width / image.width
+            new_height = int(image.height * ratio)
+            image = image.resize((max_width, new_height), Image.Resampling.LANCZOS)
+        
+        # Exibir imagem
+        st.image(image, caption=titulo, use_container_width=True)
+        
+        # Retornar ao início do buffer
+        poster_buffer.seek(0)
+        return True
+    except Exception as e:
+        st.error(f"Erro ao exibir pôster: {e}")
+        return False
+
+# =============================
+# NOVA FUNÇÃO: Enviar alertas em lotes de 3 partidas
+# =============================
+def enviar_alertas_em_lotes(jogos_analisados, min_conf, max_conf, estilo_poster="West Ham Style", 
+                           max_jogos_por_lote=3, chat_id=TELEGRAM_CHAT_ID_ALT2):
+    """Envia alertas em lotes de N partidas por lote"""
+    if not jogos_analisados:
+        st.warning("⚠️ Nenhum jogo para enviar alertas")
+        return False
+    
+    try:
+        # Filtrar jogos dentro do intervalo de confiança
+        jogos_filtrados = [j for j in jogos_analisados if min_conf <= j["confianca"] <= max_conf]
+        
+        if not jogos_filtrados:
+            st.warning(f"⚠️ Nenhum jogo com confiança entre {min_conf}% e {max_conf}%")
+            return False
+        
+        # Agrupar jogos por data
+        jogos_por_data = {}
+        for jogo in jogos_filtrados:
+            data_jogo = jogo["hora"].date() if isinstance(jogo["hora"], datetime) else datetime.now().date()
+            if data_jogo not in jogos_por_data:
+                jogos_por_data[data_jogo] = []
+            jogos_por_data[data_jogo].append(jogo)
+        
+        total_lotes_enviados = 0
+        
+        for data_jogo, jogos_data in jogos_por_data.items():
+            data_str = data_jogo.strftime("%d/%m/%Y")
+            
+            # Dividir em lotes de max_jogos_por_lote
+            lotes = [jogos_data[i:i + max_jogos_por_lote] 
+                    for i in range(0, len(jogos_data), max_jogos_por_lote)]
+            
+            st.info(f"📅 {data_str}: {len(jogos_data)} jogos → {len(lotes)} lote(s) de até {max_jogos_por_lote} jogos cada")
+            
+            for lote_idx, lote in enumerate(lotes):
+                lote_num = lote_idx + 1
+                
+                st.subheader(f"📦 Lote {lote_num}/{len(lotes)} - {data_str}")
+                
+                # Selecionar estilo do pôster
+                if estilo_poster == "West Ham Style":
+                    titulo = f"ELITE MASTER - LOTE {lote_num}/{len(lotes)} - {data_str}"
+                    poster_buffer = gerar_poster_westham_style(lote, titulo=titulo)
+                else:
+                    titulo = f"🔥 TOP {len(lote)} JOGOS - LOTE {lote_num}/{len(lotes)} - {data_str}"
+                    poster_buffer = gerar_poster_top_jogos(lote, min_conf, max_conf, titulo=titulo)
+                
+                # Verificar se o pôster foi gerado
+                if not poster_buffer:
+                    st.error(f"❌ Falha ao gerar pôster para lote {lote_num}")
+                    continue
+                
+                # Exibir pré-visualização
+                st.info("🎨 **Pré-visualização do Pôster:**")
+                if not visualizar_poster_antes_de_enviar(poster_buffer, f"Lote {lote_num} - {len(lote)} jogos"):
+                    st.warning("⚠️ Não foi possível exibir a pré-visualização")
+                
+                # Criar caption para o Telegram
+                over_count = sum(1 for j in lote if j.get('tipo_aposta') == "over")
+                under_count = len(lote) - over_count
+                avg_conf = sum(j["confianca"] for j in lote) / len(lote)
+                
+                caption = (
+                    f"<b>🎯 ALERTA DE GOLS - LOTE {lote_num}/{len(lotes)} - {data_str}</b>\n\n"
+                    f"<b>📋 TOTAL: {len(lote)} JOGOS</b>\n"
+                    f"<b>📈 Over: {over_count} jogos</b>\n"
+                    f"<b>📉 Under: {under_count} jogos</b>\n"
+                    f"<b>⚽ INTERVALO DE CONFIANÇA: {min_conf}% - {max_conf}%</b>\n"
+                    f"<b>📊 MÉDIA DE CONFIANÇA: {avg_conf:.1f}%</b>\n\n"
+                )
+                
+                # Adicionar lista dos jogos
+                caption += "<b>📋 JOGOS DO LOTE:</b>\n"
+                for idx, jogo in enumerate(lote, 1):
+                    tipo_emoji = "📈" if jogo.get('tipo_aposta') == "over" else "📉"
+                    hora_format = jogo["hora"].strftime("%H:%M") if isinstance(jogo["hora"], datetime) else str(jogo["hora"])
+                    
+                    caption += (
+                        f"<b>{idx}. {tipo_emoji} {jogo['home']} vs {jogo['away']}</b>\n"
+                        f"   <i>{jogo['tendencia']} | {hora_format} | Conf: {jogo['confianca']:.0f}%</i>\n"
+                    )
+                
+                caption += f"\n<b>🔥 LOTE {lote_num}/{len(lotes)} - ELITE MASTER SYSTEM</b>"
+                
+                # Botão para confirmar envio
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button(f"📤 Enviar Lote {lote_num}", key=f"enviar_lote_{data_str}_{lote_num}", type="primary"):
+                        with st.spinner(f"Enviando lote {lote_num}..."):
+                            if enviar_foto_telegram(poster_buffer, caption=caption, chat_id=chat_id):
+                                st.success(f"✅ Lote {lote_num} enviado com sucesso!")
+                                
+                                # Salvar alertas individuais
+                                for jogo in lote:
+                                    alertas = carregar_alertas()
+                                    fixture_id = str(jogo["id"])
+                                    if fixture_id not in alertas:
+                                        alertas[fixture_id] = {
+                                            "tendencia": jogo["tendencia"],
+                                            "estimativa": jogo["estimativa"],
+                                            "probabilidade": jogo["probabilidade"],
+                                            "confianca": jogo["confianca"],
+                                            "tipo_aposta": jogo["tipo_aposta"],
+                                            "detalhes": jogo.get("detalhes", {}),
+                                            "conferido": False,
+                                            "data_envio": datetime.now().isoformat(),
+                                            "lote": lote_num,
+                                            "data_jogo": data_str
+                                        }
+                                salvar_alertas(alertas)
+                                
+                                total_lotes_enviados += 1
+                            else:
+                                st.error(f"❌ Falha ao enviar lote {lote_num}")
+                
+                with col2:
+                    if st.button(f"⏭️ Pular Lote {lote_num}", key=f"pular_lote_{data_str}_{lote_num}", type="secondary"):
+                        st.info(f"⏭️ Lote {lote_num} pulado")
+                
+                # Adicionar separador entre lotes (exceto no último)
+                if lote_idx < len(lotes) - 1:
+                    st.markdown("---")
+                
+                # Pequena pausa automática entre lotes (apenas visual)
+                time.sleep(0.5)
+        
+        if total_lotes_enviados > 0:
+            st.success(f"✅ Total de {total_lotes_enviados} lote(s) enviado(s) com sucesso!")
+            return True
+        else:
+            st.info("ℹ️ Nenhum lote enviado")
+            return False
+            
+    except Exception as e:
+        logging.error(f"Erro ao enviar alertas em lotes: {str(e)}")
+        st.error(f"❌ Erro ao enviar alertas em lotes: {str(e)}")
+        return False
 
 # =============================
 # Funções de Envio de Alertas - VERSÃO ATUALIZADA COM NOVAS ANÁLISES
@@ -5018,53 +5185,116 @@ def main():
                         st.warning("⚠️ Nenhum jogo encontrado com os critérios selecionados.")
     
     # ==================== TAB 4: ENVIAR ALERTAS ====================
+    # ==================== TAB 4: ENVIAR ALERTAS ====================
     with tab4:
-        st.header("📨 Enviar Alertas")
+        st.header("📨 Enviar Alertas em Lotes")
         
-        col1, col2 = st.columns(2)
+        # Configurações de lote
+        st.subheader("⚙️ Configurações de Envio")
+        
+        col1, col2, col3 = st.columns(3)
         with col1:
+            max_jogos_por_lote = st.number_input(
+                "Jogos por lote", 
+                min_value=1, 
+                max_value=10, 
+                value=3,
+                help="Número máximo de jogos por lote de alerta"
+            )
+        
+        with col2:
             chat_id = st.selectbox(
                 "Chat do Telegram",
                 ["Grupo Principal", "Grupo Alternativo"],
-                format_func=lambda x: f"{x} ({TELEGRAM_CHAT_ID if x == 'Grupo Principal' else TELEGRAM_CHAT_ID_ALT2})"
+                format_func=lambda x: f"{x} ({TELEGRAM_CHAT_ID if x == 'Grupo Principal' else TELEGRAM_CHAT_ID_ALT2})",
+                help="Selecione o grupo para enviar os alertas"
+            )
+        
+        with col3:
+            estilo_poster = st.selectbox(
+                "Estilo do Pôster",
+                ["West Ham Style", "Top Jogos Style"],
+                index=0,
+                help="Estilo do pôster a ser gerado"
             )
         
         chat_id_escolhido = TELEGRAM_CHAT_ID if chat_id == "Grupo Principal" else TELEGRAM_CHAT_ID_ALT2
         
-        if st.button("🚀 Enviar Alertas West Ham Style", type="primary", use_container_width=True):
-            if 'jogos_encontrados' not in st.session_state:
-                st.warning("⚠️ Primeiro busque jogos na aba 'Buscar Jogos'")
-            else:
-                jogos = st.session_state.jogos_encontrados
-                jogos_conf = [j for j in jogos if min_conf <= j["confianca"] <= max_conf]
-                
-                if jogos_conf:
-                    with st.spinner("🎨 Gerando e enviando poster..."):
-                        enviar_alerta_westham_style(jogos_conf, min_conf, max_conf, chat_id_escolhido)
-                else:
-                    st.warning("⚠️ Nenhum jogo dentro do intervalo de confiança.")
+        # Seção de envio de alertas
+        st.subheader("🚀 Envio de Alertas")
         
-        if st.button("📤 Enviar Alertas Individuais", type="secondary", use_container_width=True):
+        if st.button("📤 Enviar Alertas em Lotes", type="primary", use_container_width=True):
             if 'jogos_encontrados' not in st.session_state:
                 st.warning("⚠️ Primeiro busque jogos na aba 'Buscar Jogos'")
             else:
                 jogos = st.session_state.jogos_encontrados
-                jogos_conf = [j for j in jogos if min_conf <= j["confianca"] <= max_conf]
                 
-                if jogos_conf:
-                    with st.spinner("📤 Enviando alertas individuais..."):
-                        alertas_enviados = 0
-                        for jogo in jogos_conf[:10]:  # Limitar a 10 para não sobrecarregar
-                            # Simular envio (precisaríamos dos dados originais do fixture)
-                            st.info(f"📤 Enviando: {jogo['home']} vs {jogo['away']}")
-                            # Aqui precisaríamos do fixture original para enviar
-                            # enviar_alerta_telegram(fixture, jogo)
-                            alertas_enviados += 1
-                            time.sleep(1)  # Pausa para evitar rate limiting
-                        
-                        st.success(f"✅ {alertas_enviados} alertas individuais enviados!")
+                if not jogos:
+                    st.warning("⚠️ Nenhum jogo disponível para envio")
                 else:
-                    st.warning("⚠️ Nenhum jogo dentro do intervalo de confiança.")
+                    # Verificar quantos jogos estão no intervalo de confiança
+                    jogos_no_intervalo = [j for j in jogos if min_conf <= j["confianca"] <= max_conf]
+                    
+                    if not jogos_no_intervalo:
+                        st.warning(f"⚠️ Nenhum jogo com confiança entre {min_conf}% e {max_conf}%")
+                    else:
+                        st.info(f"✅ {len(jogos_no_intervalo)} jogos dentro do intervalo de confiança")
+                        
+                        # Calcular número de lotes
+                        num_lotes = (len(jogos_no_intervalo) + max_jogos_por_lote - 1) // max_jogos_por_lote
+                        st.info(f"📦 Serão criados {num_lotes} lote(s) de até {max_jogos_por_lote} jogos cada")
+                        
+                        # Enviar alertas em lotes
+                        with st.spinner("🚀 Preparando envio em lotes..."):
+                            enviar_alertas_em_lotes(
+                                jogos_no_intervalo,
+                                min_conf,
+                                max_conf,
+                                estilo_poster,
+                                max_jogos_por_lote,
+                                chat_id_escolhido
+                            )
+        
+        # Seção de visualização prévia
+        st.subheader("👁️ Visualização Prévia")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("👀 Gerar Pré-visualização", type="secondary"):
+                if 'jogos_encontrados' not in st.session_state:
+                    st.warning("⚠️ Primeiro busque jogos na aba 'Buscar Jogos'")
+                else:
+                    jogos = st.session_state.jogos_encontrados
+                    jogos_filtrados = [j for j in jogos if min_conf <= j["confianca"] <= max_conf][:max_jogos_por_lote]
+                    
+                    if jogos_filtrados:
+                        if estilo_poster == "West Ham Style":
+                            poster = gerar_poster_westham_style(jogos_filtrados, 
+                                                              titulo=f"PRÉ-VISUALIZAÇÃO - {max_jogos_por_lote} JOGOS")
+                        else:
+                            poster = gerar_poster_top_jogos(jogos_filtrados, min_conf, max_conf,
+                                                          titulo=f"PRÉ-VISUALIZAÇÃO - TOP {len(jogos_filtrados)}")
+                        
+                        if poster:
+                            visualizar_poster_antes_de_enviar(poster, "Pré-visualização do Pôster")
+                        else:
+                            st.error("❌ Falha ao gerar pré-visualização")
+                    else:
+                        st.warning(f"⚠️ Nenhum jogo com confiança entre {min_conf}% e {max_conf}%")
+        
+        with col2:
+            if st.button("📊 Estatísticas de Envio", type="secondary"):
+                alertas = carregar_alertas()
+                if alertas:
+                    total_alertas = len(alertas)
+                    conferidos = sum(1 for a in alertas.values() if a.get("conferido", False))
+                    pendentes = total_alertas - conferidos
+                    
+                    st.metric("Total de Alertas", total_alertas)
+                    st.metric("Conferidos", conferidos)
+                    st.metric("Pendentes", pendentes)
+                else:
+                    st.info("ℹ️ Nenhum alerta enviado ainda")
     
     # ==================== TAB 5: CONFERIR RESULTADOS ====================
     with tab5:
