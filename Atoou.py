@@ -1626,7 +1626,7 @@ class PosterGenerator:
         return buffer
     
   #  def gerar_poster_resultados(self, jogos_com_resultados: list, tipo_alerta: str = "over_under") -> io.BytesIO:
-    def gerar_poster_resultados(self, jogos_com_resultados: list, tipo_alerta: str = "over_under") -> io.BytesIO:
+def gerar_poster_resultados(self, jogos_com_resultados: list, tipo_alerta: str = "over_under") -> io.BytesIO:
     """Gera poster de resultados no estilo West Ham com GREEN/RED destacado"""
     LARGURA = 2000
     ALTURA_TOPO = 350
