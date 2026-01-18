@@ -1642,10 +1642,10 @@ def gerar_poster_favorito(jogos_favorito, config):
     # Configurações OTIMIZADAS
     LARGURA = 2200
     ALTURA_TOPO = 350  # Reduzido
-    ALTURA_POR_JOGO = 850  # Reduzido para focar no essencial
+    ALTURA_POR_JOGO = 900  # Reduzido para focar no essencial
     PADDING = 100
     
-    jogos_count = len(jogos_favorito[:5])  # Limitar a 5 jogos por poster
+    jogos_count = len(jogos_favorito[:3])  # Limitar a 5 jogos por poster
     altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING + 50
 
     # Criar canvas com gradiente sutil
@@ -1666,7 +1666,7 @@ def gerar_poster_favorito(jogos_favorito, config):
     FONTE_TIMES = criar_fonte(80)  # Aumentado
     FONTE_VS = criar_fonte(80)  # Aumentado
     FONTE_INFO = criar_fonte(48)  # Aumentado
-    FONTE_ANALISE = criar_fonte(90)  # Aumentado
+    FONTE_ANALISE = criar_fonte(85)  # Aumentado
     FONTE_RANKING = criar_fonte(80)  # Aumentado
     FONTE_ESTATISTICAS = criar_fonte(40)  # Aumentado
     FONTE_EMOJI = criar_fonte(70)  # Para emojis
@@ -1676,7 +1676,7 @@ def gerar_poster_favorito(jogos_favorito, config):
     draw.rectangle([0, 0, LARGURA, ALTURA_TOPO - 50], fill=(20, 35, 60), outline=None)
     
     # Título PRINCIPAL com efeito
-    titulo_text = "🏆 ALERTA DE FAVORITO 🏆"
+    titulo_text = " ALERTA DE FAVORITO "
     try:
         titulo_bbox = draw.textbbox((0, 0), titulo_text, font=FONTE_TITULO)
         titulo_w = titulo_bbox[2] - titulo_bbox[0]
@@ -1691,7 +1691,7 @@ def gerar_poster_favorito(jogos_favorito, config):
     min_conf_vitoria = config.get("min_conf_vitoria", 65)
     filtro_favorito = config.get("filtro_favorito", "Todos")
     
-    subtitulo = f"🎯 Confiança Mínima: {min_conf_vitoria}% | 🔍 Filtro: {filtro_favorito}"
+    subtitulo = f" Confiança Mínima: {min_conf_vitoria}% |  Filtro: {filtro_favorito}"
     try:
         sub_bbox = draw.textbbox((0, 0), subtitulo, font=FONTE_SUBTITULO)
         sub_w = sub_bbox[2] - sub_bbox[0]
@@ -1776,7 +1776,7 @@ def gerar_poster_favorito(jogos_favorito, config):
             data_text = str(jogo.get("hora", ""))
             hora_text = ""
         
-        data_hora_text = f"📅 {data_text} • 🕐 {hora_text}"
+        data_hora_text = f" {data_text} •  {hora_text}"
         try:
             dh_bbox = draw.textbbox((0, 0), data_hora_text, font=FONTE_INFO)
             dh_w = dh_bbox[2] - dh_bbox[0]
@@ -1895,9 +1895,9 @@ def gerar_poster_favorito(jogos_favorito, config):
         
         # Fundo para a análise
         analise_width = x1 - x0 - 100
-        analise_height = 120
+        analise_height = 115
         analise_x = x0 + 50
-        analise_y = y_analysis - 20
+        analise_y = y_analysis - 30
         
         draw.rounded_rectangle([analise_x, analise_y, analise_x + analise_width, analise_y + analise_height],
                              radius=20, fill=(30, 40, 60), outline=cor_borda, width=4)
@@ -1908,17 +1908,17 @@ def gerar_poster_favorito(jogos_favorito, config):
         prob_vitoria = jogo.get('prob_vitoria', 0)
         
         if favorito == "home":
-            favorito_text = f"🏠 FAVORITO: CASA • {prob_vitoria}%"
+            favorito_text = f" FAVORITO: CASA • {prob_vitoria}%"
             cor_favorito = (46, 204, 113)
-            emoji = "🏠"
+            emoji = ""
         elif favorito == "away":
-            favorito_text = f"✈️ FAVORITO: FORA • {prob_vitoria}%"
+            favorito_text = f" FAVORITO: FORA • {prob_vitoria}%"
             cor_favorito = (52, 152, 219)
-            emoji = "✈️"
+            emoji = ""
         else:
-            favorito_text = f"🤝 FAVORITO: EMPATE • {prob_vitoria}%"
+            favorito_text = f" FAVORITO: EMPATE • {prob_vitoria}%"
             cor_favorito = (241, 196, 15)
-            emoji = "🤝"
+            emoji = ""
         
         # Texto da análise (centralizado na caixa)
         try:
@@ -1962,7 +1962,7 @@ def gerar_poster_favorito(jogos_favorito, config):
                 draw.text((analise_x + 20, analise_y + 30), favorito_text, font=FONTE_ANALISE, fill=cor_favorito)
 
         # Confiança abaixo da análise
-        conf_text = f"🔍 Confiança: {confianca_vitoria:.1f}%"
+        conf_text = f" Confiança: {confianca_vitoria:.1f}%"
         draw.text((analise_x + 40, analise_y + analise_height + 20), 
                  conf_text, font=FONTE_ESTATISTICAS, fill=(255, 215, 0))
 
@@ -1978,7 +1978,7 @@ def gerar_poster_favorito(jogos_favorito, config):
     draw.rectangle([0, altura_total - rodape_height, LARGURA, altura_total], 
                   fill=(15, 25, 45), outline=None)
     
-    rodape_text = f"⚽ ELITE MASTER SYSTEM • Análise de Favoritos • {datetime.now().strftime('%d/%m/%Y %H:%M')} ⚽"
+    rodape_text = f" ELITE MASTER SYSTEM • Análise de Favoritos • {datetime.now().strftime('%d/%m/%Y %H:%M')} ⚽"
     
     try:
         rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_INFO)
@@ -2028,7 +2028,7 @@ def gerar_poster_gols_ht(jogos_ht, config):
     FONTE_TIMES = criar_fonte(80)
     FONTE_VS = criar_fonte(80)
     FONTE_INFO = criar_fonte(48)
-    FONTE_ANALISE = criar_fonte(90)
+    FONTE_ANALISE = criar_fonte(85)
     FONTE_RANKING = criar_fonte(80)
     FONTE_ESTATISTICAS = criar_fonte(40)
     FONTE_EMOJI = criar_fonte(70)
@@ -2735,8 +2735,8 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
     # Configurações
     LARGURA = 2200
     ALTURA_TOPO = 300
-    ALTURA_POR_JOGO = 1000  # Aumentado para incluir mais análises
-    PADDING = 80
+    ALTURA_POR_JOGO = 950  # Aumentado para incluir mais análises
+    PADDING = 100
     
     jogos_count = len(top_jogos)
     altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
@@ -2765,7 +2765,7 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
         draw.text((LARGURA//2 - 350, 80), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
 
     # Subtítulo com intervalo de confiança
-    subtitulo = f"🎯 Intervalo de Confiança: {min_conf}% - {max_conf}% | 🔥 {len(top_jogos)} Jogos Selecionados"
+    subtitulo = f" Intervalo de Confiança: {min_conf}% - {max_conf}% |  {len(top_jogos)} Jogos Selecionados"
     try:
         sub_bbox = draw.textbbox((0, 0), subtitulo, font=FONTE_SUBTITULO)
         sub_w = sub_bbox[2] - sub_bbox[0]
@@ -2826,7 +2826,7 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
             draw.text((LARGURA//2 - 150, y0 + 120), data_hora_text, font=FONTE_INFO, fill=(100, 180, 255))
 
         # ESCUDOS DOS TIMES (COM CACHE)
-        TAMANHO_ESCUDO = 180
+        TAMANHO_ESCUDO = 195
         TAMANHO_QUADRADO = 220
         ESPACO_ENTRE_ESCUDOS = 700
 
@@ -2942,13 +2942,13 @@ def gerar_poster_top_jogos(top_jogos: list, min_conf: int, max_conf: int, titulo
             # Determinar favorito
             favorito = vitoria_data['favorito']
             if favorito == "home":
-                vitoria_text = f"🏆 FAVORITO: {jogo['home']} ({vitoria_data['home_win']}%)"
+                vitoria_text = f" FAVORITO: {jogo['home']} ({vitoria_data['home_win']}%)"
                 cor_vitoria = (76, 175, 80)
             elif favorito == "away":
-                vitoria_text = f"🏆 FAVORITO: {jogo['away']} ({vitoria_data['away_win']}%)"
+                vitoria_text = f" FAVORITO: {jogo['away']} ({vitoria_data['away_win']}%)"
                 cor_vitoria = (76, 175, 80)
             else:
-                vitoria_text = f"🏆 FAVORITO: EMPATE ({vitoria_data['draw']}%)"
+                vitoria_text = f" FAVORITO: EMPATE ({vitoria_data['draw']}%)"
                 cor_vitoria = (255, 193, 7)
             
             draw.text((x0 + 100, y_vitoria), vitoria_text, font=FONTE_ESTATISTICAS, fill=cor_vitoria)
