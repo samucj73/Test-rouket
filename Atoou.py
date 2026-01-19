@@ -1408,7 +1408,7 @@ class PosterGenerator:
     def gerar_poster_westham_style(self, jogos: list, titulo: str = " ALERTA DE GOLS", tipo_alerta: str = "over_under") -> io.BytesIO:
         """Gera poster no estilo West Ham"""
         LARGURA = 2000
-        ALTURA_TOPO = 350
+        ALTURA_TOPO = 300
         ALTURA_POR_JOGO = 1050
         PADDING = 120
         
@@ -1418,14 +1418,14 @@ class PosterGenerator:
         img = Image.new("RGB", (LARGURA, altura_total), color=(10, 20, 30))
         draw = ImageDraw.Draw(img)
 
-        FONTE_TITULO = self.criar_fonte(95)
-        FONTE_SUBTITULO = self.criar_fonte(70)
+        FONTE_TITULO = self.criar_fonte(90)
+        FONTE_SUBTITULO = self.criar_fonte(65)
         FONTE_TIMES = self.criar_fonte(65)
         FONTE_VS = self.criar_fonte(55)
         FONTE_INFO = self.criar_fonte(50)
-        FONTE_DETALHES = self.criar_fonte(55)
-        FONTE_ANALISE = self.criar_fonte(65)
-        FONTE_ESTATISTICAS = self.criar_fonte(40)
+        FONTE_DETALHES = self.criar_fonte(50)
+        FONTE_ANALISE = self.criar_fonte(60)
+        FONTE_ESTATISTICAS = self.criar_fonte(35)
 
         try:
             titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
@@ -1477,7 +1477,7 @@ class PosterGenerator:
                 draw.text((LARGURA//2 - 150, y0 + 130), data_text, font=FONTE_INFO, fill=(150, 200, 255))
 
             TAMANHO_ESCUDO = 200
-            TAMANHO_QUADRADO = 240
+            TAMANHO_QUADRADO = 230
             ESPACO_ENTRE_ESCUDOS = 700
 
             largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
