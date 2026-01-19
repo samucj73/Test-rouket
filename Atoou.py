@@ -1409,7 +1409,7 @@ class PosterGenerator:
         """Gera poster no estilo West Ham"""
         LARGURA = 2000
         ALTURA_TOPO = 350
-        ALTURA_POR_JOGO = 950
+        ALTURA_POR_JOGO = 900
         PADDING = 120
         
         jogos_count = len(jogos)
@@ -1679,8 +1679,8 @@ class PosterGenerator:
         FONTE_DETALHES = self.criar_fonte(55)
         FONTE_ANALISE = self.criar_fonte(65)
         FONTE_ESTATISTICAS = self.criar_fonte(40)
-        FONTE_RESULTADO = self.criar_fonte(80)
-        FONTE_RESULTADO_BADGE = self.criar_fonte(68)  # Fonte para o badge GREEN/RED
+        FONTE_RESULTADO = self.criar_fonte(76)
+        FONTE_RESULTADO_BADGE = self.criar_fonte(65)  # Fonte para o badge GREEN/RED
 
         # Título baseado no tipo de alerta
         if tipo_alerta == "over_under":
@@ -1752,8 +1752,8 @@ class PosterGenerator:
 
             # ================= BADGE GREEN/RED =================
             # Posicionar o badge no canto superior ESQUERDO do retângulo do jogo
-            badge_width = 260
-            badge_height = 95
+            badge_width = 250
+            badge_height = 92
             badge_x = x0 + 50  # 50px da borda ESQUERDA
             badge_y = y0 + 50  # 50px do topo
             
@@ -2469,11 +2469,11 @@ class SistemaAlertasFutebol:
                 # Gerar poster para o lote
                 try:
                     if tipo_alerta == "over_under":
-                        titulo = f"📊 RESULTADOS OVER/UNDER - Lote {i//batch_size + 1}"
+                        titulo = f" RESULTADOS OVER/UNDER - Lote {i//batch_size + 1}"
                     elif tipo_alerta == "favorito":
-                        titulo = f"🏆 RESULTADOS FAVORITOS - Lote {i//batch_size + 1}"
+                        titulo = f" RESULTADOS FAVORITOS - Lote {i//batch_size + 1}"
                     elif tipo_alerta == "gols_ht":
-                        titulo = f"⏰ RESULTADOS GOLS HT - Lote {i//batch_size + 1}"
+                        titulo = f" RESULTADOS GOLS HT - Lote {i//batch_size + 1}"
                     
                     # Gerar poster
                     poster = self.poster_generator.gerar_poster_resultados(batch, tipo_alerta)
@@ -2499,7 +2499,7 @@ class SistemaAlertasFutebol:
                     
                     # Enviar poster
                     if self.telegram_client.enviar_foto(poster, caption=caption):
-                        st.success(f"🖼️ Lote {i//batch_size + 1} de resultados {tipo_alerta} enviado ({len(batch)} jogos)")
+                        st.success(f" Lote {i//batch_size + 1} de resultados {tipo_alerta} enviado ({len(batch)} jogos)")
                     
                     # Esperar 2 segundos entre lotes
                     time.sleep(2)
@@ -2864,16 +2864,16 @@ class SistemaAlertasFutebol:
                 )
                 
                 if tipo_alerta == "over_under":
-                    caption = f"<b>🏆 TOP {len(top_jogos_sorted)} JOGOS OVER/UNDER 🏆</b>\n"
-                    caption += f"<b>🎯 Intervalo de Confiança: {min_conf}% - {max_conf}%</b>\n\n"
+                    caption = f"<b> TOP {len(top_jogos_sorted)} JOGOS OVER/UNDER </b>\n"
+                    caption += f"<b> Intervalo de Confiança: {min_conf}% - {max_conf}%</b>\n\n"
                 elif tipo_alerta == "favorito":
-                    caption = f"<b>🏆 TOP {len(top_jogos_sorted)} JOGOS FAVORITOS 🏆</b>\n"
-                    caption += f"<b>🎯 Confiança Mínima: {min_conf}%</b>\n\n"
+                    caption = f"<b> TOP {len(top_jogos_sorted)} JOGOS FAVORITOS 🏆</b>\n"
+                    caption += f"<b> Confiança Mínima: {min_conf}%</b>\n\n"
                 elif tipo_alerta == "gols_ht":
-                    caption = f"<b>⏰ TOP {len(top_jogos_sorted)} JOGOS GOLS HT ⏰</b>\n"
-                    caption += f"<b>🎯 Confiança Mínima: {min_conf}%</b>\n\n"
+                    caption = f"<b> TOP {len(top_jogos_sorted)} JOGOS GOLS HT ⏰</b>\n"
+                    caption += f"<b> Confiança Mínima: {min_conf}%</b>\n\n"
                 
-                caption += f"<b>🔥 ELITE MASTER SYSTEM - JOGOS COM MAIOR POTENCIAL</b>"
+                caption += f"<b> ELITE MASTER SYSTEM - JOGOS COM MAIOR POTENCIAL</b>"
                 
                 if self.telegram_client.enviar_foto(poster, caption=caption):
                     st.success(f"🖼️ Poster dos TOP {len(top_jogos_sorted)} jogos enviado!")
