@@ -1409,7 +1409,7 @@ class PosterGenerator:
         """Gera poster no estilo West Ham"""
         LARGURA = 2000
         ALTURA_TOPO = 270
-        ALTURA_POR_JOGO = 975
+        ALTURA_POR_JOGO = 995
         PADDING = 80
         
         jogos_count = len(jogos)
@@ -1630,7 +1630,7 @@ class PosterGenerator:
         LARGURA = 2000
         ALTURA_TOPO = 300
         ALTURA_POR_JOGO = 800 # Aumentei um pouco para acomodar o badge GREEN/RED
-        PADDING = 120
+        PADDING = 80
         
         jogos_count = len(jogos_com_resultados)
         altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
