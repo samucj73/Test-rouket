@@ -1409,7 +1409,7 @@ class PosterGenerator:
         """Gera poster no estilo West Ham"""
         LARGURA = 2000
         ALTURA_TOPO = 270
-        ALTURA_POR_JOGO = 960
+        ALTURA_POR_JOGO = 975
         PADDING = 80
         
         jogos_count = len(jogos)
@@ -1476,8 +1476,8 @@ class PosterGenerator:
             except:
                 draw.text((LARGURA//2 - 150, y0 + 130), data_text, font=FONTE_INFO, fill=(150, 200, 255))
 
-            TAMANHO_ESCUDO = 200
-            TAMANHO_QUADRADO = 220
+            TAMANHO_ESCUDO = 220
+            TAMANHO_QUADRADO = 230
             ESPACO_ENTRE_ESCUDOS = 700
 
             largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
@@ -1629,7 +1629,7 @@ class PosterGenerator:
         """Gera poster de resultados no estilo West Ham com GREEN/RED destacado"""
         LARGURA = 2000
         ALTURA_TOPO = 300
-        ALTURA_POR_JOGO = 830  # Aumentei um pouco para acomodar o badge GREEN/RED
+        ALTURA_POR_JOGO = 800 # Aumentei um pouco para acomodar o badge GREEN/RED
         PADDING = 120
         
         jogos_count = len(jogos_com_resultados)
