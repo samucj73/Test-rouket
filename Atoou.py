@@ -1408,8 +1408,8 @@ class PosterGenerator:
     def gerar_poster_westham_style(self, jogos: list, titulo: str = " ALERTA DE GOLS", tipo_alerta: str = "over_under") -> io.BytesIO:
         """Gera poster no estilo West Ham"""
         LARGURA = 2000
-        ALTURA_TOPO = 300
-        ALTURA_POR_JOGO = 950
+        ALTURA_TOPO = 270
+        ALTURA_POR_JOGO = 960
         PADDING = 80
         
         jogos_count = len(jogos)
@@ -1604,9 +1604,9 @@ class PosterGenerator:
                 try:
                     bbox = draw.textbbox((0, 0), text, font=FONTE_ANALISE)
                     w = bbox[2] - bbox[0]
-                    draw.text(((LARGURA - w) // 2, y_analysis + i * 90), text, font=FONTE_ANALISE, fill=cor)
+                    draw.text(((LARGURA - w) // 2, y_analysis + i * 80), text, font=FONTE_ANALISE, fill=cor)
                 except:
-                    draw.text((PADDING + 120, y_analysis + i * 90), text, font=FONTE_ANALISE, fill=cor)
+                    draw.text((PADDING + 120, y_analysis + i * 80), text, font=FONTE_ANALISE, fill=cor)
 
             y_pos += ALTURA_POR_JOGO
 
