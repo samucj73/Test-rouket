@@ -1409,7 +1409,7 @@ class PosterGenerator:
         """Gera poster no estilo West Ham"""
         LARGURA = 2000
         ALTURA_TOPO = 300
-        ALTURA_POR_JOGO = 1050
+        ALTURA_POR_JOGO = 1000
         PADDING = 120
         
         jogos_count = len(jogos)
