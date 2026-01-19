@@ -1409,7 +1409,7 @@ class PosterGenerator:
         """Gera poster no estilo West Ham"""
         LARGURA = 2000
         ALTURA_TOPO = 350
-        ALTURA_POR_JOGO = 1150
+        ALTURA_POR_JOGO = 950
         PADDING = 120
         
         jogos_count = len(jogos)
@@ -1418,7 +1418,7 @@ class PosterGenerator:
         img = Image.new("RGB", (LARGURA, altura_total), color=(10, 20, 30))
         draw = ImageDraw.Draw(img)
 
-        FONTE_TITULO = self.criar_fonte(100)
+        FONTE_TITULO = self.criar_fonte(95)
         FONTE_SUBTITULO = self.criar_fonte(70)
         FONTE_TIMES = self.criar_fonte(65)
         FONTE_VS = self.criar_fonte(55)
@@ -1557,7 +1557,7 @@ class PosterGenerator:
             
             # Mostrar diferentes informações baseadas no tipo de alerta
             if tipo_alerta == "over_under":
-                tipo_emoji = "📈" if jogo.get('tipo_aposta') == "over" else "📉"
+                tipo_emoji = "+" if jogo.get('tipo_aposta') == "over" else "-"
                 cor_tendencia = (255, 215, 0) if jogo.get('tipo_aposta') == "over" else (100, 200, 255)
                 
                 textos_analise = [
@@ -1570,7 +1570,7 @@ class PosterGenerator:
                 cores = [cor_tendencia, (100, 200, 255), (100, 255, 100), (255, 193, 7)]
                 
             elif tipo_alerta == "favorito":
-                favorito_emoji = "🏠" if jogo.get('favorito') == "home" else "✈️" if jogo.get('favorito') == "away" else "🤝"
+                favorito_emoji = "" if jogo.get('favorito') == "home" else "" if jogo.get('favorito') == "away" else "🤝"
                 favorito_text = jogo['home'] if jogo.get('favorito') == "home" else jogo['away'] if jogo.get('favorito') == "away" else "EMPATE"
                 
                 textos_analise = [
@@ -1584,7 +1584,7 @@ class PosterGenerator:
                 cores = [(255, 87, 34), (255, 152, 0), (255, 193, 7), (255, 224, 130), (100, 255, 100)]
                 
             elif tipo_alerta == "gols_ht":
-                tipo_emoji_ht = "⚡" if "OVER" in jogo.get('tendencia_ht', '') else "🛡️"
+                tipo_emoji_ht = "" if "OVER" in jogo.get('tendencia_ht', '') else ""
                 
                 textos_analise = [
                     f"{tipo_emoji_ht} {jogo.get('tendencia_ht', 'N/A')}",
@@ -1662,7 +1662,7 @@ class PosterGenerator:
         """Gera poster de resultados no estilo West Ham com GREEN/RED destacado"""
         LARGURA = 2000
         ALTURA_TOPO = 350
-        ALTURA_POR_JOGO = 1000  # Aumentei um pouco para acomodar o badge GREEN/RED
+        ALTURA_POR_JOGO = 900  # Aumentei um pouco para acomodar o badge GREEN/RED
         PADDING = 120
         
         jogos_count = len(jogos_com_resultados)
@@ -1671,7 +1671,7 @@ class PosterGenerator:
         img = Image.new("RGB", (LARGURA, altura_total), color=(10, 20, 30))
         draw = ImageDraw.Draw(img)
 
-        FONTE_TITULO = self.criar_fonte(100)
+        FONTE_TITULO = self.criar_fonte(95)
         FONTE_SUBTITULO = self.criar_fonte(70)
         FONTE_TIMES = self.criar_fonte(65)
         FONTE_VS = self.criar_fonte(55)
@@ -1680,17 +1680,17 @@ class PosterGenerator:
         FONTE_ANALISE = self.criar_fonte(65)
         FONTE_ESTATISTICAS = self.criar_fonte(40)
         FONTE_RESULTADO = self.criar_fonte(80)
-        FONTE_RESULTADO_BADGE = self.criar_fonte(70)  # Fonte para o badge GREEN/RED
+        FONTE_RESULTADO_BADGE = self.criar_fonte(68)  # Fonte para o badge GREEN/RED
 
         # Título baseado no tipo de alerta
         if tipo_alerta == "over_under":
-            titulo = "📊 RESULTADOS OVER/UNDER"
+            titulo = " RESULTADOS OVER/UNDER"
         elif tipo_alerta == "favorito":
-            titulo = "🏆 RESULTADOS FAVORITOS"
+            titulo = " RESULTADOS FAVORITOS"
         elif tipo_alerta == "gols_ht":
-            titulo = "⏰ RESULTADOS GOLS HT"
+            titulo = " RESULTADOS GOLS HT"
         else:
-            titulo = "📋 RESULTADOS"
+            titulo = " RESULTADOS"
 
         try:
             titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
@@ -1752,8 +1752,8 @@ class PosterGenerator:
 
             # ================= BADGE GREEN/RED =================
             # Posicionar o badge no canto superior ESQUERDO do retângulo do jogo
-            badge_width = 300
-            badge_height = 100
+            badge_width = 260
+            badge_height = 95
             badge_x = x0 + 50  # 50px da borda ESQUERDA
             badge_y = y0 + 50  # 50px do topo
             
@@ -1798,7 +1798,7 @@ class PosterGenerator:
                 draw.text((LARGURA//2 - 150, y0 + 40), liga_text, font=FONTE_SUBTITULO, fill=(200, 200, 200))
 
             # Times e escudos
-            TAMANHO_ESCUDO = 180
+            TAMANHO_ESCUDO = 190
             TAMANHO_QUADRADO = 220
             ESPACO_ENTRE_ESCUDOS = 700
 
@@ -1843,8 +1843,11 @@ class PosterGenerator:
             self._desenhar_escudo_quadrado(draw, img, escudo_away_img, x_away, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo['away'])
 
             # Nomes dos times
-            home_text = jogo['home']
-            away_text = jogo['away']
+            #home_text = jogo['home']
+            #away_text = jogo['away']
+            # Limitar estritamente a 12 caracteres
+             home_text = jogo['home'][:12]
+             away_text = jogo['away'][:12]
 
             try:
                 home_bbox = draw.textbbox((0, 0), home_text, font=FONTE_TIMES)
