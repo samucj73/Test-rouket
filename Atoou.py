@@ -1409,8 +1409,8 @@ class PosterGenerator:
         """Gera poster no estilo West Ham"""
         LARGURA = 2000
         ALTURA_TOPO = 300
-        ALTURA_POR_JOGO = 1000
-        PADDING = 120
+        ALTURA_POR_JOGO = 950
+        PADDING = 80
         
         jogos_count = len(jogos)
         altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
@@ -1420,11 +1420,11 @@ class PosterGenerator:
 
         FONTE_TITULO = self.criar_fonte(90)
         FONTE_SUBTITULO = self.criar_fonte(65)
-        FONTE_TIMES = self.criar_fonte(65)
+        FONTE_TIMES = self.criar_fonte(60)
         FONTE_VS = self.criar_fonte(55)
         FONTE_INFO = self.criar_fonte(50)
         FONTE_DETALHES = self.criar_fonte(50)
-        FONTE_ANALISE = self.criar_fonte(60)
+        FONTE_ANALISE = self.criar_fonte(50)
         FONTE_ESTATISTICAS = self.criar_fonte(35)
 
         try:
@@ -1477,7 +1477,7 @@ class PosterGenerator:
                 draw.text((LARGURA//2 - 150, y0 + 130), data_text, font=FONTE_INFO, fill=(150, 200, 255))
 
             TAMANHO_ESCUDO = 200
-            TAMANHO_QUADRADO = 230
+            TAMANHO_QUADRADO = 220
             ESPACO_ENTRE_ESCUDOS = 700
 
             largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
