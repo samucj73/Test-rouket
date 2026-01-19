@@ -1628,8 +1628,8 @@ class PosterGenerator:
     def gerar_poster_resultados(self, jogos_com_resultados: list, tipo_alerta: str = "over_under") -> io.BytesIO:
         """Gera poster de resultados no estilo West Ham com GREEN/RED destacado"""
         LARGURA = 2000
-        ALTURA_TOPO = 350
-        ALTURA_POR_JOGO = 900  # Aumentei um pouco para acomodar o badge GREEN/RED
+        ALTURA_TOPO = 300
+        ALTURA_POR_JOGO = 830  # Aumentei um pouco para acomodar o badge GREEN/RED
         PADDING = 120
         
         jogos_count = len(jogos_com_resultados)
@@ -1638,7 +1638,7 @@ class PosterGenerator:
         img = Image.new("RGB", (LARGURA, altura_total), color=(10, 20, 30))
         draw = ImageDraw.Draw(img)
 
-        FONTE_TITULO = self.criar_fonte(95)
+        FONTE_TITULO = self.criar_fonte(90)
         FONTE_SUBTITULO = self.criar_fonte(70)
         FONTE_TIMES = self.criar_fonte(65)
         FONTE_VS = self.criar_fonte(55)
@@ -1765,8 +1765,8 @@ class PosterGenerator:
                 draw.text((LARGURA//2 - 150, y0 + 40), liga_text, font=FONTE_SUBTITULO, fill=(200, 200, 200))
 
             # Times e escudos
-            TAMANHO_ESCUDO = 190
-            TAMANHO_QUADRADO = 220
+            TAMANHO_ESCUDO = 200
+            TAMANHO_QUADRADO = 225
             ESPACO_ENTRE_ESCUDOS = 700
 
             largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
@@ -1863,8 +1863,8 @@ class PosterGenerator:
             
             # Informações específicas do tipo de alerta
             if tipo_alerta == "over_under":
-                tipo_emoji = "📈" if jogo.get('tipo_aposta') == "over" else "📉"
-                resultado_emoji = "✅" if resultado == "GREEN" else "❌" if resultado == "RED" else "⏳"
+                tipo_emoji = "+" if jogo.get('tipo_aposta') == "over" else "-"
+                resultado_emoji = "" if resultado == "GREEN" else "❌" if resultado == "RED" else ""
                 
                 textos_analise = [
                     f"{tipo_emoji} {jogo['tendencia']} {resultado_emoji}",
@@ -1875,9 +1875,9 @@ class PosterGenerator:
                 cores = [(255, 255, 255), (200, 200, 200), (200, 200, 200)]
                 
             elif tipo_alerta == "favorito":
-                favorito_emoji = "🏠" if jogo.get('favorito') == "home" else "✈️" if jogo.get('favorito') == "away" else "🤝"
+                favorito_emoji = "" if jogo.get('favorito') == "home" else "" if jogo.get('favorito') == "away" else ""
                 favorito_text = jogo['home'] if jogo.get('favorito') == "home" else jogo['away'] if jogo.get('favorito') == "away" else "EMPATE"
-                resultado_emoji = "✅" if resultado == "GREEN" else "❌" if resultado == "RED" else "⏳"
+                resultado_emoji = "" if resultado == "GREEN" else "❌" if resultado == "RED" else ""
                 
                 textos_analise = [
                     f"{favorito_emoji} FAVORITO: {favorito_text} {resultado_emoji}",
@@ -1888,8 +1888,8 @@ class PosterGenerator:
                 cores = [(255, 255, 255), (200, 200, 200), (200, 200, 200)]
                 
             elif tipo_alerta == "gols_ht":
-                tipo_emoji_ht = "⚡" if "OVER" in jogo.get('tendencia_ht', '') else "🛡️"
-                resultado_emoji = "✅" if resultado == "GREEN" else "❌" if resultado == "RED" else "⏳"
+                tipo_emoji_ht = "" if "OVER" in jogo.get('tendencia_ht', '') else ""
+                resultado_emoji = "" if resultado == "GREEN" else "❌" if resultado == "RED" else ""
                 ht_resultado = f"{jogo.get('ht_home_goals', '?')} - {jogo.get('ht_away_goals', '?')}"
                 
                 textos_analise = [
