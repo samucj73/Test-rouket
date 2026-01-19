@@ -1846,8 +1846,8 @@ class PosterGenerator:
             #home_text = jogo['home']
             #away_text = jogo['away']
             # Limitar estritamente a 12 caracteres
-             home_text = jogo['home'][:12]
-             away_text = jogo['away'][:12]
+               home_text = jogo['home'][:12]
+               away_text = jogo['away'][:12]
 
             try:
                 home_bbox = draw.textbbox((0, 0), home_text, font=FONTE_TIMES)
