@@ -1625,39 +1625,6 @@ class PosterGenerator:
         st.success(f"✅ Poster estilo West Ham GERADO com {len(jogos)} jogos")
         return buffer
     
-  #  def gerar_poster_resultados(self, jogos_com_resultados: list, tipo_alerta: str = "over_under") -> io.BytesIO:
-class PosterGenerator:
-    """Gera posters para os alertas"""
-    
-    def __init__(self, api_client: APIClient):
-        self.api_client = api_client
-    
-    @staticmethod
-    def criar_fonte(tamanho: int) -> ImageFont.ImageFont:
-        """Cria fonte com fallback robusto"""
-        try:
-            font_paths = [
-                "arial.ttf", "Arial.ttf", "arialbd.ttf",
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-                "/System/Library/Fonts/Arial.ttf",
-                "C:/Windows/Fonts/arial.ttf"
-            ]
-            
-            for font_path in font_paths:
-                try:
-                    if os.path.exists(font_path):
-                        return ImageFont.truetype(font_path, tamanho)
-                except Exception:
-                    continue
-            
-            return ImageFont.load_default()
-            
-        except Exception as e:
-            logging.error(f"Erro ao carregar fonte: {e}")
-            return ImageFont.load_default()
-    
-    # ... outros métodos existentes ...
-
     def gerar_poster_resultados(self, jogos_com_resultados: list, tipo_alerta: str = "over_under") -> io.BytesIO:
         """Gera poster de resultados no estilo West Ham com GREEN/RED destacado"""
         LARGURA = 2000
@@ -1963,9 +1930,6 @@ class PosterGenerator:
         st.success(f"✅ Poster de resultados GERADO com {len(jogos_com_resultados)} jogos")
         return buffer
     
-    # ... método _desenhar_escudo_quadrado e outros métodos ...
-   
-    
     def _desenhar_escudo_quadrado(self, draw, img, logo_img, x, y, tamanho_quadrado, tamanho_escudo, team_name=""):
         """Desenha escudo quadrado com fallback"""
         draw.rectangle(
@@ -2053,6 +2017,7 @@ class PosterGenerator:
                          iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
             except:
                 draw.text((x + 70, y + 90), iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
+
 
 # =============================
 # SISTEMA PRINCIPAL
