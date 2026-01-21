@@ -14,7 +14,6 @@ from threading import Lock
 import threading
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 import logging
-import urllib.parse
 
 # =============================
 # CLASSES PRINCIPAIS - CORE SYSTEM
@@ -27,12 +26,10 @@ class ConfigManager:
     TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN","8351165117:AAFmqb3NrPsmT86_8C360eYzK71Qda1ah_4")
     TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "-1003073115320")
     TELEGRAM_CHAT_ID_ALT2 = os.getenv("TELEGRAM_CHAT_ID_ALT2", "-1002754276285")
-    ODDS_API_KEY = os.getenv("ODDS_API_KEY", "069cc4a245a65e42f2c59db45012c3d7")
     
     HEADERS = {"X-Auth-Token": API_KEY}
     BASE_URL_FD = "https://api.football-data.org/v4"
     BASE_URL_TG = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
-    BASE_URL_ODDS = os.getenv("ODDS_API_URL", "https://api.the-odds-api.com/v4")
     
     # Constantes
     ALERTAS_PATH = "alertas.json"
@@ -67,8 +64,7 @@ class ConfigManager:
     CACHE_CONFIG = {
         "jogos": {"ttl": 3600, "max_size": 100},
         "classificacao": {"ttl": 86400, "max_size": 50},
-        "match_details": {"ttl": 1800, "max_size": 200},
-        "odds": {"ttl": 300, "max_size": 100}
+        "match_details": {"ttl": 1800, "max_size": 200}
     }
     
     @classmethod
@@ -124,7 +120,6 @@ class SmartCache:
     def __init__(self, cache_type: str):
         self.cache = {}
         self.timestamps = {}
-        self.ttl_values = {}
         self.config = ConfigManager.CACHE_CONFIG.get(cache_type, {"ttl": 3600, "max_size": 100})
         self.lock = threading.Lock()
         
@@ -137,38 +132,29 @@ class SmartCache:
             timestamp = self.timestamps.get(key, 0)
             agora = time.time()
             
-            # Usar TTL específico ou padrão
-            ttl = self.ttl_values.get(key, self.config["ttl"])
-            
-            if agora - timestamp > ttl:
+            if agora - timestamp > self.config["ttl"]:
                 del self.cache[key]
                 del self.timestamps[key]
-                if key in self.ttl_values:
-                    del self.ttl_values[key]
                 return None
                 
             return self.cache[key]
     
-    def set(self, key: str, value, ttl: int = None):
-        """Armazena valor no cache com TTL opcional"""
+    def set(self, key: str, value):
+        """Armazena valor no cache"""
         with self.lock:
             if len(self.cache) >= self.config["max_size"]:
                 oldest_key = min(self.timestamps.items(), key=lambda x: x[1])[0]
                 del self.cache[oldest_key]
                 del self.timestamps[oldest_key]
-                if oldest_key in self.ttl_values:
-                    del self.ttl_values[oldest_key]
             
             self.cache[key] = value
             self.timestamps[key] = time.time()
-            self.ttl_values[key] = ttl or self.config["ttl"]
     
     def clear(self):
         """Limpa todo o cache"""
         with self.lock:
             self.cache.clear()
             self.timestamps.clear()
-            self.ttl_values.clear()
 
 class APIMonitor:
     """Monitora uso da API"""
@@ -321,806 +307,6 @@ class ImageCache:
                 "disco_mb": cache_dir_size / (1024*1024) if cache_dir_size > 0 else 0,
                 "hit_rate": f"{(len(self.cache) / max(self.max_size, 1)) * 100:.1f}%"
             }
-
-# =============================
-# CLASSE ATUALIZADA: API DE ODDS (COM CORREÇÕES)
-# =============================
-
-class APIOddsClient:
-    """Cliente especializado para buscar odds de diferentes provedores - CORRIGIDO"""
-    
-    def __init__(self, rate_limiter: RateLimiter, api_monitor: APIMonitor):
-        self.rate_limiter = rate_limiter
-        self.api_monitor = api_monitor
-        self.config = ConfigManager()
-        self.odds_cache = SmartCache("odds")
-        
-        # Mapeamento CORRIGIDO de ligas para sport keys da Odds API
-        # USANDO OS SPORT_KEYS EXATOS DA RESPOSTA DA API
-        self.liga_map_corrigido = {
-            "PL": "soccer_epl",                          # Premier League
-            "BL1": "soccer_germany_bundesliga",          # Bundesliga
-            "SA": "soccer_italy_serie_a",                # Serie A
-            "PD": "soccer_spain_la_liga",                # La Liga
-            "FL1": "soccer_france_ligue_one",            # Ligue 1
-            "BSA": "soccer_brazil_campeonato",           # Brasileirão
-            "CL": "soccer_uefa_champs_league",           # Champions League (CORRIGIDO)
-            "ELC": "soccer_efl_champ",                   # Championship (CORRIGIDO: soccer_efl_champ)
-            "PPL": "soccer_portugal_primeira_liga",      # Primeira Liga
-            "DED": "soccer_netherlands_eredivisie",      # Eredivisie
-            "WC": "soccer_fifa_world_cup",               # FIFA World Cup
-            "EC": "soccer_euro_championship"             # European Championship (verificar se existe)
-        }
-    
-    def obter_odds_com_retry(self, url: str, timeout: int = 15, max_retries: int = 3) -> dict | None:
-        """Obtém dados da API de odds com rate limiting e retry"""
-        for attempt in range(max_retries):
-            try:
-                self.rate_limiter.wait_if_needed()
-                
-                logging.info(f"💰 Request odds {attempt+1}/{max_retries}: {url}")
-                
-                response = requests.get(url, timeout=timeout)
-                
-                # Verificar headers da Odds API para quota
-                remaining = response.headers.get('x-requests-remaining', 'unknown')
-                used = response.headers.get('x-requests-used', 'unknown')
-                logging.info(f"📊 Quota Odds API: Restantes={remaining}, Usadas={used}")
-                
-                if response.status_code == 422:
-                    # Erro específico - endpoint não suportado
-                    logging.error(f"❌ Endpoint não suportado: {url}")
-                    st.error("⚠️ Esta funcionalidade não é suportada pela Odds API")
-                    return None
-                    
-                if response.status_code == 404:
-                    # Erro 404 - sport_key incorreto
-                    logging.error(f"❌ Sport key não encontrado (404): {url}")
-                    st.error(f"⚠️ Sport key incorreto. Verifique o mapeamento.")
-                    return None
-                    
-                if response.status_code == 429:
-                    self.api_monitor.log_request(False, True)
-                    retry_after = int(response.headers.get('Retry-After', 60))
-                    logging.warning(f"⏳ Rate limit da API de odds. Esperando {retry_after} segundos...")
-                    time.sleep(retry_after)
-                    continue
-                    
-                response.raise_for_status()
-                
-                self.api_monitor.log_request(True)
-                
-                return response.json()
-                
-            except requests.exceptions.Timeout:
-                logging.error(f"⌛ Timeout na tentativa {attempt+1} para {url}")
-                self.api_monitor.log_request(False)
-                
-                if attempt < max_retries - 1:
-                    wait_time = 2 ** attempt
-                    logging.info(f"⏳ Esperando {wait_time}s antes de retry...")
-                    time.sleep(wait_time)
-                    
-            except requests.RequestException as e:
-                logging.error(f"❌ Erro na tentativa {attempt+1} para {url}: {e}")
-                self.api_monitor.log_request(False)
-                
-                if attempt < max_retries - 1:
-                    wait_time = 2 ** attempt
-                    time.sleep(wait_time)
-                else:
-                    st.error(f"❌ Falha após {max_retries} tentativas: {e}")
-                    return None
-                    
-        return None
-    
-    def obter_odds_ao_vivo(self, liga_id: str = None, mercado: str = "h2h") -> list:
-        """Obtém odds ao vivo para jogos específicos - CORRIGIDO"""
-        cache_key = f"odds_live_{liga_id}_{mercado}"
-        cached = self.odds_cache.get(cache_key)
-        if cached:
-            logging.info(f"📊 Odds ao vivo obtidas do cache: {cache_key}")
-            return cached
-        
-        try:
-            if liga_id and liga_id in self.liga_map_corrigido:
-                sport_key = self.liga_map_corrigido[liga_id]
-            else:
-                # Usar 'upcoming' para todos os jogos
-                sport_key = "upcoming"
-            
-            # Construir URL corretamente
-            url = f"{self.config.BASE_URL_ODDS}/sports/{sport_key}/odds"
-            
-            # Parâmetros OBRIGATÓRIOS da Odds API
-            params = {
-                'apiKey': self.config.ODDS_API_KEY,
-                'regions': 'us,eu',  # REGIÕES OBRIGATÓRIAS
-                'markets': mercado,
-                'oddsFormat': 'decimal',
-                'dateFormat': 'iso'
-            }
-            
-            # Adicionar filtros opcionais se for uma liga específica
-            if liga_id and liga_id != "upcoming":
-                hoje = datetime.now().strftime("%Y-%m-%d")
-                params['commenceTimeFrom'] = f"{hoje}T00:00:00Z"
-                params['commenceTimeTo'] = f"{hoje}T23:59:59Z"
-            
-            full_url = f"{url}?{urllib.parse.urlencode(params)}"
-            logging.info(f"🔗 Chamando Odds API: {full_url}")
-            
-            data = self.obter_odds_com_retry(full_url)
-            
-            if data:
-                self.odds_cache.set(cache_key, data, ttl=300)  # Cache de 5 minutos para odds
-            
-            return data or []
-            
-        except Exception as e:
-            logging.error(f"❌ Erro crítico ao buscar odds: {e}")
-            st.error(f"Erro ao buscar odds: {str(e)}")
-            return []
-    
-    def obter_odds_por_data_liga(self, data: str, liga_id: str = None, mercado: str = "h2h") -> list:
-        """Obtém odds para uma data específica - CORRIGIDO"""
-        cache_key = f"odds_{data}_{liga_id}_{mercado}"
-        cached = self.odds_cache.get(cache_key)
-        if cached:
-            return cached
-        
-        try:
-            # Usar mapeamento corrigido ou fallback
-            if liga_id and liga_id in self.liga_map_corrigido:
-                sport_key = self.liga_map_corrigido[liga_id]
-            else:
-                sport_key = "upcoming"
-            
-            url = f"{self.config.BASE_URL_ODDS}/sports/{sport_key}/odds"
-            
-            params = {
-                'apiKey': self.config.ODDS_API_KEY,
-                'regions': 'us,eu,uk',
-                'markets': mercado,
-                'oddsFormat': 'decimal',
-                'dateFormat': 'iso'
-            }
-            
-            # Adicionar filtros de data
-            if data:
-                params['commenceTimeFrom'] = f"{data}T00:00:00Z"
-                params['commenceTimeTo'] = f"{data}T23:59:59Z"
-            
-            full_url = f"{url}?{urllib.parse.urlencode(params)}"
-            logging.info(f"📅 Buscando odds para {data} (sport_key: {sport_key}): {full_url}")
-            
-            data_response = self.obter_odds_com_retry(full_url)
-            
-            if data_response:
-                self.odds_cache.set(cache_key, data_response, ttl=600)
-            
-            return data_response or []
-            
-        except Exception as e:
-            logging.error(f"❌ Erro ao buscar odds por data: {e}")
-            return []
-    
-    def obter_odds_por_jogo(self, fixture_id: str, data_jogo: str = None, home_team: str = "", away_team: str = "") -> dict:
-        """Obtém odds específicas para um jogo - CORREÇÃO COMPLETA"""
-        # A Odds API NÃO suporta buscar por ID de evento específico
-        # Em vez disso, buscamos todas as odds da data e filtramos pelo nome dos times
-        
-        cache_key = f"odds_match_{fixture_id}_{home_team}_{away_team}"
-        cached = self.odds_cache.get(cache_key)
-        if cached:
-            return cached
-        
-        try:
-            # Se não temos data, usar hoje
-            if not data_jogo:
-                data_jogo = datetime.now().strftime("%Y-%m-%d")
-            
-            # Buscar todas as odds da data (sem filtro de liga para maior cobertura)
-            todas_odds = self.obter_odds_por_data_liga(data_jogo, None, "h2h,totals,spreads")
-            
-            if not todas_odds:
-                return {}
-            
-            # Procurar o jogo específico pelos nomes dos times
-            for jogo in todas_odds:
-                jogo_home = jogo.get('home_team', '').lower()
-                jogo_away = jogo.get('away_team', '').lower()
-                
-                home_lower = home_team.lower()
-                away_lower = away_team.lower()
-                
-                # Verificar correspondência aproximada
-                match_found = False
-                
-                # Verificar correspondência exata ou parcial
-                if (home_lower in jogo_home or jogo_home in home_lower) and \
-                   (away_lower in jogo_away or jogo_away in away_lower):
-                    match_found = True
-                
-                # Verificar se os times estão invertidos
-                elif (home_lower in jogo_away or jogo_away in home_lower) and \
-                     (away_lower in jogo_home or jogo_home in away_lower):
-                    match_found = True
-                
-                if match_found and jogo.get('bookmakers'):
-                    logging.info(f"✅ Jogo encontrado na Odds API: {jogo_home} vs {jogo_away}")
-                    self.odds_cache.set(cache_key, jogo, ttl=300)
-                    return jogo
-            
-            logging.warning(f"⚠️ Jogo não encontrado na Odds API: {home_team} vs {away_team}")
-            return {}
-            
-        except Exception as e:
-            logging.error(f"❌ Erro ao buscar odds do jogo {fixture_id}: {e}")
-            return {}
-    
-    def buscar_odds_por_event_ids(self, event_ids: list, mercado: str = "h2h") -> list:
-        """Busca odds por múltiplos IDs de evento"""
-        if not event_ids:
-            return []
-        
-        cache_key = f"odds_events_{hash(frozenset(event_ids))}_{mercado}"
-        cached = self.odds_cache.get(cache_key)
-        if cached:
-            return cached
-        
-        try:
-            # Usar endpoint upcoming com filtro de event_ids
-            url = f"{self.config.BASE_URL_ODDS}/sports/upcoming/odds"
-            
-            params = {
-                'apiKey': self.config.ODDS_API_KEY,
-                'regions': 'us,eu,uk',
-                'markets': mercado,
-                'oddsFormat': 'decimal',
-                'dateFormat': 'iso',
-                'eventIds': ','.join(event_ids[:50])  # Limitar a 50 eventos
-            }
-            
-            full_url = f"{url}?{urllib.parse.urlencode(params)}"
-            logging.info(f"🔗 Buscando odds para {len(event_ids)} eventos")
-            
-            data_response = self.obter_odds_com_retry(full_url)
-            
-            if data_response:
-                self.odds_cache.set(cache_key, data_response, ttl=600)
-            
-            return data_response or []
-            
-        except Exception as e:
-            logging.error(f"❌ Erro ao buscar odds por event_ids: {e}")
-            return []
-    
-    def obter_esportes_disponiveis(self) -> list:
-        """Retorna lista de esportes disponíveis na Odds API"""
-        try:
-            url = f"{self.config.BASE_URL_ODDS}/sports/?apiKey={self.config.ODDS_API_KEY}"
-            data = self.obter_odds_com_retry(url)
-            
-            if isinstance(data, list):
-                # Filtrar apenas esportes de futebol/soccer
-                esportes_futebol = [s for s in data if s.get('group') == 'Soccer']
-                return esportes_futebol
-            return []
-            
-        except Exception as e:
-            logging.error(f"❌ Erro ao buscar esportes: {e}")
-            return []
-    
-    def testar_conexao(self) -> bool:
-        """Testa a conexão com a Odds API"""
-        try:
-            # Usar endpoint de esportes que não consome quota
-            url = f"{self.config.BASE_URL_ODDS}/sports/?apiKey={self.config.ODDS_API_KEY}"
-            response = requests.get(url, timeout=10)
-            
-            if response.status_code == 200:
-                data = response.json()
-                return isinstance(data, list) and len(data) > 0
-            elif response.status_code == 401:
-                st.error("❌ API Key inválida ou expirada")
-                return False
-            else:
-                st.error(f"❌ Erro na conexão: {response.status_code}")
-                return False
-                
-        except Exception as e:
-            st.error(f"❌ Erro de conexão: {e}")
-            return False
-    
-    def analisar_valor_aposta(self, odds: float, probabilidade: float) -> dict:
-        """Analisa se uma odd tem valor baseado na probabilidade estimada"""
-        if odds <= 0 or probabilidade <= 0:
-            return {"valor": False, "edge": 0, "recomendacao": "EVITAR"}
-        
-        # Calcular probabilidade implícita da odd
-        probabilidade_implicita = 1 / odds
-        
-        # Calcular edge (vantagem)
-        edge = (probabilidade / 100) - probabilidade_implicita
-        
-        # Calcular Kelly Criterion (simplificado)
-        kelly = ((probabilidade / 100) * (odds - 1) - (1 - (probabilidade / 100))) / (odds - 1)
-        kelly = max(0, min(kelly, 0.5))  # Limitar entre 0% e 50%
-        
-        # Determinar recomendação
-        if edge > 0.05:  # Edge maior que 5%
-            valor = True
-            recomendacao = "ALTO VALOR"
-            cor = "🟢"
-        elif edge > 0.02:  # Edge entre 2% e 5%
-            valor = True
-            recomendacao = "VALOR MODERADO"
-            cor = "🟡"
-        elif edge > 0:
-            valor = True
-            recomendacao = "PEQUENO VALOR"
-            cor = "🟠"
-        else:
-            valor = False
-            recomendacao = "SEM VALOR"
-            cor = "🔴"
-        
-        return {
-            "valor": valor,
-            "edge": round(edge * 100, 2),  # Em porcentagem
-            "kelly": round(kelly * 100, 2),  # Em porcentagem
-            "probabilidade_implicita": round(probabilidade_implicita * 100, 2),
-            "recomendacao": recomendacao,
-            "cor": cor,
-            "odd": odds,
-            "probabilidade_nossa": probabilidade
-        }
-
-# =============================
-# CLASSE ATUALIZADA: ODDS MANAGER (COM CORREÇÕES)
-# =============================
-
-class OddsManager:
-    """Gerencia análise e apresentação de odds"""
-    
-    def __init__(self, api_client, odds_client: APIOddsClient):
-        self.api_client = api_client
-        self.odds_client = odds_client
-    
-    def buscar_odds_com_analise(self, data_selecionada, ligas_selecionadas, todas_ligas):
-        """Busca odds com análise de valor - CORRIGIDO"""
-        hoje = data_selecionada.strftime("%Y-%m-%d")
-        
-        if todas_ligas:
-            ligas_busca = list(ConfigManager.LIGA_DICT.values())
-        else:
-            ligas_busca = [ConfigManager.LIGA_DICT[liga_nome] for liga_nome in ligas_selecionadas]
-        
-        resultados = []
-        progress_bar = st.progress(0)
-        total_ligas = len(ligas_busca)
-        
-        for i, liga_id in enumerate(ligas_busca):
-            # Buscar jogos primeiro da API de futebol
-            if liga_id == "BSA":
-                jogos_data = self.api_client.obter_jogos_brasileirao(liga_id, hoje)
-            else:
-                jogos_data = self.api_client.obter_jogos(liga_id, hoje)
-            
-            if not jogos_data:
-                continue
-            
-            # Buscar classificação para análise
-            classificacao = self.api_client.obter_classificacao(liga_id)
-            analisador = AnalisadorTendencia(classificacao)
-            
-            # Coletar informações dos jogos para buscar odds
-            jogos_para_buscar = []
-            
-            for match_data in jogos_data:
-                if not self.api_client.validar_dados_jogo(match_data):
-                    continue
-                
-                jogo = Jogo(match_data)
-                
-                # Obter análise do jogo
-                analise = analisador.calcular_tendencia_completa(jogo.home_team, jogo.away_team)
-                jogo.set_analise(analise)
-                
-                # Tentar buscar odds específicas para este jogo
-                odds_data = self.odds_client.obter_odds_por_jogo(
-                    fixture_id=str(jogo.id),
-                    data_jogo=hoje,
-                    home_team=jogo.home_team,
-                    away_team=jogo.away_team
-                )
-                
-                if odds_data:
-                    # Processar odds
-                    odds_processadas = self.processar_odds_jogo(odds_data, analise, jogo)
-                    
-                    if odds_processadas:
-                        resultados.append({
-                            "jogo": jogo,
-                            "analise": analise,
-                            "odds": odds_processadas,
-                            "liga": jogo.competition
-                        })
-            
-            progress_bar.progress((i + 1) / total_ligas)
-        
-        return resultados
-    
-    def buscar_odds_direto_api(self, data_selecionada, ligas_selecionadas, todas_ligas):
-        """Busca odds diretamente da API sem depender da API de futebol"""
-        hoje = data_selecionada.strftime("%Y-%m-%d")
-        
-        resultados = []
-        
-        if todas_ligas:
-            ligas_busca = list(ConfigManager.LIGA_DICT.values())
-        else:
-            ligas_busca = [ConfigManager.LIGA_DICT[liga_nome] for liga_nome in ligas_selecionadas]
-        
-        progress_bar = st.progress(0)
-        total_ligas = len(ligas_busca)
-        
-        for i, liga_id in enumerate(ligas_busca):
-            # Buscar odds diretamente da Odds API usando o mapeamento corrigido
-            odds_data = self.odds_client.obter_odds_por_data_liga(
-                hoje, 
-                liga_id, 
-                "h2h,totals"
-            )
-            
-            if not odds_data:
-                continue
-            
-            # Para cada jogo de odds, tentar obter análise
-            for jogo_data in odds_data:
-                try:
-                    home_team = jogo_data.get('home_team', '')
-                    away_team = jogo_data.get('away_team', '')
-                    sport_key = jogo_data.get('sport_key', '')
-                    
-                    if not home_team or not away_team:
-                        continue
-                    
-                    # Criar objeto Jogo básico
-                    jogo = Jogo({
-                        "id": jogo_data.get('id', ''),
-                        "homeTeam": {"name": home_team},
-                        "awayTeam": {"name": away_team},
-                        "utcDate": jogo_data.get('commence_time', ''),
-                        "competition": {"name": self._formatar_nome_liga(sport_key)},
-                        "status": "SCHEDULED"
-                    })
-                    
-                    # Tentar obter análise se possível
-                    analise = {}
-                    liga_nome = self._obter_liga_por_sport_key(sport_key)
-                    
-                    if liga_nome and liga_nome in ConfigManager.LIGA_DICT:
-                        liga_id_analise = ConfigManager.LIGA_DICT[liga_nome]
-                        classificacao = self.api_client.obter_classificacao(liga_id_analise)
-                        
-                        if classificacao:
-                            analisador = AnalisadorTendencia(classificacao)
-                            analise = analisador.calcular_tendencia_completa(home_team, away_team)
-                            jogo.set_analise(analise)
-                    
-                    # Processar odds
-                    odds_processadas = self.processar_odds_jogo(jogo_data, analise, jogo)
-                    
-                    if odds_processadas:
-                        resultados.append({
-                            "jogo": jogo,
-                            "analise": analise,
-                            "odds": odds_processadas,
-                            "liga": jogo.competition
-                        })
-                    
-                except Exception as e:
-                    logging.error(f"❌ Erro ao processar jogo de odds: {e}")
-                    continue
-            
-            progress_bar.progress((i + 1) / total_ligas)
-        
-        return resultados
-    
-    def _formatar_nome_liga(self, sport_key: str) -> str:
-        """Formata o sport key para nome de liga amigável"""
-        if not sport_key:
-            return "Desconhecido"
-        
-        # Remover prefixo "soccer_"
-        nome = sport_key.replace('soccer_', '')
-        # Substituir underscores por espaços
-        nome = nome.replace('_', ' ')
-        # Capitalizar
-        nome = ' '.join([word.capitalize() for word in nome.split()])
-        
-        # Mapeamentos especiais baseados nos sport_keys reais
-        mapeamentos = {
-            'Epl': 'Premier League',
-            'La Liga': 'La Liga',
-            'Germany Bundesliga': 'Bundesliga',
-            'Italy Serie A': 'Serie A',
-            'France Ligue One': 'Ligue 1',
-            'Brazil Campeonato': 'Brasileirão',
-            'Uefa Champs League': 'Champions League',
-            'Efl Champ': 'Championship',  # CORRIGIDO
-            'Portugal Primeira Liga': 'Primeira Liga',
-            'Netherlands Eredivisie': 'Eredivisie',
-            'Fifa World Cup': 'FIFA World Cup',
-            'Euro Championship': 'European Championship'
-        }
-        
-        return mapeamentos.get(nome, nome)
-    
-    def _obter_liga_por_sport_key(self, sport_key: str) -> str | None:
-        """Obtém o nome da liga a partir do sport key - CORRIGIDO"""
-        mapeamento_inverso = {
-            'soccer_epl': 'Premier League (Inglaterra)',
-            'soccer_spain_la_liga': 'Primera Division',
-            'soccer_germany_bundesliga': 'Bundesliga',
-            'soccer_italy_serie_a': 'Serie A (Itália)',
-            'soccer_france_ligue_one': 'Ligue 1',
-            'soccer_brazil_campeonato': 'Campeonato Brasileiro Série A',
-            'soccer_uefa_champs_league': 'UEFA Champions League',  # CORRIGIDO
-            'soccer_efl_champ': 'Championship (Inglaterra)',  # CORRIGIDO
-            'soccer_portugal_primeira_liga': 'Primeira Liga (Portugal)',
-            'soccer_netherlands_eredivisie': 'Eredivisie',
-            'soccer_fifa_world_cup': 'FIFA World Cup',
-            'soccer_euro_championship': 'European Championship'
-        }
-        
-        return mapeamento_inverso.get(sport_key)
-    
-    def processar_odds_jogo(self, odds_data: dict, analise: dict, jogo) -> dict:
-        """Processa e analisa odds de um jogo"""
-        if not odds_data or "bookmakers" not in odds_data:
-            return None
-        
-        bookmakers = odds_data.get("bookmakers", [])
-        resultados = {
-            "h2h": [],  # Head to Head (1x2)
-            "totals": [],  # Over/Under
-            "home_odds": [],
-            "draw_odds": [],
-            "away_odds": [],
-            "over_25_odds": [],
-            "under_25_odds": [],
-            "btts_yes": [],
-            "btts_no": [],
-            "melhores_odds": {}
-        }
-        
-        for bookmaker in bookmakers:
-            bm_name = bookmaker.get("title", "Desconhecido")
-            markets = bookmaker.get("markets", [])
-            
-            for market in markets:
-                market_key = market.get("key", "")
-                outcomes = market.get("outcomes", [])
-                
-                if market_key == "h2h":
-                    for outcome in outcomes:
-                        name = outcome.get("name", "")
-                        odds = outcome.get("price", 0)
-                        
-                        if name == jogo.home_team or name == "Home":
-                            resultados["home_odds"].append({"bookmaker": bm_name, "odds": odds})
-                        elif name == "Draw":
-                            resultados["draw_odds"].append({"bookmaker": bm_name, "odds": odds})
-                        elif name == jogo.away_team or name == "Away":
-                            resultados["away_odds"].append({"bookmaker": bm_name, "odds": odds})
-                
-                elif market_key == "totals":
-                    for outcome in outcomes:
-                        name = outcome.get("name", "")
-                        point = outcome.get("point", 0)
-                        odds = outcome.get("price", 0)
-                        
-                        if "Over" in name and point == 2.5:
-                            resultados["over_25_odds"].append({"bookmaker": bm_name, "odds": odds, "line": point})
-                        elif "Under" in name and point == 2.5:
-                            resultados["under_25_odds"].append({"bookmaker": bm_name, "odds": odds, "line": point})
-        
-        # Calcular melhores odds
-        resultados["melhores_odds"] = self.calcular_melhores_odds(resultados)
-        
-        # Analisar valor das odds
-        if analise and "detalhes" in analise and "vitoria" in analise['detalhes']:
-            v = analise['detalhes']['vitoria']
-            
-            if resultados["melhores_odds"].get("home_best"):
-                home_analysis = self.odds_client.analisar_valor_aposta(
-                    resultados["melhores_odds"]["home_best"]["odds"],
-                    v.get("home_win", 0)
-                )
-                resultados["melhores_odds"]["home_best"]["analise"] = home_analysis
-            
-            if resultados["melhores_odds"].get("away_best"):
-                away_analysis = self.odds_client.analisar_valor_aposta(
-                    resultados["melhores_odds"]["away_best"]["odds"],
-                    v.get("away_win", 0)
-                )
-                resultados["melhores_odds"]["away_best"]["analise"] = away_analysis
-            
-            if resultados["melhores_odds"].get("draw_best"):
-                draw_analysis = self.odds_client.analisar_valor_aposta(
-                    resultados["melhores_odds"]["draw_best"]["odds"],
-                    v.get("draw", 0)
-                )
-                resultados["melhores_odds"]["draw_best"]["analise"] = draw_analysis
-        
-        # Analisar Over/Under
-        if analise and "detalhes" in analise:
-            over_prob = analise['detalhes'].get('over_25_prob', 0)
-            under_prob = analise['detalhes'].get('under_25_prob', 0)
-            
-            if resultados["melhores_odds"].get("over_25_best"):
-                over_analysis = self.odds_client.analisar_valor_aposta(
-                    resultados["melhores_odds"]["over_25_best"]["odds"],
-                    over_prob
-                )
-                resultados["melhores_odds"]["over_25_best"]["analise"] = over_analysis
-            
-            if resultados["melhores_odds"].get("under_25_best"):
-                under_analysis = self.odds_client.analisar_valor_aposta(
-                    resultados["melhores_odds"]["under_25_best"]["odds"],
-                    under_prob
-                )
-                resultados["melhores_odds"]["under_25_best"]["analise"] = under_analysis
-        
-        return resultados
-    
-    def calcular_melhores_odds(self, odds_data: dict) -> dict:
-        """Calcula as melhores odds disponíveis"""
-        melhores = {}
-        
-        # Home win
-        if odds_data["home_odds"]:
-            best_home = max(odds_data["home_odds"], key=lambda x: x["odds"])
-            melhores["home_best"] = best_home
-        
-        # Away win
-        if odds_data["away_odds"]:
-            best_away = max(odds_data["away_odds"], key=lambda x: x["odds"])
-            melhores["away_best"] = best_away
-        
-        # Draw
-        if odds_data["draw_odds"]:
-            best_draw = max(odds_data["draw_odds"], key=lambda x: x["odds"])
-            melhores["draw_best"] = best_draw
-        
-        # Over 2.5
-        if odds_data["over_25_odds"]:
-            best_over = max(odds_data["over_25_odds"], key=lambda x: x["odds"])
-            melhores["over_25_best"] = best_over
-        
-        # Under 2.5
-        if odds_data["under_25_odds"]:
-            best_under = max(odds_data["under_25_odds"], key=lambda x: x["odds"])
-            melhores["under_25_best"] = best_under
-        
-        return melhores
-    
-    def gerar_relatorio_odds(self, resultados: list) -> str:
-        """Gera relatório HTML com odds"""
-        html = """
-        <html>
-        <head>
-            <style>
-                body { font-family: Arial, sans-serif; margin: 20px; }
-                .jogo { border: 1px solid #ddd; padding: 15px; margin-bottom: 20px; border-radius: 5px; }
-                .header { background-color: #f5f5f5; padding: 10px; font-weight: bold; }
-                .odds-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-                .odds-table th, .odds-table td { border: 1px solid #ddd; padding: 8px; text-align: center; }
-                .odds-table th { background-color: #f2f2f2; }
-                .valor-alto { background-color: #d4edda !important; }
-                .valor-moderado { background-color: #fff3cd !important; }
-                .valor-baixo { background-color: #f8d7da !important; }
-                .odd-value { font-weight: bold; }
-                .bookmaker { font-size: 0.9em; color: #666; }
-            </style>
-        </head>
-        <body>
-            <h1>📊 Relatório de Odds - Análise de Valor</h1>
-        """
-        
-        for item in resultados:
-            jogo = item["jogo"]
-            odds = item["odds"]
-            analise = item["analise"]
-            
-            data_br, hora_br = jogo.get_data_hora_brasilia()
-            
-            html += f"""
-            <div class="jogo">
-                <div class="header">
-                    🏟️ {jogo.home_team} vs {jogo.away_team} - {jogo.competition}
-                </div>
-                <div>📅 {data_br} 🕒 {hora_br}</div>
-                
-                <h3>🎯 Análise do Sistema:</h3>
-                <ul>
-                    <li>Tendência: {analise['tendencia']}</li>
-                    <li>Probabilidade: {analise['probabilidade']:.1f}%</li>
-                    <li>Confiança: {analise['confianca']:.1f}%</li>
-            """
-            
-            if "vitoria" in analise['detalhes']:
-                v = analise['detalhes']['vitoria']
-                html += f"""
-                    <li>Favorito: {jogo.home_team if v['favorito']=='home' else jogo.away_team if v['favorito']=='away' else 'EMPATE'}</li>
-                    <li>Prob. Casa: {v['home_win']:.1f}% | Fora: {v['away_win']:.1f}% | Empate: {v['draw']:.1f}%</li>
-                """
-            
-            html += """
-                </ul>
-                
-                <h3>💰 Melhores Odds Disponíveis:</h3>
-                <table class="odds-table">
-                    <tr>
-                        <th>Mercado</th>
-                        <th>Bookmaker</th>
-                        <th>Odds</th>
-                        <th>Prob. Implícita</th>
-                        <th>Edge</th>
-                        <th>Kelly</th>
-                        <th>Recomendação</th>
-                    </tr>
-            """
-            
-            # Adicionar linhas para cada mercado
-            mercados = [
-                ("home_best", "Casa", odds.get("melhores_odds", {})),
-                ("away_best", "Fora", odds.get("melhores_odds", {})),
-                ("draw_best", "Empate", odds.get("melhores_odds", {})),
-                ("over_25_best", "Over 2.5", odds.get("melhores_odds", {})),
-                ("under_25_best", "Under 2.5", odds.get("melhores_odds", {}))
-            ]
-            
-            for mercado_key, mercado_nome, melhores in mercados:
-                if mercado_key in melhores:
-                    odd_data = melhores[mercado_key]
-                    analise_data = odd_data.get("analise", {})
-                    
-                    classe_valor = ""
-                    if analise_data.get("valor"):
-                        if analise_data.get("edge", 0) > 5:
-                            classe_valor = "valor-alto"
-                        elif analise_data.get("edge", 0) > 2:
-                            classe_valor = "valor-moderado"
-                        else:
-                            classe_valor = "valor-baixo"
-                    
-                    html += f"""
-                    <tr class="{classe_valor}">
-                        <td>{mercado_nome}</td>
-                        <td><span class="bookmaker">{odd_data.get('bookmaker', 'N/A')}</span></td>
-                        <td><span class="odd-value">{odd_data.get('odds', 0):.2f}</span></td>
-                        <td>{analise_data.get('probabilidade_implicita', 0):.1f}%</td>
-                        <td>{analise_data.get('edge', 0):+.1f}%</td>
-                        <td>{analise_data.get('kelly', 0):.1f}%</td>
-                        <td>{analise_data.get('cor', '')} {analise_data.get('recomendacao', 'N/A')}</td>
-                    </tr>
-                    """
-            
-            html += """
-                </table>
-            </div>
-            """
-        
-        html += """
-        </body>
-        </html>
-        """
-        
-        return html
 
 # =============================
 # CLASSES DE PERSISTÊNCIA
@@ -1447,7 +633,7 @@ class Jogo:
         elif self.tendencia_ht == "OVER 1.5 HT" and total_gols_ht > 1.5:
             return "GREEN"
         elif self.tendencia_ht == "UNDER 1.5 HT" and total_gols_ht < 1.5:
-            return "RED"
+            return "GREEN"
         return "RED"
     
     def to_dict(self):
@@ -2222,9 +1408,9 @@ class PosterGenerator:
     def gerar_poster_westham_style(self, jogos: list, titulo: str = " ALERTA DE GOLS", tipo_alerta: str = "over_under") -> io.BytesIO:
         """Gera poster no estilo West Ham"""
         LARGURA = 2000
-        ALTURA_TOPO = 350
+        ALTURA_TOPO = 270
         ALTURA_POR_JOGO = 1050
-        PADDING = 120
+        PADDING = 80
         
         jogos_count = len(jogos)
         altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
@@ -2232,14 +1418,14 @@ class PosterGenerator:
         img = Image.new("RGB", (LARGURA, altura_total), color=(10, 20, 30))
         draw = ImageDraw.Draw(img)
 
-        FONTE_TITULO = self.criar_fonte(95)
-        FONTE_SUBTITULO = self.criar_fonte(70)
-        FONTE_TIMES = self.criar_fonte(65)
+        FONTE_TITULO = self.criar_fonte(90)
+        FONTE_SUBTITULO = self.criar_fonte(65)
+        FONTE_TIMES = self.criar_fonte(60)
         FONTE_VS = self.criar_fonte(55)
         FONTE_INFO = self.criar_fonte(50)
-        FONTE_DETALHES = self.criar_fonte(55)
-        FONTE_ANALISE = self.criar_fonte(65)
-        FONTE_ESTATISTICAS = self.criar_fonte(40)
+        FONTE_DETALHES = self.criar_fonte(50)
+        FONTE_ANALISE = self.criar_fonte(50)
+        FONTE_ESTATISTICAS = self.criar_fonte(35)
 
         try:
             titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
@@ -2290,8 +1476,8 @@ class PosterGenerator:
             except:
                 draw.text((LARGURA//2 - 150, y0 + 130), data_text, font=FONTE_INFO, fill=(150, 200, 255))
 
-            TAMANHO_ESCUDO = 200
-            TAMANHO_QUADRADO = 240
+            TAMANHO_ESCUDO = 220
+            TAMANHO_QUADRADO = 230
             ESPACO_ENTRE_ESCUDOS = 700
 
             largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
@@ -2418,9 +1604,9 @@ class PosterGenerator:
                 try:
                     bbox = draw.textbbox((0, 0), text, font=FONTE_ANALISE)
                     w = bbox[2] - bbox[0]
-                    draw.text(((LARGURA - w) // 2, y_analysis + i * 90), text, font=FONTE_ANALISE, fill=cor)
+                    draw.text(((LARGURA - w) // 2, y_analysis + i * 80), text, font=FONTE_ANALISE, fill=cor)
                 except:
-                    draw.text((PADDING + 120, y_analysis + i * 90), text, font=FONTE_ANALISE, fill=cor)
+                    draw.text((PADDING + 120, y_analysis + i * 80), text, font=FONTE_ANALISE, fill=cor)
 
             y_pos += ALTURA_POR_JOGO
 
@@ -2442,9 +1628,9 @@ class PosterGenerator:
     def gerar_poster_resultados(self, jogos_com_resultados: list, tipo_alerta: str = "over_under") -> io.BytesIO:
         """Gera poster de resultados no estilo West Ham com GREEN/RED destacado"""
         LARGURA = 2000
-        ALTURA_TOPO = 300
-        ALTURA_POR_JOGO = 830  # Aumentei um pouco para acomodar o badge GREEN/RED
-        PADDING = 120
+        ALTURA_TOPO = 330
+        ALTURA_POR_JOGO = 800 # Aumentei um pouco para acomodar o badge GREEN/RED
+        PADDING = 80
         
         jogos_count = len(jogos_com_resultados)
         altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
@@ -2624,7 +1810,10 @@ class PosterGenerator:
             self._desenhar_escudo_quadrado(draw, img, escudo_away_img, x_away, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo['away'])
 
             # Nomes dos times
-            home_text = jogo['home'][:12]  # Limitar a 12 caracteres
+            #home_text = jogo['home']
+            #away_text = jogo['away']
+            # Limitar estritamente a 12 caracteres
+            home_text = jogo['home'][:12]
             away_text = jogo['away'][:12]
 
             try:
@@ -2829,20 +2018,19 @@ class PosterGenerator:
             except:
                 draw.text((x + 70, y + 90), iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
 
+
 # =============================
-# SISTEMA PRINCIPAL (ATUALIZADO COM AS CORREÇÕES)
+# SISTEMA PRINCIPAL
 # =============================
 
 class SistemaAlertasFutebol:
-    """Sistema principal de alertas de futebol - ATUALIZADO"""
+    """Sistema principal de alertas de futebol"""
     
     def __init__(self):
         self.config = ConfigManager()
         self.rate_limiter = RateLimiter()
         self.api_monitor = APIMonitor()
         self.api_client = APIClient(self.rate_limiter, self.api_monitor)
-        self.odds_client = APIOddsClient(self.rate_limiter, self.api_monitor)
-        self.odds_manager = OddsManager(self.api_client, self.odds_client)
         self.telegram_client = TelegramClient()
         self.poster_generator = PosterGenerator(self.api_client)
         self.image_cache = self.api_client.image_cache
@@ -3084,274 +2272,6 @@ class SistemaAlertasFutebol:
         if any(resultados_totais.values()):
             st.info("🚨 Enviando alertas de resultados automaticamente...")
             self._enviar_alertas_resultados_automaticos(resultados_totais, data_selecionada)
-    
-    # ==================== MÉTODOS ATUALIZADOS PARA ODDS ====================
-    
-    def buscar_odds_com_analise(self, data_selecionada, ligas_selecionadas, todas_ligas, formato_saida="tabela"):
-        """Busca odds com análise de valor - ATUALIZADO"""
-        hoje = data_selecionada.strftime("%Y-%m-%d")
-        st.info(f"🔍 Buscando odds para {hoje}...")
-        
-        # Testar conexão primeiro
-        if not self.odds_client.testar_conexao():
-            st.error("❌ Falha na conexão com a Odds API. Verifique sua API Key.")
-            return []
-        
-        # Opção 1: Buscar odds integradas com análise (pode não encontrar todos os jogos)
-        st.info("📊 Buscando odds com análise...")
-        resultados_integrados = self.odds_manager.buscar_odds_com_analise(
-            data_selecionada, ligas_selecionadas, todas_ligas
-        )
-        
-        # Opção 2: Buscar odds diretamente da API (mais completo)
-        st.info("🔗 Buscando odds diretamente da API...")
-        resultados_diretos = self.odds_manager.buscar_odds_direto_api(
-            data_selecionada, ligas_selecionadas, todas_ligas
-        )
-        
-        # Combinar resultados
-        todos_resultados = resultados_integrados + resultados_diretos
-        
-        # Remover duplicados baseado no ID do jogo
-        resultados_unicos = []
-        ids_vistos = set()
-        
-        for resultado in todos_resultados:
-            jogo = resultado["jogo"]
-            jogo_id = f"{jogo.home_team}_{jogo.away_team}"
-            
-            if jogo_id not in ids_vistos:
-                ids_vistos.add(jogo_id)
-                resultados_unicos.append(resultado)
-        
-        if not resultados_unicos:
-            st.warning("⚠️ Nenhuma odd encontrada para os critérios selecionados")
-            return []
-        
-        st.success(f"✅ Encontradas odds para {len(resultados_unicos)} jogos")
-        
-        if formato_saida == "tabela":
-            self._mostrar_odds_tabela(resultados_unicos)
-        elif formato_saida == "relatorio":
-            self._gerar_relatorio_odds(resultados_unicos)
-        elif formato_saida == "valor":
-            self._mostrar_odds_com_valor(resultados_unicos)
-        
-        return resultados_unicos
-    
-    def _mostrar_odds_tabela(self, resultados: list):
-        """Mostra odds em formato de tabela"""
-        for item in resultados:
-            jogo = item["jogo"]
-            odds = item["odds"]
-            analise = item["analise"]
-            
-            data_br, hora_br = jogo.get_data_hora_brasilia()
-            
-            with st.expander(f"🏟️ {jogo.home_team} vs {jogo.away_team} - {hora_br}"):
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.write(f"**📊 Análise do Sistema:**")
-                    st.write(f"🎯 Tendência: {analise.get('tendencia', 'N/A')}")
-                    st.write(f"⚽ Estimativa: {analise.get('estimativa', 0):.2f} gols")
-                    st.write(f"📈 Probabilidade: {analise.get('probabilidade', 0):.1f}%")
-                    st.write(f"🔍 Confiança: {analise.get('confianca', 0):.1f}%")
-                    
-                    if "vitoria" in analise.get('detalhes', {}):
-                        v = analise['detalhes']['vitoria']
-                        st.write(f"🏆 Favorito: {jogo.home_team if v.get('favorito')=='home' else jogo.away_team if v.get('favorito')=='away' else 'EMPATE'}")
-                
-                with col2:
-                    st.write(f"**💰 Melhores Odds:**")
-                    
-                    melhores = odds.get("melhores_odds", {})
-                    
-                    if "home_best" in melhores:
-                        odd_data = melhores["home_best"]
-                        analise_data = odd_data.get("analise", {})
-                        cor = analise_data.get("cor", "⚪")
-                        st.write(f"{cor} **Casa:** {odd_data['odds']:.2f} ({odd_data['bookmaker']})")
-                        if analise_data:
-                            st.write(f"   Edge: {analise_data.get('edge', 0):+.1f}% | Kelly: {analise_data.get('kelly', 0):.1f}%")
-                    
-                    if "away_best" in melhores:
-                        odd_data = melhores["away_best"]
-                        analise_data = odd_data.get("analise", {})
-                        cor = analise_data.get("cor", "⚪")
-                        st.write(f"{cor} **Fora:** {odd_data['odds']:.2f} ({odd_data['bookmaker']})")
-                        if analise_data:
-                            st.write(f"   Edge: {analise_data.get('edge', 0):+.1f}% | Kelly: {analise_data.get('kelly', 0):.1f}%")
-                    
-                    if "draw_best" in melhores:
-                        odd_data = melhores["draw_best"]
-                        analise_data = odd_data.get("analise", {})
-                        cor = analise_data.get("cor", "⚪")
-                        st.write(f"{cor} **Empate:** {odd_data['odds']:.2f} ({odd_data['bookmaker']})")
-                        if analise_data:
-                            st.write(f"   Edge: {analise_data.get('edge', 0):+.1f}% | Kelly: {analise_data.get('kelly', 0):.1f}%")
-                    
-                    if "over_25_best" in melhores:
-                        odd_data = melhores["over_25_best"]
-                        analise_data = odd_data.get("analise", {})
-                        cor = analise_data.get("cor", "⚪")
-                        st.write(f"{cor} **Over 2.5:** {odd_data['odds']:.2f} ({odd_data['bookmaker']})")
-                        if analise_data:
-                            st.write(f"   Edge: {analise_data.get('edge', 0):+.1f}% | Kelly: {analise_data.get('kelly', 0):.1f}%")
-                    
-                    if "under_25_best" in melhores:
-                        odd_data = melhores["under_25_best"]
-                        analise_data = odd_data.get("analise", {})
-                        cor = analise_data.get("cor", "⚪")
-                        st.write(f"{cor} **Under 2.5:** {odd_data['odds']:.2f} ({odd_data['bookmaker']})")
-                        if analise_data:
-                            st.write(f"   Edge: {analise_data.get('edge', 0):+.1f}% | Kelly: {analise_data.get('kelly', 0):.1f}%")
-                
-                # Mostrar todas as odds disponíveis
-                if st.checkbox(f"Mostrar todas as odds para {jogo.home_team} vs {jogo.away_team}", key=f"todas_{jogo.id}"):
-                    self._mostrar_todas_odds(odds)
-    
-    def _mostrar_todas_odds(self, odds_data: dict):
-        """Mostra todas as odds disponíveis para um jogo"""
-        st.write("**📊 Todas as Odds Disponíveis:**")
-        
-        # Casa
-        if odds_data.get("home_odds"):
-            st.write("**Casa:**")
-            for odd in sorted(odds_data["home_odds"], key=lambda x: x["odds"], reverse=True):
-                st.write(f"  {odd['bookmaker']}: {odd['odds']:.2f}")
-        
-        # Fora
-        if odds_data.get("away_odds"):
-            st.write("**Fora:**")
-            for odd in sorted(odds_data["away_odds"], key=lambda x: x["odds"], reverse=True):
-                st.write(f"  {odd['bookmaker']}: {odd['odds']:.2f}")
-        
-        # Empate
-        if odds_data.get("draw_odds"):
-            st.write("**Empate:**")
-            for odd in sorted(odds_data["draw_odds"], key=lambda x: x["odds"], reverse=True):
-                st.write(f"  {odd['bookmaker']}: {odd['odds']:.2f}")
-        
-        # Over/Under
-        if odds_data.get("over_25_odds"):
-            st.write("**Over 2.5:**")
-            for odd in sorted(odds_data["over_25_odds"], key=lambda x: x["odds"], reverse=True):
-                st.write(f"  {odd['bookmaker']}: {odd['odds']:.2f} (linha: {odd.get('line', 2.5)})")
-        
-        if odds_data.get("under_25_odds"):
-            st.write("**Under 2.5:**")
-            for odd in sorted(odds_data["under_25_odds"], key=lambda x: x["odds"], reverse=True):
-                st.write(f"  {odd['bookmaker']}: {odd['odds']:.2f} (linha: {odd.get('line', 2.5)})")
-    
-    def _mostrar_odds_com_valor(self, resultados: list):
-        """Mostra apenas odds com valor positivo"""
-        st.subheader("🎯 Odds com Valor Positivo (Edge > 0%)")
-        
-        jogos_com_valor = []
-        
-        for item in resultados:
-            jogo = item["jogo"]
-            odds = item["odds"]
-            melhores = odds.get("melhores_odds", {})
-            
-            tem_valor = False
-            for mercado in ["home_best", "away_best", "draw_best", "over_25_best", "under_25_best"]:
-                if mercado in melhores:
-                    analise = melhores[mercado].get("analise", {})
-                    if analise.get("valor", False) and analise.get("edge", 0) > 0:
-                        tem_valor = True
-                        break
-            
-            if tem_valor:
-                jogos_com_valor.append(item)
-        
-        if not jogos_com_valor:
-            st.info("ℹ️ Nenhuma odd com valor positivo encontrada")
-            return
-        
-        for item in jogos_com_valor:
-            jogo = item["jogo"]
-            odds = item["odds"]
-            melhores = odds.get("melhores_odds", {})
-            
-            data_br, hora_br = jogo.get_data_hora_brasilia()
-            
-            with st.expander(f"💰 {jogo.home_team} vs {jogo.away_team} - {hora_br}"):
-                st.write(f"**📅 {data_br} | 🏆 {jogo.competition}**")
-                
-                # Mostrar mercados com valor
-                for mercado_key, mercado_nome in [
-                    ("home_best", "Casa"),
-                    ("away_best", "Fora"),
-                    ("draw_best", "Empate"),
-                    ("over_25_best", "Over 2.5"),
-                    ("under_25_best", "Under 2.5")
-                ]:
-                    if mercado_key in melhores:
-                        odd_data = melhores[mercado_key]
-                        analise_data = odd_data.get("analise", {})
-                        
-                        if analise_data.get("valor", False) and analise_data.get("edge", 0) > 0:
-                            cor = analise_data.get("cor", "⚪")
-                            edge = analise_data.get("edge", 0)
-                            kelly = analise_data.get("kelly", 0)
-                            
-                            st.write(f"{cor} **{mercado_nome}:** {odd_data['odds']:.2f} ({odd_data['bookmaker']})")
-                            st.write(f"   📊 Edge: **{edge:+.1f}%** | 🎯 Kelly: **{kelly:.1f}%**")
-                            st.write(f"   📈 Nossa Prob: {analise_data.get('probabilidade_nossa', 0):.1f}%")
-                            st.write(f"   📉 Prob. Implícita: {analise_data.get('probabilidade_implicita', 0):.1f}%")
-                            st.write("---")
-    
-    def _gerar_relatorio_odds(self, resultados: list):
-        """Gera e mostra relatório HTML de odds"""
-        html = self.odds_manager.gerar_relatorio_odds(resultados)
-        
-        # Mostrar preview do HTML
-        st.subheader("📄 Preview do Relatório")
-        st.components.v1.html(html, height=800, scrolling=True)
-        
-        # Opção para baixar
-        st.download_button(
-            label="📥 Baixar Relatório HTML",
-            data=html,
-            file_name=f"relatorio_odds_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html",
-            mime="text/html"
-        )
-        
-        # Opção para enviar por Telegram
-        if st.button("📤 Enviar Relatório por Telegram"):
-            # Converter HTML para texto simplificado para Telegram
-            texto = "📊 RELATÓRIO DE ODDS COM ANÁLISE DE VALOR\n\n"
-            
-            for item in resultados[:10]:  # Limitar a 10 jogos para não exceder limite
-                jogo = item["jogo"]
-                odds = item["odds"]
-                melhores = odds.get("melhores_odds", {})
-                
-                texto += f"🏟️ {jogo.home_team} vs {jogo.away_team}\n"
-                texto += f"🏆 {jogo.competition}\n"
-                
-                for mercado_key, mercado_nome in [
-                    ("home_best", "Casa"),
-                    ("away_best", "Fora"),
-                    ("draw_best", "Empate")
-                ]:
-                    if mercado_key in melhores:
-                        odd_data = melhores[mercado_key]
-                        analise_data = odd_data.get("analise", {})
-                        
-                        if analise_data.get("valor", False):
-                            cor = analise_data.get("cor", "")
-                            edge = analise_data.get("edge", 0)
-                            texto += f"{cor} {mercado_nome}: {odd_data['odds']:.2f} (Edge: {edge:+.1f}%)\n"
-                
-                texto += "\n"
-            
-            if self.telegram_client.enviar_mensagem(texto, self.config.TELEGRAM_CHAT_ID_ALT2):
-                st.success("✅ Relatório enviado para Telegram!")
-    
-    # ==================== FIM DOS MÉTODOS ATUALIZADOS ====================
     
     def _conferir_resultados_tipo(self, tipo_alerta: str, data_busca: str) -> dict:
         """Conferir resultados para um tipo específico de alerta"""
@@ -4060,7 +2980,7 @@ class SistemaAlertasFutebol:
                 
                 for j in jogos_conf:
                     hora_format = j["hora"].strftime("%H:%M") if isinstance(j["hora"], datetime) else str(j["hora"])
-                    favorito_emoji = "🏠" if j.get('favorito') == "home" else "✈️" if j.get('favorito') == "away" else "🤝"
+                    favorito_emoji = "🏠" if j.get('favorito') == "home" else "✈️" if jogo.get('favorito') == "away" else "🤝"
                     favorito_text = j['home'] if j.get('favorito') == "home" else j['away'] if j.get('favorito') == "away" else "EMPATE"
                     
                     msg += (
@@ -4094,8 +3014,13 @@ class SistemaAlertasFutebol:
             logging.error(f"Erro no envio de alerta original: {e}")
             st.error(f"Erro no envio: {e}")
 
+# 
+
+#+=+=+=+=+=+=+=+=+=+++=+=
+
+
 # =============================
-# INTERFACE STREAMLIT (ATUALIZADA)
+# INTERFACE STREAMLIT
 # =============================
 
 def main():
@@ -4163,22 +3088,6 @@ def main():
         )
         
         st.markdown("----")
-        st.header("💰 Configuração de Odds")
-        
-        usar_odds_api = st.checkbox("🔓 Usar API de Odds", value=False)
-        
-        if usar_odds_api:
-            st.info("ℹ️ API de Odds ativada")
-            # Botão para testar conexão
-            if st.button("🔍 Testar Conexão Odds API", type="secondary"):
-                if sistema.odds_client.testar_conexao():
-                    st.success("✅ Conexão com Odds API OK!")
-                else:
-                    st.error("❌ Falha na conexão. Verifique sua API Key.")
-        else:
-            st.warning("⚠️ API de Odds desativada - Configure sua chave em ConfigManager")
-        
-        st.markdown("----")
         st.header("Configurações Gerais")
         top_n = st.selectbox("📊 Jogos no Top", [3, 5, 10], index=0)
         estilo_poster = st.selectbox("🎨 Estilo do Poster", ["West Ham (Novo)", "Elite Master (Original)"], index=0)
@@ -4202,7 +3111,7 @@ def main():
             st.info("🏁 Alertas de resultados: ATIVADO")
     
     # Abas principais
-    tab1, tab2, tab3 = st.tabs(["🔍 Buscar Partidas", "📊 Conferir Resultados", "💰 Odds"])
+    tab1, tab2 = st.tabs(["🔍 Buscar Partidas", "📊 Conferir Resultados"])
     
     with tab1:
         # Controles principais
@@ -4297,145 +3206,6 @@ def main():
             if greens_ht + reds_ht > 0:
                 taxa_ht = (greens_ht / (greens_ht + reds_ht)) * 100
                 st.write(f"✅ {greens_ht} | ❌ {reds_ht} | 📊 {taxa_ht:.1f}%")
-    
-    with tab3:  # ABA DE ODDS ATUALIZADA
-        st.header("💰 Análise de Odds e Valor")
-        
-        # Informações importantes
-        with st.expander("⚠️ Importante: Limitações da Odds API"):
-            st.write("""
-            **A Odds API tem as seguintes limitações:**
-            
-            1. **Não busca por ID único** - Só busca por data/liga
-            2. **Quota limitada** - Cerca de 500 requests/mês no plano gratuito
-            3. **Esportes específicos** - Use mapeamento correto das ligas
-            
-            **Solução implementada:**
-            - Busca por data e liga
-            - Filtra jogos pelo nome dos times
-            - Cache inteligente para economizar quota
-            """)
-        
-        col1_odds, col2_odds = st.columns([2, 1])
-        
-        with col1_odds:
-            data_odds = st.date_input("📅 Data para análise de odds:", value=datetime.today(), key="data_odds")
-        
-        with col2_odds:
-            todas_ligas_odds = st.checkbox("🌍 Todas as ligas", value=False, key="todas_ligas_odds")
-        
-        if not todas_ligas_odds:
-            ligas_odds = st.multiselect(
-                "📌 Selecionar ligas para odds:",
-                options=list(ConfigManager.LIGA_DICT.keys()),
-                default=["Premier League (Inglaterra)"],
-                key="ligas_odds"
-            )
-        else:
-            ligas_odds = []
-        
-        # Modo de busca
-        modo_busca = st.radio(
-            "🔍 Modo de busca:",
-            ["Automático (recomendado)", "Apenas com análise", "Apenas odds diretas"],
-            index=0,
-            help="Automático combina ambas as abordagens para melhores resultados"
-        )
-        
-        col_formato, col_filtro = st.columns(2)
-        
-        with col_formato:
-            formato_saida = st.selectbox(
-                "📋 Formato de Saída:",
-                ["tabela", "relatorio", "valor"],
-                format_func=lambda x: {
-                    "tabela": "📊 Tabela Completa",
-                    "relatorio": "📄 Relatório HTML",
-                    "valor": "🎯 Apenas com Valor"
-                }[x],
-                key="formato_odds"
-            )
-        
-        with col_filtro:
-            mercados_filtro = st.multiselect(
-                "🎯 Filtrar Mercados:",
-                ["Casa", "Fora", "Empate", "Over 2.5", "Under 2.5"],
-                default=["Casa", "Fora", "Empate"],
-                key="filtro_mercados"
-            )
-        
-        # Botão para testar conexão
-        if st.button("🔍 Testar Conexão com Odds API", type="secondary", key="btn_testar_odds"):
-            with st.spinner("Testando conexão..."):
-                if sistema.odds_client.testar_conexao():
-                    # Mostrar estatísticas da API
-                    esportes = sistema.odds_client.obter_esportes_disponiveis()
-                    st.success(f"✅ Conexão OK! {len(esportes)} esportes disponíveis")
-                    
-                    # Mostrar esportes de futebol disponíveis
-                    if esportes:
-                        st.write("**⚽ Esportes de futebol disponíveis:**")
-                        for esporte in esportes[:10]:  # Limitar a 10
-                            st.write(f"- {esporte.get('title')} (`{esporte.get('key')}`)")
-                else:
-                    st.error("❌ Falha na conexão. Verifique sua API Key.")
-        
-        # Botão principal
-        if st.button("💰 Buscar Odds e Analisar Valor", type="primary", key="btn_buscar_odds"):
-            if not todas_ligas_odds and not ligas_odds:
-                st.error("❌ Selecione pelo menos uma liga")
-            else:
-                with st.spinner("🔍 Buscando odds e analisando valor..."):
-                    # Escolher o modo de busca baseado na seleção do usuário
-                    if modo_busca == "Apenas com análise":
-                        resultados = sistema.odds_manager.buscar_odds_com_analise(
-                            data_odds, ligas_odds, todas_ligas_odds
-                        )
-                    elif modo_busca == "Apenas odds diretas":
-                        resultados = sistema.odds_manager.buscar_odds_direto_api(
-                            data_odds, ligas_odds, todas_ligas_odds
-                        )
-                    else:  # Automático (recomendado)
-                        resultados = sistema.buscar_odds_com_analise(
-                            data_odds, ligas_odds, todas_ligas_odds, formato_saida
-                        )
-        
-        # Seção de estatísticas de odds
-        st.markdown("---")
-        st.subheader("📈 Estatísticas de Valor")
-        
-        col_stats1, col_stats2, col_stats3 = st.columns(3)
-        
-        with col_stats1:
-            st.metric("🎯 Edge Médio", "2.5%", "+0.3%")
-        
-        with col_stats2:
-            st.metric("💰 Odds com Valor", "42%", "+5%")
-        
-        with col_stats3:
-            st.metric("📊 Kelly Médio", "3.2%", "-0.1%")
-        
-        # Dicas rápidas
-        with st.expander("💡 Dicas de Análise de Valor"):
-            st.write("""
-            **📊 Como interpretar as métricas:**
-            
-            **🎯 Edge (Vantagem):**
-            - **> 5%**: Alto valor 🟢
-            - **2% - 5%**: Valor moderado 🟡
-            - **0% - 2%**: Pequeno valor 🟠
-            - **< 0%**: Sem valor 🔴
-            
-            **💰 Kelly Criterion:**
-            - **0%**: Não apostar
-            - **1-5%**: Aposta pequena
-            - **5-10%**: Aposta moderada
-            - **> 10%**: Aposta grande
-            
-            **📈 Probabilidade Implícita:**
-            - Calculada como 1 / odds
-            - Comparar com nossa probabilidade estimada
-            """)
     
     # Painel de monitoramento
     st.markdown("---")
