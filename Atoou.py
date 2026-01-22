@@ -14,6 +14,8 @@ from threading import Lock
 import threading
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 import logging
+import math
+
 
 # =============================
 # CLASSES PRINCIPAIS - CORE SYSTEM
