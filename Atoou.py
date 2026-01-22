@@ -15,6 +15,7 @@ import threading
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 import logging
 import urllib.parse
+import math
 
 # =============================
 # NOVAS CLASSES IMPLEMENTADAS
