@@ -16,6 +16,15 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 import logging
 import urllib.parse
 import math
+from dotenv import load_dotenv
+import hashlib
+
+# =============================
+# CONFIGURAÇÃO DE VARIÁVEIS DE AMBIENTE
+# =============================
+
+# Carregar variáveis de ambiente
+load_dotenv()
 
 # =============================
 # NOVAS CLASSES IMPLEMENTADAS
@@ -377,11 +386,12 @@ class MotorDeAlertas:
 class ConfigManager:
     """Gerencia configurações e constantes do sistema"""
     
-    API_KEY = os.getenv("FOOTBALL_API_KEY", "9058de85e3324bdb969adc005b5d918a")
-    TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN","8351165117:AAFmqb3NrPsmT86_8C360eYzK71Qda1ah_4")
-    TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "-1003073115320")
-    TELEGRAM_CHAT_ID_ALT2 = os.getenv("TELEGRAM_CHAT_ID_ALT2", "-1002754276285")
-    ODDS_API_KEY = os.getenv("ODDS_API_KEY", "069cc4a245a65e42f2c59db45012c3d7")
+    # Carregar do .env ou usar valores padrão
+    API_KEY = os.getenv("FOOTBALL_API_KEY", "")
+    TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
+    TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+    TELEGRAM_CHAT_ID_ALT2 = os.getenv("TELEGRAM_CHAT_ID_ALT2", "")
+    ODDS_API_KEY = os.getenv("ODDS_API_KEY", "")
     
     HEADERS = {"X-Auth-Token": API_KEY}
     BASE_URL_FD = "https://api.football-data.org/v4"
@@ -429,6 +439,58 @@ class ConfigManager:
     def get_liga_id(cls, liga_nome):
         """Obtém o ID da liga a partir do nome"""
         return cls.LIGA_DICT.get(liga_nome)
+    
+    @classmethod
+    def validar_configuracao(cls):
+        """Valida se todas as configurações necessárias estão presentes"""
+        faltantes = []
+        
+        if not cls.API_KEY or cls.API_KEY == "":
+            faltantes.append("FOOTBALL_API_KEY")
+        
+        if not cls.TELEGRAM_TOKEN or cls.TELEGRAM_TOKEN == "":
+            faltantes.append("TELEGRAM_TOKEN")
+        
+        if not cls.TELEGRAM_CHAT_ID or cls.TELEGRAM_CHAT_ID == "":
+            faltantes.append("TELEGRAM_CHAT_ID")
+        
+        if not cls.ODDS_API_KEY or cls.ODDS_API_KEY == "":
+            faltantes.append("ODDS_API_KEY")
+        
+        return faltantes
+    
+    @classmethod
+    def testar_apis(cls):
+        """Testa conexão com as APIs"""
+        resultados = {
+            "Football Data API": False,
+            "Telegram API": False,
+            "Odds API": False
+        }
+        
+        # Testar Football Data API
+        try:
+            response = requests.get(f"{cls.BASE_URL_FD}/areas", headers=cls.HEADERS, timeout=10)
+            resultados["Football Data API"] = response.status_code == 200
+        except:
+            pass
+        
+        # Testar Telegram API
+        try:
+            response = requests.get(f"{cls.BASE_URL_TG}/getMe", timeout=10)
+            resultados["Telegram API"] = response.status_code == 200
+        except:
+            pass
+        
+        # Testar Odds API
+        try:
+            url = f"{cls.BASE_URL_ODDS}/sports/?apiKey={cls.ODDS_API_KEY}"
+            response = requests.get(url, timeout=10)
+            resultados["Odds API"] = response.status_code == 200
+        except:
+            pass
+        
+        return resultados
 
 
 class RateLimiter:
@@ -473,6 +535,29 @@ class RateLimiter:
             
             self.requests.append(now)
             self.last_request_time = now
+
+
+class ExponentialBackoffRetry:
+    """Implementa retry com backoff exponencial"""
+    def __init__(self, max_retries=3, base_delay=1, max_delay=60):
+        self.max_retries = max_retries
+        self.base_delay = base_delay
+        self.max_delay = max_delay
+    
+    def execute(self, func, *args, **kwargs):
+        for attempt in range(self.max_retries):
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                if attempt == self.max_retries - 1:
+                    raise e
+                
+                delay = min(
+                    self.base_delay * (2 ** attempt),
+                    self.max_delay
+                )
+                logging.info(f"⏳ Tentativa {attempt + 1} falhou. Esperando {delay}s antes de retry...")
+                time.sleep(delay)
 
 
 class SmartCache:
@@ -525,6 +610,15 @@ class SmartCache:
             self.cache.clear()
             self.timestamps.clear()
             self.ttl_values.clear()
+    
+    def get_stats(self):
+        """Retorna estatísticas do cache"""
+        with self.lock:
+            return {
+                "size": len(self.cache),
+                "max_size": self.config["max_size"],
+                "usage_percentage": (len(self.cache) / self.config["max_size"]) * 100
+            }
 
 
 class APIMonitor:
@@ -644,7 +738,6 @@ class ImageCache:
     
     def _generate_key(self, team_name: str, crest_url: str) -> str:
         """Gera chave única para o cache"""
-        import hashlib
         combined = f"{team_name}_{crest_url}"
         return hashlib.md5(combined.encode()).hexdigest()
     
@@ -676,7 +769,7 @@ class ImageCache:
             return {
                 "memoria": len(self.cache),
                 "max_memoria": self.max_size,
-                "disco_mb": cache_dir_size / (1024*1024) if cache_dir_size > 0 else 0,
+                "disco_mb": round(cache_dir_size / (1024*1024), 2) if cache_dir_size > 0 else 0,
                 "hit_rate": f"{(len(self.cache) / max(self.max_size, 1)) * 100:.1f}%"
             }
 
@@ -693,9 +786,9 @@ class APIOddsClient:
         self.api_monitor = api_monitor
         self.config = ConfigManager()
         self.odds_cache = SmartCache("odds")
+        self.retry_handler = ExponentialBackoffRetry(max_retries=3)
         
         # Mapeamento CORRIGIDO de ligas para sport keys da Odds API
-        # USANDO OS SPORT_KEYS EXATOS DA RESPOSTA DA API
         self.liga_map_corrigido = {
             "PL": "soccer_epl",                          # Premier League
             "BL1": "soccer_germany_bundesliga",          # Bundesliga
@@ -708,70 +801,51 @@ class APIOddsClient:
             "PPL": "soccer_portugal_primeira_liga",      # Primeira Liga
             "DED": "soccer_netherlands_eredivisie",      # Eredivisie
             "WC": "soccer_fifa_world_cup",               # FIFA World Cup
-            "EC": "soccer_euro_championship"             # European Championship (verificar se existe)
+            "EC": "soccer_euro_championship"             # European Championship
         }
     
-    def obter_odds_com_retry(self, url: str, timeout: int = 15, max_retries: int = 3) -> dict | None:
+    def obter_odds_com_retry(self, url: str, timeout: int = 15) -> dict | None:
         """Obtém dados da API de odds com rate limiting e retry"""
-        for attempt in range(max_retries):
-            try:
-                self.rate_limiter.wait_if_needed()
+        def _make_request():
+            self.rate_limiter.wait_if_needed()
+            
+            logging.info(f"💰 Request odds: {url}")
+            
+            response = requests.get(url, timeout=timeout)
+            
+            # Verificar headers da Odds API para quota
+            remaining = response.headers.get('x-requests-remaining', 'unknown')
+            used = response.headers.get('x-requests-used', 'unknown')
+            logging.info(f"📊 Quota Odds API: Restantes={remaining}, Usadas={used}")
+            
+            if response.status_code == 422:
+                # Erro específico - endpoint não suportado
+                logging.error(f"❌ Endpoint não suportado: {url}")
+                raise Exception("Endpoint não suportado pela Odds API")
                 
-                logging.info(f"💰 Request odds {attempt+1}/{max_retries}: {url}")
+            if response.status_code == 404:
+                # Erro 404 - sport key incorreto
+                logging.error(f"❌ Sport key não encontrado (404): {url}")
+                raise Exception("Sport key incorreto")
                 
-                response = requests.get(url, timeout=timeout)
+            if response.status_code == 429:
+                self.api_monitor.log_request(False, True)
+                retry_after = int(response.headers.get('Retry-After', 60))
+                logging.warning(f"⏳ Rate limit da API de odds. Esperando {retry_after} segundos...")
+                time.sleep(retry_after)
+                raise Exception("Rate limit atingido")
                 
-                # Verificar headers da Odds API para quota
-                remaining = response.headers.get('x-requests-remaining', 'unknown')
-                used = response.headers.get('x-requests-used', 'unknown')
-                logging.info(f"📊 Quota Odds API: Restantes={remaining}, Usadas={used}")
-                
-                if response.status_code == 422:
-                    # Erro específico - endpoint não suportado
-                    logging.error(f"❌ Endpoint não suportado: {url}")
-                    st.error("⚠️ Esta funcionalidade não é suportada pela Odds API")
-                    return None
-                    
-                if response.status_code == 404:
-                    # Erro 404 - sport key incorreto
-                    logging.error(f"❌ Sport key não encontrado (404): {url}")
-                    st.error(f"⚠️ Sport key incorreto. Verifique o mapeamento.")
-                    return None
-                    
-                if response.status_code == 429:
-                    self.api_monitor.log_request(False, True)
-                    retry_after = int(response.headers.get('Retry-After', 60))
-                    logging.warning(f"⏳ Rate limit da API de odds. Esperando {retry_after} segundos...")
-                    time.sleep(retry_after)
-                    continue
-                    
-                response.raise_for_status()
-                
-                self.api_monitor.log_request(True)
-                
-                return response.json()
-                
-            except requests.exceptions.Timeout:
-                logging.error(f"⌛ Timeout na tentativa {attempt+1} para {url}")
-                self.api_monitor.log_request(False)
-                
-                if attempt < max_retries - 1:
-                    wait_time = 2 ** attempt
-                    logging.info(f"⏳ Esperando {wait_time}s antes de retry...")
-                    time.sleep(wait_time)
-                    
-            except requests.RequestException as e:
-                logging.error(f"❌ Erro na tentativa {attempt+1} para {url}: {e}")
-                self.api_monitor.log_request(False)
-                
-                if attempt < max_retries - 1:
-                    wait_time = 2 ** attempt
-                    time.sleep(wait_time)
-                else:
-                    st.error(f"❌ Falha após {max_retries} tentativas: {e}")
-                    return None
-                    
-        return None
+            response.raise_for_status()
+            
+            self.api_monitor.log_request(True)
+            
+            return response.json()
+        
+        try:
+            return self.retry_handler.execute(_make_request)
+        except Exception as e:
+            logging.error(f"❌ Falha após retries para {url}: {e}")
+            return None
     
     def obter_odds_ao_vivo(self, liga_id: str = None, mercado: str = "h2h") -> list:
         """Obtém odds ao vivo para jogos específicos - CORRIGIDO"""
@@ -818,7 +892,6 @@ class APIOddsClient:
             
         except Exception as e:
             logging.error(f"❌ Erro crítico ao buscar odds: {e}")
-            st.error(f"Erro ao buscar odds: {str(e)}")
             return []
     
     def obter_odds_por_data_liga(self, data: str, liga_id: str = None, mercado: str = "h2h") -> list:
@@ -982,14 +1055,14 @@ class APIOddsClient:
                 data = response.json()
                 return isinstance(data, list) and len(data) > 0
             elif response.status_code == 401:
-                st.error("❌ API Key inválida ou expirada")
+                logging.error("❌ API Key inválida ou expirada")
                 return False
             else:
-                st.error(f"❌ Erro na conexão: {response.status_code}")
+                logging.error(f"❌ Erro na conexão: {response.status_code}")
                 return False
                 
         except Exception as e:
-            st.error(f"❌ Erro de conexão: {e}")
+            logging.error(f"❌ Erro de conexão: {e}")
             return False
     
     def analisar_valor_aposta(self, odds: float, probabilidade: float) -> dict:
@@ -1523,8 +1596,7 @@ class DataStorage:
                 return dados
         except (json.JSONDecodeError, IOError, Exception) as e:
             logging.error(f"Erro ao carregar {caminho}: {e}")
-            st.error(f"Erro ao carregar {caminho}: {e}")
-        return {}
+            return {}
     
     @staticmethod
     def salvar_json(caminho: str, dados: dict):
@@ -1541,7 +1613,6 @@ class DataStorage:
                 json.dump(dados_serializados, f, ensure_ascii=False, indent=2)
         except IOError as e:
             logging.error(f"Erro ao salvar {caminho}: {e}")
-            st.error(f"Erro ao salvar {caminho}: {e}")
     
     @staticmethod
     def carregar_alertas() -> dict:
@@ -1633,7 +1704,6 @@ class DataStorage:
                 json.dump(historico, f, ensure_ascii=False, indent=2)
         except Exception as e:
             logging.error(f"Erro ao salvar histórico: {e}")
-            st.error(f"Erro ao salvar histórico: {e}")
 
 
 # =============================
@@ -1914,9 +1984,6 @@ class Alerta:
 
 
 # =============================
-# CLASSES DE ANÁLISE
-# =============================
-# =============================
 # FUNÇÕES AUXILIARES
 # =============================
 
@@ -2138,9 +2205,6 @@ class AnalisadorTendencia:
         }
 
 
-
-
-
 # =============================
 # CLASSES DE COMUNICAÇÃO
 # =============================
@@ -2156,58 +2220,42 @@ class APIClient:
         self.classificacao_cache = SmartCache("classificacao")
         self.match_cache = SmartCache("match_details")
         self.image_cache = ImageCache()
+        self.retry_handler = ExponentialBackoffRetry(max_retries=3)
     
-    def obter_dados_api_com_retry(self, url: str, timeout: int = 15, max_retries: int = 3) -> dict | None:
+    def obter_dados_api_com_retry(self, url: str, timeout: int = 15) -> dict | None:
         """Obtém dados da API com rate limiting e retry automático"""
-        for attempt in range(max_retries):
-            try:
-                self.rate_limiter.wait_if_needed()
+        def _make_request():
+            self.rate_limiter.wait_if_needed()
+            
+            logging.info(f"🔗 Request: {url}")
+            
+            response = requests.get(url, headers=self.config.HEADERS, timeout=timeout)
+            
+            if response.status_code == 429:
+                self.api_monitor.log_request(False, True)
+                retry_after = int(response.headers.get('Retry-After', 60))
+                logging.warning(f"⏳ Rate limit da API. Esperando {retry_after} segundos...")
+                time.sleep(retry_after)
+                raise Exception("Rate limit atingido")
                 
-                logging.info(f"🔗 Request {attempt+1}/{max_retries}: {url}")
-                
-                response = requests.get(url, headers=self.config.HEADERS, timeout=timeout)
-                
-                if response.status_code == 429:
-                    self.api_monitor.log_request(False, True)
-                    retry_after = int(response.headers.get('Retry-After', 60))
-                    logging.warning(f"⏳ Rate limit da API. Esperando {retry_after} segundos...")
-                    time.sleep(retry_after)
-                    continue
-                    
-                response.raise_for_status()
-                
-                self.api_monitor.log_request(True)
-                
-                remaining = response.headers.get('X-Requests-Remaining', 'unknown')
-                reset_time = response.headers.get('X-RequestCounter-Reset', 'unknown')
-                logging.info(f"✅ Request OK. Restantes: {remaining}, Reset: {reset_time}s")
-                
-                return response.json()
-                
-            except requests.exceptions.Timeout:
-                logging.error(f"⌛ Timeout na tentativa {attempt+1} para {url}")
-                self.api_monitor.log_request(False)
-                
-                if attempt < max_retries - 1:
-                    wait_time = 2 ** attempt
-                    logging.info(f"⏳ Esperando {wait_time}s antes de retry...")
-                    time.sleep(wait_time)
-                    
-            except requests.RequestException as e:
-                logging.error(f"❌ Erro na tentativa {attempt+1} para {url}: {e}")
-                self.api_monitor.log_request(False)
-                
-                if attempt < max_retries - 1:
-                    wait_time = 2 ** attempt
-                    time.sleep(wait_time)
-                else:
-                    st.error(f"❌ Falha após {max_retries} tentativas: {e}")
-                    return None
-                    
-        return None
+            response.raise_for_status()
+            
+            self.api_monitor.log_request(True)
+            
+            remaining = response.headers.get('X-Requests-Remaining', 'unknown')
+            reset_time = response.headers.get('X-RequestCounter-Reset', 'unknown')
+            logging.info(f"✅ Request OK. Restantes: {remaining}, Reset: {reset_time}s")
+            
+            return response.json()
+        
+        try:
+            return self.retry_handler.execute(_make_request)
+        except Exception as e:
+            logging.error(f"❌ Falha após retries para {url}: {e}")
+            return None
     
     def obter_dados_api(self, url: str, timeout: int = 15) -> dict | None:
-        return self.obter_dados_api_com_retry(url, timeout, max_retries=3)
+        return self.obter_dados_api_com_retry(url, timeout)
     
     def obter_classificacao(self, liga_id: str) -> dict:
         """Obtém classificação com cache inteligente"""
@@ -2362,13 +2410,14 @@ class TelegramClient:
     
     def __init__(self):
         self.config = ConfigManager()
+        self.retry_handler = ExponentialBackoffRetry(max_retries=3)
     
     def enviar_mensagem(self, msg: str, chat_id: str = None, disable_web_page_preview: bool = True) -> bool:
         """Envia mensagem para o Telegram"""
         if chat_id is None:
             chat_id = self.config.TELEGRAM_CHAT_ID
         
-        try:
+        def _send():
             params = {
                 "chat_id": chat_id,
                 "text": msg,
@@ -2377,9 +2426,11 @@ class TelegramClient:
             }
             response = requests.get(f"{self.config.BASE_URL_TG}/sendMessage", params=params, timeout=10)
             return response.status_code == 200
-        except requests.RequestException as e:
+        
+        try:
+            return self.retry_handler.execute(_send)
+        except Exception as e:
             logging.error(f"Erro ao enviar para Telegram: {e}")
-            st.error(f"Erro ao enviar para Telegram: {e}")
             return False
     
     def enviar_foto(self, photo_bytes: io.BytesIO, caption: str = "", chat_id: str = None) -> bool:
@@ -2387,15 +2438,17 @@ class TelegramClient:
         if chat_id is None:
             chat_id = self.config.TELEGRAM_CHAT_ID_ALT2
         
-        try:
+        def _send():
             photo_bytes.seek(0)
             files = {"photo": ("elite_master.png", photo_bytes, "image/png")}
             data = {"chat_id": chat_id, "caption": caption, "parse_mode": "HTML"}
             resp = requests.post(f"{self.config.BASE_URL_TG}/sendPhoto", data=data, files=files, timeout=15)
             return resp.status_code == 200
-        except requests.RequestException as e:
+        
+        try:
+            return self.retry_handler.execute(_send)
+        except Exception as e:
             logging.error(f"Erro ao enviar foto para Telegram: {e}")
-            st.error(f"Erro ao enviar foto para Telegram: {e}")
             return False
 
 
@@ -2406,7 +2459,19 @@ class TelegramClient:
 class SistemaAlertasFutebol:
     """Sistema principal de alertas de futebol - ATUALIZADO COM NOVAS CLASSES"""
     
+    _instance = None
+    _lock = Lock()
+    
+    def __new__(cls):
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = super().__new__(cls)
+            return cls._instance
+    
     def __init__(self):
+        if hasattr(self, '_initialized'):
+            return
+            
         self.config = ConfigManager()
         self.rate_limiter = RateLimiter()
         self.api_monitor = APIMonitor()
@@ -2428,22 +2493,39 @@ class SistemaAlertasFutebol:
         
         # Inicializar logging
         self._setup_logging()
+        
+        self._initialized = True
     
     def _setup_logging(self):
         """Configura o sistema de logging"""
         logging.basicConfig(
             level=logging.INFO,
-            format='%(asctime)s - %(levelname)s - %(message)s',
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
             handlers=[
                 logging.FileHandler('sistema_alertas.log'),
                 logging.StreamHandler()
             ]
         )
     
+    def validar_configuracao(self):
+        """Valida se todas as configurações necessárias estão presentes"""
+        return self.config.validar_configuracao()
+    
+    def testar_conexoes(self):
+        """Testa conexão com todas as APIs"""
+        return self.config.testar_apis()
+    
     def processar_jogos(self, data_selecionada, ligas_selecionadas, todas_ligas, top_n, min_conf, 
                        max_conf, estilo_poster, alerta_individual, alerta_poster, alerta_top_jogos,
                        formato_top_jogos, tipo_filtro, tipo_analise, config_analise):
         """Processa jogos e gera alertas - ATUALIZADO COM NOVO SISTEMA"""
+        # Validar configuração primeiro
+        faltantes = self.validar_configuracao()
+        if faltantes:
+            st.error(f"❌ Configurações faltando: {', '.join(faltantes)}")
+            st.info("ℹ️ Configure as variáveis de ambiente em um arquivo .env")
+            return
+        
         hoje = data_selecionada.strftime("%Y-%m-%d")
         
         if todas_ligas:
@@ -4536,10 +4618,36 @@ def main():
     st.set_page_config(page_title="⚽ Sistema Completo de Alertas", layout="wide")
     st.title("⚽ Sistema Completo de Alertas de Futebol")
     
-    # Inicializar sistema
+    # Inicializar sistema (Singleton)
     sistema = SistemaAlertasFutebol()
     
-    # Sidebar
+    # Verificar configuração
+    st.sidebar.header("🔧 Configuração")
+    if st.sidebar.button("🔄 Validar Configuração"):
+        faltantes = sistema.validar_configuracao()
+        if faltantes:
+            st.sidebar.error(f"❌ Configurações faltando: {', '.join(faltantes)}")
+            st.sidebar.info("ℹ️ Crie um arquivo .env com as seguintes variáveis:")
+            st.sidebar.code("""
+FOOTBALL_API_KEY=sua_chave_aqui
+TELEGRAM_TOKEN=seu_token_aqui
+TELEGRAM_CHAT_ID=seu_chat_id_aqui
+TELEGRAM_CHAT_ID_ALT2=outro_chat_id_aqui
+ODDS_API_KEY=sua_chave_odds_aqui
+            """)
+        else:
+            st.sidebar.success("✅ Todas as configurações estão presentes!")
+            
+            # Testar conexões
+            if st.sidebar.button("🔍 Testar Conexões"):
+                resultados = sistema.testar_conexoes()
+                for api, status in resultados.items():
+                    if status:
+                        st.sidebar.success(f"✅ {api}: Conectado")
+                    else:
+                        st.sidebar.error(f"❌ {api}: Falha na conexão")
+    
+    # Sidebar principal
     with st.sidebar:
         st.header("🔔 Configurações de Alertas")
         
@@ -4613,7 +4721,7 @@ def main():
                 else:
                     st.error("❌ Falha na conexão. Verifique sua API Key.")
         else:
-            st.warning("⚠️ API de Odds desativada - Configure sua chave em ConfigManager")
+            st.warning("⚠️ API de Odds desativada - Configure sua chave no arquivo .env")
         
         st.markdown("----")
         st.header("Configurações Gerais")
@@ -4975,19 +5083,22 @@ def main():
     
     # Painel de monitoramento
     st.markdown("---")
-    st.subheader("📊 Monitoramento da API")
+    st.subheader("📊 Monitoramento do Sistema")
     
     col_mon1, col_mon2, col_mon3, col_mon4 = st.columns(4)
     
-    stats = sistema.api_monitor.get_stats()
+    stats_api = sistema.api_monitor.get_stats()
+    cache_stats = sistema.image_cache.get_stats()
+    
     with col_mon1:
-        st.metric("Total Requests", stats["total_requests"])
+        st.metric("Total Requests", stats_api["total_requests"])
     with col_mon2:
-        st.metric("Taxa de Sucesso", f"{stats['success_rate']}%")
+        st.metric("Taxa de Sucesso", f"{stats_api['success_rate']}%")
     with col_mon3:
-        st.metric("Requests/min", stats["requests_per_minute"])
+        st.metric("Cache Hit Rate", cache_stats["hit_rate"])
     with col_mon4:
-        st.metric("Rate Limit Hits", stats["rate_limit_hits"])
+        st.metric("Cache Disco", f"{cache_stats['disco_mb']} MB")
+
 
 if __name__ == "__main__":
     main()
