@@ -1256,7 +1256,7 @@ class PosterGenerator:
     
     def gerar_poster_westham_style(self, jogos: list, titulo: str = " ALERTA DE GOLS", tipo_alerta: str = "over_under") -> io.BytesIO:
         """Gera poster no estilo West Ham"""
-        LARGURA = 2000
+        LARGURA = 1900
         ALTURA_TOPO = 270
         ALTURA_POR_JOGO = 1050
         PADDING = 80
@@ -1476,7 +1476,7 @@ class PosterGenerator:
     
     def gerar_poster_resultados(self, jogos_com_resultados: list, tipo_alerta: str = "over_under") -> io.BytesIO:
         """Gera poster de resultados no estilo West Ham com GREEN/RED destacado"""
-        LARGURA = 2000
+        LARGURA = 1900
         ALTURA_TOPO = 330
         ALTURA_POR_JOGO = 800 # Aumentei um pouco para acomodar o badge GREEN/RED
         PADDING = 80
