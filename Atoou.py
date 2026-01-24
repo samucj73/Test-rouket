@@ -751,6 +751,105 @@ def sigmoid(x):
 # =============================
 # CLASSE DE ANÁLISE DE TENDÊNCIA
 # =============================
+
+class AnalisadorEstatistico:
+    """Realiza análises estatísticas para previsões"""
+
+    @staticmethod
+    def calcular_probabilidade_vitoria(home: str, away: str, classificacao: dict) -> dict:
+        """Calcula probabilidade de vitória, empate e derrota"""
+
+        dados_home = classificacao.get(home, {
+            "wins": 0, "draws": 0, "losses": 0,
+            "played": 1, "scored": 0, "against": 0
+        })
+        dados_away = classificacao.get(away, {
+            "wins": 0, "draws": 0, "losses": 0,
+            "played": 1, "scored": 0, "against": 0
+        })
+
+        played_home = max(dados_home["played"], 1)
+        played_away = max(dados_away["played"], 1)
+
+        win_rate_home = dados_home["wins"] / played_home
+        win_rate_away = dados_away["wins"] / played_away
+        draw_rate_home = dados_home["draws"] / played_home
+        draw_rate_away = dados_away["draws"] / played_away
+
+        saldo_home = (dados_home["scored"] - dados_home["against"]) / played_home
+        saldo_away = (dados_away["scored"] - dados_away["against"]) / played_away
+
+        fator_casa = clamp(1.05 + saldo_home * 0.1, 1.0, 1.2)
+        fator_fora = 2.0 - fator_casa
+
+        prob_home = (win_rate_home * fator_casa + (1 - win_rate_away) * fator_fora) * 50
+        prob_away = (win_rate_away * fator_fora + (1 - win_rate_home) * fator_casa) * 50
+        prob_draw = ((draw_rate_home + draw_rate_away) / 2) * 100
+
+        if abs(prob_home - prob_away) < 5:
+            prob_draw *= 0.85
+
+        total = prob_home + prob_away + prob_draw
+        if total > 0:
+            prob_home = (prob_home / total) * 100
+            prob_away = (prob_away / total) * 100
+            prob_draw = (prob_draw / total) * 100
+
+        prob_home = clamp(prob_home, 5, 90)
+        prob_away = clamp(prob_away, 5, 90)
+        prob_draw = clamp(prob_draw, 5, 90)
+
+        if prob_home > prob_away and prob_home > prob_draw:
+            favorito = "home"
+        elif prob_away > prob_home and prob_away > prob_draw:
+            favorito = "away"
+        else:
+            favorito = "draw"
+
+        confianca_vitoria = max(prob_home, prob_away, prob_draw)
+
+        return {
+            "home_win": round(prob_home, 1),
+            "away_win": round(prob_away, 1),
+            "draw": round(prob_draw, 1),
+            "favorito": favorito,
+            "confianca_vitoria": round(confianca_vitoria, 1)
+        }
+
+    @staticmethod
+    def calcular_probabilidade_gols_ht(home: str, away: str, classificacao: dict) -> dict:
+        """Calcula probabilidade de gols no primeiro tempo (HT)"""
+
+        dados_home = classificacao.get(home, {"scored": 0, "played": 1})
+        dados_away = classificacao.get(away, {"scored": 0, "played": 1})
+
+        played_home = max(dados_home["played"], 1)
+        played_away = max(dados_away["played"], 1)
+
+        media_home = dados_home["scored"] / played_home
+        media_away = dados_away["scored"] / played_away
+
+        estimativa_total_ht = (media_home + media_away) * 0.45
+        estimativa_total_ht = clamp(estimativa_total_ht, 0.2, 1.8)
+
+        prob_over_05_ht = sigmoid((estimativa_total_ht - 0.5) * 3) * 100
+        prob_over_15_ht = sigmoid((estimativa_total_ht - 1.2) * 3) * 100
+
+        if estimativa_total_ht > 1.1:
+            tendencia_ht = "OVER 1.5 HT"
+        elif estimativa_total_ht > 0.6:
+            tendencia_ht = "OVER 0.5 HT"
+        else:
+            tendencia_ht = "UNDER 0.5 HT"
+
+        confianca_ht = clamp(max(prob_over_05_ht, prob_over_15_ht) * 0.85, 40, 85)
+
+        return {
+            "estimativa_total_ht": round(estimativa_total_ht, 2),
+            "tendencia_ht": tendencia_ht,
+            "confianca_ht": round(confianca_ht, 1),
+            "over_05_ht": round(prob_over_05_ht, 1),
+            "over_15_ht": round(
 class AnalisadorTendencia:
     """Analisa tendências de gols em partidas"""
 
