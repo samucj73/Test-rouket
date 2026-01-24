@@ -946,18 +946,38 @@ class AnalisadorTendencia:
         # -----------------------------
         # JOGO EXPLOSIVO (DECISÃO DIRETA)
         # -----------------------------
+                # -----------------------------
+        # JOGO EXPLOSIVO (DECISÃO SEGURA)
+        # -----------------------------
 
         explosivo = DetectorJogoExplosivo.avaliar(
             estimativa, mh_f, ma_f, mh_s, ma_s, p25, p35
         )
 
-        if explosivo:
+        prob_under_15 = 1 - p15
+        prob_under_25 = 1 - p25
+
+        # 🔒 UNDER FORTE TEM PRIORIDADE
+        if prob_under_15 >= 0.68:
+            tendencia = "UNDER 1.5"
+            prob_base = prob_under_15
+            explosivo = False
+
+        elif prob_under_25 >= 0.65:
+            tendencia = "UNDER 2.5"
+            prob_base = prob_under_25
+            explosivo = False
+
+        # 🔥 SÓ DEPOIS DISSO O EXPLOSIVO PODE AGIR
+        elif explosivo:
             if estimativa >= 3.0 and p35 >= 0.50:
                 tendencia = "OVER 3.5"
                 prob_base = p35
             else:
                 tendencia = "OVER 2.5"
                 prob_base = p25
+
+        
 
         # -----------------------------
         # CONFIANÇA FINAL
