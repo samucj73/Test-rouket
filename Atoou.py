@@ -737,10 +737,7 @@ class Alerta:
         
         return alerta_dict
 
-# =============================
-# CLASSES DE ANÁLISE
-# =============================
-# =============================
+## =============================
 # FUNÇÕES AUXILIARES
 # =============================
 
@@ -752,7 +749,7 @@ def sigmoid(x):
 
 
 # =============================
-# CLASSES DE ANÁLISE
+# CLASSE DE ANÁLISE DE TENDÊNCIA
 # =============================
 class AnalisadorTendencia:
     """Analisa tendências de gols em partidas"""
@@ -761,7 +758,7 @@ class AnalisadorTendencia:
         self.classificacao = classificacao
 
     def calcular_tendencia_completa(self, home: str, away: str) -> dict:
-        """Calcula tendências completas com análise refinada"""
+        """Calcula tendências completas com calibração avançada"""
 
         dados_home = self.classificacao.get(home, {})
         dados_away = self.classificacao.get(away, {})
@@ -788,6 +785,7 @@ class AnalisadorTendencia:
             1.05 + (media_home_feitos - media_home_sofridos) * 0.1,
             1.0, 1.2
         )
+
         estimativa_total *= fator_casa
         estimativa_total = clamp(estimativa_total, 0.8, 4.5)
 
@@ -795,7 +793,7 @@ class AnalisadorTendencia:
         estimativa_total = estimativa_total * 0.75 + media_liga * 0.25
 
         # =============================
-        # PROBABILIDADES
+        # PROBABILIDADES (SIGMOID)
         # =============================
         prob_over_15 = sigmoid((estimativa_total - 1.5) * 1.5)
         prob_over_25 = sigmoid((estimativa_total - 2.5) * 1.4)
@@ -805,24 +803,40 @@ class AnalisadorTendencia:
         prob_under_25 = 1 - prob_over_25
 
         # =============================
-        # DEFINIÇÃO DA TENDÊNCIA BASE
+        # MÉTRICAS AUXILIARES
+        # =============================
+        soma_ofensiva = media_home_feitos + media_away_feitos
+        fragilidade_def = media_home_sofridos + media_away_sofridos
+        ratio_35_25 = prob_over_35 / max(prob_over_25, 0.01)
+
+        # =============================
+        # DEFINIÇÃO DA TENDÊNCIA (CALIBRADA)
         # =============================
         if prob_under_15 > 0.65:
             tendencia_principal = "UNDER 1.5"
             tipo_aposta = "under"
             probabilidade_base = prob_under_15
+
         elif prob_under_25 > 0.60:
             tendencia_principal = "UNDER 2.5"
             tipo_aposta = "under"
             probabilidade_base = prob_under_25
-        elif prob_over_35 > 0.55:
+
+        elif (
+            estimativa_total >= 3.10 and
+            prob_over_35 >= 0.57 and
+            soma_ofensiva >= 2.6 and
+            ratio_35_25 >= 0.82
+        ):
             tendencia_principal = "OVER 3.5"
             tipo_aposta = "over"
             probabilidade_base = prob_over_35
-        elif prob_over_25 > 0.60:
+
+        elif prob_over_25 > 0.62:
             tendencia_principal = "OVER 2.5"
             tipo_aposta = "over"
             probabilidade_base = prob_over_25
+
         else:
             tendencia_principal = "OVER 1.5"
             tipo_aposta = "over"
@@ -832,10 +846,13 @@ class AnalisadorTendencia:
         # CONFIANÇA BASE
         # =============================
         sinais_concordantes = 0
-        if tipo_aposta == "over" and estimativa_total > 2.0:
+
+        if tipo_aposta == "over" and estimativa_total > 2.2:
             sinais_concordantes += 1
+
         if tipo_aposta == "under" and estimativa_total < 2.3:
             sinais_concordantes += 1
+
         if probabilidade_base > 0.65:
             sinais_concordantes += 1
 
@@ -846,33 +863,32 @@ class AnalisadorTendencia:
 
         # =============================
         # 🔥 DETECÇÃO DE JOGO EXPLOSIVO
-        # (SÓ SE FOR OVER 3.5)
+        # (SOMENTE OVER 3.5)
         # =============================
         jogo_explosivo = False
 
         if tendencia_principal == "OVER 3.5":
-            soma_ofensiva = media_home_feitos + media_away_feitos
-
             if (
-                estimativa_total >= 3.2 and
-                prob_over_35 >= 0.58 and
-                soma_ofensiva >= 2.4
+                estimativa_total >= 3.25 and
+                prob_over_35 >= 0.60 and
+                soma_ofensiva >= 2.8
             ):
                 jogo_explosivo = True
                 confianca = clamp(confianca + 6, 50, 95)
 
         # =============================
-        # ANÁLISES AUXILIARES
+        # ANÁLISES AUXILIARES (FLUXO ORIGINAL)
         # =============================
         vitoria_analise = AnalisadorEstatistico.calcular_probabilidade_vitoria(
             home, away, self.classificacao
         )
+
         ht_analise = AnalisadorEstatistico.calcular_probabilidade_gols_ht(
             home, away, self.classificacao
         )
 
         logging.info(
-            f"ANÁLISE COMPLETA: {home} vs {away} | "
+            f"ANÁLISE: {home} vs {away} | "
             f"Est: {estimativa_total:.2f} | "
             f"Tend: {tendencia_principal} | "
             f"Explosivo: {jogo_explosivo} | "
@@ -896,9 +912,6 @@ class AnalisadorTendencia:
                 "under_25_prob": round(prob_under_25 * 100, 1)
             }
         }
-
-
-
     
 
 # =============================
