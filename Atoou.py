@@ -744,6 +744,9 @@ class Alerta:
 # FUNÇÕES AUXILIARES
 # =============================
 
+import math
+import logging
+
 def clamp(valor, minimo, maximo):
     return max(minimo, min(maximo, valor))
 
@@ -760,7 +763,6 @@ class AnalisadorEstatistico:
 
     @staticmethod
     def calcular_probabilidade_vitoria(home: str, away: str, classificacao: dict) -> dict:
-        """Calcula probabilidade de vitória, empate e derrota"""
 
         dados_home = classificacao.get(home, {
             "wins": 0, "draws": 0, "losses": 0,
@@ -802,12 +804,11 @@ class AnalisadorEstatistico:
         prob_away = clamp(prob_away, 5, 90)
         prob_draw = clamp(prob_draw, 5, 90)
 
-        if prob_home > prob_away and prob_home > prob_draw:
-            favorito = "home"
-        elif prob_away > prob_home and prob_away > prob_draw:
-            favorito = "away"
-        else:
-            favorito = "draw"
+        favorito = (
+            "home" if prob_home > prob_away and prob_home > prob_draw
+            else "away" if prob_away > prob_home and prob_away > prob_draw
+            else "draw"
+        )
 
         confianca_vitoria = max(prob_home, prob_away, prob_draw)
 
@@ -819,147 +820,184 @@ class AnalisadorEstatistico:
             "confianca_vitoria": round(confianca_vitoria, 1)
         }
 
+
+class AnalisadorHT:
+    """Probabilidade de gols no primeiro tempo"""
+
     @staticmethod
-    def calcular_probabilidade_gols_ht(home: str, away: str, classificacao: dict) -> dict:
-        """Calcula probabilidade de gols no primeiro tempo (HT)"""
+    def calcular(home: str, away: str, classificacao: dict) -> dict:
 
         dados_home = classificacao.get(home, {"scored": 0, "played": 1})
         dados_away = classificacao.get(away, {"scored": 0, "played": 1})
 
-        played_home = max(dados_home["played"], 1)
-        played_away = max(dados_away["played"], 1)
+        media_home = dados_home["scored"] / max(dados_home["played"], 1)
+        media_away = dados_away["scored"] / max(dados_away["played"], 1)
 
-        media_home = dados_home["scored"] / played_home
-        media_away = dados_away["scored"] / played_away
+        estimativa_ht = clamp((media_home + media_away) * 0.45, 0.2, 1.8)
 
-        estimativa_total_ht = (media_home + media_away) * 0.45
-        estimativa_total_ht = clamp(estimativa_total_ht, 0.2, 1.8)
+        prob_05 = sigmoid((estimativa_ht - 0.5) * 3) * 100
+        prob_15 = sigmoid((estimativa_ht - 1.2) * 3) * 100
 
-        prob_over_05_ht = sigmoid((estimativa_total_ht - 0.5) * 3) * 100
-        prob_over_15_ht = sigmoid((estimativa_total_ht - 1.2) * 3) * 100
+        tendencia = (
+            "OVER 1.5 HT" if estimativa_ht > 1.1
+            else "OVER 0.5 HT" if estimativa_ht > 0.6
+            else "UNDER 0.5 HT"
+        )
 
-        if estimativa_total_ht > 1.1:
-            tendencia_ht = "OVER 1.5 HT"
-        elif estimativa_total_ht > 0.6:
-            tendencia_ht = "OVER 0.5 HT"
-        else:
-            tendencia_ht = "UNDER 0.5 HT"
-
-        confianca_ht = clamp(max(prob_over_05_ht, prob_over_15_ht) * 0.85, 40, 85)
+        confianca = clamp(max(prob_05, prob_15) * 0.85, 40, 85)
 
         return {
-            "estimativa_total_ht": round(estimativa_total_ht, 2),
-            "tendencia_ht": tendencia_ht,
-            "confianca_ht": round(confianca_ht, 1),
-            "over_05_ht": round(prob_over_05_ht, 1),
-            "over_15_ht": round(prob_over_15_ht, 1)
+            "estimativa_ht": round(estimativa_ht, 2),
+            "tendencia_ht": tendencia,
+            "confianca_ht": round(confianca, 1),
+            "over_05_ht": round(prob_05, 1),
+            "over_15_ht": round(prob_15, 1)
         }
 
 
+# =============================
+# DETECTOR DE JOGO EXPLOSIVO
+# =============================
+
+class DetectorJogoExplosivo:
+    """Decide se o jogo deve subir automaticamente a linha de gols"""
+
+    @staticmethod
+    def avaliar(
+        estimativa_total,
+        media_home_feitos,
+        media_away_feitos,
+        media_home_sofridos,
+        media_away_sofridos,
+        prob_over_25,
+        prob_over_35
+    ) -> bool:
+
+        gatilhos = 0
+
+        if estimativa_total >= 2.8:
+            gatilhos += 1
+        if media_home_feitos >= 1.6 and media_away_feitos >= 1.3:
+            gatilhos += 1
+        if media_home_sofridos >= 1.3 and media_away_sofridos >= 1.3:
+            gatilhos += 1
+        if prob_over_25 >= 0.65:
+            gatilhos += 1
+        if prob_over_35 >= 0.45:
+            gatilhos += 1
+
+        return gatilhos >= 3
+
+
+# =============================
+# ANÁLISE PRINCIPAL (FINAL)
+# =============================
+
 class AnalisadorTendencia:
-    """Analisa tendências de gols em partidas"""
+    """Analisa tendência de gols com decisão direta"""
 
     def __init__(self, classificacao: dict):
         self.classificacao = classificacao
 
     def calcular_tendencia_completa(self, home: str, away: str) -> dict:
-        """Calcula tendências completas com análise refinada"""
 
-        dados_home = self.classificacao.get(home, {})
-        dados_away = self.classificacao.get(away, {})
+        d_home = self.classificacao.get(home, {})
+        d_away = self.classificacao.get(away, {})
 
-        played_home = max(dados_home.get("played", 1), 1)
-        played_away = max(dados_away.get("played", 1), 1)
+        ph = max(d_home.get("played", 1), 1)
+        pa = max(d_away.get("played", 1), 1)
 
-        media_home_feitos = dados_home.get("scored", 0) / played_home
-        media_home_sofridos = dados_home.get("against", 0) / played_home
-        media_away_feitos = dados_away.get("scored", 0) / played_away
-        media_away_sofridos = dados_away.get("against", 0) / played_away
+        mh_f = d_home.get("scored", 0) / ph
+        mh_s = d_home.get("against", 0) / ph
+        ma_f = d_away.get("scored", 0) / pa
+        ma_s = d_away.get("against", 0) / pa
 
-        estimativa_total = (
-            media_home_feitos * 0.55 +
-            media_away_feitos * 0.45 +
-            media_home_sofridos * 0.35 +
-            media_away_sofridos * 0.35
+        estimativa = (
+            mh_f * 0.55 + ma_f * 0.45 +
+            mh_s * 0.35 + ma_s * 0.35
         )
 
-        fator_casa = clamp(1.05 + (media_home_feitos - media_home_sofridos) * 0.1, 1.0, 1.2)
-        estimativa_total *= fator_casa
+        fator_casa = clamp(1.05 + (mh_f - mh_s) * 0.1, 1.0, 1.2)
+        estimativa = clamp(estimativa * fator_casa, 0.8, 4.5)
 
-        estimativa_total = clamp(estimativa_total, 0.8, 4.5)
+        estimativa = estimativa * 0.75 + 2.5 * 0.25
 
-        media_liga = 2.5
-        estimativa_total = estimativa_total * 0.75 + media_liga * 0.25
+        p15 = sigmoid((estimativa - 1.5) * 1.5)
+        p25 = sigmoid((estimativa - 2.5) * 1.4)
+        p35 = sigmoid((estimativa - 3.5) * 1.3)
 
-        prob_over_15 = sigmoid((estimativa_total - 1.5) * 1.5)
-        prob_over_25 = sigmoid((estimativa_total - 2.5) * 1.4)
-        prob_over_35 = sigmoid((estimativa_total - 3.5) * 1.3)
+        # -----------------------------
+        # DECISÃO BASE
+        # -----------------------------
 
-        prob_under_15 = 1 - prob_over_15
-        prob_under_25 = 1 - prob_over_25
+        tendencia = "OVER 1.5"
+        prob_base = p15
 
-        if prob_under_15 > 0.65:
-            tendencia_principal = "UNDER 1.5"
-            tipo_aposta = "under"
-            probabilidade_base = prob_under_15
-        elif prob_under_25 > 0.60:
-            tendencia_principal = "UNDER 2.5"
-            tipo_aposta = "under"
-            probabilidade_base = prob_under_25
-        elif prob_over_35 > 0.55:
-            tendencia_principal = "OVER 3.5"
-            tipo_aposta = "over"
-            probabilidade_base = prob_over_35
-        elif prob_over_25 > 0.60:
-            tendencia_principal = "OVER 2.5"
-            tipo_aposta = "over"
-            probabilidade_base = prob_over_25
-        else:
-            tendencia_principal = "OVER 1.5"
-            tipo_aposta = "over"
-            probabilidade_base = prob_over_15
+        if p35 > 0.55:
+            tendencia = "OVER 3.5"
+            prob_base = p35
+        elif p25 > 0.60:
+            tendencia = "OVER 2.5"
+            prob_base = p25
+        elif (1 - p15) > 0.65:
+            tendencia = "UNDER 1.5"
+            prob_base = 1 - p15
 
-        sinais_concordantes = 0
-        if tipo_aposta == "over" and estimativa_total > 2.0:
-            sinais_concordantes += 1
-        if tipo_aposta == "under" and estimativa_total < 2.3:
-            sinais_concordantes += 1
-        if probabilidade_base > 0.65:
-            sinais_concordantes += 1
+        # -----------------------------
+        # JOGO EXPLOSIVO (DECISÃO DIRETA)
+        # -----------------------------
 
-        confianca = clamp((probabilidade_base * 100) * 0.6 + sinais_concordantes * 15, 45, 92)
-
-        vitoria_analise = AnalisadorEstatistico.calcular_probabilidade_vitoria(
-            home, away, self.classificacao
+        explosivo = DetectorJogoExplosivo.avaliar(
+            estimativa, mh_f, ma_f, mh_s, ma_s, p25, p35
         )
-        ht_analise = AnalisadorEstatistico.calcular_probabilidade_gols_ht(
-            home, away, self.classificacao
-        )
+
+        if explosivo:
+            if estimativa >= 3.0 and p35 >= 0.50:
+                tendencia = "OVER 3.5"
+                prob_base = p35
+            else:
+                tendencia = "OVER 2.5"
+                prob_base = p25
+
+        # -----------------------------
+        # CONFIANÇA FINAL
+        # -----------------------------
+
+        sinais = 0
+        if estimativa >= 2.8:
+            sinais += 1
+        if prob_base >= 0.60:
+            sinais += 1
+        if explosivo:
+            sinais += 1
+
+        confianca = clamp((prob_base * 100) * 0.55 + sinais * 18, 48, 90)
 
         logging.info(
-            f"ANÁLISE COMPLETA: {home} vs {away} | "
-            f"Est: {estimativa_total:.2f} | "
-            f"Tend: {tendencia_principal} | "
-            f"Prob: {probabilidade_base*100:.1f}% | "
-            f"Conf: {confianca:.1f}%"
+            f"ANÁLISE: {home} x {away} | Est={estimativa:.2f} | "
+            f"{tendencia} | Conf={confianca:.1f}% | Explosivo={explosivo}"
         )
 
         return {
-            "tendencia": tendencia_principal,
-            "estimativa": round(estimativa_total, 2),
-            "probabilidade": round(probabilidade_base * 100, 1),
+            "tendencia": tendencia,
+            "estimativa": round(estimativa, 2),
+            "probabilidade": round(prob_base * 100, 1),
             "confianca": round(confianca, 1),
-            "tipo_aposta": tipo_aposta,
+            "tipo_aposta": "over" if "OVER" in tendencia else "under",
+            "jogo_explosivo": explosivo,
             "detalhes": {
-                "vitoria": vitoria_analise,
-                "gols_ht": ht_analise,
-                "over_15_prob": round(prob_over_15 * 100, 1),
-                "over_25_prob": round(prob_over_25 * 100, 1),
-                "over_35_prob": round(prob_over_35 * 100, 1),
-                "under_15_prob": round(prob_under_15 * 100, 1),
-                "under_25_prob": round(prob_under_25 * 100, 1)
+                "vitoria": AnalisadorEstatistico.calcular_probabilidade_vitoria(
+                    home, away, self.classificacao
+                ),
+                "gols_ht": AnalisadorHT.calcular(
+                    home, away, self.classificacao
+                ),
+                "over_15_prob": round(p15 * 100, 1),
+                "over_25_prob": round(p25 * 100, 1),
+                "over_35_prob": round(p35 * 100, 1)
             }
         }
+
 
 
     
