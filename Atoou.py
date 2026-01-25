@@ -1411,8 +1411,8 @@ class PosterGenerator:
                 
                 textos_analise = [
                     f"{tipo_emoji} {jogo['tendencia']}",
-                    f"Estimativa: {jogo['estimativa']:.2f} gols",
-                    f"Probabilidade: {jogo['probabilidade']:.0f}%",
+                #    f"Estimativa: {jogo['estimativa']:.2f} gols",
+                  #  f"Probabilidade: {jogo['probabilidade']:.0f}%",
                     f"Confiança: {jogo['confianca']:.0f}%",
                 ]
                 
@@ -1424,9 +1424,9 @@ class PosterGenerator:
                 
                 textos_analise = [
                     f"{favorito_emoji} FAVORITO: {favorito_text}",
-                    f"Prob. Casa: {jogo.get('prob_home_win', 0):.1f}%",
-                    f"Prob. Fora: {jogo.get('prob_away_win', 0):.1f}%",
-                    f"Prob. Empate: {jogo.get('prob_draw', 0):.1f}%",
+                   # f"Prob. Casa: {jogo.get('prob_home_win', 0):.1f}%",
+                   # f"Prob. Fora: {jogo.get('prob_away_win', 0):.1f}%",
+                   # f"Prob. Empate: {jogo.get('prob_draw', 0):.1f}%",
                     f"Confiança: {jogo.get('confianca_vitoria', 0):.0f}%",
                 ]
                 
