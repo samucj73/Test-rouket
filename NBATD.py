@@ -1036,7 +1036,7 @@ class AnalisadorTendencia:
    
 
 # =============================
-# NOVA CLASSE: ResultadosTopAlertas
+# NOVA CLASSE: ResultadosTopAlertas (CORRIGIDA)
 # =============================
 
 class ResultadosTopAlertas:
@@ -1076,6 +1076,13 @@ class ResultadosTopAlertas:
             "gols_ht": {}
         }
         
+        # Lista para gerar posters
+        jogos_para_poster = {
+            "over_under": [],
+            "favorito": [],
+            "gols_ht": []
+        }
+        
         # Conferir cada alerta
         progress_bar = st.progress(0)
         total_alertas = len(alertas_data)
@@ -1101,9 +1108,15 @@ class ResultadosTopAlertas:
                 ht_home_goals = half_time.get("home", 0)
                 ht_away_goals = half_time.get("away", 0)
                 
-                # Obter URLs dos escudos
+                # Obter URLs dos escudos - IMPORTANTE: obter dos dados atuais
                 home_crest = match_data.get("homeTeam", {}).get("crest") or ""
                 away_crest = match_data.get("awayTeam", {}).get("crest") or ""
+                
+                # Se não tiver escudo nos dados atuais, usar o salvo no alerta
+                if not home_crest and alerta.get("escudo_home"):
+                    home_crest = alerta["escudo_home"]
+                if not away_crest and alerta.get("escudo_away"):
+                    away_crest = alerta["escudo_away"]
                 
                 # Criar objeto Jogo com os dados do alerta
                 jogo = Jogo({
@@ -1158,6 +1171,8 @@ class ResultadosTopAlertas:
                 alertas_top[chave]["ht_home_goals"] = ht_home_goals
                 alertas_top[chave]["ht_away_goals"] = ht_away_goals
                 alertas_top[chave]["data_conferencia"] = datetime.now().isoformat()
+                alertas_top[chave]["escudo_home"] = home_crest  # Garantir que tem o URL do escudo
+                alertas_top[chave]["escudo_away"] = away_crest  # Garantir que tem o URL do escudo
                 
                 # Calcular resultados
                 if tipo_alerta == "over_under":
@@ -1170,6 +1185,49 @@ class ResultadosTopAlertas:
                 # Adicionar ao tipo correspondente
                 resultados_totais[tipo_alerta][chave] = alertas_top[chave]
                 
+                # Preparar dados para o poster
+                dados_poster = {
+                    "home": alerta.get("home", ""),
+                    "away": alerta.get("away", ""),
+                    "liga": alerta.get("liga", ""),
+                    "hora": jogo.get_hora_brasilia_datetime(),
+                    "escudo_home": home_crest,
+                    "escudo_away": away_crest,
+                    "home_goals": home_goals,
+                    "away_goals": away_goals,
+                    "ht_home_goals": ht_home_goals,
+                    "ht_away_goals": ht_away_goals,
+                    "resultado": jogo.resultado if tipo_alerta == "over_under" else None,
+                    "resultado_favorito": jogo.resultado_favorito if tipo_alerta == "favorito" else None,
+                    "resultado_ht": jogo.resultado_ht if tipo_alerta == "gols_ht" else None,
+                }
+                
+                # Adicionar dados específicos do tipo
+                if tipo_alerta == "over_under":
+                    dados_poster.update({
+                        "tendencia": alerta.get("tendencia", ""),
+                        "estimativa": alerta.get("estimativa", 0.0),
+                        "probabilidade": alerta.get("probabilidade", 0.0),
+                        "confianca": alerta.get("confianca", 0.0),
+                        "tipo_aposta": alerta.get("tipo_aposta", ""),
+                    })
+                elif tipo_alerta == "favorito":
+                    dados_poster.update({
+                        "favorito": alerta.get("favorito", ""),
+                        "confianca_vitoria": alerta.get("confianca_vitoria", 0.0),
+                        "prob_home_win": alerta.get("prob_home_win", 0.0),
+                        "prob_away_win": alerta.get("prob_away_win", 0.0),
+                        "prob_draw": alerta.get("prob_draw", 0.0),
+                    })
+                elif tipo_alerta == "gols_ht":
+                    dados_poster.update({
+                        "tendencia_ht": alerta.get("tendencia_ht", ""),
+                        "confianca_ht": alerta.get("confianca_ht", 0.0),
+                        "estimativa_total_ht": alerta.get("estimativa_total_ht", 0.0),
+                    })
+                
+                jogos_para_poster[tipo_alerta].append(dados_poster)
+                
                 # Mostrar resultado
                 self._mostrar_resultado_alerta_top(alerta, home_goals, away_goals, ht_home_goals, ht_away_goals, jogo)
             
@@ -1181,8 +1239,8 @@ class ResultadosTopAlertas:
         # Mostrar resumo
         self._mostrar_resumo_resultados_top(resultados_totais)
         
-        # Gerar posters de resultados
-        self._gerar_posters_resultados_top(resultados_totais, data_selecionada)
+        # Gerar posters de resultados - AGORA COM DADOS COMPLETOS DOS ESCUDOS
+        self._gerar_posters_resultados_top(jogos_para_poster, data_selecionada)
     
     def _mostrar_resultado_alerta_top(self, alerta, home_goals, away_goals, ht_home_goals, ht_away_goals, jogo):
         """Mostrar resultado individual do alerta TOP"""
@@ -1243,15 +1301,13 @@ class ResultadosTopAlertas:
                     taxa_acerto = (greens / total) * 100
                     st.metric("⏰ TOP Gols HT", f"{greens}✅ {reds}❌", f"{taxa_acerto:.1f}% acerto")
     
-    def _gerar_posters_resultados_top(self, resultados_totais, data_selecionada):
+    def _gerar_posters_resultados_top(self, jogos_por_tipo: dict, data_selecionada):
         """Gerar posters de resultados para os alertas TOP"""
         data_str = data_selecionada.strftime("%d/%m/%Y")
         
-        for tipo_alerta, resultados in resultados_totais.items():
-            if not resultados:
+        for tipo_alerta, jogos_lista in jogos_por_tipo.items():
+            if not jogos_lista:
                 continue
-            
-            jogos_lista = list(resultados.values())
             
             # Gerar poster específico para TOP alertas
             try:
@@ -1262,7 +1318,7 @@ class ResultadosTopAlertas:
                 elif tipo_alerta == "gols_ht":
                     titulo = f"🏆 RESULTADOS TOP GOLS HT - {data_str}"
                 
-                # Preparar caption
+                # Calcular estatísticas
                 if tipo_alerta == "over_under":
                     greens = sum(1 for j in jogos_lista if j.get("resultado") == "GREEN")
                     reds = sum(1 for j in jogos_lista if j.get("resultado") == "RED")
@@ -1277,7 +1333,7 @@ class ResultadosTopAlertas:
                 if total > 0:
                     taxa_acerto = (greens / total) * 100
                     
-                    # Gerar poster
+                    # Gerar poster - AGORA COM OS DADOS COMPLETOS DOS ESCUDOS
                     poster = self.sistema.poster_generator.gerar_poster_resultados(jogos_lista, tipo_alerta)
                     
                     caption = f"<b>{titulo}</b>\n\n"
