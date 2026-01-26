@@ -2027,8 +2027,8 @@ class PosterGenerator:
                 
                 textos_analise = [
                     f"{tipo_emoji_am} AMBAS MARCAM: {jogo.get('tendencia_ambas_marcam', 'N/A')}",
-                    f"Probabilidade SIM: {jogo.get('prob_ambas_marcam_sim', 0):.1f}%",
-                    f"Probabilidade NÃO: {jogo.get('prob_ambas_marcam_nao', 0):.1f}%",
+                    #f"Probabilidade SIM: {jogo.get('prob_ambas_marcam_sim', 0):.1f}%",
+                    #f"Probabilidade NÃO: {jogo.get('prob_ambas_marcam_nao', 0):.1f}%",
                     f"Confiança: {jogo.get('confianca_ambas_marcam', 0):.0f}%",
                 ]
                 
