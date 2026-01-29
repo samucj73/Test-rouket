@@ -1276,7 +1276,7 @@ class PosterGenerator:
         """Gera poster no estilo West Ham"""
         LARGURA = 2000
         ALTURA_TOPO = 270
-        ALTURA_POR_JOGO = 1050
+        ALTURA_POR_JOGO = 850
         PADDING = 80
         
         jogos_count = len(jogos)
@@ -1430,7 +1430,7 @@ class PosterGenerator:
                 textos_analise = [
                     f"{tipo_emoji} {jogo['tendencia']}",
                     f"Estimativa: {jogo['estimativa']:.2f} gols",
-                    f"Probabilidade: {jogo['probabilidade']:.0f}%",
+                   # f"Probabilidade: {jogo['probabilidade']:.0f}%",
                     f"Confiança: {jogo['confianca']:.0f}%",
                 ]
                 
@@ -1442,9 +1442,9 @@ class PosterGenerator:
                 
                 textos_analise = [
                     f"{favorito_emoji} FAVORITO: {favorito_text}",
-                    f"Prob. Casa: {jogo.get('prob_home_win', 0):.1f}%",
-                    f"Prob. Fora: {jogo.get('prob_away_win', 0):.1f}%",
-                    f"Prob. Empate: {jogo.get('prob_draw', 0):.1f}%",
+                   # f"Prob. Casa: {jogo.get('prob_home_win', 0):.1f}%",
+                   # f"Prob. Fora: {jogo.get('prob_away_win', 0):.1f}%",
+                   # f"Prob. Empate: {jogo.get('prob_draw', 0):.1f}%",
                     f"Confiança: {jogo.get('confianca_vitoria', 0):.0f}%",
                 ]
                 
@@ -1456,8 +1456,8 @@ class PosterGenerator:
                 textos_analise = [
                     f"{tipo_emoji_ht} {jogo.get('tendencia_ht', 'N/A')}",
                     f"Estimativa HT: {jogo.get('estimativa_total_ht', 0):.2f} gols",
-                    f"OVER 0.5 HT: {jogo.get('detalhes', {}).get('gols_ht', {}).get('over_05_ht', 0):.0f}%",
-                    f"OVER 1.5 HT: {jogo.get('detalhes', {}).get('gols_ht', {}).get('over_15_ht', 0):.0f}%",
+                    #f"OVER 0.5 HT: {jogo.get('detalhes', {}).get('gols_ht', {}).get('over_05_ht', 0):.0f}%",
+                    #f"OVER 1.5 HT: {jogo.get('detalhes', {}).get('gols_ht', {}).get('over_15_ht', 0):.0f}%",
                     f"Confiança HT: {jogo.get('confianca_ht', 0):.0f}%",
                 ]
                 
