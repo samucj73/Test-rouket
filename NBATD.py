@@ -653,16 +653,33 @@ class Jogo:
         # Calcular resultado para Ambas Marcam
         self.resultado_ambas_marcam = self.calcular_resultado_ambas_marcam(home_goals, away_goals)
     
+    #def calcular_resultado_over_under(self, total_gols: float) -> str:
     def calcular_resultado_over_under(self, total_gols: float) -> str:
         """Calcula se a previsão Over/Under foi GREEN ou RED"""
-        if self.tendencia == "OVER 2.5" and total_gols > 2.5:
-            return "GREEN"
-        elif self.tendencia == "UNDER 2.5" and total_gols < 2.5:
-            return "GREEN"
-        elif self.tendencia == "OVER 1.5" and total_gols > 1.5:
-            return "GREEN"
-        elif self.tendencia == "UNDER 1.5" and total_gols < 1.5:
-            return "GREEN"
+        
+        # Verificar se é OVER
+        if "OVER" in self.tendencia.upper():
+            # Extrair número da tendência (ex: "OVER 3.5" -> 3.5)
+            if "OVER 1.5" in self.tendencia and total_gols > 1.5:
+                return "GREEN"
+            elif "OVER 2.5" in self.tendencia and total_gols > 2.5:
+                return "GREEN"
+            elif "OVER 3.5" in self.tendencia and total_gols > 3.5:
+                return "GREEN"
+            elif "OVER 4.5" in self.tendencia and total_gols > 4.5:
+                return "GREEN"
+        
+        # Verificar se é UNDER
+        elif "UNDER" in self.tendencia.upper():
+            if "UNDER 1.5" in self.tendencia and total_gols < 1.5:
+                return "GREEN"
+            elif "UNDER 2.5" in self.tendencia and total_gols < 2.5:
+                return "GREEN"
+            elif "UNDER 3.5" in self.tendencia and total_gols < 3.5:
+                return "GREEN"
+            elif "UNDER 4.5" in self.tendencia and total_gols < 4.5:
+                return "GREEN"
+        
         return "RED"
     
     def calcular_resultado_favorito(self, home_goals: int, away_goals: int) -> str:
