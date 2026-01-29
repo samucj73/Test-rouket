@@ -605,7 +605,7 @@ class Jogo:
     
     #def calcular_resultado_over_under(self, total_gols: float) -> str:
     def calcular_resultado_over_under(self, total_gols: float) -> str:
-    """Calcula se a previsão Over/Under foi GREEN ou RED - VERSÃO CORRIGIDA"""
+       """Calcula se a previsão Over/Under foi GREEN ou RED - VERSÃO CORRIGIDA"""
     
     # Extrair o valor numérico da tendência
     import re
