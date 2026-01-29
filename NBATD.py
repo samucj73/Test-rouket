@@ -1030,22 +1030,22 @@ class AnalisadorEstatistico:
 
 #class AnalisadorTendencia:
 class AnalisadorTendencia:
-    """Analisa tendências de gols em partidas - VERSÃO RIGOROSA COM FILTROS"""
+    """Analisa tendências de gols em partidas - VERSÃO EQUILIBRADA"""
 
     def __init__(self, classificacao: dict):
         self.classificacao = classificacao
 
     def calcular_tendencia_completa(self, home: str, away: str) -> dict:
-        """Calcula tendências completas - VERSÃO COM FILTROS RIGOROSOS"""
+        """Calcula tendências completas - VERSÃO EQUILIBRADA"""
         
         dados_home = self.classificacao.get(home, {})
         dados_away = self.classificacao.get(away, {})
 
-        # FILTRO 1: Mínimo de jogos para ter dados confiáveis
+        # Filtro básico de dados
         played_home = dados_home.get("played", 0)
         played_away = dados_away.get("played", 0)
         
-        if played_home < 5 or played_away < 5:
+        if played_home < 3 or played_away < 3:  # Reduzido de 5 para 3
             return {
                 "tendencia": "DADOS INSUFICIENTES",
                 "estimativa": 0,
@@ -1066,126 +1066,149 @@ class AnalisadorTendencia:
         media_away_sofridos = dados_away.get("against", 0) / played_away
 
         # Fatores ofensivos/defensivos
-        fator_ofensivo_home = media_home_feitos / max(media_away_sofridos, 0.7)
-        fator_ofensivo_away = media_away_feitos / max(media_home_sofridos, 0.7)
+        fator_ofensivo_home = media_home_feitos / max(media_away_sofridos, 0.6)
+        fator_ofensivo_away = media_away_feitos / max(media_home_sofridos, 0.6)
         
-        # Estimativa base
+        # Estimativa base mais precisa
         estimativa_total = (
-            media_home_feitos * 0.45 +
-            media_away_feitos * 0.45 +
-            media_home_sofridos * 0.35 +
-            media_away_sofridos * 0.35
+            media_home_feitos * 0.5 +
+            media_away_feitos * 0.5 +
+            media_home_sofridos * 0.3 +
+            media_away_sofridos * 0.3
         )
         
         # Ajuste por fator ofensivo
         fator_ataque = (fator_ofensivo_home + fator_ofensivo_away) / 2
         
-        if fator_ataque > 1.5:
-            estimativa_total *= 1.08
-        elif fator_ataque > 1.3:
-            estimativa_total *= 1.04
+        if fator_ataque > 1.4:
+            estimativa_total *= 1.1
+        elif fator_ataque > 1.2:
+            estimativa_total *= 1.05
         
-        # Fator casa moderado
-        fator_casa = clamp(1.03 + (media_home_feitos - media_home_sofridos) * 0.1, 0.9, 1.2)
+        # Fator casa
+        fator_casa = clamp(1.05 + (media_home_feitos - media_home_sofridos) * 0.12, 0.9, 1.25)
         estimativa_total *= fator_casa
 
-        # Suavizar extremos
+        # Suavização moderada
         estimativa_total = (estimativa_total * 0.8) + (2.5 * 0.2)
         
         # Limites realistas
-        estimativa_total = clamp(estimativa_total, 1.2, 4.0)
+        estimativa_total = clamp(estimativa_total, 1.0, 4.5)
 
-        # ESCOLHA DO MERCADO COM THRESHOLDS MAIS ALTOS
-        if estimativa_total >= 3.3:  # Threshold alto para OVER 3.5
+        # ESCOLHA DO MERCADO - THRESHOLDS MAIS EQUILIBRADOS
+        if estimativa_total >= 3.0:  # OVER 3.5
             mercado = "OVER 3.5"
             tipo_aposta = "over"
             linha_mercado = 3.5
-            probabilidade_base = sigmoid((estimativa_total - 3.5) * 1.0)
+            probabilidade_base = sigmoid((estimativa_total - 3.5) * 1.1)
             
-        elif estimativa_total >= 2.9:  # Threshold alto para OVER 2.5
+        elif estimativa_total >= 2.6:  # OVER 2.5
             mercado = "OVER 2.5"
             tipo_aposta = "over"
             linha_mercado = 2.5
-            probabilidade_base = sigmoid((estimativa_total - 2.5) * 1.1)
+            probabilidade_base = sigmoid((estimativa_total - 2.5) * 1.2)
             
-        elif estimativa_total <= 1.3:  # Threshold baixo para UNDER 1.5
+        elif estimativa_total >= 2.2:  # OVER 2.5 com menos força
+            mercado = "OVER 2.5"
+            tipo_aposta = "over"
+            linha_mercado = 2.5
+            probabilidade_base = sigmoid((estimativa_total - 2.5) * 1.3)
+            
+        elif estimativa_total <= 1.3:  # UNDER 1.5
             mercado = "UNDER 1.5"
             tipo_aposta = "under"
             linha_mercado = 1.5
-            probabilidade_base = sigmoid((1.5 - estimativa_total) * 1.2)
+            probabilidade_base = sigmoid((1.5 - estimativa_total) * 1.4)
             
-        elif estimativa_total <= 1.8:  # Threshold para UNDER 2.5
+        elif estimativa_total <= 1.7:  # UNDER 2.5
             mercado = "UNDER 2.5"
             tipo_aposta = "under"
             linha_mercado = 2.5
-            probabilidade_base = sigmoid((2.5 - estimativa_total) * 1.1)
+            probabilidade_base = sigmoid((2.5 - estimativa_total) * 1.3)
             
         else:
-            # Zona neutra - não apostar
-            mercado = "NÃO APOSTAR"
-            tipo_aposta = "avoid"
-            linha_mercado = 2.5
-            probabilidade_base = 0.5
+            # Zona neutra - OVER 1.5 como padrão seguro
+            mercado = "OVER 1.5"
+            tipo_aposta = "over"
+            linha_mercado = 1.5
+            probabilidade_base = sigmoid((estimativa_total - 1.5) * 1.4)
 
-        # Se for "NÃO APOSTAR", retornar direto
-        if tipo_aposta == "avoid":
-            return {
-                "tendencia": mercado,
-                "estimativa": round(estimativa_total, 2),
-                "probabilidade": 0,
-                "confianca": 0,
-                "tipo_aposta": tipo_aposta,
-                "linha_mercado": linha_mercado,
-                "detalhes": {"motivo": "Zona neutra - estimativa muito próxima da linha"}
-            }
-
-        # FILTRO 2: Distância mínima da linha
+        # Cálculo de distância da linha
         distancia_linha = abs(estimativa_total - linha_mercado)
         
-        if distancia_linha < 0.4:  # Mínimo 0.4 gols de distância
+        # FILTRO FLEXÍVEL: Distância mínima da linha
+        # Para UNDER: exige mais distância (mais conservador)
+        # Para OVER: permite menos distância (mais oportunidades)
+        
+        if tipo_aposta == "under" and distancia_linha < 0.5:
             return {
-                "tendencia": "NÃO APOSTAR",
+                "tendencia": "NÃO APOSTAR - UNDER",
                 "estimativa": round(estimativa_total, 2),
                 "probabilidade": round(probabilidade_base * 100, 1),
                 "confianca": 0,
                 "tipo_aposta": "avoid",
                 "linha_mercado": linha_mercado,
-                "detalhes": {"motivo": f"Distância insuficiente da linha: {distancia_linha:.2f}"}
+                "detalhes": {"motivo": f"UNDER sem distância suficiente: {distancia_linha:.2f}"}
+            }
+        elif tipo_aposta == "over" and distancia_linha < 0.3:
+            return {
+                "tendencia": "NÃO APOSTAR - OVER",
+                "estimativa": round(estimativa_total, 2),
+                "probabilidade": round(probabilidade_base * 100, 1),
+                "confianca": 0,
+                "tipo_aposta": "avoid",
+                "linha_mercado": linha_mercado,
+                "detalhes": {"motivo": f"OVER sem distância suficiente: {distancia_linha:.2f}"}
             }
 
-        # Sinais de força MAIS RIGOROSOS
+        # Sinais de força - EQUILIBRADOS
         sinais_concordantes = 0
+        max_sinais = 4
+        
         if tipo_aposta == "over":
-            if estimativa_total > linha_mercado + 0.8:
+            if estimativa_total > linha_mercado + 0.6:
                 sinais_concordantes += 2
-            if fator_ataque > 1.5:
+            elif estimativa_total > linha_mercado + 0.4:
+                sinais_concordantes += 1
+                
+            if fator_ataque > 1.4:
                 sinais_concordantes += 2
-            elif fator_ataque > 1.3:
+            elif fator_ataque > 1.2:
                 sinais_concordantes += 1
-            if (media_home_feitos > 2.0 and media_away_feitos > 1.5):
+                
+            if media_home_feitos > 1.8 or media_away_feitos > 1.8:
                 sinais_concordantes += 1
+                
         else:  # under
-            if estimativa_total < linha_mercado - 0.8:
+            if estimativa_total < linha_mercado - 0.6:
                 sinais_concordantes += 2
-            if fator_ataque < 0.6:
-                sinais_concordantes += 2
-            elif fator_ataque < 0.8:
+            elif estimativa_total < linha_mercado - 0.4:
                 sinais_concordantes += 1
-            if (media_home_feitos < 1.0 and media_away_feitos < 1.2):
+                
+            if fator_ataque < 0.7:
+                sinais_concordantes += 2
+            elif fator_ataque < 0.9:
+                sinais_concordantes += 1
+                
+            if media_home_feitos < 1.2 and media_away_feitos < 1.2:
                 sinais_concordantes += 1
 
-        # Confiança com requisitos mínimos
-        confianca_base = (probabilidade_base * 100) * 0.6
-        confianca_distancia = min(distancia_linha * 25, 30)  # Máximo 30 por distância
-        confianca_sinais = min(sinais_concordantes * 12, 20)  # Máximo 20 por sinais
+        # Cálculo de confiança - MAIS EQUILIBRADO
+        confianca_base = (probabilidade_base * 100) * 0.7
+        
+        # Bonus por distância (máximo 20 pontos)
+        bonus_distancia = min(distancia_linha * 25, 20)
+        
+        # Bonus por sinais (máximo 15 pontos)
+        bonus_sinais = min((sinais_concordantes / max_sinais) * 15, 15)
         
         confianca = clamp(
-            confianca_base + confianca_distancia + confianca_sinais,
-            55, 85  # Mínimo 55%, máximo 85%
+            confianca_base + bonus_distancia + bonus_sinais,
+            45, 80  # Mínimo 45%, máximo 80%
         )
 
-        # FILTRO 3: Confiança mínima de 60%
-        if confianca < 60:
+        # FILTRO FINAL DE CONFIANÇA - MAIS FLEXÍVEL
+        if confianca < 50:
             return {
                 "tendencia": "NÃO APOSTAR",
                 "estimativa": round(estimativa_total, 2),
@@ -1193,21 +1216,21 @@ class AnalisadorTendencia:
                 "confianca": round(confianca, 1),
                 "tipo_aposta": "avoid",
                 "linha_mercado": linha_mercado,
-                "detalhes": {"motivo": f"Confiança insuficiente: {confianca:.1f}% < 60%"}
+                "detalhes": {"motivo": f"Confiança baixa: {confianca:.1f}% < 50%"}
             }
 
-        # Calcular probabilidades de referência
-        prob_over_15 = sigmoid((estimativa_total - 1.5) * 1.2)
-        prob_over_25 = sigmoid((estimativa_total - 2.5) * 1.1)
-        prob_over_35 = sigmoid((estimativa_total - 3.5) * 1.0)
+        # Probabilidades de referência
+        prob_over_15 = sigmoid((estimativa_total - 1.5) * 1.4)
+        prob_over_25 = sigmoid((estimativa_total - 2.5) * 1.3)
+        prob_over_35 = sigmoid((estimativa_total - 3.5) * 1.1)
         prob_under_15 = 1 - prob_over_15
         prob_under_25 = 1 - prob_over_25
 
         logging.info(
-            f"ANÁLISE RIGOROSA: {home} vs {away} | "
+            f"ANÁLISE EQUILIBRADA: {home} vs {away} | "
             f"Est: {estimativa_total:.2f} | Mercado: {mercado} | "
-            f"Dist: {distancia_linha:.2f} | Sinais: {sinais_concordantes} | "
-            f"Conf: {confianca:.1f}% | Fator Ataque: {fator_ataque:.2f}"
+            f"Dist: {distancia_linha:.2f} | Sinais: {sinais_concordantes}/{max_sinais} | "
+            f"Conf: {confianca:.1f}% | Prob: {probabilidade_base*100:.1f}%"
         )
 
         return {
@@ -1223,9 +1246,13 @@ class AnalisadorTendencia:
                 "media_away_feitos": round(media_away_feitos, 2),
                 "distancia_linha": round(distancia_linha, 2),
                 "sinais_concordantes": sinais_concordantes,
+                "max_sinais": max_sinais,
+                "over_15_prob": round(prob_over_15 * 100, 1),
                 "over_25_prob": round(prob_over_25 * 100, 1),
+                "over_35_prob": round(prob_over_35 * 100, 1),
+                "under_15_prob": round(prob_under_15 * 100, 1),
                 "under_25_prob": round(prob_under_25 * 100, 1),
-                "motivo": "ATENDE CRITÉRIOS MÍNIMOS"
+                "motivo": "ATENDE CRITÉRIOS"
             }
         }
 
