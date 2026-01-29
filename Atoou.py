@@ -1,4 +1,3 @@
-
 import streamlit as st
 from datetime import datetime, timedelta, timezone
 import requests
@@ -632,6 +631,16 @@ class Jogo:
         
         return "RED"
     
+    
+    def calcular_resultado_favorito(self, home_goals: int, away_goals: int) -> str:
+        """Calcula se a previsão de favorito foi GREEN ou RED"""
+        if self.favorito == "home" and home_goals > away_goals:
+            return "GREEN"
+        elif self.favorito == "away" and away_goals > home_goals:
+            return "GREEN"
+        elif self.favorito == "draw" and home_goals == away_goals:
+            return "GREEN"
+        return "RED"
     
     def calcular_resultado_gols_ht(self, ht_home_goals: int, ht_away_goals: int) -> str:
         """Calcula se a previsão de gols HT foi GREEN ou RED"""
