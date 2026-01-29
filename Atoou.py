@@ -605,49 +605,33 @@ class Jogo:
     
     #def calcular_resultado_over_under(self, total_gols: float) -> str:
     def calcular_resultado_over_under(self, total_gols: float) -> str:
-       """Calcula se a previsão Over/Under foi GREEN ou RED - VERSÃO CORRIGIDA"""
-    
-    # Extrair o valor numérico da tendência
-    import re
-    
-    # Encontrar todos os números na string
-    numbers = re.findall(r'(\d+\.?\d*)', self.tendencia)
-    if not numbers:
+        """Calcula se a previsão Over/Under foi GREEN ou RED"""
+        
+        # Verificar se é OVER
+        if "OVER" in self.tendencia.upper():
+            # Extrair número da tendência (ex: "OVER 3.5" -> 3.5)
+            if "OVER 1.5" in self.tendencia and total_gols > 1.5:
+                return "GREEN"
+            elif "OVER 2.5" in self.tendencia and total_gols > 2.5:
+                return "GREEN"
+            elif "OVER 3.5" in self.tendencia and total_gols > 3.5:
+                return "GREEN"
+            elif "OVER 4.5" in self.tendencia and total_gols > 4.5:
+                return "GREEN"
+        
+        # Verificar se é UNDER
+        elif "UNDER" in self.tendencia.upper():
+            if "UNDER 1.5" in self.tendencia and total_gols < 1.5:
+                return "GREEN"
+            elif "UNDER 2.5" in self.tendencia and total_gols < 2.5:
+                return "GREEN"
+            elif "UNDER 3.5" in self.tendencia and total_gols < 3.5:
+                return "GREEN"
+            elif "UNDER 4.5" in self.tendencia and total_gols < 4.5:
+                return "GREEN"
+        
         return "RED"
     
-    # Pegar o primeiro número (que é o limite)
-    try:
-        limite = float(numbers[0])
-    except ValueError:
-        return "RED"
-    
-    # Converter tendência para maiúsculas para comparação segura
-    tendencia_upper = self.tendencia.upper()
-    
-    # Verificar todas as possibilidades
-    if "OVER" in tendencia_upper:
-        if total_gols > limite:
-            return "GREEN"
-        else:
-            return "RED"
-    elif "UNDER" in tendencia_upper:
-        if total_gols < limite:
-            return "GREEN"
-        else:
-            return "RED"
-    
-    return "RED"
-      
-    
-    def calcular_resultado_favorito(self, home_goals: int, away_goals: int) -> str:
-        """Calcula se a previsão de favorito foi GREEN ou RED"""
-        if self.favorito == "home" and home_goals > away_goals:
-            return "GREEN"
-        elif self.favorito == "away" and away_goals > home_goals:
-            return "GREEN"
-        elif self.favorito == "draw" and home_goals == away_goals:
-            return "GREEN"
-        return "RED"
     
     def calcular_resultado_gols_ht(self, ht_home_goals: int, ht_away_goals: int) -> str:
         """Calcula se a previsão de gols HT foi GREEN ou RED"""
