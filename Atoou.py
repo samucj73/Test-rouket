@@ -1276,7 +1276,7 @@ class PosterGenerator:
         """Gera poster no estilo West Ham"""
         LARGURA = 1900
         ALTURA_TOPO = 270
-        ALTURA_POR_JOGO = 890
+        ALTURA_POR_JOGO = 850
         PADDING = 80
         
         jogos_count = len(jogos)
@@ -1429,7 +1429,7 @@ class PosterGenerator:
                 
                 textos_analise = [
                     f"{tipo_emoji} {jogo['tendencia']}",
-                    f"Estimativa: {jogo['estimativa']:.2f} gols",
+                    #f"Estimativa: {jogo['estimativa']:.2f} gols",
                    # f"Probabilidade: {jogo['probabilidade']:.0f}%",
                     f"Confiança: {jogo['confianca']:.0f}%",
                 ]
@@ -1455,7 +1455,7 @@ class PosterGenerator:
                 
                 textos_analise = [
                     f"{tipo_emoji_ht} {jogo.get('tendencia_ht', 'N/A')}",
-                    f"Estimativa HT: {jogo.get('estimativa_total_ht', 0):.2f} gols",
+                   # f"Estimativa HT: {jogo.get('estimativa_total_ht', 0):.2f} gols",
                     #f"OVER 0.5 HT: {jogo.get('detalhes', {}).get('gols_ht', {}).get('over_05_ht', 0):.0f}%",
                     #f"OVER 1.5 HT: {jogo.get('detalhes', {}).get('gols_ht', {}).get('over_15_ht', 0):.0f}%",
                     f"Confiança HT: {jogo.get('confianca_ht', 0):.0f}%",
