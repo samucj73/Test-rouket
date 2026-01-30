@@ -2431,7 +2431,7 @@ class PosterGenerator:
     
     #def _desenhar_escudo_quadrado(self, draw, img, logo_img, x, y, tamanho_quadrado, tamanho_escudo, team_name=""):
     def _desenhar_escudo_quadrado(self, draw, img, logo_img, x, y, tamanho_quadrado, tamanho_escudo, team_name=""):
-    """Desenha escudo quadrado com fallback"""
+        """Desenha escudo quadrado com fallback"""
     # ALTERADO: Agora desenha quadrado com cantos arredondados
     draw.rounded_rectangle(
         [x, y, x + tamanho_quadrado, y + tamanho_quadrado],
