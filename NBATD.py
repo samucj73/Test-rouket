@@ -2431,41 +2431,41 @@ class PosterGenerator:
     
     #def _desenhar_escudo_quadrado(self, draw, img, logo_img, x, y, tamanho_quadrado, tamanho_escudo, team_name=""):
     def _desenhar_escudo_quadrado(self, draw, img, logo_img, x, y, tamanho_quadrado, tamanho_escudo, team_name=""):
-        """Desenha escudo quadrado com fallback"""
+    """Desenha escudo quadrado com fallback"""
     # SOLUÇÃO PARA VERSÕES ANTIGAS DO PILLOW
     # Criar uma imagem separada para o quadrado arredondado
-quadrado_arredondado = Image.new('RGBA', (tamanho_quadrado, tamanho_quadrado), (0, 0, 0, 0))
-draw_arredondado = ImageDraw.Draw(quadrado_arredondado)
+    quadrado_arredondado = Image.new('RGBA', (tamanho_quadrado, tamanho_quadrado), (0, 0, 0, 0))
+    draw_arredondado = ImageDraw.Draw(quadrado_arredondado)
     
     # Desenhar um retângulo arredondado manualmente
-raio = int(tamanho_quadrado * 0.12)
+    raio = int(tamanho_quadrado * 0.12)
     
     # Método alternativo: desenhar um círculo e preencher
     # Criar máscara com cantos arredondados
-mask = Image.new('L', (tamanho_quadrado, tamanho_quadrado), 0)
-draw_mask = ImageDraw.Draw(mask)
+    mask = Image.new('L', (tamanho_quadrado, tamanho_quadrado), 0)
+    draw_mask = ImageDraw.Draw(mask)
     
     # Desenhar um retângulo com cantos arredondados
-draw_mask.rectangle([0, 0, tamanho_quadrado, tamanho_quadrado], fill=255)
+    draw_mask.rectangle([0, 0, tamanho_quadrado, tamanho_quadrado], fill=255)
     
     # Arredondar cantos desenhando círculos nos cantos
     # Canto superior esquerdo
-draw_mask.ellipse([0, 0, raio*2, raio*2], fill=0)
+    draw_mask.ellipse([0, 0, raio*2, raio*2], fill=0)
     # Canto superior direito
-draw_mask.ellipse([tamanho_quadrado - raio*2, 0, tamanho_quadrado, raio*2], fill=0)
+    draw_mask.ellipse([tamanho_quadrado - raio*2, 0, tamanho_quadrado, raio*2], fill=0)
     # Canto inferior esquerdo
-draw_mask.ellipse([0, tamanho_quadrado - raio*2, raio*2, tamanho_quadrado], fill=0)
+    draw_mask.ellipse([0, tamanho_quadrado - raio*2, raio*2, tamanho_quadrado], fill=0)
     # Canto inferior direito
-draw_mask.ellipse([tamanho_quadrado - raio*2, tamanho_quadrado - raio*2, tamanho_quadrado, tamanho_quadrado], fill=0)
+    draw_mask.ellipse([tamanho_quadrado - raio*2, tamanho_quadrado - raio*2, tamanho_quadrado, tamanho_quadrado], fill=0)
     
     # Criar imagem do quadrado branco
-quadrado_branco = Image.new('RGBA', (tamanho_quadrado, tamanho_quadrado), (255, 255, 255, 255))
+    quadrado_branco = Image.new('RGBA', (tamanho_quadrado, tamanho_quadrado), (255, 255, 255, 255))
     
     # Aplicar a máscara
-quadrado_branco.putalpha(mask)
+    quadrado_branco.putalpha(mask)
     
     # Colar na imagem principal
-img.paste(quadrado_branco, (x, y), quadrado_branco)
+    img.paste(quadrado_branco, (x, y), quadrado_branco)
 
     if logo_img is None:
         # Desenhar placeholder com as iniciais do time
@@ -2557,7 +2557,7 @@ img.paste(quadrado_branco, (x, y), quadrado_branco)
         except:
             draw_fallback.text((70, 90), iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
         
-        img.paste(fallback, (x, y), fallback)
+        img.paste(fallback, (x, y), fallback)    
     
 
 # =============================
