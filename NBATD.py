@@ -2504,7 +2504,7 @@ class PosterGenerator:
             # Desenhar fundo com cantos arredondados
             fundo_draw.rounded_rectangle(
                 [0, 0, tamanho_quadrado, tamanho_quadrado],
-                radius=int(tamanho_quadrado * 0.12),
+                radius=int(tamanho_quadrado * 0.15),
                 fill=(255, 255, 255),
                 outline=(255, 255, 255)
             )
@@ -2519,7 +2519,7 @@ class PosterGenerator:
             # Fallback: desenhar placeholder
             draw.rounded_rectangle(
                 [x, y, x + tamanho_quadrado, y + tamanho_quadrado],
-                radius=int(tamanho_quadrado * 0.12),
+                radius=int(tamanho_quadrado * 0.15),
                 fill=(100, 100, 100),
                 outline=(100, 100, 100)
             )
