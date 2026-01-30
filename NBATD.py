@@ -1883,7 +1883,7 @@ class PosterGenerator:
     
     def gerar_poster_westham_style(self, jogos: list, titulo: str = " ALERTA DE GOLS", tipo_alerta: str = "over_under") -> io.BytesIO:
         """Gera poster no estilo West Ham"""
-        LARGURA = 1950
+        LARGURA = 2000
         ALTURA_TOPO = 270
         ALTURA_POR_JOGO = 830
         PADDING = 80
@@ -1940,11 +1940,11 @@ class PosterGenerator:
             except:
                 draw.text((LARGURA//2 - 150, y0 + 40), liga_text, font=FONTE_SUBTITULO, fill=(200, 200, 200))
 
-            if isinstance(jogo.get("hora"), datetime):
+            if isinstance(jogo["hora"], datetime):
                 data_text = jogo["hora"].strftime("%d.%m.%Y")
                 hora_text = jogo["hora"].strftime("%H:%M")
             else:
-                data_text = str(jogo.get("hora", "N/A"))
+                data_text = str(jogo["hora"])
                 hora_text = ""
 
             try:
@@ -1998,8 +1998,8 @@ class PosterGenerator:
             self._desenhar_escudo_quadrado(draw, img, escudo_home_img, x_home, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo['home'])
             self._desenhar_escudo_quadrado(draw, img, escudo_away_img, x_away, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo['away'])
 
-            home_text = jogo['home'][:12] if len(jogo['home']) > 12 else jogo['home']
-            away_text = jogo['away'][:12] if len(jogo['away']) > 12 else jogo['away']
+            home_text = jogo['home']
+            away_text = jogo['away']
 
             try:
                 home_bbox = draw.textbbox((0, 0), home_text, font=FONTE_TIMES)
@@ -2035,18 +2035,18 @@ class PosterGenerator:
             
             # Mostrar diferentes informações baseadas no tipo de alerta
             if tipo_alerta == "over_under":
-                tipo_emoji = "✅" if jogo.get('tipo_aposta') == "over" else "🔽"
+                tipo_emoji = "+" if jogo.get('tipo_aposta') == "over" else "-"
                 cor_tendencia = (255, 215, 0) if jogo.get('tipo_aposta') == "over" else (100, 200, 255)
                 
                 textos_analise = [
-                    f"{tipo_emoji} {jogo.get('tendencia', 'N/A')}",
-                    f"Confiança: {jogo.get('confianca', 0):.0f}%",
+                    f"{tipo_emoji} {jogo['tendencia']}",
+                    f"Confiança: {jogo['confianca']:.0f}%",
                 ]
                 
-                cores = [cor_tendencia, (100, 200, 255)]
+                cores = [cor_tendencia, (100, 200, 255), (100, 255, 100), (255, 193, 7)]
                 
             elif tipo_alerta == "favorito":
-                favorito_emoji = "🏠" if jogo.get('favorito') == "home" else "✈️" if jogo.get('favorito') == "away" else "🤝"
+                favorito_emoji = "" if jogo.get('favorito') == "home" else "" if jogo.get('favorito') == "away" else "🤝"
                 favorito_text = jogo['home'] if jogo.get('favorito') == "home" else jogo['away'] if jogo.get('favorito') == "away" else "EMPATE"
                 
                 textos_analise = [
@@ -2054,28 +2054,32 @@ class PosterGenerator:
                     f"Confiança: {jogo.get('confianca_vitoria', 0):.0f}%",
                 ]
                 
-                cores = [(255, 87, 34), (255, 152, 0)]
+                cores = [(255, 87, 34), (255, 152, 0), (255, 193, 7), (255, 224, 130), (100, 255, 100)]
                 
             elif tipo_alerta == "gols_ht":
-                tipo_emoji_ht = "📈" if "OVER" in jogo.get('tendencia_ht', '') else "📉"
+                tipo_emoji_ht = "" if "OVER" in jogo.get('tendencia_ht', '') else ""
                 
                 textos_analise = [
                     f"{tipo_emoji_ht} {jogo.get('tendencia_ht', 'N/A')}",
                     f"Estimativa HT: {jogo.get('estimativa_total_ht', 0):.2f} gols",
+                    f"OVER 0.5 HT: {jogo.get('detalhes', {}).get('gols_ht', {}).get('over_05_ht', 0):.0f}%",
+                    f"OVER 1.5 HT: {jogo.get('detalhes', {}).get('gols_ht', {}).get('over_15_ht', 0):.0f}%",
                     f"Confiança HT: {jogo.get('confianca_ht', 0):.0f}%",
                 ]
                 
-                cores = [(76, 175, 80), (129, 199, 132), (102, 187, 106)]
+                cores = [(76, 175, 80), (129, 199, 132), (102, 187, 106), (67, 160, 71), (100, 255, 100)]
             
             elif tipo_alerta == "ambas_marcam":
                 tipo_emoji_am = "🤝" if jogo.get('tendencia_ambas_marcam') == "SIM" else "🚫"
                 
                 textos_analise = [
                     f"{tipo_emoji_am} AMBAS MARCAM: {jogo.get('tendencia_ambas_marcam', 'N/A')}",
+                    #f"Probabilidade SIM: {jogo.get('prob_ambas_marcam_sim', 0):.1f}%",
+                    #f"Probabilidade NÃO: {jogo.get('prob_ambas_marcam_nao', 0):.1f}%",
                     f"Confiança: {jogo.get('confianca_ambas_marcam', 0):.0f}%",
                 ]
                 
-                cores = [(155, 89, 182), (165, 105, 189)]
+                cores = [(155, 89, 182), (165, 105, 189), (176, 122, 199), (188, 143, 209), (100, 255, 100)]
             
             else:
                 textos_analise = ["Informação não disponível"]
@@ -2103,15 +2107,14 @@ class PosterGenerator:
         img.save(buffer, format="PNG", optimize=True, quality=95)
         buffer.seek(0)
         
-        if 'st' in globals():
-            st.success(f"✅ Poster estilo West Ham GERADO com {len(jogos)} jogos")
+        st.success(f"✅ Poster estilo West Ham GERADO com {len(jogos)} jogos")
         return buffer
     
     def gerar_poster_resultados(self, jogos_com_resultados: list, tipo_alerta: str = "over_under") -> io.BytesIO:
         """Gera poster de resultados no estilo West Ham com GREEN/RED destacado"""
-        LARGURA = 1950
-        ALTURA_TOPO = 335
-        ALTURA_POR_JOGO = 800  # Aumentei um pouco para acomodar o badge GREEN/RED
+        LARGURA = 2000
+        ALTURA_TOPO = 330
+        ALTURA_POR_JOGO = 800 # Aumentei um pouco para acomodar o badge GREEN/RED
         PADDING = 80
         
         jogos_count = len(jogos_com_resultados)
@@ -2213,8 +2216,8 @@ class PosterGenerator:
             
             # Desenhar badge com cantos arredondados
             # Retângulo principal do badge
-            draw.rounded_rectangle([badge_x, badge_y, badge_x + badge_width, badge_y + badge_height], 
-                                  radius=15, fill=cor_badge, outline=cor_badge, width=2)
+            draw.rectangle([badge_x, badge_y, badge_x + badge_width, badge_y + badge_height], 
+                          fill=cor_badge, outline=cor_badge, width=2)
             
             # Texto do badge (GREEN ou RED)
             try:
@@ -2233,8 +2236,8 @@ class PosterGenerator:
                          font=FONTE_RESULTADO_BADGE, fill=cor_texto)
                 
                 # Contorno branco sutil
-                draw.rounded_rectangle([badge_x-2, badge_y-2, badge_x + badge_width + 2, badge_y + badge_height + 2], 
-                                      radius=17, outline=(255, 255, 255), width=1)
+                draw.rectangle([badge_x-2, badge_y-2, badge_x + badge_width + 2, badge_y + badge_height + 2], 
+                              outline=(255, 255, 255), width=1)
                 
             except:
                 # Fallback se houver erro na fonte
@@ -2243,7 +2246,7 @@ class PosterGenerator:
             # ================= FIM DO BADGE =================
 
             # Liga e data
-            liga_text = jogo.get('liga', 'N/A').upper()
+            liga_text = jogo['liga'].upper()
             try:
                 liga_bbox = draw.textbbox((0, 0), liga_text, font=FONTE_SUBTITULO)
                 liga_w = liga_bbox[2] - liga_bbox[0]
@@ -2271,10 +2274,10 @@ class PosterGenerator:
             escudo_away_bytes = None
             
             if home_crest_url:
-                escudo_home_bytes = self.api_client.baixar_escudo_time(jogo.get('home', ''), home_crest_url)
+                escudo_home_bytes = self.api_client.baixar_escudo_time(jogo['home'], home_crest_url)
             
             if away_crest_url:
-                escudo_away_bytes = self.api_client.baixar_escudo_time(jogo.get('away', ''), away_crest_url)
+                escudo_away_bytes = self.api_client.baixar_escudo_time(jogo['away'], away_crest_url)
             
             # Converter bytes para imagens PIL
             escudo_home_img = None
@@ -2284,23 +2287,21 @@ class PosterGenerator:
                 try:
                     escudo_home_img = Image.open(io.BytesIO(escudo_home_bytes)).convert("RGBA")
                 except Exception as e:
-                    logging.error(f"Erro ao abrir escudo do {jogo.get('home', '')}: {e}")
+                    logging.error(f"Erro ao abrir escudo do {jogo['home']}: {e}")
             
             if escudo_away_bytes:
                 try:
                     escudo_away_img = Image.open(io.BytesIO(escudo_away_bytes)).convert("RGBA")
                 except Exception as e:
-                    logging.error(f"Erro ao abrir escudo do {jogo.get('away', '')}: {e}")
+                    logging.error(f"Erro ao abrir escudo do {jogo['away']}: {e}")
 
             # Desenhar escudos
-            self._desenhar_escudo_quadrado(draw, img, escudo_home_img, x_home, y_escudos, 
-                                         TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo.get('home', ''))
-            self._desenhar_escudo_quadrado(draw, img, escudo_away_img, x_away, y_escudos, 
-                                         TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo.get('away', ''))
+            self._desenhar_escudo_quadrado(draw, img, escudo_home_img, x_home, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo['home'])
+            self._desenhar_escudo_quadrado(draw, img, escudo_away_img, x_away, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo['away'])
 
             # Nomes dos times
-            home_text = jogo.get('home', '')[0:12]
-            away_text = jogo.get('away', '')[0:12]
+            home_text = jogo['home'][:12]
+            away_text = jogo['away'][:12]
 
             try:
                 home_bbox = draw.textbbox((0, 0), home_text, font=FONTE_TIMES)
@@ -2330,8 +2331,7 @@ class PosterGenerator:
                          resultado_text_score, font=FONTE_RESULTADO, fill=(255, 255, 255))
             except:
                 resultado_x = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS//2 - 60
-                draw.text((resultado_x, y_escudos + TAMANHO_QUADRADO//2 - 40), 
-                         resultado_text_score, font=FONTE_RESULTADO, fill=(255, 255, 255))
+                draw.text((resultado_x, y_escudos + TAMANHO_QUADRADO//2 - 40), resultado_text_score, font=FONTE_RESULTADO, fill=(255, 255, 255))
 
             # Resultado HT se disponível
             if jogo.get('ht_home_goals') is not None and jogo.get('ht_away_goals') is not None:
@@ -2350,21 +2350,21 @@ class PosterGenerator:
             
             # Informações específicas do tipo de alerta
             if tipo_alerta == "over_under":
-                tipo_emoji = "✅" if jogo.get('tipo_aposta') == "over" else "🔽"
-                resultado_emoji = "✅" if resultado == "GREEN" else "❌" if resultado == "RED" else ""
+                tipo_emoji = "+" if jogo.get('tipo_aposta') == "over" else "-"
+                resultado_emoji = "" if resultado == "GREEN" else "❌" if resultado == "RED" else ""
                 
                 textos_analise = [
-                    f"{tipo_emoji} {jogo.get('tendencia', 'N/A')} {resultado_emoji}",
-                    f"Estimativa: {jogo.get('estimativa', 0):.2f} gols | Resultado: {jogo.get('home_goals', '?')} - {jogo.get('away_goals', '?')}",
-                    f"Probabilidade: {jogo.get('probabilidade', 0):.0f}% | Confiança: {jogo.get('confianca', 0):.0f}%",
+                    f"{tipo_emoji} {jogo['tendencia']} {resultado_emoji}",
+                    f"Estimativa: {jogo['estimativa']:.2f} gols | Resultado: {jogo.get('home_goals', '?')} - {jogo.get('away_goals', '?')}",
+                    f"Probabilidade: {jogo['probabilidade']:.0f}% | Confiança: {jogo['confianca']:.0f}%",
                 ]
                 
                 cores = [(255, 255, 255), (200, 200, 200), (200, 200, 200)]
                 
             elif tipo_alerta == "favorito":
-                favorito_emoji = "🏠" if jogo.get('favorito') == "home" else "✈️" if jogo.get('favorito') == "away" else "🤝"
-                favorito_text = jogo.get('home', '') if jogo.get('favorito') == "home" else jogo.get('away', '') if jogo.get('favorito') == "away" else "EMPATE"
-                resultado_emoji = "✅" if resultado == "GREEN" else "❌" if resultado == "RED" else ""
+                favorito_emoji = "" if jogo.get('favorito') == "home" else "" if jogo.get('favorito') == "away" else "🤝"
+                favorito_text = jogo['home'] if jogo.get('favorito') == "home" else jogo['away'] if jogo.get('favorito') == "away" else "EMPATE"
+                resultado_emoji = "" if resultado == "GREEN" else "❌" if resultado == "RED" else ""
                 
                 textos_analise = [
                     f"{favorito_emoji} FAVORITO: {favorito_text} {resultado_emoji}",
@@ -2375,8 +2375,8 @@ class PosterGenerator:
                 cores = [(255, 255, 255), (200, 200, 200), (200, 200, 200)]
                 
             elif tipo_alerta == "gols_ht":
-                tipo_emoji_ht = "📈" if "OVER" in jogo.get('tendencia_ht', '') else "📉"
-                resultado_emoji = "✅" if resultado == "GREEN" else "❌" if resultado == "RED" else ""
+                tipo_emoji_ht = "" if "OVER" in jogo.get('tendencia_ht', '') else ""
+                resultado_emoji = "" if resultado == "GREEN" else "❌" if resultado == "RED" else ""
                 ht_resultado = f"{jogo.get('ht_home_goals', '?')} - {jogo.get('ht_away_goals', '?')}"
                 
                 textos_analise = [
@@ -2389,7 +2389,7 @@ class PosterGenerator:
             
             elif tipo_alerta == "ambas_marcam":
                 tipo_emoji_am = "🤝" if jogo.get('tendencia_ambas_marcam') == "SIM" else "🚫"
-                resultado_emoji = "✅" if resultado == "GREEN" else "❌" if resultado == "RED" else ""
+                resultado_emoji = "" if resultado == "GREEN" else "❌" if resultado == "RED" else ""
                 
                 textos_analise = [
                     f"{tipo_emoji_am} AMBAS MARCAM: {jogo.get('tendencia_ambas_marcam', 'N/A')} {resultado_emoji}",
@@ -2426,28 +2426,20 @@ class PosterGenerator:
         img.save(buffer, format="PNG", optimize=True, quality=95)
         buffer.seek(0)
         
-        if 'st' in globals():
-            st.success(f"✅ Poster de resultados GERADO com {len(jogos_com_resultados)} jogos")
+        st.success(f"✅ Poster de resultados GERADO com {len(jogos_com_resultados)} jogos")
         return buffer
     
     def _desenhar_escudo_quadrado(self, draw, img, logo_img, x, y, tamanho_quadrado, tamanho_escudo, team_name=""):
         """Desenha escudo quadrado com fallback"""
-        # Desenhar quadrado com cantos arredondados
-        draw.rounded_rectangle(
+        draw.rectangle(
             [x, y, x + tamanho_quadrado, y + tamanho_quadrado],
-            radius=int(tamanho_quadrado * 0.12),  # Raio proporcional ao tamanho
             fill=(255, 255, 255),
             outline=(255, 255, 255)
         )
 
         if logo_img is None:
             # Desenhar placeholder com as iniciais do time
-            draw.rounded_rectangle(
-                [x, y, x + tamanho_quadrado, y + tamanho_quadrado],
-                radius=int(tamanho_quadrado * 0.12),
-                fill=(60, 60, 60),
-                outline=(60, 60, 60)
-            )
+            draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(60, 60, 60))
             
             # Pegar as iniciais do time
             if team_name:
@@ -2499,16 +2491,6 @@ class PosterGenerator:
 
             # Criar uma imagem branca de fundo
             fundo = Image.new("RGBA", (tamanho_quadrado, tamanho_quadrado), (255, 255, 255, 255))
-            fundo_draw = ImageDraw.Draw(fundo)
-            
-            # Desenhar fundo com cantos arredondados
-            fundo_draw.rounded_rectangle(
-                [0, 0, tamanho_quadrado, tamanho_quadrado],
-                radius=int(tamanho_quadrado * 0.12),
-                fill=(255, 255, 255),
-                outline=(255, 255, 255)
-            )
-            
             fundo.paste(imagem_redimensionada, (pos_x - x, pos_y - y), imagem_redimensionada)
             
             # Colar a imagem composta
@@ -2517,12 +2499,7 @@ class PosterGenerator:
         except Exception as e:
             logging.error(f"Erro ao processar escudo de {team_name}: {e}")
             # Fallback: desenhar placeholder
-            draw.rounded_rectangle(
-                [x, y, x + tamanho_quadrado, y + tamanho_quadrado],
-                radius=int(tamanho_quadrado * 0.12),
-                fill=(100, 100, 100),
-                outline=(100, 100, 100)
-            )
+            draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(100, 100, 100))
             
             if team_name:
                 iniciais = ''.join([palavra[0].upper() for palavra in team_name.split()[:2]])
@@ -2539,7 +2516,6 @@ class PosterGenerator:
                          iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
             except:
                 draw.text((x + 70, y + 90), iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
-  
 
 # =============================
 # SISTEMA PRINCIPAL
