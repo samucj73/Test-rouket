@@ -1883,7 +1883,7 @@ class PosterGenerator:
     
     def gerar_poster_westham_style(self, jogos: list, titulo: str = " ALERTA DE GOLS", tipo_alerta: str = "over_under") -> io.BytesIO:
         """Gera poster no estilo West Ham"""
-        LARGURA = 2000
+        LARGURA = 1950
         ALTURA_TOPO = 270
         ALTURA_POR_JOGO = 830
         PADDING = 80
@@ -2062,8 +2062,8 @@ class PosterGenerator:
                 textos_analise = [
                     f"{tipo_emoji_ht} {jogo.get('tendencia_ht', 'N/A')}",
                     f"Estimativa HT: {jogo.get('estimativa_total_ht', 0):.2f} gols",
-                    f"OVER 0.5 HT: {jogo.get('detalhes', {}).get('gols_ht', {}).get('over_05_ht', 0):.0f}%",
-                    f"OVER 1.5 HT: {jogo.get('detalhes', {}).get('gols_ht', {}).get('over_15_ht', 0):.0f}%",
+                    #f"OVER 0.5 HT: {jogo.get('detalhes', {}).get('gols_ht', {}).get('over_05_ht', 0):.0f}%",
+                    #f"OVER 1.5 HT: {jogo.get('detalhes', {}).get('gols_ht', {}).get('over_15_ht', 0):.0f}%",
                     f"Confiança HT: {jogo.get('confianca_ht', 0):.0f}%",
                 ]
                 
@@ -2112,8 +2112,8 @@ class PosterGenerator:
     
     def gerar_poster_resultados(self, jogos_com_resultados: list, tipo_alerta: str = "over_under") -> io.BytesIO:
         """Gera poster de resultados no estilo West Ham com GREEN/RED destacado"""
-        LARGURA = 2000
-        ALTURA_TOPO = 330
+        LARGURA = 1950
+        ALTURA_TOPO = 335
         ALTURA_POR_JOGO = 800 # Aumentei um pouco para acomodar o badge GREEN/RED
         PADDING = 80
         
@@ -2444,7 +2444,7 @@ class PosterGenerator:
             # Desenhar placeholder com as iniciais do time
             draw.rounded_rectangle(
                 [x, y, x + tamanho_quadrado, y + tamanho_quadrado],
-                radius=int(tamanho_quadrado * 0.12),
+                radius=int(tamanho_quadrado * 0.20),
                 fill=(60, 60, 60),
                 outline=(60, 60, 60)
             )
@@ -2504,7 +2504,7 @@ class PosterGenerator:
             # Desenhar fundo com cantos arredondados
             fundo_draw.rounded_rectangle(
                 [0, 0, tamanho_quadrado, tamanho_quadrado],
-                radius=int(tamanho_quadrado * 0.15),
+                radius=int(tamanho_quadrado * 0.20),
                 fill=(255, 255, 255),
                 outline=(255, 255, 255)
             )
@@ -2519,7 +2519,7 @@ class PosterGenerator:
             # Fallback: desenhar placeholder
             draw.rounded_rectangle(
                 [x, y, x + tamanho_quadrado, y + tamanho_quadrado],
-                radius=int(tamanho_quadrado * 0.15),
+                radius=int(tamanho_quadrado * 0.20),
                 fill=(100, 100, 100),
                 outline=(100, 100, 100)
             )
