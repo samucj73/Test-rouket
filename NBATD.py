@@ -2488,7 +2488,7 @@ class PosterGenerator:
             w = bbox[2] - bbox[0]
             h = bbox[3] - bbox[1]
             draw_placeholder.text(((tamanho_quadrado - w)//2, (tamanho_quadrado - h)//2), 
-                     iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
+                                 iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
         except:
             draw_placeholder.text((70, 90), iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
         
@@ -2553,7 +2553,7 @@ class PosterGenerator:
             w = bbox[2] - bbox[0]
             h = bbox[3] - bbox[1]
             draw_fallback.text(((tamanho_quadrado - w)//2, (tamanho_quadrado - h)//2), 
-                     iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
+                             iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
         except:
             draw_fallback.text((70, 90), iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
         
