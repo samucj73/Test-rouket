@@ -653,7 +653,6 @@ class Jogo:
         # Calcular resultado para Ambas Marcam
         self.resultado_ambas_marcam = self.calcular_resultado_ambas_marcam(home_goals, away_goals)
     
-    #def calcular_resultado_over_under(self, total_gols: float) -> str:
     def calcular_resultado_over_under(self, total_gols: float) -> str:
         """Calcula se a previsão Over/Under foi GREEN ou RED"""
         
@@ -1028,7 +1027,6 @@ class AnalisadorEstatistico:
         }
 
 
-#class AnalisadorTendencia:
 class AnalisadorTendencia:
     """Analisa tendências de gols em partidas - VERSÃO REALISTA E EQUILIBRADA"""
 
@@ -2551,7 +2549,7 @@ class SistemaAlertasFutebol:
     def processar_jogos(self, data_selecionada, ligas_selecionadas, todas_ligas, top_n, min_conf, 
                        max_conf, estilo_poster, alerta_individual, alerta_poster, alerta_top_jogos,
                        formato_top_jogos, tipo_filtro, tipo_analise, config_analise):
-        """Processa jogos e gera alertas"""
+        """Processa jogos e gera alertas - CORRIGIDO"""
         hoje = data_selecionada.strftime("%Y-%m-%d")
         
         if todas_ligas:
@@ -2594,7 +2592,34 @@ class SistemaAlertasFutebol:
                     if not jogo.validar_dados():
                         continue
                     
+                    # Calcular análise de tendência principal (Over/Under)
                     analise = analisador.calcular_tendencia_completa(jogo.home_team, jogo.away_team)
+                    
+                    # Calcular análises adicionais
+                    dados_analise_extra = {}
+                    
+                    # SEMPRE calcular análises de favorito, HT e ambas marcam
+                    if classificacao:
+                        # 1. Análise de Favorito (Vitória)
+                        vitoria_analise = AnalisadorEstatistico.calcular_probabilidade_vitoria(
+                            jogo.home_team, jogo.away_team, classificacao
+                        )
+                        dados_analise_extra["vitoria"] = vitoria_analise
+                        
+                        # 2. Análise de Gols HT
+                        ht_analise = AnalisadorEstatistico.calcular_probabilidade_gols_ht(
+                            jogo.home_team, jogo.away_team, classificacao
+                        )
+                        dados_analise_extra["gols_ht"] = ht_analise
+                        
+                        # 3. Análise de Ambas Marcam
+                        ambas_marcam_analise = AnalisadorEstatistico.calcular_probabilidade_ambas_marcam(
+                            jogo.home_team, jogo.away_team, classificacao
+                        )
+                        dados_analise_extra["ambas_marcam"] = ambas_marcam_analise
+                    
+                    # Atualizar análise do jogo com dados extras
+                    analise["detalhes"].update(dados_analise_extra)
                     jogo.set_analise(analise)
                     
                     data_br, hora_br = jogo.get_data_hora_brasilia()
@@ -2618,46 +2643,76 @@ class SistemaAlertasFutebol:
                     
                     st.write(f"      Status: {jogo.status}")
                     
-                    # Verificar e enviar alertas baseado no tipo de análise
-                    if tipo_analise == "Over/Under de Gols" and min_conf <= analise["confianca"] <= max_conf:
-                        if tipo_filtro == "Todos" or \
-                           (tipo_filtro == "Apenas Over" and analise["tipo_aposta"] == "over") or \
-                           (tipo_filtro == "Apenas Under" and analise["tipo_aposta"] == "under"):
-                            self._verificar_enviar_alerta(jogo, match_data, analise, alerta_individual, min_conf, max_conf, "over_under")
+                    # **CORREÇÃO CRÍTICA: Verificar e enviar alertas baseado no tipo de análise selecionado**
+                    if tipo_analise == "Over/Under de Gols":
+                        # Filtro original para Over/Under
+                        if min_conf <= analise["confianca"] <= max_conf:
+                            if tipo_filtro == "Todos" or \
+                               (tipo_filtro == "Apenas Over" and analise["tipo_aposta"] == "over") or \
+                               (tipo_filtro == "Apenas Under" and analise["tipo_aposta"] == "under"):
+                                self._verificar_enviar_alerta(jogo, match_data, analise, alerta_individual, 
+                                                             min_conf, max_conf, "over_under")
                     
                     elif tipo_analise == "Favorito (Vitória)":
+                        # Configurações específicas para favorito
+                        min_conf_vitoria = config_analise.get("min_conf_vitoria", 65)
+                        filtro_favorito = config_analise.get("filtro_favorito", "Todos")
+                        
                         if 'vitoria' in analise['detalhes']:
                             v = analise['detalhes']['vitoria']
-                            min_conf_vitoria = config_analise.get("min_conf_vitoria", 65)
-                            filtro_favorito = config_analise.get("filtro_favorito", "Todos")
                             
+                            # Verificar confiança mínima
                             if v['confianca_vitoria'] >= min_conf_vitoria:
-                                if filtro_favorito == "Todos" or \
-                                   (filtro_favorito == "Casa" and v['favorito'] == "home") or \
-                                   (filtro_favorito == "Fora" and v['favorito'] == "away") or \
-                                   (filtro_favorito == "Empate" and v['favorito'] == "draw"):
-                                    self._verificar_enviar_alerta(jogo, match_data, analise, alerta_individual, min_conf_vitoria, 100, "favorito")
+                                # Verificar filtro de favorito
+                                send_alert = False
+                                if filtro_favorito == "Todos":
+                                    send_alert = True
+                                elif filtro_favorito == "Casa" and v['favorito'] == "home":
+                                    send_alert = True
+                                elif filtro_favorito == "Fora" and v['favorito'] == "away":
+                                    send_alert = True
+                                elif filtro_favorito == "Empate" and v['favorito'] == "draw":
+                                    send_alert = True
+                                
+                                if send_alert:
+                                    self._verificar_enviar_alerta(jogo, match_data, analise, alerta_individual, 
+                                                                 min_conf_vitoria, 100, "favorito")
                     
                     elif tipo_analise == "Gols HT (Primeiro Tempo)":
+                        # Configurações específicas para HT
+                        min_conf_ht = config_analise.get("min_conf_ht", 60)
+                        tipo_ht = config_analise.get("tipo_ht", "OVER 0.5 HT")
+                        
                         if 'gols_ht' in analise['detalhes']:
                             ht = analise['detalhes']['gols_ht']
-                            min_conf_ht = config_analise.get("min_conf_ht", 60)
-                            tipo_ht = config_analise.get("tipo_ht", "OVER 0.5 HT")
                             
+                            # Verificar confiança mínima e tipo
                             if ht['confianca_ht'] >= min_conf_ht and ht['tendencia_ht'] == tipo_ht:
-                                self._verificar_enviar_alerta(jogo, match_data, analise, alerta_individual, min_conf_ht, 100, "gols_ht")
+                                self._verificar_enviar_alerta(jogo, match_data, analise, alerta_individual, 
+                                                             min_conf_ht, 100, "gols_ht")
                     
                     elif tipo_analise == "Ambas Marcam (BTTS)":
+                        # Configurações específicas para ambas marcam
+                        min_conf_am = config_analise.get("min_conf_am", 60)
+                        filtro_am = config_analise.get("filtro_am", "Todos")
+                        
                         if 'ambas_marcam' in analise['detalhes']:
                             am = analise['detalhes']['ambas_marcam']
-                            min_conf_am = config_analise.get("min_conf_am", 60)
-                            filtro_am = config_analise.get("filtro_am", "Todos")
                             
+                            # Verificar confiança mínima
                             if am['confianca_ambas_marcam'] >= min_conf_am:
-                                if filtro_am == "Todos" or \
-                                   (filtro_am == "SIM" and am['tendencia_ambas_marcam'] == "SIM") or \
-                                   (filtro_am == "NÃO" and am['tendencia_ambas_marcam'] == "NÃO"):
-                                    self._verificar_enviar_alerta(jogo, match_data, analise, alerta_individual, min_conf_am, 100, "ambas_marcam")
+                                # Verificar filtro
+                                send_alert = False
+                                if filtro_am == "Todos":
+                                    send_alert = True
+                                elif filtro_am == "SIM" and am['tendencia_ambas_marcam'] == "SIM":
+                                    send_alert = True
+                                elif filtro_am == "NÃO" and am['tendencia_ambas_marcam'] == "NÃO":
+                                    send_alert = True
+                                
+                                if send_alert:
+                                    self._verificar_enviar_alerta(jogo, match_data, analise, alerta_individual, 
+                                                                 min_conf_am, 100, "ambas_marcam")
 
                     top_jogos.append(jogo.to_dict())
                 
@@ -3077,7 +3132,7 @@ class SistemaAlertasFutebol:
                 st.success(f"📊 Resumo final {tipo_alerta} enviado!")
     
     def _verificar_enviar_alerta(self, jogo: Jogo, match_data: dict, analise: dict, alerta_individual: bool, min_conf: int, max_conf: int, tipo_alerta: str):
-        """Verifica e envia alerta individual"""
+        """Verifica e envia alerta individual - CORRIGIDO"""
         # Carregar alertas apropriados baseado no tipo
         if tipo_alerta == "over_under":
             alertas = DataStorage.carregar_alertas()
@@ -3097,56 +3152,63 @@ class SistemaAlertasFutebol:
         
         fixture_id = str(jogo.id)
         
-        # Verificar condições específicas do tipo de alerta
-        enviar_alerta = False
-        
-        if tipo_alerta == "over_under":
-            enviar_alerta = (min_conf <= analise["confianca"] <= max_conf)
-        elif tipo_alerta == "favorito" and 'vitoria' in analise['detalhes']:
-            v = analise['detalhes']['vitoria']
-            enviar_alerta = (min_conf <= v['confianca_vitoria'] <= max_conf)
-        elif tipo_alerta == "gols_ht" and 'gols_ht' in analise['detalhes']:
-            ht = analise['detalhes']['gols_ht']
-            enviar_alerta = (min_conf <= ht['confianca_ht'] <= max_conf)
-        elif tipo_alerta == "ambas_marcam" and 'ambas_marcam' in analise['detalhes']:
-            am = analise['detalhes']['ambas_marcam']
-            enviar_alerta = (min_conf <= am['confianca_ambas_marcam'] <= max_conf)
-        
-        if enviar_alerta and fixture_id not in alertas:
-            # Salvar alerta
+        # Verificar se já existe alerta para este jogo
+        if fixture_id not in alertas:
+            # CRIAR alerta_data COM TODOS OS DADOS NECESSÁRIOS
             alerta_data = {
-                "tendencia": analise["tendencia"] if tipo_alerta == "over_under" else "",
-                "favorito": analise['detalhes'].get('vitoria', {}).get('favorito', '') if tipo_alerta == "favorito" else "",
-                "tendencia_ht": analise['detalhes'].get('gols_ht', {}).get('tendencia_ht', '') if tipo_alerta == "gols_ht" else "",
-                "tendencia_ambas_marcam": analise['detalhes'].get('ambas_marcam', {}).get('tendencia_ambas_marcam', '') if tipo_alerta == "ambas_marcam" else "",
-                "estimativa": analise["estimativa"] if tipo_alerta == "over_under" else 0.0,
-                "probabilidade": analise["probabilidade"] if tipo_alerta == "over_under" else 0.0,
-                "confianca": analise["confianca"] if tipo_alerta == "over_under" else 0.0,
-                "confianca_vitoria": analise['detalhes'].get('vitoria', {}).get('confianca_vitoria', 0.0) if tipo_alerta == "favorito" else 0.0,
-                "confianca_ht": analise['detalhes'].get('gols_ht', {}).get('confianca_ht', 0.0) if tipo_alerta == "gols_ht" else 0.0,
-                "confianca_ambas_marcam": analise['detalhes'].get('ambas_marcam', {}).get('confianca_ambas_marcam', 0.0) if tipo_alerta == "ambas_marcam" else 0.0,
-                "tipo_aposta": analise["tipo_aposta"] if tipo_alerta == "over_under" else "",
-                "detalhes": analise["detalhes"],
-                "conferido": False,
-                "tipo_alerta": tipo_alerta,
+                "id": fixture_id,
                 "home": jogo.home_team,
                 "away": jogo.away_team,
                 "liga": jogo.competition,
                 "hora": jogo.get_hora_brasilia_datetime().isoformat(),
+                "status": jogo.status,
                 "escudo_home": jogo.home_crest,
-                "escudo_away": jogo.away_crest
+                "escudo_away": jogo.away_crest,
+                "tipo_alerta": tipo_alerta,
+                "conferido": False,
+                "data_busca": datetime.now().strftime("%Y-%m-%d")
             }
             
-            # Adicionar probabilidades específicas
-            if tipo_alerta == "ambas_marcam" and 'ambas_marcam' in analise['detalhes']:
-                am = analise['detalhes']['ambas_marcam']
-                alerta_data["prob_ambas_marcam_sim"] = am.get("sim", 0.0)
-                alerta_data["prob_ambas_marcam_nao"] = am.get("nao", 0.0)
-            elif tipo_alerta == "favorito" and 'vitoria' in analise['detalhes']:
-                v = analise['detalhes']['vitoria']
-                alerta_data["prob_home_win"] = v.get("home_win", 0.0)
-                alerta_data["prob_away_win"] = v.get("away_win", 0.0)
-                alerta_data["prob_draw"] = v.get("draw", 0.0)
+            # Adicionar dados específicos do tipo
+            if tipo_alerta == "over_under":
+                alerta_data.update({
+                    "tendencia": analise.get("tendencia", ""),
+                    "estimativa": analise.get("estimativa", 0.0),
+                    "probabilidade": analise.get("probabilidade", 0.0),
+                    "confianca": analise.get("confianca", 0.0),
+                    "tipo_aposta": analise.get("tipo_aposta", ""),
+                    "detalhes": analise.get("detalhes", {})
+                })
+            elif tipo_alerta == "favorito":
+                if 'vitoria' in analise.get('detalhes', {}):
+                    v = analise['detalhes']['vitoria']
+                    alerta_data.update({
+                        "favorito": v.get("favorito", ""),
+                        "confianca_vitoria": v.get("confianca_vitoria", 0.0),
+                        "prob_home_win": v.get("home_win", 0.0),
+                        "prob_away_win": v.get("away_win", 0.0),
+                        "prob_draw": v.get("draw", 0.0),
+                        "detalhes": analise.get("detalhes", {})
+                    })
+            elif tipo_alerta == "gols_ht":
+                if 'gols_ht' in analise.get('detalhes', {}):
+                    ht = analise['detalhes']['gols_ht']
+                    alerta_data.update({
+                        "tendencia_ht": ht.get("tendencia_ht", ""),
+                        "confianca_ht": ht.get("confianca_ht", 0.0),
+                        "estimativa_total_ht": ht.get("estimativa_total_ht", 0.0),
+                        "detalhes": analise.get("detalhes", {})
+                    })
+            elif tipo_alerta == "ambas_marcam":
+                if 'ambas_marcam' in analise.get('detalhes', {}):
+                    am = analise['detalhes']['ambas_marcam']
+                    alerta_data.update({
+                        "tendencia_ambas_marcam": am.get("tendencia_ambas_marcam", ""),
+                        "confianca_ambas_marcam": am.get("confianca_ambas_marcam", 0.0),
+                        "prob_ambas_marcam_sim": am.get("sim", 0.0),
+                        "prob_ambas_marcam_nao": am.get("nao", 0.0),
+                        "detalhes": analise.get("detalhes", {})
+                    })
             
             alertas[fixture_id] = alerta_data
             
@@ -3276,7 +3338,7 @@ class SistemaAlertasFutebol:
             self.telegram_client.enviar_mensagem(caption, self.config.TELEGRAM_CHAT_ID_ALT2)
     
     def _filtrar_por_tipo_analise(self, jogos, tipo_analise, config):
-        """Filtra jogos baseado no tipo de análise selecionado"""
+        """Filtra jogos baseado no tipo de análise selecionado - CORRIGIDO"""
         if tipo_analise == "Over/Under de Gols":
             min_conf = config.get("min_conf", 70)
             max_conf = config.get("max_conf", 95)
@@ -3284,14 +3346,14 @@ class SistemaAlertasFutebol:
             
             jogos_filtrados = [
                 j for j in jogos
-                if min_conf <= j["confianca"] <= max_conf and 
-                j["status"] not in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"]
+                if min_conf <= j.get("confianca", 0) <= max_conf and 
+                j.get("status") not in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"]
             ]
             
             if tipo_filtro == "Apenas Over":
-                jogos_filtrados = [j for j in jogos_filtrados if j["tipo_aposta"] == "over"]
+                jogos_filtrados = [j for j in jogos_filtrados if j.get("tipo_aposta") == "over"]
             elif tipo_filtro == "Apenas Under":
-                jogos_filtrados = [j for j in jogos_filtrados if j["tipo_aposta"] == "under"]
+                jogos_filtrados = [j for j in jogos_filtrados if j.get("tipo_aposta") == "under"]
             
             return jogos_filtrados
         
@@ -3302,7 +3364,7 @@ class SistemaAlertasFutebol:
             jogos_filtrados = [
                 j for j in jogos
                 if j.get("confianca_vitoria", 0) >= min_conf_vitoria and
-                j["status"] not in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"]
+                j.get("status") not in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"]
             ]
             
             if filtro_favorito == "Casa":
@@ -3322,7 +3384,7 @@ class SistemaAlertasFutebol:
                 j for j in jogos
                 if j.get("confianca_ht", 0) >= min_conf_ht and
                 j.get("tendencia_ht") == tipo_ht and
-                j["status"] not in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"]
+                j.get("status") not in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"]
             ]
             
             return jogos_filtrados
@@ -3334,7 +3396,7 @@ class SistemaAlertasFutebol:
             jogos_filtrados = [
                 j for j in jogos
                 if j.get("confianca_ambas_marcam", 0) >= min_conf_am and
-                j["status"] not in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"]
+                j.get("status") not in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"]
             ]
             
             if filtro_am == "SIM":
@@ -3352,11 +3414,11 @@ class SistemaAlertasFutebol:
             st.info("ℹ️ Alerta de Top Jogos desativado")
             return
         
-        jogos_elegiveis = [j for j in jogos_filtrados if j["status"] not in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"]]
+        jogos_elegiveis = [j for j in jogos_filtrados if j.get("status") not in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"]]
         
         # Aplicar filtro de confiança específico para o tipo de alerta
         if tipo_alerta == "over_under":
-            jogos_elegiveis = [j for j in jogos_elegiveis if min_conf <= j["confianca"] <= max_conf]
+            jogos_elegiveis = [j for j in jogos_elegiveis if min_conf <= j.get("confianca", 0) <= max_conf]
         elif tipo_alerta == "favorito":
             jogos_elegiveis = [j for j in jogos_elegiveis if min_conf <= j.get("confianca_vitoria", 0) <= max_conf]
         elif tipo_alerta == "gols_ht":
@@ -3370,7 +3432,7 @@ class SistemaAlertasFutebol:
         
         # Ordenar por métrica apropriada
         if tipo_alerta == "over_under":
-            top_jogos_sorted = sorted(jogos_elegiveis, key=lambda x: x["confianca"], reverse=True)[:top_n]
+            top_jogos_sorted = sorted(jogos_elegiveis, key=lambda x: x.get("confianca", 0), reverse=True)[:top_n]
         elif tipo_alerta == "favorito":
             top_jogos_sorted = sorted(jogos_elegiveis, key=lambda x: x.get("confianca_vitoria", 0), reverse=True)[:top_n]
         elif tipo_alerta == "gols_ht":
@@ -3414,7 +3476,7 @@ class SistemaAlertasFutebol:
                 hora_format = jogo["hora"].strftime("%H:%M") if isinstance(jogo["hora"], datetime) else str(jogo["hora"])
                 
                 if tipo_alerta == "over_under":
-                    tipo_emoji = "📈" if jogo['tipo_aposta'] == "over" else "📉"
+                    tipo_emoji = "📈" if jogo.get('tipo_aposta') == "over" else "📉"
                     msg += (
                         f"{idx}. {tipo_emoji} <b>{jogo['home']} vs {jogo['away']}</b>\n"
                         f"   🕒 {hora_format} BRT | {jogo['liga']}\n"
@@ -3648,7 +3710,7 @@ class SistemaAlertasFutebol:
                 
                 for j in jogos_conf:
                     hora_format = j["hora"].strftime("%H:%M") if isinstance(j["hora"], datetime) else str(j["hora"])
-                    favorito_emoji = "🏠" if j.get('favorito') == "home" else "✈️" if jogo.get('favorito') == "away" else "🤝"
+                    favorito_emoji = "🏠" if j.get('favorito') == "home" else "✈️" if j.get('favorito') == "away" else "🤝"
                     favorito_text = j['home'] if j.get('favorito') == "home" else j['away'] if j.get('favorito') == "away" else "EMPATE"
                     
                     msg += (
