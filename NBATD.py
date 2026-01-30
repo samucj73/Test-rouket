@@ -2430,7 +2430,7 @@ class PosterGenerator:
         return buffer
     
     #def _desenhar_escudo_quadrado(self, draw, img, logo_img, x, y, tamanho_quadrado, tamanho_escudo, team_name=""):
-     def _desenhar_escudo_quadrado(self, draw, img, logo_img, x, y, tamanho_quadrado, tamanho_escudo, team_name=""):
+    def _desenhar_escudo_quadrado(self, draw, img, logo_img, x, y, tamanho_quadrado, tamanho_escudo, team_name=""):
        """Desenha escudo quadrado com fallback"""
     # SOLUÇÃO PARA VERSÕES ANTIGAS DO PILLOW
     # Criar uma imagem separada para o quadrado arredondado
