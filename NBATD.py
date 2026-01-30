@@ -2429,93 +2429,116 @@ class PosterGenerator:
         st.success(f"✅ Poster de resultados GERADO com {len(jogos_com_resultados)} jogos")
         return buffer
     
+    #def _desenhar_escudo_quadrado(self, draw, img, logo_img, x, y, tamanho_quadrado, tamanho_escudo, team_name=""):
     def _desenhar_escudo_quadrado(self, draw, img, logo_img, x, y, tamanho_quadrado, tamanho_escudo, team_name=""):
-        """Desenha escudo quadrado com fallback"""
-        draw.rectangle(
+    """Desenha escudo quadrado com fallback"""
+    # ALTERADO: Agora desenha quadrado com cantos arredondados
+    draw.rounded_rectangle(
+        [x, y, x + tamanho_quadrado, y + tamanho_quadrado],
+        radius=int(tamanho_quadrado * 0.12),  # Raio proporcional ao tamanho
+        fill=(255, 255, 255),
+        outline=(255, 255, 255)
+    )
+
+    if logo_img is None:
+        # Desenhar placeholder com as iniciais do time
+        draw.rounded_rectangle(
             [x, y, x + tamanho_quadrado, y + tamanho_quadrado],
+            radius=int(tamanho_quadrado * 0.12),
+            fill=(60, 60, 60),
+            outline=(60, 60, 60)
+        )
+        
+        # Pegar as iniciais do time
+        if team_name:
+            iniciais = ''.join([palavra[0].upper() for palavra in team_name.split()[:2]])
+            if len(iniciais) > 3:
+                iniciais = iniciais[:3]
+        else:
+            iniciais = "SEM"
+        
+        try:
+            bbox = draw.textbbox((0, 0), iniciais, font=self.criar_fonte(50))
+            w = bbox[2] - bbox[0]
+            h = bbox[3] - bbox[1]
+            draw.text((x + (tamanho_quadrado - w)//2, y + (tamanho_quadrado - h)//2), 
+                     iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
+        except:
+            draw.text((x + 70, y + 90), iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
+        return
+
+    try:
+        logo_img = logo_img.convert("RGBA")
+        largura, altura = logo_img.size
+        
+        # Calcular para manter proporção
+        proporcao = largura / altura
+        
+        if proporcao > 1:
+            # Imagem mais larga que alta
+            nova_altura = tamanho_escudo
+            nova_largura = int(tamanho_escudo * proporcao)
+            if nova_largura > tamanho_escudo:
+                # Redimensionar mantendo proporção
+                nova_largura = tamanho_escudo
+                nova_altura = int(tamanho_escudo / proporcao)
+        else:
+            # Imagem mais alta que larga
+            nova_largura = tamanho_escudo
+            nova_altura = int(tamanho_escudo / proporcao)
+            if nova_altura > tamanho_escudo:
+                nova_altura = tamanho_escudo
+                nova_largura = int(tamanho_escudo * proporcao)
+        
+        # Redimensionar a imagem
+        imagem_redimensionada = logo_img.resize((nova_largura, nova_altura), Image.Resampling.LANCZOS)
+        
+        # Calcular posição para centralizar
+        pos_x = x + (tamanho_quadrado - nova_largura) // 2
+        pos_y = y + (tamanho_quadrado - nova_altura) // 2
+
+        # Criar uma imagem branca de fundo
+        fundo = Image.new("RGBA", (tamanho_quadrado, tamanho_quadrado), (255, 255, 255, 255))
+        fundo_draw = ImageDraw.Draw(fundo)
+        
+        # Desenhar fundo com cantos arredondados
+        fundo_draw.rounded_rectangle(
+            [0, 0, tamanho_quadrado, tamanho_quadrado],
+            radius=int(tamanho_quadrado * 0.12),
             fill=(255, 255, 255),
             outline=(255, 255, 255)
         )
+        
+        fundo.paste(imagem_redimensionada, (pos_x - x, pos_y - y), imagem_redimensionada)
+        
+        # Colar a imagem composta
+        img.paste(fundo, (x, y), fundo)
 
-        if logo_img is None:
-            # Desenhar placeholder com as iniciais do time
-            draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(60, 60, 60))
-            
-            # Pegar as iniciais do time
-            if team_name:
-                iniciais = ''.join([palavra[0].upper() for palavra in team_name.split()[:2]])
-                if len(iniciais) > 3:
-                    iniciais = iniciais[:3]
-            else:
-                iniciais = "SEM"
-            
-            try:
-                bbox = draw.textbbox((0, 0), iniciais, font=self.criar_fonte(50))
-                w = bbox[2] - bbox[0]
-                h = bbox[3] - bbox[1]
-                draw.text((x + (tamanho_quadrado - w)//2, y + (tamanho_quadrado - h)//2), 
-                         iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
-            except:
-                draw.text((x + 70, y + 90), iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
-            return
-
+    except Exception as e:
+        logging.error(f"Erro ao processar escudo de {team_name}: {e}")
+        # Fallback: desenhar placeholder
+        draw.rounded_rectangle(
+            [x, y, x + tamanho_quadrado, y + tamanho_quadrado],
+            radius=int(tamanho_quadrado * 0.12),
+            fill=(100, 100, 100),
+            outline=(100, 100, 100)
+        )
+        
+        if team_name:
+            iniciais = ''.join([palavra[0].upper() for palavra in team_name.split()[:2]])
+            if len(iniciais) > 3:
+                iniciais = iniciais[:3]
+        else:
+            iniciais = "ERR"
+        
         try:
-            logo_img = logo_img.convert("RGBA")
-            largura, altura = logo_img.size
-            
-            # Calcular para manter proporção
-            proporcao = largura / altura
-            
-            if proporcao > 1:
-                # Imagem mais larga que alta
-                nova_altura = tamanho_escudo
-                nova_largura = int(tamanho_escudo * proporcao)
-                if nova_largura > tamanho_escudo:
-                    # Redimensionar mantendo proporção
-                    nova_largura = tamanho_escudo
-                    nova_altura = int(tamanho_escudo / proporcao)
-            else:
-                # Imagem mais alta que larga
-                nova_largura = tamanho_escudo
-                nova_altura = int(tamanho_escudo / proporcao)
-                if nova_altura > tamanho_escudo:
-                    nova_altura = tamanho_escudo
-                    nova_largura = int(tamanho_escudo * proporcao)
-            
-            # Redimensionar a imagem
-            imagem_redimensionada = logo_img.resize((nova_largura, nova_altura), Image.Resampling.LANCZOS)
-            
-            # Calcular posição para centralizar
-            pos_x = x + (tamanho_quadrado - nova_largura) // 2
-            pos_y = y + (tamanho_quadrado - nova_altura) // 2
-
-            # Criar uma imagem branca de fundo
-            fundo = Image.new("RGBA", (tamanho_quadrado, tamanho_quadrado), (255, 255, 255, 255))
-            fundo.paste(imagem_redimensionada, (pos_x - x, pos_y - y), imagem_redimensionada)
-            
-            # Colar a imagem composta
-            img.paste(fundo, (x, y), fundo)
-
-        except Exception as e:
-            logging.error(f"Erro ao processar escudo de {team_name}: {e}")
-            # Fallback: desenhar placeholder
-            draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(100, 100, 100))
-            
-            if team_name:
-                iniciais = ''.join([palavra[0].upper() for palavra in team_name.split()[:2]])
-                if len(iniciais) > 3:
-                    iniciais = iniciais[:3]
-            else:
-                iniciais = "ERR"
-            
-            try:
-                bbox = draw.textbbox((0, 0), iniciais, font=self.criar_fonte(50))
-                w = bbox[2] - bbox[0]
-                h = bbox[3] - bbox[1]
-                draw.text((x + (tamanho_quadrado - w)//2, y + (tamanho_quadrado - h)//2), 
-                         iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
-            except:
-                draw.text((x + 70, y + 90), iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
+            bbox = draw.textbbox((0, 0), iniciais, font=self.criar_fonte(50))
+            w = bbox[2] - bbox[0]
+            h = bbox[3] - bbox[1]
+            draw.text((x + (tamanho_quadrado - w)//2, y + (tamanho_quadrado - h)//2), 
+                     iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
+        except:
+            draw.text((x + 70, y + 90), iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))   
 
 # =============================
 # SISTEMA PRINCIPAL
