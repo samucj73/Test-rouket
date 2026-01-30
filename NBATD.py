@@ -2430,115 +2430,134 @@ class PosterGenerator:
         return buffer
     
     #def _desenhar_escudo_quadrado(self, draw, img, logo_img, x, y, tamanho_quadrado, tamanho_escudo, team_name=""):
-    def _desenhar_escudo_quadrado(self, draw, img, logo_img, x, y, tamanho_quadrado, tamanho_escudo, team_name=""):
-        """Desenha escudo quadrado com fallback"""
-        # ALTERADO: Agora desenha quadrado com cantos arredondados
-        draw.rounded_rectangle(
-            [x, y, x + tamanho_quadrado, y + tamanho_quadrado],
-            radius=int(tamanho_quadrado * 0.12),  # Raio proporcional ao tamanho
-            fill=(255, 255, 255),
-            outline=(255, 255, 255)
-        )
+def _desenhar_escudo_quadrado(self, draw, img, logo_img, x, y, tamanho_quadrado, tamanho_escudo, team_name=""):
+    """Desenha escudo quadrado com fallback"""
+    # SOLUÇÃO PARA VERSÕES ANTIGAS DO PILLOW
+    # Criar uma imagem separada para o quadrado arredondado
+    quadrado_arredondado = Image.new('RGBA', (tamanho_quadrado, tamanho_quadrado), (0, 0, 0, 0))
+    draw_arredondado = ImageDraw.Draw(quadrado_arredondado)
+    
+    # Desenhar um retângulo arredondado manualmente
+    raio = int(tamanho_quadrado * 0.12)
+    
+    # Método alternativo: desenhar um círculo e preencher
+    # Criar máscara com cantos arredondados
+    mask = Image.new('L', (tamanho_quadrado, tamanho_quadrado), 0)
+    draw_mask = ImageDraw.Draw(mask)
+    
+    # Desenhar um retângulo com cantos arredondados
+    draw_mask.rectangle([0, 0, tamanho_quadrado, tamanho_quadrado], fill=255)
+    
+    # Arredondar cantos desenhando círculos nos cantos
+    # Canto superior esquerdo
+    draw_mask.ellipse([0, 0, raio*2, raio*2], fill=0)
+    # Canto superior direito
+    draw_mask.ellipse([tamanho_quadrado - raio*2, 0, tamanho_quadrado, raio*2], fill=0)
+    # Canto inferior esquerdo
+    draw_mask.ellipse([0, tamanho_quadrado - raio*2, raio*2, tamanho_quadrado], fill=0)
+    # Canto inferior direito
+    draw_mask.ellipse([tamanho_quadrado - raio*2, tamanho_quadrado - raio*2, tamanho_quadrado, tamanho_quadrado], fill=0)
+    
+    # Criar imagem do quadrado branco
+    quadrado_branco = Image.new('RGBA', (tamanho_quadrado, tamanho_quadrado), (255, 255, 255, 255))
+    
+    # Aplicar a máscara
+    quadrado_branco.putalpha(mask)
+    
+    # Colar na imagem principal
+    img.paste(quadrado_branco, (x, y), quadrado_branco)
 
-        if logo_img is None:
-            # Desenhar placeholder com as iniciais do time
-            draw.rounded_rectangle(
-                [x, y, x + tamanho_quadrado, y + tamanho_quadrado],
-                radius=int(tamanho_quadrado * 0.20),
-                fill=(60, 60, 60),
-                outline=(60, 60, 60)
-            )
-            
-            # Pegar as iniciais do time
-            if team_name:
-                iniciais = ''.join([palavra[0].upper() for palavra in team_name.split()[:2]])
-                if len(iniciais) > 3:
-                    iniciais = iniciais[:3]
-            else:
-                iniciais = "SEM"
-            
-            try:
-                bbox = draw.textbbox((0, 0), iniciais, font=self.criar_fonte(50))
-                w = bbox[2] - bbox[0]
-                h = bbox[3] - bbox[1]
-                draw.text((x + (tamanho_quadrado - w)//2, y + (tamanho_quadrado - h)//2), 
-                         iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
-            except:
-                draw.text((x + 70, y + 90), iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
-            return
-
+    if logo_img is None:
+        # Desenhar placeholder com as iniciais do time
+        placeholder = Image.new('RGBA', (tamanho_quadrado, tamanho_quadrado), (60, 60, 60, 0))
+        draw_placeholder = ImageDraw.Draw(placeholder)
+        
+        # Usar a mesma máscara para o placeholder
+        placeholder.putalpha(mask)
+        
+        # Pegar as iniciais do time
+        if team_name:
+            iniciais = ''.join([palavra[0].upper() for palavra in team_name.split()[:2]])
+            if len(iniciais) > 3:
+                iniciais = iniciais[:3]
+        else:
+            iniciais = "SEM"
+        
         try:
-            logo_img = logo_img.convert("RGBA")
-            largura, altura = logo_img.size
-            
-            # Calcular para manter proporção
-            proporcao = largura / altura
-            
-            if proporcao > 1:
-                # Imagem mais larga que alta
-                nova_altura = tamanho_escudo
-                nova_largura = int(tamanho_escudo * proporcao)
-                if nova_largura > tamanho_escudo:
-                    # Redimensionar mantendo proporção
-                    nova_largura = tamanho_escudo
-                    nova_altura = int(tamanho_escudo / proporcao)
-            else:
-                # Imagem mais alta que larga
+            bbox = draw_placeholder.textbbox((0, 0), iniciais, font=self.criar_fonte(50))
+            w = bbox[2] - bbox[0]
+            h = bbox[3] - bbox[1]
+            draw_placeholder.text(((tamanho_quadrado - w)//2, (tamanho_quadrado - h)//2), 
+                     iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
+        except:
+            draw_placeholder.text((70, 90), iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
+        
+        img.paste(placeholder, (x, y), placeholder)
+        return
+
+    try:
+        logo_img = logo_img.convert("RGBA")
+        largura, altura = logo_img.size
+        
+        # Calcular para manter proporção
+        proporcao = largura / altura
+        
+        if proporcao > 1:
+            # Imagem mais larga que alta
+            nova_altura = tamanho_escudo
+            nova_largura = int(tamanho_escudo * proporcao)
+            if nova_largura > tamanho_escudo:
+                # Redimensionar mantendo proporção
                 nova_largura = tamanho_escudo
                 nova_altura = int(tamanho_escudo / proporcao)
-                if nova_altura > tamanho_escudo:
-                    nova_altura = tamanho_escudo
-                    nova_largura = int(tamanho_escudo * proporcao)
-            
-            # Redimensionar a imagem
-            imagem_redimensionada = logo_img.resize((nova_largura, nova_altura), Image.Resampling.LANCZOS)
-            
-            # Calcular posição para centralizar
-            pos_x = x + (tamanho_quadrado - nova_largura) // 2
-            pos_y = y + (tamanho_quadrado - nova_altura) // 2
+        else:
+            # Imagem mais alta que larga
+            nova_largura = tamanho_escudo
+            nova_altura = int(tamanho_escudo / proporcao)
+            if nova_altura > tamanho_escudo:
+                nova_altura = tamanho_escudo
+                nova_largura = int(tamanho_escudo * proporcao)
+        
+        # Redimensionar a imagem
+        imagem_redimensionada = logo_img.resize((nova_largura, nova_altura), Image.Resampling.LANCZOS)
+        
+        # Calcular posição para centralizar
+        pos_x = x + (tamanho_quadrado - nova_largura) // 2
+        pos_y = y + (tamanho_quadrado - nova_altura) // 2
 
-            # Criar uma imagem branca de fundo
-            fundo = Image.new("RGBA", (tamanho_quadrado, tamanho_quadrado), (255, 255, 255, 255))
-            fundo_draw = ImageDraw.Draw(fundo)
-            
-            # Desenhar fundo com cantos arredondados
-            fundo_draw.rounded_rectangle(
-                [0, 0, tamanho_quadrado, tamanho_quadrado],
-                radius=int(tamanho_quadrado * 0.20),
-                fill=(255, 255, 255),
-                outline=(255, 255, 255)
-            )
-            
-            fundo.paste(imagem_redimensionada, (pos_x - x, pos_y - y), imagem_redimensionada)
-            
-            # Colar a imagem composta
-            img.paste(fundo, (x, y), fundo)
+        # Criar uma imagem branca de fundo com máscara arredondada
+        fundo = Image.new("RGBA", (tamanho_quadrado, tamanho_quadrado), (255, 255, 255, 255))
+        fundo.putalpha(mask)  # Aplicar a mesma máscara arredondada
+        
+        fundo.paste(imagem_redimensionada, (pos_x - x, pos_y - y), imagem_redimensionada)
+        
+        # Colar a imagem composta
+        img.paste(fundo, (x, y), fundo)
 
-        except Exception as e:
-            logging.error(f"Erro ao processar escudo de {team_name}: {e}")
-            # Fallback: desenhar placeholder
-            draw.rounded_rectangle(
-                [x, y, x + tamanho_quadrado, y + tamanho_quadrado],
-                radius=int(tamanho_quadrado * 0.20),
-                fill=(100, 100, 100),
-                outline=(100, 100, 100)
-            )
-            
-            if team_name:
-                iniciais = ''.join([palavra[0].upper() for palavra in team_name.split()[:2]])
-                if len(iniciais) > 3:
-                    iniciais = iniciais[:3]
-            else:
-                iniciais = "ERR"
-            
-            try:
-                bbox = draw.textbbox((0, 0), iniciais, font=self.criar_fonte(50))
-                w = bbox[2] - bbox[0]
-                h = bbox[3] - bbox[1]
-                draw.text((x + (tamanho_quadrado - w)//2, y + (tamanho_quadrado - h)//2), 
-                         iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
-            except:
-                draw.text((x + 70, y + 90), iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
+    except Exception as e:
+        logging.error(f"Erro ao processar escudo de {team_name}: {e}")
+        # Fallback: desenhar placeholder
+        fallback = Image.new('RGBA', (tamanho_quadrado, tamanho_quadrado), (100, 100, 100, 0))
+        draw_fallback = ImageDraw.Draw(fallback)
+        fallback.putalpha(mask)  # Aplicar a mesma máscara arredondada
+        
+        if team_name:
+            iniciais = ''.join([palavra[0].upper() for palavra in team_name.split()[:2]])
+            if len(iniciais) > 3:
+                iniciais = iniciais[:3]
+        else:
+            iniciais = "ERR"
+        
+        try:
+            bbox = draw_fallback.textbbox((0, 0), iniciais, font=self.criar_fonte(50))
+            w = bbox[2] - bbox[0]
+            h = bbox[3] - bbox[1]
+            draw_fallback.text(((tamanho_quadrado - w)//2, (tamanho_quadrado - h)//2), 
+                     iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
+        except:
+            draw_fallback.text((70, 90), iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
+        
+        img.paste(fallback, (x, y), fallback)
     
 
 # =============================
