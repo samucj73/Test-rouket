@@ -18,7 +18,7 @@ psutil
 flask
 fastapi
 httpx
-pillow
+pillow>=8.0.0
 cairosvg
 feedparser
 python-nmap>=0.7.1
