@@ -844,6 +844,192 @@ def sigmoid(x):
 # =============================
 # CLASSES DE ANÁLISE
 # =============================
+# =============================
+# CLASSES DE ANÁLISE
+# =============================
+
+class AnalisadorEstatistico:
+    """Realiza análises estatísticas para previsões"""
+
+    @staticmethod
+    def calcular_probabilidade_vitoria(home: str, away: str, classificacao: dict) -> dict:
+        """Calcula probabilidade de vitória, empate e derrota"""
+
+        dados_home = classificacao.get(home, {
+            "wins": 0, "draws": 0, "losses": 0,
+            "played": 1, "scored": 0, "against": 0
+        })
+        dados_away = classificacao.get(away, {
+            "wins": 0, "draws": 0, "losses": 0,
+            "played": 1, "scored": 0, "against": 0
+        })
+
+        played_home = max(dados_home["played"], 1)
+        played_away = max(dados_away["played"], 1)
+
+        win_rate_home = dados_home["wins"] / played_home
+        win_rate_away = dados_away["wins"] / played_away
+        draw_rate_home = dados_home["draws"] / played_home
+        draw_rate_away = dados_away["draws"] / played_away
+
+        saldo_home = (dados_home["scored"] - dados_home["against"]) / played_home
+        saldo_away = (dados_away["scored"] - dados_away["against"]) / played_away
+
+        fator_casa = clamp(1.05 + saldo_home * 0.1, 1.0, 1.2)
+        fator_fora = 2.0 - fator_casa
+
+        prob_home = (win_rate_home * fator_casa + (1 - win_rate_away) * fator_fora) * 50
+        prob_away = (win_rate_away * fator_fora + (1 - win_rate_home) * fator_casa) * 50
+        prob_draw = ((draw_rate_home + draw_rate_away) / 2) * 100
+
+        if abs(prob_home - prob_away) < 5:
+            prob_draw *= 0.85
+
+        total = prob_home + prob_away + prob_draw
+        if total > 0:
+            prob_home = (prob_home / total) * 100
+            prob_away = (prob_away / total) * 100
+            prob_draw = (prob_draw / total) * 100
+
+        prob_home = clamp(prob_home, 5, 90)
+        prob_away = clamp(prob_away, 5, 90)
+        prob_draw = clamp(prob_draw, 5, 90)
+
+        if prob_home > prob_away and prob_home > prob_draw:
+            favorito = "home"
+        elif prob_away > prob_home and prob_away > prob_draw:
+            favorito = "away"
+        else:
+            favorito = "draw"
+
+        confianca_vitoria = max(prob_home, prob_away, prob_draw)
+
+        return {
+            "home_win": round(prob_home, 1),
+            "away_win": round(prob_away, 1),
+            "draw": round(prob_draw, 1),
+            "favorito": favorito,
+            "confianca_vitoria": round(confianca_vitoria, 1)
+        }
+
+    @staticmethod
+    def calcular_probabilidade_gols_ht(home: str, away: str, classificacao: dict) -> dict:
+        """Calcula probabilidade de gols no primeiro tempo (HT)"""
+
+        dados_home = classificacao.get(home, {"scored": 0, "played": 1})
+        dados_away = classificacao.get(away, {"scored": 0, "played": 1})
+
+        played_home = max(dados_home["played"], 1)
+        played_away = max(dados_away["played"], 1)
+
+        media_home = dados_home["scored"] / played_home
+        media_away = dados_away["scored"] / played_away
+
+        estimativa_total_ht = (media_home + media_away) * 0.45
+        estimativa_total_ht = clamp(estimativa_total_ht, 0.2, 1.8)
+
+        prob_over_05_ht = sigmoid((estimativa_total_ht - 0.5) * 3) * 100
+        prob_over_15_ht = sigmoid((estimativa_total_ht - 1.2) * 3) * 100
+
+        if estimativa_total_ht > 1.1:
+            tendencia_ht = "OVER 1.5 HT"
+        elif estimativa_total_ht > 0.6:
+            tendencia_ht = "OVER 0.5 HT"
+        else:
+            tendencia_ht = "UNDER 0.5 HT"
+
+        confianca_ht = clamp(max(prob_over_05_ht, prob_over_15_ht) * 0.85, 40, 85)
+
+        return {
+            "estimativa_total_ht": round(estimativa_total_ht, 2),
+            "tendencia_ht": tendencia_ht,
+            "confianca_ht": round(confianca_ht, 1),
+            "over_05_ht": round(prob_over_05_ht, 1),
+            "over_15_ht": round(prob_over_15_ht, 1)
+        }
+
+    @staticmethod
+    def calcular_probabilidade_ambas_marcam(home: str, away: str, classificacao: dict) -> dict:
+        """Calcula probabilidade de ambas as equipes marcarem gols (BTTS)"""
+        
+        dados_home = classificacao.get(home, {
+            "scored": 0, "against": 0, "played": 1,
+            "wins": 0, "draws": 0, "losses": 0
+        })
+        
+        dados_away = classificacao.get(away, {
+            "scored": 0, "against": 0, "played": 1,
+            "wins": 0, "draws": 0, "losses": 0
+        })
+
+        played_home = max(dados_home["played"], 1)
+        played_away = max(dados_away["played"], 1)
+
+        # Taxa de gols marcados por jogo
+        taxa_gols_home = dados_home["scored"] / played_home
+        taxa_gols_away = dados_away["scored"] / played_away
+        
+        # Taxa de gols sofridos por jogo
+        taxa_sofridos_home = dados_home["against"] / played_home
+        taxa_sofridos_away = dados_away["against"] / played_away
+        
+        # Taxa de jogos em que cada time marca
+        taxa_marque_home = 1 / (1 + math.exp(-taxa_gols_home * 0.8))
+        taxa_marque_away = 1 / (1 + math.exp(-taxa_gols_away * 0.8))
+        
+        # Taxa de jogos em que cada time sofre gol
+        taxa_sofra_home = 1 / (1 + math.exp(-taxa_sofridos_home * 0.8))
+        taxa_sofra_away = 1 / (1 + math.exp(-taxa_sofridos_away * 0.8))
+
+        # Probabilidade do time da casa marcar (considerando força ataque casa + defesa fora)
+        prob_home_marca = (taxa_marque_home * 0.6 + taxa_sofra_away * 0.4)
+        
+        # Probabilidade do time visitante marcar (considerando força ataque fora + defesa casa)
+        prob_away_marca = (taxa_marque_away * 0.4 + taxa_sofra_home * 0.6)
+
+        # Ajuste pelo fator casa
+        fator_casa = 1.1  # Aumenta chance do time da casa marcar
+        prob_home_marca *= fator_casa
+        prob_away_marca *= (2.0 - fator_casa) * 0.9  # Reduz um pouco a chance do visitante
+
+        # Probabilidade de ambas marcarem = P(home marque) * P(away marque)
+        prob_ambas_marcam = clamp(prob_home_marca * prob_away_marca * 100, 0, 95)
+        
+        # Probabilidade de NÃO ambas marcarem
+        prob_nao_ambas_marcam = 100 - prob_ambas_marcam
+
+        # Determinar tendência
+        if prob_ambas_marcam >= 60:
+            tendencia_ambas_marcam = "SIM"
+        elif prob_nao_ambas_marcam >= 60:
+            tendencia_ambas_marcam = "NÃO"
+        else:
+            # Se estiver próximo, usar a maior probabilidade
+            if prob_ambas_marcam >= prob_nao_ambas_marcam:
+                tendencia_ambas_marcam = "SIM"
+            else:
+                tendencia_ambas_marcam = "NÃO"
+
+        # Confiança baseada na diferença entre as probabilidades
+        diferenca = abs(prob_ambas_marcam - prob_nao_ambas_marcam)
+        confianca_ambas_marcam = clamp(50 + diferenca * 0.5, 55, 85)
+
+        logging.info(f"AMBAS MARCAM: {home} vs {away} | SIM: {prob_ambas_marcam:.1f}% | NÃO: {prob_nao_ambas_marcam:.1f}% | Tendência: {tendencia_ambas_marcam} | Conf: {confianca_ambas_marcam:.1f}%")
+
+        return {
+            "sim": round(prob_ambas_marcam, 1),
+            "nao": round(prob_nao_ambas_marcam, 1),
+            "tendencia_ambas_marcam": tendencia_ambas_marcam,
+            "confianca_ambas_marcam": round(confianca_ambas_marcam, 1),
+            "prob_home_marca": round(prob_home_marca * 100, 1),
+            "prob_away_marca": round(prob_away_marca * 100, 1),
+            "taxa_gols_home": round(taxa_gols_home, 2),
+            "taxa_gols_away": round(taxa_gols_away, 2),
+            "taxa_sofridos_home": round(taxa_sofridos_home, 2),
+            "taxa_sofridos_away": round(taxa_sofridos_away, 2)
+        }
+
+#class AnalisadorTendencia:  # CORREÇÃO: Nome alterado de AnalisadorTendenciaPro para AnalisadorTendencia
 class AnalisadorTendencia:
     """VERSÃO PROFISSIONAL - Otimizada com base em 112 jogos (81.2% acerto)"""
     
@@ -1158,8 +1344,7 @@ class AnalisadorTendencia:
             "tipo_aposta": "avoid",
             "linha_mercado": 0,
             "detalhes": {"motivo": motivo}
-        }
-
+        }   
   
 
 # =============================
