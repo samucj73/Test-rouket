@@ -844,201 +844,21 @@ def sigmoid(x):
 # =============================
 # CLASSES DE ANÁLISE
 # =============================
-# CLASSES DE ANÁLISE
-# =============================
-
-class AnalisadorEstatistico:
-    """Realiza análises estatísticas para previsões"""
-
-    @staticmethod
-    def calcular_probabilidade_vitoria(home: str, away: str, classificacao: dict) -> dict:
-        """Calcula probabilidade de vitória, empate e derrota"""
-
-        dados_home = classificacao.get(home, {
-            "wins": 0, "draws": 0, "losses": 0,
-            "played": 1, "scored": 0, "against": 0
-        })
-        dados_away = classificacao.get(away, {
-            "wins": 0, "draws": 0, "losses": 0,
-            "played": 1, "scored": 0, "against": 0
-        })
-
-        played_home = max(dados_home["played"], 1)
-        played_away = max(dados_away["played"], 1)
-
-        win_rate_home = dados_home["wins"] / played_home
-        win_rate_away = dados_away["wins"] / played_away
-        draw_rate_home = dados_home["draws"] / played_home
-        draw_rate_away = dados_away["draws"] / played_away
-
-        saldo_home = (dados_home["scored"] - dados_home["against"]) / played_home
-        saldo_away = (dados_away["scored"] - dados_away["against"]) / played_away
-
-        fator_casa = clamp(1.05 + saldo_home * 0.1, 1.0, 1.2)
-        fator_fora = 2.0 - fator_casa
-
-        prob_home = (win_rate_home * fator_casa + (1 - win_rate_away) * fator_fora) * 50
-        prob_away = (win_rate_away * fator_fora + (1 - win_rate_home) * fator_casa) * 50
-        prob_draw = ((draw_rate_home + draw_rate_away) / 2) * 100
-
-        if abs(prob_home - prob_away) < 5:
-            prob_draw *= 0.85
-
-        total = prob_home + prob_away + prob_draw
-        if total > 0:
-            prob_home = (prob_home / total) * 100
-            prob_away = (prob_away / total) * 100
-            prob_draw = (prob_draw / total) * 100
-
-        prob_home = clamp(prob_home, 5, 90)
-        prob_away = clamp(prob_away, 5, 90)
-        prob_draw = clamp(prob_draw, 5, 90)
-
-        if prob_home > prob_away and prob_home > prob_draw:
-            favorito = "home"
-        elif prob_away > prob_home and prob_away > prob_draw:
-            favorito = "away"
-        else:
-            favorito = "draw"
-
-        confianca_vitoria = max(prob_home, prob_away, prob_draw)
-
-        return {
-            "home_win": round(prob_home, 1),
-            "away_win": round(prob_away, 1),
-            "draw": round(prob_draw, 1),
-            "favorito": favorito,
-            "confianca_vitoria": round(confianca_vitoria, 1)
-        }
-
-    @staticmethod
-    def calcular_probabilidade_gols_ht(home: str, away: str, classificacao: dict) -> dict:
-        """Calcula probabilidade de gols no primeiro tempo (HT)"""
-
-        dados_home = classificacao.get(home, {"scored": 0, "played": 1})
-        dados_away = classificacao.get(away, {"scored": 0, "played": 1})
-
-        played_home = max(dados_home["played"], 1)
-        played_away = max(dados_away["played"], 1)
-
-        media_home = dados_home["scored"] / played_home
-        media_away = dados_away["scored"] / played_away
-
-        estimativa_total_ht = (media_home + media_away) * 0.45
-        estimativa_total_ht = clamp(estimativa_total_ht, 0.2, 1.8)
-
-        prob_over_05_ht = sigmoid((estimativa_total_ht - 0.5) * 3) * 100
-        prob_over_15_ht = sigmoid((estimativa_total_ht - 1.2) * 3) * 100
-
-        if estimativa_total_ht > 1.1:
-            tendencia_ht = "OVER 1.5 HT"
-        elif estimativa_total_ht > 0.6:
-            tendencia_ht = "OVER 0.5 HT"
-        else:
-            tendencia_ht = "UNDER 0.5 HT"
-
-        confianca_ht = clamp(max(prob_over_05_ht, prob_over_15_ht) * 0.85, 40, 85)
-
-        return {
-            "estimativa_total_ht": round(estimativa_total_ht, 2),
-            "tendencia_ht": tendencia_ht,
-            "confianca_ht": round(confianca_ht, 1),
-            "over_05_ht": round(prob_over_05_ht, 1),
-            "over_15_ht": round(prob_over_15_ht, 1)
-        }
-
-    @staticmethod
-    def calcular_probabilidade_ambas_marcam(home: str, away: str, classificacao: dict) -> dict:
-        """Calcula probabilidade de ambas as equipes marcarem gols (BTTS)"""
-        
-        dados_home = classificacao.get(home, {
-            "scored": 0, "against": 0, "played": 1,
-            "wins": 0, "draws": 0, "losses": 0
-        })
-        
-        dados_away = classificacao.get(away, {
-            "scored": 0, "against": 0, "played": 1,
-            "wins": 0, "draws": 0, "losses": 0
-        })
-
-        played_home = max(dados_home["played"], 1)
-        played_away = max(dados_away["played"], 1)
-
-        # Taxa de gols marcados por jogo
-        taxa_gols_home = dados_home["scored"] / played_home
-        taxa_gols_away = dados_away["scored"] / played_away
-        
-        # Taxa de gols sofridos por jogo
-        taxa_sofridos_home = dados_home["against"] / played_home
-        taxa_sofridos_away = dados_away["against"] / played_away
-        
-        # Taxa de jogos em que cada time marca
-        taxa_marque_home = 1 / (1 + math.exp(-taxa_gols_home * 0.8))
-        taxa_marque_away = 1 / (1 + math.exp(-taxa_gols_away * 0.8))
-        
-        # Taxa de jogos em que cada time sofre gol
-        taxa_sofra_home = 1 / (1 + math.exp(-taxa_sofridos_home * 0.8))
-        taxa_sofra_away = 1 / (1 + math.exp(-taxa_sofridos_away * 0.8))
-
-        # Probabilidade do time da casa marcar (considerando força ataque casa + defesa fora)
-        prob_home_marca = (taxa_marque_home * 0.6 + taxa_sofra_away * 0.4)
-        
-        # Probabilidade do time visitante marcar (considerando força ataque fora + defesa casa)
-        prob_away_marca = (taxa_marque_away * 0.4 + taxa_sofra_home * 0.6)
-
-        # Ajuste pelo fator casa
-        fator_casa = 1.1  # Aumenta chance do time da casa marcar
-        prob_home_marca *= fator_casa
-        prob_away_marca *= (2.0 - fator_casa) * 0.9  # Reduz um pouco a chance do visitante
-
-        # Probabilidade de ambas marcarem = P(home marque) * P(away marque)
-        prob_ambas_marcam = clamp(prob_home_marca * prob_away_marca * 100, 0, 95)
-        
-        # Probabilidade de NÃO ambas marcarem
-        prob_nao_ambas_marcam = 100 - prob_ambas_marcam
-
-        # Determinar tendência
-        if prob_ambas_marcam >= 60:
-            tendencia_ambas_marcam = "SIM"
-        elif prob_nao_ambas_marcam >= 60:
-            tendencia_ambas_marcam = "NÃO"
-        else:
-            # Se estiver próximo, usar a maior probabilidade
-            if prob_ambas_marcam >= prob_nao_ambas_marcam:
-                tendencia_ambas_marcam = "SIM"
-            else:
-                tendencia_ambas_marcam = "NÃO"
-
-        # Confiança baseada na diferença entre as probabilidades
-        diferenca = abs(prob_ambas_marcam - prob_nao_ambas_marcam)
-        confianca_ambas_marcam = clamp(50 + diferenca * 0.5, 55, 85)
-
-        logging.info(f"AMBAS MARCAM: {home} vs {away} | SIM: {prob_ambas_marcam:.1f}% | NÃO: {prob_nao_ambas_marcam:.1f}% | Tendência: {tendencia_ambas_marcam} | Conf: {confianca_ambas_marcam:.1f}%")
-
-        return {
-            "sim": round(prob_ambas_marcam, 1),
-            "nao": round(prob_nao_ambas_marcam, 1),
-            "tendencia_ambas_marcam": tendencia_ambas_marcam,
-            "confianca_ambas_marcam": round(confianca_ambas_marcam, 1),
-            "prob_home_marca": round(prob_home_marca * 100, 1),
-            "prob_away_marca": round(prob_away_marca * 100, 1),
-            "taxa_gols_home": round(taxa_gols_home, 2),
-            "taxa_gols_away": round(taxa_gols_away, 2),
-            "taxa_sofridos_home": round(taxa_sofridos_home, 2),
-            "taxa_sofridos_away": round(taxa_sofridos_away, 2)
-        }
-
-class AnalisadorTendencia:  # CORREÇÃO: Nome alterado de AnalisadorTendenciaPro para AnalisadorTendencia
+class AnalisadorTendencia:
     """VERSÃO PROFISSIONAL - Otimizada com base em 112 jogos (81.2% acerto)"""
     
-    # CONFIGURAÇÕES OTIMIZADAS BASEADAS NOS DADOS
+    # CONFIGURAÇÕES REVISADAS - Limiares mais realistas
     CONFIG = {
-        'min_jogos': 6,           # Dados mostram que >6 jogos aumenta acerto
-        'confianca_minima': 60,   # Filtro que funciona
-        'distancia_minima': 0.3,  # Distância mínima da linha
-        'estimativa_min_over15': 2.2,  # Mínimo para OVER 1.5
-        'estimativa_min_over25': 2.8,  # Mínimo para OVER 2.5
-        'fator_ofensivo_min': 1.1,     # Mínimo para considerar OVER
+        'min_jogos': 6,           # Mínimo de jogos para análise
+        'confianca_minima': 60,   # Confiança mínima para apostar
+        'distancia_minima': 0.15, # REDUZIDO: Distância mínima da linha (era 0.3)
+        'estimativa_min_over15': 1.8,  # REDUZIDO: Mínimo para OVER 1.5 (era 2.2)
+        'estimativa_min_over25': 2.6,  # AJUSTADO: Mínimo para OVER 2.5 (era 2.8)
+        'estimativa_min_over35': 3.3,  # NOVO: Mínimo para OVER 3.5
+        'fator_ofensivo_min': 1.0,     # REDUZIDO: Mínimo fator ofensivo (era 1.1)
+        'fator_ofensivo_over25': 1.1,  # NOVO: Fator ofensivo para OVER 2.5
+        'max_over_confidence': 85,     # NOVO: Confiança máxima para OVER
+        'under_max_estimativa': 2.2,   # NOVO: Estimativa máxima para UNDER
     }
     
     def __init__(self, classificacao: dict):
@@ -1057,26 +877,30 @@ class AnalisadorTendencia:  # CORREÇÃO: Nome alterado de AnalisadorTendenciaPr
         played_away = dados_away.get("played", 0)
         
         if played_home < self.CONFIG['min_jogos'] or played_away < self.CONFIG['min_jogos']:
-            return self._retorno_avoid(f"Dados insuficientes")
+            return self._retorno_avoid(f"Dados insuficientes: {played_home}/{played_away} jogos")
         
         # 3. CALCULAR MÉTRICAS-CHAVE
         metricas = self._calcular_metricas(dados_home, dados_away, played_home, played_away)
         
         # 4. DETECTAR PADRÕES DE RISCO
         risco = self._analisar_risco(metricas)
-        if risco['nivel'] >= 2:  # Risco médio/alto
+        if risco['nivel'] >= 3:  # Apenas risco alto (aumentado de 2 para 3)
             return self._retorno_avoid(risco['motivo'])
         
         # 5. ESTIMATIVA INTELIGENTE
         estimativa = self._calcular_estimativa(metricas)
         
-        # 6. ESCOLHER MERCADO OTIMIZADO
-        mercado_info = self._escolher_mercado(estimativa, metricas)
+        # 6. ESCOLHER MERCADO OTIMIZADO - AGORA CONSIDERA UNDER TAMBÉM
+        mercado_info = self._escolher_mercado_otimizado(estimativa, metricas)
         if mercado_info['tipo'] == 'avoid':
             return self._retorno_avoid(mercado_info['motivo'])
         
         # 7. CALCULAR CONFIANCE REALISTA
         confianca = self._calcular_confianca(estimativa, mercado_info, metricas)
+        
+        # Ajustar confiança máxima para OVER
+        if mercado_info['tipo'] == 'over':
+            confianca = min(confianca, self.CONFIG['max_over_confidence'])
         
         if confianca < self.CONFIG['confianca_minima']:
             return self._retorno_avoid(f"Confiança baixa: {confianca:.1f}%")
@@ -1091,9 +915,12 @@ class AnalisadorTendencia:  # CORREÇÃO: Nome alterado de AnalisadorTendenciaPr
             "linha_mercado": mercado_info['linha'],
             "detalhes": {
                 **metricas['resumo'],
-                "edge_estimado": "10-14%",
+                "edge_estimado": "8-12%",
                 "base_dados": f"{played_home}/{played_away} jogos",
-                "risco_detectado": risco['nivel']  # 0=baixo, 1=médio, 2=alto
+                "risco_detectado": risco['nivel'],
+                "media_gols_casa": round(metricas['mhf'], 2),
+                "media_gols_fora": round(metricas['maf'], 2),
+                "media_gols_total": round(metricas['media_combinada'], 2)
             }
         }
     
@@ -1101,15 +928,15 @@ class AnalisadorTendencia:  # CORREÇÃO: Nome alterado de AnalisadorTendenciaPr
         """Calcula todas as métricas importantes"""
         
         # Médias básicas
-        mhf = dados_home.get("scored", 0) / played_home
-        mhs = dados_home.get("against", 0) / played_home
-        maf = dados_away.get("scored", 0) / played_away
-        mas = dados_away.get("against", 0) / played_away
+        mhf = dados_home.get("scored", 0) / max(played_home, 1)
+        mhs = dados_home.get("against", 0) / max(played_home, 1)
+        maf = dados_away.get("scored", 0) / max(played_away, 1)
+        mas = dados_away.get("against", 0) / max(played_away, 1)
         
-        # Suavização inteligente
-        peso_dados = min(played_home, played_away) / 10
-        limite_sup = 2.5 + (0.4 * peso_dados)
-        limite_inf = 0.9 + (0.3 * peso_dados)
+        # Suavização inteligente - limites mais flexíveis
+        peso_dados = min(played_home, played_away) / 15  # Aumentado de 10 para 15
+        limite_sup = 3.0 + (0.5 * peso_dados)  # Aumentado de 2.5 para 3.0
+        limite_inf = 0.7 + (0.2 * peso_dados)  # Reduzido de 0.9 para 0.7
         
         mhf = clamp(mhf, limite_inf, limite_sup)
         mhs = clamp(mhs, limite_inf, limite_sup - 0.2)
@@ -1118,8 +945,8 @@ class AnalisadorTendencia:  # CORREÇÃO: Nome alterado de AnalisadorTendenciaPr
         
         # Métricas derivadas
         media_combinada = (mhf + maf) / 2
-        fator_ofensivo = (mhf/max(mas, 0.9) + maf/max(mhs, 0.9)) / 2
-        consistencia = 1.0 - min(abs(mhf-mhs) + abs(maf-mas), 1.0) / 2
+        fator_ofensivo = (mhf/max(mas, 0.5) + maf/max(mhs, 0.5)) / 2  # Reduzido de 0.9 para 0.5
+        consistencia = 1.0 - min(abs(mhf-mhs) + abs(maf-mas), 1.5) / 3  # Ajustado
         
         return {
             'mhf': mhf, 'mhs': mhs, 'maf': maf, 'mas': mas,
@@ -1132,124 +959,194 @@ class AnalisadorTendencia:  # CORREÇÃO: Nome alterado de AnalisadorTendenciaPr
                 'media_combinada': round(media_combinada, 2),
                 'consistencia': round(consistencia, 2),
                 'mhf': round(mhf, 2),
-                'maf': round(maf, 2)
+                'maf': round(maf, 2),
+                'mhs': round(mhs, 2),
+                'mas': round(mas, 2)
             }
         }
     
     def _analisar_risco(self, metricas):
-        """Analisa padrões de risco baseado em 112 jogos"""
+        """Analisa padrões de risco - menos restritivo"""
         
         risco = {'nivel': 0, 'motivo': ''}
         
         # Padrão 1: Times muito defensivos (risco UNDER)
-        if (metricas['mhf'] < 1.2 and metricas['maf'] < 1.2 and
-            metricas['mhs'] < 1.0 and metricas['mas'] < 1.0):
+        if (metricas['mhf'] < 1.0 and metricas['maf'] < 1.0 and
+            metricas['mhs'] < 0.8 and metricas['mas'] < 0.8):
             risco['nivel'] += 2
             risco['motivo'] = "Times muito defensivos"
             
         # Padrão 2: Fator ofensivo muito baixo
-        elif metricas['fator_ofensivo'] < 0.85:
-            risco['nivel'] += 2
+        elif metricas['fator_ofensivo'] < 0.7:  # Reduzido de 0.85 para 0.7
+            risco['nivel'] += 1
             risco['motivo'] = f"Ataque fraco: {metricas['fator_ofensivo']:.2f}"
             
         # Padrão 3: Inconsistência extrema
-        elif metricas['consistencia'] < 0.6:
+        elif metricas['consistencia'] < 0.5:  # Reduzido de 0.6 para 0.5
             risco['nivel'] += 1
             if risco['motivo']:
                 risco['motivo'] += " + Inconsistência"
             else:
                 risco['motivo'] = "Inconsistência extrema"
         
+        # Padrão 4: Média combinada muito alta (risco UNDER improvável)
+        elif metricas['media_combinada'] > 3.5:
+            risco['nivel'] -= 1  # REDUZ risco para UNDER
+            
+        # Padrão 5: Média combinada muito baixa (risco OVER improvável)
+        elif metricas['media_combinada'] < 1.5:
+            risco['nivel'] += 1
+            
         return risco
     
     def _calcular_estimativa(self, metricas):
-        """Fórmula otimizada para estimativa de gols"""
+        """Fórmula otimizada para estimativa de gols - mais equilibrada"""
         
-        # Peso maior nos dados ofensivos (nosso edge)
+        # Peso balanceado entre ataque e defesa
         estimativa = (
-            metricas['mhf'] * 0.6 * metricas['consistencia'] +
-            metricas['maf'] * 0.6 * metricas['consistencia'] +
-            metricas['mhs'] * 0.2 +
-            metricas['mas'] * 0.2
+            metricas['mhf'] * 0.5 * metricas['consistencia'] +
+            metricas['maf'] * 0.5 * metricas['consistencia'] +
+            metricas['mhs'] * 0.15 +  # Reduzido de 0.2
+            metricas['mas'] * 0.15    # Reduzido de 0.2
         )
         
-        # Ajustes baseados em fator ofensivo
-        if metricas['fator_ofensivo'] > 1.25:
-            estimativa *= 1.10
+        # Ajustes baseados em fator ofensivo - mais suaves
+        if metricas['fator_ofensivo'] > 1.3:
+            estimativa *= 1.15  # Aumentado de 1.10
         elif metricas['fator_ofensivo'] > 1.1:
-            estimativa *= 1.05
+            estimativa *= 1.08  # Aumentado de 1.05
+        elif metricas['fator_ofensivo'] < 0.8:
+            estimativa *= 0.90  # Aumentado de 0.95
         elif metricas['fator_ofensivo'] < 0.9:
-            estimativa *= 0.95
+            estimativa *= 0.93
         
-        # Suavização final
-        estimativa = (estimativa * 0.65) + (2.6 * 0.35)
-        return clamp(estimativa, 1.8, 3.1)
+        # Suavização final - mais peso na média real
+        estimativa = (estimativa * 0.60) + (metricas['media_combinada'] * 0.40)
+        return clamp(estimativa, 1.5, 3.5)  # Ampliado range (era 1.8-3.1)
     
-    def _escolher_mercado(self, estimativa, metricas):
-        """Escolhe o mercado mais promissor"""
+    def _escolher_mercado_otimizado(self, estimativa, metricas):
+        """Escolhe o mercado mais promissor - AGORA INCLUI UNDER"""
         
-        # OVER 2.5 (alta confiança)
-        if (estimativa >= self.CONFIG['estimativa_min_over25'] and 
-            metricas['fator_ofensivo'] >= 1.15):
+        # 1. VERIFICAR OVER 3.5 (alta ofensividade)
+        if (estimativa >= self.CONFIG['estimativa_min_over35'] and 
+            metricas['fator_ofensivo'] >= 1.2 and
+            metricas['media_combinada'] >= 2.8):
+            prob = sigmoid((estimativa - 3.5) * 1.2)
+            return {
+                'mercado': 'OVER 3.5',
+                'tipo': 'over',
+                'linha': 3.5,
+                'probabilidade': prob
+            }
+        
+        # 2. OVER 2.5 (confiança moderada-alta)
+        elif (estimativa >= self.CONFIG['estimativa_min_over25'] and 
+              metricas['fator_ofensivo'] >= self.CONFIG['fator_ofensivo_over25']):
+            
+            # Verificar se não é muito arriscado
+            if metricas['media_combinada'] < 2.0 and metricas['fator_ofensivo'] < 1.15:
+                # Considerar UNDER 2.5 em vez disso
+                if estimativa <= self.CONFIG['under_max_estimativa']:
+                    prob = 1 - sigmoid((estimativa - 2.5) * 1.3)
+                    return {
+                        'mercado': 'UNDER 2.5',
+                        'tipo': 'under',
+                        'linha': 2.5,
+                        'probabilidade': prob
+                    }
+            
+            prob = sigmoid((estimativa - 2.5) * 1.3)  # Reduzido de 1.4
             return {
                 'mercado': 'OVER 2.5',
                 'tipo': 'over',
                 'linha': 2.5,
-                'probabilidade': sigmoid((estimativa - 2.5) * 1.4)
+                'probabilidade': prob
             }
         
-        # OVER 1.5 forte
-        elif estimativa >= 2.4:
-            return {
-                'mercado': 'OVER 1.5',
-                'tipo': 'over',
-                'linha': 1.5,
-                'probabilidade': sigmoid((estimativa - 1.5) * 1.6)
-            }
-        
-        # OVER 1.5 moderado (com filtros)
-        elif (estimativa >= self.CONFIG['estimativa_min_over15'] and 
-              metricas['fator_ofensivo'] >= self.CONFIG['fator_ofensivo_min']):
+        # 3. OVER 1.5 (confiança moderada)
+        elif estimativa >= self.CONFIG['estimativa_min_over15']:
             
-            # Verificar riscos adicionais
-            if metricas['media_combinada'] < 1.5 and metricas['fator_ofensivo'] < 1.15:
+            # Verificar se UNDER 2.5 é melhor
+            if estimativa <= 2.3 and metricas['fator_ofensivo'] < 1.05:
+                prob = 1 - sigmoid((estimativa - 2.5) * 1.4)
                 return {
-                    'tipo': 'avoid',
-                    'motivo': f"Risco UNDER: est={estimativa:.2f}, media={metricas['media_combinada']:.2f}"
+                    'mercado': 'UNDER 2.5',
+                    'tipo': 'under',
+                    'linha': 2.5,
+                    'probabilidade': prob
                 }
             
+            # Verificar se UNDER 1.5 é possível
+            if estimativa <= 1.6:
+                prob = 1 - sigmoid((estimativa - 1.5) * 1.6)
+                return {
+                    'mercado': 'UNDER 1.5',
+                    'tipo': 'under',
+                    'linha': 1.5,
+                    'probabilidade': prob
+                }
+            
+            prob = sigmoid((estimativa - 1.5) * 1.5)  # Reduzido de 1.6
             return {
                 'mercado': 'OVER 1.5',
                 'tipo': 'over',
                 'linha': 1.5,
-                'probabilidade': sigmoid((estimativa - 1.5) * 1.4)
+                'probabilidade': prob
             }
         
-        # Não apostar
+        # 4. UNDER 2.5 (estimativa baixa-moderada)
+        elif estimativa <= 2.4:
+            prob = 1 - sigmoid((estimativa - 2.5) * 1.4)
+            return {
+                'mercado': 'UNDER 2.5',
+                'tipo': 'under',
+                'linha': 2.5,
+                'probabilidade': prob
+            }
+        
+        # 5. UNDER 1.5 (estimativa muito baixa)
+        elif estimativa <= 1.5:
+            prob = 1 - sigmoid((estimativa - 1.5) * 1.8)
+            return {
+                'mercado': 'UNDER 1.5',
+                'tipo': 'under',
+                'linha': 1.5,
+                'probabilidade': prob
+            }
+        
+        # 6. Não apostar
         else:
             return {
                 'tipo': 'avoid',
-                'motivo': f"Estimativa baixa: {estimativa:.2f}"
+                'motivo': f"Estimativa neutra: {estimativa:.2f}"
             }
     
     def _calcular_confianca(self, estimativa, mercado_info, metricas):
-        """Calcula confiança realista"""
+        """Calcula confiança realista - mais equilibrada"""
         
         distancia = abs(estimativa - mercado_info['linha'])
         
-        # Base probabilística (50%)
-        conf = mercado_info['probabilidade'] * 100 * 0.5
+        # Base probabilística (40% em vez de 50%)
+        conf = mercado_info['probabilidade'] * 100 * 0.4
         
-        # Distância da linha (25%)
-        conf += min(distancia * 20, 25)
+        # Distância da linha (30% em vez de 25%)
+        conf += min(distancia * 25, 30)  # Aumentado de 20 para 25
         
         # Qualidade dos dados (15%)
-        conf += metricas['peso_dados'] * 10
+        conf += metricas['peso_dados'] * 12  # Aumentado de 10 para 12
         
-        # Consistência (10%)
-        conf += metricas['consistencia'] * 10
+        # Consistência (15% em vez de 10%)
+        conf += metricas['consistencia'] * 15  # Aumentado de 10 para 15
         
-        return clamp(conf, 50, 85)
+        # Penalizar UNDER se fator ofensivo alto
+        if mercado_info['tipo'] == 'under' and metricas['fator_ofensivo'] > 1.1:
+            conf *= 0.9
+        
+        # Recompensar OVER se fator ofensivo alto
+        if mercado_info['tipo'] == 'over' and metricas['fator_ofensivo'] > 1.2:
+            conf *= 1.05
+        
+        return clamp(conf, 40, 90)  # Ampliado range (era 50-85)
     
     def _retorno_avoid(self, motivo):
         """Retorno padronizado para evitar apostas"""
@@ -1262,6 +1159,7 @@ class AnalisadorTendencia:  # CORREÇÃO: Nome alterado de AnalisadorTendenciaPr
             "linha_mercado": 0,
             "detalhes": {"motivo": motivo}
         }
+
   
 
 # =============================
