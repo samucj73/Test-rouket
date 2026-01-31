@@ -1027,6 +1027,7 @@ class AnalisadorEstatistico:
         }
 
 
+#class AnalisadorTendencia:
 class AnalisadorTendencia:
     """Analisa tendências de gols em partidas - VERSÃO REALISTA E EQUILIBRADA"""
 
@@ -1228,7 +1229,7 @@ class AnalisadorTendencia:
                 "played_away": played_away,
                 "motivo": "ALERTA CONFIRMADO"
             }
-        }
+        }   
 
 # =============================
 # NOVA CLASSE: ResultadosTopAlertas (CORRIGIDA)
