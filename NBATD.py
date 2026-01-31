@@ -844,6 +844,8 @@ def sigmoid(x):
 # =============================
 # CLASSES DE ANÁLISE
 # =============================
+# CLASSES DE ANÁLISE
+# =============================
 
 class AnalisadorEstatistico:
     """Realiza análises estatísticas para previsões"""
@@ -1026,9 +1028,7 @@ class AnalisadorEstatistico:
             "taxa_sofridos_away": round(taxa_sofridos_away, 2)
         }
 
-
-#class AnalisadorTendencia:
-class AnalisadorTendenciaPro:
+class AnalisadorTendencia:  # CORREÇÃO: Nome alterado de AnalisadorTendenciaPro para AnalisadorTendencia
     """VERSÃO PROFISSIONAL - Otimizada com base em 112 jogos (81.2% acerto)"""
     
     # CONFIGURAÇÕES OTIMIZADAS BASEADAS NOS DADOS
