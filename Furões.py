@@ -104,12 +104,12 @@ class APIOddsClient:
             "PD": "soccer_spain_la_liga",                # La Liga
             "FL1": "soccer_france_ligue_one",            # Ligue 1
             "BSA": "soccer_brazil_campeonato",           # Brasileirão
-            "CL": "soccer_uefa_champs_league",           # Champions League (CORRIGIDO)
+            "CL": "soccer_uefa_champions_league",        # Champions League (CORRIGIDO)
             "ELC": "soccer_efl_champ",                   # Championship (CORRIGIDO: soccer_efl_champ)
             "PPL": "soccer_portugal_primeira_liga",      # Primeira Liga
             "DED": "soccer_netherlands_eredivisie",      # Eredivisie
             "WC": "soccer_fifa_world_cup",               # FIFA World Cup
-            "EC": "soccer_euro_championship"             # European Championship (verificar se existe)
+            "EC": "soccer_euro_championship"             # European Championship
         }
     
     def obter_odds_com_retry(self, url: str, timeout: int = 15, max_retries: int = 3) -> dict | None:
@@ -861,7 +861,7 @@ class OddsManager:
             'France Ligue One': 'Ligue 1',
             'Brazil Campeonato': 'Brasileirão',
             'Uefa Champs League': 'Champions League',
-            'Efl Champ': 'Championship',  # CORRIGIDO
+            'Efl Champ': 'Championship',
             'Portugal Primeira Liga': 'Primeira Liga',
             'Netherlands Eredivisie': 'Eredivisie',
             'Fifa World Cup': 'FIFA World Cup',
@@ -879,8 +879,8 @@ class OddsManager:
             'soccer_italy_serie_a': 'Serie A (Itália)',
             'soccer_france_ligue_one': 'Ligue 1',
             'soccer_brazil_campeonato': 'Campeonato Brasileiro Série A',
-            'soccer_uefa_champs_league': 'UEFA Champions League',  # CORRIGIDO
-            'soccer_efl_champ': 'Championship (Inglaterra)',  # CORRIGIDO
+            'soccer_uefa_champions_league': 'UEFA Champions League',
+            'soccer_efl_champ': 'Championship (Inglaterra)',
             'soccer_portugal_primeira_liga': 'Primeira Liga (Portugal)',
             'soccer_netherlands_eredivisie': 'Eredivisie',
             'soccer_fifa_world_cup': 'FIFA World Cup',
@@ -1643,7 +1643,7 @@ class Jogo:
         elif self.tendencia_ht == "OVER 1.5 HT" and total_gols_ht > 1.5:
             return "GREEN"
         elif self.tendencia_ht == "UNDER 1.5 HT" and total_gols_ht < 1.5:
-            return "RED"
+            return "GREEN"
         return "RED"
     
     def calcular_resultado_ambas_marcam(self, home_goals: int, away_goals: int) -> str:
@@ -4422,7 +4422,7 @@ class SistemaAlertasFutebol:
         return jogos
     
     def _enviar_top_jogos(self, jogos_filtrados, top_n, alerta_top_jogos, min_conf, max_conf, formato_top_jogos, data_busca, tipo_alerta="over_under"):
-        """Envia os top jogos para o Telegram"""
+        """Envia os top jogos para o Telegram - CORRIGIDO"""
         if not alerta_top_jogos:
             st.info("ℹ️ Alerta de Top Jogos desativado")
             return
@@ -4455,30 +4455,251 @@ class SistemaAlertasFutebol:
         
         # Salvar alertas TOP
         for jogo in top_jogos_sorted:
-            alerta = Alerta(Jogo({
-                "id": jogo["id"],
-                "homeTeam": {"name": jogo["home"]},
-                "awayTeam": {"name": jogo["away"]},
-                "utcDate": jogo["hora"].isoformat() if isinstance(jogo["hora"], datetime) else "",
-                "competition": {"name": jogo["liga"]},
-                "status": jogo["status"]
-            }), data_busca, tipo_alerta)
-            
-            alerta.jogo.set_analise({
-                "tendencia": jogo.get("tendencia", ""),
-                "estimativa": jogo.get("estimativa", 0.0),
-                "probabilidade": jogo.get("probabilidade", 0.0),
-                "confianca": jogo.get("confianca", 0.0),
-                "tipo_aposta": jogo.get("tipo_aposta", ""),
-                "detalhes": jogo.get("detalhes", {})
-            })
-            
-            self._salvar_alerta_top(alerta)
+            self._salvar_alerta_top(jogo, data_busca, tipo_alerta)
         
         if formato_top_jogos in ["Texto", "Ambos"]:
+            self._enviar_top_jogos_texto(top_jogos_sorted, data_busca, tipo_alerta)
+        
+        if formato_top_jogos in ["Poster", "Ambos"]:
+            self._enviar_top_jogos_poster(top_jogos_sorted, data_busca, tipo_alerta)
+    
+    def _salvar_alerta_top(self, jogo_data, data_busca, tipo_alerta):
+        """Salva um alerta na lista de alertas TOP"""
+        alertas_top = DataStorage.carregar_alertas_top()
+        
+        # Criar objeto de alerta top
+        alerta_top = {
+            "id": jogo_data["id"],
+            "home": jogo_data["home"],
+            "away": jogo_data["away"],
+            "liga": jogo_data["liga"],
+            "hora": jogo_data.get("hora", datetime.now().isoformat()),
+            "status": jogo_data.get("status", "SCHEDULED"),
+            "escudo_home": jogo_data.get("escudo_home", ""),
+            "escudo_away": jogo_data.get("escudo_away", ""),
+            "tipo_alerta": tipo_alerta,
+            "data_busca": data_busca,
+            "conferido": False,
+            "data_criacao": datetime.now().isoformat()
+        }
+        
+        # Adicionar dados específicos do tipo
+        if tipo_alerta == "over_under":
+            alerta_top.update({
+                "tendencia": jogo_data.get("tendencia", ""),
+                "estimativa": jogo_data.get("estimativa", 0.0),
+                "probabilidade": jogo_data.get("probabilidade", 0.0),
+                "confianca": jogo_data.get("confianca", 0.0),
+                "tipo_aposta": jogo_data.get("tipo_aposta", ""),
+                "detalhes": jogo_data.get("detalhes", {})
+            })
+        elif tipo_alerta == "favorito":
+            alerta_top.update({
+                "favorito": jogo_data.get("favorito", ""),
+                "confianca_vitoria": jogo_data.get("confianca_vitoria", 0.0),
+                "prob_home_win": jogo_data.get("prob_home_win", 0.0),
+                "prob_away_win": jogo_data.get("prob_away_win", 0.0),
+                "prob_draw": jogo_data.get("prob_draw", 0.0),
+                "detalhes": jogo_data.get("detalhes", {})
+            })
+        elif tipo_alerta == "gols_ht":
+            alerta_top.update({
+                "tendencia_ht": jogo_data.get("tendencia_ht", ""),
+                "confianca_ht": jogo_data.get("confianca_ht", 0.0),
+                "estimativa_total_ht": jogo_data.get("estimativa_total_ht", 0.0),
+                "detalhes": jogo_data.get("detalhes", {})
+            })
+        elif tipo_alerta == "ambas_marcam":
+            alerta_top.update({
+                "tendencia_ambas_marcam": jogo_data.get("tendencia_ambas_marcam", ""),
+                "confianca_ambas_marcam": jogo_data.get("confianca_ambas_marcam", 0.0),
+                "prob_ambas_marcam_sim": jogo_data.get("prob_ambas_marcam_sim", 0.0),
+                "prob_ambas_marcam_nao": jogo_data.get("prob_ambas_marcam_nao", 0.0),
+                "detalhes": jogo_data.get("detalhes", {})
+            })
+        
+        # Verificar se já existe
+        existe = False
+        for idx, alerta in enumerate(alertas_top):
+            if alerta.get("id") == jogo_data["id"] and alerta.get("tipo_alerta") == tipo_alerta:
+                alertas_top[idx] = alerta_top
+                existe = True
+                break
+        
+        if not existe:
+            alertas_top.append(alerta_top)
+        
+        # Manter apenas os últimos 50 alertas
+        if len(alertas_top) > 50:
+            alertas_top = alertas_top[-50:]
+        
+        DataStorage.salvar_alertas_top(alertas_top)
+    
+    def _enviar_top_jogos_texto(self, top_jogos_sorted, data_busca, tipo_alerta):
+        """Envia os top jogos em formato de texto"""
+        data_str = datetime.strptime(data_busca, "%Y-%m-%d").strftime("%d/%m/%Y")
+        
+        if tipo_alerta == "over_under":
+            titulo = f"🏆 TOP {len(top_jogos_sorted)} OVER/UNDER - {data_str}"
+        elif tipo_alerta == "favorito":
+            titulo = f"🏆 TOP {len(top_jogos_sorted)} FAVORITOS - {data_str}"
+        elif tipo_alerta == "gols_ht":
+            titulo = f"🏆 TOP {len(top_jogos_sorted)} GOLS HT - {data_str}"
+        elif tipo_alerta == "ambas_marcam":
+            titulo = f"🏆 TOP {len(top_jogos_sorted)} AMBAS MARCAM - {data_str}"
+        
+        msg = f"<b>{titulo}</b>\n\n"
+        
+        for idx, jogo in enumerate(top_jogos_sorted, 1):
+            if tipo_alerta == "over_under":
+                tipo_emoji = "📈" if jogo.get('tipo_aposta') == "over" else "📉"
+                info = f"{jogo.get('tendencia', '')} | Conf: {jogo.get('confianca', 0):.0f}%"
+            elif tipo_alerta == "favorito":
+                tipo_emoji = "🏆"
+                favorito = jogo.get('favorito', 'home')
+                favorito_text = jogo.get('home', '') if favorito == "home" else jogo.get('away', '') if favorito == "away" else "EMPATE"
+                info = f"Favorito: {favorito_text} | Conf: {jogo.get('confianca_vitoria', 0):.0f}%"
+            elif tipo_alerta == "gols_ht":
+                tipo_emoji = "⏰"
+                info = f"{jogo.get('tendencia_ht', '')} | Conf: {jogo.get('confianca_ht', 0):.0f}%"
+            elif tipo_alerta == "ambas_marcam":
+                tipo_emoji = "🤝"
+                info = f"{jogo.get('tendencia_ambas_marcam', '')} | Conf: {jogo.get('confianca_ambas_marcam', 0):.0f}%"
+            
+            msg += f"<b>{idx}. {tipo_emoji} {jogo.get('home', '')} vs {jogo.get('away', '')}</b>\n"
+            msg += f"   📋 {info}\n"
+            msg += f"   📅 {data_str}\n\n"
+        
+        msg += f"<b>🔥 ELITE MASTER SYSTEM - TOP {len(top_jogos_sorted)} JOGOS</b>"
+        
+        if self.telegram_client.enviar_mensagem(msg, self.config.TELEGRAM_CHAT_ID_ALT2):
+            st.success(f"📤 Top {len(top_jogos_sorted)} jogos {tipo_alerta} enviados em texto!")
+    
+    def _enviar_top_jogos_poster(self, top_jogos_sorted, data_busca, tipo_alerta):
+        """Envia os top jogos em formato de poster"""
+        try:
+            if tipo_alerta == "over_under":
+                titulo = f" TOP OVER/UNDER - {datetime.strptime(data_busca, '%Y-%m-%d').strftime('%d/%m/%Y')}"
+            elif tipo_alerta == "favorito":
+                titulo = f" TOP FAVORITOS - {datetime.strptime(data_busca, '%Y-%m-%d').strftime('%d/%m/%Y')}"
+            elif tipo_alerta == "gols_ht":
+                titulo = f" TOP GOLS HT - {datetime.strptime(data_busca, '%Y-%m-%d').strftime('%d/%m/%Y')}"
+            elif tipo_alerta == "ambas_marcam":
+                titulo = f" TOP AMBAS MARCAM - {datetime.strptime(data_busca, '%Y-%m-%d').strftime('%d/%m/%Y')}"
+            
+            poster = self.poster_generator.gerar_poster_westham_style(top_jogos_sorted, titulo, tipo_alerta)
+            
+            caption = f"<b>{titulo}</b>\n\n"
+            caption += f"<b>🏆 TOP {len(top_jogos_sorted)} JOGOS SELECIONADOS</b>\n\n"
+            caption += f"<b>🔥 ELITE MASTER SYSTEM - ANÁLISE DE PONTA</b>"
+            
+            if self.telegram_client.enviar_foto(poster, caption=caption):
+                st.success(f"📤 Top {len(top_jogos_sorted)} jogos {tipo_alerta} enviados em poster!")
+                
+        except Exception as e:
+            logging.error(f"Erro ao enviar poster top jogos: {e}")
+            st.error(f"❌ Erro ao enviar poster: {e}")
+    
+    def _enviar_alerta_westham_style(self, jogos_filtrados, tipo_analise, config_analise):
+        """Envia alerta no estilo West Ham"""
+        try:
+            data_str = datetime.now().strftime("%d/%m/%Y")
+            
+            if tipo_analise == "Over/Under de Gols":
+                titulo = f" ALERTA OVER/UNDER - {data_str}"
+            elif tipo_analise == "Favorito (Vitória)":
+                titulo = f" ALERTA FAVORITOS - {data_str}"
+            elif tipo_analise == "Gols HT (Primeiro Tempo)":
+                titulo = f" ALERTA GOLS HT - {data_str}"
+            elif tipo_analise == "Ambas Marcam (BTTS)":
+                titulo = f" ALERTA AMBAS MARCAM - {data_str}"
+            
+            poster = self.poster_generator.gerar_poster_westham_style(jogos_filtrados, titulo, tipo_analise)
+            
+            caption = f"<b>{titulo}</b>\n\n"
+            caption += f"<b>🔔 {len(jogos_filtrados)} ALERTAS ATIVOS</b>\n\n"
+            caption += f"<b>🔥 ELITE MASTER SYSTEM - DETECÇÃO AUTOMÁTICA</b>"
+            
+            if self.telegram_client.enviar_foto(poster, caption=caption):
+                st.success(f"📤 Alerta {tipo_analise} enviado em estilo West Ham!")
+                
+        except Exception as e:
+            logging.error(f"Erro ao enviar alerta West Ham: {e}")
+            st.error(f"❌ Erro ao enviar alerta: {e}")
+    
+    def _enviar_alerta_poster_original(self, jogos_filtrados, tipo_analise, config_analise):
+        """Envia alerta no estilo original (fallback)"""
+        try:
+            data_str = datetime.now().strftime("%d/%m/%Y")
+            
+            if tipo_analise == "Over/Under de Gols":
+                titulo = f"ALERTA OVER/UNDER - {data_str}"
+                tipo_alerta = "over_under"
+            elif tipo_analise == "Favorito (Vitória)":
+                titulo = f"ALERTA FAVORITOS - {data_str}"
+                tipo_alerta = "favorito"
+            elif tipo_analise == "Gols HT (Primeiro Tempo)":
+                titulo = f"ALERTA GOLS HT - {data_str}"
+                tipo_alerta = "gols_ht"
+            elif tipo_analise == "Ambas Marcam (BTTS)":
+                titulo = f"ALERTA AMBAS MARCAM - {data_str}"
+                tipo_alerta = "ambas_marcam"
+            
+            # Usar o poster de resultados como fallback
+            poster = self.poster_generator.gerar_poster_resultados(jogos_filtrados, tipo_alerta)
+            
+            caption = f"<b>{titulo}</b>\n\n"
+            caption += f"<b>📊 {len(jogos_filtrados)} JOGOS SELECIONADOS</b>\n\n"
+            caption += f"<b>🔥 ELITE MASTER SYSTEM</b>"
+            
+            if self.telegram_client.enviar_foto(poster, caption=caption):
+                st.success(f"📤 Alerta {tipo_analise} enviado em estilo original!")
+                
+        except Exception as e:
+            logging.error(f"Erro ao enviar alerta original: {e}")
+            st.error(f"❌ Erro ao enviar alerta: {e}")
+    
+    def _limpar_alertas_top_antigos(self):
+        """Limpa alertas TOP com mais de 7 dias"""
+        alertas_top = DataStorage.carregar_alertas_top()
+        
+        if not alertas_top:
+            st.info("ℹ️ Nenhum alerta TOP para limpar")
+            return
+        
+        hoje = datetime.now()
+        alertas_novos = []
+        alertas_removidos = 0
+        
+        for alerta in alertas_top:
+            try:
+                # Verificar data de criação
+                data_criacao_str = alerta.get("data_criacao", "")
+                if data_criacao_str:
+                    data_criacao = datetime.fromisoformat(data_criacao_str)
+                    diferenca = hoje - data_criacao
+                    
+                    if diferenca.days <= 7:  # Manter apenas últimos 7 dias
+                        alertas_novos.append(alerta)
+                    else:
+                        alertas_removidos += 1
+                else:
+                    # Se não tem data, manter por segurança
+                    alertas_novos.append(alerta)
+            except:
+                # Em caso de erro, manter o alerta
+                alertas_novos.append(alerta)
+        
+        DataStorage.salvar_alertas_top(alertas_novos)
+        
+        if alertas_removidos > 0:
+            st.success(f"🗑️ {alertas_removidos} alertas TOP antigos removidos")
+            st.info(f"📊 Restaram {len(alertas_novos)} alertas TOP")
+        else:
+            st.info("ℹ️ Nenhum alerta TOP antigo para remover")
 
 
-#=============================
+# =============================
 # INTERFACE STREAMLIT
 # =============================
 
@@ -4583,7 +4804,7 @@ def main():
             st.info("🏁 Alertas de resultados: ATIVADO")
     
     # Abas principais
-    tab1, tab2, tab3 = st.tabs(["🔍 Buscar Partidas", "📊 Conferir Resultados", "🏆 Resultados TOP Alertas"])
+    tab1, tab2, tab3, tab4 = st.tabs(["🔍 Buscar Partidas", "📊 Conferir Resultados", "🏆 Resultados TOP Alertas", "💰 Odds TOP Alertas"])
     
     with tab1:
         # Controles principais
@@ -4716,10 +4937,10 @@ def main():
         
         if alertas_top:
             # Agrupar por tipo
-            top_ou = [a for a in alertas_top.values() if a.get("tipo_alerta") == "over_under"]
-            top_fav = [a for a in alertas_top.values() if a.get("tipo_alerta") == "favorito"]
-            top_ht = [a for a in alertas_top.values() if a.get("tipo_alerta") == "gols_ht"]
-            top_am = [a for a in alertas_top.values() if a.get("tipo_alerta") == "ambas_marcam"]
+            top_ou = [a for a in alertas_top if a.get("tipo_alerta") == "over_under"]
+            top_fav = [a for a in alertas_top if a.get("tipo_alerta") == "favorito"]
+            top_ht = [a for a in alertas_top if a.get("tipo_alerta") == "gols_ht"]
+            top_am = [a for a in alertas_top if a.get("tipo_alerta") == "ambas_marcam"]
             
             col_top1, col_top2, col_top3, col_top4 = st.columns(4)
             
@@ -4761,6 +4982,21 @@ def main():
         else:
             st.info("ℹ️ Nenhum alerta TOP salvo ainda.")
     
+    with tab4:
+        st.subheader("💰 Processar Odds para Alertas TOP")
+        
+        col_data_odds, col_btn_odds = st.columns([2, 1])
+        with col_data_odds:
+            data_odds = st.date_input(
+                "📅 Data para processar odds:", 
+                value=datetime.today(), 
+                key="data_odds"
+            )
+        
+        with col_btn_odds:
+            if st.button("💰 Processar Odds TOP", type="primary", key="btn_processar_odds"):
+                sistema.processar_alertas_top_com_odds(data_odds)
+    
     # Painel de monitoramento
     st.markdown("---")
     st.subheader("📊 Monitoramento da API")
@@ -4779,4 +5015,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
