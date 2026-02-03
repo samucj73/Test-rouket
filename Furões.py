@@ -29,7 +29,7 @@ class ConfigManager:
     TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN","8351165117:AAFmqb3NrPsmT86_8C360eYzK71Qda1ah_4")
     TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "-1003073115320")
     TELEGRAM_CHAT_ID_ALT2 = os.getenv("TELEGRAM_CHAT_ID_ALT2", "-1002754276285")
-    ODDS_API_KEY = os.getenv("ODDS_API_KEY", "27a4fe84bdd8eaa3cddc9d8e3b74119d")  # Adicionado
+    ODDS_API_KEY = os.getenv("ODDS_API_KEY", "e85fb0b2c41521a76fad76800a247663")  # Adicionado
     
     HEADERS = {"X-Auth-Token": API_KEY}
     BASE_URL_FD = "https://api.football-data.org/v4"
