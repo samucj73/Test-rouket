@@ -436,7 +436,179 @@ class APIOddsClient:
             "odd": odds,
             "probabilidade_nossa": probabilidade
         }
+# =============================
+# NOVA CLASSE: Correlacionador de Jogos
+# =============================
 
+class JogoCorrelacionador:
+    """Classe para correlacionar jogos entre diferentes APIs (Odds API vs Football API)"""
+    
+    @staticmethod
+    def normalizar_nome_time(nome: str) -> str:
+        """Normaliza o nome do time para comparação"""
+        if not nome:
+            return ""
+        
+        # Converter para minúsculas
+        nome = nome.lower()
+        
+        # Remover acentos e caracteres especiais
+        import unicodedata
+        nome = unicodedata.normalize('NFKD', nome).encode('ASCII', 'ignore').decode('ASCII')
+        
+        # Remover palavras comuns e abreviações
+        palavras_remover = [
+            'fc', 'cf', 'sc', 'ac', 'as', 'us', 'ss', 'fk', 'bk', 'if', 'ff', 
+            'club', 'football', 'soccer', 'association', 'sports', 'team',
+            'de', 'do', 'da', 'das', 'dos', 'the', 'and', '&'
+        ]
+        
+        palavras = nome.split()
+        palavras_filtradas = [p for p in palavras if p not in palavras_remover and len(p) > 1]
+        
+        # Juntar e remover espaços extras
+        nome_normalizado = ' '.join(palavras_filtradas)
+        
+        # Remover pontuação
+        nome_normalizado = re.sub(r'[^\w\s]', '', nome_normalizado)
+        
+        # Remover números (ex: "Real Madrid 2" -> "Real Madrid")
+        nome_normalizado = re.sub(r'\d+', '', nome_normalizado)
+        
+        return nome_normalizado.strip()
+    
+    @staticmethod
+    def similaridade_strings(str1: str, str2: str) -> float:
+        """Calcula similaridade entre duas strings (0 a 1)"""
+        if not str1 or not str2:
+            return 0.0
+        
+        # Normalizar strings
+        str1_norm = JogoCorrelacionador.normalizar_nome_time(str1)
+        str2_norm = JogoCorrelacionador.normalizar_nome_time(str2)
+        
+        if str1_norm == str2_norm:
+            return 1.0
+        
+        # Usar SequenceMatcher para similaridade
+        similaridade = SequenceMatcher(None, str1_norm, str2_norm).ratio()
+        
+        # Verificar se uma string está contida na outra
+        if str1_norm in str2_norm or str2_norm in str1_norm:
+            similaridade = max(similaridade, 0.8)
+        
+        # Verificar siglas ou abreviações comuns
+        siglas_comuns = {
+            'man utd': 'manchester united',
+            'man city': 'manchester city',
+            'spurs': 'tottenham',
+            'rm': 'real madrid',
+            'barca': 'barcelona',
+            'psg': 'paris saint germain',
+            'inter': 'internazionale',
+            'milan': 'ac milan',
+        }
+        
+        for sigla, nome_completo in siglas_comuns.items():
+            if (str1_norm == sigla and str2_norm == nome_completo) or \
+               (str2_norm == sigla and str1_norm == nome_completo):
+                return 0.9
+        
+        return similaridade
+    
+    @staticmethod
+    def correlacionar_jogos(jogo_alerta: dict, odds_data_list: list, threshold: float = 0.7) -> dict:
+        """Correlaciona um jogo do alerta com os dados de odds"""
+        if not jogo_alerta or not odds_data_list:
+            return {}
+        
+        home_alerta = jogo_alerta.get('home', '')
+        away_alerta = jogo_alerta.get('away', '')
+        liga_alerta = jogo_alerta.get('liga', '')
+        
+        melhor_correlacao = 0.0
+        melhor_odds_data = {}
+        
+        for odds_data in odds_data_list:
+            home_odds = odds_data.get('home_team', '')
+            away_odds = odds_data.get('away_team', '')
+            
+            # Calcular similaridade para cada time
+            similaridade_home = JogoCorrelacionador.similaridade_strings(home_alerta, home_odds)
+            similaridade_away = JogoCorrelacionador.similaridade_strings(away_alerta, away_odds)
+            
+            # Calcular similaridade combinada
+            similaridade_combinada = (similaridade_home + similaridade_away) / 2
+            
+            # Verificar se times estão invertidos
+            similaridade_home_invertido = JogoCorrelacionador.similaridade_strings(home_alerta, away_odds)
+            similaridade_away_invertido = JogoCorrelacionador.similaridade_strings(away_alerta, home_odds)
+            similaridade_invertida = (similaridade_home_invertido + similaridade_away_invertido) / 2
+            
+            # Usar a maior similaridade (normal ou invertida)
+            similaridade_final = max(similaridade_combinada, similaridade_invertida)
+            
+            # Verificar também por abreviações curtas (ex: "PSG" vs "Paris Saint Germain")
+            if similaridade_final < threshold:
+                # Tentar verificar apenas as primeiras palavras
+                home_alerta_first = home_alerta.split()[0] if home_alerta.split() else home_alerta
+                away_alerta_first = away_alerta.split()[0] if away_alerta.split() else away_alerta
+                home_odds_first = home_odds.split()[0] if home_odds.split() else home_odds
+                away_odds_first = away_odds.split()[0] if away_odds.split() else away_odds
+                
+                similaridade_home_first = JogoCorrelacionador.similaridade_strings(home_alerta_first, home_odds_first)
+                similaridade_away_first = JogoCorrelacionador.similaridade_strings(away_alerta_first, away_odds_first)
+                similaridade_first = (similaridade_home_first + similaridade_away_first) / 2
+                
+                similaridade_final = max(similaridade_final, similaridade_first)
+            
+            if similaridade_final > melhor_correlacao:
+                melhor_correlacao = similaridade_final
+                melhor_odds_data = odds_data
+                melhor_odds_data['similaridade'] = similaridade_final
+        
+        # Retornar apenas se a correlação for boa o suficiente
+        if melhor_correlacao >= threshold:
+            logging.info(f"✅ Jogo correlacionado: {home_alerta} vs {away_alerta} -> "
+                        f"{melhor_odds_data.get('home_team')} vs {melhor_odds_data.get('away_team')} "
+                        f"(Similaridade: {melhor_correlacao:.2f})")
+            return melhor_odds_data
+        
+        logging.warning(f"⚠️ Jogo não correlacionado: {home_alerta} vs {away_alerta} "
+                       f"(Melhor similaridade: {melhor_correlacao:.2f})")
+        return {}
+    
+    @staticmethod
+    def buscar_odds_por_data_e_correlacionar(data_busca: str, jogos_alerta: list, odds_client) -> dict:
+        """Busca odds por data e correlaciona com jogos do alerta"""
+        if not jogos_alerta:
+            return {}
+        
+        # Buscar todas as odds da data
+        todas_odds = odds_client.obter_odds_por_data_liga(data_busca, None, "h2h,totals,spreads")
+        
+        if not todas_odds:
+            logging.warning(f"⚠️ Nenhuma odds encontrada para a data {data_busca}")
+            return {}
+        
+        logging.info(f"📊 Encontradas {len(todas_odds)} odds para a data {data_busca}")
+        
+        # Correlacionar cada jogo do alerta
+        odds_correlacionadas = {}
+        
+        for jogo_alerta in jogos_alerta:
+            jogo_id = jogo_alerta.get('id', '')
+            odds_data = JogoCorrelacionador.correlacionar_jogos(jogo_alerta, todas_odds, threshold=0.65)
+            
+            if odds_data:
+                odds_correlacionadas[jogo_id] = {
+                    'jogo_alerta': jogo_alerta,
+                    'odds_data': odds_data,
+                    'similaridade': odds_data.get('similaridade', 0)
+                }
+        
+        logging.info(f"✅ {len(odds_correlacionadas)} jogos correlacionados com sucesso")
+        return odds_correlacionadas
 
 # =============================
 # CLASSE: GerenCIADOR DE ALERTAS COM ODDS
