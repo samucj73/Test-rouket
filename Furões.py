@@ -16,6 +16,8 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 import logging
 import math
 import urllib.parse
+import re
+from difflib import SequenceMatcher
 
 
 # =============================
@@ -4424,8 +4426,9 @@ class SistemaAlertasFutebol:
             st.info("🚨 Enviando alertas de resultados automaticamente...")
             self._enviar_alertas_resultados_automaticos(resultados_totais, data_selecionada)
     
+    #def processar_alertas_top_com_odds(self, data_selecionada):
     def processar_alertas_top_com_odds(self, data_selecionada):
-        """Processa alertas TOP e adiciona informações de odds"""
+        """Processa alertas TOP e adiciona informações de odds com correlação"""
         st.subheader(f"💰 Processando Odds para Alertas TOP - {data_selecionada.strftime('%d/%m/%Y')}")
         
         # Carregar alertas TOP
@@ -4434,18 +4437,62 @@ class SistemaAlertasFutebol:
             st.warning("⚠️ Nenhum alerta TOP para processar odds")
             return
         
-        st.info(f"🔍 Processando {len(alertas_top)} alertas TOP com odds...")
+        st.info(f"🔍 Encontrados {len(alertas_top)} alertas TOP")
         
-        # Processar alertas com odds
-        alertas_com_odds = self.alerts_odds_manager.processar_alertas_top_com_odds(
-            alertas_top, 
-            data_selecionada.strftime("%Y-%m-%d")
-        )
+        # Filtrar alertas da data selecionada
+        hoje = data_selecionada.strftime("%Y-%m-%d")
+        alertas_data = [a for a in alertas_top if a.get('data_busca') == hoje]
+        
+        if not alertas_data:
+            st.warning(f"⚠️ Nenhum alerta TOP para a data {hoje}")
+            return
+        
+        st.info(f"📅 Processando {len(alertas_data)} alertas para {hoje}")
+        
+        # Método 1: Correlação simples (mais rápida)
+        metodo = st.radio("Escolha o método de correlação:", 
+                         ["Rápido (Correlação por similaridade)", 
+                          "Avançado (Busca por liga específica)"], 
+                         index=0)
+        
+        if metodo == "Rápido (Correlação por similaridade)":
+            alertas_com_odds = self.alerts_odds_manager.processar_alertas_top_com_odds(
+                alertas_data, 
+                data_selecionada
+            )
+        else:
+            alertas_com_odds = self.alerts_odds_manager.processar_alertas_top_com_odds_avancado(
+                alertas_data, 
+                data_selecionada
+            )
+        
+        # Verificar e corrigir correlações problemáticas
+        alertas_com_odds = self.alerts_odds_manager.verificar_e_corrigir_correlacoes(alertas_com_odds)
+        
+        # Calcular estatísticas
+        alertas_com_odds_sucesso = [a for a in alertas_com_odds if a.get('odds_disponiveis', False)]
+        alertas_sem_odds = [a for a in alertas_com_odds if not a.get('odds_disponiveis', False)]
+        
+        # Mostrar estatísticas
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total Alertas", len(alertas_data))
+        with col2:
+            st.metric("Com Odds", len(alertas_com_odds_sucesso))
+        with col3:
+            taxa = (len(alertas_com_odds_sucesso)/len(alertas_data)*100) if alertas_data else 0
+            st.metric("Taxa Sucesso", f"{taxa:.1f}%")
+        
+        # Mostrar alertas sem odds
+        if alertas_sem_odds:
+            with st.expander(f"⚠️ {len(alertas_sem_odds)} Alertas sem Odds"):
+                for alerta in alertas_sem_odds:
+                    st.write(f"❌ {alerta.get('home')} vs {alerta.get('away')}")
         
         # Calcular múltiplas
         resultado_multiplas = self.alerts_odds_manager.calcular_multiplas_alertas(alertas_com_odds)
         
-        if resultado_multiplas:
+        if resultado_multiplas and resultado_multiplas['status'] == "SUCESSO":
             st.success(f"✅ {resultado_multiplas['total_jogos']} jogos com odds processados!")
             
             # Mostrar resultado
@@ -4458,41 +4505,13 @@ class SistemaAlertasFutebol:
                 st.metric("Retorno Potencial", f"R$ {resultado_multiplas['retorno_potencial']:.2f}")
             
             # Mostrar detalhes
-            st.markdown("---")
-            st.subheader("🎲 Detalhes das Odds")
+            self.alerts_odds_manager.gerar_relatorio_multiplas_detalhado(alertas_com_odds, data_selecionada)
             
-            for idx, alerta in enumerate(resultado_multiplas['alertas'], 1):
-                tipo_alerta = alerta.get('tipo_alerta', 'over_under')
-                odd = alerta.get('odd_especifica', 0)
-                market = alerta.get('market', '')
-                
-                if tipo_alerta == "over_under":
-                    tipo_emoji = "📈" if alerta.get('tipo_aposta') == "over" else "📉"
-                    info = f"{alerta.get('tendencia', '')} | Conf: {alerta.get('confianca', 0):.0f}%"
-                elif tipo_alerta == "favorito":
-                    tipo_emoji = "🏆"
-                    favorito = alerta.get('favorito', 'home')
-                    favorito_text = alerta.get('home', '') if favorito == "home" else alerta.get('away', '') if favorito == "away" else "EMPATE"
-                    info = f"Favorito: {favorito_text} | Conf: {alerta.get('confianca_vitoria', 0):.0f}%"
-                elif tipo_alerta == "gols_ht":
-                    tipo_emoji = "⏰"
-                    info = f"{alerta.get('tendencia_ht', '')} | Conf: {alerta.get('confianca_ht', 0):.0f}%"
-                elif tipo_alerta == "ambas_marcam":
-                    tipo_emoji = "🤝"
-                    info = f"{alerta.get('tendencia_ambas_marcam', '')} | Conf: {alerta.get('confianca_ambas_marcam', 0):.0f}%"
-                
-                st.write(f"**{idx}. {tipo_emoji} {alerta.get('home', '')} vs {alerta.get('away', '')}**")
-                st.write(f"   📋 {info}")
-                st.write(f"   🎲 Mercado: {market} | Odd: **{odd:.2f}**")
-            
-            # Gerar e enviar relatório de múltiplas
-            if st.button("📤 Enviar Relatório de Múltiplas", type="primary"):
-                self.alerts_odds_manager.gerar_relatorio_multiplas(
-                    alertas_com_odds, 
-                    data_selecionada
-                )
         else:
             st.warning("⚠️ Não foi possível calcular múltiplas para os alertas TOP")
+            if resultado_multiplas:
+                st.info(f"Motivo: {resultado_multiplas.get('status', 'Desconhecido')}")
+                st.info(f"Odds válidas encontradas: {resultado_multiplas.get('total_jogos', 0)}")   
     
     def _conferir_resultados_tipo(self, tipo_alerta: str, data_busca: str) -> dict:
         """Conferir resultados para um tipo específico de alerta"""
