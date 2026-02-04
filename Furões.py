@@ -613,45 +613,70 @@ class JogoCorrelacionador:
 # =============================
 # CLASSE: GerenCIADOR DE ALERTAS COM ODDS
 # =============================
+# =============================
+# CLASSE ATUALIZADA: AlertsManagerComOdds (COM CORRELAÇÃO)
+# =============================
 
 class AlertsManagerComOdds:
-    """Gerencia alertas com integração de odds"""
+    """Gerencia alertas com integração de odds e correlação inteligente"""
     
     def __init__(self, api_client, odds_client: APIOddsClient):
         self.api_client = api_client
         self.odds_client = odds_client
         self.odds_manager = OddsManager(api_client, odds_client)
+        self.correlacionador = JogoCorrelacionador()
     
     def processar_alertas_top_com_odds(self, alertas_top, data_selecionada):
-        """Processa alertas top adicionando informações de odds"""
+        """Processa alertas top adicionando informações de odds com correlação"""
         if not alertas_top:
             return []
         
-        alertas_com_odds = []
+        hoje = data_selecionada.strftime("%Y-%m-%d")
         
-        for alerta in alertas_top:
+        # Passo 1: Buscar todas as odds da data
+        st.info(f"🔍 Buscando odds para {hoje}...")
+        todas_odds = self.odds_client.obter_odds_por_data_liga(
+            hoje, 
+            None,  # Todas as ligas
+            "h2h,totals"
+        )
+        
+        if not todas_odds:
+            st.warning("⚠️ Nenhuma odds encontrada para a data selecionada")
+            return alertas_top
+        
+        st.success(f"📊 Encontradas {len(todas_odds)} odds disponíveis")
+        
+        # Passo 2: Correlacionar cada alerta com as odds
+        alertas_com_odds = []
+        correlacionados = 0
+        
+        progress_bar = st.progress(0)
+        total_alertas = len(alertas_top)
+        
+        for idx, alerta in enumerate(alertas_top):
             try:
                 # Extrair informações do alerta
-                liga = alerta.get('league', alerta.get('liga', ''))
                 home_team = alerta.get('home_team', alerta.get('home', ''))
                 away_team = alerta.get('away_team', alerta.get('away', ''))
                 data_jogo = alerta.get('date', data_selecionada)
                 
-                # Buscar odds específicas para este jogo
-                odds_data = self.odds_client.obter_odds_por_jogo(
-                    fixture_id=str(alerta.get('id', '')),
-                    data_jogo=data_jogo,
-                    home_team=home_team,
-                    away_team=away_team
+                # Tentar correlação com odds existentes
+                odds_correlacionada = self.correlacionador.correlacionar_jogos(
+                    {'home': home_team, 'away': away_team},
+                    todas_odds,
+                    threshold=0.65
                 )
                 
-                if odds_data:
-                    # Processar as odds
+                if odds_correlacionada:
+                    correlacionados += 1
+                    
+                    # Processar as odds correlacionadas
                     jogo = Jogo({
                         "id": alerta.get('id', ''),
                         "homeTeam": {"name": home_team},
                         "awayTeam": {"name": away_team},
-                        "competition": {"name": liga},
+                        "competition": {"name": alerta.get('league', alerta.get('liga', ''))},
                         "status": "SCHEDULED"
                     })
                     
@@ -659,50 +684,293 @@ class AlertsManagerComOdds:
                     analise = alerta.get('analise', {})
                     
                     odds_processadas = self.odds_manager.processar_odds_jogo(
-                        odds_data, 
+                        odds_correlacionada, 
                         analise, 
                         jogo
                     )
                     
                     # Adicionar odds ao alerta
-                    alerta['odds'] = odds_processadas
+                    if odds_processadas:
+                        alerta['odds'] = odds_processadas
+                        alerta['odds_correlacionada'] = True
+                        alerta['similaridade_correlacao'] = odds_correlacionada.get('similaridade', 0)
+                        
+                        # Calcular múltiplas para mercados específicos do alerta
+                        if 'tipo_alerta' in alerta:
+                            market = self._obter_mercado_por_tipo_alerta(alerta['tipo_alerta'], alerta)
+                            alerta['odd_especifica'] = self._obter_odd_por_mercado(
+                                odds_processadas, 
+                                market
+                            )
+                            alerta['market'] = market
+                            alerta['odds_disponiveis'] = True
                     
-                    # Calcular múltiplas para mercados específicos do alerta
-                    if 'tipo_alerta' in alerta:
-                        market = self._obter_mercado_por_tipo_alerta(alerta['tipo_alerta'], alerta)
-                        alerta['odd_especifica'] = self._obter_odd_por_mercado(
-                            odds_processadas, 
-                            market
-                        )
-                        alerta['market'] = market  # Guardar o mercado para referência
+                    else:
+                        alerta['odds_disponiveis'] = False
+                        alerta['odds_correlacionada'] = False
+                
+                else:
+                    # Tentar busca direta como fallback
+                    odds_data = self.odds_client.obter_odds_por_jogo(
+                        fixture_id=str(alerta.get('id', '')),
+                        data_jogo=data_jogo,
+                        home_team=home_team,
+                        away_team=away_team
+                    )
+                    
+                    if odds_data:
+                        # Processar odds encontradas
+                        jogo = Jogo({
+                            "id": alerta.get('id', ''),
+                            "homeTeam": {"name": home_team},
+                            "awayTeam": {"name": away_team},
+                            "competition": {"name": alerta.get('league', alerta.get('liga', ''))},
+                            "status": "SCHEDULED"
+                        })
+                        
+                        analise = alerta.get('analise', {})
+                        odds_processadas = self.odds_manager.processar_odds_jogo(odds_data, analise, jogo)
+                        
+                        if odds_processadas:
+                            alerta['odds'] = odds_processadas
+                            alerta['odds_correlacionada'] = True
+                            alerta['similaridade_correlacao'] = 1.0
+                            
+                            if 'tipo_alerta' in alerta:
+                                market = self._obter_mercado_por_tipo_alerta(alerta['tipo_alerta'], alerta)
+                                alerta['odd_especifica'] = self._obter_odd_por_mercado(
+                                    odds_processadas, 
+                                    market
+                                )
+                                alerta['market'] = market
+                                alerta['odds_disponiveis'] = True
+                    
+                    else:
+                        alerta['odds_disponiveis'] = False
+                        alerta['odds_correlacionada'] = False
                 
                 alertas_com_odds.append(alerta)
                 
             except Exception as e:
-                logging.error(f"❌ Erro ao processar odds para alerta: {e}")
+                logging.error(f"❌ Erro ao processar odds para alerta {alerta.get('id')}: {e}")
+                alerta['erro_processamento'] = str(e)
+                alerta['odds_disponiveis'] = False
+                alertas_com_odds.append(alerta)
+            
+            progress_bar.progress((idx + 1) / total_alertas)
+        
+        # Mostrar estatísticas de correlação
+        st.info(f"📊 Estatísticas de correlação:")
+        st.info(f"   • Total de alertas: {total_alertas}")
+        st.info(f"   • Correlacionados com odds: {correlacionados}")
+        st.info(f"   • Taxa de sucesso: {(correlacionados/total_alertas*100):.1f}%")
+        
+        return alertas_com_odds
+    
+    def processar_alertas_top_com_odds_avancado(self, alertas_top, data_selecionada):
+        """Processa alertas top com método avançado de correlação"""
+        if not alertas_top:
+            return []
+        
+        hoje = data_selecionada.strftime("%Y-%m-%d")
+        
+        # Agrupar alertas por liga para buscar odds mais específicas
+        alertas_por_liga = {}
+        for alerta in alertas_top:
+            liga = alerta.get('liga', '')
+            if liga not in alertas_por_liga:
+                alertas_por_liga[liga] = []
+            alertas_por_liga[liga].append(alerta)
+        
+        alertas_com_odds = []
+        
+        for liga, alertas_liga in alertas_por_liga.items():
+            st.info(f"🔍 Processando liga: {liga}")
+            
+            # Tentar obter ID da liga para buscar odds específicas
+            liga_id = None
+            for nome_liga, id_liga in ConfigManager.LIGA_DICT.items():
+                if liga.lower() in nome_liga.lower() or nome_liga.lower() in liga.lower():
+                    liga_id = id_liga
+                    break
+            
+            # Buscar odds para a liga específica
+            odds_liga = self.odds_client.obter_odds_por_data_liga(
+                hoje, 
+                liga_id, 
+                "h2h,totals"
+            )
+            
+            if not odds_liga:
+                st.warning(f"⚠️ Nenhuma odds encontrada para a liga {liga}")
+                # Adicionar alertas sem odds
+                for alerta in alertas_liga:
+                    alerta['odds_disponiveis'] = False
+                    alertas_com_odds.append(alerta)
+                continue
+            
+            # Processar cada alerta da liga
+            for alerta in alertas_liga:
+                try:
+                    home_team = alerta.get('home_team', alerta.get('home', ''))
+                    away_team = alerta.get('away_team', alerta.get('away', ''))
+                    
+                    # Correlacionar com odds da liga
+                    odds_correlacionada = self.correlacionador.correlacionar_jogos(
+                        {'home': home_team, 'away': away_team},
+                        odds_liga,
+                        threshold=0.6  # Threshold menor para mesma liga
+                    )
+                    
+                    if odds_correlacionada:
+                        # Processar odds encontradas
+                        jogo = Jogo({
+                            "id": alerta.get('id', ''),
+                            "homeTeam": {"name": home_team},
+                            "awayTeam": {"name": away_team},
+                            "competition": {"name": liga},
+                            "status": "SCHEDULED"
+                        })
+                        
+                        analise = alerta.get('analise', {})
+                        odds_processadas = self.odds_manager.processar_odds_jogo(
+                            odds_correlacionada, 
+                            analise, 
+                            jogo
+                        )
+                        
+                        if odds_processadas:
+                            alerta['odds'] = odds_processadas
+                            alerta['odds_correlacionada'] = True
+                            alerta['similaridade_correlacao'] = odds_correlacionada.get('similaridade', 0)
+                            alerta['fonte_odds'] = 'liga_especifica'
+                            
+                            # Calcular odd específica
+                            if 'tipo_alerta' in alerta:
+                                market = self._obter_mercado_por_tipo_alerta(alerta['tipo_alerta'], alerta)
+                                odd_especifica = self._obter_odd_por_mercado(odds_processadas, market)
+                                if odd_especifica:
+                                    alerta['odd_especifica'] = odd_especifica
+                                    alerta['market'] = market
+                                    alerta['odds_disponiveis'] = True
+                                else:
+                                    alerta['odds_disponiveis'] = False
+                            else:
+                                alerta['odds_disponiveis'] = False
+                        else:
+                            alerta['odds_disponiveis'] = False
+                    else:
+                        alerta['odds_disponiveis'] = False
+                        alerta['odds_correlacionada'] = False
+                
+                except Exception as e:
+                    logging.error(f"❌ Erro ao processar alerta {alerta.get('id')}: {e}")
+                    alerta['erro_processamento'] = str(e)
+                    alerta['odds_disponiveis'] = False
+                
                 alertas_com_odds.append(alerta)
         
         return alertas_com_odds
     
+    def verificar_e_corrigir_correlacoes(self, alertas_com_odds):
+        """Verifica e corrige correlações problemáticas"""
+        alertas_corrigidos = []
+        
+        for alerta in alertas_com_odds:
+            # Se não tem odds disponíveis, tentar método alternativo
+            if not alerta.get('odds_disponiveis', False):
+                # Tentar buscar por nomes alternativos
+                odds_alternativa = self._buscar_odds_por_nomes_alternativos(alerta)
+                if odds_alternativa:
+                    alerta.update(odds_alternativa)
+                    alerta['correcao_aplicada'] = True
+            
+            alertas_corrigidos.append(alerta)
+        
+        return alertas_corrigidos
+    
+    def _buscar_odds_por_nomes_alternativos(self, alerta):
+        """Busca odds usando variações de nomes dos times"""
+        home_team = alerta.get('home_team', alerta.get('home', ''))
+        away_team = alerta.get('away_team', alerta.get('away', ''))
+        data_jogo = alerta.get('date', datetime.now().strftime("%Y-%m-%d"))
+        
+        # Lista de variações comuns para times populares
+        variacoes_times = {
+            'manchester united': ['man utd', 'manchester utd', 'man united'],
+            'manchester city': ['man city'],
+            'tottenham hotspur': ['tottenham', 'spurs'],
+            'real madrid': ['real madrid cf', 'real madrid fc'],
+            'barcelona': ['barcelona fc', 'fc barcelona'],
+            'paris saint germain': ['psg', 'paris sg'],
+            'bayern munich': ['bayern munchen', 'fc bayern'],
+            'borussia dortmund': ['dortmund', 'bvb'],
+            'inter milan': ['inter', 'internazionale'],
+            'ac milan': ['milan'],
+            'atl madrid': ['atletico madrid', 'atletico'],
+            'manchester utd': ['manchester united'],
+            'man city': ['manchester city'],
+        }
+        
+        # Gerar variações para os times do alerta
+        variacoes_home = variacoes_times.get(home_team.lower(), []) + [home_team]
+        variacoes_away = variacoes_times.get(away_team.lower(), []) + [away_team]
+        
+        # Buscar todas as odds da data
+        todas_odds = self.odds_client.obter_odds_por_data_liga(data_jogo, None, "h2h,totals")
+        
+        if not todas_odds:
+            return None
+        
+        # Tentar cada variação
+        for home_var in variacoes_home:
+            for away_var in variacoes_away:
+                odds_correlacionada = self.correlacionador.correlacionar_jogos(
+                    {'home': home_var, 'away': away_var},
+                    todas_odds,
+                    threshold=0.7
+                )
+                
+                if odds_correlacionada:
+                    logging.info(f"✅ Encontrado por variação: {home_var} vs {away_var}")
+                    return {
+                        'odds_data': odds_correlacionada,
+                        'similaridade_correlacao': odds_correlacionada.get('similaridade', 0),
+                        'usou_variacao': True
+                    }
+        
+        return None
+    
     def calcular_multiplas_alertas(self, alertas_com_odds):
-        """Calcula múltiplas para os alertas top"""
+        """Calcula múltiplas para os alertas top - ATUALIZADA"""
         if not alertas_com_odds:
             return None
         
-        # Coletar odds específicas de cada alerta
+        # Coletar odds específicas de cada alerta (apenas se tiver odds disponíveis)
         odds_list = []
         alertas_validos = []
         
         for alerta in alertas_com_odds:
-            if 'odd_especifica' in alerta and alerta['odd_especifica'] is not None:
+            # Verificar se o alerta tem odds disponíveis e uma odd específica
+            if (alerta.get('odds_disponiveis', False) and 
+                'odd_especifica' in alerta and 
+                alerta['odd_especifica'] is not None and
+                alerta['odd_especifica'] > 1.0):  # Odds devem ser maiores que 1.0
+                
                 odds_list.append(alerta['odd_especifica'])
                 alertas_validos.append(alerta)
+                
+                logging.info(f"✅ Alertas incluído na múltipla: {alerta.get('home')} vs {alerta.get('away')} - Odd: {alerta['odd_especifica']:.2f}")
+            else:
+                motivo = "Sem odds" if not alerta.get('odds_disponiveis', False) else f"Odd inválida: {alerta.get('odd_especifica', 'N/A')}"
+                logging.warning(f"⚠️ Alertas excluído: {alerta.get('home')} vs {alerta.get('away')} - Motivo: {motivo}")
         
-        if not odds_list:
+        if not odds_list or len(odds_list) < 2:
+            logging.warning(f"⚠️ Número insuficiente de odds válidas: {len(odds_list)}")
             return None
         
         # Calcular múltipla acumulada
-        multipla_acumulada = 1
+        multipla_acumulada = 1.0
         for odd in odds_list:
             multipla_acumulada *= odd
         
@@ -711,15 +979,188 @@ class AlertsManagerComOdds:
         retorno_potencial = valor_aposta * multipla_acumulada
         lucro_potencial = retorno_potencial - valor_aposta
         
-        return {
+        # Calcular probabilidade implícita
+        probabilidade_implicita = 1 / multipla_acumulada * 100 if multipla_acumulada > 0 else 0
+        
+        resultado = {
             "total_jogos": len(odds_list),
             "odds_individual": odds_list,
             "multipla_acumulada": round(multipla_acumulada, 2),
             "valor_aposta": valor_aposta,
             "retorno_potencial": round(retorno_potencial, 2),
             "lucro_potencial": round(lucro_potencial, 2),
-            "alertas": alertas_validos
+            "probabilidade_implicita": round(probabilidade_implicita, 2),
+            "alertas": alertas_validos,
+            "status": "SUCESSO" if len(odds_list) >= 2 else "INSUFICIENTE"
         }
+        
+        logging.info(f"📊 Múltipla calculada: {len(odds_list)} jogos, Multipla: {multipla_acumulada:.2f}, Retorno: R${retorno_potencial:.2f}")
+        
+        return resultado
+    
+    def gerar_relatorio_multiplas_detalhado(self, alertas_com_odds, data_selecionada):
+        """Gera relatório detalhado das múltiplas"""
+        resultado_multiplas = self.calcular_multiplas_alertas(alertas_com_odds)
+        
+        if not resultado_multiplas or resultado_multiplas['status'] == "INSUFICIENTE":
+            st.warning("⚠️ Não foi possível calcular múltiplas. Número insuficiente de odds válidas.")
+            return
+        
+        data_str = data_selecionada.strftime("%d/%m/%Y")
+        
+        # Criar interface detalhada no Streamlit
+        st.subheader(f"🎰 MÚLTIPLAS CALCULADAS - {data_str}")
+        
+        # Estatísticas gerais
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Total de Jogos", resultado_multiplas['total_jogos'])
+        with col2:
+            st.metric("Multipla Acumulada", f"{resultado_multiplas['multipla_acumulada']:.2f}")
+        with col3:
+            st.metric("Retorno Potencial", f"R$ {resultado_multiplas['retorno_potencial']:.2f}")
+        with col4:
+            st.metric("Lucro Potencial", f"R$ {resultado_multiplas['lucro_potencial']:.2f}")
+        
+        # Detalhes dos jogos
+        st.markdown("---")
+        st.subheader("🎲 Detalhes das Apostas")
+        
+        for idx, alerta in enumerate(resultado_multiplas['alertas'], 1):
+            with st.expander(f"Jogo {idx}: {alerta.get('home', '')} vs {alerta.get('away', '')}"):
+                col_info, col_odds = st.columns([2, 1])
+                
+                with col_info:
+                    tipo_alerta = alerta.get('tipo_alerta', 'over_under')
+                    
+                    if tipo_alerta == "over_under":
+                        st.write(f"**Tipo:** Over/Under")
+                        st.write(f"**Tendência:** {alerta.get('tendencia', '')}")
+                        st.write(f"**Confiança:** {alerta.get('confianca', 0):.0f}%")
+                    
+                    elif tipo_alerta == "favorito":
+                        st.write(f"**Tipo:** Favorito")
+                        favorito = alerta.get('favorito', 'home')
+                        favorito_text = alerta.get('home', '') if favorito == "home" else alerta.get('away', '') if favorito == "away" else "EMPATE"
+                        st.write(f"**Favorito:** {favorito_text}")
+                        st.write(f"**Confiança:** {alerta.get('confianca_vitoria', 0):.0f}%")
+                    
+                    elif tipo_alerta == "gols_ht":
+                        st.write(f"**Tipo:** Gols HT")
+                        st.write(f"**Tendência HT:** {alerta.get('tendencia_ht', '')}")
+                        st.write(f"**Confiança HT:** {alerta.get('confianca_ht', 0):.0f}%")
+                    
+                    elif tipo_alerta == "ambas_marcam":
+                        st.write(f"**Tipo:** Ambas Marcam")
+                        st.write(f"**Tendência:** {alerta.get('tendencia_ambas_marcam', '')}")
+                        st.write(f"**Confiança:** {alerta.get('confianca_ambas_marcam', 0):.0f}%")
+                
+                with col_odds:
+                    odd = alerta.get('odd_especifica', 0)
+                    market = alerta.get('market', '')
+                    
+                    st.write(f"**Mercado:** {market}")
+                    st.write(f"**Odd:** **{odd:.2f}**")
+                    
+                    # Indicador visual da odd
+                    if odd > 2.0:
+                        st.success("📈 Odd Alta")
+                    elif odd > 1.5:
+                        st.info("📊 Odd Moderada")
+                    else:
+                        st.warning("📉 Odd Baixa")
+                
+                # Informações de correlação
+                if alerta.get('odds_correlacionada'):
+                    similaridade = alerta.get('similaridade_correlacao', 0)
+                    if similaridade > 0.8:
+                        st.success(f"✅ Correlação Excelente ({similaridade:.1%})")
+                    elif similaridade > 0.6:
+                        st.info(f"ℹ️ Correlação Boa ({similaridade:.1%})")
+                    else:
+                        st.warning(f"⚠️ Correlação Fraca ({similaridade:.1%})")
+        
+        # Resumo das múltiplas
+        st.markdown("---")
+        st.subheader("📈 Cálculo das Múltiplas")
+        
+        # Fórmula
+        formula = " × ".join([f"{odd:.2f}" for odd in resultado_multiplas['odds_individual']])
+        st.write(f"**Fórmula:** {formula} = **{resultado_multiplas['multipla_acumulada']:.2f}**")
+        
+        # Tabela de retornos para diferentes valores de aposta
+        st.write("**💰 Simulação de Retornos:**")
+        
+        valores_aposta = [50, 100, 200, 500]
+        dados_simulacao = []
+        
+        for valor in valores_aposta:
+            retorno = valor * resultado_multiplas['multipla_acumulada']
+            lucro = retorno - valor
+            dados_simulacao.append({
+                "Aposta": f"R$ {valor:.2f}",
+                "Retorno": f"R$ {retorno:.2f}",
+                "Lucro": f"R$ {lucro:.2f}",
+                "ROI": f"{(lucro/valor*100):.1f}%"
+            })
+        
+        df_simulacao = pd.DataFrame(dados_simulacao)
+        st.table(df_simulacao)
+        
+        # Botão para enviar ao Telegram
+        if st.button("📤 Enviar Relatório para Telegram", type="primary"):
+            self._enviar_relatorio_telegram(resultado_multiplas, data_selecionada)
+    
+    def _enviar_relatorio_telegram(self, resultado_multiplas, data_selecionada):
+        """Envia relatório de múltiplas para o Telegram"""
+        data_str = data_selecionada.strftime("%d/%m/%Y")
+        
+        # Construir mensagem para Telegram
+        msg = f"<b>🎰 MÚLTIPLAS ALERTAS TOP - {data_str}</b>\n\n"
+        msg += f"<b>📊 TOTAL DE JOGOS: {resultado_multiplas['total_jogos']}</b>\n\n"
+        
+        for idx, alerta in enumerate(resultado_multiplas['alertas'], 1):
+            tipo_alerta = alerta.get('tipo_alerta', 'over_under')
+            
+            if tipo_alerta == "over_under":
+                tipo_emoji = "📈" if alerta.get('tipo_aposta') == "over" else "📉"
+                info = f"{alerta.get('tendencia', '')} | Conf: {alerta.get('confianca', 0):.0f}%"
+            elif tipo_alerta == "favorito":
+                tipo_emoji = "🏆"
+                favorito = alerta.get('favorito', 'home')
+                favorito_text = alerta.get('home', '') if favorito == "home" else alerta.get('away', '') if favorito == "away" else "EMPATE"
+                info = f"Favorito: {favorito_text} | Conf: {alerta.get('confianca_vitoria', 0):.0f}%"
+            elif tipo_alerta == "gols_ht":
+                tipo_emoji = "⏰"
+                info = f"{alerta.get('tendencia_ht', '')} | Conf: {alerta.get('confianca_ht', 0):.0f}%"
+            elif tipo_alerta == "ambas_marcam":
+                tipo_emoji = "🤝"
+                info = f"{alerta.get('tendencia_ambas_marcam', '')} | Conf: {alerta.get('confianca_ambas_marcam', 0):.0f}%"
+            else:
+                tipo_emoji = "⚽"
+                info = ""
+            
+            odd = alerta.get('odd_especifica', 0)
+            msg += f"<b>{idx}. {tipo_emoji} {alerta.get('home', '')} vs {alerta.get('away', '')}</b>\n"
+            msg += f"   📋 {info}\n"
+            msg += f"   🎲 Odd: <b>{odd:.2f}</b>\n\n"
+        
+        # Adicionar cálculo das múltiplas
+        msg += f"<b>🎯 CÁLCULO DAS MÚLTIPLAS:</b>\n"
+        msg += f"<b>🎲 Odds individuais: {' x '.join([f'{o:.2f}' for o in resultado_multiplas['odds_individual']])}</b>\n"
+        msg += f"<b>💰 Multipla acumulada: {resultado_multiplas['multipla_acumulada']:.2f}</b>\n"
+        msg += f"<b>💵 Aposta: R$ {resultado_multiplas['valor_aposta']:.2f}</b>\n"
+        msg += f"<b>📈 Retorno potencial: R$ {resultado_multiplas['retorno_potencial']:.2f}</b>\n"
+        msg += f"<b>💸 Lucro potencial: R$ {resultado_multiplas['lucro_potencial']:.2f}</b>\n"
+        msg += f"<b>📊 Probabilidade implícita: {resultado_multiplas['probabilidade_implicita']:.2f}%</b>\n\n"
+        msg += f"<b>🔥 ELITE MASTER SYSTEM - ANÁLISE COM ODDS</b>"
+        
+        # Enviar para Telegram
+        sistema = SistemaAlertasFutebol()
+        if sistema.telegram_client.enviar_mensagem(msg, sistema.config.TELEGRAM_CHAT_ID_ALT2):
+            st.success("📤 Relatório de múltiplas enviado para o Telegram!")
+        else:
+            st.error("❌ Erro ao enviar relatório de múltiplas")
     
     def _obter_mercado_por_tipo_alerta(self, tipo_alerta: str, alerta: dict) -> str:
         """Obtém o mercado correto baseado no tipo de alerta"""
@@ -799,6 +1240,8 @@ class AlertsManagerComOdds:
             return melhores[mercado_key].get('odds', None)
         
         return None
+
+
     
     def gerar_relatorio_multiplas(self, alertas_com_odds, data_selecionada):
         """Gera e envia relatório de múltiplas para o Telegram"""
