@@ -21,6 +21,64 @@ from difflib import SequenceMatcher
 
 
 # =============================
+# FUNÇÕES DE PERSISTÊNCIA DE SESSÃO
+# =============================
+
+def inicializar_sessao():
+    """Inicializa as variáveis de sessão com valores padrão"""
+    session_defaults = {
+        # Configurações de alertas
+        'tipo_analise': "Over/Under de Gols",
+        'tipo_filtro': "Todos",
+        'min_conf': 70,
+        'max_conf': 95,
+        'min_conf_vitoria': 65,
+        'filtro_favorito': "Todos",
+        'min_conf_ht': 60,
+        'tipo_ht': "OVER 0.5 HT",
+        'min_conf_am': 60,
+        'filtro_am': "Todos",
+        
+        # Configurações de envio
+        'alerta_individual': True,
+        'alerta_poster': True,
+        'alerta_top_jogos': True,
+        'alerta_conferencia_auto': True,
+        'alerta_resultados': True,
+        'formato_top_jogos': "Ambos",
+        
+        # Configurações gerais
+        'top_n': 3,
+        'estilo_poster': "West Ham (Novo)",
+        
+        # Abas específicas
+        'data_busca': datetime.today(),
+        'data_resultados': datetime.today(),
+        'data_resultados_top': datetime.today(),
+        'data_odds': datetime.today(),
+        'todas_ligas': True,
+        'ligas_selecionadas': ["Campeonato Brasileiro Série A", "Premier League (Inglaterra)"],
+        
+        # Configurações de odds
+        'metodo_correlacao_odds': "Rápido (Correlação por similaridade)"
+    }
+    
+    # Inicializar cada chave se não existir
+    for key, default_value in session_defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = default_value
+
+def salvar_configuracao_sessao():
+    """Salva configurações atuais da sessão"""
+    # Esta função é chamada sempre que há mudanças nas configurações
+    # As configurações já estão salvas automaticamente no st.session_state
+    pass
+
+def carregar_configuracao_sessao():
+    """Carrega configurações da sessão - já feito por inicializar_sessao()"""
+    pass
+
+# =============================
 # CLASSES PRINCIPAIS - CORE SYSTEM
 # =============================
 
@@ -438,6 +496,7 @@ class APIOddsClient:
             "odd": odds,
             "probabilidade_nossa": probabilidade
         }
+
 # =============================
 # NOVA CLASSE: Correlacionador de Jogos
 # =============================
@@ -614,9 +673,6 @@ class JogoCorrelacionador:
 
 # =============================
 # CLASSE: GerenCIADOR DE ALERTAS COM ODDS
-# =============================
-# =============================
-# CLASSE ATUALIZADA: AlertsManagerComOdds (COM CORRELAÇÃO)
 # =============================
 
 class AlertsManagerComOdds:
@@ -1243,8 +1299,6 @@ class AlertsManagerComOdds:
         
         return None
 
-
-    
     def gerar_relatorio_multiplas(self, alertas_com_odds, data_selecionada):
         """Gera e envia relatório de múltiplas para o Telegram"""
         if not alertas_com_odds:
@@ -1303,7 +1357,6 @@ class AlertsManagerComOdds:
             st.success("📤 Relatório de múltiplas enviado para o Telegram!")
         else:
             st.error("❌ Erro ao enviar relatório de múltiplas")
-
 
 # =============================
 # CLASSE ATUALIZADA: ODDS MANAGER (COM CORREÇÕES)
@@ -1623,7 +1676,6 @@ class OddsManager:
             melhores["under_35_best"] = best_under_35
         
         return melhores
-
 
 # =============================
 # RESTANTE DO CÓDIGO (INCLUINDO CLASSES EXISTENTES)
@@ -2153,7 +2205,7 @@ class Jogo:
             fuso_brasilia = timezone(timedelta(hours=-3))
             return data_utc.astimezone(fuso_brasilia)
         except Exception as e:
-            logging.error(f"Erro ao converter data {self.utc_date}: {e}")
+            logging.error(f"Erro ao convertir data {self.utc_date}: {e}")
             return datetime.now()
     
     def set_analise(self, analise: dict):
@@ -2583,7 +2635,6 @@ class AnalisadorEstatistico:
             "taxa_sofridos_home": round(taxa_sofridos_home, 2),
             "taxa_sofridos_away": round(taxa_sofridos_away, 2)
         }
-
 
 class AnalisadorTendencia:
     """Analisa tendências de gols em partidas - VERSÃO REALISTA E EQUILIBRADA"""
@@ -4069,6 +4120,10 @@ class PosterGenerator:
                          iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
             except:
                 draw.text((x + 70, y + 90), iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
+
+# =============================
+# SISTEMA PRINCIPAL (ATUALIZADO COM ODDS)
+# =============================
 
 # =============================
 # SISTEMA PRINCIPAL (ATUALIZADO COM ODDS)
