@@ -2777,6 +2777,9 @@ class AnalisadorTendencia:
         played_home = dados_home.get("played", 0)
         played_away = dados_away.get("played", 0)
 
+        # =============================
+        # DADOS INSUFICIENTES
+        # =============================
         if played_home < 3 or played_away < 3:
             return {
                 "tendencia": "DADOS INSUFICIENTES",
@@ -2807,7 +2810,7 @@ class AnalisadorTendencia:
         media_away_sofridos = clamp(media_away_sofridos, 0.6, 3.2)
 
         # =============================
-        # ESTIMATIVA DE GOLS (VALIDADA)
+        # ESTIMATIVA DE GOLS
         # =============================
         estimativa_total = (
             media_home_feitos * 0.55 +
@@ -2914,6 +2917,8 @@ class AnalisadorTendencia:
 
         confianca = clamp(base_conf + dist_conf + consistencia, 35, 70)
 
+        detalhes = {}
+
         # =============================
         # FILTRO FINAL 3 — OVER 1.5 CONTROLADO
         # =============================
@@ -2933,30 +2938,31 @@ class AnalisadorTendencia:
             }
 
         # =============================
-# DOWNGRADE AUTOMÁTICO OVER 2.5 → OVER 1.5
-# =============================
-if (
-    mercado == "OVER 2.5"
-    and estimativa_total >= 2.7
-    and escore_confianca < 75
-):
-    mercado_original = mercado
+        # DOWNGRADE AUTOMÁTICO OVER 2.5 → OVER 1.5
+        # =============================
+        if (
+            tipo_aposta == "over"
+            and linha_mercado == 2.5
+            and estimativa_total >= 2.7
+            and confianca < 75
+        ):
+            mercado_original = mercado
 
-    mercado = "OVER 1.5"
-    tipo_aposta = "over"
-    linha_mercado = 1.5
+            mercado = "OVER 1.5"
+            tipo_aposta = "over"
+            linha_mercado = 1.5
 
-    # Recalcular probabilidade para nova linha
-    probabilidade_base = sigmoid((estimativa_total - 1.5) * 1.6)
+            probabilidade_base = sigmoid((estimativa_total - 1.5) * 1.6)
+            confianca = clamp(confianca + 5, 45, 75)
 
-    # Ajuste leve de confiança (proteção)
-    confianca = clamp(confianca + 5, 45, 75)
+            detalhes["downgrade"] = True
+            detalhes["mercado_original"] = mercado_original
+            detalhes["motivo_downgrade"] = "OVER 2.5 sem confiança suficiente"
 
-    detalhes["downgrade"] = True
-    detalhes["mercado_original"] = mercado_original
-    detalhes["motivo_downgrade"] = "OVER 2.5 sem escore suficiente"
-    
-    return {
+        # =============================
+        # RETORNO FINAL
+        # =============================
+        return {
             "tendencia": mercado,
             "estimativa": round(estimativa_total, 2),
             "probabilidade": round(probabilidade_base * 100, 1),
@@ -2964,6 +2970,7 @@ if (
             "tipo_aposta": tipo_aposta,
             "linha_mercado": linha_mercado,
             "detalhes": {
+                **detalhes,
                 "fator_ataque": round(fator_ataque, 2),
                 "distancia_linha": round(distancia_linha, 2),
                 "played_home": played_home,
