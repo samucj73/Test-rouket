@@ -2717,13 +2717,12 @@ def calcular_conflito_over_btts(
 
 #class AnalisadorTendencia:
 class AnalisadorTendencia:
-    """Analisa tendências de gols em partidas - VERSÃO REALISTA E MODERADA"""
+    """Analisa tendências de gols em partidas - VERSÃO FINAL PROFISSIONAL"""
 
     def __init__(self, classificacao: dict):
         self.classificacao = classificacao
 
     def calcular_tendencia_completa(self, home: str, away: str) -> dict:
-        """Calcula tendências completas - VERSÃO MODERADA"""
 
         dados_home = self.classificacao.get(home, {})
         dados_away = self.classificacao.get(away, {})
@@ -2747,20 +2746,21 @@ class AnalisadorTendencia:
         played_home = max(played_home, 1)
         played_away = max(played_away, 1)
 
+        # =============================
         # MÉDIAS DE GOLS
+        # =============================
         media_home_feitos = dados_home.get("scored", 0) / played_home
         media_home_sofridos = dados_home.get("against", 0) / played_home
         media_away_feitos = dados_away.get("scored", 0) / played_away
         media_away_sofridos = dados_away.get("against", 0) / played_away
 
-        # SUAVIZAÇÃO
         media_home_feitos = clamp(media_home_feitos, 0.6, 3.6)
         media_home_sofridos = clamp(media_home_sofridos, 0.6, 3.2)
         media_away_feitos = clamp(media_away_feitos, 0.6, 3.4)
         media_away_sofridos = clamp(media_away_sofridos, 0.6, 3.2)
 
         # =============================
-        # ESTIMATIVA DE GOLS (AJUSTADA)
+        # ESTIMATIVA DE GOLS (VALIDADA)
         # =============================
         estimativa_total = (
             media_home_feitos * 0.55 +
@@ -2769,7 +2769,6 @@ class AnalisadorTendencia:
             media_away_sofridos * 0.25
         )
 
-        # FORÇA RELATIVA DE ATAQUE
         fator_ofensivo_home = media_home_feitos / max(media_away_sofridos, 0.75)
         fator_ofensivo_away = media_away_feitos / max(media_home_sofridos, 0.75)
         fator_ataque = (fator_ofensivo_home + fator_ofensivo_away) / 2
@@ -2781,19 +2780,15 @@ class AnalisadorTendencia:
         elif fator_ataque <= 0.7:
             estimativa_total *= 0.92
 
-        # FATOR CASA (MAIS EFETIVO)
         fator_casa = 1.06 + (media_home_feitos - media_home_sofridos) * 0.10
         fator_casa = clamp(fator_casa, 0.95, 1.18)
         estimativa_total *= fator_casa
 
-        # PUXAR PARA MÉDIA (MENOS AGRESSIVO)
         estimativa_total = (estimativa_total * 0.75) + (2.5 * 0.25)
-
-        # LIMITES REALISTAS
         estimativa_total = clamp(estimativa_total, 1.3, 4.2)
 
         # =============================
-        # ESCOLHA DO MERCADO (INALTERADA)
+        # ESCOLHA DO MERCADO
         # =============================
         if estimativa_total <= 1.5:
             mercado = "UNDER 2.5"
@@ -2825,12 +2820,6 @@ class AnalisadorTendencia:
             linha_mercado = 2.5
             probabilidade_base = sigmoid((estimativa_total - 2.5) * 1.1)
 
-        elif estimativa_total >= 2.2:
-            mercado = "OVER 1.5"
-            tipo_aposta = "over"
-            linha_mercado = 1.5
-            probabilidade_base = sigmoid((estimativa_total - 1.5) * 1.6)
-
         else:
             mercado = "OVER 1.5"
             tipo_aposta = "over"
@@ -2838,7 +2827,30 @@ class AnalisadorTendencia:
             probabilidade_base = sigmoid((estimativa_total - 1.5) * 1.5)
 
         # =============================
-        # CONFIANÇA (INALTERADA)
+        # FILTRO FINAL 1 — UNDER PERIGOSO
+        # =============================
+        if tipo_aposta == "under" and estimativa_total > 1.85:
+            return {
+                "tendencia": "NÃO APOSTAR",
+                "estimativa": round(estimativa_total, 2),
+                "probabilidade": round(probabilidade_base * 100, 1),
+                "confianca": 0,
+                "tipo_aposta": "avoid",
+                "linha_mercado": linha_mercado,
+                "detalhes": {"motivo": "UNDER perigoso (estimativa alta)"}
+            }
+
+        # =============================
+        # FILTRO FINAL 2 — PROMOVER OVER 2.5
+        # =============================
+        if tipo_aposta == "over" and estimativa_total >= 2.75 and fator_ataque >= 1.2:
+            mercado = "OVER 2.5"
+            tipo_aposta = "over"
+            linha_mercado = 2.5
+            probabilidade_base = sigmoid((estimativa_total - 2.5) * 1.15)
+
+        # =============================
+        # CONFIANÇA
         # =============================
         distancia_linha = abs(estimativa_total - linha_mercado)
 
@@ -2854,6 +2866,13 @@ class AnalisadorTendencia:
             consistencia += 5
 
         confianca = clamp(base_conf + dist_conf + consistencia, 35, 70)
+
+        # =============================
+        # FILTRO FINAL 3 — OVER 1.5 CONTROLADO
+        # =============================
+        if tipo_aposta == "over" and linha_mercado == 1.5:
+            if media_home_feitos < 1.2 and media_away_feitos < 1.2:
+                confianca *= 0.85
 
         if confianca < 45:
             return {
@@ -2875,15 +2894,12 @@ class AnalisadorTendencia:
             "linha_mercado": linha_mercado,
             "detalhes": {
                 "fator_ataque": round(fator_ataque, 2),
-                "media_home_feitos": round(media_home_feitos, 2),
-                "media_away_feitos": round(media_away_feitos, 2),
                 "distancia_linha": round(distancia_linha, 2),
                 "played_home": played_home,
                 "played_away": played_away,
                 "motivo": "ALERTA CONFIRMADO"
             }
-        }   
-
+        }
 # =============================
 # NOVA CLASSE: ResultadosTopAlertas (CORRIGIDA)
 # =============================
