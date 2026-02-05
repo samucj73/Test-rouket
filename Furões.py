@@ -2762,7 +2762,7 @@ def calcular_escore_confianca(
 
     return int(round(escore * 100))
 
-class AnalisadorTendencia:
+#class AnalisadorTendencia:
 class AnalisadorTendencia:
     """Analisa tendências de gols em partidas - VERSÃO FINAL PROFISSIONAL"""
 
