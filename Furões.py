@@ -2636,6 +2636,85 @@ class AnalisadorEstatistico:
             "taxa_sofridos_away": round(taxa_sofridos_away, 2)
         }
 
+@staticmethod
+def calcular_conflito_over_btts(
+    home: str,
+    away: str,
+    classificacao: dict,
+    estimativa_total: float,
+    resultado_btts: dict
+) -> dict:
+    """
+    Resolve conflito inteligente entre OVER e BTTS
+    Retorna prioridade de mercado e flags de bloqueio
+    """
+
+    dados_home = classificacao.get(home, {})
+    dados_away = classificacao.get(away, {})
+
+    played_home = max(dados_home.get("played", 1), 1)
+    played_away = max(dados_away.get("played", 1), 1)
+
+    media_home = dados_home.get("scored", 0) / played_home
+    media_away = dados_away.get("scored", 0) / played_away
+
+    # -----------------------------
+    # MÉTRICAS DE DECISÃO
+    # -----------------------------
+    equilibrio_ofensivo = 1 - abs(media_home - media_away)
+    equilibrio_ofensivo = clamp(equilibrio_ofensivo, 0, 1)
+
+    ataque_unilateral = (
+        (media_home >= 1.8 and media_away < 1.0) or
+        (media_away >= 1.8 and media_home < 1.0)
+    )
+
+    prob_btts_sim = resultado_btts.get("sim", 0)
+    prob_btts_nao = resultado_btts.get("nao", 0)
+
+    # -----------------------------
+    # DECISÃO FINAL
+    # -----------------------------
+    prioridade = "NEUTRO"
+    bloquear_btts = False
+    bloquear_over = False
+    motivo = "Sem conflito relevante"
+
+    # CASO 1 — OVER forte, BTTS perigoso
+    if ataque_unilateral and estimativa_total >= 2.6:
+        prioridade = "OVER"
+        bloquear_btts = True
+        motivo = "Ataque unilateral (OVER sem BTTS)"
+
+    # CASO 2 — BTTS melhor que OVER 2.5
+    elif equilibrio_ofensivo >= 0.75 and 2.2 <= estimativa_total <= 2.6:
+        prioridade = "BTTS"
+        bloquear_over = True
+        motivo = "Equilíbrio ofensivo (BTTS prioritário)"
+
+    # CASO 3 — OVER 1.5 vence
+    elif equilibrio_ofensivo >= 0.6 and estimativa_total >= 2.0:
+        prioridade = "OVER_1.5"
+        motivo = "Jogo vivo sem garantia de BTTS"
+
+    # CASO 4 — JOGO TRAVADO
+    elif estimativa_total < 2.0 and equilibrio_ofensivo < 0.55:
+        prioridade = "EVITAR"
+        bloquear_btts = True
+        bloquear_over = True
+        motivo = "Jogo travado e desequilibrado"
+
+    return {
+        "prioridade": prioridade,
+        "bloquear_btts": bloquear_btts,
+        "bloquear_over": bloquear_over,
+        "equilibrio_ofensivo": round(equilibrio_ofensivo, 2),
+        "ataque_unilateral": ataque_unilateral,
+        "motivo": motivo,
+        "prob_btts_sim": prob_btts_sim,
+        "prob_btts_nao": prob_btts_nao
+    }
+
 #class AnalisadorTendencia:
 class AnalisadorTendencia:
     """Analisa tendências de gols em partidas - VERSÃO REALISTA E MODERADA"""
