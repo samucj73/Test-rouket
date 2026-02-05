@@ -2955,8 +2955,8 @@ if (
     detalhes["downgrade"] = True
     detalhes["mercado_original"] = mercado_original
     detalhes["motivo_downgrade"] = "OVER 2.5 sem escore suficiente"
-
-        return {
+    
+    return {
             "tendencia": mercado,
             "estimativa": round(estimativa_total, 2),
             "probabilidade": round(probabilidade_base * 100, 1),
