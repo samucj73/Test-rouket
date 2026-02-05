@@ -2940,24 +2940,7 @@ class AnalisadorTendencia:
         # =============================
         # DOWNGRADE AUTOMÁTICO OVER 2.5 → OVER 1.5
         # =============================
-        if (
-            tipo_aposta == "over"
-            and linha_mercado == 2.5
-            and estimativa_total >= 2.7
-            and confianca < 75
-        ):
-            mercado_original = mercado
-
-            mercado = "OVER 1.5"
-            tipo_aposta = "over"
-            linha_mercado = 1.5
-
-            probabilidade_base = sigmoid((estimativa_total - 1.5) * 1.6)
-            confianca = clamp(confianca + 5, 45, 75)
-
-            detalhes["downgrade"] = True
-            detalhes["mercado_original"] = mercado_original
-            detalhes["motivo_downgrade"] = "OVER 2.5 sem confiança suficiente"
+        
 
         # =============================
         # RETORNO FINAL
