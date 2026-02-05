@@ -2715,6 +2715,53 @@ def calcular_conflito_over_btts(
         "prob_btts_nao": prob_btts_nao
     }
 
+@staticmethod
+def calcular_escore_confianca(
+    probabilidade: float,
+    confianca: float,
+    estimativa_total: float,
+    linha_mercado: float,
+    conflito: dict
+) -> int:
+    """
+    Calcula o Escore Único de Confiança (0 a 100)
+    """
+
+    # -----------------------------
+    # NORMALIZAÇÃO BASE
+    # -----------------------------
+    prob_norm = clamp(probabilidade / 100, 0, 1)
+    conf_norm = clamp(confianca / 100, 0, 1)
+
+    base = (prob_norm * 0.6) + (conf_norm * 0.4)
+
+    # -----------------------------
+    # DISTÂNCIA DA LINHA
+    # -----------------------------
+    distancia = estimativa_total - linha_mercado
+    bonus_distancia = clamp(distancia / 1.2, 0, 1) * 0.25
+
+    # -----------------------------
+    # CONFLITO OVER × BTTS
+    # -----------------------------
+    penalidade_conflito = 0
+
+    if conflito:
+        if conflito.get("bloquear_over") or conflito.get("bloquear_btts"):
+            penalidade_conflito += 0.20
+
+        prioridade = conflito.get("prioridade")
+        if prioridade in ("EVITAR", "NEUTRO"):
+            penalidade_conflito += 0.15
+
+    # -----------------------------
+    # CÁLCULO FINAL
+    # -----------------------------
+    escore = base + bonus_distancia - penalidade_conflito
+    escore = clamp(escore, 0, 1)
+
+    return int(round(escore * 100))
+
 #class AnalisadorTendencia:
 class AnalisadorTendencia:
     """Analisa tendências de gols em partidas - VERSÃO FINAL PROFISSIONAL"""
