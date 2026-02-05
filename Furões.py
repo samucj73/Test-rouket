@@ -2932,6 +2932,30 @@ class AnalisadorTendencia:
                 "detalhes": {"motivo": f"Confiança baixa: {confianca:.1f}%"}
             }
 
+        # =============================
+# DOWNGRADE AUTOMÁTICO OVER 2.5 → OVER 1.5
+# =============================
+if (
+    mercado == "OVER 2.5"
+    and estimativa_total >= 2.7
+    and escore_confianca < 75
+):
+    mercado_original = mercado
+
+    mercado = "OVER 1.5"
+    tipo_aposta = "over"
+    linha_mercado = 1.5
+
+    # Recalcular probabilidade para nova linha
+    probabilidade_base = sigmoid((estimativa_total - 1.5) * 1.6)
+
+    # Ajuste leve de confiança (proteção)
+    confianca = clamp(confianca + 5, 45, 75)
+
+    detalhes["downgrade"] = True
+    detalhes["mercado_original"] = mercado_original
+    detalhes["motivo_downgrade"] = "OVER 2.5 sem escore suficiente"
+
         return {
             "tendencia": mercado,
             "estimativa": round(estimativa_total, 2),
