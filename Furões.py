@@ -328,7 +328,96 @@ class APIOddsClient:
     
     
     #def obter_odds_por_jogo(self, fixture_id: str, data_jogo: str = None, home_team: str = "", away_team: str = "") -> dict:
+    def obter_odds_por_jogo(self, fixture_id: str, data_jogo: str = None, home_team: str = "", away_team: str = "") -> dict:
+        """Obtém odds específicas para um jogo - CORREÇÃO COMPLETA"""
+        # A Odds API NÃO suporta buscar por ID de evento específico
+        # Em vez disso, buscamos todas as odds da data e filtramos pelo nome dos times
+        
+        cache_key = f"odds_match_{fixture_id}_{home_team}_{away_team}"
+        cached = self.odds_cache.get(cache_key)
+        if cached:
+            return cached
+        
+        try:
+            # Se não temos data, usar hoje
+            if not data_jogo:
+                data_jogo = datetime.now().strftime("%Y-%m-%d")
+            
+            # Buscar todas as odds da data (sem filtro de liga para maior cobertura)
+            todas_odds = self.obter_odds_por_data_liga(data_jogo, None, "h2h,totals,spreads")
+            
+            if not todas_odds:
+                return {}
+            
+            # Procurar o jogo específico pelos nomes dos times
+            for jogo in todas_odds:
+                jogo_home = jogo.get('home_team', '').lower()
+                jogo_away = jogo.get('away_team', '').lower()
+                
+                home_lower = home_team.lower()
+                away_lower = away_team.lower()
+                
+                # Verificar correspondência aproximada
+                match_found = False
+                
+                # Verificar correspondência exata ou parcial
+                if (home_lower in jogo_home or jogo_home in home_lower) and \
+                   (away_lower in jogo_away or jogo_away in away_lower):
+                    match_found = True
+                
+                # Verificar se os times estão invertidos
+                elif (home_lower in jogo_away or jogo_away in home_lower) and \
+                     (away_lower in jogo_home or jogo_home in away_lower):
+                    match_found = True
+                
+                if match_found and jogo.get('bookmakers'):
+                    logging.info(f"✅ Jogo encontrado na Odds API: {jogo_home} vs {jogo_away}")
+                    self.odds_cache.set(cache_key, jogo, ttl=300)
+                    return jogo
+            
+            logging.warning(f"⚠️ Jogo não encontrado na Odds API: {home_team} vs {away_team}")
+            return {}
+            
+        except Exception as e:
+            logging.error(f"❌ Erro ao buscar odds do jogo {fixture_id}: {e}")
+            return {}
     
+    def buscar_odds_por_event_ids(self, event_ids: list, mercado: str = "h2h") -> list:
+        """Busca odds por múltiplos IDs de evento"""
+        if not event_ids:
+            return []
+        
+        cache_key = f"odds_events_{hash(frozenset(event_ids))}_{mercado}"
+        cached = self.odds_cache.get(cache_key)
+        if cached:
+            return cached
+        
+        try:
+            # Usar endpoint upcoming com filtro de event_ids
+            url = f"{self.config.BASE_URL_ODDS}/sports/upcoming/odds"
+            
+            params = {
+                'apiKey': self.config.ODDS_API_KEY,
+                'regions': 'us,eu,uk',
+                'markets': mercado,
+                'oddsFormat': 'decimal',
+                'dateFormat': 'iso',
+                'eventIds': ','.join(event_ids[:50])  # Limitar a 50 eventos
+            }
+            
+            full_url = f"{url}?{urllib.parse.urlencode(params)}"
+            logging.info(f"🔗 Buscando odds para {len(event_ids)} eventos")
+            
+            data_response = self.obter_odds_com_retry(full_url)
+            
+            if data_response:
+                self.odds_cache.set(cache_key, data_response, ttl=600)
+            
+            return data_response or []
+            
+        except Exception as e:
+            logging.error(f"❌ Erro ao buscar odds por event_ids: {e}")
+            return []
     
     def obter_esportes_disponiveis(self) -> list:
         """Retorna lista de esportes disponíveis na Odds API"""
