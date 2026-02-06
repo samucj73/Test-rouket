@@ -340,8 +340,10 @@ class APIOddsClient:
     return odds or []
     
     #def obter_odds_por_jogo(self, fixture_id: str, data_jogo: str = None, home_team: str = "", away_team: str = "") -> dict:
-    def obter_odds_por_jogo(self, fixture_id: str, data_jogo: str = None, home_team: str = "", away_team: str = "", liga_id: str = None) -> dict:
-    """ Obtém odds específicas para um jogo
+    def obter_odds_por_jogo(self, fixture_id: str, data_jogo: str = None,
+                        home_team: str = "", away_team: str = "", liga_id: str = None) -> dict:
+    """
+    Obtém odds específicas para um jogo
     REFATORADO: NÃO chama mais a API diretamente
     """
 
@@ -393,7 +395,7 @@ class APIOddsClient:
         self.odds_cache.set(cache_key, melhor_match, ttl=300)
         return melhor_match
 
-    return {} 
+    return {}
     def buscar_odds_por_event_ids(self, event_ids: list, mercado: str = "h2h") -> list:
         """Busca odds por múltiplos IDs de evento"""
         if not event_ids:
