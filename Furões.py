@@ -145,7 +145,7 @@ class ConfigManager:
 # =============================
 # CLASSE ATUALIZADA: API DE ODDS (COM CORREÇÕES)
 # =============================
-# =============================
+#=============================
 # CLASSE ATUALIZADA: API DE ODDS (COM CORREÇÕES)
 # =============================
 
@@ -706,6 +706,12 @@ class OddsManager:
         
         return melhores
 
+
+# ======================================================
+# 🔧 CORREÇÃO DE NOME (ALIAS PARA CÓDIGO LEGADO)
+# ======================================================
+# Mantém compatibilidade com SistemaAlertasFutebol
+AlertsManagerComOdds = OddsManager
 # =============================
 # RESTANTE DO CÓDIGO (INCLUINDO CLASSES EXISTENTES)
 # =============================
