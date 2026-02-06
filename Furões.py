@@ -348,10 +348,10 @@ class APIOddsClient:
     away_team: str = "",
     liga_id: str = None
 ) -> dict:
-    """
-    Obtém odds específicas para um jogo
-    REFATORADO: NÃO chama mais a API diretamente
-    """
+    #"""
+  #  Obtém odds específicas para um jogo
+   # REFATORADO: NÃO chama mais a API diretamente
+ #   """
 
     if not data_jogo:
         data_jogo = datetime.now().strftime("%Y-%m-%d")
