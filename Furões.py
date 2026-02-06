@@ -326,8 +326,8 @@ class APIOddsClient:
             return []
 
     def obter_odds_master_liga_data(self, data: str, liga_id: str, mercados: str) -> list:
-    cache_key = f"odds_master_{liga_id}_{data}_{mercados}"
-    cached = self.odds_cache.get(cache_key)
+        cache_key = f"odds_master_{liga_id}_{data}_{mercados}"
+        cached = self.odds_cache.get(cache_key)
     if cached:
         logging.info(f"📦 Odds MASTER cache hit: {cache_key}")
         return cached
