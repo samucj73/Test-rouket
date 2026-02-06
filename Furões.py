@@ -340,8 +340,14 @@ class APIOddsClient:
     return odds or []
     
     #def obter_odds_por_jogo(self, fixture_id: str, data_jogo: str = None, home_team: str = "", away_team: str = "") -> dict:
-    def obter_odds_por_jogo(self, fixture_id: str, data_jogo: str = None,
-                        home_team: str = "", away_team: str = "", liga_id: str = None) -> dict:
+    def obter_odds_por_jogo(
+    self,
+    fixture_id: str,
+    data_jogo: str = None,
+    home_team: str = "",
+    away_team: str = "",
+    liga_id: str = None
+) -> dict:
     """
     Obtém odds específicas para um jogo
     REFATORADO: NÃO chama mais a API diretamente
@@ -372,8 +378,12 @@ class APIOddsClient:
     melhor_score = 0.0
 
     for jogo in odds_liga:
-        home_api = JogoCorrelacionador.normalizar_nome_time(jogo.get("home_team", ""))
-        away_api = JogoCorrelacionador.normalizar_nome_time(jogo.get("away_team", ""))
+        home_api = JogoCorrelacionador.normalizar_nome_time(
+            jogo.get("home_team", "")
+        )
+        away_api = JogoCorrelacionador.normalizar_nome_time(
+            jogo.get("away_team", "")
+        )
 
         score_normal = (
             JogoCorrelacionador.similaridade_strings(home_norm, home_api) +
