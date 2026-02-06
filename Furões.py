@@ -325,19 +325,7 @@ class APIOddsClient:
             logging.error(f"❌ Erro ao buscar odds por data: {e}")
             return []
 
-    def obter_odds_master_liga_data(self, data: str, liga_id: str, mercados: str) -> list:
-        cache_key = f"odds_master_{liga_id}_{data}_{mercados}"
-        cached = self.odds_cache.get(cache_key)
-    if cached:
-        logging.info(f"📦 Odds MASTER cache hit: {cache_key}")
-    return cached
-
-    odds = self.obter_odds_por_data_liga(data, liga_id, mercados)
-
-    if odds:
-        self.odds_cache.set(cache_key, odds, ttl=60 * 60 * 6)  # 6 horas
-
-    return odds or []
+    
     
     #def obter_odds_por_jogo(self, fixture_id: str, data_jogo: str = None, home_team: str = "", away_team: str = "") -> dict:
     
