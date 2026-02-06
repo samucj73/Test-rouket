@@ -324,61 +324,77 @@ class APIOddsClient:
         except Exception as e:
             logging.error(f"❌ Erro ao buscar odds por data: {e}")
             return []
+
+    def obter_odds_master_liga_data(self, data: str, liga_id: str, mercados: str) -> list:
+    cache_key = f"odds_master_{liga_id}_{data}_{mercados}"
+    cached = self.odds_cache.get(cache_key)
+    if cached:
+        logging.info(f"📦 Odds MASTER cache hit: {cache_key}")
+        return cached
+
+    odds = self.obter_odds_por_data_liga(data, liga_id, mercados)
+
+    if odds:
+        self.odds_cache.set(cache_key, odds, ttl=60 * 60 * 6)  # 6 horas
+
+    return odds or []
     
-    def obter_odds_por_jogo(self, fixture_id: str, data_jogo: str = None, home_team: str = "", away_team: str = "") -> dict:
-        """Obtém odds específicas para um jogo - CORREÇÃO COMPLETA"""
-        # A Odds API NÃO suporta buscar por ID de evento específico
-        # Em vez disso, buscamos todas as odds da data e filtramos pelo nome dos times
-        
-        cache_key = f"odds_match_{fixture_id}_{home_team}_{away_team}"
-        cached = self.odds_cache.get(cache_key)
-        if cached:
-            return cached
-        
-        try:
-            # Se não temos data, usar hoje
-            if not data_jogo:
-                data_jogo = datetime.now().strftime("%Y-%m-%d")
-            
-            # Buscar todas as odds da data (sem filtro de liga para maior cobertura)
-            todas_odds = self.obter_odds_por_data_liga(data_jogo, None, "h2h,totals,spreads")
-            
-            if not todas_odds:
-                return {}
-            
-            # Procurar o jogo específico pelos nomes dos times
-            for jogo in todas_odds:
-                jogo_home = jogo.get('home_team', '').lower()
-                jogo_away = jogo.get('away_team', '').lower()
-                
-                home_lower = home_team.lower()
-                away_lower = away_team.lower()
-                
-                # Verificar correspondência aproximada
-                match_found = False
-                
-                # Verificar correspondência exata ou parcial
-                if (home_lower in jogo_home or jogo_home in home_lower) and \
-                   (away_lower in jogo_away or jogo_away in away_lower):
-                    match_found = True
-                
-                # Verificar se os times estão invertidos
-                elif (home_lower in jogo_away or jogo_away in home_lower) and \
-                     (away_lower in jogo_home or jogo_home in away_lower):
-                    match_found = True
-                
-                if match_found and jogo.get('bookmakers'):
-                    logging.info(f"✅ Jogo encontrado na Odds API: {jogo_home} vs {jogo_away}")
-                    self.odds_cache.set(cache_key, jogo, ttl=300)
-                    return jogo
-            
-            logging.warning(f"⚠️ Jogo não encontrado na Odds API: {home_team} vs {away_team}")
-            return {}
-            
-        except Exception as e:
-            logging.error(f"❌ Erro ao buscar odds do jogo {fixture_id}: {e}")
-            return {}
-    
+    #def obter_odds_por_jogo(self, fixture_id: str, data_jogo: str = None, home_team: str = "", away_team: str = "") -> dict:
+    def obter_odds_por_jogo(self, fixture_id: str, data_jogo: str = None, home_team: str = "", away_team: str = "", liga_id: str = None) -> dict:
+    """
+    Obtém odds específicas para um jogo
+    REFATORADO: NÃO chama mais a API diretamente
+    """
+
+    if not data_jogo:
+        data_jogo = datetime.now().strftime("%Y-%m-%d")
+
+    cache_key = f"odds_match_{fixture_id}"
+    cached = self.odds_cache.get(cache_key)
+    if cached:
+        return cached
+
+    # 🔥 BUSCA ÚNICA POR LIGA + DATA
+    odds_liga = self.obter_odds_master_liga_data(
+        data=data_jogo,
+        liga_id=liga_id,
+        mercados="h2h,totals,spreads"
+    )
+
+    if not odds_liga:
+        return {}
+
+    home_norm = JogoCorrelacionador.normalizar_nome_time(home_team)
+    away_norm = JogoCorrelacionador.normalizar_nome_time(away_team)
+
+    melhor_match = {}
+    melhor_score = 0.0
+
+    for jogo in odds_liga:
+        home_api = JogoCorrelacionador.normalizar_nome_time(jogo.get("home_team", ""))
+        away_api = JogoCorrelacionador.normalizar_nome_time(jogo.get("away_team", ""))
+
+        score_normal = (
+            JogoCorrelacionador.similaridade_strings(home_norm, home_api) +
+            JogoCorrelacionador.similaridade_strings(away_norm, away_api)
+        ) / 2
+
+        score_invertido = (
+            JogoCorrelacionador.similaridade_strings(home_norm, away_api) +
+            JogoCorrelacionador.similaridade_strings(away_norm, home_api)
+        ) / 2
+
+        score = max(score_normal, score_invertido)
+
+        if score > melhor_score:
+            melhor_score = score
+            melhor_match = jogo
+
+    if melhor_score >= 0.7:
+        self.odds_cache.set(cache_key, melhor_match, ttl=300)
+        return melhor_match
+
+    return {} 
     def buscar_odds_por_event_ids(self, event_ids: list, mercado: str = "h2h") -> list:
         """Busca odds por múltiplos IDs de evento"""
         if not event_ids:
