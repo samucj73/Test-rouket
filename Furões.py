@@ -341,8 +341,7 @@ class APIOddsClient:
     
     #def obter_odds_por_jogo(self, fixture_id: str, data_jogo: str = None, home_team: str = "", away_team: str = "") -> dict:
     def obter_odds_por_jogo(self, fixture_id: str, data_jogo: str = None, home_team: str = "", away_team: str = "", liga_id: str = None) -> dict:
-    """
-    Obtém odds específicas para um jogo
+    """ Obtém odds específicas para um jogo
     REFATORADO: NÃO chama mais a API diretamente
     """
 
