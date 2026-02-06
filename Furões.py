@@ -712,6 +712,43 @@ class OddsManager:
 # ======================================================
 # Mantém compatibilidade com SistemaAlertasFutebol
 AlertsManagerComOdds = OddsManager
+
+class AlertsManagerComOdds:
+    """
+    Camada de compatibilidade:
+    Orquestra alertas usando OddsManager
+    """
+
+    def __init__(self, api_client, odds_client):
+        self.odds_manager = OddsManager(api_client, odds_client)
+        self.api_client = api_client
+        self.odds_client = odds_client
+
+    def processar_alertas_top_com_odds(self, alertas):
+        """
+        Método esperado pelo SistemaAlertasFutebol
+        """
+        resultados = []
+
+        for alerta in alertas:
+            odds_data = alerta.get("odds_data")
+            analise = alerta.get("analise")
+            jogo = alerta.get("jogo")
+
+            if not odds_data or not jogo:
+                continue
+
+            odds_processadas = self.odds_manager.processar_odds_jogo(
+                odds_data=odds_data,
+                analise=analise,
+                jogo=jogo
+            )
+
+            if odds_processadas:
+                alerta["odds_processadas"] = odds_processadas
+                resultados.append(alerta)
+
+        return resultados
 # =============================
 # RESTANTE DO CÓDIGO (INCLUINDO CLASSES EXISTENTES)
 # =============================
