@@ -330,7 +330,7 @@ class APIOddsClient:
         cached = self.odds_cache.get(cache_key)
     if cached:
         logging.info(f"📦 Odds MASTER cache hit: {cache_key}")
-        return cached
+    return cached
 
     odds = self.obter_odds_por_data_liga(data, liga_id, mercados)
 
