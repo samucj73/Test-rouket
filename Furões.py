@@ -777,6 +777,44 @@ class AlertsManagerComOdds:
 
         return alertas_filtrados
 
+    def calcular_multiplas_alertas(self, alertas_com_odds):
+        """
+        Método legado esperado pelo SistemaAlertasFutebol.
+        Calcula combinações (múltiplas) de alertas com odds.
+        """
+
+        if not alertas_com_odds:
+            return {}
+
+        total_odd = 1.0
+        jogos = []
+
+        for alerta in alertas_com_odds:
+            odds = alerta.get("odds_processadas") or alerta.get("odds")
+
+            if not odds:
+                continue
+
+            odd_principal = odds.get("odd_principal") or odds.get("odd") or 1.0
+
+            try:
+                odd_principal = float(odd_principal)
+            except (TypeError, ValueError):
+                odd_principal = 1.0
+
+            total_odd *= odd_principal
+
+            jogos.append({
+                "jogo": alerta.get("jogo"),
+                "odd": odd_principal
+            })
+
+        return {
+            "quantidade_jogos": len(jogos),
+            "odd_total": round(total_odd, 2),
+            "jogos": jogos
+        }
+
 # =============================
 # RESTANTE DO CÓDIGO (INCLUINDO CLASSES EXISTENTES)
 # =============================
