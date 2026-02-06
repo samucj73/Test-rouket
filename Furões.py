@@ -753,6 +753,30 @@ class AlertsManagerComOdds:
 
         return resultados
 
+    def verificar_e_corrigir_correlacoes(self, alertas_com_odds):
+        """
+        Método legado esperado pelo SistemaAlertasFutebol.
+        Mantém compatibilidade sem quebrar a nova arquitetura.
+        """
+
+        if not alertas_com_odds:
+            return alertas_com_odds
+
+        alertas_filtrados = []
+
+        for alerta in alertas_com_odds:
+            # Caso exista alguma flag de correlação inválida
+            if alerta.get("correlacao_invalida"):
+                continue
+
+            # Caso já tenha sido marcado como duplicado
+            if alerta.get("duplicado"):
+                continue
+
+            alertas_filtrados.append(alerta)
+
+        return alertas_filtrados
+
 # =============================
 # RESTANTE DO CÓDIGO (INCLUINDO CLASSES EXISTENTES)
 # =============================
