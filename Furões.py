@@ -724,13 +724,16 @@ class AlertsManagerComOdds:
         self.api_client = api_client
         self.odds_client = odds_client
 
-    def processar_alertas_top_com_odds(self, alertas):
+    def processar_alertas_top_com_odds(self, alertas_data, data_selecionada=None):
         """
-        Método esperado pelo SistemaAlertasFutebol
+        Assinatura 100% compatível com SistemaAlertasFutebol
         """
         resultados = []
 
-        for alerta in alertas:
+        if not alertas_data:
+            return resultados
+
+        for alerta in alertas_data:
             odds_data = alerta.get("odds_data")
             analise = alerta.get("analise")
             jogo = alerta.get("jogo")
@@ -749,6 +752,7 @@ class AlertsManagerComOdds:
                 resultados.append(alerta)
 
         return resultados
+
 # =============================
 # RESTANTE DO CÓDIGO (INCLUINDO CLASSES EXISTENTES)
 # =============================
