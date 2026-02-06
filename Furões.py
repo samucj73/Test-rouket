@@ -352,9 +352,8 @@ class APIOddsClient:
   #  Obtém odds específicas para um jogo
    # REFATORADO: NÃO chama mais a API diretamente
  #   """
-
-    if not data_jogo:
-        data_jogo = datetime.now().strftime("%Y-%m-%d")
+if not data_jogo:
+    data_jogo = datetime.now().strftime("%Y-%m-%d")
 
     cache_key = f"odds_match_{fixture_id}"
     cached = self.odds_cache.get(cache_key)
