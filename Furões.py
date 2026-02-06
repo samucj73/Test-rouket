@@ -145,6 +145,9 @@ class ConfigManager:
 # =============================
 # CLASSE ATUALIZADA: API DE ODDS (COM CORREÇÕES)
 # =============================
+# =============================
+# CLASSE ATUALIZADA: API DE ODDS (COM CORREÇÕES)
+# =============================
 
 class APIOddsClient:
     """Cliente especializado para buscar odds de diferentes provedores - CORRIGIDO"""
@@ -324,10 +327,7 @@ class APIOddsClient:
         except Exception as e:
             logging.error(f"❌ Erro ao buscar odds por data: {e}")
             return []
-
     
-    
-    #def obter_odds_por_jogo(self, fixture_id: str, data_jogo: str = None, home_team: str = "", away_team: str = "") -> dict:
     def obter_odds_por_jogo(self, fixture_id: str, data_jogo: str = None, home_team: str = "", away_team: str = "") -> dict:
         """Obtém odds específicas para um jogo - CORREÇÃO COMPLETA"""
         # A Odds API NÃO suporta buscar por ID de evento específico
