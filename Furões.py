@@ -2912,7 +2912,7 @@ class AnalisadorTendencia:
         if fator_ataque > 1.3 or fator_ataque < 0.8:
             consistencia += 5
 
-        confianca = clamp(base_conf + dist_conf + consistencia, 35, 70)
+        confianca = clamp(base_conf + dist_conf + consistencia, 35, 75)
 
         # =============================
         # FILTRO FINAL 3 — OVER 1.5 CONTROLADO
