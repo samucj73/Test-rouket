@@ -4448,10 +4448,9 @@ class SistemaAlertasFutebol:
             "conferido": False,
             "data_criacao": datetime.now().isoformat()
         }
-
-    # Adicionar dados específicos do t
-    if tipo_alerta == "over_under":
-        poster_data.update({
+        # Adicionar dados específicos do tipo
+if tipo_alerta == "over_under":
+    poster_data.update({
         "tendencia": jogo_data.get("tendencia", ""),
         "estimativa": jogo_data.get("estimativa", 0.0),
         "probabilidade": jogo_data.get("probabilidade", 0.0),
@@ -4487,7 +4486,7 @@ elif tipo_alerta == "ambas_marcam":
 jogos_para_poster.append(poster_data)
 
 if not jogos_para_poster:
-continue
+    continue
 
 # Gerar poster para o lote
 try:
@@ -5139,5 +5138,10 @@ def _limpar_alertas_top_antigos(self):
         st.info(f"📊 Restaram {len(alertas_novos)} alertas TOP")
     else:
         st.info("ℹ️ Nenhum alerta TOP antigo para remover")
-        
-       
+
+
+
+
+
+
+   
