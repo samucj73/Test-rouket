@@ -4664,3 +4664,320 @@ class SistemaAlertasFutebol:
         else:
             st.info("ℹ️ Nenhum alerta TOP antigo para remover")
 
+# =============================
+# INTERFACE STREAMLIT
+# =============================
+
+def main():
+    st.set_page_config(page_title="⚽ Sistema Completo de Alertas", layout="wide")
+    st.title("⚽ Sistema Completo de Alertas de Futebol")
+    
+    # Inicializar sistema
+    sistema = SistemaAlertasFutebol()
+    
+    # Sidebar
+    with st.sidebar:
+        st.header("🔔 Configurações de Alertas")
+        
+        st.subheader("🎯 Tipo de Análise Principal")
+        tipo_analise = st.selectbox(
+            "Selecione o tipo de alerta:",
+            ["Over/Under de Gols", "Favorito (Vitória)", "Gols HT (Primeiro Tempo)", "Ambas Marcam (BTTS)"],
+            index=0
+        )
+        
+        config_analise = {}
+        
+        if tipo_analise == "Over/Under de Gols":
+            tipo_filtro = st.selectbox("🔍 Filtrar por Tipo", ["Todos", "Apenas Over", "Apenas Under"], index=0)
+            min_conf = st.slider("Confiança Mínima (%)", 10, 95, 70, 1)
+            max_conf = st.slider("Confiança Máxima (%)", min_conf, 95, 95, 1)
+            
+            config_analise = {
+                "tipo_filtro": tipo_filtro,
+                "min_conf": min_conf,
+                "max_conf": max_conf
+            }
+            
+        elif tipo_analise == "Favorito (Vitória)":
+            st.info("🎯 Alertas baseados na probabilidade de vitória")
+            min_conf_vitoria = st.slider("Confiança Mínima Vitória (%)", 50, 95, 65, 1)
+            filtro_favorito = st.selectbox("Filtrar Favorito:", ["Todos", "Casa", "Fora", "Empate"], index=0)
+            
+            config_analise = {
+                "min_conf_vitoria": min_conf_vitoria,
+                "filtro_favorito": filtro_favorito
+            }
+            
+        elif tipo_analise == "Gols HT (Primeiro Tempo)":
+            st.info("⏰ Alertas baseados em gols no primeiro tempo")
+            min_conf_ht = st.slider("Confiança Mínima HT (%)", 50, 95, 60, 1)
+            tipo_ht = st.selectbox("Tipo de HT:", ["OVER 0.5 HT", "OVER 1.5 HT", "UNDER 0.5 HT", "UNDER 1.5 HT"], index=0)
+            
+            config_analise = {
+                "min_conf_ht": min_conf_ht,
+                "tipo_ht": tipo_ht
+            }
+        
+        elif tipo_analise == "Ambas Marcam (BTTS)":
+            st.info("🤝 Alertas baseados se ambos os times marcam")
+            min_conf_am = st.slider("Confiança Mínima Ambas Marcam (%)", 50, 95, 60, 1)
+            filtro_am = st.selectbox("Filtrar Ambas Marcam:", ["Todos", "SIM", "NÃO"], index=0)
+            
+            config_analise = {
+                "min_conf_am": min_conf_am,
+                "filtro_am": filtro_am
+            }
+        
+        st.subheader("📨 Tipos de Envio")
+        alerta_individual = st.checkbox("🎯 Alertas Individuais", value=True)
+        alerta_poster = st.checkbox("📊 Alertas com Poster", value=True)
+        alerta_top_jogos = st.checkbox("🏆 Top Jogos", value=True)
+        alerta_conferencia_auto = st.checkbox("🤖 Alerta Auto Conferência", value=True)
+        alerta_resultados = st.checkbox("🏁 Alertas de Resultados", value=True)
+        
+        formato_top_jogos = st.selectbox(
+            "📋 Formato do Top Jogos",
+            ["Ambos", "Texto", "Poster"],
+            index=0
+        )
+        
+        st.markdown("----")
+        st.header("Configurações Gerais")
+        top_n = st.selectbox("📊 Jogos no Top", [3, 5, 10], index=0)
+        estilo_poster = st.selectbox("🎨 Estilo do Poster", ["West Ham (Novo)", "Elite Master (Original)"], index=0)
+        
+        st.markdown("----")
+        st.info(f"Tipo de Análise: {tipo_analise}")
+        if tipo_analise == "Over/Under de Gols":
+            st.info(f"Intervalo de confiança: {min_conf}% a {max_conf}%")
+            st.info(f"Filtro: {tipo_filtro}")
+        elif tipo_analise == "Favorito (Vitória)":
+            st.info(f"Confiança Mínima: {config_analise.get('min_conf_vitoria', 65)}%")
+            st.info(f"Filtro Favorito: {config_analise.get('filtro_favorito', 'Todos')}")
+        elif tipo_analise == "Gols HT (Primeiro Tempo)":
+            st.info(f"Confiança Mínima: {config_analise.get('min_conf_ht', 60)}%")
+            st.info(f"Tipo HT: {config_analise.get('tipo_ht', 'OVER 0.5 HT')}")
+        elif tipo_analise == "Ambas Marcam (BTTS)":
+            st.info(f"Confiança Mínima: {config_analise.get('min_conf_am', 60)}%")
+            st.info(f"Filtro Ambas Marcam: {config_analise.get('filtro_am', 'Todos')}")
+        
+        st.info(f"Formato Top Jogos: {formato_top_jogos}")
+        if alerta_conferencia_auto:
+            st.info("🤖 Alerta automático: ATIVADO")
+        if alerta_resultados:
+            st.info("🏁 Alertas de resultados: ATIVADO")
+    
+    # Abas principais
+    tab1, tab2, tab3, tab4 = st.tabs(["🔍 Buscar Partidas", "📊 Conferir Resultados", "🏆 Resultados TOP Alertas", "💰 Odds TOP Alertas"])
+    
+    with tab1:
+        # Controles principais
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            data_selecionada = st.date_input("📅 Data para análise:", value=datetime.today(), key="data_busca")
+        with col2:
+            todas_ligas = st.checkbox("🌍 Todas as ligas", value=True, key="todas_ligas_busca")
+        
+        ligas_selecionadas = []
+        if not todas_ligas:
+            ligas_selecionadas = st.multiselect(
+                "📌 Selecionar ligas (múltipla escolha):",
+                options=list(ConfigManager.LIGA_DICT.keys()),
+                default=["Campeonato Brasileiro Série A", "Premier League (Inglaterra)"],
+                key="ligas_busca"
+            )
+            
+            if not ligas_selecionadas:
+                st.warning("⚠️ Selecione pelo menos uma liga")
+            else:
+                st.info(f"📋 {len(ligas_selecionadas)} ligas selecionadas: {', '.join(ligas_selecionadas)}")
+        
+        # Processamento
+        if st.button("🔍 Buscar Partidas", type="primary", key="btn_buscar"):
+            if not todas_ligas and not ligas_selecionadas:
+                st.error("❌ Selecione pelo menos uma liga ou marque 'Todas as ligas'")
+            else:
+                tipo_filtro_passar = tipo_filtro if tipo_analise == "Over/Under de Gols" else "Todos"
+                sistema.processar_jogos(data_selecionada, ligas_selecionadas, todas_ligas, top_n, 
+                                      config_analise.get("min_conf", 70), 
+                                      config_analise.get("max_conf", 95), 
+                                      estilo_poster, 
+                                      alerta_individual, alerta_poster, alerta_top_jogos, 
+                                      formato_top_jogos, tipo_filtro_passar, tipo_analise, config_analise)
+    
+    with tab2:
+        st.subheader("📊 Conferência de Resultados")
+        
+        col_data, col_btn = st.columns([2, 1])
+        with col_data:
+            data_resultados = st.date_input("📅 Data para conferência:", value=datetime.today(), key="data_resultados")
+        
+        with col_btn:
+            if st.button("🔄 Conferir Resultados", type="primary", key="btn_conferir"):
+                sistema.conferir_resultados(data_resultados)
+        
+        # Mostrar estatísticas rápidas
+        st.markdown("---")
+        st.subheader("📈 Estatísticas dos Alertas")
+        
+        col_ou, col_fav, col_ht, col_am = st.columns(4)  # Alterado para 4 colunas
+        
+        with col_ou:
+            alertas_ou = DataStorage.carregar_alertas()
+            resultados_ou = DataStorage.carregar_resultados()
+            
+            total_alertas_ou = len(alertas_ou)
+            conferidos_ou = sum(1 for a in alertas_ou.values() if a.get("conferido", False))
+            greens_ou = sum(1 for r in resultados_ou.values() if r.get("resultado") == "GREEN")
+            reds_ou = sum(1 for r in resultados_ou.values() if r.get("resultado") == "RED")
+            
+            st.metric("⚽ Over/Under", f"{total_alertas_ou} alertas", f"{conferidos_ou} conferidos")
+            if greens_ou + reds_ou > 0:
+                taxa_ou = (greens_ou / (greens_ou + reds_ou)) * 100
+                st.write(f"✅ {greens_ou} | ❌ {reds_ou} | 📊 {taxa_ou:.1f}%")
+        
+        with col_fav:
+            alertas_fav = DataStorage.carregar_alertas_favoritos()
+            resultados_fav = DataStorage.carregar_resultados_favoritos()
+            
+            total_alertas_fav = len(alertas_fav)
+            conferidos_fav = sum(1 for a in alertas_fav.values() if a.get("conferido", False))
+            greens_fav = sum(1 for r in resultados_fav.values() if r.get("resultado_favorito") == "GREEN")
+            reds_fav = sum(1 for r in resultados_fav.values() if r.get("resultado_favorito") == "RED")
+            
+            st.metric("🏆 Favoritos", f"{total_alertas_fav} alertas", f"{conferidos_fav} conferidos")
+            if greens_fav + reds_fav > 0:
+                taxa_fav = (greens_fav / (greens_fav + reds_fav)) * 100
+                st.write(f"✅ {greens_fav} | ❌ {reds_fav} | 📊 {taxa_fav:.1f}%")
+        
+        with col_ht:
+            alertas_ht = DataStorage.carregar_alertas_gols_ht()
+            resultados_ht = DataStorage.carregar_resultados_gols_ht()
+            
+            total_alertas_ht = len(alertas_ht)
+            conferidos_ht = sum(1 for a in alertas_ht.values() if a.get("conferido", False))
+            greens_ht = sum(1 for r in resultados_ht.values() if r.get("resultado_ht") == "GREEN")
+            reds_ht = sum(1 for r in resultados_ht.values() if r.get("resultado_ht") == "RED")
+            
+            st.metric("⏰ Gols HT", f"{total_alertas_ht} alertas", f"{conferidos_ht} conferidos")
+            if greens_ht + reds_ht > 0:
+                taxa_ht = (greens_ht / (greens_ht + reds_ht)) * 100
+                st.write(f"✅ {greens_ht} | ❌ {reds_ht} | 📊 {taxa_ht:.1f}%")
+        
+        with col_am:
+            alertas_am = DataStorage.carregar_alertas_ambas_marcam()
+            resultados_am = DataStorage.carregar_resultados_ambas_marcam()
+            
+            total_alertas_am = len(alertas_am)
+            conferidos_am = sum(1 for a in alertas_am.values() if a.get("conferido", False))
+            greens_am = sum(1 for r in resultados_am.values() if r.get("resultado_ambas_marcam") == "GREEN")
+            reds_am = sum(1 for r in resultados_am.values() if r.get("resultado_ambas_marcam") == "RED")
+            
+            st.metric("🤝 Ambas Marcam", f"{total_alertas_am} alertas", f"{conferidos_am} conferidos")
+            if greens_am + reds_am > 0:
+                taxa_am = (greens_am / (greens_am + reds_am)) * 100
+                st.write(f"✅ {greens_am} | ❌ {reds_am} | 📊 {taxa_am:.1f}%")
+    
+    with tab3:
+        st.subheader("🏆 Conferência de Resultados TOP Alertas")
+        
+        col_data_top, col_btn_top = st.columns([2, 1])
+        with col_data_top:
+            data_resultados_top = st.date_input(
+                "📅 Data para conferência TOP:", 
+                value=datetime.today(), 
+                key="data_resultados_top"
+            )
+        
+        with col_btn_top:
+            if st.button("🏆 Conferir Resultados TOP", type="primary", key="btn_conferir_top"):
+                sistema.resultados_top.conferir_resultados_top_alertas(data_resultados_top)
+        
+        # Mostrar estatísticas dos alertas TOP
+        st.markdown("---")
+        st.subheader("📊 Estatísticas dos Alertas TOP")
+        
+        alertas_top = DataStorage.carregar_alertas_top()
+        
+        if alertas_top:
+            # Agrupar por tipo
+            top_ou = [a for a in alertas_top if a.get("tipo_alerta") == "over_under"]
+            top_fav = [a for a in alertas_top if a.get("tipo_alerta") == "favorito"]
+            top_ht = [a for a in alertas_top if a.get("tipo_alerta") == "gols_ht"]
+            top_am = [a for a in alertas_top if a.get("tipo_alerta") == "ambas_marcam"]
+            
+            col_top1, col_top2, col_top3, col_top4 = st.columns(4)
+            
+            with col_top1:
+                st.metric("⚽ TOP Over/Under", len(top_ou))
+                if top_ou:
+                    greens = sum(1 for a in top_ou if a.get("resultado") == "GREEN")
+                    reds = sum(1 for a in top_ou if a.get("resultado") == "RED")
+                    conferidos = sum(1 for a in top_ou if a.get("conferido", False))
+                    st.write(f"✅ {greens} | ❌ {reds} | 🔍 {conferidos}/{len(top_ou)}")
+            
+            with col_top2:
+                st.metric("🏆 TOP Favoritos", len(top_fav))
+                if top_fav:
+                    greens = sum(1 for a in top_fav if a.get("resultado_favorito") == "GREEN")
+                    reds = sum(1 for a in top_fav if a.get("resultado_favorito") == "RED")
+                    conferidos = sum(1 for a in top_fav if a.get("conferido", False))
+                    st.write(f"✅ {greens} | ❌ {reds} | 🔍 {conferidos}/{len(top_fav)}")
+            
+            with col_top3:
+                st.metric("⏰ TOP Gols HT", len(top_ht))
+                if top_ht:
+                    greens = sum(1 for a in top_ht if a.get("resultado_ht") == "GREEN")
+                    reds = sum(1 for a in top_ht if a.get("resultado_ht") == "RED")
+                    conferidos = sum(1 for a in top_ht if a.get("conferido", False))
+                    st.write(f"✅ {greens} | ❌ {reds} | 🔍 {conferidos}/{len(top_ht)}")
+            
+            with col_top4:
+                st.metric("🤝 TOP Ambas Marcam", len(top_am))
+                if top_am:
+                    greens = sum(1 for a in top_am if a.get("resultado_ambas_marcam") == "GREEN")
+                    reds = sum(1 for a in top_am if a.get("resultado_ambas_marcam") == "RED")
+                    conferidos = sum(1 for a in top_am if a.get("conferido", False))
+                    st.write(f"✅ {greens} | ❌ {reds} | 🔍 {conferidos}/{len(top_am)}")
+            
+            # Botão para limpar alertas TOP antigos
+            if st.button("🗑️ Limpar Alertas TOP Antigos", type="secondary"):
+                sistema._limpar_alertas_top_antigos()
+        else:
+            st.info("ℹ️ Nenhum alerta TOP salvo ainda.")
+    
+    with tab4:
+        st.subheader("💰 Processar Odds para Alertas TOP")
+        
+        col_data_odds, col_btn_odds = st.columns([2, 1])
+        with col_data_odds:
+            data_odds = st.date_input(
+                "📅 Data para processar odds:", 
+                value=datetime.today(), 
+                key="data_odds"
+            )
+        
+        with col_btn_odds:
+            if st.button("💰 Processar Odds TOP", type="primary", key="btn_processar_odds"):
+                sistema.processar_alertas_top_com_odds(data_odds)
+    
+    # Painel de monitoramento
+    st.markdown("---")
+    st.subheader("📊 Monitoramento da API")
+    
+    col_mon1, col_mon2, col_mon3, col_mon4 = st.columns(4)
+    
+    stats = sistema.api_monitor.get_stats()
+    with col_mon1:
+        st.metric("Total Requests", stats["total_requests"])
+    with col_mon2:
+        st.metric("Taxa de Sucesso", f"{stats['success_rate']}%")
+    with col_mon3:
+        st.metric("Requests/min", stats["requests_per_minute"])
+    with col_mon4:
+        st.metric("Rate Limit Hits", stats["rate_limit_hits"])
+
+if __name__ == "__main__":
+    main()
+
