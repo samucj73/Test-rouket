@@ -4483,8 +4483,7 @@ class SistemaAlertasFutebol:
                         "prob_ambas_marcam_nao": jogo_data.get("prob_ambas_marcam_nao", 0.0),
                         "resultado_ambas_marcam": jogo_data.get("resultado_ambas_marcam", "PENDENTE")
                     })
-                
-                jogos_para_poster.append(poster_data)
+            jogos_para_poster.append(poster_data)
             
             if not jogos_para_poster:
                 continue
