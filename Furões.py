@@ -4451,7 +4451,7 @@ class SistemaAlertasFutebol:
 
     # Adicionar dados específicos do t
     if tipo_alerta == "over_under":
-    poster_data.update({
+        poster_data.update({
         "tendencia": jogo_data.get("tendencia", ""),
         "estimativa": jogo_data.get("estimativa", 0.0),
         "probabilidade": jogo_data.get("probabilidade", 0.0),
