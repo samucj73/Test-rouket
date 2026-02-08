@@ -4459,7 +4459,7 @@ class SistemaAlertasFutebol:
                         "tipo_aposta": jogo_data.get("tipo_aposta", ""),
                         "resultado": jogo_data.get("resultado", "PENDENTE")
                     })
-                elif tipo_alerta == "favorito":
+        elif tipo_alerta == "favorito":
                     poster_data.update({
                         "favorito": jogo_data.get("favorito", ""),
                         "confianca_vitoria": jogo_data.get("confianca_vitoria", 0.0),
@@ -4468,14 +4468,14 @@ class SistemaAlertasFutebol:
                         "prob_draw": jogo_data.get("prob_draw", 0.0),
                         "resultado_favorito": jogo_data.get("resultado_favorito", "PENDENTE")
                     })
-                elif tipo_alerta == "gols_ht":
+        elif tipo_alerta == "gols_ht":
                     poster_data.update({
                         "tendencia_ht": jogo_data.get("tendencia_ht", ""),
                         "confianca_ht": jogo_data.get("confianca_ht", 0.0),
                         "estimativa_total_ht": jogo_data.get("estimativa_total_ht", 0.0),
                         "resultado_ht": jogo_data.get("resultado_ht", "PENDENTE")
                     })
-                elif tipo_alerta == "ambas_marcam":
+        elif tipo_alerta == "ambas_marcam":
                     poster_data.update({
                         "tendencia_ambas_marcam": jogo_data.get("tendencia_ambas_marcam", ""),
                         "confianca_ambas_marcam": jogo_data.get("confianca_ambas_marcam", 0.0),
