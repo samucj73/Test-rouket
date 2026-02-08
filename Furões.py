@@ -4487,7 +4487,7 @@ elif tipo_alerta == "ambas_marcam":
 jogos_para_poster.append(poster_data)
 
 if not jogos_para_poster:
-    continue
+continue
 
 # Gerar poster para o lote
 try:
