@@ -18,6 +18,9 @@ import math
 import urllib.parse
 import re
 from difflib import SequenceMatcher
+# Adicionar estes imports se não existirem
+import unicodedata
+from collections import Counter
 
 
 # =============================
