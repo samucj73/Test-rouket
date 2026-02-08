@@ -2088,13 +2088,16 @@ class AnalisadorTendencia:
 # =============================
 # NOVA CLASSE: ResultadosTopAlertas (CORRIGIDA)
 # =============================
-
 class ResultadosTopAlertas:
     """Gerencia resultados dos alertas TOP"""
     
     def __init__(self, sistema_principal):
         self.sistema = sistema_principal
         self.config = ConfigManager()
+        # Adicionar referências diretas aos componentes necessários
+        self.poster_generator = sistema_principal.poster_generator
+        self.telegram_client = sistema_principal.telegram_client
+        self.api_client = sistema_principal.api_client
     
     def conferir_resultados_top_alertas(self, data_selecionada):
         """Conferir resultados apenas dos alertas TOP salvos"""
@@ -2126,7 +2129,7 @@ class ResultadosTopAlertas:
             "over_under": {},
             "favorito": {},
             "gols_ht": {},
-            "ambas_marcam": {}  # NOVO
+            "ambas_marcam": {}
         }
         
         # Lista para gerar posters
@@ -2134,7 +2137,7 @@ class ResultadosTopAlertas:
             "over_under": [],
             "favorito": [],
             "gols_ht": [],
-            "ambas_marcam": []  # NOVO
+            "ambas_marcam": []
         }
         
         # Conferir cada alerta
@@ -2145,8 +2148,9 @@ class ResultadosTopAlertas:
             tipo_alerta = alerta.get("tipo_alerta", "over_under")
             
             # Obter detalhes atualizados do jogo
-            match_data = self.sistema.api_client.obter_detalhes_jogo(fixture_id)
+            match_data = self.api_client.obter_detalhes_jogo(fixture_id)
             if not match_data:
+                st.warning(f"⚠️ Não foi possível obter dados do jogo {fixture_id}")
                 continue
             
             status = match_data.get("status", "")
@@ -2304,6 +2308,8 @@ class ResultadosTopAlertas:
                 
                 # Mostrar resultado
                 self._mostrar_resultado_alerta_top(alerta, home_goals, away_goals, ht_home_goals, ht_away_goals, jogo)
+            else:
+                st.write(f"⏳ Jogo {alerta.get('home')} vs {alerta.get('away')} - Status: {status}")
             
             progress_bar.progress((idx + 1) / total_alertas)
         
@@ -2313,7 +2319,7 @@ class ResultadosTopAlertas:
         # Mostrar resumo
         self._mostrar_resumo_resultados_top(resultados_totais)
         
-        # Gerar posters de resultados - AGORA COM DADOS COMPLETOS DOS ESCUDOS
+        # Gerar posters de resultados
         self._gerar_posters_resultados_top(jogos_para_poster, data_selecionada)
     
     def _mostrar_resultado_alerta_top(self, alerta, home_goals, away_goals, ht_home_goals, ht_away_goals, jogo):
@@ -2352,7 +2358,7 @@ class ResultadosTopAlertas:
         st.markdown("---")
         st.subheader("📈 RESUMO TOP ALERTAS")
         
-        col1, col2, col3, col4 = st.columns(4)  # Alterado para 4 colunas
+        col1, col2, col3, col4 = st.columns(4)
         
         with col1:
             if resultados_totais["over_under"]:
@@ -2427,8 +2433,8 @@ class ResultadosTopAlertas:
                 if total > 0:
                     taxa_acerto = (greens / total) * 100
                     
-                    # Gerar poster - AGORA COM OS DADOS COMPLETOS DOS ESCUDOS
-                    poster = self.sistema.poster_generator.gerar_poster_resultados(jogos_lista, tipo_alerta)
+                    # CORREÇÃO: Usar self.poster_generator em vez de self.sistema.poster_generator
+                    poster = self.poster_generator.gerar_poster_resultados(jogos_lista, tipo_alerta)
                     
                     caption = f"<b>{titulo}</b>\n\n"
                     caption += f"<b>📊 TOP ALERTAS: {len(jogos_lista)} JOGOS</b>\n"
@@ -2437,13 +2443,38 @@ class ResultadosTopAlertas:
                     caption += f"<b>🎯 TAXA DE ACERTO: {taxa_acerto:.1f}%</b>\n\n"
                     caption += f"<b>🔥 ELITE MASTER SYSTEM - TOP PERFORMANCE</b>"
                     
-                    # Enviar poster
-                    if self.sistema.telegram_client.enviar_foto(poster, caption=caption):
+                    # CORREÇÃO: Usar self.telegram_client em vez de self.sistema.telegram_client
+                    if self.telegram_client.enviar_foto(poster, caption=caption):
                         st.success(f"🏆 Poster resultados TOP {tipo_alerta} enviado!")
+                    else:
+                        st.warning(f"⚠️ Não foi possível enviar o poster TOP {tipo_alerta}. Enviando como texto...")
+                        # Fallback: enviar como mensagem de texto
+                        texto_fallback = f"{titulo}\n\n"
+                        texto_fallback += f"📊 TOP ALERTAS: {len(jogos_lista)} JOGOS\n"
+                        texto_fallback += f"✅ GREEN: {greens} jogos\n"
+                        texto_fallback += f"❌ RED: {reds} jogos\n"
+                        texto_fallback += f"🎯 TAXA DE ACERTO: {taxa_acerto:.1f}%\n\n"
+                        texto_fallback += "🔥 ELITE MASTER SYSTEM - TOP PERFORMANCE"
+                        
+                        if self.telegram_client.enviar_mensagem(f"<b>{texto_fallback}</b>", self.config.TELEGRAM_CHAT_ID_ALT2):
+                            st.success(f"📤 Resultados TOP {tipo_alerta} enviados como texto!")
                     
             except Exception as e:
                 logging.error(f"Erro ao gerar poster resultados TOP {tipo_alerta}: {e}")
                 st.error(f"❌ Erro no poster TOP {tipo_alerta}: {e}")
+                
+                # Tentar enviar pelo menos uma mensagem de texto
+                try:
+                    error_msg = f"<b>❌ ERRO NO POSTER TOP {tipo_alerta.upper()}</b>\n\n"
+                    error_msg += f"<b>Data: {data_str}</b>\n"
+                    error_msg += f"<b>Jogos: {len(jogos_lista)}</b>\n"
+                    error_msg += f"<b>Erro: {str(e)[:100]}...</b>"
+                    self.telegram_client.enviar_mensagem(error_msg, self.config.TELEGRAM_CHAT_ID_ALT2)
+                except Exception as e2:
+                    logging.error(f"Erro ao enviar mensagem de erro: {e2}")
+
+
+
 
 # =============================
 # CLASSES DE COMUNICAÇÃO
