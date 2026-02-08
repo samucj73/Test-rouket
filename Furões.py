@@ -2027,6 +2027,10 @@ class AnalisadorTendencia:
 # =============================
 # NOVA CLASSE: ResultadosTopAlertas (CORRIGIDA)
 # =============================
+# =============================
+# CLASSE ATUALIZADA: ResultadosTopAlertas (CORRIGIDA COM VERIFICAÇÃO DE POSTER)
+# =============================
+
 class ResultadosTopAlertas:
     """Gerencia resultados dos alertas TOP"""
     
@@ -2371,29 +2375,29 @@ class ResultadosTopAlertas:
                 if total > 0:
                     taxa_acerto = (greens / total) * 100
                     
+                    # CORREÇÃO: Gerar poster usando o método correto
                     poster = self.poster_generator.gerar_poster_resultados(jogos_lista, tipo_alerta)
                     
-                    caption = f"<b>{titulo}</b>\n\n"
-                    caption += f"<b>📊 TOP ALERTAS: {len(jogos_lista)} JOGOS</b>\n"
-                    caption += f"<b>✅ GREEN: {greens} jogos</b>\n"
-                    caption += f"<b>❌ RED: {reds} jogos</b>\n"
-                    caption += f"<b>🎯 TAXA DE ACERTO: {taxa_acerto:.1f}%</b>\n\n"
-                    caption += f"<b>🔥 ELITE MASTER SYSTEM - TOP PERFORMANCE</b>"
-                    
-                    if self.telegram_client.enviar_foto(poster, caption=caption):
-                        st.success(f"🏆 Poster resultados TOP {tipo_alerta} enviado!")
-                    else:
-                        st.warning(f"⚠️ Não foi possível enviar o poster TOP {tipo_alerta}. Enviando como texto...")
-                        # Fallback: enviar como mensagem de texto
-                        texto_fallback = f"{titulo}\n\n"
-                        texto_fallback += f"📊 TOP ALERTAS: {len(jogos_lista)} JOGOS\n"
-                        texto_fallback += f"✅ GREEN: {greens} jogos\n"
-                        texto_fallback += f"❌ RED: {reds} jogos\n"
-                        texto_fallback += f"🎯 TAXA DE ACERTO: {taxa_acerto:.1f}%\n\n"
-                        texto_fallback += "🔥 ELITE MASTER SYSTEM - TOP PERFORMANCE"
+                    # Verificar se o poster foi gerado corretamente
+                    if poster and self._verificar_poster_valido(poster):
+                        caption = f"<b>{titulo}</b>\n\n"
+                        caption += f"<b>📊 TOP ALERTAS: {len(jogos_lista)} JOGOS</b>\n"
+                        caption += f"<b>✅ GREEN: {greens} jogos</b>\n"
+                        caption += f"<b>❌ RED: {reds} jogos</b>\n"
+                        caption += f"<b>🎯 TAXA DE ACERTO: {taxa_acerto:.1f}%</b>\n\n"
+                        caption += f"<b>🔥 ELITE MASTER SYSTEM - TOP PERFORMANCE</b>"
                         
-                        if self.telegram_client.enviar_mensagem(f"<b>{texto_fallback}</b>", self.config.TELEGRAM_CHAT_ID_ALT2):
-                            st.success(f"📤 Resultados TOP {tipo_alerta} enviados como texto!")
+                        # Tentar enviar o poster
+                        if self.telegram_client.enviar_foto(poster, caption=caption):
+                            st.success(f"🏆 Poster resultados TOP {tipo_alerta} enviado!")
+                        else:
+                            # Fallback: enviar como mensagem de texto
+                            st.warning(f"⚠️ Não foi possível enviar o poster TOP {tipo_alerta}. Enviando como texto...")
+                            self._enviar_resultados_como_texto(titulo, jogos_lista, greens, reds, taxa_acerto, tipo_alerta)
+                    else:
+                        # Poster inválido, enviar como texto
+                        st.warning(f"⚠️ Poster não gerado corretamente para TOP {tipo_alerta}. Enviando como texto...")
+                        self._enviar_resultados_como_texto(titulo, jogos_lista, greens, reds, taxa_acerto, tipo_alerta)
                     
             except Exception as e:
                 logging.error(f"Erro ao gerar poster resultados TOP {tipo_alerta}: {e}")
@@ -2401,13 +2405,74 @@ class ResultadosTopAlertas:
                 
                 # Tentar enviar pelo menos uma mensagem de texto
                 try:
-                    error_msg = f"<b>❌ ERRO NO POSTER TOP {tipo_alerta.upper()}</b>\n\n"
-                    error_msg += f"<b>Data: {data_str}</b>\n"
-                    error_msg += f"<b>Jogos: {len(jogos_lista)}</b>\n"
-                    error_msg += f"<b>Erro: {str(e)[:100]}...</b>"
-                    self.telegram_client.enviar_mensagem(error_msg, self.config.TELEGRAM_CHAT_ID_ALT2)
+                    if 'jogos_lista' in locals() and 'greens' in locals() and 'reds' in locals():
+                        self._enviar_resultados_como_texto(f"❌ ERRO NO POSTER TOP {tipo_alerta.upper()} - {data_str}",
+                                                          jogos_lista, greens, reds, taxa_acerto, tipo_alerta)
+                    else:
+                        error_msg = f"<b>❌ ERRO NO POSTER TOP {tipo_alerta.upper()}</b>\n\n"
+                        error_msg += f"<b>Data: {data_str}</b>\n"
+                        error_msg += f"<b>Jogos: {len(jogos_lista)}</b>\n"
+                        error_msg += f"<b>Erro: {str(e)[:100]}...</b>"
+                        self.telegram_client.enviar_mensagem(error_msg, self.config.TELEGRAM_CHAT_ID_ALT2)
                 except Exception as e2:
                     logging.error(f"Erro ao enviar mensagem de erro: {e2}")
+    
+    def _enviar_resultados_como_texto(self, titulo, jogos_lista, greens, reds, taxa_acerto, tipo_alerta):
+        """Enviar resultados como texto (fallback)"""
+        texto_fallback = f"{titulo}\n\n"
+        texto_fallback += f"📊 TOP ALERTAS: {len(jogos_lista)} JOGOS\n"
+        texto_fallback += f"✅ GREEN: {greens} jogos\n"
+        texto_fallback += f"❌ RED: {reds} jogos\n"
+        texto_fallback += f"🎯 TAXA DE ACERTO: {taxa_acerto:.1f}%\n\n"
+        
+        # Adicionar resumo dos jogos
+        for i, jogo in enumerate(jogos_lista[:10], 1):  # Limitar a 10 jogos para não ficar muito longo
+            if tipo_alerta == "over_under":
+                resultado_texto = "✅" if jogo.get("resultado") == "GREEN" else "❌"
+                texto_fallback += f"{i}. {jogo['home']} {jogo.get('home_goals', '?')}-{jogo.get('away_goals', '?')} {jogo['away']} {resultado_texto}\n"
+        
+        texto_fallback += "\n🔥 ELITE MASTER SYSTEM - TOP PERFORMANCE"
+        
+        if self.telegram_client.enviar_mensagem(f"<b>{texto_fallback}</b>", self.config.TELEGRAM_CHAT_ID_ALT2):
+            st.success(f"📤 Resultados TOP {tipo_alerta} enviados como texto!")
+        else:
+            st.error(f"❌ Falha ao enviar resultados TOP {tipo_alerta} como texto!")
+    
+    def _verificar_poster_valido(self, poster: io.BytesIO) -> bool:
+        """Verifica se o poster foi gerado corretamente"""
+        try:
+            if not poster:
+                return False
+            
+            poster.seek(0)
+            img = Image.open(poster)
+            width, height = img.size
+            
+            # Verificar se a imagem tem dimensões razoáveis
+            if width < 100 or height < 100:
+                logging.warning(f"Poster com dimensões inválidas: {width}x{height}")
+                return False
+            
+            # Verificar se é uma imagem PNG válida
+            if img.format != "PNG":
+                logging.warning(f"Poster com formato inválido: {img.format}")
+                return False
+            
+            # Verificar tamanho do arquivo (mínimo 1KB)
+            poster.seek(0, 2)  # Ir para o final
+            file_size = poster.tell()
+            poster.seek(0)  # Resetar a posição
+            
+            if file_size < 1024:  # Menos de 1KB
+                logging.warning(f"Poster muito pequeno: {file_size} bytes")
+                return False
+            
+            logging.info(f"Poster válido: {width}x{height}, formato: {img.format}, tamanho: {file_size} bytes")
+            return True
+            
+        except Exception as e:
+            logging.error(f"Erro ao verificar poster: {e}")
+            return False
 
 # =============================
 # CLASSES DE COMUNICAÇÃO
