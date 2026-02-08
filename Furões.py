@@ -3546,6 +3546,7 @@ class PosterGenerator:
 # SISTEMA PRINCIPAL (ATUALIZADO COM ODDS)
 # =============================
 
+#class SistemaAlertasFutebol:
 class SistemaAlertasFutebol:
     """Sistema principal de alertas de futebol"""
     
@@ -3557,15 +3558,18 @@ class SistemaAlertasFutebol:
         self.telegram_client = TelegramClient()
         self.poster_generator = PosterGenerator(self.api_client)
         self.image_cache = self.api_client.image_cache
-        self.resultados_top = ResultadosTopAlertas(self)  # Instância da nova classe
         
         # Inicializar clientes de odds
         self.odds_client = APIOddsClient(self.rate_limiter, self.api_monitor)
         self.odds_manager = OddsManager(self.api_client, self.odds_client)
         self.alerts_odds_manager = AlertsManagerComOdds(self.api_client, self.odds_client)
         
+        # Inicializar resultados TOP com referência a si mesmo
+        self.resultados_top = ResultadosTopAlertas(self)
+        
         # Inicializar logging
         self._setup_logging()
+   
     
     def _setup_logging(self):
         """Configura o sistema de logging"""
