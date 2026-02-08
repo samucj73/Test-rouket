@@ -1345,7 +1345,6 @@ class AnalisadorTendencia:
 # NOVA CLASSE: ResultadosTopAlertas (CORRIGIDA)
 # ============================
 # =============================
-# =============================
 # CLASSE CORRIGIDA: ResultadosTopAlertas (COM AGRUPAMENTO CORRETO)
 # =============================
 
@@ -1428,32 +1427,71 @@ class ResultadosTopAlertas:
             "ambas_marcam": {}
         }
         
-        # CORREÇÃO: Usar data_criacao para agrupar alertas que foram criados juntos
-        for alerta in alertas_top:
-            if alerta.get("data_busca") != data_busca:
+        # CORREÇÃO: Verificar estrutura e converter para lista se necessário
+        alertas_lista = []
+        if isinstance(alertas_top, dict):
+            # Se for um dicionário onde as chaves são IDs
+            alertas_lista = list(alertas_top.values())
+        elif isinstance(alertas_top, list):
+            # Se já for uma lista
+            alertas_lista = alertas_top
+        else:
+            st.error(f"❌ Estrutura inesperada de alertas_top: {type(alertas_top)}")
+            return {}
+        
+        logging.info(f"Total de alertas TOP carregados: {len(alertas_lista)}")
+        
+        for alerta in alertas_lista:
+            if not isinstance(alerta, dict):
+                logging.warning(f"Alerta não é um dicionário: {type(alerta)}")
+                continue
+            
+            # Verificar se tem data_busca
+            if "data_busca" not in alerta:
+                logging.warning(f"Alerta sem data_busca: {alerta.get('id', 'sem_id')}")
+                continue
+                
+            # Filtrar por data
+            if alerta["data_busca"] != data_busca:
                 continue
             
             tipo_alerta = alerta.get("tipo_alerta", "over_under")
-            data_criacao = alerta.get("data_criacao", "")
+            if tipo_alerta not in alertas_por_grupo:
+                logging.warning(f"Tipo de alerta desconhecido: {tipo_alerta}")
+                continue
             
-            # Criar chave de grupo baseada na data de criação (hora/minuto)
-            if data_criacao:
+            # Usar data_hora_busca ou data_criacao para agrupar
+            data_agrupamento = alerta.get("data_hora_busca") or alerta.get("data_criacao") or alerta.get("data_busca", "")
+            grupo_key = "default"
+            
+            if data_agrupamento:
                 try:
-                    dt_criacao = datetime.fromisoformat(data_criacao)
-                    # Agrupar por hora/minuto (alertas criados no mesmo minuto estão no mesmo grupo)
-                    grupo_key = dt_criacao.strftime("%H:%M")
-                except:
-                    grupo_key = "default"
-            else:
-                grupo_key = "default"
+                    if isinstance(data_agrupamento, str):
+                        dt_agrupamento = datetime.fromisoformat(data_agrupamento.replace('Z', '+00:00'))
+                    else:
+                        dt_agrupamento = data_agrupamento
+                    
+                    # Agrupar por hora:minuto
+                    grupo_key = dt_agrupamento.strftime("%H:%M")
+                except Exception as e:
+                    logging.warning(f"Erro ao converter data para agrupamento {data_agrupamento}: {e}")
+                    # Usar hora atual como fallback
+                    grupo_key = datetime.now().strftime("%H:%M")
             
-            # Adicionar ao grupo
+            # Inicializar grupo se não existir
             if grupo_key not in alertas_por_grupo[tipo_alerta]:
                 alertas_por_grupo[tipo_alerta][grupo_key] = []
             
             alertas_por_grupo[tipo_alerta][grupo_key].append(alerta)
         
-        # Remover grupos vazios
+        # Log dos grupos encontrados
+        for tipo, grupos in alertas_por_grupo.items():
+            if grupos:
+                total_grupos = len(grupos)
+                total_jogos = sum(len(g) for g in grupos.values())
+                logging.info(f"Tipo {tipo}: {total_grupos} grupos, {total_jogos} jogos")
+        
+        # Remover tipos vazios
         for tipo in list(alertas_por_grupo.keys()):
             if not alertas_por_grupo[tipo]:
                 del alertas_por_grupo[tipo]
@@ -1766,9 +1804,6 @@ class ResultadosTopAlertas:
                 taxa_acerto = (greens / total) * 100
                 st.metric("🤝 TOP Ambas Marcam", f"{total} jogos", f"{taxa_acerto:.1f}%")
                 st.write(f"✅ {greens} | ❌ {reds}")
-    
-    # Os métodos _mostrar_resultado_alerta_top, _verificar_poster_valido e _enviar_resultados_como_texto
-    # permanecem os mesmos da versão anterior...
     
     def _mostrar_resultado_alerta_top(self, alerta, home_goals, away_goals, ht_home_goals, ht_away_goals, jogo):
         """Mostrar resultado individual do alerta TOP"""
