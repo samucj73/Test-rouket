@@ -3980,71 +3980,142 @@ class SistemaAlertasFutebol:
         
         return jogos_com_resultados
     
-    def _enviar_alertas_resultados_automaticos(self, resultados_totais: dict, data_selecionada):
-        """Enviar alertas de resultados automaticamente em lotes de 3"""
-        data_str = data_selecionada.strftime("%d/%m/%Y")
+    #def _enviar_alertas_resultados_automaticos(self, resultados_totais: dict, data_selecionada):
+def _enviar_alertas_resultados_automaticos(self, resultados_totais: dict, data_selecionada):
+    """Enviar alertas de resultados automaticamente em lotes de 3 - CORRIGIDO"""
+    data_str = data_selecionada.strftime("%d/%m/%Y")
+    
+    for tipo_alerta, resultados in resultados_totais.items():
+        if not resultados:
+            continue
         
-        for tipo_alerta, resultados in resultados_totais.items():
-            if not resultados:
+        jogos_lista = list(resultados.values())
+        
+        # Dividir em lotes de 3 jogos
+        batch_size = 3
+        for i in range(0, len(jogos_lista), batch_size):
+            batch = jogos_lista[i:i+batch_size]
+            
+            # CORREÇÃO: Preparar dados para o poster
+            jogos_para_poster = []
+            for jogo_data in batch:
+                # Garantir que temos todos os dados necessários
+                poster_data = {
+                    "home": jogo_data.get("home", ""),
+                    "away": jogo_data.get("away", ""),
+                    "liga": jogo_data.get("liga", ""),
+                    "hora": jogo_data.get("hora", ""),
+                    "escudo_home": jogo_data.get("escudo_home", ""),
+                    "escudo_away": jogo_data.get("escudo_away", ""),
+                    "home_goals": jogo_data.get("home_goals", 0),
+                    "away_goals": jogo_data.get("away_goals", 0),
+                    "ht_home_goals": jogo_data.get("ht_home_goals", 0),
+                    "ht_away_goals": jogo_data.get("ht_away_goals", 0),
+                }
+                
+                # Adicionar dados específicos do tipo
+                if tipo_alerta == "over_under":
+                    poster_data.update({
+                        "tendencia": jogo_data.get("tendencia", ""),
+                        "estimativa": jogo_data.get("estimativa", 0.0),
+                        "probabilidade": jogo_data.get("probabilidade", 0.0),
+                        "confianca": jogo_data.get("confianca", 0.0),
+                        "tipo_aposta": jogo_data.get("tipo_aposta", ""),
+                        "resultado": jogo_data.get("resultado", "PENDENTE")
+                    })
+                elif tipo_alerta == "favorito":
+                    poster_data.update({
+                        "favorito": jogo_data.get("favorito", ""),
+                        "confianca_vitoria": jogo_data.get("confianca_vitoria", 0.0),
+                        "prob_home_win": jogo_data.get("prob_home_win", 0.0),
+                        "prob_away_win": jogo_data.get("prob_away_win", 0.0),
+                        "prob_draw": jogo_data.get("prob_draw", 0.0),
+                        "resultado_favorito": jogo_data.get("resultado_favorito", "PENDENTE")
+                    })
+                elif tipo_alerta == "gols_ht":
+                    poster_data.update({
+                        "tendencia_ht": jogo_data.get("tendencia_ht", ""),
+                        "confianca_ht": jogo_data.get("confianca_ht", 0.0),
+                        "estimativa_total_ht": jogo_data.get("estimativa_total_ht", 0.0),
+                        "resultado_ht": jogo_data.get("resultado_ht", "PENDENTE")
+                    })
+                elif tipo_alerta == "ambas_marcam":
+                    poster_data.update({
+                        "tendencia_ambas_marcam": jogo_data.get("tendencia_ambas_marcam", ""),
+                        "confianca_ambas_marcam": jogo_data.get("confianca_ambas_marcam", 0.0),
+                        "prob_ambas_marcam_sim": jogo_data.get("prob_ambas_marcam_sim", 0.0),
+                        "prob_ambas_marcam_nao": jogo_data.get("prob_ambas_marcam_nao", 0.0),
+                        "resultado_ambas_marcam": jogo_data.get("resultado_ambas_marcam", "PENDENTE")
+                    })
+                
+                jogos_para_poster.append(poster_data)
+            
+            if not jogos_para_poster:
                 continue
             
-            jogos_lista = list(resultados.values())
-            
-            # Dividir em lotes de 3 jogos
-            batch_size = 3
-            for i in range(0, len(jogos_lista), batch_size):
-                batch = jogos_lista[i:i+batch_size]
+            # Gerar poster para o lote
+            try:
+                if tipo_alerta == "over_under":
+                    titulo = f" RESULTADOS OVER/UNDER - Lote {i//batch_size + 1}"
+                elif tipo_alerta == "favorito":
+                    titulo = f" RESULTADOS FAVORITOS - Lote {i//batch_size + 1}"
+                elif tipo_alerta == "gols_ht":
+                    titulo = f" RESULTADOS GOLS HT - Lote {i//batch_size + 1}"
+                elif tipo_alerta == "ambas_marcam":
+                    titulo = f" RESULTADOS AMBAS MARCAM - Lote {i//batch_size + 1}"
                 
-                # Gerar poster para o lote
+                # CORREÇÃO: Chamar método correto
+                poster = self.poster_generator.gerar_poster_resultados(jogos_para_poster, tipo_alerta)
+                
+                # Preparar caption
+                if tipo_alerta == "over_under":
+                    greens = sum(1 for j in jogos_para_poster if j.get("resultado") == "GREEN")
+                    reds = sum(1 for j in jogos_para_poster if j.get("resultado") == "RED")
+                elif tipo_alerta == "favorito":
+                    greens = sum(1 for j in jogos_para_poster if j.get("resultado_favorito") == "GREEN")
+                    reds = sum(1 for j in jogos_para_poster if j.get("resultado_favorito") == "RED")
+                elif tipo_alerta == "gols_ht":
+                    greens = sum(1 for j in jogos_para_poster if j.get("resultado_ht") == "GREEN")
+                    reds = sum(1 for j in jogos_para_poster if j.get("resultado_ht") == "RED")
+                elif tipo_alerta == "ambas_marcam":
+                    greens = sum(1 for j in jogos_para_poster if j.get("resultado_ambas_marcam") == "GREEN")
+                    reds = sum(1 for j in jogos_para_poster if j.get("resultado_ambas_marcam") == "RED")
+                
+                total = greens + reds
+                if total > 0:
+                    taxa_acerto = (greens / total) * 100
+                    caption = f"<b>{titulo}</b>\n\n"
+                    caption += f"<b>📊 LOTE {i//batch_size + 1}: {greens}✅ {reds}❌</b>\n"
+                    caption += f"<b>🎯 TAXA DE ACERTO: {taxa_acerto:.1f}%</b>\n\n"
+                    caption += f"<b>🔥 ELITE MASTER SYSTEM - RESULTADOS CONFIRMADOS</b>"
+                
+                # Enviar poster
+                if self.telegram_client.enviar_foto(poster, caption=caption):
+                    st.success(f"✅ Lote {i//batch_size + 1} de resultados {tipo_alerta} enviado ({len(batch)} jogos)")
+                else:
+                    # Fallback para mensagem de texto se o poster falhar
+                    fallback_msg = f"<b>{titulo}</b>\n\n{caption}"
+                    if self.telegram_client.enviar_mensagem(fallback_msg, self.config.TELEGRAM_CHAT_ID_ALT2):
+                        st.success(f"📤 Lote {i//batch_size + 1} enviado como texto")
+                
+                # Esperar 2 segundos entre lotes
+                time.sleep(2)
+                
+            except Exception as e:
+                logging.error(f"Erro ao gerar/enviar poster do lote {i//batch_size + 1}: {e}")
+                st.error(f"❌ Erro no lote {i//batch_size + 1}: {e}")
+                # Tentar enviar pelo menos uma mensagem de texto
                 try:
-                    if tipo_alerta == "over_under":
-                        titulo = f" RESULTADOS OVER/UNDER - Lote {i//batch_size + 1}"
-                    elif tipo_alerta == "favorito":
-                        titulo = f" RESULTADOS FAVORITOS - Lote {i//batch_size + 1}"
-                    elif tipo_alerta == "gols_ht":
-                        titulo = f" RESULTADOS GOLS HT - Lote {i//batch_size + 1}"
-                    elif tipo_alerta == "ambas_marcam":
-                        titulo = f" RESULTADOS AMBAS MARCAM - Lote {i//batch_size + 1}"
-                    
-                    # Gerar poster
-                    poster = self.poster_generator.gerar_poster_resultados(batch, tipo_alerta)
-                    
-                    # Preparar caption
-                    if tipo_alerta == "over_under":
-                        greens = sum(1 for j in batch if j.get("resultado") == "GREEN")
-                        reds = sum(1 for j in batch if j.get("resultado") == "RED")
-                    elif tipo_alerta == "favorito":
-                        greens = sum(1 for j in batch if j.get("resultado_favorito") == "GREEN")
-                        reds = sum(1 for j in batch if j.get("resultado_favorito") == "RED")
-                    elif tipo_alerta == "gols_ht":
-                        greens = sum(1 for j in batch if j.get("resultado_ht") == "GREEN")
-                        reds = sum(1 for j in batch if j.get("resultado_ht") == "RED")
-                    elif tipo_alerta == "ambas_marcam":
-                        greens = sum(1 for j in batch if j.get("resultado_ambas_marcam") == "GREEN")
-                        reds = sum(1 for j in batch if j.get("resultado_ambas_marcam") == "RED")
-                    
-                    total = greens + reds
-                    if total > 0:
-                        taxa_acerto = (greens / total) * 100
-                        caption = f"<b>{titulo}</b>\n\n"
-                        caption += f"<b>📊 LOTE {i//batch_size + 1}: {greens}✅ {reds}❌</b>\n"
-                        caption += f"<b>🎯 TAXA DE ACERTO: {taxa_acerto:.1f}%</b>\n\n"
-                        caption += f"<b>🔥 ELITE MASTER SYSTEM - RESULTADOS CONFIRMADOS</b>"
-                    
-                    # Enviar poster
-                    if self.telegram_client.enviar_foto(poster, caption=caption):
-                        st.success(f" Lote {i//batch_size + 1} de resultados {tipo_alerta} enviado ({len(batch)} jogos)")
-                    
-                    # Esperar 2 segundos entre lotes
-                    time.sleep(2)
-                    
-                except Exception as e:
-                    logging.error(f"Erro ao gerar/enviar poster do lote {i//batch_size + 1}: {e}")
-                    st.error(f"❌ Erro no lote {i//batch_size + 1}: {e}")
-            
-            # Após enviar todos os lotes, enviar um resumo final
-            if jogos_lista:
-                self._enviar_resumo_final(tipo_alerta, jogos_lista, data_str)
+                    fallback_msg = f"<b>❌ ERRO NO POSTER - {tipo_alerta.upper()}</b>\n\n"
+                    fallback_msg += f"<b>Lote {i//batch_size + 1}: {len(batch)} jogos</b>\n"
+                    fallback_msg += f"<b>Erro: {str(e)[:100]}...</b>"
+                    self.telegram_client.enviar_mensagem(fallback_msg, self.config.TELEGRAM_CHAT_ID_ALT2)
+                except:
+                    pass
+        
+        # Após enviar todos os lotes, enviar um resumo final
+        if jogos_lista:
+            self._enviar_resumo_final(tipo_alerta, jogos_lista, data_str)  
     
     def _enviar_resumo_final(self, tipo_alerta: str, jogos_lista: list, data_str: str):
         """Enviar resumo final após todos os lotes"""
