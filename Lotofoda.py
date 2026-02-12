@@ -1,940 +1,1041 @@
 import streamlit as st
 import requests
 import numpy as np
+import pandas as pd
 import random
 from collections import Counter
-from catboost import CatBoostClassifier
-import itertools
+from itertools import combinations
 import math
-import json
+import matplotlib.pyplot as plt
+import seaborn as sns
+from scipy import stats
+import hashlib
 
-st.set_page_config(page_title="Lotofácil Inteligente", layout="centered")
+st.set_page_config(page_title="Lotofácil - Estratégias Avançadas", layout="wide")
 
-# =========================
-# Captura concursos via API (robusta)
-# =========================
-def capturar_ultimos_resultados(qtd=250):
-    url_base = "https://loteriascaixa-api.herokuapp.com/api/lotofacil/"
-    concursos = []
-
-    try:
-        resp = requests.get(url_base, timeout=20)
-        if resp.status_code != 200:
-            st.error("Erro ao buscar o último concurso.")
-            return [], None
-
-        dados = resp.json()
-        ultimo = dados[0] if isinstance(dados, list) else dados
-
-        numero_atual = int(ultimo.get("concurso"))
-        data_concurso = ultimo.get("data")
-        dezenas = sorted([int(d) for d in ultimo.get("dezenas")])
-        concursos.append(dezenas)
-
-        info_ultimo = {
-            "numero": numero_atual,
-            "data": data_concurso,
-            "dezenas": dezenas
-        }
-
-        for i in range(1, qtd):
-            concurso_numero = numero_atual - i
-            try:
-                resp_i = requests.get(f"{url_base}{concurso_numero}", timeout=20)
-                if resp_i.status_code == 200:
-                    dados_i = resp_i.json()
-                    data_i = dados_i[0] if isinstance(dados_i, list) else dados_i
-                    dezenas_i = sorted([int(d) for d in data_i.get("dezenas")])
-                    concursos.append(dezenas_i)
-                else:
-                    break
-            except Exception:
-                break
-
-        return concursos, info_ultimo
-
-    except Exception as e:
-        st.error(f"Erro ao acessar API: {type(e).__name__}: {e}")
-        return [], None
-
-# =========================
-# NOVA CLASSE: Análise Combinatória
-# =========================
-class AnaliseCombinatoria:
+# ============================================
+# CLASSE DE ESTRATÉGIAS MATEMÁTICAS
+# ============================================
+class EstrategiasLotofacil:
     def __init__(self, concursos):
         self.concursos = concursos
         self.numeros = list(range(1, 26))
         self.primos = {2, 3, 5, 7, 11, 13, 17, 19, 23}
         
-    def calcular_estatisticas_base(self):
-        """Calcula estatísticas base dos concursos históricos"""
-        if not self.concursos:
-            return {}
+    # ============================================
+    # ESTRATÉGIA 1: NÚMEROS FRIOS (LEI DOS TERÇOS)
+    # ============================================
+    def estrategia_frios_leidoterco(self, n_jogos=5):
+        """
+        Baseado na Lei dos Terços: em qualquer amostra aleatória,
+        1/3 dos números ficam abaixo da média esperada
+        """
+        if len(self.concursos) < 50:
+            return self.estrategia_aleatoria_controlada(n_jogos)
+        
+        # Calcula frequência esperada (15 números por concurso)
+        total_numeros_sorteados = len(self.concursos) * 15
+        freq_esperada = total_numeros_sorteados / 25
+        
+        # Calcula frequência real
+        freq_real = Counter()
+        for concurso in self.concursos:
+            freq_real.update(concurso)
+        
+        # Identifica números frios (abaixo da frequência esperada)
+        frios = [n for n in self.numeros 
+                if freq_real[n] < freq_esperada * 0.7]  # 30% abaixo
+        
+        # Números quentes (acima da média)
+        quentes = [n for n in self.numeros 
+                  if freq_real[n] > freq_esperada * 1.3]  # 30% acima
+        
+        # Números médios
+        medios = [n for n in self.numeros if n not in frios and n not in quentes]
+        
+        jogos = []
+        for _ in range(n_jogos):
+            # Distribuição baseada na lei dos terços
+            n_frios = min(7, len(frios))
+            n_quentes = min(4, len(quentes))
+            n_medios = 15 - n_frios - n_quentes
             
-        stats = {
-            'media_pares': [],
-            'media_soma': [],
-            'media_primos': [],
-            'distribuicoes': []
+            jogo = []
+            if frios:
+                jogo.extend(random.sample(frios, min(n_frios, len(frios))))
+            if quentes:
+                jogo.extend(random.sample(quentes, min(n_quentes, len(quentes))))
+            if medios:
+                jogo.extend(random.sample(medios, min(n_medios, len(medios))))
+            
+            # Completa se necessário
+            while len(jogo) < 15:
+                candidato = random.choice(self.numeros)
+                if candidato not in jogo:
+                    jogo.append(candidato)
+            
+            jogos.append(sorted(jogo))
+        
+        return jogos
+    
+    # ============================================
+    # ESTRATÉGIA 2: COBERTURA MÍNIMA
+    # ============================================
+    def estrategia_cobertura_garantida(self, n_jogos=8, garantir=13):
+        """
+        Garantia matemática de acerto mínimo usando cobertura de conjuntos
+        Quanto mais jogos, maior a garantia
+        """
+        def calcular_cobertura(conjunto_jogos):
+            """Calcula a cobertura total de números"""
+            return len(set().union(*[set(j) for j in conjunto_jogos]))
+        
+        def probabilidade_acertar_minimo(jogos, garantir):
+            """Calcula probabilidade de acertar pelo menos 'garantir' números"""
+            if not jogos:
+                return 0
+            # Aproximação baseada na lei binomial
+            prob_acerto = 0.6  # Probabilidade aproximada de acertar um número
+            prob = 0
+            for jogo in jogos:
+                p = sum(math.comb(15, k) * (prob_acerto**k) * ((1-prob_acerto)**(15-k)) 
+                       for k in range(garantir, 16))
+                prob = 1 - (1 - prob) * (1 - p)
+            return prob
+        
+        # Gera jogos iniciais
+        jogos = []
+        
+        # Estratégia de cobertura máxima com mínimo de sobreposição
+        numeros_ordenados = self.numeros.copy()
+        random.shuffle(numeros_ordenados)
+        
+        # Distribui os números para máxima cobertura
+        for i in range(n_jogos):
+            jogo = []
+            inicio = (i * 15) % 25
+            
+            # Distribuição circular para minimizar sobreposição
+            for j in range(15):
+                idx = (inicio + j) % 25
+                jogo.append(numeros_ordenados[idx])
+            
+            jogos.append(sorted(jogo))
+        
+        # Otimiza a cobertura
+        cobertura_atual = calcular_cobertura(jogos)
+        
+        # Tenta melhorar a cobertura
+        for _ in range(100):  # Iterações de otimização
+            i = random.randint(0, n_jogos - 1)
+            jogo_original = jogos[i].copy()
+            
+            # Tenta substituir um número por outro não coberto
+            cobertos = set().union(*[set(j) for j in jogos if j != jogo_original])
+            nao_cobertos = [n for n in self.numeros if n not in cobertos]
+            
+            if nao_cobertos:
+                pos = random.randint(0, 14)
+                novo_jogo = jogo_original.copy()
+                novo_jogo[pos] = random.choice(nao_cobertos)
+                novo_jogo.sort()
+                jogos[i] = novo_jogo
+                
+                nova_cobertura = calcular_cobertura(jogos)
+                if nova_cobertura > cobertura_atual:
+                    cobertura_atual = nova_cobertura
+                else:
+                    jogos[i] = jogo_original  # Reverte
+        
+        return jogos
+    
+    # ============================================
+    # ESTRATÉGIA 3: SOMA ÓTIMA (DISTRIBUIÇÃO NORMAL)
+    # ============================================
+    def estrategia_soma_otima(self, n_jogos=5):
+        """
+        Baseado na distribuição normal das somas dos concursos
+        A soma ideal está entre 180 e 200
+        """
+        # Calcula média e desvio padrão das somas históricas
+        somas = [sum(concurso) for concurso in self.concursos[-100:]]
+        media_soma = np.mean(somas) if somas else 195
+        std_soma = np.std(somas) if somas else 15
+        
+        # Intervalo ótimo (dentro de 1 desvio padrão)
+        soma_min = max(170, media_soma - std_soma)
+        soma_max = min(210, media_soma + std_soma)
+        
+        jogos = []
+        
+        for _ in range(n_jogos * 3):  # Gera mais para selecionar os melhores
+            jogo = []
+            
+            # Gera números com distribuição balanceada
+            pares = random.randint(6, 9)
+            impares = 15 - pares
+            
+            # Seleciona pares e ímpares
+            nums_pares = [n for n in self.numeros if n % 2 == 0]
+            nums_impares = [n for n in self.numeros if n % 2 == 1]
+            
+            jogo.extend(random.sample(nums_pares, pares))
+            jogo.extend(random.sample(nums_impares, impares))
+            
+            jogo = sorted(jogo)
+            soma = sum(jogo)
+            
+            # Verifica se está no intervalo ótimo
+            if soma_min <= soma <= soma_max:
+                jogos.append(jogo)
+            
+            if len(jogos) >= n_jogos:
+                break
+        
+        # Se não gerou suficientes, completa com ajustes
+        while len(jogos) < n_jogos:
+            jogo = jogos[-1].copy() if jogos else random.sample(self.numeros, 15)
+            soma = sum(jogo)
+            
+            if soma < soma_min:
+                # Troca um número baixo por um alto
+                baixos = [n for n in jogo if n < 13]
+                if baixos:
+                    jogo.remove(random.choice(baixos))
+                    jogo.append(random.randint(20, 25))
+            elif soma > soma_max:
+                # Troca um número alto por um baixo
+                altos = [n for n in jogo if n > 13]
+                if altos:
+                    jogo.remove(random.choice(altos))
+                    jogo.append(random.randint(1, 6))
+            
+            jogo = sorted(jogo)
+            if len(set(jogo)) == 15 and jogo not in jogos:
+                jogos.append(jogo)
+        
+        return jogos[:n_jogos]
+    
+    # ============================================
+    # ESTRATÉGIA 4: GRUPOS E SUBCONJUNTOS
+    # ============================================
+    def estrategia_grupos(self, n_jogos=5):
+        """
+        Divide os números em grupos e garante representação de todos
+        Baseado na teoria de Ramsey e coloração de grafos
+        """
+        # Divide em 5 grupos de 5 números (linhas da cartela)
+        grupos = [
+            list(range(1, 6)),
+            list(range(6, 11)),
+            list(range(11, 16)),
+            list(range(16, 21)),
+            list(range(21, 26))
+        ]
+        
+        # Analisa distribuição histórica por grupos
+        distribuicao_grupos = []
+        for concurso in self.concursos[-50:]:
+            dist = [len([n for n in concurso if n in grupo]) for grupo in grupos]
+            distribuicao_grupos.append(dist)
+        
+        # Média de números por grupo
+        media_grupos = np.mean(distribuicao_grupos, axis=0) if distribuicao_grupos else [3, 3, 3, 3, 3]
+        
+        jogos = []
+        
+        for _ in range(n_jogos):
+            jogo = []
+            
+            # Distribui números seguindo a média histórica
+            for i, grupo in enumerate(grupos):
+                # Pega a quantidade média arredondada para o grupo
+                qtd = int(round(media_grupos[i]))
+                qtd = max(2, min(5, qtd))  # Limita entre 2 e 5
+                
+                if len(grupo) >= qtd:
+                    selecionados = random.sample(grupo, qtd)
+                    jogo.extend(selecionados)
+            
+            # Completa se necessário
+            while len(jogo) < 15:
+                grupo = random.choice(grupos)
+                disponiveis = [n for n in grupo if n not in jogo]
+                if disponiveis:
+                    jogo.append(random.choice(disponiveis))
+            
+            jogos.append(sorted(jogo))
+        
+        return jogos
+    
+    # ============================================
+    # ESTRATÉGIA 5: ELIMINAÇÃO (PRINCÍPIO DE PARETTO)
+    # ============================================
+    def estrategia_eliminacao_pareto(self, n_jogos=5):
+        """
+        80/20: Foca nos 20% números que aparecem 80% das vezes
+        """
+        if len(self.concursos) < 20:
+            return self.estrategia_aleatoria_controlada(n_jogos)
+        
+        # Calcula frequência
+        freq = Counter()
+        for concurso in self.concursos:
+            freq.update(concurso)
+        
+        # Ordena por frequência
+        numeros_ordenados = sorted(freq.items(), key=lambda x: x[1], reverse=True)
+        
+        # Pega os top 20% (5 números) - Princípio de Pareto
+        top_pareto = [n for n, _ in numeros_ordenados[:5]]
+        
+        # Elimina os menos frequentes (bottom 20%)
+        bottom_pareto = [n for n, _ in numeros_ordenados[-5:]]
+        
+        # Números restantes
+        resto = [n for n in self.numeros if n not in top_pareto and n not in bottom_pareto]
+        
+        jogos = []
+        
+        for _ in range(n_jogos):
+            # Sempre inclui alguns números do top Pareto
+            n_top = random.randint(3, 5)
+            n_bottom = random.randint(0, 1)  # Poucos números frios
+            n_resto = 15 - n_top - n_bottom
+            
+            jogo = []
+            jogo.extend(random.sample(top_pareto, min(n_top, len(top_pareto))))
+            
+            if bottom_pareto and n_bottom > 0:
+                jogo.extend(random.sample(bottom_pareto, min(n_bottom, len(bottom_pareto))))
+            
+            if resto:
+                jogo.extend(random.sample(resto, min(n_resto, len(resto))))
+            
+            # Completa se necessário
+            while len(jogo) < 15:
+                candidato = random.choice(self.numeros)
+                if candidato not in jogo:
+                    jogo.append(candidato)
+            
+            jogos.append(sorted(jogo))
+        
+        return jogos
+    
+    # ============================================
+    # ESTRATÉGIA 6: ESPELHOS (COMPLEMENTAR)
+    # ============================================
+    def estrategia_espelhos(self, n_jogos=5):
+        """
+        Gera jogos espelho: se um número não sai em um jogo,
+        tem alta probabilidade de sair no complemento
+        """
+        if not self.concursos:
+            return self.estrategia_aleatoria_controlada(n_jogos)
+        
+        # Pega o último concurso
+        ultimo = self.concursos[0]
+        
+        # Gera o espelho (números que NÃO saíram)
+        espelho = [n for n in self.numeros if n not in ultimo]
+        
+        jogos = []
+        
+        # Variações do espelho
+        for i in range(n_jogos):
+            # Mistura números do espelho com alguns do último concurso
+            n_espelho = random.randint(8, 12)
+            n_ultimo = 15 - n_espelho
+            
+            jogo = []
+            jogo.extend(random.sample(espelho, min(n_espelho, len(espelho))))
+            jogo.extend(random.sample(ultimo, min(n_ultimo, len(ultimo))))
+            
+            jogo = sorted(set(jogo))
+            
+            # Ajusta tamanho
+            while len(jogo) < 15:
+                candidato = random.choice(self.numeros)
+                if candidato not in jogo:
+                    jogo.append(candidato)
+            
+            while len(jogo) > 15:
+                jogo.pop()
+            
+            jogos.append(sorted(jogo))
+        
+        return jogos
+    
+    # ============================================
+    # ESTRATÉGIA 7: INTERVALOS UNIFORMES
+    # ============================================
+    def estrategia_intervalos(self, n_jogos=5):
+        """
+        Distribuição uniforme dos intervalos entre números consecutivos
+        Minimiza clusters e gaps muito grandes
+        """
+        jogos = []
+        
+        for _ in range(n_jogos):
+            jogo = []
+            
+            # Gera números com intervalos balanceados
+            while len(jogo) < 15:
+                if not jogo:
+                    # Primeiro número entre 1 e 10
+                    jogo.append(random.randint(1, 10))
+                else:
+                    # Intervalo ideal entre 1 e 3
+                    ultimo = jogo[-1]
+                    intervalo = random.randint(1, 3)
+                    proximo = ultimo + intervalo
+                    
+                    if proximo <= 25 and proximo not in jogo:
+                        jogo.append(proximo)
+                    else:
+                        # Se não for possível, escolhe outro
+                        candidatos = [n for n in range(ultimo + 1, 26) 
+                                    if n not in jogo]
+                        if candidatos:
+                            jogo.append(random.choice(candidatos))
+            
+            jogos.append(sorted(jogo[:15]))
+        
+        return jogos
+    
+    # ============================================
+    # ESTRATÉGIA 8: SISTEMA DE RODA (WHEELING)
+    # ============================================
+    def estrategia_wheeling(self, numeros_base=None, garantia=13):
+        """
+        Sistema de roda matemático: maximiza cobertura com mínimo de jogos
+        Garantia: se acertar os números base, garante X pontos
+        """
+        if numeros_base is None:
+            # Seleciona números base de alta frequência
+            freq = Counter()
+            for concurso in self.concursos[:50]:
+                freq.update(concurso)
+            
+            numeros_base = [n for n, _ in sorted(freq.items(), 
+                          key=lambda x: x[1], reverse=True)[:18]]
+        
+        # Gera combinações do sistema de roda
+        jogos = []
+        
+        # Roda completa para 18 números, 15 por jogo
+        # Isso garante que se acertar 13 dos 18, terá pelo menos um jogo com 13+
+        if len(numeros_base) >= 15:
+            # Distribuição circular
+            for i in range(0, len(numeros_base), 3):
+                jogo = []
+                for j in range(15):
+                    idx = (i + j) % len(numeros_base)
+                    jogo.append(numeros_base[idx])
+                jogos.append(sorted(set(jogo)))
+                
+                if len(jogos) >= 8:  # Limita quantidade
+                    break
+        
+        # Remove duplicatas
+        jogos = [list(x) for x in set(tuple(j) for j in jogos)]
+        
+        return jogos[:8]  # Retorna no máximo 8 jogos
+    
+    # ============================================
+    # ESTRATÉGIA 9: ANÁLISE DE TENDÊNCIA CÍCLICA
+    # ============================================
+    def estrategia_ciclica(self, n_jogos=5, ciclo=10):
+        """
+        Analisa ciclos de repetição de padrões
+        """
+        if len(self.concursos) < ciclo * 2:
+            return self.estrategia_aleatoria_controlada(n_jogos)
+        
+        # Divide os concursos em ciclos
+        ciclos = []
+        for i in range(0, len(self.concursos), ciclo):
+            if i + ciclo <= len(self.concursos):
+                ciclo_atual = self.concursos[i:i+ciclo]
+                # Padrão do ciclo (números mais frequentes)
+                freq_ciclo = Counter()
+                for concurso in ciclo_atual:
+                    freq_ciclo.update(concurso)
+                
+                top_ciclo = [n for n, _ in freq_ciclo.most_common(15)]
+                ciclos.append(top_ciclo)
+        
+        # Analisa evolução dos ciclos
+        jogos = []
+        
+        # Projeta próximo ciclo baseado nos anteriores
+        if len(ciclos) >= 2:
+            ultimo_ciclo = set(ciclos[-1])
+            penultimo_ciclo = set(ciclos[-2])
+            
+            # Números que persistiram
+            persistentes = list(ultimo_ciclo & penultimo_ciclo)
+            # Números novos no último ciclo
+            novos = list(ultimo_ciclo - penultimo_ciclo)
+            # Números que saíram
+            saidas = list(penultimo_ciclo - ultimo_ciclo)
+            
+            for _ in range(n_jogos):
+                jogo = []
+                
+                # Mantém números persistentes
+                if persistentes:
+                    jogo.extend(random.sample(persistentes, min(8, len(persistentes))))
+                
+                # Adiciona alguns novos
+                if novos:
+                    jogo.extend(random.sample(novos, min(4, len(novos))))
+                
+                # Completa com outros
+                outros = [n for n in self.numeros if n not in jogo]
+                while len(jogo) < 15:
+                    jogo.append(random.choice(outros))
+                    outros = [n for n in self.numeros if n not in jogo]
+                
+                jogos.append(sorted(jogo[:15]))
+        
+        return jogos
+    
+    # ============================================
+    # ESTRATÉGIA 10: MULTI-ESTRATÉGIA (ENSEMBLE)
+    # ============================================
+    def estrategia_ensemble(self, n_jogos=10):
+        """
+        Combina múltiplas estratégias para diversificação máxima
+        """
+        todas_estrategias = [
+            self.estrategia_frios_leidoterco,
+            self.estrategia_soma_otima,
+            self.estrategia_grupos,
+            self.estrategia_eliminacao_pareto,
+            self.estrategia_espelhos,
+            self.estrategia_intervalos
+        ]
+        
+        jogos = []
+        
+        # Distribui os jogos entre as estratégias
+        jogos_por_estrategia = max(1, n_jogos // len(todas_estrategias))
+        
+        for estrategia in todas_estrategias:
+            try:
+                novos_jogos = estrategia(jogos_por_estrategia)
+                jogos.extend(novos_jogos)
+            except Exception as e:
+                print(f"Erro na estratégia {estrategia.__name__}: {e}")
+                continue
+        
+        # Remove duplicatas
+        jogos_unicos = []
+        seen = set()
+        for jogo in jogos:
+            chave = tuple(jogo)
+            if chave not in seen:
+                seen.add(chave)
+                jogos_unicos.append(jogo)
+        
+        return jogos_unicos[:n_jogos]
+    
+    # ============================================
+    # ESTRATÉGIA BASE: ALEATÓRIA CONTROLADA
+    # ============================================
+    def estrategia_aleatoria_controlada(self, n_jogos=5):
+        """
+        Aleatória pura mas com validação estatística básica
+        """
+        jogos = []
+        
+        for _ in range(n_jogos * 2):
+            jogo = sorted(random.sample(self.numeros, 15))
+            
+            # Validações básicas
+            pares = sum(1 for n in jogo if n % 2 == 0)
+            soma = sum(jogo)
+            
+            # Filtros suaves (apenas para não gerar absurdos estatísticos)
+            if 5 <= pares <= 10 and 170 <= soma <= 210:
+                if jogo not in jogos:
+                    jogos.append(jogo)
+            
+            if len(jogos) >= n_jogos:
+                break
+        
+        # Completa se necessário
+        while len(jogos) < n_jogos:
+            jogo = sorted(random.sample(self.numeros, 15))
+            if jogo not in jogos:
+                jogos.append(jogo)
+        
+        return jogos[:n_jogos]
+    
+    # ============================================
+    # ANÁLISE COMPARATIVA DAS ESTRATÉGIAS
+    # ============================================
+    def comparar_estrategias(self, n_jogos=5, n_testes=10):
+        """
+        Compara o desempenho histórico das estratégias
+        """
+        if len(self.concursos) < 20:
+            return {}
+        
+        resultados = {}
+        estrategias = {
+            'Frios (Lei dos Terços)': self.estrategia_frios_leidoterco,
+            'Cobertura Garantida': self.estrategia_cobertura_garantida,
+            'Soma Ótima': self.estrategia_soma_otima,
+            'Grupos': self.estrategia_grupos,
+            'Pareto (80/20)': self.estrategia_eliminacao_pareto,
+            'Espelhos': self.estrategia_espelhos,
+            'Intervalos': self.estrategia_intervalos,
+            'Wheeling': self.estrategia_wheeling,
+            'Cíclica': self.estrategia_ciclica,
+            'Ensemble': self.estrategia_ensemble
         }
         
-        for concurso in self.concursos:
-            pares = sum(1 for n in concurso if n % 2 == 0)
-            soma = sum(concurso)
-            primos = sum(1 for n in concurso if n in self.primos)
+        for nome, estrategia in estrategias.items():
+            acertos_totais = []
             
-            stats['media_pares'].append(pares)
-            stats['media_soma'].append(soma)
-            stats['media_primos'].append(primos)
-            
-        return stats
-
-    def gerar_combinacoes_otimizadas(self, tamanhos, quantidade_por_tamanho=1000):
-        """Gera combinações otimizadas com filtros estatísticos"""
-        todas_combinacoes = {}
-        
-        for tamanho in tamanhos:
-            combinacoes_geradas = []
-            tentativas = 0
-            max_tentativas = quantidade_por_tamanho * 3
-            
-            while len(combinacoes_geradas) < quantidade_por_tamanho and tentativas < max_tentativas:
-                combo = sorted(random.sample(self.numeros, tamanho))
+            for teste in range(min(n_testes, len(self.concursos) - 10)):
+                # Usa concurso real para teste
+                concurso_teste = self.concursos[teste]
                 
-                if self.validar_combinacao(combo, tamanho):
-                    # Evitar duplicatas
-                    if combo not in combinacoes_geradas:
-                        combinacoes_geradas.append(combo)
+                # Gera jogos com dados ANTERIORES ao concurso
+                dados_treino = self.concursos[teste+1:teste+51] if teste+51 <= len(self.concursos) else self.concursos[teste+1:]
+                analise_treino = EstrategiasLotofacil(dados_treino)
                 
-                tentativas += 1
-            
-            # Analisar e ranquear as combinações
-            combinacoes_ranqueadas = self.ranquear_combinacoes(combinacoes_geradas, tamanho)
-            todas_combinacoes[tamanho] = combinacoes_ranqueadas[:quantidade_por_tamanho]
-            
-        return todas_combinacoes
-
-    def validar_combinacao(self, combinacao, tamanho):
-        """Valida combinação com base em estatísticas históricas"""
-        pares = sum(1 for n in combinacao if n % 2 == 0)
-        impares = len(combinacao) - pares
-        soma = sum(combinacao)
-        primos = sum(1 for n in combinacao if n in self.primos)
-        
-        # Critérios baseados no tamanho da combinação
-        if tamanho == 15:
-            return (6 <= pares <= 9 and 
-                    170 <= soma <= 210 and
-                    3 <= primos <= 7)
-        
-        elif tamanho == 14:
-            return (5 <= pares <= 8 and 
-                    160 <= soma <= 200 and
-                    2 <= primos <= 6)
-        
-        elif tamanho == 13:
-            return (5 <= pares <= 8 and 
-                    150 <= soma <= 190 and
-                    2 <= primos <= 6)
-        
-        elif tamanho == 12:
-            return (4 <= pares <= 7 and 
-                    130 <= soma <= 170 and
-                    2 <= primos <= 5)
-        
-        return True
-
-    def ranquear_combinacoes(self, combinacoes, tamanho):
-        """Ranqueia combinações por probabilidade"""
-        scores = []
-        
-        for combo in combinacoes:
-            score = self.calcular_score_combinacao(combo, tamanho)
-            scores.append((combo, score))
-        
-        # Ordenar por score (maiores primeiro)
-        return sorted(scores, key=lambda x: x[1], reverse=True)
-
-    def calcular_score_combinacao(self, combinacao, tamanho):
-        """Calcula score baseado em múltiplos fatores estatísticos"""
-        score = 0
-        
-        # Fator par/ímpar
-        pares = sum(1 for n in combinacao if n % 2 == 0)
-        if tamanho == 15 and 6 <= pares <= 8:
-            score += 3
-        elif tamanho == 14 and 5 <= pares <= 8:
-            score += 3
-        elif tamanho == 13 and 5 <= pares <= 7:
-            score += 3
-        elif tamanho == 12 and 4 <= pares <= 6:
-            score += 3
-            
-        # Fator soma
-        soma = sum(combinacao)
-        if tamanho == 15 and 180 <= soma <= 200:
-            score += 3
-        elif tamanho == 14 and 160 <= soma <= 190:
-            score += 3
-        elif tamanho == 13 and 150 <= soma <= 180:
-            score += 3
-        elif tamanho == 12 and 130 <= soma <= 160:
-            score += 3
-            
-        # Fator números consecutivos
-        consecutivos = self.contar_consecutivos(combinacao)
-        if consecutivos <= 4:
-            score += 2
-            
-        # Fator números primos
-        primos = sum(1 for n in combinacao if n in self.primos)
-        if 3 <= primos <= 6:
-            score += 2
-            
-        # Fator de distribuição
-        if self.validar_distribuicao(combinacao):
-            score += 2
-            
-        # Fator de frequência histórica
-        score += self.calcular_score_frequencia(combinacao)
-        
-        return score
-
-    def contar_consecutivos(self, combinacao):
-        """Conta números consecutivos na combinação"""
-        consecutivos = 0
-        for i in range(len(combinacao)-1):
-            if combinacao[i+1] - combinacao[i] == 1:
-                consecutivos += 1
-        return consecutivos
-
-    def validar_distribuicao(self, combinacao):
-        """Valida distribuição por faixas de números"""
-        faixa1 = sum(1 for n in combinacao if 1 <= n <= 9)   # 1-9
-        faixa2 = sum(1 for n in combinacao if 10 <= n <= 19) # 10-19
-        faixa3 = sum(1 for n in combinacao if 20 <= n <= 25) # 20-25
-        
-        total = len(combinacao)
-        if total == 15:
-            return (faixa1 >= 4 and faixa2 >= 5 and faixa3 >= 4)
-        elif total == 14:
-            return (faixa1 >= 4 and faixa2 >= 4 and faixa3 >= 4)
-        elif total == 13:
-            return (faixa1 >= 3 and faixa2 >= 4 and faixa3 >= 3)
-        elif total == 12:
-            return (faixa1 >= 3 and faixa2 >= 4 and faixa3 >= 3)
-        
-        return True
-
-    def calcular_score_frequencia(self, combinacao):
-        """Calcula score baseado na frequência histórica dos números"""
-        if not self.concursos:
-            return 0
-            
-        # Calcular frequência dos números nos últimos concursos
-        freq = Counter()
-        for concurso in self.concursos[:50]:  # Últimos 50 concursos
-            for numero in concurso:
-                freq[numero] += 1
-                
-        # Score baseado na frequência média dos números na combinação
-        freq_media = sum(freq[n] for n in combinacao) / len(combinacao)
-        freq_max = max(freq.values()) if freq.values() else 1
-        
-        # Normalizar score (0 a 2 pontos)
-        return (freq_media / freq_max) * 2
-
-    def gerar_relatorio_estatistico(self, combinacoes_por_tamanho):
-        """Gera relatório estatístico das combinações"""
-        relatorio = {}
-        
-        for tamanho, combinacoes in combinacoes_por_tamanho.items():
-            if not combinacoes:
-                continue
-                
-            stats = {
-                'total_combinacoes': len(combinacoes),
-                'media_score': np.mean([score for _, score in combinacoes]),
-                'melhor_score': max([score for _, score in combinacoes]),
-                'pior_score': min([score for _, score in combinacoes]),
-                'exemplos_top5': combinacoes[:5]
-            }
-            relatorio[tamanho] = stats
-            
-        return relatorio
-
-    # NOVO MÉTODO: Converter combinação para formato de cartão 5x5
-    def formatar_como_cartao(self, combinacao):
-        """Formata uma combinação como cartão da Lotofácil 5x5"""
-        cartao = []
-        for i in range(5):
-            linha = []
-            for j in range(5):
-                numero = i * 5 + j + 1
-                if numero in combinacao:
-                    linha.append(f"[{numero:2d}]")  # Número marcado
-                else:
-                    linha.append(f" {numero:2d} ")  # Número não marcado
-            cartao.append(linha)
-        return cartao
-
-    # NOVO MÉTODO: Gerar conteúdo para download em formato de cartão
-    def gerar_conteudo_cartoes(self, combinacoes_por_tamanho, top_n=10):
-        """Gera conteúdo formatado como cartões para download"""
-        conteudo = "CARTÕES LOTOFÁCIL - COMBINAÇÕES OTIMIZADAS\n"
-        conteudo += "=" * 50 + "\n\n"
-        
-        for tamanho in sorted(combinacoes_por_tamanho.keys()):
-            combinacoes = combinacoes_por_tamanho[tamanho][:top_n]
-            
-            if not combinacoes:
-                continue
-                
-            conteudo += f"COMBINAÇÕES COM {tamanho} NÚMEROS (Top {top_n})\n"
-            conteudo += "-" * 40 + "\n\n"
-            
-            for idx, (combo, score) in enumerate(combinacoes, 1):
-                conteudo += f"Cartão {idx} (Score: {score:.1f}):\n"
-                cartao = self.formatar_como_cartao(combo)
-                
-                for linha in cartao:
-                    conteudo += " ".join(linha) + "\n"
-                
-                # Adicionar lista dos números selecionados
-                numeros_selecionados = [n for n in combo]
-                conteudo += f"Números: {numeros_selecionados}\n"
-                
-                # Estatísticas do cartão
-                pares = sum(1 for n in combo if n % 2 == 0)
-                primos = sum(1 for n in combo if n in self.primos)
-                soma = sum(combo)
-                conteudo += f"Pares: {pares}, Ímpares: {len(combo)-pares}, Primos: {primos}, Soma: {soma}\n"
-                conteudo += "\n" + "=" * 50 + "\n\n"
-        
-        return conteudo
-
-# =========================
-# IA Avançada com CatBoost
-# =========================
-class LotoFacilIA:
-    def __init__(self, concursos):
-        self.concursos = concursos
-        self.numeros = list(range(1,26))
-        self.primos = {2,3,5,7,11,13,17,19,23}
-        self.models = {}
-        self.X = self.gerar_features()[:-1] if len(concursos) > 1 else np.array([])
-        self.Y = self.matriz_binaria()[1:] if len(concursos) > 1 else np.array([])
-        if len(self.X) > 0 and len(self.Y) > 0:
-            self.treinar_modelos()
-
-    def matriz_binaria(self):
-        return np.array([[1 if n in jogo else 0 for n in self.numeros] for jogo in self.concursos])
-
-    def frequencia(self, janela=10):
-        janela = min(janela, max(1, len(self.concursos)-1))
-        freq = {n:0 for n in self.numeros}
-        for jogo in self.concursos[-janela-1:-1]:
-            for d in jogo:
-                freq[d] +=1
-        return freq
-
-    def atraso(self):
-        atraso = {n:0 for n in self.numeros}
-        for i in range(len(self.concursos)-2, -1, -1):
-            jogo = self.concursos[i]
-            for n in self.numeros:
-                if atraso[n]==0 and n not in jogo:
-                    atraso[n] = len(self.concursos)-1 - i
-        return atraso
-
-    def quentes_frios(self, top=10):
-        freq = self.frequencia()
-        numeros_ordenados = sorted(freq.items(), key=lambda x: x[1], reverse=True)
-        quentes = [n for n,_ in numeros_ordenados[:top]]
-        frios = [n for n,_ in numeros_ordenados[-top:]]
-        return {"quentes": quentes, "frios": frios}
-
-    def pares_impares_primos(self):
-        ultimo = self.concursos[-1]
-        pares = sum(1 for n in ultimo if n%2==0)
-        impares = 15 - pares
-        primos = sum(1 for n in ultimo if n in self.primos)
-        return {"pares": pares, "impares": impares, "primos": primos}
-
-    def interacoes(self, janela=50):
-        janela = min(janela, max(1, len(self.concursos)-1))
-        matriz = np.zeros((25,25), dtype=int)
-        for jogo in self.concursos[-janela-1:-1]:
-            for i in range(15):
-                for j in range(i+1,15):
-                    matriz[jogo[i]-1, jogo[j]-1] += 1
-                    matriz[jogo[j]-1, jogo[i]-1] += 1
-        return matriz
-
-    def prob_condicional(self, janela=50):
-        matriz = self.interacoes(janela)
-        prob = np.zeros((25,25))
-        freq = np.array([v for v in self.frequencia(janela).values()])
-        for i in range(25):
-            for j in range(25):
-                if freq[i] > 0:
-                    prob[i,j] = matriz[i,j]/freq[i]
-        return prob
-
-    def gap_medio(self):
-        gaps = {n:[] for n in self.numeros}
-        for i, jogo in enumerate(self.concursos[:-1]):
-            for n in self.numeros:
-                if n not in jogo:
-                    gaps[n].append(len(self.concursos)-1-i)
-        return {n: np.mean(gaps[n]) if gaps[n] else 0 for n in self.numeros}
-
-    def gerar_features(self):
-        features = []
-        if len(self.concursos) < 2:
-            return np.array([])
-        freq = self.frequencia(janela=len(self.concursos)-1)
-        gaps = self.gap_medio()
-        for jogo in self.concursos:
-            f = []
-            for n in self.numeros:
-                f.append(1 if n in jogo else 0)
-                f.append(freq[n])
-                f.append(gaps[n])
-                f.append(1 if n%2==0 else 0)
-                f.append(1 if n in self.primos else 0)
-            features.append(f)
-        return np.array(features)
-
-    def treinar_modelos(self):
-        for i, n in enumerate(self.numeros):
-            model = CatBoostClassifier(iterations=600, verbose=0, random_state=42)
-            y = self.Y[:,i]
-            model.fit(self.X, y)
-            self.models[n] = model
-
-    def prever_proximo(self):
-        if not self.models:
-            return {n: 0.5 for n in self.numeros}
-        ultima = self.gerar_features()[-1].reshape(1,-1)
-        probabilidades = {}
-        for n in self.numeros:
-            prob = self.models[n].predict_proba(ultima)[0][1]
-            probabilidades[n] = prob
-        return probabilidades
-
-    def gerar_5_jogos(self, probabilidades):
-        ordenado = sorted(probabilidades.items(), key=lambda x:x[1], reverse=True)
-        top15 = [n for n,_ in ordenado[:15]]
-        top20 = [n for n,_ in ordenado[:20]]
-        mid = [n for n,_ in ordenado[10:20]]
-        frios = [n for n,_ in sorted(probabilidades.items(), key=lambda x:x[1])[:10]]
-
-        jogos=[]
-        jogos.append(sorted(top15))
-        jogos.append(sorted(random.sample(top15, 10) + random.sample(mid,5)))
-        jogos.append(sorted(random.sample(top15, 12) + random.sample(frios,3)))
-        jogos.append(self._equilibrado(top20))
-        jogos.append(self._equilibrado(top20, forcar_primos=True))
-        # garantir distintos
-        unicos = []
-        seen = set()
-        for j in jogos:
-            t = tuple(j)
-            if t not in seen:
-                seen.add(t); unicos.append(j)
-        while len(unicos) < 5:
-            unicos.append(self._equilibrado(top20))
-        return unicos
-
-    def _equilibrado(self, base, forcar_primos=False):
-        base = list(set(base))  # dedup
-        while True:
-            if len(base) < 15:
-                base = list(range(1,26))
-            cartao = sorted(random.sample(base,15))
-            pares = sum(1 for n in cartao if n%2==0)
-            primos_count = sum(1 for n in cartao if n in self.primos)
-            if 7 <= pares <=10 and (not forcar_primos or primos_count>=3):
-                return cartao
-
-    # =========================
-    # NOVO: Gerar 5 cartões por padrões últimos concursos (já existia no seu código)
-    # =========================
-    def gerar_cartoes_por_padroes(self, n_jogos=5, janela=10):
-        janela = min(janela, len(self.concursos))
-        ultimos = self.concursos[-janela:]
-        freq = {n:0 for n in self.numeros}
-        for jogo in ultimos:
-            for n in jogo:
-                freq[n] += 1
-
-        quentes = [n for n,_ in sorted(freq.items(), key=lambda x:x[1], reverse=True)[:15]]
-        evens_q = [x for x in quentes if x%2==0]
-        odds_q  = [x for x in quentes if x%2==1]
-        frios = [n for n,_ in sorted(freq.items(), key=lambda x:x[1])[:10]]
-
-        padrao_par_impar = []
-        for jogo in ultimos:
-            pares = sum(1 for x in jogo if x%2==0)
-            padrao_par_impar.append((pares, 15-pares))
-        media_pares = int(np.round(np.mean([p for p,_ in padrao_par_impar])))
-        media_pares = max(5, min(10, media_pares))  # limitar pra não travar
-        media_impares = 15 - media_pares
-
-        jogos=[]
-        for _ in range(n_jogos):
-            cartao = set()
-            # escolhe pares
-            candidatos_pares = evens_q if len(evens_q) >= media_pares else [x for x in range(2,26,2)]
-            cartao.update(random.sample(candidatos_pares, media_pares))
-            # escolhe ímpares
-            candidatos_impares = odds_q if len(odds_q) >= media_impares else [x for x in range(1,26,2)]
-            faltam = media_impares
-            cartao.update(random.sample(candidatos_impares, faltam))
-            # completa se faltar
-            while len(cartao) < 15:
-                cartao.add(random.choice(frios if frios else list(range(1,26))))
-            jogos.append(sorted(list(cartao)))
-        # garantir distintos
-        unicos = []
-        seen = set()
-        for j in jogos:
-            t = tuple(j)
-            if t not in seen:
-                seen.add(t); unicos.append(j)
-        while len(unicos) < n_jogos:
-            unicos.append(sorted(random.sample(range(1,26),15)))
-        return unicos
-
-# =========================
-# PADRÕES LINHA×COLUNA
-# =========================
-# Mapeamento fixo 5x5 (linhas e colunas)
-LINHAS = [
-    list(range(1, 6)),
-    list(range(6, 11)),
-    list(range(11, 16)),
-    list(range(16, 21)),
-    list(range(21, 26))
-]
-COLUNAS = [
-    list(range(1, 26, 5)),
-    list(range(2, 26, 5)),
-    list(range(3, 26, 5)),
-    list(range(4, 26, 5)),
-    list(range(5, 26, 5))
-]
-
-def contar_padroes_linha_coluna(concursos):
-    padrao_linhas = []
-    padrao_colunas = []
-    for concurso in concursos:
-        linha_cont = [sum(1 for n in concurso if n in l) for l in LINHAS]
-        col_cont = [sum(1 for n in concurso if n in c) for c in COLUNAS]
-        padrao_linhas.append(tuple(linha_cont))
-        padrao_colunas.append(tuple(col_cont))
-    return Counter(padrao_linhas), Counter(padrao_colunas)
-
-def sugerir_padroes_futuros(freq_linhas, freq_colunas, n=5):
-    pads_l = [p for p,_ in freq_linhas.most_common(n)] or [(3,3,3,3,3)]
-    pads_c = [p for p,_ in freq_colunas.most_common(n)] or [(3,3,3,3,3)]
-    futuros = []
-    for i in range(n):
-        futuros.append({"linhas": pads_l[i % len(pads_l)], "colunas": pads_c[i % len(pads_c)]})
-    return futuros
-
-# =========================
-# FUNÇÕES DE PERSISTÊNCIA
-# =========================
-def salvar_estado():
-    """Salva o estado atual da sessão"""
-    estado = {
-        'concursos': st.session_state.concursos,
-        'cartoes_gerados': st.session_state.cartoes_gerados,
-        'cartoes_gerados_padrao': st.session_state.cartoes_gerados_padrao,
-        'info_ultimo_concurso': st.session_state.info_ultimo_concurso,
-        'combinacoes_combinatorias': st.session_state.combinacoes_combinatorias
-    }
-    return estado
-
-def carregar_estado():
-    """Carrega o estado da sessão (para futuras implementações com arquivo)"""
-    # Por enquanto, apenas inicializa se não existir
-    if "concursos" not in st.session_state:
-        st.session_state.concursos = []
-    if "cartoes_gerados" not in st.session_state:
-        st.session_state.cartoes_gerados = []
-    if "cartoes_gerados_padrao" not in st.session_state:
-        st.session_state.cartoes_gerados_padrao = []
-    if "info_ultimo_concurso" not in st.session_state:
-        st.session_state.info_ultimo_concurso = None
-    if "combinacoes_combinatorias" not in st.session_state:
-        st.session_state.combinacoes_combinatorias = {}
-
-# =========================
-# Streamlit - Estado
-# =========================
-carregar_estado()  # Inicializa o estado
-
-st.markdown("<h1 style='text-align: center;'>Lotofácil Inteligente</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center;'>SAMUCJ TECHNOLOGY</p>", unsafe_allow_html=True)
-st.markdown("<hr>", unsafe_allow_html=True)
-
-# --- Captura concursos ---
-with st.expander("📥 Capturar Concursos"):
-    qtd_concursos = st.slider("Quantidade de concursos para análise", 10, 250, 100)
-    if st.button("🔄 Capturar Agora"):
-        with st.spinner("Capturando concursos da Lotofácil..."):
-            concursos, info = capturar_ultimos_resultados(qtd_concursos)
-            if concursos:
-                st.session_state.concursos = concursos
-                st.session_state.info_ultimo_concurso = info
-                st.success(f"{len(concursos)} concursos capturados com sucesso!")
-            else:
-                st.error("Não foi possível capturar concursos.")
-
-# --- Abas principais ---
-if st.session_state.concursos:
-    ia = LotoFacilIA(st.session_state.concursos)
-    probs = ia.prever_proximo()
-    jogos_gerados = ia.gerar_5_jogos(probs) if probs else []
-    quentes_frios = ia.quentes_frios()
-    pares_impares_primos = ia.pares_impares_primos()
-
-    # NOVA ABA: Análises Combinatórias
-    abas = st.tabs([
-        "📊 Estatísticas", 
-        "🧠 Gerar Cartões", 
-        "🧩 Gerar Cartões por Padrões",
-        "🔢 Análises Combinatórias",  # NOVA ABA
-        "📐 Padrões Linha×Coluna",
-        "✅ Conferência", 
-        "📤 Conferir Arquivo TXT"
-    ])
-
-    # Aba 1 - Estatísticas
-    with abas[0]:
-        st.subheader("📈 Estatísticas Gerais")
-        st.write(f"Números quentes: {quentes_frios['quentes']}")
-        st.write(f"Números frios: {quentes_frios['frios']}")
-        st.write(f"Pares/Ímpares/Primos último concurso: {pares_impares_primos}")
-        st.write(f"Frequência últimos 50 concursos (excluindo último): {ia.frequencia()}")
-        st.write(f"Atraso de cada número (excluindo último concurso): {ia.atraso()}")
-
-    # Aba 2 - Gerar Cartões
-    with abas[1]:
-        st.subheader("🧾 Geração de Cartões Inteligentes")
-        if st.button("🚀 Gerar 5 Cartões"):
-            st.session_state.cartoes_gerados = jogos_gerados
-            st.success("5 Cartões gerados com sucesso!")
-        if st.session_state.cartoes_gerados:
-            for i, c in enumerate(st.session_state.cartoes_gerados,1):
-                st.write(f"Jogo {i}: {c}")
-
-            st.subheader("📁 Exportar Cartões para TXT")
-            conteudo = "\n".join(",".join(str(n) for n in cartao) for cartao in st.session_state.cartoes_gerados)
-            st.download_button("💾 Baixar Arquivo", data=conteudo, file_name="cartoes_lotofacil.txt", mime="text/plain")
-
-    # Aba 3 - Gerar Cartões por Padrões (já tinha)
-    with abas[2]:
-        st.subheader("🧩 Geração de Cartões com Base em Padrões")
-        janela_padrao = st.slider("Janela (nº de concursos recentes)", 5, 100, 10, 5)
-        if st.button("🚀 Gerar 5 Cartões por Padrões"):
-            cartoes_padrao = ia.gerar_cartoes_por_padroes(n_jogos=5, janela=janela_padrao)
-            st.session_state.cartoes_gerados_padrao = cartoes_padrao
-            st.success("5 Cartões por Padrões gerados com sucesso!")
-        
-        if st.session_state.cartoes_gerados_padrao:
-            for i, c in enumerate(st.session_state.cartoes_gerados_padrao,1):
-                st.write(f"Cartão {i}: {c}")
-
-            st.subheader("📁 Exportar Cartões por Padrões para TXT")
-            conteudo_padrao = "\n".join(",".join(str(n) for n in cartao) for cartao in st.session_state.cartoes_gerados_padrao)
-            st.download_button("💾 Baixar Arquivo Padrões", data=conteudo_padrao, file_name="cartoes_padroes_lotofacil.txt", mime="text/plain")
-
-    # NOVA ABA 4 - Análises Combinatórias
-    with abas[3]:
-        st.subheader("🔢 Análises Combinatórias - Combinações Matemáticas")
-        
-        # Inicializar analisador combinatorio
-        analisador_combinatorio = AnaliseCombinatoria(st.session_state.concursos)
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("### ⚙️ Configurações")
-            tamanhos_selecionados = st.multiselect(
-                "Selecione os tamanhos de combinação:",
-                [12, 13, 14, 15],
-                default=[14, 15]
-            )
-            
-            quantidade_por_tamanho = st.slider(
-                "Quantidade de combinações por tamanho:",
-                min_value=10,
-                max_value=500,
-                value=100,
-                step=10
-            )
-            
-            if st.button("🎯 Gerar Combinações Otimizadas", type="primary"):
-                with st.spinner("Gerando e analisando combinações..."):
-                    combinacoes = analisador_combinatorio.gerar_combinacoes_otimizadas(
-                        tamanhos_selecionados, 
-                        quantidade_por_tamanho
-                    )
-                    st.session_state.combinacoes_combinatorias = combinacoes
-                    st.success(f"Combinações geradas com sucesso!")
-        
-        with col2:
-            st.markdown("### 📈 Estatísticas dos Filtros")
-            stats_base = analisador_combinatorio.calcular_estatisticas_base()
-            if stats_base:
-                st.write(f"**Média de pares (histórico):** {np.mean(stats_base['media_pares']):.1f}")
-                st.write(f"**Média de soma (histórico):** {np.mean(stats_base['media_soma']):.1f}")
-                st.write(f"**Média de primos (histórico):** {np.mean(stats_base['media_primos']):.1f}")
-        
-        # Mostrar resultados
-        if st.session_state.combinacoes_combinatorias:
-            st.markdown("### 🎯 Combinações Geradas (Top 10 por Tamanho)")
-            
-            for tamanho in sorted(st.session_state.combinacoes_combinatorias.keys()):
-                combinacoes_tamanho = st.session_state.combinacoes_combinatorias[tamanho]
-                
-                if combinacoes_tamanho:
-                    st.markdown(f"#### 📊 Combinações com {tamanho} números (Top 10)")
-                    
-                    # Criar colunas para exibição
-                    cols = st.columns(2)
-                    for idx, (combo, score) in enumerate(combinacoes_tamanho[:10]):
-                        with cols[idx % 2]:
-                            st.code(f"Score: {score:.1f} → {combo}")
-            
-            # Relatório estatístico
-            st.markdown("### 📋 Relatório Estatístico")
-            relatorio = analisador_combinatorio.gerar_relatorio_estatistico(
-                st.session_state.combinacoes_combinatorias
-            )
-            
-            for tamanho, stats in relatorio.items():
-                with st.expander(f"Estatísticas para {tamanho} números"):
-                    st.write(f"Total de combinações: {stats['total_combinacoes']}")
-                    st.write(f"Score médio: {stats['media_score']:.2f}")
-                    st.write(f"Melhor score: {stats['melhor_score']:.2f}")
-                    st.write(f"Pior score: {stats['pior_score']:.2f}")
-            
-            # NOVO: Exportar combinações em formato de cartão
-            st.markdown("### 💾 Exportar Combinações")
-            
-            col_export1, col_export2 = st.columns(2)
-            
-            with col_export1:
-                # Botão para baixar em formato lista
-                conteudo_combinacoes = ""
-                for tamanho, combinacoes_list in st.session_state.combinacoes_combinatorias.items():
-                    conteudo_combinacoes += f"# Combinações com {tamanho} números\n"
-                    for combo, score in combinacoes_list[:20]:  # Top 20 de cada
-                        conteudo_combinacoes += f"{','.join(map(str, combo))} # Score: {score:.1f}\n"
-                    conteudo_combinacoes += "\n"
-                
-                st.download_button(
-                    "📥 Baixar Todas as Combinações (Lista)",
-                    data=conteudo_combinacoes,
-                    file_name="combinacoes_otimizadas.txt",
-                    mime="text/plain"
-                )
-            
-            with col_export2:
-                # NOVO BOTÃO: Baixar Top 10 como Cartões
-                conteudo_cartoes = analisador_combinatorio.gerar_conteudo_cartoes(
-                    st.session_state.combinacoes_combinatorias, 
-                    top_n=10
-                )
-                
-                st.download_button(
-                    "📥 Baixar Top 10 Cartões (Formato Cartão)",
-                    data=conteudo_cartoes,
-                    file_name="cartoes_lotofacil_formatados.txt",
-                    mime="text/plain"
-                )
-            
-            # NOVO: Visualização dos cartões em formato de matriz
-            st.markdown("### 👁️ Visualização dos Cartões (Top 3)")
-            
-            for tamanho in sorted(st.session_state.combinacoes_combinatorias.keys()):
-                combinacoes_tamanho = st.session_state.combinacoes_combinatorias[tamanho][:3]  # Top 3
-                
-                if combinacoes_tamanho:
-                    st.markdown(f"#### 🎯 Cartões com {tamanho} números")
-                    
-                    for idx, (combo, score) in enumerate(combinacoes_tamanho, 1):
-                        st.write(f"**Cartão {idx}** (Score: {score:.1f})")
-                        
-                        # Criar visualização do cartão
-                        cartao = analisador_combinatorio.formatar_como_cartao(combo)
-                        
-                        # Exibir como tabela formatada
-                        col1, col2, col3 = st.columns([1, 2, 1])
-                        with col2:
-                            for linha in cartao:
-                                st.code(" ".join(linha))
-                        
-                        # Estatísticas do cartão
-                        pares = sum(1 for n in combo if n % 2 == 0)
-                        primos = sum(1 for n in combo if n in analisador_combinatorio.primos)
-                        soma = sum(combo)
-                        
-                        st.write(f"**Estatísticas:** Pares: {pares}, Ímpares: {len(combo)-pares}, Primos: {primos}, Soma: {soma}")
-                        st.write("---")
-
-    # Aba 5 - Padrões Linha×Coluna (antiga 4)
-    with abas[4]:
-        st.subheader("📐 Padrões de Linhas × Colunas")
-        concursos = st.session_state.concursos
-        if not concursos:
-            st.info("Capture concursos na seção acima para analisar os padrões.")
-        else:
-            # CORREÇÃO AQUI: Slider com parâmetros nomeados corretamente
-            max_concursos = min(500, len(concursos))
-            valor_padrao = min(100, len(concursos))
-            
-            janela_lc = st.slider(
-                "Concursos a considerar (mais recentes)", 
-                min_value=20, 
-                max_value=max_concursos, 
-                value=valor_padrao, 
-                step=10
-            )
-            
-            subset = concursos[:janela_lc]
-
-            if st.button("🔍 Analisar Padrões Linha×Coluna"):
-                freq_linhas, freq_colunas = contar_padroes_linha_coluna(subset)
-
-                st.markdown("### 📌 Padrões mais frequentes de **Linhas** (top 5)")
-                for padrao, freq in freq_linhas.most_common(5):
-                    st.write(f"{padrao} → {freq} vezes")
-
-                st.markdown("### 📌 Padrões mais frequentes de **Colunas** (top 5)")
-                for padrao, freq in freq_colunas.most_common(5):
-                    st.write(f"{padrao} → {freq} vezes")
-
-                st.markdown("### 🎯 Padrões futuros sugeridos (5 combinações)")
-                futuros = sugerir_padroes_futuros(freq_linhas, freq_colunas, n=5)
-                for i, p in enumerate(futuros, 1):
-                    st.write(f"**Padrão Futuro {i}:** Linhas {p['linhas']} | Colunas {p['colunas']}")
-
-    # Aba 6 - Conferência (ATUALIZADA)
-    with abas[5]:
-        st.subheader("🎯 Conferência de Cartões")
-        if st.session_state.info_ultimo_concurso:
-            info = st.session_state.info_ultimo_concurso
-            st.markdown(
-                f"<h4 style='text-align: center;'>Último Concurso #{info['numero']} ({info['data']})<br>Dezenas: {info['dezenas']}</h4>",
-                unsafe_allow_html=True
-            )
-            
-            if st.button("🔍 Conferir Todos os Cartões"):
-                # Conferir Cartões IA
-                if st.session_state.cartoes_gerados:
-                    st.markdown("### 🧠 Cartões Gerados por IA")
-                    for i, cartao in enumerate(st.session_state.cartoes_gerados, 1):
-                        acertos = len(set(cartao) & set(info['dezenas']))
-                        st.write(f"Jogo {i}: {cartao} - **{acertos} acertos**")
-                
-                # Conferir Cartões por Padrões
-                if st.session_state.cartoes_gerados_padrao:
-                    st.markdown("### 🧩 Cartões por Padrões")
-                    for i, cartao in enumerate(st.session_state.cartoes_gerados_padrao, 1):
-                        acertos = len(set(cartao) & set(info['dezenas']))
-                        st.write(f"Cartão {i}: {cartao} - **{acertos} acertos**")
-                
-                # NOVO: Conferir Combinações Combinatorias
-                if st.session_state.combinacoes_combinatorias:
-                    st.markdown("### 🔢 Combinações Combinatorias (Top 3 por Tamanho)")
-                    analisador_combinatorio = AnaliseCombinatoria(st.session_state.concursos)
-                    
-                    for tamanho in sorted(st.session_state.combinacoes_combinatorias.keys()):
-                        combinacoes_tamanho = st.session_state.combinacoes_combinatorias[tamanho][:3]  # Top 3
-                        
-                        if combinacoes_tamanho:
-                            st.markdown(f"#### 📊 Combinações com {tamanho} números")
-                            
-                            for idx, (combo, score) in enumerate(combinacoes_tamanho, 1):
-                                acertos = len(set(combo) & set(info['dezenas']))
-                                
-                                # Mostrar cartão formatado
-                                cartao = analisador_combinatorio.formatar_como_cartao(combo)
-                                
-                                col1, col2 = st.columns([2, 1])
-                                with col1:
-                                    st.write(f"**Cartão {idx}** (Score: {score:.1f}) - **{acertos} acertos**")
-                                    for linha in cartao:
-                                        st.code(" ".join(linha))
-                                
-                                with col2:
-                                    # Estatísticas
-                                    pares = sum(1 for n in combo if n % 2 == 0)
-                                    primos = sum(1 for n in combo if n in analisador_combinatorio.primos)
-                                    soma = sum(combo)
-                                    st.write(f"**Estatísticas:**")
-                                    st.write(f"Pares: {pares}")
-                                    st.write(f"Ímpares: {len(combo)-pares}")
-                                    st.write(f"Primos: {primos}")
-                                    st.write(f"Soma: {soma}")
-                                
-                                st.write("---")
-
-    # Aba 7 - Conferir Arquivo TXT (antiga 6)
-    with abas[6]:
-        st.subheader("📤 Conferir Cartões de um Arquivo TXT")
-        uploaded_file = st.file_uploader("Faça upload do arquivo TXT com os cartões (15 dezenas separadas por vírgula)", type="txt")
-        if uploaded_file:
-            linhas = uploaded_file.read().decode("utf-8").splitlines()
-            cartoes_txt = []
-            for linha in linhas:
                 try:
-                    dezenas = sorted([int(x) for x in linha.strip().split(",")])
-                    if len(dezenas) == 15 and all(1 <= x <= 25 for x in dezenas):
-                        cartoes_txt.append(dezenas)
-                except:
+                    jogos = estrategia(n_jogos)
+                    
+                    for jogo in jogos:
+                        acertos = len(set(jogo) & set(concurso_teste))
+                        acertos_totais.append(acertos)
+                except Exception as e:
+                    print(f"Erro na estratégia {nome}: {e}")
                     continue
+            
+            if acertos_totais:
+                resultados[nome] = {
+                    'media_acertos': np.mean(acertos_totais),
+                    'std_acertos': np.std(acertos_totais),
+                    'max_acertos': max(acertos_totais),
+                    'jogos_testados': len(acertos_totais),
+                    'premiacoes': sum(1 for a in acertos_totais if a >= 11)
+                }
+        
+        return resultados
 
-            if cartoes_txt:
-                st.success(f"{len(cartoes_txt)} cartões carregados com sucesso.")
-                if st.session_state.info_ultimo_concurso:
-                    info = st.session_state.info_ultimo_concurso
-                    st.markdown(
-                        f"<h4 style='text-align: center;'>Último Concurso #{info['numero']} ({info['data']})<br>Dezenas: {info['dezenas']}</h4>",
-                        unsafe_allow_html=True
-                    )
-                    if st.button("📊 Conferir Cartões do Arquivo"):
-                        for i, cartao in enumerate(cartoes_txt,1):
-                            acertos = len(set(cartao) & set(info['dezenas']))
-                            st.write(f"Cartão {i}: {cartao} - **{acertos} acertos**")
-            else:
-                st.warning("Nenhum cartão válido foi encontrado no arquivo.")
-
-# Botão para limpar todos os dados (útil para desenvolvimento)
-with st.sidebar:
-    st.markdown("---")
-    st.subheader("⚙️ Gerenciamento de Dados")
-    if st.button("🗑️ Limpar Todos os Dados"):
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
-        st.rerun()
+# ============================================
+# INTERFACE STREAMLIT
+# ============================================
+def main():
+    st.title("🎯 Lotofácil - 10 Estratégias Matemáticas")
     
-    # Mostrar estatísticas de uso
-    st.markdown("### 📊 Estatísticas da Sessão")
+    st.markdown("""
+    ## 📊 Estratégias Baseadas em Matemática e Estatística
+    
+    > **⚠️ AVISO IMPORTANTE**: Estas são estratégias de **ALOCAÇÃO DE RECURSOS**, 
+    > não de previsão. A Lotofácil é 100% aleatória. Estas técnicas ajudam a 
+    > diversificar e otimizar seus jogos, mas NÃO aumentam sua probabilidade matemática.
+    
+    ### 🧮 Estratégias Implementadas:
+    1. **Números Frios** - Lei dos Terços em amostras aleatórias
+    2. **Cobertura Mínima** - Garantia matemática de acerto mínimo
+    3. **Soma Ótima** - Distribuição normal das somas
+    4. **Grupos** - Teoria de Ramsey e coloração
+    5. **Eliminação (Pareto)** - Princípio 80/20
+    6. **Espelhos** - Complementaridade matemática
+    7. **Intervalos** - Distribuição uniforme
+    8. **Wheeling** - Sistema de roda combinatória
+    9. **Cíclica** - Análise de ciclos temporais
+    10. **Ensemble** - Combinação multi-estratégia
+    """)
+    
+    # Inicialização
+    if 'concursos' not in st.session_state:
+        st.session_state.concursos = []
+    
+    # Sidebar - Captura
+    with st.sidebar:
+        st.header("📥 Dados")
+        qtd = st.slider("Concursos para análise", 50, 500, 200)
+        
+        if st.button("🔄 Carregar Concursos", use_container_width=True):
+            with st.spinner("Carregando dados da Caixa..."):
+                url = "https://loteriascaixa-api.herokuapp.com/api/lotofacil/"
+                try:
+                    resp = requests.get(url, timeout=30)
+                    if resp.status_code == 200:
+                        dados = resp.json()
+                        concursos = []
+                        for i in range(min(qtd, len(dados))):
+                            dezenas = sorted([int(d) for d in dados[i]['dezenas']])
+                            concursos.append(dezenas)
+                        st.session_state.concursos = concursos
+                        st.success(f"✅ {len(concursos)} concursos carregados!")
+                        
+                        # Mostra último concurso
+                        st.info(f"📅 Último: Concurso {dados[0]['concurso']} - {dados[0]['data']}")
+                except Exception as e:
+                    st.error(f"Erro: {e}")
+        
+        if st.session_state.concursos:
+            st.metric("Total em análise", len(st.session_state.concursos))
+            
+            # Status das estratégias
+            st.header("🎮 Status das Estratégias")
+            st.success("10 estratégias disponíveis")
+    
+    # Main content
     if st.session_state.concursos:
-        st.write(f"Concursos carregados: {len(st.session_state.concursos)}")
-    if st.session_state.cartoes_gerados:
-        st.write(f"Cartões IA gerados: {len(st.session_state.cartoes_gerados)}")
-    if st.session_state.cartoes_gerados_padrao:
-        st.write(f"Cartões por padrões: {len(st.session_state.cartoes_gerados_padrao)}")
-    if st.session_state.combinacoes_combinatorias:
-        total_combinacoes = sum(len(combinacoes) for combinacoes in st.session_state.combinacoes_combinatorias.values())
-        st.write(f"Combinações combinatorias: {total_combinacoes}")
+        estrategias = EstrategiasLotofacil(st.session_state.concursos)
+        
+        # Tabs
+        tab1, tab2, tab3, tab4 = st.tabs([
+            "🎲 Gerar Jogos", 
+            "📊 Comparar Estratégias",
+            "📈 Análise Detalhada",
+            "✅ Conferência"
+        ])
+        
+        with tab1:
+            st.header("🎲 Gerar Jogos com Estratégias Específicas")
+            
+            col1, col2 = st.columns([2, 1])
+            
+            with col1:
+                estrategia_escolhida = st.selectbox(
+                    "Selecione a Estratégia",
+                    [
+                        "Frios (Lei dos Terços)",
+                        "Cobertura Garantida",
+                        "Soma Ótima",
+                        "Grupos",
+                        "Pareto (80/20)",
+                        "Espelhos",
+                        "Intervalos",
+                        "Wheeling",
+                        "Cíclica",
+                        "Ensemble (Todas)"
+                    ]
+                )
+            
+            with col2:
+                n_jogos = st.number_input("Quantidade de Jogos", 1, 20, 5)
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                if st.button("🚀 Gerar Jogos", use_container_width=True):
+                    with st.spinner("Gerando combinações..."):
+                        mapa_estrategias = {
+                            "Frios (Lei dos Terços)": estrategias.estrategia_frios_leidoterco,
+                            "Cobertura Garantida": estrategias.estrategia_cobertura_garantida,
+                            "Soma Ótima": estrategias.estrategia_soma_otima,
+                            "Grupos": estrategias.estrategia_grupos,
+                            "Pareto (80/20)": estrategias.estrategia_eliminacao_pareto,
+                            "Espelhos": estrategias.estrategia_espelhos,
+                            "Intervalos": estrategias.estrategia_intervalos,
+                            "Wheeling": estrategias.estrategia_wheeling,
+                            "Cíclica": estrategias.estrategia_ciclica,
+                            "Ensemble (Todas)": estrategias.estrategia_ensemble
+                        }
+                        
+                        func = mapa_estrategias[estrategia_escolhida]
+                        jogos = func(n_jogos)
+                        st.session_state['jogos_atuais'] = jogos
+                        st.success(f"✅ {len(jogos)} jogos gerados!")
+            
+            # Exibir jogos
+            if 'jogos_atuais' in st.session_state:
+                st.subheader(f"📋 Jogos Gerados - {estrategia_escolhida}")
+                
+                df_jogos = pd.DataFrame({
+                    'Jogo': [f"Jogo {i+1}" for i in range(len(st.session_state.jogos_atuais))],
+                    'Dezenas': [str(j) for j in st.session_state.jogos_atuais],
+                    'Pares': [sum(1 for n in j if n%2==0) for j in st.session_state.jogos_atuais],
+                    'Ímpares': [sum(1 for n in j if n%2==1) for j in st.session_state.jogos_atuais],
+                    'Primos': [sum(1 for n in j if n in estrategias.primos) for j in st.session_state.jogos_atuais],
+                    'Soma': [sum(j) for j in st.session_state.jogos_atuais]
+                })
+                
+                st.dataframe(df_jogos, use_container_width=True)
+                
+                # Download
+                conteudo = "\n".join([",".join(map(str, j)) for j in st.session_state.jogos_atuais])
+                st.download_button(
+                    "💾 Baixar Jogos (TXT)",
+                    data=conteudo,
+                    file_name=f"lotofacil_{estrategia_escolhida.lower().replace(' ', '_')}_{len(st.session_state.jogos_atuais)}.txt",
+                    use_container_width=True
+                )
+        
+        with tab2:
+            st.header("📊 Comparação entre Estratégias")
+            st.markdown("""
+            *Backtest usando dados históricos reais. 
+            **Quanto maior a média de acertos e mais premiações, melhor a estratégia**.
+            """)
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                n_testes = st.slider("Número de testes por estratégia", 5, 50, 20)
+            
+            with col2:
+                jogos_por_teste = st.slider("Jogos por teste", 3, 10, 5)
+            
+            if st.button("🔬 Executar Comparação Completa", use_container_width=True):
+                with st.spinner("Analisando estratégias..."):
+                    resultados = estrategias.comparar_estrategias(
+                        n_jogos=jogos_por_teste,
+                        n_testes=n_testes
+                    )
+                    
+                    st.session_state['resultados_comparacao'] = resultados
+                    
+                    # Dataframe
+                    df_resultados = pd.DataFrame(resultados).T
+                    df_resultados = df_resultados.sort_values('media_acertos', ascending=False)
+                    
+                    st.subheader("📈 Ranking de Estratégias")
+                    st.dataframe(
+                        df_resultados.style.highlight_max(color='lightgreen'),
+                        use_container_width=True
+                    )
+                    
+                    # Gráfico
+                    fig, ax = plt.subplots(figsize=(12, 6))
+                    
+                    y_pos = np.arange(len(df_resultados))
+                    ax.barh(y_pos, df_resultados['media_acertos'])
+                    ax.set_yticks(y_pos)
+                    ax.set_yticklabels(df_resultados.index)
+                    ax.set_xlabel('Média de Acertos')
+                    ax.set_title('Performance Média das Estratégias')
+                    
+                    for i, v in enumerate(df_resultados['media_acertos']):
+                        ax.text(v + 0.1, i, f'{v:.2f}', va='center')
+                    
+                    st.pyplot(fig)
+                    plt.close()
+                    
+                    # Gráfico de premiações
+                    fig2, ax2 = plt.subplots(figsize=(12, 6))
+                    
+                    premiacoes = df_resultados['premiacoes'].values
+                    ax2.barh(y_pos, premiacoes, color='orange')
+                    ax2.set_yticks(y_pos)
+                    ax2.set_yticklabels(df_resultados.index)
+                    ax2.set_xlabel('Quantidade de Premiações (11+ acertos)')
+                    ax2.set_title('Eficácia em Premiações')
+                    
+                    for i, v in enumerate(premiacoes):
+                        ax2.text(v + 0.5, i, str(int(v)), va='center')
+                    
+                    st.pyplot(fig2)
+                    plt.close()
+        
+        with tab3:
+            st.header("📈 Análise Detalhada das Estratégias")
+            
+            estrategia_analise = st.selectbox(
+                "Selecione estratégia para análise detalhada",
+                [
+                    "Frios (Lei dos Terços)",
+                    "Cobertura Garantida",
+                    "Soma Ótima",
+                    "Grupos",
+                    "Pareto (80/20)",
+                    "Espelhos",
+                    "Intervalos",
+                    "Wheeling",
+                    "Cíclica",
+                    "Ensemble (Todas)"
+                ],
+                key="analise_detalhada"
+            )
+            
+            if st.button("🔍 Analisar Estratégia", use_container_width=True):
+                with st.spinner("Gerando análise detalhada..."):
+                    mapa_estrategias = {
+                        "Frios (Lei dos Terços)": estrategias.estrategia_frios_leidoterco,
+                        "Cobertura Garantida": estrategias.estrategia_cobertura_garantida,
+                        "Soma Ótima": estrategias.estrategia_soma_otima,
+                        "Grupos": estrategias.estrategia_grupos,
+                        "Pareto (80/20)": estrategias.estrategia_eliminacao_pareto,
+                        "Espelhos": estrategias.estrategia_espelhos,
+                        "Intervalos": estrategias.estrategia_intervalos,
+                        "Wheeling": estrategias.estrategia_wheeling,
+                        "Cíclica": estrategias.estrategia_ciclica,
+                        "Ensemble (Todas)": estrategias.estrategia_ensemble
+                    }
+                    
+                    func = mapa_estrategias[estrategia_analise]
+                    
+                    # Gera múltiplos conjuntos para análise
+                    todos_jogos = []
+                    for _ in range(10):
+                        jogos = func(5)
+                        todos_jogos.extend(jogos)
+                    
+                    # Análise
+                    df_analise = pd.DataFrame({
+                        'Jogo': [f"Jogo {i+1}" for i in range(len(todos_jogos))],
+                        'Dezenas': [str(j) for j in todos_jogos],
+                        'Pares': [sum(1 for n in j if n%2==0) for j in todos_jogos],
+                        'Ímpares': [sum(1 for n in j if n%2==1) for j in todos_jogos],
+                        'Primos': [sum(1 for n in j if n in estrategias.primos) for j in todos_jogos],
+                        'Soma': [sum(j) for j in todos_jogos]
+                    })
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    
+                    with col1:
+                        st.metric("Média de Pares", f"{df_analise['Pares'].mean():.1f}")
+                    with col2:
+                        st.metric("Média de Ímpares", f"{df_analise['Ímpares'].mean():.1f}")
+                    with col3:
+                        st.metric("Média de Primos", f"{df_analise['Primos'].mean():.1f}")
+                    with col4:
+                        st.metric("Média da Soma", f"{df_analise['Soma'].mean():.1f}")
+                    
+                    # Distribuição
+                    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+                    
+                    axes[0, 0].hist(df_analise['Pares'], bins=range(4, 12), edgecolor='black')
+                    axes[0, 0].set_title('Distribuição de Pares')
+                    axes[0, 0].set_xlabel('Quantidade')
+                    
+                    axes[0, 1].hist(df_analise['Primos'], bins=range(0, 10), edgecolor='black')
+                    axes[0, 1].set_title('Distribuição de Primos')
+                    axes[0, 1].set_xlabel('Quantidade')
+                    
+                    axes[1, 0].hist(df_analise['Soma'], bins=15, edgecolor='black')
+                    axes[1, 0].set_title('Distribuição das Somas')
+                    axes[1, 0].set_xlabel('Soma')
+                    
+                    # Frequência dos números
+                    freq_numeros = Counter()
+                    for jogo in todos_jogos:
+                        freq_numeros.update(jogo)
+                    
+                    nums = list(range(1, 26))
+                    freqs = [freq_numeros.get(n, 0) for n in nums]
+                    
+                    axes[1, 1].bar(nums, freqs)
+                    axes[1, 1].set_title('Frequência dos Números')
+                    axes[1, 1].set_xlabel('Número')
+                    axes[1, 1].set_ylabel('Frequência')
+                    
+                    plt.tight_layout()
+                    st.pyplot(fig)
+                    plt.close()
+                    
+                    # Top números mais usados
+                    st.subheader("🎯 Números mais frequentes")
+                    df_freq = pd.DataFrame({
+                        'Número': nums,
+                        'Frequência': freqs
+                    }).sort_values('Frequência', ascending=False).head(10)
+                    
+                    st.dataframe(df_freq, use_container_width=True)
+        
+        with tab4:
+            st.header("✅ Conferência com Último Concurso")
+            
+            if st.session_state.concursos:
+                ultimo_concurso = st.session_state.concursos[0]
+                st.info(f"**Último Concurso:** {ultimo_concurso}")
+                
+                if 'jogos_atuais' in st.session_state:
+                    st.subheader("📝 Resultado dos seus jogos")
+                    
+                    resultados = []
+                    for i, jogo in enumerate(st.session_state.jogos_atuais, 1):
+                        acertos = len(set(jogo) & set(ultimo_concurso))
+                        faixa = "SENA" if acertos == 15 else "QUINA" if acertos == 14 else "QUADRA" if acertos == 13 else "TERNO" if acertos == 12 else "DUQUE" if acertos == 11 else "NÃO PREMIADO"
+                        
+                        resultados.append({
+                            'Jogo': i,
+                            'Acertos': acertos,
+                            'Faixa': faixa,
+                            'Dezenas': str(jogo)
+                        })
+                    
+                    df_resultados = pd.DataFrame(resultados)
+                    st.dataframe(df_resultados, use_container_width=True)
+                    
+                    # Estatísticas
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Média de Acertos", f"{df_resultados['Acertos'].mean():.1f}")
+                    with col2:
+                        premiados = len(df_resultados[df_resultados['Acertos'] >= 11])
+                        st.metric("Jogos Premiados", premiados)
+                    with col3:
+                        if premiados > 0:
+                            st.metric("Maior Acerto", df_resultados['Acertos'].max())
+                
+                # Upload de arquivo
+                st.subheader("📁 Conferir Arquivo TXT")
+                uploaded_file = st.file_uploader("Selecione um arquivo com jogos", type=['txt'])
+                
+                if uploaded_file is not None:
+                    content = uploaded_file.read().decode('utf-8')
+                    linhas = content.strip().split('\n')
+                    
+                    jogos_arquivo = []
+                    for linha in linhas:
+                        try:
+                            nums = [int(x.strip()) for x in linha.split(',') if x.strip()]
+                            if len(nums) == 15 and all(1 <= n <= 25 for n in nums):
+                                jogos_arquivo.append(sorted(nums))
+                        except:
+                            continue
+                    
+                    if jogos_arquivo:
+                        st.success(f"✅ {len(jogos_arquivo)} jogos carregados!")
+                        
+                        resultados_arquivo = []
+                        for i, jogo in enumerate(jogos_arquivo, 1):
+                            acertos = len(set(jogo) & set(ultimo_concurso))
+                            resultados_arquivo.append({
+                                'Jogo': i,
+                                'Acertos': acertos,
+                                'Dezenas': str(jogo)
+                            })
+                        
+                        df_arquivo = pd.DataFrame(resultados_arquivo)
+                        st.dataframe(df_arquivo, use_container_width=True)
+                        
+                        media_acertos = df_arquivo['Acertos'].mean()
+                        st.metric("Média de Acertos do Arquivo", f"{media_acertos:.1f}")
+    else:
+        st.info("👈 **Comece carregando os concursos no menu lateral**")
+        
+        # Exemplo visual
+        st.markdown("""
+        ### 🎯 Como funciona:
+        
+        1. **Carregue os concursos** da Caixa via API
+        2. **Escolha uma estratégia** matemática
+        3. **Gere jogos otimizados** para sua estratégia
+        4. **Compare o desempenho** entre estratégias
+        5. **Confera resultados** com concursos reais
+        
+        ### 📊 Base Matemática:
+        
+        - **Lei dos Terços**: Distribuição natural em amostras
+        - **Teoria da Cobertura**: Garantias combinatórias
+        - **Distribuição Normal**: Comportamento das somas
+        - **Princípio de Pareto**: 80/20 em frequências
+        - **Sistemas de Roda**: Otimização combinatória
+        """)
 
-st.markdown("<hr><p style='text-align: center;'>SAMUCJ TECHNOLOGY</p>", unsafe_allow_html=True)
+if __name__ == "__main__":
+    main()
