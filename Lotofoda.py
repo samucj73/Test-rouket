@@ -28,7 +28,7 @@ class EstrategiasLotofacil:
         Baseado na Lei dos Terços: em qualquer amostra aleatória,
         1/3 dos números ficam abaixo da média esperada
         """
-        if len(self.concursos) < 50:
+        if len(self.concursos) < 15:  # Reduzido de 50 para 15
             return self.estrategia_aleatoria_controlada(n_jogos)
         
         # Calcula frequência esperada (15 números por concurso)
@@ -196,7 +196,7 @@ class EstrategiasLotofacil:
         """
         Princípio de Pareto: foca nos números mais frequentes
         """
-        if len(self.concursos) < 20:
+        if len(self.concursos) < 15:  # Reduzido de 20 para 15
             return self.estrategia_aleatoria_controlada(n_jogos)
         
         # Calcula frequência
@@ -315,7 +315,7 @@ class EstrategiasLotofacil:
         Sistema de roda simplificado para 18 números
         """
         # Seleciona 18 números base
-        if len(self.concursos) > 20:
+        if len(self.concursos) > 15:  # Reduzido de 20 para 15
             freq = Counter()
             for concurso in self.concursos[:50]:
                 freq.update(concurso)
@@ -523,7 +523,8 @@ def main():
     # Sidebar - Captura
     with st.sidebar:
         st.header("📥 Dados")
-        qtd = st.slider("Concursos", 50, 500, 100)
+        # ALTERADO: mínimo 15, máximo 500, valor padrão 100
+        qtd = st.slider("Quantidade de concursos", min_value=15, max_value=500, value=100, step=5)
         
         if st.button("🔄 Carregar Concursos", use_container_width=True):
             with st.spinner("Carregando..."):
@@ -537,34 +538,39 @@ def main():
                             dezenas = sorted([int(d) for d in dados[i]['dezenas']])
                             concursos.append(dezenas)
                         st.session_state.concursos = concursos
-                        st.success(f"✅ {len(concursos)} concursos")
+                        st.success(f"✅ {len(concursos)} concursos carregados!")
                         
                         if dados:
-                            st.info(f"📅 Último: #{dados[0]['concurso']}")
+                            st.info(f"📅 Último: Concurso #{dados[0]['concurso']} - {dados[0]['data']}")
                 except Exception as e:
-                    st.error(f"Erro: {e}")
+                    st.error(f"Erro ao carregar: {e}")
         
         if st.session_state.concursos:
-            st.metric("Total", len(st.session_state.concursos))
+            st.metric("Total em análise", len(st.session_state.concursos))
+            
+            # Mostra período dos concursos
+            if len(st.session_state.concursos) > 1:
+                st.caption(f"📆 Último: {st.session_state.concursos[0]}")
+                st.caption(f"📆 Primeiro: {st.session_state.concursos[-1]}")
     
     # Main content
-    if st.session_state.concursos:
+    if st.session_state.concursos and len(st.session_state.concursos) >= 15:
         estrategias = EstrategiasLotofacil(st.session_state.concursos)
         
         tab1, tab2, tab3 = st.tabs([
             "🎲 Gerar Jogos", 
-            "📊 Comparar",
-            "✅ Conferir"
+            "📊 Comparar Estratégias",
+            "✅ Conferir Resultados"
         ])
         
         with tab1:
-            st.header("🎲 Gerar Jogos")
+            st.header("🎲 Gerar Jogos com Estratégias")
             
             col1, col2 = st.columns([2, 1])
             
             with col1:
                 estrategia = st.selectbox(
-                    "Estratégia",
+                    "Selecione a Estratégia",
                     [
                         "Frios (Lei dos Terços)",
                         "Cobertura",
@@ -575,15 +581,15 @@ def main():
                         "Intervalos",
                         "Wheeling",
                         "Cíclica",
-                        "Ensemble"
+                        "Ensemble (Todas)"
                     ]
                 )
             
             with col2:
-                n_jogos = st.number_input("Quantidade", 1, 20, 5)
+                n_jogos = st.number_input("Quantidade de Jogos", min_value=1, max_value=50, value=5)
             
-            if st.button("🚀 Gerar", use_container_width=True):
-                with st.spinner("Gerando..."):
+            if st.button("🚀 Gerar Jogos", use_container_width=True):
+                with st.spinner("Gerando combinações..."):
                     mapa = {
                         "Frios (Lei dos Terços)": estrategias.estrategia_frios_leidoterco,
                         "Cobertura": estrategias.estrategia_cobertura_garantida,
@@ -594,70 +600,75 @@ def main():
                         "Intervalos": estrategias.estrategia_intervalos,
                         "Wheeling": estrategias.estrategia_wheeling,
                         "Cíclica": estrategias.estrategia_ciclica,
-                        "Ensemble": estrategias.estrategia_ensemble
+                        "Ensemble (Todas)": estrategias.estrategia_ensemble
                     }
                     
                     jogos = mapa[estrategia](n_jogos)
                     st.session_state['jogos_atuais'] = jogos
-                    st.success(f"✅ {len(jogos)} jogos")
+                    st.success(f"✅ {len(jogos)} jogos gerados com sucesso!")
             
             if 'jogos_atuais' in st.session_state:
-                st.subheader(f"📋 Jogos - {estrategia}")
+                st.subheader(f"📋 Jogos Gerados - {estrategia}")
                 
                 for i, jogo in enumerate(st.session_state.jogos_atuais[:10], 1):
                     pares = sum(1 for n in jogo if n%2==0)
                     primos = sum(1 for n in jogo if n in estrategias.primos)
                     soma = sum(jogo)
                     
-                    col1, col2, col3 = st.columns([3, 1, 1])
-                    with col1:
-                        st.write(f"**Jogo {i}:** {jogo}")
-                    with col2:
-                        st.write(f"🎯 {pares}P/{15-pares}I")
-                    with col3:
-                        st.write(f"📊 {soma}")
+                    with st.container():
+                        col1, col2, col3 = st.columns([3, 1, 1])
+                        with col1:
+                            st.write(f"**Jogo {i:2d}:** {jogo}")
+                        with col2:
+                            st.write(f"🎯 {pares}P/{15-pares}I")
+                        with col3:
+                            st.write(f"📊 {soma}")
+                
+                if len(st.session_state.jogos_atuais) > 10:
+                    st.caption(f"... e mais {len(st.session_state.jogos_atuais) - 10} jogos")
                 
                 # Download
                 conteudo = "\n".join([",".join(map(str, j)) for j in st.session_state.jogos_atuais])
                 st.download_button(
-                    "💾 Baixar TXT",
+                    "💾 Baixar Jogos (TXT)",
                     data=conteudo,
-                    file_name=f"lotofacil_{estrategia.lower().replace(' ', '_')}.txt",
+                    file_name=f"lotofacil_{estrategia.lower().replace(' ', '_')}_{len(st.session_state.jogos_atuais)}jogos.txt",
                     use_container_width=True
                 )
         
         with tab2:
             st.header("📊 Comparação entre Estratégias")
+            st.markdown("*Teste o desempenho de cada estratégia no último concurso*")
             
             col1, col2 = st.columns(2)
             with col1:
-                jogos_teste = st.slider("Jogos por estratégia", 3, 10, 5)
+                jogos_teste = st.slider("Jogos por estratégia", min_value=3, max_value=20, value=5)
             
-            if st.button("🔬 Comparar", use_container_width=True):
-                with st.spinner("Analisando..."):
+            if st.button("🔬 Comparar Estratégias", use_container_width=True):
+                with st.spinner("Analisando estratégias..."):
                     resultados = estrategias.comparar_estrategias(jogos_teste)
                     
                     if resultados:
                         df = pd.DataFrame(resultados).T
                         df = df.sort_values('media_acertos', ascending=False)
                         
-                        st.subheader("🏆 Ranking")
+                        st.subheader("🏆 Ranking de Performance")
                         
                         # Formatação
                         df_display = df.copy()
                         df_display['media_acertos'] = df_display['media_acertos'].round(2)
+                        df_display['premiacoes'] = df_display['premiacoes'].astype(int)
                         
                         st.dataframe(df_display, use_container_width=True)
                         
-                        # Gráfico simples
+                        # Gráfico
                         fig, ax = plt.subplots(figsize=(10, 6))
-                        
                         y_pos = range(len(df))
                         ax.barh(y_pos, df['media_acertos'])
                         ax.set_yticks(y_pos)
                         ax.set_yticklabels(df.index)
                         ax.set_xlabel('Média de Acertos')
-                        ax.set_title('Performance das Estratégias')
+                        ax.set_title('Performance das Estratégias no Último Concurso')
                         
                         for i, v in enumerate(df['media_acertos']):
                             ax.text(v + 0.1, i, f'{v:.1f}', va='center')
@@ -665,22 +676,34 @@ def main():
                         st.pyplot(fig)
                         plt.close()
                     else:
-                        st.warning("Não foi possível comparar")
+                        st.warning("Não foi possível comparar as estratégias. Tente novamente.")
         
         with tab3:
-            st.header("✅ Conferência")
+            st.header("✅ Conferência de Resultados")
             
             if st.session_state.concursos:
                 ultimo = st.session_state.concursos[0]
                 st.info(f"**Último Concurso:** {ultimo}")
                 
                 if 'jogos_atuais' in st.session_state:
-                    st.subheader("📝 Resultados")
+                    st.subheader("📝 Resultados dos Seus Jogos")
                     
                     resultados = []
                     for i, jogo in enumerate(st.session_state.jogos_atuais, 1):
                         acertos = len(set(jogo) & set(ultimo))
-                        status = "🏆" if acertos >= 13 else "🎯" if acertos >= 11 else "⚪"
+                        
+                        if acertos >= 15:
+                            status = "🏆 SENA"
+                        elif acertos >= 14:
+                            status = "💰 QUINA"
+                        elif acertos >= 13:
+                            status = "🎯 QUADRA"
+                        elif acertos >= 12:
+                            status = "✨ TERNO"
+                        elif acertos >= 11:
+                            status = "⭐ DUQUE"
+                        else:
+                            status = "⚪ SEM PREMIAÇÃO"
                         
                         resultados.append({
                             'Jogo': i,
@@ -693,19 +716,21 @@ def main():
                     st.dataframe(df_res, use_container_width=True)
                     
                     # Estatísticas
-                    col1, col2, col3 = st.columns(3)
+                    col1, col2, col3, col4 = st.columns(4)
                     with col1:
-                        st.metric("Média", f"{df_res['Acertos'].mean():.1f}")
+                        st.metric("Média de Acertos", f"{df_res['Acertos'].mean():.1f}")
                     with col2:
                         premiados = len(df_res[df_res['Acertos'] >= 11])
-                        st.metric("Premiados", premiados)
+                        st.metric("Jogos Premiados", premiados)
                     with col3:
                         if premiados > 0:
-                            st.metric("Melhor", df_res['Acertos'].max())
+                            st.metric("Maior Acerto", df_res['Acertos'].max())
+                    with col4:
+                        st.metric("Total de Jogos", len(df_res))
                 
                 # Upload arquivo
-                st.subheader("📁 Conferir Arquivo")
-                arquivo = st.file_uploader("Upload TXT", type=['txt'])
+                st.subheader("📁 Conferir Arquivo TXT")
+                arquivo = st.file_uploader("Upload de arquivo com jogos", type=['txt'])
                 
                 if arquivo:
                     content = arquivo.read().decode('utf-8')
@@ -715,42 +740,49 @@ def main():
                     for linha in linhas:
                         try:
                             nums = [int(x.strip()) for x in linha.split(',') if x.strip()]
-                            if len(nums) == 15:
+                            if len(nums) == 15 and all(1 <= n <= 25 for n in nums):
                                 jogos_file.append(sorted(nums))
                         except:
                             continue
                     
                     if jogos_file:
-                        st.success(f"✅ {len(jogos_file)} jogos")
+                        st.success(f"✅ {len(jogos_file)} jogos válidos carregados!")
                         
                         res_file = []
                         for i, jogo in enumerate(jogos_file[:20], 1):
                             acertos = len(set(jogo) & set(ultimo))
-                            res_file.append({'Jogo': i, 'Acertos': acertos})
+                            res_file.append({'Jogo': i, 'Acertos': acertos, 'Dezenas': str(jogo)})
                         
                         df_file = pd.DataFrame(res_file)
                         st.dataframe(df_file, use_container_width=True)
                         
                         if len(jogos_file) > 20:
                             st.info(f"... e mais {len(jogos_file) - 20} jogos")
+                        
+                        media_file = np.mean([r['Acertos'] for r in res_file])
+                        st.metric("Média de Acertos do Arquivo", f"{media_file:.1f}")
     else:
-        st.info("👈 **Carregue os concursos no menu lateral**")
+        if st.session_state.concursos and len(st.session_state.concursos) < 15:
+            st.warning(f"⚠️ Você tem apenas {len(st.session_state.concursos)} concursos carregados. Carregue pelo menos 15 concursos para usar todas as estratégias!")
+            st.info("Ajuste o slider para no mínimo 15 e clique em 'Carregar Concursos'")
+        else:
+            st.info("👈 **Comece carregando os concursos no menu lateral**")
+            st.info("Mínimo necessário: **15 concursos**")
         
         st.markdown("""
-        ### 🎯 Como usar:
+        ### 🎯 Como usar o sistema:
         
-        1. **Carregue os concursos** (menu lateral)
-        2. **Escolha uma estratégia** matemática
-        3. **Gere seus jogos** otimizados
-        4. **Compare estratégias** diferentes
-        5. **Confira resultados** com concursos reais
+        1. **Ajuste o slider** no menu lateral para no mínimo 15 concursos
+        2. **Clique em "Carregar Concursos"** para obter os dados da Caixa
+        3. **Escolha uma estratégia** matemática para gerar seus jogos
+        4. **Compare o desempenho** entre diferentes estratégias
+        5. **Confira seus resultados** com o último concurso
         
-        ### 📈 Dicas:
+        ### 📈 Por que mínimo 15 concursos?
         
-        - **Ensemble** combina todas estratégias
-        - **Pareto** foca nos números mais frequentes
-        - **Espelhos** aposta nos números atrasados
-        - **Soma Ótima** busca equilíbrio estatístico
+        - Necessário para análise estatística mínima
+        - Garante que as estratégias tenham dados suficientes
+        - Evita overfitting em amostras muito pequenas
         """)
 
 if __name__ == "__main__":
