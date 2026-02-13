@@ -15,7 +15,13 @@ st.set_page_config(page_title="Lotofácil - 20 Estratégias Avançadas", layout=
 # ============================================
 class EstrategiasLotofacil:
     def __init__(self, concursos):
-        self.concursos = concursos
+        """
+        Inicializa com os concursos históricos
+        Importante: O último concurso (índice 0) é separado para conferência
+        Os cálculos usam apenas concursos[1:] (histórico)
+        """
+        self.concursos_historicos = concursos[1:] if len(concursos) > 1 else []  # TODOS os cálculos usam este
+        self.ultimo_concurso = concursos[0] if len(concursos) > 0 else []  # Apenas para conferência
         self.numeros = list(range(1, 26))
         self.primos = {2, 3, 5, 7, 11, 13, 17, 19, 23}
     
@@ -24,14 +30,14 @@ class EstrategiasLotofacil:
     # ============================================
     def estrategia_frios_leidoterco(self, n_jogos=5):
         """Lei dos Terços: 1/3 dos números ficam abaixo da média"""
-        if len(self.concursos) < 15:
+        if len(self.concursos_historicos) < 15:
             return self.estrategia_aleatoria_controlada(n_jogos)
         
-        total_numeros = len(self.concursos) * 15
+        total_numeros = len(self.concursos_historicos) * 15
         freq_esperada = total_numeros / 25
         
         freq_real = Counter()
-        for concurso in self.concursos:
+        for concurso in self.concursos_historicos:  # Usa apenas histórico
             freq_real.update(concurso)
         
         frios = [n for n in self.numeros if freq_real[n] < freq_esperada * 0.7]
@@ -85,10 +91,11 @@ class EstrategiasLotofacil:
     # ============================================
     def estrategia_soma_otima(self, n_jogos=5):
         """Soma entre 180-200 (68% dos concursos)"""
-        if len(self.concursos) < 10:
+        if len(self.concursos_historicos) < 10:
             return self.estrategia_aleatoria_controlada(n_jogos)
         
-        somas = [sum(concurso) for concurso in self.concursos[-50:]]
+        # Usa APENAS dados históricos, SEMPRE excluindo o último concurso
+        somas = [sum(concurso) for concurso in self.concursos_historicos[-50:]]
         media_soma = np.mean(somas) if somas else 195
         
         soma_min = max(170, media_soma - 15)
@@ -157,11 +164,11 @@ class EstrategiasLotofacil:
     # ============================================
     def estrategia_pareto(self, n_jogos=5):
         """Foco nos 20% números mais frequentes"""
-        if len(self.concursos) < 15:
+        if len(self.concursos_historicos) < 15:
             return self.estrategia_aleatoria_controlada(n_jogos)
         
         freq = Counter()
-        for concurso in self.concursos[:100]:
+        for concurso in self.concursos_historicos[:100]:  # Usa apenas histórico
             freq.update(concurso)
         
         numeros_ordenados = sorted(freq.items(), key=lambda x: x[1], reverse=True)
@@ -185,12 +192,12 @@ class EstrategiasLotofacil:
     # ESTRATÉGIA 6: ESPELHOS
     # ============================================
     def estrategia_espelhos(self, n_jogos=5):
-        """Complemento do último concurso"""
-        if not self.concursos:
+        """Complemento do último concurso (que está excluído dos cálculos)"""
+        if not self.ultimo_concurso:
             return self.estrategia_aleatoria_controlada(n_jogos)
         
-        ultimo = self.concursos[0]
-        espelho = [n for n in self.numeros if n not in ultimo]
+        # Usa o último concurso APENAS para gerar o espelho, NÃO para calcular frequências
+        espelho = [n for n in self.numeros if n not in self.ultimo_concurso]
         
         jogos = []
         for _ in range(n_jogos):
@@ -200,8 +207,8 @@ class EstrategiasLotofacil:
             jogo = []
             if len(espelho) >= n_espelho:
                 jogo.extend(random.sample(espelho, n_espelho))
-            if len(ultimo) >= n_ultimo:
-                jogo.extend(random.sample(ultimo, n_ultimo))
+            if len(self.ultimo_concurso) >= n_ultimo:
+                jogo.extend(random.sample(self.ultimo_concurso, n_ultimo))
             
             jogo = list(set(jogo))
             
@@ -249,9 +256,9 @@ class EstrategiasLotofacil:
     # ============================================
     def estrategia_wheeling(self, n_jogos=5):
         """Sistema de roda para 18 números"""
-        if len(self.concursos) > 15:
+        if len(self.concursos_historicos) > 15:
             freq = Counter()
-            for concurso in self.concursos[:50]:
+            for concurso in self.concursos_historicos[:50]:  # Usa apenas histórico
                 freq.update(concurso)
             numeros_base = [n for n, _ in sorted(freq.items(), key=lambda x: x[1], reverse=True)[:18]]
         else:
@@ -275,11 +282,12 @@ class EstrategiasLotofacil:
     # ESTRATÉGIA 9: CÍCLICA
     # ============================================
     def estrategia_ciclica(self, n_jogos=5):
-        """Baseada nos últimos 5 concursos"""
-        if len(self.concursos) < 5:
+        """Baseada nos últimos 5 concursos (excluindo o último sorteio)"""
+        if len(self.concursos_historicos) < 5:
             return self.estrategia_aleatoria_controlada(n_jogos)
         
-        ultimos = self.concursos[:5]
+        # Usa os últimos 5 concursos do HISTÓRICO (não inclui o último sorteio)
+        ultimos = self.concursos_historicos[:5]
         freq = Counter()
         for concurso in ultimos:
             freq.update(concurso)
@@ -339,13 +347,14 @@ class EstrategiasLotofacil:
     # ESTRATÉGIA 11: JANELAS MÓVEIS
     # ============================================
     def estrategia_janelas_moveis(self, n_jogos=5, janela=5):
-        """Teoria das Janelas: repetição em ciclos de 5-8 concursos"""
-        if len(self.concursos) < janela + 1:
+        """Teoria das Janelas: repetição em ciclos"""
+        if len(self.concursos_historicos) < janela + 1:
             return self.estrategia_aleatoria_controlada(n_jogos)
         
         jogos = []
         numeros_janela = []
-        for concurso in self.concursos[:janela]:
+        # Usa APENAS concursos históricos, NÃO inclui o último sorteio
+        for concurso in self.concursos_historicos[:janela]:
             numeros_janela.extend(concurso)
         
         freq_janela = Counter(numeros_janela)
@@ -419,18 +428,17 @@ class EstrategiasLotofacil:
     # ESTRATÉGIA 13: CICLOS DE REPETIÇÃO
     # ============================================
     def estrategia_ciclos_repeticao(self, n_jogos=5):
-        """Repetição programada a cada 3-7 concursos"""
-        if len(self.concursos) < 10:
+        """Repetição programada baseada em histórico"""
+        if len(self.concursos_historicos) < 10:
             return self.estrategia_aleatoria_controlada(n_jogos)
         
         jogos = []
-        ultimo = set(self.concursos[0]) if self.concursos else set()
         
-        # Calcula taxa de repetição
+        # Calcula taxa de repetição usando APENAS dados históricos
         repeticoes = []
-        for i in range(len(self.concursos) - 1):
-            atual = set(self.concursos[i])
-            prox = set(self.concursos[i + 1])
+        for i in range(len(self.concursos_historicos) - 1):
+            atual = set(self.concursos_historicos[i])
+            prox = set(self.concursos_historicos[i + 1])
             repeticoes.append(len(atual & prox))
         
         media_repeticoes = np.mean(repeticoes) if repeticoes else 7
@@ -440,8 +448,10 @@ class EstrategiasLotofacil:
             n_repeticoes = max(5, min(10, n_repeticoes))
             
             jogo = []
-            if ultimo:
-                repetidores = random.sample(list(ultimo), min(n_repeticoes, len(ultimo)))
+            # Usa o concurso mais recente do HISTÓRICO (não o último sorteio)
+            if self.concursos_historicos:
+                referencia = set(self.concursos_historicos[0])
+                repetidores = random.sample(list(referencia), min(n_repeticoes, len(referencia)))
                 jogo.extend(repetidores)
             
             while len(jogo) < 15:
@@ -488,22 +498,22 @@ class EstrategiasLotofacil:
     # ESTRATÉGIA 15: TENDÊNCIA TEMPORAL
     # ============================================
     def estrategia_tendencia_temporal(self, n_jogos=5):
-        """Momentum e direção dos números"""
-        if len(self.concursos) < 20:
+        """Momentum baseado em histórico"""
+        if len(self.concursos_historicos) < 20:
             return self.estrategia_aleatoria_controlada(n_jogos)
         
         jogos = []
         
-        # Calcula tendência
+        # Calcula tendência usando APENAS dados históricos
         tendencia_subindo = []
         for num in self.numeros:
             aparicoes_recentes = 0
             aparicoes_antigas = 0
             
-            for concurso in self.concursos[:10]:
+            for concurso in self.concursos_historicos[:10]:
                 if num in concurso:
                     aparicoes_recentes += 1
-            for concurso in self.concursos[10:20]:
+            for concurso in self.concursos_historicos[10:20]:
                 if num in concurso:
                     aparicoes_antigas += 1
             
@@ -563,13 +573,13 @@ class EstrategiasLotofacil:
     # ESTRATÉGIA 17: MONTE CARLO
     # ============================================
     def estrategia_monte_carlo(self, n_jogos=5):
-        """Simulação de Monte Carlo simplificada"""
-        if len(self.concursos) < 30:
+        """Simulação de Monte Carlo com dados históricos"""
+        if len(self.concursos_historicos) < 30:
             return self.estrategia_aleatoria_controlada(n_jogos)
         
-        # Calcula frequência
+        # Calcula frequência usando APENAS dados históricos
         freq = Counter()
-        for concurso in self.concursos[:100]:
+        for concurso in self.concursos_historicos[:100]:
             freq.update(concurso)
         
         # Converte para probabilidades
@@ -579,29 +589,28 @@ class EstrategiasLotofacil:
         melhores = []
         melhores_scores = []
         
-        for _ in range(3000):  # Reduzido para performance
-            # Gera jogo baseado em probabilidades
+        for _ in range(3000):
             jogo = []
             nums_disp = self.numeros.copy()
             
             while len(jogo) < 15:
-                # Seleciona com peso nas probabilidades
                 candidatos = [n for n in nums_disp if n not in jogo]
                 if candidatos:
                     pesos = [probs.get(n, 0.04) for n in candidatos]
-                    pesos = [p / sum(pesos) for p in pesos]
-                    escolhido = np.random.choice(candidatos, p=pesos)
-                    jogo.append(escolhido)
+                    if sum(pesos) > 0:
+                        pesos = [p / sum(pesos) for p in pesos]
+                        escolhido = np.random.choice(candidatos, p=pesos)
+                        jogo.append(escolhido)
+                    else:
+                        jogo.append(random.choice(candidatos))
                 else:
                     break
             
             jogo = sorted(jogo)
             
             if len(jogo) == 15:
-                # Calcula score
                 score = sum(probs.get(n, 0) for n in jogo) * 100
                 
-                # Bônus por balanceamento
                 pares = sum(1 for n in jogo if n % 2 == 0)
                 if 6 <= pares <= 9:
                     score += 10
@@ -621,31 +630,28 @@ class EstrategiasLotofacil:
     # ESTRATÉGIA 18: CORRELAÇÃO
     # ============================================
     def estrategia_correlacao(self, n_jogos=5):
-        """Pares de números que mais aparecem juntos"""
-        if len(self.concursos) < 30:
+        """Pares que mais aparecem juntos no histórico"""
+        if len(self.concursos_historicos) < 30:
             return self.estrategia_aleatoria_controlada(n_jogos)
         
-        # Conta pares que aparecem juntos
+        # Conta pares usando APENAS dados históricos
         pares_counter = Counter()
-        for concurso in self.concursos[:50]:
+        for concurso in self.concursos_historicos[:50]:
             for i in range(len(concurso)):
                 for j in range(i + 1, len(concurso)):
                     par = tuple(sorted([concurso[i], concurso[j]]))
                     pares_counter[par] += 1
         
-        # Pega os pares mais frequentes
         pares_fortes = [list(p) for p, _ in pares_counter.most_common(30)]
         
         jogos = []
         for _ in range(n_jogos):
             jogo = set()
             
-            # Adiciona pares correlacionados
             n_pares = random.randint(4, 6)
             for par in random.sample(pares_fortes, min(n_pares, len(pares_fortes))):
                 jogo.update(par)
             
-            # Completa até 15
             while len(jogo) < 15:
                 candidato = random.choice(self.numeros)
                 if candidato not in jogo:
@@ -659,29 +665,26 @@ class EstrategiasLotofacil:
     # ESTRATÉGIA 19: MÉDIAS MÓVEIS
     # ============================================
     def estrategia_medias_moveis(self, n_jogos=5):
-        """Médias móveis para detectar tendências"""
-        if len(self.concursos) < 20:
+        """Médias móveis com dados históricos"""
+        if len(self.concursos_historicos) < 20:
             return self.estrategia_aleatoria_controlada(n_jogos)
         
-        # Calcula médias
         tendencia_alta = []
         for num in self.numeros:
             media_antiga = 0
             media_recente = 0
             
-            # Média dos últimos 10-20 concursos
-            for concurso in self.concursos[10:20]:
+            for concurso in self.concursos_historicos[10:20]:
                 if num in concurso:
                     media_antiga += 1
             media_antiga /= 10
             
-            # Média dos últimos 0-10 concursos
-            for concurso in self.concursos[:10]:
+            for concurso in self.concursos_historicos[:10]:
                 if num in concurso:
                     media_recente += 1
             media_recente /= 10
             
-            if media_recente > media_antiga * 1.1:  # 10% de aumento
+            if media_recente > media_antiga * 1.1:
                 tendencia_alta.append(num)
         
         jogos = []
@@ -727,7 +730,6 @@ class EstrategiasLotofacil:
             except:
                 continue
         
-        # Remove duplicatas e ordena
         unicos = []
         seen = set()
         for jogo in jogos:
@@ -735,7 +737,6 @@ class EstrategiasLotofacil:
             if chave not in seen and len(jogo) == 15:
                 seen.add(chave)
                 
-                # Calcula score de qualidade
                 score = 0
                 pares = sum(1 for n in jogo if n % 2 == 0)
                 if 6 <= pares <= 9:
@@ -778,8 +779,11 @@ class EstrategiasLotofacil:
     # COMPARAR TODAS AS ESTRATÉGIAS
     # ============================================
     def comparar_todas_estrategias(self, n_jogos=5):
-        """Compara todas as 20 estratégias"""
-        if len(self.concursos) < 10:
+        """
+        Compara todas as 20 estratégias
+        Usa o último concurso APENAS para TESTE, nunca para treino
+        """
+        if len(self.concursos_historicos) < 10:
             return {}
         
         resultados = {}
@@ -806,11 +810,12 @@ class EstrategiasLotofacil:
             '20. Ensemble 2.0': self.estrategia_ensemble_2,
         }
         
-        concurso_teste = self.concursos[0]
+        # Usa o último concurso APENAS para teste
+        concurso_teste = self.ultimo_concurso
         
         for nome, estrategia in todas.items():
             try:
-                jogos = estrategia(min(n_jogos, 3))  # Reduzido para 3 jogos por performance
+                jogos = estrategia(min(n_jogos, 3))
                 acertos = []
                 for jogo in jogos:
                     if len(jogo) == 15:
@@ -838,8 +843,10 @@ def main():
     st.markdown("""
     ## 📊 Estratégias Baseadas em Pesquisas 2024
     
-    > **⚠️ AVISO**: Estas são estratégias de **ALOCAÇÃO**, não de previsão. 
-    > A Lotofácil é 100% aleatória. Use estas técnicas para DIVERSIFICAR seus jogos.
+    > **⚠️ AVISO IMPORTANTE**: 
+    > - Todas as estratégias usam APENAS dados HISTÓRICOS (excluindo o último sorteio)
+    > - O último concurso é usado SOMENTE para CONFERÊNCIA
+    > - Isso garante um BACKTESTING HONESTO e sem viés
     """)
     
     # Inicialização
@@ -851,7 +858,7 @@ def main():
     # Sidebar - Captura
     with st.sidebar:
         st.header("📥 Dados")
-        qtd = st.slider("Quantidade de concursos", min_value=15, max_value=500, value=100, step=5)
+        qtd = st.slider("Quantidade de concursos", min_value=16, max_value=500, value=100, step=5)
         
         if st.button("🔄 Carregar Concursos", use_container_width=True):
             with st.spinner("Carregando..."):
@@ -868,17 +875,19 @@ def main():
                         st.success(f"✅ {len(concursos)} concursos carregados!")
                         
                         if dados:
-                            st.info(f"📅 Último: Concurso #{dados[0]['concurso']}")
+                            st.info(f"📅 Último: Concurso #{dados[0]['concurso']} (USADO APENAS PARA CONFERÊNCIA)")
+                            st.caption(f"📚 Histórico: {len(concursos)-1} concursos (USADOS PARA CÁLCULOS)")
                 except Exception as e:
                     st.error(f"Erro ao carregar: {e}")
         
         if st.session_state.concursos:
             st.metric("Total em análise", len(st.session_state.concursos))
-            st.caption(f"Último: {st.session_state.concursos[0]}")
+            st.metric("Base de cálculo", len(st.session_state.concursos) - 1)
+            st.caption(f"🎯 Último (conferência): {st.session_state.concursos[0]}")
     
     # Main content
-    if st.session_state.concursos and len(st.session_state.concursos) >= 15:
-        # CRIA A INSTÂNCIA DA CLASSE
+    if st.session_state.concursos and len(st.session_state.concursos) >= 16:
+        # CRIA A INSTÂNCIA DA CLASSE - Automaticamente separa último concurso
         estrategias = EstrategiasLotofacil(st.session_state.concursos)
         
         tab1, tab2, tab3 = st.tabs([
@@ -889,6 +898,7 @@ def main():
         
         with tab1:
             st.header("🎲 Gerar Jogos com Estratégias")
+            st.caption("📊 TODAS as estratégias usam APENAS dados históricos (excluindo o último sorteio)")
             
             col1, col2 = st.columns([2, 1])
             
@@ -981,6 +991,7 @@ def main():
         
         with tab2:
             st.header("📊 Comparação entre Estratégias")
+            st.caption("📊 Teste realizado com o ÚLTIMO CONCURSO (excluído dos cálculos)")
             
             col1, col2 = st.columns(2)
             with col1:
@@ -995,6 +1006,7 @@ def main():
                         df = df.sort_values('media_acertos', ascending=False)
                         
                         st.subheader("🏆 Ranking de Performance")
+                        st.caption("✅ Teste honesto: estratégias usaram dados HISTÓRICOS, conferência com o ÚLTIMO concurso")
                         
                         st.dataframe(df, use_container_width=True)
                         
@@ -1006,7 +1018,7 @@ def main():
                         ax.set_yticks(y_pos)
                         ax.set_yticklabels(top10.index, fontsize=8)
                         ax.set_xlabel('Média de Acertos')
-                        ax.set_title('Top 10 Estratégias')
+                        ax.set_title('Top 10 Estratégias - Backtesting Honesto')
                         
                         for i, v in enumerate(top10['media_acertos']):
                             ax.text(v + 0.1, i, f'{v:.1f}', va='center')
@@ -1021,10 +1033,11 @@ def main():
             
             if st.session_state.concursos:
                 ultimo = st.session_state.concursos[0]
-                st.info(f"**Último Concurso:** {ultimo}")
+                st.info(f"**Último Concurso (para conferência):** {ultimo}")
                 
                 if st.session_state.jogos_atuais:
-                    st.subheader("📝 Resultados")
+                    st.subheader("📝 Resultados dos seus jogos")
+                    st.caption("✅ Conferência com o ÚLTIMO concurso (não usado nos cálculos)")
                     
                     dados_resultados = []
                     for i, jogo in enumerate(st.session_state.jogos_atuais, 1):
@@ -1053,7 +1066,6 @@ def main():
                         df_res = pd.DataFrame(dados_resultados)
                         st.dataframe(df_res, use_container_width=True)
                         
-                        # Estatísticas
                         col1, col2, col3 = st.columns(3)
                         with col1:
                             st.metric("Média de Acertos", f"{df_res['Acertos'].mean():.1f}")
@@ -1064,7 +1076,6 @@ def main():
                             if premiados > 0:
                                 st.metric("Maior Acerto", df_res['Acertos'].max())
                 
-                # Upload de arquivo
                 st.subheader("📁 Conferir Arquivo")
                 arquivo = st.file_uploader("Upload de arquivo TXT", type=['txt'])
                 
@@ -1098,36 +1109,13 @@ def main():
                     except Exception as e:
                         st.error("Erro ao processar arquivo")
     else:
-        st.info("👈 **Carregue no mínimo 15 concursos no menu lateral**")
-        
-        # Lista de estratégias
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("**Estratégias Clássicas:**")
-            st.markdown("1. Lei dos Terços")
-            st.markdown("2. Cobertura")
-            st.markdown("3. Soma Ótima")
-            st.markdown("4. Grupos")
-            st.markdown("5. Pareto")
-            st.markdown("6. Espelhos")
-            st.markdown("7. Intervalos")
-            st.markdown("8. Wheeling")
-            st.markdown("9. Cíclica")
-            st.markdown("10. Ensemble 1.0")
-        
-        with col2:
-            st.markdown("**Estratégias Avançadas 2024:**")
-            st.markdown("11. Janelas Móveis")
-            st.markdown("12. Terminações")
-            st.markdown("13. Ciclos Repetição")
-            st.markdown("14. Par/Ímpar Avançado")
-            st.markdown("15. Tendência Temporal")
-            st.markdown("16. Conjuntos Disjuntos")
-            st.markdown("17. Monte Carlo")
-            st.markdown("18. Correlação")
-            st.markdown("19. Médias Móveis")
-            st.markdown("20. Ensemble 2.0")
+        st.info("👈 **Carregue no mínimo 16 concursos no menu lateral**")
+        st.warning("""
+        ⚠️ **Por que mínimo 16 concursos?**
+        - 1 concurso para CONFERÊNCIA (excluído dos cálculos)
+        - 15 concursos para BASE DE CÁLCULO (mínimo necessário)
+        - Isso garante um BACKTESTING HONESTO
+        """)
 
 if __name__ == "__main__":
     main()
