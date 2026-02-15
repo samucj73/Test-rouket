@@ -4065,93 +4065,94 @@ class SistemaAlertasFutebol:
         else:
             st.warning(f"⚠️ Nenhum jogo encontrado para {tipo_analise}")
     
+    #def processar_alertas_completos(self, data_selecionada, ligas_selecionadas, todas_ligas):
     def processar_alertas_completos(self, data_selecionada, ligas_selecionadas, todas_ligas):
         """Processa jogos e envia alertas completos (ALL-IN-ONE) - CORRIGIDO"""
         hoje = data_selecionada.strftime("%Y-%m-%d")
+    
+    if todas_ligas:
+        ligas_busca = list(self.config.LIGA_DICT.values())
+        st.write(f"🌍 Analisando TODAS as {len(ligas_busca)} ligas disponíveis")
+    else:
+        ligas_busca = [self.config.LIGA_DICT[liga_nome] for liga_nome in ligas_selecionadas]
+        st.write(f"📌 Analisando {len(ligas_busca)} ligas selecionadas: {', '.join(ligas_selecionadas)}")
+
+    st.write(f"⏳ Buscando jogos para {data_selecionada.strftime('%d/%m/%Y')}...")
+    
+    jogos_analisados = []
+    progress_bar = st.progress(0)
+    total_ligas = len(ligas_busca)
+
+    # Carregar classificações
+    classificacoes = {}
+    for liga_id in ligas_busca:
+        classificacoes[liga_id] = self.api_client.obter_classificacao(liga_id)
+    
+    for i, liga_id in enumerate(ligas_busca):
+        classificacao = classificacoes[liga_id]
+        analisador = AnalisadorTendencia(classificacao)
         
-        if todas_ligas:
-            ligas_busca = list(self.config.LIGA_DICT.values())
-            st.write(f"🌍 Analisando TODAS as {len(ligas_busca)} ligas disponíveis")
+        if liga_id == "BSA":
+            jogos_data = self.api_client.obter_jogos_brasileirao(liga_id, hoje)
         else:
-            ligas_busca = [self.config.LIGA_DICT[liga_nome] for liga_nome in ligas_selecionadas]
-            st.write(f"📌 Analisando {len(ligas_busca)} ligas selecionadas: {', '.join(ligas_selecionadas)}")
+            jogos_data = self.api_client.obter_jogos(liga_id, hoje)
 
-        st.write(f"⏳ Buscando jogos para {data_selecionada.strftime('%d/%m/%Y')}...")
+        for match_data in jogos_data:
+            if not self.api_client.validar_dados_jogo(match_data):
+                continue
+            
+            jogo = Jogo(match_data)
+            if not jogo.validar_dados():
+                continue
+            
+            # Calcular análise de tendência principal (Over/Under)
+            analise = analisador.calcular_tendencia_completa(jogo.home_team, jogo.away_team)
+            
+            # Calcular análises adicionais
+            if classificacao:
+                # 1. Análise de Favorito (Vitória)
+                vitoria_analise = AnalisadorEstatistico.calcular_probabilidade_vitoria(
+                    jogo.home_team, jogo.away_team, classificacao
+                )
+                analise["detalhes"]["vitoria"] = vitoria_analise
+                
+                # 2. Análise de Gols HT
+                ht_analise = AnalisadorEstatistico.calcular_probabilidade_gols_ht(
+                    jogo.home_team, jogo.away_team, classificacao
+                )
+                analise["detalhes"]["gols_ht"] = ht_analise
+                
+                # 3. Análise de Ambas Marcam
+                ambas_marcam_analise = AnalisadorEstatistico.calcular_probabilidade_ambas_marcam(
+                    jogo.home_team, jogo.away_team, classificacao
+                )
+                analise["detalhes"]["ambas_marcam"] = ambas_marcam_analise
+            
+            # Atualizar análise do jogo
+            jogo.set_analise(analise)
+            
+            # Adicionar à lista para o poster
+            jogos_analisados.append(jogo.to_dict())
         
-        jogos_analisados = []
-        progress_bar = st.progress(0)
-        total_ligas = len(ligas_busca)
-
-        # Carregar classificações
-        classificacoes = {}
-        for liga_id in ligas_busca:
-            classificacoes[liga_id] = self.api_client.obter_classificacao(liga_id)
+        progress_bar.progress((i + 1) / total_ligas)
+    
+    # Processar e enviar alertas completos
+    if jogos_analisados:
+        st.write(f"📊 Total de jogos analisados: {len(jogos_analisados)}")
         
-        for i, liga_id in enumerate(ligas_busca):
-            classificacao = classificacoes[liga_id]
-            analisador = AnalisadorTendencia(classificacao)
-            
-            if liga_id == "BSA":
-                jogos_data = self.api_client.obter_jogos_brasileirao(liga_id, hoje)
-            else:
-                jogos_data = self.api_client.obter_jogos(liga_id, hoje)
-
-            for match_data in jogos_data:
-                if not self.api_client.validar_dados_jogo(match_data):
-                    continue
-                
-                jogo = Jogo(match_data)
-                if not jogo.validar_dados():
-                    continue
-                
-                # Calcular análise de tendência principal (Over/Under)
-                analise = analisador.calcular_tendencia_completa(jogo.home_team, jogo.away_team)
-                
-                # Calcular análises adicionais
-                if classificacao:
-                    # 1. Análise de Favorito (Vitória)
-                    vitoria_analise = AnalisadorEstatistico.calcular_probabilidade_vitoria(
-                        jogo.home_team, jogo.away_team, classificacao
-                    )
-                    analise["detalhes"]["vitoria"] = vitoria_analise
-                    
-                    # 2. Análise de Gols HT
-                    ht_analise = AnalisadorEstatistico.calcular_probabilidade_gols_ht(
-                        jogo.home_team, jogo.away_team, classificacao
-                    )
-                    analise["detalhes"]["gols_ht"] = ht_analise
-                    
-                    # 3. Análise de Ambas Marcam
-                    ambas_marcam_analise = AnalisadorEstatistico.calcular_probabilidade_ambas_marcam(
-                        jogo.home_team, jogo.away_team, classificacao
-                    )
-                    analise["detalhes"]["ambas_marcam"] = ambas_marcam_analise
-                
-                # Atualizar análise do jogo
-                jogo.set_analise(analise)
-                
-                # Adicionar à lista para o poster
-                jogos_analisados.append(jogo.to_dict())
-            
-            progress_bar.progress((i + 1) / total_ligas)
+        # Filtrar apenas jogos não iniciados
+        jogos_filtrados = [j for j in jogos_analisados 
+                          if j.get("status") not in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"]]
         
-        # Processar e enviar alertas completos
-        if jogos_analisados:
-            st.write(f"📊 Total de jogos analisados: {len(jogos_analisados)}")
+        if jogos_filtrados:
+            st.write(f"✅ Jogos elegíveis para alerta: {len(jogos_filtrados)}")
             
-            # Filtrar apenas jogos não iniciados
-            jogos_filtrados = [j for j in jogos_analisados 
-                              if j.get("status") not in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"]]
-            
-            if jogos_filtrados:
-                st.write(f"✅ Jogos elegíveis para alerta: {len(jogos_filtrados)}")
-                
-                # Enviar alertas completos
-                self.gerenciador_completo.processar_e_enviar_alertas_completos(jogos_filtrados, hoje)
-            else:
-                st.warning("⚠️ Nenhum jogo elegível para alerta completo")
+            # Enviar alertas completos
+            self.gerenciador_completo.processar_e_enviar_alertas_completos(jogos_filtrados, hoje)
         else:
-            st.warning("⚠️ Nenhum jogo encontrado")
+            st.warning("⚠️ Nenhum jogo elegível para alerta completo")
+    else:
+        st.warning("⚠️ Nenhum jogo encontrado")  
     
     def conferir_resultados(self, data_selecionada):
         """Conferir resultados dos jogos com alertas ativos"""
