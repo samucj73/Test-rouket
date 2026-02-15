@@ -2013,7 +2013,8 @@ class ResultadosTopAlertas:
             return False
 
 # =============================
-# NOVA CLASSE: AlertaCompleto (ALL-IN-ONE) - ADICIONAR AQUI
+# =============================
+# NOVA CLASSE: AlertaCompleto (ALL-IN-ONE) - VERSÃO CORRIGIDA
 # =============================
 
 class AlertaCompleto:
@@ -2206,7 +2207,7 @@ class GerenciadorAlertasCompletos:
         """Gera poster completo com todas as análises para múltiplos jogos"""
         LARGURA = 2000
         ALTURA_TOPO = 270
-        ALTURA_POR_JOGO = 900  # Aumentado para acomodar todas as análises
+        ALTURA_POR_JOGO = 900
         PADDING = 80
         
         jogos_count = len(jogos)
@@ -2397,7 +2398,7 @@ class GerenciadorAlertasCompletos:
         """Gera poster de resultados completos"""
         LARGURA = 2000
         ALTURA_TOPO = 330
-        ALTURA_POR_JOGO = 950  # Aumentado para acomodar todos os resultados
+        ALTURA_POR_JOGO = 950
         PADDING = 80
         
         jogos_count = len(jogos_com_resultados)
@@ -2454,13 +2455,13 @@ class GerenciadorAlertasCompletos:
             
             # Definir cor da borda baseada no desempenho
             if greens == 4:
-                cor_borda = (46, 204, 113)  # Verde - Todos GREEN
+                cor_borda = (46, 204, 113)
             elif greens >= 3:
-                cor_borda = (52, 152, 219)  # Azul - Maioria GREEN
+                cor_borda = (52, 152, 219)
             elif reds >= 3:
-                cor_borda = (231, 76, 60)   # Vermelho - Maioria RED
+                cor_borda = (231, 76, 60)
             else:
-                cor_borda = (149, 165, 166) # Cinza - Misto
+                cor_borda = (149, 165, 166)
             
             draw.rectangle([x0, y0, x1, y1], fill=(25, 35, 45), outline=cor_borda, width=4)
 
