@@ -2953,6 +2953,8 @@ class SistemaAlertasFutebol:
         self.poster_generator = PosterGenerator(self.api_client)
         self.image_cache = self.api_client.image_cache
         self.resultados_top = ResultadosTopAlertas(self)  # Instância da nova classe
+        # No método __init__ da classe SistemaAlertasFutebol, adicione:
+        self.gerenciador_completo = GerenciadorAlertasCompletos(self)
         
         # Inicializar logging
         self._setup_logging()
