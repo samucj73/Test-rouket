@@ -4313,7 +4313,13 @@ def main():
             st.info("🏁 Alertas de resultados: ATIVADO")
     
     # Abas principais
-    tab1, tab2, tab3 = st.tabs(["🔍 Buscar Partidas", "📊 Conferir Resultados", "🏆 Resultados TOP Alertas"])
+    #tab1, tab2, tab3 = st.tabs(["🔍 Buscar Partidas", "📊 Conferir Resultados", "🏆 Resultados TOP Alertas"])
+    # Substitua esta linha:
+    #tab1, tab2, tab3 = st.tabs(["🔍 Buscar Partidas", "📊 Conferir Resultados", "🏆 Resultados TOP Alertas"])
+
+    # Por esta:
+    tab1, tab2, tab3, tab4 = st.tabs(["🔍 Buscar Partidas", "📊 Conferir Resultados", 
+                                   "🏆 Resultados TOP Alertas", "⚽ Alertas Completos"]) 
     
     with tab1:
         # Controles principais
