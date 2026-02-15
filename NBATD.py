@@ -844,9 +844,6 @@ def sigmoid(x):
 # =============================
 # CLASSES DE ANÁLISE
 # =============================
-# =============================
-# CLASSES DE ANÁLISE
-# =============================
 
 class AnalisadorEstatistico:
     """Realiza análises estatísticas para previsões"""
@@ -1029,133 +1026,132 @@ class AnalisadorEstatistico:
             "taxa_sofridos_away": round(taxa_sofridos_away, 2)
         }
 
-@staticmethod
-def calcular_conflito_over_btts(
-    home: str,
-    away: str,
-    classificacao: dict,
-    estimativa_total: float,
-    resultado_btts: dict
-) -> dict:
-    """
-    Resolve conflito inteligente entre OVER e BTTS
-    Retorna prioridade de mercado e flags de bloqueio
-    """
+    @staticmethod
+    def calcular_conflito_over_btts(
+        home: str,
+        away: str,
+        classificacao: dict,
+        estimativa_total: float,
+        resultado_btts: dict
+    ) -> dict:
+        """
+        Resolve conflito inteligente entre OVER e BTTS
+        Retorna prioridade de mercado e flags de bloqueio
+        """
 
-    dados_home = classificacao.get(home, {})
-    dados_away = classificacao.get(away, {})
+        dados_home = classificacao.get(home, {})
+        dados_away = classificacao.get(away, {})
 
-    played_home = max(dados_home.get("played", 1), 1)
-    played_away = max(dados_away.get("played", 1), 1)
+        played_home = max(dados_home.get("played", 1), 1)
+        played_away = max(dados_away.get("played", 1), 1)
 
-    media_home = dados_home.get("scored", 0) / played_home
-    media_away = dados_away.get("scored", 0) / played_away
+        media_home = dados_home.get("scored", 0) / played_home
+        media_away = dados_away.get("scored", 0) / played_away
 
-    # -----------------------------
-    # MÉTRICAS DE DECISÃO
-    # -----------------------------
-    equilibrio_ofensivo = 1 - abs(media_home - media_away)
-    equilibrio_ofensivo = clamp(equilibrio_ofensivo, 0, 1)
+        # -----------------------------
+        # MÉTRICAS DE DECISÃO
+        # -----------------------------
+        equilibrio_ofensivo = 1 - abs(media_home - media_away)
+        equilibrio_ofensivo = clamp(equilibrio_ofensivo, 0, 1)
 
-    ataque_unilateral = (
-        (media_home >= 1.8 and media_away < 1.0) or
-        (media_away >= 1.8 and media_home < 1.0)
-    )
+        ataque_unilateral = (
+            (media_home >= 1.8 and media_away < 1.0) or
+            (media_away >= 1.8 and media_home < 1.0)
+        )
 
-    prob_btts_sim = resultado_btts.get("sim", 0)
-    prob_btts_nao = resultado_btts.get("nao", 0)
+        prob_btts_sim = resultado_btts.get("sim", 0)
+        prob_btts_nao = resultado_btts.get("nao", 0)
 
-    # -----------------------------
-    # DECISÃO FINAL
-    # -----------------------------
-    prioridade = "NEUTRO"
-    bloquear_btts = False
-    bloquear_over = False
-    motivo = "Sem conflito relevante"
+        # -----------------------------
+        # DECISÃO FINAL
+        # -----------------------------
+        prioridade = "NEUTRO"
+        bloquear_btts = False
+        bloquear_over = False
+        motivo = "Sem conflito relevante"
 
-    # CASO 1 — OVER forte, BTTS perigoso
-    if ataque_unilateral and estimativa_total >= 2.6:
-        prioridade = "OVER"
-        bloquear_btts = True
-        motivo = "Ataque unilateral (OVER sem BTTS)"
+        # CASO 1 — OVER forte, BTTS perigoso
+        if ataque_unilateral and estimativa_total >= 2.6:
+            prioridade = "OVER"
+            bloquear_btts = True
+            motivo = "Ataque unilateral (OVER sem BTTS)"
 
-    # CASO 2 — BTTS melhor que OVER 2.5
-    elif equilibrio_ofensivo >= 0.75 and 2.2 <= estimativa_total <= 2.6:
-        prioridade = "BTTS"
-        bloquear_over = True
-        motivo = "Equilíbrio ofensivo (BTTS prioritário)"
+        # CASO 2 — BTTS melhor que OVER 2.5
+        elif equilibrio_ofensivo >= 0.75 and 2.2 <= estimativa_total <= 2.6:
+            prioridade = "BTTS"
+            bloquear_over = True
+            motivo = "Equilíbrio ofensivo (BTTS prioritário)"
 
-    # CASO 3 — OVER 1.5 vence
-    elif equilibrio_ofensivo >= 0.6 and estimativa_total >= 2.0:
-        prioridade = "OVER_1.5"
-        motivo = "Jogo vivo sem garantia de BTTS"
+        # CASO 3 — OVER 1.5 vence
+        elif equilibrio_ofensivo >= 0.6 and estimativa_total >= 2.0:
+            prioridade = "OVER_1.5"
+            motivo = "Jogo vivo sem garantia de BTTS"
 
-    # CASO 4 — JOGO TRAVADO
-    elif estimativa_total < 2.0 and equilibrio_ofensivo < 0.55:
-        prioridade = "EVITAR"
-        bloquear_btts = True
-        bloquear_over = True
-        motivo = "Jogo travado e desequilibrado"
+        # CASO 4 — JOGO TRAVADO
+        elif estimativa_total < 2.0 and equilibrio_ofensivo < 0.55:
+            prioridade = "EVITAR"
+            bloquear_btts = True
+            bloquear_over = True
+            motivo = "Jogo travado e desequilibrado"
 
-    return {
-        "prioridade": prioridade,
-        "bloquear_btts": bloquear_btts,
-        "bloquear_over": bloquear_over,
-        "equilibrio_ofensivo": round(equilibrio_ofensivo, 2),
-        "ataque_unilateral": ataque_unilateral,
-        "motivo": motivo,
-        "prob_btts_sim": prob_btts_sim,
-        "prob_btts_nao": prob_btts_nao
-    }
+        return {
+            "prioridade": prioridade,
+            "bloquear_btts": bloquear_btts,
+            "bloquear_over": bloquear_over,
+            "equilibrio_ofensivo": round(equilibrio_ofensivo, 2),
+            "ataque_unilateral": ataque_unilateral,
+            "motivo": motivo,
+            "prob_btts_sim": prob_btts_sim,
+            "prob_btts_nao": prob_btts_nao
+        }
 
-@staticmethod
-def calcular_escore_confianca(
-    probabilidade: float,
-    confianca: float,
-    estimativa_total: float,
-    linha_mercado: float,
-    conflito: dict
-) -> int:
-    """
-    Calcula o Escore Único de Confiança (0 a 100)
-    """
+    @staticmethod
+    def calcular_escore_confianca(
+        probabilidade: float,
+        confianca: float,
+        estimativa_total: float,
+        linha_mercado: float,
+        conflito: dict
+    ) -> int:
+        """
+        Calcula o Escore Único de Confiança (0 a 100)
+        """
 
-    # -----------------------------
-    # NORMALIZAÇÃO BASE
-    # -----------------------------
-    prob_norm = clamp(probabilidade / 100, 0, 1)
-    conf_norm = clamp(confianca / 100, 0, 1)
+        # -----------------------------
+        # NORMALIZAÇÃO BASE
+        # -----------------------------
+        prob_norm = clamp(probabilidade / 100, 0, 1)
+        conf_norm = clamp(confianca / 100, 0, 1)
 
-    base = (prob_norm * 0.6) + (conf_norm * 0.4)
+        base = (prob_norm * 0.6) + (conf_norm * 0.4)
 
-    # -----------------------------
-    # DISTÂNCIA DA LINHA
-    # -----------------------------
-    distancia = estimativa_total - linha_mercado
-    bonus_distancia = clamp(distancia / 1.2, 0, 1) * 0.25
+        # -----------------------------
+        # DISTÂNCIA DA LINHA
+        # -----------------------------
+        distancia = estimativa_total - linha_mercado
+        bonus_distancia = clamp(distancia / 1.2, 0, 1) * 0.25
 
-    # -----------------------------
-    # CONFLITO OVER × BTTS
-    # -----------------------------
-    penalidade_conflito = 0
+        # -----------------------------
+        # CONFLITO OVER × BTTS
+        # -----------------------------
+        penalidade_conflito = 0
 
-    if conflito:
-        if conflito.get("bloquear_over") or conflito.get("bloquear_btts"):
-            penalidade_conflito += 0.20
+        if conflito:
+            if conflito.get("bloquear_over") or conflito.get("bloquear_btts"):
+                penalidade_conflito += 0.20
 
-        prioridade = conflito.get("prioridade")
-        if prioridade in ("EVITAR", "NEUTRO"):
-            penalidade_conflito += 0.15
+            prioridade = conflito.get("prioridade")
+            if prioridade in ("EVITAR", "NEUTRO"):
+                penalidade_conflito += 0.15
 
-    # -----------------------------
-    # CÁLCULO FINAL
-    # -----------------------------
-    escore = base + bonus_distancia - penalidade_conflito
-    escore = clamp(escore, 0, 1)
+        # -----------------------------
+        # CÁLCULO FINAL
+        # -----------------------------
+        escore = base + bonus_distancia - penalidade_conflito
+        escore = clamp(escore, 0, 1)
 
-    return int(round(escore * 100))
+        return int(round(escore * 100))
 
-#class AnalisadorTendencia:
 class AnalisadorTendencia:
     """Analisa tendências de gols em partidas - VERSÃO FINAL PROFISSIONAL"""
 
@@ -1344,17 +1340,13 @@ class AnalisadorTendencia:
 # =============================
 # NOVA CLASSE: ResultadosTopAlertas (CORRIGIDA)
 # ============================
-# =============================
-# =============================
-# CLASSE CORRIGIDA: ResultadosTopAlertas - SÓ ENVIA UMA VEZ POR GRUPO
-# =============================
 
 class ResultadosTopAlertas:
     """Gerencia resultados dos alertas TOP - SÓ ENVIA QUANDO TODOS OS JOGOS ENCERRARAM (APENAS UMA VEZ)"""
     
     def __init__(self, sistema_principal):
         self.sistema = sistema_principal
-        self.config = ConfigManager()
+        self.config = sistema_principal.config
         self.poster_generator = sistema_principal.poster_generator
         self.telegram_client = sistema_principal.telegram_client
         self.api_client = sistema_principal.api_client
@@ -2013,7 +2005,6 @@ class ResultadosTopAlertas:
             return False
 
 # =============================
-# =============================
 # NOVA CLASSE: AlertaCompleto (ALL-IN-ONE) - VERSÃO CORRIGIDA
 # =============================
 
@@ -2171,7 +2162,7 @@ class GerenciadorAlertasCompletos:
     
     def __init__(self, sistema_principal):
         self.sistema = sistema_principal
-        self.config = ConfigManager()
+        self.config = sistema_principal.config
         self.poster_generator = sistema_principal.poster_generator
         self.telegram_client = sistema_principal.telegram_client
         self.api_client = sistema_principal.api_client
@@ -2859,6 +2850,7 @@ class GerenciadorAlertasCompletos:
                 st.metric("🤝 Ambas Marcam", 
                          f"{stats['ambas_marcam']['GREEN']}✅ {stats['ambas_marcam']['RED']}❌",
                          f"{taxa_am:.1f}%")
+
 # =============================
 # CLASSES DE COMUNICAÇÃO
 # =============================
@@ -3801,8 +3793,7 @@ class SistemaAlertasFutebol:
         self.poster_generator = PosterGenerator(self.api_client)
         self.image_cache = self.api_client.image_cache
         self.resultados_top = ResultadosTopAlertas(self)  # Instância da nova classe
-        # No método __init__ da classe SistemaAlertasFutebol, adicione:
-        self.gerenciador_completo = GerenciadorAlertasCompletos(self)
+        self.gerenciador_completo = GerenciadorAlertasCompletos(self)  # CORRIGIDO: Adicionar esta linha
         
         # Inicializar logging
         self._setup_logging()
@@ -4073,94 +4064,94 @@ class SistemaAlertasFutebol:
                 st.info("ℹ️ Alerta com Poster desativado")
         else:
             st.warning(f"⚠️ Nenhum jogo encontrado para {tipo_analise}")
-
+    
     def processar_alertas_completos(self, data_selecionada, ligas_selecionadas, todas_ligas):
-       """Processa jogos e envia alertas completos (ALL-IN-ONE)"""
-       hoje = data_selecionada.strftime("%Y-%m-%d")
-    
-    if todas_ligas:
-        ligas_busca = list(self.config.LIGA_DICT.values())
-        st.write(f"🌍 Analisando TODAS as {len(ligas_busca)} ligas disponíveis")
-    else:
-        ligas_busca = [self.config.LIGA_DICT[liga_nome] for liga_nome in ligas_selecionadas]
-        st.write(f"📌 Analisando {len(ligas_busca)} ligas selecionadas: {', '.join(ligas_selecionadas)}")
-
-    st.write(f"⏳ Buscando jogos para {data_selecionada.strftime('%d/%m/%Y')}...")
-    
-    jogos_analisados = []
-    progress_bar = st.progress(0)
-    total_ligas = len(ligas_busca)
-
-    # Carregar classificações
-    classificacoes = {}
-    for liga_id in ligas_busca:
-        classificacoes[liga_id] = self.api_client.obter_classificacao(liga_id)
-    
-    for i, liga_id in enumerate(ligas_busca):
-        classificacao = classificacoes[liga_id]
-        analisador = AnalisadorTendencia(classificacao)
+        """Processa jogos e envia alertas completos (ALL-IN-ONE) - CORRIGIDO"""
+        hoje = data_selecionada.strftime("%Y-%m-%d")
         
-        if liga_id == "BSA":
-            jogos_data = self.api_client.obter_jogos_brasileirao(liga_id, hoje)
+        if todas_ligas:
+            ligas_busca = list(self.config.LIGA_DICT.values())
+            st.write(f"🌍 Analisando TODAS as {len(ligas_busca)} ligas disponíveis")
         else:
-            jogos_data = self.api_client.obter_jogos(liga_id, hoje)
+            ligas_busca = [self.config.LIGA_DICT[liga_nome] for liga_nome in ligas_selecionadas]
+            st.write(f"📌 Analisando {len(ligas_busca)} ligas selecionadas: {', '.join(ligas_selecionadas)}")
 
-        for match_data in jogos_data:
-            if not self.api_client.validar_dados_jogo(match_data):
-                continue
+        st.write(f"⏳ Buscando jogos para {data_selecionada.strftime('%d/%m/%Y')}...")
+        
+        jogos_analisados = []
+        progress_bar = st.progress(0)
+        total_ligas = len(ligas_busca)
+
+        # Carregar classificações
+        classificacoes = {}
+        for liga_id in ligas_busca:
+            classificacoes[liga_id] = self.api_client.obter_classificacao(liga_id)
+        
+        for i, liga_id in enumerate(ligas_busca):
+            classificacao = classificacoes[liga_id]
+            analisador = AnalisadorTendencia(classificacao)
             
-            jogo = Jogo(match_data)
-            if not jogo.validar_dados():
-                continue
-            
-            # Calcular análise de tendência principal (Over/Under)
-            analise = analisador.calcular_tendencia_completa(jogo.home_team, jogo.away_team)
-            
-            # Calcular análises adicionais
-            if classificacao:
-                # 1. Análise de Favorito (Vitória)
-                vitoria_analise = AnalisadorEstatistico.calcular_probabilidade_vitoria(
-                    jogo.home_team, jogo.away_team, classificacao
-                )
-                analise["detalhes"]["vitoria"] = vitoria_analise
+            if liga_id == "BSA":
+                jogos_data = self.api_client.obter_jogos_brasileirao(liga_id, hoje)
+            else:
+                jogos_data = self.api_client.obter_jogos(liga_id, hoje)
+
+            for match_data in jogos_data:
+                if not self.api_client.validar_dados_jogo(match_data):
+                    continue
                 
-                # 2. Análise de Gols HT
-                ht_analise = AnalisadorEstatistico.calcular_probabilidade_gols_ht(
-                    jogo.home_team, jogo.away_team, classificacao
-                )
-                analise["detalhes"]["gols_ht"] = ht_analise
+                jogo = Jogo(match_data)
+                if not jogo.validar_dados():
+                    continue
                 
-                # 3. Análise de Ambas Marcam
-                ambas_marcam_analise = AnalisadorEstatistico.calcular_probabilidade_ambas_marcam(
-                    jogo.home_team, jogo.away_team, classificacao
-                )
-                analise["detalhes"]["ambas_marcam"] = ambas_marcam_analise
+                # Calcular análise de tendência principal (Over/Under)
+                analise = analisador.calcular_tendencia_completa(jogo.home_team, jogo.away_team)
+                
+                # Calcular análises adicionais
+                if classificacao:
+                    # 1. Análise de Favorito (Vitória)
+                    vitoria_analise = AnalisadorEstatistico.calcular_probabilidade_vitoria(
+                        jogo.home_team, jogo.away_team, classificacao
+                    )
+                    analise["detalhes"]["vitoria"] = vitoria_analise
+                    
+                    # 2. Análise de Gols HT
+                    ht_analise = AnalisadorEstatistico.calcular_probabilidade_gols_ht(
+                        jogo.home_team, jogo.away_team, classificacao
+                    )
+                    analise["detalhes"]["gols_ht"] = ht_analise
+                    
+                    # 3. Análise de Ambas Marcam
+                    ambas_marcam_analise = AnalisadorEstatistico.calcular_probabilidade_ambas_marcam(
+                        jogo.home_team, jogo.away_team, classificacao
+                    )
+                    analise["detalhes"]["ambas_marcam"] = ambas_marcam_analise
+                
+                # Atualizar análise do jogo
+                jogo.set_analise(analise)
+                
+                # Adicionar à lista para o poster
+                jogos_analisados.append(jogo.to_dict())
             
-            # Atualizar análise do jogo
-            jogo.set_analise(analise)
+            progress_bar.progress((i + 1) / total_ligas)
+        
+        # Processar e enviar alertas completos
+        if jogos_analisados:
+            st.write(f"📊 Total de jogos analisados: {len(jogos_analisados)}")
             
-            # Adicionar à lista para o poster
-            jogos_analisados.append(jogo.to_dict())
-        
-        progress_bar.progress((i + 1) / total_ligas)
-    
-    # Processar e enviar alertas completos
-    if jogos_analisados:
-        st.write(f"📊 Total de jogos analisados: {len(jogos_analisados)}")
-        
-        # Filtrar apenas jogos não iniciados
-        jogos_filtrados = [j for j in jogos_analisados 
-                          if j.get("status") not in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"]]
-        
-        if jogos_filtrados:
-            st.write(f"✅ Jogos elegíveis para alerta: {len(jogos_filtrados)}")
+            # Filtrar apenas jogos não iniciados
+            jogos_filtrados = [j for j in jogos_analisados 
+                              if j.get("status") not in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"]]
             
-            # Enviar alertas completos
-            self.gerenciador_completo.processar_e_enviar_alertas_completos(jogos_filtrados, hoje)
+            if jogos_filtrados:
+                st.write(f"✅ Jogos elegíveis para alerta: {len(jogos_filtrados)}")
+                
+                # Enviar alertas completos
+                self.gerenciador_completo.processar_e_enviar_alertas_completos(jogos_filtrados, hoje)
+            else:
+                st.warning("⚠️ Nenhum jogo elegível para alerta completo")
         else:
-            st.warning("⚠️ Nenhum jogo elegível para alerta completo")
-    else:
-        st.warning("⚠️ Nenhum jogo encontrado")
+            st.warning("⚠️ Nenhum jogo encontrado")
     
     def conferir_resultados(self, data_selecionada):
         """Conferir resultados dos jogos com alertas ativos"""
@@ -5251,13 +5242,8 @@ def main():
             st.info("🏁 Alertas de resultados: ATIVADO")
     
     # Abas principais
-    #tab1, tab2, tab3 = st.tabs(["🔍 Buscar Partidas", "📊 Conferir Resultados", "🏆 Resultados TOP Alertas"])
-    # Substitua esta linha:
-    #tab1, tab2, tab3 = st.tabs(["🔍 Buscar Partidas", "📊 Conferir Resultados", "🏆 Resultados TOP Alertas"])
-
-    # Por esta:
     tab1, tab2, tab3, tab4 = st.tabs(["🔍 Buscar Partidas", "📊 Conferir Resultados", 
-                                   "🏆 Resultados TOP Alertas", "⚽ Alertas Completos"]) 
+                                   "🏆 Resultados TOP Alertas", "⚽ Alertas Completos"])
     
     with tab1:
         # Controles principais
@@ -5435,6 +5421,79 @@ def main():
         else:
             st.info("ℹ️ Nenhum alerta TOP salvo ainda.")
     
+    with tab4:
+        st.subheader("⚽ Alertas Completos - ALL IN ONE")
+        st.info("📊 Todas as análises (Over/Under, Favorito, Gols HT, Ambas Marcam) em um único poster por partida")
+        
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            data_completa = st.date_input("📅 Data para análise completa:", value=datetime.today(), key="data_completa")
+        with col2:
+            todas_ligas_completa = st.checkbox("🌍 Todas as ligas", value=True, key="todas_ligas_completa")
+        
+        ligas_selecionadas_completa = []
+        if not todas_ligas_completa:
+            ligas_selecionadas_completa = st.multiselect(
+                "📌 Selecionar ligas (múltipla escolha):",
+                options=list(ConfigManager.LIGA_DICT.keys()),
+                default=["Campeonato Brasileiro Série A", "Premier League (Inglaterra)"],
+                key="ligas_completa"
+            )
+            
+            if not ligas_selecionadas_completa:
+                st.warning("⚠️ Selecione pelo menos uma liga")
+        
+        if st.button("⚽ Gerar Alertas Completos", type="primary", key="btn_completo"):
+            if not todas_ligas_completa and not ligas_selecionadas_completa:
+                st.error("❌ Selecione pelo menos uma liga ou marque 'Todas as ligas'")
+            else:
+                sistema.processar_alertas_completos(data_completa, ligas_selecionadas_completa, todas_ligas_completa)
+        
+        st.markdown("---")
+        
+        # Seção de conferência de resultados completos
+        st.subheader("📊 Conferir Resultados Completos")
+        
+        col_data_comp, col_btn_comp = st.columns([2, 1])
+        with col_data_comp:
+            data_resultados_comp = st.date_input("📅 Data para conferência completa:", value=datetime.today(), key="data_resultados_comp")
+        
+        with col_btn_comp:
+            if st.button("🔄 Conferir Resultados Completos", type="primary", key="btn_conferir_comp"):
+                sistema.gerenciador_completo.conferir_resultados_completos(data_resultados_comp)
+        
+        # Mostrar estatísticas dos alertas completos
+        st.markdown("---")
+        st.subheader("📊 Estatísticas dos Alertas Completos")
+        
+        alertas_comp = sistema.gerenciador_completo.carregar_alertas()
+        if alertas_comp:
+            total = len(alertas_comp)
+            conferidos = sum(1 for a in alertas_comp.values() if a.get("conferido", False))
+            enviados = sum(1 for a in alertas_comp.values() if a.get("alerta_enviado", False))
+            
+            col_est1, col_est2, col_est3 = st.columns(3)
+            with col_est1:
+                st.metric("📋 Total Alertas", total)
+            with col_est2:
+                st.metric("✅ Conferidos", conferidos)
+            with col_est3:
+                st.metric("📤 Enviados", enviados)
+            
+            # Mostrar últimos alertas
+            with st.expander("📋 Últimos Alertas Completos"):
+                for chave, alerta in list(alertas_comp.items())[:5]:
+                    st.write(f"⚽ {alerta.get('home', '')} vs {alerta.get('away', '')}")
+                    st.write(f"   📅 {alerta.get('data_busca', '')} | 📤 Enviado: {alerta.get('alerta_enviado', False)}")
+                    st.write("   📊 Análises:")
+                    st.write(f"      ⚽ Over/Under: {alerta.get('analise_over_under', {}).get('tendencia', 'N/A')}")
+                    st.write(f"      🏆 Favorito: {alerta.get('analise_favorito', {}).get('favorito', 'N/A')}")
+                    st.write(f"      ⏰ Gols HT: {alerta.get('analise_gols_ht', {}).get('tendencia_ht', 'N/A')}")
+                    st.write(f"      🤝 Ambas Marcam: {alerta.get('analise_ambas_marcam', {}).get('tendencia_ambas_marcam', 'N/A')}")
+                    st.write("---")
+        else:
+            st.info("ℹ️ Nenhum alerta completo salvo ainda.")
+    
     # Painel de monitoramento
     st.markdown("---")
     st.subheader("📊 Monitoramento da API")
@@ -5451,78 +5510,6 @@ def main():
     with col_mon4:
         st.metric("Rate Limit Hits", stats["rate_limit_hits"])
 
-with tab4:
-    st.subheader("⚽ Alertas Completos - ALL IN ONE")
-    st.info("📊 Todas as análises (Over/Under, Favorito, Gols HT, Ambas Marcam) em um único poster por partida")
-    
-    col1, col2 = st.columns([2, 1])
-    with col1:
-        data_completa = st.date_input("📅 Data para análise completa:", value=datetime.today(), key="data_completa")
-    with col2:
-        todas_ligas_completa = st.checkbox("🌍 Todas as ligas", value=True, key="todas_ligas_completa")
-    
-    ligas_selecionadas_completa = []
-    if not todas_ligas_completa:
-        ligas_selecionadas_completa = st.multiselect(
-            "📌 Selecionar ligas (múltipla escolha):",
-            options=list(ConfigManager.LIGA_DICT.keys()),
-            default=["Campeonato Brasileiro Série A", "Premier League (Inglaterra)"],
-            key="ligas_completa"
-        )
-        
-        if not ligas_selecionadas_completa:
-            st.warning("⚠️ Selecione pelo menos uma liga")
-    
-    if st.button("⚽ Gerar Alertas Completos", type="primary", key="btn_completo"):
-        if not todas_ligas_completa and not ligas_selecionadas_completa:
-            st.error("❌ Selecione pelo menos uma liga ou marque 'Todas as ligas'")
-        else:
-            sistema.processar_alertas_completos(data_completa, ligas_selecionadas_completa, todas_ligas_completa)
-    
-    st.markdown("---")
-    
-    # Seção de conferência de resultados completos
-    st.subheader("📊 Conferir Resultados Completos")
-    
-    col_data_comp, col_btn_comp = st.columns([2, 1])
-    with col_data_comp:
-        data_resultados_comp = st.date_input("📅 Data para conferência completa:", value=datetime.today(), key="data_resultados_comp")
-    
-    with col_btn_comp:
-        if st.button("🔄 Conferir Resultados Completos", type="primary", key="btn_conferir_comp"):
-            sistema.gerenciador_completo.conferir_resultados_completos(data_resultados_comp)
-    
-    # Mostrar estatísticas dos alertas completos
-    st.markdown("---")
-    st.subheader("📊 Estatísticas dos Alertas Completos")
-    
-    alertas_comp = sistema.gerenciador_completo.carregar_alertas()
-    if alertas_comp:
-        total = len(alertas_comp)
-        conferidos = sum(1 for a in alertas_comp.values() if a.get("conferido", False))
-        enviados = sum(1 for a in alertas_comp.values() if a.get("alerta_enviado", False))
-        
-        col_est1, col_est2, col_est3 = st.columns(3)
-        with col_est1:
-            st.metric("📋 Total Alertas", total)
-        with col_est2:
-            st.metric("✅ Conferidos", conferidos)
-        with col_est3:
-            st.metric("📤 Enviados", enviados)
-        
-        # Mostrar últimos alertas
-        with st.expander("📋 Últimos Alertas Completos"):
-            for chave, alerta in list(alertas_comp.items())[:5]:
-                st.write(f"⚽ {alerta.get('home', '')} vs {alerta.get('away', '')}")
-                st.write(f"   📅 {alerta.get('data_busca', '')} | 📤 Enviado: {alerta.get('alerta_enviado', False)}")
-                st.write("   📊 Análises:")
-                st.write(f"      ⚽ Over/Under: {alerta.get('analise_over_under', {}).get('tendencia', 'N/A')}")
-                st.write(f"      🏆 Favorito: {alerta.get('analise_favorito', {}).get('favorito', 'N/A')}")
-                st.write(f"      ⏰ Gols HT: {alerta.get('analise_gols_ht', {}).get('tendencia_ht', 'N/A')}")
-                st.write(f"      🤝 Ambas Marcam: {alerta.get('analise_ambas_marcam', {}).get('tendencia_ambas_marcam', 'N/A')}")
-                st.write("---")
-    else:
-        st.info("ℹ️ Nenhum alerta completo salvo ainda.")
 
 if __name__ == "__main__":
     main()
