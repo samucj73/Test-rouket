@@ -4507,5 +4507,78 @@ def main():
     with col_mon4:
         st.metric("Rate Limit Hits", stats["rate_limit_hits"])
 
+with tab4:
+    st.subheader("⚽ Alertas Completos - ALL IN ONE")
+    st.info("📊 Todas as análises (Over/Under, Favorito, Gols HT, Ambas Marcam) em um único poster por partida")
+    
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        data_completa = st.date_input("📅 Data para análise completa:", value=datetime.today(), key="data_completa")
+    with col2:
+        todas_ligas_completa = st.checkbox("🌍 Todas as ligas", value=True, key="todas_ligas_completa")
+    
+    ligas_selecionadas_completa = []
+    if not todas_ligas_completa:
+        ligas_selecionadas_completa = st.multiselect(
+            "📌 Selecionar ligas (múltipla escolha):",
+            options=list(ConfigManager.LIGA_DICT.keys()),
+            default=["Campeonato Brasileiro Série A", "Premier League (Inglaterra)"],
+            key="ligas_completa"
+        )
+        
+        if not ligas_selecionadas_completa:
+            st.warning("⚠️ Selecione pelo menos uma liga")
+    
+    if st.button("⚽ Gerar Alertas Completos", type="primary", key="btn_completo"):
+        if not todas_ligas_completa and not ligas_selecionadas_completa:
+            st.error("❌ Selecione pelo menos uma liga ou marque 'Todas as ligas'")
+        else:
+            sistema.processar_alertas_completos(data_completa, ligas_selecionadas_completa, todas_ligas_completa)
+    
+    st.markdown("---")
+    
+    # Seção de conferência de resultados completos
+    st.subheader("📊 Conferir Resultados Completos")
+    
+    col_data_comp, col_btn_comp = st.columns([2, 1])
+    with col_data_comp:
+        data_resultados_comp = st.date_input("📅 Data para conferência completa:", value=datetime.today(), key="data_resultados_comp")
+    
+    with col_btn_comp:
+        if st.button("🔄 Conferir Resultados Completos", type="primary", key="btn_conferir_comp"):
+            sistema.gerenciador_completo.conferir_resultados_completos(data_resultados_comp)
+    
+    # Mostrar estatísticas dos alertas completos
+    st.markdown("---")
+    st.subheader("📊 Estatísticas dos Alertas Completos")
+    
+    alertas_comp = sistema.gerenciador_completo.carregar_alertas()
+    if alertas_comp:
+        total = len(alertas_comp)
+        conferidos = sum(1 for a in alertas_comp.values() if a.get("conferido", False))
+        enviados = sum(1 for a in alertas_comp.values() if a.get("alerta_enviado", False))
+        
+        col_est1, col_est2, col_est3 = st.columns(3)
+        with col_est1:
+            st.metric("📋 Total Alertas", total)
+        with col_est2:
+            st.metric("✅ Conferidos", conferidos)
+        with col_est3:
+            st.metric("📤 Enviados", enviados)
+        
+        # Mostrar últimos alertas
+        with st.expander("📋 Últimos Alertas Completos"):
+            for chave, alerta in list(alertas_comp.items())[:5]:
+                st.write(f"⚽ {alerta.get('home', '')} vs {alerta.get('away', '')}")
+                st.write(f"   📅 {alerta.get('data_busca', '')} | 📤 Enviado: {alerta.get('alerta_enviado', False)}")
+                st.write("   📊 Análises:")
+                st.write(f"      ⚽ Over/Under: {alerta.get('analise_over_under', {}).get('tendencia', 'N/A')}")
+                st.write(f"      🏆 Favorito: {alerta.get('analise_favorito', {}).get('favorito', 'N/A')}")
+                st.write(f"      ⏰ Gols HT: {alerta.get('analise_gols_ht', {}).get('tendencia_ht', 'N/A')}")
+                st.write(f"      🤝 Ambas Marcam: {alerta.get('analise_ambas_marcam', {}).get('tendencia_ambas_marcam', 'N/A')}")
+                st.write("---")
+    else:
+        st.info("ℹ️ Nenhum alerta completo salvo ainda.")
+
 if __name__ == "__main__":
     main()
