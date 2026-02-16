@@ -2314,7 +2314,7 @@ class GerenciadorAlertasCompletos:
             y_analysis = y_escudos + TAMANHO_QUADRADO + 120
             
             # Título das análises
-            draw.text((x0 + 80, y_analysis), "📊 ANÁLISES COMPLETAS", font=FONTE_ANALISE_TITULO, fill=(255, 215, 0))
+            #draw.text((x0 + 80, y_analysis), "📊 ANÁLISES COMPLETAS", font=FONTE_ANALISE_TITULO, fill=(255, 215, 0))
             
             # Over/Under
             analise_ou = jogo.get('analise_over_under', {})
@@ -2324,7 +2324,7 @@ class GerenciadorAlertasCompletos:
             cor_ou = (255, 215, 0) if tipo_aposta == "over" else (100, 200, 255)
             
             draw.text((x0 + 80, y_analysis + 50), 
-                     f"⚽ OVER/UNDER: {tendencia} | Conf: {conf_ou:.0f}%", 
+                     f" OVER/UNDER: {tendencia} | Conf: {conf_ou:.0f}%", 
                      font=FONTE_ANALISE, fill=cor_ou)
             
             # Favorito
@@ -2335,7 +2335,7 @@ class GerenciadorAlertasCompletos:
             cor_fav = (255, 87, 34) if favorito == "home" else (33, 150, 243) if favorito == "away" else (255, 193, 7)
             
             draw.text((x0 + 80, y_analysis + 100), 
-                     f"🏆 FAVORITO: {favorito_text} | Conf: {conf_fav:.0f}%", 
+                     f" FAVORITO: {favorito_text} | Conf: {conf_fav:.0f}%", 
                      font=FONTE_ANALISE, fill=cor_fav)
             
             # Gols HT
@@ -2345,7 +2345,7 @@ class GerenciadorAlertasCompletos:
             cor_ht = (76, 175, 80) if "OVER" in tendencia_ht else (244, 67, 54)
             
             draw.text((x0 + 80, y_analysis + 150), 
-                     f"⏰ GOLS HT: {tendencia_ht} | Conf: {conf_ht:.0f}%", 
+                     f" GOLS HT: {tendencia_ht} | Conf: {conf_ht:.0f}%", 
                      font=FONTE_ANALISE, fill=cor_ht)
             
             # Ambas Marcam
@@ -2357,12 +2357,12 @@ class GerenciadorAlertasCompletos:
             cor_am = (155, 89, 182)
             
             draw.text((x0 + 80, y_analysis + 200), 
-                     f"🤝 AMBAS MARCAM: {tendencia_am} | Conf: {conf_am:.0f}%", 
+                     f" AMBAS MARCAM: {tendencia_am} | Conf: {conf_am:.0f}%", 
                      font=FONTE_ANALISE, fill=cor_am)
             
             # Probabilidades detalhadas
             draw.text((x0 + 80, y_analysis + 250), 
-                     f"📊 Prob. Ambas Marcam: SIM {prob_sim:.1f}% | NÃO {prob_nao:.1f}%", 
+                    # f"📊 Prob. Ambas Marcam: SIM {prob_sim:.1f}% | NÃO {prob_nao:.1f}%", 
                      font=FONTE_DETALHES, fill=(200, 200, 200))
             
             # Linha separadora
@@ -2408,7 +2408,7 @@ class GerenciadorAlertasCompletos:
         FONTE_DETALHES = self.poster_generator.criar_fonte(35)
 
         # Título
-        titulo = "🏆 RESULTADOS COMPLETOS - ALL IN ONE"
+        titulo = " RESULTADOS COMPLETOS - ALL IN ONE"
         try:
             titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
             titulo_w = titulo_bbox[2] - titulo_bbox[0]
@@ -2457,7 +2457,7 @@ class GerenciadorAlertasCompletos:
             draw.rectangle([x0, y0, x1, y1], fill=(25, 35, 45), outline=cor_borda, width=4)
 
             # Badge de resultados
-            badge_text = f"🎯 {greens}✅ {reds}❌"
+            badge_text = f" {greens}✅ {reds}❌"
             badge_width = 300
             badge_height = 60
             badge_x = x0 + 50
@@ -2543,28 +2543,28 @@ class GerenciadorAlertasCompletos:
             res_ou = resultados.get('over_under', 'N/A')
             cor_ou = (46, 204, 113) if res_ou == "GREEN" else (231, 76, 60) if res_ou == "RED" else (149, 165, 166)
             draw.text((x0 + 80, y_results + 50), 
-                     f"⚽ OVER/UNDER: {res_ou}", 
+                     f" OVER/UNDER: {res_ou}", 
                      font=FONTE_ANALISE, fill=cor_ou)
             
             # Favorito
             res_fav = resultados.get('favorito', 'N/A')
             cor_fav = (46, 204, 113) if res_fav == "GREEN" else (231, 76, 60) if res_fav == "RED" else (149, 165, 166)
             draw.text((x0 + 80, y_results + 90), 
-                     f"🏆 FAVORITO: {res_fav}", 
+                     f" FAVORITO: {res_fav}", 
                      font=FONTE_ANALISE, fill=cor_fav)
             
             # Gols HT
             res_ht = resultados.get('gols_ht', 'N/A')
             cor_ht = (46, 204, 113) if res_ht == "GREEN" else (231, 76, 60) if res_ht == "RED" else (149, 165, 166)
             draw.text((x0 + 80, y_results + 130), 
-                     f"⏰ GOLS HT: {res_ht}", 
+                     f" GOLS HT: {res_ht}", 
                      font=FONTE_ANALISE, fill=cor_ht)
             
             # Ambas Marcam
             res_am = resultados.get('ambas_marcam', 'N/A')
             cor_am = (46, 204, 113) if res_am == "GREEN" else (231, 76, 60) if res_am == "RED" else (149, 165, 166)
             draw.text((x0 + 80, y_results + 170), 
-                     f"🤝 AMBAS MARCAM: {res_am}", 
+                     f" AMBAS MARCAM: {res_am}", 
                      font=FONTE_ANALISE, fill=cor_am)
 
             y_pos += ALTURA_POR_JOGO
@@ -2641,7 +2641,7 @@ class GerenciadorAlertasCompletos:
             caption = (
                 f"<b>⚽ ALERTA COMPLETO - ALL IN ONE - {data_str}</b>\n\n"
                 f"<b>📋 TOTAL: {len(jogos_para_poster)} JOGOS</b>\n"
-                f"<b>📊 TODAS AS ANÁLISES EM UM ÚNICO POSTER</b>\n\n"
+                #f"<b>📊 TODAS AS ANÁLISES EM UM ÚNICO POSTER</b>\n\n"
                 f"<b>🎯 Over/Under | 🏆 Favorito | ⏰ Gols HT | 🤝 Ambas Marcam</b>\n\n"
                 f"<b>🔥 ELITE MASTER SYSTEM - ANÁLISE COMPLETA</b>"
             )
