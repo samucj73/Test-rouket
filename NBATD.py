@@ -2361,9 +2361,9 @@ class GerenciadorAlertasCompletos:
                      font=FONTE_ANALISE, fill=cor_am)
             
             # Probabilidades detalhadas
-            draw.text((x0 + 80, y_analysis + 250), 
-                    # f"📊 Prob. Ambas Marcam: SIM {prob_sim:.1f}% | NÃO {prob_nao:.1f}%", 
-                     font=FONTE_DETALHES, fill=(200, 200, 200))
+            #draw.text((x0 + 80, y_analysis + 250), 
+                    # f" Prob. Ambas Marcam: SIM {prob_sim:.1f}% | NÃO {prob_nao:.1f}%", 
+                   #  font=FONTE_DETALHES, fill=(200, 200, 200))
             
             # Linha separadora
             draw.line([(x0 + 80, y_analysis + 290), (x1 - 80, y_analysis + 290)], fill=(100, 130, 160), width=2)
