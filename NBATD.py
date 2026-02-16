@@ -2007,6 +2007,9 @@ class ResultadosTopAlertas:
 # =============================
 # NOVA CLASSE: AlertaCompleto (ALL-IN-ONE) - VERSÃO CORRIGIDA
 # =============================
+# =============================
+# NOVA CLASSE: AlertaCompleto (ALL-IN-ONE) - VERSÃO CORRIGIDA
+# =============================
 
 class AlertaCompleto:
     """Representa um alerta completo com todas as análises (Over/Under, Favorito, Ambas Marcam)"""
@@ -2194,6 +2197,41 @@ class GerenciadorAlertasCompletos:
         """Salva resultados completos no arquivo"""
         DataStorage.salvar_json(self.RESULTADOS_COMPLETOS_PATH, resultados)
     
+    def filtrar_melhores_jogos(self, jogos_analisados: list, limiares: dict = None) -> list:
+        """
+        Filtra apenas os jogos que atendem aos critérios mínimos de confiança em todas as análises.
+        
+        Args:
+            jogos_analisados: Lista de dicionários com os dados dos jogos analisados.
+            limiares: Dicionário com as chaves 'over_under', 'favorito', 'gols_ht', 'ambas_marcam'
+                      e valores entre 0 e 100. Se None, usa padrão 70 para todos.
+        
+        Returns:
+            Lista com os jogos que possuem todas as confianças >= limiar.
+        """
+        if limiares is None:
+            limiares = {
+                'over_under': 70,
+                'favorito': 70,
+                'gols_ht': 70,
+                'ambas_marcam': 70
+            }
+        
+        melhores = []
+        for jogo_dict in jogos_analisados:
+            conf_over = jogo_dict.get('confianca', 0)
+            conf_fav = jogo_dict.get('confianca_vitoria', 0)
+            conf_ht = jogo_dict.get('confianca_ht', 0)
+            conf_am = jogo_dict.get('confianca_ambas_marcam', 0)
+            
+            if (conf_over >= limiares['over_under'] and
+                conf_fav >= limiares['favorito'] and
+                conf_ht >= limiares['gols_ht'] and
+                conf_am >= limiares['ambas_marcam']):
+                melhores.append(jogo_dict)
+        
+        return melhores
+    
     def gerar_poster_completo(self, jogos: list) -> io.BytesIO:
         """Gera poster completo com todas as análises para múltiplos jogos"""
         LARGURA = 2000
@@ -2313,9 +2351,6 @@ class GerenciadorAlertasCompletos:
             # Análises
             y_analysis = y_escudos + TAMANHO_QUADRADO + 120
             
-            # Título das análises
-            #draw.text((x0 + 80, y_analysis), "📊 ANÁLISES COMPLETAS", font=FONTE_ANALISE_TITULO, fill=(255, 215, 0))
-            
             # Over/Under
             analise_ou = jogo.get('analise_over_under', {})
             tendencia = analise_ou.get('tendencia', 'N/A')
@@ -2359,11 +2394,6 @@ class GerenciadorAlertasCompletos:
             draw.text((x0 + 80, y_analysis + 200), 
                      f" AMBAS MARCAM: {tendencia_am} | Conf: {conf_am:.0f}%", 
                      font=FONTE_ANALISE, fill=cor_am)
-            
-            # Probabilidades detalhadas
-            #draw.text((x0 + 80, y_analysis + 250), 
-                    # f" Prob. Ambas Marcam: SIM {prob_sim:.1f}% | NÃO {prob_nao:.1f}%", 
-                   #  font=FONTE_DETALHES, fill=(200, 200, 200))
             
             # Linha separadora
             draw.line([(x0 + 80, y_analysis + 290), (x1 - 80, y_analysis + 290)], fill=(100, 130, 160), width=2)
@@ -2584,15 +2614,33 @@ class GerenciadorAlertasCompletos:
         
         return buffer
     
-    def processar_e_enviar_alertas_completos(self, jogos_analisados: list, data_busca: str):
-        """Processa jogos e envia alertas completos"""
-        if not jogos_analisados:
-            return
+    def processar_e_enviar_alertas_completos(self, jogos_analisados: list, data_busca: str, filtrar_melhores: bool = True, limiares: dict = None):
+        """
+        Processa jogos e envia alertas completos em lotes de 3 jogos por vez.
         
+        Args:
+            jogos_analisados: Lista de dicionários com os dados dos jogos analisados.
+            data_busca: Data da busca no formato string.
+            filtrar_melhores: Se True, aplica o filtro de melhores jogos antes de enviar.
+            limiares: Dicionário com os limiares de confiança para o filtro (opcional).
+        """
+        if not jogos_analisados:
+            return False
+
+        # Aplicar filtro de melhores jogos, se solicitado
+        if filtrar_melhores:
+            jogos_para_processar = self.filtrar_melhores_jogos(jogos_analisados, limiares)
+            if not jogos_para_processar:
+                st.info("⚠️ Nenhum jogo atende aos critérios de qualidade. Nada será enviado.")
+                return False
+            st.info(f"✅ {len(jogos_para_processar)} jogos selecionados como melhores de um total de {len(jogos_analisados)}.")
+        else:
+            jogos_para_processar = jogos_analisados
+
         alertas_criados = []
         jogos_para_poster = []
-        
-        for jogo_dict in jogos_analisados:
+
+        for jogo_dict in jogos_para_processar:
             # Criar objeto Jogo
             jogo = Jogo({
                 "id": jogo_dict["id"],
@@ -2602,7 +2650,7 @@ class GerenciadorAlertasCompletos:
                 "competition": {"name": jogo_dict.get("liga", "")},
                 "status": jogo_dict.get("status", "")
             })
-            
+
             # Definir análises
             analise_completa = {
                 "tendencia": jogo_dict.get("tendencia", ""),
@@ -2613,12 +2661,12 @@ class GerenciadorAlertasCompletos:
                 "detalhes": jogo_dict.get("detalhes", {})
             }
             jogo.set_analise(analise_completa)
-            
+
             # Criar alerta completo
             alerta = AlertaCompleto(jogo, data_busca)
             self.salvar_alerta_completo(alerta)
             alertas_criados.append(alerta)
-            
+
             # Preparar para o poster
             jogos_para_poster.append({
                 "home": jogo.home_team,
@@ -2632,74 +2680,90 @@ class GerenciadorAlertasCompletos:
                 "analise_gols_ht": alerta.analise_gols_ht,
                 "analise_ambas_marcam": alerta.analise_ambas_marcam
             })
-        
-        if jogos_para_poster:
-            # Gerar e enviar poster
-            poster = self.gerar_poster_completo(jogos_para_poster)
+
+        if not jogos_para_poster:
+            return False
+
+        # Dividir em lotes de 3 jogos
+        lotes = [jogos_para_poster[i:i+3] for i in range(0, len(jogos_para_poster), 3)]
+        total_lotes = len(lotes)
+        enviados_com_sucesso = 0
+
+        for idx, lote in enumerate(lotes, 1):
+            # Gerar poster para o lote
+            poster = self.gerar_poster_completo(lote)
             data_str = datetime.now().strftime("%d/%m/%Y")
-            
+
             caption = (
-                f"<b>⚽ ALERTA COMPLETO - ALL IN ONE - {data_str}</b>\n\n"
-                f"<b>📋 TOTAL: {len(jogos_para_poster)} JOGOS</b>\n"
-                #f"<b>📊 TODAS AS ANÁLISES EM UM ÚNICO POSTER</b>\n\n"
+                f"<b>⚽ ALERTA COMPLETO - ALL IN ONE - {data_str}</b>\n"
+                f"<b>📋 LOTE {idx}/{total_lotes} - {len(lote)} JOGOS</b>\n\n"
                 f"<b>🎯 Over/Under | 🏆 Favorito | ⏰ Gols HT | 🤝 Ambas Marcam</b>\n\n"
                 f"<b>🔥 ELITE MASTER SYSTEM - ANÁLISE COMPLETA</b>"
             )
-            
+
             if self.telegram_client.enviar_foto(poster, caption=caption):
-                # Marcar alertas como enviados
-                for alerta in alertas_criados:
-                    alerta.alerta_enviado = True
-                    self.salvar_alerta_completo(alerta)
-                
-                st.success(f"✅ Poster completo enviado com {len(jogos_para_poster)} jogos!")
-                return True
-        
-        return False
+                enviados_com_sucesso += 1
+                # Marcar os alertas deste lote como enviados
+                for jogo_lote in lote:
+                    # Encontrar o alerta correspondente (pelo nome dos times e hora)
+                    for alerta in alertas_criados:
+                        if (alerta.jogo.home_team == jogo_lote["home"] and 
+                            alerta.jogo.away_team == jogo_lote["away"] and
+                            alerta.jogo.get_hora_brasilia_datetime() == jogo_lote["hora"]):
+                            alerta.alerta_enviado = True
+                            self.salvar_alerta_completo(alerta)
+                            break
+
+        if enviados_com_sucesso == total_lotes:
+            st.success(f"✅ Todos os {total_lotes} lotes de alertas completos foram enviados!")
+            return True
+        else:
+            st.warning(f"⚠️ Apenas {enviados_com_sucesso} de {total_lotes} lotes foram enviados.")
+            return False
     
     def conferir_resultados_completos(self, data_selecionada):
-        """Conferir resultados dos alertas completos"""
+        """Conferir resultados dos alertas completos e enviar em lotes de 3 jogos"""
         hoje = data_selecionada.strftime("%Y-%m-%d")
         st.subheader(f"🏆 Conferindo Resultados Completos - {data_selecionada.strftime('%d/%m/%Y')}")
-        
+
         alertas = self.carregar_alertas()
         if not alertas:
             st.warning("⚠️ Nenhum alerta completo salvo para conferência")
             return
-        
+
         # Filtrar alertas por data
         alertas_hoje = {k: v for k, v in alertas.items() if v.get("data_busca") == hoje and not v.get("conferido", False)}
-        
+
         if not alertas_hoje:
             st.info(f"ℹ️ Nenhum alerta pendente para {hoje}")
             return
-        
+
         st.info(f"🔍 Encontrados {len(alertas_hoje)} alertas completos para conferência")
-        
+
         jogos_conferidos = []
         progress_bar = st.progress(0)
-        
+
         for idx, (chave, alerta) in enumerate(alertas_hoje.items()):
             fixture_id = alerta.get("id")
-            
+
             # Obter detalhes atualizados do jogo
             match_data = self.api_client.obter_detalhes_jogo(fixture_id)
             if not match_data:
                 st.warning(f"⚠️ Não foi possível obter dados do jogo {alerta.get('home')} vs {alerta.get('away')}")
                 continue
-            
+
             status = match_data.get("status", "")
-            
+
             if status == "FINISHED":
                 score = match_data.get("score", {})
                 full_time = score.get("fullTime", {})
                 half_time = score.get("halfTime", {})
-                
+
                 home_goals = full_time.get("home", 0)
                 away_goals = full_time.get("away", 0)
                 ht_home_goals = half_time.get("home", 0)
                 ht_away_goals = half_time.get("away", 0)
-                
+
                 # Criar objeto AlertaCompleto e definir resultados
                 jogo = Jogo({
                     "id": fixture_id,
@@ -2709,7 +2773,7 @@ class GerenciadorAlertasCompletos:
                     "competition": {"name": alerta.get("liga", "")},
                     "status": status
                 })
-                
+
                 # Definir análises
                 analise_completa = {
                     "tendencia": alerta.get("analise_over_under", {}).get("tendencia", ""),
@@ -2720,20 +2784,20 @@ class GerenciadorAlertasCompletos:
                     "detalhes": alerta.get("detalhes", {})
                 }
                 jogo.set_analise(analise_completa)
-                
+
                 # Criar alerta completo com as análises
                 alerta_completo = AlertaCompleto(jogo, hoje)
                 alerta_completo.analise_favorito = alerta.get("analise_favorito", {})
                 alerta_completo.analise_gols_ht = alerta.get("analise_gols_ht", {})
                 alerta_completo.analise_ambas_marcam = alerta.get("analise_ambas_marcam", {})
-                
+
                 # Definir resultados
                 alerta_completo.set_resultados(home_goals, away_goals, ht_home_goals, ht_away_goals)
-                
+
                 # Atualizar alerta original
                 alertas[chave]["conferido"] = True
                 alertas[chave]["resultados"] = alerta_completo.resultados
-                
+
                 # Adicionar à lista de conferidos
                 jogos_conferidos.append({
                     "home": alerta.get("home", ""),
@@ -2744,29 +2808,30 @@ class GerenciadorAlertasCompletos:
                     "escudo_away": alerta.get("escudo_away", ""),
                     "resultados": alerta_completo.resultados
                 })
-                
+
                 # Mostrar resultado
                 greens = sum(1 for r in alerta_completo.resultados.values() 
                            if r in ["GREEN", "over_under", "favorito", "gols_ht", "ambas_marcam"])
                 reds = sum(1 for r in alerta_completo.resultados.values() 
                           if r in ["RED", "over_under", "favorito", "gols_ht", "ambas_marcam"])
-                
+
                 st.write(f"🏆 {alerta.get('home', '')} {home_goals}-{away_goals} {alerta.get('away', '')}")
                 st.write(f"   ✅ GREEN: {greens} | ❌ RED: {reds}")
-            
+
             progress_bar.progress((idx + 1) / len(alertas_hoje))
-        
+
         # Salvar alertas atualizados
         self._salvar_alertas(alertas)
-        
-        # Enviar resultados se houver jogos conferidos
+
+        # Enviar resultados se houver jogos conferidos, em lotes de 3
         if jogos_conferidos:
-            st.success(f"✅ {len(jogos_conferidos)} jogos conferidos! Enviando resultados...")
-            
-            # Gerar poster de resultados
-            poster = self.gerar_poster_resultados_completos(jogos_conferidos)
-            
-            # Calcular estatísticas
+            st.success(f"✅ {len(jogos_conferidos)} jogos conferidos! Enviando resultados em lotes...")
+
+            # Dividir em lotes de 3
+            lotes = [jogos_conferidos[i:i+3] for i in range(0, len(jogos_conferidos), 3)]
+            total_lotes = len(lotes)
+
+            # Estatísticas globais
             total_greens = 0
             total_reds = 0
             for jogo in jogos_conferidos:
@@ -2776,24 +2841,51 @@ class GerenciadorAlertasCompletos:
                         total_greens += 1
                     elif resultados.get(key) == "RED":
                         total_reds += 1
-            
+
             total_analises = len(jogos_conferidos) * 4
-            taxa_acerto = (total_greens / total_analises * 100) if total_analises > 0 else 0
-            
-            caption = (
-                f"<b>🏆 RESULTADOS COMPLETOS - {hoje}</b>\n\n"
-                f"<b>📋 TOTAL DE JOGOS: {len(jogos_conferidos)}</b>\n"
-                f"<b>📊 TOTAL DE ANÁLISES: {total_analises}</b>\n"
-                f"<b>✅ GREEN: {total_greens}</b>\n"
-                f"<b>❌ RED: {total_reds}</b>\n"
-                f"<b>🎯 TAXA DE ACERTO: {taxa_acerto:.1f}%</b>\n\n"
-                f"<b>🔥 ELITE MASTER SYSTEM - RESULTADOS CONFIRMADOS</b>"
-            )
-            
-            if self.telegram_client.enviar_foto(poster, caption=caption):
-                st.success("📤 Resultados completos enviados!")
-            
-            # Mostrar estatísticas detalhadas
+            taxa_acerto_global = (total_greens / total_analises * 100) if total_analises > 0 else 0
+
+            for idx, lote in enumerate(lotes, 1):
+                # Gerar poster para o lote
+                poster = self.gerar_poster_resultados_completos(lote)
+
+                # Calcular estatísticas do lote
+                greens_lote = 0
+                reds_lote = 0
+                for jogo in lote:
+                    resultados = jogo.get("resultados", {})
+                    for key in ['over_under', 'favorito', 'gols_ht', 'ambas_marcam']:
+                        if resultados.get(key) == "GREEN":
+                            greens_lote += 1
+                        elif resultados.get(key) == "RED":
+                            reds_lote += 1
+                analises_lote = len(lote) * 4
+                taxa_lote = (greens_lote / analises_lote * 100) if analises_lote > 0 else 0
+
+                caption = (
+                    f"<b>🏆 RESULTADOS COMPLETOS - {hoje}</b>\n"
+                    f"<b>📋 LOTE {idx}/{total_lotes} - {len(lote)} JOGOS</b>\n\n"
+                    f"<b>✅ GREEN: {greens_lote}</b>\n"
+                    f"<b>❌ RED: {reds_lote}</b>\n"
+                    f"<b>🎯 TAXA DO LOTE: {taxa_lote:.1f}%</b>\n\n"
+                    f"<b>🔥 ELITE MASTER SYSTEM - RESULTADOS CONFIRMADOS</b>"
+                )
+
+                if self.telegram_client.enviar_foto(poster, caption=caption):
+                    st.success(f"📤 Lote {idx}/{total_lotes} enviado!")
+                else:
+                    st.error(f"❌ Falha ao enviar lote {idx}/{total_lotes}")
+
+            # Mostrar estatísticas globais
+            st.markdown("---")
+            st.subheader("📊 Estatísticas Globais")
+            st.metric("Total de Jogos", len(jogos_conferidos))
+            st.metric("Total de Análises", total_analises)
+            st.metric("Total GREEN", total_greens)
+            st.metric("Total RED", total_reds)
+            st.metric("Taxa de Acerto Global", f"{taxa_acerto_global:.1f}%")
+
+            # Mostrar estatísticas detalhadas por tipo
             self._mostrar_estatisticas_detalhadas(jogos_conferidos)
     
     def _mostrar_estatisticas_detalhadas(self, jogos_conferidos: list):
@@ -2850,6 +2942,8 @@ class GerenciadorAlertasCompletos:
                 st.metric("🤝 Ambas Marcam", 
                          f"{stats['ambas_marcam']['GREEN']}✅ {stats['ambas_marcam']['RED']}❌",
                          f"{taxa_am:.1f}%")
+
+
 
 # =============================
 # CLASSES DE COMUNICAÇÃO
