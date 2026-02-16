@@ -2212,8 +2212,8 @@ class GerenciadorAlertasCompletos:
         FONTE_TIMES = self.poster_generator.criar_fonte(60)
         FONTE_VS = self.poster_generator.criar_fonte(55)
         FONTE_INFO = self.poster_generator.criar_fonte(45)
-        FONTE_ANALISE = self.poster_generator.criar_fonte(40)
-        FONTE_ANALISE_TITULO = self.poster_generator.criar_fonte(45)
+        FONTE_ANALISE = self.poster_generator.criar_fonte(55)
+        FONTE_ANALISE_TITULO = self.poster_generator.criar_fonte(55)
         FONTE_DETALHES = self.poster_generator.criar_fonte(35)
 
         # Título
