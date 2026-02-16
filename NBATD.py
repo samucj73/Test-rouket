@@ -2212,9 +2212,9 @@ class GerenciadorAlertasCompletos:
         if limiares is None:
             limiares = {
                 'over_under': 60,
-                'favorito': 55,
-                'gols_ht': 50,
-                'ambas_marcam': 55,
+                'favorito': 50,
+                'gols_ht': 30,
+                'ambas_marcam': 30,
             }
         
         melhores = []
