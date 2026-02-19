@@ -66,10 +66,10 @@ class AnaliseLotofacil:
         """Analisa soma total dos números nos concursos históricos"""
         somas = [sum(concurso) for concurso in self.concursos]
         return {
-            'media': np.mean(somas),
-            'std': np.std(somas),
-            'min': min(somas),
-            'max': max(somas)
+            'media': np.mean(somas) if somas else 0,
+            'std': np.std(somas) if somas else 0,
+            'min': min(somas) if somas else 0,
+            'max': max(somas) if somas else 0
         }
     
     # =================================================
@@ -143,6 +143,9 @@ class AnaliseLotofacil:
         """Reproduz padrões estatísticos dos concursos anteriores"""
         jogos = []
         
+        if not self.padroes_par_impar:
+            return self.estrategia_frequencia(n_jogos)
+        
         # Distribuição de pares/ímpares mais comum
         pares_comum = Counter(self.padroes_par_impar).most_common(1)[0][0]
         
@@ -157,8 +160,11 @@ class AnaliseLotofacil:
             pares = [n for n in self.numeros if n % 2 == 0]
             impares = [n for n in self.numeros if n % 2 == 1]
             
-            jogo.update(random.sample(pares, min(qtd_pares, len(pares))))
-            jogo.update(random.sample(impares, 15 - qtd_pares))
+            qtd_pares_disponivel = min(qtd_pares, len(pares))
+            qtd_impares = 15 - qtd_pares_disponivel
+            
+            jogo.update(random.sample(pares, qtd_pares_disponivel))
+            jogo.update(random.sample(impares, qtd_impares))
             
             # Ajusta soma para próximo da média histórica
             soma_atual = sum(jogo)
@@ -170,16 +176,20 @@ class AnaliseLotofacil:
                 # Remove um número e adiciona outro
                 if soma_atual > media_alvo:
                     removido = max(jogo)
-                    adicionado = random.choice([n for n in self.numeros if n < removido and n not in jogo])
+                    candidatos = [n for n in self.numeros if n < removido and n not in jogo]
+                    if candidatos:
+                        adicionado = random.choice(candidatos)
+                        jogo.remove(removido)
+                        jogo.add(adicionado)
                 else:
                     removido = min(jogo)
-                    adicionado = random.choice([n for n in self.numeros if n > removido and n not in jogo])
+                    candidatos = [n for n in self.numeros if n > removido and n not in jogo]
+                    if candidatos:
+                        adicionado = random.choice(candidatos)
+                        jogo.remove(removido)
+                        jogo.add(adicionado)
                 
-                if adicionado:
-                    jogo.remove(removido)
-                    jogo.add(adicionado)
-                    soma_atual = sum(jogo)
-                
+                soma_atual = sum(jogo)
                 tentativas += 1
             
             jogos.append(sorted(jogo))
@@ -294,7 +304,14 @@ def main():
     with st.sidebar:
         st.header("⚙️ Configurações")
         
-        qtd = st.slider("Quantidade de concursos para análise", 20, 500, 200, 10)
+        qtd = st.slider(
+            "Quantidade de concursos para análise", 
+            min_value=5,  # Mínimo de 5 concursos
+            max_value=500, 
+            value=20,  # Valor padrão 20
+            step=5,
+            help="Selecione no mínimo 5 concursos para análise"
+        )
         
         if st.button("🔄 Carregar dados históricos", type="primary"):
             with st.spinner("Carregando concursos..."):
@@ -303,7 +320,10 @@ def main():
                     resposta = requests.get(url).json()
                     
                     concursos = []
-                    for i in range(min(qtd, len(resposta))):
+                    # Garante que carrega pelo menos a quantidade solicitada
+                    quantidade_carregar = max(5, min(qtd, len(resposta)))
+                    
+                    for i in range(quantidade_carregar):
                         concurso = sorted(map(int, resposta[i]["dezenas"]))
                         concursos.append(concurso)
                     
@@ -316,139 +336,155 @@ def main():
                     ultimo = resposta[0]
                     st.info(f"📅 Último concurso: {ultimo['concurso']} - {ultimo['data']}")
                     
+                    # Aviso se carregou menos que o solicitado
+                    if len(concursos) < qtd:
+                        st.warning(f"⚠️ Apenas {len(concursos)} concursos disponíveis na API")
+                    
                 except Exception as e:
                     st.error(f"Erro ao carregar dados: {e}")
     
     # Abas para organização
     if st.session_state.concursos:
-        tab1, tab2, tab3 = st.tabs(["📈 Análise Estatística", "🎲 Gerar Jogos", "📊 Resultados"])
-        
-        with tab1:
-            st.header("Análise dos Dados Históricos")
+        # Verifica se tem pelo menos 5 concursos
+        if len(st.session_state.concursos) >= 5:
+            tab1, tab2, tab3 = st.tabs(["📈 Análise Estatística", "🎲 Gerar Jogos", "📊 Resultados"])
             
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                # Gráfico de frequências
-                fig_freq = st.session_state.analise.grafico_frequencias()
-                st.plotly_chart(fig_freq, use_container_width=True)
-            
-            with col2:
-                # Gráfico de defasagens
-                fig_def = st.session_state.analise.grafico_defasagens()
-                st.plotly_chart(fig_def, use_container_width=True)
-            
-            # Estatísticas descritivas
-            st.subheader("📊 Estatísticas Descritivas")
-            
-            col3, col4, col5 = st.columns(3)
-            
-            with col3:
-                soma_stats = st.session_state.analise.distribuicao_soma
-                st.metric("Média da soma dos números", f"{soma_stats['media']:.1f}")
-                st.metric("Desvio padrão", f"{soma_stats['std']:.1f}")
-            
-            with col4:
-                # Números mais frequentes
-                top_numeros = sorted(
-                    st.session_state.analise.frequencias.items(),
-                    key=lambda x: x[1],
-                    reverse=True
-                )[:5]
+            with tab1:
+                st.header("Análise dos Dados Históricos")
+                st.info(f"📊 Analisando {len(st.session_state.concursos)} concursos")
                 
-                st.write("**Números mais frequentes:**")
-                for num, freq in top_numeros:
-                    st.write(f"Nº {num:02d}: {freq:.2f}%")
-            
-            with col5:
-                # Números mais defasados
-                top_defasados = sorted(
-                    st.session_state.analise.defasagens.items(),
-                    key=lambda x: x[1],
-                    reverse=True
-                )[:5]
-                
-                st.write("**Números mais atrasados:**")
-                for num, defas in top_defasados:
-                    st.write(f"Nº {num:02d}: {defas} concursos")
-        
-        with tab2:
-            st.header("Gerar Jogos Baseados em Estatísticas")
-            
-            col1, col2 = st.columns([2, 1])
-            
-            with col1:
-                estrategia = st.selectbox(
-                    "Escolha a estratégia de geração",
-                    [
-                        "📈 Baseada em Frequência",
-                        "⏰ Baseada em Defasagem",
-                        "📊 Baseada em Padrões Históricos",
-                        "🔄 Estratégia Mista"
-                    ]
-                )
-            
-            with col2:
-                quantidade = st.number_input("Quantidade de jogos", 5, 100, 15)
-            
-            if st.button("🚀 Gerar jogos", type="primary"):
-                mapa = {
-                    "📈 Baseada em Frequência": st.session_state.analise.estrategia_frequencia,
-                    "⏰ Baseada em Defasagem": st.session_state.analise.estrategia_defasagem,
-                    "📊 Baseada em Padrões Históricos": st.session_state.analise.estrategia_padroes,
-                    "🔄 Estratégia Mista": st.session_state.analise.estrategia_mista
-                }
-                
-                st.session_state.jogos = mapa[estrategia](quantidade)
-                st.success(f"✅ {len(st.session_state.jogos)} jogos gerados!")
-        
-        with tab3:
-            if st.session_state.jogos:
-                st.header("Resultados da Conferência")
-                
-                # Mostra jogos gerados
-                with st.expander("🎲 Ver jogos gerados", expanded=False):
-                    df_jogos = pd.DataFrame({
-                        f"Jogo {i+1}": ", ".join([f"{n:02d}" for n in jogo])
-                        for i, jogo in enumerate(st.session_state.jogos)
-                    }.items(), columns=["Jogo", "Dezenas"])
-                    st.dataframe(df_jogos, use_container_width=True)
-                
-                # Conferência com último concurso
-                st.subheader("🎯 Conferência com o último concurso")
-                resultado = st.session_state.analise.conferir_jogos(
-                    st.session_state.jogos
-                )
-                df_resultado = pd.DataFrame(resultado)
-                st.dataframe(df_resultado, use_container_width=True)
-                
-                # Resumo de acertos
-                st.subheader("📊 Distribuição de Acertos")
-                acertos_counts = df_resultado["Acertos"].value_counts().sort_index()
-                
-                col1, col2 = st.columns([1, 1])
+                col1, col2 = st.columns(2)
                 
                 with col1:
-                    st.bar_chart(acertos_counts)
+                    # Gráfico de frequências
+                    fig_freq = st.session_state.analise.grafico_frequencias()
+                    st.plotly_chart(fig_freq, use_container_width=True)
                 
                 with col2:
-                    st.write("**Resumo:**")
-                    st.write(f"Total de jogos: {len(df_resultado)}")
-                    st.write(f"Média de acertos: {df_resultado['Acertos'].mean():.2f}")
-                    st.write(f"Máximo de acertos: {df_resultado['Acertos'].max()}")
-                    st.write(f"Mínimo de acertos: {df_resultado['Acertos'].min()}")
+                    # Gráfico de defasagens
+                    fig_def = st.session_state.analise.grafico_defasagens()
+                    st.plotly_chart(fig_def, use_container_width=True)
                 
-                # Exportação
-                if st.button("📥 Exportar resultados para CSV"):
-                    csv = df_resultado.to_csv(index=False)
-                    st.download_button(
-                        label="Download CSV",
-                        data=csv,
-                        file_name=f"lotofacil_resultados_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                        mime="text/csv"
+                # Estatísticas descritivas
+                st.subheader("📊 Estatísticas Descritivas")
+                
+                col3, col4, col5 = st.columns(3)
+                
+                with col3:
+                    soma_stats = st.session_state.analise.distribuicao_soma
+                    st.metric("Média da soma dos números", f"{soma_stats['media']:.1f}")
+                    st.metric("Desvio padrão", f"{soma_stats['std']:.1f}")
+                
+                with col4:
+                    # Números mais frequentes
+                    if st.session_state.analise.frequencias:
+                        top_numeros = sorted(
+                            st.session_state.analise.frequencias.items(),
+                            key=lambda x: x[1],
+                            reverse=True
+                        )[:5]
+                        
+                        st.write("**Números mais frequentes:**")
+                        for num, freq in top_numeros:
+                            st.write(f"Nº {num:02d}: {freq:.2f}%")
+                
+                with col5:
+                    # Números mais defasados
+                    if st.session_state.analise.defasagens:
+                        top_defasados = sorted(
+                            st.session_state.analise.defasagens.items(),
+                            key=lambda x: x[1],
+                            reverse=True
+                        )[:5]
+                        
+                        st.write("**Números mais atrasados:**")
+                        for num, defas in top_defasados:
+                            st.write(f"Nº {num:02d}: {defas} concurso{'s' if defas > 1 else ''}")
+            
+            with tab2:
+                st.header("Gerar Jogos Baseados em Estatísticas")
+                
+                col1, col2 = st.columns([2, 1])
+                
+                with col1:
+                    estrategia = st.selectbox(
+                        "Escolha a estratégia de geração",
+                        [
+                            "📈 Baseada em Frequência",
+                            "⏰ Baseada em Defasagem",
+                            "📊 Baseada em Padrões Históricos",
+                            "🔄 Estratégia Mista"
+                        ]
                     )
-            else:
-                st.info("ℹ️ Gere alguns jogos na aba 'Gerar Jogos' primeiro.")
+                
+                with col2:
+                    quantidade = st.number_input("Quantidade de jogos", 5, 100, 15)
+                
+                if st.button("🚀 Gerar jogos", type="primary"):
+                    mapa = {
+                        "📈 Baseada em Frequência": st.session_state.analise.estrategia_frequencia,
+                        "⏰ Baseada em Defasagem": st.session_state.analise.estrategia_defasagem,
+                        "📊 Baseada em Padrões Históricos": st.session_state.analise.estrategia_padroes,
+                        "🔄 Estratégia Mista": st.session_state.analise.estrategia_mista
+                    }
+                    
+                    st.session_state.jogos = mapa[estrategia](quantidade)
+                    st.success(f"✅ {len(st.session_state.jogos)} jogos gerados!")
+            
+            with tab3:
+                if st.session_state.jogos:
+                    st.header("Resultados da Conferência")
+                    
+                    # Mostra jogos gerados
+                    with st.expander("🎲 Ver jogos gerados", expanded=False):
+                        df_jogos = pd.DataFrame({
+                            f"Jogo {i+1}": ", ".join([f"{n:02d}" for n in jogo])
+                            for i, jogo in enumerate(st.session_state.jogos)
+                        }.items(), columns=["Jogo", "Dezenas"])
+                        st.dataframe(df_jogos, use_container_width=True)
+                    
+                    # Conferência com último concurso
+                    st.subheader("🎯 Conferência com o último concurso")
+                    resultado = st.session_state.analise.conferir_jogos(
+                        st.session_state.jogos
+                    )
+                    df_resultado = pd.DataFrame(resultado)
+                    st.dataframe(df_resultado, use_container_width=True)
+                    
+                    # Resumo de acertos
+                    st.subheader("📊 Distribuição de Acertos")
+                    acertos_counts = df_resultado["Acertos"].value_counts().sort_index()
+                    
+                    col1, col2 = st.columns([1, 1])
+                    
+                    with col1:
+                        if not acertos_counts.empty:
+                            st.bar_chart(acertos_counts)
+                        else:
+                            st.info("Nenhum acerto registrado")
+                    
+                    with col2:
+                        st.write("**Resumo:**")
+                        st.write(f"Total de jogos: {len(df_resultado)}")
+                        st.write(f"Média de acertos: {df_resultado['Acertos'].mean():.2f}")
+                        st.write(f"Máximo de acertos: {df_resultado['Acertos'].max()}")
+                        st.write(f"Mínimo de acertos: {df_resultado['Acertos'].min()}")
+                    
+                    # Exportação
+                    if st.button("📥 Exportar resultados para CSV"):
+                        csv = df_resultado.to_csv(index=False)
+                        st.download_button(
+                            label="Download CSV",
+                            data=csv,
+                            file_name=f"lotofacil_resultados_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                            mime="text/csv"
+                        )
+                else:
+                    st.info("ℹ️ Gere alguns jogos na aba 'Gerar Jogos' primeiro.")
+        else:
+            st.warning(f"⚠️ São necessários pelo menos 5 concursos para análise. Atualmente há {len(st.session_state.concursos)} concursos carregados. Ajuste o slider para carregar mais concursos.")
+    else:
+        st.info("👈 Clique no botão 'Carregar dados históricos' na barra lateral para começar.")
 
 # =====================================================
 # EXECUÇÃO
