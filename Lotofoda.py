@@ -16,13 +16,13 @@ warnings.filterwarnings('ignore')
 # CONFIGURAÇÃO DA APLICAÇÃO
 # =====================================================
 st.set_page_config(
-    page_title="🎯 LOTOFÁCIL - ANALISADOR PROFISSIONAL V2 (FILTROS BALANCEADOS)",
+    page_title="🎯 LOTOFÁCIL - ANALISADOR PROFISSIONAL V2",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # =====================================================
-# CLASSE PRINCIPAL OTIMIZADA - VERSÃO BALANCEADA
+# CLASSE PRINCIPAL OTIMIZADA - VERSÃO REFORÇADA
 # =====================================================
 class AnaliseLotofacilAvancada:
     def __init__(self, concursos):
@@ -39,7 +39,7 @@ class AnaliseLotofacilAvancada:
         self.probabilidades_condicionais = self._calcular_prob_condicionais()
         self.tendencias_temporais = self._analisar_tendencias_temporais()
         
-        # Análise de sequências e padrões específicos
+        # NOVO: Análise de sequências e padrões específicos
         self.padroes_sequencia = self._analisar_sequencias()
         self.numeros_chave = self._identificar_numeros_chave()
         
@@ -53,7 +53,7 @@ class AnaliseLotofacilAvancada:
             for i, concurso in enumerate(self.concursos):
                 if num in concurso:
                     # Peso exponencial para dar mais importância aos concursos recentes
-                    peso = np.exp(-i / 30)
+                    peso = np.exp(-i / 30)  # Decaimento mais acentuado (antes era 50)
                     ocorrencias += 1
                     peso_total += peso
             
@@ -102,7 +102,7 @@ class AnaliseLotofacilAvancada:
             'quadrantes': [],
             'intervalos': [],
             'repetidos_consecutivos': [],
-            'sequencias': []
+            'sequencias': []  # NOVO
         }
         
         for concurso in self.concursos:
@@ -134,21 +134,17 @@ class AnaliseLotofacilAvancada:
                     repetidos = len(set(concurso) & set(anterior))
                     padroes['repetidos_consecutivos'].append(repetidos)
             
-            # Detectar sequências (3+ números consecutivos)
+            # NOVO: Detectar sequências (3+ números consecutivos)
             seq_count = 0
-            i = 0
-            while i < len(concurso)-2:
+            for i in range(len(concurso)-2):
                 if concurso[i+2] - concurso[i+1] == 1 and concurso[i+1] - concurso[i] == 1:
                     seq_count += 1
-                    i += 3
-                else:
-                    i += 1
             padroes['sequencias'].append(seq_count)
         
         return padroes
     
     def _analisar_sequencias(self):
-        """Analisa padrões de sequências numéricas"""
+        """NOVO: Analisa padrões de sequências numéricas"""
         sequencias = {
             '2_consecutivos': [],
             '3_consecutivos': [],
@@ -162,8 +158,7 @@ class AnaliseLotofacilAvancada:
             triplas_consec = 0
             quadras_consec = 0
             
-            i = 0
-            while i < len(concurso)-1:
+            for i in range(len(concurso)-1):
                 if concurso[i+1] - concurso[i] == 1:
                     pares_consec += 1
                     
@@ -172,13 +167,6 @@ class AnaliseLotofacilAvancada:
                         
                         if i < len(concurso)-3 and concurso[i+3] - concurso[i+2] == 1:
                             quadras_consec += 1
-                            i += 3
-                        else:
-                            i += 2
-                    else:
-                        i += 1
-                else:
-                    i += 1
             
             sequencias['2_consecutivos'].append(pares_consec)
             sequencias['3_consecutivos'].append(triplas_consec)
@@ -187,10 +175,11 @@ class AnaliseLotofacilAvancada:
         return sequencias
     
     def _identificar_numeros_chave(self):
-        """Identifica números que frequentemente aparecem juntos"""
+        """NOVO: Identifica números que frequentemente aparecem juntos"""
         numeros_chave = []
         
         # Números que aparecem em mais de 50% dos concursos recentes
+        limiar = self.total_concursos * 0.5
         for num in self.numeros:
             freq_recente = sum(1 for c in self.concursos[:20] if num in c)
             if freq_recente > 10:  # Apareceu em mais da metade dos últimos 20
@@ -255,278 +244,432 @@ class AnaliseLotofacilAvancada:
         return defasagens
     
     # =================================================
-    # FUNÇÃO DE VALIDAÇÃO BALANCEADA
+    # NOVA ESTRATÉGIA - CAÇA SEQUÊNCIAS
     # =================================================
-    def validar_jogo_balanceado(self, jogo):
-        """VALIDAÇÃO BALANCEADA - Rigorosa mas realista"""
+    def estrategia_caca_sequencias(self, n_jogos=15):
+        """NOVA: Especializada em capturar sequências como 04-05-06"""
+        jogos = []
+        
+        # Analisa frequência de sequências nos últimos concursos
+        ultimos_concursos = self.concursos[:20]
+        sequencias_frequentes = []
+        
+        for concurso in ultimos_concursos:
+            for i in range(len(concurso)-2):
+                if concurso[i+2] - concurso[i+1] == 1 and concurso[i+1] - concurso[i] == 1:
+                    sequencias_frequentes.append((concurso[i], concurso[i+1], concurso[i+2]))
+        
+        # Conta sequências mais comuns
+        counter_sequencias = Counter(sequencias_frequentes)
+        
+        for _ in range(n_jogos):
+            jogo = set()
+            
+            # 40% de chance de incluir uma sequência de 3 números
+            if random.random() < 0.4 and counter_sequencias:
+                sequencia_escolhida = random.choice(list(counter_sequencias.keys()))
+                jogo.update(sequencia_escolhida)
+            
+            # Inclui números chave
+            if self.numeros_chave:
+                num_chave = random.choice(self.numeros_chave)
+                jogo.add(num_chave)
+            
+            # Completa com números baseados em frequência
+            while len(jogo) < 15:
+                # Pesos baseados em frequência
+                candidatos = [n for n in self.numeros if n not in jogo]
+                if candidatos:
+                    pesos = [self.frequencias[n] for n in candidatos]
+                    if sum(pesos) > 0:
+                        novo_num = random.choices(candidatos, weights=pesos)[0]
+                    else:
+                        novo_num = random.choice(candidatos)
+                    jogo.add(novo_num)
+            
+            jogos.append(sorted(jogo))
+        
+        return jogos
+    
+    # =================================================
+    # ESTRATÉGIA 1 – REDES NEURAIS SIMPLIFICADAS (REFORÇADA)
+    # =================================================
+    def estrategia_neural_reforcada(self, n_jogos=15):
+        """Usa conceitos de redes neurais com ênfase em números recentes"""
+        jogos = []
+        
+        for _ in range(n_jogos):
+            # Camada de entrada: frequências + defasagens + tendências
+            scores = {}
+            
+            for num in self.numeros:
+                # Peso 1: Frequência ponderada (maior peso)
+                w1 = self.frequencias[num] / 100
+                
+                # Peso 2: Defasagem (normalizada)
+                w2 = 1 - (self.defasagens[num]['real'] / self.total_concursos) if self.total_concursos > 0 else 0
+                
+                # Peso 3: Momento/tendência
+                w3 = self.tendencias_temporais[num]['momento']
+                
+                # Peso 4: Volatilidade (inversa)
+                w4 = 1 - self.tendencias_temporais[num]['volatilidade']
+                
+                # Peso 5: Números chave (bonus)
+                w5 = 0.2 if num in self.numeros_chave else 0
+                
+                # Score combinado com pesos ajustados
+                scores[num] = 0.30*w1 + 0.25*w2 + 0.20*w3 + 0.15*w4 + 0.10*w5
+            
+            # Seleciona números com maior score
+            numeros_ordenados = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+            
+            # Pega top 20 e adiciona ruído
+            jogo = []
+            for num, score in numeros_ordenados[:20]:
+                score_com_ruido = score + np.random.normal(0, 0.03)  # Menos ruído
+                jogo.append((num, score_com_ruido))
+            
+            # Ordena por score e pega os 15 melhores
+            jogo = sorted(jogo, key=lambda x: x[1], reverse=True)[:15]
+            jogos.append(sorted([x[0] for x in jogo]))
+        
+        return jogos
+    
+    # =================================================
+    # ESTRATÉGIA 2 – ANÁLISE DE CORRELAÇÃO (REFORÇADA)
+    # =================================================
+    def estrategia_correlacao_reforcada(self, n_jogos=15):
+        """Baseada em pares de números que costumam sair juntos"""
+        jogos = []
+        
+        # Identifica os pares mais fortes
+        pares_fortes = []
+        for num1 in range(1, 26):
+            for num2 in range(num1+1, 26):
+                prob = self.matriz_correlacao[num1][num2]
+                if prob > 0.3:  # Correlação forte
+                    pares_fortes.append((num1, num2, prob))
+        
+        pares_fortes.sort(key=lambda x: x[2], reverse=True)
+        
+        for _ in range(n_jogos):
+            jogo = set()
+            
+            # Adiciona um par forte
+            if pares_fortes:
+                par = random.choice(pares_fortes[:10])
+                jogo.add(par[0])
+                jogo.add(par[1])
+            
+            # Adiciona números chave
+            if self.numeros_chave:
+                jogo.add(random.choice(self.numeros_chave))
+            
+            # Completa com base em correlação
+            while len(jogo) < 15:
+                ultimos = list(jogo)[-3:] if len(jogo) >= 3 else list(jogo)
+                
+                candidatos = []
+                pesos = []
+                
+                for num in self.numeros:
+                    if num not in jogo:
+                        # Média das correlações com os últimos números
+                        correlacao_media = np.mean([self.matriz_correlacao[num][u] for u in ultimos])
+                        candidatos.append(num)
+                        pesos.append(correlacao_media)
+                
+                if candidatos and sum(pesos) > 0:
+                    novo_num = random.choices(candidatos, weights=pesos)[0]
+                elif candidatos:
+                    novo_num = random.choice(candidatos)
+                else:
+                    break
+                
+                jogo.add(novo_num)
+            
+            jogos.append(sorted(jogo))
+        
+        return jogos
+    
+    # =================================================
+    # ESTRATÉGIA 3 – ALGORITMO GENÉTICO (REFORÇADO)
+    # =================================================
+    def estrategia_genetica_reforcada(self, n_jogos=15, geracoes=70, populacao=150):
+        """Usa algoritmo genético com função fitness melhorada"""
+        
+        def fitness(jogo):
+            """Função de aptidão do jogo - REFORÇADA"""
+            score = 0
+            
+            # Critério 1: Média das frequências dos números
+            freq_media = np.mean([self.frequencias[n] for n in jogo])
+            score += freq_media * 0.25
+            
+            # Critério 2: Variedade de quadrantes
+            quadrantes = sum(1 for n in jogo if n <= 12)
+            score += 15 - abs(quadrantes - 7) * 2
+            
+            # Critério 3: Proporção par/ímpar
+            pares = sum(1 for n in jogo if n % 2 == 0)
+            score += 15 - abs(pares - 7) * 2
+            
+            # Critério 4: Soma próxima da média histórica
+            soma_media = self.padroes_combinatorios['somas']
+            if soma_media:
+                media_historica = np.mean(soma_media)
+                score += 15 - abs(sum(jogo) - media_historica) / 15
+            
+            # Critério 5: Correlação positiva entre números
+            correlacao_media = 0
+            total_pares = 0
+            for i in range(len(jogo)):
+                for j in range(i+1, len(jogo)):
+                    correlacao_media += self.matriz_correlacao[jogo[i]][jogo[j]]
+                    total_pares += 1
+            
+            if total_pares > 0:
+                correlacao_media /= total_pares
+                score += correlacao_media * 25
+            
+            # NOVO Critério 6: Presença de números chave
+            num_chave_presentes = sum(1 for n in jogo if n in self.numeros_chave)
+            score += num_chave_presentes * 3
+            
+            # NOVO Critério 7: Potencial para sequências
+            tem_sequencia = 0
+            for i in range(len(jogo)-2):
+                if jogo[i+2] - jogo[i+1] == 1 and jogo[i+1] - jogo[i] == 1:
+                    tem_sequencia += 5
+            score += tem_sequencia
+            
+            return score
+        
+        # População inicial
+        populacao_atual = []
+        for _ in range(populacao):
+            jogo = sorted(random.sample(self.numeros, 15))
+            populacao_atual.append((jogo, fitness(jogo)))
+        
+        # Evolução
+        for _ in range(geracoes):
+            # Seleção dos melhores
+            nova_populacao = []
+            
+            # Elitismo - mantém os 15% melhores
+            populacao_atual.sort(key=lambda x: x[1], reverse=True)
+            nova_populacao.extend(populacao_atual[:max(1, populacao//6)])
+            
+            # Gera novos indivíduos
+            while len(nova_populacao) < populacao:
+                # Seleciona dois pais
+                pai1 = max(random.sample(populacao_atual, min(5, len(populacao_atual))), key=lambda x: x[1])
+                pai2 = max(random.sample(populacao_atual, min(5, len(populacao_atual))), key=lambda x: x[1])
+                
+                # Crossover com 2 pontos
+                ponto1 = random.randint(3, 7)
+                ponto2 = random.randint(8, 12)
+                filho = list(set(pai1[0][:ponto1] + pai2[0][ponto1:ponto2] + pai1[0][ponto2:]))
+                
+                # Mutação (15% de chance)
+                if random.random() < 0.15:
+                    if filho:
+                        idx = random.randint(0, len(filho)-1)
+                        candidatos = [n for n in self.numeros if n not in filho]
+                        if candidatos:
+                            novo_num = random.choice(candidatos)
+                            filho[idx] = novo_num
+                
+                # Completa para 15 números
+                while len(filho) < 15:
+                    candidatos = [n for n in self.numeros if n not in filho]
+                    if candidatos:
+                        # Prioriza números chave
+                        chave_disponiveis = [n for n in candidatos if n in self.numeros_chave]
+                        if chave_disponiveis and random.random() < 0.3:
+                            novo_num = random.choice(chave_disponiveis)
+                        else:
+                            novo_num = random.choice(candidatos)
+                        filho.append(novo_num)
+                    else:
+                        break
+                
+                if len(filho) == 15:
+                    filho = sorted(filho)
+                    nova_populacao.append((filho, fitness(filho)))
+            
+            populacao_atual = nova_populacao
+        
+        # Retorna os melhores jogos
+        populacao_atual.sort(key=lambda x: x[1], reverse=True)
+        return [jogo for jogo, _ in populacao_atual[:min(n_jogos, len(populacao_atual))]]
+    
+    # =================================================
+    # ESTRATÉGIA 4 – PROBABILIDADE CONDICIONAL (REFORÇADA)
+    # =================================================
+    def estrategia_condicional_reforcada(self, n_jogos=15):
+        """Baseada em probabilidades condicionais com cadeias mais longas"""
+        jogos = []
+        
+        for _ in range(n_jogos):
+            jogo = []
+            
+            # Primeiro número: prioriza números chave
+            if self.numeros_chave and random.random() < 0.7:
+                primeiro = random.choice(self.numeros_chave)
+            else:
+                numeros_freq = sorted(self.frequencias.items(), key=lambda x: x[1], reverse=True)
+                primeiro = random.choice([n for n, _ in numeros_freq[:8]])
+            jogo.append(primeiro)
+            
+            # Próximos números: cadeia de Markov de ordem 2
+            while len(jogo) < 15:
+                ultimos = jogo[-2:] if len(jogo) >= 2 else [jogo[-1]] * 2
+                
+                # Calcula probabilidades baseadas nos últimos 2 números
+                probabilidades = {}
+                for num in self.numeros:
+                    if num not in jogo:
+                        # Média ponderada das probabilidades condicionais
+                        prob1 = self.probabilidades_condicionais.get(num, {}).get(ultimos[-1], 0)
+                        prob2 = self.probabilidades_condicionais.get(num, {}).get(ultimos[-2], 0) if len(ultimos) > 1 else 0
+                        prob = (prob1 * 0.7 + prob2 * 0.3)
+                        probabilidades[num] = prob
+                
+                # Seleciona próximo número
+                candidatos = list(probabilidades.keys())
+                pesos = list(probabilidades.values())
+                
+                if sum(pesos) > 0:
+                    proximo = random.choices(candidatos, weights=pesos)[0]
+                else:
+                    # Fallback para frequência
+                    candidatos_freq = [n for n in self.numeros if n not in jogo]
+                    if candidatos_freq:
+                        pesos_freq = [self.frequencias[n] for n in candidatos_freq]
+                        if sum(pesos_freq) > 0:
+                            proximo = random.choices(candidatos_freq, weights=pesos_freq)[0]
+                        else:
+                            proximo = random.choice(candidatos_freq)
+                    else:
+                        break
+                
+                jogo.append(proximo)
+            
+            if len(jogo) == 15:
+                jogos.append(sorted(jogo))
+        
+        return jogos
+    
+    # =================================================
+    # ESTRATÉGIA 5 – ENSEMBLE REFORÇADO
+    # =================================================
+    def estrategia_ensemble_reforcada(self, n_jogos=15):
+        """Combina múltiplas estratégias com pesos otimizados"""
+        
+        # Gera jogos de cada estratégia
+        jogos_neural = self.estrategia_neural_reforcada(n_jogos)
+        jogos_correlacao = self.estrategia_correlacao_reforcada(n_jogos)
+        jogos_genetico = self.estrategia_genetica_reforcada(max(1, n_jogos//2))
+        jogos_condicional = self.estrategia_condicional_reforcada(n_jogos)
+        jogos_sequencia = self.estrategia_caca_sequencias(n_jogos//2)
+        
+        # Converte para sets
+        todos_jogos = jogos_neural + jogos_correlacao + jogos_genetico + jogos_condicional + jogos_sequencia
+        
+        if not todos_jogos:
+            return []
+        
+        # Cria ranking de números
+        contador_numeros = Counter()
+        for jogo in todos_jogos:
+            contador_numeros.update(jogo)
+        
+        # Gera novos jogos
+        jogos_finais = []
+        for _ in range(n_jogos):
+            numeros_rank = [num for num, _ in contador_numeros.most_common()]
+            
+            if not numeros_rank:
+                continue
+                
+            jogo = set()
+            
+            # Garante números do topo (60%)
+            top_numeros = numeros_rank[:min(18, len(numeros_rank))]
+            qtd_top = random.randint(8, 10)
+            jogo.update(random.sample(top_numeros, min(qtd_top, len(top_numeros))))
+            
+            # Garante números chave
+            if self.numeros_chave:
+                chave_disponiveis = [n for n in self.numeros_chave if n not in jogo]
+                if chave_disponiveis and len(jogo) < 13:
+                    qtd_chave = min(2, len(chave_disponiveis))
+                    jogo.update(random.sample(chave_disponiveis, qtd_chave))
+            
+            # Completa com números variados
+            while len(jogo) < 15:
+                candidatos = [n for n in self.numeros if n not in jogo]
+                if candidatos:
+                    # 30% de chance de pegar um número menos frequente
+                    if random.random() < 0.3 and len(candidatos) > 5:
+                        menos_freq = sorted(candidatos, key=lambda x: self.frequencias[x])[:5]
+                        jogo.add(random.choice(menos_freq))
+                    else:
+                        jogo.add(random.choice(candidatos))
+                else:
+                    break
+            
+            if len(jogo) == 15:
+                jogos_finais.append(sorted(jogo))
+        
+        return jogos_finais
+    
+    # =================================================
+    # VALIDAÇÃO ESTATÍSTICA
+    # =================================================
+    def validar_jogo(self, jogo):
+        """Valida um jogo baseado em critérios estatísticos"""
         validacao = {
             'valido': True,
-            'motivos': [],
-            'score': 0,
-            'avisos': []
+            'motivos': []
         }
         
-        # =============================================
-        # FILTRO 1: LIMITE DE SEQUÊNCIAS (MAIS REALISTA)
-        # =============================================
-        # Verifica sequência MÁXIMA de números consecutivos
-        max_consecutivo = 0
-        atual = 1
+        # Critério 1: Soma dentro de 2.5 desvios padrão (mais rigoroso)
+        soma_stats = self.padroes_combinatorios['somas']
+        if soma_stats:
+            media = np.mean(soma_stats)
+            desvio = np.std(soma_stats)
+            soma_jogo = sum(jogo)
+            
+            if abs(soma_jogo - media) > 2.5 * desvio:
+                validacao['valido'] = False
+                validacao['motivos'].append(f"Soma {soma_jogo} fora do padrão")
         
-        for i in range(len(jogo)-1):
-            if jogo[i+1] - jogo[i] == 1:
-                atual += 1
-                max_consecutivo = max(max_consecutivo, atual)
-            else:
-                atual = 1
-        
-        # Bloqueia apenas sequências MUITO longas (6+)
-        if max_consecutivo >= 6:
+        # Critério 2: Proporção par/ímpar
+        pares = sum(1 for n in jogo if n % 2 == 0)
+        if pares < 5 or pares > 10:
             validacao['valido'] = False
-            validacao['motivos'].append(f"Sequência muito longa de {max_consecutivo} números")
-            return validacao
+            validacao['motivos'].append(f"Proporção par/ímpar atípica")
         
-        # Conta pares consecutivos totais (aviso, não bloqueio)
+        # Critério 3: Números consecutivos (mas não excessivos)
         consecutivos = 0
         for i in range(len(jogo)-1):
             if jogo[i+1] - jogo[i] == 1:
                 consecutivos += 1
         
-        if consecutivos > 6:
-            validacao['avisos'].append(f"Muitos consecutivos ({consecutivos})")
-        
-        # =============================================
-        # FILTRO 2: PARES x ÍMPARES (MAIS FLEXÍVEL)
-        # =============================================
-        pares = sum(1 for n in jogo if n % 2 == 0)
-        impares = 15 - pares
-        
-        # Aceita 6-9 pares (antes era só 7-8)
-        if pares < 6 or pares > 9:
+        if consecutivos > 4:
             validacao['valido'] = False
-            validacao['motivos'].append(f"Proporção par/ímpar inválida ({pares}-{impares})")
-            return validacao
+            validacao['motivos'].append(f"Muitos consecutivos")
         
-        # =============================================
-        # FILTRO 3: SOMA (MAIS FLEXÍVEL)
-        # =============================================
-        soma_jogo = sum(jogo)
-        if soma_jogo < 165 or soma_jogo > 215:
+        # Critério 4: Presença de números chave
+        num_chave = sum(1 for n in jogo if n in self.numeros_chave)
+        if num_chave < 3:
             validacao['valido'] = False
-            validacao['motivos'].append(f"Soma {soma_jogo} fora do intervalo 165-215")
-            return validacao
-        
-        # =============================================
-        # FILTRO 4: PRIMOS (MAIS FLEXÍVEL)
-        # =============================================
-        primos = [2, 3, 5, 7, 11, 13, 17, 19, 23]
-        qtd_primos = sum(1 for n in jogo if n in primos)
-        
-        # Aceita 4-7 primos (antes era só 5-6)
-        if qtd_primos < 4 or qtd_primos > 7:
-            validacao['valido'] = False
-            validacao['motivos'].append(f"Quantidade de primos inválida ({qtd_primos})")
-            return validacao
-        
-        # =============================================
-        # FILTRO 5: QUADRANTES (MAIS FLEXÍVEL)
-        # =============================================
-        # Quadrante 1: 1-12
-        quad1 = sum(1 for n in jogo if 1 <= n <= 12)
-        # Quadrante 2: 13-25
-        quad2 = sum(1 for n in jogo if 13 <= n <= 25)
-        
-        # Aceita até 8 em um quadrante (antes era 6)
-        if quad1 > 8 or quad2 > 8:
-            validacao['valido'] = False
-            validacao['motivos'].append(f"Concentração no quadrante (Q1:{quad1}, Q2:{quad2})")
-            return validacao
-        
-        # =============================================
-        # FILTRO 6: REPETIÇÃO DO ÚLTIMO CONCURSO (MAIS FLEXÍVEL)
-        # =============================================
-        if self.ultimo_concurso:
-            repeticoes = len(set(jogo) & set(self.ultimo_concurso))
-            
-            # Aceita 5-9 repetições (antes era 6-8)
-            if repeticoes < 5 or repeticoes > 9:
-                validacao['valido'] = False
-                validacao['motivos'].append(f"Repetição do último concurso: {repeticoes} (deve ser 5-9)")
-                return validacao
-        
-        # =============================================
-        # FILTRO 7: DISTRIBUIÇÃO POR EXTREMOS (AVISO, NÃO BLOQUEIO)
-        # =============================================
-        baixos = sum(1 for n in jogo if 1 <= n <= 5)
-        altos = sum(1 for n in jogo if 21 <= n <= 25)
-        
-        if baixos < 1 or baixos > 5:
-            validacao['avisos'].append(f"Distribuição de baixos atípica ({baixos})")
-        
-        if altos < 1 or altos > 5:
-            validacao['avisos'].append(f"Distribuição de altos atípica ({altos})")
-        
-        # =============================================
-        # CÁLCULO DO SCORE DE QUALIDADE
-        # =============================================
-        score = 100  # Base
-        
-        # Penaliza proporção par/ímpar
-        score -= abs(pares - 7.5) * 5
-        
-        # Penaliza soma distante da média
-        score -= abs(soma_jogo - 190) / 2
-        
-        # Premia quantidade ideal de primos (5-6)
-        if 5 <= qtd_primos <= 6:
-            score += 10
-        elif 4 <= qtd_primos <= 7:
-            score += 5
-        
-        # Premia boa distribuição
-        if 6 <= quad1 <= 8:
-            score += 5
-        
-        # Premia repetição ideal (6-8)
-        if self.ultimo_concurso:
-            if 6 <= repeticoes <= 8:
-                score += 10
-            elif 5 <= repeticoes <= 9:
-                score += 5
-        
-        # Penaliza muitos consecutivos
-        score -= consecutivos * 2
-        
-        validacao['score'] = max(0, round(score, 2))
+            validacao['motivos'].append(f"Poucos números chave")
         
         return validacao
-    
-    # =================================================
-    # ESTRATÉGIA BALANCEADA
-    # =================================================
-    def estrategia_balanceada(self, n_jogos=15):
-        """Estratégia com filtros balanceados"""
-        jogos = []
-        tentativas = 0
-        max_tentativas = n_jogos * 50  # Reduzido porque mais jogos vão passar
-        
-        while len(jogos) < n_jogos and tentativas < max_tentativas:
-            tentativas += 1
-            
-            # =========================================
-            # 1. BASE: 5 a 9 números do último concurso
-            # =========================================
-            jogo = set()
-            
-            # Define quantos repetir do último concurso (5 a 9)
-            qtd_repetir = random.randint(5, 9)
-            
-            # Seleciona números do último concurso
-            if self.ultimo_concurso:
-                repetidos = random.sample(self.ultimo_concurso, min(qtd_repetir, len(self.ultimo_concurso)))
-                jogo.update(repetidos)
-            
-            # =========================================
-            # 2. ADICIONA NÚMEROS CHAVE
-            # =========================================
-            if self.numeros_chave:
-                chave_disponiveis = [n for n in self.numeros_chave if n not in jogo]
-                if chave_disponiveis:
-                    qtd_chave = random.randint(1, min(3, len(chave_disponiveis)))
-                    jogo.update(random.sample(chave_disponiveis, qtd_chave))
-            
-            # =========================================
-            # 3. COMPLETA COM NÚMEROS ESTRATÉGICOS
-            # =========================================
-            while len(jogo) < 15:
-                candidatos = [n for n in self.numeros if n not in jogo]
-                
-                if not candidatos:
-                    break
-                
-                # Calcula pesos para cada candidato
-                pesos = []
-                for num in candidatos:
-                    peso = 0
-                    
-                    # Peso por frequência
-                    peso += self.frequencias[num]
-                    
-                    # Peso por defasagem
-                    defasagem = self.defasagens[num]['real']
-                    peso += defasagem * 2
-                    
-                    # Peso por tendência
-                    if self.tendencias_temporais[num]['tendencia'] == 'alta':
-                        peso += 15
-                    
-                    pesos.append(max(peso, 1))
-                
-                # Seleciona próximo número
-                if sum(pesos) > 0:
-                    novo_num = random.choices(candidatos, weights=pesos)[0]
-                else:
-                    novo_num = random.choice(candidatos)
-                
-                jogo.add(novo_num)
-            
-            jogo_ordenado = sorted(jogo)
-            
-            # =========================================
-            # 4. APLICA FILTROS BALANCEADOS
-            # =========================================
-            if len(jogo_ordenado) == 15:
-                validacao = self.validar_jogo_balanceado(jogo_ordenado)
-                
-                if validacao['valido']:
-                    # Adiciona score e avisos ao jogo
-                    jogos.append((jogo_ordenado, validacao['score'], validacao['avisos']))
-        
-        # Ordena por score e retorna apenas os jogos
-        jogos.sort(key=lambda x: x[1], reverse=True)
-        return [jogo for jogo, _, _ in jogos[:n_jogos]]
-    
-    # =================================================
-    # ESTRATÉGIA ULTRA (OPÇÃO MAIS RIGOROSA)
-    # =================================================
-    def estrategia_ultra(self, n_jogos=15):
-        """Versão ultra rigorosa (poucos jogos, altíssima qualidade)"""
-        jogos = []
-        tentativas = 0
-        max_tentativas = n_jogos * 200  # Mais tentativas porque é mais rigoroso
-        
-        while len(jogos) < n_jogos and tentativas < max_tentativas:
-            tentativas += 1
-            
-            # Processo similar mas com validação mais rigorosa
-            jogo = set()
-            
-            # Repetição ideal (6-8)
-            qtd_repetir = random.randint(6, 8)
-            if self.ultimo_concurso:
-                repetidos = random.sample(self.ultimo_concurso, min(qtd_repetir, len(self.ultimo_concurso)))
-                jogo.update(repetidos)
-            
-            # Completa com inteligência
-            while len(jogo) < 15:
-                candidatos = [n for n in self.numeros if n not in jogo]
-                if candidatos:
-                    # Prioriza números com alta frequência
-                    candidatos_freq = sorted(candidatos, key=lambda x: self.frequencias[x], reverse=True)
-                    jogo.add(random.choice(candidatos_freq[:10]))
-                else:
-                    break
-            
-            jogo_ordenado = sorted(jogo)
-            
-            if len(jogo_ordenado) == 15:
-                # Usa uma validação ainda mais rigorosa
-                # (podemos implementar depois se necessário)
-                validacao = self.validar_jogo_balanceado(jogo_ordenado)
-                if validacao['valido'] and validacao['score'] > 85:  # Score mínimo
-                    jogos.append(jogo_ordenado)
-        
-        return jogos[:n_jogos]
     
     # =================================================
     # CONFERÊNCIA AVANÇADA
@@ -539,37 +682,30 @@ class AnaliseLotofacilAvancada:
         dados = []
         
         for idx, jogo in enumerate(jogos, start=1):
-            # Validação com filtros balanceados
-            validacao = self.validar_jogo_balanceado(jogo)
+            # Validação do jogo
+            validacao = self.validar_jogo(jogo)
             
             # Conferência básica
             acertos = len(set(jogo) & set(concurso_alvo)) if concurso_alvo else 0
             
             # Análise detalhada
             pares_jogo = sum(1 for n in jogo if n % 2 == 0)
+            pares_concurso = sum(1 for n in concurso_alvo if n % 2 == 0) if concurso_alvo else 0
             
             # Análise de quadrantes
             quad1_jogo = sum(1 for n in jogo if n <= 12)
+            quad1_concurso = sum(1 for n in concurso_alvo if n <= 12) if concurso_alvo else 0
             
             # Análise de primos
             primos = [2, 3, 5, 7, 11, 13, 17, 19, 23]
             primos_jogo = sum(1 for n in jogo if n in primos)
+            primos_concurso = sum(1 for n in concurso_alvo if n in primos) if concurso_alvo else 0
             
             # Análise de sequências
-            max_consecutivo = 0
-            atual = 1
-            for i in range(len(jogo)-1):
-                if jogo[i+1] - jogo[i] == 1:
-                    atual += 1
-                    max_consecutivo = max(max_consecutivo, atual)
-                else:
-                    atual = 1
-            
-            # Repetições do último concurso
-            repeticoes = len(set(jogo) & set(self.ultimo_concurso)) if self.ultimo_concurso else 0
-            
-            # Formata avisos
-            avisos_str = ", ".join(validacao['avisos']) if validacao['avisos'] else "N/A"
+            seq_jogo = 0
+            for i in range(len(jogo)-2):
+                if jogo[i+2] - jogo[i+1] == 1 and jogo[i+1] - jogo[i] == 1:
+                    seq_jogo += 1
             
             dados.append({
                 "Jogo": idx,
@@ -577,13 +713,11 @@ class AnaliseLotofacilAvancada:
                 "Acertos": acertos,
                 "Soma": sum(jogo),
                 "Pares": pares_jogo,
-                "Q1 (1-12)": quad1_jogo,
+                "Quadrante": quad1_jogo,
                 "Primos": primos_jogo,
-                "Max Seq": max_consecutivo,
-                "Repetidos": repeticoes,
-                "Score": validacao['score'],
+                "Sequências": seq_jogo,
                 "Válido": "✅" if validacao['valido'] else "❌",
-                "Avisos": avisos_str
+                "Motivos": ", ".join(validacao['motivos']) if validacao['motivos'] else "N/A"
             })
         
         return dados
@@ -592,20 +726,15 @@ class AnaliseLotofacilAvancada:
 # INTERFACE STREAMLIT
 # =====================================================
 def main():
-    st.title("🎯 LOTOFÁCIL - VERSÃO BALANCEADA")
+    st.title("🎯 LOTOFÁCIL - ANALISADOR PROFISSIONAL V2")
     
     st.markdown("""
-    ### ⚖️ Versão com Filtros Balanceados - Qualidade sem Exagero
+    ### 🎲 Sistema Avançado de Análise Estatística - Versão Reforçada
+    Esta versão é **especializada em capturar sequências e números chave** 
+    que costumam aparecer nos sorteios da Lotofácil.
     
-    **Filtros ativos (realistas):**
-    - 📊 Soma: 165-215 (mais flexível)
-    - ⚖️ Pares/Ímpares: 6-9 (mais opções)
-    - 🔢 Primos: 4-7 (mais realista)
-    - 📍 Quadrantes: máx 8 (menos restritivo)
-    - 🔁 Repetições: 5-9 (mais natural)
-    - 🚫 Sequências: bloqueia apenas 6+ consecutivos
-    
-    ✅ **Agora vai gerar jogos!** Os filtros estão rigorosos mas realistas.
+    ⚠️ **Aviso Importante:** Não existe garantia de ganhos - a loteria é um jogo de azar.
+    Use com responsabilidade!
     """)
     
     # Inicialização da sessão
@@ -652,21 +781,6 @@ def main():
                         
                 except Exception as e:
                     st.error(f"Erro: {e}")
-        
-        # Mostra estatísticas se disponíveis
-        if st.session_state.analise:
-            st.divider()
-            st.subheader("📊 Estatísticas")
-            
-            # Último concurso
-            if st.session_state.analise.ultimo_concurso:
-                st.write("**Último concurso:**")
-                st.write(", ".join([f"{n:02d}" for n in st.session_state.analise.ultimo_concurso]))
-            
-            # Números chave
-            if st.session_state.analise.numeros_chave:
-                st.write("**Números chave:**")
-                st.write(", ".join([str(n) for n in sorted(st.session_state.analise.numeros_chave)]))
     
     # Abas
     if st.session_state.concursos and len(st.session_state.concursos) >= 20:
@@ -676,6 +790,12 @@ def main():
             st.header("📊 Análise Estatística")
             st.info(f"📈 Analisando {len(st.session_state.concursos)} concursos")
             
+            # Mostra números chave
+            if st.session_state.analise.numeros_chave:
+                st.subheader("🔑 Números Chave Identificados")
+                st.write(f"**{', '.join([str(n) for n in sorted(st.session_state.analise.numeros_chave)])}**")
+            
+            # Gráficos
             col1, col2 = st.columns(2)
             
             with col1:
@@ -695,42 +815,33 @@ def main():
                     labels={'x': 'Número', 'y': 'Concursos'}
                 )
                 st.plotly_chart(fig_def, use_container_width=True)
-            
-            # Distribuição de somas
-            fig_soma = px.histogram(
-                st.session_state.analise.padroes_combinatorios['somas'],
-                nbins=30,
-                title="Distribuição das Somas (Intervalo Alvo: 165-215)",
-                labels={'value': 'Soma', 'count': 'Frequência'}
-            )
-            fig_soma.add_vline(x=165, line_dash="dash", line_color="red")
-            fig_soma.add_vline(x=215, line_dash="dash", line_color="red")
-            st.plotly_chart(fig_soma, use_container_width=True)
         
         with tab2:
-            st.header("🎲 GERAR JOGOS COM FILTROS BALANCEADOS")
+            st.header("🎲 Gerar Jogos Inteligentes - VERSÃO REFORÇADA")
             
-            estrategia = st.radio(
-                "Escolha o nível de rigor:",
+            estrategia = st.selectbox(
+                "Escolha a estratégia (Recomendado: Ensemble Reforçado)",
                 [
-                    "⚖️ Balanceada (recomendada) - Mais jogos, boa qualidade",
-                    "🔥 Ultra - Menos jogos, qualidade superior"
+                    "🧠 Ensemble Reforçado (RECOMENDADO)",
+                    "🔗 Caça Sequências",
+                    "🧬 Algoritmo Genético Reforçado",
+                    "🎯 Rede Neural Reforçada"
                 ]
             )
             
-            quantidade = st.number_input("Quantidade de jogos desejada", 5, 50, 15)
+            quantidade = st.number_input("Quantidade de jogos", 5, 50, 15)
             
-            if st.button("🎲 GERAR JOGOS", type="primary"):
-                with st.spinner("Gerando jogos com filtros balanceados..."):
-                    if "Balanceada" in estrategia:
-                        st.session_state.jogos = st.session_state.analise.estrategia_balanceada(quantidade)
-                    else:
-                        st.session_state.jogos = st.session_state.analise.estrategia_ultra(quantidade)
+            if st.button("🚀 Gerar jogos", type="primary"):
+                with st.spinner("Gerando jogos com algoritmos reforçados..."):
+                    mapa = {
+                        "🧠 Ensemble Reforçado (RECOMENDADO)": st.session_state.analise.estrategia_ensemble_reforcada,
+                        "🔗 Caça Sequências": st.session_state.analise.estrategia_caca_sequencias,
+                        "🧬 Algoritmo Genético Reforçado": lambda n: st.session_state.analise.estrategia_genetica_reforcada(n, geracoes=70),
+                        "🎯 Rede Neural Reforçada": st.session_state.analise.estrategia_neural_reforcada
+                    }
                     
-                    if len(st.session_state.jogos) < quantidade:
-                        st.warning(f"⚠️ Gerados apenas {len(st.session_state.jogos)} jogos que passaram nos filtros")
-                    else:
-                        st.success(f"✅ {len(st.session_state.jogos)} jogos de alta qualidade gerados!")
+                    st.session_state.jogos = mapa[estrategia](quantidade)
+                    st.success(f"✅ {len(st.session_state.jogos)} jogos gerados!")
         
         with tab3:
             if st.session_state.jogos:
@@ -766,15 +877,11 @@ def main():
                     st.session_state.jogos, concurso_alvo
                 )
                 df_resultado = pd.DataFrame(resultado)
-                
-                # Ordena por score
-                df_resultado = df_resultado.sort_values('Score', ascending=False)
-                
                 st.dataframe(df_resultado, use_container_width=True)
                 
                 # Estatísticas
                 st.subheader("📈 Estatísticas de Acertos")
-                col1, col2, col3, col4, col5 = st.columns(5)
+                col1, col2, col3, col4 = st.columns(4)
                 
                 with col1:
                     st.metric("Média", f"{df_resultado['Acertos'].mean():.2f}")
@@ -785,8 +892,6 @@ def main():
                 with col4:
                     acima_10 = sum(df_resultado['Acertos'] >= 11)
                     st.metric("≥11 pontos", acima_10)
-                with col5:
-                    st.metric("Jogos Válidos", sum(df_resultado['Válido'] == "✅"))
                 
                 # Distribuição
                 fig = px.histogram(df_resultado, x='Acertos', nbins=15, 
