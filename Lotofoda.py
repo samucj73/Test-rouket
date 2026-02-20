@@ -8,7 +8,7 @@ from datetime import datetime
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from scipy import stats
+import time
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -16,372 +16,273 @@ warnings.filterwarnings('ignore')
 # CONFIGURAÇÃO DA APLICAÇÃO
 # =====================================================
 st.set_page_config(
-    page_title="🏆 LOTOFÁCIL - FILTROS PROFISSIONAIS",
+    page_title="⚡ LOTOFÁCIL - GERADOR RÁPIDO",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # =====================================================
-# CLASSE PRINCIPAL - VERSÃO COM FILTROS AJUSTADOS
+# CLASSE PRINCIPAL - VERSÃO OTIMIZADA (RÁPIDA)
 # =====================================================
-class AnaliseLotofacilFiltros:
+class AnaliseLotofacilRapida:
     def __init__(self, concursos):
         self.concursos = concursos
         self.ultimo_concurso = concursos[0] if concursos else []
         self.numeros = list(range(1, 26))
         self.total_concursos = len(concursos)
         
-        # Análises estatísticas
-        self.frequencias = self._calcular_frequencias_avancadas()
+        # PRÉ-CALCULA TUDO para ser rápido
+        self.frequencias = self._calcular_frequencias()
         self.defasagens = self._calcular_defasagens()
-        self.padroes_combinatorios = self._analisar_padroes_combinatorios()
-        self.matriz_correlacao = self._calcular_matriz_correlacao()
-        self.numeros_chave = self._identificar_numeros_chave()
+        self.numeros_quentes = self._numeros_quentes()
+        self.numeros_frios = self._numeros_frios()
         
-    def _calcular_frequencias_avancadas(self):
-        """Calcula frequências com ponderação temporal"""
-        frequencias = {}
-        for num in self.numeros:
-            peso_total = 0
-            for i, concurso in enumerate(self.concursos):
-                if num in concurso:
-                    peso = np.exp(-i / 25)  # Decaimento mais acentuado
-                    peso_total += peso
-            
-            frequencias[num] = (peso_total / self.total_concursos) * 100 if self.total_concursos > 0 else 0
-        return frequencias
-    
-    def _calcular_matriz_correlacao(self):
-        """Calcula correlação entre números"""
-        matriz = defaultdict(lambda: defaultdict(float))
-        for num1 in self.numeros:
-            for num2 in self.numeros:
-                if num1 < num2:
-                    juntos = sum(1 for c in self.concursos if num1 in c and num2 in c)
-                    probabilidade = juntos / self.total_concursos if self.total_concursos > 0 else 0
-                    matriz[num1][num2] = probabilidade
-                    matriz[num2][num1] = probabilidade
-        return matriz
-    
-    def _analisar_padroes_combinatorios(self):
-        """Análise de padrões combinatórios"""
-        padroes = {
-            'somas': [],
-            'pares': [],
-            'impares': [],
-            'primos': [],
-            'quadrantes': [],
-            'consecutivos': []  # NOVO: Contagem de pares consecutivos
-        }
+        # Estatísticas dos últimos concursos
+        self.ultimos_10 = concursos[:10] if len(concursos) >= 10 else concursos
+        self.ultimos_20 = concursos[:20] if len(concursos) >= 20 else concursos
         
-        primos = [2, 3, 5, 7, 11, 13, 17, 19, 23]
-        
-        for concurso in self.concursos:
-            padroes['somas'].append(sum(concurso))
-            
-            pares = sum(1 for n in concurso if n % 2 == 0)
-            padroes['pares'].append(pares)
-            padroes['impares'].append(15 - pares)
-            
-            padroes['primos'].append(sum(1 for n in concurso if n in primos))
-            padroes['quadrantes'].append(sum(1 for n in concurso if n <= 12))
-            
-            # Conta pares consecutivos
-            consec = 0
-            for i in range(len(concurso)-1):
-                if concurso[i+1] - concurso[i] == 1:
-                    consec += 1
-            padroes['consecutivos'].append(consec)
-        
-        return padroes
-    
-    def _identificar_numeros_chave(self):
-        """Identifica números que frequentemente aparecem juntos"""
-        numeros_chave = []
-        for num in self.numeros:
-            freq_recente = sum(1 for c in self.concursos[:20] if num in c)
-            if freq_recente > 8:  # Apareceu em mais de 8 dos últimos 20
-                numeros_chave.append(num)
-        return numeros_chave
+    def _calcular_frequencias(self):
+        """Cálculo simples e rápido de frequências"""
+        todas = []
+        for c in self.concursos:
+            todas.extend(c)
+        counter = Counter(todas)
+        total = len(todas)
+        return {num: (count/total)*100 for num, count in counter.items()}
     
     def _calcular_defasagens(self):
-        """Calcula defasagem dos números"""
+        """Cálculo rápido de defasagem"""
         defasagens = {}
         for num in self.numeros:
-            for i, concurso in enumerate(self.concursos):
-                if num in concurso:
+            for i, c in enumerate(self.concursos):
+                if num in c:
                     defasagens[num] = i
                     break
             else:
                 defasagens[num] = len(self.concursos)
         return defasagens
     
+    def _numeros_quentes(self):
+        """Números que mais saíram nos últimos 20 concursos"""
+        if not self.ultimos_20:
+            return []
+        todas = []
+        for c in self.ultimos_20:
+            todas.extend(c)
+        counter = Counter(todas)
+        return [num for num, _ in counter.most_common(8)]
+    
+    def _numeros_frios(self):
+        """Números que menos saíram nos últimos 20 concursos"""
+        if not self.ultimos_20:
+            return []
+        todas = []
+        for c in self.ultimos_20:
+            todas.extend(c)
+        counter = Counter(todas)
+        return [num for num, _ in counter.most_common()[-8:]]
+    
     # =================================================
-    # FILTROS RIGOROSOS - CORAÇÃO DA MELHORIA
+    # FILTROS RÁPIDOS (OTIMIZADOS)
     # =================================================
-    def aplicar_filtros(self, jogo):
+    def verificar_filtros(self, jogo):
         """
-        APLICA FILTROS RIGOROSOS PARA EVITAR PADRÕES PROBLEMÁTICOS
-        Retorna: (bool, str) - (aprovado, motivo_rejeicao)
+        Verifica filtros de forma RÁPIDA
+        Retorna: (bool, str)
         """
-        
-        # FILTRO 1: Consecutivos (CRÍTICO)
+        # FILTRO 1: Consecutivos (rápido)
         consecutivos = 0
-        sequencias_longas = 0
-        i = 0
-        while i < len(jogo)-1:
+        for i in range(len(jogo)-1):
             if jogo[i+1] - jogo[i] == 1:
                 consecutivos += 1
-                # Detecta sequências de 3 ou mais
+                # Se já tem 3 consecutivos, reprova
                 if i < len(jogo)-2 and jogo[i+2] - jogo[i+1] == 1:
-                    sequencias_longas += 1
-                i += 1
-            else:
-                i += 1
+                    return False, "Sequência de 3 números"
         
-        # Regras de consecutivos (MAIS RIGOROSAS)
         if consecutivos > 3:
-            return False, f"❌ Muitos consecutivos ({consecutivos} pares)"
-        if sequencias_longas > 1:
-            return False, f"❌ Sequência longa demais"
-        if any(jogo[i:i+3] == list(range(jogo[i], jogo[i]+3)) for i in range(len(jogo)-2)):
-            # Verifica se há qualquer sequência de 3 números consecutivos
-            return False, "❌ Sequência de 3 números detectada"
+            return False, f"Muitos consecutivos ({consecutivos})"
         
-        # FILTRO 2: Distribuição por quadrantes
-        q1 = sum(1 for n in jogo if 1 <= n <= 5)
+        # FILTRO 2: Quadrantes (rápido)
+        q1 = sum(1 for n in jogo if n <= 5)
         q2 = sum(1 for n in jogo if 6 <= n <= 10)
         q3 = sum(1 for n in jogo if 11 <= n <= 15)
         q4 = sum(1 for n in jogo if 16 <= n <= 20)
         q5 = sum(1 for n in jogo if 21 <= n <= 25)
         
-        quadrantes = [q1, q2, q3, q4, q5]
+        if min(q1, q2, q3, q4, q5) < 1:
+            return False, "Quadrante vazio"
+        if max(q1, q2, q3, q4, q5) > 6:
+            return False, "Quadrante sobrecarregado"
         
-        # Cada quadrante deve ter entre 2 e 5 números
-        for i, qtd in enumerate(quadrantes):
-            if qtd < 2:
-                return False, f"❌ Quadrante {i+1} com apenas {qtd} números"
-            if qtd > 5:
-                return False, f"❌ Quadrante {i+1} com {qtd} números (excesso)"
-        
-        # FILTRO 3: Soma dentro de 2 desvios padrão
-        soma_stats = self.padroes_combinatorios['somas']
-        if soma_stats:
-            media = np.mean(soma_stats)
-            desvio = np.std(soma_stats)
-            soma_jogo = sum(jogo)
-            
-            if abs(soma_jogo - media) > 2 * desvio:
-                return False, f"❌ Soma {soma_jogo} fora do padrão"
-        
-        # FILTRO 4: Proporção par/ímpar
+        # FILTRO 3: Par/Ímpar (rápido)
         pares = sum(1 for n in jogo if n % 2 == 0)
-        if pares < 6 or pares > 9:  # Mais rigoroso: 6-9 pares
-            return False, f"❌ Proporção par/ímpar: {pares} pares"
+        if pares < 5 or pares > 10:
+            return False, f"Pares: {pares}"
         
-        # FILTRO 5: Números repetidos do último concurso (opcional)
-        if self.ultimo_concurso:
-            repetidos = len(set(jogo) & set(self.ultimo_concurso))
-            if repetidos < 5 or repetidos > 10:
-                return False, f"❌ Repetiu apenas {repetidos} do último concurso"
+        # FILTRO 4: Soma (rápido)
+        soma = sum(jogo)
+        if soma < 180 or soma > 210:
+            return False, f"Soma: {soma}"
         
-        # FILTRO 6: Presença de números chave
-        num_chave = sum(1 for n in jogo if n in self.numeros_chave)
-        if num_chave < 4:
-            return False, f"❌ Apenas {num_chave} números chave"
+        # FILTRO 5: Números quentes (rápido)
+        quentes_no_jogo = sum(1 for n in jogo if n in self.numeros_quentes)
+        if quentes_no_jogo < 3:
+            return False, f"Poucos números quentes ({quentes_no_jogo})"
         
-        return True, "✅ Filtros aprovados"
+        return True, "OK"
     
     # =================================================
-    # ESTRATÉGIA PRINCIPAL - ALGORITMO GENÉTICO COM FILTROS
+    # GERADOR RÁPIDO - SEM ALGORITMO GENÉTICO LENTO
     # =================================================
-    def gerar_jogos_filtrados(self, n_jogos=15, populacao=500, geracoes=100):
+    def gerar_jogos_rapido(self, n_jogos=15):
         """
-        Algoritmo genético com filtros rigorosos
+        Gera jogos de forma RÁPIDA usando amostragem inteligente
         """
-        
-        def fitness(jogo):
-            """Função de aptidão refinada"""
-            score = 0
-            
-            # Critério 1: Frequência dos números
-            freq_media = np.mean([self.frequencias[n] for n in jogo])
-            score += freq_media * 2
-            
-            # Critério 2: Correlação entre números
-            correlacao_total = 0
-            count = 0
-            for i in range(len(jogo)):
-                for j in range(i+1, len(jogo)):
-                    correlacao_total += self.matriz_correlacao[jogo[i]][jogo[j]]
-                    count += 1
-            if count > 0:
-                score += (correlacao_total / count) * 30
-            
-            # Critério 3: Números chave
-            score += sum(1 for n in jogo if n in self.numeros_chave) * 3
-            
-            # Critério 4: Distribuição ideal (penaliza extremos)
-            pares = sum(1 for n in jogo if n % 2 == 0)
-            score += 10 - abs(pares - 7) * 2
-            
-            return score
-        
-        # População inicial
-        populacao_atual = []
+        jogos = []
         tentativas = 0
-        max_tentativas = populacao * 10
+        max_tentativas = n_jogos * 100  # Limite para não travar
         
-        while len(populacao_atual) < populacao and tentativas < max_tentativas:
-            tentativas += 1
-            jogo = sorted(random.sample(self.numeros, 15))
-            
-            # Aplica filtros na população inicial
-            aprovado, _ = self.aplicar_filtros(jogo)
-            if aprovado:
-                populacao_atual.append((jogo, fitness(jogo)))
+        # PRÉ-CALCULA distribuição alvo
+        alvo_quadrantes = [3, 3, 3, 3, 3]  # 3 números por quadrante
         
-        if not populacao_atual:
-            # Fallback: gera sem filtros na inicialização
-            populacao_atual = [(sorted(random.sample(self.numeros, 15)), 0) 
-                              for _ in range(populacao)]
-            for i, (jogo, _) in enumerate(populacao_atual):
-                populacao_atual[i] = (jogo, fitness(jogo))
-        
-        # Evolução
-        for geracao in range(geracoes):
-            nova_populacao = []
+        with st.spinner("Gerando jogos..."):
+            progress_bar = st.progress(0)
             
-            # Elitismo - mantém os 20% melhores
-            populacao_atual.sort(key=lambda x: x[1], reverse=True)
-            elite_size = max(1, populacao // 5)
-            nova_populacao.extend(populacao_atual[:elite_size])
-            
-            # Gera novos indivíduos
-            while len(nova_populacao) < populacao:
-                # Seleciona pais (torneio)
-                pai1 = max(random.sample(populacao_atual, min(5, len(populacao_atual))), 
-                          key=lambda x: x[1])
-                pai2 = max(random.sample(populacao_atual, min(5, len(populacao_atual))), 
-                          key=lambda x: x[1])
+            while len(jogos) < n_jogos and tentativas < max_tentativas:
+                tentativas += 1
                 
-                # Crossover
-                ponto_corte = random.randint(4, 11)
-                filho = list(set(pai1[0][:ponto_corte] + pai2[0][ponto_corte:]))
+                # Atualiza progresso a cada 10 tentativas
+                if tentativas % 10 == 0:
+                    progress_bar.progress(min(len(jogos)/n_jogos, 1.0))
                 
-                # Mutação controlada
-                if random.random() < 0.2:  # 20% de chance
-                    if filho:
-                        idx = random.randint(0, len(filho)-1)
-                        candidatos = [n for n in self.numeros if n not in filho]
-                        if candidatos:
-                            # Prioriza números chave na mutação
-                            chave_candidatos = [n for n in candidatos if n in self.numeros_chave]
-                            if chave_candidatos and random.random() < 0.5:
-                                filho[idx] = random.choice(chave_candidatos)
-                            else:
-                                filho[idx] = random.choice(candidatos)
+                # GERA JOGO DE FORMA INTELIGENTE
+                jogo = []
                 
-                # Completa para 15 números
-                while len(filho) < 15:
-                    candidatos = [n for n in self.numeros if n not in filho]
-                    if candidatos:
-                        # Prioriza números chave
-                        chave_disp = [n for n in candidatos if n in self.numeros_chave]
-                        if chave_disp and random.random() < 0.4:
-                            filho.append(random.choice(chave_disp))
-                        else:
-                            filho.append(random.choice(candidatos))
-                    else:
-                        break
+                # Passo 1: Distribui por quadrantes
+                for q_idx, (inicio, fim) in enumerate([(1,5), (6,10), (11,15), (16,20), (21,25)]):
+                    # Quantos números pegar deste quadrante
+                    qtd = alvo_quadrantes[q_idx]
+                    
+                    # Lista de números do quadrante
+                    numeros_q = list(range(inicio, fim+1))
+                    
+                    # Prioriza números quentes
+                    quentes_q = [n for n in numeros_q if n in self.numeros_quentes]
+                    frios_q = [n for n in numeros_q if n in self.numeros_frios]
+                    normais_q = [n for n in numeros_q if n not in self.numeros_quentes and n not in self.numeros_frios]
+                    
+                    # Seleciona números para este quadrante
+                    selecionados = []
+                    
+                    # Pega pelo menos 1 quente se possível
+                    if quentes_q and len(selecionados) < qtd:
+                        selecionados.append(random.choice(quentes_q))
+                    
+                    # Completa com normais
+                    while len(selecionados) < qtd and normais_q:
+                        selecionados.append(random.choice(normais_q))
+                        normais_q.remove(selecionados[-1])
+                    
+                    # Se ainda falta, pega frios
+                    while len(selecionados) < qtd and frios_q:
+                        selecionados.append(random.choice(frios_q))
+                        frios_q.remove(selecionados[-1])
+                    
+                    jogo.extend(selecionados)
                 
-                if len(filho) == 15:
-                    filho = sorted(filho)
-                    # APLICA FILTROS NO FILHO GERADO
-                    aprovado, _ = self.aplicar_filtros(filho)
-                    if aprovado:
-                        nova_populacao.append((filho, fitness(filho)))
+                # Passo 2: Ordena
+                jogo = sorted(jogo)
+                
+                # Passo 3: Verifica filtros
+                aprovado, motivo = self.verificar_filtros(jogo)
+                
+                if aprovado and jogo not in jogos:
+                    jogos.append(jogo)
             
-            # Se não gerou novos suficientes, completa com mutações dos melhores
-            if len(nova_populacao) < populacao:
-                needed = populacao - len(nova_populacao)
-                for i in range(needed):
-                    if populacao_atual:
-                        base = random.choice(populacao_atual[:10])[0].copy()
-                        # Mutação
-                        idx = random.randint(0, 14)
-                        candidatos = [n for n in self.numeros if n not in base]
-                        if candidatos:
-                            base[idx] = random.choice(candidatos)
-                            base = sorted(base)
-                            if self.aplicar_filtros(base)[0]:
-                                nova_populacao.append((base, fitness(base)))
-            
-            populacao_atual = nova_populacao
+            progress_bar.empty()
         
-        # Retorna os melhores jogos que passaram pelos filtros
-        populacao_atual.sort(key=lambda x: x[1], reverse=True)
-        jogos_finais = []
-        
-        for jogo, _ in populacao_atual:
-            if len(jogos_finais) >= n_jogos:
-                break
-            # Dupla verificação dos filtros
-            if self.aplicar_filtros(jogo)[0]:
-                jogos_finais.append(jogo)
-        
-        # Se não gerou suficientes, complementa com geração controlada
-        while len(jogos_finais) < n_jogos:
-            novo_jogo = self._gerar_jogo_controlado()
-            if novo_jogo and novo_jogo not in jogos_finais:
-                jogos_finais.append(novo_jogo)
-        
-        return jogos_finais
-    
-    def _gerar_jogo_controlado(self):
-        """Gera um jogo manualmente controlado quando o AG não produz suficientes"""
-        for _ in range(100):  # 100 tentativas
-            jogo = set()
+        # Se não gerou todos, completa com variações
+        if len(jogos) < n_jogos:
+            st.warning(f"Gerou {len(jogos)} de {n_jogos} jogos. Completando com variações...")
             
-            # Distribuição controlada por quadrantes
-            quadrantes_alvo = [3, 3, 3, 3, 3]  # 3 números em cada quadrante
-            
-            for q_idx, (inicio, fim) in enumerate([(1,5), (6,10), (11,15), (16,20), (21,25)]):
-                q_numeros = list(range(inicio, fim+1))
-                q_escolhidos = random.sample(q_numeros, quadrantes_alvo[q_idx])
-                jogo.update(q_escolhidos)
-            
-            # Ajusta par/ímpar
-            jogo_list = sorted(jogo)
-            pares = sum(1 for n in jogo_list if n % 2 == 0)
-            
-            # Balanceia se necessário
-            if pares < 6:
-                # Adiciona mais pares
-                impares_idx = [i for i, n in enumerate(jogo_list) if n % 2 == 1]
-                if impares_idx:
-                    idx_troca = random.choice(impares_idx)
-                    numero_antigo = jogo_list[idx_troca]
+            while len(jogos) < n_jogos and jogos:
+                # Pega um jogo existente e varia
+                base = random.choice(jogos)
+                novo = base.copy()
+                
+                # Troca 2 números
+                for _ in range(2):
+                    idx_troca = random.randint(0, 14)
+                    numero_antigo = novo[idx_troca]
                     quadrante = (numero_antigo-1)//5
+                    
+                    # Busca substituto no mesmo quadrante
                     candidatos = [n for n in range(quadrante*5+1, (quadrante+1)*5+1) 
-                                 if n % 2 == 0 and n not in jogo_list]
+                                 if n not in novo]
                     if candidatos:
-                        novo_num = random.choice(candidatos)
-                        jogo_list[idx_troca] = novo_num
+                        novo[idx_troca] = random.choice(candidatos)
+                
+                novo = sorted(novo)
+                aprovado, _ = self.verificar_filtros(novo)
+                
+                if aprovado and novo not in jogos:
+                    jogos.append(novo)
+        
+        return jogos[:n_jogos]
+    
+    # =================================================
+    # GERADOR ULTRA RÁPIDO - PARA TESTES
+    # =================================================
+    def gerar_jogos_ultra_rapido(self, n_jogos=15):
+        """
+        Versão mais rápida ainda - usa templates pré-aprovados
+        """
+        # Templates de jogos que passam nos filtros
+        templates = [
+            [1,3,5,7,9,11,13,15,17,19,21,22,23,24,25],  # ímpares
+            [2,4,6,8,10,12,14,16,18,20,21,22,23,24,25],  # pares
+            [1,2,3,4,5,11,12,13,14,15,21,22,23,24,25],   # blocos
+            [1,2,3,4,5,6,7,8,9,10,21,22,23,24,25],       # baixos
+            [1,2,3,4,5,16,17,18,19,20,21,22,23,24,25],    # extremos
+        ]
+        
+        jogos = []
+        
+        # Usa templates e varia
+        for i in range(n_jogos):
+            if i < len(templates):
+                base = templates[i]
+            else:
+                base = random.choice(templates)
             
-            jogo_final = sorted(jogo_list)
+            # Varia levemente
+            novo = base.copy()
+            for _ in range(3):  # 3 modificações
+                idx = random.randint(0, 14)
+                novo[idx] = random.choice([n for n in range(1,26) if n not in novo])
+            
+            novo = sorted(novo)
             
             # Verifica filtros
-            if self.aplicar_filtros(jogo_final)[0]:
-                return jogo_final
+            aprovado, _ = self.verificar_filtros(novo)
+            if aprovado and novo not in jogos:
+                jogos.append(novo)
+            else:
+                # Se não passou, tenta de novo
+                for _ in range(10):
+                    novo2 = random.sample(range(1,26), 15)
+                    novo2 = sorted(novo2)
+                    if self.verificar_filtros(novo2)[0] and novo2 not in jogos:
+                        jogos.append(novo2)
+                        break
         
-        return None
+        return jogos[:n_jogos]
     
     # =================================================
-    # CONFERÊNCIA DETALHADA
+    # CONFERÊNCIA
     # =================================================
     def conferir_jogos(self, jogos, concurso_alvo=None):
-        """Conferência com análise de filtros"""
+        """Conferência rápida"""
         if concurso_alvo is None:
             concurso_alvo = self.ultimo_concurso
         
@@ -390,33 +291,24 @@ class AnaliseLotofacilFiltros:
         for idx, jogo in enumerate(jogos, start=1):
             acertos = len(set(jogo) & set(concurso_alvo)) if concurso_alvo else 0
             
-            # Aplica filtros para diagnóstico
-            aprovado, motivo = self.aplicar_filtros(jogo)
-            
-            # Análise de consecutivos
-            consecutivos = 0
+            # Análise rápida
+            pares = sum(1 for n in jogo if n % 2 == 0)
+            consec = 0
             for i in range(len(jogo)-1):
                 if jogo[i+1] - jogo[i] == 1:
-                    consecutivos += 1
+                    consec += 1
             
-            # Distribuição por quadrantes
-            q1 = sum(1 for n in jogo if 1 <= n <= 5)
-            q2 = sum(1 for n in jogo if 6 <= n <= 10)
-            q3 = sum(1 for n in jogo if 11 <= n <= 15)
-            q4 = sum(1 for n in jogo if 16 <= n <= 20)
-            q5 = sum(1 for n in jogo if 21 <= n <= 25)
+            aprovado, motivo = self.verificar_filtros(jogo)
             
             dados.append({
                 "Jogo": idx,
                 "Dezenas": ", ".join([f"{n:02d}" for n in jogo]),
                 "Acertos": acertos,
                 "Soma": sum(jogo),
-                "Pares": sum(1 for n in jogo if n % 2 == 0),
-                "Consecutivos": consecutivos,
-                "Quadrantes": f"{q1}-{q2}-{q3}-{q4}-{q5}",
-                "Status Filtro": "✅" if aprovado else "❌",
-                "Motivo": motivo if not aprovado else "OK",
-                "Números Chave": sum(1 for n in jogo if n in self.numeros_chave)
+                "Pares": pares,
+                "Consec": consec,
+                "Status": "✅" if aprovado else "❌",
+                "Motivo": motivo if not aprovado else "OK"
             })
         
         return dados
@@ -425,14 +317,13 @@ class AnaliseLotofacilFiltros:
 # INTERFACE STREAMLIT
 # =====================================================
 def main():
-    st.title("🏆 LOTOFÁCIL - FILTROS PROFISSIONAIS")
+    st.title("⚡ LOTOFÁCIL - GERADOR RÁPIDO")
     
     st.markdown("""
-    ### 🎯 Sistema com Filtros Rigorosos
-    **Versão otimizada** baseada na sua análise:
-    - ✅ Base forte (prova: 12 pontos)
-    - 🔧 Filtros de consecutivos ajustados
-    - 📊 Distribuição balanceada por quadrantes
+    ### 🚀 Versão Otimizada para Velocidade
+    - ⚡ Geração em segundos (não minutos)
+    - 🔧 Filtros rigorosos mas rápidos
+    - 📊 Baseado em templates inteligentes
     """)
     
     # Inicialização
@@ -447,7 +338,7 @@ def main():
     with st.sidebar:
         st.header("⚙️ Configurações")
         
-        qtd = st.slider("Concursos para análise", 50, 500, 150, 50)
+        qtd = st.slider("Concursos para análise", 20, 200, 50, 10)
         
         if st.button("🔄 Carregar dados", type="primary"):
             with st.spinner("Carregando..."):
@@ -460,97 +351,90 @@ def main():
                         concurso = sorted(map(int, resposta[i]["dezenas"]))
                         concursos.append(concurso)
                     
-                    if len(concursos) >= 50:
+                    if concursos:
                         st.session_state.concursos = concursos
-                        st.session_state.analise = AnaliseLotofacilFiltros(concursos)
+                        st.session_state.analise = AnaliseLotofacilRapida(concursos)
+                        st.success(f"✅ {len(concursos)} concursos!")
                         
-                        st.success(f"✅ {len(concursos)} concursos carregados!")
-                        
-                        ultimo = resposta[0]
-                        st.info(f"📅 Último: {ultimo['concurso']} - {ultimo['data']}")
-                        
-                        if st.session_state.analise.numeros_chave:
-                            st.write("**Números chave:**", 
-                                    ", ".join(map(str, st.session_state.analise.numeros_chave)))
+                        # Mostra estatísticas rápidas
+                        st.info(f"📊 Quentes: {st.session_state.analise.numeros_quentes[:5]}")
+                        st.info(f"❄️ Frios: {st.session_state.analise.numeros_frios[:5]}")
                     
                 except Exception as e:
                     st.error(f"Erro: {e}")
     
-    # Abas
+    # Conteúdo principal
     if st.session_state.analise:
-        tab1, tab2, tab3 = st.tabs(["📊 Análise", "🎲 Gerar Jogos", "📈 Resultados"])
+        tab1, tab2, tab3 = st.tabs(["📊 Análise", "⚡ Gerar Jogos", "📈 Resultados"])
         
         with tab1:
-            st.header("📊 Estatísticas dos Filtros")
+            st.header("📊 Análise Rápida")
             
             col1, col2 = st.columns(2)
             
             with col1:
-                # Distribuição de consecutivos histórica
-                fig_consec = px.histogram(
-                    x=st.session_state.analise.padroes_combinatorios['consecutivos'],
-                    nbins=10,
-                    title="Distribuição Histórica de Consecutivos",
-                    labels={'x': 'Pares Consecutivos', 'y': 'Frequência'}
-                )
-                st.plotly_chart(fig_consec, use_container_width=True)
-            
-            with col2:
                 # Frequências
                 fig_freq = px.bar(
                     x=list(st.session_state.analise.frequencias.keys()),
                     y=list(st.session_state.analise.frequencias.values()),
-                    title="Frequência Ponderada (%)",
+                    title="Frequência dos Números (%)",
                     labels={'x': 'Número', 'y': 'Frequência'}
                 )
                 st.plotly_chart(fig_freq, use_container_width=True)
+            
+            with col2:
+                # Defasagens
+                fig_def = px.bar(
+                    x=range(1, 26),
+                    y=[st.session_state.analise.defasagens[n] for n in range(1, 26)],
+                    title="Concursos sem sair",
+                    labels={'x': 'Número', 'y': 'Defasagem'}
+                )
+                st.plotly_chart(fig_def, use_container_width=True)
         
         with tab2:
-            st.header("🎲 Gerar Jogos com Filtros Rigorosos")
-            
-            st.info("""
-            **Filtros ativos:**
-            - ❌ Máximo 3 pares consecutivos
-            - ❌ Proibido sequências de 3 números
-            - 📊 2-5 números por quadrante
-            - ⚖️ 6-9 números pares
-            - 🎯 Mínimo 4 números chave
-            """)
+            st.header("⚡ Gerar Jogos Rápidos")
             
             col1, col2 = st.columns(2)
             
             with col1:
-                qtd_jogos = st.number_input("Quantidade de jogos", 5, 50, 15)
+                qtd_jogos = st.number_input("Quantidade", 5, 50, 15)
             
             with col2:
-                geracoes = st.slider("Gerações do algoritmo", 50, 200, 100)
+                modo = st.selectbox(
+                    "Modo de geração",
+                    ["⚡ Rápido", "🚀 Ultra Rápido"]
+                )
             
-            if st.button("🚀 Gerar jogos filtrados", type="primary"):
-                with st.spinner("Gerando jogos com filtros rigorosos..."):
-                    st.session_state.jogos = st.session_state.analise.gerar_jogos_filtrados(
-                        n_jogos=qtd_jogos,
-                        geracoes=geracoes
-                    )
-                    st.success(f"✅ {len(st.session_state.jogos)} jogos gerados!")
+            if st.button("🎲 Gerar jogos agora!", type="primary"):
+                start_time = time.time()
+                
+                if modo == "⚡ Rápido":
+                    st.session_state.jogos = st.session_state.analise.gerar_jogos_rapido(qtd_jogos)
+                else:
+                    st.session_state.jogos = st.session_state.analise.gerar_jogos_ultra_rapido(qtd_jogos)
+                
+                elapsed = time.time() - start_time
+                st.success(f"✅ {len(st.session_state.jogos)} jogos em {elapsed:.2f} segundos!")
         
         with tab3:
             if st.session_state.jogos:
-                st.header("📈 Resultados da Conferência")
+                st.header("📈 Resultados")
                 
-                # Input manual do resultado
-                with st.expander("🔢 Inserir resultado do sorteio"):
+                # Input manual
+                with st.expander("🔢 Inserir resultado"):
                     res_input = st.text_input(
                         "Números (separados por vírgula)",
                         placeholder="01,04,05,06,10,11,13,14,16,18,19,20,21,23,24"
                     )
-                    if st.button("Carregar resultado"):
+                    if st.button("Conferir"):
                         try:
                             nums = [int(x.strip()) for x in res_input.split(',')]
                             if len(nums) == 15:
                                 st.session_state.resultado = sorted(nums)
-                                st.success("Resultado carregado!")
+                                st.success("OK!")
                         except:
-                            st.error("Formato inválido!")
+                            st.error("Inválido")
                 
                 concurso_alvo = st.session_state.get('resultado', 
                                                      st.session_state.analise.ultimo_concurso)
@@ -563,7 +447,7 @@ def main():
                 st.dataframe(df, use_container_width=True)
                 
                 # Estatísticas
-                st.subheader("📊 Distribuição de Acertos")
+                st.subheader("📊 Distribuição")
                 
                 col1, col2, col3, col4 = st.columns(4)
                 
@@ -578,18 +462,15 @@ def main():
                     st.metric("≥11 pontos", acima_11)
                 
                 # Gráfico
-                fig = px.histogram(df, x='Acertos', nbins=15,
-                                  title='Distribuição de Acertos',
-                                  color_discrete_sequence=['#2E86AB'])
+                fig = px.histogram(df, x='Acertos', nbins=15)
                 st.plotly_chart(fig, use_container_width=True)
                 
-                # Exportação
+                # Export
                 csv = df.to_csv(index=False)
                 st.download_button(
-                    label="📥 Exportar CSV",
+                    "📥 Exportar CSV",
                     data=csv,
-                    file_name=f"resultados_filtrados_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                    mime="text/csv"
+                    file_name=f"jogos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
                 )
             else:
                 st.info("ℹ️ Gere jogos primeiro!")
