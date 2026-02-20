@@ -16,13 +16,13 @@ warnings.filterwarnings('ignore')
 # CONFIGURAÇÃO DA APLICAÇÃO
 # =====================================================
 st.set_page_config(
-    page_title="🎯 LOTOFÁCIL - ANALISADOR PROFISSIONAL V2 (FILTROS AGRESSIVOS)",
+    page_title="🎯 LOTOFÁCIL - ANALISADOR PROFISSIONAL V2 (FILTROS BALANCEADOS)",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # =====================================================
-# CLASSE PRINCIPAL OTIMIZADA - VERSÃO MATADORA
+# CLASSE PRINCIPAL OTIMIZADA - VERSÃO BALANCEADA
 # =====================================================
 class AnaliseLotofacilAvancada:
     def __init__(self, concursos):
@@ -39,7 +39,7 @@ class AnaliseLotofacilAvancada:
         self.probabilidades_condicionais = self._calcular_prob_condicionais()
         self.tendencias_temporais = self._analisar_tendencias_temporais()
         
-        # NOVO: Análise de sequências e padrões específicos
+        # Análise de sequências e padrões específicos
         self.padroes_sequencia = self._analisar_sequencias()
         self.numeros_chave = self._identificar_numeros_chave()
         
@@ -255,20 +255,21 @@ class AnaliseLotofacilAvancada:
         return defasagens
     
     # =================================================
-    # FUNÇÃO DE VALIDAÇÃO AGRESSIVA - FILTROS MATADORES
+    # FUNÇÃO DE VALIDAÇÃO BALANCEADA
     # =================================================
-    def validar_jogo_agressivo(self, jogo):
-        """VALIDAÇÃO AGRESSIVA - Filtros rigorosos para forçar 11+ pontos"""
+    def validar_jogo_balanceado(self, jogo):
+        """VALIDAÇÃO BALANCEADA - Rigorosa mas realista"""
         validacao = {
             'valido': True,
             'motivos': [],
-            'score': 0
+            'score': 0,
+            'avisos': []
         }
         
         # =============================================
-        # FILTRO 1: LIMITE DURO DE SEQUÊNCIAS
+        # FILTRO 1: LIMITE DE SEQUÊNCIAS (MAIS REALISTA)
         # =============================================
-        # Verifica sequência MÁXIMA de 4 números consecutivos
+        # Verifica sequência MÁXIMA de números consecutivos
         max_consecutivo = 0
         atual = 1
         
@@ -279,125 +280,146 @@ class AnaliseLotofacilAvancada:
             else:
                 atual = 1
         
-        # Bloqueia sequências de 5+ números consecutivos
-        if max_consecutivo >= 5:
+        # Bloqueia apenas sequências MUITO longas (6+)
+        if max_consecutivo >= 6:
             validacao['valido'] = False
-            validacao['motivos'].append(f"Sequência longa de {max_consecutivo} números")
+            validacao['motivos'].append(f"Sequência muito longa de {max_consecutivo} números")
             return validacao
         
-        # Conta pares consecutivos totais
+        # Conta pares consecutivos totais (aviso, não bloqueio)
         consecutivos = 0
         for i in range(len(jogo)-1):
             if jogo[i+1] - jogo[i] == 1:
                 consecutivos += 1
         
-        if consecutivos > 4:  # Máximo 4 pares consecutivos no total
-            validacao['valido'] = False
-            validacao['motivos'].append(f"Muitos consecutivos ({consecutivos})")
-            return validacao
+        if consecutivos > 6:
+            validacao['avisos'].append(f"Muitos consecutivos ({consecutivos})")
         
         # =============================================
-        # FILTRO 2: PARES x ÍMPARES (OBRIGATÓRIO 7x8 ou 8x7)
+        # FILTRO 2: PARES x ÍMPARES (MAIS FLEXÍVEL)
         # =============================================
         pares = sum(1 for n in jogo if n % 2 == 0)
         impares = 15 - pares
         
-        if pares not in [7, 8]:  # Só aceita 7 pares/8 ímpares ou 8 pares/7 ímpares
+        # Aceita 6-9 pares (antes era só 7-8)
+        if pares < 6 or pares > 9:
             validacao['valido'] = False
             validacao['motivos'].append(f"Proporção par/ímpar inválida ({pares}-{impares})")
             return validacao
         
         # =============================================
-        # FILTRO 3: SOMA AGRESSIVA (170 a 205)
+        # FILTRO 3: SOMA (MAIS FLEXÍVEL)
         # =============================================
         soma_jogo = sum(jogo)
-        if soma_jogo < 170 or soma_jogo > 205:
+        if soma_jogo < 165 or soma_jogo > 215:
             validacao['valido'] = False
-            validacao['motivos'].append(f"Soma {soma_jogo} fora do intervalo 170-205")
+            validacao['motivos'].append(f"Soma {soma_jogo} fora do intervalo 165-215")
             return validacao
         
         # =============================================
-        # FILTRO 4: PRIMOS (5 ou 6 primos)
+        # FILTRO 4: PRIMOS (MAIS FLEXÍVEL)
         # =============================================
         primos = [2, 3, 5, 7, 11, 13, 17, 19, 23]
         qtd_primos = sum(1 for n in jogo if n in primos)
         
-        if qtd_primos < 5 or qtd_primos > 6:
+        # Aceita 4-7 primos (antes era só 5-6)
+        if qtd_primos < 4 or qtd_primos > 7:
             validacao['valido'] = False
             validacao['motivos'].append(f"Quantidade de primos inválida ({qtd_primos})")
             return validacao
         
         # =============================================
-        # FILTRO 5: QUADRANTES (máx 6 por quadrante)
+        # FILTRO 5: QUADRANTES (MAIS FLEXÍVEL)
         # =============================================
         # Quadrante 1: 1-12
         quad1 = sum(1 for n in jogo if 1 <= n <= 12)
         # Quadrante 2: 13-25
         quad2 = sum(1 for n in jogo if 13 <= n <= 25)
         
-        if quad1 > 6 or quad2 > 6:
+        # Aceita até 8 em um quadrante (antes era 6)
+        if quad1 > 8 or quad2 > 8:
             validacao['valido'] = False
             validacao['motivos'].append(f"Concentração no quadrante (Q1:{quad1}, Q2:{quad2})")
             return validacao
         
         # =============================================
-        # FILTRO 6: REPETIÇÃO DO ÚLTIMO CONCURSO (6 a 8 fixas)
+        # FILTRO 6: REPETIÇÃO DO ÚLTIMO CONCURSO (MAIS FLEXÍVEL)
         # =============================================
         if self.ultimo_concurso:
             repeticoes = len(set(jogo) & set(self.ultimo_concurso))
             
-            if repeticoes < 6 or repeticoes > 8:
+            # Aceita 5-9 repetições (antes era 6-8)
+            if repeticoes < 5 or repeticoes > 9:
                 validacao['valido'] = False
-                validacao['motivos'].append(f"Repetição do último concurso: {repeticoes} (deve ser 6-8)")
+                validacao['motivos'].append(f"Repetição do último concurso: {repeticoes} (deve ser 5-9)")
                 return validacao
         
         # =============================================
-        # FILTRO 7: DISTRIBUIÇÃO POR DEZENAS (opcional)
+        # FILTRO 7: DISTRIBUIÇÃO POR EXTREMOS (AVISO, NÃO BLOQUEIO)
         # =============================================
-        # Verifica se tem números muito baixos (1-5) e muito altos (21-25)
         baixos = sum(1 for n in jogo if 1 <= n <= 5)
         altos = sum(1 for n in jogo if 21 <= n <= 25)
         
-        if baixos < 2 or baixos > 4:
-            validacao['valido'] = False
-            validacao['motivos'].append(f"Distribuição de baixos inválida ({baixos})")
-            return validacao
+        if baixos < 1 or baixos > 5:
+            validacao['avisos'].append(f"Distribuição de baixos atípica ({baixos})")
         
-        if altos < 2 or altos > 4:
-            validacao['valido'] = False
-            validacao['motivos'].append(f"Distribuição de altos inválida ({altos})")
-            return validacao
+        if altos < 1 or altos > 5:
+            validacao['avisos'].append(f"Distribuição de altos atípica ({altos})")
         
-        # Calcula score de qualidade (quanto maior, melhor)
-        score = 0
-        score += (10 - abs(pares - 7.5)) * 2  # Pontua proporção ideal
-        score += (10 - abs(soma_jogo - 187.5) / 10)  # Pontua soma próxima da média
-        score += qtd_primos * 2  # Pontua primos
-        score += repeticoes  # Pontua repetições do último
-        score += (10 - abs(quad1 - 7)) * 2  # Pontua distribuição
-        validacao['score'] = round(score, 2)
+        # =============================================
+        # CÁLCULO DO SCORE DE QUALIDADE
+        # =============================================
+        score = 100  # Base
+        
+        # Penaliza proporção par/ímpar
+        score -= abs(pares - 7.5) * 5
+        
+        # Penaliza soma distante da média
+        score -= abs(soma_jogo - 190) / 2
+        
+        # Premia quantidade ideal de primos (5-6)
+        if 5 <= qtd_primos <= 6:
+            score += 10
+        elif 4 <= qtd_primos <= 7:
+            score += 5
+        
+        # Premia boa distribuição
+        if 6 <= quad1 <= 8:
+            score += 5
+        
+        # Premia repetição ideal (6-8)
+        if self.ultimo_concurso:
+            if 6 <= repeticoes <= 8:
+                score += 10
+            elif 5 <= repeticoes <= 9:
+                score += 5
+        
+        # Penaliza muitos consecutivos
+        score -= consecutivos * 2
+        
+        validacao['score'] = max(0, round(score, 2))
         
         return validacao
     
     # =================================================
-    # ESTRATÉGIA MATADORA - COM FILTROS AGRESSIVOS
+    # ESTRATÉGIA BALANCEADA
     # =================================================
-    def estrategia_matadora(self, n_jogos=15):
-        """Estratégia especializada com todos os filtros agressivos"""
+    def estrategia_balanceada(self, n_jogos=15):
+        """Estratégia com filtros balanceados"""
         jogos = []
         tentativas = 0
-        max_tentativas = n_jogos * 100  # Evita loop infinito
+        max_tentativas = n_jogos * 50  # Reduzido porque mais jogos vão passar
         
         while len(jogos) < n_jogos and tentativas < max_tentativas:
             tentativas += 1
             
             # =========================================
-            # 1. BASE: 6 a 8 números do último concurso
+            # 1. BASE: 5 a 9 números do último concurso
             # =========================================
             jogo = set()
             
-            # Define quantos repetir do último concurso (6 a 8)
-            qtd_repetir = random.randint(6, 8)
+            # Define quantos repetir do último concurso (5 a 9)
+            qtd_repetir = random.randint(5, 9)
             
             # Seleciona números do último concurso
             if self.ultimo_concurso:
@@ -405,15 +427,18 @@ class AnaliseLotofacilAvancada:
                 jogo.update(repetidos)
             
             # =========================================
-            # 2. COMPLETA COM NÚMEROS ESTRATÉGICOS
+            # 2. ADICIONA NÚMEROS CHAVE
+            # =========================================
+            if self.numeros_chave:
+                chave_disponiveis = [n for n in self.numeros_chave if n not in jogo]
+                if chave_disponiveis:
+                    qtd_chave = random.randint(1, min(3, len(chave_disponiveis)))
+                    jogo.update(random.sample(chave_disponiveis, qtd_chave))
+            
+            # =========================================
+            # 3. COMPLETA COM NÚMEROS ESTRATÉGICOS
             # =========================================
             while len(jogo) < 15:
-                # Prioridades:
-                # 1. Números chave
-                # 2. Números com alta frequência
-                # 3. Números atrasados
-                # 4. Aleatórios com peso
-                
                 candidatos = [n for n in self.numeros if n not in jogo]
                 
                 if not candidatos:
@@ -424,22 +449,18 @@ class AnaliseLotofacilAvancada:
                 for num in candidatos:
                     peso = 0
                     
-                    # Peso por frequência (0-100)
-                    peso += self.frequencias[num] * 0.3
+                    # Peso por frequência
+                    peso += self.frequencias[num]
                     
-                    # Peso por defasagem (quanto mais atrasado, melhor)
+                    # Peso por defasagem
                     defasagem = self.defasagens[num]['real']
-                    peso += (defasagem / self.total_concursos) * 50
-                    
-                    # Peso por ser número chave
-                    if num in self.numeros_chave:
-                        peso += 20
+                    peso += defasagem * 2
                     
                     # Peso por tendência
                     if self.tendencias_temporais[num]['tendencia'] == 'alta':
                         peso += 15
                     
-                    pesos.append(max(peso, 1))  # Garante peso mínimo
+                    pesos.append(max(peso, 1))
                 
                 # Seleciona próximo número
                 if sum(pesos) > 0:
@@ -452,20 +473,63 @@ class AnaliseLotofacilAvancada:
             jogo_ordenado = sorted(jogo)
             
             # =========================================
-            # 3. APLICA FILTROS AGRESSIVOS
+            # 4. APLICA FILTROS BALANCEADOS
             # =========================================
-            validacao = self.validar_jogo_agressivo(jogo_ordenado)
-            
-            if validacao['valido']:
-                # Adiciona score ao jogo
-                jogos.append((jogo_ordenado, validacao['score']))
+            if len(jogo_ordenado) == 15:
+                validacao = self.validar_jogo_balanceado(jogo_ordenado)
+                
+                if validacao['valido']:
+                    # Adiciona score e avisos ao jogo
+                    jogos.append((jogo_ordenado, validacao['score'], validacao['avisos']))
         
         # Ordena por score e retorna apenas os jogos
         jogos.sort(key=lambda x: x[1], reverse=True)
-        return [jogo for jogo, _ in jogos[:n_jogos]]
+        return [jogo for jogo, _, _ in jogos[:n_jogos]]
     
     # =================================================
-    # CONFERÊNCIA AVANÇADA COM FILTROS
+    # ESTRATÉGIA ULTRA (OPÇÃO MAIS RIGOROSA)
+    # =================================================
+    def estrategia_ultra(self, n_jogos=15):
+        """Versão ultra rigorosa (poucos jogos, altíssima qualidade)"""
+        jogos = []
+        tentativas = 0
+        max_tentativas = n_jogos * 200  # Mais tentativas porque é mais rigoroso
+        
+        while len(jogos) < n_jogos and tentativas < max_tentativas:
+            tentativas += 1
+            
+            # Processo similar mas com validação mais rigorosa
+            jogo = set()
+            
+            # Repetição ideal (6-8)
+            qtd_repetir = random.randint(6, 8)
+            if self.ultimo_concurso:
+                repetidos = random.sample(self.ultimo_concurso, min(qtd_repetir, len(self.ultimo_concurso)))
+                jogo.update(repetidos)
+            
+            # Completa com inteligência
+            while len(jogo) < 15:
+                candidatos = [n for n in self.numeros if n not in jogo]
+                if candidatos:
+                    # Prioriza números com alta frequência
+                    candidatos_freq = sorted(candidatos, key=lambda x: self.frequencias[x], reverse=True)
+                    jogo.add(random.choice(candidatos_freq[:10]))
+                else:
+                    break
+            
+            jogo_ordenado = sorted(jogo)
+            
+            if len(jogo_ordenado) == 15:
+                # Usa uma validação ainda mais rigorosa
+                # (podemos implementar depois se necessário)
+                validacao = self.validar_jogo_balanceado(jogo_ordenado)
+                if validacao['valido'] and validacao['score'] > 85:  # Score mínimo
+                    jogos.append(jogo_ordenado)
+        
+        return jogos[:n_jogos]
+    
+    # =================================================
+    # CONFERÊNCIA AVANÇADA
     # =================================================
     def conferir_jogos_avancada(self, jogos, concurso_alvo=None):
         """Conferência detalhada com análise estatística"""
@@ -475,8 +539,8 @@ class AnaliseLotofacilAvancada:
         dados = []
         
         for idx, jogo in enumerate(jogos, start=1):
-            # Validação com filtros agressivos
-            validacao = self.validar_jogo_agressivo(jogo)
+            # Validação com filtros balanceados
+            validacao = self.validar_jogo_balanceado(jogo)
             
             # Conferência básica
             acertos = len(set(jogo) & set(concurso_alvo)) if concurso_alvo else 0
@@ -504,19 +568,22 @@ class AnaliseLotofacilAvancada:
             # Repetições do último concurso
             repeticoes = len(set(jogo) & set(self.ultimo_concurso)) if self.ultimo_concurso else 0
             
+            # Formata avisos
+            avisos_str = ", ".join(validacao['avisos']) if validacao['avisos'] else "N/A"
+            
             dados.append({
                 "Jogo": idx,
                 "Dezenas": ", ".join([f"{n:02d}" for n in jogo]),
                 "Acertos": acertos,
                 "Soma": sum(jogo),
                 "Pares": pares_jogo,
-                "Quadrante": quad1_jogo,
+                "Q1 (1-12)": quad1_jogo,
                 "Primos": primos_jogo,
                 "Max Seq": max_consecutivo,
                 "Repetidos": repeticoes,
                 "Score": validacao['score'],
                 "Válido": "✅" if validacao['valido'] else "❌",
-                "Motivos": ", ".join(validacao['motivos']) if validacao['motivos'] else "N/A"
+                "Avisos": avisos_str
             })
         
         return dados
@@ -525,21 +592,20 @@ class AnaliseLotofacilAvancada:
 # INTERFACE STREAMLIT
 # =====================================================
 def main():
-    st.title("🎯 LOTOFÁCIL - VERSÃO MATADORA (FILTROS AGRESSIVOS)")
+    st.title("🎯 LOTOFÁCIL - VERSÃO BALANCEADA")
     
     st.markdown("""
-    ### 🔥 Versão com Filtros Agressivos - Para Caçar 11+ Pontos
+    ### ⚖️ Versão com Filtros Balanceados - Qualidade sem Exagero
     
-    **Filtros ativos:**
-    - 🚫 Máximo 4 números consecutivos (bloqueia sequências longas)
-    - ⚖️ Apenas 7x8 ou 8x7 pares/ímpares
-    - 📊 Soma obrigatória entre 170-205
-    - 🔢 Exatamente 5 ou 6 números primos
-    - 📍 Máximo 6 números por quadrante
-    - 🔁 6 a 8 repetições do último concurso
-    - 📈 Score de qualidade para ranking
+    **Filtros ativos (realistas):**
+    - 📊 Soma: 165-215 (mais flexível)
+    - ⚖️ Pares/Ímpares: 6-9 (mais opções)
+    - 🔢 Primos: 4-7 (mais realista)
+    - 📍 Quadrantes: máx 8 (menos restritivo)
+    - 🔁 Repetições: 5-9 (mais natural)
+    - 🚫 Sequências: bloqueia apenas 6+ consecutivos
     
-    ⚠️ **Aviso:** Filtros rigorosos = menos jogos, mas qualidade muito superior!
+    ✅ **Agora vai gerar jogos!** Os filtros estão rigorosos mas realistas.
     """)
     
     # Inicialização da sessão
@@ -604,7 +670,7 @@ def main():
     
     # Abas
     if st.session_state.concursos and len(st.session_state.concursos) >= 20:
-        tab1, tab2, tab3 = st.tabs(["📈 Análise", "🎲 Gerar Jogos (Matador)", "📊 Resultados"])
+        tab1, tab2, tab3 = st.tabs(["📈 Análise", "🎲 Gerar Jogos", "📊 Resultados"])
         
         with tab1:
             st.header("📊 Análise Estatística")
@@ -634,35 +700,41 @@ def main():
             fig_soma = px.histogram(
                 st.session_state.analise.padroes_combinatorios['somas'],
                 nbins=30,
-                title="Distribuição das Somas (Intervalo Alvo: 170-205)",
+                title="Distribuição das Somas (Intervalo Alvo: 165-215)",
                 labels={'value': 'Soma', 'count': 'Frequência'}
             )
-            fig_soma.add_vline(x=170, line_dash="dash", line_color="red")
-            fig_soma.add_vline(x=205, line_dash="dash", line_color="red")
+            fig_soma.add_vline(x=165, line_dash="dash", line_color="red")
+            fig_soma.add_vline(x=215, line_dash="dash", line_color="red")
             st.plotly_chart(fig_soma, use_container_width=True)
         
         with tab2:
-            st.header("🎲 ESTRATÉGIA MATADORA - FILTROS AGRESSIVOS")
+            st.header("🎲 GERAR JOGOS COM FILTROS BALANCEADOS")
             
-            st.warning("""
-            ⚠️ **ATENÇÃO:** Esta estratégia usa filtros rigorosos. 
-            Pode gerar menos jogos que o solicitado, mas todos com altíssima qualidade!
-            """)
+            estrategia = st.radio(
+                "Escolha o nível de rigor:",
+                [
+                    "⚖️ Balanceada (recomendada) - Mais jogos, boa qualidade",
+                    "🔥 Ultra - Menos jogos, qualidade superior"
+                ]
+            )
             
             quantidade = st.number_input("Quantidade de jogos desejada", 5, 50, 15)
             
-            if st.button("🔥 GERAR JOGOS COM FILTROS AGRESSIVOS", type="primary"):
-                with st.spinner("Gerando jogos com filtros matadores..."):
-                    st.session_state.jogos = st.session_state.analise.estrategia_matadora(quantidade)
+            if st.button("🎲 GERAR JOGOS", type="primary"):
+                with st.spinner("Gerando jogos com filtros balanceados..."):
+                    if "Balanceada" in estrategia:
+                        st.session_state.jogos = st.session_state.analise.estrategia_balanceada(quantidade)
+                    else:
+                        st.session_state.jogos = st.session_state.analise.estrategia_ultra(quantidade)
                     
                     if len(st.session_state.jogos) < quantidade:
-                        st.warning(f"⚠️ Gerados apenas {len(st.session_state.jogos)} jogos que passaram nos filtros rigorosos")
+                        st.warning(f"⚠️ Gerados apenas {len(st.session_state.jogos)} jogos que passaram nos filtros")
                     else:
                         st.success(f"✅ {len(st.session_state.jogos)} jogos de alta qualidade gerados!")
         
         with tab3:
             if st.session_state.jogos:
-                st.header("📊 Resultados com Filtros Agressivos")
+                st.header("📊 Resultados")
                 
                 # Permite inserir resultado manual
                 with st.expander("🔢 Inserir resultado do sorteio manualmente"):
@@ -726,11 +798,11 @@ def main():
                 st.download_button(
                     label="📥 Exportar CSV",
                     data=csv,
-                    file_name=f"resultados_matadores_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    file_name=f"resultados_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                     mime="text/csv"
                 )
             else:
-                st.info("ℹ️ Gere jogos com a estratégia matadora primeiro!")
+                st.info("ℹ️ Gere jogos primeiro!")
 
 if __name__ == "__main__":
     main()
