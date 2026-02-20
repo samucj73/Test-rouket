@@ -136,9 +136,13 @@ class AnaliseLotofacilAvancada:
             
             # NOVO: Detectar sequências (3+ números consecutivos)
             seq_count = 0
-            for i in range(len(concurso)-2):
+            i = 0
+            while i < len(concurso) - 2:
                 if concurso[i+2] - concurso[i+1] == 1 and concurso[i+1] - concurso[i] == 1:
                     seq_count += 1
+                    i += 3  # Pula a sequência já contada
+                else:
+                    i += 1
             padroes['sequencias'].append(seq_count)
         
         return padroes
@@ -158,7 +162,8 @@ class AnaliseLotofacilAvancada:
             triplas_consec = 0
             quadras_consec = 0
             
-            for i in range(len(concurso)-1):
+            i = 0
+            while i < len(concurso)-1:
                 if concurso[i+1] - concurso[i] == 1:
                     pares_consec += 1
                     
@@ -167,6 +172,13 @@ class AnaliseLotofacilAvancada:
                         
                         if i < len(concurso)-3 and concurso[i+3] - concurso[i+2] == 1:
                             quadras_consec += 1
+                            i += 3
+                        else:
+                            i += 2
+                    else:
+                        i += 1
+                else:
+                    i += 1
             
             sequencias['2_consecutivos'].append(pares_consec)
             sequencias['3_consecutivos'].append(triplas_consec)
@@ -437,11 +449,15 @@ class AnaliseLotofacilAvancada:
             num_chave_presentes = sum(1 for n in jogo if n in self.numeros_chave)
             score += num_chave_presentes * 3
             
-            # NOVO Critério 7: Potencial para sequências
+            # NOVO Critério 7: Potencial para sequências (AJUSTADO)
             tem_sequencia = 0
-            for i in range(len(jogo)-2):
+            i = 0
+            while i < len(jogo)-2:
                 if jogo[i+2] - jogo[i+1] == 1 and jogo[i+1] - jogo[i] == 1:
-                    tem_sequencia += 5
+                    tem_sequencia += 3  # Reduzido de 5 para 3
+                    i += 3
+                else:
+                    i += 1
             score += tem_sequencia
             
             return score
@@ -627,16 +643,16 @@ class AnaliseLotofacilAvancada:
         return jogos_finais
     
     # =================================================
-    # VALIDAÇÃO ESTATÍSTICA
+    # VALIDAÇÃO ESTATÍSTICA - CORRIGIDA
     # =================================================
     def validar_jogo(self, jogo):
-        """Valida um jogo baseado em critérios estatísticos"""
+        """Valida um jogo baseado em critérios estatísticos - VERSÃO CORRIGIDA"""
         validacao = {
             'valido': True,
             'motivos': []
         }
         
-        # Critério 1: Soma dentro de 2.5 desvios padrão (mais rigoroso)
+        # Critério 1: Soma dentro de 2.5 desvios padrão
         soma_stats = self.padroes_combinatorios['somas']
         if soma_stats:
             media = np.mean(soma_stats)
@@ -653,29 +669,30 @@ class AnaliseLotofacilAvancada:
             validacao['valido'] = False
             validacao['motivos'].append(f"Proporção par/ímpar atípica")
         
-        # Critério 3: Números consecutivos (mas não excessivos)
+        # CRITÉRIO 3 CORRIGIDO: Números consecutivos (ajustado ao padrão real)
         consecutivos = 0
         for i in range(len(jogo)-1):
             if jogo[i+1] - jogo[i] == 1:
                 consecutivos += 1
         
-        if consecutivos > 4:
+        # Lotofácil aceita bem até 7 consecutivos
+        if consecutivos > 7:
             validacao['valido'] = False
             validacao['motivos'].append(f"Muitos consecutivos")
         
-        # Critério 4: Presença de números chave
+        # CRITÉRIO 4 CORRIGIDO: Presença de números chave (menos restritivo)
         num_chave = sum(1 for n in jogo if n in self.numeros_chave)
-        if num_chave < 3:
+        if num_chave < 2:  # Reduzido de 3 para 2
             validacao['valido'] = False
             validacao['motivos'].append(f"Poucos números chave")
         
         return validacao
     
     # =================================================
-    # CONFERÊNCIA AVANÇADA
+    # CONFERÊNCIA AVANÇADA - CORRIGIDA
     # =================================================
     def conferir_jogos_avancada(self, jogos, concurso_alvo=None):
-        """Conferência detalhada com análise estatística"""
+        """Conferência detalhada com análise estatística - VERSÃO CORRIGIDA"""
         if concurso_alvo is None:
             concurso_alvo = self.ultimo_concurso
         
@@ -701,11 +718,15 @@ class AnaliseLotofacilAvancada:
             primos_jogo = sum(1 for n in jogo if n in primos)
             primos_concurso = sum(1 for n in concurso_alvo if n in primos) if concurso_alvo else 0
             
-            # Análise de sequências
+            # Análise de sequências - CORRIGIDA (não conta múltiplas vezes)
             seq_jogo = 0
-            for i in range(len(jogo)-2):
+            i = 0
+            while i < len(jogo)-2:
                 if jogo[i+2] - jogo[i+1] == 1 and jogo[i+1] - jogo[i] == 1:
                     seq_jogo += 1
+                    i += 3  # Pula a sequência já contada
+                else:
+                    i += 1
             
             dados.append({
                 "Jogo": idx,
