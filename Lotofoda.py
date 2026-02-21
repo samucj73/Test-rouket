@@ -112,7 +112,7 @@ class AnaliseLotofacilAvancada:
         )
 
     # =================================================
-    # FECHAMENTO 16–17 DEZENAS
+    # FECHAMENTO 16–17
     # =================================================
     def gerar_fechamento(self, tamanho=16):
         scores = {n: self.score_numero(n) for n in self.numeros}
@@ -132,102 +132,60 @@ class AnaliseLotofacilAvancada:
 
         return [list(j) for j in jogos]
 
-    # =================================================
-    # CONFERÊNCIA
-    # =================================================
-    def conferir(self, jogos, resultado):
-        dados = []
-        for i, j in enumerate(jogos, 1):
-            dados.append({
-                "Jogo": i,
-                "Dezenas": ", ".join(f"{n:02d}" for n in j),
-                "Acertos": len(set(j) & set(resultado)),
-                "Soma": sum(j),
-                "Pares": sum(1 for n in j if n % 2 == 0)
-            })
-        return pd.DataFrame(dados)
-
 # =====================================================
 # INTERFACE
 # =====================================================
 def main():
     st.title("🎯 LOTOFÁCIL - ANALISADOR PROFISSIONAL V2")
 
+    # ================== SESSION STATE ==================
+    if "concursos_raw" not in st.session_state:
+        st.session_state.concursos_raw = None
+
+    if "concursos_processados" not in st.session_state:
+        st.session_state.concursos_processados = None
+
     if "analise" not in st.session_state:
         st.session_state.analise = None
-    if "jogos" not in st.session_state:
-        st.session_state.jogos = []
 
+    # ================== SIDEBAR ==================
     with st.sidebar:
         qtd = st.slider("Qtd concursos", 50, 1000, 200)
-        #if st.button("📥 Carregar concursos"):
-        #if st.button("📥 Carregar concursos"):
+
         if st.button("📥 Carregar concursos"):
             url = "https://loteriascaixa-api.herokuapp.com/api/lotofacil/"
+            data = requests.get(url).json()
 
-    try:
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-    except Exception as e:
-        st.error("❌ Erro ao conectar com a API da Lotofácil")
-        st.stop()
+            st.session_state.concursos_raw = data[:qtd]
+            concursos = [sorted(map(int, d["dezenas"])) for d in data[:qtd]]
+            st.session_state.concursos_processados = concursos
 
-    if not isinstance(data, list) or len(data) == 0:
-        st.error("❌ API retornou dados inválidos ou vazios")
-        st.stop()
+            st.session_state.analise = AnaliseLotofacilAvancada(concursos)
+            st.session_state.analise.auto_ajustar_dna(concursos[0])
 
-    # ===============================
-    # CONCURSO MAIS RECENTE
-    # ===============================
-    ultimo = data[0]
-    numero_concurso = ultimo.get("concurso", "—")
-    dezenas_ultimo = sorted(map(int, ultimo.get("dezenas", [])))
-    data_concurso = ultimo.get("data", "—")
+            st.success(f"✅ {qtd} concursos carregados e mantidos em memória")
 
-    if len(dezenas_ultimo) != 15:
-        st.error("❌ Último concurso inválido (dezenas incorretas)")
-        st.stop()
-
-    # ===============================
-    # LISTA DE CONCURSOS PARA ANÁLISE
-    # ===============================
-    concursos = [
-        sorted(map(int, d["dezenas"]))
-        for d in data[:qtd]
-        if "dezenas" in d and len(d["dezenas"]) == 15
-    ]
-
-    if len(concursos) < 10:
-        st.error("❌ Concursos insuficientes para análise")
-        st.stop()
-
-    st.session_state.analise = AnaliseLotofacilAvancada(concursos)
-    st.session_state.analise.auto_ajustar_dna(dezenas_ultimo)
-
-    st.success("✅ Concursos carregados e DNA ajustado com sucesso")
-
-    st.markdown("### 🏆 Último Concurso Carregado")
-    st.markdown(f"""
-    **Concurso:** `{numero_concurso}`  
-    **Data:** `{data_concurso}`  
-    **Dezenas:**  
-    🔢 **{", ".join(f"{n:02d}" for n in dezenas_ultimo)}**
-    """)    
-
+    # ================== CONTEÚDO ==================
     if st.session_state.analise:
+
+        ultimo = st.session_state.concursos_raw[0]
+
+        st.info(
+            f"🎯 Concurso mais recente: **{ultimo.get('concurso', 'N/A')}** | "
+            f"📅 {ultimo.get('data', 'N/A')} | "
+            f"🔢 {', '.join(ultimo['dezenas'])}"
+        )
+
         tab1, tab2, tab3 = st.tabs(
             ["📊 Análise", "🧩 Fechamento 16–17", "🧬 DNA"]
         )
 
         with tab1:
-            st.write("🔑 Números-chave:", st.session_state.analise.numeros_chave)
+            st.subheader("🔑 Números-chave")
+            st.write(st.session_state.analise.numeros_chave)
 
-        # =================================================
-        # ABA FECHAMENTO
-        # =================================================
         with tab2:
-            st.subheader("🧩 Fechamento Inteligente (DNA)")
+            st.subheader("🧩 Fechamento Inteligente")
 
             tamanho = st.radio("Tamanho do fechamento", [16, 17], horizontal=True)
             qtd_jogos = st.slider("Qtd de jogos (15 dezenas)", 4, 10, 6)
@@ -239,18 +197,20 @@ def main():
                 st.markdown("### 🔒 Fechamento Base")
                 st.write(", ".join(f"{n:02d}" for n in fechamento))
 
-                st.markdown("### 🎯 Jogos Gerados")
                 df = pd.DataFrame({
                     "Jogo": range(1, len(jogos)+1),
                     "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in jogos],
                     "Soma": [sum(j) for j in jogos],
                     "Pares": [sum(1 for n in j if n % 2 == 0) for j in jogos]
                 })
+
+                st.markdown("### 🎯 Jogos Gerados")
                 st.dataframe(df, use_container_width=True)
 
         with tab3:
-            st.subheader("🧬 DNA Adaptativo Atual")
+            st.subheader("🧬 DNA Atual")
             st.json(st.session_state.analise.dna)
+
 
 if __name__ == "__main__":
     main()
