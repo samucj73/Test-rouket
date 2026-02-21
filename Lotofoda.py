@@ -93,7 +93,7 @@ class AnaliseLotofacilAvancada:
 
     def _numeros_chave(self):
         cont=Counter()
-        for c in self.concursos[:20]: cont.update(c)
+        for c in self.concursos[:-25]: cont.update(c)
         return [n for n,q in cont.items() if q>=10]
 
     def score_numero(self,n):
