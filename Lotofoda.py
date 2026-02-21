@@ -3,6 +3,9 @@ import requests
 import random
 import pandas as pd
 import numpy as np
+import json
+import os
+import uuid
 from collections import Counter
 from datetime import datetime
 import warnings
@@ -34,6 +37,92 @@ input, textarea { border-radius: 12px !important; }
 
 st.title("🧠🎯 LOTOFÁCIL PREMIUM")
 st.caption("DNA • Fechamento • Conferência • Mobile First")
+
+# =====================================================
+# FUNÇÕES DE ARQUIVO LOCAL
+# =====================================================
+def salvar_jogos_gerados(jogos, fechamento, dna_params):
+    """Salva os jogos gerados em arquivo JSON local"""
+    try:
+        # Criar diretório se não existir
+        if not os.path.exists("jogos_salvos"):
+            os.makedirs("jogos_salvos")
+        
+        # Gerar ID único
+        jogo_id = str(uuid.uuid4())[:8]
+        data_hora = datetime.now().strftime("%Y%m%d_%H%M%S")
+        nome_arquivo = f"jogos_salvos/fechamento_{data_hora}_{jogo_id}.json"
+        
+        # Preparar dados
+        dados = {
+            "id": jogo_id,
+            "data_geracao": datetime.now().isoformat(),
+            "concurso_alvo": "Próximo sorteio futuro",
+            "fechamento_base": fechamento,
+            "dna_params": dna_params,
+            "jogos": jogos,
+            "conferido": False,
+            "resultado_futuro": None,
+            "acertos": None
+        }
+        
+        # Salvar arquivo
+        with open(nome_arquivo, 'w', encoding='utf-8') as f:
+            json.dump(dados, f, indent=2, ensure_ascii=False)
+        
+        return nome_arquivo, jogo_id
+    except Exception as e:
+        st.error(f"Erro ao salvar jogos: {e}")
+        return None, None
+
+def carregar_jogos_salvos():
+    """Carrega todos os jogos salvos"""
+    jogos_salvos = []
+    try:
+        if os.path.exists("jogos_salvos"):
+            for arquivo in os.listdir("jogos_salvos"):
+                if arquivo.endswith(".json"):
+                    with open(f"jogos_salvos/{arquivo}", 'r', encoding='utf-8') as f:
+                        dados = json.load(f)
+                        dados["arquivo"] = arquivo
+                        jogos_salvos.append(dados)
+            
+            # Ordenar por data (mais recentes primeiro)
+            jogos_salvos.sort(key=lambda x: x.get("data_geracao", ""), reverse=True)
+    except Exception as e:
+        st.error(f"Erro ao carregar jogos salvos: {e}")
+    
+    return jogos_salvos
+
+def atualizar_conferencia(arquivo, resultado, acertos):
+    """Atualiza arquivo com resultado da conferência"""
+    try:
+        caminho = f"jogos_salvos/{arquivo}"
+        with open(caminho, 'r', encoding='utf-8') as f:
+            dados = json.load(f)
+        
+        dados["conferido"] = True
+        dados["resultado_futuro"] = resultado
+        dados["acertos"] = acertos
+        dados["data_conferencia"] = datetime.now().isoformat()
+        
+        with open(caminho, 'w', encoding='utf-8') as f:
+            json.dump(dados, f, indent=2, ensure_ascii=False)
+        
+        return True
+    except Exception as e:
+        st.error(f"Erro ao atualizar conferência: {e}")
+        return False
+
+def buscar_ultimo_concurso_futuro(api_data):
+    """Busca o último concurso disponível na API"""
+    try:
+        if api_data and len(api_data) > 0:
+            return api_data[0]  # O primeiro é o mais recente
+        return None
+    except Exception as e:
+        st.error(f"Erro ao buscar concurso futuro: {e}")
+        return None
 
 # =====================================================
 # CLASSE PRINCIPAL
@@ -150,14 +239,16 @@ def repeticao_ultimo_penultimo(concursos):
 def main():
     if "analise" not in st.session_state: st.session_state.analise=None
     if "jogos" not in st.session_state: st.session_state.jogos=[]
+    if "dados_api" not in st.session_state: st.session_state.dados_api=None
+    if "jogos_salvos" not in st.session_state: st.session_state.jogos_salvos=[]
 
     # ================= SIDEBAR =================
     with st.sidebar:
         qtd=st.slider("Qtd concursos históricos",50,1000,200)
         if st.button("📥 Carregar concursos"):
             url="https://loteriascaixa-api.herokuapp.com/api/lotofacil/"
-            data=requests.get(url).json()
-            concursos=[sorted(map(int,d["dezenas"])) for d in data[:qtd]]
+            st.session_state.dados_api = requests.get(url).json()
+            concursos=[sorted(map(int,d["dezenas"])) for d in st.session_state.dados_api[:qtd]]
             st.session_state.analise=AnaliseLotofacilAvancada(concursos)
             st.session_state.analise.auto_ajustar_dna(concursos[0])
             st.success("✅ Concursos carregados e DNA ajustado")
@@ -177,7 +268,7 @@ def main():
     st.subheader("🎯 Análise e Fechamento Inteligente")
 
     if st.session_state.analise:
-        tab1,tab2,tab3=st.tabs(["📊 Análise","🧩 Fechamento 16–17","🧬 DNA"])
+        tab1,tab2,tab3,tab4=st.tabs(["📊 Análise","🧩 Fechamento","🧬 DNA","✅ Conferência"])
 
         with tab1:
             st.markdown("<div class='card'>🔑 Números-chave: "+", ".join(str(n) for n in st.session_state.analise.numeros_chave)+"</div>",unsafe_allow_html=True)
@@ -185,27 +276,112 @@ def main():
         with tab2:
             st.subheader("🧩 Fechamento Inteligente (DNA)")
 
-            tamanho=st.radio("Tamanho do fechamento",[16,17],horizontal=True)
-            qtd_jogos=st.slider("Qtd de jogos (15 dezenas)",4,10,6)
+            tamanho=st.radio("Tamanho do fechamento",[16,17],horizontal=True, key="tam_fech")
+            qtd_jogos=st.slider("Qtd de jogos (15 dezenas)",4,10,6, key="qtd_jogos")
 
-            if st.button("🚀 Gerar Fechamento"):
+            if st.button("🚀 Gerar e Salvar Fechamento"):
                 fechamento=st.session_state.analise.gerar_fechamento(tamanho)
                 jogos=st.session_state.analise.gerar_subjogos(fechamento,qtd_jogos)
-
-                st.markdown("<div class='card'>🔒 Fechamento Base: "+", ".join(f"{n:02d}" for n in fechamento)+"</div>",unsafe_allow_html=True)
-
-                df=pd.DataFrame({
-                    "Jogo":range(1,len(jogos)+1),
-                    "Dezenas":[", ".join(f"{n:02d}" for n in j) for j in jogos],
-                    "Soma":[sum(j) for j in jogos],
-                    "Pares":[sum(1 for n in j if n%2==0) for j in jogos]
-                })
-                st.markdown("### 🎯 Jogos Gerados")
-                st.dataframe(df,use_container_width=True)
+                
+                # Salvar jogos em arquivo
+                arquivo, jogo_id = salvar_jogos_gerados(jogos, fechamento, st.session_state.analise.dna)
+                
+                if arquivo:
+                    st.success(f"✅ Fechamento salvo com ID: {jogo_id}")
+                    st.markdown("<div class='card'>🔒 Fechamento Base: "+", ".join(f"{n:02d}" for n in fechamento)+"</div>",unsafe_allow_html=True)
+                    
+                    # Atualizar lista de jogos salvos
+                    st.session_state.jogos_salvos = carregar_jogos_salvos()
+                    
+                    df=pd.DataFrame({
+                        "Jogo":range(1,len(jogos)+1),
+                        "Dezenas":[", ".join(f"{n:02d}" for n in j) for j in jogos],
+                        "Soma":[sum(j) for j in jogos],
+                        "Pares":[sum(1 for n in j if n%2==0) for j in jogos]
+                    })
+                    st.markdown("### 🎯 Jogos Gerados")
+                    st.dataframe(df,use_container_width=True)
 
         with tab3:
             st.subheader("🧬 DNA Adaptativo Atual")
             st.json(st.session_state.analise.dna)
+
+        with tab4:
+            st.subheader("✅ Conferência com Sorteio Futuro")
+            
+            # Carregar jogos salvos
+            st.session_state.jogos_salvos = carregar_jogos_salvos()
+            
+            if not st.session_state.jogos_salvos:
+                st.warning("Nenhum jogo salvo encontrado. Gere um fechamento na aba anterior.")
+            else:
+                # Selecionar jogo para conferir
+                opcoes = []
+                for i, jogo in enumerate(st.session_state.jogos_salvos[:10]):  # Últimos 10
+                    data = datetime.fromisoformat(jogo["data_geracao"]).strftime("%d/%m/%Y %H:%M")
+                    status = "✅ Conferido" if jogo.get("conferido") else "⏳ Aguardando"
+                    opcoes.append(f"{i+1} - {status} - {data} (ID: {jogo['id']})")
+                
+                selecao = st.selectbox("Selecione o fechamento para conferir", opcoes)
+                
+                if selecao:
+                    idx = int(selecao.split(" - ")[0]) - 1
+                    jogo_selecionado = st.session_state.jogos_salvos[idx]
+                    
+                    st.markdown("### 📋 Detalhes do Fechamento")
+                    st.json({
+                        "ID": jogo_selecionado["id"],
+                        "Data Geração": jogo_selecionado["data_geracao"],
+                        "Fechamento Base": jogo_selecionado["fechamento_base"],
+                        "Conferido": jogo_selecionado.get("conferido", False)
+                    })
+                    
+                    if jogo_selecionado.get("conferido"):
+                        st.info(f"✅ Já conferido! Resultado: {jogo_selecionado['resultado_futuro']}")
+                        st.metric("Melhor acerto", f"{max(jogo_selecionado['acertos'])} pontos")
+                    
+                    # Botão para conferir (apenas se não conferido ainda)
+                    if not jogo_selecionado.get("conferido"):
+                        if st.button("🔍 Buscar e Conferir com Último Concurso"):
+                            if st.session_state.dados_api:
+                                ultimo_concurso = st.session_state.dados_api[0]  # Mais recente
+                                numeros_ultimo = sorted(map(int, ultimo_concurso["dezenas"]))
+                                
+                                st.info(f"📅 Concurso {ultimo_concurso['concurso']} - Data: {ultimo_concurso['data']}")
+                                st.write(f"Números sorteados: {numeros_ultimo}")
+                                
+                                # Conferir jogos
+                                acertos_por_jogo = []
+                                for jogo in jogo_selecionado["jogos"]:
+                                    acertos = len(set(jogo) & set(numeros_ultimo))
+                                    acertos_por_jogo.append(acertos)
+                                
+                                # Atualizar arquivo
+                                if atualizar_conferencia(jogo_selecionado["arquivo"], numeros_ultimo, acertos_por_jogo):
+                                    st.success("✅ Conferência realizada e salva!")
+                                    
+                                    # Mostrar resultados
+                                    df_resultado = pd.DataFrame({
+                                        "Jogo": range(1, len(jogo_selecionado["jogos"]) + 1),
+                                        "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in jogo_selecionado["jogos"]],
+                                        "Acertos": acertos_por_jogo
+                                    })
+                                    st.dataframe(df_resultado, use_container_width=True)
+                                    
+                                    # Estatísticas
+                                    col1, col2, col3 = st.columns(3)
+                                    with col1:
+                                        st.metric("Média acertos", f"{np.mean(acertos_por_jogo):.1f}")
+                                    with col2:
+                                        st.metric("Máximo", f"{max(acertos_por_jogo)}")
+                                    with col3:
+                                        st.metric("Mínimo", f"{min(acertos_por_jogo)}")
+                                    
+                                    # Recarregar lista
+                                    st.session_state.jogos_salvos = carregar_jogos_salvos()
+                                    st.rerun()
+                            else:
+                                st.error("Carregue os concursos primeiro na barra lateral!")
 
 if __name__=="__main__":
     main()
