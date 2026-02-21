@@ -4,35 +4,33 @@ import random
 import pandas as pd
 import numpy as np
 from collections import Counter
-from datetime import datetime
 import warnings
 warnings.filterwarnings("ignore")
 
 # =====================================================
-# CONFIGURAÇÃO
+# CONFIG
 # =====================================================
 st.set_page_config(
-    page_title="🎯 LOTOFÁCIL - ANALISADOR PROFISSIONAL V2",
+    page_title="🎯 LOTOFÁCIL - FECHAMENTO AVANÇADO",
     layout="wide"
 )
 
 # =====================================================
-# CLASSE PRINCIPAL
+# MOTOR AVANÇADO
 # =====================================================
-class AnaliseLotofacilAvancada:
+class LotofacilEngine:
 
     def __init__(self, concursos):
         self.concursos = concursos
-        self.ultimo_concurso = concursos[0]
         self.numeros = list(range(1, 26))
-        self.total_concursos = len(concursos)
+        self.total = len(concursos)
 
-        self.frequencias = self._frequencias()
-        self.defasagens = self._defasagens()
+        self.freq = self._frequencias()
+        self.defas = self._defasagens()
         self.padroes = self._padroes()
-        self.numeros_chave = self._numeros_chave()
 
         self.dna = self._dna_inicial()
+        self.chaves = self._numeros_chave_avancado()
 
     # =================================================
     # DNA
@@ -44,29 +42,22 @@ class AnaliseLotofacilAvancada:
             "soma": 1.0,
             "pares": 1.0,
             "seq": 1.0,
-            "chave": 1.0
+            "ruptura": 0.6
         }
 
-    def auto_ajustar_dna(self, concurso_real):
+    def ajustar_dna(self, resultado):
         lr = 0.05
+        soma = sum(resultado)
+        pares = sum(n % 2 == 0 for n in resultado)
 
-        soma_r = sum(concurso_real)
-        pares_r = sum(1 for n in concurso_real if n % 2 == 0)
+        soma_med = np.mean(self.padroes["somas"])
+        pares_med = np.mean(self.padroes["pares"])
 
-        soma_m = np.mean(self.padroes["somas"])
-        pares_m = np.mean(self.padroes["pares"])
-
-        self.dna["soma"] += lr if soma_r > soma_m else -lr
-        self.dna["pares"] += lr if pares_r > pares_m else -lr
-
-        tem_seq = any(
-            concurso_real[i+2] == concurso_real[i] + 2
-            for i in range(len(concurso_real)-2)
-        )
-        self.dna["seq"] += lr if tem_seq else -lr
+        self.dna["soma"] += lr if soma > soma_med else -lr
+        self.dna["pares"] += lr if pares > pares_med else -lr
 
         for k in self.dna:
-            self.dna[k] = max(0.5, min(2.0, self.dna[k]))
+            self.dna[k] = min(2.0, max(0.4, self.dna[k]))
 
     # =================================================
     # ANÁLISES
@@ -75,7 +66,7 @@ class AnaliseLotofacilAvancada:
         c = Counter()
         for con in self.concursos:
             c.update(con)
-        return {n: c[n] / self.total_concursos for n in self.numeros}
+        return {n: c[n] / self.total for n in self.numeros}
 
     def _defasagens(self):
         d = {}
@@ -85,125 +76,138 @@ class AnaliseLotofacilAvancada:
                     d[n] = i
                     break
             else:
-                d[n] = self.total_concursos
+                d[n] = self.total
         return d
 
     def _padroes(self):
-        p = {"somas": [], "pares": []}
-        for c in self.concursos:
-            p["somas"].append(sum(c))
-            p["pares"].append(sum(1 for n in c if n % 2 == 0))
-        return p
-
-    def _numeros_chave(self):
-        cont = Counter()
-        for c in self.concursos[:20]:
-            cont.update(c)
-        return [n for n, q in cont.items() if q >= 10]
+        return {
+            "somas": [sum(c) for c in self.concursos],
+            "pares": [sum(n % 2 == 0 for n in c) for c in self.concursos]
+        }
 
     # =================================================
-    # SCORE DNA
+    # NÚMEROS-CHAVE AVANÇADOS
     # =================================================
-    def score_numero(self, n):
-        return (
-            self.frequencias[n] * self.dna["freq"] +
-            (1 - self.defasagens[n]/self.total_concursos) * self.dna["defas"] +
-            (self.dna["chave"] if n in self.numeros_chave else 0)
-        )
+    def _numeros_chave_avancado(self):
+        scores = {}
+        for n in self.numeros:
+            scores[n] = (
+                self.freq[n] * 1.5 +
+                (1 - self.defas[n] / self.total) +
+                random.uniform(0, self.dna["ruptura"])
+            )
+
+        ordenado = sorted(scores, key=scores.get, reverse=True)
+
+        return {
+            "fixos": ordenado[:7],
+            "condicionais": ordenado[7:14],
+            "ruptura": ordenado[14:20]
+        }
 
     # =================================================
-    # FECHAMENTO 16–17 DEZENAS
+    # FECHAMENTO EM CAMADAS
     # =================================================
     def gerar_fechamento(self, tamanho=16):
-        scores = {n: self.score_numero(n) for n in self.numeros}
-        base = sorted(scores, key=scores.get, reverse=True)[:tamanho]
-        return sorted(base)
 
-    def gerar_subjogos(self, fechamento, qtd_jogos=6):
-        jogos = set()
+        base = (
+            self.chaves["fixos"] +
+            self.chaves["condicionais"][:(tamanho - len(self.chaves["fixos"]))]
+        )
 
-        while len(jogos) < qtd_jogos:
+        return sorted(base[:tamanho])
+
+    # =================================================
+    # SCORE DO JOGO
+    # =================================================
+    def score_jogo(self, jogo):
+        soma = sum(jogo)
+        pares = sum(n % 2 == 0 for n in jogo)
+        seq = max(
+            len(list(g)) for _, g in
+            itertools.groupby(
+                [jogo[i+1] - jogo[i] == 1 for i in range(len(jogo)-1)]
+            ) if _ is True
+        ) if len(jogo) > 2 else 0
+
+        score = 0
+        score += -abs(195 - soma) * self.dna["soma"]
+        score += -abs(7 - pares) * self.dna["pares"]
+        score += -seq * self.dna["seq"]
+
+        return score
+
+    # =================================================
+    # GERADOR AVANÇADO DE JOGOS
+    # =================================================
+    def gerar_jogos(self, fechamento, qtd=6):
+
+        candidatos = []
+
+        while len(candidatos) < 30:
             jogo = sorted(random.sample(fechamento, 15))
             soma = sum(jogo)
-            pares = sum(1 for n in jogo if n % 2 == 0)
+            pares = sum(n % 2 == 0 for n in jogo)
 
-            if 180 <= soma <= 220 and 6 <= pares <= 9:
-                jogos.add(tuple(jogo))
+            if 185 <= soma <= 215 and 6 <= pares <= 9:
+                score = self.score_jogo(jogo)
+                candidatos.append((jogo, score))
 
-        return [list(j) for j in jogos]
-
-    # =================================================
-    # CONFERÊNCIA
-    # =================================================
-    def conferir(self, jogos, resultado):
-        dados = []
-        for i, j in enumerate(jogos, 1):
-            dados.append({
-                "Jogo": i,
-                "Dezenas": ", ".join(f"{n:02d}" for n in j),
-                "Acertos": len(set(j) & set(resultado)),
-                "Soma": sum(j),
-                "Pares": sum(1 for n in j if n % 2 == 0)
-            })
-        return pd.DataFrame(dados)
+        candidatos.sort(key=lambda x: x[1], reverse=True)
+        return candidatos[:qtd]
 
 # =====================================================
-# INTERFACE
+# INTERFACE STREAMLIT
 # =====================================================
 def main():
-    st.title("🎯 LOTOFÁCIL - ANALISADOR PROFISSIONAL V2")
 
-    if "analise" not in st.session_state:
-        st.session_state.analise = None
-    if "jogos" not in st.session_state:
-        st.session_state.jogos = []
+    st.title("🎯 LOTOFÁCIL — FECHAMENTO AVANÇADO")
+
+    if "engine" not in st.session_state:
+        st.session_state.engine = None
 
     with st.sidebar:
-        qtd = st.slider("Qtd concursos", 50, 1000, 200)
-        if st.button("📥 Carregar concursos"):
+        qtd = st.slider("Qtd concursos", 100, 1000, 300)
+        if st.button("📥 Carregar Concursos"):
             url = "https://loteriascaixa-api.herokuapp.com/api/lotofacil/"
             data = requests.get(url).json()
             concursos = [sorted(map(int, d["dezenas"])) for d in data[:qtd]]
-            st.session_state.analise = AnaliseLotofacilAvancada(concursos)
-            st.session_state.analise.auto_ajustar_dna(concursos[0])
-            st.success("Concursos carregados e DNA ajustado")
+            st.session_state.engine = LotofacilEngine(concursos)
+            st.session_state.engine.ajustar_dna(concursos[0])
+            st.success("Motor avançado carregado")
 
-    if st.session_state.analise:
+    if st.session_state.engine:
         tab1, tab2, tab3 = st.tabs(
-            ["📊 Análise", "🧩 Fechamento 16–17", "🧬 DNA"]
+            ["🧠 Números-Chave", "🧩 Fechamento Avançado", "🧬 DNA"]
         )
 
         with tab1:
-            st.write("🔑 Números-chave:", st.session_state.analise.numeros_chave)
+            st.json(st.session_state.engine.chaves)
 
-        # =================================================
-        # ABA FECHAMENTO
-        # =================================================
         with tab2:
-            st.subheader("🧩 Fechamento Inteligente (DNA)")
-
-            tamanho = st.radio("Tamanho do fechamento", [16, 17], horizontal=True)
-            qtd_jogos = st.slider("Qtd de jogos (15 dezenas)", 4, 10, 6)
+            tamanho = st.radio("Fechamento", [16, 17], horizontal=True)
+            qtd = st.slider("Qtd jogos", 4, 8, 6)
 
             if st.button("🚀 Gerar Fechamento"):
-                fechamento = st.session_state.analise.gerar_fechamento(tamanho)
-                jogos = st.session_state.analise.gerar_subjogos(fechamento, qtd_jogos)
+                fechamento = st.session_state.engine.gerar_fechamento(tamanho)
+                jogos = st.session_state.engine.gerar_jogos(fechamento, qtd)
 
                 st.markdown("### 🔒 Fechamento Base")
                 st.write(", ".join(f"{n:02d}" for n in fechamento))
 
-                st.markdown("### 🎯 Jogos Gerados")
-                df = pd.DataFrame({
-                    "Jogo": range(1, len(jogos)+1),
-                    "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in jogos],
-                    "Soma": [sum(j) for j in jogos],
-                    "Pares": [sum(1 for n in j if n % 2 == 0) for j in jogos]
-                })
+                df = pd.DataFrame([{
+                    "Jogo": i+1,
+                    "Dezenas": ", ".join(f"{n:02d}" for n in j),
+                    "Score": round(s, 2),
+                    "Soma": sum(j),
+                    "Pares": sum(n % 2 == 0 for n in j)
+                } for i, (j, s) in enumerate(jogos)])
+
                 st.dataframe(df, use_container_width=True)
 
         with tab3:
-            st.subheader("🧬 DNA Adaptativo Atual")
-            st.json(st.session_state.analise.dna)
+            st.json(st.session_state.engine.dna)
 
 if __name__ == "__main__":
+    import itertools
     main()
