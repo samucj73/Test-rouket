@@ -160,13 +160,32 @@ def main():
 
     with st.sidebar:
         qtd = st.slider("Qtd concursos", 50, 1000, 200)
+        #if st.button("📥 Carregar concursos"):
         if st.button("📥 Carregar concursos"):
             url = "https://loteriascaixa-api.herokuapp.com/api/lotofacil/"
             data = requests.get(url).json()
-            concursos = [sorted(map(int, d["dezenas"])) for d in data[:qtd]]
-            st.session_state.analise = AnaliseLotofacilAvancada(concursos)
-            st.session_state.analise.auto_ajustar_dna(concursos[0])
-            st.success("Concursos carregados e DNA ajustado")
+
+    # Concurso mais recente
+    ultimo = data[0]
+    numero_concurso = ultimo["concurso"]
+    dezenas_ultimo = sorted(map(int, ultimo["dezenas"]))
+    data_concurso = ultimo.get("data", "—")
+
+    # Lista de concursos para análise
+    concursos = [sorted(map(int, d["dezenas"])) for d in data[:qtd]]
+
+    st.session_state.analise = AnaliseLotofacilAvancada(concursos)
+    st.session_state.analise.auto_ajustar_dna(dezenas_ultimo)
+
+    st.success("Concursos carregados e DNA ajustado")
+
+    st.markdown("### 🏆 Último Concurso Carregado")
+    st.markdown(f"""
+    **Concurso:** `{numero_concurso}`  
+    **Data:** `{data_concurso}`  
+    **Dezenas:**  
+    🔢 **{", ".join(f"{n:02d}" for n in dezenas_ultimo)}**
+    """)    
 
     if st.session_state.analise:
         tab1, tab2, tab3 = st.tabs(
