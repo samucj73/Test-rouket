@@ -161,23 +161,51 @@ def main():
     with st.sidebar:
         qtd = st.slider("Qtd concursos", 50, 1000, 200)
         #if st.button("📥 Carregar concursos"):
+        #if st.button("📥 Carregar concursos"):
         if st.button("📥 Carregar concursos"):
             url = "https://loteriascaixa-api.herokuapp.com/api/lotofacil/"
-            data = requests.get(url).json()
 
-    # Concurso mais recente
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+    except Exception as e:
+        st.error("❌ Erro ao conectar com a API da Lotofácil")
+        st.stop()
+
+    if not isinstance(data, list) or len(data) == 0:
+        st.error("❌ API retornou dados inválidos ou vazios")
+        st.stop()
+
+    # ===============================
+    # CONCURSO MAIS RECENTE
+    # ===============================
     ultimo = data[0]
-    numero_concurso = ultimo["concurso"]
-    dezenas_ultimo = sorted(map(int, ultimo["dezenas"]))
+    numero_concurso = ultimo.get("concurso", "—")
+    dezenas_ultimo = sorted(map(int, ultimo.get("dezenas", [])))
     data_concurso = ultimo.get("data", "—")
 
-    # Lista de concursos para análise
-    concursos = [sorted(map(int, d["dezenas"])) for d in data[:qtd]]
+    if len(dezenas_ultimo) != 15:
+        st.error("❌ Último concurso inválido (dezenas incorretas)")
+        st.stop()
+
+    # ===============================
+    # LISTA DE CONCURSOS PARA ANÁLISE
+    # ===============================
+    concursos = [
+        sorted(map(int, d["dezenas"]))
+        for d in data[:qtd]
+        if "dezenas" in d and len(d["dezenas"]) == 15
+    ]
+
+    if len(concursos) < 10:
+        st.error("❌ Concursos insuficientes para análise")
+        st.stop()
 
     st.session_state.analise = AnaliseLotofacilAvancada(concursos)
     st.session_state.analise.auto_ajustar_dna(dezenas_ultimo)
 
-    st.success("Concursos carregados e DNA ajustado")
+    st.success("✅ Concursos carregados e DNA ajustado com sucesso")
 
     st.markdown("### 🏆 Último Concurso Carregado")
     st.markdown(f"""
