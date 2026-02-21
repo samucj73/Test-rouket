@@ -7,7 +7,7 @@ import json
 import os
 import uuid
 from collections import Counter
-from datetime import datetime, timedelta
+from datetime import datetime
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -32,17 +32,18 @@ input, textarea { border-radius: 12px !important; }
 .p13 { color: #4ade80; font-weight: bold; }
 .p14 { color: gold; font-weight: bold; }
 .p15 { color: #f97316; font-weight: bold; }
+.concurso-info { background: #1e1e2e; padding: 10px; border-radius: 10px; margin: 10px 0; }
 </style>
 """, unsafe_allow_html=True)
 
 st.title("🧠🎯 LOTOFÁCIL PREMIUM")
-st.caption("DNA • Fechamento • Conferência • Mobile First")
+st.caption("DNA • Fechamento • Conferência por Concurso • Mobile First")
 
 # =====================================================
 # FUNÇÕES DE ARQUIVO LOCAL
 # =====================================================
-def salvar_jogos_gerados(jogos, fechamento, dna_params):
-    """Salva os jogos gerados em arquivo JSON local"""
+def salvar_jogos_gerados(jogos, fechamento, dna_params, numero_concurso_atual, data_concurso_atual):
+    """Salva os jogos gerados em arquivo JSON local com o número do concurso atual"""
     try:
         # Criar diretório se não existir
         if not os.path.exists("jogos_salvos"):
@@ -53,18 +54,19 @@ def salvar_jogos_gerados(jogos, fechamento, dna_params):
         data_hora = datetime.now().strftime("%Y%m%d_%H%M%S")
         nome_arquivo = f"jogos_salvos/fechamento_{data_hora}_{jogo_id}.json"
         
-        # Preparar dados
+        # Preparar dados com número do concurso atual
         dados = {
             "id": jogo_id,
             "data_geracao": datetime.now().isoformat(),
-            "concurso_alvo": "Próximo sorteio futuro",
+            "concurso_base": {
+                "numero": numero_concurso_atual,
+                "data": data_concurso_atual
+            },
             "fechamento_base": fechamento,
             "dna_params": dna_params,
             "jogos": jogos,
             "conferido": False,
-            "resultado_futuro": None,
-            "acertos": None,
-            "concurso_conferido": None
+            "conferencias": []  # Lista para múltiplas conferências futuras
         }
         
         # Salvar arquivo
@@ -95,78 +97,50 @@ def carregar_jogos_salvos():
     
     return jogos_salvos
 
-def atualizar_conferencia(arquivo, resultado, acertos, concurso_info):
-    """Atualiza arquivo com resultado da conferência"""
+def adicionar_conferencia(arquivo, concurso_info, acertos):
+    """Adiciona uma nova conferência ao histórico do fechamento"""
     try:
         caminho = f"jogos_salvos/{arquivo}"
         with open(caminho, 'r', encoding='utf-8') as f:
             dados = json.load(f)
         
-        dados["conferido"] = True
-        dados["resultado_futuro"] = resultado
-        dados["acertos"] = acertos
-        dados["concurso_conferido"] = concurso_info
-        dados["data_conferencia"] = datetime.now().isoformat()
+        # Inicializar lista de conferências se não existir
+        if "conferencias" not in dados:
+            dados["conferencias"] = []
+        
+        # Adicionar nova conferência
+        nova_conferencia = {
+            "concurso": concurso_info,
+            "acertos": acertos,
+            "data_conferencia": datetime.now().isoformat()
+        }
+        
+        dados["conferencias"].append(nova_conferencia)
+        dados["conferido"] = True  # Marcar como conferido pelo menos uma vez
         
         with open(caminho, 'w', encoding='utf-8') as f:
             json.dump(dados, f, indent=2, ensure_ascii=False)
         
         return True
     except Exception as e:
-        st.error(f"Erro ao atualizar conferência: {e}")
+        st.error(f"Erro ao adicionar conferência: {e}")
         return False
 
-def buscar_concursos_futuros(api_data, data_referencia):
-    """Busca concursos que ocorreram APÓS a data de referência"""
-    try:
-        if not api_data:
-            return []
-        
-        # Converter data_referencia para datetime
-        if isinstance(data_referencia, str):
-            data_ref = datetime.fromisoformat(data_referencia).date()
-        else:
-            data_ref = data_referencia.date() if hasattr(data_referencia, 'date') else data_referencia
-        
-        concursos_futuros = []
-        for concurso in api_data:
-            # Converter data do concurso
-            data_concurso = datetime.strptime(concurso["data"], "%d/%m/%Y").date()
-            
-            # Se a data do concurso é MAIOR que a data de referência
-            if data_concurso > data_ref:
-                concursos_futuros.append(concurso)
-        
-        return concursos_futuros
-    except Exception as e:
-        st.error(f"Erro ao filtrar concursos futuros: {e}")
-        return []
-
-def verificar_se_concurso_eh_futuro(data_concurso, data_referencia):
-    """Verifica se a data do concurso é futura em relação à data de referência"""
-    try:
-        if isinstance(data_concurso, str):
-            data_conc = datetime.strptime(data_concurso, "%d/%m/%Y").date()
-        else:
-            data_conc = data_concurso
-        
-        if isinstance(data_referencia, str):
-            data_ref = datetime.fromisoformat(data_referencia).date()
-        else:
-            data_ref = data_referencia.date() if hasattr(data_referencia, 'date') else data_referencia
-        
-        return data_conc > data_ref
-    except:
-        return False
+def verificar_concurso_futuro(concurso_analisado, concurso_futuro):
+    """Verifica se o concurso futuro é realmente posterior ao concurso base"""
+    return concurso_futuro > concurso_analisado
 
 # =====================================================
 # CLASSE PRINCIPAL
 # =====================================================
 class AnaliseLotofacilAvancada:
 
-    def __init__(self, concursos):
+    def __init__(self, concursos, dados_completos=None):
         self.concursos = concursos
-        self.ultimo_concurso = concursos[0]
+        self.dados_completos = dados_completos or []
+        self.ultimo_concurso = concursos[0] if concursos else []
+        self.ultimo_concurso_numero = dados_completos[0]["concurso"] if dados_completos else 0
+        self.ultimo_concurso_data = dados_completos[0]["data"] if dados_completos else ""
         self.numeros = list(range(1, 26))
         self.total_concursos = len(concursos)
 
@@ -284,9 +258,12 @@ def main():
             url="https://loteriascaixa-api.herokuapp.com/api/lotofacil/"
             st.session_state.dados_api = requests.get(url).json()
             concursos=[sorted(map(int,d["dezenas"])) for d in st.session_state.dados_api[:qtd]]
-            st.session_state.analise=AnaliseLotofacilAvancada(concursos)
+            st.session_state.analise=AnaliseLotofacilAvancada(concursos, st.session_state.dados_api[:qtd])
             st.session_state.analise.auto_ajustar_dna(concursos[0])
-            st.success("✅ Concursos carregados e DNA ajustado")
+            
+            # Mostrar informação do último concurso
+            ultimo = st.session_state.dados_api[0]
+            st.success(f"✅ Concursos carregados - Último: #{ultimo['concurso']} - {ultimo['data']}")
 
             # ===== Repetições =====
             rep_antepenultimo=repeticao_ultimo_antepenultimo(concursos)
@@ -303,13 +280,22 @@ def main():
     st.subheader("🎯 Análise e Fechamento Inteligente")
 
     if st.session_state.analise:
-        tab1,tab2,tab3,tab4=st.tabs(["📊 Análise","🧩 Fechamento","🧬 DNA","✅ Conferência"])
+        tab1,tab2,tab3,tab4=st.tabs(["📊 Análise","🧩 Fechamento","🧬 DNA","✅ Conferência por Concurso"])
 
         with tab1:
             st.markdown("<div class='card'>🔑 Números-chave: "+", ".join(str(n) for n in st.session_state.analise.numeros_chave)+"</div>",unsafe_allow_html=True)
 
         with tab2:
             st.subheader("🧩 Fechamento Inteligente (DNA)")
+            
+            # Mostrar concurso atual
+            if st.session_state.dados_api:
+                ultimo = st.session_state.dados_api[0]
+                st.markdown(f"""
+                <div class='concurso-info'>
+                    📅 <strong>Concurso base atual:</strong> #{ultimo['concurso']} - {ultimo['data']}
+                </div>
+                """, unsafe_allow_html=True)
 
             tamanho=st.radio("Tamanho do fechamento",[16,17],horizontal=True, key="tam_fech")
             qtd_jogos=st.slider("Qtd de jogos (15 dezenas)",4,10,6, key="qtd_jogos")
@@ -318,11 +304,18 @@ def main():
                 fechamento=st.session_state.analise.gerar_fechamento(tamanho)
                 jogos=st.session_state.analise.gerar_subjogos(fechamento,qtd_jogos)
                 
-                # Salvar jogos em arquivo
-                arquivo, jogo_id = salvar_jogos_gerados(jogos, fechamento, st.session_state.analise.dna)
+                # Salvar jogos em arquivo com número do concurso atual
+                ultimo = st.session_state.dados_api[0]
+                arquivo, jogo_id = salvar_jogos_gerados(
+                    jogos, 
+                    fechamento, 
+                    st.session_state.analise.dna,
+                    ultimo['concurso'],
+                    ultimo['data']
+                )
                 
                 if arquivo:
-                    st.success(f"✅ Fechamento salvo com ID: {jogo_id}")
+                    st.success(f"✅ Fechamento salvo com ID: {jogo_id} (Baseado no concurso #{ultimo['concurso']})")
                     st.markdown("<div class='card'>🔒 Fechamento Base: "+", ".join(f"{n:02d}" for n in fechamento)+"</div>",unsafe_allow_html=True)
                     
                     # Atualizar lista de jogos salvos
@@ -342,130 +335,141 @@ def main():
             st.json(st.session_state.analise.dna)
 
         with tab4:
-            st.subheader("✅ Conferência com Sorteio Futuro")
+            st.subheader("✅ Conferência por Número de Concurso")
             
             # Carregar jogos salvos
             st.session_state.jogos_salvos = carregar_jogos_salvos()
             
             if not st.session_state.jogos_salvos:
                 st.warning("Nenhum jogo salvo encontrado. Gere um fechamento na aba anterior.")
+            elif not st.session_state.dados_api:
+                st.warning("Carregue os concursos primeiro na barra lateral!")
             else:
-                # Selecionar jogo para conferir
-                opcoes = []
-                for i, jogo in enumerate(st.session_state.jogos_salvos[:10]):  # Últimos 10
-                    data = datetime.fromisoformat(jogo["data_geracao"]).strftime("%d/%m/%Y %H:%M")
-                    status = "✅ Conferido" if jogo.get("conferido") else "⏳ Aguardando"
-                    opcoes.append(f"{i+1} - {status} - {data} (ID: {jogo['id']})")
+                # Último concurso disponível
+                ultimo_concurso_api = st.session_state.dados_api[0]
                 
-                selecao = st.selectbox("Selecione o fechamento para conferir", opcoes)
+                # Filtrar apenas fechamentos NÃO conferidos
+                fechamentos_nao_conferidos = [j for j in st.session_state.jogos_salvos if not j.get("conferido")]
                 
-                if selecao:
-                    idx = int(selecao.split(" - ")[0]) - 1
-                    jogo_selecionado = st.session_state.jogos_salvos[idx]
+                if not fechamentos_nao_conferidos:
+                    st.info("✅ Todos os fechamentos já foram conferidos!")
                     
-                    st.markdown("### 📋 Detalhes do Fechamento")
+                    # Mostrar histórico de todos os fechamentos
+                    with st.expander("📜 Ver histórico completo de fechamentos"):
+                        for jogo in st.session_state.jogos_salvos:
+                            status = "✅" if jogo.get("conferido") else "⏳"
+                            data = datetime.fromisoformat(jogo["data_geracao"]).strftime("%d/%m/%Y")
+                            base_conc = jogo["concurso_base"]["numero"]
+                            st.write(f"{status} ID: {jogo['id']} - Base: #{base_conc} - {data}")
+                else:
+                    st.markdown(f"""
+                    <div class='concurso-info'>
+                        🎯 <strong>Último concurso disponível:</strong> #{ultimo_concurso_api['concurso']} - {ultimo_concurso_api['data']}
+                    </div>
+                    """, unsafe_allow_html=True)
                     
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.markdown(f"**ID:** {jogo_selecionado['id']}")
-                        data_geracao = datetime.fromisoformat(jogo_selecionado["data_geracao"])
-                        st.markdown(f"**Data Geração:** {data_geracao.strftime('%d/%m/%Y %H:%M')}")
-                    with col2:
-                        st.markdown(f"**Status:** {'✅ Conferido' if jogo_selecionado.get('conferido') else '⏳ Aguardando'}")
-                        st.markdown(f"**Fechamento Base:** {jogo_selecionado['fechamento_base']}")
+                    # Selecionar fechamento para conferir
+                    opcoes = []
+                    for i, jogo in enumerate(fechamentos_nao_conferidos[:10]):
+                        data = datetime.fromisoformat(jogo["data_geracao"]).strftime("%d/%m/%Y %H:%M")
+                        base_conc = jogo["concurso_base"]["numero"]
+                        opcoes.append(f"{i+1} - Fechamento baseado no concurso #{base_conc} - {data} (ID: {jogo['id']})")
                     
-                    if jogo_selecionado.get("conferido"):
-                        concurso_info = jogo_selecionado.get("concurso_conferido", {})
-                        st.info(f"✅ Já conferido com o concurso {concurso_info.get('concurso', 'N/A')} - {concurso_info.get('data', 'N/A')}")
-                        st.markdown(f"**Resultado:** {jogo_selecionado['resultado_futuro']}")
-                        st.metric("Melhor acerto", f"{max(jogo_selecionado['acertos'])} pontos")
+                    selecao = st.selectbox("Selecione o fechamento para conferir", opcoes)
+                    
+                    if selecao:
+                        idx = int(selecao.split(" - ")[0]) - 1
+                        jogo_selecionado = fechamentos_nao_conferidos[idx]
                         
-                        # Mostrar tabela de acertos
-                        df_resultado = pd.DataFrame({
-                            "Jogo": range(1, len(jogo_selecionado["jogos"]) + 1),
-                            "Acertos": jogo_selecionado["acertos"]
-                        })
-                        st.dataframe(df_resultado, use_container_width=True)
-                    
-                    # Botão para conferir (apenas se não conferido ainda)
-                    if not jogo_selecionado.get("conferido"):
-                        if st.button("🔍 Buscar Concursos Futuros"):
-                            if st.session_state.dados_api:
-                                # Buscar concursos que ocorreram APÓS a data de geração
-                                concursos_futuros = buscar_concursos_futuros(
-                                    st.session_state.dados_api, 
-                                    jogo_selecionado["data_geracao"]
+                        st.markdown("### 📋 Detalhes do Fechamento")
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.markdown(f"**ID:** {jogo_selecionado['id']}")
+                            st.markdown(f"**Baseado no concurso:** #{jogo_selecionado['concurso_base']['numero']}")
+                            st.markdown(f"**Data do concurso base:** {jogo_selecionado['concurso_base']['data']}")
+                        with col2:
+                            st.markdown(f"**Data geração:** {datetime.fromisoformat(jogo_selecionado['data_geracao']).strftime('%d/%m/%Y %H:%M')}")
+                            st.markdown(f"**Fechamento base:** {jogo_selecionado['fechamento_base']}")
+                        
+                        # Verificar se há concurso futuro disponível
+                        concurso_base_num = jogo_selecionado['concurso_base']['numero']
+                        concurso_atual_num = ultimo_concurso_api['concurso']
+                        
+                        if concurso_atual_num <= concurso_base_num:
+                            st.warning(f"⏳ Aguardando sorteio futuro... (Concurso base: #{concurso_base_num} | Atual: #{concurso_atual_num})")
+                            st.info("O próximo sorteio ainda não ocorreu. Volte após o resultado!")
+                        else:
+                            # Encontrar todos os concursos futuros disponíveis
+                            concursos_futuros = []
+                            for conc in st.session_state.dados_api:
+                                if conc['concurso'] > concurso_base_num:
+                                    concursos_futuros.append(conc)
+                            
+                            if concursos_futuros:
+                                st.success(f"✅ {len(concursos_futuros)} concurso(s) futuro(s) disponível(is)!")
+                                
+                                # Opções de concursos futuros
+                                opcoes_futuros = []
+                                for conc in concursos_futuros[:5]:  # Mostrar até 5
+                                    opcoes_futuros.append(f"Concurso #{conc['concurso']} - {conc['data']}")
+                                
+                                concurso_futuro_sel = st.selectbox(
+                                    "Selecione o concurso futuro para conferir",
+                                    opcoes_futuros,
+                                    key="futuro_sel"
                                 )
                                 
-                                if not concursos_futuros:
-                                    st.warning("⏳ Ainda não houve sorteio futuro desde a data de geração deste fechamento. Aguarde o próximo sorteio!")
-                                else:
-                                    st.success(f"📅 Encontrados {len(concursos_futuros)} concursos futuros!")
+                                if concurso_futuro_sel and st.button("🔍 Conferir com concurso selecionado"):
+                                    # Extrair número do concurso
+                                    num_futuro = int(concurso_futuro_sel.split(" - ")[0].replace("Concurso #", ""))
                                     
-                                    # Mostrar opções de concursos futuros
-                                    opcoes_futuros = []
-                                    for conc in concursos_futuros[:5]:  # Mostrar até 5 futuros
-                                        opcoes_futuros.append(f"Concurso {conc['concurso']} - {conc['data']}")
+                                    # Encontrar dados do concurso
+                                    concurso_info = next(c for c in concursos_futuros if c['concurso'] == num_futuro)
+                                    numeros_sorteados = sorted(map(int, concurso_info["dezenas"]))
                                     
-                                    concurso_selecionado = st.selectbox(
-                                        "Selecione o concurso futuro para conferir",
-                                        opcoes_futuros,
-                                        key="concurso_futuro"
-                                    )
+                                    # Calcular acertos
+                                    acertos_por_jogo = []
+                                    for jogo in jogo_selecionado["jogos"]:
+                                        acertos = len(set(jogo) & set(numeros_sorteados))
+                                        acertos_por_jogo.append(acertos)
                                     
-                                    if concurso_selecionado and st.button("✅ Confirmar Conferência"):
-                                        # Extrair número do concurso selecionado
-                                        num_concurso = int(concurso_selecionado.split(" - ")[0].replace("Concurso ", ""))
+                                    # Salvar conferência
+                                    concurso_info_salvar = {
+                                        "numero": concurso_info["concurso"],
+                                        "data": concurso_info["data"],
+                                        "resultado": numeros_sorteados
+                                    }
+                                    
+                                    if adicionar_conferencia(jogo_selecionado["arquivo"], concurso_info_salvar, acertos_por_jogo):
+                                        st.success(f"✅ Conferência realizada com sucesso para o concurso #{num_futuro}!")
                                         
-                                        # Encontrar o concurso completo
-                                        concurso_info = next(
-                                            (c for c in concursos_futuros if c["concurso"] == num_concurso), 
-                                            None
-                                        )
+                                        # Mostrar resultados
+                                        df_resultado = pd.DataFrame({
+                                            "Jogo": range(1, len(jogo_selecionado["jogos"]) + 1),
+                                            "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in jogo_selecionado["jogos"]],
+                                            "Acertos": acertos_por_jogo
+                                        })
+                                        st.dataframe(df_resultado, use_container_width=True)
                                         
-                                        if concurso_info:
-                                            numeros_sorteados = sorted(map(int, concurso_info["dezenas"]))
-                                            
-                                            st.info(f"📊 Conferindo com Concurso {concurso_info['concurso']} - {concurso_info['data']}")
-                                            st.write(f"Números sorteados: {numeros_sorteados}")
-                                            
-                                            # Conferir jogos
-                                            acertos_por_jogo = []
-                                            for jogo in jogo_selecionado["jogos"]:
-                                                acertos = len(set(jogo) & set(numeros_sorteados))
-                                                acertos_por_jogo.append(acertos)
-                                            
-                                            # Atualizar arquivo
-                                            if atualizar_conferencia(
-                                                jogo_selecionado["arquivo"], 
-                                                numeros_sorteados, 
-                                                acertos_por_jogo,
-                                                {"concurso": concurso_info["concurso"], "data": concurso_info["data"]}
-                                            ):
-                                                st.success(f"✅ Conferência realizada com o concurso {concurso_info['concurso']}!")
-                                                
-                                                # Mostrar resultados
-                                                df_resultado = pd.DataFrame({
-                                                    "Jogo": range(1, len(jogo_selecionado["jogos"]) + 1),
-                                                    "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in jogo_selecionado["jogos"]],
-                                                    "Acertos": acertos_por_jogo
-                                                })
-                                                st.dataframe(df_resultado, use_container_width=True)
-                                                
-                                                # Estatísticas
-                                                col1, col2, col3 = st.columns(3)
-                                                with col1:
-                                                    st.metric("Média acertos", f"{np.mean(acertos_por_jogo):.1f}")
-                                                with col2:
-                                                    st.metric("Máximo", f"{max(acertos_por_jogo)}")
-                                                with col3:
-                                                    st.metric("Mínimo", f"{min(acertos_por_jogo)}")
-                                                
-                                                # Recarregar lista
-                                                st.session_state.jogos_salvos = carregar_jogos_salvos()
-                                                st.rerun()
+                                        # Estatísticas
+                                        col1, col2, col3 = st.columns(3)
+                                        with col1:
+                                            st.metric("Média acertos", f"{np.mean(acertos_por_jogo):.1f}")
+                                        with col2:
+                                            st.metric("Máximo", f"{max(acertos_por_jogo)}")
+                                        with col3:
+                                            st.metric("Mínimo", f"{min(acertos_por_jogo)}")
+                                        
+                                        # Mostrar distribuição de acertos
+                                        dist = Counter(acertos_por_jogo)
+                                        st.markdown("**Distribuição de acertos:**")
+                                        for pontos in sorted(dist.keys()):
+                                            st.markdown(f"- {pontos} pontos: {dist[pontos]} jogo(s)")
+                                        
+                                        st.rerun()
                             else:
-                                st.error("Carregue os concursos primeiro na barra lateral!")
+                                st.warning("Nenhum concurso futuro encontrado na API!")
 
 if __name__=="__main__":
     main()
