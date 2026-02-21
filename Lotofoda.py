@@ -11,10 +11,10 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # =============================
-# CONFIGURAÇÃO MOBILE PREMIUM + PWA
+# CONFIGURAÇÃO MOBILE PREMIUM
 # =============================
 st.set_page_config(
-    page_title="🎯 LOTOFÁCIL PREMIUM PWA",
+    page_title="🎯 LOTOFÁCIL PREMIUM",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
@@ -31,12 +31,11 @@ input, textarea { border-radius: 12px !important; }
 .p13 { color: #4ade80; font-weight: bold; }
 .p14 { color: gold; font-weight: bold; }
 .p15 { color: #f97316; font-weight: bold; }
-.alert { background-color: #facc15; color:black; font-weight:bold; padding:6px; border-radius:10px; margin-bottom:8px;}
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🧠🎯 LOTOFÁCIL PREMIUM PWA")
-st.caption("Conferência • DNA • Fechamento • Alertas • Mobile First • Histórico")
+st.title("🧠🎯 LOTOFÁCIL PREMIUM")
+st.caption("Conferência • DNA • Fechamento • Mobile First")
 
 # =============================
 # CLASSE ANALISADOR V2
@@ -129,7 +128,6 @@ class AnaliseLotofacilAvancada:
 if "concursos_raw" not in st.session_state: st.session_state.concursos_raw=None
 if "concursos_processados" not in st.session_state: st.session_state.concursos_processados=None
 if "analise" not in st.session_state: st.session_state.analise=None
-if "alertas" not in st.session_state: st.session_state.alertas=[]
 
 # =============================
 # SIDEBAR - API LOTOFÁCIL
@@ -163,9 +161,8 @@ def main():
     else:
         df=None
 
-    # ===== Conferência + Alertas =====
+    # ===== Conferência automática apenas (mobile premium) =====
     if df is not None and st.session_state.analise:
-
         df["Lista"]=[[int(i.strip()) for i in x.split(",")] for x in df["Dezenas"]]
         dezenas_sorteadas=[int(d) for d in st.session_state.concursos_processados[0]]
 
@@ -175,82 +172,53 @@ def main():
             resultados.append({
                 "Jogo":row["Jogo"],
                 "Pontos":len(acertos),
-                "Acertos":", ".join(f"{d:02d}" for d in acertos),
-                "Soma":sum(row["Lista"]),
-                "Pares":sum(1 for n in row["Lista"] if n%2==0)
+                "Acertos":", ".join(f"{d:02d}" for d in acertos)
             })
         df_res=pd.DataFrame(resultados).sort_values("Pontos",ascending=False)
 
-        # ===== Métricas Mobile =====
         c1,c2,c3=st.columns(3)
         c1.metric("🏆 Máx",df_res["Pontos"].max())
         c2.metric("🎯 Jogos",len(df_res))
         c3.metric("🔥 12+",(df_res["Pontos"]>=12).sum())
 
-        # ===== Lista de jogos com alertas =====
         st.subheader("✅ Conferência")
         for _,row in df_res.iterrows():
             pontos=row["Pontos"]
             cls=f"p{pontos}" if pontos>=12 else ""
-            alerta=""
-            if pontos>=14:
-                alerta='<div class="alert">ALERTA: PONTUAÇÃO ALTA!</div>'
-                st.session_state.alertas.append(f"Jogo {row['Jogo']} - {pontos} pontos")
-            else:
-                alerta=""
             st.markdown(f"""
             <div class="card">
                 <b>Jogo {row['Jogo']}</b><br>
                 <span class="{cls}">{pontos} pontos</span><br>
                 <small>{row['Acertos']}</small>
-                {alerta}
             </div>
             """,unsafe_allow_html=True)
 
-        # ===== DNA =====
-        st.subheader("🧬 DNA do Jogo")
-        todas=sum(df["Lista"].tolist(),[])
-        freq=Counter(todas)
-        df_freq=pd.DataFrame(freq.items(),columns=["Dezena","Frequência"]).sort_values("Frequência",ascending=False)
-        st.dataframe(df_freq,use_container_width=True,height=260)
-
-        # ===== Fechamento 16–17 =====
-        st.subheader("🔢 Fechamento Inteligente")
-        fechamento16=st.session_state.analise.gerar_fechamento(16)
-        fechamento17=st.session_state.analise.gerar_fechamento(17)
-        st.code("16 dezenas:\n" + ", ".join(f"{d:02d}" for d in fechamento16))
-        st.code("17 dezenas:\n" + ", ".join(f"{d:02d}" for d in fechamento17))
-
-        jogos16=st.session_state.analise.gerar_subjogos(fechamento16,6)
-        jogos17=st.session_state.analise.gerar_subjogos(fechamento17,6)
-
-        st.markdown("### 🎯 Jogos 16 dezenas")
-        df16=pd.DataFrame({
-            "Jogo":range(1,len(jogos16)+1),
-            "Dezenas":[" ,".join(f"{n:02d}" for n in j) for j in jogos16]
-        })
-        st.dataframe(df16,use_container_width=True)
-
-        st.markdown("### 🎯 Jogos 17 dezenas")
-        df17=pd.DataFrame({
-            "Jogo":range(1,len(jogos17)+1),
-            "Dezenas":[" ,".join(f"{n:02d}" for n in j) for j in jogos17]
-        })
-        st.dataframe(df17,use_container_width=True)
-
-        # ===== Gráfico Frequência =====
-        st.subheader("📈 Gráficos Interativos")
-        fig=px.bar(df_freq.head(15),x="Dezena",y="Frequência",title="🔥 Dezenas Mais Fortes")
-        st.plotly_chart(fig,use_container_width=True)
-
-    # ===== Último concurso =====
+    # ===== Interface completa do segundo código =====
     if st.session_state.analise:
-        ultimo=st.session_state.concursos_raw[0]
-        st.info(
-            f"🎯 Concurso mais recente: **{ultimo.get('concurso','N/A')}** | "
-            f"📅 {ultimo.get('data','N/A')} | "
-            f"🔢 {', '.join(ultimo['dezenas'])}"
-        )
+        tab1, tab2, tab3 = st.tabs(["📊 Análise","🧩 Fechamento 16–17","🧬 DNA"])
+        with tab1:
+            st.subheader("🔑 Números-chave")
+            st.write(st.session_state.analise.numeros_chave)
+        with tab2:
+            st.subheader("🧩 Fechamento Inteligente")
+            tamanho=st.radio("Tamanho do fechamento",[16,17],horizontal=True)
+            qtd_jogos=st.slider("Qtd de jogos (15 dezenas)",4,10,6)
+            if st.button("🚀 Gerar Fechamento"):
+                fechamento=st.session_state.analise.gerar_fechamento(tamanho)
+                jogos=st.session_state.analise.gerar_subjogos(fechamento,qtd_jogos)
+                st.markdown("### 🔒 Fechamento Base")
+                st.write(", ".join(f"{n:02d}" for n in fechamento))
+                dfj=pd.DataFrame({
+                    "Jogo":range(1,len(jogos)+1),
+                    "Dezenas":[", ".join(f"{n:02d}" for n in j) for j in jogos],
+                    "Soma":[sum(j) for j in jogos],
+                    "Pares":[sum(1 for n in j if n%2==0) for j in jogos]
+                })
+                st.markdown("### 🎯 Jogos Gerados")
+                st.dataframe(dfj,use_container_width=True)
+        with tab3:
+            st.subheader("🧬 DNA Atual")
+            st.json(st.session_state.analise.dna)
 
 if __name__=="__main__":
     main()
