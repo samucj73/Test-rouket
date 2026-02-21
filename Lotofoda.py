@@ -213,24 +213,56 @@ def main():
             })
             st.dataframe(df, use_container_width=True)
 
+    #with tab3:
     with tab3:
-        st.subheader("🎯 Digite o resultado oficial")
+        st.subheader("🎯 Digite o resultado oficial (15 dezenas)")
         entrada = st.text_input(
-            "Ex: 02,04,07,08,10,11,12,13,16,19,20,21,22,23,25"
-        )
+        "Aceita vírgula, traço ou espaço",
+        placeholder="01-02-04-07-08-10-11-12-13-16-19-20-21-22-23"
+    )
 
-        if st.button("📊 Conferir jogos"):
-            resultado = sorted(map(int, entrada.replace(" ", "").split(",")))
+    if st.button("📊 Conferir jogos"):
+        try:
+            if not entrada.strip():
+                st.error("❌ Informe as 15 dezenas do resultado")
+                st.stop()
+
+            # 🔹 Normalização: troca tudo por vírgula
+            limpa = (
+                entrada.replace("-", ",")
+                       .replace(" ", ",")
+            )
+
+            partes = [p for p in limpa.split(",") if p != ""]
+
+            resultado = sorted(map(int, partes))
+
+            if len(resultado) != 15:
+                st.error("❌ O resultado deve conter exatamente 15 dezenas")
+                st.stop()
+
+            if len(set(resultado)) != 15:
+                st.error("❌ Não repita dezenas")
+                st.stop()
+
+            if any(n < 1 or n > 25 for n in resultado):
+                st.error("❌ As dezenas devem estar entre 01 e 25")
+                st.stop()
+
             df = st.session_state.analise.conferir(
                 st.session_state.jogos, resultado
             )
             st.dataframe(df, use_container_width=True)
 
+            # 🔹 Reforço do DNA baseado nos acertos
             st.session_state.analise.reforcar_dna_por_acertos(
                 st.session_state.jogos, resultado
             )
-            st.success("DNA atualizado com base nos acertos")
 
+            st.success("🧬 DNA ajustado com base no desempenho real")
+
+        except ValueError:
+            st.error("❌ Use apenas números (01 a 25) separados por vírgula, traço ou espaço.")    
     with tab4:
         st.json(st.session_state.analise.dna)
 
