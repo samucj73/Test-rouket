@@ -195,8 +195,8 @@ def main():
         st.write("🔑 Números-chave:", st.session_state.analise.numeros_chave)
 
     with tab2:
-        tamanho = st.radio("Fechamento", [16, 17], horizontal=True)
-        qtd_jogos = st.slider("Qtd jogos", 4, 10, 6)
+        tamanho = st.radio("Fechamento", [16, 17, 18], horizontal=True)
+        qtd_jogos = st.slider("Qtd jogos", 4, 20, 8)
 
         if st.button("🚀 Gerar jogos"):
             fechamento = st.session_state.analise.gerar_fechamento(tamanho)
