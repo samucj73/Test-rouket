@@ -38,7 +38,7 @@ input, textarea { border-radius: 12px !important; }
 """, unsafe_allow_html=True)
 
 st.title("🧠🎯 LOTOFÁCIL PREMIUM")
-st.caption("DNA Evolutivo • Superando o Aleatório • Mobile First")
+st.caption("DNA Evolutivo • Sem Repetições • Mobile First")
 
 # =====================================================
 # FUNÇÃO PARA CONVERTER NUMPY TYPES PARA PYTHON NATIVE
@@ -173,7 +173,7 @@ def adicionar_conferencia(arquivo, concurso_info, acertos, estatisticas=None):
         return False
 
 # =====================================================
-# CLASSE PRINCIPAL MELHORADA
+# CLASSE PRINCIPAL MELHORADA - SEM REPETIÇÕES
 # =====================================================
 class AnaliseLotofacilAvancada:
 
@@ -206,16 +206,16 @@ class AnaliseLotofacilAvancada:
     def _inicializar_dna_evolutivo(self):
         """DNA mais complexo com múltiplos fatores"""
         return {
-            "freq": 1.2,      # Aumentado para dar mais peso à frequência
-            "defas": 1.3,      # Defasagem com peso maior
+            "freq": 1.2,
+            "defas": 1.3,
             "soma": 1.1,
             "pares": 1.1,
             "seq": 1.0,
-            "chave": 1.2,      # Números-chave com mais peso
-            "repeticao": 1.3,  # NOVO: Padrões de repetição
-            "linha_coluna": 1.1, # NOVO: Distribuição em linhas/colunas
-            "intervalo": 1.1,   # NOVO: Intervalos entre números
-            "tendencia": 1.2    # NOVO: Tendências recentes
+            "chave": 1.2,
+            "repeticao": 1.3,
+            "linha_coluna": 1.1,
+            "intervalo": 1.1,
+            "tendencia": 1.2
         }
 
     def _frequencias(self):
@@ -231,7 +231,7 @@ class AnaliseLotofacilAvancada:
                     # Peso exponencial para concursos recentes
                     peso = 1.5 ** (self.total_concursos - i) / self.total_concursos
                     peso_total += peso
-            frequencias_ponderadas[n] = float(peso_total / self.total_concursos * 2)  # Converter para float
+            frequencias_ponderadas[n] = float(peso_total / self.total_concursos * 2)
         return frequencias_ponderadas
 
     def _defasagens(self):
@@ -239,7 +239,7 @@ class AnaliseLotofacilAvancada:
         for n in self.numeros:
             for i, c in enumerate(self.concursos):
                 if n in c:
-                    d[n] = int(i)  # Converter para int
+                    d[n] = int(i)
                     break
             else:
                 d[n] = int(self.total_concursos)
@@ -248,8 +248,8 @@ class AnaliseLotofacilAvancada:
     def _padroes(self):
         p = {"somas": [], "pares": []}
         for c in self.concursos:
-            p["somas"].append(int(sum(c)))  # Converter para int
-            p["pares"].append(int(sum(1 for n in c if n % 2 == 0)))  # Converter para int
+            p["somas"].append(int(sum(c)))
+            p["pares"].append(int(sum(1 for n in c if n % 2 == 0)))
         return p
 
     def _numeros_chave(self):
@@ -259,31 +259,30 @@ class AnaliseLotofacilAvancada:
             cont.update(c)
         # Números que aparecem em mais de 30% dos concursos recentes
         limite = 50 * 0.3
-        return [int(n) for n, q in cont.items() if q >= limite]  # Converter para int
+        return [int(n) for n, q in cont.items() if q >= limite]
 
-    # NOVAS ANÁLISES
     def _analisar_padroes_repeticao(self):
         """Analisa padrões de repetição entre concursos consecutivos"""
         repeticoes = []
         for i in range(len(self.concursos) - 1):
             repetidos = len(set(self.concursos[i]) & set(self.concursos[i + 1]))
-            repeticoes.append(int(repetidos))  # Converter para int
+            repeticoes.append(int(repetidos))
         
         if repeticoes:
-            media_repeticao = float(np.mean(repeticoes))  # Converter para float
-            desvio_repeticao = float(np.std(repeticoes))  # Converter para float
+            media_repeticao = float(np.mean(repeticoes))
+            desvio_repeticao = float(np.std(repeticoes))
             return {
                 "media": media_repeticao,
                 "desvio": desvio_repeticao,
                 "ultima": int(repeticoes[0]) if repeticoes else 9,
-                "tendencia": [int(r) for r in repeticoes[:10]]  # Converter para int
+                "tendencia": [int(r) for r in repeticoes[:10]]
             }
         return {"media": 9.0, "desvio": 2.0, "ultima": 9, "tendencia": [9] * 10}
 
     def _analisar_linhas_colunas(self):
         """Analisa distribuição por linhas (1-5,6-10,11-15,16-20,21-25)"""
         linhas = {1: [], 2: [], 3: [], 4: [], 5: []}
-        for c in self.concursos[:30]:  # Últimos 30
+        for c in self.concursos[:30]:
             cont_linhas = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
             for n in c:
                 linha = (n - 1) // 5 + 1
@@ -291,17 +290,17 @@ class AnaliseLotofacilAvancada:
             for linha in linhas:
                 linhas[linha].append(cont_linhas[linha])
         
-        return {f"linha_{l}": float(np.mean(cont)) for l, cont in linhas.items()}  # Converter para float
+        return {f"linha_{l}": float(np.mean(cont)) for l, cont in linhas.items()}
 
     def _analisar_pares_impares(self):
         """Analisa tendência de pares/ímpares"""
         pares_tendencia = []
-        for c in self.concursos[:20]:  # Últimos 20
+        for c in self.concursos[:20]:
             pares = sum(1 for n in c if n % 2 == 0)
-            pares_tendencia.append(int(pares))  # Converter para int
+            pares_tendencia.append(int(pares))
         
         if len(pares_tendencia) > 5:
-            media_recente = float(np.mean(pares_tendencia[:5]))  # Converter para float
+            media_recente = float(np.mean(pares_tendencia[:5]))
             media_antiga = float(np.mean(pares_tendencia[5:10])) if len(pares_tendencia) > 10 else media_recente
             if media_recente > media_antiga:
                 tendencia = "crescendo"
@@ -325,9 +324,8 @@ class AnaliseLotofacilAvancada:
         for c in self.concursos[:30]:
             c_ordenado = sorted(c)
             diffs = [c_ordenado[i+1] - c_ordenado[i] for i in range(len(c_ordenado)-1)]
-            intervalos.extend([int(d) for d in diffs])  # Converter para int
+            intervalos.extend([int(d) for d in diffs])
         
-        # Encontrar intervalos mais comuns
         cont_intervalos = Counter(intervalos)
         intervalos_comuns = [(int(k), int(v)) for k, v in cont_intervalos.most_common(3)]
         
@@ -350,110 +348,115 @@ class AnaliseLotofacilAvancada:
         if n in self.numeros_chave:
             score += 0.8 * self.dna_evolutivo["chave"]
         
-        # NOVO: Tendência de repetição
+        # Tendência de repetição
         if self.concursos and n in self.concursos[0]:
             score += 0.5 * self.dna_evolutivo["repeticao"]
         elif len(self.concursos) > 1 and n in self.concursos[1]:
             score += 0.3 * self.dna_evolutivo["repeticao"]
         
-        # NOVO: Distribuição ideal por linha
+        # Distribuição por linha
         linha = (n - 1) // 5 + 1
         media_linha = self.tendencias_linhas_colunas.get(f"linha_{linha}", 3.0)
-        if media_linha > 2.8:  # Linha com mais números
+        if media_linha > 2.8:
             score += 0.2 * self.dna_evolutivo["linha_coluna"]
         
-        # NOVO: Ajuste baseado em pares/ímpares
+        # Ajuste baseado em pares/ímpares
         par_impar_tend = self.pares_impares_tendencia["tendencia"]
         if (n % 2 == 0 and par_impar_tend == "crescendo") or (n % 2 == 1 and par_impar_tend == "decrescendo"):
             score += 0.2 * self.dna_evolutivo["tendencia"]
         
-        return float(score)  # Garantir retorno como float
+        return float(score)
 
     def gerar_fechamento_evolutivo(self, tamanho=17):
-        """Gera fechamento usando o score evolutivo"""
+        """Gera fechamento usando o score evolutivo - GARANTE NÚMEROS ÚNICOS"""
         scores = {n: self.score_numero_evolutivo(n) for n in self.numeros}
         
-        # Garantir diversidade incluindo números com scores médios
-        base = sorted(scores, key=scores.get, reverse=True)
+        # Ordenar por score
+        numeros_ordenados = sorted(scores, key=scores.get, reverse=True)
         
-        # Pegar top N mas garantir 2 números de fora para diversidade
-        if tamanho <= 20:
-            base = base[:tamanho-2]
-            # Adicionar 2 números aleatórios do meio da lista
-            meio = base[len(base)//2:len(base)//2 + 10]
-            if meio:
-                extras = random.sample(meio, min(2, len(meio)))
-                base.extend(extras)
+        # Pegar os melhores números (garantindo que são únicos)
+        fechamento = list(numeros_ordenados[:tamanho-2])
         
-        return sorted([int(n) for n in base])  # Converter para int
+        # Adicionar 2 números do meio para diversidade (garantindo que não há duplicatas)
+        disponiveis = [n for n in numeros_ordenados[tamanho-2:] if n not in fechamento]
+        if len(disponiveis) >= 2:
+            extras = random.sample(disponiveis, 2)
+            fechamento.extend(extras)
+        else:
+            # Se não houver suficientes, pegar do início (garantindo que não duplica)
+            for n in numeros_ordenados:
+                if n not in fechamento and len(fechamento) < tamanho:
+                    fechamento.append(n)
+        
+        return sorted([int(n) for n in fechamento])
 
     def gerar_jogos_otimizados(self, fechamento, qtd_jogos=8):
-        """Gera jogos com otimização para superar aleatório"""
+        """Gera jogos com otimização - GARANTE QUE CADA JOGO TEM 15 NÚMEROS ÚNICOS"""
         jogos = set()
         tentativas = 0
-        max_tentativas = 500
+        max_tentativas = 1000
         
-        # Parâmetros ideais baseados em análise histórica
-        soma_alvo = 195  # Ligeiramente abaixo da média
-        pares_alvo = 7   # Ligeiramente abaixo da média
-        
-        # Usar variação controlada
+        # Parâmetros ideais
+        soma_alvo = 195
+        pares_alvo = 7
         variacao_soma = 15
         variacao_pares = 2
         
+        # Garantir que o fechamento não tem duplicatas
+        fechamento = sorted(list(set(fechamento)))
+        
         while len(jogos) < qtd_jogos and tentativas < max_tentativas:
-            # Estratégia: 70% dos números do topo, 30% variados
-            top_numeros = fechamento[:12]
-            outros_numeros = fechamento[12:]
-            
-            if outros_numeros:
-                num_top = random.randint(9, 11)  # 9-11 do topo
-                num_outros = 15 - num_top
-                
-                selecao = random.sample(top_numeros, min(num_top, len(top_numeros)))
-                if outros_numeros and num_outros > 0:
-                    selecao.extend(random.sample(outros_numeros, min(num_outros, len(outros_numeros))))
+            # Escolher números aleatórios do fechamento SEM REPETIÇÃO
+            # sample já garante que não há repetição
+            if len(fechamento) >= 15:
+                jogo = sorted(random.sample(fechamento, 15))
             else:
-                selecao = random.sample(fechamento, 15)
+                # Se fechamento for menor que 15, completar com números aleatórios
+                jogo = sorted(random.sample(fechamento, len(fechamento)))
+                # Adicionar números faltantes de fora do fechamento (garantindo unicidade)
+                while len(jogo) < 15:
+                    novo_num = random.randint(1, 25)
+                    if novo_num not in jogo:
+                        jogo.append(novo_num)
+                jogo.sort()
             
-            jogo = sorted(selecao)
+            # Verificar soma e pares
             soma = sum(jogo)
             pares = sum(1 for n in jogo if n % 2 == 0)
             
-            # Critérios mais flexíveis para aumentar diversidade
+            # Critérios de aceitação
             if (soma_alvo - variacao_soma <= soma <= soma_alvo + variacao_soma and
                 pares_alvo - variacao_pares <= pares <= pares_alvo + variacao_pares):
+                # Converter para tupla e adicionar ao set (já garante unicidade)
                 jogos.add(tuple(jogo))
             
             tentativas += 1
         
-        # Se não conseguir todos, completar com variações
+        # Se não conseguir todos, gerar jogos aleatórios SEM REPETIÇÃO
         while len(jogos) < qtd_jogos:
-            jogo = sorted(random.sample(fechamento, 15))
+            # Gerar jogo aleatório SEM números repetidos
+            jogo = sorted(random.sample(range(1, 26), 15))
             jogos.add(tuple(jogo))
         
-        return [list(j) for j in jogos]
+        # Converter de volta para lista e garantir que cada jogo está ordenado
+        jogos_lista = [list(j) for j in jogos]
+        
+        # Verificação final de segurança
+        for jogo in jogos_lista:
+            assert len(set(jogo)) == 15, f"Jogo tem números repetidos: {jogo}"
+        
+        return jogos_lista
 
     def aprender_com_resultados(self, jogos_gerados, resultado_real):
-        """Aprende com os resultados para melhorar futuras gerações"""
+        """Aprende com os resultados"""
         acertos_por_jogo = [len(set(j) & set(resultado_real)) for j in jogos_gerados]
         media_acertos = float(np.mean(acertos_por_jogo))
         
-        # Identificar números que mais acertaram
-        numeros_acertadores = Counter()
-        for jogo in jogos_gerados:
-            for num in jogo:
-                if num in resultado_real:
-                    numeros_acertadores[num] += 1
-        
-        # Ajustar DNA evolutivo baseado no desempenho
-        if media_acertos > 9.5:  # Bom desempenho
-            # Reforçar o que funcionou
+        if media_acertos > 9.5:
             for num in resultado_real:
                 if num in self.frequencias:
                     self.frequencias[num] = float(self.frequencias[num] * 1.05)
-        elif media_acertos < 8.5:  # Desempenho ruim
-            # Penalizar números que não funcionaram
+        elif media_acertos < 8.5:
             for num in set().union(*jogos_gerados) - set(resultado_real):
                 if num in self.frequencias:
                     self.frequencias[num] = float(self.frequencias[num] * 0.98)
@@ -462,24 +465,21 @@ class AnaliseLotofacilAvancada:
         return media_acertos
 
     def auto_ajustar_dna(self, concurso_real):
-        """Ajuste fino do DNA baseado em resultados reais"""
-        lr = 0.03  # Learning rate reduzido para mais estabilidade
+        """Ajuste fino do DNA"""
+        lr = 0.03
         soma_r = sum(concurso_real)
         pares_r = sum(1 for n in concurso_real if n % 2 == 0)
         soma_m = float(np.mean(self.padroes["somas"]))
         pares_m = float(np.mean(self.padroes["pares"]))
         
-        # Ajustes mais suaves
         self.dna_evolutivo["soma"] += lr if abs(soma_r - soma_m) < 15 else -lr/2
         self.dna_evolutivo["pares"] += lr if abs(pares_r - pares_m) < 2 else -lr/2
         
-        # Padrões de repetição
         if self.padroes_repeticao:
             rep_esperada = self.padroes_repeticao["media"]
             rep_real = len(set(concurso_real) & set(self.concursos[0] if self.concursos else []))
             self.dna_evolutivo["repeticao"] += lr if abs(rep_real - rep_esperada) < 2 else -lr/2
         
-        # Manter limites
         for k in self.dna_evolutivo:
             self.dna_evolutivo[k] = float(max(0.7, min(1.8, self.dna_evolutivo[k])))
 
@@ -488,14 +488,12 @@ class AnaliseLotofacilAvancada:
         acertos_sistema = []
         acertos_aleatorio = []
         
-        for _ in range(min(num_simulacoes, 100)):  # Limitado para performance
+        for _ in range(min(num_simulacoes, 100)):
             resultado_simulado = sorted(random.sample(range(1, 26), 15))
             
-            # Acertos do sistema
             for jogo in jogos_gerados:
                 acertos_sistema.append(len(set(jogo) & set(resultado_simulado)))
             
-            # Acertos aleatórios
             for _ in range(len(jogos_gerados)):
                 aleatorio = sorted(random.sample(range(1, 26), 15))
                 acertos_aleatorio.append(len(set(aleatorio) & set(resultado_simulado)))
@@ -513,6 +511,16 @@ class AnaliseLotofacilAvancada:
     def conferir(self, jogos, resultado):
         dados = []
         for i, j in enumerate(jogos, 1):
+            # Garantir que o jogo não tem números repetidos antes de conferir
+            if len(set(j)) != 15:
+                st.warning(f"Jogo {i} tem números repetidos! Corrigindo...")
+                j = sorted(list(set(j)))
+                while len(j) < 15:
+                    novo = random.randint(1, 25)
+                    if novo not in j:
+                        j.append(novo)
+                j.sort()
+            
             dados.append({
                 "Jogo": i,
                 "Dezenas": ", ".join(f"{n:02d}" for n in j),
@@ -562,6 +570,13 @@ def get_conferencias_seguro(jogo):
     except:
         return []
 
+def validar_jogos(jogos):
+    """Valida se todos os jogos têm 15 números únicos"""
+    for i, jogo in enumerate(jogos):
+        if len(set(jogo)) != 15:
+            return False, i, jogo
+    return True, None, None
+
 # =====================================================
 # INTERFACE PRINCIPAL
 # =====================================================
@@ -592,20 +607,17 @@ def main():
                     concursos = [sorted(map(int, d["dezenas"])) for d in st.session_state.dados_api[:qtd]]
                     st.session_state.analise = AnaliseLotofacilAvancada(concursos, st.session_state.dados_api[:qtd])
                     
-                    # Auto-ajustar com último concurso
                     st.session_state.analise.auto_ajustar_dna(concursos[0])
                     
                     ultimo = st.session_state.dados_api[0]
                     st.success(f"✅ Último concurso: #{ultimo['concurso']} - {ultimo['data']}")
 
-                    # Mostrar estatísticas de repetição
                     rep_penultimo = repeticao_ultimo_penultimo(concursos)
                     if rep_penultimo:
                         repetidos, media = rep_penultimo
                         st.info(f"🔁 Repetição último x penúltimo: {repetidos} ({media*100:.1f}%)")
                     
-                    # Comparação inicial com aleatório
-                    st.info("🔄 DNA Evolutivo ativado - Objetivo: superar aleatório")
+                    st.info("🔄 DNA Evolutivo ativado - Sem números repetidos!")
                     
                 except Exception as e:
                     st.error(f"Erro ao carregar: {e}")
@@ -659,10 +671,22 @@ def main():
                 qtd_jogos = st.slider("Jogos", 6, 12, 8, key="qtd_jogos_evo")
 
             if st.button("🚀 Gerar Fechamento Evolutivo", use_container_width=True):
-                with st.spinner("Gerando jogos otimizados..."):
-                    # Gerar fechamento com o novo método evolutivo
+                with st.spinner("Gerando jogos otimizados (sem repetições)..."):
+                    # Gerar fechamento
                     fechamento = st.session_state.analise.gerar_fechamento_evolutivo(tamanho)
                     jogos = st.session_state.analise.gerar_jogos_otimizados(fechamento, qtd_jogos)
+                    
+                    # Validar jogos
+                    valido, idx, jogo_invalido = validar_jogos(jogos)
+                    if not valido:
+                        st.error(f"ERRO: Jogo {idx+1} tem números repetidos! Corrigindo...")
+                        # Corrigir o jogo problemático
+                        jogos[idx] = sorted(list(set(jogo_invalido)))
+                        while len(jogos[idx]) < 15:
+                            novo = random.randint(1, 25)
+                            if novo not in jogos[idx]:
+                                jogos[idx].append(novo)
+                        jogos[idx].sort()
                     
                     # Comparar com aleatório
                     stats_comparacao = st.session_state.analise.comparar_com_aleatorio(jogos)
@@ -679,7 +703,6 @@ def main():
                     if arquivo:
                         st.success(f"✅ Fechamento salvo! ID: {jogo_id}")
                         
-                        # Mostrar vantagem sobre aleatório
                         vantagem = stats_comparacao["vantagem_media"]
                         if vantagem > 0:
                             st.markdown(f"""
@@ -694,24 +717,24 @@ def main():
                             </div>
                             """, unsafe_allow_html=True)
                         
-                        # Mostrar fechamento
                         st.markdown("### 🔒 Fechamento Base")
                         st.markdown(f"<div class='card'>{', '.join(f'{n:02d}' for n in fechamento)}</div>", 
                                   unsafe_allow_html=True)
                         
-                        # Mostrar jogos
+                        # Mostrar jogos com verificação de unicidade
                         df_jogos = pd.DataFrame({
                             "Jogo": range(1, len(jogos)+1),
                             "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in jogos],
+                            "Qtd": [len(set(j)) for j in jogos],  # Coluna de verificação
                             "Soma": [sum(j) for j in jogos],
                             "Pares": [sum(1 for n in j if n%2==0) for j in jogos]
                         })
                         st.dataframe(df_jogos, use_container_width=True, hide_index=True)
                         
-                        # Atualizar lista de jogos salvos
+                        st.caption("✅ Todos os jogos têm 15 números únicos")
+                        
                         st.session_state.jogos_salvos = carregar_jogos_salvos()
                         
-                        # Guardar no histórico de comparação
                         st.session_state.historico_comparacao.append({
                             "id": jogo_id,
                             "concurso_base": int(ultimo['concurso']),
@@ -757,7 +780,6 @@ def main():
             else:
                 ultimo_api = st.session_state.dados_api[0]
                 
-                # Filtrar não conferidos
                 nao_conferidos = [j for j in st.session_state.jogos_salvos 
                                  if len(get_conferencias_seguro(j)) == 0]
                 
@@ -770,7 +792,6 @@ def main():
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    # Selecionar fechamento
                     opcoes = []
                     for i, j in enumerate(nao_conferidos[:10]):
                         data = datetime.fromisoformat(j["data_geracao"]).strftime("%d/%m/%Y %H:%M")
@@ -783,7 +804,6 @@ def main():
                         jogo_sel = nao_conferidos[idx]
                         base_info = get_concurso_info_seguro(jogo_sel)
                         
-                        # Mostrar detalhes
                         with st.expander("📋 Detalhes do fechamento", expanded=True):
                             col1, col2 = st.columns(2)
                             with col1:
@@ -795,7 +815,6 @@ def main():
                                     vantagem = jogo_sel["estatisticas"].get("vantagem_media", 0)
                                     st.write(f"**Vantagem estimada:** {vantagem:.2f}")
                         
-                        # Verificar concursos futuros
                         concursos_futuros = [c for c in st.session_state.dados_api 
                                             if c['concurso'] > base_info['numero']]
                         
@@ -810,12 +829,15 @@ def main():
                                                     if c['concurso'] == num_futuro)
                                 numeros = sorted(map(int, concurso_info["dezenas"]))
                                 
-                                # Calcular acertos
                                 acertos = []
                                 for jogo in jogo_sel["jogos"]:
-                                    acertos.append(len(set(jogo) & set(numeros)))
+                                    # Garantir que o jogo tem números únicos
+                                    if len(set(jogo)) != 15:
+                                        st.warning("Jogo com números repetidos encontrado! Ignorando...")
+                                        acertos.append(0)
+                                    else:
+                                        acertos.append(len(set(jogo) & set(numeros)))
                                 
-                                # Estatísticas da conferência
                                 stats_conf = {
                                     "media": float(np.mean(acertos)),
                                     "max": int(max(acertos)),
@@ -823,7 +845,6 @@ def main():
                                     "distribuicao": {str(k): int(v) for k, v in Counter(acertos).items()}
                                 }
                                 
-                                # Salvar conferência
                                 info_salvar = {
                                     "numero": int(concurso_info["concurso"]),
                                     "data": str(concurso_info["data"]),
@@ -834,7 +855,6 @@ def main():
                                                         acertos, stats_conf):
                                     st.success(f"✅ Conferido com concurso #{num_futuro}!")
                                     
-                                    # Mostrar resultados
                                     df_res = pd.DataFrame({
                                         "Jogo": range(1, len(jogo_sel["jogos"])+1),
                                         "Dezenas": [", ".join(f"{n:02d}" for n in j) 
@@ -843,18 +863,14 @@ def main():
                                     })
                                     st.dataframe(df_res, use_container_width=True, hide_index=True)
                                     
-                                    # Métricas
                                     m1, m2, m3 = st.columns(3)
                                     with m1:
                                         st.metric("Média", f"{np.mean(acertos):.1f}")
                                     with m2:
                                         st.metric("Máximo", max(acertos))
                                     with m3:
-                                        # Comparar com aleatório teórico
                                         vantagem_real = np.mean(acertos) - 9.5
-                                        cor = "green" if vantagem_real > 0 else "red"
-                                        st.metric("Vs aleatório", 
-                                                 f"{vantagem_real:+.2f}")
+                                        st.metric("Vs aleatório", f"{vantagem_real:+.2f}")
                                     
                                     st.rerun()
                         else:
@@ -866,24 +882,20 @@ def main():
             if st.session_state.historico_comparacao:
                 df_hist = pd.DataFrame(st.session_state.historico_comparacao)
                 
-                # Gráfico de evolução
                 st.line_chart(df_hist.set_index("concurso_base")["vantagem"])
                 
-                # Média geral
                 media_vantagem = df_hist["vantagem"].mean()
                 if media_vantagem > 0:
                     st.success(f"🎯 Vantagem média: {media_vantagem:.2f} pontos")
                 else:
                     st.warning(f"📉 Desvantagem média: {abs(media_vantagem):.2f} pontos")
                 
-                # Últimas comparações
                 st.dataframe(df_hist[["concurso_base", "vantagem"]].tail(), 
                            use_container_width=True, hide_index=True)
             else:
                 st.info("Gere fechamentos para ver a comparação com o aleatório")
 
     else:
-        # Tela inicial
         st.markdown("""
         <div style='text-align: center; padding: 2rem;'>
             <h3>🚀 Comece carregando os concursos na barra lateral</h3>
