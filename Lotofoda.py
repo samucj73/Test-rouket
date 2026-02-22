@@ -595,7 +595,7 @@ def main():
     # ================= SIDEBAR =================
     with st.sidebar:
         st.header("⚙️ Configurações")
-        qtd = st.slider("Qtd concursos históricos", 50, 1000, 300, 
+        qtd = st.slider("Qtd concursos históricos", 20, 1000, 300, 
                        help="Mais concursos = melhor análise de tendências")
         
         if st.button("📥 Carregar concursos", use_container_width=True):
@@ -631,7 +631,7 @@ def main():
         ])
 
         with tab1:
-            st.markdown("### 🔑 Números-chave (últimos 50 concursos)")
+            st.markdown("### 🔑 Números-chave (últimos 20 concursos)")
             numeros_chave = st.session_state.analise.numeros_chave
             if numeros_chave:
                 colunas = st.columns(5)
