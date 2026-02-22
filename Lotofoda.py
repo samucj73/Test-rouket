@@ -255,7 +255,7 @@ class AnaliseLotofacilAvancada:
     def _numeros_chave(self):
         cont = Counter()
         # Usar apenas os últimos 50 concursos para números-chave mais atuais
-        for c in self.concursos[:50]: 
+        for c in self.concursos[:15]: 
             cont.update(c)
         # Números que aparecem em mais de 30% dos concursos recentes
         limite = 50 * 0.3
