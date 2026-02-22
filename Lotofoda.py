@@ -41,6 +41,32 @@ st.title("🧠🎯 LOTOFÁCIL PREMIUM")
 st.caption("DNA Evolutivo • Superando o Aleatório • Mobile First")
 
 # =====================================================
+# FUNÇÃO PARA CONVERTER NUMPY TYPES PARA PYTHON NATIVE
+# =====================================================
+def convert_numpy_types(obj):
+    """Converte numpy types para tipos nativos Python para serialização JSON"""
+    if isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {key: convert_numpy_types(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_numpy_types(item) for item in obj]
+    elif isinstance(obj, tuple):
+        return tuple(convert_numpy_types(item) for item in obj)
+    elif isinstance(obj, (np.int64, np.int32, np.int16, np.int8)):
+        return int(obj)
+    elif isinstance(obj, (np.float64, np.float32, np.float16)):
+        return float(obj)
+    elif isinstance(obj, Counter):
+        return dict(obj)
+    else:
+        return obj
+
+# =====================================================
 # FUNÇÕES DE ARQUIVO LOCAL
 # =====================================================
 def salvar_jogos_gerados(jogos, fechamento, dna_params, numero_concurso_atual, data_concurso_atual, estatisticas=None):
@@ -53,17 +79,23 @@ def salvar_jogos_gerados(jogos, fechamento, dna_params, numero_concurso_atual, d
         data_hora = datetime.now().strftime("%Y%m%d_%H%M%S")
         nome_arquivo = f"jogos_salvos/fechamento_{data_hora}_{jogo_id}.json"
         
+        # Converter todos os numpy types para tipos nativos
+        jogos_convertidos = convert_numpy_types(jogos)
+        fechamento_convertido = convert_numpy_types(fechamento)
+        dna_convertido = convert_numpy_types(dna_params)
+        estatisticas_convertidas = convert_numpy_types(estatisticas) if estatisticas else {}
+        
         dados = {
             "id": jogo_id,
             "data_geracao": datetime.now().isoformat(),
             "concurso_base": {
-                "numero": numero_concurso_atual,
-                "data": data_concurso_atual
+                "numero": int(numero_concurso_atual),
+                "data": str(data_concurso_atual)
             },
-            "fechamento_base": fechamento,
-            "dna_params": dna_params,
-            "jogos": jogos,
-            "estatisticas": estatisticas or {},
+            "fechamento_base": fechamento_convertido,
+            "dna_params": dna_convertido,
+            "jogos": jogos_convertidos,
+            "estatisticas": estatisticas_convertidas,
             "conferido": False,
             "conferencias": []
         }
@@ -113,10 +145,14 @@ def adicionar_conferencia(arquivo, concurso_info, acertos, estatisticas=None):
         if "conferencias" not in dados:
             dados["conferencias"] = []
         
+        # Converter dados para tipos nativos
+        acertos_convertidos = [int(a) for a in acertos]
+        estatisticas_convertidas = convert_numpy_types(estatisticas) if estatisticas else {}
+        
         nova_conferencia = {
             "concurso": concurso_info,
-            "acertos": acertos,
-            "estatisticas": estatisticas or {},
+            "acertos": acertos_convertidos,
+            "estatisticas": estatisticas_convertidas,
             "data_conferencia": datetime.now().isoformat()
         }
         
@@ -126,7 +162,7 @@ def adicionar_conferencia(arquivo, concurso_info, acertos, estatisticas=None):
         # Atualizar estatísticas acumuladas
         if "estatisticas_historicas" not in dados:
             dados["estatisticas_historicas"] = []
-        dados["estatisticas_historicas"].append(estatisticas)
+        dados["estatisticas_historicas"].append(estatisticas_convertidas)
         
         with open(caminho, 'w', encoding='utf-8') as f:
             json.dump(dados, f, indent=2, ensure_ascii=False)
@@ -195,7 +231,7 @@ class AnaliseLotofacilAvancada:
                     # Peso exponencial para concursos recentes
                     peso = 1.5 ** (self.total_concursos - i) / self.total_concursos
                     peso_total += peso
-            frequencias_ponderadas[n] = peso_total / self.total_concursos * 2
+            frequencias_ponderadas[n] = float(peso_total / self.total_concursos * 2)  # Converter para float
         return frequencias_ponderadas
 
     def _defasagens(self):
@@ -203,17 +239,17 @@ class AnaliseLotofacilAvancada:
         for n in self.numeros:
             for i, c in enumerate(self.concursos):
                 if n in c:
-                    d[n] = i
+                    d[n] = int(i)  # Converter para int
                     break
             else:
-                d[n] = self.total_concursos
+                d[n] = int(self.total_concursos)
         return d
 
     def _padroes(self):
         p = {"somas": [], "pares": []}
         for c in self.concursos:
-            p["somas"].append(sum(c))
-            p["pares"].append(sum(1 for n in c if n % 2 == 0))
+            p["somas"].append(int(sum(c)))  # Converter para int
+            p["pares"].append(int(sum(1 for n in c if n % 2 == 0)))  # Converter para int
         return p
 
     def _numeros_chave(self):
@@ -223,7 +259,7 @@ class AnaliseLotofacilAvancada:
             cont.update(c)
         # Números que aparecem em mais de 30% dos concursos recentes
         limite = 50 * 0.3
-        return [n for n, q in cont.items() if q >= limite]
+        return [int(n) for n, q in cont.items() if q >= limite]  # Converter para int
 
     # NOVAS ANÁLISES
     def _analisar_padroes_repeticao(self):
@@ -231,18 +267,18 @@ class AnaliseLotofacilAvancada:
         repeticoes = []
         for i in range(len(self.concursos) - 1):
             repetidos = len(set(self.concursos[i]) & set(self.concursos[i + 1]))
-            repeticoes.append(repetidos)
+            repeticoes.append(int(repetidos))  # Converter para int
         
         if repeticoes:
-            media_repeticao = np.mean(repeticoes)
-            desvio_repeticao = np.std(repeticoes)
+            media_repeticao = float(np.mean(repeticoes))  # Converter para float
+            desvio_repeticao = float(np.std(repeticoes))  # Converter para float
             return {
                 "media": media_repeticao,
                 "desvio": desvio_repeticao,
-                "ultima": repeticoes[0] if repeticoes else 9,
-                "tendencia": repeticoes[:10]  # Últimas 10 repetições
+                "ultima": int(repeticoes[0]) if repeticoes else 9,
+                "tendencia": [int(r) for r in repeticoes[:10]]  # Converter para int
             }
-        return {"media": 9, "desvio": 2, "ultima": 9, "tendencia": [9] * 10}
+        return {"media": 9.0, "desvio": 2.0, "ultima": 9, "tendencia": [9] * 10}
 
     def _analisar_linhas_colunas(self):
         """Analisa distribuição por linhas (1-5,6-10,11-15,16-20,21-25)"""
@@ -255,27 +291,32 @@ class AnaliseLotofacilAvancada:
             for linha in linhas:
                 linhas[linha].append(cont_linhas[linha])
         
-        return {f"linha_{l}": np.mean(cont) for l, cont in linhas.items()}
+        return {f"linha_{l}": float(np.mean(cont)) for l, cont in linhas.items()}  # Converter para float
 
     def _analisar_pares_impares(self):
         """Analisa tendência de pares/ímpares"""
         pares_tendencia = []
         for c in self.concursos[:20]:  # Últimos 20
             pares = sum(1 for n in c if n % 2 == 0)
-            pares_tendencia.append(pares)
+            pares_tendencia.append(int(pares))  # Converter para int
         
         if len(pares_tendencia) > 5:
-            media_recente = np.mean(pares_tendencia[:5])
-            media_antiga = np.mean(pares_tendencia[5:10]) if len(pares_tendencia) > 10 else media_recente
-            tendencia = "crescendo" if media_recente > media_antiga else "decrescendo" if media_recente < media_antiga else "estavel"
+            media_recente = float(np.mean(pares_tendencia[:5]))  # Converter para float
+            media_antiga = float(np.mean(pares_tendencia[5:10])) if len(pares_tendencia) > 10 else media_recente
+            if media_recente > media_antiga:
+                tendencia = "crescendo"
+            elif media_recente < media_antiga:
+                tendencia = "decrescendo"
+            else:
+                tendencia = "estavel"
         else:
             tendencia = "estavel"
         
         return {
-            "media": np.mean(pares_tendencia) if pares_tendencia else 7.5,
-            "desvio": np.std(pares_tendencia) if pares_tendencia else 1,
+            "media": float(np.mean(pares_tendencia)) if pares_tendencia else 7.5,
+            "desvio": float(np.std(pares_tendencia)) if pares_tendencia else 1.0,
             "tendencia": tendencia,
-            "ultimos": pares_tendencia[:5]
+            "ultimos": [int(p) for p in pares_tendencia[:5]]
         }
 
     def _analisar_intervalos(self):
@@ -284,36 +325,40 @@ class AnaliseLotofacilAvancada:
         for c in self.concursos[:30]:
             c_ordenado = sorted(c)
             diffs = [c_ordenado[i+1] - c_ordenado[i] for i in range(len(c_ordenado)-1)]
-            intervalos.extend(diffs)
+            intervalos.extend([int(d) for d in diffs])  # Converter para int
+        
+        # Encontrar intervalos mais comuns
+        cont_intervalos = Counter(intervalos)
+        intervalos_comuns = [(int(k), int(v)) for k, v in cont_intervalos.most_common(3)]
         
         return {
-            "media_intervalo": np.mean(intervalos) if intervalos else 1.6,
-            "intervalos_comuns": Counter(intervalos).most_common(3) if intervalos else [(1, 10)]
+            "media_intervalo": float(np.mean(intervalos)) if intervalos else 1.6,
+            "intervalos_comuns": intervalos_comuns
         }
 
     def score_numero_evolutivo(self, n):
         """Score avançado com múltiplos fatores"""
-        score = 0
+        score = 0.0
         
         # Frequência (ponderada)
-        score += self.frequencias[n] * self.dna_evolutivo["freq"]
+        score += self.frequencias.get(n, 0.5) * self.dna_evolutivo["freq"]
         
         # Defasagem
-        score += (1 - self.defasagens[n] / self.total_concursos) * self.dna_evolutivo["defas"]
+        score += (1.0 - self.defasagens.get(n, self.total_concursos) / self.total_concursos) * self.dna_evolutivo["defas"]
         
         # Números-chave
         if n in self.numeros_chave:
             score += 0.8 * self.dna_evolutivo["chave"]
         
         # NOVO: Tendência de repetição
-        if n in self.concursos[0] if self.concursos else []:
+        if self.concursos and n in self.concursos[0]:
             score += 0.5 * self.dna_evolutivo["repeticao"]
         elif len(self.concursos) > 1 and n in self.concursos[1]:
             score += 0.3 * self.dna_evolutivo["repeticao"]
         
         # NOVO: Distribuição ideal por linha
         linha = (n - 1) // 5 + 1
-        media_linha = self.tendencias_linhas_colunas.get(f"linha_{linha}", 3)
+        media_linha = self.tendencias_linhas_colunas.get(f"linha_{linha}", 3.0)
         if media_linha > 2.8:  # Linha com mais números
             score += 0.2 * self.dna_evolutivo["linha_coluna"]
         
@@ -322,7 +367,7 @@ class AnaliseLotofacilAvancada:
         if (n % 2 == 0 and par_impar_tend == "crescendo") or (n % 2 == 1 and par_impar_tend == "decrescendo"):
             score += 0.2 * self.dna_evolutivo["tendencia"]
         
-        return score
+        return float(score)  # Garantir retorno como float
 
     def gerar_fechamento_evolutivo(self, tamanho=17):
         """Gera fechamento usando o score evolutivo"""
@@ -336,10 +381,11 @@ class AnaliseLotofacilAvancada:
             base = base[:tamanho-2]
             # Adicionar 2 números aleatórios do meio da lista
             meio = base[len(base)//2:len(base)//2 + 10]
-            extras = random.sample(meio, min(2, len(meio)))
-            base.extend(extras)
+            if meio:
+                extras = random.sample(meio, min(2, len(meio)))
+                base.extend(extras)
         
-        return sorted(base)
+        return sorted([int(n) for n in base])  # Converter para int
 
     def gerar_jogos_otimizados(self, fechamento, qtd_jogos=8):
         """Gera jogos com otimização para superar aleatório"""
@@ -391,7 +437,7 @@ class AnaliseLotofacilAvancada:
     def aprender_com_resultados(self, jogos_gerados, resultado_real):
         """Aprende com os resultados para melhorar futuras gerações"""
         acertos_por_jogo = [len(set(j) & set(resultado_real)) for j in jogos_gerados]
-        media_acertos = np.mean(acertos_por_jogo)
+        media_acertos = float(np.mean(acertos_por_jogo))
         
         # Identificar números que mais acertaram
         numeros_acertadores = Counter()
@@ -404,12 +450,13 @@ class AnaliseLotofacilAvancada:
         if media_acertos > 9.5:  # Bom desempenho
             # Reforçar o que funcionou
             for num in resultado_real:
-                self.frequencias[num] *= 1.05
+                if num in self.frequencias:
+                    self.frequencias[num] = float(self.frequencias[num] * 1.05)
         elif media_acertos < 8.5:  # Desempenho ruim
             # Penalizar números que não funcionaram
             for num in set().union(*jogos_gerados) - set(resultado_real):
                 if num in self.frequencias:
-                    self.frequencias[num] *= 0.98
+                    self.frequencias[num] = float(self.frequencias[num] * 0.98)
         
         self.historico_acertos.append(media_acertos)
         return media_acertos
@@ -419,8 +466,8 @@ class AnaliseLotofacilAvancada:
         lr = 0.03  # Learning rate reduzido para mais estabilidade
         soma_r = sum(concurso_real)
         pares_r = sum(1 for n in concurso_real if n % 2 == 0)
-        soma_m = np.mean(self.padroes["somas"])
-        pares_m = np.mean(self.padroes["pares"])
+        soma_m = float(np.mean(self.padroes["somas"]))
+        pares_m = float(np.mean(self.padroes["pares"]))
         
         # Ajustes mais suaves
         self.dna_evolutivo["soma"] += lr if abs(soma_r - soma_m) < 15 else -lr/2
@@ -434,7 +481,7 @@ class AnaliseLotofacilAvancada:
         
         # Manter limites
         for k in self.dna_evolutivo:
-            self.dna_evolutivo[k] = max(0.7, min(1.8, self.dna_evolutivo[k]))
+            self.dna_evolutivo[k] = float(max(0.7, min(1.8, self.dna_evolutivo[k])))
 
     def comparar_com_aleatorio(self, jogos_gerados, num_simulacoes=1000):
         """Compara desempenho com escolhas aleatórias"""
@@ -454,11 +501,11 @@ class AnaliseLotofacilAvancada:
                 acertos_aleatorio.append(len(set(aleatorio) & set(resultado_simulado)))
         
         stats = {
-            "sistema_media": np.mean(acertos_sistema) if acertos_sistema else 0,
-            "sistema_max": np.max(acertos_sistema) if acertos_sistema else 0,
-            "aleatorio_media": np.mean(acertos_aleatorio) if acertos_aleatorio else 0,
-            "aleatorio_max": np.max(acertos_aleatorio) if acertos_aleatorio else 0,
-            "vantagem_media": np.mean(acertos_sistema) - np.mean(acertos_aleatorio) if acertos_sistema and acertos_aleatorio else 0
+            "sistema_media": float(np.mean(acertos_sistema)) if acertos_sistema else 0.0,
+            "sistema_max": int(np.max(acertos_sistema)) if acertos_sistema else 0,
+            "aleatorio_media": float(np.mean(acertos_aleatorio)) if acertos_aleatorio else 0.0,
+            "aleatorio_max": int(np.max(acertos_aleatorio)) if acertos_aleatorio else 0,
+            "vantagem_media": float(np.mean(acertos_sistema) - np.mean(acertos_aleatorio)) if acertos_sistema and acertos_aleatorio else 0.0
         }
         
         return stats
@@ -469,9 +516,9 @@ class AnaliseLotofacilAvancada:
             dados.append({
                 "Jogo": i,
                 "Dezenas": ", ".join(f"{n:02d}" for n in j),
-                "Acertos": len(set(j) & set(resultado)),
-                "Soma": sum(j),
-                "Pares": sum(1 for n in j if n % 2 == 0)
+                "Acertos": int(len(set(j) & set(resultado))),
+                "Soma": int(sum(j)),
+                "Pares": int(sum(1 for n in j if n % 2 == 0))
             })
         return pd.DataFrame(dados)
 
@@ -484,7 +531,7 @@ def repeticao_ultimo_antepenultimo(concursos):
     antepenultimo = set(concursos[2])
     repetidos = len(ultimo & antepenultimo)
     media = repetidos / 15
-    return repetidos, media
+    return int(repetidos), float(media)
 
 def repeticao_ultimo_penultimo(concursos):
     if len(concursos) < 2: return None
@@ -492,7 +539,7 @@ def repeticao_ultimo_penultimo(concursos):
     penultimo = set(concursos[1])
     repetidos = len(ultimo & penultimo)
     media = repetidos / 15
-    return repetidos, media
+    return int(repetidos), float(media)
 
 # =====================================================
 # FUNÇÕES AUXILIARES
@@ -540,7 +587,8 @@ def main():
             with st.spinner("Carregando dados da Caixa..."):
                 try:
                     url = "https://loteriascaixa-api.herokuapp.com/api/lotofacil/"
-                    st.session_state.dados_api = requests.get(url).json()
+                    response = requests.get(url)
+                    st.session_state.dados_api = response.json()
                     concursos = [sorted(map(int, d["dezenas"])) for d in st.session_state.dados_api[:qtd]]
                     st.session_state.analise = AnaliseLotofacilAvancada(concursos, st.session_state.dados_api[:qtd])
                     
@@ -573,15 +621,18 @@ def main():
         with tab1:
             st.markdown("### 🔑 Números-chave (últimos 50 concursos)")
             numeros_chave = st.session_state.analise.numeros_chave
-            colunas = st.columns(5)
-            for i, num in enumerate(sorted(numeros_chave)[:15]):
-                with colunas[i % 5]:
-                    st.markdown(f"<h3 style='text-align:center'>{num:02d}</h3>", unsafe_allow_html=True)
+            if numeros_chave:
+                colunas = st.columns(5)
+                for i, num in enumerate(sorted(numeros_chave)[:15]):
+                    with colunas[i % 5]:
+                        st.markdown(f"<h3 style='text-align:center'>{num:02d}</h3>", unsafe_allow_html=True)
+            else:
+                st.info("Poucos números-chave identificados")
             
             st.markdown("### 📊 Tendências Atuais")
             col1, col2, col3 = st.columns(3)
             with col1:
-                media_repeticao = st.session_state.analise.padroes_repeticao.get("media", 9)
+                media_repeticao = st.session_state.analise.padroes_repeticao.get("media", 9.0)
                 st.metric("Média repetição", f"{media_repeticao:.1f}")
             with col2:
                 media_pares = st.session_state.analise.pares_impares_tendencia.get("media", 7.5)
@@ -655,7 +706,7 @@ def main():
                             "Soma": [sum(j) for j in jogos],
                             "Pares": [sum(1 for n in j if n%2==0) for j in jogos]
                         })
-                        st.dataframe(df_jogos, use_container_width=True)
+                        st.dataframe(df_jogos, use_container_width=True, hide_index=True)
                         
                         # Atualizar lista de jogos salvos
                         st.session_state.jogos_salvos = carregar_jogos_salvos()
@@ -663,8 +714,8 @@ def main():
                         # Guardar no histórico de comparação
                         st.session_state.historico_comparacao.append({
                             "id": jogo_id,
-                            "concurso_base": ultimo['concurso'],
-                            "vantagem": vantagem,
+                            "concurso_base": int(ultimo['concurso']),
+                            "vantagem": float(vantagem),
                             "stats": stats_comparacao
                         })
 
@@ -766,17 +817,17 @@ def main():
                                 
                                 # Estatísticas da conferência
                                 stats_conf = {
-                                    "media": np.mean(acertos),
-                                    "max": max(acertos),
-                                    "min": min(acertos),
-                                    "distribuicao": dict(Counter(acertos))
+                                    "media": float(np.mean(acertos)),
+                                    "max": int(max(acertos)),
+                                    "min": int(min(acertos)),
+                                    "distribuicao": {str(k): int(v) for k, v in Counter(acertos).items()}
                                 }
                                 
                                 # Salvar conferência
                                 info_salvar = {
-                                    "numero": concurso_info["concurso"],
-                                    "data": concurso_info["data"],
-                                    "resultado": numeros
+                                    "numero": int(concurso_info["concurso"]),
+                                    "data": str(concurso_info["data"]),
+                                    "resultado": [int(n) for n in numeros]
                                 }
                                 
                                 if adicionar_conferencia(jogo_sel["arquivo"], info_salvar, 
@@ -790,7 +841,7 @@ def main():
                                                    for j in jogo_sel["jogos"]],
                                         "Acertos": acertos
                                     })
-                                    st.dataframe(df_res, use_container_width=True)
+                                    st.dataframe(df_res, use_container_width=True, hide_index=True)
                                     
                                     # Métricas
                                     m1, m2, m3 = st.columns(3)
@@ -800,9 +851,10 @@ def main():
                                         st.metric("Máximo", max(acertos))
                                     with m3:
                                         # Comparar com aleatório teórico
-                                        acertos_rand = np.random.choice(range(11, 16), 1000)
+                                        vantagem_real = np.mean(acertos) - 9.5
+                                        cor = "green" if vantagem_real > 0 else "red"
                                         st.metric("Vs aleatório", 
-                                                 f"{np.mean(acertos) - 9.5:.2f}")
+                                                 f"{vantagem_real:+.2f}")
                                     
                                     st.rerun()
                         else:
@@ -826,7 +878,7 @@ def main():
                 
                 # Últimas comparações
                 st.dataframe(df_hist[["concurso_base", "vantagem"]].tail(), 
-                           use_container_width=True)
+                           use_container_width=True, hide_index=True)
             else:
                 st.info("Gere fechamentos para ver a comparação com o aleatório")
 
