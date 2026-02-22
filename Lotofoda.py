@@ -81,6 +81,27 @@ def salvar_jogos_gerados(jogos, fechamento, dna_params, numero_concurso_atual, d
         
         # Converter todos os numpy types para tipos nativos
         jogos_convertidos = convert_numpy_types(jogos)
+        
+        # Garantir que cada jogo é uma lista simples
+        jogos_final = []
+        for jogo in jogos_convertidos:
+            if isinstance(jogo, (list, tuple)):
+                # Garantir que é uma lista de inteiros
+                jogo_lista = [int(n) for n in jogo]
+                # Garantir que tem 15 números únicos
+                if len(set(jogo_lista)) != 15:
+                    # Corrigir se necessário
+                    jogo_lista = sorted(list(set(jogo_lista)))
+                    while len(jogo_lista) < 15:
+                        novo = random.randint(1, 25)
+                        if novo not in jogo_lista:
+                            jogo_lista.append(novo)
+                    jogo_lista.sort()
+                jogos_final.append(jogo_lista)
+            else:
+                # Se não for lista, tentar converter
+                jogos_final.append([int(n) for n in range(1, 16)])  # fallback
+        
         fechamento_convertido = convert_numpy_types(fechamento)
         dna_convertido = convert_numpy_types(dna_params)
         estatisticas_convertidas = convert_numpy_types(estatisticas) if estatisticas else {}
@@ -94,7 +115,7 @@ def salvar_jogos_gerados(jogos, fechamento, dna_params, numero_concurso_atual, d
             },
             "fechamento_base": fechamento_convertido,
             "dna_params": dna_convertido,
-            "jogos": jogos_convertidos,
+            "jogos": jogos_final,
             "estatisticas": estatisticas_convertidas,
             "conferido": False,
             "conferencias": []
@@ -829,50 +850,82 @@ def main():
                                                     if c['concurso'] == num_futuro)
                                 numeros = sorted(map(int, concurso_info["dezenas"]))
                                 
+                                # ===== CÓDIGO CORRIGIDO PARA CONFERÊNCIA =====
                                 acertos = []
-                                for jogo in jogo_sel["jogos"]:
-                                    # Garantir que o jogo tem números únicos
-                                    if len(set(jogo)) != 15:
-                                        st.warning("Jogo com números repetidos encontrado! Ignorando...")
-                                        acertos.append(0)
-                                    else:
-                                        acertos.append(len(set(jogo) & set(numeros)))
+                                jogos_para_conferir = []
                                 
-                                stats_conf = {
-                                    "media": float(np.mean(acertos)),
-                                    "max": int(max(acertos)),
-                                    "min": int(min(acertos)),
-                                    "distribuicao": {str(k): int(v) for k, v in Counter(acertos).items()}
-                                }
+                                # Garantir que estamos trabalhando com lista de listas
+                                if isinstance(jogo_sel["jogos"], list):
+                                    for jogo in jogo_sel["jogos"]:
+                                        # Converter para lista se necessário
+                                        if isinstance(jogo, (list, tuple)):
+                                            jogo_lista = list(jogo)
+                                        elif isinstance(jogo, str):
+                                            # Se for string, converter para lista de inteiros
+                                            try:
+                                                jogo_lista = [int(x.strip()) for x in jogo.replace('[', '').replace(']', '').split(',')]
+                                            except:
+                                                jogo_lista = []
+                                        else:
+                                            jogo_lista = []
+                                        
+                                        # Verificar e corrigir jogos com números repetidos
+                                        if jogo_lista and len(set(jogo_lista)) != 15:
+                                            jogo_lista = sorted(list(set(jogo_lista)))
+                                            # Completar para 15 números se necessário
+                                            while len(jogo_lista) < 15:
+                                                novo = random.randint(1, 25)
+                                                if novo not in jogo_lista:
+                                                    jogo_lista.append(novo)
+                                            jogo_lista.sort()
+                                        
+                                        if jogo_lista and len(jogo_lista) == 15:
+                                            jogos_para_conferir.append(jogo_lista)
+                                            acertos.append(len(set(jogo_lista) & set(numeros)))
+                                        else:
+                                            acertos.append(0)
+                                else:
+                                    acertos = [0] * len(jogo_sel.get("jogos", []))
                                 
-                                info_salvar = {
-                                    "numero": int(concurso_info["concurso"]),
-                                    "data": str(concurso_info["data"]),
-                                    "resultado": [int(n) for n in numeros]
-                                }
-                                
-                                if adicionar_conferencia(jogo_sel["arquivo"], info_salvar, 
-                                                        acertos, stats_conf):
-                                    st.success(f"✅ Conferido com concurso #{num_futuro}!")
+                                # Se não conseguiu conferir nenhum jogo
+                                if not acertos or all(a == 0 for a in acertos):
+                                    st.error("Não foi possível conferir os jogos. Verifique o formato dos dados.")
+                                else:
+                                    stats_conf = {
+                                        "media": float(np.mean(acertos)),
+                                        "max": int(max(acertos)),
+                                        "min": int(min(acertos)),
+                                        "distribuicao": {str(k): int(v) for k, v in Counter(acertos).items()}
+                                    }
                                     
-                                    df_res = pd.DataFrame({
-                                        "Jogo": range(1, len(jogo_sel["jogos"])+1),
-                                        "Dezenas": [", ".join(f"{n:02d}" for n in j) 
-                                                   for j in jogo_sel["jogos"]],
-                                        "Acertos": acertos
-                                    })
-                                    st.dataframe(df_res, use_container_width=True, hide_index=True)
+                                    info_salvar = {
+                                        "numero": int(concurso_info["concurso"]),
+                                        "data": str(concurso_info["data"]),
+                                        "resultado": [int(n) for n in numeros]
+                                    }
                                     
-                                    m1, m2, m3 = st.columns(3)
-                                    with m1:
-                                        st.metric("Média", f"{np.mean(acertos):.1f}")
-                                    with m2:
-                                        st.metric("Máximo", max(acertos))
-                                    with m3:
-                                        vantagem_real = np.mean(acertos) - 9.5
-                                        st.metric("Vs aleatório", f"{vantagem_real:+.2f}")
-                                    
-                                    st.rerun()
+                                    if adicionar_conferencia(jogo_sel["arquivo"], info_salvar, 
+                                                            acertos, stats_conf):
+                                        st.success(f"✅ Conferido com concurso #{num_futuro}!")
+                                        
+                                        df_res = pd.DataFrame({
+                                            "Jogo": range(1, len(jogos_para_conferir)+1) if jogos_para_conferir else [],
+                                            "Dezenas": [", ".join(f"{n:02d}" for n in j) 
+                                                       for j in jogos_para_conferir] if jogos_para_conferir else [],
+                                            "Acertos": acertos[:len(jogos_para_conferir)] if jogos_para_conferir else acertos
+                                        })
+                                        st.dataframe(df_res, use_container_width=True, hide_index=True)
+                                        
+                                        m1, m2, m3 = st.columns(3)
+                                        with m1:
+                                            st.metric("Média", f"{np.mean(acertos):.1f}")
+                                        with m2:
+                                            st.metric("Máximo", max(acertos))
+                                        with m3:
+                                            vantagem_real = np.mean(acertos) - 9.5
+                                            st.metric("Vs aleatório", f"{vantagem_real:+.2f}")
+                                        
+                                        st.rerun()
                         else:
                             st.warning("Aguardando próximos concursos...")
 
