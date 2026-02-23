@@ -66,7 +66,7 @@ class AnaliseLotofacilAvancada:
         for k in self.dna:
             self.dna[k] = max(0.5, min(2.0, self.dna[k]))
 
-    # ================= BASE ESTATÍSTICA =================
+    # ================= ESTATÍSTICA =================
     def _frequencias(self):
         c = Counter()
         for con in self.concursos:
@@ -107,8 +107,7 @@ class AnaliseLotofacilAvancada:
     # ================= FECHAMENTO =================
     def gerar_fechamento(self, tamanho):
         scores = {n: self.score_numero(n) for n in self.numeros}
-        base = sorted(scores, key=scores.get, reverse=True)[:tamanho]
-        return sorted(base)
+        return sorted(sorted(scores, key=scores.get, reverse=True)[:tamanho])
 
     # ================= ESTRATÉGIA =================
     def classificar_numeros(self):
@@ -122,23 +121,37 @@ class AnaliseLotofacilAvancada:
         jogo = sorted(jogo)
         return any(jogo[i+1] == jogo[i] + 1 for i in range(len(jogo)-1))
 
-    # ================= SUBJOGOS 15 =================
+    # ================= JOGOS 15 =================
     def gerar_subjogos(self, fechamento, qtd_jogos):
         jogos = set()
         quentes, medios, frios = self.classificar_numeros()
         ultimo = set(self.ultimo_concurso)
 
-        while len(jogos) < qtd_jogos:
-            jogo = set(random.sample(list(ultimo), random.randint(8, 10)))
-            jogo |= set(random.sample(quentes, 9))
-            jogo |= set(random.sample(medios, 4))
-            jogo |= set(random.sample(frios, 2))
+        tentativas = 0
+        while len(jogos) < qtd_jogos and tentativas < 6000:
+            tentativas += 1
+            jogo = set()
+
+            jogo |= set(random.sample(list(ultimo), random.randint(8, 10)))
+
+            q = [n for n in quentes if n not in jogo]
+            m = [n for n in medios if n not in jogo]
+            f = [n for n in frios if n not in jogo]
+
+            jogo |= set(random.sample(q, min(9, len(q))))
+            if m:
+                jogo |= set(random.sample(m, min(4, len(m))))
+            if f:
+                jogo |= set(random.sample(f, min(2, len(f))))
 
             jogo = list(jogo)
+
             if len(jogo) > 15:
                 jogo = random.sample(jogo, 15)
             elif len(jogo) < 15:
-                jogo += random.sample([n for n in fechamento if n not in jogo], 15-len(jogo))
+                comp = [n for n in fechamento if n not in jogo]
+                if comp:
+                    jogo += random.sample(comp, min(15-len(jogo), len(comp)))
 
             if 180 <= sum(jogo) <= 220 and 6 <= sum(1 for n in jogo if n%2==0) <= 9 and self.tem_sequencia(jogo):
                 jogos.add(tuple(sorted(jogo)))
@@ -153,21 +166,35 @@ class AnaliseLotofacilAvancada:
         jogos = set()
         quentes, medios, frios = self.classificar_numeros()
         ultimo = set(self.ultimo_concurso)
+        base_set = set(base)
 
-        while len(jogos) < qtd_jogos:
-            jogo = set(random.sample(list(ultimo & set(base)), min(8, len(ultimo & set(base)))))
-            jogo |= set(random.sample([n for n in base if n in quentes], 6))
-            jogo |= set(random.sample([n for n in base if n in medios], 5))
+        tentativas = 0
+        while len(jogos) < qtd_jogos and tentativas < 8000:
+            tentativas += 1
+            jogo = set()
 
-            frios_base = [n for n in base if n in frios]
-            if frios_base:
-                jogo |= set(random.sample(frios_base, min(2, len(frios_base))))
+            rep = list(ultimo & base_set)
+            if rep:
+                jogo |= set(random.sample(rep, min(len(rep), random.randint(7,9))))
+
+            q = [n for n in base if n in quentes and n not in jogo]
+            m = [n for n in base if n in medios and n not in jogo]
+            f = [n for n in base if n in frios and n not in jogo]
+
+            jogo |= set(random.sample(q, min(6, len(q))))
+            if m:
+                jogo |= set(random.sample(m, min(5, len(m))))
+            if f:
+                jogo |= set(random.sample(f, min(2, len(f))))
 
             jogo = list(jogo)
+
             if len(jogo) > 15:
                 jogo = random.sample(jogo, 15)
             elif len(jogo) < 15:
-                jogo += random.sample([n for n in base if n not in jogo], 15-len(jogo))
+                comp = [n for n in base if n not in jogo]
+                if comp:
+                    jogo += random.sample(comp, min(15-len(jogo), len(comp)))
 
             if 180 <= sum(jogo) <= 220 and 6 <= sum(1 for n in jogo if n%2==0) <= 9 and self.tem_sequencia(jogo):
                 jogos.add(tuple(sorted(jogo)))
@@ -190,8 +217,6 @@ def main():
             st.session_state.analise = AnaliseLotofacilAvancada(concursos)
             st.session_state.analise.auto_ajustar_dna(concursos[0])
             st.success("✅ Concursos carregados")
-
-    st.subheader("🎯 Fechamento & Desdobramento")
 
     if st.session_state.analise:
         modo = st.radio("Modo", ["Fechamento 16–17", "Desdobramento 18–19–20"], horizontal=True)
