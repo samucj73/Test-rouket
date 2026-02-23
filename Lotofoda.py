@@ -194,6 +194,31 @@ def adicionar_conferencia(arquivo, concurso_info, acertos, estatisticas=None):
         return False
 
 # =====================================================
+# FUNÇÃO PARA EXPORTAR CONCURSOS EM TXT
+# =====================================================
+def exportar_concursos_txt(dados_api, qtd_concursos):
+    """Exporta os concursos para um arquivo TXT formatado"""
+    try:
+        linhas = []
+        linhas.append("=" * 80)
+        linhas.append(f"LOTOFÁCIL - CONCURSOS CARREGADOS")
+        linhas.append(f"Data de exportação: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
+        linhas.append(f"Total de concursos: {len(dados_api[:qtd_concursos])}")
+        linhas.append("=" * 80)
+        linhas.append("")
+        
+        for concurso in dados_api[:qtd_concursos]:
+            linhas.append(f"Concurso #{concurso['concurso']} - {concurso['data']}")
+            numeros = sorted(map(int, concurso['dezenas']))
+            numeros_str = " - ".join(f"{n:02d}" for n in numeros)
+            linhas.append(f"Números: {numeros_str}")
+            linhas.append("-" * 50)
+        
+        return "\n".join(linhas)
+    except Exception as e:
+        return f"Erro ao gerar arquivo: {e}"
+
+# =====================================================
 # CLASSE PRINCIPAL MELHORADA - SEM REPETIÇÕES
 # =====================================================
 class AnaliseLotofacilAvancada:
@@ -647,8 +672,8 @@ def main():
     st.subheader("🎯 Análise e Fechamento Evolutivo")
 
     if st.session_state.analise:
-        tab1, tab2, tab3, tab4, tab5 = st.tabs([
-            "📊 Análise", "🧩 Fechamento", "🧬 DNA", "✅ Conferência", "📈 Comparação"
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+            "📊 Análise", "🧩 Fechamento", "🧬 DNA", "✅ Conferência", "📈 Comparação", "📋 Concursos"
         ])
 
         with tab1:
@@ -789,7 +814,6 @@ def main():
                     st.success("DNA recalibrado com sucesso!")
                     st.rerun()
 
-       # with tab4:
         with tab4:
             st.subheader("✅ Conferência por Concurso")
             
@@ -1031,6 +1055,65 @@ def main():
                            use_container_width=True, hide_index=True)
             else:
                 st.info("Gere fechamentos para ver a comparação com o aleatório")
+
+        # ================= NOVA ABA: CONCURSOS =================
+        with tab6:
+            st.subheader("📋 Todos os Concursos Carregados")
+            
+            if st.session_state.dados_api:
+                st.markdown(f"""
+                <div class='concurso-info'>
+                    📊 <strong>Total de concursos carregados: {len(st.session_state.dados_api[:qtd])}</strong>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # Opções de filtro
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    busca = st.text_input("🔍 Buscar concurso específico (número ou data)", placeholder="Ex: 3000 ou 2024...")
+                with col2:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    if st.button("📥 Download TXT", use_container_width=True):
+                        conteudo_txt = exportar_concursos_txt(st.session_state.dados_api, qtd)
+                        st.download_button(
+                            label="⬇️ Baixar arquivo",
+                            data=conteudo_txt,
+                            file_name=f"lotofacil_concursos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                            mime="text/plain",
+                            use_container_width=True
+                        )
+                
+                # Filtrar concursos
+                dados_filtrados = st.session_state.dados_api[:qtd]
+                if busca:
+                    dados_filtrados = [
+                        c for c in dados_filtrados 
+                        if busca.lower() in str(c['concurso']).lower() 
+                        or busca.lower() in c['data'].lower()
+                    ]
+                
+                # Mostrar concursos em cards
+                for concurso in dados_filtrados:
+                    with st.container():
+                        col1, col2 = st.columns([1, 3])
+                        with col1:
+                            st.markdown(f"**#{concurso['concurso']}**")
+                            st.caption(concurso['data'])
+                        with col2:
+                            numeros = sorted(map(int, concurso['dezenas']))
+                            # Criar tags coloridas para os números
+                            nums_html = ""
+                            for i, num in enumerate(numeros):
+                                cor = "#4cc9f0" if num <= 5 else "#4ade80" if num <= 10 else "gold" if num <= 15 else "#f97316" if num <= 20 else "#ff6b6b"
+                                nums_html += f"<span style='background:{cor}20; border:1px solid {cor}; border-radius:20px; padding:5px 10px; margin:3px; display:inline-block; font-weight:bold;'>{num:02d}</span>"
+                            st.markdown(f"<div>{nums_html}</div>", unsafe_allow_html=True)
+                        st.divider()
+                
+                # Paginação simples
+                if len(dados_filtrados) > 50:
+                    st.caption(f"Mostrando {len(dados_filtrados)} concursos. Use a busca para encontrar um específico.")
+            else:
+                st.info("📥 Carregue os concursos usando o botão na barra lateral para visualizar a lista completa.")
 
     else:
         st.markdown("""
