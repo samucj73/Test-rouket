@@ -8,26 +8,20 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # =====================================================
-# CONFIGURAÇÃO MOBILE PREMIUM
+# CONFIG
 # =====================================================
 st.set_page_config(
     page_title="🎯 LOTOFÁCIL PREMIUM",
-    layout="centered",
-    initial_sidebar_state="collapsed"
+    layout="centered"
 )
 
-st.markdown("""
-<style>
-.block-container { padding-top: 1rem; padding-bottom: 2rem; }
-h1,h2,h3 { text-align: center; }
-.card { background: #0e1117; border-radius: 14px; padding: 16px; margin-bottom: 12px; border: 1px solid #262730; color: white; }
-.stButton>button { width: 100%; height: 3.2em; border-radius: 14px; font-size: 1.05em; }
-input, textarea { border-radius: 12px !important; }
-</style>
-""", unsafe_allow_html=True)
-
-st.title("🧠🎯 LOTOFÁCIL PREMIUM")
-st.caption("DNA • Fechamento • Desdobramento • Mobile First")
+# =====================================================
+# FUNÇÃO SEGURA (ANTI-ERRO)
+# =====================================================
+def sample_safe(lista, n):
+    if not lista:
+        return []
+    return random.sample(lista, min(n, len(lista)))
 
 # =====================================================
 # CLASSE PRINCIPAL
@@ -41,75 +35,14 @@ class AnaliseLotofacilAvancada:
         self.total_concursos = len(concursos)
 
         self.frequencias = self._frequencias()
-        self.defasagens = self._defasagens()
-        self.padroes = self._padroes()
-        self.numeros_chave = self._numeros_chave()
-        self.dna = self._dna_inicial()
-
-    # ================= DNA =================
-    def _dna_inicial(self):
-        return {"freq":1.0,"defas":1.0,"soma":1.0,"pares":1.0,"seq":1.0,"chave":1.0}
-
-    def auto_ajustar_dna(self, concurso_real):
-        lr = 0.05
-        soma_r = sum(concurso_real)
-        pares_r = sum(1 for n in concurso_real if n % 2 == 0)
-        soma_m = np.mean(self.padroes["somas"])
-        pares_m = np.mean(self.padroes["pares"])
-
-        self.dna["soma"] += lr if soma_r > soma_m else -lr
-        self.dna["pares"] += lr if pares_r > pares_m else -lr
-
-        tem_seq = any(concurso_real[i+1] == concurso_real[i] + 1 for i in range(len(concurso_real)-1))
-        self.dna["seq"] += lr if tem_seq else -lr
-
-        for k in self.dna:
-            self.dna[k] = max(0.5, min(2.0, self.dna[k]))
 
     # ================= ESTATÍSTICA =================
     def _frequencias(self):
         c = Counter()
         for con in self.concursos:
             c.update(con)
-        return {n: c[n] / self.total_concursos for n in self.numeros}
+        return c
 
-    def _defasagens(self):
-        d = {}
-        for n in self.numeros:
-            for i, c in enumerate(self.concursos):
-                if n in c:
-                    d[n] = i
-                    break
-            else:
-                d[n] = self.total_concursos
-        return d
-
-    def _padroes(self):
-        p = {"somas": [], "pares": []}
-        for c in self.concursos:
-            p["somas"].append(sum(c))
-            p["pares"].append(sum(1 for n in c if n % 2 == 0))
-        return p
-
-    def _numeros_chave(self):
-        cont = Counter()
-        for c in self.concursos[:-25]:
-            cont.update(c)
-        return [n for n, q in cont.items() if q >= 10]
-
-    def score_numero(self, n):
-        return (
-            self.frequencias[n] * self.dna["freq"]
-            + (1 - self.defasagens[n] / self.total_concursos) * self.dna["defas"]
-            + (self.dna["chave"] if n in self.numeros_chave else 0)
-        )
-
-    # ================= FECHAMENTO =================
-    def gerar_fechamento(self, tamanho):
-        scores = {n: self.score_numero(n) for n in self.numeros}
-        return sorted(sorted(scores, key=scores.get, reverse=True)[:tamanho])
-
-    # ================= ESTRATÉGIA =================
     def classificar_numeros(self):
         freq_ord = sorted(self.frequencias.items(), key=lambda x: x[1], reverse=True)
         quentes = [n for n,_ in freq_ord[:15]]
@@ -121,28 +54,24 @@ class AnaliseLotofacilAvancada:
         jogo = sorted(jogo)
         return any(jogo[i+1] == jogo[i] + 1 for i in range(len(jogo)-1))
 
+    # ================= FECHAMENTO =================
+    def gerar_fechamento(self, tamanho):
+        freq_ord = sorted(self.frequencias.items(), key=lambda x: x[1], reverse=True)
+        return sorted([n for n,_ in freq_ord[:tamanho]])
+
     # ================= JOGOS 15 =================
-    def gerar_subjogos(self, fechamento, qtd_jogos):
+    def gerar_subjogos(self, fechamento, qtd):
         jogos = set()
         quentes, medios, frios = self.classificar_numeros()
         ultimo = set(self.ultimo_concurso)
 
-        tentativas = 0
-        while len(jogos) < qtd_jogos and tentativas < 6000:
-            tentativas += 1
+        while len(jogos) < qtd:
             jogo = set()
 
-            jogo |= set(random.sample(list(ultimo), random.randint(8, 10)))
-
-            q = [n for n in quentes if n not in jogo]
-            m = [n for n in medios if n not in jogo]
-            f = [n for n in frios if n not in jogo]
-
-            jogo |= set(random.sample(q, min(9, len(q))))
-            if m:
-                jogo |= set(random.sample(m, min(4, len(m))))
-            if f:
-                jogo |= set(random.sample(f, min(2, len(f))))
+            jogo |= set(sample_safe(list(ultimo), random.randint(8, 10)))
+            jogo |= set(sample_safe(quentes, 7))
+            jogo |= set(sample_safe(medios, 4))
+            jogo |= set(sample_safe(frios, 2))
 
             jogo = list(jogo)
 
@@ -150,42 +79,26 @@ class AnaliseLotofacilAvancada:
                 jogo = random.sample(jogo, 15)
             elif len(jogo) < 15:
                 comp = [n for n in fechamento if n not in jogo]
-                if comp:
-                    jogo += random.sample(comp, min(15-len(jogo), len(comp)))
+                jogo += sample_safe(comp, 15 - len(jogo))
 
-            if 180 <= sum(jogo) <= 220 and 6 <= sum(1 for n in jogo if n%2==0) <= 9 and self.tem_sequencia(jogo):
+            if 180 <= sum(jogo) <= 220 and self.tem_sequencia(jogo):
                 jogos.add(tuple(sorted(jogo)))
 
         return [list(j) for j in jogos]
 
     # ================= DESDOBRAMENTO =================
-    def gerar_base_desdobramento(self, tamanho):
-        return self.gerar_fechamento(tamanho)
-
-    def desdobrar_base(self, base, qtd_jogos):
+    def desdobrar_base(self, base, qtd):
         jogos = set()
         quentes, medios, frios = self.classificar_numeros()
         ultimo = set(self.ultimo_concurso)
-        base_set = set(base)
 
-        tentativas = 0
-        while len(jogos) < qtd_jogos and tentativas < 8000:
-            tentativas += 1
+        while len(jogos) < qtd:
             jogo = set()
 
-            rep = list(ultimo & base_set)
-            if rep:
-                jogo |= set(random.sample(rep, min(len(rep), random.randint(7,9))))
-
-            q = [n for n in base if n in quentes and n not in jogo]
-            m = [n for n in base if n in medios and n not in jogo]
-            f = [n for n in base if n in frios and n not in jogo]
-
-            jogo |= set(random.sample(q, min(6, len(q))))
-            if m:
-                jogo |= set(random.sample(m, min(5, len(m))))
-            if f:
-                jogo |= set(random.sample(f, min(2, len(f))))
+            jogo |= set(sample_safe(list(ultimo & set(base)), random.randint(7, 9)))
+            jogo |= set(sample_safe([n for n in base if n in quentes], 6))
+            jogo |= set(sample_safe([n for n in base if n in medios], 5))
+            jogo |= set(sample_safe([n for n in base if n in frios], 2))
 
             jogo = list(jogo)
 
@@ -193,10 +106,9 @@ class AnaliseLotofacilAvancada:
                 jogo = random.sample(jogo, 15)
             elif len(jogo) < 15:
                 comp = [n for n in base if n not in jogo]
-                if comp:
-                    jogo += random.sample(comp, min(15-len(jogo), len(comp)))
+                jogo += sample_safe(comp, 15 - len(jogo))
 
-            if 180 <= sum(jogo) <= 220 and 6 <= sum(1 for n in jogo if n%2==0) <= 9 and self.tem_sequencia(jogo):
+            if 180 <= sum(jogo) <= 220 and self.tem_sequencia(jogo):
                 jogos.add(tuple(sorted(jogo)))
 
         return [list(j) for j in jogos]
@@ -205,45 +117,31 @@ class AnaliseLotofacilAvancada:
 # INTERFACE
 # =====================================================
 def main():
+    st.title("🎯 LOTOFÁCIL PREMIUM")
+
     if "analise" not in st.session_state:
         st.session_state.analise = None
 
-    with st.sidebar:
-        qtd = st.slider("Qtd concursos históricos", 50, 1000, 200)
-        if st.button("📥 Carregar concursos"):
-            url = "https://loteriascaixa-api.herokuapp.com/api/lotofacil/"
-            data = requests.get(url).json()
-            concursos = [sorted(map(int, d["dezenas"])) for d in data[:qtd]]
-            st.session_state.analise = AnaliseLotofacilAvancada(concursos)
-            st.session_state.analise.auto_ajustar_dna(concursos[0])
-            st.success("✅ Concursos carregados")
+    if st.button("📥 Carregar concursos"):
+        url = "https://loteriascaixa-api.herokuapp.com/api/lotofacil/"
+        data = requests.get(url).json()
+        concursos = [sorted(map(int, d["dezenas"])) for d in data[:200]]
+        st.session_state.analise = AnaliseLotofacilAvancada(concursos)
+        st.success("Concursos carregados")
 
     if st.session_state.analise:
-        modo = st.radio("Modo", ["Fechamento 16–17", "Desdobramento 18–19–20"], horizontal=True)
+        modo = st.radio("Modo", ["Fechamento", "Desdobramento"], horizontal=True)
 
-        if modo == "Fechamento 16–17":
-            tamanho = st.radio("Tamanho", [16,17], horizontal=True)
-            qtd_jogos = st.slider("Qtd jogos", 4, 10, 6)
-            if st.button("🚀 Gerar"):
-                base = st.session_state.analise.gerar_fechamento(tamanho)
-                jogos = st.session_state.analise.gerar_subjogos(base, qtd_jogos)
+        if modo == "Fechamento":
+            base = st.session_state.analise.gerar_fechamento(17)
+            jogos = st.session_state.analise.gerar_subjogos(base, 6)
         else:
-            tamanho = st.selectbox("Base", [18,19,20])
-            mapa = {18:15, 19:21, 20:30}
-            qtd_jogos = mapa[tamanho]
-            if st.button("🔥 Gerar Desdobramento"):
-                base = st.session_state.analise.gerar_base_desdobramento(tamanho)
-                jogos = st.session_state.analise.desdobrar_base(base, qtd_jogos)
+            base = st.session_state.analise.gerar_fechamento(19)
+            jogos = st.session_state.analise.desdobrar_base(base, 21)
 
-        if "jogos" in locals():
-            st.markdown("<div class='card'>🧱 Base: "+", ".join(f"{n:02d}" for n in base)+"</div>", unsafe_allow_html=True)
-            df = pd.DataFrame({
-                "Jogo": range(1,len(jogos)+1),
-                "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in jogos],
-                "Soma": [sum(j) for j in jogos],
-                "Pares": [sum(1 for n in j if n%2==0) for j in jogos]
-            })
-            st.dataframe(df, use_container_width=True)
+        st.write("Base:", base)
+        for i, j in enumerate(jogos, 1):
+            st.write(f"Jogo {i}: {j}")
 
 if __name__ == "__main__":
     main()
