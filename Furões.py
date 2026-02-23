@@ -37,11 +37,11 @@ class ConfigManager:
     ALERTAS_PATH = "alertas.json"
     ALERTAS_FAVORITOS_PATH = "alertas_favoritos.json"
     ALERTAS_GOLS_HT_PATH = "alertas_gols_ht.json"
-    ALERTAS_AMBAS_MARCAM_PATH = "alertas_ambas_marcam.json"  # NOVO
+    ALERTAS_AMBAS_MARCAM_PATH = "alertas_ambas_marcam.json"
     RESULTADOS_PATH = "resultados.json"
     RESULTADOS_FAVORITOS_PATH = "resultados_favoritos.json"
     RESULTADOS_GOLS_HT_PATH = "resultados_gols_ht.json"
-    RESULTADOS_AMBAS_MARCAM_PATH = "resultados_ambas_marcam.json"  # NOVO
+    RESULTADOS_AMBAS_MARCAM_PATH = "resultados_ambas_marcam.json"
     CACHE_JOGOS = "cache_jogos.json"
     CACHE_CLASSIFICACAO = "cache_classificacao.json"
     CACHE_TIMEOUT = 3600
@@ -530,7 +530,7 @@ class Jogo:
         self.resultado = None
         self.resultado_favorito = None
         self.resultado_ht = None
-        self.resultado_ambas_marcam = None  # NOVO
+        self.resultado_ambas_marcam = None
         self.conferido = False
         
         # Para análise de favoritos
@@ -546,10 +546,10 @@ class Jogo:
         self.estimativa_total_ht = 0.0
         
         # Para análise de ambas marcam
-        self.tendencia_ambas_marcam = ""  # NOVO
-        self.confianca_ambas_marcam = 0.0  # NOVO
-        self.prob_ambas_marcam_sim = 0.0  # NOVO
-        self.prob_ambas_marcam_nao = 0.0  # NOVO
+        self.tendencia_ambas_marcam = ""
+        self.confianca_ambas_marcam = 0.0
+        self.prob_ambas_marcam_sim = 0.0
+        self.prob_ambas_marcam_nao = 0.0
     
     def validar_dados(self) -> bool:
         """Valida se os dados do jogo são válidos"""
@@ -738,7 +738,7 @@ class Jogo:
             "ht_away_goals": self.ht_away_goals,
             "resultado_favorito": self.resultado_favorito,
             "resultado_ht": self.resultado_ht,
-            "resultado_ambas_marcam": self.resultado_ambas_marcam  # NOVO
+            "resultado_ambas_marcam": self.resultado_ambas_marcam
         }
         
         # Adicionar dados de favoritos se disponíveis
@@ -2004,9 +2004,6 @@ class ResultadosTopAlertas:
             st.error(f"❌ Falha ao enviar resultados como texto!")
             return False
 
-# =============================
-# NOVA CLASSE: AlertaCompleto (ALL-IN-ONE) - VERSÃO CORRIGIDA
-# =============================
 # =============================
 # NOVA CLASSE: AlertaCompleto (ALL-IN-ONE) - VERSÃO CORRIGIDA
 # =============================
@@ -4099,7 +4096,7 @@ class SistemaAlertasFutebol:
         self.poster_generator = PosterGenerator(self.api_client)
         self.image_cache = self.api_client.image_cache
         self.resultados_top = ResultadosTopAlertas(self)  # Instância da nova classe
-        self.gerenciador_completo = GerenciadorAlertasCompletos(self)  # CORRIGIDO: Adicionar esta linha
+        self.gerenciador_completo = GerenciadorAlertasCompletos(self)
         
         # Inicializar logging
         self._setup_logging()
@@ -4117,8 +4114,8 @@ class SistemaAlertasFutebol:
     
     def processar_jogos(self, data_selecionada, ligas_selecionadas, todas_ligas, top_n, min_conf, 
                        max_conf, estilo_poster, alerta_individual, alerta_poster, alerta_top_jogos,
-                       formato_top_jogos, tipo_filtro, tipo_analise, config_analise):
-        """Processa jogos e gera alertas - CORRIGIDO"""
+                       formato_top_jogos, tipo_filtro, tipo_analise, config_analise, aplicar_filtro_avancado=False):
+        """Processa jogos e gera alertas - CORRIGIDO COM FILTRO AVANÇADO"""
         hoje = data_selecionada.strftime("%Y-%m-%d")
         
         if todas_ligas:
@@ -4134,9 +4131,16 @@ class SistemaAlertasFutebol:
         progress_bar = st.progress(0)
         total_ligas = len(ligas_busca)
 
+        # Carregar classificações
         classificacoes = {}
         for liga_id in ligas_busca:
             classificacoes[liga_id] = self.api_client.obter_classificacao(liga_id)
+        
+        # Contadores para estatísticas do filtro
+        total_jogos_analisados = 0
+        jogos_aprovados_filtro = 0
+        jogos_analisar_filtro = 0
+        jogos_bloqueados_filtro = 0
         
         for i, liga_id in enumerate(ligas_busca):
             classificacao = classificacoes[liga_id]
@@ -4191,28 +4195,63 @@ class SistemaAlertasFutebol:
                     analise["detalhes"].update(dados_analise_extra)
                     jogo.set_analise(analise)
                     
+                    # Criar dicionário do jogo
+                    jogo_dict = jogo.to_dict()
+                    
+                    # APLICAR FILTRO AVANÇADO SE ATIVADO
+                    resultado_filtro = None
+                    if aplicar_filtro_avancado:
+                        dados_filtro = adicionar_filtro_ao_jogo(jogo_dict, analise, classificacao)
+                        jogo_dict.update(dados_filtro)
+                        
+                        resultado_filtro = FiltroAvancadoOver15.analisar_jogo(jogo_dict)
+                        jogo_dict.update(resultado_filtro)
+                        
+                        total_jogos_analisados += 1
+                        if resultado_filtro['score_filtro'] >= 70:
+                            jogos_aprovados_filtro += 1
+                        elif resultado_filtro['score_filtro'] >= 50:
+                            jogos_analisar_filtro += 1
+                        else:
+                            jogos_bloqueados_filtro += 1
+                    
                     data_br, hora_br = jogo.get_data_hora_brasilia()
-                    tipo_emoji = "📈" if analise["tipo_aposta"] == "over" else "📉"
                     
-                    st.write(f"   {tipo_emoji} {jogo.home_team} vs {jogo.away_team}")
-                    st.write(f"      🕒 {data_br} {hora_br} | {analise['tendencia']}")
-                    st.write(f"      ⚽ Estimativa: {analise['estimativa']:.2f} | 🎯 Prob: {analise['probabilidade']:.0f}% | 🔍 Conf: {analise['confianca']:.0f}%")
-                    
-                    if 'vitoria' in analise['detalhes']:
-                        v = analise['detalhes']['vitoria']
-                        st.write(f"      🏆 Favorito: {jogo.home_team if v['favorito']=='home' else jogo.away_team if v['favorito']=='away' else 'EMPATE'} ({v['confianca_vitoria']:.1f}%)")
-                    
-                    if 'gols_ht' in analise['detalhes']:
-                        ht = analise['detalhes']['gols_ht']
-                        st.write(f"      ⏰ HT: {ht['tendencia_ht']} ({ht['confianca_ht']:.1f}%)")
-                    
-                    if 'ambas_marcam' in analise['detalhes']:
-                        am = analise['detalhes']['ambas_marcam']
-                        st.write(f"      🤝 Ambas Marcam: {am['tendencia_ambas_marcam']} ({am['confianca_ambas_marcam']:.1f}%)")
+                    # Mostrar informações baseado se o filtro está ativo ou não
+                    if aplicar_filtro_avancado and resultado_filtro:
+                        # Com filtro avançado
+                        st.write(f"   {resultado_filtro['status_emoji']} {jogo.home_team} vs {jogo.away_team}")
+                        st.write(f"      🕒 {data_br} {hora_br} | Score: {resultado_filtro['score_filtro']} | {resultado_filtro['status_filtro']}")
+                        
+                        if resultado_filtro['motivos_filtro']:
+                            for motivo in resultado_filtro['motivos_filtro'][:2]:
+                                st.write(f"      ⚠️ {motivo}")
+                        
+                        # Mostrar análise normal também
+                        tipo_emoji = "📈" if analise["tipo_aposta"] == "over" else "📉"
+                        st.write(f"      {tipo_emoji} {analise['tendencia']} | ⚽ {analise['estimativa']:.2f} | 🎯 {analise['probabilidade']:.0f}%")
+                    else:
+                        # Sem filtro avançado (comportamento original)
+                        tipo_emoji = "📈" if analise["tipo_aposta"] == "over" else "📉"
+                        st.write(f"   {tipo_emoji} {jogo.home_team} vs {jogo.away_team}")
+                        st.write(f"      🕒 {data_br} {hora_br} | {analise['tendencia']}")
+                        st.write(f"      ⚽ Estimativa: {analise['estimativa']:.2f} | 🎯 Prob: {analise['probabilidade']:.0f}% | 🔍 Conf: {analise['confianca']:.0f}%")
+                        
+                        if 'vitoria' in analise['detalhes']:
+                            v = analise['detalhes']['vitoria']
+                            st.write(f"      🏆 Favorito: {jogo.home_team if v['favorito']=='home' else jogo.away_team if v['favorito']=='away' else 'EMPATE'} ({v['confianca_vitoria']:.1f}%)")
+                        
+                        if 'gols_ht' in analise['detalhes']:
+                            ht = analise['detalhes']['gols_ht']
+                            st.write(f"      ⏰ HT: {ht['tendencia_ht']} ({ht['confianca_ht']:.1f}%)")
+                        
+                        if 'ambas_marcam' in analise['detalhes']:
+                            am = analise['detalhes']['ambas_marcam']
+                            st.write(f"      🤝 Ambas Marcam: {am['tendencia_ambas_marcam']} ({am['confianca_ambas_marcam']:.1f}%)")
                     
                     st.write(f"      Status: {jogo.status}")
                     
-                    # **CORREÇÃO CRÍTICA: Verificar e enviar alertas baseado no tipo de análise selecionado**
+                    # Verificar e enviar alertas baseado no tipo de análise selecionado
                     if tipo_analise == "Over/Under de Gols":
                         # Filtro original para Over/Under
                         if min_conf <= analise["confianca"] <= max_conf:
@@ -4283,12 +4322,32 @@ class SistemaAlertasFutebol:
                                     self._verificar_enviar_alerta(jogo, match_data, analise, alerta_individual, 
                                                                  min_conf_am, 100, "ambas_marcam")
 
-                    top_jogos.append(jogo.to_dict())
+                    top_jogos.append(jogo_dict)
                 
                 if j + batch_size < len(jogos_data):
                     time.sleep(0.5)
             
             progress_bar.progress((i + 1) / total_ligas)
+        
+        # Mostrar estatísticas do filtro avançado se ativo
+        if aplicar_filtro_avancado:
+            st.markdown("---")
+            st.subheader("🎯 ESTATÍSTICAS DO FILTRO AVANÇADO")
+            
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Total Analisados", total_jogos_analisados)
+            with col2:
+                st.metric("✅ Aprovados (≥70)", jogos_aprovados_filtro)
+            with col3:
+                st.metric("⚠️ Analisar (50-69)", jogos_analisar_filtro)
+            with col4:
+                st.metric("❌ Bloqueados (<50)", jogos_bloqueados_filtro)
+            
+            if total_jogos_analisados > 0:
+                taxa_aprovacao = (jogos_aprovados_filtro / total_jogos_analisados) * 100
+                st.progress(taxa_aprovacao / 100)
+                st.write(f"📊 Taxa de aprovação: {taxa_aprovacao:.1f}%")
         
         # Filtrar por tipo de análise
         jogos_filtrados = self._filtrar_por_tipo_analise(top_jogos, tipo_analise, config_analise)
@@ -4469,14 +4528,14 @@ class SistemaAlertasFutebol:
             "over_under": self._conferir_resultados_tipo("over_under", hoje),
             "favorito": self._conferir_resultados_tipo("favorito", hoje),
             "gols_ht": self._conferir_resultados_tipo("gols_ht", hoje),
-            "ambas_marcam": self._conferir_resultados_tipo("ambas_marcam", hoje)  # NOVO
+            "ambas_marcam": self._conferir_resultados_tipo("ambas_marcam", hoje)
         }
         
         # Mostrar resumo
         st.markdown("---")
         st.subheader("📈 RESUMO DE RESULTADOS")
         
-        col1, col2, col3, col4 = st.columns(4)  # Alterado para 4 colunas
+        col1, col2, col3, col4 = st.columns(4)
         
         with col1:
             resultado_ou = resultados_totais["over_under"]
@@ -5443,10 +5502,6 @@ class SistemaAlertasFutebol:
         DataStorage.salvar_alertas_top(alertas_filtrados)
         st.success(f"✅ Alertas TOP limpos: mantidos {len(alertas_filtrados)} de {len(alertas_top)}")
     
-    # =============================
-    # NOVO MÉTODO: processar_com_filtro_avancado
-    # =============================
-    
     def processar_com_filtro_avancado(self, data_selecionada, ligas_selecionadas, todas_ligas, 
                                       score_minimo=70, alertar_bloqueados=False):
         """
@@ -5652,6 +5707,21 @@ def main():
         top_n = st.selectbox("📊 Jogos no Top", [3, 5, 10], index=0)
         estilo_poster = st.selectbox("🎨 Estilo do Poster", ["West Ham (Novo)", "Elite Master (Original)"], index=0)
         
+        # NOVO: Opção para ativar o filtro avançado
+        st.markdown("----")
+        st.header("🎯 Filtro Avançado")
+        aplicar_filtro_avancado = st.checkbox("✅ Aplicar Filtro Avançado Over 1.5", value=False)
+        
+        if aplicar_filtro_avancado:
+            st.info("""
+            **Critérios do Filtro:**
+            1. 🔴 Favorito forte + Over caro
+            2. 🟡 Adversário defensivo
+            3. 🔴 Liga historicamente Under
+            4. 🔴 Over dependente de um time
+            5. 🔴 Prob/Confiança mínimas
+            """)
+        
         st.markdown("----")
         st.info(f"Tipo de Análise: {tipo_analise}")
         if tipo_analise == "Over/Under de Gols":
@@ -5667,16 +5737,16 @@ def main():
             st.info(f"Confiança Mínima: {config_analise.get('min_conf_am', 60)}%")
             st.info(f"Filtro Ambas Marcam: {config_analise.get('filtro_am', 'Todos')}")
         
+        st.info(f"Filtro Avançado: {'✅ ATIVADO' if aplicar_filtro_avancado else '❌ DESATIVADO'}")
         st.info(f"Formato Top Jogos: {formato_top_jogos}")
         if alerta_conferencia_auto:
             st.info("🤖 Alerta automático: ATIVADO")
         if alerta_resultados:
             st.info("🏁 Alertas de resultados: ATIVADO")
     
-    # Abas principais
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["🔍 Buscar Partidas", "📊 Conferir Resultados", 
-                                   "🏆 Resultados TOP Alertas", "⚽ Alertas Completos",
-                                   "🎯 Filtro Avançado Over 1.5"])  # Nova aba
+    # Abas principais (removida a aba do filtro avançado)
+    tab1, tab2, tab3, tab4 = st.tabs(["🔍 Buscar Partidas", "📊 Conferir Resultados", 
+                                   "🏆 Resultados TOP Alertas", "⚽ Alertas Completos"])
     
     with tab1:
         # Controles principais
@@ -5711,7 +5781,8 @@ def main():
                                       config_analise.get("max_conf", 95), 
                                       estilo_poster, 
                                       alerta_individual, alerta_poster, alerta_top_jogos, 
-                                      formato_top_jogos, tipo_filtro_passar, tipo_analise, config_analise)
+                                      formato_top_jogos, tipo_filtro_passar, tipo_analise, config_analise,
+                                      aplicar_filtro_avancado=aplicar_filtro_avancado)  # NOVO parâmetro
     
     with tab2:
         st.subheader("📊 Conferência de Resultados")
@@ -5728,7 +5799,7 @@ def main():
         st.markdown("---")
         st.subheader("📈 Estatísticas dos Alertas")
         
-        col_ou, col_fav, col_ht, col_am = st.columns(4)  # Alterado para 4 colunas
+        col_ou, col_fav, col_ht, col_am = st.columns(4)
         
         with col_ou:
             alertas_ou = DataStorage.carregar_alertas()
@@ -5926,114 +5997,6 @@ def main():
                     st.write("---")
         else:
             st.info("ℹ️ Nenhum alerta completo salvo ainda.")
-    
-    # NOVA ABA: Filtro Avançado Over 1.5
-    with tab5:
-        st.subheader("🎯 Filtro Avançado Over 1.5")
-        st.markdown("""
-        Este filtro aplica **5 critérios profissionais** para identificar jogos com **alto risco**:
-        
-        1. 🔴 **Favorito muito forte + Over caro** - Odd favorito ≤1.40 e Odd Over ≥2.60
-        2. 🟡 **Adversário defensivo** - Média gols fora <0.9 ou finalizações no alvo <3
-        3. 🔴 **Liga historicamente Under** - ITA/COPA/PLAYOFF com prob <75% ou conf <70%
-        4. 🔴 **Over 1.5 dependente de um time** - Casa ≥1.7 gols e fora <0.8 gols
-        5. 🔴 **Probabilidade/confiança mínimas** - Prob <70% ou conf <60%
-        
-        **Score final**: 0-100 | ✅ ≥70 = APOSTAR | ⚠️ 50-69 = ANALISAR | ❌ <50 = BLOQUEADO
-        """)
-        
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            data_filtro = st.date_input("📅 Data para análise:", value=datetime.today(), key="data_filtro")
-        with col2:
-            score_minimo = st.slider("Score mínimo para aprovação:", 0, 100, 70, key="score_min")
-        
-        todas_ligas_filtro = st.checkbox("🌍 Todas as ligas", value=True, key="todas_ligas_filtro")
-        
-        ligas_selecionadas_filtro = []
-        if not todas_ligas_filtro:
-            ligas_selecionadas_filtro = st.multiselect(
-                "📌 Selecionar ligas:",
-                options=list(ConfigManager.LIGA_DICT.keys()),
-                default=["Campeonato Brasileiro Série A", "Premier League (Inglaterra)"],
-                key="ligas_filtro"
-            )
-        
-        col_btn1, col_btn2 = st.columns(2)
-        with col_btn1:
-            if st.button("🔍 Aplicar Filtro Avançado", type="primary", key="btn_filtro"):
-                if not todas_ligas_filtro and not ligas_selecionadas_filtro:
-                    st.error("❌ Selecione pelo menos uma liga")
-                else:
-                    jogos_aprovados = sistema.processar_com_filtro_avancado(
-                        data_filtro, ligas_selecionadas_filtro, todas_ligas_filtro,
-                        score_minimo=score_minimo, alertar_bloqueados=True
-                    )
-                    
-                    if jogos_aprovados:
-                        st.success(f"✅ {len(jogos_aprovados)} jogos aprovados!")
-                        
-                        # Botão para enviar poster dos aprovados
-                        if st.button("📤 Enviar Poster dos Aprovados"):
-                            poster = sistema.poster_generator.gerar_poster_westham_style(
-                                jogos_aprovados, 
-                                titulo=f"🎯 FILTRO AVANÇADO - APROVADOS",
-                                tipo_alerta="over_under"
-                            )
-                            caption = f"<b>🎯 JOGOS APROVADOS PELO FILTRO AVANÇADO</b>\n\n"
-                            caption += f"<b>Score mínimo: {score_minimo}</b>\n"
-                            caption += f"<b>Total: {len(jogos_aprovados)} jogos</b>\n\n"
-                            caption += f"<b>🔥 ELITE MASTER SYSTEM - FILTRO PROFISSIONAL</b>"
-                            
-                            if sistema.telegram_client.enviar_foto(poster, caption=caption):
-                                st.success("📤 Poster enviado!")
-        
-        with col_btn2:
-            if st.button("📊 Ver Exemplo de Análise", key="btn_exemplo"):
-                # Criar exemplo de jogo para demonstrar o filtro
-                exemplo_jogo = {
-                    "home": "Juventus",
-                    "away": "Empoli",
-                    "liga": "ITA",
-                    "odd_favorito": 1.35,
-                    "odd_over": 2.60,
-                    "media_gols_time_fora": 0.8,
-                    "finalizacoes_no_alvo_fora": 2.9,
-                    "probabilidade": 72,
-                    "confianca": 65,
-                    "media_gols_time_casa": 1.7,
-                }
-                
-                resultado = FiltroAvancadoOver15.analisar_jogo(exemplo_jogo)
-                
-                st.info("📋 **Exemplo: Juventus vs Empoli (Série A Italiana)**")
-                st.write(f"**Score Final:** {resultado['score_filtro']} - {resultado['status_filtro']} {resultado['status_emoji']}")
-                
-                if resultado['motivos_filtro']:
-                    st.write("**Motivos de bloqueio:**")
-                    for motivo in resultado['motivos_filtro']:
-                        st.write(f"   • {motivo}")
-                
-                if resultado['alertas_filtro']:
-                    st.write("**Alertas gerados:**")
-                    for alerta in resultado['alertas_filtro']:
-                        st.write(f"   • {alerta}")
-        
-        # Mostrar estatísticas dos últimos jogos processados
-        st.markdown("---")
-        st.subheader("📊 Estatísticas do Filtro")
-        
-        # Carregar últimos resultados se existirem
-        col_est1, col_est2, col_est3, col_est4 = st.columns(4)
-        
-        with col_est1:
-            st.metric("Score Médio", "72", "↑3%")
-        with col_est2:
-            st.metric("Taxa de Aprovação", "68%", "↓2%")
-        with col_est3:
-            st.metric("Principal Bloqueio", "Liga Under", "45% dos casos")
-        with col_est4:
-            st.metric("Jogos Analisados", "127", "+12 hoje")
     
     # Painel de monitoramento
     st.markdown("---")
