@@ -672,8 +672,14 @@ def main():
     st.subheader("🎯 Análise e Fechamento Evolutivo")
 
     if st.session_state.analise:
+        # CORREÇÃO: Adicionar vírgulas entre os nomes das abas
         tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-            "📊 Análise", "🧩 Fechamento", "🧬 DNA", "✅ Conferência", "📈 Comparação", "📋 Concursos"
+            "📊 Análise", 
+            "🧩 Fechamento", 
+            "🧬 DNA", 
+            "✅ Conferência", 
+            "📈 Comparação", 
+            "📋 Concursos"
         ])
 
         with tab1:
