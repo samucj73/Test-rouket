@@ -1,5 +1,3 @@
-
-
 import streamlit as st
 from datetime import datetime, timedelta, timezone
 import requests
@@ -2548,7 +2546,7 @@ class GerenciadorAlertasCompletos:
                 draw.text((resultado_x, y_escudos + TAMANHO_QUADRADO//2 - 30), 
                          resultado_text, font=FONTE_RESULTADO, fill=(255, 255, 255))
 
-            # Resultado HT se disponível
+            # Resultado HT
             if resultados.get('ht_home_goals') is not None:
                 ht_text = f"HT: {resultados['ht_home_goals']} - {resultados['ht_away_goals']}"
                 try:
@@ -3417,7 +3415,7 @@ class TelegramClient:
 # =============================
 
 class PosterGenerator:
-    """Gera posters para os alertas"""
+    """Gera posters para os alertas - VERSÃO MODIFICADA PARA INCLUIR ODDS"""
     
     def __init__(self, api_client: APIClient):
         self.api_client = api_client
@@ -3447,7 +3445,7 @@ class PosterGenerator:
             return ImageFont.load_default()
     
     def gerar_poster_westham_style(self, jogos: list, titulo: str = " ALERTA DE GOLS", tipo_alerta: str = "over_under") -> io.BytesIO:
-        """Gera poster no estilo West Ham"""
+        """Gera poster no estilo West Ham com odds incluídas no formato da imagem"""
         LARGURA = 2000
         ALTURA_TOPO = 270
         ALTURA_POR_JOGO = 830
@@ -3467,6 +3465,7 @@ class PosterGenerator:
         FONTE_DETALHES = self.criar_fonte(50)
         FONTE_ANALISE = self.criar_fonte(50)
         FONTE_ESTATISTICAS = self.criar_fonte(35)
+        FONTE_ODD = self.criar_fonte(60)  # Fonte maior para odds
 
         try:
             titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
@@ -3598,53 +3597,74 @@ class PosterGenerator:
             
             draw.line([(x0 + 80, y_analysis - 20), (x1 - 80, y_analysis - 20)], fill=(100, 130, 160), width=3)
             
-            # Mostrar diferentes informações baseadas no tipo de alerta
+            # NOVO: Calcular odds para cada mercado
             if tipo_alerta == "over_under":
-                tipo_emoji = "+" if jogo.get('tipo_aposta') == "over" else "-"
+                # Over/Under odds baseadas na probabilidade
+                prob = jogo.get('probabilidade', 50)
+                odd_over = round(100 / prob, 2) if prob > 0 else 2.0
+                odd_under = round(100 / (100 - prob), 2) if (100 - prob) > 0 else 2.0
+                
+                # Estilo da imagem: "1.29 ✅" e "○ Total → Mais de 1.5"
+                tipo_emoji = "📈" if jogo.get('tipo_aposta') == "over" else "📉"
                 cor_tendencia = (255, 215, 0) if jogo.get('tipo_aposta') == "over" else (100, 200, 255)
                 
+                # Odd principal (do favorito para over/under é a odd do over)
+                odd_principal = odd_over if jogo.get('tipo_aposta') == "over" else odd_under
+                simbolo_ok = "✅"  # ou "🔴" dependendo do resultado (aqui sempre ✅ para alerta)
+                
                 textos_analise = [
-                    f"{tipo_emoji} {jogo['tendencia']}",
+                    f"{odd_principal:.2f} {simbolo_ok}",  # Ex: 1.29 ✅
+                    f"○ Total → {jogo['tendencia']}",      # Ex: ○ Total → Mais de 1.5
                     f"Confiança: {jogo['confianca']:.0f}%",
                 ]
                 
-                cores = [cor_tendencia, (100, 200, 255), (100, 255, 100), (255, 193, 7)]
+                cores = [cor_tendencia, (200, 200, 200), (100, 255, 100)]
                 
             elif tipo_alerta == "favorito":
-                favorito_emoji = "" if jogo.get('favorito') == "home" else "" if jogo.get('favorito') == "away" else "🤝"
+                # Odds do favorito baseadas na confiança
+                prob_fav = jogo.get('confianca_vitoria', 50)
+                odd_favorito = round(100 / prob_fav, 2) if prob_fav > 0 else 2.0
+                
+                favorito_emoji = "🏠" if jogo.get('favorito') == "home" else "✈️" if jogo.get('favorito') == "away" else "🤝"
                 favorito_text = jogo['home'] if jogo.get('favorito') == "home" else jogo['away'] if jogo.get('favorito') == "away" else "EMPATE"
                 
                 textos_analise = [
-                    f"{favorito_emoji} FAVORITO: {favorito_text}",
+                    f"{odd_favorito:.2f} ✅",  # Ex: 2.15 ✅
+                    f"○ Favorito → {favorito_text}",  # Ex: ○ Favorito → Palmeiras SP
                     f"Confiança: {jogo.get('confianca_vitoria', 0):.0f}%",
                 ]
                 
-                cores = [(255, 87, 34), (255, 152, 0), (255, 193, 7), (255, 224, 130), (100, 255, 100)]
+                cores = [(255, 87, 34), (255, 152, 0), (100, 255, 100)]
                 
             elif tipo_alerta == "gols_ht":
-                tipo_emoji_ht = "" if "OVER" in jogo.get('tendencia_ht', '') else ""
+                # Odds para gols HT baseadas na estimativa
+                prob_ht = jogo.get('confianca_ht', 50)
+                odd_ht = round(100 / prob_ht, 2) if prob_ht > 0 else 2.0
+                
+                tipo_emoji_ht = "⚡" if "OVER" in jogo.get('tendencia_ht', '') else "🛡️"
                 
                 textos_analise = [
-                    f"{tipo_emoji_ht} {jogo.get('tendencia_ht', 'N/A')}",
-                    f"Estimativa HT: {jogo.get('estimativa_total_ht', 0):.2f} gols",
-                    f"OVER 0.5 HT: {jogo.get('detalhes', {}).get('gols_ht', {}).get('over_05_ht', 0):.0f}%",
-                    f"OVER 1.5 HT: {jogo.get('detalhes', {}).get('gols_ht', {}).get('over_15_ht', 0):.0f}%",
-                    f"Confiança HT: {jogo.get('confianca_ht', 0):.0f}%",
+                    f"{odd_ht:.2f} ✅",  # Ex: 1.85 ✅
+                    f"○ Total HT → {jogo.get('tendencia_ht', 'N/A')}",  # Ex: ○ Total HT → Mais de 0.5
+                    f"Confiança: {jogo.get('confianca_ht', 0):.0f}%",
                 ]
                 
-                cores = [(76, 175, 80), (129, 199, 132), (102, 187, 106), (67, 160, 71), (100, 255, 100)]
+                cores = [(76, 175, 80), (129, 199, 132), (100, 255, 100)]
             
             elif tipo_alerta == "ambas_marcam":
+                # Odds para ambas marcam baseadas na confiança
+                prob_am = jogo.get('confianca_ambas_marcam', 50)
+                odd_am = round(100 / prob_am, 2) if prob_am > 0 else 2.0
+                
                 tipo_emoji_am = "🤝" if jogo.get('tendencia_ambas_marcam') == "SIM" else "🚫"
                 
                 textos_analise = [
-                    f"{tipo_emoji_am} AMBAS MARCAM: {jogo.get('tendencia_ambas_marcam', 'N/A')}",
-                    #f"Probabilidade SIM: {jogo.get('prob_ambas_marcam_sim', 0):.1f}%",
-                    #f"Probabilidade NÃO: {jogo.get('prob_ambas_marcam_nao', 0):.1f}%",
+                    f"{odd_am:.2f} ✅",  # Ex: 1.95 ✅
+                    f"○ Ambas Marcam → {jogo.get('tendencia_ambas_marcam', 'N/A')}",  # Ex: ○ Ambas Marcam → SIM
                     f"Confiança: {jogo.get('confianca_ambas_marcam', 0):.0f}%",
                 ]
                 
-                cores = [(155, 89, 182), (165, 105, 189), (176, 122, 199), (188, 143, 209), (100, 255, 100)]
+                cores = [(155, 89, 182), (165, 105, 189), (100, 255, 100)]
             
             else:
                 textos_analise = ["Informação não disponível"]
@@ -3652,11 +3672,20 @@ class PosterGenerator:
             
             for i, (text, cor) in enumerate(zip(textos_analise, cores)):
                 try:
-                    bbox = draw.textbbox((0, 0), text, font=FONTE_ANALISE)
+                    # Ajustar fonte: primeira linha (odds) maior
+                    if i == 0:
+                        fonte_usar = FONTE_ODD
+                    else:
+                        fonte_usar = FONTE_ANALISE
+                    
+                    bbox = draw.textbbox((0, 0), text, font=fonte_usar)
                     w = bbox[2] - bbox[0]
-                    draw.text(((LARGURA - w) // 2, y_analysis + i * 80), text, font=FONTE_ANALISE, fill=cor)
+                    draw.text(((LARGURA - w) // 2, y_analysis + i * 80), text, font=fonte_usar, fill=cor)
                 except:
-                    draw.text((PADDING + 120, y_analysis + i * 80), text, font=FONTE_ANALISE, fill=cor)
+                    if i == 0:
+                        draw.text((PADDING + 120, y_analysis + i * 80), text, font=FONTE_ODD, fill=cor)
+                    else:
+                        draw.text((PADDING + 120, y_analysis + i * 80), text, font=FONTE_ANALISE, fill=cor)
 
             y_pos += ALTURA_POR_JOGO
 
@@ -3672,7 +3701,7 @@ class PosterGenerator:
         img.save(buffer, format="PNG", optimize=True, quality=95)
         buffer.seek(0)
         
-        st.success(f"✅ Poster estilo West Ham GERADO com {len(jogos)} jogos")
+        st.success(f"✅ Poster estilo West Ham GERADO com {len(jogos)} jogos (com odds)")
         return buffer
     
     def gerar_poster_resultados(self, jogos_com_resultados: list, tipo_alerta: str = "over_under") -> io.BytesIO:
@@ -3698,6 +3727,7 @@ class PosterGenerator:
         FONTE_ESTATISTICAS = self.criar_fonte(40)
         FONTE_RESULTADO = self.criar_fonte(76)
         FONTE_RESULTADO_BADGE = self.criar_fonte(65)  # Fonte para o badge GREEN/RED
+        FONTE_ODD = self.criar_fonte(70)  # Fonte para odds nos resultados
 
         # Título baseado no tipo de alerta
         if tipo_alerta == "over_under":
@@ -3915,54 +3945,74 @@ class PosterGenerator:
             
             # Informações específicas do tipo de alerta
             if tipo_alerta == "over_under":
+                # Calcular odds para Over/Under
+                prob = jogo.get('probabilidade', 50)
+                odd_over = round(100 / prob, 2) if prob > 0 else 2.0
+                
                 tipo_emoji = "+" if jogo.get('tipo_aposta') == "over" else "-"
                 resultado_emoji = "" if resultado == "GREEN" else "❌" if resultado == "RED" else ""
                 
                 textos_analise = [
-                    f"{tipo_emoji} {jogo['tendencia']} {resultado_emoji}",
-                    f"Estimativa: {jogo['estimativa']:.2f} gols | Resultado: {jogo.get('home_goals', '?')} - {jogo.get('away_goals', '?')}",
-                    f"Probabilidade: {jogo['probabilidade']:.0f}% | Confiança: {jogo['confianca']:.0f}%",
+                    f"{odd_over:.2f} {resultado_emoji}",
+                    f"○ {jogo['tendencia']}",
+                    f"Estimativa: {jogo['estimativa']:.2f} gols",
+                    f"Confiança: {jogo['confianca']:.0f}%",
                 ]
                 
-                cores = [(255, 255, 255), (200, 200, 200), (200, 200, 200)]
+                cores = [(255, 255, 255), (200, 200, 200), (200, 200, 200), (100, 255, 100)]
                 
             elif tipo_alerta == "favorito":
-                favorito_emoji = "" if jogo.get('favorito') == "home" else "" if jogo.get('favorito') == "away" else "🤝"
+                # Calcular odds do favorito
+                prob_fav = jogo.get('confianca_vitoria', 50)
+                odd_fav = round(100 / prob_fav, 2) if prob_fav > 0 else 2.0
+                
+                favorito_emoji = "🏠" if jogo.get('favorito') == "home" else "✈️" if jogo.get('favorito') == "away" else "🤝"
                 favorito_text = jogo['home'] if jogo.get('favorito') == "home" else jogo['away'] if jogo.get('favorito') == "away" else "EMPATE"
                 resultado_emoji = "" if resultado == "GREEN" else "❌" if resultado == "RED" else ""
                 
                 textos_analise = [
-                    f"{favorito_emoji} FAVORITO: {favorito_text} {resultado_emoji}",
-                    f"Confiança: {jogo.get('confianca_vitoria', 0):.0f}% | Resultado: {jogo.get('home_goals', '?')} - {jogo.get('away_goals', '?')}",
+                    f"{odd_fav:.2f} {resultado_emoji}",
+                    f"○ FAVORITO: {favorito_text}",
+                    f"Confiança: {jogo.get('confianca_vitoria', 0):.0f}%",
                     f"Prob. Casa: {jogo.get('prob_home_win', 0):.1f}% | Fora: {jogo.get('prob_away_win', 0):.1f}% | Empate: {jogo.get('prob_draw', 0):.1f}%",
                 ]
                 
-                cores = [(255, 255, 255), (200, 200, 200), (200, 200, 200)]
+                cores = [(255, 255, 255), (200, 200, 200), (100, 255, 100), (200, 200, 200)]
                 
             elif tipo_alerta == "gols_ht":
-                tipo_emoji_ht = "" if "OVER" in jogo.get('tendencia_ht', '') else ""
+                # Calcular odds para gols HT
+                prob_ht = jogo.get('confianca_ht', 50)
+                odd_ht = round(100 / prob_ht, 2) if prob_ht > 0 else 2.0
+                
+                tipo_emoji_ht = "⚡" if "OVER" in jogo.get('tendencia_ht', '') else "🛡️"
                 resultado_emoji = "" if resultado == "GREEN" else "❌" if resultado == "RED" else ""
                 ht_resultado = f"{jogo.get('ht_home_goals', '?')} - {jogo.get('ht_away_goals', '?')}"
                 
                 textos_analise = [
-                    f"{tipo_emoji_ht} {jogo.get('tendencia_ht', 'N/A')} {resultado_emoji}",
+                    f"{odd_ht:.2f} {resultado_emoji}",
+                    f"○ {jogo.get('tendencia_ht', 'N/A')}",
                     f"Estimativa HT: {jogo.get('estimativa_total_ht', 0):.2f} gols | Resultado HT: {ht_resultado}",
-                    f"Confiança HT: {jogo.get('confianca_ht', 0):.0f}% | FT: {jogo.get('home_goals', '?')} - {jogo.get('away_goals', '?')}",
+                    f"Confiança HT: {jogo.get('confianca_ht', 0):.0f}%",
                 ]
                 
-                cores = [(255, 255, 255), (200, 200, 200), (200, 200, 200)]
+                cores = [(255, 255, 255), (200, 200, 200), (200, 200, 200), (100, 255, 100)]
             
             elif tipo_alerta == "ambas_marcam":
+                # Calcular odds para ambas marcam
+                prob_am = jogo.get('confianca_ambas_marcam', 50)
+                odd_am = round(100 / prob_am, 2) if prob_am > 0 else 2.0
+                
                 tipo_emoji_am = "🤝" if jogo.get('tendencia_ambas_marcam') == "SIM" else "🚫"
                 resultado_emoji = "" if resultado == "GREEN" else "❌" if resultado == "RED" else ""
                 
                 textos_analise = [
-                    f"{tipo_emoji_am} AMBAS MARCAM: {jogo.get('tendencia_ambas_marcam', 'N/A')} {resultado_emoji}",
+                    f"{odd_am:.2f} {resultado_emoji}",
+                    f"○ AMBAS MARCAM: {jogo.get('tendencia_ambas_marcam', 'N/A')}",
                     f"Probabilidade SIM: {jogo.get('prob_ambas_marcam_sim', 0):.1f}% | NÃO: {jogo.get('prob_ambas_marcam_nao', 0):.1f}%",
-                    f"Confiança: {jogo.get('confianca_ambas_marcam', 0):.0f}% | Resultado: {jogo.get('home_goals', '?')} - {jogo.get('away_goals', '?')}",
+                    f"Confiança: {jogo.get('confianca_ambas_marcam', 0):.0f}%",
                 ]
                 
-                cores = [(255, 255, 255), (200, 200, 200), (200, 200, 200)]
+                cores = [(255, 255, 255), (200, 200, 200), (200, 200, 200), (100, 255, 100)]
             
             else:
                 textos_analise = [f"Resultado: {resultado}"]
@@ -3970,11 +4020,20 @@ class PosterGenerator:
             
             for i, (text, cor) in enumerate(zip(textos_analise, cores)):
                 try:
-                    bbox = draw.textbbox((0, 0), text, font=FONTE_ANALISE)
+                    # Primeira linha (odd) usa fonte maior
+                    if i == 0:
+                        fonte_usar = FONTE_ODD
+                    else:
+                        fonte_usar = FONTE_ANALISE
+                    
+                    bbox = draw.textbbox((0, 0), text, font=fonte_usar)
                     w = bbox[2] - bbox[0]
-                    draw.text(((LARGURA - w) // 2, y_analysis + i * 80), text, font=FONTE_ANALISE, fill=cor)
+                    draw.text(((LARGURA - w) // 2, y_analysis + i * 80), text, font=fonte_usar, fill=cor)
                 except:
-                    draw.text((PADDING + 120, y_analysis + i * 80), text, font=FONTE_ANALISE, fill=cor)
+                    if i == 0:
+                        draw.text((PADDING + 120, y_analysis + i * 80), text, font=FONTE_ODD, fill=cor)
+                    else:
+                        draw.text((PADDING + 120, y_analysis + i * 80), text, font=FONTE_ANALISE, fill=cor)
 
             y_pos += ALTURA_POR_JOGO
 
@@ -3991,7 +4050,7 @@ class PosterGenerator:
         img.save(buffer, format="PNG", optimize=True, quality=95)
         buffer.seek(0)
         
-        st.success(f"✅ Poster de resultados GERADO com {len(jogos_com_resultados)} jogos")
+        st.success(f"✅ Poster de resultados GERADO com {len(jogos_com_resultados)} jogos (com odds)")
         return buffer
     
     def _desenhar_escudo_quadrado(self, draw, img, logo_img, x, y, tamanho_quadrado, tamanho_escudo, team_name=""):
@@ -4081,123 +4140,6 @@ class PosterGenerator:
                          iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
             except:
                 draw.text((x + 70, y + 90), iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
-
-
-# =============================
-# NOVAS FUNÇÕES PARA ALERTAS NO FORMATO DA IMAGEM
-# =============================
-
-def gerar_alerta_formato_imagem(self, jogos: list, tipo_analise: str = "over_under") -> str:
-    """
-    Gera alerta no formato da imagem enviada:
-    21:30  
-    Palmeiras SP  
-    Fluminense RJ  
-    1.29 ✅  
-    
-    ○ Total → Mais de 1.5  
-    """
-    if not jogos:
-        return ""
-    
-    mensagem = ""
-    odds_acumuladas = 1.0
-    total_jogos = 0
-    
-    for jogo in jogos:
-        # Formatar hora (HH:MM)
-        if isinstance(jogo.get("hora"), datetime):
-            hora = jogo["hora"].strftime("%H:%M")
-        else:
-            # Tentar extrair hora de string ISO
-            try:
-                if isinstance(jogo.get("hora"), str):
-                    dt = datetime.fromisoformat(jogo["hora"].replace('Z', '+00:00'))
-                    hora_brasilia = dt.astimezone(timezone(timedelta(hours=-3)))
-                    hora = hora_brasilia.strftime("%H:%M")
-                else:
-                    hora = "21:30"  # fallback
-            except:
-                hora = "21:30"  # fallback
-        
-        # Nomes dos times (remover siglas de estados se existirem)
-        home = jogo.get('home', '').replace("SP", "").replace("RJ", "").replace("MG", "").replace("RS", "").replace("FB", "").replace("Porto Alegrense", "").strip()
-        away = jogo.get('away', '').replace("SP", "").replace("RJ", "").replace("MG", "").replace("RS", "").replace("FB", "").replace("Porto Alegrense", "").strip()
-        
-        # Limitar tamanho dos nomes se necessário
-        if len(home) > 15:
-            home = home[:12] + "..."
-        if len(away) > 15:
-            away = away[:12] + "..."
-        
-        # Calcular odd aproximada baseada na probabilidade
-        probabilidade = jogo.get('probabilidade', 50)
-        if probabilidade > 0:
-            # Converter probabilidade para odd (quanto maior a prob, menor a odd)
-            # Fórmula: odd = 100 / probabilidade
-            odd_aproximada = round(100 / probabilidade, 2)
-        else:
-            odd_aproximada = 1.50  # fallback
-        
-        # Arredondar para 2 casas decimais
-        odd_formatada = f"{odd_aproximada:.2f}"
-        
-        # Adicionar emoji de confirmação (✅) se a odd for boa (opcional)
-        # Na imagem original tem ✅ após a odd
-        odd_com_emoji = f"{odd_formatada} ✅"
-        
-        # Adicionar bloco do jogo no formato da imagem
-        mensagem += f"{hora}  \n"  # dois espaços para quebrar linha
-        mensagem += f"{home}  \n"
-        mensagem += f"{away}  \n"
-        mensagem += f"{odd_com_emoji}  \n\n"
-        
-        # Acumular odd para o total (multiplicativo)
-        odds_acumuladas *= odd_aproximada
-        total_jogos += 1
-        
-        # Adicionar linha "○ Total → Mais de 1.5" após cada jogo (como na imagem)
-        mensagem += f"○ Total → Mais de 1.5  \n\n"
-    
-    # Adicionar linha do total (formato da imagem)
-    if total_jogos > 0:
-        # Arredondar odd total para 2 casas
-        odd_total = round(odds_acumuladas, 2)
-        
-        mensagem += f"Total:  \n"
-        mensagem += f"{odd_total}"
-    
-    return mensagem
-
-def enviar_alerta_formato_imagem(self, jogos: list, tipo_analise: str = "over_under"):
-    """
-    Envia alerta no formato exato da imagem fornecida
-    """
-    if not jogos:
-        st.warning("⚠️ Nenhum jogo para enviar no formato imagem")
-        return False
-    
-    # Gerar mensagem no formato da imagem
-    mensagem = self.gerar_alerta_formato_imagem(jogos, tipo_analise)
-    
-    # Adicionar cabeçalho
-    data_atual = datetime.now().strftime("%d/%m/%Y")
-    mensagem_completa = f"📊 ALERTAS {data_atual}\n\n" + mensagem
-    
-    # Adicionar rodapé
-    mensagem_completa += f"\n\n🔥 ELITE MASTER SYSTEM"
-    
-    # Log para debug
-    st.code(mensagem_completa, language="text")
-    
-    # Enviar para o Telegram
-    if self.telegram_client.enviar_mensagem(mensagem_completa, self.config.TELEGRAM_CHAT_ID_ALT2):
-        st.success(f"📤 Alerta formato imagem enviado com {len(jogos)} jogos!")
-        return True
-    else:
-        st.error("❌ Falha ao enviar alerta formato imagem")
-        return False
-
 
 # =============================
 # SISTEMA PRINCIPAL
@@ -4542,8 +4484,6 @@ class SistemaAlertasFutebol:
                 st.info("🚨 Enviando alerta de imagem...")
                 if estilo_poster == "West Ham (Novo)":
                     self._enviar_alerta_westham_style(jogos_filtrados, tipo_analise, config_analise)
-                elif estilo_poster == "Formato Imagem (Simplificado)":
-                    self.enviar_alerta_formato_imagem(jogos_filtrados, tipo_analise)
                 else:
                     self._enviar_alerta_poster_original(jogos_filtrados, tipo_analise, config_analise)
             else:
@@ -5067,12 +5007,19 @@ class SistemaAlertasFutebol:
         home = fixture["homeTeam"]["name"]
         away = fixture["awayTeam"]["name"]
         
+        # Calcular odds para incluir na mensagem
         if tipo_alerta == "over_under":
+            prob = analise.get('probabilidade', 50)
+            odd_over = round(100 / prob, 2) if prob > 0 else 2.0
+            odd_under = round(100 / (100 - prob), 2) if (100 - prob) > 0 else 2.0
+            
             tipo_emoji = "🎯" if analise["tipo_aposta"] == "over" else "🛡️"
+            odd_principal = odd_over if analise["tipo_aposta"] == "over" else odd_under
             caption = (
                 f"<b>{tipo_emoji} ALERTA {analise['tipo_aposta'].upper()} DE GOLS</b>\n\n"
                 f"<b>🏠 {home}</b> vs <b>✈️ {away}</b>\n"
                 f"<b>📈 Tendência: {analise['tendencia']}</b>\n"
+                f"<b>💰 Odd: {odd_principal:.2f}</b>\n"
                 f"<b>⚽ Estimativa: {analise['estimativa']:.2f} gols</b>\n"
                 f"<b>🎯 Probabilidade: {analise['probabilidade']:.0f}%</b>\n"
                 f"<b>🔍 Confiança: {analise['confianca']:.0f}%</b>\n\n"
@@ -5080,6 +5027,9 @@ class SistemaAlertasFutebol:
             )
         elif tipo_alerta == "favorito" and 'vitoria' in analise['detalhes']:
             v = analise['detalhes']['vitoria']
+            prob_fav = max(v['home_win'], v['away_win'], v['draw'])
+            odd_fav = round(100 / prob_fav, 2) if prob_fav > 0 else 2.0
+            
             favorito_emoji = "🏠" if v['favorito'] == "home" else "✈️" if v['favorito'] == "away" else "🤝"
             favorito_text = home if v['favorito'] == "home" else away if v['favorito'] == "away" else "EMPATE"
             
@@ -5087,6 +5037,7 @@ class SistemaAlertasFutebol:
                 f"<b>{favorito_emoji} ALERTA DE FAVORITO</b>\n\n"
                 f"<b>🏠 {home}</b> vs <b>✈️ {away}</b>\n"
                 f"<b>🏆 Favorito: {favorito_text}</b>\n"
+                f"<b>💰 Odd: {odd_fav:.2f}</b>\n"
                 f"<b>📊 Probabilidade Casa: {v['home_win']:.1f}%</b>\n"
                 f"<b>📊 Probabilidade Fora: {v['away_win']:.1f}%</b>\n"
                 f"<b>📊 Probabilidade Empate: {v['draw']:.1f}%</b>\n"
@@ -5095,12 +5046,15 @@ class SistemaAlertasFutebol:
             )
         elif tipo_alerta == "gols_ht" and 'gols_ht' in analise['detalhes']:
             ht = analise['detalhes']['gols_ht']
+            odd_ht = round(100 / ht['confianca_ht'], 2) if ht['confianca_ht'] > 0 else 2.0
+            
             tipo_emoji_ht = "⚡" if "OVER" in ht['tendencia_ht'] else "🛡️"
             
             caption = (
                 f"<b>{tipo_emoji_ht} ALERTA DE GOLS HT</b>\n\n"
                 f"<b>🏠 {home}</b> vs <b>✈️ {away}</b>\n"
                 f"<b>⏰ Tendência HT: {ht['tendencia_ht']}</b>\n"
+                f"<b>💰 Odd: {odd_ht:.2f}</b>\n"
                 f"<b>⚽ Estimativa HT: {ht['estimativa_total_ht']:.2f} gols</b>\n"
                 f"<b>🎯 OVER 0.5 HT: {ht['over_05_ht']:.0f}%</b>\n"
                 f"<b>🎯 OVER 1.5 HT: {ht['over_15_ht']:.0f}%</b>\n"
@@ -5109,12 +5063,15 @@ class SistemaAlertasFutebol:
             )
         elif tipo_alerta == "ambas_marcam" and 'ambas_marcam' in analise['detalhes']:
             am = analise['detalhes']['ambas_marcam']
+            odd_am = round(100 / am['confianca_ambas_marcam'], 2) if am['confianca_ambas_marcam'] > 0 else 2.0
+            
             tipo_emoji_am = "🤝" if am['tendencia_ambas_marcam'] == "SIM" else "🚫"
             
             caption = (
                 f"<b>{tipo_emoji_am} ALERTA AMBAS MARCAM</b>\n\n"
                 f"<b>🏠 {home}</b> vs <b>✈️ {away}</b>\n"
                 f"<b>🤝 Tendência: {am['tendencia_ambas_marcam']}</b>\n"
+                f"<b>💰 Odd: {odd_am:.2f}</b>\n"
                 f"<b>📊 Probabilidade SIM: {am['sim']:.1f}%</b>\n"
                 f"<b>📊 Probabilidade NÃO: {am['nao']:.1f}%</b>\n"
                 f"<b>🔍 Confiança: {am['confianca_ambas_marcam']:.1f}%</b>\n\n"
@@ -5147,19 +5104,23 @@ class SistemaAlertasFutebol:
             
             if tipo_alerta == "over_under":
                 draw.text((50, 150), f"Tendência: {analise['tendencia']}", font=fonte, fill=(100, 200, 255))
-                draw.text((50, 200), f"Confiança: {analise['confianca']:.0f}%", font=fonte, fill=(100, 255, 100))
+                draw.text((50, 200), f"Odd: {odd_principal:.2f}", font=fonte, fill=(255, 215, 0))
+                draw.text((50, 250), f"Confiança: {analise['confianca']:.0f}%", font=fonte, fill=(100, 255, 100))
             elif tipo_alerta == "favorito" and 'vitoria' in analise['detalhes']:
                 v = analise['detalhes']['vitoria']
                 draw.text((50, 150), f"Favorito: {home if v['favorito']=='home' else away if v['favorito']=='away' else 'EMPATE'}", font=fonte, fill=(255, 193, 7))
-                draw.text((50, 200), f"Confiança: {v['confianca_vitoria']:.1f}%", font=fonte, fill=(100, 255, 100))
+                draw.text((50, 200), f"Odd: {odd_fav:.2f}", font=fonte, fill=(255, 215, 0))
+                draw.text((50, 250), f"Confiança: {v['confianca_vitoria']:.1f}%", font=fonte, fill=(100, 255, 100))
             elif tipo_alerta == "gols_ht" and 'gols_ht' in analise['detalhes']:
                 ht = analise['detalhes']['gols_ht']
                 draw.text((50, 150), f"HT: {ht['tendencia_ht']}", font=fonte, fill=(100, 200, 255))
-                draw.text((50, 200), f"Confiança: {ht['confianca_ht']:.1f}%", font=fonte, fill=(100, 255, 100))
+                draw.text((50, 200), f"Odd: {odd_ht:.2f}", font=fonte, fill=(255, 215, 0))
+                draw.text((50, 250), f"Confiança: {ht['confianca_ht']:.1f}%", font=fonte, fill=(100, 255, 100))
             elif tipo_alerta == "ambas_marcam" and 'ambas_marcam' in analise['detalhes']:
                 am = analise['detalhes']['ambas_marcam']
                 draw.text((50, 150), f"Tendência: {am['tendencia_ambas_marcam']}", font=fonte, fill=(100, 200, 255))
-                draw.text((50, 200), f"Confiança: {am['confianca_ambas_marcam']:.1f}%", font=fonte, fill=(100, 255, 100))
+                draw.text((50, 200), f"Odd: {odd_am:.2f}", font=fonte, fill=(255, 215, 0))
+                draw.text((50, 250), f"Confiança: {am['confianca_ambas_marcam']:.1f}%", font=fonte, fill=(100, 255, 100))
             
             buffer = io.BytesIO()
             img.save(buffer, format="PNG")
@@ -5314,41 +5275,55 @@ class SistemaAlertasFutebol:
                 
                 if tipo_alerta == "over_under":
                     tipo_emoji = "📈" if jogo.get('tipo_aposta') == "over" else "📉"
+                    prob = jogo.get('probabilidade', 50)
+                    odd_over = round(100 / prob, 2) if prob > 0 else 2.0
+                    odd_under = round(100 / (100 - prob), 2) if (100 - prob) > 0 else 2.0
+                    odd_principal = odd_over if jogo.get('tipo_aposta') == "over" else odd_under
+                    
                     msg += (
                         f"{idx}. {tipo_emoji} <b>{jogo['home']} vs {jogo['away']}</b>\n"
                         f"   🕒 {hora_format} BRT | {jogo['liga']}\n"
-                        f"   {jogo['tendencia']} | ⚽ {jogo['estimativa']:.2f} | "
+                        f"   {jogo['tendencia']} | 💰 Odd: {odd_principal:.2f} | "
                         f"🎯 {jogo['probabilidade']:.0f}% | 💯 {jogo['confianca']:.0f}%\n\n"
                     )
                 elif tipo_alerta == "favorito":
+                    prob_fav = jogo.get('confianca_vitoria', 50)
+                    odd_fav = round(100 / prob_fav, 2) if prob_fav > 0 else 2.0
+                    
                     favorito_emoji = "🏠" if jogo.get('favorito') == "home" else "✈️" if jogo.get('favorito') == "away" else "🤝"
                     favorito_text = jogo['home'] if jogo.get('favorito') == "home" else jogo['away'] if jogo.get('favorito') == "away" else "EMPATE"
                     msg += (
                         f"{idx}. {favorito_emoji} <b>{jogo['home']} vs {jogo['away']}</b>\n"
                         f"   🕒 {hora_format} BRT | {jogo['liga']}\n"
-                        f"   🏆 Favorito: {favorito_text} | "
+                        f"   🏆 Favorito: {favorito_text} | 💰 Odd: {odd_fav:.2f} | "
                         f"💯 {jogo.get('confianca_vitoria', 0):.0f}%\n"
                         f"   📊 Casa: {jogo.get('prob_home_win', 0):.1f}% | "
                         f"Fora: {jogo.get('prob_away_win', 0):.1f}% | "
                         f"Empate: {jogo.get('prob_draw', 0):.1f}%\n\n"
                     )
                 elif tipo_alerta == "gols_ht":
+                    prob_ht = jogo.get('confianca_ht', 50)
+                    odd_ht = round(100 / prob_ht, 2) if prob_ht > 0 else 2.0
+                    
                     tipo_emoji_ht = "⚡" if "OVER" in jogo.get('tendencia_ht', '') else "🛡️"
                     msg += (
                         f"{idx}. {tipo_emoji_ht} <b>{jogo['home']} vs {jogo['away']}</b>\n"
                         f"   🕒 {hora_format} BRT | {jogo['liga']}\n"
-                        f"   ⏰ {jogo.get('tendencia_ht', 'N/A')} | "
+                        f"   ⏰ {jogo.get('tendencia_ht', 'N/A')} | 💰 Odd: {odd_ht:.2f} | "
                         f"⚽ {jogo.get('estimativa_total_ht', 0):.2f} gols | "
                         f"💯 {jogo.get('confianca_ht', 0):.0f}%\n"
                         f"   🎯 OVER 0.5: {jogo.get('detalhes', {}).get('gols_ht', {}).get('over_05_ht', 0):.0f}% | "
                         f"OVER 1.5: {jogo.get('detalhes', {}).get('gols_ht', {}).get('over_15_ht', 0):.0f}%\n\n"
                     )
                 elif tipo_alerta == "ambas_marcam":
+                    prob_am = jogo.get('confianca_ambas_marcam', 50)
+                    odd_am = round(100 / prob_am, 2) if prob_am > 0 else 2.0
+                    
                     tipo_emoji_am = "🤝" if jogo.get('tendencia_ambas_marcam') == "SIM" else "🚫"
                     msg += (
                         f"{idx}. {tipo_emoji_am} <b>{jogo['home']} vs {jogo['away']}</b>\n"
                         f"   🕒 {hora_format} BRT | {jogo['liga']}\n"
-                        f"   🤝 {jogo.get('tendencia_ambas_marcam', 'N/A')} | "
+                        f"   🤝 {jogo.get('tendencia_ambas_marcam', 'N/A')} | 💰 Odd: {odd_am:.2f} | "
                         f"💯 {jogo.get('confianca_ambas_marcam', 0):.0f}%\n"
                         f"   📊 SIM: {jogo.get('prob_ambas_marcam_sim', 0):.1f}% | "
                         f"NÃO: {jogo.get('prob_ambas_marcam_nao', 0):.1f}%\n\n"
@@ -5404,7 +5379,7 @@ class SistemaAlertasFutebol:
         DataStorage.salvar_alertas_top(alertas_top)
     
     def _enviar_alerta_westham_style(self, jogos_conf: list, tipo_analise: str, config_analise: dict):
-        """Envia alerta no estilo West Ham"""
+        """Envia alerta no estilo West Ham (agora com odds incluídas)"""
         if not jogos_conf:
             st.warning("⚠️ Nenhum jogo para gerar poster")
             return
@@ -5511,7 +5486,7 @@ class SistemaAlertasFutebol:
             self.telegram_client.enviar_mensagem(msg)
     
     def _enviar_alerta_poster_original(self, jogos_conf: list, tipo_analise: str, config_analise: dict):
-        """Envia alerta com poster no estilo original"""
+        """Envia alerta com poster no estilo original (mantido para compatibilidade)"""
         if not jogos_conf:
             return
         
@@ -5525,27 +5500,36 @@ class SistemaAlertasFutebol:
                 if over_jogos:
                     msg += f"📈 <b>OVER ({len(over_jogos)} jogos):</b>\n\n"
                     for j in over_jogos:
+                        prob = j.get('probabilidade', 50)
+                        odd_over = round(100 / prob, 2) if prob > 0 else 2.0
+                        
                         hora_format = j["hora"].strftime("%H:%M") if isinstance(j["hora"], datetime) else str(j["hora"])
                         msg += (
                             f"🏟️ {j['home']} vs {j['away']}\n"
                             f"🕒 {hora_format} BRT | {j['liga']}\n"
-                            f"📈 {j['tendencia']} | ⚽ {j['estimativa']:.2f} | 🎯 {j['probabilidade']:.0f}% | 💯 {j['confianca']:.0f}%\n\n"
+                            f"📈 {j['tendencia']} | 💰 Odd: {odd_over:.2f} | ⚽ {j['estimativa']:.2f} | 🎯 {j['probabilidade']:.0f}% | 💯 {j['confianca']:.0f}%\n\n"
                         )
                 
                 if under_jogos:
                     msg += f"📉 <b>UNDER ({len(under_jogos)} jogos):</b>\n\n"
                     for j in under_jogos:
+                        prob = j.get('probabilidade', 50)
+                        odd_under = round(100 / (100 - prob), 2) if (100 - prob) > 0 else 2.0
+                        
                         hora_format = j["hora"].strftime("%H:%M") if isinstance(j["hora"], datetime) else str(j["hora"])
                         msg += (
                             f"🏟️ {j['home']} vs {j['away']}\n"
                             f"🕒 {hora_format} BRT | {j['liga']}\n"
-                            f"📉 {j['tendencia']} | ⚽ {j['estimativa']:.2f} | 🎯 {j['probabilidade']:.0f}% | 💯 {j['confianca']:.0f}%\n\n"
+                            f"📉 {j['tendencia']} | 💰 Odd: {odd_under:.2f} | ⚽ {j['estimativa']:.2f} | 🎯 {j['probabilidade']:.0f}% | 💯 {j['confianca']:.0f}%\n\n"
                         )
             
             elif tipo_analise == "Favorito (Vitória)":
                 msg = f"🏆 Jogos Favoritos (Estilo Original):\n\n"
                 
                 for j in jogos_conf:
+                    prob_fav = j.get('confianca_vitoria', 50)
+                    odd_fav = round(100 / prob_fav, 2) if prob_fav > 0 else 2.0
+                    
                     hora_format = j["hora"].strftime("%H:%M") if isinstance(j["hora"], datetime) else str(j["hora"])
                     favorito_emoji = "🏠" if j.get('favorito') == "home" else "✈️" if j.get('favorito') == "away" else "🤝"
                     favorito_text = j['home'] if j.get('favorito') == "home" else j['away'] if j.get('favorito') == "away" else "EMPATE"
@@ -5553,7 +5537,7 @@ class SistemaAlertasFutebol:
                     msg += (
                         f"{favorito_emoji} {j['home']} vs {j['away']}\n"
                         f"🕒 {hora_format} BRT | {j['liga']}\n"
-                        f"🏆 Favorito: {favorito_text} | 💯 {j.get('confianca_vitoria', 0):.1f}%\n"
+                        f"🏆 Favorito: {favorito_text} | 💰 Odd: {odd_fav:.2f} | 💯 {j.get('confianca_vitoria', 0):.1f}%\n"
                         f"📊 Casa: {j.get('prob_home_win', 0):.1f}% | "
                         f"Fora: {j.get('prob_away_win', 0):.1f}% | "
                         f"Empate: {j.get('prob_draw', 0):.1f}%\n\n"
@@ -5563,13 +5547,16 @@ class SistemaAlertasFutebol:
                 msg = f"⏰ Jogos Gols HT (Estilo Original):\n\n"
                 
                 for j in jogos_conf:
+                    prob_ht = j.get('confianca_ht', 50)
+                    odd_ht = round(100 / prob_ht, 2) if prob_ht > 0 else 2.0
+                    
                     hora_format = j["hora"].strftime("%H:%M") if isinstance(j["hora"], datetime) else str(j["hora"])
                     tipo_emoji_ht = "⚡" if "OVER" in j.get('tendencia_ht', '') else "🛡️"
                     
                     msg += (
                         f"{tipo_emoji_ht} {j['home']} vs {j['away']}\n"
                         f"🕒 {hora_format} BRT | {j['liga']}\n"
-                        f"⏰ {j.get('tendencia_ht', 'N/A')} | ⚽ {j.get('estimativa_total_ht', 0):.2f} gols | "
+                        f"⏰ {j.get('tendencia_ht', 'N/A')} | 💰 Odd: {odd_ht:.2f} | ⚽ {j.get('estimativa_total_ht', 0):.2f} gols | "
                         f"💯 {j.get('confianca_ht', 0):.0f}%\n"
                         f"🎯 OVER 0.5: {j.get('detalhes', {}).get('gols_ht', {}).get('over_05_ht', 0):.0f}% | "
                         f"OVER 1.5: {j.get('detalhes', {}).get('gols_ht', {}).get('over_15_ht', 0):.0f}%\n\n"
@@ -5579,13 +5566,16 @@ class SistemaAlertasFutebol:
                 msg = f"🤝 Jogos Ambas Marcam (Estilo Original):\n\n"
                 
                 for j in jogos_conf:
+                    prob_am = j.get('confianca_ambas_marcam', 50)
+                    odd_am = round(100 / prob_am, 2) if prob_am > 0 else 2.0
+                    
                     hora_format = j["hora"].strftime("%H:%M") if isinstance(j["hora"], datetime) else str(j["hora"])
                     tipo_emoji_am = "🤝" if j.get('tendencia_ambas_marcam') == "SIM" else "🚫"
                     
                     msg += (
                         f"{tipo_emoji_am} {j['home']} vs {j['away']}\n"
                         f"🕒 {hora_format} BRT | {j['liga']}\n"
-                        f"🤝 {j.get('tendencia_ambas_marcam', 'N/A')} | "
+                        f"🤝 {j.get('tendencia_ambas_marcam', 'N/A')} | 💰 Odd: {odd_am:.2f} | "
                         f"💯 {j.get('confianca_ambas_marcam', 0):.0f}%\n"
                         f"📊 SIM: {j.get('prob_ambas_marcam_sim', 0):.1f}% | "
                         f"NÃO: {j.get('prob_ambas_marcam_nao', 0):.1f}%\n\n"
@@ -5826,11 +5816,7 @@ def main():
         st.markdown("----")
         st.header("Configurações Gerais")
         top_n = st.selectbox("📊 Jogos no Top", [3, 5, 10], index=0)
-        
-        # ESTILO DO POSTER ATUALIZADO COM NOVA OPÇÃO
-        estilo_poster = st.selectbox("🎨 Estilo do Poster", 
-                                    ["West Ham (Novo)", "Elite Master (Original)", "Formato Imagem (Simplificado)"], 
-                                    index=2)  # Default para o novo formato
+        estilo_poster = st.selectbox("🎨 Estilo do Poster", ["West Ham (Novo)", "Elite Master (Original)"], index=0)
         
         # NOVO: Opção para ativar o filtro avançado
         st.markdown("----")
@@ -5862,7 +5848,6 @@ def main():
             st.info(f"Confiança Mínima: {config_analise.get('min_conf_am', 60)}%")
             st.info(f"Filtro Ambas Marcam: {config_analise.get('filtro_am', 'Todos')}")
         
-        st.info(f"Estilo Poster: {estilo_poster}")
         st.info(f"Filtro Avançado: {'✅ ATIVADO' if aplicar_filtro_avancado else '❌ DESATIVADO'}")
         st.info(f"Formato Top Jogos: {formato_top_jogos}")
         if alerta_conferencia_auto:
