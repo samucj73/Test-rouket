@@ -37,11 +37,11 @@ class ConfigManager:
     ALERTAS_PATH = "alertas.json"
     ALERTAS_FAVORITOS_PATH = "alertas_favoritos.json"
     ALERTAS_GOLS_HT_PATH = "alertas_gols_ht.json"
-    ALERTAS_AMBAS_MARCAM_PATH = "alertas_ambas_marcam.json"  # NOVO
+    ALERTAS_AMBAS_MARCAM_PATH = "alertas_ambas_marcam.json"
     RESULTADOS_PATH = "resultados.json"
     RESULTADOS_FAVORITOS_PATH = "resultados_favoritos.json"
     RESULTADOS_GOLS_HT_PATH = "resultados_gols_ht.json"
-    RESULTADOS_AMBAS_MARCAM_PATH = "resultados_ambas_marcam.json"  # NOVO
+    RESULTADOS_AMBAS_MARCAM_PATH = "resultados_ambas_marcam.json"
     CACHE_JOGOS = "cache_jogos.json"
     CACHE_CLASSIFICACAO = "cache_classificacao.json"
     CACHE_TIMEOUT = 3600
@@ -530,7 +530,7 @@ class Jogo:
         self.resultado = None
         self.resultado_favorito = None
         self.resultado_ht = None
-        self.resultado_ambas_marcam = None  # NOVO
+        self.resultado_ambas_marcam = None
         self.conferido = False
         
         # Para análise de favoritos
@@ -546,10 +546,10 @@ class Jogo:
         self.estimativa_total_ht = 0.0
         
         # Para análise de ambas marcam
-        self.tendencia_ambas_marcam = ""  # NOVO
-        self.confianca_ambas_marcam = 0.0  # NOVO
-        self.prob_ambas_marcam_sim = 0.0  # NOVO
-        self.prob_ambas_marcam_nao = 0.0  # NOVO
+        self.tendencia_ambas_marcam = ""
+        self.confianca_ambas_marcam = 0.0
+        self.prob_ambas_marcam_sim = 0.0
+        self.prob_ambas_marcam_nao = 0.0
     
     def validar_dados(self) -> bool:
         """Valida se os dados do jogo são válidos"""
@@ -557,7 +557,7 @@ class Jogo:
         return all(required_fields)
     
     def get_data_hora_brasilia(self):
-        """Retorna data e hora no fuso de Brasília"""
+        """Retorna data e hora no fuso de Brasília no formato brasileiro"""
         if not self.utc_date:
             return "Data inválida", "Hora inválida"
         
@@ -573,10 +573,33 @@ class Jogo:
             fuso_brasilia = timezone(timedelta(hours=-3))
             data_brasilia = data_utc.astimezone(fuso_brasilia)
             
+            # Formato brasileiro: dd/mm/aaaa
             return data_brasilia.strftime("%d/%m/%Y"), data_brasilia.strftime("%H:%M")
         except ValueError as e:
             logging.error(f"Erro ao formatar data {self.utc_date}: {e}")
             return "Data inválida", "Hora inválida"
+    
+    def get_data_brasilia_str(self):
+        """Retorna apenas a data no formato brasileiro"""
+        if not self.utc_date:
+            return "Data inválida"
+        
+        try:
+            if self.utc_date.endswith('Z'):
+                data_utc = datetime.fromisoformat(self.utc_date.replace('Z', '+00:00'))
+            else:
+                data_utc = datetime.fromisoformat(self.utc_date)
+            
+            if data_utc.tzinfo is None:
+                data_utc = data_utc.replace(tzinfo=timezone.utc)
+            
+            fuso_brasilia = timezone(timedelta(hours=-3))
+            data_brasilia = data_utc.astimezone(fuso_brasilia)
+            
+            return data_brasilia.strftime("%d/%m/%Y")
+        except Exception as e:
+            logging.error(f"Erro ao converter data {self.utc_date}: {e}")
+            return "Data inválida"
     
     def get_hora_brasilia_datetime(self):
         """Retorna datetime no fuso de Brasília"""
@@ -738,7 +761,7 @@ class Jogo:
             "ht_away_goals": self.ht_away_goals,
             "resultado_favorito": self.resultado_favorito,
             "resultado_ht": self.resultado_ht,
-            "resultado_ambas_marcam": self.resultado_ambas_marcam  # NOVO
+            "resultado_ambas_marcam": self.resultado_ambas_marcam
         }
         
         # Adicionar dados de favoritos se disponíveis
@@ -1354,7 +1377,8 @@ class ResultadosTopAlertas:
     def conferir_resultados_top_alertas(self, data_selecionada):
         """Conferir resultados apenas dos alertas TOP salvos - SÓ ENVIA QUANDO TODOS ENCERRARAM (UMA ÚNICA VEZ)"""
         hoje = data_selecionada.strftime("%Y-%m-%d")
-        st.subheader(f"🏆 Conferindo Resultados TOP Alertas - {data_selecionada.strftime('%d/%m/%Y')}")
+        data_br = data_selecionada.strftime("%d/%m/%Y")
+        st.subheader(f"🏆 Conferindo Resultados TOP Alertas - {data_br}")
         
         # Carregar alertas TOP
         alertas_top = DataStorage.carregar_alertas_top()
@@ -1366,7 +1390,7 @@ class ResultadosTopAlertas:
         alertas_por_grupo = self._agrupar_alertas_top_por_data_tipo(alertas_top, hoje)
         
         if not alertas_por_grupo:
-            st.warning(f"⚠️ Nenhum alerta TOP encontrado para {data_selecionada.strftime('%d/%m/%Y')}")
+            st.warning(f"⚠️ Nenhum alerta TOP encontrado para {data_br}")
             return
         
         total_grupos = sum(len(grupos) for grupos in alertas_por_grupo.values())
@@ -2007,6 +2031,9 @@ class ResultadosTopAlertas:
 # =============================
 # NOVA CLASSE: AlertaCompleto (ALL-IN-ONE) - VERSÃO CORRIGIDA
 # =============================
+# =============================
+# NOVA CLASSE: AlertaCompleto (ALL-IN-ONE) - VERSÃO CORRIGIDA
+# =============================
 
 class AlertaCompleto:
     """Representa um alerta completo com todas as análises (Over/Under, Favorito, Ambas Marcam)"""
@@ -2283,16 +2310,19 @@ class GerenciadorAlertasCompletos:
 
             # Data e hora
             if isinstance(jogo["hora"], datetime):
-                data_text = jogo["hora"].strftime("%d.%m.%Y %H:%M")
+                # Formato brasileiro: dd/mm/aaaa
+                data_text = jogo["hora"].strftime("%d/%m/%Y")
+                hora_text = jogo["hora"].strftime("%H:%M")
+                data_hora_text = f"{data_text} {hora_text}"
             else:
-                data_text = str(jogo["hora"])
+                data_hora_text = str(jogo["hora"])
 
             try:
-                data_bbox = draw.textbbox((0, 0), data_text, font=FONTE_INFO)
+                data_bbox = draw.textbbox((0, 0), data_hora_text, font=FONTE_INFO)
                 data_w = data_bbox[2] - data_bbox[0]
-                draw.text(((LARGURA - data_w) // 2, y0 + 130), data_text, font=FONTE_INFO, fill=(150, 200, 255))
+                draw.text(((LARGURA - data_w) // 2, y0 + 130), data_hora_text, font=FONTE_INFO, fill=(150, 200, 255))
             except:
-                draw.text((LARGURA//2 - 150, y0 + 130), data_text, font=FONTE_INFO, fill=(150, 200, 255))
+                draw.text((LARGURA//2 - 150, y0 + 130), data_hora_text, font=FONTE_INFO, fill=(150, 200, 255))
 
             # Escudos
             TAMANHO_ESCUDO = 180
@@ -2384,8 +2414,6 @@ class GerenciadorAlertasCompletos:
             analise_am = jogo.get('analise_ambas_marcam', {})
             tendencia_am = analise_am.get('tendencia_ambas_marcam', 'N/A')
             conf_am = analise_am.get('confianca_ambas_marcam', 0)
-            prob_sim = analise_am.get('prob_ambas_marcam_sim', 0)
-            prob_nao = analise_am.get('prob_ambas_marcam_nao', 0)
             cor_am = (155, 89, 182)
             
             draw.text((x0 + 80, y_analysis + 200), 
@@ -2721,7 +2749,8 @@ class GerenciadorAlertasCompletos:
     def conferir_resultados_completos(self, data_selecionada):
         """Conferir resultados dos alertas completos e enviar em lotes de 3 jogos"""
         hoje = data_selecionada.strftime("%Y-%m-%d")
-        st.subheader(f"🏆 Conferindo Resultados Completos - {data_selecionada.strftime('%d/%m/%Y')}")
+        data_br = data_selecionada.strftime("%d/%m/%Y")
+        st.subheader(f"🏆 Conferindo Resultados Completos - {data_br}")
 
         alertas = self.carregar_alertas()
         if not alertas:
@@ -2732,7 +2761,7 @@ class GerenciadorAlertasCompletos:
         alertas_hoje = {k: v for k, v in alertas.items() if v.get("data_busca") == hoje and not v.get("conferido", False)}
 
         if not alertas_hoje:
-            st.info(f"ℹ️ Nenhum alerta pendente para {hoje}")
+            st.info(f"ℹ️ Nenhum alerta pendente para {data_br}")
             return
 
         st.info(f"🔍 Encontrados {len(alertas_hoje)} alertas completos para conferência")
@@ -3233,7 +3262,7 @@ class PosterGenerator:
             return ImageFont.load_default()
     
     def gerar_poster_westham_style(self, jogos: list, titulo: str = " ALERTA DE GOLS", tipo_alerta: str = "over_under") -> io.BytesIO:
-        """Gera poster no estilo West Ham com odds posicionadas ao lado do escudo visitante"""
+        """Gera poster no estilo West Ham com odds no canto superior esquerdo e data no formato brasileiro"""
         LARGURA = 2000
         ALTURA_TOPO = 270
         ALTURA_POR_JOGO = 830
@@ -3253,7 +3282,7 @@ class PosterGenerator:
         FONTE_DETALHES = self.criar_fonte(50)
         FONTE_ANALISE = self.criar_fonte(50)
         FONTE_ESTATISTICAS = self.criar_fonte(35)
-        FONTE_ODD = self.criar_fonte(60)  # Fonte para odds
+        FONTE_ODD = self.criar_fonte(70)  # Fonte maior para odds
 
         try:
             titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
@@ -3293,18 +3322,19 @@ class PosterGenerator:
                 draw.text((LARGURA//2 - 150, y0 + 40), liga_text, font=FONTE_SUBTITULO, fill=(200, 200, 200))
 
             if isinstance(jogo["hora"], datetime):
+                # Formato brasileiro: dd/mm/aaaa
                 data_text = jogo["hora"].strftime("%d/%m/%Y")
                 hora_text = jogo["hora"].strftime("%H:%M")
+                data_hora_text = f"{data_text} {hora_text}"
             else:
-                data_text = str(jogo["hora"])
-                hora_text = ""
+                data_hora_text = str(jogo["hora"])
 
             try:
-                data_bbox = draw.textbbox((0, 0), data_text, font=FONTE_INFO)
+                data_bbox = draw.textbbox((0, 0), data_hora_text, font=FONTE_INFO)
                 data_w = data_bbox[2] - data_bbox[0]
-                draw.text(((LARGURA - data_w) // 2, y0 + 130), data_text, font=FONTE_INFO, fill=(150, 200, 255))
+                draw.text(((LARGURA - data_w) // 2, y0 + 130), data_hora_text, font=FONTE_INFO, fill=(150, 200, 255))
             except:
-                draw.text((LARGURA//2 - 150, y0 + 130), data_text, font=FONTE_INFO, fill=(150, 200, 255))
+                draw.text((LARGURA//2 - 150, y0 + 130), data_hora_text, font=FONTE_INFO, fill=(150, 200, 255))
 
             TAMANHO_ESCUDO = 220
             TAMANHO_QUADRADO = 230
@@ -3381,9 +3411,7 @@ class PosterGenerator:
                 vs_x = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS//2 - 30
                 draw.text((vs_x, y_escudos + TAMANHO_QUADRADO//2 - 30), "VS", font=FONTE_VS, fill=(255, 215, 0))
 
-            # ===== NOVO POSICIONAMENTO DAS ODDS =====
-            # Posicionar odds ao lado do escudo visitante (acima do nome do time)
-            
+            # ===== NOVO POSICIONAMENTO - CANTO SUPERIOR ESQUERDO =====
             # Calcular odd principal baseado no tipo de alerta
             if tipo_alerta == "over_under":
                 prob = jogo.get('probabilidade', 50)
@@ -3419,10 +3447,15 @@ class PosterGenerator:
             # Texto completo da odd
             odd_text = f"{simbolo} {odd_principal:.2f}"
             
-            # Posicionar a odd ao lado direito do escudo visitante
-            # x_away_odd = x_away + TAMANHO_QUADRADO + 50 (50 pixels de margem)
-            odd_x = x_away + TAMANHO_QUADRADO + 50
-            odd_y = y_escudos + 80  # Posicionado acima do nome do time
+            # ===== POSICIONAMENTO NO CANTO SUPERIOR ESQUERDO =====
+            # Margem do canto superior esquerdo do retângulo do jogo
+            margem_esquerda = 40  # Distância da borda esquerda
+            margem_topo = 50      # Distância do topo
+            
+            # Posicionar a odd no CANTO SUPERIOR ESQUERDO do retângulo do jogo
+            # x0 é a borda esquerda do retângulo do jogo
+            odd_x = x0 + margem_esquerda
+            odd_y = y0 + margem_topo
             
             try:
                 # Desenhar fundo semi-transparente para a odd
@@ -3439,14 +3472,14 @@ class PosterGenerator:
                 # Criar overlay escuro
                 overlay = Image.new('RGBA', img.size, (0,0,0,0))
                 overlay_draw = ImageDraw.Draw(overlay)
-                overlay_draw.rectangle([fundo_x0, fundo_y0, fundo_x1, fundo_y1], fill=(20, 20, 30, 200))
+                overlay_draw.rectangle([fundo_x0, fundo_y0, fundo_x1, fundo_y1], fill=(20, 20, 30, 230))
                 img.paste(overlay, (0,0), overlay)
                 
                 # Desenhar a odd
                 draw.text((odd_x, odd_y), odd_text, font=FONTE_ODD, fill=cor_odd)
                 
                 # Desenhar borda dourada fina ao redor da odd
-                draw.rectangle([fundo_x0, fundo_y0, fundo_x1, fundo_y1], outline=(255, 215, 0), width=2)
+                draw.rectangle([fundo_x0, fundo_y0, fundo_x1, fundo_y1], outline=(255, 215, 0), width=3)
                 
             except Exception as e:
                 logging.error(f"Erro ao desenhar odd: {e}")
@@ -3457,7 +3490,7 @@ class PosterGenerator:
             y_analysis = y_escudos + TAMANHO_QUADRADO + 150
             draw.line([(x0 + 80, y_analysis - 20), (x1 - 80, y_analysis - 20)], fill=(100, 130, 160), width=3)
             
-            # Texto de análise principal (agora mais abaixo, já que a odd está acima)
+            # Texto de análise principal
             if tipo_alerta == "over_under":
                 textos_analise = [
                     f"○ Total → {jogo['tendencia']}",
@@ -3513,11 +3546,11 @@ class PosterGenerator:
         img.save(buffer, format="PNG", optimize=True, quality=95)
         buffer.seek(0)
         
-        st.success(f"✅ Poster estilo West Ham GERADO com {len(jogos)} jogos (odds ao lado do escudo visitante)")
+        st.success(f"✅ Poster estilo West Ham GERADO com {len(jogos)} jogos (odds no canto superior esquerdo)")
         return buffer
     
     def gerar_poster_resultados(self, jogos_com_resultados: list, tipo_alerta: str = "over_under") -> io.BytesIO:
-        """Gera poster de resultados no estilo West Ham com GREEN/RED destacado"""
+        """Gera poster de resultados no estilo West Ham com GREEN/RED destacado e data no formato brasileiro"""
         LARGURA = 2000
         ALTURA_TOPO = 330
         ALTURA_POR_JOGO = 800 # Aumentei um pouco para acomodar o badge GREEN/RED
@@ -3659,19 +3692,6 @@ class PosterGenerator:
                 draw.text(((LARGURA - liga_w) // 2, y0 + 40), liga_text, font=FONTE_SUBTITULO, fill=(200, 200, 200))
             except:
                 draw.text((LARGURA//2 - 150, y0 + 40), liga_text, font=FONTE_SUBTITULO, fill=(200, 200, 200))
-
-            # Data
-            if isinstance(jogo["hora"], datetime):
-                data_text = jogo["hora"].strftime("%d/%m/%Y %H:%M")
-            else:
-                data_text = str(jogo["hora"])
-
-            try:
-                data_bbox = draw.textbbox((0, 0), data_text, font=FONTE_INFO)
-                data_w = data_bbox[2] - data_bbox[0]
-                draw.text(((LARGURA - data_w) // 2, y0 + 120), data_text, font=FONTE_INFO, fill=(150, 200, 255))
-            except:
-                draw.text((LARGURA//2 - 150, y0 + 120), data_text, font=FONTE_INFO, fill=(150, 200, 255))
 
             # Times e escudos
             TAMANHO_ESCUDO = 200
@@ -3973,6 +3993,7 @@ class SistemaAlertasFutebol:
                        formato_top_jogos, tipo_filtro, tipo_analise, config_analise):
         """Processa jogos e gera alertas - CORRIGIDO"""
         hoje = data_selecionada.strftime("%Y-%m-%d")
+        data_br = data_selecionada.strftime("%d/%m/%Y")
         
         if todas_ligas:
             ligas_busca = list(self.config.LIGA_DICT.values())
@@ -3981,7 +4002,7 @@ class SistemaAlertasFutebol:
             ligas_busca = [self.config.LIGA_DICT[liga_nome] for liga_nome in ligas_selecionadas]
             st.write(f"📌 Analisando {len(ligas_busca)} ligas selecionadas: {', '.join(ligas_selecionadas)}")
 
-        st.write(f"⏳ Buscando jogos para {data_selecionada.strftime('%d/%m/%Y')}...")
+        st.write(f"⏳ Buscando jogos para {data_br}...")
         
         top_jogos = []
         progress_bar = st.progress(0)
@@ -4227,6 +4248,7 @@ class SistemaAlertasFutebol:
     def processar_alertas_completos(self, data_selecionada, ligas_selecionadas, todas_ligas):
         """Processa jogos e envia alertas completos (ALL-IN-ONE) - CORRIGIDO"""
         hoje = data_selecionada.strftime("%Y-%m-%d")
+        data_br = data_selecionada.strftime("%d/%m/%Y")
         
         if todas_ligas:
             ligas_busca = list(self.config.LIGA_DICT.values())
@@ -4235,7 +4257,7 @@ class SistemaAlertasFutebol:
             ligas_busca = [self.config.LIGA_DICT[liga_nome] for liga_nome in ligas_selecionadas]
             st.write(f"📌 Analisando {len(ligas_busca)} ligas selecionadas: {', '.join(ligas_selecionadas)}")
 
-        st.write(f"⏳ Buscando jogos para {data_selecionada.strftime('%d/%m/%Y')}...")
+        st.write(f"⏳ Buscando jogos para {data_br}...")
         
         jogos_analisados = []
         progress_bar = st.progress(0)
@@ -4315,21 +4337,22 @@ class SistemaAlertasFutebol:
     def conferir_resultados(self, data_selecionada):
         """Conferir resultados dos jogos com alertas ativos"""
         hoje = data_selecionada.strftime("%Y-%m-%d")
-        st.subheader(f"📊 Conferindo Resultados para {data_selecionada.strftime('%d/%m/%Y')}")
+        data_br = data_selecionada.strftime("%d/%m/%Y")
+        st.subheader(f"📊 Conferindo Resultados para {data_br}")
         
         # Conferir resultados para todos os tipos de alerta
         resultados_totais = {
             "over_under": self._conferir_resultados_tipo("over_under", hoje),
             "favorito": self._conferir_resultados_tipo("favorito", hoje),
             "gols_ht": self._conferir_resultados_tipo("gols_ht", hoje),
-            "ambas_marcam": self._conferir_resultados_tipo("ambas_marcam", hoje)  # NOVO
+            "ambas_marcam": self._conferir_resultados_tipo("ambas_marcam", hoje)
         }
         
         # Mostrar resumo
         st.markdown("---")
         st.subheader("📈 RESUMO DE RESULTADOS")
         
-        col1, col2, col3, col4 = st.columns(4)  # Alterado para 4 colunas
+        col1, col2, col3, col4 = st.columns(4)
         
         with col1:
             resultado_ou = resultados_totais["over_under"]
@@ -4973,14 +4996,16 @@ class SistemaAlertasFutebol:
             self._salvar_alerta_top(alerta)
         
         if formato_top_jogos in ["Texto", "Ambos"]:
+            data_br = datetime.now().strftime("%d/%m/%Y")
+            
             if tipo_alerta == "over_under":
-                msg = f"📢 TOP {top_n} Jogos Over/Under (confiança: {min_conf}%-{max_conf}%)\n\n"
+                msg = f"📢 TOP {top_n} Jogos Over/Under (confiança: {min_conf}%-{max_conf}%) - {data_br}\n\n"
             elif tipo_alerta == "favorito":
-                msg = f"🏆 TOP {top_n} Jogos Favoritos (confiança: {min_conf}%+)\n\n"
+                msg = f"🏆 TOP {top_n} Jogos Favoritos (confiança: {min_conf}%+) - {data_br}\n\n"
             elif tipo_alerta == "gols_ht":
-                msg = f"⏰ TOP {top_n} Jogos Gols HT (confiança: {min_conf}%+)\n\n"
+                msg = f"⏰ TOP {top_n} Jogos Gols HT (confiança: {min_conf}%+) - {data_br}\n\n"
             elif tipo_alerta == "ambas_marcam":
-                msg = f"🤝 TOP {top_n} Jogos Ambas Marcam (confiança: {min_conf}%+)\n\n"
+                msg = f"🤝 TOP {top_n} Jogos Ambas Marcam (confiança: {min_conf}%+) - {data_br}\n\n"
             
             for idx, jogo in enumerate(top_jogos_sorted, 1):
                 hora_format = jogo["hora"].strftime("%H:%M") if isinstance(jogo["hora"], datetime) else str(jogo["hora"])
@@ -5033,14 +5058,16 @@ class SistemaAlertasFutebol:
         if formato_top_jogos in ["Poster", "Ambos"]:
             try:
                 # Definir título baseado no tipo de alerta
+                data_br = datetime.now().strftime("%d/%m/%Y")
+                
                 if tipo_alerta == "over_under":
-                    titulo = f"TOP {len(top_jogos_sorted)} JOGOS OVER/UNDER"
+                    titulo = f"TOP {len(top_jogos_sorted)} JOGOS OVER/UNDER - {data_br}"
                 elif tipo_alerta == "favorito":
-                    titulo = f"TOP {len(top_jogos_sorted)} JOGOS FAVORITOS"
+                    titulo = f"TOP {len(top_jogos_sorted)} JOGOS FAVORITOS - {data_br}"
                 elif tipo_alerta == "gols_ht":
-                    titulo = f"TOP {len(top_jogos_sorted)} JOGOS GOLS HT"
+                    titulo = f"TOP {len(top_jogos_sorted)} JOGOS GOLS HT - {data_br}"
                 elif tipo_alerta == "ambas_marcam":
-                    titulo = f"TOP {len(top_jogos_sorted)} JOGOS AMBAS MARCAM"
+                    titulo = f"TOP {len(top_jogos_sorted)} JOGOS AMBAS MARCAM - {data_br}"
                 
                 poster = self.poster_generator.gerar_poster_westham_style(
                     top_jogos_sorted, 
@@ -5049,16 +5076,16 @@ class SistemaAlertasFutebol:
                 )
                 
                 if tipo_alerta == "over_under":
-                    caption = f"<b> TOP {len(top_jogos_sorted)} JOGOS OVER/UNDER </b>\n"
+                    caption = f"<b> TOP {len(top_jogos_sorted)} JOGOS OVER/UNDER - {data_br}</b>\n"
                     caption += f"<b> Intervalo de Confiança: {min_conf}% - {max_conf}%</b>\n\n"
                 elif tipo_alerta == "favorito":
-                    caption = f"<b> TOP {len(top_jogos_sorted)} JOGOS FAVORITOS 🏆</b>\n"
+                    caption = f"<b> TOP {len(top_jogos_sorted)} JOGOS FAVORITOS - {data_br} 🏆</b>\n"
                     caption += f"<b> Confiança Mínima: {min_conf}%</b>\n\n"
                 elif tipo_alerta == "gols_ht":
-                    caption = f"<b> TOP {len(top_jogos_sorted)} JOGOS GOLS HT ⏰</b>\n"
+                    caption = f"<b> TOP {len(top_jogos_sorted)} JOGOS GOLS HT - {data_br} ⏰</b>\n"
                     caption += f"<b> Confiança Mínima: {min_conf}%</b>\n\n"
                 elif tipo_alerta == "ambas_marcam":
-                    caption = f"<b> TOP {len(top_jogos_sorted)} JOGOS AMBAS MARCAM 🤝</b>\n"
+                    caption = f"<b> TOP {len(top_jogos_sorted)} JOGOS AMBAS MARCAM - {data_br} 🤝</b>\n"
                     caption += f"<b> Confiança Mínima: {min_conf}%</b>\n\n"
                 
                 caption += f"<b> ELITE MASTER SYSTEM - JOGOS COM MAIOR POTENCIAL</b>"
@@ -5091,23 +5118,23 @@ class SistemaAlertasFutebol:
                 jogos_por_data[data].append(jogo)
 
             for data, jogos_data in jogos_por_data.items():
-                data_str = data.strftime("%d/%m/%Y")
+                data_br = data.strftime("%d/%m/%Y")
                 
                 # Definir título baseado no tipo de análise
                 if tipo_analise == "Over/Under de Gols":
-                    titulo = f"ELITE MASTER - OVER/UNDER - {data_str}"
+                    titulo = f"ELITE MASTER - OVER/UNDER - {data_br}"
                     tipo_alerta = "over_under"
                 elif tipo_analise == "Favorito (Vitória)":
-                    titulo = f"ELITE MASTER - FAVORITOS - {data_str}"
+                    titulo = f"ELITE MASTER - FAVORITOS - {data_br}"
                     tipo_alerta = "favorito"
                 elif tipo_analise == "Gols HT (Primeiro Tempo)":
-                    titulo = f"ELITE MASTER - GOLS HT - {data_str}"
+                    titulo = f"ELITE MASTER - GOLS HT - {data_br}"
                     tipo_alerta = "gols_ht"
                 elif tipo_analise == "Ambas Marcam (BTTS)":
-                    titulo = f"ELITE MASTER - AMBAS MARCAM - {data_str}"
+                    titulo = f"ELITE MASTER - AMBAS MARCAM - {data_br}"
                     tipo_alerta = "ambas_marcam"
                 
-                st.info(f"🎨 Gerando poster para {data_str} com {len(jogos_data)} jogos...")
+                st.info(f"🎨 Gerando poster para {data_br} com {len(jogos_data)} jogos...")
                 
                 poster = self.poster_generator.gerar_poster_westham_style(jogos_data, titulo=titulo, tipo_alerta=tipo_alerta)
                 
@@ -5119,7 +5146,7 @@ class SistemaAlertasFutebol:
                     max_conf = config_analise.get("max_conf", 95)
                     
                     caption = (
-                        f"<b>🎯 ALERTA OVER/UNDER - {data_str}</b>\n\n"
+                        f"<b>🎯 ALERTA OVER/UNDER - {data_br}</b>\n\n"
                         f"<b>📋 TOTAL: {len(jogos_data)} JOGOS</b>\n"
                         f"<b>📈 Over: {over_count} jogos</b>\n"
                         f"<b>📉 Under: {under_count} jogos</b>\n"
@@ -5130,7 +5157,7 @@ class SistemaAlertasFutebol:
                     min_conf_vitoria = config_analise.get("min_conf_vitoria", 65)
                     
                     caption = (
-                        f"<b>🏆 ALERTA DE FAVORITOS - {data_str}</b>\n\n"
+                        f"<b>🏆 ALERTA DE FAVORITOS - {data_br}</b>\n\n"
                         f"<b>📋 TOTAL: {len(jogos_data)} JOGOS</b>\n"
                         f"<b>🎯 CONFIANÇA MÍNIMA: {min_conf_vitoria}%</b>\n\n"
                         f"<b>🔥 ELITE MASTER SYSTEM - ANÁLISE DE VITÓRIA</b>"
@@ -5140,7 +5167,7 @@ class SistemaAlertasFutebol:
                     tipo_ht = config_analise.get("tipo_ht", "OVER 0.5 HT")
                     
                     caption = (
-                        f"<b>⏰ ALERTA DE GOLS HT - {data_str}</b>\n\n"
+                        f"<b>⏰ ALERTA DE GOLS HT - {data_br}</b>\n\n"
                         f"<b>📋 TOTAL: {len(jogos_data)} JOGOS</b>\n"
                         f"<b>🎯 TIPO: {tipo_ht}</b>\n"
                         f"<b>🔍 CONFIANÇA MÍNIMA: {min_conf_ht}%</b>\n\n"
@@ -5151,7 +5178,7 @@ class SistemaAlertasFutebol:
                     filtro_am = config_analise.get("filtro_am", "Todos")
                     
                     caption = (
-                        f"<b>🤝 ALERTA AMBAS MARCAM - {data_str}</b>\n\n"
+                        f"<b>🤝 ALERTA AMBAS MARCAM - {data_br}</b>\n\n"
                         f"<b>📋 TOTAL: {len(jogos_data)} JOGOS</b>\n"
                         f"<b>🎯 FILTRO: {filtro_am}</b>\n"
                         f"<b>🔍 CONFIANÇA MÍNIMA: {min_conf_am}%</b>\n\n"
@@ -5160,9 +5187,9 @@ class SistemaAlertasFutebol:
                 
                 st.info("📤 Enviando para o Telegram...")
                 if self.telegram_client.enviar_foto(poster, caption=caption):
-                    st.success(f"🚀 Poster enviado para {data_str}!")
+                    st.success(f"🚀 Poster enviado para {data_br}!")
                 else:
-                    st.error(f"❌ Falha ao enviar poster para {data_str}")
+                    st.error(f"❌ Falha ao enviar poster para {data_br}")
                     
         except Exception as e:
             logging.error(f"Erro crítico ao gerar/enviar poster West Ham: {str(e)}")
@@ -5189,11 +5216,13 @@ class SistemaAlertasFutebol:
             return
         
         try:
+            data_br = datetime.now().strftime("%d/%m/%Y")
+            
             if tipo_analise == "Over/Under de Gols":
                 over_jogos = [j for j in jogos_conf if j.get('tipo_aposta') == "over"]
                 under_jogos = [j for j in jogos_conf if j.get('tipo_aposta') == "under"]
                 
-                msg = f"🔥 Jogos Over/Under (Estilo Original):\n\n"
+                msg = f"🔥 Jogos Over/Under (Estilo Original) - {data_br}:\n\n"
                 
                 if over_jogos:
                     msg += f"📈 <b>OVER ({len(over_jogos)} jogos):</b>\n\n"
@@ -5216,7 +5245,7 @@ class SistemaAlertasFutebol:
                         )
             
             elif tipo_analise == "Favorito (Vitória)":
-                msg = f"🏆 Jogos Favoritos (Estilo Original):\n\n"
+                msg = f"🏆 Jogos Favoritos (Estilo Original) - {data_br}:\n\n"
                 
                 for j in jogos_conf:
                     hora_format = j["hora"].strftime("%H:%M") if isinstance(j["hora"], datetime) else str(j["hora"])
@@ -5233,7 +5262,7 @@ class SistemaAlertasFutebol:
                     )
             
             elif tipo_analise == "Gols HT (Primeiro Tempo)":
-                msg = f"⏰ Jogos Gols HT (Estilo Original):\n\n"
+                msg = f"⏰ Jogos Gols HT (Estilo Original) - {data_br}:\n\n"
                 
                 for j in jogos_conf:
                     hora_format = j["hora"].strftime("%H:%M") if isinstance(j["hora"], datetime) else str(j["hora"])
@@ -5249,7 +5278,7 @@ class SistemaAlertasFutebol:
                     )
             
             elif tipo_analise == "Ambas Marcam (BTTS)":
-                msg = f"🤝 Jogos Ambas Marcam (Estilo Original):\n\n"
+                msg = f"🤝 Jogos Ambas Marcam (Estilo Original) - {data_br}:\n\n"
                 
                 for j in jogos_conf:
                     hora_format = j["hora"].strftime("%H:%M") if isinstance(j["hora"], datetime) else str(j["hora"])
@@ -5380,6 +5409,7 @@ def main():
         estilo_poster = st.selectbox("🎨 Estilo do Poster", ["West Ham (Novo)", "Elite Master (Original)"], index=0)
         
         st.markdown("----")
+        data_atual_br = datetime.now().strftime("%d/%m/%Y")
         st.info(f"Tipo de Análise: {tipo_analise}")
         if tipo_analise == "Over/Under de Gols":
             st.info(f"Intervalo de confiança: {min_conf}% a {max_conf}%")
@@ -5427,6 +5457,7 @@ def main():
                 st.info(f"📋 {len(ligas_selecionadas)} ligas selecionadas: {', '.join(ligas_selecionadas)}")
         
         # Processamento
+        data_br_selecionada = data_selecionada.strftime("%d/%m/%Y")
         if st.button("🔍 Buscar Partidas", type="primary", key="btn_buscar"):
             if not todas_ligas and not ligas_selecionadas:
                 st.error("❌ Selecione pelo menos uma liga ou marque 'Todas as ligas'")
@@ -5454,7 +5485,7 @@ def main():
         st.markdown("---")
         st.subheader("📈 Estatísticas dos Alertas")
         
-        col_ou, col_fav, col_ht, col_am = st.columns(4)  # Alterado para 4 colunas
+        col_ou, col_fav, col_ht, col_am = st.columns(4)
         
         with col_ou:
             alertas_ou = DataStorage.carregar_alertas()
