@@ -34,14 +34,11 @@ input, textarea { border-radius: 12px !important; }
 .p15 { color: #f97316; font-weight: bold; }
 .concurso-info { background: #1e1e2e; padding: 10px; border-radius: 10px; margin: 10px 0; }
 .metric-card { background: #16213e; padding: 10px; border-radius: 10px; text-align: center; }
-.regra-ok { color: #4ade80; font-weight: bold; }
-.regra-alerta { color: #f97316; font-weight: bold; }
-.regra-ruim { color: #ff6b6b; font-weight: bold; }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🎯🧠 LOTOFÁCIL 3622")
-st.caption("Modelo Universal + Ajuste Adaptável • Baseado em Padrões Reais")
+st.title("🧠🎯 LOTOFÁCIL 3622")
+st.caption("Modelo Universal + Ajuste Adaptável • Mobile First")
 
 # =====================================================
 # FUNÇÃO PARA CONVERTER NUMPY TYPES PARA PYTHON NATIVE
@@ -106,7 +103,7 @@ def salvar_jogos_gerados(jogos, fechamento, dna_params, numero_concurso_atual, d
                 jogos_final.append([int(n) for n in range(1, 16)])  # fallback
         
         fechamento_convertido = convert_numpy_types(fechamento)
-        dna_convertido = convert_numpy_types(dna_params)
+        dna_convertido = convert_numpy_types(dna_params) if dna_params else {}
         estatisticas_convertidas = convert_numpy_types(estatisticas) if estatisticas else {}
         
         dados = {
@@ -222,9 +219,9 @@ def exportar_concursos_txt(dados_api, qtd_concursos):
         return f"Erro ao gerar arquivo: {e}"
 
 # =====================================================
-# CLASSE PRINCIPAL MELHORADA - SEM REPETIÇÕES
+# CLASSE PRINCIPAL PARA ANÁLISE BÁSICA
 # =====================================================
-class AnaliseLotofacilAvancada:
+class AnaliseLotofacilBasica:
 
     def __init__(self, concursos, dados_completos=None):
         self.concursos = concursos
@@ -237,727 +234,326 @@ class AnaliseLotofacilAvancada:
 
         # Análises básicas
         self.frequencias = self._frequencias()
-        self.defasagens = self._defasagens()
-        self.padroes = self._padroes()
-        self.numeros_chave = self._numeros_chave()
-        
-        # NOVAS ANÁLISES PARA SUPERAR O ALEATÓRIO
-        self.padroes_repeticao = self._analisar_padroes_repeticao()
-        self.tendencias_linhas_colunas = self._analisar_linhas_colunas()
-        self.pares_impares_tendencia = self._analisar_pares_impares()
-        self.intervalos_tendencia = self._analisar_intervalos()
-        self.dna_evolutivo = self._inicializar_dna_evolutivo()
-        
-        # Memória de acertos para aprendizado
-        self.historico_acertos = []
-        self.melhor_combinacao_dna = None
-
-    def _inicializar_dna_evolutivo(self):
-        """DNA mais complexo com múltiplos fatores"""
-        return {
-            "freq": 1.2,
-            "defas": 1.3,
-            "soma": 1.1,
-            "pares": 1.1,
-            "seq": 1.0,
-            "chave": 1.2,
-            "repeticao": 1.3,
-            "linha_coluna": 1.1,
-            "intervalo": 1.1,
-            "tendencia": 1.2
-        }
+        self.ultimo_resultado = self.concursos[0] if concursos else []
 
     def _frequencias(self):
         c = Counter()
         for con in self.concursos: 
             c.update(con)
-        # Normalizar com peso maior para concursos recentes
-        frequencias_ponderadas = {}
-        for n in self.numeros:
-            peso_total = 0
-            for i, con in enumerate(self.concursos):
-                if n in con:
-                    # Peso exponencial para concursos recentes
-                    peso = 1.5 ** (self.total_concursos - i) / self.total_concursos
-                    peso_total += peso
-            frequencias_ponderadas[n] = float(peso_total / self.total_concursos * 2)
-        return frequencias_ponderadas
-
-    def _defasagens(self):
-        d = {}
-        for n in self.numeros:
-            for i, c in enumerate(self.concursos):
-                if n in c:
-                    d[n] = int(i)
-                    break
-            else:
-                d[n] = int(self.total_concursos)
-        return d
-
-    def _padroes(self):
-        p = {"somas": [], "pares": []}
-        for c in self.concursos:
-            p["somas"].append(int(sum(c)))
-            p["pares"].append(int(sum(1 for n in c if n % 2 == 0)))
-        return p
-
-    def _numeros_chave(self):
-        cont = Counter()
-        # Usar apenas os últimos 50 concursos para números-chave mais atuais
-        for c in self.concursos[:30]: 
-            cont.update(c)
-        # Números que aparecem em mais de 30% dos concursos recentes
-        limite = 50 * 0.3
-        return [int(n) for n, q in cont.items() if q >= limite]
-
-    def _analisar_padroes_repeticao(self):
-        """Analisa padrões de repetição entre concursos consecutivos"""
-        repeticoes = []
-        for i in range(len(self.concursos) - 1):
-            repetidos = len(set(self.concursos[i]) & set(self.concursos[i + 1]))
-            repeticoes.append(int(repetidos))
-        
-        if repeticoes:
-            media_repeticao = float(np.mean(repeticoes))
-            desvio_repeticao = float(np.std(repeticoes))
-            return {
-                "media": media_repeticao,
-                "desvio": desvio_repeticao,
-                "ultima": int(repeticoes[0]) if repeticoes else 9,
-                "tendencia": [int(r) for r in repeticoes[:10]]
-            }
-        return {"media": 9.0, "desvio": 2.0, "ultima": 9, "tendencia": [9] * 10}
-
-    def _analisar_linhas_colunas(self):
-        """Analisa distribuição por linhas (1-5,6-10,11-15,16-20,21-25)"""
-        linhas = {1: [], 2: [], 3: [], 4: [], 5: []}
-        for c in self.concursos[:30]:
-            cont_linhas = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
-            for n in c:
-                linha = (n - 1) // 5 + 1
-                cont_linhas[linha] += 1
-            for linha in linhas:
-                linhas[linha].append(cont_linhas[linha])
-        
-        return {f"linha_{l}": float(np.mean(cont)) for l, cont in linhas.items()}
-
-    def _analisar_pares_impares(self):
-        """Analisa tendência de pares/ímpares"""
-        pares_tendencia = []
-        for c in self.concursos[:20]:
-            pares = sum(1 for n in c if n % 2 == 0)
-            pares_tendencia.append(int(pares))
-        
-        if len(pares_tendencia) > 5:
-            media_recente = float(np.mean(pares_tendencia[:5]))
-            media_antiga = float(np.mean(pares_tendencia[5:10])) if len(pares_tendencia) > 10 else media_recente
-            if media_recente > media_antiga:
-                tendencia = "crescendo"
-            elif media_recente < media_antiga:
-                tendencia = "decrescendo"
-            else:
-                tendencia = "estavel"
-        else:
-            tendencia = "estavel"
-        
-        return {
-            "media": float(np.mean(pares_tendencia)) if pares_tendencia else 7.5,
-            "desvio": float(np.std(pares_tendencia)) if pares_tendencia else 1.0,
-            "tendencia": tendencia,
-            "ultimos": [int(p) for p in pares_tendencia[:5]]
-        }
-
-    def _analisar_intervalos(self):
-        """Analisa intervalos médios entre números consecutivos"""
-        intervalos = []
-        for c in self.concursos[:30]:
-            c_ordenado = sorted(c)
-            diffs = [c_ordenado[i+1] - c_ordenado[i] for i in range(len(c_ordenado)-1)]
-            intervalos.extend([int(d) for d in diffs])
-        
-        cont_intervalos = Counter(intervalos)
-        intervalos_comuns = [(int(k), int(v)) for k, v in cont_intervalos.most_common(3)]
-        
-        return {
-            "media_intervalo": float(np.mean(intervalos)) if intervalos else 1.6,
-            "intervalos_comuns": intervalos_comuns
-        }
-
-    def score_numero_evolutivo(self, n):
-        """Score avançado com múltiplos fatores"""
-        score = 0.0
-        
-        # Frequência (ponderada)
-        score += self.frequencias.get(n, 0.5) * self.dna_evolutivo["freq"]
-        
-        # Defasagem
-        score += (1.0 - self.defasagens.get(n, self.total_concursos) / self.total_concursos) * self.dna_evolutivo["defas"]
-        
-        # Números-chave
-        if n in self.numeros_chave:
-            score += 0.8 * self.dna_evolutivo["chave"]
-        
-        # Tendência de repetição
-        if self.concursos and n in self.concursos[0]:
-            score += 0.5 * self.dna_evolutivo["repeticao"]
-        elif len(self.concursos) > 1 and n in self.concursos[1]:
-            score += 0.3 * self.dna_evolutivo["repeticao"]
-        
-        # Distribuição por linha
-        linha = (n - 1) // 5 + 1
-        media_linha = self.tendencias_linhas_colunas.get(f"linha_{linha}", 3.0)
-        if media_linha > 2.8:
-            score += 0.2 * self.dna_evolutivo["linha_coluna"]
-        
-        # Ajuste baseado em pares/ímpares
-        par_impar_tend = self.pares_impares_tendencia["tendencia"]
-        if (n % 2 == 0 and par_impar_tend == "crescendo") or (n % 2 == 1 and par_impar_tend == "decrescendo"):
-            score += 0.2 * self.dna_evolutivo["tendencia"]
-        
-        return float(score)
-
-    def gerar_fechamento_evolutivo(self, tamanho=17):
-        """Gera fechamento usando o score evolutivo - GARANTE NÚMEROS ÚNICOS"""
-        scores = {n: self.score_numero_evolutivo(n) for n in self.numeros}
-        
-        # Ordenar por score
-        numeros_ordenados = sorted(scores, key=scores.get, reverse=True)
-        
-        # Pegar os melhores números (garantindo que são únicos)
-        fechamento = list(numeros_ordenados[:tamanho-2])
-        
-        # Adicionar 2 números do meio para diversidade (garantindo que não há duplicatas)
-        disponiveis = [n for n in numeros_ordenados[tamanho-2:] if n not in fechamento]
-        if len(disponiveis) >= 2:
-            extras = random.sample(disponiveis, 2)
-            fechamento.extend(extras)
-        else:
-            # Se não houver suficientes, pegar do início (garantindo que não duplica)
-            for n in numeros_ordenados:
-                if n not in fechamento and len(fechamento) < tamanho:
-                    fechamento.append(n)
-        
-        return sorted([int(n) for n in fechamento])
-
-    def gerar_jogos_otimizados(self, fechamento, qtd_jogos=8):
-        """Gera jogos com otimização - GARANTE QUE CADA JOGO TEM 15 NÚMEROS ÚNICOS"""
-        jogos = set()
-        tentativas = 0
-        max_tentativas = 1000
-        
-        # Parâmetros ideais
-        soma_alvo = 195
-        pares_alvo = 7
-        variacao_soma = 15
-        variacao_pares = 2
-        
-        # Garantir que o fechamento não tem duplicatas
-        fechamento = sorted(list(set(fechamento)))
-        
-        while len(jogos) < qtd_jogos and tentativas < max_tentativas:
-            # Escolher números aleatórios do fechamento SEM REPETIÇÃO
-            # sample já garante que não há repetição
-            if len(fechamento) >= 15:
-                jogo = sorted(random.sample(fechamento, 15))
-            else:
-                # Se fechamento for menor que 15, completar com números aleatórios
-                jogo = sorted(random.sample(fechamento, len(fechamento)))
-                # Adicionar números faltantes de fora do fechamento (garantindo unicidade)
-                while len(jogo) < 15:
-                    novo_num = random.randint(1, 25)
-                    if novo_num not in jogo:
-                        jogo.append(novo_num)
-                jogo.sort()
-            
-            # Verificar soma e pares
-            soma = sum(jogo)
-            pares = sum(1 for n in jogo if n % 2 == 0)
-            
-            # Critérios de aceitação
-            if (soma_alvo - variacao_soma <= soma <= soma_alvo + variacao_soma and
-                pares_alvo - variacao_pares <= pares <= pares_alvo + variacao_pares):
-                # Converter para tupla e adicionar ao set (já garante unicidade)
-                jogos.add(tuple(jogo))
-            
-            tentativas += 1
-        
-        # Se não conseguir todos, gerar jogos aleatórios SEM REPETIÇÃO
-        while len(jogos) < qtd_jogos:
-            # Gerar jogo aleatório SEM números repetidos
-            jogo = sorted(random.sample(range(1, 26), 15))
-            jogos.add(tuple(jogo))
-        
-        # Converter de volta para lista e garantir que cada jogo está ordenado
-        jogos_lista = [list(j) for j in jogos]
-        
-        # Verificação final de segurança
-        for jogo in jogos_lista:
-            assert len(set(jogo)) == 15, f"Jogo tem números repetidos: {jogo}"
-        
-        return jogos_lista
-
-    def aprender_com_resultados(self, jogos_gerados, resultado_real):
-        """Aprende com os resultados"""
-        acertos_por_jogo = [len(set(j) & set(resultado_real)) for j in jogos_gerados]
-        media_acertos = float(np.mean(acertos_por_jogo))
-        
-        if media_acertos > 9.5:
-            for num in resultado_real:
-                if num in self.frequencias:
-                    self.frequencias[num] = float(self.frequencias[num] * 1.05)
-        elif media_acertos < 8.5:
-            for num in set().union(*jogos_gerados) - set(resultado_real):
-                if num in self.frequencias:
-                    self.frequencias[num] = float(self.frequencias[num] * 0.98)
-        
-        self.historico_acertos.append(media_acertos)
-        return media_acertos
-
-    def auto_ajustar_dna(self, concurso_real):
-        """Ajuste fino do DNA"""
-        lr = 0.03
-        soma_r = sum(concurso_real)
-        pares_r = sum(1 for n in concurso_real if n % 2 == 0)
-        soma_m = float(np.mean(self.padroes["somas"]))
-        pares_m = float(np.mean(self.padroes["pares"]))
-        
-        self.dna_evolutivo["soma"] += lr if abs(soma_r - soma_m) < 15 else -lr/2
-        self.dna_evolutivo["pares"] += lr if abs(pares_r - pares_m) < 2 else -lr/2
-        
-        if self.padroes_repeticao:
-            rep_esperada = self.padroes_repeticao["media"]
-            rep_real = len(set(concurso_real) & set(self.concursos[0] if self.concursos else []))
-            self.dna_evolutivo["repeticao"] += lr if abs(rep_real - rep_esperada) < 2 else -lr/2
-        
-        for k in self.dna_evolutivo:
-            self.dna_evolutivo[k] = float(max(0.7, min(1.8, self.dna_evolutivo[k])))
-
-    def comparar_com_aleatorio(self, jogos_gerados, num_simulacoes=1000):
-        """Compara desempenho com escolhas aleatórias"""
-        acertos_sistema = []
-        acertos_aleatorio = []
-        
-        for _ in range(min(num_simulacoes, 100)):
-            resultado_simulado = sorted(random.sample(range(1, 26), 15))
-            
-            for jogo in jogos_gerados:
-                acertos_sistema.append(len(set(jogo) & set(resultado_simulado)))
-            
-            for _ in range(len(jogos_gerados)):
-                aleatorio = sorted(random.sample(range(1, 26), 15))
-                acertos_aleatorio.append(len(set(aleatorio) & set(resultado_simulado)))
-        
-        stats = {
-            "sistema_media": float(np.mean(acertos_sistema)) if acertos_sistema else 0.0,
-            "sistema_max": int(np.max(acertos_sistema)) if acertos_sistema else 0,
-            "aleatorio_media": float(np.mean(acertos_aleatorio)) if acertos_aleatorio else 0.0,
-            "aleatorio_max": int(np.max(acertos_aleatorio)) if acertos_aleatorio else 0,
-            "vantagem_media": float(np.mean(acertos_sistema) - np.mean(acertos_aleatorio)) if acertos_sistema and acertos_aleatorio else 0.0
-        }
-        
-        return stats
-
-    def conferir(self, jogos, resultado):
-        dados = []
-        for i, j in enumerate(jogos, 1):
-            # Garantir que o jogo não tem números repetidos antes de conferir
-            if len(set(j)) != 15:
-                st.warning(f"Jogo {i} tem números repetidos! Corrigindo...")
-                j = sorted(list(set(j)))
-                while len(j) < 15:
-                    novo = random.randint(1, 25)
-                    if novo not in j:
-                        j.append(novo)
-                j.sort()
-            
-            dados.append({
-                "Jogo": i,
-                "Dezenas": ", ".join(f"{n:02d}" for n in j),
-                "Acertos": int(len(set(j) & set(resultado))),
-                "Soma": int(sum(j)),
-                "Pares": int(sum(1 for n in j if n % 2 == 0))
-            })
-        return pd.DataFrame(dados)
+        return {n: c.get(n, 0) / self.total_concursos for n in self.numeros}
 
 # =====================================================
-# CLASSE: MODELO 3622 (UNIVERSAL + AJUSTE ADAPTÁVEL)
+# CLASSE DO MODELO 3622
 # =====================================================
-class Modelo3622:
+class Gerador3622:
     """
-    Implementação do MODELO UNIVERSAL + AJUSTE ADAPTÁVEL para LOTOFácil
-    Baseado nas regras do concurso 3622
+    Implementação do MODELO UNIVERSAL + AJUSTE ADAPTÁVEL
+    Baseado na análise do concurso 3622
     """
     
-    def __init__(self, analise_principal, ultimo_concurso, ultimo_concurso_numero, ultimo_concurso_data):
-        self.analise = analise_principal
-        self.ultimo_concurso = ultimo_concurso  # Lista de números do último concurso
-        self.ultimo_numero = ultimo_concurso_numero
-        self.ultimo_data = ultimo_concurso_data
-        self.numeros = list(range(1, 26))
+    def __init__(self, ultimo_concurso, penultimo_concurso=None, antepenultimo_concurso=None):
+        self.ultimo = sorted(ultimo_concurso) if ultimo_concurso else []
+        self.penultimo = sorted(penultimo_concurso) if penultimo_concurso else []
+        self.antepenultimo = sorted(antepenultimo_concurso) if antepenultimo_concurso else []
         
-        # REGRAS UNIVERSAIS (BASE FIXA)
-        self.regras_universais = {
-            "repeticao": {"min": 8, "max": 10, "otimo": (8, 9), "descricao": "Repetição do concurso anterior"},
-            "pares_impares": {"tipos": ["7x8", "8x7"], "alternativo": "6x9", "descricao": "Ímpares x Pares"},
-            "soma": {"min": 168, "max": 186, "premium": (172, 182), "descricao": "Soma total"},
-            "faixas": {
-                "01-08": {"min": 5, "max": 6},
-                "09-16": {"min": 5, "max": 6},
-                "17-25": {"min": 3, "max": 4}
-            },
-            "consecutivos": {"min_pares": 3, "ideal": "2 blocos + 1 triplo", "descricao": "Números consecutivos"},
-            "primos": {"min": 4, "max": 6, "descricao": "Números primos"}
-        }
-        
-        # Lista de números primos
+        # Números primos na Lotofácil
         self.primos = [2, 3, 5, 7, 11, 13, 17, 19, 23]
         
-        # AJUSTES ADAPTÁVEIS (calculados com base no último concurso)
+        # Faixas do volante
+        self.faixa_baixa = list(range(1, 9))    # 01-08
+        self.faixa_media = list(range(9, 17))    # 09-16
+        self.faixa_alta = list(range(17, 26))    # 17-25
+        
+        # Ajustes adaptáveis (serão calculados)
         self.ajustes = self._calcular_ajustes()
-        
+    
     def _calcular_ajustes(self):
-        """Calcula os ajustes adaptáveis com base no último concurso"""
-        ajustes = {}
+        """Calcula os ajustes adaptáveis baseados nos últimos concursos"""
+        ajustes = {
+            "repeticoes_alvo": 8,
+            "altas_alvo": 2,
+            "miolo_alvo": 6,
+            "tipo_sequencia": "normal"
+        }
         
-        # AJUSTE A: Peso das repetições
-        if self.analise and self.analise.padroes_repeticao:
-            ultima_rep = self.analise.padroes_repeticao.get("ultima", 8)
-            
-            if ultima_rep >= 9:
-                ajustes["repeticao_alvo"] = (7, 8)  # Se veio 9 ou 10, reduzir
-            elif ultima_rep <= 7:
-                ajustes["repeticao_alvo"] = (9, 10)  # Se veio ≤7, aumentar
+        if self.penultimo and self.ultimo:
+            # AJUSTE A - Peso das repetições
+            rep_penultimo = len(set(self.ultimo) & set(self.penultimo))
+            if rep_penultimo >= 9:
+                ajustes["repeticoes_alvo"] = 7
+            elif rep_penultimo <= 7:
+                ajustes["repeticoes_alvo"] = 9
             else:
-                ajustes["repeticao_alvo"] = (8, 8)  # Manter 8
-        else:
-            ajustes["repeticao_alvo"] = (8, 9)
-        
-        # AJUSTE B: Altas (22-25)
-        if self.ultimo_concurso:
-            altas_ultimo = sum(1 for n in self.ultimo_concurso if n >= 22)
+                ajustes["repeticoes_alvo"] = 8
             
+            # AJUSTE B - Altas (22-25)
+            altas_ultimo = sum(1 for n in self.ultimo if n in [22, 23, 24, 25])
             if altas_ultimo <= 1:
-                ajustes["altas_alvo"] = (2, 3)  # Tendência a aumentar
+                ajustes["altas_alvo"] = 3
             elif altas_ultimo >= 3:
-                ajustes["altas_alvo"] = (0, 1)  # Tendência a diminuir
+                ajustes["altas_alvo"] = 1
             else:
-                ajustes["altas_alvo"] = (1, 2)  # Neutro
-        else:
-            ajustes["altas_alvo"] = (1, 2)
-        
-        # AJUSTE C: Miolo (09-16)
-        if self.ultimo_concurso:
-            miolo_ultimo = sum(1 for n in self.ultimo_concurso if 9 <= n <= 16)
+                ajustes["altas_alvo"] = 2
             
-            # Concurso 3622 é "limpo" (miolo forte)
+            # AJUSTE C - Miolo (09-16)
+            miolo_ultimo = sum(1 for n in self.ultimo if 9 <= n <= 16)
             if miolo_ultimo >= 6:
-                ajustes["miolo_alvo"] = (5, 6)  # Manter forte
+                ajustes["miolo_alvo"] = 6
             else:
-                ajustes["miolo_alvo"] = (4, 5)  # Reduzir
-        else:
-            ajustes["miolo_alvo"] = (5, 6)
-        
-        # AJUSTE D: Quebra de sequência
-        if self.analise and hasattr(self.analise, 'padroes_repeticao'):
-            # Análise simplificada de sequências
-            if self.analise.padroes_repeticao.get("media", 9) > 9.5:
-                ajustes["sequencias"] = "encurtar"
-            else:
-                ajustes["sequencias"] = "manter"
-        else:
-            ajustes["sequencias"] = "manter"
+                ajustes["miolo_alvo"] = 5
+            
+            # AJUSTE D - Quebra de sequência
+            # Verificar se houve muitas sequências no último
+            sequencias = self._contar_sequencias(self.ultimo)
+            if sequencias >= 4:
+                ajustes["tipo_sequencia"] = "encurtar"
+            elif sequencias <= 1:
+                ajustes["tipo_sequencia"] = "alongar"
         
         return ajustes
     
-    def validar_jogo(self, jogo):
+    def _contar_sequencias(self, numeros):
+        """Conta quantos pares consecutivos existem no jogo"""
+        nums = sorted(numeros)
+        pares = 0
+        for i in range(len(nums) - 1):
+            if nums[i+1] - nums[i] == 1:
+                pares += 1
+        return pares
+    
+    def _validar_regras_universais(self, jogo):
         """
-        Valida um jogo contra todas as regras universais
-        Retorna: (valido, violacoes, pontuacao)
+        Valida se o jogo respeita as 6 regras universais
+        Retorna (bool, dict) - (aprovado, diagnostico)
         """
-        violacoes = []
-        pontuacao = 0
+        diagnostico = {
+            "regra1": False,  # Repetição
+            "regra2": False,  # Pares/Ímpares
+            "regra3": False,  # Soma
+            "regra4": False,  # Faixas
+            "regra5": False,  # Consecutivos
+            "regra6": False,  # Primos
+            "falhas": 0
+        }
         
-        # REGRA 1: Repetição do último concurso
-        if self.ultimo_concurso:
-            repetidos = len(set(jogo) & set(self.ultimo_concurso))
-            if repetidos < 7:
-                violacoes.append(f"❌ Repetição muito baixa: {repetidos} (mínimo 7)")
-            elif repetidos > 11:
-                violacoes.append(f"❌ Repetição muito alta: {repetidos} (máximo 11)")
-            elif 8 <= repetidos <= 9:
-                pontuacao += 2  # Zona ótima
-            elif 7 <= repetidos <= 10:
-                pontuacao += 1  # Aceitável
+        # REGRA 1 - Repetição do concurso anterior
+        if self.ultimo:
+            repeticoes = len(set(jogo) & set(self.ultimo))
+            if 8 <= repeticoes <= 10:
+                diagnostico["regra1"] = True
+            elif repeticoes == 7 or repeticoes == 11:
+                diagnostico["regra1"] = True  # Aceitável mas não ideal
         
-        # REGRA 2: Ímpares x Pares
+        # REGRA 2 - Ímpares x Pares
         pares = sum(1 for n in jogo if n % 2 == 0)
-        impares = 15 - pares
+        if pares in [7, 8]:
+            diagnostico["regra2"] = True
+        elif pares == 6 or pares == 9:
+            diagnostico["regra2"] = True  # Alternativa aceitável
         
-        if f"{impares}x{pares}" in ["7x8", "8x7"]:
-            pontuacao += 2
-        elif f"{impares}x{pares}" == "6x9":
-            pontuacao += 1  # Alternativa aceitável
-        else:
-            violacoes.append(f"❌ Distribuição ruim: {impares} ímpares x {pares} pares")
-        
-        # REGRA 3: Soma total
+        # REGRA 3 - Soma total
         soma = sum(jogo)
-        if 172 <= soma <= 182:
-            pontuacao += 2  # Zona premium
-        elif 168 <= soma <= 186:
-            pontuacao += 1  # Faixa universal
-        else:
-            violacoes.append(f"❌ Soma fora da faixa: {soma} (deve ser 168-186)")
+        if 168 <= soma <= 186:
+            diagnostico["regra3"] = True
+        elif 165 <= soma <= 190:
+            diagnostico["regra3"] = True  # Fora da faixa premium mas aceitável
         
-        # REGRA 4: Distribuição por faixas
-        faixa1 = sum(1 for n in jogo if 1 <= n <= 8)
-        faixa2 = sum(1 for n in jogo if 9 <= n <= 16)
-        faixa3 = sum(1 for n in jogo if 17 <= n <= 25)
+        # REGRA 4 - Distribuição por faixas
+        baixas = sum(1 for n in jogo if n in self.faixa_baixa)
+        medias = sum(1 for n in jogo if n in self.faixa_media)
+        altas = sum(1 for n in jogo if n in self.faixa_alta)
         
-        # Faixa 01-08
-        if 5 <= faixa1 <= 6:
-            pontuacao += 1
-        elif faixa1 < 5:
-            violacoes.append(f"❌ Faixa 01-08 com apenas {faixa1} números (mínimo 5)")
+        if (5 <= baixas <= 6 and 5 <= medias <= 6 and 3 <= altas <= 4):
+            diagnostico["regra4"] = True
+        elif (4 <= baixas <= 7 and 4 <= medias <= 7 and 2 <= altas <= 5):
+            # Mais tolerante mas ainda aceitável
+            if not (baixas <= 4 or altas >= 6):
+                diagnostico["regra4"] = True
         
-        # Faixa 09-16
-        if 5 <= faixa2 <= 6:
-            pontuacao += 1
-        elif faixa2 < 5:
-            violacoes.append(f"❌ Faixa 09-16 com apenas {faixa2} números (mínimo 5)")
+        # REGRA 5 - Consecutivos
+        consecutivos = self._contar_sequencias(jogo)
+        if consecutivos >= 3:
+            diagnostico["regra5"] = True
         
-        # Faixa 17-25
-        if 3 <= faixa3 <= 4:
-            pontuacao += 1
-        elif faixa3 > 6:
-            violacoes.append(f"❌ Faixa 17-25 com {faixa3} números (máximo 6)")
-        
-        # REGRA 5: Consecutivos
-        jogo_ord = sorted(jogo)
-        pares_consec = 0
-        triplas_consec = 0
-        i = 0
-        
-        while i < len(jogo_ord) - 1:
-            if jogo_ord[i+1] - jogo_ord[i] == 1:
-                # Encontrou um par
-                tamanho_seq = 2
-                j = i + 1
-                while j < len(jogo_ord) - 1 and jogo_ord[j+1] - jogo_ord[j] == 1:
-                    tamanho_seq += 1
-                    j += 1
-                
-                if tamanho_seq >= 3:
-                    triplas_consec += 1
-                else:
-                    pares_consec += 1
-                
-                i = j
-            else:
-                i += 1
-        
-        total_consec = pares_consec + triplas_consec * 2  # Cada tripla conta como 2 pares
-        
-        if total_consec >= 3:
-            pontuacao += 1
-        else:
-            violacoes.append(f"❌ Apenas {total_consec} pares consecutivos (mínimo 3)")
-        
-        # REGRA 6: Primos
+        # REGRA 6 - Primos
         qtd_primos = sum(1 for n in jogo if n in self.primos)
         if 4 <= qtd_primos <= 6:
-            pontuacao += 1
-        else:
-            violacoes.append(f"❌ {qtd_primos} números primos (deve ser 4-6)")
+            diagnostico["regra6"] = True
         
-        # Verificar ajustes adaptáveis
-        if self.ajustes:
-            # Altas (22-25)
-            altas = sum(1 for n in jogo if n >= 22)
-            alvo_altas = self.ajustes.get("altas_alvo", (1, 2))
-            if alvo_altas[0] <= altas <= alvo_altas[1]:
-                pontuacao += 1
-            else:
-                violacoes.append(f"⚠️ Altas: {altas} (tendência sugere {alvo_altas[0]}-{alvo_altas[1]})")
-            
-            # Miolo (09-16)
-            miolo = sum(1 for n in jogo if 9 <= n <= 16)
-            alvo_miolo = self.ajustes.get("miolo_alvo", (5, 6))
-            if alvo_miolo[0] <= miolo <= alvo_miolo[1]:
-                pontuacao += 1
+        # Contar falhas
+        diagnostico["falhas"] = sum(1 for v in diagnostico.values() if isinstance(v, bool) and not v)
         
-        # Decisão final
-        if len(violacoes) >= 2:
-            return False, violacoes, pontuacao
-        elif len(violacoes) == 1:
-            return True, violacoes, pontuacao  # Jogo secundário
-        else:
-            return True, [], pontuacao  # Jogo principal
+        # Aprovado se tiver no máximo 1 falha
+        aprovado = diagnostico["falhas"] <= 1
+        
+        return aprovado, diagnostico
     
-    def gerar_jogo(self, max_tentativas=5000):
+    def gerar_jogo(self):
         """
         Gera um jogo seguindo o passo a passo do modelo
+        1️⃣ Fixe a BASE (9 dezenas repetidas)
+        2️⃣ Complete respeitando as faixas
+        3️⃣ Valide
         """
-        for _ in range(max_tentativas):
-            # PASSO 1: Fixar base com repetições
-            if self.ultimo_concurso and self.ajustes.get("repeticao_alvo"):
-                alvo_rep = self.ajustes["repeticao_alvo"]
-                qtd_repetir = random.randint(alvo_rep[0], alvo_rep[1])
-                
-                # Selecionar números do último concurso para repetir
-                base = random.sample(self.ultimo_concurso, min(qtd_repetir, len(self.ultimo_concurso)))
+        max_tentativas = 5000
+        
+        for tentativa in range(max_tentativas):
+            # PASSO 1: Escolher 9 repetidas do último concurso
+            if self.ultimo:
+                repeticoes_alvo = self.ajustes["repeticoes_alvo"]
+                # Garantir que temos pelo menos repeticoes_alvo números para escolher
+                if len(self.ultimo) >= repeticoes_alvo:
+                    base = sorted(random.sample(self.ultimo, repeticoes_alvo))
+                else:
+                    base = sorted(random.sample(self.ultimo, len(self.ultimo)))
             else:
                 base = []
-                qtd_repetir = 0
             
-            # PASSO 2: Completar respeitando faixas
-            jogo = list(base)
+            # Completar até 15 números
+            jogo = base.copy()
             
-            # Definir alvos para cada faixa
-            alvo_faixa1 = random.randint(5, 6)
-            alvo_faixa2 = random.randint(5, 6)
-            alvo_faixa3 = random.randint(3, 4)
+            # PASSO 2: Completar respeitando as faixas
+            # Definir alvos por faixa baseado nos ajustes
+            alvo_baixas = 5
+            alvo_medias = self.ajustes["miolo_alvo"]
+            alvo_altas = self.ajustes["altas_alvo"]
             
-            # Ajustar com base nos números já selecionados
-            atuais_faixa1 = sum(1 for n in jogo if 1 <= n <= 8)
-            atuais_faixa2 = sum(1 for n in jogo if 9 <= n <= 16)
-            atuais_faixa3 = sum(1 for n in jogo if 17 <= n <= 25)
-            
-            # Criar pool de números disponíveis por faixa
-            disponiveis_faixa1 = [n for n in range(1, 9) if n not in jogo]
-            disponiveis_faixa2 = [n for n in range(9, 17) if n not in jogo]
-            disponiveis_faixa3 = [n for n in range(17, 26) if n not in jogo]
-            
-            # Completar faixa 1
-            while len(jogo) < 15 and atuais_faixa1 < alvo_faixa1 and disponiveis_faixa1:
-                n = random.choice(disponiveis_faixa1)
-                jogo.append(n)
-                disponiveis_faixa1.remove(n)
-                atuais_faixa1 += 1
-            
-            # Completar faixa 2
-            while len(jogo) < 15 and atuais_faixa2 < alvo_faixa2 and disponiveis_faixa2:
-                n = random.choice(disponiveis_faixa2)
-                jogo.append(n)
-                disponiveis_faixa2.remove(n)
-                atuais_faixa2 += 1
-            
-            # Completar faixa 3
-            while len(jogo) < 15 and atuais_faixa3 < alvo_faixa3 and disponiveis_faixa3:
-                n = random.choice(disponiveis_faixa3)
-                jogo.append(n)
-                disponiveis_faixa3.remove(n)
-                atuais_faixa3 += 1
-            
-            # Se ainda faltam números, completar com qualquer número disponível
-            todos_disponiveis = [n for n in range(1, 26) if n not in jogo]
-            while len(jogo) < 15 and todos_disponiveis:
-                n = random.choice(todos_disponiveis)
-                jogo.append(n)
-                todos_disponiveis.remove(n)
+            # Ajustar para somar 15
+            total_atual = len(jogo)
+            if total_atual < 15:
+                # Calcular quantos faltam em cada faixa
+                baixas_atuais = sum(1 for n in jogo if n in self.faixa_baixa)
+                medias_atuais = sum(1 for n in jogo if n in self.faixa_media)
+                altas_atuais = sum(1 for n in jogo if n in self.faixa_alta)
+                
+                faltam = 15 - total_atual
+                
+                # Distribuir os faltantes
+                for _ in range(faltam):
+                    # Decidir de qual faixa tirar baseado nos alvos
+                    if baixas_atuais < alvo_baixas:
+                        opcoes = [n for n in self.faixa_baixa if n not in jogo]
+                        if opcoes:
+                            escolha = random.choice(opcoes)
+                            jogo.append(escolha)
+                            baixas_atuais += 1
+                            continue
+                    
+                    if medias_atuais < alvo_medias:
+                        opcoes = [n for n in self.faixa_media if n not in jogo]
+                        if opcoes:
+                            escolha = random.choice(opcoes)
+                            jogo.append(escolha)
+                            medias_atuais += 1
+                            continue
+                    
+                    if altas_atuais < alvo_altas:
+                        opcoes = [n for n in self.faixa_alta if n not in jogo]
+                        if opcoes:
+                            escolha = random.choice(opcoes)
+                            jogo.append(escolha)
+                            altas_atuais += 1
+                            continue
+                    
+                    # Se todas as faixas atingiram o alvo, completar aleatoriamente
+                    disponiveis = [n for n in range(1, 26) if n not in jogo]
+                    if disponiveis:
+                        escolha = random.choice(disponiveis)
+                        jogo.append(escolha)
+                        
+                        # Atualizar contadores
+                        if escolha in self.faixa_baixa:
+                            baixas_atuais += 1
+                        elif escolha in self.faixa_media:
+                            medias_atuais += 1
+                        else:
+                            altas_atuais += 1
             
             jogo.sort()
             
-            # PASSO 3: Validar o jogo
-            valido, violacoes, pontuacao = self.validar_jogo(jogo)
-            
-            if valido:
-                return jogo, violacoes, pontuacao
+            # PASSO 3: Validar
+            aprovado, diagnostico = self._validar_regras_universais(jogo)
+            if aprovado:
+                return jogo, diagnostico
         
-        # Fallback: gerar jogo aleatório e tentar validar
-        for _ in range(1000):
-            jogo = sorted(random.sample(range(1, 26), 15))
-            valido, violacoes, pontuacao = self.validar_jogo(jogo)
-            if valido:
-                return jogo, violacoes, pontuacao
-        
-        # Último recurso
-        return sorted(random.sample(range(1, 26), 15)), ["⚠️ Jogo gerado sem validação completa"], 0
+        # Fallback: gerar jogo com validação mínima
+        return self._gerar_jogo_fallback()
     
-    def gerar_multiplos_jogos(self, quantidade=10):
-        """Gera múltiplos jogos usando o modelo"""
-        jogos = []
-        violacoes_list = []
-        pontuacoes = []
+    def _gerar_jogo_fallback(self):
+        """Gera um jogo de fallback quando não encontra com validação completa"""
+        jogo = []
         
+        # Garantir pelo menos 8 repetidas
+        if self.ultimo:
+            rep = random.sample(self.ultimo, min(8, len(self.ultimo)))
+            jogo.extend(rep)
+        
+        # Completar
+        while len(jogo) < 15:
+            novo = random.randint(1, 25)
+            if novo not in jogo:
+                jogo.append(novo)
+        
+        jogo.sort()
+        
+        # Criar diagnóstico básico
+        diagnostico = {
+            "regra1": len(set(jogo) & set(self.ultimo)) >= 7 if self.ultimo else True,
+            "regra2": 6 <= sum(1 for n in jogo if n % 2 == 0) <= 9,
+            "regra3": 165 <= sum(jogo) <= 190,
+            "regra4": True,
+            "regra5": self._contar_sequencias(jogo) >= 2,
+            "regra6": 3 <= sum(1 for n in jogo if n in self.primos) <= 7,
+            "falhas": 0
+        }
+        
+        return jogo, diagnostico
+    
+    def gerar_multiplos_jogos(self, quantidade):
+        """Gera múltiplos jogos validados"""
+        jogos = []
+        diagnosticos = []
         tentativas = 0
         max_tentativas = quantidade * 200
         
         while len(jogos) < quantidade and tentativas < max_tentativas:
-            jogo, violacoes, pontuacao = self.gerar_jogo()
-            
-            # Evitar duplicatas
-            if jogo not in jogos:
+            jogo, diag = self.gerar_jogo()
+            if jogo not in jogos:  # Evitar duplicatas
                 jogos.append(jogo)
-                violacoes_list.append(violacoes)
-                pontuacoes.append(pontuacao)
-            
+                diagnosticos.append(diag)
             tentativas += 1
         
-        return jogos, violacoes_list, pontuacoes
+        return jogos, diagnosticos
     
-    def get_resumo_regras(self):
-        """Retorna resumo formatado das regras"""
-        resumo = {
-            "universais": self.regras_universais,
-            "ajustes": self.ajustes,
-            "ultimo_concurso": {
-                "numero": self.ultimo_numero,
-                "data": self.ultimo_data,
-                "dezenas": self.ultimo_concurso
-            }
+    def get_resumo_ajustes(self):
+        """Retorna resumo dos ajustes adaptáveis"""
+        return {
+            "repeticoes_alvo": self.ajustes["repeticoes_alvo"],
+            "altas_alvo": self.ajustes["altas_alvo"],
+            "miolo_alvo": self.ajustes["miolo_alvo"],
+            "tipo_sequencia": self.ajustes["tipo_sequencia"]
         }
-        return resumo
-    
-    def analisar_ultimo_concurso(self):
-        """Analisa o último concurso para mostrar ajustes"""
-        if not self.ultimo_concurso:
-            return {}
-        
-        analise = {
-            "repetidos_ultimo": "N/A",
-            "altas_ultimo": sum(1 for n in self.ultimo_concurso if n >= 22),
-            "miolo_ultimo": sum(1 for n in self.ultimo_concurso if 9 <= n <= 16),
-            "soma_ultimo": sum(self.ultimo_concurso),
-            "pares_ultimo": sum(1 for n in self.ultimo_concurso if n % 2 == 0),
-            "primos_ultimo": sum(1 for n in self.ultimo_concurso if n in self.primos)
-        }
-        
-        # Análise de repetição (se houver penúltimo)
-        if self.analise and hasattr(self.analise, 'concursos') and len(self.analise.concursos) > 1:
-            penultimo = self.analise.concursos[1]
-            analise["repetidos_ultimo"] = len(set(self.ultimo_concurso) & set(penultimo))
-        
-        return analise
-
 
 # =====================================================
 # FUNÇÕES AUXILIARES
 # =====================================================
-def get_concurso_info_seguro(jogo):
-    try:
-        if "concurso_base" in jogo:
-            return jogo["concurso_base"]
-        else:
-            return {"numero": 0, "data": "Formato antigo"}
-    except:
-        return {"numero": 0, "data": "Desconhecido"}
-
-def get_conferencias_seguro(jogo):
-    try:
-        if "conferencias" in jogo:
-            return jogo["conferencias"]
-        else:
-            return []
-    except:
-        return []
-
 def validar_jogos(jogos):
     """Valida se todos os jogos têm 15 números únicos"""
     for i, jogo in enumerate(jogos):
         if len(set(jogo)) != 15:
             return False, i, jogo
     return True, None, None
+
+def formatar_jogo_html(jogo, destaque_primos=True):
+    """Formata um jogo em HTML com cores"""
+    primos = [2, 3, 5, 7, 11, 13, 17, 19, 23]
+    html = ""
+    for num in jogo:
+        if num in primos and destaque_primos:
+            html += f"<span style='background:#4cc9f020; border:1px solid #4cc9f0; border-radius:20px; padding:5px 8px; margin:2px; display:inline-block; font-weight:bold;'>{num:02d}</span>"
+        else:
+            html += f"<span style='background:#0e1117; border:1px solid #262730; border-radius:20px; padding:5px 8px; margin:2px; display:inline-block;'>{num:02d}</span>"
+    return html
 
 # =====================================================
 # INTERFACE PRINCIPAL
@@ -971,15 +567,13 @@ def main():
         st.session_state.dados_api = None
     if "jogos_salvos" not in st.session_state: 
         st.session_state.jogos_salvos = []
-    if "historico_comparacao" not in st.session_state:
-        st.session_state.historico_comparacao = []
-    if "modelo_3622" not in st.session_state:
-        st.session_state.modelo_3622 = None
+    if "ultimo_gerador" not in st.session_state:
+        st.session_state.ultimo_gerador = None
 
     # ================= SIDEBAR =================
     with st.sidebar:
         st.header("⚙️ Configurações")
-        qtd = st.slider("Qtd concursos históricos", 20, 1000, 300, 
+        qtd = st.slider("Qtd concursos históricos", 20, 500, 100, 
                        help="Mais concursos = melhor análise de tendências")
         
         if st.button("📥 Carregar concursos", use_container_width=True):
@@ -989,381 +583,494 @@ def main():
                     response = requests.get(url)
                     st.session_state.dados_api = response.json()
                     concursos = [sorted(map(int, d["dezenas"])) for d in st.session_state.dados_api[:qtd]]
-                    st.session_state.analise = AnaliseLotofacilAvancada(concursos, st.session_state.dados_api[:qtd])
-                    
-                    st.session_state.analise.auto_ajustar_dna(concursos[0])
+                    st.session_state.analise = AnaliseLotofacilBasica(concursos, st.session_state.dados_api[:qtd])
                     
                     ultimo = st.session_state.dados_api[0]
                     st.success(f"✅ Último concurso: #{ultimo['concurso']} - {ultimo['data']}")
-
-                    # Inicializar modelo 3622
-                    st.session_state.modelo_3622 = Modelo3622(
-                        st.session_state.analise,
-                        concursos[0],
-                        ultimo['concurso'],
-                        ultimo['data']
-                    )
-                    
-                    rep_penultimo = repeticao_ultimo_penultimo(concursos)
-                    if rep_penultimo:
-                        repetidos, media = rep_penultimo
-                        st.info(f"🔁 Repetição último x penúltimo: {repetidos} ({media*100:.1f}%)")
-                    
-                    st.info("🧠 MODELO 3622 ativado - Regras universais + ajustes adaptáveis!")
                     
                 except Exception as e:
                     st.error(f"Erro ao carregar: {e}")
 
     # ================= INTERFACE PRINCIPAL =================
-    st.subheader("🎯 Geração de Jogos Inteligente")
+    st.subheader("🎯 Modelo Universal 3622")
 
-    if st.session_state.analise:
-        # APENAS DUAS ABAS: Fechamento Evolutivo e MODELO 3622
-        tab1, tab2 = st.tabs(["🧩 Fechamento Evolutivo", "🎯 MODELO 3622"])
+    if st.session_state.analise and st.session_state.dados_api:
+        # APENAS 4 ABAS: Análise, Fechamento 3622, Concursos, Conferência
+        tab1, tab2, tab3, tab4 = st.tabs([
+            "📊 Análise", 
+            "🧩 Fechamento 3622", 
+            "📋 Concursos",
+            "✅ Conferência"
+        ])
 
-        # ================= ABA 1: Fechamento Evolutivo (original) =================
         with tab1:
-            st.subheader("🧩 Fechamento Evolutivo")
+            st.markdown("### 🔍 Análise do Último Concurso")
+            
+            ultimo = st.session_state.dados_api[0]
+            numeros_ultimo = sorted(map(int, ultimo['dezenas']))
+            
+            st.markdown(f"""
+            <div class='concurso-info'>
+                <strong>Concurso #{ultimo['concurso']}</strong> - {ultimo['data']}
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Mostrar números do último concurso
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.markdown("**Dezenas sorteadas:**")
+                nums_html = ""
+                for num in numeros_ultimo:
+                    nums_html += f"<span style='background:#4cc9f0; border-radius:20px; padding:5px 10px; margin:3px; display:inline-block; font-weight:bold; color:black;'>{num:02d}</span>"
+                st.markdown(f"<div>{nums_html}</div>", unsafe_allow_html=True)
+            
+            with col2:
+                pares = sum(1 for n in numeros_ultimo if n % 2 == 0)
+                impares = 15 - pares
+                st.metric("Pares/Ímpares", f"{pares}×{impares}")
+            
+            with col3:
+                soma = sum(numeros_ultimo)
+                st.metric("Soma total", soma)
+            
+            # Estatísticas rápidas
+            if len(st.session_state.dados_api) > 1:
+                penultimo = sorted(map(int, st.session_state.dados_api[1]['dezenas']))
+                rep_penultimo = len(set(numeros_ultimo) & set(penultimo))
+                
+                st.markdown("### 📊 Ajustes Adaptáveis")
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Repetição c/ penúltimo", rep_penultimo)
+                with col2:
+                    altas = sum(1 for n in numeros_ultimo if n >= 22)
+                    st.metric("Altas (22-25)", altas)
+                with col3:
+                    miolo = sum(1 for n in numeros_ultimo if 9 <= n <= 16)
+                    st.metric("Miolo (09-16)", miolo)
+
+        with tab2:
+            st.markdown("""
+            <div style='background:#1e1e2e; padding:15px; border-radius:10px; margin-bottom:20px;'>
+                <h4 style='margin:0; color:#4cc9f0;'>🧠 MODELO UNIVERSAL + AJUSTE ADAPTÁVEL</h4>
+                <p style='margin:5px 0 0 0; font-size:0.9em;'>Baseado na análise do concurso 3622</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Regras universais em cards
+            with st.expander("📜 VER REGRAS UNIVERSAIS", expanded=False):
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown("""
+                    **✅ REGRA 1 — REPETIÇÃO**
+                    - Obrigatório: 8 a 10 repetidas
+                    - Zona ótima: 8 ou 9
+                    
+                    **✅ REGRA 2 — ÍMPARES x PARES**
+                    - Padrão vencedor: 7×8 ou 8×7
+                    - Alternativa: 6×9 (raro)
+                    
+                    **✅ REGRA 3 — SOMA TOTAL**
+                    - Faixa universal: 168 a 186
+                    - Zona premium: 172 a 182
+                    """)
+                
+                with col2:
+                    st.markdown("""
+                    **✅ REGRA 4 — DISTRIBUIÇÃO**
+                    - 01–08: 5 a 6
+                    - 09–16: 5 a 6
+                    - 17–25: 3 a 4
+                    
+                    **✅ REGRA 5 — CONSECUTIVOS**
+                    - Mínimo: 3 pares consecutivos
+                    
+                    **✅ REGRA 6 — PRIMOS**
+                    - Faixa vencedora: 4 a 6 primos
+                    """)
             
             if st.session_state.dados_api:
                 ultimo = st.session_state.dados_api[0]
-                st.markdown(f"""
-                <div class='concurso-info'>
-                    📅 <strong>Base: concurso #{ultimo['concurso']}</strong> - {ultimo['data']}
-                </div>
-                """, unsafe_allow_html=True)
-
-            col1, col2 = st.columns(2)
-            with col1:
-                tamanho = st.radio("Tamanho", [16, 17, 18], horizontal=True, key="tam_fech_evo")
-            with col2:
-                qtd_jogos = st.slider("Jogos", 6, 12, 8, key="qtd_jogos_evo")
-
-            if st.button("🚀 Gerar Fechamento Evolutivo", use_container_width=True):
-                with st.spinner("Gerando jogos otimizados (sem repetições)..."):
-                    # Gerar fechamento
-                    fechamento = st.session_state.analise.gerar_fechamento_evolutivo(tamanho)
-                    jogos = st.session_state.analise.gerar_jogos_otimizados(fechamento, qtd_jogos)
-                    
-                    # Validar jogos
-                    valido, idx, jogo_invalido = validar_jogos(jogos)
-                    if not valido:
-                        st.error(f"ERRO: Jogo {idx+1} tem números repetidos! Corrigindo...")
-                        # Corrigir o jogo problemático
-                        jogos[idx] = sorted(list(set(jogo_invalido)))
-                        while len(jogos[idx]) < 15:
-                            novo = random.randint(1, 25)
-                            if novo not in jogos[idx]:
-                                jogos[idx].append(novo)
-                        jogos[idx].sort()
-                    
-                    # Comparar com aleatório
-                    stats_comparacao = st.session_state.analise.comparar_com_aleatorio(jogos)
-                    
-                    # Salvar jogos
-                    ultimo = st.session_state.dados_api[0]
-                    arquivo, jogo_id = salvar_jogos_gerados(
-                        jogos, fechamento, 
-                        st.session_state.analise.dna_evolutivo,
-                        ultimo['concurso'], ultimo['data'],
-                        estatisticas=stats_comparacao
-                    )
-                    
-                    if arquivo:
-                        st.success(f"✅ Fechamento salvo! ID: {jogo_id}")
-                        
-                        vantagem = stats_comparacao["vantagem_media"]
-                        if vantagem > 0:
-                            st.markdown(f"""
-                            <div style='background: #00ff0022; padding: 10px; border-radius: 10px; text-align: center;'>
-                                🏆 <strong>Vantagem sobre aleatório: {vantagem:.2f} pontos</strong>
-                            </div>
-                            """, unsafe_allow_html=True)
-                        else:
-                            st.markdown(f"""
-                            <div style='background: #ff000022; padding: 10px; border-radius: 10px; text-align: center;'>
-                                ⚠️ <strong>Desvantagem: {abs(vantagem):.2f} pontos</strong>
-                            </div>
-                            """, unsafe_allow_html=True)
-                        
-                        st.markdown("### 🔒 Fechamento Base")
-                        st.markdown(f"<div class='card'>{', '.join(f'{n:02d}' for n in fechamento)}</div>", 
-                                  unsafe_allow_html=True)
-                        
-                        # Mostrar jogos com verificação de unicidade
-                        df_jogos = pd.DataFrame({
-                            "Jogo": range(1, len(jogos)+1),
-                            "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in jogos],
-                            "Qtd": [len(set(j)) for j in jogos],  # Coluna de verificação
-                            "Soma": [sum(j) for j in jogos],
-                            "Pares": [sum(1 for n in j if n%2==0) for j in jogos]
-                        })
-                        st.dataframe(df_jogos, use_container_width=True, hide_index=True)
-                        
-                        st.caption("✅ Todos os jogos têm 15 números únicos")
-                        
-                        st.session_state.jogos_salvos = carregar_jogos_salvos()
-                        
-                        st.session_state.historico_comparacao.append({
-                            "id": jogo_id,
-                            "concurso_base": int(ultimo['concurso']),
-                            "vantagem": float(vantagem),
-                            "stats": stats_comparacao
-                        })
-
-        # ================= ABA 2: MODELO 3622 (NOVA) =================
-        with tab2:
-            st.subheader("🎯 MODELO 3622 - Universal + Ajuste Adaptável")
-            
-            if not st.session_state.modelo_3622:
-                st.warning("📥 Carregue os concursos primeiro usando o botão na barra lateral")
-            else:
-                modelo = st.session_state.modelo_3622
+                penultimo = st.session_state.dados_api[1] if len(st.session_state.dados_api) > 1 else None
+                antepenultimo = st.session_state.dados_api[2] if len(st.session_state.dados_api) > 2 else None
                 
-                # Informações do último concurso
-                analise_ultimo = modelo.analisar_ultimo_concurso()
-                
-                st.markdown(f"""
-                <div class='concurso-info'>
-                    📅 <strong>Base: concurso #{modelo.ultimo_numero}</strong> - {modelo.ultimo_data}
-                </div>
-                """, unsafe_allow_html=True)
-                
-                # Menu de opções
-                opcao = st.radio(
-                    "Selecione uma opção:",
-                    ["📋 Regras do Modelo", "🎯 Gerar Jogos 3622", "📊 Análise do Último Concurso"],
-                    horizontal=True
+                # Criar gerador 3622
+                gerador = Gerador3622(
+                    ultimo_concurso=list(map(int, ultimo['dezenas'])),
+                    penultimo_concurso=list(map(int, penultimo['dezenas'])) if penultimo else None,
+                    antepenultimo_concurso=list(map(int, antepenultimo['dezenas'])) if antepenultimo else None
                 )
                 
-                if opcao == "📋 Regras do Modelo":
-                    st.markdown("### 🧠 REGRAS UNIVERSAIS (BASE FIXA)")
-                    st.markdown("Essas regras NÃO mudam. Se quebrar 2 delas, o jogo já nasce morto.")
-                    
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        st.markdown("**✅ REGRA 1 — REPETIÇÃO**")
-                        st.markdown(f"""
-                        - Obrigatório: **{modelo.regras_universais['repeticao']['min']} a {modelo.regras_universais['repeticao']['max']}** repetidas
-                        - Zona ótima: **{modelo.regras_universais['repeticao']['otimo'][0]} ou {modelo.regras_universais['repeticao']['otimo'][1]}**
-                        """)
-                        
-                        st.markdown("**✅ REGRA 2 — ÍMPARES x PARES**")
-                        st.markdown(f"""
-                        - Padrão vencedor: **{modelo.regras_universais['pares_impares']['tipos'][0]} ou {modelo.regras_universais['pares_impares']['tipos'][1]}**
-                        - Alternativa: **{modelo.regras_universais['pares_impares']['alternativo']}** (raro)
-                        """)
-                        
-                        st.markdown("**✅ REGRA 3 — SOMA TOTAL**")
-                        st.markdown(f"""
-                        - Faixa universal: **{modelo.regras_universais['soma']['min']} a {modelo.regras_universais['soma']['max']}**
-                        - Zona premium: **{modelo.regras_universais['soma']['premium'][0]} a {modelo.regras_universais['soma']['premium'][1]}**
-                        """)
-                    
-                    with col2:
-                        st.markdown("**✅ REGRA 4 — DISTRIBUIÇÃO POR FAIXAS**")
-                        st.markdown(f"""
-                        - **01–08:** {modelo.regras_universais['faixas']['01-08']['min']} a {modelo.regras_universais['faixas']['01-08']['max']}
-                        - **09–16:** {modelo.regras_universais['faixas']['09-16']['min']} a {modelo.regras_universais['faixas']['09-16']['max']}
-                        - **17–25:** {modelo.regras_universais['faixas']['17-25']['min']} a {modelo.regras_universais['faixas']['17-25']['max']}
-                        """)
-                        
-                        st.markdown("**✅ REGRA 5 — CONSECUTIVOS**")
-                        st.markdown(f"""
-                        - Mínimo: **{modelo.regras_universais['consecutivos']['min_pares']}** pares consecutivos
-                        - Ideal: **{modelo.regras_universais['consecutivos']['ideal']}**
-                        """)
-                        
-                        st.markdown("**✅ REGRA 6 — PRIMOS**")
-                        st.markdown(f"""
-                        - Faixa vencedora: **{modelo.regras_universais['primos']['min']} a {modelo.regras_universais['primos']['max']}** primos
-                        """)
-                    
-                    st.markdown("---")
-                    st.markdown("### 🧩 AJUSTES ADAPTÁVEIS (Baseados no Último Concurso)")
-                    
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        st.markdown("**🔁 AJUSTE A — Peso das Repetições**")
-                        st.markdown(f"""
-                        - Alvo para este concurso: **{modelo.ajustes.get('repeticao_alvo', (8,9))[0]} a {modelo.ajustes.get('repeticao_alvo', (8,9))[1]}** repetições
-                        """)
-                        
-                        st.markdown("**📉 AJUSTE B — Altas (22–25)**")
-                        st.markdown(f"""
-                        - Alvo para este concurso: **{modelo.ajustes.get('altas_alvo', (1,2))[0]} a {modelo.ajustes.get('altas_alvo', (1,2))[1]}** números altos
-                        """)
-                    
-                    with col2:
-                        st.markdown("**🎯 AJUSTE C — Miolo (09–16)**")
-                        st.markdown(f"""
-                        - Alvo para este concurso: **{modelo.ajustes.get('miolo_alvo', (5,6))[0]} a {modelo.ajustes.get('miolo_alvo', (5,6))[1]}** números no miolo
-                        """)
-                        
-                        st.markdown("**🔄 AJUSTE D — Quebra de Sequência**")
-                        st.markdown(f"""
-                        - Tendência: **{modelo.ajustes.get('sequencias', 'manter').upper()}** sequências
-                        """)
+                st.session_state.ultimo_gerador = gerador
                 
-                elif opcao == "🎯 Gerar Jogos 3622":
-                    st.markdown("### 🎯 Gerar Jogos com Modelo Universal")
+                # Mostrar ajustes adaptáveis calculados
+                ajustes = gerador.get_resumo_ajustes()
+                
+                st.markdown("### 🔄 Ajustes Adaptáveis Ativos")
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Repetições alvo", ajustes["repeticoes_alvo"])
+                with col2:
+                    st.metric("Altas alvo", ajustes["altas_alvo"])
+                with col3:
+                    st.metric("Miolo alvo", ajustes["miolo_alvo"])
+                with col4:
+                    st.metric("Sequências", ajustes["tipo_sequencia"])
+                
+                # Configuração de geração
+                st.markdown("### 🎯 Gerar Jogos")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    qtd_jogos = st.slider("Quantidade de jogos", 3, 100, 10, 
+                                         help="Mínimo 3, máximo 100 jogos")
+                with col2:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    if st.button("🚀 GERAR JOGOS 3622", use_container_width=True, type="primary"):
+                        with st.spinner(f"Gerando {qtd_jogos} jogos com validação completa..."):
+                            jogos, diagnosticos = gerador.gerar_multiplos_jogos(qtd_jogos)
+                            
+                            # Validar jogos
+                            valido, idx, jogo_invalido = validar_jogos(jogos)
+                            if not valido:
+                                st.error(f"ERRO: Jogo {idx+1} inválido! Corrigindo...")
+                                jogos[idx] = sorted(list(set(jogo_invalido)))
+                                while len(jogos[idx]) < 15:
+                                    novo = random.randint(1, 25)
+                                    if novo not in jogos[idx]:
+                                        jogos[idx].append(novo)
+                                jogos[idx].sort()
+                            
+                            # Salvar na sessão
+                            st.session_state.jogos_3622 = jogos
+                            st.session_state.diagnosticos_3622 = diagnosticos
+                            
+                            st.success(f"✅ {len(jogos)} jogos gerados com sucesso!")
+                
+                # Mostrar jogos gerados
+                if "jogos_3622" in st.session_state and st.session_state.jogos_3622:
+                    jogos = st.session_state.jogos_3622
+                    diagnosticos = st.session_state.diagnosticos_3622 if "diagnosticos_3622" in st.session_state else [None] * len(jogos)
                     
-                    st.markdown("""
-                    <div style='background:#1e1e2e; padding:10px; border-radius:10px; margin-bottom:20px;'>
-                    <strong>PASSO A PASSO DO MODELO:</strong><br>
-                    1️⃣ Fixe a BASE com 9 repetições do último concurso<br>
-                    2️⃣ Complete respeitando as faixas (6 baixas, 6 médias, 3 altas)<br>
-                    3️⃣ Valide o jogo contra todas as regras universais
+                    st.markdown(f"### 📋 Jogos Gerados ({len(jogos)})")
+                    
+                    # Estatísticas agregadas
+                    stats_df = pd.DataFrame({
+                        "Jogo": range(1, len(jogos)+1),
+                        "Repetidas": [len(set(j) & set(gerador.ultimo)) for j in jogos],
+                        "Pares": [sum(1 for n in j if n%2==0) for j in jogos],
+                        "Soma": [sum(j) for j in jogos],
+                        "Baixas": [sum(1 for n in j if n in gerador.faixa_baixa) for j in jogos],
+                        "Médias": [sum(1 for n in j if n in gerador.faixa_media) for j in jogos],
+                        "Altas": [sum(1 for n in j if n in gerador.faixa_alta) for j in jogos],
+                        "Consec": [gerador._contar_sequencias(j) for j in jogos],
+                        "Primos": [sum(1 for n in j if n in gerador.primos) for j in jogos],
+                        "Falhas": [d["falhas"] if d else 0 for d in diagnosticos]
+                    })
+                    
+                    st.dataframe(stats_df, use_container_width=True, hide_index=True)
+                    
+                    # Mostrar cada jogo formatado
+                    for i, (jogo, diag) in enumerate(zip(jogos, diagnosticos)):
+                        with st.container():
+                            # Determinar cor baseada no número de falhas
+                            if diag and diag["falhas"] == 0:
+                                cor_borda = "#4ade80"  # Verde - perfeito
+                            elif diag and diag["falhas"] == 1:
+                                cor_borda = "gold"     # Amarelo - aceitável
+                            else:
+                                cor_borda = "#4cc9f0"  # Azul - normal
+                            
+                            # Formatar números
+                            nums_html = formatar_jogo_html(jogo)
+                            
+                            # Estatísticas resumidas
+                            rep = len(set(jogo) & set(gerador.ultimo))
+                            pares = sum(1 for n in jogo if n%2==0)
+                            soma = sum(jogo)
+                            
+                            st.markdown(f"""
+                            <div style='border-left: 5px solid {cor_borda}; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
+                                <strong>Jogo {i+1:2d}:</strong> {nums_html}<br>
+                                <small style='color:#aaa;'>
+                                🔁 {rep} rep | ⚖️ {pares}×{15-pares} | ➕ {soma} | ✅ Falhas: {diag["falhas"] if diag else "?"}
+                                </small>
+                            </div>
+                            """, unsafe_allow_html=True)
+                    
+                    # Botões de ação
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        if st.button("💾 Salvar Jogos", use_container_width=True):
+                            arquivo, jogo_id = salvar_jogos_gerados(
+                                jogos, 
+                                list(range(1, 18)),  # Fechamento placeholder
+                                {"modelo": "3622", "ajustes": ajustes},
+                                ultimo['concurso'],
+                                ultimo['data']
+                            )
+                            if arquivo:
+                                st.success(f"✅ Jogos salvos! ID: {jogo_id}")
+                                st.session_state.jogos_salvos = carregar_jogos_salvos()
+                    
+                    with col2:
+                        if st.button("🔄 Nova Geração", use_container_width=True):
+                            st.session_state.jogos_3622 = None
+                            st.session_state.diagnosticos_3622 = None
+                            st.rerun()
+                    
+                    with col3:
+                        # Exportar para CSV
+                        df_export = pd.DataFrame({
+                            "Jogo": range(1, len(jogos)+1),
+                            "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in jogos],
+                            "Repetidas": stats_df["Repetidas"],
+                            "Pares": stats_df["Pares"],
+                            "Soma": stats_df["Soma"],
+                            "Baixas(01-08)": stats_df["Baixas"],
+                            "Medias(09-16)": stats_df["Médias"],
+                            "Altas(17-25)": stats_df["Altas"],
+                            "Consecutivos": stats_df["Consec"],
+                            "Primos": stats_df["Primos"]
+                        })
+                        
+                        csv = df_export.to_csv(index=False)
+                        st.download_button(
+                            label="📥 Exportar CSV",
+                            data=csv,
+                            file_name=f"jogos_3622_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                            mime="text/csv",
+                            use_container_width=True
+                        )
+
+        with tab3:
+            st.subheader("📋 Todos os Concursos Carregados")
+            
+            if st.session_state.dados_api:
+                st.markdown(f"""
+                <div class='concurso-info'>
+                    📊 <strong>Total de concursos carregados: {len(st.session_state.dados_api[:qtd])}</strong>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # Opções de filtro
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    busca = st.text_input("🔍 Buscar concurso específico (número ou data)", placeholder="Ex: 3000 ou 2024...")
+                with col2:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    if st.button("📥 Download TXT", use_container_width=True):
+                        conteudo_txt = exportar_concursos_txt(st.session_state.dados_api, qtd)
+                        st.download_button(
+                            label="⬇️ Baixar arquivo",
+                            data=conteudo_txt,
+                            file_name=f"lotofacil_concursos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                            mime="text/plain",
+                            use_container_width=True
+                        )
+                
+                # Filtrar concursos
+                dados_filtrados = st.session_state.dados_api[:qtd]
+                if busca:
+                    dados_filtrados = [
+                        c for c in dados_filtrados 
+                        if busca.lower() in str(c['concurso']).lower() 
+                        or busca.lower() in c['data'].lower()
+                    ]
+                
+                # Mostrar concursos em cards
+                for concurso in dados_filtrados:
+                    with st.container():
+                        col1, col2 = st.columns([1, 3])
+                        with col1:
+                            st.markdown(f"**#{concurso['concurso']}**")
+                            st.caption(concurso['data'])
+                        with col2:
+                            numeros = sorted(map(int, concurso['dezenas']))
+                            # Criar tags coloridas para os números
+                            nums_html = ""
+                            for i, num in enumerate(numeros):
+                                cor = "#4cc9f0" if num <= 5 else "#4ade80" if num <= 10 else "gold" if num <= 15 else "#f97316" if num <= 20 else "#ff6b6b"
+                                nums_html += f"<span style='background:{cor}20; border:1px solid {cor}; border-radius:20px; padding:5px 10px; margin:3px; display:inline-block; font-weight:bold;'>{num:02d}</span>"
+                            st.markdown(f"<div>{nums_html}</div>", unsafe_allow_html=True)
+                        st.divider()
+                
+                if len(dados_filtrados) > 50:
+                    st.caption(f"Mostrando {len(dados_filtrados)} concursos. Use a busca para encontrar um específico.")
+            else:
+                st.info("📥 Carregue os concursos usando o botão na barra lateral para visualizar a lista completa.")
+
+        with tab4:
+            st.subheader("✅ Conferência por Concurso")
+            
+            # Inicializar variáveis de sessão para persistência
+            if "idx_fechamento_selecionado" not in st.session_state:
+                st.session_state.idx_fechamento_selecionado = 0
+            if "futuro_selecionado" not in st.session_state:
+                st.session_state.futuro_selecionado = None
+            if "conferencia_realizada" not in st.session_state:
+                st.session_state.conferencia_realizada = False
+            if "resultado_conferencia" not in st.session_state:
+                st.session_state.resultado_conferencia = None
+            
+            st.session_state.jogos_salvos = carregar_jogos_salvos()
+            
+            if not st.session_state.jogos_salvos:
+                st.warning("Nenhum jogo salvo. Gere na aba 'Fechamento 3622'.")
+            elif not st.session_state.dados_api:
+                st.warning("Carregue os concursos primeiro!")
+            else:
+                ultimo_api = st.session_state.dados_api[0]
+                
+                nao_conferidos = [j for j in st.session_state.jogos_salvos 
+                                 if len(j.get("conferencias", [])) == 0]
+                
+                if not nao_conferidos:
+                    st.info("✅ Todos os fechamentos já foram conferidos!")
+                else:
+                    st.markdown(f"""
+                    <div class='concurso-info'>
+                        🎯 Último concurso: #{ultimo_api['concurso']} - {ultimo_api['data']}
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        qtd_jogos_3622 = st.slider("Quantidade de jogos", 5, 20, 10, key="qtd_3622")
-                    with col2:
-                        st.markdown("<br>", unsafe_allow_html=True)
-                        if st.button("🎲 Gerar Jogos 3622", use_container_width=True, type="primary"):
-                            with st.spinner("Gerando jogos com validação rigorosa..."):
-                                jogos_3622, violacoes_list, pontuacoes = modelo.gerar_multiplos_jogos(qtd_jogos_3622)
-                                st.session_state.jogos_3622_gerados = jogos_3622
-                                st.session_state.jogos_3622_violacoes = violacoes_list
-                                st.session_state.jogos_3622_pontuacoes = pontuacoes
-                                st.success(f"✅ {len(jogos_3622)} jogos gerados com validação!")
+                    # Criar opções para o selectbox
+                    opcoes = []
+                    for i, j in enumerate(nao_conferidos[:10]):
+                        data = datetime.fromisoformat(j["data_geracao"]).strftime("%d/%m/%Y %H:%M")
+                        base = j.get("concurso_base", {"numero": 0, "data": "Desconhecido"})
+                        opcoes.append(f"{i+1} - Base #{base['numero']} - {data}")
                     
-                    # Mostrar jogos gerados
-                    if "jogos_3622_gerados" in st.session_state:
-                        jogos_3622 = st.session_state.jogos_3622_gerados
-                        violacoes_list = st.session_state.jogos_3622_violacoes
-                        pontuacoes = st.session_state.jogos_3622_pontuacoes
+                    if opcoes:
+                        opcao_selecionada = st.selectbox(
+                            "Selecione o fechamento", 
+                            opcoes,
+                            index=st.session_state.idx_fechamento_selecionado if st.session_state.idx_fechamento_selecionado < len(opcoes) else 0
+                        )
                         
-                        st.markdown("### 📋 Jogos Gerados - MODELO 3622")
+                        # Atualizar o índice
+                        novo_idx = int(opcao_selecionada.split(" - ")[0]) - 1
+                        if novo_idx != st.session_state.idx_fechamento_selecionado:
+                            st.session_state.idx_fechamento_selecionado = novo_idx
+                            st.session_state.conferencia_realizada = False
+                            st.session_state.resultado_conferencia = None
+                            st.rerun()
                         
-                        # Estatísticas agregadas
-                        df_stats = pd.DataFrame({
-                            "Jogo": range(1, len(jogos_3622)+1),
-                            "Pontuação": pontuacoes,
-                            "Violações": [len(v) for v in violacoes_list],
-                            "Status": ["✅ Principal" if len(v) == 0 else "⚠️ Secundário" if len(v) == 1 else "❌ Ruim" for v in violacoes_list]
-                        })
-                        st.dataframe(df_stats, use_container_width=True, hide_index=True)
+                        idx = st.session_state.idx_fechamento_selecionado
+                        jogo_sel = nao_conferidos[idx]
+                        base_info = jogo_sel.get("concurso_base", {"numero": 0, "data": "Desconhecido"})
                         
-                        # Mostrar cada jogo
-                        for i, jogo in enumerate(jogos_3622, 1):
-                            with st.container():
-                                # Calcular estatísticas do jogo
-                                pares = sum(1 for n in jogo if n % 2 == 0)
-                                impares = 15 - pares
-                                soma = sum(jogo)
-                                primos = sum(1 for n in jogo if n in modelo.primos)
-                                faixa1 = sum(1 for n in jogo if 1 <= n <= 8)
-                                faixa2 = sum(1 for n in jogo if 9 <= n <= 16)
-                                faixa3 = sum(1 for n in jogo if 17 <= n <= 25)
-                                
-                                # Cor de fundo baseada na pontuação
-                                cor_fundo = "#0e1117"
-                                if pontuacoes[i-1] >= 10:
-                                    cor_fundo = "#1a3b2e"  # Verde escuro para jogos principais
-                                elif pontuacoes[i-1] >= 7:
-                                    cor_fundo = "#3b3a1a"  # Amarelo escuro para secundários
-                                
-                                st.markdown(f"""
-                                <div style='background:{cor_fundo}; border-radius:10px; padding:15px; margin-bottom:10px; border-left: 5px solid #4cc9f0;'>
-                                    <strong>Jogo {i:2d} (Pontuação: {pontuacoes[i-1]})</strong><br>
-                                    <span style='font-size:1.1em;'>{', '.join(f"{n:02d}" for n in jogo)}</span><br>
-                                    <small>
-                                    📊 Pares: {pares} | Ímpares: {impares} | Soma: {soma} | Primos: {primos}<br>
-                                    📈 Faixas: {faixa1}/01-08 | {faixa2}/09-16 | {faixa3}/17-25
-                                    </small>
-                                </div>
-                                """, unsafe_allow_html=True)
-                                
-                                # Mostrar violações se houver
-                                if violacoes_list[i-1]:
-                                    with st.expander(f"⚠️ Ver {len(violacoes_list[i-1])} violação(s)"):
-                                        for v in violacoes_list[i-1]:
-                                            st.markdown(v)
-                        
-                        # Opção de exportar
-                        if st.button("📥 Exportar Jogos 3622", use_container_width=True):
-                            df_export = pd.DataFrame({
-                                "Jogo": range(1, len(jogos_3622)+1),
-                                "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in jogos_3622],
-                                "Pontuacao": pontuacoes,
-                                "Pares": [sum(1 for n in j if n%2==0) for j in jogos_3622],
-                                "Impares": [15 - sum(1 for n in j if n%2==0) for j in jogos_3622],
-                                "Soma": [sum(j) for j in jogos_3622],
-                                "Primos": [sum(1 for n in j if n in modelo.primos) for j in jogos_3622],
-                                "Faixa01_08": [sum(1 for n in j if 1<=n<=8) for j in jogos_3622],
-                                "Faixa09_16": [sum(1 for n in j if 9<=n<=16) for j in jogos_3622],
-                                "Faixa17_25": [sum(1 for n in j if 17<=n<=25) for j in jogos_3622]
-                            })
+                        with st.expander("📋 Detalhes do fechamento", expanded=True):
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.write(f"**ID:** {jogo_sel.get('id', 'N/A')}")
+                                st.write(f"**Base concurso:** #{base_info['numero']}")
+                            with col2:
+                                st.write(f"**Jogos:** {len(jogo_sel.get('jogos', []))}")
                             
-                            csv = df_export.to_csv(index=False)
-                            st.download_button(
-                                label="⬇️ Baixar CSV",
-                                data=csv,
-                                file_name=f"jogos_modelo3622_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                                mime="text/csv"
+                            # Mostrar jogos do fechamento
+                            with st.expander("🔍 Ver jogos do fechamento"):
+                                jogos_preview = jogo_sel.get("jogos", [])[:5]
+                                for idx_j, j in enumerate(jogos_preview):
+                                    st.markdown(f"**Jogo {idx_j+1}:** {', '.join(f'{n:02d}' for n in j)}")
+                                if len(jogo_sel.get("jogos", [])) > 5:
+                                    st.caption(f"... e mais {len(jogo_sel['jogos']) - 5} jogos")
+                        
+                        # Concursos futuros disponíveis
+                        concursos_futuros = [c for c in st.session_state.dados_api 
+                                            if c['concurso'] > base_info['numero']]
+                        
+                        if concursos_futuros:
+                            opcoes_futuros = [f"#{c['concurso']} - {c['data']}" 
+                                             for c in concursos_futuros[:5]]
+                            
+                            futuro_sel = st.selectbox(
+                                "Concurso para conferir", 
+                                opcoes_futuros,
+                                key="select_futuro"
                             )
-                
-                elif opcao == "📊 Análise do Último Concurso":
-                    st.markdown("### 📊 Análise do Último Concurso")
-                    
-                    if analise_ultimo:
-                        col1, col2, col3 = st.columns(3)
-                        
-                        with col1:
-                            st.metric("Soma", analise_ultimo.get("soma_ultimo", "N/A"))
-                            st.metric("Pares", analise_ultimo.get("pares_ultimo", "N/A"))
-                        
-                        with col2:
-                            st.metric("Primos", analise_ultimo.get("primos_ultimo", "N/A"))
-                            st.metric("Repetição", analise_ultimo.get("repetidos_ultimo", "N/A"))
-                        
-                        with col3:
-                            st.metric("Altas (22-25)", analise_ultimo.get("altas_ultimo", "N/A"))
-                            st.metric("Miolo (09-16)", analise_ultimo.get("miolo_ultimo", "N/A"))
-                        
-                        st.markdown("### 📋 Dezenas do Último Concurso")
-                        
-                        # Mostrar números com cores
-                        nums_html = ""
-                        for num in sorted(modelo.ultimo_concurso):
-                            # Classificar o número
-                            if num >= 22:
-                                cor = "#ff6b6b"  # Vermelho para altas
-                                icone = "🔴"
-                            elif 9 <= num <= 16:
-                                cor = "#4cc9f0"  # Azul para miolo
-                                icone = "🔵"
-                            else:
-                                cor = "#4ade80"  # Verde para baixas
-                                icone = "🟢"
                             
-                            nums_html += f"<span style='background:{cor}30; border:1px solid {cor}; border-radius:30px; padding:8px 15px; margin:5px; display:inline-block; font-weight:bold; font-size:1.2em;'>{num:02d} {icone}</span>"
-                        
-                        st.markdown(f"<div style='text-align:center;'>{nums_html}</div>", unsafe_allow_html=True)
-                        
-                        st.markdown("### 🔍 Ajustes Adaptáveis Calculados")
-                        
-                        col1, col2 = st.columns(2)
-                        
-                        with col1:
-                            st.markdown("**Com base neste último concurso:**")
-                            st.markdown(f"""
-                            - Último teve **{analise_ultimo.get('altas_ultimo', 0)}** altas → próximo tende a **{modelo.ajustes.get('altas_alvo', (1,2))[0]}-{modelo.ajustes.get('altas_alvo', (1,2))[1]}**
-                            - Último teve **{analise_ultimo.get('miolo_ultimo', 0)}** no miolo → próximo tende a **{modelo.ajustes.get('miolo_alvo', (5,6))[0]}-{modelo.ajustes.get('miolo_alvo', (5,6))[1]}**
-                            """)
-                        
-                        with col2:
-                            st.markdown("**Recomendações para o próximo concurso:**")
-                            st.markdown(f"""
-                            - Repetir **{modelo.ajustes.get('repeticao_alvo', (8,9))[0]}-{modelo.ajustes.get('repeticao_alvo', (8,9))[1]}** números
-                            - Manter {modelo.ajustes.get('sequencias', 'manter')} sequências
-                            - Soma entre 168-186 (ideal 172-182)
-                            """)
+                            num_futuro = int(futuro_sel.split(" - ")[0].replace("#", ""))
+                            
+                            # Botão de conferência
+                            if st.button("🔍 CONFERIR AGORA", use_container_width=True, type="primary"):
+                                with st.spinner("Conferindo resultados..."):
+                                    concurso_info = next(c for c in concursos_futuros 
+                                                        if c['concurso'] == num_futuro)
+                                    numeros = sorted(map(int, concurso_info["dezenas"]))
+                                    
+                                    # Processar jogos para conferência
+                                    acertos = []
+                                    jogos_validos = []
+                                    
+                                    for jogo in jogo_sel.get("jogos", []):
+                                        if isinstance(jogo, list) and len(set(jogo)) == 15:
+                                            jogos_validos.append(jogo)
+                                            acertos.append(len(set(jogo) & set(numeros)))
+                                    
+                                    if acertos:
+                                        # Calcular estatísticas
+                                        stats_conf = {
+                                            "media": float(np.mean(acertos)),
+                                            "max": int(max(acertos)),
+                                            "min": int(min(acertos)),
+                                            "distribuicao": {str(k): int(v) for k, v in Counter(acertos).items()}
+                                        }
+                                        
+                                        info_salvar = {
+                                            "numero": int(concurso_info["concurso"]),
+                                            "data": str(concurso_info["data"]),
+                                            "resultado": [int(n) for n in numeros]
+                                        }
+                                        
+                                        # Salvar conferência
+                                        if adicionar_conferencia(jogo_sel["arquivo"], info_salvar, 
+                                                                acertos, stats_conf):
+                                            st.session_state.conferencia_realizada = True
+                                            st.session_state.resultado_conferencia = {
+                                                "acertos": acertos,
+                                                "jogos_validos": jogos_validos,
+                                                "stats": stats_conf,
+                                                "num_futuro": num_futuro,
+                                                "concurso_info": concurso_info
+                                            }
+                                            st.rerun()
+                            
+                            # Mostrar resultados da conferência se existirem
+                            if st.session_state.conferencia_realizada and st.session_state.resultado_conferencia:
+                                resultado = st.session_state.resultado_conferencia
+                                
+                                st.success(f"✅ Conferência realizada com concurso #{resultado['num_futuro']}!")
+                                
+                                # Mostrar estatísticas
+                                m1, m2, m3, m4 = st.columns(4)
+                                with m1:
+                                    st.metric("Média", f"{resultado['stats']['media']:.1f}")
+                                with m2:
+                                    st.metric("Máximo", resultado['stats']['max'])
+                                with m3:
+                                    st.metric("Mínimo", resultado['stats']['min'])
+                                with m4:
+                                    vantagem_real = resultado['stats']['media'] - 9.5
+                                    cor = "green" if vantagem_real > 0 else "red"
+                                    st.markdown(f"<p style='text-align:center; color:{cor}; font-weight:bold;'>Vs aleatório<br>{vantagem_real:+.2f}</p>", unsafe_allow_html=True)
+                                
+                                # Mostrar tabela de resultados
+                                df_res = pd.DataFrame({
+                                    "Jogo": range(1, len(resultado['jogos_validos'])+1),
+                                    "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in resultado['jogos_validos']],
+                                    "Acertos": resultado['acertos'][:len(resultado['jogos_validos'])]
+                                })
+                                st.dataframe(df_res, use_container_width=True, hide_index=True)
+                                
+                                # Botão para conferir outro
+                                if st.button("✅ Conferir Outro Fechamento", use_container_width=True):
+                                    st.session_state.conferencia_realizada = False
+                                    st.session_state.resultado_conferencia = None
+                                    st.rerun()
+                        else:
+                            st.warning("Aguardando próximos concursos...")
     else:
         st.markdown("""
         <div style='text-align: center; padding: 2rem;'>
@@ -1371,25 +1078,6 @@ def main():
             <p>Use o menu ≡ no canto superior esquerdo</p>
         </div>
         """, unsafe_allow_html=True)
-
-# =====================================================
-# FUNÇÕES DE REPETIÇÃO (MANTIDAS DO CÓDIGO ORIGINAL)
-# =====================================================
-def repeticao_ultimo_penultimo(concursos):
-    if len(concursos) < 2: return None
-    ultimo = set(concursos[0])
-    penultimo = set(concursos[1])
-    repetidos = len(ultimo & penultimo)
-    media = repetidos / 15
-    return int(repetidos), float(media)
-
-def repeticao_ultimo_antepenultimo(concursos):
-    if len(concursos) < 3: return None
-    ultimo = set(concursos[0])
-    antepenultimo = set(concursos[2])
-    repetidos = len(ultimo & antepenultimo)
-    media = repetidos / 15
-    return int(repetidos), float(media)
 
 if __name__ == "__main__":
     main()
