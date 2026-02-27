@@ -1,3 +1,30 @@
+[file name]: IMG_2140.jpeg
+[file content begin]
+21:30  
+Palmeiras SP  
+Fluminense RJ  
+1.29 ✅  
+
+○ Total → Mais de 1.5  
+
+20:00  
+Cruzeiro MG  
+Corinthians SP  
+1.33 ✅  
+
+○ Total → Mais de 1.5  
+
+21:30  
+Gremio FB Porto Alegrense RS  
+Atletico Mineiro MG  
+1.36 ✅  
+
+○ Total → Mais de 1.5  
+
+Total:  
+2.33
+[file content end]
+
 import streamlit as st
 from datetime import datetime, timedelta, timezone
 import requests
@@ -2546,7 +2573,7 @@ class GerenciadorAlertasCompletos:
                 draw.text((resultado_x, y_escudos + TAMANHO_QUADRADO//2 - 30), 
                          resultado_text, font=FONTE_RESULTADO, fill=(255, 255, 255))
 
-            # Resultado HT
+            # Resultado HT se disponível
             if resultados.get('ht_home_goals') is not None:
                 ht_text = f"HT: {resultados['ht_home_goals']} - {resultados['ht_away_goals']}"
                 try:
@@ -4080,6 +4107,123 @@ class PosterGenerator:
             except:
                 draw.text((x + 70, y + 90), iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
 
+
+# =============================
+# NOVAS FUNÇÕES PARA ALERTAS NO FORMATO DA IMAGEM
+# =============================
+
+def gerar_alerta_formato_imagem(self, jogos: list, tipo_analise: str = "over_under") -> str:
+    """
+    Gera alerta no formato da imagem enviada:
+    21:30  
+    Palmeiras SP  
+    Fluminense RJ  
+    1.29 ✅  
+    
+    ○ Total → Mais de 1.5  
+    """
+    if not jogos:
+        return ""
+    
+    mensagem = ""
+    odds_acumuladas = 1.0
+    total_jogos = 0
+    
+    for jogo in jogos:
+        # Formatar hora (HH:MM)
+        if isinstance(jogo.get("hora"), datetime):
+            hora = jogo["hora"].strftime("%H:%M")
+        else:
+            # Tentar extrair hora de string ISO
+            try:
+                if isinstance(jogo.get("hora"), str):
+                    dt = datetime.fromisoformat(jogo["hora"].replace('Z', '+00:00'))
+                    hora_brasilia = dt.astimezone(timezone(timedelta(hours=-3)))
+                    hora = hora_brasilia.strftime("%H:%M")
+                else:
+                    hora = "21:30"  # fallback
+            except:
+                hora = "21:30"  # fallback
+        
+        # Nomes dos times (remover siglas de estados se existirem)
+        home = jogo.get('home', '').replace("SP", "").replace("RJ", "").replace("MG", "").replace("RS", "").replace("FB", "").replace("Porto Alegrense", "").strip()
+        away = jogo.get('away', '').replace("SP", "").replace("RJ", "").replace("MG", "").replace("RS", "").replace("FB", "").replace("Porto Alegrense", "").strip()
+        
+        # Limitar tamanho dos nomes se necessário
+        if len(home) > 15:
+            home = home[:12] + "..."
+        if len(away) > 15:
+            away = away[:12] + "..."
+        
+        # Calcular odd aproximada baseada na probabilidade
+        probabilidade = jogo.get('probabilidade', 50)
+        if probabilidade > 0:
+            # Converter probabilidade para odd (quanto maior a prob, menor a odd)
+            # Fórmula: odd = 100 / probabilidade
+            odd_aproximada = round(100 / probabilidade, 2)
+        else:
+            odd_aproximada = 1.50  # fallback
+        
+        # Arredondar para 2 casas decimais
+        odd_formatada = f"{odd_aproximada:.2f}"
+        
+        # Adicionar emoji de confirmação (✅) se a odd for boa (opcional)
+        # Na imagem original tem ✅ após a odd
+        odd_com_emoji = f"{odd_formatada} ✅"
+        
+        # Adicionar bloco do jogo no formato da imagem
+        mensagem += f"{hora}  \n"  # dois espaços para quebrar linha
+        mensagem += f"{home}  \n"
+        mensagem += f"{away}  \n"
+        mensagem += f"{odd_com_emoji}  \n\n"
+        
+        # Acumular odd para o total (multiplicativo)
+        odds_acumuladas *= odd_aproximada
+        total_jogos += 1
+        
+        # Adicionar linha "○ Total → Mais de 1.5" após cada jogo (como na imagem)
+        mensagem += f"○ Total → Mais de 1.5  \n\n"
+    
+    # Adicionar linha do total (formato da imagem)
+    if total_jogos > 0:
+        # Arredondar odd total para 2 casas
+        odd_total = round(odds_acumuladas, 2)
+        
+        mensagem += f"Total:  \n"
+        mensagem += f"{odd_total}"
+    
+    return mensagem
+
+def enviar_alerta_formato_imagem(self, jogos: list, tipo_analise: str = "over_under"):
+    """
+    Envia alerta no formato exato da imagem fornecida
+    """
+    if not jogos:
+        st.warning("⚠️ Nenhum jogo para enviar no formato imagem")
+        return False
+    
+    # Gerar mensagem no formato da imagem
+    mensagem = self.gerar_alerta_formato_imagem(jogos, tipo_analise)
+    
+    # Adicionar cabeçalho
+    data_atual = datetime.now().strftime("%d/%m/%Y")
+    mensagem_completa = f"📊 ALERTAS {data_atual}\n\n" + mensagem
+    
+    # Adicionar rodapé
+    mensagem_completa += f"\n\n🔥 ELITE MASTER SYSTEM"
+    
+    # Log para debug
+    st.code(mensagem_completa, language="text")
+    
+    # Enviar para o Telegram
+    if self.telegram_client.enviar_mensagem(mensagem_completa, self.config.TELEGRAM_CHAT_ID_ALT2):
+        st.success(f"📤 Alerta formato imagem enviado com {len(jogos)} jogos!")
+        return True
+    else:
+        st.error("❌ Falha ao enviar alerta formato imagem")
+        return False
+
+
 # =============================
 # SISTEMA PRINCIPAL
 # =============================
@@ -4423,6 +4567,8 @@ class SistemaAlertasFutebol:
                 st.info("🚨 Enviando alerta de imagem...")
                 if estilo_poster == "West Ham (Novo)":
                     self._enviar_alerta_westham_style(jogos_filtrados, tipo_analise, config_analise)
+                elif estilo_poster == "Formato Imagem (Simplificado)":
+                    self.enviar_alerta_formato_imagem(jogos_filtrados, tipo_analise)
                 else:
                     self._enviar_alerta_poster_original(jogos_filtrados, tipo_analise, config_analise)
             else:
@@ -5705,7 +5851,11 @@ def main():
         st.markdown("----")
         st.header("Configurações Gerais")
         top_n = st.selectbox("📊 Jogos no Top", [3, 5, 10], index=0)
-        estilo_poster = st.selectbox("🎨 Estilo do Poster", ["West Ham (Novo)", "Elite Master (Original)"], index=0)
+        
+        # ESTILO DO POSTER ATUALIZADO COM NOVA OPÇÃO
+        estilo_poster = st.selectbox("🎨 Estilo do Poster", 
+                                    ["West Ham (Novo)", "Elite Master (Original)", "Formato Imagem (Simplificado)"], 
+                                    index=2)  # Default para o novo formato
         
         # NOVO: Opção para ativar o filtro avançado
         st.markdown("----")
@@ -5737,6 +5887,7 @@ def main():
             st.info(f"Confiança Mínima: {config_analise.get('min_conf_am', 60)}%")
             st.info(f"Filtro Ambas Marcam: {config_analise.get('filtro_am', 'Todos')}")
         
+        st.info(f"Estilo Poster: {estilo_poster}")
         st.info(f"Filtro Avançado: {'✅ ATIVADO' if aplicar_filtro_avancado else '❌ DESATIVADO'}")
         st.info(f"Formato Top Jogos: {formato_top_jogos}")
         if alerta_conferencia_auto:
@@ -5744,7 +5895,7 @@ def main():
         if alerta_resultados:
             st.info("🏁 Alertas de resultados: ATIVADO")
     
-    # Abas principais (removida a aba do filtro avançado)
+    # Abas principais
     tab1, tab2, tab3, tab4 = st.tabs(["🔍 Buscar Partidas", "📊 Conferir Resultados", 
                                    "🏆 Resultados TOP Alertas", "⚽ Alertas Completos"])
     
@@ -5782,7 +5933,7 @@ def main():
                                       estilo_poster, 
                                       alerta_individual, alerta_poster, alerta_top_jogos, 
                                       formato_top_jogos, tipo_filtro_passar, tipo_analise, config_analise,
-                                      aplicar_filtro_avancado=aplicar_filtro_avancado)  # NOVO parâmetro
+                                      aplicar_filtro_avancado=aplicar_filtro_avancado)
     
     with tab2:
         st.subheader("📊 Conferência de Resultados")
