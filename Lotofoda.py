@@ -15,7 +15,7 @@ warnings.filterwarnings("ignore")
 # CONFIGURAÇÃO MOBILE PREMIUM
 # =====================================================
 st.set_page_config(
-    page_title="🎯 LOTOFÁCIL PREMIUM",
+    page_title="🎯 LOTOFÁCIL 3622",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
@@ -34,11 +34,14 @@ input, textarea { border-radius: 12px !important; }
 .p15 { color: #f97316; font-weight: bold; }
 .concurso-info { background: #1e1e2e; padding: 10px; border-radius: 10px; margin: 10px 0; }
 .metric-card { background: #16213e; padding: 10px; border-radius: 10px; text-align: center; }
+.regra-ok { color: #4ade80; font-weight: bold; }
+.regra-alerta { color: #f97316; font-weight: bold; }
+.regra-ruim { color: #ff6b6b; font-weight: bold; }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🧠🎯 LOTOFÁCIL PREMIUM")
-st.caption("DNA Evolutivo • Sem Repetições • Mobile First")
+st.title("🎯🧠 LOTOFÁCIL 3622")
+st.caption("Modelo Universal + Ajuste Adaptável • Baseado em Padrões Reais")
 
 # =====================================================
 # FUNÇÃO PARA CONVERTER NUMPY TYPES PARA PYTHON NATIVE
@@ -577,957 +580,356 @@ class AnaliseLotofacilAvancada:
         return pd.DataFrame(dados)
 
 # =====================================================
-# CLASSE: ANÁLISE DE JOGOS HISTÓRICOS (600 CONCURSOS)
+# CLASSE: MODELO 3622 (UNIVERSAL + AJUSTE ADAPTÁVEL)
 # =====================================================
-class AnaliseHistoricaLotofacil:
+class Modelo3622:
     """
-    Análise aprofundada dos 600 concursos históricos
-    Identifica padrões reais para geração de jogos inteligentes
+    Implementação do MODELO UNIVERSAL + AJUSTE ADAPTÁVEL para LOTOFácil
+    Baseado nas regras do concurso 3622
     """
     
-    def __init__(self, concursos_historicos, dados_completos=None):
-        self.concursos = concursos_historicos  # Lista de listas com números
-        self.dados_completos = dados_completos or []  # Dados completos da API
-        self.total_concursos = len(concursos_historicos)
+    def __init__(self, analise_principal, ultimo_concurso, ultimo_concurso_numero, ultimo_concurso_data):
+        self.analise = analise_principal
+        self.ultimo_concurso = ultimo_concurso  # Lista de números do último concurso
+        self.ultimo_numero = ultimo_concurso_numero
+        self.ultimo_data = ultimo_concurso_data
         self.numeros = list(range(1, 26))
         
-        # Análises principais
-        self.frequencias = self._calcular_frequencias()
-        self.numeros_quentes = self._identificar_quentes_frios()[0]
-        self.numeros_frios = self._identificar_quentes_frios()[1]
-        self.numeros_atrasados = self._calcular_atraso()
-        self.numeros_repetentes = self._identificar_repetentes_recentes()
-        
-        # Padrões estatísticos
-        self.padroes_pares_impares = self._analisar_pares_impares()
-        self.padroes_soma = self._analisar_somas()
-        self.padroes_primos = self._analisar_numeros_primos()
-        self.padroes_linhas = self._analisar_linhas()
-        self.padroes_repeticao_entre_concursos = self._analisar_repeticao_entre_concursos()
-        
-        # Estatísticas descritivas
-        self.estatisticas_gerais = self._calcular_estatisticas_gerais()
-        
-    def _calcular_frequencias(self):
-        """Calcula frequência absoluta e relativa de cada número"""
-        contador = Counter()
-        for concurso in self.concursos:
-            contador.update(concurso)
-        
-        frequencias = {}
-        for num in self.numeros:
-            frequencias[num] = {
-                'absoluta': contador[num],
-                'relativa': contador[num] / self.total_concursos * 100,
-                'percentual': (contador[num] / self.total_concursos) * 100
-            }
-        return frequencias
-    
-    def _identificar_quentes_frios(self, top_n=8):
-        """Identifica números quentes (mais frequentes) e frios (menos frequentes)"""
-        sorted_nums = sorted(
-            self.numeros, 
-            key=lambda x: self.frequencias[x]['absoluta'], 
-            reverse=True
-        )
-        quentes = sorted_nums[:top_n]
-        frios = sorted_nums[-top_n:]
-        return quentes, frios
-    
-    def _calcular_atraso(self, ultimos_n_concursos=10):
-        """Calcula números mais atrasados (que não aparecem há mais tempo)"""
-        ultimos_concursos = self.concursos[:ultimos_n_concursos]
-        numeros_ultimos = set()
-        for concurso in ultimos_concursos:
-            numeros_ultimos.update(concurso)
-        
-        atrasados = []
-        for num in self.numeros:
-            if num not in numeros_ultimos:
-                atrasados.append(num)
-            else:
-                # Verificar há quantos concursos não aparece
-                for i, concurso in enumerate(self.concursos[:30]):  # Verificar últimos 30
-                    if num in concurso:
-                        if i > 5:  # Se passou mais de 5 concursos
-                            atrasados.append(num)
-                        break
-        
-        return sorted(list(set(atrasados)))[:10]  # Top 10 atrasados
-    
-    def _identificar_repetentes_recentes(self, ultimos_n=5):
-        """Identifica números que se repetem muito nos últimos concursos"""
-        ultimos_concursos = self.concursos[:ultimos_n]
-        contador_recente = Counter()
-        for concurso in ultimos_concursos:
-            contador_recente.update(concurso)
-        
-        repetentes = []
-        for num, freq in contador_recente.most_common():
-            if freq >= 3:  # Apareceu em pelo menos 3 dos últimos 5
-                repetentes.append(num)
-        
-        return repetentes[:8]  # Top 8 repetentes
-    
-    def _analisar_pares_impares(self):
-        """Analisa distribuição de pares e ímpares nos concursos"""
-        distribuicao = []
-        for concurso in self.concursos:
-            pares = sum(1 for n in concurso if n % 2 == 0)
-            impares = 15 - pares
-            distribuicao.append({
-                'pares': pares,
-                'impares': impares,
-                'tipo': f"{pares}-{impares}"
-            })
-        
-        # Contar frequência de cada tipo
-        tipos = Counter([d['tipo'] for d in distribuicao])
-        
-        return {
-            'distribuicao': distribuicao,
-            'tipos_frequentes': tipos.most_common(3),
-            'media_pares': float(np.mean([d['pares'] for d in distribuicao])),
-            'desvio_pares': float(np.std([d['pares'] for d in distribuicao])),
-            'tipo_dominante': tipos.most_common(1)[0][0] if tipos else "8-7"
-        }
-    
-    def _analisar_somas(self):
-        """Analisa a soma dos números em cada concurso"""
-        somas = [sum(concurso) for concurso in self.concursos]
-        
-        return {
-            'somas': somas,
-            'media': float(np.mean(somas)),
-            'mediana': float(np.median(somas)),
-            'minimo': int(min(somas)),
-            'maximo': int(max(somas)),
-            'desvio': float(np.std(somas)),
-            'intervalo_confianca': (
-                int(np.mean(somas) - np.std(somas)),
-                int(np.mean(somas) + np.std(somas))
-            ),
-            'faixa_mais_comum': (180, 210)  # Faixa observada empiricamente
-        }
-    
-    def _analisar_numeros_primos(self):
-        """Analisa quantidade de números primos por concurso"""
-        primos = [2, 3, 5, 7, 11, 13, 17, 19, 23]
-        qtd_primos = []
-        
-        for concurso in self.concursos:
-            qtd = sum(1 for n in concurso if n in primos)
-            qtd_primos.append(qtd)
-        
-        distribuicao = Counter(qtd_primos)
-        
-        return {
-            'quantidades': qtd_primos,
-            'media': float(np.mean(qtd_primos)),
-            'mediana': float(np.median(qtd_primos)),
-            'moda': int(distribuicao.most_common(1)[0][0]) if distribuicao else 5,
-            'distribuicao': dict(distribuicao.most_common()),
-            'faixa_ideal': (5, 6)  # 5 ou 6 primos é o mais comum
-        }
-    
-    def _analisar_linhas(self):
-        """Analisa distribuição por linhas (1-5, 6-10, 11-15, 16-20, 21-25)"""
-        linhas = {1: [], 2: [], 3: [], 4: [], 5: []}
-        
-        for concurso in self.concursos:
-            cont_linhas = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
-            for n in concurso:
-                linha = (n - 1) // 5 + 1
-                cont_linhas[linha] += 1
-            
-            for linha in linhas:
-                linhas[linha].append(cont_linhas[linha])
-        
-        return {
-            f"linha_{l}": {
-                'media': float(np.mean(cont)) if cont else 3.0,
-                'desvio': float(np.std(cont)) if cont else 1.0,
-                'min': int(min(cont)) if cont else 0,
-                'max': int(max(cont)) if cont else 5
-            } for l, cont in linhas.items()
-        }
-    
-    def _analisar_repeticao_entre_concursos(self):
-        """Analisa quantos números se repetem entre concursos consecutivos"""
-        repeticoes = []
-        for i in range(len(self.concursos) - 1):
-            repetidos = len(set(self.concursos[i]) & set(self.concursos[i + 1]))
-            repeticoes.append(repetidos)
-        
-        return {
-            'media': float(np.mean(repeticoes)) if repeticoes else 9.0,
-            'desvio': float(np.std(repeticoes)) if repeticoes else 2.0,
-            'min': int(min(repeticoes)) if repeticoes else 5,
-            'max': int(max(repeticoes)) if repeticoes else 13,
-            'distribuicao': dict(Counter(repeticoes).most_common(5)) if repeticoes else {}
-        }
-    
-    def _calcular_estatisticas_gerais(self):
-        """Calcula estatísticas descritivas gerais"""
-        return {
-            'total_concursos': self.total_concursos,
-            'periodo': {
-                'inicio': self.dados_completos[-1]['data'] if self.dados_completos else 'N/A',
-                'fim': self.dados_completos[0]['data'] if self.dados_completos else 'N/A'
+        # REGRAS UNIVERSAIS (BASE FIXA)
+        self.regras_universais = {
+            "repeticao": {"min": 8, "max": 10, "otimo": (8, 9), "descricao": "Repetição do concurso anterior"},
+            "pares_impares": {"tipos": ["7x8", "8x7"], "alternativo": "6x9", "descricao": "Ímpares x Pares"},
+            "soma": {"min": 168, "max": 186, "premium": (172, 182), "descricao": "Soma total"},
+            "faixas": {
+                "01-08": {"min": 5, "max": 6},
+                "09-16": {"min": 5, "max": 6},
+                "17-25": {"min": 3, "max": 4}
             },
-            'frequencia_media': float(np.mean([self.frequencias[n]['absoluta'] for n in self.numeros])),
-            'numeros_por_faixa': self._classificar_por_faixa()
-        }
-    
-    def _classificar_por_faixa(self):
-        """Classifica números por faixa de frequência"""
-        faixas = {
-            'quentes': [],
-            'neutros': [],
-            'frios': []
+            "consecutivos": {"min_pares": 3, "ideal": "2 blocos + 1 triplo", "descricao": "Números consecutivos"},
+            "primos": {"min": 4, "max": 6, "descricao": "Números primos"}
         }
         
-        for num in self.numeros:
-            freq = self.frequencias[num]['absoluta']
-            if freq > np.mean([self.frequencias[n]['absoluta'] for n in self.numeros]) + np.std([self.frequencias[n]['absoluta'] for n in self.numeros]):
-                faixas['quentes'].append(num)
-            elif freq < np.mean([self.frequencias[n]['absoluta'] for n in self.numeros]) - np.std([self.frequencias[n]['absoluta'] for n in self.numeros]):
-                faixas['frios'].append(num)
+        # Lista de números primos
+        self.primos = [2, 3, 5, 7, 11, 13, 17, 19, 23]
+        
+        # AJUSTES ADAPTÁVEIS (calculados com base no último concurso)
+        self.ajustes = self._calcular_ajustes()
+        
+    def _calcular_ajustes(self):
+        """Calcula os ajustes adaptáveis com base no último concurso"""
+        ajustes = {}
+        
+        # AJUSTE A: Peso das repetições
+        if self.analise and self.analise.padroes_repeticao:
+            ultima_rep = self.analise.padroes_repeticao.get("ultima", 8)
+            
+            if ultima_rep >= 9:
+                ajustes["repeticao_alvo"] = (7, 8)  # Se veio 9 ou 10, reduzir
+            elif ultima_rep <= 7:
+                ajustes["repeticao_alvo"] = (9, 10)  # Se veio ≤7, aumentar
             else:
-                faixas['neutros'].append(num)
+                ajustes["repeticao_alvo"] = (8, 8)  # Manter 8
+        else:
+            ajustes["repeticao_alvo"] = (8, 9)
         
-        return faixas
+        # AJUSTE B: Altas (22-25)
+        if self.ultimo_concurso:
+            altas_ultimo = sum(1 for n in self.ultimo_concurso if n >= 22)
+            
+            if altas_ultimo <= 1:
+                ajustes["altas_alvo"] = (2, 3)  # Tendência a aumentar
+            elif altas_ultimo >= 3:
+                ajustes["altas_alvo"] = (0, 1)  # Tendência a diminuir
+            else:
+                ajustes["altas_alvo"] = (1, 2)  # Neutro
+        else:
+            ajustes["altas_alvo"] = (1, 2)
+        
+        # AJUSTE C: Miolo (09-16)
+        if self.ultimo_concurso:
+            miolo_ultimo = sum(1 for n in self.ultimo_concurso if 9 <= n <= 16)
+            
+            # Concurso 3622 é "limpo" (miolo forte)
+            if miolo_ultimo >= 6:
+                ajustes["miolo_alvo"] = (5, 6)  # Manter forte
+            else:
+                ajustes["miolo_alvo"] = (4, 5)  # Reduzir
+        else:
+            ajustes["miolo_alvo"] = (5, 6)
+        
+        # AJUSTE D: Quebra de sequência
+        if self.analise and hasattr(self.analise, 'padroes_repeticao'):
+            # Análise simplificada de sequências
+            if self.analise.padroes_repeticao.get("media", 9) > 9.5:
+                ajustes["sequencias"] = "encurtar"
+            else:
+                ajustes["sequencias"] = "manter"
+        else:
+            ajustes["sequencias"] = "manter"
+        
+        return ajustes
     
-    def gerar_jogo_historico_inteligente(self):
+    def validar_jogo(self, jogo):
         """
-        Gera um jogo baseado nos padrões históricos reais
-        Usa os padrões identificados para criar combinações mais prováveis
+        Valida um jogo contra todas as regras universais
+        Retorna: (valido, violacoes, pontuacao)
         """
-        # Peso para cada número baseado em múltiplos fatores
-        pesos = {}
-        for num in self.numeros:
-            peso = 1.0
-            
-            # Fator frequência (quentes têm mais peso)
-            if num in self.numeros_quentes:
-                peso *= 2.5
-            elif num in self.numeros_frios:
-                peso *= 0.8
-            
-            # Fator atraso (atrasados têm mais chance de sair)
-            if num in self.numeros_atrasados:
-                peso *= 2.0
-            
-            # Fator repetição recente
-            if num in self.numeros_repetentes:
-                peso *= 1.5
-            
-            pesos[num] = peso
+        violacoes = []
+        pontuacao = 0
         
-        # Gerar jogos até encontrar um que satisfaça todos os padrões
-        max_tentativas = 5000
-        for _ in range(max_tentativas):
-            # Selecionar números baseado nos pesos
-            numeros_pesados = []
-            for num, peso in pesos.items():
-                numeros_pesados.extend([num] * int(peso * 10))
-            
-            jogo = []
-            while len(jogo) < 15:
-                candidato = random.choice(numeros_pesados)
-                if candidato not in jogo:
-                    jogo.append(candidato)
-            jogo.sort()
-            
-            # Validar padrões
-            if self._validar_jogo_padroes(jogo):
-                return jogo
+        # REGRA 1: Repetição do último concurso
+        if self.ultimo_concurso:
+            repetidos = len(set(jogo) & set(self.ultimo_concurso))
+            if repetidos < 7:
+                violacoes.append(f"❌ Repetição muito baixa: {repetidos} (mínimo 7)")
+            elif repetidos > 11:
+                violacoes.append(f"❌ Repetição muito alta: {repetidos} (máximo 11)")
+            elif 8 <= repetidos <= 9:
+                pontuacao += 2  # Zona ótima
+            elif 7 <= repetidos <= 10:
+                pontuacao += 1  # Aceitável
         
-        # Fallback: gerar jogo aleatório balanceado
-        return self._gerar_jogo_balanceado()
-    
-    def _validar_jogo_padroes(self, jogo):
-        """Valida se o jogo segue os padrões históricos"""
-        
-        # 1. Validar pares/ímpares
+        # REGRA 2: Ímpares x Pares
         pares = sum(1 for n in jogo if n % 2 == 0)
-        if pares not in [7, 8]:
-            return False
+        impares = 15 - pares
         
-        # 2. Validar soma
+        if f"{impares}x{pares}" in ["7x8", "8x7"]:
+            pontuacao += 2
+        elif f"{impares}x{pares}" == "6x9":
+            pontuacao += 1  # Alternativa aceitável
+        else:
+            violacoes.append(f"❌ Distribuição ruim: {impares} ímpares x {pares} pares")
+        
+        # REGRA 3: Soma total
         soma = sum(jogo)
-        faixa_soma = self.padroes_soma['faixa_mais_comum']
-        if not (faixa_soma[0] <= soma <= faixa_soma[1]):
-            return False
+        if 172 <= soma <= 182:
+            pontuacao += 2  # Zona premium
+        elif 168 <= soma <= 186:
+            pontuacao += 1  # Faixa universal
+        else:
+            violacoes.append(f"❌ Soma fora da faixa: {soma} (deve ser 168-186)")
         
-        # 3. Validar números primos
-        primos = [2, 3, 5, 7, 11, 13, 17, 19, 23]
-        qtd_primos = sum(1 for n in jogo if n in primos)
-        faixa_primos = self.padroes_primos['faixa_ideal']
-        if not (faixa_primos[0] <= qtd_primos <= faixa_primos[1]):
-            return False
+        # REGRA 4: Distribuição por faixas
+        faixa1 = sum(1 for n in jogo if 1 <= n <= 8)
+        faixa2 = sum(1 for n in jogo if 9 <= n <= 16)
+        faixa3 = sum(1 for n in jogo if 17 <= n <= 25)
         
-        # 4. Validar distribuição por linhas (não pode ter linha vazia)
-        linhas_presentes = set()
-        for n in jogo:
-            linha = (n - 1) // 5 + 1
-            linhas_presentes.add(linha)
+        # Faixa 01-08
+        if 5 <= faixa1 <= 6:
+            pontuacao += 1
+        elif faixa1 < 5:
+            violacoes.append(f"❌ Faixa 01-08 com apenas {faixa1} números (mínimo 5)")
         
-        if len(linhas_presentes) < 4:  # Pelo menos 4 linhas diferentes
-            return False
+        # Faixa 09-16
+        if 5 <= faixa2 <= 6:
+            pontuacao += 1
+        elif faixa2 < 5:
+            violacoes.append(f"❌ Faixa 09-16 com apenas {faixa2} números (mínimo 5)")
         
-        return True
-    
-    def _gerar_jogo_balanceado(self):
-        """Gera um jogo balanceado como fallback"""
-        while True:
-            jogo = sorted(random.sample(range(1, 26), 15))
-            pares = sum(1 for n in jogo if n % 2 == 0)
-            if pares in [7, 8] and 180 <= sum(jogo) <= 210:
-                return jogo
-    
-    def gerar_multiplos_jogos(self, quantidade=10):
-        """Gera múltiplos jogos baseados nos padrões históricos"""
-        jogos = []
-        tentativas = 0
-        max_tentativas = quantidade * 100
+        # Faixa 17-25
+        if 3 <= faixa3 <= 4:
+            pontuacao += 1
+        elif faixa3 > 6:
+            violacoes.append(f"❌ Faixa 17-25 com {faixa3} números (máximo 6)")
         
-        while len(jogos) < quantidade and tentativas < max_tentativas:
-            jogo = self.gerar_jogo_historico_inteligente()
-            if jogo not in jogos:
-                jogos.append(jogo)
-            tentativas += 1
+        # REGRA 5: Consecutivos
+        jogo_ord = sorted(jogo)
+        pares_consec = 0
+        triplas_consec = 0
+        i = 0
         
-        return jogos
-    
-    def get_resumo_padroes(self):
-        """Retorna um resumo formatado dos padrões encontrados"""
-        return {
-            'numeros_quentes': self.numeros_quentes,
-            'numeros_frios': self.numeros_frios,
-            'numeros_atrasados': self.numeros_atrasados[:8],
-            'numeros_repetentes': self.numeros_repetentes,
-            'padrao_pares_impares': self.padroes_pares_impares['tipo_dominante'],
-            'faixa_soma_ideal': self.padroes_soma['faixa_mais_comum'],
-            'qtd_primos_ideal': self.padroes_primos['faixa_ideal'],
-            'media_repeticao': f"{self.padroes_repeticao_entre_concursos['media']:.1f}"
-        }
-
-# =====================================================
-# NOVA CLASSE: ANÁLISE DE PADRÕES OCULTOS (DEEP STATS)
-# =====================================================
-class AnalisePadroesOcultos:
-    """
-    Análise profunda de padrões não óbvios nos 600 concursos
-    Detecta correlações, gaps, terminações, vizinhança e outros padrões estatísticos avançados
-    """
-    
-    def __init__(self, concursos_historicos, dados_completos=None):
-        self.concursos = concursos_historicos  # Lista de listas com números
-        self.dados_completos = dados_completos or []
-        self.total_concursos = len(concursos_historicos)
-        self.numeros = list(range(1, 26))
-        
-        # Padrões Ocultos Principais
-        self.padrao_vizinhos = self._analisar_pares_vizinhos()
-        self.padrao_terminacoes = self._analisar_terminacoes()
-        self.padrao_primos = self._analisar_primos_avancado()
-        self.padrao_intervalos = self._analisar_intervalos_avancado()
-        self.padrao_correlacoes = self._analisar_correlacoes_numeros()
-        self.padrao_repeticao_ciclica = self._analisar_repeticao_ciclica()
-        self.padrao_distribuicao_linhas = self._analisar_distribuicao_avancada()
-        self.padrao_gaps = self._analisar_gaps_temporais()
-        
-        # Matriz de correlação (números que mais aparecem juntos)
-        self.matriz_correlacao = self._criar_matriz_correlacao()
-        
-        # Estatísticas avançadas
-        self.estatisticas_ocultas = self._calcular_estatisticas_ocultas()
-    
-    def _analisar_pares_vizinhos(self):
-        """Analisa padrões de números consecutivos (vizinhos)"""
-        total_pares = 0
-        distribuicao_pares = []
-        concursos_com_vizinhos = 0
-        
-        for concurso in self.concursos:
-            concurso_ordenado = sorted(concurso)
-            pares = 0
-            vizinhos_encontrados = []
-            
-            for i in range(len(concurso_ordenado) - 1):
-                if concurso_ordenado[i+1] - concurso_ordenado[i] == 1:
-                    pares += 1
-                    vizinhos_encontrados.append((concurso_ordenado[i], concurso_ordenado[i+1]))
-            
-            if pares > 0:
-                concursos_com_vizinhos += 1
-            
-            distribuicao_pares.append(pares)
-            total_pares += pares
-        
-        # Identificar pares de vizinhos mais comuns
-        todos_vizinhos = []
-        for concurso in self.concursos:
-            conc_ord = sorted(concurso)
-            for i in range(len(conc_ord) - 1):
-                if conc_ord[i+1] - conc_ord[i] == 1:
-                    todos_vizinhos.append((conc_ord[i], conc_ord[i+1]))
-        
-        vizinhos_comuns = Counter(todos_vizinhos).most_common(10)
-        
-        return {
-            'media_por_concurso': total_pares / self.total_concursos if self.total_concursos > 0 else 0,
-            'distribuicao': dict(Counter(distribuicao_pares)),
-            'percentual_com_vizinhos': (concursos_com_vizinhos / self.total_concursos * 100) if self.total_concursos > 0 else 0,
-            'vizinhos_mais_comuns': [(list(par), freq) for par, freq in vizinhos_comuns],
-            'faixa_ideal': (2, 3)  # 2 a 3 pares de vizinhos por concurso
-        }
-    
-    def _analisar_terminacoes(self):
-        """Analisa padrões de dígitos finais (0-9)"""
-        terminacoes = {i: [] for i in range(10)}
-        todas_terminacoes = []
-        
-        for concurso in self.concursos:
-            term_conc = [n % 10 for n in concurso]
-            todas_terminacoes.extend(term_conc)
-            for t in term_conc:
-                terminacoes[t].append(t)
-        
-        # Contagem de cada terminação
-        contagem = Counter(todas_terminacoes)
-        
-        # Terminações preferenciais (1,2,3,4,5) vs secundárias (6,7,8,9,0)
-        preferenciais = [1, 2, 3, 4, 5]
-        secundarias = [6, 7, 8, 9, 0]
-        
-        total_preferenciais = sum(contagem.get(t, 0) for t in preferenciais)
-        total_secundarias = sum(contagem.get(t, 0) for t in secundarias)
-        
-        # Proporção ideal por concurso
-        proporcao_preferenciais = total_preferenciais / (total_preferenciais + total_secundarias) if (total_preferenciais + total_secundarias) > 0 else 0.5
-        
-        return {
-            'contagem': {str(k): v for k, v in contagem.most_common()},
-            'terminacoes_preferenciais': preferenciais,
-            'terminacoes_secundarias': secundarias,
-            'total_preferenciais': total_preferenciais,
-            'total_secundarias': total_secundarias,
-            'proporcao_preferenciais': proporcao_preferenciais,
-            'media_preferenciais_por_concurso': total_preferenciais / self.total_concursos if self.total_concursos > 0 else 0,
-            'terminacoes_mais_fortes': [t for t, _ in contagem.most_common(5)]
-        }
-    
-    def _analisar_primos_avancado(self):
-        """Análise avançada de números primos"""
-        primos = [2, 3, 5, 7, 11, 13, 17, 19, 23]
-        qtd_primos_por_concurso = []
-        sequencias_primos = []
-        
-        for concurso in self.concursos:
-            qtd = sum(1 for n in concurso if n in primos)
-            qtd_primos_por_concurso.append(qtd)
-            
-            # Identificar sequências de primos consecutivos
-            primos_no_jogo = sorted([n for n in concurso if n in primos])
-            seq_atual = 1
-            for i in range(len(primos_no_jogo) - 1):
-                if primos_no_jogo[i+1] - primos_no_jogo[i] == 1:
-                    seq_atual += 1
-                else:
-                    if seq_atual > 1:
-                        sequencias_primos.append(seq_atual)
-                    seq_atual = 1
-            if seq_atual > 1:
-                sequencias_primos.append(seq_atual)
-        
-        return {
-            'quantidades': qtd_primos_por_concurso,
-            'media': float(np.mean(qtd_primos_por_concurso)) if qtd_primos_por_concurso else 0,
-            'mediana': float(np.median(qtd_primos_por_concurso)) if qtd_primos_por_concurso else 0,
-            'desvio': float(np.std(qtd_primos_por_concurso)) if qtd_primos_por_concurso else 0,
-            'min': min(qtd_primos_por_concurso) if qtd_primos_por_concurso else 0,
-            'max': max(qtd_primos_por_concurso) if qtd_primos_por_concurso else 0,
-            'distribuicao': dict(Counter(qtd_primos_por_concurso)),
-            'faixa_ideal': (4, 6),  # 4 a 6 primos por concurso
-            'primos_fortes': [p for p in primos if self._frequencia_numero(p) > self.total_concursos * 0.5]
-        }
-    
-    def _analisar_intervalos_avancado(self):
-        """Analisa intervalos entre números consecutivos"""
-        todos_intervalos = []
-        intervalos_por_posicao = {i: [] for i in range(1, 15)}  # posição 1-14
-        
-        for concurso in self.concursos:
-            conc_ord = sorted(concurso)
-            for i in range(len(conc_ord) - 1):
-                intervalo = conc_ord[i+1] - conc_ord[i]
-                todos_intervalos.append(intervalo)
-                intervalos_por_posicao[i+1].append(intervalo)
-        
-        # Intervalos mais comuns
-        contagem_intervalos = Counter(todos_intervalos)
-        
-        return {
-            'todos_intervalos': todos_intervalos,
-            'media_geral': float(np.mean(todos_intervalos)) if todos_intervalos else 0,
-            'mediana_geral': float(np.median(todos_intervalos)) if todos_intervalos else 0,
-            'intervalos_mais_comuns': [(k, v) for k, v in contagem_intervalos.most_common(5)],
-            'intervalo_1_mais_comum': contagem_intervalos.most_common(1)[0][0] if contagem_intervalos else 1,
-            'percentual_intervalo_1': contagem_intervalos.get(1, 0) / len(todos_intervalos) * 100 if todos_intervalos else 0
-        }
-    
-    def _analisar_correlacoes_numeros(self):
-        """Analisa correlações entre números (quais aparecem mais juntos)"""
-        correlacoes = {}
-        
-        # Para cada par de números, contar quantas vezes aparecem juntos
-        for i in range(1, 26):
-            for j in range(i+1, 26):
-                count = 0
-                for concurso in self.concursos:
-                    if i in concurso and j in concurso:
-                        count += 1
+        while i < len(jogo_ord) - 1:
+            if jogo_ord[i+1] - jogo_ord[i] == 1:
+                # Encontrou um par
+                tamanho_seq = 2
+                j = i + 1
+                while j < len(jogo_ord) - 1 and jogo_ord[j+1] - jogo_ord[j] == 1:
+                    tamanho_seq += 1
+                    j += 1
                 
-                if count > 0:
-                    correlacoes[(i, j)] = count
-        
-        # Pares mais fortes
-        pares_fortes = sorted(correlacoes.items(), key=lambda x: x[1], reverse=True)[:20]
-        
-        # Trios mais fortes (análise simplificada)
-        trios = {}
-        for i in range(1, 24):
-            for j in range(i+1, 25):
-                for k in range(j+1, 26):
-                    count = 0
-                    for concurso in self.concursos:
-                        if i in concurso and j in concurso and k in concurso:
-                            count += 1
-                    
-                    if count > 50:  # Apenas trios significativos
-                        trios[(i, j, k)] = count
-        
-        trios_fortes = sorted(trios.items(), key=lambda x: x[1], reverse=True)[:10]
-        
-        return {
-            'pares_fortes': [(list(par), freq) for par, freq in pares_fortes],
-            'trios_fortes': [(list(trio), freq) for trio, freq in trios_fortes],
-            'numero_mais_correlacionado': self._encontrar_numero_mais_conectado(correlacoes)
-        }
-    
-    def _analisar_repeticao_ciclica(self):
-        """Analisa padrões de repetição em ciclos (a cada N concursos)"""
-        repeticoes = []
-        
-        # Analisar repetição entre concurso atual e concursos anteriores em diferentes distâncias
-        for distancia in [1, 2, 3, 4, 5, 10]:
-            rep_dist = []
-            for i in range(distancia, len(self.concursos)):
-                repetidos = len(set(self.concursos[i]) & set(self.concursos[i - distancia]))
-                rep_dist.append(repetidos)
-            
-            if rep_dist:
-                repeticoes.append({
-                    'distancia': distancia,
-                    'media': float(np.mean(rep_dist)),
-                    'desvio': float(np.std(rep_dist)),
-                    'min': min(rep_dist),
-                    'max': max(rep_dist)
-                })
-        
-        return repeticoes
-    
-    def _analisar_distribuicao_avancada(self):
-        """Análise avançada de distribuição por quadrantes"""
-        # Dividir o volante em 4 quadrantes
-        # Q1: 01-13 (ímpares) | Q2: 02-14 (pares) | Q3: 15-25 (ímpares) | Q4: 16-24 (pares) - simplificado
-        
-        quadrantes = {
-            'Q1_baixo_impar': [1, 3, 5, 7, 9, 11, 13],
-            'Q2_baixo_par': [2, 4, 6, 8, 10, 12, 14],
-            'Q3_alto_impar': [15, 17, 19, 21, 23, 25],
-            'Q4_alto_par': [16, 18, 20, 22, 24]
-        }
-        
-        distribuicao = {q: [] for q in quadrantes}
-        
-        for concurso in self.concursos:
-            for nome_q, nums_q in quadrantes.items():
-                count = sum(1 for n in concurso if n in nums_q)
-                distribuicao[nome_q].append(count)
-        
-        return {
-            q: {
-                'media': float(np.mean(dist)) if dist else 0,
-                'desvio': float(np.std(dist)) if dist else 0,
-                'min': int(min(dist)) if dist else 0,
-                'max': int(max(dist)) if dist else 0,
-                'faixa_ideal': (
-                    int(np.mean(dist) - np.std(dist)) if dist else 0,
-                    int(np.mean(dist) + np.std(dist)) if dist else 0
-                )
-            }
-            for q, dist in distribuicao.items()
-        }
-    
-    def _analisar_gaps_temporais(self):
-        """Analisa gaps (intervalos entre aparições de cada número)"""
-        gaps_por_numero = {}
-        
-        for num in self.numeros:
-            aparicoes = []
-            for i, concurso in enumerate(self.concursos):
-                if num in concurso:
-                    aparicoes.append(i)
-            
-            if len(aparicoes) > 1:
-                gaps = [aparicoes[j+1] - aparicoes[j] for j in range(len(aparicoes)-1)]
-                gaps_por_numero[num] = {
-                    'gaps': gaps,
-                    'media_gap': float(np.mean(gaps)) if gaps else 0,
-                    'mediana_gap': float(np.median(gaps)) if gaps else 0,
-                    'max_gap': int(max(gaps)) if gaps else 0,
-                    'min_gap': int(min(gaps)) if gaps else 0,
-                    'ultima_aparicao': aparicoes[0] if aparicoes else None
-                }
-        
-        # Números com maior consistência (menor variação de gaps)
-        consistencia = {
-            num: dados['media_gap'] / (dados['max_gap'] + 1) 
-            for num, dados in gaps_por_numero.items() 
-            if dados['media_gap'] > 0
-        }
-        
-        numeros_mais_consistentes = sorted(consistencia.items(), key=lambda x: x[1])[:5]
-        
-        return {
-            'gaps_por_numero': gaps_por_numero,
-            'numeros_mais_consistentes': [n for n, _ in numeros_mais_consistentes],
-            'media_gaps_geral': float(np.mean([d['media_gap'] for d in gaps_por_numero.values() if d['media_gap'] > 0])) if gaps_por_numero else 0
-        }
-    
-    def _criar_matriz_correlacao(self):
-        """Cria matriz de correlação entre números"""
-        matriz = np.zeros((25, 25))
-        
-        for concurso in self.concursos:
-            for i in concurso:
-                for j in concurso:
-                    if i != j:
-                        matriz[i-1][j-1] += 1
-        
-        # Normalizar
-        for i in range(25):
-            total = matriz[i].sum()
-            if total > 0:
-                matriz[i] = matriz[i] / total * 100
-        
-        return matriz
-    
-    def _frequencia_numero(self, num):
-        """Calcula frequência de um número específico"""
-        count = 0
-        for concurso in self.concursos:
-            if num in concurso:
-                count += 1
-        return count
-    
-    def _encontrar_numero_mais_conectado(self, correlacoes):
-        """Encontra o número que tem mais correlações fortes"""
-        conexoes = {i: 0 for i in range(1, 26)}
-        
-        for (i, j), freq in correlacoes.items():
-            if freq > self.total_concursos * 0.3:  # Aparecem juntos em >30% dos concursos
-                conexoes[i] += 1
-                conexoes[j] += 1
-        
-        if conexoes:
-            max_conexoes = max(conexoes.values())
-            return [n for n, c in conexoes.items() if c == max_conexoes]
-        return []
-    
-    def _calcular_estatisticas_ocultas(self):
-        """Calcula estatísticas combinadas"""
-        return {
-            'total_analisado': self.total_concursos,
-            'confiabilidade': min(100, self.total_concursos / 6),  # Quanto mais dados, mais confiável
-            'padroes_identificados': sum([
-                1 if self.padrao_vizinhos['media_por_concurso'] > 1 else 0,
-                1 if self.padrao_terminacoes['proporcao_preferenciais'] > 0.55 else 0,
-                1 if 4 <= self.padrao_primos['media'] <= 6 else 0,
-                1 if self.padrao_intervalos['percentual_intervalo_1'] > 20 else 0
-            ])
-        }
-    
-    def gerar_jogo_padroes_ocultos(self):
-        """
-        Gera um jogo baseado nos padrões ocultos identificados
-        Combina múltiplos padrões para criar combinações estatisticamente fortes
-        """
-        # Pesos para cada número baseado em múltiplos fatores ocultos
-        pesos = {}
-        
-        for num in range(1, 26):
-            peso = 1.0
-            
-            # Fator vizinhança (números que costumam ter vizinhos)
-            for par, freq in self.padrao_vizinhos['vizinhos_mais_comuns'][:10]:
-                if num in par:
-                    peso *= 1.3
-            
-            # Fator terminação preferencial
-            if num % 10 in self.padrao_terminacoes['terminacoes_preferenciais']:
-                peso *= 1.4
+                if tamanho_seq >= 3:
+                    triplas_consec += 1
+                else:
+                    pares_consec += 1
+                
+                i = j
             else:
-                peso *= 0.9
-            
-            # Fator primo
-            if num in [2, 3, 5, 7, 11, 13, 17, 19, 23]:
-                peso *= 1.2
-            
-            # Fator gap (números consistentes têm mais peso)
-            if num in self.padrao_gaps.get('numeros_mais_consistentes', []):
-                peso *= 1.3
-            
-            # Fator correlação (números que aparecem com outros fortes)
-            for par, freq in self.padrao_correlacoes['pares_fortes'][:15]:
-                if num in par:
-                    peso *= 1.1
-            
-            pesos[num] = peso
+                i += 1
         
-        # Gerar jogos até encontrar um que satisfaça todos os padrões
-        max_tentativas = 5000
-        for _ in range(max_tentativas):
-            # Selecionar números baseado nos pesos
-            numeros_pesados = []
-            for num, peso in pesos.items():
-                numeros_pesados.extend([num] * int(peso * 10))
+        total_consec = pares_consec + triplas_consec * 2  # Cada tripla conta como 2 pares
+        
+        if total_consec >= 3:
+            pontuacao += 1
+        else:
+            violacoes.append(f"❌ Apenas {total_consec} pares consecutivos (mínimo 3)")
+        
+        # REGRA 6: Primos
+        qtd_primos = sum(1 for n in jogo if n in self.primos)
+        if 4 <= qtd_primos <= 6:
+            pontuacao += 1
+        else:
+            violacoes.append(f"❌ {qtd_primos} números primos (deve ser 4-6)")
+        
+        # Verificar ajustes adaptáveis
+        if self.ajustes:
+            # Altas (22-25)
+            altas = sum(1 for n in jogo if n >= 22)
+            alvo_altas = self.ajustes.get("altas_alvo", (1, 2))
+            if alvo_altas[0] <= altas <= alvo_altas[1]:
+                pontuacao += 1
+            else:
+                violacoes.append(f"⚠️ Altas: {altas} (tendência sugere {alvo_altas[0]}-{alvo_altas[1]})")
             
-            jogo = []
-            while len(jogo) < 15:
-                candidato = random.choice(numeros_pesados)
-                if candidato not in jogo:
-                    jogo.append(candidato)
+            # Miolo (09-16)
+            miolo = sum(1 for n in jogo if 9 <= n <= 16)
+            alvo_miolo = self.ajustes.get("miolo_alvo", (5, 6))
+            if alvo_miolo[0] <= miolo <= alvo_miolo[1]:
+                pontuacao += 1
+        
+        # Decisão final
+        if len(violacoes) >= 2:
+            return False, violacoes, pontuacao
+        elif len(violacoes) == 1:
+            return True, violacoes, pontuacao  # Jogo secundário
+        else:
+            return True, [], pontuacao  # Jogo principal
+    
+    def gerar_jogo(self, max_tentativas=5000):
+        """
+        Gera um jogo seguindo o passo a passo do modelo
+        """
+        for _ in range(max_tentativas):
+            # PASSO 1: Fixar base com repetições
+            if self.ultimo_concurso and self.ajustes.get("repeticao_alvo"):
+                alvo_rep = self.ajustes["repeticao_alvo"]
+                qtd_repetir = random.randint(alvo_rep[0], alvo_rep[1])
+                
+                # Selecionar números do último concurso para repetir
+                base = random.sample(self.ultimo_concurso, min(qtd_repetir, len(self.ultimo_concurso)))
+            else:
+                base = []
+                qtd_repetir = 0
+            
+            # PASSO 2: Completar respeitando faixas
+            jogo = list(base)
+            
+            # Definir alvos para cada faixa
+            alvo_faixa1 = random.randint(5, 6)
+            alvo_faixa2 = random.randint(5, 6)
+            alvo_faixa3 = random.randint(3, 4)
+            
+            # Ajustar com base nos números já selecionados
+            atuais_faixa1 = sum(1 for n in jogo if 1 <= n <= 8)
+            atuais_faixa2 = sum(1 for n in jogo if 9 <= n <= 16)
+            atuais_faixa3 = sum(1 for n in jogo if 17 <= n <= 25)
+            
+            # Criar pool de números disponíveis por faixa
+            disponiveis_faixa1 = [n for n in range(1, 9) if n not in jogo]
+            disponiveis_faixa2 = [n for n in range(9, 17) if n not in jogo]
+            disponiveis_faixa3 = [n for n in range(17, 26) if n not in jogo]
+            
+            # Completar faixa 1
+            while len(jogo) < 15 and atuais_faixa1 < alvo_faixa1 and disponiveis_faixa1:
+                n = random.choice(disponiveis_faixa1)
+                jogo.append(n)
+                disponiveis_faixa1.remove(n)
+                atuais_faixa1 += 1
+            
+            # Completar faixa 2
+            while len(jogo) < 15 and atuais_faixa2 < alvo_faixa2 and disponiveis_faixa2:
+                n = random.choice(disponiveis_faixa2)
+                jogo.append(n)
+                disponiveis_faixa2.remove(n)
+                atuais_faixa2 += 1
+            
+            # Completar faixa 3
+            while len(jogo) < 15 and atuais_faixa3 < alvo_faixa3 and disponiveis_faixa3:
+                n = random.choice(disponiveis_faixa3)
+                jogo.append(n)
+                disponiveis_faixa3.remove(n)
+                atuais_faixa3 += 1
+            
+            # Se ainda faltam números, completar com qualquer número disponível
+            todos_disponiveis = [n for n in range(1, 26) if n not in jogo]
+            while len(jogo) < 15 and todos_disponiveis:
+                n = random.choice(todos_disponiveis)
+                jogo.append(n)
+                todos_disponiveis.remove(n)
+            
             jogo.sort()
             
-            # Validar contra todos os padrões ocultos
-            if self._validar_jogo_padroes_ocultos(jogo):
-                return jogo
+            # PASSO 3: Validar o jogo
+            valido, violacoes, pontuacao = self.validar_jogo(jogo)
+            
+            if valido:
+                return jogo, violacoes, pontuacao
         
-        # Fallback: gerar jogo com validação parcial
-        return self._gerar_jogo_fallback()
-    
-    def _validar_jogo_padroes_ocultos(self, jogo):
-        """Validação rigorosa contra todos os padrões ocultos"""
-        
-        # 1. Padrão de vizinhos (deve ter 2-3 pares de vizinhos)
-        pares_vizinhos = 0
-        for i in range(len(jogo) - 1):
-            if jogo[i+1] - jogo[i] == 1:
-                pares_vizinhos += 1
-        
-        faixa_vizinhos = self.padrao_vizinhos['faixa_ideal']
-        if not (faixa_vizinhos[0] <= pares_vizinhos <= faixa_vizinhos[1]):
-            return False
-        
-        # 2. Padrão de terminações (maioria deve ser terminações preferenciais)
-        terminacoes_pref = sum(1 for n in jogo if n % 10 in self.padrao_terminacoes['terminacoes_preferenciais'])
-        if terminacoes_pref < 10:  # Pelo menos 10 números com terminações preferenciais
-            return False
-        
-        # 3. Padrão de números primos (4-6 primos)
-        primos = [2, 3, 5, 7, 11, 13, 17, 19, 23]
-        qtd_primos = sum(1 for n in jogo if n in primos)
-        faixa_primos = self.padrao_primos['faixa_ideal']
-        if not (faixa_primos[0] <= qtd_primos <= faixa_primos[1]):
-            return False
-        
-        # 4. Distribuição por quadrantes (nenhum quadrante pode estar vazio)
-        quadrantes = {
-            'baixo_impar': [n for n in jogo if n <= 13 and n % 2 == 1],
-            'baixo_par': [n for n in jogo if n <= 14 and n % 2 == 0],
-            'alto_impar': [n for n in jogo if n >= 15 and n % 2 == 1],
-            'alto_par': [n for n in jogo if n >= 16 and n % 2 == 0]
-        }
-        
-        if any(len(q) == 0 for q in quadrantes.values()):
-            return False
-        
-        # 5. Soma dentro da faixa ideal (180-210)
-        soma = sum(jogo)
-        if not (180 <= soma <= 210):
-            return False
-        
-        return True
-    
-    def _gerar_jogo_fallback(self):
-        """Gera jogo com validação parcial como fallback"""
+        # Fallback: gerar jogo aleatório e tentar validar
         for _ in range(1000):
             jogo = sorted(random.sample(range(1, 26), 15))
-            
-            # Validar apenas os padrões mais importantes
-            pares_vizinhos = sum(1 for i in range(len(jogo)-1) if jogo[i+1] - jogo[i] == 1)
-            terminacoes_pref = sum(1 for n in jogo if n % 10 in [1, 2, 3, 4, 5])
-            primos = sum(1 for n in jogo if n in [2, 3, 5, 7, 11, 13, 17, 19, 23])
-            
-            if (pares_vizinhos >= 1 and 
-                terminacoes_pref >= 9 and 
-                4 <= primos <= 6 and 
-                180 <= sum(jogo) <= 210):
-                return jogo
+            valido, violacoes, pontuacao = self.validar_jogo(jogo)
+            if valido:
+                return jogo, violacoes, pontuacao
         
-        # Último fallback: jogo aleatório balanceado
-        return self._gerar_jogo_balanceado_simples()
+        # Último recurso
+        return sorted(random.sample(range(1, 26), 15)), ["⚠️ Jogo gerado sem validação completa"], 0
     
-    def _gerar_jogo_balanceado_simples(self):
-        """Gera um jogo minimamente balanceado"""
-        while True:
-            jogo = sorted(random.sample(range(1, 26), 15))
-            if 7 <= sum(1 for n in jogo if n % 2 == 0) <= 8 and 180 <= sum(jogo) <= 210:
-                return jogo
-    
-    def gerar_multiplos_jogos_ocultos(self, quantidade=10):
-        """Gera múltiplos jogos baseados nos padrões ocultos"""
+    def gerar_multiplos_jogos(self, quantidade=10):
+        """Gera múltiplos jogos usando o modelo"""
         jogos = []
+        violacoes_list = []
+        pontuacoes = []
+        
         tentativas = 0
         max_tentativas = quantidade * 200
         
         while len(jogos) < quantidade and tentativas < max_tentativas:
-            jogo = self.gerar_jogo_padroes_ocultos()
+            jogo, violacoes, pontuacao = self.gerar_jogo()
+            
+            # Evitar duplicatas
             if jogo not in jogos:
                 jogos.append(jogo)
+                violacoes_list.append(violacoes)
+                pontuacoes.append(pontuacao)
+            
             tentativas += 1
         
-        return jogos
+        return jogos, violacoes_list, pontuacoes
     
-    def get_resumo_padroes_ocultos(self):
-        """Retorna resumo formatado dos padrões ocultos"""
-        return {
-            'vizinhos': {
-                'media': f"{self.padrao_vizinhos['media_por_concurso']:.2f}",
-                'percentual': f"{self.padrao_vizinhos['percentual_com_vizinhos']:.1f}%",
-                'principais': [f"{p[0]:02d}-{p[1]:02d}" for p, _ in self.padrao_vizinhos['vizinhos_mais_comuns'][:5]]
-            },
-            'terminacoes': {
-                'preferenciais': [1, 2, 3, 4, 5],
-                'proporcao': f"{self.padrao_terminacoes['proporcao_preferenciais']*100:.1f}%",
-                'fortes': self.padrao_terminacoes['terminacoes_mais_fortes']
-            },
-            'primos': {
-                'faixa_ideal': f"{self.padrao_primos['faixa_ideal'][0]}-{self.padrao_primos['faixa_ideal'][1]}",
-                'media': f"{self.padrao_primos['media']:.2f}",
-                'distribuicao': dict(self.padrao_primos['distribuicao'])
-            },
-            'intervalos': {
-                'mais_comum': self.padrao_intervalos['intervalo_1_mais_comum'],
-                'percentual_intervalo1': f"{self.padrao_intervalos['percentual_intervalo_1']:.1f}%"
-            },
-            'correlacoes': {
-                'top_pares': [f"{p[0]:02d}-{p[1]:02d}" for p, _ in self.padrao_correlacoes['pares_fortes'][:8]],
-                'numero_conectado': self.padrao_correlacoes['numero_mais_correlacionado']
-            },
-            'gaps': {
-                'numeros_consistentes': self.padrao_gaps['numeros_mais_consistentes'],
-                'media_geral': f"{self.padrao_gaps['media_gaps_geral']:.1f}"
+    def get_resumo_regras(self):
+        """Retorna resumo formatado das regras"""
+        resumo = {
+            "universais": self.regras_universais,
+            "ajustes": self.ajustes,
+            "ultimo_concurso": {
+                "numero": self.ultimo_numero,
+                "data": self.ultimo_data,
+                "dezenas": self.ultimo_concurso
             }
         }
+        return resumo
+    
+    def analisar_ultimo_concurso(self):
+        """Analisa o último concurso para mostrar ajustes"""
+        if not self.ultimo_concurso:
+            return {}
+        
+        analise = {
+            "repetidos_ultimo": "N/A",
+            "altas_ultimo": sum(1 for n in self.ultimo_concurso if n >= 22),
+            "miolo_ultimo": sum(1 for n in self.ultimo_concurso if 9 <= n <= 16),
+            "soma_ultimo": sum(self.ultimo_concurso),
+            "pares_ultimo": sum(1 for n in self.ultimo_concurso if n % 2 == 0),
+            "primos_ultimo": sum(1 for n in self.ultimo_concurso if n in self.primos)
+        }
+        
+        # Análise de repetição (se houver penúltimo)
+        if self.analise and hasattr(self.analise, 'concursos') and len(self.analise.concursos) > 1:
+            penultimo = self.analise.concursos[1]
+            analise["repetidos_ultimo"] = len(set(self.ultimo_concurso) & set(penultimo))
+        
+        return analise
 
-
-# =====================================================
-# FUNÇÕES AUXILIARES PARA ANÁLISE HISTÓRICA E PADRÕES OCULTOS
-# =====================================================
-def criar_analise_historica(concursos, dados_completos, qtd_concursos=600):
-    """Cria análise histórica com os concursos carregados"""
-    # Pegar apenas os primeiros N concursos (mais antigos para mais recentes)
-    # Como a API retorna do mais recente para o mais antigo, invertemos
-    concursos_historicos = [sorted(map(int, d["dezenas"])) for d in dados_completos[:qtd_concursos]]
-    
-    # Inverter para ordem cronológica (mais antigo primeiro)
-    concursos_historicos.reverse()
-    dados_historicos = list(reversed(dados_completos[:qtd_concursos]))
-    
-    return AnaliseHistoricaLotofacil(concursos_historicos, dados_historicos)
-
-def criar_analise_padroes_ocultos(concursos, dados_completos, qtd_concursos=600):
-    """Cria análise de padrões ocultos com os concursos carregados"""
-    if not concursos or len(concursos) < 100:
-        return None
-    
-    # Pegar os concursos para análise (inverter para ordem cronológica se necessário)
-    concursos_analise = concursos[:min(qtd_concursos, len(concursos))]
-    
-    return AnalisePadroesOcultos(concursos_analise, dados_completos[:min(qtd_concursos, len(dados_completos))])
-
-def formatar_numero_com_cor(num, analise_historica):
-    """Formata número com cor baseada em sua classificação"""
-    if num in analise_historica.numeros_quentes:
-        return f"<span style='color:#ff6b6b; font-weight:bold;'>{num:02d} 🔥</span>"
-    elif num in analise_historica.numeros_frios:
-        return f"<span style='color:#4ade80; font-weight:bold;'>{num:02d} ❄️</span>"
-    elif num in analise_historica.numeros_atrasados:
-        return f"<span style='color:#f97316; font-weight:bold;'>{num:02d} ⏰</span>"
-    elif num in analise_historica.numeros_repetentes:
-        return f"<span style='color:#4cc9f0; font-weight:bold;'>{num:02d} 🔁</span>"
-    else:
-        return f"<span style='color:white;'>{num:02d}</span>"
-
-def formatar_numero_com_padroes(num, analise_oculta):
-    """Formata número com ícones baseados em múltiplos padrões"""
-    icones = []
-    
-    # Verificar se faz parte de pares fortes
-    for par, _ in analise_oculta.padrao_correlacoes['pares_fortes'][:10]:
-        if num in par:
-            icones.append("🤝")
-            break
-    
-    # Verificar se é número consistente (baixo gap)
-    if num in analise_oculta.padrao_gaps.get('numeros_mais_consistentes', []):
-        icones.append("⚡")
-    
-    # Verificar terminação preferencial
-    if num % 10 in analise_oculta.padrao_terminacoes['terminacoes_preferenciais']:
-        icones.append("✨")
-    
-    # Verificar se é primo
-    if num in [2, 3, 5, 7, 11, 13, 17, 19, 23]:
-        icones.append("🔢")
-    
-    icone_str = " " + " ".join(icones) if icones else ""
-    
-    # Cor baseada em classificação
-    if len(icones) >= 3:
-        cor = "#ff6b6b"  # Vermelho para múltiplos padrões
-    elif len(icones) >= 2:
-        cor = "#4cc9f0"  # Azul para padrões médios
-    elif len(icones) >= 1:
-        cor = "#4ade80"  # Verde para pelo menos um padrão
-    else:
-        cor = "white"
-    
-    return f"<span style='color:{cor}; font-weight:bold;'>{num:02d}{icone_str}</span>"
-
-# =====================================================
-# FUNÇÕES DE REPETIÇÃO
-# =====================================================
-def repeticao_ultimo_antepenultimo(concursos):
-    if len(concursos) < 3: return None
-    ultimo = set(concursos[0])
-    antepenultimo = set(concursos[2])
-    repetidos = len(ultimo & antepenultimo)
-    media = repetidos / 15
-    return int(repetidos), float(media)
-
-def repeticao_ultimo_penultimo(concursos):
-    if len(concursos) < 2: return None
-    ultimo = set(concursos[0])
-    penultimo = set(concursos[1])
-    repetidos = len(ultimo & penultimo)
-    media = repetidos / 15
-    return int(repetidos), float(media)
 
 # =====================================================
 # FUNÇÕES AUXILIARES
@@ -1571,6 +973,8 @@ def main():
         st.session_state.jogos_salvos = []
     if "historico_comparacao" not in st.session_state:
         st.session_state.historico_comparacao = []
+    if "modelo_3622" not in st.session_state:
+        st.session_state.modelo_3622 = None
 
     # ================= SIDEBAR =================
     with st.sidebar:
@@ -1592,56 +996,33 @@ def main():
                     ultimo = st.session_state.dados_api[0]
                     st.success(f"✅ Último concurso: #{ultimo['concurso']} - {ultimo['data']}")
 
+                    # Inicializar modelo 3622
+                    st.session_state.modelo_3622 = Modelo3622(
+                        st.session_state.analise,
+                        concursos[0],
+                        ultimo['concurso'],
+                        ultimo['data']
+                    )
+                    
                     rep_penultimo = repeticao_ultimo_penultimo(concursos)
                     if rep_penultimo:
                         repetidos, media = rep_penultimo
                         st.info(f"🔁 Repetição último x penúltimo: {repetidos} ({media*100:.1f}%)")
                     
-                    st.info("🔄 DNA Evolutivo ativado - Sem números repetidos!")
+                    st.info("🧠 MODELO 3622 ativado - Regras universais + ajustes adaptáveis!")
                     
                 except Exception as e:
                     st.error(f"Erro ao carregar: {e}")
 
     # ================= INTERFACE PRINCIPAL =================
-    st.subheader("🎯 Análise e Fechamento Evolutivo")
+    st.subheader("🎯 Geração de Jogos Inteligente")
 
     if st.session_state.analise:
-        # CORREÇÃO: Adicionar vírgulas entre os nomes das abas
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
-            "📊 Análise", 
-            "🧩 Fechamento", 
-            "🧬 DNA", 
-            "✅ Conferência", 
-            "📈 Comparação", 
-            "📋 Concursos",
-            "📊 Jogos Históricos",
-            "🔮 Padrões Ocultos"
-        ])
+        # APENAS DUAS ABAS: Fechamento Evolutivo e MODELO 3622
+        tab1, tab2 = st.tabs(["🧩 Fechamento Evolutivo", "🎯 MODELO 3622"])
 
+        # ================= ABA 1: Fechamento Evolutivo (original) =================
         with tab1:
-            st.markdown("### 🔑 Números-chave (últimos 20 concursos)")
-            numeros_chave = st.session_state.analise.numeros_chave
-            if numeros_chave:
-                colunas = st.columns(5)
-                for i, num in enumerate(sorted(numeros_chave)[:15]):
-                    with colunas[i % 5]:
-                        st.markdown(f"<h3 style='text-align:center'>{num:02d}</h3>", unsafe_allow_html=True)
-            else:
-                st.info("Poucos números-chave identificados")
-            
-            st.markdown("### 📊 Tendências Atuais")
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                media_repeticao = st.session_state.analise.padroes_repeticao.get("media", 9.0)
-                st.metric("Média repetição", f"{media_repeticao:.1f}")
-            with col2:
-                media_pares = st.session_state.analise.pares_impares_tendencia.get("media", 7.5)
-                st.metric("Média pares", f"{media_pares:.1f}")
-            with col3:
-                tendencia = st.session_state.analise.pares_impares_tendencia.get("tendencia", "estavel")
-                st.metric("Tendência", tendencia.capitalize())
-
-        with tab2:
             st.subheader("🧩 Fechamento Evolutivo")
             
             if st.session_state.dados_api:
@@ -1730,863 +1111,259 @@ def main():
                             "stats": stats_comparacao
                         })
 
-        with tab3:
-            st.subheader("🧬 DNA Evolutivo Atual")
+        # ================= ABA 2: MODELO 3622 (NOVA) =================
+        with tab2:
+            st.subheader("🎯 MODELO 3622 - Universal + Ajuste Adaptável")
             
-            dna = st.session_state.analise.dna_evolutivo
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.markdown("**Fatores Principais:**")
-                for key in ["freq", "defas", "chave", "repeticao"]:
-                    if key in dna:
-                        st.metric(key.capitalize(), f"{dna[key]:.2f}")
-            
-            with col2:
-                st.markdown("**Fatores de Ajuste:**")
-                for key in ["soma", "pares", "linha_coluna", "tendencia"]:
-                    if key in dna:
-                        st.metric(key.replace("_", " ").capitalize(), f"{dna[key]:.2f}")
-            
-            if st.button("🔄 Recalibrar DNA", use_container_width=True):
-                if st.session_state.dados_api and len(st.session_state.dados_api) > 1:
-                    segundo_ultimo = st.session_state.dados_api[1]
-                    numeros_segundo = sorted(map(int, segundo_ultimo["dezenas"]))
-                    st.session_state.analise.auto_ajustar_dna(numeros_segundo)
-                    st.success("DNA recalibrado com sucesso!")
-                    st.rerun()
-
-        with tab4:
-            st.subheader("✅ Conferência por Concurso")
-            
-            # Inicializar variáveis de sessão para persistência
-            if "idx_fechamento_selecionado" not in st.session_state:
-                st.session_state.idx_fechamento_selecionado = 0
-            if "futuro_selecionado" not in st.session_state:
-                st.session_state.futuro_selecionado = None
-            if "conferencia_realizada" not in st.session_state:
-                st.session_state.conferencia_realizada = False
-            if "resultado_conferencia" not in st.session_state:
-                st.session_state.resultado_conferencia = None
-            
-            st.session_state.jogos_salvos = carregar_jogos_salvos()
-            
-            if not st.session_state.jogos_salvos:
-                st.warning("Nenhum jogo salvo. Gere na aba 'Fechamento'.")
-            elif not st.session_state.dados_api:
-                st.warning("Carregue os concursos primeiro!")
+            if not st.session_state.modelo_3622:
+                st.warning("📥 Carregue os concursos primeiro usando o botão na barra lateral")
             else:
-                ultimo_api = st.session_state.dados_api[0]
+                modelo = st.session_state.modelo_3622
                 
-                nao_conferidos = [j for j in st.session_state.jogos_salvos 
-                                 if len(get_conferencias_seguro(j)) == 0]
+                # Informações do último concurso
+                analise_ultimo = modelo.analisar_ultimo_concurso()
                 
-                if not nao_conferidos:
-                    st.info("✅ Todos os fechamentos já foram conferidos!")
-                else:
-                    st.markdown(f"""
-                    <div class='concurso-info'>
-                        🎯 Último concurso: #{ultimo_api['concurso']} - {ultimo_api['data']}
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                    # Criar opções para o selectbox
-                    opcoes = []
-                    for i, j in enumerate(nao_conferidos[:10]):
-                        data = datetime.fromisoformat(j["data_geracao"]).strftime("%d/%m/%Y %H:%M")
-                        base = get_concurso_info_seguro(j)
-                        opcoes.append(f"{i+1} - Base #{base['numero']} - {data}")
-                    
-                    if opcoes:
-                        # Usar session_state para manter a seleção
-                        opcao_selecionada = st.selectbox(
-                            "Selecione o fechamento", 
-                            opcoes,
-                            index=st.session_state.idx_fechamento_selecionado,
-                            key="select_fechamento"
-                        )
-                        
-                        # Atualizar o índice no session_state quando mudar
-                        novo_idx = int(opcao_selecionada.split(" - ")[0]) - 1
-                        if novo_idx != st.session_state.idx_fechamento_selecionado:
-                            st.session_state.idx_fechamento_selecionado = novo_idx
-                            st.session_state.conferencia_realizada = False
-                            st.session_state.resultado_conferencia = None
-                            st.rerun()
-                        
-                        idx = st.session_state.idx_fechamento_selecionado
-                        jogo_sel = nao_conferidos[idx]
-                        base_info = get_concurso_info_seguro(jogo_sel)
-                        
-                        with st.expander("📋 Detalhes do fechamento", expanded=True):
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                st.write(f"**ID:** {jogo_sel['id']}")
-                                st.write(f"**Base concurso:** #{base_info['numero']}")
-                            with col2:
-                                st.write(f"**Fechamento:** {len(jogo_sel['fechamento_base'])} números")
-                                if "estatisticas" in jogo_sel and jogo_sel["estatisticas"]:
-                                    vantagem = jogo_sel["estatisticas"].get("vantagem_media", 0)
-                                    st.write(f"**Vantagem estimada:** {vantagem:.2f}")
-                            
-                            # Mostrar jogos do fechamento
-                            with st.expander("🔍 Ver jogos do fechamento"):
-                                df_preview = pd.DataFrame({
-                                    "Jogo": range(1, len(jogo_sel["jogos"][:5])+1),
-                                    "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in jogo_sel["jogos"][:5]]
-                                })
-                                st.dataframe(df_preview, use_container_width=True, hide_index=True)
-                                if len(jogo_sel["jogos"]) > 5:
-                                    st.caption(f"... e mais {len(jogo_sel['jogos']) - 5} jogos")
-                        
-                        # Concursos futuros disponíveis
-                        concursos_futuros = [c for c in st.session_state.dados_api 
-                                            if c['concurso'] > base_info['numero']]
-                        
-                        if concursos_futuros:
-                            opcoes_futuros = [f"#{c['concurso']} - {c['data']}" 
-                                             for c in concursos_futuros[:5]]
-                            
-                            # Definir índice padrão para o selectbox de futuro
-                            futuro_idx = 0
-                            if st.session_state.futuro_selecionado:
-                                for i, opt in enumerate(opcoes_futuros):
-                                    if f"#{st.session_state.futuro_selecionado}" in opt:
-                                        futuro_idx = i
-                                        break
-                            
-                            futuro_sel = st.selectbox(
-                                "Concurso para conferir", 
-                                opcoes_futuros,
-                                index=futuro_idx,
-                                key="select_futuro"
-                            )
-                            
-                            num_futuro = int(futuro_sel.split(" - ")[0].replace("#", ""))
-                            st.session_state.futuro_selecionado = num_futuro
-                            
-                            # Botão de conferência
-                            col1, col2 = st.columns([3, 1])
-                            with col1:
-                                if st.button("🔍 CONFERIR AGORA", use_container_width=True, type="primary"):
-                                    with st.spinner("Conferindo resultados..."):
-                                        concurso_info = next(c for c in concursos_futuros 
-                                                            if c['concurso'] == num_futuro)
-                                        numeros = sorted(map(int, concurso_info["dezenas"]))
-                                        
-                                        # Processar jogos para conferência
-                                        acertos = []
-                                        jogos_validos = []
-                                        
-                                        if isinstance(jogo_sel["jogos"], list):
-                                            for jogo in jogo_sel["jogos"]:
-                                                # Converter para lista se necessário
-                                                if isinstance(jogo, (list, tuple)):
-                                                    jogo_lista = list(jogo)
-                                                elif isinstance(jogo, str):
-                                                    try:
-                                                        jogo_lista = [int(x.strip()) for x in jogo.replace('[', '').replace(']', '').split(',')]
-                                                    except:
-                                                        jogo_lista = []
-                                                else:
-                                                    jogo_lista = []
-                                                
-                                                # Validar jogo
-                                                if jogo_lista and len(set(jogo_lista)) == 15:
-                                                    jogos_validos.append(jogo_lista)
-                                                    acertos.append(len(set(jogo_lista) & set(numeros)))
-                                                else:
-                                                    acertos.append(0)
-                                        
-                                        if acertos:
-                                            # Calcular estatísticas
-                                            stats_conf = {
-                                                "media": float(np.mean(acertos)),
-                                                "max": int(max(acertos)),
-                                                "min": int(min(acertos)),
-                                                "distribuicao": {str(k): int(v) for k, v in Counter(acertos).items()}
-                                            }
-                                            
-                                            info_salvar = {
-                                                "numero": int(concurso_info["concurso"]),
-                                                "data": str(concurso_info["data"]),
-                                                "resultado": [int(n) for n in numeros]
-                                            }
-                                            
-                                            # Salvar conferência
-                                            if adicionar_conferencia(jogo_sel["arquivo"], info_salvar, 
-                                                                    acertos, stats_conf):
-                                                # Guardar resultados na sessão
-                                                st.session_state.conferencia_realizada = True
-                                                st.session_state.resultado_conferencia = {
-                                                    "acertos": acertos,
-                                                    "jogos_validos": jogos_validos,
-                                                    "stats": stats_conf,
-                                                    "num_futuro": num_futuro,
-                                                    "concurso_info": concurso_info
-                                                }
-                                                st.rerun()
-                                        else:
-                                            st.error("Não foi possível processar os jogos para conferência.")
-                            
-                            with col2:
-                                if st.button("🔄 Limpar", use_container_width=True):
-                                    st.session_state.conferencia_realizada = False
-                                    st.session_state.resultado_conferencia = None
-                                    st.rerun()
-                            
-                            # Mostrar resultados da conferência se existirem
-                            if st.session_state.conferencia_realizada and st.session_state.resultado_conferencia:
-                                resultado = st.session_state.resultado_conferencia
-                                
-                                st.success(f"✅ Conferência realizada com concurso #{resultado['num_futuro']}!")
-                                
-                                # Mostrar estatísticas
-                                m1, m2, m3, m4 = st.columns(4)
-                                with m1:
-                                    st.metric("Média", f"{resultado['stats']['media']:.1f}")
-                                with m2:
-                                    st.metric("Máximo", resultado['stats']['max'])
-                                with m3:
-                                    st.metric("Mínimo", resultado['stats']['min'])
-                                with m4:
-                                    vantagem_real = resultado['stats']['media'] - 9.5
-                                    cor = "green" if vantagem_real > 0 else "red"
-                                    st.markdown(f"<p style='text-align:center; color:{cor}; font-weight:bold;'>Vs aleatório<br>{vantagem_real:+.2f}</p>", unsafe_allow_html=True)
-                                
-                                # Mostrar tabela de resultados
-                                df_res = pd.DataFrame({
-                                    "Jogo": range(1, len(resultado['jogos_validos'])+1),
-                                    "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in resultado['jogos_validos']],
-                                    "Acertos": resultado['acertos'][:len(resultado['jogos_validos'])]
-                                })
-                                st.dataframe(df_res, use_container_width=True, hide_index=True)
-                                
-                                # Gráfico de distribuição
-                                if resultado['stats']['distribuicao']:
-                                    st.subheader("📊 Distribuição de Acertos")
-                                    df_dist = pd.DataFrame(
-                                        list(resultado['stats']['distribuicao'].items()),
-                                        columns=["Acertos", "Quantidade"]
-                                    ).sort_values("Acertos")
-                                    st.bar_chart(df_dist.set_index("Acertos"))
-                                
-                                # Botão para conferir outro
-                                if st.button("✅ Conferir Outro Fechamento", use_container_width=True):
-                                    st.session_state.conferencia_realizada = False
-                                    st.session_state.resultado_conferencia = None
-                                    st.rerun()
-                        else:
-                            st.warning("Aguardando próximos concursos...")    
-
-        with tab5:
-            st.subheader("📈 Comparação vs Aleatório")
-            
-            if st.session_state.historico_comparacao:
-                df_hist = pd.DataFrame(st.session_state.historico_comparacao)
-                
-                st.line_chart(df_hist.set_index("concurso_base")["vantagem"])
-                
-                media_vantagem = df_hist["vantagem"].mean()
-                if media_vantagem > 0:
-                    st.success(f"🎯 Vantagem média: {media_vantagem:.2f} pontos")
-                else:
-                    st.warning(f"📉 Desvantagem média: {abs(media_vantagem):.2f} pontos")
-                
-                st.dataframe(df_hist[["concurso_base", "vantagem"]].tail(), 
-                           use_container_width=True, hide_index=True)
-            else:
-                st.info("Gere fechamentos para ver a comparação com o aleatório")
-
-        # ================= ABA: CONCURSOS =================
-        with tab6:
-            st.subheader("📋 Todos os Concursos Carregados")
-            
-            if st.session_state.dados_api:
                 st.markdown(f"""
                 <div class='concurso-info'>
-                    📊 <strong>Total de concursos carregados: {len(st.session_state.dados_api[:qtd])}</strong>
+                    📅 <strong>Base: concurso #{modelo.ultimo_numero}</strong> - {modelo.ultimo_data}
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # Opções de filtro
-                col1, col2 = st.columns([3, 1])
-                with col1:
-                    busca = st.text_input("🔍 Buscar concurso específico (número ou data)", placeholder="Ex: 3000 ou 2024...")
-                with col2:
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    if st.button("📥 Download TXT", use_container_width=True):
-                        conteudo_txt = exportar_concursos_txt(st.session_state.dados_api, qtd)
-                        st.download_button(
-                            label="⬇️ Baixar arquivo",
-                            data=conteudo_txt,
-                            file_name=f"lotofacil_concursos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
-                            mime="text/plain",
-                            use_container_width=True
-                        )
-                
-                # Filtrar concursos
-                dados_filtrados = st.session_state.dados_api[:qtd]
-                if busca:
-                    dados_filtrados = [
-                        c for c in dados_filtrados 
-                        if busca.lower() in str(c['concurso']).lower() 
-                        or busca.lower() in c['data'].lower()
-                    ]
-                
-                # Mostrar concursos em cards
-                for concurso in dados_filtrados:
-                    with st.container():
-                        col1, col2 = st.columns([1, 3])
-                        with col1:
-                            st.markdown(f"**#{concurso['concurso']}**")
-                            st.caption(concurso['data'])
-                        with col2:
-                            numeros = sorted(map(int, concurso['dezenas']))
-                            # Criar tags coloridas para os números
-                            nums_html = ""
-                            for i, num in enumerate(numeros):
-                                cor = "#4cc9f0" if num <= 5 else "#4ade80" if num <= 10 else "gold" if num <= 15 else "#f97316" if num <= 20 else "#ff6b6b"
-                                nums_html += f"<span style='background:{cor}20; border:1px solid {cor}; border-radius:20px; padding:5px 10px; margin:3px; display:inline-block; font-weight:bold;'>{num:02d}</span>"
-                            st.markdown(f"<div>{nums_html}</div>", unsafe_allow_html=True)
-                        st.divider()
-                
-                # Paginação simples
-                if len(dados_filtrados) > 50:
-                    st.caption(f"Mostrando {len(dados_filtrados)} concursos. Use a busca para encontrar um específico.")
-            else:
-                st.info("📥 Carregue os concursos usando o botão na barra lateral para visualizar a lista completa.")
-        
-        # ================= ABA: JOGOS HISTÓRICOS (600 CONCURSOS) =================
-        with tab7:
-            st.subheader("📊 Análise de 600 Concursos Históricos")
-            
-            if not st.session_state.dados_api:
-                st.warning("📥 Carregue os concursos primeiro usando o botão na barra lateral")
-            else:
-                # Inicializar análise histórica na session_state se não existir
-                if "analise_historica" not in st.session_state:
-                    with st.spinner("🔄 Analisando 600 concursos históricos..."):
-                        st.session_state.analise_historica = criar_analise_historica(
-                            st.session_state.analise.concursos if st.session_state.analise else [],
-                            st.session_state.dados_api,
-                            qtd_concursos=600
-                        )
-                
-                analise_hist = st.session_state.analise_historica
-                
-                # Menu de opções para a aba histórica
-                opcao_historica = st.radio(
+                # Menu de opções
+                opcao = st.radio(
                     "Selecione uma opção:",
-                    ["📈 Visão Geral dos Padrões", "🎯 Gerar Jogos Inteligentes", "🔍 Explorar Números"],
+                    ["📋 Regras do Modelo", "🎯 Gerar Jogos 3622", "📊 Análise do Último Concurso"],
                     horizontal=True
                 )
                 
-                if opcao_historica == "📈 Visão Geral dos Padrões":
-                    # Métricas principais
-                    col1, col2, col3, col4 = st.columns(4)
-                    with col1:
-                        st.metric("Total Concursos", analise_hist.total_concursos)
-                    with col2:
-                        st.metric("Média Soma", f"{analise_hist.padroes_soma['media']:.0f}")
-                    with col3:
-                        st.metric("Média Pares", f"{analise_hist.padroes_pares_impares['media_pares']:.1f}")
-                    with col4:
-                        st.metric("Média Primos", f"{analise_hist.padroes_primos['media']:.1f}")
+                if opcao == "📋 Regras do Modelo":
+                    st.markdown("### 🧠 REGRAS UNIVERSAIS (BASE FIXA)")
+                    st.markdown("Essas regras NÃO mudam. Se quebrar 2 delas, o jogo já nasce morto.")
                     
-                    # Números Quentes e Frios
                     col1, col2 = st.columns(2)
                     
                     with col1:
-                        st.markdown("### 🔥 Números Quentes (Mais Frequentes)")
-                        quentes_html = ""
-                        for num in analise_hist.numeros_quentes[:8]:
-                            freq = analise_hist.frequencias[num]['percentual']
-                            quentes_html += f"<span style='background:#ff6b6b20; border:1px solid #ff6b6b; border-radius:20px; padding:8px 12px; margin:5px; display:inline-block; font-weight:bold;'>{num:02d} ({freq:.1f}%)</span>"
-                        st.markdown(f"<div>{quentes_html}</div>", unsafe_allow_html=True)
+                        st.markdown("**✅ REGRA 1 — REPETIÇÃO**")
+                        st.markdown(f"""
+                        - Obrigatório: **{modelo.regras_universais['repeticao']['min']} a {modelo.regras_universais['repeticao']['max']}** repetidas
+                        - Zona ótima: **{modelo.regras_universais['repeticao']['otimo'][0]} ou {modelo.regras_universais['repeticao']['otimo'][1]}**
+                        """)
+                        
+                        st.markdown("**✅ REGRA 2 — ÍMPARES x PARES**")
+                        st.markdown(f"""
+                        - Padrão vencedor: **{modelo.regras_universais['pares_impares']['tipos'][0]} ou {modelo.regras_universais['pares_impares']['tipos'][1]}**
+                        - Alternativa: **{modelo.regras_universais['pares_impares']['alternativo']}** (raro)
+                        """)
+                        
+                        st.markdown("**✅ REGRA 3 — SOMA TOTAL**")
+                        st.markdown(f"""
+                        - Faixa universal: **{modelo.regras_universais['soma']['min']} a {modelo.regras_universais['soma']['max']}**
+                        - Zona premium: **{modelo.regras_universais['soma']['premium'][0]} a {modelo.regras_universais['soma']['premium'][1]}**
+                        """)
                     
                     with col2:
-                        st.markdown("### ❄️ Números Frios (Menos Frequentes)")
-                        frios_html = ""
-                        for num in analise_hist.numeros_frios[:8]:
-                            freq = analise_hist.frequencias[num]['percentual']
-                            frios_html += f"<span style='background:#4ade8020; border:1px solid #4ade80; border-radius:20px; padding:8px 12px; margin:5px; display:inline-block; font-weight:bold;'>{num:02d} ({freq:.1f}%)</span>"
-                        st.markdown(f"<div>{frios_html}</div>", unsafe_allow_html=True)
+                        st.markdown("**✅ REGRA 4 — DISTRIBUIÇÃO POR FAIXAS**")
+                        st.markdown(f"""
+                        - **01–08:** {modelo.regras_universais['faixas']['01-08']['min']} a {modelo.regras_universais['faixas']['01-08']['max']}
+                        - **09–16:** {modelo.regras_universais['faixas']['09-16']['min']} a {modelo.regras_universais['faixas']['09-16']['max']}
+                        - **17–25:** {modelo.regras_universais['faixas']['17-25']['min']} a {modelo.regras_universais['faixas']['17-25']['max']}
+                        """)
+                        
+                        st.markdown("**✅ REGRA 5 — CONSECUTIVOS**")
+                        st.markdown(f"""
+                        - Mínimo: **{modelo.regras_universais['consecutivos']['min_pares']}** pares consecutivos
+                        - Ideal: **{modelo.regras_universais['consecutivos']['ideal']}**
+                        """)
+                        
+                        st.markdown("**✅ REGRA 6 — PRIMOS**")
+                        st.markdown(f"""
+                        - Faixa vencedora: **{modelo.regras_universais['primos']['min']} a {modelo.regras_universais['primos']['max']}** primos
+                        """)
                     
-                    # Números Atrasados e Repetentes
+                    st.markdown("---")
+                    st.markdown("### 🧩 AJUSTES ADAPTÁVEIS (Baseados no Último Concurso)")
+                    
                     col1, col2 = st.columns(2)
                     
                     with col1:
-                        st.markdown("### ⏰ Números Atrasados (Maior Jejum)")
-                        atrasados_html = ""
-                        for num in analise_hist.numeros_atrasados[:8]:
-                            atrasados_html += f"<span style='background:#f9731620; border:1px solid #f97316; border-radius:20px; padding:8px 12px; margin:5px; display:inline-block; font-weight:bold;'>{num:02d}</span>"
-                        st.markdown(f"<div>{atrasados_html}</div>", unsafe_allow_html=True)
-                    
-                    with col2:
-                        st.markdown("### 🔁 Números Repetentes (Últimos 5)")
-                        repetentes_html = ""
-                        for num in analise_hist.numeros_repetentes[:8]:
-                            repetentes_html += f"<span style='background:#4cc9f020; border:1px solid #4cc9f0; border-radius:20px; padding:8px 12px; margin:5px; display:inline-block; font-weight:bold;'>{num:02d}</span>"
-                        st.markdown(f"<div>{repetentes_html}</div>", unsafe_allow_html=True)
-                    
-                    # Padrões Estatísticos
-                    st.markdown("### 📊 Padrões Estatísticos Identificados")
-                    
-                    col1, col2, col3 = st.columns(3)
-                    
-                    with col1:
-                        st.markdown("**🎯 Pares/Ímpares**")
+                        st.markdown("**🔁 AJUSTE A — Peso das Repetições**")
                         st.markdown(f"""
-                        - Tipo dominante: **{analise_hist.padroes_pares_impares['tipo_dominante']}**
-                        - Média de pares: **{analise_hist.padroes_pares_impares['media_pares']:.1f}**
-                        - Desvio: ±{analise_hist.padroes_pares_impares['desvio_pares']:.1f}
+                        - Alvo para este concurso: **{modelo.ajustes.get('repeticao_alvo', (8,9))[0]} a {modelo.ajustes.get('repeticao_alvo', (8,9))[1]}** repetições
+                        """)
+                        
+                        st.markdown("**📉 AJUSTE B — Altas (22–25)**")
+                        st.markdown(f"""
+                        - Alvo para este concurso: **{modelo.ajustes.get('altas_alvo', (1,2))[0]} a {modelo.ajustes.get('altas_alvo', (1,2))[1]}** números altos
                         """)
                     
                     with col2:
-                        st.markdown("**➕ Soma dos Números**")
+                        st.markdown("**🎯 AJUSTE C — Miolo (09–16)**")
                         st.markdown(f"""
-                        - Faixa ideal: **{analise_hist.padroes_soma['faixa_mais_comum'][0]}–{analise_hist.padroes_soma['faixa_mais_comum'][1]}**
-                        - Média: **{analise_hist.padroes_soma['media']:.0f}**
-                        - Intervalo confiança: **{analise_hist.padroes_soma['intervalo_confianca'][0]}–{analise_hist.padroes_soma['intervalo_confianca'][1]}**
+                        - Alvo para este concurso: **{modelo.ajustes.get('miolo_alvo', (5,6))[0]} a {modelo.ajustes.get('miolo_alvo', (5,6))[1]}** números no miolo
                         """)
-                    
-                    with col3:
-                        st.markdown("**🔢 Números Primos**")
+                        
+                        st.markdown("**🔄 AJUSTE D — Quebra de Sequência**")
                         st.markdown(f"""
-                        - Quantidade ideal: **{analise_hist.padroes_primos['faixa_ideal'][0]}–{analise_hist.padroes_primos['faixa_ideal'][1]}**
-                        - Média: **{analise_hist.padroes_primos['media']:.1f}**
-                        - Moda: **{analise_hist.padroes_primos['moda']}** primos
+                        - Tendência: **{modelo.ajustes.get('sequencias', 'manter').upper()}** sequências
                         """)
-                    
-                    # Tabela de frequência completa
-                    with st.expander("📋 Ver tabela completa de frequência"):
-                        freq_data = []
-                        for num in range(1, 26):
-                            freq_data.append({
-                                "Número": num,
-                                "Frequência": analise_hist.frequencias[num]['absoluta'],
-                                "Percentual": f"{analise_hist.frequencias[num]['percentual']:.1f}%",
-                                "Classificação": "Quente 🔥" if num in analise_hist.numeros_quentes else "Frio ❄️" if num in analise_hist.numeros_frios else "Normal"
-                            })
-                        df_freq = pd.DataFrame(freq_data)
-                        st.dataframe(df_freq, use_container_width=True, hide_index=True)
                 
-                elif opcao_historica == "🎯 Gerar Jogos Inteligentes":
-                    st.markdown("### 🎯 Jogos Baseados em Padrões Reais")
+                elif opcao == "🎯 Gerar Jogos 3622":
+                    st.markdown("### 🎯 Gerar Jogos com Modelo Universal")
+                    
                     st.markdown("""
                     <div style='background:#1e1e2e; padding:10px; border-radius:10px; margin-bottom:20px;'>
-                    ✅ Jogos gerados respeitando os padrões identificados nos 600 concursos:
-                    • Equilíbrio de pares/ímpares (7-8)
-                    • Soma entre 180 e 210
-                    • 5-6 números primos
-                    • Distribuição balanceada por linhas
-                    • Peso maior para números quentes e atrasados
+                    <strong>PASSO A PASSO DO MODELO:</strong><br>
+                    1️⃣ Fixe a BASE com 9 repetições do último concurso<br>
+                    2️⃣ Complete respeitando as faixas (6 baixas, 6 médias, 3 altas)<br>
+                    3️⃣ Valide o jogo contra todas as regras universais
                     </div>
                     """, unsafe_allow_html=True)
                     
                     col1, col2 = st.columns(2)
                     with col1:
-                        qtd_jogos_hist = st.slider("Quantidade de jogos", 5, 20, 10, key="qtd_jogos_hist")
+                        qtd_jogos_3622 = st.slider("Quantidade de jogos", 5, 20, 10, key="qtd_3622")
                     with col2:
                         st.markdown("<br>", unsafe_allow_html=True)
-                        if st.button("🎲 Gerar Jogos Históricos", use_container_width=True, type="primary"):
-                            with st.spinner("Gerando jogos baseados em padrões reais..."):
-                                jogos_historicos = analise_hist.gerar_multiplos_jogos(qtd_jogos_hist)
-                                
-                                # Salvar na sessão
-                                st.session_state.jogos_historicos_gerados = jogos_historicos
-                                
-                                st.success(f"✅ {len(jogos_historicos)} jogos gerados com sucesso!")
+                        if st.button("🎲 Gerar Jogos 3622", use_container_width=True, type="primary"):
+                            with st.spinner("Gerando jogos com validação rigorosa..."):
+                                jogos_3622, violacoes_list, pontuacoes = modelo.gerar_multiplos_jogos(qtd_jogos_3622)
+                                st.session_state.jogos_3622_gerados = jogos_3622
+                                st.session_state.jogos_3622_violacoes = violacoes_list
+                                st.session_state.jogos_3622_pontuacoes = pontuacoes
+                                st.success(f"✅ {len(jogos_3622)} jogos gerados com validação!")
                     
                     # Mostrar jogos gerados
-                    if "jogos_historicos_gerados" in st.session_state:
-                        jogos_hist = st.session_state.jogos_historicos_gerados
+                    if "jogos_3622_gerados" in st.session_state:
+                        jogos_3622 = st.session_state.jogos_3622_gerados
+                        violacoes_list = st.session_state.jogos_3622_violacoes
+                        pontuacoes = st.session_state.jogos_3622_pontuacoes
                         
-                        st.markdown("### 📋 Jogos Gerados")
+                        st.markdown("### 📋 Jogos Gerados - MODELO 3622")
                         
-                        for i, jogo in enumerate(jogos_hist, 1):
+                        # Estatísticas agregadas
+                        df_stats = pd.DataFrame({
+                            "Jogo": range(1, len(jogos_3622)+1),
+                            "Pontuação": pontuacoes,
+                            "Violações": [len(v) for v in violacoes_list],
+                            "Status": ["✅ Principal" if len(v) == 0 else "⚠️ Secundário" if len(v) == 1 else "❌ Ruim" for v in violacoes_list]
+                        })
+                        st.dataframe(df_stats, use_container_width=True, hide_index=True)
+                        
+                        # Mostrar cada jogo
+                        for i, jogo in enumerate(jogos_3622, 1):
                             with st.container():
-                                # Formatar números com cores
-                                nums_html = ""
-                                for num in jogo:
-                                    nums_html += formatar_numero_com_cor(num, analise_hist)
-                                
                                 # Calcular estatísticas do jogo
                                 pares = sum(1 for n in jogo if n % 2 == 0)
-                                primos = sum(1 for n in jogo if n in [2,3,5,7,11,13,17,19,23])
+                                impares = 15 - pares
                                 soma = sum(jogo)
+                                primos = sum(1 for n in jogo if n in modelo.primos)
+                                faixa1 = sum(1 for n in jogo if 1 <= n <= 8)
+                                faixa2 = sum(1 for n in jogo if 9 <= n <= 16)
+                                faixa3 = sum(1 for n in jogo if 17 <= n <= 25)
+                                
+                                # Cor de fundo baseada na pontuação
+                                cor_fundo = "#0e1117"
+                                if pontuacoes[i-1] >= 10:
+                                    cor_fundo = "#1a3b2e"  # Verde escuro para jogos principais
+                                elif pontuacoes[i-1] >= 7:
+                                    cor_fundo = "#3b3a1a"  # Amarelo escuro para secundários
                                 
                                 st.markdown(f"""
-                                <div style='background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
-                                    <strong>Jogo {i:2d}:</strong> {nums_html}<br>
-                                    <small>📊 Pares: {pares} | Primos: {primos} | Soma: {soma}</small>
+                                <div style='background:{cor_fundo}; border-radius:10px; padding:15px; margin-bottom:10px; border-left: 5px solid #4cc9f0;'>
+                                    <strong>Jogo {i:2d} (Pontuação: {pontuacoes[i-1]})</strong><br>
+                                    <span style='font-size:1.1em;'>{', '.join(f"{n:02d}" for n in jogo)}</span><br>
+                                    <small>
+                                    📊 Pares: {pares} | Ímpares: {impares} | Soma: {soma} | Primos: {primos}<br>
+                                    📈 Faixas: {faixa1}/01-08 | {faixa2}/09-16 | {faixa3}/17-25
+                                    </small>
                                 </div>
                                 """, unsafe_allow_html=True)
+                                
+                                # Mostrar violações se houver
+                                if violacoes_list[i-1]:
+                                    with st.expander(f"⚠️ Ver {len(violacoes_list[i-1])} violação(s)"):
+                                        for v in violacoes_list[i-1]:
+                                            st.markdown(v)
                         
                         # Opção de exportar
-                        if st.button("📥 Exportar Jogos", use_container_width=True):
-                            # Criar DataFrame para exportação
+                        if st.button("📥 Exportar Jogos 3622", use_container_width=True):
                             df_export = pd.DataFrame({
-                                "Jogo": range(1, len(jogos_hist)+1),
-                                "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in jogos_hist],
-                                "Pares": [sum(1 for n in j if n%2==0) for j in jogos_hist],
-                                "Primos": [sum(1 for n in j if n in [2,3,5,7,11,13,17,19,23]) for j in jogos_hist],
-                                "Soma": [sum(j) for j in jogos_hist]
+                                "Jogo": range(1, len(jogos_3622)+1),
+                                "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in jogos_3622],
+                                "Pontuacao": pontuacoes,
+                                "Pares": [sum(1 for n in j if n%2==0) for j in jogos_3622],
+                                "Impares": [15 - sum(1 for n in j if n%2==0) for j in jogos_3622],
+                                "Soma": [sum(j) for j in jogos_3622],
+                                "Primos": [sum(1 for n in j if n in modelo.primos) for j in jogos_3622],
+                                "Faixa01_08": [sum(1 for n in j if 1<=n<=8) for j in jogos_3622],
+                                "Faixa09_16": [sum(1 for n in j if 9<=n<=16) for j in jogos_3622],
+                                "Faixa17_25": [sum(1 for n in j if 17<=n<=25) for j in jogos_3622]
                             })
                             
-                            # Converter para CSV
                             csv = df_export.to_csv(index=False)
                             st.download_button(
                                 label="⬇️ Baixar CSV",
                                 data=csv,
-                                file_name=f"jogos_historicos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                                file_name=f"jogos_modelo3622_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                                 mime="text/csv"
                             )
                 
-                elif opcao_historica == "🔍 Explorar Números":
-                    st.markdown("### 🔍 Análise Individual por Número")
+                elif opcao == "📊 Análise do Último Concurso":
+                    st.markdown("### 📊 Análise do Último Concurso")
                     
-                    # Seletor de número
-                    num_selecionado = st.selectbox("Selecione um número:", range(1, 26))
-                    
-                    if num_selecionado:
-                        freq = analise_hist.frequencias[num_selecionado]
-                        
+                    if analise_ultimo:
                         col1, col2, col3 = st.columns(3)
+                        
                         with col1:
-                            st.metric("Frequência", f"{freq['absoluta']}x")
+                            st.metric("Soma", analise_ultimo.get("soma_ultimo", "N/A"))
+                            st.metric("Pares", analise_ultimo.get("pares_ultimo", "N/A"))
+                        
                         with col2:
-                            st.metric("Percentual", f"{freq['percentual']:.1f}%")
+                            st.metric("Primos", analise_ultimo.get("primos_ultimo", "N/A"))
+                            st.metric("Repetição", analise_ultimo.get("repetidos_ultimo", "N/A"))
+                        
                         with col3:
-                            # Classificação
-                            if num_selecionado in analise_hist.numeros_quentes:
-                                st.markdown("<p style='color:#ff6b6b; font-weight:bold;'>🔥 QUENTE</p>", unsafe_allow_html=True)
-                            elif num_selecionado in analise_hist.numeros_frios:
-                                st.markdown("<p style='color:#4ade80; font-weight:bold;'>❄️ FRIO</p>", unsafe_allow_html=True)
-                            elif num_selecionado in analise_hist.numeros_atrasados:
-                                st.markdown("<p style='color:#f97316; font-weight:bold;'>⏰ ATRASADO</p>", unsafe_allow_html=True)
-                            elif num_selecionado in analise_hist.numeros_repetentes:
-                                st.markdown("<p style='color:#4cc9f0; font-weight:bold;'>🔁 REPETENTE</p>", unsafe_allow_html=True)
+                            st.metric("Altas (22-25)", analise_ultimo.get("altas_ultimo", "N/A"))
+                            st.metric("Miolo (09-16)", analise_ultimo.get("miolo_ultimo", "N/A"))
                         
-                        # Últimas aparições
-                        st.markdown("#### 📅 Últimas aparições")
-                        aparicoes = []
-                        for i, concurso in enumerate(analise_hist.concursos[:20]):
-                            if num_selecionado in concurso:
-                                if i < len(analise_hist.dados_completos):
-                                    aparicoes.append({
-                                        "concurso": analise_hist.dados_completos[i]["concurso"],
-                                        "data": analise_hist.dados_completos[i]["data"]
-                                    })
+                        st.markdown("### 📋 Dezenas do Último Concurso")
                         
-                        if aparicoes:
-                            df_aparicoes = pd.DataFrame(aparicoes[:10])
-                            st.dataframe(df_aparicoes, use_container_width=True, hide_index=True)
-                        else:
-                            st.info("Número não encontrado nos últimos 20 concursos")
-        
-        # ================= NOVA ABA: PADRÕES OCULTOS =================
-        with tab8:
-            st.subheader("🔮 Padrões Ocultos - Deep Analytics")
-            
-            if not st.session_state.dados_api:
-                st.warning("📥 Carregue os concursos primeiro usando o botão na barra lateral")
-            else:
-                # Inicializar análise de padrões ocultos
-                if "analise_padroes_ocultos" not in st.session_state:
-                    with st.spinner("🧠 Analisando padrões ocultos em 600 concursos..."):
-                        concursos_para_analise = [sorted(map(int, d["dezenas"])) for d in st.session_state.dados_api[:600]]
-                        st.session_state.analise_padroes_ocultos = criar_analise_padroes_ocultos(
-                            concursos_para_analise,
-                            st.session_state.dados_api[:600],
-                            600
-                        )
-                
-                if st.session_state.analise_padroes_ocultos:
-                    analise_oculta = st.session_state.analise_padroes_ocultos
-                    
-                    # Menu de opções
-                    opcao_oculta = st.radio(
-                        "Selecione uma opção:",
-                        ["📊 Visão Geral dos Padrões Ocultos", "🎯 Gerar Jogos com Padrões Ocultos", "🔬 Análise Detalhada"],
-                        horizontal=True,
-                        key="opcao_oculta"
-                    )
-                    
-                    if opcao_oculta == "📊 Visão Geral dos Padrões Ocultos":
-                        st.markdown("### 📊 Padrões Estatísticos Não-Óbvios")
-                        
-                        # Métricas de confiabilidade
-                        col1, col2, col3 = st.columns(3)
-                        with col1:
-                            st.metric("Concursos Analisados", analise_oculta.total_concursos)
-                        with col2:
-                            st.metric("Confiabilidade", f"{analise_oculta.estatisticas_ocultas['confiabilidade']:.0f}%")
-                        with col3:
-                            st.metric("Padrões Fortes", analise_oculta.estatisticas_ocultas['padroes_identificados'])
-                        
-                        st.markdown("---")
-                        
-                        # Padrão 1: Vizinhos
-                        with st.expander("🔍 **Padrão de Vizinhos (Números Consecutivos)**", expanded=True):
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                st.markdown(f"""
-                                - **Média por concurso:** {analise_oculta.padrao_vizinhos['media_por_concurso']:.2f} pares
-                                - **Percentual com vizinhos:** {analise_oculta.padrao_vizinhos['percentual_com_vizinhos']:.1f}%
-                                - **Faixa ideal:** {analise_oculta.padrao_vizinhos['faixa_ideal'][0]} a {analise_oculta.padrao_vizinhos['faixa_ideal'][1]} pares
-                                """)
+                        # Mostrar números com cores
+                        nums_html = ""
+                        for num in sorted(modelo.ultimo_concurso):
+                            # Classificar o número
+                            if num >= 22:
+                                cor = "#ff6b6b"  # Vermelho para altas
+                                icone = "🔴"
+                            elif 9 <= num <= 16:
+                                cor = "#4cc9f0"  # Azul para miolo
+                                icone = "🔵"
+                            else:
+                                cor = "#4ade80"  # Verde para baixas
+                                icone = "🟢"
                             
-                            with col2:
-                                st.markdown("**Pares de vizinhos mais comuns:**")
-                                vizinhos_html = ""
-                                for par, freq in analise_oculta.padrao_vizinhos['vizinhos_mais_comuns'][:6]:
-                                    vizinhos_html += f"<span style='background:#4cc9f020; border:1px solid #4cc9f0; border-radius:20px; padding:5px 10px; margin:3px; display:inline-block;'>{par[0]:02d}-{par[1]:02d} ({freq}x)</span>"
-                                st.markdown(f"<div>{vizinhos_html}</div>", unsafe_allow_html=True)
+                            nums_html += f"<span style='background:{cor}30; border:1px solid {cor}; border-radius:30px; padding:8px 15px; margin:5px; display:inline-block; font-weight:bold; font-size:1.2em;'>{num:02d} {icone}</span>"
                         
-                        # Padrão 2: Terminações
-                        with st.expander("🔍 **Padrão de Terminações (Dígitos Finais)**", expanded=True):
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                st.markdown(f"""
-                                - **Terminações preferenciais:** {analise_oculta.padrao_terminacoes['terminacoes_preferenciais']}
-                                - **Proporção preferenciais:** {analise_oculta.padrao_terminacoes['proporcao_preferenciais']*100:.1f}%
-                                - **Média por concurso:** {analise_oculta.padrao_terminacoes['media_preferenciais_por_concurso']:.1f} números
-                                """)
-                            
-                            with col2:
-                                st.markdown("**Distribuição das terminações:**")
-                                term_data = analise_oculta.padrao_terminacoes['contagem']
-                                term_chart = pd.DataFrame({
-                                    'Terminação': list(term_data.keys()),
-                                    'Frequência': list(term_data.values())
-                                })
-                                st.bar_chart(term_chart.set_index('Terminação'))
+                        st.markdown(f"<div style='text-align:center;'>{nums_html}</div>", unsafe_allow_html=True)
                         
-                        # Padrão 3: Números Primos
-                        with st.expander("🔍 **Padrão de Números Primos**", expanded=True):
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                st.markdown(f"""
-                                - **Média:** {analise_oculta.padrao_primos['media']:.2f} primos/concurso
-                                - **Faixa ideal:** {analise_oculta.padrao_primos['faixa_ideal'][0]} a {analise_oculta.padrao_primos['faixa_ideal'][1]} primos
-                                - **Mínimo/Máximo:** {analise_oculta.padrao_primos['min']} / {analise_oculta.padrao_primos['max']}
-                                """)
-                            
-                            with col2:
-                                st.markdown("**Distribuição de primos:**")
-                                dist_primos = analise_oculta.padrao_primos['distribuicao']
-                                if dist_primos:
-                                    df_primos = pd.DataFrame({
-                                        'Quantidade': list(dist_primos.keys()),
-                                        'Frequência': list(dist_primos.values())
-                                    })
-                                    st.bar_chart(df_primos.set_index('Quantidade'))
-                        
-                        # Padrão 4: Correlações
-                        with st.expander("🔍 **Correlações entre Números**", expanded=True):
-                            col1, col2 = st.columns(2)
-                            
-                            with col1:
-                                st.markdown("**Pares que mais aparecem juntos:**")
-                                pares_html = ""
-                                for par, freq in analise_oculta.padrao_correlacoes['pares_fortes'][:8]:
-                                    pares_html += f"<span style='background:#ff6b6b20; border:1px solid #ff6b6b; border-radius:20px; padding:5px 10px; margin:3px; display:inline-block;'>{par[0]:02d}-{par[1]:02d} ({freq}x)</span>"
-                                st.markdown(f"<div>{pares_html}</div>", unsafe_allow_html=True)
-                            
-                            with col2:
-                                st.markdown("**Trios que mais aparecem juntos:**")
-                                trios_html = ""
-                                for trio, freq in analise_oculta.padrao_correlacoes['trios_fortes'][:4]:
-                                    trios_html += f"<div style='background:#4ade8020; border:1px solid #4ade80; border-radius:20px; padding:5px; margin:3px; text-align:center;'>{trio[0]:02d}-{trio[1]:02d}-{trio[2]:02d} ({freq}x)</div>"
-                                st.markdown(f"<div>{trios_html}</div>", unsafe_allow_html=True)
-                            
-                            if analise_oculta.padrao_correlacoes['numero_mais_correlacionado']:
-                                st.info(f"🎯 **Número mais conectado:** {analise_oculta.padrao_correlacoes['numero_mais_correlacionado']}")
-                        
-                        # Padrão 5: Gaps e Consistência
-                        with st.expander("🔍 **Gaps Temporais e Consistência**", expanded=False):
-                            st.markdown(f"**Média geral de gaps:** {analise_oculta.padrao_gaps['media_gaps_geral']:.1f} concursos")
-                            
-                            st.markdown("**Números mais consistentes (menor variação):**")
-                            consistentes_html = ""
-                            for num in analise_oculta.padrao_gaps['numeros_mais_consistentes']:
-                                consistentes_html += f"<span style='background:#f9731620; border:1px solid #f97316; border-radius:20px; padding:5px 10px; margin:3px; display:inline-block;'>{num:02d} ⚡</span>"
-                            st.markdown(f"<div>{consistentes_html}</div>", unsafe_allow_html=True)
-                    
-                    elif opcao_oculta == "🎯 Gerar Jogos com Padrões Ocultos":
-                        st.markdown("### 🎯 Jogos Baseados em Padrões Ocultos")
-                        st.markdown("""
-                        <div style='background:#1e1e2e; padding:10px; border-radius:10px; margin-bottom:20px;'>
-                        ✅ **Validação rigorosa contra todos os padrões ocultos:**
-                        • 2-3 pares de números vizinhos por jogo
-                        • Pelo menos 10 números com terminações preferenciais (1,2,3,4,5)
-                        • 4-6 números primos por jogo
-                        • Distribuição balanceada nos 4 quadrantes
-                        • Soma entre 180 e 210
-                        • Peso maior para números com fortes correlações
-                        </div>
-                        """, unsafe_allow_html=True)
+                        st.markdown("### 🔍 Ajustes Adaptáveis Calculados")
                         
                         col1, col2 = st.columns(2)
+                        
                         with col1:
-                            qtd_jogos_ocultos = st.slider("Quantidade de jogos", 5, 20, 10, key="qtd_jogos_ocultos")
+                            st.markdown("**Com base neste último concurso:**")
+                            st.markdown(f"""
+                            - Último teve **{analise_ultimo.get('altas_ultimo', 0)}** altas → próximo tende a **{modelo.ajustes.get('altas_alvo', (1,2))[0]}-{modelo.ajustes.get('altas_alvo', (1,2))[1]}**
+                            - Último teve **{analise_ultimo.get('miolo_ultimo', 0)}** no miolo → próximo tende a **{modelo.ajustes.get('miolo_alvo', (5,6))[0]}-{modelo.ajustes.get('miolo_alvo', (5,6))[1]}**
+                            """)
+                        
                         with col2:
-                            st.markdown("<br>", unsafe_allow_html=True)
-                            if st.button("🔮 Gerar Jogos com Padrões Ocultos", use_container_width=True, type="primary"):
-                                with st.spinner("Gerando jogos validados por múltiplos padrões..."):
-                                    jogos_ocultos = analise_oculta.gerar_multiplos_jogos_ocultos(qtd_jogos_ocultos)
-                                    st.session_state.jogos_ocultos_gerados = jogos_ocultos
-                                    st.success(f"✅ {len(jogos_ocultos)} jogos gerados com validação completa!")
-                        
-                        # Mostrar jogos gerados
-                        if "jogos_ocultos_gerados" in st.session_state:
-                            jogos_ocultos = st.session_state.jogos_ocultos_gerados
-                            
-                            st.markdown("### 📋 Jogos com Padrões Ocultos")
-                            
-                            # Estatísticas agregadas dos jogos
-                            stats_jogos = []
-                            for jogo in jogos_ocultos:
-                                pares_viz = sum(1 for i in range(len(jogo)-1) if jogo[i+1] - jogo[i] == 1)
-                                term_pref = sum(1 for n in jogo if n % 10 in [1,2,3,4,5])
-                                primos = sum(1 for n in jogo if n in [2,3,5,7,11,13,17,19,23])
-                                stats_jogos.append({
-                                    'Pares Vizinhos': pares_viz,
-                                    'Term. Pref.': term_pref,
-                                    'Primos': primos,
-                                    'Soma': sum(jogo)
-                                })
-                            
-                            df_stats = pd.DataFrame(stats_jogos)
-                            st.dataframe(df_stats.describe().round(1), use_container_width=True)
-                            
-                            st.markdown("---")
-                            
-                            # Mostrar cada jogo com formatação especial
-                            for i, jogo in enumerate(jogos_ocultos, 1):
-                                with st.container():
-                                    # Formatar números com ícones de padrões
-                                    nums_html = ""
-                                    for num in jogo:
-                                        nums_html += formatar_numero_com_padroes(num, analise_oculta) + " "
-                                    
-                                    # Estatísticas do jogo
-                                    pares_viz = sum(1 for idx in range(len(jogo)-1) if jogo[idx+1] - jogo[idx] == 1)
-                                    term_pref = sum(1 for n in jogo if n % 10 in [1,2,3,4,5])
-                                    primos = sum(1 for n in jogo if n in [2,3,5,7,11,13,17,19,23])
-                                    
-                                    st.markdown(f"""
-                                    <div style='background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px; border-left: 5px solid #4cc9f0;'>
-                                        <strong>Jogo {i:2d}:</strong> {nums_html}<br>
-                                        <small style='color:#aaa;'>📊 Vizinhos: {pares_viz} | Term. Pref.: {term_pref}/15 | Primos: {primos} | Soma: {sum(jogo)}</small>
-                                    </div>
-                                    """, unsafe_allow_html=True)
-                            
-                            # Opção de exportar
-                            if st.button("📥 Exportar Jogos Ocultos", use_container_width=True):
-                                df_export = pd.DataFrame({
-                                    "Jogo": range(1, len(jogos_ocultos)+1),
-                                    "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in jogos_ocultos],
-                                    "Pares_Vizinhos": [sum(1 for i in range(len(j)-1) if j[i+1]-j[i]==1) for j in jogos_ocultos],
-                                    "Terminacoes_Preferenciais": [sum(1 for n in j if n%10 in [1,2,3,4,5]) for j in jogos_ocultos],
-                                    "Primos": [sum(1 for n in j if n in [2,3,5,7,11,13,17,19,23]) for j in jogos_ocultos],
-                                    "Soma": [sum(j) for j in jogos_ocultos]
-                                })
-                                
-                                csv = df_export.to_csv(index=False)
-                                st.download_button(
-                                    label="⬇️ Baixar CSV",
-                                    data=csv,
-                                    file_name=f"jogos_padroes_ocultos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                                    mime="text/csv"
-                                )
-                    
-                    elif opcao_oculta == "🔬 Análise Detalhada":
-                        st.markdown("### 🔬 Análise Detalhada por Padrão")
-                        
-                        tipo_analise = st.selectbox(
-                            "Selecione o tipo de análise:",
-                            ["Matriz de Correlação", "Gaps por Número", "Distribuição por Quadrantes", "Ciclos de Repetição"]
-                        )
-                        
-                        if tipo_analise == "Matriz de Correlação":
-                            st.markdown("**Matriz de Correlação entre Números**")
-                            st.markdown("*Quanto mais forte a cor, mais frequentemente os números aparecem juntos*")
-                            
-                            # Criar heatmap simplificado
-                            matriz = analise_oculta.matriz_correlacao
-                            
-                            # Selecionar um número para ver correlações
-                            num_select = st.selectbox("Ver correlações do número:", range(1, 26))
-                            
-                            if num_select:
-                                correlacoes_num = matriz[num_select-1]
-                                nums_correl = list(range(1, 26))
-                                
-                                # Remover o próprio número
-                                dados_corr = [(nums_correl[i], correlacoes_num[i]) for i in range(25) if i != num_select-1]
-                                dados_corr.sort(key=lambda x: x[1], reverse=True)
-                                
-                                st.markdown(f"**Top 10 números que mais aparecem com {num_select:02d}:**")
-                                
-                                cols = st.columns(2)
-                                for idx, (num, corr) in enumerate(dados_corr[:10]):
-                                    with cols[idx % 2]:
-                                        st.markdown(f"• {num:02d}: **{corr:.1f}%** das vezes")
-                        
-                        elif tipo_analise == "Gaps por Número":
-                            st.markdown("**Análise de Gaps (Intervalos entre aparições)**")
-                            
-                            num_gap = st.selectbox("Selecione um número:", range(1, 26), key="num_gap")
-                            
-                            if num_gap in analise_oculta.padrao_gaps['gaps_por_numero']:
-                                dados = analise_oculta.padrao_gaps['gaps_por_numero'][num_gap]
-                                
-                                col1, col2, col3, col4 = st.columns(4)
-                                with col1:
-                                    st.metric("Média gap", f"{dados['media_gap']:.1f}")
-                                with col2:
-                                    st.metric("Mediana", f"{dados['mediana_gap']:.1f}")
-                                with col3:
-                                    st.metric("Máximo", dados['max_gap'])
-                                with col4:
-                                    st.metric("Mínimo", dados['min_gap'])
-                                
-                                if dados['gaps']:
-                                    st.markdown("**Distribuição dos gaps:**")
-                                    df_gaps = pd.DataFrame({'Gap': dados['gaps']})
-                                    st.bar_chart(df_gaps['Gap'].value_counts().sort_index())
-                        
-                        elif tipo_analise == "Distribuição por Quadrantes":
-                            st.markdown("**Distribuição Ideal por Quadrante**")
-                            
-                            quad_data = analise_oculta.padrao_distribuicao_linhas
-                            
-                            for quad, stats in quad_data.items():
-                                st.markdown(f"**{quad}:**")
-                                col1, col2, col3 = st.columns(3)
-                                with col1:
-                                    st.metric("Média", f"{stats['media']:.1f}")
-                                with col2:
-                                    st.metric("Faixa ideal", f"{stats['faixa_ideal'][0]}-{stats['faixa_ideal'][1]}")
-                                with col3:
-                                    st.metric("Variação", f"{stats['desvio']:.1f}")
-                        
-                        elif tipo_analise == "Ciclos de Repetição":
-                            st.markdown("**Repetição em Ciclos (distâncias entre concursos)**")
-                            
-                            for ciclo in analise_oculta.padrao_repeticao_ciclica:
-                                st.markdown(f"""
-                                **Distância {ciclo['distancia']} concursos:**
-                                - Média de repetição: {ciclo['media']:.1f} números
-                                - Variação: ±{ciclo['desvio']:.1f}
-                                - Mínimo/Máximo: {ciclo['min']} / {ciclo['max']}
-                                """)
-                                st.progress(min(1.0, ciclo['media'] / 15))
-                else:
-                    st.warning("⚠️ Não foi possível analisar padrões ocultos com os dados disponíveis. Carregue mais concursos.")
+                            st.markdown("**Recomendações para o próximo concurso:**")
+                            st.markdown(f"""
+                            - Repetir **{modelo.ajustes.get('repeticao_alvo', (8,9))[0]}-{modelo.ajustes.get('repeticao_alvo', (8,9))[1]}** números
+                            - Manter {modelo.ajustes.get('sequencias', 'manter')} sequências
+                            - Soma entre 168-186 (ideal 172-182)
+                            """)
     else:
         st.markdown("""
         <div style='text-align: center; padding: 2rem;'>
@@ -2594,6 +1371,25 @@ def main():
             <p>Use o menu ≡ no canto superior esquerdo</p>
         </div>
         """, unsafe_allow_html=True)
+
+# =====================================================
+# FUNÇÕES DE REPETIÇÃO (MANTIDAS DO CÓDIGO ORIGINAL)
+# =====================================================
+def repeticao_ultimo_penultimo(concursos):
+    if len(concursos) < 2: return None
+    ultimo = set(concursos[0])
+    penultimo = set(concursos[1])
+    repetidos = len(ultimo & penultimo)
+    media = repetidos / 15
+    return int(repetidos), float(media)
+
+def repeticao_ultimo_antepenultimo(concursos):
+    if len(concursos) < 3: return None
+    ultimo = set(concursos[0])
+    antepenultimo = set(concursos[2])
+    repetidos = len(ultimo & antepenultimo)
+    media = repetidos / 15
+    return int(repetidos), float(media)
 
 if __name__ == "__main__":
     main()
