@@ -1,29 +1,4 @@
-[file name]: IMG_2140.jpeg
-[file content begin]
-21:30  
-Palmeiras SP  
-Fluminense RJ  
-1.29 ✅  
 
-○ Total → Mais de 1.5  
-
-20:00  
-Cruzeiro MG  
-Corinthians SP  
-1.33 ✅  
-
-○ Total → Mais de 1.5  
-
-21:30  
-Gremio FB Porto Alegrense RS  
-Atletico Mineiro MG  
-1.36 ✅  
-
-○ Total → Mais de 1.5  
-
-Total:  
-2.33
-[file content end]
 
 import streamlit as st
 from datetime import datetime, timedelta, timezone
