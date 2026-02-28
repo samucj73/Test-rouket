@@ -3276,7 +3276,7 @@ class PosterGenerator:
         draw = ImageDraw.Draw(img)
 
         # Fontes
-        FONTE_TITULO = self.criar_fonte(90)
+        FONTE_TITULO = self.criar_fonte(85)
         FONTE_SUBTITULO = self.criar_fonte(65)
         FONTE_TIMES = self.criar_fonte(60)
         FONTE_VS = self.criar_fonte(55)
@@ -3323,30 +3323,30 @@ class PosterGenerator:
                 prob = jogo_dict.get('probabilidade', 50)
                 odd_principal = round(100 / prob, 2) if prob > 0 else 2.0
                 cor_odd = (255, 215, 0) if jogo_dict.get('tipo_aposta') == "over" else (100, 200, 255)
-                simbolo = "📈" if jogo_dict.get('tipo_aposta') == "over" else "📉"
+                simbolo = "" if jogo_dict.get('tipo_aposta') == "over" else ""
                 
             elif tipo_alerta == "favorito":
                 prob_fav = jogo_dict.get('confianca_vitoria', 50)
                 odd_principal = round(100 / prob_fav, 2) if prob_fav > 0 else 2.0
                 cor_odd = (255, 87, 34)
-                simbolo = "🏆"
+                simbolo = ""
                 
             elif tipo_alerta == "gols_ht":
                 prob_ht = jogo_dict.get('confianca_ht', 50)
                 odd_principal = round(100 / prob_ht, 2) if prob_ht > 0 else 2.0
                 cor_odd = (76, 175, 80)
-                simbolo = "⚡" if "OVER" in jogo_dict.get('tendencia_ht', '') else "🛡️"
+                simbolo = "" if "OVER" in jogo_dict.get('tendencia_ht', '') else ""
                 
             elif tipo_alerta == "ambas_marcam":
                 prob_am = jogo_dict.get('confianca_ambas_marcam', 50)
                 odd_principal = round(100 / prob_am, 2) if prob_am > 0 else 2.0
                 cor_odd = (155, 89, 182)
-                simbolo = "🤝" if jogo_dict.get('tendencia_ambas_marcam') == "SIM" else "🚫"
+                simbolo = "" if jogo_dict.get('tendencia_ambas_marcam') == "SIM" else ""
             
             else:
                 odd_principal = 2.0
                 cor_odd = (255, 215, 0)
-                simbolo = "💰"
+                simbolo = ""
             
             # Texto completo da odd
             odd_text = f"{simbolo} {odd_principal:.2f}"
