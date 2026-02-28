@@ -3231,6 +3231,7 @@ class TelegramClient:
 # CLASSES DE GERAÇÃO DE POSTERS
 # =============================
 
+#class PosterGenerator:
 class PosterGenerator:
     """Gera posters para os alertas"""
     
@@ -3261,340 +3262,30 @@ class PosterGenerator:
             logging.error(f"Erro ao carregar fonte: {e}")
             return ImageFont.load_default()
     
-    #def gerar_poster_westham_style(self, jogos: list, titulo: str = " ALERTA DE GOLS", tipo_alerta: str = "over_under") -> io.BytesIO:
-def gerar_poster_westham_style(self, jogos: list, titulo: str = "⚽ ALERTA DE GOLS", tipo_alerta: str = "over_under") -> io.BytesIO:
-    """Gera poster no estilo West Ham com odds no canto superior direito"""
-    LARGURA = 2000
-    ALTURA_TOPO = 270
-    ALTURA_POR_JOGO = 830
-    PADDING = 80
-    
-    jogos_count = len(jogos)
-    altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
-
-    img = Image.new("RGB", (LARGURA, altura_total), color=(10, 20, 30))
-    draw = ImageDraw.Draw(img)
-
-    # Fontes
-    FONTE_TITULO = self.criar_fonte(90)
-    FONTE_SUBTITULO = self.criar_fonte(65)
-    FONTE_TIMES = self.criar_fonte(60)
-    FONTE_VS = self.criar_fonte(55)
-    FONTE_INFO = self.criar_fonte(50)
-    FONTE_DETALHES = self.criar_fonte(45)
-    FONTE_ANALISE = self.criar_fonte(50)
-    FONTE_ODD = self.criar_fonte(70)  # Fonte maior para odds no canto
-
-    # Título
-    try:
-        titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
-        titulo_w = titulo_bbox[2] - titulo_bbox[0]
-        draw.text(((LARGURA - titulo_w) // 2, 100), titulo, font=FONTE_TITULO, fill=(255, 255, 255))
-    except:
-        draw.text((LARGURA//2 - 250, 100), titulo, font=FONTE_TITULO, fill=(255, 255, 255))
-
-    # Linha decorativa
-    draw.line([(LARGURA//4, 220), (3*LARGURA//4, 220)], fill=(255, 215, 0), width=6)
-
-    y_pos = ALTURA_TOPO
-
-    for idx, jogo_dict in enumerate(jogos):
-        x0, y0 = PADDING, y_pos
-        x1, y1 = LARGURA - PADDING, y_pos + ALTURA_POR_JOGO - 40
-        
-        # Definir cores baseadas no tipo de alerta
-        if tipo_alerta == "over_under":
-            cor_borda = (255, 215, 0) if jogo_dict.get('tipo_aposta') == "over" else (100, 200, 255)
-        elif tipo_alerta == "favorito":
-            cor_borda = (255, 87, 34)  # Laranja para favoritos
-        elif tipo_alerta == "gols_ht":
-            cor_borda = (76, 175, 80)  # Verde para HT
-        elif tipo_alerta == "ambas_marcam":
-            cor_borda = (155, 89, 182)  # Roxo para Ambas Marcam
-        else:
-            cor_borda = (255, 215, 0)
-        
-        # Retângulo do jogo
-        draw.rectangle([x0, y0, x1, y1], fill=(25, 35, 45), outline=cor_borda, width=4)
-
-        # ===== ODD NO CANTO SUPERIOR DIREITO =====
-        # Calcular odd principal baseado no tipo de alerta
-        if tipo_alerta == "over_under":
-            prob = jogo_dict.get('probabilidade', 50)
-            odd_principal = round(100 / prob, 2) if prob > 0 else 2.0
-            cor_odd = (255, 215, 0) if jogo_dict.get('tipo_aposta') == "over" else (100, 200, 255)
-            simbolo = "📈" if jogo_dict.get('tipo_aposta') == "over" else "📉"
-            
-        elif tipo_alerta == "favorito":
-            prob_fav = jogo_dict.get('confianca_vitoria', 50)
-            odd_principal = round(100 / prob_fav, 2) if prob_fav > 0 else 2.0
-            cor_odd = (255, 87, 34)
-            simbolo = "🏆"
-            
-        elif tipo_alerta == "gols_ht":
-            prob_ht = jogo_dict.get('confianca_ht', 50)
-            odd_principal = round(100 / prob_ht, 2) if prob_ht > 0 else 2.0
-            cor_odd = (76, 175, 80)
-            simbolo = "⚡" if "OVER" in jogo_dict.get('tendencia_ht', '') else "🛡️"
-            
-        elif tipo_alerta == "ambas_marcam":
-            prob_am = jogo_dict.get('confianca_ambas_marcam', 50)
-            odd_principal = round(100 / prob_am, 2) if prob_am > 0 else 2.0
-            cor_odd = (155, 89, 182)
-            simbolo = "🤝" if jogo_dict.get('tendencia_ambas_marcam') == "SIM" else "🚫"
-        
-        else:
-            odd_principal = 2.0
-            cor_odd = (255, 215, 0)
-            simbolo = "💰"
-        
-        # Texto completo da odd
-        odd_text = f"{simbolo} {odd_principal:.2f}"
-        
-        # Posicionar a odd no CANTO SUPERIOR DIREITO do retângulo do jogo
-        try:
-            # Calcular dimensões do texto
-            odd_bbox = draw.textbbox((0, 0), odd_text, font=FONTE_ODD)
-            odd_w = odd_bbox[2] - odd_bbox[0]
-            odd_h = odd_bbox[3] - odd_bbox[1]
-            
-            # Margens do canto superior direito
-            margem_direita = 40
-            margem_topo = 40
-            
-            # Posição final da odd
-            odd_x = x1 - odd_w - margem_direita
-            odd_y = y0 + margem_topo
-            
-            # Fundo escuro semi-transparente
-            fundo_x0 = odd_x - 15
-            fundo_y0 = odd_y - 10
-            fundo_x1 = odd_x + odd_w + 15
-            fundo_y1 = odd_y + odd_h + 10
-            
-            # Criar overlay escuro
-            overlay = Image.new('RGBA', img.size, (0,0,0,0))
-            overlay_draw = ImageDraw.Draw(overlay)
-            overlay_draw.rectangle([fundo_x0, fundo_y0, fundo_x1, fundo_y1], fill=(0, 0, 0, 200))
-            img.paste(overlay, (0,0), overlay)
-            
-            # Desenhar borda dourada
-            draw.rectangle([fundo_x0, fundo_y0, fundo_x1, fundo_y1], outline=(255, 215, 0), width=3)
-            
-            # Desenhar a odd
-            draw.text((odd_x, odd_y), odd_text, font=FONTE_ODD, fill=cor_odd)
-            
-        except Exception as e:
-            logging.error(f"Erro ao desenhar odd: {e}")
-            # Fallback: posicionar sem fundo
-            odd_x = x1 - 200
-            odd_y = y0 + 40
-            draw.text((odd_x, odd_y), odd_text, font=FONTE_ODD, fill=cor_odd)
-
-        # Liga
-        liga_text = jogo_dict['liga'].upper() if 'liga' in jogo_dict else "LIGA DESCONHECIDA"
-        try:
-            liga_bbox = draw.textbbox((0, 0), liga_text, font=FONTE_SUBTITULO)
-            liga_w = liga_bbox[2] - liga_bbox[0]
-            draw.text(((LARGURA - liga_w) // 2, y0 + 40), liga_text, font=FONTE_SUBTITULO, fill=(200, 200, 200))
-        except:
-            draw.text((LARGURA//2 - 150, y0 + 40), liga_text, font=FONTE_SUBTITULO, fill=(200, 200, 200))
-
-        # Data
-        if isinstance(jogo_dict.get("hora"), datetime):
-            data_text = jogo_dict["hora"].strftime("%d.%m.%Y %H:%M")
-        else:
-            data_text = str(jogo_dict.get("hora", "Data desconhecida"))
-
-        try:
-            data_bbox = draw.textbbox((0, 0), data_text, font=FONTE_INFO)
-            data_w = data_bbox[2] - data_bbox[0]
-            draw.text(((LARGURA - data_w) // 2, y0 + 130), data_text, font=FONTE_INFO, fill=(150, 200, 255))
-        except:
-            draw.text((LARGURA//2 - 150, y0 + 130), data_text, font=FONTE_INFO, fill=(150, 200, 255))
-
-        # Escudos
-        TAMANHO_ESCUDO = 220
-        TAMANHO_QUADRADO = 230
-        ESPACO_ENTRE_ESCUDOS = 700
-
-        largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
-        x_inicio = (LARGURA - largura_total) // 2
-
-        x_home = x_inicio
-        x_away = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
-        y_escudos = y0 + 250
-
-        # Baixar escudos
-        home_crest_url = jogo_dict.get('escudo_home', '')
-        away_crest_url = jogo_dict.get('escudo_away', '')
-        
-        escudo_home_bytes = None
-        escudo_away_bytes = None
-        
-        if home_crest_url:
-            escudo_home_bytes = self.api_client.baixar_escudo_time(jogo_dict.get('home', ''), home_crest_url)
-        
-        if away_crest_url:
-            escudo_away_bytes = self.api_client.baixar_escudo_time(jogo_dict.get('away', ''), away_crest_url)
-        
-        # Converter bytes para imagens PIL
-        escudo_home_img = None
-        escudo_away_img = None
-        
-        if escudo_home_bytes:
-            try:
-                escudo_home_img = Image.open(io.BytesIO(escudo_home_bytes)).convert("RGBA")
-            except Exception as e:
-                logging.error(f"Erro ao abrir escudo do {jogo_dict.get('home', '')}: {e}")
-        
-        if escudo_away_bytes:
-            try:
-                escudo_away_img = Image.open(io.BytesIO(escudo_away_bytes)).convert("RGBA")
-            except Exception as e:
-                logging.error(f"Erro ao abrir escudo do {jogo_dict.get('away', '')}: {e}")
-
-        # Desenhar escudos
-        self._desenhar_escudo_quadrado(draw, img, escudo_home_img, x_home, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo_dict.get('home', ''))
-        self._desenhar_escudo_quadrado(draw, img, escudo_away_img, x_away, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo_dict.get('away', ''))
-
-        # Nomes dos times
-        home_text = jogo_dict.get('home', 'TIME CASA')[:15]
-        away_text = jogo_dict.get('away', 'TIME FORA')[:15]
-
-        try:
-            home_bbox = draw.textbbox((0, 0), home_text, font=FONTE_TIMES)
-            home_w = home_bbox[2] - home_bbox[0]
-            draw.text((x_home + (TAMANHO_QUADRADO - home_w)//2, y_escudos + TAMANHO_QUADRADO + 50),
-                     home_text, font=FONTE_TIMES, fill=(255, 255, 255))
-        except:
-            draw.text((x_home, y_escudos + TAMANHO_QUADRADO + 50), home_text, font=FONTE_TIMES, fill=(255, 255, 255))
-
-        try:
-            away_bbox = draw.textbbox((0, 0), away_text, font=FONTE_TIMES)
-            away_w = away_bbox[2] - away_bbox[0]
-            draw.text((x_away + (TAMANHO_QUADRADO - away_w)//2, y_escudos + TAMANHO_QUADRADO + 50),
-                     away_text, font=FONTE_TIMES, fill=(255, 255, 255))
-        except:
-            draw.text((x_away, y_escudos + TAMANHO_QUADRADO + 50), away_text, font=FONTE_TIMES, fill=(255, 255, 255))
-
-        # VS
-        try:
-            vs_bbox = draw.textbbox((0, 0), "VS", font=FONTE_VS)
-            vs_w = vs_bbox[2] - vs_bbox[0]
-            vs_x = x_home + TAMANHO_QUADRADO + (ESPACO_ENTRE_ESCUDOS - vs_w) // 2
-            draw.text((vs_x, y_escudos + TAMANHO_QUADRADO//2 - 30), "VS", font=FONTE_VS, fill=(255, 215, 0))
-        except:
-            vs_x = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS//2 - 30
-            draw.text((vs_x, y_escudos + TAMANHO_QUADRADO//2 - 30), "VS", font=FONTE_VS, fill=(255, 215, 0))
-
-        # Linha separadora
-        y_analysis = y_escudos + TAMANHO_QUADRADO + 150
-        draw.line([(x0 + 80, y_analysis - 20), (x1 - 80, y_analysis - 20)], fill=(100, 130, 160), width=3)
-        
-        # Texto de análise principal
-        if tipo_alerta == "over_under":
-            textos_analise = [
-                f"○ {jogo_dict.get('tendencia', 'N/A')}",
-                f"Confiança: {jogo_dict.get('confianca', 0):.0f}%",
-            ]
-            cores = [(200, 200, 200), (100, 255, 100)]
-            
-        elif tipo_alerta == "favorito":
-            favorito = jogo_dict.get('favorito', '')
-            if favorito == "home":
-                favorito_text = jogo_dict.get('home', 'CASA')
-            elif favorito == "away":
-                favorito_text = jogo_dict.get('away', 'FORA')
-            else:
-                favorito_text = "EMPATE"
-            
-            textos_analise = [
-                f"○ Favorito → {favorito_text}",
-                f"Confiança: {jogo_dict.get('confianca_vitoria', 0):.0f}%",
-            ]
-            cores = [(255, 152, 0), (100, 255, 100)]
-            
-        elif tipo_alerta == "gols_ht":
-            textos_analise = [
-                f"○ {jogo_dict.get('tendencia_ht', 'N/A')}",
-                f"Confiança: {jogo_dict.get('confianca_ht', 0):.0f}%",
-            ]
-            cores = [(129, 199, 132), (100, 255, 100)]
-        
-        elif tipo_alerta == "ambas_marcam":
-            textos_analise = [
-                f"○ {jogo_dict.get('tendencia_ambas_marcam', 'N/A')}",
-                f"Confiança: {jogo_dict.get('confianca_ambas_marcam', 0):.0f}%",
-            ]
-            cores = [(165, 105, 189), (100, 255, 100)]
-        
-        else:
-            textos_analise = ["Informação não disponível"]
-            cores = [(200, 200, 200)]
-        
-        for i, (text, cor) in enumerate(zip(textos_analise, cores)):
-            try:
-                bbox = draw.textbbox((0, 0), text, font=FONTE_ANALISE)
-                w = bbox[2] - bbox[0]
-                draw.text(((LARGURA - w) // 2, y_analysis + i * 80), text, font=FONTE_ANALISE, fill=cor)
-            except:
-                draw.text((PADDING + 120, y_analysis + i * 80), text, font=FONTE_ANALISE, fill=cor)
-
-        y_pos += ALTURA_POR_JOGO
-
-    # Rodapé
-    rodape_text = f"Gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')} - ELITE MASTER SYSTEM"
-    try:
-        rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_DETALHES)
-        rodape_w = rodape_bbox[2] - rodape_bbox[0]
-        draw.text(((LARGURA - rodape_w) // 2, altura_total - 70), rodape_text, font=FONTE_DETALHES, fill=(100, 130, 160))
-    except:
-        draw.text((LARGURA//2 - 300, altura_total - 70), rodape_text, font=FONTE_DETALHES, fill=(100, 130, 160))
-
-    # Salvar imagem
-    buffer = io.BytesIO()
-    img.save(buffer, format="PNG", optimize=True, quality=95)
-    buffer.seek(0)
-    
-    return buffer
-    
-    def gerar_poster_resultados(self, jogos_com_resultados: list, tipo_alerta: str = "over_under") -> io.BytesIO:
-        """Gera poster de resultados no estilo West Ham com GREEN/RED destacado e data no formato brasileiro"""
+    def gerar_poster_westham_style(self, jogos: list, titulo: str = "⚽ ALERTA DE GOLS", tipo_alerta: str = "over_under") -> io.BytesIO:
+        """Gera poster no estilo West Ham com odds no canto superior direito"""
         LARGURA = 2000
-        ALTURA_TOPO = 330
-        ALTURA_POR_JOGO = 800 # Aumentei um pouco para acomodar o badge GREEN/RED
+        ALTURA_TOPO = 270
+        ALTURA_POR_JOGO = 830
         PADDING = 80
         
-        jogos_count = len(jogos_com_resultados)
+        jogos_count = len(jogos)
         altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
 
         img = Image.new("RGB", (LARGURA, altura_total), color=(10, 20, 30))
         draw = ImageDraw.Draw(img)
 
+        # Fontes
         FONTE_TITULO = self.criar_fonte(90)
-        FONTE_SUBTITULO = self.criar_fonte(70)
-        FONTE_TIMES = self.criar_fonte(65)
+        FONTE_SUBTITULO = self.criar_fonte(65)
+        FONTE_TIMES = self.criar_fonte(60)
         FONTE_VS = self.criar_fonte(55)
         FONTE_INFO = self.criar_fonte(50)
-        FONTE_DETALHES = self.criar_fonte(55)
-        FONTE_ANALISE = self.criar_fonte(65)
-        FONTE_ESTATISTICAS = self.criar_fonte(40)
-        FONTE_RESULTADO = self.criar_fonte(76)
-        FONTE_RESULTADO_BADGE = self.criar_fonte(65)  # Fonte para o badge GREEN/RED
+        FONTE_DETALHES = self.criar_fonte(45)
+        FONTE_ANALISE = self.criar_fonte(50)
+        FONTE_ODD = self.criar_fonte(70)  # Fonte maior para odds no canto
 
-        # Título baseado no tipo de alerta
-        if tipo_alerta == "over_under":
-            titulo = " RESULTADOS OVER/UNDER"
-        elif tipo_alerta == "favorito":
-            titulo = " RESULTADOS FAVORITOS"
-        elif tipo_alerta == "gols_ht":
-            titulo = " RESULTADOS GOLS HT"
-        elif tipo_alerta == "ambas_marcam":
-            titulo = " RESULTADOS AMBAS MARCAM"
-        else:
-            titulo = " RESULTADOS"
-
+        # Título
         try:
             titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
             titulo_w = titulo_bbox[2] - titulo_bbox[0]
@@ -3605,97 +3296,103 @@ def gerar_poster_westham_style(self, jogos: list, titulo: str = "⚽ ALERTA DE G
         # Linha decorativa
         draw.line([(LARGURA//4, 220), (3*LARGURA//4, 220)], fill=(255, 215, 0), width=6)
 
-        # Data de geração
-        data_geracao = f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}"
-        try:
-            data_bbox = draw.textbbox((0, 0), data_geracao, font=FONTE_INFO)
-            data_w = data_bbox[2] - data_bbox[0]
-            draw.text(((LARGURA - data_w) // 2, 280), data_geracao, font=FONTE_INFO, fill=(150, 200, 255))
-        except:
-            draw.text((LARGURA//2 - 200, 280), data_geracao, font=FONTE_INFO, fill=(150, 200, 255))
-
         y_pos = ALTURA_TOPO
 
-        for idx, jogo in enumerate(jogos_com_resultados):
+        for idx, jogo_dict in enumerate(jogos):
             x0, y0 = PADDING, y_pos
             x1, y1 = LARGURA - PADDING, y_pos + ALTURA_POR_JOGO - 40
             
-            # Determinar resultado e cores
+            # Definir cores baseadas no tipo de alerta
             if tipo_alerta == "over_under":
-                resultado = jogo.get("resultado", "PENDENTE")
-                resultado_text = "GREEN" if resultado == "GREEN" else "RED" if resultado == "RED" else "PENDENTE"
+                cor_borda = (255, 215, 0) if jogo_dict.get('tipo_aposta') == "over" else (100, 200, 255)
             elif tipo_alerta == "favorito":
-                resultado = jogo.get("resultado_favorito", "PENDENTE")
-                resultado_text = "GREEN" if resultado == "GREEN" else "RED" if resultado == "RED" else "PENDENTE"
+                cor_borda = (255, 87, 34)
             elif tipo_alerta == "gols_ht":
-                resultado = jogo.get("resultado_ht", "PENDENTE")
-                resultado_text = "GREEN" if resultado == "GREEN" else "RED" if resultado == "RED" else "PENDENTE"
+                cor_borda = (76, 175, 80)
             elif tipo_alerta == "ambas_marcam":
-                resultado = jogo.get("resultado_ambas_marcam", "PENDENTE")
-                resultado_text = "GREEN" if resultado == "GREEN" else "RED" if resultado == "RED" else "PENDENTE"
+                cor_borda = (155, 89, 182)
             else:
-                resultado_text = "PENDENTE"
+                cor_borda = (255, 215, 0)
             
-            # Cores baseadas no resultado
-            if resultado_text == "GREEN":
-                cor_badge = (46, 204, 113)  # Verde vibrante
-                cor_borda = (46, 204, 113)
-                cor_fundo = (30, 50, 40)  # Fundo verde escuro
-                cor_texto = (255, 255, 255)
-            elif resultado_text == "RED":
-                cor_badge = (231, 76, 60)  # Vermelho vibrante
-                cor_borda = (231, 76, 60)
-                cor_fundo = (50, 30, 30)  # Fundo vermelho escuro
-                cor_texto = (255, 255, 255)
-            else:
-                cor_badge = (149, 165, 166)  # Cinza
-                cor_borda = (149, 165, 166)
-                cor_fundo = (35, 35, 35)
-                cor_texto = (255, 255, 255)
-            
-            # Retângulo principal do jogo
-            draw.rectangle([x0, y0, x1, y1], fill=cor_fundo, outline=cor_borda, width=4)
+            # Retângulo do jogo
+            draw.rectangle([x0, y0, x1, y1], fill=(25, 35, 45), outline=cor_borda, width=4)
 
-            # ================= BADGE GREEN/RED =================
-            # Posicionar o badge no canto superior ESQUERDO do retângulo do jogo
-            badge_width = 250
-            badge_height = 92
-            badge_x = x0 + 50  # 50px da borda ESQUERDA
-            badge_y = y0 + 50  # 50px do topo
+            # ===== ODD NO CANTO SUPERIOR DIREITO =====
+            # Calcular odd principal baseado no tipo de alerta
+            if tipo_alerta == "over_under":
+                prob = jogo_dict.get('probabilidade', 50)
+                odd_principal = round(100 / prob, 2) if prob > 0 else 2.0
+                cor_odd = (255, 215, 0) if jogo_dict.get('tipo_aposta') == "over" else (100, 200, 255)
+                simbolo = "📈" if jogo_dict.get('tipo_aposta') == "over" else "📉"
+                
+            elif tipo_alerta == "favorito":
+                prob_fav = jogo_dict.get('confianca_vitoria', 50)
+                odd_principal = round(100 / prob_fav, 2) if prob_fav > 0 else 2.0
+                cor_odd = (255, 87, 34)
+                simbolo = "🏆"
+                
+            elif tipo_alerta == "gols_ht":
+                prob_ht = jogo_dict.get('confianca_ht', 50)
+                odd_principal = round(100 / prob_ht, 2) if prob_ht > 0 else 2.0
+                cor_odd = (76, 175, 80)
+                simbolo = "⚡" if "OVER" in jogo_dict.get('tendencia_ht', '') else "🛡️"
+                
+            elif tipo_alerta == "ambas_marcam":
+                prob_am = jogo_dict.get('confianca_ambas_marcam', 50)
+                odd_principal = round(100 / prob_am, 2) if prob_am > 0 else 2.0
+                cor_odd = (155, 89, 182)
+                simbolo = "🤝" if jogo_dict.get('tendencia_ambas_marcam') == "SIM" else "🚫"
             
-            # Desenhar badge com cantos arredondados
-            # Retângulo principal do badge
-            draw.rectangle([badge_x, badge_y, badge_x + badge_width, badge_y + badge_height], 
-                          fill=cor_badge, outline=cor_badge, width=2)
+            else:
+                odd_principal = 2.0
+                cor_odd = (255, 215, 0)
+                simbolo = "💰"
             
-            # Texto do badge (GREEN ou RED)
+            # Texto completo da odd
+            odd_text = f"{simbolo} {odd_principal:.2f}"
+            
+            # Posicionar a odd no CANTO SUPERIOR DIREITO
             try:
-                badge_bbox = draw.textbbox((0, 0), resultado_text, font=FONTE_RESULTADO_BADGE)
-                badge_text_w = badge_bbox[2] - badge_bbox[0]
-                badge_text_h = badge_bbox[3] - badge_bbox[1]
-                badge_text_x = badge_x + (badge_width - badge_text_w) // 2
-                badge_text_y = badge_y + (badge_height - badge_text_h) // 2
+                # Calcular dimensões do texto
+                odd_bbox = draw.textbbox((0, 0), odd_text, font=FONTE_ODD)
+                odd_w = odd_bbox[2] - odd_bbox[0]
+                odd_h = odd_bbox[3] - odd_bbox[1]
                 
-                # Sombra para destaque
-                draw.text((badge_text_x + 2, badge_text_y + 2), resultado_text, 
-                         font=FONTE_RESULTADO_BADGE, fill=(0, 0, 0, 128))
+                # Margens do canto superior direito
+                margem_direita = 40
+                margem_topo = 40
                 
-                # Texto principal
-                draw.text((badge_text_x, badge_text_y), resultado_text, 
-                         font=FONTE_RESULTADO_BADGE, fill=cor_texto)
+                # Posição final da odd
+                odd_x = x1 - odd_w - margem_direita
+                odd_y = y0 + margem_topo
                 
-                # Contorno branco sutil
-                draw.rectangle([badge_x-2, badge_y-2, badge_x + badge_width + 2, badge_y + badge_height + 2], 
-                              outline=(255, 255, 255), width=1)
+                # Fundo escuro semi-transparente
+                fundo_x0 = odd_x - 15
+                fundo_y0 = odd_y - 10
+                fundo_x1 = odd_x + odd_w + 15
+                fundo_y1 = odd_y + odd_h + 10
                 
-            except:
-                # Fallback se houver erro na fonte
-                draw.text((badge_x + 80, badge_y + 25), resultado_text, 
-                         font=FONTE_RESULTADO_BADGE, fill=cor_texto)
-            # ================= FIM DO BADGE =================
+                # Criar overlay escuro
+                overlay = Image.new('RGBA', img.size, (0,0,0,0))
+                overlay_draw = ImageDraw.Draw(overlay)
+                overlay_draw.rectangle([fundo_x0, fundo_y0, fundo_x1, fundo_y1], fill=(0, 0, 0, 200))
+                img.paste(overlay, (0,0), overlay)
+                
+                # Desenhar borda dourada
+                draw.rectangle([fundo_x0, fundo_y0, fundo_x1, fundo_y1], outline=(255, 215, 0), width=3)
+                
+                # Desenhar a odd
+                draw.text((odd_x, odd_y), odd_text, font=FONTE_ODD, fill=cor_odd)
+                
+            except Exception as e:
+                logging.error(f"Erro ao desenhar odd: {e}")
+                # Fallback: posicionar sem fundo
+                odd_x = x1 - 200
+                odd_y = y0 + 40
+                draw.text((odd_x, odd_y), odd_text, font=FONTE_ODD, fill=cor_odd)
 
-            # Liga e data
-            liga_text = jogo['liga'].upper()
+            # Liga
+            liga_text = jogo_dict.get('liga', 'LIGA').upper()
             try:
                 liga_bbox = draw.textbbox((0, 0), liga_text, font=FONTE_SUBTITULO)
                 liga_w = liga_bbox[2] - liga_bbox[0]
@@ -3703,9 +3400,22 @@ def gerar_poster_westham_style(self, jogos: list, titulo: str = "⚽ ALERTA DE G
             except:
                 draw.text((LARGURA//2 - 150, y0 + 40), liga_text, font=FONTE_SUBTITULO, fill=(200, 200, 200))
 
-            # Times e escudos
-            TAMANHO_ESCUDO = 200
-            TAMANHO_QUADRADO = 225
+            # Data
+            if isinstance(jogo_dict.get("hora"), datetime):
+                data_text = jogo_dict["hora"].strftime("%d.%m.%Y %H:%M")
+            else:
+                data_text = str(jogo_dict.get("hora", "Data desconhecida"))
+
+            try:
+                data_bbox = draw.textbbox((0, 0), data_text, font=FONTE_INFO)
+                data_w = data_bbox[2] - data_bbox[0]
+                draw.text(((LARGURA - data_w) // 2, y0 + 130), data_text, font=FONTE_INFO, fill=(150, 200, 255))
+            except:
+                draw.text((LARGURA//2 - 150, y0 + 130), data_text, font=FONTE_INFO, fill=(150, 200, 255))
+
+            # Escudos
+            TAMANHO_ESCUDO = 220
+            TAMANHO_QUADRADO = 230
             ESPACO_ENTRE_ESCUDOS = 700
 
             largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
@@ -3713,20 +3423,20 @@ def gerar_poster_westham_style(self, jogos: list, titulo: str = "⚽ ALERTA DE G
 
             x_home = x_inicio
             x_away = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
-            y_escudos = y0 + 150
+            y_escudos = y0 + 250
 
-            # Baixar escudos usando o APIClient
-            home_crest_url = jogo.get('escudo_home', '')
-            away_crest_url = jogo.get('escudo_away', '')
+            # Baixar escudos
+            home_crest_url = jogo_dict.get('escudo_home', '')
+            away_crest_url = jogo_dict.get('escudo_away', '')
             
             escudo_home_bytes = None
             escudo_away_bytes = None
             
             if home_crest_url:
-                escudo_home_bytes = self.api_client.baixar_escudo_time(jogo['home'], home_crest_url)
+                escudo_home_bytes = self.api_client.baixar_escudo_time(jogo_dict.get('home', ''), home_crest_url)
             
             if away_crest_url:
-                escudo_away_bytes = self.api_client.baixar_escudo_time(jogo['away'], away_crest_url)
+                escudo_away_bytes = self.api_client.baixar_escudo_time(jogo_dict.get('away', ''), away_crest_url)
             
             # Converter bytes para imagens PIL
             escudo_home_img = None
@@ -3736,120 +3446,91 @@ def gerar_poster_westham_style(self, jogos: list, titulo: str = "⚽ ALERTA DE G
                 try:
                     escudo_home_img = Image.open(io.BytesIO(escudo_home_bytes)).convert("RGBA")
                 except Exception as e:
-                    logging.error(f"Erro ao abrir escudo do {jogo['home']}: {e}")
+                    logging.error(f"Erro ao abrir escudo do {jogo_dict.get('home', '')}: {e}")
             
             if escudo_away_bytes:
                 try:
                     escudo_away_img = Image.open(io.BytesIO(escudo_away_bytes)).convert("RGBA")
                 except Exception as e:
-                    logging.error(f"Erro ao abrir escudo do {jogo['away']}: {e}")
+                    logging.error(f"Erro ao abrir escudo do {jogo_dict.get('away', '')}: {e}")
 
             # Desenhar escudos
-            self._desenhar_escudo_quadrado(draw, img, escudo_home_img, x_home, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo['home'])
-            self._desenhar_escudo_quadrado(draw, img, escudo_away_img, x_away, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo['away'])
+            self._desenhar_escudo_quadrado(draw, img, escudo_home_img, x_home, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo_dict.get('home', ''))
+            self._desenhar_escudo_quadrado(draw, img, escudo_away_img, x_away, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo_dict.get('away', ''))
 
             # Nomes dos times
-            home_text = jogo['home'][:12]
-            away_text = jogo['away'][:12]
+            home_text = jogo_dict.get('home', 'TIME CASA')[:15]
+            away_text = jogo_dict.get('away', 'TIME FORA')[:15]
 
             try:
                 home_bbox = draw.textbbox((0, 0), home_text, font=FONTE_TIMES)
                 home_w = home_bbox[2] - home_bbox[0]
-                draw.text((x_home + (TAMANHO_QUADRADO - home_w)//2, y_escudos + TAMANHO_QUADRADO + 30),
+                draw.text((x_home + (TAMANHO_QUADRADO - home_w)//2, y_escudos + TAMANHO_QUADRADO + 50),
                          home_text, font=FONTE_TIMES, fill=(255, 255, 255))
             except:
-                draw.text((x_home, y_escudos + TAMANHO_QUADRADO + 30),
-                         home_text, font=FONTE_TIMES, fill=(255, 255, 255))
+                draw.text((x_home, y_escudos + TAMANHO_QUADRADO + 50), home_text, font=FONTE_TIMES, fill=(255, 255, 255))
 
             try:
                 away_bbox = draw.textbbox((0, 0), away_text, font=FONTE_TIMES)
                 away_w = away_bbox[2] - away_bbox[0]
-                draw.text((x_away + (TAMANHO_QUADRADO - away_w)//2, y_escudos + TAMANHO_QUADRADO + 30),
+                draw.text((x_away + (TAMANHO_QUADRADO - away_w)//2, y_escudos + TAMANHO_QUADRADO + 50),
                          away_text, font=FONTE_TIMES, fill=(255, 255, 255))
             except:
-                draw.text((x_away, y_escudos + TAMANHO_QUADRADO + 30),
-                         away_text, font=FONTE_TIMES, fill=(255, 255, 255))
+                draw.text((x_away, y_escudos + TAMANHO_QUADRADO + 50), away_text, font=FONTE_TIMES, fill=(255, 255, 255))
 
-            # Resultado do jogo
-            resultado_text_score = f"{jogo.get('home_goals', '?')} - {jogo.get('away_goals', '?')}"
+            # VS
             try:
-                resultado_bbox = draw.textbbox((0, 0), resultado_text_score, font=FONTE_RESULTADO)
-                resultado_w = resultado_bbox[2] - resultado_bbox[0]
-                resultado_x = x_home + TAMANHO_QUADRADO + (ESPACO_ENTRE_ESCUDOS - resultado_w) // 2
-                draw.text((resultado_x, y_escudos + TAMANHO_QUADRADO//2 - 40), 
-                         resultado_text_score, font=FONTE_RESULTADO, fill=(255, 255, 255))
+                vs_bbox = draw.textbbox((0, 0), "VS", font=FONTE_VS)
+                vs_w = vs_bbox[2] - vs_bbox[0]
+                vs_x = x_home + TAMANHO_QUADRADO + (ESPACO_ENTRE_ESCUDOS - vs_w) // 2
+                draw.text((vs_x, y_escudos + TAMANHO_QUADRADO//2 - 30), "VS", font=FONTE_VS, fill=(255, 215, 0))
             except:
-                resultado_x = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS//2 - 60
-                draw.text((resultado_x, y_escudos + TAMANHO_QUADRADO//2 - 40), resultado_text_score, font=FONTE_RESULTADO, fill=(255, 255, 255))
+                vs_x = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS//2 - 30
+                draw.text((vs_x, y_escudos + TAMANHO_QUADRADO//2 - 30), "VS", font=FONTE_VS, fill=(255, 215, 0))
 
-            # Resultado HT se disponível
-            if jogo.get('ht_home_goals') is not None and jogo.get('ht_away_goals') is not None:
-                ht_text = f"HT: {jogo['ht_home_goals']} - {jogo['ht_away_goals']}"
-                try:
-                    ht_bbox = draw.textbbox((0, 0), ht_text, font=FONTE_INFO)
-                    ht_w = ht_bbox[2] - ht_bbox[0]
-                    ht_x = x_home + TAMANHO_QUADRADO + (ESPACO_ENTRE_ESCUDOS - ht_w) // 2
-                    draw.text((ht_x, y_escudos + TAMANHO_QUADRADO//2 + 40), 
-                             ht_text, font=FONTE_INFO, fill=(200, 200, 200))
-                except:
-                    ht_x = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS//2 - 60
-                    draw.text((ht_x, y_escudos + TAMANHO_QUADRADO//2 + 40), ht_text, font=FONTE_INFO, fill=(200, 200, 200))
-
-            y_analysis = y_escudos + TAMANHO_QUADRADO + 120
+            # Linha separadora
+            y_analysis = y_escudos + TAMANHO_QUADRADO + 150
+            draw.line([(x0 + 80, y_analysis - 20), (x1 - 80, y_analysis - 20)], fill=(100, 130, 160), width=3)
             
-            # Informações específicas do tipo de alerta
+            # Texto de análise principal
             if tipo_alerta == "over_under":
-                tipo_emoji = "+" if jogo.get('tipo_aposta') == "over" else "-"
-                resultado_emoji = "" if resultado == "GREEN" else "❌" if resultado == "RED" else ""
-                
                 textos_analise = [
-                    f"{tipo_emoji} {jogo['tendencia']} {resultado_emoji}",
-                    f"Estimativa: {jogo['estimativa']:.2f} gols | Resultado: {jogo.get('home_goals', '?')} - {jogo.get('away_goals', '?')}",
-                    f"Probabilidade: {jogo['probabilidade']:.0f}% | Confiança: {jogo['confianca']:.0f}%",
+                    f"○ {jogo_dict.get('tendencia', 'N/A')}",
+                    f"Confiança: {jogo_dict.get('confianca', 0):.0f}%",
                 ]
-                
-                cores = [(255, 255, 255), (200, 200, 200), (200, 200, 200)]
+                cores = [(200, 200, 200), (100, 255, 100)]
                 
             elif tipo_alerta == "favorito":
-                favorito_emoji = "" if jogo.get('favorito') == "home" else "" if jogo.get('favorito') == "away" else "🤝"
-                favorito_text = jogo['home'] if jogo.get('favorito') == "home" else jogo['away'] if jogo.get('favorito') == "away" else "EMPATE"
-                resultado_emoji = "" if resultado == "GREEN" else "❌" if resultado == "RED" else ""
+                favorito = jogo_dict.get('favorito', '')
+                if favorito == "home":
+                    favorito_text = jogo_dict.get('home', 'CASA')
+                elif favorito == "away":
+                    favorito_text = jogo_dict.get('away', 'FORA')
+                else:
+                    favorito_text = "EMPATE"
                 
                 textos_analise = [
-                    f"{favorito_emoji} FAVORITO: {favorito_text} {resultado_emoji}",
-                    f"Confiança: {jogo.get('confianca_vitoria', 0):.0f}% | Resultado: {jogo.get('home_goals', '?')} - {jogo.get('away_goals', '?')}",
-                    f"Prob. Casa: {jogo.get('prob_home_win', 0):.1f}% | Fora: {jogo.get('prob_away_win', 0):.1f}% | Empate: {jogo.get('prob_draw', 0):.1f}%",
+                    f"○ Favorito → {favorito_text}",
+                    f"Confiança: {jogo_dict.get('confianca_vitoria', 0):.0f}%",
                 ]
-                
-                cores = [(255, 255, 255), (200, 200, 200), (200, 200, 200)]
+                cores = [(255, 152, 0), (100, 255, 100)]
                 
             elif tipo_alerta == "gols_ht":
-                tipo_emoji_ht = "" if "OVER" in jogo.get('tendencia_ht', '') else ""
-                resultado_emoji = "" if resultado == "GREEN" else "❌" if resultado == "RED" else ""
-                ht_resultado = f"{jogo.get('ht_home_goals', '?')} - {jogo.get('ht_away_goals', '?')}"
-                
                 textos_analise = [
-                    f"{tipo_emoji_ht} {jogo.get('tendencia_ht', 'N/A')} {resultado_emoji}",
-                    f"Estimativa HT: {jogo.get('estimativa_total_ht', 0):.2f} gols | Resultado HT: {ht_resultado}",
-                    f"Confiança HT: {jogo.get('confianca_ht', 0):.0f}% | FT: {jogo.get('home_goals', '?')} - {jogo.get('away_goals', '?')}",
+                    f"○ {jogo_dict.get('tendencia_ht', 'N/A')}",
+                    f"Confiança: {jogo_dict.get('confianca_ht', 0):.0f}%",
                 ]
-                
-                cores = [(255, 255, 255), (200, 200, 200), (200, 200, 200)]
+                cores = [(129, 199, 132), (100, 255, 100)]
             
             elif tipo_alerta == "ambas_marcam":
-                tipo_emoji_am = "🤝" if jogo.get('tendencia_ambas_marcam') == "SIM" else "🚫"
-                resultado_emoji = "" if resultado == "GREEN" else "❌" if resultado == "RED" else ""
-                
                 textos_analise = [
-                    f"{tipo_emoji_am} AMBAS MARCAM: {jogo.get('tendencia_ambas_marcam', 'N/A')} {resultado_emoji}",
-                    f"Probabilidade SIM: {jogo.get('prob_ambas_marcam_sim', 0):.1f}% | NÃO: {jogo.get('prob_ambas_marcam_nao', 0):.1f}%",
-                    f"Confiança: {jogo.get('confianca_ambas_marcam', 0):.0f}% | Resultado: {jogo.get('home_goals', '?')} - {jogo.get('away_goals', '?')}",
+                    f"○ {jogo_dict.get('tendencia_ambas_marcam', 'N/A')}",
+                    f"Confiança: {jogo_dict.get('confianca_ambas_marcam', 0):.0f}%",
                 ]
-                
-                cores = [(255, 255, 255), (200, 200, 200), (200, 200, 200)]
+                cores = [(165, 105, 189), (100, 255, 100)]
             
             else:
-                textos_analise = [f"Resultado: {resultado}"]
+                textos_analise = ["Informação não disponível"]
                 cores = [(200, 200, 200)]
             
             for i, (text, cor) in enumerate(zip(textos_analise, cores)):
@@ -3863,7 +3544,7 @@ def gerar_poster_westham_style(self, jogos: list, titulo: str = "⚽ ALERTA DE G
             y_pos += ALTURA_POR_JOGO
 
         # Rodapé
-        rodape_text = "ELITE MASTER SYSTEM - ANÁLISE PREDITIVA DE RESULTADOS"
+        rodape_text = f"Gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')} - ELITE MASTER SYSTEM"
         try:
             rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_DETALHES)
             rodape_w = rodape_bbox[2] - rodape_bbox[0]
@@ -3871,11 +3552,11 @@ def gerar_poster_westham_style(self, jogos: list, titulo: str = "⚽ ALERTA DE G
         except:
             draw.text((LARGURA//2 - 300, altura_total - 70), rodape_text, font=FONTE_DETALHES, fill=(100, 130, 160))
 
+        # Salvar imagem
         buffer = io.BytesIO()
         img.save(buffer, format="PNG", optimize=True, quality=95)
         buffer.seek(0)
         
-        st.success(f"✅ Poster de resultados GERADO com {len(jogos_com_resultados)} jogos")
         return buffer
     
     def _desenhar_escudo_quadrado(self, draw, img, logo_img, x, y, tamanho_quadrado, tamanho_escudo, team_name=""):
@@ -3899,11 +3580,12 @@ def gerar_poster_westham_style(self, jogos: list, titulo: str = "⚽ ALERTA DE G
                 iniciais = "SEM"
             
             try:
-                bbox = draw.textbbox((0, 0), iniciais, font=self.criar_fonte(50))
+                fonte = self.criar_fonte(50)
+                bbox = draw.textbbox((0, 0), iniciais, font=fonte)
                 w = bbox[2] - bbox[0]
                 h = bbox[3] - bbox[1]
                 draw.text((x + (tamanho_quadrado - w)//2, y + (tamanho_quadrado - h)//2), 
-                         iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
+                         iniciais, font=fonte, fill=(255, 255, 255))
             except:
                 draw.text((x + 70, y + 90), iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
             return
@@ -3920,7 +3602,6 @@ def gerar_poster_westham_style(self, jogos: list, titulo: str = "⚽ ALERTA DE G
                 nova_altura = tamanho_escudo
                 nova_largura = int(tamanho_escudo * proporcao)
                 if nova_largura > tamanho_escudo:
-                    # Redimensionar mantendo proporção
                     nova_largura = tamanho_escudo
                     nova_altura = int(tamanho_escudo / proporcao)
             else:
@@ -3958,11 +3639,12 @@ def gerar_poster_westham_style(self, jogos: list, titulo: str = "⚽ ALERTA DE G
                 iniciais = "ERR"
             
             try:
-                bbox = draw.textbbox((0, 0), iniciais, font=self.criar_fonte(50))
+                fonte = self.criar_fonte(50)
+                bbox = draw.textbbox((0, 0), iniciais, font=fonte)
                 w = bbox[2] - bbox[0]
                 h = bbox[3] - bbox[1]
                 draw.text((x + (tamanho_quadrado - w)//2, y + (tamanho_quadrado - h)//2), 
-                         iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
+                         iniciais, font=fonte, fill=(255, 255, 255))
             except:
                 draw.text((x + 70, y + 90), iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
 
