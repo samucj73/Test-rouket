@@ -5420,7 +5420,6 @@ class SistemaAlertasFutebol:
 # =============================
 # =============================
 # =============================
-# =============================
 # INTERFACE MOBILE FUNCIONAL - TODAS AS FUNÇÕES ORIGINAIS
 # =============================
 
@@ -5432,7 +5431,7 @@ def main():
         initial_sidebar_state="collapsed"
     )
     
-    # CSS básico para mobile
+    # CSS básico para mobile + título estilizado
     st.markdown("""
     <style>
         /* Reset e ajustes mobile */
@@ -5442,6 +5441,92 @@ def main():
         
         .main > div {
             padding: 0.5rem 1rem;
+        }
+        
+        /* TÍTULO PRINCIPAL - ESTILO PREMIUM */
+        .title-container {
+            text-align: center;
+            margin: 1.5rem 0 2rem 0;
+            padding: 0.5rem;
+            background: linear-gradient(180deg, rgba(255,215,0,0.05) 0%, transparent 100%);
+            border-radius: 30px;
+        }
+        
+        .main-title {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 5px;
+        }
+        
+        .title-icon {
+            font-size: 3rem;
+            filter: drop-shadow(0 8px 16px rgba(255,215,0,0.3));
+            animation: float 3s ease-in-out infinite;
+        }
+        
+        .title-icon.left {
+            transform: scaleX(-1);
+        }
+        
+        @keyframes float {
+            0% { transform: translateY(0px) scaleX(-1); }
+            50% { transform: translateY(-5px) scaleX(-1); }
+            100% { transform: translateY(0px) scaleX(-1); }
+        }
+        
+        @keyframes float-right {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-5px); }
+            100% { transform: translateY(0px); }
+        }
+        
+        .title-icon.right {
+            animation: float-right 3s ease-in-out infinite;
+        }
+        
+        .title-text {
+            text-align: center;
+        }
+        
+        .title-futebol {
+            font-size: 2.2rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, #FFD700 0%, #FFA500 50%, #FFD700 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: 4px;
+            text-shadow: 0 4px 12px rgba(255,215,0,0.3);
+            line-height: 1.2;
+        }
+        
+        .title-elite {
+            font-size: 1.4rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #FFFFFF 0%, #E0E0E0 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: 3px;
+            margin-top: -5px;
+            text-shadow: 0 2px 8px rgba(255,255,255,0.2);
+        }
+        
+        .title-master {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #8E9AAB;
+            letter-spacing: 6px;
+            margin-top: -5px;
+            text-transform: uppercase;
+        }
+        
+        .title-decoration {
+            width: 150px;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, #FFD700, #FFA500, #FFD700, transparent);
+            margin: 15px auto 0 auto;
+            border-radius: 3px;
         }
         
         /* Cards de jogo */
@@ -5625,6 +5710,22 @@ def main():
             padding: 1rem;
         }
     </style>
+    """, unsafe_allow_html=True)
+    
+    # TÍTULO PRINCIPAL - FUTEBOL ELITE MASTER
+    st.markdown("""
+    <div class="title-container">
+        <div class="main-title">
+            <span class="title-icon left">⚽</span>
+            <div class="title-text">
+                <div class="title-futebol">FUTEBOL</div>
+                <div class="title-elite">ELITE MASTER</div>
+                <div class="title-master">PREMIUM</div>
+            </div>
+            <span class="title-icon right">🏆</span>
+        </div>
+        <div class="title-decoration"></div>
+    </div>
     """, unsafe_allow_html=True)
     
     # Inicializar sistema
