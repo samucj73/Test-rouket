@@ -3622,8 +3622,8 @@ class PosterGenerator:
         FONTE_RESULTADO = self.criar_fonte(80)
         FONTE_VS = self.criar_fonte(55)
         FONTE_INFO = self.criar_fonte(45)
-        FONTE_DATA = self.criar_fonte(40)  # Fonte para data/hora
-        FONTE_ANALISE = self.criar_fonte(50)
+        FONTE_DATA = self.criar_fonte(45)  # Fonte para data/hora
+        FONTE_ANALISE = self.criar_fonte(65)
         FONTE_DETALHES = self.criar_fonte(35)
 
         # Título baseado no tipo de alerta
@@ -3647,9 +3647,9 @@ class PosterGenerator:
         try:
             titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
             titulo_w = titulo_bbox[2] - titulo_bbox[0]
-            draw.text(((LARGURA - titulo_w) // 2, 80), titulo, font=FONTE_TITULO, fill=cor_titulo)
+            draw.text(((LARGURA - titulo_w) // 2, 120), titulo, font=FONTE_TITULO, fill=cor_titulo)
         except:
-            draw.text((LARGURA//2 - 250, 80), titulo, font=FONTE_TITULO, fill=cor_titulo)
+            draw.text((LARGURA//2 - 250, 120), titulo, font=FONTE_TITULO, fill=cor_titulo)
 
         # Linha decorativa
         draw.line([(LARGURA//4, 200), (3*LARGURA//4, 200)], fill=cor_titulo, width=6)
@@ -3820,14 +3820,14 @@ class PosterGenerator:
 
             # Informações da análise
             if tipo_alerta == "over_under":
-                info_text = f"📊 {tendencia} | Conf: {confianca:.0f}%"
+                info_text = f" {tendencia} | Conf: {confianca:.0f}%"
             elif tipo_alerta == "favorito":
                 favorito_text = home if favorito == "home" else away if favorito == "away" else "EMPATE"
-                info_text = f"🏆 Favorito: {favorito_text} | Conf: {confianca:.0f}%"
+                info_text = f" Favorito: {favorito_text} | Conf: {confianca:.0f}%"
             elif tipo_alerta == "gols_ht":
-                info_text = f"⏰ {tendencia_ht} | Conf: {confianca:.0f}%"
+                info_text = f" {tendencia_ht} | Conf: {confianca:.0f}%"
             elif tipo_alerta == "ambas_marcam":
-                info_text = f"🤝 {tendencia_am} | Conf: {confianca:.0f}%"
+                info_text = f" {tendencia_am} | Conf: {confianca:.0f}%"
             else:
                 info_text = ""
 
