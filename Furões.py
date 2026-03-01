@@ -3606,7 +3606,7 @@ class PosterGenerator:
         """Gera poster de resultados com escudos, placares e data/hora de cada jogo"""
         LARGURA = 2000
         ALTURA_TOPO = 300
-        ALTURA_POR_JOGO = 850  # Aumentado para acomodar a data/hora
+        ALTURA_POR_JOGO = 800  # Aumentado para acomodar a data/hora
         PADDING = 80
         
         jogos_count = len(jogos)
@@ -3628,19 +3628,19 @@ class PosterGenerator:
 
         # Título baseado no tipo de alerta
         if tipo_alerta == "over_under":
-            titulo = "📊 RESULTADOS OVER/UNDER"
+            titulo = " RESULTADOS OVER/UNDER"
             cor_titulo = (255, 215, 0)
         elif tipo_alerta == "favorito":
-            titulo = "🏆 RESULTADOS FAVORITOS"
+            titulo = " RESULTADOS FAVORITOS"
             cor_titulo = (255, 87, 34)
         elif tipo_alerta == "gols_ht":
-            titulo = "⏰ RESULTADOS GOLS HT"
+            titulo = " RESULTADOS GOLS HT"
             cor_titulo = (76, 175, 80)
         elif tipo_alerta == "ambas_marcam":
-            titulo = "🤝 RESULTADOS AMBAS MARCAM"
+            titulo = " RESULTADOS AMBAS MARCAM"
             cor_titulo = (155, 89, 182)
         else:
-            titulo = "📊 RESULTADOS"
+            titulo = " RESULTADOS"
             cor_titulo = (255, 255, 255)
 
         # Desenhar título
@@ -3735,17 +3735,17 @@ class PosterGenerator:
             try:
                 liga_bbox = draw.textbbox((0, 0), liga, font=FONTE_SUBTITULO)
                 liga_w = liga_bbox[2] - liga_bbox[0]
-                draw.text(((LARGURA - liga_w) // 2, y0 + 30), liga, font=FONTE_SUBTITULO, fill=(200, 200, 200))
+                draw.text(((LARGURA - liga_w) // 2, y0 + 60), liga, font=FONTE_SUBTITULO, fill=(200, 200, 200))
             except:
-                draw.text((LARGURA//2 - 150, y0 + 30), liga, font=FONTE_SUBTITULO, fill=(200, 200, 200))
+                draw.text((LARGURA//2 - 150, y0 + 60), liga, font=FONTE_SUBTITULO, fill=(200, 200, 200))
 
             # ===== DATA E HORA DO JOGO (ABAIXO DA LIGA) =====
             try:
                 data_bbox = draw.textbbox((0, 0), data_hora_text, font=FONTE_DATA)
                 data_w = data_bbox[2] - data_bbox[0]
-                draw.text(((LARGURA - data_w) // 2, y0 + 80), data_hora_text, font=FONTE_DATA, fill=(150, 200, 255))
+                draw.text(((LARGURA - data_w) // 2, y0 + 120), data_hora_text, font=FONTE_DATA, fill=(150, 200, 255))
             except:
-                draw.text((LARGURA//2 - 150, y0 + 80), data_hora_text, font=FONTE_DATA, fill=(150, 200, 255))
+                draw.text((LARGURA//2 - 150, y0 + 120), data_hora_text, font=FONTE_DATA, fill=(150, 200, 255))
 
             # Escudos
             TAMANHO_ESCUDO = 200
