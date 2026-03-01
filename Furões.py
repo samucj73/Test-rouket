@@ -3331,7 +3331,7 @@ class PosterGenerator:
         FONTE_INFO = self.criar_fonte(50)
         FONTE_DETALHES = self.criar_fonte(45)
         FONTE_ANALISE = self.criar_fonte(50)
-        FONTE_ODD = self.criar_fonte(70)
+        FONTE_ODD = self.criar_fonte(65)
 
         # Título
         try:
@@ -3640,7 +3640,7 @@ class PosterGenerator:
             titulo = " RESULTADOS AMBAS MARCAM"
             cor_titulo = (155, 89, 182)
         else:
-            titulo = " RESULTADOS"
+            titulo = "RESULTADOS"
             cor_titulo = (255, 255, 255)
 
         # Desenhar título
@@ -3735,17 +3735,17 @@ class PosterGenerator:
             try:
                 liga_bbox = draw.textbbox((0, 0), liga, font=FONTE_SUBTITULO)
                 liga_w = liga_bbox[2] - liga_bbox[0]
-                draw.text(((LARGURA - liga_w) // 2, y0 + 60), liga, font=FONTE_SUBTITULO, fill=(200, 200, 200))
+                draw.text(((LARGURA - liga_w) // 2, y0 + 100), liga, font=FONTE_SUBTITULO, fill=(200, 200, 200))
             except:
-                draw.text((LARGURA//2 - 150, y0 + 60), liga, font=FONTE_SUBTITULO, fill=(200, 200, 200))
+                draw.text((LARGURA//2 - 150, y0 + 100), liga, font=FONTE_SUBTITULO, fill=(200, 200, 200))
 
             # ===== DATA E HORA DO JOGO (ABAIXO DA LIGA) =====
             try:
                 data_bbox = draw.textbbox((0, 0), data_hora_text, font=FONTE_DATA)
                 data_w = data_bbox[2] - data_bbox[0]
-                draw.text(((LARGURA - data_w) // 2, y0 + 120), data_hora_text, font=FONTE_DATA, fill=(150, 200, 255))
+                draw.text(((LARGURA - data_w) // 2, y0 + 100), data_hora_text, font=FONTE_DATA, fill=(150, 200, 255))
             except:
-                draw.text((LARGURA//2 - 150, y0 + 120), data_hora_text, font=FONTE_DATA, fill=(150, 200, 255))
+                draw.text((LARGURA//2 - 150, y0 + 100), data_hora_text, font=FONTE_DATA, fill=(150, 200, 255))
 
             # Escudos
             TAMANHO_ESCUDO = 200
