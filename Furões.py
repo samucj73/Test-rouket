@@ -5420,496 +5420,209 @@ class SistemaAlertasFutebol:
 # =============================
 # =============================
 # =============================
-# INTERFACE MOBILE PREMIUM - APP PROFISSIONAL
+# =============================
+# INTERFACE MOBILE FUNCIONAL - TODAS AS FUNÇÕES ORIGINAIS
 # =============================
 
 def main():
-    # Configuração Mobile Premium
     st.set_page_config(
-        page_title="Elite Master",
+        page_title="⚽ Elite Master",
         page_icon="⚽",
         layout="centered",
         initial_sidebar_state="collapsed"
     )
     
-    # CSS Premium - Design de App Nativo
+    # CSS básico para mobile
     st.markdown("""
     <style>
-        /* Reset e fonte premium */
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-        
-        * {
-            font-family: 'Inter', sans-serif;
-            box-sizing: border-box;
-        }
-        
+        /* Reset e ajustes mobile */
         .stApp {
-            background: #0A0C10;
-        }
-        
-        /* Remover elementos padrão do Streamlit */
-        #MainMenu, footer, header, .stDeployButton {
-            display: none !important;
+            background-color: #0a0c10;
         }
         
         .main > div {
-            padding: 0 !important;
+            padding: 0.5rem 1rem;
         }
         
-        /* Container principal - App-like */
-        .app-container {
-            max-width: 480px;
-            margin: 0 auto;
-            background: #0A0C10;
-            min-height: 100vh;
-            position: relative;
-            padding-bottom: 80px;
+        /* Cards de jogo */
+        .mobile-card {
+            background: linear-gradient(145deg, #1a1f2c 0%, #151a26 100%);
+            border-radius: 16px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border: 1px solid rgba(255,215,0,0.1);
         }
         
-        /* Header Premium */
-        .app-header {
-            background: linear-gradient(135deg, #0F1218 0%, #1A1F2C 100%);
-            padding: 20px 24px;
-            border-bottom: 1px solid rgba(255, 215, 0, 0.1);
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-        }
-        
-        .header-content {
+        .card-header {
             display: flex;
             justify-content: space-between;
-            align-items: center;
-        }
-        
-        .logo-area {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .logo-icon {
-            font-size: 28px;
-            filter: drop-shadow(0 4px 8px rgba(255,215,0,0.2));
-        }
-        
-        .logo-text {
-            font-weight: 800;
-            font-size: 18px;
-            background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            letter-spacing: -0.5px;
-        }
-        
-        .status-badge {
-            background: rgba(76, 175, 80, 0.1);
-            padding: 6px 12px;
-            border-radius: 30px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            border: 1px solid rgba(76, 175, 80, 0.2);
-        }
-        
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            background: #4CAF50;
-            border-radius: 50%;
-            animation: pulse 2s infinite;
-        }
-        
-        @keyframes pulse {
-            0% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.5; transform: scale(1.2); }
-            100% { opacity: 1; transform: scale(1); }
-        }
-        
-        .status-text {
-            color: #4CAF50;
-            font-size: 12px;
-            font-weight: 600;
-        }
-        
-        /* Navigation Bar Inferior */
-        .bottom-nav {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: rgba(15, 18, 24, 0.95);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border-top: 1px solid rgba(255, 215, 0, 0.1);
-            padding: 12px 20px;
-            display: flex;
-            justify-content: space-around;
-            z-index: 1000;
-            max-width: 480px;
-            margin: 0 auto;
-        }
-        
-        .nav-item {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 4px;
-            cursor: pointer;
-            padding: 8px 16px;
-            border-radius: 30px;
-            transition: all 0.2s ease;
-        }
-        
-        .nav-item.active {
-            background: rgba(255, 215, 0, 0.1);
-        }
-        
-        .nav-icon {
-            font-size: 22px;
-            transition: all 0.2s ease;
-        }
-        
-        .nav-item.active .nav-icon {
-            color: #FFD700;
-            transform: translateY(-2px);
-        }
-        
-        .nav-label {
-            font-size: 11px;
-            font-weight: 500;
-            color: #8E9AAB;
-            transition: all 0.2s ease;
-        }
-        
-        .nav-item.active .nav-label {
-            color: #FFD700;
-        }
-        
-        /* Cards de Conteúdo */
-        .content-section {
-            padding: 16px 20px;
-        }
-        
-        .section-title {
-            font-size: 16px;
-            font-weight: 600;
-            color: #FFFFFF;
-            margin-bottom: 12px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .section-title span {
-            color: #8E9AAB;
-            font-size: 14px;
-            font-weight: 400;
-        }
-        
-        /* Cards de Jogo Premium */
-        .game-card {
-            background: linear-gradient(135deg, #1A1F2C 0%, #151A26 100%);
-            border-radius: 24px;
-            padding: 20px;
-            margin-bottom: 12px;
-            border: 1px solid rgba(255, 215, 0, 0.1);
-            transition: all 0.2s ease;
-        }
-        
-        .game-card:active {
-            transform: scale(0.98);
-        }
-        
-        .game-card.over {
-            border-left: 4px solid #4CAF50;
-        }
-        
-        .game-card.under {
-            border-left: 4px solid #2196F3;
-        }
-        
-        .game-card.favorito {
-            border-left: 4px solid #FF9800;
-        }
-        
-        .game-card.ht {
-            border-left: 4px solid #9C27B0;
-        }
-        
-        .game-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 16px;
+            margin-bottom: 0.8rem;
+            font-size: 0.8rem;
+            color: #8e9aab;
         }
         
         .liga-badge {
-            background: rgba(255, 215, 0, 0.1);
-            color: #FFD700;
-            padding: 4px 12px;
-            border-radius: 30px;
-            font-size: 12px;
+            background: rgba(255,215,0,0.1);
+            color: #ffd700;
+            padding: 0.2rem 0.8rem;
+            border-radius: 12px;
             font-weight: 600;
         }
         
-        .time-badge {
-            color: #8E9AAB;
-            font-size: 13px;
-            font-weight: 500;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-        
-        .time-badge i {
-            font-size: 14px;
-            color: #FFD700;
-        }
-        
-        /* Times e Placar */
-        .teams-container {
+        .times-row {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 16px;
+            margin: 0.8rem 0;
         }
         
-        .team-box {
+        .time-box {
+            text-align: center;
             flex: 1;
-            text-align: center;
         }
         
-        .team-name {
-            color: #FFFFFF;
+        .time-nome {
+            color: white;
             font-weight: 600;
-            font-size: 15px;
-            margin-top: 8px;
+            font-size: 0.9rem;
+            margin-top: 0.3rem;
         }
         
-        .team-shield {
-            width: 56px;
-            height: 56px;
-            background: #0A0C10;
-            border-radius: 28px;
-            margin: 0 auto;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-            border: 2px solid rgba(255, 215, 0, 0.2);
-        }
-        
-        .score-box {
-            padding: 0 16px;
+        .placar-box {
             text-align: center;
+            padding: 0 1rem;
         }
         
-        .score {
-            font-size: 32px;
+        .placar {
+            font-size: 1.8rem;
             font-weight: 800;
-            color: #FFD700;
-            line-height: 1;
+            color: #ffd700;
         }
         
-        .vs {
-            font-size: 16px;
-            color: #8E9AAB;
-            font-weight: 500;
+        .analise-row {
+            background: rgba(0,0,0,0.3);
+            border-radius: 12px;
+            padding: 0.8rem;
+            margin-top: 0.8rem;
+            font-size: 0.9rem;
         }
         
-        /* Info Box */
         .info-grid {
-            background: rgba(10, 12, 16, 0.6);
-            border-radius: 16px;
-            padding: 16px;
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 12px;
-            margin-top: 16px;
+            gap: 0.5rem;
+            margin-top: 0.8rem;
         }
         
         .info-item {
             text-align: center;
+            background: rgba(255,215,0,0.05);
+            padding: 0.5rem;
+            border-radius: 8px;
         }
         
         .info-label {
-            color: #8E9AAB;
-            font-size: 11px;
-            font-weight: 500;
-            margin-bottom: 4px;
+            color: #8e9aab;
+            font-size: 0.7rem;
         }
         
         .info-value {
-            color: #FFFFFF;
+            color: white;
             font-weight: 700;
-            font-size: 16px;
+            font-size: 1rem;
         }
         
-        .info-value.green {
-            color: #4CAF50;
-        }
+        .green-text { color: #4caf50; }
+        .red-text { color: #f44336; }
+        .gold-text { color: #ffd700; }
         
-        .info-value.orange {
-            color: #FF9800;
-        }
-        
-        .info-value.blue {
-            color: #2196F3;
-        }
-        
-        /* Odds Badge */
-        .odds-badge {
-            background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
-            color: #0A0C10;
-            font-weight: 800;
-            padding: 8px 16px;
+        /* Abas */
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 0.5rem;
+            background: #1a1f2c;
+            padding: 0.3rem;
             border-radius: 30px;
-            font-size: 18px;
-            display: inline-block;
-            box-shadow: 0 8px 16px rgba(255,215,0,0.2);
         }
         
-        /* Botões Premium */
-        .premium-button {
-            background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
-            color: #0A0C10;
-            font-weight: 700;
-            padding: 16px 24px;
+        .stTabs [data-baseweb="tab"] {
             border-radius: 30px;
-            border: none;
-            width: 100%;
-            font-size: 16px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            box-shadow: 0 8px 16px rgba(255,215,0,0.2);
-            margin: 8px 0;
+            padding: 0.5rem 1rem;
+            font-size: 0.8rem;
         }
         
-        .premium-button:active {
-            transform: scale(0.96);
-        }
-        
-        .premium-button.secondary {
-            background: transparent;
-            border: 2px solid #FFD700;
-            color: #FFD700;
-            box-shadow: none;
-        }
-        
-        /* Selector de Data */
-        .date-selector {
-            background: #1A1F2C;
-            border-radius: 30px;
-            padding: 4px;
-            display: flex;
-            margin-bottom: 20px;
-        }
-        
-        .date-option {
-            flex: 1;
-            text-align: center;
-            padding: 12px;
-            border-radius: 30px;
-            font-weight: 600;
-            font-size: 14px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-        
-        .date-option.active {
-            background: #FFD700;
-            color: #0A0C10;
-        }
-        
-        /* Toggle Switch */
-        .toggle-container {
-            background: #1A1F2C;
-            border-radius: 30px;
-            padding: 4px;
-            display: flex;
-            gap: 4px;
-        }
-        
-        .toggle-option {
-            flex: 1;
-            text-align: center;
-            padding: 12px;
-            border-radius: 30px;
-            font-weight: 600;
-            font-size: 13px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-        
-        .toggle-option.active {
-            background: #FFD700;
-            color: #0A0C10;
-        }
-        
-        /* Loading Spinner Premium */
-        .premium-spinner {
-            width: 48px;
-            height: 48px;
-            border: 4px solid rgba(255,215,0,0.1);
-            border-top: 4px solid #FFD700;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 40px auto;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        /* Métricas Cards */
+        /* Métricas */
         .metric-card {
-            background: #1A1F2C;
-            border-radius: 20px;
-            padding: 16px;
+            background: #1a1f2c;
+            border-radius: 12px;
+            padding: 1rem;
             text-align: center;
+            border: 1px solid rgba(255,215,0,0.1);
         }
         
         .metric-value {
-            font-size: 28px;
+            font-size: 1.5rem;
             font-weight: 800;
-            color: #FFD700;
-            line-height: 1.2;
+            color: #ffd700;
         }
         
         .metric-label {
-            color: #8E9AAB;
-            font-size: 13px;
-            font-weight: 500;
-            margin-top: 4px;
+            color: #8e9aab;
+            font-size: 0.8rem;
         }
         
-        .metric-trend {
-            font-size: 12px;
-            margin-top: 8px;
-            padding: 4px 8px;
+        /* Botões */
+        .stButton button {
+            width: 100%;
             border-radius: 30px;
-            display: inline-block;
+            background: linear-gradient(135deg, #ffd700 0%, #ffa500 100%);
+            color: #0a0c10;
+            font-weight: 700;
+            border: none;
+            padding: 0.6rem 1rem;
         }
         
-        .metric-trend.up {
-            background: rgba(76, 175, 80, 0.1);
-            color: #4CAF50;
+        .stButton button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(255,215,0,0.2);
         }
         
-        /* Divider */
-        .divider {
-            height: 1px;
-            background: linear-gradient(90deg, transparent, rgba(255,215,0,0.2), transparent);
-            margin: 24px 0;
+        /* Inputs */
+        .stDateInput input {
+            background: #1a1f2c;
+            border: 1px solid rgba(255,215,0,0.2);
+            border-radius: 30px;
+            color: white;
         }
         
-        /* Esconder elementos originais */
-        .stDateInput, .stSelectbox, .stMultiSelect, .stSlider {
-            display: none !important;
+        .stSelectbox div[data-baseweb="select"] {
+            background: #1a1f2c;
+            border-radius: 30px;
+        }
+        
+        /* Checkboxes */
+        .stCheckbox {
+            background: #1a1f2c;
+            padding: 0.5rem;
+            border-radius: 12px;
+            margin: 0.2rem 0;
+        }
+        
+        /* Sliders */
+        .stSlider div[data-baseweb="slider"] {
+            padding-top: 1rem;
+        }
+        
+        /* Expander */
+        .streamlit-expanderHeader {
+            background: #1a1f2c;
+            border-radius: 12px;
+            color: white;
+        }
+        
+        .streamlit-expanderContent {
+            background: #1a1f2c;
+            border-radius: 0 0 12px 12px;
+            padding: 1rem;
         }
     </style>
     """, unsafe_allow_html=True)
@@ -5917,492 +5630,428 @@ def main():
     # Inicializar sistema
     sistema = SistemaAlertasFutebol()
     
-    # Estado da sessão
-    if 'current_tab' not in st.session_state:
-        st.session_state.current_tab = 'buscar'
-    if 'selected_date' not in st.session_state:
-        st.session_state.selected_date = datetime.now()
+    # Abas principais (mantendo as 4 originais)
+    tab1, tab2, tab3, tab4 = st.tabs(["🔍 Buscar", "📊 Resultados", "🏆 TOP", "⚽ Completos"])
     
-    # Container principal do app
-    st.markdown('<div class="app-container">', unsafe_allow_html=True)
+    with tab1:
+        render_tab_busca(sistema)
     
-    # Header Premium
-    stats = sistema.api_monitor.get_stats()
-    st.markdown(f"""
-    <div class="app-header">
-        <div class="header-content">
-            <div class="logo-area">
-                <span class="logo-icon">⚽</span>
-                <span class="logo-text">ELITE MASTER</span>
-            </div>
-            <div class="status-badge">
-                <span class="status-dot"></span>
-                <span class="status-text">{stats['success_rate']}%</span>
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    with tab2:
+        render_tab_resultados(sistema)
     
-    # Renderizar conteúdo baseado na aba atual
-    if st.session_state.current_tab == 'buscar':
-        render_buscar_tab(sistema)
-    elif st.session_state.current_tab == 'resultados':
-        render_resultados_tab(sistema)
-    elif st.session_state.current_tab == 'completos':
-        render_completos_tab(sistema)
-    elif st.session_state.current_tab == 'stats':
-        render_stats_tab(sistema)
+    with tab3:
+        render_tab_top_alertas(sistema)
     
-    # Navigation Bar Inferior
-    st.markdown(f"""
-    <div class="bottom-nav">
-        <div class="nav-item {'active' if st.session_state.current_tab == 'buscar' else ''}" onclick="document.querySelector('[data-testid=\"baseButton-tab1\"]').click()">
-            <span class="nav-icon">🔍</span>
-            <span class="nav-label">Buscar</span>
-        </div>
-        <div class="nav-item {'active' if st.session_state.current_tab == 'resultados' else ''}" onclick="document.querySelector('[data-testid=\"baseButton-tab2\"]').click()">
-            <span class="nav-icon">📊</span>
-            <span class="nav-label">Resultados</span>
-        </div>
-        <div class="nav-item {'active' if st.session_state.current_tab == 'completos' else ''}" onclick="document.querySelector('[data-testid=\"baseButton-tab3\"]').click()">
-            <span class="nav-icon">⚽</span>
-            <span class="nav-label">Completos</span>
-        </div>
-        <div class="nav-item {'active' if st.session_state.current_tab == 'stats' else ''}" onclick="document.querySelector('[data-testid=\"baseButton-tab4\"]').click()">
-            <span class="nav-icon">📈</span>
-            <span class="nav-label">Stats</span>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    with tab4:
+        render_tab_completos(sistema)
     
-    # Botões invisíveis para navegação (gatilhos)
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        if st.button("tab1", key="tab1", help="Buscar"):
-            st.session_state.current_tab = 'buscar'
-            st.rerun()
-    with col2:
-        if st.button("tab2", key="tab2", help="Resultados"):
-            st.session_state.current_tab = 'resultados'
-            st.rerun()
-    with col3:
-        if st.button("tab3", key="tab3", help="Completos"):
-            st.session_state.current_tab = 'completos'
-            st.rerun()
-    with col4:
-        if st.button("tab4", key="tab4", help="Stats"):
-            st.session_state.current_tab = 'stats'
-            st.rerun()
-    
-    st.markdown('</div>', unsafe_allow_html=True)
+    # Monitoramento no rodapé
+    with st.expander("📊 Monitoramento", expanded=False):
+        stats = sistema.api_monitor.get_stats()
+        cache_stats = sistema.image_cache.get_stats()
+        
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Requests", stats['total_requests'])
+        col2.metric("Sucesso", f"{stats['success_rate']}%")
+        col3.metric("Cache", f"{cache_stats['memoria']} img")
 
-def render_buscar_tab(sistema):
-    """Renderiza aba de busca com design premium"""
+def render_tab_busca(sistema):
+    """Aba de busca com todas as funcionalidades originais"""
     
-    st.markdown('<div class="content-section">', unsafe_allow_html=True)
+    st.subheader("🔍 Buscar Partidas")
     
-    # Seletor de Data Premium
-    st.markdown("""
-    <div class="section-title">
-        <span>📅 Data</span>
-        <span>Hoje</span>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    data_opcoes = ["Hoje", "Amanhã", "Escolher"]
-    data_selecionada = datetime.now()
-    
-    # Toggle de data
-    st.markdown("""
-    <div class="toggle-container" style="margin-bottom: 24px;">
-        <div class="toggle-option active">Hoje</div>
-        <div class="toggle-option">Amanhã</div>
-        <div class="toggle-option">Escolher</div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Tipo de Análise
-    st.markdown('<div class="section-title">🎯 Tipo de Análise</div>', unsafe_allow_html=True)
-    
-    tipo_map = {
-        "📈 Over/Under": "Over/Under de Gols",
-        "🏆 Favorito": "Favorito (Vitória)",
-        "⏰ Gols HT": "Gols HT (Primeiro Tempo)",
-        "🤝 Ambas Marcam": "Ambas Marcam (BTTS)"
-    }
-    
-    tipo_selecionado = st.radio(
-        "Tipo",
-        options=list(tipo_map.keys()),
-        horizontal=True,
-        label_visibility="collapsed"
+    # Data
+    data_selecionada = st.date_input(
+        "📅 Data para análise",
+        value=datetime.today(),
+        format="DD/MM/YYYY"
     )
-    tipo_analise = tipo_map[tipo_selecionado]
     
-    # Configurações (expansível)
-    with st.expander("⚙️ Configurações", expanded=False):
-        config = {}
-        if tipo_analise == "Over/Under de Gols":
-            col1, col2 = st.columns(2)
-            with col1:
-                min_conf = st.slider("Conf. Mínima", 50, 90, 70)
-            with col2:
-                max_conf = st.slider("Conf. Máxima", min_conf, 95, 95)
-            filtro = st.selectbox("Filtro", ["Todos", "📈 Over", "📉 Under"])
-            
-            config = {
-                "min_conf": min_conf,
-                "max_conf": max_conf,
-                "filtro": filtro
-            }
-        
-        elif tipo_analise == "Favorito (Vitória)":
-            min_conf = st.slider("Confiança Mínima", 50, 90, 65)
-            filtro = st.selectbox("Favorito", ["Todos", "🏠 Casa", "✈️ Fora", "🤝 Empate"])
-            
-            config = {
-                "min_conf": min_conf,
-                "filtro": filtro
-            }
-        
-        elif tipo_analise == "Gols HT (Primeiro Tempo)":
-            min_conf = st.slider("Confiança Mínima", 50, 90, 60)
-            tipo_ht = st.selectbox("Tipo HT", ["OVER 0.5", "OVER 1.5", "UNDER 0.5", "UNDER 1.5"])
-            
-            config = {
-                "min_conf": min_conf,
-                "tipo_ht": tipo_ht
-            }
-        
-        elif tipo_analise == "Ambas Marcam (BTTS)":
-            min_conf = st.slider("Confiança Mínima", 50, 90, 60)
-            filtro = st.selectbox("Tipo", ["Todos", "SIM", "NÃO"])
-            
-            config = {
-                "min_conf": min_conf,
-                "filtro": filtro
-            }
+    # Tipo de análise (igual ao original)
+    tipo_analise = st.selectbox(
+        "🎯 Tipo de Análise",
+        ["Over/Under de Gols", "Favorito (Vitória)", "Gols HT (Primeiro Tempo)", "Ambas Marcam (BTTS)"],
+        key="tipo_analise_busca"
+    )
     
-    # Opções de Envio
-    st.markdown('<div class="section-title">📨 Envio</div>', unsafe_allow_html=True)
+    # Configurações específicas por tipo
+    config_analise = {}
+    
+    if tipo_analise == "Over/Under de Gols":
+        col1, col2 = st.columns(2)
+        with col1:
+            min_conf = st.slider("Conf. Mínima %", 10, 95, 70, key="min_conf_ou")
+        with col2:
+            max_conf = st.slider("Conf. Máxima %", min_conf, 95, 95, key="max_conf_ou")
+        
+        tipo_filtro = st.selectbox(
+            "Filtrar por Tipo",
+            ["Todos", "Apenas Over", "Apenas Under"],
+            key="filtro_ou"
+        )
+        
+        config_analise = {
+            "tipo_filtro": tipo_filtro,
+            "min_conf": min_conf,
+            "max_conf": max_conf
+        }
+    
+    elif tipo_analise == "Favorito (Vitória)":
+        min_conf_vitoria = st.slider("Confiança Mínima %", 50, 95, 65, key="min_conf_fav")
+        filtro_favorito = st.selectbox(
+            "Filtrar Favorito",
+            ["Todos", "Casa", "Fora", "Empate"],
+            key="filtro_fav"
+        )
+        
+        config_analise = {
+            "min_conf_vitoria": min_conf_vitoria,
+            "filtro_favorito": filtro_favorito
+        }
+    
+    elif tipo_analise == "Gols HT (Primeiro Tempo)":
+        min_conf_ht = st.slider("Confiança Mínima %", 50, 95, 60, key="min_conf_ht")
+        tipo_ht = st.selectbox(
+            "Tipo de HT",
+            ["OVER 0.5 HT", "OVER 1.5 HT", "UNDER 0.5 HT", "UNDER 1.5 HT"],
+            key="tipo_ht"
+        )
+        
+        config_analise = {
+            "min_conf_ht": min_conf_ht,
+            "tipo_ht": tipo_ht
+        }
+    
+    elif tipo_analise == "Ambas Marcam (BTTS)":
+        min_conf_am = st.slider("Confiança Mínima %", 50, 95, 60, key="min_conf_am")
+        filtro_am = st.selectbox(
+            "Filtrar",
+            ["Todos", "SIM", "NÃO"],
+            key="filtro_am"
+        )
+        
+        config_analise = {
+            "min_conf_am": min_conf_am,
+            "filtro_am": filtro_am
+        }
+    
+    # Opções de envio
+    st.markdown("### 📨 Tipos de Envio")
     
     col1, col2 = st.columns(2)
     with col1:
-        individual = st.checkbox("🎯 Individual", value=True)
-        poster = st.checkbox("📊 Poster", value=True)
-    with col2:
-        top = st.checkbox("🏆 Top Jogos", value=True)
+        alerta_individual = st.checkbox("🎯 Individuais", value=True, key="ind_busca")
+        alerta_poster = st.checkbox("📊 Poster", value=True, key="poster_busca")
     
-    # Seleção de Ligas
-    todas_ligas = st.checkbox("🌍 Todas as ligas", value=True)
+    with col2:
+        alerta_top_jogos = st.checkbox("🏆 Top Jogos", value=True, key="top_busca")
+    
+    formato_top_jogos = st.selectbox(
+        "📋 Formato Top Jogos",
+        ["Ambos", "Texto", "Poster"],
+        key="formato_top"
+    )
+    
+    # Estilo do poster
+    estilo_poster = st.selectbox(
+        "🎨 Estilo do Poster",
+        ["West Ham (Novo)", "Elite Master (Original)"],
+        key="estilo_poster"
+    )
+    
+    # Seleção de ligas
+    todas_ligas = st.checkbox("🌍 Todas as ligas", value=True, key="todas_ligas_busca")
     
     ligas_selecionadas = []
     if not todas_ligas:
         ligas_selecionadas = st.multiselect(
-            "Selecionar ligas",
+            "📌 Selecionar ligas",
             options=list(ConfigManager.LIGA_DICT.keys()),
-            default=["Campeonato Brasileiro Série A"]
+            default=["Campeonato Brasileiro Série A", "Premier League (Inglaterra)"]
         )
     
-    # Botão de Busca Premium
-    st.markdown('<div style="margin-top: 32px;">', unsafe_allow_html=True)
+    # Top N
+    top_n = st.selectbox("📊 Quantidade no Top", [3, 5, 10], index=1, key="top_n")
     
-    if st.button("🔍 BUSCAR PARTIDAS", key="buscar_btn", use_container_width=True):
+    # Botão de busca
+    if st.button("🔍 BUSCAR PARTIDAS", type="primary", use_container_width=True):
         if not todas_ligas and not ligas_selecionadas:
-            st.error("Selecione pelo menos uma liga")
+            st.error("❌ Selecione pelo menos uma liga")
         else:
             with st.spinner("Analisando partidas..."):
                 sistema.processar_jogos(
                     data_selecionada,
                     ligas_selecionadas,
                     todas_ligas,
-                    5,
-                    config.get("min_conf", 70),
-                    config.get("max_conf", 95),
-                    "West Ham (Novo)",
-                    individual,
-                    poster,
-                    top,
-                    "Ambos",
-                    config.get("filtro", "Todos"),
+                    top_n,
+                    config_analise.get("min_conf", 70),
+                    config_analise.get("max_conf", 95),
+                    estilo_poster,
+                    alerta_individual,
+                    alerta_poster,
+                    alerta_top_jogos,
+                    formato_top_jogos,
+                    config_analise.get("tipo_filtro", "Todos"),
                     tipo_analise,
-                    config
+                    config_analise
                 )
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
 
-def render_resultados_tab(sistema):
-    """Renderiza aba de resultados com design premium"""
+def render_tab_resultados(sistema):
+    """Aba de resultados com todas as funcionalidades originais"""
     
-    st.markdown('<div class="content-section">', unsafe_allow_html=True)
+    st.subheader("📊 Conferir Resultados")
     
-    st.markdown("""
-    <div class="section-title">
-        <span>📊 RESULTADOS</span>
-        <span>Atualizado</span>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Cards de métricas
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        resultados_ou = DataStorage.carregar_resultados()
-        greens_ou = sum(1 for r in resultados_ou.values() if r.get("resultado") == "GREEN")
-        reds_ou = sum(1 for r in resultados_ou.values() if r.get("resultado") == "RED")
-        total_ou = greens_ou + reds_ou
-        taxa_ou = (greens_ou / total_ou * 100) if total_ou > 0 else 0
-        
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-value">{greens_ou}✅ {reds_ou}❌</div>
-            <div class="metric-label">Over/Under</div>
-            <div class="metric-trend up">{taxa_ou:.1f}% acerto</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        resultados_fav = DataStorage.carregar_resultados_favoritos()
-        greens_fav = sum(1 for r in resultados_fav.values() if r.get("resultado_favorito") == "GREEN")
-        reds_fav = sum(1 for r in resultados_fav.values() if r.get("resultado_favorito") == "RED")
-        total_fav = greens_fav + reds_fav
-        taxa_fav = (greens_fav / total_fav * 100) if total_fav > 0 else 0
-        
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-value">{greens_fav}✅ {reds_fav}❌</div>
-            <div class="metric-label">Favoritos</div>
-            <div class="metric-trend up">{taxa_fav:.1f}% acerto</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    col3, col4 = st.columns(2)
-    
-    with col3:
-        resultados_ht = DataStorage.carregar_resultados_gols_ht()
-        greens_ht = sum(1 for r in resultados_ht.values() if r.get("resultado_ht") == "GREEN")
-        reds_ht = sum(1 for r in resultados_ht.values() if r.get("resultado_ht") == "RED")
-        total_ht = greens_ht + reds_ht
-        taxa_ht = (greens_ht / total_ht * 100) if total_ht > 0 else 0
-        
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-value">{greens_ht}✅ {reds_ht}❌</div>
-            <div class="metric-label">Gols HT</div>
-            <div class="metric-trend up">{taxa_ht:.1f}% acerto</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col4:
-        resultados_am = DataStorage.carregar_resultados_ambas_marcam()
-        greens_am = sum(1 for r in resultados_am.values() if r.get("resultado_ambas_marcam") == "GREEN")
-        reds_am = sum(1 for r in resultados_am.values() if r.get("resultado_ambas_marcam") == "RED")
-        total_am = greens_am + reds_am
-        taxa_am = (greens_am / total_am * 100) if total_am > 0 else 0
-        
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-value">{greens_am}✅ {reds_am}❌</div>
-            <div class="metric-label">Ambas Marcam</div>
-            <div class="metric-trend up">{taxa_am:.1f}% acerto</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-    
-    # Conferir Resultados
-    st.markdown("""
-    <div class="section-title">
-        <span>🔄 Conferir Resultados</span>
-    </div>
-    """, unsafe_allow_html=True)
-    
+    # Data para conferência
     data_resultados = st.date_input(
-        "Data",
-        value=datetime.now(),
+        "📅 Data para conferência",
+        value=datetime.today(),
         format="DD/MM/YYYY",
-        label_visibility="collapsed"
+        key="data_resultados_conf"
     )
     
-    if st.button("📊 CONFERIR RESULTADOS", key="conferir_btn", use_container_width=True):
+    # Botão de conferência
+    if st.button("🔄 CONFERIR RESULTADOS", type="primary", use_container_width=True):
         with st.spinner("Conferindo resultados..."):
             sistema.conferir_resultados(data_resultados)
     
-    st.markdown('</div>', unsafe_allow_html=True)
-
-def render_completos_tab(sistema):
-    """Renderiza aba de alertas completos"""
+    # Estatísticas dos alertas
+    st.markdown("### 📈 Estatísticas dos Alertas")
     
-    st.markdown('<div class="content-section">', unsafe_allow_html=True)
+    # Carregar dados
+    alertas_ou = DataStorage.carregar_alertas()
+    alertas_fav = DataStorage.carregar_alertas_favoritos()
+    alertas_ht = DataStorage.carregar_alertas_gols_ht()
+    alertas_am = DataStorage.carregar_alertas_ambas_marcam()
     
-    st.markdown("""
-    <div class="section-title">
-        <span>⚽ ALERTAS COMPLETOS</span>
-        <span>ALL-IN-ONE</span>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Data selector
-    data_completa = st.date_input(
-        "Data",
-        value=datetime.now(),
-        format="DD/MM/YYYY",
-        label_visibility="collapsed"
-    )
-    
-    # Ligas
-    todas_ligas = st.checkbox("🌍 Todas as ligas", value=True)
-    
-    ligas_selecionadas = []
-    if not todas_ligas:
-        ligas_selecionadas = st.multiselect(
-            "Ligas",
-            options=list(ConfigManager.LIGA_DICT.keys()),
-            default=["Campeonato Brasileiro Série A"]
-        )
-    
-    # Botões
-    if st.button("⚽ GERAR ALERTAS COMPLETOS", key="gerar_completo", use_container_width=True):
-        if not todas_ligas and not ligas_selecionadas:
-            st.error("Selecione pelo menos uma liga")
-        else:
-            with st.spinner("Gerando alertas completos..."):
-                sistema.processar_alertas_completos(data_completa, ligas_selecionadas, todas_ligas)
-    
-    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-    
-    # Resultados completos
-    st.markdown("""
-    <div class="section-title">
-        <span>📋 Resultados Completos</span>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    data_resultados = st.date_input(
-        "Data resultados",
-        value=datetime.now(),
-        format="DD/MM/YYYY",
-        key="data_resultados_comp",
-        label_visibility="collapsed"
-    )
-    
-    if st.button("🔄 CONFERIR RESULTADOS", key="conferir_comp", use_container_width=True):
-        with st.spinner("Conferindo resultados..."):
-            sistema.gerenciador_completo.conferir_resultados_completos(data_resultados)
-    
-    # Estatísticas rápidas
-    alertas_comp = sistema.gerenciador_completo.carregar_alertas()
-    if alertas_comp:
-        st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-        
-        total = len(alertas_comp)
-        conferidos = sum(1 for a in alertas_comp.values() if a.get("conferido", False))
-        
-        col1, col2 = st.columns(2)
-        col1.metric("📋 Total Alertas", total)
-        col2.metric("✅ Conferidos", conferidos)
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-
-def render_stats_tab(sistema):
-    """Renderiza aba de estatísticas"""
-    
-    st.markdown('<div class="content-section">', unsafe_allow_html=True)
-    
-    st.markdown("""
-    <div class="section-title">
-        <span>📈 ESTATÍSTICAS</span>
-        <span>Sistema</span>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    stats = sistema.api_monitor.get_stats()
+    resultados_ou = DataStorage.carregar_resultados()
+    resultados_fav = DataStorage.carregar_resultados_favoritos()
+    resultados_ht = DataStorage.carregar_resultados_gols_ht()
+    resultados_am = DataStorage.carregar_resultados_ambas_marcam()
     
     # Cards de estatísticas
     col1, col2 = st.columns(2)
     
     with col1:
+        # Over/Under
+        total_ou = len(alertas_ou)
+        conferidos_ou = sum(1 for a in alertas_ou.values() if a.get("conferido", False))
+        greens_ou = sum(1 for r in resultados_ou.values() if r.get("resultado") == "GREEN")
+        reds_ou = sum(1 for r in resultados_ou.values() if r.get("resultado") == "RED")
+        
         st.markdown(f"""
         <div class="metric-card">
-            <div class="metric-value">{stats['total_requests']}</div>
-            <div class="metric-label">Total Requests</div>
+            <div class="metric-value">⚽ {total_ou}</div>
+            <div class="metric-label">Over/Under</div>
+            <div style="font-size:0.8rem; margin-top:0.3rem;">
+                <span class="green-text">✅ {greens_ou}</span> | 
+                <span class="red-text">❌ {reds_ou}</span> | 
+                <span>📊 {conferidos_ou}/{total_ou}</span>
+            </div>
         </div>
         """, unsafe_allow_html=True)
     
     with col2:
+        # Favoritos
+        total_fav = len(alertas_fav)
+        conferidos_fav = sum(1 for a in alertas_fav.values() if a.get("conferido", False))
+        greens_fav = sum(1 for r in resultados_fav.values() if r.get("resultado_favorito") == "GREEN")
+        reds_fav = sum(1 for r in resultados_fav.values() if r.get("resultado_favorito") == "RED")
+        
         st.markdown(f"""
         <div class="metric-card">
-            <div class="metric-value">{stats['success_rate']}%</div>
-            <div class="metric-label">Taxa de Sucesso</div>
+            <div class="metric-value">🏆 {total_fav}</div>
+            <div class="metric-label">Favoritos</div>
+            <div style="font-size:0.8rem; margin-top:0.3rem;">
+                <span class="green-text">✅ {greens_fav}</span> | 
+                <span class="red-text">❌ {reds_fav}</span> | 
+                <span>📊 {conferidos_fav}/{total_fav}</span>
+            </div>
         </div>
         """, unsafe_allow_html=True)
     
     col3, col4 = st.columns(2)
     
     with col3:
+        # Gols HT
+        total_ht = len(alertas_ht)
+        conferidos_ht = sum(1 for a in alertas_ht.values() if a.get("conferido", False))
+        greens_ht = sum(1 for r in resultados_ht.values() if r.get("resultado_ht") == "GREEN")
+        reds_ht = sum(1 for r in resultados_ht.values() if r.get("resultado_ht") == "RED")
+        
         st.markdown(f"""
         <div class="metric-card">
-            <div class="metric-value">{stats['requests_per_minute']}</div>
-            <div class="metric-label">Requests/min</div>
+            <div class="metric-value">⏰ {total_ht}</div>
+            <div class="metric-label">Gols HT</div>
+            <div style="font-size:0.8rem; margin-top:0.3rem;">
+                <span class="green-text">✅ {greens_ht}</span> | 
+                <span class="red-text">❌ {reds_ht}</span> | 
+                <span>📊 {conferidos_ht}/{total_ht}</span>
+            </div>
         </div>
         """, unsafe_allow_html=True)
     
     with col4:
+        # Ambas Marcam
+        total_am = len(alertas_am)
+        conferidos_am = sum(1 for a in alertas_am.values() if a.get("conferido", False))
+        greens_am = sum(1 for r in resultados_am.values() if r.get("resultado_ambas_marcam") == "GREEN")
+        reds_am = sum(1 for r in resultados_am.values() if r.get("resultado_ambas_marcam") == "RED")
+        
         st.markdown(f"""
         <div class="metric-card">
-            <div class="metric-value">{stats['rate_limit_hits']}</div>
-            <div class="metric-label">Rate Limit</div>
+            <div class="metric-value">🤝 {total_am}</div>
+            <div class="metric-label">Ambas Marcam</div>
+            <div style="font-size:0.8rem; margin-top:0.3rem;">
+                <span class="green-text">✅ {greens_am}</span> | 
+                <span class="red-text">❌ {reds_am}</span> | 
+                <span>📊 {conferidos_am}/{total_am}</span>
+            </div>
         </div>
         """, unsafe_allow_html=True)
-    
-    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-    
-    # Cache stats
-    st.markdown("""
-    <div class="section-title">
-        <span>💾 Cache</span>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    cache_stats = sistema.image_cache.get_stats()
-    
-    col_c1, col_c2 = st.columns(2)
-    
-    with col_c1:
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-value">{cache_stats['memoria']}</div>
-            <div class="metric-label">Imagens em Cache</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col_c2:
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-value">{cache_stats['disco_mb']:.1f}MB</div>
-            <div class="metric-label">Espaço em Disco</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-    
-    # Ações
-    col_b1, col_b2 = st.columns(2)
-    
-    with col_b1:
-        if st.button("🗑️ Limpar Cache", use_container_width=True):
-            sistema.image_cache.clear()
-            st.success("Cache limpo!")
-            st.rerun()
-    
-    with col_b2:
-        if st.button("🔄 Reset Stats", use_container_width=True):
-            sistema.api_monitor.reset()
-            st.success("Estatísticas resetadas!")
-            st.rerun()
-    
-    st.markdown('</div>', unsafe_allow_html=True)
 
+def render_tab_top_alertas(sistema):
+    """Aba de TOP Alertas com todas as funcionalidades"""
+    
+    st.subheader("🏆 Resultados TOP Alertas")
+    
+    # Data para conferência TOP
+    data_top = st.date_input(
+        "📅 Data para conferência TOP",
+        value=datetime.today(),
+        format="DD/MM/YYYY",
+        key="data_top"
+    )
+    
+    # Botão de conferência TOP
+    if st.button("🏆 CONFERIR RESULTADOS TOP", type="primary", use_container_width=True):
+        with st.spinner("Conferindo TOP alertas..."):
+            sistema.resultados_top.conferir_resultados_top_alertas(data_top)
+    
+    # Estatísticas dos alertas TOP
+    st.markdown("### 📊 Estatísticas TOP Alertas")
+    
+    alertas_top = DataStorage.carregar_alertas_top()
+    
+    if alertas_top:
+        # Agrupar por tipo
+        top_ou = [a for a in alertas_top.values() if a.get("tipo_alerta") == "over_under"]
+        top_fav = [a for a in alertas_top.values() if a.get("tipo_alerta") == "favorito"]
+        top_ht = [a for a in alertas_top.values() if a.get("tipo_alerta") == "gols_ht"]
+        top_am = [a for a in alertas_top.values() if a.get("tipo_alerta") == "ambas_marcam"]
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-value">⚽ {len(top_ou)}</div>
+                <div class="metric-label">TOP Over/Under</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-value">⏰ {len(top_ht)}</div>
+                <div class="metric-label">TOP Gols HT</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-value">🏆 {len(top_fav)}</div>
+                <div class="metric-label">TOP Favoritos</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-value">🤝 {len(top_am)}</div>
+                <div class="metric-label">TOP Ambas Marcam</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        # Botão para limpar alertas antigos
+        if st.button("🗑️ Limpar Alertas TOP Antigos", use_container_width=True):
+            sistema._limpar_alertas_top_antigos()
+            st.rerun()
+    else:
+        st.info("ℹ️ Nenhum alerta TOP salvo ainda.")
+
+def render_tab_completos(sistema):
+    """Aba de alertas completos com todas as funcionalidades"""
+    
+    st.subheader("⚽ Alertas Completos - ALL IN ONE")
+    st.caption("Todas as análises em um único poster")
+    
+    # Data
+    data_completa = st.date_input(
+        "📅 Data para análise completa",
+        value=datetime.today(),
+        format="DD/MM/YYYY",
+        key="data_completa"
+    )
+    
+    # Seleção de ligas
+    todas_ligas = st.checkbox("🌍 Todas as ligas", value=True, key="todas_ligas_completa")
+    
+    ligas_selecionadas = []
+    if not todas_ligas:
+        ligas_selecionadas = st.multiselect(
+            "📌 Selecionar ligas",
+            options=list(ConfigManager.LIGA_DICT.keys()),
+            default=["Campeonato Brasileiro Série A", "Premier League (Inglaterra)"],
+            key="ligas_completa"
+        )
+    
+    # Botão para gerar alertas completos
+    if st.button("⚽ GERAR ALERTAS COMPLETOS", type="primary", use_container_width=True):
+        if not todas_ligas and not ligas_selecionadas:
+            st.error("❌ Selecione pelo menos uma liga")
+        else:
+            with st.spinner("Gerando alertas completos..."):
+                sistema.processar_alertas_completos(data_completa, ligas_selecionadas, todas_ligas)
+    
+    st.markdown("---")
+    
+    # Seção de conferência de resultados completos
+    st.subheader("📊 Conferir Resultados Completos")
+    
+    data_resultados_comp = st.date_input(
+        "📅 Data para conferência completa",
+        value=datetime.today(),
+        format="DD/MM/YYYY",
+        key="data_resultados_comp"
+    )
+    
+    if st.button("🔄 CONFERIR RESULTADOS COMPLETOS", use_container_width=True):
+        with st.spinner("Conferindo resultados..."):
+            sistema.gerenciador_completo.conferir_resultados_completos(data_resultados_comp)
+    
+    # Estatísticas dos alertas completos
+    st.markdown("### 📊 Estatísticas Completos")
+    
+    alertas_comp = sistema.gerenciador_completo.carregar_alertas()
+    
+    if alertas_comp:
+        total = len(alertas_comp)
+        conferidos = sum(1 for a in alertas_comp.values() if a.get("conferido", False))
+        enviados = sum(1 for a in alertas_comp.values() if a.get("alerta_enviado", False))
+        
+        col1, col2, col3 = st.columns(3)
+        col1.metric("📋 Total", total)
+        col2.metric("✅ Conferidos", conferidos)
+        col3.metric("📤 Enviados", enviados)
+        
+        # Últimos alertas
+        with st.expander("📋 Últimos Alertas"):
+            for chave, alerta in list(alertas_comp.items())[:3]:
+                st.write(f"**{alerta.get('home')} vs {alerta.get('away')}**")
+                st.write(f"📅 {alerta.get('data_busca')} | 📤 {alerta.get('alerta_enviado', False)}")
+                st.write("---")
+    else:
+        st.info("ℹ️ Nenhum alerta completo salvo ainda.")
+
+# Manter a execução principal
 if __name__ == "__main__":
     main()
