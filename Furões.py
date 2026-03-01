@@ -3602,7 +3602,8 @@ class PosterGenerator:
         return buffer
     
     #def gerar_poster_resultados(self, jogos: list, tipo_alerta: str) -> io.BytesIO:
- def gerar_poster_resultados(self, jogos: list, tipo_alerta: str) -> io.BytesIO:
+    
+def gerar_poster_resultados(self, jogos: list, tipo_alerta: str) -> io.BytesIO:
     """Gera poster de resultados com escudos e placares - VERSÃO ORIGINAL"""
     LARGURA = 2000
     ALTURA_TOPO = 300
