@@ -5418,378 +5418,798 @@ class SistemaAlertasFutebol:
 # =============================
 # INTERFACE STREAMLIT
 # =============================
+# =============================
+# INTERFACE STREAMLIT - VERSÃO MOBILE PREMIUM
+# =============================
 
 def main():
-    st.set_page_config(page_title="⚽ Sistema Completo de Alertas", layout="wide")
-    st.title("⚽ Sistema Completo de Alertas de Futebol")
+    # Configuração Mobile-First
+    st.set_page_config(
+        page_title="⚽ Elite Master", 
+        page_icon="⚽",
+        layout="centered",  # Melhor para mobile
+        initial_sidebar_state="collapsed"  # Sidebar escondida por padrão
+    )
+    
+    # CSS Personalizado para mobile
+    st.markdown("""
+    <style>
+        /* Reset e fonte base */
+        .stApp {
+            background: linear-gradient(145deg, #0a0f1e 0%, #1a1f2e 100%);
+        }
+        
+        /* Containers principais */
+        .main > div {
+            padding: 0.5rem 1rem;
+        }
+        
+        /* Cards de jogo */
+        .game-card {
+            background: rgba(25, 35, 45, 0.95);
+            border-radius: 20px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border: 2px solid;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+        
+        .game-card.over { border-color: #4CAF50; }
+        .game-card.under { border-color: #2196F3; }
+        .game-card.favorito { border-color: #FF9800; }
+        .game-card.ht { border-color: #9C27B0; }
+        .game-card.btts { border-color: #E91E63; }
+        
+        /* Cabeçalho do card */
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.8rem;
+        }
+        
+        .liga-badge {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 0.3rem 1rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: white;
+        }
+        
+        .hora-badge {
+            background: rgba(255,255,255,0.1);
+            padding: 0.3rem 1rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            color: #a0aec0;
+        }
+        
+        /* Times e placar */
+        .times-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 1rem 0;
+        }
+        
+        .time-box {
+            flex: 1;
+            text-align: center;
+        }
+        
+        .time-nome {
+            font-size: 1rem;
+            font-weight: 600;
+            color: white;
+            margin-top: 0.5rem;
+        }
+        
+        .placar {
+            font-size: 2.2rem;
+            font-weight: 800;
+            color: #FFD700;
+            text-shadow: 0 0 10px rgba(255,215,0,0.3);
+            margin: 0 1rem;
+        }
+        
+        .vs-text {
+            font-size: 1.2rem;
+            color: #FFD700;
+            font-weight: 600;
+            margin: 0 1rem;
+        }
+        
+        /* Informações da análise */
+        .analise-info {
+            background: rgba(0,0,0,0.3);
+            border-radius: 15px;
+            padding: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+        }
+        
+        .info-label {
+            color: #a0aec0;
+            font-size: 0.9rem;
+        }
+        
+        .info-value {
+            color: white;
+            font-weight: 600;
+        }
+        
+        .green-value {
+            color: #4CAF50;
+        }
+        
+        .red-value {
+            color: #f44336;
+        }
+        
+        /* Odds badge */
+        .odds-badge {
+            background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+            color: #1a1f2e;
+            font-weight: 800;
+            padding: 0.5rem 1rem;
+            border-radius: 30px;
+            display: inline-block;
+            font-size: 1.2rem;
+            box-shadow: 0 4px 12px rgba(255,215,0,0.3);
+        }
+        
+        /* Botões flutuantes */
+        .fab {
+            position: fixed;
+            bottom: 2rem;
+            right: 1.5rem;
+            background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+            color: #1a1f2e;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            box-shadow: 0 8px 16px rgba(255,215,0,0.3);
+            cursor: pointer;
+            z-index: 1000;
+            border: none;
+            transition: transform 0.2s;
+        }
+        
+        .fab:hover {
+            transform: scale(1.1);
+        }
+        
+        .fab-container {
+            position: sticky;
+            bottom: 1rem;
+            z-index: 1000;
+            pointer-events: none;
+        }
+        
+        .fab-container > * {
+            pointer-events: auto;
+        }
+        
+        /* Abas inferiores (iOS style) */
+        .bottom-tabs {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(10, 15, 30, 0.95);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            display: flex;
+            justify-content: space-around;
+            padding: 0.8rem 1rem;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            z-index: 999;
+        }
+        
+        .tab-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: #718096;
+            font-size: 0.7rem;
+            transition: color 0.2s;
+        }
+        
+        .tab-item.active {
+            color: #FFD700;
+        }
+        
+        .tab-icon {
+            font-size: 1.5rem;
+            margin-bottom: 0.2rem;
+        }
+        
+        /* Ajuste para conteúdo não ficar atrás das abas */
+        .main-content {
+            padding-bottom: 5rem;
+        }
+        
+        /* Métricas compactas */
+        .metric-container {
+            background: rgba(25, 35, 45, 0.7);
+            border-radius: 15px;
+            padding: 0.8rem;
+            text-align: center;
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+        }
+        
+        .metric-value {
+            font-size: 1.4rem;
+            font-weight: 800;
+            color: #FFD700;
+            line-height: 1.2;
+        }
+        
+        .metric-label {
+            font-size: 0.8rem;
+            color: #a0aec0;
+        }
+        
+        /* Sliders customizados */
+        .stSlider > div > div > div {
+            background: linear-gradient(90deg, #FFD700 0%, #FFA500 100%) !important;
+        }
+        
+        /* Esconder elementos originais do Streamlit que atrapalham */
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        .stDeployButton {display:none;}
+        header {visibility: hidden;}
+    </style>
+    """, unsafe_allow_html=True)
     
     # Inicializar sistema
     sistema = SistemaAlertasFutebol()
     
-    # Sidebar
-    with st.sidebar:
-        st.header("🔔 Configurações de Alertas")
+    # Estado da sessão para controle de abas
+    if 'current_tab' not in st.session_state:
+        st.session_state.current_tab = 'buscar'
+    
+    # Container principal
+    with st.container():
+        st.markdown('<div class="main-content">', unsafe_allow_html=True)
         
-        st.subheader("🎯 Tipo de Análise Principal")
-        tipo_analise = st.selectbox(
-            "Selecione o tipo de alerta:",
-            ["Over/Under de Gols", "Favorito (Vitória)", "Gols HT (Primeiro Tempo)", "Ambas Marcam (BTTS)"],
-            index=0
-        )
+        # Cabeçalho compacto
+        col_logo, col_status = st.columns([3, 1])
+        with col_logo:
+            st.markdown("""
+            <div style="display: flex; align-items: center; margin-bottom: 1rem;">
+                <span style="font-size: 2rem; margin-right: 0.5rem;">⚽</span>
+                <span style="font-size: 1.3rem; font-weight: 800; background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">ELITE MASTER</span>
+            </div>
+            """, unsafe_allow_html=True)
         
-        config_analise = {}
+        with col_status:
+            stats = sistema.api_monitor.get_stats()
+            st.markdown(f"""
+            <div style="text-align: right;">
+                <span style="color: #4CAF50; font-size: 0.8rem;">● Online</span><br>
+                <span style="color: #a0aec0; font-size: 0.7rem;">{stats['success_rate']}% acerto</span>
+            </div>
+            """, unsafe_allow_html=True)
         
-        if tipo_analise == "Over/Under de Gols":
-            tipo_filtro = st.selectbox("🔍 Filtrar por Tipo", ["Todos", "Apenas Over", "Apenas Under"], index=0)
-            min_conf = st.slider("Confiança Mínima (%)", 10, 95, 70, 1)
-            max_conf = st.slider("Confiança Máxima (%)", min_conf, 95, 95, 1)
+        # Conteúdo baseado na aba atual
+        if st.session_state.current_tab == 'buscar':
+            render_tab_buscar(sistema)
+        elif st.session_state.current_tab == 'resultados':
+            render_tab_resultados(sistema)
+        elif st.session_state.current_tab == 'completos':
+            render_tab_completos(sistema)
+        elif st.session_state.current_tab == 'stats':
+            render_tab_stats(sistema)
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Abas inferiores fixas
+    st.markdown("""
+    <div class="bottom-tabs">
+        <div class="tab-item {0}" onclick="document.querySelector('[data-testid=baseButton-primary]').click()">
+            <span class="tab-icon">🔍</span>
+            <span>Buscar</span>
+        </div>
+        <div class="tab-item {1}" onclick="document.querySelector('[data-testid=baseButton-secondary]').click()">
+            <span class="tab-icon">📊</span>
+            <span>Resultados</span>
+        </div>
+        <div class="tab-item {2}" onclick="document.querySelector('[data-testid=baseButton-tertiary]').click()">
+            <span class="tab-icon">⚽</span>
+            <span>Completos</span>
+        </div>
+        <div class="tab-item {3}" onclick="document.querySelector('[data-testid=baseButton-quaternary]').click()">
+            <span class="tab-icon">📈</span>
+            <span>Stats</span>
+        </div>
+    </div>
+    
+    <script>
+        // Simular clique nos botões quando as abas forem clicadas
+        document.querySelectorAll('.tab-item').forEach((tab, index) => {
+            tab.addEventListener('click', function() {
+                // Remover active de todas
+                document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+                // Adicionar active na clicada
+                this.classList.add('active');
+                
+                // Disparar evento personalizado para o Streamlit
+                const event = new CustomEvent('tabChange', {detail: {tab: index}});
+                window.dispatchEvent(event);
+            });
+        });
+        
+        // Ativar aba inicial
+        document.querySelectorAll('.tab-item')[0].classList.add('active');
+    </script>
+    """.format(
+        'active' if st.session_state.current_tab == 'buscar' else '',
+        'active' if st.session_state.current_tab == 'resultados' else '',
+        'active' if st.session_state.current_tab == 'completos' else '',
+        'active' if st.session_state.current_tab == 'stats' else ''
+    ), unsafe_allow_html=True)
+    
+    # Botão flutuante de ação rápida
+    st.markdown("""
+    <div class="fab-container">
+        <button class="fab" onclick="document.querySelector('[data-testid=baseButton-primary]').click()">
+            ⚡
+        </button>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Capturar mudanças de aba via session state
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        if st.button("🔍", key="tab1", help="Buscar"):
+            st.session_state.current_tab = 'buscar'
+            st.rerun()
+    with col2:
+        if st.button("📊", key="tab2", help="Resultados"):
+            st.session_state.current_tab = 'resultados'
+            st.rerun()
+    with col3:
+        if st.button("⚽", key="tab3", help="Completos"):
+            st.session_state.current_tab = 'completos'
+            st.rerun()
+    with col4:
+        if st.button("📈", key="tab4", help="Estatísticas"):
+            st.session_state.current_tab = 'stats'
+            st.rerun()
+
+def render_tab_buscar(sistema):
+    """Renderiza a aba de busca com controles compactos"""
+    
+    # Seletor de data estilo calendário mobile
+    st.markdown("""
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+        <span style="color: #a0aec0;">📅 Data</span>
+        <span style="background: rgba(255,215,0,0.1); padding: 0.3rem 1rem; border-radius: 20px; color: #FFD700; font-weight: 600;">Hoje</span>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    data_selecionada = st.date_input(
+        "",  # Label vazia
+        value=datetime.today(),
+        format="DD/MM/YYYY",
+        key="mobile_data_busca"
+    )
+    
+    # Tipo de análise em cards
+    st.markdown("<p style='color: #a0aec0; margin-top: 1rem;'>🎯 Tipo de Análise</p>", unsafe_allow_html=True)
+    
+    tipo_analise = st.radio(
+        "",
+        ["⚽ Over/Under", "🏆 Favorito", "⏰ Gols HT", "🤝 Ambas Marcam"],
+        horizontal=True,
+        label_visibility="collapsed",
+        key="mobile_tipo_analise"
+    )
+    
+    # Mapear para o formato do sistema
+    tipo_map = {
+        "⚽ Over/Under": "Over/Under de Gols",
+        "🏆 Favorito": "Favorito (Vitória)",
+        "⏰ Gols HT": "Gols HT (Primeiro Tempo)",
+        "🤝 Ambas Marcam": "Ambas Marcam (BTTS)"
+    }
+    tipo_analise_sistema = tipo_map[tipo_analise]
+    
+    # Configurações específicas por tipo (em expansor)
+    config_analise = {}
+    with st.expander("⚙️ Configurações", expanded=False):
+        if tipo_analise_sistema == "Over/Under de Gols":
+            col1, col2 = st.columns(2)
+            with col1:
+                min_conf = st.slider("Mín", 50, 90, 70, key="mobile_min_conf")
+            with col2:
+                max_conf = st.slider("Máx", min_conf, 95, 95, key="mobile_max_conf")
+            
+            tipo_filtro = st.selectbox(
+                "Filtro",
+                ["Todos", "Apenas Over", "Apenas Under"],
+                key="mobile_tipo_filtro"
+            )
             
             config_analise = {
                 "tipo_filtro": tipo_filtro,
                 "min_conf": min_conf,
                 "max_conf": max_conf
             }
-            
-        elif tipo_analise == "Favorito (Vitória)":
-            st.info("🎯 Alertas baseados na probabilidade de vitória")
-            min_conf_vitoria = st.slider("Confiança Mínima Vitória (%)", 50, 95, 65, 1)
-            filtro_favorito = st.selectbox("Filtrar Favorito:", ["Todos", "Casa", "Fora", "Empate"], index=0)
+        
+        elif tipo_analise_sistema == "Favorito (Vitória)":
+            min_conf_vitoria = st.slider("Confiança Mínima", 50, 90, 65, key="mobile_min_conf_vitoria")
+            filtro_favorito = st.selectbox(
+                "Favorito",
+                ["Todos", "Casa", "Fora", "Empate"],
+                key="mobile_filtro_favorito"
+            )
             
             config_analise = {
                 "min_conf_vitoria": min_conf_vitoria,
                 "filtro_favorito": filtro_favorito
             }
-            
-        elif tipo_analise == "Gols HT (Primeiro Tempo)":
-            st.info("⏰ Alertas baseados em gols no primeiro tempo")
-            min_conf_ht = st.slider("Confiança Mínima HT (%)", 50, 95, 60, 1)
-            tipo_ht = st.selectbox("Tipo de HT:", ["OVER 0.5 HT", "OVER 1.5 HT", "UNDER 0.5 HT", "UNDER 1.5 HT"], index=0)
+        
+        elif tipo_analise_sistema == "Gols HT (Primeiro Tempo)":
+            min_conf_ht = st.slider("Confiança Mínima", 50, 90, 60, key="mobile_min_conf_ht")
+            tipo_ht = st.selectbox(
+                "Tipo HT",
+                ["OVER 0.5 HT", "OVER 1.5 HT", "UNDER 0.5 HT", "UNDER 1.5 HT"],
+                key="mobile_tipo_ht"
+            )
             
             config_analise = {
                 "min_conf_ht": min_conf_ht,
                 "tipo_ht": tipo_ht
             }
         
-        elif tipo_analise == "Ambas Marcam (BTTS)":
-            st.info("🤝 Alertas baseados se ambos os times marcam")
-            min_conf_am = st.slider("Confiança Mínima Ambas Marcam (%)", 50, 95, 60, 1)
-            filtro_am = st.selectbox("Filtrar Ambas Marcam:", ["Todos", "SIM", "NÃO"], index=0)
+        elif tipo_analise_sistema == "Ambas Marcam (BTTS)":
+            min_conf_am = st.slider("Confiança Mínima", 50, 90, 60, key="mobile_min_conf_am")
+            filtro_am = st.selectbox(
+                "Tipo",
+                ["Todos", "SIM", "NÃO"],
+                key="mobile_filtro_am"
+            )
             
             config_analise = {
                 "min_conf_am": min_conf_am,
                 "filtro_am": filtro_am
             }
-        
-        st.subheader("📨 Tipos de Envio")
-        alerta_individual = st.checkbox("🎯 Alertas Individuais", value=True)
-        alerta_poster = st.checkbox("📊 Alertas com Poster", value=True)
-        alerta_top_jogos = st.checkbox("🏆 Top Jogos", value=True)
-        alerta_conferencia_auto = st.checkbox("🤖 Alerta Auto Conferência", value=True)
-        alerta_resultados = st.checkbox("🏁 Alertas de Resultados", value=True)
-        
-        formato_top_jogos = st.selectbox(
-            "📋 Formato do Top Jogos",
-            ["Ambos", "Texto", "Poster"],
-            index=0
+    
+    # Opções de envio em chips
+    st.markdown("<p style='color: #a0aec0; margin-top: 1rem;'>📨 Envio</p>", unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        alerta_individual = st.checkbox("🎯 Individual", value=True, key="mobile_alerta_individual")
+    with col2:
+        alerta_poster = st.checkbox("📊 Poster", value=True, key="mobile_alerta_poster")
+    with col3:
+        alerta_top_jogos = st.checkbox("🏆 Top", value=True, key="mobile_alerta_top")
+    
+    # Seleção de ligas
+    todas_ligas = st.checkbox("🌍 Todas as ligas", value=True, key="mobile_todas_ligas")
+    
+    ligas_selecionadas = []
+    if not todas_ligas:
+        ligas_selecionadas = st.multiselect(
+            "Ligas",
+            options=list(ConfigManager.LIGA_DICT.keys()),
+            default=["Campeonato Brasileiro Série A", "Premier League (Inglaterra)"],
+            key="mobile_ligas"
         )
-        
-        st.markdown("----")
-        st.header("Configurações Gerais")
-        top_n = st.selectbox("📊 Jogos no Top", [3, 5, 10], index=0)
-        estilo_poster = st.selectbox("🎨 Estilo do Poster", ["West Ham (Novo)", "Elite Master (Original)"], index=0)
-        
-        st.markdown("----")
-        data_atual_br = datetime.now().strftime("%d/%m/%Y")
-        st.info(f"Tipo de Análise: {tipo_analise}")
-        if tipo_analise == "Over/Under de Gols":
-            st.info(f"Intervalo de confiança: {min_conf}% a {max_conf}%")
-            st.info(f"Filtro: {tipo_filtro}")
-        elif tipo_analise == "Favorito (Vitória)":
-            st.info(f"Confiança Mínima: {config_analise.get('min_conf_vitoria', 65)}%")
-            st.info(f"Filtro Favorito: {config_analise.get('filtro_favorito', 'Todos')}")
-        elif tipo_analise == "Gols HT (Primeiro Tempo)":
-            st.info(f"Confiança Mínima: {config_analise.get('min_conf_ht', 60)}%")
-            st.info(f"Tipo HT: {config_analise.get('tipo_ht', 'OVER 0.5 HT')}")
-        elif tipo_analise == "Ambas Marcam (BTTS)":
-            st.info(f"Confiança Mínima: {config_analise.get('min_conf_am', 60)}%")
-            st.info(f"Filtro Ambas Marcam: {config_analise.get('filtro_am', 'Todos')}")
-        
-        st.info(f"Formato Top Jogos: {formato_top_jogos}")
-        if alerta_conferencia_auto:
-            st.info("🤖 Alerta automático: ATIVADO")
-        if alerta_resultados:
-            st.info("🏁 Alertas de resultados: ATIVADO")
     
-    # Abas principais
-    tab1, tab2, tab3, tab4 = st.tabs(["🔍 Buscar Partidas", "📊 Conferir Resultados", 
-                                   "🏆 Resultados TOP Alertas", "⚽ Alertas Completos"])
-    
-    with tab1:
-        # Controles principais
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            data_selecionada = st.date_input("📅 Data para análise:", value=datetime.today(), key="data_busca")
-        with col2:
-            todas_ligas = st.checkbox("🌍 Todas as ligas", value=True, key="todas_ligas_busca")
-        
-        ligas_selecionadas = []
-        if not todas_ligas:
-            ligas_selecionadas = st.multiselect(
-                "📌 Selecionar ligas (múltipla escolha):",
-                options=list(ConfigManager.LIGA_DICT.keys()),
-                default=["Campeonato Brasileiro Série A", "Premier League (Inglaterra)"],
-                key="ligas_busca"
-            )
-            
-            if not ligas_selecionadas:
-                st.warning("⚠️ Selecione pelo menos uma liga")
-            else:
-                st.info(f"📋 {len(ligas_selecionadas)} ligas selecionadas: {', '.join(ligas_selecionadas)}")
-        
-        # Processamento
-        data_br_selecionada = data_selecionada.strftime("%d/%m/%Y")
-        if st.button("🔍 Buscar Partidas", type="primary", key="btn_buscar"):
-            if not todas_ligas and not ligas_selecionadas:
-                st.error("❌ Selecione pelo menos uma liga ou marque 'Todas as ligas'")
-            else:
-                tipo_filtro_passar = tipo_filtro if tipo_analise == "Over/Under de Gols" else "Todos"
-                sistema.processar_jogos(data_selecionada, ligas_selecionadas, todas_ligas, top_n, 
-                                      config_analise.get("min_conf", 70), 
-                                      config_analise.get("max_conf", 95), 
-                                      estilo_poster, 
-                                      alerta_individual, alerta_poster, alerta_top_jogos, 
-                                      formato_top_jogos, tipo_filtro_passar, tipo_analise, config_analise)
-    
-    with tab2:
-        st.subheader("📊 Conferência de Resultados")
-        
-        col_data, col_btn = st.columns([2, 1])
-        with col_data:
-            data_resultados = st.date_input("📅 Data para conferência:", value=datetime.today(), key="data_resultados")
-        
-        with col_btn:
-            if st.button("🔄 Conferir Resultados", type="primary", key="btn_conferir"):
-                sistema.conferir_resultados(data_resultados)
-        
-        # Mostrar estatísticas rápidas
-        st.markdown("---")
-        st.subheader("📈 Estatísticas dos Alertas")
-        
-        col_ou, col_fav, col_ht, col_am = st.columns(4)
-        
-        with col_ou:
-            alertas_ou = DataStorage.carregar_alertas()
-            resultados_ou = DataStorage.carregar_resultados()
-            
-            total_alertas_ou = len(alertas_ou)
-            conferidos_ou = sum(1 for a in alertas_ou.values() if a.get("conferido", False))
-            greens_ou = sum(1 for r in resultados_ou.values() if r.get("resultado") == "GREEN")
-            reds_ou = sum(1 for r in resultados_ou.values() if r.get("resultado") == "RED")
-            
-            st.metric("⚽ Over/Under", f"{total_alertas_ou} alertas", f"{conferidos_ou} conferidos")
-            if greens_ou + reds_ou > 0:
-                taxa_ou = (greens_ou / (greens_ou + reds_ou)) * 100
-                st.write(f"✅ {greens_ou} | ❌ {reds_ou} | 📊 {taxa_ou:.1f}%")
-        
-        with col_fav:
-            alertas_fav = DataStorage.carregar_alertas_favoritos()
-            resultados_fav = DataStorage.carregar_resultados_favoritos()
-            
-            total_alertas_fav = len(alertas_fav)
-            conferidos_fav = sum(1 for a in alertas_fav.values() if a.get("conferido", False))
-            greens_fav = sum(1 for r in resultados_fav.values() if r.get("resultado_favorito") == "GREEN")
-            reds_fav = sum(1 for r in resultados_fav.values() if r.get("resultado_favorito") == "RED")
-            
-            st.metric("🏆 Favoritos", f"{total_alertas_fav} alertas", f"{conferidos_fav} conferidos")
-            if greens_fav + reds_fav > 0:
-                taxa_fav = (greens_fav / (greens_fav + reds_fav)) * 100
-                st.write(f"✅ {greens_fav} | ❌ {reds_fav} | 📊 {taxa_fav:.1f}%")
-        
-        with col_ht:
-            alertas_ht = DataStorage.carregar_alertas_gols_ht()
-            resultados_ht = DataStorage.carregar_resultados_gols_ht()
-            
-            total_alertas_ht = len(alertas_ht)
-            conferidos_ht = sum(1 for a in alertas_ht.values() if a.get("conferido", False))
-            greens_ht = sum(1 for r in resultados_ht.values() if r.get("resultado_ht") == "GREEN")
-            reds_ht = sum(1 for r in resultados_ht.values() if r.get("resultado_ht") == "RED")
-            
-            st.metric("⏰ Gols HT", f"{total_alertas_ht} alertas", f"{conferidos_ht} conferidos")
-            if greens_ht + reds_ht > 0:
-                taxa_ht = (greens_ht / (greens_ht + reds_ht)) * 100
-                st.write(f"✅ {greens_ht} | ❌ {reds_ht} | 📊 {taxa_ht:.1f}%")
-        
-        with col_am:
-            alertas_am = DataStorage.carregar_alertas_ambas_marcam()
-            resultados_am = DataStorage.carregar_resultados_ambas_marcam()
-            
-            total_alertas_am = len(alertas_am)
-            conferidos_am = sum(1 for a in alertas_am.values() if a.get("conferido", False))
-            greens_am = sum(1 for r in resultados_am.values() if r.get("resultado_ambas_marcam") == "GREEN")
-            reds_am = sum(1 for r in resultados_am.values() if r.get("resultado_ambas_marcam") == "RED")
-            
-            st.metric("🤝 Ambas Marcam", f"{total_alertas_am} alertas", f"{conferidos_am} conferidos")
-            if greens_am + reds_am > 0:
-                taxa_am = (greens_am / (greens_am + reds_am)) * 100
-                st.write(f"✅ {greens_am} | ❌ {reds_am} | 📊 {taxa_am:.1f}%")
-    
-    with tab3:
-        st.subheader("🏆 Conferência de Resultados TOP Alertas")
-        
-        col_data_top, col_btn_top = st.columns([2, 1])
-        with col_data_top:
-            data_resultados_top = st.date_input(
-                "📅 Data para conferência TOP:", 
-                value=datetime.today(), 
-                key="data_resultados_top"
-            )
-        
-        with col_btn_top:
-            if st.button("🏆 Conferir Resultados TOP", type="primary", key="btn_conferir_top"):
-                sistema.resultados_top.conferir_resultados_top_alertas(data_resultados_top)
-        
-        # Mostrar estatísticas dos alertas TOP
-        st.markdown("---")
-        st.subheader("📊 Estatísticas dos Alertas TOP")
-        
-        alertas_top = DataStorage.carregar_alertas_top()
-        
-        if alertas_top:
-            # Agrupar por tipo
-            top_ou = [a for a in alertas_top.values() if a.get("tipo_alerta") == "over_under"]
-            top_fav = [a for a in alertas_top.values() if a.get("tipo_alerta") == "favorito"]
-            top_ht = [a for a in alertas_top.values() if a.get("tipo_alerta") == "gols_ht"]
-            top_am = [a for a in alertas_top.values() if a.get("tipo_alerta") == "ambas_marcam"]
-            
-            col_top1, col_top2, col_top3, col_top4 = st.columns(4)
-            
-            with col_top1:
-                st.metric("⚽ TOP Over/Under", len(top_ou))
-                if top_ou:
-                    greens = sum(1 for a in top_ou if a.get("resultado") == "GREEN")
-                    reds = sum(1 for a in top_ou if a.get("resultado") == "RED")
-                    conferidos = sum(1 for a in top_ou if a.get("conferido", False))
-                    st.write(f"✅ {greens} | ❌ {reds} | 🔍 {conferidos}/{len(top_ou)}")
-            
-            with col_top2:
-                st.metric("🏆 TOP Favoritos", len(top_fav))
-                if top_fav:
-                    greens = sum(1 for a in top_fav if a.get("resultado_favorito") == "GREEN")
-                    reds = sum(1 for a in top_fav if a.get("resultado_favorito") == "RED")
-                    conferidos = sum(1 for a in top_fav if a.get("conferido", False))
-                    st.write(f"✅ {greens} | ❌ {reds} | 🔍 {conferidos}/{len(top_fav)}")
-            
-            with col_top3:
-                st.metric("⏰ TOP Gols HT", len(top_ht))
-                if top_ht:
-                    greens = sum(1 for a in top_ht if a.get("resultado_ht") == "GREEN")
-                    reds = sum(1 for a in top_ht if a.get("resultado_ht") == "RED")
-                    conferidos = sum(1 for a in top_ht if a.get("conferido", False))
-                    st.write(f"✅ {greens} | ❌ {reds} | 🔍 {conferidos}/{len(top_ht)}")
-            
-            with col_top4:
-                st.metric("🤝 TOP Ambas Marcam", len(top_am))
-                if top_am:
-                    greens = sum(1 for a in top_am if a.get("resultado_ambas_marcam") == "GREEN")
-                    reds = sum(1 for a in top_am if a.get("resultado_ambas_marcam") == "RED")
-                    conferidos = sum(1 for a in top_am if a.get("conferido", False))
-                    st.write(f"✅ {greens} | ❌ {reds} | 🔍 {conferidos}/{len(top_am)}")
-            
-            # Botão para limpar alertas TOP antigos
-            if st.button("🗑️ Limpar Alertas TOP Antigos", type="secondary"):
-                sistema._limpar_alertas_top_antigos()
+    # Botão de busca grande e chamativo
+    if st.button("🔍 BUSCAR PARTIDAS", type="primary", use_container_width=True):
+        if not todas_ligas and not ligas_selecionadas:
+            st.error("Selecione pelo menos uma liga")
         else:
-            st.info("ℹ️ Nenhum alerta TOP salvo ainda.")
-    
-    with tab4:
-        st.subheader("⚽ Alertas Completos - ALL IN ONE")
-        st.info("📊 Todas as análises (Over/Under, Favorito, Gols HT, Ambas Marcam) em um único poster por partida")
-        
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            data_completa = st.date_input("📅 Data para análise completa:", value=datetime.today(), key="data_completa")
-        with col2:
-            todas_ligas_completa = st.checkbox("🌍 Todas as ligas", value=True, key="todas_ligas_completa")
-        
-        ligas_selecionadas_completa = []
-        if not todas_ligas_completa:
-            ligas_selecionadas_completa = st.multiselect(
-                "📌 Selecionar ligas (múltipla escolha):",
-                options=list(ConfigManager.LIGA_DICT.keys()),
-                default=["Campeonato Brasileiro Série A", "Premier League (Inglaterra)"],
-                key="ligas_completa"
-            )
-            
-            if not ligas_selecionadas_completa:
-                st.warning("⚠️ Selecione pelo menos uma liga")
-        
-        if st.button("⚽ Gerar Alertas Completos", type="primary", key="btn_completo"):
-            if not todas_ligas_completa and not ligas_selecionadas_completa:
-                st.error("❌ Selecione pelo menos uma liga ou marque 'Todas as ligas'")
-            else:
-                sistema.processar_alertas_completos(data_completa, ligas_selecionadas_completa, todas_ligas_completa)
-        
-        st.markdown("---")
-        
-        # Seção de conferência de resultados completos
-        st.subheader("📊 Conferir Resultados Completos")
-        
-        col_data_comp, col_btn_comp = st.columns([2, 1])
-        with col_data_comp:
-            data_resultados_comp = st.date_input("📅 Data para conferência completa:", value=datetime.today(), key="data_resultados_comp")
-        
-        with col_btn_comp:
-            if st.button("🔄 Conferir Resultados Completos", type="primary", key="btn_conferir_comp"):
-                sistema.gerenciador_completo.conferir_resultados_completos(data_resultados_comp)
-        
-        # Mostrar estatísticas dos alertas completos
-        st.markdown("---")
-        st.subheader("📊 Estatísticas dos Alertas Completos")
-        
-        alertas_comp = sistema.gerenciador_completo.carregar_alertas()
-        if alertas_comp:
-            total = len(alertas_comp)
-            conferidos = sum(1 for a in alertas_comp.values() if a.get("conferido", False))
-            enviados = sum(1 for a in alertas_comp.values() if a.get("alerta_enviado", False))
-            
-            col_est1, col_est2, col_est3 = st.columns(3)
-            with col_est1:
-                st.metric("📋 Total Alertas", total)
-            with col_est2:
-                st.metric("✅ Conferidos", conferidos)
-            with col_est3:
-                st.metric("📤 Enviados", enviados)
-            
-            # Mostrar últimos alertas
-            with st.expander("📋 Últimos Alertas Completos"):
-                for chave, alerta in list(alertas_comp.items())[:5]:
-                    st.write(f"⚽ {alerta.get('home', '')} vs {alerta.get('away', '')}")
-                    st.write(f"   📅 {alerta.get('data_busca', '')} | 📤 Enviado: {alerta.get('alerta_enviado', False)}")
-                    st.write("   📊 Análises:")
-                    st.write(f"      ⚽ Over/Under: {alerta.get('analise_over_under', {}).get('tendencia', 'N/A')}")
-                    st.write(f"      🏆 Favorito: {alerta.get('analise_favorito', {}).get('favorito', 'N/A')}")
-                    st.write(f"      ⏰ Gols HT: {alerta.get('analise_gols_ht', {}).get('tendencia_ht', 'N/A')}")
-                    st.write(f"      🤝 Ambas Marcam: {alerta.get('analise_ambas_marcam', {}).get('tendencia_ambas_marcam', 'N/A')}")
-                    st.write("---")
-        else:
-            st.info("ℹ️ Nenhum alerta completo salvo ainda.")
-    
-    # Painel de monitoramento
-    st.markdown("---")
-    st.subheader("📊 Monitoramento da API")
-    
-    col_mon1, col_mon2, col_mon3, col_mon4 = st.columns(4)
-    
-    stats = sistema.api_monitor.get_stats()
-    with col_mon1:
-        st.metric("Total Requests", stats["total_requests"])
-    with col_mon2:
-        st.metric("Taxa de Sucesso", f"{stats['success_rate']}%")
-    with col_mon3:
-        st.metric("Requests/min", stats["requests_per_minute"])
-    with col_mon4:
-        st.metric("Rate Limit Hits", stats["rate_limit_hits"])
+            with st.spinner("Analisando partidas..."):
+                sistema.processar_jogos(
+                    data_selecionada, 
+                    ligas_selecionadas, 
+                    todas_ligas, 
+                    5,  # top_n fixo para mobile
+                    config_analise.get("min_conf", 70),
+                    config_analise.get("max_conf", 95),
+                    "West Ham (Novo)",  # estilo fixo
+                    alerta_individual, 
+                    alerta_poster, 
+                    alerta_top_jogos,
+                    "Ambos",  # formato fixo
+                    config_analise.get("tipo_filtro", "Todos"),
+                    tipo_analise_sistema,
+                    config_analise
+                )
 
+def render_tab_resultados(sistema):
+    """Renderiza a aba de resultados"""
+    
+    st.markdown("<h3 style='text-align: center; color: #FFD700;'>📊 RESULTADOS</h3>", unsafe_allow_html=True)
+    
+    # Cards de estatísticas rápidas
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        alertas_ou = DataStorage.carregar_alertas()
+        resultados_ou = DataStorage.carregar_resultados()
+        
+        greens_ou = sum(1 for r in resultados_ou.values() if r.get("resultado") == "GREEN")
+        reds_ou = sum(1 for r in resultados_ou.values() if r.get("resultado") == "RED")
+        total_ou = greens_ou + reds_ou
+        taxa_ou = (greens_ou / total_ou * 100) if total_ou > 0 else 0
+        
+        st.markdown(f"""
+        <div class="metric-container">
+            <div class="metric-value">{greens_ou}✅ {reds_ou}❌</div>
+            <div class="metric-label">⚽ Over/Under</div>
+            <div style="font-size: 0.9rem; color: #4CAF50;">{taxa_ou:.1f}% acerto</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        alertas_fav = DataStorage.carregar_alertas_favoritos()
+        resultados_fav = DataStorage.carregar_resultados_favoritos()
+        
+        greens_fav = sum(1 for r in resultados_fav.values() if r.get("resultado_favorito") == "GREEN")
+        reds_fav = sum(1 for r in resultados_fav.values() if r.get("resultado_favorito") == "RED")
+        total_fav = greens_fav + reds_fav
+        taxa_fav = (greens_fav / total_fav * 100) if total_fav > 0 else 0
+        
+        st.markdown(f"""
+        <div class="metric-container">
+            <div class="metric-value">{greens_fav}✅ {reds_fav}❌</div>
+            <div class="metric-label">🏆 Favoritos</div>
+            <div style="font-size: 0.9rem; color: #4CAF50;">{taxa_fav:.1f}% acerto</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    col3, col4 = st.columns(2)
+    
+    with col3:
+        alertas_ht = DataStorage.carregar_alertas_gols_ht()
+        resultados_ht = DataStorage.carregar_resultados_gols_ht()
+        
+        greens_ht = sum(1 for r in resultados_ht.values() if r.get("resultado_ht") == "GREEN")
+        reds_ht = sum(1 for r in resultados_ht.values() if r.get("resultado_ht") == "RED")
+        total_ht = greens_ht + reds_ht
+        taxa_ht = (greens_ht / total_ht * 100) if total_ht > 0 else 0
+        
+        st.markdown(f"""
+        <div class="metric-container">
+            <div class="metric-value">{greens_ht}✅ {reds_ht}❌</div>
+            <div class="metric-label">⏰ Gols HT</div>
+            <div style="font-size: 0.9rem; color: #4CAF50;">{taxa_ht:.1f}% acerto</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col4:
+        alertas_am = DataStorage.carregar_alertas_ambas_marcam()
+        resultados_am = DataStorage.carregar_resultados_ambas_marcam()
+        
+        greens_am = sum(1 for r in resultados_am.values() if r.get("resultado_ambas_marcam") == "GREEN")
+        reds_am = sum(1 for r in resultados_am.values() if r.get("resultado_ambas_marcam") == "RED")
+        total_am = greens_am + reds_am
+        taxa_am = (greens_am / total_am * 100) if total_am > 0 else 0
+        
+        st.markdown(f"""
+        <div class="metric-container">
+            <div class="metric-value">{greens_am}✅ {reds_am}❌</div>
+            <div class="metric-label">🤝 Ambas Marcam</div>
+            <div style="font-size: 0.9rem; color: #4CAF50;">{taxa_am:.1f}% acerto</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Seletor de data para conferência
+    st.markdown("<hr style='margin: 1.5rem 0; opacity: 0.2;'>", unsafe_allow_html=True)
+    
+    data_resultados = st.date_input(
+        "📅 Conferir resultados de:",
+        value=datetime.today(),
+        format="DD/MM/YYYY",
+        key="mobile_data_resultados"
+    )
+    
+    if st.button("🔄 CONFERIR RESULTADOS", type="primary", use_container_width=True):
+        with st.spinner("Conferindo resultados..."):
+            sistema.conferir_resultados(data_resultados)
+    
+    # Atalho para TOP Alertas
+    st.markdown("<hr style='margin: 1.5rem 0; opacity: 0.2;'>", unsafe_allow_html=True)
+    
+    col_top1, col_top2 = st.columns(2)
+    with col_top1:
+        if st.button("🏆 TOP Alertas", use_container_width=True):
+            st.session_state.current_tab = 'completos'
+            st.rerun()
+    with col_top2:
+        if st.button("📊 Ver Todos", use_container_width=True):
+            st.info("Em desenvolvimento...")
+
+def render_tab_completos(sistema):
+    """Renderiza a aba de alertas completos"""
+    
+    st.markdown("<h3 style='text-align: center; color: #FFD700;'>⚽ ALERTAS COMPLETOS</h3>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #a0aec0; font-size: 0.9rem;'>Todas as análises em um só lugar</p>", unsafe_allow_html=True)
+    
+    # Seletor de data
+    data_completa = st.date_input(
+        "📅 Data",
+        value=datetime.today(),
+        format="DD/MM/YYYY",
+        key="mobile_data_completa"
+    )
+    
+    # Opção de todas as ligas
+    todas_ligas = st.checkbox("🌍 Todas as ligas", value=True, key="mobile_completa_todas")
+    
+    ligas_selecionadas = []
+    if not todas_ligas:
+        ligas_selecionadas = st.multiselect(
+            "Selecionar ligas",
+            options=list(ConfigManager.LIGA_DICT.keys()),
+            default=["Campeonato Brasileiro Série A"],
+            key="mobile_completa_ligas"
+        )
+    
+    # Botão principal
+    if st.button("⚽ GERAR ALERTAS COMPLETOS", type="primary", use_container_width=True):
+        if not todas_ligas and not ligas_selecionadas:
+            st.error("Selecione pelo menos uma liga")
+        else:
+            with st.spinner("Gerando alertas completos..."):
+                sistema.processar_alertas_completos(data_completa, ligas_selecionadas, todas_ligas)
+    
+    # Seção de resultados completos
+    st.markdown("<hr style='margin: 2rem 0; opacity: 0.2;'>", unsafe_allow_html=True)
+    st.markdown("<h4 style='color: #FFD700;'>📋 Resultados Completos</h4>", unsafe_allow_html=True)
+    
+    data_resultados_comp = st.date_input(
+        "Conferir resultados de:",
+        value=datetime.today(),
+        format="DD/MM/YYYY",
+        key="mobile_data_resultados_comp",
+        label_visibility="collapsed"
+    )
+    
+    if st.button("🔄 CONFERIR RESULTADOS COMPLETOS", use_container_width=True):
+        with st.spinner("Conferindo resultados..."):
+            sistema.gerenciador_completo.conferir_resultados_completos(data_resultados_comp)
+    
+    # Estatísticas dos alertas completos
+    alertas_comp = sistema.gerenciador_completo.carregar_alertas()
+    if alertas_comp:
+        st.markdown("<hr style='margin: 1.5rem 0; opacity: 0.2;'>", unsafe_allow_html=True)
+        
+        total = len(alertas_comp)
+        conferidos = sum(1 for a in alertas_comp.values() if a.get("conferido", False))
+        enviados = sum(1 for a in alertas_comp.values() if a.get("alerta_enviado", False))
+        
+        col1, col2, col3 = st.columns(3)
+        col1.metric("📋 Total", total)
+        col2.metric("✅ Conferidos", conferidos)
+        col3.metric("📤 Enviados", enviados)
+
+def render_tab_stats(sistema):
+    """Renderiza a aba de estatísticas e monitoramento"""
+    
+    st.markdown("<h3 style='text-align: center; color: #FFD700;'>📊 ESTATÍSTICAS</h3>", unsafe_allow_html=True)
+    
+    # Estatísticas da API
+    stats = sistema.api_monitor.get_stats()
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown(f"""
+        <div class="metric-container" style="margin-bottom: 1rem;">
+            <div class="metric-value">{stats['total_requests']}</div>
+            <div class="metric-label">Total de Requests</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown(f"""
+        <div class="metric-container" style="margin-bottom: 1rem;">
+            <div class="metric-value">{stats['success_rate']}%</div>
+            <div class="metric-label">Taxa de Sucesso</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    col3, col4 = st.columns(2)
+    with col3:
+        st.markdown(f"""
+        <div class="metric-container" style="margin-bottom: 1rem;">
+            <div class="metric-value">{stats['requests_per_minute']}</div>
+            <div class="metric-label">Requests/min</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col4:
+        st.markdown(f"""
+        <div class="metric-container" style="margin-bottom: 1rem;">
+            <div class="metric-value">{stats['rate_limit_hits']}</div>
+            <div class="metric-label">Rate Limit Hits</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Estatísticas do cache
+    st.markdown("<h4 style='color: #FFD700; margin-top: 2rem;'>💾 Cache</h4>", unsafe_allow_html=True)
+    
+    cache_stats = sistema.image_cache.get_stats()
+    
+    col_c1, col_c2 = st.columns(2)
+    with col_c1:
+        st.markdown(f"""
+        <div class="metric-container">
+            <div class="metric-value">{cache_stats['memoria']}</div>
+            <div class="metric-label">Imagens em Memória</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col_c2:
+        st.markdown(f"""
+        <div class="metric-container">
+            <div class="metric-value">{cache_stats['disco_mb']:.1f}MB</div>
+            <div class="metric-label">Cache em Disco</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Informações do sistema
+    st.markdown("<h4 style='color: #FFD700; margin-top: 2rem;'>ℹ️ Sistema</h4>", unsafe_allow_html=True)
+    
+    uptime_min = stats['uptime_minutes']
+    uptime_str = f"{int(uptime_min // 60)}h {int(uptime_min % 60)}m" if uptime_min > 60 else f"{int(uptime_min)}m"
+    
+    st.markdown(f"""
+    <div style="background: rgba(25,35,45,0.7); border-radius: 15px; padding: 1rem;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+            <span style="color: #a0aec0;">Versão</span>
+            <span style="color: white;">2.0.0</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+            <span style="color: #a0aec0;">Uptime</span>
+            <span style="color: white;">{uptime_str}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+            <span style="color: #a0aec0;">Última atualização</span>
+            <span style="color: white;">{datetime.now().strftime('%H:%M')}</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Botões de ação
+    st.markdown("<hr style='margin: 2rem 0; opacity: 0.2;'>", unsafe_allow_html=True)
+    
+    col_b1, col_b2 = st.columns(2)
+    with col_b1:
+        if st.button("🗑️ Limpar Cache", use_container_width=True):
+            sistema.image_cache.clear()
+            st.success("Cache limpo!")
+            st.rerun()
+    
+    with col_b2:
+        if st.button("🔄 Reset Stats", use_container_width=True):
+            sistema.api_monitor.reset()
+            st.success("Estatísticas resetadas!")
+            st.rerun()
+
+# Sobrescrever a função main original
+# (A main original será substituída por esta nova versão quando o arquivo for executado)
 
 if __name__ == "__main__":
     main()
