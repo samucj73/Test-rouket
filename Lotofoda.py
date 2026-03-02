@@ -79,59 +79,97 @@ def convert_numpy_types(obj):
         return obj
 
 # =====================================================
-# FUNÇÃO PARA EXTRAIR DEZENAS DE UM JOGO (BLINDAGEM)
+# FUNÇÃO PARA NORMALIZAR JOGOS (DEFINITIVA)
 # =====================================================
-def extrair_dezenas(jogo):
+def normalizar_jogos(jogos_brutos):
     """
-    Extrai as dezenas de um jogo independente do formato
-    Suporta: lista, dict com chave 'dezenas', dict com chave 'jogo'
+    Converte qualquer formato de jogo para lista de listas de inteiros
+    Suporta: DataFrame, lista de dicts, lista de strings, lista de listas
     """
-    if isinstance(jogo, (list, tuple)):
-        return list(jogo)
-    elif isinstance(jogo, dict):
-        if "dezenas" in jogo:
-            return jogo["dezenas"]
-        elif "jogo" in jogo:
-            return jogo["jogo"]
-        elif "numeros" in jogo:
-            return jogo["numeros"]
-        else:
-            # Se for dict mas não tem chave conhecida, tenta pegar o primeiro valor que é lista
-            for v in jogo.values():
-                if isinstance(v, (list, tuple)) and len(v) == 15:
-                    return list(v)
-    # Se não conseguir extrair, retorna lista vazia
-    return []
+    jogos_normalizados = []
+
+    # Caso 1: É um DataFrame do pandas
+    if isinstance(jogos_brutos, pd.DataFrame):
+        for _, row in jogos_brutos.iterrows():
+            # Procurar coluna que contém as dezenas
+            for col in row.index:
+                valor = row[col]
+                if isinstance(valor, str) and "," in valor:
+                    # É uma string com vírgulas
+                    dezenas = [int(d.strip()) for d in valor.split(",")]
+                    jogos_normalizados.append(sorted(dezenas))
+                    break
+                elif isinstance(valor, list):
+                    # Já é uma lista
+                    jogos_normalizados.append(sorted(valor))
+                    break
+        return jogos_normalizados
+
+    # Caso 2: É uma lista
+    if isinstance(jogos_brutos, list):
+        for item in jogos_brutos:
+            # 2.1: Item é dicionário
+            if isinstance(item, dict):
+                # Procurar chave que contém as dezenas
+                for chave in ["dezenas", "Dezenas", "jogo", "Jogo", "numeros", "Numeros"]:
+                    if chave in item:
+                        valor = item[chave]
+                        if isinstance(valor, str):
+                            dezenas = [int(d.strip()) for d in valor.split(",")]
+                            jogos_normalizados.append(sorted(dezenas))
+                            break
+                        elif isinstance(valor, list):
+                            jogos_normalizados.append(sorted(valor))
+                            break
+            
+            # 2.2: Item é string
+            elif isinstance(item, str):
+                if "," in item:
+                    dezenas = [int(d.strip()) for d in item.split(",")]
+                    jogos_normalizados.append(sorted(dezenas))
+                else:
+                    # Tentar interpretar como números separados por espaço
+                    dezenas = [int(d) for d in item.split()]
+                    jogos_normalizados.append(sorted(dezenas))
+            
+            # 2.3: Item já é lista
+            elif isinstance(item, (list, tuple)):
+                jogos_normalizados.append(sorted([int(x) for x in item]))
+
+    # Caso 3: Fallback - retorna o original se já estiver no formato correto
+    if not jogos_normalizados and jogos_brutos:
+        # Verificar se já está no formato correto
+        if isinstance(jogos_brutos[0], list) and len(jogos_brutos[0]) == 15:
+            return jogos_brutos
+
+    return jogos_normalizados
 
 # =====================================================
-# FUNÇÃO PARA NORMALIZAR FECHAMENTOS ANTIGOS
+# FUNÇÃO PARA VALIDAR JOGOS NORMALIZADOS
 # =====================================================
-def normalizar_fechamento(fechamento):
-    """
-    Normaliza um fechamento para o formato padrão
-    """
-    if "jogos" not in fechamento:
-        return fechamento
+def validar_jogos_normalizados(jogos):
+    """Valida se todos os jogos estão no formato correto"""
+    if not isinstance(jogos, list):
+        return False, "jogos não é uma lista"
     
-    jogos_normalizados = []
-    for jogo in fechamento["jogos"]:
-        if isinstance(jogo, (list, tuple)):
-            jogos_normalizados.append({
-                "id": len(jogos_normalizados) + 1,
-                "dezenas": list(jogo),
-                "formato_original": "lista"
-            })
-        elif isinstance(jogo, dict):
-            dezenas = extrair_dezenas(jogo)
-            if dezenas:
-                jogos_normalizados.append({
-                    "id": len(jogos_normalizados) + 1,
-                    "dezenas": dezenas,
-                    "formato_original": "dict"
-                })
+    if len(jogos) == 0:
+        return False, "lista de jogos vazia"
     
-    fechamento["jogos"] = jogos_normalizados
-    return fechamento
+    for i, jogo in enumerate(jogos):
+        if not isinstance(jogo, list):
+            return False, f"jogo {i+1} não é uma lista"
+        
+        if len(jogo) != 15:
+            return False, f"jogo {i+1} tem {len(jogo)} números (deveria ter 15)"
+        
+        if len(set(jogo)) != 15:
+            return False, f"jogo {i+1} tem números duplicados"
+        
+        for num in jogo:
+            if not isinstance(num, int) or num < 1 or num > 25:
+                return False, f"jogo {i+1} contém número inválido: {num}"
+    
+    return True, "OK"
 
 # =====================================================
 # FUNÇÕES DE ARQUIVO LOCAL
@@ -149,7 +187,7 @@ def salvar_jogos_gerados(jogos, fechamento, dna_params, numero_concurso_atual, d
         # Converter todos os numpy types para tipos nativos
         jogos_convertidos = convert_numpy_types(jogos)
         
-        # Garantir que cada jogo é uma lista simples
+        # Garantir que cada jogo é uma lista simples de inteiros
         jogos_final = []
         for jogo in jogos_convertidos:
             if isinstance(jogo, (list, tuple)):
@@ -165,19 +203,11 @@ def salvar_jogos_gerados(jogos, fechamento, dna_params, numero_concurso_atual, d
                             jogo_lista.append(novo)
                     jogo_lista.sort()
                 
-                # Salvar como dict estruturado
-                jogos_final.append({
-                    "id": len(jogos_final) + 1,
-                    "dezenas": jogo_lista,
-                    "formato": "padrao"
-                })
+                # Salvar no formato padronizado (lista de inteiros)
+                jogos_final.append(jogo_lista)
             else:
                 # Se não for lista, tentar converter
-                jogos_final.append({
-                    "id": len(jogos_final) + 1,
-                    "dezenas": [int(n) for n in range(1, 16)],  # fallback
-                    "formato": "fallback"
-                })
+                jogos_final.append([int(n) for n in range(1, 16)])  # fallback
         
         fechamento_convertido = convert_numpy_types(fechamento)
         dna_convertido = convert_numpy_types(dna_params) if dna_params else {}
@@ -192,11 +222,11 @@ def salvar_jogos_gerados(jogos, fechamento, dna_params, numero_concurso_atual, d
             },
             "fechamento_base": fechamento_convertido,
             "dna_params": dna_convertido,
-            "jogos": jogos_final,
+            "jogos": jogos_final,  # Agora é lista de listas de inteiros
             "estatisticas": estatisticas_convertidas,
             "conferido": False,
             "conferencias": [],
-            "schema_version": "2.0"  # Versão do schema para futura compatibilidade
+            "schema_version": "3.0"  # Versão do schema para futura compatibilidade
         }
         
         with open(nome_arquivo, 'w', encoding='utf-8') as f:
@@ -208,7 +238,7 @@ def salvar_jogos_gerados(jogos, fechamento, dna_params, numero_concurso_atual, d
         return None, None
 
 def carregar_jogos_salvos():
-    """Carrega todos os jogos salvos e normaliza se necessário"""
+    """Carrega todos os jogos salvos"""
     jogos_salvos = []
     try:
         if os.path.exists("jogos_salvos"):
@@ -223,10 +253,6 @@ def carregar_jogos_salvos():
                                 dados["conferencias"] = []
                             if "estatisticas" not in dados:
                                 dados["estatisticas"] = {}
-                            
-                            # Normalizar jogos antigos se necessário
-                            dados = normalizar_fechamento(dados)
-                            
                             dados["arquivo"] = arquivo
                             jogos_salvos.append(dados)
                     except Exception as e:
@@ -630,9 +656,21 @@ def formatar_jogo_html(jogo, destaque_primos=True):
     """Formata um jogo em HTML com cores"""
     primos = [2, 3, 5, 7, 11, 13, 17, 19, 23]
     
-    # Extrair dezenas se for dict
+    # Garantir que jogo é uma lista de inteiros
     if isinstance(jogo, dict):
-        dezenas = extrair_dezenas(jogo)
+        # Tentar extrair dezenas do dict
+        for chave in ["dezenas", "Dezenas", "jogo", "Jogo"]:
+            if chave in jogo:
+                dezenas = jogo[chave]
+                break
+        else:
+            dezenas = []
+    elif isinstance(jogo, str):
+        # Converter string para lista
+        if "," in jogo:
+            dezenas = [int(d.strip()) for d in jogo.split(",")]
+        else:
+            dezenas = [int(d) for d in jogo.split()]
     else:
         dezenas = jogo
     
@@ -1485,18 +1523,27 @@ def main():
                 )
 
                 fechamento = st.session_state.jogos_salvos[idx]
-                jogos = fechamento["jogos"]
+                jogos_brutos = fechamento["jogos"]
 
+                # =========================
+                # NORMALIZAÇÃO DOS JOGOS (CORREÇÃO DEFINITIVA)
+                # =========================
+                jogos = normalizar_jogos(jogos_brutos)
+                
                 # =========================
                 # BLINDAGEM TOTAL
                 # =========================
-                assert isinstance(jogos, list), "ERRO: jogos não é lista"
-                assert len(jogos) > 0, "ERRO: fechamento vazio"
+                valido, mensagem = validar_jogos_normalizados(jogos)
+                if not valido:
+                    st.error(f"❌ Erro na estrutura dos jogos: {mensagem}")
+                    st.stop()
                 
                 # Debug visual (opcional - comentar em produção)
-                st.caption(f"📦 Estrutura detectada: {type(jogos[0]).__name__}")
-                if isinstance(jogos[0], dict):
-                    st.caption(f"🔍 Chaves disponíveis: {list(jogos[0].keys())}")
+                with st.expander("🔍 Debug - Estrutura dos Jogos", expanded=False):
+                    st.write(f"**Tipo original:** {type(jogos_brutos).__name__}")
+                    st.write(f"**Tipo após normalização:** {type(jogos).__name__}")
+                    st.write(f"**Quantidade de jogos:** {len(jogos)}")
+                    st.write(f"**Primeiro jogo (exemplo):** {jogos[0] if jogos else 'N/A'}")
 
                 st.markdown(f"""
                 <div class='concurso-info'>
@@ -1523,20 +1570,13 @@ def main():
                 st.markdown(formatar_jogo_html(dezenas_sorteadas), unsafe_allow_html=True)
 
                 # =========================
-                # CONFERÊNCIA (CORRIGIDA E BLINDADA)
+                # CONFERÊNCIA (SIMPLIFICADA E ROBUSTA)
                 # =========================
                 if st.button("🔍 CONFERIR FECHAMENTO", type="primary", use_container_width=True):
                     resultados = []
                     distribuicao = Counter()
 
-                    for i, jogo in enumerate(jogos):
-                        # 🔐 Blindagem estrutural - extrai dezenas independente do formato
-                        dezenas_jogo = extrair_dezenas(jogo)
-                        
-                        if not dezenas_jogo:
-                            st.warning(f"⚠️ Jogo {i+1} ignorado: formato não reconhecido")
-                            continue
-                        
+                    for i, dezenas_jogo in enumerate(jogos):
                         acertos = len(set(dezenas_jogo) & dezenas_set)
                         distribuicao[acertos] += 1
                         resultados.append({
