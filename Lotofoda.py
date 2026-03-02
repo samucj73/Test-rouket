@@ -979,6 +979,10 @@ def main():
         st.session_state.jogos_3622 = None
     if "diagnosticos_3622" not in st.session_state:
         st.session_state.diagnosticos_3622 = None
+    if "jogos_otimizados" not in st.session_state:
+        st.session_state.jogos_otimizados = None
+    if "logs_otimizados" not in st.session_state:
+        st.session_state.logs_otimizados = None
 
     # ================= SIDEBAR =================
     with st.sidebar:
@@ -1277,48 +1281,249 @@ def main():
             if not jogos_gerados:
                 st.warning("⚠️ Gere jogos na aba 'Fechamento 3622' primeiro para avaliá-los estatisticamente!")
                 st.info("💡 Os jogos gerados são salvos automaticamente e ficam disponíveis em todas as abas.")
-            else:
-                # BASELINE CORRETO (interseção 15×15)
+            
+            # BASELINE CORRETO (interseção 15×15)
+            baseline = st.session_state.baseline_cache or baseline_aleatorio()
+            
+            with st.expander("🎲 Baseline Estatístico (H₀)", expanded=False):
+                st.markdown(f"""
+                **Modelo nulo:** {baseline['descricao']}  
+                **Média de acertos esperada:** {baseline['media']:.3f}  
+                **Desvio padrão:** {baseline['std']:.3f}  
+                """)
+                
+                # Gráfico da distribuição baseline
+                baseline_dist = pd.DataFrame({
+                    "Acertos": range(16),
+                    "Probabilidade": baseline['dist']
+                })
+                st.bar_chart(baseline_dist.set_index("Acertos"))
+            
+            # Distribuições empíricas
+            st.markdown("### 📈 Distribuições Empíricas")
+            dist = distribuicoes_empiricas(st.session_state.historico_df)
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("**Pares x Ímpares**")
+                pares_df = pd.DataFrame({
+                    "Quantidade": list(dist['pares'].keys()),
+                    "Probabilidade": list(dist['pares'].values())
+                }).sort_values("Quantidade")
+                st.bar_chart(pares_df.set_index("Quantidade"))
+            
+            with col2:
+                st.markdown("**Números Primos**")
+                primos_df = pd.DataFrame({
+                    "Quantidade": list(dist['primos'].keys()),
+                    "Probabilidade": list(dist['primos'].values())
+                }).sort_values("Quantidade")
+                st.bar_chart(primos_df.set_index("Quantidade"))
+            
+            # =====================================================
+            # 🎲 GERADOR OTIMIZADO PELO MOTOR ESTATÍSTICO
+            # =====================================================
+            st.markdown("---")
+            st.markdown("## 🎲 Gerador Otimizado pelo Motor Estatístico")
+            st.caption("5 jogos gerados com base nas distribuições empíricas e features históricas")
+            
+            col1, col2, col3 = st.columns([1, 1, 1])
+            with col2:
+                if st.button("🚀 GERAR 5 JOGOS OTIMIZADOS", use_container_width=True, type="primary"):
+                    with st.spinner("Gerando jogos com base nas distribuições estatísticas..."):
+                        
+                        # =========================================
+                        # FUNÇÃO INTERNA PARA GERAR JOGO OTIMIZADO
+                        # =========================================
+                        def gerar_jogo_otimizado(dist, historico_df):
+                            """
+                            Gera um jogo otimizado usando as distribuições empíricas
+                            """
+                            max_tentativas = 10000
+                            melhor_jogo = None
+                            melhor_logL = -float('inf')
+                            
+                            for tentativa in range(max_tentativas):
+                                # GERAR JOGO ALEATÓRIO BASE
+                                jogo_candidato = sorted(random.sample(range(1, 26), 15))
+                                
+                                # CALCULAR FEATURES
+                                features = {
+                                    "pares": contar_pares(jogo_candidato),
+                                    "primos": contar_primos(jogo_candidato),
+                                    "consecutivos": contar_consecutivos(jogo_candidato),
+                                    "soma": bucket_soma(sum(jogo_candidato))
+                                }
+                                
+                                # CALCULAR LIKELIHOOD
+                                logL = log_likelihood(features, dist)
+                                
+                                # MANTER O MELHOR
+                                if logL > melhor_logL:
+                                    melhor_logL = logL
+                                    melhor_jogo = jogo_candidato
+                            
+                            return melhor_jogo, melhor_logL
+                        
+                        # =========================================
+                        # GERAR 5 JOGOS OTIMIZADOS
+                        # =========================================
+                        jogos_otimizados = []
+                        logs_otimizados = []
+                        
+                        for i in range(5):
+                            jogo, logL = gerar_jogo_otimizado(dist, st.session_state.historico_df)
+                            if jogo:
+                                jogos_otimizados.append(jogo)
+                                logs_otimizados.append(logL)
+                        
+                        # SALVAR NA SESSÃO
+                        st.session_state.jogos_otimizados = jogos_otimizados
+                        st.session_state.logs_otimizados = logs_otimizados
+                        
+                        st.success(f"✅ 5 jogos gerados com sucesso! Log-likelihood médio: {np.mean(logs_otimizados):.4f}")
+            
+            # MOSTRAR JOGOS OTIMIZADOS SE EXISTIREM
+            if "jogos_otimizados" in st.session_state and st.session_state.jogos_otimizados:
+                jogos_otimizados = st.session_state.jogos_otimizados
+                logs_otimizados = st.session_state.logs_otimizados
+                
+                st.markdown("### 📊 Jogos Otimizados pelo Motor Estatístico")
+                
+                # COMPARAR COM BASELINE
                 baseline = st.session_state.baseline_cache or baseline_aleatorio()
                 
-                with st.expander("🎲 Baseline Estatístico (H₀)", expanded=False):
-                    st.markdown(f"""
-                    **Modelo nulo:** {baseline['descricao']}  
-                    **Média de acertos esperada:** {baseline['media']:.3f}  
-                    **Desvio padrão:** {baseline['std']:.3f}  
-                    """)
-                    
-                    # Gráfico da distribuição baseline
-                    baseline_dist = pd.DataFrame({
-                        "Acertos": range(16),
-                        "Probabilidade": baseline['dist']
-                    })
-                    st.bar_chart(baseline_dist.set_index("Acertos"))
+                # CALCULAR PERCENTIS RELATIVOS AO BASELINE
+                percentis = []
+                for jogo in jogos_otimizados:
+                    # Simular probabilidade de acertos via Monte Carlo rápido
+                    mc_fast = monte_carlo_jogo(tuple(jogo), 5000)  # Rápido para não travar
+                    percentis.append(mc_fast["P>=11"] * 100)
                 
-                # Distribuições empíricas
-                st.markdown("### 📈 Distribuições Empíricas")
-                dist = distribuicoes_empiricas(st.session_state.historico_df)
+                # MOSTrar cada jogo
+                for i, (jogo, logL, pct) in enumerate(zip(jogos_otimizados, logs_otimizados, percentis)):
+                    with st.container():
+                        # Calcular features para exibição
+                        features_jogo = {
+                            "pares": contar_pares(jogo),
+                            "primos": contar_primos(jogo),
+                            "consecutivos": contar_consecutivos(jogo),
+                            "soma": sum(jogo)
+                        }
+                        
+                        # Determinar cor baseada no logL
+                        if logL > np.percentile(logs_otimizados, 80):
+                            cor = "#4ade80"  # Verde (excelente)
+                        elif logL > np.percentile(logs_otimizados, 50):
+                            cor = "gold"      # Amarelo (bom)
+                        else:
+                            cor = "#4cc9f0"   # Azul (médio)
+                        
+                        # HTML do jogo
+                        nums_html = formatar_jogo_html(jogo)
+                        
+                        st.markdown(f"""
+                        <div style='border-left: 5px solid {cor}; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
+                            <div style='display:flex; justify-content:space-between;'>
+                                <strong>Jogo Otimizado #{i+1}</strong>
+                                <small>LogL: {logL:.4f}</small>
+                            </div>
+                            <div>{nums_html}</div>
+                            <div style='display:flex; gap:15px; margin-top:8px; color:#aaa; font-size:0.9em; flex-wrap:wrap;'>
+                                <span>⚖️ {features_jogo['pares']} pares</span>
+                                <span>🔢 {features_jogo['primos']} primos</span>
+                                <span>🔗 {features_jogo['consecutivos']} consec</span>
+                                <span>➕ {features_jogo['soma']}</span>
+                                <span>🎯 P(≥11): {pct:.1f}%</span>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
                 
-                col1, col2 = st.columns(2)
+                # BOTÕES DE AÇÃO PARA JOGOS OTIMIZADOS
+                col1, col2, col3 = st.columns(3)
                 with col1:
-                    st.markdown("**Pares x Ímpares**")
-                    pares_df = pd.DataFrame({
-                        "Quantidade": list(dist['pares'].keys()),
-                        "Probabilidade": list(dist['pares'].values())
-                    }).sort_values("Quantidade")
-                    st.bar_chart(pares_df.set_index("Quantidade"))
+                    if st.button("💾 Salvar Jogos Otimizados", use_container_width=True):
+                        if st.session_state.dados_api:
+                            ultimo = st.session_state.dados_api[0]
+                            arquivo, jogo_id = salvar_jogos_gerados(
+                                jogos_otimizados,
+                                list(range(1, 18)),
+                                {"modelo": "Motor Estatístico", "tipo": "otimizado"},
+                                ultimo['concurso'],
+                                ultimo['data']
+                            )
+                            if arquivo:
+                                st.success(f"✅ Jogos otimizados salvos! ID: {jogo_id}")
+                                st.session_state.jogos_salvos = carregar_jogos_salvos()
                 
                 with col2:
-                    st.markdown("**Números Primos**")
-                    primos_df = pd.DataFrame({
-                        "Quantidade": list(dist['primos'].keys()),
-                        "Probabilidade": list(dist['primos'].values())
-                    }).sort_values("Quantidade")
-                    st.bar_chart(primos_df.set_index("Quantidade"))
+                    if st.button("🔄 Nova Geração", use_container_width=True):
+                        st.session_state.jogos_otimizados = None
+                        st.rerun()
                 
-                # AVALIAÇÃO DOS JOGOS (Likelihood com pesos)
-                st.markdown("### 🎯 Ranking Estatístico dos Jogos")
+                with col3:
+                    # Exportar para CSV
+                    df_export_otimizado = pd.DataFrame({
+                        "Jogo": range(1, len(jogos_otimizados)+1),
+                        "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in jogos_otimizados],
+                        "Pares": [contar_pares(j) for j in jogos_otimizados],
+                        "Primos": [contar_primos(j) for j in jogos_otimizados],
+                        "Consecutivos": [contar_consecutivos(j) for j in jogos_otimizados],
+                        "Soma": [sum(j) for j in jogos_otimizados],
+                        "Log-Likelihood": [round(l, 4) for l in logs_otimizados],
+                        "P(≥11)": [f"{p:.1f}%" for p in percentis]
+                    })
+                    
+                    csv_otimizado = df_export_otimizado.to_csv(index=False)
+                    st.download_button(
+                        label="📥 Exportar CSV",
+                        data=csv_otimizado,
+                        file_name=f"jogos_otimizados_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        mime="text/csv",
+                        use_container_width=True
+                    )
                 
+                # COMPARAÇÃO COM BASELINE
+                st.markdown("### 📊 Análise Comparativa")
+                
+                # Calcular médias dos jogos otimizados
+                media_pares = np.mean([contar_pares(j) for j in jogos_otimizados])
+                media_primos = np.mean([contar_primos(j) for j in jogos_otimizados])
+                media_consec = np.mean([contar_consecutivos(j) for j in jogos_otimizados])
+                media_soma = np.mean([sum(j) for j in jogos_otimizados])
+                
+                # Calcular médias históricas
+                hist_pares = st.session_state.historico_df["pares"].mean()
+                hist_primos = st.session_state.historico_df["primos"].mean()
+                hist_consec = st.session_state.historico_df["consecutivos"].mean()
+                hist_soma = st.session_state.historico_df["soma"].mean()
+                
+                # Criar DataFrame comparativo
+                df_comp = pd.DataFrame({
+                    "Feature": ["Pares", "Primos", "Consecutivos", "Soma"],
+                    "Jogos Otimizados": [media_pares, media_primos, media_consec, media_soma],
+                    "Média Histórica": [hist_pares, hist_primos, hist_consec, hist_soma]
+                })
+                
+                st.dataframe(df_comp, use_container_width=True, hide_index=True)
+                
+                # Probabilidade média de acertos
+                st.markdown("### 🎯 Probabilidade Média de Acertos")
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("P(≥11) média", f"{np.mean(percentis):.1f}%")
+                with col2:
+                    st.metric("P(≥12) média", "---")
+                with col3:
+                    st.metric("vs Baseline", f"{np.mean(percentis) - baseline['media']*100:.1f}%")
+                
+                st.markdown("---")
+            
+            # AVALIAÇÃO DOS JOGOS (Likelihood com pesos)
+            st.markdown("### 🎯 Ranking Estatístico dos Jogos")
+            
+            if jogos_gerados:
                 avaliacao = []
                 for i, jogo in enumerate(jogos_gerados):
                     features = {
@@ -1392,7 +1597,6 @@ def main():
                 with col3:
                     st.metric("p-value", f"{p_value:.6f}")
                 
-                # CORREÇÃO: Substituir st.success, st.warning, st.info por st.markdown com HTML
                 if z > 1.96:
                     st.markdown("""
                     <div style='background:#00ff0020; padding:15px; border-radius:10px; border-left:5px solid #00ff00; margin:10px 0;'>
@@ -1608,6 +1812,8 @@ def main():
                     st.metric("Score médio", f"{df_avaliacao['Score (0-100)'].mean():.1f}")
                 with col3:
                     st.metric("Melhor score", f"{df_avaliacao['Score (0-100)'].max():.1f}")
+            else:
+                st.info("👆 Gere jogos na aba 'Fechamento 3622' primeiro para ver o ranking estatístico.")
 
         with tab4:
             st.subheader("📋 Todos os Concursos Carregados")
