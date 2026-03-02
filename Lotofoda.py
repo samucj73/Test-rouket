@@ -1221,10 +1221,10 @@ def main():
                             </div>
                             """, unsafe_allow_html=True)
                     
-                    # Botões de ação
+                    # Botões de ação - CORRIGIDO COM KEYS ÚNICAS
                     col1, col2, col3 = st.columns(3)
                     with col1:
-                        if st.button("💾 Salvar Jogos", use_container_width=True):
+                        if st.button("💾 Salvar Jogos", key="salvar_3622", use_container_width=True):
                             arquivo, jogo_id = salvar_jogos_gerados(
                                 jogos, 
                                 list(range(1, 18)),  # Fechamento placeholder
@@ -1237,7 +1237,7 @@ def main():
                                 st.session_state.jogos_salvos = carregar_jogos_salvos()
                     
                     with col2:
-                        if st.button("🔄 Nova Geração", use_container_width=True):
+                        if st.button("🔄 Nova Geração", key="nova_geracao_3622", use_container_width=True):
                             st.session_state.jogos_3622 = None
                             st.session_state.diagnosticos_3622 = None
                             st.session_state.mc_resultados = None
@@ -1329,7 +1329,7 @@ def main():
             
             col1, col2, col3 = st.columns([1, 1, 1])
             with col2:
-                if st.button("🚀 GERAR 5 JOGOS OTIMIZADOS", use_container_width=True, type="primary"):
+                if st.button("🚀 GERAR 5 JOGOS OTIMIZADOS", key="gerar_otimizados", use_container_width=True, type="primary"):
                     with st.spinner("Gerando jogos com base nas distribuições estatísticas..."):
                         
                         # =========================================
@@ -1439,10 +1439,10 @@ def main():
                         </div>
                         """, unsafe_allow_html=True)
                 
-                # BOTÕES DE AÇÃO PARA JOGOS OTIMIZADOS
+                # BOTÕES DE AÇÃO PARA JOGOS OTIMIZADOS - CORRIGIDO COM KEYS ÚNICAS
                 col1, col2, col3 = st.columns(3)
                 with col1:
-                    if st.button("💾 Salvar Jogos Otimizados", use_container_width=True):
+                    if st.button("💾 Salvar Jogos Otimizados", key="salvar_otimizados", use_container_width=True):
                         if st.session_state.dados_api:
                             ultimo = st.session_state.dados_api[0]
                             arquivo, jogo_id = salvar_jogos_gerados(
@@ -1457,7 +1457,7 @@ def main():
                                 st.session_state.jogos_salvos = carregar_jogos_salvos()
                 
                 with col2:
-                    if st.button("🔄 Nova Geração", use_container_width=True):
+                    if st.button("🔄 Nova Geração", key="nova_geracao_otimizados", use_container_width=True):
                         st.session_state.jogos_otimizados = None
                         st.rerun()
                 
