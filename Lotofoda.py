@@ -79,6 +79,61 @@ def convert_numpy_types(obj):
         return obj
 
 # =====================================================
+# FUNÇÃO PARA EXTRAIR DEZENAS DE UM JOGO (BLINDAGEM)
+# =====================================================
+def extrair_dezenas(jogo):
+    """
+    Extrai as dezenas de um jogo independente do formato
+    Suporta: lista, dict com chave 'dezenas', dict com chave 'jogo'
+    """
+    if isinstance(jogo, (list, tuple)):
+        return list(jogo)
+    elif isinstance(jogo, dict):
+        if "dezenas" in jogo:
+            return jogo["dezenas"]
+        elif "jogo" in jogo:
+            return jogo["jogo"]
+        elif "numeros" in jogo:
+            return jogo["numeros"]
+        else:
+            # Se for dict mas não tem chave conhecida, tenta pegar o primeiro valor que é lista
+            for v in jogo.values():
+                if isinstance(v, (list, tuple)) and len(v) == 15:
+                    return list(v)
+    # Se não conseguir extrair, retorna lista vazia
+    return []
+
+# =====================================================
+# FUNÇÃO PARA NORMALIZAR FECHAMENTOS ANTIGOS
+# =====================================================
+def normalizar_fechamento(fechamento):
+    """
+    Normaliza um fechamento para o formato padrão
+    """
+    if "jogos" not in fechamento:
+        return fechamento
+    
+    jogos_normalizados = []
+    for jogo in fechamento["jogos"]:
+        if isinstance(jogo, (list, tuple)):
+            jogos_normalizados.append({
+                "id": len(jogos_normalizados) + 1,
+                "dezenas": list(jogo),
+                "formato_original": "lista"
+            })
+        elif isinstance(jogo, dict):
+            dezenas = extrair_dezenas(jogo)
+            if dezenas:
+                jogos_normalizados.append({
+                    "id": len(jogos_normalizados) + 1,
+                    "dezenas": dezenas,
+                    "formato_original": "dict"
+                })
+    
+    fechamento["jogos"] = jogos_normalizados
+    return fechamento
+
+# =====================================================
 # FUNÇÕES DE ARQUIVO LOCAL
 # =====================================================
 def salvar_jogos_gerados(jogos, fechamento, dna_params, numero_concurso_atual, data_concurso_atual, estatisticas=None):
@@ -109,10 +164,20 @@ def salvar_jogos_gerados(jogos, fechamento, dna_params, numero_concurso_atual, d
                         if novo not in jogo_lista:
                             jogo_lista.append(novo)
                     jogo_lista.sort()
-                jogos_final.append(jogo_lista)
+                
+                # Salvar como dict estruturado
+                jogos_final.append({
+                    "id": len(jogos_final) + 1,
+                    "dezenas": jogo_lista,
+                    "formato": "padrao"
+                })
             else:
                 # Se não for lista, tentar converter
-                jogos_final.append([int(n) for n in range(1, 16)])  # fallback
+                jogos_final.append({
+                    "id": len(jogos_final) + 1,
+                    "dezenas": [int(n) for n in range(1, 16)],  # fallback
+                    "formato": "fallback"
+                })
         
         fechamento_convertido = convert_numpy_types(fechamento)
         dna_convertido = convert_numpy_types(dna_params) if dna_params else {}
@@ -130,7 +195,8 @@ def salvar_jogos_gerados(jogos, fechamento, dna_params, numero_concurso_atual, d
             "jogos": jogos_final,
             "estatisticas": estatisticas_convertidas,
             "conferido": False,
-            "conferencias": []
+            "conferencias": [],
+            "schema_version": "2.0"  # Versão do schema para futura compatibilidade
         }
         
         with open(nome_arquivo, 'w', encoding='utf-8') as f:
@@ -142,7 +208,7 @@ def salvar_jogos_gerados(jogos, fechamento, dna_params, numero_concurso_atual, d
         return None, None
 
 def carregar_jogos_salvos():
-    """Carrega todos os jogos salvos"""
+    """Carrega todos os jogos salvos e normaliza se necessário"""
     jogos_salvos = []
     try:
         if os.path.exists("jogos_salvos"):
@@ -157,6 +223,10 @@ def carregar_jogos_salvos():
                                 dados["conferencias"] = []
                             if "estatisticas" not in dados:
                                 dados["estatisticas"] = {}
+                            
+                            # Normalizar jogos antigos se necessário
+                            dados = normalizar_fechamento(dados)
+                            
                             dados["arquivo"] = arquivo
                             jogos_salvos.append(dados)
                     except Exception as e:
@@ -559,8 +629,15 @@ def validar_jogos(jogos):
 def formatar_jogo_html(jogo, destaque_primos=True):
     """Formata um jogo em HTML com cores"""
     primos = [2, 3, 5, 7, 11, 13, 17, 19, 23]
+    
+    # Extrair dezenas se for dict
+    if isinstance(jogo, dict):
+        dezenas = extrair_dezenas(jogo)
+    else:
+        dezenas = jogo
+    
     html = ""
-    for num in jogo:
+    for num in dezenas:
         if num in primos and destaque_primos:
             html += f"<span style='background:#4cc9f020; border:1px solid #4cc9f0; border-radius:20px; padding:5px 8px; margin:2px; display:inline-block; font-weight:bold;'>{num:02d}</span>"
         else:
@@ -1410,6 +1487,17 @@ def main():
                 fechamento = st.session_state.jogos_salvos[idx]
                 jogos = fechamento["jogos"]
 
+                # =========================
+                # BLINDAGEM TOTAL
+                # =========================
+                assert isinstance(jogos, list), "ERRO: jogos não é lista"
+                assert len(jogos) > 0, "ERRO: fechamento vazio"
+                
+                # Debug visual (opcional - comentar em produção)
+                st.caption(f"📦 Estrutura detectada: {type(jogos[0]).__name__}")
+                if isinstance(jogos[0], dict):
+                    st.caption(f"🔍 Chaves disponíveis: {list(jogos[0].keys())}")
+
                 st.markdown(f"""
                 <div class='concurso-info'>
                     📦 <strong>Fechamento ID:</strong> {fechamento['id']}<br>
@@ -1435,63 +1523,78 @@ def main():
                 st.markdown(formatar_jogo_html(dezenas_sorteadas), unsafe_allow_html=True)
 
                 # =========================
-                # CONFERÊNCIA
+                # CONFERÊNCIA (CORRIGIDA E BLINDADA)
                 # =========================
                 if st.button("🔍 CONFERIR FECHAMENTO", type="primary", use_container_width=True):
                     resultados = []
                     distribuicao = Counter()
 
                     for i, jogo in enumerate(jogos):
-                        acertos = len(set(jogo) & dezenas_set)
+                        # 🔐 Blindagem estrutural - extrai dezenas independente do formato
+                        dezenas_jogo = extrair_dezenas(jogo)
+                        
+                        if not dezenas_jogo:
+                            st.warning(f"⚠️ Jogo {i+1} ignorado: formato não reconhecido")
+                            continue
+                        
+                        acertos = len(set(dezenas_jogo) & dezenas_set)
                         distribuicao[acertos] += 1
                         resultados.append({
                             "Jogo": i + 1,
-                            "Acertos": acertos
+                            "Acertos": acertos,
+                            "Dezenas": ", ".join(f"{n:02d}" for n in sorted(dezenas_jogo))
                         })
 
-                    df_resultado = pd.DataFrame(resultados).sort_values("Acertos", ascending=False)
+                    if not resultados:
+                        st.error("❌ Nenhum jogo válido encontrado para conferência")
+                    else:
+                        df_resultado = pd.DataFrame(resultados).sort_values("Acertos", ascending=False)
 
-                    # Estatísticas
-                    estatisticas = {
-                        "distribuicao": dict(distribuicao),
-                        "melhor_jogo": int(df_resultado.iloc[0]["Jogo"]),
-                        "maior_acerto": int(df_resultado.iloc[0]["Acertos"])
-                    }
+                        # Estatísticas
+                        estatisticas = {
+                            "distribuicao": dict(distribuicao),
+                            "melhor_jogo": int(df_resultado.iloc[0]["Jogo"]),
+                            "maior_acerto": int(df_resultado.iloc[0]["Acertos"]),
+                            "total_jogos_validos": len(resultados)
+                        }
 
-                    # Salvar conferência
-                    adicionar_conferencia(
-                        fechamento["arquivo"],
-                        {
-                            "numero": concurso_escolhido["concurso"],
-                            "data": concurso_escolhido["data"]
-                        },
-                        df_resultado["Acertos"].tolist(),
-                        estatisticas
-                    )
+                        # Salvar conferência
+                        adicionar_conferencia(
+                            fechamento["arquivo"],
+                            {
+                                "numero": concurso_escolhido["concurso"],
+                                "data": concurso_escolhido["data"]
+                            },
+                            df_resultado["Acertos"].tolist(),
+                            estatisticas
+                        )
 
-                    # =========================
-                    # VISUALIZAÇÃO
-                    # =========================
-                    st.success("✅ Conferência realizada e salva com sucesso!")
+                        # =========================
+                        # VISUALIZAÇÃO
+                        # =========================
+                        st.success(f"✅ Conferência realizada e salva com sucesso! ({len(resultados)} jogos válidos)")
 
-                    col1, col2, col3 = st.columns(3)
-                    col1.metric("🏆 Melhor jogo", f"Jogo {estatisticas['melhor_jogo']}")
-                    col2.metric("🎯 Maior acerto", estatisticas["maior_acerto"])
-                    col3.metric("📊 Total de jogos", len(jogos))
+                        col1, col2, col3 = st.columns(3)
+                        col1.metric("🏆 Melhor jogo", f"Jogo {estatisticas['melhor_jogo']}")
+                        col2.metric("🎯 Maior acerto", estatisticas["maior_acerto"])
+                        col3.metric("📊 Jogos válidos", estatisticas["total_jogos_validos"])
 
-                    st.markdown("### 📊 Distribuição de Acertos")
-                    dist_df = pd.DataFrame(
-                        sorted(distribuicao.items()),
-                        columns=["Acertos", "Quantidade"]
-                    )
-                    st.bar_chart(dist_df.set_index("Acertos"))
+                        st.markdown("### 📊 Distribuição de Acertos")
+                        dist_df = pd.DataFrame(
+                            sorted(distribuicao.items()),
+                            columns=["Acertos", "Quantidade"]
+                        )
+                        st.bar_chart(dist_df.set_index("Acertos"))
 
-                    st.markdown("### 🏅 Ranking dos Jogos")
-                    st.dataframe(
-                        df_resultado,
-                        use_container_width=True,
-                        hide_index=True
-                    )
+                        st.markdown("### 🏅 Ranking dos Jogos")
+                        st.dataframe(
+                            df_resultado[["Jogo", "Acertos", "Dezenas"]],
+                            use_container_width=True,
+                            hide_index=True,
+                            column_config={
+                                "Dezenas": st.column_config.TextColumn("Dezenas", width="large")
+                            }
+                        )
     else:
         st.markdown("""
         <div style='text-align: center; padding: 2rem;'>
