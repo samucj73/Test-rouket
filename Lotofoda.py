@@ -694,6 +694,8 @@ def main():
         st.session_state.baseline_cache = None
     if "mc_resultados" not in st.session_state:
         st.session_state.mc_resultados = None
+    if "jogos_3622" not in st.session_state:
+        st.session_state.jogos_3622 = None
 
     # ================= SIDEBAR =================
     with st.sidebar:
@@ -982,327 +984,335 @@ def main():
             st.subheader("📊 Motor Estatístico - Avaliação Probabilística")
             
             # Verificar se há jogos gerados
-            if "jogos_3622" not in st.session_state or not st.session_state.jogos_3622:
+            if "jogos_3622" not in st.session_state or st.session_state.jogos_3622 is None or len(st.session_state.jogos_3622) == 0:
                 st.warning("⚠️ Gere jogos na aba 'Fechamento 3622' primeiro para avaliá-los estatisticamente!")
             else:
                 jogos_gerados = st.session_state.jogos_3622
                 
-                # BASELINE CORRETO (interseção 15×15)
-                baseline = st.session_state.baseline_cache or baseline_aleatorio()
-                
-                with st.expander("🎲 Baseline Estatístico (H₀)", expanded=False):
-                    st.markdown(f"""
-                    **Modelo nulo:** {baseline['descricao']}  
-                    **Média de acertos esperada:** {baseline['media']:.3f}  
-                    **Desvio padrão:** {baseline['std']:.3f}  
-                    """)
-                    
-                    # Gráfico da distribuição baseline
-                    baseline_dist = pd.DataFrame({
-                        "Acertos": range(16),
-                        "Probabilidade": baseline['dist']
-                    })
-                    st.bar_chart(baseline_dist.set_index("Acertos"))
-                
-                # Distribuições empíricas
-                st.markdown("### 📈 Distribuições Empíricas")
-                dist = distribuicoes_empiricas(st.session_state.historico_df)
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.markdown("**Pares x Ímpares**")
-                    pares_df = pd.DataFrame({
-                        "Quantidade": list(dist['pares'].keys()),
-                        "Probabilidade": list(dist['pares'].values())
-                    }).sort_values("Quantidade")
-                    st.bar_chart(pares_df.set_index("Quantidade"))
-                
-                with col2:
-                    st.markdown("**Números Primos**")
-                    primos_df = pd.DataFrame({
-                        "Quantidade": list(dist['primos'].keys()),
-                        "Probabilidade": list(dist['primos'].values())
-                    }).sort_values("Quantidade")
-                    st.bar_chart(primos_df.set_index("Quantidade"))
-                
-                # AVALIAÇÃO DOS JOGOS (Likelihood com pesos)
-                st.markdown("### 🎯 Ranking Estatístico dos Jogos")
-                
-                avaliacao = []
-                for i, jogo in enumerate(jogos_gerados):
-                    features = {
-                        "pares": contar_pares(jogo),
-                        "primos": contar_primos(jogo),
-                        "consecutivos": contar_consecutivos(jogo),
-                        "soma": bucket_soma(sum(jogo))
-                    }
-                    
-                    logL = log_likelihood(features, dist)
-                    
-                    avaliacao.append({
-                        "Jogo": i + 1,
-                        "Likelihood (log)": round(logL, 4)
-                    })
-                
-                df_avaliacao = pd.DataFrame(avaliacao)
-                df_avaliacao["Rank"] = df_avaliacao["Likelihood (log)"].rank(ascending=False).astype(int)
-                df_avaliacao["Percentil"] = (df_avaliacao["Likelihood (log)"].rank(pct=True) * 100).round(1)
-                
-                # Score normalizado 0-100 baseado no próprio lote
-                logLs = df_avaliacao["Likelihood (log)"]
-                min_logL = logLs.min()
-                max_logL = logLs.max()
-                
-                if max_logL > min_logL:  # Evitar divisão por zero
-                    score = 100 * (logLs - min_logL) / (max_logL - min_logL)
+                # Verificação adicional para garantir que jogos_gerados não está vazio
+                if len(jogos_gerados) == 0:
+                    st.warning("⚠️ Nenhum jogo disponível para análise. Gere novos jogos na aba 'Fechamento 3622'.")
                 else:
-                    score = pd.Series([50] * len(logLs))  # Todos iguais
-                
-                df_avaliacao["Score (0-100)"] = score.round(1)
-                
-                # Ordenar por rank
-                df_avaliacao = df_avaliacao.sort_values("Rank").reset_index(drop=True)
-                
-                # Mostrar dataframe com destaque
-                st.dataframe(
-                    df_avaliacao[["Rank", "Jogo", "Score (0-100)", "Percentil", "Likelihood (log)"]],
-                    use_container_width=True,
-                    hide_index=True,
-                    column_config={
-                        "Score (0-100)": st.column_config.ProgressColumn(
-                            "Score",
-                            format="%.1f",
-                            min_value=0,
-                            max_value=100
-                        )
-                    }
-                )
-                
-                # Distribuição dos scores
-                st.markdown("### 📊 Distribuição dos Scores")
-                chart_data = pd.DataFrame({
-                    "Score": df_avaliacao["Score (0-100)"]
-                })
-                st.bar_chart(chart_data)
-                
-                # TESTE Z CORRIGIDO - Usando percentil
-                st.markdown("### 🧪 Validação Estatística (Teste Z)")
-                
-                percentil_medio = df_avaliacao["Percentil"].mean()
-                z = (percentil_medio - 50) / 15  # 15 = desvio aproximado
-                p_value = 1 - norm.cdf(z)
-                
-                # Interpretação profissional
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Percentil médio", f"{percentil_medio:.1f}%")
-                with col2:
-                    st.metric("Z-score", f"{z:.3f}")
-                with col3:
-                    st.metric("p-value", f"{p_value:.6f}")
-                
-                # CORREÇÃO: Substituir st.success, st.warning, st.info por st.markdown com HTML
-                if z > 1.96:
-                    st.markdown("""
-                    <div style='background:#00ff0020; padding:15px; border-radius:10px; border-left:5px solid #00ff00; margin:10px 0;'>
-                        <strong>✅ VANTAGEM ESTATÍSTICA SIGNIFICATIVA (p < 0.05)</strong><br>
-                        O modelo supera o aleatório com 95% de confiança.
-                    </div>
-                    """, unsafe_allow_html=True)
-                elif z > 1.28:
-                    st.markdown("""
-                    <div style='background:#ffff0020; padding:15px; border-radius:10px; border-left:5px solid #ffff00; margin:10px 0;'>
-                        <strong>⚠️ VANTAGEM MODERADA (p < 0.10)</strong><br>
-                        Há indícios de vantagem, mas não conclusivos.
-                    </div>
-                    """, unsafe_allow_html=True)
-                else:
-                    st.markdown("""
-                    <div style='background:#0000ff20; padding:15px; border-radius:10px; border-left:5px solid #0000ff; margin:10px 0;'>
-                        <strong>📊 ALEATÓRIO (p > 0.10)</strong><br>
-                        Sem evidência estatística de vantagem.
-                    </div>
-                    """, unsafe_allow_html=True)
-                
-                # TOP JOGOS RECOMENDADOS
-                st.markdown("### 🏆 Top 5 Jogos Recomendados")
-                
-                # Filtrar top 5 por score
-                top_jogos = df_avaliacao.nlargest(5, "Score (0-100)")
-                
-                for idx, row in top_jogos.iterrows():
-                    jogo_idx = row["Jogo"] - 1
-                    jogo = jogos_gerados[jogo_idx]
+                    # BASELINE CORRETO (interseção 15×15)
+                    baseline = st.session_state.baseline_cache or baseline_aleatorio()
                     
-                    # Análise individual do jogo
-                    features_jogo = {
-                        "pares": contar_pares(jogo),
-                        "primos": contar_primos(jogo),
-                        "consecutivos": contar_consecutivos(jogo),
-                        "soma": sum(jogo)
-                    }
+                    with st.expander("🎲 Baseline Estatístico (H₀)", expanded=False):
+                        st.markdown(f"""
+                        **Modelo nulo:** {baseline['descricao']}  
+                        **Média de acertos esperada:** {baseline['media']:.3f}  
+                        **Desvio padrão:** {baseline['std']:.3f}  
+                        """)
+                        
+                        # Gráfico da distribuição baseline
+                        baseline_dist = pd.DataFrame({
+                            "Acertos": range(16),
+                            "Probabilidade": baseline['dist']
+                        })
+                        st.bar_chart(baseline_dist.set_index("Acertos"))
                     
-                    # HTML do jogo
-                    nums_html = formatar_jogo_html(jogo)
+                    # Distribuições empíricas
+                    st.markdown("### 📈 Distribuições Empíricas")
+                    dist = distribuicoes_empiricas(st.session_state.historico_df)
                     
-                    # Determinar cor baseada no score
-                    if row["Score (0-100)"] >= 80:
-                        cor = "#4ade80"  # Verde (excelente)
-                    elif row["Score (0-100)"] >= 60:
-                        cor = "gold"      # Amarelo (bom)
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.markdown("**Pares x Ímpares**")
+                        pares_df = pd.DataFrame({
+                            "Quantidade": list(dist['pares'].keys()),
+                            "Probabilidade": list(dist['pares'].values())
+                        }).sort_values("Quantidade")
+                        st.bar_chart(pares_df.set_index("Quantidade"))
+                    
+                    with col2:
+                        st.markdown("**Números Primos**")
+                        primos_df = pd.DataFrame({
+                            "Quantidade": list(dist['primos'].keys()),
+                            "Probabilidade": list(dist['primos'].values())
+                        }).sort_values("Quantidade")
+                        st.bar_chart(primos_df.set_index("Quantidade"))
+                    
+                    # AVALIAÇÃO DOS JOGOS (Likelihood com pesos)
+                    st.markdown("### 🎯 Ranking Estatístico dos Jogos")
+                    
+                    avaliacao = []
+                    for i, jogo in enumerate(jogos_gerados):
+                        features = {
+                            "pares": contar_pares(jogo),
+                            "primos": contar_primos(jogo),
+                            "consecutivos": contar_consecutivos(jogo),
+                            "soma": bucket_soma(sum(jogo))
+                        }
+                        
+                        logL = log_likelihood(features, dist)
+                        
+                        avaliacao.append({
+                            "Jogo": i + 1,
+                            "Likelihood (log)": round(logL, 4)
+                        })
+                    
+                    df_avaliacao = pd.DataFrame(avaliacao)
+                    df_avaliacao["Rank"] = df_avaliacao["Likelihood (log)"].rank(ascending=False).astype(int)
+                    df_avaliacao["Percentil"] = (df_avaliacao["Likelihood (log)"].rank(pct=True) * 100).round(1)
+                    
+                    # Score normalizado 0-100 baseado no próprio lote
+                    logLs = df_avaliacao["Likelihood (log)"]
+                    min_logL = logLs.min()
+                    max_logL = logLs.max()
+                    
+                    if max_logL > min_logL:  # Evitar divisão por zero
+                        score = 100 * (logLs - min_logL) / (max_logL - min_logL)
                     else:
-                        cor = "#4cc9f0"   # Azul (médio)
+                        score = pd.Series([50] * len(logLs))  # Todos iguais
                     
-                    st.markdown(f"""
-                    <div style='border-left: 5px solid {cor}; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
-                        <div style='display:flex; justify-content:space-between;'>
-                            <strong>Rank #{row['Rank']} | Score {row['Score (0-100)']:.1f}</strong>
-                            <small>Percentil {row['Percentil']:.0f}%</small>
-                        </div>
-                        <div>{nums_html}</div>
-                        <div style='display:flex; gap:15px; margin-top:8px; color:#aaa; font-size:0.9em;'>
-                            <span>⚖️ {features_jogo['pares']} pares</span>
-                            <span>🔢 {features_jogo['primos']} primos</span>
-                            <span>📈 {features_jogo['consecutivos']} consec</span>
-                            <span>➕ {features_jogo['soma']}</span>
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                
-                # =====================================================
-                # 🔥 NÍVEL PROFISSIONAL: MONTE CARLO POR JOGO
-                # =====================================================
-                st.markdown("---")
-                st.markdown("## 🎲 Simulação Monte Carlo por Jogo")
-                st.caption("Estimativa empírica real de probabilidade por jogo")
-
-                N_SIM = st.slider(
-                    "Quantidade de simulações por jogo",
-                    min_value=1_000,
-                    max_value=50_000,
-                    value=10_000,
-                    step=1_000,
-                    key="mc_slider"
-                )
-
-                if st.button("🚀 Rodar Simulação Monte Carlo", use_container_width=True, type="primary"):
-                    with st.spinner(f"Rodando {N_SIM:,} simulações para cada jogo..."):
-                        mc_resultados = []
-                        
-                        for i, jogo in enumerate(jogos_gerados):
-                            res = monte_carlo_jogo(tuple(jogo), N_SIM)
-                            mc_resultados.append({
-                                "Jogo": i + 1,
-                                "P(≥11)": f"{res['P>=11']*100:.2f}%",
-                                "P(≥12)": f"{res['P>=12']*100:.2f}%",
-                                "P(≥13)": f"{res['P>=13']*100:.2f}%",
-                                "P(≥14)": f"{res['P>=14']*100:.2f}%",
-                                "P(15)": f"{res['P=15']*100:.4f}%",
-                                "Média": round(res['media'], 2),
-                                "Std": round(res['std'], 2)
-                            })
-                        
-                        st.session_state.mc_resultados = pd.DataFrame(mc_resultados)
-                        st.success("✅ Simulação concluída!")
-
-                # Mostrar resultados Monte Carlo se existirem
-                if st.session_state.mc_resultados is not None:
-                    st.markdown("### 📊 Resultados da Simulação")
+                    df_avaliacao["Score (0-100)"] = score.round(1)
                     
-                    # Ordenar por P(≥11) para melhor visualização
-                    df_mc = st.session_state.mc_resultados.copy()
-                    df_mc["P(≥11)_valor"] = df_mc["P(≥11)"].str.replace("%", "").astype(float)
-                    df_mc = df_mc.sort_values("P(≥11)_valor", ascending=False).drop("P(≥11)_valor", axis=1)
+                    # Ordenar por rank
+                    df_avaliacao = df_avaliacao.sort_values("Rank").reset_index(drop=True)
                     
+                    # Mostrar dataframe com destaque
                     st.dataframe(
-                        df_mc,
+                        df_avaliacao[["Rank", "Jogo", "Score (0-100)", "Percentil", "Likelihood (log)"]],
                         use_container_width=True,
                         hide_index=True,
                         column_config={
-                            "P(≥11)": st.column_config.TextColumn("P(≥11)", width="small"),
-                            "P(≥12)": st.column_config.TextColumn("P(≥12)", width="small"),
-                            "P(≥13)": st.column_config.TextColumn("P(≥13)", width="small"),
-                            "P(≥14)": st.column_config.TextColumn("P(≥14)", width="small"),
-                            "P(15)": st.column_config.TextColumn("P(15)", width="small"),
+                            "Score (0-100)": st.column_config.ProgressColumn(
+                                "Score",
+                                format="%.1f",
+                                min_value=0,
+                                max_value=100
+                            )
                         }
                     )
                     
-                    # Gráfico comparativo
-                    st.markdown("### 📈 Comparativo de Probabilidades")
+                    # Distribuição dos scores
+                    st.markdown("### 📊 Distribuição dos Scores")
+                    chart_data = pd.DataFrame({
+                        "Score": df_avaliacao["Score (0-100)"]
+                    })
+                    st.bar_chart(chart_data)
                     
-                    # Preparar dados para o gráfico
-                    df_chart = df_mc.head(10).copy()  # Top 10 jogos
-                    for col in ["P(≥11)", "P(≥12)", "P(≥13)", "P(≥14)"]:
-                        df_chart[col] = df_chart[col].str.replace("%", "").astype(float)
+                    # TESTE Z CORRIGIDO - Usando percentil
+                    st.markdown("### 🧪 Validação Estatística (Teste Z)")
                     
-                    chart_data = df_chart.melt(
-                        id_vars=["Jogo"],
-                        value_vars=["P(≥11)", "P(≥12)", "P(≥13)", "P(≥14)"],
-                        var_name="Faixa",
-                        value_name="Probabilidade (%)"
+                    percentil_medio = df_avaliacao["Percentil"].mean()
+                    z = (percentil_medio - 50) / 15  # 15 = desvio aproximado
+                    p_value = 1 - norm.cdf(z)
+                    
+                    # Interpretação profissional
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Percentil médio", f"{percentil_medio:.1f}%")
+                    with col2:
+                        st.metric("Z-score", f"{z:.3f}")
+                    with col3:
+                        st.metric("p-value", f"{p_value:.6f}")
+                    
+                    # CORREÇÃO: Substituir st.success, st.warning, st.info por st.markdown com HTML
+                    if z > 1.96:
+                        st.markdown("""
+                        <div style='background:#00ff0020; padding:15px; border-radius:10px; border-left:5px solid #00ff00; margin:10px 0;'>
+                            <strong>✅ VANTAGEM ESTATÍSTICA SIGNIFICATIVA (p < 0.05)</strong><br>
+                            O modelo supera o aleatório com 95% de confiança.
+                        </div>
+                        """, unsafe_allow_html=True)
+                    elif z > 1.28:
+                        st.markdown("""
+                        <div style='background:#ffff0020; padding:15px; border-radius:10px; border-left:5px solid #ffff00; margin:10px 0;'>
+                            <strong>⚠️ VANTAGEM MODERADA (p < 0.10)</strong><br>
+                            Há indícios de vantagem, mas não conclusivos.
+                        </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        st.markdown("""
+                        <div style='background:#0000ff20; padding:15px; border-radius:10px; border-left:5px solid #0000ff; margin:10px 0;'>
+                            <strong>📊 ALEATÓRIO (p > 0.10)</strong><br>
+                            Sem evidência estatística de vantagem.
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    # TOP JOGOS RECOMENDADOS
+                    st.markdown("### 🏆 Top 5 Jogos Recomendados")
+                    
+                    # Verificar se há jogos suficientes para mostrar top 5
+                    if len(df_avaliacao) > 0:
+                        # Filtrar top 5 por score
+                        top_jogos = df_avaliacao.nlargest(min(5, len(df_avaliacao)), "Score (0-100)")
+                        
+                        for idx, row in top_jogos.iterrows():
+                            jogo_idx = row["Jogo"] - 1
+                            # Verificar se o índice é válido
+                            if 0 <= jogo_idx < len(jogos_gerados):
+                                jogo = jogos_gerados[jogo_idx]
+                                
+                                # Análise individual do jogo
+                                features_jogo = {
+                                    "pares": contar_pares(jogo),
+                                    "primos": contar_primos(jogo),
+                                    "consecutivos": contar_consecutivos(jogo),
+                                    "soma": sum(jogo)
+                                }
+                                
+                                # HTML do jogo
+                                nums_html = formatar_jogo_html(jogo)
+                                
+                                # Determinar cor baseada no score
+                                if row["Score (0-100)"] >= 80:
+                                    cor = "#4ade80"  # Verde (excelente)
+                                elif row["Score (0-100)"] >= 60:
+                                    cor = "gold"      # Amarelo (bom)
+                                else:
+                                    cor = "#4cc9f0"   # Azul (médio)
+                                
+                                st.markdown(f"""
+                                <div style='border-left: 5px solid {cor}; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
+                                    <div style='display:flex; justify-content:space-between;'>
+                                        <strong>Rank #{row['Rank']} | Score {row['Score (0-100)']:.1f}</strong>
+                                        <small>Percentil {row['Percentil']:.0f}%</small>
+                                    </div>
+                                    <div>{nums_html}</div>
+                                    <div style='display:flex; gap:15px; margin-top:8px; color:#aaa; font-size:0.9em;'>
+                                        <span>⚖️ {features_jogo['pares']} pares</span>
+                                        <span>🔢 {features_jogo['primos']} primos</span>
+                                        <span>📈 {features_jogo['consecutivos']} consec</span>
+                                        <span>➕ {features_jogo['soma']}</span>
+                                    </div>
+                                </div>
+                                """, unsafe_allow_html=True)
+                    
+                    # =====================================================
+                    # 🔥 NÍVEL PROFISSIONAL: MONTE CARLO POR JOGO
+                    # =====================================================
+                    st.markdown("---")
+                    st.markdown("## 🎲 Simulação Monte Carlo por Jogo")
+                    st.caption("Estimativa empírica real de probabilidade por jogo")
+
+                    N_SIM = st.slider(
+                        "Quantidade de simulações por jogo",
+                        min_value=1_000,
+                        max_value=50_000,
+                        value=10_000,
+                        step=1_000,
+                        key="mc_slider"
                     )
+
+                    if st.button("🚀 Rodar Simulação Monte Carlo", use_container_width=True, type="primary"):
+                        with st.spinner(f"Rodando {N_SIM:,} simulações para cada jogo..."):
+                            mc_resultados = []
+                            
+                            for i, jogo in enumerate(jogos_gerados):
+                                res = monte_carlo_jogo(tuple(jogo), N_SIM)
+                                mc_resultados.append({
+                                    "Jogo": i + 1,
+                                    "P(≥11)": f"{res['P>=11']*100:.2f}%",
+                                    "P(≥12)": f"{res['P>=12']*100:.2f}%",
+                                    "P(≥13)": f"{res['P>=13']*100:.2f}%",
+                                    "P(≥14)": f"{res['P>=14']*100:.2f}%",
+                                    "P(15)": f"{res['P=15']*100:.4f}%",
+                                    "Média": round(res['media'], 2),
+                                    "Std": round(res['std'], 2)
+                                })
+                            
+                            st.session_state.mc_resultados = pd.DataFrame(mc_resultados)
+                            st.success("✅ Simulação concluída!")
+
+                    # Mostrar resultados Monte Carlo se existirem
+                    if st.session_state.mc_resultados is not None:
+                        st.markdown("### 📊 Resultados da Simulação")
+                        
+                        # Ordenar por P(≥11) para melhor visualização
+                        df_mc = st.session_state.mc_resultados.copy()
+                        df_mc["P(≥11)_valor"] = df_mc["P(≥11)"].str.replace("%", "").astype(float)
+                        df_mc = df_mc.sort_values("P(≥11)_valor", ascending=False).drop("P(≥11)_valor", axis=1)
+                        
+                        st.dataframe(
+                            df_mc,
+                            use_container_width=True,
+                            hide_index=True,
+                            column_config={
+                                "P(≥11)": st.column_config.TextColumn("P(≥11)", width="small"),
+                                "P(≥12)": st.column_config.TextColumn("P(≥12)", width="small"),
+                                "P(≥13)": st.column_config.TextColumn("P(≥13)", width="small"),
+                                "P(≥14)": st.column_config.TextColumn("P(≥14)", width="small"),
+                                "P(15)": st.column_config.TextColumn("P(15)", width="small"),
+                            }
+                        )
+                        
+                        # Gráfico comparativo
+                        st.markdown("### 📈 Comparativo de Probabilidades")
+                        
+                        # Preparar dados para o gráfico
+                        df_chart = df_mc.head(10).copy()  # Top 10 jogos
+                        for col in ["P(≥11)", "P(≥12)", "P(≥13)", "P(≥14)"]:
+                            df_chart[col] = df_chart[col].str.replace("%", "").astype(float)
+                        
+                        chart_data = df_chart.melt(
+                            id_vars=["Jogo"],
+                            value_vars=["P(≥11)", "P(≥12)", "P(≥13)", "P(≥14)"],
+                            var_name="Faixa",
+                            value_name="Probabilidade (%)"
+                        )
+                        
+                        # Criar gráfico de barras agrupadas
+                        chart_pivot = chart_data.pivot(index="Jogo", columns="Faixa", values="Probabilidade (%)")
+                        st.bar_chart(chart_pivot)
+                        
+                        # Melhor jogo por categoria
+                        st.markdown("### 🏆 Melhores Jogos por Categoria")
+                        
+                        col1, col2, col3 = st.columns(3)
+                        
+                        with col1:
+                            best_11 = df_mc.loc[df_mc["P(≥11)_valor"].idxmax()] if "P(≥11)_valor" in df_mc.columns else df_mc.iloc[0]
+                            st.metric(
+                                "Melhor para ≥11", 
+                                f"Jogo {int(best_11['Jogo'])}",
+                                best_11["P(≥11)"]
+                            )
+                        
+                        with col2:
+                            df_mc["P(≥12)_valor"] = df_mc["P(≥12)"].str.replace("%", "").astype(float)
+                            best_12 = df_mc.loc[df_mc["P(≥12)_valor"].idxmax()]
+                            st.metric(
+                                "Melhor para ≥12", 
+                                f"Jogo {int(best_12['Jogo'])}",
+                                best_12["P(≥12)"]
+                            )
+                        
+                        with col3:
+                            df_mc["P(≥13)_valor"] = df_mc["P(≥13)"].str.replace("%", "").astype(float)
+                            best_13 = df_mc.loc[df_mc["P(≥13)_valor"].idxmax()]
+                            st.metric(
+                                "Melhor para ≥13", 
+                                f"Jogo {int(best_13['Jogo'])}",
+                                best_13["P(≥13)"]
+                            )
+                        
+                        # Explicação técnica
+                        with st.expander("📘 O que significa Monte Carlo?"):
+                            st.markdown("""
+                            **Monte Carlo** é uma técnica estatística que simula milhares de sorteios reais para estimar probabilidades.
+                            
+                            - **P(≥11)**: Probabilidade de fazer 11 pontos ou mais
+                            - **P(≥12)**: Probabilidade de fazer 12 pontos ou mais  
+                            - **P(≥13)**: Probabilidade de fazer 13 pontos ou mais
+                            - **P(≥14)**: Probabilidade de fazer 14 pontos ou mais
+                            - **P(15)**: Probabilidade de acertar os 15 números
+                            
+                            Quanto maior o número de simulações, mais precisa a estimativa.
+                            """)
                     
-                    # Criar gráfico de barras agrupadas
-                    chart_pivot = chart_data.pivot(index="Jogo", columns="Faixa", values="Probabilidade (%)")
-                    st.bar_chart(chart_pivot)
-                    
-                    # Melhor jogo por categoria
-                    st.markdown("### 🏆 Melhores Jogos por Categoria")
+                    # MÉTRICA AGREGADA FINAL
+                    st.markdown("---")
+                    st.markdown("### 📌 Resumo Executivo")
                     
                     col1, col2, col3 = st.columns(3)
-                    
                     with col1:
-                        best_11 = df_mc.loc[df_mc["P(≥11)_valor"].idxmax()] if "P(≥11)_valor" in df_mc.columns else df_mc.iloc[0]
-                        st.metric(
-                            "Melhor para ≥11", 
-                            f"Jogo {int(best_11['Jogo'])}",
-                            best_11["P(≥11)"]
-                        )
-                    
+                        st.metric("Jogos acima do percentil 80", 
+                                 f"{(df_avaliacao['Percentil'] >= 80).sum()}/{len(df_avaliacao)}")
                     with col2:
-                        df_mc["P(≥12)_valor"] = df_mc["P(≥12)"].str.replace("%", "").astype(float)
-                        best_12 = df_mc.loc[df_mc["P(≥12)_valor"].idxmax()]
-                        st.metric(
-                            "Melhor para ≥12", 
-                            f"Jogo {int(best_12['Jogo'])}",
-                            best_12["P(≥12)"]
-                        )
-                    
+                        st.metric("Score médio", f"{df_avaliacao['Score (0-100)'].mean():.1f}")
                     with col3:
-                        df_mc["P(≥13)_valor"] = df_mc["P(≥13)"].str.replace("%", "").astype(float)
-                        best_13 = df_mc.loc[df_mc["P(≥13)_valor"].idxmax()]
-                        st.metric(
-                            "Melhor para ≥13", 
-                            f"Jogo {int(best_13['Jogo'])}",
-                            best_13["P(≥13)"]
-                        )
-                    
-                    # Explicação técnica
-                    with st.expander("📘 O que significa Monte Carlo?"):
-                        st.markdown("""
-                        **Monte Carlo** é uma técnica estatística que simula milhares de sorteios reais para estimar probabilidades.
-                        
-                        - **P(≥11)**: Probabilidade de fazer 11 pontos ou mais
-                        - **P(≥12)**: Probabilidade de fazer 12 pontos ou mais  
-                        - **P(≥13)**: Probabilidade de fazer 13 pontos ou mais
-                        - **P(≥14)**: Probabilidade de fazer 14 pontos ou mais
-                        - **P(15)**: Probabilidade de acertar os 15 números
-                        
-                        Quanto maior o número de simulações, mais precisa a estimativa.
-                        """)
-                
-                # MÉTRICA AGREGADA FINAL
-                st.markdown("---")
-                st.markdown("### 📌 Resumo Executivo")
-                
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Jogos acima do percentil 80", 
-                             f"{(df_avaliacao['Percentil'] >= 80).sum()}/{len(df_avaliacao)}")
-                with col2:
-                    st.metric("Score médio", f"{df_avaliacao['Score (0-100)'].mean():.1f}")
-                with col3:
-                    st.metric("Melhor score", f"{df_avaliacao['Score (0-100)'].max():.1f}")
+                        st.metric("Melhor score", f"{df_avaliacao['Score (0-100)'].max():.1f}")
 
         with tab4:
             st.subheader("📋 Todos os Concursos Carregados")
