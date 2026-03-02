@@ -682,7 +682,7 @@ def get_jogos_seguros():
     if "jogos_3622" in st.session_state and st.session_state.jogos_3622 is not None:
         if isinstance(st.session_state.jogos_3622, list) and len(st.session_state.jogos_3622) > 0:
             return st.session_state.jogos_3622
-    return None
+    return []
 
 # =====================================================
 # INTERFACE PRINCIPAL
@@ -999,7 +999,7 @@ def main():
             jogos_gerados = get_jogos_seguros()
             
             # Verificar se há jogos gerados
-            if jogos_gerados is None:
+            if not jogos_gerados:
                 st.warning("⚠️ Gere jogos na aba 'Fechamento 3622' primeiro para avaliá-los estatisticamente!")
                 st.info("💡 Os jogos gerados são salvos automaticamente e ficam disponíveis em todas as abas.")
             else:
@@ -1143,51 +1143,55 @@ def main():
                 # TOP JOGOS RECOMENDADOS
                 st.markdown("### 🏆 Top 5 Jogos Recomendados")
                 
-                # Filtrar top 5 por score
-                top_jogos = df_avaliacao.nlargest(min(5, len(df_avaliacao)), "Score (0-100)")
-                
-                for idx, row in top_jogos.iterrows():
-                    jogo_idx = row["Jogo"] - 1
-                    # Verificação de segurança do índice
-                    if 0 <= jogo_idx < len(jogos_gerados):
-                        jogo = jogos_gerados[jogo_idx]
-                        
-                        # Análise individual do jogo
-                        features_jogo = {
-                            "pares": contar_pares(jogo),
-                            "primos": contar_primos(jogo),
-                            "consecutivos": contar_consecutivos(jogo),
-                            "soma": sum(jogo)
-                        }
-                        
-                        # HTML do jogo
-                        nums_html = formatar_jogo_html(jogo)
-                        
-                        # Determinar cor baseada no score
-                        if row["Score (0-100)"] >= 80:
-                            cor = "#4ade80"  # Verde (excelente)
-                        elif row["Score (0-100)"] >= 60:
-                            cor = "gold"      # Amarelo (bom)
+                # Verificar se há jogos suficientes
+                if len(df_avaliacao) > 0:
+                    # Filtrar top 5 por score
+                    top_jogos = df_avaliacao.nlargest(min(5, len(df_avaliacao)), "Score (0-100)")
+                    
+                    for idx, row in top_jogos.iterrows():
+                        jogo_idx = row["Jogo"] - 1
+                        # Verificação de segurança do índice
+                        if 0 <= jogo_idx < len(jogos_gerados):
+                            jogo = jogos_gerados[jogo_idx]
+                            
+                            # Análise individual do jogo
+                            features_jogo = {
+                                "pares": contar_pares(jogo),
+                                "primos": contar_primos(jogo),
+                                "consecutivos": contar_consecutivos(jogo),
+                                "soma": sum(jogo)
+                            }
+                            
+                            # HTML do jogo
+                            nums_html = formatar_jogo_html(jogo)
+                            
+                            # Determinar cor baseada no score
+                            if row["Score (0-100)"] >= 80:
+                                cor = "#4ade80"  # Verde (excelente)
+                            elif row["Score (0-100)"] >= 60:
+                                cor = "gold"      # Amarelo (bom)
+                            else:
+                                cor = "#4cc9f0"   # Azul (médio)
+                            
+                            st.markdown(f"""
+                            <div style='border-left: 5px solid {cor}; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
+                                <div style='display:flex; justify-content:space-between;'>
+                                    <strong>Rank #{row['Rank']} | Score {row['Score (0-100)']:.1f}</strong>
+                                    <small>Percentil {row['Percentil']:.0f}%</small>
+                                </div>
+                                <div>{nums_html}</div>
+                                <div style='display:flex; gap:15px; margin-top:8px; color:#aaa; font-size:0.9em;'>
+                                    <span>⚖️ {features_jogo['pares']} pares</span>
+                                    <span>🔢 {features_jogo['primos']} primos</span>
+                                    <span>📈 {features_jogo['consecutivos']} consec</span>
+                                    <span>➕ {features_jogo['soma']}</span>
+                                </div>
+                            </div>
+                            """, unsafe_allow_html=True)
                         else:
-                            cor = "#4cc9f0"   # Azul (médio)
-                        
-                        st.markdown(f"""
-                        <div style='border-left: 5px solid {cor}; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
-                            <div style='display:flex; justify-content:space-between;'>
-                                <strong>Rank #{row['Rank']} | Score {row['Score (0-100)']:.1f}</strong>
-                                <small>Percentil {row['Percentil']:.0f}%</small>
-                            </div>
-                            <div>{nums_html}</div>
-                            <div style='display:flex; gap:15px; margin-top:8px; color:#aaa; font-size:0.9em;'>
-                                <span>⚖️ {features_jogo['pares']} pares</span>
-                                <span>🔢 {features_jogo['primos']} primos</span>
-                                <span>📈 {features_jogo['consecutivos']} consec</span>
-                                <span>➕ {features_jogo['soma']}</span>
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    else:
-                        st.error(f"Erro: Índice de jogo inválido - Jogo {row['Jogo']} não encontrado")
+                            st.error(f"Erro: Índice de jogo inválido - Jogo {row['Jogo']} não encontrado")
+                else:
+                    st.info("Nenhum jogo disponível para exibição.")
                 
                 # =====================================================
                 # 🔥 NÍVEL PROFISSIONAL: MONTE CARLO POR JOGO
