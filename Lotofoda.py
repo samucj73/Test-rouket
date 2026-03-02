@@ -1387,176 +1387,111 @@ def main():
 
         with tab5:
             st.subheader("✅ Conferência por Concurso")
-            
-            # Inicializar variáveis de sessão para persistência
-            if "idx_fechamento_selecionado" not in st.session_state:
-                st.session_state.idx_fechamento_selecionado = 0
-            if "futuro_selecionado" not in st.session_state:
-                st.session_state.futuro_selecionado = None
-            if "conferencia_realizada" not in st.session_state:
-                st.session_state.conferencia_realizada = False
-            if "resultado_conferencia" not in st.session_state:
-                st.session_state.resultado_conferencia = None
-            
+
             st.session_state.jogos_salvos = carregar_jogos_salvos()
-            
+
             if not st.session_state.jogos_salvos:
-                st.warning("Nenhum jogo salvo. Gere na aba 'Fechamento 3622'.")
-            elif not st.session_state.dados_api:
-                st.warning("Carregue os concursos primeiro!")
+                st.warning("Nenhum fechamento salvo. Gere jogos na aba 'Fechamento 3622'.")
             else:
-                ultimo_api = st.session_state.dados_api[0]
-                
-                nao_conferidos = [j for j in st.session_state.jogos_salvos 
-                                 if len(j.get("conferencias", [])) == 0]
-                
-                if not nao_conferidos:
-                    st.info("✅ Todos os fechamentos já foram conferidos!")
-                else:
-                    st.markdown(f"""
-                    <div class='concurso-info'>
-                        🎯 Último concurso: #{ultimo_api['concurso']} - {ultimo_api['data']}
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                    # Criar opções para o selectbox
-                    opcoes = []
-                    for i, j in enumerate(nao_conferidos[:10]):
-                        data = datetime.fromisoformat(j["data_geracao"]).strftime("%d/%m/%Y %H:%M")
-                        base = j.get("concurso_base", {"numero": 0, "data": "Desconhecido"})
-                        opcoes.append(f"{i+1} - Base #{base['numero']} - {data}")
-                    
-                    if opcoes:
-                        opcao_selecionada = st.selectbox(
-                            "Selecione o fechamento", 
-                            opcoes,
-                            index=st.session_state.idx_fechamento_selecionado if st.session_state.idx_fechamento_selecionado < len(opcoes) else 0
-                        )
-                        
-                        # Atualizar o índice
-                        novo_idx = int(opcao_selecionada.split(" - ")[0]) - 1
-                        if novo_idx != st.session_state.idx_fechamento_selecionado:
-                            st.session_state.idx_fechamento_selecionado = novo_idx
-                            st.session_state.conferencia_realizada = False
-                            st.session_state.resultado_conferencia = None
-                            st.rerun()
-                        
-                        idx = st.session_state.idx_fechamento_selecionado
-                        jogo_sel = nao_conferidos[idx]
-                        base_info = jogo_sel.get("concurso_base", {"numero": 0, "data": "Desconhecido"})
-                        
-                        with st.expander("📋 Detalhes do fechamento", expanded=True):
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                st.write(f"**ID:** {jogo_sel.get('id', 'N/A')}")
-                                st.write(f"**Base concurso:** #{base_info['numero']}")
-                            with col2:
-                                st.write(f"**Jogos:** {len(jogo_sel.get('jogos', []))}")
-                            
-                            # Mostrar jogos do fechamento
-                            with st.expander("🔍 Ver jogos do fechamento"):
-                                jogos_preview = jogo_sel.get("jogos", [])[:5]
-                                for idx_j, j in enumerate(jogos_preview):
-                                    st.markdown(f"**Jogo {idx_j+1}:** {', '.join(f'{n:02d}' for n in j)}")
-                                if len(jogo_sel.get("jogos", [])) > 5:
-                                    st.caption(f"... e mais {len(jogo_sel['jogos']) - 5} jogos")
-                        
-                        # Concursos futuros disponíveis
-                        concursos_futuros = [c for c in st.session_state.dados_api 
-                                            if c['concurso'] > base_info['numero']]
-                        
-                        if concursos_futuros:
-                            opcoes_futuros = [f"#{c['concurso']} - {c['data']}" 
-                                             for c in concursos_futuros[:5]]
-                            
-                            futuro_sel = st.selectbox(
-                                "Concurso para conferir", 
-                                opcoes_futuros,
-                                key="select_futuro"
-                            )
-                            
-                            num_futuro = int(futuro_sel.split(" - ")[0].replace("#", ""))
-                            
-                            # Botão de conferência
-                            if st.button("🔍 CONFERIR AGORA", use_container_width=True, type="primary"):
-                                with st.spinner("Conferindo resultados..."):
-                                    concurso_info = next(c for c in concursos_futuros 
-                                                        if c['concurso'] == num_futuro)
-                                    numeros = sorted(map(int, concurso_info["dezenas"]))
-                                    
-                                    # Processar jogos para conferência
-                                    acertos = []
-                                    jogos_validos = []
-                                    
-                                    for jogo in jogo_sel.get("jogos", []):
-                                        if isinstance(jogo, list) and len(set(jogo)) == 15:
-                                            jogos_validos.append(jogo)
-                                            acertos.append(len(set(jogo) & set(numeros)))
-                                    
-                                    if acertos:
-                                        # Calcular estatísticas
-                                        stats_conf = {
-                                            "media": float(np.mean(acertos)),
-                                            "max": int(max(acertos)),
-                                            "min": int(min(acertos)),
-                                            "distribuicao": {str(k): int(v) for k, v in Counter(acertos).items()}
-                                        }
-                                        
-                                        info_salvar = {
-                                            "numero": int(concurso_info["concurso"]),
-                                            "data": str(concurso_info["data"]),
-                                            "resultado": [int(n) for n in numeros]
-                                        }
-                                        
-                                        # Salvar conferência
-                                        if adicionar_conferencia(jogo_sel["arquivo"], info_salvar, 
-                                                                acertos, stats_conf):
-                                            st.session_state.conferencia_realizada = True
-                                            st.session_state.resultado_conferencia = {
-                                                "acertos": acertos,
-                                                "jogos_validos": jogos_validos,
-                                                "stats": stats_conf,
-                                                "num_futuro": num_futuro,
-                                                "concurso_info": concurso_info
-                                            }
-                                            st.rerun()
-                            
-                            # Mostrar resultados da conferência se existirem
-                            if st.session_state.conferencia_realizada and st.session_state.resultado_conferencia:
-                                resultado = st.session_state.resultado_conferencia
-                                
-                                st.success(f"✅ Conferência realizada com concurso #{resultado['num_futuro']}!")
-                                
-                                # Mostrar estatísticas
-                                m1, m2, m3, m4 = st.columns(4)
-                                with m1:
-                                    st.metric("Média", f"{resultado['stats']['media']:.1f}")
-                                with m2:
-                                    st.metric("Máximo", resultado['stats']['max'])
-                                with m3:
-                                    st.metric("Mínimo", resultado['stats']['min'])
-                                with m4:
-                                    # Usar o baseline cache para comparação
-                                    baseline = st.session_state.baseline_cache or baseline_aleatorio(n=100000)
-                                    vantagem_real = resultado['stats']['media'] - baseline["media"]
-                                    cor = "green" if vantagem_real > 0 else "red"
-                                    st.markdown(f"<p style='text-align:center; color:{cor}; font-weight:bold;'>Vs aleatório<br>{vantagem_real:+.2f}</p>", unsafe_allow_html=True)
-                                
-                                # Mostrar tabela de resultados
-                                df_res = pd.DataFrame({
-                                    "Jogo": range(1, len(resultado['jogos_validos'])+1),
-                                    "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in resultado['jogos_validos']],
-                                    "Acertos": resultado['acertos'][:len(resultado['jogos_validos'])]
-                                })
-                                st.dataframe(df_res, use_container_width=True, hide_index=True)
-                                
-                                # Botão para conferir outro
-                                if st.button("✅ Conferir Outro Fechamento", use_container_width=True):
-                                    st.session_state.conferencia_realizada = False
-                                    st.session_state.resultado_conferencia = None
-                                    st.rerun()
-                        else:
-                            st.warning("Aguardando próximos concursos...")
+                # =========================
+                # SELEÇÃO DO FECHAMENTO
+                # =========================
+                opcoes = [
+                    f"ID {j['id']} | Concurso Base #{j['concurso_base']['numero']} | {j['data_geracao'][:19]}"
+                    for j in st.session_state.jogos_salvos
+                ]
+
+                idx = st.selectbox(
+                    "📦 Selecione o fechamento",
+                    range(len(opcoes)),
+                    format_func=lambda i: opcoes[i]
+                )
+
+                fechamento = st.session_state.jogos_salvos[idx]
+                jogos = fechamento["jogos"]
+
+                st.markdown(f"""
+                <div class='concurso-info'>
+                    📦 <strong>Fechamento ID:</strong> {fechamento['id']}<br>
+                    🎯 <strong>Total de jogos:</strong> {len(jogos)}
+                </div>
+                """, unsafe_allow_html=True)
+
+                # =========================
+                # SELEÇÃO DO CONCURSO REAL
+                # =========================
+                concursos = st.session_state.dados_api
+
+                concurso_escolhido = st.selectbox(
+                    "🎯 Selecione o concurso para conferência",
+                    concursos,
+                    format_func=lambda c: f"#{c['concurso']} - {c['data']}"
+                )
+
+                dezenas_sorteadas = sorted(map(int, concurso_escolhido["dezenas"]))
+                dezenas_set = set(dezenas_sorteadas)
+
+                st.markdown("### 🔢 Resultado Oficial")
+                st.markdown(formatar_jogo_html(dezenas_sorteadas), unsafe_allow_html=True)
+
+                # =========================
+                # CONFERÊNCIA
+                # =========================
+                if st.button("🔍 CONFERIR FECHAMENTO", type="primary", use_container_width=True):
+                    resultados = []
+                    distribuicao = Counter()
+
+                    for i, jogo in enumerate(jogos):
+                        acertos = len(set(jogo) & dezenas_set)
+                        distribuicao[acertos] += 1
+                        resultados.append({
+                            "Jogo": i + 1,
+                            "Acertos": acertos
+                        })
+
+                    df_resultado = pd.DataFrame(resultados).sort_values("Acertos", ascending=False)
+
+                    # Estatísticas
+                    estatisticas = {
+                        "distribuicao": dict(distribuicao),
+                        "melhor_jogo": int(df_resultado.iloc[0]["Jogo"]),
+                        "maior_acerto": int(df_resultado.iloc[0]["Acertos"])
+                    }
+
+                    # Salvar conferência
+                    adicionar_conferencia(
+                        fechamento["arquivo"],
+                        {
+                            "numero": concurso_escolhido["concurso"],
+                            "data": concurso_escolhido["data"]
+                        },
+                        df_resultado["Acertos"].tolist(),
+                        estatisticas
+                    )
+
+                    # =========================
+                    # VISUALIZAÇÃO
+                    # =========================
+                    st.success("✅ Conferência realizada e salva com sucesso!")
+
+                    col1, col2, col3 = st.columns(3)
+                    col1.metric("🏆 Melhor jogo", f"Jogo {estatisticas['melhor_jogo']}")
+                    col2.metric("🎯 Maior acerto", estatisticas["maior_acerto"])
+                    col3.metric("📊 Total de jogos", len(jogos))
+
+                    st.markdown("### 📊 Distribuição de Acertos")
+                    dist_df = pd.DataFrame(
+                        sorted(distribuicao.items()),
+                        columns=["Acertos", "Quantidade"]
+                    )
+                    st.bar_chart(dist_df.set_index("Acertos"))
+
+                    st.markdown("### 🏅 Ranking dos Jogos")
+                    st.dataframe(
+                        df_resultado,
+                        use_container_width=True,
+                        hide_index=True
+                    )
     else:
         st.markdown("""
         <div style='text-align: center; padding: 2rem;'>
