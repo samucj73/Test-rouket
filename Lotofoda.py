@@ -43,14 +43,78 @@ st.title("🧠🎯 LOTOFÁCIL 3622")
 st.caption("Modelo Universal + Ajuste Adaptável • Mobile First")
 
 # =====================================================
-# CONSTANTES GLOBAIS PARA MOTOR ESTATÍSTICO
+# FUNÇÃO PARA GARANTIR QUE JOGOS SÃO LISTAS DE INTEIROS
 # =====================================================
-FEATURE_WEIGHTS = {
-    "pares": 1.0,
-    "primos": 1.0,
-    "consecutivos": 0.8,
-    "soma": 0.6
-}
+def garantir_jogos_como_listas(jogos_entrada):
+    """
+    Converte QUALQUER formato de jogos para lista de listas de inteiros
+    Funciona com: DataFrame, lista de dicts, lista de strings, lista de listas
+    """
+    # Se for None ou vazio
+    if jogos_entrada is None:
+        return []
+    
+    # Se já for lista de listas de inteiros válida
+    if isinstance(jogos_entrada, list) and len(jogos_entrada) > 0:
+        if isinstance(jogos_entrada[0], list) and all(isinstance(n, int) for n in jogos_entrada[0]):
+            return jogos_entrada
+    
+    jogos_normalizados = []
+    
+    # CASO 1: DataFrame do pandas
+    if isinstance(jogos_entrada, pd.DataFrame):
+        for _, row in jogos_entrada.iterrows():
+            # Procurar coluna que contém as dezenas
+            for col in row.index:
+                valor = row[col]
+                if isinstance(valor, str) and ("," in valor or " " in valor):
+                    # String com separadores
+                    if "," in valor:
+                        dezenas = [int(d.strip()) for d in valor.split(",")]
+                    else:
+                        dezenas = [int(d) for d in valor.split()]
+                    jogos_normalizados.append(sorted(dezenas))
+                    break
+                elif isinstance(valor, list):
+                    # Já é lista
+                    jogos_normalizados.append(sorted([int(x) for x in valor]))
+                    break
+        return jogos_normalizados
+    
+    # CASO 2: Lista de objetos
+    if isinstance(jogos_entrada, list):
+        for item in jogos_entrada:
+            # 2.1: Item é dicionário
+            if isinstance(item, dict):
+                # Procurar chave com as dezenas
+                for chave in ["Dezenas", "dezenas", "Numeros", "numeros", "Jogo", "jogo"]:
+                    if chave in item:
+                        valor = item[chave]
+                        if isinstance(valor, str):
+                            if "," in valor:
+                                dezenas = [int(d.strip()) for d in valor.split(",")]
+                            else:
+                                dezenas = [int(d) for d in valor.split()]
+                        elif isinstance(valor, list):
+                            dezenas = [int(x) for x in valor]
+                        else:
+                            continue
+                        jogos_normalizados.append(sorted(dezenas))
+                        break
+            
+            # 2.2: Item é string
+            elif isinstance(item, str):
+                if "," in item:
+                    dezenas = [int(d.strip()) for d in item.split(",")]
+                else:
+                    dezenas = [int(d) for d in item.split()]
+                jogos_normalizados.append(sorted(dezenas))
+            
+            # 2.3: Item já é lista/tupla
+            elif isinstance(item, (list, tuple)):
+                jogos_normalizados.append(sorted([int(x) for x in item]))
+    
+    return jogos_normalizados
 
 # =====================================================
 # FUNÇÃO PARA CONVERTER NUMPY TYPES PARA PYTHON NATIVE
@@ -800,6 +864,98 @@ def get_jogos_seguros():
     return []
 
 # =====================================================
+# FUNÇÃO PARA EXTRAIR JOGO POR ÍNDICE (CORREÇÃO LINHA 1270)
+# =====================================================
+def extrair_jogo_por_indice(jogos_gerados, indice):
+    """
+    Extrai um jogo específico por índice, independente do formato de entrada
+    Retorna uma lista de inteiros
+    """
+    if jogos_gerados is None:
+        return []
+    
+    # Verificar se o índice é válido
+    if indice < 0 or indice >= len(jogos_gerados):
+        return []
+    
+    # Caso 1: É DataFrame
+    if isinstance(jogos_gerados, pd.DataFrame):
+        try:
+            jogo_row = jogos_gerados.iloc[indice]
+            # Procurar coluna com as dezenas
+            for col in ["Dezenas", "dezenas", "Jogo", "jogo", "Numeros", "numeros"]:
+                if col in jogo_row:
+                    valor = jogo_row[col]
+                    if isinstance(valor, str):
+                        if "," in valor:
+                            return [int(d.strip()) for d in valor.split(",")]
+                        else:
+                            return [int(d) for d in valor.split()]
+                    elif isinstance(valor, list):
+                        return [int(d) for d in valor]
+                    elif isinstance(valor, (int, float)):
+                        # Pode ser o número do jogo, não as dezenas
+                        continue
+            # Se não encontrou, tentar a primeira coluna que parece lista
+            for col in jogo_row.index:
+                valor = jogo_row[col]
+                if isinstance(valor, str) and ("," in valor or " " in valor):
+                    if "," in valor:
+                        return [int(d.strip()) for d in valor.split(",")]
+                    else:
+                        return [int(d) for d in valor.split()]
+            return []
+        except:
+            return []
+    
+    # Caso 2: É lista
+    elif isinstance(jogos_gerados, list):
+        try:
+            item = jogos_gerados[indice]
+            
+            # 2.1: Item é dicionário
+            if isinstance(item, dict):
+                for chave in ["Dezenas", "dezenas", "Jogo", "jogo", "Numeros", "numeros"]:
+                    if chave in item:
+                        valor = item[chave]
+                        if isinstance(valor, str):
+                            if "," in valor:
+                                return [int(d.strip()) for d in valor.split(",")]
+                            else:
+                                return [int(d) for d in valor.split()]
+                        elif isinstance(valor, list):
+                            return [int(d) for d in valor]
+                return []
+            
+            # 2.2: Item é string
+            elif isinstance(item, str):
+                if "," in item:
+                    return [int(d.strip()) for d in item.split(",")]
+                else:
+                    return [int(d) for d in item.split()]
+            
+            # 2.3: Item já é lista
+            elif isinstance(item, (list, tuple)):
+                return [int(d) for d in item]
+            
+            else:
+                return []
+        except:
+            return []
+    
+    return []
+
+# =====================================================
+# CONSTANTES GLOBAIS PARA MOTOR ESTATÍSTICO
+# =====================================================
+FEATURE_WEIGHTS = {
+    "pares": 1.0,
+    "primos": 1.0,
+    "consecutivos": 0.8,
+    "soma": 0.6
+}
+
+# =====================================================
 # INTERFACE PRINCIPAL
 # =====================================================
 def main():
@@ -1113,6 +1269,10 @@ def main():
             # Usar função segura para acessar jogos
             jogos_gerados = get_jogos_seguros()
             
+            # GARANTIR QUE OS JOGOS ESTÃO NO FORMATO CORRETO
+            if jogos_gerados:
+                jogos_gerados = garantir_jogos_como_listas(jogos_gerados)
+            
             # Verificar se há jogos gerados
             if not jogos_gerados:
                 st.warning("⚠️ Gere jogos na aba 'Fechamento 3622' primeiro para avaliá-los estatisticamente!")
@@ -1255,7 +1415,7 @@ def main():
                     </div>
                     """, unsafe_allow_html=True)
                 
-                # TOP JOGOS RECOMENDADOS
+                # TOP JOGOS RECOMENDADOS - COM CORREÇÃO DA LINHA 1270
                 st.markdown("### 🏆 Top 5 Jogos Recomendados")
                 
                 # Verificar se há jogos suficientes
@@ -1265,46 +1425,49 @@ def main():
                     
                     for idx, row in top_jogos.iterrows():
                         jogo_idx = row["Jogo"] - 1
-                        # Verificação de segurança do índice
-                        if 0 <= jogo_idx < len(jogos_gerados):
-                            jogo = jogos_gerados[jogo_idx]
-                            
-                            # Análise individual do jogo
-                            features_jogo = {
-                                "pares": contar_pares(jogo),
-                                "primos": contar_primos(jogo),
-                                "consecutivos": contar_consecutivos(jogo),
-                                "soma": sum(jogo)
-                            }
-                            
-                            # HTML do jogo
-                            nums_html = formatar_jogo_html(jogo)
-                            
-                            # Determinar cor baseada no score
-                            if row["Score (0-100)"] >= 80:
-                                cor = "#4ade80"  # Verde (excelente)
-                            elif row["Score (0-100)"] >= 60:
-                                cor = "gold"      # Amarelo (bom)
-                            else:
-                                cor = "#4cc9f0"   # Azul (médio)
-                            
-                            st.markdown(f"""
-                            <div style='border-left: 5px solid {cor}; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
-                                <div style='display:flex; justify-content:space-between;'>
-                                    <strong>Rank #{row['Rank']} | Score {row['Score (0-100)']:.1f}</strong>
-                                    <small>Percentil {row['Percentil']:.0f}%</small>
-                                </div>
-                                <div>{nums_html}</div>
-                                <div style='display:flex; gap:15px; margin-top:8px; color:#aaa; font-size:0.9em;'>
-                                    <span>⚖️ {features_jogo['pares']} pares</span>
-                                    <span>🔢 {features_jogo['primos']} primos</span>
-                                    <span>📈 {features_jogo['consecutivos']} consec</span>
-                                    <span>➕ {features_jogo['soma']}</span>
-                                </div>
-                            </div>
-                            """, unsafe_allow_html=True)
+                        
+                        # USAR FUNÇÃO DE EXTRAÇÃO SEGURA (CORREÇÃO LINHA 1270)
+                        jogo = extrair_jogo_por_indice(jogos_gerados, jogo_idx)
+                        
+                        # Verificar se conseguiu extrair o jogo
+                        if not jogo:
+                            st.error(f"❌ Não foi possível extrair o jogo {row['Jogo']}")
+                            continue
+                        
+                        # Análise individual do jogo
+                        features_jogo = {
+                            "pares": contar_pares(jogo),
+                            "primos": contar_primos(jogo),
+                            "consecutivos": contar_consecutivos(jogo),
+                            "soma": sum(jogo)
+                        }
+                        
+                        # HTML do jogo
+                        nums_html = formatar_jogo_html(jogo)
+                        
+                        # Determinar cor baseada no score
+                        if row["Score (0-100)"] >= 80:
+                            cor = "#4ade80"  # Verde (excelente)
+                        elif row["Score (0-100)"] >= 60:
+                            cor = "gold"      # Amarelo (bom)
                         else:
-                            st.error(f"Erro: Índice de jogo inválido - Jogo {row['Jogo']} não encontrado")
+                            cor = "#4cc9f0"   # Azul (médio)
+                        
+                        st.markdown(f"""
+                        <div style='border-left: 5px solid {cor}; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
+                            <div style='display:flex; justify-content:space-between;'>
+                                <strong>Rank #{row['Rank']} | Score {row['Score (0-100)']:.1f}</strong>
+                                <small>Percentil {row['Percentil']:.0f}%</small>
+                            </div>
+                            <div>{nums_html}</div>
+                            <div style='display:flex; gap:15px; margin-top:8px; color:#aaa; font-size:0.9em;'>
+                                <span>⚖️ {features_jogo['pares']} pares</span>
+                                <span>🔢 {features_jogo['primos']} primos</span>
+                                <span>📈 {features_jogo['consecutivos']} consec</span>
+                                <span>➕ {features_jogo['soma']}</span>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
                 else:
                     st.info("Nenhum jogo disponível para exibição.")
                 
