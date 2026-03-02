@@ -1339,7 +1339,7 @@ def main():
                             """
                             Gera um jogo otimizado usando as distribuições empíricas
                             """
-                            max_tentativas = 80000
+                            max_tentativas = 280000
                             melhor_jogo = None
                             melhor_logL = -float('inf')
                             
