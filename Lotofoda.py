@@ -1415,7 +1415,9 @@ def main():
                     </div>
                     """, unsafe_allow_html=True)
                 
-                # TOP JOGOS RECOMENDADOS - COM CORREÇÃO DA LINHA 1270
+                # =====================================================
+                # TOP JOGOS RECOMENDADOS - CORRIGIDO (TEXTO COMPLETO)
+                # =====================================================
                 st.markdown("### 🏆 Top 5 Jogos Recomendados")
                 
                 # Verificar se há jogos suficientes
@@ -1453,6 +1455,7 @@ def main():
                         else:
                             cor = "#4cc9f0"   # Azul (médio)
                         
+                        # BLOCO CORRIGIDO - TEXTO COMPLETO SEM TRUNCAMENTO
                         st.markdown(f"""
                         <div style='border-left: 5px solid {cor}; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
                             <div style='display:flex; justify-content:space-between;'>
@@ -1460,11 +1463,11 @@ def main():
                                 <small>Percentil {row['Percentil']:.0f}%</small>
                             </div>
                             <div>{nums_html}</div>
-                            <div style='display:flex; gap:15px; margin-top:8px; color:#aaa; font-size:0.9em;'>
+                            <div style='display:flex; gap:15px; margin-top:8px; color:#aaa; font-size:0.9em; flex-wrap:wrap;'>
                                 <span>⚖️ {features_jogo['pares']} pares</span>
                                 <span>🔢 {features_jogo['primos']} primos</span>
-                                <span>📈 {features_jogo['consecutivos']} consec</span>
-                                <span>➕ {features_jogo['soma']}</span>
+                                <span>🔗 {features_jogo['consecutivos']} consecutivos</span>
+                                <span>➕ {features_jogo['soma']} soma</span>
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
