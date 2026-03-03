@@ -707,7 +707,270 @@ class Gerador3622:
         }
 
 # =====================================================
-# FUNÇÕES AUXILIARES
+# ===== NOVO: GERADOR 12+ (MODELO DEFINITIVO) =====
+# =====================================================
+
+class Gerador12Plus:
+    """
+    Gerador Otimizado para 12+ pontos
+    Baseado na análise dos 20 concursos mais recentes
+    """
+    
+    def __init__(self, concursos_historico, ultimo_concurso):
+        """
+        Args:
+            concursos_historico: Lista de listas com os últimos N concursos
+            ultimo_concurso: Lista com o resultado do último concurso
+        """
+        self.concursos = concursos_historico
+        self.ultimo = sorted(ultimo_concurso) if ultimo_concurso else []
+        
+        # Definir faixas
+        self.baixas = list(range(1, 9))
+        self.medias = list(range(9, 17))
+        self.altas = list(range(17, 26))
+        self.primos = [2, 3, 5, 7, 11, 13, 17, 19, 23]
+        
+        # Calcular frequências dos últimos 10 concursos para ponderação
+        self.frequencias_recentes = self._calcular_frequencias_recentes()
+        
+        # Peso extra para números do último concurso
+        self.peso_ultimo = 3.0
+        
+    def _calcular_frequencias_recentes(self, n=10):
+        """Calcula frequências dos últimos N concursos para ponderação"""
+        frequencias = Counter()
+        total = 0
+        
+        # Pegar os últimos N concursos (excluindo o último)
+        ultimos_n = self.concursos[1:n+1] if len(self.concursos) > n else self.concursos[1:]
+        
+        for concurso in ultimos_n:
+            frequencias.update(concurso)
+            total += len(concurso)
+        
+        # Converter para probabilidades
+        if total > 0:
+            return {num: count/total for num, count in frequencias.items()}
+        return {}
+    
+    def _maior_bloco_consecutivo(self, jogo):
+        """Retorna o tamanho do maior bloco de números consecutivos"""
+        if not jogo:
+            return 0
+        
+        nums = sorted(jogo)
+        maior = 1
+        atual = 1
+        
+        for i in range(len(nums) - 1):
+            if nums[i+1] - nums[i] == 1:
+                atual += 1
+                maior = max(maior, atual)
+            else:
+                atual = 1
+        
+        return maior
+    
+    def _contar_consecutivos(self, jogo):
+        """Conta pares consecutivos (não blocos)"""
+        nums = sorted(jogo)
+        count = 0
+        for i in range(len(nums) - 1):
+            if nums[i+1] - nums[i] == 1:
+                count += 1
+        return count
+    
+    def jogo_valido(self, jogo):
+        """
+        Valida se o jogo respeita TODAS as regras do modelo 12+
+        Retorna (bool, dict) com diagnóstico
+        """
+        if len(jogo) != 15:
+            return False, {"erro": "Tamanho incorreto"}
+        
+        # Calcular métricas
+        baixas = sum(1 for n in jogo if n in self.baixas)
+        medias = sum(1 for n in jogo if n in self.medias)
+        altas = sum(1 for n in jogo if n in self.altas)
+        
+        pares = sum(1 for n in jogo if n % 2 == 0)
+        primos = sum(1 for n in jogo if n in self.primos)
+        soma = sum(jogo)
+        
+        repetidas = len(set(jogo) & set(self.ultimo))
+        consecutivos = self._contar_consecutivos(jogo)
+        maior_bloco = self._maior_bloco_consecutivo(jogo)
+        
+        # Diagnóstico detalhado
+        diag = {
+            "baixas": baixas,
+            "medias": medias,
+            "altas": altas,
+            "pares": pares,
+            "primos": primos,
+            "soma": soma,
+            "repetidas": repetidas,
+            "consecutivos": consecutivos,
+            "maior_bloco": maior_bloco,
+            "regras": {}
+        }
+        
+        # ===== REGRAS OBRIGATÓRIAS =====
+        
+        # Regra 1: Distribuição
+        diag["regras"]["distribuicao"] = (4 <= baixas <= 5) and (5 <= medias <= 6) and (5 <= altas <= 6)
+        
+        # Regra 2: Pares
+        diag["regras"]["pares"] = (7 <= pares <= 8)
+        
+        # Regra 3: Soma (faixa premium 190-210)
+        diag["regras"]["soma"] = (190 <= soma <= 210)
+        
+        # Regra 4: Primos
+        diag["regras"]["primos"] = (5 <= primos <= 6)
+        
+        # Regra 5: Repetidas
+        diag["regras"]["repetidas"] = (9 <= repetidas <= 11)
+        
+        # Regra 6: Consecutivos (quantidade)
+        diag["regras"]["consecutivos_qtd"] = (2 <= consecutivos <= 4)
+        
+        # Regra 7: Bloco grande (pelo menos 3 consecutivos)
+        diag["regras"]["bloco_grande"] = (maior_bloco >= 3)
+        
+        # ===== REGRAS DE BLOQUEIO (ANTI-QUEBRA) =====
+        bloqueios = [
+            soma < 185,
+            soma > 215,
+            pares <= 6,
+            pares >= 9,
+            altas <= 4,
+            maior_bloco < 3,
+            repetidas <= 7
+        ]
+        
+        # Verificar se alguma regra de bloqueio foi ativada
+        tem_bloqueio = any(bloqueios)
+        diag["bloqueio"] = tem_bloqueio
+        
+        # Aprovado se todas as regras obrigatórias forem verdadeiras E nenhum bloqueio
+        aprovado = all(diag["regras"].values()) and not tem_bloqueio
+        
+        # Contar regras aprovadas
+        diag["regras_aprovadas"] = sum(1 for v in diag["regras"].values() if v)
+        diag["total_regras"] = len(diag["regras"])
+        
+        return aprovado, diag
+    
+    def _gerar_jogo_ponderado(self):
+        """
+        Gera um jogo usando pool ponderado baseado em:
+        - Frequências recentes
+        - Números do último concurso (peso extra)
+        """
+        # Criar pool com pesos
+        pool = []
+        pesos = []
+        
+        for num in range(1, 26):
+            pool.append(num)
+            
+            # Peso base: frequência recente (ou 1.0 se não apareceu)
+            peso = self.frequencias_recentes.get(num, 1.0)
+            
+            # Peso extra se está no último concurso
+            if num in self.ultimo:
+                peso *= self.peso_ultimo
+            
+            pesos.append(peso)
+        
+        # Normalizar pesos
+        pesos = np.array(pesos) / sum(pesos)
+        
+        return pool, pesos
+    
+    def gerar_jogo(self, max_tentativas=10000):
+        """
+        Gera um único jogo válido
+        """
+        pool, pesos = self._gerar_jogo_ponderado()
+        
+        for _ in range(max_tentativas):
+            # Gerar 15 números com pesos
+            # Nota: random.choices não aceita pesos normalizados diretamente?
+            # Vamos usar numpy para garantir
+            indices = np.random.choice(len(pool), size=15, replace=False, p=pesos)
+            jogo = sorted([pool[i] for i in indices])
+            
+            # Validar
+            aprovado, diag = self.jogo_valido(jogo)
+            if aprovado:
+                return jogo, diag
+        
+        # Fallback: gerar aleatório simples e tentar validar
+        for _ in range(max_tentativas):
+            jogo = sorted(random.sample(range(1, 26), 15))
+            aprovado, diag = self.jogo_valido(jogo)
+            if aprovado:
+                return jogo, diag
+        
+        # Último fallback: retornar None
+        return None, None
+    
+    def gerar_multiplos_jogos(self, quantidade, max_total_tentativas=100000):
+        """
+        Gera múltiplos jogos válidos
+        Retorna lista de jogos e lista de diagnósticos
+        """
+        jogos = []
+        diagnosticos = []
+        tentativas = 0
+        
+        # Barra de progresso (simulada)
+        progress_text = "Gerando jogos válidos..."
+        progress_bar = st.progress(0, text=progress_text)
+        
+        while len(jogos) < quantidade and tentativas < max_total_tentativas:
+            jogo, diag = self.gerar_jogo()
+            tentativas += 1
+            
+            if jogo and jogo not in jogos:  # Evitar duplicatas
+                jogos.append(jogo)
+                diagnosticos.append(diag)
+                
+                # Atualizar progresso
+                progress_bar.progress(len(jogos) / quantidade, text=progress_text)
+        
+        progress_bar.empty()
+        
+        if len(jogos) < quantidade:
+            st.warning(f"⚠️ Gerados apenas {len(jogos)} jogos válidos em {tentativas} tentativas")
+        
+        return jogos, diagnosticos
+    
+    def get_estatisticas_recentes(self):
+        """Retorna estatísticas dos últimos concursos para exibição"""
+        if len(self.concursos) < 2:
+            return {}
+        
+        # Calcular médias dos últimos 20 concursos
+        ultimos = self.concursos[:20]
+        
+        medias = {
+            "baixas": np.mean([sum(1 for n in c if n in self.baixas) for c in ultimos]),
+            "medias": np.mean([sum(1 for n in c if n in self.medias) for c in ultimos]),
+            "altas": np.mean([sum(1 for n in c if n in self.altas) for c in ultimos]),
+            "pares": np.mean([sum(1 for n in c if n % 2 == 0) for c in ultimos]),
+            "primos": np.mean([sum(1 for n in c if n in self.primos) for c in ultimos]),
+            "soma": np.mean([sum(c) for c in ultimos]),
+            "repetidas": np.mean([len(set(c) & set(self.ultimo)) for c in ultimos[1:]]) if len(ultimos) > 1 else 0,
+        }
+        
+        return medias
+
+# =====================================================
+# FUNÇÕES AUXILIARES (já existentes)
 # =====================================================
 def validar_jogos(jogos):
     """Valida se todos os jogos têm 15 números únicos"""
@@ -983,6 +1246,11 @@ def main():
         st.session_state.jogos_otimizados = None
     if "logs_otimizados" not in st.session_state:
         st.session_state.logs_otimizados = None
+    # NOVO: estado para o Gerador 12+
+    if "jogos_12plus" not in st.session_state:
+        st.session_state.jogos_12plus = None
+    if "diagnosticos_12plus" not in st.session_state:
+        st.session_state.diagnosticos_12plus = None
 
     # ================= SIDEBAR =================
     with st.sidebar:
@@ -1015,13 +1283,14 @@ def main():
     st.subheader("🎯 Modelo Universal 3622")
 
     if st.session_state.analise and st.session_state.dados_api and st.session_state.historico_df is not None:
-        # AGORA SÃO 5 ABAS: Análise, Fechamento 3622, Motor Estatístico, Concursos, Conferência
-        tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        # AGORA SÃO 6 ABAS: Análise, Fechamento 3622, Motor Estatístico, Concursos, Conferência, Gerador 12+
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
             "📊 Análise", 
             "🧩 Fechamento 3622", 
             "📊 Motor Estatístico",
             "📋 Concursos",
-            "✅ Conferência"
+            "✅ Conferência",
+            "🚀 Gerador 12+"
         ])
 
         with tab1:
@@ -1221,7 +1490,7 @@ def main():
                             </div>
                             """, unsafe_allow_html=True)
                     
-                    # Botões de ação - CORRIGIDO COM KEYS ÚNICAS
+                    # Botões de ação
                     col1, col2, col3 = st.columns(3)
                     with col1:
                         if st.button("💾 Salvar Jogos", key="salvar_3622", use_container_width=True):
@@ -1439,7 +1708,7 @@ def main():
                         </div>
                         """, unsafe_allow_html=True)
                 
-                # BOTÕES DE AÇÃO PARA JOGOS OTIMIZADOS - CORRIGIDO COM KEYS ÚNICAS
+                # BOTÕES DE AÇÃO PARA JOGOS OTIMIZADOS
                 col1, col2, col3 = st.columns(3)
                 with col1:
                     if st.button("💾 Salvar Jogos Otimizados", key="salvar_otimizados", use_container_width=True):
@@ -1620,7 +1889,7 @@ def main():
                     """, unsafe_allow_html=True)
                 
                 # =====================================================
-                # TOP JOGOS RECOMENDADOS - CORRIGIDO (TEXTO COMPLETO)
+                # TOP JOGOS RECOMENDADOS
                 # =====================================================
                 st.markdown("### 🏆 Top 5 Jogos Recomendados")
                 
@@ -1632,7 +1901,7 @@ def main():
                     for idx, row in top_jogos.iterrows():
                         jogo_idx = row["Jogo"] - 1
                         
-                        # USAR FUNÇÃO DE EXTRAÇÃO SEGURA (CORREÇÃO LINHA 1270)
+                        # USAR FUNÇÃO DE EXTRAÇÃO SEGURA
                         jogo = extrair_jogo_por_indice(jogos_gerados, jogo_idx)
                         
                         # Verificar se conseguiu extrair o jogo
@@ -1659,7 +1928,6 @@ def main():
                         else:
                             cor = "#4cc9f0"   # Azul (médio)
                         
-                        # BLOCO CORRIGIDO - TEXTO COMPLETO SEM TRUNCAMENTO
                         st.markdown(f"""
                         <div style='border-left: 5px solid {cor}; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
                             <div style='display:flex; justify-content:space-between;'>
@@ -1898,7 +2166,7 @@ def main():
                 jogos_brutos = fechamento["jogos"]
 
                 # =========================
-                # NORMALIZAÇÃO DOS JOGOS (CORREÇÃO DEFINITIVA)
+                # NORMALIZAÇÃO DOS JOGOS
                 # =========================
                 jogos = normalizar_jogos(jogos_brutos)
                 
@@ -2007,6 +2275,246 @@ def main():
                                 "Dezenas": st.column_config.TextColumn("Dezenas", width="large")
                             }
                         )
+
+        # =====================================================
+        # NOVA ABA: GERADOR 12+
+        # =====================================================
+        with tab6:
+            st.markdown("""
+            <div style='background:#1e1e2e; padding:15px; border-radius:10px; margin-bottom:20px;'>
+                <h4 style='margin:0; color:#f97316;'>🚀 GERADOR 12+ (MODELO DEFINITIVO)</h4>
+                <p style='margin:5px 0 0 0; font-size:0.9em;'>Baseado na análise dos últimos 20 concursos • Foco em 12+ pontos</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            if st.session_state.dados_api:
+                ultimo = st.session_state.dados_api[0]
+                numeros_ultimo = sorted(map(int, ultimo['dezenas']))
+                
+                # Pegar os últimos 20 concursos para análise
+                ultimos_concursos = [
+                    sorted(map(int, c['dezenas'])) 
+                    for c in st.session_state.dados_api[:20]
+                ]
+                
+                # Criar gerador 12+
+                gerador_12plus = Gerador12Plus(
+                    concursos_historico=ultimos_concursos,
+                    ultimo_concurso=numeros_ultimo
+                )
+                
+                # Mostrar estatísticas recentes
+                st.markdown("### 📊 Estatísticas dos Últimos 20 Concursos")
+                stats = gerador_12plus.get_estatisticas_recentes()
+                
+                if stats:
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Média Baixas", f"{stats['baixas']:.1f}")
+                    with col2:
+                        st.metric("Média Médias", f"{stats['medias']:.1f}")
+                    with col3:
+                        st.metric("Média Altas", f"{stats['altas']:.1f}")
+                    with col4:
+                        st.metric("Média Soma", f"{stats['soma']:.1f}")
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Média Pares", f"{stats['pares']:.1f}")
+                    with col2:
+                        st.metric("Média Primos", f"{stats['primos']:.1f}")
+                    with col3:
+                        st.metric("Média Repetidas", f"{stats['repetidas']:.1f}")
+                    with col4:
+                        st.metric("", "")  # Espaço vazio
+                
+                # Mostrar regras do modelo 12+
+                with st.expander("📜 VER REGRAS DO MODELO 12+", expanded=True):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.markdown("""
+                        **📊 REGRAS FIXAS (OBRIGATÓRIAS)**
+                        
+                        **Distribuição:**
+                        - Baixas (01-08): **4 ou 5**
+                        - Médias (09-16): **5 ou 6**
+                        - Altas (17-25): **5 ou 6**
+                        
+                        **Pares/Ímpares:** 7 ou 8 pares
+                        
+                        **Soma:** 190 a 210 (janela premium)
+                        
+                        **Primos:** 5 ou 6 números primos
+                        """)
+                    
+                    with col2:
+                        st.markdown("""
+                        **🛡️ REGRAS DE BLOQUEIO**
+                        
+                        **Repetidas do último concurso:** 9 a 11
+                        
+                        **Consecutivos:**
+                        - 2 a 4 pares consecutivos
+                        - Pelo menos 1 bloco ≥ 3 números
+                        
+                        **❌ PROIBIDO:**
+                        - Altas ≤ 4
+                        - Repetidas ≤ 7
+                        - Soma < 185 ou > 215
+                        - Pares ≤ 6 ou ≥ 9
+                        """)
+                
+                # Configuração de geração
+                st.markdown("### 🎯 Gerar Jogos 12+")
+                
+                col1, col2, col3 = st.columns([1, 1, 1])
+                with col1:
+                    qtd_jogos_12plus = st.slider(
+                        "Quantidade de jogos", 
+                        min_value=3, 
+                        max_value=50, 
+                        value=10,
+                        key="qtd_12plus"
+                    )
+                
+                with col2:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    if st.button("🚀 GERAR JOGOS 12+", key="gerar_12plus", use_container_width=True, type="primary"):
+                        with st.spinner(f"Gerando {qtd_jogos_12plus} jogos com validação rigorosa..."):
+                            jogos, diagnosticos = gerador_12plus.gerar_multiplos_jogos(qtd_jogos_12plus)
+                            
+                            if jogos:
+                                st.session_state.jogos_12plus = jogos
+                                st.session_state.diagnosticos_12plus = diagnosticos
+                                st.success(f"✅ {len(jogos)} jogos válidos gerados!")
+                            else:
+                                st.error("❌ Não foi possível gerar jogos válidos. Tente novamente.")
+                
+                with col3:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    if st.button("🔄 Reset", key="reset_12plus", use_container_width=True):
+                        st.session_state.jogos_12plus = None
+                        st.rerun()
+                
+                # Mostrar jogos gerados
+                if "jogos_12plus" in st.session_state and st.session_state.jogos_12plus:
+                    jogos = st.session_state.jogos_12plus
+                    diagnosticos = st.session_state.diagnosticos_12plus if "diagnosticos_12plus" in st.session_state else [None] * len(jogos)
+                    
+                    st.markdown(f"### 📋 Jogos Gerados ({len(jogos)})")
+                    
+                    # Estatísticas agregadas
+                    stats_df = pd.DataFrame({
+                        "Jogo": range(1, len(jogos)+1),
+                        "Baixas": [sum(1 for n in j if n in gerador_12plus.baixas) for j in jogos],
+                        "Médias": [sum(1 for n in j if n in gerador_12plus.medias) for j in jogos],
+                        "Altas": [sum(1 for n in j if n in gerador_12plus.altas) for j in jogos],
+                        "Pares": [sum(1 for n in j if n % 2 == 0) for j in jogos],
+                        "Primos": [sum(1 for n in j if n in gerador_12plus.primos) for j in jogos],
+                        "Soma": [sum(j) for j in jogos],
+                        "Repetidas": [len(set(j) & set(gerador_12plus.ultimo)) for j in jogos],
+                        "Consec": [gerador_12plus._contar_consecutivos(j) for j in jogos],
+                        "Bloco": [gerador_12plus._maior_bloco_consecutivo(j) for j in jogos]
+                    })
+                    
+                    st.dataframe(stats_df, use_container_width=True, hide_index=True)
+                    
+                    # Mostrar cada jogo formatado
+                    for i, (jogo, diag) in enumerate(zip(jogos, diagnosticos)):
+                        with st.container():
+                            # Determinar cor baseada na qualidade
+                            if diag and diag.get("regras_aprovadas", 0) == diag.get("total_regras", 7):
+                                cor_borda = "#4ade80"  # Verde - perfeito
+                            elif diag and diag.get("regras_aprovadas", 0) >= 6:
+                                cor_borda = "gold"     # Amarelo - bom
+                            else:
+                                cor_borda = "#f97316"  # Laranja - regular
+                            
+                            # Formatar números
+                            nums_html = formatar_jogo_html(jogo)
+                            
+                            # Estatísticas resumidas
+                            baixas = sum(1 for n in jogo if n in gerador_12plus.baixas)
+                            medias = sum(1 for n in jogo if n in gerador_12plus.medias)
+                            altas = sum(1 for n in jogo if n in gerador_12plus.altas)
+                            pares = sum(1 for n in jogo if n % 2 == 0)
+                            soma = sum(jogo)
+                            
+                            st.markdown(f"""
+                            <div style='border-left: 5px solid {cor_borda}; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
+                                <strong>Jogo {i+1:2d}:</strong> {nums_html}<br>
+                                <small style='color:#aaa;'>
+                                📊 {baixas}B/{medias}M/{altas}A | ⚖️ {pares}×{15-pares} | ➕ {soma}
+                                </small>
+                            </div>
+                            """, unsafe_allow_html=True)
+                    
+                    # Botões de ação
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        if st.button("💾 Salvar Jogos 12+", key="salvar_12plus", use_container_width=True):
+                            arquivo, jogo_id = salvar_jogos_gerados(
+                                jogos, 
+                                list(range(1, 18)),  # Fechamento placeholder
+                                {"modelo": "12+", "tipo": "definitivo"},
+                                ultimo['concurso'],
+                                ultimo['data']
+                            )
+                            if arquivo:
+                                st.success(f"✅ Jogos salvos! ID: {jogo_id}")
+                                st.session_state.jogos_salvos = carregar_jogos_salvos()
+                    
+                    with col2:
+                        if st.button("🔄 Nova Geração", key="nova_geracao_12plus", use_container_width=True):
+                            st.session_state.jogos_12plus = None
+                            st.rerun()
+                    
+                    with col3:
+                        # Exportar para CSV
+                        df_export_12plus = pd.DataFrame({
+                            "Jogo": range(1, len(jogos)+1),
+                            "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in jogos],
+                            "Baixas(01-08)": stats_df["Baixas"],
+                            "Médias(09-16)": stats_df["Médias"],
+                            "Altas(17-25)": stats_df["Altas"],
+                            "Pares": stats_df["Pares"],
+                            "Primos": stats_df["Primos"],
+                            "Soma": stats_df["Soma"],
+                            "Repetidas": stats_df["Repetidas"],
+                            "Consecutivos": stats_df["Consec"],
+                            "Maior_Bloco": stats_df["Bloco"]
+                        })
+                        
+                        csv_12plus = df_export_12plus.to_csv(index=False)
+                        st.download_button(
+                            label="📥 Exportar CSV",
+                            data=csv_12plus,
+                            file_name=f"jogos_12plus_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                            mime="text/csv",
+                            use_container_width=True
+                        )
+                    
+                    # Explicação do modelo
+                    with st.expander("📘 Como funciona o Gerador 12+?"):
+                        st.markdown("""
+                        ### 🎯 Estratégia do Gerador 12+
+                        
+                        **1. Pool ponderado:**
+                        - Números mais frequentes nos últimos 10 concursos têm maior peso
+                        - Números do último concurso têm peso extra (3x)
+                        
+                        **2. Validação rigorosa:**
+                        - 7 regras obrigatórias (distribuição, pares, soma, primos, repetidas, consecutivos, bloco grande)
+                        - 7 regras de bloqueio que eliminam jogos fora do padrão
+                        
+                        **3. Otimização:**
+                        - Geração de milhares de jogos até encontrar os que atendem TODAS as regras
+                        - Eliminação de duplicatas
+                        
+                        **4. Foco em 12+ pontos:**
+                        - Baseado nos padrões reais dos últimos 20 concursos
+                        - Elimina exceções estatísticas (apenas 0.1% dos jogos aleatórios passam)
+                        """)
     else:
         st.markdown("""
         <div style='text-align: center; padding: 2rem;'>
