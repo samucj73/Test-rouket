@@ -1594,7 +1594,9 @@ def detectar_sinal(concursos_historico, lookback=5):
 
 def filtro_573_ultra(jogo):
     """
-    Filtro ultra-restritivo baseado no padrão 5-7-3.
+    Filtro ultra-restritivo baseado nos 4 padrões prioritários:
+    5-7-3 (PRIORIDADE MÁXIMA), 5-6-4, 6-6-3, 4-7-4
+    Estes 4 padrões cobrem ~68% dos concursos reais.
     Retorna True se o jogo PASSA no filtro.
     """
     f = contar_faixas_573(jogo)
@@ -1602,28 +1604,46 @@ def filtro_573_ultra(jogo):
     s = soma_573(jogo)
     bloco = maior_bloco_consecutivo_573(jogo)
 
-    # 1. Faixas: Baixa=5, Média=6 ou 7, Alta=3 ou 4
-    if not (f["baixa"] == 5 and f["media"] in [6, 7] and f["alta"] in [3, 4]):
+    # PADRÕES PRIORITÁRIOS (os únicos aceitos)
+    padrao_valido = False
+    
+    # 1. 5-7-3 (PRIORIDADE MÁXIMA)
+    if f["baixa"] == 5 and f["media"] == 7 and f["alta"] == 3:
+        padrao_valido = True
+    
+    # 2. 5-6-4
+    elif f["baixa"] == 5 and f["media"] == 6 and f["alta"] == 4:
+        padrao_valido = True
+    
+    # 3. 6-6-3
+    elif f["baixa"] == 6 and f["media"] == 6 and f["alta"] == 3:
+        padrao_valido = True
+    
+    # 4. 4-7-4
+    elif f["baixa"] == 4 and f["media"] == 7 and f["alta"] == 4:
+        padrao_valido = True
+    
+    if not padrao_valido:
         return False
 
-    # 2. Paridade: 6 a 8 pares
+    # Paridade: 6 a 8 pares
     if not (6 <= pares <= 8):
         return False
 
-    # 3. Soma: 185 a 205
+    # Soma: 185 a 205
     if not (185 <= s <= 205):
         return False
 
-    # 4. Bloco: Pelo menos 4 números consecutivos em algum lugar
+    # Bloco: Pelo menos 4 números consecutivos em algum lugar
     if bloco < 4:
         return False
 
-    # 5. Altas Frias (23-25): No máximo 1
+    # Altas Frias (23-25): No máximo 1
     altas_frias = sum(1 for n in jogo if n >= 23)
     if altas_frias > 1:
         return False
 
-    # 6. Médias Blindadas: Pelo menos 6 números no coração do volante (9-16)
+    # Médias Blindadas: Pelo menos 6 números no coração do volante (9-16)
     medias_centro = {9, 10, 11, 12, 13, 14, 15, 16}
     if len(set(jogo) & medias_centro) < 6:
         return False
@@ -1633,6 +1653,7 @@ def filtro_573_ultra(jogo):
 def score_jogo_573(jogo):
     """
     Atribui uma pontuação de qualidade ao jogo. Quanto maior, melhor.
+    Prioridade máxima para o padrão 5-7-3.
     """
     pontos = 0
     f = contar_faixas_573(jogo)
@@ -1640,11 +1661,15 @@ def score_jogo_573(jogo):
     s = soma_573(jogo)
     bloco = maior_bloco_consecutivo_573(jogo)
 
-    # Pontos por configuração de faixas
+    # Pontos extras por padrões prioritários
     if f["baixa"] == 5 and f["media"] == 7 and f["alta"] == 3:
-        pontos += 3
+        pontos += 5  # PRIORIDADE MÁXIMA
     elif f["baixa"] == 5 and f["media"] == 6 and f["alta"] == 4:
-        pontos += 2
+        pontos += 4
+    elif f["baixa"] == 6 and f["media"] == 6 and f["alta"] == 3:
+        pontos += 4
+    elif f["baixa"] == 4 and f["media"] == 7 and f["alta"] == 4:
+        pontos += 4
 
     # Pontos por forte presença no miolo
     if f["media"] >= 7:
@@ -1697,10 +1722,32 @@ def pipeline_selecao_inteligente(jogos_gerados, concursos_historico, modo_operac
         "sinal_estava_ativo": sinal_ativo,
         "jogos_filtrados_573": 0,
         "jogos_reprovados_score": 0,
-        "threshold_score": threshold_score
+        "threshold_score": threshold_score,
+        "jogos_por_padrao": {
+            "5-7-3": 0,
+            "5-6-4": 0,
+            "6-6-3": 0,
+            "4-7-4": 0,
+            "outros": 0
+        }
     }
 
     for jogo in jogos_gerados:
+        # Identificar padrão do jogo
+        f = contar_faixas_573(jogo)
+        padrao = f"{f['baixa']}-{f['media']}-{f['alta']}"
+        
+        if padrao == "5-7-3":
+            estatisticas["jogos_por_padrao"]["5-7-3"] += 1
+        elif padrao == "5-6-4":
+            estatisticas["jogos_por_padrao"]["5-6-4"] += 1
+        elif padrao == "6-6-3":
+            estatisticas["jogos_por_padrao"]["6-6-3"] += 1
+        elif padrao == "4-7-4":
+            estatisticas["jogos_por_padrao"]["4-7-4"] += 1
+        else:
+            estatisticas["jogos_por_padrao"]["outros"] += 1
+
         passa_pelo_filtro = True
         if sinal_ativo:
             # Modo SNIPER: Aplica o filtro ultra
@@ -3298,7 +3345,8 @@ def main():
             st.markdown("""
             <div style='background:#1e1e2e; padding:15px; border-radius:10px; margin-bottom:20px; border-left:5px solid #aa00ff;'>
                 <h4 style='margin:0; color:#aa00ff;'>🧠 MODO INTELIGENTE 5-7-3</h4>
-                <p style='margin:5px 0 0 0; font-size:0.9em;'>Detector de Sinal Automático + Filtro de Elite. O sistema decide quando atirar.</p>
+                <p style='margin:5px 0 0 0; font-size:0.9em;'>Detector de Sinal Automático + Filtro de Elite com os 4 padrões prioritários</p>
+                <p style='margin:2px 0 0 0; font-size:0.85em; color:#ccc;'>Padrões aceitos: <strong>5-7-3</strong> (prioridade máxima), 5-6-4, 6-6-3, 4-7-4 (cobrem 68% dos concursos)</p>
             </div>
             """, unsafe_allow_html=True)
 
@@ -3317,16 +3365,50 @@ def main():
                     st.markdown("""
                     <div style='background:#aa00ff20; padding:20px; border-radius:15px; text-align:center; border:2px solid #aa00ff; margin-bottom:15px;'>
                         <h2 style='color:#aa00ff; margin:0;'>🟢 SINAL SNIPER ATIVADO</h2>
-                        <p style='margin:0;'>Modo de alta precisão. Filtro 5-7-3 aplicado.</p>
+                        <p style='margin:0;'>Modo de alta precisão. Apenas os 4 padrões prioritários são aceitos.</p>
                     </div>
                     """, unsafe_allow_html=True)
                 else:
                     st.markdown("""
                     <div style='background:#66666620; padding:20px; border-radius:15px; text-align:center; border:2px solid #666; margin-bottom:15px;'>
                         <h2 style='color:#ccc; margin:0;'>⚪ SINAL DESLIGADO</h2>
-                        <p style='margin:0;'>Modo livre. Apenas score mínimo aplicado.</p>
+                        <p style='margin:0;'>Modo livre. Apenas score mínimo aplicado, mas padrões fora dos 4 prioritários são tolerados.</p>
                     </div>
                     """, unsafe_allow_html=True)
+
+                # --- ESTATÍSTICAS DOS PADRÕES NOS CONCURSOS REAIS ---
+                with st.expander("📊 Análise dos Padrões nos Concursos Reais", expanded=False):
+                    # Analisar os últimos 50 concursos
+                    ultimos_50 = [sorted(map(int, c['dezenas'])) for c in st.session_state.dados_api[:50]]
+                    contagem_padroes = {
+                        "5-7-3": 0,
+                        "5-6-4": 0,
+                        "6-6-3": 0,
+                        "4-7-4": 0,
+                        "outros": 0
+                    }
+                    
+                    for c in ultimos_50:
+                        f = contar_faixas_573(c)
+                        padrao = f"{f['baixa']}-{f['media']}-{f['alta']}"
+                        if padrao in contagem_padroes:
+                            contagem_padroes[padrao] += 1
+                        else:
+                            contagem_padroes["outros"] += 1
+                    
+                    # Mostrar em gráfico de barras
+                    df_padroes = pd.DataFrame({
+                        "Padrão": list(contagem_padroes.keys()),
+                        "Ocorrências": list(contagem_padroes.values()),
+                        "Percentual": [f"{v/len(ultimos_50)*100:.1f}%" for v in contagem_padroes.values()]
+                    })
+                    
+                    st.dataframe(df_padroes, use_container_width=True, hide_index=True)
+                    
+                    total_cobertura = (contagem_padroes["5-7-3"] + contagem_padroes["5-6-4"] + 
+                                      contagem_padroes["6-6-3"] + contagem_padroes["4-7-4"])
+                    st.metric("Cobertura dos 4 padrões", f"{total_cobertura/len(ultimos_50)*100:.1f}%", 
+                             f"{total_cobertura}/{len(ultimos_50)} concursos")
 
                 # --- SELEÇÃO DE JOGOS PARA FILTRAR ---
                 st.markdown("### 🎯 Aplicar Inteligência aos Jogos")
@@ -3365,7 +3447,7 @@ def main():
                     threshold_score = st.slider("Score Mínimo", 0, 10, 6, help="Jogos com score abaixo disso são descartados.", key="threshold_intel")
                 with col2:
                     modo_operacao = st.selectbox("Modo de Operação", ["auto", "forcar_on", "forcar_off"], 
-                                                help="Auto: sistema decide. Forçar ON: sempre aplica filtro. Forçar OFF: nunca aplica.",
+                                                help="Auto: sistema decide. Forçar ON: sempre aplica filtro com apenas 4 padrões. Forçar OFF: nunca aplica filtro.",
                                                 key="modo_intel")
                 with col3:
                     st.markdown("<br>", unsafe_allow_html=True)
@@ -3409,24 +3491,36 @@ def main():
                     with col4:
                         st.metric("Reprovados por Score", stats['jogos_reprovados_score'])
 
+                    # Distribuição dos padrões
+                    st.markdown("#### 📈 Distribuição dos Padrões nos Jogos Analisados")
+                    df_padroes_analisados = pd.DataFrame({
+                        "Padrão": list(stats['jogos_por_padrao'].keys()),
+                        "Quantidade": list(stats['jogos_por_padrao'].values())
+                    })
+                    st.dataframe(df_padroes_analisados, use_container_width=True, hide_index=True)
+
                     # Tabela com scores dos jogos aprovados
                     scores_data = []
                     for i, jogo in enumerate(jogos_finais):
+                        f = contar_faixas_573(jogo)
+                        padrao = f"{f['baixa']}-{f['media']}-{f['alta']}"
                         scores_data.append({
                             "Rank": i+1,
+                            "Padrão": padrao,
                             "Score": score_jogo_573(jogo),
                             "Dezenas": ", ".join(f"{n:02d}" for n in jogo)
                         })
                     
                     scores_df = pd.DataFrame(scores_data).sort_values("Score", ascending=False).reset_index(drop=True)
                     scores_df["Rank"] = scores_df.index + 1
-                    st.dataframe(scores_df[["Rank", "Score", "Dezenas"]], use_container_width=True, hide_index=True)
+                    st.dataframe(scores_df[["Rank", "Padrão", "Score", "Dezenas"]], use_container_width=True, hide_index=True)
 
                     # Mostrar cada jogo formatado
                     for i, jogo in enumerate(jogos_finais[:10]):  # Limitar a 10 para não poluir
                         with st.container():
                             # Calcular métricas para exibição
                             f = contar_faixas_573(jogo)
+                            padrao = f"{f['baixa']}-{f['media']}-{f['alta']}"
                             pares, _ = paridade_573(jogo)
                             s = soma_573(jogo)
                             score = score_jogo_573(jogo)
@@ -3434,19 +3528,25 @@ def main():
                             # Formatar números
                             nums_html = formatar_jogo_html(jogo)
                             
-                            # Cor baseada no score
-                            if score >= 8:
+                            # Cor baseada no padrão e score
+                            if padrao == "5-7-3":
                                 cor_borda = "#aa00ff"  # Roxo - elite
-                            elif score >= 6:
+                                destaque = "🔥 PRIORIDADE MÁXIMA"
+                            elif score >= 8:
                                 cor_borda = "#4ade80"  # Verde - ótimo
-                            else:
+                                destaque = "✅ Excelente"
+                            elif score >= 6:
                                 cor_borda = "#4cc9f0"  # Azul - bom
+                                destaque = "👍 Bom"
+                            else:
+                                cor_borda = "#f97316"  # Laranja - regular
+                                destaque = "⚠️ Regular"
                             
                             st.markdown(f"""
                             <div style='border-left: 5px solid {cor_borda}; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
                                 <div style='display:flex; justify-content:space-between;'>
-                                    <strong>Jogo Elite #{i+1}</strong>
-                                    <span style='color:{cor_borda}; font-weight:bold;'>Score: {score:.1f}</span>
+                                    <strong>Jogo Elite #{i+1} - Padrão {padrao}</strong>
+                                    <span style='color:{cor_borda}; font-weight:bold;'>Score: {score:.1f} | {destaque}</span>
                                 </div>
                                 <div>{nums_html}</div>
                                 <div style='display:flex; gap:15px; margin-top:8px; color:#aaa; font-size:0.9em; flex-wrap:wrap;'>
@@ -3466,7 +3566,7 @@ def main():
                             arquivo, jogo_id = salvar_jogos_gerados(
                                 jogos_finais,
                                 list(range(1, 18)),
-                                {"modelo": "Inteligencia 5-7-3", "sinal": sinal_detectado},
+                                {"modelo": "Inteligencia 5-7-3", "sinal": sinal_detectado, "padroes": "4 prioritários"},
                                 ultimo['concurso'],
                                 ultimo['data']
                             )
@@ -3483,6 +3583,7 @@ def main():
                         # Exportar CSV
                         df_export_intel = pd.DataFrame({
                             "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in jogos_finais],
+                            "Padrão": [f"{contar_faixas_573(j)['baixa']}-{contar_faixas_573(j)['media']}-{contar_faixas_573(j)['alta']}" for j in jogos_finais],
                             "Score": [score_jogo_573(j) for j in jogos_finais],
                             "Baixas": [contar_faixas_573(j)["baixa"] for j in jogos_finais],
                             "Médias": [contar_faixas_573(j)["media"] for j in jogos_finais],
