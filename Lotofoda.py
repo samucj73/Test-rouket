@@ -1501,6 +1501,224 @@ def extrair_jogo_por_indice(jogos_gerados, indice):
     return []
 
 # =====================================================
+# MÓDULO DE INTELIGÊNCIA: DETECTOR DE SINAL + FILTRO 5-7-3
+# =====================================================
+
+def faixa_573(n):
+    """Classifica um número em faixa para o filtro 5-7-3."""
+    if 1 <= n <= 8:
+        return "baixa"
+    elif 9 <= n <= 16:
+        return "media"
+    else:
+        return "alta"
+
+def contar_faixas_573(jogo):
+    """Conta quantos números em cada faixa (baixa, media, alta)."""
+    f = {"baixa": 0, "media": 0, "alta": 0}
+    for n in jogo:
+        f[faixa_573(n)] += 1
+    return f
+
+def paridade_573(jogo):
+    """Retorna a contagem de pares e ímpares."""
+    pares = sum(1 for n in jogo if n % 2 == 0)
+    return pares, 15 - pares
+
+def soma_573(jogo):
+    """Calcula a soma total do jogo."""
+    return sum(jogo)
+
+def maior_bloco_consecutivo_573(jogo):
+    """Encontra o tamanho do maior bloco de números consecutivos."""
+    jogo_sorted = sorted(jogo)
+    if not jogo_sorted:
+        return 0
+    maior = atual = 1
+    for i in range(1, len(jogo_sorted)):
+        if jogo_sorted[i] == jogo_sorted[i-1] + 1:
+            atual += 1
+            maior = max(maior, atual)
+        else:
+            atual = 1
+    return maior
+
+def detectar_sinal(concursos_historico, lookback=5):
+    """
+    Detecta se o sistema deve entrar em modo 'SNIPER' (Sinal ON).
+    Args:
+        concursos_historico: Lista de listas com os últimos N concursos.
+        lookback: Número de concursos recentes para análise.
+    Returns:
+        bool: True se o sinal está ON (ativar filtro), False caso contrário.
+    """
+    if len(concursos_historico) < 3:
+        return False  # Não há dados suficientes para detectar sinal
+
+    recentes = concursos_historico[:lookback]
+    sinais_detectados = 0
+
+    # --- SINAL A: Excesso de Altas (17-25) nos últimos 3 concursos ---
+    altas_excesso_count = 0
+    for c in recentes[:3]:
+        if contar_faixas_573(c)["alta"] >= 6:
+            altas_excesso_count += 1
+    if altas_excesso_count >= 2:
+        sinais_detectados += 1
+
+    # --- SINAL B: Médias (9-16) Reprimidas nos últimos 2 concursos ---
+    if len(recentes) >= 2:
+        medias_baixas_count = 0
+        for c in recentes[:2]:
+            if contar_faixas_573(c)["media"] <= 5:
+                medias_baixas_count += 1
+        if medias_baixas_count == 2:
+            sinais_detectados += 1
+
+    # --- SINAL C: Falta de Blocos Grandes nos últimos 2 concursos ---
+    if len(recentes) >= 2 and all(maior_bloco_consecutivo_573(c) <= 3 for c in recentes[:2]):
+        sinais_detectados += 1
+
+    # --- SINAL D: Soma Fora da Zona Premium nos últimos 2 concursos ---
+    if len(recentes) >= 2:
+        soma_fora_count = 0
+        for c in recentes[:2]:
+            s = soma_573(c)
+            if s < 180 or s > 210:
+                soma_fora_count += 1
+        if soma_fora_count >= 1: # Se pelo menos um deles está fora
+            sinais_detectados += 1
+
+    # REGRA FINAL: Sinal ON se pelo menos 3 sinais forem detectados
+    return sinais_detectados >= 3
+
+def filtro_573_ultra(jogo):
+    """
+    Filtro ultra-restritivo baseado no padrão 5-7-3.
+    Retorna True se o jogo PASSA no filtro.
+    """
+    f = contar_faixas_573(jogo)
+    pares, _ = paridade_573(jogo)
+    s = soma_573(jogo)
+    bloco = maior_bloco_consecutivo_573(jogo)
+
+    # 1. Faixas: Baixa=5, Média=6 ou 7, Alta=3 ou 4
+    if not (f["baixa"] == 5 and f["media"] in [6, 7] and f["alta"] in [3, 4]):
+        return False
+
+    # 2. Paridade: 6 a 8 pares
+    if not (6 <= pares <= 8):
+        return False
+
+    # 3. Soma: 185 a 205
+    if not (185 <= s <= 205):
+        return False
+
+    # 4. Bloco: Pelo menos 4 números consecutivos em algum lugar
+    if bloco < 4:
+        return False
+
+    # 5. Altas Frias (23-25): No máximo 1
+    altas_frias = sum(1 for n in jogo if n >= 23)
+    if altas_frias > 1:
+        return False
+
+    # 6. Médias Blindadas: Pelo menos 6 números no coração do volante (9-16)
+    medias_centro = {9, 10, 11, 12, 13, 14, 15, 16}
+    if len(set(jogo) & medias_centro) < 6:
+        return False
+
+    return True
+
+def score_jogo_573(jogo):
+    """
+    Atribui uma pontuação de qualidade ao jogo. Quanto maior, melhor.
+    """
+    pontos = 0
+    f = contar_faixas_573(jogo)
+    pares, _ = paridade_573(jogo)
+    s = soma_573(jogo)
+    bloco = maior_bloco_consecutivo_573(jogo)
+
+    # Pontos por configuração de faixas
+    if f["baixa"] == 5 and f["media"] == 7 and f["alta"] == 3:
+        pontos += 3
+    elif f["baixa"] == 5 and f["media"] == 6 and f["alta"] == 4:
+        pontos += 2
+
+    # Pontos por forte presença no miolo
+    if f["media"] >= 7:
+        pontos += 2
+    elif f["media"] == 6:
+        pontos += 1
+
+    # Pontos por blocos longos
+    if bloco >= 5:
+        pontos += 2
+    elif bloco == 4:
+        pontos += 1
+
+    # Pontos por paridade equilibrada
+    if pares == 7:
+        pontos += 1
+    elif pares == 8:
+        pontos += 0.5
+
+    # Pontos por soma na zona premium
+    if 190 <= s <= 200:
+        pontos += 2
+    elif 185 <= s <= 205:
+        pontos += 1
+
+    return pontos
+
+def pipeline_selecao_inteligente(jogos_gerados, concursos_historico, modo_operacao="auto", threshold_score=6):
+    """
+    Pipeline completo que decide se aplica o filtro pesado baseado no sinal.
+    Args:
+        jogos_gerados: Lista de jogos a serem filtrados.
+        concursos_historico: Lista de listas com os últimos concursos.
+        modo_operacao: "auto", "forcar_on", "forcar_off".
+        threshold_score: Pontuação mínima para um jogo ser aprovado.
+    Returns:
+        tuple: (jogos_aprovados, sinal_ativo, estatisticas)
+    """
+    sinal_ativo = False
+    if modo_operacao == "auto":
+        sinal_ativo = detectar_sinal(concursos_historico)
+    elif modo_operacao == "forcar_on":
+        sinal_ativo = True
+    elif modo_operacao == "forcar_off":
+        sinal_ativo = False
+
+    jogos_aprovados = []
+    estatisticas = {
+        "total_jogos_analisados": len(jogos_gerados),
+        "sinal_estava_ativo": sinal_ativo,
+        "jogos_filtrados_573": 0,
+        "jogos_reprovados_score": 0,
+        "threshold_score": threshold_score
+    }
+
+    for jogo in jogos_gerados:
+        passa_pelo_filtro = True
+        if sinal_ativo:
+            # Modo SNIPER: Aplica o filtro ultra
+            if not filtro_573_ultra(jogo):
+                passa_pelo_filtro = False
+                estatisticas["jogos_filtrados_573"] += 1
+
+        if passa_pelo_filtro:
+            # Sempre aplica o score, independente do modo
+            if score_jogo_573(jogo) >= threshold_score:
+                jogos_aprovados.append(jogo)
+            else:
+                estatisticas["jogos_reprovados_score"] += 1
+
+    estatisticas["jogos_aprovados"] = len(jogos_aprovados)
+    return jogos_aprovados, sinal_ativo, estatisticas
+
+# =====================================================
 # CONSTANTES GLOBAIS PARA MOTOR ESTATÍSTICO
 # =====================================================
 FEATURE_WEIGHTS = {
@@ -1548,6 +1766,11 @@ def main():
         st.session_state.jogos_13plus = None
     if "diagnosticos_13plus" not in st.session_state:
         st.session_state.diagnosticos_13plus = None
+    # NOVO: estado para jogos filtrados pela inteligência
+    if "jogos_inteligentes" not in st.session_state:
+        st.session_state.jogos_inteligentes = None
+    if "stats_inteligentes" not in st.session_state:
+        st.session_state.stats_inteligentes = None
 
     # ================= SIDEBAR =================
     with st.sidebar:
@@ -1580,15 +1803,16 @@ def main():
     st.subheader("🎯 Modelo Universal 3622")
 
     if st.session_state.analise and st.session_state.dados_api and st.session_state.historico_df is not None:
-        # AGORA SÃO 7 ABAS
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+        # AGORA SÃO 8 ABAS (adicionada a nova aba de inteligência)
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
             "📊 Análise", 
             "🧩 Fechamento 3622", 
             "📊 Motor Estatístico",
             "📋 Concursos",
             "✅ Conferência",
             "🚀 Gerador 12+",
-            "🔥 Gerador 13+"
+            "🔥 Gerador 13+",
+            "🧠 Inteligência 5-7-3"
         ])
 
         with tab1:
@@ -2815,7 +3039,7 @@ def main():
                         """)
 
         # =====================================================
-        # NOVA ABA: GERADOR 13+ (MODELO ULTRA)
+        # ABA: GERADOR 13+
         # =====================================================
         with tab7:
             st.markdown("""
@@ -3066,6 +3290,217 @@ def main():
                         - 13+ pontos (zona de convergência máxima)
                         - Tiro de precisão, não cobertura
                         """)
+        
+        # =====================================================
+        # NOVA ABA: INTELIGÊNCIA 5-7-3
+        # =====================================================
+        with tab8:
+            st.markdown("""
+            <div style='background:#1e1e2e; padding:15px; border-radius:10px; margin-bottom:20px; border-left:5px solid #aa00ff;'>
+                <h4 style='margin:0; color:#aa00ff;'>🧠 MODO INTELIGENTE 5-7-3</h4>
+                <p style='margin:5px 0 0 0; font-size:0.9em;'>Detector de Sinal Automático + Filtro de Elite. O sistema decide quando atirar.</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+            if st.session_state.dados_api:
+                # Pega os últimos concursos para análise de sinal
+                ultimos_concursos_para_sinal = [
+                    sorted(map(int, c['dezenas'])) for c in st.session_state.dados_api[:10]
+                ]
+
+                # --- DETECTOR DE SINAL EM TEMPO REAL ---
+                st.markdown("### 🔍 Análise de Sinal em Tempo Real")
+                sinal_detectado = detectar_sinal(ultimos_concursos_para_sinal)
+
+                # Indicador visual do sinal
+                if sinal_detectado:
+                    st.markdown("""
+                    <div style='background:#aa00ff20; padding:20px; border-radius:15px; text-align:center; border:2px solid #aa00ff; margin-bottom:15px;'>
+                        <h2 style='color:#aa00ff; margin:0;'>🟢 SINAL SNIPER ATIVADO</h2>
+                        <p style='margin:0;'>Modo de alta precisão. Filtro 5-7-3 aplicado.</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.markdown("""
+                    <div style='background:#66666620; padding:20px; border-radius:15px; text-align:center; border:2px solid #666; margin-bottom:15px;'>
+                        <h2 style='color:#ccc; margin:0;'>⚪ SINAL DESLIGADO</h2>
+                        <p style='margin:0;'>Modo livre. Apenas score mínimo aplicado.</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                # --- SELEÇÃO DE JOGOS PARA FILTRAR ---
+                st.markdown("### 🎯 Aplicar Inteligência aos Jogos")
+                
+                # Opção de escolher de qual gerador pegar os jogos
+                fonte_jogos = st.radio(
+                    "Selecione a fonte dos jogos:",
+                    ["Jogos do Fechamento 3622", "Jogos do Gerador 12+", "Jogos do Gerador 13+", "Gerar Novos Jogos 12+ para Teste"],
+                    horizontal=True,
+                    key="fonte_inteligencia"
+                )
+
+                jogos_para_filtrar = []
+                if fonte_jogos == "Jogos do Fechamento 3622" and st.session_state.jogos_3622:
+                    jogos_para_filtrar = st.session_state.jogos_3622
+                elif fonte_jogos == "Jogos do Gerador 12+" and st.session_state.jogos_12plus:
+                    jogos_para_filtrar = st.session_state.jogos_12plus
+                elif fonte_jogos == "Jogos do Gerador 13+" and st.session_state.jogos_13plus:
+                    jogos_para_filtrar = st.session_state.jogos_13plus
+                elif fonte_jogos == "Gerar Novos Jogos 12+ para Teste":
+                    with st.spinner("Gerando 20 jogos 12+ para teste..."):
+                        ultimo = st.session_state.dados_api[0]
+                        numeros_ultimo = sorted(map(int, ultimo['dezenas']))
+                        ultimos_concursos = [
+                            sorted(map(int, c['dezenas'])) 
+                            for c in st.session_state.dados_api[:20]
+                        ]
+                        gerador_12plus = Gerador12Plus(ultimos_concursos, numeros_ultimo)
+                        jogos_temp, _ = gerador_12plus.gerar_multiplos_jogos(20)
+                        if jogos_temp:
+                            jogos_para_filtrar = jogos_temp
+                            st.success(f"✅ 20 jogos 12+ gerados!")
+
+                col1, col2, col3 = st.columns([1,1,1])
+                with col1:
+                    threshold_score = st.slider("Score Mínimo", 0, 10, 6, help="Jogos com score abaixo disso são descartados.", key="threshold_intel")
+                with col2:
+                    modo_operacao = st.selectbox("Modo de Operação", ["auto", "forcar_on", "forcar_off"], 
+                                                help="Auto: sistema decide. Forçar ON: sempre aplica filtro. Forçar OFF: nunca aplica.",
+                                                key="modo_intel")
+                with col3:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    botao_filtrar = st.button("✨ FILTRAR JOGOS", type="primary", use_container_width=True, key="filtrar_intel")
+
+                if botao_filtrar:
+                    if not jogos_para_filtrar:
+                        st.warning("⚠️ Nenhum jogo encontrado na fonte selecionada. Gere jogos primeiro ou escolha outra fonte.")
+                    else:
+                        with st.spinner("Aplicando inteligência aos jogos..."):
+                            jogos_aprovados, sinal_estava_ativo, stats = pipeline_selecao_inteligente(
+                                jogos_para_filtrar, 
+                                ultimos_concursos_para_sinal,
+                                modo_operacao=modo_operacao,
+                                threshold_score=threshold_score
+                            )
+                        
+                        st.session_state.jogos_inteligentes = jogos_aprovados
+                        st.session_state.stats_inteligentes = stats
+                        st.success(f"✅ Filtragem concluída! {len(jogos_aprovados)} jogos aprovados.")
+
+                # --- EXIBIÇÃO DOS RESULTADOS ---
+                if "jogos_inteligentes" in st.session_state and st.session_state.jogos_inteligentes:
+                    jogos_finais = st.session_state.jogos_inteligentes
+                    stats = st.session_state.stats_inteligentes
+
+                    st.markdown("---")
+                    st.markdown("### 📊 Resultado da Seleção Inteligente")
+
+                    # Estatísticas do processo
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Jogos Analisados", stats['total_jogos_analisados'])
+                    with col2:
+                        st.metric("Jogos Aprovados", stats['jogos_aprovados'])
+                    with col3:
+                        if stats['sinal_estava_ativo']:
+                            st.metric("Filtro 5-7-3 Bloqueou", stats['jogos_filtrados_573'])
+                        else:
+                            st.metric("Filtro 5-7-3", "Inativo")
+                    with col4:
+                        st.metric("Reprovados por Score", stats['jogos_reprovados_score'])
+
+                    # Tabela com scores dos jogos aprovados
+                    scores_data = []
+                    for i, jogo in enumerate(jogos_finais):
+                        scores_data.append({
+                            "Rank": i+1,
+                            "Score": score_jogo_573(jogo),
+                            "Dezenas": ", ".join(f"{n:02d}" for n in jogo)
+                        })
+                    
+                    scores_df = pd.DataFrame(scores_data).sort_values("Score", ascending=False).reset_index(drop=True)
+                    scores_df["Rank"] = scores_df.index + 1
+                    st.dataframe(scores_df[["Rank", "Score", "Dezenas"]], use_container_width=True, hide_index=True)
+
+                    # Mostrar cada jogo formatado
+                    for i, jogo in enumerate(jogos_finais[:10]):  # Limitar a 10 para não poluir
+                        with st.container():
+                            # Calcular métricas para exibição
+                            f = contar_faixas_573(jogo)
+                            pares, _ = paridade_573(jogo)
+                            s = soma_573(jogo)
+                            score = score_jogo_573(jogo)
+                            
+                            # Formatar números
+                            nums_html = formatar_jogo_html(jogo)
+                            
+                            # Cor baseada no score
+                            if score >= 8:
+                                cor_borda = "#aa00ff"  # Roxo - elite
+                            elif score >= 6:
+                                cor_borda = "#4ade80"  # Verde - ótimo
+                            else:
+                                cor_borda = "#4cc9f0"  # Azul - bom
+                            
+                            st.markdown(f"""
+                            <div style='border-left: 5px solid {cor_borda}; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
+                                <div style='display:flex; justify-content:space-between;'>
+                                    <strong>Jogo Elite #{i+1}</strong>
+                                    <span style='color:{cor_borda}; font-weight:bold;'>Score: {score:.1f}</span>
+                                </div>
+                                <div>{nums_html}</div>
+                                <div style='display:flex; gap:15px; margin-top:8px; color:#aaa; font-size:0.9em; flex-wrap:wrap;'>
+                                    <span>📊 {f['baixa']}B/{f['media']}M/{f['alta']}A</span>
+                                    <span>⚖️ {pares}×{15-pares}</span>
+                                    <span>➕ {s}</span>
+                                    <span>🔗 bloco {maior_bloco_consecutivo_573(jogo)}</span>
+                                </div>
+                            </div>
+                            """, unsafe_allow_html=True)
+
+                    # Botões de ação
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        if st.button("💾 Salvar Jogos Inteligentes", key="salvar_intel", use_container_width=True):
+                            ultimo = st.session_state.dados_api[0]
+                            arquivo, jogo_id = salvar_jogos_gerados(
+                                jogos_finais,
+                                list(range(1, 18)),
+                                {"modelo": "Inteligencia 5-7-3", "sinal": sinal_detectado},
+                                ultimo['concurso'],
+                                ultimo['data']
+                            )
+                            if arquivo:
+                                st.success(f"✅ Jogos salvos! ID: {jogo_id}")
+                                st.session_state.jogos_salvos = carregar_jogos_salvos()
+                    
+                    with col2:
+                        if st.button("🔄 Nova Filtragem", use_container_width=True, key="nova_intel"):
+                            st.session_state.jogos_inteligentes = None
+                            st.rerun()
+                    
+                    with col3:
+                        # Exportar CSV
+                        df_export_intel = pd.DataFrame({
+                            "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in jogos_finais],
+                            "Score": [score_jogo_573(j) for j in jogos_finais],
+                            "Baixas": [contar_faixas_573(j)["baixa"] for j in jogos_finais],
+                            "Médias": [contar_faixas_573(j)["media"] for j in jogos_finais],
+                            "Altas": [contar_faixas_573(j)["alta"] for j in jogos_finais],
+                            "Pares": [paridade_573(j)[0] for j in jogos_finais],
+                            "Soma": [soma_573(j) for j in jogos_finais],
+                            "Maior_Bloco": [maior_bloco_consecutivo_573(j) for j in jogos_finais]
+                        })
+                        csv_intel = df_export_intel.to_csv(index=False)
+                        st.download_button(
+                            label="📥 Exportar CSV",
+                            data=csv_intel,
+                            file_name=f"jogos_inteligentes_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                            mime="text/csv",
+                            use_container_width=True
+                        )
+            else:
+                st.info("📥 Carregue os concursos na barra lateral para ativar a inteligência 5-7-3.")
     else:
         st.markdown("""
         <div style='text-align: center; padding: 2rem;'>
