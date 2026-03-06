@@ -15,8 +15,8 @@ import threading
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 import logging
 import math
-import statistics # [MELHORIA] Importado para análise estatística
-from collections import defaultdict # [MELHORIA] Importado para análise de erros
+import statistics
+from collections import defaultdict
 
 
 # =============================
@@ -26,7 +26,6 @@ from collections import defaultdict # [MELHORIA] Importado para análise de erro
 class ConfigManager:
     """Gerencia configurações e constantes do sistema"""
     
-    # ... (seu código existente permanece igual) ...
     API_KEY = os.getenv("FOOTBALL_API_KEY", "9058de85e3324bdb969adc005b5d918a")
     TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN","8351165117:AAFmqb3NrPsmT86_8C360eYzK71Qda1ah_4")
     TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "-1003073115320")
@@ -54,7 +53,6 @@ class ConfigManager:
     ALERTAS_COMPLETOS_PATH = "alertas_completos.json"
     RESULTADOS_COMPLETOS_PATH = "resultados_completos.json"
     
-    # [MELHORIA] Novo caminho para o histórico de performance do modelo
     MODELO_PERFORMANCE_PATH = "modelo_performance.json"
     
     # Dicionário de Ligas
@@ -85,10 +83,8 @@ class ConfigManager:
         """Obtém o ID da liga a partir do nome"""
         return cls.LIGA_DICT.get(liga_nome)
 
-# ... (suas classes RateLimiter, SmartCache, APIMonitor, ImageCache permanecem iguais) ...
 
 class RateLimiter:
-    # ... (código existente) ...
     _instance = None
     _lock = Lock()
     
@@ -130,8 +126,8 @@ class RateLimiter:
             self.requests.append(now)
             self.last_request_time = now
 
+
 class SmartCache:
-    # ... (código existente) ...
     def __init__(self, cache_type: str):
         self.cache = {}
         self.timestamps = {}
@@ -171,8 +167,8 @@ class SmartCache:
             self.cache.clear()
             self.timestamps.clear()
 
+
 class APIMonitor:
-    # ... (código existente) ...
     def __init__(self):
         self.total_requests = 0
         self.failed_requests = 0
@@ -212,8 +208,8 @@ class APIMonitor:
             self.rate_limit_hits = 0
             self.start_time = time.time()
 
+
 class ImageCache:
-    # ... (código existente) ...
     def __init__(self):
         self.cache = {}
         self.timestamps = {}
@@ -323,6 +319,7 @@ class ImageCache:
                 "hit_rate": f"{(len(self.cache) / max(self.max_size, 1)) * 100:.1f}%"
             }
 
+
 # =============================
 # CLASSES DE PERSISTÊNCIA
 # =============================
@@ -332,7 +329,6 @@ class DataStorage:
     
     @staticmethod
     def _serialize_for_json(obj):
-        # ... (código existente) ...
         if isinstance(obj, datetime):
             return obj.isoformat()
         elif isinstance(obj, dict):
@@ -343,7 +339,6 @@ class DataStorage:
     
     @staticmethod
     def carregar_json(caminho: str) -> dict:
-        # ... (código existente) ...
         try:
             if os.path.exists(caminho):
                 with open(caminho, "r", encoding='utf-8') as f:
@@ -368,7 +363,6 @@ class DataStorage:
     
     @staticmethod
     def salvar_json(caminho: str, dados: dict):
-        # ... (código existente) ...
         try:
             dados_serializados = DataStorage._serialize_for_json(dados)
             
@@ -382,18 +376,14 @@ class DataStorage:
             logging.error(f"Erro ao salvar {caminho}: {e}")
             st.error(f"Erro ao salvar {caminho}: {e}")
     
-    # [MELHORIA] Métodos para carregar/salvar performance do modelo
     @staticmethod
     def carregar_performance_modelo() -> dict:
-        """Carrega o histórico de performance do modelo"""
         return DataStorage.carregar_json(ConfigManager.MODELO_PERFORMANCE_PATH)
     
     @staticmethod
     def salvar_performance_modelo(performance: dict):
-        """Salva o histórico de performance do modelo"""
         DataStorage.salvar_json(ConfigManager.MODELO_PERFORMANCE_PATH, performance)
 
-    # ... (seus outros métodos de carregar/salvar permanecem iguais) ...
     @staticmethod
     def carregar_alertas() -> dict:
         return DataStorage.carregar_json(ConfigManager.ALERTAS_PATH)
@@ -510,12 +500,12 @@ class DataStorage:
             logging.error(f"Erro ao salvar histórico: {e}")
             st.error(f"Erro ao salvar histórico: {e}")
 
+
 # =============================
 # CLASSES DE MODELOS DE DADOS
 # =============================
 
 class Jogo:
-    # ... (código existente) ...
     def __init__(self, match_data: dict):
         self.id = match_data.get("id")
         self.home_team = match_data.get("homeTeam", {}).get("name", "")
@@ -524,11 +514,9 @@ class Jogo:
         self.status = match_data.get("status", "DESCONHECIDO")
         self.competition = match_data.get("competition", {}).get("name", "Desconhecido")
         
-        # Escudos dos times
         self.home_crest = match_data.get("homeTeam", {}).get("crest") or match_data.get("homeTeam", {}).get("logo", "")
         self.away_crest = match_data.get("awayTeam", {}).get("crest") or match_data.get("awayTeam", {}).get("logo", "")
         
-        # Análise calculada posteriormente
         self.tendencia = ""
         self.estimativa = 0.0
         self.probabilidade = 0.0
@@ -536,7 +524,6 @@ class Jogo:
         self.tipo_aposta = ""
         self.detalhes_analise = {}
         
-        # Resultados
         self.home_goals = None
         self.away_goals = None
         self.ht_home_goals = None
@@ -547,27 +534,23 @@ class Jogo:
         self.resultado_ambas_marcam = None
         self.conferido = False
         
-        # Para análise de favoritos
         self.favorito = ""
         self.confianca_vitoria = 0.0
         self.prob_home_win = 0.0
         self.prob_away_win = 0.0
         self.prob_draw = 0.0
         
-        # Para análise de gols HT
         self.tendencia_ht = ""
         self.confianca_ht = 0.0
         self.estimativa_total_ht = 0.0
         self.over_05_ht = 0.0
         self.over_15_ht = 0.0
         
-        # Para análise de ambas marcam
         self.tendencia_ambas_marcam = ""
         self.confianca_ambas_marcam = 0.0
         self.prob_ambas_marcam_sim = 0.0
         self.prob_ambas_marcam_nao = 0.0
     
-    # ... (seus outros métodos existentes) ...
     def validar_dados(self) -> bool:
         required_fields = [self.id, self.home_team, self.away_team, self.utc_date]
         return all(required_fields)
@@ -787,8 +770,8 @@ class Jogo:
         
         return data_dict
 
+
 class Alerta:
-    # ... (código existente) ...
     def __init__(self, jogo: Jogo, data_busca: str, tipo_alerta: str = "over_under"):
         self.jogo = jogo
         self.data_busca = data_busca
@@ -847,6 +830,7 @@ class Alerta:
         
         return alerta_dict
 
+
 # =============================
 # FUNÇÕES AUXILIARES
 # =============================
@@ -856,6 +840,7 @@ def clamp(valor, minimo, maximo):
 
 def sigmoid(x):
     return 1 / (1 + math.exp(-x))
+
 
 # =============================
 # [MELHORIA] NOVA CLASSE: AnalisadorPerformance
@@ -895,8 +880,7 @@ class AnalisadorPerformance:
             hist["greens"] += 1
         else:
             hist["reds"] += 1
-            # Guardar detalhes do erro para análise
-            if len(hist["erros"]) < 100:  # Limitar o histórico de erros
+            if len(hist["erros"]) < 100:
                 hist["erros"].append({
                     "alerta": alerta,
                     "metadata": metadata,
@@ -904,20 +888,17 @@ class AnalisadorPerformance:
                     "resultado_real": f"{metadata.get('home_goals', '?')}-{metadata.get('away_goals', '?')}"
                 })
         
-        # Estatísticas por liga
         liga = alerta.get("liga", "Desconhecida")
         hist["por_liga"][liga]["total"] += 1
         if resultado == "GREEN":
             hist["por_liga"][liga]["greens"] += 1
         
-        # Estatísticas por faixa de confiança
         confianca = alerta.get("confianca", 0)
         faixa = f"{int(confianca // 10 * 10)}-{int(confianca // 10 * 10 + 9)}"
         hist["por_faixa_confianca"][faixa]["total"] += 1
         if resultado == "GREEN":
             hist["por_faixa_confianca"][faixa]["greens"] += 1
         
-        # Estatísticas por tipo de aposta (over/under)
         tipo_aposta = alerta.get("tipo_aposta", "unknown")
         hist["por_tipo"][tipo_aposta]["total"] += 1
         if resultado == "GREEN":
@@ -926,10 +907,9 @@ class AnalisadorPerformance:
         self._salvar_historico()
     
     def obter_acuracia_por_liga(self, liga: str, tipo_alerta: str = "over_under") -> float:
-        """Retorna a acurácia histórica para uma liga específica"""
         chave = f"{tipo_alerta}_{datetime.now().strftime('%Y%m')}"
         if chave not in self.historico:
-            return 0.5  # Valor padrão se não houver histórico
+            return 0.5
         
         dados_liga = self.historico[chave]["por_liga"].get(liga, {})
         total = dados_liga.get("total", 0)
@@ -938,7 +918,6 @@ class AnalisadorPerformance:
         return dados_liga.get("greens", 0) / total
     
     def obter_acuracia_por_faixa_confianca(self, confianca: float, tipo_alerta: str = "over_under") -> float:
-        """Retorna a acurácia histórica para uma faixa de confiança"""
         chave = f"{tipo_alerta}_{datetime.now().strftime('%Y%m')}"
         if chave not in self.historico:
             return 0.5
@@ -951,24 +930,20 @@ class AnalisadorPerformance:
         return dados_faixa.get("greens", 0) / total
     
     def ajustar_limiar_confianca(self, tipo_alerta: str = "over_under") -> float:
-        """Sugere um limiar de confiança baseado na performance histórica"""
         chave = f"{tipo_alerta}_{datetime.now().strftime('%Y%m')}"
         if chave not in self.historico:
-            return 70.0  # Valor padrão
+            return 70.0
         
         dados = self.historico[chave]
         
-        # Encontrar a faixa de confiança com melhor equilíbrio entre quantidade e acurácia
         melhor_faixa = 70.0
         melhor_score = 0.0
         
         for faixa, stats in dados["por_faixa_confianca"].items():
-            if stats["total"] < 5:  # Ignorar faixas com poucos dados
+            if stats["total"] < 5:
                 continue
             
             acuracia = stats["greens"] / stats["total"] if stats["total"] > 0 else 0
-            
-            # Score = acurácia * sqrt(total) (priorizar faixas com muitos dados)
             score = acuracia * (stats["total"] ** 0.5)
             
             if score > melhor_score:
@@ -978,22 +953,21 @@ class AnalisadorPerformance:
                 except:
                     melhor_faixa = 70.0
         
-        return max(60.0, min(85.0, melhor_faixa))  # Limitar entre 60% e 85%
+        return max(60.0, min(85.0, melhor_faixa))
+
 
 # =============================
-# CLASSES DE ANÁLISE (COM MELHORIAS)
+# CLASSES DE ANÁLISE
 # =============================
 
 class AnalisadorEstatistico:
     """Realiza análises estatísticas para previsões"""
     
     def __init__(self):
-        # [MELHORIA] Inicializar o analisador de performance
         self.analisador_performance = AnalisadorPerformance()
 
     @staticmethod
     def calcular_probabilidade_vitoria(home: str, away: str, classificacao: dict) -> dict:
-        # ... (código existente, sem alterações) ...
         dados_home = classificacao.get(home, {
             "wins": 0, "draws": 0, "losses": 0,
             "played": 1, "scored": 0, "against": 0
@@ -1053,7 +1027,6 @@ class AnalisadorEstatistico:
 
     @staticmethod
     def calcular_probabilidade_gols_ht(home: str, away: str, classificacao: dict) -> dict:
-        # ... (código existente, sem alterações) ...
         dados_home = classificacao.get(home, {"scored": 0, "played": 1})
         dados_away = classificacao.get(away, {"scored": 0, "played": 1})
 
@@ -1088,7 +1061,6 @@ class AnalisadorEstatistico:
 
     @staticmethod
     def calcular_probabilidade_ambas_marcam(home: str, away: str, classificacao: dict) -> dict:
-        # ... (código existente, sem alterações) ...
         dados_home = classificacao.get(home, {
             "scored": 0, "against": 0, "played": 1,
             "wins": 0, "draws": 0, "losses": 0
@@ -1154,7 +1126,6 @@ class AnalisadorEstatistico:
 
     @staticmethod
     def calcular_conflito_over_btts(home: str, away: str, classificacao: dict, estimativa_total: float, resultado_btts: dict) -> dict:
-        # ... (código existente, sem alterações) ...
         dados_home = classificacao.get(home, {})
         dados_away = classificacao.get(away, {})
 
@@ -1210,7 +1181,6 @@ class AnalisadorEstatistico:
 
     @staticmethod
     def calcular_escore_confianca(probabilidade: float, confianca: float, estimativa_total: float, linha_mercado: float, conflito: dict) -> int:
-        # ... (código existente, sem alterações) ...
         prob_norm = clamp(probabilidade / 100, 0, 1)
         conf_norm = clamp(confianca / 100, 0, 1)
 
@@ -1234,16 +1204,15 @@ class AnalisadorEstatistico:
 
         return int(round(escore * 100))
 
+
 class AnalisadorTendencia:
     """Analisa tendências de gols em partidas - VERSÃO FINAL PROFISSIONAL COM MELHORIAS"""
 
     def __init__(self, classificacao: dict):
         self.classificacao = classificacao
-        # [MELHORIA] Inicializar o analisador de performance
         self.analisador_performance = AnalisadorPerformance()
 
     def calcular_tendencia_completa(self, home: str, away: str) -> dict:
-        # ... (seu código existente, com ajustes finos) ...
         dados_home = self.classificacao.get(home, {})
         dados_away = self.classificacao.get(away, {})
 
@@ -1276,8 +1245,6 @@ class AnalisadorTendencia:
         media_away_feitos = clamp(media_away_feitos, 0.6, 3.4)
         media_away_sofridos = clamp(media_away_sofridos, 0.6, 3.2)
 
-        # [MELHORIA] Estimativa de gols - Ajuste baseado nos resultados da análise
-        # A análise mostrou que o modelo subestima jogos com OVER 1.5 e superestima OVER 2.5 em certos contextos.
         estimativa_total = (
             media_home_feitos * 0.55 +
             media_away_feitos * 0.55 +
@@ -1289,63 +1256,52 @@ class AnalisadorTendencia:
         fator_ofensivo_away = media_away_feitos / max(media_home_sofridos, 0.75)
         fator_ataque = (fator_ofensivo_home + fator_ofensivo_away) / 2
 
-        # [MELHORIA] Ajuste mais conservador para ataques muito fortes, evitando otimismo excessivo
         if fator_ataque >= 1.6:
-            estimativa_total *= 1.08 # Antes 1.12
+            estimativa_total *= 1.08
         elif fator_ataque >= 1.35:
-            estimativa_total *= 1.05 # Antes 1.08
+            estimativa_total *= 1.05
         elif fator_ataque <= 0.7:
-            estimativa_total *= 0.95 # Antes 0.92
+            estimativa_total *= 0.95
 
-        fator_casa = 1.05 + (media_home_feitos - media_home_sofridos) * 0.08 # Antes 1.06 e 0.10
-        fator_casa = clamp(fator_casa, 0.96, 1.15) # Antes 0.95, 1.18
+        fator_casa = 1.05 + (media_home_feitos - media_home_sofridos) * 0.08
+        fator_casa = clamp(fator_casa, 0.96, 1.15)
         estimativa_total *= fator_casa
 
-        # [MELHORIA] Suavizar a estimativa, dando menos peso à média geral (2.5)
-        estimativa_total = (estimativa_total * 0.85) + (2.5 * 0.15) # Antes 0.75 e 0.25
+        estimativa_total = (estimativa_total * 0.85) + (2.5 * 0.15)
 
-        # [MELHORIA] Novos limites baseados nos resultados: jogos com estimativa entre 2.2 e 2.8 são os mais perigosos
-        estimativa_total = clamp(estimativa_total, 1.4, 4.0) # Antes 1.3, 4.2
+        estimativa_total = clamp(estimativa_total, 1.4, 4.0)
 
-        # =============================
-        # ESCOLHA DO MERCADO (REFINADO)
-        # =============================
-        # [MELHORIA] Lógica de escolha de mercado mais granular e segura
-        if estimativa_total <= 1.6: # Antes 1.5
+        if estimativa_total <= 1.6:
             mercado = "UNDER 2.5"
             tipo_aposta = "under"
             linha_mercado = 2.5
-            # [MELHORIA] Probabilidade mais realista para jogos com poucos gols
-            probabilidade_base = sigmoid((2.5 - estimativa_total) * 1.4) # Antes 1.3
+            probabilidade_base = sigmoid((2.5 - estimativa_total) * 1.4)
 
-        elif estimativa_total <= 2.1: # Antes 2.0
-            # [MELHORIA] Zona cinzenta: favorecer UNDER ou OVER 1.5 baseado no ataque
-            if fator_ataque < 0.95: # Antes 0.9
+        elif estimativa_total <= 2.1:
+            if fator_ataque < 0.95:
                 mercado = "UNDER 2.5"
                 tipo_aposta = "under"
                 linha_mercado = 2.5
-                probabilidade_base = sigmoid((2.5 - estimativa_total) * 1.3) # Antes 1.2
+                probabilidade_base = sigmoid((2.5 - estimativa_total) * 1.3)
             else:
                 mercado = "OVER 1.5"
                 tipo_aposta = "over"
                 linha_mercado = 1.5
-                probabilidade_base = sigmoid((estimativa_total - 1.5) * 1.6) # Antes 1.5
+                probabilidade_base = sigmoid((estimativa_total - 1.5) * 1.6)
 
-        elif estimativa_total >= 3.4: # Antes 3.3
+        elif estimativa_total >= 3.4:
             mercado = "OVER 3.5"
             tipo_aposta = "over"
             linha_mercado = 3.5
-            probabilidade_base = sigmoid((estimativa_total - 3.5) * 1.1) # Antes 1.0
+            probabilidade_base = sigmoid((estimativa_total - 3.5) * 1.1)
 
-        elif estimativa_total >= 2.8: # Antes 2.6
-            # [MELHORIA] Só promove para OVER 2.5 se o ataque for muito bom
-            if fator_ataque >= 1.3: # Antes 1.2
+        elif estimativa_total >= 2.8:
+            if fator_ataque >= 1.3:
                 mercado = "OVER 2.5"
                 tipo_aposta = "over"
                 linha_mercado = 2.5
-                probabilidade_base = sigmoid((estimativa_total - 2.5) * 1.2) # Antes 1.15
+                probabilidade_base = sigmoid((estimativa_total - 2.5) * 1.2)
             else:
-                # [MELHORIA] Se o ataque não justifica, fica em OVER 1.5
                 mercado = "OVER 1.5"
                 tipo_aposta = "over"
                 linha_mercado = 1.5
@@ -1355,13 +1311,9 @@ class AnalisadorTendencia:
             mercado = "OVER 1.5"
             tipo_aposta = "over"
             linha_mercado = 1.5
-            probabilidade_base = sigmoid((estimativa_total - 1.5) * 1.6) # Antes 1.5
+            probabilidade_base = sigmoid((estimativa_total - 1.5) * 1.6)
 
-        # =============================
-        # FILTROS DE SEGURANÇA (MAIS RÍGIDOS)
-        # =============================
-        # [MELHORIA] Filtrar UNDER 2.5 perigoso
-        if tipo_aposta == "under" and estimativa_total > 1.8: # Antes 1.85
+        if tipo_aposta == "under" and estimativa_total > 1.8:
             return {
                 "tendencia": "NÃO APOSTAR",
                 "estimativa": round(estimativa_total, 2),
@@ -1372,8 +1324,7 @@ class AnalisadorTendencia:
                 "detalhes": {"motivo": f"UNDER perigoso (estimativa alta: {estimativa_total:.2f})"}
             }
 
-        # [MELHORIA] Filtrar OVER 2.5 em jogos mornos
-        if tipo_aposta == "over" and linha_mercado == 2.5 and estimativa_total < 2.6: # Antes não tinha
+        if tipo_aposta == "over" and linha_mercado == 2.5 and estimativa_total < 2.6:
             return {
                 "tendencia": "NÃO APOSTAR",
                 "estimativa": round(estimativa_total, 2),
@@ -1384,40 +1335,33 @@ class AnalisadorTendencia:
                 "detalhes": {"motivo": f"OVER 2.5 sem força (estimativa: {estimativa_total:.2f})"}
             }
 
-        # =============================
-        # CÁLCULO DE CONFIANÇA (REFINADO)
-        # =============================
         distancia_linha = abs(estimativa_total - linha_mercado)
 
-        # [MELHORIA] A confiança base agora considera o tipo de aposta e a distância de forma mais realista
         if tipo_aposta == "over":
-            base_conf = probabilidade_base * 55 # Antes 50
-            # [MELHORIA] Bônus maior para distâncias grandes em overs
-            dist_conf = min(distancia_linha * 28, 32) # Antes 25, 30
-        else: # under
-            base_conf = probabilidade_base * 45 # Antes 50
-            dist_conf = min(distancia_linha * 22, 28) # Antes 25, 30
+            base_conf = probabilidade_base * 55
+            dist_conf = min(distancia_linha * 28, 32)
+        else:
+            base_conf = probabilidade_base * 45
+            dist_conf = min(distancia_linha * 22, 28)
 
         consistencia = 0
-        if played_home >= 6 and played_away >= 6: # Antes 5
-            consistencia += 12 # Antes 10
+        if played_home >= 6 and played_away >= 6:
+            consistencia += 12
         if abs(media_home_feitos - media_away_feitos) < 1.0:
-            consistencia += 6 # Antes 5
-        if fator_ataque > 1.4 or fator_ataque < 0.7: # Antes 1.3, 0.8
-            consistencia += 8 # Antes 5
+            consistencia += 6
+        if fator_ataque > 1.4 or fator_ataque < 0.7:
+            consistencia += 8
 
-        confianca = clamp(base_conf + dist_conf + consistencia, 35, 78) # Antes 35, 75
+        confianca = clamp(base_conf + dist_conf + consistencia, 35, 78)
 
-        # [MELHORIA] Filtro de confiança mais baixo para overs de linha baixa
         if tipo_aposta == "over" and linha_mercado == 1.5:
             if media_home_feitos < 1.2 and media_away_feitos < 1.2:
-                confianca *= 0.8 # Antes 0.85
+                confianca *= 0.8
 
-        # [MELHORIA] Penalidade para jogos com histórico defensivo forte
         if media_home_sofridos < 0.8 and media_away_sofridos < 0.8:
             confianca *= 0.9
 
-        if confianca < 48: # Antes 45
+        if confianca < 48:
             return {
                 "tendencia": "NÃO APOSTAR",
                 "estimativa": round(estimativa_total, 2),
@@ -1444,10 +1388,8 @@ class AnalisadorTendencia:
             }
         }
 
-# ... (suas classes ResultadosTopAlertas, AlertaCompleto, GerenciadorAlertasCompletos permanecem iguais) ...
 
 class ResultadosTopAlertas:
-    # ... (código existente) ...
     def __init__(self, sistema_principal):
         self.sistema = sistema_principal
         self.config = sistema_principal.config
@@ -1456,7 +1398,6 @@ class ResultadosTopAlertas:
         self.api_client = sistema_principal.api_client
     
     def conferir_resultados_top_alertas(self, data_selecionada):
-        # ... (código existente) ...
         hoje = data_selecionada.strftime("%Y-%m-%d")
         data_br = data_selecionada.strftime("%d/%m/%Y")
         st.subheader(f"🏆 Conferindo Resultados TOP Alertas - {data_br}")
@@ -1575,7 +1516,6 @@ class ResultadosTopAlertas:
         self._mostrar_resumo_geral(alertas_por_grupo)
     
     def _agrupar_alertas_top_por_data_tipo(self, alertas_top, data_busca):
-        # ... (código existente) ...
         alertas_por_grupo = {
             "over_under": {},
             "favorito": {},
@@ -1644,7 +1584,6 @@ class ResultadosTopAlertas:
         return alertas_por_grupo
     
     def _salvar_alertas_top_atualizados(self, alertas_top):
-        # ... (código existente) ...
         try:
             DataStorage.salvar_alertas_top(alertas_top)
             logging.info(f"✅ Alertas TOP salvos com sucesso")
@@ -1652,7 +1591,6 @@ class ResultadosTopAlertas:
             logging.error(f"❌ Erro ao salvar alertas TOP: {e}")
     
     def _processar_resultado_alerta(self, alerta, match_data, tipo_alerta):
-        # ... (código existente) ...
         try:
             fixture_id = alerta.get("id")
             score = match_data.get("score", {})
@@ -1800,7 +1738,6 @@ class ResultadosTopAlertas:
             return None
     
     def _gerar_poster_para_grupo(self, jogos_conferidos, tipo_alerta, grupo_id, data_selecionada):
-        # ... (código existente, com pequena correção na caption) ...
         data_str = data_selecionada.strftime("%d/%m/%Y")
         
         try:
@@ -1836,7 +1773,6 @@ class ResultadosTopAlertas:
                 poster = self.poster_generator.gerar_poster_resultados(jogos_conferidos, tipo_alerta)
                 
                 if poster and self._verificar_poster_valido(poster):
-                    # [MELHORIA] Caption mais limpa
                     caption = (
                         f"<b>{titulo}</b>\n\n"
                         f"<b>📊 {len(jogos_conferidos)} JOGOS</b>\n"
@@ -1873,7 +1809,6 @@ class ResultadosTopAlertas:
                 return False
     
     def _mostrar_resumo_geral(self, alertas_por_grupo):
-        # ... (código existente) ...
         st.markdown("---")
         st.subheader("📈 RESUMO GERAL TOP ALERTAS")
         
@@ -1977,7 +1912,6 @@ class ResultadosTopAlertas:
                 st.write(f"⏳ {pendentes} pendentes")
     
     def _mostrar_resultado_alerta_top(self, alerta, home_goals, away_goals, ht_home_goals, ht_away_goals, jogo):
-        # ... (código existente) ...
         tipo_alerta = alerta.get("tipo_alerta", "over_under")
         
         if tipo_alerta == "over_under":
@@ -2008,7 +1942,6 @@ class ResultadosTopAlertas:
             st.write(f"   🎯 Resultado Ambas Marcam: {resultado}")
     
     def _verificar_poster_valido(self, poster: io.BytesIO) -> bool:
-        # ... (código existente) ...
         try:
             if not poster:
                 return False
@@ -2041,7 +1974,6 @@ class ResultadosTopAlertas:
             return False
     
     def _enviar_resultados_como_texto(self, titulo, jogos_lista, greens, reds, taxa_acerto, tipo_alerta):
-        # ... (código existente, com pequena melhoria) ...
         texto_fallback = f"{titulo}\n\n"
         texto_fallback += f"📊 {len(jogos_lista)} JOGOS\n"
         texto_fallback += f"✅ GREEN: {greens}\n"
@@ -2062,8 +1994,8 @@ class ResultadosTopAlertas:
             st.error(f"❌ Falha ao enviar resultados como texto!")
             return False
 
+
 class AlertaCompleto:
-    # ... (código existente) ...
     def __init__(self, jogo: Jogo, data_busca: str):
         self.jogo = jogo
         self.data_busca = data_busca
@@ -2204,7 +2136,6 @@ class AlertaCompleto:
 
 
 class GerenciadorAlertasCompletos:
-    # ... (código existente) ...
     def __init__(self, sistema_principal):
         self.sistema = sistema_principal
         self.config = sistema_principal.config
@@ -2258,7 +2189,6 @@ class GerenciadorAlertasCompletos:
         return melhores
     
     def gerar_poster_completo(self, jogos: list) -> io.BytesIO:
-        # ... (código existente, com pequena correção) ...
         LARGURA = 2000
         ALTURA_TOPO = 270
         ALTURA_POR_JOGO = 900
@@ -2436,7 +2366,6 @@ class GerenciadorAlertasCompletos:
         return buffer
     
     def gerar_poster_resultados_completos(self, jogos_com_resultados: list) -> io.BytesIO:
-        # ... (código existente, com pequena correção) ...
         LARGURA = 2000
         ALTURA_TOPO = 330
         ALTURA_POR_JOGO = 950
@@ -2616,7 +2545,6 @@ class GerenciadorAlertasCompletos:
         return buffer
     
     def processar_e_enviar_alertas_completos(self, jogos_analisados: list, data_busca: str, filtrar_melhores: bool = True, limiares: dict = None):
-        # ... (código existente, com pequena correção) ...
         if not jogos_analisados:
             return False
 
@@ -2706,7 +2634,6 @@ class GerenciadorAlertasCompletos:
             return False
     
     def conferir_resultados_completos(self, data_selecionada):
-        # ... (código existente, com pequena correção) ...
         hoje = data_selecionada.strftime("%Y-%m-%d")
         data_br = data_selecionada.strftime("%d/%m/%Y")
         st.subheader(f"🏆 Conferindo Resultados Completos - {data_br}")
@@ -2855,7 +2782,6 @@ class GerenciadorAlertasCompletos:
             self._mostrar_estatisticas_detalhadas(jogos_conferidos)
     
     def _mostrar_estatisticas_detalhadas(self, jogos_conferidos: list):
-        # ... (código existente) ...
         st.markdown("---")
         st.subheader("📊 Estatísticas Detalhadas")
         
@@ -2908,12 +2834,12 @@ class GerenciadorAlertasCompletos:
                          f"{stats['ambas_marcam']['GREEN']}✅ {stats['ambas_marcam']['RED']}❌",
                          f"{taxa_am:.1f}%")
 
+
 # =============================
 # CLASSES DE COMUNICAÇÃO
 # =============================
 
 class APIClient:
-    # ... (código existente, sem alterações) ...
     def __init__(self, rate_limiter: RateLimiter, api_monitor: APIMonitor):
         self.rate_limiter = rate_limiter
         self.api_monitor = api_monitor
@@ -3114,8 +3040,8 @@ class APIClient:
             logging.error(f"Erro ao convertir data {data_iso}: {e}")
             return datetime.now()
 
+
 class TelegramClient:
-    # ... (código existente, sem alterações) ...
     def __init__(self):
         self.config = ConfigManager()
     
@@ -3152,12 +3078,12 @@ class TelegramClient:
             st.error(f"Erro ao enviar foto para Telegram: {e}")
             return False
 
+
 # =============================
 # CLASSES DE GERAÇÃO DE POSTERS
 # =============================
 
 class PosterGenerator:
-    # ... (código existente, sem alterações) ...
     def __init__(self, api_client: APIClient):
         self.api_client = api_client
     
@@ -3185,7 +3111,6 @@ class PosterGenerator:
             return ImageFont.load_default()
     
     def gerar_poster_westham_style(self, jogos: list, titulo: str = "⚽ ALERTA DE GOLS", tipo_alerta: str = "over_under") -> io.BytesIO:
-        # ... (código existente) ...
         LARGURA = 2000
         ALTURA_TOPO = 270
         ALTURA_POR_JOGO = 830
@@ -3448,7 +3373,6 @@ class PosterGenerator:
         return buffer
     
     def gerar_poster_resultados(self, jogos_com_resultados: list, tipo_alerta: str = "over_under") -> io.BytesIO:
-        # ... (código existente, com pequena correção) ...
         LARGURA = 2000
         ALTURA_TOPO = 330
         ALTURA_POR_JOGO = 800
@@ -3741,7 +3665,6 @@ class PosterGenerator:
         return buffer
     
     def _desenhar_escudo_quadrado(self, draw, img, logo_img, x, y, tamanho_quadrado, tamanho_escudo, team_name=""):
-        # ... (código existente) ...
         draw.rectangle(
             [x, y, x + tamanho_quadrado, y + tamanho_quadrado],
             fill=(255, 255, 255),
@@ -3819,6 +3742,7 @@ class PosterGenerator:
             except:
                 draw.text((x + 70, y + 90), iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
 
+
 # =============================
 # SISTEMA PRINCIPAL (COM MELHORIAS)
 # =============================
@@ -3836,7 +3760,6 @@ class SistemaAlertasFutebol:
         self.image_cache = self.api_client.image_cache
         self.resultados_top = ResultadosTopAlertas(self)
         self.gerenciador_completo = GerenciadorAlertasCompletos(self)
-        # [MELHORIA] Inicializar o analisador de performance
         self.analisador_performance = AnalisadorPerformance()
         
         self._setup_logging()
@@ -3851,10 +3774,62 @@ class SistemaAlertasFutebol:
             ]
         )
     
+    # =============================
+    # [MELHORIA] NOVOS MÉTODOS DE FILTRO PROFISSIONAL
+    # =============================
+    
+    def _calcular_score_profissional(self, probabilidade: float, confianca: float) -> float:
+        """Calcula um score combinado para ranquear as apostas."""
+        return (probabilidade * 0.7) + (confianca * 0.3)
+    
+    def _aplicar_filtro_profissional(self, jogos_df: pd.DataFrame, 
+                                      prob_min: float = 70.0, 
+                                      conf_min: float = 65.0, 
+                                      max_apostas: int = 5) -> pd.DataFrame:
+        """
+        Aplica o filtro profissional a um DataFrame de jogos.
+        - Filtra por probabilidade e confiança mínimas.
+        - Remove mercados duplicados para o mesmo jogo.
+        - Calcula e ordena por score.
+        - Limita o número de apostas.
+        """
+        if jogos_df.empty:
+            return jogos_df
+
+        df_filtrado = jogos_df.copy()
+
+        # 1. Filtros de Probabilidade e Confiança
+        df_filtrado = df_filtrado[
+            (df_filtrado['probabilidade'] >= prob_min) & 
+            (df_filtrado['confianca'] >= conf_min)
+        ]
+
+        if df_filtrado.empty:
+            return df_filtrado
+
+        # 2. Calcular o Score
+        df_filtrado['score'] = df_filtrado.apply(
+            lambda x: self._calcular_score_profissional(x['probabilidade'], x['confianca']), 
+            axis=1
+        )
+
+        # 3. Ordenar por Score (do maior para o menor)
+        df_filtrado = df_filtrado.sort_values(by='score', ascending=False)
+
+        # 4. Manter apenas o melhor mercado para cada jogo
+        if 'jogo_id' not in df_filtrado.columns:
+            df_filtrado['jogo_id'] = df_filtrado['home'] + ' vs ' + df_filtrado['away']
+
+        df_filtrado = df_filtrado.drop_duplicates(subset=['jogo_id'], keep='first')
+
+        # 5. Limitar o número de apostas
+        df_filtrado = df_filtrado.head(max_apostas)
+
+        return df_filtrado
+    
     def processar_jogos(self, data_selecionada, ligas_selecionadas, todas_ligas, top_n, min_conf, 
                        max_conf, estilo_poster, alerta_individual, alerta_poster, alerta_top_jogos,
                        formato_top_jogos, tipo_filtro, tipo_analise, config_analise):
-        # ... (código existente, com pequena correção no final) ...
         hoje = data_selecionada.strftime("%Y-%m-%d")
         data_br = data_selecionada.strftime("%d/%m/%Y")
         
@@ -4087,7 +4062,6 @@ class SistemaAlertasFutebol:
             st.warning(f"⚠️ Nenhum jogo encontrado para {tipo_analise}")
     
     def processar_alertas_completos(self, data_selecionada, ligas_selecionadas, todas_ligas):
-        # ... (código existente) ...
         hoje = data_selecionada.strftime("%Y-%m-%d")
         data_br = data_selecionada.strftime("%d/%m/%Y")
         
@@ -4165,7 +4139,6 @@ class SistemaAlertasFutebol:
             st.warning("⚠️ Nenhum jogo encontrado")
     
     def conferir_resultados(self, data_selecionada):
-        # ... (código existente, com registro de performance) ...
         hoje = data_selecionada.strftime("%Y-%m-%d")
         data_br = data_selecionada.strftime("%d/%m/%Y")
         st.subheader(f"📊 Conferindo Resultados para {data_br}")
@@ -4227,7 +4200,6 @@ class SistemaAlertasFutebol:
             self._enviar_alertas_resultados_automaticos(resultados_totais, data_selecionada)
     
     def _conferir_resultados_tipo(self, tipo_alerta: str, data_busca: str) -> dict:
-        # ... (código existente, com registro de performance) ...
         if tipo_alerta == "over_under":
             alertas = DataStorage.carregar_alertas()
             resultados = DataStorage.carregar_resultados()
@@ -4332,7 +4304,6 @@ class SistemaAlertasFutebol:
                 
                 jogo.set_resultado(home_goals, away_goals, ht_home_goals, ht_away_goals)
                 
-                # [MELHORIA] Registrar performance do modelo
                 if tipo_alerta == "over_under":
                     resultado_analise = jogo.resultado
                 elif tipo_alerta == "favorito":
@@ -4408,7 +4379,6 @@ class SistemaAlertasFutebol:
         return jogos_com_resultados
     
     def _enviar_alertas_resultados_automaticos(self, resultados_totais: dict, data_selecionada):
-        # ... (código existente) ...
         data_str = data_selecionada.strftime("%d/%m/%Y")
         
         for tipo_alerta, resultados in resultados_totais.items():
@@ -4467,7 +4437,6 @@ class SistemaAlertasFutebol:
                 self._enviar_resumo_final(tipo_alerta, jogos_lista, data_str)
     
     def _enviar_resumo_final(self, tipo_alerta: str, jogos_lista: list, data_str: str):
-        # ... (código existente) ...
         if tipo_alerta == "over_under":
             titulo = f"📊 RESUMO FINAL OVER/UNDER - {data_str}"
             greens = sum(1 for j in jogos_lista if j.get("resultado") == "GREEN")
@@ -4500,7 +4469,6 @@ class SistemaAlertasFutebol:
                 st.success(f"📊 Resumo final {tipo_alerta} enviado!")
     
     def _verificar_enviar_alerta(self, jogo: Jogo, match_data: dict, analise: dict, alerta_individual: bool, min_conf: int, max_conf: int, tipo_alerta: str):
-        # ... (código existente) ...
         if tipo_alerta == "over_under":
             alertas = DataStorage.carregar_alertas()
         elif tipo_alerta == "favorito":
@@ -4586,7 +4554,6 @@ class SistemaAlertasFutebol:
                 DataStorage.salvar_alertas_ambas_marcam(alertas)
     
     def _enviar_alerta_individual(self, fixture: dict, analise: dict, tipo_alerta: str, min_conf: int, max_conf: int):
-        # ... (código existente) ...
         home = fixture["homeTeam"]["name"]
         away = fixture["awayTeam"]["name"]
         
@@ -4709,7 +4676,6 @@ class SistemaAlertasFutebol:
             self.telegram_client.enviar_mensagem(caption, self.config.TELEGRAM_CHAT_ID_ALT2)
     
     def _filtrar_por_tipo_analise(self, jogos, tipo_analise, config):
-        # ... (código existente) ...
         if tipo_analise == "Over/Under de Gols":
             min_conf = config.get("min_conf", 70)
             max_conf = config.get("max_conf", 95)
@@ -4780,7 +4746,6 @@ class SistemaAlertasFutebol:
         return jogos
     
     def _enviar_top_jogos(self, jogos_filtrados, top_n, alerta_top_jogos, min_conf, max_conf, formato_top_jogos, data_busca, tipo_alerta="over_under"):
-        # ... (código existente) ...
         if not alerta_top_jogos:
             st.info("ℹ️ Alerta de Top Jogos desativado")
             return
@@ -4800,15 +4765,33 @@ class SistemaAlertasFutebol:
             st.warning(f"⚠️ Nenhum jogo elegível para o Top Jogos.")
             return
         
-        if tipo_alerta == "over_under":
-            top_jogos_sorted = sorted(jogos_elegiveis, key=lambda x: x.get("confianca", 0), reverse=True)[:top_n]
-        elif tipo_alerta == "favorito":
-            top_jogos_sorted = sorted(jogos_elegiveis, key=lambda x: x.get("confianca_vitoria", 0), reverse=True)[:top_n]
-        elif tipo_alerta == "gols_ht":
-            top_jogos_sorted = sorted(jogos_elegiveis, key=lambda x: x.get("confianca_ht", 0), reverse=True)[:top_n]
-        elif tipo_alerta == "ambas_marcam":
-            top_jogos_sorted = sorted(jogos_elegiveis, key=lambda x: x.get("confianca_ambas_marcam", 0), reverse=True)[:top_n]
+        # [MELHORIA] APLICAR FILTRO PROFISSIONAL
+        import pandas as pd
+        df_jogos = pd.DataFrame(jogos_elegiveis)
+
+        # Garantir que as colunas necessárias existem
+        if 'probabilidade' not in df_jogos.columns:
+            df_jogos['probabilidade'] = 0.0
+        if 'confianca' not in df_jogos.columns:
+            df_jogos['confianca'] = 0.0
+
+        # Aplicar o filtro profissional
+        PROBABILIDADE_MINIMA_PARA_TOP = 70.0 
         
+        df_top_filtrado = self._aplicar_filtro_profissional(
+            df_jogos, 
+            prob_min=PROBABILIDADE_MINIMA_PARA_TOP, 
+            conf_min=min_conf,
+            max_apostas=top_n
+        )
+
+        if df_top_filtrado.empty:
+            st.warning(f"⚠️ Nenhum jogo passou no filtro profissional com confiança >={min_conf}% e probabilidade >={PROBABILIDADE_MINIMA_PARA_TOP}%.")
+            return
+
+        top_jogos_sorted = df_top_filtrado.to_dict('records')
+        # FIM DA MELHORIA
+
         for jogo in top_jogos_sorted:
             alerta = Alerta(Jogo({
                 "id": jogo["id"],
@@ -4945,7 +4928,6 @@ class SistemaAlertasFutebol:
         DataStorage.salvar_alertas_top(alertas_top)
     
     def _enviar_alerta_westham_style(self, jogos_conf: list, tipo_analise: str, config_analise: dict):
-        # ... (código existente) ...
         if not jogos_conf:
             st.warning("⚠️ Nenhum jogo para gerar poster")
             return
@@ -5058,7 +5040,6 @@ class SistemaAlertasFutebol:
             self.telegram_client.enviar_mensagem(msg)
     
     def _enviar_alerta_poster_original(self, jogos_conf: list, tipo_analise: str, config_analise: dict):
-        # ... (código existente) ...
         if not jogos_conf:
             return
         
@@ -5157,7 +5138,6 @@ class SistemaAlertasFutebol:
             st.error(f"Erro no envio: {e}")
     
     def _limpar_alertas_top_antigos(self):
-        # ... (código existente) ...
         alertas_top = DataStorage.carregar_alertas_top()
         agora = datetime.now()
         
@@ -5177,6 +5157,7 @@ class SistemaAlertasFutebol:
         
         DataStorage.salvar_alertas_top(alertas_filtrados)
         st.success(f"✅ Alertas TOP limpos: mantidos {len(alertas_filtrados)} de {len(alertas_top)}")
+
 
 # =============================
 # INTERFACE STREAMLIT
@@ -5510,8 +5491,8 @@ def main():
         col2.metric("Sucesso", f"{stats['success_rate']}%")
         col3.metric("Cache", f"{cache_stats['memoria']} img")
 
+
 def render_tab_busca(sistema):
-    # ... (código existente) ...
     st.subheader("🔍 Buscar Partidas")
     
     data_selecionada = st.date_input(
@@ -5642,8 +5623,8 @@ def render_tab_busca(sistema):
                     config_analise
                 )
 
+
 def render_tab_resultados(sistema):
-    # ... (código existente) ...
     st.subheader("📊 Conferir Resultados")
     
     data_resultados = st.date_input(
@@ -5745,8 +5726,8 @@ def render_tab_resultados(sistema):
         </div>
         """, unsafe_allow_html=True)
 
+
 def render_tab_top_alertas(sistema):
-    # ... (código existente) ...
     st.subheader("🏆 Resultados TOP Alertas")
     
     data_top = st.date_input(
@@ -5808,8 +5789,8 @@ def render_tab_top_alertas(sistema):
     else:
         st.info("ℹ️ Nenhum alerta TOP salvo ainda.")
 
+
 def render_tab_completos(sistema):
-    # ... (código existente) ...
     st.subheader("⚽ Alertas Completos - ALL IN ONE")
     st.caption("Todas as análises em um único poster")
     
@@ -5874,6 +5855,7 @@ def render_tab_completos(sistema):
                 st.write("---")
     else:
         st.info("ℹ️ Nenhum alerta completo salvo ainda.")
+
 
 if __name__ == "__main__":
     main()
