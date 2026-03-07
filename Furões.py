@@ -4930,8 +4930,8 @@ class SistemaAlertasFutebol:
     #def _enviar_alerta_westham_style(self, jogos_conf: list, tipo_analise: str, config_analise: dict):
     def _enviar_alerta_westham_style(self, jogos_conf: list, tipo_analise: str, config_analise: dict):
         if not jogos_conf:
-        st.warning("⚠️ Nenhum jogo para gerar poster")
-        return
+            st.warning("⚠️ Nenhum jogo para gerar poster")
+            return
     
     # Guardar a lista de jogos para uso no fallback
     jogos_para_fallback = jogos_conf.copy()
