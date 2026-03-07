@@ -4959,19 +4959,19 @@ class SistemaAlertasFutebol:
                 
                 for idx, lote in enumerate(lotes, 1):
                     if tipo_analise == "Over/Under de Gols":
-                        titulo = f"ELITE MASTER - OVER/UNDER - {data_br} (Lote {idx}/{total_lotes})"
+                        titulo = f"- OVER/UNDER - {data_br} (Lote {idx}/{total_lotes})"
                         tipo_alerta = "over_under"
                     elif tipo_analise == "Favorito (Vitória)":
-                        titulo = f"ELITE MASTER - FAVORITOS - {data_br} (Lote {idx}/{total_lotes})"
+                        titulo = f"- FAVORITOS - {data_br} (Lote {idx}/{total_lotes})"
                         tipo_alerta = "favorito"
                     elif tipo_analise == "Gols HT (Primeiro Tempo)":
-                        titulo = f"ELITE MASTER - GOLS HT - {data_br} (Lote {idx}/{total_lotes})"
+                        titulo = f"- GOLS HT - {data_br} (Lote {idx}/{total_lotes})"
                         tipo_alerta = "gols_ht"
                     elif tipo_analise == "Ambas Marcam (BTTS)":
-                        titulo = f"ELITE MASTER - AMBAS MARCAM - {data_br} (Lote {idx}/{total_lotes})"
+                        titulo = f"- AMBAS MARCAM - {data_br} (Lote {idx}/{total_lotes})"
                         tipo_alerta = "ambas_marcam"
                     else:
-                        titulo = f"ELITE MASTER - ALERTAS - {data_br} (Lote {idx}/{total_lotes})"
+                        titulo = f" - ALERTAS - {data_br} (Lote {idx}/{total_lotes})"
                         tipo_alerta = "over_under"
                     
                     st.info(f"🎨 Gerando poster lote {idx}/{total_lotes} com {len(lote)} jogos...")
