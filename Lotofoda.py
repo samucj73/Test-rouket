@@ -1803,21 +1803,40 @@ def main():
         st.session_state.jogos_otimizados = None
     if "logs_otimizados" not in st.session_state:
         st.session_state.logs_otimizados = None
-    # NOVO: estado para o Gerador 12+
     if "jogos_12plus" not in st.session_state:
         st.session_state.jogos_12plus = None
     if "diagnosticos_12plus" not in st.session_state:
         st.session_state.diagnosticos_12plus = None
-    # NOVO: estado para o Gerador 13+
     if "jogos_13plus" not in st.session_state:
         st.session_state.jogos_13plus = None
     if "diagnosticos_13plus" not in st.session_state:
         st.session_state.diagnosticos_13plus = None
-    # NOVO: estado para jogos filtrados pela inteligência
     if "jogos_inteligentes" not in st.session_state:
         st.session_state.jogos_inteligentes = None
     if "stats_inteligentes" not in st.session_state:
         st.session_state.stats_inteligentes = None
+    
+    # =====================================================
+    # NOVOS ESTADOS PARA PERSISTÊNCIA
+    # =====================================================
+    if "fonte_inteligencia" not in st.session_state:
+        st.session_state.fonte_inteligencia = "Jogos do Fechamento 3622"
+    if "modo_intel" not in st.session_state:
+        st.session_state.modo_intel = "auto"
+    if "threshold_intel" not in st.session_state:
+        st.session_state.threshold_intel = 6
+    if "idx_fechamento_conferencia" not in st.session_state:
+        st.session_state.idx_fechamento_conferencia = 0
+    if "qtd_12plus" not in st.session_state:
+        st.session_state.qtd_12plus = 10
+    if "qtd_13plus" not in st.session_state:
+        st.session_state.qtd_13plus = 5
+    if "qtd_3622" not in st.session_state:
+        st.session_state.qtd_3622 = 10
+    if "mc_sim_value" not in st.session_state:
+        st.session_state.mc_sim_value = 10000
+    if "jogos_teste_intel" not in st.session_state:
+        st.session_state.jogos_teste_intel = None
 
     # ================= SIDEBAR =================
     with st.sidebar:
@@ -1982,8 +2001,15 @@ def main():
                 
                 col1, col2 = st.columns(2)
                 with col1:
-                    qtd_jogos = st.slider("Quantidade de jogos", 3, 100, 10, 
-                                         help="Mínimo 3, máximo 100 jogos")
+                    qtd_jogos = st.slider(
+                        "Quantidade de jogos", 
+                        3, 100, 
+                        value=st.session_state.qtd_3622,
+                        key="slider_qtd_3622",
+                        help="Mínimo 3, máximo 100 jogos"
+                    )
+                    st.session_state.qtd_3622 = qtd_jogos
+                
                 with col2:
                     st.markdown("<br>", unsafe_allow_html=True)
                     if st.button("🚀 GERAR JOGOS 3622", use_container_width=True, type="primary"):
@@ -2526,10 +2552,11 @@ def main():
                     "Quantidade de simulações por jogo",
                     min_value=1_000,
                     max_value=50_000,
-                    value=10_000,
+                    value=st.session_state.mc_sim_value,
                     step=1_000,
-                    key="mc_slider"
+                    key="mc_slider_principal"
                 )
+                st.session_state.mc_sim_value = N_SIM
 
                 if st.button("🚀 Rodar Simulação Monte Carlo", use_container_width=True, type="primary"):
                     with st.spinner(f"Rodando {N_SIM:,} simulações para cada jogo..."):
@@ -2718,18 +2745,27 @@ def main():
                 st.warning("Nenhum fechamento salvo. Gere jogos na aba 'Fechamento 3622'.")
             else:
                 # =========================
-                # SELEÇÃO DO FECHAMENTO
+                # SELEÇÃO DO FECHAMENTO COM PERSISTÊNCIA
                 # =========================
                 opcoes = [
                     f"ID {j['id']} | Concurso Base #{j['concurso_base']['numero']} | {j['data_geracao'][:19]}"
                     for j in st.session_state.jogos_salvos
                 ]
 
+                # Verificar se o índice salvo ainda é válido
+                if st.session_state.idx_fechamento_conferencia >= len(opcoes):
+                    st.session_state.idx_fechamento_conferencia = 0
+
                 idx = st.selectbox(
                     "📦 Selecione o fechamento",
                     range(len(opcoes)),
-                    format_func=lambda i: opcoes[i]
+                    format_func=lambda i: opcoes[i],
+                    index=st.session_state.idx_fechamento_conferencia,
+                    key="select_fechamento_conferencia"
                 )
+                
+                # ATUALIZAR ESTADO
+                st.session_state.idx_fechamento_conferencia = idx
 
                 fechamento = st.session_state.jogos_salvos[idx]
                 jogos_brutos = fechamento["jogos"]
@@ -2942,9 +2978,10 @@ def main():
                         "Quantidade de jogos", 
                         min_value=3, 
                         max_value=50, 
-                        value=10,
-                        key="qtd_12plus"
+                        value=st.session_state.qtd_12plus,
+                        key="slider_qtd_12plus"
                     )
+                    st.session_state.qtd_12plus = qtd_jogos_12plus
                 
                 with col2:
                     st.markdown("<br>", unsafe_allow_html=True)
@@ -3185,9 +3222,10 @@ def main():
                         "Quantidade de jogos", 
                         min_value=1, 
                         max_value=20, 
-                        value=5,
-                        key="qtd_13plus"
+                        value=st.session_state.qtd_13plus,
+                        key="slider_qtd_13plus"
                     )
+                    st.session_state.qtd_13plus = qtd_jogos_13plus
                 
                 with col2:
                     st.markdown("<br>", unsafe_allow_html=True)
@@ -3413,42 +3451,70 @@ def main():
                 # --- SELEÇÃO DE JOGOS PARA FILTRAR ---
                 st.markdown("### 🎯 Aplicar Inteligência aos Jogos")
                 
-                # Opção de escolher de qual gerador pegar os jogos
+                # Opção de escolher de qual gerador pegar os jogos - COM PERSISTÊNCIA
                 fonte_jogos = st.radio(
                     "Selecione a fonte dos jogos:",
                     ["Jogos do Fechamento 3622", "Jogos do Gerador 12+", "Jogos do Gerador 13+", "Gerar Novos Jogos 12+ para Teste"],
                     horizontal=True,
-                    key="fonte_inteligencia"
+                    key="fonte_inteligencia_radio",
+                    index=["Jogos do Fechamento 3622", "Jogos do Gerador 12+", "Jogos do Gerador 13+", "Gerar Novos Jogos 12+ para Teste"].index(st.session_state.fonte_inteligencia)
                 )
+                
+                # ATUALIZAR ESTADO
+                st.session_state.fonte_inteligencia = fonte_jogos
 
+                # Preparar lista de jogos baseado na fonte selecionada
                 jogos_para_filtrar = []
-                if fonte_jogos == "Jogos do Fechamento 3622" and st.session_state.jogos_3622:
+                
+                # IMPORTANTE: Processar a fonte selecionada AQUI, fora do botão
+                if st.session_state.fonte_inteligencia == "Jogos do Fechamento 3622" and st.session_state.jogos_3622:
                     jogos_para_filtrar = st.session_state.jogos_3622
-                elif fonte_jogos == "Jogos do Gerador 12+" and st.session_state.jogos_12plus:
+                    st.caption(f"📋 {len(jogos_para_filtrar)} jogos do Fechamento 3622 carregados")
+                elif st.session_state.fonte_inteligencia == "Jogos do Gerador 12+" and st.session_state.jogos_12plus:
                     jogos_para_filtrar = st.session_state.jogos_12plus
-                elif fonte_jogos == "Jogos do Gerador 13+" and st.session_state.jogos_13plus:
+                    st.caption(f"📋 {len(jogos_para_filtrar)} jogos do Gerador 12+ carregados")
+                elif st.session_state.fonte_inteligencia == "Jogos do Gerador 13+" and st.session_state.jogos_13plus:
                     jogos_para_filtrar = st.session_state.jogos_13plus
-                elif fonte_jogos == "Gerar Novos Jogos 12+ para Teste":
-                    with st.spinner("Gerando 20 jogos 12+ para teste..."):
-                        ultimo = st.session_state.dados_api[0]
-                        numeros_ultimo = sorted(map(int, ultimo['dezenas']))
-                        ultimos_concursos = [
-                            sorted(map(int, c['dezenas'])) 
-                            for c in st.session_state.dados_api[:20]
-                        ]
-                        gerador_12plus = Gerador12Plus(ultimos_concursos, numeros_ultimo)
-                        jogos_temp, _ = gerador_12plus.gerar_multiplos_jogos(20)
-                        if jogos_temp:
-                            jogos_para_filtrar = jogos_temp
-                            st.success(f"✅ 20 jogos 12+ gerados!")
+                    st.caption(f"📋 {len(jogos_para_filtrar)} jogos do Gerador 13+ carregados")
+                elif st.session_state.fonte_inteligencia == "Gerar Novos Jogos 12+ para Teste":
+                    # Só gerar se não tiver jogos já gerados nesta sessão
+                    if "jogos_teste_intel" not in st.session_state or st.session_state.jogos_teste_intel is None:
+                        with st.spinner("Gerando 20 jogos 12+ para teste..."):
+                            ultimo = st.session_state.dados_api[0]
+                            numeros_ultimo = sorted(map(int, ultimo['dezenas']))
+                            ultimos_concursos = [
+                                sorted(map(int, c['dezenas'])) 
+                                for c in st.session_state.dados_api[:20]
+                            ]
+                            gerador_12plus = Gerador12Plus(ultimos_concursos, numeros_ultimo)
+                            jogos_temp, _ = gerador_12plus.gerar_multiplos_jogos(20)
+                            if jogos_temp:
+                                st.session_state.jogos_teste_intel = jogos_temp
+                                jogos_para_filtrar = jogos_temp
+                                st.success(f"✅ 20 jogos 12+ gerados!")
+                    else:
+                        jogos_para_filtrar = st.session_state.jogos_teste_intel
+                        st.caption(f"📋 {len(jogos_para_filtrar)} jogos de teste carregados")
 
                 col1, col2, col3 = st.columns([1,1,1])
                 with col1:
-                    threshold_score = st.slider("Score Mínimo", 0, 10, 6, help="Jogos com score abaixo disso são descartados.", key="threshold_intel")
+                    threshold_score = st.slider(
+                        "Score Mínimo", 
+                        0, 10, 
+                        value=st.session_state.threshold_intel,
+                        key="slider_threshold_intel"
+                    )
+                    st.session_state.threshold_intel = threshold_score
+                
                 with col2:
-                    modo_operacao = st.selectbox("Modo de Operação", ["auto", "forcar_on", "forcar_off"], 
-                                                help="Auto: sistema decide. Forçar ON: sempre aplica filtro com apenas 4 padrões. Forçar OFF: nunca aplica filtro.",
-                                                key="modo_intel")
+                    modo_operacao = st.selectbox(
+                        "Modo de Operação", 
+                        ["auto", "forcar_on", "forcar_off"],
+                        index=["auto", "forcar_on", "forcar_off"].index(st.session_state.modo_intel),
+                        key="select_modo_intel"
+                    )
+                    st.session_state.modo_intel = modo_operacao
+                
                 with col3:
                     st.markdown("<br>", unsafe_allow_html=True)
                     botao_filtrar = st.button("✨ FILTRAR JOGOS", type="primary", use_container_width=True, key="filtrar_intel")
