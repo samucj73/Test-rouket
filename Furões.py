@@ -845,6 +845,9 @@ def sigmoid(x):
 # =============================
 # [MELHORIA] NOVA CLASSE: AnalisadorPerformance
 # =============================
+# =============================
+# [MELHORIA] CLASSE AnalisadorPerformance CORRIGIDA
+# =============================
 class AnalisadorPerformance:
     """Analisa a performance histórica do modelo para autoajuste"""
     
@@ -868,14 +871,15 @@ class AnalisadorPerformance:
                 "total": 0,
                 "greens": 0,
                 "reds": 0,
-                "por_liga": defaultdict(lambda: {"total": 0, "greens": 0}),
-                "por_faixa_confianca": defaultdict(lambda: {"total": 0, "greens": 0}),
-                "por_tipo": defaultdict(lambda: {"total": 0, "greens": 0}),
+                "por_liga": {},
+                "por_faixa_confianca": {},
+                "por_tipo": {},
                 "erros": []
             }
         
         hist = self.historico[chave]
         hist["total"] += 1
+        
         if resultado == "GREEN":
             hist["greens"] += 1
         else:
@@ -888,18 +892,27 @@ class AnalisadorPerformance:
                     "resultado_real": f"{metadata.get('home_goals', '?')}-{metadata.get('away_goals', '?')}"
                 })
         
+        # Estatísticas por liga - CORREÇÃO AQUI
         liga = alerta.get("liga", "Desconhecida")
+        if liga not in hist["por_liga"]:
+            hist["por_liga"][liga] = {"total": 0, "greens": 0}
         hist["por_liga"][liga]["total"] += 1
         if resultado == "GREEN":
             hist["por_liga"][liga]["greens"] += 1
         
+        # Estatísticas por faixa de confiança - CORREÇÃO AQUI
         confianca = alerta.get("confianca", 0)
         faixa = f"{int(confianca // 10 * 10)}-{int(confianca // 10 * 10 + 9)}"
+        if faixa not in hist["por_faixa_confianca"]:
+            hist["por_faixa_confianca"][faixa] = {"total": 0, "greens": 0}
         hist["por_faixa_confianca"][faixa]["total"] += 1
         if resultado == "GREEN":
             hist["por_faixa_confianca"][faixa]["greens"] += 1
         
+        # Estatísticas por tipo de aposta - CORREÇÃO AQUI
         tipo_aposta = alerta.get("tipo_aposta", "unknown")
+        if tipo_aposta not in hist["por_tipo"]:
+            hist["por_tipo"][tipo_aposta] = {"total": 0, "greens": 0}
         hist["por_tipo"][tipo_aposta]["total"] += 1
         if resultado == "GREEN":
             hist["por_tipo"][tipo_aposta]["greens"] += 1
@@ -907,9 +920,10 @@ class AnalisadorPerformance:
         self._salvar_historico()
     
     def obter_acuracia_por_liga(self, liga: str, tipo_alerta: str = "over_under") -> float:
+        """Retorna a acurácia histórica para uma liga específica"""
         chave = f"{tipo_alerta}_{datetime.now().strftime('%Y%m')}"
         if chave not in self.historico:
-            return 0.5
+            return 0.5  # Valor padrão se não houver histórico
         
         dados_liga = self.historico[chave]["por_liga"].get(liga, {})
         total = dados_liga.get("total", 0)
@@ -918,6 +932,7 @@ class AnalisadorPerformance:
         return dados_liga.get("greens", 0) / total
     
     def obter_acuracia_por_faixa_confianca(self, confianca: float, tipo_alerta: str = "over_under") -> float:
+        """Retorna a acurácia histórica para uma faixa de confiança"""
         chave = f"{tipo_alerta}_{datetime.now().strftime('%Y%m')}"
         if chave not in self.historico:
             return 0.5
@@ -930,20 +945,24 @@ class AnalisadorPerformance:
         return dados_faixa.get("greens", 0) / total
     
     def ajustar_limiar_confianca(self, tipo_alerta: str = "over_under") -> float:
+        """Sugere um limiar de confiança baseado na performance histórica"""
         chave = f"{tipo_alerta}_{datetime.now().strftime('%Y%m')}"
         if chave not in self.historico:
-            return 70.0
+            return 70.0  # Valor padrão
         
         dados = self.historico[chave]
         
+        # Encontrar a faixa de confiança com melhor equilíbrio entre quantidade e acurácia
         melhor_faixa = 70.0
         melhor_score = 0.0
         
         for faixa, stats in dados["por_faixa_confianca"].items():
-            if stats["total"] < 5:
+            if stats["total"] < 5:  # Ignorar faixas com poucos dados
                 continue
             
             acuracia = stats["greens"] / stats["total"] if stats["total"] > 0 else 0
+            
+            # Score = acurácia * sqrt(total) (priorizar faixas com muitos dados)
             score = acuracia * (stats["total"] ** 0.5)
             
             if score > melhor_score:
@@ -953,8 +972,7 @@ class AnalisadorPerformance:
                 except:
                     melhor_faixa = 70.0
         
-        return max(60.0, min(85.0, melhor_faixa))
-
+        return max(60.0, min(85.0, melhor_faixa))  # Limitar entre 60% e 85%
 
 # =============================
 # CLASSES DE ANÁLISE
