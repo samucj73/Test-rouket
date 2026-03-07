@@ -4929,54 +4929,68 @@ class SistemaAlertasFutebol:
         DataStorage.salvar_alertas_top(alertas_top)
     
     def _enviar_alerta_westham_style(self, jogos_conf: list, tipo_analise: str, config_analise: dict):
+    def _enviar_alerta_westham_style(self, jogos_conf: list, tipo_analise: str, config_analise: dict):
         """
-        Envia alertas no estilo West Ham, dividindo em lotes de 3 jogos
+        Envia alertas no estilo West Ham, dividindo em lotes de 3 jogos por horário
         """
         if not jogos_conf:
             st.warning("⚠️ Nenhum jogo para gerar poster")
             return
-        
-        # Guardar a lista de jogos para uso no fallback
-        jogos_para_fallback = jogos_conf.copy()
-        
-        try:
-            # Agrupar jogos por data
-            jogos_por_data = {}
-            for jogo in jogos_conf:
-                data = jogo["hora"].date() if isinstance(jogo["hora"], datetime) else datetime.now().date()
-                if data not in jogos_por_data:
-                    jogos_por_data[data] = []
-                jogos_por_data[data].append(jogo)
+    
+    # Guardar a lista de jogos para uso no fallback
+    jogos_para_fallback = jogos_conf.copy()
+    
+    try:
+        # Agrupar jogos por data
+        jogos_por_data = {}
+        for jogo in jogos_conf:
+            data = jogo["hora"].date() if isinstance(jogo["hora"], datetime) else datetime.now().date()
+            if data not in jogos_por_data:
+                jogos_por_data[data] = []
+            jogos_por_data[data].append(jogo)
 
-            for data, jogos_data in jogos_por_data.items():
-                data_br = data.strftime("%d/%m/%Y")
+        for data, jogos_data in jogos_por_data.items():
+            data_br = data.strftime("%d/%m/%Y")
+            
+            # ORDENAR JOGOS POR HORÁRIO (DO MAIS CEDO PARA O MAIS TARDE)
+            jogos_ordenados = sorted(jogos_data, key=lambda x: x["hora"] if isinstance(x["hora"], datetime) else datetime.now())
+            
+            # Dividir em lotes de 3 jogos (agora já ordenados por horário)
+            lotes = [jogos_ordenados[i:i+3] for i in range(0, len(jogos_ordenados), 3)]
+            total_lotes = len(lotes)
+            
+            st.info(f"📦 Dividindo {len(jogos_ordenados)} jogos em {total_lotes} lotes de até 3 jogos cada (ordenados por horário)")
+            
+            # Mostrar os horários de cada lote
+            for idx, lote in enumerate(lotes, 1):
+                if lote:
+                    primeiro_horario = lote[0]["hora"].strftime("%H:%M") if isinstance(lote[0]["hora"], datetime) else str(lote[0]["hora"])
+                    ultimo_horario = lote[-1]["hora"].strftime("%H:%M") if isinstance(lote[-1]["hora"], datetime) else str(lote[-1]["hora"])
+                    st.info(f"   Lote {idx}: {len(lote)} jogos (horários: {primeiro_horario} - {ultimo_horario})")
+            
+            for idx, lote in enumerate(lotes, 1):
+                if tipo_analise == "Over/Under de Gols":
+                    titulo = f"- OVER/UNDER - {data_br} (Lote {idx}/{total_lotes})"
+                    tipo_alerta = "over_under"
+                elif tipo_analise == "Favorito (Vitória)":
+                    titulo = f"- FAVORITOS - {data_br} (Lote {idx}/{total_lotes})"
+                    tipo_alerta = "favorito"
+                elif tipo_analise == "Gols HT (Primeiro Tempo)":
+                    titulo = f"- GOLS HT - {data_br} (Lote {idx}/{total_lotes})"
+                    tipo_alerta = "gols_ht"
+                elif tipo_analise == "Ambas Marcam (BTTS)":
+                    titulo = f"- AMBAS MARCAM - {data_br} (Lote {idx}/{total_lotes})"
+                    tipo_alerta = "ambas_marcam"
+                else:
+                    titulo = f"- ALERTAS - {data_br} (Lote {idx}/{total_lotes})"
+                    tipo_alerta = "over_under"
                 
-                # Dividir em lotes de 3 jogos
-                lotes = [jogos_data[i:i+3] for i in range(0, len(jogos_data), 3)]
-                total_lotes = len(lotes)
+                st.info(f"🎨 Gerando poster lote {idx}/{total_lotes} com {len(lote)} jogos...")
                 
-                st.info(f"📦 Dividindo {len(jogos_data)} jogos em {total_lotes} lotes de até 3 jogos cada")
+                poster = self.poster_generator.gerar_poster_westham_style(lote, titulo=titulo, tipo_alerta=tipo_alerta)
                 
-                for idx, lote in enumerate(lotes, 1):
-                    if tipo_analise == "Over/Under de Gols":
-                        titulo = f"- OVER/UNDER - {data_br} (Lote {idx}/{total_lotes})"
-                        tipo_alerta = "over_under"
-                    elif tipo_analise == "Favorito (Vitória)":
-                        titulo = f"- FAVORITOS - {data_br} (Lote {idx}/{total_lotes})"
-                        tipo_alerta = "favorito"
-                    elif tipo_analise == "Gols HT (Primeiro Tempo)":
-                        titulo = f"- GOLS HT - {data_br} (Lote {idx}/{total_lotes})"
-                        tipo_alerta = "gols_ht"
-                    elif tipo_analise == "Ambas Marcam (BTTS)":
-                        titulo = f"- AMBAS MARCAM - {data_br} (Lote {idx}/{total_lotes})"
-                        tipo_alerta = "ambas_marcam"
-                    else:
-                        titulo = f" - ALERTAS - {data_br} (Lote {idx}/{total_lotes})"
-                        tipo_alerta = "over_under"
-                    
-                    st.info(f"🎨 Gerando poster lote {idx}/{total_lotes} com {len(lote)} jogos...")
-                    
-                    poster = self.poster_generator.gerar_poster_westham_style(lote, titulo=titulo, tipo_alerta=tipo_alerta)
+                # O RESTO DO CÓDIGO PERMANECE IGUAL (CAPTIONS E ENVIO)
+                # ... (mantenha todo o código existente para captions e envio) ...    
                     
                     if tipo_analise == "Over/Under de Gols":
                         over_count = sum(1 for j in lote if j.get('tipo_aposta') == "over")
