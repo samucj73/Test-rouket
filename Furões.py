@@ -4929,9 +4929,9 @@ class SistemaAlertasFutebol:
     
     #def _enviar_alerta_westham_style(self, jogos_conf: list, tipo_analise: str, config_analise: dict):
     def _enviar_alerta_westham_style(self, jogos_conf: list, tipo_analise: str, config_analise: dict):
-        if not jogos_conf:
-            st.warning("⚠️ Nenhum jogo para gerar poster")
-            return
+    if not jogos_conf:
+        st.warning("⚠️ Nenhum jogo para gerar poster")
+        return
     
     try:
         # Agrupar jogos por data
@@ -4964,6 +4964,9 @@ class SistemaAlertasFutebol:
                 elif tipo_analise == "Ambas Marcam (BTTS)":
                     titulo = f"ELITE MASTER - AMBAS MARCAM - {data_br} (Lote {idx}/{total_lotes})"
                     tipo_alerta = "ambas_marcam"
+                else:
+                    titulo = f"ELITE MASTER - ALERTAS - {data_br} (Lote {idx}/{total_lotes})"
+                    tipo_alerta = "over_under"
                 
                 st.info(f"🎨 Gerando poster lote {idx}/{total_lotes} com {len(lote)} jogos...")
                 
@@ -5014,6 +5017,12 @@ class SistemaAlertasFutebol:
                         f"<b>🔍 CONFIANÇA MÍNIMA: {min_conf_am}%</b>\n\n"
                         f"<b>🔥 ELITE MASTER SYSTEM - ANÁLISE BTTS</b>"
                     )
+                else:
+                    caption = (
+                        f"<b>⚽ ALERTA DE JOGOS - {data_br}</b>\n\n"
+                        f"<b>📋 LOTE {idx}/{total_lotes}: {len(lote)} JOGOS</b>\n\n"
+                        f"<b>🔥 ELITE MASTER SYSTEM</b>"
+                    )
                 
                 st.info(f"📤 Enviando lote {idx}/{total_lotes} para o Telegram...")
                 if self.telegram_client.enviar_foto(poster, caption=caption):
@@ -5029,38 +5038,71 @@ class SistemaAlertasFutebol:
         logging.error(f"Erro crítico ao gerar/enviar poster West Ham: {str(e)}")
         st.error(f"❌ Erro crítico ao gerar/enviar poster: {str(e)}")
         
-        # Fallback: enviar como texto
-        msg = f"🔥 Jogos encontrados para {data_br} (Erro na imagem - enviando em lotes de 5):\n\n"
+        # Obter a data do primeiro jogo ou usar data atual
+        if jogos_conf and len(jogos_conf) > 0:
+            primeiro_jogo = jogos_conf[0]
+            if isinstance(primeiro_jogo.get("hora"), datetime):
+                data_br_fallback = primeiro_jogo["hora"].strftime("%d/%m/%Y")
+            else:
+                data_br_fallback = datetime.now().strftime("%d/%m/%Y")
+        else:
+            data_br_fallback = datetime.now().strftime("%d/%m/%Y")
         
-        # Dividir em lotes de 5 para texto também
+        # Fallback: enviar como texto em lotes
+        st.info(f"📝 Enviando alertas como texto em lotes para {data_br_fallback}...")
+        
+        # Dividir em lotes de 5 para texto
         lotes_texto = [jogos_conf[i:i+5] for i in range(0, len(jogos_conf), 5)]
         
         for idx, lote in enumerate(lotes_texto, 1):
-            msg_lote = f"📋 LOTE {idx}/{len(lotes_texto)}:\n\n"
+            if tipo_analise == "Over/Under de Gols":
+                msg_lote = f"<b>📊 ALERTA OVER/UNDER - {data_br_fallback} (Lote {idx}/{len(lotes_texto)})</b>\n\n"
+            elif tipo_analise == "Favorito (Vitória)":
+                msg_lote = f"<b>🏆 ALERTA FAVORITOS - {data_br_fallback} (Lote {idx}/{len(lotes_texto)})</b>\n\n"
+            elif tipo_analise == "Gols HT (Primeiro Tempo)":
+                msg_lote = f"<b>⏰ ALERTA GOLS HT - {data_br_fallback} (Lote {idx}/{len(lotes_texto)})</b>\n\n"
+            elif tipo_analise == "Ambas Marcam (BTTS)":
+                msg_lote = f"<b>🤝 ALERTA AMBAS MARCAM - {data_br_fallback} (Lote {idx}/{len(lotes_texto)})</b>\n\n"
+            else:
+                msg_lote = f"<b>⚽ ALERTA DE JOGOS - {data_br_fallback} (Lote {idx}/{len(lotes_texto)})</b>\n\n"
+            
             for j in lote:
                 if tipo_analise == "Over/Under de Gols":
                     tipo_emoji = "📈" if j.get('tipo_aposta') == "over" else "📉"
                     prob = j.get('probabilidade', 50)
                     odd = round(100 / prob, 2) if prob > 0 else 2.0
-                    msg_lote += f"{tipo_emoji} {j['home']} vs {j['away']} | {j['tendencia']} | Conf: {j['confianca']:.0f}% | Odds: {odd:.2f}\n"
+                    msg_lote += f"{tipo_emoji} <b>{j['home']} vs {j['away']}</b>\n"
+                    msg_lote += f"   📊 {j['tendencia']} | Conf: {j['confianca']:.0f}% | Odds: {odd:.2f}\n"
+                    msg_lote += f"   🕒 {j.get('hora', '').strftime('%H:%M') if isinstance(j.get('hora'), datetime) else j.get('hora', '')} BRT | {j.get('liga', '')}\n\n"
                 elif tipo_analise == "Favorito (Vitória)":
                     favorito_emoji = "🏠" if j.get('favorito') == "home" else "✈️" if j.get('favorito') == "away" else "🤝"
                     prob_fav = j.get('confianca_vitoria', 50)
                     odd = round(100 / prob_fav, 2) if prob_fav > 0 else 2.0
-                    msg_lote += f"{favorito_emoji} {j['home']} vs {j['away']} | Favorito: {j['favorito']} | Conf: {j['confianca_vitoria']:.1f}% | Odds: {odd:.2f}\n"
+                    favorito_text = j['home'] if j.get('favorito') == "home" else j['away'] if j.get('favorito') == "away" else "EMPATE"
+                    msg_lote += f"{favorito_emoji} <b>{j['home']} vs {j['away']}</b>\n"
+                    msg_lote += f"   🏆 Favorito: {favorito_text} | Conf: {j['confianca_vitoria']:.1f}% | Odds: {odd:.2f}\n"
+                    msg_lote += f"   🕒 {j.get('hora', '').strftime('%H:%M') if isinstance(j.get('hora'), datetime) else j.get('hora', '')} BRT | {j.get('liga', '')}\n\n"
                 elif tipo_analise == "Gols HT (Primeiro Tempo)":
                     tipo_emoji_ht = "⚡" if "OVER" in j.get('tendencia_ht', '') else "🛡️"
                     prob_ht = j.get('confianca_ht', 50)
                     odd = round(100 / prob_ht, 2) if prob_ht > 0 else 2.0
-                    msg_lote += f"{tipo_emoji_ht} {j['home']} vs {j['away']} | {j['tendencia_ht']} | Conf: {j['confianca_ht']:.0f}% | Odds: {odd:.2f}\n"
+                    msg_lote += f"{tipo_emoji_ht} <b>{j['home']} vs {j['away']}</b>\n"
+                    msg_lote += f"   ⏰ {j['tendencia_ht']} | Conf: {j['confianca_ht']:.0f}% | Odds: {odd:.2f}\n"
+                    msg_lote += f"   🕒 {j.get('hora', '').strftime('%H:%M') if isinstance(j.get('hora'), datetime) else j.get('hora', '')} BRT | {j.get('liga', '')}\n\n"
                 elif tipo_analise == "Ambas Marcam (BTTS)":
                     tipo_emoji_am = "🤝" if j.get('tendencia_ambas_marcam') == "SIM" else "🚫"
                     prob_am = j.get('confianca_ambas_marcam', 50)
                     odd = round(100 / prob_am, 2) if prob_am > 0 else 2.0
-                    msg_lote += f"{tipo_emoji_am} {j['home']} vs {j['away']} | {j['tendencia_ambas_marcam']} | Conf: {j['confianca_ambas_marcam']:.1f}% | Odds: {odd:.2f}\n"
+                    msg_lote += f"{tipo_emoji_am} <b>{j['home']} vs {j['away']}</b>\n"
+                    msg_lote += f"   🤝 {j['tendencia_ambas_marcam']} | Conf: {j['confianca_ambas_marcam']:.1f}% | Odds: {odd:.2f}\n"
+                    msg_lote += f"   🕒 {j.get('hora', '').strftime('%H:%M') if isinstance(j.get('hora'), datetime) else j.get('hora', '')} BRT | {j.get('liga', '')}\n\n"
             
-            self.telegram_client.enviar_mensagem(msg_lote)
+            msg_lote += f"<b>🔥 ELITE MASTER SYSTEM - LOTE {idx}/{len(lotes_texto)}</b>"
+            
+            self.telegram_client.enviar_mensagem(msg_lote, self.config.TELEGRAM_CHAT_ID_ALT2)
+            st.info(f"📤 Lote {idx}/{len(lotes_texto)} enviado como texto")
             time.sleep(1)
+    
         
     
     def _enviar_alerta_poster_original(self, jogos_conf: list, tipo_analise: str, config_analise: dict):
