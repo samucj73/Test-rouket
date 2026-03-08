@@ -415,6 +415,180 @@ class AnaliseLotofacilBasica:
         return {n: c.get(n, 0) / self.total_concursos for n in self.numeros}
 
 # =====================================================
+# ===== DETECTOR MASTER DE PADRÕES B-M-A =====
+# =====================================================
+
+def contar_bma(concurso):
+    """
+    Conta quantos números em cada faixa do volante
+    Baixas: 1-8
+    Médias: 9-16
+    Altas: 17-25
+    Retorna tupla (baixas, medias, altas)
+    """
+    baixas = sum(1 for n in concurso if 1 <= n <= 8)
+    medias = sum(1 for n in concurso if 9 <= n <= 16)
+    altas = sum(1 for n in concurso if 17 <= n <= 25)
+    return (baixas, medias, altas)
+
+def analisar_padroes(lista_concursos):
+    """
+    Analisa todos os concursos e calcula:
+    - Frequência de cada padrão
+    - Atraso atual de cada padrão
+    - Média do ciclo
+    """
+    padroes = [contar_bma(c) for c in lista_concursos]
+    freq = Counter(padroes)
+    atraso = {}
+    ultima_aparicao = {}
+    total = len(lista_concursos)
+    
+    # Calcular última aparição de cada padrão
+    for i in range(total-1, -1, -1):
+        p = padroes[i]
+        if p not in ultima_aparicao:
+            ultima_aparicao[p] = i
+    
+    # Calcular atraso (concursos desde a última aparição)
+    for p in freq:
+        if p in ultima_aparicao:
+            # O atraso é a diferença entre o último concurso e a última aparição
+            atraso[p] = total - 1 - ultima_aparicao[p]
+        else:
+            atraso[p] = total  # Nunca apareceu (improvável)
+    
+    return freq, atraso, padroes
+
+def detector_sinais(lista_concursos, limiar=1.5):
+    """
+    Detecta padrões atrasados baseado no ciclo médio
+    limiar: multiplicador para considerar atrasado (1.5 = 50% acima da média)
+    """
+    freq, atraso, _ = analisar_padroes(lista_concursos)
+    total = len(lista_concursos)
+    sinais = []
+    
+    for p in freq:
+        ciclo_medio = total / freq[p]  # Média de concursos entre aparições
+        if atraso[p] > ciclo_medio * limiar:
+            # Calcular intensidade do sinal
+            intensidade = atraso[p] / ciclo_medio
+            sinais.append({
+                "padrao": p,
+                "frequencia": freq[p],
+                "ciclo_medio": round(ciclo_medio, 1),
+                "atraso": atraso[p],
+                "intensidade": round(intensidade, 1),
+                "nivel": "🚨 FORTE" if intensidade > 2 else "⚠️ MÉDIO" if intensidade > 1.5 else "🔔 FRACO"
+            })
+    
+    # Ordenar por intensidade (maior atraso primeiro)
+    sinais.sort(key=lambda x: x["intensidade"], reverse=True)
+    return sinais
+
+def detector_alvos(lista_concursos, padroes_alvo=None):
+    """
+    Detecta especificamente os padrões alvo nos últimos N concursos
+    """
+    if padroes_alvo is None:
+        padroes_alvo = [
+            (7,4,4),  # 7 baixas, 4 médias, 4 altas
+            (3,6,6),  # 3 baixas, 6 médias, 6 altas
+            (4,5,6),  # 4 baixas, 5 médias, 6 altas
+            (6,5,4),  # 6 baixas, 5 médias, 4 altas
+            (4,6,5),  # 4 baixas, 6 médias, 5 altas
+            (5,6,4),  # 5 baixas, 6 médias, 4 altas
+            (5,7,3),  # 5 baixas, 7 médias, 3 altas
+            (6,6,3),  # 6 baixas, 6 médias, 3 altas
+            (4,7,4),  # 4 baixas, 7 médias, 4 altas
+            (5,5,5)   # 5 baixas, 5 médias, 5 altas (equilíbrio)
+        ]
+    
+    padroes = [contar_bma(c) for c in lista_concursos]
+    ultimos_10 = padroes[:10]  # Últimos 10 concursos
+    ultimos_5 = padroes[:5]     # Últimos 5 concursos
+    ultimo = padroes[0] if padroes else None
+    
+    resultados = []
+    
+    for p in padroes_alvo:
+        # Contar ocorrências
+        total_ocorrencias = padroes.count(p)
+        ocorrencias_10 = ultimos_10.count(p)
+        ocorrencias_5 = ultimos_5.count(p)
+        
+        # Calcular atraso
+        atraso = 0
+        for i, padrao in enumerate(padroes):
+            if padrao == p:
+                atraso = i
+                break
+        
+        # Determinar status
+        if p == ultimo:
+            status = "🎯 NO ÚLTIMO CONCURSO"
+            cor = "gold"
+        elif p in ultimos_5:
+            status = "✅ RECENTE (últimos 5)"
+            cor = "#4ade80"
+        elif p in ultimos_10:
+            status = "📊 APARECEU (últimos 10)"
+            cor = "#4cc9f0"
+        elif atraso > 20:
+            status = "🔥 MUITO ATRASADO"
+            cor = "#f97316"
+        elif atraso > 10:
+            status = "⚠️ ATRASADO"
+            cor = "#ff6b6b"
+        else:
+            status = "⏳ AUSENTE"
+            cor = "#aaa"
+        
+        resultados.append({
+            "padrao": f"{p[0]}-{p[1]}-{p[2]}",
+            "total": total_ocorrencias,
+            "ultimos_10": ocorrencias_10,
+            "ultimos_5": ocorrencias_5,
+            "atraso": atraso,
+            "status": status,
+            "cor": cor
+        })
+    
+    return resultados
+
+def top_padroes_frequentes(lista_concursos, n=15):
+    """
+    Retorna os N padrões mais frequentes
+    """
+    padroes = [contar_bma(c) for c in lista_concursos]
+    freq = Counter(padroes)
+    
+    top = []
+    for p, count in freq.most_common(n):
+        percentual = (count / len(lista_concursos)) * 100
+        top.append({
+            "padrao": f"{p[0]}-{p[1]}-{p[2]}",
+            "ocorrencias": count,
+            "percentual": round(percentual, 1)
+        })
+    
+    return top
+
+def formatar_padrao_html(padrao_str, destaque=False):
+    """Formata um padrão B-M-A em HTML com cores"""
+    partes = padrao_str.split('-')
+    if len(partes) == 3:
+        b, m, a = partes
+        html = f"""
+        <span style='background:#4cc9f020; border:1px solid #4cc9f0; border-radius:15px; padding:3px 8px; margin:2px; display:inline-block;'>
+            <span style='color:#4cc9f0; font-weight:bold;'>{b}</span>-<span style='color:#4ade80; font-weight:bold;'>{m}</span>-<span style='color:#f97316; font-weight:bold;'>{a}</span>
+        </span>
+        """
+        return html
+    return padrao_str
+
+# =====================================================
 # CLASSE DO MODELO 3622
 # =====================================================
 class Gerador3622:
@@ -968,7 +1142,7 @@ class Gerador12Plus:
         return medias
 
 # =====================================================
-# ===== NOVO: GERADOR 13+ (MODELO ULTRA) =====
+# ===== GERADOR 13+ (MODELO ULTRA) =====
 # =====================================================
 
 class Gerador13Plus:
@@ -1979,6 +2153,8 @@ def main():
         st.session_state.jogos_profissionais = None
     if "diagnosticos_profissionais" not in st.session_state:
         st.session_state.diagnosticos_profissionais = None
+    if "jogos_teste_intel" not in st.session_state:
+        st.session_state.jogos_teste_intel = None
     
     # =====================================================
     # NOVOS ESTADOS PARA PERSISTÊNCIA
@@ -1999,8 +2175,6 @@ def main():
         st.session_state.qtd_3622 = 10
     if "mc_sim_value" not in st.session_state:
         st.session_state.mc_sim_value = 10000
-    if "jogos_teste_intel" not in st.session_state:
-        st.session_state.jogos_teste_intel = None
 
     # ================= SIDEBAR =================
     with st.sidebar:
@@ -2033,8 +2207,8 @@ def main():
     st.subheader("🎯 Modelo Universal 3622")
 
     if st.session_state.analise and st.session_state.dados_api and st.session_state.historico_df is not None:
-        # AGORA SÃO 8 ABAS (adicionada a nova aba de inteligência)
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+        # AGORA SÃO 9 ABAS (adicionada a nova aba de Detector MASTER)
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
             "📊 Análise", 
             "🧩 Fechamento 3622", 
             "📊 Motor Estatístico",
@@ -2042,7 +2216,8 @@ def main():
             "✅ Conferência",
             "🚀 Gerador 12+",
             "🔥 Gerador 13+",
-            "🧠 Inteligência 5-7-3"
+            "🧠 Inteligência 5-7-3",
+            "📡 Detector MASTER B-M-A"
         ])
 
         with tab1:
@@ -3692,7 +3867,7 @@ def main():
                         """)
 
         # =====================================================
-        # ABA 8: INTELIGÊNCIA 5-7-3 (CORRIGIDA - AGORA DENTRO DA FUNÇÃO MAIN)
+        # ABA 8: INTELIGÊNCIA 5-7-3
         # =====================================================
         with tab8:
             st.markdown("""
@@ -3989,6 +4164,217 @@ def main():
                         )
             else:
                 st.info("📥 Carregue os concursos na barra lateral para ativar a inteligência 5-7-3.")
+
+        # =====================================================
+        # ABA 9: DETECTOR MASTER DE PADRÕES B-M-A
+        # =====================================================
+        with tab9:
+            st.markdown("""
+            <div style='background:#1e1e2e; padding:15px; border-radius:10px; margin-bottom:20px; border-left:5px solid #ffaa00;'>
+                <h4 style='margin:0; color:#ffaa00;'>📡 DETECTOR MASTER DE PADRÕES B-M-A</h4>
+                <p style='margin:5px 0 0 0; font-size:0.9em;'>Análise completa de padrões Baixa-Média-Alta com detecção de atrasos</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+            if st.session_state.dados_api:
+                # Pega todos os concursos carregados
+                todos_concursos = [
+                    sorted(map(int, c['dezenas'])) for c in st.session_state.dados_api[:qtd]
+                ]
+                
+                # Último concurso
+                ultimo = st.session_state.dados_api[0]
+                numeros_ultimo = sorted(map(int, ultimo['dezenas']))
+                padrao_ultimo = contar_bma(numeros_ultimo)
+                
+                # =====================================================
+                # PAINEL DO ÚLTIMO CONCURSO
+                # =====================================================
+                st.markdown("### 🎯 Último Concurso Analisado")
+                
+                col1, col2, col3 = st.columns([1,2,1])
+                with col1:
+                    st.metric("Concurso", f"#{ultimo['concurso']}")
+                with col2:
+                    st.markdown(f"""
+                    <div style='text-align:center; background:#0e1117; padding:10px; border-radius:10px;'>
+                        <span style='font-size:1.2rem;'>Padrão B-M-A</span><br>
+                        <span style='font-size:2rem; font-weight:bold; color:#ffaa00;'>{padrao_ultimo[0]}-{padrao_ultimo[1]}-{padrao_ultimo[2]}</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+                with col3:
+                    st.metric("Data", ultimo['data'][:10])
+                
+                # =====================================================
+                # DETECTOR DE SINAIS (PADRÕES ATRASADOS)
+                # =====================================================
+                st.markdown("### 🚨 Sinais de Atraso Detectados")
+                
+                # Detectar sinais
+                sinais = detector_sinais(todos_concursos, limiar=1.5)
+                
+                if sinais:
+                    for sinal in sinais:
+                        padrao_str = f"{sinal['padrao'][0]}-{sinal['padrao'][1]}-{sinal['padrao'][2]}"
+                        
+                        # Definir cor baseada no nível
+                        if sinal['nivel'] == "🚨 FORTE":
+                            cor = "#ff6b6b"
+                        elif sinal['nivel'] == "⚠️ MÉDIO":
+                            cor = "#ffaa00"
+                        else:
+                            cor = "#4cc9f0"
+                        
+                        st.markdown(f"""
+                        <div style='border-left: 5px solid {cor}; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
+                            <div style='display:flex; justify-content:space-between;'>
+                                <strong style='color:{cor};'>{sinal['nivel']}</strong>
+                                <span>Padrão <strong style='font-size:1.2rem;'>{padrao_str}</strong></span>
+                            </div>
+                            <div style='display:flex; gap:20px; margin-top:10px; flex-wrap:wrap;'>
+                                <span>📊 Frequência: {sinal['frequencia']}x</span>
+                                <span>⏱️ Ciclo médio: {sinal['ciclo_medio']} concursos</span>
+                                <span>⌛ Atraso atual: <strong>{sinal['atraso']}</strong> concursos</span>
+                                <span>📈 Intensidade: {sinal['intensidade']}x</span>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.info("Nenhum padrão significativamente atrasado detectado no momento.")
+                
+                # =====================================================
+                # DETECTOR DE PADRÕES ALVO
+                # =====================================================
+                st.markdown("### 🎯 Monitoramento de Padrões Específicos")
+                
+                # Detectar padrões alvo
+                alvos = detector_alvos(todos_concursos)
+                
+                # Criar DataFrame para exibição
+                df_alvos = pd.DataFrame(alvos)
+                
+                # Formatar para exibição
+                df_alvos_display = df_alvos.copy()
+                df_alvos_display["status_formatado"] = df_alvos_display.apply(
+                    lambda row: f"<span style='color:{row['cor']}; font-weight:bold;'>{row['status']}</span>", 
+                    axis=1
+                )
+                
+                # Mostrar como tabela HTML
+                for _, row in df_alvos.iterrows():
+                    col1, col2, col3, col4, col5 = st.columns([1,1,1,1,2])
+                    with col1:
+                        st.markdown(formatar_padrao_html(row['padrao']), unsafe_allow_html=True)
+                    with col2:
+                        st.markdown(f"**{row['total']}**")
+                    with col3:
+                        st.markdown(f"**{row['ultimos_10']}**")
+                    with col4:
+                        st.markdown(f"**{row['atraso']}**")
+                    with col5:
+                        st.markdown(f"<span style='color:{row['cor']}; font-weight:bold;'>{row['status']}</span>", unsafe_allow_html=True)
+                
+                # Cabeçalho
+                st.markdown("""
+                <div style='display:flex; gap:10px; margin-top:10px; padding:5px; background:#1e1e2e; border-radius:5px; font-weight:bold;'>
+                    <div style='width:12%;'>Padrão</div>
+                    <div style='width:12%;'>Total</div>
+                    <div style='width:12%;'>Últ.10</div>
+                    <div style='width:12%;'>Atraso</div>
+                    <div style='width:52%;'>Status</div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # =====================================================
+                # TOP 15 PADRÕES MAIS FREQUENTES
+                # =====================================================
+                st.markdown("### 📊 Top 15 Padrões Mais Frequentes")
+                
+                top_padroes = top_padroes_frequentes(todos_concursos, n=15)
+                
+                df_top = pd.DataFrame(top_padroes)
+                st.dataframe(
+                    df_top,
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "padrao": "Padrão B-M-A",
+                        "ocorrencias": "Ocorrências",
+                        "percentual": "Percentual"
+                    }
+                )
+                
+                # =====================================================
+                # GRÁFICO DE EVOLUÇÃO DOS PADRÕES
+                # =====================================================
+                st.markdown("### 📈 Evolução dos Padrões nos Últimos 50 Concursos")
+                
+                # Pegar últimos 50 concursos
+                ultimos_50 = todos_concursos[:50]
+                padroes_50 = [contar_bma(c) for c in ultimos_50]
+                
+                # Criar DataFrame para o gráfico
+                df_evolucao = pd.DataFrame({
+                    "Concurso": range(len(ultimos_50)),
+                    "Baixas": [p[0] for p in padroes_50],
+                    "Médias": [p[1] for p in padroes_50],
+                    "Altas": [p[2] for p in padroes_50]
+                })
+                
+                # Inverter ordem para mostrar do mais antigo para o mais recente
+                df_evolucao = df_evolucao.iloc[::-1].reset_index(drop=True)
+                
+                # Plotar
+                st.line_chart(df_evolucao.set_index("Concurso")[["Baixas", "Médias", "Altas"]])
+                
+                # =====================================================
+                # RESUMO ESTATÍSTICO
+                # =====================================================
+                st.markdown("### 📋 Resumo Estatístico")
+                
+                # Calcular médias gerais
+                medias_gerais = {
+                    "Baixas": np.mean([p[0] for p in padroes_50]),
+                    "Médias": np.mean([p[1] for p in padroes_50]),
+                    "Altas": np.mean([p[2] for p in padroes_50])
+                }
+                
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Média Baixas", f"{medias_gerais['Baixas']:.1f}")
+                with col2:
+                    st.metric("Média Médias", f"{medias_gerais['Médias']:.1f}")
+                with col3:
+                    st.metric("Média Altas", f"{medias_gerais['Altas']:.1f}")
+                with col4:
+                    # Padrão mais comum
+                    padrao_comum = Counter([f"{p[0]}-{p[1]}-{p[2]}" for p in padroes_50]).most_common(1)[0][0]
+                    st.metric("Padrão mais comum", padrao_comum)
+                
+                # Explicação do detector
+                with st.expander("📘 Como funciona o Detector MASTER de Padrões B-M-A?"):
+                    st.markdown("""
+                    ### 📡 Detector MASTER de Padrões B-M-A
+                    
+                    **Divisão do volante:**
+                    - **Baixas (B):** números 01 a 08
+                    - **Médias (M):** números 09 a 16  
+                    - **Altas (A):** números 17 a 25
+                    
+                    **Funcionalidades:**
+                    
+                    1. **Detector de Sinais:** Identifica padrões com atraso superior a 1.5x a média do ciclo
+                    2. **Monitoramento de Alvos:** Acompanha padrões específicos (7-4-4, 3-6-6, 4-5-6, etc.)
+                    3. **Top Padrões:** Lista os 15 padrões mais frequentes na história
+                    4. **Evolução Temporal:** Gráfico mostrando como variam B, M, A nos últimos concursos
+                    
+                    **Como usar:**
+                    - Padrões com **🚨 FORTE** indicam alta probabilidade de retorno
+                    - Use o status dos padrões alvo para direcionar seus jogos
+                    - Combine com os geradores para aumentar chances
+                    """)
+            else:
+                st.info("📥 Carregue os concursos na barra lateral para ativar o Detector MASTER de Padrões B-M-A.")
 
 # =====================================================
 # EXECUÇÃO PRINCIPAL (FORA DA FUNÇÃO MAIN)
