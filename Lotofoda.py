@@ -3692,297 +3692,314 @@ def main():
                         """)
         
         # =====================================================
-        # NOVA ABA: INTELIGÊNCIA 5-7-3
+        # NOVA ABA: INTELIGÊNCIA 5-
         # =====================================================
-        with tab8:
+# ABA 8: INTELIGÊNCIA 5-7-3 (MODIFICADA)
+# =====================================================
+with tab8:
+    st.markdown("""
+    <div style='background:#1e1e2e; padding:15px; border-radius:10px; margin-bottom:20px; border-left:5px solid #aa00ff;'>
+        <h4 style='margin:0; color:#aa00ff;'>🧠 MODO INTELIGENTE 5-7-3</h4>
+        <p style='margin:5px 0 0 0; font-size:0.9em;'>Detector de Sinal Automático + Filtro de Elite com os 4 padrões prioritários</p>
+        <p style='margin:2px 0 0 0; font-size:0.85em; color:#ccc;'>Padrões aceitos: <strong>5-7-3</strong> (prioridade máxima), 5-6-4, 6-6-3, 4-7-4 (cobrem 68% dos concursos)</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if st.session_state.dados_api:
+        # Pega os últimos concursos para análise de sinal
+        ultimos_concursos_para_sinal = [
+            sorted(map(int, c['dezenas'])) for c in st.session_state.dados_api[:10]
+        ]
+
+        # --- DETECTOR DE SINAL EM TEMPO REAL ---
+        st.markdown("### 🔍 Análise de Sinal em Tempo Real")
+        sinal_detectado = detectar_sinal(ultimos_concursos_para_sinal)
+
+        # Indicador visual do sinal
+        if sinal_detectado:
             st.markdown("""
-            <div style='background:#1e1e2e; padding:15px; border-radius:10px; margin-bottom:20px; border-left:5px solid #aa00ff;'>
-                <h4 style='margin:0; color:#aa00ff;'>🧠 MODO INTELIGENTE 5-7-3</h4>
-                <p style='margin:5px 0 0 0; font-size:0.9em;'>Detector de Sinal Automático + Filtro de Elite com os 4 padrões prioritários</p>
-                <p style='margin:2px 0 0 0; font-size:0.85em; color:#ccc;'>Padrões aceitos: <strong>5-7-3</strong> (prioridade máxima), 5-6-4, 6-6-3, 4-7-4 (cobrem 68% dos concursos)</p>
+            <div style='background:#aa00ff20; padding:20px; border-radius:15px; text-align:center; border:2px solid #aa00ff; margin-bottom:15px;'>
+                <h2 style='color:#aa00ff; margin:0;'>🟢 SINAL SNIPER ATIVADO</h2>
+                <p style='margin:0;'>Modo de alta precisão. Apenas os 4 padrões prioritários são aceitos.</p>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown("""
+            <div style='background:#66666620; padding:20px; border-radius:15px; text-align:center; border:2px solid #666; margin-bottom:15px;'>
+                <h2 style='color:#ccc; margin:0;'>⚪ SINAL DESLIGADO</h2>
+                <p style='margin:0;'>Modo livre. Apenas score mínimo aplicado, mas padrões fora dos 4 prioritários são tolerados.</p>
             </div>
             """, unsafe_allow_html=True)
 
-            if st.session_state.dados_api:
-                # Pega os últimos concursos para análise de sinal
-                ultimos_concursos_para_sinal = [
-                    sorted(map(int, c['dezenas'])) for c in st.session_state.dados_api[:10]
-                ]
-
-                # --- DETECTOR DE SINAL EM TEMPO REAL ---
-                st.markdown("### 🔍 Análise de Sinal em Tempo Real")
-                sinal_detectado = detectar_sinal(ultimos_concursos_para_sinal)
-
-                # Indicador visual do sinal
-                if sinal_detectado:
-                    st.markdown("""
-                    <div style='background:#aa00ff20; padding:20px; border-radius:15px; text-align:center; border:2px solid #aa00ff; margin-bottom:15px;'>
-                        <h2 style='color:#aa00ff; margin:0;'>🟢 SINAL SNIPER ATIVADO</h2>
-                        <p style='margin:0;'>Modo de alta precisão. Apenas os 4 padrões prioritários são aceitos.</p>
-                    </div>
-                    """, unsafe_allow_html=True)
+        # --- ESTATÍSTICAS DOS PADRÕES NOS CONCURSOS REAIS ---
+        with st.expander("📊 Análise dos Padrões nos Concursos Reais", expanded=False):
+            # Analisar os últimos 50 concursos
+            ultimos_50 = [sorted(map(int, c['dezenas'])) for c in st.session_state.dados_api[:50]]
+            contagem_padroes = {
+                "5-7-3": 0,
+                "5-6-4": 0,
+                "6-6-3": 0,
+                "4-7-4": 0,
+                "outros": 0
+            }
+            
+            for c in ultimos_50:
+                f = contar_faixas_573(c)
+                padrao = f"{f['baixa']}-{f['media']}-{f['alta']}"
+                if padrao in contagem_padroes:
+                    contagem_padroes[padrao] += 1
                 else:
-                    st.markdown("""
-                    <div style='background:#66666620; padding:20px; border-radius:15px; text-align:center; border:2px solid #666; margin-bottom:15px;'>
-                        <h2 style='color:#ccc; margin:0;'>⚪ SINAL DESLIGADO</h2>
-                        <p style='margin:0;'>Modo livre. Apenas score mínimo aplicado, mas padrões fora dos 4 prioritários são tolerados.</p>
+                    contagem_padroes["outros"] += 1
+            
+            # Mostrar em gráfico de barras
+            df_padroes = pd.DataFrame({
+                "Padrão": list(contagem_padroes.keys()),
+                "Ocorrências": list(contagem_padroes.values()),
+                "Percentual": [f"{v/len(ultimos_50)*100:.1f}%" for v in contagem_padroes.values()]
+            })
+            
+            st.dataframe(df_padroes, use_container_width=True, hide_index=True)
+            
+            total_cobertura = (contagem_padroes["5-7-3"] + contagem_padroes["5-6-4"] + 
+                              contagem_padroes["6-6-3"] + contagem_padroes["4-7-4"])
+            st.metric("Cobertura dos 4 padrões", f"{total_cobertura/len(ultimos_50)*100:.1f}%", 
+                     f"{total_cobertura}/{len(ultimos_50)} concursos")
+
+        # --- SELEÇÃO DE JOGOS PARA FILTRAR ---
+        st.markdown("### 🎯 Aplicar Inteligência aos Jogos")
+        
+        # Opção de escolher de qual gerador pegar os jogos - AGORA COM PROFISSIONAL
+        fonte_jogos = st.radio(
+            "Selecione a fonte dos jogos:",
+            [
+                "Jogos do Fechamento 3622", 
+                "Jogos do Gerador 12+", 
+                "Jogos do Gerador 13+",
+                "Jogos do Gerador Profissional",  # ← NOVO!
+                "Gerar Novos Jogos 12+ para Teste"
+            ],
+            horizontal=True,
+            key="fonte_inteligencia_radio",
+            index=["Jogos do Fechamento 3622", "Jogos do Gerador 12+", "Jogos do Gerador 13+", "Jogos do Gerador Profissional", "Gerar Novos Jogos 12+ para Teste"].index(st.session_state.fonte_inteligencia)
+        )
+        
+        # ATUALIZAR ESTADO
+        st.session_state.fonte_inteligencia = fonte_jogos
+
+        # Preparar lista de jogos baseado na fonte selecionada
+        jogos_para_filtrar = []
+        
+        if st.session_state.fonte_inteligencia == "Jogos do Fechamento 3622" and st.session_state.jogos_3622:
+            jogos_para_filtrar = st.session_state.jogos_3622
+            st.caption(f"📋 {len(jogos_para_filtrar)} jogos do Fechamento 3622 carregados")
+        
+        elif st.session_state.fonte_inteligencia == "Jogos do Gerador 12+" and st.session_state.jogos_12plus:
+            jogos_para_filtrar = st.session_state.jogos_12plus
+            st.caption(f"📋 {len(jogos_para_filtrar)} jogos do Gerador 12+ carregados")
+        
+        elif st.session_state.fonte_inteligencia == "Jogos do Gerador 13+" and st.session_state.jogos_13plus:
+            jogos_para_filtrar = st.session_state.jogos_13plus
+            st.caption(f"📋 {len(jogos_para_filtrar)} jogos do Gerador 13+ carregados")
+        
+        # ===== NOVO: GERADOR PROFISSIONAL =====
+        elif st.session_state.fonte_inteligencia == "Jogos do Gerador Profissional" and st.session_state.jogos_profissionais:
+            jogos_para_filtrar = st.session_state.jogos_profissionais
+            st.caption(f"📋 {len(jogos_para_filtrar)} jogos do Gerador Profissional carregados")
+        
+        elif st.session_state.fonte_inteligencia == "Gerar Novos Jogos 12+ para Teste":
+            # Só gerar se não tiver jogos já gerados nesta sessão
+            if "jogos_teste_intel" not in st.session_state or st.session_state.jogos_teste_intel is None:
+                with st.spinner("Gerando 20 jogos 12+ para teste..."):
+                    ultimo = st.session_state.dados_api[0]
+                    numeros_ultimo = sorted(map(int, ultimo['dezenas']))
+                    ultimos_concursos = [
+                        sorted(map(int, c['dezenas'])) 
+                        for c in st.session_state.dados_api[:20]
+                    ]
+                    gerador_12plus = Gerador12Plus(ultimos_concursos, numeros_ultimo)
+                    jogos_temp, _ = gerador_12plus.gerar_multiplos_jogos(20)
+                    if jogos_temp:
+                        st.session_state.jogos_teste_intel = jogos_temp
+                        jogos_para_filtrar = jogos_temp
+                        st.success(f"✅ 20 jogos 12+ gerados!")
+            else:
+                jogos_para_filtrar = st.session_state.jogos_teste_intel
+                st.caption(f"📋 {len(jogos_para_filtrar)} jogos de teste carregados")
+
+        col1, col2, col3 = st.columns([1,1,1])
+        with col1:
+            threshold_score = st.slider(
+                "Score Mínimo", 
+                0, 10, 
+                value=st.session_state.threshold_intel,
+                key="slider_threshold_intel"
+            )
+            st.session_state.threshold_intel = threshold_score
+        
+        with col2:
+            modo_operacao = st.selectbox(
+                "Modo de Operação", 
+                ["auto", "forcar_on", "forcar_off"],
+                index=["auto", "forcar_on", "forcar_off"].index(st.session_state.modo_intel),
+                key="select_modo_intel"
+            )
+            st.session_state.modo_intel = modo_operacao
+        
+        with col3:
+            st.markdown("<br>", unsafe_allow_html=True)
+            botao_filtrar = st.button("✨ FILTRAR JOGOS", type="primary", use_container_width=True, key="filtrar_intel")
+
+        if botao_filtrar:
+            if not jogos_para_filtrar:
+                st.warning("⚠️ Nenhum jogo encontrado na fonte selecionada. Gere jogos primeiro ou escolha outra fonte.")
+            else:
+                with st.spinner("Aplicando inteligência aos jogos..."):
+                    jogos_aprovados, sinal_estava_ativo, stats = pipeline_selecao_inteligente(
+                        jogos_para_filtrar, 
+                        ultimos_concursos_para_sinal,
+                        modo_operacao=modo_operacao,
+                        threshold_score=threshold_score
+                    )
+                
+                st.session_state.jogos_inteligentes = jogos_aprovados
+                st.session_state.stats_inteligentes = stats
+                st.success(f"✅ Filtragem concluída! {len(jogos_aprovados)} jogos aprovados.")
+
+        # --- EXIBIÇÃO DOS RESULTADOS ---
+        if "jogos_inteligentes" in st.session_state and st.session_state.jogos_inteligentes:
+            jogos_finais = st.session_state.jogos_inteligentes
+            stats = st.session_state.stats_inteligentes
+
+            st.markdown("---")
+            st.markdown("### 📊 Resultado da Seleção Inteligente")
+
+            # Estatísticas do processo
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Jogos Analisados", stats['total_jogos_analisados'])
+            with col2:
+                st.metric("Jogos Aprovados", stats['jogos_aprovados'])
+            with col3:
+                if stats['sinal_estava_ativo']:
+                    st.metric("Filtro 5-7-3 Bloqueou", stats['jogos_filtrados_573'])
+                else:
+                    st.metric("Filtro 5-7-3", "Inativo")
+            with col4:
+                st.metric("Reprovados por Score", stats['jogos_reprovados_score'])
+
+            # Distribuição dos padrões
+            st.markdown("#### 📈 Distribuição dos Padrões nos Jogos Analisados")
+            df_padroes_analisados = pd.DataFrame({
+                "Padrão": list(stats['jogos_por_padrao'].keys()),
+                "Quantidade": list(stats['jogos_por_padrao'].values())
+            })
+            st.dataframe(df_padroes_analisados, use_container_width=True, hide_index=True)
+
+            # Tabela com scores dos jogos aprovados
+            scores_data = []
+            for i, jogo in enumerate(jogos_finais):
+                f = contar_faixas_573(jogo)
+                padrao = f"{f['baixa']}-{f['media']}-{f['alta']}"
+                scores_data.append({
+                    "Rank": i+1,
+                    "Padrão": padrao,
+                    "Score": score_jogo_573(jogo),
+                    "Dezenas": ", ".join(f"{n:02d}" for n in jogo)
+                })
+            
+            scores_df = pd.DataFrame(scores_data).sort_values("Score", ascending=False).reset_index(drop=True)
+            scores_df["Rank"] = scores_df.index + 1
+            st.dataframe(scores_df[["Rank", "Padrão", "Score", "Dezenas"]], use_container_width=True, hide_index=True)
+
+            # Mostrar cada jogo formatado
+            for i, jogo in enumerate(jogos_finais[:10]):  # Limitar a 10 para não poluir
+                with st.container():
+                    # Calcular métricas para exibição
+                    f = contar_faixas_573(jogo)
+                    padrao = f"{f['baixa']}-{f['media']}-{f['alta']}"
+                    pares, _ = paridade_573(jogo)
+                    s = soma_573(jogo)
+                    score = score_jogo_573(jogo)
+                    
+                    # Formatar números
+                    nums_html = formatar_jogo_html(jogo)
+                    
+                    # Cor baseada no padrão e score
+                    if padrao == "5-7-3":
+                        cor_borda = "#aa00ff"  # Roxo - elite
+                        destaque = "🔥 PRIORIDADE MÁXIMA"
+                    elif score >= 8:
+                        cor_borda = "#4ade80"  # Verde - ótimo
+                        destaque = "✅ Excelente"
+                    elif score >= 6:
+                        cor_borda = "#4cc9f0"  # Azul - bom
+                        destaque = "👍 Bom"
+                    else:
+                        cor_borda = "#f97316"  # Laranja - regular
+                        destaque = "⚠️ Regular"
+                    
+                    st.markdown(f"""
+                    <div style='border-left: 5px solid {cor_borda}; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
+                        <div style='display:flex; justify-content:space-between;'>
+                            <strong>Jogo Elite #{i+1} - Padrão {padrao}</strong>
+                            <span style='color:{cor_borda}; font-weight:bold;'>Score: {score:.1f} | {destaque}</span>
+                        </div>
+                        <div>{nums_html}</div>
+                        <div style='display:flex; gap:15px; margin-top:8px; color:#aaa; font-size:0.9em; flex-wrap:wrap;'>
+                            <span>📊 {f['baixa']}B/{f['media']}M/{f['alta']}A</span>
+                            <span>⚖️ {pares}×{15-pares}</span>
+                            <span>➕ {s}</span>
+                            <span>🔗 bloco {maior_bloco_consecutivo_573(jogo)}</span>
+                        </div>
                     </div>
                     """, unsafe_allow_html=True)
 
-                # --- ESTATÍSTICAS DOS PADRÕES NOS CONCURSOS REAIS ---
-                with st.expander("📊 Análise dos Padrões nos Concursos Reais", expanded=False):
-                    # Analisar os últimos 50 concursos
-                    ultimos_50 = [sorted(map(int, c['dezenas'])) for c in st.session_state.dados_api[:50]]
-                    contagem_padroes = {
-                        "5-7-3": 0,
-                        "5-6-4": 0,
-                        "6-6-3": 0,
-                        "4-7-4": 0,
-                        "outros": 0
-                    }
-                    
-                    for c in ultimos_50:
-                        f = contar_faixas_573(c)
-                        padrao = f"{f['baixa']}-{f['media']}-{f['alta']}"
-                        if padrao in contagem_padroes:
-                            contagem_padroes[padrao] += 1
-                        else:
-                            contagem_padroes["outros"] += 1
-                    
-                    # Mostrar em gráfico de barras
-                    df_padroes = pd.DataFrame({
-                        "Padrão": list(contagem_padroes.keys()),
-                        "Ocorrências": list(contagem_padroes.values()),
-                        "Percentual": [f"{v/len(ultimos_50)*100:.1f}%" for v in contagem_padroes.values()]
-                    })
-                    
-                    st.dataframe(df_padroes, use_container_width=True, hide_index=True)
-                    
-                    total_cobertura = (contagem_padroes["5-7-3"] + contagem_padroes["5-6-4"] + 
-                                      contagem_padroes["6-6-3"] + contagem_padroes["4-7-4"])
-                    st.metric("Cobertura dos 4 padrões", f"{total_cobertura/len(ultimos_50)*100:.1f}%", 
-                             f"{total_cobertura}/{len(ultimos_50)} concursos")
-
-                # --- SELEÇÃO DE JOGOS PARA FILTRAR ---
-                st.markdown("### 🎯 Aplicar Inteligência aos Jogos")
-                
-                # Opção de escolher de qual gerador pegar os jogos - COM PERSISTÊNCIA
-                fonte_jogos = st.radio(
-                    "Selecione a fonte dos jogos:",
-                    ["Jogos do Fechamento 3622", "Jogos do Gerador 12+", "Jogos do Gerador 13+", "Gerar Novos Jogos 12+ para Teste"],
-                    horizontal=True,
-                    key="fonte_inteligencia_radio",
-                    index=["Jogos do Fechamento 3622", "Jogos do Gerador 12+", "Jogos do Gerador 13+", "Gerar Novos Jogos 12+ para Teste"].index(st.session_state.fonte_inteligencia)
+            # Botões de ação
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                if st.button("💾 Salvar Jogos Inteligentes", key="salvar_intel", use_container_width=True):
+                    ultimo = st.session_state.dados_api[0]
+                    arquivo, jogo_id = salvar_jogos_gerados(
+                        jogos_finais,
+                        list(range(1, 18)),
+                        {"modelo": "Inteligencia 5-7-3", "sinal": sinal_detectado, "padroes": "4 prioritários"},
+                        ultimo['concurso'],
+                        ultimo['data']
+                    )
+                    if arquivo:
+                        st.success(f"✅ Jogos salvos! ID: {jogo_id}")
+                        st.session_state.jogos_salvos = carregar_jogos_salvos()
+            
+            with col2:
+                if st.button("🔄 Nova Filtragem", use_container_width=True, key="nova_intel"):
+                    st.session_state.jogos_inteligentes = None
+                    st.rerun()
+            
+            with col3:
+                # Exportar CSV
+                df_export_intel = pd.DataFrame({
+                    "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in jogos_finais],
+                    "Padrão": [f"{contar_faixas_573(j)['baixa']}-{contar_faixas_573(j)['media']}-{contar_faixas_573(j)['alta']}" for j in jogos_finais],
+                    "Score": [score_jogo_573(j) for j in jogos_finais],
+                    "Baixas": [contar_faixas_573(j)["baixa"] for j in jogos_finais],
+                    "Médias": [contar_faixas_573(j)["media"] for j in jogos_finais],
+                    "Altas": [contar_faixas_573(j)["alta"] for j in jogos_finais],
+                    "Pares": [paridade_573(j)[0] for j in jogos_finais],
+                    "Soma": [soma_573(j) for j in jogos_finais],
+                    "Maior_Bloco": [maior_bloco_consecutivo_573(j) for j in jogos_finais]
+                })
+                csv_intel = df_export_intel.to_csv(index=False)
+                st.download_button(
+                    label="📥 Exportar CSV",
+                    data=csv_intel,
+                    file_name=f"jogos_inteligentes_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    mime="text/csv",
+                    use_container_width=True
                 )
-                
-                # ATUALIZAR ESTADO
-                st.session_state.fonte_inteligencia = fonte_jogos
-
-                # Preparar lista de jogos baseado na fonte selecionada
-                jogos_para_filtrar = []
-                
-                # IMPORTANTE: Processar a fonte selecionada AQUI, fora do botão
-                if st.session_state.fonte_inteligencia == "Jogos do Fechamento 3622" and st.session_state.jogos_3622:
-                    jogos_para_filtrar = st.session_state.jogos_3622
-                    st.caption(f"📋 {len(jogos_para_filtrar)} jogos do Fechamento 3622 carregados")
-                elif st.session_state.fonte_inteligencia == "Jogos do Gerador 12+" and st.session_state.jogos_12plus:
-                    jogos_para_filtrar = st.session_state.jogos_12plus
-                    st.caption(f"📋 {len(jogos_para_filtrar)} jogos do Gerador 12+ carregados")
-                elif st.session_state.fonte_inteligencia == "Jogos do Gerador 13+" and st.session_state.jogos_13plus:
-                    jogos_para_filtrar = st.session_state.jogos_13plus
-                    st.caption(f"📋 {len(jogos_para_filtrar)} jogos do Gerador 13+ carregados")
-                elif st.session_state.fonte_inteligencia == "Gerar Novos Jogos 12+ para Teste":
-                    # Só gerar se não tiver jogos já gerados nesta sessão
-                    if "jogos_teste_intel" not in st.session_state or st.session_state.jogos_teste_intel is None:
-                        with st.spinner("Gerando 20 jogos 12+ para teste..."):
-                            ultimo = st.session_state.dados_api[0]
-                            numeros_ultimo = sorted(map(int, ultimo['dezenas']))
-                            ultimos_concursos = [
-                                sorted(map(int, c['dezenas'])) 
-                                for c in st.session_state.dados_api[:20]
-                            ]
-                            gerador_12plus = Gerador12Plus(ultimos_concursos, numeros_ultimo)
-                            jogos_temp, _ = gerador_12plus.gerar_multiplos_jogos(20)
-                            if jogos_temp:
-                                st.session_state.jogos_teste_intel = jogos_temp
-                                jogos_para_filtrar = jogos_temp
-                                st.success(f"✅ 20 jogos 12+ gerados!")
-                    else:
-                        jogos_para_filtrar = st.session_state.jogos_teste_intel
-                        st.caption(f"📋 {len(jogos_para_filtrar)} jogos de teste carregados")
-
-                col1, col2, col3 = st.columns([1,1,1])
-                with col1:
-                    threshold_score = st.slider(
-                        "Score Mínimo", 
-                        0, 10, 
-                        value=st.session_state.threshold_intel,
-                        key="slider_threshold_intel"
-                    )
-                    st.session_state.threshold_intel = threshold_score
-                
-                with col2:
-                    modo_operacao = st.selectbox(
-                        "Modo de Operação", 
-                        ["auto", "forcar_on", "forcar_off"],
-                        index=["auto", "forcar_on", "forcar_off"].index(st.session_state.modo_intel),
-                        key="select_modo_intel"
-                    )
-                    st.session_state.modo_intel = modo_operacao
-                
-                with col3:
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    botao_filtrar = st.button("✨ FILTRAR JOGOS", type="primary", use_container_width=True, key="filtrar_intel")
-
-                if botao_filtrar:
-                    if not jogos_para_filtrar:
-                        st.warning("⚠️ Nenhum jogo encontrado na fonte selecionada. Gere jogos primeiro ou escolha outra fonte.")
-                    else:
-                        with st.spinner("Aplicando inteligência aos jogos..."):
-                            jogos_aprovados, sinal_estava_ativo, stats = pipeline_selecao_inteligente(
-                                jogos_para_filtrar, 
-                                ultimos_concursos_para_sinal,
-                                modo_operacao=modo_operacao,
-                                threshold_score=threshold_score
-                            )
-                        
-                        st.session_state.jogos_inteligentes = jogos_aprovados
-                        st.session_state.stats_inteligentes = stats
-                        st.success(f"✅ Filtragem concluída! {len(jogos_aprovados)} jogos aprovados.")
-
-                # --- EXIBIÇÃO DOS RESULTADOS ---
-                if "jogos_inteligentes" in st.session_state and st.session_state.jogos_inteligentes:
-                    jogos_finais = st.session_state.jogos_inteligentes
-                    stats = st.session_state.stats_inteligentes
-
-                    st.markdown("---")
-                    st.markdown("### 📊 Resultado da Seleção Inteligente")
-
-                    # Estatísticas do processo
-                    col1, col2, col3, col4 = st.columns(4)
-                    with col1:
-                        st.metric("Jogos Analisados", stats['total_jogos_analisados'])
-                    with col2:
-                        st.metric("Jogos Aprovados", stats['jogos_aprovados'])
-                    with col3:
-                        if stats['sinal_estava_ativo']:
-                            st.metric("Filtro 5-7-3 Bloqueou", stats['jogos_filtrados_573'])
-                        else:
-                            st.metric("Filtro 5-7-3", "Inativo")
-                    with col4:
-                        st.metric("Reprovados por Score", stats['jogos_reprovados_score'])
-
-                    # Distribuição dos padrões
-                    st.markdown("#### 📈 Distribuição dos Padrões nos Jogos Analisados")
-                    df_padroes_analisados = pd.DataFrame({
-                        "Padrão": list(stats['jogos_por_padrao'].keys()),
-                        "Quantidade": list(stats['jogos_por_padrao'].values())
-                    })
-                    st.dataframe(df_padroes_analisados, use_container_width=True, hide_index=True)
-
-                    # Tabela com scores dos jogos aprovados
-                    scores_data = []
-                    for i, jogo in enumerate(jogos_finais):
-                        f = contar_faixas_573(jogo)
-                        padrao = f"{f['baixa']}-{f['media']}-{f['alta']}"
-                        scores_data.append({
-                            "Rank": i+1,
-                            "Padrão": padrao,
-                            "Score": score_jogo_573(jogo),
-                            "Dezenas": ", ".join(f"{n:02d}" for n in jogo)
-                        })
-                    
-                    scores_df = pd.DataFrame(scores_data).sort_values("Score", ascending=False).reset_index(drop=True)
-                    scores_df["Rank"] = scores_df.index + 1
-                    st.dataframe(scores_df[["Rank", "Padrão", "Score", "Dezenas"]], use_container_width=True, hide_index=True)
-
-                    # Mostrar cada jogo formatado
-                    for i, jogo in enumerate(jogos_finais[:10]):  # Limitar a 10 para não poluir
-                        with st.container():
-                            # Calcular métricas para exibição
-                            f = contar_faixas_573(jogo)
-                            padrao = f"{f['baixa']}-{f['media']}-{f['alta']}"
-                            pares, _ = paridade_573(jogo)
-                            s = soma_573(jogo)
-                            score = score_jogo_573(jogo)
-                            
-                            # Formatar números
-                            nums_html = formatar_jogo_html(jogo)
-                            
-                            # Cor baseada no padrão e score
-                            if padrao == "5-7-3":
-                                cor_borda = "#aa00ff"  # Roxo - elite
-                                destaque = "🔥 PRIORIDADE MÁXIMA"
-                            elif score >= 8:
-                                cor_borda = "#4ade80"  # Verde - ótimo
-                                destaque = "✅ Excelente"
-                            elif score >= 6:
-                                cor_borda = "#4cc9f0"  # Azul - bom
-                                destaque = "👍 Bom"
-                            else:
-                                cor_borda = "#f97316"  # Laranja - regular
-                                destaque = "⚠️ Regular"
-                            
-                            st.markdown(f"""
-                            <div style='border-left: 5px solid {cor_borda}; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
-                                <div style='display:flex; justify-content:space-between;'>
-                                    <strong>Jogo Elite #{i+1} - Padrão {padrao}</strong>
-                                    <span style='color:{cor_borda}; font-weight:bold;'>Score: {score:.1f} | {destaque}</span>
-                                </div>
-                                <div>{nums_html}</div>
-                                <div style='display:flex; gap:15px; margin-top:8px; color:#aaa; font-size:0.9em; flex-wrap:wrap;'>
-                                    <span>📊 {f['baixa']}B/{f['media']}M/{f['alta']}A</span>
-                                    <span>⚖️ {pares}×{15-pares}</span>
-                                    <span>➕ {s}</span>
-                                    <span>🔗 bloco {maior_bloco_consecutivo_573(jogo)}</span>
-                                </div>
-                            </div>
-                            """, unsafe_allow_html=True)
-
-                    # Botões de ação
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        if st.button("💾 Salvar Jogos Inteligentes", key="salvar_intel", use_container_width=True):
-                            ultimo = st.session_state.dados_api[0]
-                            arquivo, jogo_id = salvar_jogos_gerados(
-                                jogos_finais,
-                                list(range(1, 18)),
-                                {"modelo": "Inteligencia 5-7-3", "sinal": sinal_detectado, "padroes": "4 prioritários"},
-                                ultimo['concurso'],
-                                ultimo['data']
-                            )
-                            if arquivo:
-                                st.success(f"✅ Jogos salvos! ID: {jogo_id}")
-                                st.session_state.jogos_salvos = carregar_jogos_salvos()
-                    
-                    with col2:
-                        if st.button("🔄 Nova Filtragem", use_container_width=True, key="nova_intel"):
-                            st.session_state.jogos_inteligentes = None
-                            st.rerun()
-                    
-                    with col3:
-                        # Exportar CSV
-                        df_export_intel = pd.DataFrame({
-                            "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in jogos_finais],
-                            "Padrão": [f"{contar_faixas_573(j)['baixa']}-{contar_faixas_573(j)['media']}-{contar_faixas_573(j)['alta']}" for j in jogos_finais],
-                            "Score": [score_jogo_573(j) for j in jogos_finais],
-                            "Baixas": [contar_faixas_573(j)["baixa"] for j in jogos_finais],
-                            "Médias": [contar_faixas_573(j)["media"] for j in jogos_finais],
-                            "Altas": [contar_faixas_573(j)["alta"] for j in jogos_finais],
-                            "Pares": [paridade_573(j)[0] for j in jogos_finais],
-                            "Soma": [soma_573(j) for j in jogos_finais],
-                            "Maior_Bloco": [maior_bloco_consecutivo_573(j) for j in jogos_finais]
-                        })
-                        csv_intel = df_export_intel.to_csv(index=False)
-                        st.download_button(
-                            label="📥 Exportar CSV",
-                            data=csv_intel,
-                            file_name=f"jogos_inteligentes_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                            mime="text/csv",
-                            use_container_width=True
-                        )
-            else:
-                st.info("📥 Carregue os concursos na barra lateral para ativar a inteligência 5-7-3.")
+    else:
+        st.info("📥 Carregue os concursos na barra lateral para ativar a inteligência 5-7-3.")
+    
+        
     else:
         st.markdown("""
         <div style='text-align: center; padding: 2rem;'>
