@@ -3692,8 +3692,7 @@ def main():
                         """)
         
         # =====================================================
-        # NOVA ABA: INTELIGÊNCIA 5-
-        # =====================================================
+         # =====================================================
 # ABA 8: INTELIGÊNCIA 5-7-3 (MODIFICADA)
 # =====================================================
 with tab8:
@@ -3775,7 +3774,7 @@ with tab8:
                 "Jogos do Fechamento 3622", 
                 "Jogos do Gerador 12+", 
                 "Jogos do Gerador 13+",
-                "Jogos do Gerador Profissional",  # ← NOVO!
+                "Jogos do Gerador Profissional",
                 "Gerar Novos Jogos 12+ para Teste"
             ],
             horizontal=True,
@@ -3801,7 +3800,7 @@ with tab8:
             jogos_para_filtrar = st.session_state.jogos_13plus
             st.caption(f"📋 {len(jogos_para_filtrar)} jogos do Gerador 13+ carregados")
         
-        # ===== NOVO: GERADOR PROFISSIONAL =====
+        # GERADOR PROFISSIONAL
         elif st.session_state.fonte_inteligencia == "Jogos do Gerador Profissional" and st.session_state.jogos_profissionais:
             jogos_para_filtrar = st.session_state.jogos_profissionais
             st.caption(f"📋 {len(jogos_para_filtrar)} jogos do Gerador Profissional carregados")
@@ -3912,7 +3911,7 @@ with tab8:
             st.dataframe(scores_df[["Rank", "Padrão", "Score", "Dezenas"]], use_container_width=True, hide_index=True)
 
             # Mostrar cada jogo formatado
-            for i, jogo in enumerate(jogos_finais[:10]):  # Limitar a 10 para não poluir
+            for i, jogo in enumerate(jogos_finais[:10]):
                 with st.container():
                     # Calcular métricas para exibição
                     f = contar_faixas_573(jogo)
@@ -3926,16 +3925,16 @@ with tab8:
                     
                     # Cor baseada no padrão e score
                     if padrao == "5-7-3":
-                        cor_borda = "#aa00ff"  # Roxo - elite
+                        cor_borda = "#aa00ff"
                         destaque = "🔥 PRIORIDADE MÁXIMA"
                     elif score >= 8:
-                        cor_borda = "#4ade80"  # Verde - ótimo
+                        cor_borda = "#4ade80"
                         destaque = "✅ Excelente"
                     elif score >= 6:
-                        cor_borda = "#4cc9f0"  # Azul - bom
+                        cor_borda = "#4cc9f0"
                         destaque = "👍 Bom"
                     else:
-                        cor_borda = "#f97316"  # Laranja - regular
+                        cor_borda = "#f97316"
                         destaque = "⚠️ Regular"
                     
                     st.markdown(f"""
@@ -3998,8 +3997,10 @@ with tab8:
                 )
     else:
         st.info("📥 Carregue os concursos na barra lateral para ativar a inteligência 5-7-3.")
-    
-        
+
+# =====================================================
+# FIM DO CÓDIGO - FECHAMENTO CORRETO
+# =====================================================
     else:
         st.markdown("""
         <div style='text-align: center; padding: 2rem;'>
@@ -4008,5 +4009,8 @@ with tab8:
         </div>
         """, unsafe_allow_html=True)
 
+# =====================================================
+# EXECUÇÃO PRINCIPAL
+# =====================================================
 if __name__ == "__main__":
-    main()
+    main() 
