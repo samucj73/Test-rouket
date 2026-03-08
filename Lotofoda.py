@@ -3692,7 +3692,7 @@ def main():
                         """)
 
     # =====================================================
-# =====================================================
+    # =====================================================
 # ABA 8: INTELIGÊNCIA 5-7-3 (CORRIGIDA)
 # =====================================================
 with tab8:
@@ -3992,24 +3992,11 @@ with tab8:
         st.info("📥 Carregue os concursos na barra lateral para ativar a inteligência 5-7-3.")
 
 # =====================================================
-# FIM DO CÓDIGO - FECHAMENTO CORRETO
+# FIM DA FUNÇÃO MAIN - NÃO ADICIONAR NADA AQUI!
 # =====================================================
-    else:
-        st.markdown("""
-        <div style='text-align: center; padding: 2rem;'>
-            <h3>🚀 Comece carregando os concursos na barra lateral</h3>
-            <p>Use o menu ≡ no canto superior esquerdo</p>
-        </div>
-        """, unsafe_allow_html=True)
-
 
 # =====================================================
-# EXECUÇÃO PRINCIPAL
+# EXECUÇÃO PRINCIPAL (FORA DA FUNÇÃO MAIN)
 # =====================================================
 if __name__ == "__main__":
     main()
-
-
-
-        
-       
