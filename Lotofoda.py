@@ -3692,7 +3692,8 @@ def main():
                         """)
 
     # =====================================================
-# ABA 8: INTELIGÊNCIA 5-7-3 (MODIFICADA)
+# =====================================================
+# ABA 8: INTELIGÊNCIA 5-7-3 (CORRIGIDA)
 # =====================================================
 with tab8:
     st.markdown("""
@@ -3749,7 +3750,7 @@ with tab8:
                 else:
                     contagem_padroes["outros"] += 1
             
-            # Mostrar em gráfico de barras
+            # Mostrar tabela
             df_padroes = pd.DataFrame({
                 "Padrão": list(contagem_padroes.keys()),
                 "Ocorrências": list(contagem_padroes.values()),
@@ -3766,7 +3767,7 @@ with tab8:
         # --- SELEÇÃO DE JOGOS PARA FILTRAR ---
         st.markdown("### 🎯 Aplicar Inteligência aos Jogos")
         
-        # Opção de escolher de qual gerador pegar os jogos - AGORA COM PROFISSIONAL
+        # Opção de escolher de qual gerador pegar os jogos
         fonte_jogos = st.radio(
             "Selecione a fonte dos jogos:",
             [
@@ -3777,8 +3778,7 @@ with tab8:
                 "Gerar Novos Jogos 12+ para Teste"
             ],
             horizontal=True,
-            key="fonte_inteligencia_radio",
-            index=["Jogos do Fechamento 3622", "Jogos do Gerador 12+", "Jogos do Gerador 13+", "Jogos do Gerador Profissional", "Gerar Novos Jogos 12+ para Teste"].index(st.session_state.fonte_inteligencia)
+            key="fonte_inteligencia_radio"
         )
         
         # ATUALIZAR ESTADO
@@ -3799,13 +3799,11 @@ with tab8:
             jogos_para_filtrar = st.session_state.jogos_13plus
             st.caption(f"📋 {len(jogos_para_filtrar)} jogos do Gerador 13+ carregados")
         
-        # GERADOR PROFISSIONAL
         elif st.session_state.fonte_inteligencia == "Jogos do Gerador Profissional" and st.session_state.jogos_profissionais:
             jogos_para_filtrar = st.session_state.jogos_profissionais
             st.caption(f"📋 {len(jogos_para_filtrar)} jogos do Gerador Profissional carregados")
         
         elif st.session_state.fonte_inteligencia == "Gerar Novos Jogos 12+ para Teste":
-            # Só gerar se não tiver jogos já gerados nesta sessão
             if "jogos_teste_intel" not in st.session_state or st.session_state.jogos_teste_intel is None:
                 with st.spinner("Gerando 20 jogos 12+ para teste..."):
                     ultimo = st.session_state.dados_api[0]
@@ -3912,17 +3910,14 @@ with tab8:
             # Mostrar cada jogo formatado
             for i, jogo in enumerate(jogos_finais[:10]):
                 with st.container():
-                    # Calcular métricas para exibição
                     f = contar_faixas_573(jogo)
                     padrao = f"{f['baixa']}-{f['media']}-{f['alta']}"
                     pares, _ = paridade_573(jogo)
                     s = soma_573(jogo)
                     score = score_jogo_573(jogo)
                     
-                    # Formatar números
                     nums_html = formatar_jogo_html(jogo)
                     
-                    # Cor baseada no padrão e score
                     if padrao == "5-7-3":
                         cor_borda = "#aa00ff"
                         destaque = "🔥 PRIORIDADE MÁXIMA"
@@ -3974,7 +3969,6 @@ with tab8:
                     st.rerun()
             
             with col3:
-                # Exportar CSV
                 df_export_intel = pd.DataFrame({
                     "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in jogos_finais],
                     "Padrão": [f"{contar_faixas_573(j)['baixa']}-{contar_faixas_573(j)['media']}-{contar_faixas_573(j)['alta']}" for j in jogos_finais],
@@ -3997,16 +3991,6 @@ with tab8:
     else:
         st.info("📥 Carregue os concursos na barra lateral para ativar a inteligência 5-7-3.")
 
-# =====================================================
-# FIM DO CÓDIGO - FECHAMENTO CORRETO
-# =====================================================
-    else:
-        st.markdown("""
-        <div style='text-align: center; padding: 2rem;'>
-            <h3>🚀 Comece carregando os concursos na barra lateral</h3>
-            <p>Use o menu ≡ no canto superior esquerdo</p>
-        </div>
-        """, unsafe_allow_html=True)
 
 # =====================================================
 # EXECUÇÃO PRINCIPAL
