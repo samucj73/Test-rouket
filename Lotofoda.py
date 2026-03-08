@@ -3991,6 +3991,17 @@ with tab8:
     else:
         st.info("📥 Carregue os concursos na barra lateral para ativar a inteligência 5-7-3.")
 
+# =====================================================
+# FIM DO CÓDIGO - FECHAMENTO CORRETO
+# =====================================================
+    else:
+        st.markdown("""
+        <div style='text-align: center; padding: 2rem;'>
+            <h3>🚀 Comece carregando os concursos na barra lateral</h3>
+            <p>Use o menu ≡ no canto superior esquerdo</p>
+        </div>
+        """, unsafe_allow_html=True)
+
 
 # =====================================================
 # EXECUÇÃO PRINCIPAL
