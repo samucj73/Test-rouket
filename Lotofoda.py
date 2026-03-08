@@ -1262,6 +1262,166 @@ class Gerador13Plus:
         return medias
 
 # =====================================================
+# GERADOR PROFISSIONAL (BASEADO NOS CÓDIGOS FORNECIDOS)
+# =====================================================
+
+class GeradorProfissional:
+    """
+    Gerador profissional baseado nos padrões estatísticos mais fortes:
+    - Distribuição Baixa-Média-Alta: 5-7-3
+    - Pares/Ímpares: 7-8
+    - Repetidas do último concurso: 8-9
+    - Sequências consecutivas: 4-6 números
+    - Soma: 180-220
+    """
+    
+    def __init__(self, ultimo_concurso):
+        """
+        Args:
+            ultimo_concurso: Lista com o resultado do último concurso
+        """
+        self.ultimo_concurso = set(ultimo_concurso) if ultimo_concurso else set()
+        
+        # Faixas do volante
+        self.baixas = list(range(1, 9))    # 01-08
+        self.medias = list(range(9, 17))   # 09-16
+        self.altas = list(range(17, 26))   # 17-25
+        
+    def contar_consecutivos(self, jogo):
+        """
+        Conta o tamanho da maior sequência consecutiva no jogo
+        """
+        jogo_sorted = sorted(jogo)
+        maior = 1
+        atual = 1
+        
+        for i in range(1, len(jogo_sorted)):
+            if jogo_sorted[i] == jogo_sorted[i-1] + 1:
+                atual += 1
+                maior = max(maior, atual)
+            else:
+                atual = 1
+                
+        return maior
+    
+    def gerar_jogo(self, max_tentativas=10000):
+        """
+        Gera um único jogo respeitando todos os filtros estatísticos
+        """
+        for tentativa in range(max_tentativas):
+            jogo = set()
+            
+            # PASSO 1: Distribuição estrutural 5-7-3
+            jogo.update(random.sample(self.baixas, 5))
+            jogo.update(random.sample(self.medias, 7))
+            jogo.update(random.sample(self.altas, 3))
+            
+            jogo = sorted(jogo)
+            
+            # PASSO 2: Verificar pares/ímpares
+            pares = sum(1 for n in jogo if n % 2 == 0)
+            if pares not in [6, 7, 8]:
+                continue
+            
+            # PASSO 3: Verificar repetidas do último concurso
+            if self.ultimo_concurso:
+                repetidas = len(set(jogo) & self.ultimo_concurso)
+                if repetidas not in [8, 9]:
+                    continue
+            
+            # PASSO 4: Verificar sequências consecutivas
+            seq = self.contar_consecutivos(jogo)
+            if seq < 4 or seq > 6:
+                continue
+            
+            # PASSO 5: Verificar soma total
+            soma = sum(jogo)
+            if soma < 180 or soma > 220:
+                continue
+            
+            # Se passou por todos os filtros, jogo é válido
+            return jogo, {
+                "distribuicao": "5-7-3",
+                "pares": pares,
+                "repetidas": repetidas if self.ultimo_concurso else 0,
+                "sequencia_max": seq,
+                "soma": soma
+            }
+        
+        # Fallback: gerar jogo com regras mais flexíveis
+        return self._gerar_jogo_fallback()
+    
+    def _gerar_jogo_fallback(self):
+        """Gera um jogo de fallback quando não encontra com validação completa"""
+        jogo = set()
+        
+        # Manter distribuição 5-7-3
+        jogo.update(random.sample(self.baixas, 5))
+        jogo.update(random.sample(self.medias, 7))
+        jogo.update(random.sample(self.altas, 3))
+        
+        jogo = sorted(jogo)
+        
+        # Estatísticas do jogo fallback
+        pares = sum(1 for n in jogo if n % 2 == 0)
+        repetidas = len(set(jogo) & self.ultimo_concurso) if self.ultimo_concurso else 0
+        seq = self.contar_consecutivos(jogo)
+        soma = sum(jogo)
+        
+        diagnostico = {
+            "distribuicao": "5-7-3",
+            "pares": pares,
+            "repetidas": repetidas,
+            "sequencia_max": seq,
+            "soma": soma,
+            "fallback": True
+        }
+        
+        return jogo, diagnostico
+    
+    def gerar_multiplos_jogos(self, quantidade):
+        """
+        Gera múltiplos jogos válidos
+        """
+        jogos = []
+        diagnosticos = []
+        tentativas = 0
+        max_tentativas = quantidade * 5000
+        
+        # Barra de progresso
+        progress_text = "Gerando jogos profissionais..."
+        progress_bar = st.progress(0, text=progress_text)
+        
+        while len(jogos) < quantidade and tentativas < max_tentativas:
+            jogo, diag = self.gerar_jogo()
+            tentativas += 1
+            
+            if jogo and jogo not in jogos:  # Evitar duplicatas
+                jogos.append(jogo)
+                diagnosticos.append(diag)
+                
+                # Atualizar progresso
+                progress_bar.progress(len(jogos) / quantidade, text=progress_text)
+        
+        progress_bar.empty()
+        
+        if len(jogos) < quantidade:
+            st.warning(f"⚠️ Gerados apenas {len(jogos)} jogos profissionais em {tentativas} tentativas")
+        
+        return jogos, diagnosticos
+    
+    def get_info(self):
+        """Retorna informações sobre o gerador"""
+        return {
+            "nome": "Gerador Profissional",
+            "distribuicao": "5-7-3 (Baixas:5, Médias:7, Altas:3)",
+            "pares": "6-8 pares",
+            "repetidas": "8-9 do último concurso",
+            "sequencias": "4-6 números consecutivos",
+            "soma": "180-220"
+        }
+
+# =====================================================
 # FUNÇÕES AUXILIARES
 # =====================================================
 def validar_jogos(jogos):
@@ -1815,6 +1975,10 @@ def main():
         st.session_state.jogos_inteligentes = None
     if "stats_inteligentes" not in st.session_state:
         st.session_state.stats_inteligentes = None
+    if "jogos_profissionais" not in st.session_state:
+        st.session_state.jogos_profissionais = None
+    if "diagnosticos_profissionais" not in st.session_state:
+        st.session_state.diagnosticos_profissionais = None
     
     # =====================================================
     # NOVOS ESTADOS PARA PERSISTÊNCIA
@@ -2127,6 +2291,157 @@ def main():
                             label="📥 Exportar CSV",
                             data=csv,
                             file_name=f"jogos_3622_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                            mime="text/csv",
+                            use_container_width=True
+                        )
+                
+                # =====================================================
+                # GERADOR PROFISSIONAL (INTEGRADO)
+                # =====================================================
+                st.markdown("---")
+                st.markdown("## 🏆 GERADOR PROFISSIONAL")
+                st.caption("Baseado nos padrões estatísticos mais fortes: distribuição 5-7-3, repetidas 8-9, sequências 4-6, soma 180-220")
+                
+                # Criar gerador profissional
+                gerador_profissional = GeradorProfissional(numeros_ultimo)
+                
+                # Mostrar informações do gerador
+                info = gerador_profissional.get_info()
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.markdown(f"**📊 {info['distribuicao']}**")
+                with col2:
+                    st.markdown(f"**⚖️ {info['pares']}**")
+                with col3:
+                    st.markdown(f"**🔄 {info['repetidas']}**")
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.markdown(f"**📈 {info['sequencias']}**")
+                with col2:
+                    st.markdown(f"**➕ {info['soma']}**")
+                with col3:
+                    st.markdown("")
+                
+                # Configuração de geração
+                col1, col2, col3 = st.columns([1, 1, 1])
+                with col1:
+                    qtd_profissional = st.slider(
+                        "Quantidade de jogos profissionais",
+                        min_value=3,
+                        max_value=50,
+                        value=10,
+                        key="slider_qtd_profissional"
+                    )
+                
+                with col2:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    if st.button("🏆 GERAR JOGOS PROFISSIONAIS", key="gerar_profissional", use_container_width=True, type="secondary"):
+                        with st.spinner(f"Gerando {qtd_profissional} jogos profissionais..."):
+                            jogos, diagnosticos = gerador_profissional.gerar_multiplos_jogos(qtd_profissional)
+                            
+                            if jogos:
+                                # Salvar na sessão
+                                st.session_state.jogos_profissionais = jogos
+                                st.session_state.diagnosticos_profissionais = diagnosticos
+                                
+                                st.success(f"✅ {len(jogos)} jogos profissionais gerados!")
+                
+                with col3:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    if st.button("🔄 Reset", key="reset_profissional", use_container_width=True):
+                        st.session_state.jogos_profissionais = None
+                        st.rerun()
+                
+                # Mostrar jogos gerados
+                if "jogos_profissionais" in st.session_state and st.session_state.jogos_profissionais:
+                    jogos = st.session_state.jogos_profissionais
+                    diagnosticos = st.session_state.diagnosticos_profissionais if "diagnosticos_profissionais" in st.session_state else [None] * len(jogos)
+                    
+                    st.markdown(f"### 📋 Jogos Profissionais ({len(jogos)})")
+                    
+                    # Estatísticas agregadas
+                    stats_df = pd.DataFrame({
+                        "Jogo": range(1, len(jogos)+1),
+                        "Pares": [sum(1 for n in j if n%2==0) for j in jogos],
+                        "Repetidas": [len(set(j) & set(numeros_ultimo)) for j in jogos],
+                        "Soma": [sum(j) for j in jogos],
+                        "Sequência Max": [gerador_profissional.contar_consecutivos(j) for j in jogos],
+                        "Baixas": [sum(1 for n in j if n in gerador_profissional.baixas) for j in jogos],
+                        "Médias": [sum(1 for n in j if n in gerador_profissional.medias) for j in jogos],
+                        "Altas": [sum(1 for n in j if n in gerador_profissional.altas) for j in jogos]
+                    })
+                    
+                    st.dataframe(stats_df, use_container_width=True, hide_index=True)
+                    
+                    # Mostrar cada jogo formatado
+                    for i, (jogo, diag) in enumerate(zip(jogos, diagnosticos)):
+                        with st.container():
+                            # Determinar cor baseada na qualidade
+                            if diag and diag.get("fallback", False):
+                                cor_borda = "#f97316"  # Laranja - fallback
+                            else:
+                                cor_borda = "#4ade80"  # Verde - perfeito
+                            
+                            # Formatar números
+                            nums_html = formatar_jogo_html(jogo)
+                            
+                            # Estatísticas resumidas
+                            pares = sum(1 for n in jogo if n%2==0)
+                            repetidas = len(set(jogo) & set(numeros_ultimo))
+                            soma = sum(jogo)
+                            seq = gerador_profissional.contar_consecutivos(jogo)
+                            
+                            st.markdown(f"""
+                            <div style='border-left: 5px solid {cor_borda}; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
+                                <div style='display:flex; justify-content:space-between;'>
+                                    <strong>🏆 Jogo Profissional #{i+1:2d}</strong>
+                                    <small>⚖️ {pares}×{15-pares} | 🔁 {repetidas} rep | ➕ {soma} | 📈 seq {seq}</small>
+                                </div>
+                                <div>{nums_html}</div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                    
+                    # Botões de ação
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        if st.button("💾 Salvar Jogos Profissionais", key="salvar_profissional", use_container_width=True):
+                            arquivo, jogo_id = salvar_jogos_gerados(
+                                jogos,
+                                list(range(1, 18)),
+                                {"modelo": "Profissional", "regras": info},
+                                ultimo['concurso'],
+                                ultimo['data']
+                            )
+                            if arquivo:
+                                st.success(f"✅ Jogos profissionais salvos! ID: {jogo_id}")
+                                st.session_state.jogos_salvos = carregar_jogos_salvos()
+                    
+                    with col2:
+                        if st.button("🔄 Nova Geração", key="nova_geracao_profissional", use_container_width=True):
+                            st.session_state.jogos_profissionais = None
+                            st.rerun()
+                    
+                    with col3:
+                        # Exportar para CSV
+                        df_export_prof = pd.DataFrame({
+                            "Jogo": range(1, len(jogos)+1),
+                            "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in jogos],
+                            "Pares": stats_df["Pares"],
+                            "Repetidas": stats_df["Repetidas"],
+                            "Soma": stats_df["Soma"],
+                            "Sequência_Max": stats_df["Sequência Max"],
+                            "Baixas(01-08)": stats_df["Baixas"],
+                            "Médias(09-16)": stats_df["Médias"],
+                            "Altas(17-25)": stats_df["Altas"]
+                        })
+                        
+                        csv_prof = df_export_prof.to_csv(index=False)
+                        st.download_button(
+                            label="📥 Exportar CSV Profissional",
+                            data=csv_prof,
+                            file_name=f"jogos_profissionais_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                             mime="text/csv",
                             use_container_width=True
                         )
