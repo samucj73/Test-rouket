@@ -17,6 +17,7 @@ import logging
 import math
 import statistics
 from collections import defaultdict
+import shutil
 
 
 # =============================
@@ -293,11 +294,9 @@ class ImageCache:
             self.cache.clear()
             self.timestamps.clear()
             try:
-                for file in os.listdir(self.cache_dir):
-                    try:
-                        os.remove(os.path.join(self.cache_dir, file))
-                    except:
-                        pass
+                if os.path.exists(self.cache_dir):
+                    shutil.rmtree(self.cache_dir)
+                    os.makedirs(self.cache_dir, exist_ok=True)
             except:
                 pass
     
@@ -843,10 +842,7 @@ def sigmoid(x):
 
 
 # =============================
-# [MELHORIA] NOVA CLASSE: AnalisadorPerformance
-# =============================
-# =============================
-# [MELHORIA] CLASSE AnalisadorPerformance CORRIGIDA
+# [MELHORIA] CLASSE AnalisadorPerformance
 # =============================
 class AnalisadorPerformance:
     """Analisa a performance histórica do modelo para autoajuste"""
@@ -892,7 +888,7 @@ class AnalisadorPerformance:
                     "resultado_real": f"{metadata.get('home_goals', '?')}-{metadata.get('away_goals', '?')}"
                 })
         
-        # Estatísticas por liga - CORREÇÃO AQUI
+        # Estatísticas por liga
         liga = alerta.get("liga", "Desconhecida")
         if liga not in hist["por_liga"]:
             hist["por_liga"][liga] = {"total": 0, "greens": 0}
@@ -900,7 +896,7 @@ class AnalisadorPerformance:
         if resultado == "GREEN":
             hist["por_liga"][liga]["greens"] += 1
         
-        # Estatísticas por faixa de confiança - CORREÇÃO AQUI
+        # Estatísticas por faixa de confiança
         confianca = alerta.get("confianca", 0)
         faixa = f"{int(confianca // 10 * 10)}-{int(confianca // 10 * 10 + 9)}"
         if faixa not in hist["por_faixa_confianca"]:
@@ -909,7 +905,7 @@ class AnalisadorPerformance:
         if resultado == "GREEN":
             hist["por_faixa_confianca"][faixa]["greens"] += 1
         
-        # Estatísticas por tipo de aposta - CORREÇÃO AQUI
+        # Estatísticas por tipo de aposta
         tipo_aposta = alerta.get("tipo_aposta", "unknown")
         if tipo_aposta not in hist["por_tipo"]:
             hist["por_tipo"][tipo_aposta] = {"total": 0, "greens": 0}
@@ -973,6 +969,7 @@ class AnalisadorPerformance:
                     melhor_faixa = 70.0
         
         return max(60.0, min(85.0, melhor_faixa))  # Limitar entre 60% e 85%
+
 
 # =============================
 # CLASSES DE ANÁLISE
@@ -3762,8 +3759,6 @@ class PosterGenerator:
 
 
 # =============================
-# =============================
-# =============================
 # SISTEMA PRINCIPAL (COM MELHORIAS)
 # =============================
 
@@ -3795,7 +3790,585 @@ class SistemaAlertasFutebol:
         )
     
     # =============================
-    # [MELHORIA] MÉTODOS DE FILTRO PROFISSIONAL
+    # [NOVO] MÉTODO DE RESET TOTAL DO SISTEMA
+    # =============================
+    
+    def reset_total_sistema(self):
+        """LIMPA COMPLETAMENTE TODO O SISTEMA - TODOS OS DADOS SÃO APAGADOS"""
+        
+        # =============================
+        # 1. LIMPAR ARQUIVOS JSON
+        # =============================
+        arquivos_para_limpar = [
+            ConfigManager.ALERTAS_PATH,
+            ConfigManager.ALERTAS_FAVORITOS_PATH,
+            ConfigManager.ALERTAS_GOLS_HT_PATH,
+            ConfigManager.ALERTAS_AMBAS_MARCAM_PATH,
+            ConfigManager.RESULTADOS_PATH,
+            ConfigManager.RESULTADOS_FAVORITOS_PATH,
+            ConfigManager.RESULTADOS_GOLS_HT_PATH,
+            ConfigManager.RESULTADOS_AMBAS_MARCAM_PATH,
+            ConfigManager.ALERTAS_TOP_PATH,
+            ConfigManager.RESULTADOS_TOP_PATH,
+            ConfigManager.ALERTAS_COMPLETOS_PATH,
+            ConfigManager.RESULTADOS_COMPLETOS_PATH,
+            ConfigManager.HISTORICO_PATH,
+            ConfigManager.MODELO_PERFORMANCE_PATH,
+            ConfigManager.CACHE_JOGOS,
+            ConfigManager.CACHE_CLASSIFICACAO
+        ]
+        
+        arquivos_removidos = 0
+        for arquivo in arquivos_para_limpar:
+            try:
+                if os.path.exists(arquivo):
+                    # Salva um JSON vazio no lugar
+                    with open(arquivo, 'w', encoding='utf-8') as f:
+                        if arquivo in [ConfigManager.HISTORICO_PATH]:
+                            json.dump([], f)  # Histórico é lista
+                        else:
+                            json.dump({}, f)  # Demais são dicionários
+                    arquivos_removidos += 1
+                    logging.info(f"✅ Limpo: {arquivo}")
+            except Exception as e:
+                logging.error(f"❌ Erro ao limpar {arquivo}: {e}")
+        
+        # =============================
+        # 2. LIMPAR CACHE DE IMAGENS
+        # =============================
+        try:
+            # Limpar cache em memória
+            if hasattr(self, 'image_cache') and self.image_cache:
+                self.image_cache.clear()
+                logging.info("✅ Cache de imagens em memória limpo")
+            
+            # Limpar pasta de cache de escudos
+            cache_dir = "escudos_cache"
+            if os.path.exists(cache_dir):
+                shutil.rmtree(cache_dir)
+                os.makedirs(cache_dir, exist_ok=True)
+                logging.info(f"✅ Pasta {cache_dir} limpa")
+        except Exception as e:
+            logging.error(f"❌ Erro ao limpar cache de imagens: {e}")
+        
+        # =============================
+        # 3. LIMPAR CACHES DO SmartCache
+        # =============================
+        try:
+            if hasattr(self.api_client, 'jogos_cache'):
+                self.api_client.jogos_cache.clear()
+            if hasattr(self.api_client, 'classificacao_cache'):
+                self.api_client.classificacao_cache.clear()
+            if hasattr(self.api_client, 'match_cache'):
+                self.api_client.match_cache.clear()
+            logging.info("✅ Caches de dados limpos")
+        except Exception as e:
+            logging.error(f"❌ Erro ao limpar caches: {e}")
+        
+        # =============================
+        # 4. RESETAR MONITORAMENTO
+        # =============================
+        try:
+            if hasattr(self, 'api_monitor'):
+                self.api_monitor.reset()
+            logging.info("✅ Monitoramento resetado")
+        except Exception as e:
+            logging.error(f"❌ Erro ao resetar monitoramento: {e}")
+        
+        # =============================
+        # 5. LIMPAR VARIÁVEIS DE SESSÃO DO STREAMLIT
+        # =============================
+        try:
+            import streamlit as st
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
+            logging.info("✅ Sessão Streamlit limpa")
+        except Exception as e:
+            logging.error(f"❌ Erro ao limpar sessão: {e}")
+        
+        return arquivos_removidos
+    
+    # =============================
+    # [NOVO] MÉTODOS DE EXPORTAÇÃO DE RESULTADOS
+    # =============================
+    
+    def gerar_relatorio_resultados_completo(self) -> dict:
+        """
+        Gera um relatório completo de todos os jogos finalizados,
+        organizado por liga, com todos os resultados e análises.
+        Retorna um dicionário com os relatórios por liga e o relatório consolidado.
+        """
+        
+        # =============================
+        # CARREGAR TODOS OS RESULTADOS
+        # =============================
+        resultados = {
+            "over_under": DataStorage.carregar_resultados(),
+            "favorito": DataStorage.carregar_resultados_favoritos(),
+            "gols_ht": DataStorage.carregar_resultados_gols_ht(),
+            "ambas_marcam": DataStorage.carregar_resultados_ambas_marcam(),
+            "top": DataStorage.carregar_resultados_top(),
+            "completos": DataStorage.carregar_resultados_completos()
+        }
+        
+        # Também carregar alertas para ter as análises originais
+        alertas = {
+            "over_under": DataStorage.carregar_alertas(),
+            "favorito": DataStorage.carregar_alertas_favoritos(),
+            "gols_ht": DataStorage.carregar_alertas_gols_ht(),
+            "ambas_marcam": DataStorage.carregar_alertas_ambas_marcam(),
+            "top": DataStorage.carregar_alertas_top(),
+            "completos": DataStorage.carregar_alertas_completos()
+        }
+        
+        # =============================
+        # ORGANIZAR POR LIGA
+        # =============================
+        relatorio_por_liga = defaultdict(list)
+        jogos_processados = set()  # Para evitar duplicatas
+        
+        # Processar resultados de Over/Under
+        for fixture_id, jogo in resultados["over_under"].items():
+            if fixture_id in jogos_processados:
+                continue
+                
+            liga = jogo.get("liga", "Desconhecida")
+            alerta_original = alertas["over_under"].get(fixture_id, {})
+            
+            registro = {
+                "id": fixture_id,
+                "data": jogo.get("hora", "").split("T")[0] if "T" in jogo.get("hora", "") else jogo.get("hora", ""),
+                "horario": jogo.get("hora", ""),
+                "home": jogo.get("home", ""),
+                "away": jogo.get("away", ""),
+                "home_goals": jogo.get("home_goals", "?"),
+                "away_goals": jogo.get("away_goals", "?"),
+                "ht_home_goals": jogo.get("ht_home_goals", "?"),
+                "ht_away_goals": jogo.get("ht_away_goals", "?"),
+                
+                # Análise Over/Under
+                "tendencia_ou": alerta_original.get("tendencia", jogo.get("tendencia", "N/A")),
+                "estimativa_ou": alerta_original.get("estimativa", jogo.get("estimativa", 0)),
+                "probabilidade_ou": alerta_original.get("probabilidade", jogo.get("probabilidade", 0)),
+                "confianca_ou": alerta_original.get("confianca", jogo.get("confianca", 0)),
+                "resultado_ou": jogo.get("resultado", "N/A"),
+                
+                # Análise Favorito (se disponível)
+                "favorito": alerta_original.get("favorito", jogo.get("favorito", "N/A")),
+                "confianca_fav": alerta_original.get("confianca_vitoria", jogo.get("confianca_vitoria", 0)),
+                "resultado_fav": jogo.get("resultado_favorito", "N/A"),
+                
+                # Análise Gols HT (se disponível)
+                "tendencia_ht": alerta_original.get("tendencia_ht", jogo.get("tendencia_ht", "N/A")),
+                "confianca_ht": alerta_original.get("confianca_ht", jogo.get("confianca_ht", 0)),
+                "resultado_ht": jogo.get("resultado_ht", "N/A"),
+                
+                # Análise Ambas Marcam (se disponível)
+                "tendencia_am": alerta_original.get("tendencia_ambas_marcam", jogo.get("tendencia_ambas_marcam", "N/A")),
+                "confianca_am": alerta_original.get("confianca_ambas_marcam", jogo.get("confianca_ambas_marcam", 0)),
+                "resultado_am": jogo.get("resultado_ambas_marcam", "N/A"),
+                
+                "data_conferencia": jogo.get("data_conferencia", ""),
+                "status": "FINALIZADO"
+            }
+            
+            relatorio_por_liga[liga].append(registro)
+            jogos_processados.add(fixture_id)
+        
+        # Processar resultados de Favoritos (caso não tenham sido capturados pelo Over/Under)
+        for fixture_id, jogo in resultados["favorito"].items():
+            if fixture_id in jogos_processados:
+                continue
+                
+            liga = jogo.get("liga", "Desconhecida")
+            alerta_original = alertas["favorito"].get(fixture_id, {})
+            
+            registro = {
+                "id": fixture_id,
+                "data": jogo.get("hora", "").split("T")[0] if "T" in jogo.get("hora", "") else jogo.get("hora", ""),
+                "horario": jogo.get("hora", ""),
+                "home": jogo.get("home", ""),
+                "away": jogo.get("away", ""),
+                "home_goals": jogo.get("home_goals", "?"),
+                "away_goals": jogo.get("away_goals", "?"),
+                "ht_home_goals": jogo.get("ht_home_goals", "?"),
+                "ht_away_goals": jogo.get("ht_away_goals", "?"),
+                
+                # Análise Over/Under (não disponível)
+                "tendencia_ou": "N/A",
+                "estimativa_ou": 0,
+                "probabilidade_ou": 0,
+                "confianca_ou": 0,
+                "resultado_ou": "N/A",
+                
+                # Análise Favorito
+                "favorito": alerta_original.get("favorito", jogo.get("favorito", "N/A")),
+                "confianca_fav": alerta_original.get("confianca_vitoria", jogo.get("confianca_vitoria", 0)),
+                "resultado_fav": jogo.get("resultado_favorito", "N/A"),
+                
+                # Análise Gols HT (não disponível)
+                "tendencia_ht": "N/A",
+                "confianca_ht": 0,
+                "resultado_ht": "N/A",
+                
+                # Análise Ambas Marcam (não disponível)
+                "tendencia_am": "N/A",
+                "confianca_am": 0,
+                "resultado_am": "N/A",
+                
+                "data_conferencia": jogo.get("data_conferencia", ""),
+                "status": "FINALIZADO"
+            }
+            
+            relatorio_por_liga[liga].append(registro)
+            jogos_processados.add(fixture_id)
+        
+        # Processar resultados de Gols HT (caso não tenham sido capturados)
+        for fixture_id, jogo in resultados["gols_ht"].items():
+            if fixture_id in jogos_processados:
+                continue
+                
+            liga = jogo.get("liga", "Desconhecida")
+            alerta_original = alertas["gols_ht"].get(fixture_id, {})
+            
+            registro = {
+                "id": fixture_id,
+                "data": jogo.get("hora", "").split("T")[0] if "T" in jogo.get("hora", "") else jogo.get("hora", ""),
+                "horario": jogo.get("hora", ""),
+                "home": jogo.get("home", ""),
+                "away": jogo.get("away", ""),
+                "home_goals": jogo.get("home_goals", "?"),
+                "away_goals": jogo.get("away_goals", "?"),
+                "ht_home_goals": jogo.get("ht_home_goals", "?"),
+                "ht_away_goals": jogo.get("ht_away_goals", "?"),
+                
+                # Análise Over/Under (não disponível)
+                "tendencia_ou": "N/A",
+                "estimativa_ou": 0,
+                "probabilidade_ou": 0,
+                "confianca_ou": 0,
+                "resultado_ou": "N/A",
+                
+                # Análise Favorito (não disponível)
+                "favorito": "N/A",
+                "confianca_fav": 0,
+                "resultado_fav": "N/A",
+                
+                # Análise Gols HT
+                "tendencia_ht": alerta_original.get("tendencia_ht", jogo.get("tendencia_ht", "N/A")),
+                "confianca_ht": alerta_original.get("confianca_ht", jogo.get("confianca_ht", 0)),
+                "resultado_ht": jogo.get("resultado_ht", "N/A"),
+                
+                # Análise Ambas Marcam (não disponível)
+                "tendencia_am": "N/A",
+                "confianca_am": 0,
+                "resultado_am": "N/A",
+                
+                "data_conferencia": jogo.get("data_conferencia", ""),
+                "status": "FINALIZADO"
+            }
+            
+            relatorio_por_liga[liga].append(registro)
+            jogos_processados.add(fixture_id)
+        
+        # Processar resultados de Ambas Marcam (caso não tenham sido capturados)
+        for fixture_id, jogo in resultados["ambas_marcam"].items():
+            if fixture_id in jogos_processados:
+                continue
+                
+            liga = jogo.get("liga", "Desconhecida")
+            alerta_original = alertas["ambas_marcam"].get(fixture_id, {})
+            
+            registro = {
+                "id": fixture_id,
+                "data": jogo.get("hora", "").split("T")[0] if "T" in jogo.get("hora", "") else jogo.get("hora", ""),
+                "horario": jogo.get("hora", ""),
+                "home": jogo.get("home", ""),
+                "away": jogo.get("away", ""),
+                "home_goals": jogo.get("home_goals", "?"),
+                "away_goals": jogo.get("away_goals", "?"),
+                "ht_home_goals": jogo.get("ht_home_goals", "?"),
+                "ht_away_goals": jogo.get("ht_away_goals", "?"),
+                
+                # Análise Over/Under (não disponível)
+                "tendencia_ou": "N/A",
+                "estimativa_ou": 0,
+                "probabilidade_ou": 0,
+                "confianca_ou": 0,
+                "resultado_ou": "N/A",
+                
+                # Análise Favorito (não disponível)
+                "favorito": "N/A",
+                "confianca_fav": 0,
+                "resultado_fav": "N/A",
+                
+                # Análise Gols HT (não disponível)
+                "tendencia_ht": "N/A",
+                "confianca_ht": 0,
+                "resultado_ht": "N/A",
+                
+                # Análise Ambas Marcam
+                "tendencia_am": alerta_original.get("tendencia_ambas_marcam", jogo.get("tendencia_ambas_marcam", "N/A")),
+                "confianca_am": alerta_original.get("confianca_ambas_marcam", jogo.get("confianca_ambas_marcam", 0)),
+                "resultado_am": jogo.get("resultado_ambas_marcam", "N/A"),
+                
+                "data_conferencia": jogo.get("data_conferencia", ""),
+                "status": "FINALIZADO"
+            }
+            
+            relatorio_por_liga[liga].append(registro)
+            jogos_processados.add(fixture_id)
+        
+        # =============================
+        # ORDENAR POR DATA/HORA
+        # =============================
+        for liga in relatorio_por_liga:
+            relatorio_por_liga[liga].sort(key=lambda x: x.get("horario", ""))
+        
+        return relatorio_por_liga
+    
+    def exportar_resultados_para_texto(self) -> dict:
+        """
+        Exporta todos os resultados para formato de texto,
+        organizado por liga com estatísticas.
+        Retorna um dicionário com nome do arquivo e conteúdo.
+        """
+        
+        relatorio = self.gerar_relatorio_resultados_completo()
+        
+        # Data atual para o nome do arquivo
+        data_export = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # =============================
+        # GERAR RELATÓRIO CONSOLIDADO
+        # =============================
+        conteudo_total = []
+        conteudo_total.append("=" * 100)
+        conteudo_total.append("📊 RELATÓRIO COMPLETO DE RESULTADOS - ELITE MASTER SYSTEM")
+        conteudo_total.append("=" * 100)
+        conteudo_total.append(f"📅 Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
+        conteudo_total.append(f"📋 Total de Ligas: {len(relatorio)}")
+        conteudo_total.append("")
+        
+        # Estatísticas globais
+        total_jogos = sum(len(jogos) for jogos in relatorio.values())
+        total_greens_ou = 0
+        total_reds_ou = 0
+        total_greens_fav = 0
+        total_reds_fav = 0
+        total_greens_ht = 0
+        total_reds_ht = 0
+        total_greens_am = 0
+        total_reds_am = 0
+        
+        for liga, jogos in relatorio.items():
+            for jogo in jogos:
+                if jogo["resultado_ou"] == "GREEN":
+                    total_greens_ou += 1
+                elif jogo["resultado_ou"] == "RED":
+                    total_reds_ou += 1
+                
+                if jogo["resultado_fav"] == "GREEN":
+                    total_greens_fav += 1
+                elif jogo["resultado_fav"] == "RED":
+                    total_reds_fav += 1
+                
+                if jogo["resultado_ht"] == "GREEN":
+                    total_greens_ht += 1
+                elif jogo["resultado_ht"] == "RED":
+                    total_reds_ht += 1
+                
+                if jogo["resultado_am"] == "GREEN":
+                    total_greens_am += 1
+                elif jogo["resultado_am"] == "RED":
+                    total_reds_am += 1
+        
+        # Resumo global
+        conteudo_total.append("📈 RESUMO GLOBAL")
+        conteudo_total.append("-" * 50)
+        conteudo_total.append(f"🎯 Total de Jogos: {total_jogos}")
+        conteudo_total.append("")
+        conteudo_total.append("⚽ OVER/UNDER:")
+        conteudo_total.append(f"   ✅ GREEN: {total_greens_ou}")
+        conteudo_total.append(f"   ❌ RED: {total_reds_ou}")
+        if total_greens_ou + total_reds_ou > 0:
+            taxa_ou = (total_greens_ou / (total_greens_ou + total_reds_ou)) * 100
+            conteudo_total.append(f"   📊 Taxa de Acerto: {taxa_ou:.1f}%")
+        
+        conteudo_total.append("")
+        conteudo_total.append("🏆 FAVORITOS:")
+        conteudo_total.append(f"   ✅ GREEN: {total_greens_fav}")
+        conteudo_total.append(f"   ❌ RED: {total_reds_fav}")
+        if total_greens_fav + total_reds_fav > 0:
+            taxa_fav = (total_greens_fav / (total_greens_fav + total_reds_fav)) * 100
+            conteudo_total.append(f"   📊 Taxa de Acerto: {taxa_fav:.1f}%")
+        
+        conteudo_total.append("")
+        conteudo_total.append("⏰ GOLS HT:")
+        conteudo_total.append(f"   ✅ GREEN: {total_greens_ht}")
+        conteudo_total.append(f"   ❌ RED: {total_reds_ht}")
+        if total_greens_ht + total_reds_ht > 0:
+            taxa_ht = (total_greens_ht / (total_greens_ht + total_reds_ht)) * 100
+            conteudo_total.append(f"   📊 Taxa de Acerto: {taxa_ht:.1f}%")
+        
+        conteudo_total.append("")
+        conteudo_total.append("🤝 AMBAS MARCAM:")
+        conteudo_total.append(f"   ✅ GREEN: {total_greens_am}")
+        conteudo_total.append(f"   ❌ RED: {total_reds_am}")
+        if total_greens_am + total_reds_am > 0:
+            taxa_am = (total_greens_am / (total_greens_am + total_reds_am)) * 100
+            conteudo_total.append(f"   📊 Taxa de Acerto: {taxa_am:.1f}%")
+        
+        conteudo_total.append("")
+        conteudo_total.append("=" * 100)
+        
+        # =============================
+        # GERAR RELATÓRIO POR LIGA
+        # =============================
+        arquivos_gerados = {}
+        
+        for liga, jogos in relatorio.items():
+            if not jogos:
+                continue
+            
+            conteudo_liga = []
+            nome_arquivo = f"resultados_{liga.replace(' ', '_')}_{data_export}.txt"
+            
+            # Cabeçalho da liga
+            conteudo_liga.append("=" * 100)
+            conteudo_liga.append(f"🏆 LIGA: {liga.upper()}")
+            conteudo_liga.append("=" * 100)
+            conteudo_liga.append(f"📅 Data Exportação: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
+            conteudo_liga.append(f"📋 Total de Jogos: {len(jogos)}")
+            conteudo_liga.append("")
+            
+            # Estatísticas da liga
+            greens_ou = sum(1 for j in jogos if j["resultado_ou"] == "GREEN")
+            reds_ou = sum(1 for j in jogos if j["resultado_ou"] == "RED")
+            greens_fav = sum(1 for j in jogos if j["resultado_fav"] == "GREEN")
+            reds_fav = sum(1 for j in jogos if j["resultado_fav"] == "RED")
+            greens_ht = sum(1 for j in jogos if j["resultado_ht"] == "GREEN")
+            reds_ht = sum(1 for j in jogos if j["resultado_ht"] == "RED")
+            greens_am = sum(1 for j in jogos if j["resultado_am"] == "GREEN")
+            reds_am = sum(1 for j in jogos if j["resultado_am"] == "RED")
+            
+            conteudo_liga.append("📊 ESTATÍSTICAS DA LIGA")
+            conteudo_liga.append("-" * 50)
+            conteudo_liga.append(f"⚽ Over/Under: {greens_ou}✅ | {reds_ou}❌")
+            if greens_ou + reds_ou > 0:
+                taxa_ou = (greens_ou / (greens_ou + reds_ou)) * 100
+                conteudo_liga.append(f"   Taxa: {taxa_ou:.1f}%")
+            
+            conteudo_liga.append(f"🏆 Favoritos: {greens_fav}✅ | {reds_fav}❌")
+            if greens_fav + reds_fav > 0:
+                taxa_fav = (greens_fav / (greens_fav + reds_fav)) * 100
+                conteudo_liga.append(f"   Taxa: {taxa_fav:.1f}%")
+            
+            conteudo_liga.append(f"⏰ Gols HT: {greens_ht}✅ | {reds_ht}❌")
+            if greens_ht + reds_ht > 0:
+                taxa_ht = (greens_ht / (greens_ht + reds_ht)) * 100
+                conteudo_liga.append(f"   Taxa: {taxa_ht:.1f}%")
+            
+            conteudo_liga.append(f"🤝 Ambas Marcam: {greens_am}✅ | {reds_am}❌")
+            if greens_am + reds_am > 0:
+                taxa_am = (greens_am / (greens_am + reds_am)) * 100
+                conteudo_liga.append(f"   Taxa: {taxa_am:.1f}%")
+            
+            conteudo_liga.append("")
+            conteudo_liga.append("=" * 100)
+            
+            # Lista de jogos
+            conteudo_liga.append("📋 JOGOS")
+            conteudo_liga.append("-" * 100)
+            
+            for idx, jogo in enumerate(jogos, 1):
+                # Cabeçalho do jogo
+                conteudo_liga.append(f"\n{idx}. {jogo['home']} vs {jogo['away']}")
+                conteudo_liga.append(f"   📅 Data: {jogo.get('data', 'N/A')}")
+                conteudo_liga.append(f"   ⏰ Horário: {jogo.get('horario', 'N/A')}")
+                conteudo_liga.append(f"   🏟️ Estádio: N/A")
+                conteudo_liga.append("")
+                
+                # Resultado Final
+                conteudo_liga.append(f"   🏁 RESULTADO FINAL: {jogo['home_goals']} - {jogo['away_goals']}")
+                if jogo['ht_home_goals'] != "?" and jogo['ht_away_goals'] != "?":
+                    conteudo_liga.append(f"   ⏱️ HT: {jogo['ht_home_goals']} - {jogo['ht_away_goals']}")
+                conteudo_liga.append("")
+                
+                # Análise Over/Under
+                resultado_ou = jogo['resultado_ou']
+                emoji_ou = "✅" if resultado_ou == "GREEN" else "❌" if resultado_ou == "RED" else "⏳"
+                conteudo_liga.append(f"   ⚽ OVER/UNDER {emoji_ou}")
+                conteudo_liga.append(f"      Tendência: {jogo['tendencia_ou']}")
+                if jogo['estimativa_ou'] > 0:
+                    conteudo_liga.append(f"      Estimativa: {jogo['estimativa_ou']:.2f} gols")
+                if jogo['confianca_ou'] > 0:
+                    conteudo_liga.append(f"      Confiança: {jogo['confianca_ou']:.1f}%")
+                if jogo['probabilidade_ou'] > 0:
+                    prob = jogo['probabilidade_ou']
+                    odd = round(100 / prob, 2) if prob > 0 else 2.0
+                    conteudo_liga.append(f"      Probabilidade: {jogo['probabilidade_ou']:.1f}% | Odds: {odd:.2f}")
+                conteudo_liga.append(f"      Resultado: {resultado_ou}")
+                conteudo_liga.append("")
+                
+                # Análise Favorito
+                if jogo['favorito'] != "N/A":
+                    resultado_fav = jogo['resultado_fav']
+                    emoji_fav = "✅" if resultado_fav == "GREEN" else "❌" if resultado_fav == "RED" else "⏳"
+                    favorito_text = jogo['home'] if jogo['favorito'] == "home" else jogo['away'] if jogo['favorito'] == "away" else "EMPATE"
+                    conteudo_liga.append(f"   🏆 FAVORITO {emoji_fav}")
+                    conteudo_liga.append(f"      Favorito: {favorito_text}")
+                    if jogo['confianca_fav'] > 0:
+                        prob_fav = jogo['confianca_fav']
+                        odd_fav = round(100 / prob_fav, 2) if prob_fav > 0 else 2.0
+                        conteudo_liga.append(f"      Confiança: {jogo['confianca_fav']:.1f}% | Odds: {odd_fav:.2f}")
+                    conteudo_liga.append(f"      Resultado: {resultado_fav}")
+                    conteudo_liga.append("")
+                
+                # Análise Gols HT
+                if jogo['tendencia_ht'] != "N/A":
+                    resultado_ht = jogo['resultado_ht']
+                    emoji_ht = "✅" if resultado_ht == "GREEN" else "❌" if resultado_ht == "RED" else "⏳"
+                    conteudo_liga.append(f"   ⏰ GOLS HT {emoji_ht}")
+                    conteudo_liga.append(f"      Tendência HT: {jogo['tendencia_ht']}")
+                    if jogo['confianca_ht'] > 0:
+                        prob_ht = jogo['confianca_ht']
+                        odd_ht = round(100 / prob_ht, 2) if prob_ht > 0 else 2.0
+                        conteudo_liga.append(f"      Confiança HT: {jogo['confianca_ht']:.1f}% | Odds: {odd_ht:.2f}")
+                    conteudo_liga.append(f"      Resultado HT: {resultado_ht}")
+                    conteudo_liga.append("")
+                
+                # Análise Ambas Marcam
+                if jogo['tendencia_am'] != "N/A":
+                    resultado_am = jogo['resultado_am']
+                    emoji_am = "✅" if resultado_am == "GREEN" else "❌" if resultado_am == "RED" else "⏳"
+                    conteudo_liga.append(f"   🤝 AMBAS MARCAM {emoji_am}")
+                    conteudo_liga.append(f"      Tendência: {jogo['tendencia_am']}")
+                    if jogo['confianca_am'] > 0:
+                        prob_am = jogo['confianca_am']
+                        odd_am = round(100 / prob_am, 2) if prob_am > 0 else 2.0
+                        conteudo_liga.append(f"      Confiança: {jogo['confianca_am']:.1f}% | Odds: {odd_am:.2f}")
+                    conteudo_liga.append(f"      Resultado: {resultado_am}")
+                    conteudo_liga.append("")
+                
+                conteudo_liga.append("-" * 80)
+            
+            # Salvar arquivo da liga
+            conteudo_liga_str = "\n".join(conteudo_liga)
+            arquivos_gerados[nome_arquivo] = conteudo_liga_str
+            
+            # Adicionar ao relatório consolidado
+            conteudo_total.append("")
+            conteudo_total.extend(conteudo_liga)
+        
+        # Adicionar arquivo consolidado
+        nome_consolidado = f"resultados_COMPLETO_{data_export}.txt"
+        arquivos_gerados[nome_consolidado] = "\n".join(conteudo_total)
+        
+        return arquivos_gerados
+    
+    # =============================
+    # MÉTODOS DE FILTRO PROFISSIONAL
     # =============================
     
     def _calcular_score_profissional(self, probabilidade: float, confianca: float) -> float:
@@ -4785,7 +5358,7 @@ class SistemaAlertasFutebol:
             st.warning(f"⚠️ Nenhum jogo elegível para o Top Jogos.")
             return
         
-        # [MELHORIA] APLICAR FILTRO PROFISSIONAL
+        # Aplicar filtro profissional
         import pandas as pd
         df_jogos = pd.DataFrame(jogos_elegiveis)
 
@@ -4810,7 +5383,6 @@ class SistemaAlertasFutebol:
             return
 
         top_jogos_sorted = df_top_filtrado.to_dict('records')
-        # FIM DA MELHORIA
 
         for jogo in top_jogos_sorted:
             alerta = Alerta(Jogo({
@@ -5577,7 +6149,7 @@ def main():
     
     sistema = SistemaAlertasFutebol()
     
-    tab1, tab2, tab3, tab4 = st.tabs(["🔍 Buscar", "📊 Resultados", "🏆 TOP", "⚽ Completos"])
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["🔍 Buscar", "📊 Resultados", "🏆 TOP", "⚽ Completos", "📥 Exportar", "⚙️ Admin"])
     
     with tab1:
         render_tab_busca(sistema)
@@ -5591,14 +6163,11 @@ def main():
     with tab4:
         render_tab_completos(sistema)
     
-    with st.expander("📊 Monitoramento", expanded=False):
-        stats = sistema.api_monitor.get_stats()
-        cache_stats = sistema.image_cache.get_stats()
-        
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Requests", stats['total_requests'])
-        col2.metric("Sucesso", f"{stats['success_rate']}%")
-        col3.metric("Cache", f"{cache_stats['memoria']} img")
+    with tab5:
+        render_tab_exportar(sistema)
+    
+    with tab6:
+        render_tab_admin(sistema)
 
 
 def render_tab_busca(sistema):
@@ -5964,6 +6533,192 @@ def render_tab_completos(sistema):
                 st.write("---")
     else:
         st.info("ℹ️ Nenhum alerta completo salvo ainda.")
+
+
+def render_tab_exportar(sistema):
+    st.subheader("📥 Exportar Resultados")
+    st.caption("Baixe relatórios completos de todos os jogos finalizados")
+    
+    st.markdown("""
+    <div style="background-color: #1a2c1a; padding: 1rem; border-radius: 10px; border: 1px solid #4caf50; margin-bottom: 1.5rem;">
+        <h4 style="color: #4caf50; margin-top: 0;">📊 RELATÓRIO COMPLETO</h4>
+        <p style="color: #a5d6a5;">
+            Esta ferramenta gera um relatório detalhado com TODOS os jogos finalizados, incluindo:
+        </p>
+        <ul style="color: #a5d6a5;">
+            <li>✅ Resultados de Over/Under com análise completa</li>
+            <li>✅ Resultados de Favoritos (Casa/Fora/Empate)</li>
+            <li>✅ Resultados de Gols no Primeiro Tempo (HT)</li>
+            <li>✅ Resultados de Ambas Marcam (BTTS)</li>
+            <li>✅ Estatísticas por liga e consolidadas</li>
+            <li>✅ Placar final e placar do intervalo</li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if st.button("📥 GERAR RELATÓRIO COMPLETO", type="primary", use_container_width=True):
+            with st.spinner("🔄 Gerando relatórios..."):
+                arquivos = sistema.exportar_resultados_para_texto()
+                
+                if arquivos:
+                    st.success(f"✅ {len(arquivos)} relatórios gerados com sucesso!")
+                    
+                    # Mostrar estatísticas rápidas
+                    st.markdown("### 📊 Prévia dos Dados")
+                    
+                    # Contar totais do relatório consolidado
+                    total_jogos = 0
+                    total_greens = 0
+                    total_reds = 0
+                    
+                    # Analisar o arquivo consolidado para mostrar estatísticas
+                    for nome, conteudo in arquivos.items():
+                        if "COMPLETO" in nome:
+                            linhas = conteudo.split('\n')
+                            for linha in linhas:
+                                if "Total de Jogos:" in linha:
+                                    try:
+                                        total_jogos = int(linha.split(':')[1].strip())
+                                    except:
+                                        pass
+                                if "✅ GREEN:" in linha:
+                                    try:
+                                        greens = int(linha.split(':')[1].split('|')[0].strip())
+                                        total_greens += greens
+                                    except:
+                                        pass
+                                if "❌ RED:" in linha:
+                                    try:
+                                        reds = int(linha.split(':')[1].strip())
+                                        total_reds += reds
+                                    except:
+                                        pass
+                    
+                    col_meta1, col_meta2, col_meta3 = st.columns(3)
+                    with col_meta1:
+                        st.metric("📋 Total Jogos", total_jogos)
+                    with col_meta2:
+                        st.metric("✅ Total GREEN", total_greens)
+                    with col_meta3:
+                        st.metric("❌ Total RED", total_reds)
+                    
+                    if total_greens + total_reds > 0:
+                        taxa_global = (total_greens / (total_greens + total_reds)) * 100
+                        st.metric("🎯 Taxa Global", f"{taxa_global:.1f}%")
+                    
+                    st.markdown("### 📁 Arquivos Disponíveis")
+                    
+                    # Criar botões de download para cada arquivo
+                    for nome_arquivo, conteudo in arquivos.items():
+                        tipo = "📋 Consolidado" if "COMPLETO" in nome_arquivo else "🏆 Liga"
+                        
+                        with st.expander(f"{tipo}: {nome_arquivo}"):
+                            st.download_button(
+                                label=f"⬇️ Baixar {nome_arquivo}",
+                                data=conteudo,
+                                file_name=nome_arquivo,
+                                mime="text/plain",
+                                use_container_width=True
+                            )
+                            
+                            # Mostrar primeiras linhas do arquivo
+                            st.text("📄 Primeiras linhas:")
+                            linhas_previa = conteudo.split('\n')[:15]
+                            st.code("\n".join(linhas_previa), language="text")
+                else:
+                    st.warning("⚠️ Nenhum resultado encontrado para exportar.")
+
+
+def render_tab_admin(sistema):
+    st.subheader("⚙️ Administração do Sistema")
+    
+    with st.expander("📊 Monitoramento", expanded=False):
+        stats = sistema.api_monitor.get_stats()
+        cache_stats = sistema.image_cache.get_stats()
+        
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Requests", stats['total_requests'])
+        col2.metric("Sucesso", f"{stats['success_rate']}%")
+        col3.metric("Cache Memória", f"{cache_stats['memoria']} img")
+        
+        col4, col5, col6 = st.columns(3)
+        col4.metric("Rate Limit Hits", stats['rate_limit_hits'])
+        col5.metric("Requests/min", stats['requests_per_minute'])
+        col6.metric("Cache Disco", f"{cache_stats['disco_mb']:.1f} MB")
+        
+        if st.button("🔄 Resetar Monitoramento", use_container_width=True):
+            sistema.api_monitor.reset()
+            st.rerun()
+    
+    with st.expander("🗑️ Limpeza de Cache", expanded=False):
+        st.info("Limpa apenas os caches temporários, mantendo os alertas e resultados.")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🧹 Limpar Cache de Imagens", use_container_width=True):
+                with st.spinner("Limpando cache de imagens..."):
+                    sistema.image_cache.clear()
+                    st.success("✅ Cache de imagens limpo!")
+                    time.sleep(1)
+                    st.rerun()
+        
+        with col2:
+            if st.button("🧹 Limpar Cache de Dados", use_container_width=True):
+                with st.spinner("Limpando caches de dados..."):
+                    sistema.api_client.jogos_cache.clear()
+                    sistema.api_client.classificacao_cache.clear()
+                    sistema.api_client.match_cache.clear()
+                    st.success("✅ Caches de dados limpos!")
+                    time.sleep(1)
+                    st.rerun()
+    
+    with st.expander("⚠️ ZONA DE PERIGO - RESET TOTAL", expanded=False):
+        st.markdown("""
+        <div style="background-color: #2c1a1a; padding: 1rem; border-radius: 10px; border: 1px solid #ff4444;">
+            <h4 style="color: #ff4444; margin-top: 0;">⚠️ ATENÇÃO - AÇÃO IRREVERSÍVEL</h4>
+            <p style="color: #ff9999; font-size: 0.9rem;">
+                Esta ação irá APAGAR TODOS OS DADOS do sistema:
+            </p>
+            <ul style="color: #ff9999; font-size: 0.9rem;">
+                <li>✅ Todos os alertas (Over/Under, Favoritos, Gols HT, Ambas Marcam)</li>
+                <li>✅ Todos os resultados salvos</li>
+                <li>✅ Alertas TOP e Completos</li>
+                <li>✅ Cache de imagens e escudos</li>
+                <li>✅ Histórico de conferências</li>
+                <li>✅ Estatísticas de performance</li>
+                <li>✅ Sessão do Streamlit</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            # Botão de confirmação em duas etapas
+            if 'confirmar_reset' not in st.session_state:
+                st.session_state.confirmar_reset = False
+            
+            if not st.session_state.confirmar_reset:
+                if st.button("🗑️ RESETAR SISTEMA COMPLETO", type="primary", use_container_width=True):
+                    st.session_state.confirmar_reset = True
+                    st.rerun()
+            else:
+                st.warning("⚠️ **CONFIRMAÇÃO FINAL:** Tem certeza? Esta ação é **IRREVERSÍVEL**!")
+                
+                col_confirm1, col_confirm2 = st.columns(2)
+                with col_confirm1:
+                    if st.button("✅ SIM, RESETAR TUDO", use_container_width=True):
+                        with st.spinner("🧹 Limpando todo o sistema..."):
+                            arquivos = sistema.reset_total_sistema()
+                            st.session_state.confirmar_reset = False
+                            st.success(f"✅ Sistema completamente resetado! {arquivos} arquivos limpos.")
+                            time.sleep(2)
+                            st.rerun()
+                with col_confirm2:
+                    if st.button("❌ CANCELAR", use_container_width=True):
+                        st.session_state.confirmar_reset = False
+                        st.rerun()
 
 
 if __name__ == "__main__":
