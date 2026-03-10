@@ -2650,7 +2650,7 @@ def main():
                         qtd_profissional = st.slider(
                             "Quantidade de jogos profissionais",
                             min_value=3,
-                            max_value=50,
+                            max_value=3500,
                             value=10,
                             key="slider_qtd_profissional"
                         )
