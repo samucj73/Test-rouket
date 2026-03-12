@@ -6771,7 +6771,7 @@ st.markdown("""
 </style>
 
 <div class="footer-premium">
-    <div class="footer-title">ELITE MASTER SISTER</div>
-    <div class="footer-sub">STJ TECNOLOGIA CORPORATION 2026</div>
+    <div class="footer-title">ELITE MASTER SYSTEM</div>
+    <div class="footer-sub">SAMUCJ TECNOLOGIA © 2026</div>
 </div>
 """, unsafe_allow_html=True)
