@@ -4546,3 +4546,54 @@ def main():
 # =====================================================
 if __name__ == "__main__":
     main()
+
+# Rodapé Premium Neon
+st.markdown("""
+<style>
+
+.footer-premium{
+    width:100%;
+    text-align:center;
+    padding:22px 10px;
+    margin-top:40px;
+    background:linear-gradient(180deg,#0b0b0b,#050505);
+    color:#ffffff;
+    font-family:Arial, Helvetica, sans-serif;
+    border-top:1px solid #222;
+    position:relative;
+}
+
+/* Linha neon superior */
+.footer-premium::before{
+    content:"";
+    position:absolute;
+    top:0;
+    left:0;
+    width:100%;
+    height:2px;
+    background:linear-gradient(90deg,#00ffcc,#00aaff,#00ffcc);
+    box-shadow:0 0 10px #00ffcc;
+}
+
+.footer-title{
+    font-size:16px;
+    font-weight:800;
+    letter-spacing:3px;
+    text-transform:uppercase;
+    text-shadow:0 0 6px rgba(0,255,200,0.6);
+}
+
+.footer-sub{
+    font-size:11px;
+    color:#bfbfbf;
+    margin-top:4px;
+    letter-spacing:1.5px;
+}
+
+</style>
+
+<div class="footer-premium">
+    <div class="footer-title">ELITE MASTER SYSTEM</div>
+    <div class="footer-sub">SAMUCJ TECNOLOGIA © 2026</div>
+</div>
+""", unsafe_allow_html=True)
