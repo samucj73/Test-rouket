@@ -5632,34 +5632,47 @@ def main():
                 # =====================================================
                 # MATRIZ DE CO-OCORRÊNCIA
                 # =====================================================
-                st.markdown("### 🔗 Matriz de Co-ocorrência")
-                st.caption("Números que mais aparecem juntos")
+                # =====================================================
+# MATRIZ DE CO-OCORRÊNCIA - VERSÃO ALTERNATIVA COM PROGRESS COLUMN CORRIGIDA
+# =====================================================
+st.markdown("### 🔗 Matriz de Co-ocorrência")
+st.caption("Números que mais aparecem juntos")
+
+# Mostrar top pares
+df_pares = motor.plot_matriz_coocorrencia()
+
+if not df_pares.empty:
+    # CORREÇÃO: Criar uma cópia e garantir tipos nativos
+    df_pares_display = df_pares.head(20).copy()
+    
+    # Garantir que os dados são tipos nativos Python
+    df_pares_display['num1'] = df_pares_display['num1'].astype(int)
+    df_pares_display['num2'] = df_pares_display['num2'].astype(int)
+    df_pares_display['ocorrencias'] = df_pares_display['ocorrencias'].astype(int)
+    
+    # Usar column_config com tipos nativos
+    st.dataframe(
+        df_pares_display,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "num1": st.column_config.NumberColumn("Número 1", format="%d"),
+            "num2": st.column_config.NumberColumn("Número 2", format="%d"),
+            "ocorrencias": st.column_config.ProgressColumn(
+                "Ocorrências",
+                format="%d",
+                min_value=0,
+                max_value=int(df_pares['ocorrencias'].max())
+            )
+        }
+    )
+    
+    # Gráfico de barras dos top 10 pares
+    st.markdown("**Top 10 Pares mais frequentes**")
+    chart_data = df_pares.head(10).copy()
+    chart_data['par'] = chart_data['num1'].astype(str) + "-" + chart_data['num2'].astype(str)
+    st.bar_chart(chart_data.set_index('par')[['ocorrencias']])
                 
-                # Mostrar top pares
-                df_pares = motor.plot_matriz_coocorrencia()
-                
-                if not df_pares.empty:
-                    st.dataframe(
-                        df_pares.head(20),
-                        use_container_width=True,
-                        hide_index=True,
-                        column_config={
-                            "num1": "Número 1",
-                            "num2": "Número 2",
-                            "ocorrencias": st.column_config.ProgressColumn(
-                                "Ocorrências",
-                                format="%d",
-                                min_value=0,
-                                max_value=df_pares['ocorrencias'].max()
-                            )
-                        }
-                    )
-                    
-                    # Gráfico de barras dos top 10 pares
-                    st.markdown("**Top 10 Pares mais frequentes**")
-                    chart_data = df_pares.head(10).copy()
-                    chart_data['par'] = chart_data['num1'].astype(str) + "-" + chart_data['num2'].astype(str)
-                    st.bar_chart(chart_data.set_index('par')[['ocorrencias']])
                 
                 # =====================================================
                 # CONSULTAR PARES FORTES POR NÚMERO
