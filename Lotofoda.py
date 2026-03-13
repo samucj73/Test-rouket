@@ -5356,7 +5356,7 @@ def main():
                 st.info("📥 Carregue os concursos na barra lateral para ativar o Detector MASTER de Padrões B-M-A.")
 
         # =====================================================
-        # ABA 10: MOTOR PRO
+        # ABA 10: MOTOR PRO (CORRIGIDO)
         # =====================================================
         with tab10:
             st.markdown("""
@@ -5367,15 +5367,20 @@ def main():
             """, unsafe_allow_html=True)
             
             if st.session_state.dados_api:
-                # Pegar histórico completo
-                historico_completo = [
-                    sorted(map(int, c['dezenas'])) for c in st.session_state.dados_api
+                # PEGAR HISTÓRICO DE ACORDO COM A QUANTIDADE SELECIONADA PELO USUÁRIO
+                qtd_historico = qtd  # A variável 'qtd' vem do slider na sidebar
+                
+                historico_selecionado = [
+                    sorted(map(int, c['dezenas'])) for c in st.session_state.dados_api[:qtd_historico]
                 ]
                 ultimo = st.session_state.dados_api[0]
                 numeros_ultimo = sorted(map(int, ultimo['dezenas']))
                 
-                # Inicializar motor PRO
-                motor_pro = MotorLotofacilPro(historico_completo, numeros_ultimo)
+                # Mostrar informação sobre o histórico usado
+                st.info(f"📊 Analisando **{qtd_historico}** concursos históricos (baseado na sua seleção de {qtd} concursos)")
+                
+                # Inicializar motor PRO com o histórico selecionado
+                motor_pro = MotorLotofacilPro(historico_selecionado, numeros_ultimo)
                 
                 # Mostrar resumo do motor
                 resumo = motor_pro.get_resumo()
@@ -5414,13 +5419,13 @@ def main():
                 with col2:
                     st.markdown("<br>", unsafe_allow_html=True)
                     if st.button("🧠 GERAR JOGOS PRO", key="gerar_pro", use_container_width=True, type="primary"):
-                        with st.spinner(f"Gerando {qtd_pro} jogos profissionais..."):
+                        with st.spinner(f"Gerando {qtd_pro} jogos profissionais baseados em {qtd_historico} concursos..."):
                             jogos, diagnosticos = motor_pro.gerar_multiplos_jogos(qtd_pro)
                             
                             if jogos:
                                 st.session_state.jogos_pro = jogos
                                 st.session_state.diagnosticos_pro = diagnosticos
-                                st.success(f"✅ {len(jogos)} jogos PRO gerados!")
+                                st.success(f"✅ {len(jogos)} jogos PRO gerados com base em {qtd_historico} concursos!")
                 
                 with col3:
                     if st.button("🔄 Reset", key="reset_pro", use_container_width=True):
@@ -5486,7 +5491,7 @@ def main():
                             arquivo, jogo_id = salvar_jogos_gerados(
                                 jogos,
                                 list(range(1, 18)),
-                                {"modelo": "Motor PRO", "camadas": "6"},
+                                {"modelo": "Motor PRO", "camadas": "6", "concursos_analisados": qtd_historico},
                                 ultimo['concurso'],
                                 ultimo['data']
                             )
@@ -5519,8 +5524,10 @@ def main():
                     
                     # Explicação das 6 camadas
                     with st.expander("📘 Como funciona o Motor PRO?"):
-                        st.markdown("""
+                        st.markdown(f"""
                         ### 🧠 Arquitetura de 6 Camadas
+                        
+                        **📊 Base histórica:** {qtd_historico} concursos analisados
                         
                         **1️⃣ Frequência histórica:** Classifica números em quentes/mornos/frios
                         - Estratégia: 6 quentes + 5 mornos + 4 frios
@@ -5549,7 +5556,7 @@ def main():
                 st.info("📥 Carregue os concursos na barra lateral para ativar o Motor PRO.")
 
         # =====================================================
-        # ABA 11: GEOMETRIA ANALÍTICA E MATRIZ DE CO-OCORRÊNCIA
+        # ABA 11: GEOMETRIA ANALÍTICA (CORRIGIDO)
         # =====================================================
         with tab11:
             st.markdown("""
@@ -5560,13 +5567,19 @@ def main():
             """, unsafe_allow_html=True)
             
             if st.session_state.dados_api:
-                # Inicializar motor de geometria se necessário
-                if st.session_state.motor_geometria is None:
-                    with st.spinner("Inicializando motor de geometria..."):
-                        todos_concursos = [
-                            sorted(map(int, c['dezenas'])) for c in st.session_state.dados_api
-                        ]
-                        st.session_state.motor_geometria = MotorGeometriaAvancada(todos_concursos)
+                # PEGAR HISTÓRICO DE ACORDO COM A QUANTIDADE SELECIONADA PELO USUÁRIO
+                qtd_historico = qtd  # A variável 'qtd' vem do slider na sidebar
+                
+                historico_selecionado = [
+                    sorted(map(int, c['dezenas'])) for c in st.session_state.dados_api[:qtd_historico]
+                ]
+                
+                # Mostrar informação sobre o histórico usado
+                st.info(f"📊 Analisando **{qtd_historico}** concursos históricos (baseado na sua seleção de {qtd} concursos)")
+                
+                # Inicializar motor de geometria com o histórico selecionado
+                if st.session_state.motor_geometria is None or len(historico_selecionado) != st.session_state.motor_geometria.total_concursos:
+                    st.session_state.motor_geometria = MotorGeometriaAvancada(historico_selecionado)
                 
                 motor = st.session_state.motor_geometria
                 
@@ -5631,7 +5644,7 @@ def main():
                         st.line_chart(df_centroides.set_index('concurso')[['y']])
                 
                 # =====================================================
-                # MATRIZ DE CO-OCORRÊNCIA - VERSÃO CORRIGIDA
+                # MATRIZ DE CO-OCORRÊNCIA
                 # =====================================================
                 st.markdown("### 🔗 Matriz de Co-ocorrência")
                 st.caption("Números que mais aparecem juntos")
@@ -5852,7 +5865,7 @@ def main():
                 )
                 
                 if st.button("🎲 Gerar Jogos por Centroide", key="gerar_geo"):
-                    with st.spinner("Gerando jogos..."):
+                    with st.spinner(f"Gerando jogos baseados em {qtd_historico} concursos..."):
                         jogos_geo = []
                         distancias = []
                         
@@ -5866,7 +5879,7 @@ def main():
                                 distancias.append(dist)
                         
                         st.session_state.jogos_geometricos = list(zip(jogos_geo, distancias))
-                        st.success(f"✅ {len(jogos_geo)} jogos gerados!")
+                        st.success(f"✅ {len(jogos_geo)} jogos gerados com base em {qtd_historico} concursos!")
                 
                 # Mostrar jogos geométricos gerados
                 if st.session_state.jogos_geometricos:
@@ -5901,7 +5914,7 @@ def main():
                         arquivo, jogo_id = salvar_jogos_gerados(
                             jogos_puros,
                             list(range(1, 18)),
-                            {"modelo": "Geométrico", "target": (target_x, target_y)},
+                            {"modelo": "Geométrico", "target": (target_x, target_y), "concursos_analisados": qtd_historico},
                             ultimo['concurso'],
                             ultimo['data']
                         )
@@ -5913,8 +5926,10 @@ def main():
                 # EXPLICAÇÃO TÉCNICA
                 # =====================================================
                 with st.expander("📘 Como funciona a Geometria Analítica?"):
-                    st.markdown("""
+                    st.markdown(f"""
                     ### 📐 Fundamentos da Geometria Aplicada à Lotofácil
+                    
+                    **📊 Base histórica:** {qtd_historico} concursos analisados
                     
                     **1. Coordenadas do Tabuleiro:**
                     - Cada número vira um ponto (x,y) no plano cartesiano
