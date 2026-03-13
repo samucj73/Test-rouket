@@ -5548,7 +5548,7 @@ def main():
             else:
                 st.info("📥 Carregue os concursos na barra lateral para ativar o Motor PRO.")
 
-     # =====================================================
+        # =====================================================
         # ABA 11: GEOMETRIA ANALÍTICA E MATRIZ DE CO-OCORRÊNCIA
         # =====================================================
         with tab11:
@@ -5945,43 +5945,6 @@ def main():
             else:
                 st.info("📥 Carregue os concursos na barra lateral para ativar a Geometria Analítica.")
 
-
-# =====================================================
-                # EXPLICAÇÃO TÉCNICA
-                # =====================================================
-                with st.expander("📘 Como funciona a Geometria Analítica?"):
-                    st.markdown("""
-                    ### 📐 Fundamentos da Geometria Aplicada à Lotofácil
-                    
-                    **1. Coordenadas do Tabuleiro:**
-                    - Cada número vira um ponto (x,y) no plano cartesiano
-                    - Linhas: 0 (topo) a 4 (base)
-                    - Colunas: 0 (esquerda) a 4 (direita)
-                    
-                    **2. Centroide:**
-                    - Média das coordenadas de todos os números do jogo
-                    - Representa o "centro de massa" do jogo no tabuleiro
-                    
-                    **3. Matriz de Co-ocorrência:**
-                    - M[i][j] = quantas vezes os números i e j apareceram juntos
-                    - Identifica pares "amigos" que costumam sair juntos
-                    
-                    **4. Entropia de Shannon:**
-                    - H = -Σ p_i * log2(p_i)
-                    - Mede o nível de aleatoriedade/incerteza
-                    - Quanto maior a entropia, mais equilibrada a distribuição
-                    
-                    **5. Dispersão Geométrica:**
-                    - Distância média dos números ao centroide
-                    - Mede o quão espalhado é o jogo no volante
-                    
-                    **6. Pares Adjacentes:**
-                    - Números que são vizinhos no tabuleiro (distância Manhattan = 1)
-                    - Indica concentração local
-                    """)
-            else:
-                st.info("📥 Carregue os concursos na barra lateral para ativar a Geometria Analítica.")
-
     else:
         st.info("👈 Clique em 'Carregar concursos' na barra lateral para começar.")
 
@@ -6040,4 +6003,4 @@ st.markdown("""
     <div class="footer-title">ELITE MASTER SYSTEM</div>
     <div class="footer-sub">SAMUCJ TECNOLOGIA © 2026</div>
 </div>
-""", unsafe_allow_html=True) 
+""", unsafe_allow_html=True)
