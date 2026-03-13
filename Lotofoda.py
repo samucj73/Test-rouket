@@ -438,6 +438,383 @@ class MotorLotofacilPro:
         }
 
 # =====================================================
+# MOTOR DE GEOMETRIA ANALÍTICA E ANÁLISE AVANÇADA
+# =====================================================
+
+class MotorGeometriaAvancada:
+    """
+    Motor de análise avançada baseado em:
+    - Geometria analítica do tabuleiro
+    - Matriz de co-ocorrência
+    - Entropia de Shannon
+    - Grafos simples de relações
+    """
+    
+    def __init__(self, concursos_historico):
+        """
+        Args:
+            concursos_historico: Lista de listas com todos os concursos
+        """
+        self.concursos = concursos_historico
+        self.total_concursos = len(concursos_historico)
+        
+        # =====================================================
+        # 1️⃣ GEOMETRIA DO TABULEIRO (coordenadas)
+        # =====================================================
+        self.volante = np.array([
+            [1, 2, 3, 4, 5],
+            [6, 7, 8, 9, 10],
+            [11, 12, 13, 14, 15],
+            [16, 17, 18, 19, 20],
+            [21, 22, 23, 24, 25]
+        ])
+        
+        # Mapear números para coordenadas
+        self.coordenadas = {}
+        for i in range(5):
+            for j in range(5):
+                num = self.volante[i][j]
+                self.coordenadas[num] = (i, j)  # (linha, coluna)
+        
+        # =====================================================
+        # 2️⃣ MATRIZ DE CO-OCORRÊNCIA
+        # =====================================================
+        self.matriz_coocorrencia = self._calcular_matriz_coocorrencia()
+        
+        # =====================================================
+        # 3️⃣ CENTROIDES DOS CONCURSOS
+        # =====================================================
+        self.centroides = self._calcular_centroides()
+        
+        # =====================================================
+        # 4️⃣ ENTROPIA DOS NÚMEROS
+        # =====================================================
+        self.frequencias = self._calcular_frequencias()
+        self.entropia_global = self._calcular_entropia(self.frequencias)
+        
+        # =====================================================
+        # 5️⃣ GRAFO DE RELAÇÕES (pares fortes)
+        # =====================================================
+        self.pares_fortes = self._identificar_pares_fortes()
+        
+    def num_to_coord(self, numero):
+        """Converte número para coordenada (linha, coluna) no tabuleiro 5x5"""
+        return self.coordenadas.get(numero, (None, None))
+    
+    def coord_to_num(self, linha, coluna):
+        """Converte coordenada para número"""
+        if 0 <= linha < 5 and 0 <= coluna < 5:
+            return self.volante[linha][coluna]
+        return None
+    
+    def _calcular_matriz_coocorrencia(self):
+        """
+        Calcula matriz 25x25 de co-ocorrência
+        M[i][j] = quantas vezes i e j apareceram juntos
+        """
+        M = np.zeros((26, 26))  # Índices 1-25 (ignorar 0)
+        
+        for jogo in self.concursos:
+            for i in jogo:
+                for j in jogo:
+                    if i != j:
+                        M[i][j] += 1
+        
+        return M
+    
+    def _calcular_centroides(self):
+        """
+        Calcula o centroide (média das coordenadas) de cada concurso
+        Retorna lista de (cx, cy) para cada concurso
+        """
+        centroides = []
+        
+        for jogo in self.concursos:
+            xs = []
+            ys = []
+            
+            for num in jogo:
+                x, y = self.num_to_coord(num)
+                if x is not None:
+                    xs.append(x)
+                    ys.append(y)
+            
+            if xs and ys:
+                cx = sum(xs) / len(xs)
+                cy = sum(ys) / len(ys)
+                centroides.append((cx, cy))
+            else:
+                centroides.append((None, None))
+        
+        return centroides
+    
+    def _calcular_frequencias(self):
+        """Calcula frequência absoluta de cada número"""
+        freq = [0] * 26
+        
+        for jogo in self.concursos:
+            for num in jogo:
+                freq[num] += 1
+        
+        return freq
+    
+    def _calcular_entropia(self, frequencias):
+        """
+        Calcula entropia de Shannon: H = -Σ p_i * log2(p_i)
+        """
+        total = sum(frequencias)
+        if total == 0:
+            return 0
+        
+        H = 0
+        for f in frequencias:
+            if f > 0:
+                p = f / total
+                H -= p * math.log2(p)
+        
+        return H
+    
+    def _identificar_pares_fortes(self, limiar_percentil=90):
+        """
+        Identifica pares de números que mais ocorrem juntos
+        Usa percentil para definir o que é "forte"
+        """
+        # Extrair valores não-zero da matriz (apenas triângulo superior)
+        valores = []
+        for i in range(1, 26):
+            for j in range(i+1, 26):
+                if self.matriz_coocorrencia[i][j] > 0:
+                    valores.append(self.matriz_coocorrencia[i][j])
+        
+        if not valores:
+            return []
+        
+        # Calcular percentil
+        limiar = np.percentile(valores, limiar_percentil)
+        
+        # Identificar pares acima do limiar
+        pares_fortes = []
+        for i in range(1, 26):
+            for j in range(i+1, 26):
+                if self.matriz_coocorrencia[i][j] >= limiar:
+                    pares_fortes.append({
+                        'par': (i, j),
+                        'ocorrencias': int(self.matriz_coocorrencia[i][j])
+                    })
+        
+        # Ordenar por ocorrências (decrescente)
+        pares_fortes.sort(key=lambda x: x['ocorrencias'], reverse=True)
+        
+        return pares_fortes
+    
+    def distancia_euclidiana(self, coord1, coord2):
+        """Calcula distância euclidiana entre duas coordenadas"""
+        if None in coord1 or None in coord2:
+            return None
+        return math.sqrt((coord1[0] - coord2[0])**2 + (coord1[1] - coord2[1])**2)
+    
+    def distancia_manhattan(self, coord1, coord2):
+        """Calcula distância Manhattan (quadras) entre duas coordenadas"""
+        if None in coord1 or None in coord2:
+            return None
+        return abs(coord1[0] - coord2[0]) + abs(coord1[1] - coord2[1])
+    
+    def dispersao_geometrica(self, jogo):
+        """
+        Calcula a dispersão geométrica do jogo
+        Quanto maior, mais espalhado no tabuleiro
+        """
+        coords = [self.num_to_coord(n) for n in jogo if n in self.coordenadas]
+        
+        if len(coords) < 2:
+            return 0
+        
+        # Calcular centroide do jogo
+        xs = [c[0] for c in coords]
+        ys = [c[1] for c in coords]
+        cx = sum(xs) / len(xs)
+        cy = sum(ys) / len(ys)
+        
+        # Calcular distância média ao centroide
+        distancias = [math.sqrt((x - cx)**2 + (y - cy)**2) for x, y in coords]
+        
+        return sum(distancias) / len(distancias)
+    
+    def get_pares_recomendados(self, numero_base, top_n=5):
+        """
+        Retorna os números mais relacionados a um número base
+        Baseado na matriz de co-ocorrência
+        """
+        if numero_base < 1 or numero_base > 25:
+            return []
+        
+        # Pegar linha da matriz
+        linha = self.matriz_coocorrencia[numero_base]
+        
+        # Criar lista de pares (numero, ocorrencias)
+        pares = []
+        for i in range(1, 26):
+            if i != numero_base and linha[i] > 0:
+                pares.append((i, linha[i]))
+        
+        # Ordenar por ocorrências
+        pares.sort(key=lambda x: x[1], reverse=True)
+        
+        return pares[:top_n]
+    
+    def analisar_jogo(self, jogo):
+        """
+        Análise completa de um jogo
+        Retorna dicionário com todas as métricas geométricas
+        """
+        # Garantir que jogo é lista ordenada
+        jogo = sorted(jogo)
+        
+        # Calcular centroide
+        xs, ys = [], []
+        for num in jogo:
+            x, y = self.num_to_coord(num)
+            if x is not None:
+                xs.append(x)
+                ys.append(y)
+        
+        cx = sum(xs) / len(xs)
+        cy = sum(ys) / len(ys)
+        
+        # Calcular distâncias ao centro
+        dist_centro = []
+        for num in jogo:
+            x, y = self.num_to_coord(num)
+            dist = math.sqrt((x - cx)**2 + (y - cy)**2)
+            dist_centro.append(dist)
+        
+        # Calcular matriz de adjacência do jogo
+        adjacentes = 0
+        for i in range(len(jogo)):
+            for j in range(i+1, len(jogo)):
+                x1, y1 = self.num_to_coord(jogo[i])
+                x2, y2 = self.num_to_coord(jogo[j])
+                # Verificar se são adjacentes (distância Manhattan = 1)
+                if abs(x1 - x2) + abs(y1 - y2) == 1:
+                    adjacentes += 1
+        
+        # Análise de quadrantes
+        quadrantes = {'Q1': 0, 'Q2': 0, 'Q3': 0, 'Q4': 0}
+        for num in jogo:
+            x, y = self.num_to_coord(num)
+            if x < 2.5 and y < 2.5:
+                quadrantes['Q1'] += 1
+            elif x < 2.5 and y >= 2.5:
+                quadrantes['Q2'] += 1
+            elif x >= 2.5 and y < 2.5:
+                quadrantes['Q3'] += 1
+            else:
+                quadrantes['Q4'] += 1
+        
+        # Análise de linhas e colunas
+        linhas = {i: 0 for i in range(5)}
+        colunas = {i: 0 for i in range(5)}
+        
+        for num in jogo:
+            x, y = self.num_to_coord(num)
+            linhas[x] += 1
+            colunas[y] += 1
+        
+        return {
+            'centroide': (round(cx, 2), round(cy, 2)),
+            'dispersao_media': round(sum(dist_centro) / len(dist_centro), 2),
+            'distancia_max_centro': round(max(dist_centro), 2),
+            'pares_adjacentes': adjacentes,
+            'quadrantes': quadrantes,
+            'linhas': linhas,
+            'colunas': colunas,
+            'distribuicao_linhas': list(linhas.values()),
+            'distribuicao_colunas': list(colunas.values())
+        }
+    
+    def get_estatisticas_geometricas(self):
+        """
+        Retorna estatísticas geométricas globais
+        """
+        if not self.centroides:
+            return {}
+        
+        # Extrair xs e ys dos centroides
+        xs_validos = [c[0] for c in self.centroides if c[0] is not None]
+        ys_validos = [c[1] for c in self.centroides if c[1] is not None]
+        
+        if not xs_validos or not ys_validos:
+            return {}
+        
+        return {
+            'centroide_medio': (
+                round(np.mean(xs_validos), 2),
+                round(np.mean(ys_validos), 2)
+            ),
+            'variancia_x': round(np.var(xs_validos), 2),
+            'variancia_y': round(np.var(ys_validos), 2),
+            'entropia_global': round(self.entropia_global, 3),
+            'total_pares_fortes': len(self.pares_fortes),
+            'max_coocorrencia': int(np.max(self.matriz_coocorrencia))
+        }
+    
+    def gerar_jogo_geometrico(self, target_centroide=None, tolerancia=0.5):
+        """
+        Gera um jogo que se aproxima de um centroide alvo
+        Se target_centroide for None, usa o centroide médio histórico
+        """
+        if target_centroide is None:
+            stats = self.get_estatisticas_geometricas()
+            target_centroide = stats.get('centroide_medio', (2, 2))
+        
+        melhor_jogo = None
+        melhor_distancia = float('inf')
+        
+        for _ in range(10000):  # Tentativas
+            # Gerar jogo aleatório
+            jogo = sorted(random.sample(range(1, 26), 15))
+            
+            # Calcular centroide do jogo
+            xs, ys = [], []
+            for num in jogo:
+                x, y = self.num_to_coord(num)
+                xs.append(x)
+                ys.append(y)
+            
+            cx = sum(xs) / len(xs)
+            cy = sum(ys) / len(ys)
+            
+            # Calcular distância ao alvo
+            dist = math.sqrt((cx - target_centroide[0])**2 + 
+                           (cy - target_centroide[1])**2)
+            
+            if dist < melhor_distancia:
+                melhor_distancia = dist
+                melhor_jogo = jogo
+            
+            if dist <= tolerancia:
+                break
+        
+        return melhor_jogo, round(melhor_distancia, 2)
+    
+    def plot_matriz_coocorrencia(self):
+        """
+        Retorna dados para plotagem da matriz de co-ocorrência
+        """
+        # Pegar apenas valores relevantes (ignorar diagonal)
+        dados = []
+        for i in range(1, 26):
+            for j in range(i+1, 26):
+                if self.matriz_coocorrencia[i][j] > 0:
+                    dados.append({
+                        'num1': i,
+                        'num2': j,
+                        'ocorrencias': int(self.matriz_coocorrencia[i][j])
+                    })
+        
+        return pd.DataFrame(dados).sort_values('ocorrencias', ascending=False)
+
+# =====================================================
 # CONFIGURAÇÃO MOBILE PREMIUM
 # =====================================================
 st.set_page_config(
@@ -1906,7 +2283,7 @@ class GeradorProfissional:
         # Faixas do volante
         self.baixas = list(range(1, 9))    # 01-08
         self.medias = list(range(9, 17))   # 09-16
-        self.altas = list(range(17, 26))   # 17-25
+        self.altas = list(range(17, 25))   # 17-25
         
     def contar_consecutivos(self, jogo):
         """
@@ -2640,10 +3017,17 @@ def main():
         st.session_state.diagnosticos_profissionais = None
     if "jogos_teste_intel" not in st.session_state:
         st.session_state.jogos_teste_intel = None
-    if "jogos_pro" not in st.session_state:  # NOVO: para o Motor PRO
+    if "jogos_pro" not in st.session_state:
         st.session_state.jogos_pro = None
-    if "diagnosticos_pro" not in st.session_state:  # NOVO
+    if "diagnosticos_pro" not in st.session_state:
         st.session_state.diagnosticos_pro = None
+    # NOVOS ESTADOS PARA GEOMETRIA ANALÍTICA
+    if "motor_geometria" not in st.session_state:
+        st.session_state.motor_geometria = None
+    if "analise_geometrica_jogo" not in st.session_state:
+        st.session_state.analise_geometrica_jogo = None
+    if "jogos_geometricos" not in st.session_state:
+        st.session_state.jogos_geometricos = None
     
     # =====================================================
     # NOVOS ESTADOS PARA PERSISTÊNCIA
@@ -2696,8 +3080,8 @@ def main():
     st.subheader("🎯 Modelo Universal 3622")
 
     if st.session_state.analise and st.session_state.dados_api and st.session_state.historico_df is not None:
-        # AGORA SÃO 10 ABAS (adicionada a nova aba de Motor PRO)
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
+        # AGORA SÃO 11 ABAS (adicionada a nova aba de Geometria Analítica)
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11 = st.tabs([
             "📊 Análise", 
             "🧩 Fechamento 3622", 
             "📊 Motor Estatístico",
@@ -2707,7 +3091,8 @@ def main():
             "🔥 Gerador 13+",
             "🧠 Inteligência 5-7-3",
             "📡 Detector MASTER B-M-A",
-            "🧠 Motor PRO"  # NOVA ABA
+            "🧠 Motor PRO",
+            "📐 Geometria Analítica"  # NOVA ABA
         ])
 
         with tab1:
@@ -4971,7 +5356,7 @@ def main():
                 st.info("📥 Carregue os concursos na barra lateral para ativar o Detector MASTER de Padrões B-M-A.")
 
         # =====================================================
-        # ABA 10: MOTOR PRO (NOVA)
+        # ABA 10: MOTOR PRO
         # =====================================================
         with tab10:
             st.markdown("""
@@ -5162,6 +5547,396 @@ def main():
                         """)
             else:
                 st.info("📥 Carregue os concursos na barra lateral para ativar o Motor PRO.")
+
+        # =====================================================
+        # ABA 11: GEOMETRIA ANALÍTICA E MATRIZ DE CO-OCORRÊNCIA
+        # =====================================================
+        with tab11:
+            st.markdown("""
+            <div style='background:#1e1e2e; padding:15px; border-radius:10px; margin-bottom:20px; border-left:5px solid #00ffaa;'>
+                <h4 style='margin:0; color:#00ffaa;'>📐 GEOMETRIA ANALÍTICA DO TABULEIRO</h4>
+                <p style='margin:5px 0 0 0; font-size:0.9em;'>Matriz de co-ocorrência • Centroides • Entropia • Grafos de relação</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            if st.session_state.dados_api:
+                # Inicializar motor de geometria se necessário
+                if st.session_state.motor_geometria is None:
+                    with st.spinner("Inicializando motor de geometria..."):
+                        todos_concursos = [
+                            sorted(map(int, c['dezenas'])) for c in st.session_state.dados_api
+                        ]
+                        st.session_state.motor_geometria = MotorGeometriaAvancada(todos_concursos)
+                
+                motor = st.session_state.motor_geometria
+                
+                # =====================================================
+                # VISUALIZAÇÃO DO TABULEIRO
+                # =====================================================
+                st.markdown("### 🎲 Tabuleiro Lotofácil (5x5)")
+                
+                # Criar visualização do tabuleiro
+                tabuleiro_html = "<table style='width:100%; border-collapse:collapse; text-align:center;'>"
+                for i in range(5):
+                    tabuleiro_html += "<tr>"
+                    for j in range(5):
+                        num = motor.volante[i][j]
+                        # Destacar números baseado na frequência
+                        freq = motor.frequencias[num]
+                        intensidade = min(255, int(100 + 155 * (freq / max(motor.frequencias))))
+                        cor = f"rgba({intensidade}, 100, 200, 0.3)"
+                        tabuleiro_html += f"<td style='border:1px solid #444; padding:12px; background:{cor};'><strong>{num:02d}</strong></td>"
+                    tabuleiro_html += "</tr>"
+                tabuleiro_html += "</table>"
+                
+                st.markdown(tabuleiro_html, unsafe_allow_html=True)
+                st.caption("Intensidade da cor representa frequência histórica")
+                
+                # =====================================================
+                # ESTATÍSTICAS GLOBAIS
+                # =====================================================
+                st.markdown("### 📊 Estatísticas Globais")
+                
+                stats_geo = motor.get_estatisticas_geometricas()
+                
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Centroide Médio", f"({stats_geo['centroide_medio'][0]}, {stats_geo['centroide_medio'][1]})")
+                with col2:
+                    st.metric("Entropia Global", f"{stats_geo['entropia_global']:.3f}")
+                with col3:
+                    st.metric("Pares Fortes", stats_geo['total_pares_fortes'])
+                with col4:
+                    st.metric("Max Co-ocorrência", stats_geo['max_coocorrencia'])
+                
+                # =====================================================
+                # EVOLUÇÃO DOS CENTROIDES
+                # =====================================================
+                st.markdown("### 📈 Evolução dos Centroides")
+                
+                # Preparar dados dos centroides
+                centroides_validos = [(i, c[0], c[1]) for i, c in enumerate(motor.centroides) 
+                                      if c[0] is not None and i < 50]  # Últimos 50
+                
+                if centroides_validos:
+                    df_centroides = pd.DataFrame(centroides_validos, columns=['concurso', 'x', 'y'])
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.markdown("**Coordenada X (linha)**")
+                        st.line_chart(df_centroides.set_index('concurso')[['x']])
+                    with col2:
+                        st.markdown("**Coordenada Y (coluna)**")
+                        st.line_chart(df_centroides.set_index('concurso')[['y']])
+                
+                # =====================================================
+                # MATRIZ DE CO-OCORRÊNCIA
+                # =====================================================
+                st.markdown("### 🔗 Matriz de Co-ocorrência")
+                st.caption("Números que mais aparecem juntos")
+                
+                # Mostrar top pares
+                df_pares = motor.plot_matriz_coocorrencia()
+                
+                if not df_pares.empty:
+                    st.dataframe(
+                        df_pares.head(20),
+                        use_container_width=True,
+                        hide_index=True,
+                        column_config={
+                            "num1": "Número 1",
+                            "num2": "Número 2",
+                            "ocorrencias": st.column_config.ProgressColumn(
+                                "Ocorrências",
+                                format="%d",
+                                min_value=0,
+                                max_value=df_pares['ocorrencias'].max()
+                            )
+                        }
+                    )
+                    
+                    # Gráfico de barras dos top 10 pares
+                    st.markdown("**Top 10 Pares mais frequentes**")
+                    chart_data = df_pares.head(10).copy()
+                    chart_data['par'] = chart_data['num1'].astype(str) + "-" + chart_data['num2'].astype(str)
+                    st.bar_chart(chart_data.set_index('par')[['ocorrencias']])
+                
+                # =====================================================
+                # CONSULTAR PARES FORTES POR NÚMERO
+                # =====================================================
+                st.markdown("### 🔍 Consultar Pares Fortes por Número")
+                
+                col1, col2 = st.columns([1, 2])
+                with col1:
+                    num_consulta = st.number_input(
+                        "Digite um número (1-25)",
+                        min_value=1,
+                        max_value=25,
+                        value=13,
+                        key="num_consulta_geo"
+                    )
+                
+                with col2:
+                    pares_recomendados = motor.get_pares_recomendados(num_consulta, top_n=8)
+                    
+                    if pares_recomendados:
+                        st.markdown(f"**Números mais relacionados ao {num_consulta:02d}:**")
+                        
+                        # Criar visualização
+                        html_pares = ""
+                        for num, ocorr in pares_recomendados:
+                            intensidade = min(255, int(100 + 155 * (ocorr / pares_recomendados[0][1])))
+                            html_pares += f"<span style='background:rgba(0,255,170,{intensidade/510}); border:1px solid #00ffaa; border-radius:20px; padding:5px 10px; margin:3px; display:inline-block;'>{num:02d} ({ocorr})</span>"
+                        
+                        st.markdown(html_pares, unsafe_allow_html=True)
+                    else:
+                        st.info("Nenhum par forte encontrado para este número.")
+                
+                # =====================================================
+                # ANÁLISE GEOMÉTRICA DE UM JOGO
+                # =====================================================
+                st.markdown("### 📐 Análise Geométrica de um Jogo")
+                
+                # Opções de fonte do jogo
+                fonte_jogo_geo = st.radio(
+                    "Fonte do jogo para análise:",
+                    ["Jogos do Fechamento 3622", "Jogos do Gerador 12+", "Jogos do Gerador 13+", "Jogos Profissionais", "Inserir manualmente"],
+                    horizontal=True,
+                    key="fonte_jogo_geo"
+                )
+                
+                jogo_para_analisar = None
+                
+                if fonte_jogo_geo == "Jogos do Fechamento 3622" and st.session_state.jogos_3622:
+                    if st.session_state.jogos_3622:
+                        idx_jogo = st.selectbox(
+                            "Selecione o jogo:",
+                            range(len(st.session_state.jogos_3622)),
+                            format_func=lambda i: f"Jogo {i+1}: {st.session_state.jogos_3622[i]}",
+                            key="select_jogo_geo_3622"
+                        )
+                        jogo_para_analisar = st.session_state.jogos_3622[idx_jogo]
+                
+                elif fonte_jogo_geo == "Jogos do Gerador 12+" and st.session_state.jogos_12plus:
+                    if st.session_state.jogos_12plus:
+                        idx_jogo = st.selectbox(
+                            "Selecione o jogo:",
+                            range(len(st.session_state.jogos_12plus)),
+                            format_func=lambda i: f"Jogo {i+1}: {st.session_state.jogos_12plus[i]}",
+                            key="select_jogo_geo_12plus"
+                        )
+                        jogo_para_analisar = st.session_state.jogos_12plus[idx_jogo]
+                
+                elif fonte_jogo_geo == "Jogos do Gerador 13+" and st.session_state.jogos_13plus:
+                    if st.session_state.jogos_13plus:
+                        idx_jogo = st.selectbox(
+                            "Selecione o jogo:",
+                            range(len(st.session_state.jogos_13plus)),
+                            format_func=lambda i: f"Jogo {i+1}: {st.session_state.jogos_13plus[i]}",
+                            key="select_jogo_geo_13plus"
+                        )
+                        jogo_para_analisar = st.session_state.jogos_13plus[idx_jogo]
+                
+                elif fonte_jogo_geo == "Jogos Profissionais" and st.session_state.jogos_profissionais:
+                    if st.session_state.jogos_profissionais:
+                        idx_jogo = st.selectbox(
+                            "Selecione o jogo:",
+                            range(len(st.session_state.jogos_profissionais)),
+                            format_func=lambda i: f"Jogo {i+1}: {st.session_state.jogos_profissionais[i]}",
+                            key="select_jogo_geo_prof"
+                        )
+                        jogo_para_analisar = st.session_state.jogos_profissionais[idx_jogo]
+                
+                elif fonte_jogo_geo == "Inserir manualmente":
+                    jogo_input = st.text_input(
+                        "Digite 15 números separados por vírgula:",
+                        placeholder="Ex: 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15",
+                        key="input_jogo_geo"
+                    )
+                    if jogo_input:
+                        try:
+                            numeros = [int(n.strip()) for n in jogo_input.split(",")]
+                            if len(numeros) == 15 and len(set(numeros)) == 15 and all(1 <= n <= 25 for n in numeros):
+                                jogo_para_analisar = sorted(numeros)
+                            else:
+                                st.error("❌ Jogo inválido! Deve ter 15 números únicos entre 1 e 25.")
+                        except:
+                            st.error("❌ Formato inválido! Use números separados por vírgula.")
+                
+                if jogo_para_analisar and st.button("📊 Analisar Jogo", key="analisar_jogo_geo"):
+                    with st.spinner("Analisando geometria do jogo..."):
+                        analise = motor.analisar_jogo(jogo_para_analisar)
+                        st.session_state.analise_geometrica_jogo = analise
+                        
+                        # Mostrar resultado
+                        st.markdown("#### 📊 Resultado da Análise Geométrica")
+                        
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Centroide", f"({analise['centroide'][0]}, {analise['centroide'][1]})")
+                        with col2:
+                            st.metric("Dispersão Média", analise['dispersao_media'])
+                        with col3:
+                            st.metric("Pares Adjacentes", analise['pares_adjacentes'])
+                        
+                        # Distribuição nos quadrantes
+                        st.markdown("**📍 Distribuição nos Quadrantes**")
+                        df_quad = pd.DataFrame({
+                            'Quadrante': list(analise['quadrantes'].keys()),
+                            'Quantidade': list(analise['quadrantes'].values())
+                        })
+                        st.bar_chart(df_quad.set_index('Quadrante'))
+                        
+                        # Distribuição nas linhas e colunas
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.markdown("**📏 Distribuição por Linhas**")
+                            df_linhas = pd.DataFrame({
+                                'Linha': range(5),
+                                'Quantidade': analise['distribuicao_linhas']
+                            })
+                            st.bar_chart(df_linhas.set_index('Linha'))
+                        
+                        with col2:
+                            st.markdown("**📏 Distribuição por Colunas**")
+                            df_colunas = pd.DataFrame({
+                                'Coluna': range(5),
+                                'Quantidade': analise['distribuicao_colunas']
+                            })
+                            st.bar_chart(df_colunas.set_index('Coluna'))
+                
+                # =====================================================
+                # GERADOR BASEADO EM CENTROIDE
+                # =====================================================
+                st.markdown("### 🎲 Gerador Baseado em Centroide")
+                st.caption("Gera jogos que se aproximam de um centroide alvo")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    target_x = st.slider(
+                        "Coordenada X alvo (linha)",
+                        min_value=0.0,
+                        max_value=4.0,
+                        value=stats_geo.get('centroide_medio', (2,2))[0],
+                        step=0.1,
+                        key="target_x"
+                    )
+                
+                with col2:
+                    target_y = st.slider(
+                        "Coordenada Y alvo (coluna)",
+                        min_value=0.0,
+                        max_value=4.0,
+                        value=stats_geo.get('centroide_medio', (2,2))[1],
+                        step=0.1,
+                        key="target_y"
+                    )
+                
+                tolerancia = st.slider(
+                    "Tolerância (distância máxima aceitável)",
+                    min_value=0.1,
+                    max_value=2.0,
+                    value=0.5,
+                    step=0.1,
+                    key="tolerancia_geo"
+                )
+                
+                if st.button("🎲 Gerar Jogos por Centroide", key="gerar_geo"):
+                    with st.spinner("Gerando jogos..."):
+                        jogos_geo = []
+                        distancias = []
+                        
+                        for _ in range(10):  # Gerar 10 jogos
+                            jogo, dist = motor.gerar_jogo_geometrico(
+                                target_centroide=(target_x, target_y),
+                                tolerancia=tolerancia
+                            )
+                            if jogo:
+                                jogos_geo.append(jogo)
+                                distancias.append(dist)
+                        
+                        st.session_state.jogos_geometricos = list(zip(jogos_geo, distancias))
+                        st.success(f"✅ {len(jogos_geo)} jogos gerados!")
+                
+                # Mostrar jogos geométricos gerados
+                if st.session_state.jogos_geometricos:
+                    st.markdown("### 📋 Jogos Gerados por Centroide")
+                    
+                    for i, (jogo, dist) in enumerate(st.session_state.jogos_geometricos[:10]):
+                        with st.container():
+                            # Cor baseada na distância
+                            if dist <= 0.3:
+                                cor = "#4ade80"  # Verde - excelente
+                            elif dist <= 0.6:
+                                cor = "gold"     # Amarelo - bom
+                            else:
+                                cor = "#4cc9f0"  # Azul - aceitável
+                            
+                            nums_html = formatar_jogo_html(jogo)
+                            
+                            st.markdown(f"""
+                            <div style='border-left: 5px solid {cor}; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
+                                <div style='display:flex; justify-content:space-between;'>
+                                    <strong>Jogo #{i+1}</strong>
+                                    <small>Distância ao alvo: {dist}</small>
+                                </div>
+                                <div>{nums_html}</div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                    
+                    # Botão para salvar
+                    if st.button("💾 Salvar Jogos Geométricos", key="salvar_geo", use_container_width=True):
+                        ultimo = st.session_state.dados_api[0]
+                        jogos_puros = [j for j, _ in st.session_state.jogos_geometricos]
+                        arquivo, jogo_id = salvar_jogos_gerados(
+                            jogos_puros,
+                            list(range(1, 18)),
+                            {"modelo": "Geométrico", "target": (target_x, target_y)},
+                            ultimo['concurso'],
+                            ultimo['data']
+                        )
+                        if arquivo:
+                            st.success(f"✅ Jogos salvos! ID: {jogo_id}")
+                            st.session_state.jogos_salvos = carregar_jogos_salvos()
+                
+                # =====================================================
+                # EXPLICAÇÃO TÉCNICA
+                # =====================================================
+                with st.expander("📘 Como funciona a Geometria Analítica?"):
+                    st.markdown("""
+                    ### 📐 Fundamentos da Geometria Aplicada à Lotofácil
+                    
+                    **1. Coordenadas do Tabuleiro:**
+                    - Cada número vira um ponto (x,y) no plano cartesiano
+                    - Linhas: 0 (topo) a 4 (base)
+                    - Colunas: 0 (esquerda) a 4 (direita)
+                    
+                    **2. Centroide:**
+                    - Média das coordenadas de todos os números do jogo
+                    - Representa o "centro de massa" do jogo no tabuleiro
+                    
+                    **3. Matriz de Co-ocorrência:**
+                    - M[i][j] = quantas vezes os números i e j apareceram juntos
+                    - Identifica pares "amigos" que costumam sair juntos
+                    
+                    **4. Entropia de Shannon:**
+                    - H = -Σ p_i * log2(p_i)
+                    - Mede o nível de aleatoriedade/incerteza
+                    - Quanto maior a entropia, mais equilibrada a distribuição
+                    
+                    **5. Dispersão Geométrica:**
+                    - Distância média dos números ao centroide
+                    - Mede o quão espalhado é o jogo no volante
+                    
+                    **6. Pares Adjacentes:**
+                    - Números que são vizinhos no tabuleiro (distância Manhattan = 1)
+                    - Indica concentração local
+                    """)
+            else:
+                st.info("📥 Carregue os concursos na barra lateral para ativar a Geometria Analítica.")
+
+    else:
+        st.info("👈 Clique em 'Carregar concursos' na barra lateral para começar.")
 
 # =====================================================
 # EXECUÇÃO PRINCIPAL (FORA DA FUNÇÃO MAIN)
