@@ -14,6 +14,430 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # =====================================================
+# MOTOR LOTOFÁCIL PRO (6 CAMADAS) - ADICIONADO
+# =====================================================
+
+class MotorLotofacilPro:
+    """
+    Motor profissional de 6 camadas para geração de jogos inteligentes.
+    Combina estatística, geometria do volante e filtros matemáticos.
+    """
+    
+    def __init__(self, dados_historicos, ultimo_concurso=None):
+        """
+        Args:
+            dados_historicos: Lista completa de concursos (listas de 15 ints)
+            ultimo_concurso: Lista com o resultado do último concurso
+        """
+        self.historico = dados_historicos
+        self.ultimo = sorted(ultimo_concurso) if ultimo_concurso else []
+        
+        # Volante como matriz 5x5 para geometria
+        self.volante = np.array([
+            [1, 2, 3, 4, 5],
+            [6, 7, 8, 9, 10],
+            [11, 12, 13, 14, 15],
+            [16, 17, 18, 19, 20],
+            [21, 22, 23, 24, 25]
+        ])
+        
+        # Números primos
+        self.primos = {2, 3, 5, 7, 11, 13, 17, 19, 23}
+        
+        # Faixas do volante
+        self.baixos = list(range(1, 13))   # 1-12
+        self.altos = list(range(13, 26))   # 13-25
+        
+        # =====================================================
+        # 1️⃣ CAMADA 1: FREQUÊNCIA HISTÓRICA
+        # =====================================================
+        self.frequencias = self._calcular_frequencias()
+        self.quentes, self.mornos, self.frios = self._classificar_frequencias()
+        
+        # =====================================================
+        # 2️⃣ CAMADA 2: ATRASO DOS NÚMEROS
+        # =====================================================
+        self.atrasos = self._calcular_atrasos()
+        self.atrasados = self._get_top_atrasados(5)
+        
+        # =====================================================
+        # 3️⃣ CAMADA 3: GEOMETRIA DO VOLANTE
+        # =====================================================
+        self.padroes_geometricos = self._detectar_padroes_geometricos()
+        
+        # =====================================================
+        # 4️⃣ CAMADA 4: PADRÕES ESTATÍSTICOS
+        # =====================================================
+        self.padroes_estatisticos = self._calcular_padroes_estatisticos()
+        
+    def _calcular_frequencias(self):
+        """Calcula frequência histórica de cada número"""
+        counter = Counter()
+        for concurso in self.historico:
+            counter.update(concurso)
+        
+        total = len(self.historico) * 15
+        return {num: count/total for num, count in counter.items()}
+    
+    def _classificar_frequencias(self, percentis=(0.33, 0.66)):
+        """
+        Classifica números em quentes, mornos e frios baseado em percentis
+        """
+        valores = sorted(self.frequencias.values())
+        n = len(valores)
+        
+        limiar_frio = valores[int(n * percentis[0])]
+        limiar_quente = valores[int(n * percentis[1])]
+        
+        quentes = [n for n, f in self.frequencias.items() if f >= limiar_quente]
+        frios = [n for n, f in self.frequencias.items() if f <= limiar_frio]
+        mornos = [n for n in range(1, 26) if n not in quentes + frios]
+        
+        return quentes, mornos, frios
+    
+    def _calcular_atrasos(self):
+        """Calcula quantos concursos cada número está ausente"""
+        if not self.historico:
+            return {n: 0 for n in range(1, 26)}
+        
+        ultimo_concurso = set(self.historico[0])
+        atrasos = {}
+        
+        for num in range(1, 26):
+            atraso = 0
+            for concurso in self.historico:
+                if num in concurso:
+                    break
+                atraso += 1
+            atrasos[num] = atraso
+        
+        return atrasos
+    
+    def _get_top_atrasados(self, n=5):
+        """Retorna os n números mais atrasados"""
+        return sorted(self.atrasos.items(), key=lambda x: x[1], reverse=True)[:n]
+    
+    def _coordenadas(self, numero):
+        """Retorna coordenadas (x,y) de um número no volante 5x5"""
+        linha = (numero - 1) // 5
+        coluna = (numero - 1) % 5
+        return linha, coluna
+    
+    def _detectar_padroes_geometricos(self):
+        """
+        Detecta padrões geométricos fortes no histórico
+        Retorna dicionário com frequência de cada padrão
+        """
+        padroes = {
+            'diagonal_principal': 0,
+            'diagonal_secundaria': 0,
+            'cruz': 0,
+            'quadrantes': {1: 0, 2: 0, 3: 0, 4: 0}
+        }
+        
+        for concurso in self.historico:
+            # Diagonal principal (1,7,13,19,25)
+            diag_principal = {1, 7, 13, 19, 25}
+            if len(set(concurso) & diag_principal) >= 3:
+                padroes['diagonal_principal'] += 1
+            
+            # Diagonal secundária (5,9,13,17,21)
+            diag_secundaria = {5, 9, 13, 17, 21}
+            if len(set(concurso) & diag_secundaria) >= 3:
+                padroes['diagonal_secundaria'] += 1
+            
+            # Cruz (centro + eixos)
+            cruz = {3, 11, 13, 15, 23}
+            if len(set(concurso) & cruz) >= 3:
+                padroes['cruz'] += 1
+            
+            # Quadrantes
+            for num in concurso:
+                linha, coluna = self._coordenadas(num)
+                if linha < 2.5 and coluna < 2.5:  # Quadrante 1
+                    padroes['quadrantes'][1] += 1
+                elif linha < 2.5 and coluna >= 2.5:  # Quadrante 2
+                    padroes['quadrantes'][2] += 1
+                elif linha >= 2.5 and coluna < 2.5:  # Quadrante 3
+                    padroes['quadrantes'][3] += 1
+                else:  # Quadrante 4
+                    padroes['quadrantes'][4] += 1
+        
+        # Normalizar quadrantes
+        total = len(self.historico) * 15
+        for q in padroes['quadrantes']:
+            padroes['quadrantes'][q] /= total
+        
+        return padroes
+    
+    def _calcular_padroes_estatisticos(self):
+        """Calcula estatísticas dos padrões mais comuns"""
+        pares_count = []
+        baixos_count = []
+        soma_total = []
+        
+        for concurso in self.historico:
+            pares = sum(1 for n in concurso if n % 2 == 0)
+            baixos = sum(1 for n in concurso if n <= 12)
+            soma = sum(concurso)
+            
+            pares_count.append(pares)
+            baixos_count.append(baixos)
+            soma_total.append(soma)
+        
+        return {
+            'pares': {
+                'media': np.mean(pares_count),
+                'dist': Counter(pares_count)
+            },
+            'baixos': {
+                'media': np.mean(baixos_count),
+                'dist': Counter(baixos_count)
+            },
+            'soma': {
+                'media': np.mean(soma_total),
+                'min': np.min(soma_total),
+                'max': np.max(soma_total),
+                'intervalo': (170, 210)  # Faixa mais comum
+            }
+        }
+    
+    def _verificar_filtros_matematicos(self, jogo):
+        """
+        Aplica filtros matemáticos ao jogo
+        Retorna (bool, dict) - aprovado e diagnóstico
+        """
+        diag = {
+            'sequencia_max': 0,
+            'repeticao_anterior': 0,
+            'distribuicao_linhas': {},
+            'aprovado': False
+        }
+        
+        # 5️⃣ CAMADA 5: FILTROS MATEMÁTICOS
+        
+        # Filtro 1: Sequência máxima (evitar mais de 3 consecutivos)
+        jogo_sorted = sorted(jogo)
+        max_seq = 1
+        atual = 1
+        for i in range(1, len(jogo_sorted)):
+            if jogo_sorted[i] == jogo_sorted[i-1] + 1:
+                atual += 1
+                max_seq = max(max_seq, atual)
+            else:
+                atual = 1
+        diag['sequencia_max'] = max_seq
+        if max_seq > 3:
+            return False, diag
+        
+        # Filtro 2: Repetição do concurso anterior (normalmente 8-10)
+        if self.ultimo:
+            rep = len(set(jogo) & set(self.ultimo))
+            diag['repeticao_anterior'] = rep
+            if rep < 7 or rep > 11:
+                return False, diag
+        
+        # Filtro 3: Distribuição por linhas do volante (2-4 por linha)
+        linhas = {i: 0 for i in range(5)}
+        for num in jogo:
+            linha = (num - 1) // 5
+            linhas[linha] += 1
+        diag['distribuicao_linhas'] = linhas
+        
+        for linha, count in linhas.items():
+            if count < 2 or count > 4:
+                return False, diag
+        
+        diag['aprovado'] = True
+        return True, diag
+    
+    def _gerar_jogo_base(self):
+        """
+        Gera um jogo base usando a estratégia 6 quentes / 5 mornos / 4 frios
+        + 2-3 atrasados
+        """
+        jogo = set()
+        
+        # Garantir que temos números suficientes em cada categoria
+        quentes_disp = self.quentes if len(self.quentes) >= 6 else self.quentes + self.mornos[:6-len(self.quentes)]
+        mornos_disp = self.mornos if len(self.mornos) >= 5 else self.mornos + self.frios[:5-len(self.mornos)]
+        frios_disp = self.frios if len(self.frios) >= 4 else self.frios + [n for n in range(1,26) if n not in jogo][:4-len(self.frios)]
+        
+        # Adicionar 6 quentes
+        jogo.update(random.sample(quentes_disp, min(6, len(quentes_disp))))
+        
+        # Adicionar 5 mornos (que não estão no jogo)
+        mornos_restantes = [n for n in mornos_disp if n not in jogo]
+        if mornos_restantes:
+            jogo.update(random.sample(mornos_restantes, min(5, len(mornos_restantes))))
+        
+        # Adicionar 4 frios (que não estão no jogo)
+        frios_restantes = [n for n in frios_disp if n not in jogo]
+        if frios_restantes:
+            jogo.update(random.sample(frios_restantes, min(4, len(frios_restantes))))
+        
+        # Completar com números atrasados se necessário
+        while len(jogo) < 15:
+            # Escolher um dos números mais atrasados que ainda não está no jogo
+            atrasados_disp = [n for n, _ in self.atrasados if n not in jogo]
+            if atrasados_disp:
+                jogo.add(random.choice(atrasados_disp))
+            else:
+                # Se não houver atrasados disponíveis, escolher qualquer número
+                jogo.add(random.choice([n for n in range(1, 26) if n not in jogo]))
+        
+        return sorted(jogo)
+    
+    def gerar_jogo_inteligente(self, max_tentativas=10000):
+        """
+        Gera um jogo passando por todas as 6 camadas
+        """
+        for tentativa in range(max_tentativas):
+            # Gerar jogo base (camadas 1 e 2)
+            jogo = self._gerar_jogo_base()
+            
+            # Verificar padrões estatísticos (camada 4)
+            pares = sum(1 for n in jogo if n % 2 == 0)
+            if pares not in [7, 8]:
+                continue
+            
+            baixos = sum(1 for n in jogo if n <= 12)
+            if baixos not in [7, 8]:
+                continue
+            
+            soma = sum(jogo)
+            if soma < 170 or soma > 210:
+                continue
+            
+            # Aplicar filtros matemáticos (camada 5)
+            aprovado, diag = self._verificar_filtros_matematicos(jogo)
+            if aprovado:
+                # Calcular score geométrico (camada 3)
+                score_geo = self._calcular_score_geometrico(jogo)
+                
+                return jogo, {
+                    'frequencias': self._classificar_jogo(jogo),
+                    'pares': pares,
+                    'baixos': baixos,
+                    'soma': soma,
+                    'geometria': score_geo,
+                    'filtros': diag
+                }
+        
+        return None, None
+    
+    def _calcular_score_geometrico(self, jogo):
+        """
+        Calcula um score baseado em padrões geométricos
+        """
+        score = 0
+        jogo_set = set(jogo)
+        
+        # Pontos por diagonais
+        diag_principal = {1, 7, 13, 19, 25}
+        diag_secundaria = {5, 9, 13, 17, 21}
+        cruz = {3, 11, 13, 15, 23}
+        
+        score += len(jogo_set & diag_principal) * 0.5
+        score += len(jogo_set & diag_secundaria) * 0.5
+        score += len(jogo_set & cruz) * 0.3
+        
+        # Pontos por distribuição equilibrada nos quadrantes
+        quadrantes = {1: 0, 2: 0, 3: 0, 4: 0}
+        for num in jogo:
+            linha, coluna = self._coordenadas(num)
+            if linha < 2.5 and coluna < 2.5:
+                quadrantes[1] += 1
+            elif linha < 2.5 and coluna >= 2.5:
+                quadrantes[2] += 1
+            elif linha >= 2.5 and coluna < 2.5:
+                quadrantes[3] += 1
+            else:
+                quadrantes[4] += 1
+        
+        # Quanto mais equilibrado, melhor (entre 3 e 5 por quadrante)
+        for q in quadrantes:
+            if 3 <= quadrantes[q] <= 5:
+                score += 1
+        
+        return round(score, 1)
+    
+    def _classificar_jogo(self, jogo):
+        """Classifica os números do jogo em quentes/mornos/frios"""
+        result = {'quentes': 0, 'mornos': 0, 'frios': 0}
+        for num in jogo:
+            if num in self.quentes:
+                result['quentes'] += 1
+            elif num in self.mornos:
+                result['mornos'] += 1
+            else:
+                result['frios'] += 1
+        return result
+    
+    def gerar_multiplos_jogos(self, quantidade, max_global=20000):
+        """
+        Gera múltiplos jogos usando o pipeline completo
+        Similar a: gerar 20000, filtrar, sobram 200 bons
+        """
+        jogos = []
+        diagnosticos = []
+        tentativas = 0
+        
+        progress_text = "🧠 Motor PRO gerando jogos inteligentes..."
+        progress_bar = st.progress(0, text=progress_text)
+        
+        # Gerar muitos jogos e filtrar os melhores
+        candidatos = []
+        for _ in range(max_global):
+            jogo, diag = self.gerar_jogo_inteligente(max_tentativas=100)
+            if jogo and jogo not in [c[0] for c in candidatos]:
+                # Calcular score total
+                score_total = (
+                    diag['geometria'] + 
+                    (10 if diag['pares'] in [7,8] else 0) +
+                    (10 if 170 <= diag['soma'] <= 210 else 0) +
+                    (5 if diag['filtros']['aprovado'] else 0)
+                )
+                candidatos.append((jogo, diag, score_total))
+            
+            if len(candidatos) >= quantidade * 5:  # Gerar 5x mais que necessário
+                break
+        
+        # Ordenar por score e pegar os melhores
+        candidatos.sort(key=lambda x: x[2], reverse=True)
+        
+        for jogo, diag, _ in candidatos[:quantidade]:
+            jogos.append(jogo)
+            diagnosticos.append(diag)
+            progress_bar.progress(len(jogos) / quantidade, text=progress_text)
+        
+        progress_bar.empty()
+        
+        if len(jogos) < quantidade:
+            st.warning(f"⚠️ Gerados apenas {len(jogos)} jogos PRO (meta: {quantidade})")
+        
+        return jogos, diagnosticos
+    
+    def get_resumo(self):
+        """Retorna resumo do motor para exibição"""
+        return {
+            'quentes': len(self.quentes),
+            'mornos': len(self.mornos),
+            'frios': len(self.frios),
+            'top_atrasados': [f"{n} ({a} conc.)" for n, a in self.atrasados[:3]],
+            'padroes_geo': {
+                'diag_principal': self.padroes_geometricos['diagonal_principal'],
+                'diag_secundaria': self.padroes_geometricos['diagonal_secundaria'],
+                'cruz': self.padroes_geometricos['cruz']
+            },
+            'padroes_est': {
+                'pares_medio': round(self.padroes_estatisticos['pares']['media'], 1),
+                'baixos_medio': round(self.padroes_estatisticos['baixos']['media'], 1),
+                'soma_media': round(self.padroes_estatisticos['soma']['media'], 1)
+            }
+        }
+
+# =====================================================
 # CONFIGURAÇÃO MOBILE PREMIUM
 # =====================================================
 st.set_page_config(
@@ -1776,6 +2200,16 @@ def distribuicoes_empiricas(historico_df):
     }
 
 # =====================================================
+# CONSTANTES GLOBAIS PARA MOTOR ESTATÍSTICO
+# =====================================================
+FEATURE_WEIGHTS = {
+    "pares": 1.0,
+    "primos": 1.0,
+    "consecutivos": 0.8,
+    "soma": 0.6
+}
+
+# =====================================================
 # FUNÇÃO MONTE CARLO PARA O NÍVEL PROFISSIONAL
 # =====================================================
 @st.cache_data
@@ -2161,16 +2595,6 @@ def pipeline_selecao_inteligente(jogos_gerados, concursos_historico, modo_operac
     return jogos_aprovados, sinal_ativo, estatisticas
 
 # =====================================================
-# CONSTANTES GLOBAIS PARA MOTOR ESTATÍSTICO
-# =====================================================
-FEATURE_WEIGHTS = {
-    "pares": 1.0,
-    "primos": 1.0,
-    "consecutivos": 0.8,
-    "soma": 0.6
-}
-
-# =====================================================
 # INTERFACE PRINCIPAL
 # =====================================================
 def main():
@@ -2216,6 +2640,10 @@ def main():
         st.session_state.diagnosticos_profissionais = None
     if "jogos_teste_intel" not in st.session_state:
         st.session_state.jogos_teste_intel = None
+    if "jogos_pro" not in st.session_state:  # NOVO: para o Motor PRO
+        st.session_state.jogos_pro = None
+    if "diagnosticos_pro" not in st.session_state:  # NOVO
+        st.session_state.diagnosticos_pro = None
     
     # =====================================================
     # NOVOS ESTADOS PARA PERSISTÊNCIA
@@ -2268,8 +2696,8 @@ def main():
     st.subheader("🎯 Modelo Universal 3622")
 
     if st.session_state.analise and st.session_state.dados_api and st.session_state.historico_df is not None:
-        # AGORA SÃO 9 ABAS (adicionada a nova aba de Detector MASTER)
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
+        # AGORA SÃO 10 ABAS (adicionada a nova aba de Motor PRO)
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
             "📊 Análise", 
             "🧩 Fechamento 3622", 
             "📊 Motor Estatístico",
@@ -2278,7 +2706,8 @@ def main():
             "🚀 Gerador 12+",
             "🔥 Gerador 13+",
             "🧠 Inteligência 5-7-3",
-            "📡 Detector MASTER B-M-A"
+            "📡 Detector MASTER B-M-A",
+            "🧠 Motor PRO"  # NOVA ABA
         ])
 
         with tab1:
@@ -4540,6 +4969,199 @@ def main():
                     """)
             else:
                 st.info("📥 Carregue os concursos na barra lateral para ativar o Detector MASTER de Padrões B-M-A.")
+
+        # =====================================================
+        # ABA 10: MOTOR PRO (NOVA)
+        # =====================================================
+        with tab10:
+            st.markdown("""
+            <div style='background:#1e1e2e; padding:15px; border-radius:10px; margin-bottom:20px; border-left:5px solid #ff00ff;'>
+                <h4 style='margin:0; color:#ff00ff;'>🧠 MOTOR LOTOFÁCIL PRO (6 CAMADAS)</h4>
+                <p style='margin:5px 0 0 0; font-size:0.9em;'>Frequência + Atraso + Geometria + Estatística + Filtros + Gerador Inteligente</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            if st.session_state.dados_api:
+                # Pegar histórico completo
+                historico_completo = [
+                    sorted(map(int, c['dezenas'])) for c in st.session_state.dados_api
+                ]
+                ultimo = st.session_state.dados_api[0]
+                numeros_ultimo = sorted(map(int, ultimo['dezenas']))
+                
+                # Inicializar motor PRO
+                motor_pro = MotorLotofacilPro(historico_completo, numeros_ultimo)
+                
+                # Mostrar resumo do motor
+                resumo = motor_pro.get_resumo()
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("🔥 Quentes", resumo['quentes'])
+                    st.metric("🌡️ Mornos", resumo['mornos'])
+                    st.metric("❄️ Frios", resumo['frios'])
+                
+                with col2:
+                    st.markdown("**⏱️ Top atrasados:**")
+                    for item in resumo['top_atrasados']:
+                        st.markdown(f"- {item}")
+                
+                with col3:
+                    st.markdown("**📐 Padrões geométricos:**")
+                    st.markdown(f"- Diagonal principal: {resumo['padroes_geo']['diag_principal']}")
+                    st.markdown(f"- Diagonal secundária: {resumo['padroes_geo']['diag_secundaria']}")
+                    st.markdown(f"- Cruz: {resumo['padroes_geo']['cruz']}")
+                
+                # Configuração de geração
+                st.markdown("### 🎲 Gerador Inteligente")
+                st.caption("Pipeline: gerar 20.000 jogos → filtrar → melhores")
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    qtd_pro = st.slider(
+                        "Quantidade final de jogos",
+                        min_value=5,
+                        max_value=200,
+                        value=20,
+                        key="slider_qtd_pro"
+                    )
+                
+                with col2:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    if st.button("🧠 GERAR JOGOS PRO", key="gerar_pro", use_container_width=True, type="primary"):
+                        with st.spinner(f"Gerando {qtd_pro} jogos profissionais..."):
+                            jogos, diagnosticos = motor_pro.gerar_multiplos_jogos(qtd_pro)
+                            
+                            if jogos:
+                                st.session_state.jogos_pro = jogos
+                                st.session_state.diagnosticos_pro = diagnosticos
+                                st.success(f"✅ {len(jogos)} jogos PRO gerados!")
+                
+                with col3:
+                    if st.button("🔄 Reset", key="reset_pro", use_container_width=True):
+                        st.session_state.jogos_pro = None
+                        st.rerun()
+                
+                # Mostrar jogos gerados
+                if "jogos_pro" in st.session_state and st.session_state.jogos_pro:
+                    jogos = st.session_state.jogos_pro
+                    diagnosticos = st.session_state.diagnosticos_pro if "diagnosticos_pro" in st.session_state else [None] * len(jogos)
+                    
+                    st.markdown(f"### 📋 Jogos PRO Gerados ({len(jogos)})")
+                    
+                    # Estatísticas agregadas
+                    stats_df = pd.DataFrame({
+                        "Jogo": range(1, len(jogos)+1),
+                        "Quentes": [d['frequencias']['quentes'] if d else 0 for d in diagnosticos],
+                        "Mornos": [d['frequencias']['mornos'] if d else 0 for d in diagnosticos],
+                        "Frios": [d['frequencias']['frios'] if d else 0 for d in diagnosticos],
+                        "Pares": [d['pares'] if d else 0 for d in diagnosticos],
+                        "Baixos": [d['baixos'] if d else 0 for d in diagnosticos],
+                        "Soma": [d['soma'] if d else 0 for d in diagnosticos],
+                        "Geometria": [d['geometria'] if d else 0 for d in diagnosticos]
+                    })
+                    
+                    st.dataframe(stats_df, use_container_width=True, hide_index=True)
+                    
+                    # Mostrar cada jogo
+                    for i, (jogo, diag) in enumerate(zip(jogos, diagnosticos)):
+                        with st.container():
+                            # Cor baseada no score geométrico
+                            if diag and diag['geometria'] >= 5:
+                                cor_borda = "#ff00ff"  # Rosa - excelente
+                            elif diag and diag['geometria'] >= 3:
+                                cor_borda = "#4ade80"  # Verde - bom
+                            else:
+                                cor_borda = "#4cc9f0"  # Azul - normal
+                            
+                            nums_html = formatar_jogo_html(jogo)
+                            
+                            st.markdown(f"""
+                            <div style='border-left: 5px solid {cor_borda}; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
+                                <div style='display:flex; justify-content:space-between;'>
+                                    <strong>🧠 Jogo PRO #{i+1:2d}</strong>
+                                    <small>Geometria: {diag['geometria'] if diag else '?'}/10</small>
+                                </div>
+                                <div>{nums_html}</div>
+                                <div style='display:flex; gap:15px; margin-top:8px; color:#aaa; font-size:0.9em; flex-wrap:wrap;'>
+                                    <span>🔥 {diag['frequencias']['quentes'] if diag else 0}Q</span>
+                                    <span>🌡️ {diag['frequencias']['mornos'] if diag else 0}M</span>
+                                    <span>❄️ {diag['frequencias']['frios'] if diag else 0}F</span>
+                                    <span>⚖️ {diag['pares'] if diag else 0} pares</span>
+                                    <span>📉 {diag['baixos'] if diag else 0} baixos</span>
+                                    <span>➕ {diag['soma'] if diag else 0}</span>
+                                </div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                    
+                    # Botões de ação
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button("💾 Salvar Jogos PRO", key="salvar_pro", use_container_width=True):
+                            arquivo, jogo_id = salvar_jogos_gerados(
+                                jogos,
+                                list(range(1, 18)),
+                                {"modelo": "Motor PRO", "camadas": "6"},
+                                ultimo['concurso'],
+                                ultimo['data']
+                            )
+                            if arquivo:
+                                st.success(f"✅ Jogos PRO salvos! ID: {jogo_id}")
+                                st.session_state.jogos_salvos = carregar_jogos_salvos()
+                    
+                    with col2:
+                        # Exportar CSV
+                        df_export_pro = pd.DataFrame({
+                            "Jogo": range(1, len(jogos)+1),
+                            "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in jogos],
+                            "Quentes": stats_df["Quentes"],
+                            "Mornos": stats_df["Mornos"],
+                            "Frios": stats_df["Frios"],
+                            "Pares": stats_df["Pares"],
+                            "Baixos": stats_df["Baixos"],
+                            "Soma": stats_df["Soma"],
+                            "Geometria": stats_df["Geometria"]
+                        })
+                        
+                        csv_pro = df_export_pro.to_csv(index=False)
+                        st.download_button(
+                            label="📥 Exportar CSV",
+                            data=csv_pro,
+                            file_name=f"jogos_pro_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                            mime="text/csv",
+                            use_container_width=True
+                        )
+                    
+                    # Explicação das 6 camadas
+                    with st.expander("📘 Como funciona o Motor PRO?"):
+                        st.markdown("""
+                        ### 🧠 Arquitetura de 6 Camadas
+                        
+                        **1️⃣ Frequência histórica:** Classifica números em quentes/mornos/frios
+                        - Estratégia: 6 quentes + 5 mornos + 4 frios
+                        
+                        **2️⃣ Atraso dos números:** Inclui 2-3 números mais atrasados
+                        
+                        **3️⃣ Geometria do volante:** Detecta padrões em matriz 5x5
+                        - Diagonais, cruz, quadrantes
+                        
+                        **4️⃣ Padrões estatísticos:** 
+                        - Pares/Ímpares: 7 ou 8 pares
+                        - Baixos/Altos: 7 ou 8 baixos
+                        - Soma: 170 a 210
+                        
+                        **5️⃣ Filtros matemáticos:**
+                        - Máximo 3 números seguidos
+                        - 8-10 repetidos do último concurso
+                        - 2-4 números por linha do volante
+                        
+                        **6️⃣ Gerador inteligente:**
+                        - Gera 20.000 jogos
+                        - Aplica todos os filtros
+                        - Seleciona os 200 melhores
+                        """)
+            else:
+                st.info("📥 Carregue os concursos na barra lateral para ativar o Motor PRO.")
 
 # =====================================================
 # EXECUÇÃO PRINCIPAL (FORA DA FUNÇÃO MAIN)
