@@ -5548,7 +5548,7 @@ def main():
             else:
                 st.info("📥 Carregue os concursos na barra lateral para ativar o Motor PRO.")
 
-        # =====================================================
+     # =====================================================
         # ABA 11: GEOMETRIA ANALÍTICA E MATRIZ DE CO-OCORRÊNCIA
         # =====================================================
         with tab11:
@@ -5583,7 +5583,8 @@ def main():
                         num = motor.volante[i][j]
                         # Destacar números baseado na frequência
                         freq = motor.frequencias[num]
-                        intensidade = min(255, int(100 + 155 * (freq / max(motor.frequencias))))
+                        max_freq = max(motor.frequencias) if max(motor.frequencias) > 0 else 1
+                        intensidade = min(255, int(100 + 155 * (freq / max_freq)))
                         cor = f"rgba({intensidade}, 100, 200, 0.3)"
                         tabuleiro_html += f"<td style='border:1px solid #444; padding:12px; background:{cor};'><strong>{num:02d}</strong></td>"
                     tabuleiro_html += "</tr>"
@@ -5630,49 +5631,45 @@ def main():
                         st.line_chart(df_centroides.set_index('concurso')[['y']])
                 
                 # =====================================================
-                # MATRIZ DE CO-OCORRÊNCIA
+                # MATRIZ DE CO-OCORRÊNCIA - VERSÃO CORRIGIDA
                 # =====================================================
-                # =====================================================
-# MATRIZ DE CO-OCORRÊNCIA - VERSÃO ALTERNATIVA COM PROGRESS COLUMN CORRIGIDA
-# =====================================================
-st.markdown("### 🔗 Matriz de Co-ocorrência")
-st.caption("Números que mais aparecem juntos")
-
-# Mostrar top pares
-df_pares = motor.plot_matriz_coocorrencia()
-
-if not df_pares.empty:
-    # CORREÇÃO: Criar uma cópia e garantir tipos nativos
-    df_pares_display = df_pares.head(20).copy()
-    
-    # Garantir que os dados são tipos nativos Python
-    df_pares_display['num1'] = df_pares_display['num1'].astype(int)
-    df_pares_display['num2'] = df_pares_display['num2'].astype(int)
-    df_pares_display['ocorrencias'] = df_pares_display['ocorrencias'].astype(int)
-    
-    # Usar column_config com tipos nativos
-    st.dataframe(
-        df_pares_display,
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "num1": st.column_config.NumberColumn("Número 1", format="%d"),
-            "num2": st.column_config.NumberColumn("Número 2", format="%d"),
-            "ocorrencias": st.column_config.ProgressColumn(
-                "Ocorrências",
-                format="%d",
-                min_value=0,
-                max_value=int(df_pares['ocorrencias'].max())
-            )
-        }
-    )
-    
-    # Gráfico de barras dos top 10 pares
-    st.markdown("**Top 10 Pares mais frequentes**")
-    chart_data = df_pares.head(10).copy()
-    chart_data['par'] = chart_data['num1'].astype(str) + "-" + chart_data['num2'].astype(str)
-    st.bar_chart(chart_data.set_index('par')[['ocorrencias']])
+                st.markdown("### 🔗 Matriz de Co-ocorrência")
+                st.caption("Números que mais aparecem juntos")
                 
+                # Mostrar top pares
+                df_pares = motor.plot_matriz_coocorrencia()
+                
+                if not df_pares.empty:
+                    # CORREÇÃO: Criar uma cópia e garantir tipos nativos
+                    df_pares_display = df_pares.head(20).copy()
+                    
+                    # Garantir que os dados são tipos nativos Python
+                    df_pares_display['num1'] = df_pares_display['num1'].astype(int)
+                    df_pares_display['num2'] = df_pares_display['num2'].astype(int)
+                    df_pares_display['ocorrencias'] = df_pares_display['ocorrencias'].astype(int)
+                    
+                    # Usar column_config com tipos nativos
+                    st.dataframe(
+                        df_pares_display,
+                        use_container_width=True,
+                        hide_index=True,
+                        column_config={
+                            "num1": st.column_config.NumberColumn("Número 1", format="%d"),
+                            "num2": st.column_config.NumberColumn("Número 2", format="%d"),
+                            "ocorrencias": st.column_config.ProgressColumn(
+                                "Ocorrências",
+                                format="%d",
+                                min_value=0,
+                                max_value=int(df_pares['ocorrencias'].max())
+                            )
+                        }
+                    )
+                    
+                    # Gráfico de barras dos top 10 pares
+                    st.markdown("**Top 10 Pares mais frequentes**")
+                    chart_data = df_pares.head(10).copy()
+                    chart_data['par'] = chart_data['num1'].astype(str) + "-" + chart_data['num2'].astype(str)
+                    st.bar_chart(chart_data.set_index('par')[['ocorrencias']])
                 
                 # =====================================================
                 # CONSULTAR PARES FORTES POR NÚMERO
@@ -5948,6 +5945,43 @@ if not df_pares.empty:
             else:
                 st.info("📥 Carregue os concursos na barra lateral para ativar a Geometria Analítica.")
 
+
+# =====================================================
+                # EXPLICAÇÃO TÉCNICA
+                # =====================================================
+                with st.expander("📘 Como funciona a Geometria Analítica?"):
+                    st.markdown("""
+                    ### 📐 Fundamentos da Geometria Aplicada à Lotofácil
+                    
+                    **1. Coordenadas do Tabuleiro:**
+                    - Cada número vira um ponto (x,y) no plano cartesiano
+                    - Linhas: 0 (topo) a 4 (base)
+                    - Colunas: 0 (esquerda) a 4 (direita)
+                    
+                    **2. Centroide:**
+                    - Média das coordenadas de todos os números do jogo
+                    - Representa o "centro de massa" do jogo no tabuleiro
+                    
+                    **3. Matriz de Co-ocorrência:**
+                    - M[i][j] = quantas vezes os números i e j apareceram juntos
+                    - Identifica pares "amigos" que costumam sair juntos
+                    
+                    **4. Entropia de Shannon:**
+                    - H = -Σ p_i * log2(p_i)
+                    - Mede o nível de aleatoriedade/incerteza
+                    - Quanto maior a entropia, mais equilibrada a distribuição
+                    
+                    **5. Dispersão Geométrica:**
+                    - Distância média dos números ao centroide
+                    - Mede o quão espalhado é o jogo no volante
+                    
+                    **6. Pares Adjacentes:**
+                    - Números que são vizinhos no tabuleiro (distância Manhattan = 1)
+                    - Indica concentração local
+                    """)
+            else:
+                st.info("📥 Carregue os concursos na barra lateral para ativar a Geometria Analítica.")
+
     else:
         st.info("👈 Clique em 'Carregar concursos' na barra lateral para começar.")
 
@@ -6006,4 +6040,4 @@ st.markdown("""
     <div class="footer-title">ELITE MASTER SYSTEM</div>
     <div class="footer-sub">SAMUCJ TECNOLOGIA © 2026</div>
 </div>
-""", unsafe_allow_html=True)
+""", unsafe_allow_html=True) 
