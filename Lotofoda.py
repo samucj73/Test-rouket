@@ -499,7 +499,7 @@ class GeradorML:
         return melhor_jogo or sorted(random.sample(range(1, 26), 15)), melhor_prob
 
 # =====================================================
-# BACKTESTING REAL (VALIDAÇÃO CRUZADA TEMPORAL)
+# BACKTESTING REAL (VALIDAÇÃO CRUZADA TEMPORAL) - CORRIGIDO
 # =====================================================
 
 class BacktestingEngine:
@@ -530,11 +530,20 @@ class BacktestingEngine:
             # Concurso real (futuro)
             concurso_real = self.historico[idx_teste]
             
+            # Último concurso disponível no treino
+            ultimo_treino = treino[0] if treino else []
+            
             # Instanciar gerador com dados de treino
             if gerador_class.__name__ == 'EnsembleLotofacil':
-                ultimo = treino[0] if treino else []
-                gerador = gerador_class(treino, ultimo)
+                gerador = gerador_class(treino, ultimo_treino)
+            elif gerador_class.__name__ == 'GeradorSimplesEficaz':
+                gerador = gerador_class(treino, ultimo_treino)
+            elif gerador_class.__name__ == 'GeradorProbabilistico':
+                # GeradorProbabilistico precisa de distribuicoes, não do historico diretamente
+                dist = DistribuicoesProbabilisticas(treino)
+                gerador = gerador_class(dist)
             else:
+                # Para outros geradores que só precisam do histórico
                 gerador = gerador_class(treino)
             
             # Gerar jogos
@@ -554,9 +563,9 @@ class BacktestingEngine:
         
         # Estatísticas
         stats = {
-            'media_acertos': np.mean(resultados),
-            'std_acertos': np.std(resultados),
-            'max_acertos': max(resultados),
+            'media_acertos': np.mean(resultados) if resultados else 0,
+            'std_acertos': np.std(resultados) if resultados else 0,
+            'max_acertos': max(resultados) if resultados else 0,
             'p_13plus': acertos_13plus / total_jogos if total_jogos > 0 else 0,
             'distribuicao': Counter(resultados),
             'resultados': resultados
@@ -578,7 +587,7 @@ class BacktestingEngine:
         return resultados
 
 # =====================================================
-# GERADOR SIMPLES E EFICAZ (BASEADO EM PADRÕES REAIS)
+# GERADOR SIMPLES E EFICAZ (BASEADO EM PADRÕES REAIS) - CORRIGIDO
 # =====================================================
 
 class GeradorSimplesEficaz:
@@ -588,32 +597,57 @@ class GeradorSimplesEficaz:
     
     def __init__(self, historico, ultimo_concurso):
         self.historico = historico
-        self.ultimo = ultimo_concurso
+        self.ultimo = ultimo_concurso if ultimo_concurso else []
+        
+        # Se não houver último concurso, usar um padrão
+        if not self.ultimo and historico:
+            self.ultimo = historico[0]
+        elif not self.ultimo:
+            self.ultimo = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]  # fallback
         
         # Analisar padrões reais dos últimos 100 concursos
         ultimos_100 = historico[:100] if len(historico) > 100 else historico
         
         # Distribuições reais
-        self.repeticoes = [len(set(c) & set(ultimo_concurso)) for c in ultimos_100 if c != ultimo_concurso]
-        self.somas = [sum(c) for c in ultimos_100]
-        self.baixas_counts = [sum(1 for n in c if n <= 8) for c in ultimos_100]
-        self.medias_counts = [sum(1 for n in c if 9 <= n <= 16) for c in ultimos_100]
+        if ultimos_100:
+            self.repeticoes = [len(set(c) & set(self.ultimo)) for c in ultimos_100 if c != self.ultimo]
+            self.somas = [sum(c) for c in ultimos_100]
+            self.baixas_counts = [sum(1 for n in c if n <= 8) for c in ultimos_100]
+            self.medias_counts = [sum(1 for n in c if 9 <= n <= 16) for c in ultimos_100]
+        else:
+            self.repeticoes = [8]
+            self.somas = [195]
+            self.baixas_counts = [5]
+            self.medias_counts = [5]
         
     def gerar_jogo(self):
         """
         Gera um jogo baseado em estatísticas reais
         """
+        if not self.ultimo:
+            return sorted(random.sample(range(1, 26), 15))
+        
         jogo = set()
         
         # 1. Repetir 8-9 números do último (70% dos casos)
-        rep = random.choice([8, 9]) if random.random() < 0.7 else random.randint(7, 10)
+        if self.repeticoes:
+            rep_media = int(np.mean(self.repeticoes))
+            rep = random.choice([rep_media, rep_media+1]) if random.random() < 0.7 else random.randint(max(5, rep_media-2), min(12, rep_media+2))
+        else:
+            rep = 8
+            
         rep = min(rep, len(self.ultimo))
-        jogo.update(random.sample(self.ultimo, rep))
+        if rep > 0 and self.ultimo:
+            jogo.update(random.sample(self.ultimo, rep))
         
         # 2. Completar com números fora do último
         disponiveis = [n for n in range(1, 26) if n not in self.ultimo]
-        while len(jogo) < 15:
+        while len(jogo) < 15 and disponiveis:
             jogo.add(random.choice(disponiveis))
+        
+        # Se ainda não tiver 15 números, completar aleatoriamente
+        while len(jogo) < 15:
+            jogo.add(random.choice(range(1, 26)))
         
         jogo = sorted(jogo)
         
@@ -622,23 +656,25 @@ class GeradorSimplesEficaz:
         medias = sum(1 for n in jogo if 9 <= n <= 16)
         
         # Distribuição típica: 4-5 baixas, 5-6 médias
-        if baixas < 4:
+        if baixas < 4 and any(n > 16 for n in jogo):
             # Trocar um número alto por um baixo
             altos = [n for n in jogo if n > 16]
             if altos:
                 jogo.remove(random.choice(altos))
-                baixo_novo = random.choice([n for n in range(1, 9) if n not in jogo])
-                jogo.append(baixo_novo)
-                jogo.sort()
+                baixos_disponiveis = [n for n in range(1, 9) if n not in jogo]
+                if baixos_disponiveis:
+                    jogo.append(random.choice(baixos_disponiveis))
+                    jogo.sort()
         
         if medias < 5:
             # Trocar um número extremo por uma média
             extremos = [n for n in jogo if n <= 8 or n >= 17]
             if extremos:
                 jogo.remove(random.choice(extremos))
-                media_nova = random.choice([n for n in range(9, 17) if n not in jogo])
-                jogo.append(media_nova)
-                jogo.sort()
+                medias_disponiveis = [n for n in range(9, 17) if n not in jogo]
+                if medias_disponiveis:
+                    jogo.append(random.choice(medias_disponiveis))
+                    jogo.sort()
         
         return jogo
     
@@ -890,17 +926,14 @@ def main():
                     modelos = {
                         'Simples Eficaz': (GeradorSimplesEficaz, {'jogos_por_teste': jogos_por_teste}),
                         'Ensemble AI': (EnsembleLotofacil, {'jogos_por_teste': jogos_por_teste}),
-                        'Aleatório (baseline)': (None, {'jogos_por_teste': jogos_por_teste})
                     }
                     
-                    # Adaptar para o formato do walk_forward_test
+                    # Executar backtesting para cada modelo
                     resultados = {}
                     
                     for nome, (gerador_class, kwargs) in modelos.items():
-                        if nome == 'Aleatório (baseline)':
-                            # Baseline: jogos aleatórios
-                            resultados[nome] = {'media_acertos': 7.5, 'p_13plus': 0.01}
-                        else:
+                        st.write(f"📊 Testando {nome}...")
+                        try:
                             stats = engine.walk_forward_test(
                                 gerador_class, 
                                 janela_treino=janela_treino,
@@ -908,6 +941,12 @@ def main():
                                 passos=passos
                             )
                             resultados[nome] = stats
+                        except Exception as e:
+                            st.error(f"Erro ao testar {nome}: {str(e)}")
+                            resultados[nome] = {'media_acertos': 0, 'p_13plus': 0}
+                    
+                    # Baseline (jogos aleatórios)
+                    resultados['Aleatório (baseline)'] = {'media_acertos': 7.5, 'p_13plus': 0.01}
                     
                     st.session_state.resultados_backtest = resultados
         
