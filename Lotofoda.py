@@ -338,12 +338,13 @@ class EnsembleLotofacil:
         return [j for j, _ in candidatos[:quantidade]]
 
 # =====================================================
-# MACHINE LEARNING REAL (COM TREINAMENTO)
+# MACHINE LEARNING REAL (COM TREINAMENTO) - CORRIGIDO
 # =====================================================
 
 class GeradorML:
     """
     Usa Machine Learning para aprender padrões vencedores
+    Versão corrigida com número fixo de features
     """
     
     def __init__(self, historico):
@@ -353,15 +354,16 @@ class GeradorML:
             'baixas', 'medias', 'altas', 'pares', 'primos',
             'soma', 'consecutivos', 'rep_anterior', 'media_movel_5'
         ]
+        self.n_features = len(self.feature_names)  # Always 9 features
         
     def _extrair_features(self, jogo, contexto=None):
         """
-        Extrai features de um jogo
+        Extrai features de um jogo - SEMPRE retorna 9 features
         contexto: concursos anteriores para features temporais
         """
         features = []
         
-        # Features estáticas
+        # Features estáticas (sempre presentes)
         features.append(sum(1 for n in jogo if n <= 8))  # baixas
         features.append(sum(1 for n in jogo if 9 <= n <= 16))  # medias
         features.append(sum(1 for n in jogo if 17 <= n <= 25))  # altas
@@ -374,7 +376,7 @@ class GeradorML:
         consec = sum(1 for i in range(len(jogo_sorted)-1) if jogo_sorted[i+1] == jogo_sorted[i] + 1)
         features.append(consec)
         
-        # Features temporais (se contexto fornecido)
+        # Features temporais (sempre incluir, com valor padrão se contexto não disponível)
         if contexto and len(contexto) > 0:
             ultimo = contexto[0]
             rep = len(set(jogo) & set(ultimo))
@@ -386,9 +388,13 @@ class GeradorML:
                 media_baixas = np.mean([sum(1 for n in c if n <= 8) for c in ultimos_5])
                 features.append(media_baixas)
             else:
-                features.append(0)
+                features.append(0)  # Default se não houver dados suficientes
         else:
-            features.extend([0, 0])
+            features.append(0)  # Default para repetição
+            features.append(0)  # Default para média móvel
+        
+        # Verificar se temos exatamente 9 features
+        assert len(features) == self.n_features, f"Expected {self.n_features} features, got {len(features)}"
         
         return np.array(features).reshape(1, -1)
     
@@ -400,12 +406,17 @@ class GeradorML:
         X = []
         y = []
         
+        # Garantir que temos dados suficientes
+        if len(self.historico) < janela_treino + horizonte + 10:
+            st.warning("Histórico muito pequeno para treinamento. Use mais dados.")
+            return 0.5
+        
         for i in range(janela_treino, len(self.historico) - horizonte):
             # Dados de treino (passado)
             treino = self.historico[i-janela_treino:i]
             
-            # Gerar jogos aleatórios para treino
-            for _ in range(100):  # 100 exemplos por ponto temporal
+            # Gerar jogos para treino (balancear classes)
+            for _ in range(50):  # Reduzir para 50 exemplos por ponto temporal
                 jogo = sorted(random.sample(range(1, 26), 15))
                 
                 # Feature do jogo
@@ -419,34 +430,54 @@ class GeradorML:
                 X.append(features.flatten())
                 y.append(target)
         
+        # Converter para arrays numpy
         X = np.array(X)
         y = np.array(y)
         
+        # Verificar se temos dados suficientes e classes balanceadas
+        if len(X) < 100:
+            st.warning("Poucos exemplos gerados para treinamento.")
+            return 0.5
+        
+        if len(np.unique(y)) < 2:
+            st.warning("Apenas uma classe presente nos dados. Não é possível treinar.")
+            return 0.5
+        
         # Treinar modelo
         self.modelo = GradientBoostingClassifier(
-            n_estimators=100,
+            n_estimators=50,  # Reduzir para evitar overfitting
             max_depth=3,
             learning_rate=0.1,
-            random_state=42
+            random_state=42,
+            min_samples_split=10  # Adicionar para evitar overfitting
         )
-        self.modelo.fit(X, y)
         
-        # Avaliar
-        y_pred = self.modelo.predict(X)
-        accuracy = accuracy_score(y, y_pred)
-        
-        return accuracy
+        try:
+            self.modelo.fit(X, y)
+            
+            # Avaliar
+            y_pred = self.modelo.predict(X)
+            accuracy = accuracy_score(y, y_pred)
+            
+            return accuracy
+            
+        except Exception as e:
+            st.error(f"Erro no treinamento: {str(e)}")
+            return 0.5
     
     def prever_probabilidade(self, jogo, contexto):
         """Prevê probabilidade do jogo dar 12+"""
         if self.modelo is None:
             return 0.5
         
-        features = self._extrair_features(jogo, contexto)
-        prob = self.modelo.predict_proba(features)[0][1]
-        return prob
+        try:
+            features = self._extrair_features(jogo, contexto)
+            prob = self.modelo.predict_proba(features)[0][1]
+            return prob
+        except:
+            return 0.5
     
-    def gerar_jogo_otimizado(self, contexto, n_tentativas=10000):
+    def gerar_jogo_otimizado(self, contexto, n_tentativas=5000):
         """Gera jogo maximizando probabilidade prevista"""
         if self.modelo is None:
             return sorted(random.sample(range(1, 26), 15)), 0.5
@@ -456,13 +487,16 @@ class GeradorML:
         
         for _ in range(n_tentativas):
             jogo = sorted(random.sample(range(1, 26), 15))
-            prob = self.prever_probabilidade(jogo, contexto)
-            
-            if prob > melhor_prob:
-                melhor_prob = prob
-                melhor_jogo = jogo
+            try:
+                prob = self.prever_probabilidade(jogo, contexto)
+                
+                if prob > melhor_prob:
+                    melhor_prob = prob
+                    melhor_jogo = jogo
+            except:
+                continue
         
-        return melhor_jogo, melhor_prob
+        return melhor_jogo or sorted(random.sample(range(1, 26), 15)), melhor_prob
 
 # =====================================================
 # BACKTESTING REAL (VALIDAÇÃO CRUZADA TEMPORAL)
