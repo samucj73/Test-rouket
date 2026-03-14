@@ -1440,206 +1440,287 @@ def main():
     # =====================================================
     # NOVA ABA 6: CONFERÊNCIA
     # =====================================================
-    with tab6:
-        st.subheader("📋 Conferência Pós-Sorteio")
+
+    # =====================================================
+# ABA 6: CONFERÊNCIA (ATUALIZADA - COM API)
+# =====================================================
+with tab6:
+    st.subheader("📋 Conferência Pós-Sorteio")
+    
+    conferencia = st.session_state.conferencia
+    
+    # Buscar concurso mais recente da API
+    concurso_recente = None
+    if st.session_state.dados_api and len(st.session_state.dados_api) > 0:
+        concurso_recente = st.session_state.dados_api[0]
+    
+    # Sidebar dentro da aba para opções
+    with st.expander("📁 Carregar Jogos", expanded=True):
+        col1, col2 = st.columns(2)
         
-        conferencia = st.session_state.conferencia
-        
-        # Sidebar dentro da aba para opções
-        with st.expander("📁 Carregar Jogos", expanded=True):
-            col1, col2 = st.columns(2)
+        with col1:
+            # Upload de arquivo
+            arquivo_upload = st.file_uploader("Carregar arquivo JSON", type=['json'], key="conferencia_upload")
             
-            with col1:
-                # Upload de arquivo
-                arquivo_upload = st.file_uploader("Carregar arquivo JSON", type=['json'], key="conferencia_upload")
+            if arquivo_upload is not None:
+                # Salvar temporariamente
+                with open("temp_jogos_conferencia.json", "wb") as f:
+                    f.write(arquivo_upload.getbuffer())
                 
-                if arquivo_upload is not None:
-                    # Salvar temporariamente
-                    with open("temp_jogos_conferencia.json", "wb") as f:
-                        f.write(arquivo_upload.getbuffer())
-                    
-                    sucesso, msg = conferencia.carregar_jogos("temp_jogos_conferencia.json")
+                sucesso, msg = conferencia.carregar_jogos("temp_jogos_conferencia.json")
+                if sucesso:
+                    st.success(msg)
+                else:
+                    st.error(msg)
+        
+        with col2:
+            st.markdown("### Ou")
+            
+            # Carregar da sessão atual
+            if st.session_state.jogos_gerados:
+                if st.button("📥 Usar jogos da sessão atual", use_container_width=True):
+                    sucesso, msg = conferencia.carregar_jogos_da_sessao(st.session_state.jogos_gerados)
                     if sucesso:
                         st.success(msg)
                     else:
                         st.error(msg)
+            else:
+                st.info("Nenhum jogo na sessão atual. Gere jogos primeiro!")
             
-            with col2:
-                st.markdown("### Ou")
-                
-                # Carregar da sessão atual
-                if st.session_state.jogos_gerados:
-                    if st.button("📥 Usar jogos da sessão atual", use_container_width=True):
-                        sucesso, msg = conferencia.carregar_jogos_da_sessao(st.session_state.jogos_gerados)
-                        if sucesso:
-                            st.success(msg)
-                        else:
-                            st.error(msg)
-                else:
-                    st.info("Nenhum jogo na sessão atual. Gere jogos primeiro!")
-                
-                # Gerar exemplo
-                if st.button("🎲 Gerar exemplo para teste", use_container_width=True):
-                    arquivo = gerar_arquivo_exemplo()
-                    sucesso, msg = conferencia.carregar_jogos(arquivo)
-                    if sucesso:
-                        st.success(msg + " (arquivo exemplo)")
-        
-        # Mostrar info do concurso carregado
-        if conferencia.jogos:
-            st.markdown(f"""
-            <div class='info-box'>
-                <strong>📊 Jogos carregados:</strong> {len(conferencia.jogos)}<br>
-                <strong>🎯 Concurso alvo:</strong> {conferencia.concurso_alvo}<br>
-                <strong>📅 Data:</strong> {conferencia.data_alvo}
-            </div>
-            """, unsafe_allow_html=True)
+            # Gerar exemplo
+            if st.button("🎲 Gerar exemplo para teste", use_container_width=True):
+                arquivo = gerar_arquivo_exemplo()
+                sucesso, msg = conferencia.carregar_jogos(arquivo)
+                if sucesso:
+                    st.success(msg + " (arquivo exemplo)")
+    
+    # Mostrar info do concurso carregado
+    if conferencia.jogos:
+        st.markdown(f"""
+        <div class='info-box'>
+            <strong>📊 Jogos carregados:</strong> {len(conferencia.jogos)}<br>
+            <strong>🎯 Concurso alvo:</strong> {conferencia.concurso_alvo}<br>
+            <strong>📅 Data:</strong> {conferencia.data_alvo}
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # ===== NOVO: SELEÇÃO DO CONCURSO VIA API =====
+    st.markdown("### 🎯 Selecionar Concurso para Conferência")
+    
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        # Opções de concurso
+        if st.session_state.dados_api:
+            opcoes_concurso = [
+                f"#{c['concurso']} - {c['data']} (Último)" if i == 0 else f"#{c['concurso']} - {c['data']}"
+                for i, c in enumerate(st.session_state.dados_api[:20])  # Mostrar últimos 20
+            ]
             
-            # Input dos números sorteados
-            st.markdown("### 🎯 Números Sorteados")
+            indices_concurso = list(range(min(20, len(st.session_state.dados_api))))
             
-            numeros_input = st.text_area(
-                "Digite os 15 números sorteados (separados por vírgula ou espaço):",
-                placeholder="Ex: 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15",
-                height=100,
-                key="numeros_sorteados_input"
+            idx_selecionado = st.selectbox(
+                "Selecione o concurso:",
+                indices_concurso,
+                format_func=lambda i: opcoes_concurso[i],
+                key="select_concurso_conferencia"
             )
             
-            col1, col2 = st.columns(2)
+            concurso_selecionado = st.session_state.dados_api[idx_selecionado]
+            numeros_sorteados_api = sorted(map(int, concurso_selecionado['dezenas']))
             
-            with col1:
-                if st.button("🔍 CONFERIR RESULTADO", type="primary", use_container_width=True):
-                    if not numeros_input:
-                        st.error("Digite os números sorteados!")
-                    else:
-                        # Processar input
-                        try:
-                            # Substituir vírgulas por espaços e dividir
-                            numeros_texto = numeros_input.replace(',', ' ').split()
-                            numeros = [int(n.strip()) for n in numeros_texto if n.strip()]
-                            
-                            if len(numeros) != 15:
-                                st.error(f"Foram encontrados {len(numeros)} números. Devem ser 15!")
-                            elif len(set(numeros)) != 15:
-                                st.error("Números duplicados!")
-                            elif any(n < 1 or n > 25 for n in numeros):
-                                st.error("Números devem estar entre 1 e 25!")
-                            else:
-                                numeros = sorted(numeros)
-                                sucesso, msg = conferencia.conferir(numeros)
-                                if sucesso:
-                                    st.success(msg)
-                                    st.balloons()
-                                else:
-                                    st.error(msg)
-                        except Exception as e:
-                            st.error(f"Erro ao processar números: {e}")
+            st.markdown(f"**Números sorteados:** {numeros_sorteados_api}")
             
-            with col2:
-                if st.button("🔄 Limpar", use_container_width=True):
-                    st.session_state.conferencia = ConferenciaLotofacil()
-                    st.rerun()
+            # Mostrar números em formato visual
+            nums_html_api = ""
+            for n in numeros_sorteados_api:
+                if n <= 8:
+                    cor = "#4ade80"
+                elif n <= 16:
+                    cor = "#4cc9f0"
+                else:
+                    cor = "#f97316"
+                nums_html_api += f"<span style='background:{cor}30; border:2px solid {cor}; border-radius:25px; padding:5px 10px; margin:3px; display:inline-block; font-weight:bold;'>{n:02d}</span>"
+            
+            st.markdown(f"<div style='margin:10px 0;'>{nums_html_api}</div>", unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown("<br>", unsafe_allow_html=True)
         
-        # Resultados da conferência
-        if conferencia.df_conferencia is not None:
-            st.markdown("---")
-            st.markdown("### 📊 Resultados da Conferência")
+        # Botão para carregar automaticamente o último concurso
+        if concurso_recente and st.button("📥 Carregar Último Concurso", use_container_width=True):
+            numeros_ultimo = sorted(map(int, concurso_recente['dezenas']))
             
-            # Métricas rápidas
-            e = conferencia.estatisticas
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("Média Acertos", f"{e['media_acertos']:.2f}")
-            with col2:
-                st.metric("Melhor Jogo", f"{e['max_acertos']} pts (J{e['melhor_jogo']})")
-            with col3:
-                st.metric("Total 11+", e['total_11'])
-            with col4:
-                st.metric("Total 13+", e['total_13'])
+            # Pré-preencher o text area com os números
+            numeros_texto = ", ".join(f"{n:02d}" for n in numeros_ultimo)
+            st.session_state['numeros_preenchidos'] = numeros_texto
             
-            # Tabs para diferentes visualizações
-            res_tab1, res_tab2, res_tab3, res_tab4 = st.tabs(["📊 Tabela", "📈 Gráficos", "🏆 Melhores", "📝 Relatório"])
-            
-            with res_tab1:
-                # DataFrame com cores
-                df_display = conferencia.df_conferencia.copy()
-                df_display['dezenas'] = df_display['dezenas'].apply(lambda x: ', '.join(f"{n:02d}" for n in x))
-                df_display = df_display[['jogo_id', 'acertos', 'premio', 'dezenas']]
-                df_display.columns = ['Jogo', 'Acertos', 'Prêmio (R$)', 'Dezenas']
-                
-                # Colorir linhas por acertos
-                def color_acertos(val):
-                    if val >= 13:
-                        return 'background-color: #f9731680'
-                    elif val >= 11:
-                        return 'background-color: #4ade8080'
-                    return ''
-                
-                st.dataframe(
-                    df_display.style.applymap(color_acertos, subset=['Acertos']),
-                    use_container_width=True,
-                    hide_index=True
-                )
-            
-            with res_tab2:
-                fig = conferencia.plot_graficos()
-                if fig:
-                    st.pyplot(fig)
-            
-            with res_tab3:
-                st.markdown("#### 🥇 Top 10 Melhores Jogos")
-                top10 = conferencia.df_conferencia.nlargest(10, 'acertos')
-                
-                for _, row in top10.iterrows():
-                    # Formatar números com cores
-                    nums_html = ""
-                    for n in row['dezenas']:
-                        if n <= 8:
-                            cor = "#4ade80"
-                        elif n <= 16:
-                            cor = "#4cc9f0"
-                        else:
-                            cor = "#f97316"
-                        nums_html += f"<span style='background:{cor}30; border:1px solid {cor}; border-radius:15px; padding:3px 6px; margin:2px; display:inline-block;'>{n:02d}</span>"
+            st.success(f"✅ Números do concurso #{concurso_recente['concurso']} carregados!")
+            st.rerun()
+    
+    # Input dos números sorteados (com opção de preenchimento automático)
+    st.markdown("### 🔢 Números Sorteados (manual ou automático)")
+    
+    # Verificar se há números pré-preenchidos na session state
+    valor_padrao = st.session_state.get('numeros_preenchidos', "")
+    
+    numeros_input = st.text_area(
+        "Digite os 15 números sorteados (separados por vírgula ou espaço):",
+        value=valor_padrao,
+        placeholder="Ex: 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15",
+        height=100,
+        key="numeros_sorteados_input"
+    )
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if st.button("🔍 CONFERIR RESULTADO", type="primary", use_container_width=True):
+            if not conferencia.jogos:
+                st.error("Carregue os jogos primeiro!")
+            elif not numeros_input:
+                st.error("Digite os números sorteados!")
+            else:
+                # Processar input
+                try:
+                    # Substituir vírgulas por espaços e dividir
+                    numeros_texto = numeros_input.replace(',', ' ').split()
+                    numeros = [int(n.strip()) for n in numeros_texto if n.strip()]
                     
+                    if len(numeros) != 15:
+                        st.error(f"Foram encontrados {len(numeros)} números. Devem ser 15!")
+                    elif len(set(numeros)) != 15:
+                        st.error("Números duplicados!")
+                    elif any(n < 1 or n > 25 for n in numeros):
+                        st.error("Números devem estar entre 1 e 25!")
+                    else:
+                        numeros = sorted(numeros)
+                        sucesso, msg = conferencia.conferir(numeros)
+                        if sucesso:
+                            st.success(msg)
+                            st.balloons()
+                            
+                            # Limpar o campo de números após conferência bem-sucedida
+                            st.session_state['numeros_preenchidos'] = ""
+                        else:
+                            st.error(msg)
+                except Exception as e:
+                    st.error(f"Erro ao processar números: {e}")
+    
+    with col2:
+        if st.button("🔄 Limpar Tudo", use_container_width=True):
+            st.session_state.conferencia = ConferenciaLotofacil()
+            st.session_state['numeros_preenchidos'] = ""
+            st.rerun()
+    
+    with col3:
+        # Botão para usar números selecionados na API
+        if 'numeros_sorteados_api' in locals():
+            numeros_str = ", ".join(f"{n:02d}" for n in numeros_sorteados_api)
+            if st.button(f"📋 Usar nº do concurso #{concurso_selecionado['concurso']}", use_container_width=True):
+                st.session_state['numeros_preenchidos'] = numeros_str
+                st.rerun()
+    
+    # Resultados da conferência
+    if conferencia.df_conferencia is not None:
+        st.markdown("---")
+        st.markdown("### 📊 Resultados da Conferência")
+        
+        # Métricas rápidas
+        e = conferencia.estatisticas
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Média Acertos", f"{e['media_acertos']:.2f}")
+        with col2:
+            st.metric("Melhor Jogo", f"{e['max_acertos']} pts (J{e['melhor_jogo']})")
+        with col3:
+            st.metric("Total 11+", e['total_11'])
+        with col4:
+            st.metric("Total 13+", e['total_13'])
+        
+        # Tabs para diferentes visualizações
+        res_tab1, res_tab2, res_tab3, res_tab4 = st.tabs(["📊 Tabela", "📈 Gráficos", "🏆 Melhores", "📝 Relatório"])
+        
+        with res_tab1:
+            # DataFrame com cores
+            df_display = conferencia.df_conferencia.copy()
+            df_display['dezenas'] = df_display['dezenas'].apply(lambda x: ', '.join(f"{n:02d}" for n in x))
+            df_display = df_display[['jogo_id', 'acertos', 'premio', 'dezenas']]
+            df_display.columns = ['Jogo', 'Acertos', 'Prêmio (R$)', 'Dezenas']
+            
+            # Colorir linhas por acertos
+            def color_acertos(val):
+                if val >= 13:
+                    return 'background-color: #f9731680'
+                elif val >= 11:
+                    return 'background-color: #4ade8080'
+                return ''
+            
+            st.dataframe(
+                df_display.style.applymap(color_acertos, subset=['Acertos']),
+                use_container_width=True,
+                hide_index=True
+            )
+        
+        with res_tab2:
+            fig = conferencia.plot_graficos()
+            if fig:
+                st.pyplot(fig)
+        
+        with res_tab3:
+            st.markdown("#### 🥇 Top 10 Melhores Jogos")
+            top10 = conferencia.df_conferencia.nlargest(10, 'acertos')
+            
+            for _, row in top10.iterrows():
+                # Formatar números com cores
+                nums_html = ""
+                for n in row['dezenas']:
+                    if n <= 8:
+                        cor = "#4ade80"
+                    elif n <= 16:
+                        cor = "#4cc9f0"
+                    else:
+                        cor = "#f97316"
+                    nums_html += f"<span style='background:{cor}30; border:1px solid {cor}; border-radius:15px; padding:3px 6px; margin:2px; display:inline-block;'>{n:02d}</span>"
+                
+                st.markdown(f"""
+                <div style='background:#0e1117; border-left:5px solid gold; border-radius:10px; padding:10px; margin:5px 0;'>
+                    <div style='display:flex; justify-content:space-between;'>
+                        <strong>Jogo {int(row['jogo_id'])}</strong>
+                        <span style='color:gold; font-weight:bold;'>{int(row['acertos'])} pontos - R$ {row['premio']:,.2f}</span>
+                    </div>
+                    <div>{nums_html}</div>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        with res_tab4:
+            st.markdown("#### 📄 Relatório Completo")
+            relatorio = conferencia.gerar_relatorio_texto()
+            st.text(relatorio)
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("💾 Salvar Relatório", use_container_width=True):
+                    nome = conferencia.salvar_relatorio()
+                    st.success(f"Relatório salvo como {nome}.txt, .json e .csv")
+            
+            with col2:
+                # Comparação com baseline
+                media_modelo = conferencia.estatisticas['media_acertos']
+                vantagem = ((media_modelo - 7.5) / 7.5) * 100
+                
+                if media_modelo > 7.5:
                     st.markdown(f"""
-                    <div style='background:#0e1117; border-left:5px solid gold; border-radius:10px; padding:10px; margin:5px 0;'>
-                        <div style='display:flex; justify-content:space-between;'>
-                            <strong>Jogo {int(row['jogo_id'])}</strong>
-                            <span style='color:gold; font-weight:bold;'>{int(row['acertos'])} pontos - R$ {row['premio']:,.2f}</span>
-                        </div>
-                        <div>{nums_html}</div>
+                    <div class='success-box'>
+                        <strong>✅ Vantagem: +{vantagem:.1f}% sobre aleatório</strong>
                     </div>
                     """, unsafe_allow_html=True)
-            
-            with res_tab4:
-                st.markdown("#### 📄 Relatório Completo")
-                relatorio = conferencia.gerar_relatorio_texto()
-                st.text(relatorio)
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("💾 Salvar Relatório", use_container_width=True):
-                        nome = conferencia.salvar_relatorio()
-                        st.success(f"Relatório salvo como {nome}.txt, .json e .csv")
-                
-                with col2:
-                    # Comparação com baseline
-                    media_modelo = conferencia.estatisticas['media_acertos']
-                    vantagem = ((media_modelo - 7.5) / 7.5) * 100
-                    
-                    if media_modelo > 7.5:
-                        st.markdown(f"""
-                        <div class='success-box'>
-                            <strong>✅ Vantagem: +{vantagem:.1f}% sobre aleatório</strong>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    else:
-                        st.markdown(f"""
-                        <div class='warning-box'>
-                            <strong>⚠️ Desempenho abaixo do aleatório</strong>
-                        </div>
-                        """, unsafe_allow_html=True)
+                else:
+                    st.markdown(f"""
+                    <div class='warning-box'>
+                        <strong>⚠️ Desempenho abaixo do aleatório</strong>
+                    </div>
+                    """, unsafe_allow_html=True)
 
 # =====================================================
 # EXECUÇÃO
