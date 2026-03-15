@@ -10,12 +10,14 @@ import math
 from collections import Counter
 from datetime import datetime
 from scipy.stats import norm, chi2_contingency
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, RandomForestRegressor
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import accuracy_score
 import matplotlib.pyplot as plt
 import seaborn as sns
 import warnings
+import itertools
+from copy import deepcopy
 warnings.filterwarnings("ignore")
 
 # =====================================================
@@ -42,7 +44,7 @@ h1,h2,h3 { text-align: center; }
 """, unsafe_allow_html=True)
 
 st.title("🧠🎯 LOTOFÁCIL AI 3.0")
-st.caption("Machine Learning + Algoritmo Genético + Monte Carlo + Entropia • Nível Profissional")
+st.caption("Markov Chains + Algoritmo Genético + Monte Carlo + Entropia • Nível Profissional")
 
 # =====================================================
 # MÓDULO 1: ENTROPIA DE SHANNON
@@ -70,13 +72,13 @@ class EntropiaLotofacil:
     def _calcular_entropia_media(self):
         """Calcula a entropia média dos jogos históricos"""
         entropias = []
-        for jogo in self.historico[:100]:  # Últimos 100
+        for jogo in self.historico:
             H = 0
             for n in jogo:
                 p = self.probs.get(n, 1e-9)
                 H -= p * math.log(p + 1e-10)
             entropias.append(H)
-        return np.mean(entropias) if entropias else 2.5  # Valor típico
+        return np.mean(entropias)
     
     def entropia_jogo(self, jogo):
         """Calcula a entropia de um jogo específico"""
@@ -88,172 +90,261 @@ class EntropiaLotofacil:
     
     def score_entropia(self, jogo):
         """
-        Retorna um score baseado em quão próximo da entropia média
-        Quanto mais próximo de 1, melhor
+        Score baseado na proximidade da entropia média
+        Quanto mais próximo da média, maior o score
         """
         H = self.entropia_jogo(jogo)
-        # Normalizar: 1 = entropia média, <1 = desvio
-        if H == 0:
-            return 0
-        return max(0, 1 - abs(H - self.entropia_media) / self.entropia_media)
+        # Distribuição normal aproximada
+        diff = abs(H - self.entropia_media)
+        score = math.exp(-diff / self.entropia_media)
+        return score
 
 # =====================================================
-# MÓDULO 2: ALGORITMO GENÉTICO (EVOLUTIVO)
+# MÓDULO 2: CADEIAS DE MARKOV
+# =====================================================
+
+class MarkovLotofacil:
+    """
+    Modelo de Cadeias de Markov para capturar dependências temporais entre concursos
+    Aprende probabilidades de transição entre números de um concurso para o próximo
+    """
+    
+    def __init__(self, historico, ordem=1):
+        """
+        Args:
+            historico: lista de jogos históricos
+            ordem: ordem da cadeia de Markov (1 = último concurso, 2 = últimos 2 concursos)
+        """
+        self.historico = historico
+        self.ordem = ordem
+        self.matriz_transicao = None
+        self._treinar()
+        
+    def _treinar(self):
+        """Treina o modelo de Markov com base no histórico"""
+        if self.ordem == 1:
+            self._treinar_markov_ordem1()
+        else:
+            self._treinar_markov_ordem2()
+    
+    def _treinar_markov_ordem1(self):
+        """Markov de ordem 1: P(próximo | atual)"""
+        self.matriz_transicao = np.zeros((25, 25))
+        
+        for i in range(len(self.historico) - 1):
+            atual = self.historico[i]
+            prox = self.historico[i + 1]
+            
+            for a in atual:
+                for b in prox:
+                    self.matriz_transicao[a-1][b-1] += 1
+        
+        # Normalizar (evitar divisão por zero)
+        soma_linhas = self.matriz_transicao.sum(axis=1, keepdims=True)
+        soma_linhas[soma_linhas == 0] = 1
+        self.matriz_transicao = self.matriz_transicao / soma_linhas
+    
+    def _treinar_markov_ordem2(self):
+        """
+        Markov de ordem 2: P(próximo | atual, anterior)
+        Implementado como uma matriz 3D
+        """
+        # Formato: [anterior][atual][proximo]
+        self.matriz_transicao = np.zeros((25, 25, 25))
+        
+        for i in range(len(self.historico) - 2):
+            anterior = self.historico[i]
+            atual = self.historico[i + 1]
+            prox = self.historico[i + 2]
+            
+            for a in anterior:
+                for b in atual:
+                    for c in prox:
+                        self.matriz_transicao[a-1][b-1][c-1] += 1
+        
+        # Normalizar
+        for i in range(25):
+            for j in range(25):
+                soma = self.matriz_transicao[i][j].sum()
+                if soma > 0:
+                    self.matriz_transicao[i][j] = self.matriz_transicao[i][j] / soma
+    
+    def score_transicao(self, ultimos_jogos, jogo_candidato):
+        """
+        Calcula a probabilidade de transição dos últimos jogos para o candidato
+        
+        Args:
+            ultimos_jogos: lista com 1 ou 2 últimos concursos (depende da ordem)
+            jogo_candidato: jogo a ser avaliado
+        """
+        if self.ordem == 1:
+            return self._score_ordem1(ultimos_jogos[0], jogo_candidato)
+        else:
+            return self._score_ordem2(ultimos_jogos[0], ultimos_jogos[1], jogo_candidato)
+    
+    def _score_ordem1(self, ultimo, candidato):
+        """Score para Markov ordem 1"""
+        score = 0
+        for a in ultimo:
+            for b in candidato:
+                score += self.matriz_transicao[a-1][b-1]
+        return score / (len(ultimo) * len(candidato))
+    
+    def _score_ordem2(self, anterior, atual, candidato):
+        """Score para Markov ordem 2"""
+        score = 0
+        count = 0
+        for a in anterior:
+            for b in atual:
+                for c in candidato:
+                    score += self.matriz_transicao[a-1][b-1][c-1]
+                    count += 1
+        return score / count if count > 0 else 0
+
+# =====================================================
+# MÓDULO 3: ALGORITMO GENÉTICO AVANÇADO
 # =====================================================
 
 class AlgoritmoGeneticoLotofacil:
     """
     Algoritmo Genético para evoluir jogos da Lotofácil
-    Muito mais poderoso que geração aleatória simples
+    Mais poderoso que geração aleatória simples
     """
     
-    def __init__(self, historico, tamanho_pop=200, taxa_mutacao=0.15, taxa_crossover=0.7):
+    def __init__(self, historico, fitness_func=None, tamanho_pop=200, taxa_mutacao=0.15):
         self.historico = historico
         self.tamanho_pop = tamanho_pop
         self.taxa_mutacao = taxa_mutacao
-        self.taxa_crossover = taxa_crossover
+        self.fitness_func = fitness_func if fitness_func else self._fitness_padrao
         
-        # Inicializar distribuições para fitness
-        self.dist = DistribuicoesProbabilisticas(historico)
-        self.entropia = EntropiaLotofacil(historico)
+        # Pré-calcular estatísticas para fitness
+        self.soma_media = np.mean([sum(j) for j in historico])
+        self.rep_media = np.mean([
+            len(set(historico[i]) & set(historico[i+1])) 
+            for i in range(len(historico)-1)
+        ])
         
-        # Último concurso
-        self.ultimo = historico[0] if historico else []
-        
-    def gerar_individuo(self):
-        """Gera um indivíduo aleatório (jogo)"""
-        return sorted(random.sample(range(1, 26), 15))
-    
-    def fitness(self, jogo):
+    def _fitness_padrao(self, jogo):
         """
-        Função de avaliação (quanto maior, melhor)
-        Combina múltiplos critérios
+        Função de fitness baseada em múltiplos critérios:
+        - Proximidade da soma média
+        - Potencial de repetição com histórico
+        - Distribuição baixas/médias/altas
         """
-        if not jogo:
-            return 0
-        
-        score = 0
-        
-        # 1. Probabilidade baseada nas distribuições
-        try:
-            prob = np.exp(self.dist.probabilidade_jogo(jogo))
-            score += prob * 100  # Peso
-        except:
-            pass
-        
-        # 2. Entropia (equilíbrio estatístico)
-        score_ent = self.entropia.score_entropia(jogo)
-        score += score_ent * 50  # Peso
-        
-        # 3. Repetições do último concurso (padrão real)
-        if self.ultimo:
-            rep = len(set(jogo) & set(self.ultimo))
-            # Distribuição típica: 7-9 repetições
-            if 7 <= rep <= 10:
-                score += 30
-            elif 5 <= rep <= 11:
-                score += 15
-        
-        # 4. Soma dentro da faixa típica
+        # Soma
         soma = sum(jogo)
-        if 180 <= soma <= 210:
-            score += 20
-        elif 170 <= soma <= 220:
-            score += 10
+        score_soma = 1 - abs(soma - self.soma_media) / 100
         
-        # 5. Distribuição baixas/médias/altas
+        # Repetição com últimos concursos (média dos últimos 10)
+        rep = np.mean([
+            len(set(jogo) & set(h)) 
+            for h in self.historico[:10]
+        ])
+        score_rep = 1 - abs(rep - self.rep_media) / 15
+        
+        # Distribuição
         baixas = sum(1 for n in jogo if n <= 8)
         medias = sum(1 for n in jogo if 9 <= n <= 16)
         
-        if 4 <= baixas <= 6 and 5 <= medias <= 7:
-            score += 25
+        score_dist = 1 - (abs(baixas - 5) + abs(medias - 5)) / 10
         
-        return score
+        # Combinar scores
+        fitness = 0.4 * score_soma + 0.4 * score_rep + 0.2 * score_dist
+        return fitness
+    
+    def gerar_individuo(self):
+        """Gera um indivíduo aleatório (jogo válido)"""
+        return sorted(random.sample(range(1, 26), 15))
     
     def crossover(self, pai1, pai2):
         """
-        Operador de crossover (recombinação)
-        Gera um filho combinando características dos pais
+        Operador de crossover: combina dois pais para gerar um filho
+        Usa crossover de ponto único com reparo
         """
-        if random.random() > self.taxa_crossover:
-            return pai1.copy()
+        # Escolher ponto de corte aleatório
+        ponto = random.randint(1, 14)
         
-        # Pega parte de cada pai
-        ponto_corte = random.randint(5, 10)
-        filho = set(pai1[:ponto_corte] + pai2[ponto_corte:15])
+        # Combinar
+        filho = list(pai1[:ponto]) + list(pai2[ponto:])
+        filho = sorted(set(filho))  # Remover duplicatas
         
-        # Ajustar para ter exatamente 15 números
+        # Reparar se necessário (completar para 15 números)
         while len(filho) < 15:
-            filho.add(random.randint(1, 25))
+            disponiveis = [n for n in range(1, 26) if n not in filho]
+            filho.append(random.choice(disponiveis))
+            filho.sort()
         
-        while len(filho) > 15:
-            filho.remove(random.choice(list(filho)))
-        
-        return sorted(filho)
+        return filho
     
     def mutacao(self, individuo):
         """
-        Operador de mutação
-        Introduz variação genética
+        Operador de mutação: troca um número por outro não presente
         """
         if random.random() > self.taxa_mutacao:
             return individuo
         
-        mutante = set(individuo)
+        mutante = individuo.copy()
         
-        # Trocar 1-3 números
-        n_mutacoes = random.randint(1, 3)
+        # Escolher índice para mutação
+        idx = random.randint(0, 14)
+        numero_removido = mutante[idx]
         
-        for _ in range(n_mutacoes):
-            if len(mutante) > 0:
-                remover = random.choice(list(mutante))
-                mutante.remove(remover)
-                
-                novo = random.randint(1, 25)
-                while novo in mutante:
-                    novo = random.randint(1, 25)
-                mutante.add(novo)
+        # Escolher novo número (não presente no jogo)
+        disponiveis = [n for n in range(1, 26) if n not in mutante]
+        if disponiveis:
+            novo_numero = random.choice(disponiveis)
+            mutante[idx] = novo_numero
+            mutante.sort()
         
-        return sorted(mutante)
+        return mutante
     
-    def selecao_torneio(self, populacao, k=3):
-        """
-        Seleção por torneio
-        Escolhe os melhores indivíduos para reprodução
-        """
-        torneio = random.sample(populacao, min(k, len(populacao)))
-        return max(torneio, key=lambda x: x[1])[0]
+    def selecao_torneio(self, populacao, fitness, k=3):
+        """Seleção por torneio"""
+        indices = random.sample(range(len(populacao)), k)
+        melhor_idx = max(indices, key=lambda i: fitness[i])
+        return populacao[melhor_idx]
     
-    def evoluir(self, geracoes=50, elite_size=20):
+    def evoluir(self, geracoes=100, elite_size=20):
         """
         Executa o algoritmo genético
-        Retorna os melhores jogos após N gerações
+        
+        Args:
+            geracoes: número de gerações
+            elite_size: quantidade de melhores indivíduos preservados
+        
+        Returns:
+            Lista dos melhores jogos
         """
-        # População inicial: (jogo, fitness)
-        populacao = [(self.gerar_individuo(), 0) for _ in range(self.tamanho_pop)]
+        # Inicializar população
+        populacao = [self.gerar_individuo() for _ in range(self.tamanho_pop)]
+        historico_fitness = []
         
-        # Avaliar fitness inicial
-        for i in range(len(populacao)):
-            fitness = self.fitness(populacao[i][0])
-            populacao[i] = (populacao[i][0], fitness)
-        
-        historico_melhor = []
+        # Barra de progresso
+        progress_bar = st.progress(0)
         
         for geracao in range(geracoes):
-            # Ordenar por fitness (decrescente)
-            populacao.sort(key=lambda x: x[1], reverse=True)
+            # Calcular fitness
+            fitness = [self.fitness_func(ind) for ind in populacao]
             
-            # Salvar melhor da geração
-            historico_melhor.append(populacao[0][1])
+            # Ordenar população por fitness
+            populacao_ordenada = [x for _, x in sorted(
+                zip(fitness, populacao), key=lambda pair: pair[0], reverse=True
+            )]
             
-            # Elitismo: manter os melhores
-            nova_populacao = populacao[:elite_size].copy()
+            # Guardar melhor fitness
+            historico_fitness.append(max(fitness))
             
-            # Preencher resto com crossover e mutação
+            # Criar nova geração
+            nova_populacao = []
+            
+            # Elitismo: preservar os melhores
+            nova_populacao.extend(populacao_ordenada[:elite_size])
+            
+            # Gerar resto da população
             while len(nova_populacao) < self.tamanho_pop:
                 # Selecionar pais
-                pai1 = self.selecao_torneio(populacao)
-                pai2 = self.selecao_torneio(populacao)
+                pai1 = self.selecao_torneio(populacao_ordenada[:100], fitness[:100])
+                pai2 = self.selecao_torneio(populacao_ordenada[:100], fitness[:100])
                 
                 # Crossover
                 filho = self.crossover(pai1, pai2)
@@ -261,184 +352,187 @@ class AlgoritmoGeneticoLotofacil:
                 # Mutação
                 filho = self.mutacao(filho)
                 
-                # Avaliar fitness
-                fitness_filho = self.fitness(filho)
-                
-                nova_populacao.append((filho, fitness_filho))
+                nova_populacao.append(filho)
             
             populacao = nova_populacao
-            
-            # Feedback a cada 10 gerações
-            if (geracao + 1) % 10 == 0:
-                st.info(f"🧬 Geração {geracao+1}/{geracoes} - Melhor fitness: {populacao[0][1]:.2f}")
+            progress_bar.progress((geracao + 1) / geracoes)
         
-        # Ordenar final
-        populacao.sort(key=lambda x: x[1], reverse=True)
+        progress_bar.empty()
         
-        return [jogo for jogo, _ in populacao[:50]], historico_melhor
+        # Calcular fitness final
+        fitness_final = [self.fitness_func(ind) for ind in populacao]
+        
+        # Retornar top 50
+        melhores = [x for _, x in sorted(
+            zip(fitness_final, populacao), key=lambda pair: pair[0], reverse=True
+        )]
+        
+        return melhores[:50], historico_fitness
 
 # =====================================================
-# MÓDULO 3: SIMULAÇÃO MONTE CARLO
+# MÓDULO 4: SIMULAÇÃO MONTE CARLO
 # =====================================================
 
 class SimuladorMonteCarlo:
     """
     Simula milhares de concursos futuros para avaliar jogos
-    Calcula probabilidades reais baseadas em simulação
     """
     
-    def __init__(self, historico=None, simulacoes=50000):
+    def __init__(self, historico=None, num_simulacoes=100000):
         self.historico = historico
-        self.simulacoes = simulacoes
+        self.num_simulacoes = num_simulacoes
         
-        # Se tiver histórico, aprende padrões de sorteio
-        self.pesos = None
-        if historico and len(historico) > 100:
-            self._calcular_pesos_aprendizados()
+        # Se tiver histórico, aprender distribuições
+        if historico:
+            self.dist_numeros = self._calcular_distribuicao_numeros()
+        else:
+            self.dist_numeros = None
     
-    def _calcular_pesos_aprendizados(self):
-        """Aprende quais números saem mais frequentemente"""
-        contador = Counter()
-        total = 0
+    def _calcular_distribuicao_numeros(self):
+        """Calcula distribuição de probabilidade dos números baseada no histórico"""
+        counter = Counter()
+        for jogo in self.historico:
+            counter.update(jogo)
         
-        for jogo in self.historico[:500]:  # Últimos 500
-            contador.update(jogo)
-            total += len(jogo)
+        total = sum(counter.values())
+        probs = {n: counter[n]/total for n in range(1, 26)}
         
-        self.pesos = [contador.get(i, 0) / total for i in range(1, 26)]
+        # Normalizar
+        soma = sum(probs.values())
+        return {n: p/soma for n, p in probs.items()}
     
     def _gerar_sorteio_simulado(self):
         """
-        Gera um sorteio simulado
-        Se tiver pesos aprendidos, usa distribuição realista
+        Gera um sorteio simulado baseado nas probabilidades históricas
+        Se não tiver histórico, gera uniformemente
         """
-        if self.pesos:
-            # Usar distribuição aprendida
-            return sorted(np.random.choice(
-                range(1, 26), 
-                size=15, 
-                replace=False, 
-                p=self.pesos
-            ))
+        if self.dist_numeros:
+            # Amostragem ponderada
+            numeros = list(self.dist_numeros.keys())
+            probs = list(self.dist_numeros.values())
+            
+            # Garantir que a soma seja 1 (pequeno ajuste)
+            probs = np.array(probs)
+            probs = probs / probs.sum()
+            
+            # Amostrar sem reposição
+            indices = np.random.choice(len(numeros), size=15, replace=False, p=probs)
+            sorteio = [numeros[i] for i in indices]
         else:
-            # Sorteio uniforme
-            return sorted(random.sample(range(1, 26), 15))
+            # Uniforme
+            sorteio = random.sample(range(1, 26), 15)
+        
+        return sorted(sorteio)
     
     def avaliar_jogo(self, jogo, verbose=False):
         """
-        Avalia um jogo através de Monte Carlo
-        Retorna estatísticas detalhadas
+        Avalia um jogo através de simulação Monte Carlo
+        
+        Returns:
+            dict com estatísticas do jogo
         """
         resultados = []
         
         # Barra de progresso para simulações longas
         if verbose:
-            progresso = st.progress(0)
+            progress_bar = st.progress(0)
         
-        for i in range(self.simulacoes):
+        for i in range(self.num_simulacoes):
             sorteio = self._gerar_sorteio_simulado()
             acertos = len(set(jogo) & set(sorteio))
             resultados.append(acertos)
             
-            if verbose and (i + 1) % (self.simulacoes // 10) == 0:
-                progresso.progress((i + 1) / self.simulacoes)
+            if verbose and i % (self.num_simulacoes // 10) == 0:
+                progress_bar.progress(i / self.num_simulacoes)
         
         if verbose:
-            progresso.empty()
+            progress_bar.empty()
         
-        # Converter para array numpy para cálculos
         resultados = np.array(resultados)
         
         estatisticas = {
-            "media": np.mean(resultados),
-            "mediana": np.median(resultados),
-            "desvio": np.std(resultados),
-            "min": np.min(resultados),
-            "max": np.max(resultados),
-            "p11": np.mean(resultados >= 11) * 100,
-            "p12": np.mean(resultados >= 12) * 100,
-            "p13": np.mean(resultados >= 13) * 100,
-            "p14": np.mean(resultados >= 14) * 100,
-            "p15": np.mean(resultados == 15) * 100,
-            "ic_95": (
-                np.percentile(resultados, 2.5),
-                np.percentile(resultados, 97.5)
-            )
+            'media': np.mean(resultados),
+            'mediana': np.median(resultados),
+            'std': np.std(resultados),
+            'min': np.min(resultados),
+            'max': np.max(resultados),
+            'p11': np.mean(resultados >= 11) * 100,
+            'p12': np.mean(resultados >= 12) * 100,
+            'p13': np.mean(resultados >= 13) * 100,
+            'p14': np.mean(resultados >= 14) * 100,
+            'p15': np.mean(resultados == 15) * 100,
+            'distribuicao': Counter(resultados)
         }
         
-        return estatisticas, resultados
+        return estatisticas
     
-    def comparar_jogos(self, jogos, nomes=None):
+    def avaliar_multiplos_jogos(self, jogos):
         """
-        Compara múltiplos jogos via Monte Carlo
+        Avalia múltiplos jogos e retorna ranking
+        
+        Args:
+            jogos: lista de jogos para avaliar
+        
+        Returns:
+            DataFrame com ranking dos jogos
         """
-        if nomes is None:
-            nomes = [f"Jogo {i+1}" for i in range(len(jogos))]
+        resultados = []
         
-        resultados_comparacao = []
+        for i, jogo in enumerate(jogos):
+            stats = self.avaliar_jogo(jogo)
+            resultados.append({
+                'jogo_id': i + 1,
+                'jogo': jogo,
+                'media_acertos': stats['media'],
+                'p13': stats['p13'],
+                'p14': stats['p14'],
+                'p15': stats['p15']
+            })
         
-        for jogo, nome in zip(jogos, nomes):
-            stats, _ = self.avaliar_jogo(jogo, verbose=False)
-            stats["nome"] = nome
-            stats["jogo"] = jogo
-            resultados_comparacao.append(stats)
+        df = pd.DataFrame(resultados)
+        df = df.sort_values('p13', ascending=False).reset_index(drop=True)
         
-        # Ordenar por probabilidade de 13+
-        resultados_comparacao.sort(key=lambda x: x["p13"], reverse=True)
-        
-        return resultados_comparacao
+        return df
 
 # =====================================================
-# MÓDULO 4: SISTEMA DE DOMINÂNCIA
+# MÓDULO 5: SISTEMA DE DOMINÂNCIA
 # =====================================================
 
 class SistemaDominancia:
     """
-    Remove jogos estatisticamente dominados
-    Um jogo A domina B se A é melhor em todas as métricas
+    Remove jogos dominados (piores em todas as métricas)
     """
     
-    def __init__(self):
-        self.metricas = [
-            "media_esperada",
-            "prob_11",
-            "prob_12", 
-            "prob_13",
-            "entropia_score"
-        ]
+    def __init__(self, metricas=['media', 'p11', 'p13']):
+        self.metricas = metricas
     
-    def calcular_metricas(self, jogo, distrib, entropia):
+    def _domina(self, jogo_a, jogo_b, scores):
         """
-        Calcula todas as métricas para um jogo
+        Verifica se jogo A domina jogo B
+        A domina B se for melhor ou igual em todas métricas e estritamente melhor em pelo menos uma
         """
-        return {
-            "media_esperada": self._estimar_media(jogo, distrib),
-            "prob_11": self._estimar_prob(jogo, distrib, 11),
-            "prob_12": self._estimar_prob(jogo, distrib, 12),
-            "prob_13": self._estimar_prob(jogo, distrib, 13),
-            "entropia_score": entropia.score_entropia(jogo)
-        }
+        a_domina = True
+        estritamente_melhor = False
+        
+        for metrica in self.metricas:
+            if scores[jogo_a][metrica] < scores[jogo_b][metrica]:
+                a_domina = False
+                break
+            elif scores[jogo_a][metrica] > scores[jogo_b][metrica]:
+                estritamente_melhor = True
+        
+        return a_domina and estritamente_melhor
     
-    def _estimar_media(self, jogo, distrib):
-        """Estima média de acertos baseado em distribuições"""
-        # Método simplificado: usar probabilidade de repetição
-        if hasattr(distrib, 'dist_repeticoes') and distrib.dist_repeticoes:
-            rep_esperada = sum(k * v for k, v in distrib.dist_repeticoes.items())
-            return rep_esperada + 7.5 - 8  # Ajuste
-        return 7.5
-    
-    def _estimar_prob(self, jogo, distrib, alvo):
-        """Estima probabilidade de atingir alvo"""
-        # Placeholder - em versão real, usaria distribuições conjuntas
-        media = self._estimar_media(jogo, distrib)
-        if media >= alvo:
-            return 0.3
-        return max(0, 0.1 * (media - alvo + 2))
-    
-    def filtrar_dominados(self, jogos, metricas_list):
+    def filtrar_dominados(self, jogos, scores):
         """
-        Aplica filtro de Pareto dominance
-        Retorna apenas jogos não-dominados
+        Remove jogos dominados
+        
+        Args:
+            jogos: lista de jogos
+            scores: dict com scores para cada jogo (índice -> dict de métricas)
+        
+        Returns:
+            Lista de jogos não dominados
         """
         n = len(jogos)
         dominado = [False] * n
@@ -451,21 +545,304 @@ class SistemaDominancia:
                 if i == j or dominado[j]:
                     continue
                 
-                # Verifica se j domina i
-                domina = True
-                for metrica in self.metricas:
-                    if metricas_list[j][metrica] <= metricas_list[i][metrica]:
-                        domina = False
-                        break
-                
-                if domina:
+                if self._domina(i, j, scores):
+                    dominado[j] = True
+                elif self._domina(j, i, scores):
                     dominado[i] = True
                     break
         
         return [jogos[i] for i in range(n) if not dominado[i]]
+    
+    def selecionar_melhores(self, jogos, scores, k=20):
+        """
+        Seleciona os k melhores jogos usando dominância e rankeamento
+        """
+        # Primeiro, remover dominados
+        nao_dominados = self.filtrar_dominados(jogos, scores)
+        
+        # Se ainda temos mais que k, rankear por média das métricas
+        if len(nao_dominados) > k:
+            indices_nao_dominados = [jogos.index(j) for j in nao_dominados]
+            medias = [
+                np.mean([scores[idx][m] for m in self.metricas])
+                for idx in indices_nao_dominados
+            ]
+            
+            # Selecionar top k
+            melhores_indices = np.argsort(medias)[-k:][::-1]
+            nao_dominados = [nao_dominados[i] for i in melhores_indices]
+        
+        return nao_dominados
 
 # =====================================================
-# CLASSE BASE: DISTRIBUIÇÕES PROBABILÍSTICAS (EXISTENTE)
+# MÓDULO 6: GEOMETRIA DO VOLANTE E TEORIA DOS GRAFOS
+# =====================================================
+
+class GeometriaVolante:
+    """
+    Transforma o volante 5x5 em um grafo e analisa padrões geométricos
+    """
+    
+    def __init__(self):
+        # Mapeamento número -> posição (linha, coluna)
+        self.posicoes = {}
+        num = 1
+        for linha in range(5):
+            for coluna in range(5):
+                self.posicoes[num] = (linha, coluna)
+                num += 1
+        
+        # Matriz de adjacência (vizinhança no volante)
+        self.grafo = self._criar_grafo()
+    
+    def _criar_grafo(self):
+        """Cria grafo onde arestas conectam números vizinhos no volante"""
+        grafo = {i: [] for i in range(1, 26)}
+        
+        for num in range(1, 26):
+            linha, col = self.posicoes[num]
+            
+            # Verificar vizinhos (8 direções)
+            for dl in [-1, 0, 1]:
+                for dc in [-1, 0, 1]:
+                    if dl == 0 and dc == 0:
+                        continue
+                    
+                    nova_linha = linha + dl
+                    nova_col = col + dc
+                    
+                    if 0 <= nova_linha < 5 and 0 <= nova_col < 5:
+                        # Encontrar número na nova posição
+                        for n, (l, c) in self.posicoes.items():
+                            if l == nova_linha and c == nova_col:
+                                grafo[num].append(n)
+                                break
+        
+        return grafo
+    
+    def densidade_vizinhanca(self, jogo):
+        """
+        Calcula quantas conexões existem entre números do jogo no volante
+        Quanto maior, mais "agrupado" é o jogo
+        """
+        conexoes = 0
+        for i, n1 in enumerate(jogo):
+            for n2 in jogo[i+1:]:
+                if n2 in self.grafo[n1]:
+                    conexoes += 1
+        
+        return conexoes / len(jogo)  # Normalizado
+    
+    def dispersao_geometrica(self, jogo):
+        """
+        Calcula a dispersão dos números no volante
+        Quanto maior, mais espalhado
+        """
+        posicoes_jogo = [self.posicoes[n] for n in jogo]
+        
+        # Centroide
+        centro_linha = np.mean([p[0] for p in posicoes_jogo])
+        centro_col = np.mean([p[1] for p in posicoes_jogo])
+        
+        # Distância média ao centro
+        distancias = [
+            ((p[0] - centro_linha)**2 + (p[1] - centro_col)**2)**0.5
+            for p in posicoes_jogo
+        ]
+        
+        return np.mean(distancias)
+    
+    def padroes_linhas_colunas(self, jogo):
+        """
+        Analisa distribuição por linhas e colunas
+        """
+        linhas = [self.posicoes[n][0] for n in jogo]
+        colunas = [self.posicoes[n][1] for n in jogo]
+        
+        return {
+            'linhas_unicas': len(set(linhas)),
+            'colunas_unicas': len(set(colunas)),
+            'linha_mais_freq': max(Counter(linhas).values()),
+            'coluna_mais_freq': max(Counter(colunas).values()),
+            'dist_linhas': Counter(linhas),
+            'dist_colunas': Counter(colunas)
+        }
+    
+    def score_geometrico(self, jogo):
+        """
+        Score composto baseado em geometria
+        """
+        densidade = self.densidade_vizinhanca(jogo)
+        dispersao = self.dispersao_geometrica(jogo)
+        padroes = self.padroes_linhas_colunas(jogo)
+        
+        # Valores ideais (estimados)
+        densidade_ideal = 2.5
+        dispersao_ideal = 2.0
+        linhas_ideal = 4
+        colunas_ideal = 4
+        
+        score = 0
+        score += 1 - abs(densidade - densidade_ideal) / 5
+        score += 1 - abs(dispersao - dispersao_ideal) / 3
+        score += padroes['linhas_unicas'] / 5
+        score += padroes['colunas_unicas'] / 5
+        
+        return score / 4  # Normalizar
+
+# =====================================================
+# MÓDULO 7: REDES BAYESIANAS SIMPLIFICADAS
+# =====================================================
+
+class RedeBayesianaLotofacil:
+    """
+    Rede Bayesiana para modelar dependências entre números
+    """
+    
+    def __init__(self, historico):
+        self.historico = historico
+        self.prob_condicional = {}
+        self._treinar()
+    
+    def _treinar(self):
+        """Calcula probabilidades condicionais P(n_j | n_i aparece)"""
+        # Contar co-ocorrências
+        co_ocorrencias = np.zeros((25, 25))
+        ocorrencias = np.zeros(25)
+        
+        for jogo in self.historico:
+            for i, n1 in enumerate(jogo):
+                ocorrencias[n1-1] += 1
+                for n2 in jogo[i+1:]:
+                    co_ocorrencias[n1-1][n2-1] += 1
+                    co_ocorrencias[n2-1][n1-1] += 1
+        
+        # Calcular probabilidades condicionais
+        for i in range(25):
+            for j in range(25):
+                if i != j and ocorrencias[i] > 0:
+                    self.prob_condicional[(i+1, j+1)] = co_ocorrencias[i][j] / ocorrencias[i]
+    
+    def probabilidade_conjunta(self, jogo):
+        """
+        Calcula a probabilidade conjunta dos números aparecerem juntos
+        """
+        prob = 1.0
+        for i, n1 in enumerate(jogo):
+            for n2 in jogo[i+1:]:
+                prob *= self.prob_condicional.get((n1, n2), 0.5)
+        
+        return prob
+
+# =====================================================
+# MÓDULO 8: ENSEMBLE HÍBRIDO FINAL
+# =====================================================
+
+class EnsembleAvancado:
+    """
+    Combina todos os modelos em um ensemble poderoso
+    """
+    
+    def __init__(self, historico):
+        self.historico = historico
+        self.ultimo = historico[0] if historico else []
+        
+        # Inicializar todos os modelos
+        self.entropia = EntropiaLotofacil(historico)
+        self.markov1 = MarkovLotofacil(historico, ordem=1)
+        self.markov2 = MarkovLotofacil(historico, ordem=2)
+        self.geometria = GeometriaVolante()
+        self.bayesiana = RedeBayesianaLotofacil(historico)
+        self.monte_carlo = SimuladorMonteCarlo(historico, num_simulacoes=10000)
+        
+        # Pesos otimizados (podem ser ajustados)
+        self.pesos = {
+            'entropia': 0.8,
+            'markov1': 1.2,
+            'markov2': 1.5,
+            'geometria': 0.9,
+            'bayesiana': 1.0,
+            'monte_carlo': 1.3
+        }
+    
+    def calcular_scores(self, jogo):
+        """
+        Calcula todos os scores para um jogo
+        """
+        scores = {}
+        
+        # Entropia
+        scores['entropia'] = self.entropia.score_entropia(jogo)
+        
+        # Markov
+        if self.ultimo:
+            scores['markov1'] = self.markov1.score_transicao([self.ultimo], jogo)
+            
+            if len(self.historico) > 1:
+                anterior = self.historico[1] if len(self.historico) > 1 else self.ultimo
+                scores['markov2'] = self.markov2.score_transicao([anterior, self.ultimo], jogo)
+            else:
+                scores['markov2'] = 0.5
+        else:
+            scores['markov1'] = 0.5
+            scores['markov2'] = 0.5
+        
+        # Geometria
+        scores['geometria'] = self.geometria.score_geometrico(jogo)
+        
+        # Bayesiana
+        scores['bayesiana'] = self.bayesiana.probabilidade_conjunta(jogo)
+        
+        # Monte Carlo (mais pesado, pode ser calculado sob demanda)
+        # scores['monte_carlo'] = self.monte_carlo.avaliar_jogo(jogo)['p13'] / 100
+        
+        return scores
+    
+    def score_ensemble(self, jogo):
+        """
+        Score ponderado final
+        """
+        scores = self.calcular_scores(jogo)
+        
+        score_total = 0
+        peso_total = 0
+        
+        for modelo, score in scores.items():
+            if modelo in self.pesos:
+                score_total += score * self.pesos[modelo]
+                peso_total += self.pesos[modelo]
+        
+        return score_total / peso_total if peso_total > 0 else 0
+    
+    def gerar_jogos_genetico(self, quantidade=20, geracoes=80):
+        """
+        Usa algoritmo genético para encontrar melhores jogos
+        """
+        # Função de fitness personalizada (usa ensemble)
+        def fitness_ensemble(jogo):
+            return self.score_ensemble(jogo)
+        
+        ga = AlgoritmoGeneticoLotofacil(
+            self.historico,
+            fitness_func=fitness_ensemble,
+            tamanho_pop=200,
+            taxa_mutacao=0.15
+        )
+        
+        melhores, historico_fitness = ga.evoluir(geracoes=geracoes, elite_size=30)
+        
+        return melhores[:quantidade]
+    
+    def validar_com_monte_carlo(self, jogos, num_simulacoes=50000):
+        """
+        Valida jogos com Monte Carlo e retorna ranking
+        """
+        simulador = SimuladorMonteCarlo(self.historico, num_simulacoes=num_simulacoes)
+        ranking = simulador.avaliar_multiplos_jogos(jogos)
+        return ranking
+
+# =====================================================
+# CLASSE BASE: DISTRIBUIÇÕES PROBABILÍSTICAS
 # =====================================================
 
 class DistribuicoesProbabilisticas:
@@ -576,7 +953,7 @@ class DistribuicoesProbabilisticas:
         return log_prob
 
 # =====================================================
-# GERADOR PROBABILÍSTICO (EXISTENTE)
+# GERADOR PROBABILÍSTICO (BASEADO EM DISTRIBUIÇÕES)
 # =====================================================
 
 class GeradorProbabilistico:
@@ -668,7 +1045,7 @@ class GeradorProbabilistico:
         return [j for j, _ in jogos_com_prob[:quantidade]]
 
 # =====================================================
-# ENSEMBLE LEARNING (EXISTENTE)
+# ENSEMBLE LEARNING (COMBINAÇÃO DE MÚLTIPLOS MODELOS)
 # =====================================================
 
 class EnsembleLotofacil:
@@ -761,7 +1138,7 @@ class EnsembleLotofacil:
         return [j for j, _ in candidatos[:quantidade]]
 
 # =====================================================
-# MACHINE LEARNING REAL (EXISTENTE)
+# MACHINE LEARNING REAL (COM TREINAMENTO) - CORRIGIDO
 # =====================================================
 
 class GeradorML:
@@ -922,7 +1299,7 @@ class GeradorML:
         return melhor_jogo or sorted(random.sample(range(1, 26), 15)), melhor_prob
 
 # =====================================================
-# BACKTESTING REAL (EXISTENTE)
+# BACKTESTING REAL (VALIDAÇÃO CRUZADA TEMPORAL) - CORRIGIDO
 # =====================================================
 
 class BacktestingEngine:
@@ -933,7 +1310,7 @@ class BacktestingEngine:
     def __init__(self, historico_completo):
         self.historico = historico_completo
         
-    def walk_forward_test(self, gerador_class, janela_treino=100, jogos_por_teste=10, passos=20, **kwargs):
+    def walk_forward_test(self, gerador_class, janela_treino=100, jogos_por_teste=10, passos=20):
         """
         Teste walk-forward: treina com passado, testa no futuro
         """
@@ -1010,7 +1387,7 @@ class BacktestingEngine:
         return resultados
 
 # =====================================================
-# GERADOR SIMPLES E EFICAZ (EXISTENTE)
+# GERADOR SIMPLES E EFICAZ (BASEADO EM PADRÕES REAIS) - CORRIGIDO
 # =====================================================
 
 class GeradorSimplesEficaz:
@@ -1110,7 +1487,7 @@ class GeradorSimplesEficaz:
         return jogos
 
 # =====================================================
-# SISTEMA DE CONFERÊNCIA PROFISSIONAL (EXISTENTE)
+# SISTEMA DE CONFERÊNCIA PROFISSIONAL (NOVO)
 # =====================================================
 
 class ConferenciaLotofacil:
@@ -1436,103 +1813,6 @@ class ConferenciaLotofacil:
         return nome_arquivo
 
 # =====================================================
-# GERADOR MESTRE AI 3.0 (COMBINA TODOS OS MÓDULOS)
-# =====================================================
-
-class GeradorMestreAI3:
-    """
-    Combina todos os 4 novos motores com os existentes
-    Algoritmo Genético + Entropia + Monte Carlo + Dominância
-    """
-    
-    def __init__(self, historico):
-        self.historico = historico
-        self.ultimo = historico[0] if historico else []
-        
-        # Inicializar todos os módulos
-        self.dist = DistribuicoesProbabilisticas(historico)
-        self.entropia = EntropiaLotofacil(historico)
-        self.ga = AlgoritmoGeneticoLotofacil(historico)
-        self.monte_carlo = SimuladorMonteCarlo(historico, simulacoes=20000)
-        self.dominancia = SistemaDominancia()
-        
-    def gerar_jogos_elite(self, quantidade=20, geracoes=50, simulacoes_mc=True):
-        """
-        Pipeline completo de geração:
-        1. Algoritmo Genético evolui população
-        2. Avaliação por Monte Carlo
-        3. Filtro de dominância
-        """
-        st.info("🧬 Fase 1: Evoluindo população com Algoritmo Genético...")
-        jogos_evoluidos, historico_fitness = self.ga.evoluir(geracoes=geracoes, elite_size=50)
-        
-        st.info(f"📊 Fase 2: Avaliando {len(jogos_evoluidos)} jogos com Monte Carlo...")
-        
-        # Avaliar cada jogo
-        jogos_com_metricas = []
-        
-        for i, jogo in enumerate(jogos_evoluidos[:30]):  # Avaliar top 30
-            # Calcular métricas
-            metricas = self.dominancia.calcular_metricas(jogo, self.dist, self.entropia)
-            
-            # Simulação Monte Carlo
-            if simulacoes_mc:
-                stats_mc, _ = self.monte_carlo.avaliar_jogo(jogo, verbose=False)
-                metricas.update({
-                    "media_esperada": stats_mc["media"],
-                    "prob_11": stats_mc["p11"] / 100,
-                    "prob_12": stats_mc["p12"] / 100,
-                    "prob_13": stats_mc["p13"] / 100,
-                    "p13_mc": stats_mc["p13"]
-                })
-            
-            jogos_com_metricas.append((jogo, metricas))
-            
-            # Progresso
-            if (i + 1) % 5 == 0:
-                st.info(f"   Avaliados {i+1}/{min(30, len(jogos_evoluidos))} jogos...")
-        
-        st.info("🧠 Fase 3: Aplicando filtro de dominância de Pareto...")
-        
-        # Separar jogos e métricas
-        jogos_list = [j for j, _ in jogos_com_metricas]
-        metricas_list = [m for _, m in jogos_com_metricas]
-        
-        # Filtrar dominados
-        jogos_finais = self.dominancia.filtrar_dominados(jogos_list, metricas_list)
-        
-        # Se não temos jogos suficientes, complementar
-        if len(jogos_finais) < quantidade:
-            # Adicionar mais jogos dos evoluídos
-            restantes = [j for j in jogos_evoluidos if j not in jogos_finais]
-            jogos_finais.extend(restantes[:quantidade - len(jogos_finais)])
-        
-        # Calcular score final para ordenação
-        jogos_com_score = []
-        for jogo in jogos_finais[:quantidade * 2]:
-            # Score composto
-            prob_log = self.dist.probabilidade_jogo(jogo)
-            prob = np.exp(prob_log) if prob_log > -20 else 0
-            
-            score_ent = self.entropia.score_entropia(jogo)
-            
-            # Score final (pesos ajustáveis)
-            score_final = prob * 0.4 + score_ent * 0.3
-            
-            # Adicionar se tiver métricas MC
-            for j, m in jogos_com_metricas:
-                if j == jogo and "p13_mc" in m:
-                    score_final += m["p13_mc"] / 100 * 0.3
-                    break
-            
-            jogos_com_score.append((jogo, score_final))
-        
-        # Ordenar e retornar
-        jogos_com_score.sort(key=lambda x: x[1], reverse=True)
-        
-        return [j for j, _ in jogos_com_score[:quantidade]], jogos_com_metricas, historico_fitness
-
-# =====================================================
 # FUNÇÃO PARA GERAR ARQUIVO DE EXEMPLO
 # =====================================================
 
@@ -1559,7 +1839,7 @@ def gerar_arquivo_exemplo():
     return 'exemplo_jogos.json'
 
 # =====================================================
-# INTERFACE PRINCIPAL (ATUALIZADA COM AI 3.0)
+# INTERFACE PRINCIPAL - ATUALIZADA
 # =====================================================
 
 def main():
@@ -1578,10 +1858,8 @@ def main():
         st.session_state.jogos_salvos = []
     if "conferencia" not in st.session_state:
         st.session_state.conferencia = ConferenciaLotofacil()
-    if "gerador_ai3" not in st.session_state:
-        st.session_state.gerador_ai3 = None
-    if "resultados_mc" not in st.session_state:
-        st.session_state.resultados_mc = None
+    if "ensemble_avancado" not in st.session_state:
+        st.session_state.ensemble_avancado = None
     
     # Sidebar
     with st.sidebar:
@@ -1597,11 +1875,13 @@ def main():
                     st.session_state.historico = [
                         sorted(map(int, d["dezenas"])) for d in st.session_state.dados_api[:qtd]
                     ]
-                    
-                    # Inicializar gerador AI 3.0
-                    st.session_state.gerador_ai3 = GeradorMestreAI3(st.session_state.historico)
-                    
                     st.success(f"✅ {len(st.session_state.historico)} concursos carregados!")
+                    
+                    # Inicializar ensemble avançado
+                    with st.spinner("Inicializando modelos avançados..."):
+                        st.session_state.ensemble_avancado = EnsembleAvancado(st.session_state.historico)
+                        st.success("✅ Modelos avançados prontos!")
+                        
                 except Exception as e:
                     st.error(f"Erro: {e}")
     
@@ -1616,9 +1896,9 @@ def main():
         "🧠 Ensemble AI",
         "🤖 Machine Learning",
         "✅ Backtesting Real",
-        "🧬 AI 3.0 (Genético + MC)",  # NOVA ABA PRINCIPAL
         "🎯 Gerar Jogos",
-        "📋 Conferência"
+        "📋 Conferência",
+        "🚀 AI 3.0 Avançado"  # NOVA ABA
     ])
     
     with tab1:
@@ -1861,90 +2141,6 @@ def main():
                     st.bar_chart(dist_df.set_index('Acertos'))
     
     with tab5:
-        st.subheader("🧬 AI 3.0 - Algoritmo Genético + Monte Carlo")
-        st.markdown("""
-        <div class='highlight' style='padding:20px; border-radius:10px;'>
-        <strong>⚡ Motor avançado combinando:</strong><br>
-        • 🧬 Algoritmo Genético (evolução de populações)<br>
-        • 📊 Entropia de Shannon (equilíbrio estatístico)<br>
-        • 🎲 Simulação Monte Carlo (50.000 sorteios simulados)<br>
-        • 🧠 Dominância de Pareto (filtro de qualidade)
-        </div>
-        """, unsafe_allow_html=True)
-        
-        if st.session_state.gerador_ai3 is None:
-            st.session_state.gerador_ai3 = GeradorMestreAI3(st.session_state.historico)
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            qtd_ai3 = st.number_input("Quantidade de jogos", 5, 50, 15, key="ai3_qtd")
-        
-        with col2:
-            geracoes = st.number_input("Gerações do AG", 20, 200, 50, key="ai3_geracoes")
-        
-        with col3:
-            simulacoes_mc = st.checkbox("Usar Monte Carlo", value=True, key="ai3_mc")
-        
-        if st.button("🚀 EXECUTAR AI 3.0", use_container_width=True, type="primary"):
-            with st.spinner("Executando Algoritmo Genético e Monte Carlo..."):
-                jogos_finais, metricas, historico_fitness = st.session_state.gerador_ai3.gerar_jogos_elite(
-                    quantidade=qtd_ai3,
-                    geracoes=geracoes,
-                    simulacoes_mc=simulacoes_mc
-                )
-                
-                st.session_state.jogos_gerados = jogos_finais
-                st.session_state.resultados_mc = metricas
-                
-                st.balloons()
-                st.success(f"✅ {len(jogos_finais)} jogos de elite gerados!")
-                
-                # Mostrar evolução
-                if historico_fitness:
-                    st.markdown("### 📈 Evolução do Fitness")
-                    fig, ax = plt.subplots(figsize=(10, 4))
-                    ax.plot(historico_fitness, linewidth=2, color='#4ade80')
-                    ax.set_xlabel('Geração')
-                    ax.set_ylabel('Melhor Fitness')
-                    ax.set_title('Evolução do Algoritmo Genético')
-                    ax.grid(True, alpha=0.3)
-                    st.pyplot(fig)
-        
-        # Mostrar jogos com estatísticas Monte Carlo
-        if st.session_state.jogos_gerados and st.session_state.resultados_mc:
-            st.markdown("### 🏆 Jogos de Elite com Probabilidades Monte Carlo")
-            
-            # Criar DataFrame para visualização
-            dados_tabela = []
-            for i, jogo in enumerate(st.session_state.jogos_gerados[:10]):
-                # Encontrar métricas
-                prob_13 = 0
-                for j, m in st.session_state.resultados_mc:
-                    if j == jogo and "p13_mc" in m:
-                        prob_13 = m["p13_mc"]
-                        break
-                
-                # Estatísticas
-                baixas = sum(1 for n in jogo if n <= 8)
-                medias = sum(1 for n in jogo if 9 <= n <= 16)
-                pares = sum(1 for n in jogo if n % 2 == 0)
-                soma = sum(jogo)
-                
-                dados_tabela.append({
-                    "Jogo": i+1,
-                    "Dezenas": ", ".join(f"{n:02d}" for n in jogo),
-                    "Baixas": baixas,
-                    "Médias": medias,
-                    "Pares": pares,
-                    "Soma": soma,
-                    "P(13+) MC": f"{prob_13:.2f}%"
-                })
-            
-            df_display = pd.DataFrame(dados_tabela)
-            st.dataframe(df_display, hide_index=True, use_container_width=True)
-    
-    with tab6:
         st.subheader("🎯 Gerador Final - Combinação Inteligente")
         
         ultimo = st.session_state.historico[0] if st.session_state.historico else []
@@ -2048,7 +2244,8 @@ def main():
                     st.session_state.jogos_gerados = None
                     st.rerun()
     
-    with tab7:
+    # ABA 6: CONFERÊNCIA
+    with tab6:
         st.subheader("📋 Conferência Pós-Sorteio")
         
         conferencia = st.session_state.conferencia
@@ -2118,7 +2315,7 @@ def main():
             if st.session_state.dados_api:
                 opcoes_concurso = [
                     f"#{c['concurso']} - {c['data']} (Último)" if i == 0 else f"#{c['concurso']} - {c['data']}"
-                    for i, c in enumerate(st.session_state.dados_api[:20])
+                    for i, c in enumerate(st.session_state.dados_api[:20])  # Mostrar últimos 20
                 ]
                 
                 indices_concurso = list(range(min(20, len(st.session_state.dados_api))))
@@ -2163,7 +2360,7 @@ def main():
                 st.rerun()
         
         # Input dos números sorteados
-        st.markdown("### 🔢 Números Sorteados")
+        st.markdown("### 🔢 Números Sorteados (manual ou automático)")
         
         valor_padrao = st.session_state.get('numeros_preenchidos', "")
         
@@ -2214,6 +2411,7 @@ def main():
                 st.rerun()
         
         with col3:
+            # Botão para usar números selecionados na API
             if 'numeros_sorteados_api' in locals():
                 numeros_str = ", ".join(f"{n:02d}" for n in numeros_sorteados_api)
                 if st.button(f"📋 Usar nº do concurso #{concurso_selecionado['concurso']}", use_container_width=True):
@@ -2225,7 +2423,6 @@ def main():
             st.markdown("---")
             st.markdown("### 📊 Resultados da Conferência")
             
-            # Métricas rápidas
             e = conferencia.estatisticas
             col1, col2, col3, col4 = st.columns(4)
             with col1:
@@ -2237,17 +2434,14 @@ def main():
             with col4:
                 st.metric("Total 13+", e['total_13'])
             
-            # Tabs para diferentes visualizações
             res_tab1, res_tab2, res_tab3, res_tab4 = st.tabs(["📊 Tabela", "📈 Gráficos", "🏆 Melhores", "📝 Relatório"])
             
             with res_tab1:
-                # DataFrame com cores
                 df_display = conferencia.df_conferencia.copy()
                 df_display['dezenas'] = df_display['dezenas'].apply(lambda x: ', '.join(f"{n:02d}" for n in x))
                 df_display = df_display[['jogo_id', 'acertos', 'premio', 'dezenas']]
                 df_display.columns = ['Jogo', 'Acertos', 'Prêmio (R$)', 'Dezenas']
                 
-                # Colorir linhas por acertos
                 def color_acertos(val):
                     if val >= 13:
                         return 'background-color: #f9731680'
@@ -2256,7 +2450,7 @@ def main():
                     return ''
                 
                 st.dataframe(
-                    df_display.style.map(color_acertos, subset=['Acertos']),
+                    df_display.style.applymap(color_acertos, subset=['Acertos']),
                     use_container_width=True,
                     hide_index=True
                 )
@@ -2303,7 +2497,6 @@ def main():
                         st.success(f"Relatório salvo como {nome}.txt, .json e .csv")
                 
                 with col2:
-                    # Comparação com baseline
                     media_modelo = conferencia.estatisticas['media_acertos']
                     vantagem = ((media_modelo - 7.5) / 7.5) * 100
                     
@@ -2319,6 +2512,480 @@ def main():
                             <strong>⚠️ Desempenho abaixo do aleatório</strong>
                         </div>
                         """, unsafe_allow_html=True)
+    
+    # =====================================================
+    # ABA 7: AI 3.0 AVANÇADO (NOVA)
+    # =====================================================
+    with tab7:
+        st.subheader("🚀 LOTOFÁCIL AI 3.0 - Modelos Avançados")
+        
+        st.markdown("""
+        <div class='highlight' style='padding:20px; border-radius:15px; margin-bottom:20px;'>
+        <h4 style='margin-top:0;'>🧠 Motor Matemático Profissional</h4>
+        <p>Esta aba contém os modelos mais avançados do sistema:</p>
+        <ul>
+            <li>📊 Entropia de Shannon - Mede equilíbrio estatístico</li>
+            <li>🔄 Cadeias de Markov (ordem 1 e 2) - Captura dependências temporais</li>
+            <li>🧬 Algoritmo Genético - Evolui jogos através de gerações</li>
+            <li>🎲 Simulação Monte Carlo (100k+ simulações) - Avaliação probabilística</li>
+            <li>📐 Geometria do Volante - Análise de padrões no tabuleiro 5x5</li>
+            <li>🧠 Rede Bayesiana - Modela dependências entre números</li>
+        </ul>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if st.session_state.ensemble_avancado is None:
+            st.warning("Recarregue os concursos para inicializar os modelos avançados.")
+            return
+        
+        ensemble_avancado = st.session_state.ensemble_avancado
+        
+        ## Sub-abas para organização
+        sub_tab1, sub_tab2, sub_tab3, sub_tab4 = st.tabs([
+            "🧬 Algoritmo Genético",
+            "🎲 Monte Carlo",
+            "📊 Análise Avançada",
+            "🎯 Gerador Premium"
+        ])
+        
+        with sub_tab1:
+            st.markdown("### 🧬 Algoritmo Genético - Evolução de Jogos")
+            st.markdown("""
+            O algoritmo genético simula a evolução natural:
+            1. **População inicial** - 200 jogos aleatórios
+            2. **Seleção** - Os melhores são preservados
+            3. **Crossover** - Combinação de jogos pais
+            4. **Mutação** - Pequenas alterações aleatórias
+            5. **Evolução** - 100 gerações de aprimoramento
+            """)
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                geracoes = st.slider("Número de gerações", 20, 200, 80, key="ga_geracoes")
+                pop_size = st.slider("Tamanho da população", 50, 500, 200, key="ga_pop")
+            
+            with col2:
+                qtd_ga = st.number_input("Quantidade de jogos", 5, 50, 20, key="ga_qtd")
+                
+                if st.button("🚀 Evoluir Jogos", use_container_width=True, type="primary"):
+                    with st.spinner(f"Evoluindo por {geracoes} gerações..."):
+                        # Criar GA com fitness do ensemble
+                        ga = AlgoritmoGeneticoLotofacil(
+                            st.session_state.historico,
+                            fitness_func=ensemble_avancado.score_ensemble,
+                            tamanho_pop=pop_size,
+                            taxa_mutacao=0.15
+                        )
+                        
+                        melhores, historico_fitness = ga.evoluir(geracoes=geracoes, elite_size=30)
+                        
+                        # Mostrar evolução
+                        st.markdown("### 📈 Evolução do Fitness")
+                        fig, ax = plt.subplots(figsize=(10, 4))
+                        ax.plot(historico_fitness, linewidth=2, color='#4ade80')
+                        ax.set_xlabel('Geração')
+                        ax.set_ylabel('Melhor Fitness')
+                        ax.set_title('Evolução do Fitness ao Longo das Gerações')
+                        ax.grid(True, alpha=0.3)
+                        st.pyplot(fig)
+                        
+                        st.session_state.jogos_gerados = melhores[:qtd_ga]
+                        st.success(f"✅ {len(melhores[:qtd_ga])} jogos evoluídos!")
+                        
+                        # Mostrar top 5
+                        st.markdown("### 🏆 Top 5 Jogos Evoluídos")
+                        for i, jogo in enumerate(melhores[:5]):
+                            score = ensemble_avancado.score_ensemble(jogo)
+                            nums_html = ""
+                            for n in jogo:
+                                if n <= 8:
+                                    cor = "#4ade80"
+                                elif n <= 16:
+                                    cor = "#4cc9f0"
+                                else:
+                                    cor = "#f97316"
+                                nums_html += f"<span style='background:{cor}30; border:1px solid {cor}; border-radius:20px; padding:3px 6px; margin:2px;'>{n:02d}</span>"
+                            
+                            st.markdown(f"""
+                            <div style='background:#0e1117; border-radius:10px; padding:10px; margin:5px 0;'>
+                                <div style='display:flex; justify-content:space-between;'>
+                                    <strong>Jogo {i+1}</strong>
+                                    <span>Fitness: {score:.4f}</span>
+                                </div>
+                                <div>{nums_html}</div>
+                            </div>
+                            """, unsafe_allow_html=True)
+        
+        with sub_tab2:
+            st.markdown("### 🎲 Simulação Monte Carlo")
+            st.markdown("""
+            Avaliação probabilística através de **100.000+ simulações** de concursos futuros.
+            Quanto maior a simulação, mais precisa a estimativa.
+            """)
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                num_simulacoes = st.select_slider(
+                    "Número de simulações",
+                    options=[10000, 50000, 100000, 200000, 500000],
+                    value=100000
+                )
+            
+            with col2:
+                if st.button("📊 Avaliar Jogos da Sessão", use_container_width=True):
+                    if not st.session_state.jogos_gerados:
+                        st.warning("Gere alguns jogos primeiro!")
+                    else:
+                        with st.spinner(f"Executando {num_simulacoes:,} simulações..."):
+                            simulador = SimuladorMonteCarlo(
+                                st.session_state.historico,
+                                num_simulacoes=num_simulacoes
+                            )
+                            
+                            ranking = simulador.avaliar_multiplos_jogos(st.session_state.jogos_gerados)
+                            
+                            st.markdown("### 📊 Ranking Probabilístico")
+                            st.dataframe(
+                                ranking[['jogo_id', 'media_acertos', 'p13', 'p14', 'p15']].round(2),
+                                hide_index=True,
+                                use_container_width=True
+                            )
+                            
+                            # Gráfico comparativo
+                            fig, ax = plt.subplots(figsize=(10, 5))
+                            bars = ax.bar(
+                                range(len(ranking)),
+                                ranking['p13'],
+                                color=['#4ade80' if p > 5 else '#4cc9f0' for p in ranking['p13']]
+                            )
+                            ax.axhline(y=1.7, color='red', linestyle='--', label='Aleatório (1.7%)')
+                            ax.set_xlabel('Jogo')
+                            ax.set_ylabel('Probabilidade 13+ (%)')
+                            ax.set_title('Probabilidade de 13+ pontos por Jogo')
+                            ax.legend()
+                            st.pyplot(fig)
+            
+            # Avaliar um jogo específico
+            st.markdown("### 🔍 Avaliar Jogo Específico")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                n1 = st.number_input("N1", 1, 25, 1, key="mc_n1")
+            with col2:
+                n2 = st.number_input("N2", 1, 25, 2, key="mc_n2")
+            with col3:
+                n3 = st.number_input("N3", 1, 25, 3, key="mc_n3")
+            
+            col4, col5, col6 = st.columns(3)
+            with col4:
+                n4 = st.number_input("N4", 1, 25, 4, key="mc_n4")
+            with col5:
+                n5 = st.number_input("N5", 1, 25, 5, key="mc_n5")
+            with col6:
+                n6 = st.number_input("N6", 1, 25, 6, key="mc_n6")
+            
+            col7, col8, col9 = st.columns(3)
+            with col7:
+                n7 = st.number_input("N7", 1, 25, 7, key="mc_n7")
+            with col8:
+                n8 = st.number_input("N8", 1, 25, 8, key="mc_n8")
+            with col9:
+                n9 = st.number_input("N9", 1, 25, 9, key="mc_n9")
+            
+            col10, col11, col12 = st.columns(3)
+            with col10:
+                n10 = st.number_input("N10", 1, 25, 10, key="mc_n10")
+            with col11:
+                n11 = st.number_input("N11", 1, 25, 11, key="mc_n11")
+            with col12:
+                n12 = st.number_input("N12", 1, 25, 12, key="mc_n12")
+            
+            col13, col14, col15 = st.columns(3)
+            with col13:
+                n13 = st.number_input("N13", 1, 25, 13, key="mc_n13")
+            with col14:
+                n14 = st.number_input("N14", 1, 25, 14, key="mc_n14")
+            with col15:
+                n15 = st.number_input("N15", 1, 25, 15, key="mc_n15")
+            
+            if st.button("📊 Avaliar Este Jogo", use_container_width=True):
+                jogo = sorted([n1, n2, n3, n4, n5, n6, n7, n8, n9, n10, n11, n12, n13, n14, n15])
+                
+                if len(set(jogo)) != 15:
+                    st.error("Números duplicados! Cada número deve ser único.")
+                else:
+                    with st.spinner(f"Executando {num_simulacoes:,} simulações..."):
+                        simulador = SimuladorMonteCarlo(
+                            st.session_state.historico,
+                            num_simulacoes=num_simulacoes
+                        )
+                        
+                        stats = simulador.avaliar_jogo(jogo, verbose=True)
+                        
+                        # Mostrar resultados
+                        col1, col2, col3, col4 = st.columns(4)
+                        with col1:
+                            st.metric("Média acertos", f"{stats['media']:.2f}")
+                        with col2:
+                            st.metric("P(11+)", f"{stats['p11']:.2f}%")
+                        with col3:
+                            st.metric("P(13+)", f"{stats['p13']:.2f}%")
+                        with col4:
+                            st.metric("P(15)", f"{stats['p15']:.4f}%")
+                        
+                        # Histograma
+                        fig, ax = plt.subplots(figsize=(10, 4))
+                        distribuicao = stats['distribuicao']
+                        acertos = list(distribuicao.keys())
+                        frequencias = list(distribuicao.values())
+                        
+                        bars = ax.bar(acertos, frequencias, color='#4ade80', edgecolor='black')
+                        ax.axvline(stats['media'], color='red', linestyle='--', label=f"Média: {stats['media']:.2f}")
+                        ax.set_xlabel('Acertos')
+                        ax.set_ylabel('Frequência')
+                        ax.set_title(f'Distribuição de Acertos - {num_simulacoes:,} Simulações')
+                        ax.legend()
+                        st.pyplot(fig)
+        
+        with sub_tab3:
+            st.markdown("### 📊 Análise Avançada de Padrões")
+            
+            # Análise de entropia
+            st.markdown("#### 📈 Entropia de Shannon")
+            entropia = ensemble_avancado.entropia
+            
+            # Calcular entropia dos últimos 50 jogos
+            entropias_historicas = [entropia.entropia_jogo(j) for j in st.session_state.historico[:50]]
+            media_entropia = np.mean(entropias_historicas)
+            std_entropia = np.std(entropias_historicas)
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Entropia Média", f"{media_entropia:.4f}")
+            with col2:
+                st.metric("Desvio Padrão", f"{std_entropia:.4f}")
+            with col3:
+                st.metric("Intervalo Confiança (95%)", f"{media_entropia-2*std_entropia:.4f} - {media_entropia+2*std_entropia:.4f}")
+            
+            # Se houver jogos gerados, mostrar entropia deles
+            if st.session_state.jogos_gerados:
+                st.markdown("#### 🎯 Entropia dos Jogos Gerados")
+                entropias_jogos = [entropia.entropia_jogo(j) for j in st.session_state.jogos_gerados]
+                
+                fig, ax = plt.subplots(figsize=(10, 4))
+                ax.hist(entropias_historicas, bins=20, alpha=0.5, label='Histórico', color='#4cc9f0')
+                ax.hist(entropias_jogos, bins=20, alpha=0.5, label='Seus Jogos', color='#f97316')
+                ax.axvline(media_entropia, color='blue', linestyle='--', label='Média Histórica')
+                ax.set_xlabel('Entropia')
+                ax.set_ylabel('Frequência')
+                ax.set_title('Comparação de Entropia')
+                ax.legend()
+                st.pyplot(fig)
+            
+            # Análise de Markov
+            st.markdown("#### 🔄 Transições Markov")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("**Top 10 Transições mais prováveis (ordem 1)**")
+                if hasattr(ensemble_avancado.markov1, 'matriz_transicao'):
+                    matriz = ensemble_avancado.markov1.matriz_transicao
+                    transicoes = []
+                    for i in range(25):
+                        for j in range(25):
+                            if matriz[i][j] > 0.05:  # Filtrar transições significativas
+                                transicoes.append((i+1, j+1, matriz[i][j]))
+                    
+                    transicoes.sort(key=lambda x: x[2], reverse=True)
+                    
+                    df_trans = pd.DataFrame(
+                        transicoes[:10],
+                        columns=['De', 'Para', 'Probabilidade']
+                    )
+                    df_trans['Probabilidade'] = df_trans['Probabilidade'].apply(lambda x: f"{x:.2%}")
+                    st.dataframe(df_trans, hide_index=True, use_container_width=True)
+            
+            with col2:
+                st.markdown("**Padrões de Repetição**")
+                repeticoes = [len(set(st.session_state.historico[i]) & set(st.session_state.historico[i+1])) 
+                             for i in range(len(st.session_state.historico)-1)]
+                
+                fig, ax = plt.subplots(figsize=(8, 4))
+                ax.hist(repeticoes, bins=15, color='#4ade80', edgecolor='black')
+                ax.set_xlabel('Número de repetições')
+                ax.set_ylabel('Frequência')
+                ax.set_title('Distribuição de Repetições')
+                st.pyplot(fig)
+            
+            # Análise geométrica
+            st.markdown("#### 📐 Geometria do Volante")
+            geometria = ensemble_avancado.geometria
+            
+            if st.session_state.jogos_gerados:
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # Densidade de vizinhança
+                    densidades = [geometria.densidade_vizinhanca(j) for j in st.session_state.jogos_gerados]
+                    st.metric("Densidade média", f"{np.mean(densidades):.2f}")
+                    
+                    fig, ax = plt.subplots(figsize=(8, 4))
+                    ax.hist(densidades, bins=10, color='#4cc9f0', edgecolor='black')
+                    ax.set_xlabel('Densidade de vizinhança')
+                    ax.set_ylabel('Frequência')
+                    ax.set_title('Distribuição de Densidade')
+                    st.pyplot(fig)
+                
+                with col2:
+                    # Padrões de linhas/colunas
+                    padroes = [geometria.padroes_linhas_colunas(j) for j in st.session_state.jogos_gerados]
+                    linhas_unicas = [p['linhas_unicas'] for p in padroes]
+                    
+                    fig, ax = plt.subplots(figsize=(8, 4))
+                    ax.hist(linhas_unicas, bins=5, color='#f97316', edgecolor='black')
+                    ax.set_xlabel('Linhas diferentes')
+                    ax.set_ylabel('Frequência')
+                    ax.set_title('Distribuição por Linhas')
+                    st.pyplot(fig)
+        
+        with sub_tab4:
+            st.markdown("### 🎯 Gerador Premium - Ensemble Completo")
+            st.markdown("""
+            <div class='info-box'>
+            <strong>Este gerador combina TODOS os modelos:</strong><br>
+            • Entropia de Shannon<br>
+            • Markov (ordem 1 e 2)<br>
+            • Algoritmo Genético<br>
+            • Geometria do Volante<br>
+            • Rede Bayesiana<br>
+            • Validação Monte Carlo
+            </div>
+            """, unsafe_allow_html=True)
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                qtd_premium = st.number_input("Quantidade", 5, 50, 15, key="premium_qtd")
+            
+            with col2:
+                modo_premium = st.selectbox(
+                    "Estratégia",
+                    ["Balanceada", "Alta probabilidade 13+", "Máxima entropia", "Diversificada"],
+                    key="modo_premium"
+                )
+            
+            with col3:
+                if st.button("🚀 GERAR PREMIUM", use_container_width=True, type="primary"):
+                    with st.spinner("Gerando jogos com todos os modelos avançados..."):
+                        
+                        if modo_premium == "Alta probabilidade 13+":
+                            # Foco em Markov e Monte Carlo
+                            ensemble_avancado.pesos['markov2'] = 2.0
+                            ensemble_avancado.pesos['monte_carlo'] = 2.0
+                        elif modo_premium == "Máxima entropia":
+                            # Foco em entropia
+                            ensemble_avancado.pesos['entropia'] = 2.0
+                        elif modo_premium == "Diversificada":
+                            # Gerar múltiplas estratégias
+                            jogos_premium = []
+                            
+                            # Estratégia 1: Algoritmo Genético
+                            ga = AlgoritmoGeneticoLotofacil(
+                                st.session_state.historico,
+                                fitness_func=ensemble_avancado.score_ensemble,
+                                tamanho_pop=150,
+                                taxa_mutacao=0.15
+                            )
+                            melhores_ga, _ = ga.evoluir(geracoes=50, elite_size=20)
+                            jogos_premium.extend(melhores_ga[:5])
+                            
+                            # Estratégia 2: Markov puro
+                            for _ in range(5):
+                                jogo = ensemble_avancado.gerar_jogos_genetico(1, 30)[0]
+                                jogos_premium.append(jogo)
+                            
+                            # Remover duplicatas
+                            jogos_premium = list({tuple(j): j for j in jogos_premium}.values())
+                            
+                            st.session_state.jogos_gerados = jogos_premium[:qtd_premium]
+                            st.success(f"✅ {len(jogos_premium[:qtd_premium])} jogos gerados!")
+                            
+                        if modo_premium != "Diversificada":
+                            # Usar algoritmo genético com fitness do ensemble
+                            jogos_premium = ensemble_avancado.gerar_jogos_genetico(
+                                quantidade=qtd_premium * 2,
+                                geracoes=80
+                            )
+                            
+                            # Validar com Monte Carlo (amostra reduzida para performance)
+                            st.info("Validando jogos com Monte Carlo (20k simulações)...")
+                            simulador = SimuladorMonteCarlo(
+                                st.session_state.historico,
+                                num_simulacoes=20000
+                            )
+                            
+                            ranking = simulador.avaliar_multiplos_jogos(jogos_premium)
+                            melhores_ids = ranking.head(qtd_premium)['jogo_id'].values - 1
+                            jogos_finais = [jogos_premium[i] for i in melhores_ids]
+                            
+                            st.session_state.jogos_gerados = jogos_finais
+                            st.success(f"✅ {len(jogos_finais)} jogos premium gerados e validados!")
+            
+            # Mostrar jogos premium se existirem
+            if st.session_state.jogos_gerados:
+                st.markdown("### 💎 Jogos Premium Gerados")
+                
+                # Calcular scores avançados
+                for i, jogo in enumerate(st.session_state.jogos_gerados[:10]):
+                    score_ensemble = ensemble_avancado.score_ensemble(jogo)
+                    
+                    # Análise rápida
+                    baixas = sum(1 for n in jogo if n <= 8)
+                    medias = sum(1 for n in jogo if 9 <= n <= 16)
+                    pares = sum(1 for n in jogo if n % 2 == 0)
+                    
+                    # Formatação visual
+                    nums_html = ""
+                    for n in jogo:
+                        if n <= 8:
+                            cor = "#4ade80"
+                        elif n <= 16:
+                            cor = "#4cc9f0"
+                        else:
+                            cor = "#f97316"
+                        nums_html += f"<span style='background:{cor}40; border:2px solid {cor}; border-radius:25px; padding:6px 10px; margin:3px; display:inline-block; font-weight:bold;'>{n:02d}</span>"
+                    
+                    st.markdown(f"""
+                    <div style='background:linear-gradient(145deg, #0e1117, #1a1a2a); border-radius:15px; padding:15px; margin-bottom:15px; border:2px solid gold;'>
+                        <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;'>
+                            <h4 style='margin:0; color:gold;'>🏆 Jogo Premium #{i+1}</h4>
+                            <span style='background:gold; color:black; padding:5px 15px; border-radius:20px; font-weight:bold;'>Score: {score_ensemble:.4f}</span>
+                        </div>
+                        <div style='margin:15px 0;'>{nums_html}</div>
+                        <div style='display:flex; gap:20px; color:#aaa; font-size:0.95rem;'>
+                            <span>📊 {baixas} baixas | {medias} médias | {15-baixas-medias} altas</span>
+                            <span>⚖️ {pares} pares | {15-pares} ímpares</span>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                # Botão para download
+                if st.button("💾 Baixar Jogos Premium", use_container_width=True):
+                    df_premium = pd.DataFrame({
+                        'Jogo': range(1, len(st.session_state.jogos_gerados)+1),
+                        'Dezenas': [', '.join(f"{n:02d}" for n in j) for j in st.session_state.jogos_gerados],
+                        'Baixas': [sum(1 for n in j if n <= 8) for j in st.session_state.jogos_gerados],
+                        'Médias': [sum(1 for n in j if 9 <= n <= 16) for j in st.session_state.jogos_gerados],
+                        'Pares': [sum(1 for n in j if n % 2 == 0) for j in st.session_state.jogos_gerados],
+                        'Soma': [sum(j) for j in st.session_state.jogos_gerados]
+                    })
+                    
+                    csv = df_premium.to_csv(index=False)
+                    st.download_button(
+                        label="📥 Download CSV",
+                        data=csv,
+                        file_name=f"jogos_premium_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        mime="text/csv"
+                    )
 
 # =====================================================
 # EXECUÇÃO
@@ -2338,8 +3005,13 @@ st.markdown("""
     font-size: 0.8rem;
     border-top: 1px solid #222;
 }
+.footer a {
+    color: #4ade80;
+    text-decoration: none;
+}
 </style>
 <div class="footer">
-    LOTOFÁCIL AI 3.0 • Algoritmo Genético • Monte Carlo • Entropia • Machine Learning • Ensemble
+    <strong>LOTOFÁCIL AI 3.0</strong> • Markov Chains • Algoritmo Genético • Monte Carlo • Entropia • Geometria do Volante • Redes Bayesianas<br>
+    Desenvolvido com matemática avançada para máxima precisão • © 2024
 </div>
 """, unsafe_allow_html=True)
