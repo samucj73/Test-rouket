@@ -972,11 +972,11 @@ class AnalisadorPerformance:
 
 
 # =============================
-# CLASSES DE ANÁLISE
+# CLASSES DE ANÁLISE - VERSÕES MELHORADAS
 # =============================
 
 class AnalisadorEstatistico:
-    """Realiza análises estatísticas para previsões"""
+    """Realiza análises estatísticas para previsões - VERSÃO MELHORADA"""
     
     def __init__(self):
         self.analisador_performance = AnalisadorPerformance()
@@ -1042,29 +1042,56 @@ class AnalisadorEstatistico:
 
     @staticmethod
     def calcular_probabilidade_gols_ht(home: str, away: str, classificacao: dict) -> dict:
-        dados_home = classificacao.get(home, {"scored": 0, "played": 1})
-        dados_away = classificacao.get(away, {"scored": 0, "played": 1})
+        """Calcula a probabilidade de gols no primeiro tempo (HT) - VERSÃO MELHORADA"""
+        dados_home = classificacao.get(home, {"scored": 0, "against": 0, "played": 1})
+        dados_away = classificacao.get(away, {"scored": 0, "against": 0, "played": 1})
 
         played_home = max(dados_home["played"], 1)
         played_away = max(dados_away["played"], 1)
 
-        media_home = dados_home["scored"] / played_home
-        media_away = dados_away["scored"] / played_away
+        # Estimar gols no HT: aproximadamente 40-45% dos gols totais acontecem no primeiro tempo.
+        fator_ht = 0.42
 
-        estimativa_total_ht = (media_home + media_away) * 0.45
-        estimativa_total_ht = clamp(estimativa_total_ht, 0.2, 1.8)
+        # Potencial ofensivo (média de gols marcados)
+        media_gols_home = dados_home["scored"] / played_home
+        media_gols_away = dados_away["scored"] / played_away
+        
+        # Potencial defensivo (influencia o time adversário a marcar)
+        media_sofridos_home = dados_home["against"] / played_home
+        media_sofridos_away = dados_away["against"] / played_away
 
-        prob_over_05_ht = sigmoid((estimativa_total_ht - 0.5) * 3) * 100
-        prob_over_15_ht = sigmoid((estimativa_total_ht - 1.2) * 3) * 100
+        # Estimativa mais realista: combinação de ataque próprio e fragilidade adversária
+        potencial_ht_home = (media_gols_home * 0.7 + media_sofridos_away * 0.3) * fator_ht
+        potencial_ht_away = (media_gols_away * 0.7 + media_sofridos_home * 0.3) * fator_ht
 
-        if estimativa_total_ht > 1.1:
+        estimativa_total_ht = potencial_ht_home + potencial_ht_away
+        estimativa_total_ht = clamp(estimativa_total_ht, 0.2, 1.9) # Limite mais realista para HT
+
+        # --- Fator de Início de Jogo ---
+        # Se ambos os times são muito defensivos, reduz a chance de gol no HT.
+        if media_gols_home < 0.9 and media_gols_away < 0.9:
+            estimativa_total_ht *= 0.85
+        
+        prob_over_05_ht = sigmoid((estimativa_total_ht - 0.45) * 3.5) * 100
+        prob_over_15_ht = sigmoid((estimativa_total_ht - 1.1) * 3.5) * 100
+
+        # Definir tendência
+        if estimativa_total_ht > 1.2:
             tendencia_ht = "OVER 1.5 HT"
         elif estimativa_total_ht > 0.6:
             tendencia_ht = "OVER 0.5 HT"
         else:
             tendencia_ht = "UNDER 0.5 HT"
 
-        confianca_ht = clamp(max(prob_over_05_ht, prob_over_15_ht) * 0.85, 40, 85)
+        # Confiança baseada na estimativa
+        if "OVER 1.5" in tendencia_ht:
+            confianca_ht = clamp(prob_over_15_ht * 0.8, 40, 82)
+        elif "OVER 0.5" in tendencia_ht:
+            confianca_ht = clamp(prob_over_05_ht * 0.75, 45, 85)
+        else: # UNDER
+            confianca_ht = clamp((1 - prob_over_05_ht) * 0.7, 40, 80)
+
+        logging.info(f"[HT Melhorado] {home} vs {away} | Est: {estimativa_total_ht:.2f} | Tend: {tendencia_ht} | Conf: {confianca_ht:.1f}%")
 
         return {
             "estimativa_total_ht": round(estimativa_total_ht, 2),
@@ -1076,55 +1103,72 @@ class AnalisadorEstatistico:
 
     @staticmethod
     def calcular_probabilidade_ambas_marcam(home: str, away: str, classificacao: dict) -> dict:
+        """
+        Calcula a probabilidade de ambas as equipes marcarem.
+        Versão melhorada com modelo de forças e fragilidades.
+        """
         dados_home = classificacao.get(home, {
             "scored": 0, "against": 0, "played": 1,
-            "wins": 0, "draws": 0, "losses": 0
         })
         
         dados_away = classificacao.get(away, {
             "scored": 0, "against": 0, "played": 1,
-            "wins": 0, "draws": 0, "losses": 0
         })
 
         played_home = max(dados_home["played"], 1)
         played_away = max(dados_away["played"], 1)
 
-        taxa_gols_home = dados_home["scored"] / played_home
-        taxa_gols_away = dados_away["scored"] / played_away
+        # --- Médias por jogo ---
+        # Poder Ofensivo (gols marcados)
+        atk_home = dados_home["scored"] / played_home
+        atk_away = dados_away["scored"] / played_away
         
-        taxa_sofridos_home = dados_home["against"] / played_home
-        taxa_sofridos_away = dados_away["against"] / played_away
+        # Fragilidade Defensiva (gols sofridos)
+        def_home = dados_home["against"] / played_home
+        def_away = dados_away["against"] / played_away
+
+        # --- Probabilidade de cada time marcar ---
+        # A chance do time da casa marcar é baseada no seu ataque e na defesa fraca do visitante.
+        prob_home_marca = (atk_home * 0.6) + (def_away * 0.4)
+        # A chance do time visitante marcar é baseada no seu ataque e na defesa fraca da casa.
+        prob_away_marca = (atk_away * 0.6) + (def_home * 0.4)
+
+        # Normalizar para um valor entre 0.1 e 0.95 (probabilidade realista)
+        prob_home_marca = clamp(prob_home_marca / 3.5, 0.1, 0.95)
+        prob_away_marca = clamp(prob_away_marca / 3.5, 0.1, 0.95)
+
+        # --- Fator "Desespero" ---
+        # Se um time sofre muitos gols, a chance do outro marcar aumenta, mas isso não significa que o primeiro marcará.
+        # Isso ajuda a evitar falsos positivos de "SIM" (ex: time forte vs time fraco).
+        fator_desespero = 1.0
+        if def_home > 2.0 and atk_away < 1.2:
+            fator_desespero *= 0.85 # Visitante fraco, mesmo com defesa fraca, pode não marcar.
+        if def_away > 2.0 and atk_home < 1.2:
+            fator_desespero *= 0.85
         
-        taxa_marque_home = 1 / (1 + math.exp(-taxa_gols_home * 0.8))
-        taxa_marque_away = 1 / (1 + math.exp(-taxa_gols_away * 0.8))
-        
-        taxa_sofra_home = 1 / (1 + math.exp(-taxa_sofridos_home * 0.8))
-        taxa_sofra_away = 1 / (1 + math.exp(-taxa_sofridos_away * 0.8))
+        prob_ambas_marcam = (prob_home_marca * prob_away_marca) * 100 * fator_desespero
+        prob_ambas_marcam = clamp(prob_ambas_marcam, 5, 92)
 
-        prob_home_marca = (taxa_marque_home * 0.6 + taxa_sofra_away * 0.4)
-        prob_away_marca = (taxa_marque_away * 0.4 + taxa_sofra_home * 0.6)
-
-        fator_casa = 1.1
-        prob_home_marca *= fator_casa
-        prob_away_marca *= (2.0 - fator_casa) * 0.9
-
-        prob_ambas_marcam = clamp(prob_home_marca * prob_away_marca * 100, 0, 95)
         prob_nao_ambas_marcam = 100 - prob_ambas_marcam
 
-        if prob_ambas_marcam >= 60:
+        # Definir tendência
+        if prob_ambas_marcam >= 62:  # Aumentei o limiar para SIM
             tendencia_ambas_marcam = "SIM"
-        elif prob_nao_ambas_marcam >= 60:
+        elif prob_nao_ambas_marcam >= 62: # Aumentei o limiar para NÃO
             tendencia_ambas_marcam = "NÃO"
         else:
+            # Zona cinzenta: escolher a maior, mas com baixa confiança
             if prob_ambas_marcam >= prob_nao_ambas_marcam:
                 tendencia_ambas_marcam = "SIM"
             else:
                 tendencia_ambas_marcam = "NÃO"
 
-        diferenca = abs(prob_ambas_marcam - prob_nao_ambas_marcam)
-        confianca_ambas_marcam = clamp(50 + diferenca * 0.5, 55, 85)
+        # Confiança baseada na "certeza" da previsão (distância do equilíbrio 50-50)
+        distancia_do_equilibrio = abs(prob_ambas_marcam - 50)
+        confianca_ambas_marcam = 50 + (distancia_do_equilibrio * 0.6) # Ex: 60% de chance -> confiança 56%
+        confianca_ambas_marcam = clamp(confianca_ambas_marcam, 55, 88)
 
-        logging.info(f"AMBAS MARCAM: {home} vs {away} | SIM: {prob_ambas_marcam:.1f}% | NÃO: {prob_nao_ambas_marcam:.1f}% | Tendência: {tendencia_ambas_marcam} | Conf: {confianca_ambas_marcam:.1f}%")
+        logging.info(f"[BTTS Melhorado] {home} vs {away} | Prob SIM: {prob_ambas_marcam:.1f}% | Tendência: {tendencia_ambas_marcam} | Conf: {confianca_ambas_marcam:.1f}%")
 
         return {
             "sim": round(prob_ambas_marcam, 1),
@@ -1133,10 +1177,11 @@ class AnalisadorEstatistico:
             "confianca_ambas_marcam": round(confianca_ambas_marcam, 1),
             "prob_home_marca": round(prob_home_marca * 100, 1),
             "prob_away_marca": round(prob_away_marca * 100, 1),
-            "taxa_gols_home": round(taxa_gols_home, 2),
-            "taxa_gols_away": round(taxa_gols_away, 2),
-            "taxa_sofridos_home": round(taxa_sofridos_home, 2),
-            "taxa_sofridos_away": round(taxa_sofridos_away, 2)
+            # Dados brutos para debug
+            "atk_home": round(atk_home, 2),
+            "atk_away": round(atk_away, 2),
+            "def_home": round(def_home, 2),
+            "def_away": round(def_away, 2),
         }
 
     @staticmethod
@@ -1218,6 +1263,68 @@ class AnalisadorEstatistico:
         escore = clamp(escore, 0, 1)
 
         return int(round(escore * 100))
+    
+    @staticmethod
+    def calcular_escore_qualidade(probabilidade: float, confianca: float, jogos_disputados_home: int, jogos_disputados_away: int, tendencia: str) -> float:
+        """
+        Calcula um score de 0 a 100 para classificar a qualidade de um alerta.
+        Quanto maior, melhor.
+        """
+        # Peso 1: Probabilidade (30%)
+        prob_score = clamp(probabilidade, 0, 100) * 0.3
+        
+        # Peso 2: Confiança (40%)
+        conf_score = confianca * 0.4
+        
+        # Peso 3: Consistência (30%) - baseado no número de jogos disputados
+        jogos_totais = jogos_disputados_home + jogos_disputados_away
+        # Se cada time jogou pelo menos 8 jogos, a base de dados é boa.
+        consistencia_base = min((jogos_totais / 20) * 30, 30) # Máximo de 30 pontos se tiver 20+ jogos somados
+        
+        # Bônus/penalidade por tipo de mercado
+        bonus_mercado = 0
+        if "OVER 1.5" in tendencia:
+            # Mercado OVER 1.5 é mais seguro, adiciona um pequeno bônus
+            bonus_mercado = 3
+        elif "OVER 2.5" in tendencia:
+            # OVER 2.5 precisa de mais certeza
+            if probabilidade > 75:
+                bonus_mercado = 2
+            else:
+                bonus_mercado = -2
+        elif "UNDER" in tendencia:
+            # Under é sempre arriscado, penalidade leve
+            bonus_mercado = -3
+        
+        score_final = prob_score + conf_score + consistencia_base + bonus_mercado
+        return clamp(score_final, 0, 100)
+
+    @staticmethod
+    def aplicar_filtro_qualidade(jogos: list, score_minimo: float = 65) -> list:
+        """
+        Filtra uma lista de jogos, mantendo apenas aqueles com score de qualidade acima do mínimo.
+        """
+        jogos_filtrados = []
+        for jogo in jogos:
+            # Extrair dados necessários
+            prob = jogo.get('probabilidade', 0)
+            conf = jogo.get('confianca', 0)
+            tendencia = jogo.get('tendencia', '')
+            
+            # Tentar obter número de jogos das equipes (pode não estar disponível)
+            detalhes = jogo.get('detalhes', {})
+            played_home = detalhes.get('played_home', 10) # Valor padrão se não encontrado
+            played_away = detalhes.get('played_away', 10)
+            
+            score = AnalisadorEstatistico.calcular_escore_qualidade(prob, conf, played_home, played_away, tendencia)
+            jogo['score_qualidade'] = round(score, 1) # Adicionar ao dict do jogo
+            
+            if score >= score_minimo:
+                jogos_filtrados.append(jogo)
+        
+        # Ordenar por score (melhores primeiro)
+        jogos_filtrados.sort(key=lambda x: x.get('score_qualidade', 0), reverse=True)
+        return jogos_filtrados
 
 
 class AnalisadorTendencia:
