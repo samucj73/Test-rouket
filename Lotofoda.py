@@ -11,7 +11,7 @@ from collections import Counter
 from datetime import datetime
 from scipy.stats import norm
 import warnings
-warnings.filterwarnings("ignore")
+warnings.filterprobabilities("ignore")
 
 # =====================================================
 # MOTOR LOTOFÁCIL PRO (6 CAMADAS) - ADICIONADO
@@ -2458,6 +2458,215 @@ class GeradorProfissional:
         return info
 
 # =====================================================
+# ===== SISTEMA AUTÔNOMO (NOVA ABA) =====
+# =====================================================
+
+class SistemaAutonomo:
+    """
+    Sistema que testa múltiplas estratégias e escolhe automaticamente a melhor
+    Baseado no estudo de auto-estratégia com backtest
+    """
+    
+    def __init__(self, concursos_historico):
+        """
+        Args:
+            concursos_historico: Lista de listas com todos os concursos
+        """
+        self.concursos = concursos_historico
+        self.total_concursos = len(concursos_historico)
+        
+        # Faixas para validação
+        self.baixas = list(range(1, 9))
+        self.medias = list(range(9, 17))
+        self.altas = list(range(17, 26))
+        
+    # ===== ESTRATÉGIAS DE SELEÇÃO DE BASE =====
+    
+    def estrategia_frequencia(self, qtd=18):
+        """Seleciona números mais frequentes"""
+        freq = Counter()
+        for c in self.concursos:
+            freq.update(c)
+        return sorted(freq, key=freq.get, reverse=True)[:qtd]
+    
+    def estrategia_atraso(self, qtd=18):
+        """Seleciona números mais atrasados"""
+        atraso = {n: 0 for n in range(1, 26)}
+        for c in reversed(self.concursos):
+            for n in range(1, 26):
+                if n not in c:
+                    atraso[n] += 1
+        return sorted(atraso, key=atraso.get, reverse=True)[:qtd]
+    
+    def estrategia_hibrida(self, qtd=18):
+        """Mix de frequência e atraso (70% freq + 30% atraso)"""
+        freq = Counter()
+        for c in self.concursos:
+            freq.update(c)
+        
+        atraso = {n: 0 for n in range(1, 26)}
+        for c in reversed(self.concursos):
+            for n in range(1, 26):
+                if n not in c:
+                    atraso[n] += 1
+        
+        # Normalizar scores
+        max_freq = max(freq.values())
+        max_atraso = max(atraso.values())
+        
+        score = {}
+        for n in range(1, 26):
+            freq_norm = freq[n] / max_freq if max_freq > 0 else 0
+            atraso_norm = atraso[n] / max_atraso if max_atraso > 0 else 0
+            score[n] = freq_norm * 0.7 + atraso_norm * 0.3
+        
+        return sorted(score, key=score.get, reverse=True)[:qtd]
+    
+    def estrategia_aleatoria(self, qtd=18):
+        """Seleção aleatória controlada"""
+        return sorted(random.sample(range(1, 26), qtd))
+    
+    # ===== VALIDAÇÃO DE JOGOS =====
+    
+    def jogo_valido(self, jogo):
+        """
+        Valida se o jogo respeita os filtros básicos
+        """
+        # Pares/Ímpares
+        pares = sum(1 for n in jogo if n % 2 == 0)
+        if not (6 <= pares <= 9):
+            return False
+        
+        # Distribuição por linhas (2-4 por linha)
+        linhas = [0] * 5
+        for n in jogo:
+            linhas[(n-1)//5] += 1
+        if any(l < 2 or l > 4 for l in linhas):
+            return False
+        
+        # Sequências consecutivas
+        seq = 0
+        for i in range(len(jogo)-1):
+            if jogo[i] + 1 == jogo[i+1]:
+                seq += 1
+        if not (2 <= seq <= 5):
+            return False
+        
+        return True
+    
+    # ===== GERADOR DE JOGOS =====
+    
+    def gerar_jogos_base(self, base, qtd=10):
+        """
+        Gera jogos a partir de uma base de números
+        """
+        jogos = []
+        max_tentativas = qtd * 1000
+        tentativas = 0
+        
+        while len(jogos) < qtd and tentativas < max_tentativas:
+            jogo = sorted(random.sample(base, 15))
+            if self.jogo_valido(jogo) and jogo not in jogos:
+                jogos.append(jogo)
+            tentativas += 1
+        
+        return jogos
+    
+    # ===== BACKTEST =====
+    
+    def avaliar_estrategia(self, estrategia_func, num_testes=50):
+        """
+        Avalia uma estratégia via backtest
+        """
+        if self.total_concursos < 100:
+            return 0
+        
+        resultados = []
+        
+        for i in range(50, min(50 + num_testes, self.total_concursos - 1)):
+            # Dados históricos até o concurso i
+            historico = self.concursos[:i]
+            resultado_real = set(self.concursos[i])
+            
+            # Gerar base com a estratégia
+            base = estrategia_func(qtd=18)
+            
+            # Gerar jogos
+            jogos = self.gerar_jogos_base(base, qtd=10)
+            
+            # Calcular melhor acerto
+            melhor = 0
+            for j in jogos:
+                acertos = len(set(j) & resultado_real)
+                melhor = max(melhor, acertos)
+            
+            resultados.append(melhor)
+        
+        return np.mean(resultados) if resultados else 0
+    
+    # ===== AUTO SELEÇÃO =====
+    
+    def escolher_melhor_estrategia(self, progress_callback=None):
+        """
+        Testa todas as estratégias e retorna a melhor
+        """
+        estrategias = {
+            "🎯 Frequência (quentes)": self.estrategia_frequencia,
+            "⏱️ Atraso (frias)": self.estrategia_atraso,
+            "🧬 Híbrida (70/30)": self.estrategia_hibrida,
+            "🎲 Aleatória": self.estrategia_aleatoria
+        }
+        
+        scores = {}
+        detalhes = {}
+        
+        total_estrategias = len(estrategias)
+        for idx, (nome, func) in enumerate(estrategias.items()):
+            if progress_callback:
+                progress_callback(idx / total_estrategias, f"Testando {nome}...")
+            
+            score = self.avaliar_estrategia(func)
+            scores[nome] = score
+            detalhes[nome] = {
+                "score": score,
+                "func": func
+            }
+        
+        # Encontrar melhor estratégia
+        melhor_nome = max(scores, key=scores.get)
+        melhor_score = scores[melhor_nome]
+        melhor_func = detalhes[melhor_nome]["func"]
+        
+        return melhor_nome, melhor_func, melhor_score, scores
+    
+    # ===== PIPELINE COMPLETO =====
+    
+    def sistema_autonomo_completo(self, qtd_jogos=10, progress_callback=None):
+        """
+        Executa o pipeline completo:
+        1. Escolhe melhor estratégia via backtest
+        2. Gera base com a estratégia vencedora
+        3. Gera jogos válidos
+        """
+        # Passo 1: Escolher melhor estratégia
+        melhor_nome, melhor_func, melhor_score, todos_scores = self.escolher_melhor_estrategia(progress_callback)
+        
+        # Passo 2: Gerar base
+        base = melhor_func(qtd=18)
+        
+        # Passo 3: Gerar jogos
+        jogos = self.gerar_jogos_base(base, qtd=qtd_jogos)
+        
+        return {
+            "melhor_estrategia": melhor_nome,
+            "melhor_score": melhor_score,
+            "todos_scores": todos_scores,
+            "base_utilizada": sorted(base),
+            "jogos": jogos,
+            "quantidade_jogos": len(jogos)
+        }
+
+# =====================================================
 # FUNÇÕES AUXILIARES
 # =====================================================
 def validar_jogos(jogos):
@@ -3021,13 +3230,16 @@ def main():
         st.session_state.jogos_pro = None
     if "diagnosticos_pro" not in st.session_state:
         st.session_state.diagnosticos_pro = None
-    # NOVOS ESTADOS PARA GEOMETRIA ANALÍTICA
     if "motor_geometria" not in st.session_state:
         st.session_state.motor_geometria = None
     if "analise_geometrica_jogo" not in st.session_state:
         st.session_state.analise_geometrica_jogo = None
     if "jogos_geometricos" not in st.session_state:
         st.session_state.jogos_geometricos = None
+    if "sistema_autonomo" not in st.session_state:
+        st.session_state.sistema_autonomo = None
+    if "resultado_autonomo" not in st.session_state:
+        st.session_state.resultado_autonomo = None
     
     # =====================================================
     # NOVOS ESTADOS PARA PERSISTÊNCIA
@@ -3048,6 +3260,10 @@ def main():
         st.session_state.qtd_3622 = 10
     if "mc_sim_value" not in st.session_state:
         st.session_state.mc_sim_value = 10000
+    if "qtd_autonomo" not in st.session_state:
+        st.session_state.qtd_autonomo = 10
+    if "num_testes_autonomo" not in st.session_state:
+        st.session_state.num_testes_autonomo = 30
 
     # ================= SIDEBAR =================
     with st.sidebar:
@@ -3070,6 +3286,9 @@ def main():
                     # Cache do baseline para usar em toda a aplicação
                     st.session_state.baseline_cache = baseline_aleatorio()
                     
+                    # Inicializar sistema autônomo
+                    st.session_state.sistema_autonomo = SistemaAutonomo(concursos)
+                    
                     ultimo = st.session_state.dados_api[0]
                     st.success(f"✅ Último concurso: #{ultimo['concurso']} - {ultimo['data']}")
                     
@@ -3080,8 +3299,8 @@ def main():
     st.subheader("🎯 Modelo Universal 3622")
 
     if st.session_state.analise and st.session_state.dados_api and st.session_state.historico_df is not None:
-        # AGORA SÃO 11 ABAS (adicionada a nova aba de Geometria Analítica)
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11 = st.tabs([
+        # AGORA SÃO 12 ABAS (adicionada a nova aba de Sistema Autônomo)
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12 = st.tabs([
             "📊 Análise", 
             "🧩 Fechamento 3622", 
             "📊 Motor Estatístico",
@@ -3092,7 +3311,8 @@ def main():
             "🧠 Inteligência 5-7-3",
             "📡 Detector MASTER B-M-A",
             "🧠 Motor PRO",
-            "📐 Geometria Analítica"  # NOVA ABA
+            "📐 Geometria Analítica",
+            "🤖 Sistema Autônomo"  # NOVA ABA
         ])
 
         with tab1:
@@ -5959,6 +6179,296 @@ def main():
                     """)
             else:
                 st.info("📥 Carregue os concursos na barra lateral para ativar a Geometria Analítica.")
+
+        # =====================================================
+        # ABA 12: SISTEMA AUTÔNOMO (NOVA ABA)
+        # =====================================================
+        with tab12:
+            st.markdown("""
+            <div style='background:#1e1e2e; padding:15px; border-radius:10px; margin-bottom:20px; border-left:5px solid #ff6600;'>
+                <h4 style='margin:0; color:#ff6600;'>🤖 SISTEMA AUTÔNOMO</h4>
+                <p style='margin:5px 0 0 0; font-size:0.9em;'>Auto-estratégia: testa frequência, atraso, híbrida e aleatória, escolhe a melhor e gera jogos</p>
+                <p style='margin:2px 0 0 0; font-size:0.85em; color:#ccc;'>Backtest automático • Seleção inteligente • Geração otimizada</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            if st.session_state.dados_api and st.session_state.sistema_autonomo:
+                
+                st.markdown("### 🧠 Funcionamento do Sistema")
+                
+                with st.expander("📋 Entenda como funciona", expanded=False):
+                    st.markdown("""
+                    #### Como o Sistema Autônomo Toma Decisões
+                    
+                    1. **Testa 4 estratégias** em backtest:
+                       - 🎯 **Frequência:** números mais quentes
+                       - ⏱️ **Atraso:** números mais frios
+                       - 🧬 **Híbrida:** 70% frequência + 30% atraso
+                       - 🎲 **Aleatória:** seleção aleatória controlada
+                    
+                    2. **Avalia o desempenho** de cada uma nos últimos 50 concursos
+                    
+                    3. **Escolhe a melhor** estratégia baseada na média de acertos
+                    
+                    4. **Gera jogos** usando a estratégia vencedora
+                    
+                    Tudo automático, sem intervenção manual!
+                    """)
+                
+                # Configuração de geração
+                st.markdown("### ⚙️ Configuração da Geração")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    qtd_autonomo = st.slider(
+                        "Quantidade de jogos a gerar",
+                        min_value=5,
+                        max_value=50,
+                        value=st.session_state.qtd_autonomo,
+                        step=5,
+                        key="slider_qtd_autonomo"
+                    )
+                    st.session_state.qtd_autonomo = qtd_autonomo
+                
+                with col2:
+                    num_testes = st.slider(
+                        "Número de testes no backtest",
+                        min_value=20,
+                        max_value=100,
+                        value=st.session_state.num_testes_autonomo,
+                        step=10,
+                        key="slider_testes_autonomo",
+                        help="Mais testes = mais preciso, porém mais lento"
+                    )
+                    st.session_state.num_testes_autonomo = num_testes
+                
+                # Botão principal
+                if st.button("🚀 EXECUTAR SISTEMA AUTÔNOMO", type="primary", use_container_width=True):
+                    
+                    # Criar barra de progresso
+                    progress_bar = st.progress(0, text="Inicializando sistema autônomo...")
+                    status_text = st.empty()
+                    
+                    # Função de callback para progresso
+                    def update_progress(progress, message):
+                        progress_bar.progress(progress, text=message)
+                        status_text.text(message)
+                    
+                    with st.spinner("Executando backtest e gerando jogos..."):
+                        try:
+                            # Configurar número de testes no sistema
+                            st.session_state.sistema_autonomo.num_testes = num_testes
+                            
+                            # Executar sistema autônomo
+                            resultado = st.session_state.sistema_autonomo.sistema_autonomo_completo(
+                                qtd_jogos=qtd_autonomo,
+                                progress_callback=update_progress
+                            )
+                            
+                            # Salvar resultado na sessão
+                            st.session_state.resultado_autonomo = resultado
+                            
+                            # Atualizar progresso final
+                            progress_bar.progress(1.0, text="✅ Sistema autônomo concluído!")
+                            status_text.success("✅ Sistema autônomo executado com sucesso!")
+                            
+                        except Exception as e:
+                            st.error(f"❌ Erro ao executar sistema autônomo: {e}")
+                            progress_bar.empty()
+                            status_text.empty()
+                
+                # Mostrar resultados se existirem
+                if st.session_state.resultado_autonomo:
+                    resultado = st.session_state.resultado_autonomo
+                    
+                    st.markdown("---")
+                    st.markdown("## 📊 RESULTADOS DO SISTEMA AUTÔNOMO")
+                    
+                    # =====================================================
+                    # PAINEL DE RESULTADOS
+                    # =====================================================
+                    
+                    # Card da melhor estratégia
+                    st.markdown(f"""
+                    <div style='background:#1e1e2e; padding:20px; border-radius:15px; margin-bottom:20px; text-align:center; border:2px solid #ff6600;'>
+                        <h3 style='margin:0; color:#ff6600;'>🏆 MELHOR ESTRATÉGIA</h3>
+                        <p style='font-size:2rem; font-weight:bold; margin:10px 0; color:#fff;'>{resultado['melhor_estrategia']}</p>
+                        <p style='font-size:1.2rem; color:#4ade80;'>Score médio: {resultado['melhor_score']:.2f} acertos</p>
+                        <p style='color:#aaa;'>Base de {len(resultado['base_utilizada'])} números selecionados</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Score de todas as estratégias
+                    st.markdown("### 📈 Score das Estratégias Testadas")
+                    
+                    scores_data = []
+                    for nome, score in resultado['todos_scores'].items():
+                        scores_data.append({
+                            "Estratégia": nome,
+                            "Score Médio": round(score, 2)
+                        })
+                    
+                    df_scores = pd.DataFrame(scores_data).sort_values("Score Médio", ascending=False)
+                    
+                    # Mostrar como bar chart
+                    st.bar_chart(df_scores.set_index("Estratégia"))
+                    
+                    # Mostrar como tabela
+                    st.dataframe(df_scores, use_container_width=True, hide_index=True)
+                    
+                    # =====================================================
+                    # BASE UTILIZADA
+                    # =====================================================
+                    st.markdown("### 🎯 Base de Números Selecionada")
+                    st.markdown(f"**{len(resultado['base_utilizada'])} números:** {', '.join(f'{n:02d}' for n in resultado['base_utilizada'])}")
+                    
+                    # Mostrar distribuição da base
+                    base_baixas = sum(1 for n in resultado['base_utilizada'] if n <= 8)
+                    base_medias = sum(1 for n in resultado['base_utilizada'] if 9 <= n <= 16)
+                    base_altas = sum(1 for n in resultado['base_utilizada'] if n >= 17)
+                    
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Baixas (1-8)", base_baixas)
+                    with col2:
+                        st.metric("Médias (9-16)", base_medias)
+                    with col3:
+                        st.metric("Altas (17-25)", base_altas)
+                    
+                    # =====================================================
+                    # JOGOS GERADOS
+                    # =====================================================
+                    st.markdown(f"### 🎲 Jogos Gerados ({len(resultado['jogos'])}/{qtd_autonomo})")
+                    
+                    if len(resultado['jogos']) < qtd_autonomo:
+                        st.warning(f"⚠️ Gerados apenas {len(resultado['jogos'])} jogos de {qtd_autonomo} (limite de tentativas atingido)")
+                    
+                    # Estatísticas dos jogos
+                    jogos_stats = []
+                    for i, jogo in enumerate(resultado['jogos']):
+                        pares = sum(1 for n in jogo if n % 2 == 0)
+                        baixas = sum(1 for n in jogo if n <= 8)
+                        medias = sum(1 for n in jogo if 9 <= n <= 16)
+                        altas = sum(1 for n in jogo if n >= 17)
+                        soma = sum(jogo)
+                        seq = 0
+                        for k in range(len(jogo)-1):
+                            if jogo[k] + 1 == jogo[k+1]:
+                                seq += 1
+                        
+                        jogos_stats.append({
+                            "Jogo": i+1,
+                            "Pares": pares,
+                            "Baixas": baixas,
+                            "Médias": medias,
+                            "Altas": altas,
+                            "Soma": soma,
+                            "Consec": seq
+                        })
+                    
+                    df_jogos_stats = pd.DataFrame(jogos_stats)
+                    st.dataframe(df_jogos_stats, use_container_width=True, hide_index=True)
+                    
+                    # Mostrar cada jogo formatado
+                    for i, jogo in enumerate(resultado['jogos']):
+                        with st.container():
+                            # Calcular métricas para o card
+                            pares = sum(1 for n in jogo if n % 2 == 0)
+                            baixas = sum(1 for n in jogo if n <= 8)
+                            medias = sum(1 for n in jogo if 9 <= n <= 16)
+                            altas = sum(1 for n in jogo if n >= 17)
+                            soma = sum(jogo)
+                            
+                            nums_html = formatar_jogo_html(jogo)
+                            
+                            st.markdown(f"""
+                            <div style='border-left: 5px solid #ff6600; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
+                                <div style='display:flex; justify-content:space-between;'>
+                                    <strong>🤖 Jogo Autônomo #{i+1}</strong>
+                                    <small>⚖️ {pares} pares | 📊 {baixas}B/{medias}M/{altas}A | ➕ {soma}</small>
+                                </div>
+                                <div>{nums_html}</div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                    
+                    # =====================================================
+                    # BOTÕES DE AÇÃO
+                    # =====================================================
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        if st.button("💾 Salvar Jogos Autônomos", key="salvar_autonomo", use_container_width=True):
+                            ultimo = st.session_state.dados_api[0]
+                            arquivo, jogo_id = salvar_jogos_gerados(
+                                resultado['jogos'],
+                                list(range(1, 18)),
+                                {
+                                    "modelo": "Sistema Autônomo",
+                                    "estrategia_vencedora": resultado['melhor_estrategia'],
+                                    "score": resultado['melhor_score'],
+                                    "todos_scores": resultado['todos_scores']
+                                },
+                                ultimo['concurso'],
+                                ultimo['data']
+                            )
+                            if arquivo:
+                                st.success(f"✅ Jogos autônomos salvos! ID: {jogo_id}")
+                                st.session_state.jogos_salvos = carregar_jogos_salvos()
+                    
+                    with col2:
+                        if st.button("🔄 Nova Execução", key="nova_autonomo", use_container_width=True):
+                            st.session_state.resultado_autonomo = None
+                            st.rerun()
+                    
+                    with col3:
+                        # Exportar para CSV
+                        df_export_autonomo = pd.DataFrame({
+                            "Jogo": [f"Jogo {i+1}" for i in range(len(resultado['jogos']))],
+                            "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in resultado['jogos']],
+                            "Pares": df_jogos_stats["Pares"],
+                            "Baixas(1-8)": df_jogos_stats["Baixas"],
+                            "Médias(9-16)": df_jogos_stats["Médias"],
+                            "Altas(17-25)": df_jogos_stats["Altas"],
+                            "Soma": df_jogos_stats["Soma"],
+                            "Consecutivos": df_jogos_stats["Consec"]
+                        })
+                        
+                        csv_autonomo = df_export_autonomo.to_csv(index=False)
+                        st.download_button(
+                            label="📥 Exportar CSV",
+                            data=csv_autonomo,
+                            file_name=f"jogos_autonomos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                            mime="text/csv",
+                            use_container_width=True
+                        )
+                    
+                    # =====================================================
+                    # EXPLICAÇÃO DOS RESULTADOS
+                    # =====================================================
+                    with st.expander("📘 Interpretando os Resultados"):
+                        st.markdown(f"""
+                        ### Análise da Execução
+                        
+                        **Estratégia vencedora:** {resultado['melhor_estrategia']}
+                        
+                        **Por que essa estratégia foi escolhida?**
+                        
+                        O sistema testou cada estratégia nos últimos {num_testes} concursos, simulando a geração de jogos baseados em cada método e medindo quantos acertos cada uma conseguiria em média.
+                        
+                        - **Score médio de {resultado['melhor_score']:.2f}** significa que, em média, os melhores jogos gerados por esta estratégia acertariam entre {int(resultado['melhor_score'])} e {int(resultado['melhor_score'])+1} pontos.
+                        
+                        **Comparativo:**
+                        - Baseline aleatório: ~11.5 acertos (média teórica)
+                        - Estratégia vencedora: {resultado['melhor_score']:.2f} acertos
+                        - Diferença: +{resultado['melhor_score'] - 11.5:.2f} acertos
+                        
+                        **Limitações:**
+                        - Quanto menor o número de jogos gerados, mais rápido mas menos preciso
+                        - O backtest simula o passado, não garante resultados futuros
+                        - A base de {len(resultado['base_utilizada'])} números é o "pool" de onde os jogos são sorteados
+                        """)
+            else:
+                st.info("📥 Carregue os concursos na barra lateral para ativar o Sistema Autônomo.")
 
     else:
         st.info("👈 Clique em 'Carregar concursos' na barra lateral para começar.")
