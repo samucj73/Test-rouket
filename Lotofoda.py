@@ -11,7 +11,7 @@ from collections import Counter
 from datetime import datetime
 from scipy.stats import norm
 import warnings
-warnings.filterprobabilities("ignore")
+warnings.filterwarnings("ignore")  # CORRIGIDO: era filterprobabilities
 
 # =====================================================
 # MOTOR LOTOFÁCIL PRO (6 CAMADAS) - ADICIONADO
