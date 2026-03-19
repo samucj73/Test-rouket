@@ -3317,54 +3317,56 @@ def main():
         ])
 
         with tab1:
+        with tab1:
             st.markdown("### 🔍 Análise do Último Concurso")
+    
+    if st.session_state.dados_api:
+        ultimo = st.session_state.dados_api[0]
+        numeros_ultimo = sorted(map(int, ultimo['dezenas']))
+        
+        st.markdown(f"""
+        <div class='concurso-info'>
+            <strong>Concurso #{ultimo['concurso']}</strong> - {ultimo['data']}
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Mostrar números do último concurso
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.markdown("**Dezenas sorteadas:**")
+            nums_html = ""
+            for num in numeros_ultimo:
+                nums_html += f"<span style='background:#4cc9f0; border-radius:20px; padding:5px 10px; margin:3px; display:inline-block; font-weight:bold; color:black;'>{num:02d}</span>"
+            st.markdown(f"<div>{nums_html}</div>", unsafe_allow_html=True)
+        
+        with col2:
+            pares = sum(1 for n in numeros_ultimo if n % 2 == 0)
+            impares = 15 - pares
+            st.metric("Pares/Ímpares", f"{pares}×{impares}")
+        
+        with col3:
+            soma = sum(numeros_ultimo)
+            st.metric("Soma total", soma)
+        
+        # Estatísticas rápidas
+        if len(st.session_state.dados_api) > 1:
+            penultimo = sorted(map(int, st.session_state.dados_api[1]['dezenas']))
+            rep_penultimo = len(set(numeros_ultimo) & set(penultimo))
             
-            if st.session_state.dados_api:
-                ultimo = st.session_state.dados_api[0]
-                numeros_ultimo = sorted(map(int, ultimo['dezenas']))
-                
-                st.markdown(f"""
-                <div class='concurso-info'>
-                    <strong>Concurso #{ultimo['concurso']}</strong> - {ultimo['data']}
-                </div>
-                """, unsafe_allow_html=True)
-                
-                # Mostrar números do último concurso
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.markdown("**Dezenas sorteadas:**")
-                    nums_html = ""
-                    for num in numeros_ultimo:
-                        nums_html += f"<span style='background:#4cc9f0; border-radius:20px; padding:5px 10px; margin:3px; display:inline-block; font-weight:bold; color:black;'>{num:02d}</span>"
-                    st.markdown(f"<div>{nums_html}</div>", unsafe_allow_html=True)
-                
-                with col2:
-                    pares = sum(1 for n in numeros_ultimo if n % 2 == 0)
-                    impares = 15 - pares
-                    st.metric("Pares/Ímpares", f"{pares}×{impares}")
-                
-                with col3:
-                    soma = sum(numeros_ultimo)
-                    st.metric("Soma total", soma)
-                
-                # Estatísticas rápidas
-                if len(st.session_state.dados_api) > 1:
-                    penultimo = sorted(map(int, st.session_state.dados_api[1]['dezenas']))
-                    rep_penultimo = len(set(numeros_ultimo) & set(penultimo))
-                    
-                    st.markdown("### 📊 Ajustes Adaptáveis")
-                    
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.metric("Repetição c/ penúltimo", rep_penultimo)
-                    with col2:
-                        altas = sum(1 for n in numeros_ultimo if n >= 22)
-                        st.metric("Altas (22-25)", altas)
-                    with col3:
-                        miolo = sum(1 for n in numeros_ultimo if 9 <= n <= 16)
-                        st.metric("Miolo (09-16)", miolo)
-            else:
-                st.info("👈 Clique em 'Carregar concursos' na barra lateral para começar")
+            st.markdown("### 📊 Ajustes Adaptáveis")
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Repetição c/ penúltimo", rep_penultimo)
+            with col2:
+                altas = sum(1 for n in numeros_ultimo if n >= 22)
+                st.metric("Altas (22-25)", altas)
+            with col3:
+                miolo = sum(1 for n in numeros_ultimo if 9 <= n <= 16)
+                st.metric("Miolo (09-16)", miolo)
+    else:
+        st.info("👈 Clique em 'Carregar concursos' na barra lateral para começar")    
+            
 
         with tab2:
             st.markdown("""
