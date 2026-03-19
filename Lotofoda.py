@@ -3316,7 +3316,7 @@ def main():
             "🤖 SISTEMA AUTÔNOMO INSANO + FECHAMENTO 14"  # NOVA ABA
         ])
 
-        with tab1:
+       # with tab1:
         with tab1:
             st.markdown("### 🔍 Análise do Último Concurso")
     
