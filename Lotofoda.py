@@ -3298,6 +3298,7 @@ def main():
     # ================= INTERFACE PRINCIPAL =================
     st.subheader("🎯 Modelo Universal 3622")
 
+    # Verificar se os dados foram carregados antes de exibir as abas
     if st.session_state.analise and st.session_state.dados_api and st.session_state.historico_df is not None:
         # AGORA SÃO 12 ABAS (adicionada a nova aba de Sistema Autônomo)
         tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12 = st.tabs([
@@ -3318,49 +3319,52 @@ def main():
         with tab1:
             st.markdown("### 🔍 Análise do Último Concurso")
             
-            ultimo = st.session_state.dados_api[0]
-            numeros_ultimo = sorted(map(int, ultimo['dezenas']))
-            
-            st.markdown(f"""
-            <div class='concurso-info'>
-                <strong>Concurso #{ultimo['concurso']}</strong> - {ultimo['data']}
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # Mostrar números do último concurso
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.markdown("**Dezenas sorteadas:**")
-                nums_html = ""
-                for num in numeros_ultimo:
-                    nums_html += f"<span style='background:#4cc9f0; border-radius:20px; padding:5px 10px; margin:3px; display:inline-block; font-weight:bold; color:black;'>{num:02d}</span>"
-                st.markdown(f"<div>{nums_html}</div>", unsafe_allow_html=True)
-            
-            with col2:
-                pares = sum(1 for n in numeros_ultimo if n % 2 == 0)
-                impares = 15 - pares
-                st.metric("Pares/Ímpares", f"{pares}×{impares}")
-            
-            with col3:
-                soma = sum(numeros_ultimo)
-                st.metric("Soma total", soma)
-            
-            # Estatísticas rápidas
-            if len(st.session_state.dados_api) > 1:
-                penultimo = sorted(map(int, st.session_state.dados_api[1]['dezenas']))
-                rep_penultimo = len(set(numeros_ultimo) & set(penultimo))
+            if st.session_state.dados_api:
+                ultimo = st.session_state.dados_api[0]
+                numeros_ultimo = sorted(map(int, ultimo['dezenas']))
                 
-                st.markdown("### 📊 Ajustes Adaptáveis")
+                st.markdown(f"""
+                <div class='concurso-info'>
+                    <strong>Concurso #{ultimo['concurso']}</strong> - {ultimo['data']}
+                </div>
+                """, unsafe_allow_html=True)
                 
+                # Mostrar números do último concurso
                 col1, col2, col3 = st.columns(3)
                 with col1:
-                    st.metric("Repetição c/ penúltimo", rep_penultimo)
+                    st.markdown("**Dezenas sorteadas:**")
+                    nums_html = ""
+                    for num in numeros_ultimo:
+                        nums_html += f"<span style='background:#4cc9f0; border-radius:20px; padding:5px 10px; margin:3px; display:inline-block; font-weight:bold; color:black;'>{num:02d}</span>"
+                    st.markdown(f"<div>{nums_html}</div>", unsafe_allow_html=True)
+                
                 with col2:
-                    altas = sum(1 for n in numeros_ultimo if n >= 22)
-                    st.metric("Altas (22-25)", altas)
+                    pares = sum(1 for n in numeros_ultimo if n % 2 == 0)
+                    impares = 15 - pares
+                    st.metric("Pares/Ímpares", f"{pares}×{impares}")
+                
                 with col3:
-                    miolo = sum(1 for n in numeros_ultimo if 9 <= n <= 16)
-                    st.metric("Miolo (09-16)", miolo)
+                    soma = sum(numeros_ultimo)
+                    st.metric("Soma total", soma)
+                
+                # Estatísticas rápidas
+                if len(st.session_state.dados_api) > 1:
+                    penultimo = sorted(map(int, st.session_state.dados_api[1]['dezenas']))
+                    rep_penultimo = len(set(numeros_ultimo) & set(penultimo))
+                    
+                    st.markdown("### 📊 Ajustes Adaptáveis")
+                    
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Repetição c/ penúltimo", rep_penultimo)
+                    with col2:
+                        altas = sum(1 for n in numeros_ultimo if n >= 22)
+                        st.metric("Altas (22-25)", altas)
+                    with col3:
+                        miolo = sum(1 for n in numeros_ultimo if 9 <= n <= 16)
+                        st.metric("Miolo (09-16)", miolo)
+            else:
+                st.info("👈 Clique em 'Carregar concursos' na barra lateral para começar")
 
         with tab2:
             st.markdown("""
@@ -3370,39 +3374,39 @@ def main():
             </div>
             """, unsafe_allow_html=True)
             
-            # Regras universais em cards
-            with st.expander("📜 VER REGRAS UNIVERSAIS", expanded=False):
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.markdown("""
-                    **✅ REGRA 1 — REPETIÇÃO**
-                    - Obrigatório: 8 a 10 repetidas
-                    - Zona ótima: 8 ou 9
-                    
-                    **✅ REGRA 2 — ÍMPARES x PARES**
-                    - Padrão vencedor: 7×8 ou 8×7
-                    - Alternativa: 6×9 (raro)
-                    
-                    **✅ REGRA 3 — SOMA TOTAL**
-                    - Faixa universal: 168 a 186
-                    - Zona premium: 172 a 182
-                    """)
-                
-                with col2:
-                    st.markdown("""
-                    **✅ REGRA 4 — DISTRIBUIÇÃO**
-                    - 01–08: 5 a 6
-                    - 09–16: 5 a 6
-                    - 17–25: 3 a 4
-                    
-                    **✅ REGRA 5 — CONSECUTIVOS**
-                    - Mínimo: 3 pares consecutivos
-                    
-                    **✅ REGRA 6 — PRIMOS**
-                    - Faixa vencedora: 4 a 6 primos
-                    """)
-            
             if st.session_state.dados_api:
+                # Regras universais em cards
+                with st.expander("📜 VER REGRAS UNIVERSAIS", expanded=False):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.markdown("""
+                        **✅ REGRA 1 — REPETIÇÃO**
+                        - Obrigatório: 8 a 10 repetidas
+                        - Zona ótima: 8 ou 9
+                        
+                        **✅ REGRA 2 — ÍMPARES x PARES**
+                        - Padrão vencedor: 7×8 ou 8×7
+                        - Alternativa: 6×9 (raro)
+                        
+                        **✅ REGRA 3 — SOMA TOTAL**
+                        - Faixa universal: 168 a 186
+                        - Zona premium: 172 a 182
+                        """)
+                    
+                    with col2:
+                        st.markdown("""
+                        **✅ REGRA 4 — DISTRIBUIÇÃO**
+                        - 01–08: 5 a 6
+                        - 09–16: 5 a 6
+                        - 17–25: 3 a 4
+                        
+                        **✅ REGRA 5 — CONSECUTIVOS**
+                        - Mínimo: 3 pares consecutivos
+                        
+                        **✅ REGRA 6 — PRIMOS**
+                        - Faixa vencedora: 4 a 6 primos
+                        """)
+                
                 ultimo = st.session_state.dados_api[0]
                 penultimo = st.session_state.dados_api[1] if len(st.session_state.dados_api) > 1 else None
                 antepenultimo = st.session_state.dados_api[2] if len(st.session_state.dados_api) > 2 else None
@@ -3819,554 +3823,559 @@ def main():
                                 mime="text/csv",
                                 use_container_width=True
                             )
+            else:
+                st.info("👈 Clique em 'Carregar concursos' na barra lateral para começar")
 
         with tab3:
             st.subheader("📊 Motor Estatístico - Avaliação Probabilística")
             
-            # Usar função segura para acessar jogos
-            jogos_gerados = get_jogos_seguros()
-            
-            # GARANTIR QUE OS JOGOS ESTÃO NO FORMATO CORRETO
-            if jogos_gerados:
-                jogos_gerados = garantir_jogos_como_listas(jogos_gerados)
-            
-            # Verificar se há jogos gerados
-            if not jogos_gerados:
-                st.warning("⚠️ Gere jogos na aba 'Fechamento 3622' primeiro para avaliá-los estatisticamente!")
-                st.info("💡 Os jogos gerados são salvos automaticamente e ficam disponíveis em todas as abas.")
-            
-            # BASELINE CORRETO (interseção 15×15)
-            baseline = st.session_state.baseline_cache or baseline_aleatorio()
-            
-            with st.expander("🎲 Baseline Estatístico (H₀)", expanded=False):
-                st.markdown(f"""
-                **Modelo nulo:** {baseline['descricao']}  
-                **Média de acertos esperada:** {baseline['media']:.3f}  
-                **Desvio padrão:** {baseline['std']:.3f}  
-                """)
+            if st.session_state.dados_api and st.session_state.historico_df is not None:
+                # Usar função segura para acessar jogos
+                jogos_gerados = get_jogos_seguros()
                 
-                # Gráfico da distribuição baseline
-                baseline_dist = pd.DataFrame({
-                    "Acertos": range(16),
-                    "Probabilidade": baseline['dist']
-                })
-                st.bar_chart(baseline_dist.set_index("Acertos"))
-            
-            # Distribuições empíricas
-            st.markdown("### 📈 Distribuições Empíricas")
-            dist = distribuicoes_empiricas(st.session_state.historico_df)
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown("**Pares x Ímpares**")
-                pares_df = pd.DataFrame({
-                    "Quantidade": list(dist['pares'].keys()),
-                    "Probabilidade": list(dist['pares'].values())
-                }).sort_values("Quantidade")
-                st.bar_chart(pares_df.set_index("Quantidade"))
-            
-            with col2:
-                st.markdown("**Números Primos**")
-                primos_df = pd.DataFrame({
-                    "Quantidade": list(dist['primos'].keys()),
-                    "Probabilidade": list(dist['primos'].values())
-                }).sort_values("Quantidade")
-                st.bar_chart(primos_df.set_index("Quantidade"))
-            
-            # =====================================================
-            # 🎲 GERADOR OTIMIZADO PELO MOTOR ESTATÍSTICO
-            # =====================================================
-            st.markdown("---")
-            st.markdown("## 🎲 Gerador Otimizado pelo Motor Estatístico")
-            st.caption("5 jogos gerados com base nas distribuições empíricas e features históricas")
-            
-            col1, col2, col3 = st.columns([1, 1, 1])
-            with col2:
-                if st.button("🚀 GERAR 5 JOGOS OTIMIZADOS", key="gerar_otimizados", use_container_width=True, type="primary"):
-                    with st.spinner("Gerando jogos com base nas distribuições estatísticas..."):
-                        
-                        # =========================================
-                        # FUNÇÃO INTERNA PARA GERAR JOGO OTIMIZADO
-                        # =========================================
-                        def gerar_jogo_otimizado(dist, historico_df):
-                            """
-                            Gera um jogo otimizado usando as distribuições empíricas
-                            """
-                            max_tentativas = 11280000
-                            melhor_jogo = None
-                            melhor_logL = -float('inf')
-                            
-                            for tentativa in range(max_tentativas):
-                                # GERAR JOGO ALEATÓRIO BASE
-                                jogo_candidato = sorted(random.sample(range(1, 26), 15))
-                                
-                                # CALCULAR FEATURES
-                                features = {
-                                    "pares": contar_pares(jogo_candidato),
-                                    "primos": contar_primos(jogo_candidato),
-                                    "consecutivos": contar_consecutivos(jogo_candidato),
-                                    "soma": bucket_soma(sum(jogo_candidato))
-                                }
-                                
-                                # CALCULAR LIKELIHOOD
-                                logL = log_likelihood(features, dist)
-                                
-                                # MANTER O MELHOR
-                                if logL > melhor_logL:
-                                    melhor_logL = logL
-                                    melhor_jogo = jogo_candidato
-                            
-                            return melhor_jogo, melhor_logL
-                        
-                        # =========================================
-                        # GERAR 5 JOGOS OTIMIZADOS
-                        # =========================================
-                        jogos_otimizados = []
-                        logs_otimizados = []
-                        
-                        for i in range(5):
-                            jogo, logL = gerar_jogo_otimizado(dist, st.session_state.historico_df)
-                            if jogo:
-                                jogos_otimizados.append(jogo)
-                                logs_otimizados.append(logL)
-                        
-                        # SALVAR NA SESSÃO
-                        st.session_state.jogos_otimizados = jogos_otimizados
-                        st.session_state.logs_otimizados = logs_otimizados
-                        
-                        st.success(f"✅ 5 jogos gerados com sucesso! Log-likelihood médio: {np.mean(logs_otimizados):.4f}")
-            
-            # MOSTRAR JOGOS OTIMIZADOS SE EXISTIREM
-            if "jogos_otimizados" in st.session_state and st.session_state.jogos_otimizados:
-                jogos_otimizados = st.session_state.jogos_otimizados
-                logs_otimizados = st.session_state.logs_otimizados
+                # GARANTIR QUE OS JOGOS ESTÃO NO FORMATO CORRETO
+                if jogos_gerados:
+                    jogos_gerados = garantir_jogos_como_listas(jogos_gerados)
                 
-                st.markdown("### 📊 Jogos Otimizados pelo Motor Estatístico")
+                # Verificar se há jogos gerados
+                if not jogos_gerados:
+                    st.warning("⚠️ Gere jogos na aba 'Fechamento 3622' primeiro para avaliá-los estatisticamente!")
+                    st.info("💡 Os jogos gerados são salvos automaticamente e ficam disponíveis em todas as abas.")
                 
-                # COMPARAR COM BASELINE
+                # BASELINE CORRETO (interseção 15×15)
                 baseline = st.session_state.baseline_cache or baseline_aleatorio()
                 
-                # CALCULAR PERCENTIS RELATIVOS AO BASELINE
-                percentis = []
-                for jogo in jogos_otimizados:
-                    # Simular probabilidade de acertos via Monte Carlo rápido
-                    mc_fast = monte_carlo_jogo(tuple(jogo), 5000)  # Rápido para não travar
-                    percentis.append(mc_fast["P>=11"] * 100)
-                
-                # MOSTrar cada jogo
-                for i, (jogo, logL, pct) in enumerate(zip(jogos_otimizados, logs_otimizados, percentis)):
-                    with st.container():
-                        # Calcular features para exibição
-                        features_jogo = {
-                            "pares": contar_pares(jogo),
-                            "primos": contar_primos(jogo),
-                            "consecutivos": contar_consecutivos(jogo),
-                            "soma": sum(jogo)
-                        }
-                        
-                        # Determinar cor baseada no logL
-                        if logL > np.percentile(logs_otimizados, 80):
-                            cor = "#4ade80"  # Verde (excelente)
-                        elif logL > np.percentile(logs_otimizados, 50):
-                            cor = "gold"      # Amarelo (bom)
-                        else:
-                            cor = "#4cc9f0"   # Azul (médio)
-                        
-                        # HTML do jogo
-                        nums_html = formatar_jogo_html(jogo)
-                        
-                        st.markdown(f"""
-                        <div style='border-left: 5px solid {cor}; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
-                            <div style='display:flex; justify-content:space-between;'>
-                                <strong>Jogo Otimizado #{i+1}</strong>
-                                <small>LogL: {logL:.4f}</small>
-                            </div>
-                            <div>{nums_html}</div>
-                            <div style='display:flex; gap:15px; margin-top:8px; color:#aaa; font-size:0.9em; flex-wrap:wrap;'>
-                                <span>⚖️ {features_jogo['pares']} pares</span>
-                                <span>🔢 {features_jogo['primos']} primos</span>
-                                <span>🔗 {features_jogo['consecutivos']} consec</span>
-                                <span>➕ {features_jogo['soma']}</span>
-                                <span>🎯 P(≥11): {pct:.1f}%</span>
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                
-                # BOTÕES DE AÇÃO PARA JOGOS OTIMIZADOS
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    if st.button("💾 Salvar Jogos Otimizados", key="salvar_otimizados", use_container_width=True):
-                        if st.session_state.dados_api:
-                            ultimo = st.session_state.dados_api[0]
-                            arquivo, jogo_id = salvar_jogos_gerados(
-                                jogos_otimizados,
-                                list(range(1, 18)),
-                                {"modelo": "Motor Estatístico", "tipo": "otimizado"},
-                                ultimo['concurso'],
-                                ultimo['data']
-                            )
-                            if arquivo:
-                                st.success(f"✅ Jogos otimizados salvos! ID: {jogo_id}")
-                                st.session_state.jogos_salvos = carregar_jogos_salvos()
-                
-                with col2:
-                    if st.button("🔄 Nova Geração", key="nova_geracao_otimizados", use_container_width=True):
-                        st.session_state.jogos_otimizados = None
-                        st.rerun()
-                
-                with col3:
-                    # Exportar para CSV
-                    df_export_otimizado = pd.DataFrame({
-                        "Jogo": range(1, len(jogos_otimizados)+1),
-                        "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in jogos_otimizados],
-                        "Pares": [contar_pares(j) for j in jogos_otimizados],
-                        "Primos": [contar_primos(j) for j in jogos_otimizados],
-                        "Consecutivos": [contar_consecutivos(j) for j in jogos_otimizados],
-                        "Soma": [sum(j) for j in jogos_otimizados],
-                        "Log-Likelihood": [round(l, 4) for l in logs_otimizados],
-                        "P(≥11)": [f"{p:.1f}%" for p in percentis]
-                    })
+                with st.expander("🎲 Baseline Estatístico (H₀)", expanded=False):
+                    st.markdown(f"""
+                    **Modelo nulo:** {baseline['descricao']}  
+                    **Média de acertos esperada:** {baseline['media']:.3f}  
+                    **Desvio padrão:** {baseline['std']:.3f}  
+                    """)
                     
-                    csv_otimizado = df_export_otimizado.to_csv(index=False)
-                    st.download_button(
-                        label="📥 Exportar CSV",
-                        data=csv_otimizado,
-                        file_name=f"jogos_otimizados_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                        mime="text/csv",
-                        use_container_width=True
-                    )
+                    # Gráfico da distribuição baseline
+                    baseline_dist = pd.DataFrame({
+                        "Acertos": range(16),
+                        "Probabilidade": baseline['dist']
+                    })
+                    st.bar_chart(baseline_dist.set_index("Acertos"))
                 
-                # COMPARAÇÃO COM BASELINE
-                st.markdown("### 📊 Análise Comparativa")
+                # Distribuições empíricas
+                st.markdown("### 📈 Distribuições Empíricas")
+                dist = distribuicoes_empiricas(st.session_state.historico_df)
                 
-                # Calcular médias dos jogos otimizados
-                media_pares = np.mean([contar_pares(j) for j in jogos_otimizados])
-                media_primos = np.mean([contar_primos(j) for j in jogos_otimizados])
-                media_consec = np.mean([contar_consecutivos(j) for j in jogos_otimizados])
-                media_soma = np.mean([sum(j) for j in jogos_otimizados])
-                
-                # Calcular médias históricas
-                hist_pares = st.session_state.historico_df["pares"].mean()
-                hist_primos = st.session_state.historico_df["primos"].mean()
-                hist_consec = st.session_state.historico_df["consecutivos"].mean()
-                hist_soma = st.session_state.historico_df["soma"].mean()
-                
-                # Criar DataFrame comparativo
-                df_comp = pd.DataFrame({
-                    "Feature": ["Pares", "Primos", "Consecutivos", "Soma"],
-                    "Jogos Otimizados": [media_pares, media_primos, media_consec, media_soma],
-                    "Média Histórica": [hist_pares, hist_primos, hist_consec, hist_soma]
-                })
-                
-                st.dataframe(df_comp, use_container_width=True, hide_index=True)
-                
-                # Probabilidade média de acertos
-                st.markdown("### 🎯 Probabilidade Média de Acertos")
-                
-                col1, col2, col3 = st.columns(3)
+                col1, col2 = st.columns(2)
                 with col1:
-                    st.metric("P(≥11) média", f"{np.mean(percentis):.1f}%")
-                with col2:
-                    st.metric("P(≥12) média", "---")
-                with col3:
-                    st.metric("vs Baseline", f"{np.mean(percentis) - baseline['media']*100:.1f}%")
+                    st.markdown("**Pares x Ímpares**")
+                    pares_df = pd.DataFrame({
+                        "Quantidade": list(dist['pares'].keys()),
+                        "Probabilidade": list(dist['pares'].values())
+                    }).sort_values("Quantidade")
+                    st.bar_chart(pares_df.set_index("Quantidade"))
                 
+                with col2:
+                    st.markdown("**Números Primos**")
+                    primos_df = pd.DataFrame({
+                        "Quantidade": list(dist['primos'].keys()),
+                        "Probabilidade": list(dist['primos'].values())
+                    }).sort_values("Quantidade")
+                    st.bar_chart(primos_df.set_index("Quantidade"))
+                
+                # =====================================================
+                # 🎲 GERADOR OTIMIZADO PELO MOTOR ESTATÍSTICO
+                # =====================================================
                 st.markdown("---")
-            
-            # AVALIAÇÃO DOS JOGOS (Likelihood com pesos)
-            st.markdown("### 🎯 Ranking Estatístico dos Jogos")
-            
-            if jogos_gerados:
-                avaliacao = []
-                for i, jogo in enumerate(jogos_gerados):
-                    features = {
-                        "pares": contar_pares(jogo),
-                        "primos": contar_primos(jogo),
-                        "consecutivos": contar_consecutivos(jogo),
-                        "soma": bucket_soma(sum(jogo))
-                    }
+                st.markdown("## 🎲 Gerador Otimizado pelo Motor Estatístico")
+                st.caption("5 jogos gerados com base nas distribuições empíricas e features históricas")
+                
+                col1, col2, col3 = st.columns([1, 1, 1])
+                with col2:
+                    if st.button("🚀 GERAR 5 JOGOS OTIMIZADOS", key="gerar_otimizados", use_container_width=True, type="primary"):
+                        with st.spinner("Gerando jogos com base nas distribuições estatísticas..."):
+                            
+                            # =========================================
+                            # FUNÇÃO INTERNA PARA GERAR JOGO OTIMIZADO
+                            # =========================================
+                            def gerar_jogo_otimizado(dist, historico_df):
+                                """
+                                Gera um jogo otimizado usando as distribuições empíricas
+                                """
+                                max_tentativas = 11280000
+                                melhor_jogo = None
+                                melhor_logL = -float('inf')
+                                
+                                for tentativa in range(max_tentativas):
+                                    # GERAR JOGO ALEATÓRIO BASE
+                                    jogo_candidato = sorted(random.sample(range(1, 26), 15))
+                                    
+                                    # CALCULAR FEATURES
+                                    features = {
+                                        "pares": contar_pares(jogo_candidato),
+                                        "primos": contar_primos(jogo_candidato),
+                                        "consecutivos": contar_consecutivos(jogo_candidato),
+                                        "soma": bucket_soma(sum(jogo_candidato))
+                                    }
+                                    
+                                    # CALCULAR LIKELIHOOD
+                                    logL = log_likelihood(features, dist)
+                                    
+                                    # MANTER O MELHOR
+                                    if logL > melhor_logL:
+                                        melhor_logL = logL
+                                        melhor_jogo = jogo_candidato
+                                
+                                return melhor_jogo, melhor_logL
+                            
+                            # =========================================
+                            # GERAR 5 JOGOS OTIMIZADOS
+                            # =========================================
+                            jogos_otimizados = []
+                            logs_otimizados = []
+                            
+                            for i in range(5):
+                                jogo, logL = gerar_jogo_otimizado(dist, st.session_state.historico_df)
+                                if jogo:
+                                    jogos_otimizados.append(jogo)
+                                    logs_otimizados.append(logL)
+                            
+                            # SALVAR NA SESSÃO
+                            st.session_state.jogos_otimizados = jogos_otimizados
+                            st.session_state.logs_otimizados = logs_otimizados
+                            
+                            st.success(f"✅ 5 jogos gerados com sucesso! Log-likelihood médio: {np.mean(logs_otimizados):.4f}")
+                
+                # MOSTRAR JOGOS OTIMIZADOS SE EXISTIREM
+                if "jogos_otimizados" in st.session_state and st.session_state.jogos_otimizados:
+                    jogos_otimizados = st.session_state.jogos_otimizados
+                    logs_otimizados = st.session_state.logs_otimizados
                     
-                    logL = log_likelihood(features, dist)
+                    st.markdown("### 📊 Jogos Otimizados pelo Motor Estatístico")
                     
-                    avaliacao.append({
-                        "Jogo": i + 1,
-                        "Likelihood (log)": round(logL, 4)
-                    })
-                
-                df_avaliacao = pd.DataFrame(avaliacao)
-                df_avaliacao["Rank"] = df_avaliacao["Likelihood (log)"].rank(ascending=False).astype(int)
-                df_avaliacao["Percentil"] = (df_avaliacao["Likelihood (log)"].rank(pct=True) * 100).round(1)
-                
-                # Score normalizado 0-100 baseado no próprio lote
-                logLs = df_avaliacao["Likelihood (log)"]
-                min_logL = logLs.min()
-                max_logL = logLs.max()
-                
-                if max_logL > min_logL:  # Evitar divisão por zero
-                    score = 100 * (logLs - min_logL) / (max_logL - min_logL)
-                else:
-                    score = pd.Series([50] * len(logLs))  # Todos iguais
-                
-                df_avaliacao["Score (0-100)"] = score.round(1)
-                
-                # Ordenar por rank
-                df_avaliacao = df_avaliacao.sort_values("Rank").reset_index(drop=True)
-                
-                # Mostrar dataframe com destaque
-                st.dataframe(
-                    df_avaliacao[["Rank", "Jogo", "Score (0-100)", "Percentil", "Likelihood (log)"]],
-                    use_container_width=True,
-                    hide_index=True,
-                    column_config={
-                        "Score (0-100)": st.column_config.ProgressColumn(
-                            "Score",
-                            format="%.1f",
-                            min_value=0,
-                            max_value=100
+                    # COMPARAR COM BASELINE
+                    baseline = st.session_state.baseline_cache or baseline_aleatorio()
+                    
+                    # CALCULAR PERCENTIS RELATIVOS AO BASELINE
+                    percentis = []
+                    for jogo in jogos_otimizados:
+                        # Simular probabilidade de acertos via Monte Carlo rápido
+                        mc_fast = monte_carlo_jogo(tuple(jogo), 5000)  # Rápido para não travar
+                        percentis.append(mc_fast["P>=11"] * 100)
+                    
+                    # MOSTrar cada jogo
+                    for i, (jogo, logL, pct) in enumerate(zip(jogos_otimizados, logs_otimizados, percentis)):
+                        with st.container():
+                            # Calcular features para exibição
+                            features_jogo = {
+                                "pares": contar_pares(jogo),
+                                "primos": contar_primos(jogo),
+                                "consecutivos": contar_consecutivos(jogo),
+                                "soma": sum(jogo)
+                            }
+                            
+                            # Determinar cor baseada no logL
+                            if logL > np.percentile(logs_otimizados, 80):
+                                cor = "#4ade80"  # Verde (excelente)
+                            elif logL > np.percentile(logs_otimizados, 50):
+                                cor = "gold"      # Amarelo (bom)
+                            else:
+                                cor = "#4cc9f0"   # Azul (médio)
+                            
+                            # HTML do jogo
+                            nums_html = formatar_jogo_html(jogo)
+                            
+                            st.markdown(f"""
+                            <div style='border-left: 5px solid {cor}; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
+                                <div style='display:flex; justify-content:space-between;'>
+                                    <strong>Jogo Otimizado #{i+1}</strong>
+                                    <small>LogL: {logL:.4f}</small>
+                                </div>
+                                <div>{nums_html}</div>
+                                <div style='display:flex; gap:15px; margin-top:8px; color:#aaa; font-size:0.9em; flex-wrap:wrap;'>
+                                    <span>⚖️ {features_jogo['pares']} pares</span>
+                                    <span>🔢 {features_jogo['primos']} primos</span>
+                                    <span>🔗 {features_jogo['consecutivos']} consec</span>
+                                    <span>➕ {features_jogo['soma']}</span>
+                                    <span>🎯 P(≥11): {pct:.1f}%</span>
+                                </div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                    
+                    # BOTÕES DE AÇÃO PARA JOGOS OTIMIZADOS
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        if st.button("💾 Salvar Jogos Otimizados", key="salvar_otimizados", use_container_width=True):
+                            if st.session_state.dados_api:
+                                ultimo = st.session_state.dados_api[0]
+                                arquivo, jogo_id = salvar_jogos_gerados(
+                                    jogos_otimizados,
+                                    list(range(1, 18)),
+                                    {"modelo": "Motor Estatístico", "tipo": "otimizado"},
+                                    ultimo['concurso'],
+                                    ultimo['data']
+                                )
+                                if arquivo:
+                                    st.success(f"✅ Jogos otimizados salvos! ID: {jogo_id}")
+                                    st.session_state.jogos_salvos = carregar_jogos_salvos()
+                    
+                    with col2:
+                        if st.button("🔄 Nova Geração", key="nova_geracao_otimizados", use_container_width=True):
+                            st.session_state.jogos_otimizados = None
+                            st.rerun()
+                    
+                    with col3:
+                        # Exportar para CSV
+                        df_export_otimizado = pd.DataFrame({
+                            "Jogo": range(1, len(jogos_otimizados)+1),
+                            "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in jogos_otimizados],
+                            "Pares": [contar_pares(j) for j in jogos_otimizados],
+                            "Primos": [contar_primos(j) for j in jogos_otimizados],
+                            "Consecutivos": [contar_consecutivos(j) for j in jogos_otimizados],
+                            "Soma": [sum(j) for j in jogos_otimizados],
+                            "Log-Likelihood": [round(l, 4) for l in logs_otimizados],
+                            "P(≥11)": [f"{p:.1f}%" for p in percentis]
+                        })
+                        
+                        csv_otimizado = df_export_otimizado.to_csv(index=False)
+                        st.download_button(
+                            label="📥 Exportar CSV",
+                            data=csv_otimizado,
+                            file_name=f"jogos_otimizados_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                            mime="text/csv",
+                            use_container_width=True
                         )
-                    }
-                )
-                
-                # Distribuição dos scores
-                st.markdown("### 📊 Distribuição dos Scores")
-                chart_data = pd.DataFrame({
-                    "Score": df_avaliacao["Score (0-100)"]
-                })
-                st.bar_chart(chart_data)
-                
-                # TESTE Z CORRIGIDO - Usando percentil
-                st.markdown("### 🧪 Validação Estatística (Teste Z)")
-                
-                percentil_medio = df_avaliacao["Percentil"].mean()
-                z = (percentil_medio - 50) / 15  # 15 = desvio aproximado
-                p_value = 1 - norm.cdf(z)
-                
-                # Interpretação profissional
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Percentil médio", f"{percentil_medio:.1f}%")
-                with col2:
-                    st.metric("Z-score", f"{z:.3f}")
-                with col3:
-                    st.metric("p-value", f"{p_value:.6f}")
-                
-                if z > 1.96:
-                    st.markdown("""
-                    <div style='background:#00ff0020; padding:15px; border-radius:10px; border-left:5px solid #00ff00; margin:10px 0;'>
-                        <strong>✅ VANTAGEM ESTATÍSTICA SIGNIFICATIVA (p < 0.05)</strong><br>
-                        O modelo supera o aleatório com 95% de confiança.
-                    </div>
-                    """, unsafe_allow_html=True)
-                elif z > 1.28:
-                    st.markdown("""
-                    <div style='background:#ffff0020; padding:15px; border-radius:10px; border-left:5px solid #ffff00; margin:10px 0;'>
-                        <strong>⚠️ VANTAGEM MODERADA (p < 0.10)</strong><br>
-                        Há indícios de vantagem, mas não conclusivos.
-                    </div>
-                    """, unsafe_allow_html=True)
-                else:
-                    st.markdown("""
-                    <div style='background:#0000ff20; padding:15px; border-radius:10px; border-left:5px solid #0000ff; margin:10px 0;'>
-                        <strong>📊 ALEATÓRIO (p > 0.10)</strong><br>
-                        Sem evidência estatística de vantagem.
-                    </div>
-                    """, unsafe_allow_html=True)
-                
-                # =====================================================
-                # TOP JOGOS RECOMENDADOS
-                # =====================================================
-                st.markdown("### 🏆 Top 5 Jogos Recomendados")
-                
-                # Verificar se há jogos suficientes
-                if len(df_avaliacao) > 0:
-                    # Filtrar top 5 por score
-                    top_jogos = df_avaliacao.nlargest(min(5, len(df_avaliacao)), "Score (0-100)")
                     
-                    for idx, row in top_jogos.iterrows():
-                        jogo_idx = row["Jogo"] - 1
-                        
-                        # USAR FUNÇÃO DE EXTRAÇÃO SEGURA
-                        jogo = extrair_jogo_por_indice(jogos_gerados, jogo_idx)
-                        
-                        # Verificar se conseguiu extrair o jogo
-                        if not jogo:
-                            st.error(f"❌ Não foi possível extrair o jogo {row['Jogo']}")
-                            continue
-                        
-                        # Análise individual do jogo
-                        features_jogo = {
+                    # COMPARAÇÃO COM BASELINE
+                    st.markdown("### 📊 Análise Comparativa")
+                    
+                    # Calcular médias dos jogos otimizados
+                    media_pares = np.mean([contar_pares(j) for j in jogos_otimizados])
+                    media_primos = np.mean([contar_primos(j) for j in jogos_otimizados])
+                    media_consec = np.mean([contar_consecutivos(j) for j in jogos_otimizados])
+                    media_soma = np.mean([sum(j) for j in jogos_otimizados])
+                    
+                    # Calcular médias históricas
+                    hist_pares = st.session_state.historico_df["pares"].mean()
+                    hist_primos = st.session_state.historico_df["primos"].mean()
+                    hist_consec = st.session_state.historico_df["consecutivos"].mean()
+                    hist_soma = st.session_state.historico_df["soma"].mean()
+                    
+                    # Criar DataFrame comparativo
+                    df_comp = pd.DataFrame({
+                        "Feature": ["Pares", "Primos", "Consecutivos", "Soma"],
+                        "Jogos Otimizados": [media_pares, media_primos, media_consec, media_soma],
+                        "Média Histórica": [hist_pares, hist_primos, hist_consec, hist_soma]
+                    })
+                    
+                    st.dataframe(df_comp, use_container_width=True, hide_index=True)
+                    
+                    # Probabilidade média de acertos
+                    st.markdown("### 🎯 Probabilidade Média de Acertos")
+                    
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("P(≥11) média", f"{np.mean(percentis):.1f}%")
+                    with col2:
+                        st.metric("P(≥12) média", "---")
+                    with col3:
+                        st.metric("vs Baseline", f"{np.mean(percentis) - baseline['media']*100:.1f}%")
+                    
+                    st.markdown("---")
+                
+                # AVALIAÇÃO DOS JOGOS (Likelihood com pesos)
+                if jogos_gerados:
+                    st.markdown("### 🎯 Ranking Estatístico dos Jogos")
+                    
+                    avaliacao = []
+                    for i, jogo in enumerate(jogos_gerados):
+                        features = {
                             "pares": contar_pares(jogo),
                             "primos": contar_primos(jogo),
                             "consecutivos": contar_consecutivos(jogo),
-                            "soma": sum(jogo)
+                            "soma": bucket_soma(sum(jogo))
                         }
                         
-                        # HTML do jogo
-                        nums_html = formatar_jogo_html(jogo)
+                        logL = log_likelihood(features, dist)
                         
-                        # Determinar cor baseada no score
-                        if row["Score (0-100)"] >= 80:
-                            cor = "#4ade80"  # Verde (excelente)
-                        elif row["Score (0-100)"] >= 60:
-                            cor = "gold"      # Amarelo (bom)
-                        else:
-                            cor = "#4cc9f0"   # Azul (médio)
-                        
-                        st.markdown(f"""
-                        <div style='border-left: 5px solid {cor}; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
-                            <div style='display:flex; justify-content:space-between;'>
-                                <strong>Rank #{row['Rank']} | Score {row['Score (0-100)']:.1f}</strong>
-                                <small>Percentil {row['Percentil']:.0f}%</small>
-                            </div>
-                            <div>{nums_html}</div>
-                            <div style='display:flex; gap:15px; margin-top:8px; color:#aaa; font-size:0.9em; flex-wrap:wrap;'>
-                                <span>⚖️ {features_jogo['pares']} pares</span>
-                                <span>🔢 {features_jogo['primos']} primos</span>
-                                <span>🔗 {features_jogo['consecutivos']} consecutivos</span>
-                                <span>➕ {features_jogo['soma']} soma</span>
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                else:
-                    st.info("Nenhum jogo disponível para exibição.")
-                
-                # =====================================================
-                # 🔥 NÍVEL PROFISSIONAL: MONTE CARLO POR JOGO
-                # =====================================================
-                st.markdown("---")
-                st.markdown("## 🎲 Simulação Monte Carlo por Jogo")
-                st.caption("Estimativa empírica real de probabilidade por jogo")
-
-                N_SIM = st.slider(
-                    "Quantidade de simulações por jogo",
-                    min_value=1_000,
-                    max_value=50_000,
-                    value=st.session_state.mc_sim_value,
-                    step=1_000,
-                    key="mc_slider_principal"
-                )
-                st.session_state.mc_sim_value = N_SIM
-
-                if st.button("🚀 Rodar Simulação Monte Carlo", use_container_width=True, type="primary"):
-                    with st.spinner(f"Rodando {N_SIM:,} simulações para cada jogo..."):
-                        mc_resultados = []
-                        
-                        for i, jogo in enumerate(jogos_gerados):
-                            res = monte_carlo_jogo(tuple(jogo), N_SIM)
-                            mc_resultados.append({
-                                "Jogo": i + 1,
-                                "P(≥11)": f"{res['P>=11']*100:.2f}%",
-                                "P(≥12)": f"{res['P>=12']*100:.2f}%",
-                                "P(≥13)": f"{res['P>=13']*100:.2f}%",
-                                "P(≥14)": f"{res['P>=14']*100:.2f}%",
-                                "P(15)": f"{res['P=15']*100:.4f}%",
-                                "Média": round(res['media'], 2),
-                                "Std": round(res['std'], 2)
-                            })
-                        
-                        st.session_state.mc_resultados = pd.DataFrame(mc_resultados)
-                        st.success("✅ Simulação concluída!")
-
-                # Mostrar resultados Monte Carlo se existirem
-                if st.session_state.mc_resultados is not None:
-                    st.markdown("### 📊 Resultados da Simulação")
+                        avaliacao.append({
+                            "Jogo": i + 1,
+                            "Likelihood (log)": round(logL, 4)
+                        })
                     
-                    # Ordenar por P(≥11) para melhor visualização
-                    df_mc = st.session_state.mc_resultados.copy()
-                    df_mc["P(≥11)_valor"] = df_mc["P(≥11)"].str.replace("%", "").astype(float)
-                    df_mc = df_mc.sort_values("P(≥11)_valor", ascending=False).drop("P(≥11)_valor", axis=1)
+                    df_avaliacao = pd.DataFrame(avaliacao)
+                    df_avaliacao["Rank"] = df_avaliacao["Likelihood (log)"].rank(ascending=False).astype(int)
+                    df_avaliacao["Percentil"] = (df_avaliacao["Likelihood (log)"].rank(pct=True) * 100).round(1)
                     
+                    # Score normalizado 0-100 baseado no próprio lote
+                    logLs = df_avaliacao["Likelihood (log)"]
+                    min_logL = logLs.min()
+                    max_logL = logLs.max()
+                    
+                    if max_logL > min_logL:  # Evitar divisão por zero
+                        score = 100 * (logLs - min_logL) / (max_logL - min_logL)
+                    else:
+                        score = pd.Series([50] * len(logLs))  # Todos iguais
+                    
+                    df_avaliacao["Score (0-100)"] = score.round(1)
+                    
+                    # Ordenar por rank
+                    df_avaliacao = df_avaliacao.sort_values("Rank").reset_index(drop=True)
+                    
+                    # Mostrar dataframe com destaque
                     st.dataframe(
-                        df_mc,
+                        df_avaliacao[["Rank", "Jogo", "Score (0-100)", "Percentil", "Likelihood (log)"]],
                         use_container_width=True,
                         hide_index=True,
                         column_config={
-                            "P(≥11)": st.column_config.TextColumn("P(≥11)", width="small"),
-                            "P(≥12)": st.column_config.TextColumn("P(≥12)", width="small"),
-                            "P(≥13)": st.column_config.TextColumn("P(≥13)", width="small"),
-                            "P(≥14)": st.column_config.TextColumn("P(≥14)", width="small"),
-                            "P(15)": st.column_config.TextColumn("P(15)", width="small"),
+                            "Score (0-100)": st.column_config.ProgressColumn(
+                                "Score",
+                                format="%.1f",
+                                min_value=0,
+                                max_value=100
+                            )
                         }
                     )
                     
-                    # Gráfico comparativo
-                    st.markdown("### 📈 Comparativo de Probabilidades")
+                    # Distribuição dos scores
+                    st.markdown("### 📊 Distribuição dos Scores")
+                    chart_data = pd.DataFrame({
+                        "Score": df_avaliacao["Score (0-100)"]
+                    })
+                    st.bar_chart(chart_data)
                     
-                    # Preparar dados para o gráfico
-                    df_chart = df_mc.head(10).copy()  # Top 10 jogos
-                    for col in ["P(≥11)", "P(≥12)", "P(≥13)", "P(≥14)"]:
-                        df_chart[col] = df_chart[col].str.replace("%", "").astype(float)
+                    # TESTE Z CORRIGIDO - Usando percentil
+                    st.markdown("### 🧪 Validação Estatística (Teste Z)")
                     
-                    chart_data = df_chart.melt(
-                        id_vars=["Jogo"],
-                        value_vars=["P(≥11)", "P(≥12)", "P(≥13)", "P(≥14)"],
-                        var_name="Faixa",
-                        value_name="Probabilidade (%)"
+                    percentil_medio = df_avaliacao["Percentil"].mean()
+                    z = (percentil_medio - 50) / 15  # 15 = desvio aproximado
+                    p_value = 1 - norm.cdf(z)
+                    
+                    # Interpretação profissional
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Percentil médio", f"{percentil_medio:.1f}%")
+                    with col2:
+                        st.metric("Z-score", f"{z:.3f}")
+                    with col3:
+                        st.metric("p-value", f"{p_value:.6f}")
+                    
+                    if z > 1.96:
+                        st.markdown("""
+                        <div style='background:#00ff0020; padding:15px; border-radius:10px; border-left:5px solid #00ff00; margin:10px 0;'>
+                            <strong>✅ VANTAGEM ESTATÍSTICA SIGNIFICATIVA (p < 0.05)</strong><br>
+                            O modelo supera o aleatório com 95% de confiança.
+                        </div>
+                        """, unsafe_allow_html=True)
+                    elif z > 1.28:
+                        st.markdown("""
+                        <div style='background:#ffff0020; padding:15px; border-radius:10px; border-left:5px solid #ffff00; margin:10px 0;'>
+                            <strong>⚠️ VANTAGEM MODERADA (p < 0.10)</strong><br>
+                            Há indícios de vantagem, mas não conclusivos.
+                        </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        st.markdown("""
+                        <div style='background:#0000ff20; padding:15px; border-radius:10px; border-left:5px solid #0000ff; margin:10px 0;'>
+                            <strong>📊 ALEATÓRIO (p > 0.10)</strong><br>
+                            Sem evidência estatística de vantagem.
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    # =====================================================
+                    # TOP JOGOS RECOMENDADOS
+                    # =====================================================
+                    st.markdown("### 🏆 Top 5 Jogos Recomendados")
+                    
+                    # Verificar se há jogos suficientes
+                    if len(df_avaliacao) > 0:
+                        # Filtrar top 5 por score
+                        top_jogos = df_avaliacao.nlargest(min(5, len(df_avaliacao)), "Score (0-100)")
+                        
+                        for idx, row in top_jogos.iterrows():
+                            jogo_idx = row["Jogo"] - 1
+                            
+                            # USAR FUNÇÃO DE EXTRAÇÃO SEGURA
+                            jogo = extrair_jogo_por_indice(jogos_gerados, jogo_idx)
+                            
+                            # Verificar se conseguiu extrair o jogo
+                            if not jogo:
+                                st.error(f"❌ Não foi possível extrair o jogo {row['Jogo']}")
+                                continue
+                            
+                            # Análise individual do jogo
+                            features_jogo = {
+                                "pares": contar_pares(jogo),
+                                "primos": contar_primos(jogo),
+                                "consecutivos": contar_consecutivos(jogo),
+                                "soma": sum(jogo)
+                            }
+                            
+                            # HTML do jogo
+                            nums_html = formatar_jogo_html(jogo)
+                            
+                            # Determinar cor baseada no score
+                            if row["Score (0-100)"] >= 80:
+                                cor = "#4ade80"  # Verde (excelente)
+                            elif row["Score (0-100)"] >= 60:
+                                cor = "gold"      # Amarelo (bom)
+                            else:
+                                cor = "#4cc9f0"   # Azul (médio)
+                            
+                            st.markdown(f"""
+                            <div style='border-left: 5px solid {cor}; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
+                                <div style='display:flex; justify-content:space-between;'>
+                                    <strong>Rank #{row['Rank']} | Score {row['Score (0-100)']:.1f}</strong>
+                                    <small>Percentil {row['Percentil']:.0f}%</small>
+                                </div>
+                                <div>{nums_html}</div>
+                                <div style='display:flex; gap:15px; margin-top:8px; color:#aaa; font-size:0.9em; flex-wrap:wrap;'>
+                                    <span>⚖️ {features_jogo['pares']} pares</span>
+                                    <span>🔢 {features_jogo['primos']} primos</span>
+                                    <span>🔗 {features_jogo['consecutivos']} consecutivos</span>
+                                    <span>➕ {features_jogo['soma']} soma</span>
+                                </div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                    else:
+                        st.info("Nenhum jogo disponível para exibição.")
+                    
+                    # =====================================================
+                    # 🔥 NÍVEL PROFISSIONAL: MONTE CARLO POR JOGO
+                    # =====================================================
+                    st.markdown("---")
+                    st.markdown("## 🎲 Simulação Monte Carlo por Jogo")
+                    st.caption("Estimativa empírica real de probabilidade por jogo")
+
+                    N_SIM = st.slider(
+                        "Quantidade de simulações por jogo",
+                        min_value=1_000,
+                        max_value=50_000,
+                        value=st.session_state.mc_sim_value,
+                        step=1_000,
+                        key="mc_slider_principal"
                     )
+                    st.session_state.mc_sim_value = N_SIM
+
+                    if st.button("🚀 Rodar Simulação Monte Carlo", use_container_width=True, type="primary"):
+                        with st.spinner(f"Rodando {N_SIM:,} simulações para cada jogo..."):
+                            mc_resultados = []
+                            
+                            for i, jogo in enumerate(jogos_gerados):
+                                res = monte_carlo_jogo(tuple(jogo), N_SIM)
+                                mc_resultados.append({
+                                    "Jogo": i + 1,
+                                    "P(≥11)": f"{res['P>=11']*100:.2f}%",
+                                    "P(≥12)": f"{res['P>=12']*100:.2f}%",
+                                    "P(≥13)": f"{res['P>=13']*100:.2f}%",
+                                    "P(≥14)": f"{res['P>=14']*100:.2f}%",
+                                    "P(15)": f"{res['P=15']*100:.4f}%",
+                                    "Média": round(res['media'], 2),
+                                    "Std": round(res['std'], 2)
+                                })
+                            
+                            st.session_state.mc_resultados = pd.DataFrame(mc_resultados)
+                            st.success("✅ Simulação concluída!")
+
+                    # Mostrar resultados Monte Carlo se existirem
+                    if st.session_state.mc_resultados is not None:
+                        st.markdown("### 📊 Resultados da Simulação")
+                        
+                        # Ordenar por P(≥11) para melhor visualização
+                        df_mc = st.session_state.mc_resultados.copy()
+                        df_mc["P(≥11)_valor"] = df_mc["P(≥11)"].str.replace("%", "").astype(float)
+                        df_mc = df_mc.sort_values("P(≥11)_valor", ascending=False).drop("P(≥11)_valor", axis=1)
+                        
+                        st.dataframe(
+                            df_mc,
+                            use_container_width=True,
+                            hide_index=True,
+                            column_config={
+                                "P(≥11)": st.column_config.TextColumn("P(≥11)", width="small"),
+                                "P(≥12)": st.column_config.TextColumn("P(≥12)", width="small"),
+                                "P(≥13)": st.column_config.TextColumn("P(≥13)", width="small"),
+                                "P(≥14)": st.column_config.TextColumn("P(≥14)", width="small"),
+                                "P(15)": st.column_config.TextColumn("P(15)", width="small"),
+                            }
+                        )
+                        
+                        # Gráfico comparativo
+                        st.markdown("### 📈 Comparativo de Probabilidades")
+                        
+                        # Preparar dados para o gráfico
+                        df_chart = df_mc.head(10).copy()  # Top 10 jogos
+                        for col in ["P(≥11)", "P(≥12)", "P(≥13)", "P(≥14)"]:
+                            df_chart[col] = df_chart[col].str.replace("%", "").astype(float)
+                        
+                        chart_data = df_chart.melt(
+                            id_vars=["Jogo"],
+                            value_vars=["P(≥11)", "P(≥12)", "P(≥13)", "P(≥14)"],
+                            var_name="Faixa",
+                            value_name="Probabilidade (%)"
+                        )
+                        
+                        # Criar gráfico de barras agrupadas
+                        chart_pivot = chart_data.pivot(index="Jogo", columns="Faixa", values="Probabilidade (%)")
+                        st.bar_chart(chart_pivot)
+                        
+                        # Melhor jogo por categoria
+                        st.markdown("### 🏆 Melhores Jogos por Categoria")
+                        
+                        col1, col2, col3 = st.columns(3)
+                        
+                        with col1:
+                            best_11 = df_mc.loc[df_mc["P(≥11)_valor"].idxmax()] if "P(≥11)_valor" in df_mc.columns else df_mc.iloc[0]
+                            st.metric(
+                                "Melhor para ≥11", 
+                                f"Jogo {int(best_11['Jogo'])}",
+                                best_11["P(≥11)"]
+                            )
+                        
+                        with col2:
+                            df_mc["P(≥12)_valor"] = df_mc["P(≥12)"].str.replace("%", "").astype(float)
+                            best_12 = df_mc.loc[df_mc["P(≥12)_valor"].idxmax()]
+                            st.metric(
+                                "Melhor para ≥12", 
+                                f"Jogo {int(best_12['Jogo'])}",
+                                best_12["P(≥12)"]
+                            )
+                        
+                        with col3:
+                            df_mc["P(≥13)_valor"] = df_mc["P(≥13)"].str.replace("%", "").astype(float)
+                            best_13 = df_mc.loc[df_mc["P(≥13)_valor"].idxmax()]
+                            st.metric(
+                                "Melhor para ≥13", 
+                                f"Jogo {int(best_13['Jogo'])}",
+                                best_13["P(≥13)"]
+                            )
+                        
+                        # Explicação técnica
+                        with st.expander("📘 O que significa Monte Carlo?"):
+                            st.markdown("""
+                            **Monte Carlo** é uma técnica estatística que simula milhares de sorteios reais para estimar probabilidades.
+                            
+                            - **P(≥11)**: Probabilidade de fazer 11 pontos ou mais
+                            - **P(≥12)**: Probabilidade de fazer 12 pontos ou mais  
+                            - **P(≥13)**: Probabilidade de fazer 13 pontos ou mais
+                            - **P(≥14)**: Probabilidade de fazer 14 pontos ou mais
+                            - **P(15)**: Probabilidade de acertar os 15 números
+                            
+                            Quanto maior o número de simulações, mais precisa a estimativa.
+                            """)
                     
-                    # Criar gráfico de barras agrupadas
-                    chart_pivot = chart_data.pivot(index="Jogo", columns="Faixa", values="Probabilidade (%)")
-                    st.bar_chart(chart_pivot)
-                    
-                    # Melhor jogo por categoria
-                    st.markdown("### 🏆 Melhores Jogos por Categoria")
+                    # MÉTRICA AGREGADA FINAL
+                    st.markdown("---")
+                    st.markdown("### 📌 Resumo Executivo")
                     
                     col1, col2, col3 = st.columns(3)
-                    
                     with col1:
-                        best_11 = df_mc.loc[df_mc["P(≥11)_valor"].idxmax()] if "P(≥11)_valor" in df_mc.columns else df_mc.iloc[0]
-                        st.metric(
-                            "Melhor para ≥11", 
-                            f"Jogo {int(best_11['Jogo'])}",
-                            best_11["P(≥11)"]
-                        )
-                    
+                        st.metric("Jogos acima do percentil 80", 
+                                 f"{(df_avaliacao['Percentil'] >= 80).sum()}/{len(df_avaliacao)}")
                     with col2:
-                        df_mc["P(≥12)_valor"] = df_mc["P(≥12)"].str.replace("%", "").astype(float)
-                        best_12 = df_mc.loc[df_mc["P(≥12)_valor"].idxmax()]
-                        st.metric(
-                            "Melhor para ≥12", 
-                            f"Jogo {int(best_12['Jogo'])}",
-                            best_12["P(≥12)"]
-                        )
-                    
+                        st.metric("Score médio", f"{df_avaliacao['Score (0-100)'].mean():.1f}")
                     with col3:
-                        df_mc["P(≥13)_valor"] = df_mc["P(≥13)"].str.replace("%", "").astype(float)
-                        best_13 = df_mc.loc[df_mc["P(≥13)_valor"].idxmax()]
-                        st.metric(
-                            "Melhor para ≥13", 
-                            f"Jogo {int(best_13['Jogo'])}",
-                            best_13["P(≥13)"]
-                        )
-                    
-                    # Explicação técnica
-                    with st.expander("📘 O que significa Monte Carlo?"):
-                        st.markdown("""
-                        **Monte Carlo** é uma técnica estatística que simula milhares de sorteios reais para estimar probabilidades.
-                        
-                        - **P(≥11)**: Probabilidade de fazer 11 pontos ou mais
-                        - **P(≥12)**: Probabilidade de fazer 12 pontos ou mais  
-                        - **P(≥13)**: Probabilidade de fazer 13 pontos ou mais
-                        - **P(≥14)**: Probabilidade de fazer 14 pontos ou mais
-                        - **P(15)**: Probabilidade de acertar os 15 números
-                        
-                        Quanto maior o número de simulações, mais precisa a estimativa.
-                        """)
-                
-                # MÉTRICA AGREGADA FINAL
-                st.markdown("---")
-                st.markdown("### 📌 Resumo Executivo")
-                
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Jogos acima do percentil 80", 
-                             f"{(df_avaliacao['Percentil'] >= 80).sum()}/{len(df_avaliacao)}")
-                with col2:
-                    st.metric("Score médio", f"{df_avaliacao['Score (0-100)'].mean():.1f}")
-                with col3:
-                    st.metric("Melhor score", f"{df_avaliacao['Score (0-100)'].max():.1f}")
+                        st.metric("Melhor score", f"{df_avaliacao['Score (0-100)'].max():.1f}")
+                else:
+                    st.info("👆 Gere jogos na aba 'Fechamento 3622' primeiro para ver o ranking estatístico.")
             else:
-                st.info("👆 Gere jogos na aba 'Fechamento 3622' primeiro para ver o ranking estatístico.")
+                st.info("👈 Clique em 'Carregar concursos' na barra lateral para começar")
 
         with tab4:
             st.subheader("📋 Todos os Concursos Carregados")
@@ -4428,147 +4437,150 @@ def main():
         with tab5:
             st.subheader("✅ Conferência por Concurso")
 
-            st.session_state.jogos_salvos = carregar_jogos_salvos()
+            if st.session_state.dados_api:
+                st.session_state.jogos_salvos = carregar_jogos_salvos()
 
-            if not st.session_state.jogos_salvos:
-                st.warning("Nenhum fechamento salvo. Gere jogos na aba 'Fechamento 3622'.")
-            else:
-                # =========================
-                # SELEÇÃO DO FECHAMENTO COM PERSISTÊNCIA
-                # =========================
-                opcoes = [
-                    f"ID {j['id']} | Concurso Base #{j['concurso_base']['numero']} | {j['data_geracao'][:19]}"
-                    for j in st.session_state.jogos_salvos
-                ]
+                if not st.session_state.jogos_salvos:
+                    st.warning("Nenhum fechamento salvo. Gere jogos na aba 'Fechamento 3622'.")
+                else:
+                    # =========================
+                    # SELEÇÃO DO FECHAMENTO COM PERSISTÊNCIA
+                    # =========================
+                    opcoes = [
+                        f"ID {j['id']} | Concurso Base #{j['concurso_base']['numero']} | {j['data_geracao'][:19]}"
+                        for j in st.session_state.jogos_salvos
+                    ]
 
-                # Verificar se o índice salvo ainda é válido
-                if st.session_state.idx_fechamento_conferencia >= len(opcoes):
-                    st.session_state.idx_fechamento_conferencia = 0
+                    # Verificar se o índice salvo ainda é válido
+                    if st.session_state.idx_fechamento_conferencia >= len(opcoes):
+                        st.session_state.idx_fechamento_conferencia = 0
 
-                idx = st.selectbox(
-                    "📦 Selecione o fechamento",
-                    range(len(opcoes)),
-                    format_func=lambda i: opcoes[i],
-                    index=st.session_state.idx_fechamento_conferencia,
-                    key="select_fechamento_conferencia"
-                )
-                
-                # ATUALIZAR ESTADO
-                st.session_state.idx_fechamento_conferencia = idx
+                    idx = st.selectbox(
+                        "📦 Selecione o fechamento",
+                        range(len(opcoes)),
+                        format_func=lambda i: opcoes[i],
+                        index=st.session_state.idx_fechamento_conferencia,
+                        key="select_fechamento_conferencia"
+                    )
+                    
+                    # ATUALIZAR ESTADO
+                    st.session_state.idx_fechamento_conferencia = idx
 
-                fechamento = st.session_state.jogos_salvos[idx]
-                jogos_brutos = fechamento["jogos"]
+                    fechamento = st.session_state.jogos_salvos[idx]
+                    jogos_brutos = fechamento["jogos"]
 
-                # =========================
-                # NORMALIZAÇÃO DOS JOGOS
-                # =========================
-                jogos = normalizar_jogos(jogos_brutos)
-                
-                # =========================
-                # BLINDAGEM TOTAL
-                # =========================
-                valido, mensagem = validar_jogos_normalizados(jogos)
-                if not valido:
-                    st.error(f"❌ Erro na estrutura dos jogos: {mensagem}")
-                    st.stop()
-                
-                # Debug visual (opcional - comentar em produção)
-                with st.expander("🔍 Debug - Estrutura dos Jogos", expanded=False):
-                    st.write(f"**Tipo original:** {type(jogos_brutos).__name__}")
-                    st.write(f"**Tipo após normalização:** {type(jogos).__name__}")
-                    st.write(f"**Quantidade de jogos:** {len(jogos)}")
-                    st.write(f"**Primeiro jogo (exemplo):** {jogos[0] if jogos else 'N/A'}")
+                    # =========================
+                    # NORMALIZAÇÃO DOS JOGOS
+                    # =========================
+                    jogos = normalizar_jogos(jogos_brutos)
+                    
+                    # =========================
+                    # BLINDAGEM TOTAL
+                    # =========================
+                    valido, mensagem = validar_jogos_normalizados(jogos)
+                    if not valido:
+                        st.error(f"❌ Erro na estrutura dos jogos: {mensagem}")
+                        st.stop()
+                    
+                    # Debug visual (opcional - comentar em produção)
+                    with st.expander("🔍 Debug - Estrutura dos Jogos", expanded=False):
+                        st.write(f"**Tipo original:** {type(jogos_brutos).__name__}")
+                        st.write(f"**Tipo após normalização:** {type(jogos).__name__}")
+                        st.write(f"**Quantidade de jogos:** {len(jogos)}")
+                        st.write(f"**Primeiro jogo (exemplo):** {jogos[0] if jogos else 'N/A'}")
 
-                st.markdown(f"""
-                <div class='concurso-info'>
-                    📦 <strong>Fechamento ID:</strong> {fechamento['id']}<br>
-                    🎯 <strong>Total de jogos:</strong> {len(jogos)}
-                </div>
-                """, unsafe_allow_html=True)
+                    st.markdown(f"""
+                    <div class='concurso-info'>
+                        📦 <strong>Fechamento ID:</strong> {fechamento['id']}<br>
+                        🎯 <strong>Total de jogos:</strong> {len(jogos)}
+                    </div>
+                    """, unsafe_allow_html=True)
 
-                # =========================
-                # SELEÇÃO DO CONCURSO REAL
-                # =========================
-                concursos = st.session_state.dados_api
+                    # =========================
+                    # SELEÇÃO DO CONCURSO REAL
+                    # =========================
+                    concursos = st.session_state.dados_api
 
-                concurso_escolhido = st.selectbox(
-                    "🎯 Selecione o concurso para conferência",
-                    concursos,
-                    format_func=lambda c: f"#{c['concurso']} - {c['data']}"
-                )
+                    concurso_escolhido = st.selectbox(
+                        "🎯 Selecione o concurso para conferência",
+                        concursos,
+                        format_func=lambda c: f"#{c['concurso']} - {c['data']}"
+                    )
 
-                dezenas_sorteadas = sorted(map(int, concurso_escolhido["dezenas"]))
-                dezenas_set = set(dezenas_sorteadas)
+                    dezenas_sorteadas = sorted(map(int, concurso_escolhido["dezenas"]))
+                    dezenas_set = set(dezenas_sorteadas)
 
-                st.markdown("### 🔢 Resultado Oficial")
-                st.markdown(formatar_jogo_html(dezenas_sorteadas), unsafe_allow_html=True)
+                    st.markdown("### 🔢 Resultado Oficial")
+                    st.markdown(formatar_jogo_html(dezenas_sorteadas), unsafe_allow_html=True)
 
-                # =========================
-                # CONFERÊNCIA (SIMPLIFICADA E ROBUSTA)
-                # =========================
-                if st.button("🔍 CONFERIR FECHAMENTO", type="primary", use_container_width=True):
-                    resultados = []
-                    distribuicao = Counter()
+                    # =========================
+                    # CONFERÊNCIA (SIMPLIFICADA E ROBUSTA)
+                    # =========================
+                    if st.button("🔍 CONFERIR FECHAMENTO", type="primary", use_container_width=True):
+                        resultados = []
+                        distribuicao = Counter()
 
-                    for i, dezenas_jogo in enumerate(jogos):
-                        acertos = len(set(dezenas_jogo) & dezenas_set)
-                        distribuicao[acertos] += 1
-                        resultados.append({
-                            "Jogo": i + 1,
-                            "Acertos": acertos,
-                            "Dezenas": ", ".join(f"{n:02d}" for n in sorted(dezenas_jogo))
-                        })
+                        for i, dezenas_jogo in enumerate(jogos):
+                            acertos = len(set(dezenas_jogo) & dezenas_set)
+                            distribuicao[acertos] += 1
+                            resultados.append({
+                                "Jogo": i + 1,
+                                "Acertos": acertos,
+                                "Dezenas": ", ".join(f"{n:02d}" for n in sorted(dezenas_jogo))
+                            })
 
-                    if not resultados:
-                        st.error("❌ Nenhum jogo válido encontrado para conferência")
-                    else:
-                        df_resultado = pd.DataFrame(resultados).sort_values("Acertos", ascending=False)
+                        if not resultados:
+                            st.error("❌ Nenhum jogo válido encontrado para conferência")
+                        else:
+                            df_resultado = pd.DataFrame(resultados).sort_values("Acertos", ascending=False)
 
-                        # Estatísticas
-                        estatisticas = {
-                            "distribuicao": dict(distribuicao),
-                            "melhor_jogo": int(df_resultado.iloc[0]["Jogo"]),
-                            "maior_acerto": int(df_resultado.iloc[0]["Acertos"]),
-                            "total_jogos_validos": len(resultados)
-                        }
-
-                        # Salvar conferência
-                        adicionar_conferencia(
-                            fechamento["arquivo"],
-                            {
-                                "numero": concurso_escolhido["concurso"],
-                                "data": concurso_escolhido["data"]
-                            },
-                            df_resultado["Acertos"].tolist(),
-                            estatisticas
-                        )
-
-                        # =========================
-                        # VISUALIZAÇÃO
-                        # =========================
-                        st.success(f"✅ Conferência realizada e salva com sucesso! ({len(resultados)} jogos válidos)")
-
-                        col1, col2, col3 = st.columns(3)
-                        col1.metric("🏆 Melhor jogo", f"Jogo {estatisticas['melhor_jogo']}")
-                        col2.metric("🎯 Maior acerto", estatisticas["maior_acerto"])
-                        col3.metric("📊 Jogos válidos", estatisticas["total_jogos_validos"])
-
-                        st.markdown("### 📊 Distribuição de Acertos")
-                        dist_df = pd.DataFrame(
-                            sorted(distribuicao.items()),
-                            columns=["Acertos", "Quantidade"]
-                        )
-                        st.bar_chart(dist_df.set_index("Acertos"))
-
-                        st.markdown("### 🏅 Ranking dos Jogos")
-                        st.dataframe(
-                            df_resultado[["Jogo", "Acertos", "Dezenas"]],
-                            use_container_width=True,
-                            hide_index=True,
-                            column_config={
-                                "Dezenas": st.column_config.TextColumn("Dezenas", width="large")
+                            # Estatísticas
+                            estatisticas = {
+                                "distribuicao": dict(distribuicao),
+                                "melhor_jogo": int(df_resultado.iloc[0]["Jogo"]),
+                                "maior_acerto": int(df_resultado.iloc[0]["Acertos"]),
+                                "total_jogos_validos": len(resultados)
                             }
-                        )
+
+                            # Salvar conferência
+                            adicionar_conferencia(
+                                fechamento["arquivo"],
+                                {
+                                    "numero": concurso_escolhido["concurso"],
+                                    "data": concurso_escolhido["data"]
+                                },
+                                df_resultado["Acertos"].tolist(),
+                                estatisticas
+                            )
+
+                            # =========================
+                            # VISUALIZAÇÃO
+                            # =========================
+                            st.success(f"✅ Conferência realizada e salva com sucesso! ({len(resultados)} jogos válidos)")
+
+                            col1, col2, col3 = st.columns(3)
+                            col1.metric("🏆 Melhor jogo", f"Jogo {estatisticas['melhor_jogo']}")
+                            col2.metric("🎯 Maior acerto", estatisticas["maior_acerto"])
+                            col3.metric("📊 Jogos válidos", estatisticas["total_jogos_validos"])
+
+                            st.markdown("### 📊 Distribuição de Acertos")
+                            dist_df = pd.DataFrame(
+                                sorted(distribuicao.items()),
+                                columns=["Acertos", "Quantidade"]
+                            )
+                            st.bar_chart(dist_df.set_index("Acertos"))
+
+                            st.markdown("### 🏅 Ranking dos Jogos")
+                            st.dataframe(
+                                df_resultado[["Jogo", "Acertos", "Dezenas"]],
+                                use_container_width=True,
+                                hide_index=True,
+                                column_config={
+                                    "Dezenas": st.column_config.TextColumn("Dezenas", width="large")
+                                }
+                            )
+            else:
+                st.info("👈 Clique em 'Carregar concursos' na barra lateral para começar")
 
         # =====================================================
         # ABA: GERADOR 12+
@@ -4810,6 +4822,8 @@ def main():
                         - Baseado nos padrões reais dos últimos 20 concursos
                         - Elimina exceções estatísticas (apenas 0.1% dos jogos aleatórios passam)
                         """)
+            else:
+                st.info("👈 Clique em 'Carregar concursos' na barra lateral para começar")
 
         # =====================================================
         # ABA: GERADOR 13+
@@ -5064,6 +5078,8 @@ def main():
                         - 13+ pontos (zona de convergência máxima)
                         - Tiro de precisão, não cobertura
                         """)
+            else:
+                st.info("👈 Clique em 'Carregar concursos' na barra lateral para começar")
 
         # =====================================================
         # ABA 8: INTELIGÊNCIA 5-7-3
@@ -5362,7 +5378,7 @@ def main():
                             use_container_width=True
                         )
             else:
-                st.info("📥 Carregue os concursos na barra lateral para ativar a inteligência 5-7-3.")
+                st.info("👈 Clique em 'Carregar concursos' na barra lateral para ativar a inteligência 5-7-3.")
 
         # =====================================================
         # ABA 9: DETECTOR MASTER DE PADRÕES B-M-A
@@ -5573,7 +5589,7 @@ def main():
                     - Combine com os geradores para aumentar chances
                     """)
             else:
-                st.info("📥 Carregue os concursos na barra lateral para ativar o Detector MASTER de Padrões B-M-A.")
+                st.info("👈 Clique em 'Carregar concursos' na barra lateral para ativar o Detector MASTER de Padrões B-M-A.")
 
         # =====================================================
         # ABA 10: MOTOR PRO (CORRIGIDO)
@@ -5773,7 +5789,7 @@ def main():
                         - Seleciona os 200 melhores
                         """)
             else:
-                st.info("📥 Carregue os concursos na barra lateral para ativar o Motor PRO.")
+                st.info("👈 Clique em 'Carregar concursos' na barra lateral para ativar o Motor PRO.")
 
         # =====================================================
         # ABA 11: GEOMETRIA ANALÍTICA (CORRIGIDO)
@@ -6178,7 +6194,7 @@ def main():
                     - Indica concentração local
                     """)
             else:
-                st.info("📥 Carregue os concursos na barra lateral para ativar a Geometria Analítica.")
+                st.info("👈 Clique em 'Carregar concursos' na barra lateral para ativar a Geometria Analítica.")
 
         # =====================================================
         # ABA 12: SISTEMA AUTÔNOMO INSANO + FECHAMENTO 14
@@ -6348,7 +6364,11 @@ def main():
                         """, unsafe_allow_html=True)
 
             else:
-                st.info("Carregue os dados para ativar.")
+                st.info("👈 Clique em 'Carregar concursos' na barra lateral para ativar.")
+
+    else:
+        # Se os dados não foram carregados, mostrar mensagem em todas as abas
+        st.info("👈 Clique em 'Carregar concursos' na barra lateral para começar")
 
 # =====================================================
 # EXECUÇÃO PRINCIPAL (FORA DA FUNÇÃO MAIN)
