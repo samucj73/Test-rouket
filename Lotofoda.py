@@ -3479,95 +3479,100 @@ def main():
                     
                     st.markdown(f"### 📋 Jogos Gerados ({len(jogos)})")
                     
-                    # Estatísticas agregadas
-                    stats_df = pd.DataFrame({
-                        "Jogo": range(1, len(jogos)+1),
-                        "Repetidas": [len(set(j) & set(gerador.ultimo)) for j in jogos],
-                        "Pares": [sum(1 for n in j if n%2==0) for j in jogos],
-                        "Soma": [sum(j) for j in jogos],
-                        "Baixas": [sum(1 for n in j if n in gerador.faixa_baixa) for j in jogos],
-                        "Médias": [sum(1 for n in j if n in gerador.faixa_media) for j in jogos],
-                        "Altas": [sum(1 for n in j if n in gerador.faixa_alta) for j in jogos],
-                        "Consec": [gerador._contar_sequencias(j) for j in jogos],
-                        "Primos": [sum(1 for n in j if n in gerador.primos) for j in jogos],
-                        "Falhas": [d["falhas"] if d else 0 for d in diagnosticos]
-                    })
-                    
-                    st.dataframe(stats_df, use_container_width=True, hide_index=True)
-                    
-                    # Mostrar cada jogo formatado
-                    for i, (jogo, diag) in enumerate(zip(jogos, diagnosticos)):
-                        with st.container():
-                            # Determinar cor baseada no número de falhas
-                            if diag and diag["falhas"] == 0:
-                                cor_borda = "#4ade80"  # Verde - perfeito
-                            elif diag and diag["falhas"] == 1:
-                                cor_borda = "gold"     # Amarelo - aceitável
-                            else:
-                                cor_borda = "#4cc9f0"  # Azul - normal
-                            
-                            # Formatar números
-                            nums_html = formatar_jogo_html(jogo)
-                            
-                            # Estatísticas resumidas
-                            rep = len(set(jogo) & set(gerador.ultimo))
-                            pares = sum(1 for n in jogo if n%2==0)
-                            soma = sum(jogo)
-                            
-                            st.markdown(f"""
-                            <div style='border-left: 5px solid {cor_borda}; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
-                                <strong>Jogo {i+1:2d}:</strong> {nums_html}<br>
-                                <small style='color:#aaa;'>
-                                🔁 {rep} rep | ⚖️ {pares}×{15-pares} | ➕ {soma} | ✅ Falhas: {diag["falhas"] if diag else "?"}
-                                </small>
-                            </div>
-                            """, unsafe_allow_html=True)
-                    
-                    # Botões de ação
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        if st.button("💾 Salvar Jogos", key="salvar_3622", use_container_width=True):
-                            arquivo, jogo_id = salvar_jogos_gerados(
-                                jogos, 
-                                list(range(1, 18)),  # Fechamento placeholder
-                                {"modelo": "3622", "ajustes": ajustes},
-                                ultimo['concurso'],
-                                ultimo['data']
-                            )
-                            if arquivo:
-                                st.success(f"✅ Jogos salvos! ID: {jogo_id}")
-                                st.session_state.jogos_salvos = carregar_jogos_salvos()
-                    
-                    with col2:
-                        if st.button("🔄 Nova Geração", key="nova_geracao_3622", use_container_width=True):
-                            st.session_state.jogos_3622 = None
-                            st.session_state.diagnosticos_3622 = None
-                            st.session_state.mc_resultados = None
-                            st.rerun()
-                    
-                    with col3:
-                        # Exportar para CSV
-                        df_export = pd.DataFrame({
+                    # --- CORREÇÃO APLICADA AQUI ---
+                    # A variável 'gerador' está disponível dentro deste bloco
+                    if gerador:
+                        # Estatísticas agregadas
+                        stats_df = pd.DataFrame({
                             "Jogo": range(1, len(jogos)+1),
-                            "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in jogos],
-                            "Repetidas": stats_df["Repetidas"],
-                            "Pares": stats_df["Pares"],
-                            "Soma": stats_df["Soma"],
-                            "Baixas(01-08)": stats_df["Baixas"],
-                            "Medias(09-16)": stats_df["Médias"],
-                            "Altas(17-25)": stats_df["Altas"],
-                            "Consecutivos": stats_df["Consec"],
-                            "Primos": stats_df["Primos"]
+                            "Repetidas": [len(set(j) & set(gerador.ultimo)) for j in jogos],
+                            "Pares": [sum(1 for n in j if n%2==0) for j in jogos],
+                            "Soma": [sum(j) for j in jogos],
+                            "Baixas": [sum(1 for n in j if n in gerador.faixa_baixa) for j in jogos],
+                            "Médias": [sum(1 for n in j if n in gerador.faixa_media) for j in jogos],
+                            "Altas": [sum(1 for n in j if n in gerador.faixa_alta) for j in jogos],
+                            "Consec": [gerador._contar_sequencias(j) for j in jogos],
+                            "Primos": [sum(1 for n in j if n in gerador.primos) for j in jogos],
+                            "Falhas": [d["falhas"] if d else 0 for d in diagnosticos]
                         })
                         
-                        csv = df_export.to_csv(index=False)
-                        st.download_button(
-                            label="📥 Exportar CSV",
-                            data=csv,
-                            file_name=f"jogos_3622_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                            mime="text/csv",
-                            use_container_width=True
-                        )
+                        st.dataframe(stats_df, use_container_width=True, hide_index=True)
+                        
+                        # Mostrar cada jogo formatado
+                        for i, (jogo, diag) in enumerate(zip(jogos, diagnosticos)):
+                            with st.container():
+                                # Determinar cor baseada no número de falhas
+                                if diag and diag["falhas"] == 0:
+                                    cor_borda = "#4ade80"  # Verde - perfeito
+                                elif diag and diag["falhas"] == 1:
+                                    cor_borda = "gold"     # Amarelo - aceitável
+                                else:
+                                    cor_borda = "#4cc9f0"  # Azul - normal
+                                
+                                # Formatar números
+                                nums_html = formatar_jogo_html(jogo)
+                                
+                                # Estatísticas resumidas
+                                rep = len(set(jogo) & set(gerador.ultimo))
+                                pares = sum(1 for n in jogo if n%2==0)
+                                soma = sum(jogo)
+                                
+                                st.markdown(f"""
+                                <div style='border-left: 5px solid {cor_borda}; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
+                                    <strong>Jogo {i+1:2d}:</strong> {nums_html}<br>
+                                    <small style='color:#aaa;'>
+                                    🔁 {rep} rep | ⚖️ {pares}×{15-pares} | ➕ {soma} | ✅ Falhas: {diag["falhas"] if diag else "?"}
+                                    </small>
+                                </div>
+                                """, unsafe_allow_html=True)
+                        
+                        # Botões de ação
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            if st.button("💾 Salvar Jogos", key="salvar_3622", use_container_width=True):
+                                arquivo, jogo_id = salvar_jogos_gerados(
+                                    jogos, 
+                                    list(range(1, 18)),  # Fechamento placeholder
+                                    {"modelo": "3622", "ajustes": ajustes},
+                                    ultimo['concurso'],
+                                    ultimo['data']
+                                )
+                                if arquivo:
+                                    st.success(f"✅ Jogos salvos! ID: {jogo_id}")
+                                    st.session_state.jogos_salvos = carregar_jogos_salvos()
+                        
+                        with col2:
+                            if st.button("🔄 Nova Geração", key="nova_geracao_3622", use_container_width=True):
+                                st.session_state.jogos_3622 = None
+                                st.session_state.diagnosticos_3622 = None
+                                st.session_state.mc_resultados = None
+                                st.rerun()
+                        
+                        with col3:
+                            # Exportar para CSV
+                            df_export = pd.DataFrame({
+                                "Jogo": range(1, len(jogos)+1),
+                                "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in jogos],
+                                "Repetidas": stats_df["Repetidas"],
+                                "Pares": stats_df["Pares"],
+                                "Soma": stats_df["Soma"],
+                                "Baixas(01-08)": stats_df["Baixas"],
+                                "Medias(09-16)": stats_df["Médias"],
+                                "Altas(17-25)": stats_df["Altas"],
+                                "Consecutivos": stats_df["Consec"],
+                                "Primos": stats_df["Primos"]
+                            })
+                            
+                            csv = df_export.to_csv(index=False)
+                            st.download_button(
+                                label="📥 Exportar CSV",
+                                data=csv,
+                                file_name=f"jogos_3622_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                                mime="text/csv",
+                                use_container_width=True
+                            )
+                    else:
+                        st.error("Erro: Gerador não inicializado.")
                 
                 # =====================================================
                 # GERADOR PROFISSIONAL (INTEGRADO) - VERSÃO MODIFICADA
