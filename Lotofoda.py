@@ -3842,10 +3842,9 @@ def main():
                     st.warning("⚠️ Gere jogos na aba 'Fechamento 3622' primeiro para avaliá-los estatisticamente!")
                     st.info("💡 Os jogos gerados são salvos automaticamente e ficam disponíveis em todas as abas.")
                 
-                # BASELINE CORRETO (interseção 15×15) - CORRIGIDO: verificar se baseline_cache existe
-                if "baseline_cache" in st.session_state and st.session_state.baseline_cache is not None:
-                    baseline = st.session_state.baseline_cache
-                else:
+                # BASELINE CORRETO (interseção 15×15) - CORRIGIDO: garantir que baseline está definida
+                baseline = st.session_state.baseline_cache
+                if baseline is None:
                     baseline = baseline_aleatorio()
                     st.session_state.baseline_cache = baseline
                 
@@ -3856,10 +3855,10 @@ def main():
                     **Desvio padrão:** {baseline['std']:.3f}  
                     """)
                     
-                    # Gráfico da distribuição baseline
+                    # Gráfico da distribuição baseline - CORRIGIDO: baseline['dist'] já é um array numpy
                     baseline_dist = pd.DataFrame({
                         "Acertos": list(range(16)),
-                        "Probabilidade": list(baseline['dist'][:16])
+                        "Probabilidade": baseline['dist'][:16]
                     })
                     st.bar_chart(baseline_dist.set_index("Acertos"))
                 
