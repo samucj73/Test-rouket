@@ -11,10 +11,10 @@ from collections import Counter
 from datetime import datetime
 from scipy.stats import norm
 import warnings
-warnings.filterwarnings("ignore")  # CORRIGIDO: era filterprobabilities
+warnings.filterwarnings("ignore")
 
 # =====================================================
-# MOTOR LOTOFÁCIL PRO (6 CAMADAS) - ADICIONADO
+# MOTOR LOTOFÁCIL PRO (6 CAMADAS)
 # =====================================================
 
 class MotorLotofacilPro:
@@ -3847,7 +3847,7 @@ def main():
                     st.warning("⚠️ Gere jogos na aba 'Fechamento 3622' primeiro para avaliá-los estatisticamente!")
                     st.info("💡 Os jogos gerados são salvos automaticamente e ficam disponíveis em todas as abas.")
                 
-                # BASELINE CORRETO (interseção 15×15) - CORRIGIDO: garantir que baseline está definida
+                # BASELINE CORRETO (interseção 15×15) - CORREÇÃO APLICADA
                 baseline = st.session_state.baseline_cache
                 if baseline is None:
                     baseline = baseline_aleatorio()
@@ -3860,12 +3860,25 @@ def main():
                     **Desvio padrão:** {baseline['std']:.3f}  
                     """)
                     
-                    # Gráfico da distribuição baseline - CORRIGIDO: baseline['dist'] já é um array numpy
-                    baseline_dist = pd.DataFrame({
-                        "Acertos": list(range(16)),
-                        "Probabilidade": baseline['dist'][:16]
-                    })
-                    st.bar_chart(baseline_dist.set_index("Acertos"))
+                    # CORREÇÃO APLICADA: Verificar se baseline['dist'] existe e tem o formato correto
+                    try:
+                        # Garantir que estamos acessando os primeiros 16 elementos
+                        dist_array = baseline['dist']
+                        if len(dist_array) >= 16:
+                            prob_data = dist_array[:16]
+                        else:
+                            # Se for menor, completar com zeros
+                            prob_data = list(dist_array) + [0] * (16 - len(dist_array))
+                        
+                        baseline_dist = pd.DataFrame({
+                            "Acertos": list(range(16)),
+                            "Probabilidade": prob_data
+                        })
+                        st.bar_chart(baseline_dist.set_index("Acertos"))
+                    except (KeyError, TypeError, IndexError) as e:
+                        st.warning(f"Não foi possível gerar o gráfico do baseline: {e}")
+                        # Fallback: mostrar dados em texto
+                        st.write("Distribuição de probabilidades:", baseline.get('dist', 'Não disponível'))
                 
                 # Distribuições empíricas
                 st.markdown("### 📈 Distribuições Empíricas")
