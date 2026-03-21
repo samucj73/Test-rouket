@@ -1405,11 +1405,11 @@ class AnalisadorTendencia:
 
 
 # =============================
-# [NOVA] CLASSE SISTEMA AUTÔNOMO DE APOSTAS
+# [NOVA] CLASSE SISTEMA AUTÔNOMO DE APOSTAS COM FILTROS ANTI-ERRO
 # =============================
 
 class SistemaAutonomoApostas:
-    """Sistema profissional de análise e filtragem de apostas"""
+    """Sistema profissional de análise e filtragem de apostas - VERSÃO ANTI-ERRO"""
     
     def __init__(self):
         self.config = ConfigManager()
@@ -1428,6 +1428,144 @@ class SistemaAutonomoApostas:
         self.ligas_alto_risco = ["Portugal", "Espanha", "Itália"]
         self.ligas_baixo_risco = ["Holanda", "Inglaterra", "Alemanha"]
         
+        # Lista de ligas com alta taxa de empate (Itália, França)
+        self.ligas_empate = ["Serie A", "Ligue 1", "Itália", "França"]
+        
+    # ======================== NOVOS FILTROS ANTI-ERRO ========================
+    
+    def _filtro_detector_empate_under(self, jogo_dict: dict) -> tuple:
+        """
+        FILTRO ANTI-EMPATE/UNDER
+        Detecta jogos que tendem a ser travados, com baixo poder ofensivo
+        Retorna: (aprovado, motivo)
+        """
+        # Extrair médias de gols
+        gols_casa = jogo_dict.get("gols_casa", jogo_dict.get("estimativa", 1.5) * 0.55)
+        gols_fora = jogo_dict.get("gols_fora", jogo_dict.get("estimativa", 1.5) * 0.45)
+        media_total = jogo_dict.get("media_total", jogo_dict.get("estimativa", 1.5))
+        
+        # 1. Times com baixo poder ofensivo
+        if gols_casa < 1.3 and gols_fora < 1.3:
+            return False, f"⚽ Baixo poder ofensivo: Casa {gols_casa:.1f} | Fora {gols_fora:.1f} (risco de 0x0)"
+        
+        # 2. Média de gols muito baixa
+        if media_total < 2.2:
+            return False, f"📉 Média de gols baixa: {media_total:.2f} (risco de UNDER/EMPATE)"
+        
+        # 3. Ambas não marcam com alta probabilidade
+        ambas_marcam_prob = jogo_dict.get("prob_ambas_marcam_sim", 50)
+        if ambas_marcam_prob < 45:
+            return False, f"🚫 Baixa chance de ambas marcarem: {ambas_marcam_prob:.0f}% (risco de 0x0)"
+        
+        # 4. Verificar ligas com alta taxa de empate
+        liga = jogo_dict.get("liga", "")
+        for liga_empate in self.ligas_empate:
+            if liga_empate in liga and media_total < 2.5:
+                return False, f"⚠️ Liga com alta taxa de empate ({liga_empate}) e média baixa ({media_total:.2f})"
+        
+        return True, "Aprovado"
+    
+    def _filtro_bloqueio_ligas_instaveis(self, jogo_dict: dict) -> tuple:
+        """
+        FILTRO DE BLOQUEIO DE LIGAS INSTÁVEIS
+        Bloqueia ligas que historicamente causam muitas surpresas
+        """
+        liga = jogo_dict.get("liga", "")
+        odd = jogo_dict.get("odd_sugerida", 2.0)
+        
+        # 1. Bloquear Brasileirão (alta imprevisibilidade)
+        if "Brasileiro" in liga or "Brasil" in liga:
+            return False, f"❌ Liga de alto risco: {liga} (imprevisibilidade alta)"
+        
+        # 2. Itália com odd alta (armadilha)
+        if "Serie A" in liga or "Itália" in liga:
+            if odd > 1.80:
+                return False, f"⚠️ Itália com odd alta: {odd:.2f} (risco de empate)"
+        
+        # 3. Espanha (La Liga) - aceita apenas jogos muito claros
+        if "Primera Division" in liga or "Espanha" in liga:
+            confianca = jogo_dict.get("confianca", 0)
+            if confianca < 75:
+                return False, f"⚠️ Espanha requer confiança alta: {confianca:.0f}% < 75%"
+        
+        return True, "Aprovado"
+    
+    def _filtro_contexto_jogo(self, jogo_dict: dict) -> tuple:
+        """
+        FILTRO DE CONTEXTO DO JOGO
+        Analisa padrões de ritmo e estilo de jogo
+        """
+        # Extrair dados relevantes
+        tendencia = jogo_dict.get("tendencia", "")
+        tendencia_am = jogo_dict.get("tendencia_ambas_marcam", "")
+        confianca_am = jogo_dict.get("confianca_ambas_marcam", 0)
+        media_total = jogo_dict.get("media_total", jogo_dict.get("estimativa", 1.5))
+        
+        # 1. OVER 2.5 com ambas não marcam? Conflito
+        if "OVER 2.5" in tendencia and tendencia_am == "NÃO" and confianca_am > 55:
+            return False, f"⚡ Conflito: OVER 2.5 com Ambas Marcam NÃO ({confianca_am:.0f}%)"
+        
+        # 2. UNDER com ambas marcam? Conflito
+        if "UNDER" in tendencia and tendencia_am == "SIM" and confianca_am > 55:
+            return False, f"⚡ Conflito: UNDER com Ambas Marcam SIM ({confianca_am:.0f}%)"
+        
+        # 3. Média alta mas confiança baixa? Inconsistência
+        if media_total > 2.8 and jogo_dict.get("confianca", 0) < 60:
+            return False, f"⚠️ Inconsistência: média {media_total:.2f} com confiança baixa"
+        
+        return True, "Aprovado"
+    
+    def _aplicar_filtros_anti_erro(self, jogo_dict: dict) -> tuple:
+        """
+        Aplica todos os filtros anti-erro sequencialmente
+        Retorna: (aprovado, motivo)
+        """
+        # 1. Filtro de empate/under (NOVO)
+        aprovado, motivo = self._filtro_detector_empate_under(jogo_dict)
+        if not aprovado:
+            return False, motivo
+        
+        # 2. Filtro de ligas instáveis (NOVO)
+        aprovado, motivo = self._filtro_bloqueio_ligas_instaveis(jogo_dict)
+        if not aprovado:
+            return False, motivo
+        
+        # 3. Filtro de contexto (NOVO)
+        aprovado, motivo = self._filtro_contexto_jogo(jogo_dict)
+        if not aprovado:
+            return False, motivo
+        
+        # 4. Filtros originais (liga alto risco, odd, confiança)
+        liga = jogo_dict.get("liga", "")
+        for liga_alta in self.ligas_alto_risco:
+            if liga_alta in liga:
+                return False, f"Liga de alto risco: {liga_alta}"
+        
+        odd = jogo_dict.get("odd_sugerida", 0)
+        if odd > 2.50:
+            return False, f"Odd muito alta: {odd:.2f} > 2.50"
+        
+        confianca = jogo_dict.get("confianca", 0)
+        if confianca < 45:
+            return False, f"Confiança baixa: {confianca:.0f}% < 45%"
+        
+        tendencia = jogo_dict.get("tendencia", "")
+        if "OVER" in tendencia:
+            estimativa = jogo_dict.get("estimativa", 0)
+            if estimativa < 1.8:
+                return False, f"Estimativa baixa para OVER: {estimativa:.2f}"
+        
+        conf_ou = jogo_dict.get("confianca", 0)
+        conf_am = jogo_dict.get("confianca_ambas_marcam", 0)
+        if conf_ou >= 70 and conf_am >= 70:
+            tendencia_am = jogo_dict.get("tendencia_ambas_marcam", "")
+            if tendencia_am == "SIM" and "UNDER" in tendencia:
+                return False, "Conflito: UNDER com Ambas Marcam SIM"
+        
+        return True, "Aprovado"
+    
+    # ======================== RESTANTE DA CLASSE ========================
+    
     def calcular_score_profissional(self, jogo_dict: dict) -> dict:
         """
         Calcula score profissional baseado em múltiplos fatores
@@ -1561,43 +1699,8 @@ class SistemaAutonomoApostas:
         }
     
     def aplicar_filtro_anti_red(self, jogo_dict: dict) -> tuple:
-        """
-        Aplica filtros inteligentes para evitar armadilhas
-        Retorna: (aprovado, motivo)
-        """
-        liga = jogo_dict.get("liga", "")
-        
-        # 1. Ligas de alto risco
-        for liga_alta in self.ligas_alto_risco:
-            if liga_alta in liga:
-                return False, f"Liga de alto risco: {liga_alta}"
-        
-        # 2. Odd muito alta (armadilha)
-        odd = jogo_dict.get("odd_sugerida", 0)
-        if odd > 2.50:
-            return False, f"Odd muito alta: {odd:.2f} > 2.50"
-        
-        # 3. Confiança muito baixa
-        confianca = jogo_dict.get("confianca", 0)
-        if confianca < 45:
-            return False, f"Confiança baixa: {confianca:.0f}% < 45%"
-            
-        # 4. Estimativa muito baixa para OVER
-        tendencia = jogo_dict.get("tendencia", "")
-        if "OVER" in tendencia:
-            estimativa = jogo_dict.get("estimativa", 0)
-            if estimativa < 1.8:
-                return False, f"Estimativa baixa para OVER: {estimativa:.2f}"
-                
-        # 5. Conflito entre análises
-        conf_ou = jogo_dict.get("confianca", 0)
-        conf_am = jogo_dict.get("confianca_ambas_marcam", 0)
-        if conf_ou >= 70 and conf_am >= 70:
-            tendencia_am = jogo_dict.get("tendencia_ambas_marcam", "")
-            if tendencia_am == "SIM" and "UNDER" in tendencia:
-                return False, "Conflito: UNDER com Ambas Marcam SIM"
-                
-        return True, "Aprovado"
+        """Método wrapper para os novos filtros anti-erro"""
+        return self._aplicar_filtros_anti_erro(jogo_dict)
     
     def calcular_odd_sugerida(self, jogo_dict: dict, tipo_analise: str) -> float:
         """Calcula a odd sugerida baseada nas probabilidades"""
@@ -1668,7 +1771,7 @@ class SistemaAutonomoApostas:
             # Extrair dados para análise
             jogo_completo = self.extrair_dados_para_analise(jogo_dict)
             
-            # Aplicar filtro anti-red
+            # Aplicar filtro anti-red (NOVO com múltiplos filtros)
             aprovado, motivo = self.aplicar_filtro_anti_red(jogo_completo)
             
             if not aprovado:
@@ -1694,7 +1797,7 @@ class SistemaAutonomoApostas:
         # Ordenar aprovados por score (maior primeiro)
         aprovados.sort(key=lambda x: x["analise_profissional"]["score"], reverse=True)
         
-        # Gerar múltiplas
+        # Gerar múltiplas (versão otimizada com menos jogos)
         multiplas = self.gerar_multiplas_inteligentes(aprovados)
         
         # Estatísticas
@@ -1719,7 +1822,7 @@ class SistemaAutonomoApostas:
     def gerar_multiplas_inteligentes(self, jogos_aprovados: list, max_por_multipla: int = 3) -> list:
         """
         Gera múltiplas inteligentes com os melhores jogos
-        Retorna lista de múltiplas (cada múltipla é uma lista de jogos)
+        MÁXIMO DE 3-4 JOGOS POR MÚLTIPLA (otimizado para menor risco)
         """
         if len(jogos_aprovados) < max_por_multipla:
             return []
@@ -1730,10 +1833,10 @@ class SistemaAutonomoApostas:
         premium = [j for j in jogos_aprovados if j["analise_profissional"]["score"] >= 12]
         forte = [j for j in jogos_aprovados if 9 <= j["analise_profissional"]["score"] < 12]
         
-        # 1. Múltiplas Premium (só com PREMIUM)
+        # 1. Múltiplas Premium (só com PREMIUM) - máximo 3 jogos
         for i in range(0, len(premium), max_por_multipla):
             bloco = premium[i:i+max_por_multipla]
-            if len(bloco) >= max_por_multipla - 1:
+            if len(bloco) >= 2:  # Pelo menos 2 jogos
                 odd_total = sum(j.get("odd_sugerida", 2.0) for j in bloco)
                 multiplas.append({
                     "tipo": "🔥 PREMIUM",
@@ -1743,10 +1846,10 @@ class SistemaAutonomoApostas:
                     "risco": "BAIXO"
                 })
         
-        # 2. Múltiplas FORTE
+        # 2. Múltiplas FORTE (só com FORTE) - máximo 3 jogos
         for i in range(0, len(forte), max_por_multipla):
             bloco = forte[i:i+max_por_multipla]
-            if len(bloco) >= max_por_multipla - 1:
+            if len(bloco) >= 2:
                 odd_total = sum(j.get("odd_sugerida", 2.0) for j in bloco)
                 multiplas.append({
                     "tipo": "✅ FORTE",
@@ -1756,24 +1859,36 @@ class SistemaAutonomoApostas:
                     "risco": "MÉDIO"
                 })
         
-        # 3. Múltiplas Mistas (Premium + Forte)
-        mistas = (premium[:3] + forte[:3])[:max_por_multipla * 2]
-        for i in range(0, len(mistas), max_por_multipla):
-            bloco = mistas[i:i+max_por_multipla]
-            if len(bloco) >= max_por_multipla - 1:
+        # 3. Múltiplas Mistas (Premium + Forte) - máximo 3 jogos
+        mistas = (premium[:2] + forte[:2])[:max_por_multipla]
+        if len(mistas) >= 2:
+            odd_total = sum(j.get("odd_sugerida", 2.0) for j in mistas)
+            multiplas.append({
+                "tipo": "⚡ MISTA (PREMIUM + FORTE)",
+                "jogos": mistas,
+                "score_total": sum(j["analise_profissional"]["score"] for j in mistas),
+                "odd_total": round(odd_total, 2),
+                "risco": "MÉDIO/BAIXO"
+            })
+        
+        # 4. Múltipla com Holanda obrigatória (se disponível)
+        holanda_jogos = [j for j in jogos_aprovados if "Eredivisie" in j.get("liga", "") or "Holanda" in j.get("liga", "")]
+        if holanda_jogos:
+            melhor_holanda = max(holanda_jogos, key=lambda x: x["analise_profissional"]["score"])
+            outros_melhores = [j for j in jogos_aprovados if j != melhor_holanda][:2]
+            if outros_melhores:
+                bloco = [melhor_holanda] + outros_melhores
                 odd_total = sum(j.get("odd_sugerida", 2.0) for j in bloco)
                 multiplas.append({
-                    "tipo": "⚡ MISTA (PREMIUM + FORTE)",
+                    "tipo": "🇳🇱 HOLANDA OBRIGATÓRIA",
                     "jogos": bloco,
                     "score_total": sum(j["analise_profissional"]["score"] for j in bloco),
                     "odd_total": round(odd_total, 2),
-                    "risco": "MÉDIO/BAIXO"
+                    "risco": "BAIXO/MÉDIO"
                 })
         
-        # Ordenar múltiplas por score total
+        # Ordenar múltiplas por score total e limitar a 5
         multiplas.sort(key=lambda x: x["score_total"], reverse=True)
-        
-        # Limitar a 5 múltiplas
         return multiplas[:5]
     
     def gerar_texto_multipla(self, multipla: dict) -> str:
@@ -3541,12 +3656,13 @@ class GerenciadorAlertasCompletos:
                                              mostrar_estatisticas: bool = True):
         """
         Processa os jogos com o SISTEMA AUTÔNOMO DE APOSTAS
+        Versão com NOVOS FILTROS ANTI-ERRO
         """
         if not jogos_analisados:
             return False
 
         st.markdown("### 🤖 SISTEMA AUTÔNOMO DE APOSTAS ATIVADO")
-        st.markdown("Analisando jogos com filtros profissionais...")
+        st.markdown("Analisando jogos com filtros profissionais (incluindo anti-empate/under)...")
         
         # 1. Filtrar jogos pelos tipos de análise selecionados
         jogos_por_tipo = []
@@ -3570,8 +3686,8 @@ class GerenciadorAlertasCompletos:
             st.warning("⚠️ Nenhum jogo com análises válidas para os tipos selecionados.")
             return False
         
-        # 2. Aplicar o sistema autônomo
-        with st.spinner("🔍 Aplicando filtros inteligentes e calculando scores..."):
+        # 2. Aplicar o sistema autônomo (agora com filtros anti-erro)
+        with st.spinner("🔍 Aplicando filtros inteligentes (anti-empate/under, ligas instáveis)..."):
             resultado_autonomo = self.sistema_autonomo.processar_jogos_autonomo(
                 jogos_por_tipo, 
                 tipos_analise_selecionados,
@@ -3586,7 +3702,8 @@ class GerenciadorAlertasCompletos:
         jogos_aprovados = resultado_autonomo["aprovados"]
         
         if not jogos_aprovados:
-            st.warning(f"⚠️ Nenhum jogo passou pelos filtros profissionais (score mínimo: {score_minimo}). Tente ajustar o parâmetro.")
+            st.warning(f"⚠️ Nenhum jogo passou pelos filtros profissionais (score mínimo: {score_minimo}).")
+            st.info("💡 Dica: Ajuste o score mínimo ou verifique se há jogos com padrões de gol consistentes.")
             return False
         
         # 5. Criar alertas para os jogos aprovados
@@ -3689,7 +3806,7 @@ class GerenciadorAlertasCompletos:
                     f"<b>📋 LOTE {idx}/{total_lotes} - {len(lote)} JOGOS</b>\n"
                     f"<b>{tipos_str}</b>\n\n"
                     f"<b>🔥 PREMIUM: {premium_count} | ✅ FORTE: {forte_count}</b>\n\n"
-                    f"<b>🤖 ELITE MASTER SYSTEM - ANÁLISE AUTÔNOMA</b>"
+                    f"<b>🤖 ELITE MASTER SYSTEM - ANÁLISE AUTÔNOMA (Anti-Erro)</b>"
                 )
                 
                 if self.telegram_client.enviar_foto(poster, caption=caption):
@@ -3789,7 +3906,7 @@ class GerenciadorAlertasCompletos:
                 texto += f"   💰 Odd: {jogo.get('odd_sugerida', 2.0):.2f}\n"
                 texto += f"   🔍 Confiança: {jogo.get('confianca', 0):.0f}%\n\n"
             
-            texto += "<b>🔥 ELITE MASTER SYSTEM - ANÁLISE AUTÔNOMA</b>"
+            texto += "<b>🔥 ELITE MASTER SYSTEM - ANÁLISE AUTÔNOMA (Anti-Erro)</b>"
             
             if self.telegram_client.enviar_mensagem(texto, self.config.TELEGRAM_CHAT_ID_ALT2):
                 st.success(f"📤 Múltipla {idx} enviada para o Telegram!")
@@ -3821,7 +3938,7 @@ class GerenciadorAlertasCompletos:
         FONTE_DETALHES = self.poster_generator.criar_fonte(32)
         FONTE_SCORE = self.poster_generator.criar_fonte(70)
 
-        titulo = "🤖 ALERTA AUTÔNOMO - ELITE MASTER"
+        titulo = "🤖 ALERTA AUTÔNOMO - ELITE MASTER (Anti-Erro)"
         try:
             titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
             titulo_w = titulo_bbox[2] - titulo_bbox[0]
@@ -3830,7 +3947,7 @@ class GerenciadorAlertasCompletos:
             draw.text((LARGURA//2 - 250, 70), titulo, font=FONTE_TITULO, fill=(255, 255, 255))
 
         # Subtítulo com estatísticas
-        data_geracao = f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')} - Sistema Autônomo"
+        data_geracao = f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')} - Sistema Autônomo Anti-Erro"
         try:
             data_bbox = draw.textbbox((0, 0), data_geracao, font=FONTE_INFO)
             data_w = data_bbox[2] - data_bbox[0]
@@ -4025,7 +4142,7 @@ class GerenciadorAlertasCompletos:
 
             y_pos += ALTURA_POR_JOGO
 
-        rodape_text = "ELITE MASTER SYSTEM - SISTEMA AUTÔNOMO DE APOSTAS"
+        rodape_text = "ELITE MASTER SYSTEM - SISTEMA AUTÔNOMO DE APOSTAS (Anti-Erro)"
         try:
             rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_DETALHES)
             rodape_w = rodape_bbox[2] - rodape_bbox[0]
@@ -4377,7 +4494,7 @@ class GerenciadorAlertasCompletos:
         FONTE_ANALISE_TITULO = self.poster_generator.criar_fonte(45)
         FONTE_DETALHES = self.poster_generator.criar_fonte(35)
 
-        titulo = " RESULTADOS COMPLETOS - ALL IN ONE"
+        titulo = " RESULTADOS COMPLETOS - ALL IN ONE (Anti-Erro)"
         try:
             titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
             titulo_w = titulo_bbox[2] - titulo_bbox[0]
@@ -4551,7 +4668,7 @@ class GerenciadorAlertasCompletos:
 
             y_pos += ALTURA_POR_JOGO
 
-        rodape_text = "ELITE MASTER SYSTEM - RESULTADOS COMPLETOS"
+        rodape_text = "ELITE MASTER SYSTEM - RESULTADOS COMPLETOS (Anti-Erro)"
         try:
             rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_DETALHES)
             rodape_w = rodape_bbox[2] - rodape_bbox[0]
@@ -4830,7 +4947,7 @@ class SistemaAlertasFutebol:
             st.warning(f"⚠️ Nenhum jogo encontrado para {tipo_analise}")
     
     def processar_alertas_completos(self, data_selecionada, ligas_selecionadas, todas_ligas, tipos_analise_selecionados):
-        """Processa alertas completos com o sistema autônomo"""
+        """Processa alertas completos com o sistema autônomo (versão com filtros anti-erro)"""
         hoje = data_selecionada.strftime("%Y-%m-%d")
         data_br = data_selecionada.strftime("%d/%m/%Y")
         
@@ -4908,7 +5025,7 @@ class SistemaAlertasFutebol:
                     'ambas_marcam': 50,
                 }
                 
-                # Processar com o sistema autônomo
+                # Processar com o sistema autônomo (agora com filtros anti-erro)
                 self.gerenciador_completo.processar_e_enviar_alertas_completos(
                     jogos_filtrados, hoje, tipos_analise_selecionados, False, limiares
                 )
@@ -7056,22 +7173,21 @@ def render_tab_top_alertas(sistema):
 
 
 def render_tab_completos(sistema):
-    st.subheader("🤖 Sistema Autônomo de Apostas")
-    st.caption("Análise profissional com filtros inteligentes e geração automática de múltiplas")
+    st.subheader("🤖 Sistema Autônomo de Apostas (Anti-Erro)")
+    st.caption("Análise profissional com filtros inteligentes anti-empate/under e geração automática de múltiplas")
     
     st.markdown("""
     <div style="background: linear-gradient(135deg, #1a2a3a 0%, #0f1a24 100%); padding: 1rem; border-radius: 15px; margin-bottom: 1.5rem; border-left: 4px solid #ffd700;">
-        <h4 style="color: #ffd700; margin: 0 0 0.5rem 0;">🎯 SISTEMA AUTÔNOMO ATIVADO</h4>
+        <h4 style="color: #ffd700; margin: 0 0 0.5rem 0;">🎯 SISTEMA AUTÔNOMO ATIVADO (Anti-Erro)</h4>
         <p style="color: #aaccff; margin: 0; font-size: 0.9rem;">
-            O sistema irá:
+            NOVOS FILTROS IMPLEMENTADOS:
         </p>
         <ul style="color: #aaccff; font-size: 0.85rem; margin: 0.5rem 0 0 1.5rem;">
-            <li>✅ Analisar estatísticas completas de cada jogo</li>
-            <li>✅ Aplicar filtros anti-red (evitar armadilhas)</li>
-            <li>✅ Calcular score profissional (0-20 pontos)</li>
-            <li>✅ Classificar por nível (PREMIUM, FORTE, MÉDIO)</li>
-            <li>✅ Gerar múltiplas prontas (3-5 jogos por múltipla)</li>
-            <li>✅ Sugerir odds e calcular risco</li>
+            <li>✅ <strong>Detector de EMPATE/UNDER:</strong> Elimina jogos com baixo poder ofensivo e risco de 0x0</li>
+            <li>✅ <strong>Bloqueio de ligas instáveis:</strong> Brasil, Itália com odds altas e Espanha são filtradas</li>
+            <li>✅ <strong>Filtro de contexto:</strong> Detecta conflitos entre OVER 2.5 e Ambas Marcam NÃO</li>
+            <li>✅ <strong>Múltiplas otimizadas:</strong> Máximo de 3-4 jogos, priorizando Holanda e Inglaterra</li>
+            <li>✅ <strong>Score profissional ajustado:</strong> Penaliza jogos com risco de empate</li>
         </ul>
     </div>
     """, unsafe_allow_html=True)
@@ -7115,7 +7231,7 @@ def render_tab_completos(sistema):
         ligas_selecionadas = st.multiselect(
             "📌 Selecionar ligas",
             options=list(ConfigManager.LIGA_DICT.keys()),
-            default=["Campeonato Brasileiro Série A", "Premier League (Inglaterra)", "Bundesliga", "Eredivisie"],
+            default=["Premier League (Inglaterra)", "Bundesliga", "Eredivisie"],
             key="ligas_auto"
         )
     
@@ -7128,7 +7244,7 @@ def render_tab_completos(sistema):
             min_value=3,
             max_value=15,
             value=6,
-            help="Jogos com score abaixo deste valor serão descartados"
+            help="Jogos com score abaixo deste valor serão descartados (recomendado: 6)"
         )
     
     with col2:
@@ -7141,13 +7257,13 @@ def render_tab_completos(sistema):
     st.session_state.enviar_multiplas = enviar_multiplas
     
     # Botão de ação
-    if st.button("🤖 GERAR ALERTAS AUTÔNOMOS", type="primary", use_container_width=True):
+    if st.button("🤖 GERAR ALERTAS AUTÔNOMOS (Anti-Erro)", type="primary", use_container_width=True):
         if not todas_ligas and not ligas_selecionadas:
             st.error("❌ Selecione pelo menos uma liga")
         elif not any(tipos_analise_selecionados.values()):
             st.error("❌ Selecione pelo menos um tipo de análise")
         else:
-            with st.spinner("🔍 Analisando jogos com sistema autônomo..."):
+            with st.spinner("🔍 Analisando jogos com sistema autônomo anti-erro..."):
                 sistema.processar_alertas_completos(
                     data_completa, 
                     ligas_selecionadas, 
