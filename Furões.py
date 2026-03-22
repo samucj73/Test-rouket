@@ -3824,11 +3824,12 @@ class GerenciadorAlertasCompletos:
         
         return False
     
+    #def _mostrar_estatisticas_autonomas(self, resultado: dict):
     def _mostrar_estatisticas_autonomas(self, resultado: dict):
         """Mostra estatísticas detalhadas do processamento autônomo"""
         # VERIFICAÇÃO DE SEGURANÇA - Garante que a chave existe
         if "estatisticas" not in resultado:
-        st.warning("⚠️ Estatísticas não disponíveis para este processamento")
+            st.warning("⚠️ Estatísticas não disponíveis para este processamento")
             return
         
         stats = resultado["estatisticas"]
@@ -3893,6 +3894,7 @@ class GerenciadorAlertasCompletos:
                     st.write("---")
         
         st.markdown("---")
+       
     
     def _enviar_multiplas_telegram(self, multiplas: list, data_busca: str):
         """Envia as múltiplas geradas para o Telegram"""
