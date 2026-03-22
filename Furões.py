@@ -3825,78 +3825,75 @@ class GerenciadorAlertasCompletos:
         return False
     
     def _mostrar_estatisticas_autonomas(self, resultado: dict):
-    def _mostrar_estatisticas_autonomas(self, resultado: dict):
         """Mostra estatísticas detalhadas do processamento autônomo"""
-    
-    # VERIFICAÇÃO DE SEGURANÇA - Garante que a chave existe
-    if "estatisticas" not in resultado:
-        st.warning("⚠️ Estatísticas não disponíveis para este processamento")
-        return  # <-- Este return está DENTRO da função, indentado corretamente
-    
-    stats = resultado["estatisticas"]
-    
-    st.markdown("### 📊 ESTATÍSTICAS DO SISTEMA AUTÔNOMO 2.0")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric(
-            "📋 Total Analisados", 
-            stats.get("total_analisados", 0),
-            delta=f"{stats.get('taxa_aprovacao', 0):.1f}% aprovados"
-        )
-    
-    with col2:
-        st.metric(
-            "✅ Aprovados", 
-            stats.get("total_aprovados", 0),
-            delta=f"Score médio: {stats.get('media_score_aprovados', 0):.1f}"
-        )
-    
-    with col3:
-        st.metric(
-            "🔥 ELITE", 
-            stats.get("premium_count", 0),
-            delta=f"Score ≥ 12"
-        )
-    
-    with col4:
-        st.metric(
-            "✅ PREMIUM", 
-            stats.get("forte_count", 0),
-            delta=f"Score ≥ 9"
-        )
-    
-    # Mostrar distribuição de mercados
-    if stats.get("mercados"):
-        st.markdown("**🎯 Distribuição de Mercados Escolhidos:**")
-        mercados_str = " | ".join([f"{m.upper()}: {c}" for m, c in stats["mercados"].items()])
-        st.info(mercados_str)
-    
-    # Mostrar reprovados em expander
-    if resultado.get("reprovados"):
-        with st.expander(f"❌ Jogos REPROVADOS ({len(resultado['reprovados'])})"):
-            for reprovado in resultado["reprovados"][:10]:  # Mostrar até 10
-                jogo = reprovado.get("jogo", {})
-                motivo = reprovado.get("motivo", "Motivo não especificado")
-                decisao = reprovado.get("decisao", {})
-                mercado_sugerido = decisao.get("mercado", "N/A")
-                conf_ajustada = decisao.get("confianca_ajustada", 0) * 100
-                
-                st.write(f"**{jogo.get('home', '?')} vs {jogo.get('away', '?')}**")
-                st.write(f"   ❌ Motivo: {motivo}")
-                
-                # CORREÇÃO: Tratamento seguro para mercado_sugerido
-                if mercado_sugerido and mercado_sugerido != "N/A":
-                    st.write(f"   🎯 Mercado sugerido: {str(mercado_sugerido).upper()} ({conf_ajustada:.0f}%)")
-                else:
-                    st.write(f"   🎯 Mercado sugerido: N/A ({conf_ajustada:.0f}%)")
-                
-                st.write("---")
-    
-    st.markdown("---")
-    # Não há return no final da função, apenas a execução continua
-    
+        # VERIFICAÇÃO DE SEGURANÇA - Garante que a chave existe
+        if "estatisticas" not in resultado:
+            st.warning("⚠️ Estatísticas não disponíveis para este processamento")
+            return  # <-- Este return está DENTRO da função, indentado corretamente
+        
+        stats = resultado["estatisticas"]
+        
+        st.markdown("### 📊 ESTATÍSTICAS DO SISTEMA AUTÔNOMO 2.0")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric(
+                "📋 Total Analisados", 
+                stats.get("total_analisados", 0),
+                delta=f"{stats.get('taxa_aprovacao', 0):.1f}% aprovados"
+            )
+        
+        with col2:
+            st.metric(
+                "✅ Aprovados", 
+                stats.get("total_aprovados", 0),
+                delta=f"Score médio: {stats.get('media_score_aprovados', 0):.1f}"
+            )
+        
+        with col3:
+            st.metric(
+                "🔥 ELITE", 
+                stats.get("premium_count", 0),
+                delta=f"Score ≥ 12"
+            )
+        
+        with col4:
+            st.metric(
+                "✅ PREMIUM", 
+                stats.get("forte_count", 0),
+                delta=f"Score ≥ 9"
+            )
+        
+        # Mostrar distribuição de mercados
+        if stats.get("mercados"):
+            st.markdown("**🎯 Distribuição de Mercados Escolhidos:**")
+            mercados_str = " | ".join([f"{m.upper()}: {c}" for m, c in stats["mercados"].items()])
+            st.info(mercados_str)
+        
+        # Mostrar reprovados em expander
+        if resultado.get("reprovados"):
+            with st.expander(f"❌ Jogos REPROVADOS ({len(resultado['reprovados'])})"):
+                for reprovado in resultado["reprovados"][:10]:  # Mostrar até 10
+                    jogo = reprovado.get("jogo", {})
+                    motivo = reprovado.get("motivo", "Motivo não especificado")
+                    decisao = reprovado.get("decisao", {})
+                    mercado_sugerido = decisao.get("mercado", "N/A")
+                    conf_ajustada = decisao.get("confianca_ajustada", 0) * 100
+                    
+                    st.write(f"**{jogo.get('home', '?')} vs {jogo.get('away', '?')}**")
+                    st.write(f"   ❌ Motivo: {motivo}")
+                    
+                    # CORREÇÃO: Tratamento seguro para mercado_sugerido
+                    if mercado_sugerido and mercado_sugerido != "N/A":
+                        st.write(f"   🎯 Mercado sugerido: {str(mercado_sugerido).upper()} ({conf_ajustada:.0f}%)")
+                    else:
+                        st.write(f"   🎯 Mercado sugerido: N/A ({conf_ajustada:.0f}%)")
+                    
+                    st.write("---")
+        
+        st.markdown("---")
+        # Não há return no final da função, apenas a execução continua
     
    
        
