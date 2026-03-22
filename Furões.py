@@ -3824,9 +3824,15 @@ class GerenciadorAlertasCompletos:
         
         return False
     
-    #def _mostrar_estatisticas_autonomas(self, resultado: dict):
+   # def _mostrar_estatisticas_autonomas(self, resultado: dict):
     def _mostrar_estatisticas_autonomas(self, resultado: dict):
         """Mostra estatísticas detalhadas do processamento autônomo"""
+    
+    # VERIFICAÇÃO DE SEGURANÇA - Garante que a chave existe
+    if "estatisticas" not in resultado:
+        st.warning("⚠️ Estatísticas não disponíveis para este processamento")
+        return
+    
     stats = resultado["estatisticas"]
     
     st.markdown("### 📊 ESTATÍSTICAS DO SISTEMA AUTÔNOMO 2.0")
@@ -3836,28 +3842,28 @@ class GerenciadorAlertasCompletos:
     with col1:
         st.metric(
             "📋 Total Analisados", 
-            stats["total_analisados"],
-            delta=f"{stats['taxa_aprovacao']:.1f}% aprovados"
+            stats.get("total_analisados", 0),
+            delta=f"{stats.get('taxa_aprovacao', 0):.1f}% aprovados"
         )
     
     with col2:
         st.metric(
             "✅ Aprovados", 
-            stats["total_aprovados"],
-            delta=f"Score médio: {stats['media_score_aprovados']:.1f}"
+            stats.get("total_aprovados", 0),
+            delta=f"Score médio: {stats.get('media_score_aprovados', 0):.1f}"
         )
     
     with col3:
         st.metric(
             "🔥 ELITE", 
-            stats["premium_count"],
+            stats.get("premium_count", 0),
             delta=f"Score ≥ 12"
         )
     
     with col4:
         st.metric(
             "✅ PREMIUM", 
-            stats["forte_count"],
+            stats.get("forte_count", 0),
             delta=f"Score ≥ 9"
         )
     
@@ -3868,11 +3874,11 @@ class GerenciadorAlertasCompletos:
         st.info(mercados_str)
     
     # Mostrar reprovados em expander
-    if resultado["reprovados"]:
+    if resultado.get("reprovados"):
         with st.expander(f"❌ Jogos REPROVADOS ({len(resultado['reprovados'])})"):
             for reprovado in resultado["reprovados"][:10]:  # Mostrar até 10
-                jogo = reprovado["jogo"]
-                motivo = reprovado["motivo"]
+                jogo = reprovado.get("jogo", {})
+                motivo = reprovado.get("motivo", "Motivo não especificado")
                 decisao = reprovado.get("decisao", {})
                 mercado_sugerido = decisao.get("mercado", "N/A")
                 conf_ajustada = decisao.get("confianca_ajustada", 0) * 100
@@ -3880,15 +3886,16 @@ class GerenciadorAlertasCompletos:
                 st.write(f"**{jogo.get('home', '?')} vs {jogo.get('away', '?')}**")
                 st.write(f"   ❌ Motivo: {motivo}")
                 
-                # CORREÇÃO: Verificar se mercado_sugerido não é None antes de chamar .upper()
+                # CORREÇÃO: Tratamento seguro para mercado_sugerido
                 if mercado_sugerido and mercado_sugerido != "N/A":
                     st.write(f"   🎯 Mercado sugerido: {str(mercado_sugerido).upper()} ({conf_ajustada:.0f}%)")
-                elif mercado_sugerido:
-                    st.write(f"   🎯 Mercado sugerido: {mercado_sugerido} ({conf_ajustada:.0f}%)")
+                else:
+                    st.write(f"   🎯 Mercado sugerido: N/A ({conf_ajustada:.0f}%)")
                 
                 st.write("---")
     
     st.markdown("---")
+   
        
     
     def _enviar_multiplas_telegram(self, multiplas: list, data_busca: str):
