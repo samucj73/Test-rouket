@@ -3605,6 +3605,7 @@ class ResultadosTopAlertas:
 # CLASSE GERENCIADOR ALERTAS COMPLETOS MODIFICADA
 # =============================
 
+#class GerenciadorAlertasCompletos:
 class GerenciadorAlertasCompletos:
     def __init__(self, sistema_principal):
         self.sistema = sistema_principal
@@ -3823,8 +3824,7 @@ class GerenciadorAlertasCompletos:
             return True
         
         return False
-    
-    #def _mostrar_estatisticas_autonomas(self, resultado: dict):
+
     def _mostrar_estatisticas_autonomas(self, resultado: dict):
         """Mostra estatísticas detalhadas do processamento autônomo"""
         # VERIFICAÇÃO DE SEGURANÇA - Garante que a chave existe
@@ -3894,7 +3894,6 @@ class GerenciadorAlertasCompletos:
                     st.write("---")
         
         st.markdown("---")
-       
     
     def _enviar_multiplas_telegram(self, multiplas: list, data_busca: str):
         """Envia as múltiplas geradas para o Telegram"""
@@ -4473,6 +4472,7 @@ class GerenciadorAlertasCompletos:
         buffer.seek(0)
         
         return buffer
+    
 
 
 # =============================
