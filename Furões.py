@@ -3824,65 +3824,72 @@ class GerenciadorAlertasCompletos:
         
         return False
     
+    #def _mostrar_estatisticas_autonomas(self, resultado: dict):
     def _mostrar_estatisticas_autonomas(self, resultado: dict):
         """Mostra estatísticas detalhadas do processamento autônomo"""
-        stats = resultado["estatisticas"]
-        
-        st.markdown("### 📊 ESTATÍSTICAS DO SISTEMA AUTÔNOMO 2.0")
-        
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.metric(
-                "📋 Total Analisados", 
-                stats["total_analisados"],
-                delta=f"{stats['taxa_aprovacao']:.1f}% aprovados"
-            )
-        
-        with col2:
-            st.metric(
-                "✅ Aprovados", 
-                stats["total_aprovados"],
-                delta=f"Score médio: {stats['media_score_aprovados']:.1f}"
-            )
-        
-        with col3:
-            st.metric(
-                "🔥 ELITE", 
-                stats["premium_count"],
-                delta=f"Score ≥ 12"
-            )
-        
-        with col4:
-            st.metric(
-                "✅ PREMIUM", 
-                stats["forte_count"],
-                delta=f"Score ≥ 9"
-            )
-        
-        # Mostrar distribuição de mercados
-        if stats.get("mercados"):
-            st.markdown("**🎯 Distribuição de Mercados Escolhidos:**")
-            mercados_str = " | ".join([f"{m.upper()}: {c}" for m, c in stats["mercados"].items()])
-            st.info(mercados_str)
-        
-        # Mostrar reprovados em expander
-        if resultado["reprovados"]:
-            with st.expander(f"❌ Jogos REPROVADOS ({len(resultado['reprovados'])})"):
-                for reprovado in resultado["reprovados"][:10]:  # Mostrar até 10
-                    jogo = reprovado["jogo"]
-                    motivo = reprovado["motivo"]
-                    decisao = reprovado.get("decisao", {})
-                    mercado_sugerido = decisao.get("mercado", "N/A")
-                    conf_ajustada = decisao.get("confianca_ajustada", 0) * 100
-                    
-                    st.write(f"**{jogo.get('home', '?')} vs {jogo.get('away', '?')}**")
-                    st.write(f"   ❌ Motivo: {motivo}")
-                    if mercado_sugerido != "N/A":
-                        st.write(f"   🎯 Mercado sugerido: {mercado_sugerido.upper()} ({conf_ajustada:.0f}%)")
-                    st.write("---")
-        
-        st.markdown("---")
+    stats = resultado["estatisticas"]
+    
+    st.markdown("### 📊 ESTATÍSTICAS DO SISTEMA AUTÔNOMO 2.0")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric(
+            "📋 Total Analisados", 
+            stats["total_analisados"],
+            delta=f"{stats['taxa_aprovacao']:.1f}% aprovados"
+        )
+    
+    with col2:
+        st.metric(
+            "✅ Aprovados", 
+            stats["total_aprovados"],
+            delta=f"Score médio: {stats['media_score_aprovados']:.1f}"
+        )
+    
+    with col3:
+        st.metric(
+            "🔥 ELITE", 
+            stats["premium_count"],
+            delta=f"Score ≥ 12"
+        )
+    
+    with col4:
+        st.metric(
+            "✅ PREMIUM", 
+            stats["forte_count"],
+            delta=f"Score ≥ 9"
+        )
+    
+    # Mostrar distribuição de mercados
+    if stats.get("mercados"):
+        st.markdown("**🎯 Distribuição de Mercados Escolhidos:**")
+        mercados_str = " | ".join([f"{m.upper()}: {c}" for m, c in stats["mercados"].items()])
+        st.info(mercados_str)
+    
+    # Mostrar reprovados em expander
+    if resultado["reprovados"]:
+        with st.expander(f"❌ Jogos REPROVADOS ({len(resultado['reprovados'])})"):
+            for reprovado in resultado["reprovados"][:10]:  # Mostrar até 10
+                jogo = reprovado["jogo"]
+                motivo = reprovado["motivo"]
+                decisao = reprovado.get("decisao", {})
+                mercado_sugerido = decisao.get("mercado", "N/A")
+                conf_ajustada = decisao.get("confianca_ajustada", 0) * 100
+                
+                st.write(f"**{jogo.get('home', '?')} vs {jogo.get('away', '?')}**")
+                st.write(f"   ❌ Motivo: {motivo}")
+                
+                # CORREÇÃO: Verificar se mercado_sugerido não é None antes de chamar .upper()
+                if mercado_sugerido and mercado_sugerido != "N/A":
+                    st.write(f"   🎯 Mercado sugerido: {str(mercado_sugerido).upper()} ({conf_ajustada:.0f}%)")
+                elif mercado_sugerido:
+                    st.write(f"   🎯 Mercado sugerido: {mercado_sugerido} ({conf_ajustada:.0f}%)")
+                
+                st.write("---")
+    
+    st.markdown("---")
+       
     
     def _enviar_multiplas_telegram(self, multiplas: list, data_busca: str):
         """Envia as múltiplas geradas para o Telegram"""
