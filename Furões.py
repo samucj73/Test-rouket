@@ -18,6 +18,7 @@ import math
 import statistics
 from collections import defaultdict
 import shutil
+import hashlib
 
 
 # =============================
@@ -284,7 +285,6 @@ class ImageCache:
     
     def _generate_key(self, team_name: str, crest_url: str) -> str:
         """Gera chave única para o cache"""
-        import hashlib
         combined = f"{team_name}_{crest_url}"
         return hashlib.md5(combined.encode()).hexdigest()
     
@@ -449,10 +449,17 @@ class DataStorage:
     
     @staticmethod
     def carregar_alertas_top() -> dict:
-        return DataStorage.carregar_json(ConfigManager.ALERTAS_TOP_PATH)
+        """Carrega alertas TOP - garante que é um dicionário"""
+        dados = DataStorage.carregar_json(ConfigManager.ALERTAS_TOP_PATH)
+        if not isinstance(dados, dict):
+            return {}
+        return dados
     
     @staticmethod
     def salvar_alertas_top(alertas_top: dict):
+        """Salva alertas TOP - garante que é um dicionário"""
+        if not isinstance(alertas_top, dict):
+            alertas_top = {}
         DataStorage.salvar_json(ConfigManager.ALERTAS_TOP_PATH, alertas_top)
     
     @staticmethod
@@ -484,7 +491,8 @@ class DataStorage:
         if os.path.exists(ConfigManager.HISTORICO_PATH):
             try:
                 with open(ConfigManager.HISTORICO_PATH, "r", encoding="utf-8") as f:
-                    return json.load(f)
+                    dados = json.load(f)
+                    return dados if isinstance(dados, list) else []
             except Exception as e:
                 logging.error(f"Erro ao carregar histórico: {e}")
                 return []
@@ -2992,7 +3000,7 @@ class PosterGenerator:
 
 
 # =============================
-# CLASSE RESULTADOS TOP ALERTAS
+# CLASSE RESULTADOS TOP ALERTAS (CORRIGIDA)
 # =============================
 
 class ResultadosTopAlertas:
@@ -3013,181 +3021,80 @@ class ResultadosTopAlertas:
             st.warning("⚠️ Nenhum alerta TOP salvo para conferência")
             return
         
-        alertas_por_grupo = self._agrupar_alertas_top_por_data_tipo(alertas_top, hoje)
+        # Filtra apenas os alertas da data selecionada e não conferidos
+        alertas_hoje = {}
+        for chave, alerta in alertas_top.items():
+            if alerta.get("data_busca") == hoje and not alerta.get("conferido", False):
+                alertas_hoje[chave] = alerta
         
-        if not alertas_por_grupo:
-            st.warning(f"⚠️ Nenhum alerta TOP encontrado para {data_br}")
+        if not alertas_hoje:
+            st.info(f"ℹ️ Nenhum alerta TOP pendente para {data_br}")
             return
         
-        total_grupos = sum(len(grupos) for grupos in alertas_por_grupo.values())
-        st.info(f"🔍 Encontrados {total_grupos} grupos de alertas TOP para conferência")
+        st.info(f"🔍 Encontrados {len(alertas_hoje)} alertas TOP pendentes")
         
-        grupos_para_enviar = []
-        grupos_ja_enviados = 0
+        # Agrupar por tipo de alerta
+        alertas_por_tipo = defaultdict(list)
+        for alerta in alertas_hoje.values():
+            tipo = alerta.get("tipo_alerta", "over_under")
+            alertas_por_tipo[tipo].append(alerta)
         
-        for tipo_alerta, grupos in alertas_por_grupo.items():
-            for grupo_id, alertas_grupo in grupos.items():
+        jogos_conferidos_por_tipo = {}
+        progress_bar = st.progress(0)
+        total_alertas = len(alertas_hoje)
+        idx = 0
+        
+        for tipo_alerta, alertas_lista in alertas_por_tipo.items():
+            jogos_conferidos = []
+            for alerta in alertas_lista:
+                fixture_id = alerta.get("id")
                 
-                grupo_ja_enviado = all(alerta.get("enviado", False) for alerta in alertas_grupo)
-                
-                if grupo_ja_enviado:
-                    st.info(f"📤 Grupo {grupo_id} - {tipo_alerta} já foi enviado anteriormente. Pulando...")
-                    grupos_ja_enviados += 1
+                match_data = self.api_client.obter_detalhes_jogo(fixture_id)
+                if not match_data:
+                    st.warning(f"⚠️ Não foi possível obter dados do jogo {fixture_id}")
                     continue
                 
-                st.write(f"📋 Processando grupo {grupo_id} - {tipo_alerta} ({len(alertas_grupo)} jogos)")
+                status = match_data.get("status", "")
                 
-                jogos_conferidos = []
-                jogos_pendentes = []
-                jogos_em_andamento = []
-                
-                for alerta in alertas_grupo:
-                    fixture_id = alerta.get("id")
-                    
-                    match_data = self.api_client.obter_detalhes_jogo(fixture_id)
-                    if not match_data:
-                        st.warning(f"⚠️ Não foi possível obter dados do jogo {fixture_id}")
-                        jogos_pendentes.append(alerta)
-                        continue
-                    
-                    status = match_data.get("status", "")
-                    
-                    if status == "FINISHED":
-                        jogo_conferido = self._processar_resultado_alerta(alerta, match_data, tipo_alerta)
-                        if jogo_conferido:
-                            jogos_conferidos.append(jogo_conferido)
-                            alerta["conferido"] = True
-                            alerta["data_conferencia"] = datetime.now().isoformat()
-                    
-                    elif status in ["IN_PLAY", "PAUSED"]:
-                        st.write(f"⏳ Jogo em andamento: {alerta.get('home')} vs {alerta.get('away')}")
-                        jogos_em_andamento.append(alerta)
-                    elif status in ["SCHEDULED", "TIMED"]:
-                        st.write(f"⏰ Jogo agendado: {alerta.get('home')} vs {alerta.get('away')}")
-                        jogos_pendentes.append(alerta)
-                    else:
-                        st.write(f"❓ Status {status}: {alerta.get('home')} vs {alerta.get('away')}")
-                        jogos_pendentes.append(alerta)
-                
-                if len(jogos_pendentes) == 0 and len(jogos_em_andamento) == 0:
-                    if jogos_conferidos:
-                        st.success(f"✅ TODOS OS {len(jogos_conferidos)} JOGOS ENCERRARAM! Preparando para envio...")
-                        grupos_para_enviar.append({
-                            "tipo_alerta": tipo_alerta,
-                            "grupo_id": grupo_id,
-                            "jogos_conferidos": jogos_conferidos,
-                            "alertas_originais": alertas_grupo,
-                            "data_selecionada": data_selecionada
-                        })
-                    else:
-                        st.warning(f"⚠️ Grupo {grupo_id} sem jogos conferidos, mesmo com todos encerrados?")
+                if status == "FINISHED":
+                    jogo_conferido = self._processar_resultado_alerta(alerta, match_data, tipo_alerta)
+                    if jogo_conferido:
+                        jogos_conferidos.append(jogo_conferido)
+                        alerta["conferido"] = True
+                        alerta["data_conferencia"] = datetime.now().isoformat()
+                        alerta["home_goals"] = jogo_conferido.get("home_goals")
+                        alerta["away_goals"] = jogo_conferido.get("away_goals")
+                        if tipo_alerta == "over_under":
+                            alerta["resultado"] = jogo_conferido.get("resultado")
+                        elif tipo_alerta == "favorito":
+                            alerta["resultado_favorito"] = jogo_conferido.get("resultado_favorito")
+                        elif tipo_alerta == "gols_ht":
+                            alerta["resultado_ht"] = jogo_conferido.get("resultado_ht")
+                        elif tipo_alerta == "ambas_marcam":
+                            alerta["resultado_ambas_marcam"] = jogo_conferido.get("resultado_ambas_marcam")
+                elif status in ["IN_PLAY", "PAUSED"]:
+                    st.write(f"⏳ Jogo em andamento: {alerta.get('home')} vs {alerta.get('away')}")
+                elif status in ["SCHEDULED", "TIMED"]:
+                    st.write(f"⏰ Jogo agendado: {alerta.get('home')} vs {alerta.get('away')}")
                 else:
-                    pendentes = len(jogos_pendentes) + len(jogos_em_andamento)
-                    st.info(f"⏳ Aguardando {pendentes} jogos encerrarem para enviar o grupo {grupo_id}")
-                    
-                    if jogos_em_andamento:
-                        st.write("   🏃 Jogos em andamento:")
-                        for j in jogos_em_andamento:
-                            st.write(f"      ⏱️ {j.get('home')} vs {j.get('away')}")
-                    
-                    if jogos_pendentes:
-                        st.write("   📅 Jogos pendentes:")
-                        for j in jogos_pendentes:
-                            st.write(f"      ⏰ {j.get('home')} vs {j.get('away')}")
-        
-        if grupos_para_enviar:
-            st.success(f"🏆 {len(grupos_para_enviar)} grupos completos prontos para envio!")
-            
-            for grupo in grupos_para_enviar:
-                envio_sucesso = self._gerar_poster_para_grupo(
-                    grupo["jogos_conferidos"], 
-                    grupo["tipo_alerta"], 
-                    grupo["grupo_id"], 
-                    grupo["data_selecionada"]
-                )
+                    st.write(f"❓ Status {status}: {alerta.get('home')} vs {alerta.get('away')}")
                 
-                if envio_sucesso:
-                    for alerta in grupo["alertas_originais"]:
-                        alerta["enviado"] = True
-                        alerta["data_envio"] = datetime.now().isoformat()
-                    st.success(f"✅ Grupo {grupo['grupo_id']} marcado como ENVIADO!")
+                idx += 1
+                progress_bar.progress(idx / total_alertas)
             
+            if jogos_conferidos:
+                jogos_conferidos_por_tipo[tipo_alerta] = jogos_conferidos
+        
+        if jogos_conferidos_por_tipo:
             self._salvar_alertas_top_atualizados(alertas_top)
+            st.success(f"✅ {sum(len(j) for j in jogos_conferidos_por_tipo.values())} jogos conferidos!")
+            
+            for tipo_alerta, jogos in jogos_conferidos_por_tipo.items():
+                self._gerar_poster_para_grupo(jogos, tipo_alerta, data_selecionada)
         else:
-            if grupos_ja_enviados > 0:
-                st.info(f"📤 {grupos_ja_enviados} grupos já foram enviados anteriormente.")
-            st.info("⏳ Nenhum grupo novo completo ainda. Aguardando jogos encerrarem...")
+            st.info("⏳ Nenhum jogo conferido ainda. Aguardando jogos encerrarem...")
         
-        self._salvar_alertas_top_atualizados(alertas_top)
-        self._mostrar_resumo_geral(alertas_por_grupo)
-    
-    def _agrupar_alertas_top_por_data_tipo(self, alertas_top, data_busca):
-        alertas_por_grupo = {
-            "over_under": {},
-            "favorito": {},
-            "gols_ht": {},
-            "ambas_marcam": {}
-        }
-        
-        alertas_lista = []
-        if isinstance(alertas_top, dict):
-            alertas_lista = list(alertas_top.values())
-        elif isinstance(alertas_top, list):
-            alertas_lista = alertas_top
-        else:
-            st.error(f"❌ Estrutura inesperada de alertas_top: {type(alertas_top)}")
-            return {}
-        
-        logging.info(f"Total de alertas TOP carregados: {len(alertas_lista)}")
-        
-        for alerta in alertas_lista:
-            if not isinstance(alerta, dict):
-                logging.warning(f"Alerta não é um dicionário: {type(alerta)}")
-                continue
-            
-            if "data_busca" not in alerta:
-                logging.warning(f"Alerta sem data_busca: {alerta.get('id', 'sem_id')}")
-                continue
-                
-            if alerta["data_busca"] != data_busca:
-                continue
-            
-            tipo_alerta = alerta.get("tipo_alerta", "over_under")
-            if tipo_alerta not in alertas_por_grupo:
-                logging.warning(f"Tipo de alerta desconhecido: {tipo_alerta}")
-                continue
-            
-            data_agrupamento = alerta.get("data_hora_busca") or alerta.get("data_criacao") or alerta.get("data_busca", "")
-            grupo_key = "default"
-            
-            if data_agrupamento:
-                try:
-                    if isinstance(data_agrupamento, str):
-                        dt_agrupamento = datetime.fromisoformat(data_agrupamento.replace('Z', '+00:00'))
-                    else:
-                        dt_agrupamento = data_agrupamento
-                    
-                    grupo_key = dt_agrupamento.strftime("%H:%M")
-                except Exception as e:
-                    logging.warning(f"Erro ao converter data para agrupamento {data_agrupamento}: {e}")
-                    grupo_key = datetime.now().strftime("%H:%M")
-            
-            if grupo_key not in alertas_por_grupo[tipo_alerta]:
-                alertas_por_grupo[tipo_alerta][grupo_key] = []
-            
-            alertas_por_grupo[tipo_alerta][grupo_key].append(alerta)
-        
-        for tipo, grupos in alertas_por_grupo.items():
-            if grupos:
-                total_grupos = len(grupos)
-                total_jogos = sum(len(g) for g in grupos.values())
-                logging.info(f"Tipo {tipo}: {total_grupos} grupos, {total_jogos} jogos")
-        
-        for tipo in list(alertas_por_grupo.keys()):
-            if not alertas_por_grupo[tipo]:
-                del alertas_por_grupo[tipo]
-        
-        return alertas_por_grupo
+        self._mostrar_resumo_geral(alertas_hoje)
     
     def _salvar_alertas_top_atualizados(self, alertas_top):
         try:
@@ -3267,26 +3174,6 @@ class ResultadosTopAlertas:
             
             jogo.set_resultado(home_goals, away_goals, ht_home_goals, ht_away_goals)
             
-            alerta["conferido"] = True
-            alerta["home_goals"] = home_goals
-            alerta["away_goals"] = away_goals
-            alerta["ht_home_goals"] = ht_home_goals
-            alerta["ht_away_goals"] = ht_away_goals
-            alerta["data_conferencia"] = datetime.now().isoformat()
-            alerta["escudo_home"] = home_crest
-            alerta["escudo_away"] = away_crest
-            
-            if tipo_alerta == "over_under":
-                alerta["resultado"] = jogo.resultado
-            elif tipo_alerta == "favorito":
-                alerta["resultado_favorito"] = jogo.resultado_favorito
-            elif tipo_alerta == "gols_ht":
-                alerta["resultado_ht"] = jogo.resultado_ht
-            elif tipo_alerta == "ambas_marcam":
-                alerta["resultado_ambas_marcam"] = jogo.resultado_ambas_marcam
-            
-            self._mostrar_resultado_alerta_top(alerta, home_goals, away_goals, ht_home_goals, ht_away_goals, jogo)
-            
             dados_poster = {
                 "home": alerta.get("home", ""),
                 "away": alerta.get("away", ""),
@@ -3336,6 +3223,8 @@ class ResultadosTopAlertas:
                     "resultado_ambas_marcam": jogo.resultado_ambas_marcam
                 })
             
+            self._mostrar_resultado_alerta_top(alerta, home_goals, away_goals, ht_home_goals, ht_away_goals, jogo, tipo_alerta)
+            
             return dados_poster
             
         except Exception as e:
@@ -3343,38 +3232,32 @@ class ResultadosTopAlertas:
             st.error(f"❌ Erro ao processar {alerta.get('home')} vs {alerta.get('away')}: {e}")
             return None
     
-    def _gerar_poster_para_grupo(self, jogos_conferidos, tipo_alerta, grupo_id, data_selecionada):
+    def _gerar_poster_para_grupo(self, jogos_conferidos, tipo_alerta, data_selecionada):
         data_str = data_selecionada.strftime("%d/%m/%Y")
         
         try:
             if tipo_alerta == "over_under":
                 titulo = f"🏆 RESULTADOS TOP OVER/UNDER - {data_str}"
-            elif tipo_alerta == "favorito":
-                titulo = f"🏆 RESULTADOS TOP FAVORITOS - {data_str}"
-            elif tipo_alerta == "gols_ht":
-                titulo = f"🏆 RESULTADOS TOP GOLS HT - {data_str}"
-            elif tipo_alerta == "ambas_marcam":
-                titulo = f"🏆 RESULTADOS TOP AMBAS MARCAM - {data_str}"
-            
-            if tipo_alerta == "over_under":
                 greens = sum(1 for j in jogos_conferidos if j.get("resultado") == "GREEN")
                 reds = sum(1 for j in jogos_conferidos if j.get("resultado") == "RED")
             elif tipo_alerta == "favorito":
+                titulo = f"🏆 RESULTADOS TOP FAVORITOS - {data_str}"
                 greens = sum(1 for j in jogos_conferidos if j.get("resultado_favorito") == "GREEN")
                 reds = sum(1 for j in jogos_conferidos if j.get("resultado_favorito") == "RED")
             elif tipo_alerta == "gols_ht":
+                titulo = f"🏆 RESULTADOS TOP GOLS HT - {data_str}"
                 greens = sum(1 for j in jogos_conferidos if j.get("resultado_ht") == "GREEN")
                 reds = sum(1 for j in jogos_conferidos if j.get("resultado_ht") == "RED")
             elif tipo_alerta == "ambas_marcam":
+                titulo = f"🏆 RESULTADOS TOP AMBAS MARCAM - {data_str}"
                 greens = sum(1 for j in jogos_conferidos if j.get("resultado_ambas_marcam") == "GREEN")
                 reds = sum(1 for j in jogos_conferidos if j.get("resultado_ambas_marcam") == "RED")
+            else:
+                return
             
             total = greens + reds
             if total > 0:
                 taxa_acerto = (greens / total) * 100
-                
-                if grupo_id != "default":
-                    titulo += f" (Grupo {grupo_id})"
                 
                 poster = self.poster_generator.gerar_poster_resultados(jogos_conferidos, tipo_alerta)
                 
@@ -3388,7 +3271,7 @@ class ResultadosTopAlertas:
                     )
                     
                     if self.telegram_client.enviar_foto(poster, caption=caption):
-                        st.success(f"🏆 Poster resultados TOP {tipo_alerta} (Grupo {grupo_id}) enviado!")
+                        st.success(f"🏆 Poster resultados TOP {tipo_alerta} enviado!")
                         return True
                     else:
                         st.warning(f"⚠️ Não foi possível enviar o poster. Enviando como texto...")
@@ -3400,126 +3283,74 @@ class ResultadosTopAlertas:
             return False
                     
         except Exception as e:
-            logging.error(f"Erro ao gerar poster para grupo {grupo_id} - {tipo_alerta}: {e}")
+            logging.error(f"Erro ao gerar poster para grupo - {tipo_alerta}: {e}")
             st.error(f"❌ Erro no poster: {e}")
-            
-            try:
-                error_msg = f"<b>❌ ERRO NO POSTER - {tipo_alerta.upper()}</b>\n\n"
-                error_msg += f"<b>Grupo: {grupo_id}</b>\n"
-                error_msg += f"<b>Data: {data_str}</b>\n"
-                error_msg += f"<b>Jogos: {len(jogos_conferidos)}</b>\n"
-                error_msg += f"<b>Erro: {str(e)[:100]}...</b>"
-                return self.telegram_client.enviar_mensagem(error_msg, self.config.TELEGRAM_CHAT_ID_ALT2)
-            except Exception as e2:
-                logging.error(f"Erro ao enviar mensagem de erro: {e2}")
-                return False
+            return False
     
-    def _mostrar_resumo_geral(self, alertas_por_grupo):
+    def _mostrar_resumo_geral(self, alertas):
         st.markdown("---")
         st.subheader("📈 RESUMO GERAL TOP ALERTAS")
         
-        col1, col2, col3, col4 = st.columns(4)
-        
         totais = {
-            "over_under": {"greens": 0, "reds": 0, "total": 0, "pendentes": 0, "conferidos": 0, "enviados": 0},
-            "favorito": {"greens": 0, "reds": 0, "total": 0, "pendentes": 0, "conferidos": 0, "enviados": 0},
-            "gols_ht": {"greens": 0, "reds": 0, "total": 0, "pendentes": 0, "conferidos": 0, "enviados": 0},
-            "ambas_marcam": {"greens": 0, "reds": 0, "total": 0, "pendentes": 0, "conferidos": 0, "enviados": 0}
+            "over_under": {"total": 0, "conferidos": 0, "greens": 0, "reds": 0},
+            "favorito": {"total": 0, "conferidos": 0, "greens": 0, "reds": 0},
+            "gols_ht": {"total": 0, "conferidos": 0, "greens": 0, "reds": 0},
+            "ambas_marcam": {"total": 0, "conferidos": 0, "greens": 0, "reds": 0}
         }
         
-        for tipo_alerta, grupos in alertas_por_grupo.items():
-            for grupo_id, alertas_grupo in grupos.items():
-                for alerta in alertas_grupo:
-                    totais[tipo_alerta]["total"] += 1
-                    
-                    if alerta.get("enviado", False):
-                        totais[tipo_alerta]["enviados"] += 1
-                    
-                    if alerta.get("conferido", False):
-                        totais[tipo_alerta]["conferidos"] += 1
-                        
-                        if tipo_alerta == "over_under" and alerta.get("resultado") == "GREEN":
-                            totais[tipo_alerta]["greens"] += 1
-                        elif tipo_alerta == "over_under" and alerta.get("resultado") == "RED":
-                            totais[tipo_alerta]["reds"] += 1
-                        elif tipo_alerta == "favorito" and alerta.get("resultado_favorito") == "GREEN":
-                            totais[tipo_alerta]["greens"] += 1
-                        elif tipo_alerta == "favorito" and alerta.get("resultado_favorito") == "RED":
-                            totais[tipo_alerta]["reds"] += 1
-                        elif tipo_alerta == "gols_ht" and alerta.get("resultado_ht") == "GREEN":
-                            totais[tipo_alerta]["greens"] += 1
-                        elif tipo_alerta == "gols_ht" and alerta.get("resultado_ht") == "RED":
-                            totais[tipo_alerta]["reds"] += 1
-                        elif tipo_alerta == "ambas_marcam" and alerta.get("resultado_ambas_marcam") == "GREEN":
-                            totais[tipo_alerta]["greens"] += 1
-                        elif tipo_alerta == "ambas_marcam" and alerta.get("resultado_ambas_marcam") == "RED":
-                            totais[tipo_alerta]["reds"] += 1
-                    else:
-                        totais[tipo_alerta]["pendentes"] += 1
+        for alerta in alertas.values():
+            tipo = alerta.get("tipo_alerta", "over_under")
+            totais[tipo]["total"] += 1
+            if alerta.get("conferido", False):
+                totais[tipo]["conferidos"] += 1
+                if tipo == "over_under" and alerta.get("resultado") == "GREEN":
+                    totais[tipo]["greens"] += 1
+                elif tipo == "over_under" and alerta.get("resultado") == "RED":
+                    totais[tipo]["reds"] += 1
+                elif tipo == "favorito" and alerta.get("resultado_favorito") == "GREEN":
+                    totais[tipo]["greens"] += 1
+                elif tipo == "favorito" and alerta.get("resultado_favorito") == "RED":
+                    totais[tipo]["reds"] += 1
+                elif tipo == "gols_ht" and alerta.get("resultado_ht") == "GREEN":
+                    totais[tipo]["greens"] += 1
+                elif tipo == "gols_ht" and alerta.get("resultado_ht") == "RED":
+                    totais[tipo]["reds"] += 1
+                elif tipo == "ambas_marcam" and alerta.get("resultado_ambas_marcam") == "GREEN":
+                    totais[tipo]["greens"] += 1
+                elif tipo == "ambas_marcam" and alerta.get("resultado_ambas_marcam") == "RED":
+                    totais[tipo]["reds"] += 1
+        
+        col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            total = totais["over_under"]["total"]
-            conferidos = totais["over_under"]["conferidos"]
-            enviados = totais["over_under"]["enviados"]
-            pendentes = totais["over_under"]["pendentes"]
-            greens = totais["over_under"]["greens"]
-            reds = totais["over_under"]["reds"]
-            
-            st.metric("⚽ TOP Over/Under", f"{total} jogos", f"{enviados} enviados")
-            if conferidos > 0:
-                taxa_acerto = (greens / conferidos) * 100 if conferidos > 0 else 0
-                st.write(f"✅ {greens} | ❌ {reds} | 📊 {taxa_acerto:.1f}%")
-            if pendentes > 0:
-                st.write(f"⏳ {pendentes} pendentes")
+            t = totais["over_under"]
+            st.metric("⚽ TOP Over/Under", f"{t['total']} jogos")
+            if t["conferidos"] > 0:
+                taxa = (t["greens"] / t["conferidos"]) * 100 if t["conferidos"] > 0 else 0
+                st.write(f"✅ {t['greens']} | ❌ {t['reds']} | 📊 {taxa:.1f}%")
         
         with col2:
-            total = totais["favorito"]["total"]
-            conferidos = totais["favorito"]["conferidos"]
-            enviados = totais["favorito"]["enviados"]
-            pendentes = totais["favorito"]["pendentes"]
-            greens = totais["favorito"]["greens"]
-            reds = totais["favorito"]["reds"]
-            
-            st.metric("🏆 TOP Favoritos", f"{total} jogos", f"{enviados} enviados")
-            if conferidos > 0:
-                taxa_acerto = (greens / conferidos) * 100 if conferidos > 0 else 0
-                st.write(f"✅ {greens} | ❌ {reds} | 📊 {taxa_acerto:.1f}%")
-            if pendentes > 0:
-                st.write(f"⏳ {pendentes} pendentes")
+            t = totais["favorito"]
+            st.metric("🏆 TOP Favoritos", f"{t['total']} jogos")
+            if t["conferidos"] > 0:
+                taxa = (t["greens"] / t["conferidos"]) * 100 if t["conferidos"] > 0 else 0
+                st.write(f"✅ {t['greens']} | ❌ {t['reds']} | 📊 {taxa:.1f}%")
         
         with col3:
-            total = totais["gols_ht"]["total"]
-            conferidos = totais["gols_ht"]["conferidos"]
-            enviados = totais["gols_ht"]["enviados"]
-            pendentes = totais["gols_ht"]["pendentes"]
-            greens = totais["gols_ht"]["greens"]
-            reds = totais["gols_ht"]["reds"]
-            
-            st.metric("⏰ TOP Gols HT", f"{total} jogos", f"{enviados} enviados")
-            if conferidos > 0:
-                taxa_acerto = (greens / conferidos) * 100 if conferidos > 0 else 0
-                st.write(f"✅ {greens} | ❌ {reds} | 📊 {taxa_acerto:.1f}%")
-            if pendentes > 0:
-                st.write(f"⏳ {pendentes} pendentes")
+            t = totais["gols_ht"]
+            st.metric("⏰ TOP Gols HT", f"{t['total']} jogos")
+            if t["conferidos"] > 0:
+                taxa = (t["greens"] / t["conferidos"]) * 100 if t["conferidos"] > 0 else 0
+                st.write(f"✅ {t['greens']} | ❌ {t['reds']} | 📊 {taxa:.1f}%")
         
         with col4:
-            total = totais["ambas_marcam"]["total"]
-            conferidos = totais["ambas_marcam"]["conferidos"]
-            enviados = totais["ambas_marcam"]["enviados"]
-            pendentes = totais["ambas_marcam"]["pendentes"]
-            greens = totais["ambas_marcam"]["greens"]
-            reds = totais["ambas_marcam"]["reds"]
-            
-            st.metric("🤝 TOP Ambas Marcam", f"{total} jogos", f"{enviados} enviados")
-            if conferidos > 0:
-                taxa_acerto = (greens / conferidos) * 100 if conferidos > 0 else 0
-                st.write(f"✅ {greens} | ❌ {reds} | 📊 {taxa_acerto:.1f}%")
-            if pendentes > 0:
-                st.write(f"⏳ {pendentes} pendentes")
+            t = totais["ambas_marcam"]
+            st.metric("🤝 TOP Ambas Marcam", f"{t['total']} jogos")
+            if t["conferidos"] > 0:
+                taxa = (t["greens"] / t["conferidos"]) * 100 if t["conferidos"] > 0 else 0
+                st.write(f"✅ {t['greens']} | ❌ {t['reds']} | 📊 {taxa:.1f}%")
     
-    def _mostrar_resultado_alerta_top(self, alerta, home_goals, away_goals, ht_home_goals, ht_away_goals, jogo):
-        tipo_alerta = alerta.get("tipo_alerta", "over_under")
-        
+    def _mostrar_resultado_alerta_top(self, alerta, home_goals, away_goals, ht_home_goals, ht_away_goals, jogo, tipo_alerta):
         if tipo_alerta == "over_under":
             resultado = jogo.resultado
             cor = "🟢" if resultado == "GREEN" else "🔴"
@@ -3572,7 +3403,6 @@ class ResultadosTopAlertas:
                 logging.warning(f"Poster muito pequeno: {file_size} bytes")
                 return False
             
-            logging.info(f"Poster válido: {width}x{height}, formato: {img.format}, tamanho: {file_size} bytes")
             return True
             
         except Exception as e:
@@ -3605,7 +3435,6 @@ class ResultadosTopAlertas:
 # CLASSE GERENCIADOR ALERTAS COMPLETOS MODIFICADA
 # =============================
 
-#class GerenciadorAlertasCompletos:
 class GerenciadorAlertasCompletos:
     def __init__(self, sistema_principal):
         self.sistema = sistema_principal
@@ -4473,7 +4302,6 @@ class GerenciadorAlertasCompletos:
         
         return buffer
     
-
 
 # =============================
 # SISTEMA PRINCIPAL (COM MELHORIAS 2.0)
