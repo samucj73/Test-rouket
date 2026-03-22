@@ -3824,14 +3824,14 @@ class GerenciadorAlertasCompletos:
         
         return False
     
-   # def _mostrar_estatisticas_autonomas(self, resultado: dict):
+    def _mostrar_estatisticas_autonomas(self, resultado: dict):
     def _mostrar_estatisticas_autonomas(self, resultado: dict):
         """Mostra estatísticas detalhadas do processamento autônomo"""
     
     # VERIFICAÇÃO DE SEGURANÇA - Garante que a chave existe
     if "estatisticas" not in resultado:
         st.warning("⚠️ Estatísticas não disponíveis para este processamento")
-        return
+        return  # <-- Este return está DENTRO da função, indentado corretamente
     
     stats = resultado["estatisticas"]
     
@@ -3895,6 +3895,9 @@ class GerenciadorAlertasCompletos:
                 st.write("---")
     
     st.markdown("---")
+    # Não há return no final da função, apenas a execução continua
+    
+    
    
        
     
