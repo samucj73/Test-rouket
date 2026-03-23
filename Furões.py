@@ -22,6 +22,121 @@ import hashlib
 
 
 # =============================
+# [NOVA] FUNÇÕES DO SISTEMA AUTÔNOMO PRO
+# =============================
+
+class SistemaApostasPro:
+    """Sistema profissional de classificação e filtragem de apostas"""
+    
+    def __init__(self, alerts):
+        self.alerts = alerts
+
+    def calcular_score(self, alerta):
+        prob = alerta['probabilidade']
+        conf = alerta['confianca']
+        return (prob * 0.6) + (conf * 0.4)
+
+    def classificar_mercado(self, alerta):
+        est = alerta['estimativa']
+        prob = alerta['probabilidade']
+
+        # FLIP INTELIGENTE
+        if est >= 2.5 and prob >= 65:
+            return "OVER 2.5", 1.90
+        elif est >= 2.1:
+            return "OVER 1.5", 1.35
+        elif est >= 1.8:
+            return "UNDER 2.5", 1.55
+        else:
+            return "UNDER 1.5", 1.80
+
+    def filtro_armadilha(self, alerta):
+        prob = alerta['probabilidade']
+        est = alerta['estimativa']
+
+        if prob >= 75 and est < 2.1:
+            return "UNDER 2.5"
+        return None
+
+    def processar_alertas(self):
+        selecionados = []
+
+        for alerta in self.alerts:
+            score = self.calcular_score(alerta)
+
+            # Filtro mínimo
+            if score < 70:
+                continue
+
+            mercado, odd = self.classificar_mercado(alerta)
+
+            # Anti-armadilha
+            ajuste = self.filtro_armadilha(alerta)
+            if ajuste:
+                mercado = ajuste
+
+            selecionados.append({
+                "jogo": alerta['jogo'],
+                "mercado": mercado,
+                "odd": odd,
+                "score": round(score, 2),
+                "liga": alerta.get('liga', ''),
+                "hora": alerta.get('hora', ''),
+                "escudo_home": alerta.get('escudo_home', ''),
+                "escudo_away": alerta.get('escudo_away', ''),
+                "tendencia": alerta.get('tendencia', ''),
+                "tipo_aposta": alerta.get('tipo_aposta', '')
+            })
+
+        return selecionados
+
+
+def separar_por_nivel(jogos):
+    elite = []
+    bons = []
+    risco = []
+
+    for j in jogos:
+        if j['score'] >= 85:
+            elite.append(j)
+        elif j['score'] >= 75:
+            bons.append(j)
+        else:
+            risco.append(j)
+
+    return elite, bons, risco
+
+
+def gerar_multiplas(elite, bons, risco):
+    multiplas = []
+
+    # 🔒 Múltipla segura (consistência)
+    if len(elite) >= 3:
+        segura = random.sample(elite, min(4, len(elite)))
+        multiplas.append(("SEGURA", segura))
+
+    # ⚖️ Múltipla balanceada
+    if len(elite) >= 2 and len(bons) >= 2:
+        balanceada = random.sample(elite, 2) + random.sample(bons, 2)
+        multiplas.append(("BALANCEADA", balanceada))
+
+    # 💥 Múltipla agressiva
+    pool = elite + bons + risco
+    if len(pool) >= 5:
+        agressiva = random.sample(pool, 5)
+        multiplas.append(("AGRESSIVA", agressiva))
+
+    return multiplas
+
+
+def calcular_odd_total(multipla):
+    total = 1.0
+    for jogo in multipla:
+        total *= jogo['odd']
+    return round(total, 2)
+
+
+# =============================
 # CLASSES PRINCIPAIS - CORE SYSTEM
 # =============================
 
@@ -6490,6 +6605,204 @@ class SistemaAlertasFutebol:
 
 
 # =============================
+# NOVA ABA: MÚLTIPLAS PRO
+# =============================
+
+def render_tab_multiplas_pro(sistema):
+    """
+    NOVA ABA: Múltiplas Pro - Sistema Autônomo de Apostas
+    Implementa a lógica do SistemaApostasPro usando os dados já existentes.
+    """
+    st.subheader("🧠 MÚLTIPLAS PRO - SISTEMA AUTÔNOMO")
+    st.caption("Gera múltiplas inteligentes com score de qualidade, filtro anti-armadilha e balanceamento de risco.")
+
+    # =============================
+    # 1. PARÂMETROS DE BUSCA
+    # =============================
+    data_selecionada = st.date_input(
+        "📅 Data para análise",
+        value=datetime.today(),
+        format="DD/MM/YYYY",
+        key="data_multiplas_pro"
+    )
+
+    todas_ligas = st.checkbox("🌍 Todas as ligas", value=True, key="todas_ligas_multiplas_pro")
+    ligas_selecionadas = []
+    if not todas_ligas:
+        ligas_selecionadas = st.multiselect(
+            "📌 Selecionar ligas",
+            options=list(ConfigManager.LIGA_DICT.keys()),
+            default=["Premier League (Inglaterra)", "Bundesliga", "Eredivisie"],
+            key="ligas_multiplas_pro"
+        )
+
+    # Configurações de Score
+    st.markdown("### 🎯 Configurações de Qualidade")
+    col1, col2 = st.columns(2)
+    with col1:
+        score_minimo = st.slider(
+            "Score Mínimo por Jogo",
+            min_value=0,
+            max_value=100,
+            value=70,
+            step=5,
+            help="Jogos com score abaixo deste valor serão descartados."
+        )
+    with col2:
+        usar_anti_armadilha = st.checkbox("🛡️ Ativar Filtro Anti-Armadilha", value=True)
+
+    enviar_multiplas_tg = st.checkbox("📤 Enviar Múltiplas para Telegram", value=True, key="enviar_multiplas_tg_pro")
+
+    if st.button("🧠 GERAR MÚLTIPLAS PROFISSIONAIS", type="primary", use_container_width=True):
+        if not todas_ligas and not ligas_selecionadas:
+            st.error("❌ Selecione pelo menos uma liga")
+            return
+
+        with st.spinner("🔍 Analisando jogos e gerando múltiplas..."):
+            hoje = data_selecionada.strftime("%Y-%m-%d")
+            data_br = data_selecionada.strftime("%d/%m/%Y")
+
+            if todas_ligas:
+                ligas_busca = list(sistema.config.LIGA_DICT.values())
+                st.write(f"🌍 Analisando TODAS as {len(ligas_busca)} ligas disponíveis")
+            else:
+                ligas_busca = [sistema.config.LIGA_DICT[liga_nome] for liga_nome in ligas_selecionadas]
+                st.write(f"📌 Analisando {len(ligas_busca)} ligas selecionadas: {', '.join(ligas_selecionadas)}")
+
+            st.write(f"⏳ Buscando jogos para {data_br}...")
+
+            classificacoes = {}
+            for liga_id in ligas_busca:
+                classificacoes[liga_id] = sistema.api_client.obter_classificacao(liga_id)
+
+            jogos_analisados = []
+
+            for liga_id in ligas_busca:
+                classificacao = classificacoes[liga_id]
+                analisador = AnalisadorTendencia(classificacao)
+
+                if liga_id == "BSA":
+                    jogos_data = sistema.api_client.obter_jogos_brasileirao(liga_id, hoje)
+                else:
+                    jogos_data = sistema.api_client.obter_jogos(liga_id, hoje)
+
+                for match_data in jogos_data:
+                    if not sistema.api_client.validar_dados_jogo(match_data):
+                        continue
+
+                    jogo = Jogo(match_data)
+                    if not jogo.validar_dados():
+                        continue
+
+                    analise = analisador.calcular_tendencia_completa(jogo.home_team, jogo.away_team)
+
+                    if classificacao:
+                        vitoria_analise = AnalisadorEstatistico.calcular_probabilidade_vitoria(
+                            jogo.home_team, jogo.away_team, classificacao
+                        )
+                        analise["detalhes"]["vitoria"] = vitoria_analise
+
+                        ht_analise = AnalisadorEstatistico.calcular_probabilidade_gols_ht(
+                            jogo.home_team, jogo.away_team, classificacao
+                        )
+                        analise["detalhes"]["gols_ht"] = ht_analise
+
+                        ambas_marcam_analise = AnalisadorEstatistico.calcular_probabilidade_ambas_marcam(
+                            jogo.home_team, jogo.away_team, classificacao
+                        )
+                        analise["detalhes"]["ambas_marcam"] = ambas_marcam_analise
+
+                    jogo.set_analise(analise)
+                    jogos_analisados.append(jogo)
+
+            jogos_filtrados = [j for j in jogos_analisados if j.status not in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"]]
+
+            if not jogos_filtrados:
+                st.warning("⚠️ Nenhum jogo futuro encontrado para a data selecionada.")
+                return
+
+            st.write(f"✅ {len(jogos_filtrados)} jogos elegíveis encontrados.")
+
+            # Converter jogos para o formato esperado pelo SistemaApostasPro
+            alerts = []
+            for jogo in jogos_filtrados:
+                if jogo.estimativa > 0 and jogo.confianca > 0:
+                    alerts.append({
+                        "jogo": f"{jogo.home_team} vs {jogo.away_team}",
+                        "probabilidade": jogo.probabilidade,
+                        "confianca": jogo.confianca,
+                        "estimativa": jogo.estimativa,
+                        "liga": jogo.competition,
+                        "hora": jogo.get_hora_brasilia_datetime(),
+                        "escudo_home": jogo.home_crest,
+                        "escudo_away": jogo.away_crest,
+                        "tendencia": jogo.tendencia,
+                        "tipo_aposta": jogo.tipo_aposta,
+                        "jogo_obj": jogo
+                    })
+
+            if not alerts:
+                st.warning("⚠️ Nenhum alerta com Over/Under válido encontrado.")
+                return
+
+            sistema_apostas = SistemaApostasPro(alerts)
+
+            jogos_selecionados = sistema_apostas.processar_alertas()
+
+            if not jogos_selecionados:
+                st.warning("⚠️ Nenhum jogo aprovado após filtros de score.")
+                return
+
+            jogos_finais = [j for j in jogos_selecionados if j['score'] >= score_minimo]
+
+            if not jogos_finais:
+                st.warning(f"⚠️ Nenhum jogo com score >= {score_minimo}.")
+                return
+
+            st.success(f"🎯 {len(jogos_finais)} jogos aprovados (Score ≥ {score_minimo})!")
+
+            st.markdown("### 📊 Jogos Aprovados por Score")
+            for j in jogos_finais:
+                st.write(f"**{j['jogo']}** → {j['mercado']} (Odd: {j['odd']:.2f}) | **Score: {j['score']}**")
+
+            elite, bons, risco = separar_por_nivel(jogos_finais)
+
+            st.markdown("### 📈 Níveis de Jogos")
+            col1, col2, col3 = st.columns(3)
+            col1.metric("🔥 ELITE (Score ≥ 85)", len(elite))
+            col2.metric("💎 BONS (75 ≤ Score < 85)", len(bons))
+            col3.metric("⚠️ RISCO (Score < 75)", len(risco))
+
+            multiplas = gerar_multiplas(elite, bons, risco)
+
+            if not multiplas:
+                st.warning("⚠️ Não foi possível gerar múltiplas com os jogos disponíveis.")
+                return
+
+            st.markdown("### 💣 MÚLTIPLAS GERADAS")
+            for idx, (tipo, jogos_mult) in enumerate(multiplas):
+                odd_total = calcular_odd_total(jogos_mult)
+                with st.expander(f"{tipo} (Odds Total: {odd_total:.2f})"):
+                    for j in jogos_mult:
+                        st.write(f"   {j['jogo']} → {j['mercado']} ({j['odd']:.2f}) | Score: {j['score']}")
+
+                if enviar_multiplas_tg:
+                    msg = f"💣 **{tipo}**\n"
+                    msg += f"🎯 **Odds Total:** {odd_total:.2f}\n\n"
+                    for j in jogos_mult:
+                        msg += f"⚽ {j['jogo']}\n"
+                        msg += f"   📊 {j['mercado']} ({j['odd']:.2f}) | Score: {j['score']}\n\n"
+                    msg += f"🔥 **ELITE MASTER PRO - MÚLTIPLAS AUTÔNOMAS**"
+
+                    if sistema.telegram_client.enviar_mensagem(msg, sistema.config.TELEGRAM_CHAT_ID_ALT2):
+                        st.success(f"📤 Múltipla {tipo} enviada para o Telegram!")
+                    else:
+                        st.error(f"❌ Falha ao enviar múltipla {tipo}")
+
+            st.success("✅ Processamento concluído!")
+
+
+# =============================
 # INTERFACE STREAMLIT
 # =============================
 
@@ -6717,7 +7030,7 @@ def main():
     
     sistema = SistemaAlertasFutebol()
     
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["🔍 Buscar", "📊 Resultados", "🏆 TOP", "⚽ Completos 3.0", "📥 Exportar", "⚙️ Admin"])
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["🔍 Buscar", "📊 Resultados", "🏆 TOP", "⚽ Completos 3.0", "🧠 Múltiplas Pro", "📥 Exportar", "⚙️ Admin"])
     
     with tab1:
         render_tab_busca(sistema)
@@ -6732,9 +7045,12 @@ def main():
         render_tab_completos(sistema)
     
     with tab5:
-        render_tab_exportar(sistema)
+        render_tab_multiplas_pro(sistema)
     
     with tab6:
+        render_tab_exportar(sistema)
+    
+    with tab7:
         render_tab_admin(sistema)
 
 
@@ -7121,7 +7437,6 @@ def render_tab_completos(sistema):
     
     st.session_state.enviar_multiplas = enviar_multiplas
     
-    # Botão de ação
     if st.button("🤖 GERAR MÚLTIPLAS PROFISSIONAIS 3.0", type="primary", use_container_width=True):
         if not todas_ligas and not ligas_selecionadas:
             st.error("❌ Selecione pelo menos uma liga")
@@ -7165,7 +7480,6 @@ def render_tab_completos(sistema):
         col2.metric("✅ Conferidos", conferidos)
         col3.metric("📤 Enviados", enviados)
         
-        # Mostrar distribuição de mercados
         mercados_dist = {}
         for alerta in alertas_comp.values():
             decisao = alerta.get("decisao_autonomo", {})
@@ -7198,7 +7512,6 @@ def render_tab_completos(sistema):
     else:
         st.info("ℹ️ Nenhum alerta completo salvo ainda.")
     
-    # Estatísticas de múltiplas
     multiplas = sistema.gerenciador_completo.carregar_multiplas()
     if multiplas:
         st.markdown("### 💣 Estatísticas de Múltiplas")
