@@ -3037,7 +3037,7 @@ class PosterGenerator:
 
 
 # =============================
-# CLASSE RESULTADOS TOP ALERTAS
+# CLASSE RESULTADOS TOP ALERTAS - COM NOVO GERADOR DE MÚLTIPLAS
 # =============================
 
 class ResultadosTopAlertas:
@@ -3126,12 +3126,179 @@ class ResultadosTopAlertas:
             self._salvar_alertas_top_atualizados(alertas_top)
             st.success(f"✅ {sum(len(j) for j in jogos_conferidos_por_tipo.values())} jogos conferidos!")
             
+            # **************************************************
+            # *** [NOVO] GERAR MÚLTIPLAS A PARTIR DOS TOP ALERTAS ***
+            # **************************************************
+            self.gerar_multiplas_a_partir_de_alertas_top(jogos_conferidos_por_tipo, data_selecionada)
+            
             for tipo_alerta, jogos in jogos_conferidos_por_tipo.items():
                 self._gerar_poster_para_grupo(jogos, tipo_alerta, data_selecionada)
         else:
             st.info("⏳ Nenhum jogo conferido ainda. Aguardando jogos encerrarem...")
         
         self._mostrar_resumo_geral(alertas_hoje)
+    
+    # **************************************************
+    # *** [NOVO] FUNÇÃO PARA GERAR MÚLTIPLAS 3.0 ***
+    # **************************************************
+    def gerar_multiplas_a_partir_de_alertas_top(self, jogos_conferidos_por_tipo: dict, data_selecionada: datetime):
+        """
+        Gera múltiplas usando a lógica definida pelo usuário:
+        - NÍVEL A: Over 1.5 (confiança ≥ 75% e estimativa ≥ 2.2)
+        - NÍVEL B: Over 2.5 (confiança ≥ estimativa >= 2.7 e ambas marcam = SIM)
+        - NÍVEL C: Descartado (Gols HT, Favorito ou estimativa < 2.0)
+        """
+        st.markdown("---")
+        st.subheader("💣 GERADOR DE MÚLTIPLAS 3.0")
+        
+        # Coletar todos os jogos de todos os tipos (over_under, favorito, gols_ht, ambas_marcam)
+        todos_os_jogos = []
+        for tipo, jogos in jogos_conferidos_por_tipo.items():
+            for jogo in jogos:
+                jogo['tipo_original_alerta'] = tipo
+                todos_os_jogos.append(jogo)
+        
+        if not todos_os_jogos:
+            st.info("Nenhum jogo disponível para gerar múltiplas.")
+            return
+        
+        # 1. CLASSIFICAÇÃO DOS JOGOS
+        nivel_A = []
+        nivel_B = []
+        nivel_C = []
+        
+        for jogo in todos_os_jogos:
+            # Extrair informações relevantes
+            estimativa = jogo.get('estimativa', 0.0)
+            confianca = jogo.get('confianca', 0.0)
+            ambas_marcam_tend = jogo.get('tendencia_ambas_marcam')
+            tipo_alerta = jogo.get('tipo_original_alerta')
+            tendencia = jogo.get('tendencia', '')
+            
+            # Verifica se é do tipo over_under (a base para Níveis A e B)
+            if tipo_alerta == 'over_under':
+                # Classificação NÍVEL A (OVER 1.5)
+                if "OVER 1.5" in tendencia and estimativa >= 2.2 and confianca >= 75:
+                    nivel_A.append(jogo)
+                # Classificação NÍVEL B (OVER 2.5)
+                elif "OVER 2.5" in tendencia and estimativa >= 2.7 and ambas_marcam_tend == "SIM":
+                    nivel_B.append(jogo)
+                # Classificação NÍVEL C (perigo)
+                elif "HT" in tendencia or "FAVORITO" in tipo_alerta or estimativa < 2.0:
+                    nivel_C.append(jogo)
+            elif tipo_alerta in ['favorito', 'gols_ht']:
+                # Favoritos e Gols HT são considerados perigosos (Nível C) por definição
+                nivel_C.append(jogo)
+            elif tipo_alerta == 'ambas_marcam':
+                # Verifica se o jogo com ambas marcam poderia ser um Nível B?
+                # A regra original exige "over 2.5" e "ambas marcam = sim" para nível B.
+                # Portanto, um jogo que apenas tem "ambas marcam" não se encaixa.
+                # Vamos considerar como nível C também, pois não é a base de gols.
+                nivel_C.append(jogo)
+        
+        # 2. MONTAGEM AUTOMÁTICA (MODELO HÍBRIDO PROFISSIONAL)
+        # Escolhemos 3 jogos de Nível A e 1 jogo de Nível B.
+        multiplas_geradas = []
+        
+        if len(nivel_A) >= 3 and len(nivel_B) >= 1:
+            # Seleciona os 3 melhores do Nível A (por confiança e estimativa)
+            nivel_A.sort(key=lambda x: (x.get('confianca', 0), x.get('estimativa', 0)), reverse=True)
+            base_jogos = nivel_A[:3]
+            
+            # Seleciona o melhor do Nível B
+            nivel_B.sort(key=lambda x: x.get('confianca', 0), reverse=True)
+            alavanca_jogo = nivel_B[0]
+            
+            # Criar a múltipla
+            multipla = {
+                "tipo": "PROFISSIONAL (HÍBRIDO)",
+                "jogos": base_jogos + [alavanca_jogo],
+                "descricao": "3x Over 1.5 (Nível A) + 1x Over 2.5 (Nível B)",
+                "data_geracao": data_selecionada.strftime("%d/%m/%Y"),
+                "status": "GERADA"
+            }
+            
+            # Calcular odd estimada
+            odd_total = 1.0
+            for j in multipla["jogos"]:
+                prob = j.get('probabilidade', 50)
+                odd = round(100 / prob, 2) if prob > 0 else 2.0
+                odd_total *= odd
+            multipla["odd_estimada"] = round(odd_total, 2)
+            multiplas_geradas.append(multipla)
+            
+            # Opcional: Gerar versão Conservadora se possível
+            if len(nivel_A) >= 3:
+                multipla_cons = {
+                    "tipo": "CONSERVADOR (ALTA TAXA)",
+                    "jogos": nivel_A[:3],
+                    "descricao": "3x Over 1.5 (Nível A)",
+                    "data_geracao": data_selecionada.strftime("%d/%m/%Y"),
+                    "status": "GERADA"
+                }
+                odd_total_cons = 1.0
+                for j in multipla_cons["jogos"]:
+                    prob = j.get('probabilidade', 50)
+                    odd = round(100 / prob, 2) if prob > 0 else 2.0
+                    odd_total_cons *= odd
+                multipla_cons["odd_estimada"] = round(odd_total_cons, 2)
+                multiplas_geradas.append(multipla_cons)
+                
+        else:
+            st.warning(f"⚠️ Não foi possível gerar uma múltipla profissional. Nível A: {len(nivel_A)} (min 3), Nível B: {len(nivel_B)} (min 1).")
+        
+        # 3. EXIBIR E ENVIAR MÚLTIPLAS
+        if multiplas_geradas:
+            st.success(f"🎯 {len(multiplas_geradas)} MÚLTIPLA(S) GERADA(S)!")
+            for i, multipla in enumerate(multiplas_geradas):
+                with st.expander(f"💣 MÚLTIPLA {i+1}: {multipla['tipo']} (Odds Total: {multipla['odd_estimada']:.2f})"):
+                    st.write(f"**📊 Estratégia:** {multipla['descricao']}")
+                    st.write("**⚽ JOGOS:**")
+                    for idx, j in enumerate(multipla["jogos"], 1):
+                        if "OVER 1.5" in j.get('tendencia', ''):
+                            nivel_text = "(Nível A)"
+                        else:
+                            nivel_text = "(Nível B)"
+                        st.write(f"{idx}. {j['home']} vs {j['away']} - {j['tendencia']} {nivel_text}")
+                    
+                    # Opção para enviar a múltipla via Telegram
+                    if st.button(f"📤 Enviar Múltipla {i+1} para o Telegram", key=f"send_mult_{i}_{multipla['data_geracao']}"):
+                        texto_mult = self.gerar_texto_multipla(multipla)
+                        if self.telegram_client.enviar_mensagem(texto_mult, self.config.TELEGRAM_CHAT_ID_ALT2):
+                            st.success(f"✅ Múltipla {i+1} enviada!")
+                        else:
+                            st.error("❌ Erro ao enviar múltipla.")
+        else:
+            st.info("Não foi possível gerar uma múltipla profissional com os resultados disponíveis. Tente outra data com mais jogos.")
+    
+    def gerar_texto_multipla(self, multipla: dict) -> str:
+        """Gera o texto HTML formatado para a múltipla."""
+        data = multipla["data_geracao"]
+        tipo = multipla["tipo"]
+        odd = multipla["odd_estimada"]
+        jogos = multipla["jogos"]
+        
+        texto = f"💣 <b>MÚLTIPLA {tipo}</b>\n"
+        texto += f"📅 {data}\n"
+        texto += f"🎯 <b>Odds Total Estimada:</b> {odd:.2f}\n"
+        texto += f"📊 <b>Estratégia:</b> {multipla['descricao']}\n\n"
+        
+        for idx, j in enumerate(jogos, 1):
+            texto += f"{idx}. <b>{j['home']} vs {j['away']}</b>\n"
+            texto += f"   🎯 <b>{j['tendencia']}</b>\n"
+            if "OVER 1.5" in j.get('tendencia', ''):
+                confianca = j.get('confianca', 0)
+                texto += f"   🔍 Confiança: {confianca:.0f}% (Nível A - Seguro)\n"
+            else:
+                confianca = j.get('confianca', 0)
+                texto += f"   🔍 Confiança: {confianca:.0f}% (Nível B - Valor)\n"
+            prob = j.get('probabilidade', 50)
+            odd_jogo = round(100 / prob, 2) if prob > 0 else 2.0
+            texto += f"   💰 Odd Sugerida: {odd_jogo:.2f}\n"
+            texto += f"   🏷️ Liga: {j.get('liga', 'N/A')}\n\n"
+        
+        texto += f"<b>🔥 ELITE MASTER SYSTEM 3.0 - MÁQUINA DE MÚLTIPLAS</b>"
+        return texto
     
     def _salvar_alertas_top_atualizados(self, alertas_top):
         try:
@@ -3222,43 +3389,15 @@ class ResultadosTopAlertas:
                 "away_goals": away_goals,
                 "ht_home_goals": ht_home_goals,
                 "ht_away_goals": ht_away_goals,
+                "tendencia": alerta.get("tendencia", ""),  # For Over/Under
+                "estimativa": alerta.get("estimativa", 0.0),
+                "probabilidade": alerta.get("probabilidade", 0.0),
+                "confianca": alerta.get("confianca", 0.0),
+                "tipo_aposta": alerta.get("tipo_aposta", ""),
+                "resultado": jogo.resultado,
+                "tendencia_ambas_marcam": alerta.get("tendencia_ambas_marcam", ""),
+                "confianca_ambas_marcam": alerta.get("confianca_ambas_marcam", 0.0),
             }
-            
-            if tipo_alerta == "over_under":
-                dados_poster.update({
-                    "tendencia": alerta.get("tendencia", ""),
-                    "estimativa": alerta.get("estimativa", 0.0),
-                    "probabilidade": alerta.get("probabilidade", 0.0),
-                    "confianca": alerta.get("confianca", 0.0),
-                    "tipo_aposta": alerta.get("tipo_aposta", ""),
-                    "resultado": jogo.resultado
-                })
-            elif tipo_alerta == "favorito":
-                dados_poster.update({
-                    "favorito": alerta.get("favorito", ""),
-                    "confianca_vitoria": alerta.get("confianca_vitoria", 0.0),
-                    "prob_home_win": alerta.get("prob_home_win", 0.0),
-                    "prob_away_win": alerta.get("prob_away_win", 0.0),
-                    "prob_draw": alerta.get("prob_draw", 0.0),
-                    "resultado_favorito": jogo.resultado_favorito
-                })
-            elif tipo_alerta == "gols_ht":
-                dados_poster.update({
-                    "tendencia_ht": alerta.get("tendencia_ht", ""),
-                    "confianca_ht": alerta.get("confianca_ht", 0.0),
-                    "estimativa_total_ht": alerta.get("estimativa_total_ht", 0.0),
-                    "over_05_ht": alerta.get("over_05_ht", 0.0),
-                    "over_15_ht": alerta.get("over_15_ht", 0.0),
-                    "resultado_ht": jogo.resultado_ht
-                })
-            elif tipo_alerta == "ambas_marcam":
-                dados_poster.update({
-                    "tendencia_ambas_marcam": alerta.get("tendencia_ambas_marcam", ""),
-                    "confianca_ambas_marcam": alerta.get("confianca_ambas_marcam", 0.0),
-                    "prob_ambas_marcam_sim": alerta.get("prob_ambas_marcam_sim", 0.0),
-                    "prob_ambas_marcam_nao": alerta.get("prob_ambas_marcam_nao", 0.0),
-                    "resultado_ambas_marcam": jogo.resultado_ambas_marcam
-                })
             
             self._mostrar_resultado_alerta_top(alerta, home_goals, away_goals, ht_home_goals, ht_away_goals, jogo, tipo_alerta)
             
@@ -3468,9 +3607,6 @@ class ResultadosTopAlertas:
             return False
 
 
-# =============================
-# CLASSE GERENCIADOR ALERTAS COMPLETOS MODIFICADA (COM MÚLTIPLAS)
-# =============================
 # =============================
 # CLASSE GERENCIADOR ALERTAS COMPLETOS MODIFICADA (COM MÚLTIPLAS) - CORRIGIDA
 # =============================
@@ -6591,8 +6727,8 @@ def main():
             <span class="title-icon left">⚽</span>
             <div class="title-text">
                 <div class="title-futebol">FUTEBOL</div>
-                <div class="title-elite">ELITE MASTER <span class="version-badge">2.0</span></div>
-                <div class="title-master">DECISÃO AUTÔNOMA</div>
+                <div class="title-elite">ELITE MASTER <span class="version-badge">3.0</span></div>
+                <div class="title-master">MÁQUINA DE MÚLTIPLAS</div>
             </div>
             <span class="title-icon right">🏆</span>
         </div>
@@ -7329,7 +7465,7 @@ st.markdown("""
 </style>
 
 <div class="footer-premium">
-    <div class="footer-title">ELITE MASTER SYSTEM 2.0</div>
-    <div class="footer-sub">DECISÃO AUTÔNOMA • SAMUCJ TECNOLOGIA © 2026</div>
+    <div class="footer-title">ELITE MASTER SYSTEM 3.0</div>
+    <div class="footer-sub">MÁQUINA DE MÚLTIPLAS • SAMUCJ TECNOLOGIA © 2026</div>
 </div>
 """, unsafe_allow_html=True)
