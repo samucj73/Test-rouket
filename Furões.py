@@ -3471,6 +3471,9 @@ class ResultadosTopAlertas:
 # =============================
 # CLASSE GERENCIADOR ALERTAS COMPLETOS MODIFICADA (COM MÚLTIPLAS)
 # =============================
+# =============================
+# CLASSE GERENCIADOR ALERTAS COMPLETOS MODIFICADA (COM MÚLTIPLAS) - CORRIGIDA
+# =============================
 
 class GerenciadorAlertasCompletos:
     def __init__(self, sistema_principal):
@@ -3732,7 +3735,7 @@ class GerenciadorAlertasCompletos:
             
             if alertas_hoje:
                 st.info(f"🔍 Encontrados {len(alertas_hoje)} alertas pendentes")
-                self._conferir_alertas_individuais(alertas_hoje)
+                self._conferir_alertas_individuais(alertas_hoje, hoje)  # Passa hoje como parâmetro
             else:
                 st.info(f"ℹ️ Nenhum alerta individual pendente para {data_br}")
         
@@ -3743,14 +3746,14 @@ class GerenciadorAlertasCompletos:
             
             if multiplas_hoje:
                 st.info(f"🔍 Conferindo {len(multiplas_hoje)} múltiplas pendentes...")
-                self._conferir_multiplas(multiplas_hoje)
+                self._conferir_multiplas(multiplas_hoje, hoje)  # Passa hoje como parâmetro
             else:
                 st.info(f"ℹ️ Nenhuma múltipla pendente para {data_br}")
         
         # 3. Mostrar resumo
         self._mostrar_resumo_completos()
     
-    def _conferir_alertas_individuais(self, alertas):
+    def _conferir_alertas_individuais(self, alertas, hoje):
         """Confere os alertas individuais"""
         jogos_conferidos = []
         progress_bar = st.progress(0)
@@ -3856,21 +3859,21 @@ class GerenciadorAlertasCompletos:
             
             # Enviar resultados em lotes
             lotes = [jogos_conferidos[i:i+3] for i in range(0, len(jogos_conferidos), 3)]
-            for idx, lote in enumerate(lotes, 1):
+            for idx_lote, lote in enumerate(lotes, 1):
                 poster = self.gerar_poster_resultados_completos_v2(lote, {})
                 caption = (
                     f"<b>🏆 RESULTADOS COMPLETOS - {hoje}</b>\n"
-                    f"<b>📋 LOTE {idx}/{len(lotes)} - {len(lote)} JOGOS</b>\n"
+                    f"<b>📋 LOTE {idx_lote}/{len(lotes)} - {len(lote)} JOGOS</b>\n"
                     f"<b>📊 Decisão Autônoma por Mercado</b>\n\n"
                     f"<b>🔥 ELITE MASTER SYSTEM 2.0 - RESULTADOS CONFIRMADOS</b>"
                 )
                 
                 if self.telegram_client.enviar_foto(poster, caption=caption):
-                    st.success(f"📤 Lote {idx}/{len(lotes)} enviado!")
+                    st.success(f"📤 Lote {idx_lote}/{len(lotes)} enviado!")
                 else:
-                    st.error(f"❌ Falha ao enviar lote {idx}/{len(lotes)}")
+                    st.error(f"❌ Falha ao enviar lote {idx_lote}/{len(lotes)}")
     
-    def _conferir_multiplas(self, multiplas):
+    def _conferir_multiplas(self, multiplas, hoje):
         """
         Confere os resultados das múltiplas.
         Envia o resultado apenas quando TODOS os jogos da múltipla estiverem finalizados.
@@ -4721,6 +4724,7 @@ class GerenciadorAlertasCompletos:
         buffer.seek(0)
         
         return buffer
+
 
 
 # =============================
