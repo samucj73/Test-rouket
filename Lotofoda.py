@@ -2829,162 +2829,196 @@ def main():
         # =====================================================
         # TAB 11: GEOMETRIA ANALÍTICA
         # =====================================================
-        with tab11:
-            st.markdown("<div style='background:#1e1e2e; padding:15px; border-radius:10px; margin-bottom:20px; border-left:5px solid #00ffaa;'><h4 style='margin:0; color:#00ffaa;'>📐 GEOMETRIA ANALÍTICA DO TABULEIRO</h4><p style='margin:5px 0 0 0; font-size:0.9em;'>Matriz de co-ocorrência • Centroides • Entropia • Grafos de relação</p></div>", unsafe_allow_html=True)
-            if st.session_state.dados_api:
-                qtd_historico = qtd
-                historico_selecionado = [sorted(map(int, c['dezenas'])) for c in st.session_state.dados_api[:qtd_historico]]
-                st.info(f"📊 Analisando **{qtd_historico}** concursos históricos (baseado na sua seleção de {qtd} concursos)")
-                if st.session_state.motor_geometria is None or len(historico_selecionado) != st.session_state.motor_geometria.total_concursos:
-                    st.session_state.motor_geometria = MotorGeometriaAvancada(historico_selecionado)
-                motor = st.session_state.motor_geometria
-                st.markdown("### 🎲 Tabuleiro Lotofácil (5x5)")
-                tabuleiro_html = "<table style='width:100%; border-collapse:collapse; text-align:center;'>"
-                for i in range(5):
-                    tabuleiro_html += "<tr>"
-                    for j in range(5):
-                        num = motor.volante[i][j]
-                        freq = motor.frequencias[num]
-                        max_freq = max(motor.frequencias) if max(motor.frequencias) > 0 else 1
-                        intensidade = min(255, int(100 + 155 * (freq / max_freq)))
-                        cor = f"rgba({intensidade}, 100, 200, 0.3)"
-                        tabuleiro_html += f"<td style='border:1px solid #444; padding:12px; background:{cor};'><strong>{num:02d}</strong></td>"
-                    tabuleiro_html += "</tr>"
-                tabuleiro_html += "</table>"
-                st.markdown(tabuleiro_html, unsafe_allow_html=True)
-                st.caption("Intensidade da cor representa frequência histórica")
-                st.markdown("### 📊 Estatísticas Globais")
-                stats_geo = motor.get_estatisticas_geometricas()
-                col1, col2, col3, col4 = st.columns(4)
-                with col1: st.metric("Centroide Médio", f"({stats_geo['centroide_medio'][0]}, {stats_geo['centroide_medio'][1]})")
-                with col2: st.metric("Entropia Global", f"{stats_geo['entropia_global']:.3f}")
-                with col3: st.metric("Pares Fortes", stats_geo['total_pares_fortes'])
-                with col4: st.metric("Max Co-ocorrência", stats_geo['max_coocorrencia'])
-                st.markdown("### 📈 Evolução dos Centroides")
-                centroides_validos = [(i, c[0], c[1]) for i, c in enumerate(motor.centroides) if c[0] is not None and i < 50]
-                if centroides_validos:
-                    df_centroides = pd.DataFrame(centroides_validos, columns=['concurso','x','y'])
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.markdown("**Coordenada X (linha)**")
-                        st.line_chart(df_centroides.set_index('concurso')[['x']])
-                    with col2:
-                        st.markdown("**Coordenada Y (coluna)**")
-                        st.line_chart(df_centroides.set_index('concurso')[['y']])
-                st.markdown("### 🔗 Matriz de Co-ocorrência")
-                st.caption("Números que mais aparecem juntos")
-                df_pares = motor.plot_matriz_coocorrencia()
-                if not df_pares.empty:
-                    df_pares_display = df_pares.head(20).copy()
-                    df_pares_display['num1'] = df_pares_display['num1'].astype(int)
-                    df_pares_display['num2'] = df_pares_display['num2'].astype(int)
-                    df_pares_display['ocorrencias'] = df_pares_display['ocorrencias'].astype(int)
-                    st.dataframe(df_pares_display, use_container_width=True, hide_index=True, column_config={"num1": st.column_config.NumberColumn("Número 1", format="%d"), "num2": st.column_config.NumberColumn("Número 2", format="%d"), "ocorrencias": st.column_config.ProgressColumn("Ocorrências", format="%d", min_value=0, max_value=int(df_pares['ocorrencias'].max()))})
-                    st.markdown("**Top 10 Pares mais frequentes**")
-                    chart_data = df_pares.head(10).copy()
-                    chart_data['par'] = chart_data['num1'].astype(str) + "-" + chart_data['num2'].astype(str)
-                    st.bar_chart(chart_data.set_index('par')[['ocorrencias']])
-                st.markdown("### 🔍 Consultar Pares Fortes por Número")
-                col1, col2 = st.columns([1,2])
-                with col1:
-                    num_consulta = st.number_input("Digite um número (1-25)", min_value=1, max_value=25, value=13, key="num_consulta_geo")
-                with col2:
-                    pares_recomendados = motor.get_pares_recomendados(num_consulta, top_n=8)
-                    if pares_recomendados:
-                        st.markdown(f"**Números mais relacionados ao {num_consulta:02d}:**")
-                        html_pares = ""
-                        for num, ocorr in pares_recomendados:
-                            intensidade = min(255, int(100 + 155 * (ocorr / pares_recomendados[0][1])))
-                            html_pares += f"<span style='background:rgba(0,255,170,{intensidade/510}); border:1px solid #00ffaa; border-radius:20px; padding:5px 10px; margin:3px; display:inline-block;'>{num:02d} ({ocorr})</span>"
-                        st.markdown(html_pares, unsafe_allow_html=True)
+        # =====================================================
+# TAB 11: GEOMETRIA ANALÍTICA (CORRIGIDO)
+# =====================================================
+with tab11:
+    st.markdown("<div style='background:#1e1e2e; padding:15px; border-radius:10px; margin-bottom:20px; border-left:5px solid #00ffaa;'><h4 style='margin:0; color:#00ffaa;'>📐 GEOMETRIA ANALÍTICA DO TABULEIRO</h4><p style='margin:5px 0 0 0; font-size:0.9em;'>Matriz de co-ocorrência • Centroides • Entropia • Grafos de relação</p></div>", unsafe_allow_html=True)
+    if st.session_state.dados_api:
+        qtd_historico = qtd
+        historico_selecionado = [sorted(map(int, c['dezenas'])) for c in st.session_state.dados_api[:qtd_historico]]
+        st.info(f"📊 Analisando **{qtd_historico}** concursos históricos (baseado na sua seleção de {qtd} concursos)")
+        if st.session_state.motor_geometria is None or len(historico_selecionado) != st.session_state.motor_geometria.total_concursos:
+            st.session_state.motor_geometria = MotorGeometriaAvancada(historico_selecionado)
+        motor = st.session_state.motor_geometria
+        st.markdown("### 🎲 Tabuleiro Lotofácil (5x5)")
+        tabuleiro_html = "<table style='width:100%; border-collapse:collapse; text-align:center;'>"
+        for i in range(5):
+            tabuleiro_html += "患"
+            for j in range(5):
+                num = motor.volante[i][j]
+                freq = motor.frequencias[num]
+                max_freq = max(motor.frequencias) if max(motor.frequencias) > 0 else 1
+                intensidade = min(255, int(100 + 155 * (freq / max_freq)))
+                cor = f"rgba({intensidade}, 100, 200, 0.3)"
+                tabuleiro_html += f"<td style='border:1px solid #444; padding:12px; background:{cor};'><strong>{num:02d}</strong>脉"
+            tabuleiro_html += "缁"
+        tabuleiro_html += "缁"
+        st.markdown(tabuleiro_html, unsafe_allow_html=True)
+        st.caption("Intensidade da cor representa frequência histórica")
+        st.markdown("### 📊 Estatísticas Globais")
+        stats_geo = motor.get_estatisticas_geometricas()
+        col1, col2, col3, col4 = st.columns(4)
+        with col1: st.metric("Centroide Médio", f"({stats_geo['centroide_medio'][0]}, {stats_geo['centroide_medio'][1]})")
+        with col2: st.metric("Entropia Global", f"{stats_geo['entropia_global']:.3f}")
+        with col3: st.metric("Pares Fortes", stats_geo['total_pares_fortes'])
+        with col4: st.metric("Max Co-ocorrência", stats_geo['max_coocorrencia'])
+        st.markdown("### 📈 Evolução dos Centroides")
+        centroides_validos = [(i, c[0], c[1]) for i, c in enumerate(motor.centroides) if c[0] is not None and i < 50]
+        if centroides_validos:
+            df_centroides = pd.DataFrame(centroides_validos, columns=['concurso','x','y'])
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("**Coordenada X (linha)**")
+                st.line_chart(df_centroides.set_index('concurso')[['x']])
+            with col2:
+                st.markdown("**Coordenada Y (coluna)**")
+                st.line_chart(df_centroides.set_index('concurso')[['y']])
+        st.markdown("### 🔗 Matriz de Co-ocorrência")
+        st.caption("Números que mais aparecem juntos")
+        df_pares = motor.plot_matriz_coocorrencia()
+        if not df_pares.empty:
+            df_pares_display = df_pares.head(20).copy()
+            df_pares_display['num1'] = df_pares_display['num1'].astype(int)
+            df_pares_display['num2'] = df_pares_display['num2'].astype(int)
+            df_pares_display['ocorrencias'] = df_pares_display['ocorrencias'].astype(int)
+            st.dataframe(df_pares_display, use_container_width=True, hide_index=True, column_config={"num1": st.column_config.NumberColumn("Número 1", format="%d"), "num2": st.column_config.NumberColumn("Número 2", format="%d"), "ocorrencias": st.column_config.ProgressColumn("Ocorrências", format="%d", min_value=0, max_value=int(df_pares['ocorrencias'].max()))})
+            st.markdown("**Top 10 Pares mais frequentes**")
+            chart_data = df_pares.head(10).copy()
+            chart_data['par'] = chart_data['num1'].astype(str) + "-" + chart_data['num2'].astype(str)
+            st.bar_chart(chart_data.set_index('par')[['ocorrencias']])
+        st.markdown("### 🔍 Consultar Pares Fortes por Número")
+        col1, col2 = st.columns([1,2])
+        with col1:
+            num_consulta = st.number_input("Digite um número (1-25)", min_value=1, max_value=25, value=13, key="num_consulta_geo")
+        with col2:
+            pares_recomendados = motor.get_pares_recomendados(num_consulta, top_n=8)
+            if pares_recomendados:
+                st.markdown(f"**Números mais relacionados ao {num_consulta:02d}:**")
+                html_pares = ""
+                for num, ocorr in pares_recomendados:
+                    intensidade = min(255, int(100 + 155 * (ocorr / pares_recomendados[0][1])))
+                    html_pares += f"<span style='background:rgba(0,255,170,{intensidade/510}); border:1px solid #00ffaa; border-radius:20px; padding:5px 10px; margin:3px; display:inline-block;'>{num:02d} ({ocorr})</span>"
+                st.markdown(html_pares, unsafe_allow_html=True)
+            else:
+                st.info("Nenhum par forte encontrado para este número.")
+        st.markdown("### 📐 Análise Geométrica de um Jogo")
+        fonte_jogo_geo = st.radio("Fonte do jogo para análise:", ["Jogos do Fechamento 3622", "Jogos do Gerador 12+", "Jogos do Gerador 13+", "Jogos Profissionais", "Inserir manualmente"], horizontal=True, key="fonte_jogo_geo")
+        jogo_para_analisar = None
+        if fonte_jogo_geo == "Jogos do Fechamento 3622" and st.session_state.jogos_3622:
+            if st.session_state.jogos_3622:
+                idx_jogo = st.selectbox("Selecione o jogo:", range(len(st.session_state.jogos_3622)), format_func=lambda i: f"Jogo {i+1}: {st.session_state.jogos_3622[i]}", key="select_jogo_geo_3622")
+                jogo_para_analisar = st.session_state.jogos_3622[idx_jogo]
+        elif fonte_jogo_geo == "Jogos do Gerador 12+" and st.session_state.jogos_12plus:
+            if st.session_state.jogos_12plus:
+                idx_jogo = st.selectbox("Selecione o jogo:", range(len(st.session_state.jogos_12plus)), format_func=lambda i: f"Jogo {i+1}: {st.session_state.jogos_12plus[i]}", key="select_jogo_geo_12plus")
+                jogo_para_analisar = st.session_state.jogos_12plus[idx_jogo]
+        elif fonte_jogo_geo == "Jogos do Gerador 13+" and st.session_state.jogos_13plus:
+            if st.session_state.jogos_13plus:
+                idx_jogo = st.selectbox("Selecione o jogo:", range(len(st.session_state.jogos_13plus)), format_func=lambda i: f"Jogo {i+1}: {st.session_state.jogos_13plus[i]}", key="select_jogo_geo_13plus")
+                jogo_para_analisar = st.session_state.jogos_13plus[idx_jogo]
+        elif fonte_jogo_geo == "Jogos Profissionais" and st.session_state.jogos_profissionais:
+            if st.session_state.jogos_profissionais:
+                idx_jogo = st.selectbox("Selecione o jogo:", range(len(st.session_state.jogos_profissionais)), format_func=lambda i: f"Jogo {i+1}: {st.session_state.jogos_profissionais[i]}", key="select_jogo_geo_prof")
+                jogo_para_analisar = st.session_state.jogos_profissionais[idx_jogo]
+        elif fonte_jogo_geo == "Inserir manualmente":
+            jogo_input = st.text_input("Digite 15 números separados por vírgula:", placeholder="Ex: 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15", key="input_jogo_geo")
+            if jogo_input:
+                try:
+                    numeros = [int(n.strip()) for n in jogo_input.split(",")]
+                    if len(numeros) == 15 and len(set(numeros)) == 15 and all(1 <= n <= 25 for n in numeros):
+                        jogo_para_analisar = sorted(numeros)
                     else:
-                        st.info("Nenhum par forte encontrado para este número.")
-                st.markdown("### 📐 Análise Geométrica de um Jogo")
-                fonte_jogo_geo = st.radio("Fonte do jogo para análise:", ["Jogos do Fechamento 3622", "Jogos do Gerador 12+", "Jogos do Gerador 13+", "Jogos Profissionais", "Inserir manualmente"], horizontal=True, key="fonte_jogo_geo")
-                jogo_para_analisar = None
-                if fonte_jogo_geo == "Jogos do Fechamento 3622" and st.session_state.jogos_3622:
-                    if st.session_state.jogos_3622:
-                        idx_jogo = st.selectbox("Selecione o jogo:", range(len(st.session_state.jogos_3622)), format_func=lambda i: f"Jogo {i+1}: {st.session_state.jogos_3622[i]}", key="select_jogo_geo_3622")
-                        jogo_para_analisar = st.session_state.jogos_3622[idx_jogo]
-                elif fonte_jogo_geo == "Jogos do Gerador 12+" and st.session_state.jogos_12plus:
-                    if st.session_state.jogos_12plus:
-                        idx_jogo = st.selectbox("Selecione o jogo:", range(len(st.session_state.jogos_12plus)), format_func=lambda i: f"Jogo {i+1}: {st.session_state.jogos_12plus[i]}", key="select_jogo_geo_12plus")
-                        jogo_para_analisar = st.session_state.jogos_12plus[idx_jogo]
-                elif fonte_jogo_geo == "Jogos do Gerador 13+" and st.session_state.jogos_13plus:
-                    if st.session_state.jogos_13plus:
-                        idx_jogo = st.selectbox("Selecione o jogo:", range(len(st.session_state.jogos_13plus)), format_func=lambda i: f"Jogo {i+1}: {st.session_state.jogos_13plus[i]}", key="select_jogo_geo_13plus")
-                        jogo_para_analisar = st.session_state.jogos_13plus[idx_jogo]
-                elif fonte_jogo_geo == "Jogos Profissionais" and st.session_state.jogos_profissionais:
-                    if st.session_state.jogos_profissionais:
-                        idx_jogo = st.selectbox("Selecione o jogo:", range(len(st.session_state.jogos_profissionais)), format_func=lambda i: f"Jogo {i+1}: {st.session_state.jogos_profissionais[i]}", key="select_jogo_geo_prof")
-                        jogo_para_analisar = st.session_state.jogos_profissionais[idx_jogo]
-                elif fonte_jogo_geo == "Inserir manualmente":
-                    jogo_input = st.text_input("Digite 15 números separados por vírgula:", placeholder="Ex: 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15", key="input_jogo_geo")
-                    if jogo_input:
-                        try:
-                            numeros = [int(n.strip()) for n in jogo_input.split(",")]
-                            if len(numeros) == 15 and len(set(numeros)) == 15 and all(1 <= n <= 25 for n in numeros):
-                                jogo_para_analisar = sorted(numeros)
-                            else:
-                                st.error("❌ Jogo inválido! Deve ter 15 números únicos entre 1 e 25.")
-                        except:
-                            st.error("❌ Formato inválido! Use números separados por vírgula.")
-                if jogo_para_analisar and st.button("📊 Analisar Jogo", key="analisar_jogo_geo"):
-                    with st.spinner("Analisando geometria do jogo..."):
-                        analise = motor.analisar_jogo(jogo_para_analisar)
-                        st.session_state.analise_geometrica_jogo = analise
-                        st.markdown("#### 📊 Resultado da Análise Geométrica")
-                        col1, col2, col3 = st.columns(3)
-                        with col1: st.metric("Centroide", f"({analise['centroide'][0]}, {analise['centroide'][1]})")
-                        with col2: st.metric("Dispersão Média", analise['dispersao_media'])
-                        with col3: st.metric("Pares Adjacentes", analise['pares_adjacentes'])
-                        st.markdown("**📍 Distribuição nos Quadrantes**")
-                        df_quad = pd.DataFrame({'Quadrante': list(analise['quadrantes'].keys()), 'Quantidade': list(analise['quadrantes'].values())})
-                        st.bar_chart(df_quad.set_index('Quadrante'))
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.markdown("**📏 Distribuição por Linhas**")
-                            df_linhas = pd.DataFrame({'Linha': range(5), 'Quantidade': analise['distribuicao_linhas']})
-                            st.bar_chart(df_linhas.set_index('Linha'))
-                        with col2:
-                            st.markdown("**📏 Distribuição por Colunas**")
-                            df_colunas = pd.DataFrame({'Coluna': range(5), 'Quantidade': analise['distribuicao_colunas']})
-                            st.bar_chart(df_colunas.set_index('Coluna'))
-                st.markdown("### 🎲 Gerador Baseado em Centroide")
-                st.caption("Gera jogos que se aproximam de um centroide alvo")
+                        st.error("❌ Jogo inválido! Deve ter 15 números únicos entre 1 e 25.")
+                except:
+                    st.error("❌ Formato inválido! Use números separados por vírgula.")
+        if jogo_para_analisar and st.button("📊 Analisar Jogo", key="analisar_jogo_geo"):
+            with st.spinner("Analisando geometria do jogo..."):
+                analise = motor.analisar_jogo(jogo_para_analisar)
+                st.session_state.analise_geometrica_jogo = analise
+                st.markdown("#### 📊 Resultado da Análise Geométrica")
+                col1, col2, col3 = st.columns(3)
+                with col1: st.metric("Centroide", f"({analise['centroide'][0]}, {analise['centroide'][1]})")
+                with col2: st.metric("Dispersão Média", analise['dispersao_media'])
+                with col3: st.metric("Pares Adjacentes", analise['pares_adjacentes'])
+                st.markdown("**📍 Distribuição nos Quadrantes**")
+                df_quad = pd.DataFrame({'Quadrante': list(analise['quadrantes'].keys()), 'Quantidade': list(analise['quadrantes'].values())})
+                st.bar_chart(df_quad.set_index('Quadrante'))
                 col1, col2 = st.columns(2)
                 with col1:
-                    target_x = st.slider("Coordenada X alvo (linha)", min_value=0.0, max_value=4.0, value=stats_geo.get('centroide_medio',(2,2))[0], step=0.1, key="target_x")
+                    st.markdown("**📏 Distribuição por Linhas**")
+                    df_linhas = pd.DataFrame({'Linha': range(5), 'Quantidade': analise['distribuicao_linhas']})
+                    st.bar_chart(df_linhas.set_index('Linha'))
                 with col2:
-                    target_y = st.slider("Coordenada Y alvo (coluna)", min_value=0.0, max_value=4.0, value=stats_geo.get('centroide_medio',(2,2))[1], step=0.1, key="target_y")
-                tolerancia = st.slider("Tolerância (distância máxima aceitável)", min_value=0.1, max_value=2.0, value=0.5, step=0.1, key="tolerancia_geo")
-                if st.button("🎲 Gerar Jogos por Centroide", key="gerar_geo"):
-                    with st.spinner(f"Gerando jogos baseados em {qtd_historico} concursos..."):
-                        jogos_geo, distancias = [], []
-                        for _ in range(10):
-                            jogo, dist = motor.gerar_jogo_geometrico(target_centroide=(target_x, target_y), tolerancia=tolerancia)
-                            if jogo:
-                                jogos_geo.append(jogo)
-                                distancias.append(dist)
-                        st.session_state.jogos_geometricos = list(zip(jogos_geo, distancias))
-                        st.success(f"✅ {len(jogos_geo)} jogos gerados com base em {qtd_historico} concursos!")
-                if st.session_state.jogos_geometricos:
-                    st.markdown("### 📋 Jogos Gerados por Centroide")
-                    for i, (jogo, dist) in enumerate(st.session_state.jogos_geometricos[:10]):
-                        cor = "#4ade80" if dist <= 0.3 else "gold" if dist <= 0.6 else "#4cc9f0"
-                        nums_html = formatar_jogo_html(jogo)
-                        st.markdown(f"<div style='border-left: 5px solid {cor}; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'><div style='display:flex; justify-content:space-between;'><strong>Jogo #{i+1}</strong><small>Distância ao alvo: {dist}</small></div><div>{nums_html}</div></div>", unsafe_allow_html=True)
-                    if st.button("💾 Salvar Jogos Geométricos", key="salvar_geo", use_container_width=True):
-                        ultimo = st.session_state.dados_api[0]
-                        jogos_puros = [j for j, _ in st.session_state.jogos_geometricos]
-                        arquivo, jogo_id = salvar_jogos_gerados(jogos_puros, list(range(1,18)), {"modelo": "Geométrico", "target": (target_x, target_y), "concursos_analisados": qtd_historico}, ultimo['concurso'], ultimo['data'])
-                        if arquivo:
-                            st.success(f"✅ Jogos salvos! ID: {jogo_id}")
-                            st.session_state.jogos_salvos = carregar_jogos_salvos()
-                with st.expander("📘 Como funciona a Geometria Analítica?"):
-                    st.markdown(f"### 📐 Fundamentos da Geometria Aplicada à Lotofácil\n\n**📊 Base histórica:** {qtd_historico} concursos analisados\n\n**1. Coordenadas do Tabuleiro:**\n- Cada número vira um ponto (x,y) no plano cartesiano\n- Linhas: 0 (topo) a 4 (base)\n- Colunas: 0 (esquerda) a 4 (direita)\n\n**2. Centroide:**\n- Média das coordenadas de todos os números do jogo\n- Representa o "centro de massa" do jogo no tabuleiro\n\n**3. Matriz de Co-ocorrência:**\n- M[i][j] = quantas vezes os números i e j apareceram juntos\n- Identifica pares "amigos" que costumam sair juntos\n\n**4. Entropia de Shannon:**\n- H = -Σ p_i * log2(p_i)\n- Mede o nível de aleatoriedade/incerteza\n- Quanto maior a entropia, mais equilibrada a distribuição\n\n**5. Dispersão Geométrica:**\n- Distância média dos números ao centroide\n- Mede o quão espalhado é o jogo no volante\n\n**6. Pares Adjacentes:**\n- Números que são vizinhos no tabuleiro (distância Manhattan = 1)\n- Indica concentração local")
-            else:
-                st.info("📥 Carregue os concursos na barra lateral para ativar a Geometria Analítica.")
+                    st.markdown("**📏 Distribuição por Colunas**")
+                    df_colunas = pd.DataFrame({'Coluna': range(5), 'Quantidade': analise['distribuicao_colunas']})
+                    st.bar_chart(df_colunas.set_index('Coluna'))
+        st.markdown("### 🎲 Gerador Baseado em Centroide")
+        st.caption("Gera jogos que se aproximam de um centroide alvo")
+        col1, col2 = st.columns(2)
+        with col1:
+            target_x = st.slider("Coordenada X alvo (linha)", min_value=0.0, max_value=4.0, value=stats_geo.get('centroide_medio',(2,2))[0], step=0.1, key="target_x")
+        with col2:
+            target_y = st.slider("Coordenada Y alvo (coluna)", min_value=0.0, max_value=4.0, value=stats_geo.get('centroide_medio',(2,2))[1], step=0.1, key="target_y")
+        tolerancia = st.slider("Tolerância (distância máxima aceitável)", min_value=0.1, max_value=2.0, value=0.5, step=0.1, key="tolerancia_geo")
+        if st.button("🎲 Gerar Jogos por Centroide", key="gerar_geo"):
+            with st.spinner(f"Gerando jogos baseados em {qtd_historico} concursos..."):
+                jogos_geo, distancias = [], []
+                for _ in range(10):
+                    jogo, dist = motor.gerar_jogo_geometrico(target_centroide=(target_x, target_y), tolerancia=tolerancia)
+                    if jogo:
+                        jogos_geo.append(jogo)
+                        distancias.append(dist)
+                st.session_state.jogos_geometricos = list(zip(jogos_geo, distancias))
+                st.success(f"✅ {len(jogos_geo)} jogos gerados com base em {qtd_historico} concursos!")
+        if st.session_state.jogos_geometricos:
+            st.markdown("### 📋 Jogos Gerados por Centroide")
+            for i, (jogo, dist) in enumerate(st.session_state.jogos_geometricos[:10]):
+                cor = "#4ade80" if dist <= 0.3 else "gold" if dist <= 0.6 else "#4cc9f0"
+                nums_html = formatar_jogo_html(jogo)
+                st.markdown(f"<div style='border-left: 5px solid {cor}; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'><div style='display:flex; justify-content:space-between;'><strong>Jogo #{i+1}</strong><small>Distância ao alvo: {dist}</small></div><div>{nums_html}</div></div>", unsafe_allow_html=True)
+            if st.button("💾 Salvar Jogos Geométricos", key="salvar_geo", use_container_width=True):
+                ultimo = st.session_state.dados_api[0]
+                jogos_puros = [j for j, _ in st.session_state.jogos_geometricos]
+                arquivo, jogo_id = salvar_jogos_gerados(jogos_puros, list(range(1,18)), {"modelo": "Geométrico", "target": (target_x, target_y), "concursos_analisados": qtd_historico}, ultimo['concurso'], ultimo['data'])
+                if arquivo:
+                    st.success(f"✅ Jogos salvos! ID: {jogo_id}")
+                    st.session_state.jogos_salvos = carregar_jogos_salvos()
+        with st.expander("📘 Como funciona a Geometria Analítica?"):
+            st.markdown(f"""
+            ### 📐 Fundamentos da Geometria Aplicada à Lotofácil
+
+            **📊 Base histórica:** {qtd_historico} concursos analisados
+
+            **1. Coordenadas do Tabuleiro:**
+            - Cada número vira um ponto (x,y) no plano cartesiano
+            - Linhas: 0 (topo) a 4 (base)
+            - Colunas: 0 (esquerda) a 4 (direita)
+
+            **2. Centroide:**
+            - Média das coordenadas de todos os números do jogo
+            - Representa o \"centro de massa\" do jogo no tabuleiro
+
+            **3. Matriz de Co-ocorrência:**
+            - M[i][j] = quantas vezes os números i e j apareceram juntos
+            - Identifica pares \"amigos\" que costumam sair juntos
+
+            **4. Entropia de Shannon:**
+            - H = -Σ p_i * log2(p_i)
+            - Mede o nível de aleatoriedade/incerteza
+            - Quanto maior a entropia, mais equilibrada a distribuição
+
+            **5. Dispersão Geométrica:**
+            - Distância média dos números ao centroide
+            - Mede o quão espalhado é o jogo no volante
+
+            **6. Pares Adjacentes:**
+            - Números que são vizinhos no tabuleiro (distância Manhattan = 1)
+            - Indica concentração local
+            """)
+    else:
+        st.info("📥 Carregue os concursos na barra lateral para ativar a Geometria Analítica.")
+        
 
         # =====================================================
         # TAB 12: SISTEMA AUTÔNOMO (JÁ EXISTENTE)
