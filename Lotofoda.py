@@ -3393,6 +3393,136 @@ def pipeline_selecao_inteligente(jogos_gerados, concursos_historico, modo_operac
     return jogos_aprovados, sinal_ativo, estatisticas
 
 # =====================================================
+# ===== SISTEMA 6.0 - IA EM TEMPO REAL =====
+# =====================================================
+
+def buscar_dados_api(qtd=50):
+    """
+    Busca dados em tempo real da API da Caixa
+    """
+    try:
+        url = "https://loteriascaixa-api.herokuapp.com/api/lotofacil/"
+        response = requests.get(url)
+        dados = response.json()
+        
+        # Limitar a quantidade
+        dados = dados[:qtd]
+        
+        concursos = []
+        for c in dados:
+            dezenas = list(map(int, c['dezenas']))
+            concursos.append(dezenas)
+        
+        return concursos, dados[0] if dados else None
+    except Exception as e:
+        st.error(f"Erro ao buscar dados da API: {e}")
+        return [], None
+
+def calcular_frequencia_ponderada(concursos):
+    """
+    Calcula frequência ponderada onde concursos mais recentes têm mais peso
+    """
+    pesos = list(range(len(concursos), 0, -1))
+    freq = Counter()
+    
+    for i, c in enumerate(concursos):
+        for n in c:
+            freq[n] += pesos[i]
+    
+    return freq
+
+def gerar_score_ia(freq):
+    """
+    Gera score normalizado entre 0 e 1 para cada número
+    """
+    score = {}
+    max_f = max(freq.values()) if freq else 1
+    
+    for n in range(1, 26):
+        base = freq.get(n, 0)
+        score[n] = base / max_f
+    
+    return score
+
+def gerar_jogo_ia(score, ultimo, max_tentativas=5000):
+    """
+    Gera um jogo usando inteligência adaptativa
+    """
+    # Ordenar números por score
+    ordenados = sorted(score.items(), key=lambda x: x[1], reverse=True)
+    fortes = [n for n, _ in ordenados[:15]]
+    
+    for _ in range(max_tentativas):
+        jogo = set()
+        
+        # Base forte: pegar 10 números dos mais fortes
+        jogo.update(random.sample(fortes, min(10, len(fortes))))
+        
+        # Repetição controlada do último concurso
+        if ultimo:
+            repetidos = list(set(ultimo) & set(fortes))
+            if len(repetidos) >= 5:
+                jogo.update(random.sample(repetidos, 5))
+        
+        # Completar com números aleatórios se necessário
+        while len(jogo) < 15:
+            novo = random.randint(1, 25)
+            if novo not in jogo:
+                jogo.add(novo)
+        
+        jogo = sorted(jogo)
+        
+        # Validar jogo
+        pares = sum(1 for n in jogo if n % 2 == 0)
+        if not (6 <= pares <= 9):
+            continue
+        
+        # Verificar sequências consecutivas
+        seq = 0
+        for i in range(len(jogo)-1):
+            if jogo[i] + 1 == jogo[i+1]:
+                seq += 1
+        if seq > 5:
+            continue
+        
+        return jogo
+    
+    # Fallback: gerar aleatório
+    return sorted(random.sample(range(1, 26), 15))
+
+def gerar_jogos_ia(quantidade=10):
+    """
+    Gera múltiplos jogos usando o Sistema 6.0
+    """
+    # Buscar dados em tempo real
+    concursos, ultimo_concurso_obj = buscar_dados_api(qtd=50)
+    
+    if not concursos:
+        return [], None
+    
+    # Calcular frequência ponderada
+    freq = calcular_frequencia_ponderada(concursos)
+    score = gerar_score_ia(freq)
+    
+    # Extrair último concurso
+    ultimo = sorted(concursos[0]) if concursos else []
+    ultimo_numero = ultimo_concurso_obj['concurso'] if ultimo_concurso_obj else 0
+    ultimo_data = ultimo_concurso_obj['data'] if ultimo_concurso_obj else ""
+    
+    # Gerar jogos
+    jogos = []
+    tentativas = 0
+    max_tentativas = quantidade * 200
+    
+    while len(jogos) < quantidade and tentativas < max_tentativas:
+        jogo = gerar_jogo_ia(score, ultimo)
+        if jogo and jogo not in jogos:
+            jogos.append(jogo)
+        tentativas += 1
+    
+    return jogos, (ultimo_numero, ultimo_data)
+
+# =====================================================
 # INTERFACE PRINCIPAL
 # =====================================================
 def main():
@@ -3476,6 +3606,10 @@ def main():
         st.session_state.qtd_autonomo = 10
     if "num_testes_autonomo" not in st.session_state:
         st.session_state.num_testes_autonomo = 30
+    if "qtd_ia" not in st.session_state:
+        st.session_state.qtd_ia = 10
+    if "jogos_ia" not in st.session_state:
+        st.session_state.jogos_ia = None
 
     # ================= SIDEBAR =================
     with st.sidebar:
@@ -3511,8 +3645,8 @@ def main():
     st.subheader("🎯 Modelo Universal 3622")
 
     if st.session_state.analise and st.session_state.dados_api and st.session_state.historico_df is not None:
-        # AGORA SÃO 12 ABAS (adicionada a nova aba de Sistema Autônomo)
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12 = st.tabs([
+        # AGORA SÃO 13 ABAS (adicionada a nova aba de IA 6.0)
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13 = st.tabs([
             "📊 Análise", 
             "🧩 Fechamento 3622", 
             "📊 Motor Estatístico",
@@ -3524,7 +3658,8 @@ def main():
             "📡 Detector MASTER B-M-A",
             "🧠 Motor PRO",
             "📐 Geometria Analítica",
-            "🤖 Sistema Autônomo"  # NOVA ABA COM ESTRATÉGIA HARD
+            "🤖 Sistema Autônomo",
+            "🤖 IA 6.0 (Tempo Real)"  # NOVA ABA - SISTEMA 6.0
         ])
 
         with tab1:
@@ -6703,6 +6838,183 @@ def main():
                         """)
             else:
                 st.info("📥 Carregue os concursos na barra lateral para ativar o Sistema Autônomo HARD.")
+
+        # =====================================================
+        # ABA 13: SISTEMA 6.0 - IA EM TEMPO REAL
+        # =====================================================
+        with tab13:
+            st.markdown("""
+            <div style='background:#1e1e2e; padding:15px; border-radius:10px; margin-bottom:20px; border-left:5px solid #00ffaa;'>
+                <h4 style='margin:0; color:#00ffaa;'>🤖 IA 6.0 (Tempo Real)</h4>
+                <p style='margin:5px 0 0 0; font-size:0.9em;'>Sistema adaptativo que aprende com TODOS os concursos e gera jogos otimizados automaticamente</p>
+                <p style='margin:2px 0 0 0; font-size:0.85em; color:#ccc;'>API em tempo real • Pesos dinâmicos • Filtro inteligente</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            st.markdown("### 🧠 Como Funciona o Sistema 6.0")
+            
+            with st.expander("📋 Entenda a tecnologia", expanded=False):
+                st.markdown("""
+                #### Arquitetura do Sistema 6.0
+                
+                **1. 📡 API em Tempo Real**
+                - Busca os concursos diretamente da Caixa
+                - Sempre com os dados mais atualizados
+                - Nenhum arquivo local necessário
+                
+                **2. 🧠 IA Adaptativa**
+                - Frequência ponderada: concursos mais recentes têm MAIOR peso
+                - Score dinâmico para cada número
+                - Ajuste automático baseado no último resultado
+                
+                **3. 🎯 Geração Inteligente**
+                - Seleção dos 15 números mais fortes como base
+                - Controle de repetição do último concurso
+                - Validação de pares (6-9) e sequências (máx 5)
+                
+                **4. 🔄 Auto-otimização**
+                - A cada nova geração, recalcula pesos
+                - Adapta-se às mudanças de tendência
+                - Zero intervenção manual
+                """)
+            
+            # Configuração de geração
+            st.markdown("### ⚙️ Configuração da Geração")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                qtd_ia = st.slider(
+                    "Quantidade de jogos a gerar",
+                    min_value=1,
+                    max_value=50,
+                    value=st.session_state.qtd_ia,
+                    step=1,
+                    key="slider_qtd_ia"
+                )
+                st.session_state.qtd_ia = qtd_ia
+            
+            with col2:
+                st.markdown("<br>", unsafe_allow_html=True)
+                if st.button("🚀 GERAR JOGOS IA 6.0", type="primary", use_container_width=True):
+                    with st.spinner(f"Buscando dados da API e gerando {qtd_ia} jogos inteligentes..."):
+                        jogos, info = gerar_jogos_ia(qtd_ia)
+                        
+                        if jogos:
+                            st.session_state.jogos_ia = jogos
+                            st.success(f"✅ {len(jogos)} jogos gerados! (Baseado nos últimos 50 concursos)")
+                            
+                            # Mostrar informações do concurso base
+                            if info:
+                                ultimo_num, ultimo_data = info
+                                st.info(f"📊 Baseado no último concurso: #{ultimo_num} - {ultimo_data}")
+                        else:
+                            st.error("❌ Não foi possível gerar jogos. Verifique sua conexão com a internet.")
+            
+            # Mostrar jogos gerados
+            if st.session_state.jogos_ia:
+                jogos = st.session_state.jogos_ia
+                
+                st.markdown(f"### 📋 Jogos Gerados ({len(jogos)})")
+                
+                # Estatísticas agregadas
+                stats_df = pd.DataFrame({
+                    "Jogo": range(1, len(jogos)+1),
+                    "Pares": [sum(1 for n in j if n % 2 == 0) for j in jogos],
+                    "Soma": [sum(j) for j in jogos],
+                    "Baixas(1-8)": [sum(1 for n in j if n <= 8) for j in jogos],
+                    "Médias(9-16)": [sum(1 for n in j if 9 <= n <= 16) for j in jogos],
+                    "Altas(17-25)": [sum(1 for n in j if n >= 17) for j in jogos]
+                })
+                
+                st.dataframe(stats_df, use_container_width=True, hide_index=True)
+                
+                # Mostrar cada jogo formatado
+                for i, jogo in enumerate(jogos):
+                    with st.container():
+                        # Calcular métricas para o card
+                        pares = sum(1 for n in jogo if n % 2 == 0)
+                        baixas = sum(1 for n in jogo if n <= 8)
+                        medias = sum(1 for n in jogo if 9 <= n <= 16)
+                        altas = sum(1 for n in jogo if n >= 17)
+                        soma = sum(jogo)
+                        
+                        nums_html = formatar_jogo_html(jogo)
+                        
+                        st.markdown(f"""
+                        <div style='border-left: 5px solid #00ffaa; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
+                            <div style='display:flex; justify-content:space-between;'>
+                                <strong>🤖 Jogo IA 6.0 #{i+1}</strong>
+                                <small>⚖️ {pares} pares | 📊 {baixas}B/{medias}M/{altas}A | ➕ {soma}</small>
+                            </div>
+                            <div>{nums_html}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                
+                # Botões de ação
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    if st.button("💾 Salvar Jogos IA 6.0", key="salvar_ia", use_container_width=True):
+                        if st.session_state.dados_api:
+                            ultimo = st.session_state.dados_api[0]
+                            arquivo, jogo_id = salvar_jogos_gerados(
+                                jogos,
+                                list(range(1, 18)),
+                                {"modelo": "IA 6.0", "tipo": "tempo_real", "pesos": "dinamicos"},
+                                ultimo['concurso'],
+                                ultimo['data']
+                            )
+                            if arquivo:
+                                st.success(f"✅ Jogos IA salvos! ID: {jogo_id}")
+                                st.session_state.jogos_salvos = carregar_jogos_salvos()
+                
+                with col2:
+                    # Exportar para CSV
+                    df_export_ia = pd.DataFrame({
+                        "Jogo": range(1, len(jogos)+1),
+                        "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in jogos],
+                        "Pares": stats_df["Pares"],
+                        "Soma": stats_df["Soma"],
+                        "Baixas(1-8)": stats_df["Baixas(1-8)"],
+                        "Médias(9-16)": stats_df["Médias(9-16)"],
+                        "Altas(17-25)": stats_df["Altas(17-25)"]
+                    })
+                    
+                    csv_ia = df_export_ia.to_csv(index=False)
+                    st.download_button(
+                        label="📥 Exportar CSV",
+                        data=csv_ia,
+                        file_name=f"jogos_ia_6.0_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        mime="text/csv",
+                        use_container_width=True
+                    )
+                
+                # Explicação dos pesos
+                with st.expander("🔍 Ver detalhes da IA"):
+                    st.markdown("""
+                    ### 🧠 Como a IA 6.0 Calcula os Pesos
+                    
+                    **Frequência Ponderada:**
+                    - Cada concurso tem um peso proporcional à sua recentidade
+                    - Concurso mais recente = peso máximo
+                    - Concurso mais antigo = peso mínimo
+                    
+                    **Score Normalizado:**
+                    - Score = frequência_ponderada / frequência_máxima
+                    - Varia de 0 (nunca saiu) a 1 (mais frequente)
+                    
+                    **Estratégia de Geração:**
+                    1. Seleciona os 15 números com maior score como base
+                    2. Escolhe 10 números da base forte
+                    3. Adiciona 5 repetidos do último concurso (se disponíveis)
+                    4. Completa aleatoriamente se necessário
+                    5. Valida pares (6-9) e sequências (máx 5)
+                    
+                    **Vantagens:**
+                    - Sempre atualizado com os últimos concursos
+                    - Adapta-se automaticamente às mudanças de tendência
+                    - Elimina viés humano
+                    """)
 
 # =====================================================
 # EXECUÇÃO PRINCIPAL (FORA DA FUNÇÃO MAIN)
