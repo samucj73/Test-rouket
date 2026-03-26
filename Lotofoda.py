@@ -3400,120 +3400,173 @@ def gerar_jogos_ia(qtd_jogos):
     Gera jogos usando IA 7.0 com ranking, diversificação e pontuação inteligente
     """
     try:
+        # Verificar se os dados já estão carregados na sessão
+        if st.session_state.dados_api is None:
+            st.error("❌ Nenhum concurso carregado. Clique em 'Carregar concursos' na barra lateral primeiro.")
+            return [], None
+        
+        # Pegar os primeiros 50 concursos dos dados já carregados
         dados = st.session_state.dados_api[:50]
-
+        
+        # Verificar se temos dados suficientes
+        if len(dados) < 10:
+            st.warning("⚠️ Poucos concursos carregados. Tente carregar mais concursos na barra lateral.")
+            return [], None
+        
         concursos = []
         for d in dados:
-            dezenas = list(map(int, d['dezenas'].split(',')))
-            concursos.append(dezenas)
-
+            # Extrair dezenas - a API retorna como lista de strings
+            if isinstance(d['dezenas'], list):
+                dezenas = [int(x) for x in d['dezenas']]
+            elif isinstance(d['dezenas'], str):
+                dezenas = [int(x.strip()) for x in d['dezenas'].split(',')]
+            else:
+                continue
+            concursos.append(sorted(dezenas))
+        
+        if not concursos:
+            st.error("❌ Não foi possível extrair os números dos concursos.")
+            return [], None
+        
         ultimo_concurso = concursos[0]
-
+        
         # -------------------------------
         # FREQUÊNCIA + ATRASO
         # -------------------------------
         freq = {i: 0 for i in range(1, 26)}
         atraso = {i: 0 for i in range(1, 26)}
-
-        for i, concurso in enumerate(concursos):
-            peso = (50 - i) / 50
+        
+        # Calcular frequência ponderada (concursos mais recentes têm mais peso)
+        total_concursos = len(concursos)
+        for idx, concurso in enumerate(concursos):
+            # Peso decrescente: o mais recente tem peso 1.0
+            peso = (total_concursos - idx) / total_concursos
             for dez in concurso:
                 freq[dez] += peso
-
+        
+        # Calcular atraso (quantos concursos desde a última aparição)
         for dez in range(1, 26):
-            for i, concurso in enumerate(concursos):
+            for idx, concurso in enumerate(concursos):
                 if dez in concurso:
-                    atraso[dez] = i
+                    atraso[dez] = idx
                     break
-
+            else:
+                atraso[dez] = total_concursos  # Nunca apareceu
+        
         # -------------------------------
-        # SCORE BASE
+        # SCORE BASE (60% frequência + 40% atraso)
         # -------------------------------
         score = {}
+        max_freq = max(freq.values()) if freq.values() else 1
+        max_atraso = max(atraso.values()) if atraso.values() else 1
+        
         for dez in range(1, 26):
-            score[dez] = (freq[dez] * 0.6) + ((atraso[dez] / 50) * 0.4)
-
+            freq_norm = freq[dez] / max_freq
+            atraso_norm = atraso[dez] / max_atraso
+            score[dez] = (freq_norm * 0.6) + ((1 - atraso_norm) * 0.4)  # Invertido: menor atraso = maior score
+        
+        # Ordenar números por score
         ordenados = sorted(score.items(), key=lambda x: x[1], reverse=True)
-
+        
+        # Dividir em categorias
         base_forte = [d[0] for d in ordenados[:15]]
         base_media = [d[0] for d in ordenados[15:22]]
         base_fraca = [d[0] for d in ordenados[22:]]
-
+        
         candidatos = []
-
+        
         # -------------------------------
-        # GERAR LOTE GRANDE
+        # GERAR LOTE GRANDE (10x a quantidade desejada)
         # -------------------------------
-        for _ in range(qtd_jogos * 10):
+        for _ in range(qtd_jogos * 15):
             jogo = set()
-
-            jogo.update(random.sample(base_forte, 8))
-            jogo.update(random.sample(base_media, 4))
-            jogo.update(random.sample(base_fraca, 3))
-
-            repetidos = random.sample(ultimo_concurso, random.randint(6, 9))
+            
+            # Selecionar números das diferentes categorias
+            # 8 da base forte, 4 da média, 3 da fraca
+            jogo.update(random.sample(base_forte, min(8, len(base_forte))))
+            jogo.update(random.sample(base_media, min(4, len(base_media))))
+            jogo.update(random.sample(base_fraca, min(3, len(base_fraca))))
+            
+            # Adicionar repetidos do último concurso (6 a 9 números)
+            qtd_repetidos = random.randint(6, 9)
+            repetidos = random.sample(ultimo_concurso, min(qtd_repetidos, len(ultimo_concurso)))
             jogo.update(repetidos)
-
+            
+            # Completar até 15 números
             while len(jogo) < 15:
-                jogo.add(random.randint(1, 25))
-
+                novo = random.randint(1, 25)
+                if novo not in jogo:
+                    jogo.add(novo)
+            
             jogo = sorted(list(jogo))[:15]
-
             candidatos.append(jogo)
-
+        
         # -------------------------------
-        # SCORE DO JOGO
+        # FUNÇÃO DE AVALIAÇÃO DO JOGO
         # -------------------------------
         def avaliar_jogo(jogo):
             s = 0
-
+            
+            # Score base (soma dos scores individuais)
             s += sum(score[n] for n in jogo)
-
+            
+            # Bônus por paridade equilibrada
             pares = sum(1 for n in jogo if n % 2 == 0)
             if 6 <= pares <= 9:
                 s += 5
-
+            
+            # Bônus por soma na faixa ideal
             soma = sum(jogo)
             if 180 <= soma <= 220:
                 s += 5
-
+            
+            # Bônus por repetição equilibrada
             repetidos = len(set(jogo) & set(ultimo_concurso))
             if 6 <= repetidos <= 9:
                 s += 5
-
+            
             return s
-
+        
         # -------------------------------
-        # RANKING
+        # REMOVER DUPLICATAS
         # -------------------------------
         candidatos = list(set(tuple(j) for j in candidatos))
         candidatos = [list(j) for j in candidatos]
-
+        
+        # Ordenar por pontuação
         candidatos.sort(key=avaliar_jogo, reverse=True)
-
+        
         # -------------------------------
-        # DIVERSIDADE
+        # DIVERSIFICAÇÃO (evitar jogos muito parecidos)
         # -------------------------------
         finais = []
-
+        
         for jogo in candidatos:
             if len(finais) >= qtd_jogos:
                 break
-
+            
             diferente = True
             for j in finais:
-                inter = len(set(jogo) & set(j))
-                if inter >= 13:
+                # Se tiver mais de 12 números em comum, é muito parecido
+                if len(set(jogo) & set(j)) >= 12:
                     diferente = False
                     break
-
+            
             if diferente:
                 finais.append(jogo)
-
-        return finais, (dados[0]['concurso'], dados[0]['data'])
-
+        
+        # Garantir que retornamos exatamente a quantidade desejada
+        if len(finais) < qtd_jogos:
+            finais = candidatos[:qtd_jogos]
+        
+        # Informações do concurso base
+        concurso_info = (dados[0]['concurso'], dados[0]['data'])
+        
+        return finais, concurso_info
+        
     except Exception as e:
-        print("Erro IA 7.0:", e)
+        st.error(f"❌ Erro na IA 7.0: {str(e)}")
+        print(f"Erro detalhado: {e}")
         return [], None
 
 # =====================================================
@@ -3653,7 +3706,7 @@ def main():
             "🧠 Motor PRO",
             "📐 Geometria Analítica",
             "🤖 Sistema Autônomo",
-            "🤖 IA 7.0 (Profissional)"  # NOVA ABA - IA 7.0
+            "🤖 IA 7.0 (Profissional)"
         ])
 
         with tab1:
@@ -6152,7 +6205,7 @@ def main():
                 # Criar visualização do tabuleiro
                 tabuleiro_html = "<table style='width:100%; border-collapse:collapse; text-align:center;'>"
                 for i in range(5):
-                    tabuleiro_html += " "
+                    tabuleiro_html += "<tr>"
                     for j in range(5):
                         num = motor.volante[i][j]
                         # Destacar números baseado na frequência
@@ -6160,9 +6213,9 @@ def main():
                         max_freq = max(motor.frequencias) if max(motor.frequencias) > 0 else 1
                         intensidade = min(255, int(100 + 155 * (freq / max_freq)))
                         cor = f"rgba({intensidade}, 100, 200, 0.3)"
-                        tabuleiro_html += f"<td style='border:1px solid #444; padding:12px; background:{cor};'><strong>{num:02d}</strong> "
-                    tabuleiro_html += " "
-                tabuleiro_html += " </div>"
+                        tabuleiro_html += f"<td style='border:1px solid #444; padding:12px; background:{cor};'><strong>{num:02d}</strong></td>"
+                    tabuleiro_html += "</tr>"
+                tabuleiro_html += "</table>"
                 
                 st.markdown(tabuleiro_html, unsafe_allow_html=True)
                 st.caption("Intensidade da cor representa frequência histórica")
@@ -6834,185 +6887,244 @@ def main():
                 st.info("📥 Carregue os concursos na barra lateral para ativar o Sistema Autônomo HARD.")
 
         # =====================================================
+        # ABA 13: IA 7.0 - MOTOR PROFISSIONAL
         # =====================================================
-# ===== IA 7.0 - MOTOR PROFISSIONAL (CORRIGIDO) =====
-# =====================================================
-def gerar_jogos_ia(qtd_jogos):
-    """
-    Gera jogos usando IA 7.0 com ranking, diversificação e pontuação inteligente
-    """
-    try:
-        # Verificar se os dados já estão carregados na sessão
-        if st.session_state.dados_api is None:
-            st.error("❌ Nenhum concurso carregado. Clique em 'Carregar concursos' na barra lateral primeiro.")
-            return [], None
-        
-        # Pegar os primeiros 50 concursos dos dados já carregados
-        dados = st.session_state.dados_api[:50]
-        
-        # Verificar se temos dados suficientes
-        if len(dados) < 10:
-            st.warning("⚠️ Poucos concursos carregados. Tente carregar mais concursos na barra lateral.")
-            return [], None
-        
-        concursos = []
-        for d in dados:
-            # Extrair dezenas - a API retorna como lista de strings
-            if isinstance(d['dezenas'], list):
-                dezenas = [int(x) for x in d['dezenas']]
-            elif isinstance(d['dezenas'], str):
-                dezenas = [int(x.strip()) for x in d['dezenas'].split(',')]
+        with tab13:
+            st.markdown("""
+            <div style='background:#1e1e2e; padding:15px; border-radius:10px; margin-bottom:20px; border-left:5px solid #00ffcc;'>
+                <h4 style='margin:0; color:#00ffcc;'>🤖 IA 7.0 - MOTOR PROFISSIONAL</h4>
+                <p style='margin:5px 0 0 0; font-size:0.9em;'>Ranking inteligente • Diversificação • Pontuação adaptativa</p>
+                <p style='margin:2px 0 0 0; font-size:0.85em; color:#ccc;'>Baseado em frequência ponderada + atraso + validação em tempo real</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            if st.session_state.dados_api:
+                ultimo = st.session_state.dados_api[0]
+                numeros_ultimo = sorted(map(int, ultimo['dezenas']))
+                
+                # Mostrar estatísticas rápidas
+                with st.expander("📊 Estatísticas da Base IA", expanded=False):
+                    # Calcular frequência geral dos últimos 50 concursos
+                    ultimos_50 = [
+                        sorted(map(int, c['dezenas'])) 
+                        for c in st.session_state.dados_api[:50]
+                    ]
+                    
+                    freq_total = Counter()
+                    for c in ultimos_50:
+                        freq_total.update(c)
+                    
+                    # Top 10 mais frequentes
+                    top_10 = freq_total.most_common(10)
+                    top_10_html = " ".join(f"<span style='background:#00ffcc20; border:1px solid #00ffcc; border-radius:15px; padding:3px 8px; margin:2px; display:inline-block;'>{n:02d} ({f}x)</span>" for n, f in top_10)
+                    
+                    st.markdown("**🔥 Top 10 números mais frequentes:**")
+                    st.markdown(top_10_html, unsafe_allow_html=True)
+                    
+                    # Bottom 10 (mais atrasados)
+                    bottom_10 = freq_total.most_common()[-10:]
+                    bottom_10_html = " ".join(f"<span style='background:#ff660020; border:1px solid #ff6600; border-radius:15px; padding:3px 8px; margin:2px; display:inline-block;'>{n:02d} ({f}x)</span>" for n, f in bottom_10)
+                    
+                    st.markdown("**❄️ 10 números menos frequentes:**")
+                    st.markdown(bottom_10_html, unsafe_allow_html=True)
+                
+                # Configuração de geração
+                st.markdown("### 🎯 Gerar Jogos com IA 7.0")
+                st.caption("Algoritmo de pontuação adaptativa com diversificação automática")
+                
+                col1, col2, col3 = st.columns([1, 1, 1])
+                with col1:
+                    qtd_ia = st.slider(
+                        "Quantidade de jogos", 
+                        min_value=3, 
+                        max_value=50, 
+                        value=st.session_state.qtd_ia,
+                        key="slider_qtd_ia"
+                    )
+                    st.session_state.qtd_ia = qtd_ia
+                
+                with col2:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    if st.button("🤖 GERAR COM IA 7.0", key="gerar_ia", use_container_width=True, type="primary"):
+                        with st.spinner(f"IA 7.0 gerando {qtd_ia} jogos inteligentes..."):
+                            jogos, concurso_info = gerar_jogos_ia(qtd_ia)
+                            
+                            if jogos:
+                                st.session_state.jogos_ia = jogos
+                                st.success(f"✅ {len(jogos)} jogos gerados pela IA 7.0!")
+                                st.balloons()
+                            else:
+                                st.error("❌ Não foi possível gerar jogos. Verifique os dados carregados.")
+                
+                with col3:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    if st.button("🔄 Reset", key="reset_ia", use_container_width=True):
+                        st.session_state.jogos_ia = None
+                        st.rerun()
+                
+                # Mostrar jogos gerados pela IA
+                if "jogos_ia" in st.session_state and st.session_state.jogos_ia:
+                    jogos = st.session_state.jogos_ia
+                    
+                    st.markdown(f"### 📋 Jogos IA 7.0 ({len(jogos)})")
+                    
+                    # Calcular estatísticas dos jogos
+                    stats_data = []
+                    for i, jogo in enumerate(jogos):
+                        pares = sum(1 for n in jogo if n % 2 == 0)
+                        baixas = sum(1 for n in jogo if n <= 8)
+                        medias = sum(1 for n in jogo if 9 <= n <= 16)
+                        altas = sum(1 for n in jogo if n >= 17)
+                        soma = sum(jogo)
+                        repetidas = len(set(jogo) & set(numeros_ultimo))
+                        seq = 0
+                        for k in range(len(jogo)-1):
+                            if jogo[k] + 1 == jogo[k+1]:
+                                seq += 1
+                        
+                        stats_data.append({
+                            "Jogo": i+1,
+                            "Pares": pares,
+                            "Baixas": baixas,
+                            "Médias": medias,
+                            "Altas": altas,
+                            "Soma": soma,
+                            "Repetidas": repetidas,
+                            "Consec": seq
+                        })
+                    
+                    df_stats = pd.DataFrame(stats_data)
+                    st.dataframe(df_stats, use_container_width=True, hide_index=True)
+                    
+                    # Mostrar cada jogo formatado
+                    for i, jogo in enumerate(jogos):
+                        with st.container():
+                            pares = sum(1 for n in jogo if n % 2 == 0)
+                            baixas = sum(1 for n in jogo if n <= 8)
+                            medias = sum(1 for n in jogo if 9 <= n <= 16)
+                            altas = sum(1 for n in jogo if n >= 17)
+                            soma = sum(jogo)
+                            repetidas = len(set(jogo) & set(numeros_ultimo))
+                            
+                            nums_html = formatar_jogo_html(jogo)
+                            
+                            # Gradiente de cor baseado na qualidade do jogo
+                            qualidade = 0
+                            if 6 <= pares <= 9: qualidade += 1
+                            if 170 <= soma <= 210: qualidade += 1
+                            if 6 <= repetidas <= 9: qualidade += 1
+                            if 4 <= baixas <= 6 and 4 <= medias <= 6 and 3 <= altas <= 5: qualidade += 1
+                            
+                            if qualidade >= 3:
+                                cor_borda = "#00ffcc"
+                                icone = "🤖"
+                            elif qualidade >= 2:
+                                cor_borda = "#4ade80"
+                                icone = "✅"
+                            else:
+                                cor_borda = "#4cc9f0"
+                                icone = "📊"
+                            
+                            st.markdown(f"""
+                            <div style='border-left: 5px solid {cor_borda}; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
+                                <div style='display:flex; justify-content:space-between;'>
+                                    <strong>{icone} Jogo IA 7.0 #{i+1:2d}</strong>
+                                    <small>⚖️ {pares} pares | 📊 {baixas}B/{medias}M/{altas}A | ➕ {soma} | 🔁 {repetidas} rep</small>
+                                </div>
+                                <div>{nums_html}</div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                    
+                    # Botões de ação
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        if st.button("💾 Salvar Jogos IA 7.0", key="salvar_ia", use_container_width=True):
+                            arquivo, jogo_id = salvar_jogos_gerados(
+                                jogos,
+                                list(range(1, 18)),
+                                {"modelo": "IA 7.0", "versao": "profissional"},
+                                ultimo['concurso'],
+                                ultimo['data']
+                            )
+                            if arquivo:
+                                st.success(f"✅ Jogos IA salvos! ID: {jogo_id}")
+                                st.session_state.jogos_salvos = carregar_jogos_salvos()
+                    
+                    with col2:
+                        if st.button("🔄 Nova Geração IA", key="nova_geracao_ia", use_container_width=True):
+                            st.session_state.jogos_ia = None
+                            st.rerun()
+                    
+                    with col3:
+                        # Exportar para CSV
+                        df_export_ia = pd.DataFrame({
+                            "Jogo": [f"IA_{i+1}" for i in range(len(jogos))],
+                            "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in jogos],
+                            "Pares": [d["Pares"] for d in stats_data],
+                            "Baixas(1-8)": [d["Baixas"] for d in stats_data],
+                            "Médias(9-16)": [d["Médias"] for d in stats_data],
+                            "Altas(17-25)": [d["Altas"] for d in stats_data],
+                            "Soma": [d["Soma"] for d in stats_data],
+                            "Repetidas_Ultimo": [d["Repetidas"] for d in stats_data],
+                            "Consecutivos": [d["Consec"] for d in stats_data]
+                        })
+                        
+                        csv_ia = df_export_ia.to_csv(index=False)
+                        st.download_button(
+                            label="📥 Exportar CSV",
+                            data=csv_ia,
+                            file_name=f"jogos_ia7_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                            mime="text/csv",
+                            use_container_width=True
+                        )
+                    
+                    # Explicação do algoritmo
+                    with st.expander("📘 Como funciona a IA 7.0?"):
+                        st.markdown("""
+                        ### 🤖 Algoritmo IA 7.0 - Motor Profissional
+                        
+                        **1. Frequência Ponderada:**
+                        - Concursos mais recentes têm maior peso
+                        - Fórmula: `peso = (total_concursos - idx) / total_concursos`
+                        - Identifica números em tendência de alta
+                        
+                        **2. Atraso:**
+                        - Calcula quantos concursos cada número está ausente
+                        - Números com maior atraso recebem pontuação extra
+                        
+                        **3. Score Base:**
+                        - `score = (freq_norm × 0.6) + ((1 - atraso_norm) × 0.4)`
+                        - Balanceamento entre números quentes e frios
+                        
+                        **4. Geração Inteligente:**
+                        - Pool dividido em forte (15), média (7), fraca (4)
+                        - Seleção: 8 forte + 4 média + 3 fraca
+                        - +6 a 9 repetidos do último concurso
+                        
+                        **5. Avaliação e Ranking:**
+                        - Pontua cada jogo por:
+                          * Score individual dos números
+                          * Paridade equilibrada (6-9 pares)
+                          * Soma na faixa ideal (180-220)
+                          * Repetição equilibrada (6-9 do último)
+                        
+                        **6. Diversificação:**
+                        - Elimina jogos com mais de 12 números em comum
+                        - Garante variedade no conjunto final
+                        - Seleciona os melhores por pontuação
+                        
+                        **Vantagens:**
+                        - ✅ Base estatística sólida
+                        - ✅ Adaptativo a mudanças de tendência
+                        - ✅ Diversificação automática
+                        - ✅ Validação em múltiplos critérios
+                        """)
             else:
-                continue
-            concursos.append(sorted(dezenas))
-        
-        if not concursos:
-            st.error("❌ Não foi possível extrair os números dos concursos.")
-            return [], None
-        
-        ultimo_concurso = concursos[0]
-        
-        # -------------------------------
-        # FREQUÊNCIA + ATRASO
-        # -------------------------------
-        freq = {i: 0 for i in range(1, 26)}
-        atraso = {i: 0 for i in range(1, 26)}
-        
-        # Calcular frequência ponderada (concursos mais recentes têm mais peso)
-        total_concursos = len(concursos)
-        for idx, concurso in enumerate(concursos):
-            # Peso decrescente: o mais recente tem peso 1.0
-            peso = (total_concursos - idx) / total_concursos
-            for dez in concurso:
-                freq[dez] += peso
-        
-        # Calcular atraso (quantos concursos desde a última aparição)
-        for dez in range(1, 26):
-            for idx, concurso in enumerate(concursos):
-                if dez in concurso:
-                    atraso[dez] = idx
-                    break
-            else:
-                atraso[dez] = total_concursos  # Nunca apareceu
-        
-        # -------------------------------
-        # SCORE BASE (60% frequência + 40% atraso)
-        # -------------------------------
-        score = {}
-        max_freq = max(freq.values()) if freq.values() else 1
-        max_atraso = max(atraso.values()) if atraso.values() else 1
-        
-        for dez in range(1, 26):
-            freq_norm = freq[dez] / max_freq
-            atraso_norm = atraso[dez] / max_atraso
-            score[dez] = (freq_norm * 0.6) + ((1 - atraso_norm) * 0.4)  # Invertido: menor atraso = maior score
-        
-        # Ordenar números por score
-        ordenados = sorted(score.items(), key=lambda x: x[1], reverse=True)
-        
-        # Dividir em categorias
-        base_forte = [d[0] for d in ordenados[:15]]
-        base_media = [d[0] for d in ordenados[15:22]]
-        base_fraca = [d[0] for d in ordenados[22:]]
-        
-        candidatos = []
-        
-        # -------------------------------
-        # GERAR LOTE GRANDE (10x a quantidade desejada)
-        # -------------------------------
-        for _ in range(qtd_jogos * 15):
-            jogo = set()
-            
-            # Selecionar números das diferentes categorias
-            # 8 da base forte, 4 da média, 3 da fraca
-            jogo.update(random.sample(base_forte, min(8, len(base_forte))))
-            jogo.update(random.sample(base_media, min(4, len(base_media))))
-            jogo.update(random.sample(base_fraca, min(3, len(base_fraca))))
-            
-            # Adicionar repetidos do último concurso (6 a 9 números)
-            qtd_repetidos = random.randint(6, 9)
-            repetidos = random.sample(ultimo_concurso, min(qtd_repetidos, len(ultimo_concurso)))
-            jogo.update(repetidos)
-            
-            # Completar até 15 números
-            while len(jogo) < 15:
-                novo = random.randint(1, 25)
-                if novo not in jogo:
-                    jogo.add(novo)
-            
-            jogo = sorted(list(jogo))[:15]
-            candidatos.append(jogo)
-        
-        # -------------------------------
-        # FUNÇÃO DE AVALIAÇÃO DO JOGO
-        # -------------------------------
-        def avaliar_jogo(jogo):
-            s = 0
-            
-            # Score base (soma dos scores individuais)
-            s += sum(score[n] for n in jogo)
-            
-            # Bônus por paridade equilibrada
-            pares = sum(1 for n in jogo if n % 2 == 0)
-            if 6 <= pares <= 9:
-                s += 5
-            
-            # Bônus por soma na faixa ideal
-            soma = sum(jogo)
-            if 180 <= soma <= 220:
-                s += 5
-            
-            # Bônus por repetição equilibrada
-            repetidos = len(set(jogo) & set(ultimo_concurso))
-            if 6 <= repetidos <= 9:
-                s += 5
-            
-            return s
-        
-        # -------------------------------
-        # REMOVER DUPLICATAS
-        # -------------------------------
-        candidatos = list(set(tuple(j) for j in candidatos))
-        candidatos = [list(j) for j in candidatos]
-        
-        # Ordenar por pontuação
-        candidatos.sort(key=avaliar_jogo, reverse=True)
-        
-        # -------------------------------
-        # DIVERSIFICAÇÃO (evitar jogos muito parecidos)
-        # -------------------------------
-        finais = []
-        
-        for jogo in candidatos:
-            if len(finais) >= qtd_jogos:
-                break
-            
-            diferente = True
-            for j in finais:
-                # Se tiver mais de 12 números em comum, é muito parecido
-                if len(set(jogo) & set(j)) >= 12:
-                    diferente = False
-                    break
-            
-            if diferente:
-                finais.append(jogo)
-        
-        # Garantir que retornamos exatamente a quantidade desejada
-        if len(finais) < qtd_jogos:
-            finais = candidatos[:qtd_jogos]
-        
-        # Informações do concurso base
-        concurso_info = (dados[0]['concurso'], dados[0]['data'])
-        
-        return finais, concurso_info
-        
-    except Exception as e:
-        st.error(f"❌ Erro na IA 7.0: {str(e)}")
-        print(f"Erro detalhado: {e}")
-        return [], None
+                st.info("📥 Carregue os concursos na barra lateral para ativar a IA 7.0.")
 
 # =====================================================
-# EXECUÇÃO PRINCIPAL (FORA DA FUNÇÃO MAIN)
+# EXECUÇÃO PRINCIPAL
 # =====================================================
 if __name__ == "__main__":
     main()
