@@ -38,6 +38,7 @@ input, textarea { border-radius: 12px !important; }
 .concurso-info { background: #1e1e2e; padding: 10px; border-radius: 10px; margin: 10px 0; }
 .metric-card { background: #16213e; padding: 10px; border-radius: 10px; text-align: center; }
 .cover-stats { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); padding: 15px; border-radius: 12px; margin: 10px 0; border: 1px solid #00ffaa20; }
+.highlight { background: #00ffaa20; border-left: 4px solid #00ffaa; padding: 10px; border-radius: 8px; margin: 10px 0; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -786,6 +787,207 @@ def multi_pool_fechamento(gerador, num_pools=3, jogos_por_pool=15):
 
 
 # =====================================================
+# CONFERIDOR INTELIGENTE + OTIMIZADOR
+# =====================================================
+
+def parse_dezenas(dezenas_str):
+    """Converte string de dezenas para set de inteiros"""
+    if isinstance(dezenas_str, str):
+        return set(map(int, dezenas_str.replace('"', '').replace(' ', '').split(',')))
+    elif isinstance(dezenas_str, list):
+        return set(dezenas_str)
+    else:
+        return set()
+
+
+def conferir_jogos_inteligente(jogos, resultado_set):
+    """
+    Confere jogos contra um resultado oficial
+    
+    Args:
+        jogos: lista de jogos (cada jogo pode ser lista ou string)
+        resultado_set: set com os números sorteados
+    
+    Returns:
+        DataFrame com resultados ordenados por acertos
+    """
+    resultados = []
+    
+    for i, jogo in enumerate(jogos):
+        if isinstance(jogo, str):
+            dezenas = parse_dezenas(jogo)
+        else:
+            dezenas = set(jogo)
+        
+        acertos = dezenas.intersection(resultado_set)
+        
+        resultados.append({
+            "Jogo": i + 1,
+            "Acertos": len(acertos),
+            "Acertos_Dezenas": sorted(acertos),
+            "Dezenas": sorted(dezenas)
+        })
+    
+    df = pd.DataFrame(resultados)
+    return df.sort_values(by="Acertos", ascending=False).reset_index(drop=True)
+
+
+def analisar_frequencia_jogos(jogos):
+    """
+    Analisa a frequência dos números em um conjunto de jogos
+    
+    Args:
+        jogos: lista de jogos
+    
+    Returns:
+        DataFrame com frequência ordenada
+    """
+    todas = []
+    
+    for jogo in jogos:
+        if isinstance(jogo, str):
+            dezenas = parse_dezenas(jogo)
+        else:
+            dezenas = set(jogo)
+        todas.extend(dezenas)
+    
+    freq = Counter(todas)
+    
+    df_freq = pd.DataFrame({
+        "Número": list(freq.keys()),
+        "Frequência": list(freq.values())
+    }).sort_values(by="Frequência", ascending=False).reset_index(drop=True)
+    
+    df_freq["%"] = (df_freq["Frequência"] / len(jogos) * 100).round(1)
+    
+    return df_freq
+
+
+def gerar_jogos_otimizados(base_jogos, resultado_set, n_jogos=10, estrategia="inteligente"):
+    """
+    Gera jogos otimizados baseado nos jogos existentes e resultado
+    
+    Args:
+        base_jogos: lista de jogos base
+        resultado_set: set com números do último concurso
+        n_jogos: quantidade de jogos a gerar
+        estrategia: "inteligente", "frequencia", "hibrido"
+    
+    Returns:
+        lista de jogos otimizados
+    """
+    todos_numeros = set(range(1, 26))
+    jogos_novos = []
+    
+    # Analisa frequência dos jogos base
+    freq = analisar_frequencia_jogos(base_jogos)
+    numeros_frequentes = set(freq.head(10)["Número"].tolist())
+    numeros_raros = set(freq.tail(10)["Número"].tolist())
+    
+    for _ in range(n_jogos):
+        if estrategia == "inteligente":
+            # Pega um jogo base aleatório
+            jogo_base = base_jogos[random.randint(0, len(base_jogos) - 1)]
+            if isinstance(jogo_base, str):
+                base = parse_dezenas(jogo_base)
+            else:
+                base = set(jogo_base)
+            
+            # Remove 2-3 números para variar
+            remover_qtd = random.randint(2, 3)
+            remover = set(random.sample(list(base), min(remover_qtd, len(base))))
+            base -= remover
+            
+            # Adiciona números do resultado (que são mais prováveis)
+            if len(resultado_set) > 0:
+                novos_do_resultado = list(resultado_set - base)
+                if novos_do_resultado:
+                    base.add(random.choice(novos_do_resultado))
+            
+            # Adiciona números frequentes se faltar
+            if len(base) < 12:
+                faltantes = numeros_frequentes - base
+                if faltantes:
+                    base.add(random.choice(list(faltantes)))
+        
+        elif estrategia == "frequencia":
+            # Baseado puramente em frequência
+            base = set()
+            numeros_prioridade = list(numeros_frequentes) + list(resultado_set)
+            while len(base) < 15 and numeros_prioridade:
+                n = random.choice(numeros_prioridade)
+                base.add(n)
+                numeros_prioridade = [x for x in numeros_prioridade if x != n]
+        
+        else:  # híbrido
+            base = set()
+            # 50% números frequentes, 50% resultado
+            metade = n_jogos // 2
+            base.update(random.sample(list(numeros_frequentes), min(metade, len(numeros_frequentes))))
+            base.update(random.sample(list(resultado_set), min(metade, len(resultado_set))))
+        
+        # Completa até 15 números
+        while len(base) < 15:
+            disponiveis = list(todos_numeros - base)
+            if disponiveis:
+                base.add(random.choice(disponiveis))
+        
+        jogos_novos.append(sorted(base))
+    
+    return jogos_novos
+
+
+def analisar_padroes_avancados(jogos, resultado_set):
+    """
+    Análise avançada de padrões nos jogos
+    
+    Returns:
+        dict com estatísticas detalhadas
+    """
+    todas_dezenas = []
+    pares_total = []
+    primos_total = []
+    consecutivos_total = []
+    somas_total = []
+    
+    for jogo in jogos:
+        if isinstance(jogo, str):
+            dezenas = parse_dezenas(jogo)
+        else:
+            dezenas = set(jogo)
+        
+        todas_dezenas.extend(dezenas)
+        pares_total.append(contar_pares(list(dezenas)))
+        primos_total.append(contar_primos(list(dezenas)))
+        consecutivos_total.append(contar_consecutivos(list(dezenas)))
+        somas_total.append(sum(dezenas))
+    
+    freq_total = Counter(todas_dezenas)
+    
+    # Identifica números que mais acertaram
+    if resultado_set:
+        acertos_por_numero = {}
+        for jogo in jogos:
+            if isinstance(jogo, str):
+                dezenas = parse_dezenas(jogo)
+            else:
+                dezenas = set(jogo)
+            for num in dezenas & resultado_set:
+                acertos_por_numero[num] = acertos_por_numero.get(num, 0) + 1
+    
+    return {
+        "frequencia_geral": dict(sorted(freq_total.items(), key=lambda x: x[1], reverse=True)[:15]),
+        "media_pares": np.mean(pares_total),
+        "media_primos": np.mean(primos_total),
+        "media_consecutivos": np.mean(consecutivos_total),
+        "media_soma": np.mean(somas_total),
+        "std_soma": np.std(somas_total),
+        "acertos_por_numero": acertos_por_numero if resultado_set else {},
+        "total_jogos": len(jogos)
+    }
+
+
+# =====================================================
 # GERADOR BASE (POOL PONDERADO + FILTROS)
 # =====================================================
 class GeradorLotofacil:
@@ -972,14 +1174,15 @@ def main():
     # ================= INTERFACE PRINCIPAL =================
     st.subheader("🎯 Análise e Geração de Jogos")
 
-    # Reorganização das abas para conter apenas o que é matematicamente relevante
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    # Reorganização das abas
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
         "📊 Análise do Último Concurso",
         "🎲 Gerador de Jogos",
         "🚀 EMS 5.0 - Cobertura",
+        "🔍 Conferência Inteligente",
         "📈 Avaliação Estatística",
         "📐 Geometria do Volante",
-        "✅ Conferência"
+        "✅ Conferência Salvos"
     ])
 
     # ================= TAB 1: ANÁLISE DO ÚLTIMO CONCURSO =================
@@ -1078,7 +1281,7 @@ def main():
             jogos = st.session_state.jogos_gerados
             st.markdown(f"### 📋 Jogos Gerados ({len(jogos)})")
             
-            for i, jogo in enumerate(jogos):
+            for i, jogo in enumerate(jogos[:20]):
                 score = st.session_state.scores[i] if i < len(st.session_state.scores) else 0
                 medalha = ["🥇","🥈","🥉"][i] if i < 3 else "🔹"
                 nums_html = formatar_jogo_html(jogo)
@@ -1091,6 +1294,9 @@ def main():
                     <small style='color:#aaa;'>{stats}</small>
                 </div>
                 """, unsafe_allow_html=True)
+            
+            if len(jogos) > 20:
+                st.info(f"Exibindo os primeiros 20 de {len(jogos)} jogos. Salve para ver todos.")
             
             col1, col2 = st.columns(2)
             with col1:
@@ -1228,7 +1434,6 @@ def main():
         if "jogos_gerados" in st.session_state and st.session_state.jogos_gerados:
             st.markdown(f"### 📋 Jogos Gerados ({len(st.session_state.jogos_gerados)})")
             
-            # Mostra primeiros 20 jogos
             for i, jogo in enumerate(st.session_state.jogos_gerados[:20]):
                 nums_html = formatar_jogo_html(jogo)
                 st.markdown(f"""
@@ -1254,8 +1459,197 @@ def main():
                     st.success(f"✅ {len(st.session_state.jogos_gerados)} jogos salvos! ID: {jogo_id}")
                     st.session_state.jogos_salvos = carregar_jogos_salvos()
 
-    # ================= TAB 4: AVALIAÇÃO ESTATÍSTICA =================
+    # ================= TAB 4: CONFERÊNCIA INTELIGENTE =================
     with tab4:
+        st.markdown("### 🔍 Conferência Inteligente de Jogos")
+        st.caption("Confira seus jogos contra qualquer resultado e obtenha análises detalhadas")
+        
+        # Seleção do resultado oficial
+        st.markdown("#### 📌 Resultado Oficial")
+        concurso_resultado = st.selectbox(
+            "Selecione o concurso para conferência",
+            st.session_state.dados_api,
+            format_func=lambda c: f"#{c['concurso']} - {c['data']}",
+            key="conferencia_resultado"
+        )
+        
+        if concurso_resultado:
+            resultado_oficial = set(map(int, concurso_resultado["dezenas"]))
+            st.markdown(f"""
+            <div class="highlight">
+            <strong>🎯 Resultado #{concurso_resultado['concurso']}:</strong><br>
+            {formatar_jogo_html(sorted(resultado_oficial))}
+            </div>
+            """, unsafe_allow_html=True)
+        
+        # Entrada dos jogos para conferir
+        st.markdown("#### 📋 Jogos para Conferir")
+        opcao_jogos = st.radio(
+            "Origem dos jogos:",
+            ["Jogos gerados na sessão atual", "Carregar de arquivo CSV", "Digitar manualmente"],
+            horizontal=True
+        )
+        
+        jogos_para_conferir = []
+        
+        if opcao_jogos == "Jogos gerados na sessão atual":
+            if st.session_state.jogos_gerados:
+                jogos_para_conferir = st.session_state.jogos_gerados
+                st.info(f"{len(jogos_para_conferir)} jogos carregados da sessão atual")
+            else:
+                st.warning("Nenhum jogo gerado na sessão atual. Gere jogos na aba 'Gerador de Jogos' primeiro.")
+        
+        elif opcao_jogos == "Carregar de arquivo CSV":
+            uploaded_file = st.file_uploader("Escolha um arquivo CSV", type="csv")
+            if uploaded_file:
+                df_carregado = pd.read_csv(uploaded_file)
+                if "Dezenas" in df_carregado.columns:
+                    jogos_para_conferir = df_carregado["Dezenas"].tolist()
+                    st.success(f"{len(jogos_para_conferir)} jogos carregados do CSV")
+                else:
+                    st.error("Arquivo CSV deve conter uma coluna 'Dezenas'")
+        
+        else:  # Digitar manualmente
+            jogos_texto = st.text_area(
+                "Digite os jogos (um por linha, números separados por vírgula)",
+                placeholder="Exemplo:\n1,2,3,4,5,6,7,8,9,10,11,12,13,14,15\n2,4,6,8,10,12,14,16,18,20,22,24,1,3,5"
+            )
+            if jogos_texto:
+                for linha in jogos_texto.strip().split('\n'):
+                    if linha.strip():
+                        try:
+                            dezenas = [int(n.strip()) for n in linha.split(',')]
+                            if len(dezenas) == 15 and all(1 <= n <= 25 for n in dezenas):
+                                jogos_para_conferir.append(sorted(dezenas))
+                        except:
+                            pass
+                if jogos_para_conferir:
+                    st.success(f"{len(jogos_para_conferir)} jogos carregados manualmente")
+                else:
+                    st.warning("Nenhum jogo válido encontrado")
+        
+        # Botão para conferir
+        if jogos_para_conferir and concurso_resultado:
+            if st.button("🔍 CONFERIR JOGOS", use_container_width=True, type="primary"):
+                with st.spinner("Conferindo jogos..."):
+                    df_conferencia = conferir_jogos_inteligente(jogos_para_conferir, resultado_oficial)
+                    
+                    st.markdown("### 📊 Resultados da Conferência")
+                    
+                    # Resumo
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Total Jogos", len(df_conferencia))
+                    with col2:
+                        st.metric("Melhor Acerto", df_conferencia.iloc[0]["Acertos"])
+                    with col3:
+                        st.metric("Média Acertos", round(df_conferencia["Acertos"].mean(), 1))
+                    with col4:
+                        st.metric("Jogos com 11+", len(df_conferencia[df_conferencia["Acertos"] >= 11]))
+                    
+                    # Tabela de resultados
+                    st.markdown("#### 🎯 Classificação dos Jogos")
+                    for i, row in df_conferencia.head(20).iterrows():
+                        medalha = "🥇" if i == 0 else "🥈" if i == 1 else "🥉" if i == 2 else "📌"
+                        st.markdown(f"""
+                        <div style='border-left: 5px solid {"#ffd700" if i == 0 else "#c0c0c0" if i == 1 else "#cd7f32" if i == 2 else "#4cc9f0"}; 
+                                    background:#0e1117; border-radius:10px; padding:12px; margin-bottom:8px;'>
+                            {medalha} <strong>Jogo {row['Jogo']}</strong> — <span style='color:#00ffaa; font-weight:bold;'>{row['Acertos']} acertos</span><br>
+                            {formatar_jogo_html(row['Dezenas'])}<br>
+                            <small style='color:#aaa;'>Acertou: {", ".join(f"{n:02d}" for n in row['Acertos_Dezenas'])}</small>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    if len(df_conferencia) > 20:
+                        st.info(f"Exibindo os primeiros 20 de {len(df_conferencia)} jogos")
+                    
+                    # Exportar resultado
+                    df_export_conferencia = df_conferencia.copy()
+                    df_export_conferencia["Dezenas"] = df_export_conferencia["Dezenas"].apply(lambda x: ", ".join(f"{n:02d}" for n in x))
+                    df_export_conferencia["Acertos_Dezenas"] = df_export_conferencia["Acertos_Dezenas"].apply(lambda x: ", ".join(f"{n:02d}" for n in x))
+                    
+                    st.download_button(
+                        label="📥 Exportar Resultado da Conferência",
+                        data=df_export_conferencia.to_csv(index=False),
+                        file_name=f"conferencia_{concurso_resultado['concurso']}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        mime="text/csv",
+                        use_container_width=True
+                    )
+        
+        # Análise de frequência
+        st.markdown("### 📊 Análise de Frequência dos Jogos")
+        if jogos_para_conferir:
+            if st.button("📈 Analisar Frequência", use_container_width=True):
+                with st.spinner("Analisando frequência..."):
+                    df_freq = analisar_frequencia_jogos(jogos_para_conferir)
+                    
+                    st.markdown("#### 🔢 Frequência dos Números")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.dataframe(df_freq.head(15), use_container_width=True, hide_index=True)
+                    with col2:
+                        st.dataframe(df_freq.tail(15), use_container_width=True, hide_index=True)
+                    
+                    # Gráfico de barras
+                    st.markdown("#### 📊 Distribuição de Frequência")
+                    st.bar_chart(df_freq.set_index("Número")["Frequência"])
+                    
+                    # Estatísticas
+                    st.markdown("#### 📈 Estatísticas Gerais")
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Números mais frequentes", f"{df_freq.iloc[0]['Número']} ({df_freq.iloc[0]['Frequência']}x)")
+                    with col2:
+                        st.metric("Números menos frequentes", f"{df_freq.iloc[-1]['Número']} ({df_freq.iloc[-1]['Frequência']}x)")
+                    with col3:
+                        st.metric("Média de aparições", f"{df_freq['Frequência'].mean():.1f}")
+        
+        # Gerador Otimizado
+        st.markdown("### 🤖 Gerador de Jogos Otimizados")
+        st.caption("Baseado na análise dos seus jogos e nos resultados recentes")
+        
+        if jogos_para_conferir and concurso_resultado:
+            col1, col2 = st.columns(2)
+            with col1:
+                qtd_otimizados = st.slider("Quantidade de jogos otimizados", 5, 30, 10)
+            with col2:
+                estrategia_otimizacao = st.selectbox(
+                    "Estratégia de otimização",
+                    ["inteligente", "frequencia", "hibrido"],
+                    format_func=lambda x: {"inteligente": "🧠 Inteligente (híbrido)", 
+                                          "frequencia": "📊 Baseado em Frequência", 
+                                          "hibrido": "🎯 Híbrido + Resultado"}[x]
+                )
+            
+            if st.button("🚀 GERAR JOGOS OTIMIZADOS", use_container_width=True, type="primary"):
+                with st.spinner("Gerando jogos otimizados..."):
+                    jogos_otimizados = gerar_jogos_otimizados(
+                        jogos_para_conferir,
+                        resultado_oficial,
+                        n_jogos=qtd_otimizados,
+                        estrategia=estrategia_otimizacao
+                    )
+                    
+                    st.session_state.jogos_otimizados = jogos_otimizados
+                    st.success(f"✅ {len(jogos_otimizados)} jogos otimizados gerados!")
+                    
+                    st.markdown("### 🎯 Jogos Otimizados")
+                    for i, jogo in enumerate(jogos_otimizados):
+                        st.markdown(f"""
+                        <div style='border-left: 5px solid #00ffaa; background:#0e1117; border-radius:10px; padding:12px; margin-bottom:8px;'>
+                            <strong>Jogo {i+1:2d}</strong><br>
+                            {formatar_jogo_html(jogo)}
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    # Botão para usar esses jogos
+                    if st.button("💾 Usar estes jogos como base", use_container_width=True):
+                        st.session_state.jogos_gerados = jogos_otimizados
+                        st.session_state.scores = []
+                        st.success("Jogos otimizados carregados na aba 'Gerador de Jogos'!")
+
+    # ================= TAB 5: AVALIAÇÃO ESTATÍSTICA =================
+    with tab5:
         st.markdown("### 📈 Avaliação Estatística dos Jogos")
         baseline = st.session_state.baseline_cache
         st.markdown(f"**Baseline Aleatório:** Média = {baseline['media']:.3f}, Desvio = {baseline['std']:.3f}")
@@ -1304,8 +1698,8 @@ def main():
             if st.session_state.mc_resultados is not None:
                 st.dataframe(st.session_state.mc_resultados, use_container_width=True, hide_index=True)
 
-    # ================= TAB 5: GEOMETRIA DO VOLANTE =================
-    with tab5:
+    # ================= TAB 6: GEOMETRIA DO VOLANTE =================
+    with tab6:
         st.markdown("### 📐 Geometria Analítica do Volante 5x5")
         motor_geo = st.session_state.motor_geometria
         stats_geo = motor_geo.get_estatisticas_geometricas()
@@ -1340,8 +1734,8 @@ def main():
             except:
                 st.error("Formato inválido. Use números separados por vírgula.")
 
-    # ================= TAB 6: CONFERÊNCIA =================
-    with tab6:
+    # ================= TAB 7: CONFERÊNCIA SALVOS =================
+    with tab7:
         st.markdown("### ✅ Conferência de Jogos Salvos")
         st.session_state.jogos_salvos = carregar_jogos_salvos()
         if not st.session_state.jogos_salvos:
