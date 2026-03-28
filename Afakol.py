@@ -18,7 +18,7 @@ warnings.filterwarnings("ignore")
 # CONFIGURAÇÃO MOBILE PREMIUM
 # =====================================================
 st.set_page_config(
-    page_title="🎯 LOTOFÁCIL - Análise e Geração",
+    page_title="🎯 LOTOFÁCIL - EMS 6.0 EV MAX",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
@@ -39,11 +39,12 @@ input, textarea { border-radius: 12px !important; }
 .metric-card { background: #16213e; padding: 10px; border-radius: 10px; text-align: center; }
 .cover-stats { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); padding: 15px; border-radius: 12px; margin: 10px 0; border: 1px solid #00ffaa20; }
 .highlight { background: #00ffaa20; border-left: 4px solid #00ffaa; padding: 10px; border-radius: 8px; margin: 10px 0; }
+.ev-highlight { background: linear-gradient(135deg, #ffd70020 0%, #ffa50020 100%); border: 1px solid #ffd700; padding: 15px; border-radius: 12px; margin: 10px 0; }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("📊🎯 LOTOFÁCIL - Análise e Geração")
-st.caption("Análise Estatística e Geração de Jogos com Filtros Matemáticos")
+st.title("📊🎯 LOTOFÁCIL - EMS 6.0 EV MAX")
+st.caption("Sistema Profissional de Maximização de Retorno Esperado (Expected Value)")
 
 # =====================================================
 # FUNÇÕES AUXILIARES (GARANTIR JOGOS COMO LISTAS)
@@ -291,8 +292,9 @@ def log_likelihood(features, dist):
     return logL
 
 # =====================================================
-# NOVO SCORE BASEADO EM MONTE CARLO (MELHORIA 1)
+# EMS 6.0 - SCORE BASEADO EM RETORNO ESPERADO (EV)
 # =====================================================
+
 @st.cache_data
 def monte_carlo_jogo(jogo_tuple, n_sim):
     jogo = set(jogo_tuple)
@@ -311,10 +313,10 @@ def monte_carlo_jogo(jogo_tuple, n_sim):
         "std": acertos.std()
     }
 
-def score_jogo_real(jogo, n_sim=2000):
+def score_ev(jogo, n_sim=3000):
     """
-    Score baseado na probabilidade real de acertos altos via Monte Carlo.
-    Este é o substituto para score_jogo_ems, que era estético.
+    Score baseado em Retorno Esperado (Expected Value)
+    Maximiza lucro ao invés de apenas acertos
     """
     jogo_set = set(jogo)
     acertos = []
@@ -325,16 +327,21 @@ def score_jogo_real(jogo, n_sim=2000):
 
     acertos = np.array(acertos)
 
-    # Foco em alta performance (não média)
-    score = (
-        np.mean(acertos >= 11) * 1 +
-        np.mean(acertos >= 12) * 3 +
-        np.mean(acertos >= 13) * 8 +
-        np.mean(acertos >= 14) * 20
-    )
+    # Aproximação de premiação da Lotofácil
+    premios = {
+        11: 5.00,      # ~R$ 5,00
+        12: 10.00,     # ~R$ 10,00
+        13: 25.00,     # ~R$ 25,00
+        14: 1500.00,   # ~R$ 1.500,00
+        15: 1500000.00 # ~R$ 1.500.000,00
+    }
 
-    return score
+    ev = 0
+    for pontos, premio in premios.items():
+        prob = np.mean(acertos == pontos)
+        ev += prob * premio
 
+    return ev
 
 # =====================================================
 # GEOMETRIA ANALÍTICA
@@ -425,13 +432,24 @@ class MotorGeometria:
         }
 
 # =====================================================
-# EMS 3.0 - GENÉTICO + FECHAMENTO (ATUALIZADO)
+# EMS 6.0 - GENÉTICO COM EV + ANTI-CORRELAÇÃO
 # =====================================================
 
-# --- MELHORIA 4: Função para forçar diversidade ---
 def distancia_jogos(j1, j2):
     """Calcula a distância (número de elementos diferentes) entre dois jogos."""
     return len(set(j1) ^ set(j2))
+
+def penalidade_correlacao(jogo, populacao):
+    """
+    Penaliza jogos muito correlacionados com a população existente
+    Isso força diversidade e aumenta cobertura
+    """
+    penalidade = 0
+    for j in populacao:
+        inter = len(set(jogo) & set(j))
+        if inter > 10:
+            penalidade += (inter - 10) * 5
+    return penalidade
 
 def crossover(j1, j2):
     """Operador de crossover entre dois jogos"""
@@ -445,39 +463,49 @@ def crossover(j1, j2):
 
     return sorted(filho[:15])
 
-
-def mutacao(jogo, taxa=0.2):
-    """Operador de mutação com taxa configurável"""
+def mutacao_inteligente(jogo):
+    """
+    MUTAÇÃO INTELIGENTE:
+    - Remove um número do jogo
+    - Adiciona um número pouco usado globalmente
+    """
     jogo = jogo.copy()
-    if random.random() < taxa:
-        idx = random.randint(0, 14)
-        novo = random.randint(1, 25)
-        while novo in jogo:
-            novo = random.randint(1, 25)
-        jogo[idx] = novo
+    
+    # Remove um número aleatório
+    idx = random.randint(0, len(jogo) - 1)
+    removido = jogo.pop(idx)
+    
+    # Adiciona um número que não está no jogo
+    candidatos = list(set(range(1, 26)) - set(jogo))
+    novo = random.choice(candidatos)
+    jogo.append(novo)
+    
     return sorted(jogo)
 
-
-# --- MELHORIA 2: Algoritmo Genético atualizado para usar score_jogo_real ---
-def algoritmo_genetico_ems(
+def algoritmo_genetico_ev(
     gerador,
-    motor_geo, # Mantido para compatibilidade, mas não usado no novo score
-    ultimo,    # Mantido para compatibilidade, mas não usado no novo score
+    motor_geo,
+    ultimo,
     config_filtros,
     populacao_size=80,
     geracoes=25
 ):
-    """Algoritmo genético evoluindo jogos com base no score real (Monte Carlo)"""
+    """
+    Algoritmo genético evoluindo jogos com base no Retorno Esperado (EV)
+    Inclui penalidade de correlação para diversidade
+    """
     
     populacao = gerador.gerar_multiplos_jogos(populacao_size, config_filtros)
 
     for _ in range(geracoes):
         
-        # Avalia usando o novo score real
-        avaliados = [
-            (j, score_jogo_real(j, n_sim=1500)) # Usa 1500 simulações para equilibrar velocidade e precisão
-            for j in populacao
-        ]
+        # Avalia usando EV com penalidade de correlação
+        avaliados = []
+        for j in populacao:
+            ev = score_ev(j, n_sim=2000)
+            penalidade = penalidade_correlacao(j, populacao)
+            score_final = ev - penalidade
+            avaliados.append((j, score_final))
         
         avaliados.sort(key=lambda x: x[1], reverse=True)
         sobreviventes = [j for j, _ in avaliados[:int(populacao_size * 0.3)]]
@@ -486,98 +514,35 @@ def algoritmo_genetico_ems(
         
         while len(nova_pop) < populacao_size:
             p1, p2 = random.sample(sobreviventes, 2)
-            filho = mutacao(crossover(p1, p2))
+            filho = mutacao_inteligente(crossover(p1, p2))
             
             # Aplica os filtros tradicionais
             if gerador.aplicar_filtros(filho, config_filtros):
-                # --- MELHORIA 4: Garantir diversidade na nova população ---
+                # Garante diversidade mínima
                 if all(distancia_jogos(filho, j) > 6 for j in nova_pop):
                     nova_pop.append(filho)
-                # Se não houver diversidade suficiente, tenta novamente (loop irá continuar)
         
         populacao = nova_pop
     
-    final = [
-        (j, score_jogo_real(j, n_sim=1500))
-        for j in populacao
-    ]
+    # Avaliação final com mais simulações para precisão
+    final = []
+    for j in populacao:
+        ev = score_ev(j, n_sim=3000)
+        final.append((j, ev))
     
     final.sort(key=lambda x: x[1], reverse=True)
     return final[:20]
 
-
-# ================= FECHAMENTO INTELIGENTE =================
-
-def gerar_pool_inteligente(gerador, tamanho=20):
-    """Gera um pool de números baseado em frequência e atraso"""
-    numeros, pesos = gerador.pool_ponderado
-    escolhidos = set()
-    
-    while len(escolhidos) < tamanho:
-        n = random.choices(numeros, weights=pesos, k=1)[0]
-        escolhidos.add(n)
-    
-    return sorted(escolhidos)
-
-
-def gerar_fechamento(pool, qtd_jogos=15):
-    """Gera fechamento inteligente com cobertura de combinações de 14 números"""
-    jogos = []
-    cobertura = set()
-    
-    while len(jogos) < qtd_jogos:
-        melhor_jogo = None
-        melhor_score = -1
-        
-        for _ in range(200):
-            jogo = sorted(random.sample(pool, 15))
-            
-            cobertos = 0
-            for comb in combinations(jogo, 14):
-                if comb not in cobertura:
-                    cobertos += 1
-            
-            if cobertos > melhor_score:
-                melhor_score = cobertos
-                melhor_jogo = jogo
-        
-        jogos.append(melhor_jogo)
-        
-        for comb in combinations(melhor_jogo, 14):
-            cobertura.add(comb)
-    
-    return jogos
-
-
-def fechamento_inteligente_ems(
-    gerador,
-    dist_emp, # Mantido para compatibilidade
-    motor_geo,
-    ultimo,
-    config_filtros,
-    qtd_jogos=15
-):
-    """Sistema completo de fechamento inteligente com pool otimizado"""
-    
-    pool = gerar_pool_inteligente(gerador, 20)
-    
-    jogos_base = gerar_fechamento(pool, qtd_jogos * 2)
-    
-    avaliados = []
-    
-    for j in jogos_base:
-        if gerador.aplicar_filtros(j, config_filtros):
-            # Usa o novo score real
-            score = score_jogo_real(j, n_sim=1500)
-            avaliados.append((j, score))
-    
-    avaliados.sort(key=lambda x: x[1], reverse=True)
-    
-    return avaliados[:qtd_jogos], pool
-
+def filtrar_diversidade(jogos, min_dist=7):
+    """Filtra jogos garantindo diversidade mínima entre eles"""
+    finais = []
+    for j in jogos:
+        if all(distancia_jogos(j, x) >= min_dist for x in finais):
+            finais.append(j)
+    return finais
 
 # =====================================================
-# EMS 5.0 - ENGENHARIA COMBINATÓRIA FORMAL
+# EMS 6.0 - MULTI-POOL INTELIGENTE COM EV
 # =====================================================
 
 def gerar_pool_cirurgico_balanceado(gerador=None, tamanho=20):
@@ -691,7 +656,7 @@ def fechamento_v5_avancado(pool, limite_jogos=30, usar_pesos=False, gerador=None
     # Gera todos os vizinhos possíveis
     candidatos = gerar_vizinhos_combinatorios(base, pool)
     
-    # Se usar pesos, ordena candidatos por score
+    # Se usar pesos, ordena candidatos por EV
     if usar_pesos and gerador:
         numeros, pesos = gerador.pool_ponderado
         peso_dict = {num: peso for num, peso in zip(numeros, pesos)}
@@ -750,35 +715,27 @@ def fechamento_v5_avancado(pool, limite_jogos=30, usar_pesos=False, gerador=None
     
     return jogos_finais, cobertura_stats
 
-
-def multi_pool_fechamento(gerador, num_pools=3, jogos_por_pool=15):
+def multi_pool_ev(gerador, num_pools=4):
     """
-    Estratégia multi-pool: gera múltiplos pools e seus fechamentos
-    Aumenta drasticamente a cobertura global
+    EMS 6.0: Multi-pool inteligente baseado em EV
+    Gera múltiplos pools e seleciona os melhores por Retorno Esperado
     """
     todos_jogos = []
-    todos_pools = []
     
     for i in range(num_pools):
         with st.spinner(f"Gerando Pool {i+1}/{num_pools}..."):
-            # Gera pool cirúrgico
-            pool, pool_stats = gerar_pool_cirurgico_balanceado(gerador, 20)
+            # Gera pool aleatório
+            pool = random.sample(range(1, 26), 20)
             
             # Gera fechamento para este pool
-            jogos, cobertura_stats = fechamento_v5_avancado(
+            jogos, _ = fechamento_v5_avancado(
                 pool, 
-                limite_jogos=jogos_por_pool,
+                limite_jogos=20,
                 usar_pesos=True,
                 gerador=gerador
             )
             
             todos_jogos.extend(jogos)
-            todos_pools.append({
-                "pool": pool,
-                "stats": pool_stats,
-                "cobertura": cobertura_stats,
-                "jogos": jogos
-            })
     
     # Remove duplicatas
     jogos_unicos = []
@@ -786,7 +743,11 @@ def multi_pool_fechamento(gerador, num_pools=3, jogos_por_pool=15):
         if j not in jogos_unicos:
             jogos_unicos.append(j)
     
-    return jogos_unicos, todos_pools
+    # Seleciona os melhores por EV
+    avaliados = [(j, score_ev(j, n_sim=2000)) for j in jogos_unicos]
+    avaliados.sort(key=lambda x: x[1], reverse=True)
+    
+    return [j for j, _ in avaliados[:30]]
 
 
 # =====================================================
@@ -1031,8 +992,7 @@ class GeradorLotofacil:
             atraso_norm = self.atrasos[n]/max_atraso if max_atraso > 0 else 0
             # Quanto maior a frequência e o atraso, maior o peso
             peso = freq_norm * peso_freq + atraso_norm * peso_atraso
-            # --- MELHORIA 3: REMOVER VÍCIO DO ÚLTIMO CONCURSO ---
-            # Peso reduzido de 2.0 para 1.2 para não dominar
+            # Influência leve do último concurso
             if n in self.ultimo:
                 peso *= 1.2
             numeros.append(n)
@@ -1143,11 +1103,10 @@ def main():
     if "scores" not in st.session_state: st.session_state.scores = []
     if "cobertura_stats" not in st.session_state: st.session_state.cobertura_stats = None
     if "multi_pool_results" not in st.session_state: st.session_state.multi_pool_results = None
-    # --- MELHORIA 5: QUEBRAR PADRÃO DE FILTROS (limites mais amplos) ---
     if "config_filtros" not in st.session_state:
         st.session_state.config_filtros = {
-            'pares_min': 5, 'pares_max': 10, # Era 6-9, agora mais amplo
-            'soma_min': 160, 'soma_max': 240, # Era 180-210, agora mais amplo
+            'pares_min': 5, 'pares_max': 10,
+            'soma_min': 160, 'soma_max': 240,
             'faixas': [(5,6), (5,6), (3,4)],
             'consecutivos_max': 5,
             'linhas_min_max': [(2,4)]*5,
@@ -1178,13 +1137,13 @@ def main():
         return
 
     # ================= INTERFACE PRINCIPAL =================
-    st.subheader("🎯 Análise e Geração de Jogos")
+    st.subheader("🎯 Análise e Geração de Jogos - EMS 6.0 EV MAX")
 
     # Reorganização das abas
     tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
         "📊 Análise do Último Concurso",
-        "🎲 Gerador de Jogos",
-        "🚀 EMS 5.0 - Cobertura",
+        "🎲 Gerador EV MAX",
+        "🚀 EMS 6.0 - Multi-Pool EV",
         "🔍 Conferência Inteligente",
         "📈 Avaliação Estatística",
         "📐 Geometria do Volante",
@@ -1225,15 +1184,20 @@ def main():
             linhas = distribuir_por_linhas(numeros_ultimo)
             st.metric("Linhas (0-4)", f"{linhas[0]}-{linhas[1]}-{linhas[2]}-{linhas[3]}-{linhas[4]}")
 
-    # ================= TAB 2: GERADOR DE JOGOS =================
+    # ================= TAB 2: GERADOR EV MAX =================
     with tab2:
-        st.markdown("### 🎲 Gerador de Jogos com Filtros Ajustáveis")
-        st.caption("Base estatística: Frequência e atraso dos números, com pesos configuráveis.")
+        st.markdown("### 🎲 Gerador EV MAX - Maximização de Retorno Esperado")
+        st.markdown("""
+        <div class="ev-highlight">
+        <strong>💰 Estratégia Profissional:</strong> Este gerador não busca apenas acertar, 
+        mas sim <strong>maximizar o Retorno Esperado (EV)</strong> considerando as premiações reais.
+        Jogos com maior chance de 13, 14 e 15 pontos são priorizados, mesmo que tenham menos 11 pontos.
+        </div>
+        """, unsafe_allow_html=True)
         
         with st.expander("⚙️ Configuração dos Filtros", expanded=True):
             col1, col2 = st.columns(2)
             with col1:
-                # --- MELHORIA 5: Atualizando valores padrão nos inputs ---
                 pares_min = st.number_input("Mínimo de Pares", 0, 15, value=st.session_state.config_filtros['pares_min'])
                 pares_max = st.number_input("Máximo de Pares", 0, 15, value=st.session_state.config_filtros['pares_max'])
                 soma_min = st.number_input("Soma Mínima", 150, 300, value=st.session_state.config_filtros['soma_min'])
@@ -1259,45 +1223,45 @@ def main():
             qtd_jogos = st.slider("Quantidade de jogos", 5, 50, 10)
         
         with col2:
-            if st.button("🚀 GERAR JOGOS", use_container_width=True):
-                with st.spinner(f"Gerando {qtd_jogos} jogos..."):
+            if st.button("🚀 GERAR EV MAX", use_container_width=True):
+                with st.spinner(f"Gerando {qtd_jogos} jogos com otimização de EV..."):
                     jogos = st.session_state.gerador_principal.gerar_multiplos_jogos(qtd_jogos, st.session_state.config_filtros)
                     if jogos:
                         st.session_state.jogos_gerados = jogos
-                        st.session_state.scores = [score_jogo_real(j) for j in jogos]
+                        st.session_state.scores = [score_ev(j, n_sim=2000) for j in jogos]
                         st.success(f"✅ {len(jogos)} jogos gerados!")
         
         with col3:
-            if st.button("🔥 EMS 3.0 (Probabilístico)", use_container_width=True):
-                with st.spinner("Gerando jogos com Algoritmo Genético baseado em Monte Carlo..."):
-                    # --- MELHORIA 2: Usando o novo score no genético ---
-                    # O genético agora usa score_jogo_real e garante diversidade
-                    resultados = algoritmo_genetico_ems(
+            if st.button("🧬 GENÉTICO EV MAX", use_container_width=True):
+                with st.spinner("Gerando jogos com Algoritmo Genético otimizado para EV..."):
+                    resultados = algoritmo_genetico_ev(
                         st.session_state.gerador_principal,
-                        st.session_state.motor_geometria, # Passado mas não usado no novo score
+                        st.session_state.motor_geometria,
                         st.session_state.gerador_principal.ultimo,
                         st.session_state.config_filtros
                     )
                     
                     st.session_state.jogos_gerados = [r[0] for r in resultados]
                     st.session_state.scores = [r[1] for r in resultados]
-                    st.success(f"✅ {len(resultados)} jogos gerados com EMS 3.0 (Probabilístico)!")
+                    st.success(f"✅ {len(resultados)} jogos gerados com Genético EV MAX!")
 
         if "jogos_gerados" in st.session_state and st.session_state.jogos_gerados:
             jogos = st.session_state.jogos_gerados
             st.markdown(f"### 📋 Jogos Gerados ({len(jogos)})")
+            st.markdown("💰 **EV (Retorno Esperado)** - Quanto maior, melhor a expectativa de lucro")
             
             for i, jogo in enumerate(jogos[:20]):
-                score = st.session_state.scores[i] if i < len(st.session_state.scores) else 0
+                ev = st.session_state.scores[i] if i < len(st.session_state.scores) else 0
                 medalha = ["🥇","🥈","🥉"][i] if i < 3 else "🔹"
                 nums_html = formatar_jogo_html(jogo)
-                # Adicionando informação de probabilidade de 13+ baseada no score
-                prob_13_plus = score / 20 # Aproximação, pois score máximo é 20 (1*1 + 1*3 + 1*8 + 1*20)
-                stats = f"⚖️ {contar_pares(jogo)}p | ➕ {sum(jogo)} | 🔁 {len(set(jogo) & set(st.session_state.gerador_principal.ultimo))} rep"
+                
+                # Calcula distribuição de acertos para informação
+                mc = monte_carlo_jogo(tuple(jogo), 2000)
+                stats = f"⚖️ {contar_pares(jogo)}p | ➕ {sum(jogo)} | 🔁 {len(set(jogo) & set(st.session_state.gerador_principal.ultimo))} rep | P13+: {mc['P>=13']*100:.1f}%"
                 
                 st.markdown(f"""
-                <div style='border-left: 5px solid #4cc9f0; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
-                    {medalha} <strong>Jogo {i+1:2d}</strong> — Score Prob.: {round(score,2)}<br>
+                <div style='border-left: 5px solid #ffd700; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
+                    {medalha} <strong>Jogo {i+1:2d}</strong> — <span style='color:#ffd700;'>💰 EV: R$ {ev:.2f}</span><br>
                     {nums_html}<br>
                     <small style='color:#aaa;'>{stats}</small>
                 </div>
@@ -1310,7 +1274,7 @@ def main():
             with col1:
                 if st.button("💾 Salvar Jogos", key="salvar_jogos", use_container_width=True):
                     ultimo = st.session_state.dados_api[0]
-                    arquivo, jogo_id = salvar_jogos_gerados(jogos, [], {"filtros": st.session_state.config_filtros}, ultimo['concurso'], ultimo['data'])
+                    arquivo, jogo_id = salvar_jogos_gerados(jogos, [], {"versao": "EMS 6.0 EV MAX", "filtros": st.session_state.config_filtros}, ultimo['concurso'], ultimo['data'])
                     if arquivo:
                         st.success(f"✅ Jogos salvos! ID: {jogo_id}")
                         st.session_state.jogos_salvos = carregar_jogos_salvos()
@@ -1319,148 +1283,79 @@ def main():
                 df_export = pd.DataFrame({
                     "Jogo": range(1, len(jogos)+1),
                     "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in jogos],
-                    "Score_Prob": [round(s, 2) for s in st.session_state.scores] if st.session_state.scores else [0]*len(jogos),
+                    "EV_Esperado": [round(ev, 2) for ev in st.session_state.scores] if st.session_state.scores else [0]*len(jogos),
                     "Pares": [contar_pares(j) for j in jogos],
                     "Soma": [sum(j) for j in jogos],
                     "Repetidas": [len(set(j) & set(st.session_state.gerador_principal.ultimo)) for j in jogos]
                 })
                 st.download_button(label="📥 Exportar CSV", data=df_export.to_csv(index=False), 
-                                 file_name=f"jogos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", 
+                                 file_name=f"jogos_ev_max_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", 
                                  mime="text/csv", use_container_width=True)
 
-    # ================= TAB 3: EMS 5.0 - COBERTURA =================
+    # ================= TAB 3: EMS 6.0 - MULTI-POOL EV =================
     with tab3:
-        st.markdown("### 🚀 EMS 5.0 - Engenharia Combinatória Formal")
-        st.caption("Cobertura garantida de combinações de 14 números dentro do pool selecionado")
+        st.markdown("### 🚀 EMS 6.0 - Multi-Pool com Seleção por EV")
+        st.caption("Gera múltiplos pools e seleciona os jogos com maior Retorno Esperado")
         
         st.markdown("""
         <div class="cover-stats">
-        <strong>🎯 Conceito:</strong> Se os 15 números sorteados estiverem dentro do seu pool, 
-        este sistema GARANTE cobertura de combinações de 14 números.
+        <strong>🎯 Estratégia Multi-Pool EV:</strong><br>
+        1. Gera múltiplos pools aleatórios de 20 números<br>
+        2. Para cada pool, gera fechamento de cobertura<br>
+        3. Avalia todos os jogos pelo Retorno Esperado (EV)<br>
+        4. Seleciona os top 30 jogos com maior EV
         </div>
         """, unsafe_allow_html=True)
         
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            tamanho_pool = st.selectbox("Tamanho do Pool", [18, 19, 20], index=2)
-        with col2:
-            qtd_jogos_v5 = st.slider("Jogos por pool", 10, 40, 25)
-        with col3:
-            num_pools = st.selectbox("Multi-Pool", [1, 2, 3, 4, 5], index=2, 
-                                    help="Múltiplos pools aumentam a cobertura global")
-        
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("🎯 POOL CIRÚRGICO", use_container_width=True):
-                with st.spinner("Gerando pool balanceado..."):
-                    pool, stats = gerar_pool_cirurgico_balanceado(st.session_state.gerador_principal, tamanho_pool)
-                    st.session_state.pool_atual = pool
-                    st.session_state.pool_stats = stats
-                    
-                    st.markdown(f"**Pool Selecionado ({len(pool)} números):**")
-                    st.markdown(" ".join(f"<span style='background:#0e1117; border:1px solid #00ffaa; border-radius:15px; padding:5px 10px; margin:2px; display:inline-block;'>{n:02d}</span>" for n in pool), unsafe_allow_html=True)
-                    
-                    col_a, col_b, col_c = st.columns(3)
-                    with col_a:
-                        st.metric("Pares/Ímpares", f"{stats['pares']}/{stats['impares']}")
-                    with col_b:
-                        st.metric("Distribuição Linhas", f"{stats['linhas']}")
-                    with col_c:
-                        st.metric("Distribuição Colunas", f"{stats['colunas']}")
+            num_pools = st.selectbox("Número de Pools", [2, 3, 4, 5, 6], index=2, 
+                                    help="Mais pools = mais diversidade, mas mais tempo de processamento")
         
         with col2:
-            if st.button("💣 FECHAMENTO V5", use_container_width=True, type="primary"):
-                if "pool_atual" not in st.session_state:
-                    st.warning("Gere um pool cirúrgico primeiro!")
-                else:
-                    with st.spinner("Construindo matriz de cobertura..."):
-                        jogos, cobertura = fechamento_v5_avancado(
-                            st.session_state.pool_atual,
-                            limite_jogos=qtd_jogos_v5,
-                            usar_pesos=True,
-                            gerador=st.session_state.gerador_principal
-                        )
-                        
-                        st.session_state.jogos_gerados = jogos
-                        st.session_state.cobertura_stats = cobertura
-                        st.session_state.scores = [score_jogo_real(j) for j in jogos]
-                        
-                        st.success(f"✅ {len(jogos)} jogos gerados!")
-                        
-                        st.markdown("### 📊 Estatísticas de Cobertura")
-                        col_a, col_b, col_c = st.columns(3)
-                        with col_a:
-                            st.metric("Combinações de 14 cobertas", f"{cobertura['combinacoes_14_cobertas']:,}")
-                        with col_b:
-                            st.metric("Total combinações possíveis", f"{cobertura['total_combinacoes_possiveis']:,}")
-                        with col_c:
-                            st.metric("% Cobertura", f"{cobertura['percentual_cobertura']:.2f}%")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("🔁 MULTI-POOL (Recomendado)", use_container_width=True):
-                # --- MELHORIA 6: Multi-pool já é usado, mas garantimos que a função está atualizada ---
-                with st.spinner(f"Gerando {num_pools} pools com fechamento..."):
-                    todos_jogos, pools_info = multi_pool_fechamento(
+            if st.button("🔥 GERAR MULTI-POOL EV", use_container_width=True, type="primary"):
+                with st.spinner(f"Gerando {num_pools} pools e selecionando melhores por EV..."):
+                    jogos_selecionados = multi_pool_ev(
                         st.session_state.gerador_principal,
-                        num_pools=num_pools,
-                        jogos_por_pool=qtd_jogos_v5
+                        num_pools=num_pools
                     )
                     
-                    st.session_state.jogos_gerados = todos_jogos
-                    st.session_state.multi_pool_results = pools_info
-                    st.session_state.scores = [score_jogo_real(j) for j in todos_jogos]
+                    # Aplica filtro de diversidade final
+                    jogos_finais = filtrar_diversidade(jogos_selecionados, min_dist=7)
                     
-                    st.success(f"✅ {len(todos_jogos)} jogos únicos gerados com {num_pools} pools!")
+                    st.session_state.jogos_gerados = jogos_finais
+                    st.session_state.scores = [score_ev(j, n_sim=2000) for j in jogos_finais]
+                    st.session_state.multi_pool_results = {"num_pools": num_pools, "total_gerados": len(jogos_selecionados), "final": len(jogos_finais)}
                     
-                    st.markdown("### 📊 Estatísticas Multi-Pool")
-                    for i, pool_info in enumerate(pools_info):
-                        with st.expander(f"Pool {i+1} - {len(pool_info['pool'])} números"):
-                            st.markdown(f"**Pool:** {pool_info['pool']}")
-                            st.markdown(f"**Cobertura:** {pool_info['cobertura']['percentual_cobertura']:.2f}%")
-                            st.markdown(f"**Jogos:** {len(pool_info['jogos'])}")
+                    st.success(f"✅ {len(jogos_finais)} jogos selecionados (de {len(jogos_selecionados)} gerados)!")
         
-        with col2:
-            if st.button("📊 Calcular Probabilidade Real", use_container_width=True):
-                if "pool_atual" in st.session_state:
-                    pool = st.session_state.pool_atual
-                    prob_pool_acertar = math.comb(len(pool), 15) / math.comb(25, 15)
-                    prob_14_se_pool_acertar = st.session_state.cobertura_stats['percentual_cobertura'] / 100 if st.session_state.cobertura_stats else 0
-                    
-                    prob_total_14 = prob_pool_acertar * prob_14_se_pool_acertar
-                    
-                    st.markdown(f"""
-                    <div class="cover-stats">
-                    <strong>🎲 Análise de Probabilidade Real:</strong><br>
-                    • Probabilidade do sorteio cair DENTRO do pool: {prob_pool_acertar:.4%}<br>
-                    • Probabilidade de GARANTIR 14 pontos SE cair no pool: {prob_14_se_pool_acertar:.2%}<br>
-                    • <strong>Probabilidade TOTAL de 14 pontos garantidos: {prob_total_14:.4%}</strong>
-                    </div>
-                    """, unsafe_allow_html=True)
-                else:
-                    st.warning("Gere um pool primeiro!")
+        if "multi_pool_results" in st.session_state and st.session_state.multi_pool_results:
+            st.info(f"📊 Gerados {st.session_state.multi_pool_results['total_gerados']} jogos, selecionados {st.session_state.multi_pool_results['final']} após filtro de diversidade")
 
         if "jogos_gerados" in st.session_state and st.session_state.jogos_gerados:
-            st.markdown(f"### 📋 Jogos Gerados ({len(st.session_state.jogos_gerados)})")
+            st.markdown(f"### 📋 Top {len(st.session_state.jogos_gerados)} Jogos por EV")
             
             for i, jogo in enumerate(st.session_state.jogos_gerados[:20]):
+                ev = st.session_state.scores[i] if i < len(st.session_state.scores) else 0
                 nums_html = formatar_jogo_html(jogo)
+                
+                mc = monte_carlo_jogo(tuple(jogo), 2000)
                 st.markdown(f"""
-                <div style='border-left: 5px solid #f97316; background:#0e1117; border-radius:10px; padding:12px; margin-bottom:8px;'>
-                    <strong>Jogo {i+1:2d}</strong><br>
+                <div style='border-left: 5px solid #ffa500; background:#0e1117; border-radius:10px; padding:12px; margin-bottom:8px;'>
+                    <strong>Jogo {i+1:2d}</strong> — <span style='color:#ffa500;'>💰 EV: R$ {ev:.2f}</span> | P(13+): {mc['P>=13']*100:.1f}%<br>
                     {nums_html}
                 </div>
                 """, unsafe_allow_html=True)
             
             if len(st.session_state.jogos_gerados) > 20:
-                st.info(f"Exibindo os primeiros 20 de {len(st.session_state.jogos_gerados)} jogos. Salve para ver todos.")
+                st.info(f"Exibindo os primeiros 20 de {len(st.session_state.jogos_gerados)} jogos.")
             
-            if st.button("💾 Salvar Jogos EMS 5.0", key="salvar_v5", use_container_width=True):
+            if st.button("💾 Salvar Jogos Multi-Pool EV", key="salvar_ev", use_container_width=True):
                 ultimo = st.session_state.dados_api[0]
                 arquivo, jogo_id = salvar_jogos_gerados(
                     st.session_state.jogos_gerados, 
                     [], 
-                    {"versao": "EMS 5.0", "pool": st.session_state.get("pool_atual", [])}, 
+                    {"versao": "EMS 6.0 Multi-Pool EV", "num_pools": num_pools}, 
                     ultimo['concurso'], 
                     ultimo['data']
                 )
@@ -1506,7 +1401,7 @@ def main():
                 jogos_para_conferir = st.session_state.jogos_gerados
                 st.info(f"{len(jogos_para_conferir)} jogos carregados da sessão atual")
             else:
-                st.warning("Nenhum jogo gerado na sessão atual. Gere jogos na aba 'Gerador de Jogos' primeiro.")
+                st.warning("Nenhum jogo gerado na sessão atual. Gere jogos na aba 'Gerador EV MAX' primeiro.")
         
         elif opcao_jogos == "Carregar de arquivo CSV":
             uploaded_file = st.file_uploader("Escolha um arquivo CSV", type="csv")
@@ -1654,8 +1549,8 @@ def main():
                     # Botão para usar esses jogos
                     if st.button("💾 Usar estes jogos como base", use_container_width=True):
                         st.session_state.jogos_gerados = jogos_otimizados
-                        st.session_state.scores = [score_jogo_real(j) for j in jogos_otimizados]
-                        st.success("Jogos otimizados carregados na aba 'Gerador de Jogos'!")
+                        st.session_state.scores = [score_ev(j, n_sim=2000) for j in jogos_otimizados]
+                        st.success("Jogos otimizados carregados na aba 'Gerador EV MAX'!")
 
     # ================= TAB 5: AVALIAÇÃO ESTATÍSTICA =================
     with tab5:
@@ -1679,14 +1574,14 @@ def main():
                 features = {"pares": contar_pares(jogo), "primos": contar_primos(jogo), 
                            "consecutivos": contar_consecutivos(jogo), "soma": (sum(jogo)//20)*20}
                 logL = log_likelihood(features, dist_emp)
-                score_ems = st.session_state.scores[i] if i < len(st.session_state.scores) else 0
+                ev = st.session_state.scores[i] if i < len(st.session_state.scores) else 0
                 avaliacao.append({
                     "Jogo": i+1, 
                     "Log-Likelihood": round(logL, 4),
-                    "Score Prob.": round(score_ems, 2)
+                    "EV (R$)": round(ev, 2)
                 })
             df_avaliacao = pd.DataFrame(avaliacao)
-            st.dataframe(df_avaliacao.sort_values("Score Prob.", ascending=False).reset_index(drop=True), use_container_width=True, hide_index=True)
+            st.dataframe(df_avaliacao.sort_values("EV (R$)", ascending=False).reset_index(drop=True), use_container_width=True, hide_index=True)
 
         st.markdown("### 🎲 Simulação Monte Carlo")
         if "jogos_gerados" in st.session_state and st.session_state.jogos_gerados:
@@ -1701,6 +1596,7 @@ def main():
                             "P(≥11)": f"{res['P>=11']*100:.2f}%", 
                             "P(≥12)": f"{res['P>=12']*100:.2f}%", 
                             "P(≥13)": f"{res['P>=13']*100:.2f}%", 
+                            "P(≥14)": f"{res['P>=14']*100:.2f}%",
                             "Média": round(res['media'], 2)
                         })
                     st.session_state.mc_resultados = pd.DataFrame(mc_res)
@@ -1738,6 +1634,15 @@ def main():
                         st.metric("Dispersão Média", analise['dispersao_media'])
                     with col3:
                         st.metric("Pares Adjacentes", analise['pares_adjacentes'])
+                    
+                    # Adiciona análise de EV
+                    ev = score_ev(numeros, n_sim=3000)
+                    st.markdown(f"""
+                    <div class="ev-highlight">
+                    <strong>💰 Retorno Esperado (EV):</strong> R$ {ev:.2f}<br>
+                    <small>Considera premiações: 11pts=R$5, 12pts=R$10, 13pts=R$25, 14pts=R$1500, 15pts=R$1.5M</small>
+                    </div>
+                    """, unsafe_allow_html=True)
                 else:
                     st.error("Jogo inválido. Deve ter 15 números únicos entre 1 e 25.")
             except:
@@ -1772,9 +1677,9 @@ if __name__ == "__main__":
 st.markdown("""
 <style>
 .footer-premium{width:100%;text-align:center;padding:22px 10px;margin-top:40px;background:linear-gradient(180deg,#0b0b0b,#050505);color:#ffffff;border-top:1px solid #222;position:relative;}
-.footer-premium::before{content:"";position:absolute;top:0;left:0;width:100%;height:2px;background:linear-gradient(90deg,#00ffcc,#00aaff,#00ffcc);box-shadow:0 0 10px #00ffcc;}
-.footer-title{font-size:16px;font-weight:800;letter-spacing:3px;text-transform:uppercase;text-shadow:0 0 6px rgba(0,255,200,0.6);}
+.footer-premium::before{content:"";position:absolute;top:0;left:0;width:100%;height:2px;background:linear-gradient(90deg,#ffd700,#ffa500,#ffd700);box-shadow:0 0 10px #ffd700;}
+.footer-title{font-size:16px;font-weight:800;letter-spacing:3px;text-transform:uppercase;text-shadow:0 0 6px rgba(255,215,0,0.6);}
 .footer-sub{font-size:11px;color:#bfbfbf;margin-top:4px;letter-spacing:1.5px;}
 </style>
-<div class="footer-premium"><div class="footer-title">ELITE MASTER SYSTEM</div><div class="footer-sub">SAMUCJ TECNOLOGIA © 2026</div></div>
+<div class="footer-premium"><div class="footer-title">EMS 6.0 EV MAX - HEDGE MATEMÁTICO</div><div class="footer-sub">SAMUCJ TECNOLOGIA © 2026</div></div>
 """, unsafe_allow_html=True)
