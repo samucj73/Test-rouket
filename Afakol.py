@@ -22,7 +22,7 @@ try:
     ORTOOLS_AVAILABLE = True
 except ImportError:
     ORTOOLS_AVAILABLE = False
-    st.warning("⚠️ OR-Tools não está instalado. Execute: pip install ortools")
+    # Não mostra warning aqui para não poluir a interface
 
 # =====================================================
 # CONFIGURAÇÃO MOBILE PREMIUM
@@ -329,7 +329,10 @@ def calcular_pesos_inteligentes(gerador, ultimo_concurso, usar_frequencia=True, 
     - Atraso (tempo desde última aparição)
     - Repetição do último concurso
     - Padrões estruturais
+    
+    Retorna um array numpy de 25 posições com os pesos normalizados.
     """
+    # Inicializa array de pesos com zeros
     pesos = np.zeros(25)
     
     if usar_frequencia and gerador:
@@ -346,11 +349,14 @@ def calcular_pesos_inteligentes(gerador, ultimo_concurso, usar_frequencia=True, 
     
     if usar_ultimo and ultimo_concurso:
         for num in ultimo_concurso:
-            pesos[num-1] += 0.2
+            idx = num - 1
+            if 0 <= idx < 25:
+                pesos[idx] += 0.2
     
-    # Normaliza
-    if pesos.sum() > 0:
-        pesos = pesos / pesos.sum()
+    # Normaliza para soma 1
+    soma_pesos = pesos.sum()
+    if soma_pesos > 0:
+        pesos = pesos / soma_pesos
     
     return pesos
 
@@ -420,8 +426,9 @@ def gerar_jogo_ilp_profissional(
         rep_min = config_filtros.get('repetidas_min', 7)
         rep_max = config_filtros.get('repetidas_max', 10)
         indices_ultimo = [i for i in range(NUM_DEZENAS) if (i+1) in ultimo_concurso]
-        solver.Add(solver.Sum(x[i] for i in indices_ultimo) >= rep_min)
-        solver.Add(solver.Sum(x[i] for i in indices_ultimo) <= rep_max)
+        if indices_ultimo:
+            solver.Add(solver.Sum(x[i] for i in indices_ultimo) >= rep_min)
+            solver.Add(solver.Sum(x[i] for i in indices_ultimo) <= rep_max)
     
     # =====================================================
     # RESTRIÇÃO 4: Linhas do volante (0-4)
@@ -471,7 +478,6 @@ def gerar_jogo_ilp_profissional(
     consecutivos_max = config_filtros.get('consecutivos_max', 5)
     # Adiciona restrições para cada possível sequência de (consecutivos_max+1) números
     for i in range(NUM_DEZENAS - consecutivos_max):
-        # Impede que todos os números de uma sequência sejam escolhidos
         sequencia = list(range(i, i + consecutivos_max + 1))
         solver.Add(solver.Sum(x[j] for j in sequencia) <= consecutivos_max)
     
@@ -521,7 +527,13 @@ def gerar_multiplos_jogos_ilp(
             if usar_diversidade and jogos:
                 for jogo_existente in jogos:
                     for num in jogo_existente:
-                        pesos[num-1] *= 0.95  # Reduz peso de números já usados
+                        idx_num = num - 1
+                        if 0 <= idx_num < 25:
+                            pesos[idx_num] *= 0.95  # Reduz peso de números já usados
+                # Re-normaliza
+                soma_pesos = pesos.sum()
+                if soma_pesos > 0:
+                    pesos = pesos / soma_pesos
             
             jogo, status = gerar_jogo_ilp_profissional(
                 pesos,
@@ -671,7 +683,8 @@ class GeradorLotofacil:
             numeros.append(n)
             pesos.append(peso)
         pesos = np.array(pesos)
-        pesos /= pesos.sum()
+        if pesos.sum() > 0:
+            pesos /= pesos.sum()
         return numeros, pesos
 
     def aplicar_filtros(self, jogo, config_filtros):
@@ -840,7 +853,7 @@ def main():
 
     # Alerta sobre OR-Tools
     if not ORTOOLS_AVAILABLE:
-        st.error("""
+        st.warning("""
         ⚠️ **OR-Tools não está instalado!**  
         Para usar o sistema ILP profissional, execute no terminal:  
         ```bash
@@ -910,19 +923,20 @@ def main():
         with st.expander("⚙️ Configuração das Restrições ILP", expanded=True):
             col1, col2 = st.columns(2)
             with col1:
-                pares_min = st.number_input("Mínimo de Pares", 0, 15, value=st.session_state.config_filtros['pares_min'])
-                pares_max = st.number_input("Máximo de Pares", 0, 15, value=st.session_state.config_filtros['pares_max'])
-                soma_min = st.number_input("Soma Mínima", 150, 300, value=st.session_state.config_filtros['soma_min'])
-                soma_max = st.number_input("Soma Máxima", 150, 300, value=st.session_state.config_filtros['soma_max'])
-                repetidas_min = st.number_input("Mínimo de Repetidas do Último", 0, 15, value=st.session_state.config_filtros['repetidas_min'])
-                repetidas_max = st.number_input("Máximo de Repetidas do Último", 0, 15, value=st.session_state.config_filtros['repetidas_max'])
+                pares_min = st.number_input("Mínimo de Pares", 0, 15, value=st.session_state.config_filtros['pares_min'], key="ilp_pares_min")
+                pares_max = st.number_input("Máximo de Pares", 0, 15, value=st.session_state.config_filtros['pares_max'], key="ilp_pares_max")
+                soma_min = st.number_input("Soma Mínima", 150, 300, value=st.session_state.config_filtros['soma_min'], key="ilp_soma_min")
+                soma_max = st.number_input("Soma Máxima", 150, 300, value=st.session_state.config_filtros['soma_max'], key="ilp_soma_max")
+                repetidas_min = st.number_input("Mínimo de Repetidas do Último", 0, 15, value=st.session_state.config_filtros['repetidas_min'], key="ilp_rep_min")
+                repetidas_max = st.number_input("Máximo de Repetidas do Último", 0, 15, value=st.session_state.config_filtros['repetidas_max'], key="ilp_rep_max")
             with col2:
-                consecutivos_max = st.number_input("Máximo de Consecutivos", 0, 10, value=st.session_state.config_filtros['consecutivos_max'])
-                linha_min = st.number_input("Mínimo por Linha", 0, 5, value=2)
-                linha_max = st.number_input("Máximo por Linha", 0, 5, value=4)
-                coluna_min = st.number_input("Mínimo por Coluna", 0, 5, value=2)
-                coluna_max = st.number_input("Máximo por Coluna", 0, 5, value=4)
+                consecutivos_max = st.number_input("Máximo de Consecutivos", 0, 10, value=st.session_state.config_filtros['consecutivos_max'], key="ilp_cons_max")
+                linha_min = st.number_input("Mínimo por Linha", 0, 5, value=2, key="ilp_linha_min")
+                linha_max = st.number_input("Máximo por Linha", 0, 5, value=4, key="ilp_linha_max")
+                coluna_min = st.number_input("Mínimo por Coluna", 0, 5, value=2, key="ilp_coluna_min")
+                coluna_max = st.number_input("Máximo por Coluna", 0, 5, value=4, key="ilp_coluna_max")
             
+            # Atualiza configurações
             st.session_state.config_filtros.update({
                 'pares_min': pares_min, 'pares_max': pares_max,
                 'soma_min': soma_min, 'soma_max': soma_max,
@@ -964,7 +978,6 @@ def main():
                     if jogo:
                         st.session_state.jogos_gerados = [jogo]
                         # Calcula EV e probabilidades
-                        ev = sum(pesos[i-1] * 100 for i in jogo)  # Aproximação
                         mc = monte_carlo_jogo(tuple(jogo), 3000)
                         st.session_state.scores = [mc['P>=13'] * 100]
                         
@@ -974,7 +987,6 @@ def main():
                         st.markdown(f"""
                         <div class="pro-highlight">
                         <strong>🎲 Jogo Gerado:</strong> {formatar_jogo_html(jogo)}<br>
-                        <strong>💰 EV Estimado:</strong> R$ {ev:.2f}<br>
                         <strong>📊 P(13+):</strong> {mc['P>=13']*100:.2f}%<br>
                         <strong>📊 P(14+):</strong> {mc['P>=14']*100:.2f}%<br>
                         <strong>🔧 Status Solver:</strong> {status}
@@ -999,42 +1011,39 @@ def main():
                         st.error(f"Falha ao encontrar solução: {status}")
         
         # Gerar múltiplos jogos com diversidade
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("🎲 GERAR MÚLTIPLOS JOGOS ILP", use_container_width=True):
-                if not ORTOOLS_AVAILABLE:
-                    st.error("OR-Tools não disponível.")
-                else:
-                    ultimo_concurso_set = set(st.session_state.dados_api[0]['dezenas'])
-                    
-                    jogos = gerar_multiplos_jogos_ilp(
-                        st.session_state.gerador_principal,
-                        ultimo_concurso_set,
-                        st.session_state.config_filtros,
-                        qtd_jogos=qtd_jogos_ilp,
-                        timeout_por_jogo=timeout,
-                        usar_diversidade=True
-                    )
-                    
-                    if jogos:
-                        st.session_state.jogos_gerados = jogos
-                        st.session_state.scores = [monte_carlo_jogo(tuple(j), 2000)['P>=13'] * 100 for j in jogos]
-                        st.success(f"✅ {len(jogos)} jogos gerados via ILP!")
+        if st.button("🎲 GERAR MÚLTIPLOS JOGOS ILP", use_container_width=True):
+            if not ORTOOLS_AVAILABLE:
+                st.error("OR-Tools não disponível.")
+            else:
+                ultimo_concurso_set = set(st.session_state.dados_api[0]['dezenas'])
+                
+                jogos = gerar_multiplos_jogos_ilp(
+                    st.session_state.gerador_principal,
+                    ultimo_concurso_set,
+                    st.session_state.config_filtros,
+                    qtd_jogos=qtd_jogos_ilp,
+                    timeout_por_jogo=timeout,
+                    usar_diversidade=True
+                )
+                
+                if jogos:
+                    st.session_state.jogos_gerados = jogos
+                    st.session_state.scores = [monte_carlo_jogo(tuple(j), 2000)['P>=13'] * 100 for j in jogos]
+                    st.success(f"✅ {len(jogos)} jogos gerados via ILP!")
         
-        with col2:
-            if st.button("💾 Salvar Jogos ILP", use_container_width=True):
-                if st.session_state.jogos_gerados:
-                    ultimo = st.session_state.dados_api[0]
-                    arquivo, jogo_id = salvar_jogos_gerados(
-                        st.session_state.jogos_gerados, 
-                        [], 
-                        {"versao": "EMS 8.0 ILP", "config": st.session_state.config_filtros}, 
-                        ultimo['concurso'], 
-                        ultimo['data']
-                    )
-                    if arquivo:
-                        st.success(f"✅ Jogos salvos! ID: {jogo_id}")
-                        st.session_state.jogos_salvos = carregar_jogos_salvos()
+        # Botão para salvar
+        if st.session_state.jogos_gerados and st.button("💾 Salvar Jogos ILP", use_container_width=True):
+            ultimo = st.session_state.dados_api[0]
+            arquivo, jogo_id = salvar_jogos_gerados(
+                st.session_state.jogos_gerados, 
+                [], 
+                {"versao": "EMS 8.0 ILP", "config": st.session_state.config_filtros}, 
+                ultimo['concurso'], 
+                ultimo['data']
+            )
+            if arquivo:
+                st.success(f"✅ Jogos salvos! ID: {jogo_id}")
+                st.session_state.jogos_salvos = carregar_jogos_salvos()
         
         # Exibir jogos gerados
         if "jogos_gerados" in st.session_state and st.session_state.jogos_gerados:
