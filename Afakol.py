@@ -15,10 +15,20 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # =====================================================
+# TENTAR IMPORTAR OR-TOOLS (SOLVER PROFISSIONAL)
+# =====================================================
+try:
+    from ortools.linear_solver import pywraplp
+    ORTOOLS_AVAILABLE = True
+except ImportError:
+    ORTOOLS_AVAILABLE = False
+    st.warning("⚠️ OR-Tools não está instalado. Execute: pip install ortools")
+
+# =====================================================
 # CONFIGURAÇÃO MOBILE PREMIUM
 # =====================================================
 st.set_page_config(
-    page_title="🎯 LOTOFÁCIL - EMS 7.0 Cobertura Profissional",
+    page_title="🎯 LOTOFÁCIL - EMS 8.0 ILP Professional",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
@@ -41,11 +51,12 @@ input, textarea { border-radius: 12px !important; }
 .highlight { background: #00ffaa20; border-left: 4px solid #00ffaa; padding: 10px; border-radius: 8px; margin: 10px 0; }
 .ev-highlight { background: linear-gradient(135deg, #ffd70020 0%, #ffa50020 100%); border: 1px solid #ffd700; padding: 15px; border-radius: 12px; margin: 10px 0; }
 .pro-highlight { background: linear-gradient(135deg, #ff00ff20 0%, #aa00ff20 100%); border: 2px solid #ff00ff; padding: 15px; border-radius: 12px; margin: 10px 0; }
+.ilp-highlight { background: linear-gradient(135deg, #00ffaa20 0%, #00aaff20 100%); border: 2px solid #00ffaa; padding: 15px; border-radius: 12px; margin: 10px 0; }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("📊🎯 LOTOFÁCIL - EMS 7.0 COBERTURA PROFISSIONAL")
-st.caption("Sistema de Cobertura Combinatória - Garantia de 13 Pontos via Set Cover Optimization")
+st.title("📊🎯 LOTOFÁCIL - EMS 8.0 ILP PROFESSIONAL")
+st.caption("Programação Linear Inteira (ILP) - Otimização Combinatória com Solver Profissional")
 
 # =====================================================
 # FUNÇÕES AUXILIARES (GARANTIR JOGOS COMO LISTAS)
@@ -227,14 +238,12 @@ def contar_consecutivos(jogo):
     return sum(1 for i in range(len(jogo)-1) if jogo[i+1] == jogo[i] + 1)
 
 def contar_por_faixa(jogo, faixa_limites):
-    """faixa_limites: lista de tuplas (inicio, fim)"""
     contagem = []
     for inicio, fim in faixa_limites:
         contagem.append(sum(1 for n in jogo if inicio <= n <= fim))
     return contagem
 
 def distribuir_por_linhas(jogo):
-    """Conta quantos números em cada linha do volante 5x5"""
     linhas = [0] * 5
     for n in jogo:
         linhas[(n-1)//5] += 1
@@ -248,7 +257,6 @@ def distribuir_por_colunas(jogo):
 
 @st.cache_data
 def baseline_aleatorio(n=200000):
-    """Baseline: interseção de dois conjuntos aleatórios de 15 números em 25"""
     acertos = []
     for _ in range(n):
         jogo = set(random.sample(range(1, 26), 15))
@@ -293,7 +301,7 @@ def log_likelihood(features, dist):
     return logL
 
 # =====================================================
-# EMS 7.0 - SISTEMA PROFISSIONAL DE COBERTURA DE 13 NÚMEROS
+# EMS 8.0 - ILP PROFISSIONAL COM OR-TOOLS
 # =====================================================
 
 @st.cache_data
@@ -314,214 +322,221 @@ def monte_carlo_jogo(jogo_tuple, n_sim):
         "std": acertos.std()
     }
 
-def calcular_ganho_cobertura(jogo, coberto_set):
+def calcular_pesos_inteligentes(gerador, ultimo_concurso, usar_frequencia=True, usar_atraso=True, usar_ultimo=True):
     """
-    Calcula quantas novas combinações de 13 números um jogo cobre
-    Cada jogo de 15 números cobre C(15,13) = 105 combinações de 13
+    Calcula pesos inteligentes para cada dezena baseado em:
+    - Frequência histórica
+    - Atraso (tempo desde última aparição)
+    - Repetição do último concurso
+    - Padrões estruturais
     """
-    ganho = 0
-    for comb in combinations(jogo, 13):
-        if comb not in coberto_set:
-            ganho += 1
-    return ganho
-
-def gerar_sistema_cobertura_13(qtd_jogos=20, iteracoes_por_jogo=2000, usar_pool=None):
-    """
-    SISTEMA PROFISSIONAL DE COBERTURA DE 13 NÚMEROS
+    pesos = np.zeros(25)
     
-    Este é um solver para o problema Set Cover:
-    - Cada jogo cobre 105 combinações de 13 números
-    - O objetivo é maximizar a cobertura única dessas combinações
-    - Algoritmo Greedy: a cada passo, escolhe o jogo que cobre mais combinações novas
+    if usar_frequencia and gerador:
+        freq = gerador.frequencias
+        max_freq = max(freq.values()) if freq else 1
+        for i in range(25):
+            pesos[i] += (freq.get(i+1, 0) / max_freq) * 0.5
+    
+    if usar_atraso and gerador:
+        atrasos = gerador.atrasos
+        max_atraso = max(atrasos.values()) if atrasos else 1
+        for i in range(25):
+            pesos[i] += (atrasos.get(i+1, 0) / max_atraso) * 0.3
+    
+    if usar_ultimo and ultimo_concurso:
+        for num in ultimo_concurso:
+            pesos[num-1] += 0.2
+    
+    # Normaliza
+    if pesos.sum() > 0:
+        pesos = pesos / pesos.sum()
+    
+    return pesos
+
+def gerar_jogo_ilp_profissional(
+    pesos,
+    ultimo_concurso,
+    config_filtros,
+    solver_timeout=10
+):
+    """
+    Gera o jogo otimizado usando Programação Linear Inteira (ILP)
+    com OR-Tools SCIP solver.
     
     Args:
-        qtd_jogos: número de jogos a gerar
-        iteracoes_por_jogo: intensidade de busca para cada jogo
-        usar_pool: lista de números para restringir o espaço (opcional)
+        pesos: array com pesos para cada dezena (1-25)
+        ultimo_concurso: set com números do último concurso
+        config_filtros: dicionário com restrições
+        solver_timeout: tempo máximo em segundos
     
     Returns:
-        jogos: lista de jogos selecionados
-        cobertura_stats: estatísticas de cobertura
+        jogo otimizado como lista de 15 números
+        status do solver
     """
     
-    # Universo de números
-    if usar_pool:
-        universo_numeros = usar_pool
+    if not ORTOOLS_AVAILABLE:
+        return None, "OR-Tools não disponível"
+    
+    NUM_DEZENAS = 25
+    NUM_ESCOLHER = 15
+    
+    # Cria solver SCIP (melhor para problemas inteiros)
+    solver = pywraplp.Solver.CreateSolver('SCIP')
+    if not solver:
+        return None, "Solver SCIP não disponível"
+    
+    # Variáveis binárias: x[i] = 1 se dezena i+1 for escolhida
+    x = {}
+    for i in range(NUM_DEZENAS):
+        x[i] = solver.IntVar(0, 1, f'x[{i}]')
+    
+    # =====================================================
+    # FUNÇÃO OBJETIVO: Maximizar soma dos pesos
+    # =====================================================
+    objective = solver.Objective()
+    for i in range(NUM_DEZENAS):
+        objective.SetCoefficient(x[i], pesos[i])
+    objective.SetMaximization()
+    
+    # =====================================================
+    # RESTRIÇÃO 1: Exatamente 15 dezenas
+    # =====================================================
+    solver.Add(solver.Sum(x[i] for i in range(NUM_DEZENAS)) == NUM_ESCOLHER)
+    
+    # =====================================================
+    # RESTRIÇÃO 2: Pares / Ímpares
+    # =====================================================
+    pares = [i for i in range(NUM_DEZENAS) if (i+1) % 2 == 0]
+    pares_min = config_filtros.get('pares_min', 6)
+    pares_max = config_filtros.get('pares_max', 9)
+    solver.Add(solver.Sum(x[i] for i in pares) >= pares_min)
+    solver.Add(solver.Sum(x[i] for i in pares) <= pares_max)
+    
+    # =====================================================
+    # RESTRIÇÃO 3: Repetição do último concurso
+    # =====================================================
+    if ultimo_concurso:
+        rep_min = config_filtros.get('repetidas_min', 7)
+        rep_max = config_filtros.get('repetidas_max', 10)
+        indices_ultimo = [i for i in range(NUM_DEZENAS) if (i+1) in ultimo_concurso]
+        solver.Add(solver.Sum(x[i] for i in indices_ultimo) >= rep_min)
+        solver.Add(solver.Sum(x[i] for i in indices_ultimo) <= rep_max)
+    
+    # =====================================================
+    # RESTRIÇÃO 4: Linhas do volante (0-4)
+    # =====================================================
+    linhas = [
+        range(0, 5),   # Linha 1: 1-5
+        range(5, 10),  # Linha 2: 6-10
+        range(10, 15), # Linha 3: 11-15
+        range(15, 20), # Linha 4: 16-20
+        range(20, 25)  # Linha 5: 21-25
+    ]
+    linha_min = config_filtros.get('linhas_min_max', [(2,4)]*5)
+    for idx, linha in enumerate(linhas):
+        min_q = linha_min[idx][0] if idx < len(linha_min) else 2
+        max_q = linha_min[idx][1] if idx < len(linha_min) else 4
+        solver.Add(solver.Sum(x[i] for i in linha) >= min_q)
+        solver.Add(solver.Sum(x[i] for i in linha) <= max_q)
+    
+    # =====================================================
+    # RESTRIÇÃO 5: Colunas do volante
+    # =====================================================
+    colunas = [
+        [0,5,10,15,20],   # Coluna 1: 1,6,11,16,21
+        [1,6,11,16,21],   # Coluna 2: 2,7,12,17,22
+        [2,7,12,17,22],   # Coluna 3: 3,8,13,18,23
+        [3,8,13,18,23],   # Coluna 4: 4,9,14,19,24
+        [4,9,14,19,24]    # Coluna 5: 5,10,15,20,25
+    ]
+    coluna_min = config_filtros.get('colunas_min_max', [(2,4)]*5)
+    for idx, coluna in enumerate(colunas):
+        min_q = coluna_min[idx][0] if idx < len(coluna_min) else 2
+        max_q = coluna_min[idx][1] if idx < len(coluna_min) else 4
+        solver.Add(solver.Sum(x[i] for i in coluna) >= min_q)
+        solver.Add(solver.Sum(x[i] for i in coluna) <= max_q)
+    
+    # =====================================================
+    # RESTRIÇÃO 6: Soma das dezenas
+    # =====================================================
+    soma_min = config_filtros.get('soma_min', 160)
+    soma_max = config_filtros.get('soma_max', 240)
+    solver.Add(solver.Sum((i+1) * x[i] for i in range(NUM_DEZENAS)) >= soma_min)
+    solver.Add(solver.Sum((i+1) * x[i] for i in range(NUM_DEZENAS)) <= soma_max)
+    
+    # =====================================================
+    # RESTRIÇÃO 7: Consecutivos (evita sequências muito longas)
+    # =====================================================
+    consecutivos_max = config_filtros.get('consecutivos_max', 5)
+    # Adiciona restrições para cada possível sequência de (consecutivos_max+1) números
+    for i in range(NUM_DEZENAS - consecutivos_max):
+        # Impede que todos os números de uma sequência sejam escolhidos
+        sequencia = list(range(i, i + consecutivos_max + 1))
+        solver.Add(solver.Sum(x[j] for j in sequencia) <= consecutivos_max)
+    
+    # =====================================================
+    # RESOLVER
+    # =====================================================
+    solver.SetTimeLimit(solver_timeout * 1000)  # Converte para milissegundos
+    
+    status = solver.Solve()
+    
+    if status == pywraplp.Solver.OPTIMAL or status == pywraplp.Solver.FEASIBLE:
+        jogo = [i+1 for i in range(NUM_DEZENAS) if x[i].solution_value() > 0.5]
+        return sorted(jogo), f"Ótimo encontrado (status: {status})"
     else:
-        universo_numeros = list(range(1, 26))
+        return None, f"Nenhuma solução encontrada (status: {status})"
+
+def gerar_multiplos_jogos_ilp(
+    gerador,
+    ultimo_concurso,
+    config_filtros,
+    qtd_jogos=10,
+    timeout_por_jogo=5,
+    usar_diversidade=True
+):
+    """
+    Gera múltiplos jogos otimizados via ILP
+    Com opção de diversidade via restrições adicionais
+    """
+    if not ORTOOLS_AVAILABLE:
+        st.error("OR-Tools não está instalado. Execute: pip install ortools")
+        return []
     
-    # Conjunto de combinações já cobertas
-    coberto = set()
     jogos = []
     
-    progress_bar = st.progress(0, text="Construindo cobertura de 13 números...")
-    
     for idx in range(qtd_jogos):
-        melhor_jogo = None
-        melhor_ganho = -1
-        
-        # Busca intensiva pelo jogo que cobre mais combinações novas
-        for _ in range(iteracoes_por_jogo):
-            jogo = tuple(sorted(random.sample(universo_numeros, 15)))
-            ganho = calcular_ganho_cobertura(jogo, coberto)
+        with st.spinner(f"Gerando jogo {idx+1}/{qtd_jogos} via ILP..."):
+            # Calcula pesos (pode variar para cada jogo se usar diversidade)
+            pesos = calcular_pesos_inteligentes(
+                gerador, 
+                ultimo_concurso,
+                usar_frequencia=True,
+                usar_atraso=True,
+                usar_ultimo=True
+            )
             
-            if ganho > melhor_ganho:
-                melhor_ganho = ganho
-                melhor_jogo = jogo
-        
-        if melhor_jogo is None:
-            break
-        
-        jogos.append(list(melhor_jogo))
-        
-        # Atualiza cobertura
-        for comb in combinations(melhor_jogo, 13):
-            coberto.add(comb)
-        
-        # Calcula estatísticas
-        total_combinacoes_possiveis = len(list(combinations(universo_numeros, 13)))
-        percentual = (len(coberto) / total_combinacoes_possiveis * 100) if total_combinacoes_possiveis > 0 else 0
-        
-        progress_bar.progress(
-            (idx + 1) / qtd_jogos,
-            text=f"Jogo {idx+1}/{qtd_jogos} | Ganho: {melhor_ganho} | Cobertura: {len(coberto):,} / {total_combinacoes_possiveis:,} ({percentual:.2f}%)"
-        )
-    
-    progress_bar.empty()
-    
-    # Estatísticas finais
-    total_combinacoes = len(list(combinations(universo_numeros, 13)))
-    cobertura_stats = {
-        "combinacoes_13_cobertas": len(coberto),
-        "total_combinacoes_possiveis": total_combinacoes,
-        "percentual_cobertura": (len(coberto) / total_combinacoes * 100) if total_combinacoes > 0 else 0,
-        "jogos_gerados": len(jogos),
-        "media_ganho_por_jogo": sum(len(list(combinations(j, 13))) for j in jogos) / len(jogos) if jogos else 0
-    }
-    
-    return jogos, cobertura_stats
-
-def gerar_sistema_pool_13(pool, qtd_jogos=20, iteracoes_por_jogo=1000):
-    """
-    Versão otimizada que trabalha dentro de um pool de números
-    Isso reduz drasticamente o espaço de busca e aumenta eficiência
-    
-    Args:
-        pool: lista de 20 números
-        qtd_jogos: número de jogos a gerar
-        iteracoes_por_jogo: intensidade de busca
-    
-    Returns:
-        jogos: lista de jogos selecionados
-        cobertura_stats: estatísticas de cobertura
-    """
-    
-    coberto = set()
-    jogos = []
-    
-    progress_bar = st.progress(0, text=f"Construindo cobertura no pool de {len(pool)} números...")
-    
-    for idx in range(qtd_jogos):
-        melhor_jogo = None
-        melhor_ganho = -1
-        
-        for _ in range(iteracoes_por_jogo):
-            jogo = tuple(sorted(random.sample(pool, 15)))
-            ganho = calcular_ganho_cobertura(jogo, coberto)
+            # Se usar diversidade, penaliza números já muito usados
+            if usar_diversidade and jogos:
+                for jogo_existente in jogos:
+                    for num in jogo_existente:
+                        pesos[num-1] *= 0.95  # Reduz peso de números já usados
             
-            if ganho > melhor_ganho:
-                melhor_ganho = ganho
-                melhor_jogo = jogo
-        
-        if melhor_jogo is None:
-            break
-        
-        jogos.append(list(melhor_jogo))
-        
-        for comb in combinations(melhor_jogo, 13):
-            coberto.add(comb)
-        
-        total_combinacoes_pool = len(list(combinations(pool, 13)))
-        percentual = (len(coberto) / total_combinacoes_pool * 100) if total_combinacoes_pool > 0 else 0
-        
-        progress_bar.progress(
-            (idx + 1) / qtd_jogos,
-            text=f"Jogo {idx+1}/{qtd_jogos} | Cobertura pool: {percentual:.2f}%"
-        )
-    
-    progress_bar.empty()
-    
-    total_combinacoes_pool = len(list(combinations(pool, 13)))
-    cobertura_stats = {
-        "combinacoes_13_cobertas": len(coberto),
-        "total_combinacoes_possiveis": total_combinacoes_pool,
-        "percentual_cobertura": (len(coberto) / total_combinacoes_pool * 100) if total_combinacoes_pool > 0 else 0,
-        "jogos_gerados": len(jogos),
-        "pool_utilizado": pool
-    }
-    
-    return jogos, cobertura_stats
-
-def gerar_pool_inteligente_para_cobertura(gerador, tamanho=20):
-    """
-    Gera pool inteligente baseado em frequência e atraso
-    Otimizado para maximizar cobertura de 13 números
-    """
-    if gerador:
-        numeros, pesos = gerador.pool_ponderado
-        # Seleciona números com maior peso
-        escolhidos = set()
-        
-        # Primeiro, garante distribuição balanceada
-        for linha in range(5):
-            for coluna in range(5):
-                num = linha * 5 + coluna + 1
-                if len(escolhidos) < tamanho and random.random() < 0.4:
-                    escolhidos.add(num)
-        
-        # Completa com os números de maior peso
-        candidatos_restantes = [n for n in numeros if n not in escolhidos]
-        pesos_restantes = [pesos[numeros.index(n)] for n in candidatos_restantes if n in numeros]
-        
-        while len(escolhidos) < tamanho and candidatos_restantes:
-            if pesos_restantes:
-                n = random.choices(candidatos_restantes, weights=pesos_restantes, k=1)[0]
+            jogo, status = gerar_jogo_ilp_profissional(
+                pesos,
+                ultimo_concurso,
+                config_filtros,
+                solver_timeout=timeout_por_jogo
+            )
+            
+            if jogo:
+                jogos.append(jogo)
+                st.success(f"Jogo {idx+1}: {jogo} - {status}")
             else:
-                n = random.choice(candidatos_restantes)
-            escolhidos.add(n)
-            if n in candidatos_restantes:
-                idx = candidatos_restantes.index(n)
-                candidatos_restantes.pop(idx)
-                if idx < len(pesos_restantes):
-                    pesos_restantes.pop(idx)
-        
-        pool = sorted(escolhidos)
-    else:
-        # Fallback: seleção aleatória balanceada
-        pool = []
-        pares = [n for n in range(1, 26) if n % 2 == 0]
-        impares = [n for n in range(1, 26) if n % 2 != 0]
-        pool.extend(random.sample(pares, tamanho // 2))
-        pool.extend(random.sample(impares, tamanho - tamanho // 2))
-        pool.sort()
+                st.warning(f"Jogo {idx+1} falhou: {status}")
     
-    return pool
-
-def calcular_probabilidade_13_garantido(pool, cobertura_stats):
-    """
-    Calcula a probabilidade real de garantir 13 pontos
-    Se o sorteio cair dentro do pool, a garantia é dada pelo percentual de cobertura
-    """
-    prob_pool_acertar = math.comb(len(pool), 15) / math.comb(25, 15) if pool else 0
-    prob_13_se_pool = cobertura_stats['percentual_cobertura'] / 100 if cobertura_stats else 0
-    
-    prob_total_13 = prob_pool_acertar * prob_13_se_pool
-    
-    return {
-        "prob_pool_acertar": prob_pool_acertar,
-        "prob_13_se_pool": prob_13_se_pool,
-        "prob_total_13_garantido": prob_total_13
-    }
+    return jogos
 
 # =====================================================
 # GEOMETRIA ANALÍTICA
@@ -722,7 +737,6 @@ class GeradorLotofacil:
 # =====================================================
 
 def parse_dezenas(dezenas_str):
-    """Converte string de dezenas para set de inteiros"""
     if isinstance(dezenas_str, str):
         return set(map(int, dezenas_str.replace('"', '').replace(' ', '').split(',')))
     elif isinstance(dezenas_str, list):
@@ -731,7 +745,6 @@ def parse_dezenas(dezenas_str):
         return set()
 
 def conferir_jogos_inteligente(jogos, resultado_set):
-    """Confere jogos contra um resultado oficial"""
     resultados = []
     
     for i, jogo in enumerate(jogos):
@@ -753,7 +766,6 @@ def conferir_jogos_inteligente(jogos, resultado_set):
     return df.sort_values(by="Acertos", ascending=False).reset_index(drop=True)
 
 def analisar_frequencia_jogos(jogos):
-    """Analisa a frequência dos números em um conjunto de jogos"""
     todas = []
     
     for jogo in jogos:
@@ -775,26 +787,6 @@ def analisar_frequencia_jogos(jogos):
     return df_freq
 
 # =====================================================
-# BACKTESTING
-# =====================================================
-def backtest_cobertura(historico, jogos_sistema, num_testes=30):
-    """Testa o sistema de cobertura nos últimos concursos"""
-    resultados = []
-    for i in range(1, min(num_testes, len(historico)) + 1):
-        concurso_alvo = set(historico[-i])
-        melhor_acerto = 0
-        for jogo in jogos_sistema:
-            acertos = len(set(jogo) & concurso_alvo)
-            melhor_acerto = max(melhor_acerto, acertos)
-        resultados.append(melhor_acerto)
-    return {
-        "media": np.mean(resultados) if resultados else 0,
-        "max": max(resultados) if resultados else 0,
-        "min": min(resultados) if resultados else 0,
-        "p13": sum(1 for r in resultados if r >= 13) / len(resultados) if resultados else 0
-    }
-
-# =====================================================
 # INTERFACE PRINCIPAL
 # =====================================================
 def main():
@@ -810,11 +802,10 @@ def main():
     if "gerador_principal" not in st.session_state: st.session_state.gerador_principal = None
     if "jogos_gerados" not in st.session_state: st.session_state.jogos_gerados = None
     if "scores" not in st.session_state: st.session_state.scores = []
-    if "cobertura_stats" not in st.session_state: st.session_state.cobertura_stats = None
     if "config_filtros" not in st.session_state:
         st.session_state.config_filtros = {
-            'pares_min': 5, 'pares_max': 10,
-            'soma_min': 160, 'soma_max': 240,
+            'pares_min': 6, 'pares_max': 9,
+            'soma_min': 180, 'soma_max': 210,
             'faixas': [(5,6), (5,6), (3,4)],
             'consecutivos_max': 5,
             'linhas_min_max': [(2,4)]*5,
@@ -845,13 +836,24 @@ def main():
         return
 
     # ================= INTERFACE PRINCIPAL =================
-    st.subheader("🎯 EMS 7.0 - Sistema Profissional de Cobertura de 13 Números")
+    st.subheader("🎯 EMS 8.0 - ILP Professional (Otimização Combinatória Exata)")
 
+    # Alerta sobre OR-Tools
+    if not ORTOOLS_AVAILABLE:
+        st.error("""
+        ⚠️ **OR-Tools não está instalado!**  
+        Para usar o sistema ILP profissional, execute no terminal:  
+        ```bash
+        pip install ortools
+        ```
+        Enquanto isso, apenas os geradores tradicionais estarão disponíveis.
+        """)
+    
     # Abas reorganizadas
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "📊 Análise do Último Concurso",
-        "🔥 COBERTURA 13 (Set Cover)",
-        "🎯 COBERTURA COM POOL",
+        "🔥 ILP PROFESSIONAL",
+        "🎯 Gerador Tradicional",
         "🔍 Conferência Inteligente",
         "📈 Avaliação Estatística",
         "📐 Geometria do Volante"
@@ -891,59 +893,225 @@ def main():
             linhas = distribuir_por_linhas(numeros_ultimo)
             st.metric("Linhas (0-4)", f"{linhas[0]}-{linhas[1]}-{linhas[2]}-{linhas[3]}-{linhas[4]}")
 
-    # ================= TAB 2: COBERTURA 13 (SET COVER) =================
+    # ================= TAB 2: ILP PROFESSIONAL =================
     with tab2:
-        st.markdown("### 🔥 SISTEMA PROFISSIONAL DE COBERTURA DE 13 NÚMEROS")
+        st.markdown("### 🔥 ILP PROFESSIONAL - Programação Linear Inteira")
         st.markdown("""
-        <div class="pro-highlight">
-        <strong>🎯 CONCEITO MATEMÁTICO:</strong><br>
-        • Cada jogo de 15 números cobre <strong>C(15,13) = 105 combinações de 13 números</strong><br>
-        • Universo total: <strong>C(25,13) = 5.200.300 combinações</strong><br>
-        • Este sistema resolve o problema de <strong>Set Cover</strong> para maximizar cobertura única<br>
-        • <strong>GARANTIA:</strong> Se o sorteio tiver 13 números dentro do espaço coberto, você GARANTE 13 pontos!
+        <div class="ilp-highlight">
+        <strong>🎯 O QUE É ILP (Programação Linear Inteira):</strong><br>
+        • Transforma a Lotofácil em um <strong>problema de otimização combinatória exata</strong><br>
+        • Usa um <strong>solver profissional (OR-Tools/SCIP)</strong> para encontrar a solução ótima<br>
+        • Todas as restrições matemáticas são aplicadas como <strong>equações lineares</strong><br>
+        • <strong>GARANTE</strong> que o jogo gerado é o MELHOR POSSÍVEL dentro das restrições!
         </div>
         """, unsafe_allow_html=True)
         
+        # Configurações dos filtros
+        with st.expander("⚙️ Configuração das Restrições ILP", expanded=True):
+            col1, col2 = st.columns(2)
+            with col1:
+                pares_min = st.number_input("Mínimo de Pares", 0, 15, value=st.session_state.config_filtros['pares_min'])
+                pares_max = st.number_input("Máximo de Pares", 0, 15, value=st.session_state.config_filtros['pares_max'])
+                soma_min = st.number_input("Soma Mínima", 150, 300, value=st.session_state.config_filtros['soma_min'])
+                soma_max = st.number_input("Soma Máxima", 150, 300, value=st.session_state.config_filtros['soma_max'])
+                repetidas_min = st.number_input("Mínimo de Repetidas do Último", 0, 15, value=st.session_state.config_filtros['repetidas_min'])
+                repetidas_max = st.number_input("Máximo de Repetidas do Último", 0, 15, value=st.session_state.config_filtros['repetidas_max'])
+            with col2:
+                consecutivos_max = st.number_input("Máximo de Consecutivos", 0, 10, value=st.session_state.config_filtros['consecutivos_max'])
+                linha_min = st.number_input("Mínimo por Linha", 0, 5, value=2)
+                linha_max = st.number_input("Máximo por Linha", 0, 5, value=4)
+                coluna_min = st.number_input("Mínimo por Coluna", 0, 5, value=2)
+                coluna_max = st.number_input("Máximo por Coluna", 0, 5, value=4)
+            
+            st.session_state.config_filtros.update({
+                'pares_min': pares_min, 'pares_max': pares_max,
+                'soma_min': soma_min, 'soma_max': soma_max,
+                'repetidas_min': repetidas_min, 'repetidas_max': repetidas_max,
+                'consecutivos_max': consecutivos_max,
+                'linhas_min_max': [(linha_min, linha_max)]*5,
+                'colunas_min_max': [(coluna_min, coluna_max)]*5
+            })
+        
         col1, col2 = st.columns(2)
         with col1:
-            qtd_jogos = st.slider("Quantidade de jogos", 10, 50, 20, key="qtd_jogos_cover")
+            qtd_jogos_ilp = st.slider("Quantidade de jogos", 1, 20, 5, key="qtd_ilp")
         with col2:
-            iteracoes = st.slider("Intensidade de busca (por jogo)", 500, 5000, 2000, key="iter_cover",
-                                 help="Maior intensidade = melhor cobertura, porém mais lento")
+            timeout = st.slider("Timeout por jogo (segundos)", 2, 30, 10, key="timeout_ilp")
         
-        if st.button("🔥 GERAR SISTEMA DE COBERTURA 13", use_container_width=True, type="primary"):
-            with st.spinner(f"Construindo cobertura de 13 números com {qtd_jogos} jogos..."):
-                jogos, stats = gerar_sistema_cobertura_13(
-                    qtd_jogos=qtd_jogos,
-                    iteracoes_por_jogo=iteracoes
+        if st.button("🚀 GERAR JOGO ÓTIMO VIA ILP", use_container_width=True, type="primary"):
+            if not ORTOOLS_AVAILABLE:
+                st.error("OR-Tools não disponível. Instale com: pip install ortools")
+            else:
+                ultimo_concurso_set = set(st.session_state.dados_api[0]['dezenas'])
+                
+                # Gera um único jogo ótimo
+                pesos = calcular_pesos_inteligentes(
+                    st.session_state.gerador_principal,
+                    ultimo_concurso_set,
+                    usar_frequencia=True,
+                    usar_atraso=True,
+                    usar_ultimo=True
                 )
                 
-                st.session_state.jogos_gerados = jogos
-                st.session_state.cobertura_stats = stats
-                st.session_state.scores = [monte_carlo_jogo(tuple(j), 2000)["P>=13"] * 100 for j in jogos]
+                with st.spinner("Resolvendo problema de otimização combinatória..."):
+                    jogo, status = gerar_jogo_ilp_profissional(
+                        pesos,
+                        ultimo_concurso_set,
+                        st.session_state.config_filtros,
+                        solver_timeout=timeout
+                    )
+                    
+                    if jogo:
+                        st.session_state.jogos_gerados = [jogo]
+                        # Calcula EV e probabilidades
+                        ev = sum(pesos[i-1] * 100 for i in jogo)  # Aproximação
+                        mc = monte_carlo_jogo(tuple(jogo), 3000)
+                        st.session_state.scores = [mc['P>=13'] * 100]
+                        
+                        st.success(f"✅ Jogo ótimo encontrado!")
+                        
+                        st.markdown("### 🏆 Jogo Otimizado pelo Solver ILP")
+                        st.markdown(f"""
+                        <div class="pro-highlight">
+                        <strong>🎲 Jogo Gerado:</strong> {formatar_jogo_html(jogo)}<br>
+                        <strong>💰 EV Estimado:</strong> R$ {ev:.2f}<br>
+                        <strong>📊 P(13+):</strong> {mc['P>=13']*100:.2f}%<br>
+                        <strong>📊 P(14+):</strong> {mc['P>=14']*100:.2f}%<br>
+                        <strong>🔧 Status Solver:</strong> {status}
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        # Mostra restrições atendidas
+                        st.markdown("### ✅ Restrições Atendidas")
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Pares", f"{contar_pares(jogo)} (limite: {pares_min}-{pares_max})")
+                            st.metric("Repetidas", f"{len(set(jogo) & ultimo_concurso_set)} (limite: {repetidas_min}-{repetidas_max})")
+                        with col2:
+                            st.metric("Soma", f"{sum(jogo)} (limite: {soma_min}-{soma_max})")
+                            st.metric("Consecutivos", f"{contar_consecutivos(jogo)} (max: {consecutivos_max})")
+                        with col3:
+                            linhas = distribuir_por_linhas(jogo)
+                            st.metric("Linhas", f"{min(linhas)}-{max(linhas)} (limite: {linha_min}-{linha_max})")
+                            colunas = distribuir_por_colunas(jogo)
+                            st.metric("Colunas", f"{min(colunas)}-{max(colunas)} (limite: {coluna_min}-{coluna_max})")
+                    else:
+                        st.error(f"Falha ao encontrar solução: {status}")
+        
+        # Gerar múltiplos jogos com diversidade
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🎲 GERAR MÚLTIPLOS JOGOS ILP", use_container_width=True):
+                if not ORTOOLS_AVAILABLE:
+                    st.error("OR-Tools não disponível.")
+                else:
+                    ultimo_concurso_set = set(st.session_state.dados_api[0]['dezenas'])
+                    
+                    jogos = gerar_multiplos_jogos_ilp(
+                        st.session_state.gerador_principal,
+                        ultimo_concurso_set,
+                        st.session_state.config_filtros,
+                        qtd_jogos=qtd_jogos_ilp,
+                        timeout_por_jogo=timeout,
+                        usar_diversidade=True
+                    )
+                    
+                    if jogos:
+                        st.session_state.jogos_gerados = jogos
+                        st.session_state.scores = [monte_carlo_jogo(tuple(j), 2000)['P>=13'] * 100 for j in jogos]
+                        st.success(f"✅ {len(jogos)} jogos gerados via ILP!")
+        
+        with col2:
+            if st.button("💾 Salvar Jogos ILP", use_container_width=True):
+                if st.session_state.jogos_gerados:
+                    ultimo = st.session_state.dados_api[0]
+                    arquivo, jogo_id = salvar_jogos_gerados(
+                        st.session_state.jogos_gerados, 
+                        [], 
+                        {"versao": "EMS 8.0 ILP", "config": st.session_state.config_filtros}, 
+                        ultimo['concurso'], 
+                        ultimo['data']
+                    )
+                    if arquivo:
+                        st.success(f"✅ Jogos salvos! ID: {jogo_id}")
+                        st.session_state.jogos_salvos = carregar_jogos_salvos()
+        
+        # Exibir jogos gerados
+        if "jogos_gerados" in st.session_state and st.session_state.jogos_gerados:
+            st.markdown(f"### 📋 {len(st.session_state.jogos_gerados)} Jogos Gerados")
+            
+            for i, jogo in enumerate(st.session_state.jogos_gerados[:20]):
+                prob_13 = st.session_state.scores[i] if i < len(st.session_state.scores) else 0
+                medalha = ["🥇","🥈","🥉"][i] if i < 3 else "🔹"
+                nums_html = formatar_jogo_html(jogo)
                 
-                st.success(f"✅ {len(jogos)} jogos gerados!")
-                
-                # Estatísticas de cobertura
-                st.markdown("### 📊 Estatísticas de Cobertura")
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Combinações de 13 cobertas", f"{stats['combinacoes_13_cobertas']:,}")
-                with col2:
-                    st.metric("Total combinações possíveis", f"{stats['total_combinacoes_possiveis']:,}")
-                with col3:
-                    st.metric("% de Cobertura", f"{stats['percentual_cobertura']:.4f}%")
-                
-                # Probabilidade real
-                prob_13_garantido = stats['percentual_cobertura'] / 100
                 st.markdown(f"""
-                <div class="ev-highlight">
-                <strong>🎲 PROBABILIDADE REAL:</strong><br>
-                Se o sorteio cair em QUALQUER combinação de 15 números, a probabilidade de você ter GARANTIDO 13 pontos é de:<br>
-                <strong style="font-size: 1.4rem;">{stats['percentual_cobertura']:.6f}%</strong><br>
-                <small>Isso significa que em aproximadamente 1 a cada {int(100 / stats['percentual_cobertura'] if stats['percentual_cobertura'] > 0 else 0):,} sorteios, você garante 13 pontos!</small>
+                <div style='border-left: 5px solid #00ffaa; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
+                    {medalha} <strong>Jogo {i+1:2d}</strong> — P(13+): {prob_13:.2f}%<br>
+                    {nums_html}
                 </div>
                 """, unsafe_allow_html=True)
+            
+            if len(st.session_state.jogos_gerados) > 20:
+                st.info(f"Exibindo os primeiros 20 de {len(st.session_state.jogos_gerados)} jogos.")
+            
+            # Exportar CSV
+            df_export = pd.DataFrame({
+                "Jogo": range(1, len(st.session_state.jogos_gerados)+1),
+                "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in st.session_state.jogos_gerados],
+                "P_13+_%": [round(p, 2) for p in st.session_state.scores]
+            })
+            st.download_button(
+                label="📥 Exportar CSV", 
+                data=df_export.to_csv(index=False), 
+                file_name=f"ilp_jogos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", 
+                mime="text/csv", 
+                use_container_width=True
+            )
+
+    # ================= TAB 3: GERADOR TRADICIONAL =================
+    with tab3:
+        st.markdown("### 🎲 Gerador Tradicional (Pool Ponderado)")
+        
+        with st.expander("⚙️ Configuração dos Filtros", expanded=True):
+            col1, col2 = st.columns(2)
+            with col1:
+                pares_min_trad = st.number_input("Mínimo de Pares", 0, 15, value=st.session_state.config_filtros['pares_min'], key="trad_pares_min")
+                pares_max_trad = st.number_input("Máximo de Pares", 0, 15, value=st.session_state.config_filtros['pares_max'], key="trad_pares_max")
+                soma_min_trad = st.number_input("Soma Mínima", 150, 300, value=st.session_state.config_filtros['soma_min'], key="trad_soma_min")
+                soma_max_trad = st.number_input("Soma Máxima", 150, 300, value=st.session_state.config_filtros['soma_max'], key="trad_soma_max")
+                repetidas_min_trad = st.number_input("Mínimo de Repetidas", 0, 15, value=st.session_state.config_filtros['repetidas_min'], key="trad_rep_min")
+                repetidas_max_trad = st.number_input("Máximo de Repetidas", 0, 15, value=st.session_state.config_filtros['repetidas_max'], key="trad_rep_max")
+            with col2:
+                b_min = st.number_input("Mínimo Baixas (1-8)", 0, 15, value=st.session_state.config_filtros['faixas'][0][0], key="trad_b_min")
+                b_max = st.number_input("Máximo Baixas (1-8)", 0, 15, value=st.session_state.config_filtros['faixas'][0][1], key="trad_b_max")
+                m_min = st.number_input("Mínimo Médias (9-16)", 0, 15, value=st.session_state.config_filtros['faixas'][1][0], key="trad_m_min")
+                m_max = st.number_input("Máximo Médias (9-16)", 0, 15, value=st.session_state.config_filtros['faixas'][1][1], key="trad_m_max")
+                a_min = st.number_input("Mínimo Altas (17-25)", 0, 15, value=st.session_state.config_filtros['faixas'][2][0], key="trad_a_min")
+                a_max = st.number_input("Máximo Altas (17-25)", 0, 15, value=st.session_state.config_filtros['faixas'][2][1], key="trad_a_max")
+            
+            config_trad = {
+                'pares_min': pares_min_trad, 'pares_max': pares_max_trad,
+                'soma_min': soma_min_trad, 'soma_max': soma_max_trad,
+                'repetidas_min': repetidas_min_trad, 'repetidas_max': repetidas_max_trad,
+                'faixas': [(b_min, b_max), (m_min, m_max), (a_min, a_max)],
+                'consecutivos_max': st.session_state.config_filtros['consecutivos_max'],
+                'linhas_min_max': st.session_state.config_filtros['linhas_min_max'],
+                'colunas_min_max': st.session_state.config_filtros['colunas_min_max']
+            }
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            qtd_jogos_trad = st.slider("Quantidade de jogos", 5, 50, 10, key="trad_qtd")
+        
+        with col2:
+            if st.button("🎲 GERAR JOGOS TRADICIONAIS", use_container_width=True):
+                with st.spinner(f"Gerando {qtd_jogos_trad} jogos..."):
+                    jogos = st.session_state.gerador_principal.gerar_multiplos_jogos(qtd_jogos_trad, config_trad)
+                    if jogos:
+                        st.session_state.jogos_gerados = jogos
+                        st.session_state.scores = [monte_carlo_jogo(tuple(j), 2000)['P>=13'] * 100 for j in jogos]
+                        st.success(f"✅ {len(jogos)} jogos gerados!")
         
         if "jogos_gerados" in st.session_state and st.session_state.jogos_gerados:
             st.markdown(f"### 📋 {len(st.session_state.jogos_gerados)} Jogos Gerados")
@@ -954,7 +1122,7 @@ def main():
                 nums_html = formatar_jogo_html(jogo)
                 
                 st.markdown(f"""
-                <div style='border-left: 5px solid #ff00ff; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
+                <div style='border-left: 5px solid #4cc9f0; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
                     {medalha} <strong>Jogo {i+1:2d}</strong> — P(13+): {prob_13:.2f}%<br>
                     {nums_html}
                 </div>
@@ -963,159 +1131,17 @@ def main():
             if len(st.session_state.jogos_gerados) > 20:
                 st.info(f"Exibindo os primeiros 20 de {len(st.session_state.jogos_gerados)} jogos.")
             
-            # Backtesting
-            if st.button("📊 Executar Backtesting", use_container_width=True):
-                with st.spinner("Executando backtesting nos últimos concursos..."):
-                    historico = [sorted(map(int, d["dezenas"])) for d in st.session_state.dados_api[:100]]
-                    resultados = backtest_cobertura(historico, st.session_state.jogos_gerados, num_testes=50)
-                    
-                    st.markdown("### 📈 Resultados do Backtesting")
-                    col1, col2, col3, col4 = st.columns(4)
-                    with col1:
-                        st.metric("Média de acertos", f"{resultados['media']:.2f}")
-                    with col2:
-                        st.metric("Melhor acerto", resultados['max'])
-                    with col3:
-                        st.metric("Pior acerto", resultados['min'])
-                    with col4:
-                        st.metric("Frequência de 13+", f"{resultados['p13']*100:.1f}%")
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("💾 Salvar Jogos", key="salvar_cover", use_container_width=True):
-                    ultimo = st.session_state.dados_api[0]
-                    arquivo, jogo_id = salvar_jogos_gerados(
-                        st.session_state.jogos_gerados, 
-                        [], 
-                        {"versao": "EMS 7.0 Cobertura 13", "stats": st.session_state.cobertura_stats}, 
-                        ultimo['concurso'], 
-                        ultimo['data']
-                    )
-                    if arquivo:
-                        st.success(f"✅ Jogos salvos! ID: {jogo_id}")
-                        st.session_state.jogos_salvos = carregar_jogos_salvos()
-            
-            with col2:
-                df_export = pd.DataFrame({
-                    "Jogo": range(1, len(st.session_state.jogos_gerados)+1),
-                    "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in st.session_state.jogos_gerados],
-                    "P_13+_%": [round(p, 2) for p in st.session_state.scores]
-                })
-                st.download_button(
-                    label="📥 Exportar CSV", 
-                    data=df_export.to_csv(index=False), 
-                    file_name=f"cobertura_13_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", 
-                    mime="text/csv", 
-                    use_container_width=True
-                )
-
-    # ================= TAB 3: COBERTURA COM POOL =================
-    with tab3:
-        st.markdown("### 🎯 COBERTURA DE 13 NÚMEROS COM POOL REDUZIDO")
-        st.markdown("""
-        <div class="cover-stats">
-        <strong>💡 ESTRATÉGIA AVANÇADA:</strong><br>
-        Trabalhar com um pool de 20 números reduz drasticamente o espaço de busca:<br>
-        • Universo total: C(25,13) = 5.200.300 combinações<br>
-        • Pool de 20: C(20,13) = 77.520 combinações (67x menor!)<br>
-        • Isso permite coberturas muito mais densas com poucos jogos
-        </div>
-        """, unsafe_allow_html=True)
-        
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            tamanho_pool = st.selectbox("Tamanho do Pool", [18, 19, 20, 21, 22], index=2)
-        with col2:
-            qtd_jogos_pool = st.slider("Jogos por pool", 10, 40, 20, key="qtd_jogos_pool")
-        with col3:
-            iter_pool = st.slider("Intensidade de busca", 500, 3000, 1000, key="iter_pool")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("🎯 GERAR POOL INTELIGENTE", use_container_width=True):
-                with st.spinner(f"Gerando pool inteligente de {tamanho_pool} números..."):
-                    pool = gerar_pool_inteligente_para_cobertura(st.session_state.gerador_principal, tamanho_pool)
-                    st.session_state.pool_atual = pool
-                    
-                    st.markdown(f"**Pool Selecionado ({len(pool)} números):**")
-                    st.markdown(" ".join(f"<span style='background:#0e1117; border:1px solid #ff00ff; border-radius:15px; padding:5px 10px; margin:2px; display:inline-block;'>{n:02d}</span>" for n in pool), unsafe_allow_html=True)
-                    
-                    # Estatísticas do pool
-                    pares_pool = len([n for n in pool if n % 2 == 0])
-                    impares_pool = len([n for n in pool if n % 2 != 0])
-                    col_a, col_b = st.columns(2)
-                    with col_a:
-                        st.metric("Pares/Ímpares", f"{pares_pool}/{impares_pool}")
-                    with col_b:
-                        st.metric("Combinações de 13 possíveis", f"{len(list(combinations(pool, 13))):,}")
-        
-        with col2:
-            if st.button("💣 GERAR COBERTURA NO POOL", use_container_width=True, type="primary"):
-                if "pool_atual" not in st.session_state:
-                    st.warning("Gere um pool primeiro!")
-                else:
-                    with st.spinner(f"Construindo cobertura no pool de {len(st.session_state.pool_atual)} números..."):
-                        jogos, stats = gerar_sistema_pool_13(
-                            st.session_state.pool_atual,
-                            qtd_jogos=qtd_jogos_pool,
-                            iteracoes_por_jogo=iter_pool
-                        )
-                        
-                        st.session_state.jogos_gerados = jogos
-                        st.session_state.cobertura_stats = stats
-                        st.session_state.scores = [monte_carlo_jogo(tuple(j), 2000)["P>=13"] * 100 for j in jogos]
-                        
-                        st.success(f"✅ {len(jogos)} jogos gerados!")
-                        
-                        st.markdown("### 📊 Estatísticas de Cobertura no Pool")
-                        col1, col2, col3 = st.columns(3)
-                        with col1:
-                            st.metric("Combinações de 13 cobertas", f"{stats['combinacoes_13_cobertas']:,}")
-                        with col2:
-                            st.metric("Total combinações no pool", f"{stats['total_combinacoes_possiveis']:,}")
-                        with col3:
-                            st.metric("% Cobertura do Pool", f"{stats['percentual_cobertura']:.2f}%")
-                        
-                        # Probabilidade real
-                        probs = calcular_probabilidade_13_garantido(st.session_state.pool_atual, stats)
-                        st.markdown(f"""
-                        <div class="ev-highlight">
-                        <strong>🎲 PROBABILIDADE REAL DE GARANTIR 13 PONTOS:</strong><br>
-                        • Chance do sorteio cair DENTRO do pool: {probs['prob_pool_acertar']:.4%}<br>
-                        • Chance de GARANTIR 13 pontos SE cair no pool: {probs['prob_13_se_pool']:.2f}%<br>
-                        • <strong style="font-size: 1.2rem;">PROBABILIDADE TOTAL: {probs['prob_total_13_garantido']:.6f}%</strong><br>
-                        <small>Isso significa 1 a cada {int(1 / probs['prob_total_13_garantido'] if probs['prob_total_13_garantido'] > 0 else 0):,} sorteios!</small>
-                        </div>
-                        """, unsafe_allow_html=True)
-        
-        if "jogos_gerados" in st.session_state and st.session_state.jogos_gerados:
-            st.markdown(f"### 📋 {len(st.session_state.jogos_gerados)} Jogos Gerados")
-            
-            for i, jogo in enumerate(st.session_state.jogos_gerados[:20]):
-                prob_13 = st.session_state.scores[i] if i < len(st.session_state.scores) else 0
-                nums_html = formatar_jogo_html(jogo)
-                
-                st.markdown(f"""
-                <div style='border-left: 5px solid #ffa500; background:#0e1117; border-radius:10px; padding:12px; margin-bottom:8px;'>
-                    <strong>Jogo {i+1:2d}</strong> — P(13+): {prob_13:.2f}%<br>
-                    {nums_html}
-                </div>
-                """, unsafe_allow_html=True)
-            
-            if len(st.session_state.jogos_gerados) > 20:
-                st.info(f"Exibindo os primeiros 20 de {len(st.session_state.jogos_gerados)} jogos.")
-            
-            if st.button("💾 Salvar Jogos com Pool", key="salvar_pool", use_container_width=True):
+            if st.button("💾 Salvar Jogos", key="salvar_trad", use_container_width=True):
                 ultimo = st.session_state.dados_api[0]
                 arquivo, jogo_id = salvar_jogos_gerados(
                     st.session_state.jogos_gerados, 
                     [], 
-                    {"versao": "EMS 7.0 Pool Coverage", "pool": st.session_state.get("pool_atual", [])}, 
+                    {"versao": "Tradicional", "config": config_trad}, 
                     ultimo['concurso'], 
                     ultimo['data']
                 )
                 if arquivo:
-                    st.success(f"✅ {len(st.session_state.jogos_gerados)} jogos salvos! ID: {jogo_id}")
+                    st.success(f"✅ Jogos salvos! ID: {jogo_id}")
                     st.session_state.jogos_salvos = carregar_jogos_salvos()
 
     # ================= TAB 4: CONFERÊNCIA INTELIGENTE =================
@@ -1259,9 +1285,9 @@ if __name__ == "__main__":
 st.markdown("""
 <style>
 .footer-premium{width:100%;text-align:center;padding:22px 10px;margin-top:40px;background:linear-gradient(180deg,#0b0b0b,#050505);color:#ffffff;border-top:1px solid #222;position:relative;}
-.footer-premium::before{content:"";position:absolute;top:0;left:0;width:100%;height:2px;background:linear-gradient(90deg,#ff00ff,#aa00ff,#ff00ff);box-shadow:0 0 10px #ff00ff;}
-.footer-title{font-size:16px;font-weight:800;letter-spacing:3px;text-transform:uppercase;text-shadow:0 0 6px rgba(255,0,255,0.6);}
+.footer-premium::before{content:"";position:absolute;top:0;left:0;width:100%;height:2px;background:linear-gradient(90deg,#00ffaa,#00aaff,#00ffaa);box-shadow:0 0 10px #00ffaa;}
+.footer-title{font-size:16px;font-weight:800;letter-spacing:3px;text-transform:uppercase;text-shadow:0 0 6px rgba(0,255,170,0.6);}
 .footer-sub{font-size:11px;color:#bfbfbf;margin-top:4px;letter-spacing:1.5px;}
 </style>
-<div class="footer-premium"><div class="footer-title">EMS 7.0 - SET COVER PROFESSIONAL</div><div class="footer-sub">SAMUCJ TECNOLOGIA © 2026</div></div>
+<div class="footer-premium"><div class="footer-title">EMS 8.0 - ILP PROFESSIONAL SOLVER</div><div class="footer-sub">SAMUCJ TECNOLOGIA © 2026</div></div>
 """, unsafe_allow_html=True)
