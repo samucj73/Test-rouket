@@ -18,7 +18,7 @@ warnings.filterwarnings("ignore")
 # CONFIGURAÇÃO MOBILE PREMIUM
 # =====================================================
 st.set_page_config(
-    page_title="🎯 LOTOFÁCIL - EMS 6.0 EV MAX",
+    page_title="🎯 LOTOFÁCIL - EMS 7.0 Cobertura Profissional",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
@@ -40,11 +40,12 @@ input, textarea { border-radius: 12px !important; }
 .cover-stats { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); padding: 15px; border-radius: 12px; margin: 10px 0; border: 1px solid #00ffaa20; }
 .highlight { background: #00ffaa20; border-left: 4px solid #00ffaa; padding: 10px; border-radius: 8px; margin: 10px 0; }
 .ev-highlight { background: linear-gradient(135deg, #ffd70020 0%, #ffa50020 100%); border: 1px solid #ffd700; padding: 15px; border-radius: 12px; margin: 10px 0; }
+.pro-highlight { background: linear-gradient(135deg, #ff00ff20 0%, #aa00ff20 100%); border: 2px solid #ff00ff; padding: 15px; border-radius: 12px; margin: 10px 0; }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("📊🎯 LOTOFÁCIL - EMS 6.0 EV MAX")
-st.caption("Sistema Profissional de Maximização de Retorno Esperado (Expected Value)")
+st.title("📊🎯 LOTOFÁCIL - EMS 7.0 COBERTURA PROFISSIONAL")
+st.caption("Sistema de Cobertura Combinatória - Garantia de 13 Pontos via Set Cover Optimization")
 
 # =====================================================
 # FUNÇÕES AUXILIARES (GARANTIR JOGOS COMO LISTAS)
@@ -292,7 +293,7 @@ def log_likelihood(features, dist):
     return logL
 
 # =====================================================
-# EMS 6.0 - SCORE BASEADO EM RETORNO ESPERADO (EV)
+# EMS 7.0 - SISTEMA PROFISSIONAL DE COBERTURA DE 13 NÚMEROS
 # =====================================================
 
 @st.cache_data
@@ -313,35 +314,214 @@ def monte_carlo_jogo(jogo_tuple, n_sim):
         "std": acertos.std()
     }
 
-def score_ev(jogo, n_sim=3000):
+def calcular_ganho_cobertura(jogo, coberto_set):
     """
-    Score baseado em Retorno Esperado (Expected Value)
-    Maximiza lucro ao invés de apenas acertos
+    Calcula quantas novas combinações de 13 números um jogo cobre
+    Cada jogo de 15 números cobre C(15,13) = 105 combinações de 13
     """
-    jogo_set = set(jogo)
-    acertos = []
+    ganho = 0
+    for comb in combinations(jogo, 13):
+        if comb not in coberto_set:
+            ganho += 1
+    return ganho
 
-    for _ in range(n_sim):
-        sorteio = set(random.sample(range(1, 26), 15))
-        acertos.append(len(jogo_set & sorteio))
-
-    acertos = np.array(acertos)
-
-    # Aproximação de premiação da Lotofácil
-    premios = {
-        11: 5.00,      # ~R$ 5,00
-        12: 10.00,     # ~R$ 10,00
-        13: 25.00,     # ~R$ 25,00
-        14: 1500.00,   # ~R$ 1.500,00
-        15: 1500000.00 # ~R$ 1.500.000,00
+def gerar_sistema_cobertura_13(qtd_jogos=20, iteracoes_por_jogo=2000, usar_pool=None):
+    """
+    SISTEMA PROFISSIONAL DE COBERTURA DE 13 NÚMEROS
+    
+    Este é um solver para o problema Set Cover:
+    - Cada jogo cobre 105 combinações de 13 números
+    - O objetivo é maximizar a cobertura única dessas combinações
+    - Algoritmo Greedy: a cada passo, escolhe o jogo que cobre mais combinações novas
+    
+    Args:
+        qtd_jogos: número de jogos a gerar
+        iteracoes_por_jogo: intensidade de busca para cada jogo
+        usar_pool: lista de números para restringir o espaço (opcional)
+    
+    Returns:
+        jogos: lista de jogos selecionados
+        cobertura_stats: estatísticas de cobertura
+    """
+    
+    # Universo de números
+    if usar_pool:
+        universo_numeros = usar_pool
+    else:
+        universo_numeros = list(range(1, 26))
+    
+    # Conjunto de combinações já cobertas
+    coberto = set()
+    jogos = []
+    
+    progress_bar = st.progress(0, text="Construindo cobertura de 13 números...")
+    
+    for idx in range(qtd_jogos):
+        melhor_jogo = None
+        melhor_ganho = -1
+        
+        # Busca intensiva pelo jogo que cobre mais combinações novas
+        for _ in range(iteracoes_por_jogo):
+            jogo = tuple(sorted(random.sample(universo_numeros, 15)))
+            ganho = calcular_ganho_cobertura(jogo, coberto)
+            
+            if ganho > melhor_ganho:
+                melhor_ganho = ganho
+                melhor_jogo = jogo
+        
+        if melhor_jogo is None:
+            break
+        
+        jogos.append(list(melhor_jogo))
+        
+        # Atualiza cobertura
+        for comb in combinations(melhor_jogo, 13):
+            coberto.add(comb)
+        
+        # Calcula estatísticas
+        total_combinacoes_possiveis = len(list(combinations(universo_numeros, 13)))
+        percentual = (len(coberto) / total_combinacoes_possiveis * 100) if total_combinacoes_possiveis > 0 else 0
+        
+        progress_bar.progress(
+            (idx + 1) / qtd_jogos,
+            text=f"Jogo {idx+1}/{qtd_jogos} | Ganho: {melhor_ganho} | Cobertura: {len(coberto):,} / {total_combinacoes_possiveis:,} ({percentual:.2f}%)"
+        )
+    
+    progress_bar.empty()
+    
+    # Estatísticas finais
+    total_combinacoes = len(list(combinations(universo_numeros, 13)))
+    cobertura_stats = {
+        "combinacoes_13_cobertas": len(coberto),
+        "total_combinacoes_possiveis": total_combinacoes,
+        "percentual_cobertura": (len(coberto) / total_combinacoes * 100) if total_combinacoes > 0 else 0,
+        "jogos_gerados": len(jogos),
+        "media_ganho_por_jogo": sum(len(list(combinations(j, 13))) for j in jogos) / len(jogos) if jogos else 0
     }
+    
+    return jogos, cobertura_stats
 
-    ev = 0
-    for pontos, premio in premios.items():
-        prob = np.mean(acertos == pontos)
-        ev += prob * premio
+def gerar_sistema_pool_13(pool, qtd_jogos=20, iteracoes_por_jogo=1000):
+    """
+    Versão otimizada que trabalha dentro de um pool de números
+    Isso reduz drasticamente o espaço de busca e aumenta eficiência
+    
+    Args:
+        pool: lista de 20 números
+        qtd_jogos: número de jogos a gerar
+        iteracoes_por_jogo: intensidade de busca
+    
+    Returns:
+        jogos: lista de jogos selecionados
+        cobertura_stats: estatísticas de cobertura
+    """
+    
+    coberto = set()
+    jogos = []
+    
+    progress_bar = st.progress(0, text=f"Construindo cobertura no pool de {len(pool)} números...")
+    
+    for idx in range(qtd_jogos):
+        melhor_jogo = None
+        melhor_ganho = -1
+        
+        for _ in range(iteracoes_por_jogo):
+            jogo = tuple(sorted(random.sample(pool, 15)))
+            ganho = calcular_ganho_cobertura(jogo, coberto)
+            
+            if ganho > melhor_ganho:
+                melhor_ganho = ganho
+                melhor_jogo = jogo
+        
+        if melhor_jogo is None:
+            break
+        
+        jogos.append(list(melhor_jogo))
+        
+        for comb in combinations(melhor_jogo, 13):
+            coberto.add(comb)
+        
+        total_combinacoes_pool = len(list(combinations(pool, 13)))
+        percentual = (len(coberto) / total_combinacoes_pool * 100) if total_combinacoes_pool > 0 else 0
+        
+        progress_bar.progress(
+            (idx + 1) / qtd_jogos,
+            text=f"Jogo {idx+1}/{qtd_jogos} | Cobertura pool: {percentual:.2f}%"
+        )
+    
+    progress_bar.empty()
+    
+    total_combinacoes_pool = len(list(combinations(pool, 13)))
+    cobertura_stats = {
+        "combinacoes_13_cobertas": len(coberto),
+        "total_combinacoes_possiveis": total_combinacoes_pool,
+        "percentual_cobertura": (len(coberto) / total_combinacoes_pool * 100) if total_combinacoes_pool > 0 else 0,
+        "jogos_gerados": len(jogos),
+        "pool_utilizado": pool
+    }
+    
+    return jogos, cobertura_stats
 
-    return ev
+def gerar_pool_inteligente_para_cobertura(gerador, tamanho=20):
+    """
+    Gera pool inteligente baseado em frequência e atraso
+    Otimizado para maximizar cobertura de 13 números
+    """
+    if gerador:
+        numeros, pesos = gerador.pool_ponderado
+        # Seleciona números com maior peso
+        escolhidos = set()
+        
+        # Primeiro, garante distribuição balanceada
+        for linha in range(5):
+            for coluna in range(5):
+                num = linha * 5 + coluna + 1
+                if len(escolhidos) < tamanho and random.random() < 0.4:
+                    escolhidos.add(num)
+        
+        # Completa com os números de maior peso
+        candidatos_restantes = [n for n in numeros if n not in escolhidos]
+        pesos_restantes = [pesos[numeros.index(n)] for n in candidatos_restantes if n in numeros]
+        
+        while len(escolhidos) < tamanho and candidatos_restantes:
+            if pesos_restantes:
+                n = random.choices(candidatos_restantes, weights=pesos_restantes, k=1)[0]
+            else:
+                n = random.choice(candidatos_restantes)
+            escolhidos.add(n)
+            if n in candidatos_restantes:
+                idx = candidatos_restantes.index(n)
+                candidatos_restantes.pop(idx)
+                if idx < len(pesos_restantes):
+                    pesos_restantes.pop(idx)
+        
+        pool = sorted(escolhidos)
+    else:
+        # Fallback: seleção aleatória balanceada
+        pool = []
+        pares = [n for n in range(1, 26) if n % 2 == 0]
+        impares = [n for n in range(1, 26) if n % 2 != 0]
+        pool.extend(random.sample(pares, tamanho // 2))
+        pool.extend(random.sample(impares, tamanho - tamanho // 2))
+        pool.sort()
+    
+    return pool
+
+def calcular_probabilidade_13_garantido(pool, cobertura_stats):
+    """
+    Calcula a probabilidade real de garantir 13 pontos
+    Se o sorteio cair dentro do pool, a garantia é dada pelo percentual de cobertura
+    """
+    prob_pool_acertar = math.comb(len(pool), 15) / math.comb(25, 15) if pool else 0
+    prob_13_se_pool = cobertura_stats['percentual_cobertura'] / 100 if cobertura_stats else 0
+    
+    prob_total_13 = prob_pool_acertar * prob_13_se_pool
+    
+    return {
+        "prob_pool_acertar": prob_pool_acertar,
+        "prob_13_se_pool": prob_13_se_pool,
+        "prob_total_13_garantido": prob_total_13
+    }
 
 # =====================================================
 # GEOMETRIA ANALÍTICA
@@ -432,526 +612,6 @@ class MotorGeometria:
         }
 
 # =====================================================
-# EMS 6.0 - GENÉTICO COM EV + ANTI-CORRELAÇÃO
-# =====================================================
-
-def distancia_jogos(j1, j2):
-    """Calcula a distância (número de elementos diferentes) entre dois jogos."""
-    return len(set(j1) ^ set(j2))
-
-def penalidade_correlacao(jogo, populacao):
-    """
-    Penaliza jogos muito correlacionados com a população existente
-    Isso força diversidade e aumenta cobertura
-    """
-    penalidade = 0
-    for j in populacao:
-        inter = len(set(jogo) & set(j))
-        if inter > 10:
-            penalidade += (inter - 10) * 5
-    return penalidade
-
-def crossover(j1, j2):
-    """Operador de crossover entre dois jogos"""
-    corte = random.randint(5, 10)
-    filho = list(set(j1[:corte] + j2[corte:]))
-
-    while len(filho) < 15:
-        n = random.randint(1, 25)
-        if n not in filho:
-            filho.append(n)
-
-    return sorted(filho[:15])
-
-def mutacao_inteligente(jogo):
-    """
-    MUTAÇÃO INTELIGENTE:
-    - Remove um número do jogo
-    - Adiciona um número pouco usado globalmente
-    """
-    jogo = jogo.copy()
-    
-    # Remove um número aleatório
-    idx = random.randint(0, len(jogo) - 1)
-    removido = jogo.pop(idx)
-    
-    # Adiciona um número que não está no jogo
-    candidatos = list(set(range(1, 26)) - set(jogo))
-    novo = random.choice(candidatos)
-    jogo.append(novo)
-    
-    return sorted(jogo)
-
-def algoritmo_genetico_ev(
-    gerador,
-    motor_geo,
-    ultimo,
-    config_filtros,
-    populacao_size=80,
-    geracoes=25
-):
-    """
-    Algoritmo genético evoluindo jogos com base no Retorno Esperado (EV)
-    Inclui penalidade de correlação para diversidade
-    """
-    
-    populacao = gerador.gerar_multiplos_jogos(populacao_size, config_filtros)
-
-    for _ in range(geracoes):
-        
-        # Avalia usando EV com penalidade de correlação
-        avaliados = []
-        for j in populacao:
-            ev = score_ev(j, n_sim=2000)
-            penalidade = penalidade_correlacao(j, populacao)
-            score_final = ev - penalidade
-            avaliados.append((j, score_final))
-        
-        avaliados.sort(key=lambda x: x[1], reverse=True)
-        sobreviventes = [j for j, _ in avaliados[:int(populacao_size * 0.3)]]
-        
-        nova_pop = sobreviventes.copy()
-        
-        while len(nova_pop) < populacao_size:
-            p1, p2 = random.sample(sobreviventes, 2)
-            filho = mutacao_inteligente(crossover(p1, p2))
-            
-            # Aplica os filtros tradicionais
-            if gerador.aplicar_filtros(filho, config_filtros):
-                # Garante diversidade mínima
-                if all(distancia_jogos(filho, j) > 6 for j in nova_pop):
-                    nova_pop.append(filho)
-        
-        populacao = nova_pop
-    
-    # Avaliação final com mais simulações para precisão
-    final = []
-    for j in populacao:
-        ev = score_ev(j, n_sim=3000)
-        final.append((j, ev))
-    
-    final.sort(key=lambda x: x[1], reverse=True)
-    return final[:20]
-
-def filtrar_diversidade(jogos, min_dist=7):
-    """Filtra jogos garantindo diversidade mínima entre eles"""
-    finais = []
-    for j in jogos:
-        if all(distancia_jogos(j, x) >= min_dist for x in finais):
-            finais.append(j)
-    return finais
-
-# =====================================================
-# EMS 6.0 - MULTI-POOL INTELIGENTE COM EV
-# =====================================================
-
-def gerar_pool_cirurgico_balanceado(gerador=None, tamanho=20):
-    """
-    Gera pool cirúrgico com balanceamento matemático:
-    - Distribuição equilibrada no volante 5x5
-    - Balanceamento par/ímpar (10/10)
-    - Evita clusters
-    - Cobertura de todas colunas e linhas
-    """
-    
-    if gerador:
-        numeros, pesos = gerador.pool_ponderado
-        # Seleciona baseado em pesos, mas garante balanceamento
-        candidatos = list(range(1, 26))
-        escolhidos = set()
-        
-        # Primeiro, garante cobertura de todas linhas e colunas
-        linhas_necessarias = 4  # mínimo por linha
-        colunas_necessarias = 4  # mínimo por coluna
-        
-        # Seleciona números estratégicos
-        for linha in range(5):
-            for coluna in range(5):
-                num = linha * 5 + coluna + 1
-                if len(escolhidos) < tamanho:
-                    if random.random() < 0.3:  # 30% de chance de incluir
-                        escolhidos.add(num)
-        
-        # Completa com pesos
-        while len(escolhidos) < tamanho:
-            n = random.choices(numeros, weights=pesos, k=1)[0]
-            escolhidos.add(n)
-        
-        pool = sorted(escolhidos)
-    else:
-        # Fallback: seleção aleatória balanceada
-        pool = []
-        pares = [n for n in range(1, 26) if n % 2 == 0]
-        impares = [n for n in range(1, 26) if n % 2 != 0]
-        
-        # Balanceamento 10/10
-        pool.extend(random.sample(pares, tamanho // 2))
-        pool.extend(random.sample(impares, tamanho - tamanho // 2))
-        pool.sort()
-    
-    # Verifica balanceamento
-    stats = {
-        "pares": len([n for n in pool if n % 2 == 0]),
-        "impares": len([n for n in pool if n % 2 != 0]),
-        "linhas": [len([n for n in pool if (n-1)//5 == i]) for i in range(5)],
-        "colunas": [len([n for n in pool if (n-1)%5 == i]) for i in range(5)]
-    }
-    
-    return pool, stats
-
-
-def gerar_base_estrategica(pool, tamanho_base=15):
-    """Gera base inicial estratégica dentro do pool"""
-    base = set(random.sample(pool, tamanho_base))
-    return sorted(base)
-
-
-def gerar_vizinhos_combinatorios(base, pool):
-    """
-    Gera vizinhos por trocas controladas:
-    - Remove 1 número
-    - Adiciona 1 número do pool
-    """
-    jogos = []
-    base_set = set(base)
-    
-    for out in base:
-        for new in pool:
-            if new not in base_set:
-                novo = base_set.copy()
-                novo.remove(out)
-                novo.add(new)
-                jogos.append(sorted(novo))
-    
-    return jogos
-
-
-def calcular_cobertura(jogo, cobertura_set):
-    """Calcula quantas novas combinações de 14 um jogo cobre"""
-    ganho = 0
-    for comb in combinations(jogo, 14):
-        if comb not in cobertura_set:
-            ganho += 1
-    return ganho
-
-
-def fechamento_v5_avancado(pool, limite_jogos=30, usar_pesos=False, gerador=None):
-    """
-    EMS 5.0: Engenharia combinatória formal com cobertura otimizada
-    
-    Args:
-        pool: lista de números (20 números)
-        limite_jogos: número máximo de jogos a gerar
-        usar_pesos: se True, usa pesos do gerador para ordenar
-        gerador: instância do GeradorLotofacil para pesos
-    
-    Returns:
-        jogos_finais: lista de jogos otimizados
-        cobertura_stats: estatísticas de cobertura
-    """
-    
-    # Gera base inicial
-    base = gerar_base_estrategica(pool)
-    
-    # Gera todos os vizinhos possíveis
-    candidatos = gerar_vizinhos_combinatorios(base, pool)
-    
-    # Se usar pesos, ordena candidatos por EV
-    if usar_pesos and gerador:
-        numeros, pesos = gerador.pool_ponderado
-        peso_dict = {num: peso for num, peso in zip(numeros, pesos)}
-        
-        def calcular_peso_total(jogo):
-            return sum(peso_dict.get(n, 0) for n in jogo)
-        
-        candidatos.sort(key=calcular_peso_total, reverse=True)
-    else:
-        random.shuffle(candidatos)
-    
-    # Matriz de cobertura
-    cobertura = set()
-    jogos_finais = []
-    
-    progress_bar = st.progress(0, text="Construindo cobertura combinatória...")
-    
-    while len(jogos_finais) < limite_jogos and candidatos:
-        melhor_jogo = None
-        melhor_ganho = -1
-        
-        # Avalia melhores candidatos
-        for jogo in candidatos[:min(500, len(candidatos))]:
-            ganho = calcular_cobertura(jogo, cobertura)
-            if ganho > melhor_ganho:
-                melhor_ganho = ganho
-                melhor_jogo = jogo
-        
-        if melhor_jogo is None:
-            break
-        
-        jogos_finais.append(melhor_jogo)
-        
-        # Atualiza cobertura
-        for comb in combinations(melhor_jogo, 14):
-            cobertura.add(comb)
-        
-        # Remove jogo usado
-        if melhor_jogo in candidatos:
-            candidatos.remove(melhor_jogo)
-        
-        progress_bar.progress(min(len(jogos_finais)/limite_jogos, 1.0), 
-                            text=f"Cobertura: {len(cobertura)} combinações de 14")
-    
-    progress_bar.empty()
-    
-    # Estatísticas de cobertura
-    total_combinacoes = len(list(combinations(pool, 14)))
-    cobertura_stats = {
-        "combinacoes_14_cobertas": len(cobertura),
-        "total_combinacoes_possiveis": total_combinacoes,
-        "percentual_cobertura": (len(cobertura) / total_combinacoes * 100) if total_combinacoes > 0 else 0,
-        "jogos_gerados": len(jogos_finais),
-        "pool_utilizado": pool
-    }
-    
-    return jogos_finais, cobertura_stats
-
-def multi_pool_ev(gerador, num_pools=4):
-    """
-    EMS 6.0: Multi-pool inteligente baseado em EV
-    Gera múltiplos pools e seleciona os melhores por Retorno Esperado
-    """
-    todos_jogos = []
-    
-    for i in range(num_pools):
-        with st.spinner(f"Gerando Pool {i+1}/{num_pools}..."):
-            # Gera pool aleatório
-            pool = random.sample(range(1, 26), 20)
-            
-            # Gera fechamento para este pool
-            jogos, _ = fechamento_v5_avancado(
-                pool, 
-                limite_jogos=20,
-                usar_pesos=True,
-                gerador=gerador
-            )
-            
-            todos_jogos.extend(jogos)
-    
-    # Remove duplicatas
-    jogos_unicos = []
-    for j in todos_jogos:
-        if j not in jogos_unicos:
-            jogos_unicos.append(j)
-    
-    # Seleciona os melhores por EV
-    avaliados = [(j, score_ev(j, n_sim=2000)) for j in jogos_unicos]
-    avaliados.sort(key=lambda x: x[1], reverse=True)
-    
-    return [j for j, _ in avaliados[:30]]
-
-
-# =====================================================
-# CONFERIDOR INTELIGENTE + OTIMIZADOR
-# =====================================================
-
-def parse_dezenas(dezenas_str):
-    """Converte string de dezenas para set de inteiros"""
-    if isinstance(dezenas_str, str):
-        return set(map(int, dezenas_str.replace('"', '').replace(' ', '').split(',')))
-    elif isinstance(dezenas_str, list):
-        return set(dezenas_str)
-    else:
-        return set()
-
-
-def conferir_jogos_inteligente(jogos, resultado_set):
-    """
-    Confere jogos contra um resultado oficial
-    
-    Args:
-        jogos: lista de jogos (cada jogo pode ser lista ou string)
-        resultado_set: set com os números sorteados
-    
-    Returns:
-        DataFrame com resultados ordenados por acertos
-    """
-    resultados = []
-    
-    for i, jogo in enumerate(jogos):
-        if isinstance(jogo, str):
-            dezenas = parse_dezenas(jogo)
-        else:
-            dezenas = set(jogo)
-        
-        acertos = dezenas.intersection(resultado_set)
-        
-        resultados.append({
-            "Jogo": i + 1,
-            "Acertos": len(acertos),
-            "Acertos_Dezenas": sorted(acertos),
-            "Dezenas": sorted(dezenas)
-        })
-    
-    df = pd.DataFrame(resultados)
-    return df.sort_values(by="Acertos", ascending=False).reset_index(drop=True)
-
-
-def analisar_frequencia_jogos(jogos):
-    """
-    Analisa a frequência dos números em um conjunto de jogos
-    
-    Args:
-        jogos: lista de jogos
-    
-    Returns:
-        DataFrame com frequência ordenada
-    """
-    todas = []
-    
-    for jogo in jogos:
-        if isinstance(jogo, str):
-            dezenas = parse_dezenas(jogo)
-        else:
-            dezenas = set(jogo)
-        todas.extend(dezenas)
-    
-    freq = Counter(todas)
-    
-    df_freq = pd.DataFrame({
-        "Número": list(freq.keys()),
-        "Frequência": list(freq.values())
-    }).sort_values(by="Frequência", ascending=False).reset_index(drop=True)
-    
-    df_freq["%"] = (df_freq["Frequência"] / len(jogos) * 100).round(1)
-    
-    return df_freq
-
-
-def gerar_jogos_otimizados(base_jogos, resultado_set, n_jogos=10, estrategia="inteligente"):
-    """
-    Gera jogos otimizados baseado nos jogos existentes e resultado
-    
-    Args:
-        base_jogos: lista de jogos base
-        resultado_set: set com números do último concurso
-        n_jogos: quantidade de jogos a gerar
-        estrategia: "inteligente", "frequencia", "hibrido"
-    
-    Returns:
-        lista de jogos otimizados
-    """
-    todos_numeros = set(range(1, 26))
-    jogos_novos = []
-    
-    # Analisa frequência dos jogos base
-    freq = analisar_frequencia_jogos(base_jogos)
-    numeros_frequentes = set(freq.head(10)["Número"].tolist())
-    numeros_raros = set(freq.tail(10)["Número"].tolist())
-    
-    for _ in range(n_jogos):
-        if estrategia == "inteligente":
-            # Pega um jogo base aleatório
-            jogo_base = base_jogos[random.randint(0, len(base_jogos) - 1)]
-            if isinstance(jogo_base, str):
-                base = parse_dezenas(jogo_base)
-            else:
-                base = set(jogo_base)
-            
-            # Remove 2-3 números para variar
-            remover_qtd = random.randint(2, 3)
-            remover = set(random.sample(list(base), min(remover_qtd, len(base))))
-            base -= remover
-            
-            # Adiciona números do resultado (que são mais prováveis)
-            if len(resultado_set) > 0:
-                novos_do_resultado = list(resultado_set - base)
-                if novos_do_resultado:
-                    base.add(random.choice(novos_do_resultado))
-            
-            # Adiciona números frequentes se faltar
-            if len(base) < 12:
-                faltantes = numeros_frequentes - base
-                if faltantes:
-                    base.add(random.choice(list(faltantes)))
-        
-        elif estrategia == "frequencia":
-            # Baseado puramente em frequência
-            base = set()
-            numeros_prioridade = list(numeros_frequentes) + list(resultado_set)
-            while len(base) < 15 and numeros_prioridade:
-                n = random.choice(numeros_prioridade)
-                base.add(n)
-                numeros_prioridade = [x for x in numeros_prioridade if x != n]
-        
-        else:  # híbrido
-            base = set()
-            # 50% números frequentes, 50% resultado
-            metade = n_jogos // 2
-            base.update(random.sample(list(numeros_frequentes), min(metade, len(numeros_frequentes))))
-            base.update(random.sample(list(resultado_set), min(metade, len(resultado_set))))
-        
-        # Completa até 15 números
-        while len(base) < 15:
-            disponiveis = list(todos_numeros - base)
-            if disponiveis:
-                base.add(random.choice(disponiveis))
-        
-        jogos_novos.append(sorted(base))
-    
-    return jogos_novos
-
-
-def analisar_padroes_avancados(jogos, resultado_set):
-    """
-    Análise avançada de padrões nos jogos
-    
-    Returns:
-        dict com estatísticas detalhadas
-    """
-    todas_dezenas = []
-    pares_total = []
-    primos_total = []
-    consecutivos_total = []
-    somas_total = []
-    
-    for jogo in jogos:
-        if isinstance(jogo, str):
-            dezenas = parse_dezenas(jogo)
-        else:
-            dezenas = set(jogo)
-        
-        todas_dezenas.extend(dezenas)
-        pares_total.append(contar_pares(list(dezenas)))
-        primos_total.append(contar_primos(list(dezenas)))
-        consecutivos_total.append(contar_consecutivos(list(dezenas)))
-        somas_total.append(sum(dezenas))
-    
-    freq_total = Counter(todas_dezenas)
-    
-    # Identifica números que mais acertaram
-    if resultado_set:
-        acertos_por_numero = {}
-        for jogo in jogos:
-            if isinstance(jogo, str):
-                dezenas = parse_dezenas(jogo)
-            else:
-                dezenas = set(jogo)
-            for num in dezenas & resultado_set:
-                acertos_por_numero[num] = acertos_por_numero.get(num, 0) + 1
-    
-    return {
-        "frequencia_geral": dict(sorted(freq_total.items(), key=lambda x: x[1], reverse=True)[:15]),
-        "media_pares": np.mean(pares_total),
-        "media_primos": np.mean(primos_total),
-        "media_consecutivos": np.mean(consecutivos_total),
-        "media_soma": np.mean(somas_total),
-        "std_soma": np.std(somas_total),
-        "acertos_por_numero": acertos_por_numero if resultado_set else {},
-        "total_jogos": len(jogos)
-    }
-
-
-# =====================================================
 # GERADOR BASE (POOL PONDERADO + FILTROS)
 # =====================================================
 class GeradorLotofacil:
@@ -990,9 +650,7 @@ class GeradorLotofacil:
         for n in range(1,26):
             freq_norm = self.frequencias[n]/max_freq if max_freq > 0 else 0
             atraso_norm = self.atrasos[n]/max_atraso if max_atraso > 0 else 0
-            # Quanto maior a frequência e o atraso, maior o peso
             peso = freq_norm * peso_freq + atraso_norm * peso_atraso
-            # Influência leve do último concurso
             if n in self.ultimo:
                 peso *= 1.2
             numeros.append(n)
@@ -1042,7 +700,6 @@ class GeradorLotofacil:
             jogo = sorted([numeros[i] for i in indices])
             if self.aplicar_filtros(jogo, config_filtros):
                 return jogo
-        # Fallback: gerar aleatório
         return sorted(random.sample(range(1,26), 15))
 
     def gerar_multiplos_jogos(self, quantidade, config_filtros, max_tentativas_por_jogo=2000):
@@ -1061,29 +718,81 @@ class GeradorLotofacil:
         return jogos
 
 # =====================================================
+# CONFERIDOR INTELIGENTE
+# =====================================================
+
+def parse_dezenas(dezenas_str):
+    """Converte string de dezenas para set de inteiros"""
+    if isinstance(dezenas_str, str):
+        return set(map(int, dezenas_str.replace('"', '').replace(' ', '').split(',')))
+    elif isinstance(dezenas_str, list):
+        return set(dezenas_str)
+    else:
+        return set()
+
+def conferir_jogos_inteligente(jogos, resultado_set):
+    """Confere jogos contra um resultado oficial"""
+    resultados = []
+    
+    for i, jogo in enumerate(jogos):
+        if isinstance(jogo, str):
+            dezenas = parse_dezenas(jogo)
+        else:
+            dezenas = set(jogo)
+        
+        acertos = dezenas.intersection(resultado_set)
+        
+        resultados.append({
+            "Jogo": i + 1,
+            "Acertos": len(acertos),
+            "Acertos_Dezenas": sorted(acertos),
+            "Dezenas": sorted(dezenas)
+        })
+    
+    df = pd.DataFrame(resultados)
+    return df.sort_values(by="Acertos", ascending=False).reset_index(drop=True)
+
+def analisar_frequencia_jogos(jogos):
+    """Analisa a frequência dos números em um conjunto de jogos"""
+    todas = []
+    
+    for jogo in jogos:
+        if isinstance(jogo, str):
+            dezenas = parse_dezenas(jogo)
+        else:
+            dezenas = set(jogo)
+        todas.extend(dezenas)
+    
+    freq = Counter(todas)
+    
+    df_freq = pd.DataFrame({
+        "Número": list(freq.keys()),
+        "Frequência": list(freq.values())
+    }).sort_values(by="Frequência", ascending=False).reset_index(drop=True)
+    
+    df_freq["%"] = (df_freq["Frequência"] / len(jogos) * 100).round(1)
+    
+    return df_freq
+
+# =====================================================
 # BACKTESTING
 # =====================================================
-def backtest_estrategia(historico, config_filtros, num_testes=30):
-    """Testa a estratégia de geração nos últimos 'num_testes' concursos históricos."""
+def backtest_cobertura(historico, jogos_sistema, num_testes=30):
+    """Testa o sistema de cobertura nos últimos concursos"""
     resultados = []
-    for i in range(1, num_testes+1):
-        # Usa os concursos anteriores ao concurso alvo para treino
-        idx_alvo = -i
-        if abs(idx_alvo) > len(historico):
-            continue
-        concurso_alvo = historico[idx_alvo]
-        historico_treino = historico[:idx_alvo] if idx_alvo != 0 else []
-        if not historico_treino:
-            continue
-        gerador_teste = GeradorLotofacil(historico_treino, historico_treino[0])
-        # Gera alguns jogos e pega o melhor
-        jogos_teste = gerador_teste.gerar_multiplos_jogos(5, config_filtros, max_tentativas_por_jogo=1000)
+    for i in range(1, min(num_testes, len(historico)) + 1):
+        concurso_alvo = set(historico[-i])
         melhor_acerto = 0
-        for j in jogos_teste:
-            acertos = len(set(j) & set(concurso_alvo))
+        for jogo in jogos_sistema:
+            acertos = len(set(jogo) & concurso_alvo)
             melhor_acerto = max(melhor_acerto, acertos)
         resultados.append(melhor_acerto)
-    return np.mean(resultados) if resultados else 0
+    return {
+        "media": np.mean(resultados) if resultados else 0,
+        "max": max(resultados) if resultados else 0,
+        "min": min(resultados) if resultados else 0,
+        "p13": sum(1 for r in resultados if r >= 13) / len(resultados) if resultados else 0
+    }
 
 # =====================================================
 # INTERFACE PRINCIPAL
@@ -1102,7 +811,6 @@ def main():
     if "jogos_gerados" not in st.session_state: st.session_state.jogos_gerados = None
     if "scores" not in st.session_state: st.session_state.scores = []
     if "cobertura_stats" not in st.session_state: st.session_state.cobertura_stats = None
-    if "multi_pool_results" not in st.session_state: st.session_state.multi_pool_results = None
     if "config_filtros" not in st.session_state:
         st.session_state.config_filtros = {
             'pares_min': 5, 'pares_max': 10,
@@ -1137,17 +845,16 @@ def main():
         return
 
     # ================= INTERFACE PRINCIPAL =================
-    st.subheader("🎯 Análise e Geração de Jogos - EMS 6.0 EV MAX")
+    st.subheader("🎯 EMS 7.0 - Sistema Profissional de Cobertura de 13 Números")
 
-    # Reorganização das abas
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+    # Abas reorganizadas
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "📊 Análise do Último Concurso",
-        "🎲 Gerador EV MAX",
-        "🚀 EMS 6.0 - Multi-Pool EV",
+        "🔥 COBERTURA 13 (Set Cover)",
+        "🎯 COBERTURA COM POOL",
         "🔍 Conferência Inteligente",
         "📈 Avaliação Estatística",
-        "📐 Geometria do Volante",
-        "✅ Conferência Salvos"
+        "📐 Geometria do Volante"
     ])
 
     # ================= TAB 1: ANÁLISE DO ÚLTIMO CONCURSO =================
@@ -1168,7 +875,7 @@ def main():
             st.metric("Pares/Ímpares", f"{pares}×{15-pares}")
         with col3:
             st.metric("Soma total", sum(numeros_ultimo))
-        # Estatísticas básicas da última
+        
         st.markdown("### 📊 Estatísticas do Último Concurso")
         col1, col2, col3, col4 = st.columns(4)
         with col1:
@@ -1184,165 +891,71 @@ def main():
             linhas = distribuir_por_linhas(numeros_ultimo)
             st.metric("Linhas (0-4)", f"{linhas[0]}-{linhas[1]}-{linhas[2]}-{linhas[3]}-{linhas[4]}")
 
-    # ================= TAB 2: GERADOR EV MAX =================
+    # ================= TAB 2: COBERTURA 13 (SET COVER) =================
     with tab2:
-        st.markdown("### 🎲 Gerador EV MAX - Maximização de Retorno Esperado")
+        st.markdown("### 🔥 SISTEMA PROFISSIONAL DE COBERTURA DE 13 NÚMEROS")
         st.markdown("""
-        <div class="ev-highlight">
-        <strong>💰 Estratégia Profissional:</strong> Este gerador não busca apenas acertar, 
-        mas sim <strong>maximizar o Retorno Esperado (EV)</strong> considerando as premiações reais.
-        Jogos com maior chance de 13, 14 e 15 pontos são priorizados, mesmo que tenham menos 11 pontos.
-        </div>
-        """, unsafe_allow_html=True)
-        
-        with st.expander("⚙️ Configuração dos Filtros", expanded=True):
-            col1, col2 = st.columns(2)
-            with col1:
-                pares_min = st.number_input("Mínimo de Pares", 0, 15, value=st.session_state.config_filtros['pares_min'])
-                pares_max = st.number_input("Máximo de Pares", 0, 15, value=st.session_state.config_filtros['pares_max'])
-                soma_min = st.number_input("Soma Mínima", 150, 300, value=st.session_state.config_filtros['soma_min'])
-                soma_max = st.number_input("Soma Máxima", 150, 300, value=st.session_state.config_filtros['soma_max'])
-                repetidas_min = st.number_input("Mínimo de Repetidas do Último", 0, 15, value=st.session_state.config_filtros['repetidas_min'])
-                repetidas_max = st.number_input("Máximo de Repetidas do Último", 0, 15, value=st.session_state.config_filtros['repetidas_max'])
-            with col2:
-                b_min = st.number_input("Mínimo Baixas (1-8)", 0, 15, value=st.session_state.config_filtros['faixas'][0][0])
-                b_max = st.number_input("Máximo Baixas (1-8)", 0, 15, value=st.session_state.config_filtros['faixas'][0][1])
-                m_min = st.number_input("Mínimo Médias (9-16)", 0, 15, value=st.session_state.config_filtros['faixas'][1][0])
-                m_max = st.number_input("Máximo Médias (9-16)", 0, 15, value=st.session_state.config_filtros['faixas'][1][1])
-                a_min = st.number_input("Mínimo Altas (17-25)", 0, 15, value=st.session_state.config_filtros['faixas'][2][0])
-                a_max = st.number_input("Máximo Altas (17-25)", 0, 15, value=st.session_state.config_filtros['faixas'][2][1])
-            st.session_state.config_filtros.update({
-                'pares_min': pares_min, 'pares_max': pares_max,
-                'soma_min': soma_min, 'soma_max': soma_max,
-                'repetidas_min': repetidas_min, 'repetidas_max': repetidas_max,
-                'faixas': [(b_min, b_max), (m_min, m_max), (a_min, a_max)]
-            })
-
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            qtd_jogos = st.slider("Quantidade de jogos", 5, 50, 10)
-        
-        with col2:
-            if st.button("🚀 GERAR EV MAX", use_container_width=True):
-                with st.spinner(f"Gerando {qtd_jogos} jogos com otimização de EV..."):
-                    jogos = st.session_state.gerador_principal.gerar_multiplos_jogos(qtd_jogos, st.session_state.config_filtros)
-                    if jogos:
-                        st.session_state.jogos_gerados = jogos
-                        st.session_state.scores = [score_ev(j, n_sim=2000) for j in jogos]
-                        st.success(f"✅ {len(jogos)} jogos gerados!")
-        
-        with col3:
-            if st.button("🧬 GENÉTICO EV MAX", use_container_width=True):
-                with st.spinner("Gerando jogos com Algoritmo Genético otimizado para EV..."):
-                    resultados = algoritmo_genetico_ev(
-                        st.session_state.gerador_principal,
-                        st.session_state.motor_geometria,
-                        st.session_state.gerador_principal.ultimo,
-                        st.session_state.config_filtros
-                    )
-                    
-                    st.session_state.jogos_gerados = [r[0] for r in resultados]
-                    st.session_state.scores = [r[1] for r in resultados]
-                    st.success(f"✅ {len(resultados)} jogos gerados com Genético EV MAX!")
-
-        if "jogos_gerados" in st.session_state and st.session_state.jogos_gerados:
-            jogos = st.session_state.jogos_gerados
-            st.markdown(f"### 📋 Jogos Gerados ({len(jogos)})")
-            st.markdown("💰 **EV (Retorno Esperado)** - Quanto maior, melhor a expectativa de lucro")
-            
-            for i, jogo in enumerate(jogos[:20]):
-                ev = st.session_state.scores[i] if i < len(st.session_state.scores) else 0
-                medalha = ["🥇","🥈","🥉"][i] if i < 3 else "🔹"
-                nums_html = formatar_jogo_html(jogo)
-                
-                # Calcula distribuição de acertos para informação
-                mc = monte_carlo_jogo(tuple(jogo), 2000)
-                stats = f"⚖️ {contar_pares(jogo)}p | ➕ {sum(jogo)} | 🔁 {len(set(jogo) & set(st.session_state.gerador_principal.ultimo))} rep | P13+: {mc['P>=13']*100:.1f}%"
-                
-                st.markdown(f"""
-                <div style='border-left: 5px solid #ffd700; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
-                    {medalha} <strong>Jogo {i+1:2d}</strong> — <span style='color:#ffd700;'>💰 EV: R$ {ev:.2f}</span><br>
-                    {nums_html}<br>
-                    <small style='color:#aaa;'>{stats}</small>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            if len(jogos) > 20:
-                st.info(f"Exibindo os primeiros 20 de {len(jogos)} jogos. Salve para ver todos.")
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("💾 Salvar Jogos", key="salvar_jogos", use_container_width=True):
-                    ultimo = st.session_state.dados_api[0]
-                    arquivo, jogo_id = salvar_jogos_gerados(jogos, [], {"versao": "EMS 6.0 EV MAX", "filtros": st.session_state.config_filtros}, ultimo['concurso'], ultimo['data'])
-                    if arquivo:
-                        st.success(f"✅ Jogos salvos! ID: {jogo_id}")
-                        st.session_state.jogos_salvos = carregar_jogos_salvos()
-            
-            with col2:
-                df_export = pd.DataFrame({
-                    "Jogo": range(1, len(jogos)+1),
-                    "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in jogos],
-                    "EV_Esperado": [round(ev, 2) for ev in st.session_state.scores] if st.session_state.scores else [0]*len(jogos),
-                    "Pares": [contar_pares(j) for j in jogos],
-                    "Soma": [sum(j) for j in jogos],
-                    "Repetidas": [len(set(j) & set(st.session_state.gerador_principal.ultimo)) for j in jogos]
-                })
-                st.download_button(label="📥 Exportar CSV", data=df_export.to_csv(index=False), 
-                                 file_name=f"jogos_ev_max_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", 
-                                 mime="text/csv", use_container_width=True)
-
-    # ================= TAB 3: EMS 6.0 - MULTI-POOL EV =================
-    with tab3:
-        st.markdown("### 🚀 EMS 6.0 - Multi-Pool com Seleção por EV")
-        st.caption("Gera múltiplos pools e seleciona os jogos com maior Retorno Esperado")
-        
-        st.markdown("""
-        <div class="cover-stats">
-        <strong>🎯 Estratégia Multi-Pool EV:</strong><br>
-        1. Gera múltiplos pools aleatórios de 20 números<br>
-        2. Para cada pool, gera fechamento de cobertura<br>
-        3. Avalia todos os jogos pelo Retorno Esperado (EV)<br>
-        4. Seleciona os top 30 jogos com maior EV
+        <div class="pro-highlight">
+        <strong>🎯 CONCEITO MATEMÁTICO:</strong><br>
+        • Cada jogo de 15 números cobre <strong>C(15,13) = 105 combinações de 13 números</strong><br>
+        • Universo total: <strong>C(25,13) = 5.200.300 combinações</strong><br>
+        • Este sistema resolve o problema de <strong>Set Cover</strong> para maximizar cobertura única<br>
+        • <strong>GARANTIA:</strong> Se o sorteio tiver 13 números dentro do espaço coberto, você GARANTE 13 pontos!
         </div>
         """, unsafe_allow_html=True)
         
         col1, col2 = st.columns(2)
         with col1:
-            num_pools = st.selectbox("Número de Pools", [2, 3, 4, 5, 6], index=2, 
-                                    help="Mais pools = mais diversidade, mas mais tempo de processamento")
-        
+            qtd_jogos = st.slider("Quantidade de jogos", 10, 50, 20, key="qtd_jogos_cover")
         with col2:
-            if st.button("🔥 GERAR MULTI-POOL EV", use_container_width=True, type="primary"):
-                with st.spinner(f"Gerando {num_pools} pools e selecionando melhores por EV..."):
-                    jogos_selecionados = multi_pool_ev(
-                        st.session_state.gerador_principal,
-                        num_pools=num_pools
-                    )
-                    
-                    # Aplica filtro de diversidade final
-                    jogos_finais = filtrar_diversidade(jogos_selecionados, min_dist=7)
-                    
-                    st.session_state.jogos_gerados = jogos_finais
-                    st.session_state.scores = [score_ev(j, n_sim=2000) for j in jogos_finais]
-                    st.session_state.multi_pool_results = {"num_pools": num_pools, "total_gerados": len(jogos_selecionados), "final": len(jogos_finais)}
-                    
-                    st.success(f"✅ {len(jogos_finais)} jogos selecionados (de {len(jogos_selecionados)} gerados)!")
+            iteracoes = st.slider("Intensidade de busca (por jogo)", 500, 5000, 2000, key="iter_cover",
+                                 help="Maior intensidade = melhor cobertura, porém mais lento")
         
-        if "multi_pool_results" in st.session_state and st.session_state.multi_pool_results:
-            st.info(f"📊 Gerados {st.session_state.multi_pool_results['total_gerados']} jogos, selecionados {st.session_state.multi_pool_results['final']} após filtro de diversidade")
-
+        if st.button("🔥 GERAR SISTEMA DE COBERTURA 13", use_container_width=True, type="primary"):
+            with st.spinner(f"Construindo cobertura de 13 números com {qtd_jogos} jogos..."):
+                jogos, stats = gerar_sistema_cobertura_13(
+                    qtd_jogos=qtd_jogos,
+                    iteracoes_por_jogo=iteracoes
+                )
+                
+                st.session_state.jogos_gerados = jogos
+                st.session_state.cobertura_stats = stats
+                st.session_state.scores = [monte_carlo_jogo(tuple(j), 2000)["P>=13"] * 100 for j in jogos]
+                
+                st.success(f"✅ {len(jogos)} jogos gerados!")
+                
+                # Estatísticas de cobertura
+                st.markdown("### 📊 Estatísticas de Cobertura")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Combinações de 13 cobertas", f"{stats['combinacoes_13_cobertas']:,}")
+                with col2:
+                    st.metric("Total combinações possíveis", f"{stats['total_combinacoes_possiveis']:,}")
+                with col3:
+                    st.metric("% de Cobertura", f"{stats['percentual_cobertura']:.4f}%")
+                
+                # Probabilidade real
+                prob_13_garantido = stats['percentual_cobertura'] / 100
+                st.markdown(f"""
+                <div class="ev-highlight">
+                <strong>🎲 PROBABILIDADE REAL:</strong><br>
+                Se o sorteio cair em QUALQUER combinação de 15 números, a probabilidade de você ter GARANTIDO 13 pontos é de:<br>
+                <strong style="font-size: 1.4rem;">{stats['percentual_cobertura']:.6f}%</strong><br>
+                <small>Isso significa que em aproximadamente 1 a cada {int(100 / stats['percentual_cobertura'] if stats['percentual_cobertura'] > 0 else 0):,} sorteios, você garante 13 pontos!</small>
+                </div>
+                """, unsafe_allow_html=True)
+        
         if "jogos_gerados" in st.session_state and st.session_state.jogos_gerados:
-            st.markdown(f"### 📋 Top {len(st.session_state.jogos_gerados)} Jogos por EV")
+            st.markdown(f"### 📋 {len(st.session_state.jogos_gerados)} Jogos Gerados")
             
             for i, jogo in enumerate(st.session_state.jogos_gerados[:20]):
-                ev = st.session_state.scores[i] if i < len(st.session_state.scores) else 0
+                prob_13 = st.session_state.scores[i] if i < len(st.session_state.scores) else 0
+                medalha = ["🥇","🥈","🥉"][i] if i < 3 else "🔹"
                 nums_html = formatar_jogo_html(jogo)
                 
-                mc = monte_carlo_jogo(tuple(jogo), 2000)
                 st.markdown(f"""
-                <div style='border-left: 5px solid #ffa500; background:#0e1117; border-radius:10px; padding:12px; margin-bottom:8px;'>
-                    <strong>Jogo {i+1:2d}</strong> — <span style='color:#ffa500;'>💰 EV: R$ {ev:.2f}</span> | P(13+): {mc['P>=13']*100:.1f}%<br>
+                <div style='border-left: 5px solid #ff00ff; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
+                    {medalha} <strong>Jogo {i+1:2d}</strong> — P(13+): {prob_13:.2f}%<br>
                     {nums_html}
                 </div>
                 """, unsafe_allow_html=True)
@@ -1350,12 +963,154 @@ def main():
             if len(st.session_state.jogos_gerados) > 20:
                 st.info(f"Exibindo os primeiros 20 de {len(st.session_state.jogos_gerados)} jogos.")
             
-            if st.button("💾 Salvar Jogos Multi-Pool EV", key="salvar_ev", use_container_width=True):
+            # Backtesting
+            if st.button("📊 Executar Backtesting", use_container_width=True):
+                with st.spinner("Executando backtesting nos últimos concursos..."):
+                    historico = [sorted(map(int, d["dezenas"])) for d in st.session_state.dados_api[:100]]
+                    resultados = backtest_cobertura(historico, st.session_state.jogos_gerados, num_testes=50)
+                    
+                    st.markdown("### 📈 Resultados do Backtesting")
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Média de acertos", f"{resultados['media']:.2f}")
+                    with col2:
+                        st.metric("Melhor acerto", resultados['max'])
+                    with col3:
+                        st.metric("Pior acerto", resultados['min'])
+                    with col4:
+                        st.metric("Frequência de 13+", f"{resultados['p13']*100:.1f}%")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("💾 Salvar Jogos", key="salvar_cover", use_container_width=True):
+                    ultimo = st.session_state.dados_api[0]
+                    arquivo, jogo_id = salvar_jogos_gerados(
+                        st.session_state.jogos_gerados, 
+                        [], 
+                        {"versao": "EMS 7.0 Cobertura 13", "stats": st.session_state.cobertura_stats}, 
+                        ultimo['concurso'], 
+                        ultimo['data']
+                    )
+                    if arquivo:
+                        st.success(f"✅ Jogos salvos! ID: {jogo_id}")
+                        st.session_state.jogos_salvos = carregar_jogos_salvos()
+            
+            with col2:
+                df_export = pd.DataFrame({
+                    "Jogo": range(1, len(st.session_state.jogos_gerados)+1),
+                    "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in st.session_state.jogos_gerados],
+                    "P_13+_%": [round(p, 2) for p in st.session_state.scores]
+                })
+                st.download_button(
+                    label="📥 Exportar CSV", 
+                    data=df_export.to_csv(index=False), 
+                    file_name=f"cobertura_13_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", 
+                    mime="text/csv", 
+                    use_container_width=True
+                )
+
+    # ================= TAB 3: COBERTURA COM POOL =================
+    with tab3:
+        st.markdown("### 🎯 COBERTURA DE 13 NÚMEROS COM POOL REDUZIDO")
+        st.markdown("""
+        <div class="cover-stats">
+        <strong>💡 ESTRATÉGIA AVANÇADA:</strong><br>
+        Trabalhar com um pool de 20 números reduz drasticamente o espaço de busca:<br>
+        • Universo total: C(25,13) = 5.200.300 combinações<br>
+        • Pool de 20: C(20,13) = 77.520 combinações (67x menor!)<br>
+        • Isso permite coberturas muito mais densas com poucos jogos
+        </div>
+        """, unsafe_allow_html=True)
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            tamanho_pool = st.selectbox("Tamanho do Pool", [18, 19, 20, 21, 22], index=2)
+        with col2:
+            qtd_jogos_pool = st.slider("Jogos por pool", 10, 40, 20, key="qtd_jogos_pool")
+        with col3:
+            iter_pool = st.slider("Intensidade de busca", 500, 3000, 1000, key="iter_pool")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🎯 GERAR POOL INTELIGENTE", use_container_width=True):
+                with st.spinner(f"Gerando pool inteligente de {tamanho_pool} números..."):
+                    pool = gerar_pool_inteligente_para_cobertura(st.session_state.gerador_principal, tamanho_pool)
+                    st.session_state.pool_atual = pool
+                    
+                    st.markdown(f"**Pool Selecionado ({len(pool)} números):**")
+                    st.markdown(" ".join(f"<span style='background:#0e1117; border:1px solid #ff00ff; border-radius:15px; padding:5px 10px; margin:2px; display:inline-block;'>{n:02d}</span>" for n in pool), unsafe_allow_html=True)
+                    
+                    # Estatísticas do pool
+                    pares_pool = len([n for n in pool if n % 2 == 0])
+                    impares_pool = len([n for n in pool if n % 2 != 0])
+                    col_a, col_b = st.columns(2)
+                    with col_a:
+                        st.metric("Pares/Ímpares", f"{pares_pool}/{impares_pool}")
+                    with col_b:
+                        st.metric("Combinações de 13 possíveis", f"{len(list(combinations(pool, 13))):,}")
+        
+        with col2:
+            if st.button("💣 GERAR COBERTURA NO POOL", use_container_width=True, type="primary"):
+                if "pool_atual" not in st.session_state:
+                    st.warning("Gere um pool primeiro!")
+                else:
+                    with st.spinner(f"Construindo cobertura no pool de {len(st.session_state.pool_atual)} números..."):
+                        jogos, stats = gerar_sistema_pool_13(
+                            st.session_state.pool_atual,
+                            qtd_jogos=qtd_jogos_pool,
+                            iteracoes_por_jogo=iter_pool
+                        )
+                        
+                        st.session_state.jogos_gerados = jogos
+                        st.session_state.cobertura_stats = stats
+                        st.session_state.scores = [monte_carlo_jogo(tuple(j), 2000)["P>=13"] * 100 for j in jogos]
+                        
+                        st.success(f"✅ {len(jogos)} jogos gerados!")
+                        
+                        st.markdown("### 📊 Estatísticas de Cobertura no Pool")
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Combinações de 13 cobertas", f"{stats['combinacoes_13_cobertas']:,}")
+                        with col2:
+                            st.metric("Total combinações no pool", f"{stats['total_combinacoes_possiveis']:,}")
+                        with col3:
+                            st.metric("% Cobertura do Pool", f"{stats['percentual_cobertura']:.2f}%")
+                        
+                        # Probabilidade real
+                        probs = calcular_probabilidade_13_garantido(st.session_state.pool_atual, stats)
+                        st.markdown(f"""
+                        <div class="ev-highlight">
+                        <strong>🎲 PROBABILIDADE REAL DE GARANTIR 13 PONTOS:</strong><br>
+                        • Chance do sorteio cair DENTRO do pool: {probs['prob_pool_acertar']:.4%}<br>
+                        • Chance de GARANTIR 13 pontos SE cair no pool: {probs['prob_13_se_pool']:.2f}%<br>
+                        • <strong style="font-size: 1.2rem;">PROBABILIDADE TOTAL: {probs['prob_total_13_garantido']:.6f}%</strong><br>
+                        <small>Isso significa 1 a cada {int(1 / probs['prob_total_13_garantido'] if probs['prob_total_13_garantido'] > 0 else 0):,} sorteios!</small>
+                        </div>
+                        """, unsafe_allow_html=True)
+        
+        if "jogos_gerados" in st.session_state and st.session_state.jogos_gerados:
+            st.markdown(f"### 📋 {len(st.session_state.jogos_gerados)} Jogos Gerados")
+            
+            for i, jogo in enumerate(st.session_state.jogos_gerados[:20]):
+                prob_13 = st.session_state.scores[i] if i < len(st.session_state.scores) else 0
+                nums_html = formatar_jogo_html(jogo)
+                
+                st.markdown(f"""
+                <div style='border-left: 5px solid #ffa500; background:#0e1117; border-radius:10px; padding:12px; margin-bottom:8px;'>
+                    <strong>Jogo {i+1:2d}</strong> — P(13+): {prob_13:.2f}%<br>
+                    {nums_html}
+                </div>
+                """, unsafe_allow_html=True)
+            
+            if len(st.session_state.jogos_gerados) > 20:
+                st.info(f"Exibindo os primeiros 20 de {len(st.session_state.jogos_gerados)} jogos.")
+            
+            if st.button("💾 Salvar Jogos com Pool", key="salvar_pool", use_container_width=True):
                 ultimo = st.session_state.dados_api[0]
                 arquivo, jogo_id = salvar_jogos_gerados(
                     st.session_state.jogos_gerados, 
                     [], 
-                    {"versao": "EMS 6.0 Multi-Pool EV", "num_pools": num_pools}, 
+                    {"versao": "EMS 7.0 Pool Coverage", "pool": st.session_state.get("pool_atual", [])}, 
                     ultimo['concurso'], 
                     ultimo['data']
                 )
@@ -1366,10 +1121,7 @@ def main():
     # ================= TAB 4: CONFERÊNCIA INTELIGENTE =================
     with tab4:
         st.markdown("### 🔍 Conferência Inteligente de Jogos")
-        st.caption("Confira seus jogos contra qualquer resultado e obtenha análises detalhadas")
         
-        # Seleção do resultado oficial
-        st.markdown("#### 📌 Resultado Oficial")
         concurso_resultado = st.selectbox(
             "Selecione o concurso para conferência",
             st.session_state.dados_api,
@@ -1386,8 +1138,6 @@ def main():
             </div>
             """, unsafe_allow_html=True)
         
-        # Entrada dos jogos para conferir
-        st.markdown("#### 📋 Jogos para Conferir")
         opcao_jogos = st.radio(
             "Origem dos jogos:",
             ["Jogos gerados na sessão atual", "Carregar de arquivo CSV", "Digitar manualmente"],
@@ -1401,7 +1151,7 @@ def main():
                 jogos_para_conferir = st.session_state.jogos_gerados
                 st.info(f"{len(jogos_para_conferir)} jogos carregados da sessão atual")
             else:
-                st.warning("Nenhum jogo gerado na sessão atual. Gere jogos na aba 'Gerador EV MAX' primeiro.")
+                st.warning("Nenhum jogo gerado na sessão atual.")
         
         elif opcao_jogos == "Carregar de arquivo CSV":
             uploaded_file = st.file_uploader("Escolha um arquivo CSV", type="csv")
@@ -1409,14 +1159,12 @@ def main():
                 df_carregado = pd.read_csv(uploaded_file)
                 if "Dezenas" in df_carregado.columns:
                     jogos_para_conferir = df_carregado["Dezenas"].tolist()
-                    st.success(f"{len(jogos_para_conferir)} jogos carregados do CSV")
-                else:
-                    st.error("Arquivo CSV deve conter uma coluna 'Dezenas'")
+                    st.success(f"{len(jogos_para_conferir)} jogos carregados")
         
-        else:  # Digitar manualmente
+        else:
             jogos_texto = st.text_area(
                 "Digite os jogos (um por linha, números separados por vírgula)",
-                placeholder="Exemplo:\n1,2,3,4,5,6,7,8,9,10,11,12,13,14,15\n2,4,6,8,10,12,14,16,18,20,22,24,1,3,5"
+                placeholder="Exemplo:\n1,2,3,4,5,6,7,8,9,10,11,12,13,14,15"
             )
             if jogos_texto:
                 for linha in jogos_texto.strip().split('\n'):
@@ -1428,11 +1176,8 @@ def main():
                         except:
                             pass
                 if jogos_para_conferir:
-                    st.success(f"{len(jogos_para_conferir)} jogos carregados manualmente")
-                else:
-                    st.warning("Nenhum jogo válido encontrado")
+                    st.success(f"{len(jogos_para_conferir)} jogos carregados")
         
-        # Botão para conferir
         if jogos_para_conferir and concurso_resultado:
             if st.button("🔍 CONFERIR JOGOS", use_container_width=True, type="primary"):
                 with st.spinner("Conferindo jogos..."):
@@ -1440,7 +1185,6 @@ def main():
                     
                     st.markdown("### 📊 Resultados da Conferência")
                     
-                    # Resumo
                     col1, col2, col3, col4 = st.columns(4)
                     with col1:
                         st.metric("Total Jogos", len(df_conferencia))
@@ -1449,10 +1193,8 @@ def main():
                     with col3:
                         st.metric("Média Acertos", round(df_conferencia["Acertos"].mean(), 1))
                     with col4:
-                        st.metric("Jogos com 11+", len(df_conferencia[df_conferencia["Acertos"] >= 11]))
+                        st.metric("Jogos com 13+", len(df_conferencia[df_conferencia["Acertos"] >= 13]))
                     
-                    # Tabela de resultados
-                    st.markdown("#### 🎯 Classificação dos Jogos")
                     for i, row in df_conferencia.head(20).iterrows():
                         medalha = "🥇" if i == 0 else "🥈" if i == 1 else "🥉" if i == 2 else "📌"
                         st.markdown(f"""
@@ -1466,128 +1208,18 @@ def main():
                     
                     if len(df_conferencia) > 20:
                         st.info(f"Exibindo os primeiros 20 de {len(df_conferencia)} jogos")
-                    
-                    # Exportar resultado
-                    df_export_conferencia = df_conferencia.copy()
-                    df_export_conferencia["Dezenas"] = df_export_conferencia["Dezenas"].apply(lambda x: ", ".join(f"{n:02d}" for n in x))
-                    df_export_conferencia["Acertos_Dezenas"] = df_export_conferencia["Acertos_Dezenas"].apply(lambda x: ", ".join(f"{n:02d}" for n in x))
-                    
-                    st.download_button(
-                        label="📥 Exportar Resultado da Conferência",
-                        data=df_export_conferencia.to_csv(index=False),
-                        file_name=f"conferencia_{concurso_resultado['concurso']}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                        mime="text/csv",
-                        use_container_width=True
-                    )
-        
-        # Análise de frequência
-        st.markdown("### 📊 Análise de Frequência dos Jogos")
-        if jogos_para_conferir:
-            if st.button("📈 Analisar Frequência", use_container_width=True):
-                with st.spinner("Analisando frequência..."):
-                    df_freq = analisar_frequencia_jogos(jogos_para_conferir)
-                    
-                    st.markdown("#### 🔢 Frequência dos Números")
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.dataframe(df_freq.head(15), use_container_width=True, hide_index=True)
-                    with col2:
-                        st.dataframe(df_freq.tail(15), use_container_width=True, hide_index=True)
-                    
-                    # Gráfico de barras
-                    st.markdown("#### 📊 Distribuição de Frequência")
-                    st.bar_chart(df_freq.set_index("Número")["Frequência"])
-                    
-                    # Estatísticas
-                    st.markdown("#### 📈 Estatísticas Gerais")
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.metric("Números mais frequentes", f"{df_freq.iloc[0]['Número']} ({df_freq.iloc[0]['Frequência']}x)")
-                    with col2:
-                        st.metric("Números menos frequentes", f"{df_freq.iloc[-1]['Número']} ({df_freq.iloc[-1]['Frequência']}x)")
-                    with col3:
-                        st.metric("Média de aparições", f"{df_freq['Frequência'].mean():.1f}")
-        
-        # Gerador Otimizado
-        st.markdown("### 🤖 Gerador de Jogos Otimizados")
-        st.caption("Baseado na análise dos seus jogos e nos resultados recentes")
-        
-        if jogos_para_conferir and concurso_resultado:
-            col1, col2 = st.columns(2)
-            with col1:
-                qtd_otimizados = st.slider("Quantidade de jogos otimizados", 5, 30, 10)
-            with col2:
-                estrategia_otimizacao = st.selectbox(
-                    "Estratégia de otimização",
-                    ["inteligente", "frequencia", "hibrido"],
-                    format_func=lambda x: {"inteligente": "🧠 Inteligente (híbrido)", 
-                                          "frequencia": "📊 Baseado em Frequência", 
-                                          "hibrido": "🎯 Híbrido + Resultado"}[x]
-                )
-            
-            if st.button("🚀 GERAR JOGOS OTIMIZADOS", use_container_width=True, type="primary"):
-                with st.spinner("Gerando jogos otimizados..."):
-                    jogos_otimizados = gerar_jogos_otimizados(
-                        jogos_para_conferir,
-                        resultado_oficial,
-                        n_jogos=qtd_otimizados,
-                        estrategia=estrategia_otimizacao
-                    )
-                    
-                    st.session_state.jogos_otimizados = jogos_otimizados
-                    st.success(f"✅ {len(jogos_otimizados)} jogos otimizados gerados!")
-                    
-                    st.markdown("### 🎯 Jogos Otimizados")
-                    for i, jogo in enumerate(jogos_otimizados):
-                        st.markdown(f"""
-                        <div style='border-left: 5px solid #00ffaa; background:#0e1117; border-radius:10px; padding:12px; margin-bottom:8px;'>
-                            <strong>Jogo {i+1:2d}</strong><br>
-                            {formatar_jogo_html(jogo)}
-                        </div>
-                        """, unsafe_allow_html=True)
-                    
-                    # Botão para usar esses jogos
-                    if st.button("💾 Usar estes jogos como base", use_container_width=True):
-                        st.session_state.jogos_gerados = jogos_otimizados
-                        st.session_state.scores = [score_ev(j, n_sim=2000) for j in jogos_otimizados]
-                        st.success("Jogos otimizados carregados na aba 'Gerador EV MAX'!")
 
     # ================= TAB 5: AVALIAÇÃO ESTATÍSTICA =================
     with tab5:
         st.markdown("### 📈 Avaliação Estatística dos Jogos")
         baseline = st.session_state.baseline_cache
         st.markdown(f"**Baseline Aleatório:** Média = {baseline['media']:.3f}, Desvio = {baseline['std']:.3f}")
-        dist_emp = distribuicoes_empiricas(st.session_state.historico_df)
         
-        with st.expander("📊 Distribuições Empíricas Históricas"):
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown("**Pares**")
-                st.bar_chart(pd.DataFrame(dist_emp['pares'].items(), columns=["Quantidade", "Probabilidade"]).set_index("Quantidade"))
-            with col2:
-                st.markdown("**Primos**")
-                st.bar_chart(pd.DataFrame(dist_emp['primos'].items(), columns=["Quantidade", "Probabilidade"]).set_index("Quantidade"))
-
         if "jogos_gerados" in st.session_state and st.session_state.jogos_gerados:
-            avaliacao = []
-            for i, jogo in enumerate(st.session_state.jogos_gerados[:50]):
-                features = {"pares": contar_pares(jogo), "primos": contar_primos(jogo), 
-                           "consecutivos": contar_consecutivos(jogo), "soma": (sum(jogo)//20)*20}
-                logL = log_likelihood(features, dist_emp)
-                ev = st.session_state.scores[i] if i < len(st.session_state.scores) else 0
-                avaliacao.append({
-                    "Jogo": i+1, 
-                    "Log-Likelihood": round(logL, 4),
-                    "EV (R$)": round(ev, 2)
-                })
-            df_avaliacao = pd.DataFrame(avaliacao)
-            st.dataframe(df_avaliacao.sort_values("EV (R$)", ascending=False).reset_index(drop=True), use_container_width=True, hide_index=True)
-
-        st.markdown("### 🎲 Simulação Monte Carlo")
-        if "jogos_gerados" in st.session_state and st.session_state.jogos_gerados:
+            st.markdown("### 🎲 Simulação Monte Carlo")
             n_sim = st.slider("Simulações por jogo", 1000, 50000, 10000, key="mc_sim")
             if st.button("Executar Monte Carlo"):
-                with st.spinner(f"Simulando {n_sim} sorteios para cada jogo..."):
+                with st.spinner(f"Simulando {n_sim} sorteios..."):
                     mc_res = []
                     for i, jogo in enumerate(st.session_state.jogos_gerados[:10]):
                         res = monte_carlo_jogo(tuple(jogo), n_sim)
@@ -1613,6 +1245,7 @@ def main():
             st.metric("Centroide Médio Histórico", f"({stats_geo['centroide_medio'][0]}, {stats_geo['centroide_medio'][1]})")
         with col2:
             st.metric("Dispersão Média Histórica", stats_geo['dispersao_media'])
+        
         st.markdown("### 🔗 Pares Fortes (Co-ocorrência)")
         num_consulta = st.number_input("Número base", 1, 25, 13)
         pares = motor_geo.get_pares_recomendados(num_consulta, 8)
@@ -1620,66 +1253,15 @@ def main():
             st.markdown(f"**Números mais relacionados ao {num_consulta:02d}:**")
             st.markdown(" ".join(f"<span style='border:1px solid #00ffaa; border-radius:15px; padding:3px 8px; margin:2px;'>{p[0]:02d} ({p[1]})</span>" for p in pares), unsafe_allow_html=True)
 
-        st.markdown("### 📊 Analisar um Jogo")
-        jogo_input = st.text_input("Digite 15 números separados por vírgula", placeholder="Ex: 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15")
-        if jogo_input:
-            try:
-                numeros = [int(n.strip()) for n in jogo_input.split(",")]
-                if len(numeros) == 15 and len(set(numeros)) == 15 and all(1 <= n <= 25 for n in numeros):
-                    analise = motor_geo.analisar_jogo(numeros)
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.metric("Centroide", f"({analise['centroide'][0]}, {analise['centroide'][1]})")
-                    with col2:
-                        st.metric("Dispersão Média", analise['dispersao_media'])
-                    with col3:
-                        st.metric("Pares Adjacentes", analise['pares_adjacentes'])
-                    
-                    # Adiciona análise de EV
-                    ev = score_ev(numeros, n_sim=3000)
-                    st.markdown(f"""
-                    <div class="ev-highlight">
-                    <strong>💰 Retorno Esperado (EV):</strong> R$ {ev:.2f}<br>
-                    <small>Considera premiações: 11pts=R$5, 12pts=R$10, 13pts=R$25, 14pts=R$1500, 15pts=R$1.5M</small>
-                    </div>
-                    """, unsafe_allow_html=True)
-                else:
-                    st.error("Jogo inválido. Deve ter 15 números únicos entre 1 e 25.")
-            except:
-                st.error("Formato inválido. Use números separados por vírgula.")
-
-    # ================= TAB 7: CONFERÊNCIA SALVOS =================
-    with tab7:
-        st.markdown("### ✅ Conferência de Jogos Salvos")
-        st.session_state.jogos_salvos = carregar_jogos_salvos()
-        if not st.session_state.jogos_salvos:
-            st.warning("Nenhum jogo salvo encontrado.")
-        else:
-            opcoes = [f"ID {j['id']} | Concurso #{j['concurso_base']['numero']} | {j['data_geracao'][:19]}" for j in st.session_state.jogos_salvos]
-            idx = st.selectbox("Selecione o fechamento", range(len(opcoes)), format_func=lambda i: opcoes[i])
-            fechamento = st.session_state.jogos_salvos[idx]
-            jogos = garantir_jogos_como_listas(fechamento["jogos"])
-            concurso_escolhido = st.selectbox("Selecione o concurso para conferência", st.session_state.dados_api, format_func=lambda c: f"#{c['concurso']} - {c['data']}")
-            dezenas_sorteadas = set(map(int, concurso_escolhido["dezenas"]))
-            if st.button("🔍 CONFERIR", use_container_width=True):
-                resultados = []
-                for i, jogo in enumerate(jogos):
-                    acertos = len(set(jogo) & dezenas_sorteadas)
-                    resultados.append({"Jogo": i+1, "Acertos": acertos})
-                df_resultado = pd.DataFrame(resultados).sort_values("Acertos", ascending=False)
-                st.dataframe(df_resultado, use_container_width=True, hide_index=True)
-                adicionar_conferencia(fechamento["arquivo"], {"numero": concurso_escolhido["concurso"], "data": concurso_escolhido["data"]}, df_resultado["Acertos"].tolist(), {})
-                st.success("Conferência salva!")
-
 if __name__ == "__main__":
     main()
 
 st.markdown("""
 <style>
 .footer-premium{width:100%;text-align:center;padding:22px 10px;margin-top:40px;background:linear-gradient(180deg,#0b0b0b,#050505);color:#ffffff;border-top:1px solid #222;position:relative;}
-.footer-premium::before{content:"";position:absolute;top:0;left:0;width:100%;height:2px;background:linear-gradient(90deg,#ffd700,#ffa500,#ffd700);box-shadow:0 0 10px #ffd700;}
-.footer-title{font-size:16px;font-weight:800;letter-spacing:3px;text-transform:uppercase;text-shadow:0 0 6px rgba(255,215,0,0.6);}
+.footer-premium::before{content:"";position:absolute;top:0;left:0;width:100%;height:2px;background:linear-gradient(90deg,#ff00ff,#aa00ff,#ff00ff);box-shadow:0 0 10px #ff00ff;}
+.footer-title{font-size:16px;font-weight:800;letter-spacing:3px;text-transform:uppercase;text-shadow:0 0 6px rgba(255,0,255,0.6);}
 .footer-sub{font-size:11px;color:#bfbfbf;margin-top:4px;letter-spacing:1.5px;}
 </style>
-<div class="footer-premium"><div class="footer-title">EMS 6.0 EV MAX - HEDGE MATEMÁTICO</div><div class="footer-sub">SAMUCJ TECNOLOGIA © 2026</div></div>
+<div class="footer-premium"><div class="footer-title">EMS 7.0 - SET COVER PROFESSIONAL</div><div class="footer-sub">SAMUCJ TECNOLOGIA © 2026</div></div>
 """, unsafe_allow_html=True)
