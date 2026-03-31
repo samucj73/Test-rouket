@@ -19,6 +19,7 @@ import statistics
 from collections import defaultdict
 import shutil
 import hashlib
+import random  # 🔧 IMPORT ADICIONADO
 
 
 # =============================
@@ -3468,7 +3469,7 @@ class PosterGenerator:
 
 
 # =============================
-# CLASSE RESULTADOS TOP ALERTAS (MODIFICADA COM NOVA CLASSIFICAÇÃO)
+# CLASSE RESULTADOS TOP ALERTAS
 # =============================
 
 class ResultadosTopAlertas:
