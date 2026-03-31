@@ -6459,7 +6459,6 @@ def render_tab_multiplas_pro(sistema):
     with col2:
         usar_anti_armadilha = st.checkbox("🛡️ Ativar Filtro Anti-Armadilha", value=True)
 
-    # Opção de formato para múltiplas
     st.markdown("### 📨 Opções de Envio")
     col_f1, col_f2 = st.columns(2)
     with col_f1:
@@ -6599,6 +6598,16 @@ def render_tab_multiplas_pro(sistema):
             st.markdown("### 💣 MÚLTIPLAS GERADAS")
             for idx, (tipo, jogos_mult) in enumerate(multiplas):
                 odd_total = calcular_odd_total(jogos_mult)
+                
+                # Calcular contagens de Over 1.5 e Over 2.5
+                over_1_5_count = 0
+                over_2_5_count = 0
+                for j in jogos_mult:
+                    if "OVER 1.5" in j.get('mercado', '').upper():
+                        over_1_5_count += 1
+                    elif "OVER 2.5" in j.get('mercado', '').upper():
+                        over_2_5_count += 1
+                
                 with st.expander(f"{tipo} (Odds Total: {odd_total:.2f})"):
                     for j in jogos_mult:
                         st.write(f"   {j['jogo']} → {j['mercado']} ({j['odd']:.2f}) | Score: {j['score']}")
@@ -6618,9 +6627,38 @@ def render_tab_multiplas_pro(sistema):
                             st.success(f"📤 Múltipla {tipo} enviada como texto!")
                     
                     if formato_multipla in ["Pôster West Ham", "Ambos"]:
-                        # CORREÇÃO: Usar o método correto gerar_poster_multipla
+                        # Construir estrutura completa de múltipla para o pôster
+                        multipla_struct = {
+                            "modelo": tipo,
+                            "odd_total": odd_total,
+                            "jogos": [],
+                            "over_1.5_count": over_1_5_count,
+                            "over_2.5_count": over_2_5_count,
+                            "risco": "MÉDIO",
+                            "taxa_acerto_esperada": "ALTA",
+                            "recomendacao": "Múltipla gerada automaticamente"
+                        }
+                        
+                        # Adicionar jogos à estrutura
+                        for j in jogos_mult:
+                            jogo_dict = {
+                                "home": j['jogo'].split(' vs ')[0] if ' vs ' in j['jogo'] else j['jogo'],
+                                "away": j['jogo'].split(' vs ')[1] if ' vs ' in j['jogo'] else '',
+                                "tendencia": j['mercado'],
+                                "probabilidade": 100 / j['odd'] if j['odd'] > 0 else 65,
+                                "classificacao": {
+                                    "tipo": "over_1.5" if "OVER 1.5" in j['mercado'].upper() else "over_2.5",
+                                    "estimativa": j.get('score', 70) / 10,
+                                    "confianca": j.get('score', 70)
+                                },
+                                "escudo_home": j.get('escudo_home', ''),
+                                "escudo_away": j.get('escudo_away', ''),
+                                "liga": j.get('liga', 'Desconhecida')
+                            }
+                            multipla_struct["jogos"].append(jogo_dict)
+                        
                         poster = sistema.poster_generator.gerar_poster_multipla(
-                            {"modelo": tipo, "odd_total": odd_total, "jogos": jogos_mult},
+                            multipla_struct,
                             titulo=f"📅 {data_br_str}"
                         )
                         caption = f"<b>💣 MÚLTIPLA PROFISSIONAL - {tipo}</b>\n"
