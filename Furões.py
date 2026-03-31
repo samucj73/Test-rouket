@@ -6423,6 +6423,7 @@ class SistemaAlertasFutebol:
         return arquivos_removidos
 
 
+#def render_tab_multiplas_pro(sistema):
 def render_tab_multiplas_pro(sistema):
     st.subheader("🧠 MÚLTIPLAS PRO - SISTEMA AUTÔNOMO")
     st.caption("Gera múltiplas inteligentes com score de qualidade, filtro anti-armadilha e balanceamento de risco.")
@@ -6617,7 +6618,11 @@ def render_tab_multiplas_pro(sistema):
                             st.success(f"📤 Múltipla {tipo} enviada como texto!")
                     
                     if formato_multipla in ["Pôster West Ham", "Ambos"]:
-                        poster = sistema.poster_generator.gerar_poster_multipla_com_personalizada(jogos_mult, tipo, odd_total, data_br_str)
+                        # CORREÇÃO: Usar o método correto gerar_poster_multipla
+                        poster = sistema.poster_generator.gerar_poster_multipla(
+                            {"modelo": tipo, "odd_total": odd_total, "jogos": jogos_mult},
+                            titulo=f"📅 {data_br_str}"
+                        )
                         caption = f"<b>💣 MÚLTIPLA PROFISSIONAL - {tipo}</b>\n"
                         caption += f"<b>📅 {data_br_str}</b>\n"
                         caption += f"<b>🎯 Odds Total: {odd_total:.2f}</b>\n\n"
@@ -6627,6 +6632,7 @@ def render_tab_multiplas_pro(sistema):
                             st.success(f"📤 Múltipla {tipo} enviada como pôster!")
 
             st.success("✅ Processamento concluído!")
+    
 
 
 def render_tab_busca(sistema):
