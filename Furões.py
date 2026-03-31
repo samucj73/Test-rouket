@@ -19,8 +19,7 @@ import statistics
 from collections import defaultdict
 import shutil
 import hashlib
-import random  # <-- IMPORT ADICIONADA
-
+import random
 
 # =============================
 # [NOVA] FUNÇÕES DO SISTEMA AUTÔNOMO PRO
@@ -41,7 +40,6 @@ class SistemaApostasPro:
         est = alerta['estimativa']
         prob = alerta['probabilidade']
 
-        # FLIP INTELIGENTE
         if est >= 2.5 and prob >= 65:
             return "OVER 2.5", 1.90
         elif est >= 2.1:
@@ -65,13 +63,11 @@ class SistemaApostasPro:
         for alerta in self.alerts:
             score = self.calcular_score(alerta)
 
-            # Filtro mínimo
             if score < 70:
                 continue
 
             mercado, odd = self.classificar_mercado(alerta)
 
-            # Anti-armadilha
             ajuste = self.filtro_armadilha(alerta)
             if ajuste:
                 mercado = ajuste
@@ -111,17 +107,14 @@ def separar_por_nivel(jogos):
 def gerar_multiplas(elite, bons, risco):
     multiplas = []
 
-    # 🔒 Múltipla segura (consistência)
     if len(elite) >= 3:
         segura = random.sample(elite, min(4, len(elite)))
         multiplas.append(("SEGURA", segura))
 
-    # ⚖️ Múltipla balanceada
     if len(elite) >= 2 and len(bons) >= 2:
         balanceada = random.sample(elite, 2) + random.sample(bons, 2)
         multiplas.append(("BALANCEADA", balanceada))
 
-    # 💥 Múltipla agressiva
     pool = elite + bons + risco
     if len(pool) >= 5:
         agressiva = random.sample(pool, 5)
@@ -137,10 +130,6 @@ def calcular_odd_total(multipla):
     return round(total, 2)
 
 
-# =============================
-# CLASSES PRINCIPAIS - CORE SYSTEM
-# =============================
-
 class ConfigManager:
     """Gerencia configurações e constantes do sistema"""
     
@@ -153,7 +142,6 @@ class ConfigManager:
     BASE_URL_FD = "https://api.football-data.org/v4"
     BASE_URL_TG = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
     
-    # Constantes
     ALERTAS_PATH = "alertas.json"
     ALERTAS_FAVORITOS_PATH = "alertas_favoritos.json"
     ALERTAS_GOLS_HT_PATH = "alertas_gols_ht.json"
@@ -175,7 +163,6 @@ class ConfigManager:
     
     MODELO_PERFORMANCE_PATH = "modelo_performance.json"
     
-    # Dicionário de Ligas
     LIGA_DICT = {
         "FIFA World Cup": "WC",
         "UEFA Champions League": "CL",
@@ -191,7 +178,6 @@ class ConfigManager:
         "Premier League (Inglaterra)": "PL"
     }
     
-    # Configurações de cache
     CACHE_CONFIG = {
         "jogos": {"ttl": 3600, "max_size": 100},
         "classificacao": {"ttl": 86400, "max_size": 50},
@@ -200,7 +186,6 @@ class ConfigManager:
     
     @classmethod
     def get_liga_id(cls, liga_nome):
-        """Obtém o ID da liga a partir do nome"""
         return cls.LIGA_DICT.get(liga_nome)
 
 
@@ -224,7 +209,6 @@ class RateLimiter:
         self.max_retries = 3
         
     def wait_if_needed(self):
-        """Espera se necessário para respeitar rate limit"""
         with self.lock:
             now = time.time()
             
@@ -255,7 +239,6 @@ class SmartCache:
         self.lock = threading.Lock()
         
     def get(self, key: str):
-        """Obtém valor do cache se ainda for válido"""
         with self.lock:
             if key not in self.cache:
                 return None
@@ -271,7 +254,6 @@ class SmartCache:
             return self.cache[key]
     
     def set(self, key: str, value):
-        """Armazena valor no cache"""
         with self.lock:
             if len(self.cache) >= self.config["max_size"]:
                 oldest_key = min(self.timestamps.items(), key=lambda x: x[1])[0]
@@ -282,7 +264,6 @@ class SmartCache:
             self.timestamps[key] = time.time()
     
     def clear(self):
-        """Limpa todo o cache"""
         with self.lock:
             self.cache.clear()
             self.timestamps.clear()
@@ -297,7 +278,6 @@ class APIMonitor:
         self.lock = threading.Lock()
         
     def log_request(self, success: bool, was_rate_limited: bool = False):
-        """Registra uma requisição"""
         with self.lock:
             self.total_requests += 1
             if not success:
@@ -306,7 +286,6 @@ class APIMonitor:
                 self.rate_limit_hits += 1
     
     def get_stats(self):
-        """Retorna estatísticas"""
         with self.lock:
             elapsed = time.time() - self.start_time
             requests_per_min = (self.total_requests / elapsed * 60) if elapsed > 0 else 0
@@ -321,7 +300,6 @@ class APIMonitor:
             }
     
     def reset(self):
-        """Reseta estatísticas"""
         with self.lock:
             self.total_requests = 0
             self.failed_requests = 0
@@ -342,7 +320,6 @@ class ImageCache:
             os.makedirs(self.cache_dir, exist_ok=True)
     
     def get(self, team_name: str, crest_url: str) -> bytes | None:
-        """Obtém escudo do cache"""
         if not crest_url:
             return None
             
@@ -372,7 +349,6 @@ class ImageCache:
         return None
     
     def set(self, team_name: str, crest_url: str, img_bytes: bytes):
-        """Armazena escudo no cache"""
         if not crest_url or not img_bytes:
             return
             
@@ -402,12 +378,10 @@ class ImageCache:
                 logging.warning(f"Erro ao salvar escudo em disco: {e}")
     
     def _generate_key(self, team_name: str, crest_url: str) -> str:
-        """Gera chave única para o cache"""
         combined = f"{team_name}_{crest_url}"
         return hashlib.md5(combined.encode()).hexdigest()
     
     def clear(self):
-        """Limpa cache"""
         with self.lock:
             self.cache.clear()
             self.timestamps.clear()
@@ -419,7 +393,6 @@ class ImageCache:
                 pass
     
     def get_stats(self):
-        """Retorna estatísticas do cache"""
         with self.lock:
             cache_dir_size = 0
             if os.path.exists(self.cache_dir):
@@ -437,45 +410,17 @@ class ImageCache:
             }
 
 
-# =============================
-# [NOVA] CLASSE GERADOR DE MÚLTIPLAS 3.0
-# =============================
-
 class GeradorMultiplasProfissional:
-    """
-    GERADOR DE MÚLTIPLAS 3.0 - ELITE MASTER
-    Sistema profissional de classificação e geração de múltiplas
-    Baseado em: Over 1.5, Over 2.5, Ambas Marcam
-    """
+    """GERADOR DE MÚLTIPLAS 3.0 - ELITE MASTER"""
     
-    # Liga recomendadas para Over
     LIGAS_OVER_RECOMMENDED = ["Bundesliga", "Eredivisie", "Premier League"]
     LIGAS_OVER_WITH_FILTER = ["Ligue 1", "Serie A"]
     LIGAS_OVER_AVOID = ["Campeonato Brasileiro Série A", "Primera Division"]
     
     def __init__(self):
-        self.analisador_performance = None  # Será definido posteriormente
+        self.analisador_performance = None
     
     def classificar_jogo(self, jogo: dict) -> dict:
-        """
-        Classifica um jogo nos níveis A, B ou C
-        Critérios do estudo:
-        
-        🟢 NÍVEL A (SEGURO):
-            - Over 1.5
-            - Estimativa ≥ 2.2
-            - Confiança ≥ 75%
-        
-        🟡 NÍVEL B (VALOR):
-            - Over 2.5
-            - Estimativa ≥ 2.7
-            - Ambas marcam = SIM
-        
-        🔴 NÍVEL C (PERIGO):
-            - Gols HT
-            - Favorito
-            - Estimativa < 2.0
-        """
         liga = jogo.get("liga", "")
         estimativa = jogo.get("estimativa", 0.0)
         confianca = jogo.get("confianca", 0.0)
@@ -484,40 +429,33 @@ class GeradorMultiplasProfissional:
         ambas_marcam = jogo.get("tendencia_ambas_marcam", "")
         confianca_am = jogo.get("confianca_ambas_marcam", 0.0)
         
-        # Classificação NÍVEL A (Over 1.5)
         nivel_a = False
         if "OVER" in tendencia.upper() and "1.5" in tendencia:
             if estimativa >= 2.2 and confianca >= 75:
                 nivel_a = True
         
-        # Classificação NÍVEL B (Over 2.5)
         nivel_b = False
         if "OVER" in tendencia.upper() and "2.5" in tendencia:
             if estimativa >= 2.7 and ambas_marcam == "SIM" and confianca_am >= 60:
                 nivel_b = True
         
-        # Classificação NÍVEL C (PERIGO)
         nivel_c = False
         motivo_c = ""
         
-        # Verificar se é gols HT
         tendencia_ht = jogo.get("tendencia_ht", "")
         if tendencia_ht and "HT" in tendencia_ht:
             nivel_c = True
             motivo_c = "Gols HT"
         
-        # Verificar se é favorito
         favorito = jogo.get("favorito", "")
         if favorito and favorito != "":
             nivel_c = True
             motivo_c = "Favorito"
         
-        # Verificar estimativa muito baixa
         if estimativa < 2.0 and "OVER" in tendencia.upper():
             nivel_c = True
             motivo_c = f"Estimativa baixa ({estimativa:.2f})"
         
-        # Aplicar filtros por liga
         liga_base = liga.split("(")[0].strip() if "(" in liga else liga
         
         if liga_base in self.LIGAS_OVER_AVOID:
@@ -525,7 +463,6 @@ class GeradorMultiplasProfissional:
                 nivel_c = True
                 motivo_c = f"Liga evitar Over ({liga_base})"
         
-        # Definir nível final
         if nivel_c:
             return {
                 "nivel": "C",
@@ -569,20 +506,10 @@ class GeradorMultiplasProfissional:
             }
     
     def gerar_multipla(self, jogos_classificados: list, modelo: str = "hibrido") -> dict:
-        """
-        Gera múltipla profissional baseada na classificação
-        Modelos disponíveis:
-        
-        🟢 CONSERVADOR: 3 jogos, todos Over 1.5
-        🔥 HÍBRIDO: 4 jogos (3x Over 1.5 + 1x Over 2.5)
-        💣 AGRESSIVO: 5 jogos (3x Over 1.5 + 2x Over 2.5)
-        """
-        # Separar jogos por nível
         nivel_a = [j for j in jogos_classificados if j.get("classificacao", {}).get("nivel") == "A"]
         nivel_b = [j for j in jogos_classificados if j.get("classificacao", {}).get("nivel") == "B"]
         
         if modelo == "conservador":
-            # Mínimo 3 jogos, todos Over 1.5
             if len(nivel_a) < 3:
                 return self._gerar_multipla_fallback(jogos_classificados, "conservador")
             
@@ -603,7 +530,6 @@ class GeradorMultiplasProfissional:
             }
         
         elif modelo == "hibrido":
-            # 3 Over 1.5 + 1 Over 2.5
             if len(nivel_a) < 3 or len(nivel_b) < 1:
                 return self._gerar_multipla_fallback(jogos_classificados, "hibrido")
             
@@ -624,7 +550,6 @@ class GeradorMultiplasProfissional:
             }
         
         elif modelo == "agressivo":
-            # 3 Over 1.5 + 2 Over 2.5
             if len(nivel_a) < 3 or len(nivel_b) < 2:
                 return self._gerar_multipla_fallback(jogos_classificados, "agressivo")
             
@@ -648,8 +573,6 @@ class GeradorMultiplasProfissional:
             return self._gerar_multipla_fallback(jogos_classificados, "hibrido")
     
     def _gerar_multipla_fallback(self, jogos_classificados: list, modelo: str) -> dict:
-        """Gera múltipla de fallback quando não há jogos suficientes"""
-        # Priorizar os melhores jogos disponíveis
         jogos_ordenados = sorted(
             jogos_classificados,
             key=lambda x: (
@@ -685,7 +608,6 @@ class GeradorMultiplasProfissional:
         }
     
     def _calcular_odd_total(self, jogos: list) -> float:
-        """Calcula a odd total da múltipla baseada nas probabilidades"""
         odd_total = 1.0
         
         for jogo in jogos:
@@ -705,20 +627,16 @@ class GeradorMultiplasProfissional:
         return round(odd_total, 2)
     
     def gerar_todas_multiplas(self, jogos_classificados: list) -> list:
-        """Gera todas as múltiplas profissionais (conservadora, híbrida, agressiva)"""
         multiplas = []
         
-        # Modelo Conservador
         cons = self.gerar_multipla(jogos_classificados, "conservador")
         if cons:
             multiplas.append(cons)
         
-        # Modelo Híbrido (principal)
         hib = self.gerar_multipla(jogos_classificados, "hibrido")
         if hib:
             multiplas.append(hib)
         
-        # Modelo Agressivo
         agr = self.gerar_multipla(jogos_classificados, "agressivo")
         if agr:
             multiplas.append(agr)
@@ -726,7 +644,6 @@ class GeradorMultiplasProfissional:
         return multiplas
     
     def gerar_texto_multipla(self, multipla: dict) -> str:
-        """Gera texto formatado para exibição da múltipla"""
         texto = f"💣 **{multipla['modelo']}**\n"
         texto += f"🎯 **Odds Total:** {multipla['odd_total']:.2f}\n"
         texto += f"📊 **Composição:** {multipla['over_1.5_count']}x Over 1.5 + {multipla['over_2.5_count']}x Over 2.5\n"
@@ -758,8 +675,6 @@ class GeradorMultiplasProfissional:
 
 
 class DataStorage:
-    """Gerencia armazenamento e recuperação de dados"""
-    
     @staticmethod
     def _serialize_for_json(obj):
         if isinstance(obj, datetime):
@@ -883,7 +798,6 @@ class DataStorage:
     
     @staticmethod
     def carregar_alertas_top() -> dict:
-        """Carrega alertas TOP - garante que é um dicionário"""
         dados = DataStorage.carregar_json(ConfigManager.ALERTAS_TOP_PATH)
         if not isinstance(dados, dict):
             return {}
@@ -891,7 +805,6 @@ class DataStorage:
     
     @staticmethod
     def salvar_alertas_top(alertas_top: dict):
-        """Salva alertas TOP - garante que é um dicionário"""
         if not isinstance(alertas_top, dict):
             alertas_top = {}
         DataStorage.salvar_json(ConfigManager.ALERTAS_TOP_PATH, alertas_top)
@@ -922,22 +835,18 @@ class DataStorage:
     
     @staticmethod
     def carregar_multiplas() -> dict:
-        """Carrega as múltiplas salvas"""
         return DataStorage.carregar_json(ConfigManager.MULTIPLAS_PATH)
     
     @staticmethod
     def salvar_multiplas(multiplas: dict):
-        """Salva as múltiplas"""
         DataStorage.salvar_json(ConfigManager.MULTIPLAS_PATH, multiplas)
     
     @staticmethod
     def carregar_resultados_multiplas() -> dict:
-        """Carrega os resultados das múltiplas"""
         return DataStorage.carregar_json(ConfigManager.RESULTADOS_MULTIPLAS_PATH)
     
     @staticmethod
     def salvar_resultados_multiplas(resultados: dict):
-        """Salva os resultados das múltiplas"""
         DataStorage.salvar_json(ConfigManager.RESULTADOS_MULTIPLAS_PATH, resultados)
     
     @staticmethod
@@ -961,10 +870,6 @@ class DataStorage:
             logging.error(f"Erro ao salvar histórico: {e}")
             st.error(f"Erro ao salvar histórico: {e}")
 
-
-# =============================
-# CLASSES DE MODELOS DE DADOS
-# =============================
 
 class Jogo:
     def __init__(self, match_data: dict):
@@ -1292,10 +1197,6 @@ class Alerta:
         return alerta_dict
 
 
-# =============================
-# FUNÇÕES AUXILIARES
-# =============================
-
 def clamp(valor, minimo, maximo):
     return max(minimo, min(maximo, valor))
 
@@ -1303,25 +1204,17 @@ def sigmoid(x):
     return 1 / (1 + math.exp(-x))
 
 
-# =============================
-# [MELHORIA] CLASSE AnalisadorPerformance
-# =============================
 class AnalisadorPerformance:
-    """Analisa a performance histórica do modelo para autoajuste"""
-    
     def __init__(self):
         self.historico = self._carregar_historico()
         
     def _carregar_historico(self) -> dict:
-        """Carrega o histórico de performance"""
         return DataStorage.carregar_performance_modelo()
     
     def _salvar_historico(self):
-        """Salva o histórico de performance"""
         DataStorage.salvar_performance_modelo(self.historico)
     
     def registrar_resultado(self, alerta: dict, tipo_alerta: str, resultado: str, metadata: dict):
-        """Registra o resultado de um alerta para análise futura"""
         chave = f"{tipo_alerta}_{datetime.now().strftime('%Y%m')}"
         
         if chave not in self.historico:
@@ -1350,7 +1243,6 @@ class AnalisadorPerformance:
                     "resultado_real": f"{metadata.get('home_goals', '?')}-{metadata.get('away_goals', '?')}"
                 })
         
-        # Estatísticas por liga
         liga = alerta.get("liga", "Desconhecida")
         if liga not in hist["por_liga"]:
             hist["por_liga"][liga] = {"total": 0, "greens": 0}
@@ -1358,7 +1250,6 @@ class AnalisadorPerformance:
         if resultado == "GREEN":
             hist["por_liga"][liga]["greens"] += 1
         
-        # Estatísticas por faixa de confiança
         confianca = alerta.get("confianca", 0)
         faixa = f"{int(confianca // 10 * 10)}-{int(confianca // 10 * 10 + 9)}"
         if faixa not in hist["por_faixa_confianca"]:
@@ -1367,7 +1258,6 @@ class AnalisadorPerformance:
         if resultado == "GREEN":
             hist["por_faixa_confianca"][faixa]["greens"] += 1
         
-        # Estatísticas por tipo de aposta
         tipo_aposta = alerta.get("tipo_aposta", "unknown")
         if tipo_aposta not in hist["por_tipo"]:
             hist["por_tipo"][tipo_aposta] = {"total": 0, "greens": 0}
@@ -1378,10 +1268,9 @@ class AnalisadorPerformance:
         self._salvar_historico()
     
     def obter_acuracia_por_liga(self, liga: str, tipo_alerta: str = "over_under") -> float:
-        """Retorna a acurácia histórica para uma liga específica"""
         chave = f"{tipo_alerta}_{datetime.now().strftime('%Y%m')}"
         if chave not in self.historico:
-            return 0.5  # Valor padrão se não houver histórico
+            return 0.5
         
         dados_liga = self.historico[chave]["por_liga"].get(liga, {})
         total = dados_liga.get("total", 0)
@@ -1390,7 +1279,6 @@ class AnalisadorPerformance:
         return dados_liga.get("greens", 0) / total
     
     def obter_acuracia_por_faixa_confianca(self, confianca: float, tipo_alerta: str = "over_under") -> float:
-        """Retorna a acurácia histórica para uma faixa de confiança"""
         chave = f"{tipo_alerta}_{datetime.now().strftime('%Y%m')}"
         if chave not in self.historico:
             return 0.5
@@ -1403,24 +1291,21 @@ class AnalisadorPerformance:
         return dados_faixa.get("greens", 0) / total
     
     def ajustar_limiar_confianca(self, tipo_alerta: str = "over_under") -> float:
-        """Sugere um limiar de confiança baseado na performance histórica"""
         chave = f"{tipo_alerta}_{datetime.now().strftime('%Y%m')}"
         if chave not in self.historico:
-            return 70.0  # Valor padrão
+            return 70.0
         
         dados = self.historico[chave]
         
-        # Encontrar a faixa de confiança com melhor equilíbrio entre quantidade e acurácia
         melhor_faixa = 70.0
         melhor_score = 0.0
         
         for faixa, stats in dados["por_faixa_confianca"].items():
-            if stats["total"] < 5:  # Ignorar faixas com poucos dados
+            if stats["total"] < 5:
                 continue
             
             acuracia = stats["greens"] / stats["total"] if stats["total"] > 0 else 0
             
-            # Score = acurácia * sqrt(total) (priorizar faixas com muitos dados)
             score = acuracia * (stats["total"] ** 0.5)
             
             if score > melhor_score:
@@ -1430,16 +1315,10 @@ class AnalisadorPerformance:
                 except:
                     melhor_faixa = 70.0
         
-        return max(60.0, min(85.0, melhor_faixa))  # Limitar entre 60% e 85%
+        return max(60.0, min(85.0, melhor_faixa))
 
-
-# =============================
-# CLASSES DE ANÁLISE
-# =============================
 
 class AnalisadorEstatistico:
-    """Realiza análises estatísticas para previsões"""
-    
     def __init__(self):
         self.analisador_performance = AnalisadorPerformance()
 
@@ -1683,8 +1562,6 @@ class AnalisadorEstatistico:
 
 
 class AnalisadorTendencia:
-    """Analisa tendências de gols em partidas - VERSÃO FINAL PROFISSIONAL COM MELHORIAS"""
-
     def __init__(self, classificacao: dict):
         self.classificacao = classificacao
         self.analisador_performance = AnalisadorPerformance()
@@ -1866,75 +1743,22 @@ class AnalisadorTendencia:
         }
 
 
-# =============================
-# [NOVA] CLASSE SISTEMA AUTÔNOMO DE APOSTAS 2.0
-# =============================
-
 class SistemaAutonomoApostas:
-    """Sistema profissional de análise e filtragem de apostas - VERSÃO 2.0 COM DECISÃO AUTOMÁTICA"""
-    
     def __init__(self):
         self.config = ConfigManager()
         
-        # CONFIGURAÇÃO DE PESOS POR LIGA (MODO PROFISSIONAL)
         self.LIGAS_CONFIG = {
-            "Eredivisie": {
-                "over": 1.2,
-                "btts": 1.1,
-                "ht": 1.0,
-                "favorito": 1.0
-            },
-            "Bundesliga": {
-                "over": 1.2,
-                "btts": 1.2,
-                "ht": 1.1,
-                "favorito": 1.0
-            },
-            "Championship": {
-                "over": 0.9,
-                "btts": 1.3,
-                "ht": 0.9,
-                "favorito": 1.0
-            },
-            "Premier League": {
-                "over": 1.0,
-                "btts": 1.0,
-                "ht": 0.9,
-                "favorito": 0.9
-            },
-            "Primera Division": {
-                "over": 0.9,
-                "btts": 0.8,
-                "ht": 0.8,
-                "favorito": 1.0
-            },
-            "Ligue 1": {
-                "over": 0.8,
-                "btts": 0.7,
-                "ht": 0.7,
-                "favorito": 1.0
-            },
-            "Primeira Liga": {
-                "over": 0.7,
-                "btts": 1.0,
-                "ht": 0.5,
-                "favorito": 1.0
-            },
-            "Serie A": {
-                "over": 1.0,
-                "btts": 0.9,
-                "ht": 0.8,
-                "favorito": 1.0
-            },
-            "Campeonato Brasileiro Série A": {
-                "over": 0.8,
-                "btts": 0.8,
-                "ht": 0.7,
-                "favorito": 1.1
-            }
+            "Eredivisie": {"over": 1.2, "btts": 1.1, "ht": 1.0, "favorito": 1.0},
+            "Bundesliga": {"over": 1.2, "btts": 1.2, "ht": 1.1, "favorito": 1.0},
+            "Championship": {"over": 0.9, "btts": 1.3, "ht": 0.9, "favorito": 1.0},
+            "Premier League": {"over": 1.0, "btts": 1.0, "ht": 0.9, "favorito": 0.9},
+            "Primera Division": {"over": 0.9, "btts": 0.8, "ht": 0.8, "favorito": 1.0},
+            "Ligue 1": {"over": 0.8, "btts": 0.7, "ht": 0.7, "favorito": 1.0},
+            "Primeira Liga": {"over": 0.7, "btts": 1.0, "ht": 0.5, "favorito": 1.0},
+            "Serie A": {"over": 1.0, "btts": 0.9, "ht": 0.8, "favorito": 1.0},
+            "Campeonato Brasileiro Série A": {"over": 0.8, "btts": 0.8, "ht": 0.7, "favorito": 1.1}
         }
         
-        # Lista de ligas para identificação
         self.ligas_identificacao = {
             "Eredivisie": "Eredivisie",
             "Bundesliga": "Bundesliga",
@@ -1948,48 +1772,32 @@ class SistemaAutonomoApostas:
         }
     
     def _identificar_liga(self, liga_nome: str) -> str:
-        """Identifica a liga correta a partir do nome"""
         for key in self.ligas_identificacao:
             if key in liga_nome:
                 return key
-        return "Premier League"  # Padrão
+        return "Premier League"
     
     def _ajustar_confianca(self, confianca_base: float, liga: str, mercado: str) -> float:
-        """
-        Ajusta a confiança baseada no peso da liga para o mercado específico
-        Retorna confiança ajustada (0-1)
-        """
         peso = self.LIGAS_CONFIG.get(liga, {}).get(mercado, 1.0)
         conf_ajustada = confianca_base * peso
-        
-        # Normalizar para 0-1
         conf_ajustada = clamp(conf_ajustada, 0, 1)
-        
         return conf_ajustada
     
     def _validar_aposta(self, liga: str, mercado: str, confianca_ajustada: float) -> tuple:
-        """
-        Valida se a aposta deve ser aceita baseada em regras específicas
-        Retorna: (aprovado, motivo)
-        """
-        # Regra HT (maior filtro)
         if mercado == "ht":
             if liga in ["Primeira Liga", "Ligue 1"]:
                 return False, f"❌ HT bloqueado na liga {liga} (baixa performance)"
             if confianca_ajustada < 0.75:
                 return False, f"❌ Confiança HT baixa: {confianca_ajustada*100:.0f}% < 75%"
         
-        # Regra FAVORITOS
         if mercado == "favorito":
             if confianca_ajustada < 0.55:
                 return False, f"❌ Confiança favorito baixa: {confianca_ajustada*100:.0f}% < 55%"
         
-        # Regra OVER
         if mercado == "over":
             if liga == "Primeira Liga" and confianca_ajustada < 0.80:
                 return False, f"❌ OVER em Portugal requer confiança ≥ 80%"
         
-        # Regra BTTS
         if mercado == "btts":
             if liga == "Ligue 1":
                 return False, f"❌ BTTS bloqueado na Ligue 1 (baixa performance)"
@@ -1997,7 +1805,6 @@ class SistemaAutonomoApostas:
         return True, "Aprovado"
     
     def _extrair_confiancas(self, jogo_dict: dict) -> dict:
-        """Extrai as confianças de cada mercado do jogo"""
         return {
             "over": jogo_dict.get("confianca", 0) / 100,
             "btts": jogo_dict.get("confianca_ambas_marcam", 0) / 100,
@@ -2006,25 +1813,13 @@ class SistemaAutonomoApostas:
         }
     
     def escolher_melhor_mercado(self, jogo_dict: dict) -> dict:
-        """
-        CÉREBRO DO SISTEMA 2.0
-        Escolhe automaticamente o melhor mercado para cada jogo
-        Retorna: {
-            "mercado": mercado_escolhido,
-            "confianca_original": conf_base,
-            "confianca_ajustada": conf_ajustada,
-            "aprovado": bool,
-            "motivo": str,
-            "nivel": str
-        }
-        """
         liga = self._identificar_liga(jogo_dict.get("liga", ""))
         confiancas = self._extrair_confiancas(jogo_dict)
         
         melhores = []
         
         for mercado, conf_base in confiancas.items():
-            if conf_base < 0.30:  # Ignora confianças muito baixas
+            if conf_base < 0.30:
                 continue
                 
             conf_ajustada = self._ajustar_confianca(conf_base, liga, mercado)
@@ -2049,11 +1844,9 @@ class SistemaAutonomoApostas:
                 "nivel": "❌ DESCARTADO"
             }
         
-        # Ordena por confiança ajustada (maior primeiro)
         melhores.sort(key=lambda x: x["confianca_ajustada"], reverse=True)
         melhor = melhores[0]
         
-        # Classifica o nível da aposta
         if melhor["confianca_ajustada"] >= 0.80:
             nivel = "🔥 ELITE"
         elif melhor["confianca_ajustada"] >= 0.70:
@@ -2069,18 +1862,13 @@ class SistemaAutonomoApostas:
         return melhor
     
     def processar_jogos_autonomo(self, jogos_analisados: list, tipos_analise_selecionados: dict, score_minimo: int = 6) -> dict:
-        """
-        Processa os jogos com o sistema autônomo 2.0 (decisão automática)
-        """
         aprovados = []
         reprovados = []
         estatisticas_mercados = defaultdict(int)
         
         for jogo_dict in jogos_analisados:
-            # Extrair dados para análise
             jogo_completo = self.extrair_dados_para_analise(jogo_dict)
             
-            # Escolher o melhor mercado automaticamente
             decisao = self.escolher_melhor_mercado(jogo_completo)
             
             if not decisao["aprovado"]:
@@ -2091,12 +1879,10 @@ class SistemaAutonomoApostas:
                 })
                 continue
             
-            # Adicionar a decisão ao jogo
             jogo_completo["decisao_autonomo"] = decisao
             jogo_completo["mercado_escolhido"] = decisao["mercado"]
             jogo_completo["confianca_final"] = decisao["confianca_ajustada"] * 100
             
-            # Mapear para compatibilidade com o sistema anterior
             if decisao["mercado"] == "over":
                 jogo_completo["tendencia"] = jogo_dict.get("tendencia", "OVER")
                 jogo_completo["confianca"] = decisao["confianca_ajustada"] * 100
@@ -2110,13 +1896,10 @@ class SistemaAutonomoApostas:
                 jogo_completo["favorito"] = jogo_dict.get("favorito", "home")
                 jogo_completo["confianca_vitoria"] = decisao["confianca_ajustada"] * 100
             
-            # Calcular odd sugerida
             jogo_completo["odd_sugerida"] = self.calcular_odd_sugerida(jogo_completo, decisao["mercado"])
             
-            # Calcular score profissional (ajustado)
             jogo_completo["analise_profissional"] = self.calcular_score_profissional_v2(jogo_completo, decisao)
             
-            # Verificar score mínimo
             if jogo_completo["analise_profissional"]["score"] >= score_minimo:
                 aprovados.append(jogo_completo)
                 estatisticas_mercados[decisao["mercado"]] += 1
@@ -2127,13 +1910,10 @@ class SistemaAutonomoApostas:
                     "decisao": decisao
                 })
         
-        # Ordenar aprovados por score
         aprovados.sort(key=lambda x: x["analise_profissional"]["score"], reverse=True)
         
-        # Gerar múltiplas inteligentes
         multiplas = self.gerar_multiplas_inteligentes_v2(aprovados)
         
-        # Estatísticas
         stats = {
             "total_analisados": len(jogos_analisados),
             "total_aprovados": len(aprovados),
@@ -2154,7 +1934,6 @@ class SistemaAutonomoApostas:
         }
     
     def calcular_score_profissional_v2(self, jogo_dict: dict, decisao: dict) -> dict:
-        """Calcula score profissional baseado na decisão autônoma"""
         score = 0
         detalhes = {
             "mercado_bonus": 0,
@@ -2163,7 +1942,6 @@ class SistemaAutonomoApostas:
             "odd_bonus": 0
         }
         
-        # Bônus por mercado escolhido
         mercado = decisao["mercado"]
         if mercado == "over":
             score += 3
@@ -2178,7 +1956,6 @@ class SistemaAutonomoApostas:
             score += 2
             detalhes["mercado_bonus"] = 2
         
-        # Bônus por confiança ajustada
         conf_ajustada = decisao["confianca_ajustada"] * 100
         if conf_ajustada >= 80:
             score += 4
@@ -2193,7 +1970,6 @@ class SistemaAutonomoApostas:
             score += 1
             detalhes["confianca_bonus"] = 1
         
-        # Bônus por liga
         liga = decisao.get("liga", "")
         if liga == "Eredivisie":
             score += 2
@@ -2202,7 +1978,6 @@ class SistemaAutonomoApostas:
             score += 1
             detalhes["liga_bonus"] = 1
         
-        # Bônus por odd
         odd = jogo_dict.get("odd_sugerida", 2.0)
         if 1.40 <= odd <= 2.20:
             score += 2
@@ -2211,7 +1986,6 @@ class SistemaAutonomoApostas:
             score += 1
             detalhes["odd_bonus"] = 1
         
-        # Classificar nível
         if score >= 12:
             nivel = "🔥 ELITE (ALTÍSSIMA CONFIANÇA)"
             cor = "#FFD700"
@@ -2242,17 +2016,14 @@ class SistemaAutonomoApostas:
         }
     
     def gerar_multiplas_inteligentes_v2(self, jogos_aprovados: list, max_por_multipla: int = 3) -> list:
-        """Gera múltiplas inteligentes com os melhores jogos - VERSÃO 2.0"""
         if len(jogos_aprovados) < 2:
             return []
         
         multiplas = []
         
-        # Separar por nível
         elite = [j for j in jogos_aprovados if j["analise_profissional"]["score"] >= 12]
         premium = [j for j in jogos_aprovados if 9 <= j["analise_profissional"]["score"] < 12]
         
-        # 1. Múltiplas ELITE (score ≥ 12) - máximo 3 jogos
         for i in range(0, len(elite), max_por_multipla):
             bloco = elite[i:i+max_por_multipla]
             if len(bloco) >= 2:
@@ -2270,7 +2041,6 @@ class SistemaAutonomoApostas:
                     "enviada": False
                 })
         
-        # 2. Múltiplas PREMIUM (score ≥ 9) - máximo 3 jogos
         for i in range(0, len(premium), max_por_multipla):
             bloco = premium[i:i+max_por_multipla]
             if len(bloco) >= 2:
@@ -2288,7 +2058,6 @@ class SistemaAutonomoApostas:
                     "enviada": False
                 })
         
-        # 3. Múltipla com Holanda obrigatória (se disponível)
         holanda_jogos = [j for j in jogos_aprovados if "Eredivisie" in j.get("liga", "")]
         if holanda_jogos:
             melhor_holanda = max(holanda_jogos, key=lambda x: x["analise_profissional"]["score"])
@@ -2309,12 +2078,10 @@ class SistemaAutonomoApostas:
                     "enviada": False
                 })
         
-        # Ordenar múltiplas por score total e limitar a 5
         multiplas.sort(key=lambda x: x["score_total"], reverse=True)
         return multiplas[:5]
     
     def calcular_odd_sugerida(self, jogo_dict: dict, mercado: str) -> float:
-        """Calcula a odd sugerida baseada nas probabilidades e mercado"""
         if mercado == "over":
             prob = jogo_dict.get("probabilidade", 50)
             odd = round(100 / prob, 2) if prob > 0 else 2.0
@@ -2333,10 +2100,8 @@ class SistemaAutonomoApostas:
         return round(odd, 2)
     
     def extrair_dados_para_analise(self, jogo_dict: dict) -> dict:
-        """Extrai e calcula métricas adicionais para análise"""
         dados = jogo_dict.copy()
         
-        # Médias de gols
         dados["gols_casa"] = jogo_dict.get("estimativa", 1.5) * 0.55
         dados["gols_fora"] = jogo_dict.get("estimativa", 1.5) * 0.45
         dados["media_total"] = jogo_dict.get("estimativa", 1.5)
@@ -2344,7 +2109,6 @@ class SistemaAutonomoApostas:
         return dados
     
     def gerar_texto_multipla(self, multipla: dict) -> str:
-        """Gera texto formatado para a múltipla - VERSÃO 2.0"""
         texto = f"💣 **{multipla['tipo']}**\n"
         texto += f"🎯 **Odds Total:** {multipla['odd_total']:.2f}\n"
         texto += f"⚠️ **Risco:** {multipla['risco']}\n\n"
@@ -2358,7 +2122,6 @@ class SistemaAutonomoApostas:
             texto += f"   📊 {analise['emoji']} {analise['nivel']}\n"
             texto += f"   🎯 Score: {analise['score']} pontos\n"
             
-            # Mostrar mercado escolhido
             if mercado == "over":
                 texto += f"   ⚽ Mercado: OVER {jogo.get('tendencia', '')}\n"
             elif mercado == "btts":
@@ -2374,19 +2137,7 @@ class SistemaAutonomoApostas:
             texto += f"   🏷️ Liga: {decisao.get('liga', 'Desconhecida')}\n\n"
         
         return texto
-    
-    # Métodos de compatibilidade
-    def aplicar_filtro_anti_red(self, jogo_dict: dict) -> tuple:
-        """Mantido para compatibilidade, mas agora usa a decisão autônoma"""
-        decisao = self.escolher_melhor_mercado(jogo_dict)
-        if decisao["aprovado"]:
-            return True, decisao["motivo"]
-        return False, decisao["motivo"]
 
-
-# =============================
-# CLASSE ALERTA COMPLETO
-# =============================
 
 class AlertaCompleto:
     def __init__(self, jogo: Jogo, data_busca: str, tipos_analise_selecionados: dict):
@@ -2494,7 +2245,6 @@ class AlertaCompleto:
         
         total_gols = home_goals + away_goals
         
-        # Over/Under
         if self.analise_over_under is not None:
             tendencia = self.analise_over_under.get("tendencia", "")
             
@@ -2521,7 +2271,6 @@ class AlertaCompleto:
                 else:
                     self.resultados["over_under"] = "RED"
         
-        # Favorito
         if self.analise_favorito is not None:
             favorito = self.analise_favorito.get("favorito", "")
             if favorito == "home" and home_goals > away_goals:
@@ -2533,7 +2282,6 @@ class AlertaCompleto:
             else:
                 self.resultados["favorito"] = "RED"
         
-        # Gols HT
         if self.analise_gols_ht is not None and ht_home_goals is not None and ht_away_goals is not None:
             total_gols_ht = ht_home_goals + ht_away_goals
             tendencia_ht = self.analise_gols_ht.get("tendencia_ht", "")
@@ -2549,7 +2297,6 @@ class AlertaCompleto:
             else:
                 self.resultados["gols_ht"] = "RED"
         
-        # Ambas Marcam
         if self.analise_ambas_marcam is not None:
             tendencia_am = self.analise_ambas_marcam.get("tendencia_ambas_marcam", "")
             if tendencia_am == "SIM" and home_goals > 0 and away_goals > 0:
@@ -2559,10 +2306,6 @@ class AlertaCompleto:
             else:
                 self.resultados["ambas_marcam"] = "RED"
 
-
-# =============================
-# CLASSES DE COMUNICAÇÃO
-# =============================
 
 class APIClient:
     def __init__(self, rate_limiter: RateLimiter, api_monitor: APIMonitor):
@@ -2804,10 +2547,6 @@ class TelegramClient:
             return False
 
 
-# =============================
-# CLASSES DE GERAÇÃO DE POSTERS
-# =============================
-
 class PosterGenerator:
     def __init__(self, api_client: APIClient):
         self.api_client = api_client
@@ -2834,6 +2573,408 @@ class PosterGenerator:
         except Exception as e:
             logging.error(f"Erro ao carregar fonte: {e}")
             return ImageFont.load_default()
+    
+    def gerar_poster_multipla(self, multipla: dict, titulo: str = "💣 MÚLTIPLA PROFISSIONAL") -> io.BytesIO:
+        """Gera pôster estilo West Ham para múltiplas"""
+        LARGURA = 2000
+        ALTURA_TOPO = 350
+        ALTURA_POR_JOGO = 550
+        PADDING = 80
+        
+        jogos = multipla["jogos"]
+        jogos_count = len(jogos)
+        altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
+
+        img = Image.new("RGB", (LARGURA, altura_total), color=(10, 20, 30))
+        draw = ImageDraw.Draw(img)
+
+        FONTE_TITULO = self.criar_fonte(90)
+        FONTE_SUBTITULO = self.criar_fonte(65)
+        FONTE_TIMES = self.criar_fonte(55)
+        FONTE_VS = self.criar_fonte(50)
+        FONTE_INFO = self.criar_fonte(45)
+        FONTE_ANALISE = self.criar_fonte(42)
+        FONTE_ODD = self.criar_fonte(60)
+        FONTE_TOTAL = self.criar_fonte(70)
+        FONTE_DETALHES = self.criar_fonte(40)
+
+        # Título principal
+        titulo_text = f"{titulo} - {multipla['modelo']}"
+        try:
+            titulo_bbox = draw.textbbox((0, 0), titulo_text, font=FONTE_TITULO)
+            titulo_w = titulo_bbox[2] - titulo_bbox[0]
+            draw.text(((LARGURA - titulo_w) // 2, 80), titulo_text, font=FONTE_TITULO, fill=(255, 215, 0))
+        except:
+            draw.text((LARGURA//2 - 300, 80), titulo_text, font=FONTE_TITULO, fill=(255, 215, 0))
+
+        # Composição da múltipla
+        composicao = f"{multipla['over_1.5_count']}x Over 1.5 + {multipla['over_2.5_count']}x Over 2.5"
+        try:
+            comp_bbox = draw.textbbox((0, 0), composicao, font=FONTE_SUBTITULO)
+            comp_w = comp_bbox[2] - comp_bbox[0]
+            draw.text(((LARGURA - comp_w) // 2, 180), composicao, font=FONTE_SUBTITULO, fill=(200, 200, 200))
+        except:
+            draw.text((LARGURA//2 - 250, 180), composicao, font=FONTE_SUBTITULO, fill=(200, 200, 200))
+
+        # Odd Total
+        odd_total = multipla['odd_total']
+        odd_text = f"ODDS TOTAL: {odd_total:.2f}"
+        try:
+            odd_bbox = draw.textbbox((0, 0), odd_text, font=FONTE_TOTAL)
+            odd_w = odd_bbox[2] - odd_bbox[0]
+            draw.text(((LARGURA - odd_w) // 2, 260), odd_text, font=FONTE_TOTAL, fill=(100, 255, 100))
+        except:
+            draw.text((LARGURA//2 - 200, 260), odd_text, font=FONTE_TOTAL, fill=(100, 255, 100))
+
+        # Risco e taxa esperada
+        info_text = f"⚠️ Risco: {multipla['risco']} | 📈 Taxa Esperada: {multipla['taxa_acerto_esperada']}"
+        try:
+            info_bbox = draw.textbbox((0, 0), info_text, font=FONTE_INFO)
+            info_w = info_bbox[2] - info_bbox[0]
+            draw.text(((LARGURA - info_w) // 2, 320), info_text, font=FONTE_INFO, fill=(150, 200, 255))
+        except:
+            draw.text((LARGURA//2 - 250, 320), info_text, font=FONTE_INFO, fill=(150, 200, 255))
+
+        draw.line([(LARGURA//4, 360), (3*LARGURA//4, 360)], fill=(255, 215, 0), width=4)
+
+        y_pos = ALTURA_TOPO
+
+        for idx, jogo in enumerate(jogos):
+            x0, y0 = PADDING, y_pos
+            x1, y1 = LARGURA - PADDING, y_pos + ALTURA_POR_JOGO - 40
+            
+            classificacao = jogo.get("classificacao", {})
+            tipo = classificacao.get("tipo", "over_1.5")
+            cor_borda = (255, 215, 0) if tipo == "over_1.5" else (255, 193, 7) if tipo == "over_2.5" else (100, 200, 255)
+            
+            draw.rectangle([x0, y0, x1, y1], fill=(25, 35, 45), outline=cor_borda, width=4)
+
+            # Odd do jogo
+            odd_jogo = 100 / max(jogo.get("probabilidade", 65), 10)
+            odd_text = f"{odd_jogo:.2f}"
+            
+            try:
+                odd_bbox = draw.textbbox((0, 0), odd_text, font=FONTE_ODD)
+                odd_w = odd_bbox[2] - odd_bbox[0]
+                odd_h = odd_bbox[3] - odd_bbox[1]
+                
+                odd_x = x1 - odd_w - 40
+                odd_y = y0 + 40
+                
+                fundo_x0 = odd_x - 15
+                fundo_y0 = odd_y - 10
+                fundo_x1 = odd_x + odd_w + 15
+                fundo_y1 = odd_y + odd_h + 10
+                
+                overlay = Image.new('RGBA', img.size, (0,0,0,0))
+                overlay_draw = ImageDraw.Draw(overlay)
+                overlay_draw.rectangle([fundo_x0, fundo_y0, fundo_x1, fundo_y1], fill=(0, 0, 0, 200))
+                img.paste(overlay, (0,0), overlay)
+                
+                draw.rectangle([fundo_x0, fundo_y0, fundo_x1, fundo_y1], outline=cor_borda, width=3)
+                draw.text((odd_x, odd_y), odd_text, font=FONTE_ODD, fill=cor_borda)
+                
+            except Exception as e:
+                logging.error(f"Erro ao desenhar odd: {e}")
+                odd_x = x1 - 150
+                odd_y = y0 + 40
+                draw.text((odd_x, odd_y), odd_text, font=FONTE_ODD, fill=cor_borda)
+
+            # Liga
+            liga_text = jogo.get('liga', 'LIGA').upper()
+            try:
+                liga_bbox = draw.textbbox((0, 0), liga_text, font=FONTE_INFO)
+                liga_w = liga_bbox[2] - liga_bbox[0]
+                draw.text(((LARGURA - liga_w) // 2, y0 + 35), liga_text, font=FONTE_INFO, fill=(200, 200, 200))
+            except:
+                draw.text((LARGURA//2 - 150, y0 + 35), liga_text, font=FONTE_INFO, fill=(200, 200, 200))
+
+            # Escudos e times
+            TAMANHO_ESCUDO = 140
+            TAMANHO_QUADRADO = 160
+            ESPACO_ENTRE_ESCUDOS = 600
+
+            largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
+            x_inicio = (LARGURA - largura_total) // 2
+
+            x_home = x_inicio
+            x_away = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
+            y_escudos = y0 + 100
+
+            escudo_home_bytes = self.api_client.baixar_escudo_time(jogo.get('home', ''), jogo.get('escudo_home', ''))
+            escudo_away_bytes = self.api_client.baixar_escudo_time(jogo.get('away', ''), jogo.get('escudo_away', ''))
+            
+            escudo_home_img = Image.open(io.BytesIO(escudo_home_bytes)).convert("RGBA") if escudo_home_bytes else None
+            escudo_away_img = Image.open(io.BytesIO(escudo_away_bytes)).convert("RGBA") if escudo_away_bytes else None
+
+            self._desenhar_escudo_quadrado(draw, img, escudo_home_img, x_home, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo.get('home', ''))
+            self._desenhar_escudo_quadrado(draw, img, escudo_away_img, x_away, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo.get('away', ''))
+
+            home_text = jogo.get('home', 'TIME CASA')[:15]
+            away_text = jogo.get('away', 'TIME FORA')[:15]
+
+            try:
+                home_bbox = draw.textbbox((0, 0), home_text, font=FONTE_TIMES)
+                home_w = home_bbox[2] - home_bbox[0]
+                draw.text((x_home + (TAMANHO_QUADRADO - home_w)//2, y_escudos + TAMANHO_QUADRADO + 25),
+                         home_text, font=FONTE_TIMES, fill=(255, 255, 255))
+            except:
+                draw.text((x_home, y_escudos + TAMANHO_QUADRADO + 25), home_text, font=FONTE_TIMES, fill=(255, 255, 255))
+
+            try:
+                away_bbox = draw.textbbox((0, 0), away_text, font=FONTE_TIMES)
+                away_w = away_bbox[2] - away_bbox[0]
+                draw.text((x_away + (TAMANHO_QUADRADO - away_w)//2, y_escudos + TAMANHO_QUADRADO + 25),
+                         away_text, font=FONTE_TIMES, fill=(255, 255, 255))
+            except:
+                draw.text((x_away, y_escudos + TAMANHO_QUADRADO + 25), away_text, font=FONTE_TIMES, fill=(255, 255, 255))
+
+            try:
+                vs_bbox = draw.textbbox((0, 0), "VS", font=FONTE_VS)
+                vs_w = vs_bbox[2] - vs_bbox[0]
+                vs_x = x_home + TAMANHO_QUADRADO + (ESPACO_ENTRE_ESCUDOS - vs_w) // 2
+                draw.text((vs_x, y_escudos + TAMANHO_QUADRADO//2 - 20), "VS", font=FONTE_VS, fill=(255, 215, 0))
+            except:
+                vs_x = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS//2 - 30
+                draw.text((vs_x, y_escudos + TAMANHO_QUADRADO//2 - 20), "VS", font=FONTE_VS, fill=(255, 215, 0))
+
+            # Informações da aposta
+            y_analysis = y_escudos + TAMANHO_QUADRADO + 110
+            draw.line([(x0 + 80, y_analysis - 15), (x1 - 80, y_analysis - 15)], fill=(100, 130, 160), width=2)
+            
+            if tipo == "over_1.5":
+                tendencia = jogo.get("tendencia", "Over 1.5")
+                emoji = "🟢"
+                cor_texto = (100, 255, 100)
+            else:
+                tendencia = jogo.get("tendencia", "Over 2.5")
+                emoji = "🟡"
+                cor_texto = (255, 215, 0)
+            
+            text_analise = f"{emoji} {tendencia}"
+            try:
+                analise_bbox = draw.textbbox((0, 0), text_analise, font=FONTE_ANALISE)
+                analise_w = analise_bbox[2] - analise_bbox[0]
+                draw.text(((LARGURA - analise_w) // 2, y_analysis + 10), text_analise, font=FONTE_ANALISE, fill=cor_texto)
+            except:
+                draw.text((LARGURA//2 - 150, y_analysis + 10), text_analise, font=FONTE_ANALISE, fill=cor_texto)
+            
+            info_jogo = f"Estimativa: {classificacao.get('estimativa', 0):.2f} gols | Confiança: {classificacao.get('confianca', 0):.0f}%"
+            try:
+                info_bbox = draw.textbbox((0, 0), info_jogo, font=FONTE_INFO)
+                info_w = info_bbox[2] - info_bbox[0]
+                draw.text(((LARGURA - info_w) // 2, y_analysis + 60), info_jogo, font=FONTE_INFO, fill=(150, 200, 255))
+            except:
+                draw.text((LARGURA//2 - 200, y_analysis + 60), info_jogo, font=FONTE_INFO, fill=(150, 200, 255))
+
+            y_pos += ALTURA_POR_JOGO
+
+        # Rodapé
+        rodape_text = f"GERADO EM {datetime.now().strftime('%d/%m/%Y %H:%M')} | ELITE MASTER 3.0 - MÚLTIPLAS"
+        try:
+            rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_DETALHES)
+            rodape_w = rodape_bbox[2] - rodape_bbox[0]
+            draw.text(((LARGURA - rodape_w) // 2, altura_total - 70), rodape_text, font=FONTE_DETALHES, fill=(100, 130, 160))
+        except:
+            draw.text((LARGURA//2 - 350, altura_total - 70), rodape_text, font=FONTE_DETALHES, fill=(100, 130, 160))
+
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG", optimize=True, quality=95)
+        buffer.seek(0)
+        
+        return buffer
+    
+    def gerar_poster_resultado_multipla(self, multipla: dict, data_br: str) -> io.BytesIO:
+        """Gera pôster para resultado de múltipla"""
+        LARGURA = 2000
+        ALTURA_TOPO = 320
+        ALTURA_POR_JOGO = 520
+        PADDING = 80
+        
+        jogos_conferidos = multipla.get("jogos_conferidos", [])
+        jogos_count = len(jogos_conferidos)
+        altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
+
+        img = Image.new("RGB", (LARGURA, altura_total), color=(10, 20, 30))
+        draw = ImageDraw.Draw(img)
+
+        FONTE_TITULO = self.criar_fonte(85)
+        FONTE_SUBTITULO = self.criar_fonte(60)
+        FONTE_TIMES = self.criar_fonte(55)
+        FONTE_VS = self.criar_fonte(50)
+        FONTE_INFO = self.criar_fonte(45)
+        FONTE_RESULTADO = self.criar_fonte(70)
+        FONTE_TOTAL = self.criar_fonte(65)
+        FONTE_DETALHES = self.criar_fonte(40)
+
+        acertada = multipla.get("acertada", False)
+        odd_total = multipla.get("odd_total", 0)
+        modelo = multipla.get("modelo", "MÚLTIPLA")
+        
+        titulo = f"📊 RESULTADO MÚLTIPLA - {data_br}"
+        try:
+            titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
+            titulo_w = titulo_bbox[2] - titulo_bbox[0]
+            draw.text(((LARGURA - titulo_w) // 2, 70), titulo, font=FONTE_TITULO, fill=(255, 255, 255))
+        except:
+            draw.text((LARGURA//2 - 300, 70), titulo, font=FONTE_TITULO, fill=(255, 255, 255))
+
+        # Badge de resultado
+        if acertada:
+            cor_badge = (46, 204, 113)
+            resultado_text = "✅ ACERTOU!"
+            badge_bg = (30, 70, 40)
+        else:
+            cor_badge = (231, 76, 60)
+            resultado_text = "❌ ERROU!"
+            badge_bg = (70, 40, 40)
+        
+        badge_width = 400
+        badge_height = 100
+        badge_x = (LARGURA - badge_width) // 2
+        badge_y = 170
+        
+        draw.rectangle([badge_x, badge_y, badge_x + badge_width, badge_y + badge_height], 
+                      fill=badge_bg, outline=cor_badge, width=4)
+        
+        try:
+            badge_bbox = draw.textbbox((0, 0), resultado_text, font=FONTE_TITULO)
+            badge_w = badge_bbox[2] - badge_bbox[0]
+            badge_h = badge_bbox[3] - badge_bbox[1]
+            badge_x_center = badge_x + (badge_width - badge_w) // 2
+            badge_y_center = badge_y + (badge_height - badge_h) // 2
+            draw.text((badge_x_center, badge_y_center), resultado_text, font=FONTE_TITULO, fill=cor_badge)
+        except:
+            draw.text((badge_x + 100, badge_y + 25), resultado_text, font=FONTE_TITULO, fill=cor_badge)
+        
+        # Informações da múltipla
+        info_text = f"{modelo} | Odds Total: {odd_total:.2f}"
+        try:
+            info_bbox = draw.textbbox((0, 0), info_text, font=FONTE_SUBTITULO)
+            info_w = info_bbox[2] - info_bbox[0]
+            draw.text(((LARGURA - info_w) // 2, 290), info_text, font=FONTE_SUBTITULO, fill=(200, 200, 200))
+        except:
+            draw.text((LARGURA//2 - 250, 290), info_text, font=FONTE_SUBTITULO, fill=(200, 200, 200))
+
+        draw.line([(LARGURA//4, 340), (3*LARGURA//4, 340)], fill=(255, 215, 0), width=4)
+
+        y_pos = ALTURA_TOPO + 50
+
+        for idx, jogo in enumerate(jogos_conferidos):
+            x0, y0 = PADDING, y_pos
+            x1, y1 = LARGURA - PADDING, y_pos + ALTURA_POR_JOGO - 40
+            
+            resultado = jogo.get("resultado", "RED")
+            cor_borda = (46, 204, 113) if resultado == "GREEN" else (231, 76, 60)
+            
+            draw.rectangle([x0, y0, x1, y1], fill=(25, 35, 45), outline=cor_borda, width=4)
+
+            # Badge de resultado do jogo
+            badge_jogo_width = 150
+            badge_jogo_height = 60
+            badge_jogo_x = x1 - badge_jogo_width - 40
+            badge_jogo_y = y0 + 30
+            
+            resultado_jogo = "✅" if resultado == "GREEN" else "❌"
+            cor_jogo = (46, 204, 113) if resultado == "GREEN" else (231, 76, 60)
+            
+            draw.rectangle([badge_jogo_x, badge_jogo_y, badge_jogo_x + badge_jogo_width, badge_jogo_y + badge_jogo_height], 
+                          fill=cor_jogo, outline=(255, 255, 255), width=2)
+            
+            try:
+                badge_bbox = draw.textbbox((0, 0), resultado_jogo, font=FONTE_INFO)
+                badge_w = badge_bbox[2] - badge_bbox[0]
+                badge_x_center = badge_jogo_x + (badge_jogo_width - badge_w) // 2
+                draw.text((badge_x_center, badge_jogo_y + 15), resultado_jogo, font=FONTE_INFO, fill=(255, 255, 255))
+            except:
+                draw.text((badge_jogo_x + 65, badge_jogo_y + 15), resultado_jogo, font=FONTE_INFO, fill=(255, 255, 255))
+
+            # Times
+            TAMANHO_ESCUDO = 120
+            TAMANHO_QUADRADO = 140
+            ESPACO_ENTRE_ESCUDOS = 500
+
+            largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
+            x_inicio = (LARGURA - largura_total) // 2
+
+            x_home = x_inicio
+            x_away = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
+            y_escudos = y0 + 70
+
+            home_crest_url = jogo.get('escudo_home', '')
+            away_crest_url = jogo.get('escudo_away', '')
+            
+            escudo_home_bytes = self.api_client.baixar_escudo_time(jogo.get('home', ''), home_crest_url)
+            escudo_away_bytes = self.api_client.baixar_escudo_time(jogo.get('away', ''), away_crest_url)
+            
+            escudo_home_img = Image.open(io.BytesIO(escudo_home_bytes)).convert("RGBA") if escudo_home_bytes else None
+            escudo_away_img = Image.open(io.BytesIO(escudo_away_bytes)).convert("RGBA") if escudo_away_bytes else None
+
+            self._desenhar_escudo_quadrado(draw, img, escudo_home_img, x_home, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo.get('home', ''))
+            self._desenhar_escudo_quadrado(draw, img, escudo_away_img, x_away, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo.get('away', ''))
+
+            home_text = jogo.get('home', '')[:12]
+            away_text = jogo.get('away', '')[:12]
+
+            try:
+                home_bbox = draw.textbbox((0, 0), home_text, font=FONTE_TIMES)
+                home_w = home_bbox[2] - home_bbox[0]
+                draw.text((x_home + (TAMANHO_QUADRADO - home_w)//2, y_escudos + TAMANHO_QUADRADO + 20),
+                         home_text, font=FONTE_TIMES, fill=(255, 255, 255))
+            except:
+                draw.text((x_home, y_escudos + TAMANHO_QUADRADO + 20), home_text, font=FONTE_TIMES, fill=(255, 255, 255))
+
+            try:
+                away_bbox = draw.textbbox((0, 0), away_text, font=FONTE_TIMES)
+                away_w = away_bbox[2] - away_bbox[0]
+                draw.text((x_away + (TAMANHO_QUADRADO - away_w)//2, y_escudos + TAMANHO_QUADRADO + 20),
+                         away_text, font=FONTE_TIMES, fill=(255, 255, 255))
+            except:
+                draw.text((x_away, y_escudos + TAMANHO_QUADRADO + 20), away_text, font=FONTE_TIMES, fill=(255, 255, 255))
+
+            # Placar
+            resultado_score = f"{jogo.get('home_goals', '?')} - {jogo.get('away_goals', '?')}"
+            try:
+                score_bbox = draw.textbbox((0, 0), resultado_score, font=FONTE_RESULTADO)
+                score_w = score_bbox[2] - score_bbox[0]
+                score_x = x_home + TAMANHO_QUADRADO + (ESPACO_ENTRE_ESCUDOS - score_w) // 2
+                draw.text((score_x, y_escudos + TAMANHO_QUADRADO//2 - 25), 
+                         resultado_score, font=FONTE_RESULTADO, fill=(255, 255, 255))
+            except:
+                score_x = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS//2 - 60
+                draw.text((score_x, y_escudos + TAMANHO_QUADRADO//2 - 25), 
+                         resultado_score, font=FONTE_RESULTADO, fill=(255, 255, 255))
+
+            # Tipo de aposta
+            tipo_aposta = jogo.get("tipo", "over_1.5")
+            tipo_text = "Over 1.5" if tipo_aposta == "over_1.5" else "Over 2.5"
+            emoji_tipo = "🟢" if tipo_aposta == "over_1.5" else "🟡"
+            
+            try:
+                tipo_bbox = draw.textbbox((0, 0), f"{emoji_tipo} {tipo_text}", font=FONTE_INFO)
+                tipo_w = tipo_bbox[2] - tipo_bbox[0]
+                draw.text(((LARGURA - tipo_w) // 2, y_escudos + TAMANHO_QUADRADO + 80), 
+                         f"{emoji_tipo} {tipo_text}", font=FONTE_INFO, fill=(150, 200, 255))
+            except:
+                draw.text((LARGURA//2 - 100, y_escudos + TAMANHO_QUADRADO + 80), 
+                         f"{emoji_tipo} {tipo_text}", font=FONTE_INFO, fill=(150, 200, 255))
+
+            y_pos += ALTURA_POR_JOGO
+
+        # Rodapé
+        rodape_text = f"CONFERIDO EM {datetime.now().strftime('%d/%m/%Y %H:%M')} | ELITE MASTER 3.0"
+        try:
+            rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_DETALHES)
+            rodape_w = rodape_bbox[2] - rodape_bbox[0]
+            draw.text(((LARGURA - rodape_w) // 2, altura_total - 70), rodape_text, font=FONTE_DETALHES, fill=(100, 130, 160))
+        except:
+            draw.text((LARGURA//2 - 300, altura_total - 70), rodape_text, font=FONTE_DETALHES, fill=(100, 130, 160))
+
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG", optimize=True, quality=95)
+        buffer.seek(0)
+        
+        return buffer
     
     def gerar_poster_westham_style(self, jogos: list, titulo: str = "⚽ ALERTA DE GOLS", tipo_alerta: str = "over_under") -> io.BytesIO:
         LARGURA = 2000
@@ -3083,7 +3224,7 @@ class PosterGenerator:
 
             y_pos += ALTURA_POR_JOGO
 
-        rodape_text = f"Gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')} - ELITE MASTER SYSTEM 2.0"
+        rodape_text = f"Gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')} - ELITE MASTER SYSTEM 3.0"
         try:
             rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_DETALHES)
             rodape_w = rodape_bbox[2] - rodape_bbox[0]
@@ -3374,7 +3515,7 @@ class PosterGenerator:
 
             y_pos += ALTURA_POR_JOGO
 
-        rodape_text = "ELITE MASTER SYSTEM 2.0 - ANÁLISE PREDITIVA DE RESULTADOS"
+        rodape_text = "ELITE MASTER SYSTEM 3.0 - ANÁLISE PREDITIVA DE RESULTADOS"
         try:
             rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_DETALHES)
             rodape_w = rodape_bbox[2] - rodape_bbox[0]
@@ -3468,10 +3609,6 @@ class PosterGenerator:
                 draw.text((x + 70, y + 90), iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
 
 
-# =============================
-# CLASSE RESULTADOS TOP ALERTAS (MODIFICADA COM NOVA CLASSIFICAÇÃO)
-# =============================
-
 class ResultadosTopAlertas:
     def __init__(self, sistema_principal):
         self.sistema = sistema_principal
@@ -3491,7 +3628,6 @@ class ResultadosTopAlertas:
             st.warning("⚠️ Nenhum alerta TOP salvo para conferência")
             return
         
-        # Filtra apenas os alertas da data selecionada e não conferidos
         alertas_hoje = {}
         for chave, alerta in alertas_top.items():
             if alerta.get("data_busca") == hoje and not alerta.get("conferido", False):
@@ -3503,7 +3639,6 @@ class ResultadosTopAlertas:
         
         st.info(f"🔍 Encontrados {len(alertas_hoje)} alertas TOP pendentes")
         
-        # Agrupar por tipo de alerta
         alertas_por_tipo = defaultdict(list)
         for alerta in alertas_hoje.values():
             tipo = alerta.get("tipo_alerta", "over_under")
@@ -3737,7 +3872,7 @@ class ResultadosTopAlertas:
                         f"<b>📊 {len(jogos_conferidos)} JOGOS</b>\n"
                         f"<b>✅ {greens} GREEN  •  ❌ {reds} RED</b>\n"
                         f"<b>🎯 ACERTO: {taxa_acerto:.1f}%</b>\n\n"
-                        f"<b>🔥 ELITE MASTER SYSTEM 2.0</b>"
+                        f"<b>🔥 ELITE MASTER SYSTEM 3.0</b>"
                     )
                     
                     if self.telegram_client.enviar_foto(poster, caption=caption):
@@ -3891,7 +4026,7 @@ class ResultadosTopAlertas:
                 resultado_texto = "✅" if jogo.get("resultado") == "GREEN" else "❌"
                 texto_fallback += f"{i}. {jogo['home']} {jogo.get('home_goals', '?')}-{jogo.get('away_goals', '?')} {jogo['away']} {resultado_texto}\n"
         
-        texto_fallback += "\n🔥 ELITE MASTER SYSTEM 2.0 - TOP PERFORMANCE"
+        texto_fallback += "\n🔥 ELITE MASTER SYSTEM 3.0 - TOP PERFORMANCE"
         
         if self.telegram_client.enviar_mensagem(f"<b>{texto_fallback}</b>", self.config.TELEGRAM_CHAT_ID_ALT2):
             st.success(f"📤 Resultados enviados como texto!")
@@ -3900,10 +4035,6 @@ class ResultadosTopAlertas:
             st.error(f"❌ Falha ao enviar resultados como texto!")
             return False
 
-
-# =============================
-# CLASSE GERENCIADOR ALERTAS COMPLETOS (MODIFICADA COM GERADOR DE MÚLTIPLAS 3.0)
-# =============================
 
 class GerenciadorAlertasCompletos:
     def __init__(self, sistema_principal):
@@ -3939,19 +4070,15 @@ class GerenciadorAlertasCompletos:
         DataStorage.salvar_resultados_completos(resultados)
     
     def carregar_multiplas(self) -> dict:
-        """Carrega as múltiplas salvas"""
         return DataStorage.carregar_multiplas()
     
     def _salvar_multiplas(self, multiplas: dict):
-        """Salva as múltiplas"""
         DataStorage.salvar_multiplas(multiplas)
     
     def carregar_resultados_multiplas(self) -> dict:
-        """Carrega os resultados das múltiplas"""
         return DataStorage.carregar_resultados_multiplas()
     
     def _salvar_resultados_multiplas(self, resultados: dict):
-        """Salva os resultados das múltiplas"""
         DataStorage.salvar_resultados_multiplas(resultados)
     
     def processar_e_enviar_alertas_completos(self, jogos_analisados: list, data_busca: str, 
@@ -3962,14 +4089,33 @@ class GerenciadorAlertasCompletos:
                                              mostrar_estatisticas: bool = True):
         """
         Processa os jogos com o SISTEMA AUTÔNOMO DE APOSTAS 2.0 + GERADOR DE MÚLTIPLAS 3.0
+        Com opção de enviar múltiplas como texto ou pôster
         """
         if not jogos_analisados:
             return False
 
-        st.markdown("### 🤖 SISTEMA AUTÔNOMO DE APOSTAS 2.0 + GERADOR DE MÚLTIPLAS 3.0")
+        st.markdown("### 🤖 SISTEMA AUTÔNOMO DE APOSTAS 3.0 + GERADOR DE MÚLTIPLAS")
         st.markdown("**Decisão automática por mercado** com classificação A/B/C e geração profissional de múltiplas")
         
-        # 1. Filtrar jogos pelos tipos de análise selecionados
+        # Opção de envio para múltiplas
+        st.markdown("### 📨 Opções de Envio de Múltiplas")
+        col1, col2 = st.columns(2)
+        with col1:
+            enviar_multiplas = st.checkbox("📤 Enviar Múltiplas", value=True, key="enviar_multiplas_opcao")
+        with col2:
+            formato_multipla = st.selectbox(
+                "Formato da Múltipla",
+                ["Pôster West Ham", "Texto", "Ambos"],
+                key="formato_multipla"
+            )
+        
+        # Opção para aliviar envios (evitar spam)
+        aliviar_envios = st.checkbox(
+            "🌙 Modo Aliviado (enviar apenas múltipla principal - HÍBRIDO)", 
+            value=False,
+            help="Ative para enviar apenas a múltipla HÍBRIDA (principal) em vez de todas as 3 múltiplas"
+        )
+        
         jogos_por_tipo = []
         for jogo_dict in jogos_analisados:
             tem_analise = False
@@ -3990,7 +4136,6 @@ class GerenciadorAlertasCompletos:
             st.warning("⚠️ Nenhum jogo com análises válidas para os tipos selecionados.")
             return False
         
-        # 2. Aplicar classificação A/B/C e gerar alertas TOP
         with st.spinner("🔍 Classificando jogos (Níveis A/B/C) e gerando alertas TOP..."):
             jogos_classificados = self._classificar_e_gerar_alertas_top(jogos_por_tipo, data_busca, tipos_analise_selecionados)
         
@@ -3998,17 +4143,14 @@ class GerenciadorAlertasCompletos:
             st.warning("⚠️ Nenhum jogo aprovado após classificação A/B/C.")
             return False
         
-        # 3. Mostrar classificação dos jogos
         self._mostrar_classificacao_jogos(jogos_classificados)
         
-        # 4. Gerar múltiplas profissionais
         with st.spinner("💣 Gerando múltiplas profissionais..."):
             multiplas = self.gerador_multiplas.gerar_todas_multiplas(jogos_classificados)
         
         if multiplas:
             st.success(f"🎯 {len(multiplas)} MÚLTIPLAS GERADAS!")
             
-            # Salvar múltiplas
             multiplas_dict = {}
             for idx, multipla in enumerate(multiplas):
                 multipla_id = f"multipla_{idx}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -4020,37 +4162,80 @@ class GerenciadorAlertasCompletos:
             
             self._salvar_multiplas(multiplas_dict)
             
-            # Mostrar e enviar múltiplas
-            for idx, multipla in enumerate(multiplas, 1):
-                with st.expander(f"💣 MÚLTIPLA {idx} - {multipla['modelo']} (Odds: {multipla['odd_total']:.2f})"):
-                    st.markdown(self.gerador_multiplas.gerar_texto_multipla(multipla))
+            if enviar_multiplas:
+                multiplas_para_enviar = []
                 
-                # Enviar para Telegram se configurado
-                if st.session_state.get("enviar_multiplas", True):
-                    self._enviar_multipla_telegram(multipla, data_busca)
+                if aliviar_envios:
+                    # Enviar apenas a múltipla HÍBRIDA (principal)
+                    multipla_hibrida = next((m for m in multiplas if m["modelo"] == "🔥 HÍBRIDO (PROFISSIONAL)"), None)
+                    if multipla_hibrida:
+                        multiplas_para_enviar.append(multipla_hibrida)
+                        st.info("🌙 Modo Aliviado ativado - Enviando apenas a múltipla HÍBRIDA (principal)")
+                    else:
+                        # Se não encontrar híbrida, envia a primeira disponível
+                        multiplas_para_enviar.append(multiplas[0])
+                        st.info("🌙 Modo Aliviado ativado - Enviando a primeira múltipla disponível")
+                else:
+                    multiplas_para_enviar = multiplas
+                
+                for idx, multipla in enumerate(multiplas_para_enviar, 1):
+                    with st.expander(f"💣 MÚLTIPLA {idx} - {multipla['modelo']} (Odds: {multipla['odd_total']:.2f})"):
+                        st.markdown(self.gerador_multiplas.gerar_texto_multipla(multipla))
+                    
+                    self._enviar_multipla_telegram_v2(multipla, data_busca, formato_multipla)
+                    time.sleep(2)  # Pequena pausa entre envios
+            else:
+                for idx, multipla in enumerate(multiplas, 1):
+                    with st.expander(f"💣 MÚLTIPLA {idx} - {multipla['modelo']} (Odds: {multipla['odd_total']:.2f})"):
+                        st.markdown(self.gerador_multiplas.gerar_texto_multipla(multipla))
         else:
             st.warning("⚠️ Não foi possível gerar múltiplas com os jogos disponíveis.")
         
         return True
     
+    def _enviar_multipla_telegram_v2(self, multipla: dict, data_busca: str, formato: str):
+        """Envia a múltipla para o Telegram com formato escolhido (texto ou pôster)"""
+        try:
+            data_br = datetime.strptime(data_busca, "%Y-%m-%d").strftime("%d/%m/%Y")
+            
+            if formato in ["Texto", "Ambos"]:
+                texto = self.gerador_multiplas.gerar_texto_multipla(multipla)
+                texto = f"📅 {data_br}\n" + texto
+                if self.telegram_client.enviar_mensagem(texto, self.config.TELEGRAM_CHAT_ID_ALT2):
+                    st.success(f"📤 Múltipla {multipla['modelo']} enviada como texto!")
+                else:
+                    st.warning(f"⚠️ Falha ao enviar múltipla como texto")
+            
+            if formato in ["Pôster West Ham", "Ambos"]:
+                poster = self.poster_generator.gerar_poster_multipla(multipla, titulo=f"📅 {data_br}")
+                caption = f"<b>💣 MÚLTIPLA PROFISSIONAL - {multipla['modelo']}</b>\n"
+                caption += f"<b>📅 {data_br}</b>\n"
+                caption += f"<b>🎯 Odds Total: {multipla['odd_total']:.2f}</b>\n\n"
+                caption += f"<b>🔥 ELITE MASTER SYSTEM 3.0</b>"
+                
+                if self.telegram_client.enviar_foto(poster, caption=caption):
+                    st.success(f"📤 Múltipla {multipla['modelo']} enviada como pôster!")
+                else:
+                    st.warning(f"⚠️ Falha ao enviar múltipla como pôster")
+            
+            return True
+                
+        except Exception as e:
+            logging.error(f"Erro ao enviar múltipla: {e}")
+            st.error(f"❌ Erro ao enviar múltipla: {e}")
+            return False
+    
     def _classificar_e_gerar_alertas_top(self, jogos: list, data_busca: str, tipos_analise_selecionados: dict) -> list:
-        """
-        Classifica os jogos em Níveis A, B ou C e gera alertas TOP
-        Retorna lista de jogos aprovados (Nível A e B)
-        """
         jogos_classificados = []
         alertas_top = DataStorage.carregar_alertas_top()
         
         for jogo_dict in jogos:
-            # Classificar o jogo
             classificacao = self.gerador_multiplas.classificar_jogo(jogo_dict)
             jogo_dict["classificacao"] = classificacao
             
-            # Se for Nível C (perigo), não incluir nos alertas TOP
             if classificacao["nivel"] == "C":
                 continue
             
-            # Gerar alerta TOP
             fixture_id = str(jogo_dict.get("id"))
             chave_alerta = f"{fixture_id}_{data_busca}"
             
@@ -4083,16 +4268,13 @@ class GerenciadorAlertasCompletos:
             
             jogos_classificados.append(jogo_dict)
         
-        # Salvar alertas TOP
         DataStorage.salvar_alertas_top(alertas_top)
         
         return jogos_classificados
     
     def _mostrar_classificacao_jogos(self, jogos_classificados: list):
-        """Mostra a classificação dos jogos na interface"""
         st.markdown("### 📊 CLASSIFICAÇÃO DOS JOGOS (NÍVEIS A/B/C)")
         
-        # Contar por nível
         nivel_a = [j for j in jogos_classificados if j.get("classificacao", {}).get("nivel") == "A"]
         nivel_b = [j for j in jogos_classificados if j.get("classificacao", {}).get("nivel") == "B"]
         
@@ -4106,7 +4288,6 @@ class GerenciadorAlertasCompletos:
         
         st.markdown("---")
         
-        # Expandir para ver todos os jogos
         with st.expander("📋 Ver todos os jogos classificados"):
             for jogo in jogos_classificados:
                 classif = jogo.get("classificacao", {})
@@ -4122,54 +4303,11 @@ class GerenciadorAlertasCompletos:
                 st.write(f"   ⚽ Estimativa: {estimativa:.2f} | 🔍 Confiança: {confianca:.0f}%")
                 st.write("---")
     
-    def _enviar_multipla_telegram(self, multipla: dict, data_busca: str):
-        """Envia a múltipla para o Telegram"""
-        try:
-            data_br = datetime.strptime(data_busca, "%Y-%m-%d").strftime("%d/%m/%Y")
-            
-            texto = f"💣 **MÚLTIPLA PROFISSIONAL - {multipla['modelo']}**\n"
-            texto += f"📅 {data_br}\n"
-            texto += f"🎯 **Odds Total:** {multipla['odd_total']:.2f}\n"
-            texto += f"📊 **Composição:** {multipla['over_1.5_count']}x Over 1.5 + {multipla['over_2.5_count']}x Over 2.5\n"
-            texto += f"⚠️ **Risco:** {multipla['risco']}\n\n"
-            
-            for i, jogo in enumerate(multipla["jogos"], 1):
-                classif = jogo.get("classificacao", {})
-                tipo = classif.get("tipo", "over_1.5")
-                emoji = "🟢" if tipo == "over_1.5" else "🟡"
-                tendencia = jogo.get("tendencia", "Over 1.5")
-                
-                odd_jogo = 100 / max(jogo.get("probabilidade", 65), 10)
-                
-                texto += f"{i}. {emoji} **{jogo['home']} vs {jogo['away']}**\n"
-                texto += f"   📊 {tendencia}\n"
-                texto += f"   ⚽ Estimativa: {classif.get('estimativa', 0):.2f} | 🔍 Conf: {classif.get('confianca', 0):.0f}%\n"
-                texto += f"   💰 Odd: {odd_jogo:.2f}\n"
-                texto += f"   🏷️ Liga: {jogo.get('liga', 'Desconhecida')}\n\n"
-            
-            texto += f"📌 **Recomendação:** {multipla['recomendacao']}\n\n"
-            texto += f"🔥 **ELITE MASTER SYSTEM 3.0 - GERADOR DE MÚLTIPLAS**"
-            
-            if self.telegram_client.enviar_mensagem(texto, self.config.TELEGRAM_CHAT_ID_ALT2):
-                st.success(f"📤 Múltipla {multipla['modelo']} enviada para o Telegram!")
-                return True
-            else:
-                st.warning(f"⚠️ Falha ao enviar múltipla para o Telegram")
-                return False
-                
-        except Exception as e:
-            logging.error(f"Erro ao enviar múltipla: {e}")
-            return False
-    
     def conferir_resultados_completos(self, data_selecionada):
-        """
-        Confere os resultados dos alertas completos e das múltiplas
-        """
         hoje = data_selecionada.strftime("%Y-%m-%d")
         data_br = data_selecionada.strftime("%d/%m/%Y")
         st.subheader(f"🏆 Conferindo Resultados Completos - {data_br}")
 
-        # 1. Conferir alertas individuais
         alertas = self.carregar_alertas()
         if alertas:
             alertas_hoje = {k: v for k, v in alertas.items() if v.get("data_busca") == hoje and not v.get("conferido", False)}
@@ -4180,7 +4318,6 @@ class GerenciadorAlertasCompletos:
             else:
                 st.info(f"ℹ️ Nenhum alerta individual pendente para {data_br}")
         
-        # 2. Conferir múltiplas
         multiplas = self.carregar_multiplas()
         if multiplas:
             multiplas_hoje = {k: v for k, v in multiplas.items() if v.get("data_criacao", "").startswith(hoje) and not v.get("enviada", False)}
@@ -4191,11 +4328,9 @@ class GerenciadorAlertasCompletos:
             else:
                 st.info(f"ℹ️ Nenhuma múltipla pendente para {data_br}")
         
-        # 3. Mostrar resumo
         self._mostrar_resumo_completos()
     
     def _conferir_alertas_individuais(self, alertas, hoje):
-        """Confere os alertas individuais"""
         jogos_conferidos = []
         progress_bar = st.progress(0)
         total = len(alertas)
@@ -4272,7 +4407,6 @@ class GerenciadorAlertasCompletos:
                 }
                 jogos_conferidos.append(jogo_conferido)
                 
-                # Mostrar resultado
                 decisao = alerta_completo.decisao_autonomo
                 mercado_escolhido = decisao.get("mercado", "unknown")
                 resultado_mercado = None
@@ -4298,15 +4432,14 @@ class GerenciadorAlertasCompletos:
         if jogos_conferidos:
             st.success(f"✅ {len(jogos_conferidos)} jogos conferidos!")
             
-            # Enviar resultados em lotes
             lotes = [jogos_conferidos[i:i+3] for i in range(0, len(jogos_conferidos), 3)]
             for idx_lote, lote in enumerate(lotes, 1):
-                poster = self.gerar_poster_resultados_completos_v2(lote, {})
+                poster = self.poster_generator.gerar_poster_resultados_completos_v2(lote, {})
                 caption = (
                     f"<b>🏆 RESULTADOS COMPLETOS - {hoje}</b>\n"
                     f"<b>📋 LOTE {idx_lote}/{len(lotes)} - {len(lote)} JOGOS</b>\n"
                     f"<b>📊 Decisão Autônoma por Mercado</b>\n\n"
-                    f"<b>🔥 ELITE MASTER SYSTEM 2.0 - RESULTADOS CONFIRMADOS</b>"
+                    f"<b>🔥 ELITE MASTER SYSTEM 3.0 - RESULTADOS CONFIRMADOS</b>"
                 )
                 
                 if self.telegram_client.enviar_foto(poster, caption=caption):
@@ -4315,10 +4448,6 @@ class GerenciadorAlertasCompletos:
                     st.error(f"❌ Falha ao enviar lote {idx_lote}/{len(lotes)}")
     
     def _conferir_multiplas(self, multiplas, hoje):
-        """
-        Confere os resultados das múltiplas.
-        Envia o resultado apenas quando TODOS os jogos da múltipla estiverem finalizados.
-        """
         multiplas_para_enviar = []
         
         for multipla_id, multipla in multiplas.items():
@@ -4349,7 +4478,6 @@ class GerenciadorAlertasCompletos:
                     ht_home_goals = half_time.get("home", 0)
                     ht_away_goals = half_time.get("away", 0)
                     
-                    # Verificar resultado da aposta
                     total_gols = home_goals + away_goals
                     classificacao = jogo.get("classificacao", {})
                     tipo = classificacao.get("tipo", "over_1.5")
@@ -4390,20 +4518,18 @@ class GerenciadorAlertasCompletos:
                     todos_finalizados = False
             
             if todos_finalizados and jogos_conferidos:
-                # Calcular resultado da múltipla
                 multipla_acertada = all(resultados_jogos)
                 multipla["jogos_conferidos"] = jogos_conferidos
                 multipla["acertada"] = multipla_acertada
                 multipla["data_conferencia"] = datetime.now().isoformat()
                 multiplas_para_enviar.append(multipla)
         
-        # Salvar múltiplas atualizadas e enviar as completas
         multiplas_atualizadas = self.carregar_multiplas()
         for multipla in multiplas_para_enviar:
             multipla_id = multipla["id"]
             multiplas_atualizadas[multipla_id] = multipla
             multiplas_atualizadas[multipla_id]["enviada"] = True
-            self._enviar_resultado_multipla(multipla)
+            self._enviar_resultado_multipla_v2(multipla)
         
         self._salvar_multiplas(multiplas_atualizadas)
         
@@ -4412,13 +4538,17 @@ class GerenciadorAlertasCompletos:
         else:
             st.info("⏳ Nenhuma múltipla completamente finalizada ainda.")
     
-    def _enviar_resultado_multipla(self, multipla: dict):
-        """Envia o resultado da múltipla"""
+    def _enviar_resultado_multipla_v2(self, multipla: dict):
+        """Envia o resultado da múltipla com pôster West Ham"""
         try:
             jogos = multipla["jogos_conferidos"]
             acertada = multipla.get("acertada", False)
             modelo = multipla["modelo"]
             odd_total = multipla["odd_total"]
+            data_br = datetime.now().strftime("%d/%m/%Y")
+            
+            # Gerar pôster para resultado da múltipla
+            poster = self.poster_generator.gerar_poster_resultado_multipla(multipla, data_br)
             
             if acertada:
                 titulo = f"🎯 MÚLTIPLA {modelo.upper()} - ACERTOU! 🎯"
@@ -4427,22 +4557,34 @@ class GerenciadorAlertasCompletos:
                 titulo = f"❌ MÚLTIPLA {modelo.upper()} - ERRADA ❌"
                 emoji = "❌"
             
-            texto = f"<b>{titulo}</b>\n\n"
-            texto += f"{emoji} <b>RESULTADO:</b> {'Acertou' if acertada else 'Errou'}\n"
-            texto += f"📊 <b>JOGOS:</b> {len(jogos)}\n"
-            texto += f"🎯 <b>ODDS TOTAL:</b> {odd_total:.2f}\n\n"
+            caption = (
+                f"<b>{titulo}</b>\n\n"
+                f"{emoji} <b>RESULTADO:</b> {'Acertou' if acertada else 'Errou'}\n"
+                f"📊 <b>JOGOS:</b> {len(jogos)}\n"
+                f"🎯 <b>ODDS TOTAL:</b> {odd_total:.2f}\n\n"
+                f"<b>🔥 ELITE MASTER SYSTEM 3.0 - MÚLTIPLAS</b>"
+            )
             
-            for i, jogo in enumerate(jogos, 1):
-                resultado_emoji = "✅" if jogo["resultado"] == "GREEN" else "❌"
-                texto += f"{i}. {jogo['home']} {jogo['home_goals']}-{jogo['away_goals']} {jogo['away']}\n"
-                texto += f"   🎯 {jogo['tipo'].upper()} | {resultado_emoji} {jogo['resultado']}\n\n"
-            
-            texto += f"<b>🔥 ELITE MASTER SYSTEM 3.0 - MÚLTIPLAS</b>"
-            
-            if self.telegram_client.enviar_mensagem(texto, self.config.TELEGRAM_CHAT_ID_ALT2):
-                st.success(f"📤 Resultado da múltipla {modelo} enviado!")
+            if self.telegram_client.enviar_foto(poster, caption=caption):
+                st.success(f"📤 Resultado da múltipla {modelo} enviado com pôster!")
                 return True
             else:
+                # Fallback para texto
+                texto = f"<b>{titulo}</b>\n\n"
+                texto += f"{emoji} <b>RESULTADO:</b> {'Acertou' if acertada else 'Errou'}\n"
+                texto += f"📊 <b>JOGOS:</b> {len(jogos)}\n"
+                texto += f"🎯 <b>ODDS TOTAL:</b> {odd_total:.2f}\n\n"
+                
+                for i, jogo in enumerate(jogos, 1):
+                    resultado_emoji = "✅" if jogo["resultado"] == "GREEN" else "❌"
+                    texto += f"{i}. {jogo['home']} {jogo['home_goals']}-{jogo['away_goals']} {jogo['away']}\n"
+                    texto += f"   🎯 {jogo['tipo'].upper()} | {resultado_emoji} {jogo['resultado']}\n\n"
+                
+                texto += f"<b>🔥 ELITE MASTER SYSTEM 3.0 - MÚLTIPLAS</b>"
+                
+                if self.telegram_client.enviar_mensagem(texto, self.config.TELEGRAM_CHAT_ID_ALT2):
+                    st.success(f"📤 Resultado da múltipla {modelo} enviado como texto!")
+                    return True
                 return False
                 
         except Exception as e:
@@ -4450,7 +4592,6 @@ class GerenciadorAlertasCompletos:
             return False
     
     def _mostrar_resumo_completos(self):
-        """Mostra resumo dos alertas completos"""
         alertas = self.carregar_alertas()
         multiplas = self.carregar_multiplas()
         
@@ -4482,310 +4623,6 @@ class GerenciadorAlertasCompletos:
                 taxa_acerto = (acertadas / total_multiplas) * 100
                 st.metric("📊 Taxa de Acerto", f"{taxa_acerto:.1f}%")
     
-    def _mostrar_estatisticas_autonomas(self, resultado: dict):
-        """Mostra estatísticas detalhadas do processamento autônomo"""
-        if "estatisticas" not in resultado:
-            st.warning("⚠️ Estatísticas não disponíveis para este processamento")
-            return
-        
-        stats = resultado["estatisticas"]
-        
-        st.markdown("### 📊 ESTATÍSTICAS DO SISTEMA AUTÔNOMO 2.0")
-        
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.metric(
-                "📋 Total Analisados", 
-                stats.get("total_analisados", 0),
-                delta=f"{stats.get('taxa_aprovacao', 0):.1f}% aprovados"
-            )
-        
-        with col2:
-            st.metric(
-                "✅ Aprovados", 
-                stats.get("total_aprovados", 0),
-                delta=f"Score médio: {stats.get('media_score_aprovados', 0):.1f}"
-            )
-        
-        with col3:
-            st.metric(
-                "🔥 ELITE", 
-                stats.get("premium_count", 0),
-                delta=f"Score ≥ 12"
-            )
-        
-        with col4:
-            st.metric(
-                "✅ PREMIUM", 
-                stats.get("forte_count", 0),
-                delta=f"Score ≥ 9"
-            )
-        
-        # Mostrar distribuição de mercados
-        if stats.get("mercados"):
-            st.markdown("**🎯 Distribuição de Mercados Escolhidos:**")
-            mercados_str = " | ".join([f"{m.upper()}: {c}" for m, c in stats["mercados"].items()])
-            st.info(mercados_str)
-        
-        # Mostrar reprovados em expander
-        if resultado.get("reprovados"):
-            with st.expander(f"❌ Jogos REPROVADOS ({len(resultado['reprovados'])})"):
-                for reprovado in resultado["reprovados"][:10]:
-                    jogo = reprovado.get("jogo", {})
-                    motivo = reprovado.get("motivo", "Motivo não especificado")
-                    decisao = reprovado.get("decisao", {})
-                    mercado_sugerido = decisao.get("mercado", "N/A")
-                    conf_ajustada = decisao.get("confianca_ajustada", 0) * 100
-                    
-                    st.write(f"**{jogo.get('home', '?')} vs {jogo.get('away', '?')}**")
-                    st.write(f"   ❌ Motivo: {motivo}")
-                    
-                    if mercado_sugerido and mercado_sugerido != "N/A":
-                        st.write(f"   🎯 Mercado sugerido: {str(mercado_sugerido).upper()} ({conf_ajustada:.0f}%)")
-                    else:
-                        st.write(f"   🎯 Mercado sugerido: N/A ({conf_ajustada:.0f}%)")
-                    
-                    st.write("---")
-        
-        st.markdown("---")
-    
-    def gerar_poster_completo_v2(self, jogos: list, tipos_analise_selecionados: dict) -> io.BytesIO:
-        """Gera poster com os jogos aprovados e suas classificações - VERSÃO 2.0"""
-        LARGURA = 2000
-        ALTURA_TOPO = 320
-        ALTURA_POR_JOGO = 1000
-        PADDING = 80
-        
-        jogos_count = len(jogos)
-        altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
-
-        img = Image.new("RGB", (LARGURA, altura_total), color=(10, 20, 30))
-        draw = ImageDraw.Draw(img)
-
-        FONTE_TITULO = self.poster_generator.criar_fonte(85)
-        FONTE_SUBTITULO = self.poster_generator.criar_fonte(60)
-        FONTE_TIMES = self.poster_generator.criar_fonte(55)
-        FONTE_VS = self.poster_generator.criar_fonte(50)
-        FONTE_INFO = self.poster_generator.criar_fonte(42)
-        FONTE_ANALISE = self.poster_generator.criar_fonte(45)
-        FONTE_ANALISE_TITULO = self.poster_generator.criar_fonte(48)
-        FONTE_DETALHES = self.poster_generator.criar_fonte(32)
-        FONTE_SCORE = self.poster_generator.criar_fonte(70)
-
-        titulo = "🤖 ELITE MASTER 2.0 - DECISÃO AUTÔNOMA"
-        try:
-            titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
-            titulo_w = titulo_bbox[2] - titulo_bbox[0]
-            draw.text(((LARGURA - titulo_w) // 2, 70), titulo, font=FONTE_TITULO, fill=(255, 255, 255))
-        except:
-            draw.text((LARGURA//2 - 250, 70), titulo, font=FONTE_TITULO, fill=(255, 255, 255))
-
-        # Subtítulo com estatísticas
-        data_geracao = f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')} - Decisão Autônoma por Liga"
-        try:
-            data_bbox = draw.textbbox((0, 0), data_geracao, font=FONTE_INFO)
-            data_w = data_bbox[2] - data_bbox[0]
-            draw.text(((LARGURA - data_w) // 2, 160), data_geracao, font=FONTE_INFO, fill=(150, 200, 255))
-        except:
-            draw.text((LARGURA//2 - 250, 160), data_geracao, font=FONTE_INFO, fill=(150, 200, 255))
-
-        draw.line([(LARGURA//4, 210), (3*LARGURA//4, 210)], fill=(255, 215, 0), width=6)
-
-        y_pos = ALTURA_TOPO
-
-        for idx, jogo in enumerate(jogos):
-            x0, y0 = PADDING, y_pos
-            x1, y1 = LARGURA - PADDING, y_pos + ALTURA_POR_JOGO - 40
-            
-            analise_prof = jogo.get("analise_profissional", {})
-            decisao = jogo.get("decisao_autonomo", {})
-            mercado = decisao.get("mercado", "unknown")
-            conf_ajustada = decisao.get("confianca_ajustada", 0) * 100
-            conf_original = decisao.get("confianca_original", 0) * 100
-            liga_decisao = decisao.get("liga", "Desconhecida")
-            nivel = analise_prof.get("nivel", "N/A")
-            score = analise_prof.get("score", 0)
-            
-            # Definir cor baseada no mercado escolhido
-            if mercado == "over":
-                cor_rgb = (255, 215, 0)  # Ouro
-            elif mercado == "btts":
-                cor_rgb = (155, 89, 182)  # Roxo
-            elif mercado == "ht":
-                cor_rgb = (76, 175, 80)   # Verde
-            elif mercado == "favorito":
-                cor_rgb = (255, 87, 34)   # Laranja
-            else:
-                cor_rgb = (100, 100, 100) # Cinza
-            
-            draw.rectangle([x0, y0, x1, y1], fill=(25, 35, 45), outline=cor_rgb, width=4)
-
-            # Badge de Score
-            badge_width = 180
-            badge_height = 80
-            badge_x = x1 - badge_width - 50
-            badge_y = y0 + 40
-            
-            draw.rectangle([badge_x, badge_y, badge_x + badge_width, badge_y + badge_height], 
-                          fill=cor_rgb, outline=(255, 255, 255), width=2)
-            
-            try:
-                score_text = f"{score}"
-                score_bbox = draw.textbbox((0, 0), score_text, font=FONTE_SCORE)
-                score_w = score_bbox[2] - score_bbox[0]
-                score_h = score_bbox[3] - score_bbox[1]
-                score_x = badge_x + (badge_width - score_w) // 2
-                score_y = badge_y + (badge_height - score_h) // 2
-                draw.text((score_x, score_y), score_text, font=FONTE_SCORE, fill=(0, 0, 0))
-            except:
-                draw.text((badge_x + 70, badge_y + 20), str(score), font=FONTE_SCORE, fill=(0, 0, 0))
-
-            liga_text = jogo['liga'].upper()[:25]
-            try:
-                liga_bbox = draw.textbbox((0, 0), liga_text, font=FONTE_SUBTITULO)
-                liga_w = liga_bbox[2] - liga_bbox[0]
-                draw.text(((LARGURA - liga_w) // 2, y0 + 40), liga_text, font=FONTE_SUBTITULO, fill=(200, 200, 200))
-            except:
-                draw.text((LARGURA//2 - 150, y0 + 40), liga_text, font=FONTE_SUBTITULO, fill=(200, 200, 200))
-
-            # Mercado escolhido e confiança
-            mercado_text = f"🎯 MERCADO: {mercado.upper()}"
-            try:
-                mercado_bbox = draw.textbbox((0, 0), mercado_text, font=FONTE_INFO)
-                mercado_w = mercado_bbox[2] - mercado_bbox[0]
-                draw.text(((LARGURA - mercado_w) // 2, y0 + 100), mercado_text, font=FONTE_INFO, fill=cor_rgb)
-            except:
-                draw.text((LARGURA//2 - 150, y0 + 100), mercado_text, font=FONTE_INFO, fill=cor_rgb)
-            
-            conf_text = f"Confiança Ajustada: {conf_ajustada:.0f}% | Original: {conf_original:.0f}%"
-            try:
-                conf_bbox = draw.textbbox((0, 0), conf_text, font=FONTE_INFO)
-                conf_w = conf_bbox[2] - conf_bbox[0]
-                draw.text(((LARGURA - conf_w) // 2, y0 + 150), conf_text, font=FONTE_INFO, fill=(150, 200, 255))
-            except:
-                draw.text((LARGURA//2 - 150, y0 + 150), conf_text, font=FONTE_INFO, fill=(150, 200, 255))
-
-            if isinstance(jogo["hora"], datetime):
-                data_text = jogo["hora"].strftime("%d/%m/%Y")
-                hora_text = jogo["hora"].strftime("%H:%M")
-                data_hora_text = f"{data_text} {hora_text}"
-            else:
-                data_hora_text = str(jogo["hora"])
-
-            try:
-                data_bbox = draw.textbbox((0, 0), data_hora_text, font=FONTE_INFO)
-                data_w = data_bbox[2] - data_bbox[0]
-                draw.text(((LARGURA - data_w) // 2, y0 + 200), data_hora_text, font=FONTE_INFO, fill=(150, 200, 255))
-            except:
-                draw.text((LARGURA//2 - 150, y0 + 200), data_hora_text, font=FONTE_INFO, fill=(150, 200, 255))
-
-            TAMANHO_ESCUDO = 180
-            TAMANHO_QUADRADO = 200
-            ESPACO_ENTRE_ESCUDOS = 700
-
-            largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
-            x_inicio = (LARGURA - largura_total) // 2
-
-            x_home = x_inicio
-            x_away = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
-            y_escudos = y0 + 260
-
-            escudo_home_bytes = self.api_client.baixar_escudo_time(jogo['home'], jogo.get('escudo_home', ''))
-            escudo_away_bytes = self.api_client.baixar_escudo_time(jogo['away'], jogo.get('escudo_away', ''))
-            
-            escudo_home_img = Image.open(io.BytesIO(escudo_home_bytes)).convert("RGBA") if escudo_home_bytes else None
-            escudo_away_img = Image.open(io.BytesIO(escudo_away_bytes)).convert("RGBA") if escudo_away_bytes else None
-
-            self.poster_generator._desenhar_escudo_quadrado(draw, img, escudo_home_img, x_home, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo['home'])
-            self.poster_generator._desenhar_escudo_quadrado(draw, img, escudo_away_img, x_away, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo['away'])
-
-            try:
-                home_bbox = draw.textbbox((0, 0), jogo['home'][:20], font=FONTE_TIMES)
-                home_w = home_bbox[2] - home_bbox[0]
-                draw.text((x_home + (TAMANHO_QUADRADO - home_w)//2, y_escudos + TAMANHO_QUADRADO + 40),
-                         jogo['home'][:20], font=FONTE_TIMES, fill=(255, 255, 255))
-            except:
-                draw.text((x_home, y_escudos + TAMANHO_QUADRADO + 40), jogo['home'][:20], font=FONTE_TIMES, fill=(255, 255, 255))
-
-            try:
-                away_bbox = draw.textbbox((0, 0), jogo['away'][:20], font=FONTE_TIMES)
-                away_w = away_bbox[2] - away_bbox[0]
-                draw.text((x_away + (TAMANHO_QUADRADO - away_w)//2, y_escudos + TAMANHO_QUADRADO + 40),
-                         jogo['away'][:20], font=FONTE_TIMES, fill=(255, 255, 255))
-            except:
-                draw.text((x_away, y_escudos + TAMANHO_QUADRADO + 40), jogo['away'][:20], font=FONTE_TIMES, fill=(255, 255, 255))
-
-            try:
-                vs_bbox = draw.textbbox((0, 0), "VS", font=FONTE_VS)
-                vs_w = vs_bbox[2] - vs_bbox[0]
-                vs_x = x_home + TAMANHO_QUADRADO + (ESPACO_ENTRE_ESCUDOS - vs_w) // 2
-                draw.text((vs_x, y_escudos + TAMANHO_QUADRADO//2 - 30), 
-                         "VS", font=FONTE_VS, fill=(255, 215, 0))
-            except:
-                vs_x = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS//2 - 30
-                draw.text((vs_x, y_escudos + TAMANHO_QUADRADO//2 - 30), "VS", font=FONTE_VS, fill=(255, 215, 0))
-
-            y_analysis = y_escudos + TAMANHO_QUADRADO + 160
-            draw.text((x0 + 80, y_analysis), "📊 DETALHES DA DECISÃO AUTÔNOMA", font=FONTE_ANALISE_TITULO, fill=(255, 215, 0))
-            
-            line_height = 55
-            current_y = y_analysis + 50
-            
-            # Mostrar análise do mercado escolhido
-            if mercado == "over" and "analise_over_under" in jogo:
-                analise_ou = jogo['analise_over_under']
-                draw.text((x0 + 80, current_y), 
-                         f"⚽ OVER: {analise_ou.get('tendencia', 'N/A')} | Prob: {analise_ou.get('probabilidade', 0):.0f}%", 
-                         font=FONTE_ANALISE, fill=(255, 215, 0))
-                current_y += line_height
-                
-            elif mercado == "btts" and "analise_ambas_marcam" in jogo:
-                analise_am = jogo['analise_ambas_marcam']
-                draw.text((x0 + 80, current_y), 
-                         f"🤝 BTTS: {analise_am.get('tendencia_ambas_marcam', 'N/A')} | Conf: {analise_am.get('confianca_ambas_marcam', 0):.0f}%", 
-                         font=FONTE_ANALISE, fill=(155, 89, 182))
-                current_y += line_height
-                
-            elif mercado == "ht" and "analise_gols_ht" in jogo:
-                analise_ht = jogo['analise_gols_ht']
-                draw.text((x0 + 80, current_y), 
-                         f"⏰ GOLS HT: {analise_ht.get('tendencia_ht', 'N/A')} | Conf: {analise_ht.get('confianca_ht', 0):.0f}%", 
-                         font=FONTE_ANALISE, fill=(76, 175, 80))
-                current_y += line_height
-                
-            elif mercado == "favorito" and "analise_favorito" in jogo:
-                analise_fav = jogo['analise_favorito']
-                favorito = analise_fav.get('favorito', '')
-                favorito_text = jogo['home'] if favorito == "home" else jogo['away'] if favorito == "away" else "EMPATE"
-                draw.text((x0 + 80, current_y), 
-                         f"🏆 FAVORITO: {favorito_text} | Conf: {analise_fav.get('confianca_vitoria', 0):.0f}%", 
-                         font=FONTE_ANALISE, fill=(255, 87, 34))
-                current_y += line_height
-            
-            # Linha separadora
-            draw.line([(x0 + 80, current_y + 20), (x1 - 80, current_y + 20)], fill=(100, 130, 160), width=2)
-            
-            # Mostrar odd sugerida e liga
-            odd_text = f"💰 Odd Sugerida: {jogo.get('odd_sugerida', 2.0):.2f} | 🏷️ Liga: {liga_decisao}"
-            draw.text((x0 + 80, current_y + 40), odd_text, font=FONTE_INFO, fill=(100, 255, 100))
-
-            y_pos += ALTURA_POR_JOGO
-
-        rodape_text = "ELITE MASTER SYSTEM 2.0 - DECISÃO AUTÔNOMA POR LIGA"
-        try:
-            rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_DETALHES)
-            rodape_w = rodape_bbox[2] - rodape_bbox[0]
-            draw.text(((LARGURA - rodape_w) // 2, altura_total - 70), rodape_text, font=FONTE_DETALHES, fill=(100, 130, 160))
-        except:
-            draw.text((LARGURA//2 - 300, altura_total - 70), rodape_text, font=FONTE_DETALHES, fill=(100, 130, 160))
-
-        buffer = io.BytesIO()
-        img.save(buffer, format="PNG", optimize=True, quality=95)
-        buffer.seek(0)
-        
-        return buffer
-    
     def gerar_poster_resultados_completos_v2(self, jogos_com_resultados: list, tipos_analise_selecionados: dict) -> io.BytesIO:
         LARGURA = 2000
         ALTURA_TOPO = 330
@@ -4807,7 +4644,7 @@ class GerenciadorAlertasCompletos:
         FONTE_ANALISE_TITULO = self.poster_generator.criar_fonte(45)
         FONTE_DETALHES = self.poster_generator.criar_fonte(35)
 
-        titulo = " RESULTADOS COMPLETOS - ELITE MASTER 2.0"
+        titulo = " RESULTADOS COMPLETOS - ELITE MASTER 3.0"
         try:
             titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
             titulo_w = titulo_bbox[2] - titulo_bbox[0]
@@ -4839,7 +4676,6 @@ class GerenciadorAlertasCompletos:
             home_goals = resultados.get("home_goals", '?')
             away_goals = resultados.get("away_goals", '?')
             
-            # Determinar resultado do mercado escolhido
             resultado_mercado = None
             if mercado_escolhido == "over":
                 resultado_mercado = resultados.get("over_under", "N/A")
@@ -4942,7 +4778,7 @@ class GerenciadorAlertasCompletos:
 
             y_pos += ALTURA_POR_JOGO
 
-        rodape_text = "ELITE MASTER SYSTEM 2.0 - RESULTADOS CONFIRMADOS"
+        rodape_text = "ELITE MASTER SYSTEM 3.0 - RESULTADOS CONFIRMADOS"
         try:
             rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_DETALHES)
             rodape_w = rodape_bbox[2] - rodape_bbox[0]
@@ -4957,13 +4793,7 @@ class GerenciadorAlertasCompletos:
         return buffer
 
 
-# =============================
-# SISTEMA PRINCIPAL (COM MELHORIAS 3.0)
-# =============================
-
 class SistemaAlertasFutebol:
-    """Sistema principal de alertas de futebol - VERSÃO 3.0 COM GERADOR DE MÚLTIPLAS"""
-    
     def __init__(self):
         self.config = ConfigManager()
         self.rate_limiter = RateLimiter()
@@ -4991,7 +4821,6 @@ class SistemaAlertasFutebol:
         )
     
     def processar_jogos(self, data_selecionada, ligas_selecionadas, todas_ligas, top_n, min_conf, max_conf, estilo_poster, alerta_individual, alerta_poster, alerta_top_jogos, formato_top_jogos, tipo_filtro, tipo_analise, config_analise):
-        # Método mantido para compatibilidade
         hoje = data_selecionada.strftime("%Y-%m-%d")
         data_br = data_selecionada.strftime("%d/%m/%Y")
         
@@ -5164,7 +4993,6 @@ class SistemaAlertasFutebol:
             st.warning(f"⚠️ Nenhum jogo encontrado para {tipo_analise}")
     
     def processar_alertas_completos(self, data_selecionada, ligas_selecionadas, todas_ligas, tipos_analise_selecionados):
-        """Processa alertas completos com o sistema autônomo 2.0 e gerador de múltiplas 3.0"""
         hoje = data_selecionada.strftime("%Y-%m-%d")
         data_br = data_selecionada.strftime("%d/%m/%Y")
         
@@ -5234,7 +5062,6 @@ class SistemaAlertasFutebol:
             if jogos_filtrados:
                 st.write(f"✅ Jogos elegíveis: {len(jogos_filtrados)}")
                 
-                # Processar com o sistema autônomo 2.0 e gerador de múltiplas 3.0
                 self.gerenciador_completo.processar_e_enviar_alertas_completos(
                     jogos_filtrados, hoje, tipos_analise_selecionados, False, None
                 )
@@ -5305,7 +5132,6 @@ class SistemaAlertasFutebol:
             self._enviar_alertas_resultados_automaticos(resultados_totais, data_selecionada)
     
     def _conferir_resultados_tipo(self, tipo_alerta: str, data_busca: str) -> dict:
-        # Método mantido para compatibilidade
         if tipo_alerta == "over_under":
             alertas = DataStorage.carregar_alertas()
             resultados = DataStorage.carregar_resultados()
@@ -5528,7 +5354,7 @@ class SistemaAlertasFutebol:
                         caption = f"<b>{titulo}</b>\n\n"
                         caption += f"<b>📊 LOTE {i//batch_size + 1}: {greens}✅ {reds}❌</b>\n"
                         caption += f"<b>🎯 TAXA DE ACERTO: {taxa_acerto:.1f}%</b>\n\n"
-                        caption += f"<b>🔥 ELITE MASTER SYSTEM 2.0 - RESULTADOS CONFIRMADOS</b>"
+                        caption += f"<b>🔥 ELITE MASTER SYSTEM 3.0 - RESULTADOS CONFIRMADOS</b>"
                     
                     if self.telegram_client.enviar_foto(poster, caption=caption):
                         st.success(f"📤 Lote {i//batch_size + 1} de resultados {tipo_alerta} enviado ({len(batch)} jogos)")
@@ -5569,13 +5395,12 @@ class SistemaAlertasFutebol:
             msg += f"<b>✅ GREEN: {greens} jogos</b>\n"
             msg += f"<b>❌ RED: {reds} jogos</b>\n"
             msg += f"<b>🎯 TAXA DE ACERTO FINAL: {taxa_acerto:.1f}%</b>\n\n"
-            msg += f"<b>🔥 ELITE MASTER SYSTEM 2.0 - ANÁLISE CONFIRMADA</b>"
+            msg += f"<b>🔥 ELITE MASTER SYSTEM 3.0 - ANÁLISE CONFIRMADA</b>"
             
             if self.telegram_client.enviar_mensagem(msg, self.config.TELEGRAM_CHAT_ID_ALT2):
                 st.success(f"📊 Resumo final {tipo_alerta} enviado!")
     
     def _verificar_enviar_alerta(self, jogo: Jogo, match_data: dict, analise: dict, alerta_individual: bool, min_conf: int, max_conf: int, tipo_alerta: str):
-        # Método mantido para compatibilidade
         if tipo_alerta == "over_under":
             alertas = DataStorage.carregar_alertas()
         elif tipo_alerta == "favorito":
@@ -5661,7 +5486,6 @@ class SistemaAlertasFutebol:
                 DataStorage.salvar_alertas_ambas_marcam(alertas)
     
     def _enviar_alerta_individual(self, fixture: dict, analise: dict, tipo_alerta: str, min_conf: int, max_conf: int):
-        # Método mantido para compatibilidade
         home = fixture["homeTeam"]["name"]
         away = fixture["awayTeam"]["name"]
         
@@ -5677,7 +5501,7 @@ class SistemaAlertasFutebol:
                 f"<b>🎯 Probabilidade: {analise['probabilidade']:.0f}%</b>\n"
                 f"<b>💰 Odds: {odd:.2f}</b>\n"
                 f"<b>🔍 Confiança: {analise['confianca']:.0f}%</b>\n\n"
-                f"<b>🔥 ELITE MASTER SYSTEM 2.0</b>"
+                f"<b>🔥 ELITE MASTER SYSTEM 3.0</b>"
             )
         elif tipo_alerta == "favorito" and 'vitoria' in analise['detalhes']:
             v = analise['detalhes']['vitoria']
@@ -5695,7 +5519,7 @@ class SistemaAlertasFutebol:
                 f"<b>📊 Probabilidade Empate: {v['draw']:.1f}%</b>\n"
                 f"<b>💰 Odds: {odd:.2f}</b>\n"
                 f"<b>🔍 Confiança: {v['confianca_vitoria']:.1f}%</b>\n\n"
-                f"<b>🔥 ELITE MASTER SYSTEM 2.0</b>"
+                f"<b>🔥 ELITE MASTER SYSTEM 3.0</b>"
             )
         elif tipo_alerta == "gols_ht" and 'gols_ht' in analise['detalhes']:
             ht = analise['detalhes']['gols_ht']
@@ -5712,7 +5536,7 @@ class SistemaAlertasFutebol:
                 f"<b>🎯 OVER 1.5 HT: {ht['over_15_ht']:.0f}%</b>\n"
                 f"<b>💰 Odds: {odd:.2f}</b>\n"
                 f"<b>🔍 Confiança HT: {ht['confianca_ht']:.1f}%</b>\n\n"
-                f"<b>🔥 ELITE MASTER SYSTEM 2.0</b>"
+                f"<b>🔥 ELITE MASTER SYSTEM 3.0</b>"
             )
         elif tipo_alerta == "ambas_marcam" and 'ambas_marcam' in analise['detalhes']:
             am = analise['detalhes']['ambas_marcam']
@@ -5728,7 +5552,7 @@ class SistemaAlertasFutebol:
                 f"<b>📊 Probabilidade NÃO: {am['nao']:.1f}%</b>\n"
                 f"<b>💰 Odds: {odd:.2f}</b>\n"
                 f"<b>🔍 Confiança: {am['confianca_ambas_marcam']:.1f}%</b>\n\n"
-                f"<b>🔥 ELITE MASTER SYSTEM 2.0</b>"
+                f"<b>🔥 ELITE MASTER SYSTEM 3.0</b>"
             )
         else:
             return
@@ -5784,7 +5608,6 @@ class SistemaAlertasFutebol:
             self.telegram_client.enviar_mensagem(caption, self.config.TELEGRAM_CHAT_ID_ALT2)
     
     def _filtrar_por_tipo_analise(self, jogos, tipo_analise, config):
-        # Método mantido para compatibilidade
         if tipo_analise == "Over/Under de Gols":
             min_conf = config.get("min_conf", 70)
             max_conf = config.get("max_conf", 95)
@@ -5855,7 +5678,6 @@ class SistemaAlertasFutebol:
         return jogos
     
     def _enviar_alerta_westham_style(self, jogos_conf: list, tipo_analise: str, config_analise: dict):
-        # Método mantido para compatibilidade
         if not jogos_conf:
             st.warning("⚠️ Nenhum jogo para gerar poster")
             return
@@ -5911,7 +5733,7 @@ class SistemaAlertasFutebol:
                             f"<b>📈 Over: {over_count} jogos</b>\n"
                             f"<b>📉 Under: {under_count} jogos</b>\n"
                             f"<b>⚽ INTERVALO DE CONFIANÇA: {min_conf}% - {max_conf}%</b>\n\n"
-                            f"<b>🔥 ELITE MASTER SYSTEM 2.0 - ANÁLISE PREDITIVA</b>"
+                            f"<b>🔥 ELITE MASTER SYSTEM 3.0 - ANÁLISE PREDITIVA</b>"
                         )
                     elif tipo_analise == "Favorito (Vitória)":
                         min_conf_vitoria = config_analise.get("min_conf_vitoria", 65)
@@ -5920,7 +5742,7 @@ class SistemaAlertasFutebol:
                             f"<b>🏆 ALERTA DE FAVORITOS - {data_br}</b>\n\n"
                             f"<b>📋 LOTE {idx}/{total_lotes}: {len(lote)} JOGOS</b>\n"
                             f"<b>🎯 CONFIANÇA MÍNIMA: {min_conf_vitoria}%</b>\n\n"
-                            f"<b>🔥 ELITE MASTER SYSTEM 2.0 - ANÁLISE DE VITÓRIA</b>"
+                            f"<b>🔥 ELITE MASTER SYSTEM 3.0 - ANÁLISE DE VITÓRIA</b>"
                         )
                     elif tipo_analise == "Gols HT (Primeiro Tempo)":
                         min_conf_ht = config_analise.get("min_conf_ht", 60)
@@ -5931,7 +5753,7 @@ class SistemaAlertasFutebol:
                             f"<b>📋 LOTE {idx}/{total_lotes}: {len(lote)} JOGOS</b>\n"
                             f"<b>🎯 TIPO: {tipo_ht}</b>\n"
                             f"<b>🔍 CONFIANÇA MÍNIMA: {min_conf_ht}%</b>\n\n"
-                            f"<b>🔥 ELITE MASTER SYSTEM 2.0 - ANÁLISE DO PRIMEIRO TEMPO</b>"
+                            f"<b>🔥 ELITE MASTER SYSTEM 3.0 - ANÁLISE DO PRIMEIRO TEMPO</b>"
                         )
                     elif tipo_analise == "Ambas Marcam (BTTS)":
                         min_conf_am = config_analise.get("min_conf_am", 60)
@@ -5942,13 +5764,13 @@ class SistemaAlertasFutebol:
                             f"<b>📋 LOTE {idx}/{total_lotes}: {len(lote)} JOGOS</b>\n"
                             f"<b>🎯 FILTRO: {filtro_am}</b>\n"
                             f"<b>🔍 CONFIANÇA MÍNIMA: {min_conf_am}%</b>\n\n"
-                            f"<b>🔥 ELITE MASTER SYSTEM 2.0 - ANÁLISE BTTS</b>"
+                            f"<b>🔥 ELITE MASTER SYSTEM 3.0 - ANÁLISE BTTS</b>"
                         )
                     else:
                         caption = (
                             f"<b>⚽ ALERTA DE JOGOS - {data_br}</b>\n\n"
                             f"<b>📋 LOTE {idx}/{total_lotes}: {len(lote)} JOGOS</b>\n\n"
-                            f"<b>🔥 ELITE MASTER SYSTEM 2.0</b>"
+                            f"<b>🔥 ELITE MASTER SYSTEM 3.0</b>"
                         )
                     
                     st.info(f"📤 Enviando lote {idx}/{total_lotes} para o Telegram...")
@@ -6026,7 +5848,7 @@ class SistemaAlertasFutebol:
                         hora_formatada = j["hora"].strftime("%H:%M") if isinstance(j["hora"], datetime) else str(j["hora"])
                         msg_lote += f"   🕒 {hora_formatada} BRT | {j.get('liga', '')}\n\n"
                 
-                msg_lote += f"<b>🔥 ELITE MASTER SYSTEM 2.0 - LOTE {idx}/{len(lotes_texto)}</b>"
+                msg_lote += f"<b>🔥 ELITE MASTER SYSTEM 3.0 - LOTE {idx}/{len(lotes_texto)}</b>"
                 
                 if self.telegram_client.enviar_mensagem(msg_lote, self.config.TELEGRAM_CHAT_ID_ALT2):
                     st.info(f"📤 Lote {idx}/{len(lotes_texto)} enviado como texto")
@@ -6036,7 +5858,6 @@ class SistemaAlertasFutebol:
                 time.sleep(1)
     
     def _enviar_alerta_poster_original(self, jogos_conf: list, tipo_analise: str, config_analise: dict):
-        # Método mantido para compatibilidade
         if not jogos_conf:
             return
         
@@ -6355,7 +6176,6 @@ class SistemaAlertasFutebol:
         return arquivos_gerados
     
     def gerar_relatorio_resultados_completo(self) -> dict:
-        """Gera relatório completo de resultados"""
         resultados = {
             "over_under": DataStorage.carregar_resultados(),
             "favorito": DataStorage.carregar_resultados_favoritos(),
@@ -6527,8 +6347,6 @@ class SistemaAlertasFutebol:
         return relatorio_por_liga
     
     def reset_total_sistema(self):
-        """LIMPA COMPLETAMENTE TODO O SISTEMA - TODOS OS DADOS SÃO APAGADOS"""
-        
         arquivos_para_limpar = [
             ConfigManager.ALERTAS_PATH,
             ConfigManager.ALERTAS_FAVORITOS_PATH,
@@ -6605,21 +6423,10 @@ class SistemaAlertasFutebol:
         return arquivos_removidos
 
 
-# =============================
-# NOVA ABA: MÚLTIPLAS PRO
-# =============================
-
 def render_tab_multiplas_pro(sistema):
-    """
-    NOVA ABA: Múltiplas Pro - Sistema Autônomo de Apostas
-    Implementa a lógica do SistemaApostasPro usando os dados já existentes.
-    """
     st.subheader("🧠 MÚLTIPLAS PRO - SISTEMA AUTÔNOMO")
     st.caption("Gera múltiplas inteligentes com score de qualidade, filtro anti-armadilha e balanceamento de risco.")
 
-    # =============================
-    # 1. PARÂMETROS DE BUSCA
-    # =============================
     data_selecionada = st.date_input(
         "📅 Data para análise",
         value=datetime.today(),
@@ -6637,7 +6444,6 @@ def render_tab_multiplas_pro(sistema):
             key="ligas_multiplas_pro"
         )
 
-    # Configurações de Score
     st.markdown("### 🎯 Configurações de Qualidade")
     col1, col2 = st.columns(2)
     with col1:
@@ -6652,7 +6458,17 @@ def render_tab_multiplas_pro(sistema):
     with col2:
         usar_anti_armadilha = st.checkbox("🛡️ Ativar Filtro Anti-Armadilha", value=True)
 
-    enviar_multiplas_tg = st.checkbox("📤 Enviar Múltiplas para Telegram", value=True, key="enviar_multiplas_tg_pro")
+    # Opção de formato para múltiplas
+    st.markdown("### 📨 Opções de Envio")
+    col_f1, col_f2 = st.columns(2)
+    with col_f1:
+        enviar_multiplas_tg = st.checkbox("📤 Enviar Múltiplas para Telegram", value=True, key="enviar_multiplas_tg_pro")
+    with col_f2:
+        formato_multipla = st.selectbox(
+            "Formato da Múltipla",
+            ["Pôster West Ham", "Texto", "Ambos"],
+            key="formato_multipla_pro"
+        )
 
     if st.button("🧠 GERAR MÚLTIPLAS PROFISSIONAIS", type="primary", use_container_width=True):
         if not todas_ligas and not ligas_selecionadas:
@@ -6724,7 +6540,6 @@ def render_tab_multiplas_pro(sistema):
 
             st.write(f"✅ {len(jogos_filtrados)} jogos elegíveis encontrados.")
 
-            # Converter jogos para o formato esperado pelo SistemaApostasPro
             alerts = []
             for jogo in jogos_filtrados:
                 if jogo.estimativa > 0 and jogo.confianca > 0:
@@ -6788,271 +6603,30 @@ def render_tab_multiplas_pro(sistema):
                         st.write(f"   {j['jogo']} → {j['mercado']} ({j['odd']:.2f}) | Score: {j['score']}")
 
                 if enviar_multiplas_tg:
-                    msg = f"💣 **{tipo}**\n"
-                    msg += f"🎯 **Odds Total:** {odd_total:.2f}\n\n"
-                    for j in jogos_mult:
-                        msg += f"⚽ {j['jogo']}\n"
-                        msg += f"   📊 {j['mercado']} ({j['odd']:.2f}) | Score: {j['score']}\n\n"
-                    msg += f"🔥 **ELITE MASTER PRO - MÚLTIPLAS AUTÔNOMAS**"
+                    data_br_str = data_selecionada.strftime("%d/%m/%Y")
+                    
+                    if formato_multipla in ["Texto", "Ambos"]:
+                        msg = f"💣 **{tipo}**\n📅 {data_br_str}\n"
+                        msg += f"🎯 **Odds Total:** {odd_total:.2f}\n\n"
+                        for j in jogos_mult:
+                            msg += f"⚽ {j['jogo']}\n"
+                            msg += f"   📊 {j['mercado']} ({j['odd']:.2f}) | Score: {j['score']}\n\n"
+                        msg += f"🔥 **ELITE MASTER PRO - MÚLTIPLAS AUTÔNOMAS**"
 
-                    if sistema.telegram_client.enviar_mensagem(msg, sistema.config.TELEGRAM_CHAT_ID_ALT2):
-                        st.success(f"📤 Múltipla {tipo} enviada para o Telegram!")
-                    else:
-                        st.error(f"❌ Falha ao enviar múltipla {tipo}")
+                        if sistema.telegram_client.enviar_mensagem(msg, sistema.config.TELEGRAM_CHAT_ID_ALT2):
+                            st.success(f"📤 Múltipla {tipo} enviada como texto!")
+                    
+                    if formato_multipla in ["Pôster West Ham", "Ambos"]:
+                        poster = sistema.poster_generator.gerar_poster_multipla_com_personalizada(jogos_mult, tipo, odd_total, data_br_str)
+                        caption = f"<b>💣 MÚLTIPLA PROFISSIONAL - {tipo}</b>\n"
+                        caption += f"<b>📅 {data_br_str}</b>\n"
+                        caption += f"<b>🎯 Odds Total: {odd_total:.2f}</b>\n\n"
+                        caption += f"<b>🔥 ELITE MASTER PRO</b>"
+                        
+                        if sistema.telegram_client.enviar_foto(poster, caption=caption):
+                            st.success(f"📤 Múltipla {tipo} enviada como pôster!")
 
             st.success("✅ Processamento concluído!")
-
-
-# =============================
-# INTERFACE STREAMLIT
-# =============================
-
-def main():
-    st.set_page_config(
-        page_title="⚽ Elite Master 3.0",
-        page_icon="⚽",
-        layout="centered",
-        initial_sidebar_state="collapsed"
-    )
-    
-    st.markdown("""
-    <style>
-        /* Reset e ajustes mobile */
-        .stApp {
-            background-color: #0a0c10;
-        }
-        
-        .main > div {
-            padding: 0.5rem 1rem;
-        }
-        
-        /* TÍTULO PRINCIPAL - ESTILO PREMIUM */
-        .title-container {
-            text-align: center;
-            margin: 1.5rem 0 2rem 0;
-            padding: 0.5rem;
-            background: linear-gradient(180deg, rgba(255,215,0,0.05) 0%, transparent 100%);
-            border-radius: 30px;
-        }
-        
-        .main-title {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 15px;
-            margin-bottom: 5px;
-        }
-        
-        .title-icon {
-            font-size: 3rem;
-            filter: drop-shadow(0 8px 16px rgba(255,215,0,0.3));
-            animation: float 3s ease-in-out infinite;
-        }
-        
-        .title-icon.left {
-            transform: scaleX(-1);
-        }
-        
-        @keyframes float {
-            0% { transform: translateY(0px) scaleX(-1); }
-            50% { transform: translateY(-5px) scaleX(-1); }
-            100% { transform: translateY(0px) scaleX(-1); }
-        }
-        
-        @keyframes float-right {
-            0% { transform: translateY(0px); }
-            50% { transform: translateY(-5px); }
-            100% { transform: translateY(0px); }
-        }
-        
-        .title-icon.right {
-            animation: float-right 3s ease-in-out infinite;
-        }
-        
-        .title-text {
-            text-align: center;
-        }
-        
-        .title-futebol {
-            font-size: 2.2rem;
-            font-weight: 900;
-            background: linear-gradient(135deg, #FFD700 0%, #FFA500 50%, #FFD700 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            letter-spacing: 4px;
-            text-shadow: 0 4px 12px rgba(255,215,0,0.3);
-            line-height: 1.2;
-        }
-        
-        .title-elite {
-            font-size: 1.4rem;
-            font-weight: 800;
-            background: linear-gradient(135deg, #FFFFFF 0%, #E0E0E0 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            letter-spacing: 3px;
-            margin-top: -5px;
-            text-shadow: 0 2px 8px rgba(255,255,255,0.2);
-        }
-        
-        .title-master {
-            font-size: 1rem;
-            font-weight: 600;
-            color: #8E9AAB;
-            letter-spacing: 6px;
-            margin-top: -5px;
-            text-transform: uppercase;
-        }
-        
-        .title-decoration {
-            width: 150px;
-            height: 3px;
-            background: linear-gradient(90deg, transparent, #FFD700, #FFA500, #FFD700, transparent);
-            margin: 15px auto 0 auto;
-            border-radius: 3px;
-        }
-        
-        /* Métricas */
-        .metric-card {
-            background: #1a1f2c;
-            border-radius: 12px;
-            padding: 1rem;
-            text-align: center;
-            border: 1px solid rgba(255,215,0,0.1);
-        }
-        
-        .metric-value {
-            font-size: 1.5rem;
-            font-weight: 800;
-            color: #ffd700;
-        }
-        
-        .metric-label {
-            color: #8e9aab;
-            font-size: 0.8rem;
-        }
-        
-        /* Botões */
-        .stButton button {
-            width: 100%;
-            border-radius: 30px;
-            background: linear-gradient(135deg, #ffd700 0%, #ffa500 100%);
-            color: #0a0c10;
-            font-weight: 700;
-            border: none;
-            padding: 0.6rem 1rem;
-        }
-        
-        .stButton button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 16px rgba(255,215,0,0.2);
-        }
-        
-        /* Inputs */
-        .stDateInput input {
-            background: #1a1f2c;
-            border: 1px solid rgba(255,215,0,0.2);
-            border-radius: 30px;
-            color: white;
-        }
-        
-        .stSelectbox div[data-baseweb="select"] {
-            background: #1a1f2c;
-            border-radius: 30px;
-        }
-        
-        /* Checkboxes */
-        .stCheckbox {
-            background: #1a1f2c;
-            padding: 0.5rem;
-            border-radius: 12px;
-            margin: 0.2rem 0;
-        }
-        
-        /* Sliders */
-        .stSlider div[data-baseweb="slider"] {
-            padding-top: 1rem;
-        }
-        
-        /* Expander */
-        .streamlit-expanderHeader {
-            background: #1a1f2c;
-            border-radius: 12px;
-            color: white;
-        }
-        
-        .streamlit-expanderContent {
-            background: #1a1f2c;
-            border-radius: 0 0 12px 12px;
-            padding: 1rem;
-        }
-        
-        /* Abas */
-        .stTabs [data-baseweb="tab-list"] {
-            gap: 0.5rem;
-            background: #1a1f2c;
-            padding: 0.3rem;
-            border-radius: 30px;
-        }
-        
-        .stTabs [data-baseweb="tab"] {
-            border-radius: 30px;
-            padding: 0.5rem 1rem;
-            font-size: 0.8rem;
-        }
-        
-        .version-badge {
-            display: inline-block;
-            background: linear-gradient(135deg, #ffd700, #ffa500);
-            color: #0a0c10;
-            padding: 2px 8px;
-            border-radius: 20px;
-            font-size: 0.7rem;
-            font-weight: bold;
-            margin-left: 10px;
-        }
-    </style>
-    """, unsafe_allow_html=True)
-    
-    st.markdown("""
-    <div class="title-container">
-        <div class="main-title">
-            <span class="title-icon left">⚽</span>
-            <div class="title-text">
-                <div class="title-futebol">FUTEBOL</div>
-                <div class="title-elite">ELITE MASTER <span class="version-badge">3.0</span></div>
-                <div class="title-master">GERADOR DE MÚLTIPLAS</div>
-            </div>
-            <span class="title-icon right">🏆</span>
-        </div>
-        <div class="title-decoration"></div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    sistema = SistemaAlertasFutebol()
-    
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["🔍 Buscar", "📊 Resultados", "🏆 TOP", "⚽ Completos 3.0", "🧠 Múltiplas Pro", "📥 Exportar", "⚙️ Admin"])
-    
-    with tab1:
-        render_tab_busca(sistema)
-    
-    with tab2:
-        render_tab_resultados(sistema)
-    
-    with tab3:
-        render_tab_top_alertas(sistema)
-    
-    with tab4:
-        render_tab_completos(sistema)
-    
-    with tab5:
-        render_tab_multiplas_pro(sistema)
-    
-    with tab6:
-        render_tab_exportar(sistema)
-    
-    with tab7:
-        render_tab_admin(sistema)
 
 
 def render_tab_busca(sistema):
@@ -7430,13 +7004,14 @@ def render_tab_completos(sistema):
         )
     
     with col2:
-        enviar_multiplas = st.checkbox(
-            "📤 Enviar Múltiplas para Telegram",
-            value=True,
-            key="enviar_multiplas_auto"
+        aliviar_envios = st.checkbox(
+            "🌙 Modo Aliviado (enviar apenas múltipla principal)",
+            value=False,
+            help="Ative para enviar apenas a múltipla HÍBRIDA em vez de todas as 3 múltiplas"
         )
     
-    st.session_state.enviar_multiplas = enviar_multiplas
+    st.session_state.enviar_multiplas = True
+    st.session_state.aliviar_envios = aliviar_envios
     
     if st.button("🤖 GERAR MÚLTIPLAS PROFISSIONAIS 3.0", type="primary", use_container_width=True):
         if not todas_ligas and not ligas_selecionadas:
@@ -7711,11 +7286,249 @@ def render_tab_admin(sistema):
                         st.rerun()
 
 
+def main():
+    st.set_page_config(
+        page_title="⚽ Elite Master 3.0",
+        page_icon="⚽",
+        layout="centered",
+        initial_sidebar_state="collapsed"
+    )
+    
+    st.markdown("""
+    <style>
+        .stApp {
+            background-color: #0a0c10;
+        }
+        
+        .main > div {
+            padding: 0.5rem 1rem;
+        }
+        
+        .title-container {
+            text-align: center;
+            margin: 1.5rem 0 2rem 0;
+            padding: 0.5rem;
+            background: linear-gradient(180deg, rgba(255,215,0,0.05) 0%, transparent 100%);
+            border-radius: 30px;
+        }
+        
+        .main-title {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 5px;
+        }
+        
+        .title-icon {
+            font-size: 3rem;
+            filter: drop-shadow(0 8px 16px rgba(255,215,0,0.3));
+            animation: float 3s ease-in-out infinite;
+        }
+        
+        .title-icon.left {
+            transform: scaleX(-1);
+        }
+        
+        @keyframes float {
+            0% { transform: translateY(0px) scaleX(-1); }
+            50% { transform: translateY(-5px) scaleX(-1); }
+            100% { transform: translateY(0px) scaleX(-1); }
+        }
+        
+        @keyframes float-right {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-5px); }
+            100% { transform: translateY(0px); }
+        }
+        
+        .title-icon.right {
+            animation: float-right 3s ease-in-out infinite;
+        }
+        
+        .title-text {
+            text-align: center;
+        }
+        
+        .title-futebol {
+            font-size: 2.2rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, #FFD700 0%, #FFA500 50%, #FFD700 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: 4px;
+            text-shadow: 0 4px 12px rgba(255,215,0,0.3);
+            line-height: 1.2;
+        }
+        
+        .title-elite {
+            font-size: 1.4rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #FFFFFF 0%, #E0E0E0 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: 3px;
+            margin-top: -5px;
+            text-shadow: 0 2px 8px rgba(255,255,255,0.2);
+        }
+        
+        .title-master {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #8E9AAB;
+            letter-spacing: 6px;
+            margin-top: -5px;
+            text-transform: uppercase;
+        }
+        
+        .title-decoration {
+            width: 150px;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, #FFD700, #FFA500, #FFD700, transparent);
+            margin: 15px auto 0 auto;
+            border-radius: 3px;
+        }
+        
+        .metric-card {
+            background: #1a1f2c;
+            border-radius: 12px;
+            padding: 1rem;
+            text-align: center;
+            border: 1px solid rgba(255,215,0,0.1);
+        }
+        
+        .metric-value {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: #ffd700;
+        }
+        
+        .metric-label {
+            color: #8e9aab;
+            font-size: 0.8rem;
+        }
+        
+        .stButton button {
+            width: 100%;
+            border-radius: 30px;
+            background: linear-gradient(135deg, #ffd700 0%, #ffa500 100%);
+            color: #0a0c10;
+            font-weight: 700;
+            border: none;
+            padding: 0.6rem 1rem;
+        }
+        
+        .stButton button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(255,215,0,0.2);
+        }
+        
+        .stDateInput input {
+            background: #1a1f2c;
+            border: 1px solid rgba(255,215,0,0.2);
+            border-radius: 30px;
+            color: white;
+        }
+        
+        .stSelectbox div[data-baseweb="select"] {
+            background: #1a1f2c;
+            border-radius: 30px;
+        }
+        
+        .stCheckbox {
+            background: #1a1f2c;
+            padding: 0.5rem;
+            border-radius: 12px;
+            margin: 0.2rem 0;
+        }
+        
+        .stSlider div[data-baseweb="slider"] {
+            padding-top: 1rem;
+        }
+        
+        .streamlit-expanderHeader {
+            background: #1a1f2c;
+            border-radius: 12px;
+            color: white;
+        }
+        
+        .streamlit-expanderContent {
+            background: #1a1f2c;
+            border-radius: 0 0 12px 12px;
+            padding: 1rem;
+        }
+        
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 0.5rem;
+            background: #1a1f2c;
+            padding: 0.3rem;
+            border-radius: 30px;
+        }
+        
+        .stTabs [data-baseweb="tab"] {
+            border-radius: 30px;
+            padding: 0.5rem 1rem;
+            font-size: 0.8rem;
+        }
+        
+        .version-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #ffd700, #ffa500);
+            color: #0a0c10;
+            padding: 2px 8px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("""
+    <div class="title-container">
+        <div class="main-title">
+            <span class="title-icon left">⚽</span>
+            <div class="title-text">
+                <div class="title-futebol">FUTEBOL</div>
+                <div class="title-elite">ELITE MASTER <span class="version-badge">3.0</span></div>
+                <div class="title-master">GERADOR DE MÚLTIPLAS</div>
+            </div>
+            <span class="title-icon right">🏆</span>
+        </div>
+        <div class="title-decoration"></div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    sistema = SistemaAlertasFutebol()
+    
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["🔍 Buscar", "📊 Resultados", "🏆 TOP", "⚽ Completos 3.0", "🧠 Múltiplas Pro", "📥 Exportar", "⚙️ Admin"])
+    
+    with tab1:
+        render_tab_busca(sistema)
+    
+    with tab2:
+        render_tab_resultados(sistema)
+    
+    with tab3:
+        render_tab_top_alertas(sistema)
+    
+    with tab4:
+        render_tab_completos(sistema)
+    
+    with tab5:
+        render_tab_multiplas_pro(sistema)
+    
+    with tab6:
+        render_tab_exportar(sistema)
+    
+    with tab7:
+        render_tab_admin(sistema)
+
+
 if __name__ == "__main__":
     main()
 
 
-# Rodapé Premium Neon
 st.markdown("""
 <style>
 .footer-premium{
