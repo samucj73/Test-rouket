@@ -3537,8 +3537,8 @@ class PosterGenerator:
     def gerar_poster_multipla_pro(self, multipla: dict, titulo: str = "💣 MÚLTIPLA PRO") -> io.BytesIO:
         """Gera pôster para múltipla Pro com horário dos jogos"""
         LARGURA = 2000
-        ALTURA_TOPO = 350
-        ALTURA_POR_JOGO = 650
+        ALTURA_TOPO = 360
+        ALTURA_POR_JOGO = 550
         PADDING = 80
         
         jogos = multipla.get("jogos", [])
@@ -3554,7 +3554,7 @@ class PosterGenerator:
         FONTE_VS = self.criar_fonte(48)
         FONTE_INFO = self.criar_fonte(40)
         FONTE_HORA = self.criar_fonte(38)
-        FONTE_ANALISE = self.criar_fonte(42)
+        FONTE_ANALISE = self.criar_fonte(55)
         FONTE_ODD = self.criar_fonte(55)
         FONTE_TOTAL = self.criar_fonte(65)
         FONTE_DETALHES = self.criar_fonte(35)
@@ -3678,7 +3678,7 @@ class PosterGenerator:
             # Escudos e times
             TAMANHO_ESCUDO = 130
             TAMANHO_QUADRADO = 150
-            ESPACO_ENTRE_ESCUDOS = 550
+            ESPACO_ENTRE_ESCUDOS = 650
 
             largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
             x_inicio = (LARGURA - largura_total) // 2
@@ -3728,7 +3728,7 @@ class PosterGenerator:
             y_analysis = y_escudos + TAMANHO_QUADRADO + 100
             draw.line([(x0 + 80, y_analysis - 10), (x1 - 80, y_analysis - 10)], fill=(100, 130, 160), width=2)
             
-            emoji = "🟢" if "OVER 1.5" in mercado.upper() else "🟡"
+            emoji = "" if "OVER 1.5" in mercado.upper() else ""
             text_analise = f"{emoji} {mercado}"
             try:
                 analise_bbox = draw.textbbox((0, 0), text_analise, font=FONTE_ANALISE)
