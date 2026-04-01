@@ -2574,9 +2574,9 @@ class PosterGenerator:
             logging.error(f"Erro ao carregar fonte: {e}")
             return ImageFont.load_default()
     
-    #def gerar_poster_multipla(self, multipla: dict, titulo: str = "💣 MÚLTIPLA PROFISSIONAL") -> io.BytesIO:
-    def gerar_poster_multipla(self, multipla: dict, titulo: str = "💣 MÚLTIPLA PROFISSIONAL") -> io.BytesIO:
-        """Gera pôster estilo West Ham para múltiplas com squircle premium"""
+   # def gerar_poster_multipla(self, multipla: dict, titulo: str = "💣 MÚLTIPLA PROFISSIONAL") -> io.BytesIO:
+def gerar_poster_multipla(self, multipla: dict, titulo: str = "💣 MÚLTIPLA PROFISSIONAL") -> io.BytesIO:
+    """Gera pôster estilo West Ham para múltiplas com squircle premium"""
     LARGURA = 2000
     ALTURA_TOPO = 350
     ALTURA_POR_JOGO = 550
@@ -2864,7 +2864,9 @@ def _desenhar_escudo_squircle(self, base_img, escudo_img, x, y, tamanho_quadrado
         )
         
         base_img.paste(escudo_img, (escudo_x, escudo_y), mascara_escudo)
-        
+    
+
+
     
     def gerar_poster_resultado_multipla(self, multipla: dict, data_br: str) -> io.BytesIO:
         """Gera pôster para resultado de múltipla"""
