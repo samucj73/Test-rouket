@@ -2575,58 +2575,117 @@ class PosterGenerator:
             logging.error(f"Erro ao carregar fonte: {e}")
             return ImageFont.load_default()
     
-    def _desenhar_squircle(self, base_img, x, y, tamanho, cor_fundo, cor_borda=None, border_width=0, radius=0.35):
+    def _desenhar_escudo_squircle(self, img, escudo_img, x, y, tamanho_quadrado, tamanho_escudo, nome_time, cor_borda):
         """
-        Desenha um squircle usando máscara (superellipse suavizada)
-        radius: controla o arredondamento (0.35 = ideal premium)
+        Desenha escudo dentro de um fundo branco com cantos arredondados
+        Usa método garantido que funciona em todas as versões do Pillow
         """
-        from PIL import ImageFilter
+        # Criar uma camada temporária para o fundo
+        camada_fundo = Image.new("RGBA", (tamanho_quadrado, tamanho_quadrado), (0, 0, 0, 0))
+        draw_fundo = ImageDraw.Draw(camada_fundo)
         
-        # Cria uma imagem RGBA temporária para o squircle
-        squircle_img = Image.new("RGBA", (tamanho, tamanho), (0, 0, 0, 0))
-        squircle_draw = ImageDraw.Draw(squircle_img)
+        # Raio do arredondamento (35% do tamanho para um squircle suave)
+        raio = int(tamanho_quadrado * 0.35)
         
-        # Desenha o fundo com a cor especificada (usando retângulo arredondado)
-        squircle_draw.rounded_rectangle(
-            [0, 0, tamanho, tamanho],
-            radius=int(tamanho * radius),
-            fill=cor_fundo
+        # === DESENHAR O FUNDO BRANCO COM CANTOS ARREDONDADOS ===
+        # Método: desenhar retângulos + círculos nos cantos
+        
+        # 1. Retângulo central horizontal
+        draw_fundo.rectangle(
+            [raio, 0, tamanho_quadrado - raio, tamanho_quadrado],
+            fill=(255, 255, 255, 255)
         )
         
-        # Desenha a borda se especificada
-        if cor_borda and border_width > 0:
-            squircle_draw.rounded_rectangle(
-                [border_width//2, border_width//2, tamanho-border_width//2, tamanho-border_width//2],
-                radius=int(tamanho * radius) - border_width//2,
-                outline=cor_borda,
-                width=border_width
-            )
-        
-        # Aplica o squircle na imagem base
-        base_img.paste(squircle_img, (x, y), squircle_img)
-
-    def _desenhar_escudo_squircle(self, base_img, escudo_img, x, y, tamanho_quadrado, tamanho_escudo, nome_time, cor_borda):
-        """
-        Desenha escudo dentro de um squircle estilizado premium
-        """
-        # Desenha o fundo squircle (branco com borda colorida)
-        self._desenhar_squircle(
-            base_img,
-            x,
-            y,
-            tamanho_quadrado,
-            cor_fundo=(255, 255, 255, 255),  # Fundo branco com alpha
-            cor_borda=cor_borda,  # Borda colorida
-            border_width=4,
-            radius=0.35  # 🔥 ajuste fino premium
+        # 2. Retângulo central vertical
+        draw_fundo.rectangle(
+            [0, raio, tamanho_quadrado, tamanho_quadrado - raio],
+            fill=(255, 255, 255, 255)
         )
         
+        # 3. Círculo canto superior esquerdo
+        draw_fundo.ellipse(
+            [0, 0, raio * 2, raio * 2],
+            fill=(255, 255, 255, 255)
+        )
+        
+        # 4. Círculo canto superior direito
+        draw_fundo.ellipse(
+            [tamanho_quadrado - raio * 2, 0, tamanho_quadrado, raio * 2],
+            fill=(255, 255, 255, 255)
+        )
+        
+        # 5. Círculo canto inferior esquerdo
+        draw_fundo.ellipse(
+            [0, tamanho_quadrado - raio * 2, raio * 2, tamanho_quadrado],
+            fill=(255, 255, 255, 255)
+        )
+        
+        # 6. Círculo canto inferior direito
+        draw_fundo.ellipse(
+            [tamanho_quadrado - raio * 2, tamanho_quadrado - raio * 2, tamanho_quadrado, tamanho_quadrado],
+            fill=(255, 255, 255, 255)
+        )
+        
+        # === DESENHAR A BORDA COLORIDA ===
+        # Borda superior
+        draw_fundo.line(
+            [(raio, 0), (tamanho_quadrado - raio, 0)],
+            fill=cor_borda, width=4
+        )
+        
+        # Borda inferior
+        draw_fundo.line(
+            [(raio, tamanho_quadrado), (tamanho_quadrado - raio, tamanho_quadrado)],
+            fill=cor_borda, width=4
+        )
+        
+        # Borda esquerda
+        draw_fundo.line(
+            [(0, raio), (0, tamanho_quadrado - raio)],
+            fill=cor_borda, width=4
+        )
+        
+        # Borda direita
+        draw_fundo.line(
+            [(tamanho_quadrado, raio), (tamanho_quadrado, tamanho_quadrado - raio)],
+            fill=cor_borda, width=4
+        )
+        
+        # Bordas dos cantos (arcos)
+        # Canto superior esquerdo
+        draw_fundo.arc(
+            [0, 0, raio * 2, raio * 2],
+            180, 270, fill=cor_borda, width=4
+        )
+        
+        # Canto superior direito
+        draw_fundo.arc(
+            [tamanho_quadrado - raio * 2, 0, tamanho_quadrado, raio * 2],
+            270, 360, fill=cor_borda, width=4
+        )
+        
+        # Canto inferior esquerdo
+        draw_fundo.arc(
+            [0, tamanho_quadrado - raio * 2, raio * 2, tamanho_quadrado],
+            90, 180, fill=cor_borda, width=4
+        )
+        
+        # Canto inferior direito
+        draw_fundo.arc(
+            [tamanho_quadrado - raio * 2, tamanho_quadrado - raio * 2, tamanho_quadrado, tamanho_quadrado],
+            0, 90, fill=cor_borda, width=4
+        )
+        
+        # Aplicar o fundo na imagem principal
+        img.paste(camada_fundo, (x, y), camada_fundo)
+        
+        # === DESENHAR O ESCUDO OU INICIAIS ===
         if escudo_img:
-            # Redimensiona o escudo mantendo proporção
+            # Redimensionar escudo mantendo proporção
             escudo_img = escudo_img.convert("RGBA")
             largura, altura = escudo_img.size
             
-            # Calcula dimensões para caber no espaço
+            # Calcular dimensões para caber no espaço
             if largura > altura:
                 nova_largura = tamanho_escudo
                 nova_altura = int(altura * (tamanho_escudo / largura))
@@ -2634,26 +2693,33 @@ class PosterGenerator:
                 nova_altura = tamanho_escudo
                 nova_largura = int(largura * (tamanho_escudo / altura))
             
+            # Redimensionar
             escudo_redim = escudo_img.resize((nova_largura, nova_altura), Image.Resampling.LANCZOS)
             
-            # Calcula posição centralizada
+            # Centralizar
             escudo_x = x + (tamanho_quadrado - nova_largura) // 2
             escudo_y = y + (tamanho_quadrado - nova_altura) // 2
             
-            # Cria máscara circular para o escudo
+            # Criar máscara circular para bordas suaves do escudo
             mascara = Image.new("L", (nova_largura, nova_altura), 0)
             mascara_draw = ImageDraw.Draw(mascara)
-            raio = min(nova_largura, nova_altura) // 2
-            mascara_draw.ellipse([0, 0, nova_largura, nova_altura], fill=255)
+            raio_escudo = min(nova_largura, nova_altura) // 2
+            centro_x = nova_largura // 2
+            centro_y = nova_altura // 2
+            mascara_draw.ellipse(
+                [centro_x - raio_escudo, centro_y - raio_escudo, 
+                 centro_x + raio_escudo, centro_y + raio_escudo],
+                fill=255
+            )
             
-            # Aplica máscara para bordas suaves
+            # Aplicar máscara
             escudo_com_mascara = Image.new("RGBA", (nova_largura, nova_altura), (0, 0, 0, 0))
             escudo_com_mascara.paste(escudo_redim, (0, 0), mascara)
             
-            # Coloca o escudo no squircle
-            base_img.paste(escudo_com_mascara, (escudo_x, escudo_y), escudo_com_mascara)
+            # Colocar na imagem
+            img.paste(escudo_com_mascara, (escudo_x, escudo_y), escudo_com_mascara)
         else:
-            # Se não tem escudo, desenha as iniciais do time no centro
+            # Desenhar iniciais do time
             if nome_time:
                 palavras = nome_time.split()
                 if len(palavras) >= 2:
@@ -2663,30 +2729,20 @@ class PosterGenerator:
             else:
                 iniciais = "??"
             
-            # Desenha as iniciais no centro do squircle
             try:
                 fonte = self.criar_fonte(int(tamanho_quadrado * 0.4))
-                # Cria uma imagem temporária para o texto
-                temp_img = Image.new("RGBA", (tamanho_quadrado, tamanho_quadrado), (0, 0, 0, 0))
-                temp_draw = ImageDraw.Draw(temp_img)
-                
-                # Centraliza o texto
-                bbox = temp_draw.textbbox((0, 0), iniciais, font=fonte)
+                draw = ImageDraw.Draw(img)
+                bbox = draw.textbbox((0, 0), iniciais, font=fonte)
                 text_w = bbox[2] - bbox[0]
                 text_h = bbox[3] - bbox[1]
-                text_x = (tamanho_quadrado - text_w) // 2
-                text_y = (tamanho_quadrado - text_h) // 2
-                
-                # Desenha o texto
-                temp_draw.text((text_x, text_y), iniciais, font=fonte, fill=(80, 80, 80))
-                
-                # Aplica na imagem base
-                base_img.paste(temp_img, (x, y), temp_img)
+                text_x = x + (tamanho_quadrado - text_w) // 2
+                text_y = y + (tamanho_quadrado - text_h) // 2
+                draw.text((text_x, text_y), iniciais, font=fonte, fill=(80, 80, 80))
             except Exception as e:
                 logging.error(f"Erro ao desenhar iniciais: {e}")
-
+    
     def _desenhar_escudo_quadrado(self, draw, img, logo_img, x, y, tamanho_quadrado, tamanho_escudo, team_name=""):
-        """Método de fallback para desenhar escudo em quadrado tradicional (mantido para compatibilidade)"""
+        """Método de fallback para desenhar escudo em quadrado tradicional"""
         draw.rectangle(
             [x, y, x + tamanho_quadrado, y + tamanho_quadrado],
             fill=(255, 255, 255),
@@ -2736,7 +2792,12 @@ class PosterGenerator:
             mascara = Image.new("L", (nova_largura, nova_altura), 0)
             mascara_draw = ImageDraw.Draw(mascara)
             raio = min(nova_largura, nova_altura) // 2
-            mascara_draw.ellipse([0, 0, nova_largura, nova_altura], fill=255)
+            centro_x = nova_largura // 2
+            centro_y = nova_altura // 2
+            mascara_draw.ellipse(
+                [centro_x - raio, centro_y - raio, centro_x + raio, centro_y + raio],
+                fill=255
+            )
             
             # Aplica máscara
             escudo_com_mascara = Image.new("RGBA", (nova_largura, nova_altura), (0, 0, 0, 0))
@@ -2769,7 +2830,7 @@ class PosterGenerator:
                          font=self.criar_fonte(tamanho_quadrado // 2), fill=(50, 50, 50))
 
     def gerar_poster_multipla(self, multipla: dict, titulo: str = "💣 MÚLTIPLA PROFISSIONAL") -> io.BytesIO:
-        """Gera pôster estilo West Ham para múltiplas com squircle premium"""
+        """Gera pôster estilo West Ham para múltiplas com cantos arredondados"""
         LARGURA = 2000
         ALTURA_TOPO = 350
         ALTURA_POR_JOGO = 550
@@ -2884,7 +2945,7 @@ class PosterGenerator:
             except:
                 draw.text((LARGURA//2 - 150, y0 + 35), liga_text, font=FONTE_INFO, fill=(200, 200, 200))
 
-            # Escudos e times com SQUIRCLE premium
+            # Escudos e times com cantos arredondados
             TAMANHO_ESCUDO = 140
             TAMANHO_QUADRADO = 160
             ESPACO_ENTRE_ESCUDOS = 600
@@ -2915,7 +2976,7 @@ class PosterGenerator:
                 except Exception as e:
                     logging.error(f"Erro ao abrir escudo do {jogo.get('away', '')}: {e}")
 
-            # Desenhar escudos com squircle (fundo branco arredondado)
+            # Desenhar escudos com fundo branco arredondado
             self._desenhar_escudo_squircle(
                 img, escudo_home_img, x_home, y_escudos,
                 TAMANHO_QUADRADO, TAMANHO_ESCUDO,
@@ -3005,6 +3066,10 @@ class PosterGenerator:
         buffer.seek(0)
         
         return buffer
+
+
+
+
 
     def gerar_poster_resultado_multipla(self, multipla: dict, data_br: str) -> io.BytesIO:
         """Gera pôster para resultado de múltipla com squircle"""
