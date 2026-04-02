@@ -2578,33 +2578,22 @@ class PosterGenerator:
     def _desenhar_escudo_rounded(self, img, escudo_img, x, y, tamanho_quadrado, tamanho_escudo, nome_time, cor_borda):
         """
         Desenha escudo dentro de um ROUNDED RECTANGLE (retângulo com cantos arredondados)
-        Usa o método rounded_rectangle do Pillow que é simples e eficaz
+        NÃO usa quadrado branco, apenas rounded_rectangle diretamente na imagem
         """
         # Raio do arredondamento - 50% para um arredondamento SUPER acentuado
-        # Quanto maior o raio, mais arredondado fica. Máximo recomendado: 50% do tamanho
-        raio = int(tamanho_quadrado * 0.95)  # 50% - arredondamento máximo
+        raio = int(tamanho_quadrado * 0.50)  # 50% - arredondamento máximo
         
-        # Criar uma camada temporária para o fundo com cantos arredondados
-        camada_fundo = Image.new("RGBA", (tamanho_quadrado, tamanho_quadrado), (0, 0, 0, 0))
-        draw_fundo = ImageDraw.Draw(camada_fundo)
+        # Criar um objeto draw para a imagem principal
+        draw = ImageDraw.Draw(img)
         
-        # Desenhar o retângulo arredondado BRANCO
-        draw_fundo.rounded_rectangle(
-            [0, 0, tamanho_quadrado, tamanho_quadrado],
+        # Desenhar DIRETAMENTE na imagem principal o retângulo arredondado BRANCO
+        draw.rounded_rectangle(
+            [x, y, x + tamanho_quadrado, y + tamanho_quadrado],
             radius=raio,
-            fill=(255, 255, 255, 255)  # Branco com alpha total
+            fill=(255, 255, 255, 255),  # Branco com alpha total
+            outline=cor_borda,  # Borda colorida
+            width=6  # Borda grossa para destacar
         )
-        
-        # Desenhar a BORDA COLORIDA (mais grossa para destacar)
-        draw_fundo.rounded_rectangle(
-            [0, 0, tamanho_quadrado, tamanho_quadrado],
-            radius=raio,
-            outline=cor_borda,
-            width=6  # Borda grossa para destacar o arredondamento
-        )
-        
-        # Aplicar o fundo arredondado na imagem principal
-        img.paste(camada_fundo, (x, y), camada_fundo)
         
         # === DESENHAR O ESCUDO OU INICIAIS ===
         if escudo_img:
@@ -2662,7 +2651,7 @@ class PosterGenerator:
             
             try:
                 fonte = self.criar_fonte(int(tamanho_quadrado * 0.5))
-                draw = ImageDraw.Draw(img)
+                # Usar o draw existente
                 bbox = draw.textbbox((0, 0), iniciais, font=fonte)
                 text_w = bbox[2] - bbox[0]
                 text_h = bbox[3] - bbox[1]
@@ -2673,94 +2662,14 @@ class PosterGenerator:
                 logging.error(f"Erro ao desenhar iniciais: {e}")
     
     def _desenhar_escudo_quadrado(self, draw, img, logo_img, x, y, tamanho_quadrado, tamanho_escudo, team_name=""):
-        """Método de fallback para desenhar escudo em quadrado tradicional"""
-        draw.rectangle(
-            [x, y, x + tamanho_quadrado, y + tamanho_quadrado],
-            fill=(255, 255, 255),
-            outline=(200, 200, 200)
-        )
-
-        if logo_img is None:
-            if team_name:
-                palavras = team_name.split()
-                if len(palavras) >= 2:
-                    iniciais = palavras[0][0].upper() + palavras[1][0].upper()
-                else:
-                    iniciais = team_name[:2].upper() if len(team_name) >= 2 else team_name[0].upper()
-            else:
-                iniciais = "??"
-            
-            try:
-                fonte = self.criar_fonte(tamanho_quadrado // 2)
-                bbox = draw.textbbox((0, 0), iniciais, font=fonte)
-                w = bbox[2] - bbox[0]
-                h = bbox[3] - bbox[1]
-                draw.text((x + (tamanho_quadrado - w)//2, y + (tamanho_quadrado - h)//2), 
-                         iniciais, font=fonte, fill=(100, 100, 100))
-            except:
-                draw.text((x + tamanho_quadrado//3, y + tamanho_quadrado//3), iniciais, 
-                         font=self.criar_fonte(tamanho_quadrado // 2), fill=(100, 100, 100))
-            return
-
-        try:
-            logo_img = logo_img.convert("RGBA")
-            largura, altura = logo_img.size
-            
-            if largura > altura:
-                nova_largura = tamanho_escudo
-                nova_altura = int(altura * (tamanho_escudo / largura))
-            else:
-                nova_altura = tamanho_escudo
-                nova_largura = int(largura * (tamanho_escudo / altura))
-            
-            imagem_redimensionada = logo_img.resize((nova_largura, nova_altura), Image.Resampling.LANCZOS)
-            
-            pos_x = x + (tamanho_quadrado - nova_largura) // 2
-            pos_y = y + (tamanho_quadrado - nova_altura) // 2
-
-            mascara = Image.new("L", (nova_largura, nova_altura), 0)
-            mascara_draw = ImageDraw.Draw(mascara)
-            raio = min(nova_largura, nova_altura) // 2
-            centro_x = nova_largura // 2
-            centro_y = nova_altura // 2
-            mascara_draw.ellipse(
-                [centro_x - raio, centro_y - raio, centro_x + raio, centro_y + raio],
-                fill=255
-            )
-            
-            escudo_com_mascara = Image.new("RGBA", (nova_largura, nova_altura), (0, 0, 0, 0))
-            escudo_com_mascara.paste(imagem_redimensionada, (0, 0), mascara)
-            
-            img.paste(escudo_com_mascara, (pos_x, pos_y), escudo_com_mascara)
-
-        except Exception as e:
-            logging.error(f"Erro ao processar escudo de {team_name}: {e}")
-            draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(200, 200, 200))
-            
-            if team_name:
-                palavras = team_name.split()
-                if len(palavras) >= 2:
-                    iniciais = palavras[0][0].upper() + palavras[1][0].upper()
-                else:
-                    iniciais = team_name[:2].upper() if len(team_name) >= 2 else team_name[0].upper()
-            else:
-                iniciais = "ERR"
-            
-            try:
-                fonte = self.criar_fonte(tamanho_quadrado // 2)
-                bbox = draw.textbbox((0, 0), iniciais, font=fonte)
-                w = bbox[2] - bbox[0]
-                h = bbox[3] - bbox[1]
-                draw.text((x + (tamanho_quadrado - w)//2, y + (tamanho_quadrado - h)//2), 
-                         iniciais, font=fonte, fill=(50, 50, 50))
-            except:
-                draw.text((x + tamanho_quadrado//3, y + tamanho_quadrado//3), iniciais, 
-                         font=self.criar_fonte(tamanho_quadrado // 2), fill=(50, 50, 50))
+        """Método de fallback para desenhar escudo em quadrado tradicional (NÃO USA MAIS)"""
+        # Este método não será mais usado, mantido apenas para compatibilidade
+        pass
 
     def gerar_poster_multipla(self, multipla: dict, titulo: str = "💣 MÚLTIPLA PROFISSIONAL") -> io.BytesIO:
-        """Gera pôster estilo West Ham para múltiplas com rounded rectangle"""
+        """Gera pôster estilo West Ham para múltiplas com rounded rectangle (SEM QUADRADO BRANCO)"""
         LARGURA = 2000
-        ALTURA_TOPO = 365
+        ALTURA_TOPO = 350
         ALTURA_POR_JOGO = 550
         PADDING = 80
         
@@ -2768,7 +2677,7 @@ class PosterGenerator:
         jogos_count = len(jogos)
         altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
 
-        # Criar imagem em RGBA para permitir transparência e cantos arredondados
+        # Criar imagem em RGBA
         img = Image.new("RGBA", (LARGURA, altura_total), (10, 20, 30, 255))
         draw = ImageDraw.Draw(img)
 
@@ -2873,10 +2782,10 @@ class PosterGenerator:
             except:
                 draw.text((LARGURA//2 - 150, y0 + 35), liga_text, font=FONTE_INFO, fill=(200, 200, 200))
 
-            # Escudos e times com ROUNDED RECTANGLE
-            TAMANHO_ESCUDO = 150
-            TAMANHO_QUADRADO = 170
-            ESPACO_ENTRE_ESCUDOS = 700
+            # Escudos e times com ROUNDED RECTANGLE (SEM QUADRADO BRANCO)
+            TAMANHO_ESCUDO = 140
+            TAMANHO_QUADRADO = 160
+            ESPACO_ENTRE_ESCUDOS = 600
 
             largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
             x_inicio = (LARGURA - largura_total) // 2
@@ -2904,7 +2813,7 @@ class PosterGenerator:
                 except Exception as e:
                     logging.error(f"Erro ao abrir escudo do {jogo.get('away', '')}: {e}")
 
-            # Desenhar escudos com ROUNDED RECTANGLE (cantos arredondados)
+            # Desenhar escudos com ROUNDED RECTANGLE (diretamente na imagem, sem quadrado branco)
             self._desenhar_escudo_rounded(
                 img, escudo_home_img, x_home, y_escudos,
                 TAMANHO_QUADRADO, TAMANHO_ESCUDO,
@@ -2994,6 +2903,7 @@ class PosterGenerator:
         buffer.seek(0)
         
         return buffer
+
 
 
 
