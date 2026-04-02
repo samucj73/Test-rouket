@@ -2575,71 +2575,59 @@ class PosterGenerator:
             logging.error(f"Erro ao carregar fonte: {e}")
             return ImageFont.load_default()
     
-    def _desenhar_escudo_rounded(self, img, escudo_img, x, y, tamanho_quadrado, tamanho_escudo, nome_time, cor_borda):
+    def _desenhar_escudo_rounded(self, img, escudo_img, x, y, tamanho, tamanho_escudo, nome_time, cor_borda):
         """
-        Desenha escudo dentro de um ROUNDED RECTANGLE (retângulo com cantos arredondados)
-        NÃO usa quadrado branco, apenas rounded_rectangle diretamente na imagem
+        Desenha escudo dentro de um ROUNDED RECTANGLE
         """
-        # Raio do arredondamento - 50% para um arredondamento SUPER acentuado
-        raio = int(tamanho_quadrado * 0.50)  # 50% - arredondamento máximo
+        # Raio do arredondamento - 45% para arredondamento acentuado
+        raio = int(tamanho * 0.45)
         
-        # Criar um objeto draw para a imagem principal
+        # Desenhar diretamente na imagem o retângulo arredondado
         draw = ImageDraw.Draw(img)
-        
-        # Desenhar DIRETAMENTE na imagem principal o retângulo arredondado BRANCO
         draw.rounded_rectangle(
-            [x, y, x + tamanho_quadrado, y + tamanho_quadrado],
+            [x, y, x + tamanho, y + tamanho],
             radius=raio,
-            fill=(255, 255, 255, 255),  # Branco com alpha total
-            outline=cor_borda,  # Borda colorida
-            width=6  # Borda grossa para destacar
+            fill=(255, 255, 255, 255),
+            outline=cor_borda,
+            width=5
         )
         
-        # === DESENHAR O ESCUDO OU INICIAIS ===
+        # Desenhar o escudo ou iniciais
         if escudo_img:
-            # Redimensionar escudo mantendo proporção
             escudo_img = escudo_img.convert("RGBA")
             largura, altura = escudo_img.size
             
-            # Calcular dimensões para caber no espaço (um pouco menor para dar espaço à borda)
-            tamanho_escudo_ajustado = tamanho_escudo - 15
-            if tamanho_escudo_ajustado < 40:
-                tamanho_escudo_ajustado = tamanho_escudo
+            tamanho_ajustado = tamanho_escudo - 12
+            if tamanho_ajustado < 40:
+                tamanho_ajustado = tamanho_escudo
             
             if largura > altura:
-                nova_largura = tamanho_escudo_ajustado
-                nova_altura = int(altura * (tamanho_escudo_ajustado / largura))
+                nova_largura = tamanho_ajustado
+                nova_altura = int(altura * (tamanho_ajustado / largura))
             else:
-                nova_altura = tamanho_escudo_ajustado
-                nova_largura = int(largura * (tamanho_escudo_ajustado / altura))
+                nova_altura = tamanho_ajustado
+                nova_largura = int(largura * (tamanho_ajustado / altura))
             
-            # Redimensionar
             escudo_redim = escudo_img.resize((nova_largura, nova_altura), Image.Resampling.LANCZOS)
             
-            # Centralizar
-            escudo_x = x + (tamanho_quadrado - nova_largura) // 2
-            escudo_y = y + (tamanho_quadrado - nova_altura) // 2
+            escudo_x = x + (tamanho - nova_largura) // 2
+            escudo_y = y + (tamanho - nova_altura) // 2
             
-            # Criar máscara circular para bordas suaves do escudo
-            mascara_escudo = Image.new("L", (nova_largura, nova_altura), 0)
-            mascara_escudo_draw = ImageDraw.Draw(mascara_escudo)
+            mascara = Image.new("L", (nova_largura, nova_altura), 0)
+            mascara_draw = ImageDraw.Draw(mascara)
             raio_escudo = min(nova_largura, nova_altura) // 2
             centro_x = nova_largura // 2
             centro_y = nova_altura // 2
-            mascara_escudo_draw.ellipse(
+            mascara_draw.ellipse(
                 [centro_x - raio_escudo, centro_y - raio_escudo, 
                  centro_x + raio_escudo, centro_y + raio_escudo],
                 fill=255
             )
             
-            # Aplicar máscara
             escudo_com_mascara = Image.new("RGBA", (nova_largura, nova_altura), (0, 0, 0, 0))
-            escudo_com_mascara.paste(escudo_redim, (0, 0), mascara_escudo)
-            
-            # Colocar na imagem
+            escudo_com_mascara.paste(escudo_redim, (0, 0), mascara)
             img.paste(escudo_com_mascara, (escudo_x, escudo_y), escudo_com_mascara)
         else:
-            # Desenhar iniciais do time
             if nome_time:
                 palavras = nome_time.split()
                 if len(palavras) >= 2:
@@ -2650,24 +2638,19 @@ class PosterGenerator:
                 iniciais = "??"
             
             try:
-                fonte = self.criar_fonte(int(tamanho_quadrado * 0.5))
-                # Usar o draw existente
+                fonte = self.criar_fonte(int(tamanho * 0.45))
+                draw = ImageDraw.Draw(img)
                 bbox = draw.textbbox((0, 0), iniciais, font=fonte)
                 text_w = bbox[2] - bbox[0]
                 text_h = bbox[3] - bbox[1]
-                text_x = x + (tamanho_quadrado - text_w) // 2
-                text_y = y + (tamanho_quadrado - text_h) // 2
+                text_x = x + (tamanho - text_w) // 2
+                text_y = y + (tamanho - text_h) // 2
                 draw.text((text_x, text_y), iniciais, font=fonte, fill=(80, 80, 80))
             except Exception as e:
                 logging.error(f"Erro ao desenhar iniciais: {e}")
-    
-    def _desenhar_escudo_quadrado(self, draw, img, logo_img, x, y, tamanho_quadrado, tamanho_escudo, team_name=""):
-        """Método de fallback para desenhar escudo em quadrado tradicional (NÃO USA MAIS)"""
-        # Este método não será mais usado, mantido apenas para compatibilidade
-        pass
 
     def gerar_poster_multipla(self, multipla: dict, titulo: str = "💣 MÚLTIPLA PROFISSIONAL") -> io.BytesIO:
-        """Gera pôster estilo West Ham para múltiplas com rounded rectangle (SEM QUADRADO BRANCO)"""
+        """Gera pôster com rounded rectangle para múltiplas"""
         LARGURA = 2000
         ALTURA_TOPO = 350
         ALTURA_POR_JOGO = 550
@@ -2677,7 +2660,6 @@ class PosterGenerator:
         jogos_count = len(jogos)
         altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
 
-        # Criar imagem em RGBA
         img = Image.new("RGBA", (LARGURA, altura_total), (10, 20, 30, 255))
         draw = ImageDraw.Draw(img)
 
@@ -2691,7 +2673,6 @@ class PosterGenerator:
         FONTE_TOTAL = self.criar_fonte(70)
         FONTE_DETALHES = self.criar_fonte(40)
 
-        # Título principal
         titulo_text = f"{titulo} - {multipla['modelo']}"
         try:
             titulo_bbox = draw.textbbox((0, 0), titulo_text, font=FONTE_TITULO)
@@ -2700,7 +2681,6 @@ class PosterGenerator:
         except:
             draw.text((LARGURA//2 - 300, 80), titulo_text, font=FONTE_TITULO, fill=(255, 215, 0))
 
-        # Composição da múltipla
         composicao = f"{multipla['over_1.5_count']}x Over 1.5 + {multipla['over_2.5_count']}x Over 2.5"
         try:
             comp_bbox = draw.textbbox((0, 0), composicao, font=FONTE_SUBTITULO)
@@ -2709,7 +2689,6 @@ class PosterGenerator:
         except:
             draw.text((LARGURA//2 - 250, 180), composicao, font=FONTE_SUBTITULO, fill=(200, 200, 200))
 
-        # Odd Total
         odd_total = multipla['odd_total']
         odd_text = f"ODDS TOTAL: {odd_total:.2f}"
         try:
@@ -2719,7 +2698,6 @@ class PosterGenerator:
         except:
             draw.text((LARGURA//2 - 200, 260), odd_text, font=FONTE_TOTAL, fill=(100, 255, 100))
 
-        # Risco e taxa esperada
         info_text = f"⚠️ Risco: {multipla['risco']} | 📈 Taxa Esperada: {multipla['taxa_acerto_esperada']}"
         try:
             info_bbox = draw.textbbox((0, 0), info_text, font=FONTE_INFO)
@@ -2742,7 +2720,6 @@ class PosterGenerator:
             
             draw.rectangle([x0, y0, x1, y1], fill=(25, 35, 45, 255), outline=cor_borda, width=4)
 
-            # Odd do jogo
             odd_jogo = 100 / max(jogo.get("probabilidade", 65), 10)
             odd_text = f"{odd_jogo:.2f}"
             
@@ -2773,7 +2750,6 @@ class PosterGenerator:
                 odd_y = y0 + 40
                 draw.text((odd_x, odd_y), odd_text, font=FONTE_ODD, fill=cor_borda)
 
-            # Liga
             liga_text = jogo.get('liga', 'LIGA').upper()
             try:
                 liga_bbox = draw.textbbox((0, 0), liga_text, font=FONTE_INFO)
@@ -2782,19 +2758,17 @@ class PosterGenerator:
             except:
                 draw.text((LARGURA//2 - 150, y0 + 35), liga_text, font=FONTE_INFO, fill=(200, 200, 200))
 
-            # Escudos e times com ROUNDED RECTANGLE (SEM QUADRADO BRANCO)
             TAMANHO_ESCUDO = 140
-            TAMANHO_QUADRADO = 160
-            ESPACO_ENTRE_ESCUDOS = 600
+            TAMANHO = 160
+            ESPACO_ENTRE = 600
 
-            largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
+            largura_total = 2 * TAMANHO + ESPACO_ENTRE
             x_inicio = (LARGURA - largura_total) // 2
 
             x_home = x_inicio
-            x_away = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
+            x_away = x_home + TAMANHO + ESPACO_ENTRE
             y_escudos = y0 + 100
 
-            # Baixar escudos
             escudo_home_bytes = self.api_client.baixar_escudo_time(jogo.get('home', ''), jogo.get('escudo_home', ''))
             escudo_away_bytes = self.api_client.baixar_escudo_time(jogo.get('away', ''), jogo.get('escudo_away', ''))
             
@@ -2813,16 +2787,15 @@ class PosterGenerator:
                 except Exception as e:
                     logging.error(f"Erro ao abrir escudo do {jogo.get('away', '')}: {e}")
 
-            # Desenhar escudos com ROUNDED RECTANGLE (diretamente na imagem, sem quadrado branco)
             self._desenhar_escudo_rounded(
                 img, escudo_home_img, x_home, y_escudos,
-                TAMANHO_QUADRADO, TAMANHO_ESCUDO,
+                TAMANHO, TAMANHO_ESCUDO,
                 jogo.get('home', ''), cor_borda
             )
 
             self._desenhar_escudo_rounded(
                 img, escudo_away_img, x_away, y_escudos,
-                TAMANHO_QUADRADO, TAMANHO_ESCUDO,
+                TAMANHO, TAMANHO_ESCUDO,
                 jogo.get('away', ''), cor_borda
             )
 
@@ -2832,30 +2805,29 @@ class PosterGenerator:
             try:
                 home_bbox = draw.textbbox((0, 0), home_text, font=FONTE_TIMES)
                 home_w = home_bbox[2] - home_bbox[0]
-                draw.text((x_home + (TAMANHO_QUADRADO - home_w)//2, y_escudos + TAMANHO_QUADRADO + 25),
+                draw.text((x_home + (TAMANHO - home_w)//2, y_escudos + TAMANHO + 25),
                          home_text, font=FONTE_TIMES, fill=(255, 255, 255))
             except:
-                draw.text((x_home, y_escudos + TAMANHO_QUADRADO + 25), home_text, font=FONTE_TIMES, fill=(255, 255, 255))
+                draw.text((x_home, y_escudos + TAMANHO + 25), home_text, font=FONTE_TIMES, fill=(255, 255, 255))
 
             try:
                 away_bbox = draw.textbbox((0, 0), away_text, font=FONTE_TIMES)
                 away_w = away_bbox[2] - away_bbox[0]
-                draw.text((x_away + (TAMANHO_QUADRADO - away_w)//2, y_escudos + TAMANHO_QUADRADO + 25),
+                draw.text((x_away + (TAMANHO - away_w)//2, y_escudos + TAMANHO + 25),
                          away_text, font=FONTE_TIMES, fill=(255, 255, 255))
             except:
-                draw.text((x_away, y_escudos + TAMANHO_QUADRADO + 25), away_text, font=FONTE_TIMES, fill=(255, 255, 255))
+                draw.text((x_away, y_escudos + TAMANHO + 25), away_text, font=FONTE_TIMES, fill=(255, 255, 255))
 
             try:
                 vs_bbox = draw.textbbox((0, 0), "VS", font=FONTE_VS)
                 vs_w = vs_bbox[2] - vs_bbox[0]
-                vs_x = x_home + TAMANHO_QUADRADO + (ESPACO_ENTRE_ESCUDOS - vs_w) // 2
-                draw.text((vs_x, y_escudos + TAMANHO_QUADRADO//2 - 20), "VS", font=FONTE_VS, fill=(255, 215, 0))
+                vs_x = x_home + TAMANHO + (ESPACO_ENTRE - vs_w) // 2
+                draw.text((vs_x, y_escudos + TAMANHO//2 - 20), "VS", font=FONTE_VS, fill=(255, 215, 0))
             except:
-                vs_x = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS//2 - 30
-                draw.text((vs_x, y_escudos + TAMANHO_QUADRADO//2 - 20), "VS", font=FONTE_VS, fill=(255, 215, 0))
+                vs_x = x_home + TAMANHO + ESPACO_ENTRE//2 - 30
+                draw.text((vs_x, y_escudos + TAMANHO//2 - 20), "VS", font=FONTE_VS, fill=(255, 215, 0))
 
-            # Informações da aposta
-            y_analysis = y_escudos + TAMANHO_QUADRADO + 110
+            y_analysis = y_escudos + TAMANHO + 110
             draw.line([(x0 + 80, y_analysis - 15), (x1 - 80, y_analysis - 15)], fill=(100, 130, 160), width=2)
             
             if tipo == "over_1.5":
@@ -2885,8 +2857,7 @@ class PosterGenerator:
 
             y_pos += ALTURA_POR_JOGO
 
-        # Rodapé
-        rodape_text = f"GERADO EM {datetime.now().strftime('%d/%m/%Y %H:%M')} | ELITE MASTER 3.0 - MÚLTIPLAS"
+        rodape_text = f"GERADO EM {datetime.now().strftime('%d/%m/%Y %H:%M')} | ELITE MASTER 3.0"
         try:
             rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_DETALHES)
             rodape_w = rodape_bbox[2] - rodape_bbox[0]
@@ -2894,7 +2865,6 @@ class PosterGenerator:
         except:
             draw.text((LARGURA//2 - 350, altura_total - 70), rodape_text, font=FONTE_DETALHES, fill=(100, 130, 160))
 
-        # Converter para RGB antes de salvar
         img_rgb = Image.new("RGB", img.size, (10, 20, 30))
         img_rgb.paste(img, (0, 0), img)
         
@@ -2904,15 +2874,8 @@ class PosterGenerator:
         
         return buffer
 
-
-
-
-
-
-
-
     def gerar_poster_resultado_multipla(self, multipla: dict, data_br: str) -> io.BytesIO:
-        """Gera pôster para resultado de múltipla com squircle"""
+        """Gera pôster para resultado de múltipla com rounded rectangle"""
         LARGURA = 2000
         ALTURA_TOPO = 320
         ALTURA_POR_JOGO = 520
@@ -2922,7 +2885,6 @@ class PosterGenerator:
         jogos_count = len(jogos_conferidos)
         altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
 
-        # Criar imagem em RGBA
         img = Image.new("RGBA", (LARGURA, altura_total), (10, 20, 30, 255))
         draw = ImageDraw.Draw(img)
 
@@ -2947,7 +2909,6 @@ class PosterGenerator:
         except:
             draw.text((LARGURA//2 - 300, 70), titulo, font=FONTE_TITULO, fill=(255, 255, 255))
 
-        # Badge de resultado
         if acertada:
             cor_badge = (46, 204, 113)
             resultado_text = "✅ ACERTOU!"
@@ -2975,7 +2936,6 @@ class PosterGenerator:
         except:
             draw.text((badge_x + 100, badge_y + 25), resultado_text, font=FONTE_TITULO, fill=cor_badge)
         
-        # Informações da múltipla
         info_text = f"{modelo} | Odds Total: {odd_total:.2f}"
         try:
             info_bbox = draw.textbbox((0, 0), info_text, font=FONTE_SUBTITULO)
@@ -2997,7 +2957,6 @@ class PosterGenerator:
             
             draw.rectangle([x0, y0, x1, y1], fill=(25, 35, 45, 255), outline=cor_borda, width=4)
 
-            # Badge de resultado do jogo
             badge_jogo_width = 150
             badge_jogo_height = 60
             badge_jogo_x = x1 - badge_jogo_width - 40
@@ -3017,16 +2976,15 @@ class PosterGenerator:
             except:
                 draw.text((badge_jogo_x + 65, badge_jogo_y + 15), resultado_jogo, font=FONTE_INFO, fill=(255, 255, 255))
 
-            # Times com SQUIRCLE
             TAMANHO_ESCUDO = 120
-            TAMANHO_QUADRADO = 140
-            ESPACO_ENTRE_ESCUDOS = 500
+            TAMANHO = 140
+            ESPACO_ENTRE = 500
 
-            largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
+            largura_total = 2 * TAMANHO + ESPACO_ENTRE
             x_inicio = (LARGURA - largura_total) // 2
 
             x_home = x_inicio
-            x_away = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
+            x_away = x_home + TAMANHO + ESPACO_ENTRE
             y_escudos = y0 + 70
 
             home_crest_url = jogo.get('escudo_home', '')
@@ -3038,16 +2996,15 @@ class PosterGenerator:
             escudo_home_img = Image.open(io.BytesIO(escudo_home_bytes)).convert("RGBA") if escudo_home_bytes else None
             escudo_away_img = Image.open(io.BytesIO(escudo_away_bytes)).convert("RGBA") if escudo_away_bytes else None
 
-            # Usar squircle em vez de quadrado
-            self._desenhar_escudo_squircle(
+            self._desenhar_escudo_rounded(
                 img, escudo_home_img, x_home, y_escudos,
-                TAMANHO_QUADRADO, TAMANHO_ESCUDO,
+                TAMANHO, TAMANHO_ESCUDO,
                 jogo.get('home', ''), cor_borda
             )
 
-            self._desenhar_escudo_squircle(
+            self._desenhar_escudo_rounded(
                 img, escudo_away_img, x_away, y_escudos,
-                TAMANHO_QUADRADO, TAMANHO_ESCUDO,
+                TAMANHO, TAMANHO_ESCUDO,
                 jogo.get('away', ''), cor_borda
             )
 
@@ -3057,33 +3014,31 @@ class PosterGenerator:
             try:
                 home_bbox = draw.textbbox((0, 0), home_text, font=FONTE_TIMES)
                 home_w = home_bbox[2] - home_bbox[0]
-                draw.text((x_home + (TAMANHO_QUADRADO - home_w)//2, y_escudos + TAMANHO_QUADRADO + 20),
+                draw.text((x_home + (TAMANHO - home_w)//2, y_escudos + TAMANHO + 20),
                          home_text, font=FONTE_TIMES, fill=(255, 255, 255))
             except:
-                draw.text((x_home, y_escudos + TAMANHO_QUADRADO + 20), home_text, font=FONTE_TIMES, fill=(255, 255, 255))
+                draw.text((x_home, y_escudos + TAMANHO + 20), home_text, font=FONTE_TIMES, fill=(255, 255, 255))
 
             try:
                 away_bbox = draw.textbbox((0, 0), away_text, font=FONTE_TIMES)
                 away_w = away_bbox[2] - away_bbox[0]
-                draw.text((x_away + (TAMANHO_QUADRADO - away_w)//2, y_escudos + TAMANHO_QUADRADO + 20),
+                draw.text((x_away + (TAMANHO - away_w)//2, y_escudos + TAMANHO + 20),
                          away_text, font=FONTE_TIMES, fill=(255, 255, 255))
             except:
-                draw.text((x_away, y_escudos + TAMANHO_QUADRADO + 20), away_text, font=FONTE_TIMES, fill=(255, 255, 255))
+                draw.text((x_away, y_escudos + TAMANHO + 20), away_text, font=FONTE_TIMES, fill=(255, 255, 255))
 
-            # Placar
             resultado_score = f"{jogo.get('home_goals', '?')} - {jogo.get('away_goals', '?')}"
             try:
                 score_bbox = draw.textbbox((0, 0), resultado_score, font=FONTE_RESULTADO)
                 score_w = score_bbox[2] - score_bbox[0]
-                score_x = x_home + TAMANHO_QUADRADO + (ESPACO_ENTRE_ESCUDOS - score_w) // 2
-                draw.text((score_x, y_escudos + TAMANHO_QUADRADO//2 - 25), 
+                score_x = x_home + TAMANHO + (ESPACO_ENTRE - score_w) // 2
+                draw.text((score_x, y_escudos + TAMANHO//2 - 25), 
                          resultado_score, font=FONTE_RESULTADO, fill=(255, 255, 255))
             except:
-                score_x = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS//2 - 60
-                draw.text((score_x, y_escudos + TAMANHO_QUADRADO//2 - 25), 
+                score_x = x_home + TAMANHO + ESPACO_ENTRE//2 - 60
+                draw.text((score_x, y_escudos + TAMANHO//2 - 25), 
                          resultado_score, font=FONTE_RESULTADO, fill=(255, 255, 255))
 
-            # Tipo de aposta
             tipo_aposta = jogo.get("tipo", "over_1.5")
             tipo_text = "Over 1.5" if tipo_aposta == "over_1.5" else "Over 2.5"
             emoji_tipo = "🟢" if tipo_aposta == "over_1.5" else "🟡"
@@ -3091,15 +3046,14 @@ class PosterGenerator:
             try:
                 tipo_bbox = draw.textbbox((0, 0), f"{emoji_tipo} {tipo_text}", font=FONTE_INFO)
                 tipo_w = tipo_bbox[2] - tipo_bbox[0]
-                draw.text(((LARGURA - tipo_w) // 2, y_escudos + TAMANHO_QUADRADO + 80), 
+                draw.text(((LARGURA - tipo_w) // 2, y_escudos + TAMANHO + 80), 
                          f"{emoji_tipo} {tipo_text}", font=FONTE_INFO, fill=(150, 200, 255))
             except:
-                draw.text((LARGURA//2 - 100, y_escudos + TAMANHO_QUADRADO + 80), 
+                draw.text((LARGURA//2 - 100, y_escudos + TAMANHO + 80), 
                          f"{emoji_tipo} {tipo_text}", font=FONTE_INFO, fill=(150, 200, 255))
 
             y_pos += ALTURA_POR_JOGO
 
-        # Rodapé
         rodape_text = f"CONFERIDO EM {datetime.now().strftime('%d/%m/%Y %H:%M')} | ELITE MASTER 3.0"
         try:
             rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_DETALHES)
@@ -3108,7 +3062,6 @@ class PosterGenerator:
         except:
             draw.text((LARGURA//2 - 300, altura_total - 70), rodape_text, font=FONTE_DETALHES, fill=(100, 130, 160))
 
-        # Converter para RGB
         img_rgb = Image.new("RGB", img.size, (10, 20, 30))
         img_rgb.paste(img, (0, 0), img)
         
@@ -3119,7 +3072,7 @@ class PosterGenerator:
         return buffer
     
     def gerar_poster_westham_style(self, jogos: list, titulo: str = "⚽ ALERTA DE GOLS", tipo_alerta: str = "over_under") -> io.BytesIO:
-        """Gera pôster estilo West Ham com squircle"""
+        """Gera pôster estilo West Ham com rounded rectangle"""
         LARGURA = 2000
         ALTURA_TOPO = 270
         ALTURA_POR_JOGO = 830
@@ -3128,7 +3081,6 @@ class PosterGenerator:
         jogos_count = len(jogos)
         altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
 
-        # Criar imagem em RGBA
         img = Image.new("RGBA", (LARGURA, altura_total), (10, 20, 30, 255))
         draw = ImageDraw.Draw(img)
 
@@ -3173,22 +3125,18 @@ class PosterGenerator:
                 prob = jogo_dict.get('probabilidade', 50)
                 odd_principal = round(100 / prob, 2) if prob > 0 else 2.0
                 cor_odd = (255, 215, 0) if jogo_dict.get('tipo_aposta') == "over" else (100, 200, 255)
-                
             elif tipo_alerta == "favorito":
                 prob_fav = jogo_dict.get('confianca_vitoria', 50)
                 odd_principal = round(100 / prob_fav, 2) if prob_fav > 0 else 2.0
                 cor_odd = (255, 87, 34)
-                
             elif tipo_alerta == "gols_ht":
                 prob_ht = jogo_dict.get('confianca_ht', 50)
                 odd_principal = round(100 / prob_ht, 2) if prob_ht > 0 else 2.0
                 cor_odd = (76, 175, 80)
-                
             elif tipo_alerta == "ambas_marcam":
                 prob_am = jogo_dict.get('confianca_ambas_marcam', 50)
                 odd_principal = round(100 / prob_am, 2) if prob_am > 0 else 2.0
                 cor_odd = (155, 89, 182)
-            
             else:
                 odd_principal = 2.0
                 cor_odd = (255, 215, 0)
@@ -3200,11 +3148,8 @@ class PosterGenerator:
                 odd_w = odd_bbox[2] - odd_bbox[0]
                 odd_h = odd_bbox[3] - odd_bbox[1]
                 
-                margem_direita = 40
-                margem_topo = 40
-                
-                odd_x = x1 - odd_w - margem_direita
-                odd_y = y0 + margem_topo
+                odd_x = x1 - odd_w - 40
+                odd_y = y0 + 40
                 
                 fundo_x0 = odd_x - 15
                 fundo_y0 = odd_y - 10
@@ -3217,9 +3162,7 @@ class PosterGenerator:
                 img.paste(overlay, (0,0), overlay)
                 
                 draw.rectangle([fundo_x0, fundo_y0, fundo_x1, fundo_y1], outline=(255, 215, 0), width=3)
-                
                 draw.text((odd_x, odd_y), odd_text, font=FONTE_ODD, fill=cor_odd)
-                
             except Exception as e:
                 logging.error(f"Erro ao desenhar odd: {e}")
                 odd_x = x1 - 200
@@ -3247,14 +3190,14 @@ class PosterGenerator:
                 draw.text((LARGURA//2 - 150, y0 + 130), data_text, font=FONTE_INFO, fill=(150, 200, 255))
 
             TAMANHO_ESCUDO = 220
-            TAMANHO_QUADRADO = 230
-            ESPACO_ENTRE_ESCUDOS = 700
+            TAMANHO = 230
+            ESPACO_ENTRE = 700
 
-            largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
+            largura_total = 2 * TAMANHO + ESPACO_ENTRE
             x_inicio = (LARGURA - largura_total) // 2
 
             x_home = x_inicio
-            x_away = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
+            x_away = x_home + TAMANHO + ESPACO_ENTRE
             y_escudos = y0 + 250
 
             home_crest_url = jogo_dict.get('escudo_home', '')
@@ -3266,16 +3209,15 @@ class PosterGenerator:
             escudo_home_img = Image.open(io.BytesIO(escudo_home_bytes)).convert("RGBA") if escudo_home_bytes else None
             escudo_away_img = Image.open(io.BytesIO(escudo_away_bytes)).convert("RGBA") if escudo_away_bytes else None
 
-            # Usar squircle
-            self._desenhar_escudo_squircle(
+            self._desenhar_escudo_rounded(
                 img, escudo_home_img, x_home, y_escudos,
-                TAMANHO_QUADRADO, TAMANHO_ESCUDO,
+                TAMANHO, TAMANHO_ESCUDO,
                 jogo_dict.get('home', ''), cor_borda
             )
 
-            self._desenhar_escudo_squircle(
+            self._desenhar_escudo_rounded(
                 img, escudo_away_img, x_away, y_escudos,
-                TAMANHO_QUADRADO, TAMANHO_ESCUDO,
+                TAMANHO, TAMANHO_ESCUDO,
                 jogo_dict.get('away', ''), cor_borda
             )
 
@@ -3285,29 +3227,29 @@ class PosterGenerator:
             try:
                 home_bbox = draw.textbbox((0, 0), home_text, font=FONTE_TIMES)
                 home_w = home_bbox[2] - home_bbox[0]
-                draw.text((x_home + (TAMANHO_QUADRADO - home_w)//2, y_escudos + TAMANHO_QUADRADO + 50),
+                draw.text((x_home + (TAMANHO - home_w)//2, y_escudos + TAMANHO + 50),
                          home_text, font=FONTE_TIMES, fill=(255, 255, 255))
             except:
-                draw.text((x_home, y_escudos + TAMANHO_QUADRADO + 50), home_text, font=FONTE_TIMES, fill=(255, 255, 255))
+                draw.text((x_home, y_escudos + TAMANHO + 50), home_text, font=FONTE_TIMES, fill=(255, 255, 255))
 
             try:
                 away_bbox = draw.textbbox((0, 0), away_text, font=FONTE_TIMES)
                 away_w = away_bbox[2] - away_bbox[0]
-                draw.text((x_away + (TAMANHO_QUADRADO - away_w)//2, y_escudos + TAMANHO_QUADRADO + 50),
+                draw.text((x_away + (TAMANHO - away_w)//2, y_escudos + TAMANHO + 50),
                          away_text, font=FONTE_TIMES, fill=(255, 255, 255))
             except:
-                draw.text((x_away, y_escudos + TAMANHO_QUADRADO + 50), away_text, font=FONTE_TIMES, fill=(255, 255, 255))
+                draw.text((x_away, y_escudos + TAMANHO + 50), away_text, font=FONTE_TIMES, fill=(255, 255, 255))
 
             try:
                 vs_bbox = draw.textbbox((0, 0), "VS", font=FONTE_VS)
                 vs_w = vs_bbox[2] - vs_bbox[0]
-                vs_x = x_home + TAMANHO_QUADRADO + (ESPACO_ENTRE_ESCUDOS - vs_w) // 2
-                draw.text((vs_x, y_escudos + TAMANHO_QUADRADO//2 - 30), "VS", font=FONTE_VS, fill=(255, 215, 0))
+                vs_x = x_home + TAMANHO + (ESPACO_ENTRE - vs_w) // 2
+                draw.text((vs_x, y_escudos + TAMANHO//2 - 30), "VS", font=FONTE_VS, fill=(255, 215, 0))
             except:
-                vs_x = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS//2 - 30
-                draw.text((vs_x, y_escudos + TAMANHO_QUADRADO//2 - 30), "VS", font=FONTE_VS, fill=(255, 215, 0))
+                vs_x = x_home + TAMANHO + ESPACO_ENTRE//2 - 30
+                draw.text((vs_x, y_escudos + TAMANHO//2 - 30), "VS", font=FONTE_VS, fill=(255, 215, 0))
 
-            y_analysis = y_escudos + TAMANHO_QUADRADO + 150
+            y_analysis = y_escudos + TAMANHO + 150
             draw.line([(x0 + 80, y_analysis - 20), (x1 - 80, y_analysis - 20)], fill=(100, 130, 160), width=3)
             
             if tipo_alerta == "over_under":
@@ -3316,7 +3258,6 @@ class PosterGenerator:
                     f"Confiança: {jogo_dict.get('confianca', 0):.0f}% | Odds: {odd_principal:.2f}",
                 ]
                 cores = [(200, 200, 200), (100, 255, 100)]
-                
             elif tipo_alerta == "favorito":
                 favorito = jogo_dict.get('favorito', '')
                 if favorito == "home":
@@ -3331,21 +3272,18 @@ class PosterGenerator:
                     f"Confiança: {jogo_dict.get('confianca_vitoria', 0):.0f}% | Odds: {odd_principal:.2f}",
                 ]
                 cores = [(255, 152, 0), (100, 255, 100)]
-                
             elif tipo_alerta == "gols_ht":
                 textos_analise = [
                     f"○ {jogo_dict.get('tendencia_ht', 'N/A')}",
                     f"Confiança: {jogo_dict.get('confianca_ht', 0):.0f}% | Odds: {odd_principal:.2f}",
                 ]
                 cores = [(129, 199, 132), (100, 255, 100)]
-            
             elif tipo_alerta == "ambas_marcam":
                 textos_analise = [
                     f"○ {jogo_dict.get('tendencia_ambas_marcam', 'N/A')}",
                     f"Confiança: {jogo_dict.get('confianca_ambas_marcam', 0):.0f}% | Odds: {odd_principal:.2f}",
                 ]
                 cores = [(165, 105, 189), (100, 255, 100)]
-            
             else:
                 textos_analise = ["Informação não disponível"]
                 cores = [(200, 200, 200)]
@@ -3368,7 +3306,6 @@ class PosterGenerator:
         except:
             draw.text((LARGURA//2 - 300, altura_total - 70), rodape_text, font=FONTE_DETALHES, fill=(100, 130, 160))
 
-        # Converter para RGB
         img_rgb = Image.new("RGB", img.size, (10, 20, 30))
         img_rgb.paste(img, (0, 0), img)
         
@@ -3379,7 +3316,7 @@ class PosterGenerator:
         return buffer
     
     def gerar_poster_resultados(self, jogos_com_resultados: list, tipo_alerta: str = "over_under") -> io.BytesIO:
-        """Gera pôster de resultados com squircle"""
+        """Gera pôster de resultados com rounded rectangle"""
         LARGURA = 2000
         ALTURA_TOPO = 330
         ALTURA_POR_JOGO = 800
@@ -3388,7 +3325,6 @@ class PosterGenerator:
         jogos_count = len(jogos_com_resultados)
         altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
 
-        # Criar imagem em RGBA
         img = Image.new("RGBA", (LARGURA, altura_total), (10, 20, 30, 255))
         draw = ImageDraw.Draw(img)
 
@@ -3399,7 +3335,6 @@ class PosterGenerator:
         FONTE_INFO = self.criar_fonte(50)
         FONTE_DETALHES = self.criar_fonte(55)
         FONTE_ANALISE = self.criar_fonte(65)
-        FONTE_ESTATISTICAS = self.criar_fonte(40)
         FONTE_RESULTADO = self.criar_fonte(76)
         FONTE_RESULTADO_BADGE = self.criar_fonte(65)
 
@@ -3482,7 +3417,6 @@ class PosterGenerator:
                 
                 draw.rectangle([badge_x-2, badge_y-2, badge_x + badge_width + 2, badge_y + badge_height + 2], 
                               outline=(255, 255, 255), width=1)
-                
             except:
                 draw.text((badge_x + 80, badge_y + 25), resultado_text, 
                          font=FONTE_RESULTADO_BADGE, fill=(255, 255, 255))
@@ -3496,14 +3430,14 @@ class PosterGenerator:
                 draw.text((LARGURA//2 - 150, y0 + 40), liga_text, font=FONTE_SUBTITULO, fill=(200, 200, 200))
 
             TAMANHO_ESCUDO = 200
-            TAMANHO_QUADRADO = 225
-            ESPACO_ENTRE_ESCUDOS = 700
+            TAMANHO = 225
+            ESPACO_ENTRE = 700
 
-            largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
+            largura_total = 2 * TAMANHO + ESPACO_ENTRE
             x_inicio = (LARGURA - largura_total) // 2
 
             x_home = x_inicio
-            x_away = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
+            x_away = x_home + TAMANHO + ESPACO_ENTRE
             y_escudos = y0 + 150
 
             home_crest_url = jogo.get('escudo_home', '')
@@ -3515,16 +3449,15 @@ class PosterGenerator:
             escudo_home_img = Image.open(io.BytesIO(escudo_home_bytes)).convert("RGBA") if escudo_home_bytes else None
             escudo_away_img = Image.open(io.BytesIO(escudo_away_bytes)).convert("RGBA") if escudo_away_bytes else None
 
-            # Usar squircle
-            self._desenhar_escudo_squircle(
+            self._desenhar_escudo_rounded(
                 img, escudo_home_img, x_home, y_escudos,
-                TAMANHO_QUADRADO, TAMANHO_ESCUDO,
+                TAMANHO, TAMANHO_ESCUDO,
                 jogo['home'], cor_borda
             )
 
-            self._desenhar_escudo_squircle(
+            self._desenhar_escudo_rounded(
                 img, escudo_away_img, x_away, y_escudos,
-                TAMANHO_QUADRADO, TAMANHO_ESCUDO,
+                TAMANHO, TAMANHO_ESCUDO,
                 jogo['away'], cor_borda
             )
 
@@ -3534,45 +3467,45 @@ class PosterGenerator:
             try:
                 home_bbox = draw.textbbox((0, 0), home_text, font=FONTE_TIMES)
                 home_w = home_bbox[2] - home_bbox[0]
-                draw.text((x_home + (TAMANHO_QUADRADO - home_w)//2, y_escudos + TAMANHO_QUADRADO + 30),
+                draw.text((x_home + (TAMANHO - home_w)//2, y_escudos + TAMANHO + 30),
                          home_text, font=FONTE_TIMES, fill=(255, 255, 255))
             except:
-                draw.text((x_home, y_escudos + TAMANHO_QUADRADO + 30),
+                draw.text((x_home, y_escudos + TAMANHO + 30),
                          home_text, font=FONTE_TIMES, fill=(255, 255, 255))
 
             try:
                 away_bbox = draw.textbbox((0, 0), away_text, font=FONTE_TIMES)
                 away_w = away_bbox[2] - away_bbox[0]
-                draw.text((x_away + (TAMANHO_QUADRADO - away_w)//2, y_escudos + TAMANHO_QUADRADO + 30),
+                draw.text((x_away + (TAMANHO - away_w)//2, y_escudos + TAMANHO + 30),
                          away_text, font=FONTE_TIMES, fill=(255, 255, 255))
             except:
-                draw.text((x_away, y_escudos + TAMANHO_QUADRADO + 30),
+                draw.text((x_away, y_escudos + TAMANHO + 30),
                          away_text, font=FONTE_TIMES, fill=(255, 255, 255))
 
             resultado_text_score = f"{jogo.get('home_goals', '?')} - {jogo.get('away_goals', '?')}"
             try:
                 resultado_bbox = draw.textbbox((0, 0), resultado_text_score, font=FONTE_RESULTADO)
                 resultado_w = resultado_bbox[2] - resultado_bbox[0]
-                resultado_x = x_home + TAMANHO_QUADRADO + (ESPACO_ENTRE_ESCUDOS - resultado_w) // 2
-                draw.text((resultado_x, y_escudos + TAMANHO_QUADRADO//2 - 40), 
+                resultado_x = x_home + TAMANHO + (ESPACO_ENTRE - resultado_w) // 2
+                draw.text((resultado_x, y_escudos + TAMANHO//2 - 40), 
                          resultado_text_score, font=FONTE_RESULTADO, fill=(255, 255, 255))
             except:
-                resultado_x = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS//2 - 60
-                draw.text((resultado_x, y_escudos + TAMANHO_QUADRADO//2 - 40), resultado_text_score, font=FONTE_RESULTADO, fill=(255, 255, 255))
+                resultado_x = x_home + TAMANHO + ESPACO_ENTRE//2 - 60
+                draw.text((resultado_x, y_escudos + TAMANHO//2 - 40), resultado_text_score, font=FONTE_RESULTADO, fill=(255, 255, 255))
 
             if jogo.get('ht_home_goals') is not None and jogo.get('ht_away_goals') is not None:
                 ht_text = f"HT: {jogo['ht_home_goals']} - {jogo['ht_away_goals']}"
                 try:
                     ht_bbox = draw.textbbox((0, 0), ht_text, font=FONTE_INFO)
                     ht_w = ht_bbox[2] - ht_bbox[0]
-                    ht_x = x_home + TAMANHO_QUADRADO + (ESPACO_ENTRE_ESCUDOS - ht_w) // 2
-                    draw.text((ht_x, y_escudos + TAMANHO_QUADRADO//2 + 40), 
+                    ht_x = x_home + TAMANHO + (ESPACO_ENTRE - ht_w) // 2
+                    draw.text((ht_x, y_escudos + TAMANHO//2 + 40), 
                              ht_text, font=FONTE_INFO, fill=(200, 200, 200))
                 except:
-                    ht_x = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS//2 - 60
-                    draw.text((ht_x, y_escudos + TAMANHO_QUADRADO//2 + 40), ht_text, font=FONTE_INFO, fill=(200, 200, 200))
+                    ht_x = x_home + TAMANHO + ESPACO_ENTRE//2 - 60
+                    draw.text((ht_x, y_escudos + TAMANHO//2 + 40), ht_text, font=FONTE_INFO, fill=(200, 200, 200))
 
-            y_analysis = y_escudos + TAMANHO_QUADRADO + 120
+            y_analysis = y_escudos + TAMANHO + 120
             
             if tipo_alerta == "over_under":
                 tipo_emoji = "+" if jogo.get('tipo_aposta') == "over" else "-"
@@ -3583,9 +3516,7 @@ class PosterGenerator:
                     f"Estimativa: {jogo['estimativa']:.2f} gols | Resultado: {jogo.get('home_goals', '?')} - {jogo.get('away_goals', '?')}",
                     f"Probabilidade: {jogo['probabilidade']:.0f}% | Confiança: {jogo['confianca']:.0f}%",
                 ]
-                
                 cores = [(255, 255, 255), (200, 200, 200), (200, 200, 200)]
-                
             elif tipo_alerta == "favorito":
                 favorito_emoji = "" if jogo.get('favorito') == "home" else "" if jogo.get('favorito') == "away" else "🤝"
                 favorito_text = jogo['home'] if jogo.get('favorito') == "home" else jogo['away'] if jogo.get('favorito') == "away" else "EMPATE"
@@ -3596,9 +3527,7 @@ class PosterGenerator:
                     f"Confiança: {jogo.get('confianca_vitoria', 0):.0f}% | Resultado: {jogo.get('home_goals', '?')} - {jogo.get('away_goals', '?')}",
                     f"Prob. Casa: {jogo.get('prob_home_win', 0):.1f}% | Fora: {jogo.get('prob_away_win', 0):.1f}% | Empate: {jogo.get('prob_draw', 0):.1f}%",
                 ]
-                
                 cores = [(255, 255, 255), (200, 200, 200), (200, 200, 200)]
-                
             elif tipo_alerta == "gols_ht":
                 tipo_emoji_ht = "" if "OVER" in jogo.get('tendencia_ht', '') else ""
                 resultado_emoji = "" if resultado == "GREEN" else "❌" if resultado == "RED" else ""
@@ -3609,9 +3538,7 @@ class PosterGenerator:
                     f"Estimativa HT: {jogo.get('estimativa_total_ht', 0):.2f} gols | Resultado HT: {ht_resultado}",
                     f"Confiança HT: {jogo.get('confianca_ht', 0):.0f}% | FT: {jogo.get('home_goals', '?')} - {jogo.get('away_goals', '?')}",
                 ]
-                
                 cores = [(255, 255, 255), (200, 200, 200), (200, 200, 200)]
-            
             elif tipo_alerta == "ambas_marcam":
                 tipo_emoji_am = "🤝" if jogo.get('tendencia_ambas_marcam') == "SIM" else "🚫"
                 resultado_emoji = "" if resultado == "GREEN" else "❌" if resultado == "RED" else ""
@@ -3621,9 +3548,7 @@ class PosterGenerator:
                     f"Probabilidade SIM: {jogo.get('prob_ambas_marcam_sim', 0):.1f}% | NÃO: {jogo.get('prob_ambas_marcam_nao', 0):.1f}%",
                     f"Confiança: {jogo.get('confianca_ambas_marcam', 0):.0f}% | Resultado: {jogo.get('home_goals', '?')} - {jogo.get('away_goals', '?')}",
                 ]
-                
                 cores = [(255, 255, 255), (200, 200, 200), (200, 200, 200)]
-            
             else:
                 textos_analise = [f"Resultado: {resultado}"]
                 cores = [(200, 200, 200)]
@@ -3646,7 +3571,6 @@ class PosterGenerator:
         except:
             draw.text((LARGURA//2 - 300, altura_total - 70), rodape_text, font=FONTE_DETALHES, fill=(100, 130, 160))
 
-        # Converter para RGB
         img_rgb = Image.new("RGB", img.size, (10, 20, 30))
         img_rgb.paste(img, (0, 0), img)
         
@@ -3658,7 +3582,7 @@ class PosterGenerator:
         return buffer
 
     def gerar_poster_multipla_pro(self, multipla: dict, titulo: str = "💣 MÚLTIPLA PRO") -> io.BytesIO:
-        """Gera pôster para múltipla Pro com squircle"""
+        """Gera pôster para múltipla Pro com rounded rectangle"""
         LARGURA = 2000
         ALTURA_TOPO = 360
         ALTURA_POR_JOGO = 550
@@ -3668,7 +3592,6 @@ class PosterGenerator:
         jogos_count = len(jogos)
         altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
 
-        # Criar imagem em RGBA
         img = Image.new("RGBA", (LARGURA, altura_total), (10, 20, 30, 255))
         draw = ImageDraw.Draw(img)
 
@@ -3683,7 +3606,6 @@ class PosterGenerator:
         FONTE_TOTAL = self.criar_fonte(65)
         FONTE_DETALHES = self.criar_fonte(35)
 
-        # Título principal
         titulo_text = f"{titulo} - {multipla.get('tipo', 'MÚLTIPLA')}"
         try:
             titulo_bbox = draw.textbbox((0, 0), titulo_text, font=FONTE_TITULO)
@@ -3692,7 +3614,6 @@ class PosterGenerator:
         except:
             draw.text((LARGURA//2 - 300, 70), titulo_text, font=FONTE_TITULO, fill=(255, 215, 0))
 
-        # Composição
         over_1_5 = multipla.get('over_1.5_count', 0)
         over_2_5 = multipla.get('over_2.5_count', 0)
         composicao = f"{over_1_5}x Over 1.5 + {over_2_5}x Over 2.5"
@@ -3703,7 +3624,6 @@ class PosterGenerator:
         except:
             draw.text((LARGURA//2 - 250, 160), composicao, font=FONTE_SUBTITULO, fill=(200, 200, 200))
 
-        # Odd Total
         odd_total = multipla.get('odd_total', 0)
         odd_text = f"ODDS TOTAL: {odd_total:.2f}"
         try:
@@ -3713,7 +3633,6 @@ class PosterGenerator:
         except:
             draw.text((LARGURA//2 - 200, 240), odd_text, font=FONTE_TOTAL, fill=(100, 255, 100))
 
-        # Risco e Score
         risco = multipla.get('risco', 'MÉDIO')
         score_medio = multipla.get('score_medio', 0)
         info_text = f"⚠️ Risco: {risco} | 📊 Score Médio: {score_medio:.1f}"
@@ -3737,7 +3656,6 @@ class PosterGenerator:
             
             draw.rectangle([x0, y0, x1, y1], fill=(25, 35, 45, 255), outline=cor_borda, width=4)
 
-            # Odd do jogo
             odd_jogo = jogo.get('odd', 1.35)
             odd_text = f"{odd_jogo:.2f}"
             
@@ -3760,13 +3678,11 @@ class PosterGenerator:
                 
                 draw.rectangle([fundo_x0, fundo_y0, fundo_x1, fundo_y1], outline=cor_borda, width=3)
                 draw.text((odd_x, odd_y), odd_text, font=FONTE_ODD, fill=cor_borda)
-                
             except:
                 odd_x = x1 - 150
                 odd_y = y0 + 40
                 draw.text((odd_x, odd_y), odd_text, font=FONTE_ODD, fill=cor_borda)
 
-            # Score do jogo
             score_jogo = jogo.get('score', 0)
             score_text = f"Score: {score_jogo:.0f}"
             try:
@@ -3776,7 +3692,6 @@ class PosterGenerator:
             except:
                 draw.text((x1 - 150, y0 + 110), score_text, font=FONTE_INFO, fill=(100, 255, 100))
 
-            # Liga
             liga_text = jogo.get('liga', 'LIGA').upper()
             try:
                 liga_bbox = draw.textbbox((0, 0), liga_text, font=FONTE_INFO)
@@ -3785,7 +3700,6 @@ class PosterGenerator:
             except:
                 draw.text((LARGURA//2 - 150, y0 + 35), liga_text, font=FONTE_INFO, fill=(200, 200, 200))
 
-            # Data e Hora do jogo
             hora_jogo = jogo.get('hora')
             if hora_jogo and isinstance(hora_jogo, datetime):
                 data_hora_text = hora_jogo.strftime("%d/%m/%Y %H:%M")
@@ -3799,16 +3713,15 @@ class PosterGenerator:
             except:
                 draw.text((LARGURA//2 - 150, y0 + 90), data_hora_text, font=FONTE_HORA, fill=(150, 200, 255))
 
-            # Escudos e times com SQUIRCLE
             TAMANHO_ESCUDO = 130
-            TAMANHO_QUADRADO = 150
-            ESPACO_ENTRE_ESCUDOS = 650
+            TAMANHO = 150
+            ESPACO_ENTRE = 650
 
-            largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
+            largura_total = 2 * TAMANHO + ESPACO_ENTRE
             x_inicio = (LARGURA - largura_total) // 2
 
             x_home = x_inicio
-            x_away = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
+            x_away = x_home + TAMANHO + ESPACO_ENTRE
             y_escudos = y0 + 150
 
             escudo_home_bytes = self.api_client.baixar_escudo_time(jogo.get('home', ''), jogo.get('escudo_home', ''))
@@ -3817,16 +3730,15 @@ class PosterGenerator:
             escudo_home_img = Image.open(io.BytesIO(escudo_home_bytes)).convert("RGBA") if escudo_home_bytes else None
             escudo_away_img = Image.open(io.BytesIO(escudo_away_bytes)).convert("RGBA") if escudo_away_bytes else None
 
-            # Usar squircle
-            self._desenhar_escudo_squircle(
+            self._desenhar_escudo_rounded(
                 img, escudo_home_img, x_home, y_escudos,
-                TAMANHO_QUADRADO, TAMANHO_ESCUDO,
+                TAMANHO, TAMANHO_ESCUDO,
                 jogo.get('home', ''), cor_borda
             )
 
-            self._desenhar_escudo_squircle(
+            self._desenhar_escudo_rounded(
                 img, escudo_away_img, x_away, y_escudos,
-                TAMANHO_QUADRADO, TAMANHO_ESCUDO,
+                TAMANHO, TAMANHO_ESCUDO,
                 jogo.get('away', ''), cor_borda
             )
 
@@ -3836,30 +3748,29 @@ class PosterGenerator:
             try:
                 home_bbox = draw.textbbox((0, 0), home_text, font=FONTE_TIMES)
                 home_w = home_bbox[2] - home_bbox[0]
-                draw.text((x_home + (TAMANHO_QUADRADO - home_w)//2, y_escudos + TAMANHO_QUADRADO + 20),
+                draw.text((x_home + (TAMANHO - home_w)//2, y_escudos + TAMANHO + 20),
                          home_text, font=FONTE_TIMES, fill=(255, 255, 255))
             except:
-                draw.text((x_home, y_escudos + TAMANHO_QUADRADO + 20), home_text, font=FONTE_TIMES, fill=(255, 255, 255))
+                draw.text((x_home, y_escudos + TAMANHO + 20), home_text, font=FONTE_TIMES, fill=(255, 255, 255))
 
             try:
                 away_bbox = draw.textbbox((0, 0), away_text, font=FONTE_TIMES)
                 away_w = away_bbox[2] - away_bbox[0]
-                draw.text((x_away + (TAMANHO_QUADRADO - away_w)//2, y_escudos + TAMANHO_QUADRADO + 20),
+                draw.text((x_away + (TAMANHO - away_w)//2, y_escudos + TAMANHO + 20),
                          away_text, font=FONTE_TIMES, fill=(255, 255, 255))
             except:
-                draw.text((x_away, y_escudos + TAMANHO_QUADRADO + 20), away_text, font=FONTE_TIMES, fill=(255, 255, 255))
+                draw.text((x_away, y_escudos + TAMANHO + 20), away_text, font=FONTE_TIMES, fill=(255, 255, 255))
 
             try:
                 vs_bbox = draw.textbbox((0, 0), "VS", font=FONTE_VS)
                 vs_w = vs_bbox[2] - vs_bbox[0]
-                vs_x = x_home + TAMANHO_QUADRADO + (ESPACO_ENTRE_ESCUDOS - vs_w) // 2
-                draw.text((vs_x, y_escudos + TAMANHO_QUADRADO//2 - 15), "VS", font=FONTE_VS, fill=(255, 215, 0))
+                vs_x = x_home + TAMANHO + (ESPACO_ENTRE - vs_w) // 2
+                draw.text((vs_x, y_escudos + TAMANHO//2 - 15), "VS", font=FONTE_VS, fill=(255, 215, 0))
             except:
-                vs_x = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS//2 - 30
-                draw.text((vs_x, y_escudos + TAMANHO_QUADRADO//2 - 15), "VS", font=FONTE_VS, fill=(255, 215, 0))
+                vs_x = x_home + TAMANHO + ESPACO_ENTRE//2 - 30
+                draw.text((vs_x, y_escudos + TAMANHO//2 - 15), "VS", font=FONTE_VS, fill=(255, 215, 0))
 
-            # Mercado
-            y_analysis = y_escudos + TAMANHO_QUADRADO + 100
+            y_analysis = y_escudos + TAMANHO + 100
             draw.line([(x0 + 80, y_analysis - 10), (x1 - 80, y_analysis - 10)], fill=(100, 130, 160), width=2)
             
             emoji = "" if "OVER 1.5" in mercado.upper() else ""
@@ -3873,7 +3784,6 @@ class PosterGenerator:
 
             y_pos += ALTURA_POR_JOGO
 
-        # Rodapé
         rodape_text = f"GERADO EM {datetime.now().strftime('%d/%m/%Y %H:%M')} | ELITE MASTER PRO"
         try:
             rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_DETALHES)
@@ -3882,7 +3792,6 @@ class PosterGenerator:
         except:
             draw.text((LARGURA//2 - 350, altura_total - 70), rodape_text, font=FONTE_DETALHES, fill=(100, 130, 160))
 
-        # Converter para RGB
         img_rgb = Image.new("RGB", img.size, (10, 20, 30))
         img_rgb.paste(img, (0, 0), img)
         
@@ -3893,7 +3802,7 @@ class PosterGenerator:
         return buffer
 
     def gerar_poster_resultado_multipla_pro(self, multipla: dict, data_br: str) -> io.BytesIO:
-        """Gera pôster para resultado de múltipla Pro com squircle"""
+        """Gera pôster para resultado de múltipla Pro com rounded rectangle"""
         LARGURA = 2000
         ALTURA_TOPO = 320
         ALTURA_POR_JOGO = 580
@@ -3903,7 +3812,6 @@ class PosterGenerator:
         jogos_count = len(jogos_conferidos)
         altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
 
-        # Criar imagem em RGBA
         img = Image.new("RGBA", (LARGURA, altura_total), (10, 20, 30, 255))
         draw = ImageDraw.Draw(img)
 
@@ -3928,7 +3836,6 @@ class PosterGenerator:
         except:
             draw.text((LARGURA//2 - 300, 60), titulo, font=FONTE_TITULO, fill=(255, 255, 255))
 
-        # Badge de resultado
         if acertada:
             cor_badge = (46, 204, 113)
             resultado_text = "✅ ACERTOU!"
@@ -3956,7 +3863,6 @@ class PosterGenerator:
         except:
             draw.text((badge_x + 100, badge_y + 25), resultado_text, font=FONTE_TITULO, fill=cor_badge)
         
-        # Informações da múltipla
         info_text = f"{tipo} | Odds Total: {odd_total:.2f}"
         try:
             info_bbox = draw.textbbox((0, 0), info_text, font=FONTE_SUBTITULO)
@@ -3978,7 +3884,6 @@ class PosterGenerator:
             
             draw.rectangle([x0, y0, x1, y1], fill=(25, 35, 45, 255), outline=cor_borda, width=4)
 
-            # Badge de resultado do jogo
             badge_jogo_width = 120
             badge_jogo_height = 50
             badge_jogo_x = x1 - badge_jogo_width - 40
@@ -3998,16 +3903,15 @@ class PosterGenerator:
             except:
                 draw.text((badge_jogo_x + 45, badge_jogo_y + 12), resultado_jogo, font=FONTE_INFO, fill=(255, 255, 255))
 
-            # Times com SQUIRCLE
             TAMANHO_ESCUDO = 110
-            TAMANHO_QUADRADO = 130
-            ESPACO_ENTRE_ESCUDOS = 480
+            TAMANHO = 130
+            ESPACO_ENTRE = 480
 
-            largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
+            largura_total = 2 * TAMANHO + ESPACO_ENTRE
             x_inicio = (LARGURA - largura_total) // 2
 
             x_home = x_inicio
-            x_away = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
+            x_away = x_home + TAMANHO + ESPACO_ENTRE
             y_escudos = y0 + 60
 
             home_crest_url = jogo.get('escudo_home', '')
@@ -4019,16 +3923,15 @@ class PosterGenerator:
             escudo_home_img = Image.open(io.BytesIO(escudo_home_bytes)).convert("RGBA") if escudo_home_bytes else None
             escudo_away_img = Image.open(io.BytesIO(escudo_away_bytes)).convert("RGBA") if escudo_away_bytes else None
 
-            # Usar squircle
-            self._desenhar_escudo_squircle(
+            self._desenhar_escudo_rounded(
                 img, escudo_home_img, x_home, y_escudos,
-                TAMANHO_QUADRADO, TAMANHO_ESCUDO,
+                TAMANHO, TAMANHO_ESCUDO,
                 jogo.get('home', ''), cor_borda
             )
 
-            self._desenhar_escudo_squircle(
+            self._desenhar_escudo_rounded(
                 img, escudo_away_img, x_away, y_escudos,
-                TAMANHO_QUADRADO, TAMANHO_ESCUDO,
+                TAMANHO, TAMANHO_ESCUDO,
                 jogo.get('away', ''), cor_borda
             )
 
@@ -4038,46 +3941,43 @@ class PosterGenerator:
             try:
                 home_bbox = draw.textbbox((0, 0), home_text, font=FONTE_TIMES)
                 home_w = home_bbox[2] - home_bbox[0]
-                draw.text((x_home + (TAMANHO_QUADRADO - home_w)//2, y_escudos + TAMANHO_QUADRADO + 15),
+                draw.text((x_home + (TAMANHO - home_w)//2, y_escudos + TAMANHO + 15),
                          home_text, font=FONTE_TIMES, fill=(255, 255, 255))
             except:
-                draw.text((x_home, y_escudos + TAMANHO_QUADRADO + 15), home_text, font=FONTE_TIMES, fill=(255, 255, 255))
+                draw.text((x_home, y_escudos + TAMANHO + 15), home_text, font=FONTE_TIMES, fill=(255, 255, 255))
 
             try:
                 away_bbox = draw.textbbox((0, 0), away_text, font=FONTE_TIMES)
                 away_w = away_bbox[2] - away_bbox[0]
-                draw.text((x_away + (TAMANHO_QUADRADO - away_w)//2, y_escudos + TAMANHO_QUADRADO + 15),
+                draw.text((x_away + (TAMANHO - away_w)//2, y_escudos + TAMANHO + 15),
                          away_text, font=FONTE_TIMES, fill=(255, 255, 255))
             except:
-                draw.text((x_away, y_escudos + TAMANHO_QUADRADO + 15), away_text, font=FONTE_TIMES, fill=(255, 255, 255))
+                draw.text((x_away, y_escudos + TAMANHO + 15), away_text, font=FONTE_TIMES, fill=(255, 255, 255))
 
-            # Placar
             resultado_score = f"{jogo.get('home_goals', '?')} - {jogo.get('away_goals', '?')}"
             try:
                 score_bbox = draw.textbbox((0, 0), resultado_score, font=FONTE_RESULTADO)
                 score_w = score_bbox[2] - score_bbox[0]
-                score_x = x_home + TAMANHO_QUADRADO + (ESPACO_ENTRE_ESCUDOS - score_w) // 2
-                draw.text((score_x, y_escudos + TAMANHO_QUADRADO//2 - 20), 
+                score_x = x_home + TAMANHO + (ESPACO_ENTRE - score_w) // 2
+                draw.text((score_x, y_escudos + TAMANHO//2 - 20), 
                          resultado_score, font=FONTE_RESULTADO, fill=(255, 255, 255))
             except:
-                score_x = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS//2 - 50
-                draw.text((score_x, y_escudos + TAMANHO_QUADRADO//2 - 20), 
+                score_x = x_home + TAMANHO + ESPACO_ENTRE//2 - 50
+                draw.text((score_x, y_escudos + TAMANHO//2 - 20), 
                          resultado_score, font=FONTE_RESULTADO, fill=(255, 255, 255))
 
-            # Mercado
             mercado_text = jogo.get('mercado', '')
             try:
                 mercado_bbox = draw.textbbox((0, 0), mercado_text, font=FONTE_INFO)
                 mercado_w = mercado_bbox[2] - mercado_bbox[0]
-                draw.text(((LARGURA - mercado_w) // 2, y_escudos + TAMANHO_QUADRADO + 70), 
+                draw.text(((LARGURA - mercado_w) // 2, y_escudos + TAMANHO + 70), 
                          mercado_text, font=FONTE_INFO, fill=(150, 200, 255))
             except:
-                draw.text((LARGURA//2 - 100, y_escudos + TAMANHO_QUADRADO + 70), 
+                draw.text((LARGURA//2 - 100, y_escudos + TAMANHO + 70), 
                          mercado_text, font=FONTE_INFO, fill=(150, 200, 255))
 
             y_pos += ALTURA_POR_JOGO
 
-        # Rodapé
         rodape_text = f"CONFERIDO EM {datetime.now().strftime('%d/%m/%Y %H:%M')} | ELITE MASTER PRO"
         try:
             rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_DETALHES)
@@ -4086,7 +3986,6 @@ class PosterGenerator:
         except:
             draw.text((LARGURA//2 - 300, altura_total - 70), rodape_text, font=FONTE_DETALHES, fill=(100, 130, 160))
 
-        # Converter para RGB
         img_rgb = Image.new("RGB", img.size, (10, 20, 30))
         img_rgb.paste(img, (0, 0), img)
         
@@ -4095,6 +3994,8 @@ class PosterGenerator:
         buffer.seek(0)
         
         return buffer
+
+
 
 # =============================
 # CONTINUAÇÃO DO CÓDIGO (GerenciadorMultiplasPro, ResultadosTopAlertas, GerenciadorAlertasCompletos, SistemaAlertasFutebol, etc.)
