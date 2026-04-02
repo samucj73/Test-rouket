@@ -2758,8 +2758,8 @@ class PosterGenerator:
             except:
                 draw.text((LARGURA//2 - 150, y0 + 35), liga_text, font=FONTE_INFO, fill=(200, 200, 200))
 
-            TAMANHO_ESCUDO = 150
-            TAMANHO = 170
+            TAMANHO_ESCUDO = 180
+            TAMANHO = 200
             ESPACO_ENTRE = 700
 
             largura_total = 2 * TAMANHO + ESPACO_ENTRE
@@ -3713,9 +3713,9 @@ class PosterGenerator:
             except:
                 draw.text((LARGURA//2 - 150, y0 + 90), data_hora_text, font=FONTE_HORA, fill=(150, 200, 255))
 
-            TAMANHO_ESCUDO = 130
-            TAMANHO = 150
-            ESPACO_ENTRE = 650
+            TAMANHO_ESCUDO = 170
+            TAMANHO = 190
+            ESPACO_ENTRE = 700
 
             largura_total = 2 * TAMANHO + ESPACO_ENTRE
             x_inicio = (LARGURA - largura_total) // 2
@@ -3828,7 +3828,7 @@ class PosterGenerator:
         odd_total = multipla.get("odd_total", 0)
         tipo = multipla.get("tipo", "MÚLTIPLA")
         
-        titulo = f"📊 RESULTADO MÚLTIPLA PRO - {data_br}"
+        titulo = f" RESULTADO MÚLTIPLA PRO - {data_br}"
         try:
             titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
             titulo_w = titulo_bbox[2] - titulo_bbox[0]
