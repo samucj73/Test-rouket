@@ -2577,32 +2577,31 @@ class PosterGenerator:
     
     def _desenhar_escudo_squircle(self, img, escudo_img, x, y, tamanho_quadrado, tamanho_escudo, nome_time, cor_borda):
         """
-        Desenha escudo dentro de um fundo branco com cantos arredondados
-        Usa método garantido que funciona em todas as versões do Pillow
+        Desenha escudo dentro de um fundo branco com cantos MUITO arredondados (squircle acentuado)
         """
         # Criar uma camada temporária para o fundo
         camada_fundo = Image.new("RGBA", (tamanho_quadrado, tamanho_quadrado), (0, 0, 0, 0))
         draw_fundo = ImageDraw.Draw(camada_fundo)
         
-        # Raio do arredondamento (35% do tamanho para um squircle suave)
-        raio = int(tamanho_quadrado * 0.35)
+        # Raio do arredondamento - AUMENTADO para 50% para um arredondamento mais acentuado
+        # Quanto maior o raio, mais arredondado fica (máximo = 50% do tamanho)
+        raio = int(tamanho_quadrado * 0.50)  # 🔥 50% - arredondamento SUPER acentuado
         
-        # === DESENHAR O FUNDO BRANCO COM CANTOS ARREDONDADOS ===
-        # Método: desenhar retângulos + círculos nos cantos
+        # === DESENHAR O FUNDO BRANCO COM CANTOS SUPER ARREDONDADOS ===
         
-        # 1. Retângulo central horizontal
+        # 1. Retângulo central horizontal (reduzido pelo raio)
         draw_fundo.rectangle(
             [raio, 0, tamanho_quadrado - raio, tamanho_quadrado],
             fill=(255, 255, 255, 255)
         )
         
-        # 2. Retângulo central vertical
+        # 2. Retângulo central vertical (reduzido pelo raio)
         draw_fundo.rectangle(
             [0, raio, tamanho_quadrado, tamanho_quadrado - raio],
             fill=(255, 255, 255, 255)
         )
         
-        # 3. Círculo canto superior esquerdo
+        # 3. Círculo canto superior esquerdo (maior para arredondamento acentuado)
         draw_fundo.ellipse(
             [0, 0, raio * 2, raio * 2],
             fill=(255, 255, 255, 255)
@@ -2626,54 +2625,56 @@ class PosterGenerator:
             fill=(255, 255, 255, 255)
         )
         
-        # === DESENHAR A BORDA COLORIDA ===
+        # === DESENHAR A BORDA COLORIDA (MAIS GROSSA PARA DESTACAR) ===
+        espessura_borda = 5  # 🔥 Borda mais grossa para destacar o arredondamento
+        
         # Borda superior
         draw_fundo.line(
             [(raio, 0), (tamanho_quadrado - raio, 0)],
-            fill=cor_borda, width=4
+            fill=cor_borda, width=espessura_borda
         )
         
         # Borda inferior
         draw_fundo.line(
             [(raio, tamanho_quadrado), (tamanho_quadrado - raio, tamanho_quadrado)],
-            fill=cor_borda, width=4
+            fill=cor_borda, width=espessura_borda
         )
         
         # Borda esquerda
         draw_fundo.line(
             [(0, raio), (0, tamanho_quadrado - raio)],
-            fill=cor_borda, width=4
+            fill=cor_borda, width=espessura_borda
         )
         
         # Borda direita
         draw_fundo.line(
             [(tamanho_quadrado, raio), (tamanho_quadrado, tamanho_quadrado - raio)],
-            fill=cor_borda, width=4
+            fill=cor_borda, width=espessura_borda
         )
         
-        # Bordas dos cantos (arcos)
+        # Bordas dos cantos (arcos) - mais grossos também
         # Canto superior esquerdo
         draw_fundo.arc(
             [0, 0, raio * 2, raio * 2],
-            180, 270, fill=cor_borda, width=4
+            180, 270, fill=cor_borda, width=espessura_borda
         )
         
         # Canto superior direito
         draw_fundo.arc(
             [tamanho_quadrado - raio * 2, 0, tamanho_quadrado, raio * 2],
-            270, 360, fill=cor_borda, width=4
+            270, 360, fill=cor_borda, width=espessura_borda
         )
         
         # Canto inferior esquerdo
         draw_fundo.arc(
             [0, tamanho_quadrado - raio * 2, raio * 2, tamanho_quadrado],
-            90, 180, fill=cor_borda, width=4
+            90, 180, fill=cor_borda, width=espessura_borda
         )
         
         # Canto inferior direito
         draw_fundo.arc(
             [tamanho_quadrado - raio * 2, tamanho_quadrado - raio * 2, tamanho_quadrado, tamanho_quadrado],
-            0, 90, fill=cor_borda, width=4
+            0, 90, fill=cor_borda, width=espessura_borda
         )
         
         # Aplicar o fundo na imagem principal
@@ -2685,13 +2686,17 @@ class PosterGenerator:
             escudo_img = escudo_img.convert("RGBA")
             largura, altura = escudo_img.size
             
-            # Calcular dimensões para caber no espaço
+            # Calcular dimensões para caber no espaço (um pouco menor para destacar a borda)
+            tamanho_escudo_ajustado = tamanho_escudo - 10  # Reduzir 10px para dar espaço à borda
+            if tamanho_escudo_ajustado < 50:
+                tamanho_escudo_ajustado = tamanho_escudo
+            
             if largura > altura:
-                nova_largura = tamanho_escudo
-                nova_altura = int(altura * (tamanho_escudo / largura))
+                nova_largura = tamanho_escudo_ajustado
+                nova_altura = int(altura * (tamanho_escudo_ajustado / largura))
             else:
-                nova_altura = tamanho_escudo
-                nova_largura = int(largura * (tamanho_escudo / altura))
+                nova_altura = tamanho_escudo_ajustado
+                nova_largura = int(largura * (tamanho_escudo_ajustado / altura))
             
             # Redimensionar
             escudo_redim = escudo_img.resize((nova_largura, nova_altura), Image.Resampling.LANCZOS)
@@ -2719,7 +2724,7 @@ class PosterGenerator:
             # Colocar na imagem
             img.paste(escudo_com_mascara, (escudo_x, escudo_y), escudo_com_mascara)
         else:
-            # Desenhar iniciais do time
+            # Desenhar iniciais do time com fonte maior para preencher o espaço
             if nome_time:
                 palavras = nome_time.split()
                 if len(palavras) >= 2:
@@ -2730,14 +2735,15 @@ class PosterGenerator:
                 iniciais = "??"
             
             try:
-                fonte = self.criar_fonte(int(tamanho_quadrado * 0.4))
+                # Fonte maior para preencher o espaço
+                fonte = self.criar_fonte(int(tamanho_quadrado * 0.5))
                 draw = ImageDraw.Draw(img)
                 bbox = draw.textbbox((0, 0), iniciais, font=fonte)
                 text_w = bbox[2] - bbox[0]
                 text_h = bbox[3] - bbox[1]
                 text_x = x + (tamanho_quadrado - text_w) // 2
                 text_y = y + (tamanho_quadrado - text_h) // 2
-                draw.text((text_x, text_y), iniciais, font=fonte, fill=(80, 80, 80))
+                draw.text((text_x, text_y), iniciais, font=fonte, fill=(100, 100, 100))
             except Exception as e:
                 logging.error(f"Erro ao desenhar iniciais: {e}")
     
@@ -2830,7 +2836,7 @@ class PosterGenerator:
                          font=self.criar_fonte(tamanho_quadrado // 2), fill=(50, 50, 50))
 
     def gerar_poster_multipla(self, multipla: dict, titulo: str = "💣 MÚLTIPLA PROFISSIONAL") -> io.BytesIO:
-        """Gera pôster estilo West Ham para múltiplas com cantos arredondados"""
+        """Gera pôster estilo West Ham para múltiplas com cantos SUPER arredondados"""
         LARGURA = 2000
         ALTURA_TOPO = 350
         ALTURA_POR_JOGO = 550
@@ -2945,7 +2951,7 @@ class PosterGenerator:
             except:
                 draw.text((LARGURA//2 - 150, y0 + 35), liga_text, font=FONTE_INFO, fill=(200, 200, 200))
 
-            # Escudos e times com cantos arredondados
+            # Escudos e times com cantos SUPER arredondados
             TAMANHO_ESCUDO = 140
             TAMANHO_QUADRADO = 160
             ESPACO_ENTRE_ESCUDOS = 600
@@ -2976,7 +2982,7 @@ class PosterGenerator:
                 except Exception as e:
                     logging.error(f"Erro ao abrir escudo do {jogo.get('away', '')}: {e}")
 
-            # Desenhar escudos com fundo branco arredondado
+            # Desenhar escudos com fundo branco SUPER arredondado
             self._desenhar_escudo_squircle(
                 img, escudo_home_img, x_home, y_escudos,
                 TAMANHO_QUADRADO, TAMANHO_ESCUDO,
@@ -3066,6 +3072,7 @@ class PosterGenerator:
         buffer.seek(0)
         
         return buffer
+
 
 
 
