@@ -2580,7 +2580,7 @@ class PosterGenerator:
         Desenha escudo dentro de um ROUNDED RECTANGLE
         """
         # Raio do arredondamento - 45% para arredondamento acentuado
-        raio = int(tamanho * 0.45)
+        raio = int(tamanho * 0.95)
         
         # Desenhar diretamente na imagem o retângulo arredondado
         draw = ImageDraw.Draw(img)
@@ -2652,7 +2652,7 @@ class PosterGenerator:
     def gerar_poster_multipla(self, multipla: dict, titulo: str = "💣 MÚLTIPLA PROFISSIONAL") -> io.BytesIO:
         """Gera pôster com rounded rectangle para múltiplas"""
         LARGURA = 2000
-        ALTURA_TOPO = 350
+        ALTURA_TOPO = 365
         ALTURA_POR_JOGO = 550
         PADDING = 80
         
@@ -2758,9 +2758,9 @@ class PosterGenerator:
             except:
                 draw.text((LARGURA//2 - 150, y0 + 35), liga_text, font=FONTE_INFO, fill=(200, 200, 200))
 
-            TAMANHO_ESCUDO = 140
-            TAMANHO = 160
-            ESPACO_ENTRE = 600
+            TAMANHO_ESCUDO = 150
+            TAMANHO = 170
+            ESPACO_ENTRE = 700
 
             largura_total = 2 * TAMANHO + ESPACO_ENTRE
             x_inicio = (LARGURA - largura_total) // 2
@@ -2976,9 +2976,9 @@ class PosterGenerator:
             except:
                 draw.text((badge_jogo_x + 65, badge_jogo_y + 15), resultado_jogo, font=FONTE_INFO, fill=(255, 255, 255))
 
-            TAMANHO_ESCUDO = 120
-            TAMANHO = 140
-            ESPACO_ENTRE = 500
+            TAMANHO_ESCUDO = 140
+            TAMANHO = 160
+            ESPACO_ENTRE = 600
 
             largura_total = 2 * TAMANHO + ESPACO_ENTRE
             x_inicio = (LARGURA - largura_total) // 2
