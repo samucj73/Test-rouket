@@ -2582,100 +2582,105 @@ class PosterGenerator:
         """
         from PIL import ImageFilter
         
-        # Cria máscara para o squircle
-        mask = Image.new("L", (tamanho, tamanho), 0)
-        draw_mask = ImageDraw.Draw(mask)
+        # Cria uma imagem RGBA temporária para o squircle
+        squircle_img = Image.new("RGBA", (tamanho, tamanho), (0, 0, 0, 0))
+        squircle_draw = ImageDraw.Draw(squircle_img)
         
-        # Desenha um retângulo arredondado que simula o squircle
-        draw_mask.rounded_rectangle(
+        # Desenha o fundo com a cor especificada (usando retângulo arredondado)
+        squircle_draw.rounded_rectangle(
             [0, 0, tamanho, tamanho],
             radius=int(tamanho * radius),
-            fill=255
+            fill=cor_fundo
         )
         
-        # Suaviza bordas (efeito squircle premium)
-        mask = mask.filter(ImageFilter.GaussianBlur(2.5))
-        
-        # Cria a forma com a cor de fundo
-        shape = Image.new("RGBA", (tamanho, tamanho), cor_fundo)
-        base_img.paste(shape, (x, y), mask)
-        
-        # Borda opcional
+        # Desenha a borda se especificada
         if cor_borda and border_width > 0:
-            borda = Image.new("RGBA", (tamanho, tamanho), (0, 0, 0, 0))
-            draw_borda = ImageDraw.Draw(borda)
-            
-            draw_borda.rounded_rectangle(
+            squircle_draw.rounded_rectangle(
                 [border_width//2, border_width//2, tamanho-border_width//2, tamanho-border_width//2],
-                radius=int(tamanho * radius),
+                radius=int(tamanho * radius) - border_width//2,
                 outline=cor_borda,
                 width=border_width
             )
-            
-            base_img.paste(borda, (x, y), mask)
+        
+        # Aplica o squircle na imagem base
+        base_img.paste(squircle_img, (x, y), squircle_img)
 
     def _desenhar_escudo_squircle(self, base_img, escudo_img, x, y, tamanho_quadrado, tamanho_escudo, nome_time, cor_borda):
         """
         Desenha escudo dentro de um squircle estilizado premium
         """
-        # Desenha o fundo squircle (branco com borda dourada)
+        # Desenha o fundo squircle (branco com borda colorida)
         self._desenhar_squircle(
             base_img,
             x,
             y,
             tamanho_quadrado,
-            cor_fundo=(255, 255, 255, 255),  # Fundo branco
-            cor_borda=cor_borda,  # Borda colorida (dourado para Over 1.5, amarelo para Over 2.5)
+            cor_fundo=(255, 255, 255, 255),  # Fundo branco com alpha
+            cor_borda=cor_borda,  # Borda colorida
             border_width=4,
             radius=0.35  # 🔥 ajuste fino premium
         )
         
         if escudo_img:
-            # Redimensiona o escudo
-            escudo_img = escudo_img.resize((tamanho_escudo, tamanho_escudo), Image.Resampling.LANCZOS)
+            # Redimensiona o escudo mantendo proporção
+            escudo_img = escudo_img.convert("RGBA")
+            largura, altura = escudo_img.size
+            
+            # Calcula dimensões para caber no espaço
+            if largura > altura:
+                nova_largura = tamanho_escudo
+                nova_altura = int(altura * (tamanho_escudo / largura))
+            else:
+                nova_altura = tamanho_escudo
+                nova_largura = int(largura * (tamanho_escudo / altura))
+            
+            escudo_redim = escudo_img.resize((nova_largura, nova_altura), Image.Resampling.LANCZOS)
             
             # Calcula posição centralizada
-            escudo_x = x + (tamanho_quadrado - tamanho_escudo) // 2
-            escudo_y = y + (tamanho_quadrado - tamanho_escudo) // 2
+            escudo_x = x + (tamanho_quadrado - nova_largura) // 2
+            escudo_y = y + (tamanho_quadrado - nova_altura) // 2
             
-            # Cria máscara para o escudo também ter cantos suaves
-            mascara_escudo = Image.new("L", (tamanho_escudo, tamanho_escudo), 0)
-            draw_mascara = ImageDraw.Draw(mascara_escudo)
-            draw_mascara.rounded_rectangle(
-                [0, 0, tamanho_escudo, tamanho_escudo],
-                radius=int(tamanho_escudo * 0.2),
-                fill=255
-            )
+            # Cria máscara circular para o escudo
+            mascara = Image.new("L", (nova_largura, nova_altura), 0)
+            mascara_draw = ImageDraw.Draw(mascara)
+            raio = min(nova_largura, nova_altura) // 2
+            mascara_draw.ellipse([0, 0, nova_largura, nova_altura], fill=255)
             
-            # Suaviza a máscara do escudo
-            from PIL import ImageFilter
-            mascara_escudo = mascara_escudo.filter(ImageFilter.GaussianBlur(1.5))
+            # Aplica máscara para bordas suaves
+            escudo_com_mascara = Image.new("RGBA", (nova_largura, nova_altura), (0, 0, 0, 0))
+            escudo_com_mascara.paste(escudo_redim, (0, 0), mascara)
             
-            # Aplica o escudo com a máscara
-            base_img.paste(escudo_img, (escudo_x, escudo_y), mascara_escudo)
+            # Coloca o escudo no squircle
+            base_img.paste(escudo_com_mascara, (escudo_x, escudo_y), escudo_com_mascara)
         else:
-            # Se não tem escudo, desenha as iniciais do time no centro do squircle
+            # Se não tem escudo, desenha as iniciais do time no centro
             if nome_time:
-                iniciais = ''.join([palavra[0].upper() for palavra in nome_time.split()[:2]])
-                if len(iniciais) > 3:
-                    iniciais = iniciais[:3]
+                palavras = nome_time.split()
+                if len(palavras) >= 2:
+                    iniciais = palavras[0][0].upper() + palavras[1][0].upper()
+                else:
+                    iniciais = nome_time[:2].upper() if len(nome_time) >= 2 else nome_time[0].upper()
             else:
-                iniciais = "SEM"
+                iniciais = "??"
             
-            # Cria uma imagem temporária para desenhar as iniciais
-            temp_img = Image.new("RGBA", (tamanho_quadrado, tamanho_quadrado), (0, 0, 0, 0))
-            temp_draw = ImageDraw.Draw(temp_img)
-            
+            # Desenha as iniciais no centro do squircle
             try:
-                fonte = self.criar_fonte(int(tamanho_escudo * 0.4))
-                bbox = temp_draw.textbbox((0, 0), iniciais, font=fonte)
-                w = bbox[2] - bbox[0]
-                h = bbox[3] - bbox[1]
-                text_x = (tamanho_quadrado - w) // 2
-                text_y = (tamanho_quadrado - h) // 2
-                temp_draw.text((text_x, text_y), iniciais, font=fonte, fill=(100, 100, 100))
+                fonte = self.criar_fonte(int(tamanho_quadrado * 0.4))
+                # Cria uma imagem temporária para o texto
+                temp_img = Image.new("RGBA", (tamanho_quadrado, tamanho_quadrado), (0, 0, 0, 0))
+                temp_draw = ImageDraw.Draw(temp_img)
                 
-                # Aplica o texto na imagem base usando a máscara do squircle
+                # Centraliza o texto
+                bbox = temp_draw.textbbox((0, 0), iniciais, font=fonte)
+                text_w = bbox[2] - bbox[0]
+                text_h = bbox[3] - bbox[1]
+                text_x = (tamanho_quadrado - text_w) // 2
+                text_y = (tamanho_quadrado - text_h) // 2
+                
+                # Desenha o texto
+                temp_draw.text((text_x, text_y), iniciais, font=fonte, fill=(80, 80, 80))
+                
+                # Aplica na imagem base
                 base_img.paste(temp_img, (x, y), temp_img)
             except Exception as e:
                 logging.error(f"Erro ao desenhar iniciais: {e}")
@@ -2685,79 +2690,83 @@ class PosterGenerator:
         draw.rectangle(
             [x, y, x + tamanho_quadrado, y + tamanho_quadrado],
             fill=(255, 255, 255),
-            outline=(255, 255, 255)
+            outline=(200, 200, 200)
         )
 
         if logo_img is None:
-            draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(60, 60, 60))
-            
             if team_name:
-                iniciais = ''.join([palavra[0].upper() for palavra in team_name.split()[:2]])
-                if len(iniciais) > 3:
-                    iniciais = iniciais[:3]
+                palavras = team_name.split()
+                if len(palavras) >= 2:
+                    iniciais = palavras[0][0].upper() + palavras[1][0].upper()
+                else:
+                    iniciais = team_name[:2].upper() if len(team_name) >= 2 else team_name[0].upper()
             else:
-                iniciais = "SEM"
+                iniciais = "??"
             
             try:
-                fonte = self.criar_fonte(50)
+                fonte = self.criar_fonte(tamanho_quadrado // 2)
                 bbox = draw.textbbox((0, 0), iniciais, font=fonte)
                 w = bbox[2] - bbox[0]
                 h = bbox[3] - bbox[1]
                 draw.text((x + (tamanho_quadrado - w)//2, y + (tamanho_quadrado - h)//2), 
-                         iniciais, font=fonte, fill=(255, 255, 255))
+                         iniciais, font=fonte, fill=(100, 100, 100))
             except:
-                draw.text((x + 70, y + 90), iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
+                draw.text((x + tamanho_quadrado//3, y + tamanho_quadrado//3), iniciais, 
+                         font=self.criar_fonte(tamanho_quadrado // 2), fill=(100, 100, 100))
             return
 
         try:
             logo_img = logo_img.convert("RGBA")
             largura, altura = logo_img.size
             
-            proporcao = largura / altura
-            
-            if proporcao > 1:
-                nova_altura = tamanho_escudo
-                nova_largura = int(tamanho_escudo * proporcao)
-                if nova_largura > tamanho_escudo:
-                    nova_largura = tamanho_escudo
-                    nova_altura = int(tamanho_escudo / proporcao)
-            else:
+            # Calcula dimensões para caber no espaço
+            if largura > altura:
                 nova_largura = tamanho_escudo
-                nova_altura = int(tamanho_escudo / proporcao)
-                if nova_altura > tamanho_escudo:
-                    nova_altura = tamanho_escudo
-                    nova_largura = int(tamanho_escudo * proporcao)
+                nova_altura = int(altura * (tamanho_escudo / largura))
+            else:
+                nova_altura = tamanho_escudo
+                nova_largura = int(largura * (tamanho_escudo / altura))
             
             imagem_redimensionada = logo_img.resize((nova_largura, nova_altura), Image.Resampling.LANCZOS)
             
             pos_x = x + (tamanho_quadrado - nova_largura) // 2
             pos_y = y + (tamanho_quadrado - nova_altura) // 2
 
-            fundo = Image.new("RGBA", (tamanho_quadrado, tamanho_quadrado), (255, 255, 255, 255))
-            fundo.paste(imagem_redimensionada, (pos_x - x, pos_y - y), imagem_redimensionada)
+            # Cria máscara circular para o escudo
+            mascara = Image.new("L", (nova_largura, nova_altura), 0)
+            mascara_draw = ImageDraw.Draw(mascara)
+            raio = min(nova_largura, nova_altura) // 2
+            mascara_draw.ellipse([0, 0, nova_largura, nova_altura], fill=255)
             
-            img.paste(fundo, (x, y), fundo)
+            # Aplica máscara
+            escudo_com_mascara = Image.new("RGBA", (nova_largura, nova_altura), (0, 0, 0, 0))
+            escudo_com_mascara.paste(imagem_redimensionada, (0, 0), mascara)
+            
+            img.paste(escudo_com_mascara, (pos_x, pos_y), escudo_com_mascara)
 
         except Exception as e:
             logging.error(f"Erro ao processar escudo de {team_name}: {e}")
-            draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(100, 100, 100))
+            draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(200, 200, 200))
             
             if team_name:
-                iniciais = ''.join([palavra[0].upper() for palavra in team_name.split()[:2]])
-                if len(iniciais) > 3:
-                    iniciais = iniciais[:3]
+                palavras = team_name.split()
+                if len(palavras) >= 2:
+                    iniciais = palavras[0][0].upper() + palavras[1][0].upper()
+                else:
+                    iniciais = team_name[:2].upper() if len(team_name) >= 2 else team_name[0].upper()
             else:
                 iniciais = "ERR"
             
             try:
-                fonte = self.criar_fonte(50)
+                fonte = self.criar_fonte(tamanho_quadrado // 2)
                 bbox = draw.textbbox((0, 0), iniciais, font=fonte)
                 w = bbox[2] - bbox[0]
                 h = bbox[3] - bbox[1]
                 draw.text((x + (tamanho_quadrado - w)//2, y + (tamanho_quadrado - h)//2), 
-                         iniciais, font=fonte, fill=(255, 255, 255))
+                         iniciais, font=fonte, fill=(50, 50, 50))
             except:
-                draw.text((x + 70, y + 90), iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
+                draw.text((x + tamanho_quadrado//3, y + tamanho_quadrado//3), iniciais, 
+                         font=self.criar_fonte(tamanho_quadrado // 2), fill=(50, 50, 50))
 
     def gerar_poster_multipla(self, multipla: dict, titulo: str = "💣 MÚLTIPLA PROFISSIONAL") -> io.BytesIO:
         """Gera pôster estilo West Ham para múltiplas com squircle premium"""
@@ -2770,7 +2779,8 @@ class PosterGenerator:
         jogos_count = len(jogos)
         altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
 
-        img = Image.new("RGB", (LARGURA, altura_total), color=(10, 20, 30))
+        # Criar imagem em RGBA para permitir transparência
+        img = Image.new("RGBA", (LARGURA, altura_total), (10, 20, 30, 255))
         draw = ImageDraw.Draw(img)
 
         FONTE_TITULO = self.criar_fonte(90)
@@ -2832,7 +2842,7 @@ class PosterGenerator:
             tipo = classificacao.get("tipo", "over_1.5")
             cor_borda = (255, 215, 0) if tipo == "over_1.5" else (255, 193, 7) if tipo == "over_2.5" else (100, 200, 255)
             
-            draw.rectangle([x0, y0, x1, y1], fill=(25, 35, 45), outline=cor_borda, width=4)
+            draw.rectangle([x0, y0, x1, y1], fill=(25, 35, 45, 255), outline=cor_borda, width=4)
 
             # Odd do jogo
             odd_jogo = 100 / max(jogo.get("probabilidade", 65), 10)
@@ -2851,10 +2861,10 @@ class PosterGenerator:
                 fundo_x1 = odd_x + odd_w + 15
                 fundo_y1 = odd_y + odd_h + 10
                 
-                overlay = Image.new('RGBA', img.size, (0,0,0,0))
+                overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
                 overlay_draw = ImageDraw.Draw(overlay)
                 overlay_draw.rectangle([fundo_x0, fundo_y0, fundo_x1, fundo_y1], fill=(0, 0, 0, 200))
-                img.paste(overlay, (0,0), overlay)
+                img.paste(overlay, (0, 0), overlay)
                 
                 draw.rectangle([fundo_x0, fundo_y0, fundo_x1, fundo_y1], outline=cor_borda, width=3)
                 draw.text((odd_x, odd_y), odd_text, font=FONTE_ODD, fill=cor_borda)
@@ -2986,11 +2996,16 @@ class PosterGenerator:
         except:
             draw.text((LARGURA//2 - 350, altura_total - 70), rodape_text, font=FONTE_DETALHES, fill=(100, 130, 160))
 
+        # Converter para RGB antes de salvar
+        img_rgb = Image.new("RGB", img.size, (10, 20, 30))
+        img_rgb.paste(img, (0, 0), img)
+        
         buffer = io.BytesIO()
-        img.save(buffer, format="PNG", optimize=True, quality=95)
+        img_rgb.save(buffer, format="PNG", optimize=True, quality=95)
         buffer.seek(0)
         
         return buffer
+
     
 
     def gerar_poster_resultado_multipla(self, multipla: dict, data_br: str) -> io.BytesIO:
