@@ -2582,7 +2582,7 @@ class PosterGenerator:
         """
         # Raio do arredondamento - 50% para um arredondamento SUPER acentuado
         # Quanto maior o raio, mais arredondado fica. Máximo recomendado: 50% do tamanho
-        raio = int(tamanho_quadrado * 0.50)  # 50% - arredondamento máximo
+        raio = int(tamanho_quadrado * 0.95)  # 50% - arredondamento máximo
         
         # Criar uma camada temporária para o fundo com cantos arredondados
         camada_fundo = Image.new("RGBA", (tamanho_quadrado, tamanho_quadrado), (0, 0, 0, 0))
@@ -2760,7 +2760,7 @@ class PosterGenerator:
     def gerar_poster_multipla(self, multipla: dict, titulo: str = "💣 MÚLTIPLA PROFISSIONAL") -> io.BytesIO:
         """Gera pôster estilo West Ham para múltiplas com rounded rectangle"""
         LARGURA = 2000
-        ALTURA_TOPO = 350
+        ALTURA_TOPO = 365
         ALTURA_POR_JOGO = 550
         PADDING = 80
         
@@ -2874,9 +2874,9 @@ class PosterGenerator:
                 draw.text((LARGURA//2 - 150, y0 + 35), liga_text, font=FONTE_INFO, fill=(200, 200, 200))
 
             # Escudos e times com ROUNDED RECTANGLE
-            TAMANHO_ESCUDO = 140
-            TAMANHO_QUADRADO = 160
-            ESPACO_ENTRE_ESCUDOS = 600
+            TAMANHO_ESCUDO = 150
+            TAMANHO_QUADRADO = 170
+            ESPACO_ENTRE_ESCUDOS = 700
 
             largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
             x_inicio = (LARGURA - largura_total) // 2
