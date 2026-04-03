@@ -2581,7 +2581,7 @@ class PosterGenerator:
         Raio de arredondamento = 35% do tamanho (padrão iOS/macOS)
         """
         # Raio do arredondamento - 35% para formato squircle (mais suave que rounded rectangle)
-        raio = int(tamanho * 0.35)
+        raio = int(tamanho * 0.25)
         
         # Desenhar o squircle (rounded rectangle com cantos suaves)
         draw = ImageDraw.Draw(img)
