@@ -2722,8 +2722,8 @@ class PosterGenerator:
 
     def gerar_poster_multipla(self, multipla: dict, titulo: str = "💣 MÚLTIPLA PROFISSIONAL") -> io.BytesIO:
         LARGURA = 2000
-        ALTURA_TOPO = 365
-        ALTURA_POR_JOGO = 570
+        ALTURA_TOPO = 370
+        ALTURA_POR_JOGO = 650
         PADDING = 80
         
         jogos = multipla["jogos"]
@@ -2768,7 +2768,7 @@ class PosterGenerator:
         except:
             draw.text((LARGURA//2 - 200, 260), odd_text, font=FONTE_TOTAL, fill=(100, 255, 100))
 
-        info_text = f"⚠️ Risco: {multipla['risco']} | 📈 Taxa Esperada: {multipla['taxa_acerto_esperada']}"
+        info_text = f"Risco: {multipla['risco']} | 📈 Taxa Esperada: {multipla['taxa_acerto_esperada']}"
         try:
             info_bbox = draw.textbbox((0, 0), info_text, font=FONTE_INFO)
             info_w = info_bbox[2] - info_bbox[0]
@@ -2902,11 +2902,11 @@ class PosterGenerator:
             
             if tipo == "over_1.5":
                 tendencia = jogo.get("tendencia", "Over 1.5")
-                emoji = "🟢"
+                emoji = ""
                 cor_texto = (100, 255, 100)
             else:
                 tendencia = jogo.get("tendencia", "Over 2.5")
-                emoji = "🟡"
+                emoji = ""
                 cor_texto = (255, 215, 0)
             
             text_analise = f"{emoji} {tendencia}"
@@ -2970,7 +2970,7 @@ class PosterGenerator:
         odd_total = multipla.get("odd_total", 0)
         modelo = multipla.get("modelo", "MÚLTIPLA")
         
-        titulo = f"📊 RESULTADO MÚLTIPLA - {data_br}"
+        titulo = f" RESULTADO MÚLTIPLA - {data_br}"
         try:
             titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
             titulo_w = titulo_bbox[2] - titulo_bbox[0]
@@ -3650,8 +3650,8 @@ class PosterGenerator:
 
     def gerar_poster_multipla_pro(self, multipla: dict, titulo: str = "💣 MÚLTIPLA PRO") -> io.BytesIO:
         LARGURA = 2000
-        ALTURA_TOPO = 360
-        ALTURA_POR_JOGO = 550
+        ALTURA_TOPO = 370
+        ALTURA_POR_JOGO = 650
         PADDING = 80
         
         jogos = multipla.get("jogos", [])
@@ -3779,8 +3779,8 @@ class PosterGenerator:
             except:
                 draw.text((LARGURA//2 - 150, y0 + 90), data_hora_text, font=FONTE_HORA, fill=(150, 200, 255))
 
-            TAMANHO_ESCUDO = 170
-            TAMANHO = 190
+            TAMANHO_ESCUDO = 180
+            TAMANHO = 200
             ESPACO_ENTRE = 700
 
             largura_total = 2 * TAMANHO + ESPACO_ENTRE
