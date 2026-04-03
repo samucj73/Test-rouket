@@ -2575,15 +2575,25 @@ class PosterGenerator:
             logging.error(f"Erro ao carregar fonte: {e}")
             return ImageFont.load_default()
     
-    def _desenhar_escudo_squircle(self, img, escudo_img, x, y, tamanho, tamanho_escudo, nome_time, cor_borda):
-        """
-        Desenha escudo dentro de um SQUIRCLE (quadrado com cantos arredondados)
-        Raio de arredondamento = 35% do tamanho (padrão iOS/macOS)
-        """
-        # Raio do arredondamento - 35% para formato squircle (mais suave que rounded rectangle)
-        raio = int(tamanho * 0.25)
+    def _aplicar_bordas_arredondadas(self, img: Image.Image, raio: int = 60) -> Image.Image:
+        """Aplica bordas arredondadas na imagem inteira"""
+        mascara = Image.new("L", img.size, 0)
+        desenho_mascara = ImageDraw.Draw(mascara)
+        desenho_mascara.rounded_rectangle(
+            [0, 0, img.size[0], img.size[1]],
+            radius=raio,
+            fill=255
+        )
         
-        # Desenhar o squircle (rounded rectangle com cantos suaves)
+        img_com_mascara = Image.new("RGBA", img.size, (0, 0, 0, 0))
+        img_com_mascara.paste(img, (0, 0), mascara)
+        
+        return img_com_mascara
+    
+    def _desenhar_escudo_squircle(self, img, escudo_img, x, y, tamanho, tamanho_escudo, nome_time, cor_borda):
+        """Desenha escudo dentro de um SQUIRCLE (quadrado com cantos arredondados)"""
+        raio = int(tamanho * 0.35)
+        
         draw = ImageDraw.Draw(img)
         draw.rounded_rectangle(
             [x, y, x + tamanho, y + tamanho],
@@ -2593,7 +2603,6 @@ class PosterGenerator:
             width=5
         )
         
-        # Desenhar o escudo ou iniciais
         if escudo_img:
             escudo_img = escudo_img.convert("RGBA")
             largura, altura = escudo_img.size
@@ -2614,7 +2623,6 @@ class PosterGenerator:
             escudo_x = x + (tamanho - nova_largura) // 2
             escudo_y = y + (tamanho - nova_altura) // 2
             
-            # Máscara squircle para o escudo (mesmo formato)
             mascara = Image.new("L", (nova_largura, nova_altura), 0)
             mascara_draw = ImageDraw.Draw(mascara)
             raio_mascara = min(nova_largura, nova_altura) // 3
@@ -2650,10 +2658,7 @@ class PosterGenerator:
                 logging.error(f"Erro ao desenhar iniciais: {e}")
 
     def _desenhar_escudo_quadrado(self, draw, img, logo_img, x, y, tamanho_quadrado, tamanho_escudo, team_name=""):
-        """
-        Desenha escudo dentro de um SQUIRCLE (formato quadrado com cantos arredondados)
-        para uso em posters de resultado
-        """
+        """Desenha escudo dentro de um SQUIRCLE para uso em posters de resultado"""
         raio = int(tamanho_quadrado * 0.35)
         
         draw.rounded_rectangle(
@@ -2739,8 +2744,8 @@ class PosterGenerator:
 
     def gerar_poster_multipla(self, multipla: dict, titulo: str = "💣 MÚLTIPLA PROFISSIONAL") -> io.BytesIO:
         LARGURA = 2000
-        ALTURA_TOPO = 370
-        ALTURA_POR_JOGO = 650
+        ALTURA_TOPO = 365
+        ALTURA_POR_JOGO = 550
         PADDING = 80
         
         jogos = multipla["jogos"]
@@ -2805,7 +2810,7 @@ class PosterGenerator:
             tipo = classificacao.get("tipo", "over_1.5")
             cor_borda = (255, 215, 0) if tipo == "over_1.5" else (255, 193, 7) if tipo == "over_2.5" else (100, 200, 255)
             
-            draw.rectangle([x0, y0, x1, y1], fill=(25, 35, 45, 255), outline=cor_borda, width=4)
+            draw.rounded_rectangle([x0, y0, x1, y1], radius=25, fill=(25, 35, 45, 255), outline=cor_borda, width=4)
 
             odd_jogo = 100 / max(jogo.get("probabilidade", 65), 10)
             odd_text = f"{odd_jogo:.2f}"
@@ -2825,10 +2830,10 @@ class PosterGenerator:
                 
                 overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
                 overlay_draw = ImageDraw.Draw(overlay)
-                overlay_draw.rectangle([fundo_x0, fundo_y0, fundo_x1, fundo_y1], fill=(0, 0, 0, 200))
+                overlay_draw.rounded_rectangle([fundo_x0, fundo_y0, fundo_x1, fundo_y1], radius=15, fill=(0, 0, 0, 200))
                 img.paste(overlay, (0, 0), overlay)
                 
-                draw.rectangle([fundo_x0, fundo_y0, fundo_x1, fundo_y1], outline=cor_borda, width=3)
+                draw.rounded_rectangle([fundo_x0, fundo_y0, fundo_x1, fundo_y1], radius=15, outline=cor_borda, width=3)
                 draw.text((odd_x, odd_y), odd_text, font=FONTE_ODD, fill=cor_borda)
                 
             except Exception as e:
@@ -2846,7 +2851,7 @@ class PosterGenerator:
                 draw.text((LARGURA//2 - 150, y0 + 35), liga_text, font=FONTE_INFO, fill=(200, 200, 200))
 
             TAMANHO_ESCUDO = 180
-            TAMANHO = 220
+            TAMANHO = 200
             ESPACO_ENTRE = 700
 
             largura_total = 2 * TAMANHO + ESPACO_ENTRE
@@ -2955,8 +2960,10 @@ class PosterGenerator:
         img_rgb = Image.new("RGB", img.size, (10, 20, 30))
         img_rgb.paste(img, (0, 0), img)
         
+        img_com_bordas = self._aplicar_bordas_arredondadas(img_rgb, raio=50)
+        
         buffer = io.BytesIO()
-        img_rgb.save(buffer, format="PNG", optimize=True, quality=95)
+        img_com_bordas.save(buffer, format="PNG", optimize=True, quality=95)
         buffer.seek(0)
         
         return buffer
@@ -2964,7 +2971,7 @@ class PosterGenerator:
     def gerar_poster_resultado_multipla(self, multipla: dict, data_br: str) -> io.BytesIO:
         LARGURA = 2000
         ALTURA_TOPO = 320
-        ALTURA_POR_JOGO = 620
+        ALTURA_POR_JOGO = 520
         PADDING = 80
         
         jogos_conferidos = multipla.get("jogos_conferidos", [])
@@ -3009,8 +3016,8 @@ class PosterGenerator:
         badge_x = (LARGURA - badge_width) // 2
         badge_y = 170
         
-        draw.rectangle([badge_x, badge_y, badge_x + badge_width, badge_y + badge_height], 
-                      fill=badge_bg, outline=cor_badge, width=4)
+        draw.rounded_rectangle([badge_x, badge_y, badge_x + badge_width, badge_y + badge_height], 
+                               radius=30, fill=badge_bg, outline=cor_badge, width=4)
         
         try:
             badge_bbox = draw.textbbox((0, 0), resultado_text, font=FONTE_TITULO)
@@ -3041,7 +3048,7 @@ class PosterGenerator:
             resultado = jogo.get("resultado", "RED")
             cor_borda = (46, 204, 113) if resultado == "GREEN" else (231, 76, 60)
             
-            draw.rectangle([x0, y0, x1, y1], fill=(25, 35, 45, 255), outline=cor_borda, width=4)
+            draw.rounded_rectangle([x0, y0, x1, y1], radius=25, fill=(25, 35, 45, 255), outline=cor_borda, width=4)
 
             badge_jogo_width = 150
             badge_jogo_height = 60
@@ -3051,8 +3058,8 @@ class PosterGenerator:
             resultado_jogo = "✅" if resultado == "GREEN" else "❌"
             cor_jogo = (46, 204, 113) if resultado == "GREEN" else (231, 76, 60)
             
-            draw.rectangle([badge_jogo_x, badge_jogo_y, badge_jogo_x + badge_jogo_width, badge_jogo_y + badge_jogo_height], 
-                          fill=cor_jogo, outline=(255, 255, 255), width=2)
+            draw.rounded_rectangle([badge_jogo_x, badge_jogo_y, badge_jogo_x + badge_jogo_width, badge_jogo_y + badge_jogo_height], 
+                                   radius=20, fill=cor_jogo, outline=(255, 255, 255), width=2)
             
             try:
                 badge_bbox = draw.textbbox((0, 0), resultado_jogo, font=FONTE_INFO)
@@ -3062,9 +3069,9 @@ class PosterGenerator:
             except:
                 draw.text((badge_jogo_x + 65, badge_jogo_y + 15), resultado_jogo, font=FONTE_INFO, fill=(255, 255, 255))
 
-            TAMANHO_ESCUDO = 180
-            TAMANHO = 220
-            ESPACO_ENTRE = 700
+            TAMANHO_ESCUDO = 140
+            TAMANHO = 160
+            ESPACO_ENTRE = 600
 
             largura_total = 2 * TAMANHO + ESPACO_ENTRE
             x_inicio = (LARGURA - largura_total) // 2
@@ -3151,15 +3158,17 @@ class PosterGenerator:
         img_rgb = Image.new("RGB", img.size, (10, 20, 30))
         img_rgb.paste(img, (0, 0), img)
         
+        img_com_bordas = self._aplicar_bordas_arredondadas(img_rgb, raio=50)
+        
         buffer = io.BytesIO()
-        img_rgb.save(buffer, format="PNG", optimize=True, quality=95)
+        img_com_bordas.save(buffer, format="PNG", optimize=True, quality=95)
         buffer.seek(0)
         
         return buffer
 
     def gerar_poster_westham_style(self, jogos: list, titulo: str = "⚽ ALERTA DE GOLS", tipo_alerta: str = "over_under") -> io.BytesIO:
         LARGURA = 2000
-        ALTURA_TOPO = 280
+        ALTURA_TOPO = 270
         ALTURA_POR_JOGO = 830
         PADDING = 80
         
@@ -3204,7 +3213,7 @@ class PosterGenerator:
             else:
                 cor_borda = (255, 215, 0)
             
-            draw.rectangle([x0, y0, x1, y1], fill=(25, 35, 45, 255), outline=cor_borda, width=4)
+            draw.rounded_rectangle([x0, y0, x1, y1], radius=25, fill=(25, 35, 45, 255), outline=cor_borda, width=4)
 
             if tipo_alerta == "over_under":
                 prob = jogo_dict.get('probabilidade', 50)
@@ -3243,10 +3252,10 @@ class PosterGenerator:
                 
                 overlay = Image.new('RGBA', img.size, (0,0,0,0))
                 overlay_draw = ImageDraw.Draw(overlay)
-                overlay_draw.rectangle([fundo_x0, fundo_y0, fundo_x1, fundo_y1], fill=(0, 0, 0, 200))
+                overlay_draw.rounded_rectangle([fundo_x0, fundo_y0, fundo_x1, fundo_y1], radius=15, fill=(0, 0, 0, 200))
                 img.paste(overlay, (0,0), overlay)
                 
-                draw.rectangle([fundo_x0, fundo_y0, fundo_x1, fundo_y1], outline=(255, 215, 0), width=3)
+                draw.rounded_rectangle([fundo_x0, fundo_y0, fundo_x1, fundo_y1], radius=15, outline=(255, 215, 0), width=3)
                 draw.text((odd_x, odd_y), odd_text, font=FONTE_ODD, fill=cor_odd)
             except Exception as e:
                 logging.error(f"Erro ao desenhar odd: {e}")
@@ -3275,7 +3284,7 @@ class PosterGenerator:
                 draw.text((LARGURA//2 - 150, y0 + 130), data_text, font=FONTE_INFO, fill=(150, 200, 255))
 
             TAMANHO_ESCUDO = 220
-            TAMANHO = 245
+            TAMANHO = 230
             ESPACO_ENTRE = 700
 
             largura_total = 2 * TAMANHO + ESPACO_ENTRE
@@ -3394,8 +3403,10 @@ class PosterGenerator:
         img_rgb = Image.new("RGB", img.size, (10, 20, 30))
         img_rgb.paste(img, (0, 0), img)
         
+        img_com_bordas = self._aplicar_bordas_arredondadas(img_rgb, raio=50)
+        
         buffer = io.BytesIO()
-        img_rgb.save(buffer, format="PNG", optimize=True, quality=95)
+        img_com_bordas.save(buffer, format="PNG", optimize=True, quality=95)
         buffer.seek(0)
         
         return buffer
@@ -3476,15 +3487,15 @@ class PosterGenerator:
                 resultado_text = "PENDENTE"
                 cor_borda = (149, 165, 166)
             
-            draw.rectangle([x0, y0, x1, y1], fill=(25, 35, 45, 255), outline=cor_borda, width=4)
+            draw.rounded_rectangle([x0, y0, x1, y1], radius=25, fill=(25, 35, 45, 255), outline=cor_borda, width=4)
 
             badge_width = 250
             badge_height = 92
             badge_x = x0 + 50
             badge_y = y0 + 50
             
-            draw.rectangle([badge_x, badge_y, badge_x + badge_width, badge_y + badge_height], 
-                          fill=cor_borda, outline=cor_borda, width=2)
+            draw.rounded_rectangle([badge_x, badge_y, badge_x + badge_width, badge_y + badge_height], 
+                                   radius=20, fill=cor_borda, outline=cor_borda, width=2)
             
             try:
                 badge_bbox = draw.textbbox((0, 0), resultado_text, font=FONTE_RESULTADO_BADGE)
@@ -3499,8 +3510,8 @@ class PosterGenerator:
                 draw.text((badge_text_x, badge_text_y), resultado_text, 
                          font=FONTE_RESULTADO_BADGE, fill=(255, 255, 255))
                 
-                draw.rectangle([badge_x-2, badge_y-2, badge_x + badge_width + 2, badge_y + badge_height + 2], 
-                              outline=(255, 255, 255), width=1)
+                draw.rounded_rectangle([badge_x-2, badge_y-2, badge_x + badge_width + 2, badge_y + badge_height + 2], 
+                                       radius=22, outline=(255, 255, 255), width=1)
             except:
                 draw.text((badge_x + 80, badge_y + 25), resultado_text, 
                          font=FONTE_RESULTADO_BADGE, fill=(255, 255, 255))
@@ -3658,8 +3669,10 @@ class PosterGenerator:
         img_rgb = Image.new("RGB", img.size, (10, 20, 30))
         img_rgb.paste(img, (0, 0), img)
         
+        img_com_bordas = self._aplicar_bordas_arredondadas(img_rgb, raio=50)
+        
         buffer = io.BytesIO()
-        img_rgb.save(buffer, format="PNG", optimize=True, quality=95)
+        img_com_bordas.save(buffer, format="PNG", optimize=True, quality=95)
         buffer.seek(0)
         
         st.success(f"✅ Poster de resultados GERADO com {len(jogos_com_resultados)} jogos")
@@ -3668,7 +3681,7 @@ class PosterGenerator:
     def gerar_poster_multipla_pro(self, multipla: dict, titulo: str = "💣 MÚLTIPLA PRO") -> io.BytesIO:
         LARGURA = 2000
         ALTURA_TOPO = 360
-        ALTURA_POR_JOGO = 650
+        ALTURA_POR_JOGO = 550
         PADDING = 80
         
         jogos = multipla.get("jogos", [])
@@ -3737,7 +3750,7 @@ class PosterGenerator:
             mercado = jogo.get('mercado', 'Over 1.5')
             cor_borda = (255, 215, 0) if "OVER 1.5" in mercado.upper() else (255, 193, 7)
             
-            draw.rectangle([x0, y0, x1, y1], fill=(25, 35, 45, 255), outline=cor_borda, width=4)
+            draw.rounded_rectangle([x0, y0, x1, y1], radius=25, fill=(25, 35, 45, 255), outline=cor_borda, width=4)
 
             odd_jogo = jogo.get('odd', 1.35)
             odd_text = f"{odd_jogo:.2f}"
@@ -3756,10 +3769,10 @@ class PosterGenerator:
                 
                 overlay = Image.new('RGBA', img.size, (0,0,0,0))
                 overlay_draw = ImageDraw.Draw(overlay)
-                overlay_draw.rectangle([fundo_x0, fundo_y0, fundo_x1, fundo_y1], fill=(0, 0, 0, 200))
+                overlay_draw.rounded_rectangle([fundo_x0, fundo_y0, fundo_x1, fundo_y1], radius=15, fill=(0, 0, 0, 200))
                 img.paste(overlay, (0,0), overlay)
                 
-                draw.rectangle([fundo_x0, fundo_y0, fundo_x1, fundo_y1], outline=cor_borda, width=3)
+                draw.rounded_rectangle([fundo_x0, fundo_y0, fundo_x1, fundo_y1], radius=15, outline=cor_borda, width=3)
                 draw.text((odd_x, odd_y), odd_text, font=FONTE_ODD, fill=cor_borda)
             except:
                 odd_x = x1 - 150
@@ -3796,8 +3809,8 @@ class PosterGenerator:
             except:
                 draw.text((LARGURA//2 - 150, y0 + 90), data_hora_text, font=FONTE_HORA, fill=(150, 200, 255))
 
-            TAMANHO_ESCUDO = 180
-            TAMANHO = 200
+            TAMANHO_ESCUDO = 170
+            TAMANHO = 190
             ESPACO_ENTRE = 700
 
             largura_total = 2 * TAMANHO + ESPACO_ENTRE
@@ -3878,8 +3891,10 @@ class PosterGenerator:
         img_rgb = Image.new("RGB", img.size, (10, 20, 30))
         img_rgb.paste(img, (0, 0), img)
         
+        img_com_bordas = self._aplicar_bordas_arredondadas(img_rgb, raio=50)
+        
         buffer = io.BytesIO()
-        img_rgb.save(buffer, format="PNG", optimize=True, quality=95)
+        img_com_bordas.save(buffer, format="PNG", optimize=True, quality=95)
         buffer.seek(0)
         
         return buffer
@@ -3887,7 +3902,7 @@ class PosterGenerator:
     def gerar_poster_resultado_multipla_pro(self, multipla: dict, data_br: str) -> io.BytesIO:
         LARGURA = 2000
         ALTURA_TOPO = 320
-        ALTURA_POR_JOGO = 600
+        ALTURA_POR_JOGO = 580
         PADDING = 80
         
         jogos_conferidos = multipla.get("jogos_conferidos", [])
@@ -3932,8 +3947,8 @@ class PosterGenerator:
         badge_x = (LARGURA - badge_width) // 2
         badge_y = 150
         
-        draw.rectangle([badge_x, badge_y, badge_x + badge_width, badge_y + badge_height], 
-                      fill=badge_bg, outline=cor_badge, width=4)
+        draw.rounded_rectangle([badge_x, badge_y, badge_x + badge_width, badge_y + badge_height], 
+                               radius=25, fill=badge_bg, outline=cor_badge, width=4)
         
         try:
             badge_bbox = draw.textbbox((0, 0), resultado_text, font=FONTE_TITULO)
@@ -3964,7 +3979,7 @@ class PosterGenerator:
             resultado = jogo.get("resultado", "RED")
             cor_borda = (46, 204, 113) if resultado == "GREEN" else (231, 76, 60)
             
-            draw.rectangle([x0, y0, x1, y1], fill=(25, 35, 45, 255), outline=cor_borda, width=4)
+            draw.rounded_rectangle([x0, y0, x1, y1], radius=25, fill=(25, 35, 45, 255), outline=cor_borda, width=4)
 
             badge_jogo_width = 120
             badge_jogo_height = 50
@@ -3974,8 +3989,8 @@ class PosterGenerator:
             resultado_jogo = "✅" if resultado == "GREEN" else "❌"
             cor_jogo = (46, 204, 113) if resultado == "GREEN" else (231, 76, 60)
             
-            draw.rectangle([badge_jogo_x, badge_jogo_y, badge_jogo_x + badge_jogo_width, badge_jogo_y + badge_jogo_height], 
-                          fill=cor_jogo, outline=(255, 255, 255), width=2)
+            draw.rounded_rectangle([badge_jogo_x, badge_jogo_y, badge_jogo_x + badge_jogo_width, badge_jogo_y + badge_jogo_height], 
+                                   radius=15, fill=cor_jogo, outline=(255, 255, 255), width=2)
             
             try:
                 badge_bbox = draw.textbbox((0, 0), resultado_jogo, font=FONTE_INFO)
@@ -3985,9 +4000,9 @@ class PosterGenerator:
             except:
                 draw.text((badge_jogo_x + 45, badge_jogo_y + 12), resultado_jogo, font=FONTE_INFO, fill=(255, 255, 255))
 
-            TAMANHO_ESCUDO = 180
-            TAMANHO = 200
-            ESPACO_ENTRE = 700
+            TAMANHO_ESCUDO = 110
+            TAMANHO = 130
+            ESPACO_ENTRE = 480
 
             largura_total = 2 * TAMANHO + ESPACO_ENTRE
             x_inicio = (LARGURA - largura_total) // 2
@@ -4071,11 +4086,14 @@ class PosterGenerator:
         img_rgb = Image.new("RGB", img.size, (10, 20, 30))
         img_rgb.paste(img, (0, 0), img)
         
+        img_com_bordas = self._aplicar_bordas_arredondadas(img_rgb, raio=50)
+        
         buffer = io.BytesIO()
-        img_rgb.save(buffer, format="PNG", optimize=True, quality=95)
+        img_com_bordas.save(buffer, format="PNG", optimize=True, quality=95)
         buffer.seek(0)
         
         return buffer
+
     
 
 
