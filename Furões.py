@@ -2592,7 +2592,7 @@ class PosterGenerator:
     
     def _desenhar_escudo_squircle(self, img, escudo_img, x, y, tamanho, tamanho_escudo, nome_time, cor_borda):
         """Desenha escudo dentro de um SQUIRCLE (quadrado com cantos arredondados)"""
-        raio = int(tamanho * 0.35)
+        raio = int(tamanho * 0.25)
         
         draw = ImageDraw.Draw(img)
         draw.rounded_rectangle(
@@ -2744,8 +2744,8 @@ class PosterGenerator:
 
     def gerar_poster_multipla(self, multipla: dict, titulo: str = "💣 MÚLTIPLA PROFISSIONAL") -> io.BytesIO:
         LARGURA = 2000
-        ALTURA_TOPO = 365
-        ALTURA_POR_JOGO = 550
+        ALTURA_TOPO = 370
+        ALTURA_POR_JOGO = 630
         PADDING = 80
         
         jogos = multipla["jogos"]
@@ -2850,8 +2850,8 @@ class PosterGenerator:
             except:
                 draw.text((LARGURA//2 - 150, y0 + 35), liga_text, font=FONTE_INFO, fill=(200, 200, 200))
 
-            TAMANHO_ESCUDO = 180
-            TAMANHO = 200
+            TAMANHO_ESCUDO = 190
+            TAMANHO = 210
             ESPACO_ENTRE = 700
 
             largura_total = 2 * TAMANHO + ESPACO_ENTRE
@@ -2970,8 +2970,8 @@ class PosterGenerator:
 
     def gerar_poster_resultado_multipla(self, multipla: dict, data_br: str) -> io.BytesIO:
         LARGURA = 2000
-        ALTURA_TOPO = 320
-        ALTURA_POR_JOGO = 520
+        ALTURA_TOPO = 350
+        ALTURA_POR_JOGO = 600
         PADDING = 80
         
         jogos_conferidos = multipla.get("jogos_conferidos", [])
@@ -3069,9 +3069,9 @@ class PosterGenerator:
             except:
                 draw.text((badge_jogo_x + 65, badge_jogo_y + 15), resultado_jogo, font=FONTE_INFO, fill=(255, 255, 255))
 
-            TAMANHO_ESCUDO = 140
-            TAMANHO = 160
-            ESPACO_ENTRE = 600
+            TAMANHO_ESCUDO = 190
+            TAMANHO = 210
+            ESPACO_ENTRE = 700
 
             largura_total = 2 * TAMANHO + ESPACO_ENTRE
             x_inicio = (LARGURA - largura_total) // 2
@@ -3168,7 +3168,7 @@ class PosterGenerator:
 
     def gerar_poster_westham_style(self, jogos: list, titulo: str = "⚽ ALERTA DE GOLS", tipo_alerta: str = "over_under") -> io.BytesIO:
         LARGURA = 2000
-        ALTURA_TOPO = 270
+        ALTURA_TOPO = 280
         ALTURA_POR_JOGO = 830
         PADDING = 80
         
@@ -3284,7 +3284,7 @@ class PosterGenerator:
                 draw.text((LARGURA//2 - 150, y0 + 130), data_text, font=FONTE_INFO, fill=(150, 200, 255))
 
             TAMANHO_ESCUDO = 220
-            TAMANHO = 230
+            TAMANHO = 240
             ESPACO_ENTRE = 700
 
             largura_total = 2 * TAMANHO + ESPACO_ENTRE
@@ -3681,7 +3681,7 @@ class PosterGenerator:
     def gerar_poster_multipla_pro(self, multipla: dict, titulo: str = "💣 MÚLTIPLA PRO") -> io.BytesIO:
         LARGURA = 2000
         ALTURA_TOPO = 360
-        ALTURA_POR_JOGO = 550
+        ALTURA_POR_JOGO = 600
         PADDING = 80
         
         jogos = multipla.get("jogos", [])
@@ -3809,8 +3809,8 @@ class PosterGenerator:
             except:
                 draw.text((LARGURA//2 - 150, y0 + 90), data_hora_text, font=FONTE_HORA, fill=(150, 200, 255))
 
-            TAMANHO_ESCUDO = 170
-            TAMANHO = 190
+            TAMANHO_ESCUDO = 190
+            TAMANHO = 210
             ESPACO_ENTRE = 700
 
             largura_total = 2 * TAMANHO + ESPACO_ENTRE
@@ -3902,7 +3902,7 @@ class PosterGenerator:
     def gerar_poster_resultado_multipla_pro(self, multipla: dict, data_br: str) -> io.BytesIO:
         LARGURA = 2000
         ALTURA_TOPO = 320
-        ALTURA_POR_JOGO = 580
+        ALTURA_POR_JOGO = 600
         PADDING = 80
         
         jogos_conferidos = multipla.get("jogos_conferidos", [])
@@ -4000,9 +4000,9 @@ class PosterGenerator:
             except:
                 draw.text((badge_jogo_x + 45, badge_jogo_y + 12), resultado_jogo, font=FONTE_INFO, fill=(255, 255, 255))
 
-            TAMANHO_ESCUDO = 110
-            TAMANHO = 130
-            ESPACO_ENTRE = 480
+            TAMANHO_ESCUDO = 190
+            TAMANHO = 210
+            ESPACO_ENTRE = 700
 
             largura_total = 2 * TAMANHO + ESPACO_ENTRE
             x_inicio = (LARGURA - largura_total) // 2
