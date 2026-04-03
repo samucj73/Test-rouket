@@ -2575,7 +2575,7 @@ class PosterGenerator:
             return ImageFont.load_default()
     
     def _desenhar_escudo_rounded(self, img, escudo_img, x, y, tamanho, tamanho_escudo, nome_time, cor_borda):
-        raio = int(tamanho * 0.95)
+        raio = int(tamanho * 0.60)
         
         draw = ImageDraw.Draw(img)
         draw.rounded_rectangle(
@@ -2723,7 +2723,7 @@ class PosterGenerator:
     def gerar_poster_multipla(self, multipla: dict, titulo: str = "💣 MÚLTIPLA PROFISSIONAL") -> io.BytesIO:
         LARGURA = 2000
         ALTURA_TOPO = 365
-        ALTURA_POR_JOGO = 550
+        ALTURA_POR_JOGO = 570
         PADDING = 80
         
         jogos = multipla["jogos"]
