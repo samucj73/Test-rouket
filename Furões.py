@@ -2547,6 +2547,7 @@ class TelegramClient:
             return False
 
 
+#class PosterGenerator:
 class PosterGenerator:
     def __init__(self, api_client: APIClient):
         self.api_client = api_client
@@ -2574,9 +2575,15 @@ class PosterGenerator:
             logging.error(f"Erro ao carregar fonte: {e}")
             return ImageFont.load_default()
     
-    def _desenhar_escudo_rounded(self, img, escudo_img, x, y, tamanho, tamanho_escudo, nome_time, cor_borda):
-        raio = int(tamanho * 0.60)
+    def _desenhar_escudo_squircle(self, img, escudo_img, x, y, tamanho, tamanho_escudo, nome_time, cor_borda):
+        """
+        Desenha escudo dentro de um SQUIRCLE (quadrado com cantos arredondados)
+        Raio de arredondamento = 35% do tamanho (padrão iOS/macOS)
+        """
+        # Raio do arredondamento - 35% para formato squircle (mais suave que rounded rectangle)
+        raio = int(tamanho * 0.35)
         
+        # Desenhar o squircle (rounded rectangle com cantos suaves)
         draw = ImageDraw.Draw(img)
         draw.rounded_rectangle(
             [x, y, x + tamanho, y + tamanho],
@@ -2586,6 +2593,7 @@ class PosterGenerator:
             width=5
         )
         
+        # Desenhar o escudo ou iniciais
         if escudo_img:
             escudo_img = escudo_img.convert("RGBA")
             largura, altura = escudo_img.size
@@ -2606,14 +2614,13 @@ class PosterGenerator:
             escudo_x = x + (tamanho - nova_largura) // 2
             escudo_y = y + (tamanho - nova_altura) // 2
             
+            # Máscara squircle para o escudo (mesmo formato)
             mascara = Image.new("L", (nova_largura, nova_altura), 0)
             mascara_draw = ImageDraw.Draw(mascara)
-            raio_escudo = min(nova_largura, nova_altura) // 2
-            centro_x = nova_largura // 2
-            centro_y = nova_altura // 2
-            mascara_draw.ellipse(
-                [centro_x - raio_escudo, centro_y - raio_escudo, 
-                 centro_x + raio_escudo, centro_y + raio_escudo],
+            raio_mascara = min(nova_largura, nova_altura) // 3
+            mascara_draw.rounded_rectangle(
+                [0, 0, nova_largura, nova_altura],
+                radius=raio_mascara,
                 fill=255
             )
             
@@ -2643,14 +2650,23 @@ class PosterGenerator:
                 logging.error(f"Erro ao desenhar iniciais: {e}")
 
     def _desenhar_escudo_quadrado(self, draw, img, logo_img, x, y, tamanho_quadrado, tamanho_escudo, team_name=""):
-        draw.rectangle(
+        """
+        Desenha escudo dentro de um SQUIRCLE (formato quadrado com cantos arredondados)
+        para uso em posters de resultado
+        """
+        raio = int(tamanho_quadrado * 0.35)
+        
+        draw.rounded_rectangle(
             [x, y, x + tamanho_quadrado, y + tamanho_quadrado],
+            radius=raio,
             fill=(255, 255, 255),
-            outline=(255, 255, 255)
+            outline=(255, 255, 255),
+            width=3
         )
 
         if logo_img is None:
-            draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(60, 60, 60))
+            draw.rounded_rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], 
+                                   radius=raio, fill=(60, 60, 60))
             
             if team_name:
                 iniciais = ''.join([palavra[0].upper() for palavra in team_name.split()[:2]])
@@ -2701,7 +2717,8 @@ class PosterGenerator:
 
         except Exception as e:
             logging.error(f"Erro ao processar escudo de {team_name}: {e}")
-            draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(100, 100, 100))
+            draw.rounded_rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], 
+                                   radius=raio, fill=(100, 100, 100))
             
             if team_name:
                 iniciais = ''.join([palavra[0].upper() for palavra in team_name.split()[:2]])
@@ -2722,8 +2739,8 @@ class PosterGenerator:
 
     def gerar_poster_multipla(self, multipla: dict, titulo: str = "💣 MÚLTIPLA PROFISSIONAL") -> io.BytesIO:
         LARGURA = 2000
-        ALTURA_TOPO = 370
-        ALTURA_POR_JOGO = 650
+        ALTURA_TOPO = 365
+        ALTURA_POR_JOGO = 550
         PADDING = 80
         
         jogos = multipla["jogos"]
@@ -2768,7 +2785,7 @@ class PosterGenerator:
         except:
             draw.text((LARGURA//2 - 200, 260), odd_text, font=FONTE_TOTAL, fill=(100, 255, 100))
 
-        info_text = f"Risco: {multipla['risco']} | 📈 Taxa Esperada: {multipla['taxa_acerto_esperada']}"
+        info_text = f"⚠️ Risco: {multipla['risco']} | 📈 Taxa Esperada: {multipla['taxa_acerto_esperada']}"
         try:
             info_bbox = draw.textbbox((0, 0), info_text, font=FONTE_INFO)
             info_w = info_bbox[2] - info_bbox[0]
@@ -2857,13 +2874,13 @@ class PosterGenerator:
                 except Exception as e:
                     logging.error(f"Erro ao abrir escudo do {jogo.get('away', '')}: {e}")
 
-            self._desenhar_escudo_rounded(
+            self._desenhar_escudo_squircle(
                 img, escudo_home_img, x_home, y_escudos,
                 TAMANHO, TAMANHO_ESCUDO,
                 jogo.get('home', ''), cor_borda
             )
 
-            self._desenhar_escudo_rounded(
+            self._desenhar_escudo_squircle(
                 img, escudo_away_img, x_away, y_escudos,
                 TAMANHO, TAMANHO_ESCUDO,
                 jogo.get('away', ''), cor_borda
@@ -2902,11 +2919,11 @@ class PosterGenerator:
             
             if tipo == "over_1.5":
                 tendencia = jogo.get("tendencia", "Over 1.5")
-                emoji = ""
+                emoji = "🟢"
                 cor_texto = (100, 255, 100)
             else:
                 tendencia = jogo.get("tendencia", "Over 2.5")
-                emoji = ""
+                emoji = "🟡"
                 cor_texto = (255, 215, 0)
             
             text_analise = f"{emoji} {tendencia}"
@@ -2970,7 +2987,7 @@ class PosterGenerator:
         odd_total = multipla.get("odd_total", 0)
         modelo = multipla.get("modelo", "MÚLTIPLA")
         
-        titulo = f" RESULTADO MÚLTIPLA - {data_br}"
+        titulo = f"📊 RESULTADO MÚLTIPLA - {data_br}"
         try:
             titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
             titulo_w = titulo_bbox[2] - titulo_bbox[0]
@@ -3065,13 +3082,13 @@ class PosterGenerator:
             escudo_home_img = Image.open(io.BytesIO(escudo_home_bytes)).convert("RGBA") if escudo_home_bytes else None
             escudo_away_img = Image.open(io.BytesIO(escudo_away_bytes)).convert("RGBA") if escudo_away_bytes else None
 
-            self._desenhar_escudo_rounded(
+            self._desenhar_escudo_squircle(
                 img, escudo_home_img, x_home, y_escudos,
                 TAMANHO, TAMANHO_ESCUDO,
                 jogo.get('home', ''), cor_borda
             )
 
-            self._desenhar_escudo_rounded(
+            self._desenhar_escudo_squircle(
                 img, escudo_away_img, x_away, y_escudos,
                 TAMANHO, TAMANHO_ESCUDO,
                 jogo.get('away', ''), cor_borda
@@ -3277,13 +3294,13 @@ class PosterGenerator:
             escudo_home_img = Image.open(io.BytesIO(escudo_home_bytes)).convert("RGBA") if escudo_home_bytes else None
             escudo_away_img = Image.open(io.BytesIO(escudo_away_bytes)).convert("RGBA") if escudo_away_bytes else None
 
-            self._desenhar_escudo_rounded(
+            self._desenhar_escudo_squircle(
                 img, escudo_home_img, x_home, y_escudos,
                 TAMANHO, TAMANHO_ESCUDO,
                 jogo_dict.get('home', ''), cor_borda
             )
 
-            self._desenhar_escudo_rounded(
+            self._desenhar_escudo_squircle(
                 img, escudo_away_img, x_away, y_escudos,
                 TAMANHO, TAMANHO_ESCUDO,
                 jogo_dict.get('away', ''), cor_borda
@@ -3516,13 +3533,13 @@ class PosterGenerator:
             escudo_home_img = Image.open(io.BytesIO(escudo_home_bytes)).convert("RGBA") if escudo_home_bytes else None
             escudo_away_img = Image.open(io.BytesIO(escudo_away_bytes)).convert("RGBA") if escudo_away_bytes else None
 
-            self._desenhar_escudo_rounded(
+            self._desenhar_escudo_squircle(
                 img, escudo_home_img, x_home, y_escudos,
                 TAMANHO, TAMANHO_ESCUDO,
                 jogo['home'], cor_borda
             )
 
-            self._desenhar_escudo_rounded(
+            self._desenhar_escudo_squircle(
                 img, escudo_away_img, x_away, y_escudos,
                 TAMANHO, TAMANHO_ESCUDO,
                 jogo['away'], cor_borda
@@ -3650,8 +3667,8 @@ class PosterGenerator:
 
     def gerar_poster_multipla_pro(self, multipla: dict, titulo: str = "💣 MÚLTIPLA PRO") -> io.BytesIO:
         LARGURA = 2000
-        ALTURA_TOPO = 370
-        ALTURA_POR_JOGO = 650
+        ALTURA_TOPO = 360
+        ALTURA_POR_JOGO = 550
         PADDING = 80
         
         jogos = multipla.get("jogos", [])
@@ -3779,8 +3796,8 @@ class PosterGenerator:
             except:
                 draw.text((LARGURA//2 - 150, y0 + 90), data_hora_text, font=FONTE_HORA, fill=(150, 200, 255))
 
-            TAMANHO_ESCUDO = 180
-            TAMANHO = 200
+            TAMANHO_ESCUDO = 170
+            TAMANHO = 190
             ESPACO_ENTRE = 700
 
             largura_total = 2 * TAMANHO + ESPACO_ENTRE
@@ -3796,13 +3813,13 @@ class PosterGenerator:
             escudo_home_img = Image.open(io.BytesIO(escudo_home_bytes)).convert("RGBA") if escudo_home_bytes else None
             escudo_away_img = Image.open(io.BytesIO(escudo_away_bytes)).convert("RGBA") if escudo_away_bytes else None
 
-            self._desenhar_escudo_rounded(
+            self._desenhar_escudo_squircle(
                 img, escudo_home_img, x_home, y_escudos,
                 TAMANHO, TAMANHO_ESCUDO,
                 jogo.get('home', ''), cor_borda
             )
 
-            self._desenhar_escudo_rounded(
+            self._desenhar_escudo_squircle(
                 img, escudo_away_img, x_away, y_escudos,
                 TAMANHO, TAMANHO_ESCUDO,
                 jogo.get('away', ''), cor_borda
@@ -3988,13 +4005,13 @@ class PosterGenerator:
             escudo_home_img = Image.open(io.BytesIO(escudo_home_bytes)).convert("RGBA") if escudo_home_bytes else None
             escudo_away_img = Image.open(io.BytesIO(escudo_away_bytes)).convert("RGBA") if escudo_away_bytes else None
 
-            self._desenhar_escudo_rounded(
+            self._desenhar_escudo_squircle(
                 img, escudo_home_img, x_home, y_escudos,
                 TAMANHO, TAMANHO_ESCUDO,
                 jogo.get('home', ''), cor_borda
             )
 
-            self._desenhar_escudo_rounded(
+            self._desenhar_escudo_squircle(
                 img, escudo_away_img, x_away, y_escudos,
                 TAMANHO, TAMANHO_ESCUDO,
                 jogo.get('away', ''), cor_borda
@@ -4059,6 +4076,7 @@ class PosterGenerator:
         buffer.seek(0)
         
         return buffer
+    
 
 
 class GerenciadorMultiplasPro:
