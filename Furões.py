@@ -2547,7 +2547,6 @@ class TelegramClient:
             return False
 
 
-#class PosterGenerator:
 class PosterGenerator:
     def __init__(self, api_client: APIClient):
         self.api_client = api_client
@@ -2576,13 +2575,8 @@ class PosterGenerator:
             return ImageFont.load_default()
     
     def _desenhar_escudo_rounded(self, img, escudo_img, x, y, tamanho, tamanho_escudo, nome_time, cor_borda):
-        """
-        Desenha escudo dentro de um ROUNDED RECTANGLE
-        """
-        # Raio do arredondamento - 45% para arredondamento acentuado
         raio = int(tamanho * 0.95)
         
-        # Desenhar diretamente na imagem o retângulo arredondado
         draw = ImageDraw.Draw(img)
         draw.rounded_rectangle(
             [x, y, x + tamanho, y + tamanho],
@@ -2592,7 +2586,6 @@ class PosterGenerator:
             width=5
         )
         
-        # Desenhar o escudo ou iniciais
         if escudo_img:
             escudo_img = escudo_img.convert("RGBA")
             largura, altura = escudo_img.size
@@ -2649,8 +2642,85 @@ class PosterGenerator:
             except Exception as e:
                 logging.error(f"Erro ao desenhar iniciais: {e}")
 
+    def _desenhar_escudo_quadrado(self, draw, img, logo_img, x, y, tamanho_quadrado, tamanho_escudo, team_name=""):
+        draw.rectangle(
+            [x, y, x + tamanho_quadrado, y + tamanho_quadrado],
+            fill=(255, 255, 255),
+            outline=(255, 255, 255)
+        )
+
+        if logo_img is None:
+            draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(60, 60, 60))
+            
+            if team_name:
+                iniciais = ''.join([palavra[0].upper() for palavra in team_name.split()[:2]])
+                if len(iniciais) > 3:
+                    iniciais = iniciais[:3]
+            else:
+                iniciais = "SEM"
+            
+            try:
+                fonte = self.criar_fonte(50)
+                bbox = draw.textbbox((0, 0), iniciais, font=fonte)
+                w = bbox[2] - bbox[0]
+                h = bbox[3] - bbox[1]
+                draw.text((x + (tamanho_quadrado - w)//2, y + (tamanho_quadrado - h)//2), 
+                         iniciais, font=fonte, fill=(255, 255, 255))
+            except:
+                draw.text((x + 70, y + 90), iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
+            return
+
+        try:
+            logo_img = logo_img.convert("RGBA")
+            largura, altura = logo_img.size
+            
+            proporcao = largura / altura
+            
+            if proporcao > 1:
+                nova_altura = tamanho_escudo
+                nova_largura = int(tamanho_escudo * proporcao)
+                if nova_largura > tamanho_escudo:
+                    nova_largura = tamanho_escudo
+                    nova_altura = int(tamanho_escudo / proporcao)
+            else:
+                nova_largura = tamanho_escudo
+                nova_altura = int(tamanho_escudo / proporcao)
+                if nova_altura > tamanho_escudo:
+                    nova_altura = tamanho_escudo
+                    nova_largura = int(tamanho_escudo * proporcao)
+            
+            imagem_redimensionada = logo_img.resize((nova_largura, nova_altura), Image.Resampling.LANCZOS)
+            
+            pos_x = x + (tamanho_quadrado - nova_largura) // 2
+            pos_y = y + (tamanho_quadrado - nova_altura) // 2
+
+            fundo = Image.new("RGBA", (tamanho_quadrado, tamanho_quadrado), (255, 255, 255, 255))
+            fundo.paste(imagem_redimensionada, (pos_x - x, pos_y - y), imagem_redimensionada)
+            
+            img.paste(fundo, (x, y), fundo)
+
+        except Exception as e:
+            logging.error(f"Erro ao processar escudo de {team_name}: {e}")
+            draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(100, 100, 100))
+            
+            if team_name:
+                iniciais = ''.join([palavra[0].upper() for palavra in team_name.split()[:2]])
+                if len(iniciais) > 3:
+                    iniciais = iniciais[:3]
+            else:
+                iniciais = "ERR"
+            
+            try:
+                fonte = self.criar_fonte(50)
+                bbox = draw.textbbox((0, 0), iniciais, font=fonte)
+                w = bbox[2] - bbox[0]
+                h = bbox[3] - bbox[1]
+                draw.text((x + (tamanho_quadrado - w)//2, y + (tamanho_quadrado - h)//2), 
+                         iniciais, font=fonte, fill=(255, 255, 255))
+            except:
+                draw.text((x + 70, y + 90), iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
+
     def gerar_poster_multipla(self, multipla: dict, titulo: str = "💣 MÚLTIPLA PROFISSIONAL") -> io.BytesIO:
-        """Gera pôster com rounded rectangle para múltiplas"""
         LARGURA = 2000
         ALTURA_TOPO = 365
         ALTURA_POR_JOGO = 550
@@ -2875,7 +2945,6 @@ class PosterGenerator:
         return buffer
 
     def gerar_poster_resultado_multipla(self, multipla: dict, data_br: str) -> io.BytesIO:
-        """Gera pôster para resultado de múltipla com rounded rectangle"""
         LARGURA = 2000
         ALTURA_TOPO = 320
         ALTURA_POR_JOGO = 520
@@ -3070,9 +3139,8 @@ class PosterGenerator:
         buffer.seek(0)
         
         return buffer
-    
+
     def gerar_poster_westham_style(self, jogos: list, titulo: str = "⚽ ALERTA DE GOLS", tipo_alerta: str = "over_under") -> io.BytesIO:
-        """Gera pôster estilo West Ham com rounded rectangle"""
         LARGURA = 2000
         ALTURA_TOPO = 270
         ALTURA_POR_JOGO = 830
@@ -3314,9 +3382,8 @@ class PosterGenerator:
         buffer.seek(0)
         
         return buffer
-    
+
     def gerar_poster_resultados(self, jogos_com_resultados: list, tipo_alerta: str = "over_under") -> io.BytesIO:
-        """Gera pôster de resultados com rounded rectangle"""
         LARGURA = 2000
         ALTURA_TOPO = 330
         ALTURA_POR_JOGO = 800
@@ -3582,7 +3649,6 @@ class PosterGenerator:
         return buffer
 
     def gerar_poster_multipla_pro(self, multipla: dict, titulo: str = "💣 MÚLTIPLA PRO") -> io.BytesIO:
-        """Gera pôster para múltipla Pro com rounded rectangle"""
         LARGURA = 2000
         ALTURA_TOPO = 360
         ALTURA_POR_JOGO = 550
@@ -3802,7 +3868,6 @@ class PosterGenerator:
         return buffer
 
     def gerar_poster_resultado_multipla_pro(self, multipla: dict, data_br: str) -> io.BytesIO:
-        """Gera pôster para resultado de múltipla Pro com rounded rectangle"""
         LARGURA = 2000
         ALTURA_TOPO = 320
         ALTURA_POR_JOGO = 580
@@ -3996,1261 +4061,6 @@ class PosterGenerator:
         return buffer
 
 
-
-# =============================
-# CONTINUAÇÃO DO CÓDIGO (GerenciadorMultiplasPro, ResultadosTopAlertas, GerenciadorAlertasCompletos, SistemaAlertasFutebol, etc.)
-# =============================
-
-# Nota: Devido ao limite de caracteres, as classes restantes (GerenciadorMultiplasPro, ResultadosTopAlertas, GerenciadorAlertasCompletos, SistemaAlertasFutebol e as funções de renderização das abas) mantêm-se exatamente como estavam no código original, sem alterações.
-
-# O código continua com as mesmas classes e funções da versão original, apenas a classe PosterGenerator foi corrigida e substituída.
-
-    
-
-
-    
-    def gerar_poster_resultado_multipla(self, multipla: dict, data_br: str) -> io.BytesIO:
-        """Gera pôster para resultado de múltipla"""
-        LARGURA = 2000
-        ALTURA_TOPO = 320
-        ALTURA_POR_JOGO = 520
-        PADDING = 80
-        
-        jogos_conferidos = multipla.get("jogos_conferidos", [])
-        jogos_count = len(jogos_conferidos)
-        altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
-
-        img = Image.new("RGB", (LARGURA, altura_total), color=(10, 20, 30))
-        draw = ImageDraw.Draw(img)
-
-        FONTE_TITULO = self.criar_fonte(85)
-        FONTE_SUBTITULO = self.criar_fonte(60)
-        FONTE_TIMES = self.criar_fonte(55)
-        FONTE_VS = self.criar_fonte(50)
-        FONTE_INFO = self.criar_fonte(45)
-        FONTE_RESULTADO = self.criar_fonte(70)
-        FONTE_TOTAL = self.criar_fonte(65)
-        FONTE_DETALHES = self.criar_fonte(40)
-
-        acertada = multipla.get("acertada", False)
-        odd_total = multipla.get("odd_total", 0)
-        modelo = multipla.get("modelo", "MÚLTIPLA")
-        
-        titulo = f"📊 RESULTADO MÚLTIPLA - {data_br}"
-        try:
-            titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
-            titulo_w = titulo_bbox[2] - titulo_bbox[0]
-            draw.text(((LARGURA - titulo_w) // 2, 70), titulo, font=FONTE_TITULO, fill=(255, 255, 255))
-        except:
-            draw.text((LARGURA//2 - 300, 70), titulo, font=FONTE_TITULO, fill=(255, 255, 255))
-
-        # Badge de resultado
-        if acertada:
-            cor_badge = (46, 204, 113)
-            resultado_text = "✅ ACERTOU!"
-            badge_bg = (30, 70, 40)
-        else:
-            cor_badge = (231, 76, 60)
-            resultado_text = "❌ ERROU!"
-            badge_bg = (70, 40, 40)
-        
-        badge_width = 400
-        badge_height = 100
-        badge_x = (LARGURA - badge_width) // 2
-        badge_y = 170
-        
-        draw.rectangle([badge_x, badge_y, badge_x + badge_width, badge_y + badge_height], 
-                      fill=badge_bg, outline=cor_badge, width=4)
-        
-        try:
-            badge_bbox = draw.textbbox((0, 0), resultado_text, font=FONTE_TITULO)
-            badge_w = badge_bbox[2] - badge_bbox[0]
-            badge_h = badge_bbox[3] - badge_bbox[1]
-            badge_x_center = badge_x + (badge_width - badge_w) // 2
-            badge_y_center = badge_y + (badge_height - badge_h) // 2
-            draw.text((badge_x_center, badge_y_center), resultado_text, font=FONTE_TITULO, fill=cor_badge)
-        except:
-            draw.text((badge_x + 100, badge_y + 25), resultado_text, font=FONTE_TITULO, fill=cor_badge)
-        
-        # Informações da múltipla
-        info_text = f"{modelo} | Odds Total: {odd_total:.2f}"
-        try:
-            info_bbox = draw.textbbox((0, 0), info_text, font=FONTE_SUBTITULO)
-            info_w = info_bbox[2] - info_bbox[0]
-            draw.text(((LARGURA - info_w) // 2, 290), info_text, font=FONTE_SUBTITULO, fill=(200, 200, 200))
-        except:
-            draw.text((LARGURA//2 - 250, 290), info_text, font=FONTE_SUBTITULO, fill=(200, 200, 200))
-
-        draw.line([(LARGURA//4, 340), (3*LARGURA//4, 340)], fill=(255, 215, 0), width=4)
-
-        y_pos = ALTURA_TOPO + 50
-
-        for idx, jogo in enumerate(jogos_conferidos):
-            x0, y0 = PADDING, y_pos
-            x1, y1 = LARGURA - PADDING, y_pos + ALTURA_POR_JOGO - 40
-            
-            resultado = jogo.get("resultado", "RED")
-            cor_borda = (46, 204, 113) if resultado == "GREEN" else (231, 76, 60)
-            
-            draw.rectangle([x0, y0, x1, y1], fill=(25, 35, 45), outline=cor_borda, width=4)
-
-            # Badge de resultado do jogo
-            badge_jogo_width = 150
-            badge_jogo_height = 60
-            badge_jogo_x = x1 - badge_jogo_width - 40
-            badge_jogo_y = y0 + 30
-            
-            resultado_jogo = "✅" if resultado == "GREEN" else "❌"
-            cor_jogo = (46, 204, 113) if resultado == "GREEN" else (231, 76, 60)
-            
-            draw.rectangle([badge_jogo_x, badge_jogo_y, badge_jogo_x + badge_jogo_width, badge_jogo_y + badge_jogo_height], 
-                          fill=cor_jogo, outline=(255, 255, 255), width=2)
-            
-            try:
-                badge_bbox = draw.textbbox((0, 0), resultado_jogo, font=FONTE_INFO)
-                badge_w = badge_bbox[2] - badge_bbox[0]
-                badge_x_center = badge_jogo_x + (badge_jogo_width - badge_w) // 2
-                draw.text((badge_x_center, badge_jogo_y + 15), resultado_jogo, font=FONTE_INFO, fill=(255, 255, 255))
-            except:
-                draw.text((badge_jogo_x + 65, badge_jogo_y + 15), resultado_jogo, font=FONTE_INFO, fill=(255, 255, 255))
-
-            # Times
-            TAMANHO_ESCUDO = 120
-            TAMANHO_QUADRADO = 140
-            ESPACO_ENTRE_ESCUDOS = 500
-
-            largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
-            x_inicio = (LARGURA - largura_total) // 2
-
-            x_home = x_inicio
-            x_away = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
-            y_escudos = y0 + 70
-
-            home_crest_url = jogo.get('escudo_home', '')
-            away_crest_url = jogo.get('escudo_away', '')
-            
-            escudo_home_bytes = self.api_client.baixar_escudo_time(jogo.get('home', ''), home_crest_url)
-            escudo_away_bytes = self.api_client.baixar_escudo_time(jogo.get('away', ''), away_crest_url)
-            
-            escudo_home_img = Image.open(io.BytesIO(escudo_home_bytes)).convert("RGBA") if escudo_home_bytes else None
-            escudo_away_img = Image.open(io.BytesIO(escudo_away_bytes)).convert("RGBA") if escudo_away_bytes else None
-
-            self._desenhar_escudo_quadrado(draw, img, escudo_home_img, x_home, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo.get('home', ''))
-            self._desenhar_escudo_quadrado(draw, img, escudo_away_img, x_away, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo.get('away', ''))
-
-            home_text = jogo.get('home', '')[:12]
-            away_text = jogo.get('away', '')[:12]
-
-            try:
-                home_bbox = draw.textbbox((0, 0), home_text, font=FONTE_TIMES)
-                home_w = home_bbox[2] - home_bbox[0]
-                draw.text((x_home + (TAMANHO_QUADRADO - home_w)//2, y_escudos + TAMANHO_QUADRADO + 20),
-                         home_text, font=FONTE_TIMES, fill=(255, 255, 255))
-            except:
-                draw.text((x_home, y_escudos + TAMANHO_QUADRADO + 20), home_text, font=FONTE_TIMES, fill=(255, 255, 255))
-
-            try:
-                away_bbox = draw.textbbox((0, 0), away_text, font=FONTE_TIMES)
-                away_w = away_bbox[2] - away_bbox[0]
-                draw.text((x_away + (TAMANHO_QUADRADO - away_w)//2, y_escudos + TAMANHO_QUADRADO + 20),
-                         away_text, font=FONTE_TIMES, fill=(255, 255, 255))
-            except:
-                draw.text((x_away, y_escudos + TAMANHO_QUADRADO + 20), away_text, font=FONTE_TIMES, fill=(255, 255, 255))
-
-            # Placar
-            resultado_score = f"{jogo.get('home_goals', '?')} - {jogo.get('away_goals', '?')}"
-            try:
-                score_bbox = draw.textbbox((0, 0), resultado_score, font=FONTE_RESULTADO)
-                score_w = score_bbox[2] - score_bbox[0]
-                score_x = x_home + TAMANHO_QUADRADO + (ESPACO_ENTRE_ESCUDOS - score_w) // 2
-                draw.text((score_x, y_escudos + TAMANHO_QUADRADO//2 - 25), 
-                         resultado_score, font=FONTE_RESULTADO, fill=(255, 255, 255))
-            except:
-                score_x = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS//2 - 60
-                draw.text((score_x, y_escudos + TAMANHO_QUADRADO//2 - 25), 
-                         resultado_score, font=FONTE_RESULTADO, fill=(255, 255, 255))
-
-            # Tipo de aposta
-            tipo_aposta = jogo.get("tipo", "over_1.5")
-            tipo_text = "Over 1.5" if tipo_aposta == "over_1.5" else "Over 2.5"
-            emoji_tipo = "🟢" if tipo_aposta == "over_1.5" else "🟡"
-            
-            try:
-                tipo_bbox = draw.textbbox((0, 0), f"{emoji_tipo} {tipo_text}", font=FONTE_INFO)
-                tipo_w = tipo_bbox[2] - tipo_bbox[0]
-                draw.text(((LARGURA - tipo_w) // 2, y_escudos + TAMANHO_QUADRADO + 80), 
-                         f"{emoji_tipo} {tipo_text}", font=FONTE_INFO, fill=(150, 200, 255))
-            except:
-                draw.text((LARGURA//2 - 100, y_escudos + TAMANHO_QUADRADO + 80), 
-                         f"{emoji_tipo} {tipo_text}", font=FONTE_INFO, fill=(150, 200, 255))
-
-            y_pos += ALTURA_POR_JOGO
-
-        # Rodapé
-        rodape_text = f"CONFERIDO EM {datetime.now().strftime('%d/%m/%Y %H:%M')} | ELITE MASTER 3.0"
-        try:
-            rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_DETALHES)
-            rodape_w = rodape_bbox[2] - rodape_bbox[0]
-            draw.text(((LARGURA - rodape_w) // 2, altura_total - 70), rodape_text, font=FONTE_DETALHES, fill=(100, 130, 160))
-        except:
-            draw.text((LARGURA//2 - 300, altura_total - 70), rodape_text, font=FONTE_DETALHES, fill=(100, 130, 160))
-
-        buffer = io.BytesIO()
-        img.save(buffer, format="PNG", optimize=True, quality=95)
-        buffer.seek(0)
-        
-        return buffer
-    
-    def gerar_poster_westham_style(self, jogos: list, titulo: str = "⚽ ALERTA DE GOLS", tipo_alerta: str = "over_under") -> io.BytesIO:
-        LARGURA = 2000
-        ALTURA_TOPO = 270
-        ALTURA_POR_JOGO = 830
-        PADDING = 80
-        
-        jogos_count = len(jogos)
-        altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
-
-        img = Image.new("RGB", (LARGURA, altura_total), color=(10, 20, 30))
-        draw = ImageDraw.Draw(img)
-
-        FONTE_TITULO = self.criar_fonte(85)
-        FONTE_SUBTITULO = self.criar_fonte(65)
-        FONTE_TIMES = self.criar_fonte(60)
-        FONTE_VS = self.criar_fonte(55)
-        FONTE_INFO = self.criar_fonte(50)
-        FONTE_DETALHES = self.criar_fonte(45)
-        FONTE_ANALISE = self.criar_fonte(50)
-        FONTE_ODD = self.criar_fonte(65)
-
-        try:
-            titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
-            titulo_w = titulo_bbox[2] - titulo_bbox[0]
-            draw.text(((LARGURA - titulo_w) // 2, 100), titulo, font=FONTE_TITULO, fill=(255, 255, 255))
-        except:
-            draw.text((LARGURA//2 - 250, 100), titulo, font=FONTE_TITULO, fill=(255, 255, 255))
-
-        draw.line([(LARGURA//4, 220), (3*LARGURA//4, 220)], fill=(255, 215, 0), width=6)
-
-        y_pos = ALTURA_TOPO
-
-        for idx, jogo_dict in enumerate(jogos):
-            x0, y0 = PADDING, y_pos
-            x1, y1 = LARGURA - PADDING, y_pos + ALTURA_POR_JOGO - 40
-            
-            if tipo_alerta == "over_under":
-                cor_borda = (255, 215, 0) if jogo_dict.get('tipo_aposta') == "over" else (100, 200, 255)
-            elif tipo_alerta == "favorito":
-                cor_borda = (255, 87, 34)
-            elif tipo_alerta == "gols_ht":
-                cor_borda = (76, 175, 80)
-            elif tipo_alerta == "ambas_marcam":
-                cor_borda = (155, 89, 182)
-            else:
-                cor_borda = (255, 215, 0)
-            
-            draw.rectangle([x0, y0, x1, y1], fill=(25, 35, 45), outline=cor_borda, width=4)
-
-            if tipo_alerta == "over_under":
-                prob = jogo_dict.get('probabilidade', 50)
-                odd_principal = round(100 / prob, 2) if prob > 0 else 2.0
-                cor_odd = (255, 215, 0) if jogo_dict.get('tipo_aposta') == "over" else (100, 200, 255)
-                
-            elif tipo_alerta == "favorito":
-                prob_fav = jogo_dict.get('confianca_vitoria', 50)
-                odd_principal = round(100 / prob_fav, 2) if prob_fav > 0 else 2.0
-                cor_odd = (255, 87, 34)
-                
-            elif tipo_alerta == "gols_ht":
-                prob_ht = jogo_dict.get('confianca_ht', 50)
-                odd_principal = round(100 / prob_ht, 2) if prob_ht > 0 else 2.0
-                cor_odd = (76, 175, 80)
-                
-            elif tipo_alerta == "ambas_marcam":
-                prob_am = jogo_dict.get('confianca_ambas_marcam', 50)
-                odd_principal = round(100 / prob_am, 2) if prob_am > 0 else 2.0
-                cor_odd = (155, 89, 182)
-            
-            else:
-                odd_principal = 2.0
-                cor_odd = (255, 215, 0)
-            
-            odd_text = f"{odd_principal:.2f}"
-            
-            try:
-                odd_bbox = draw.textbbox((0, 0), odd_text, font=FONTE_ODD)
-                odd_w = odd_bbox[2] - odd_bbox[0]
-                odd_h = odd_bbox[3] - odd_bbox[1]
-                
-                margem_direita = 40
-                margem_topo = 40
-                
-                odd_x = x1 - odd_w - margem_direita
-                odd_y = y0 + margem_topo
-                
-                fundo_x0 = odd_x - 15
-                fundo_y0 = odd_y - 10
-                fundo_x1 = odd_x + odd_w + 15
-                fundo_y1 = odd_y + odd_h + 10
-                
-                overlay = Image.new('RGBA', img.size, (0,0,0,0))
-                overlay_draw = ImageDraw.Draw(overlay)
-                overlay_draw.rectangle([fundo_x0, fundo_y0, fundo_x1, fundo_y1], fill=(0, 0, 0, 200))
-                img.paste(overlay, (0,0), overlay)
-                
-                draw.rectangle([fundo_x0, fundo_y0, fundo_x1, fundo_y1], outline=(255, 215, 0), width=3)
-                
-                draw.text((odd_x, odd_y), odd_text, font=FONTE_ODD, fill=cor_odd)
-                
-            except Exception as e:
-                logging.error(f"Erro ao desenhar odd: {e}")
-                odd_x = x1 - 200
-                odd_y = y0 + 40
-                draw.text((odd_x, odd_y), odd_text, font=FONTE_ODD, fill=cor_odd)
-
-            liga_text = jogo_dict.get('liga', 'LIGA').upper()
-            try:
-                liga_bbox = draw.textbbox((0, 0), liga_text, font=FONTE_SUBTITULO)
-                liga_w = liga_bbox[2] - liga_bbox[0]
-                draw.text(((LARGURA - liga_w) // 2, y0 + 40), liga_text, font=FONTE_SUBTITULO, fill=(200, 200, 200))
-            except:
-                draw.text((LARGURA//2 - 150, y0 + 40), liga_text, font=FONTE_SUBTITULO, fill=(200, 200, 200))
-
-            if isinstance(jogo_dict.get("hora"), datetime):
-                data_text = jogo_dict["hora"].strftime("%d/%m/%Y %H:%M")
-            else:
-                data_text = str(jogo_dict.get("hora", "Data desconhecida"))
-
-            try:
-                data_bbox = draw.textbbox((0, 0), data_text, font=FONTE_INFO)
-                data_w = data_bbox[2] - data_bbox[0]
-                draw.text(((LARGURA - data_w) // 2, y0 + 130), data_text, font=FONTE_INFO, fill=(150, 200, 255))
-            except:
-                draw.text((LARGURA//2 - 150, y0 + 130), data_text, font=FONTE_INFO, fill=(150, 200, 255))
-
-            TAMANHO_ESCUDO = 220
-            TAMANHO_QUADRADO = 230
-            ESPACO_ENTRE_ESCUDOS = 700
-
-            largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
-            x_inicio = (LARGURA - largura_total) // 2
-
-            x_home = x_inicio
-            x_away = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
-            y_escudos = y0 + 250
-
-            home_crest_url = jogo_dict.get('escudo_home', '')
-            away_crest_url = jogo_dict.get('escudo_away', '')
-            
-            escudo_home_bytes = None
-            escudo_away_bytes = None
-            
-            if home_crest_url:
-                escudo_home_bytes = self.api_client.baixar_escudo_time(jogo_dict.get('home', ''), home_crest_url)
-            
-            if away_crest_url:
-                escudo_away_bytes = self.api_client.baixar_escudo_time(jogo_dict.get('away', ''), away_crest_url)
-            
-            escudo_home_img = None
-            escudo_away_img = None
-            
-            if escudo_home_bytes:
-                try:
-                    escudo_home_img = Image.open(io.BytesIO(escudo_home_bytes)).convert("RGBA")
-                except Exception as e:
-                    logging.error(f"Erro ao abrir escudo do {jogo_dict.get('home', '')}: {e}")
-            
-            if escudo_away_bytes:
-                try:
-                    escudo_away_img = Image.open(io.BytesIO(escudo_away_bytes)).convert("RGBA")
-                except Exception as e:
-                    logging.error(f"Erro ao abrir escudo do {jogo_dict.get('away', '')}: {e}")
-
-            self._desenhar_escudo_quadrado(draw, img, escudo_home_img, x_home, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo_dict.get('home', ''))
-            self._desenhar_escudo_quadrado(draw, img, escudo_away_img, x_away, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo_dict.get('away', ''))
-
-            home_text = jogo_dict.get('home', 'TIME CASA')[:15]
-            away_text = jogo_dict.get('away', 'TIME FORA')[:15]
-
-            try:
-                home_bbox = draw.textbbox((0, 0), home_text, font=FONTE_TIMES)
-                home_w = home_bbox[2] - home_bbox[0]
-                draw.text((x_home + (TAMANHO_QUADRADO - home_w)//2, y_escudos + TAMANHO_QUADRADO + 50),
-                         home_text, font=FONTE_TIMES, fill=(255, 255, 255))
-            except:
-                draw.text((x_home, y_escudos + TAMANHO_QUADRADO + 50), home_text, font=FONTE_TIMES, fill=(255, 255, 255))
-
-            try:
-                away_bbox = draw.textbbox((0, 0), away_text, font=FONTE_TIMES)
-                away_w = away_bbox[2] - away_bbox[0]
-                draw.text((x_away + (TAMANHO_QUADRADO - away_w)//2, y_escudos + TAMANHO_QUADRADO + 50),
-                         away_text, font=FONTE_TIMES, fill=(255, 255, 255))
-            except:
-                draw.text((x_away, y_escudos + TAMANHO_QUADRADO + 50), away_text, font=FONTE_TIMES, fill=(255, 255, 255))
-
-            try:
-                vs_bbox = draw.textbbox((0, 0), "VS", font=FONTE_VS)
-                vs_w = vs_bbox[2] - vs_bbox[0]
-                vs_x = x_home + TAMANHO_QUADRADO + (ESPACO_ENTRE_ESCUDOS - vs_w) // 2
-                draw.text((vs_x, y_escudos + TAMANHO_QUADRADO//2 - 30), "VS", font=FONTE_VS, fill=(255, 215, 0))
-            except:
-                vs_x = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS//2 - 30
-                draw.text((vs_x, y_escudos + TAMANHO_QUADRADO//2 - 30), "VS", font=FONTE_VS, fill=(255, 215, 0))
-
-            y_analysis = y_escudos + TAMANHO_QUADRADO + 150
-            draw.line([(x0 + 80, y_analysis - 20), (x1 - 80, y_analysis - 20)], fill=(100, 130, 160), width=3)
-            
-            if tipo_alerta == "over_under":
-                textos_analise = [
-                    f"○ {jogo_dict.get('tendencia', 'N/A')}",
-                    f"Confiança: {jogo_dict.get('confianca', 0):.0f}% | Odds: {odd_principal:.2f}",
-                ]
-                cores = [(200, 200, 200), (100, 255, 100)]
-                
-            elif tipo_alerta == "favorito":
-                favorito = jogo_dict.get('favorito', '')
-                if favorito == "home":
-                    favorito_text = jogo_dict.get('home', 'CASA')
-                elif favorito == "away":
-                    favorito_text = jogo_dict.get('away', 'FORA')
-                else:
-                    favorito_text = "EMPATE"
-                
-                textos_analise = [
-                    f"○ Favorito → {favorito_text}",
-                    f"Confiança: {jogo_dict.get('confianca_vitoria', 0):.0f}% | Odds: {odd_principal:.2f}",
-                ]
-                cores = [(255, 152, 0), (100, 255, 100)]
-                
-            elif tipo_alerta == "gols_ht":
-                textos_analise = [
-                    f"○ {jogo_dict.get('tendencia_ht', 'N/A')}",
-                    f"Confiança: {jogo_dict.get('confianca_ht', 0):.0f}% | Odds: {odd_principal:.2f}",
-                ]
-                cores = [(129, 199, 132), (100, 255, 100)]
-            
-            elif tipo_alerta == "ambas_marcam":
-                textos_analise = [
-                    f"○ {jogo_dict.get('tendencia_ambas_marcam', 'N/A')}",
-                    f"Confiança: {jogo_dict.get('confianca_ambas_marcam', 0):.0f}% | Odds: {odd_principal:.2f}",
-                ]
-                cores = [(165, 105, 189), (100, 255, 100)]
-            
-            else:
-                textos_analise = ["Informação não disponível"]
-                cores = [(200, 200, 200)]
-            
-            for i, (text, cor) in enumerate(zip(textos_analise, cores)):
-                try:
-                    bbox = draw.textbbox((0, 0), text, font=FONTE_ANALISE)
-                    w = bbox[2] - bbox[0]
-                    draw.text(((LARGURA - w) // 2, y_analysis + i * 80), text, font=FONTE_ANALISE, fill=cor)
-                except:
-                    draw.text((PADDING + 120, y_analysis + i * 80), text, font=FONTE_ANALISE, fill=cor)
-
-            y_pos += ALTURA_POR_JOGO
-
-        rodape_text = f"Gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')} - ELITE MASTER SYSTEM 3.0"
-        try:
-            rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_DETALHES)
-            rodape_w = rodape_bbox[2] - rodape_bbox[0]
-            draw.text(((LARGURA - rodape_w) // 2, altura_total - 70), rodape_text, font=FONTE_DETALHES, fill=(100, 130, 160))
-        except:
-            draw.text((LARGURA//2 - 300, altura_total - 70), rodape_text, font=FONTE_DETALHES, fill=(100, 130, 160))
-
-        buffer = io.BytesIO()
-        img.save(buffer, format="PNG", optimize=True, quality=95)
-        buffer.seek(0)
-        
-        return buffer
-    
-    def gerar_poster_resultados(self, jogos_com_resultados: list, tipo_alerta: str = "over_under") -> io.BytesIO:
-        LARGURA = 2000
-        ALTURA_TOPO = 330
-        ALTURA_POR_JOGO = 800
-        PADDING = 80
-        
-        jogos_count = len(jogos_com_resultados)
-        altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
-
-        img = Image.new("RGB", (LARGURA, altura_total), color=(10, 20, 30))
-        draw = ImageDraw.Draw(img)
-
-        FONTE_TITULO = self.criar_fonte(90)
-        FONTE_SUBTITULO = self.criar_fonte(70)
-        FONTE_TIMES = self.criar_fonte(65)
-        FONTE_VS = self.criar_fonte(55)
-        FONTE_INFO = self.criar_fonte(50)
-        FONTE_DETALHES = self.criar_fonte(55)
-        FONTE_ANALISE = self.criar_fonte(65)
-        FONTE_ESTATISTICAS = self.criar_fonte(40)
-        FONTE_RESULTADO = self.criar_fonte(76)
-        FONTE_RESULTADO_BADGE = self.criar_fonte(65)
-
-        if tipo_alerta == "over_under":
-            titulo = " RESULTADOS OVER/UNDER"
-        elif tipo_alerta == "favorito":
-            titulo = " RESULTADOS FAVORITOS"
-        elif tipo_alerta == "gols_ht":
-            titulo = " RESULTADOS GOLS HT"
-        elif tipo_alerta == "ambas_marcam":
-            titulo = " RESULTADOS AMBAS MARCAM"
-        else:
-            titulo = " RESULTADOS"
-
-        try:
-            titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
-            titulo_w = titulo_bbox[2] - titulo_bbox[0]
-            draw.text(((LARGURA - titulo_w) // 2, 100), titulo, font=FONTE_TITULO, fill=(255, 255, 255))
-        except:
-            draw.text((LARGURA//2 - 250, 100), titulo, font=FONTE_TITULO, fill=(255, 255, 255))
-
-        draw.line([(LARGURA//4, 220), (3*LARGURA//4, 220)], fill=(255, 215, 0), width=6)
-
-        data_geracao = f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}"
-        try:
-            data_bbox = draw.textbbox((0, 0), data_geracao, font=FONTE_INFO)
-            data_w = data_bbox[2] - data_bbox[0]
-            draw.text(((LARGURA - data_w) // 2, 280), data_geracao, font=FONTE_INFO, fill=(150, 200, 255))
-        except:
-            draw.text((LARGURA//2 - 200, 280), data_geracao, font=FONTE_INFO, fill=(150, 200, 255))
-
-        y_pos = ALTURA_TOPO
-
-        for idx, jogo in enumerate(jogos_com_resultados):
-            x0, y0 = PADDING, y_pos
-            x1, y1 = LARGURA - PADDING, y_pos + ALTURA_POR_JOGO - 40
-            
-            if tipo_alerta == "over_under":
-                resultado = jogo.get("resultado", "PENDENTE")
-                resultado_text = "GREEN" if resultado == "GREEN" else "RED" if resultado == "RED" else "PENDENTE"
-            elif tipo_alerta == "favorito":
-                resultado = jogo.get("resultado_favorito", "PENDENTE")
-                resultado_text = "GREEN" if resultado == "GREEN" else "RED" if resultado == "RED" else "PENDENTE"
-            elif tipo_alerta == "gols_ht":
-                resultado = jogo.get("resultado_ht", "PENDENTE")
-                resultado_text = "GREEN" if resultado == "GREEN" else "RED" if resultado == "RED" else "PENDENTE"
-            elif tipo_alerta == "ambas_marcam":
-                resultado = jogo.get("resultado_ambas_marcam", "PENDENTE")
-                resultado_text = "GREEN" if resultado == "GREEN" else "RED" if resultado == "RED" else "PENDENTE"
-            else:
-                resultado_text = "PENDENTE"
-            
-            if resultado_text == "GREEN":
-                cor_badge = (46, 204, 113)
-                cor_borda = (46, 204, 113)
-                cor_fundo = (30, 50, 40)
-                cor_texto = (255, 255, 255)
-            elif resultado_text == "RED":
-                cor_badge = (231, 76, 60)
-                cor_borda = (231, 76, 60)
-                cor_fundo = (50, 30, 30)
-                cor_texto = (255, 255, 255)
-            else:
-                cor_badge = (149, 165, 166)
-                cor_borda = (149, 165, 166)
-                cor_fundo = (35, 35, 35)
-                cor_texto = (255, 255, 255)
-            
-            draw.rectangle([x0, y0, x1, y1], fill=cor_fundo, outline=cor_borda, width=4)
-
-            badge_width = 250
-            badge_height = 92
-            badge_x = x0 + 50
-            badge_y = y0 + 50
-            
-            draw.rectangle([badge_x, badge_y, badge_x + badge_width, badge_y + badge_height], 
-                          fill=cor_badge, outline=cor_badge, width=2)
-            
-            try:
-                badge_bbox = draw.textbbox((0, 0), resultado_text, font=FONTE_RESULTADO_BADGE)
-                badge_text_w = badge_bbox[2] - badge_bbox[0]
-                badge_text_h = badge_bbox[3] - badge_bbox[1]
-                badge_text_x = badge_x + (badge_width - badge_text_w) // 2
-                badge_text_y = badge_y + (badge_height - badge_text_h) // 2
-                
-                draw.text((badge_text_x + 2, badge_text_y + 2), resultado_text, 
-                         font=FONTE_RESULTADO_BADGE, fill=(0, 0, 0, 128))
-                
-                draw.text((badge_text_x, badge_text_y), resultado_text, 
-                         font=FONTE_RESULTADO_BADGE, fill=cor_texto)
-                
-                draw.rectangle([badge_x-2, badge_y-2, badge_x + badge_width + 2, badge_y + badge_height + 2], 
-                              outline=(255, 255, 255), width=1)
-                
-            except:
-                draw.text((badge_x + 80, badge_y + 25), resultado_text, 
-                         font=FONTE_RESULTADO_BADGE, fill=cor_texto)
-
-            liga_text = jogo['liga'].upper()
-            try:
-                liga_bbox = draw.textbbox((0, 0), liga_text, font=FONTE_SUBTITULO)
-                liga_w = liga_bbox[2] - liga_bbox[0]
-                draw.text(((LARGURA - liga_w) // 2, y0 + 40), liga_text, font=FONTE_SUBTITULO, fill=(200, 200, 200))
-            except:
-                draw.text((LARGURA//2 - 150, y0 + 40), liga_text, font=FONTE_SUBTITULO, fill=(200, 200, 200))
-
-            TAMANHO_ESCUDO = 200
-            TAMANHO_QUADRADO = 225
-            ESPACO_ENTRE_ESCUDOS = 700
-
-            largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
-            x_inicio = (LARGURA - largura_total) // 2
-
-            x_home = x_inicio
-            x_away = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
-            y_escudos = y0 + 150
-
-            home_crest_url = jogo.get('escudo_home', '')
-            away_crest_url = jogo.get('escudo_away', '')
-            
-            escudo_home_bytes = None
-            escudo_away_bytes = None
-            
-            if home_crest_url:
-                escudo_home_bytes = self.api_client.baixar_escudo_time(jogo['home'], home_crest_url)
-            
-            if away_crest_url:
-                escudo_away_bytes = self.api_client.baixar_escudo_time(jogo['away'], away_crest_url)
-            
-            escudo_home_img = None
-            escudo_away_img = None
-            
-            if escudo_home_bytes:
-                try:
-                    escudo_home_img = Image.open(io.BytesIO(escudo_home_bytes)).convert("RGBA")
-                except Exception as e:
-                    logging.error(f"Erro ao abrir escudo do {jogo['home']}: {e}")
-            
-            if escudo_away_bytes:
-                try:
-                    escudo_away_img = Image.open(io.BytesIO(escudo_away_bytes)).convert("RGBA")
-                except Exception as e:
-                    logging.error(f"Erro ao abrir escudo do {jogo['away']}: {e}")
-
-            self._desenhar_escudo_quadrado(draw, img, escudo_home_img, x_home, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo['home'])
-            self._desenhar_escudo_quadrado(draw, img, escudo_away_img, x_away, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo['away'])
-
-            home_text = jogo['home'][:12]
-            away_text = jogo['away'][:12]
-
-            try:
-                home_bbox = draw.textbbox((0, 0), home_text, font=FONTE_TIMES)
-                home_w = home_bbox[2] - home_bbox[0]
-                draw.text((x_home + (TAMANHO_QUADRADO - home_w)//2, y_escudos + TAMANHO_QUADRADO + 30),
-                         home_text, font=FONTE_TIMES, fill=(255, 255, 255))
-            except:
-                draw.text((x_home, y_escudos + TAMANHO_QUADRADO + 30),
-                         home_text, font=FONTE_TIMES, fill=(255, 255, 255))
-
-            try:
-                away_bbox = draw.textbbox((0, 0), away_text, font=FONTE_TIMES)
-                away_w = away_bbox[2] - away_bbox[0]
-                draw.text((x_away + (TAMANHO_QUADRADO - away_w)//2, y_escudos + TAMANHO_QUADRADO + 30),
-                         away_text, font=FONTE_TIMES, fill=(255, 255, 255))
-            except:
-                draw.text((x_away, y_escudos + TAMANHO_QUADRADO + 30),
-                         away_text, font=FONTE_TIMES, fill=(255, 255, 255))
-
-            resultado_text_score = f"{jogo.get('home_goals', '?')} - {jogo.get('away_goals', '?')}"
-            try:
-                resultado_bbox = draw.textbbox((0, 0), resultado_text_score, font=FONTE_RESULTADO)
-                resultado_w = resultado_bbox[2] - resultado_bbox[0]
-                resultado_x = x_home + TAMANHO_QUADRADO + (ESPACO_ENTRE_ESCUDOS - resultado_w) // 2
-                draw.text((resultado_x, y_escudos + TAMANHO_QUADRADO//2 - 40), 
-                         resultado_text_score, font=FONTE_RESULTADO, fill=(255, 255, 255))
-            except:
-                resultado_x = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS//2 - 60
-                draw.text((resultado_x, y_escudos + TAMANHO_QUADRADO//2 - 40), resultado_text_score, font=FONTE_RESULTADO, fill=(255, 255, 255))
-
-            if jogo.get('ht_home_goals') is not None and jogo.get('ht_away_goals') is not None:
-                ht_text = f"HT: {jogo['ht_home_goals']} - {jogo['ht_away_goals']}"
-                try:
-                    ht_bbox = draw.textbbox((0, 0), ht_text, font=FONTE_INFO)
-                    ht_w = ht_bbox[2] - ht_bbox[0]
-                    ht_x = x_home + TAMANHO_QUADRADO + (ESPACO_ENTRE_ESCUDOS - ht_w) // 2
-                    draw.text((ht_x, y_escudos + TAMANHO_QUADRADO//2 + 40), 
-                             ht_text, font=FONTE_INFO, fill=(200, 200, 200))
-                except:
-                    ht_x = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS//2 - 60
-                    draw.text((ht_x, y_escudos + TAMANHO_QUADRADO//2 + 40), ht_text, font=FONTE_INFO, fill=(200, 200, 200))
-
-            y_analysis = y_escudos + TAMANHO_QUADRADO + 120
-            
-            if tipo_alerta == "over_under":
-                tipo_emoji = "+" if jogo.get('tipo_aposta') == "over" else "-"
-                resultado_emoji = "" if resultado == "GREEN" else "❌" if resultado == "RED" else ""
-                
-                textos_analise = [
-                    f"{tipo_emoji} {jogo['tendencia']} {resultado_emoji}",
-                    f"Estimativa: {jogo['estimativa']:.2f} gols | Resultado: {jogo.get('home_goals', '?')} - {jogo.get('away_goals', '?')}",
-                    f"Probabilidade: {jogo['probabilidade']:.0f}% | Confiança: {jogo['confianca']:.0f}%",
-                ]
-                
-                cores = [(255, 255, 255), (200, 200, 200), (200, 200, 200)]
-                
-            elif tipo_alerta == "favorito":
-                favorito_emoji = "" if jogo.get('favorito') == "home" else "" if jogo.get('favorito') == "away" else "🤝"
-                favorito_text = jogo['home'] if jogo.get('favorito') == "home" else jogo['away'] if jogo.get('favorito') == "away" else "EMPATE"
-                resultado_emoji = "" if resultado == "GREEN" else "❌" if resultado == "RED" else ""
-                
-                textos_analise = [
-                    f"{favorito_emoji} FAVORITO: {favorito_text} {resultado_emoji}",
-                    f"Confiança: {jogo.get('confianca_vitoria', 0):.0f}% | Resultado: {jogo.get('home_goals', '?')} - {jogo.get('away_goals', '?')}",
-                    f"Prob. Casa: {jogo.get('prob_home_win', 0):.1f}% | Fora: {jogo.get('prob_away_win', 0):.1f}% | Empate: {jogo.get('prob_draw', 0):.1f}%",
-                ]
-                
-                cores = [(255, 255, 255), (200, 200, 200), (200, 200, 200)]
-                
-            elif tipo_alerta == "gols_ht":
-                tipo_emoji_ht = "" if "OVER" in jogo.get('tendencia_ht', '') else ""
-                resultado_emoji = "" if resultado == "GREEN" else "❌" if resultado == "RED" else ""
-                ht_resultado = f"{jogo.get('ht_home_goals', '?')} - {jogo.get('ht_away_goals', '?')}"
-                
-                textos_analise = [
-                    f"{tipo_emoji_ht} {jogo.get('tendencia_ht', 'N/A')} {resultado_emoji}",
-                    f"Estimativa HT: {jogo.get('estimativa_total_ht', 0):.2f} gols | Resultado HT: {ht_resultado}",
-                    f"Confiança HT: {jogo.get('confianca_ht', 0):.0f}% | FT: {jogo.get('home_goals', '?')} - {jogo.get('away_goals', '?')}",
-                ]
-                
-                cores = [(255, 255, 255), (200, 200, 200), (200, 200, 200)]
-            
-            elif tipo_alerta == "ambas_marcam":
-                tipo_emoji_am = "🤝" if jogo.get('tendencia_ambas_marcam') == "SIM" else "🚫"
-                resultado_emoji = "" if resultado == "GREEN" else "❌" if resultado == "RED" else ""
-                
-                textos_analise = [
-                    f"{tipo_emoji_am} AMBAS MARCAM: {jogo.get('tendencia_ambas_marcam', 'N/A')} {resultado_emoji}",
-                    f"Probabilidade SIM: {jogo.get('prob_ambas_marcam_sim', 0):.1f}% | NÃO: {jogo.get('prob_ambas_marcam_nao', 0):.1f}%",
-                    f"Confiança: {jogo.get('confianca_ambas_marcam', 0):.0f}% | Resultado: {jogo.get('home_goals', '?')} - {jogo.get('away_goals', '?')}",
-                ]
-                
-                cores = [(255, 255, 255), (200, 200, 200), (200, 200, 200)]
-            
-            else:
-                textos_analise = [f"Resultado: {resultado}"]
-                cores = [(200, 200, 200)]
-            
-            for i, (text, cor) in enumerate(zip(textos_analise, cores)):
-                try:
-                    bbox = draw.textbbox((0, 0), text, font=FONTE_ANALISE)
-                    w = bbox[2] - bbox[0]
-                    draw.text(((LARGURA - w) // 2, y_analysis + i * 80), text, font=FONTE_ANALISE, fill=cor)
-                except:
-                    draw.text((PADDING + 120, y_analysis + i * 80), text, font=FONTE_ANALISE, fill=cor)
-
-            y_pos += ALTURA_POR_JOGO
-
-        rodape_text = "ELITE MASTER SYSTEM 3.0 - ANÁLISE PREDITIVA DE RESULTADOS"
-        try:
-            rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_DETALHES)
-            rodape_w = rodape_bbox[2] - rodape_bbox[0]
-            draw.text(((LARGURA - rodape_w) // 2, altura_total - 70), rodape_text, font=FONTE_DETALHES, fill=(100, 130, 160))
-        except:
-            draw.text((LARGURA//2 - 300, altura_total - 70), rodape_text, font=FONTE_DETALHES, fill=(100, 130, 160))
-
-        buffer = io.BytesIO()
-        img.save(buffer, format="PNG", optimize=True, quality=95)
-        buffer.seek(0)
-        
-        st.success(f"✅ Poster de resultados GERADO com {len(jogos_com_resultados)} jogos")
-        return buffer
-
-    # =============================
-    # NOVOS MÉTODOS PARA MÚLTIPLAS PRO
-    # =============================
-    
-    def gerar_poster_multipla_pro(self, multipla: dict, titulo: str = "💣 MÚLTIPLA PRO") -> io.BytesIO:
-        """Gera pôster para múltipla Pro com horário dos jogos"""
-        LARGURA = 2000
-        ALTURA_TOPO = 360
-        ALTURA_POR_JOGO = 550
-        PADDING = 80
-        
-        jogos = multipla.get("jogos", [])
-        jogos_count = len(jogos)
-        altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
-
-        img = Image.new("RGB", (LARGURA, altura_total), color=(10, 20, 30))
-        draw = ImageDraw.Draw(img)
-
-        FONTE_TITULO = self.criar_fonte(85)
-        FONTE_SUBTITULO = self.criar_fonte(60)
-        FONTE_TIMES = self.criar_fonte(52)
-        FONTE_VS = self.criar_fonte(48)
-        FONTE_INFO = self.criar_fonte(40)
-        FONTE_HORA = self.criar_fonte(38)
-        FONTE_ANALISE = self.criar_fonte(55)
-        FONTE_ODD = self.criar_fonte(55)
-        FONTE_TOTAL = self.criar_fonte(65)
-        FONTE_DETALHES = self.criar_fonte(35)
-
-        # Título principal
-        titulo_text = f"{titulo} - {multipla.get('tipo', 'MÚLTIPLA')}"
-        try:
-            titulo_bbox = draw.textbbox((0, 0), titulo_text, font=FONTE_TITULO)
-            titulo_w = titulo_bbox[2] - titulo_bbox[0]
-            draw.text(((LARGURA - titulo_w) // 2, 70), titulo_text, font=FONTE_TITULO, fill=(255, 215, 0))
-        except:
-            draw.text((LARGURA//2 - 300, 70), titulo_text, font=FONTE_TITULO, fill=(255, 215, 0))
-
-        # Composição
-        over_1_5 = multipla.get('over_1.5_count', 0)
-        over_2_5 = multipla.get('over_2.5_count', 0)
-        composicao = f"{over_1_5}x Over 1.5 + {over_2_5}x Over 2.5"
-        try:
-            comp_bbox = draw.textbbox((0, 0), composicao, font=FONTE_SUBTITULO)
-            comp_w = comp_bbox[2] - comp_bbox[0]
-            draw.text(((LARGURA - comp_w) // 2, 160), composicao, font=FONTE_SUBTITULO, fill=(200, 200, 200))
-        except:
-            draw.text((LARGURA//2 - 250, 160), composicao, font=FONTE_SUBTITULO, fill=(200, 200, 200))
-
-        # Odd Total
-        odd_total = multipla.get('odd_total', 0)
-        odd_text = f"ODDS TOTAL: {odd_total:.2f}"
-        try:
-            odd_bbox = draw.textbbox((0, 0), odd_text, font=FONTE_TOTAL)
-            odd_w = odd_bbox[2] - odd_bbox[0]
-            draw.text(((LARGURA - odd_w) // 2, 240), odd_text, font=FONTE_TOTAL, fill=(100, 255, 100))
-        except:
-            draw.text((LARGURA//2 - 200, 240), odd_text, font=FONTE_TOTAL, fill=(100, 255, 100))
-
-        # Risco e Score
-        risco = multipla.get('risco', 'MÉDIO')
-        score_medio = multipla.get('score_medio', 0)
-        info_text = f"⚠️ Risco: {risco} | 📊 Score Médio: {score_medio:.1f}"
-        try:
-            info_bbox = draw.textbbox((0, 0), info_text, font=FONTE_INFO)
-            info_w = info_bbox[2] - info_bbox[0]
-            draw.text(((LARGURA - info_w) // 2, 300), info_text, font=FONTE_INFO, fill=(150, 200, 255))
-        except:
-            draw.text((LARGURA//2 - 250, 300), info_text, font=FONTE_INFO, fill=(150, 200, 255))
-
-        draw.line([(LARGURA//4, 340), (3*LARGURA//4, 340)], fill=(255, 215, 0), width=4)
-
-        y_pos = ALTURA_TOPO
-
-        for idx, jogo in enumerate(jogos):
-            x0, y0 = PADDING, y_pos
-            x1, y1 = LARGURA - PADDING, y_pos + ALTURA_POR_JOGO - 40
-            
-            mercado = jogo.get('mercado', 'Over 1.5')
-            cor_borda = (255, 215, 0) if "OVER 1.5" in mercado.upper() else (255, 193, 7)
-            
-            draw.rectangle([x0, y0, x1, y1], fill=(25, 35, 45), outline=cor_borda, width=4)
-
-            # Odd do jogo
-            odd_jogo = jogo.get('odd', 1.35)
-            odd_text = f"{odd_jogo:.2f}"
-            
-            try:
-                odd_bbox = draw.textbbox((0, 0), odd_text, font=FONTE_ODD)
-                odd_w = odd_bbox[2] - odd_bbox[0]
-                
-                odd_x = x1 - odd_w - 40
-                odd_y = y0 + 40
-                
-                fundo_x0 = odd_x - 15
-                fundo_y0 = odd_y - 10
-                fundo_x1 = odd_x + odd_w + 15
-                fundo_y1 = odd_y + 50
-                
-                overlay = Image.new('RGBA', img.size, (0,0,0,0))
-                overlay_draw = ImageDraw.Draw(overlay)
-                overlay_draw.rectangle([fundo_x0, fundo_y0, fundo_x1, fundo_y1], fill=(0, 0, 0, 200))
-                img.paste(overlay, (0,0), overlay)
-                
-                draw.rectangle([fundo_x0, fundo_y0, fundo_x1, fundo_y1], outline=cor_borda, width=3)
-                draw.text((odd_x, odd_y), odd_text, font=FONTE_ODD, fill=cor_borda)
-                
-            except:
-                odd_x = x1 - 150
-                odd_y = y0 + 40
-                draw.text((odd_x, odd_y), odd_text, font=FONTE_ODD, fill=cor_borda)
-
-            # Score do jogo
-            score_jogo = jogo.get('score', 0)
-            score_text = f"Score: {score_jogo:.0f}"
-            try:
-                score_bbox = draw.textbbox((0, 0), score_text, font=FONTE_INFO)
-                score_w = score_bbox[2] - score_bbox[0]
-                draw.text((x1 - score_w - 40, y0 + 110), score_text, font=FONTE_INFO, fill=(100, 255, 100))
-            except:
-                draw.text((x1 - 150, y0 + 110), score_text, font=FONTE_INFO, fill=(100, 255, 100))
-
-            # Liga
-            liga_text = jogo.get('liga', 'LIGA').upper()
-            try:
-                liga_bbox = draw.textbbox((0, 0), liga_text, font=FONTE_INFO)
-                liga_w = liga_bbox[2] - liga_bbox[0]
-                draw.text(((LARGURA - liga_w) // 2, y0 + 35), liga_text, font=FONTE_INFO, fill=(200, 200, 200))
-            except:
-                draw.text((LARGURA//2 - 150, y0 + 35), liga_text, font=FONTE_INFO, fill=(200, 200, 200))
-
-            # Data e Hora do jogo (fuso brasileiro)
-            hora_jogo = jogo.get('hora')
-            if hora_jogo and isinstance(hora_jogo, datetime):
-                data_hora_text = hora_jogo.strftime("%d/%m/%Y %H:%M")
-            else:
-                data_hora_text = jogo.get('hora', 'Data não disponível')
-            
-            try:
-                data_bbox = draw.textbbox((0, 0), data_hora_text, font=FONTE_HORA)
-                data_w = data_bbox[2] - data_bbox[0]
-                draw.text(((LARGURA - data_w) // 2, y0 + 90), data_hora_text, font=FONTE_HORA, fill=(150, 200, 255))
-            except:
-                draw.text((LARGURA//2 - 150, y0 + 90), data_hora_text, font=FONTE_HORA, fill=(150, 200, 255))
-
-            # Escudos e times
-            TAMANHO_ESCUDO = 130
-            TAMANHO_QUADRADO = 150
-            ESPACO_ENTRE_ESCUDOS = 650
-
-            largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
-            x_inicio = (LARGURA - largura_total) // 2
-
-            x_home = x_inicio
-            x_away = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
-            y_escudos = y0 + 150
-
-            escudo_home_bytes = self.api_client.baixar_escudo_time(jogo.get('home', ''), jogo.get('escudo_home', ''))
-            escudo_away_bytes = self.api_client.baixar_escudo_time(jogo.get('away', ''), jogo.get('escudo_away', ''))
-            
-            escudo_home_img = Image.open(io.BytesIO(escudo_home_bytes)).convert("RGBA") if escudo_home_bytes else None
-            escudo_away_img = Image.open(io.BytesIO(escudo_away_bytes)).convert("RGBA") if escudo_away_bytes else None
-
-            self._desenhar_escudo_quadrado(draw, img, escudo_home_img, x_home, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo.get('home', ''))
-            self._desenhar_escudo_quadrado(draw, img, escudo_away_img, x_away, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo.get('away', ''))
-
-            home_text = jogo.get('home', 'TIME CASA')[:18]
-            away_text = jogo.get('away', 'TIME FORA')[:18]
-
-            try:
-                home_bbox = draw.textbbox((0, 0), home_text, font=FONTE_TIMES)
-                home_w = home_bbox[2] - home_bbox[0]
-                draw.text((x_home + (TAMANHO_QUADRADO - home_w)//2, y_escudos + TAMANHO_QUADRADO + 20),
-                         home_text, font=FONTE_TIMES, fill=(255, 255, 255))
-            except:
-                draw.text((x_home, y_escudos + TAMANHO_QUADRADO + 20), home_text, font=FONTE_TIMES, fill=(255, 255, 255))
-
-            try:
-                away_bbox = draw.textbbox((0, 0), away_text, font=FONTE_TIMES)
-                away_w = away_bbox[2] - away_bbox[0]
-                draw.text((x_away + (TAMANHO_QUADRADO - away_w)//2, y_escudos + TAMANHO_QUADRADO + 20),
-                         away_text, font=FONTE_TIMES, fill=(255, 255, 255))
-            except:
-                draw.text((x_away, y_escudos + TAMANHO_QUADRADO + 20), away_text, font=FONTE_TIMES, fill=(255, 255, 255))
-
-            try:
-                vs_bbox = draw.textbbox((0, 0), "VS", font=FONTE_VS)
-                vs_w = vs_bbox[2] - vs_bbox[0]
-                vs_x = x_home + TAMANHO_QUADRADO + (ESPACO_ENTRE_ESCUDOS - vs_w) // 2
-                draw.text((vs_x, y_escudos + TAMANHO_QUADRADO//2 - 15), "VS", font=FONTE_VS, fill=(255, 215, 0))
-            except:
-                vs_x = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS//2 - 30
-                draw.text((vs_x, y_escudos + TAMANHO_QUADRADO//2 - 15), "VS", font=FONTE_VS, fill=(255, 215, 0))
-
-            # Mercado
-            y_analysis = y_escudos + TAMANHO_QUADRADO + 100
-            draw.line([(x0 + 80, y_analysis - 10), (x1 - 80, y_analysis - 10)], fill=(100, 130, 160), width=2)
-            
-            emoji = "" if "OVER 1.5" in mercado.upper() else ""
-            text_analise = f"{emoji} {mercado}"
-            try:
-                analise_bbox = draw.textbbox((0, 0), text_analise, font=FONTE_ANALISE)
-                analise_w = analise_bbox[2] - analise_bbox[0]
-                draw.text(((LARGURA - analise_w) // 2, y_analysis + 20), text_analise, font=FONTE_ANALISE, fill=cor_borda)
-            except:
-                draw.text((LARGURA//2 - 150, y_analysis + 20), text_analise, font=FONTE_ANALISE, fill=cor_borda)
-
-            y_pos += ALTURA_POR_JOGO
-
-        # Rodapé
-        rodape_text = f"GERADO EM {datetime.now().strftime('%d/%m/%Y %H:%M')} | ELITE MASTER PRO"
-        try:
-            rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_DETALHES)
-            rodape_w = rodape_bbox[2] - rodape_bbox[0]
-            draw.text(((LARGURA - rodape_w) // 2, altura_total - 70), rodape_text, font=FONTE_DETALHES, fill=(100, 130, 160))
-        except:
-            draw.text((LARGURA//2 - 350, altura_total - 70), rodape_text, font=FONTE_DETALHES, fill=(100, 130, 160))
-
-        buffer = io.BytesIO()
-        img.save(buffer, format="PNG", optimize=True, quality=95)
-        buffer.seek(0)
-        
-        return buffer
-
-    def gerar_poster_resultado_multipla_pro(self, multipla: dict, data_br: str) -> io.BytesIO:
-        """Gera pôster para resultado de múltipla Pro"""
-        LARGURA = 2000
-        ALTURA_TOPO = 320
-        ALTURA_POR_JOGO = 580
-        PADDING = 80
-        
-        jogos_conferidos = multipla.get("jogos_conferidos", [])
-        jogos_count = len(jogos_conferidos)
-        altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
-
-        img = Image.new("RGB", (LARGURA, altura_total), color=(10, 20, 30))
-        draw = ImageDraw.Draw(img)
-
-        FONTE_TITULO = self.criar_fonte(80)
-        FONTE_SUBTITULO = self.criar_fonte(55)
-        FONTE_TIMES = self.criar_fonte(50)
-        FONTE_VS = self.criar_fonte(45)
-        FONTE_INFO = self.criar_fonte(40)
-        FONTE_RESULTADO = self.criar_fonte(65)
-        FONTE_TOTAL = self.criar_fonte(60)
-        FONTE_DETALHES = self.criar_fonte(35)
-
-        acertada = multipla.get("acertada", False)
-        odd_total = multipla.get("odd_total", 0)
-        tipo = multipla.get("tipo", "MÚLTIPLA")
-        
-        titulo = f"📊 RESULTADO MÚLTIPLA PRO - {data_br}"
-        try:
-            titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
-            titulo_w = titulo_bbox[2] - titulo_bbox[0]
-            draw.text(((LARGURA - titulo_w) // 2, 60), titulo, font=FONTE_TITULO, fill=(255, 255, 255))
-        except:
-            draw.text((LARGURA//2 - 300, 60), titulo, font=FONTE_TITULO, fill=(255, 255, 255))
-
-        # Badge de resultado
-        if acertada:
-            cor_badge = (46, 204, 113)
-            resultado_text = "✅ ACERTOU!"
-            badge_bg = (30, 70, 40)
-        else:
-            cor_badge = (231, 76, 60)
-            resultado_text = "❌ ERROU!"
-            badge_bg = (70, 40, 40)
-        
-        badge_width = 350
-        badge_height = 90
-        badge_x = (LARGURA - badge_width) // 2
-        badge_y = 150
-        
-        draw.rectangle([badge_x, badge_y, badge_x + badge_width, badge_y + badge_height], 
-                      fill=badge_bg, outline=cor_badge, width=4)
-        
-        try:
-            badge_bbox = draw.textbbox((0, 0), resultado_text, font=FONTE_TITULO)
-            badge_w = badge_bbox[2] - badge_bbox[0]
-            badge_h = badge_bbox[3] - badge_bbox[1]
-            badge_x_center = badge_x + (badge_width - badge_w) // 2
-            badge_y_center = badge_y + (badge_height - badge_h) // 2
-            draw.text((badge_x_center, badge_y_center), resultado_text, font=FONTE_TITULO, fill=cor_badge)
-        except:
-            draw.text((badge_x + 100, badge_y + 25), resultado_text, font=FONTE_TITULO, fill=cor_badge)
-        
-        # Informações da múltipla
-        info_text = f"{tipo} | Odds Total: {odd_total:.2f}"
-        try:
-            info_bbox = draw.textbbox((0, 0), info_text, font=FONTE_SUBTITULO)
-            info_w = info_bbox[2] - info_bbox[0]
-            draw.text(((LARGURA - info_w) // 2, 260), info_text, font=FONTE_SUBTITULO, fill=(200, 200, 200))
-        except:
-            draw.text((LARGURA//2 - 250, 260), info_text, font=FONTE_SUBTITULO, fill=(200, 200, 200))
-
-        draw.line([(LARGURA//4, 310), (3*LARGURA//4, 310)], fill=(255, 215, 0), width=4)
-
-        y_pos = ALTURA_TOPO + 50
-
-        for idx, jogo in enumerate(jogos_conferidos):
-            x0, y0 = PADDING, y_pos
-            x1, y1 = LARGURA - PADDING, y_pos + ALTURA_POR_JOGO - 40
-            
-            resultado = jogo.get("resultado", "RED")
-            cor_borda = (46, 204, 113) if resultado == "GREEN" else (231, 76, 60)
-            
-            draw.rectangle([x0, y0, x1, y1], fill=(25, 35, 45), outline=cor_borda, width=4)
-
-            # Badge de resultado do jogo
-            badge_jogo_width = 120
-            badge_jogo_height = 50
-            badge_jogo_x = x1 - badge_jogo_width - 40
-            badge_jogo_y = y0 + 25
-            
-            resultado_jogo = "✅" if resultado == "GREEN" else "❌"
-            cor_jogo = (46, 204, 113) if resultado == "GREEN" else (231, 76, 60)
-            
-            draw.rectangle([badge_jogo_x, badge_jogo_y, badge_jogo_x + badge_jogo_width, badge_jogo_y + badge_jogo_height], 
-                          fill=cor_jogo, outline=(255, 255, 255), width=2)
-            
-            try:
-                badge_bbox = draw.textbbox((0, 0), resultado_jogo, font=FONTE_INFO)
-                badge_w = badge_bbox[2] - badge_bbox[0]
-                badge_x_center = badge_jogo_x + (badge_jogo_width - badge_w) // 2
-                draw.text((badge_x_center, badge_jogo_y + 12), resultado_jogo, font=FONTE_INFO, fill=(255, 255, 255))
-            except:
-                draw.text((badge_jogo_x + 45, badge_jogo_y + 12), resultado_jogo, font=FONTE_INFO, fill=(255, 255, 255))
-
-            # Times
-            TAMANHO_ESCUDO = 110
-            TAMANHO_QUADRADO = 130
-            ESPACO_ENTRE_ESCUDOS = 480
-
-            largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
-            x_inicio = (LARGURA - largura_total) // 2
-
-            x_home = x_inicio
-            x_away = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS
-            y_escudos = y0 + 60
-
-            home_crest_url = jogo.get('escudo_home', '')
-            away_crest_url = jogo.get('escudo_away', '')
-            
-            escudo_home_bytes = self.api_client.baixar_escudo_time(jogo.get('home', ''), home_crest_url)
-            escudo_away_bytes = self.api_client.baixar_escudo_time(jogo.get('away', ''), away_crest_url)
-            
-            escudo_home_img = Image.open(io.BytesIO(escudo_home_bytes)).convert("RGBA") if escudo_home_bytes else None
-            escudo_away_img = Image.open(io.BytesIO(escudo_away_bytes)).convert("RGBA") if escudo_away_bytes else None
-
-            self._desenhar_escudo_quadrado(draw, img, escudo_home_img, x_home, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo.get('home', ''))
-            self._desenhar_escudo_quadrado(draw, img, escudo_away_img, x_away, y_escudos, TAMANHO_QUADRADO, TAMANHO_ESCUDO, jogo.get('away', ''))
-
-            home_text = jogo.get('home', '')[:15]
-            away_text = jogo.get('away', '')[:15]
-
-            try:
-                home_bbox = draw.textbbox((0, 0), home_text, font=FONTE_TIMES)
-                home_w = home_bbox[2] - home_bbox[0]
-                draw.text((x_home + (TAMANHO_QUADRADO - home_w)//2, y_escudos + TAMANHO_QUADRADO + 15),
-                         home_text, font=FONTE_TIMES, fill=(255, 255, 255))
-            except:
-                draw.text((x_home, y_escudos + TAMANHO_QUADRADO + 15), home_text, font=FONTE_TIMES, fill=(255, 255, 255))
-
-            try:
-                away_bbox = draw.textbbox((0, 0), away_text, font=FONTE_TIMES)
-                away_w = away_bbox[2] - away_bbox[0]
-                draw.text((x_away + (TAMANHO_QUADRADO - away_w)//2, y_escudos + TAMANHO_QUADRADO + 15),
-                         away_text, font=FONTE_TIMES, fill=(255, 255, 255))
-            except:
-                draw.text((x_away, y_escudos + TAMANHO_QUADRADO + 15), away_text, font=FONTE_TIMES, fill=(255, 255, 255))
-
-            # Placar
-            resultado_score = f"{jogo.get('home_goals', '?')} - {jogo.get('away_goals', '?')}"
-            try:
-                score_bbox = draw.textbbox((0, 0), resultado_score, font=FONTE_RESULTADO)
-                score_w = score_bbox[2] - score_bbox[0]
-                score_x = x_home + TAMANHO_QUADRADO + (ESPACO_ENTRE_ESCUDOS - score_w) // 2
-                draw.text((score_x, y_escudos + TAMANHO_QUADRADO//2 - 20), 
-                         resultado_score, font=FONTE_RESULTADO, fill=(255, 255, 255))
-            except:
-                score_x = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE_ESCUDOS//2 - 50
-                draw.text((score_x, y_escudos + TAMANHO_QUADRADO//2 - 20), 
-                         resultado_score, font=FONTE_RESULTADO, fill=(255, 255, 255))
-
-            # Mercado
-            mercado_text = jogo.get('mercado', '')
-            try:
-                mercado_bbox = draw.textbbox((0, 0), mercado_text, font=FONTE_INFO)
-                mercado_w = mercado_bbox[2] - mercado_bbox[0]
-                draw.text(((LARGURA - mercado_w) // 2, y_escudos + TAMANHO_QUADRADO + 70), 
-                         mercado_text, font=FONTE_INFO, fill=(150, 200, 255))
-            except:
-                draw.text((LARGURA//2 - 100, y_escudos + TAMANHO_QUADRADO + 70), 
-                         mercado_text, font=FONTE_INFO, fill=(150, 200, 255))
-
-            y_pos += ALTURA_POR_JOGO
-
-        # Rodapé
-        rodape_text = f"CONFERIDO EM {datetime.now().strftime('%d/%m/%Y %H:%M')} | ELITE MASTER PRO"
-        try:
-            rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_DETALHES)
-            rodape_w = rodape_bbox[2] - rodape_bbox[0]
-            draw.text(((LARGURA - rodape_w) // 2, altura_total - 70), rodape_text, font=FONTE_DETALHES, fill=(100, 130, 160))
-        except:
-            draw.text((LARGURA//2 - 300, altura_total - 70), rodape_text, font=FONTE_DETALHES, fill=(100, 130, 160))
-
-        buffer = io.BytesIO()
-        img.save(buffer, format="PNG", optimize=True, quality=95)
-        buffer.seek(0)
-        
-        return buffer
-
-    def _desenhar_escudo_quadrado(self, draw, img, logo_img, x, y, tamanho_quadrado, tamanho_escudo, team_name=""):
-        draw.rectangle(
-            [x, y, x + tamanho_quadrado, y + tamanho_quadrado],
-            fill=(255, 255, 255),
-            outline=(255, 255, 255)
-        )
-
-        if logo_img is None:
-            draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(60, 60, 60))
-            
-            if team_name:
-                iniciais = ''.join([palavra[0].upper() for palavra in team_name.split()[:2]])
-                if len(iniciais) > 3:
-                    iniciais = iniciais[:3]
-            else:
-                iniciais = "SEM"
-            
-            try:
-                fonte = self.criar_fonte(50)
-                bbox = draw.textbbox((0, 0), iniciais, font=fonte)
-                w = bbox[2] - bbox[0]
-                h = bbox[3] - bbox[1]
-                draw.text((x + (tamanho_quadrado - w)//2, y + (tamanho_quadrado - h)//2), 
-                         iniciais, font=fonte, fill=(255, 255, 255))
-            except:
-                draw.text((x + 70, y + 90), iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
-            return
-
-        try:
-            logo_img = logo_img.convert("RGBA")
-            largura, altura = logo_img.size
-            
-            proporcao = largura / altura
-            
-            if proporcao > 1:
-                nova_altura = tamanho_escudo
-                nova_largura = int(tamanho_escudo * proporcao)
-                if nova_largura > tamanho_escudo:
-                    nova_largura = tamanho_escudo
-                    nova_altura = int(tamanho_escudo / proporcao)
-            else:
-                nova_largura = tamanho_escudo
-                nova_altura = int(tamanho_escudo / proporcao)
-                if nova_altura > tamanho_escudo:
-                    nova_altura = tamanho_escudo
-                    nova_largura = int(tamanho_escudo * proporcao)
-            
-            imagem_redimensionada = logo_img.resize((nova_largura, nova_altura), Image.Resampling.LANCZOS)
-            
-            pos_x = x + (tamanho_quadrado - nova_largura) // 2
-            pos_y = y + (tamanho_quadrado - nova_altura) // 2
-
-            fundo = Image.new("RGBA", (tamanho_quadrado, tamanho_quadrado), (255, 255, 255, 255))
-            fundo.paste(imagem_redimensionada, (pos_x - x, pos_y - y), imagem_redimensionada)
-            
-            img.paste(fundo, (x, y), fundo)
-
-        except Exception as e:
-            logging.error(f"Erro ao processar escudo de {team_name}: {e}")
-            draw.rectangle([x, y, x + tamanho_quadrado, y + tamanho_quadrado], fill=(100, 100, 100))
-            
-            if team_name:
-                iniciais = ''.join([palavra[0].upper() for palavra in team_name.split()[:2]])
-                if len(iniciais) > 3:
-                    iniciais = iniciais[:3]
-            else:
-                iniciais = "ERR"
-            
-            try:
-                fonte = self.criar_fonte(50)
-                bbox = draw.textbbox((0, 0), iniciais, font=fonte)
-                w = bbox[2] - bbox[0]
-                h = bbox[3] - bbox[1]
-                draw.text((x + (tamanho_quadrado - w)//2, y + (tamanho_quadrado - h)//2), 
-                         iniciais, font=fonte, fill=(255, 255, 255))
-            except:
-                draw.text((x + 70, y + 90), iniciais, font=self.criar_fonte(50), fill=(255, 255, 255))
-
-
-# =============================
-# NOVA CLASSE: GERENCIADOR DE MÚLTIPLAS PRO
-# =============================
-
 class GerenciadorMultiplasPro:
     """Gerencia múltiplas Pro com armazenamento e conferência"""
     
@@ -5386,7 +4196,6 @@ class GerenciadorMultiplasPro:
             multipla["data_conferencia"] = datetime.now().isoformat()
             multipla["resultado"] = "GREEN" if multipla_acertada else "RED"
             
-            # Salvar resultado
             resultados = self.carregar_resultados()
             resultados[multipla_id] = {
                 "id": multipla_id,
@@ -5399,7 +4208,6 @@ class GerenciadorMultiplasPro:
             }
             self._salvar_resultados(resultados)
             
-            # Atualizar múltipla
             multiplas[multipla_id] = multipla
             self._salvar_multiplas(multiplas)
             
@@ -5920,18 +4728,12 @@ class GerenciadorAlertasCompletos:
                                              limiares: dict = None,
                                              score_minimo: int = 6,
                                              mostrar_estatisticas: bool = True):
-        """
-        Processa os jogos com o SISTEMA AUTÔNOMO DE APOSTAS 2.0 + GERADOR DE MÚLTIPLAS 3.0
-        Com opção de enviar múltiplas como texto ou pôster
-        """
         if not jogos_analisados:
             return False
 
         st.markdown("### 🤖 SISTEMA AUTÔNOMO DE APOSTAS 3.0 + GERADOR DE MÚLTIPLAS")
         st.markdown("**Decisão automática por mercado** com classificação A/B/C e geração profissional de múltiplas")
         
-        # Opção de envio para múltiplas
-        st.markdown("### 📨 Opções de Envio de Múltiplas")
         col1, col2 = st.columns(2)
         with col1:
             enviar_multiplas = st.checkbox("📤 Enviar Múltiplas", value=True, key="enviar_multiplas_opcao")
@@ -5942,7 +4744,6 @@ class GerenciadorAlertasCompletos:
                 key="formato_multipla"
             )
         
-        # Opção para aliviar envios (evitar spam)
         aliviar_envios = st.checkbox(
             "🌙 Modo Aliviado (enviar apenas múltipla principal - HÍBRIDO)", 
             value=False,
@@ -5999,13 +4800,11 @@ class GerenciadorAlertasCompletos:
                 multiplas_para_enviar = []
                 
                 if aliviar_envios:
-                    # Enviar apenas a múltipla HÍBRIDA (principal)
                     multipla_hibrida = next((m for m in multiplas if m["modelo"] == "🔥 HÍBRIDO (PROFISSIONAL)"), None)
                     if multipla_hibrida:
                         multiplas_para_enviar.append(multipla_hibrida)
                         st.info("🌙 Modo Aliviado ativado - Enviando apenas a múltipla HÍBRIDA (principal)")
                     else:
-                        # Se não encontrar híbrida, envia a primeira disponível
                         multiplas_para_enviar.append(multiplas[0])
                         st.info("🌙 Modo Aliviado ativado - Enviando a primeira múltipla disponível")
                 else:
@@ -6016,7 +4815,7 @@ class GerenciadorAlertasCompletos:
                         st.markdown(self.gerador_multiplas.gerar_texto_multipla(multipla))
                     
                     self._enviar_multipla_telegram_v2(multipla, data_busca, formato_multipla)
-                    time.sleep(2)  # Pequena pausa entre envios
+                    time.sleep(2)
             else:
                 for idx, multipla in enumerate(multiplas, 1):
                     with st.expander(f"💣 MÚLTIPLA {idx} - {multipla['modelo']} (Odds: {multipla['odd_total']:.2f})"):
@@ -6027,7 +4826,6 @@ class GerenciadorAlertasCompletos:
         return True
     
     def _enviar_multipla_telegram_v2(self, multipla: dict, data_busca: str, formato: str):
-        """Envia a múltipla para o Telegram com formato escolhido (texto ou pôster)"""
         try:
             data_br = datetime.strptime(data_busca, "%Y-%m-%d").strftime("%d/%m/%Y")
             
@@ -6372,7 +5170,6 @@ class GerenciadorAlertasCompletos:
             st.info("⏳ Nenhuma múltipla completamente finalizada ainda.")
     
     def _enviar_resultado_multipla_v2(self, multipla: dict):
-        """Envia o resultado da múltipla com pôster West Ham"""
         try:
             jogos = multipla["jogos_conferidos"]
             acertada = multipla.get("acertada", False)
@@ -6380,7 +5177,6 @@ class GerenciadorAlertasCompletos:
             odd_total = multipla["odd_total"]
             data_br = datetime.now().strftime("%d/%m/%Y")
             
-            # Gerar pôster para resultado da múltipla
             poster = self.poster_generator.gerar_poster_resultado_multipla(multipla, data_br)
             
             if acertada:
@@ -6402,7 +5198,6 @@ class GerenciadorAlertasCompletos:
                 st.success(f"📤 Resultado da múltipla {modelo} enviado com pôster!")
                 return True
             else:
-                # Fallback para texto
                 texto = f"<b>{titulo}</b>\n\n"
                 texto += f"{emoji} <b>RESULTADO:</b> {'Acertou' if acertada else 'Errou'}\n"
                 texto += f"📊 <b>JOGOS:</b> {len(jogos)}\n"
@@ -8259,10 +7054,6 @@ class SistemaAlertasFutebol:
         return arquivos_removidos
 
 
-# =============================
-# FUNÇÃO RENDER_TAB_MULTIPLAS_PRO ATUALIZADA
-# =============================
-
 def render_tab_multiplas_pro(sistema):
     st.subheader("🧠 MÚLTIPLAS PRO - SISTEMA AUTÔNOMO")
     st.caption("Gera múltiplas inteligentes com score de qualidade, filtro anti-armadilha e balanceamento de risco. As múltiplas são salvas para conferência futura.")
@@ -8415,7 +7206,6 @@ def render_tab_multiplas_pro(sistema):
                 st.warning("⚠️ Nenhum jogo aprovado após filtros de score.")
                 return
 
-            # Filtrar por score mínimo e máximo
             jogos_finais = [j for j in jogos_selecionados if score_minimo <= j['score'] <= score_maximo]
 
             if not jogos_finais:
@@ -8448,7 +7238,6 @@ def render_tab_multiplas_pro(sistema):
             for idx, (tipo, jogos_mult) in enumerate(multiplas):
                 odd_total = calcular_odd_total(jogos_mult)
                 
-                # Calcular contagens
                 over_1_5_count = sum(1 for j in jogos_mult if "OVER 1.5" in j.get('mercado', '').upper())
                 over_2_5_count = sum(1 for j in jogos_mult if "OVER 2.5" in j.get('mercado', '').upper())
                 score_medio = sum(j.get('score', 0) for j in jogos_mult) / len(jogos_mult) if jogos_mult else 0
@@ -8460,7 +7249,6 @@ def render_tab_multiplas_pro(sistema):
                 if enviar_multiplas_tg:
                     data_br_str = data_selecionada.strftime("%d/%m/%Y")
                     
-                    # Preparar estrutura da múltipla
                     multipla_struct = {
                         "id": f"pro_{tipo}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
                         "tipo": tipo,
@@ -8473,9 +7261,7 @@ def render_tab_multiplas_pro(sistema):
                         "data_busca": hoje
                     }
                     
-                    # Adicionar jogos à estrutura
                     for j in jogos_mult:
-                        # Extrair home e away do nome do jogo
                         if ' vs ' in j['jogo']:
                             home, away = j['jogo'].split(' vs ')
                         else:
@@ -8495,7 +7281,6 @@ def render_tab_multiplas_pro(sistema):
                         }
                         multipla_struct["jogos"].append(jogo_dict)
                     
-                    # Salvar múltipla para conferência futura
                     multipla_id = sistema.gerenciador_multiplas_pro.salvar_multipla(multipla_struct)
                     multiplas_salvas.append(multipla_id)
                     
@@ -8529,12 +7314,10 @@ def render_tab_multiplas_pro(sistema):
 
             st.success("✅ Processamento concluído!")
 
-    # Seção de conferência de múltiplas
     st.markdown("---")
     st.subheader("📊 CONFERÊNCIA DE MÚLTIPLAS PRO")
     st.caption("Confere os resultados das múltiplas geradas. O alerta só é enviado quando TODOS os jogos estiverem encerrados.")
 
-    # Botão para conferir múltiplas pendentes
     if st.button("🔄 CONFERIR MÚLTIPLAS PENDENTES", use_container_width=True):
         with st.spinner("Conferindo múltiplas pendentes..."):
             resultados = sistema.gerenciador_multiplas_pro.conferir_todas_multiplas_pendentes(sistema.api_client)
@@ -8551,16 +7334,13 @@ def render_tab_multiplas_pro(sistema):
                     else:
                         st.error(f"❌ Múltipla {multipla.get('tipo', '')} - ERROU! (Odds: {multipla.get('odd_total', 0):.2f})")
                     
-                    # Mostrar resultados dos jogos
                     for jogo in res.get("jogos_conferidos", []):
                         emoji = "✅" if jogo.get("resultado") == "GREEN" else "❌"
                         st.write(f"   {emoji} {jogo.get('home')} {jogo.get('home_goals')}-{jogo.get('away_goals')} {jogo.get('away')} - {jogo.get('mercado')}")
                     
-                    # Enviar alerta de resultado para o Telegram
                     if enviar_multiplas_tg:
                         data_br_str = datetime.now().strftime("%d/%m/%Y")
                         
-                        # Preparar estrutura para pôster de resultado
                         multipla_resultado = {
                             "tipo": multipla.get("tipo"),
                             "odd_total": multipla.get("odd_total"),
@@ -8600,7 +7380,6 @@ def render_tab_multiplas_pro(sistema):
             else:
                 st.info("ℹ️ Nenhuma múltipla pendente encontrada ou nenhuma múltipla foi completamente finalizada ainda.")
     
-    # Mostrar estatísticas das múltiplas
     st.markdown("### 📊 Estatísticas das Múltiplas")
     
     multiplas = sistema.gerenciador_multiplas_pro.carregar_multiplas()
@@ -8620,7 +7399,6 @@ def render_tab_multiplas_pro(sistema):
             taxa_acerto = (acertadas / conferidas) * 100
             st.metric("📊 Taxa de Acerto", f"{taxa_acerto:.1f}%")
         
-        # Mostrar últimas múltiplas
         with st.expander("📋 Últimas Múltiplas Geradas"):
             for multipla_id, multipla in list(multiplas.items())[-5:]:
                 st.write(f"**{multipla.get('tipo', 'N/A')}** - Odds: {multipla.get('odd_total', 0):.2f}")
@@ -8630,10 +7408,6 @@ def render_tab_multiplas_pro(sistema):
     else:
         st.info("ℹ️ Nenhuma múltipla gerada ainda.")
 
-
-# =============================
-# FUNÇÕES DE RENDER DAS ABAS (RESTO DO CÓDIGO)
-# =============================
 
 def render_tab_busca(sistema):
     st.subheader("🔍 Buscar Partidas")
@@ -9291,10 +8065,6 @@ def render_tab_admin(sistema):
                         st.session_state.confirmar_reset = False
                         st.rerun()
 
-
-# =============================
-# FUNÇÃO MAIN
-# =============================
 
 def main():
     st.set_page_config(
