@@ -2547,7 +2547,6 @@ class TelegramClient:
             return False
 
 
-#class PosterGenerator:
 class PosterGenerator:
     def __init__(self, api_client: APIClient):
         self.api_client = api_client
@@ -4094,8 +4093,6 @@ class PosterGenerator:
         
         return buffer
 
-    
-
 
 class GerenciadorMultiplasPro:
     """Gerencia múltiplas Pro com armazenamento e conferência"""
@@ -4108,12 +4105,25 @@ class GerenciadorMultiplasPro:
         """Salva uma múltipla para conferência futura"""
         multiplas = self.carregar_multiplas()
         multipla_id = multipla.get("id", f"multipla_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+        
+        # Garantir campos obrigatórios
+        if "data_criacao" not in multipla:
+            multipla["data_criacao"] = datetime.now().isoformat()
+        if "conferida" not in multipla:
+            multipla["conferida"] = False
+        if "acertada" not in multipla:
+            multipla["acertada"] = False
+        if "jogos_conferidos" not in multipla:
+            multipla["jogos_conferidos"] = []
+        if "enviada" not in multipla:
+            multipla["enviada"] = False
+        if "resultado" not in multipla:
+            multipla["resultado"] = None
+        
         multipla["id"] = multipla_id
-        multipla["data_criacao"] = datetime.now().isoformat()
-        multipla["conferida"] = False
-        multipla["resultado"] = None
         multiplas[multipla_id] = multipla
         self._salvar_multiplas(multiplas)
+        logging.info(f"✅ Múltipla salva: {multipla_id} - {multipla.get('tipo', 'N/A')}")
         return multipla_id
     
     def carregar_multiplas(self) -> dict:
@@ -4122,7 +4132,10 @@ class GerenciadorMultiplasPro:
             if os.path.exists(self.MULTIPLAS_PRO_PATH):
                 with open(self.MULTIPLAS_PRO_PATH, "r", encoding='utf-8') as f:
                     dados = json.load(f)
+                    logging.info(f"📂 Múltiplas Pro carregadas: {len(dados)} registros")
                     return dados if isinstance(dados, dict) else {}
+            else:
+                logging.info(f"📂 Arquivo não existe: {self.MULTIPLAS_PRO_PATH}")
         except Exception as e:
             logging.error(f"Erro ao carregar múltiplas Pro: {e}")
         return {}
@@ -4266,6 +4279,8 @@ class GerenciadorMultiplasPro:
         multiplas = self.carregar_multiplas()
         resultados = []
         
+        logging.info(f"🔍 Verificando {len(multiplas)} múltiplas para conferência")
+        
         for multipla_id, multipla in multiplas.items():
             if multipla.get("conferida", False):
                 continue
@@ -4275,6 +4290,7 @@ class GerenciadorMultiplasPro:
                 if data_criacao > data_limite:
                     continue
             
+            logging.info(f"📋 Conferindo múltipla: {multipla_id} - {multipla.get('tipo', 'N/A')}")
             resultado = self.conferir_multipla(multipla_id, api_client)
             if resultado.get("conferida"):
                 resultados.append({
@@ -4283,6 +4299,7 @@ class GerenciadorMultiplasPro:
                     "resultado": resultado
                 })
         
+        logging.info(f"✅ {len(resultados)} múltiplas conferidas")
         return resultados
 
 
@@ -7285,16 +7302,24 @@ def render_tab_multiplas_pro(sistema):
                 if enviar_multiplas_tg:
                     data_br_str = data_selecionada.strftime("%d/%m/%Y")
                     
+                    # Estrutura completa da múltipla para salvar
                     multipla_struct = {
                         "id": f"pro_{tipo}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
                         "tipo": tipo,
+                        "modelo": tipo,
                         "odd_total": odd_total,
                         "jogos": [],
+                        "jogos_conferidos": [],
                         "over_1.5_count": over_1_5_count,
                         "over_2.5_count": over_2_5_count,
                         "risco": "ALTO" if over_2_5_count >= 2 else "MÉDIO" if over_2_5_count == 1 else "BAIXO",
                         "score_medio": score_medio,
-                        "data_busca": hoje
+                        "data_busca": hoje,
+                        "data_criacao": datetime.now().isoformat(),
+                        "conferida": False,
+                        "acertada": False,
+                        "enviada": False,
+                        "resultado": None
                     }
                     
                     for j in jogos_mult:
@@ -7347,6 +7372,9 @@ def render_tab_multiplas_pro(sistema):
 
             if multiplas_salvas:
                 st.info(f"💾 {len(multiplas_salvas)} múltiplas salvas para conferência futura.")
+                # Verificar se foram salvas corretamente
+                multiplas_verificacao = sistema.gerenciador_multiplas_pro.carregar_multiplas()
+                st.write(f"🔍 Total de múltiplas no arquivo: {len(multiplas_verificacao)}")
 
             st.success("✅ Processamento concluído!")
 
