@@ -4730,6 +4730,7 @@ class ResultadosTopAlertas:
             return False
 
 
+#class GerenciadorAlertasCompletos:
 class GerenciadorAlertasCompletos:
     def __init__(self, sistema_principal):
         self.sistema = sistema_principal
@@ -4914,11 +4915,105 @@ class GerenciadorAlertasCompletos:
         alertas_top = DataStorage.carregar_alertas_top()
         
         for jogo_dict in jogos:
-            classificacao = self.gerador_multiplas.classificar_jogo(jogo_dict)
-            jogo_dict["classificacao"] = classificacao
+            # CRITÉRIOS MODERADOS - Classificação mais permissiva
+            liga = jogo_dict.get("liga", "")
+            estimativa = jogo_dict.get("estimativa", 0.0)
+            confianca = jogo_dict.get("confianca", 0.0)
+            tendencia = jogo_dict.get("tendencia", "")
+            ambas_marcam = jogo_dict.get("tendencia_ambas_marcam", "")
+            confianca_am = jogo_dict.get("confianca_ambas_marcam", 0.0)
             
-            if classificacao["nivel"] == "C":
+            # NÍVEL A (SEGURO) - Critério moderado
+            nivel_a = False
+            if "OVER" in tendencia.upper() and "1.5" in tendencia:
+                if estimativa >= 1.8 and confianca >= 60:
+                    nivel_a = True
+            
+            # NÍVEL B (VALOR) - Critério moderado
+            nivel_b = False
+            if "OVER" in tendencia.upper() and "2.5" in tendencia:
+                if estimativa >= 2.3:
+                    if ambas_marcam == "SIM" and confianca_am >= 50:
+                        nivel_b = True
+                    elif confianca >= 65:
+                        nivel_b = True
+            
+            # NÍVEL C (PERIGO) - Só exclui se realmente ruim
+            nivel_c = False
+            motivo_c = ""
+            
+            # Só exclui se estimativa for MUITO baixa
+            if estimativa < 1.3 and "OVER" in tendencia.upper():
+                nivel_c = True
+                motivo_c = f"Estimativa muito baixa ({estimativa:.2f})"
+            
+            # Liga que evita Over - apenas alerta se estimativa baixa
+            liga_base = liga.split("(")[0].strip() if "(" in liga else liga
+            ligas_evitar = ["Campeonato Brasileiro Série A", "Primera Division"]
+            
+            if liga_base in ligas_evitar:
+                if "OVER" in tendencia.upper() and estimativa < 2.0:
+                    nivel_c = True
+                    motivo_c = f"Liga evitar Over com estimativa baixa ({liga_base})"
+            
+            # NÍVEL D (POTENCIAL) - NOVO nível para jogos aceitáveis
+            nivel_d = False
+            if not nivel_a and not nivel_b and not nivel_c:
+                if estimativa >= 1.6 and confianca >= 55:
+                    nivel_d = True
+            
+            # Criar classificação
+            if nivel_c:
+                classificacao = {
+                    "nivel": "C",
+                    "cor": "🟠",
+                    "motivo": motivo_c,
+                    "recomendacao": "EXCLUIR",
+                    "tipo": "perigo",
+                    "estimativa": estimativa,
+                    "confianca": confianca
+                }
+                # Nível C - PULAR (não adicionar aos classificados)
                 continue
+                
+            elif nivel_b:
+                classificacao = {
+                    "nivel": "B",
+                    "cor": "🟡",
+                    "motivo": "Over 2.5 com valor",
+                    "recomendacao": "VALOR",
+                    "tipo": "over_2.5",
+                    "estimativa": estimativa,
+                    "confianca": confianca,
+                    "confianca_am": confianca_am
+                }
+                
+            elif nivel_a:
+                classificacao = {
+                    "nivel": "A",
+                    "cor": "🟢",
+                    "motivo": "Over 1.5 seguro",
+                    "recomendacao": "SEGURO",
+                    "tipo": "over_1.5",
+                    "estimativa": estimativa,
+                    "confianca": confianca
+                }
+                
+            elif nivel_d:
+                classificacao = {
+                    "nivel": "D",
+                    "cor": "🔵",
+                    "motivo": "Potencial para Over 1.5",
+                    "recomendacao": "ANALISAR",
+                    "tipo": "over_1.5_potencial",
+                    "estimativa": estimativa,
+                    "confianca": confianca
+                }
+            else:
+                # Nível E - descartar
+                continue
+            
+            jogo_dict["classificacao"] = classificacao
             
             fixture_id = str(jogo_dict.get("id"))
             chave_alerta = f"{fixture_id}_{data_busca}"
@@ -4957,18 +5052,22 @@ class GerenciadorAlertasCompletos:
         return jogos_classificados
     
     def _mostrar_classificacao_jogos(self, jogos_classificados: list):
-        st.markdown("### 📊 CLASSIFICAÇÃO DOS JOGOS (NÍVEIS A/B/C)")
+        st.markdown("### 📊 CLASSIFICAÇÃO DOS JOGOS (NÍVEIS A/B/D)")
         
         nivel_a = [j for j in jogos_classificados if j.get("classificacao", {}).get("nivel") == "A"]
         nivel_b = [j for j in jogos_classificados if j.get("classificacao", {}).get("nivel") == "B"]
+        nivel_d = [j for j in jogos_classificados if j.get("classificacao", {}).get("nivel") == "D"]
         
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
         with col1:
             st.markdown(f"🟢 **NÍVEL A (SEGURO):** {len(nivel_a)} jogos")
-            st.caption("Over 1.5 | Estimativa ≥ 2.2 | Confiança ≥ 75%")
+            st.caption("Over 1.5 | Estimativa ≥ 1.8 | Confiança ≥ 60%")
         with col2:
             st.markdown(f"🟡 **NÍVEL B (VALOR):** {len(nivel_b)} jogos")
-            st.caption("Over 2.5 | Estimativa ≥ 2.7 | Ambas Marcam = SIM")
+            st.caption("Over 2.5 | Estimativa ≥ 2.3 | Confiança ≥ 65% ou Ambas Marcam")
+        with col3:
+            st.markdown(f"🔵 **NÍVEL D (POTENCIAL):** {len(nivel_d)} jogos")
+            st.caption("Over 1.5 | Estimativa ≥ 1.6 | Confiança ≥ 55%")
         
         st.markdown("---")
         
@@ -4976,7 +5075,7 @@ class GerenciadorAlertasCompletos:
             for jogo in jogos_classificados:
                 classif = jogo.get("classificacao", {})
                 cor = classif.get("cor", "⚪")
-                nivel = classif.get("nivel", "D")
+                nivel = classif.get("nivel", "?")
                 motivo = classif.get("motivo", "")
                 estimativa = classif.get("estimativa", 0)
                 confianca = classif.get("confianca", 0)
@@ -5167,7 +5266,7 @@ class GerenciadorAlertasCompletos:
                     tipo = classificacao.get("tipo", "over_1.5")
                     
                     resultado_mercado = "RED"
-                    if tipo == "over_1.5" and total_gols > 1.5:
+                    if tipo in ["over_1.5", "over_1.5_potencial"] and total_gols > 1.5:
                         resultado_mercado = "GREEN"
                     elif tipo == "over_2.5" and total_gols > 2.5:
                         resultado_mercado = "GREEN"
@@ -5472,6 +5571,7 @@ class GerenciadorAlertasCompletos:
         buffer.seek(0)
         
         return buffer
+    
 
 
 class SistemaAlertasFutebol:
