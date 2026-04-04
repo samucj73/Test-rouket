@@ -7207,6 +7207,7 @@ class SistemaAlertasFutebol:
         return arquivos_removidos
 
 
+#def render_tab_multiplas_pro(sistema):
 def render_tab_multiplas_pro(sistema):
     st.subheader("🧠 MÚLTIPLAS PRO - SISTEMA AUTÔNOMO")
     st.caption("Gera múltiplas inteligentes com score de qualidade, filtro anti-armadilha e balanceamento de risco. As múltiplas são salvas para conferência futura.")
@@ -7387,7 +7388,11 @@ def render_tab_multiplas_pro(sistema):
 
             st.markdown("### 💣 MÚLTIPLAS GERADAS")
             
+            # ============================================================
+            # SALVAR MÚLTIPLAS NO GERENCIADOR (CORREÇÃO)
+            # ============================================================
             multiplas_salvas = []
+            
             for idx, (tipo, jogos_mult) in enumerate(multiplas):
                 odd_total = calcular_odd_total(jogos_mult)
                 
@@ -7428,8 +7433,12 @@ def render_tab_multiplas_pro(sistema):
                         else:
                             home, away = j['jogo'], ""
                         
+                        # Buscar ID do jogo se disponível
+                        jogo_obj = j.get('jogo_obj', None)
+                        jogo_id = str(jogo_obj.id) if jogo_obj and hasattr(jogo_obj, 'id') else f"jogo_{idx}"
+                        
                         jogo_dict = {
-                            "id": j.get('id', f"jogo_{idx}"),
+                            "id": jogo_id,
                             "home": home,
                             "away": away,
                             "mercado": j['mercado'],
@@ -7438,10 +7447,13 @@ def render_tab_multiplas_pro(sistema):
                             "liga": j.get('liga', 'Desconhecida'),
                             "hora": j.get('hora', datetime.now()),
                             "escudo_home": j.get('escudo_home', ''),
-                            "escudo_away": j.get('escudo_away', '')
+                            "escudo_away": j.get('escudo_away', ''),
+                            "tendencia": j.get('tendencia', ''),
+                            "tipo_aposta": j.get('tipo_aposta', '')
                         }
                         multipla_struct["jogos"].append(jogo_dict)
                     
+                    # SALVAR NO GERENCIADOR
                     multipla_id = sistema.gerenciador_multiplas_pro.salvar_multipla(multipla_struct)
                     multiplas_salvas.append(multipla_id)
                     
@@ -7470,11 +7482,14 @@ def render_tab_multiplas_pro(sistema):
                         if sistema.telegram_client.enviar_foto(poster, caption=caption):
                             st.success(f"📤 Múltipla {tipo} enviada como pôster!")
 
+            # Exibir mensagem de confirmação de salvamento
             if multiplas_salvas:
-                st.info(f"💾 {len(multiplas_salvas)} múltiplas salvas para conferência futura.")
+                st.success(f"💾 {len(multiplas_salvas)} múltiplas salvas para conferência futura!")
                 # Verificar se foram salvas corretamente
                 multiplas_verificacao = sistema.gerenciador_multiplas_pro.carregar_multiplas()
                 st.write(f"🔍 Total de múltiplas no arquivo: {len(multiplas_verificacao)}")
+            else:
+                st.warning("⚠️ Nenhuma múltipla foi salva. Verifique se a geração foi bem sucedida.")
 
             st.success("✅ Processamento concluído!")
 
@@ -7571,6 +7586,8 @@ def render_tab_multiplas_pro(sistema):
                 st.write("---")
     else:
         st.info("ℹ️ Nenhuma múltipla gerada ainda.")
+    
+    
 
 
 def render_tab_busca(sistema):
