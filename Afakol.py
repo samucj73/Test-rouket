@@ -49,6 +49,7 @@ input, textarea { border-radius: 12px !important; }
 .cover-stats { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); padding: 15px; border-radius: 12px; margin: 10px 0; border: 1px solid #00ffaa20; }
 .highlight { background: #00ffaa20; border-left: 4px solid #00ffaa; padding: 10px; border-radius: 8px; margin: 10px 0; }
 .ilp-highlight { background: linear-gradient(135deg, #ff00ff20 0%, #aa00ff20 100%); border: 2px solid #ff00ff; padding: 15px; border-radius: 12px; margin: 10px 0; }
+.ia7-highlight { background: linear-gradient(135deg, #ff880020 0%, #ff440020 100%); border: 2px solid #ff8800; padding: 15px; border-radius: 12px; margin: 10px 0; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -885,6 +886,208 @@ def multi_pool_fechamento(gerador, num_pools=3, jogos_por_pool=15):
     return jogos_unicos, todos_pools
 
 # =====================================================
+# IA 7.0 - MOTOR PROFISSIONAL AVANÇADO
+# =====================================================
+
+def gerar_jogos_ia_70(qtd_jogos, dados_api, qtd_concursos_base=20):
+    """
+    IA 7.0 - Gera jogos usando ranking, diversificação e pontuação inteligente
+    
+    Args:
+        qtd_jogos: Quantidade de jogos a gerar
+        dados_api: Dados dos concursos da API
+        qtd_concursos_base: Quantidade de concursos para análise (padrão 20)
+    
+    Returns:
+        tuple: (lista_de_jogos, info_do_concurso_base)
+    """
+    try:
+        if dados_api is None or len(dados_api) < 10:
+            st.error("❌ Nenhum concurso carregado. Clique em 'Carregar concursos' na barra lateral primeiro.")
+            return [], None
+        
+        # Pegar os concursos mais recentes para análise
+        dados = dados_api[:min(qtd_concursos_base, len(dados_api))]
+        
+        # Verificar se temos dados suficientes
+        if len(dados) < 10:
+            st.warning(f"⚠️ Poucos concursos carregados ({len(dados)}). Mínimo recomendado: 10")
+            return [], None
+        
+        concursos = []
+        for d in dados:
+            # Extrair dezenas - a API retorna como lista de strings
+            if isinstance(d['dezenas'], list):
+                dezenas = [int(x) for x in d['dezenas']]
+            elif isinstance(d['dezenas'], str):
+                dezenas = [int(x.strip()) for x in d['dezenas'].split(',')]
+            else:
+                continue
+            concursos.append(sorted(dezenas))
+        
+        if not concursos:
+            st.error("❌ Não foi possível extrair os números dos concursos.")
+            return [], None
+        
+        ultimo_concurso = concursos[0]
+        
+        # -------------------------------
+        # FREQUÊNCIA + ATRASO PONDERADO
+        # -------------------------------
+        freq = {i: 0 for i in range(1, 26)}
+        atraso = {i: 0 for i in range(1, 26)}
+        
+        # Calcular frequência ponderada (concursos mais recentes têm mais peso)
+        total_concursos = len(concursos)
+        for idx, concurso in enumerate(concursos):
+            # Peso decrescente: o mais recente tem peso 1.0
+            peso = (total_concursos - idx) / total_concursos
+            for dez in concurso:
+                freq[dez] += peso
+        
+        # Calcular atraso (quantos concursos desde a última aparição)
+        for dez in range(1, 26):
+            for idx, concurso in enumerate(concursos):
+                if dez in concurso:
+                    atraso[dez] = idx
+                    break
+            else:
+                atraso[dez] = total_concursos  # Nunca apareceu
+        
+        # -------------------------------
+        # SCORE BASE (60% frequência + 40% atraso)
+        # -------------------------------
+        score = {}
+        max_freq = max(freq.values()) if freq.values() else 1
+        max_atraso = max(atraso.values()) if atraso.values() else 1
+        
+        for dez in range(1, 26):
+            freq_norm = freq[dez] / max_freq
+            atraso_norm = atraso[dez] / max_atraso
+            # Invertido: menor atraso = maior score
+            score[dez] = (freq_norm * 0.6) + ((1 - atraso_norm) * 0.4)
+        
+        # Ordenar números por score
+        ordenados = sorted(score.items(), key=lambda x: x[1], reverse=True)
+        
+        # Dividir em categorias
+        base_forte = [d[0] for d in ordenados[:15]]
+        base_media = [d[0] for d in ordenados[15:22]]
+        base_fraca = [d[0] for d in ordenados[22:]]
+        
+        candidatos = []
+        
+        # -------------------------------
+        # GERAR LOTE GRANDE (15x a quantidade desejada)
+        # -------------------------------
+        for _ in range(qtd_jogos * 15):
+            jogo = set()
+            
+            # Selecionar números das diferentes categorias
+            # 8 da base forte, 4 da média, 3 da fraca
+            jogo.update(random.sample(base_forte, min(8, len(base_forte))))
+            jogo.update(random.sample(base_media, min(4, len(base_media))))
+            jogo.update(random.sample(base_fraca, min(3, len(base_fraca))))
+            
+            # Adicionar repetidos do último concurso (6 a 9 números)
+            qtd_repetidos = random.randint(6, 9)
+            repetidos = random.sample(ultimo_concurso, min(qtd_repetidos, len(ultimo_concurso)))
+            jogo.update(repetidos)
+            
+            # Completar até 15 números
+            while len(jogo) < 15:
+                novo = random.randint(1, 25)
+                if novo not in jogo:
+                    jogo.add(novo)
+            
+            jogo = sorted(list(jogo))[:15]
+            candidatos.append(jogo)
+        
+        # -------------------------------
+        # FUNÇÃO DE AVALIAÇÃO DO JOGO (APRIMORADA)
+        # -------------------------------
+        def avaliar_jogo_ia(jogo):
+            s = 0
+            
+            # Score base (soma dos scores individuais)
+            s += sum(score[n] for n in jogo)
+            
+            # Bônus por paridade equilibrada (6-9 pares)
+            pares = sum(1 for n in jogo if n % 2 == 0)
+            if 6 <= pares <= 9:
+                s += 5
+            elif pares == 7 or pares == 8:
+                s += 3
+            
+            # Bônus por soma na faixa ideal (180-220)
+            soma = sum(jogo)
+            if 180 <= soma <= 220:
+                s += 5
+            elif 170 <= soma <= 230:
+                s += 2
+            
+            # Bônus por repetição equilibrada (6-9 repetidas)
+            repetidos = len(set(jogo) & set(ultimo_concurso))
+            if 6 <= repetidos <= 9:
+                s += 5
+            elif repetidos == 7 or repetidos == 8:
+                s += 3
+            
+            # Bônus por distribuição em linhas (evitar concentração)
+            linhas = distribuir_por_linhas(jogo)
+            if max(linhas) <= 4 and min(linhas) >= 2:
+                s += 3
+            
+            # Penalidade para muitos consecutivos
+            consec = contar_consecutivos(jogo)
+            if consec > 4:
+                s -= consec - 4
+            
+            return s
+        
+        # -------------------------------
+        # REMOVER DUPLICATAS
+        # -------------------------------
+        candidatos = list(set(tuple(j) for j in candidatos))
+        candidatos = [list(j) for j in candidatos]
+        
+        # Ordenar por pontuação
+        candidatos.sort(key=avaliar_jogo_ia, reverse=True)
+        
+        # -------------------------------
+        # DIVERSIFICAÇÃO (evitar jogos muito parecidos)
+        # -------------------------------
+        finais = []
+        
+        for jogo in candidatos:
+            if len(finais) >= qtd_jogos:
+                break
+            
+            diferente = True
+            for j in finais:
+                # Se tiver mais de 11 números em comum, é muito parecido
+                if len(set(jogo) & set(j)) >= 11:
+                    diferente = False
+                    break
+            
+            if diferente:
+                finais.append(jogo)
+        
+        # Garantir que retornamos exatamente a quantidade desejada
+        if len(finais) < qtd_jogos:
+            finais = candidatos[:qtd_jogos]
+        
+        # Informações do concurso base
+        concurso_info = (dados[0]['concurso'], dados[0]['data'])
+        
+        return finais, concurso_info
+        
+    except Exception as e:
+        st.error(f"❌ Erro na IA 7.0: {str(e)}")
+        print(f"Erro detalhado: {e}")
+        return [], None
+
+# =====================================================
 # CONFERIDOR INTELIGENTE + OTIMIZADOR
 # =====================================================
 
@@ -1222,12 +1425,13 @@ def main():
     # ================= INTERFACE PRINCIPAL =================
     st.subheader("🎯 Análise e Geração de Jogos")
 
-    # AGORA COM 8 ABAS (ADICIONEI ILP)
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+    # AGORA COM 9 ABAS (ADICIONEI IA 7.0)
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
         "📊 Análise do Último Concurso",
         "🎲 Gerador de Jogos",
         "🚀 EMS 5.0 - Cobertura",
         "🔥 ILP PROFESSIONAL",
+        "🤖 IA 7.0 - Motor Avançado",
         "🔍 Conferência Inteligente",
         "📈 Avaliação Estatística",
         "📐 Geometria do Volante",
@@ -1645,8 +1849,154 @@ def main():
                 if arquivo:
                     st.success("✅ Jogos salvos!")
 
-    # ================= TAB 5: CONFERÊNCIA INTELIGENTE =================
+    # ================= TAB 5: IA 7.0 - MOTOR AVANÇADO =================
     with tab5:
+        st.markdown("### 🤖 IA 7.0 - Motor Profissional Avançado")
+        st.markdown("""
+        <div class="ia7-highlight">
+        <strong>🎯 COMO FUNCIONA A IA 7.0:</strong><br>
+        • 📊 <strong>Ranking Inteligente:</strong> Números ranqueados por frequência ponderada + atraso<br>
+        • 🎲 <strong>Geração Estratificada:</strong> Seleção de números das categorias forte/média/fraca<br>
+        • 🔄 <strong>Diversificação Controlada:</strong> Evita jogos muito parecidos entre si<br>
+        • ⚖️ <strong>Balanceamento Automático:</strong> Ajuste de paridade, soma, repetições e distribuição<br>
+        • 🏆 <strong>Pontuação Multi-critério:</strong> Avaliação e ranqueamento dos melhores jogos
+        </div>
+        """, unsafe_allow_html=True)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            qtd_ia = st.slider("Quantidade de jogos", 5, 50, 15, key="qtd_ia")
+        with col2:
+            qtd_concursos_base = st.slider("Concursos para análise", 10, 50, 20, 
+                                          help="Quantidade de concursos mais recentes usados para análise estatística")
+        
+        if st.button("🤖 GERAR COM IA 7.0", use_container_width=True, type="primary"):
+            with st.spinner(f"IA 7.0 gerando {qtd_ia} jogos otimizados..."):
+                jogos, concurso_info = gerar_jogos_ia_70(
+                    qtd_ia, 
+                    st.session_state.dados_api, 
+                    qtd_concursos_base
+                )
+                
+                if jogos:
+                    st.session_state.jogos_gerados = jogos
+                    
+                    # Calcular scores para os jogos gerados
+                    scores_calculados = []
+                    for jogo in jogos:
+                        pares = contar_pares(jogo)
+                        soma = sum(jogo)
+                        repetidas = len(set(jogo) & set(st.session_state.gerador_principal.ultimo))
+                        consec = contar_consecutivos(jogo)
+                        
+                        # Score simplificado para exibição
+                        score = 0
+                        if 6 <= pares <= 9:
+                            score += 2
+                        if 180 <= soma <= 220:
+                            score += 2
+                        if 6 <= repetidas <= 9:
+                            score += 2
+                        if consec <= 4:
+                            score += 1
+                        scores_calculados.append(score)
+                    
+                    st.session_state.scores = scores_calculados
+                    
+                    st.success(f"✅ {len(jogos)} jogos gerados com IA 7.0!")
+                    
+                    # Mostrar informações do concurso base
+                    if concurso_info:
+                        concurso_num, concurso_data = concurso_info
+                        st.info(f"📅 Baseado em análise dos últimos {qtd_concursos_base} concursos (até #{concurso_num} - {concurso_data})")
+                    
+                    # Mostrar estatísticas da geração
+                    st.markdown("### 📊 Estatísticas da Geração")
+                    
+                    # Calcular estatísticas agregadas dos jogos
+                    todos_numeros = []
+                    for j in jogos:
+                        todos_numeros.extend(j)
+                    freq_gerados = Counter(todos_numeros)
+                    
+                    col_a, col_b, col_c, col_d = st.columns(4)
+                    with col_a:
+                        media_pares = np.mean([contar_pares(j) for j in jogos])
+                        st.metric("Média de Pares", f"{media_pares:.1f}")
+                    with col_b:
+                        media_soma = np.mean([sum(j) for j in jogos])
+                        st.metric("Média da Soma", f"{media_soma:.0f}")
+                    with col_c:
+                        media_rep = np.mean([len(set(j) & set(st.session_state.gerador_principal.ultimo)) for j in jogos])
+                        st.metric("Média Repetidas", f"{media_rep:.1f}")
+                    with col_d:
+                        st.metric("Diversidade", f"{len(freq_gerados)}/25 números")
+                    
+                    # Mostrar os 10 números mais frequentes nos jogos gerados
+                    st.markdown("#### 🔢 Números mais selecionados pela IA")
+                    top_numeros = freq_gerados.most_common(10)
+                    top_html = " ".join(f"<span style='background:#ff880020; border:1px solid #ff8800; border-radius:15px; padding:5px 10px; margin:2px; display:inline-block;'>{n:02d} ({f}x)</span>" for n, f in top_numeros)
+                    st.markdown(top_html, unsafe_allow_html=True)
+        
+        if "jogos_gerados" in st.session_state and st.session_state.jogos_gerados:
+            jogos = st.session_state.jogos_gerados
+            st.markdown(f"### 📋 Jogos Gerados pela IA 7.0 ({len(jogos)})")
+            
+            for i, jogo in enumerate(jogos[:20]):
+                score = st.session_state.scores[i] if i < len(st.session_state.scores) else 0
+                medalha = ["🥇","🥈","🥉"][i] if i < 3 else "🤖"
+                
+                # Estatísticas do jogo
+                pares = contar_pares(jogo)
+                impares = 15 - pares
+                soma = sum(jogo)
+                repetidas = len(set(jogo) & set(st.session_state.gerador_principal.ultimo))
+                consec = contar_consecutivos(jogo)
+                
+                stats = f"⚖️ {pares}p/{impares}i | ➕ {soma} | 🔁 {repetidas} rep | 📏 {consec} cons"
+                
+                st.markdown(f"""
+                <div style='border-left: 5px solid #ff8800; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
+                    {medalha} <strong>Jogo {i+1:2d}</strong> — Score IA: {score}/7<br>
+                    {formatar_jogo_html(jogo)}<br>
+                    <small style='color:#aaa;'>{stats}</small>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            if len(jogos) > 20:
+                st.info(f"Exibindo os primeiros 20 de {len(jogos)} jogos. Salve para ver todos.")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("💾 Salvar Jogos IA 7.0", key="salvar_ia", use_container_width=True):
+                    ultimo = st.session_state.dados_api[0]
+                    arquivo, jogo_id = salvar_jogos_gerados(
+                        jogos, 
+                        [], 
+                        {"versao": "IA 7.0", "concursos_base": qtd_concursos_base}, 
+                        ultimo['concurso'], 
+                        ultimo['data']
+                    )
+                    if arquivo:
+                        st.success(f"✅ {len(jogos)} jogos salvos! ID: {jogo_id}")
+                        st.session_state.jogos_salvos = carregar_jogos_salvos()
+            
+            with col2:
+                df_export = pd.DataFrame({
+                    "Jogo": range(1, len(jogos)+1),
+                    "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in jogos],
+                    "Score_IA": [round(s, 2) for s in st.session_state.scores] if st.session_state.scores else [0]*len(jogos),
+                    "Pares": [contar_pares(j) for j in jogos],
+                    "Soma": [sum(j) for j in jogos],
+                    "Repetidas": [len(set(j) & set(st.session_state.gerador_principal.ultimo)) for j in jogos],
+                    "Consecutivos": [contar_consecutivos(j) for j in jogos]
+                })
+                st.download_button(label="📥 Exportar CSV", data=df_export.to_csv(index=False), 
+                                 file_name=f"ia70_jogos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", 
+                                 mime="text/csv", use_container_width=True)
+
+    # ================= TAB 6: CONFERÊNCIA INTELIGENTE =================
+    with tab6:
         st.markdown("### 🔍 Conferência Inteligente de Jogos")
         st.caption("Confira seus jogos contra qualquer resultado e obtenha análises detalhadas")
         
@@ -1818,8 +2168,8 @@ def main():
                         st.session_state.scores = []
                         st.success("Jogos otimizados carregados na aba 'Gerador de Jogos'!")
 
-    # ================= TAB 6: AVALIAÇÃO ESTATÍSTICA =================
-    with tab6:
+    # ================= TAB 7: AVALIAÇÃO ESTATÍSTICA =================
+    with tab7:
         st.markdown("### 📈 Avaliação Estatística dos Jogos")
         baseline = st.session_state.baseline_cache
         st.markdown(f"**Baseline Aleatório:** Média = {baseline['media']:.3f}, Desvio = {baseline['std']:.3f}")
@@ -1868,8 +2218,8 @@ def main():
             if st.session_state.mc_resultados is not None:
                 st.dataframe(st.session_state.mc_resultados, use_container_width=True, hide_index=True)
 
-    # ================= TAB 7: GEOMETRIA DO VOLANTE =================
-    with tab7:
+    # ================= TAB 8: GEOMETRIA DO VOLANTE =================
+    with tab8:
         st.markdown("### 📐 Geometria Analítica do Volante 5x5")
         motor_geo = st.session_state.motor_geometria
         stats_geo = motor_geo.get_estatisticas_geometricas()
@@ -1904,8 +2254,8 @@ def main():
             except:
                 st.error("Formato inválido. Use números separados por vírgula.")
 
-    # ================= TAB 8: CONFERÊNCIA SALVOS =================
-    with tab8:
+    # ================= TAB 9: CONFERÊNCIA SALVOS =================
+    with tab9:
         st.markdown("### ✅ Conferência de Jogos Salvos")
         st.session_state.jogos_salvos = carregar_jogos_salvos()
         if not st.session_state.jogos_salvos:
