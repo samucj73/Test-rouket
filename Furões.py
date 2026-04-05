@@ -1562,9 +1562,43 @@ class AnalisadorEstatistico:
 
 
 class AnalisadorTendencia:
-    def __init__(self, classificacao: dict):
+    """Analisador de tendências com ajuste por liga e limites realistas de confiança"""
+    
+    # FATORES DE AJUSTE POR LIGA (baseado nos 215 jogos)
+    LIGA_OVER_FACTOR = {
+        'Eredivisie': 1.12,
+        'Championship': 1.08,
+        'Bundesliga': 1.04,
+        'Campeonato Brasileiro Série A': 1.02,
+        'Primera Division': 1.00,
+        'Ligue 1': 0.96,
+        'Primeira Liga': 0.94,
+        'Premier League': 0.92,
+        'Serie A': 0.88
+    }
+    
+    # CONFIABILIDADE DA LIGA (afeta o teto máximo de confiança)
+    LIGA_CONFIDENCE_CAP = {
+        'Eredivisie': 85,
+        'Championship': 82,
+        'Bundesliga': 80,
+        'Campeonato Brasileiro Série A': 78,
+        'Primera Division': 76,
+        'Ligue 1': 72,
+        'Primeira Liga': 70,
+        'Premier League': 68,
+        'Serie A': 65
+    }
+    
+    # LIGAS PERMITIDAS PARA AMBAS MARCAM
+    LIGAS_BTTS_PERMITIDAS = ["Bundesliga", "Eredivisie", "Premier League"]
+    
+    def __init__(self, classificacao: dict, liga_nome: str = ""):
         self.classificacao = classificacao
         self.analisador_performance = AnalisadorPerformance()
+        self.liga_nome = liga_nome
+        self.over_factor = self.LIGA_OVER_FACTOR.get(liga_nome, 1.0)
+        self.confidence_cap = self.LIGA_CONFIDENCE_CAP.get(liga_nome, 78)
 
     def calcular_tendencia_completa(self, home: str, away: str) -> dict:
         dados_home = self.classificacao.get(home, {})
@@ -1594,10 +1628,11 @@ class AnalisadorTendencia:
         media_away_feitos = dados_away.get("scored", 0) / played_away
         media_away_sofridos = dados_away.get("against", 0) / played_away
 
-        media_home_feitos = clamp(media_home_feitos, 0.6, 3.6)
-        media_home_sofridos = clamp(media_home_sofridos, 0.6, 3.2)
-        media_away_feitos = clamp(media_away_feitos, 0.6, 3.4)
-        media_away_sofridos = clamp(media_away_sofridos, 0.6, 3.2)
+        # LIMITES MAIS REALISTAS
+        media_home_feitos = clamp(media_home_feitos, 0.4, 3.2)
+        media_home_sofridos = clamp(media_home_sofridos, 0.4, 3.0)
+        media_away_feitos = clamp(media_away_feitos, 0.4, 3.0)
+        media_away_sofridos = clamp(media_away_sofridos, 0.4, 3.0)
 
         estimativa_total = (
             media_home_feitos * 0.55 +
@@ -1605,6 +1640,9 @@ class AnalisadorTendencia:
             media_home_sofridos * 0.25 +
             media_away_sofridos * 0.25
         )
+
+        # APLICA FATOR DA LIGA
+        estimativa_total *= self.over_factor
 
         fator_ofensivo_home = media_home_feitos / max(media_away_sofridos, 0.75)
         fator_ofensivo_away = media_away_feitos / max(media_home_sofridos, 0.75)
@@ -1623,50 +1661,45 @@ class AnalisadorTendencia:
 
         estimativa_total = (estimativa_total * 0.85) + (2.5 * 0.15)
 
-        estimativa_total = clamp(estimativa_total, 1.4, 4.0)
+        estimativa_total = clamp(estimativa_total, 1.2, 3.8)
 
-        if estimativa_total <= 1.6:
+        # NOVOS LIMIARES MAIS EXIGENTES
+        if estimativa_total <= 1.5:
             mercado = "UNDER 2.5"
             tipo_aposta = "under"
             linha_mercado = 2.5
             probabilidade_base = sigmoid((2.5 - estimativa_total) * 1.4)
+            confianca_max = 65
 
-        elif estimativa_total <= 2.1:
-            if fator_ataque < 0.95:
-                mercado = "UNDER 2.5"
-                tipo_aposta = "under"
-                linha_mercado = 2.5
-                probabilidade_base = sigmoid((2.5 - estimativa_total) * 1.3)
-            else:
-                mercado = "OVER 1.5"
-                tipo_aposta = "over"
-                linha_mercado = 1.5
-                probabilidade_base = sigmoid((estimativa_total - 1.5) * 1.6)
-
-        elif estimativa_total >= 3.4:
-            mercado = "OVER 3.5"
-            tipo_aposta = "over"
-            linha_mercado = 3.5
-            probabilidade_base = sigmoid((estimativa_total - 3.5) * 1.1)
-
-        elif estimativa_total >= 2.8:
-            if fator_ataque >= 1.3:
-                mercado = "OVER 2.5"
-                tipo_aposta = "over"
-                linha_mercado = 2.5
-                probabilidade_base = sigmoid((estimativa_total - 2.5) * 1.2)
-            else:
-                mercado = "OVER 1.5"
-                tipo_aposta = "over"
-                linha_mercado = 1.5
-                probabilidade_base = sigmoid((estimativa_total - 1.5) * 1.5)
-
-        else:
+        elif estimativa_total <= 2.0:
             mercado = "OVER 1.5"
             tipo_aposta = "over"
             linha_mercado = 1.5
             probabilidade_base = sigmoid((estimativa_total - 1.5) * 1.6)
+            confianca_max = 70
 
+        elif estimativa_total <= 2.8:
+            mercado = "OVER 1.5"
+            tipo_aposta = "over"
+            linha_mercado = 1.5
+            probabilidade_base = sigmoid((estimativa_total - 1.5) * 1.8)
+            confianca_max = 75
+
+        elif estimativa_total <= 3.2:
+            mercado = "OVER 2.5"
+            tipo_aposta = "over"
+            linha_mercado = 2.5
+            probabilidade_base = sigmoid((estimativa_total - 2.5) * 1.2)
+            confianca_max = 72
+
+        else:
+            mercado = "OVER 3.5"
+            tipo_aposta = "over"
+            linha_mercado = 3.5
+            probabilidade_base = sigmoid((estimativa_total - 3.5) * 1.1)
+            confianca_max = 68
+
+        # BLOQUEIA UNDER PERIGOSO
         if tipo_aposta == "under" and estimativa_total > 1.8:
             return {
                 "tendencia": "NÃO APOSTAR",
@@ -1678,53 +1711,75 @@ class AnalisadorTendencia:
                 "detalhes": {"motivo": f"UNDER perigoso (estimativa alta: {estimativa_total:.2f})"}
             }
 
-        if tipo_aposta == "over" and linha_mercado == 2.5 and estimativa_total < 2.6:
-            return {
-                "tendencia": "NÃO APOSTAR",
-                "estimativa": round(estimativa_total, 2),
-                "probabilidade": round(probabilidade_base * 100, 1),
-                "confianca": 0,
-                "tipo_aposta": "avoid",
-                "linha_mercado": linha_mercado,
-                "detalhes": {"motivo": f"OVER 2.5 sem força (estimativa: {estimativa_total:.2f})"}
-            }
-
+        # CÁLCULO DE CONFIANÇA MAIS REALISTA
         distancia_linha = abs(estimativa_total - linha_mercado)
-
-        if tipo_aposta == "over":
-            base_conf = probabilidade_base * 55
-            dist_conf = min(distancia_linha * 28, 32)
-        else:
-            base_conf = probabilidade_base * 45
-            dist_conf = min(distancia_linha * 22, 28)
-
-        consistencia = 0
-        if played_home >= 6 and played_away >= 6:
-            consistencia += 12
-        if abs(media_home_feitos - media_away_feitos) < 1.0:
-            consistencia += 6
-        if fator_ataque > 1.4 or fator_ataque < 0.7:
-            consistencia += 8
-
-        confianca = clamp(base_conf + dist_conf + consistencia, 35, 78)
-
+        
+        # FATORES DE CONFIANÇA
+        conf_base = probabilidade_base * 55
+        conf_dist = min(distancia_linha * 20, 25)
+        conf_consistencia = 0
+        
+        if played_home >= 8 and played_away >= 8:
+            conf_consistencia += 8
+        
+        # PENALIDADE PARA LIGAS RUINS
+        penalidade_liga = 0
+        if self.liga_nome in ['Serie A', 'Premier League', 'Primeira Liga']:
+            penalidade_liga = 8
+        elif self.liga_nome in ['Ligue 1']:
+            penalidade_liga = 5
+        
+        # CONFIANÇA FINAL COM TETO VARIÁVEL
+        confianca = clamp(conf_base + conf_dist + conf_consistencia - penalidade_liga, 35, self.confidence_cap)
+        
+        # REGRAS DE EXCLUSÃO MAIS RÍGIDAS
         if tipo_aposta == "over" and linha_mercado == 1.5:
-            if media_home_feitos < 1.2 and media_away_feitos < 1.2:
-                confianca *= 0.8
-
-        if media_home_sofridos < 0.8 and media_away_sofridos < 0.8:
-            confianca *= 0.9
-
-        if confianca < 48:
-            return {
-                "tendencia": "NÃO APOSTAR",
-                "estimativa": round(estimativa_total, 2),
-                "probabilidade": round(probabilidade_base * 100, 1),
-                "confianca": round(confianca, 1),
-                "tipo_aposta": "avoid",
-                "linha_mercado": linha_mercado,
-                "detalhes": {"motivo": f"Confiança baixa: {confianca:.1f}%"}
-            }
+            # OVER 1.5 SÓ É APROVADO COM CONFIANÇA >= 65%
+            if confianca < 65:
+                return {
+                    "tendencia": "NÃO APOSTAR",
+                    "estimativa": round(estimativa_total, 2),
+                    "probabilidade": round(probabilidade_base * 100, 1),
+                    "confianca": round(confianca, 1),
+                    "tipo_aposta": "avoid",
+                    "linha_mercado": linha_mercado,
+                    "detalhes": {"motivo": f"Confiança Over 1.5 baixa: {confianca:.1f}% < 65%"}
+                }
+            
+            # OVER 1.5 COM ESTIMATIVA BAIXA
+            if estimativa_total < 1.8:
+                return {
+                    "tendencia": "NÃO APOSTAR",
+                    "estimativa": round(estimativa_total, 2),
+                    "probabilidade": round(probabilidade_base * 100, 1),
+                    "confianca": round(confianca, 1),
+                    "tipo_aposta": "avoid",
+                    "linha_mercado": linha_mercado,
+                    "detalhes": {"motivo": f"Estimativa Over 1.5 baixa: {estimativa_total:.2f} < 1.8"}
+                }
+        
+        if tipo_aposta == "over" and linha_mercado == 2.5:
+            # OVER 2.5 SÓ É APROVADO COM ESTIMATIVA >= 2.6 E CONFIANÇA >= 68%
+            if estimativa_total < 2.6:
+                return {
+                    "tendencia": "NÃO APOSTAR",
+                    "estimativa": round(estimativa_total, 2),
+                    "probabilidade": round(probabilidade_base * 100, 1),
+                    "confianca": round(confianca, 1),
+                    "tipo_aposta": "avoid",
+                    "linha_mercado": linha_mercado,
+                    "detalhes": {"motivo": f"Estimativa Over 2.5 baixa: {estimativa_total:.2f} < 2.6"}
+                }
+            if confianca < 68:
+                return {
+                    "tendencia": "NÃO APOSTAR",
+                    "estimativa": round(estimativa_total, 2),
+                    "probabilidade": round(probabilidade_base * 100, 1),
+                    "confianca": round(confianca, 1),
+                    "tipo_aposta": "avoid",
+                    "linha_mercado": linha_mercado,
+                    "detalhes": {"motivo": f"Confiança Over 2.5 baixa: {confianca:.1f}% < 68%"}
+                }
 
         return {
             "tendencia": mercado,
@@ -1735,6 +1790,7 @@ class AnalisadorTendencia:
             "linha_mercado": linha_mercado,
             "detalhes": {
                 "fator_ataque": round(fator_ataque, 2),
+                "fator_liga": self.over_factor,
                 "distancia_linha": round(distancia_linha, 2),
                 "played_home": played_home,
                 "played_away": played_away,
@@ -1744,6 +1800,8 @@ class AnalisadorTendencia:
 
 
 class SistemaAutonomoApostas:
+    """Sistema autônomo de seleção de mercados com validação de odds"""
+    
     def __init__(self):
         self.config = ConfigManager()
         
@@ -1770,6 +1828,47 @@ class SistemaAutonomoApostas:
             "Serie A": "Serie A",
             "Campeonato Brasileiro Série A": "Campeonato Brasileiro Série A"
         }
+        
+        # LIGAS PERMITIDAS PARA BTTS
+        self.LIGAS_BTTS_PERMITIDAS = ["Bundesliga", "Eredivisie", "Premier League"]
+    
+    def validar_odd_para_aposta(self, mercado: str, odd_calculada: float, confianca: float) -> tuple:
+        """
+        Retorna (aprovado, odd_minima_necessaria, motivo)
+        """
+        if mercado == "over_1.5":
+            odd_minima = 1.30
+            if confianca >= 80:
+                odd_minima = 1.25
+            elif confianca >= 70:
+                odd_minima = 1.30
+            else:
+                odd_minima = 1.35
+            
+            if odd_calculada >= odd_minima:
+                return True, odd_minima, "OK"
+            else:
+                return False, odd_minima, f"Odd {odd_calculada:.2f} < {odd_minima:.2f}"
+        
+        elif mercado == "over_2.5":
+            odd_minima = 1.85
+            if confianca >= 75:
+                odd_minima = 1.80
+            
+            if odd_calculada >= odd_minima:
+                return True, odd_minima, "OK"
+            else:
+                return False, odd_minima, f"Odd {odd_calculada:.2f} < {odd_minima:.2f}"
+        
+        elif mercado == "over_3.5":
+            odd_minima = 2.20
+            
+            if odd_calculada >= odd_minima:
+                return True, odd_minima, "OK"
+            else:
+                return False, odd_minima, f"Odd {odd_calculada:.2f} < {odd_minima:.2f}"
+        
+        return False, 0, "Mercado não suportado"
     
     def _identificar_liga(self, liga_nome: str) -> str:
         for key in self.ligas_identificacao:
@@ -1784,23 +1883,26 @@ class SistemaAutonomoApostas:
         return conf_ajustada
     
     def _validar_aposta(self, liga: str, mercado: str, confianca_ajustada: float) -> tuple:
+        # BLOQUEAR COMPLETAMENTE GOLS HT (43,3% de acerto)
         if mercado == "ht":
-            if liga in ["Primeira Liga", "Ligue 1"]:
-                return False, f"❌ HT bloqueado na liga {liga} (baixa performance)"
-            if confianca_ajustada < 0.75:
-                return False, f"❌ Confiança HT baixa: {confianca_ajustada*100:.0f}% < 75%"
+            return False, f"❌ Gols HT bloqueado (performance 43.3% - não recomendado)"
+        
+        # RESTRINGIR BTTS APENAS PARA LIGAS PERMITIDAS
+        if mercado == "btts":
+            if liga not in self.LIGAS_BTTS_PERMITIDAS:
+                return False, f"❌ BTTS bloqueado na liga {liga} (apenas Bundesliga, Eredivisie, Premier League)"
+            if confianca_ajustada < 0.70:
+                return False, f"❌ Confiança BTTS baixa: {confianca_ajustada*100:.0f}% < 70%"
+        
+        if mercado == "over":
+            if liga in ["Primeira Liga", "Ligue 1"] and confianca_ajustada < 0.75:
+                return False, f"❌ OVER em {liga} requer confiança ≥ 75%"
+            if confianca_ajustada < 0.65:
+                return False, f"❌ Confiança OVER baixa: {confianca_ajustada*100:.0f}% < 65%"
         
         if mercado == "favorito":
             if confianca_ajustada < 0.55:
                 return False, f"❌ Confiança favorito baixa: {confianca_ajustada*100:.0f}% < 55%"
-        
-        if mercado == "over":
-            if liga == "Primeira Liga" and confianca_ajustada < 0.80:
-                return False, f"❌ OVER em Portugal requer confiança ≥ 80%"
-        
-        if mercado == "btts":
-            if liga == "Ligue 1":
-                return False, f"❌ BTTS bloqueado na Ligue 1 (baixa performance)"
         
         return True, "Aprovado"
     
@@ -1897,6 +1999,30 @@ class SistemaAutonomoApostas:
                 jogo_completo["confianca_vitoria"] = decisao["confianca_ajustada"] * 100
             
             jogo_completo["odd_sugerida"] = self.calcular_odd_sugerida(jogo_completo, decisao["mercado"])
+            
+            # VALIDAÇÃO DE ODD MÍNIMA
+            mercado_tipo = "over_1.5"
+            if "OVER 2.5" in jogo_completo.get("tendencia", ""):
+                mercado_tipo = "over_2.5"
+            elif "OVER 3.5" in jogo_completo.get("tendencia", ""):
+                mercado_tipo = "over_3.5"
+            
+            odd_valida, odd_min, motivo_odd = self.validar_odd_para_aposta(
+                mercado_tipo, 
+                jogo_completo["odd_sugerida"], 
+                decisao["confianca_ajustada"] * 100
+            )
+            
+            if not odd_valida:
+                reprovados.append({
+                    "jogo": jogo_dict,
+                    "motivo": f"Odd inválida: {motivo_odd}",
+                    "decisao": decisao
+                })
+                continue
+            
+            jogo_completo["odd_sugerida"] = round(max(jogo_completo["odd_sugerida"], odd_min), 2)
+            jogo_completo["odd_minima"] = odd_min
             
             jogo_completo["analise_profissional"] = self.calcular_score_profissional_v2(jogo_completo, decisao)
             
@@ -4730,7 +4856,6 @@ class ResultadosTopAlertas:
             return False
 
 
-#class GerenciadorAlertasCompletos:
 class GerenciadorAlertasCompletos:
     def __init__(self, sistema_principal):
         self.sistema = sistema_principal
@@ -5571,7 +5696,6 @@ class GerenciadorAlertasCompletos:
         buffer.seek(0)
         
         return buffer
-    
 
 
 class SistemaAlertasFutebol:
@@ -5602,6 +5726,24 @@ class SistemaAlertasFutebol:
             ]
         )
     
+    def _obter_nome_liga_por_id(self, liga_id: str) -> str:
+        """Converte ID da liga para nome legível"""
+        mapping = {
+            "BL1": "Bundesliga",
+            "DED": "Eredivisie",
+            "BSA": "Campeonato Brasileiro Série A",
+            "PD": "Primera Division",
+            "FL1": "Ligue 1",
+            "ELC": "Championship",
+            "PPL": "Primeira Liga",
+            "SA": "Serie A",
+            "PL": "Premier League",
+            "WC": "FIFA World Cup",
+            "CL": "UEFA Champions League",
+            "EC": "European Championship"
+        }
+        return mapping.get(liga_id, "Desconhecida")
+    
     def processar_jogos(self, data_selecionada, ligas_selecionadas, todas_ligas, top_n, min_conf, max_conf, estilo_poster, alerta_individual, alerta_poster, alerta_top_jogos, formato_top_jogos, tipo_filtro, tipo_analise, config_analise):
         hoje = data_selecionada.strftime("%Y-%m-%d")
         data_br = data_selecionada.strftime("%d/%m/%Y")
@@ -5625,7 +5767,8 @@ class SistemaAlertasFutebol:
         
         for i, liga_id in enumerate(ligas_busca):
             classificacao = classificacoes[liga_id]
-            analisador = AnalisadorTendencia(classificacao)
+            nome_liga = self._obter_nome_liga_por_id(liga_id)
+            analisador = AnalisadorTendencia(classificacao, nome_liga)
             
             if liga_id == "BSA":
                 jogos_data = self.api_client.obter_jogos_brasileirao(liga_id, hoje)
@@ -5797,7 +5940,8 @@ class SistemaAlertasFutebol:
         
         for i, liga_id in enumerate(ligas_busca):
             classificacao = classificacoes[liga_id]
-            analisador = AnalisadorTendencia(classificacao)
+            nome_liga = self._obter_nome_liga_por_id(liga_id)
+            analisador = AnalisadorTendencia(classificacao, nome_liga)
             
             if liga_id == "BSA":
                 jogos_data = self.api_client.obter_jogos_brasileirao(liga_id, hoje)
@@ -7207,7 +7351,6 @@ class SistemaAlertasFutebol:
         return arquivos_removidos
 
 
-#def render_tab_multiplas_pro(sistema):
 def render_tab_multiplas_pro(sistema):
     st.subheader("🧠 MÚLTIPLAS PRO - SISTEMA AUTÔNOMO")
     st.caption("Gera múltiplas inteligentes com score de qualidade, filtro anti-armadilha e balanceamento de risco. As múltiplas são salvas para conferência futura.")
@@ -7287,7 +7430,8 @@ def render_tab_multiplas_pro(sistema):
 
             for liga_id in ligas_busca:
                 classificacao = classificacoes[liga_id]
-                analisador = AnalisadorTendencia(classificacao)
+                nome_liga = sistema._obter_nome_liga_por_id(liga_id)
+                analisador = AnalisadorTendencia(classificacao, nome_liga)
 
                 if liga_id == "BSA":
                     jogos_data = sistema.api_client.obter_jogos_brasileirao(liga_id, hoje)
@@ -7389,7 +7533,7 @@ def render_tab_multiplas_pro(sistema):
             st.markdown("### 💣 MÚLTIPLAS GERADAS")
             
             # ============================================================
-            # SALVAR MÚLTIPLAS NO GERENCIADOR (CORREÇÃO)
+            # SALVAR MÚLTIPLAS NO GERENCIADOR
             # ============================================================
             multiplas_salvas = []
             
@@ -7586,8 +7730,6 @@ def render_tab_multiplas_pro(sistema):
                 st.write("---")
     else:
         st.info("ℹ️ Nenhuma múltipla gerada ainda.")
-    
-    
 
 
 def render_tab_busca(sistema):
