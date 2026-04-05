@@ -3406,7 +3406,7 @@ def gerar_jogos_ia(qtd_jogos):
             return [], None
         
         # Pegar os primeiros 50 concursos dos dados já carregados
-        dados = st.session_state.dados_api[:50]
+        dados = st.session_state.dados_api[:20]
         
         # Verificar se temos dados suficientes
         if len(dados) < 10:
