@@ -2976,7 +2976,7 @@ class PosterGenerator:
                 draw.text((LARGURA//2 - 150, y0 + 35), liga_text, font=FONTE_INFO, fill=(200, 200, 200))
 
             TAMANHO_ESCUDO = 190
-            TAMANHO = 210
+            TAMANHO = 220
             ESPACO_ENTRE = 700
 
             largura_total = 2 * TAMANHO + ESPACO_ENTRE
@@ -3195,7 +3195,7 @@ class PosterGenerator:
                 draw.text((badge_jogo_x + 65, badge_jogo_y + 15), resultado_jogo, font=FONTE_INFO, fill=(255, 255, 255))
 
             TAMANHO_ESCUDO = 190
-            TAMANHO = 210
+            TAMANHO = 220
             ESPACO_ENTRE = 700
 
             largura_total = 2 * TAMANHO + ESPACO_ENTRE
@@ -3649,7 +3649,7 @@ class PosterGenerator:
             except:
                 draw.text((LARGURA//2 - 150, y0 + 40), liga_text, font=FONTE_SUBTITULO, fill=(200, 200, 200))
 
-            TAMANHO_ESCUDO = 200
+            TAMANHO_ESCUDO = 190
             TAMANHO = 225
             ESPACO_ENTRE = 700
 
@@ -3935,7 +3935,7 @@ class PosterGenerator:
                 draw.text((LARGURA//2 - 150, y0 + 90), data_hora_text, font=FONTE_HORA, fill=(150, 200, 255))
 
             TAMANHO_ESCUDO = 190
-            TAMANHO = 210
+            TAMANHO = 220
             ESPACO_ENTRE = 700
 
             largura_total = 2 * TAMANHO + ESPACO_ENTRE
@@ -4126,7 +4126,7 @@ class PosterGenerator:
                 draw.text((badge_jogo_x + 45, badge_jogo_y + 12), resultado_jogo, font=FONTE_INFO, fill=(255, 255, 255))
 
             TAMANHO_ESCUDO = 190
-            TAMANHO = 210
+            TAMANHO = 220
             ESPACO_ENTRE = 700
 
             largura_total = 2 * TAMANHO + ESPACO_ENTRE
