@@ -4933,6 +4933,10 @@ class GerenciadorAlertasCompletos:
         for jogo_dict in jogos_analisados:
             tem_analise = False
             
+            # ⚠️ NOVO: Pular se for "NÃO APOSTAR"
+            if jogo_dict.get("tipo_aposta") == "avoid":
+                continue
+            
             if tipos_analise_selecionados.get("over_under", False) and jogo_dict.get('confianca', 0) >= 30:
                 tem_analise = True
             if tipos_analise_selecionados.get("favorito", False) and jogo_dict.get('confianca_vitoria', 0) >= 30:
@@ -5098,7 +5102,7 @@ class GerenciadorAlertasCompletos:
                     "estimativa": estimativa,
                     "confianca": confianca
                 }
-                # Nível C - PULAR (não adicionar aos classificados)
+                # ⚠️ NOVO: Nível C - PULAR (não adicionar aos classificados nem criar alerta)
                 continue
                 
             elif nivel_b:
@@ -5135,7 +5139,7 @@ class GerenciadorAlertasCompletos:
                     "confianca": confianca
                 }
             else:
-                # Nível E - descartar
+                # Nível E - descartar sem criar alerta
                 continue
             
             jogo_dict["classificacao"] = classificacao
@@ -5143,7 +5147,8 @@ class GerenciadorAlertasCompletos:
             fixture_id = str(jogo_dict.get("id"))
             chave_alerta = f"{fixture_id}_{data_busca}"
             
-            if chave_alerta not in alertas_top:
+            # ⚠️ NOVO: Só criar alerta se NÃO for nível C (EXCLUIR)
+            if classificacao.get("recomendacao") != "EXCLUIR" and chave_alerta not in alertas_top:
                 alerta_top = {
                     "id": fixture_id,
                     "home": jogo_dict.get("home", ""),
@@ -5831,6 +5836,11 @@ class SistemaAlertasFutebol:
                     st.write(f"      Status: {jogo.status}")
                     
                     if tipo_analise == "Over/Under de Gols":
+                        # ⚠️ NOVO: Ignorar completamente "NÃO APOSTAR"
+                        if analise.get("tipo_aposta") == "avoid":
+                            st.write(f"      🚫 Ignorado (NÃO APOSTAR): {jogo.home_team} vs {jogo.away_team}")
+                            continue
+                        
                         if min_conf <= analise["confianca"] <= max_conf:
                             if tipo_filtro == "Todos" or \
                                (tipo_filtro == "Apenas Over" and analise["tipo_aposta"] == "over") or \
@@ -6327,6 +6337,11 @@ class SistemaAlertasFutebol:
                 st.success(f"📊 Resumo final {tipo_alerta} enviado!")
     
     def _verificar_enviar_alerta(self, jogo: Jogo, match_data: dict, analise: dict, alerta_individual: bool, min_conf: int, max_conf: int, tipo_alerta: str):
+        # ⚠️ NOVO: Não criar alerta se for "NÃO APOSTAR"
+        if analise.get("tipo_aposta") == "avoid":
+            logging.info(f"🚫 Alerta ignorado: {jogo.home_team} vs {jogo.away_team} - NÃO APOSTAR")
+            return
+        
         if tipo_alerta == "over_under":
             alertas = DataStorage.carregar_alertas()
         elif tipo_alerta == "favorito":
@@ -6542,7 +6557,8 @@ class SistemaAlertasFutebol:
             jogos_filtrados = [
                 j for j in jogos
                 if min_conf <= j.get("confianca", 0) <= max_conf and 
-                j.get("status") not in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"]
+                j.get("status") not in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"] and
+                j.get("tipo_aposta") != "avoid"  # ⚠️ NOVO: Excluir "NÃO APOSTAR"
             ]
             
             if tipo_filtro == "Apenas Over":
