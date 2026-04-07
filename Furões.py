@@ -1609,6 +1609,7 @@ class AnalisadorEstatistico:
         return int(round(escore * 100))
 
 
+#class AnalisadorTendencia:
 class AnalisadorTendencia:
     """Analisador de tendências com ajuste por liga e análise inteligente de UNDER"""
     
@@ -1764,7 +1765,6 @@ class AnalisadorTendencia:
             }
         }
     
-    #def _analisar_over
     def _analisar_over(self, home: str, away: str, estimativa_total: float, 
                        played_home: int, played_away: int,
                        media_home_feitos: float, media_away_feitos: float,
@@ -1929,6 +1929,70 @@ class AnalisadorTendencia:
                 "motivo": f"ALERTA {mercado} CONFIRMADO"
             }
         }
+
+    def _analisar_under(self, home: str, away: str, estimativa_total: float,
+                        played_home: int, played_away: int,
+                        media_home_sofridos: float, media_away_sofridos: float,
+                        media_home_feitos: float, media_away_feitos: float) -> dict:
+        """Analisa opções de UNDER quando OVER não é viável"""
+        
+        # Aplica fator UNDER específico da liga
+        estimativa_under = estimativa_total * self.under_factor
+        
+        # Liga defensiva tem mais chance de UNDER
+        liga_defensiva = self.liga_nome in ['Serie A', 'Primeira Liga', 'Ligue 1']
+        
+        # UNDER 2.5
+        if estimativa_under <= 2.2 or liga_defensiva:
+            prob_under_25 = sigmoid((2.5 - estimativa_under) * 1.8) * 100
+            conf_under_25 = min(prob_under_25 * 0.75, 75)
+            
+            # Ajuste por consistência defensiva
+            defesa_home = 1 - (media_home_sofridos / 3.0)
+            defesa_away = 1 - (media_away_sofridos / 3.0)
+            fator_defesa = (defesa_home + defesa_away) / 2
+            conf_under_25 *= (0.9 + fator_defesa * 0.2)
+            conf_under_25 = clamp(conf_under_25, 55, 75)
+            
+            if conf_under_25 >= self.UNDER_CONF_MIN:
+                # Verificar se não é uma liga ofensiva
+                if self.liga_nome not in ['Bundesliga', 'Eredivisie'] or estimativa_under <= 1.8:
+                    return {
+                        "tendencia": "UNDER 2.5",
+                        "estimativa": round(estimativa_total, 2),
+                        "probabilidade": round(prob_under_25, 1),
+                        "confianca": round(conf_under_25, 1),
+                        "tipo_aposta": "under",
+                        "linha_mercado": 2.5,
+                        "detalhes": {
+                            "motivo": f"OVER não recomendado, UNDER 2.5 com {conf_under_25:.1f}% confiança",
+                            "fator_under": self.under_factor,
+                            "estimativa_ajustada": round(estimativa_under, 2)
+                        }
+                    }
+        
+        # UNDER 1.5 (para jogos muito travados)
+        if estimativa_under <= 1.6:
+            prob_under_15 = sigmoid((1.5 - estimativa_under) * 2.5) * 100
+            conf_under_15 = min(prob_under_15 * 0.8, 70)
+            
+            if conf_under_15 >= 60:
+                return {
+                    "tendencia": "UNDER 1.5",
+                    "estimativa": round(estimativa_total, 2),
+                    "probabilidade": round(prob_under_15, 1),
+                    "confianca": round(conf_under_15, 1),
+                    "tipo_aposta": "under",
+                    "linha_mercado": 1.5,
+                    "detalhes": {
+                        "motivo": f"Jogo travado, UNDER 1.5 com {conf_under_15:.1f}% confiança",
+                        "fator_under": self.under_factor,
+                        "estimativa_ajustada": round(estimativa_under, 2)
+                    }
+                }
+        
+        return None
+    
                       
 
 
