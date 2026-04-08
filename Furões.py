@@ -9136,4 +9136,4 @@ st.markdown("""
     <div class="footer-title">ELITE MASTER SYSTEM 3.0</div>
     <div class="footer-sub">GERADOR DE MÚLTIPLAS • CLASSIFICAÇÃO A/B/C/D (UNDER) • SAMUCJ TECNOLOGIA © 2026</div>
 </div>
-""", unsafe_allow_html=True)p
+""", unsafe_allow_html=True)
