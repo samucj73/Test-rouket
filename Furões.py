@@ -413,8 +413,7 @@ class ImageCache:
 class GeradorMultiplasProfissional:
     """GERADOR DE MÚLTIPLAS 3.0 - ELITE MASTER"""
     
-    # ADICIONADO: Champions League nas listas de recomendação
-    LIGAS_OVER_RECOMMENDED = ["Bundesliga", "Eredivisie", "Premier League", "UEFA Champions League", "Champions League"]
+    LIGAS_OVER_RECOMMENDED = ["Bundesliga", "Eredivisie", "Premier League"]
     LIGAS_OVER_WITH_FILTER = ["Ligue 1", "Serie A"]
     LIGAS_OVER_AVOID = ["Campeonato Brasileiro Série A", "Primera Division"]
     LIGAS_UNDER_RECOMMENDED = ["Serie A", "Ligue 1", "Primeira Liga"]
@@ -1664,7 +1663,7 @@ class AnalisadorEstatistico:
 class AnalisadorTendencia:
     """Analisador de tendências com ajuste por liga e análise inteligente de UNDER"""
     
-    # FATORES DE AJUSTE POR LIGA (ADICIONADO CHAMPIONS LEAGUE)
+    # FATORES DE AJUSTE POR LIGA (baseado nos 215 jogos)
     LIGA_OVER_FACTOR = {
         'Eredivisie': 1.12,
         'Championship': 1.08,
@@ -1674,12 +1673,10 @@ class AnalisadorTendencia:
         'Ligue 1': 0.96,
         'Primeira Liga': 0.94,
         'Premier League': 0.92,
-        'Serie A': 0.88,
-        'UEFA Champions League': 1.10,
-        'Champions League': 1.10,
+        'Serie A': 0.88
     }
     
-    # FATORES PARA UNDER (ADICIONADO CHAMPIONS LEAGUE)
+    # FATORES PARA UNDER (ligas defensivas)
     LIGA_UNDER_FACTOR = {
         'Serie A': 1.15,
         'Primeira Liga': 1.12,
@@ -1689,12 +1686,10 @@ class AnalisadorTendencia:
         'Primera Division': 1.00,
         'Bundesliga': 0.92,
         'Eredivisie': 0.88,
-        'Championship': 0.85,
-        'UEFA Champions League': 0.95,
-        'Champions League': 0.95,
+        'Championship': 0.85
     }
     
-    # CONFIABILIDADE DA LIGA (ADICIONADO CHAMPIONS LEAGUE)
+    # CONFIABILIDADE DA LIGA (afeta o teto máximo de confiança)
     LIGA_CONFIDENCE_CAP = {
         'Eredivisie': 85,
         'Championship': 82,
@@ -1704,13 +1699,11 @@ class AnalisadorTendencia:
         'Ligue 1': 72,
         'Primeira Liga': 70,
         'Premier League': 68,
-        'Serie A': 65,
-        'UEFA Champions League': 85,
-        'Champions League': 85,
+        'Serie A': 65
     }
     
-    # LIGAS PERMITIDAS PARA AMBAS MARCAM (ADICIONADO CHAMPIONS LEAGUE)
-    LIGAS_BTTS_PERMITIDAS = ["Bundesliga", "Eredivisie", "Premier League", "UEFA Champions League", "Champions League"]
+    # LIGAS PERMITIDAS PARA AMBAS MARCAM
+    LIGAS_BTTS_PERMITIDAS = ["Bundesliga", "Eredivisie", "Premier League"]
     
     # LIMIARES PARA UNDER (mais exigentes que OVER)
     UNDER_CONF_MIN = 65
@@ -1828,6 +1821,10 @@ class AnalisadorTendencia:
                        media_home_sofridos: float, media_away_sofridos: float,
                        fator_ataque: float) -> dict:
         """Analisa opções de OVER com classificação correta por linha de mercado"""
+        
+        # ============================================================
+        # CORREÇÃO: Limiares agora estão na ordem correta (maior → menor)
+        # ============================================================
         
         # OVER 3.5 - Para jogos com estimativa MUITO ALTA (≥ 3.2 gols)
         if estimativa_total >= 3.2:
@@ -2055,7 +2052,6 @@ class SistemaAutonomoApostas:
     def __init__(self):
         self.config = ConfigManager()
         
-        # ADICIONADO: Champions League nas configurações de liga
         self.LIGAS_CONFIG = {
             "Eredivisie": {"over": 1.2, "btts": 1.1, "ht": 1.0, "favorito": 1.0, "under": 0.8},
             "Bundesliga": {"over": 1.2, "btts": 1.2, "ht": 1.1, "favorito": 1.0, "under": 0.85},
@@ -2065,9 +2061,7 @@ class SistemaAutonomoApostas:
             "Ligue 1": {"over": 0.8, "btts": 0.7, "ht": 0.7, "favorito": 1.0, "under": 1.1},
             "Primeira Liga": {"over": 0.7, "btts": 1.0, "ht": 0.5, "favorito": 1.0, "under": 1.15},
             "Serie A": {"over": 1.0, "btts": 0.9, "ht": 0.8, "favorito": 1.0, "under": 1.1},
-            "Campeonato Brasileiro Série A": {"over": 0.8, "btts": 0.8, "ht": 0.7, "favorito": 1.1, "under": 1.05},
-            "UEFA Champions League": {"over": 1.15, "btts": 1.1, "ht": 1.05, "favorito": 1.05, "under": 0.9},
-            "Champions League": {"over": 1.15, "btts": 1.1, "ht": 1.05, "favorito": 1.05, "under": 0.9},
+            "Campeonato Brasileiro Série A": {"over": 0.8, "btts": 0.8, "ht": 0.7, "favorito": 1.1, "under": 1.05}
         }
         
         self.ligas_identificacao = {
@@ -2079,13 +2073,11 @@ class SistemaAutonomoApostas:
             "Ligue 1": "Ligue 1",
             "Primeira Liga": "Primeira Liga",
             "Serie A": "Serie A",
-            "Campeonato Brasileiro Série A": "Campeonato Brasileiro Série A",
-            "UEFA Champions League": "UEFA Champions League",
-            "Champions League": "Champions League",
+            "Campeonato Brasileiro Série A": "Campeonato Brasileiro Série A"
         }
         
-        # LIGAS PERMITIDAS PARA BTTS (ADICIONADO CHAMPIONS LEAGUE)
-        self.LIGAS_BTTS_PERMITIDAS = ["Bundesliga", "Eredivisie", "Premier League", "UEFA Champions League", "Champions League"]
+        # LIGAS PERMITIDAS PARA BTTS
+        self.LIGAS_BTTS_PERMITIDAS = ["Bundesliga", "Eredivisie", "Premier League"]
     
     def validar_odd_para_aposta(self, mercado: str, odd_calculada: float, confianca: float) -> tuple:
         """
@@ -2167,7 +2159,7 @@ class SistemaAutonomoApostas:
         # RESTRINGIR BTTS APENAS PARA LIGAS PERMITIDAS
         if mercado == "btts":
             if liga not in self.LIGAS_BTTS_PERMITIDAS:
-                return False, f"❌ BTTS bloqueado na liga {liga} (apenas Bundesliga, Eredivisie, Premier League, Champions League)"
+                return False, f"❌ BTTS bloqueado na liga {liga} (apenas Bundesliga, Eredivisie, Premier League)"
             if confianca_ajustada < 0.70:
                 return False, f"❌ Confiança BTTS baixa: {confianca_ajustada*100:.0f}% < 70%"
         
@@ -2391,7 +2383,7 @@ class SistemaAutonomoApostas:
             detalhes["confianca_bonus"] = 1
         
         liga = decisao.get("liga", "")
-        if liga == "Eredivisie" or liga == "UEFA Champions League" or liga == "Champions League":
+        if liga == "Eredivisie":
             score += 2
             detalhes["liga_bonus"] = 2
         elif liga in ["Bundesliga", "Premier League"]:
@@ -6709,17 +6701,9 @@ class SistemaAlertasFutebol:
             alertas = {}
         
         fixture_id = str(jogo.id)
-        data_busca = datetime.now().strftime("%Y-%m-%d")
-        chave = f"{fixture_id}_{data_busca}"
-        
-        # LOG para debug da Champions League
-        if "Champions" in jogo.competition:
-            st.write(f"🏆 CHAMPIONS LEAGUE DETECTADA: {jogo.home_team} vs {jogo.away_team}")
-            st.write(f"   Chave: {chave}")
-            st.write(f"   Alertas existentes: {len(alertas)}")
         
         # CRIAÇÃO DO ALERTA (apenas se não existir)
-        if chave not in alertas:
+        if fixture_id not in alertas:
             alerta_data = {
                 "id": fixture_id,
                 "home": jogo.home_team,
@@ -6731,7 +6715,7 @@ class SistemaAlertasFutebol:
                 "escudo_away": jogo.away_crest,
                 "tipo_alerta": tipo_alerta,
                 "conferido": False,
-                "data_busca": data_busca,
+                "data_busca": datetime.now().strftime("%Y-%m-%d"),
                 "data_hora_criacao": datetime.now().isoformat()
             }
             
@@ -6778,10 +6762,7 @@ class SistemaAlertasFutebol:
                     })
             
             # ADICIONAR ao dicionário existente (não substituir)
-            alertas[chave] = alerta_data
-            
-            if "Champions" in jogo.competition:
-                st.success(f"✅ Alerta Champions League criado: {jogo.home_team} vs {jogo.away_team}")
+            alertas[fixture_id] = alerta_data
             
             if alerta_individual:
                 self._enviar_alerta_individual(match_data, analise, tipo_alerta, min_conf, max_conf)
@@ -6789,14 +6770,6 @@ class SistemaAlertasFutebol:
             # SALVAR mantendo TODOS os alertas existentes
             if tipo_alerta == "over_under":
                 DataStorage.salvar_alertas(alertas)
-                if "Champions" in jogo.competition:
-                    st.success(f"💾 Alerta Champions League SALVO! Total: {len(alertas)}")
-                    # Verificar se realmente salvou
-                    verificacao = DataStorage.carregar_alertas()
-                    if chave in verificacao:
-                        st.success(f"✅ VERIFICAÇÃO: Alerta Champions League está no arquivo!")
-                    else:
-                        st.error(f"❌ ERRO: Alerta Champions League NÃO está no arquivo!")
             elif tipo_alerta == "favorito":
                 DataStorage.salvar_alertas_favoritos(alertas)
             elif tipo_alerta == "gols_ht":
@@ -6806,8 +6779,6 @@ class SistemaAlertasFutebol:
             
             logging.info(f"✅ Alerta salvo: {jogo.home_team} vs {jogo.away_team} - {tipo_alerta}")
         else:
-            if "Champions" in jogo.competition:
-                st.info(f"ℹ️ Alerta Champions League já existe: {jogo.home_team} vs {jogo.away_team}")
             logging.info(f"ℹ️ Alerta já existe para {jogo.home_team} vs {jogo.away_team}")
     
     def _enviar_alerta_individual(self, fixture: dict, analise: dict, tipo_alerta: str, min_conf: int, max_conf: int):
