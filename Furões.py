@@ -735,41 +735,92 @@ class DataStorage:
     
     @staticmethod
     def carregar_json(caminho: str) -> dict:
+        """Carrega JSON com tratamento robusto de erros e backup"""
         try:
-            if os.path.exists(caminho):
+            if os.path.exists(caminho) and os.path.getsize(caminho) > 0:
                 with open(caminho, "r", encoding='utf-8') as f:
                     dados = json.load(f)
-                
-                if not dados:
-                    return {}
                     
-                if caminho in [ConfigManager.CACHE_JOGOS, ConfigManager.CACHE_CLASSIFICACAO]:
-                    agora = datetime.now().timestamp()
-                    if isinstance(dados, dict) and '_timestamp' in dados:
-                        if agora - dados['_timestamp'] > ConfigManager.CACHE_TIMEOUT:
-                            return {}
+                    # Verifica se é um dict válido
+                    if isinstance(dados, dict):
+                        # Verificar cache expirado se aplicável
+                        if caminho in [ConfigManager.CACHE_JOGOS, ConfigManager.CACHE_CLASSIFICACAO]:
+                            agora = datetime.now().timestamp()
+                            if isinstance(dados, dict) and '_timestamp' in dados:
+                                if agora - dados['_timestamp'] > ConfigManager.CACHE_TIMEOUT:
+                                    logging.info(f"🕐 Cache expirado: {caminho}")
+                                    return {}
+                        return dados
+                    elif isinstance(dados, list):
+                        # Para arquivos que deveriam ser dict mas são list, converter
+                        logging.warning(f"⚠️ {caminho} é uma lista, convertendo para dict vazio")
+                        return {}
                     else:
-                        if agora - os.path.getmtime(caminho) > ConfigManager.CACHE_TIMEOUT:
-                            return {}
-                return dados
-        except (json.JSONDecodeError, IOError, Exception) as e:
-            logging.error(f"Erro ao carregar {caminho}: {e}")
-            st.error(f"Erro ao carregar {caminho}: {e}")
-        return {}
+                        logging.warning(f"⚠️ {caminho} formato inválido, retornando dict vazio")
+                        return {}
+            else:
+                # Arquivo não existe ou está vazio
+                if os.path.exists(caminho):
+                    logging.info(f"📂 {caminho} está vazio, criando novo")
+                else:
+                    logging.info(f"📂 {caminho} não encontrado, será criado")
+                return {}
+                
+        except json.JSONDecodeError as e:
+            logging.error(f"❌ Erro JSON em {caminho}: {e}")
+            # Backup do arquivo corrompido
+            if os.path.exists(caminho):
+                backup_path = f"{caminho}.corrompido_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                try:
+                    shutil.copy(caminho, backup_path)
+                    logging.info(f"📁 Backup criado: {backup_path}")
+                    st.warning(f"⚠️ Arquivo {caminho} estava corrompido. Backup salvo como {backup_path}")
+                except Exception as backup_err:
+                    logging.error(f"❌ Erro ao criar backup: {backup_err}")
+            return {}
+            
+        except Exception as e:
+            logging.error(f"❌ Erro ao carregar {caminho}: {e}")
+            return {}
     
     @staticmethod
     def salvar_json(caminho: str, dados: dict):
+        """Salva JSON com validação e backup"""
         try:
+            # Validar dados antes de salvar
+            if not isinstance(dados, dict):
+                logging.error(f"❌ Tentativa de salvar dados não-dict em {caminho}: {type(dados)}")
+                return
+            
             dados_serializados = DataStorage._serialize_for_json(dados)
             
+            # Adicionar timestamp para caches
             if caminho in [ConfigManager.CACHE_JOGOS, ConfigManager.CACHE_CLASSIFICACAO]:
                 if isinstance(dados_serializados, dict):
                     dados_serializados['_timestamp'] = datetime.now().timestamp()
             
+            # Backup antes de salvar (para arquivos importantes)
+            if caminho in [ConfigManager.ALERTAS_PATH, ConfigManager.ALERTAS_FAVORITOS_PATH,
+                          ConfigManager.ALERTAS_GOLS_HT_PATH, ConfigManager.ALERTAS_AMBAS_MARCAM_PATH,
+                          ConfigManager.ALERTAS_TOP_PATH, ConfigManager.ALERTAS_COMPLETOS_PATH]:
+                if os.path.exists(caminho):
+                    backup_path = f"{caminho}.backup"
+                    try:
+                        shutil.copy(caminho, backup_path)
+                    except Exception as backup_err:
+                        logging.warning(f"⚠️ Não foi possível criar backup: {backup_err}")
+            
+            # Salvar arquivo
             with open(caminho, "w", encoding='utf-8') as f:
                 json.dump(dados_serializados, f, ensure_ascii=False, indent=2)
+                
+            logging.info(f"✅ Arquivo salvo: {caminho} ({len(dados_serializados)} registros)")
+            
         except IOError as e:
-            logging.error(f"Erro ao salvar {caminho}: {e}")
+            logging.error(f"❌ Erro de I/O ao salvar {caminho}: {e}")
+            st.error(f"Erro ao salvar {caminho}: {e}")
+        except Exception as e:
+            logging.error(f"❌ Erro inesperado ao salvar {caminho}: {e}")
             st.error(f"Erro ao salvar {caminho}: {e}")
     
     @staticmethod
@@ -1609,7 +1660,6 @@ class AnalisadorEstatistico:
         return int(round(escore * 100))
 
 
-#class AnalisadorTendencia:
 class AnalisadorTendencia:
     """Analisador de tendências com ajuste por liga e análise inteligente de UNDER"""
     
@@ -4267,9 +4317,9 @@ class PosterGenerator:
             draw.line([(x0 + 80, y_analysis - 10), (x1 - 80, y_analysis - 10)], fill=(100, 130, 160), width=2)
             
             if "OVER 1.5" in mercado.upper():
-                emoji = ""
+                emoji = "🟢"
             elif "OVER 2.5" in mercado.upper():
-                emoji = ""
+                emoji = "🟡"
             else:
                 emoji = "🔵 "
             
@@ -5630,7 +5680,7 @@ class GerenciadorAlertasCompletos:
             
             lotes = [jogos_conferidos[i:i+3] for i in range(0, len(jogos_conferidos), 3)]
             for idx_lote, lote in enumerate(lotes, 1):
-                poster = self.poster_generator.gerar_poster_resultados_completos_v2(lote, {})
+                poster = self.gerar_poster_resultados_completos_v2(lote, {})
                 caption = (
                     f"<b>🏆 RESULTADOS COMPLETOS - {hoje}</b>\n"
                     f"<b>📋 LOTE {idx_lote}/{len(lotes)} - {len(lote)} JOGOS</b>\n"
@@ -6355,6 +6405,7 @@ class SistemaAlertasFutebol:
             self._enviar_alertas_resultados_automaticos(resultados_totais, data_selecionada)
     
     def _conferir_resultados_tipo(self, tipo_alerta: str, data_busca: str) -> dict:
+        # CARREGAR alertas e resultados existentes
         if tipo_alerta == "over_under":
             alertas = DataStorage.carregar_alertas()
             resultados = DataStorage.carregar_resultados()
@@ -6370,20 +6421,27 @@ class SistemaAlertasFutebol:
         else:
             return {}
         
-        jogos_com_resultados = {}
-        progress_bar = st.progress(0)
-        total_alertas = len(alertas)
-        
-        if total_alertas == 0:
+        if not alertas:
             st.info(f"ℹ️ Nenhum alerta ativo do tipo {tipo_alerta}")
             return {}
         
-        st.write(f"🔍 Conferindo {total_alertas} alertas do tipo {tipo_alerta}...")
+        # FILTRAR alertas da data específica que NÃO foram conferidos
+        alertas_hoje = {}
+        for fixture_id, alerta in alertas.items():
+            if alerta.get("data_busca") == data_busca and not alerta.get("conferido", False):
+                alertas_hoje[fixture_id] = alerta
         
-        for idx, (fixture_id, alerta) in enumerate(alertas.items()):
-            if alerta.get("conferido", False):
-                continue
-            
+        if not alertas_hoje:
+            st.info(f"ℹ️ Nenhum alerta pendente para {data_busca}")
+            return {}
+        
+        st.write(f"🔍 Conferindo {len(alertas_hoje)} alertas do tipo {tipo_alerta}...")
+        
+        jogos_com_resultados = {}
+        progress_bar = st.progress(0)
+        total_alertas = len(alertas_hoje)
+        
+        for idx, (fixture_id, alerta) in enumerate(alertas_hoje.items()):
             match_data = self.api_client.obter_detalhes_jogo(fixture_id)
             if not match_data:
                 continue
@@ -6518,6 +6576,7 @@ class SistemaAlertasFutebol:
             
             progress_bar.progress((idx + 1) / total_alertas)
         
+        # ATUALIZAR ambos os arquivos após conferência
         if tipo_alerta == "over_under":
             DataStorage.salvar_alertas(alertas)
             DataStorage.salvar_resultados(resultados)
@@ -6624,11 +6683,12 @@ class SistemaAlertasFutebol:
                 st.success(f"📊 Resumo final {tipo_alerta} enviado!")
     
     def _verificar_enviar_alerta(self, jogo: Jogo, match_data: dict, analise: dict, alerta_individual: bool, min_conf: int, max_conf: int, tipo_alerta: str):
-        # Não criar alerta se for "NÃO APOSTAR" - mas agora "avoid" pode ser substituído por UNDER
+        # Não criar alerta se for "NÃO APOSTAR"
         if analise.get("tipo_aposta") == "avoid":
             logging.info(f"🚫 Alerta ignorado: {jogo.home_team} vs {jogo.away_team} - NÃO APOSTAR")
             return
         
+        # CARREGAR alertas existentes ANTES de criar novo
         if tipo_alerta == "over_under":
             alertas = DataStorage.carregar_alertas()
         elif tipo_alerta == "favorito":
@@ -6642,6 +6702,7 @@ class SistemaAlertasFutebol:
         
         fixture_id = str(jogo.id)
         
+        # CRIAÇÃO DO ALERTA (apenas se não existir)
         if fixture_id not in alertas:
             alerta_data = {
                 "id": fixture_id,
@@ -6654,7 +6715,8 @@ class SistemaAlertasFutebol:
                 "escudo_away": jogo.away_crest,
                 "tipo_alerta": tipo_alerta,
                 "conferido": False,
-                "data_busca": datetime.now().strftime("%Y-%m-%d")
+                "data_busca": datetime.now().strftime("%Y-%m-%d"),
+                "data_hora_criacao": datetime.now().isoformat()
             }
             
             if tipo_alerta == "over_under":
@@ -6699,11 +6761,13 @@ class SistemaAlertasFutebol:
                         "detalhes": analise.get("detalhes", {})
                     })
             
+            # ADICIONAR ao dicionário existente (não substituir)
             alertas[fixture_id] = alerta_data
             
             if alerta_individual:
                 self._enviar_alerta_individual(match_data, analise, tipo_alerta, min_conf, max_conf)
             
+            # SALVAR mantendo TODOS os alertas existentes
             if tipo_alerta == "over_under":
                 DataStorage.salvar_alertas(alertas)
             elif tipo_alerta == "favorito":
@@ -6712,6 +6776,10 @@ class SistemaAlertasFutebol:
                 DataStorage.salvar_alertas_gols_ht(alertas)
             elif tipo_alerta == "ambas_marcam":
                 DataStorage.salvar_alertas_ambas_marcam(alertas)
+            
+            logging.info(f"✅ Alerta salvo: {jogo.home_team} vs {jogo.away_team} - {tipo_alerta}")
+        else:
+            logging.info(f"ℹ️ Alerta já existe para {jogo.home_team} vs {jogo.away_team}")
     
     def _enviar_alerta_individual(self, fixture: dict, analise: dict, tipo_alerta: str, min_conf: int, max_conf: int):
         home = fixture["homeTeam"]["name"]
