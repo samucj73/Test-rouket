@@ -6356,29 +6356,12 @@ class SistemaAlertasFutebol:
         data_br = data_selecionada.strftime("%d/%m/%Y")
         st.subheader(f"📊 Conferindo Resultados para {data_br}")
         
-        # CORREÇÃO AQUI: Carregar também os alertas COMPLETOS (Champions League)
-        alertas_completos = DataStorage.carregar_alertas_completos()
-        resultados_completos = DataStorage.carregar_resultados_completos()
-        
         resultados_totais = {
             "over_under": self._conferir_resultados_tipo("over_under", hoje),
             "favorito": self._conferir_resultados_tipo("favorito", hoje),
             "gols_ht": self._conferir_resultados_tipo("gols_ht", hoje),
             "ambas_marcam": self._conferir_resultados_tipo("ambas_marcam", hoje)
         }
-        
-        # Adicionar alertas completos às estatísticas
-        if alertas_completos:
-            st.info(f"🏆 Incluindo {len(alertas_completos)} alertas COMPLETOS (Champions League) na conferência...")
-            # Converter alertas completos para o formato esperado pela conferência
-            for chave, alerta in alertas_completos.items():
-                if alerta.get("data_busca") == hoje and not alerta.get("conferido", False):
-                    # Verificar se já existe um resultado para este jogo
-                    if chave in resultados_completos:
-                        resultado_data = resultados_completos[chave]
-                        # Adicionar aos totais da aba de resultados
-                        if resultado_data.get("resultado") == "GREEN":
-                            resultados_totais["over_under"][chave] = resultado_data
         
         st.markdown("---")
         st.subheader("📈 RESUMO DE RESULTADOS")
@@ -8315,7 +8298,6 @@ def render_tab_resultados(sistema):
     
     st.markdown("### 📈 Estatísticas dos Alertas")
     
-    # Carregar alertas regulares
     alertas_ou = DataStorage.carregar_alertas()
     alertas_fav = DataStorage.carregar_alertas_favoritos()
     alertas_ht = DataStorage.carregar_alertas_gols_ht()
@@ -8325,27 +8307,6 @@ def render_tab_resultados(sistema):
     resultados_fav = DataStorage.carregar_resultados_favoritos()
     resultados_ht = DataStorage.carregar_resultados_gols_ht()
     resultados_am = DataStorage.carregar_resultados_ambas_marcam()
-    
-    # Carregar também alertas COMPLETOS (Champions League)
-    alertas_completos = DataStorage.carregar_alertas_completos()
-    resultados_completos = DataStorage.carregar_resultados_completos()
-    
-    # Adicionar alertas completos às estatísticas de Over/Under
-    if alertas_completos:
-        for chave, alerta in alertas_completos.items():
-            if alerta.get("tipo_alerta") == "completo" and alerta.get("conferido", False):
-                # Verificar se já existe no dicionário de alertas_ou (para não duplicar)
-                if chave not in alertas_ou:
-                    alertas_ou[chave] = alerta
-                
-                # Adicionar resultado se existir
-                if chave in resultados_completos:
-                    resultado_comp = resultados_completos[chave]
-                    # Criar um resultado compatível com o formato esperado
-                    if "resultado" not in resultado_comp and "over_under" in resultado_comp:
-                        resultado_comp["resultado"] = resultado_comp.get("over_under")
-                    if chave not in resultados_ou:
-                        resultados_ou[chave] = resultado_comp
     
     col1, col2 = st.columns(2)
     
