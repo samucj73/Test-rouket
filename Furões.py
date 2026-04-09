@@ -25,9 +25,8 @@ import random
 # [NOVA] FUNÇÕES DO SISTEMA AUTÔNOMO PRO
 # =============================
 
-#class SistemaApostasPro:
 class SistemaApostasPro:
-    """Sistema profissional de classificação e filtragem de apostas - CORRIGIDO"""
+    """Sistema profissional de classificação e filtragem de apostas"""
     
     def __init__(self, alerts):
         self.alerts = alerts
@@ -40,45 +39,15 @@ class SistemaApostasPro:
     def classificar_mercado(self, alerta):
         est = alerta['estimativa']
         prob = alerta['probabilidade']
-        
-        # CORREÇÃO: Avaliar TODOS os mercados e escolher o MAIS ADEQUADO
-        mercados = []
-        
-        # OVER 3.5
-        if est >= 3.2 and prob >= 60:
-            mercados.append(("OVER 3.5", 2.20, 3))
-        elif est >= 3.0 and prob >= 65:
-            mercados.append(("OVER 3.5", 2.20, 2))
-        
-        # OVER 2.5
-        if est >= 2.6 and prob >= 65:
-            mercados.append(("OVER 2.5", 1.90, 5))
-        elif est >= 2.4 and prob >= 70:
-            mercados.append(("OVER 2.5", 1.90, 4))
-        elif est >= 2.2 and prob >= 75:
-            mercados.append(("OVER 2.5", 1.85, 3))
-        
-        # OVER 1.5 (sempre disponível como fallback)
-        if est >= 1.8 and prob >= 60:
-            mercados.append(("OVER 1.5", 1.35, 1))
-        
-        # UNDER 2.5 (para jogos com poucos gols)
-        if est <= 2.0 and prob >= 65:
-            mercados.append(("UNDER 2.5", 1.65, 2))
-        elif est <= 1.8 and prob >= 70:
-            mercados.append(("UNDER 2.5", 1.70, 3))
-        
-        # UNDER 1.5
-        if est <= 1.4 and prob >= 70:
-            mercados.append(("UNDER 1.5", 2.00, 3))
-        
-        if not mercados:
-            return "OVER 1.5 (FALLBACK)", 1.35
-        
-        # Ordenar por prioridade (maior = melhor)
-        mercados.sort(key=lambda x: x[2], reverse=True)
-        
-        return mercados[0][0], mercados[0][1]
+
+        if est >= 2.5 and prob >= 65:
+            return "OVER 2.5", 1.90
+        elif est >= 2.1:
+            return "OVER 1.5", 1.35
+        elif est >= 1.8:
+            return "UNDER 2.5", 1.55
+        else:
+            return "UNDER 1.5", 1.80
 
     def filtro_armadilha(self, alerta):
         prob = alerta['probabilidade']
@@ -117,8 +86,6 @@ class SistemaApostasPro:
             })
 
         return selecionados
-
-    
 
 
 def separar_por_nivel(jogos):
@@ -449,7 +416,6 @@ class GeradorMultiplasProfissional:
     LIGAS_OVER_RECOMMENDED = ["Bundesliga", "Eredivisie", "Premier League"]
     LIGAS_OVER_WITH_FILTER = ["Ligue 1", "Serie A"]
     LIGAS_OVER_AVOID = ["Campeonato Brasileiro Série A", "Primera Division"]
-    LIGAS_UNDER_RECOMMENDED = ["Serie A", "Ligue 1", "Primeira Liga"]
     
     def __init__(self):
         self.analisador_performance = None
@@ -529,32 +495,19 @@ class GeradorMultiplasProfissional:
                 "confianca": confianca
             }
         else:
-            # Verificar se é um bom candidato para UNDER
-            if tipo_aposta == "under" and confianca >= 65:
-                return {
-                    "nivel": "D",
-                    "cor": "🔵",
-                    "motivo": "UNDER com boa confiança",
-                    "recomendacao": "UNDER",
-                    "tipo": "under",
-                    "estimativa": estimativa,
-                    "confianca": confianca
-                }
-            else:
-                return {
-                    "nivel": "E",
-                    "cor": "⚪",
-                    "motivo": "Não se enquadra nos critérios",
-                    "recomendacao": "DESCARTAR",
-                    "tipo": "descartar",
-                    "estimativa": estimativa,
-                    "confianca": confianca
-                }
+            return {
+                "nivel": "D",
+                "cor": "⚪",
+                "motivo": "Não se enquadra nos critérios",
+                "recomendacao": "DESCARTAR",
+                "tipo": "descartar",
+                "estimativa": estimativa,
+                "confianca": confianca
+            }
     
     def gerar_multipla(self, jogos_classificados: list, modelo: str = "hibrido") -> dict:
         nivel_a = [j for j in jogos_classificados if j.get("classificacao", {}).get("nivel") == "A"]
         nivel_b = [j for j in jogos_classificados if j.get("classificacao", {}).get("nivel") == "B"]
-        nivel_d = [j for j in jogos_classificados if j.get("classificacao", {}).get("nivel") == "D"]
         
         if modelo == "conservador":
             if len(nivel_a) < 3:
@@ -569,7 +522,6 @@ class GeradorMultiplasProfissional:
                 "total_jogos": len(jogos_selecionados),
                 "over_1.5_count": len([j for j in jogos_selecionados if j.get("classificacao", {}).get("tipo") == "over_1.5"]),
                 "over_2.5_count": 0,
-                "under_count": len([j for j in jogos_selecionados if j.get("classificacao", {}).get("tipo") == "under"]),
                 "odd_total": odd_total,
                 "odd_media": odd_total / len(jogos_selecionados) if jogos_selecionados else 0,
                 "risco": "BAIXO",
@@ -578,15 +530,10 @@ class GeradorMultiplasProfissional:
             }
         
         elif modelo == "hibrido":
-            if len(nivel_a) < 3 or (len(nivel_b) < 1 and len(nivel_d) < 1):
+            if len(nivel_a) < 3 or len(nivel_b) < 1:
                 return self._gerar_multipla_fallback(jogos_classificados, "hibrido")
             
-            jogos_selecionados = nivel_a[:3]
-            if nivel_b:
-                jogos_selecionados += nivel_b[:1]
-            elif nivel_d:
-                jogos_selecionados += nivel_d[:1]
-            
+            jogos_selecionados = nivel_a[:3] + nivel_b[:1]
             odd_total = self._calcular_odd_total(jogos_selecionados)
             
             return {
@@ -594,8 +541,7 @@ class GeradorMultiplasProfissional:
                 "jogos": jogos_selecionados,
                 "total_jogos": len(jogos_selecionados),
                 "over_1.5_count": 3,
-                "over_2.5_count": 1 if nivel_b else 0,
-                "under_count": 1 if nivel_d and not nivel_b else 0,
+                "over_2.5_count": 1,
                 "odd_total": odd_total,
                 "odd_media": odd_total / len(jogos_selecionados) if jogos_selecionados else 0,
                 "risco": "MÉDIO",
@@ -604,20 +550,10 @@ class GeradorMultiplasProfissional:
             }
         
         elif modelo == "agressivo":
-            if len(nivel_a) < 3 or (len(nivel_b) < 2 and len(nivel_d) < 2):
+            if len(nivel_a) < 3 or len(nivel_b) < 2:
                 return self._gerar_multipla_fallback(jogos_classificados, "agressivo")
             
-            jogos_selecionados = nivel_a[:3]
-            
-            # Prioriza nivel_b, depois nivel_d
-            adicionados = 0
-            for j in nivel_b[:2]:
-                jogos_selecionados.append(j)
-                adicionados += 1
-            if adicionados < 2:
-                for j in nivel_d[:2-adicionados]:
-                    jogos_selecionados.append(j)
-            
+            jogos_selecionados = nivel_a[:3] + nivel_b[:2]
             odd_total = self._calcular_odd_total(jogos_selecionados)
             
             return {
@@ -625,8 +561,7 @@ class GeradorMultiplasProfissional:
                 "jogos": jogos_selecionados,
                 "total_jogos": len(jogos_selecionados),
                 "over_1.5_count": 3,
-                "over_2.5_count": sum(1 for j in jogos_selecionados[3:] if j.get("classificacao", {}).get("tipo") == "over_2.5"),
-                "under_count": sum(1 for j in jogos_selecionados[3:] if j.get("classificacao", {}).get("tipo") == "under"),
+                "over_2.5_count": 2,
                 "odd_total": odd_total,
                 "odd_media": odd_total / len(jogos_selecionados) if jogos_selecionados else 0,
                 "risco": "ALTO",
@@ -643,7 +578,6 @@ class GeradorMultiplasProfissional:
             key=lambda x: (
                 x.get("classificacao", {}).get("nivel") == "A",
                 x.get("classificacao", {}).get("nivel") == "B",
-                x.get("classificacao", {}).get("nivel") == "D",
                 x.get("confianca", 0)
             ),
             reverse=True
@@ -657,7 +591,6 @@ class GeradorMultiplasProfissional:
         
         over_1_5 = sum(1 for j in jogos_selecionados if j.get("classificacao", {}).get("tipo") == "over_1.5")
         over_2_5 = sum(1 for j in jogos_selecionados if j.get("classificacao", {}).get("tipo") == "over_2.5")
-        under = sum(1 for j in jogos_selecionados if j.get("classificacao", {}).get("tipo") == "under")
         
         odd_total = self._calcular_odd_total(jogos_selecionados)
         
@@ -667,7 +600,6 @@ class GeradorMultiplasProfissional:
             "total_jogos": len(jogos_selecionados),
             "over_1.5_count": over_1_5,
             "over_2.5_count": over_2_5,
-            "under_count": under,
             "odd_total": odd_total,
             "odd_media": odd_total / len(jogos_selecionados) if jogos_selecionados else 0,
             "risco": "VARIÁVEL",
@@ -686,8 +618,6 @@ class GeradorMultiplasProfissional:
                 prob = jogo.get("probabilidade", 65)
             elif tipo == "over_2.5":
                 prob = jogo.get("probabilidade", 55)
-            elif tipo == "under":
-                prob = jogo.get("probabilidade", 60)
             else:
                 prob = jogo.get("confianca", 60)
             
@@ -716,15 +646,7 @@ class GeradorMultiplasProfissional:
     def gerar_texto_multipla(self, multipla: dict) -> str:
         texto = f"💣 **{multipla['modelo']}**\n"
         texto += f"🎯 **Odds Total:** {multipla['odd_total']:.2f}\n"
-        
-        if multipla.get('over_1.5_count', 0) > 0 or multipla.get('over_2.5_count', 0) > 0:
-            texto += f"📊 **Composição:** {multipla['over_1.5_count']}x Over 1.5 + {multipla['over_2.5_count']}x Over 2.5"
-            if multipla.get('under_count', 0) > 0:
-                texto += f" + {multipla['under_count']}x UNDER"
-            texto += "\n"
-        elif multipla.get('under_count', 0) > 0:
-            texto += f"📊 **Composição:** {multipla['under_count']}x UNDER\n"
-        
+        texto += f"📊 **Composição:** {multipla['over_1.5_count']}x Over 1.5 + {multipla['over_2.5_count']}x Over 2.5\n"
         texto += f"⚠️ **Risco:** {multipla['risco']} | 📈 **Taxa Esperada:** {multipla['taxa_acerto_esperada']}\n\n"
         
         for i, jogo in enumerate(multipla["jogos"], 1):
@@ -735,12 +657,9 @@ class GeradorMultiplasProfissional:
             if tipo == "over_1.5":
                 emoji = "🟢"
                 texto_tendencia = f"Over 1.5 ({tendencia})"
-            elif tipo == "over_2.5":
+            else:
                 emoji = "🟡"
                 texto_tendencia = f"Over 2.5 ({tendencia})"
-            else:
-                emoji = "🔵"
-                texto_tendencia = f"UNDER ({tendencia})"
             
             odd_jogo = 100 / max(jogo.get("probabilidade", 65), 10)
             
@@ -768,92 +687,41 @@ class DataStorage:
     
     @staticmethod
     def carregar_json(caminho: str) -> dict:
-        """Carrega JSON com tratamento robusto de erros e backup"""
         try:
-            if os.path.exists(caminho) and os.path.getsize(caminho) > 0:
+            if os.path.exists(caminho):
                 with open(caminho, "r", encoding='utf-8') as f:
                     dados = json.load(f)
-                    
-                    # Verifica se é um dict válido
-                    if isinstance(dados, dict):
-                        # Verificar cache expirado se aplicável
-                        if caminho in [ConfigManager.CACHE_JOGOS, ConfigManager.CACHE_CLASSIFICACAO]:
-                            agora = datetime.now().timestamp()
-                            if isinstance(dados, dict) and '_timestamp' in dados:
-                                if agora - dados['_timestamp'] > ConfigManager.CACHE_TIMEOUT:
-                                    logging.info(f"🕐 Cache expirado: {caminho}")
-                                    return {}
-                        return dados
-                    elif isinstance(dados, list):
-                        # Para arquivos que deveriam ser dict mas são list, converter
-                        logging.warning(f"⚠️ {caminho} é uma lista, convertendo para dict vazio")
-                        return {}
-                    else:
-                        logging.warning(f"⚠️ {caminho} formato inválido, retornando dict vazio")
-                        return {}
-            else:
-                # Arquivo não existe ou está vazio
-                if os.path.exists(caminho):
-                    logging.info(f"📂 {caminho} está vazio, criando novo")
-                else:
-                    logging.info(f"📂 {caminho} não encontrado, será criado")
-                return {}
                 
-        except json.JSONDecodeError as e:
-            logging.error(f"❌ Erro JSON em {caminho}: {e}")
-            # Backup do arquivo corrompido
-            if os.path.exists(caminho):
-                backup_path = f"{caminho}.corrompido_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                try:
-                    shutil.copy(caminho, backup_path)
-                    logging.info(f"📁 Backup criado: {backup_path}")
-                    st.warning(f"⚠️ Arquivo {caminho} estava corrompido. Backup salvo como {backup_path}")
-                except Exception as backup_err:
-                    logging.error(f"❌ Erro ao criar backup: {backup_err}")
-            return {}
-            
-        except Exception as e:
-            logging.error(f"❌ Erro ao carregar {caminho}: {e}")
-            return {}
+                if not dados:
+                    return {}
+                    
+                if caminho in [ConfigManager.CACHE_JOGOS, ConfigManager.CACHE_CLASSIFICACAO]:
+                    agora = datetime.now().timestamp()
+                    if isinstance(dados, dict) and '_timestamp' in dados:
+                        if agora - dados['_timestamp'] > ConfigManager.CACHE_TIMEOUT:
+                            return {}
+                    else:
+                        if agora - os.path.getmtime(caminho) > ConfigManager.CACHE_TIMEOUT:
+                            return {}
+                return dados
+        except (json.JSONDecodeError, IOError, Exception) as e:
+            logging.error(f"Erro ao carregar {caminho}: {e}")
+            st.error(f"Erro ao carregar {caminho}: {e}")
+        return {}
     
     @staticmethod
     def salvar_json(caminho: str, dados: dict):
-        """Salva JSON com validação e backup"""
         try:
-            # Validar dados antes de salvar
-            if not isinstance(dados, dict):
-                logging.error(f"❌ Tentativa de salvar dados não-dict em {caminho}: {type(dados)}")
-                return
-            
             dados_serializados = DataStorage._serialize_for_json(dados)
             
-            # Adicionar timestamp para caches
             if caminho in [ConfigManager.CACHE_JOGOS, ConfigManager.CACHE_CLASSIFICACAO]:
                 if isinstance(dados_serializados, dict):
                     dados_serializados['_timestamp'] = datetime.now().timestamp()
             
-            # Backup antes de salvar (para arquivos importantes)
-            if caminho in [ConfigManager.ALERTAS_PATH, ConfigManager.ALERTAS_FAVORITOS_PATH,
-                          ConfigManager.ALERTAS_GOLS_HT_PATH, ConfigManager.ALERTAS_AMBAS_MARCAM_PATH,
-                          ConfigManager.ALERTAS_TOP_PATH, ConfigManager.ALERTAS_COMPLETOS_PATH]:
-                if os.path.exists(caminho):
-                    backup_path = f"{caminho}.backup"
-                    try:
-                        shutil.copy(caminho, backup_path)
-                    except Exception as backup_err:
-                        logging.warning(f"⚠️ Não foi possível criar backup: {backup_err}")
-            
-            # Salvar arquivo
             with open(caminho, "w", encoding='utf-8') as f:
                 json.dump(dados_serializados, f, ensure_ascii=False, indent=2)
-                
-            logging.info(f"✅ Arquivo salvo: {caminho} ({len(dados_serializados)} registros)")
-            
         except IOError as e:
-            logging.error(f"❌ Erro de I/O ao salvar {caminho}: {e}")
-            st.error(f"Erro ao salvar {caminho}: {e}")
-        except Exception as e:
-            logging.error(f"❌ Erro inesperado ao salvar {caminho}: {e}")
+            logging.error(f"Erro ao salvar {caminho}: {e}")
             st.error(f"Erro ao salvar {caminho}: {e}")
     
     @staticmethod
@@ -1693,53 +1561,10 @@ class AnalisadorEstatistico:
         return int(round(escore * 100))
 
 
-#class AnalisadorTendencia:
 class AnalisadorTendencia:
-    """Analisador de tendências com análise independente por mercado (CORRIGIDO)"""
-    
-    LIGA_OVER_FACTOR = {
-        'Eredivisie': 1.12,
-        'Championship': 1.08,
-        'Bundesliga': 1.04,
-        'Campeonato Brasileiro Série A': 1.02,
-        'Primera Division': 1.00,
-        'Ligue 1': 0.96,
-        'Primeira Liga': 0.94,
-        'Premier League': 0.92,
-        'Serie A': 0.88
-    }
-    
-    LIGA_UNDER_FACTOR = {
-        'Serie A': 1.15,
-        'Primeira Liga': 1.12,
-        'Ligue 1': 1.08,
-        'Premier League': 1.05,
-        'Campeonato Brasileiro Série A': 1.03,
-        'Primera Division': 1.00,
-        'Bundesliga': 0.92,
-        'Eredivisie': 0.88,
-        'Championship': 0.85
-    }
-    
-    LIGA_CONFIDENCE_CAP = {
-        'Eredivisie': 85,
-        'Championship': 82,
-        'Bundesliga': 80,
-        'Campeonato Brasileiro Série A': 78,
-        'Primera Division': 76,
-        'Ligue 1': 72,
-        'Primeira Liga': 70,
-        'Premier League': 68,
-        'Serie A': 65
-    }
-    
-    def __init__(self, classificacao: dict, liga_nome: str = ""):
+    def __init__(self, classificacao: dict):
         self.classificacao = classificacao
         self.analisador_performance = AnalisadorPerformance()
-        self.liga_nome = liga_nome
-        self.over_factor = self.LIGA_OVER_FACTOR.get(liga_nome, 1.0)
-        self.under_factor = self.LIGA_UNDER_FACTOR.get(liga_nome, 1.0)
-        self.confidence_cap = self.LIGA_CONFIDENCE_CAP.get(liga_nome, 78)
 
     def calcular_tendencia_completa(self, home: str, away: str) -> dict:
         dados_home = self.classificacao.get(home, {})
@@ -1756,7 +1581,9 @@ class AnalisadorTendencia:
                 "confianca": 0,
                 "tipo_aposta": "avoid",
                 "linha_mercado": 0,
-                "detalhes": {"motivo": f"Jogos insuficientes: Home={played_home}, Away={played_away}"}
+                "detalhes": {
+                    "motivo": f"Jogos insuficientes: Home={played_home}, Away={played_away}"
+                }
             }
 
         played_home = max(played_home, 1)
@@ -1767,10 +1594,10 @@ class AnalisadorTendencia:
         media_away_feitos = dados_away.get("scored", 0) / played_away
         media_away_sofridos = dados_away.get("against", 0) / played_away
 
-        media_home_feitos = clamp(media_home_feitos, 0.4, 3.2)
-        media_home_sofridos = clamp(media_home_sofridos, 0.4, 3.0)
-        media_away_feitos = clamp(media_away_feitos, 0.4, 3.0)
-        media_away_sofridos = clamp(media_away_sofridos, 0.4, 3.0)
+        media_home_feitos = clamp(media_home_feitos, 0.6, 3.6)
+        media_home_sofridos = clamp(media_home_sofridos, 0.6, 3.2)
+        media_away_feitos = clamp(media_away_feitos, 0.6, 3.4)
+        media_away_sofridos = clamp(media_away_sofridos, 0.6, 3.2)
 
         estimativa_total = (
             media_home_feitos * 0.55 +
@@ -1778,8 +1605,6 @@ class AnalisadorTendencia:
             media_home_sofridos * 0.25 +
             media_away_sofridos * 0.25
         )
-
-        estimativa_total *= self.over_factor
 
         fator_ofensivo_home = media_home_feitos / max(media_away_sofridos, 0.75)
         fator_ofensivo_away = media_away_feitos / max(media_home_sofridos, 0.75)
@@ -1797,111 +1622,141 @@ class AnalisadorTendencia:
         estimativa_total *= fator_casa
 
         estimativa_total = (estimativa_total * 0.85) + (2.5 * 0.15)
-        estimativa_total = clamp(estimativa_total, 1.2, 3.8)
 
-        # ============================================================
-        # ANÁLISE DOS MERCADOS - ESCOLHA PELA ESTIMATIVA
-        # CORREÇÃO: Agora escolhe o mercado baseado no valor real
-        # ============================================================
-        
-        mercado_escolhido = None
-        linha_escolhida = 1.5
-        prob_escolhida = 0
-        conf_escolhida = 0
-        tipo_aposta = "over"
-        
-        # REGRA 1: Estimativa MUITO ALTA (≥ 3.2) → OVER 3.5
-        if estimativa_total >= 3.2:
-            mercado_escolhido = f"OVER 3.5"
-            linha_escolhida = 3.5
-            prob_escolhida = sigmoid((estimativa_total - 3.5) * 1.1) * 100
-            conf_escolhida = min(65 + (estimativa_total - 3.2) * 12, 85)
-            tipo_aposta = "over"
-        
-        # REGRA 2: Estimativa ALTA (2.7 a 3.19) → OVER 2.5
-        elif estimativa_total >= 2.7:
-            mercado_escolhido = f"OVER 2.5"
-            linha_escolhida = 2.5
-            prob_escolhida = sigmoid((estimativa_total - 2.5) * 1.2) * 100
-            conf_escolhida = min(60 + (estimativa_total - 2.7) * 15, 80)
-            tipo_aposta = "over"
-        
-        # REGRA 3: Estimativa MÉDIA (1.8 a 2.69) → OVER 1.5
-        elif estimativa_total >= 1.8:
-            mercado_escolhido = f"OVER 1.5"
-            linha_escolhida = 1.5
-            prob_escolhida = sigmoid((estimativa_total - 1.5) * 1.8) * 100
-            conf_escolhida = min(55 + (estimativa_total - 1.8) * 15, 75)
-            tipo_aposta = "over"
-        
-        # REGRA 4: Estimativa BAIXA (1.4 a 1.79) → UNDER 2.5
-        elif estimativa_total >= 1.4:
-            mercado_escolhido = f"UNDER 2.5"
-            linha_escolhida = 2.5
-            prob_escolhida = sigmoid((2.5 - estimativa_total) * 1.8) * 100
-            conf_escolhida = min(55 + (1.8 - estimativa_total) * 15, 70)
+        estimativa_total = clamp(estimativa_total, 1.4, 4.0)
+
+        if estimativa_total <= 1.6:
+            mercado = "UNDER 2.5"
             tipo_aposta = "under"
-        
-        # REGRA 5: Estimativa MUITO BAIXA (< 1.4) → NÃO APOSTAR
+            linha_mercado = 2.5
+            probabilidade_base = sigmoid((2.5 - estimativa_total) * 1.4)
+
+        elif estimativa_total <= 2.1:
+            if fator_ataque < 0.95:
+                mercado = "UNDER 2.5"
+                tipo_aposta = "under"
+                linha_mercado = 2.5
+                probabilidade_base = sigmoid((2.5 - estimativa_total) * 1.3)
+            else:
+                mercado = "OVER 1.5"
+                tipo_aposta = "over"
+                linha_mercado = 1.5
+                probabilidade_base = sigmoid((estimativa_total - 1.5) * 1.6)
+
+        elif estimativa_total >= 3.4:
+            mercado = "OVER 3.5"
+            tipo_aposta = "over"
+            linha_mercado = 3.5
+            probabilidade_base = sigmoid((estimativa_total - 3.5) * 1.1)
+
+        elif estimativa_total >= 2.8:
+            if fator_ataque >= 1.3:
+                mercado = "OVER 2.5"
+                tipo_aposta = "over"
+                linha_mercado = 2.5
+                probabilidade_base = sigmoid((estimativa_total - 2.5) * 1.2)
+            else:
+                mercado = "OVER 1.5"
+                tipo_aposta = "over"
+                linha_mercado = 1.5
+                probabilidade_base = sigmoid((estimativa_total - 1.5) * 1.5)
+
         else:
+            mercado = "OVER 1.5"
+            tipo_aposta = "over"
+            linha_mercado = 1.5
+            probabilidade_base = sigmoid((estimativa_total - 1.5) * 1.6)
+
+        if tipo_aposta == "under" and estimativa_total > 1.8:
             return {
                 "tendencia": "NÃO APOSTAR",
                 "estimativa": round(estimativa_total, 2),
-                "probabilidade": 0,
+                "probabilidade": round(probabilidade_base * 100, 1),
                 "confianca": 0,
                 "tipo_aposta": "avoid",
-                "linha_mercado": 0,
-                "detalhes": {"motivo": f"Estimativa muito baixa: {estimativa_total:.2f}"}
+                "linha_mercado": linha_mercado,
+                "detalhes": {"motivo": f"UNDER perigoso (estimativa alta: {estimativa_total:.2f})"}
             }
-        
-        # Ajuste fino da confiança por liga
-        if self.liga_nome in ['Serie A', 'Primeira Liga'] and "OVER" in mercado_escolhido:
-            conf_escolhida -= 8
-        elif self.liga_nome in ['Eredivisie', 'Bundesliga'] and "UNDER" in mercado_escolhido:
-            conf_escolhida -= 8
-        
-        conf_escolhida = clamp(conf_escolhida, 45, self.confidence_cap)
-        
+
+        if tipo_aposta == "over" and linha_mercado == 2.5 and estimativa_total < 2.6:
+            return {
+                "tendencia": "NÃO APOSTAR",
+                "estimativa": round(estimativa_total, 2),
+                "probabilidade": round(probabilidade_base * 100, 1),
+                "confianca": 0,
+                "tipo_aposta": "avoid",
+                "linha_mercado": linha_mercado,
+                "detalhes": {"motivo": f"OVER 2.5 sem força (estimativa: {estimativa_total:.2f})"}
+            }
+
+        distancia_linha = abs(estimativa_total - linha_mercado)
+
+        if tipo_aposta == "over":
+            base_conf = probabilidade_base * 55
+            dist_conf = min(distancia_linha * 28, 32)
+        else:
+            base_conf = probabilidade_base * 45
+            dist_conf = min(distancia_linha * 22, 28)
+
+        consistencia = 0
+        if played_home >= 6 and played_away >= 6:
+            consistencia += 12
+        if abs(media_home_feitos - media_away_feitos) < 1.0:
+            consistencia += 6
+        if fator_ataque > 1.4 or fator_ataque < 0.7:
+            consistencia += 8
+
+        confianca = clamp(base_conf + dist_conf + consistencia, 35, 78)
+
+        if tipo_aposta == "over" and linha_mercado == 1.5:
+            if media_home_feitos < 1.2 and media_away_feitos < 1.2:
+                confianca *= 0.8
+
+        if media_home_sofridos < 0.8 and media_away_sofridos < 0.8:
+            confianca *= 0.9
+
+        if confianca < 48:
+            return {
+                "tendencia": "NÃO APOSTAR",
+                "estimativa": round(estimativa_total, 2),
+                "probabilidade": round(probabilidade_base * 100, 1),
+                "confianca": round(confianca, 1),
+                "tipo_aposta": "avoid",
+                "linha_mercado": linha_mercado,
+                "detalhes": {"motivo": f"Confiança baixa: {confianca:.1f}%"}
+            }
+
         return {
-            "tendencia": mercado_escolhido,
+            "tendencia": mercado,
             "estimativa": round(estimativa_total, 2),
-            "probabilidade": round(prob_escolhida, 1),
-            "confianca": round(conf_escolhida, 1),
+            "probabilidade": round(probabilidade_base * 100, 1),
+            "confianca": round(confianca, 1),
             "tipo_aposta": tipo_aposta,
-            "linha_mercado": linha_escolhida,
+            "linha_mercado": linha_mercado,
             "detalhes": {
-                "estimativa_original": round(estimativa_total, 2),
-                "fator_liga": self.over_factor,
-                "liga": self.liga_nome
+                "fator_ataque": round(fator_ataque, 2),
+                "distancia_linha": round(distancia_linha, 2),
+                "played_home": played_home,
+                "played_away": played_away,
+                "motivo": "ALERTA CONFIRMADO"
             }
         }
 
 
-
-
-
-
-        
-    
-                      
-
-
 class SistemaAutonomoApostas:
-    """Sistema autônomo de seleção de mercados com validação de odds"""
-    
     def __init__(self):
         self.config = ConfigManager()
         
         self.LIGAS_CONFIG = {
-            "Eredivisie": {"over": 1.2, "btts": 1.1, "ht": 1.0, "favorito": 1.0, "under": 0.8},
-            "Bundesliga": {"over": 1.2, "btts": 1.2, "ht": 1.1, "favorito": 1.0, "under": 0.85},
-            "Championship": {"over": 0.9, "btts": 1.3, "ht": 0.9, "favorito": 1.0, "under": 1.05},
-            "Premier League": {"over": 1.0, "btts": 1.0, "ht": 0.9, "favorito": 0.9, "under": 1.0},
-            "Primera Division": {"over": 0.9, "btts": 0.8, "ht": 0.8, "favorito": 1.0, "under": 1.05},
-            "Ligue 1": {"over": 0.8, "btts": 0.7, "ht": 0.7, "favorito": 1.0, "under": 1.1},
-            "Primeira Liga": {"over": 0.7, "btts": 1.0, "ht": 0.5, "favorito": 1.0, "under": 1.15},
-            "Serie A": {"over": 1.0, "btts": 0.9, "ht": 0.8, "favorito": 1.0, "under": 1.1},
-            "Campeonato Brasileiro Série A": {"over": 0.8, "btts": 0.8, "ht": 0.7, "favorito": 1.1, "under": 1.05}
+            "Eredivisie": {"over": 1.2, "btts": 1.1, "ht": 1.0, "favorito": 1.0},
+            "Bundesliga": {"over": 1.2, "btts": 1.2, "ht": 1.1, "favorito": 1.0},
+            "Championship": {"over": 0.9, "btts": 1.3, "ht": 0.9, "favorito": 1.0},
+            "Premier League": {"over": 1.0, "btts": 1.0, "ht": 0.9, "favorito": 0.9},
+            "Primera Division": {"over": 0.9, "btts": 0.8, "ht": 0.8, "favorito": 1.0},
+            "Ligue 1": {"over": 0.8, "btts": 0.7, "ht": 0.7, "favorito": 1.0},
+            "Primeira Liga": {"over": 0.7, "btts": 1.0, "ht": 0.5, "favorito": 1.0},
+            "Serie A": {"over": 1.0, "btts": 0.9, "ht": 0.8, "favorito": 1.0},
+            "Campeonato Brasileiro Série A": {"over": 0.8, "btts": 0.8, "ht": 0.7, "favorito": 1.1}
         }
         
         self.ligas_identificacao = {
@@ -1915,69 +1770,6 @@ class SistemaAutonomoApostas:
             "Serie A": "Serie A",
             "Campeonato Brasileiro Série A": "Campeonato Brasileiro Série A"
         }
-        
-        # LIGAS PERMITIDAS PARA BTTS
-        self.LIGAS_BTTS_PERMITIDAS = ["Bundesliga", "Eredivisie", "Premier League"]
-    
-    def validar_odd_para_aposta(self, mercado: str, odd_calculada: float, confianca: float) -> tuple:
-        """
-        Retorna (aprovado, odd_minima_necessaria, motivo)
-        """
-        if mercado == "over_1.5":
-            odd_minima = 1.30
-            if confianca >= 80:
-                odd_minima = 1.25
-            elif confianca >= 70:
-                odd_minima = 1.30
-            else:
-                odd_minima = 1.35
-            
-            if odd_calculada >= odd_minima:
-                return True, odd_minima, "OK"
-            else:
-                return False, odd_minima, f"Odd {odd_calculada:.2f} < {odd_minima:.2f}"
-        
-        elif mercado == "over_2.5":
-            odd_minima = 1.85
-            if confianca >= 75:
-                odd_minima = 1.80
-            
-            if odd_calculada >= odd_minima:
-                return True, odd_minima, "OK"
-            else:
-                return False, odd_minima, f"Odd {odd_calculada:.2f} < {odd_minima:.2f}"
-        
-        elif mercado == "over_3.5":
-            odd_minima = 2.20
-            
-            if odd_calculada >= odd_minima:
-                return True, odd_minima, "OK"
-            else:
-                return False, odd_minima, f"Odd {odd_calculada:.2f} < {odd_minima:.2f}"
-        
-        elif mercado == "under_2.5":
-            odd_minima = 1.70
-            if confianca >= 75:
-                odd_minima = 1.65
-            elif confianca >= 65:
-                odd_minima = 1.70
-            
-            if odd_calculada >= odd_minima:
-                return True, odd_minima, "OK"
-            else:
-                return False, odd_minima, f"Odd {odd_calculada:.2f} < {odd_minima:.2f}"
-        
-        elif mercado == "under_1.5":
-            odd_minima = 2.00
-            if confianca >= 70:
-                odd_minima = 1.90
-            
-            if odd_calculada >= odd_minima:
-                return True, odd_minima, "OK"
-            else:
-                return False, odd_minima, f"Odd {odd_calculada:.2f} < {odd_minima:.2f}"
-        
-        return False, 0, "Mercado não suportado"
     
     def _identificar_liga(self, liga_nome: str) -> str:
         for key in self.ligas_identificacao:
@@ -1992,39 +1784,29 @@ class SistemaAutonomoApostas:
         return conf_ajustada
     
     def _validar_aposta(self, liga: str, mercado: str, confianca_ajustada: float) -> tuple:
-        # BLOQUEAR COMPLETAMENTE GOLS HT (43,3% de acerto)
         if mercado == "ht":
-            return False, f"❌ Gols HT bloqueado (performance 43.3% - não recomendado)"
-        
-        # RESTRINGIR BTTS APENAS PARA LIGAS PERMITIDAS
-        if mercado == "btts":
-            if liga not in self.LIGAS_BTTS_PERMITIDAS:
-                return False, f"❌ BTTS bloqueado na liga {liga} (apenas Bundesliga, Eredivisie, Premier League)"
-            if confianca_ajustada < 0.70:
-                return False, f"❌ Confiança BTTS baixa: {confianca_ajustada*100:.0f}% < 70%"
-        
-        if mercado == "over":
-            if liga in ["Primeira Liga", "Ligue 1"] and confianca_ajustada < 0.75:
-                return False, f"❌ OVER em {liga} requer confiança ≥ 75%"
-            if confianca_ajustada < 0.65:
-                return False, f"❌ Confiança OVER baixa: {confianca_ajustada*100:.0f}% < 65%"
-        
-        if mercado == "under":
-            if liga in ["Bundesliga", "Eredivisie"] and confianca_ajustada < 0.70:
-                return False, f"❌ UNDER em {liga} requer confiança ≥ 70% (liga ofensiva)"
-            if confianca_ajustada < 0.65:
-                return False, f"❌ Confiança UNDER baixa: {confianca_ajustada*100:.0f}% < 65%"
+            if liga in ["Primeira Liga", "Ligue 1"]:
+                return False, f"❌ HT bloqueado na liga {liga} (baixa performance)"
+            if confianca_ajustada < 0.75:
+                return False, f"❌ Confiança HT baixa: {confianca_ajustada*100:.0f}% < 75%"
         
         if mercado == "favorito":
             if confianca_ajustada < 0.55:
                 return False, f"❌ Confiança favorito baixa: {confianca_ajustada*100:.0f}% < 55%"
+        
+        if mercado == "over":
+            if liga == "Primeira Liga" and confianca_ajustada < 0.80:
+                return False, f"❌ OVER em Portugal requer confiança ≥ 80%"
+        
+        if mercado == "btts":
+            if liga == "Ligue 1":
+                return False, f"❌ BTTS bloqueado na Ligue 1 (baixa performance)"
         
         return True, "Aprovado"
     
     def _extrair_confiancas(self, jogo_dict: dict) -> dict:
         return {
             "over": jogo_dict.get("confianca", 0) / 100,
-            "under": jogo_dict.get("confianca", 0) / 100,
             "btts": jogo_dict.get("confianca_ambas_marcam", 0) / 100,
             "ht": jogo_dict.get("confianca_ht", 0) / 100,
             "favorito": jogo_dict.get("confianca_vitoria", 0) / 100
@@ -2104,9 +1886,6 @@ class SistemaAutonomoApostas:
             if decisao["mercado"] == "over":
                 jogo_completo["tendencia"] = jogo_dict.get("tendencia", "OVER")
                 jogo_completo["confianca"] = decisao["confianca_ajustada"] * 100
-            elif decisao["mercado"] == "under":
-                jogo_completo["tendencia"] = jogo_dict.get("tendencia", "UNDER")
-                jogo_completo["confianca"] = decisao["confianca_ajustada"] * 100
             elif decisao["mercado"] == "btts":
                 jogo_completo["tendencia_ambas_marcam"] = jogo_dict.get("tendencia_ambas_marcam", "SIM")
                 jogo_completo["confianca_ambas_marcam"] = decisao["confianca_ajustada"] * 100
@@ -2118,34 +1897,6 @@ class SistemaAutonomoApostas:
                 jogo_completo["confianca_vitoria"] = decisao["confianca_ajustada"] * 100
             
             jogo_completo["odd_sugerida"] = self.calcular_odd_sugerida(jogo_completo, decisao["mercado"])
-            
-            # VALIDAÇÃO DE ODD MÍNIMA
-            mercado_tipo = "over_1.5"
-            if "OVER 2.5" in jogo_completo.get("tendencia", ""):
-                mercado_tipo = "over_2.5"
-            elif "OVER 3.5" in jogo_completo.get("tendencia", ""):
-                mercado_tipo = "over_3.5"
-            elif "UNDER 2.5" in jogo_completo.get("tendencia", ""):
-                mercado_tipo = "under_2.5"
-            elif "UNDER 1.5" in jogo_completo.get("tendencia", ""):
-                mercado_tipo = "under_1.5"
-            
-            odd_valida, odd_min, motivo_odd = self.validar_odd_para_aposta(
-                mercado_tipo, 
-                jogo_completo["odd_sugerida"], 
-                decisao["confianca_ajustada"] * 100
-            )
-            
-            if not odd_valida:
-                reprovados.append({
-                    "jogo": jogo_dict,
-                    "motivo": f"Odd inválida: {motivo_odd}",
-                    "decisao": decisao
-                })
-                continue
-            
-            jogo_completo["odd_sugerida"] = round(max(jogo_completo["odd_sugerida"], odd_min), 2)
-            jogo_completo["odd_minima"] = odd_min
             
             jogo_completo["analise_profissional"] = self.calcular_score_profissional_v2(jogo_completo, decisao)
             
@@ -2193,9 +1944,6 @@ class SistemaAutonomoApostas:
         
         mercado = decisao["mercado"]
         if mercado == "over":
-            score += 3
-            detalhes["mercado_bonus"] = 3
-        elif mercado == "under":
             score += 3
             detalhes["mercado_bonus"] = 3
         elif mercado == "btts":
@@ -2337,9 +2085,6 @@ class SistemaAutonomoApostas:
         if mercado == "over":
             prob = jogo_dict.get("probabilidade", 50)
             odd = round(100 / prob, 2) if prob > 0 else 2.0
-        elif mercado == "under":
-            prob = jogo_dict.get("probabilidade", 50)
-            odd = round(100 / prob, 2) if prob > 0 else 2.0
         elif mercado == "btts":
             prob = jogo_dict.get("prob_ambas_marcam_sim", 50)
             odd = round(100 / prob, 2) if prob > 0 else 2.0
@@ -2379,8 +2124,6 @@ class SistemaAutonomoApostas:
             
             if mercado == "over":
                 texto += f"   ⚽ Mercado: OVER {jogo.get('tendencia', '')}\n"
-            elif mercado == "under":
-                texto += f"   ⚽ Mercado: UNDER {jogo.get('tendencia', '')}\n"
             elif mercado == "btts":
                 texto += f"   🤝 Mercado: AMBAS MARCAM ({jogo.get('tendencia_ambas_marcam', 'SIM')})\n"
             elif mercado == "ht":
@@ -3030,9 +2773,6 @@ class PosterGenerator:
             draw.text((LARGURA//2 - 300, 80), titulo_text, font=FONTE_TITULO, fill=(255, 215, 0))
 
         composicao = f"{multipla['over_1.5_count']}x Over 1.5 + {multipla['over_2.5_count']}x Over 2.5"
-        if multipla.get('under_count', 0) > 0:
-            composicao += f" + {multipla['under_count']}x UNDER"
-        
         try:
             comp_bbox = draw.textbbox((0, 0), composicao, font=FONTE_SUBTITULO)
             comp_w = comp_bbox[2] - comp_bbox[0]
@@ -3067,13 +2807,7 @@ class PosterGenerator:
             
             classificacao = jogo.get("classificacao", {})
             tipo = classificacao.get("tipo", "over_1.5")
-            
-            if tipo == "over_1.5":
-                cor_borda = (255, 215, 0)
-            elif tipo == "over_2.5":
-                cor_borda = (255, 193, 7)
-            else:
-                cor_borda = (100, 200, 255)
+            cor_borda = (255, 215, 0) if tipo == "over_1.5" else (255, 193, 7) if tipo == "over_2.5" else (100, 200, 255)
             
             draw.rounded_rectangle([x0, y0, x1, y1], radius=25, fill=(25, 35, 45, 255), outline=cor_borda, width=4)
 
@@ -3116,7 +2850,7 @@ class PosterGenerator:
                 draw.text((LARGURA//2 - 150, y0 + 35), liga_text, font=FONTE_INFO, fill=(200, 200, 200))
 
             TAMANHO_ESCUDO = 190
-            TAMANHO = 220
+            TAMANHO = 210
             ESPACO_ENTRE = 700
 
             largura_total = 2 * TAMANHO + ESPACO_ENTRE
@@ -3191,14 +2925,10 @@ class PosterGenerator:
                 tendencia = jogo.get("tendencia", "Over 1.5")
                 emoji = "🟢"
                 cor_texto = (100, 255, 100)
-            elif tipo == "over_2.5":
+            else:
                 tendencia = jogo.get("tendencia", "Over 2.5")
                 emoji = "🟡"
                 cor_texto = (255, 215, 0)
-            else:
-                tendencia = jogo.get("tendencia", "UNDER")
-                emoji = "🔵"
-                cor_texto = (100, 200, 255)
             
             text_analise = f"{emoji} {tendencia}"
             try:
@@ -3339,7 +3069,7 @@ class PosterGenerator:
                 draw.text((badge_jogo_x + 65, badge_jogo_y + 15), resultado_jogo, font=FONTE_INFO, fill=(255, 255, 255))
 
             TAMANHO_ESCUDO = 190
-            TAMANHO = 220
+            TAMANHO = 210
             ESPACO_ENTRE = 700
 
             largura_total = 2 * TAMANHO + ESPACO_ENTRE
@@ -3402,15 +3132,8 @@ class PosterGenerator:
                          resultado_score, font=FONTE_RESULTADO, fill=(255, 255, 255))
 
             tipo_aposta = jogo.get("tipo", "over_1.5")
-            if tipo_aposta == "over_1.5":
-                tipo_text = "Over 1.5"
-                emoji_tipo = "🟢"
-            elif tipo_aposta == "over_2.5":
-                tipo_text = "Over 2.5"
-                emoji_tipo = "🟡"
-            else:
-                tipo_text = "UNDER"
-                emoji_tipo = "🔵"
+            tipo_text = "Over 1.5" if tipo_aposta == "over_1.5" else "Over 2.5"
+            emoji_tipo = "🟢" if tipo_aposta == "over_1.5" else "🟡"
             
             try:
                 tipo_bbox = draw.textbbox((0, 0), f"{emoji_tipo} {tipo_text}", font=FONTE_INFO)
@@ -3479,8 +3202,7 @@ class PosterGenerator:
             x1, y1 = LARGURA - PADDING, y_pos + ALTURA_POR_JOGO - 40
             
             if tipo_alerta == "over_under":
-                tipo_aposta = jogo_dict.get('tipo_aposta', 'over')
-                cor_borda = (255, 215, 0) if tipo_aposta == "over" else (100, 200, 255)
+                cor_borda = (255, 215, 0) if jogo_dict.get('tipo_aposta') == "over" else (100, 200, 255)
             elif tipo_alerta == "favorito":
                 cor_borda = (255, 87, 34)
             elif tipo_alerta == "gols_ht":
@@ -3801,7 +3523,7 @@ class PosterGenerator:
             except:
                 draw.text((LARGURA//2 - 150, y0 + 40), liga_text, font=FONTE_SUBTITULO, fill=(200, 200, 200))
 
-            TAMANHO_ESCUDO = 190
+            TAMANHO_ESCUDO = 200
             TAMANHO = 225
             ESPACO_ENTRE = 700
 
@@ -3989,12 +3711,7 @@ class PosterGenerator:
 
         over_1_5 = multipla.get('over_1.5_count', 0)
         over_2_5 = multipla.get('over_2.5_count', 0)
-        under = multipla.get('under_count', 0)
-        
         composicao = f"{over_1_5}x Over 1.5 + {over_2_5}x Over 2.5"
-        if under > 0:
-            composicao += f" + {under}x UNDER"
-        
         try:
             comp_bbox = draw.textbbox((0, 0), composicao, font=FONTE_SUBTITULO)
             comp_w = comp_bbox[2] - comp_bbox[0]
@@ -4030,12 +3747,7 @@ class PosterGenerator:
             x1, y1 = LARGURA - PADDING, y_pos + ALTURA_POR_JOGO - 40
             
             mercado = jogo.get('mercado', 'Over 1.5')
-            if "OVER 1.5" in mercado.upper():
-                cor_borda = (255, 215, 0)
-            elif "OVER 2.5" in mercado.upper():
-                cor_borda = (255, 193, 7)
-            else:
-                cor_borda = (100, 200, 255)
+            cor_borda = (255, 215, 0) if "OVER 1.5" in mercado.upper() else (255, 193, 7)
             
             draw.rounded_rectangle([x0, y0, x1, y1], radius=25, fill=(25, 35, 45, 255), outline=cor_borda, width=4)
 
@@ -4097,7 +3809,7 @@ class PosterGenerator:
                 draw.text((LARGURA//2 - 150, y0 + 90), data_hora_text, font=FONTE_HORA, fill=(150, 200, 255))
 
             TAMANHO_ESCUDO = 190
-            TAMANHO = 220
+            TAMANHO = 210
             ESPACO_ENTRE = 700
 
             largura_total = 2 * TAMANHO + ESPACO_ENTRE
@@ -4156,14 +3868,8 @@ class PosterGenerator:
             y_analysis = y_escudos + TAMANHO + 100
             draw.line([(x0 + 80, y_analysis - 10), (x1 - 80, y_analysis - 10)], fill=(100, 130, 160), width=2)
             
-            if "OVER 1.5" in mercado.upper():
-                emoji = "🟢"
-            elif "OVER 2.5" in mercado.upper():
-                emoji = "🟡"
-            else:
-                emoji = "🔵 "
-            
-            text_analise = f"{emoji}{mercado}"
+            emoji = "" if "OVER 1.5" in mercado.upper() else ""
+            text_analise = f"{emoji} {mercado}"
             try:
                 analise_bbox = draw.textbbox((0, 0), text_analise, font=FONTE_ANALISE)
                 analise_w = analise_bbox[2] - analise_bbox[0]
@@ -4294,7 +4000,7 @@ class PosterGenerator:
                 draw.text((badge_jogo_x + 45, badge_jogo_y + 12), resultado_jogo, font=FONTE_INFO, fill=(255, 255, 255))
 
             TAMANHO_ESCUDO = 190
-            TAMANHO = 220
+            TAMANHO = 210
             ESPACO_ENTRE = 700
 
             largura_total = 2 * TAMANHO + ESPACO_ENTRE
@@ -5024,6 +4730,7 @@ class ResultadosTopAlertas:
             return False
 
 
+#class GerenciadorAlertasCompletos:
 class GerenciadorAlertasCompletos:
     def __init__(self, sistema_principal):
         self.sistema = sistema_principal
@@ -5100,10 +4807,6 @@ class GerenciadorAlertasCompletos:
         jogos_por_tipo = []
         for jogo_dict in jogos_analisados:
             tem_analise = False
-            
-            # Pular se for "NÃO APOSTAR"
-            if jogo_dict.get("tipo_aposta") == "avoid":
-                continue
             
             if tipos_analise_selecionados.get("over_under", False) and jogo_dict.get('confianca', 0) >= 30:
                 tem_analise = True
@@ -5217,7 +4920,6 @@ class GerenciadorAlertasCompletos:
             estimativa = jogo_dict.get("estimativa", 0.0)
             confianca = jogo_dict.get("confianca", 0.0)
             tendencia = jogo_dict.get("tendencia", "")
-            tipo_aposta = jogo_dict.get("tipo_aposta", "")
             ambas_marcam = jogo_dict.get("tendencia_ambas_marcam", "")
             confianca_am = jogo_dict.get("confianca_ambas_marcam", 0.0)
             
@@ -5254,12 +4956,10 @@ class GerenciadorAlertasCompletos:
                     nivel_c = True
                     motivo_c = f"Liga evitar Over com estimativa baixa ({liga_base})"
             
-            # NÍVEL D (UNDER) - Para jogos onde UNDER é recomendado
+            # NÍVEL D (POTENCIAL) - NOVO nível para jogos aceitáveis
             nivel_d = False
             if not nivel_a and not nivel_b and not nivel_c:
-                if tipo_aposta == "under" and confianca >= 65:
-                    nivel_d = True
-                elif estimativa <= 1.8 and confianca >= 60:
+                if estimativa >= 1.6 and confianca >= 55:
                     nivel_d = True
             
             # Criar classificação
@@ -5303,9 +5003,9 @@ class GerenciadorAlertasCompletos:
                 classificacao = {
                     "nivel": "D",
                     "cor": "🔵",
-                    "motivo": "UNDER com boa confiança",
-                    "recomendacao": "UNDER",
-                    "tipo": "under",
+                    "motivo": "Potencial para Over 1.5",
+                    "recomendacao": "ANALISAR",
+                    "tipo": "over_1.5_potencial",
                     "estimativa": estimativa,
                     "confianca": confianca
                 }
@@ -5318,8 +5018,7 @@ class GerenciadorAlertasCompletos:
             fixture_id = str(jogo_dict.get("id"))
             chave_alerta = f"{fixture_id}_{data_busca}"
             
-            # Só criar alerta se NÃO for nível C (EXCLUIR)
-            if classificacao.get("recomendacao") != "EXCLUIR" and chave_alerta not in alertas_top:
+            if chave_alerta not in alertas_top:
                 alerta_top = {
                     "id": fixture_id,
                     "home": jogo_dict.get("home", ""),
@@ -5367,8 +5066,8 @@ class GerenciadorAlertasCompletos:
             st.markdown(f"🟡 **NÍVEL B (VALOR):** {len(nivel_b)} jogos")
             st.caption("Over 2.5 | Estimativa ≥ 2.3 | Confiança ≥ 65% ou Ambas Marcam")
         with col3:
-            st.markdown(f"🔵 **NÍVEL D (UNDER):** {len(nivel_d)} jogos")
-            st.caption("UNDER | Confiança ≥ 65% | Estimativa ≤ 1.8")
+            st.markdown(f"🔵 **NÍVEL D (POTENCIAL):** {len(nivel_d)} jogos")
+            st.caption("Over 1.5 | Estimativa ≥ 1.6 | Confiança ≥ 55%")
         
         st.markdown("---")
         
@@ -5497,8 +5196,6 @@ class GerenciadorAlertasCompletos:
                 
                 if mercado_escolhido == "over":
                     resultado_mercado = alerta_completo.resultados.get("over_under", "RED")
-                elif mercado_escolhido == "under":
-                    resultado_mercado = alerta_completo.resultados.get("over_under", "RED")
                 elif mercado_escolhido == "btts":
                     resultado_mercado = alerta_completo.resultados.get("ambas_marcam", "RED")
                 elif mercado_escolhido == "ht":
@@ -5520,7 +5217,7 @@ class GerenciadorAlertasCompletos:
             
             lotes = [jogos_conferidos[i:i+3] for i in range(0, len(jogos_conferidos), 3)]
             for idx_lote, lote in enumerate(lotes, 1):
-                poster = self.gerar_poster_resultados_completos_v2(lote, {})
+                poster = self.poster_generator.gerar_poster_resultados_completos_v2(lote, {})
                 caption = (
                     f"<b>🏆 RESULTADOS COMPLETOS - {hoje}</b>\n"
                     f"<b>📋 LOTE {idx_lote}/{len(lotes)} - {len(lote)} JOGOS</b>\n"
@@ -5572,8 +5269,6 @@ class GerenciadorAlertasCompletos:
                     if tipo in ["over_1.5", "over_1.5_potencial"] and total_gols > 1.5:
                         resultado_mercado = "GREEN"
                     elif tipo == "over_2.5" and total_gols > 2.5:
-                        resultado_mercado = "GREEN"
-                    elif tipo == "under" and total_gols < 2.5:
                         resultado_mercado = "GREEN"
                     
                     jogo_conferido = {
@@ -5764,8 +5459,6 @@ class GerenciadorAlertasCompletos:
             resultado_mercado = None
             if mercado_escolhido == "over":
                 resultado_mercado = resultados.get("over_under", "N/A")
-            elif mercado_escolhido == "under":
-                resultado_mercado = resultados.get("over_under", "N/A")
             elif mercado_escolhido == "btts":
                 resultado_mercado = resultados.get("ambas_marcam", "N/A")
             elif mercado_escolhido == "ht":
@@ -5878,6 +5571,7 @@ class GerenciadorAlertasCompletos:
         buffer.seek(0)
         
         return buffer
+    
 
 
 class SistemaAlertasFutebol:
@@ -5908,24 +5602,6 @@ class SistemaAlertasFutebol:
             ]
         )
     
-    def _obter_nome_liga_por_id(self, liga_id: str) -> str:
-        """Converte ID da liga para nome legível"""
-        mapping = {
-            "BL1": "Bundesliga",
-            "DED": "Eredivisie",
-            "BSA": "Campeonato Brasileiro Série A",
-            "PD": "Primera Division",
-            "FL1": "Ligue 1",
-            "ELC": "Championship",
-            "PPL": "Primeira Liga",
-            "SA": "Serie A",
-            "PL": "Premier League",
-            "WC": "FIFA World Cup",
-            "CL": "UEFA Champions League",
-            "EC": "European Championship"
-        }
-        return mapping.get(liga_id, "Desconhecida")
-    
     def processar_jogos(self, data_selecionada, ligas_selecionadas, todas_ligas, top_n, min_conf, max_conf, estilo_poster, alerta_individual, alerta_poster, alerta_top_jogos, formato_top_jogos, tipo_filtro, tipo_analise, config_analise):
         hoje = data_selecionada.strftime("%Y-%m-%d")
         data_br = data_selecionada.strftime("%d/%m/%Y")
@@ -5949,8 +5625,7 @@ class SistemaAlertasFutebol:
         
         for i, liga_id in enumerate(ligas_busca):
             classificacao = classificacoes[liga_id]
-            nome_liga = self._obter_nome_liga_por_id(liga_id)
-            analisador = AnalisadorTendencia(classificacao, nome_liga)
+            analisador = AnalisadorTendencia(classificacao)
             
             if liga_id == "BSA":
                 jogos_data = self.api_client.obter_jogos_brasileirao(liga_id, hoje)
@@ -5992,7 +5667,7 @@ class SistemaAlertasFutebol:
                     jogo.set_analise(analise)
                     
                     data_br, hora_br = jogo.get_data_hora_brasilia()
-                    tipo_emoji = "📈" if analise["tipo_aposta"] == "over" else "📉" if analise["tipo_aposta"] == "under" else "🚫"
+                    tipo_emoji = "📈" if analise["tipo_aposta"] == "over" else "📉"
                     
                     st.write(f"   {tipo_emoji} {jogo.home_team} vs {jogo.away_team}")
                     st.write(f"      🕒 {data_br} {hora_br} | {analise['tendencia']}")
@@ -6013,11 +5688,6 @@ class SistemaAlertasFutebol:
                     st.write(f"      Status: {jogo.status}")
                     
                     if tipo_analise == "Over/Under de Gols":
-                        # Ignorar completamente "NÃO APOSTAR" - mas agora "avoid" pode ser UNDER
-                        if analise.get("tipo_aposta") == "avoid":
-                            st.write(f"      🚫 Ignorado (NÃO APOSTAR): {jogo.home_team} vs {jogo.away_team}")
-                            continue
-                        
                         if min_conf <= analise["confianca"] <= max_conf:
                             if tipo_filtro == "Todos" or \
                                (tipo_filtro == "Apenas Over" and analise["tipo_aposta"] == "over") or \
@@ -6127,8 +5797,7 @@ class SistemaAlertasFutebol:
         
         for i, liga_id in enumerate(ligas_busca):
             classificacao = classificacoes[liga_id]
-            nome_liga = self._obter_nome_liga_por_id(liga_id)
-            analisador = AnalisadorTendencia(classificacao, nome_liga)
+            analisador = AnalisadorTendencia(classificacao)
             
             if liga_id == "BSA":
                 jogos_data = self.api_client.obter_jogos_brasileirao(liga_id, hoje)
@@ -6245,7 +5914,6 @@ class SistemaAlertasFutebol:
             self._enviar_alertas_resultados_automaticos(resultados_totais, data_selecionada)
     
     def _conferir_resultados_tipo(self, tipo_alerta: str, data_busca: str) -> dict:
-        # CARREGAR alertas e resultados existentes
         if tipo_alerta == "over_under":
             alertas = DataStorage.carregar_alertas()
             resultados = DataStorage.carregar_resultados()
@@ -6261,27 +5929,20 @@ class SistemaAlertasFutebol:
         else:
             return {}
         
-        if not alertas:
+        jogos_com_resultados = {}
+        progress_bar = st.progress(0)
+        total_alertas = len(alertas)
+        
+        if total_alertas == 0:
             st.info(f"ℹ️ Nenhum alerta ativo do tipo {tipo_alerta}")
             return {}
         
-        # FILTRAR alertas da data específica que NÃO foram conferidos
-        alertas_hoje = {}
-        for fixture_id, alerta in alertas.items():
-            if alerta.get("data_busca") == data_busca and not alerta.get("conferido", False):
-                alertas_hoje[fixture_id] = alerta
+        st.write(f"🔍 Conferindo {total_alertas} alertas do tipo {tipo_alerta}...")
         
-        if not alertas_hoje:
-            st.info(f"ℹ️ Nenhum alerta pendente para {data_busca}")
-            return {}
-        
-        st.write(f"🔍 Conferindo {len(alertas_hoje)} alertas do tipo {tipo_alerta}...")
-        
-        jogos_com_resultados = {}
-        progress_bar = st.progress(0)
-        total_alertas = len(alertas_hoje)
-        
-        for idx, (fixture_id, alerta) in enumerate(alertas_hoje.items()):
+        for idx, (fixture_id, alerta) in enumerate(alertas.items()):
+            if alerta.get("conferido", False):
+                continue
+            
             match_data = self.api_client.obter_detalhes_jogo(fixture_id)
             if not match_data:
                 continue
@@ -6416,7 +6077,6 @@ class SistemaAlertasFutebol:
             
             progress_bar.progress((idx + 1) / total_alertas)
         
-        # ATUALIZAR ambos os arquivos após conferência
         if tipo_alerta == "over_under":
             DataStorage.salvar_alertas(alertas)
             DataStorage.salvar_resultados(resultados)
@@ -6523,12 +6183,6 @@ class SistemaAlertasFutebol:
                 st.success(f"📊 Resumo final {tipo_alerta} enviado!")
     
     def _verificar_enviar_alerta(self, jogo: Jogo, match_data: dict, analise: dict, alerta_individual: bool, min_conf: int, max_conf: int, tipo_alerta: str):
-        # Não criar alerta se for "NÃO APOSTAR"
-        if analise.get("tipo_aposta") == "avoid":
-            logging.info(f"🚫 Alerta ignorado: {jogo.home_team} vs {jogo.away_team} - NÃO APOSTAR")
-            return
-        
-        # CARREGAR alertas existentes ANTES de criar novo
         if tipo_alerta == "over_under":
             alertas = DataStorage.carregar_alertas()
         elif tipo_alerta == "favorito":
@@ -6542,7 +6196,6 @@ class SistemaAlertasFutebol:
         
         fixture_id = str(jogo.id)
         
-        # CRIAÇÃO DO ALERTA (apenas se não existir)
         if fixture_id not in alertas:
             alerta_data = {
                 "id": fixture_id,
@@ -6555,8 +6208,7 @@ class SistemaAlertasFutebol:
                 "escudo_away": jogo.away_crest,
                 "tipo_alerta": tipo_alerta,
                 "conferido": False,
-                "data_busca": datetime.now().strftime("%Y-%m-%d"),
-                "data_hora_criacao": datetime.now().isoformat()
+                "data_busca": datetime.now().strftime("%Y-%m-%d")
             }
             
             if tipo_alerta == "over_under":
@@ -6601,13 +6253,11 @@ class SistemaAlertasFutebol:
                         "detalhes": analise.get("detalhes", {})
                     })
             
-            # ADICIONAR ao dicionário existente (não substituir)
             alertas[fixture_id] = alerta_data
             
             if alerta_individual:
                 self._enviar_alerta_individual(match_data, analise, tipo_alerta, min_conf, max_conf)
             
-            # SALVAR mantendo TODOS os alertas existentes
             if tipo_alerta == "over_under":
                 DataStorage.salvar_alertas(alertas)
             elif tipo_alerta == "favorito":
@@ -6616,10 +6266,6 @@ class SistemaAlertasFutebol:
                 DataStorage.salvar_alertas_gols_ht(alertas)
             elif tipo_alerta == "ambas_marcam":
                 DataStorage.salvar_alertas_ambas_marcam(alertas)
-            
-            logging.info(f"✅ Alerta salvo: {jogo.home_team} vs {jogo.away_team} - {tipo_alerta}")
-        else:
-            logging.info(f"ℹ️ Alerta já existe para {jogo.home_team} vs {jogo.away_team}")
     
     def _enviar_alerta_individual(self, fixture: dict, analise: dict, tipo_alerta: str, min_conf: int, max_conf: int):
         home = fixture["homeTeam"]["name"]
@@ -6628,18 +6274,9 @@ class SistemaAlertasFutebol:
         if tipo_alerta == "over_under":
             prob = analise.get("probabilidade", 50)
             odd = round(100 / prob, 2) if prob > 0 else 2.0
-            if analise["tipo_aposta"] == "over":
-                tipo_emoji = "🎯"
-                tipo_texto = "OVER"
-            elif analise["tipo_aposta"] == "under":
-                tipo_emoji = "🛡️"
-                tipo_texto = "UNDER"
-            else:
-                tipo_emoji = "🚫"
-                tipo_texto = "NÃO APOSTAR"
-            
+            tipo_emoji = "🎯" if analise["tipo_aposta"] == "over" else "🛡️"
             caption = (
-                f"<b>{tipo_emoji} ALERTA {tipo_texto} DE GOLS</b>\n\n"
+                f"<b>{tipo_emoji} ALERTA {analise['tipo_aposta'].upper()} DE GOLS</b>\n\n"
                 f"<b>🏠 {home}</b> vs <b>✈️ {away}</b>\n"
                 f"<b>📈 Tendência: {analise['tendencia']}</b>\n"
                 f"<b>⚽ Estimativa: {analise['estimativa']:.2f} gols</b>\n"
@@ -6708,15 +6345,8 @@ class SistemaAlertasFutebol:
             fonte = self.poster_generator.criar_fonte(30)
             
             if tipo_alerta == "over_under":
-                if analise["tipo_aposta"] == "over":
-                    tipo_text = "ALERTA OVER"
-                    cor_titulo = (255, 215, 0)
-                elif analise["tipo_aposta"] == "under":
-                    tipo_text = "ALERTA UNDER"
-                    cor_titulo = (100, 200, 255)
-                else:
-                    tipo_text = "NÃO APOSTAR"
-                    cor_titulo = (149, 165, 166)
+                tipo_text = f"ALERTA {analise['tipo_aposta'].upper()}"
+                cor_titulo = (255, 215, 0) if analise["tipo_aposta"] == "over" else (100, 200, 255)
             elif tipo_alerta == "favorito":
                 tipo_text = "ALERTA FAVORITO"
                 cor_titulo = (255, 87, 34)
@@ -6768,8 +6398,7 @@ class SistemaAlertasFutebol:
             jogos_filtrados = [
                 j for j in jogos
                 if min_conf <= j.get("confianca", 0) <= max_conf and 
-                j.get("status") not in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"] and
-                j.get("tipo_aposta") != "avoid"
+                j.get("status") not in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"]
             ]
             
             if tipo_filtro == "Apenas Over":
@@ -7578,6 +7207,7 @@ class SistemaAlertasFutebol:
         return arquivos_removidos
 
 
+#def render_tab_multiplas_pro(sistema):
 def render_tab_multiplas_pro(sistema):
     st.subheader("🧠 MÚLTIPLAS PRO - SISTEMA AUTÔNOMO")
     st.caption("Gera múltiplas inteligentes com score de qualidade, filtro anti-armadilha e balanceamento de risco. As múltiplas são salvas para conferência futura.")
@@ -7657,8 +7287,7 @@ def render_tab_multiplas_pro(sistema):
 
             for liga_id in ligas_busca:
                 classificacao = classificacoes[liga_id]
-                nome_liga = sistema._obter_nome_liga_por_id(liga_id)
-                analisador = AnalisadorTendencia(classificacao, nome_liga)
+                analisador = AnalisadorTendencia(classificacao)
 
                 if liga_id == "BSA":
                     jogos_data = sistema.api_client.obter_jogos_brasileirao(liga_id, hoje)
@@ -7760,7 +7389,7 @@ def render_tab_multiplas_pro(sistema):
             st.markdown("### 💣 MÚLTIPLAS GERADAS")
             
             # ============================================================
-            # SALVAR MÚLTIPLAS NO GERENCIADOR
+            # SALVAR MÚLTIPLAS NO GERENCIADOR (CORREÇÃO)
             # ============================================================
             multiplas_salvas = []
             
@@ -7769,7 +7398,6 @@ def render_tab_multiplas_pro(sistema):
                 
                 over_1_5_count = sum(1 for j in jogos_mult if "OVER 1.5" in j.get('mercado', '').upper())
                 over_2_5_count = sum(1 for j in jogos_mult if "OVER 2.5" in j.get('mercado', '').upper())
-                under_count = sum(1 for j in jogos_mult if "UNDER" in j.get('mercado', '').upper())
                 score_medio = sum(j.get('score', 0) for j in jogos_mult) / len(jogos_mult) if jogos_mult else 0
                 
                 with st.expander(f"{tipo} (Odds Total: {odd_total:.2f})"):
@@ -7789,7 +7417,6 @@ def render_tab_multiplas_pro(sistema):
                         "jogos_conferidos": [],
                         "over_1.5_count": over_1_5_count,
                         "over_2.5_count": over_2_5_count,
-                        "under_count": under_count,
                         "risco": "ALTO" if over_2_5_count >= 2 else "MÉDIO" if over_2_5_count == 1 else "BAIXO",
                         "score_medio": score_medio,
                         "data_busca": hoje,
@@ -7959,6 +7586,8 @@ def render_tab_multiplas_pro(sistema):
                 st.write("---")
     else:
         st.info("ℹ️ Nenhuma múltipla gerada ainda.")
+    
+    
 
 
 def render_tab_busca(sistema):
@@ -8261,7 +7890,7 @@ def render_tab_top_alertas(sistema):
 
 def render_tab_completos(sistema):
     st.subheader("🤖 ELITE MASTER 3.0 - GERADOR DE MÚLTIPLAS")
-    st.caption("Sistema com classificação A/B/C e geração profissional de múltiplas (Over 1.5 + Over 2.5 + UNDER)")
+    st.caption("Sistema com classificação A/B/C e geração profissional de múltiplas (Over 1.5 + Over 2.5)")
     
     st.markdown("""
     <div style="background: linear-gradient(135deg, #1a2a3a 0%, #0f1a24 100%); padding: 1rem; border-radius: 15px; margin-bottom: 1.5rem; border-left: 4px solid #ffd700;">
@@ -8270,13 +7899,13 @@ def render_tab_completos(sistema):
             🚀 <strong>SISTEMA PROFISSIONAL DE MÚLTIPLAS:</strong>
         </p>
         <ul style="color: #aaccff; font-size: 0.85rem; margin: 0.5rem 0 0 1.5rem;">
-            <li>✅ <strong>Classificação NÍVEL A (SEGURO):</strong> Over 1.5 | Estimativa ≥ 1.8 | Confiança ≥ 60%</li>
-            <li>✅ <strong>Classificação NÍVEL B (VALOR):</strong> Over 2.5 | Estimativa ≥ 2.3 | Confiança ≥ 65% ou Ambas Marcam</li>
-            <li>✅ <strong>Classificação NÍVEL C (PERIGO):</strong> Gols HT | Favorito | Estimativa &lt; 1.3 → EXCLUÍDO</li>
-            <li>✅ <strong>Classificação NÍVEL D (UNDER):</strong> UNDER | Confiança ≥ 65% | Estimativa ≤ 1.8</li>
+            <li>✅ <strong>Classificação NÍVEL A (SEGURO):</strong> Over 1.5 | Estimativa ≥ 2.2 | Confiança ≥ 75%</li>
+            <li>✅ <strong>Classificação NÍVEL B (VALOR):</strong> Over 2.5 | Estimativa ≥ 2.7 | Ambas Marcam = SIM</li>
+            <li>✅ <strong>Classificação NÍVEL C (PERIGO):</strong> Gols HT | Favorito | Estimativa &lt; 2.0 → EXCLUÍDO</li>
             <li>✅ <strong>Modelo CONSERVADOR:</strong> 3 jogos Over 1.5 (odd média 2.0~3.0) - Alta taxa</li>
-            <li>✅ <strong>Modelo HÍBRIDO:</strong> 3x Over 1.5 + 1x Over 2.5/UNDER (odd 4.0~6.0) - Estratégia principal</li>
-            <li>✅ <strong>Modelo AGRESSIVO:</strong> 3x Over 1.5 + 2x Over 2.5/UNDER (odd 8.0+) - Seleção TOP</li>
+            <li>✅ <strong>Modelo HÍBRIDO:</strong> 3x Over 1.5 + 1x Over 2.5 (odd 4.0~6.0) - Estratégia principal</li>
+            <li>✅ <strong>Modelo AGRESSIVO:</strong> 3x Over 1.5 + 2x Over 2.5 (odd 8.0+) - Seleção TOP</li>
+            <li>✅ <strong>Filtros por liga:</strong> Bundesliga, Eredivisie, Premier League (ENTRAR), Ligue 1, Serie A (FILTRO), Brasileirão, La Liga (EVITAR)</li>
         </ul>
     </div>
     """, unsafe_allow_html=True)
@@ -8396,16 +8025,14 @@ def render_tab_completos(sistema):
         
         if mercados_dist:
             st.markdown("**🎯 Distribuição de Mercados:**")
-            col_m1, col_m2, col_m3, col_m4, col_m5 = st.columns(5)
+            col_m1, col_m2, col_m3, col_m4 = st.columns(4)
             with col_m1:
                 st.metric("⚽ OVER", mercados_dist.get("over", 0))
             with col_m2:
-                st.metric("📉 UNDER", mercados_dist.get("under", 0))
-            with col_m3:
                 st.metric("🤝 BTTS", mercados_dist.get("btts", 0))
-            with col_m4:
+            with col_m3:
                 st.metric("⏰ HT", mercados_dist.get("ht", 0))
-            with col_m5:
+            with col_m4:
                 st.metric("🏆 FAV", mercados_dist.get("favorito", 0))
         
         with st.expander("📋 Últimos Alertas"):
@@ -8906,6 +8533,6 @@ st.markdown("""
 
 <div class="footer-premium">
     <div class="footer-title">ELITE MASTER SYSTEM 3.0</div>
-    <div class="footer-sub">GERADOR DE MÚLTIPLAS • CLASSIFICAÇÃO A/B/C/D (UNDER) • SAMUCJ TECNOLOGIA © 2026</div>
+    <div class="footer-sub">GERADOR DE MÚLTIPLAS • CLASSIFICAÇÃO A/B/C • SAMUCJ TECNOLOGIA © 2026</div>
 </div>
 """, unsafe_allow_html=True)
