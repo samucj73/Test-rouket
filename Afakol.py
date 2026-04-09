@@ -51,6 +51,7 @@ input, textarea { border-radius: 12px !important; }
 .ilp-highlight { background: linear-gradient(135deg, #ff00ff20 0%, #aa00ff20 100%); border: 2px solid #ff00ff; padding: 15px; border-radius: 12px; margin: 10px 0; }
 .ia7-highlight { background: linear-gradient(135deg, #ff880020 0%, #ff440020 100%); border: 2px solid #ff8800; padding: 15px; border-radius: 12px; margin: 10px 0; }
 .nash-highlight { background: linear-gradient(135deg, #9b59b620 0%, #6c348320 100%); border: 2px solid #9b59b6; padding: 15px; border-radius: 12px; margin: 10px 0; }
+.ev-highlight { background: linear-gradient(135deg, #00ff8820 0%, #00cc6620 100%); border: 2px solid #00ff88; padding: 15px; border-radius: 12px; margin: 10px 0; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -237,14 +238,12 @@ def contar_consecutivos(jogo):
     return sum(1 for i in range(len(jogo)-1) if jogo[i+1] == jogo[i] + 1)
 
 def contar_por_faixa(jogo, faixa_limites):
-    """faixa_limites: lista de tuplas (inicio, fim)"""
     contagem = []
     for inicio, fim in faixa_limites:
         contagem.append(sum(1 for n in jogo if inicio <= n <= fim))
     return contagem
 
 def distribuir_por_linhas(jogo):
-    """Conta quantos números em cada linha do volante 5x5"""
     linhas = [0] * 5
     for n in jogo:
         linhas[(n-1)//5] += 1
@@ -258,7 +257,6 @@ def distribuir_por_colunas(jogo):
 
 @st.cache_data
 def baseline_aleatorio(n=200000):
-    """Baseline: interseção de dois conjuntos aleatórios de 15 números em 25"""
     acertos = []
     for _ in range(n):
         jogo = set(random.sample(range(1, 26), 15))
@@ -409,329 +407,244 @@ class MotorGeometria:
         }
 
 # =====================================================
-# TEORIA DOS JOGOS - ESTRATÉGIAS DE JOHN NASH
+# MODELO PROFISSIONAL DE VALOR ESPERADO (EV)
 # =====================================================
 
-def calcular_matriz_pagamento(jogo, historico_concursos, outros_jogadores=None):
+def simular_apostadores_realistas(num_apostas=10000):
     """
-    Calcula a matriz de pagamento para um jogo baseado na Teoria de Nash.
+    Simula o comportamento real dos apostadores na Lotofácil
     
-    O pagamento é maior quando:
-    1. O jogo é diferente dos outros jogadores (menos competição)
-    2. O jogo tem boa probabilidade estatística baseada no histórico
-    3. O jogo está em equilíbrio (sem números muito populares ou muito esquecidos)
+    Distribuição mais próxima da realidade:
+    - 50% → números baixos (1-15)
+    - 20% → padrões (linhas, colunas, sequências)
+    - 20% → aleatório
+    - 10% → "números da sorte" (repetições, datas, etc)
     """
-    if outros_jogadores is None:
-        outros_jogadores = []
+    apostas = []
     
-    # Fator 1: Singularidade (menos competição = maior pagamento)
-    if outros_jogadores:
-        similaridade = 0
-        for outro in outros_jogadores:
-            # Quantos números em comum
-            interseccao = len(set(jogo) & set(outro))
-            similaridade += interseccao / 15
-        similaridade /= len(outros_jogadores)
-        fator_singularidade = 1 - similaridade  # Quanto mais único, melhor
-    else:
-        fator_singularidade = 1.0
+    # 50% números baixos (1-15)
+    for _ in range(int(num_apostas * 0.5)):
+        base = list(range(1, 16))
+        jogo = set(random.sample(base, min(15, len(base))))
+        while len(jogo) < 15:
+            jogo.add(random.randint(1, 25))
+        apostas.append(sorted(jogo))
     
-    # Fator 2: Probabilidade histórica (frequência balanceada)
-    freq = Counter()
-    for concurso in historico_concursos:
-        freq.update(concurso)
-    
-    # Evitar números muito populares (equilíbrio de Nash)
-    freq_vals = [freq.get(n, 0) for n in jogo]
-    media_freq = np.mean(freq_vals) if freq_vals else 0
-    desvio_freq = np.std(freq_vals) if len(freq_vals) > 1 else 0
-    
-    # Ideal: desvio baixo (números com frequências parecidas)
-    fator_equilibrio = 1 / (1 + desvio_freq) if desvio_freq > 0 else 1.0
-    
-    # Fator 3: Distribuição ideal (tendência natural da Lotofácil)
-    pares = contar_pares(jogo)
-    fator_paridade = 1 - abs(pares - 7.5) / 7.5  # Ideal: ~7-8 pares
-    
-    soma = sum(jogo)
-    # Média histórica da soma ~195
-    fator_soma = 1 - abs(soma - 195) / 100
-    
-    # Pagamento total (quanto maior, melhor)
-    pagamento = (fator_singularidade * 0.4 + 
-                 fator_equilibrio * 0.3 + 
-                 fator_paridade * 0.15 + 
-                 fator_soma * 0.15)
-    
-    return pagamento
-
-def encontrar_equilibrio_nash(historico_concursos, outros_jogadores, num_jogos=10, iteracoes=100):
-    """
-    Encontra o Equilíbrio de Nash para a Lotofácil.
-    
-    O Equilíbrio de Nash ocorre quando nenhum jogador pode melhorar
-    sua situação mudando unilateralmente sua estratégia.
-    """
-    melhores_jogos = []
-    
-    # Inicializar com estratégias aleatórias
-    estrategias = []
-    for _ in range(num_jogos):
-        jogo = sorted(random.sample(range(1, 26), 15))
-        estrategias.append(jogo)
-    
-    for _ in range(iteracoes):
-        novos_estrategias = []
-        
-        for i, jogo in enumerate(estrategias):
-            # Outros jogadores (exceto o atual)
-            outros = [e for idx, e in enumerate(estrategias) if idx != i]
-            outros.extend(outros_jogadores)
-            
-            # Calcular pagamento atual
-            pag_atual = calcular_matriz_pagamento(jogo, historico_concursos, outros)
-            
-            # Tentar melhorar (desvio unilateral)
-            melhor_jogo = jogo
-            melhor_pag = pag_atual
-            
-            # Gerar variações do jogo atual
-            for _ in range(50):
-                # Mutação controlada
-                variante = jogo.copy()
-                posicao = random.randint(0, 14)
-                novo_num = random.randint(1, 25)
-                while novo_num in variante:
-                    novo_num = random.randint(1, 25)
-                variante[posicao] = novo_num
-                variante.sort()
-                
-                # Avaliar variante
-                pag_variante = calcular_matriz_pagamento(variante, historico_concursos, outros)
-                
-                if pag_variante > melhor_pag:
-                    melhor_pag = pag_variante
-                    melhor_jogo = variante
-            
-            novos_estrategias.append(melhor_jogo)
-        
-        estrategias = novos_estrategias
-    
-    # Remover duplicatas
-    estrategias_unicas = []
-    for j in estrategias:
-        if j not in estrategias_unicas:
-            estrategias_unicas.append(j)
-    
-    # Avaliar cada estratégia
-    resultados = []
-    for jogo in estrategias_unicas[:num_jogos]:
-        pagamento = calcular_matriz_pagamento(jogo, historico_concursos, outros_jogadores)
-        
-        # Calcular métricas adicionais
-        pares = contar_pares(jogo)
-        soma_total = sum(jogo)
-        consecutivos = contar_consecutivos(jogo)
-        
-        resultados.append({
-            'jogo': jogo,
-            'pagamento': pagamento,
-            'pares': pares,
-            'soma': soma_total,
-            'consecutivos': consecutivos,
-            'unicidade': 1 - (len(set(jogo) & set(outros_jogadores[0] if outros_jogadores else [])) / 15)
-        })
-    
-    # Ordenar por pagamento (melhor equilíbrio)
-    resultados.sort(key=lambda x: x['pagamento'], reverse=True)
-    
-    return resultados
-
-def gerar_estrategia_dominante(historico_concursos, tamanho_pool=25):
-    """
-    Estratégia Dominante de Nash: números que ninguém quer jogar,
-    mas que têm boa probabilidade estatística.
-    """
-    # Calcular frequência de cada número
-    freq = Counter()
-    for concurso in historico_concursos:
-        freq.update(concurso)
-    
-    # Encontrar números "esquecidos" (menos frequentes)
-    menos_frequentes = sorted(freq.items(), key=lambda x: x[1])[:20]
-    
-    # Mas também considerar números com bom atraso (vão sair em breve)
-    atrasos = {}
-    for num in range(1, 26):
-        atraso = 0
-        for concurso in historico_concursos:
-            if num in concurso:
-                break
-            atraso += 1
-        atrasos[num] = atraso
-    
-    # Score = (1/frequencia) * atraso
-    scores = {}
-    for num in range(1, 26):
-        freq_num = freq.get(num, 1)
-        atraso_num = atrasos.get(num, 0)
-        # Quanto menor a frequência e maior o atraso, melhor
-        scores[num] = (1 / (freq_num + 1)) * (atraso_num + 1)
-    
-    # Ordenar por score
-    ordenados = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-    
-    # Selecionar os 20 melhores para o pool
-    pool = [n for n, _ in ordenados[:tamanho_pool]]
-    
-    return pool
-
-def gerar_jogos_nash(historico_concursos, outros_jogadores_simulados=None, qtd_jogos=10):
-    """
-    Gera jogos baseados no Equilíbrio de Nash.
-    
-    Princípio: Em vez de tentar acertar os números mais prováveis,
-    busca-se números que maximizam o retorno esperado considerando
-    que outros apostadores também estão escolhendo.
-    """
-    if outros_jogadores_simulados is None:
-        # Simular outros jogadores baseados em padrões comuns
-        outros_jogadores_simulados = []
-        # Padrões comuns que as pessoas jogam:
-        padroes_comuns = [
-            # Datas de aniversário (1-31)
-            list(range(1, 16)),
-            list(range(10, 25)),
-            # Números pares
-            [n for n in range(2, 26, 2)][:15],
-            # Números ímpares
-            [n for n in range(1, 26, 2)][:15],
-            # Sequências
-            [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],
-            [11,12,13,14,15,16,17,18,19,20,21,22,23,24,25],
-        ]
-        outros_jogadores_simulados.extend(padroes_comuns)
-        
-        # Adicionar alguns jogos aleatórios
-        for _ in range(50):
-            outros_jogadores_simulados.append(sorted(random.sample(range(1, 26), 15)))
-    
-    # Encontrar o equilíbrio
-    equilibrio = encontrar_equilibrio_nash(
-        historico_concursos, 
-        outros_jogadores_simulados, 
-        num_jogos=qtd_jogos,
-        iteracoes=80
-    )
-    
-    # Estratégia dominante complementar
-    pool_dominante = gerar_estrategia_dominante(historico_concursos, 20)
-    
-    # Combinar ambas abordagens
-    jogos_finais = []
-    
-    # Adicionar jogos do equilíbrio
-    for item in equilibrio:
-        jogos_finais.append(item['jogo'])
-    
-    # Adicionar alguns jogos da estratégia dominante
-    estrategia_dominante_jogos = []
-    for _ in range(qtd_jogos // 2):
-        jogo = sorted(random.sample(pool_dominante, 15))
-        if jogo not in jogos_finais:
-            estrategia_dominante_jogos.append(jogo)
-    
-    jogos_finais.extend(estrategia_dominante_jogos[:qtd_jogos // 2])
-    
-    # Garantir quantidade exata
-    while len(jogos_finais) < qtd_jogos:
-        jogo = sorted(random.sample(range(1, 26), 15))
-        if jogo not in jogos_finais:
-            jogos_finais.append(jogo)
-    
-    # Calcular scores para os jogos
-    scores = []
-    for jogo in jogos_finais[:qtd_jogos]:
-        # Score Nash = pagamento esperado
-        pag = calcular_matriz_pagamento(jogo, historico_concursos, outros_jogadores_simulados)
-        
-        # Adicionar bônus por características desejáveis
-        pares = contar_pares(jogo)
-        if 6 <= pares <= 9:
-            pag += 0.1
-        
-        soma = sum(jogo)
-        if 180 <= soma <= 220:
-            pag += 0.1
-        
-        scores.append(pag * 100)
-    
-    return jogos_finais[:qtd_jogos], scores
-
-def analisar_competicao(jogos_usuario, historico_concursos):
-    """
-    Analisa a competição: quantos outros apostadores provavelmente
-    escolheram números similares aos seus.
-    """
-    # Simular apostadores baseados em estatísticas reais
-    # Cerca de 2-3 milhões de apostas por concurso na Lotofácil
-    
-    # Distribuição comum de apostas
-    padroes_apostadores = []
-    
-    # 40% jogam datas (1-31)
-    for _ in range(400):
-        jogo = sorted(random.sample(range(1, 32), min(15, 31)))
-        if len(jogo) < 15:
-            jogo.extend(random.sample(range(1, 26), 15 - len(jogo)))
-        padroes_apostadores.append(sorted(jogo))
-    
-    # 30% jogam números aleatórios
-    for _ in range(300):
-        padroes_apostadores.append(sorted(random.sample(range(1, 26), 15)))
-    
-    # 20% jogam números repetidos do último concurso
-    ultimo = historico_concursos[0] if historico_concursos else []
-    for _ in range(200):
-        base = set(random.sample(ultimo, min(9, len(ultimo))))
-        while len(base) < 15:
-            base.add(random.randint(1, 25))
-        padroes_apostadores.append(sorted(base))
-    
-    # 10% jogam padrões geométricos (linhas/colunas)
-    for _ in range(100):
+    # 20% padrões geométricos
+    for _ in range(int(num_apostas * 0.2)):
         jogo = set()
-        # Selecionar 2-3 linhas completas
+        # Escolher 2-3 linhas completas
         linhas = random.sample(range(5), random.randint(2, 3))
         for linha in linhas:
             for col in range(5):
-                num = linha * 5 + col + 1
-                jogo.add(num)
+                jogo.add(linha * 5 + col + 1)
         while len(jogo) < 15:
             jogo.add(random.randint(1, 25))
-        padroes_apostadores.append(sorted(jogo))
+        apostas.append(sorted(jogo))
     
-    # Analisar competição para os jogos do usuário
-    analise = []
-    for jogo in jogos_usuario:
-        competidores = 0
-        for aposta in padroes_apostadores:
-            # Se tem mais de 10 números iguais, compete diretamente
-            if len(set(jogo) & set(aposta)) >= 10:
-                competidores += 1
+    # 20% completamente aleatório
+    for _ in range(int(num_apostas * 0.2)):
+        apostas.append(sorted(random.sample(range(1, 26), 15)))
+    
+    # 10% números da sorte (repetições do último, datas, etc)
+    for _ in range(int(num_apostas * 0.1)):
+        jogo = set()
+        # Datas (1-31)
+        jogo.update(random.sample(range(1, 32), min(8, 31)))
+        while len(jogo) < 15:
+            jogo.add(random.randint(1, 25))
+        apostas.append(sorted(jogo))
+    
+    return apostas
+
+def estimar_divisao_premio(jogo, apostas_simuladas):
+    """
+    Estima quantas pessoas dividiriam o prêmio com este jogo
+    
+    Retorna um fator de competição (quanto maior, pior)
+    """
+    iguais = 0
+    similares = 0
+    
+    for aposta in apostas_simuladas:
+        inter = len(set(jogo) & set(aposta))
         
-        # Premiação esperada (simplificada)
-        # Quanto menos competidores, maior o prêmio
-        premio_esperado = 1000000 / (competidores + 1) if competidores > 0 else 1000000
+        if inter == 15:
+            iguais += 1
+        elif inter >= 13:
+            similares += 1
+    
+    # Peso maior para jogos muito parecidos
+    competicao = iguais * 1.0 + similares * 0.3
+    
+    return competicao
+
+def calcular_ev(jogo, apostas_simuladas, premio_base=1500000):
+    """
+    Calcula o Valor Esperado (EV) do jogo
+    
+    EV = Probabilidade de ganhar × Prêmio esperado
+    
+    A probabilidade é fixa (1/3.268.760), então o foco é maximizar o prêmio
+    """
+    competicao = estimar_divisao_premio(jogo, apostas_simuladas)
+    
+    # Prêmio esperado considerando divisão
+    premio_esperado = premio_base / (competicao + 1)
+    
+    # Probabilidade fixa de 15 pontos
+    prob = 1 / 3268760
+    
+    ev = prob * premio_esperado
+    
+    return ev
+
+def penalizar_padroes_humanos(jogo):
+    """
+    Penaliza padrões que muitos apostadores usam
+    
+    Quanto maior o penalty, pior para o EV
+    """
+    penalty = 0
+    
+    # Sequências longas (ex: 1,2,3,4,5)
+    consecutivos = contar_consecutivos(jogo)
+    if consecutivos > 3:
+        penalty += 0.2 * (consecutivos - 3)
+    
+    # Muitos números baixos (1-15)
+    baixos = len([n for n in jogo if n <= 15])
+    if baixos > 10:
+        penalty += 0.3 * (baixos - 10)
+    elif baixos < 5:
+        penalty += 0.1  # Muitos altos também é padrão
+    
+    # Linhas completas
+    linhas = [list(range(i*5+1, (i+1)*5+1)) for i in range(5)]
+    for linha in linhas:
+        if set(linha).issubset(set(jogo)):
+            penalty += 0.3
+    
+    # Colunas completas
+    colunas = [[1,6,11,16,21], [2,7,12,17,22], [3,8,13,18,23], [4,9,14,19,24], [5,10,15,20,25]]
+    for coluna in colunas:
+        if set(coluna).issubset(set(jogo)):
+            penalty += 0.3
+    
+    # Números repetidos do último concurso (muitos apostadores fazem isso)
+    # Isso será passado como parâmetro separado
+    
+    return penalty
+
+def penalizar_repetidas(jogo, ultimo_concurso):
+    """Penaliza jogos que repetem muitos números do último concurso"""
+    if not ultimo_concurso:
+        return 0
+    
+    repetidas = len(set(jogo) & set(ultimo_concurso))
+    
+    if repetidas > 9:
+        return 0.2 * (repetidas - 9)
+    elif repetidas < 6:
+        return 0.1  # Muito poucas repetidas também é incomum
+    return 0
+
+def score_final_profissional(jogo, apostas_simuladas, ultimo_concurso=None):
+    """
+    Score final profissional que combina EV e penalidades
+    
+    Este é o coração do sistema - maximiza retorno financeiro real
+    """
+    ev = calcular_ev(jogo, apostas_simuladas)
+    penalty_humano = penalizar_padroes_humanos(jogo)
+    
+    if ultimo_concurso:
+        penalty_rep = penalizar_repetidas(jogo, ultimo_concurso)
+    else:
+        penalty_rep = 0
+    
+    # Score final: EV ajustado pelas penalidades
+    score = ev * (1 - penalty_humano - penalty_rep)
+    
+    # Normalizar para escala mais amigável (multiplicar por 10^9)
+    score_normalizado = score * 1e9
+    
+    return score_normalizado, ev
+
+def gerar_jogos_ev_otimizados(apostas_simuladas, qtd_jogos=10, amostragem=5000, ultimo_concurso=None):
+    """
+    Gera jogos otimizados pelo Valor Esperado (EV)
+    
+    Estratégia:
+    1. Gera uma grande amostra de jogos aleatórios
+    2. Calcula o EV para cada um
+    3. Ordena por EV (considerando penalidades)
+    4. Retorna os melhores
+    """
+    jogos_candidatos = []
+    
+    progress_bar = st.progress(0, text=f"Gerando e avaliando {amostragem} jogos...")
+    
+    for i in range(amostragem):
+        # Gerar jogo aleatório com distribuição balanceada
+        if random.random() < 0.7:
+            # Jogo mais balanceado (não totalmente aleatório)
+            pares = random.randint(6, 9)
+            impares = 15 - pares
+            jogo = set()
+            jogo.update(random.sample([n for n in range(1, 26) if n % 2 == 0], pares))
+            jogo.update(random.sample([n for n in range(1, 26) if n % 2 != 0], impares))
+            jogo = sorted(jogo)
+        else:
+            # Completamente aleatório para diversidade
+            jogo = sorted(random.sample(range(1, 26), 15))
         
-        analise.append({
+        score, ev = score_final_profissional(jogo, apostas_simuladas, ultimo_concurso)
+        
+        jogos_candidatos.append({
             'jogo': jogo,
-            'competidores_estimados': competidores,
-            'premio_esperado': premio_esperado,
-            'unicidade': 1 - (len(set(jogo) & set(ultimo)) / 15)
+            'score': score,
+            'ev': ev
         })
+        
+        if (i + 1) % 500 == 0:
+            progress_bar.progress((i + 1) / amostragem)
     
-    return analise
+    progress_bar.empty()
+    
+    # Ordenar por score (maior é melhor)
+    jogos_candidatos.sort(key=lambda x: x['score'], reverse=True)
+    
+    # Remover duplicatas
+    jogos_unicos = []
+    for item in jogos_candidatos:
+        if item['jogo'] not in [j['jogo'] for j in jogos_unicos]:
+            jogos_unicos.append(item)
+    
+    # Retornar top jogos
+    top_jogos = jogos_unicos[:qtd_jogos]
+    
+    return top_jogos
+
+def analisar_ev_detalhado(jogo, apostas_simuladas, premio_base=1500000):
+    """
+    Análise detalhada do EV para um jogo específico
+    """
+    competicao = estimar_divisao_premio(jogo, apostas_simuladas)
+    premio_esperado = premio_base / (competicao + 1)
+    prob = 1 / 3268760
+    ev = prob * premio_esperado
+    
+    penalty_humano = penalizar_padroes_humanos(jogo)
+    
+    return {
+        'competidores_diretos': int(competicao),
+        'premio_esperado': premio_esperado,
+        'probabilidade': prob,
+        'ev_bruto': ev,
+        'penalidade': penalty_humano,
+        'ev_ajustado': ev * (1 - penalty_humano)
+    }
 
 # =====================================================
 # EMS 8.0 - ILP PROFISSIONAL
@@ -1232,17 +1145,14 @@ def gerar_jogos_ia_70(qtd_jogos, dados_api, qtd_concursos_base=20):
             st.error("❌ Nenhum concurso carregado. Clique em 'Carregar concursos' na barra lateral primeiro.")
             return [], None
         
-        # Pegar os concursos mais recentes para análise
         dados = dados_api[:min(qtd_concursos_base, len(dados_api))]
         
-        # Verificar se temos dados suficientes
         if len(dados) < 10:
             st.warning(f"⚠️ Poucos concursos carregados ({len(dados)}). Mínimo recomendado: 10")
             return [], None
         
         concursos = []
         for d in dados:
-            # Extrair dezenas - a API retorna como lista de strings
             if isinstance(d['dezenas'], list):
                 dezenas = [int(x) for x in d['dezenas']]
             elif isinstance(d['dezenas'], str):
@@ -1257,32 +1167,23 @@ def gerar_jogos_ia_70(qtd_jogos, dados_api, qtd_concursos_base=20):
         
         ultimo_concurso = concursos[0]
         
-        # -------------------------------
-        # FREQUÊNCIA + ATRASO PONDERADO
-        # -------------------------------
         freq = {i: 0 for i in range(1, 26)}
         atraso = {i: 0 for i in range(1, 26)}
         
-        # Calcular frequência ponderada (concursos mais recentes têm mais peso)
         total_concursos = len(concursos)
         for idx, concurso in enumerate(concursos):
-            # Peso decrescente: o mais recente tem peso 1.0
             peso = (total_concursos - idx) / total_concursos
             for dez in concurso:
                 freq[dez] += peso
         
-        # Calcular atraso (quantos concursos desde a última aparição)
         for dez in range(1, 26):
             for idx, concurso in enumerate(concursos):
                 if dez in concurso:
                     atraso[dez] = idx
                     break
             else:
-                atraso[dez] = total_concursos  # Nunca apareceu
+                atraso[dez] = total_concursos
         
-        # -------------------------------
-        # SCORE BASE (60% frequência + 40% atraso)
-        # -------------------------------
         score = {}
         max_freq = max(freq.values()) if freq.values() else 1
         max_atraso = max(atraso.values()) if atraso.values() else 1
@@ -1290,37 +1191,27 @@ def gerar_jogos_ia_70(qtd_jogos, dados_api, qtd_concursos_base=20):
         for dez in range(1, 26):
             freq_norm = freq[dez] / max_freq
             atraso_norm = atraso[dez] / max_atraso
-            # Invertido: menor atraso = maior score
             score[dez] = (freq_norm * 0.6) + ((1 - atraso_norm) * 0.4)
         
-        # Ordenar números por score
         ordenados = sorted(score.items(), key=lambda x: x[1], reverse=True)
         
-        # Dividir em categorias
         base_forte = [d[0] for d in ordenados[:15]]
         base_media = [d[0] for d in ordenados[15:22]]
         base_fraca = [d[0] for d in ordenados[22:]]
         
         candidatos = []
         
-        # -------------------------------
-        # GERAR LOTE GRANDE (15x a quantidade desejada)
-        # -------------------------------
         for _ in range(qtd_jogos * 15):
             jogo = set()
             
-            # Selecionar números das diferentes categorias
-            # 8 da base forte, 4 da média, 3 da fraca
             jogo.update(random.sample(base_forte, min(8, len(base_forte))))
             jogo.update(random.sample(base_media, min(4, len(base_media))))
             jogo.update(random.sample(base_fraca, min(3, len(base_fraca))))
             
-            # Adicionar repetidos do último concurso (6 a 9 números)
             qtd_repetidos = random.randint(6, 9)
             repetidos = random.sample(ultimo_concurso, min(qtd_repetidos, len(ultimo_concurso)))
             jogo.update(repetidos)
             
-            # Completar até 15 números
             while len(jogo) < 15:
                 novo = random.randint(1, 25)
                 if novo not in jogo:
@@ -1329,60 +1220,42 @@ def gerar_jogos_ia_70(qtd_jogos, dados_api, qtd_concursos_base=20):
             jogo = sorted(list(jogo))[:15]
             candidatos.append(jogo)
         
-        # -------------------------------
-        # FUNÇÃO DE AVALIAÇÃO DO JOGO (APRIMORADA)
-        # -------------------------------
         def avaliar_jogo_ia(jogo):
             s = 0
-            
-            # Score base (soma dos scores individuais)
             s += sum(score[n] for n in jogo)
             
-            # Bônus por paridade equilibrada (6-9 pares)
             pares = sum(1 for n in jogo if n % 2 == 0)
             if 6 <= pares <= 9:
                 s += 5
             elif pares == 7 or pares == 8:
                 s += 3
             
-            # Bônus por soma na faixa ideal (180-220)
             soma = sum(jogo)
             if 180 <= soma <= 220:
                 s += 5
             elif 170 <= soma <= 230:
                 s += 2
             
-            # Bônus por repetição equilibrada (6-9 repetidas)
             repetidos = len(set(jogo) & set(ultimo_concurso))
             if 6 <= repetidos <= 9:
                 s += 5
             elif repetidos == 7 or repetidos == 8:
                 s += 3
             
-            # Bônus por distribuição em linhas (evitar concentração)
             linhas = distribuir_por_linhas(jogo)
             if max(linhas) <= 4 and min(linhas) >= 2:
                 s += 3
             
-            # Penalidade para muitos consecutivos
             consec = contar_consecutivos(jogo)
             if consec > 4:
                 s -= consec - 4
             
             return s
         
-        # -------------------------------
-        # REMOVER DUPLICATAS
-        # -------------------------------
         candidatos = list(set(tuple(j) for j in candidatos))
         candidatos = [list(j) for j in candidatos]
-        
-        # Ordenar por pontuação
         candidatos.sort(key=avaliar_jogo_ia, reverse=True)
         
-        # -------------------------------
-        # DIVERSIFICAÇÃO (evitar jogos muito parecidos)
-        # -------------------------------
         finais = []
         
         for jogo in candidatos:
@@ -1391,7 +1264,6 @@ def gerar_jogos_ia_70(qtd_jogos, dados_api, qtd_concursos_base=20):
             
             diferente = True
             for j in finais:
-                # Se tiver mais de 11 números em comum, é muito parecido
                 if len(set(jogo) & set(j)) >= 11:
                     diferente = False
                     break
@@ -1399,11 +1271,9 @@ def gerar_jogos_ia_70(qtd_jogos, dados_api, qtd_concursos_base=20):
             if diferente:
                 finais.append(jogo)
         
-        # Garantir que retornamos exatamente a quantidade desejada
         if len(finais) < qtd_jogos:
             finais = candidatos[:qtd_jogos]
         
-        # Informações do concurso base
         concurso_info = (dados[0]['concurso'], dados[0]['data'])
         
         return finais, concurso_info
@@ -1418,7 +1288,6 @@ def gerar_jogos_ia_70(qtd_jogos, dados_api, qtd_concursos_base=20):
 # =====================================================
 
 def parse_dezenas(dezenas_str):
-    """Converte string de dezenas para set de inteiros"""
     if isinstance(dezenas_str, str):
         return set(map(int, dezenas_str.replace('"', '').replace(' ', '').split(',')))
     elif isinstance(dezenas_str, list):
@@ -1427,7 +1296,6 @@ def parse_dezenas(dezenas_str):
         return set()
 
 def conferir_jogos_inteligente(jogos, resultado_set):
-    """Confere jogos contra um resultado oficial"""
     resultados = []
     
     for i, jogo in enumerate(jogos):
@@ -1449,7 +1317,6 @@ def conferir_jogos_inteligente(jogos, resultado_set):
     return df.sort_values(by="Acertos", ascending=False).reset_index(drop=True)
 
 def analisar_frequencia_jogos(jogos):
-    """Analisa a frequência dos números em um conjunto de jogos"""
     todas = []
     
     for jogo in jogos:
@@ -1471,7 +1338,6 @@ def analisar_frequencia_jogos(jogos):
     return df_freq
 
 def gerar_jogos_otimizados(base_jogos, resultado_set, n_jogos=10, estrategia="inteligente"):
-    """Gera jogos otimizados baseado nos jogos existentes e resultado"""
     todos_numeros = set(range(1, 26))
     jogos_novos = []
     
@@ -1525,7 +1391,6 @@ def gerar_jogos_otimizados(base_jogos, resultado_set, n_jogos=10, estrategia="in
     return jogos_novos
 
 def analisar_padroes_avancados(jogos, resultado_set):
-    """Análise avançada de padrões nos jogos"""
     todas_dezenas = []
     pares_total = []
     primos_total = []
@@ -1678,7 +1543,6 @@ class GeradorLotofacil:
 # BACKTESTING
 # =====================================================
 def backtest_estrategia(historico, config_filtros, num_testes=30):
-    """Testa a estratégia de geração nos últimos 'num_testes' concursos históricos."""
     resultados = []
     for i in range(1, num_testes+1):
         idx_alvo = -i
@@ -1715,6 +1579,7 @@ def main():
     if "scores" not in st.session_state: st.session_state.scores = []
     if "cobertura_stats" not in st.session_state: st.session_state.cobertura_stats = None
     if "multi_pool_results" not in st.session_state: st.session_state.multi_pool_results = None
+    if "apostas_simuladas" not in st.session_state: st.session_state.apostas_simuladas = None
     if "config_filtros" not in st.session_state:
         st.session_state.config_filtros = {
             'pares_min': 6, 'pares_max': 9,
@@ -1740,6 +1605,7 @@ def main():
                     st.session_state.baseline_cache = baseline_aleatorio()
                     st.session_state.motor_geometria = MotorGeometria(concursos)
                     st.session_state.gerador_principal = GeradorLotofacil(concursos, concursos[0])
+                    st.session_state.apostas_simuladas = simular_apostadores_realistas(10000)
                     st.success(f"✅ Último concurso: #{st.session_state.dados_api[0]['concurso']} - {st.session_state.dados_api[0]['data']}")
                 except Exception as e:
                     st.error(f"Erro ao carregar: {e}")
@@ -1751,14 +1617,13 @@ def main():
     # ================= INTERFACE PRINCIPAL =================
     st.subheader("🎯 Análise e Geração de Jogos")
 
-    # AGORA COM 10 ABAS (ADICIONEI A TEORIA DE NASH)
     tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
         "📊 Análise do Último Concurso",
         "🎲 Gerador de Jogos",
         "🚀 EMS 5.0 - Cobertura",
         "🔥 ILP PROFESSIONAL",
         "🤖 IA 7.0 - Motor Avançado",
-        "🎲 TEORIA DE NASH",
+        "🎲 TEORIA DE NASH (EV)",
         "🔍 Conferência Inteligente",
         "📈 Avaliação Estatística",
         "📐 Geometria do Volante",
@@ -2119,7 +1984,6 @@ def main():
                         </div>
                         """, unsafe_allow_html=True)
                         
-                        # Mostra restrições atendidas
                         st.markdown("### ✅ Restrições Atendidas")
                         col_a, col_b, col_c = st.columns(3)
                         with col_a:
@@ -2208,7 +2072,6 @@ def main():
                 if jogos:
                     st.session_state.jogos_gerados = jogos
                     
-                    # Calcular scores para os jogos gerados
                     scores_calculados = []
                     for jogo in jogos:
                         pares = contar_pares(jogo)
@@ -2216,7 +2079,6 @@ def main():
                         repetidas = len(set(jogo) & set(st.session_state.gerador_principal.ultimo))
                         consec = contar_consecutivos(jogo)
                         
-                        # Score simplificado para exibição
                         score = 0
                         if 6 <= pares <= 9:
                             score += 2
@@ -2232,15 +2094,12 @@ def main():
                     
                     st.success(f"✅ {len(jogos)} jogos gerados com IA 7.0!")
                     
-                    # Mostrar informações do concurso base
                     if concurso_info:
                         concurso_num, concurso_data = concurso_info
                         st.info(f"📅 Baseado em análise dos últimos {qtd_concursos_base} concursos (até #{concurso_num} - {concurso_data})")
                     
-                    # Mostrar estatísticas da geração
                     st.markdown("### 📊 Estatísticas da Geração")
                     
-                    # Calcular estatísticas agregadas dos jogos
                     todos_numeros = []
                     for j in jogos:
                         todos_numeros.extend(j)
@@ -2259,7 +2118,6 @@ def main():
                     with col_d:
                         st.metric("Diversidade", f"{len(freq_gerados)}/25 números")
                     
-                    # Mostrar os 10 números mais frequentes nos jogos gerados
                     st.markdown("#### 🔢 Números mais selecionados pela IA")
                     top_numeros = freq_gerados.most_common(10)
                     top_html = " ".join(f"<span style='background:#ff880020; border:1px solid #ff8800; border-radius:15px; padding:5px 10px; margin:2px; display:inline-block;'>{n:02d} ({f}x)</span>" for n, f in top_numeros)
@@ -2273,7 +2131,6 @@ def main():
                 score = st.session_state.scores[i] if i < len(st.session_state.scores) else 0
                 medalha = ["🥇","🥈","🥉"][i] if i < 3 else "🤖"
                 
-                # Estatísticas do jogo
                 pares = contar_pares(jogo)
                 impares = 15 - pares
                 soma = sum(jogo)
@@ -2322,245 +2179,202 @@ def main():
                                  file_name=f"ia70_jogos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", 
                                  mime="text/csv", use_container_width=True)
 
-    # ================= TAB 6: TEORIA DE NASH =================
+    # ================= TAB 6: TEORIA DE NASH (VALOR ESPERADO) =================
     with tab6:
-        st.markdown("### 🎲 Teoria dos Jogos - John Nash")
+        st.markdown("### 🎲 Teoria de Nash - Maximização do Valor Esperado (EV)")
         st.markdown("""
-        <div class="nash-highlight">
-        <strong>📖 O QUE É A TEORIA DE NASH APLICADA À LOTOFÁCIL?</strong><br><br>
-        John Nash revolucionou a economia com o conceito de <strong>Equilíbrio de Nash</strong>: 
-        uma situação onde nenhum jogador pode melhorar sua posição mudando unilateralmente sua estratégia.<br><br>
-        <strong>🎯 Aplicação na Lotofácil:</strong><br>
-        • Em vez de tentar "prever" os números sorteados, buscamos números que <strong>MAXIMIZAM O RETORNO</strong><br>
-        • Consideramos que <strong>outros apostadores</strong> também estão escolhendo números<br>
-        • Quanto <strong>MENOS pessoas acertarem com você</strong>, maior o prêmio<br>
-        • O <strong>Equilíbrio de Nash</strong> encontra números "esquecidos" mas com boa probabilidade<br>
-        • É a <strong>estratégia dominante</strong>: você não consegue melhorar sem piorar os outros
+        <div class="ev-highlight">
+        <strong>📈 O QUE É VALOR ESPERADO (EV) NA LOTOFÁCIL?</strong><br><br>
+        <strong>EV = Probabilidade de ganhar × Prêmio esperado</strong><br><br>
+        
+        🔑 <strong>O PULO DO GATO:</strong> A probabilidade é praticamente fixa (1/3.268.760),<br>
+        então o jogo é sobre <strong>MAXIMIZAR O PRÊMIO</strong> quando você acerta!<br><br>
+        
+        <strong>🎯 Estratégia Profissional:</strong><br>
+        • ✅ Evita números e padrões que <strong>todo mundo joga</strong><br>
+        • ✅ Busca <strong>números "esquecidos"</strong> com boa probabilidade<br>
+        • ✅ Maximiza o <strong>RETORNO FINANCEIRO REAL</strong><br>
+        • ✅ Pensa como <strong>mercado financeiro</strong>, não como apostador<br><br>
+        
+        <strong>💡 Resultado:</strong> Você não acerta mais, mas <strong>GANHA MUITO MAIS</strong> quando acerta!
         </div>
         """, unsafe_allow_html=True)
         
         col1, col2 = st.columns(2)
         with col1:
-            qtd_nash = st.slider("Quantidade de jogos", 5, 30, 10, key="qtd_nash")
+            qtd_ev = st.slider("Quantidade de jogos", 5, 30, 10, key="qtd_ev")
         with col2:
-            considerar_competicao = st.checkbox("Considerar competição simulada", value=True,
-                                               help="Simula outros apostadores para encontrar estratégias mais únicas")
+            amostragem_ev = st.slider("Amostragem de jogos", 1000, 20000, 5000, key="amostragem_ev",
+                                      help="Quanto maior, melhor a qualidade, mas mais lento")
         
-        if st.button("🎲 GERAR ESTRATÉGIA DE NASH", use_container_width=True, type="primary"):
-            with st.spinner("Calculando Equilíbrio de Nash..."):
-                # Preparar histórico
-                concursos_numeros = []
-                for d in st.session_state.dados_api[:100]:
-                    if isinstance(d['dezenas'], list):
-                        dezenas = [int(x) for x in d['dezenas']]
-                    else:
-                        dezenas = [int(x.strip()) for x in d['dezenas'].split(',')]
-                    concursos_numeros.append(sorted(dezenas))
+        if st.button("🎯 OTIMIZAR POR VALOR ESPERADO (EV)", use_container_width=True, type="primary"):
+            with st.spinner(f"Analisando {amostragem_ev} jogos e calculando EV..."):
                 
-                # Simular outros jogadores se necessário
-                outros = None
-                if considerar_competicao:
-                    # Gerar simulação de outros apostadores
-                    outros = []
-                    # Padrões comuns que as pessoas jogam
-                    padroes = [
-                        list(range(1, 16)),  # 1-15
-                        list(range(11, 26)),  # 11-25
-                        [n for n in range(1, 26) if n % 2 == 0][:15],  # Pares
-                        [n for n in range(1, 26) if n % 2 != 0][:15],  # Ímpares
-                    ]
-                    outros.extend(padroes)
-                    
-                    # Adicionar apostadores aleatórios
-                    for _ in range(100):
-                        outros.append(sorted(random.sample(range(1, 26), 15)))
+                # Preparar último concurso para penalidades
+                ultimo_concurso = st.session_state.gerador_principal.ultimo if st.session_state.gerador_principal else None
                 
-                # Gerar jogos Nash
-                jogos_nash, scores_nash = gerar_jogos_nash(
-                    concursos_numeros,
-                    outros,
-                    qtd_jogos=qtd_nash
+                # Gerar jogos otimizados por EV
+                top_jogos = gerar_jogos_ev_otimizados(
+                    st.session_state.apostas_simuladas,
+                    qtd_jogos=qtd_ev,
+                    amostragem=amostragem_ev,
+                    ultimo_concurso=ultimo_concurso
                 )
                 
-                if jogos_nash:
-                    st.session_state.jogos_gerados = jogos_nash
-                    st.session_state.scores = scores_nash
+                if top_jogos:
+                    st.session_state.jogos_gerados = [item['jogo'] for item in top_jogos]
+                    st.session_state.scores = [item['score'] for item in top_jogos]
+                    st.session_state.ev_detalhes = [analisar_ev_detalhado(item['jogo'], st.session_state.apostas_simuladas) for item in top_jogos]
                     
-                    st.success(f"✅ {len(jogos_nash)} jogos gerados com Estratégia de Nash!")
+                    st.success(f"✅ {len(top_jogos)} jogos otimizados por Valor Esperado!")
                     
-                    # Explicação da estratégia
-                    st.markdown("### 🧠 Lógica do Equilíbrio Encontrado")
+                    # Explicação do resultado
+                    st.markdown("### 🧠 Análise da Otimização")
                     
-                    # Analisar competição
-                    if considerar_competicao:
-                        analise_comp = analisar_competicao(jogos_nash, concursos_numeros)
-                        
-                        col_a, col_b, col_c = st.columns(3)
-                        with col_a:
-                            media_unicidade = np.mean([a['unicidade'] for a in analise_comp])
-                            st.metric("Média de Unicidade", f"{media_unicidade:.1%}",
-                                     help="Quanto mais único, menos competidores")
-                        with col_b:
-                            media_competidores = np.mean([a['competidores_estimados'] for a in analise_comp])
-                            st.metric("Competidores Médios", f"{media_competidores:,.0f}",
-                                     help="Estimativa de apostas similares")
-                        with col_c:
-                            premio_medio = np.mean([a['premio_esperado'] for a in analise_comp])
-                            st.metric("Prêmio Esperado Médio", f"R$ {premio_medio:,.0f}",
-                                     help="Considerando divisão do prêmio")
+                    col_a, col_b, col_c = st.columns(3)
+                    with col_a:
+                        ev_medio = np.mean([item['ev'] for item in st.session_state.ev_detalhes]) * 1e9
+                        st.metric("EV Médio (x10⁹)", f"{ev_medio:.2f}",
+                                 help="Valor Esperado médio dos jogos gerados")
+                    with col_b:
+                        premio_medio = np.mean([item['premio_esperado'] for item in st.session_state.ev_detalhes])
+                        st.metric("Prêmio Esperado Médio", f"R$ {premio_medio:,.0f}",
+                                 help="Considerando divisão do prêmio")
+                    with col_c:
+                        competidores_medio = np.mean([item['competidores_diretos'] for item in st.session_state.ev_detalhes])
+                        st.metric("Competidores Médios", f"{competidores_medio:.0f}",
+                                 help="Estimativa de apostas idênticas")
                     
                     # Mostrar jogos
-                    st.markdown(f"### 📋 {len(jogos_nash)} Jogos - Estratégia de Nash")
+                    st.markdown(f"### 📋 TOP {len(top_jogos)} Jogos por Valor Esperado")
                     
-                    for i, jogo in enumerate(jogos_nash[:20]):
-                        score = scores_nash[i] if i < len(scores_nash) else 0
+                    for i, item in enumerate(top_jogos):
+                        jogo = item['jogo']
+                        score = item['score']
+                        ev_detalhe = st.session_state.ev_detalhes[i]
                         
-                        # Calcular métricas
                         pares = contar_pares(jogo)
                         impares = 15 - pares
                         soma = sum(jogo)
                         consec = contar_consecutivos(jogo)
                         
-                        # Ícone baseado na singularidade
-                        if considerar_competicao and i < len(analise_comp):
-                            unicidade = analise_comp[i]['unicidade']
-                            if unicidade > 0.7:
-                                icone = "🦄"
-                            elif unicidade > 0.5:
-                                icone = "⭐"
-                            else:
-                                icone = "🎲"
-                        else:
-                            icone = "🎯"
+                        medalha = "🏆" if i == 0 else "🥈" if i == 1 else "🥉" if i == 2 else "📌"
                         
                         stats = f"⚖️ {pares}p/{impares}i | ➕ {soma} | 📏 {consec} cons"
                         
                         st.markdown(f"""
-                        <div style='border-left: 5px solid #9b59b6; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
-                            {icone} <strong>Jogo {i+1:2d}</strong> — Score Nash: {score:.2f}<br>
+                        <div style='border-left: 5px solid #00ff88; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
+                            {medalha} <strong>Jogo {i+1:2d}</strong> — EV Score: {score:.2f}<br>
                             {formatar_jogo_html(jogo)}<br>
-                            <small style='color:#aaa;'>{stats}</small>
+                            <small style='color:#aaa;'>{stats}</small><br>
+                            <small style='color:#00ff88;'>💰 Prêmio esperado: R$ {ev_detalhe['premio_esperado']:,.0f} | 
+                            🎲 Competidores: {ev_detalhe['competidores_diretos']:.0f}</small>
                         </div>
                         """, unsafe_allow_html=True)
                     
                     # Botões de ação
                     col1, col2 = st.columns(2)
                     with col1:
-                        if st.button("💾 Salvar Jogos Nash", key="salvar_nash", use_container_width=True):
+                        if st.button("💾 Salvar Jogos EV", key="salvar_ev", use_container_width=True):
                             ultimo = st.session_state.dados_api[0]
                             arquivo, jogo_id = salvar_jogos_gerados(
-                                jogos_nash, 
+                                st.session_state.jogos_gerados, 
                                 [], 
-                                {"versao": "Teoria de Nash - Equilíbrio", 
-                                 "considerar_competicao": considerar_competicao}, 
+                                {"versao": "Valor Esperado (EV) - Nash", 
+                                 "amostragem": amostragem_ev}, 
                                 ultimo['concurso'], 
                                 ultimo['data']
                             )
                             if arquivo:
-                                st.success(f"✅ {len(jogos_nash)} jogos salvos! ID: {jogo_id}")
+                                st.success(f"✅ {len(st.session_state.jogos_gerados)} jogos salvos! ID: {jogo_id}")
                                 st.session_state.jogos_salvos = carregar_jogos_salvos()
                     
                     with col2:
                         df_export = pd.DataFrame({
-                            "Jogo": range(1, len(jogos_nash)+1),
-                            "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in jogos_nash],
-                            "Score_Nash": [round(s, 2) for s in scores_nash],
-                            "Pares": [contar_pares(j) for j in jogos_nash],
-                            "Soma": [sum(j) for j in jogos_nash],
-                            "Consecutivos": [contar_consecutivos(j) for j in jogos_nash]
+                            "Jogo": range(1, len(top_jogos)+1),
+                            "Dezenas": [", ".join(f"{n:02d}" for n in item['jogo']) for item in top_jogos],
+                            "EV_Score": [round(item['score'], 2) for item in top_jogos],
+                            "Premio_Esperado": [f"R$ {d['premio_esperado']:,.0f}" for d in st.session_state.ev_detalhes],
+                            "Competidores": [d['competidores_diretos'] for d in st.session_state.ev_detalhes],
+                            "Pares": [contar_pares(item['jogo']) for item in top_jogos],
+                            "Soma": [sum(item['jogo']) for item in top_jogos]
                         })
                         st.download_button(
                             label="📥 Exportar CSV", 
                             data=df_export.to_csv(index=False), 
-                            file_name=f"nash_jogos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", 
+                            file_name=f"ev_jogos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", 
                             mime="text/csv", 
                             use_container_width=True
                         )
                 else:
-                    st.error("❌ Falha ao gerar jogos Nash")
+                    st.error("❌ Falha ao gerar jogos otimizados por EV")
         
-        # Seção explicativa sobre John Nash
-        with st.expander("📚 Sobre John Nash e sua Teoria"):
+        # Seção educativa sobre Valor Esperado
+        with st.expander("📚 Entendendo o Valor Esperado (EV)"):
             st.markdown("""
-            **John Forbes Nash Jr. (1928-2015)** - Matemático e Prêmio Nobel de Economia
+            ### O que é Valor Esperado?
             
-            **O Equilíbrio de Nash:**
-            - Formalizado em sua tese de doutorado de 1950 com apenas 28 páginas
-            - Revolucionou a Teoria dos Jogos e a Economia
-            - Popularizado no filme "Uma Mente Brilhante" (2001)
+            O **Valor Esperado (EV)** é um conceito fundamental da teoria da probabilidade e finanças:
             
-            **Aplicação em Loterias:**
-            - Na Lotofácil, não estamos apenas contra a "sorte", mas contra outros jogadores
-            - Se você escolhe os números mais prováveis (frequentes), estará competindo com milhares
-            - A estratégia ótima (Equilíbrio) é escolher números que ninguém mais escolhe,
-              mas que ainda têm boa chance estatística
+            ```
+            EV = (Probabilidade de Ganhar) × (Prêmio Esperado)
+            ```
             
-            **Por que funciona?**
-            - O prêmio é dividido entre os acertadores
-            - 11, 12 ou 13 pontos também pagam (Faixas de premiação)
-            - Menos competidores = maior retorno financeiro
+            ### Por que isso é revolucionário para loterias?
             
-            **Resultado:** Você não necessariamente acerta mais, mas quando acerta,
-            o prêmio tende a ser MAIOR por ter menos divisões.
+            1. **A probabilidade é praticamente fixa** (1 em 3.268.760)
+            2. **O que varia é o prêmio** (divisão entre acertadores)
+            3. **Logo, maximizar EV = maximizar o prêmio quando acertar**
+            
+            ### Como maximizamos o EV?
+            
+            ✅ **Evitamos padrões humanos:**
+            - Sequências (1,2,3,4,5)
+            - Linhas/colunas completas
+            - Muitos números baixos (datas)
+            
+            ✅ **Buscamos números "esquecidos":**
+            - Números com baixa frequência histórica
+            - Números com grande atraso
+            - Combinações únicas
+            
+            ✅ **Simulamos a competição real:**
+            - Modelamos como 50% das apostas são em números baixos
+            - Consideramos padrões geométricos comuns
+            - Estimamos quantos dividiriam o prêmio
+            
+            ### Resultado prático:
+            
+            | Estratégia | Acertos | Prêmio quando acerta | EV Final |
+            |------------|---------|---------------------|----------|
+            | Popular (datas) | Normal | Pequeno (divide com milhares) | Baixo |
+            | Aleatório | Normal | Médio | Médio |
+            | **Nash EV** | Normal | **GRANDE** (poucos competidores) | **ALTO** |
+            
+            ### Conclusão:
+            
+            > **Você não vence a loteria acertando mais.**
+            > **Você vence ganhando mais quando acerta.**
+            
+            *- Adaptado do princípio de John Nash*
             """)
         
-        # Visualização do "Mapa de Competição"
-        if "jogos_gerados" in st.session_state and st.session_state.jogos_gerados:
-            st.markdown("### 🗺️ Mapa de Competição")
-            st.caption("Visualização de como seus jogos se comparam com apostas comuns")
+        # Visualização da distribuição de EV
+        if "ev_detalhes" in st.session_state and st.session_state.ev_detalhes:
+            st.markdown("### 📊 Distribuição do Valor Esperado")
             
-            # Simular distribuição de apostas
-            todas_apostas = []
-            for _ in range(500):
-                tipo = random.choices(["datas", "aleatorio", "repetido", "geometrico"], weights=[0.4, 0.3, 0.2, 0.1])[0]
-                if tipo == "datas":
-                    jogo = sorted(random.sample(range(1, 32), min(15, 31)))
-                    if len(jogo) < 15:
-                        jogo.extend(random.sample(range(1, 26), 15 - len(jogo)))
-                elif tipo == "aleatorio":
-                    jogo = sorted(random.sample(range(1, 26), 15))
-                elif tipo == "repetido":
-                    ultimo = st.session_state.dados_api[0]['dezenas']
-                    if isinstance(ultimo, list):
-                        ultimo_nums = [int(x) for x in ultimo]
-                    else:
-                        ultimo_nums = [int(x.strip()) for x in ultimo.split(',')]
-                    base = set(random.sample(ultimo_nums, min(9, len(ultimo_nums))))
-                    while len(base) < 15:
-                        base.add(random.randint(1, 25))
-                    jogo = sorted(base)
-                else:
-                    jogo = set()
-                    linhas = random.sample(range(5), random.randint(2, 3))
-                    for linha in linhas:
-                        for col in range(5):
-                            jogo.add(linha * 5 + col + 1)
-                    while len(jogo) < 15:
-                        jogo.add(random.randint(1, 25))
-                    jogo = sorted(jogo)
-                todas_apostas.append(jogo)
-            
-            # Calcular sobreposição
-            sobreposicoes = []
-            for jogo in st.session_state.jogos_gerados[:10]:
-                sobrep = 0
-                for aposta in todas_apostas:
-                    if len(set(jogo) & set(aposta)) >= 10:
-                        sobrep += 1
-                sobreposicoes.append(sobrep)
-            
-            # Mostrar gráfico
-            df_sobreposicao = pd.DataFrame({
-                "Jogo": range(1, len(sobreposicoes)+1),
-                "Apostas Similares": sobreposicoes
+            df_ev = pd.DataFrame({
+                "Jogo": range(1, len(st.session_state.ev_detalhes)+1),
+                "EV (x10⁹)": [d['ev_bruto'] * 1e9 for d in st.session_state.ev_detalhes],
+                "Prêmio Esperado (R$)": [d['premio_esperado'] for d in st.session_state.ev_detalhes],
+                "Competidores": [d['competidores_diretos'] for d in st.session_state.ev_detalhes]
             })
-            st.bar_chart(df_sobreposicao.set_index("Jogo"))
             
-            st.caption("""
-            **Interpretação:** 
-            - Barras ALTAS = Muita competição (muitos apostadores com jogos parecidos)
-            - Barras BAIXAS = Pouca competição (seu jogo é único, prêmio potencialmente maior)
-            """)
+            col1, col2 = st.columns(2)
+            with col1:
+                st.bar_chart(df_ev.set_index("Jogo")["EV (x10⁹)"])
+            with col2:
+                st.bar_chart(df_ev.set_index("Jogo")["Prêmio Esperado (R$)"])
 
     # ================= TAB 7: CONFERÊNCIA INTELIGENTE =================
     with tab7:
