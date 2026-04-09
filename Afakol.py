@@ -50,6 +50,7 @@ input, textarea { border-radius: 12px !important; }
 .highlight { background: #00ffaa20; border-left: 4px solid #00ffaa; padding: 10px; border-radius: 8px; margin: 10px 0; }
 .ilp-highlight { background: linear-gradient(135deg, #ff00ff20 0%, #aa00ff20 100%); border: 2px solid #ff00ff; padding: 15px; border-radius: 12px; margin: 10px 0; }
 .ia7-highlight { background: linear-gradient(135deg, #ff880020 0%, #ff440020 100%); border: 2px solid #ff8800; padding: 15px; border-radius: 12px; margin: 10px 0; }
+.nash-highlight { background: linear-gradient(135deg, #9b59b620 0%, #6c348320 100%); border: 2px solid #9b59b6; padding: 15px; border-radius: 12px; margin: 10px 0; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -406,6 +407,331 @@ class MotorGeometria:
             'pares_adjacentes': sum(1 for i in range(len(jogo)) for j in range(i+1, len(jogo))
                                     if abs(xs[i]-xs[j]) + abs(ys[i]-ys[j]) == 1)
         }
+
+# =====================================================
+# TEORIA DOS JOGOS - ESTRATÉGIAS DE JOHN NASH
+# =====================================================
+
+def calcular_matriz_pagamento(jogo, historico_concursos, outros_jogadores=None):
+    """
+    Calcula a matriz de pagamento para um jogo baseado na Teoria de Nash.
+    
+    O pagamento é maior quando:
+    1. O jogo é diferente dos outros jogadores (menos competição)
+    2. O jogo tem boa probabilidade estatística baseada no histórico
+    3. O jogo está em equilíbrio (sem números muito populares ou muito esquecidos)
+    """
+    if outros_jogadores is None:
+        outros_jogadores = []
+    
+    # Fator 1: Singularidade (menos competição = maior pagamento)
+    if outros_jogadores:
+        similaridade = 0
+        for outro in outros_jogadores:
+            # Quantos números em comum
+            interseccao = len(set(jogo) & set(outro))
+            similaridade += interseccao / 15
+        similaridade /= len(outros_jogadores)
+        fator_singularidade = 1 - similaridade  # Quanto mais único, melhor
+    else:
+        fator_singularidade = 1.0
+    
+    # Fator 2: Probabilidade histórica (frequência balanceada)
+    freq = Counter()
+    for concurso in historico_concursos:
+        freq.update(concurso)
+    
+    # Evitar números muito populares (equilíbrio de Nash)
+    freq_vals = [freq.get(n, 0) for n in jogo]
+    media_freq = np.mean(freq_vals) if freq_vals else 0
+    desvio_freq = np.std(freq_vals) if len(freq_vals) > 1 else 0
+    
+    # Ideal: desvio baixo (números com frequências parecidas)
+    fator_equilibrio = 1 / (1 + desvio_freq) if desvio_freq > 0 else 1.0
+    
+    # Fator 3: Distribuição ideal (tendência natural da Lotofácil)
+    pares = contar_pares(jogo)
+    fator_paridade = 1 - abs(pares - 7.5) / 7.5  # Ideal: ~7-8 pares
+    
+    soma = sum(jogo)
+    # Média histórica da soma ~195
+    fator_soma = 1 - abs(soma - 195) / 100
+    
+    # Pagamento total (quanto maior, melhor)
+    pagamento = (fator_singularidade * 0.4 + 
+                 fator_equilibrio * 0.3 + 
+                 fator_paridade * 0.15 + 
+                 fator_soma * 0.15)
+    
+    return pagamento
+
+def encontrar_equilibrio_nash(historico_concursos, outros_jogadores, num_jogos=10, iteracoes=100):
+    """
+    Encontra o Equilíbrio de Nash para a Lotofácil.
+    
+    O Equilíbrio de Nash ocorre quando nenhum jogador pode melhorar
+    sua situação mudando unilateralmente sua estratégia.
+    """
+    melhores_jogos = []
+    
+    # Inicializar com estratégias aleatórias
+    estrategias = []
+    for _ in range(num_jogos):
+        jogo = sorted(random.sample(range(1, 26), 15))
+        estrategias.append(jogo)
+    
+    for _ in range(iteracoes):
+        novos_estrategias = []
+        
+        for i, jogo in enumerate(estrategias):
+            # Outros jogadores (exceto o atual)
+            outros = [e for idx, e in enumerate(estrategias) if idx != i]
+            outros.extend(outros_jogadores)
+            
+            # Calcular pagamento atual
+            pag_atual = calcular_matriz_pagamento(jogo, historico_concursos, outros)
+            
+            # Tentar melhorar (desvio unilateral)
+            melhor_jogo = jogo
+            melhor_pag = pag_atual
+            
+            # Gerar variações do jogo atual
+            for _ in range(50):
+                # Mutação controlada
+                variante = jogo.copy()
+                posicao = random.randint(0, 14)
+                novo_num = random.randint(1, 25)
+                while novo_num in variante:
+                    novo_num = random.randint(1, 25)
+                variante[posicao] = novo_num
+                variante.sort()
+                
+                # Avaliar variante
+                pag_variante = calcular_matriz_pagamento(variante, historico_concursos, outros)
+                
+                if pag_variante > melhor_pag:
+                    melhor_pag = pag_variante
+                    melhor_jogo = variante
+            
+            novos_estrategias.append(melhor_jogo)
+        
+        estrategias = novos_estrategias
+    
+    # Remover duplicatas
+    estrategias_unicas = []
+    for j in estrategias:
+        if j not in estrategias_unicas:
+            estrategias_unicas.append(j)
+    
+    # Avaliar cada estratégia
+    resultados = []
+    for jogo in estrategias_unicas[:num_jogos]:
+        pagamento = calcular_matriz_pagamento(jogo, historico_concursos, outros_jogadores)
+        
+        # Calcular métricas adicionais
+        pares = contar_pares(jogo)
+        soma_total = sum(jogo)
+        consecutivos = contar_consecutivos(jogo)
+        
+        resultados.append({
+            'jogo': jogo,
+            'pagamento': pagamento,
+            'pares': pares,
+            'soma': soma_total,
+            'consecutivos': consecutivos,
+            'unicidade': 1 - (len(set(jogo) & set(outros_jogadores[0] if outros_jogadores else [])) / 15)
+        })
+    
+    # Ordenar por pagamento (melhor equilíbrio)
+    resultados.sort(key=lambda x: x['pagamento'], reverse=True)
+    
+    return resultados
+
+def gerar_estrategia_dominante(historico_concursos, tamanho_pool=25):
+    """
+    Estratégia Dominante de Nash: números que ninguém quer jogar,
+    mas que têm boa probabilidade estatística.
+    """
+    # Calcular frequência de cada número
+    freq = Counter()
+    for concurso in historico_concursos:
+        freq.update(concurso)
+    
+    # Encontrar números "esquecidos" (menos frequentes)
+    menos_frequentes = sorted(freq.items(), key=lambda x: x[1])[:20]
+    
+    # Mas também considerar números com bom atraso (vão sair em breve)
+    atrasos = {}
+    for num in range(1, 26):
+        atraso = 0
+        for concurso in historico_concursos:
+            if num in concurso:
+                break
+            atraso += 1
+        atrasos[num] = atraso
+    
+    # Score = (1/frequencia) * atraso
+    scores = {}
+    for num in range(1, 26):
+        freq_num = freq.get(num, 1)
+        atraso_num = atrasos.get(num, 0)
+        # Quanto menor a frequência e maior o atraso, melhor
+        scores[num] = (1 / (freq_num + 1)) * (atraso_num + 1)
+    
+    # Ordenar por score
+    ordenados = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+    
+    # Selecionar os 20 melhores para o pool
+    pool = [n for n, _ in ordenados[:tamanho_pool]]
+    
+    return pool
+
+def gerar_jogos_nash(historico_concursos, outros_jogadores_simulados=None, qtd_jogos=10):
+    """
+    Gera jogos baseados no Equilíbrio de Nash.
+    
+    Princípio: Em vez de tentar acertar os números mais prováveis,
+    busca-se números que maximizam o retorno esperado considerando
+    que outros apostadores também estão escolhendo.
+    """
+    if outros_jogadores_simulados is None:
+        # Simular outros jogadores baseados em padrões comuns
+        outros_jogadores_simulados = []
+        # Padrões comuns que as pessoas jogam:
+        padroes_comuns = [
+            # Datas de aniversário (1-31)
+            list(range(1, 16)),
+            list(range(10, 25)),
+            # Números pares
+            [n for n in range(2, 26, 2)][:15],
+            # Números ímpares
+            [n for n in range(1, 26, 2)][:15],
+            # Sequências
+            [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],
+            [11,12,13,14,15,16,17,18,19,20,21,22,23,24,25],
+        ]
+        outros_jogadores_simulados.extend(padroes_comuns)
+        
+        # Adicionar alguns jogos aleatórios
+        for _ in range(50):
+            outros_jogadores_simulados.append(sorted(random.sample(range(1, 26), 15)))
+    
+    # Encontrar o equilíbrio
+    equilibrio = encontrar_equilibrio_nash(
+        historico_concursos, 
+        outros_jogadores_simulados, 
+        num_jogos=qtd_jogos,
+        iteracoes=80
+    )
+    
+    # Estratégia dominante complementar
+    pool_dominante = gerar_estrategia_dominante(historico_concursos, 20)
+    
+    # Combinar ambas abordagens
+    jogos_finais = []
+    
+    # Adicionar jogos do equilíbrio
+    for item in equilibrio:
+        jogos_finais.append(item['jogo'])
+    
+    # Adicionar alguns jogos da estratégia dominante
+    estrategia_dominante_jogos = []
+    for _ in range(qtd_jogos // 2):
+        jogo = sorted(random.sample(pool_dominante, 15))
+        if jogo not in jogos_finais:
+            estrategia_dominante_jogos.append(jogo)
+    
+    jogos_finais.extend(estrategia_dominante_jogos[:qtd_jogos // 2])
+    
+    # Garantir quantidade exata
+    while len(jogos_finais) < qtd_jogos:
+        jogo = sorted(random.sample(range(1, 26), 15))
+        if jogo not in jogos_finais:
+            jogos_finais.append(jogo)
+    
+    # Calcular scores para os jogos
+    scores = []
+    for jogo in jogos_finais[:qtd_jogos]:
+        # Score Nash = pagamento esperado
+        pag = calcular_matriz_pagamento(jogo, historico_concursos, outros_jogadores_simulados)
+        
+        # Adicionar bônus por características desejáveis
+        pares = contar_pares(jogo)
+        if 6 <= pares <= 9:
+            pag += 0.1
+        
+        soma = sum(jogo)
+        if 180 <= soma <= 220:
+            pag += 0.1
+        
+        scores.append(pag * 100)
+    
+    return jogos_finais[:qtd_jogos], scores
+
+def analisar_competicao(jogos_usuario, historico_concursos):
+    """
+    Analisa a competição: quantos outros apostadores provavelmente
+    escolheram números similares aos seus.
+    """
+    # Simular apostadores baseados em estatísticas reais
+    # Cerca de 2-3 milhões de apostas por concurso na Lotofácil
+    
+    # Distribuição comum de apostas
+    padroes_apostadores = []
+    
+    # 40% jogam datas (1-31)
+    for _ in range(400):
+        jogo = sorted(random.sample(range(1, 32), min(15, 31)))
+        if len(jogo) < 15:
+            jogo.extend(random.sample(range(1, 26), 15 - len(jogo)))
+        padroes_apostadores.append(sorted(jogo))
+    
+    # 30% jogam números aleatórios
+    for _ in range(300):
+        padroes_apostadores.append(sorted(random.sample(range(1, 26), 15)))
+    
+    # 20% jogam números repetidos do último concurso
+    ultimo = historico_concursos[0] if historico_concursos else []
+    for _ in range(200):
+        base = set(random.sample(ultimo, min(9, len(ultimo))))
+        while len(base) < 15:
+            base.add(random.randint(1, 25))
+        padroes_apostadores.append(sorted(base))
+    
+    # 10% jogam padrões geométricos (linhas/colunas)
+    for _ in range(100):
+        jogo = set()
+        # Selecionar 2-3 linhas completas
+        linhas = random.sample(range(5), random.randint(2, 3))
+        for linha in linhas:
+            for col in range(5):
+                num = linha * 5 + col + 1
+                jogo.add(num)
+        while len(jogo) < 15:
+            jogo.add(random.randint(1, 25))
+        padroes_apostadores.append(sorted(jogo))
+    
+    # Analisar competição para os jogos do usuário
+    analise = []
+    for jogo in jogos_usuario:
+        competidores = 0
+        for aposta in padroes_apostadores:
+            # Se tem mais de 10 números iguais, compete diretamente
+            if len(set(jogo) & set(aposta)) >= 10:
+                competidores += 1
+        
+        # Premiação esperada (simplificada)
+        # Quanto menos competidores, maior o prêmio
+        premio_esperado = 1000000 / (competidores + 1) if competidores > 0 else 1000000
+        
+        analise.append({
+            'jogo': jogo,
+            'competidores_estimados': competidores,
+            'premio_esperado': premio_esperado,
+            'unicidade': 1 - (len(set(jogo) & set(ultimo)) / 15)
+        })
+    
+    return analise
 
 # =====================================================
 # EMS 8.0 - ILP PROFISSIONAL
@@ -1425,13 +1751,14 @@ def main():
     # ================= INTERFACE PRINCIPAL =================
     st.subheader("🎯 Análise e Geração de Jogos")
 
-    # AGORA COM 9 ABAS (ADICIONEI IA 7.0)
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
+    # AGORA COM 10 ABAS (ADICIONEI A TEORIA DE NASH)
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
         "📊 Análise do Último Concurso",
         "🎲 Gerador de Jogos",
         "🚀 EMS 5.0 - Cobertura",
         "🔥 ILP PROFESSIONAL",
         "🤖 IA 7.0 - Motor Avançado",
+        "🎲 TEORIA DE NASH",
         "🔍 Conferência Inteligente",
         "📈 Avaliação Estatística",
         "📐 Geometria do Volante",
@@ -1995,8 +2322,248 @@ def main():
                                  file_name=f"ia70_jogos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", 
                                  mime="text/csv", use_container_width=True)
 
-    # ================= TAB 6: CONFERÊNCIA INTELIGENTE =================
+    # ================= TAB 6: TEORIA DE NASH =================
     with tab6:
+        st.markdown("### 🎲 Teoria dos Jogos - John Nash")
+        st.markdown("""
+        <div class="nash-highlight">
+        <strong>📖 O QUE É A TEORIA DE NASH APLICADA À LOTOFÁCIL?</strong><br><br>
+        John Nash revolucionou a economia com o conceito de <strong>Equilíbrio de Nash</strong>: 
+        uma situação onde nenhum jogador pode melhorar sua posição mudando unilateralmente sua estratégia.<br><br>
+        <strong>🎯 Aplicação na Lotofácil:</strong><br>
+        • Em vez de tentar "prever" os números sorteados, buscamos números que <strong>MAXIMIZAM O RETORNO</strong><br>
+        • Consideramos que <strong>outros apostadores</strong> também estão escolhendo números<br>
+        • Quanto <strong>MENOS pessoas acertarem com você</strong>, maior o prêmio<br>
+        • O <strong>Equilíbrio de Nash</strong> encontra números "esquecidos" mas com boa probabilidade<br>
+        • É a <strong>estratégia dominante</strong>: você não consegue melhorar sem piorar os outros
+        </div>
+        """, unsafe_allow_html=True)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            qtd_nash = st.slider("Quantidade de jogos", 5, 30, 10, key="qtd_nash")
+        with col2:
+            considerar_competicao = st.checkbox("Considerar competição simulada", value=True,
+                                               help="Simula outros apostadores para encontrar estratégias mais únicas")
+        
+        if st.button("🎲 GERAR ESTRATÉGIA DE NASH", use_container_width=True, type="primary"):
+            with st.spinner("Calculando Equilíbrio de Nash..."):
+                # Preparar histórico
+                concursos_numeros = []
+                for d in st.session_state.dados_api[:100]:
+                    if isinstance(d['dezenas'], list):
+                        dezenas = [int(x) for x in d['dezenas']]
+                    else:
+                        dezenas = [int(x.strip()) for x in d['dezenas'].split(',')]
+                    concursos_numeros.append(sorted(dezenas))
+                
+                # Simular outros jogadores se necessário
+                outros = None
+                if considerar_competicao:
+                    # Gerar simulação de outros apostadores
+                    outros = []
+                    # Padrões comuns que as pessoas jogam
+                    padroes = [
+                        list(range(1, 16)),  # 1-15
+                        list(range(11, 26)),  # 11-25
+                        [n for n in range(1, 26) if n % 2 == 0][:15],  # Pares
+                        [n for n in range(1, 26) if n % 2 != 0][:15],  # Ímpares
+                    ]
+                    outros.extend(padroes)
+                    
+                    # Adicionar apostadores aleatórios
+                    for _ in range(100):
+                        outros.append(sorted(random.sample(range(1, 26), 15)))
+                
+                # Gerar jogos Nash
+                jogos_nash, scores_nash = gerar_jogos_nash(
+                    concursos_numeros,
+                    outros,
+                    qtd_jogos=qtd_nash
+                )
+                
+                if jogos_nash:
+                    st.session_state.jogos_gerados = jogos_nash
+                    st.session_state.scores = scores_nash
+                    
+                    st.success(f"✅ {len(jogos_nash)} jogos gerados com Estratégia de Nash!")
+                    
+                    # Explicação da estratégia
+                    st.markdown("### 🧠 Lógica do Equilíbrio Encontrado")
+                    
+                    # Analisar competição
+                    if considerar_competicao:
+                        analise_comp = analisar_competicao(jogos_nash, concursos_numeros)
+                        
+                        col_a, col_b, col_c = st.columns(3)
+                        with col_a:
+                            media_unicidade = np.mean([a['unicidade'] for a in analise_comp])
+                            st.metric("Média de Unicidade", f"{media_unicidade:.1%}",
+                                     help="Quanto mais único, menos competidores")
+                        with col_b:
+                            media_competidores = np.mean([a['competidores_estimados'] for a in analise_comp])
+                            st.metric("Competidores Médios", f"{media_competidores:,.0f}",
+                                     help="Estimativa de apostas similares")
+                        with col_c:
+                            premio_medio = np.mean([a['premio_esperado'] for a in analise_comp])
+                            st.metric("Prêmio Esperado Médio", f"R$ {premio_medio:,.0f}",
+                                     help="Considerando divisão do prêmio")
+                    
+                    # Mostrar jogos
+                    st.markdown(f"### 📋 {len(jogos_nash)} Jogos - Estratégia de Nash")
+                    
+                    for i, jogo in enumerate(jogos_nash[:20]):
+                        score = scores_nash[i] if i < len(scores_nash) else 0
+                        
+                        # Calcular métricas
+                        pares = contar_pares(jogo)
+                        impares = 15 - pares
+                        soma = sum(jogo)
+                        consec = contar_consecutivos(jogo)
+                        
+                        # Ícone baseado na singularidade
+                        if considerar_competicao and i < len(analise_comp):
+                            unicidade = analise_comp[i]['unicidade']
+                            if unicidade > 0.7:
+                                icone = "🦄"
+                            elif unicidade > 0.5:
+                                icone = "⭐"
+                            else:
+                                icone = "🎲"
+                        else:
+                            icone = "🎯"
+                        
+                        stats = f"⚖️ {pares}p/{impares}i | ➕ {soma} | 📏 {consec} cons"
+                        
+                        st.markdown(f"""
+                        <div style='border-left: 5px solid #9b59b6; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
+                            {icone} <strong>Jogo {i+1:2d}</strong> — Score Nash: {score:.2f}<br>
+                            {formatar_jogo_html(jogo)}<br>
+                            <small style='color:#aaa;'>{stats}</small>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    # Botões de ação
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button("💾 Salvar Jogos Nash", key="salvar_nash", use_container_width=True):
+                            ultimo = st.session_state.dados_api[0]
+                            arquivo, jogo_id = salvar_jogos_gerados(
+                                jogos_nash, 
+                                [], 
+                                {"versao": "Teoria de Nash - Equilíbrio", 
+                                 "considerar_competicao": considerar_competicao}, 
+                                ultimo['concurso'], 
+                                ultimo['data']
+                            )
+                            if arquivo:
+                                st.success(f"✅ {len(jogos_nash)} jogos salvos! ID: {jogo_id}")
+                                st.session_state.jogos_salvos = carregar_jogos_salvos()
+                    
+                    with col2:
+                        df_export = pd.DataFrame({
+                            "Jogo": range(1, len(jogos_nash)+1),
+                            "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in jogos_nash],
+                            "Score_Nash": [round(s, 2) for s in scores_nash],
+                            "Pares": [contar_pares(j) for j in jogos_nash],
+                            "Soma": [sum(j) for j in jogos_nash],
+                            "Consecutivos": [contar_consecutivos(j) for j in jogos_nash]
+                        })
+                        st.download_button(
+                            label="📥 Exportar CSV", 
+                            data=df_export.to_csv(index=False), 
+                            file_name=f"nash_jogos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", 
+                            mime="text/csv", 
+                            use_container_width=True
+                        )
+                else:
+                    st.error("❌ Falha ao gerar jogos Nash")
+        
+        # Seção explicativa sobre John Nash
+        with st.expander("📚 Sobre John Nash e sua Teoria"):
+            st.markdown("""
+            **John Forbes Nash Jr. (1928-2015)** - Matemático e Prêmio Nobel de Economia
+            
+            **O Equilíbrio de Nash:**
+            - Formalizado em sua tese de doutorado de 1950 com apenas 28 páginas
+            - Revolucionou a Teoria dos Jogos e a Economia
+            - Popularizado no filme "Uma Mente Brilhante" (2001)
+            
+            **Aplicação em Loterias:**
+            - Na Lotofácil, não estamos apenas contra a "sorte", mas contra outros jogadores
+            - Se você escolhe os números mais prováveis (frequentes), estará competindo com milhares
+            - A estratégia ótima (Equilíbrio) é escolher números que ninguém mais escolhe,
+              mas que ainda têm boa chance estatística
+            
+            **Por que funciona?**
+            - O prêmio é dividido entre os acertadores
+            - 11, 12 ou 13 pontos também pagam (Faixas de premiação)
+            - Menos competidores = maior retorno financeiro
+            
+            **Resultado:** Você não necessariamente acerta mais, mas quando acerta,
+            o prêmio tende a ser MAIOR por ter menos divisões.
+            """)
+        
+        # Visualização do "Mapa de Competição"
+        if "jogos_gerados" in st.session_state and st.session_state.jogos_gerados:
+            st.markdown("### 🗺️ Mapa de Competição")
+            st.caption("Visualização de como seus jogos se comparam com apostas comuns")
+            
+            # Simular distribuição de apostas
+            todas_apostas = []
+            for _ in range(500):
+                tipo = random.choices(["datas", "aleatorio", "repetido", "geometrico"], weights=[0.4, 0.3, 0.2, 0.1])[0]
+                if tipo == "datas":
+                    jogo = sorted(random.sample(range(1, 32), min(15, 31)))
+                    if len(jogo) < 15:
+                        jogo.extend(random.sample(range(1, 26), 15 - len(jogo)))
+                elif tipo == "aleatorio":
+                    jogo = sorted(random.sample(range(1, 26), 15))
+                elif tipo == "repetido":
+                    ultimo = st.session_state.dados_api[0]['dezenas']
+                    if isinstance(ultimo, list):
+                        ultimo_nums = [int(x) for x in ultimo]
+                    else:
+                        ultimo_nums = [int(x.strip()) for x in ultimo.split(',')]
+                    base = set(random.sample(ultimo_nums, min(9, len(ultimo_nums))))
+                    while len(base) < 15:
+                        base.add(random.randint(1, 25))
+                    jogo = sorted(base)
+                else:
+                    jogo = set()
+                    linhas = random.sample(range(5), random.randint(2, 3))
+                    for linha in linhas:
+                        for col in range(5):
+                            jogo.add(linha * 5 + col + 1)
+                    while len(jogo) < 15:
+                        jogo.add(random.randint(1, 25))
+                    jogo = sorted(jogo)
+                todas_apostas.append(jogo)
+            
+            # Calcular sobreposição
+            sobreposicoes = []
+            for jogo in st.session_state.jogos_gerados[:10]:
+                sobrep = 0
+                for aposta in todas_apostas:
+                    if len(set(jogo) & set(aposta)) >= 10:
+                        sobrep += 1
+                sobreposicoes.append(sobrep)
+            
+            # Mostrar gráfico
+            df_sobreposicao = pd.DataFrame({
+                "Jogo": range(1, len(sobreposicoes)+1),
+                "Apostas Similares": sobreposicoes
+            })
+            st.bar_chart(df_sobreposicao.set_index("Jogo"))
+            
+            st.caption("""
+            **Interpretação:** 
+            - Barras ALTAS = Muita competição (muitos apostadores com jogos parecidos)
+            - Barras BAIXAS = Pouca competição (seu jogo é único, prêmio potencialmente maior)
+            """)
+
+    # ================= TAB 7: CONFERÊNCIA INTELIGENTE =================
+    with tab7:
         st.markdown("### 🔍 Conferência Inteligente de Jogos")
         st.caption("Confira seus jogos contra qualquer resultado e obtenha análises detalhadas")
         
@@ -2168,8 +2735,8 @@ def main():
                         st.session_state.scores = []
                         st.success("Jogos otimizados carregados na aba 'Gerador de Jogos'!")
 
-    # ================= TAB 7: AVALIAÇÃO ESTATÍSTICA =================
-    with tab7:
+    # ================= TAB 8: AVALIAÇÃO ESTATÍSTICA =================
+    with tab8:
         st.markdown("### 📈 Avaliação Estatística dos Jogos")
         baseline = st.session_state.baseline_cache
         st.markdown(f"**Baseline Aleatório:** Média = {baseline['media']:.3f}, Desvio = {baseline['std']:.3f}")
@@ -2218,8 +2785,8 @@ def main():
             if st.session_state.mc_resultados is not None:
                 st.dataframe(st.session_state.mc_resultados, use_container_width=True, hide_index=True)
 
-    # ================= TAB 8: GEOMETRIA DO VOLANTE =================
-    with tab8:
+    # ================= TAB 9: GEOMETRIA DO VOLANTE =================
+    with tab9:
         st.markdown("### 📐 Geometria Analítica do Volante 5x5")
         motor_geo = st.session_state.motor_geometria
         stats_geo = motor_geo.get_estatisticas_geometricas()
@@ -2254,8 +2821,8 @@ def main():
             except:
                 st.error("Formato inválido. Use números separados por vírgula.")
 
-    # ================= TAB 9: CONFERÊNCIA SALVOS =================
-    with tab9:
+    # ================= TAB 10: CONFERÊNCIA SALVOS =================
+    with tab10:
         st.markdown("### ✅ Conferência de Jogos Salvos")
         st.session_state.jogos_salvos = carregar_jogos_salvos()
         if not st.session_state.jogos_salvos:
