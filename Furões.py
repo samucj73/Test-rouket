@@ -1860,13 +1860,14 @@ class AnalisadorTendencia:
         
         return melhor_mercado
     
-    #def _analisar_mercado_over
-def _analisar_mercado_over(self, home: str, away: str, estimativa_total: float, linha: float,
+    def _analisar_mercado_over
+    def _analisar_mercado_over(self, home: str, away: str, estimativa_total: float, linha: float,
                             played_home: int, played_away: int,
                             media_home_feitos: float, media_away_feitos: float,
                             media_home_sofridos: float, media_away_sofridos: float,
                             fator_ataque: float) -> dict:
-    """Analisa um mercado OVER específico de forma independente"""
+                                
+        """Analisa um mercado OVER específico de forma independente"""
     
     # Probabilidade base usando sigmoid
     if linha == 1.5:
@@ -1985,6 +1986,7 @@ def _analisar_mercado_under(self, home: str, away: str, estimativa_total: float,
             "played_away": played_away
         }
     } 
+
                                 
     
                       
