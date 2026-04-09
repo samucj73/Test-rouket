@@ -1664,7 +1664,6 @@ class AnalisadorEstatistico:
 class AnalisadorTendencia:
     """Analisador de tendências com análise independente por mercado (sem prioridades)"""
     
-    # FATORES DE AJUSTE POR LIGA
     LIGA_OVER_FACTOR = {
         'Eredivisie': 1.12,
         'Championship': 1.08,
@@ -1724,9 +1723,7 @@ class AnalisadorTendencia:
                 "confianca": 0,
                 "tipo_aposta": "avoid",
                 "linha_mercado": 0,
-                "detalhes": {
-                    "motivo": f"Jogos insuficientes: Home={played_home}, Away={played_away}"
-                }
+                "detalhes": {"motivo": f"Jogos insuficientes: Home={played_home}, Away={played_away}"}
             }
 
         played_home = max(played_home, 1)
@@ -1737,13 +1734,11 @@ class AnalisadorTendencia:
         media_away_feitos = dados_away.get("scored", 0) / played_away
         media_away_sofridos = dados_away.get("against", 0) / played_away
 
-        # Limites realistas
         media_home_feitos = clamp(media_home_feitos, 0.4, 3.2)
         media_home_sofridos = clamp(media_home_sofridos, 0.4, 3.0)
         media_away_feitos = clamp(media_away_feitos, 0.4, 3.0)
         media_away_sofridos = clamp(media_away_sofridos, 0.4, 3.0)
 
-        # Estimativa base de gols
         estimativa_total = (
             media_home_feitos * 0.55 +
             media_away_feitos * 0.55 +
@@ -1751,10 +1746,8 @@ class AnalisadorTendencia:
             media_away_sofridos * 0.25
         )
 
-        # Aplica fator da liga
         estimativa_total *= self.over_factor
 
-        # Ajuste por ataque
         fator_ofensivo_home = media_home_feitos / max(media_away_sofridos, 0.75)
         fator_ofensivo_away = media_away_feitos / max(media_home_sofridos, 0.75)
         fator_ataque = (fator_ofensivo_home + fator_ofensivo_away) / 2
@@ -1766,79 +1759,36 @@ class AnalisadorTendencia:
         elif fator_ataque <= 0.7:
             estimativa_total *= 0.95
 
-        # Fator casa
         fator_casa = 1.05 + (media_home_feitos - media_home_sofridos) * 0.08
         fator_casa = clamp(fator_casa, 0.96, 1.15)
         estimativa_total *= fator_casa
 
-        # Suavização
         estimativa_total = (estimativa_total * 0.85) + (2.5 * 0.15)
         estimativa_total = clamp(estimativa_total, 1.2, 3.8)
 
-        # ============================================================
-        # ANÁLISE INDEPENDENTE POR MERCADO (SEM PRIORIDADES)
-        # ============================================================
-        
         mercados_analisados = []
         
-        # 1. OVER 1.5
-        mercado_over15 = self._analisar_mercado_over(
-            home, away, estimativa_total, 1.5,
-            played_home, played_away,
-            media_home_feitos, media_away_feitos,
-            media_home_sofridos, media_away_sofridos,
-            fator_ataque
-        )
+        mercado_over15 = self._analisar_mercado_over(estimativa_total, 1.5, played_home, played_away, fator_ataque)
         if mercado_over15:
             mercados_analisados.append(mercado_over15)
         
-        # 2. OVER 2.5
-        mercado_over25 = self._analisar_mercado_over(
-            home, away, estimativa_total, 2.5,
-            played_home, played_away,
-            media_home_feitos, media_away_feitos,
-            media_home_sofridos, media_away_sofridos,
-            fator_ataque
-        )
+        mercado_over25 = self._analisar_mercado_over(estimativa_total, 2.5, played_home, played_away, fator_ataque)
         if mercado_over25:
             mercados_analisados.append(mercado_over25)
         
-        # 3. OVER 3.5 (apenas se estimativa for razoável)
-        if estimativa_total >= 2.6:
-            mercado_over35 = self._analisar_mercado_over(
-                home, away, estimativa_total, 3.5,
-                played_home, played_away,
-                media_home_feitos, media_away_feitos,
-                media_home_sofridos, media_away_sofridos,
-                fator_ataque
-            )
+        if estimativa_total >= 2.4:
+            mercado_over35 = self._analisar_mercado_over(estimativa_total, 3.5, played_home, played_away, fator_ataque)
             if mercado_over35:
                 mercados_analisados.append(mercado_over35)
         
-        # 4. UNDER 2.5
-        mercado_under25 = self._analisar_mercado_under(
-            home, away, estimativa_total, 2.5,
-            played_home, played_away,
-            media_home_sofridos, media_away_sofridos,
-            media_home_feitos, media_away_feitos
-        )
+        mercado_under25 = self._analisar_mercado_under(estimativa_total, 2.5, played_home, played_away)
         if mercado_under25:
             mercados_analisados.append(mercado_under25)
         
-        # 5. UNDER 1.5 (apenas se estimativa for baixa)
         if estimativa_total <= 2.2:
-            mercado_under15 = self._analisar_mercado_under(
-                home, away, estimativa_total, 1.5,
-                played_home, played_away,
-                media_home_sofridos, media_away_sofridos,
-                media_home_feitos, media_away_feitos
-            )
+            mercado_under15 = self._analisar_mercado_under(estimativa_total, 1.5, played_home, played_away)
             if mercado_under15:
                 mercados_analisados.append(mercado_under15)
-        
-        # ============================================================
-        # SELECIONAR O MELHOR MERCADO (MAIOR CONFIANÇA)
-        # ============================================================
         
         if not mercados_analisados:
             return {
@@ -1848,87 +1798,64 @@ class AnalisadorTendencia:
                 "confianca": 0,
                 "tipo_aposta": "avoid",
                 "linha_mercado": 0,
-                "detalhes": {
-                    "motivo": "Nenhum mercado com confiança suficiente"
-                }
+                "detalhes": {"motivo": "Nenhum mercado com confiança suficiente"}
             }
         
-        # Ordenar por confiança (maior para menor)
         mercados_analisados.sort(key=lambda x: x["confianca"], reverse=True)
-        
         melhor_mercado = mercados_analisados[0]
-        
-        # Log da análise completa para debug
-        logging.info(f"📊 ANÁLISE COMPLETA {home} vs {away}:")
-        for m in mercados_analisados:
-            logging.info(f"   - {m['tendencia']}: Confiança {m['confianca']:.1f}% | Prob {m['probabilidade']:.1f}%")
-        logging.info(f"   ✅ SELECIONADO: {melhor_mercado['tendencia']} (Confiança: {melhor_mercado['confianca']:.1f}%)")
         
         return melhor_mercado
     
-    def _analisar_mercado_over(self, home: str, away: str, estimativa_total: float, linha: float,
+    def _analisar_mercado_over(self, estimativa_total: float, linha: float,
                                 played_home: int, played_away: int,
-                                media_home_feitos: float, media_away_feitos: float,
-                                media_home_sofridos: float, media_away_sofridos: float,
                                 fator_ataque: float) -> dict:
-        """Analisa um mercado OVER específico de forma independente"""
-        
-        # Configurações por linha de mercado (LIMIARES AJUSTADOS)
         if linha == 1.5:
             probabilidade_base = sigmoid((estimativa_total - 1.5) * 1.8)
             conf_min = 50
             estimativa_min = 1.4
-            bonus_extra = 4 if estimativa_total >= 1.8 else 0
         elif linha == 2.5:
             probabilidade_base = sigmoid((estimativa_total - 2.5) * 1.2)
             conf_min = 55
             estimativa_min = 2.2
-            bonus_extra = 6 if estimativa_total >= 2.6 else 0
         elif linha == 3.5:
             probabilidade_base = sigmoid((estimativa_total - 3.5) * 1.1)
             conf_min = 55
-            estimativa_min = 2.8
-            bonus_extra = 8 if estimativa_total >= 3.2 else 0
+            estimativa_min = 2.7
         else:
-            probabilidade_base = sigmoid((estimativa_total - linha) * 1.0)
-            conf_min = 50
-            estimativa_min = linha - 0.3
-            bonus_extra = 0
+            return None
         
-        # Fator de confiança base
+        if estimativa_total < estimativa_min:
+            return None
+        
         distancia_linha = abs(estimativa_total - linha)
         conf_base = probabilidade_base * 55
         conf_dist = min(distancia_linha * 20, 25)
         
-        # Bônus por consistência (mais jogos = mais confiável)
         conf_consistencia = 0
         if played_home >= 8 and played_away >= 8:
             conf_consistencia += 8
         elif played_home >= 5 and played_away >= 5:
             conf_consistencia += 4
         
-        # Adiciona bônus específico da linha
-        conf_consistencia += bonus_extra
+        if linha == 2.5 and estimativa_total >= 2.6:
+            conf_consistencia += 5
+        elif linha == 3.5 and estimativa_total >= 3.0:
+            conf_consistencia += 5
         
-        # Bônus por ataque forte
         if fator_ataque >= 1.5:
             conf_consistencia += 5
         elif fator_ataque >= 1.3:
             conf_consistencia += 3
         
-        # Penalidade para ligas defensivas em OVER
         penalidade_liga = 0
         if self.liga_nome in ['Serie A', 'Primeira Liga']:
             penalidade_liga = 6
         elif self.liga_nome in ['Ligue 1']:
             penalidade_liga = 4
-        elif self.liga_nome in ['Premier League']:
-            penalidade_liga = 2
         
         confianca = clamp(conf_base + conf_dist + conf_consistencia - penalidade_liga, 40, self.confidence_cap)
         
-        # VALIDAÇÃO FINAL COM LIMIARES AJUSTADOS
-        if confianca < conf_min or estimativa_total < estimativa_min:
+        if confianca < conf_min:
             return None
         
         return {
@@ -1938,56 +1865,37 @@ class AnalisadorTendencia:
             "confianca": round(confianca, 1),
             "tipo_aposta": "over",
             "linha_mercado": linha,
-            "detalhes": {
-                "fator_ataque": round(fator_ataque, 2),
-                "distancia_linha": round(distancia_linha, 2),
-                "played_home": played_home,
-                "played_away": played_away,
-                "bonus_aplicado": bonus_extra
-            }
+            "detalhes": {}
         }
 
-    def _analisar_mercado_under(self, home: str, away: str, estimativa_total: float, linha: float,
-                                 played_home: int, played_away: int,
-                                 media_home_sofridos: float, media_away_sofridos: float,
-                                 media_home_feitos: float, media_away_feitos: float) -> dict:
-        """Analisa um mercado UNDER específico de forma independente"""
-        
+    def _analisar_mercado_under(self, estimativa_total: float, linha: float,
+                                 played_home: int, played_away: int) -> dict:
         estimativa_under = estimativa_total * self.under_factor
         
-        # Configurações por linha de mercado
         if linha == 1.5:
             probabilidade_base = sigmoid((1.5 - estimativa_under) * 2.5)
             conf_min = 55
             estimativa_max = 1.9
         elif linha == 2.5:
             probabilidade_base = sigmoid((2.5 - estimativa_under) * 1.8)
-            conf_min = 60
+            conf_min = 55
             estimativa_max = 2.4
         else:
-            probabilidade_base = sigmoid((linha - estimativa_under) * 1.5)
-            conf_min = 55
-            estimativa_max = linha - 0.3
+            return None
+        
+        if estimativa_under > estimativa_max:
+            return None
         
         conf_under = min(probabilidade_base * 0.75, 75)
         
-        # Ajuste por consistência defensiva
-        defesa_home = 1 - min(media_home_sofridos / 3.0, 1.0)
-        defesa_away = 1 - min(media_away_sofridos / 3.0, 1.0)
-        fator_defesa = (defesa_home + defesa_away) / 2
-        conf_under *= (0.9 + fator_defesa * 0.2)
-        
-        # Bônus por jogos consistentes
         if played_home >= 8 and played_away >= 8:
             conf_under *= 1.05
         
         conf_under = clamp(conf_under, 50, 75)
         
-        # VALIDAÇÃO FINAL
-        if conf_under < conf_min or estimativa_under > estimativa_max:
+        if conf_under < conf_min:
             return None
         
-        # Verificar se não é uma liga ofensiva para UNDER
         if self.liga_nome in ['Bundesliga', 'Eredivisie'] and estimativa_under > 1.8:
             return None
         
@@ -1998,14 +1906,9 @@ class AnalisadorTendencia:
             "confianca": round(conf_under, 1),
             "tipo_aposta": "under",
             "linha_mercado": linha,
-            "detalhes": {
-                "fator_under": self.under_factor,
-                "estimativa_ajustada": round(estimativa_under, 2),
-                "played_home": played_home,
-                "played_away": played_away,
-                "fator_defesa": round(fator_defesa, 2)
-            }
+            "detalhes": {}
         }
+
 
 
 
