@@ -2180,7 +2180,7 @@ def main():
                                  mime="text/csv", use_container_width=True)
 
     # ================= TAB 6: TEORIA DE NASH (VALOR ESPERADO) =================
-   # ================= TAB 6: TEORIA DE NASH (VALOR ESPERADO) - CORRIGIDO =================
+    # ================= TAB 6: TEORIA DE NASH (VALOR ESPERADO) - CORRIGIDO =================
 with tab6:
     st.markdown("### 🎲 Teoria de Nash - Maximização do Valor Esperado (EV)")
     st.markdown("""
