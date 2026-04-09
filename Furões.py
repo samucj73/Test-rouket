@@ -1695,7 +1695,7 @@ class AnalisadorEstatistico:
 
 #class AnalisadorTendencia:
 class AnalisadorTendencia:
-    """Analisador de tendências com análise independente por mercado (sem prioridades)"""
+    """Analisador de tendências com análise independente por mercado"""
     
     LIGA_OVER_FACTOR = {
         'Eredivisie': 1.12,
@@ -1799,31 +1799,50 @@ class AnalisadorTendencia:
         estimativa_total = (estimativa_total * 0.85) + (2.5 * 0.15)
         estimativa_total = clamp(estimativa_total, 1.2, 3.8)
 
-        mercados_analisados = []
+        # ============================================================
+        # ANÁLISE DOS MERCADOS - ESCOLHA PELA ESTIMATIVA
+        # ============================================================
         
-        mercado_over15 = self._analisar_mercado_over(estimativa_total, 1.5, played_home, played_away, fator_ataque)
-        if mercado_over15:
-            mercados_analisados.append(mercado_over15)
+        mercado_escolhido = None
+        linha_escolhida = 1.5
+        prob_escolhida = 0
+        conf_escolhida = 0
         
-        mercado_over25 = self._analisar_mercado_over(estimativa_total, 2.5, played_home, played_away, fator_ataque)
-        if mercado_over25:
-            mercados_analisados.append(mercado_over25)
+        # REGRA 1: Estimativa MUITO ALTA (≥ 3.0) → OVER 3.5
+        if estimativa_total >= 3.0:
+            mercado_escolhido = f"OVER 3.5"
+            linha_escolhida = 3.5
+            prob_escolhida = sigmoid((estimativa_total - 3.5) * 1.1) * 100
+            conf_escolhida = min(65 + (estimativa_total - 3.0) * 10, 85)
+            logging.info(f"🎯 {home} vs {away}: Estimativa {estimativa_total:.2f} → {mercado_escolhido}")
         
-        if estimativa_total >= 2.4:
-            mercado_over35 = self._analisar_mercado_over(estimativa_total, 3.5, played_home, played_away, fator_ataque)
-            if mercado_over35:
-                mercados_analisados.append(mercado_over35)
+        # REGRA 2: Estimativa ALTA (2.5 a 2.9) → OVER 2.5
+        elif estimativa_total >= 2.5:
+            mercado_escolhido = f"OVER 2.5"
+            linha_escolhida = 2.5
+            prob_escolhida = sigmoid((estimativa_total - 2.5) * 1.2) * 100
+            conf_escolhida = min(60 + (estimativa_total - 2.5) * 15, 80)
+            logging.info(f"🎯 {home} vs {away}: Estimativa {estimativa_total:.2f} → {mercado_escolhido}")
         
-        mercado_under25 = self._analisar_mercado_under(estimativa_total, 2.5, played_home, played_away)
-        if mercado_under25:
-            mercados_analisados.append(mercado_under25)
+        # REGRA 3: Estimativa MÉDIA (1.8 a 2.4) → OVER 1.5
+        elif estimativa_total >= 1.8:
+            mercado_escolhido = f"OVER 1.5"
+            linha_escolhida = 1.5
+            prob_escolhida = sigmoid((estimativa_total - 1.5) * 1.8) * 100
+            conf_escolhida = min(55 + (estimativa_total - 1.8) * 20, 75)
+            logging.info(f"🎯 {home} vs {away}: Estimativa {estimativa_total:.2f} → {mercado_escolhido}")
         
-        if estimativa_total <= 2.2:
-            mercado_under15 = self._analisar_mercado_under(estimativa_total, 1.5, played_home, played_away)
-            if mercado_under15:
-                mercados_analisados.append(mercado_under15)
+        # REGRA 4: Estimativa BAIXA (1.4 a 1.7) → UNDER 2.5
+        elif estimativa_total >= 1.4:
+            mercado_escolhido = f"UNDER 2.5"
+            linha_escolhida = 2.5
+            prob_escolhida = sigmoid((2.5 - estimativa_total) * 1.8) * 100
+            conf_escolhida = min(55 + (1.8 - estimativa_total) * 15, 70)
+            tipo_aposta = "under"
+            logging.info(f"🎯 {home} vs {away}: Estimativa {estimativa_total:.2f} → {mercado_escolhido}")
         
-        if not mercados_analisados:
+        # REGRA 5: Estimativa MUITO BAIXA (< 1.4) → NÃO APOSTAR
+        else:
             return {
                 "tendencia": "NÃO APOSTAR",
                 "estimativa": round(estimativa_total, 2),
@@ -1831,116 +1850,31 @@ class AnalisadorTendencia:
                 "confianca": 0,
                 "tipo_aposta": "avoid",
                 "linha_mercado": 0,
-                "detalhes": {"motivo": "Nenhum mercado com confiança suficiente"}
+                "detalhes": {"motivo": f"Estimativa muito baixa: {estimativa_total:.2f}"}
             }
         
-        mercados_analisados.sort(key=lambda x: x["confianca"], reverse=True)
-        melhor_mercado = mercados_analisados[0]
+        # Ajuste fino da confiança por liga
+        if self.liga_nome in ['Serie A', 'Primeira Liga'] and "OVER" in mercado_escolhido:
+            conf_escolhida -= 8
+        elif self.liga_nome in ['Eredivisie', 'Bundesliga'] and "UNDER" in mercado_escolhido:
+            conf_escolhida -= 8
         
-        return melhor_mercado
-    
-    def _analisar_mercado_over(self, estimativa_total: float, linha: float,
-                                played_home: int, played_away: int,
-                                fator_ataque: float) -> dict:
-        if linha == 1.5:
-            probabilidade_base = sigmoid((estimativa_total - 1.5) * 1.8)
-            conf_min = 50
-            estimativa_min = 1.4
-        elif linha == 2.5:
-            probabilidade_base = sigmoid((estimativa_total - 2.5) * 1.2)
-            conf_min = 55
-            estimativa_min = 2.2
-        elif linha == 3.5:
-            probabilidade_base = sigmoid((estimativa_total - 3.5) * 1.1)
-            conf_min = 55
-            estimativa_min = 2.7
-        else:
-            return None
-        
-        if estimativa_total < estimativa_min:
-            return None
-        
-        distancia_linha = abs(estimativa_total - linha)
-        conf_base = probabilidade_base * 55
-        conf_dist = min(distancia_linha * 20, 25)
-        
-        conf_consistencia = 0
-        if played_home >= 8 and played_away >= 8:
-            conf_consistencia += 8
-        elif played_home >= 5 and played_away >= 5:
-            conf_consistencia += 4
-        
-        if linha == 2.5 and estimativa_total >= 2.6:
-            conf_consistencia += 5
-        elif linha == 3.5 and estimativa_total >= 3.0:
-            conf_consistencia += 5
-        
-        if fator_ataque >= 1.5:
-            conf_consistencia += 5
-        elif fator_ataque >= 1.3:
-            conf_consistencia += 3
-        
-        penalidade_liga = 0
-        if self.liga_nome in ['Serie A', 'Primeira Liga']:
-            penalidade_liga = 6
-        elif self.liga_nome in ['Ligue 1']:
-            penalidade_liga = 4
-        
-        confianca = clamp(conf_base + conf_dist + conf_consistencia - penalidade_liga, 40, self.confidence_cap)
-        
-        if confianca < conf_min:
-            return None
+        conf_escolhida = clamp(conf_escolhida, 45, self.confidence_cap)
         
         return {
-            "tendencia": f"OVER {linha}",
+            "tendencia": mercado_escolhido,
             "estimativa": round(estimativa_total, 2),
-            "probabilidade": round(probabilidade_base * 100, 1),
-            "confianca": round(confianca, 1),
-            "tipo_aposta": "over",
-            "linha_mercado": linha,
-            "detalhes": {}
+            "probabilidade": round(prob_escolhida, 1),
+            "confianca": round(conf_escolhida, 1),
+            "tipo_aposta": "over" if "OVER" in mercado_escolhido else "under" if "UNDER" in mercado_escolhido else "avoid",
+            "linha_mercado": linha_escolhida,
+            "detalhes": {
+                "estimativa_original": round(estimativa_total, 2),
+                "fator_liga": self.over_factor,
+                "liga": self.liga_nome
+            }
         }
 
-    def _analisar_mercado_under(self, estimativa_total: float, linha: float,
-                                 played_home: int, played_away: int) -> dict:
-        estimativa_under = estimativa_total * self.under_factor
-        
-        if linha == 1.5:
-            probabilidade_base = sigmoid((1.5 - estimativa_under) * 2.5)
-            conf_min = 55
-            estimativa_max = 1.9
-        elif linha == 2.5:
-            probabilidade_base = sigmoid((2.5 - estimativa_under) * 1.8)
-            conf_min = 55
-            estimativa_max = 2.4
-        else:
-            return None
-        
-        if estimativa_under > estimativa_max:
-            return None
-        
-        conf_under = min(probabilidade_base * 0.75, 75)
-        
-        if played_home >= 8 and played_away >= 8:
-            conf_under *= 1.05
-        
-        conf_under = clamp(conf_under, 50, 75)
-        
-        if conf_under < conf_min:
-            return None
-        
-        if self.liga_nome in ['Bundesliga', 'Eredivisie'] and estimativa_under > 1.8:
-            return None
-        
-        return {
-            "tendencia": f"UNDER {linha}",
-            "estimativa": round(estimativa_total, 2),
-            "probabilidade": round(probabilidade_base * 100, 1),
-            "confianca": round(conf_under, 1),
-            "tipo_aposta": "under",
-            "linha_mercado": linha,
-            "detalhes": {}
-        }
 
 
 
