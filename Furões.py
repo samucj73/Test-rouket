@@ -25,52 +25,132 @@ import random
 # [NOVA] FUNÇÕES DO SISTEMA AUTÔNOMO PRO
 # =============================
 
+#class SistemaApostasPro:
 class SistemaApostasPro:
-    """Sistema profissional de classificação e filtragem de apostas"""
+    """Sistema profissional de classificação e filtragem de apostas - VERSÃO OTIMIZADA"""
     
     def __init__(self, alerts):
         self.alerts = alerts
 
     def calcular_score(self, alerta):
+        """Calcula score com bônus para estimativas altas"""
         prob = alerta['probabilidade']
         conf = alerta['confianca']
-        return (prob * 0.6) + (conf * 0.4)
+        est = alerta['estimativa']
+        
+        # Bônus para jogos com potencial de muitos gols
+        bonus = 0
+        if est >= 3.0:
+            bonus = 10
+        elif est >= 2.8:
+            bonus = 8
+        elif est >= 2.5:
+            bonus = 5
+        elif est >= 2.3:
+            bonus = 2
+        
+        score_base = (prob * 0.6) + (conf * 0.4)
+        return score_base + bonus
+
+    def tem_valor_para_over25(self, alerta):
+        """Verifica se há valor real para OVER 2.5"""
+        est = alerta['estimativa']
+        linha_mercado = 2.5
+        return (est - linha_mercado) > 0.4
+
+    def upgrade_para_over25(self, alerta):
+        """Decide se um OVER 1.5 deve ser upgraded para OVER 2.5"""
+        est = alerta['estimativa']
+        prob = alerta['probabilidade']
+        conf = alerta['confianca']
+        
+        # Condições mais acessíveis para upgrade
+        if est >= 2.5 and prob >= 65 and conf >= 70:
+            return True
+        if est >= 2.7 and prob >= 60:
+            return True
+        if self.tem_valor_para_over25(alerta) and prob >= 55:
+            return True
+        return False
 
     def classificar_mercado(self, alerta):
+        """Classificação mais agressiva para OVER 2.5"""
         est = alerta['estimativa']
         prob = alerta['probabilidade']
 
-        if est >= 2.5 and prob >= 65:
-            return "OVER 2.5", 1.90
-        elif est >= 2.1:
+        # NOVA REGRA AGRESSIVA
+        if est >= 2.5 and prob >= 60:
+            return "OVER 2.5", 1.92
+        elif est >= 2.3 and prob >= 58:
+            return "OVER 2.5", 1.88
+        elif est >= 2.1 and prob >= 55:
+            return "OVER 2.5", 1.85
+        elif est >= 1.9 and prob >= 70:
+            return "OVER 1.5", 1.38
+        elif est >= 1.7 and prob >= 75:
             return "OVER 1.5", 1.35
-        elif est >= 1.8:
-            return "UNDER 2.5", 1.55
-        else:
+        elif est <= 1.4 and prob >= 65:
             return "UNDER 1.5", 1.80
+        elif est <= 1.8 and prob >= 60:
+            return "UNDER 2.5", 1.58
+        else:
+            return "UNDER 2.5", 1.55
 
     def filtro_armadilha(self, alerta):
+        """Detecta armadilhas onde estimativa alta não se confirma"""
         prob = alerta['probabilidade']
         est = alerta['estimativa']
 
-        if prob >= 75 and est < 2.1:
+        # OVER 2.5 com alta probabilidade mas estimativa baixa é armadilha
+        if prob >= 75 and est < 2.2:
             return "UNDER 2.5"
+        
+        # OVER 1.5 com estimativa muito baixa
+        if prob >= 80 and est < 1.6:
+            return "UNDER 1.5"
+            
         return None
 
     def processar_alertas(self):
+        """Processa todos os alertas com os novos filtros"""
         selecionados = []
 
         for alerta in self.alerts:
             score = self.calcular_score(alerta)
 
-            if score < 70:
+            # Score mínimo mais rigoroso
+            if score < 68:
                 continue
 
             mercado, odd = self.classificar_mercado(alerta)
 
+            # Tenta fazer upgrade para OVER 2.5
+            if mercado == "OVER 1.5" and self.upgrade_para_over25(alerta):
+                mercado = "OVER 2.5"
+                odd = 1.92
+            
+            # Aplica filtro de armadilha
             ajuste = self.filtro_armadilha(alerta)
             if ajuste:
                 mercado = ajuste
+                if ajuste == "UNDER 1.5":
+                    odd = 1.80
+                else:
+                    odd = 1.58
+
+            # 🔥 NOVO: Descarta OVER 1.5 com odd muito baixa e score mediano
+            if mercado == "OVER 1.5" and odd < 1.38 and score < 78:
+                continue
+
+            # 🔥 NOVO: Descarta UNDER com estimativa contraditória
+            if "UNDER" in mercado and alerta['estimativa'] > 2.0:
+                continue
+
+            # 🔥 NOVO: Prioridade para OVER 2.5 de qualidade
+            if mercado == "OVER 2.5" and score >= 75:
+                prioridade = "ALTA"
+            else:
+                prioridade = "NORMAL"
 
             selecionados.append({
                 "jogo": alerta['jogo'],
@@ -82,13 +162,19 @@ class SistemaApostasPro:
                 "escudo_home": alerta.get('escudo_home', ''),
                 "escudo_away": alerta.get('escudo_away', ''),
                 "tendencia": alerta.get('tendencia', ''),
-                "tipo_aposta": alerta.get('tipo_aposta', '')
+                "tipo_aposta": alerta.get('tipo_aposta', ''),
+                "prioridade": prioridade,
+                "estimativa_original": alerta['estimativa']
             })
 
+        # Ordena por score e prioridade
+        selecionados.sort(key=lambda x: (x['prioridade'] == "ALTA", x['score']), reverse=True)
+        
         return selecionados
 
 
 def separar_por_nivel(jogos):
+    """Separa jogos por nível de confiança"""
     elite = []
     bons = []
     risco = []
@@ -98,36 +184,45 @@ def separar_por_nivel(jogos):
             elite.append(j)
         elif j['score'] >= 75:
             bons.append(j)
-        else:
+        elif j['score'] >= 68:
             risco.append(j)
 
     return elite, bons, risco
 
 
 def gerar_multiplas(elite, bons, risco):
+    """Gera múltiplas apostas com diferentes níveis de risco"""
     multiplas = []
 
+    # Múltipla SEGURA (só elite)
     if len(elite) >= 3:
         segura = random.sample(elite, min(4, len(elite)))
-        multiplas.append(("SEGURA", segura))
+        odd_total = calcular_odd_total(segura)
+        multiplas.append(("SEGURA", segura, odd_total))
 
+    # Múltipla BALANCEADA (elite + bons)
     if len(elite) >= 2 and len(bons) >= 2:
         balanceada = random.sample(elite, 2) + random.sample(bons, 2)
-        multiplas.append(("BALANCEADA", balanceada))
+        odd_total = calcular_odd_total(balanceada)
+        multiplas.append(("BALANCEADA", balanceada, odd_total))
 
-    pool = elite + bons + risco
-    if len(pool) >= 5:
-        agressiva = random.sample(pool, 5)
-        multiplas.append(("AGRESSIVA", agressiva))
+    # Múltipla AGRESSIVA (só OVER 2.5 de qualidade)
+    over25_jogos = [j for j in (elite + bons + risco) if j['mercado'] == "OVER 2.5"]
+    if len(over25_jogos) >= 3:
+        agressiva = random.sample(over25_jogos, min(5, len(over25_jogos)))
+        odd_total = calcular_odd_total(agressiva)
+        multiplas.append(("AGRESSIVA", agressiva, odd_total))
 
     return multiplas
 
 
 def calcular_odd_total(multipla):
+    """Calcula odd total da múltipla"""
     total = 1.0
     for jogo in multipla:
         total *= jogo['odd']
     return round(total, 2)
+    
 
 
 class ConfigManager:
