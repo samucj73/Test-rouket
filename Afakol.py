@@ -2180,11 +2180,9 @@ def main():
                                  mime="text/csv", use_container_width=True)
 
     # ================= TAB 6: TEORIA DE NASH (VALOR ESPERADO) =================
-    # ================= TAB 6: TEORIA DE NASH (VALOR ESPERADO) - CORRIGIDO =================
-with tab6:
-    st.markdown("### 🎲 Teoria de Nash - Maximização do Valor Esperado (EV)")
-    st.markdown("""
-    <div class="ev-highlight">
+    with tab6:
+        st.markdown("### 🎲 Teoria de Nash - Maximização do Valor Esperado (EV)")
+        st.markdown("""<div class="ev-highlight">
     <strong>📈 O QUE É VALOR ESPERADO (EV) NA LOTOFÁCIL?</strong><br><br>
     <strong>EV = Probabilidade de ganhar × Prêmio esperado</strong><br><br>
     
@@ -2317,6 +2315,8 @@ with tab6:
                     )
             else:
                 st.error("❌ Falha ao gerar jogos otimizados por EV")
+        
+   
     
     # Seção educativa sobre Valor Esperado
     with st.expander("📚 Entendendo o Valor Esperado (EV)"):
@@ -2393,6 +2393,84 @@ with tab6:
         # Mostrar tabela detalhada
         st.markdown("### 📋 Detalhamento por Jogo")
         st.dataframe(df_ev, use_container_width=True, hide_index=True) 
+     
+    
+    # Seção educativa sobre Valor Esperado
+    with st.expander("📚 Entendendo o Valor Esperado (EV)"):
+        st.markdown("""
+        ### O que é Valor Esperado?
+        
+        O **Valor Esperado (EV)** é um conceito fundamental da teoria da probabilidade e finanças:
+        
+        ```
+        EV = (Probabilidade de Ganhar) × (Prêmio Esperado)
+        ```
+        
+        ### Por que isso é revolucionário para loterias?
+        
+        1. **A probabilidade é praticamente fixa** (1 em 3.268.760)
+        2. **O que varia é o prêmio** (divisão entre acertadores)
+        3. **Logo, maximizar EV = maximizar o prêmio quando acertar**
+        
+        ### Como maximizamos o EV?
+        
+        ✅ **Evitamos padrões humanos:**
+        - Sequências (1,2,3,4,5)
+        - Linhas/colunas completas
+        - Muitos números baixos (datas)
+        
+        ✅ **Buscamos números "esquecidos":**
+        - Números com baixa frequência histórica
+        - Números com grande atraso
+        - Combinações únicas
+        
+        ✅ **Simulamos a competição real:**
+        - Modelamos como 50% das apostas são em números baixos
+        - Consideramos padrões geométricos comuns
+        - Estimamos quantos dividiriam o prêmio
+        
+        ### Resultado prático:
+        
+        | Estratégia | Acertos | Prêmio quando acerta | EV Final |
+        |------------|---------|---------------------|----------|
+        | Popular (datas) | Normal | Pequeno (divide com milhares) | Baixo |
+        | Aleatório | Normal | Médio | Médio |
+        | **Nash EV** | Normal | **GRANDE** (poucos competidores) | **ALTO** |
+        
+        ### Conclusão:
+        
+        > **Você não vence a loteria acertando mais.**
+        > **Você vence ganhando mais quando acerta.**
+        
+        *- Adaptado do princípio de John Nash*
+        """)
+    
+    # Visualização da distribuição de EV
+    if "ev_detalhes" in st.session_state and st.session_state.ev_detalhes:
+        st.markdown("### 📊 Distribuição do Valor Esperado")
+        
+        # CORREÇÃO AQUI: usar as chaves corretas que existem no dicionário
+        df_ev = pd.DataFrame({
+            "Jogo": range(1, len(st.session_state.ev_detalhes)+1),
+            "EV Ajustado (x10⁹)": [d['ev_ajustado'] * 1e9 for d in st.session_state.ev_detalhes],
+            "EV Bruto (x10⁹)": [d['ev_bruto'] * 1e9 for d in st.session_state.ev_detalhes],
+            "Prêmio Esperado (R$)": [d['premio_esperado'] for d in st.session_state.ev_detalhes],
+            "Competidores": [d['competidores_diretos'] for d in st.session_state.ev_detalhes],
+            "Penalidade": [d['penalidade'] for d in st.session_state.ev_detalhes]
+        })
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader("EV Ajustado por Jogo")
+            st.bar_chart(df_ev.set_index("Jogo")["EV Ajustado (x10⁹)"])
+        with col2:
+            st.subheader("Prêmio Esperado por Jogo")
+            st.bar_chart(df_ev.set_index("Jogo")["Prêmio Esperado (R$)"])
+        
+        # Mostrar tabela detalhada
+        st.markdown("### 📋 Detalhamento por Jogo")
+        st.dataframe(df_ev, use_container_width=True, hide_index=True) 
+
 
     # ================= TAB 7: CONFERÊNCIA INTELIGENTE =================
     with tab7:
