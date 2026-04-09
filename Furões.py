@@ -1860,7 +1860,7 @@ class AnalisadorTendencia:
         
         return melhor_mercado
     
-    def _analisar_mercado_over
+    #def _analisar_mercado_over
     def _analisar_mercado_over(self, home: str, away: str, estimativa_total: float, linha: float,
                             played_home: int, played_away: int,
                             media_home_feitos: float, media_away_feitos: float,
