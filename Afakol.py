@@ -2180,60 +2180,64 @@ def main():
                                  mime="text/csv", use_container_width=True)
 
     # ================= TAB 6: TEORIA DE NASH (VALOR ESPERADO) =================
-    with tab6:
-        st.markdown("### 🎲 Teoria de Nash - Maximização do Valor Esperado (EV)")
-        st.markdown("""
-        <div class="ev-highlight">
-        <strong>📈 O QUE É VALOR ESPERADO (EV) NA LOTOFÁCIL?</strong><br><br>
-        <strong>EV = Probabilidade de ganhar × Prêmio esperado</strong><br><br>
-        
-        🔑 <strong>O PULO DO GATO:</strong> A probabilidade é praticamente fixa (1/3.268.760),<br>
-        então o jogo é sobre <strong>MAXIMIZAR O PRÊMIO</strong> quando você acerta!<br><br>
-        
-        <strong>🎯 Estratégia Profissional:</strong><br>
-        • ✅ Evita números e padrões que <strong>todo mundo joga</strong><br>
-        • ✅ Busca <strong>números "esquecidos"</strong> com boa probabilidade<br>
-        • ✅ Maximiza o <strong>RETORNO FINANCEIRO REAL</strong><br>
-        • ✅ Pensa como <strong>mercado financeiro</strong>, não como apostador<br><br>
-        
-        <strong>💡 Resultado:</strong> Você não acerta mais, mas <strong>GANHA MUITO MAIS</strong> quando acerta!
-        </div>
-        """, unsafe_allow_html=True)
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            qtd_ev = st.slider("Quantidade de jogos", 5, 30, 10, key="qtd_ev")
-        with col2:
-            amostragem_ev = st.slider("Amostragem de jogos", 1000, 20000, 5000, key="amostragem_ev",
-                                      help="Quanto maior, melhor a qualidade, mas mais lento")
-        
-        if st.button("🎯 OTIMIZAR POR VALOR ESPERADO (EV)", use_container_width=True, type="primary"):
-            with st.spinner(f"Analisando {amostragem_ev} jogos e calculando EV..."):
+   # ================= TAB 6: TEORIA DE NASH (VALOR ESPERADO) - CORRIGIDO =================
+with tab6:
+    st.markdown("### 🎲 Teoria de Nash - Maximização do Valor Esperado (EV)")
+    st.markdown("""
+    <div class="ev-highlight">
+    <strong>📈 O QUE É VALOR ESPERADO (EV) NA LOTOFÁCIL?</strong><br><br>
+    <strong>EV = Probabilidade de ganhar × Prêmio esperado</strong><br><br>
+    
+    🔑 <strong>O PULO DO GATO:</strong> A probabilidade é praticamente fixa (1/3.268.760),<br>
+    então o jogo é sobre <strong>MAXIMIZAR O PRÊMIO</strong> quando você acerta!<br><br>
+    
+    <strong>🎯 Estratégia Profissional:</strong><br>
+    • ✅ Evita números e padrões que <strong>todo mundo joga</strong><br>
+    • ✅ Busca <strong>números "esquecidos"</strong> com boa probabilidade<br>
+    • ✅ Maximiza o <strong>RETORNO FINANCEIRO REAL</strong><br>
+    • ✅ Pensa como <strong>mercado financeiro</strong>, não como apostador<br><br>
+    
+    <strong>💡 Resultado:</strong> Você não acerta mais, mas <strong>GANHA MUITO MAIS</strong> quando acerta!
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        qtd_ev = st.slider("Quantidade de jogos", 5, 30, 10, key="qtd_ev")
+    with col2:
+        amostragem_ev = st.slider("Amostragem de jogos", 1000, 20000, 5000, key="amostragem_ev",
+                                  help="Quanto maior, melhor a qualidade, mas mais lento")
+    
+    if st.button("🎯 OTIMIZAR POR VALOR ESPERADO (EV)", use_container_width=True, type="primary"):
+        with st.spinner(f"Analisando {amostragem_ev} jogos e calculando EV..."):
+            
+            # Preparar último concurso para penalidades
+            ultimo_concurso = st.session_state.gerador_principal.ultimo if st.session_state.gerador_principal else None
+            
+            # Gerar jogos otimizados por EV
+            top_jogos = gerar_jogos_ev_otimizados(
+                st.session_state.apostas_simuladas,
+                qtd_jogos=qtd_ev,
+                amostragem=amostragem_ev,
+                ultimo_concurso=ultimo_concurso
+            )
+            
+            if top_jogos:
+                st.session_state.jogos_gerados = [item['jogo'] for item in top_jogos]
+                st.session_state.scores = [item['score'] for item in top_jogos]
+                st.session_state.ev_detalhes = [analisar_ev_detalhado(item['jogo'], st.session_state.apostas_simuladas) for item in top_jogos]
                 
-                # Preparar último concurso para penalidades
-                ultimo_concurso = st.session_state.gerador_principal.ultimo if st.session_state.gerador_principal else None
+                st.success(f"✅ {len(top_jogos)} jogos otimizados por Valor Esperado!")
                 
-                # Gerar jogos otimizados por EV
-                top_jogos = gerar_jogos_ev_otimizados(
-                    st.session_state.apostas_simuladas,
-                    qtd_jogos=qtd_ev,
-                    amostragem=amostragem_ev,
-                    ultimo_concurso=ultimo_concurso
-                )
+                # Explicação do resultado
+                st.markdown("### 🧠 Análise da Otimização")
                 
-                if top_jogos:
-                    st.session_state.jogos_gerados = [item['jogo'] for item in top_jogos]
-                    st.session_state.scores = [item['score'] for item in top_jogos]
-                    st.session_state.ev_detalhes = [analisar_ev_detalhado(item['jogo'], st.session_state.apostas_simuladas) for item in top_jogos]
-                    
-                    st.success(f"✅ {len(top_jogos)} jogos otimizados por Valor Esperado!")
-                    
-                    # Explicação do resultado
-                    st.markdown("### 🧠 Análise da Otimização")
-                    
+                # CORREÇÃO AQUI: usar a chave correta 'ev_ajustado' em vez de 'ev'
+                if st.session_state.ev_detalhes:
                     col_a, col_b, col_c = st.columns(3)
                     with col_a:
-                        ev_medio = np.mean([item['ev'] for item in st.session_state.ev_detalhes]) * 1e9
+                        # Usar ev_ajustado que existe no dicionário
+                        ev_medio = np.mean([item['ev_ajustado'] for item in st.session_state.ev_detalhes]) * 1e9
                         st.metric("EV Médio (x10⁹)", f"{ev_medio:.2f}",
                                  help="Valor Esperado médio dos jogos gerados")
                     with col_b:
@@ -2244,137 +2248,151 @@ def main():
                         competidores_medio = np.mean([item['competidores_diretos'] for item in st.session_state.ev_detalhes])
                         st.metric("Competidores Médios", f"{competidores_medio:.0f}",
                                  help="Estimativa de apostas idênticas")
+                
+                # Mostrar jogos
+                st.markdown(f"### 📋 TOP {len(top_jogos)} Jogos por Valor Esperado")
+                
+                for i, item in enumerate(top_jogos):
+                    jogo = item['jogo']
+                    score = item['score']
+                    ev_detalhe = st.session_state.ev_detalhes[i] if i < len(st.session_state.ev_detalhes) else None
                     
-                    # Mostrar jogos
-                    st.markdown(f"### 📋 TOP {len(top_jogos)} Jogos por Valor Esperado")
+                    pares = contar_pares(jogo)
+                    impares = 15 - pares
+                    soma = sum(jogo)
+                    consec = contar_consecutivos(jogo)
                     
-                    for i, item in enumerate(top_jogos):
-                        jogo = item['jogo']
-                        score = item['score']
-                        ev_detalhe = st.session_state.ev_detalhes[i]
-                        
-                        pares = contar_pares(jogo)
-                        impares = 15 - pares
-                        soma = sum(jogo)
-                        consec = contar_consecutivos(jogo)
-                        
-                        medalha = "🏆" if i == 0 else "🥈" if i == 1 else "🥉" if i == 2 else "📌"
-                        
-                        stats = f"⚖️ {pares}p/{impares}i | ➕ {soma} | 📏 {consec} cons"
-                        
-                        st.markdown(f"""
-                        <div style='border-left: 5px solid #00ff88; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
-                            {medalha} <strong>Jogo {i+1:2d}</strong> — EV Score: {score:.2f}<br>
-                            {formatar_jogo_html(jogo)}<br>
-                            <small style='color:#aaa;'>{stats}</small><br>
-                            <small style='color:#00ff88;'>💰 Prêmio esperado: R$ {ev_detalhe['premio_esperado']:,.0f} | 
-                            🎲 Competidores: {ev_detalhe['competidores_diretos']:.0f}</small>
-                        </div>
-                        """, unsafe_allow_html=True)
+                    medalha = "🏆" if i == 0 else "🥈" if i == 1 else "🥉" if i == 2 else "📌"
                     
-                    # Botões de ação
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        if st.button("💾 Salvar Jogos EV", key="salvar_ev", use_container_width=True):
-                            ultimo = st.session_state.dados_api[0]
-                            arquivo, jogo_id = salvar_jogos_gerados(
-                                st.session_state.jogos_gerados, 
-                                [], 
-                                {"versao": "Valor Esperado (EV) - Nash", 
-                                 "amostragem": amostragem_ev}, 
-                                ultimo['concurso'], 
-                                ultimo['data']
-                            )
-                            if arquivo:
-                                st.success(f"✅ {len(st.session_state.jogos_gerados)} jogos salvos! ID: {jogo_id}")
-                                st.session_state.jogos_salvos = carregar_jogos_salvos()
+                    stats = f"⚖️ {pares}p/{impares}i | ➕ {soma} | 📏 {consec} cons"
                     
-                    with col2:
-                        df_export = pd.DataFrame({
-                            "Jogo": range(1, len(top_jogos)+1),
-                            "Dezenas": [", ".join(f"{n:02d}" for n in item['jogo']) for item in top_jogos],
-                            "EV_Score": [round(item['score'], 2) for item in top_jogos],
-                            "Premio_Esperado": [f"R$ {d['premio_esperado']:,.0f}" for d in st.session_state.ev_detalhes],
-                            "Competidores": [d['competidores_diretos'] for d in st.session_state.ev_detalhes],
-                            "Pares": [contar_pares(item['jogo']) for item in top_jogos],
-                            "Soma": [sum(item['jogo']) for item in top_jogos]
-                        })
-                        st.download_button(
-                            label="📥 Exportar CSV", 
-                            data=df_export.to_csv(index=False), 
-                            file_name=f"ev_jogos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", 
-                            mime="text/csv", 
-                            use_container_width=True
+                    # CORREÇÃO AQUI: verificar se ev_detalhe existe antes de acessar
+                    if ev_detalhe:
+                        premio_text = f"💰 Prêmio esperado: R$ {ev_detalhe['premio_esperado']:,.0f} | 🎲 Competidores: {ev_detalhe['competidores_diretos']:.0f}"
+                    else:
+                        premio_text = "💰 Aguardando análise detalhada"
+                    
+                    st.markdown(f"""
+                    <div style='border-left: 5px solid #00ff88; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
+                        {medalha} <strong>Jogo {i+1:2d}</strong> — EV Score: {score:.2f}<br>
+                        {formatar_jogo_html(jogo)}<br>
+                        <small style='color:#aaa;'>{stats}</small><br>
+                        <small style='color:#00ff88;'>{premio_text}</small>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                # Botões de ação
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("💾 Salvar Jogos EV", key="salvar_ev", use_container_width=True):
+                        ultimo = st.session_state.dados_api[0]
+                        arquivo, jogo_id = salvar_jogos_gerados(
+                            st.session_state.jogos_gerados, 
+                            [], 
+                            {"versao": "Valor Esperado (EV) - Nash", 
+                             "amostragem": amostragem_ev}, 
+                            ultimo['concurso'], 
+                            ultimo['data']
                         )
-                else:
-                    st.error("❌ Falha ao gerar jogos otimizados por EV")
+                        if arquivo:
+                            st.success(f"✅ {len(st.session_state.jogos_gerados)} jogos salvos! ID: {jogo_id}")
+                            st.session_state.jogos_salvos = carregar_jogos_salvos()
+                
+                with col2:
+                    df_export = pd.DataFrame({
+                        "Jogo": range(1, len(top_jogos)+1),
+                        "Dezenas": [", ".join(f"{n:02d}" for n in item['jogo']) for item in top_jogos],
+                        "EV_Score": [round(item['score'], 2) for item in top_jogos],
+                        "Premio_Esperado": [f"R$ {d['premio_esperado']:,.0f}" for d in st.session_state.ev_detalhes] if st.session_state.ev_detalhes else [""] * len(top_jogos),
+                        "Competidores": [d['competidores_diretos'] for d in st.session_state.ev_detalhes] if st.session_state.ev_detalhes else [0] * len(top_jogos),
+                        "Pares": [contar_pares(item['jogo']) for item in top_jogos],
+                        "Soma": [sum(item['jogo']) for item in top_jogos]
+                    })
+                    st.download_button(
+                        label="📥 Exportar CSV", 
+                        data=df_export.to_csv(index=False), 
+                        file_name=f"ev_jogos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", 
+                        mime="text/csv", 
+                        use_container_width=True
+                    )
+            else:
+                st.error("❌ Falha ao gerar jogos otimizados por EV")
+    
+    # Seção educativa sobre Valor Esperado
+    with st.expander("📚 Entendendo o Valor Esperado (EV)"):
+        st.markdown("""
+        ### O que é Valor Esperado?
         
-        # Seção educativa sobre Valor Esperado
-        with st.expander("📚 Entendendo o Valor Esperado (EV)"):
-            st.markdown("""
-            ### O que é Valor Esperado?
-            
-            O **Valor Esperado (EV)** é um conceito fundamental da teoria da probabilidade e finanças:
-            
-            ```
-            EV = (Probabilidade de Ganhar) × (Prêmio Esperado)
-            ```
-            
-            ### Por que isso é revolucionário para loterias?
-            
-            1. **A probabilidade é praticamente fixa** (1 em 3.268.760)
-            2. **O que varia é o prêmio** (divisão entre acertadores)
-            3. **Logo, maximizar EV = maximizar o prêmio quando acertar**
-            
-            ### Como maximizamos o EV?
-            
-            ✅ **Evitamos padrões humanos:**
-            - Sequências (1,2,3,4,5)
-            - Linhas/colunas completas
-            - Muitos números baixos (datas)
-            
-            ✅ **Buscamos números "esquecidos":**
-            - Números com baixa frequência histórica
-            - Números com grande atraso
-            - Combinações únicas
-            
-            ✅ **Simulamos a competição real:**
-            - Modelamos como 50% das apostas são em números baixos
-            - Consideramos padrões geométricos comuns
-            - Estimamos quantos dividiriam o prêmio
-            
-            ### Resultado prático:
-            
-            | Estratégia | Acertos | Prêmio quando acerta | EV Final |
-            |------------|---------|---------------------|----------|
-            | Popular (datas) | Normal | Pequeno (divide com milhares) | Baixo |
-            | Aleatório | Normal | Médio | Médio |
-            | **Nash EV** | Normal | **GRANDE** (poucos competidores) | **ALTO** |
-            
-            ### Conclusão:
-            
-            > **Você não vence a loteria acertando mais.**
-            > **Você vence ganhando mais quando acerta.**
-            
-            *- Adaptado do princípio de John Nash*
-            """)
+        O **Valor Esperado (EV)** é um conceito fundamental da teoria da probabilidade e finanças:
         
-        # Visualização da distribuição de EV
-        if "ev_detalhes" in st.session_state and st.session_state.ev_detalhes:
-            st.markdown("### 📊 Distribuição do Valor Esperado")
-            
-            df_ev = pd.DataFrame({
-                "Jogo": range(1, len(st.session_state.ev_detalhes)+1),
-                "EV (x10⁹)": [d['ev_bruto'] * 1e9 for d in st.session_state.ev_detalhes],
-                "Prêmio Esperado (R$)": [d['premio_esperado'] for d in st.session_state.ev_detalhes],
-                "Competidores": [d['competidores_diretos'] for d in st.session_state.ev_detalhes]
-            })
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                st.bar_chart(df_ev.set_index("Jogo")["EV (x10⁹)"])
-            with col2:
-                st.bar_chart(df_ev.set_index("Jogo")["Prêmio Esperado (R$)"])
+        ```
+        EV = (Probabilidade de Ganhar) × (Prêmio Esperado)
+        ```
+        
+        ### Por que isso é revolucionário para loterias?
+        
+        1. **A probabilidade é praticamente fixa** (1 em 3.268.760)
+        2. **O que varia é o prêmio** (divisão entre acertadores)
+        3. **Logo, maximizar EV = maximizar o prêmio quando acertar**
+        
+        ### Como maximizamos o EV?
+        
+        ✅ **Evitamos padrões humanos:**
+        - Sequências (1,2,3,4,5)
+        - Linhas/colunas completas
+        - Muitos números baixos (datas)
+        
+        ✅ **Buscamos números "esquecidos":**
+        - Números com baixa frequência histórica
+        - Números com grande atraso
+        - Combinações únicas
+        
+        ✅ **Simulamos a competição real:**
+        - Modelamos como 50% das apostas são em números baixos
+        - Consideramos padrões geométricos comuns
+        - Estimamos quantos dividiriam o prêmio
+        
+        ### Resultado prático:
+        
+        | Estratégia | Acertos | Prêmio quando acerta | EV Final |
+        |------------|---------|---------------------|----------|
+        | Popular (datas) | Normal | Pequeno (divide com milhares) | Baixo |
+        | Aleatório | Normal | Médio | Médio |
+        | **Nash EV** | Normal | **GRANDE** (poucos competidores) | **ALTO** |
+        
+        ### Conclusão:
+        
+        > **Você não vence a loteria acertando mais.**
+        > **Você vence ganhando mais quando acerta.**
+        
+        *- Adaptado do princípio de John Nash*
+        """)
+    
+    # Visualização da distribuição de EV
+    if "ev_detalhes" in st.session_state and st.session_state.ev_detalhes:
+        st.markdown("### 📊 Distribuição do Valor Esperado")
+        
+        # CORREÇÃO AQUI: usar as chaves corretas que existem no dicionário
+        df_ev = pd.DataFrame({
+            "Jogo": range(1, len(st.session_state.ev_detalhes)+1),
+            "EV Ajustado (x10⁹)": [d['ev_ajustado'] * 1e9 for d in st.session_state.ev_detalhes],
+            "EV Bruto (x10⁹)": [d['ev_bruto'] * 1e9 for d in st.session_state.ev_detalhes],
+            "Prêmio Esperado (R$)": [d['premio_esperado'] for d in st.session_state.ev_detalhes],
+            "Competidores": [d['competidores_diretos'] for d in st.session_state.ev_detalhes],
+            "Penalidade": [d['penalidade'] for d in st.session_state.ev_detalhes]
+        })
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader("EV Ajustado por Jogo")
+            st.bar_chart(df_ev.set_index("Jogo")["EV Ajustado (x10⁹)"])
+        with col2:
+            st.subheader("Prêmio Esperado por Jogo")
+            st.bar_chart(df_ev.set_index("Jogo")["Prêmio Esperado (R$)"])
+        
+        # Mostrar tabela detalhada
+        st.markdown("### 📋 Detalhamento por Jogo")
+        st.dataframe(df_ev, use_container_width=True, hide_index=True) 
 
     # ================= TAB 7: CONFERÊNCIA INTELIGENTE =================
     with tab7:
