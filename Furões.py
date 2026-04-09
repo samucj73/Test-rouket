@@ -1695,7 +1695,7 @@ class AnalisadorEstatistico:
 
 #class AnalisadorTendencia:
 class AnalisadorTendencia:
-    """Analisador de tendências com análise independente por mercado"""
+    """Analisador de tendências com análise independente por mercado (CORRIGIDO)"""
     
     LIGA_OVER_FACTOR = {
         'Eredivisie': 1.12,
@@ -1801,45 +1801,46 @@ class AnalisadorTendencia:
 
         # ============================================================
         # ANÁLISE DOS MERCADOS - ESCOLHA PELA ESTIMATIVA
+        # CORREÇÃO: Agora escolhe o mercado baseado no valor real
         # ============================================================
         
         mercado_escolhido = None
         linha_escolhida = 1.5
         prob_escolhida = 0
         conf_escolhida = 0
+        tipo_aposta = "over"
         
-        # REGRA 1: Estimativa MUITO ALTA (≥ 3.0) → OVER 3.5
-        if estimativa_total >= 3.0:
+        # REGRA 1: Estimativa MUITO ALTA (≥ 3.2) → OVER 3.5
+        if estimativa_total >= 3.2:
             mercado_escolhido = f"OVER 3.5"
             linha_escolhida = 3.5
             prob_escolhida = sigmoid((estimativa_total - 3.5) * 1.1) * 100
-            conf_escolhida = min(65 + (estimativa_total - 3.0) * 10, 85)
-            logging.info(f"🎯 {home} vs {away}: Estimativa {estimativa_total:.2f} → {mercado_escolhido}")
+            conf_escolhida = min(65 + (estimativa_total - 3.2) * 12, 85)
+            tipo_aposta = "over"
         
-        # REGRA 2: Estimativa ALTA (2.5 a 2.9) → OVER 2.5
-        elif estimativa_total >= 2.5:
+        # REGRA 2: Estimativa ALTA (2.7 a 3.19) → OVER 2.5
+        elif estimativa_total >= 2.7:
             mercado_escolhido = f"OVER 2.5"
             linha_escolhida = 2.5
             prob_escolhida = sigmoid((estimativa_total - 2.5) * 1.2) * 100
-            conf_escolhida = min(60 + (estimativa_total - 2.5) * 15, 80)
-            logging.info(f"🎯 {home} vs {away}: Estimativa {estimativa_total:.2f} → {mercado_escolhido}")
+            conf_escolhida = min(60 + (estimativa_total - 2.7) * 15, 80)
+            tipo_aposta = "over"
         
-        # REGRA 3: Estimativa MÉDIA (1.8 a 2.4) → OVER 1.5
+        # REGRA 3: Estimativa MÉDIA (1.8 a 2.69) → OVER 1.5
         elif estimativa_total >= 1.8:
             mercado_escolhido = f"OVER 1.5"
             linha_escolhida = 1.5
             prob_escolhida = sigmoid((estimativa_total - 1.5) * 1.8) * 100
-            conf_escolhida = min(55 + (estimativa_total - 1.8) * 20, 75)
-            logging.info(f"🎯 {home} vs {away}: Estimativa {estimativa_total:.2f} → {mercado_escolhido}")
+            conf_escolhida = min(55 + (estimativa_total - 1.8) * 15, 75)
+            tipo_aposta = "over"
         
-        # REGRA 4: Estimativa BAIXA (1.4 a 1.7) → UNDER 2.5
+        # REGRA 4: Estimativa BAIXA (1.4 a 1.79) → UNDER 2.5
         elif estimativa_total >= 1.4:
             mercado_escolhido = f"UNDER 2.5"
             linha_escolhida = 2.5
             prob_escolhida = sigmoid((2.5 - estimativa_total) * 1.8) * 100
             conf_escolhida = min(55 + (1.8 - estimativa_total) * 15, 70)
             tipo_aposta = "under"
-            logging.info(f"🎯 {home} vs {away}: Estimativa {estimativa_total:.2f} → {mercado_escolhido}")
         
         # REGRA 5: Estimativa MUITO BAIXA (< 1.4) → NÃO APOSTAR
         else:
@@ -1866,7 +1867,7 @@ class AnalisadorTendencia:
             "estimativa": round(estimativa_total, 2),
             "probabilidade": round(prob_escolhida, 1),
             "confianca": round(conf_escolhida, 1),
-            "tipo_aposta": "over" if "OVER" in mercado_escolhido else "under" if "UNDER" in mercado_escolhido else "avoid",
+            "tipo_aposta": tipo_aposta,
             "linha_mercado": linha_escolhida,
             "detalhes": {
                 "estimativa_original": round(estimativa_total, 2),
@@ -1874,6 +1875,7 @@ class AnalisadorTendencia:
                 "liga": self.liga_nome
             }
         }
+
 
 
 
