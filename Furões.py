@@ -25,8 +25,9 @@ import random
 # [NOVA] FUNÇÕES DO SISTEMA AUTÔNOMO PRO
 # =============================
 
+#class SistemaApostasPro:
 class SistemaApostasPro:
-    """Sistema profissional de classificação e filtragem de apostas"""
+    """Sistema profissional de classificação e filtragem de apostas - CORRIGIDO"""
     
     def __init__(self, alerts):
         self.alerts = alerts
@@ -39,15 +40,45 @@ class SistemaApostasPro:
     def classificar_mercado(self, alerta):
         est = alerta['estimativa']
         prob = alerta['probabilidade']
-
-        if est >= 2.5 and prob >= 65:
-            return "OVER 2.5", 1.90
-        elif est >= 2.1:
-            return "OVER 1.5", 1.35
-        elif est >= 1.8:
-            return "UNDER 2.5", 1.55
-        else:
-            return "UNDER 1.5", 1.80
+        
+        # CORREÇÃO: Avaliar TODOS os mercados e escolher o MAIS ADEQUADO
+        mercados = []
+        
+        # OVER 3.5
+        if est >= 3.2 and prob >= 60:
+            mercados.append(("OVER 3.5", 2.20, 3))
+        elif est >= 3.0 and prob >= 65:
+            mercados.append(("OVER 3.5", 2.20, 2))
+        
+        # OVER 2.5
+        if est >= 2.6 and prob >= 65:
+            mercados.append(("OVER 2.5", 1.90, 5))
+        elif est >= 2.4 and prob >= 70:
+            mercados.append(("OVER 2.5", 1.90, 4))
+        elif est >= 2.2 and prob >= 75:
+            mercados.append(("OVER 2.5", 1.85, 3))
+        
+        # OVER 1.5 (sempre disponível como fallback)
+        if est >= 1.8 and prob >= 60:
+            mercados.append(("OVER 1.5", 1.35, 1))
+        
+        # UNDER 2.5 (para jogos com poucos gols)
+        if est <= 2.0 and prob >= 65:
+            mercados.append(("UNDER 2.5", 1.65, 2))
+        elif est <= 1.8 and prob >= 70:
+            mercados.append(("UNDER 2.5", 1.70, 3))
+        
+        # UNDER 1.5
+        if est <= 1.4 and prob >= 70:
+            mercados.append(("UNDER 1.5", 2.00, 3))
+        
+        if not mercados:
+            return "OVER 1.5 (FALLBACK)", 1.35
+        
+        # Ordenar por prioridade (maior = melhor)
+        mercados.sort(key=lambda x: x[2], reverse=True)
+        
+        return mercados[0][0], mercados[0][1]
 
     def filtro_armadilha(self, alerta):
         prob = alerta['probabilidade']
@@ -86,6 +117,8 @@ class SistemaApostasPro:
             })
 
         return selecionados
+
+    
 
 
 def separar_por_nivel(jogos):
