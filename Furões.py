@@ -7488,19 +7488,18 @@ def render_tab_multiplas_pro(sistema):
             # ============================================================
             multiplas_salvas = []
             
-            for idx, (tipo, jogos_mult) in enumerate(multiplas):
-                odd_total = calcular_odd_total(jogos_mult)
-                
-                over_1_5_count = sum(1 for j in jogos_mult if "OVER 1.5" in j.get('mercado', '').upper())
-                over_2_5_count = sum(1 for j in jogos_mult if "OVER 2.5" in j.get('mercado', '').upper())
-                score_medio = sum(j.get('score', 0) for j in jogos_mult) / len(jogos_mult) if jogos_mult else 0
-                
+            # CORREÇÃO: Desempacotamento correto da tupla com 3 elementos (tipo, jogos_mult, odd_total)
+            for idx, (tipo, jogos_mult, odd_total) in enumerate(multiplas):
                 with st.expander(f"{tipo} (Odds Total: {odd_total:.2f})"):
                     for j in jogos_mult:
                         st.write(f"   {j['jogo']} → {j['mercado']} ({j['odd']:.2f}) | Score: {j['score']}")
 
                 if enviar_multiplas_tg:
                     data_br_str = data_selecionada.strftime("%d/%m/%Y")
+                    
+                    over_1_5_count = sum(1 for j in jogos_mult if "OVER 1.5" in j.get('mercado', '').upper())
+                    over_2_5_count = sum(1 for j in jogos_mult if "OVER 2.5" in j.get('mercado', '').upper())
+                    score_medio = sum(j.get('score', 0) for j in jogos_mult) / len(jogos_mult) if jogos_mult else 0
                     
                     # Estrutura completa da múltipla para salvar
                     multipla_struct = {
@@ -7530,7 +7529,7 @@ def render_tab_multiplas_pro(sistema):
                         
                         # Buscar ID do jogo se disponível
                         jogo_obj = j.get('jogo_obj', None)
-                        jogo_id = str(jogo_obj.id) if jogo_obj and hasattr(jogo_obj, 'id') else f"jogo_{idx}"
+                        jogo_id = str(jogo_obj.id) if jogo_obj and hasattr(jogo_obj, 'id') else f"jogo_{idx}_{j['jogo'].replace(' ', '_')}"
                         
                         jogo_dict = {
                             "id": jogo_id,
@@ -7681,7 +7680,7 @@ def render_tab_multiplas_pro(sistema):
                 st.write("---")
     else:
         st.info("ℹ️ Nenhuma múltipla gerada ainda.")
-    
+
     
 
 
