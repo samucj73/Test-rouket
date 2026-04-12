@@ -4191,186 +4191,171 @@ class PosterGenerator:
     # ============================================================
     # NOVO MÉTODO: PÔSTER PARA MÚLTIPLAS GREEN (ESTILO BET365)
     # ============================================================
+    #def gerar_poster_multipla_green_style(self, jogos: list, valor_aposta: float, odd_total: float) -> io.BytesIO:
     def gerar_poster_multipla_green_style(self, jogos: list, valor_aposta: float, odd_total: float) -> io.BytesIO:
-        """
-        Gera pôster no estilo bet365 para múltiplas que deram GREEN.
-        - jogos: lista de dicts com 'home', 'away', 'mercado', 'odd'
-        - valor_aposta: valor em reais
-        - odd_total: produto das odds
-        """
-        LARGURA = 2000
-        ALTURA_TOPO = 360
-        ALTURA_POR_JOGO = 520
-        PADDING = 80
+    """
+    Gera pôster no estilo da imagem enviada (casas de apostas).
+    - jogos: lista de dicts com 'home', 'away', 'mercado', 'odd', 'liga', 'escudo_home', 'escudo_away'
+    - valor_aposta: valor em reais
+    - odd_total: produto das odds
+    """
+    LARGURA = 1200
+    ALTURA_TOPO = 180
+    ALTURA_POR_JOGO = 200
+    PADDING = 40
+    RODAPE_ALTURA = 100
 
-        jogos_count = len(jogos)
-        altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + PADDING
+    jogos_count = len(jogos)
+    altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + RODAPE_ALTURA + PADDING
 
-        img = Image.new("RGBA", (LARGURA, altura_total), (10, 20, 30, 255))
-        draw = ImageDraw.Draw(img)
+    # Fundo branco (estilo casa de apostas)
+    img = Image.new("RGBA", (LARGURA, altura_total), (255, 255, 255, 255))
+    draw = ImageDraw.Draw(img)
 
-        # Fontes
-        FONTE_TITULO = self.criar_fonte(80)
-        FONTE_SUBTITULO = self.criar_fonte(55)
-        FONTE_TIMES = self.criar_fonte(50)
-        FONTE_VS = self.criar_fonte(45)
-        FONTE_INFO = self.criar_fonte(40)
-        FONTE_ODD = self.criar_fonte(55)
-        FONTE_VALOR = self.criar_fonte(65)
-        FONTE_DETALHES = self.criar_fonte(35)
+    # Fontes
+    FONTE_TITULO = self.criar_fonte(48)
+    FONTE_TIMES = self.criar_fonte(32)
+    FONTE_MERCADO = self.criar_fonte(28)
+    FONTE_ODD = self.criar_fonte(40)
+    FONTE_TIPO = self.criar_fonte(24)
+    FONTE_RODAPE = self.criar_fonte(26)
+    FONTE_VALOR = self.criar_fonte(32)
 
-        # Título principal
-        titulo = f"💣 MÚLTIPLA GREEN - {jogos_count} JOGOS"
+    # ========== CABEÇALHO ==========
+    titulo = "MÚLTIPLA GREEN"
+    try:
+        titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
+        titulo_w = titulo_bbox[2] - titulo_bbox[0]
+        draw.text(((LARGURA - titulo_w) // 2, 50), titulo, font=FONTE_TITULO, fill=(0, 0, 0))
+    except:
+        draw.text((LARGURA//2 - 150, 50), titulo, font=FONTE_TITULO, fill=(0, 0, 0))
+
+    # Linha divisória
+    draw.line([(PADDING, 110), (LARGURA - PADDING, 110)], fill=(200, 200, 200), width=2)
+
+    y_pos = 140
+
+    # ========== JOGOS ==========
+    for idx, jogo in enumerate(jogos):
+        x0 = PADDING
+        y0 = y_pos
+        x1 = LARGURA - PADDING
+        y1 = y_pos + ALTURA_POR_JOGO - 20
+
+        # Linha separadora entre jogos (exceto no primeiro)
+        if idx > 0:
+            draw.line([(x0, y0 - 10), (x1, y0 - 10)], fill=(230, 230, 230), width=1)
+
+        # ===== MERCADO E ODD (lado esquerdo) =====
+        mercado_text = jogo.get('mercado', 'Mais de 1.5')
+        odd_text = f"{jogo.get('odd', 1.0):.2f}"
+        tipo_text = "Total de Gols"
+
+        # Mercado (ex: "Mais de 1.5")
         try:
-            titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
-            titulo_w = titulo_bbox[2] - titulo_bbox[0]
-            draw.text(((LARGURA - titulo_w) // 2, 70), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
+            draw.text((x0, y0 + 10), f"- **{mercado_text}**", font=FONTE_MERCADO, fill=(0, 0, 0))
         except:
-            draw.text((LARGURA//2 - 300, 70), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
+            draw.text((x0, y0 + 10), mercado_text, font=FONTE_MERCADO, fill=(0, 0, 0))
 
-        # Valor da aposta
-        valor_text = f"Valor da Aposta: R$ {valor_aposta:.2f}"
+        # Odd (ex: "1.40")
         try:
-            valor_bbox = draw.textbbox((0, 0), valor_text, font=FONTE_VALOR)
-            valor_w = valor_bbox[2] - valor_bbox[0]
-            draw.text(((LARGURA - valor_w) // 2, 160), valor_text, font=FONTE_VALOR, fill=(200, 255, 200))
-        except:
-            draw.text((LARGURA//2 - 250, 160), valor_text, font=FONTE_VALOR, fill=(200, 255, 200))
-
-        # Odd total
-        odd_text = f"Odd Total: {odd_total:.2f}"
-        try:
-            odd_bbox = draw.textbbox((0, 0), odd_text, font=FONTE_VALOR)
+            odd_bbox = draw.textbbox((0, 0), odd_text, font=FONTE_ODD)
             odd_w = odd_bbox[2] - odd_bbox[0]
-            draw.text(((LARGURA - odd_w) // 2, 230), odd_text, font=FONTE_VALOR, fill=(100, 255, 100))
+            draw.text((x0 + 20, y0 + 45), odd_text, font=FONTE_ODD, fill=(0, 150, 0))
         except:
-            draw.text((LARGURA//2 - 200, 230), odd_text, font=FONTE_VALOR, fill=(100, 255, 100))
+            draw.text((x0 + 20, y0 + 45), odd_text, font=FONTE_ODD, fill=(0, 150, 0))
 
-        # Retorno potencial
-        retorno = valor_aposta * odd_total
-        retorno_text = f"Retorno Potencial: R$ {retorno:.2f}"
+        # Tipo (ex: "Total de Gols")
         try:
-            ret_bbox = draw.textbbox((0, 0), retorno_text, font=FONTE_VALOR)
-            ret_w = ret_bbox[2] - ret_bbox[0]
-            draw.text(((LARGURA - ret_w) // 2, 300), retorno_text, font=FONTE_VALOR, fill=(255, 215, 0))
+            draw.text((x0 + 20, y0 + 95), tipo_text, font=FONTE_TIPO, fill=(100, 100, 100))
         except:
-            draw.text((LARGURA//2 - 250, 300), retorno_text, font=FONTE_VALOR, fill=(255, 215, 0))
+            draw.text((x0 + 20, y0 + 95), tipo_text, font=FONTE_TIPO, fill=(100, 100, 100))
 
-        # Linha decorativa
-        draw.line([(LARGURA//4, 350), (3*LARGURA//4, 350)], fill=(255, 215, 0), width=4)
+        # ===== ESCUDOS E TIMES (lado direito) =====
+        TAMANHO_ESCUDO = 50
+        TAMANHO = 60
+        ESPACO_ENTRE = 180
+        
+        # Posicionar escudos à direita
+        x_home = LARGURA - 380
+        x_away = x_home + TAMANHO + ESPACO_ENTRE
+        y_escudos = y0 + 15
 
-        y_pos = ALTURA_TOPO
+        # Baixar escudos
+        escudo_home_bytes = self.api_client.baixar_escudo_time(jogo.get('home', ''), jogo.get('escudo_home', ''))
+        escudo_away_bytes = self.api_client.baixar_escudo_time(jogo.get('away', ''), jogo.get('escudo_away', ''))
+        escudo_home_img = Image.open(io.BytesIO(escudo_home_bytes)).convert("RGBA") if escudo_home_bytes else None
+        escudo_away_img = Image.open(io.BytesIO(escudo_away_bytes)).convert("RGBA") if escudo_away_bytes else None
 
-        for idx, jogo in enumerate(jogos):
-            x0, y0 = PADDING, y_pos
-            x1, y1 = LARGURA - PADDING, y_pos + ALTURA_POR_JOGO - 40
+        # Desenhar escudos (quadrados arredondados)
+        self._desenhar_escudo_squircle(img, escudo_home_img, x_home, y_escudos, TAMANHO, TAMANHO_ESCUDO, jogo.get('home', ''), (0, 150, 0))
+        self._desenhar_escudo_squircle(img, escudo_away_img, x_away, y_escudos, TAMANHO, TAMANHO_ESCUDO, jogo.get('away', ''), (0, 150, 0))
 
-            # Cor da borda: verde para GREEN
-            cor_borda = (46, 204, 113)
+        # Nomes dos times (abaixo dos escudos)
+        home_text = jogo.get('home', '')[:15]
+        away_text = jogo.get('away', '')[:15]
 
-            draw.rounded_rectangle([x0, y0, x1, y1], radius=25, fill=(25, 35, 45, 255), outline=cor_borda, width=4)
-
-            # Odd do jogo
-            odd_jogo = jogo.get('odd', 1.0)
-            odd_text = f"{odd_jogo:.2f}"
-            try:
-                odd_bbox = draw.textbbox((0, 0), odd_text, font=FONTE_ODD)
-                odd_w = odd_bbox[2] - odd_bbox[0]
-                odd_x = x1 - odd_w - 40
-                odd_y = y0 + 40
-                # Fundo semi-transparente
-                overlay = Image.new('RGBA', img.size, (0,0,0,0))
-                overlay_draw = ImageDraw.Draw(overlay)
-                overlay_draw.rounded_rectangle([odd_x-15, odd_y-10, odd_x+odd_w+15, odd_y+60], radius=15, fill=(0,0,0,200))
-                img.paste(overlay, (0,0), overlay)
-                draw.rounded_rectangle([odd_x-15, odd_y-10, odd_x+odd_w+15, odd_y+60], radius=15, outline=cor_borda, width=3)
-                draw.text((odd_x, odd_y), odd_text, font=FONTE_ODD, fill=cor_borda)
-            except:
-                odd_x = x1 - 150
-                odd_y = y0 + 40
-                draw.text((odd_x, odd_y), odd_text, font=FONTE_ODD, fill=cor_borda)
-
-            # Nome da liga (se disponível)
-            liga_text = jogo.get('liga', 'LIGA').upper()
-            try:
-                liga_bbox = draw.textbbox((0, 0), liga_text, font=FONTE_INFO)
-                liga_w = liga_bbox[2] - liga_bbox[0]
-                draw.text(((LARGURA - liga_w) // 2, y0 + 35), liga_text, font=FONTE_INFO, fill=(200, 200, 200))
-            except:
-                draw.text((LARGURA//2 - 150, y0 + 35), liga_text, font=FONTE_INFO, fill=(200, 200, 200))
-
-            # Escudos
-            TAMANHO_ESCUDO = 180
-            TAMANHO = 200
-            ESPACO_ENTRE = 700
-            largura_total = 2 * TAMANHO + ESPACO_ENTRE
-            x_inicio = (LARGURA - largura_total) // 2
-            x_home = x_inicio
-            x_away = x_home + TAMANHO + ESPACO_ENTRE
-            y_escudos = y0 + 100
-
-            escudo_home_bytes = self.api_client.baixar_escudo_time(jogo.get('home', ''), jogo.get('escudo_home', ''))
-            escudo_away_bytes = self.api_client.baixar_escudo_time(jogo.get('away', ''), jogo.get('escudo_away', ''))
-            escudo_home_img = Image.open(io.BytesIO(escudo_home_bytes)).convert("RGBA") if escudo_home_bytes else None
-            escudo_away_img = Image.open(io.BytesIO(escudo_away_bytes)).convert("RGBA") if escudo_away_bytes else None
-
-            self._desenhar_escudo_squircle(img, escudo_home_img, x_home, y_escudos, TAMANHO, TAMANHO_ESCUDO, jogo.get('home', ''), cor_borda)
-            self._desenhar_escudo_squircle(img, escudo_away_img, x_away, y_escudos, TAMANHO, TAMANHO_ESCUDO, jogo.get('away', ''), cor_borda)
-
-            # Nomes dos times
-            home_text = jogo.get('home', '')[:15]
-            away_text = jogo.get('away', '')[:15]
-            try:
-                home_bbox = draw.textbbox((0, 0), home_text, font=FONTE_TIMES)
-                home_w = home_bbox[2] - home_bbox[0]
-                draw.text((x_home + (TAMANHO - home_w)//2, y_escudos + TAMANHO + 20), home_text, font=FONTE_TIMES, fill=(255,255,255))
-            except:
-                draw.text((x_home, y_escudos + TAMANHO + 20), home_text, font=FONTE_TIMES, fill=(255,255,255))
-
-            try:
-                away_bbox = draw.textbbox((0, 0), away_text, font=FONTE_TIMES)
-                away_w = away_bbox[2] - away_bbox[0]
-                draw.text((x_away + (TAMANHO - away_w)//2, y_escudos + TAMANHO + 20), away_text, font=FONTE_TIMES, fill=(255,255,255))
-            except:
-                draw.text((x_away, y_escudos + TAMANHO + 20), away_text, font=FONTE_TIMES, fill=(255,255,255))
-
-            # VS
-            try:
-                vs_bbox = draw.textbbox((0, 0), "VS", font=FONTE_VS)
-                vs_w = vs_bbox[2] - vs_bbox[0]
-                vs_x = x_home + TAMANHO + (ESPACO_ENTRE - vs_w) // 2
-                draw.text((vs_x, y_escudos + TAMANHO//2 - 20), "VS", font=FONTE_VS, fill=(255,215,0))
-            except:
-                vs_x = x_home + TAMANHO + ESPACO_ENTRE//2 - 30
-                draw.text((vs_x, y_escudos + TAMANHO//2 - 20), "VS", font=FONTE_VS, fill=(255,215,0))
-
-            # Mercado
-            mercado_text = jogo.get('mercado', 'Mais de 1.5')
-            try:
-                mercado_bbox = draw.textbbox((0, 0), mercado_text, font=FONTE_INFO)
-                mercado_w = mercado_bbox[2] - mercado_bbox[0]
-                draw.text(((LARGURA - mercado_w) // 2, y_escudos + TAMANHO + 110), mercado_text, font=FONTE_INFO, fill=(150,200,255))
-            except:
-                draw.text((LARGURA//2 - 100, y_escudos + TAMANHO + 110), mercado_text, font=FONTE_INFO, fill=(150,200,255))
-
-            y_pos += ALTURA_POR_JOGO
-
-        # Rodapé
-        rodape_text = f"GERADO EM {datetime.now().strftime('%d/%m/%Y %H:%M')} | ELITE MASTER GREEN"
         try:
-            rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_DETALHES)
-            rodape_w = rodape_bbox[2] - rodape_bbox[0]
-            draw.text(((LARGURA - rodape_w) // 2, altura_total - 70), rodape_text, font=FONTE_DETALHES, fill=(100,130,160))
+            home_bbox = draw.textbbox((0, 0), home_text, font=FONTE_TIMES)
+            home_w = home_bbox[2] - home_bbox[0]
+            draw.text((x_home + (TAMANHO - home_w)//2, y_escudos + TAMANHO + 5), home_text, font=FONTE_TIMES, fill=(0, 0, 0))
         except:
-            draw.text((LARGURA//2 - 300, altura_total - 70), rodape_text, font=FONTE_DETALHES, fill=(100,130,160))
+            draw.text((x_home, y_escudos + TAMANHO + 5), home_text, font=FONTE_TIMES, fill=(0, 0, 0))
 
-        img_rgb = Image.new("RGB", img.size, (10,20,30))
-        img_rgb.paste(img, (0,0), img)
-        img_com_bordas = self._aplicar_bordas_arredondadas(img_rgb, raio=50)
-        buffer = io.BytesIO()
-        img_com_bordas.save(buffer, format="PNG", optimize=True, quality=95)
-        buffer.seek(0)
-        return buffer
+        try:
+            away_bbox = draw.textbbox((0, 0), away_text, font=FONTE_TIMES)
+            away_w = away_bbox[2] - away_bbox[0]
+            draw.text((x_away + (TAMANHO - away_w)//2, y_escudos + TAMANHO + 5), away_text, font=FONTE_TIMES, fill=(0, 0, 0))
+        except:
+            draw.text((x_away, y_escudos + TAMANHO + 5), away_text, font=FONTE_TIMES, fill=(0, 0, 0))
+
+        # "VS" entre os escudos
+        try:
+            vs_x = x_home + TAMANHO + (ESPACO_ENTRE - 30) // 2
+            draw.text((vs_x, y_escudos + TAMANHO//2 - 10), "VS", font=FONTE_TIPO, fill=(150, 150, 150))
+        except:
+            vs_x = x_home + TAMANHO + ESPACO_ENTRE//2 - 20
+            draw.text((vs_x, y_escudos + TAMANHO//2 - 10), "VS", font=FONTE_TIPO, fill=(150, 150, 150))
+
+        y_pos += ALTURA_POR_JOGO
+
+    # ========== RODAPÉ (VALOR DA APOSTA E RETORNO) ==========
+    rodape_y = altura_total - RODAPE_ALTURA - 20
+    
+    # Linha superior do rodapé
+    draw.line([(PADDING, rodape_y - 10), (LARGURA - PADDING, rodape_y - 10)], fill=(200, 200, 200), width=2)
+
+    retorno = valor_aposta * odd_total
+    
+    # Texto do rodapé
+    rodape_text = f"Valor da Aposta: R$ {valor_aposta:.2f}    |    Retorno Potencial: R$ {retorno:.2f}"
+    try:
+        rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_RODAPE)
+        rodape_w = rodape_bbox[2] - rodape_bbox[0]
+        draw.text(((LARGURA - rodape_w) // 2, rodape_y), rodape_text, font=FONTE_RODAPE, fill=(0, 0, 0))
+    except:
+        draw.text((LARGURA//2 - 250, rodape_y), rodape_text, font=FONTE_RODAPE, fill=(0, 0, 0))
+
+    # Data no rodapé
+    data_text = datetime.now().strftime("%d/%m/%Y %H:%M")
+    try:
+        data_bbox = draw.textbbox((0, 0), data_text, font=FONTE_TIPO)
+        data_w = data_bbox[2] - data_bbox[0]
+        draw.text(((LARGURA - data_w) // 2, rodape_y + 40), data_text, font=FONTE_TIPO, fill=(150, 150, 150))
+    except:
+        draw.text((LARGURA//2 - 100, rodape_y + 40), data_text, font=FONTE_TIPO, fill=(150, 150, 150))
+
+    # Converter para RGB e salvar
+    img_rgb = Image.new("RGB", img.size, (255, 255, 255))
+    img_rgb.paste(img, (0, 0), img)
+    
+    buffer = io.BytesIO()
+    img_rgb.save(buffer, format="PNG", optimize=True, quality=95)
+    buffer.seek(0)
+    return buffer 
+   
+        
+        
 
 
 class GerenciadorMultiplasPro:
