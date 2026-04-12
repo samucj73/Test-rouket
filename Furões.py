@@ -4191,8 +4191,7 @@ class PosterGenerator:
     # ============================================================
     # NOVO MÉTODO: PÔSTER PARA MÚLTIPLAS GREEN (ESTILO BET365)
     # ============================================================
-    #def gerar_poster_multipla_green_style(self, jogos: list, valor_aposta: float, odd_total: float) -> io.BytesIO:
-    def gerar_poster_multipla_green_style(self, jogos: list, valor_aposta: float, odd_total: float) -> io.BytesIO:
+def gerar_poster_multipla_green_style(self, jogos: list, valor_aposta: float, odd_total: float) -> io.BytesIO:
     """
     Gera pôster no estilo da imagem enviada (casas de apostas).
     - jogos: lista de dicts com 'home', 'away', 'mercado', 'odd', 'liga', 'escudo_home', 'escudo_away'
@@ -4228,7 +4227,7 @@ class PosterGenerator:
         titulo_w = titulo_bbox[2] - titulo_bbox[0]
         draw.text(((LARGURA - titulo_w) // 2, 50), titulo, font=FONTE_TITULO, fill=(0, 0, 0))
     except:
-        draw.text((LARGURA//2 - 150, 50), titulo, font=FONTE_TITULO, fill=(0, 0, 0))
+        draw.text((LARGURA // 2 - 150, 50), titulo, font=FONTE_TITULO, fill=(0, 0, 0))
 
     # Linha divisória
     draw.line([(PADDING, 110), (LARGURA - PADDING, 110)], fill=(200, 200, 200), width=2)
@@ -4275,7 +4274,7 @@ class PosterGenerator:
         TAMANHO_ESCUDO = 50
         TAMANHO = 60
         ESPACO_ENTRE = 180
-        
+
         # Posicionar escudos à direita
         x_home = LARGURA - 380
         x_away = x_home + TAMANHO + ESPACO_ENTRE
@@ -4298,35 +4297,35 @@ class PosterGenerator:
         try:
             home_bbox = draw.textbbox((0, 0), home_text, font=FONTE_TIMES)
             home_w = home_bbox[2] - home_bbox[0]
-            draw.text((x_home + (TAMANHO - home_w)//2, y_escudos + TAMANHO + 5), home_text, font=FONTE_TIMES, fill=(0, 0, 0))
+            draw.text((x_home + (TAMANHO - home_w) // 2, y_escudos + TAMANHO + 5), home_text, font=FONTE_TIMES, fill=(0, 0, 0))
         except:
             draw.text((x_home, y_escudos + TAMANHO + 5), home_text, font=FONTE_TIMES, fill=(0, 0, 0))
 
         try:
             away_bbox = draw.textbbox((0, 0), away_text, font=FONTE_TIMES)
             away_w = away_bbox[2] - away_bbox[0]
-            draw.text((x_away + (TAMANHO - away_w)//2, y_escudos + TAMANHO + 5), away_text, font=FONTE_TIMES, fill=(0, 0, 0))
+            draw.text((x_away + (TAMANHO - away_w) // 2, y_escudos + TAMANHO + 5), away_text, font=FONTE_TIMES, fill=(0, 0, 0))
         except:
             draw.text((x_away, y_escudos + TAMANHO + 5), away_text, font=FONTE_TIMES, fill=(0, 0, 0))
 
         # "VS" entre os escudos
         try:
             vs_x = x_home + TAMANHO + (ESPACO_ENTRE - 30) // 2
-            draw.text((vs_x, y_escudos + TAMANHO//2 - 10), "VS", font=FONTE_TIPO, fill=(150, 150, 150))
+            draw.text((vs_x, y_escudos + TAMANHO // 2 - 10), "VS", font=FONTE_TIPO, fill=(150, 150, 150))
         except:
-            vs_x = x_home + TAMANHO + ESPACO_ENTRE//2 - 20
-            draw.text((vs_x, y_escudos + TAMANHO//2 - 10), "VS", font=FONTE_TIPO, fill=(150, 150, 150))
+            vs_x = x_home + TAMANHO + ESPACO_ENTRE // 2 - 20
+            draw.text((vs_x, y_escudos + TAMANHO // 2 - 10), "VS", font=FONTE_TIPO, fill=(150, 150, 150))
 
         y_pos += ALTURA_POR_JOGO
 
     # ========== RODAPÉ (VALOR DA APOSTA E RETORNO) ==========
     rodape_y = altura_total - RODAPE_ALTURA - 20
-    
+
     # Linha superior do rodapé
     draw.line([(PADDING, rodape_y - 10), (LARGURA - PADDING, rodape_y - 10)], fill=(200, 200, 200), width=2)
 
     retorno = valor_aposta * odd_total
-    
+
     # Texto do rodapé
     rodape_text = f"Valor da Aposta: R$ {valor_aposta:.2f}    |    Retorno Potencial: R$ {retorno:.2f}"
     try:
@@ -4334,7 +4333,7 @@ class PosterGenerator:
         rodape_w = rodape_bbox[2] - rodape_bbox[0]
         draw.text(((LARGURA - rodape_w) // 2, rodape_y), rodape_text, font=FONTE_RODAPE, fill=(0, 0, 0))
     except:
-        draw.text((LARGURA//2 - 250, rodape_y), rodape_text, font=FONTE_RODAPE, fill=(0, 0, 0))
+        draw.text((LARGURA // 2 - 250, rodape_y), rodape_text, font=FONTE_RODAPE, fill=(0, 0, 0))
 
     # Data no rodapé
     data_text = datetime.now().strftime("%d/%m/%Y %H:%M")
@@ -4343,16 +4342,18 @@ class PosterGenerator:
         data_w = data_bbox[2] - data_bbox[0]
         draw.text(((LARGURA - data_w) // 2, rodape_y + 40), data_text, font=FONTE_TIPO, fill=(150, 150, 150))
     except:
-        draw.text((LARGURA//2 - 100, rodape_y + 40), data_text, font=FONTE_TIPO, fill=(150, 150, 150))
+        draw.text((LARGURA // 2 - 100, rodape_y + 40), data_text, font=FONTE_TIPO, fill=(150, 150, 150))
 
     # Converter para RGB e salvar
     img_rgb = Image.new("RGB", img.size, (255, 255, 255))
     img_rgb.paste(img, (0, 0), img)
-    
+
     buffer = io.BytesIO()
     img_rgb.save(buffer, format="PNG", optimize=True, quality=95)
     buffer.seek(0)
-    return buffer 
+    return buffer
+   
+    
    
         
         
