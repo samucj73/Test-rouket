@@ -7490,6 +7490,7 @@ class SistemaAlertasFutebol:
 # NOVA ABA - MÚLTIPLAS GREEN
 # ============================================================
 
+#def render_tab_multiplas_green(sistema):
 def render_tab_multiplas_green(sistema):
     st.subheader("🟢 MÚLTIPLAS GREEN - PÔSTER DE ACERTOS")
     st.caption("Selecione jogos que deram GREEN, defina o valor da aposta e gere um pôster profissional para enviar ao Telegram.")
@@ -7510,68 +7511,77 @@ def render_tab_multiplas_green(sistema):
 
     # Unificar e filtrar apenas GREEN da data selecionada
     jogos_green = []
+    idx_counter = 0
 
     for jogo_id, jogo in resultados_ou.items():
         data_jogo = jogo.get("hora", "").split("T")[0] if "T" in jogo.get("hora", "") else ""
         if data_jogo == data_str and jogo.get("resultado") == "GREEN":
+            odd_calculada = 100 / max(jogo.get("probabilidade", 50), 1) if jogo.get("probabilidade", 0) > 0 else 1.0
             jogos_green.append({
-                "id": jogo_id,
+                "id": f"ou_{jogo_id}_{idx_counter}",
                 "home": jogo.get("home"),
                 "away": jogo.get("away"),
                 "liga": jogo.get("liga"),
                 "mercado": jogo.get("tendencia", "Mais de 1.5"),
-                "odd": 100 / max(jogo.get("probabilidade", 50), 1) if jogo.get("probabilidade", 0) > 0 else 1.0,
+                "odd": odd_calculada,
                 "escudo_home": jogo.get("escudo_home", ""),
                 "escudo_away": jogo.get("escudo_away", ""),
                 "tipo": "over_under"
             })
+            idx_counter += 1
 
     for jogo_id, jogo in resultados_fav.items():
         data_jogo = jogo.get("hora", "").split("T")[0] if "T" in jogo.get("hora", "") else ""
         if data_jogo == data_str and jogo.get("resultado_favorito") == "GREEN":
             favorito = jogo.get("favorito", "")
             favorito_text = jogo.get("home") if favorito == "home" else jogo.get("away") if favorito == "away" else "EMPATE"
+            odd_calculada = 100 / max(jogo.get("confianca_vitoria", 50), 1)
             jogos_green.append({
-                "id": jogo_id,
+                "id": f"fav_{jogo_id}_{idx_counter}",
                 "home": jogo.get("home"),
                 "away": jogo.get("away"),
                 "liga": jogo.get("liga"),
                 "mercado": f"Favorito: {favorito_text}",
-                "odd": 100 / max(jogo.get("confianca_vitoria", 50), 1),
+                "odd": odd_calculada,
                 "escudo_home": jogo.get("escudo_home", ""),
                 "escudo_away": jogo.get("escudo_away", ""),
                 "tipo": "favorito"
             })
+            idx_counter += 1
 
     for jogo_id, jogo in resultados_ht.items():
         data_jogo = jogo.get("hora", "").split("T")[0] if "T" in jogo.get("hora", "") else ""
         if data_jogo == data_str and jogo.get("resultado_ht") == "GREEN":
+            odd_calculada = 100 / max(jogo.get("confianca_ht", 50), 1)
             jogos_green.append({
-                "id": jogo_id,
+                "id": f"ht_{jogo_id}_{idx_counter}",
                 "home": jogo.get("home"),
                 "away": jogo.get("away"),
                 "liga": jogo.get("liga"),
                 "mercado": jogo.get("tendencia_ht", "Over 0.5 HT"),
-                "odd": 100 / max(jogo.get("confianca_ht", 50), 1),
+                "odd": odd_calculada,
                 "escudo_home": jogo.get("escudo_home", ""),
                 "escudo_away": jogo.get("escudo_away", ""),
                 "tipo": "ht"
             })
+            idx_counter += 1
 
     for jogo_id, jogo in resultados_am.items():
         data_jogo = jogo.get("hora", "").split("T")[0] if "T" in jogo.get("hora", "") else ""
         if data_jogo == data_str and jogo.get("resultado_ambas_marcam") == "GREEN":
+            odd_calculada = 100 / max(jogo.get("confianca_ambas_marcam", 50), 1)
             jogos_green.append({
-                "id": jogo_id,
+                "id": f"am_{jogo_id}_{idx_counter}",
                 "home": jogo.get("home"),
                 "away": jogo.get("away"),
                 "liga": jogo.get("liga"),
                 "mercado": f"Ambas Marcam: {jogo.get('tendencia_ambas_marcam', 'SIM')}",
-                "odd": 100 / max(jogo.get("confianca_ambas_marcam", 50), 1),
+                "odd": odd_calculada,
                 "escudo_home": jogo.get("escudo_home", ""),
                 "escudo_away": jogo.get("escudo_away", ""),
                 "tipo": "ambas_marcam"
             })
+            idx_counter += 1
 
     if not jogos_green:
         st.warning(f"⚠️ Nenhum jogo com resultado GREEN encontrado para {data_green.strftime('%d/%m/%Y')}.")
@@ -7583,8 +7593,12 @@ def render_tab_multiplas_green(sistema):
     # Seleção dos jogos
     st.markdown("### 📋 Selecione os jogos para a múltipla")
     jogos_selecionados = []
-    for jogo in jogos_green:
-        if st.checkbox(f"{jogo['home']} vs {jogo['away']} - {jogo['mercado']} (Odd: {jogo['odd']:.2f})", key=f"green_{jogo['id']}"):
+    
+    # Criar uma chave única para cada checkbox
+    for idx, jogo in enumerate(jogos_green):
+        # Chave única: data + índice + tipo + id
+        unique_key = f"green_check_{data_str}_{idx}_{jogo['id']}_{jogo['tipo']}"
+        if st.checkbox(f"{jogo['home']} vs {jogo['away']} - {jogo['mercado']} (Odd: {jogo['odd']:.2f})", key=unique_key):
             jogos_selecionados.append(jogo)
 
     if not jogos_selecionados:
@@ -7598,7 +7612,8 @@ def render_tab_multiplas_green(sistema):
         max_value=10000.00,
         value=10.00,
         step=5.00,
-        format="%.2f"
+        format="%.2f",
+        key="valor_aposta_green"
     )
 
     # Cálculo da odd total e retorno
@@ -7617,7 +7632,7 @@ def render_tab_multiplas_green(sistema):
     """, unsafe_allow_html=True)
 
     # Botão para gerar e enviar
-    if st.button("🎨 GERAR PÔSTER E ENVIAR", type="primary", use_container_width=True):
+    if st.button("🎨 GERAR PÔSTER E ENVIAR", type="primary", use_container_width=True, key="btn_gerar_green"):
         with st.spinner("Gerando pôster e enviando para o Telegram..."):
             try:
                 poster = sistema.poster_generator.gerar_poster_multipla_green_style(
@@ -7640,6 +7655,7 @@ def render_tab_multiplas_green(sistema):
             except Exception as e:
                 st.error(f"❌ Erro ao gerar/enviar pôster: {e}")
                 logging.error(f"Erro no pôster green: {e}")
+    
 
 
 # ============================================================
