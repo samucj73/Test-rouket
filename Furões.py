@@ -221,7 +221,220 @@ def calcular_odd_total(multipla):
     for jogo in multipla:
         total *= jogo['odd']
     return round(total, 2)
+
+
+# =============================
+# [NOVO] FILTRO PREMIUM - BASEADO NO RELATÓRIO
+# =============================
+
+class FiltroPremium:
+    """Filtro avançado baseado em análise de performance real dos mercados"""
     
+    # Configurações baseadas no relatório de performance
+    LIGAS_CONFIG = {
+        "OVER_1.5": {
+            "recomendadas": ["Premier League", "La Liga", "Ligue 1", "Bundesliga"],
+            "neutras": ["Serie A", "Eredivisie"],
+            "evitar": ["Championship", "Campeonato Brasileiro Série A"],
+            "taxa_acerto": {"Premier League": 100, "La Liga": 75, "Ligue 1": 100, "Bundesliga": 50}
+        },
+        "OVER_2.5": {
+            "recomendadas": ["Premier League", "La Liga", "Bundesliga"],
+            "neutras": [],
+            "evitar": ["Championship", "Ligue 1"],
+            "estimativa_minima": 3.0,
+            "taxa_acerto": {"Premier League": 100, "La Liga": 100, "Bundesliga": 50}
+        },
+        "BTTS_SIM": {
+            "recomendadas": ["La Liga", "Championship", "Serie A"],
+            "neutras": ["Bundesliga", "Eredivisie"],
+            "evitar": ["Premier League", "Ligue 1"],
+            "taxa_acerto": {"La Liga": 100, "Championship": 100, "Serie A": 100, "Premier League": 0}
+        },
+        "UNDER_2.5": {
+            "recomendadas": ["Ligue 1", "Serie A"],
+            "neutras": [],
+            "evitar": ["Premier League", "Bundesliga", "La Liga"],
+            "estimativa_maxima": 1.8,
+            "taxa_acerto": {"Ligue 1": 100, "Serie A": 100}
+        },
+        "HT": {
+            "recomendadas": [],
+            "evitar": ["TODAS"],
+            "taxa_acerto_global": 35.5,
+            "bloquear": True
+        },
+        "FAVORITO": {
+            "recomendadas": [],
+            "evitar": ["TODAS"],
+            "confianca_minima": 60,
+            "taxa_acerto_global": 44.1,
+            "bloquear_baixa_confianca": True
+        }
+    }
+    
+    # Limite máximo de jogos por dia
+    MAX_JOGOS_POR_DIA = 15
+    
+    @classmethod
+    def aplicar_filtro_premium(cls, jogos, ativar=True):
+        """
+        Aplica todos os filtros premium baseados na análise real
+        
+        Args:
+            jogos: Lista de jogos a serem filtrados
+            ativar: Boolean para ativar/desativar o filtro
+            
+        Returns:
+            Lista de jogos filtrados
+        """
+        if not ativar:
+            return jogos
+        
+        jogos_filtrados = []
+        motivos_descarte = []
+        
+        for jogo in jogos:
+            qualidade = 0
+            razoes = []
+            descartar = False
+            motivo_descarte = None
+            
+            liga = jogo.get('liga', '')
+            tendencia = jogo.get('tendencia', '')
+            tendencia_am = jogo.get('tendencia_ambas_marcam', '')
+            favorito = jogo.get('favorito', '')
+            confianca = jogo.get('confianca', 0)
+            confianca_am = jogo.get('confianca_ambas_marcam', 0)
+            confianca_fav = jogo.get('confianca_vitoria', 0)
+            estimativa = jogo.get('estimativa', 0)
+            
+            # ========== FILTROS DE BLOQUEIO (DESCARTE IMEDIATO) ==========
+            
+            # 1. BLOQUEAR GOLS HT (performance 35.5%)
+            if 'HT' in tendencia or jogo.get('tendencia_ht'):
+                descartar = True
+                motivo_descarte = "❌ GOLS HT bloqueado (taxa global 35.5%)"
+                motivos_descarte.append(motivo_descarte)
+                continue
+            
+            # 2. BLOQUEAR FAVORITOS COM BAIXA CONFIANÇA (performance 44.1%)
+            if favorito and confianca_fav < 60:
+                descartar = True
+                motivo_descarte = f"❌ Favorito com confiança baixa ({confianca_fav:.0f}% < 60%)"
+                motivos_descarte.append(motivo_descarte)
+                continue
+            
+            # 3. BLOQUEAR BTTS NA PREMIER LEAGUE (taxa 0%)
+            if 'Premier League' in liga and tendencia_am == 'SIM':
+                descartar = True
+                motivo_descarte = "❌ BTTS na Premier League (taxa 0% - todos RED)"
+                motivos_descarte.append(motivo_descarte)
+                continue
+            
+            # 4. BLOQUEAR OVER 2.5 COM ESTIMATIVA BAIXA
+            if tendencia == 'OVER 2.5' and estimativa < 3.0:
+                descartar = True
+                motivo_descarte = f"❌ OVER 2.5 com estimativa baixa ({estimativa:.2f}g < 3.0g)"
+                motivos_descarte.append(motivo_descarte)
+                continue
+            
+            # 5. BLOQUEAR UNDER COM ESTIMATIVA ALTA
+            if 'UNDER' in tendencia and estimativa > 1.8:
+                descartar = True
+                motivo_descarte = f"❌ UNDER com estimativa alta ({estimativa:.2f}g > 1.8g)"
+                motivos_descarte.append(motivo_descarte)
+                continue
+            
+            # 6. BLOQUEAR CHAMPIONSHIP OVER (taxa 42.9%)
+            if 'Championship' in liga and 'OVER' in tendencia and 'BTTS' not in tendencia_am:
+                descartar = True
+                motivo_descarte = "❌ Championship OVER (taxa 42.9% - usar apenas BTTS)"
+                motivos_descarte.append(motivo_descarte)
+                continue
+            
+            # ========== CÁLCULO DE QUALIDADE (PONTUAÇÃO) ==========
+            
+            # OVER 1.5 com confiança ≥ 75%
+            if tendencia in ['OVER 1.5', 'OVER 2.5'] and confianca >= 75:
+                qualidade += 3
+                razoes.append(f"✅ Over com {confianca:.0f}% confiança")
+            
+            # OVER 1.5 em ligas recomendadas
+            if 'OVER' in tendencia:
+                if any(liga_rec in liga for liga_rec in cls.LIGAS_CONFIG["OVER_1.5"]["recomendadas"]):
+                    qualidade += 2
+                    razoes.append(f"✅ Liga favorável para Over: {liga}")
+            
+            # BTTS SIM com confiança ≥ 60%
+            if tendencia_am == 'SIM' and confianca_am >= 60:
+                qualidade += 3
+                razoes.append(f"✅ BTTS SIM com {confianca_am:.0f}% confiança")
+            
+            # BTTS em ligas recomendadas (La Liga, Championship, Serie A)
+            if tendencia_am == 'SIM':
+                if any(liga_rec in liga for liga_rec in cls.LIGAS_CONFIG["BTTS_SIM"]["recomendadas"]):
+                    qualidade += 2
+                    razoes.append(f"✅ Liga favorável para BTTS: {liga}")
+            
+            # UNDER com estimativa ≤ 1.8
+            if 'UNDER' in tendencia and estimativa <= 1.8:
+                qualidade += 3
+                razoes.append(f"✅ UNDER com estimativa baixa ({estimativa:.2f}g)")
+            
+            # UNDER em ligas recomendadas (Ligue 1, Serie A)
+            if 'UNDER' in tendencia:
+                if any(liga_rec in liga for liga_rec in cls.LIGAS_CONFIG["UNDER_2.5"]["recomendadas"]):
+                    qualidade += 2
+                    razoes.append(f"✅ Liga favorável para UNDER: {liga}")
+            
+            # OVER 2.5 com estimativa ≥ 3.0 (qualidade extra)
+            if tendencia == 'OVER 2.5' and estimativa >= 3.0:
+                qualidade += 2
+                razoes.append(f"✅ OVER 2.5 com estimativa alta ({estimativa:.2f}g)")
+            
+            # Penalidades
+            
+            # Penalidade para Brasileirão OVER (taxa 60%)
+            if 'Brasileiro' in liga and 'OVER' in tendencia:
+                qualidade -= 1
+                razoes.append(f"⚠️ Brasileirão Over (taxa 60% - penalidade leve)")
+            
+            # Penalidade para Bundesliga OVER (taxa 50%)
+            if 'Bundesliga' in liga and 'OVER' in tendencia:
+                qualidade -= 1
+                razoes.append(f"⚠️ Bundesliga Over (taxa 50% - cautela)")
+            
+            # APROVAÇÃO: qualidade >= 4 pontos
+            if qualidade >= 4:
+                jogo['qualidade_score'] = qualidade
+                jogo['razoes_aprovacao'] = razoes
+                jogos_filtrados.append(jogo)
+            else:
+                motivo_descarte = f"⚠️ Qualidade insuficiente ({qualidade} pontos < 4)"
+                motivos_descarte.append(motivo_descarte)
+        
+        # Limitar número máximo de jogos
+        if len(jogos_filtrados) > cls.MAX_JOGOS_POR_DIA:
+            # Ordenar por qualidade e pegar os melhores
+            jogos_filtrados.sort(key=lambda x: x.get('qualidade_score', 0), reverse=True)
+            jogos_filtrados = jogos_filtrados[:cls.MAX_JOGOS_POR_DIA]
+        
+        # Mostrar estatísticas do filtro
+        if motivos_descarte and len(motivos_descarte) > 0:
+            st.info(f"🔍 Filtro Premium ativado: {len(jogos_filtrados)} jogos aprovados de {len(jogos)} | Limite máximo: {cls.MAX_JOGOS_POR_DIA} jogos")
+        
+        return jogos_filtrados
+    
+    @classmethod
+    def get_estatisticas_filtro(cls, jogos_originais, jogos_filtrados):
+        """Retorna estatísticas do filtro para exibição"""
+        return {
+            "total_original": len(jogos_originais),
+            "total_filtrado": len(jogos_filtrados),
+            "reducao_percentual": round((1 - len(jogos_filtrados) / max(len(jogos_originais), 1)) * 100, 1),
+            "maximo_permitido": cls.MAX_JOGOS_POR_DIA
+        }
 
 
 class ConfigManager:
@@ -4187,9 +4400,6 @@ class PosterGenerator:
         
         return buffer
 
-    # ============================================================
-    # MÉTODO: PÔSTER PARA MÚLTIPLAS GREEN (ESTILO BET365) - CORRIGIDO
-    # ============================================================
     def gerar_poster_multipla_green_style(self, jogos: list, valor_aposta: float, odd_total: float) -> io.BytesIO:
         """
         Gera pôster no estilo da imagem enviada (casas de apostas).
@@ -5859,7 +6069,7 @@ class SistemaAlertasFutebol:
             ]
         )
     
-    def processar_jogos(self, data_selecionada, ligas_selecionadas, todas_ligas, top_n, min_conf, max_conf, estilo_poster, alerta_individual, alerta_poster, alerta_top_jogos, formato_top_jogos, tipo_filtro, tipo_analise, config_analise):
+    def processar_jogos(self, data_selecionada, ligas_selecionadas, todas_ligas, top_n, min_conf, max_conf, estilo_poster, alerta_individual, alerta_poster, alerta_top_jogos, formato_top_jogos, tipo_filtro, tipo_analise, config_analise, filtro_premium_ativado=False):
         hoje = data_selecionada.strftime("%Y-%m-%d")
         data_br = data_selecionada.strftime("%d/%m/%Y")
         
@@ -6013,6 +6223,18 @@ class SistemaAlertasFutebol:
             progress_bar.progress((i + 1) / total_ligas)
         
         jogos_filtrados = self._filtrar_por_tipo_analise(top_jogos, tipo_analise, config_analise)
+        
+        # APLICAR FILTRO PREMIUM SE ATIVADO
+        if filtro_premium_ativado:
+            jogos_antes_filtro = len(jogos_filtrados)
+            jogos_filtrados = FiltroPremium.aplicar_filtro_premium(jogos_filtrados, ativar=True)
+            stats = FiltroPremium.get_estatisticas_filtro(jogos_filtrados if jogos_filtrados else [], jogos_filtrados)
+            
+            if jogos_filtrados:
+                st.success(f"🎯 Filtro Premium ativado! {len(jogos_filtrados)} jogos aprovados (redução de {stats['reducao_percentual']:.0f}%)")
+                st.info(f"📋 Limite máximo: {stats['maximo_permitido']} jogos por dia para garantir qualidade")
+            else:
+                st.warning(f"⚠️ Filtro Premium ativado, mas nenhum jogo atendeu aos critérios rigorosos de qualidade")
         
         st.write(f"📊 Total de jogos: {len(top_jogos)}")
         st.write(f"📊 Jogos após filtros: {len(jogos_filtrados)}")
@@ -7747,6 +7969,18 @@ def render_tab_busca(sistema):
     
     top_n = st.selectbox("📊 Quantidade no Top", [3, 5, 10], index=1, key="top_n")
     
+    # NOVO SELECT BOX PARA FILTRO PREMIUM
+    filtro_premium = st.selectbox(
+        "🎯 Filtro de Qualidade Premium",
+        ["Desativado", "Ativado (Apenas jogos de alta qualidade)"],
+        key="filtro_premium",
+        help="Quando ativado, aplica filtros rigorosos baseados na análise de performance real. Remove GOLS HT, Favoritos com baixa confiança, BTTS da Premier League, e limita a 15 jogos por dia."
+    )
+    filtro_premium_ativado = filtro_premium == "Ativado (Apenas jogos de alta qualidade)"
+    
+    if filtro_premium_ativado:
+        st.info("🔍 **Filtro Premium ATIVADO** - Apenas jogos com alta probabilidade de acerto serão selecionados. Baseado em análise real de performance.")
+    
     if st.button("🔍 BUSCAR PARTIDAS", type="primary", use_container_width=True):
         if not todas_ligas and not ligas_selecionadas:
             st.error("❌ Selecione pelo menos uma liga")
@@ -7766,7 +8000,8 @@ def render_tab_busca(sistema):
                     formato_top_jogos,
                     config_analise.get("tipo_filtro", "Todos"),
                     tipo_analise,
-                    config_analise
+                    config_analise,
+                    filtro_premium_ativado  # NOVO PARÂMETRO
                 )
 
 
@@ -8295,11 +8530,10 @@ def render_tab_multiplas_pro(sistema):
             st.markdown("### 💣 MÚLTIPLAS GERADAS")
             
             # ============================================================
-            # SALVAR MÚLTIPLAS NO GERENCIADOR (CORREÇÃO)
+            # SALVAR MÚLTIPLAS NO GERENCIADOR
             # ============================================================
             multiplas_salvas = []
             
-            # CORREÇÃO: Desempacotamento correto da tupla com 3 elementos (tipo, jogos_mult, odd_total)
             for idx, (tipo, jogos_mult, odd_total) in enumerate(multiplas):
                 with st.expander(f"{tipo} (Odds Total: {odd_total:.2f})"):
                     for j in jogos_mult:
@@ -8312,7 +8546,6 @@ def render_tab_multiplas_pro(sistema):
                     over_2_5_count = sum(1 for j in jogos_mult if "OVER 2.5" in j.get('mercado', '').upper())
                     score_medio = sum(j.get('score', 0) for j in jogos_mult) / len(jogos_mult) if jogos_mult else 0
                     
-                    # Estrutura completa da múltipla para salvar
                     multipla_struct = {
                         "id": f"pro_{tipo}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
                         "tipo": tipo,
@@ -8338,7 +8571,6 @@ def render_tab_multiplas_pro(sistema):
                         else:
                             home, away = j['jogo'], ""
                         
-                        # Buscar ID do jogo se disponível
                         jogo_obj = j.get('jogo_obj', None)
                         jogo_id = str(jogo_obj.id) if jogo_obj and hasattr(jogo_obj, 'id') else f"jogo_{idx}_{j['jogo'].replace(' ', '_')}"
                         
@@ -8358,7 +8590,6 @@ def render_tab_multiplas_pro(sistema):
                         }
                         multipla_struct["jogos"].append(jogo_dict)
                     
-                    # SALVAR NO GERENCIADOR
                     multipla_id = sistema.gerenciador_multiplas_pro.salvar_multipla(multipla_struct)
                     multiplas_salvas.append(multipla_id)
                     
@@ -8387,10 +8618,8 @@ def render_tab_multiplas_pro(sistema):
                         if sistema.telegram_client.enviar_foto(poster, caption=caption):
                             st.success(f"📤 Múltipla {tipo} enviada como pôster!")
 
-            # Exibir mensagem de confirmação de salvamento
             if multiplas_salvas:
                 st.success(f"💾 {len(multiplas_salvas)} múltiplas salvas para conferência futura!")
-                # Verificar se foram salvas corretamente
                 multiplas_verificacao = sistema.gerenciador_multiplas_pro.carregar_multiplas()
                 st.write(f"🔍 Total de múltiplas no arquivo: {len(multiplas_verificacao)}")
             else:
