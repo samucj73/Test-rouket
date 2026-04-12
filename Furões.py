@@ -4191,13 +4191,13 @@ class PosterGenerator:
     # ============================================================
     # NOVO MÉTODO: PÔSTER PARA MÚLTIPLAS GREEN (ESTILO BET365)
     # ============================================================
-def gerar_poster_multipla_green_style(self, jogos: list, valor_aposta: float, odd_total: float) -> io.BytesIO:
-    """
-    Gera pôster no estilo da imagem enviada (casas de apostas).
-    - jogos: lista de dicts com 'home', 'away', 'mercado', 'odd', 'liga', 'escudo_home', 'escudo_away'
-    - valor_aposta: valor em reais
-    - odd_total: produto das odds
-    """
+    def gerar_poster_multipla_green_style(self, jogos: list, valor_aposta: float, odd_total: float) -> io.BytesIO:
+        """
+        Gera pôster no estilo da imagem enviada (casas de apostas).
+        - jogos: lista de dicts com 'home', 'away', 'mercado', 'odd', 'liga', 'escudo_home', 'escudo_away'
+        - valor_aposta: valor em reais
+        - odd_total: produto das odds
+        """
     LARGURA = 1200
     ALTURA_TOPO = 180
     ALTURA_POR_JOGO = 200
