@@ -4378,7 +4378,7 @@ class PosterGenerator:
         - valor_aposta: valor em reais
         - odd_total: produto das odds
         """
-        LARGURA = 800
+        LARGURA = 1500
         ALTURA_TOPO = 160
         ALTURA_POR_JOGO = 140
         PADDING = 20
