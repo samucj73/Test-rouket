@@ -4378,7 +4378,7 @@ class PosterGenerator:
         - valor_aposta: valor em reais
         - odd_total: produto das odds
         """
-        LARGURA = 1500
+        LARGURA = 800
         ALTURA_TOPO = 160
         ALTURA_POR_JOGO = 140
         PADDING = 20
@@ -4448,11 +4448,11 @@ class PosterGenerator:
             away_text = jogo.get('away', '')[:18]
 
             try:
-                draw.text((x0, y0 + 5), f"- {home_text}", font=FONTE_TIMES, fill=(0, 0, 0))
-                draw.text((x0, y0 + 35), f"- {away_text}", font=FONTE_TIMES, fill=(0, 0, 0))
+                draw.text((x0 + 35, y0 + 5), f"- {home_text}", font=FONTE_TIMES, fill=(0, 0, 0))
+                draw.text((x0 + 35, y0 + 35), f"- {away_text}", font=FONTE_TIMES, fill=(0, 0, 0))
             except Exception:
-                draw.text((x0, y0 + 5), home_text, font=FONTE_TIMES, fill=(0, 0, 0))
-                draw.text((x0, y0 + 35), away_text, font=FONTE_TIMES, fill=(0, 0, 0))
+                draw.text((x0 + 35, y0 + 5), home_text, font=FONTE_TIMES, fill=(0, 0, 0))
+                draw.text((x0 + 35, y0 + 35), away_text, font=FONTE_TIMES, fill=(0, 0, 0))
 
             # ===== MERCADO =====
             mercado_text = jogo.get('mercado', 'Mais de 1.5')
@@ -4479,10 +4479,13 @@ class PosterGenerator:
             except Exception:
                 draw.text((LARGURA - 100, y0 + 15), odd_text, font=FONTE_ODD, fill=(0, 150, 0))
 
-            # ===== ESCUDOS (pequenos, à esquerda do nome do time) =====
+            # ===== ESCUDOS (pequenos, à esquerda do nome do time - COM AFASTAMENTO) =====
             TAMANHO_ESCUDO = 24
             TAMANHO = 30
             y_escudos = y0 + 5
+            
+            # Posição do escudo: x0 - 45 (mais afastado da lateral)
+            escudo_x_pos = x0 - 45
 
             # Baixar escudos
             escudo_home_bytes = self.api_client.baixar_escudo_time(jogo.get('home', ''), jogo.get('escudo_home', ''))
@@ -4502,9 +4505,9 @@ class PosterGenerator:
                 except Exception:
                     escudo_away_img = None
 
-            # Desenhar escudos pequenos
-            self._desenhar_escudo_squircle(img, escudo_home_img, x0 - 35, y_escudos, TAMANHO, TAMANHO_ESCUDO, '', (0, 150, 0))
-            self._desenhar_escudo_squircle(img, escudo_away_img, x0 - 35, y_escudos + 30, TAMANHO, TAMANHO_ESCUDO, '', (0, 150, 0))
+            # Desenhar escudos pequenos (posição mais afastada da lateral)
+            self._desenhar_escudo_squircle(img, escudo_home_img, escudo_x_pos, y_escudos, TAMANHO, TAMANHO_ESCUDO, '', (0, 150, 0))
+            self._desenhar_escudo_squircle(img, escudo_away_img, escudo_x_pos, y_escudos + 30, TAMANHO, TAMANHO_ESCUDO, '', (0, 150, 0))
 
             y_pos += ALTURA_POR_JOGO
 
@@ -4548,7 +4551,7 @@ class PosterGenerator:
         img_rgb.save(buffer, format="PNG", optimize=True, quality=95)
         buffer.seek(0)
         return buffer
-  
+
     
 
 
