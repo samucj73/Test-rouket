@@ -4198,11 +4198,11 @@ class PosterGenerator:
         - valor_aposta: valor em reais
         - odd_total: produto das odds
         """
-    LARGURA = 1200
-    ALTURA_TOPO = 180
-    ALTURA_POR_JOGO = 200
-    PADDING = 40
-    RODAPE_ALTURA = 100
+        LARGURA = 1200
+        ALTURA_TOPO = 180
+        ALTURA_POR_JOGO = 200
+        PADDING = 40
+        RODAPE_ALTURA = 100
 
     jogos_count = len(jogos)
     altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + RODAPE_ALTURA + PADDING
@@ -4352,6 +4352,12 @@ class PosterGenerator:
     img_rgb.save(buffer, format="PNG", optimize=True, quality=95)
     buffer.seek(0)
     return buffer
+
+
+
+        
+    
+     
    
     
    
