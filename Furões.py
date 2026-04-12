@@ -4188,21 +4188,19 @@ class PosterGenerator:
         
         return buffer
 
-    # ============================================================
     # NOVO MÉTODO: PÔSTER PARA MÚLTIPLAS GREEN (ESTILO BET365)
-    # ============================================================
-    def gerar_poster_multipla_green_style(self, jogos: list, valor_aposta: float, odd_total: float) -> io.BytesIO:
-        """
-        Gera pôster no estilo da imagem enviada (casas de apostas).
-        - jogos: lista de dicts com 'home', 'away', 'mercado', 'odd', 'liga', 'escudo_home', 'escudo_away'
-        - valor_aposta: valor em reais
-        - odd_total: produto das odds
-        """
-        LARGURA = 1200
-        ALTURA_TOPO = 180
-        ALTURA_POR_JOGO = 200
-        PADDING = 40
-        RODAPE_ALTURA = 100
+def gerar_poster_multipla_green_style(self, jogos: list, valor_aposta: float, odd_total: float) -> io.BytesIO:
+    """
+    Gera pôster no estilo da imagem enviada (casas de apostas).
+    - jogos: lista de dicts com 'home', 'away', 'mercado', 'odd', 'liga', 'escudo_home', 'escudo_away'
+    - valor_aposta: valor em reais
+    - odd_total: produto das odds
+    """
+    LARGURA = 1200
+    ALTURA_TOPO = 180
+    ALTURA_POR_JOGO = 200
+    PADDING = 40
+    RODAPE_ALTURA = 100
 
     jogos_count = len(jogos)
     altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + RODAPE_ALTURA + PADDING
@@ -4352,6 +4350,7 @@ class PosterGenerator:
     img_rgb.save(buffer, format="PNG", optimize=True, quality=95)
     buffer.seek(0)
     return buffer
+    
 
 
 
