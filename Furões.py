@@ -229,73 +229,53 @@ def calcular_odd_total(multipla):
 
 #class FiltroPremium:
 class FiltroPremium:
-    """Filtro avançado baseado em análise real de 69 jogos - VERSÃO OTIMIZADA E MAIS PERMISSIVA"""
+    """Filtro avançado baseado em análise real - VERSÃO EQUILIBRADA"""
     
-    # Configurações baseadas nos dados reais - AJUSTADAS
+    # Configurações baseadas nos dados reais - MAIS PERMISSIVAS
     LIGAS_CONFIG = {
         "OVER_1.5": {
             "recomendadas": ["Premier League", "La Liga", "Ligue 1", "Bundesliga", "Eredivisie", "Serie A", "Brasileirão", "Championship"],
-            "evitar": ["Primeira Liga"],  # Só evitar Portugal mesmo
-            "taxa_acerto": {
-                "Premier League": 85.7,
-                "La Liga": 85.7,
-                "Ligue 1": 100,
-                "Eredivisie": 75,
-                "Bundesliga": 57.1,
-                "Serie A": 83.3,
-                "Brasileirão": 71.4,
-                "Championship": 50,  # Mediano, mas pode entrar
-            }
+            "evitar": ["Primeira Liga"],
+            "estimativa_minima": 1.8,  # Qualquer OVER 1.5 com estimativa ≥ 1.8
+            "confianca_minima": 60,    # Confiança mínima 60%
         },
         "OVER_2.5": {
             "recomendadas": ["Premier League", "La Liga", "Bundesliga", "Serie A"],
-            "evitar": [],
-            "estimativa_minima": 2.5,  # REDUZIDO de 2.8 para 2.5
-            "taxa_acerto": {
-                "Premier League": 100,
-                "La Liga": 100,
-                "Bundesliga": 50,
-                "Serie A": 100,
-            }
+            "estimativa_minima": 2.5,
+            "confianca_minima": 60,
         },
         "UNDER_2.5": {
             "recomendadas": ["Ligue 1", "Serie A", "Championship"],
-            "estimativa_maxima": 2.0,  # AUMENTADO de 1.85 para 2.0
-            "taxa_acerto": 100,
-        },
-        "BTTS_SIM": {
-            "recomendadas": ["La Liga", "Championship", "Brasileirão"],
-            "evitar": ["Premier League"],
-            "confianca_minima": 50,  # REDUZIDO de 55 para 50
-        },
-        "GOLS_HT": {
-            "evitar": ["TODAS"],
-            "bloquear_total": True
-        },
-        "FAVORITO": {
-            "evitar": ["La Liga", "Premier League"],
-            "confianca_minima": 50,
+            "estimativa_maxima": 2.2,
+            "confianca_minima": 60,
         }
     }
     
-    MAX_JOGOS_POR_DIA = 30  # AUMENTADO de 25 para 30
+    MAX_JOGOS_POR_DIA = 25
     
     @classmethod
     def aplicar_filtro_premium(cls, jogos, ativar=True):
         """
-        Aplica filtros baseados na análise real de 69 jogos - VERSÃO MAIS PERMISSIVA
+        Aplica filtros baseados na análise real - VERSÃO EQUILIBRADA
         """
         if not ativar:
             return jogos
         
+        # Primeiro, filtrar apenas jogos com confiança > 0 (remover "NÃO APOSTAR")
+        jogos_validos = [j for j in jogos if j.get('confianca', 0) > 0 or j.get('tendencia', '') != 'NÃO APOSTAR']
+        
+        if not jogos_validos:
+            st.warning("⚠️ Nenhum jogo com confiança válida encontrado")
+            return []
+        
         jogos_filtrados = []
         estatisticas = {
-            "total": len(jogos),
+            "total": len(jogos_validos),
             "por_liga": defaultdict(int),
             "motivos_descarte": defaultdict(int)
         }
         
-        for jogo in jogos:
+        for jogo in jogos_validos:
             liga = cls._extrair_liga(jogo.get('liga', ''))
             tendencia = jogo.get('tendencia', '')
             tendencia_am = jogo.get('tendencia_ambas_marcam', '')
@@ -306,122 +286,90 @@ class FiltroPremium:
             aprovado = True
             motivo = None
             
-            # ========== REGRA 0: BLOQUEAR GOLS_HT ==========
+            # ========== REGRA 0: PULAR "NÃO APOSTAR" ==========
+            if tendencia == "NÃO APOSTAR" or confianca == 0:
+                aprovado = False
+                motivo = "Jogo classificado como NÃO APOSTAR"
+                estatisticas["motivos_descarte"]["NÃO APOSTAR"] += 1
+                continue
+            
+            # ========== REGRA 1: BLOQUEAR GOLS_HT ==========
             if jogo.get('tendencia_ht') or 'HT' in tendencia:
                 aprovado = False
                 motivo = "GOLS HT bloqueado"
                 estatisticas["motivos_descarte"]["GOLS HT"] += 1
                 continue
             
-            # ========== REGRA 1: Primeira Liga = EVITAR OVER (33.3% acerto) ==========
-            if liga == "Primeira Liga" and 'OVER' in tendencia:
+            # ========== REGRA 2: Primeira Liga = EVITAR ==========
+            if liga == "Primeira Liga":
                 aprovado = False
-                motivo = "Primeira Liga: OVER tem apenas 33.3% acerto"
-                estatisticas["motivos_descarte"]["Primeira Liga OVER"] += 1
+                motivo = "Primeira Liga: baixa performance"
+                estatisticas["motivos_descarte"]["Primeira Liga"] += 1
+                continue
             
-            # ========== REGRA 2: OVER 2.5 precisa de estimativa ≥ 2.5 (AJUSTADO) ==========
-            elif tendencia == 'OVER 2.5' and estimativa < 2.5:
-                aprovado = False
-                motivo = f"OVER 2.5 com estimativa {estimativa:.2f} (mínimo 2.5)"
-                estatisticas["motivos_descarte"]["OVER 2.5 estimativa baixa"] += 1
-            
-            # ========== REGRA 3: UNDER 2.5 só com estimativa ≤ 2.0 (AJUSTADO) ==========
-            elif tendencia == 'UNDER 2.5' and estimativa > 2.0:
-                aprovado = False
-                motivo = f"UNDER 2.5 com estimativa {estimativa:.2f} (máximo 2.0)"
-                estatisticas["motivos_descarte"]["UNDER 2.5 estimativa alta"] += 1
-            
-            # ========== REGRA 4: Premier League OVER (sempre aprovado) ==========
-            elif liga == "Premier League" and 'OVER' in tendencia:
-                aprovado = True
-                jogo['qualidade_extra'] = "🔥 Premier League OVER (85.7% acerto)"
-            
-            # ========== REGRA 5: La Liga OVER (sempre aprovado) ==========
-            elif liga == "La Liga" and 'OVER' in tendencia:
-                aprovado = True
-                jogo['qualidade_extra'] = "🔥 La Liga OVER (85.7% acerto)"
-            
-            # ========== REGRA 6: Ligue 1 OVER (sempre aprovado) ==========
-            elif liga == "Ligue 1" and 'OVER' in tendencia:
-                aprovado = True
-                jogo['qualidade_extra'] = "💎 Ligue 1 OVER (100% acerto)"
-            
-            # ========== REGRA 7: Serie A OVER (aprovado com estimativa ≥ 1.8) ==========
-            elif liga == "Serie A" and 'OVER' in tendencia:
-                if estimativa >= 1.8:
+            # ========== REGRA 3: OVER 1.5 ==========
+            if tendencia == 'OVER 1.5':
+                if estimativa >= 1.8 and confianca >= 60:
                     aprovado = True
-                    jogo['qualidade_extra'] = "✅ Serie A OVER (83.3% acerto)"
+                    if liga in ["Premier League", "La Liga", "Ligue 1"]:
+                        jogo['qualidade_extra'] = f"🔥 {liga} OVER (alta qualidade)"
+                    elif liga == "Bundesliga":
+                        jogo['qualidade_extra'] = f"⚠️ Bundesliga OVER (cautela)"
+                    else:
+                        jogo['qualidade_extra'] = f"✅ {liga} OVER"
                 else:
                     aprovado = False
-                    motivo = f"Serie A OVER com estimativa baixa ({estimativa:.2f})"
-                    estatisticas["motivos_descarte"]["Serie A OVER estimativa baixa"] += 1
+                    motivo = f"OVER 1.5: estimativa {estimativa:.2f} ou confiança {confianca:.0f}% insuficiente"
+                    estatisticas["motivos_descarte"]["OVER 1.5 requisitos"] += 1
             
-            # ========== REGRA 8: Eredivisie OVER (aprovado com estimativa ≥ 2.0) ==========
-            elif liga == "Eredivisie" and 'OVER' in tendencia:
-                if estimativa >= 2.0:
+            # ========== REGRA 4: OVER 2.5 ==========
+            elif tendencia == 'OVER 2.5':
+                if estimativa >= 2.5 and confianca >= 60:
                     aprovado = True
-                    jogo['qualidade_extra'] = "⚡ Eredivisie OVER (75% acerto)"
+                    jogo['qualidade_extra'] = f"⚡ OVER 2.5 com {estimativa:.2f}g estimativa"
                 else:
                     aprovado = False
-                    motivo = f"Eredivisie OVER com estimativa baixa ({estimativa:.2f})"
-                    estatisticas["motivos_descarte"]["Eredivisie OVER estimativa baixa"] += 1
+                    motivo = f"OVER 2.5: estimativa {estimativa:.2f} (mínimo 2.5)"
+                    estatisticas["motivos_descarte"]["OVER 2.5 requisitos"] += 1
             
-            # ========== REGRA 9: Brasileirão OVER (aprovado com estimativa ≥ 1.8) ==========
-            elif liga == "Brasileirão" and 'OVER' in tendencia:
-                if estimativa >= 1.8:
+            # ========== REGRA 5: UNDER 2.5 ==========
+            elif tendencia == 'UNDER 2.5':
+                if estimativa <= 2.2 and confianca >= 60:
                     aprovado = True
-                    jogo['qualidade_extra'] = "🇧🇷 Brasileirão OVER (71.4% acerto)"
+                    jogo['qualidade_extra'] = f"🛡️ UNDER 2.5 com {estimativa:.2f}g estimativa"
                 else:
                     aprovado = False
-                    motivo = "Brasileirão OVER requer estimativa ≥ 1.8"
-                    estatisticas["motivos_descarte"]["Brasileirão OVER"] += 1
+                    motivo = f"UNDER 2.5: estimativa {estimativa:.2f} (máximo 2.2)"
+                    estatisticas["motivos_descarte"]["UNDER 2.5 requisitos"] += 1
             
-            # ========== REGRA 10: Bundesliga OVER (aprovado com estimativa ≥ 2.2) ==========
-            elif liga == "Bundesliga" and 'OVER' in tendencia:
-                if estimativa >= 2.2:
-                    aprovado = True
-                    jogo['qualidade_extra'] = "⚠️ Bundesliga OVER (57.1% acerto - cautela)"
-                else:
-                    aprovado = False
-                    motivo = f"Bundesliga OVER com estimativa baixa ({estimativa:.2f})"
-                    estatisticas["motivos_descarte"]["Bundesliga OVER"] += 1
-            
-            # ========== REGRA 11: Championship OVER (aprovado com estimativa ≥ 2.0) ==========
-            elif liga == "Championship" and 'OVER' in tendencia:
-                if estimativa >= 2.0:
-                    aprovado = True
-                    jogo['qualidade_extra'] = "📊 Championship OVER (50% acerto - risco moderado)"
-                else:
-                    aprovado = False
-                    motivo = f"Championship OVER com estimativa baixa ({estimativa:.2f})"
-                    estatisticas["motivos_descarte"]["Championship OVER"] += 1
-            
-            # ========== REGRA 12: UNDER 2.5 em qualquer liga com estimativa ≤ 2.0 ==========
-            elif tendencia == 'UNDER 2.5' and estimativa <= 2.0:
-                aprovado = True
-                jogo['qualidade_extra'] = f"🛡️ UNDER 2.5 com estimativa {estimativa:.2f}g"
-            
-            # ========== REGRA 13: BTTS SIM (apenas Premier League bloqueada) ==========
+            # ========== REGRA 6: BTTS SIM ==========
             elif tendencia_am == 'SIM':
                 if liga == "Premier League":
                     aprovado = False
                     motivo = "Premier League BTTS SIM (28.6% acerto)"
-                    estatisticas["motivos_descarte"]["Premier League BTTS SIM"] += 1
+                    estatisticas["motivos_descarte"]["Premier League BTTS"] += 1
+                elif confianca_am >= 50:
+                    aprovado = True
+                    jogo['qualidade_extra'] = f"BTTS SIM com {confianca_am:.0f}% confiança"
                 else:
-                    if confianca_am >= 50:
-                        aprovado = True
-                        jogo['qualidade_extra'] = f"BTTS SIM com {confianca_am:.0f}% confiança"
-                    else:
-                        aprovado = False
-                        motivo = f"BTTS SIM com confiança baixa ({confianca_am:.0f}%)"
-                        estatisticas["motivos_descarte"]["BTTS SIM confiança baixa"] += 1
+                    aprovado = False
+                    motivo = f"BTTS SIM confiança baixa ({confianca_am:.0f}%)"
+                    estatisticas["motivos_descarte"]["BTTS confiança baixa"] += 1
+            
+            # ========== REGRA 7: BTTS NÃO ==========
+            elif tendencia_am == 'NÃO':
+                if confianca_am >= 50:
+                    aprovado = True
+                    jogo['qualidade_extra'] = f"BTTS NÃO com {confianca_am:.0f}% confiança"
+                else:
+                    aprovado = False
+                    motivo = f"BTTS NÃO confiança baixa ({confianca_am:.0f}%)"
+                    estatisticas["motivos_descarte"]["BTTS confiança baixa"] += 1
             
             # ========== APROVAÇÃO ==========
             if aprovado:
                 # Calcular score de qualidade
-                score = 0
-                if 'OVER' in tendencia:
-                    score += 2
+                score = 2  # Base
                 if confianca >= 75:
                     score += 1
                 if estimativa >= 2.5:
@@ -440,11 +388,11 @@ class FiltroPremium:
         
         # Exibir estatísticas do filtro
         if jogos_filtrados:
-            st.success(f"🎯 Filtro Premium: {len(jogos_filtrados)} jogos aprovados de {len(jogos)}")
+            st.success(f"🎯 Filtro Premium: {len(jogos_filtrados)} jogos aprovados de {len(jogos_validos)}")
             
             if estatisticas["por_liga"]:
                 st.markdown("**📊 Jogos aprovados por liga:**")
-                for liga, qtd in sorted(estatisticas["por_liga"].items(), key=lambda x: x[1], reverse=True)[:5]:
+                for liga, qtd in sorted(estatisticas["por_liga"].items(), key=lambda x: x[1], reverse=True):
                     st.write(f"   • {liga}: {qtd} jogos")
             
             if estatisticas["motivos_descarte"]:
@@ -452,7 +400,13 @@ class FiltroPremium:
                 for motivo, qtd in sorted(estatisticas["motivos_descarte"].items(), key=lambda x: x[1], reverse=True)[:5]:
                     st.write(f"   • {motivo}: {qtd} jogos")
         else:
-            st.warning(f"⚠️ Nenhum jogo aprovado. {len(jogos)} jogos analisados.")
+            st.warning(f"⚠️ Nenhum jogo aprovado. {len(jogos_validos)} jogos analisados.")
+            
+            # Mostrar sugestões
+            st.markdown("**💡 Sugestões para ajuste:**")
+            st.markdown("- Reduza a confiança mínima para 50%")
+            st.markdown("- Aumente a estimativa máxima para UNDER para 2.5")
+            st.markdown("- Desative o filtro premium para testar todos os jogos")
         
         return jogos_filtrados
     
@@ -469,7 +423,8 @@ class FiltroPremium:
             "Eredivisie": "Eredivisie",
             "Championship": "Championship",
             "Primeira Liga": "Primeira Liga",
-            "Campeonato Brasileiro": "Brasileirão"
+            "Campeonato Brasileiro": "Brasileirão",
+            "BSA": "Brasileirão"
         }
         for key, value in ligas_map.items():
             if key in liga_nome:
@@ -485,6 +440,7 @@ class FiltroPremium:
             "reducao_percentual": round((1 - len(jogos_filtrados) / max(len(jogos_originais), 1)) * 100, 1),
             "maximo_permitido": cls.MAX_JOGOS_POR_DIA
         }
+
     
     
     @classmethod
