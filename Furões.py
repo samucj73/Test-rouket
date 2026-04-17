@@ -5189,19 +5189,23 @@ def render_tab_multiplas_individuais(sistema):
     if not hasattr(sistema, 'gerenciador_individuais'):
         sistema.gerenciador_individuais = GerenciadorMultiplasIndividuais(sistema)
     
-    # Seleção de data
+    # Seleção de data - COM KEY ÚNICA
     data_selecionada = st.date_input(
         "📅 Data da partida",
         value=datetime.today(),
         format="DD/MM/YYYY",
-        key="data_individuais"
+        key="data_individuais_unicas"
     )
     
     # Configurações
     st.markdown("### ⚙️ Configurações")
     col1, col2 = st.columns(2)
     with col1:
-        todas_ligas = st.checkbox("🌍 Todas as ligas", value=True, key="todas_ligas_ind")
+        todas_ligas = st.checkbox(
+            "🌍 Todas as ligas", 
+            value=True, 
+            key="todas_ligas_ind_unicas"
+        )
     
     ligas_selecionadas = []
     if not todas_ligas:
@@ -5209,17 +5213,19 @@ def render_tab_multiplas_individuais(sistema):
             "📌 Selecionar ligas",
             options=list(ConfigManager.LIGA_DICT.keys()),
             default=["Premier League (Inglaterra)", "Bundesliga", "La Liga"],
-            key="ligas_ind"
+            key="ligas_ind_unicas"
         )
     
     with col2:
         filtro_premium = st.checkbox(
             "🎯 Ativar Filtro Premium",
             value=True,
-            help="Apenas partidas com alta qualidade (baseado em análise real de performance)"
+            help="Apenas partidas com alta qualidade (baseado em análise real de performance)",
+            key="filtro_premium_ind_unicas"
         )
     
-    if st.button("🔍 BUSCAR PARTIDAS", type="primary", use_container_width=True):
+    # Botão de busca - COM KEY ÚNICA
+    if st.button("🔍 BUSCAR PARTIDAS", type="primary", use_container_width=True, key="buscar_partidas_ind_unicas"):
         if not todas_ligas and not ligas_selecionadas:
             st.error("❌ Selecione pelo menos uma liga")
             return
@@ -5299,6 +5305,7 @@ def render_tab_multiplas_individuais(sistema):
             # Armazenar na sessão
             st.session_state['jogos_individuais'] = jogos_filtrados
             st.session_state['data_individuais'] = data_br
+            st.rerun()  # Adicionado para recarregar e exibir os jogos
     
     # Exibir jogos encontrados
     if 'jogos_individuais' in st.session_state and st.session_state['jogos_individuais']:
@@ -5308,7 +5315,11 @@ def render_tab_multiplas_individuais(sistema):
         st.markdown(f"### 📋 PARTIDAS DISPONÍVEIS - {data_br}")
         
         for idx, jogo_dict in enumerate(jogos):
-            with st.expander(f"⚽ {jogo_dict.get('home', '')} vs {jogo_dict.get('away', '')} - {jogo_dict.get('liga', '')}"):
+            # Usar ID do jogo como parte da chave para garantir unicidade
+            jogo_id = jogo_dict.get('id', idx)
+            expander_key = f"exp_ind_{jogo_id}_{idx}"
+            
+            with st.expander(f"⚽ {jogo_dict.get('home', '')} vs {jogo_dict.get('away', '')} - {jogo_dict.get('liga', '')}", expanded=False):
                 
                 # Extrair dados dos mercados
                 tendencia_ou = jogo_dict.get("tendencia", "OVER 1.5")
@@ -5332,7 +5343,7 @@ def render_tab_multiplas_individuais(sistema):
                 with col1:
                     selecionar_ou = st.checkbox(
                         f"⚽ OVER/UNDER: {tendencia_ou}",
-                        key=f"ou_{idx}",
+                        key=f"ou_ind_{jogo_id}_{idx}",
                         value=True
                     )
                     st.caption(f"Conf: {confianca_ou:.0f}% | Est: {estimativa:.2f} | Odd: {odd_ou:.2f}")
@@ -5341,7 +5352,7 @@ def render_tab_multiplas_individuais(sistema):
                     favorito_text = jogo_dict.get("home") if favorito == "home" else jogo_dict.get("away") if favorito == "away" else "EMPATE"
                     selecionar_fav = st.checkbox(
                         f"🏆 FAVORITO: {favorito_text}",
-                        key=f"fav_{idx}",
+                        key=f"fav_ind_{jogo_id}_{idx}",
                         value=True
                     )
                     st.caption(f"Conf: {confianca_fav:.0f}% | Odd: {odd_fav:.2f}")
@@ -5349,13 +5360,14 @@ def render_tab_multiplas_individuais(sistema):
                 with col3:
                     selecionar_am = st.checkbox(
                         f"🤝 AMBAS MARCAM: {tendencia_am}",
-                        key=f"am_{idx}",
+                        key=f"am_ind_{jogo_id}_{idx}",
                         value=True
                     )
                     st.caption(f"Conf: {confianca_am:.0f}% | Odd: {odd_am:.2f}")
                 
-                # Botão para gerar múltipla individual
-                if st.button(f"🎯 GERAR MÚLTIPLA INDIVIDUAL", key=f"btn_{idx}", use_container_width=True):
+                # Botão para gerar múltipla individual - KEY ÚNICA
+                btn_key = f"btn_ind_{jogo_id}_{idx}"
+                if st.button(f"🎯 GERAR MÚLTIPLA INDIVIDUAL", key=btn_key, use_container_width=True):
                     mercados = {}
                     
                     if selecionar_ou:
@@ -5436,7 +5448,8 @@ def render_tab_multiplas_individuais(sistema):
     st.subheader("📊 CONFERÊNCIA DE MÚLTIPLAS INDIVIDUAIS")
     st.caption("Confere os resultados das múltiplas individuais após as partidas serem encerradas.")
     
-    if st.button("🔄 CONFERIR MÚLTIPLAS PENDENTES", use_container_width=True):
+    # Botão de conferência - KEY ÚNICA
+    if st.button("🔄 CONFERIR MÚLTIPLAS PENDENTES", use_container_width=True, key="conferir_ind_unicas"):
         with st.spinner("Conferindo múltiplas individuais pendentes..."):
             resultados = sistema.gerenciador_individuais.conferir_multiplas_pendentes(sistema.api_client)
             
