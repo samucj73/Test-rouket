@@ -4762,7 +4762,7 @@ def gerar_poster_multipla_individual(jogo: dict, mercados: dict, titulo: str = "
     """Gera pôster profissional para múltipla individual (3 mercados) - VERSÃO CORRIGIDA COM ESCUDOS"""
     
     LARGURA = 2000
-    ALTURA = 1600
+    ALTURA = 1200
     PADDING = 80
     
     img = Image.new("RGBA", (LARGURA, ALTURA), (10, 20, 30, 255))
@@ -4973,12 +4973,12 @@ def gerar_poster_multipla_individual(jogo: dict, mercados: dict, titulo: str = "
     y_mercados = y_escudos + TAMANHO_QUADRADO + 130
     
     # Linha separadora
-    draw.line([(PADDING + 80, y_mercados - 15), (LARGURA - PADDING - 80, y_mercados - 15)], 
+    draw.line([(PADDING + 90, y_mercados - 15), (LARGURA - PADDING - 80, y_mercados - 15)], 
               fill=(100, 130, 160), width=3)
     
     # Título dos mercados
     try:
-        draw.text((PADDING + 80, y_mercados), "📊 MERCADOS DISPONÍVEIS", font=FONTE_INFO, fill=(255, 215, 0))
+        draw.text((PADDING + 80, y_mercados), " MERCADOS DISPONÍVEIS", font=FONTE_INFO, fill=(255, 215, 0))
     except:
         draw.text((PADDING + 80, y_mercados), "MERCADOS DISPONÍVEIS", font=FONTE_INFO, fill=(255, 215, 0))
     
@@ -5011,15 +5011,15 @@ def gerar_poster_multipla_individual(jogo: dict, mercados: dict, titulo: str = "
                                radius=20, fill=(25, 35, 45), outline=cor, width=3)
         
         # Esquerda: Ícone e Título
-        draw.text((PADDING + 120, y_atual + 30), icone, font=FONTE_INFO, fill=cor)
-        draw.text((PADDING + 170, y_atual + 30), "OVER / UNDER", font=FONTE_MERCADO_TITULO, fill=cor)
+        draw.text((PADDING + 120, y_atual + 60), icone, font=FONTE_INFO, fill=cor)
+        draw.text((PADDING + 170, y_atual + 60), "OVER / UNDER", font=FONTE_MERCADO_TITULO, fill=cor)
         
         # Tendência
         draw.text((PADDING + 120, y_atual + 80), tendencia, font=FONTE_MERCADO_VALOR, fill=(255, 255, 255))
         
         # Direita: Odd (verde grande)
         odd_text = f"{odd:.2f}"
-        draw.text((LARGURA - PADDING - 140, y_atual + 30), odd_text, font=FONTE_ODD, fill=(100, 255, 100))
+        draw.text((LARGURA - PADDING - 140, y_atual + 60), odd_text, font=FONTE_ODD, fill=(100, 255, 100))
         
         # Confiança
         conf_text = f"Conf: {confianca:.0f}%"
