@@ -5489,7 +5489,9 @@ def render_tab_multiplas_individuais(sistema):
                     poster = gerar_poster_multipla_individual(
                         multipla["jogo"],
                         mercados,
-                        titulo=f"🎯 MÚLTIPLA INDIVIDUAL - {data_br}"
+                        titulo=f"🎯 MÚLTIPLA INDIVIDUAL - {data_br}",
+                        api_client=sistema.api_client  # <-- ADICIONE ESTE PARÂMETRO
+                        
                     )
                     
                     caption = f"<b>🎯 MÚLTIPLA INDIVIDUAL - {data_br}</b>\n\n"
