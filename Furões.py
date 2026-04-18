@@ -4972,14 +4972,14 @@ def gerar_poster_multipla_individual(jogo: dict, mercados: dict, titulo: str = "
         # Confiança
         confianca = mercado_data.get("confianca", 0)
         conf_text = f"Confiança: {confianca:.0f}%"
-        draw.text((LARGURA - PADDING - 300, y_pos + 90), conf_text, font=FONTE_CONFIANCA, fill=(150, 200, 255))
+        draw.text((LARGURA - PADDING - 700, y_pos + 90), conf_text, font=FONTE_CONFIANCA, fill=(150, 200, 255))
         
         # Estimativa (apenas para over_under)
         if mercado_key == "over_under":
             estimativa = mercado_data.get("estimativa", 0)
             if estimativa > 0:
                 est_text = f"Estimativa: {estimativa:.2f} gols"
-                draw.text((LARGURA - PADDING - 300, y_pos + 60), est_text, font=FONTE_CONFIANCA, fill=(200, 200, 200))
+                draw.text((LARGURA - PADDING - 700, y_pos + 60), est_text, font=FONTE_CONFIANCA, fill=(200, 200, 200))
     
     # Desenhar cards na ordem correta
     if "over_under" in mercados:
