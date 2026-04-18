@@ -4979,7 +4979,7 @@ def gerar_poster_multipla_individual(jogo: dict, mercados: dict, titulo: str = "
             estimativa = mercado_data.get("estimativa", 0)
             if estimativa > 0:
                 est_text = f"Estimativa: {estimativa:.2f} gols"
-                draw.text((LARGURA - PADDING - 780, y_pos + 80), est_text, font=FONTE_CONFIANCA, fill=(200, 200, 200))
+                draw.text((LARGURA - PADDING - 780, y_pos + 40), est_text, font=FONTE_CONFIANCA, fill=(200, 200, 200))
     
     # Desenhar cards na ordem correta
     if "over_under" in mercados:
