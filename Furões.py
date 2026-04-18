@@ -5017,39 +5017,53 @@ def gerar_poster_multipla_individual(jogo: dict, mercados: dict, titulo: str = "
 
     
 
+#def gerar_poster_resultado_individual(multipla: dict, data_br: str) -> io.BytesIO:
 def gerar_poster_resultado_individual(multipla: dict, data_br: str) -> io.BytesIO:
-    """Gera pôster de resultado para múltipla individual"""
+    """Gera pôster de resultado para múltipla individual - VERSÃO CORRIGIDA COM TODAS AS INFORMAÇÕES"""
     
     LARGURA = 2000
-    ALTURA = 1200
+    ALTURA = 1400
     PADDING = 80
     
     img = Image.new("RGBA", (LARGURA, ALTURA), (10, 20, 30, 255))
     draw = ImageDraw.Draw(img)
     
-    FONTE_TITULO = PosterGenerator.criar_fonte(70)
+    # Fontes
+    FONTE_TITULO = PosterGenerator.criar_fonte(75)
     FONTE_SUBTITULO = PosterGenerator.criar_fonte(50)
     FONTE_TIMES = PosterGenerator.criar_fonte(60)
-    FONTE_MERCADO = PosterGenerator.criar_fonte(45)
+    FONTE_PLACAR = PosterGenerator.criar_fonte(85)
+    FONTE_MERCADO = PosterGenerator.criar_fonte(48)
     FONTE_RESULTADO = PosterGenerator.criar_fonte(55)
-    FONTE_DETALHES = PosterGenerator.criar_fonte(40)
+    FONTE_INFO = PosterGenerator.criar_fonte(42)
+    FONTE_DETALHES = PosterGenerator.criar_fonte(38)
     
+    # Extrair dados da múltipla
     jogo = multipla.get("jogo", {})
     resultados = multipla.get("resultados", {})
     acertada = multipla.get("acertada", False)
+    
+    # Tentar obter os gols de diferentes lugares
     home_goals = multipla.get("home_goals", "?")
     away_goals = multipla.get("away_goals", "?")
     
-    # Título
-    titulo = f"📊 RESULTADO MÚLTIPLA INDIVIDUAL - {data_br}"
-    try:
-        titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
-        titulo_w = titulo_bbox[2] - titulo_bbox[0]
-        draw.text(((LARGURA - titulo_w) // 2, 50), titulo, font=FONTE_TITULO, fill=(255, 255, 255))
-    except:
-        draw.text((LARGURA//2 - 300, 50), titulo, font=FONTE_TITULO, fill=(255, 255, 255))
+    # Se não encontrou, tentar nos resultados
+    if home_goals == "?" and "home_goals" in resultados:
+        home_goals = resultados.get("home_goals", "?")
+    if away_goals == "?" and "away_goals" in resultados:
+        away_goals = resultados.get("away_goals", "?")
     
-    # Badge de acerto/erro
+    home_nome = jogo.get("home", "TIME CASA")
+    away_nome = jogo.get("away", "TIME FORA")
+    liga_nome = jogo.get("liga", "LIGA")
+    
+    # ===== CABEÇALHO =====
+    titulo = f"📊 RESULTADO MÚLTIPLA INDIVIDUAL - {data_br}"
+    titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
+    titulo_w = titulo_bbox[2] - titulo_bbox[0]
+    draw.text(((LARGURA - titulo_w) // 2, 45), titulo, font=FONTE_TITULO, fill=(255, 255, 255))
+    
+    # ===== BADGE DE ACERTO/ERRO =====
     if acertada:
         cor_badge = (46, 204, 113)
         resultado_text = "✅ ACERTOU!"
@@ -5059,89 +5073,147 @@ def gerar_poster_resultado_individual(multipla: dict, data_br: str) -> io.BytesI
         resultado_text = "❌ ERROU!"
         badge_bg = (70, 40, 40)
     
-    badge_width = 350
-    badge_height = 80
+    badge_width = 400
+    badge_height = 90
     badge_x = (LARGURA - badge_width) // 2
-    badge_y = 140
+    badge_y = 120
     
     draw.rounded_rectangle([badge_x, badge_y, badge_x + badge_width, badge_y + badge_height], 
-                           radius=25, fill=badge_bg, outline=cor_badge, width=4)
+                           radius=30, fill=badge_bg, outline=cor_badge, width=4)
     
-    try:
-        badge_bbox = draw.textbbox((0, 0), resultado_text, font=FONTE_TITULO)
-        badge_w = badge_bbox[2] - badge_bbox[0]
-        badge_x_center = badge_x + (badge_width - badge_w) // 2
-        badge_y_center = badge_y + (badge_height - 40) // 2
-        draw.text((badge_x_center, badge_y_center), resultado_text, font=FONTE_TITULO, fill=cor_badge)
-    except:
-        draw.text((badge_x + 100, badge_y + 25), resultado_text, font=FONTE_TITULO, fill=cor_badge)
+    badge_bbox = draw.textbbox((0, 0), resultado_text, font=FONTE_TITULO)
+    badge_w = badge_bbox[2] - badge_bbox[0]
+    badge_x_center = badge_x + (badge_width - badge_w) // 2
+    badge_y_center = badge_y + (badge_height - 50) // 2
+    draw.text((badge_x_center, badge_y_center), resultado_text, font=FONTE_TITULO, fill=cor_badge)
     
-    # Placar
-    placar_text = f"{jogo.get('home', '')} {home_goals} - {away_goals} {jogo.get('away', '')}"
-    try:
-        placar_bbox = draw.textbbox((0, 0), placar_text, font=FONTE_TIMES)
-        placar_w = placar_bbox[2] - placar_bbox[0]
-        draw.text(((LARGURA - placar_w) // 2, 250), placar_text, font=FONTE_TIMES, fill=(255, 255, 255))
-    except:
-        draw.text((LARGURA//2 - 300, 250), placar_text, font=FONTE_TIMES, fill=(255, 255, 255))
+    # ===== PLACAR =====
+    placar_text = f"{home_nome} {home_goals} - {away_goals} {away_nome}"
+    placar_bbox = draw.textbbox((0, 0), placar_text, font=FONTE_PLACAR)
+    placar_w = placar_bbox[2] - placar_bbox[0]
+    draw.text(((LARGURA - placar_w) // 2, 250), placar_text, font=FONTE_PLACAR, fill=(255, 255, 255))
     
-    # Liga
-    liga_text = jogo.get("liga", "").upper()
-    try:
-        draw.text(((LARGURA - 200) // 2, 320), liga_text, font=FONTE_SUBTITULO, fill=(200, 200, 200))
-    except:
-        draw.text((LARGURA//2 - 150, 320), liga_text, font=FONTE_SUBTITULO, fill=(200, 200, 200))
+    # ===== LIGA =====
+    liga_text = liga_nome.upper()
+    liga_bbox = draw.textbbox((0, 0), liga_text, font=FONTE_SUBTITULO)
+    liga_w = liga_bbox[2] - liga_bbox[0]
+    draw.text(((LARGURA - liga_w) // 2, 340), liga_text, font=FONTE_SUBTITULO, fill=(200, 200, 200))
     
-    # Linha
-    draw.line([(LARGURA//4, 380), (3*LARGURA//4, 380)], fill=(255, 215, 0), width=4)
+    # Linha decorativa
+    draw.line([(LARGURA//4, 400), (3*LARGURA//4, 400)], fill=(255, 215, 0), width=4)
     
-    # Resultados dos mercados
-    y_atual = 430
+    # ===== RESULTADOS DOS MERCADOS =====
+    y_atual = 460
+    CARD_ALTURA = 130
     
-    mercados_map = {
-        "over_under": {"nome": "OVER / UNDER", "icone": "⚽", "cor": (255, 215, 0)},
-        "favorito": {"nome": "FAVORITO", "icone": "🏆", "cor": (255, 87, 34)},
-        "ambas_marcam": {"nome": "AMBAS MARCAM", "icone": "🤝", "cor": (155, 89, 182)}
+    cores_mercados = {
+        "over_under": (255, 215, 0),
+        "favorito": (255, 87, 34),
+        "ambas_marcam": (155, 89, 182)
     }
     
-    for mercado_key, info in mercados_map.items():
-        if mercado_key in resultados:
-            resultado = resultados[mercado_key]
-            cor_mercado = info["cor"]
-            
-            # Fundo do card
-            draw.rounded_rectangle([PADDING + 80, y_atual, LARGURA - PADDING - 80, y_atual + 100], 
-                                   radius=20, fill=(25, 35, 45), outline=cor_mercado, width=3)
-            
-            # Ícone e nome
-            try:
-                draw.text((PADDING + 120, y_atual + 30), info["icone"], font=FONTE_MERCADO, fill=cor_mercado)
-                draw.text((PADDING + 170, y_atual + 30), info["nome"], font=FONTE_MERCADO, fill=cor_mercado)
-            except:
-                draw.text((PADDING + 120, y_atual + 30), info["nome"], font=FONTE_MERCADO, fill=cor_mercado)
-            
-            # Resultado
-            resultado_emoji = "✅" if resultado == "GREEN" else "❌"
-            cor_resultado = (46, 204, 113) if resultado == "GREEN" else (231, 76, 60)
-            
-            try:
-                draw.text((LARGURA - PADDING - 150, y_atual + 35), f"{resultado_emoji} {resultado}", 
-                         font=FONTE_RESULTADO, fill=cor_resultado)
-            except:
-                draw.text((LARGURA - PADDING - 150, y_atual + 35), resultado, 
-                         font=FONTE_RESULTADO, fill=cor_resultado)
-            
-            y_atual += 120
+    icones = {
+        "over_under": "⚽",
+        "favorito": "🏆",
+        "ambas_marcam": "🤝"
+    }
     
-    # Rodapé
+    titulos = {
+        "over_under": "OVER / UNDER",
+        "favorito": "FAVORITO",
+        "ambas_marcam": "AMBAS MARCAM"
+    }
+    
+    # Verificar cada mercado
+    mercados_para_mostrar = []
+    
+    # OVER/UNDER
+    if multipla.get("mercado_over_under") or "over_under" in resultados:
+        mercado_data = multipla.get("mercado_over_under", {})
+        resultado = resultados.get("over_under", "N/A")
+        mercados_para_mostrar.append(("over_under", mercado_data, resultado))
+    
+    # FAVORITO
+    if multipla.get("mercado_favorito") or "favorito" in resultados:
+        mercado_data = multipla.get("mercado_favorito", {})
+        resultado = resultados.get("favorito", "N/A")
+        mercados_para_mostrar.append(("favorito", mercado_data, resultado))
+    
+    # AMBAS MARCAM
+    if multipla.get("mercado_ambas_marcam") or "ambas_marcam" in resultados:
+        mercado_data = multipla.get("mercado_ambas_marcam", {})
+        resultado = resultados.get("ambas_marcam", "N/A")
+        mercados_para_mostrar.append(("ambas_marcam", mercado_data, resultado))
+    
+    # Desenhar cards para cada mercado
+    for idx, (mercado_key, mercado_data, resultado) in enumerate(mercados_para_mostrar):
+        cor = cores_mercados.get(mercado_key, (200, 200, 200))
+        icone_text = icones.get(mercado_key, "📊")
+        titulo_text = titulos.get(mercado_key, mercado_key.upper())
+        
+        y_card = y_atual + idx * (CARD_ALTURA + 15)
+        
+        # Fundo do card
+        draw.rounded_rectangle([PADDING + 80, y_card, LARGURA - PADDING - 80, y_card + CARD_ALTURA], 
+                               radius=20, fill=(25, 35, 45), outline=cor, width=3)
+        
+        # Linha vertical separadora
+        linha_x = LARGURA - PADDING - 350
+        draw.line([(linha_x, y_card + 15), (linha_x, y_card + CARD_ALTURA - 15)], 
+                  fill=(60, 70, 85), width=2)
+        
+        # ===== LADO ESQUERDO =====
+        draw.text((PADDING + 120, y_card + 35), icone_text, font=FONTE_INFO, fill=cor)
+        draw.text((PADDING + 180, y_card + 35), titulo_text, font=FONTE_MERCADO, fill=cor)
+        
+        # Valor do mercado
+        if mercado_key == "over_under":
+            valor = mercado_data.get("tendencia", "OVER 1.5")
+        elif mercado_key == "favorito":
+            favorito = mercado_data.get("favorito", "home")
+            valor = home_nome if favorito == "home" else away_nome if favorito == "away" else "EMPATE"
+        else:
+            valor = mercado_data.get("tendencia", "SIM")
+        
+        draw.text((PADDING + 120, y_card + 85), valor, font=FONTE_MERCADO, fill=(255, 255, 255))
+        
+        # ===== LADO DIREITO =====
+        POS_X_DIREITA = LARGURA - PADDING - 330
+        
+        # Odd
+        odd = mercado_data.get("odd", 1.50)
+        odd_text = f"{odd:.2f}"
+        draw.text((POS_X_DIREITA, y_card + 35), odd_text, font=FONTE_INFO, fill=(100, 255, 100))
+        
+        # Resultado (GREEN ou RED)
+        resultado_emoji = "✅" if resultado == "GREEN" else "❌" if resultado == "RED" else "⏳"
+        cor_resultado = (46, 204, 113) if resultado == "GREEN" else (231, 76, 60) if resultado == "RED" else (149, 165, 166)
+        
+        resultado_texto = f"{resultado_emoji} {resultado}"
+        draw.text((POS_X_DIREITA, y_card + 85), resultado_texto, font=FONTE_RESULTADO, fill=cor_resultado)
+        
+        # Confiança (se disponível)
+        confianca = mercado_data.get("confianca", 0)
+        if confianca > 0:
+            conf_text = f"Conf: {confianca:.0f}%"
+            draw.text((POS_X_DIREITA, y_card + 60), conf_text, font=FONTE_DETALHES, fill=(150, 200, 255))
+    
+    # Se não há mercados para mostrar, exibir mensagem
+    if not mercados_para_mostrar:
+        draw.text((LARGURA//2, y_atual + 100), "Nenhum mercado disponível para conferência", 
+                 font=FONTE_INFO, fill=(200, 200, 200), anchor="mm")
+    
+    # ===== RODAPÉ =====
+    rodape_y = ALTURA - 80
+    draw.line([(PADDING + 80, rodape_y - 30), (LARGURA - PADDING - 80, rodape_y - 30)], 
+              fill=(60, 70, 85), width=2)
+    
     rodape_text = f"CONFERIDO EM {datetime.now().strftime('%d/%m/%Y %H:%M')} | ELITE MASTER 3.0"
-    try:
-        rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_DETALHES)
-        rodape_w = rodape_bbox[2] - rodape_bbox[0]
-        draw.text(((LARGURA - rodape_w) // 2, ALTURA - 70), rodape_text, font=FONTE_DETALHES, fill=(100, 130, 160))
-    except:
-        draw.text((LARGURA//2 - 350, ALTURA - 70), rodape_text, font=FONTE_DETALHES, fill=(100, 130, 160))
+    rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_DETALHES)
+    rodape_w = rodape_bbox[2] - rodape_bbox[0]
+    draw.text(((LARGURA - rodape_w) // 2, rodape_y), rodape_text, font=FONTE_DETALHES, fill=(100, 130, 160))
     
+    # Converter para RGB e salvar
     img_rgb = Image.new("RGB", img.size, (10, 20, 30))
     img_rgb.paste(img, (0, 0), img)
     
@@ -5150,6 +5222,7 @@ def gerar_poster_resultado_individual(multipla: dict, data_br: str) -> io.BytesI
     buffer.seek(0)
     
     return buffer
+    
 
 
 def render_tab_multiplas_individuais(sistema):
