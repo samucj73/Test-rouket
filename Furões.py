@@ -4762,7 +4762,7 @@ def gerar_poster_multipla_individual(jogo: dict, mercados: dict, titulo: str = "
     """Gera pôster profissional para múltipla individual - VERSÃO COMPLETAMENTE REESTRUTURADA"""
     
     LARGURA = 2000
-    ALTURA = 1650
+    ALTURA = 1350
     PADDING = 80
     
     img = Image.new("RGBA", (LARGURA, ALTURA), (10, 20, 30, 255))
@@ -4907,7 +4907,7 @@ def gerar_poster_multipla_individual(jogo: dict, mercados: dict, titulo: str = "
     draw.text((PADDING + 80, y_mercados), "📊 MERCADOS DISPONÍVEIS", font=FONTE_MERCADO_TITULO, fill=(255, 215, 0))
     
     y_atual = y_mercados + 60
-    CARD_ALTURA = 140
+    CARD_ALTURA = 150
     LARGURA_CARD = LARGURA - 2 * PADDING - 160
     
     # Cores por mercado
@@ -4918,9 +4918,9 @@ def gerar_poster_multipla_individual(jogo: dict, mercados: dict, titulo: str = "
     }
     
     icones = {
-        "over_under": "⚽",
-        "favorito": "🏆",
-        "ambas_marcam": "🤝"
+        "over_under": "",
+        "favorito": "",
+        "ambas_marcam": ""
     }
     
     titulos = {
@@ -4967,19 +4967,19 @@ def gerar_poster_multipla_individual(jogo: dict, mercados: dict, titulo: str = "
         # Odd (grande, em verde)
         odd = mercado_data.get("odd", 1.50)
         odd_text = f"{odd:.2f}"
-        draw.text((LARGURA - PADDING - 200, y_pos + 35), odd_text, font=FONTE_ODD_GRANDE, fill=(100, 255, 100))
+        draw.text((LARGURA - PADDING - 300, y_pos + 35), odd_text, font=FONTE_ODD_GRANDE, fill=(100, 255, 100))
         
         # Confiança
         confianca = mercado_data.get("confianca", 0)
         conf_text = f"Confiança: {confianca:.0f}%"
-        draw.text((LARGURA - PADDING - 200, y_pos + 90), conf_text, font=FONTE_CONFIANCA, fill=(150, 200, 255))
+        draw.text((LARGURA - PADDING - 300, y_pos + 90), conf_text, font=FONTE_CONFIANCA, fill=(150, 200, 255))
         
         # Estimativa (apenas para over_under)
         if mercado_key == "over_under":
             estimativa = mercado_data.get("estimativa", 0)
             if estimativa > 0:
                 est_text = f"Estimativa: {estimativa:.2f} gols"
-                draw.text((LARGURA - PADDING - 200, y_pos + 60), est_text, font=FONTE_CONFIANCA, fill=(200, 200, 200))
+                draw.text((LARGURA - PADDING - 300, y_pos + 60), est_text, font=FONTE_CONFIANCA, fill=(200, 200, 200))
     
     # Desenhar cards na ordem correta
     if "over_under" in mercados:
@@ -4995,7 +4995,7 @@ def gerar_poster_multipla_individual(jogo: dict, mercados: dict, titulo: str = "
         y_atual += CARD_ALTURA + 15
     
     # ===== RODAPÉ =====
-    rodape_y = ALTURA - 80
+    rodape_y = ALTURA - 85
     draw.line([(PADDING + 80, rodape_y - 30), (LARGURA - PADDING - 80, rodape_y - 30)], 
               fill=(60, 70, 85), width=2)
     
