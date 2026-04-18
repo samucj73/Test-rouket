@@ -4759,338 +4759,252 @@ class GerenciadorMultiplasIndividuais:
 
 #def gerar_poster_multipla_individual(jogo: dict, mercados: dict, titulo: str = "🎯 MÚLTIPLA INDIVIDUAL") -> io.BytesIO:
 def gerar_poster_multipla_individual(jogo: dict, mercados: dict, titulo: str = "🎯 MÚLTIPLA INDIVIDUAL", api_client=None) -> io.BytesIO:
-    """Gera pôster profissional para múltipla individual (3 mercados) - VERSÃO CORRIGIDA COM ESCUDOS"""
+    """Gera pôster profissional para múltipla individual - VERSÃO COMPLETAMENTE REESTRUTURADA"""
     
     LARGURA = 2000
-    ALTURA = 1200
+    ALTURA = 1650
     PADDING = 80
     
     img = Image.new("RGBA", (LARGURA, ALTURA), (10, 20, 30, 255))
     draw = ImageDraw.Draw(img)
     
     # Fontes
-    FONTE_TITULO = PosterGenerator.criar_fonte(80)
-    FONTE_SUBTITULO = PosterGenerator.criar_fonte(55)
-    FONTE_TIMES = PosterGenerator.criar_fonte(58)
+    FONTE_TITULO = PosterGenerator.criar_fonte(85)
+    FONTE_DATA = PosterGenerator.criar_fonte(45)
+    FONTE_LIGA = PosterGenerator.criar_fonte(50)
+    FONTE_TIMES = PosterGenerator.criar_fonte(55)
+    FONTE_VS = PosterGenerator.criar_fonte(70)
     FONTE_MERCADO_TITULO = PosterGenerator.criar_fonte(48)
     FONTE_MERCADO_VALOR = PosterGenerator.criar_fonte(52)
-    FONTE_ODD = PosterGenerator.criar_fonte(70)
+    FONTE_ODD_GRANDE = PosterGenerator.criar_fonte(72)
     FONTE_INFO = PosterGenerator.criar_fonte(42)
-    FONTE_DETALHES = PosterGenerator.criar_fonte(38)
-    FONTE_LIGA = PosterGenerator.criar_fonte(45)
+    FONTE_CONFIANCA = PosterGenerator.criar_fonte(40)
+    FONTE_RODAPE = PosterGenerator.criar_fonte(38)
     
     # ===== CABEÇALHO =====
-    try:
-        titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
-        titulo_w = titulo_bbox[2] - titulo_bbox[0]
-        draw.text(((LARGURA - titulo_w) // 2, 45), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
-    except:
-        draw.text((LARGURA//2 - 250, 45), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
+    # Título
+    titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
+    titulo_w = titulo_bbox[2] - titulo_bbox[0]
+    draw.text(((LARGURA - titulo_w) // 2, 50), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
     
-    # Data/Hora
+    # Data
     data_hora = jogo.get("hora", datetime.now())
     if isinstance(data_hora, datetime):
         data_text = data_hora.strftime("%d/%m/%Y %H:%M")
     else:
         data_text = str(data_hora)
     
-    try:
-        data_bbox = draw.textbbox((0, 0), data_text, font=FONTE_INFO)
-        data_w = data_bbox[2] - data_bbox[0]
-        draw.text(((LARGURA - data_w) // 2, 120), data_text, font=FONTE_INFO, fill=(150, 200, 255))
-    except:
-        draw.text((LARGURA//2 - 150, 120), data_text, font=FONTE_INFO, fill=(150, 200, 255))
+    data_bbox = draw.textbbox((0, 0), data_text, font=FONTE_DATA)
+    data_w = data_bbox[2] - data_bbox[0]
+    draw.text(((LARGURA - data_w) // 2, 130), data_text, font=FONTE_DATA, fill=(150, 200, 255))
     
     # Liga
     liga_text = jogo.get("liga", "LIGA").upper()
-    try:
-        liga_bbox = draw.textbbox((0, 0), liga_text, font=FONTE_LIGA)
-        liga_w = liga_bbox[2] - liga_bbox[0]
-        draw.text(((LARGURA - liga_w) // 2, 175), liga_text, font=FONTE_LIGA, fill=(200, 200, 200))
-    except:
-        draw.text((LARGURA//2 - 150, 175), liga_text, font=FONTE_LIGA, fill=(200, 200, 200))
+    liga_bbox = draw.textbbox((0, 0), liga_text, font=FONTE_LIGA)
+    liga_w = liga_bbox[2] - liga_bbox[0]
+    draw.text(((LARGURA - liga_w) // 2, 190), liga_text, font=FONTE_LIGA, fill=(200, 200, 200))
     
     # Linha decorativa
-    draw.line([(LARGURA//4, 230), (3*LARGURA//4, 230)], fill=(255, 215, 0), width=4)
+    draw.line([(LARGURA//4, 250), (3*LARGURA//4, 250)], fill=(255, 215, 0), width=4)
     
-    # ===== ESCUDOS E TIMES =====
-    TAMANHO_ESCUDO = 200
-    TAMANHO_QUADRADO = 250
-    ESPACO_ENTRE = 580
+    # ===== SEÇÃO DOS TIMES =====
+    TAMANHO_ESCUDO = 180
+    TAMANHO_QUADRADO = 230
+    ESPACO_ENTRE = 500
     
     largura_total = 2 * TAMANHO_QUADRADO + ESPACO_ENTRE
     x_inicio = (LARGURA - largura_total) // 2
     
     x_home = x_inicio
     x_away = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE
-    y_escudos = 280
+    y_escudos = 300
     
-    # Nomes completos dos times
     home_nome = jogo.get("home", "TIME CASA")
     away_nome = jogo.get("away", "TIME FORA")
     
-    # ===== BAIXAR ESCUDOS USANDO API_CLIENT =====
+    # Baixar escudos
     escudo_home_img = None
     escudo_away_img = None
     
-    # Criar poster generator temporário
-    poster_gen = PosterGenerator(api_client) if api_client else PosterGenerator(None)
-    
-    # Tentar baixar escudos reais usando o api_client
     if api_client:
         try:
-            st.info(f"🖼️ Baixando escudo: {home_nome}")
             escudo_home_bytes = api_client.baixar_escudo_time(home_nome, jogo.get("escudo_home", ""))
             if escudo_home_bytes:
                 escudo_home_img = Image.open(io.BytesIO(escudo_home_bytes)).convert("RGBA")
-                st.success(f"✅ Escudo de {home_nome} carregado!")
-        except Exception as e:
-            st.warning(f"⚠️ Erro ao baixar escudo de {home_nome}: {e}")
+                escudo_home_img = escudo_home_img.resize((TAMANHO_ESCUDO, TAMANHO_ESCUDO), Image.Resampling.LANCZOS)
+        except:
+            pass
         
         try:
-            st.info(f"🖼️ Baixando escudo: {away_nome}")
             escudo_away_bytes = api_client.baixar_escudo_time(away_nome, jogo.get("escudo_away", ""))
             if escudo_away_bytes:
                 escudo_away_img = Image.open(io.BytesIO(escudo_away_bytes)).convert("RGBA")
-                st.success(f"✅ Escudo de {away_nome} carregado!")
-        except Exception as e:
-            st.warning(f"⚠️ Erro ao baixar escudo de {away_nome}: {e}")
+                escudo_away_img = escudo_away_img.resize((TAMANHO_ESCUDO, TAMANHO_ESCUDO), Image.Resampling.LANCZOS)
+        except:
+            pass
     
-    # Criar escudo fallback com iniciais (mais profissional)
-    def criar_escudo_fallback(nome_time, cor_fundo=(45, 45, 65)):
-        img_escudo = Image.new("RGBA", (TAMANHO_ESCUDO, TAMANHO_ESCUDO), cor_fundo + (255,))
-        draw_esc = ImageDraw.Draw(img_escudo)
+    # Fallback com iniciais
+    def criar_escudo_fallback(nome, cor_fundo=(35, 40, 55)):
+        img_esc = Image.new("RGBA", (TAMANHO_ESCUDO, TAMANHO_ESCUDO), cor_fundo + (255,))
+        draw_esc = ImageDraw.Draw(img_esc)
         
-        # Bordas arredondadas
-        raio_fallback = 30
-        draw_esc.rounded_rectangle([0, 0, TAMANHO_ESCUDO, TAMANHO_ESCUDO], radius=raio_fallback, 
-                                   outline=(255, 215, 0), width=5)
+        # Fundo arredondado
+        draw_esc.rounded_rectangle([0, 0, TAMANHO_ESCUDO, TAMANHO_ESCUDO], radius=35, 
+                                   outline=(255, 215, 0), width=4, fill=cor_fundo + (255,))
         
         # Iniciais
-        palavras = nome_time.split()
+        palavras = nome.split()
         if len(palavras) >= 2:
             iniciais = palavras[0][0].upper() + palavras[1][0].upper()
-        elif len(palavras) == 1 and len(nome_time) >= 2:
-            iniciais = nome_time[:2].upper()
         else:
-            iniciais = nome_time[0].upper() if nome_time else "?"
+            iniciais = nome[:2].upper() if len(nome) >= 2 else nome[0].upper()
         
-        try:
-            fonte_escudo = PosterGenerator.criar_fonte(85)
-            bbox = draw_esc.textbbox((0, 0), iniciais, font=fonte_escudo)
-            w = bbox[2] - bbox[0]
-            h = bbox[3] - bbox[1]
-            draw_esc.text(((TAMANHO_ESCUDO - w)//2, (TAMANHO_ESCUDO - h)//2 - 10), 
-                         iniciais, font=fonte_escudo, fill=(255, 215, 0))
-            
-            # Nome do time abaixo das iniciais
-            nome_curto = nome_time[:15] if len(nome_time) > 15 else nome_time
-            fonte_nome = PosterGenerator.criar_fonte(28)
-            nome_bbox = draw_esc.textbbox((0, 0), nome_curto, font=fonte_nome)
-            nome_w = nome_bbox[2] - nome_bbox[0]
-            draw_esc.text(((TAMANHO_ESCUDO - nome_w)//2, TAMANHO_ESCUDO - 45), 
-                         nome_curto, font=fonte_nome, fill=(200, 200, 200))
-        except:
-            draw_esc.text((TAMANHO_ESCUDO//2 - 40, TAMANHO_ESCUDO//2 - 30), 
-                         iniciais, font=PosterGenerator.criar_fonte(70), fill=(255, 215, 0))
+        fonte_esc = PosterGenerator.criar_fonte(80)
+        bbox = draw_esc.textbbox((0, 0), iniciais, font=fonte_esc)
+        w = bbox[2] - bbox[0]
+        h = bbox[3] - bbox[1]
+        draw_esc.text(((TAMANHO_ESCUDO - w)//2, (TAMANHO_ESCUDO - h)//2 - 10), 
+                     iniciais, font=fonte_esc, fill=(255, 215, 0))
         
-        return img_escudo
+        return img_esc
     
-    # Usar fallback se não conseguiu baixar
     if escudo_home_img is None:
-        escudo_home_img = criar_escudo_fallback(home_nome, (45, 45, 65))
-    else:
-        escudo_home_img = escudo_home_img.resize((TAMANHO_ESCUDO, TAMANHO_ESCUDO), Image.Resampling.LANCZOS)
-    
+        escudo_home_img = criar_escudo_fallback(home_nome)
     if escudo_away_img is None:
-        escudo_away_img = criar_escudo_fallback(away_nome, (45, 45, 65))
-    else:
-        escudo_away_img = escudo_away_img.resize((TAMANHO_ESCUDO, TAMANHO_ESCUDO), Image.Resampling.LANCZOS)
+        escudo_away_img = criar_escudo_fallback(away_nome)
     
-    # Desenhar escudos com fundo arredondado
-    raio_quadrado = int(TAMANHO_QUADRADO * 0.2)
-    
-    # Escudo Casa
+    # Desenhar containers dos escudos
+    raio_container = 25
     draw.rounded_rectangle([x_home, y_escudos, x_home + TAMANHO_QUADRADO, y_escudos + TAMANHO_QUADRADO], 
-                          radius=raio_quadrado, fill=(25, 30, 45), outline=(255, 215, 0), width=3)
+                          radius=raio_container, fill=(20, 25, 40), outline=(255, 215, 0), width=3)
+    draw.rounded_rectangle([x_away, y_escudos, x_away + TAMANHO_QUADRADO, y_escudos + TAMANHO_QUADRADO], 
+                          radius=raio_container, fill=(20, 25, 40), outline=(255, 215, 0), width=3)
+    
+    # Colocar escudos
     img.paste(escudo_home_img, (x_home + (TAMANHO_QUADRADO - TAMANHO_ESCUDO)//2, 
                                 y_escudos + (TAMANHO_QUADRADO - TAMANHO_ESCUDO)//2), escudo_home_img)
-    
-    # Escudo Fora
-    draw.rounded_rectangle([x_away, y_escudos, x_away + TAMANHO_QUADRADO, y_escudos + TAMANHO_QUADRADO], 
-                          radius=raio_quadrado, fill=(25, 30, 45), outline=(255, 215, 0), width=3)
     img.paste(escudo_away_img, (x_away + (TAMANHO_QUADRADO - TAMANHO_ESCUDO)//2, 
                                 y_escudos + (TAMANHO_QUADRADO - TAMANHO_ESCUDO)//2), escudo_away_img)
     
-    # Nomes dos times (com quebra de linha se necessário)
-    def desenhar_texto_com_quebra(texto, x, y, largura_max, fonte, cor):
-        palavras = texto.split()
-        linhas = []
-        linha_atual = ""
-        
-        for palavra in palavras:
-            teste = linha_atual + " " + palavra if linha_atual else palavra
-            try:
-                bbox = draw.textbbox((0, 0), teste, font=fonte)
-                if bbox[2] - bbox[0] <= largura_max:
-                    linha_atual = teste
-                else:
-                    if linha_atual:
-                        linhas.append(linha_atual)
-                    linha_atual = palavra
-            except:
-                linhas.append(texto[:20])
-                break
-        
-        if linha_atual:
-            linhas.append(linha_atual)
-        
-        for i, linha in enumerate(linhas):
-            try:
-                linha_bbox = draw.textbbox((0, 0), linha, font=fonte)
-                linha_w = linha_bbox[2] - linha_bbox[0]
-                draw.text((x + (TAMANHO_QUADRADO - linha_w)//2, y + i * 45), linha, font=fonte, fill=cor)
-            except:
-                draw.text((x, y + i * 45), linha[:20], font=fonte, fill=cor)
+    # Nomes dos times (centralizados abaixo dos escudos)
+    draw.text((x_home + TAMANHO_QUADRADO//2, y_escudos + TAMANHO_QUADRADO + 20), 
+             home_nome[:22], font=FONTE_TIMES, fill=(255, 255, 255), anchor="mm")
+    draw.text((x_away + TAMANHO_QUADRADO//2, y_escudos + TAMANHO_QUADRADO + 20), 
+             away_nome[:22], font=FONTE_TIMES, fill=(255, 255, 255), anchor="mm")
     
-    # Desenhar nomes
-    desenhar_texto_com_quebra(home_nome, x_home, y_escudos + TAMANHO_QUADRADO + 15, 
-                              TAMANHO_QUADRADO - 20, FONTE_TIMES, (255, 255, 255))
-    desenhar_texto_com_quebra(away_nome, x_away, y_escudos + TAMANHO_QUADRADO + 15, 
-                              TAMANHO_QUADRADO - 20, FONTE_TIMES, (255, 255, 255))
+    # VS centralizado
+    vs_x = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE//2
+    vs_y = y_escudos + TAMANHO_QUADRADO//2
+    draw.text((vs_x, vs_y), "VS", font=FONTE_VS, fill=(255, 215, 0), anchor="mm")
     
-    # VS
-    try:
-        vs_bbox = draw.textbbox((0, 0), "VS", font=FONTE_TIMES)
-        vs_w = vs_bbox[2] - vs_bbox[0]
-        vs_x = x_home + TAMANHO_QUADRADO + (ESPACO_ENTRE - vs_w) // 2
-        draw.text((vs_x, y_escudos + TAMANHO_QUADRADO//2 - 30), "VS", font=FONTE_TIMES, fill=(255, 215, 0))
-    except:
-        vs_x = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE//2 - 30
-        draw.text((vs_x, y_escudos + TAMANHO_QUADRADO//2 - 30), "VS", font=FONTE_TIMES, fill=(255, 215, 0))
-    
-    # ===== MERCADOS (LAYOUT REFATORADO) =====
+    # ===== SEÇÃO DOS MERCADOS =====
     y_mercados = y_escudos + TAMANHO_QUADRADO + 130
     
     # Linha separadora
-    draw.line([(PADDING + 90, y_mercados - 15), (LARGURA - PADDING - 80, y_mercados - 15)], 
+    draw.line([(PADDING + 80, y_mercados - 15), (LARGURA - PADDING - 80, y_mercados - 15)], 
               fill=(100, 130, 160), width=3)
     
-    # Título dos mercados
-    try:
-        draw.text((PADDING + 80, y_mercados), " MERCADOS DISPONÍVEIS", font=FONTE_INFO, fill=(255, 215, 0))
-    except:
-        draw.text((PADDING + 80, y_mercados), "MERCADOS DISPONÍVEIS", font=FONTE_INFO, fill=(255, 215, 0))
+    draw.text((PADDING + 80, y_mercados), "📊 MERCADOS DISPONÍVEIS", font=FONTE_MERCADO_TITULO, fill=(255, 215, 0))
     
-    y_atual = y_mercados + 55
-    CARD_ALTURA = 130
+    y_atual = y_mercados + 60
+    CARD_ALTURA = 140
+    LARGURA_CARD = LARGURA - 2 * PADDING - 160
     
+    # Cores por mercado
     cores_mercados = {
-        "over_under": (255, 215, 0),
-        "favorito": (255, 87, 34),
-        "ambas_marcam": (155, 89, 182)
+        "over_under": (255, 215, 0),   # Dourado
+        "favorito": (255, 87, 34),     # Laranja
+        "ambas_marcam": (155, 89, 182) # Roxo
     }
     
-    icones_mercados = {
+    icones = {
         "over_under": "⚽",
         "favorito": "🏆",
         "ambas_marcam": "🤝"
     }
     
-    # 1. OVER/UNDER
-    if "over_under" in mercados:
-        mercado = mercados["over_under"]
-        cor = cores_mercados["over_under"]
-        icone = icones_mercados["over_under"]
-        tendencia = mercado.get("tendencia", "OVER 1.5")
-        odd = mercado.get("odd", 1.35)
-        confianca = mercado.get("confianca", 0)
-        estimativa = mercado.get("estimativa", 0)
+    titulos = {
+        "over_under": "OVER / UNDER",
+        "favorito": "FAVORITO",
+        "ambas_marcam": "AMBAS MARCAM"
+    }
+    
+    # Função para desenhar card de mercado
+    def desenhar_card_mercado(mercado_key, mercado_data, y_pos):
+        cor = cores_mercados.get(mercado_key, (200, 200, 200))
+        icone_text = icones.get(mercado_key, "📊")
+        titulo_text = titulos.get(mercado_key, mercado_key.upper())
         
-        draw.rounded_rectangle([PADDING + 80, y_atual, LARGURA - PADDING - 80, y_atual + CARD_ALTURA], 
+        # Fundo do card
+        draw.rounded_rectangle([PADDING + 80, y_pos, LARGURA - PADDING - 80, y_pos + CARD_ALTURA], 
                                radius=20, fill=(25, 35, 45), outline=cor, width=3)
         
-        # Esquerda: Ícone e Título
-        draw.text((PADDING + 120, y_atual + 60), icone, font=FONTE_INFO, fill=cor)
-        draw.text((PADDING + 170, y_atual + 60), "OVER / UNDER", font=FONTE_MERCADO_TITULO, fill=cor)
+        # Linha vertical separadora (esquerda vs direita)
+        linha_x = LARGURA - PADDING - 280
+        draw.line([(linha_x, y_pos + 15), (linha_x, y_pos + CARD_ALTURA - 15)], 
+                  fill=(60, 70, 85), width=2)
         
-        # Tendência
-        draw.text((PADDING + 120, y_atual + 80), tendencia, font=FONTE_MERCADO_VALOR, fill=(255, 255, 255))
+        # ===== LADO ESQUERDO =====
+        # Ícone
+        draw.text((PADDING + 120, y_pos + 35), icone_text, font=FONTE_INFO, fill=cor)
+        # Título
+        draw.text((PADDING + 180, y_pos + 35), titulo_text, font=FONTE_MERCADO_TITULO, fill=cor)
         
-        # Direita: Odd (verde grande)
+        # Valor principal (tendência ou favorito)
+        if mercado_key == "over_under":
+            valor = mercado_data.get("tendencia", "OVER 1.5")
+        elif mercado_key == "favorito":
+            favorito = mercado_data.get("favorito", "home")
+            valor = home_nome if favorito == "home" else away_nome if favorito == "away" else "EMPATE"
+            if len(valor) > 25:
+                valor = valor[:22] + "..."
+        else:  # ambas_marcam
+            valor = mercado_data.get("tendencia", "SIM")
+        
+        draw.text((PADDING + 120, y_pos + 85), valor, font=FONTE_MERCADO_VALOR, fill=(255, 255, 255))
+        
+        # ===== LADO DIREITO =====
+        # Odd (grande, em verde)
+        odd = mercado_data.get("odd", 1.50)
         odd_text = f"{odd:.2f}"
-        draw.text((LARGURA - PADDING - 140, y_atual + 60), odd_text, font=FONTE_ODD, fill=(100, 255, 100))
+        draw.text((LARGURA - PADDING - 200, y_pos + 35), odd_text, font=FONTE_ODD_GRANDE, fill=(100, 255, 100))
         
         # Confiança
-        conf_text = f"Conf: {confianca:.0f}%"
-        draw.text((LARGURA - PADDING - 140, y_atual + 85), conf_text, font=FONTE_INFO, fill=(150, 200, 255))
+        confianca = mercado_data.get("confianca", 0)
+        conf_text = f"Confiança: {confianca:.0f}%"
+        draw.text((LARGURA - PADDING - 200, y_pos + 90), conf_text, font=FONTE_CONFIANCA, fill=(150, 200, 255))
         
-        if estimativa > 0:
-            est_text = f"Est: {estimativa:.2f}"
-            draw.text((LARGURA - PADDING - 140, y_atual + 55), est_text, font=FONTE_DETALHES, fill=(200, 200, 200))
-        
+        # Estimativa (apenas para over_under)
+        if mercado_key == "over_under":
+            estimativa = mercado_data.get("estimativa", 0)
+            if estimativa > 0:
+                est_text = f"Estimativa: {estimativa:.2f} gols"
+                draw.text((LARGURA - PADDING - 200, y_pos + 60), est_text, font=FONTE_CONFIANCA, fill=(200, 200, 200))
+    
+    # Desenhar cards na ordem correta
+    if "over_under" in mercados:
+        desenhar_card_mercado("over_under", mercados["over_under"], y_atual)
         y_atual += CARD_ALTURA + 15
     
-    # 2. FAVORITO
     if "favorito" in mercados:
-        mercado = mercados["favorito"]
-        cor = cores_mercados["favorito"]
-        icone = icones_mercados["favorito"]
-        favorito = mercado.get("favorito", "home")
-        odd = mercado.get("odd", 1.50)
-        confianca = mercado.get("confianca", 0)
-        
-        favorito_text = home_nome if favorito == "home" else away_nome if favorito == "away" else "EMPATE"
-        if len(favorito_text) > 28:
-            favorito_text = favorito_text[:25] + "..."
-        
-        draw.rounded_rectangle([PADDING + 80, y_atual, LARGURA - PADDING - 80, y_atual + CARD_ALTURA], 
-                               radius=20, fill=(25, 35, 45), outline=cor, width=3)
-        
-        draw.text((PADDING + 120, y_atual + 30), icone, font=FONTE_INFO, fill=cor)
-        draw.text((PADDING + 170, y_atual + 30), "FAVORITO", font=FONTE_MERCADO_TITULO, fill=cor)
-        draw.text((PADDING + 120, y_atual + 80), favorito_text, font=FONTE_MERCADO_VALOR, fill=(255, 255, 255))
-        
-        odd_text = f"{odd:.2f}"
-        draw.text((LARGURA - PADDING - 140, y_atual + 30), odd_text, font=FONTE_ODD, fill=(100, 255, 100))
-        
-        conf_text = f"Conf: {confianca:.0f}%"
-        draw.text((LARGURA - PADDING - 140, y_atual + 85), conf_text, font=FONTE_INFO, fill=(150, 200, 255))
-        
+        desenhar_card_mercado("favorito", mercados["favorito"], y_atual)
         y_atual += CARD_ALTURA + 15
     
-    # 3. AMBAS MARCAM
     if "ambas_marcam" in mercados:
-        mercado = mercados["ambas_marcam"]
-        cor = cores_mercados["ambas_marcam"]
-        icone = icones_mercados["ambas_marcam"]
-        tendencia = mercado.get("tendencia", "SIM")
-        odd = mercado.get("odd", 1.80)
-        confianca = mercado.get("confianca", 0)
-        
-        draw.rounded_rectangle([PADDING + 80, y_atual, LARGURA - PADDING - 80, y_atual + CARD_ALTURA], 
-                               radius=20, fill=(25, 35, 45), outline=cor, width=3)
-        
-        draw.text((PADDING + 120, y_atual + 30), icone, font=FONTE_INFO, fill=cor)
-        draw.text((PADDING + 170, y_atual + 30), "AMBAS MARCAM", font=FONTE_MERCADO_TITULO, fill=cor)
-        draw.text((PADDING + 120, y_atual + 80), tendencia, font=FONTE_MERCADO_VALOR, fill=(255, 255, 255))
-        
-        odd_text = f"{odd:.2f}"
-        draw.text((LARGURA - PADDING - 140, y_atual + 30), odd_text, font=FONTE_ODD, fill=(100, 255, 100))
-        
-        conf_text = f"Conf: {confianca:.0f}%"
-        draw.text((LARGURA - PADDING - 140, y_atual + 85), conf_text, font=FONTE_INFO, fill=(150, 200, 255))
+        desenhar_card_mercado("ambas_marcam", mercados["ambas_marcam"], y_atual)
+        y_atual += CARD_ALTURA + 15
     
     # ===== RODAPÉ =====
-    rodape_text = f"GERADO EM {datetime.now().strftime('%d/%m/%Y %H:%M')} | ELITE MASTER 3.0"
-    try:
-        rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_DETALHES)
-        rodape_w = rodape_bbox[2] - rodape_bbox[0]
-        draw.text(((LARGURA - rodape_w) // 2, ALTURA - 70), rodape_text, font=FONTE_DETALHES, fill=(100, 130, 160))
-    except:
-        draw.text((LARGURA//2 - 350, ALTURA - 70), rodape_text, font=FONTE_DETALHES, fill=(100, 130, 160))
+    rodape_y = ALTURA - 80
+    draw.line([(PADDING + 80, rodape_y - 30), (LARGURA - PADDING - 80, rodape_y - 30)], 
+              fill=(60, 70, 85), width=2)
     
-    # Converter para RGB e salvar
+    rodape_text = f"GERADO EM {datetime.now().strftime('%d/%m/%Y %H:%M')} | ELITE MASTER 3.0"
+    rodape_bbox = draw.textbbox((0, 0), rodape_text, font=FONTE_RODAPE)
+    rodape_w = rodape_bbox[2] - rodape_bbox[0]
+    draw.text(((LARGURA - rodape_w) // 2, rodape_y), rodape_text, font=FONTE_RODAPE, fill=(100, 130, 160))
+    
+    # ===== SALVAR =====
     img_rgb = Image.new("RGB", img.size, (10, 20, 30))
     img_rgb.paste(img, (0, 0), img)
     
@@ -5099,6 +5013,7 @@ def gerar_poster_multipla_individual(jogo: dict, mercados: dict, titulo: str = "
     buffer.seek(0)
     
     return buffer
+
 
     
 
