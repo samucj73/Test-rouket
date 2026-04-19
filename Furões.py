@@ -5075,7 +5075,7 @@ def gerar_poster_resultado_individual(multipla: dict, data_br: str, api_client=N
     """Gera pôster de resultado para múltipla individual - VERSÃO CORRIGIDA"""
     
     LARGURA = 2000
-    ALTURA = 1600
+    ALTURA = 1400
     PADDING = 80
     
     img = Image.new("RGBA", (LARGURA, ALTURA), (10, 20, 30, 255))
@@ -5129,7 +5129,7 @@ def gerar_poster_resultado_individual(multipla: dict, data_br: str, api_client=N
     liga_nome = jogo.get("liga", "LIGA")
     
     # ===== CABEÇALHO =====
-    titulo = f"📊 RESULTADO MÚLTIPLA INDIVIDUAL - {data_br}"
+    titulo = f" RESULTADO MÚLTIPLA INDIVIDUAL - {data_br}"
     titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
     titulo_w = titulo_bbox[2] - titulo_bbox[0]
     draw.text(((LARGURA - titulo_w) // 2, 40), titulo, font=FONTE_TITULO, fill=(255, 255, 255))
@@ -5145,7 +5145,7 @@ def gerar_poster_resultado_individual(multipla: dict, data_br: str, api_client=N
         badge_bg = (70, 40, 40)
     
     badge_width = 400
-    badge_height = 90
+    badge_height = 95
     badge_x = (LARGURA - badge_width) // 2
     badge_y = 110
     
@@ -5274,9 +5274,9 @@ def gerar_poster_resultado_individual(multipla: dict, data_br: str, api_client=N
     }
     
     icones = {
-        "over_under": "⚽",
-        "favorito": "🏆",
-        "ambas_marcam": "🤝"
+        "over_under": "",
+        "favorito": "",
+        "ambas_marcam": ""
     }
     
     titulos_mercados = {
@@ -5332,10 +5332,10 @@ def gerar_poster_resultado_individual(multipla: dict, data_br: str, api_client=N
         else:
             valor = mercado_data.get("tendencia", "SIM")
         
-        draw.text((PADDING + 120, y_card + 80), valor, font=FONTE_MERCADO_VALOR, fill=(255, 255, 255))
+        draw.text((PADDING + 300, y_card + 80), valor, font=FONTE_MERCADO_VALOR, fill=(255, 255, 255))
         
         # LADO DIREITO
-        POS_X_DIREITA = LARGURA - PADDING - 300
+        POS_X_DIREITA = LARGURA - PADDING - 650
         
         # Odd
         odd = mercado_data.get("odd", 1.50)
@@ -5352,7 +5352,7 @@ def gerar_poster_resultado_individual(multipla: dict, data_br: str, api_client=N
         confianca = mercado_data.get("confianca", 0)
         if confianca > 0:
             conf_text = f"Confiança: {confianca:.0f}%"
-            draw.text((POS_X_DIREITA, y_card + 55), conf_text, font=FONTE_DETALHES, fill=(150, 200, 255))
+            draw.text((POS_X_DIREITA, y_card + 40), conf_text, font=FONTE_DETALHES, fill=(150, 200, 255))
     
     # Rodapé
     rodape_y = ALTURA - 70
@@ -5629,7 +5629,7 @@ def render_tab_multiplas_individuais(sistema):
                     poster = gerar_poster_multipla_individual(
                         multipla["jogo"],
                         mercados,
-                        titulo=f"🎯 MÚLTIPLA INDIVIDUAL - {data_br}",
+                        titulo=f" MÚLTIPLA INDIVIDUAL - {data_br}",
                         api_client=sistema.api_client  # <-- ADICIONE ESTE PARÂMETRO
                         
                     )
