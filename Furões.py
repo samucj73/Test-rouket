@@ -229,102 +229,74 @@ def calcular_odd_total(multipla):
 
 #class FiltroPremium:
 class FiltroPremium:
-    """Filtro avançado baseado em análise REAL de 33 jogos - ATUALIZADO 19/04/2026"""
+    """Filtro avançado baseado em análise REAL - VERSÃO AJUSTADA"""
     
-    # Configurações baseadas nos dados REAIS do relatório
     LIGAS_CONFIG = {
         "OVER_1.5": {
-            "recomendadas": ["Bundesliga", "Championship", "Serie A", "Campeonato Brasileiro Série A"],
-            "evitar": ["Ligue 1", "Premier League", "Primeira Liga"],
+            "recomendadas": ["Bundesliga", "Championship", "Serie A", "Campeonato Brasileiro Série A", "Ligue 1", "Premier League", "Primeira Liga"],
+            "evitar": [],  # REMOVER restrições de liga
             "taxa_acerto": {
-                "Bundesliga": 100,      # 4/4
-                "Serie A": 100,         # 2/2
-                "Championship": 78,     # 7/9
-                "Campeonato Brasileiro Série A": 75,  # 3/4
-                "Ligue 1": 67,          # 2/3
-                "Premier League": 50,   # 2/4
-                "Primeira Liga": 50,    # 1/2
+                "Bundesliga": 100,
+                "Serie A": 100,
+                "Championship": 78,
+                "Campeonato Brasileiro Série A": 75,
+                "Ligue 1": 67,
+                "Premier League": 50,
+                "Primeira Liga": 50,
             },
-            "confianca_minima": 75,     # Aumentado de 70 para 75
-            "estimativa_minima": 2.0,   # Adicionado
+            "confianca_minima": 60,  # REDUZIDO de 75 para 60
+            "estimativa_minima": 1.8,  # REDUZIDO de 2.0 para 1.8
         },
         "OVER_2.5": {
-            "recomendadas": ["Bundesliga", "Championship"],
-            "evitar": ["Ligue 1", "Premier League", "Primeira Liga"],
+            "recomendadas": ["Bundesliga", "Championship", "Ligue 1", "Premier League", "Primeira Liga"],
+            "evitar": [],
             "taxa_acerto": {
-                "Bundesliga": 100,      # 1/1 (Hoffenheim x Dortmund)
-                "Championship": 50,     # 1/2
+                "Bundesliga": 100,
+                "Championship": 50,
             },
-            "estimativa_minima": 2.9,   # Mantido
-            "confianca_minima": 70,
+            "estimativa_minima": 2.7,  # REDUZIDO de 2.9 para 2.7
+            "confianca_minima": 65,    # REDUZIDO de 70 para 65
         },
         "UNDER_2.5": {
             "recomendadas": ["Ligue 1", "Campeonato Brasileiro Série A", "Primeira Liga"],
-            "evitar": ["Bundesliga", "Championship"],
-            "taxa_acerto": {
-                "Ligue 1": 100,         # 1/1 (Angers x Le Havre)
-                "Campeonato Brasileiro Série A": 100,  # 1/1 (Vitória x Corinthians)
-                "Primeira Liga": 100,   # 1/1 (Casa Pia x Santa Clara)
-            },
-            "estimativa_maxima": 1.85,  # Mantido
-            "confianca_minima": 65,
+            "evitar": [],
+            "estimativa_maxima": 2.0,  # AUMENTADO de 1.85 para 2.0
+            "confianca_minima": 60,
         },
         "AMBAS_MARCAM": {
             "recomendadas": ["Bundesliga", "Championship", "Primeira Liga"],
-            "evitar": ["Ligue 1", "Premier League", "Serie A"],
+            "evitar": ["Ligue 1", "Premier League"],
             "taxa_acerto": {
-                "Bundesliga": 100,      # 4/4
-                "Championship": 67,     # 6/9
-                "Primeira Liga": 100,   # 2/2 (ambos NÃO acertaram)
-                "Campeonato Brasileiro Série A": 50,  # 2/4
-                "Serie A": 50,          # 1/2
-                "Premier League": 25,   # 1/4
-                "Ligue 1": 0,           # 0/3
+                "Bundesliga": 100,
+                "Championship": 67,
+                "Primeira Liga": 100,
             },
-            "confianca_minima": 58,     # Aumentado
+            "confianca_minima": 55,  # REDUZIDO de 58 para 55
         },
         "FAVORITO": {
             "recomendadas": ["Championship"],
-            "evitar": ["TODAS"],        # Performance geral muito baixa (36%)
-            "taxa_acerto": {
-                "Championship": 70,     # 7/10
-                "Premier League": 40,   # 2/5
-                "Bundesliga": 40,       # 2/5
-                "Campeonato Brasileiro Série A": 25,  # 1/4
-                "Serie A": 0,           # 0/3
-                "Ligue 1": 0,           # 0/3
-                "Primeira Liga": 0,     # 0/3
-            },
-            "confianca_minima": 65,
-            "desabilitado": True,       # NOVO: desabilita este mercado
+            "evitar": [],
+            "confianca_minima": 60,
+            "desabilitado": False,  # REATIVADO mas com confiança maior
         },
         "GOLS_HT": {
             "recomendadas": [],
-            "evitar": ["TODAS"],        # Performance geral muito baixa (32%)
-            "taxa_acerto": {
-                "Bundesliga": 50,       # 2/4
-                "Serie A": 50,          # 1/2
-                "Championship": 33,     # 3/9
-                "Ligue 1": 33,          # 1/3
-                "Premier League": 25,   # 1/4
-                "Campeonato Brasileiro Série A": 25,  # 1/4
-                "Primeira Liga": 0,     # 0/2
-            },
-            "confianca_minima": 75,
-            "desabilitado": True,       # NOVO: desabilita este mercado
+            "evitar": [],
+            "confianca_minima": 70,
+            "desabilitado": True,  # Mantém desabilitado (32% acerto)
         }
     }
     
-    # Limite máximo de jogos por dia (reduzido para maior qualidade)
-    MAX_JOGOS_POR_DIA = 12  # era 20
+    # Limite máximo de jogos por dia - AJUSTADO para 15
+    MAX_JOGOS_POR_DIA = 15  # era 12
     
-    # Score mínimo para aprovação (aumentado)
-    SCORE_MINIMO_GLOBAL = 75  # era 68
+    # Score mínimo para aprovação - REDUZIDO
+    SCORE_MINIMO_GLOBAL = 60  # era 75
     
     @classmethod
     def aplicar_filtro_premium(cls, jogos, ativar=True):
         """
-        Aplica filtros baseados na análise REAL de 33 jogos
+        Aplica filtros baseados na análise REAL - VERSÃO MAIS PERMISSIVA
         """
         if not ativar:
             return jogos
@@ -340,10 +312,16 @@ class FiltroPremium:
         for jogo in jogos:
             liga = jogo.get('liga', '')
             tendencia = jogo.get('tendencia', '')
-            mercado = cls._identificar_mercado(tendencia)
             confianca = jogo.get('confianca', 0)
             estimativa = jogo.get('estimativa', 0)
+            tipo_aposta = jogo.get('tipo_aposta', '')
             
+            # PULAR jogos que o próprio sistema já classificou como "NÃO APOSTAR"
+            if confianca == 0 or tipo_aposta == "avoid":
+                estatisticas["motivos_descarte"]["sistema_nao_apostar"] += 1
+                continue
+            
+            mercado = cls._identificar_mercado(tendencia)
             aprovado = True
             motivo = None
             
@@ -351,76 +329,45 @@ class FiltroPremium:
             config_mercado = cls.LIGAS_CONFIG.get(mercado, {})
             if config_mercado.get("desabilitado", False):
                 aprovado = False
-                motivo = f"Mercado {mercado} desabilitado (taxa de acerto < 40%)"
+                motivo = f"Mercado {mercado} desabilitado"
                 estatisticas["motivos_descarte"][f"{mercado}_desabilitado"] += 1
-                estatisticas["por_mercado"][mercado] += 1
             
-            # ========== REGRA 2: Filtro por liga ==========
-            elif mercado in cls.LIGAS_CONFIG:
-                config = cls.LIGAS_CONFIG[mercado]
-                liga_base = cls._normalizar_liga(liga)
-                
-                # Verificar se é uma liga para evitar
-                if liga_base in config.get("evitar", []):
-                    aprovado = False
-                    motivo = f"Liga {liga_base} evitar para {mercado} (baixa performance)"
-                    estatisticas["motivos_descarte"][f"{mercado}_liga_evitar"] += 1
-                
-                # Verificar confiança mínima
-                elif confianca < config.get("confianca_minima", 60):
-                    aprovado = False
-                    motivo = f"Confiança {confianca:.0f}% < {config.get('confianca_minima', 60)}% para {mercado}"
-                    estatisticas["motivos_descarte"][f"{mercado}_confianca_baixa"] += 1
-                
-                # Verificar estimativa mínima (para OVER)
-                elif mercado in ["OVER_1.5", "OVER_2.5"] and estimativa < config.get("estimativa_minima", 2.0):
-                    aprovado = False
-                    motivo = f"Estimativa {estimativa:.2f} < {config.get('estimativa_minima', 2.0)} para {mercado}"
-                    estatisticas["motivos_descarte"][f"{mercado}_estimativa_baixa"] += 1
-                
-                # Verificar estimativa máxima (para UNDER)
-                elif mercado == "UNDER_2.5" and estimativa > config.get("estimativa_maxima", 1.85):
-                    aprovado = False
-                    motivo = f"Estimativa {estimativa:.2f} > {config.get('estimativa_maxima', 1.85)} para UNDER"
-                    estatisticas["motivos_descarte"]["UNDER_estimativa_alta"] += 1
+            # ========== REGRA 2: Verificar confiança mínima ==========
+            elif confianca < config_mercado.get("confianca_minima", 55):
+                aprovado = False
+                motivo = f"Confiança {confianca:.0f}% < {config_mercado.get('confianca_minima', 55)}%"
+                estatisticas["motivos_descarte"]["confianca_baixa"] += 1
             
-            # ========== REGRA 3: Score mínimo global ==========
-            if aprovado and jogo.get('score', 0) < cls.SCORE_MINIMO_GLOBAL:
+            # ========== REGRA 3: Verificar estimativa (para OVER/UNDER) ==========
+            elif mercado in ["OVER_1.5", "OVER_2.5"] and estimativa < config_mercado.get("estimativa_minima", 1.8):
+                aprovado = False
+                motivo = f"Estimativa {estimativa:.2f} < {config_mercado.get('estimativa_minima', 1.8)}"
+                estatisticas["motivos_descarte"]["estimativa_baixa"] += 1
+            
+            elif mercado == "UNDER_2.5" and estimativa > config_mercado.get("estimativa_maxima", 2.0):
+                aprovado = False
+                motivo = f"Estimativa {estimativa:.2f} > {config_mercado.get('estimativa_maxima', 2.0)}"
+                estatisticas["motivos_descarte"]["estimativa_alta"] += 1
+            
+            # ========== REGRA 4: Score mínimo (apenas se tiver score) ==========
+            if aprovado and jogo.get('score', 100) < cls.SCORE_MINIMO_GLOBAL:
                 aprovado = False
                 motivo = f"Score {jogo.get('score', 0)} < {cls.SCORE_MINIMO_GLOBAL}"
                 estatisticas["motivos_descarte"]["score_baixo"] += 1
             
-            # ========== REGRA 4: Bônus para ligas recomendadas ==========
-            if aprovado and mercado in cls.LIGAS_CONFIG:
-                config = cls.LIGAS_CONFIG[mercado]
-                liga_base = cls._normalizar_liga(liga)
-                
-                if liga_base in config.get("recomendadas", []):
-                    taxa = config.get("taxa_acerto", {}).get(liga_base, 50)
-                    if taxa >= 75:
-                        jogo['qualidade_extra'] = f"🔥 {liga_base} {mercado} ({taxa:.0f}% acerto)"
-                        jogo['qualidade_score'] = jogo.get('qualidade_score', 0) + 3
-                    elif taxa >= 60:
-                        jogo['qualidade_extra'] = f"✅ {liga_base} {mercado} ({taxa:.0f}% acerto)"
-                        jogo['qualidade_score'] = jogo.get('qualidade_score', 0) + 1
-            
             # ========== APROVAÇÃO ==========
             if aprovado:
-                # Calcular score de qualidade baseado na performance real
-                score_adicional = 0
-                if mercado in cls.LIGAS_CONFIG:
-                    config = cls.LIGAS_CONFIG[mercado]
-                    liga_base = cls._normalizar_liga(liga)
-                    taxa = config.get("taxa_acerto", {}).get(liga_base, 50)
-                    
-                    if taxa >= 80:
-                        score_adicional = 3
-                    elif taxa >= 70:
-                        score_adicional = 2
-                    elif taxa >= 60:
-                        score_adicional = 1
+                # Bônus para ligas com boa performance
+                liga_base = cls._normalizar_liga(liga)
+                taxa = config_mercado.get("taxa_acerto", {}).get(liga_base, 50)
                 
-                jogo['qualidade_score'] = jogo.get('qualidade_score', 0) + score_adicional
+                if taxa >= 75:
+                    jogo['qualidade_extra'] = f"🔥 {liga_base} ({taxa:.0f}% acerto)"
+                    jogo['qualidade_score'] = jogo.get('qualidade_score', 0) + 3
+                elif taxa >= 60:
+                    jogo['qualidade_extra'] = f"✅ {liga_base} ({taxa:.0f}% acerto)"
+                    jogo['qualidade_score'] = jogo.get('qualidade_score', 0) + 1
+                
                 jogos_filtrados.append(jogo)
                 estatisticas["por_liga"][liga] += 1
                 estatisticas["por_mercado"][mercado] += 1
@@ -430,8 +377,26 @@ class FiltroPremium:
             jogos_filtrados.sort(key=lambda x: x.get('qualidade_score', 0), reverse=True)
             jogos_filtrados = jogos_filtrados[:cls.MAX_JOGOS_POR_DIA]
         
-        # Exibir estatísticas do filtro
-        cls._exibir_estatisticas_filtro(jogos_filtrados, estatisticas, len(jogos))
+        # Exibir estatísticas
+        if jogos_filtrados:
+            st.success(f"🎯 Filtro Premium: {len(jogos_filtrados)} jogos aprovados de {len(jogos)}")
+            
+            if estatisticas["por_mercado"]:
+                st.markdown("**📊 Jogos aprovados por mercado:**")
+                for mercado, qtd in sorted(estatisticas["por_mercado"].items(), key=lambda x: x[1], reverse=True):
+                    st.write(f"   • {mercado}: {qtd} jogos")
+            
+            if estatisticas["motivos_descarte"]:
+                st.markdown("**⚠️ Motivos de descarte:**")
+                for motivo, qtd in sorted(estatisticas["motivos_descarte"].items(), key=lambda x: x[1], reverse=True)[:5]:
+                    st.write(f"   • {motivo}: {qtd} jogos")
+        else:
+            st.warning(f"⚠️ Nenhum jogo aprovado. {len(jogos)} jogos analisados.")
+            # Mostrar por que não passou
+            if estatisticas["motivos_descarte"]:
+                st.markdown("**📋 Motivos que impediram aprovação:**")
+                for motivo, qtd in estatisticas["motivos_descarte"].items():
+                    st.write(f"   • {motivo}: {qtd} jogos")
         
         return jogos_filtrados
     
@@ -443,6 +408,8 @@ class FiltroPremium:
         if "OVER 1.5" in tendencia_upper:
             return "OVER_1.5"
         elif "OVER 2.5" in tendencia_upper:
+            return "OVER_2.5"
+        elif "OVER 3.5" in tendencia_upper:
             return "OVER_2.5"
         elif "UNDER 2.5" in tendencia_upper:
             return "UNDER_2.5"
@@ -480,32 +447,6 @@ class FiltroPremium:
             return liga
     
     @classmethod
-    def _exibir_estatisticas_filtro(cls, jogos_filtrados, estatisticas, total_original):
-        """Exibe estatísticas detalhadas do filtro"""
-        if jogos_filtrados:
-            st.success(f"🎯 Filtro Premium: {len(jogos_filtrados)} jogos aprovados de {total_original}")
-            
-            # Mostrar distribuição por mercado
-            if estatisticas["por_mercado"]:
-                st.markdown("**📊 Jogos aprovados por mercado:**")
-                for mercado, qtd in sorted(estatisticas["por_mercado"].items(), key=lambda x: x[1], reverse=True):
-                    st.write(f"   • {mercado}: {qtd} jogos")
-            
-            # Mostrar distribuição por liga
-            if estatisticas["por_liga"]:
-                st.markdown("**📊 Jogos aprovados por liga:**")
-                for liga, qtd in sorted(estatisticas["por_liga"].items(), key=lambda x: x[1], reverse=True)[:5]:
-                    st.write(f"   • {liga}: {qtd} jogos")
-            
-            # Mostrar motivos de descarte
-            if estatisticas["motivos_descarte"]:
-                st.markdown("**⚠️ Principais motivos de descarte:**")
-                for motivo, qtd in sorted(estatisticas["motivos_descarte"].items(), key=lambda x: x[1], reverse=True)[:5]:
-                    st.write(f"   • {motivo}: {qtd} jogos")
-        else:
-            st.warning(f"⚠️ Nenhum jogo aprovado. {total_original} jogos analisados, nenhum atendeu aos critérios.")
-    
-    @classmethod
     def get_estatisticas_filtro(cls, jogos_originais, jogos_filtrados):
         """Retorna estatísticas do filtro para exibição"""
         return {
@@ -514,46 +455,8 @@ class FiltroPremium:
             "reducao_percentual": round((1 - len(jogos_filtrados) / max(len(jogos_originais), 1)) * 100, 1),
             "maximo_permitido": cls.MAX_JOGOS_POR_DIA,
             "score_minimo": cls.SCORE_MINIMO_GLOBAL
-        }
-    
-    @classmethod
-    def get_recomendacoes_por_liga(cls, liga: str, mercado: str) -> dict:
-        """Retorna recomendações específicas para uma liga/mercado"""
-        liga_normalizada = cls._normalizar_liga(liga)
-        config = cls.LIGAS_CONFIG.get(mercado, {})
-        
-        if liga_normalizada in config.get("recomendadas", []):
-            taxa = config.get("taxa_acerto", {}).get(liga_normalizada, 50)
-            return {
-                "recomendado": True,
-                "taxa_acerto": taxa,
-                "nivel": "ALTA" if taxa >= 75 else "MÉDIA" if taxa >= 60 else "BAIXA"
-            }
-        elif liga_normalizada in config.get("evitar", []):
-            return {
-                "recomendado": False,
-                "taxa_acerto": config.get("taxa_acerto", {}).get(liga_normalizada, 0),
-                "motivo": f"Performance baixa nesta liga"
-            }
-        else:
-            return {
-                "recomendado": None,
-                "taxa_acerto": 50,
-                "motivo": "Dados insuficientes para avaliação"
-            }
-   
+        } 
 
-    
-    
-    @classmethod
-    def get_estatisticas_filtro(cls, jogos_originais, jogos_filtrados):
-        """Retorna estatísticas do filtro para exibição"""
-        return {
-            "total_original": len(jogos_originais),
-            "total_filtrado": len(jogos_filtrados),
-            "reducao_percentual": round((1 - len(jogos_filtrados) / max(len(jogos_originais), 1)) * 100, 1),
-            "maximo_permitido": cls.MAX_JOGOS_POR_DIA
-        }
 
 
 class ConfigManager:
