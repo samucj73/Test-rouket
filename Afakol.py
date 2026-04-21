@@ -1617,7 +1617,7 @@ def main():
     # ================= INTERFACE PRINCIPAL =================
     st.subheader("🎯 Análise e Geração de Jogos")
 
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11 = st.tabs([
         "📊 Análise do Último Concurso",
         "🎲 Gerador de Jogos",
         "🚀 EMS 5.0 - Cobertura",
@@ -1627,7 +1627,8 @@ def main():
         "🔍 Conferência Inteligente",
         "📈 Avaliação Estatística",
         "📐 Geometria do Volante",
-        "✅ Conferência Salvos"
+        "✅ Conferência Salvos",
+        "👑 REGRAS DE OURO"
     ])
 
     # ================= TAB 1: ANÁLISE DO ÚLTIMO CONCURSO =================
@@ -2230,11 +2231,9 @@ def main():
                 # Explicação do resultado
                 st.markdown("### 🧠 Análise da Otimização")
                 
-                # CORREÇÃO AQUI: usar a chave correta 'ev_ajustado' em vez de 'ev'
                 if st.session_state.ev_detalhes:
                     col_a, col_b, col_c = st.columns(3)
                     with col_a:
-                        # Usar ev_ajustado que existe no dicionário
                         ev_medio = np.mean([item['ev_ajustado'] for item in st.session_state.ev_detalhes]) * 1e9
                         st.metric("EV Médio (x10⁹)", f"{ev_medio:.2f}",
                                  help="Valor Esperado médio dos jogos gerados")
@@ -2264,7 +2263,6 @@ def main():
                     
                     stats = f"⚖️ {pares}p/{impares}i | ➕ {soma} | 📏 {consec} cons"
                     
-                    # CORREÇÃO AQUI: verificar se ev_detalhe existe antes de acessar
                     if ev_detalhe:
                         premio_text = f"💰 Prêmio esperado: R$ {ev_detalhe['premio_esperado']:,.0f} | 🎲 Competidores: {ev_detalhe['competidores_diretos']:.0f}"
                     else:
@@ -2316,161 +2314,79 @@ def main():
             else:
                 st.error("❌ Falha ao gerar jogos otimizados por EV")
         
-   
-    
-    # Seção educativa sobre Valor Esperado
-    with st.expander("📚 Entendendo o Valor Esperado (EV)"):
-        st.markdown("""
-        ### O que é Valor Esperado?
+        # Seção educativa sobre Valor Esperado
+        with st.expander("📚 Entendendo o Valor Esperado (EV)"):
+            st.markdown("""
+            ### O que é Valor Esperado?
+            
+            O **Valor Esperado (EV)** é um conceito fundamental da teoria da probabilidade e finanças:
+            
+            ```
+            EV = (Probabilidade de Ganhar) × (Prêmio Esperado)
+            ```
+            
+            ### Por que isso é revolucionário para loterias?
+            
+            1. **A probabilidade é praticamente fixa** (1 em 3.268.760)
+            2. **O que varia é o prêmio** (divisão entre acertadores)
+            3. **Logo, maximizar EV = maximizar o prêmio quando acertar**
+            
+            ### Como maximizamos o EV?
+            
+            ✅ **Evitamos padrões humanos:**
+            - Sequências (1,2,3,4,5)
+            - Linhas/colunas completas
+            - Muitos números baixos (datas)
+            
+            ✅ **Buscamos números "esquecidos":**
+            - Números com baixa frequência histórica
+            - Números com grande atraso
+            - Combinações únicas
+            
+            ✅ **Simulamos a competição real:**
+            - Modelamos como 50% das apostas são em números baixos
+            - Consideramos padrões geométricos comuns
+            - Estimamos quantos dividiriam o prêmio
+            
+            ### Resultado prático:
+            
+            | Estratégia | Acertos | Prêmio quando acerta | EV Final |
+            |------------|---------|---------------------|----------|
+            | Popular (datas) | Normal | Pequeno (divide com milhares) | Baixo |
+            | Aleatório | Normal | Médio | Médio |
+            | **Nash EV** | Normal | **GRANDE** (poucos competidores) | **ALTO** |
+            
+            ### Conclusão:
+            
+            > **Você não vence a loteria acertando mais.**
+            > **Você vence ganhando mais quando acerta.**
+            
+            *- Adaptado do princípio de John Nash*
+            """)
         
-        O **Valor Esperado (EV)** é um conceito fundamental da teoria da probabilidade e finanças:
-        
-        ```
-        EV = (Probabilidade de Ganhar) × (Prêmio Esperado)
-        ```
-        
-        ### Por que isso é revolucionário para loterias?
-        
-        1. **A probabilidade é praticamente fixa** (1 em 3.268.760)
-        2. **O que varia é o prêmio** (divisão entre acertadores)
-        3. **Logo, maximizar EV = maximizar o prêmio quando acertar**
-        
-        ### Como maximizamos o EV?
-        
-        ✅ **Evitamos padrões humanos:**
-        - Sequências (1,2,3,4,5)
-        - Linhas/colunas completas
-        - Muitos números baixos (datas)
-        
-        ✅ **Buscamos números "esquecidos":**
-        - Números com baixa frequência histórica
-        - Números com grande atraso
-        - Combinações únicas
-        
-        ✅ **Simulamos a competição real:**
-        - Modelamos como 50% das apostas são em números baixos
-        - Consideramos padrões geométricos comuns
-        - Estimamos quantos dividiriam o prêmio
-        
-        ### Resultado prático:
-        
-        | Estratégia | Acertos | Prêmio quando acerta | EV Final |
-        |------------|---------|---------------------|----------|
-        | Popular (datas) | Normal | Pequeno (divide com milhares) | Baixo |
-        | Aleatório | Normal | Médio | Médio |
-        | **Nash EV** | Normal | **GRANDE** (poucos competidores) | **ALTO** |
-        
-        ### Conclusão:
-        
-        > **Você não vence a loteria acertando mais.**
-        > **Você vence ganhando mais quando acerta.**
-        
-        *- Adaptado do princípio de John Nash*
-        """)
-    
-    # Visualização da distribuição de EV
-    if "ev_detalhes" in st.session_state and st.session_state.ev_detalhes:
-        st.markdown("### 📊 Distribuição do Valor Esperado")
-        
-        # CORREÇÃO AQUI: usar as chaves corretas que existem no dicionário
-        df_ev = pd.DataFrame({
-            "Jogo": range(1, len(st.session_state.ev_detalhes)+1),
-            "EV Ajustado (x10⁹)": [d['ev_ajustado'] * 1e9 for d in st.session_state.ev_detalhes],
-            "EV Bruto (x10⁹)": [d['ev_bruto'] * 1e9 for d in st.session_state.ev_detalhes],
-            "Prêmio Esperado (R$)": [d['premio_esperado'] for d in st.session_state.ev_detalhes],
-            "Competidores": [d['competidores_diretos'] for d in st.session_state.ev_detalhes],
-            "Penalidade": [d['penalidade'] for d in st.session_state.ev_detalhes]
-        })
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("EV Ajustado por Jogo")
-            st.bar_chart(df_ev.set_index("Jogo")["EV Ajustado (x10⁹)"])
-        with col2:
-            st.subheader("Prêmio Esperado por Jogo")
-            st.bar_chart(df_ev.set_index("Jogo")["Prêmio Esperado (R$)"])
-        
-        # Mostrar tabela detalhada
-        st.markdown("### 📋 Detalhamento por Jogo")
-        st.dataframe(df_ev, use_container_width=True, hide_index=True) 
-     
-    
-    # Seção educativa sobre Valor Esperado
-    with st.expander("📚 Entendendo o Valor Esperado (EV)"):
-        st.markdown("""
-        ### O que é Valor Esperado?
-        
-        O **Valor Esperado (EV)** é um conceito fundamental da teoria da probabilidade e finanças:
-        
-        ```
-        EV = (Probabilidade de Ganhar) × (Prêmio Esperado)
-        ```
-        
-        ### Por que isso é revolucionário para loterias?
-        
-        1. **A probabilidade é praticamente fixa** (1 em 3.268.760)
-        2. **O que varia é o prêmio** (divisão entre acertadores)
-        3. **Logo, maximizar EV = maximizar o prêmio quando acertar**
-        
-        ### Como maximizamos o EV?
-        
-        ✅ **Evitamos padrões humanos:**
-        - Sequências (1,2,3,4,5)
-        - Linhas/colunas completas
-        - Muitos números baixos (datas)
-        
-        ✅ **Buscamos números "esquecidos":**
-        - Números com baixa frequência histórica
-        - Números com grande atraso
-        - Combinações únicas
-        
-        ✅ **Simulamos a competição real:**
-        - Modelamos como 50% das apostas são em números baixos
-        - Consideramos padrões geométricos comuns
-        - Estimamos quantos dividiriam o prêmio
-        
-        ### Resultado prático:
-        
-        | Estratégia | Acertos | Prêmio quando acerta | EV Final |
-        |------------|---------|---------------------|----------|
-        | Popular (datas) | Normal | Pequeno (divide com milhares) | Baixo |
-        | Aleatório | Normal | Médio | Médio |
-        | **Nash EV** | Normal | **GRANDE** (poucos competidores) | **ALTO** |
-        
-        ### Conclusão:
-        
-        > **Você não vence a loteria acertando mais.**
-        > **Você vence ganhando mais quando acerta.**
-        
-        *- Adaptado do princípio de John Nash*
-        """)
-    
-    # Visualização da distribuição de EV
-    if "ev_detalhes" in st.session_state and st.session_state.ev_detalhes:
-        st.markdown("### 📊 Distribuição do Valor Esperado")
-        
-        # CORREÇÃO AQUI: usar as chaves corretas que existem no dicionário
-        df_ev = pd.DataFrame({
-            "Jogo": range(1, len(st.session_state.ev_detalhes)+1),
-            "EV Ajustado (x10⁹)": [d['ev_ajustado'] * 1e9 for d in st.session_state.ev_detalhes],
-            "EV Bruto (x10⁹)": [d['ev_bruto'] * 1e9 for d in st.session_state.ev_detalhes],
-            "Prêmio Esperado (R$)": [d['premio_esperado'] for d in st.session_state.ev_detalhes],
-            "Competidores": [d['competidores_diretos'] for d in st.session_state.ev_detalhes],
-            "Penalidade": [d['penalidade'] for d in st.session_state.ev_detalhes]
-        })
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("EV Ajustado por Jogo")
-            st.bar_chart(df_ev.set_index("Jogo")["EV Ajustado (x10⁹)"])
-        with col2:
-            st.subheader("Prêmio Esperado por Jogo")
-            st.bar_chart(df_ev.set_index("Jogo")["Prêmio Esperado (R$)"])
-        
-        # Mostrar tabela detalhada
-        st.markdown("### 📋 Detalhamento por Jogo")
-        st.dataframe(df_ev, use_container_width=True, hide_index=True) 
-
+        # Visualização da distribuição de EV
+        if "ev_detalhes" in st.session_state and st.session_state.ev_detalhes:
+            st.markdown("### 📊 Distribuição do Valor Esperado")
+            
+            df_ev = pd.DataFrame({
+                "Jogo": range(1, len(st.session_state.ev_detalhes)+1),
+                "EV Ajustado (x10⁹)": [d['ev_ajustado'] * 1e9 for d in st.session_state.ev_detalhes],
+                "EV Bruto (x10⁹)": [d['ev_bruto'] * 1e9 for d in st.session_state.ev_detalhes],
+                "Prêmio Esperado (R$)": [d['premio_esperado'] for d in st.session_state.ev_detalhes],
+                "Competidores": [d['competidores_diretos'] for d in st.session_state.ev_detalhes],
+                "Penalidade": [d['penalidade'] for d in st.session_state.ev_detalhes]
+            })
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.subheader("EV Ajustado por Jogo")
+                st.bar_chart(df_ev.set_index("Jogo")["EV Ajustado (x10⁹)"])
+            with col2:
+                st.subheader("Prêmio Esperado por Jogo")
+                st.bar_chart(df_ev.set_index("Jogo")["Prêmio Esperado (R$)"])
+            
+            st.markdown("### 📋 Detalhamento por Jogo")
+            st.dataframe(df_ev, use_container_width=True, hide_index=True)
 
     # ================= TAB 7: CONFERÊNCIA INTELIGENTE =================
     with tab7:
@@ -2753,6 +2669,204 @@ def main():
                 st.dataframe(df_resultado, use_container_width=True, hide_index=True)
                 adicionar_conferencia(fechamento["arquivo"], {"numero": concurso_escolhido["concurso"], "data": concurso_escolhido["data"]}, df_resultado["Acertos"].tolist(), {})
                 st.success("Conferência salva!")
+
+    # ================= TAB 11: REGRAS DE OURO =================
+    with tab11:
+        st.markdown("### 👑 Regras de Ouro - Baseado nos Slides Estratégicos")
+        st.caption("Heurísticas matemáticas para posicionamento tático das dezenas.")
+        
+        # Exibição visual das regras para referência do usuário
+        with st.expander("📜 Visualizar Regras de Ouro (Referência)", expanded=False):
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.markdown("""
+                **Regra #1: Bordas Iniciais**  
+                `P1 ∈ {01, 02, 03, 04}`  
+                *Nunca comece com 05, 06 ou 07.*
+                """)
+                st.markdown("""
+                **Regra #2: Ancoragem Final**  
+                `P15 ∈ {22, 23, 24, 25}`  
+                *Ancore a borda direita.*
+                """)
+            with col2:
+                st.markdown("""
+                **Regra #3: Morte das Sequências**  
+                `Consecutivos ≤ 4`  
+                *Nunca marque 5 ou mais consecutivos.*
+                """)
+                st.markdown("""
+                **Regra #4: Centro Gravitacional**  
+                `P08 ∈ {12, 13, 14}`  
+                *Fixe o eixo central na 8ª posição.*
+                """)
+            with col3:
+                st.markdown("""
+                **Regra #5: Navegando o Caos**  
+                `P07, P08, P09 ∈ {11, 12, 13, 14, 15}`  
+                *Restrinja o núcleo do jogo.*
+                """)
+                st.markdown("""
+                **Filtro Global: Soma**  
+                `180 ≤ Soma ≤ 210`  
+                *Validação final do bilhete.*
+                """)
+
+        st.divider()
+        
+        # Interface de Geração
+        col1, col2 = st.columns(2)
+        with col1:
+            qtd_jogos_ouro = st.slider("Quantidade de Jogos", 1, 30, 10, key="qtd_ouro")
+        with col2:
+            usar_pesos = st.checkbox("Usar pesos estatísticos (Freq/Atraso)", value=True, 
+                                     help="Se ativado, prioriza números com melhor desempenho histórico dentro das regras.")
+        
+        if st.button("👑 GERAR JOGOS PELAS REGRAS DE OURO", use_container_width=True, type="primary"):
+            if not st.session_state.gerador_principal:
+                st.error("Carregue os concursos primeiro na barra lateral!")
+            else:
+                with st.spinner(f"Aplicando tática posicional para gerar {qtd_jogos_ouro} jogos..."):
+                    
+                    # Preparar pool de números com pesos (se ativado)
+                    numeros_pool = list(range(1, 26))
+                    pesos_pool = None
+                    
+                    if usar_pesos:
+                        numeros_pool, pesos_pool = st.session_state.gerador_principal.pool_ponderado
+                    
+                    jogos_gerados_ouro = []
+                    tentativas = 0
+                    max_tentativas = qtd_jogos_ouro * 1000
+                    
+                    progress_bar = st.progress(0, text="Calculando estruturas permitidas...")
+                    
+                    while len(jogos_gerados_ouro) < qtd_jogos_ouro and tentativas < max_tentativas:
+                        tentativas += 1
+                        
+                        # 1. Selecionar 15 números (com ou sem peso)
+                        if usar_pesos and pesos_pool is not None:
+                            # Garantir que a soma dos pesos é válida
+                            if np.sum(pesos_pool) > 0:
+                                jogo = sorted(np.random.choice(numeros_pool, size=15, replace=False, p=pesos_pool))
+                            else:
+                                jogo = sorted(random.sample(numeros_pool, 15))
+                        else:
+                            jogo = sorted(random.sample(numeros_pool, 15))
+                        
+                        # 2. Aplicar Filtros das Regras de Ouro
+                        
+                        # Regra #1: Borda Esquerda (P1)
+                        if jogo[0] not in [1, 2, 3, 4]:
+                            continue
+                            
+                        # Regra #2: Borda Direita (P15)
+                        if jogo[14] not in [22, 23, 24, 25]:
+                            continue
+                            
+                        # Regra #3: Sequências Longas
+                        # Encontrar a maior sequência consecutiva
+                        max_consec = 1
+                        current_consec = 1
+                        for i in range(1, len(jogo)):
+                            if jogo[i] == jogo[i-1] + 1:
+                                current_consec += 1
+                                max_consec = max(max_consec, current_consec)
+                            else:
+                                current_consec = 1
+                        if max_consec > 4:
+                            continue
+                            
+                        # Regra #4: Centro Gravitacional (P8)
+                        if jogo[7] not in [12, 13, 14]:  # índice 7 = 8ª posição
+                            continue
+                            
+                        # Regra #5: Zona de Caos (P7, P8, P9)
+                        # Índices 6, 7, 8 correspondem às posições 7, 8, 9
+                        zona_caos_set = {11, 12, 13, 14, 15}
+                        if not (jogo[6] in zona_caos_set and jogo[7] in zona_caos_set and jogo[8] in zona_caos_set):
+                            continue
+                            
+                        # Filtro Global: Soma
+                        soma_jogo = sum(jogo)
+                        if not (180 <= soma_jogo <= 210):
+                            continue
+                            
+                        # Se passou por todos os filtros, é um jogo válido
+                        if jogo not in jogos_gerados_ouro:
+                            jogos_gerados_ouro.append(jogo)
+                            
+                        # Atualizar progresso
+                        if tentativas % 100 == 0:
+                            progress_bar.progress(min(len(jogos_gerados_ouro)/qtd_jogos_ouro, 1.0), 
+                                                text=f"Encontrados {len(jogos_gerados_ouro)}/{qtd_jogos_ouro} (Tentativas: {tentativas})")
+                    
+                    progress_bar.empty()
+                    
+                    if len(jogos_gerados_ouro) < qtd_jogos_ouro:
+                        st.warning(f"Apenas {len(jogos_gerados_ouro)} jogos encontrados em {tentativas} tentativas. As regras são muito restritivas!")
+                    
+                    if jogos_gerados_ouro:
+                        st.session_state.jogos_gerados = jogos_gerados_ouro
+                        st.session_state.scores = []  # Sem score específico, apenas validação
+                        st.success(f"✅ {len(jogos_gerados_ouro)} jogos gerados seguindo estritamente as Regras de Ouro!")
+                    else:
+                        st.error("❌ Nenhum jogo pôde ser gerado. Verifique a base de dados ou desative os pesos.")
+        
+        # Exibição dos Jogos Gerados pelas Regras de Ouro
+        if "jogos_gerados" in st.session_state and st.session_state.jogos_gerados:
+            # Verificar se os jogos atuais parecem ser das regras de ouro (checagem rápida pelo P1)
+            # Isso é apenas para UX, para não mostrar métricas erradas se o usuário veio de outra aba
+            is_ouro_style = (st.session_state.jogos_gerados[0][0] in [1,2,3,4] and 
+                             st.session_state.jogos_gerados[0][14] in [22,23,24,25])
+            
+            if is_ouro_style:
+                st.markdown(f"### 📋 Jogos Táticos ({len(st.session_state.jogos_gerados)})")
+                st.caption("Estrutura validada: Bordas fixas, centro controlado, soma balanceada.")
+                
+                for i, jogo in enumerate(st.session_state.jogos_gerados[:15]):
+                    # Destacar as posições estratégicas
+                    p1 = jogo[0]
+                    p7, p8, p9 = jogo[6], jogo[7], jogo[8]
+                    p15 = jogo[14]
+                    
+                    stats_jogo = f"🎯 P1={p1:02d} | P7-9=[{p7:02d},{p8:02d},{p9:02d}] | P15={p15:02d} | Σ={sum(jogo)}"
+                    
+                    # Formatação HTML customizada para destacar as posições chave
+                    nums_html = ""
+                    for idx, num in enumerate(jogo):
+                        if idx == 0:  # P1
+                            nums_html += f"<span style='background:#4cc9f040; border:2px solid #4cc9f0; border-radius:20px; padding:5px 8px; margin:2px; display:inline-block; font-weight:bold;'>{num:02d}</span>"
+                        elif idx in [6, 7, 8]:  # P7, P8, P9 (Zona de Caos)
+                            nums_html += f"<span style='background:#ff880040; border:2px solid #ff8800; border-radius:20px; padding:5px 8px; margin:2px; display:inline-block; font-weight:bold;'>{num:02d}</span>"
+                        elif idx == 14:  # P15
+                            nums_html += f"<span style='background:#00ff8840; border:2px solid #00ff88; border-radius:20px; padding:5px 8px; margin:2px; display:inline-block; font-weight:bold;'>{num:02d}</span>"
+                        else:
+                            nums_html += f"<span style='background:#0e1117; border:1px solid #262730; border-radius:20px; padding:5px 8px; margin:2px; display:inline-block;'>{num:02d}</span>"
+                    
+                    st.markdown(f"""
+                    <div style='border-left: 5px solid gold; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
+                        <strong>Jogo {i+1:2d}</strong><br>
+                        {nums_html}<br>
+                        <small style='color:#aaa;'>{stats_jogo}</small>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                # Botão para salvar
+                if st.button("💾 Salvar Jogos das Regras de Ouro", key="salvar_ouro", use_container_width=True):
+                    ultimo = st.session_state.dados_api[0]
+                    arquivo, jogo_id = salvar_jogos_gerados(
+                        st.session_state.jogos_gerados, 
+                        [], 
+                        {"estrategia": "Regras de Ouro - Posicional", "filtros": "P1, P15, P7-9, Soma"}, 
+                        ultimo['concurso'], 
+                        ultimo['data']
+                    )
+                    if arquivo:
+                        st.success(f"✅ Jogos táticos salvos! ID: {jogo_id}")
+                        st.session_state.jogos_salvos = carregar_jogos_salvos()
+            else:
+                st.info("👆 Gere jogos usando o botão 'GERAR JOGOS PELAS REGRAS DE OURO' para ver a análise posicional aqui.")
 
 if __name__ == "__main__":
     main()
