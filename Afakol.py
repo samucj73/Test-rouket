@@ -52,6 +52,7 @@ input, textarea { border-radius: 12px !important; }
 .ia7-highlight { background: linear-gradient(135deg, #ff880020 0%, #ff440020 100%); border: 2px solid #ff8800; padding: 15px; border-radius: 12px; margin: 10px 0; }
 .nash-highlight { background: linear-gradient(135deg, #9b59b620 0%, #6c348320 100%); border: 2px solid #9b59b6; padding: 15px; border-radius: 12px; margin: 10px 0; }
 .ev-highlight { background: linear-gradient(135deg, #00ff8820 0%, #00cc6620 100%); border: 2px solid #00ff88; padding: 15px; border-radius: 12px; margin: 10px 0; }
+.img-analysis-highlight { background: linear-gradient(135deg, #ffd70020 0%, #ff8c0020 100%); border: 2px solid #ffd700; padding: 15px; border-radius: 12px; margin: 10px 0; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -1617,7 +1618,7 @@ def main():
     # ================= INTERFACE PRINCIPAL =================
     st.subheader("🎯 Análise e Geração de Jogos")
 
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12 = st.tabs([
         "📊 Análise do Último Concurso",
         "🎲 Gerador de Jogos",
         "🚀 EMS 5.0 - Cobertura",
@@ -1628,7 +1629,8 @@ def main():
         "📈 Avaliação Estatística",
         "📐 Geometria do Volante",
         "✅ Conferência Salvos",
-        "👑 REGRAS DE OURO"
+        "👑 REGRAS DE OURO",
+        "📋 REGRAS DE OURO AVANÇADO (IMG 2812/2814)"
     ])
 
     # ================= TAB 1: ANÁLISE DO ÚLTIMO CONCURSO =================
@@ -2867,6 +2869,267 @@ def main():
                         st.session_state.jogos_salvos = carregar_jogos_salvos()
             else:
                 st.info("👆 Gere jogos usando o botão 'GERAR JOGOS PELAS REGRAS DE OURO' para ver a análise posicional aqui.")
+
+    # ================= TAB 12: REGRAS DE OURO AVANÇADO (IMG 2812/2814) =================
+    with tab12:
+        st.markdown("### 📋 REGRAS DE OURO AVANÇADO - Baseado nos Checklists 3124")
+        st.markdown("""
+        <div class="img-analysis-highlight">
+        <strong>🎯 ESTUDO DOS CHECKLISTS - CONCURSO 3124:</strong><br>
+        • 📊 <strong>Soma Total:</strong> 168 (Faixa ideal: 140-200)<br>
+        • ⚖️ <strong>Paridade:</strong> 8 ímpares / 7 pares (Equilíbrio perfeito)<br>
+        • 📈 <strong>Saltos (Atrasos):</strong> 12 números com salto 3-5, Máximo atraso: 09 (Bola 14)<br>
+        • 📐 <strong>Repetição de Linhas:</strong> 3 linhas com 4+ números (Linha 3 central forte)<br>
+        • 📏 <strong>Colunas Concentradas:</strong> Coluna 2 e 4 com 5 acertos (Padrão vertical confirmado)<br>
+        • 🧩 <strong>Quadrantes:</strong> Quadrante inferior esquerdo dominante<br>
+        • 🔗 <strong>Consecutivos:</strong> Apenas 2 pares seguidos (Baixo risco)<br>
+        • 🔢 <strong>Números Primos:</strong> 7 primos presentes<br>
+        • 📊 <strong>Distribuição por Dezena:</strong> Dezena 1: 3 | 2: 4 | 3: 2 | 4: 3 | 5: 3<br>
+        • ✅ <strong>Conclusão:</strong> 14/15 itens verificados positivamente - PADRÃO FORTE!
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.caption("Geração de jogos baseada nos padrões estatísticos identificados no Concurso 3124.")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            qtd_jogos_img = st.slider("Quantidade de Jogos", 5, 50, 15, key="qtd_img")
+        with col2:
+            st.markdown("**Filtros Ativos:**")
+            st.markdown("✅ Soma: 140-200 | ✅ Paridade: 7-8 pares | ✅ Saltos: 3-5 | ✅ Consecutivos ≤ 2")
+        
+        if st.button("🎲 GERAR JOGOS PADRÃO 3124", use_container_width=True, type="primary"):
+            if not st.session_state.gerador_principal:
+                st.error("Carregue os concursos primeiro na barra lateral!")
+            else:
+                with st.spinner(f"Analisando padrões do Concurso 3124 e gerando {qtd_jogos_img} jogos..."):
+                    
+                    # Função para calcular atraso de um número específico
+                    def calcular_atraso_numero(numero, concursos):
+                        for i, concurso in enumerate(concursos):
+                            if numero in concurso:
+                                return i
+                        return len(concursos)
+                    
+                    # Obter concursos para análise
+                    concursos = st.session_state.gerador_principal.historico
+                    ultimo_concurso = st.session_state.gerador_principal.ultimo
+                    
+                    # Candidatos para geração
+                    candidatos = []
+                    tentativas = 0
+                    max_tentativas = qtd_jogos_img * 2000
+                    
+                    progress_bar = st.progress(0, text="Aplicando filtros do padrão 3124...")
+                    
+                    while len(candidatos) < qtd_jogos_img and tentativas < max_tentativas:
+                        tentativas += 1
+                        
+                        # Gerar jogo base
+                        jogo = sorted(random.sample(range(1, 26), 15))
+                        
+                        # Filtro 1: Soma Total (140-200)
+                        soma = sum(jogo)
+                        if not (140 <= soma <= 200):
+                            continue
+                        
+                        # Filtro 2: Paridade (7 ou 8 pares)
+                        pares = contar_pares(jogo)
+                        if pares not in [7, 8]:
+                            continue
+                        
+                        # Filtro 3: Consecutivos (apenas 2 pares seguidos)
+                        # Contar pares consecutivos (ex: 1-2, 3-4, 5-6 são 3 pares consecutivos)
+                        pares_consecutivos = 0
+                        for i in range(len(jogo)-1):
+                            if jogo[i+1] == jogo[i] + 1:
+                                pares_consecutivos += 1
+                        if pares_consecutivos > 2:
+                            continue
+                        
+                        # Filtro 4: Saltos (Atrasos) - 12 números com salto 3-5
+                        # Verificar atraso dos números no histórico
+                        numeros_com_salto_3_5 = 0
+                        for num in jogo:
+                            atraso = calcular_atraso_numero(num, concursos)
+                            if 3 <= atraso <= 5:
+                                numeros_com_salto_3_5 += 1
+                        
+                        if numeros_com_salto_3_5 < 10:  # Permitir uma margem (12 é o ideal)
+                            continue
+                        
+                        # Filtro 5: Distribuição por Dezenas (baseado no padrão: 3,4,2,3,3)
+                        dezenas = [0] * 5
+                        for num in jogo:
+                            dezenas[(num-1)//5] += 1
+                        
+                        # Verificar se a distribuição é próxima do padrão
+                        padrao_ideal = [3, 4, 2, 3, 3]
+                        diff = sum(abs(dezenas[i] - padrao_ideal[i]) for i in range(5))
+                        if diff > 3:  # Permitir pequena variação
+                            continue
+                        
+                        # Filtro 6: Números Primos (7 primos)
+                        primos = contar_primos(jogo)
+                        if primos != 7:
+                            continue
+                        
+                        # Filtro 7: Quadrante inferior esquerdo dominante
+                        # Quadrante inferior esquerdo: números 16-20 (linhas 4 e 5, colunas 1 e 2)
+                        # Coordenadas: (3,0)=16, (3,1)=17, (4,0)=21, (4,1)=22
+                        quadrante_inf_esq = {16, 17, 21, 22}
+                        outros_quadrantes_superiores = {1,2,3,4,5,6,7,8,9,10}  # Linhas 1 e 2
+                        
+                        count_inf_esq = len(set(jogo) & quadrante_inf_esq)
+                        count_sup = len(set(jogo) & outros_quadrantes_superiores)
+                        
+                        # Inferior esquerdo deve ter pelo menos 2 números e mais que os superiores
+                        if count_inf_esq < 2 or count_inf_esq <= count_sup:
+                            continue
+                        
+                        # Se passou por todos os filtros
+                        if jogo not in candidatos:
+                            candidatos.append(jogo)
+                        
+                        if tentativas % 200 == 0:
+                            progress_bar.progress(min(len(candidatos)/qtd_jogos_img, 1.0), 
+                                                text=f"Encontrados {len(candidatos)}/{qtd_jogos_img} jogos válidos")
+                    
+                    progress_bar.empty()
+                    
+                    if len(candidatos) < qtd_jogos_img:
+                        st.warning(f"Apenas {len(candidatos)} jogos encontrados em {tentativas} tentativas. Os filtros são muito restritivos!")
+                    
+                    if candidatos:
+                        # Calcular scores baseados nos filtros
+                        scores_img = []
+                        for jogo in candidatos:
+                            score = 0
+                            soma = sum(jogo)
+                            if 150 <= soma <= 180:
+                                score += 3
+                            elif 140 <= soma <= 200:
+                                score += 1
+                            
+                            pares = contar_pares(jogo)
+                            if pares == 7 or pares == 8:
+                                score += 2
+                            
+                            pares_cons = sum(1 for i in range(len(jogo)-1) if jogo[i+1] == jogo[i] + 1)
+                            if pares_cons <= 2:
+                                score += 1
+                            
+                            primos = contar_primos(jogo)
+                            if primos == 7:
+                                score += 2
+                            
+                            scores_img.append(score)
+                        
+                        st.session_state.jogos_gerados = candidatos
+                        st.session_state.scores = scores_img
+                        st.session_state.jogos_img_info = {
+                            "filtros": "Padrão Concurso 3124",
+                            "soma": "140-200",
+                            "paridade": "7-8 pares",
+                            "consecutivos": "≤ 2 pares",
+                            "primos": "7 primos"
+                        }
+                        
+                        st.success(f"✅ {len(candidatos)} jogos gerados seguindo o padrão do Concurso 3124!")
+                        
+                        # Estatísticas dos jogos gerados
+                        st.markdown("### 📊 Estatísticas dos Jogos Gerados")
+                        col_a, col_b, col_c, col_d = st.columns(4)
+                        with col_a:
+                            media_soma = np.mean([sum(j) for j in candidatos])
+                            st.metric("Média Soma", f"{media_soma:.0f}")
+                        with col_b:
+                            media_pares = np.mean([contar_pares(j) for j in candidatos])
+                            st.metric("Média Pares", f"{media_pares:.1f}")
+                        with col_c:
+                            media_primos = np.mean([contar_primos(j) for j in candidatos])
+                            st.metric("Média Primos", f"{media_primos:.1f}")
+                        with col_d:
+                            media_cons = np.mean([sum(1 for i in range(len(j)-1) if j[i+1] == j[i] + 1) for j in candidatos])
+                            st.metric("Média Consecutivos", f"{media_cons:.1f}")
+                    else:
+                        st.error("❌ Nenhum jogo pôde ser gerado. Tente novamente.")
+        
+        # Exibição dos Jogos Gerados pelo Padrão 3124
+        if "jogos_gerados" in st.session_state and st.session_state.jogos_gerados and "jogos_img_info" in st.session_state:
+            jogos = st.session_state.jogos_gerados
+            st.markdown(f"### 📋 Jogos Gerados - Padrão Concurso 3124 ({len(jogos)})")
+            
+            for i, jogo in enumerate(jogos[:20]):
+                score = st.session_state.scores[i] if i < len(st.session_state.scores) else 0
+                medalha = ["🥇","🥈","🥉"][i] if i < 3 else "📋"
+                
+                soma = sum(jogo)
+                pares = contar_pares(jogo)
+                impares = 15 - pares
+                primos = contar_primos(jogo)
+                pares_cons = sum(1 for idx in range(len(jogo)-1) if jogo[idx+1] == jogo[idx] + 1)
+                
+                # Calcular distribuição por dezenas
+                dezenas_dist = [0] * 5
+                for num in jogo:
+                    dezenas_dist[(num-1)//5] += 1
+                dist_text = f"D:{dezenas_dist[0]}-{dezenas_dist[1]}-{dezenas_dist[2]}-{dezenas_dist[3]}-{dezenas_dist[4]}"
+                
+                stats = f"⚖️ {pares}p/{impares}i | ➕ {soma} | 🔢 {primos} primos | 🔗 {pares_cons} cons | {dist_text}"
+                
+                # Destacar padrões específicos
+                nums_html = ""
+                for num in jogo:
+                    # Destacar números do quadrante inferior esquerdo (16,17,21,22)
+                    if num in [16, 17, 21, 22]:
+                        nums_html += f"<span style='background:#ffd70040; border:2px solid #ffd700; border-radius:20px; padding:5px 8px; margin:2px; display:inline-block; font-weight:bold;'>{num:02d}</span>"
+                    else:
+                        nums_html += f"<span style='background:#0e1117; border:1px solid #262730; border-radius:20px; padding:5px 8px; margin:2px; display:inline-block;'>{num:02d}</span>"
+                
+                st.markdown(f"""
+                <div style='border-left: 5px solid #ffd700; background:#0e1117; border-radius:10px; padding:15px; margin-bottom:10px;'>
+                    {medalha} <strong>Jogo {i+1:2d}</strong> — Score Padrão 3124: {score}/10<br>
+                    {nums_html}<br>
+                    <small style='color:#aaa;'>{stats}</small>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            if len(jogos) > 20:
+                st.info(f"Exibindo os primeiros 20 de {len(jogos)} jogos. Salve para ver todos.")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("💾 Salvar Jogos Padrão 3124", key="salvar_img", use_container_width=True):
+                    ultimo = st.session_state.dados_api[0]
+                    arquivo, jogo_id = salvar_jogos_gerados(
+                        jogos, 
+                        [], 
+                        st.session_state.jogos_img_info, 
+                        ultimo['concurso'], 
+                        ultimo['data']
+                    )
+                    if arquivo:
+                        st.success(f"✅ {len(jogos)} jogos salvos! ID: {jogo_id}")
+                        st.session_state.jogos_salvos = carregar_jogos_salvos()
+            
+            with col2:
+                df_export = pd.DataFrame({
+                    "Jogo": range(1, len(jogos)+1),
+                    "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in jogos],
+                    "Score_3124": st.session_state.scores if st.session_state.scores else [0]*len(jogos),
+                    "Soma": [sum(j) for j in jogos],
+                    "Pares": [contar_pares(j) for j in jogos],
+                    "Primos": [contar_primos(j) for j in jogos],
+                    "Consecutivos": [sum(1 for i in range(len(j)-1) if j[i+1] == j[i] + 1) for j in jogos]
+                })
+                st.download_button(
+                    label="📥 Exportar CSV", 
+                    data=df_export.to_csv(index=False), 
+                    file_name=f"padrao3124_jogos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", 
+                    mime="text/csv", 
+                    use_container_width=True
+                )
 
 if __name__ == "__main__":
     main()
