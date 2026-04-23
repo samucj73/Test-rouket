@@ -5072,7 +5072,7 @@ def gerar_poster_multipla_individual(jogo: dict, mercados: dict, titulo: str = "
 
 #def gerar_poster_resultado_individual(multipla: dict, data_br: str) -> io.BytesIO:
 def gerar_poster_resultado_individual(multipla: dict, data_br: str, api_client=None) -> io.BytesIO:
-    """Gera pôster de resultado para múltipla individual - VERSÃO UNIFICADA"""
+    """Gera pôster de resultado para múltipla individual - VERSÃO CORRIGIDA E UNIFICADA"""
     
     LARGURA = 2000
     ALTURA = 1350
@@ -5098,9 +5098,8 @@ def gerar_poster_resultado_individual(multipla: dict, data_br: str, api_client=N
     # Extrair dados da múltipla
     jogo = multipla.get("jogo", {})
     resultados = multipla.get("resultados", {})
-    acertada = multipla.get("acertada", False)
     
-    # GOLS - buscar de diferentes lugares
+    # GOLS - buscar de diferentes lugares (MESMO SISTEMA DA MÚLTIPLA INDIVIDUAL)
     home_goals = multipla.get("home_goals", None)
     away_goals = multipla.get("away_goals", None)
     
@@ -5130,6 +5129,37 @@ def gerar_poster_resultado_individual(multipla: dict, data_br: str, api_client=N
     away_nome = jogo.get("away", "TIME FORA")
     liga_nome = jogo.get("liga", "LIGA")
     
+    # ===== VERIFICAÇÃO CORRETA DE ACERTO =====
+    # Lista de mercados para mostrar
+    mercados_para_mostrar = []
+    
+    if multipla.get("mercado_over_under") or "over_under" in resultados:
+        mercado_data = multipla.get("mercado_over_under", {})
+        resultado = resultados.get("over_under", "N/A")
+        mercados_para_mostrar.append(("over_under", mercado_data, resultado))
+    
+    if multipla.get("mercado_favorito") or "favorito" in resultados:
+        mercado_data = multipla.get("mercado_favorito", {})
+        resultado = resultados.get("favorito", "N/A")
+        mercados_para_mostrar.append(("favorito", mercado_data, resultado))
+    
+    if multipla.get("mercado_ambas_marcam") or "ambas_marcam" in resultados:
+        mercado_data = multipla.get("mercado_ambas_marcam", {})
+        resultado = resultados.get("ambas_marcam", "N/A")
+        mercados_para_mostrar.append(("ambas_marcam", mercado_data, resultado))
+    
+    # CORREÇÃO: Só é GREEN se TODOS os mercados forem GREEN
+    # Se não houver mercados, considera erro
+    if not mercados_para_mostrar:
+        acertada = False
+    else:
+        # Verifica se TODOS os resultados são GREEN
+        todos_green = all(resultado == "GREEN" for _, _, resultado in mercados_para_mostrar)
+        # Verifica se há algum mercado (mesmo que não tenha resultado ainda)
+        tem_mercados = len(mercados_para_mostrar) > 0
+        # Só acertou se tem mercados E todos são GREEN
+        acertada = tem_mercados and todos_green
+    
     # ===== CABEÇALHO =====
     titulo = f"RESULTADO - {data_br}"
     titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
@@ -5138,11 +5168,16 @@ def gerar_poster_resultado_individual(multipla: dict, data_br: str, api_client=N
     
     # Status (acertou/errou) como subtítulo
     if acertada:
-        status_text = "✅ MÚLTIPLA ACERTADA!"
+        status_text = "✅ MÚLTIPLA ACERTADA! TODOS OS MERCADOS GREEN"
         status_cor = (46, 204, 113)
     else:
-        status_text = "❌ MÚLTIPLA ERRADA!"
-        status_cor = (231, 76, 60)
+        # Verifica se tem algum RED
+        tem_red = any(resultado == "RED" for _, _, resultado in mercados_para_mostrar)
+        if tem_red:
+            status_text = "❌ MÚLTIPLA ERRADA! PELO MENOS UM MERCADO RED"
+        else:
+            status_text = "⏳ MÚLTIPLA PENDENTE - AGUARDANDO RESULTADOS"
+        status_cor = (231, 76, 60) if tem_red else (149, 165, 166)
     
     status_bbox = draw.textbbox((0, 0), status_text, font=FONTE_DATA)
     status_w = status_bbox[2] - status_bbox[0]
@@ -5169,7 +5204,7 @@ def gerar_poster_resultado_individual(multipla: dict, data_br: str, api_client=N
     x_away = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE
     y_escudos = 300
     
-    # Baixar escudos
+    # Baixar escudos (MESMO SISTEMA DO gerar_poster_multipla_individual)
     escudo_home_img = None
     escudo_away_img = None
     
@@ -5190,7 +5225,7 @@ def gerar_poster_resultado_individual(multipla: dict, data_br: str, api_client=N
         except:
             pass
     
-    # Fallback com iniciais
+    # Fallback com iniciais (MESMO SISTEMA DO gerar_poster_multipla_individual)
     def criar_escudo_fallback(nome, cor_fundo=(35, 40, 55)):
         img_esc = Image.new("RGBA", (TAMANHO_ESCUDO, TAMANHO_ESCUDO), cor_fundo + (255,))
         draw_esc = ImageDraw.Draw(img_esc)
@@ -5244,10 +5279,23 @@ def gerar_poster_resultado_individual(multipla: dict, data_br: str, api_client=N
     vs_y = y_escudos + TAMANHO_QUADRADO//2
     draw.text((vs_x, vs_y), "VS", font=FONTE_VS, fill=(255, 215, 0), anchor="mm")
     
-    # PLACAR (entre os escudos, acima do VS)
-    placar_text = f"{home_goals} - {away_goals}"
-    placar_y = y_escudos - 30
-    draw.text((vs_x, placar_y), placar_text, font=FONTE_PLACAR, fill=(255, 255, 255), anchor="mm")
+    # PLACAR AO LADO DOS ESCUDOS (CORRIGIDO)
+    # Placar do time home (à direita do escudo home)
+    placar_home_x = x_home + TAMANHO_QUADRADO + 15
+    placar_home_y = y_escudos + TAMANHO_QUADRADO//2
+    draw.text((placar_home_x, placar_home_y), str(home_goals), font=FONTE_PLACAR, 
+             fill=(255, 255, 255), anchor="lm")
+    
+    # Placar do time away (à esquerda do escudo away)
+    placar_away_x = x_away - 15
+    placar_away_y = y_escudos + TAMANHO_QUADRADO//2
+    draw.text((placar_away_x, placar_away_y), str(away_goals), font=FONTE_PLACAR, 
+             fill=(255, 255, 255), anchor="rm")
+    
+    # Hífen entre os placares
+    hifen_x = (placar_home_x + placar_away_x) // 2
+    hifen_y = y_escudos + TAMANHO_QUADRADO//2
+    draw.text((hifen_x, hifen_y), "-", font=FONTE_PLACAR, fill=(255, 215, 0), anchor="mm")
     
     # ===== SEÇÃO DOS MERCADOS =====
     y_mercados = y_escudos + TAMANHO_QUADRADO + 130
@@ -5262,7 +5310,7 @@ def gerar_poster_resultado_individual(multipla: dict, data_br: str, api_client=N
     CARD_ALTURA = 155
     LARGURA_CARD = LARGURA - 2 * PADDING - 160
     
-    # Cores por mercado
+    # Cores por mercado (MESMO DO gerar_poster_multipla_individual)
     cores_mercados = {
         "over_under": (255, 215, 0),   # Dourado
         "favorito": (255, 87, 34),     # Laranja
@@ -5270,9 +5318,9 @@ def gerar_poster_resultado_individual(multipla: dict, data_br: str, api_client=N
     }
     
     icones = {
-        "over_under": "⚽",
-        "favorito": "🏆",
-        "ambas_marcam": "🥅"
+        "over_under": "",
+        "favorito": "",
+        "ambas_marcam": ""
     }
     
     titulos = {
@@ -5281,25 +5329,7 @@ def gerar_poster_resultado_individual(multipla: dict, data_br: str, api_client=N
         "ambas_marcam": "AMBAS MARCAM"
     }
     
-    # Lista de mercados para mostrar
-    mercados_para_mostrar = []
-    
-    if multipla.get("mercado_over_under") or "over_under" in resultados:
-        mercado_data = multipla.get("mercado_over_under", {})
-        resultado = resultados.get("over_under", "N/A")
-        mercados_para_mostrar.append(("over_under", mercado_data, resultado))
-    
-    if multipla.get("mercado_favorito") or "favorito" in resultados:
-        mercado_data = multipla.get("mercado_favorito", {})
-        resultado = resultados.get("favorito", "N/A")
-        mercados_para_mostrar.append(("favorito", mercado_data, resultado))
-    
-    if multipla.get("mercado_ambas_marcam") or "ambas_marcam" in resultados:
-        mercado_data = multipla.get("mercado_ambas_marcam", {})
-        resultado = resultados.get("ambas_marcam", "N/A")
-        mercados_para_mostrar.append(("ambas_marcam", mercado_data, resultado))
-    
-    # Função para desenhar card de mercado (adaptada para resultados)
+    # Função para desenhar card de resultado (ESTRUTURA IGUAL AO gerar_poster_multipla_individual)
     def desenhar_card_resultado(mercado_key, mercado_data, resultado, y_pos):
         cor = cores_mercados.get(mercado_key, (200, 200, 200))
         icone_text = icones.get(mercado_key, "📊")
@@ -5339,24 +5369,24 @@ def gerar_poster_resultado_individual(multipla: dict, data_br: str, api_client=N
         odd_text = f"{odd:.2f}"
         draw.text((LARGURA - PADDING - 300, y_pos + 35), odd_text, font=FONTE_ODD_GRANDE, fill=(100, 255, 100))
         
-        # Resultado (no lugar da confiança)
-        resultado_emoji = "✅" if resultado == "GREEN" else "❌" if resultado == "RED" else "⏳"
-        cor_resultado = (46, 204, 113) if resultado == "GREEN" else (231, 76, 60) if resultado == "RED" else (149, 165, 166)
-        resultado_text = f"{resultado_emoji} {resultado}"
-        draw.text((LARGURA - PADDING - 780, y_pos + 90), resultado_text, font=FONTE_CONFIANCA, fill=cor_resultado)
-        
         # Confiança
         confianca = mercado_data.get("confianca", 0)
         if confianca > 0:
             conf_text = f"Confiança: {confianca:.0f}%"
-            draw.text((LARGURA - PADDING - 780, y_pos + 40), conf_text, font=FONTE_CONFIANCA, fill=(150, 200, 255))
+            draw.text((LARGURA - PADDING - 780, y_pos + 30), conf_text, font=FONTE_CONFIANCA, fill=(150, 200, 255))
+        
+        # Resultado do mercado
+        resultado_emoji = "✅" if resultado == "GREEN" else "❌" if resultado == "RED" else "⏳"
+        cor_resultado = (46, 204, 113) if resultado == "GREEN" else (231, 76, 60) if resultado == "RED" else (149, 165, 166)
+        resultado_text = f"{resultado_emoji} {resultado}"
+        draw.text((LARGURA - PADDING - 780, y_pos + 80), resultado_text, font=FONTE_CONFIANCA, fill=cor_resultado)
         
         # Estimativa (apenas para over_under)
         if mercado_key == "over_under":
             estimativa = mercado_data.get("estimativa", 0)
             if estimativa > 0:
                 est_text = f"Estimativa: {estimativa:.2f} gols"
-                draw.text((LARGURA - PADDING - 300, y_pos + 105), est_text, font=FONTE_CONFIANCA, fill=(200, 200, 200))
+                draw.text((LARGURA - PADDING - 780, y_pos + 105), est_text, font=FONTE_CONFIANCA, fill=(200, 200, 200))
     
     # Desenhar cards na ordem correta
     for mercado_key, mercado_data, resultado in mercados_para_mostrar:
@@ -5381,7 +5411,8 @@ def gerar_poster_resultado_individual(multipla: dict, data_br: str, api_client=N
     img_rgb.save(buffer, format="PNG", optimize=True, quality=95)
     buffer.seek(0)
     
-    return buffer
+    return buffer 
+
 
 
     
