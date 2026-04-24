@@ -5726,7 +5726,9 @@ def render_tab_multiplas_individuais(sistema):
                     
                     # Enviar resultado para Telegram
                     data_br = datetime.now().strftime("%d/%m/%Y")
-                    poster_resultado = gerar_poster_resultado_individual(multipla, data_br)
+                    poster_resultado = gerar_poster_resultado_individual(multipla, data_br,
+                    api_client=sistema.api_client  # ← ADICIONADO
+                )                                                   
                     
                     if acertada:
                         titulo = "✅ MÚLTIPLA INDIVIDUAL - ACERTOU!"
