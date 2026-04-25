@@ -4940,9 +4940,9 @@ def gerar_poster_multipla_individual(jogo: dict, mercados: dict, titulo: str = "
                                 y_escudos + (TAMANHO_QUADRADO - TAMANHO_ESCUDO)//2), escudo_away_img)
     
     # Nomes dos times (centralizados abaixo dos escudos)
-    draw.text((x_home + TAMANHO_QUADRADO//2, y_escudos + TAMANHO_QUADRADO + 25), 
+    draw.text((x_home + TAMANHO_QUADRADO//2, y_escudos + TAMANHO_QUADRADO + 35), 
              home_nome[:22], font=FONTE_TIMES, fill=(255, 255, 255), anchor="mm")
-    draw.text((x_away + TAMANHO_QUADRADO//2, y_escudos + TAMANHO_QUADRADO + 25), 
+    draw.text((x_away + TAMANHO_QUADRADO//2, y_escudos + TAMANHO_QUADRADO + 35), 
              away_nome[:22], font=FONTE_TIMES, fill=(255, 255, 255), anchor="mm")
     
     # VS centralizado
@@ -5020,7 +5020,7 @@ def gerar_poster_multipla_individual(jogo: dict, mercados: dict, titulo: str = "
         # Odd (grande, em verde)
         odd = mercado_data.get("odd", 1.50)
         odd_text = f"{odd:.2f}"
-        draw.text((LARGURA - PADDING - 280, y_pos + 35), odd_text, font=FONTE_ODD_GRANDE, fill=(100, 255, 100))
+        draw.text((LARGURA - PADDING - 270, y_pos + 35), odd_text, font=FONTE_ODD_GRANDE, fill=(100, 255, 100))
         
         # Confiança
         confianca = mercado_data.get("confianca", 0)
@@ -5269,9 +5269,9 @@ def gerar_poster_resultado_individual(multipla: dict, data_br: str, api_client=N
                                 y_escudos + (TAMANHO_QUADRADO - TAMANHO_ESCUDO)//2), escudo_away_img)
     
     # Nomes dos times (centralizados abaixo dos escudos)
-    draw.text((x_home + TAMANHO_QUADRADO//2, y_escudos + TAMANHO_QUADRADO + 25), 
+    draw.text((x_home + TAMANHO_QUADRADO//2, y_escudos + TAMANHO_QUADRADO + 35), 
              home_nome[:22], font=FONTE_TIMES, fill=(255, 255, 255), anchor="mm")
-    draw.text((x_away + TAMANHO_QUADRADO//2, y_escudos + TAMANHO_QUADRADO + 25), 
+    draw.text((x_away + TAMANHO_QUADRADO//2, y_escudos + TAMANHO_QUADRADO + 35), 
              away_nome[:22], font=FONTE_TIMES, fill=(255, 255, 255), anchor="mm")
     
     # VS centralizado
@@ -5281,13 +5281,13 @@ def gerar_poster_resultado_individual(multipla: dict, data_br: str, api_client=N
     
     # PLACAR AO LADO DOS ESCUDOS (CORRIGIDO)
     # Placar do time home (à direita do escudo home)
-    placar_home_x = x_home + TAMANHO_QUADRADO + 20
+    placar_home_x = x_home + TAMANHO_QUADRADO + 30
     placar_home_y = y_escudos + TAMANHO_QUADRADO//2
     draw.text((placar_home_x, placar_home_y), str(home_goals), font=FONTE_PLACAR, 
              fill=(255, 255, 255), anchor="lm")
     
     # Placar do time away (à esquerda do escudo away)
-    placar_away_x = x_away - 20
+    placar_away_x = x_away - 30
     placar_away_y = y_escudos + TAMANHO_QUADRADO//2
     draw.text((placar_away_x, placar_away_y), str(away_goals), font=FONTE_PLACAR, 
              fill=(255, 255, 255), anchor="rm")
@@ -5367,7 +5367,7 @@ def gerar_poster_resultado_individual(multipla: dict, data_br: str, api_client=N
         # Odd (grande, em verde)
         odd = mercado_data.get("odd", 1.50)
         odd_text = f"{odd:.2f}"
-        draw.text((LARGURA - PADDING - 280, y_pos + 35), odd_text, font=FONTE_ODD_GRANDE, fill=(100, 255, 100))
+        draw.text((LARGURA - PADDING - 270, y_pos + 35), odd_text, font=FONTE_ODD_GRANDE, fill=(100, 255, 100))
         
         # Confiança
         confianca = mercado_data.get("confianca", 0)
