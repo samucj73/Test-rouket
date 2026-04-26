@@ -4757,7 +4757,8 @@ class PosterGenerator:
             try:
                 badge_bbox = draw.textbbox((0, 0), resultado_jogo, font=FONTE_INFO)
                 badge_w = badge_bbox[2] - badge_bbox[0]
-                badge_x_center = badge_jogo_x + (badge_jogo_width - badge_w) // 2                draw.text((badge_x_center, badge_jogo_y + 12), resultado_jogo, font=FONTE_INFO, fill=(255, 255, 255))
+                badge_x_center = badge_jogo_x + (badge_jogo_width - badge_w) // 2                
+                draw.text((badge_x_center, badge_jogo_y + 12), resultado_jogo, font=FONTE_INFO, fill=(255, 255, 255))
             except:
                 draw.text((badge_jogo_x + 45, badge_jogo_y + 12), resultado_jogo, font=FONTE_INFO, fill=(255, 255, 255))
 
