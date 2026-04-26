@@ -227,14 +227,13 @@ def calcular_odd_total(multipla):
 # [NOVO] FILTRO PREMIUM - BASEADO NO RELATÓRIO
 # =============================
 
-#class FiltroPremium:
 class FiltroPremium:
     """Filtro avançado baseado em análise REAL - VERSÃO AJUSTADA"""
     
     LIGAS_CONFIG = {
         "OVER_1.5": {
             "recomendadas": ["Bundesliga", "Championship", "Serie A", "Campeonato Brasileiro Série A", "Ligue 1", "Premier League", "Primeira Liga"],
-            "evitar": [],  # REMOVER restrições de liga
+            "evitar": [],
             "taxa_acerto": {
                 "Bundesliga": 100,
                 "Serie A": 100,
@@ -244,8 +243,8 @@ class FiltroPremium:
                 "Premier League": 50,
                 "Primeira Liga": 50,
             },
-            "confianca_minima": 60,  # REDUZIDO de 75 para 60
-            "estimativa_minima": 1.8,  # REDUZIDO de 2.0 para 1.8
+            "confianca_minima": 60,
+            "estimativa_minima": 1.8,
         },
         "OVER_2.5": {
             "recomendadas": ["Bundesliga", "Championship", "Ligue 1", "Premier League", "Primeira Liga"],
@@ -254,13 +253,13 @@ class FiltroPremium:
                 "Bundesliga": 100,
                 "Championship": 50,
             },
-            "estimativa_minima": 2.7,  # REDUZIDO de 2.9 para 2.7
-            "confianca_minima": 65,    # REDUZIDO de 70 para 65
+            "estimativa_minima": 2.7,
+            "confianca_minima": 65,
         },
         "UNDER_2.5": {
             "recomendadas": ["Ligue 1", "Campeonato Brasileiro Série A", "Primeira Liga"],
             "evitar": [],
-            "estimativa_maxima": 2.0,  # AUMENTADO de 1.85 para 2.0
+            "estimativa_maxima": 2.0,
             "confianca_minima": 60,
         },
         "AMBAS_MARCAM": {
@@ -271,27 +270,24 @@ class FiltroPremium:
                 "Championship": 67,
                 "Primeira Liga": 100,
             },
-            "confianca_minima": 55,  # REDUZIDO de 58 para 55
+            "confianca_minima": 55,
         },
         "FAVORITO": {
             "recomendadas": ["Championship"],
             "evitar": [],
             "confianca_minima": 60,
-            "desabilitado": False,  # REATIVADO mas com confiança maior
+            "desabilitado": False,
         },
         "GOLS_HT": {
             "recomendadas": [],
             "evitar": [],
             "confianca_minima": 70,
-            "desabilitado": True,  # Mantém desabilitado (32% acerto)
+            "desabilitado": True,
         }
     }
     
-    # Limite máximo de jogos por dia - AJUSTADO para 15
-    MAX_JOGOS_POR_DIA = 15  # era 12
-    
-    # Score mínimo para aprovação - REDUZIDO
-    SCORE_MINIMO_GLOBAL = 60  # era 75
+    MAX_JOGOS_POR_DIA = 15
+    SCORE_MINIMO_GLOBAL = 60
     
     @classmethod
     def aplicar_filtro_premium(cls, jogos, ativar=True):
@@ -316,7 +312,6 @@ class FiltroPremium:
             estimativa = jogo.get('estimativa', 0)
             tipo_aposta = jogo.get('tipo_aposta', '')
             
-            # PULAR jogos que o próprio sistema já classificou como "NÃO APOSTAR"
             if confianca == 0 or tipo_aposta == "avoid":
                 estatisticas["motivos_descarte"]["sistema_nao_apostar"] += 1
                 continue
@@ -325,20 +320,17 @@ class FiltroPremium:
             aprovado = True
             motivo = None
             
-            # ========== REGRA 1: Verificar se mercado está desabilitado ==========
             config_mercado = cls.LIGAS_CONFIG.get(mercado, {})
             if config_mercado.get("desabilitado", False):
                 aprovado = False
                 motivo = f"Mercado {mercado} desabilitado"
                 estatisticas["motivos_descarte"][f"{mercado}_desabilitado"] += 1
             
-            # ========== REGRA 2: Verificar confiança mínima ==========
             elif confianca < config_mercado.get("confianca_minima", 55):
                 aprovado = False
                 motivo = f"Confiança {confianca:.0f}% < {config_mercado.get('confianca_minima', 55)}%"
                 estatisticas["motivos_descarte"]["confianca_baixa"] += 1
             
-            # ========== REGRA 3: Verificar estimativa (para OVER/UNDER) ==========
             elif mercado in ["OVER_1.5", "OVER_2.5"] and estimativa < config_mercado.get("estimativa_minima", 1.8):
                 aprovado = False
                 motivo = f"Estimativa {estimativa:.2f} < {config_mercado.get('estimativa_minima', 1.8)}"
@@ -349,15 +341,12 @@ class FiltroPremium:
                 motivo = f"Estimativa {estimativa:.2f} > {config_mercado.get('estimativa_maxima', 2.0)}"
                 estatisticas["motivos_descarte"]["estimativa_alta"] += 1
             
-            # ========== REGRA 4: Score mínimo (apenas se tiver score) ==========
             if aprovado and jogo.get('score', 100) < cls.SCORE_MINIMO_GLOBAL:
                 aprovado = False
                 motivo = f"Score {jogo.get('score', 0)} < {cls.SCORE_MINIMO_GLOBAL}"
                 estatisticas["motivos_descarte"]["score_baixo"] += 1
             
-            # ========== APROVAÇÃO ==========
             if aprovado:
-                # Bônus para ligas com boa performance
                 liga_base = cls._normalizar_liga(liga)
                 taxa = config_mercado.get("taxa_acerto", {}).get(liga_base, 50)
                 
@@ -372,12 +361,10 @@ class FiltroPremium:
                 estatisticas["por_liga"][liga] += 1
                 estatisticas["por_mercado"][mercado] += 1
         
-        # Limitar número máximo de jogos
         if len(jogos_filtrados) > cls.MAX_JOGOS_POR_DIA:
             jogos_filtrados.sort(key=lambda x: x.get('qualidade_score', 0), reverse=True)
             jogos_filtrados = jogos_filtrados[:cls.MAX_JOGOS_POR_DIA]
         
-        # Exibir estatísticas
         if jogos_filtrados:
             st.success(f"🎯 Filtro Premium: {len(jogos_filtrados)} jogos aprovados de {len(jogos)}")
             
@@ -392,7 +379,6 @@ class FiltroPremium:
                     st.write(f"   • {motivo}: {qtd} jogos")
         else:
             st.warning(f"⚠️ Nenhum jogo aprovado. {len(jogos)} jogos analisados.")
-            # Mostrar por que não passou
             if estatisticas["motivos_descarte"]:
                 st.markdown("**📋 Motivos que impediram aprovação:**")
                 for motivo, qtd in estatisticas["motivos_descarte"].items():
@@ -402,7 +388,6 @@ class FiltroPremium:
     
     @classmethod
     def _identificar_mercado(cls, tendencia: str) -> str:
-        """Identifica o tipo de mercado baseado na tendência"""
         tendencia_upper = tendencia.upper()
         
         if "OVER 1.5" in tendencia_upper:
@@ -428,7 +413,6 @@ class FiltroPremium:
     
     @classmethod
     def _normalizar_liga(cls, liga: str) -> str:
-        """Normaliza o nome da liga para comparação"""
         if "Bundesliga" in liga:
             return "Bundesliga"
         elif "Championship" in liga:
@@ -448,16 +432,97 @@ class FiltroPremium:
     
     @classmethod
     def get_estatisticas_filtro(cls, jogos_originais, jogos_filtrados):
-        """Retorna estatísticas do filtro para exibição"""
         return {
             "total_original": len(jogos_originais),
             "total_filtrado": len(jogos_filtrados),
             "reducao_percentual": round((1 - len(jogos_filtrados) / max(len(jogos_originais), 1)) * 100, 1),
             "maximo_permitido": cls.MAX_JOGOS_POR_DIA,
             "score_minimo": cls.SCORE_MINIMO_GLOBAL
-        } 
+        }
 
 
+# ============================================================
+# CONFIGURAÇÃO DE LIGAS PARA OVER/UNDER (NOVO - V2)
+# ============================================================
+
+LIGAS_OVER_CONFIG = {
+    "Eredivisie": {
+        "fator_gols": 1.18,
+        "mercado_preferido": "OVER 2.5",
+        "confianca_minima": 55,
+        "over25_medio": 0.58,
+        "gols_medios": 3.2,
+        "evitar_under": True
+    },
+    "Bundesliga": {
+        "fator_gols": 1.12,
+        "mercado_preferido": "OVER 2.5",
+        "confianca_minima": 58,
+        "over25_medio": 0.55,
+        "gols_medios": 3.1,
+        "evitar_under": True
+    },
+    "Premier League": {
+        "fator_gols": 1.05,
+        "mercado_preferido": "OVER 1.5",
+        "confianca_minima": 60,
+        "over25_medio": 0.48,
+        "gols_medios": 2.8,
+        "evitar_under": False
+    },
+    "Championship": {
+        "fator_gols": 1.02,
+        "mercado_preferido": "OVER 1.5",
+        "confianca_minima": 58,
+        "over25_medio": 0.45,
+        "gols_medios": 2.7,
+        "evitar_under": False
+    },
+    "Serie A": {
+        "fator_gols": 0.98,
+        "mercado_preferido": "OVER 1.5",
+        "confianca_minima": 62,
+        "over25_medio": 0.44,
+        "gols_medios": 2.6,
+        "evitar_under": False
+    },
+    "Ligue 1": {
+        "fator_gols": 0.95,
+        "mercado_preferido": "UNDER 2.5",
+        "confianca_minima": 60,
+        "over25_medio": 0.40,
+        "gols_medios": 2.5,
+        "evitar_under": False,
+        "tendencia_under": True
+    },
+    "Primeira Liga": {
+        "fator_gols": 0.88,
+        "mercado_preferido": "UNDER 2.5",
+        "confianca_minima": 58,
+        "over25_medio": 0.38,
+        "gols_medios": 2.3,
+        "evitar_under": False,
+        "tendencia_under": True,
+        "aviso": "⚠️ Liga com menor média de gols da Europa"
+    },
+    "Campeonato Brasileiro Série A": {
+        "fator_gols": 0.93,
+        "mercado_preferido": "OVER 1.5",
+        "confianca_minima": 55,
+        "over25_medio": 0.42,
+        "gols_medios": 2.4,
+        "evitar_under": False
+    },
+    "Primera Division": {
+        "fator_gols": 0.92,
+        "mercado_preferido": "UNDER 2.5",
+        "confianca_minima": 58,
+        "over25_medio": 0.40,
+        "gols_medios": 2.4,
+        "evitar_under": False,
+        "tendencia_under": True
+    }
+}
 
 class ConfigManager:
     """Gerencia configurações e constantes do sistema"""
@@ -1001,7 +1066,6 @@ class GeradorMultiplasProfissional:
         texto += f"📌 **Recomendação:** {multipla['recomendacao']}\n"
         
         return texto
-
 
 class DataStorage:
     @staticmethod
@@ -1647,9 +1711,14 @@ class AnalisadorPerformance:
         return max(60.0, min(85.0, melhor_faixa))
 
 
+# ============================================================
+# AnalisadorEstatistico - VERSÃO ATUALIZADA (BTTS V2)
+# ============================================================
+
 class AnalisadorEstatistico:
     def __init__(self):
         self.analisador_performance = AnalisadorPerformance()
+        self.btts_stats_cache = {}
 
     @staticmethod
     def calcular_probabilidade_vitoria(home: str, away: str, classificacao: dict) -> dict:
@@ -1744,70 +1813,183 @@ class AnalisadorEstatistico:
             "over_15_ht": round(prob_over_15_ht, 1)
         }
 
+    # ========== NOVO MÉTODO BTTS V2 ==========
     @staticmethod
-    def calcular_probabilidade_ambas_marcam(home: str, away: str, classificacao: dict) -> dict:
-        dados_home = classificacao.get(home, {
-            "scored": 0, "against": 0, "played": 1,
-            "wins": 0, "draws": 0, "losses": 0
-        })
+    def calcular_probabilidade_ambas_marcam_v2(
+        home: str, 
+        away: str, 
+        classificacao: dict,
+        historico_btts: dict = None,
+        forma_recente: dict = None
+    ) -> dict:
+        """
+        VERSÃO 2.0 - Modelo melhorado para Ambas Marcam
+        Usa múltiplas fontes de dados e pesos dinâmicos
+        """
+        dados_home = classificacao.get(home, {})
+        dados_away = classificacao.get(away, {})
         
-        dados_away = classificacao.get(away, {
-            "scored": 0, "against": 0, "played": 1,
-            "wins": 0, "draws": 0, "losses": 0
-        })
-
-        played_home = max(dados_home["played"], 1)
-        played_away = max(dados_away["played"], 1)
-
-        taxa_gols_home = dados_home["scored"] / played_home
-        taxa_gols_away = dados_away["scored"] / played_away
+        played_home = max(dados_home.get("played", 1), 1)
+        played_away = max(dados_away.get("played", 1), 1)
         
-        taxa_sofridos_home = dados_home["against"] / played_home
-        taxa_sofridos_away = dados_away["against"] / played_away
+        # ===== 1. FORÇA OFENSIVA =====
+        gols_feitos_home = dados_home.get("scored", 0) / played_home
+        gols_feitos_away = dados_away.get("scored", 0) / played_home
+        gols_sofridos_home = dados_home.get("against", 0) / played_home
+        gols_sofridos_away = dados_away.get("against", 0) / played_home
         
-        taxa_marque_home = 1 / (1 + math.exp(-taxa_gols_home * 0.8))
-        taxa_marque_away = 1 / (1 + math.exp(-taxa_gols_away * 0.8))
+        # ===== 2. TAXA REAL DE BTTS =====
+        btts_rate_home = historico_btts.get(home, {}).get("btts_rate", 0.5) if historico_btts else 0.5
+        btts_rate_away = historico_btts.get(away, {}).get("btts_rate", 0.5) if historico_btts else 0.5
         
-        taxa_sofra_home = 1 / (1 + math.exp(-taxa_sofridos_home * 0.8))
-        taxa_sofra_away = 1 / (1 + math.exp(-taxa_sofridos_away * 0.8))
-
-        prob_home_marca = (taxa_marque_home * 0.6 + taxa_sofra_away * 0.4)
-        prob_away_marca = (taxa_marque_away * 0.4 + taxa_sofra_home * 0.6)
-
-        fator_casa = 1.1
-        prob_home_marca *= fator_casa
-        prob_away_marca *= (2.0 - fator_casa) * 0.9
-
-        prob_ambas_marcam = clamp(prob_home_marca * prob_away_marca * 100, 0, 95)
-        prob_nao_ambas_marcam = 100 - prob_ambas_marcam
-
-        if prob_ambas_marcam >= 60:
-            tendencia_ambas_marcam = "SIM"
-        elif prob_nao_ambas_marcam >= 60:
-            tendencia_ambas_marcam = "NÃO"
+        # ===== 3. FORMA RECENTE =====
+        if forma_recente:
+            forma_home = forma_recente.get(home, {})
+            forma_away = forma_recente.get(away, {})
+            
+            gols_recentes_home = forma_home.get("gols_marcados_ultimos_5", gols_feitos_home * 5) / 5
+            gols_recentes_away = forma_away.get("gols_marcados_ultimos_5", gols_feitos_away * 5) / 5
+            
+            btts_ultimos_home = forma_home.get("btts_ultimos_5", 0) / 5
+            btts_ultimos_away = forma_away.get("btts_ultimos_5", 0) / 5
         else:
-            if prob_ambas_marcam >= prob_nao_ambas_marcam:
-                tendencia_ambas_marcam = "SIM"
+            gols_recentes_home = gols_feitos_home
+            gols_recentes_away = gols_feitos_away
+            btts_ultimos_home = btts_rate_home
+            btts_ultimos_away = btts_rate_away
+        
+        # ===== 4. FORÇA DEFENSIVA =====
+        fragilidade_defensiva_home = min(gols_sofridos_home / 2.0, 1.0)
+        fragilidade_defensiva_away = min(gols_sofridos_away / 2.0, 1.0)
+        
+        # ===== 5. CÁLCULO DA PROBABILIDADE =====
+        prob_home_marca = (
+            gols_feitos_home * 0.25 +
+            gols_recentes_home * 0.35 +
+            fragilidade_defensiva_away * 0.25 +
+            btts_ultimos_home * 0.15
+        )
+        
+        prob_away_marca = (
+            gols_feitos_away * 0.20 +
+            gols_recentes_away * 0.35 +
+            fragilidade_defensiva_home * 0.30 +
+            btts_ultimos_away * 0.15
+        )
+        
+        fator_casa = 1.05 + (gols_feitos_home - gols_sofridos_away) * 0.05
+        fator_casa = clamp(fator_casa, 0.92, 1.15)
+        
+        prob_home_marca *= fator_casa
+        prob_away_marca *= (2.0 - fator_casa) * 0.88
+        
+        prob_home_marca = clamp(prob_home_marca, 0.10, 0.92)
+        prob_away_marca = clamp(prob_away_marca, 0.08, 0.88)
+        
+        prob_btts_sim = prob_home_marca * prob_away_marca * 100
+        prob_btts_sim = clamp(prob_btts_sim, 5, 90)
+        
+        taxa_btts_historica = (btts_rate_home + btts_rate_away) / 2
+        prob_btts_sim = prob_btts_sim * 0.7 + taxa_btts_historica * 100 * 0.3
+        
+        prob_btts_nao = 100 - prob_btts_sim
+        
+        # ===== 6. CONFIANÇA REAL =====
+        confianca = AnalisadorEstatistico._calcular_confianca_btts(
+            prob_btts_sim=prob_btts_sim,
+            prob_btts_nao=prob_btts_nao,
+            btts_rate_home=btts_rate_home,
+            btts_rate_away=btts_rate_away,
+            gols_feitos_home=gols_feitos_home,
+            gols_feitos_away=gols_feitos_away,
+            gols_sofridos_home=gols_sofridos_home,
+            gols_sofridos_away=gols_sofridos_away
+        )
+        
+        # ===== 7. DECISÃO COM THRESHOLD ADAPTATIVO =====
+        if prob_btts_sim >= 62:
+            tendencia = "SIM"
+        elif prob_btts_nao >= 62:
+            tendencia = "NÃO"
+        else:
+            if confianca >= 65:
+                tendencia = "SIM" if prob_btts_sim > prob_btts_nao else "NÃO"
             else:
-                tendencia_ambas_marcam = "NÃO"
-
-        diferenca = abs(prob_ambas_marcam - prob_nao_ambas_marcam)
-        confianca_ambas_marcam = clamp(50 + diferenca * 0.5, 55, 85)
-
-        logging.info(f"AMBAS MARCAM: {home} vs {away} | SIM: {prob_ambas_marcam:.1f}% | NÃO: {prob_nao_ambas_marcam:.1f}% | Tendência: {tendencia_ambas_marcam} | Conf: {confianca_ambas_marcam:.1f}%")
-
+                tendencia = "NÃO APOSTAR"
+        
+        if tendencia == "NÃO APOSTAR":
+            confianca = 0
+        
+        logging.info(f"BTTS V2: {home} vs {away} | SIM: {prob_btts_sim:.1f}% | "
+                    f"NÃO: {prob_btts_nao:.1f}% | Tend: {tendencia} | Conf: {confianca:.1f}%")
+        
         return {
-            "sim": round(prob_ambas_marcam, 1),
-            "nao": round(prob_nao_ambas_marcam, 1),
-            "tendencia_ambas_marcam": tendencia_ambas_marcam,
-            "confianca_ambas_marcam": round(confianca_ambas_marcam, 1),
+            "sim": round(prob_btts_sim, 1),
+            "nao": round(prob_btts_nao, 1),
+            "tendencia_ambas_marcam": tendencia,
+            "confianca_ambas_marcam": round(confianca, 1),
             "prob_home_marca": round(prob_home_marca * 100, 1),
             "prob_away_marca": round(prob_away_marca * 100, 1),
-            "taxa_gols_home": round(taxa_gols_home, 2),
-            "taxa_gols_away": round(taxa_gols_away, 2),
-            "taxa_sofridos_home": round(taxa_sofridos_home, 2),
-            "taxa_sofridos_away": round(taxa_sofridos_away, 2)
+            "btts_rate_home": round(btts_rate_home * 100, 1),
+            "btts_rate_away": round(btts_rate_away * 100, 1),
+            "gols_recentes_home": round(gols_recentes_home, 2),
+            "gols_recentes_away": round(gols_recentes_away, 2)
         }
+    
+    @staticmethod
+    def _calcular_confianca_btts(
+        prob_btts_sim: float,
+        prob_btts_nao: float,
+        btts_rate_home: float,
+        btts_rate_away: float,
+        gols_feitos_home: float,
+        gols_feitos_away: float,
+        gols_sofridos_home: float,
+        gols_sofridos_away: float
+    ) -> float:
+        """
+        Calcula confiança REAL baseada em múltiplos indicadores
+        """
+        confianca = 50.0
+        
+        diferenca = abs(prob_btts_sim - prob_btts_nao)
+        confianca += diferenca * 0.4
+        
+        if prob_btts_sim > 55 and btts_rate_home > 0.55 and btts_rate_away > 0.55:
+            confianca += 8
+        elif prob_btts_nao > 55 and btts_rate_home < 0.45 and btts_rate_away < 0.45:
+            confianca += 8
+        
+        media_gols = (gols_feitos_home + gols_feitos_away) / 2
+        media_sofridos = (gols_sofridos_home + gols_sofridos_away) / 2
+        
+        if prob_btts_sim > 55:
+            if media_gols > 1.5 and media_sofridos > 1.2:
+                confianca += 5
+            if gols_feitos_home > 1.5 and gols_sofridos_away > 1.3:
+                confianca += 3
+        
+        if media_gols < 1.0 and prob_btts_sim > 50:
+            confianca -= 8
+        if gols_feitos_away < 0.8 and prob_btts_sim > 50:
+            confianca -= 5
+        
+        if gols_sofridos_home > 1.8 or gols_sofridos_away > 1.8:
+            confianca += 3
+        
+        return clamp(confianca, 30, 85)
+
+    # ========== MÉTODO ANTIGO (MANTIDO PARA COMPATIBILIDADE) ==========
+    @staticmethod
+    def calcular_probabilidade_ambas_marcam(home: str, away: str, classificacao: dict) -> dict:
+        """
+        VERSÃO ORIGINAL - Mantida para compatibilidade com código existente
+        Redireciona para V2 quando possível
+        """
+        # Tenta usar a V2, mas sem dados de histórico
+        return AnalisadorEstatistico.calcular_probabilidade_ambas_marcam_v2(
+            home, away, classificacao, historico_btts=None, forma_recente=None
+        )
 
     @staticmethod
     def calcular_conflito_over_btts(home: str, away: str, classificacao: dict, estimativa_total: float, resultado_btts: dict) -> dict:
@@ -1889,185 +2071,438 @@ class AnalisadorEstatistico:
 
         return int(round(escore * 100))
 
-
 class AnalisadorTendencia:
-    def __init__(self, classificacao: dict):
+    def __init__(self, classificacao: dict, api_client=None):
         self.classificacao = classificacao
         self.analisador_performance = AnalisadorPerformance()
+        self.api_client = api_client
+        self.cache_forma_recente = {}
 
-    def calcular_tendencia_completa(self, home: str, away: str) -> dict:
+    # ========== MÉTODO PRINCIPAL REFORMULADO (V2) ==========
+    def calcular_tendencia_completa(self, home: str, away: str, liga: str = "", jogos_recentes: list = None) -> dict:
+        """
+        VERSÃO 2.0 - Modelo profissional de OVER/UNDER
+        """
         dados_home = self.classificacao.get(home, {})
         dados_away = self.classificacao.get(away, {})
-
+        
         played_home = dados_home.get("played", 0)
         played_away = dados_away.get("played", 0)
-
+        
         if played_home < 3 or played_away < 3:
-            return {
-                "tendencia": "DADOS INSUFICIENTES",
-                "estimativa": 0,
-                "probabilidade": 0,
-                "confianca": 0,
-                "tipo_aposta": "avoid",
-                "linha_mercado": 0,
-                "detalhes": {
-                    "motivo": f"Jogos insuficientes: Home={played_home}, Away={played_away}"
-                }
-            }
-
+            return self._resultado_insuficiente(played_home, played_away)
+        
         played_home = max(played_home, 1)
         played_away = max(played_away, 1)
-
-        media_home_feitos = dados_home.get("scored", 0) / played_home
-        media_home_sofridos = dados_home.get("against", 0) / played_home
-        media_away_feitos = dados_away.get("scored", 0) / played_away
-        media_away_sofridos = dados_away.get("against", 0) / played_away
-
-        media_home_feitos = clamp(media_home_feitos, 0.6, 3.6)
-        media_home_sofridos = clamp(media_home_sofridos, 0.6, 3.2)
-        media_away_feitos = clamp(media_away_feitos, 0.6, 3.4)
-        media_away_sofridos = clamp(media_away_sofridos, 0.6, 3.2)
-
-        estimativa_total = (
-            media_home_feitos * 0.55 +
-            media_away_feitos * 0.55 +
-            media_home_sofridos * 0.25 +
-            media_away_sofridos * 0.25
+        
+        # ===== 1. MÉDIAS DA TEMPORADA =====
+        gols_feitos_home = dados_home.get("scored", 0) / played_home
+        gols_feitos_away = dados_away.get("scored", 0) / played_away
+        gols_sofridos_home = dados_home.get("against", 0) / played_home
+        gols_sofridos_away = dados_away.get("against", 0) / played_away
+        
+        # ===== 2. FORMA RECENTE (NOVO - peso maior!) =====
+        forma_home = self._extrair_forma_recente(home, jogos_recentes) if jogos_recentes else {}
+        forma_away = self._extrair_forma_recente(away, jogos_recentes) if jogos_recentes else {}
+        
+        gols_recentes_home = forma_home.get("media_gols_feitos", gols_feitos_home)
+        gols_recentes_away = forma_away.get("media_gols_feitos", gols_feitos_away)
+        gols_sofridos_recentes_home = forma_home.get("media_gols_sofridos", gols_sofridos_home)
+        gols_sofridos_recentes_away = forma_away.get("media_gols_sofridos", gols_sofridos_away)
+        
+        # Over 2.5 recente (% de jogos com +2.5 gols)
+        over25_rate_home = forma_home.get("over25_rate", 0.5)
+        over25_rate_away = forma_away.get("over25_rate", 0.5)
+        
+        # ===== 3. VARIÂNCIA (NOVO - times irregulares) =====
+        variancia_home = forma_home.get("variancia_gols", 1.0)
+        variancia_away = forma_away.get("variancia_gols", 1.0)
+        
+        # Times com alta variância tendem a jogos imprevisíveis
+        fator_variabilidade = (variancia_home + variancia_away) / 2
+        bonus_variabilidade = clamp((fator_variabilidade - 1.0) * 0.3, 0, 0.5)
+        
+        # ===== 4. FORÇA OFENSIVA COMBINADA =====
+        forca_ofensiva_home = (
+            gols_feitos_home * 0.3 +          # Média temporada
+            gols_recentes_home * 0.45 +       # Forma recente (MAIOR PESO)
+            gols_sofridos_recentes_away * 0.25 # Defesa visitante frágil
         )
-
-        fator_ofensivo_home = media_home_feitos / max(media_away_sofridos, 0.75)
-        fator_ofensivo_away = media_away_feitos / max(media_home_sofridos, 0.75)
-        fator_ataque = (fator_ofensivo_home + fator_ofensivo_away) / 2
-
-        if fator_ataque >= 1.6:
-            estimativa_total *= 1.08
-        elif fator_ataque >= 1.35:
-            estimativa_total *= 1.05
-        elif fator_ataque <= 0.7:
-            estimativa_total *= 0.95
-
-        fator_casa = 1.05 + (media_home_feitos - media_home_sofridos) * 0.08
-        fator_casa = clamp(fator_casa, 0.96, 1.15)
-        estimativa_total *= fator_casa
-
-        estimativa_total = (estimativa_total * 0.85) + (2.5 * 0.15)
-
-        estimativa_total = clamp(estimativa_total, 1.4, 4.0)
-
-        if estimativa_total <= 1.6:
-            mercado = "UNDER 2.5"
-            tipo_aposta = "under"
-            linha_mercado = 2.5
-            probabilidade_base = sigmoid((2.5 - estimativa_total) * 1.4)
-
-        elif estimativa_total <= 2.1:
-            if fator_ataque < 0.95:
-                mercado = "UNDER 2.5"
-                tipo_aposta = "under"
-                linha_mercado = 2.5
-                probabilidade_base = sigmoid((2.5 - estimativa_total) * 1.3)
-            else:
-                mercado = "OVER 1.5"
-                tipo_aposta = "over"
-                linha_mercado = 1.5
-                probabilidade_base = sigmoid((estimativa_total - 1.5) * 1.6)
-
-        elif estimativa_total >= 3.4:
-            mercado = "OVER 3.5"
-            tipo_aposta = "over"
-            linha_mercado = 3.5
-            probabilidade_base = sigmoid((estimativa_total - 3.5) * 1.1)
-
-        elif estimativa_total >= 2.8:
-            if fator_ataque >= 1.3:
-                mercado = "OVER 2.5"
-                tipo_aposta = "over"
-                linha_mercado = 2.5
-                probabilidade_base = sigmoid((estimativa_total - 2.5) * 1.2)
-            else:
-                mercado = "OVER 1.5"
-                tipo_aposta = "over"
-                linha_mercado = 1.5
-                probabilidade_base = sigmoid((estimativa_total - 1.5) * 1.5)
-
+        
+        forca_ofensiva_away = (
+            gols_feitos_away * 0.25 +
+            gols_recentes_away * 0.45 +
+            gols_sofridos_recentes_home * 0.30
+        )
+        
+        # ===== 5. FATOR CASA/ FORA DINÂMICO =====
+        if played_home >= 5:
+            vantagem_casa = clamp(
+                1.08 + (gols_feitos_home - gols_feitos_away) * 0.06,
+                0.95, 1.18
+            )
         else:
-            mercado = "OVER 1.5"
-            tipo_aposta = "over"
-            linha_mercado = 1.5
-            probabilidade_base = sigmoid((estimativa_total - 1.5) * 1.6)
-
-        if tipo_aposta == "under" and estimativa_total > 1.8:
+            vantagem_casa = 1.06
+        
+        # ===== 6. ESTIMATIVA TOTAL (MODELO PRINCIPAL) =====
+        estimativa_total = (
+            forca_ofensiva_home * vantagem_casa +
+            forca_ofensiva_away * (2.0 - vantagem_casa) +
+            bonus_variabilidade
+        )
+        
+        # ===== 7. AJUSTE POR LIGA =====
+        fator_liga = self._get_fator_liga(liga)
+        estimativa_total *= fator_liga
+        
+        # Clampar em limites realistas (SEM pull artificial para 2.5)
+        estimativa_total = clamp(estimativa_total, 0.8, 5.5)
+        
+        # ===== 8. TENDÊNCIA DE OVER 2.5 =====
+        prob_over25 = self._calcular_prob_over25(
+            estimativa_total,
+            over25_rate_home,
+            over25_rate_away,
+            variancia_home,
+            variancia_away
+        )
+        
+        prob_over15 = self._calcular_prob_over15(
+            estimativa_total,
+            gols_feitos_home,
+            gols_feitos_away
+        )
+        
+        prob_over35 = self._calcular_prob_over35(
+            estimativa_total,
+            over25_rate_home,
+            over25_rate_away
+        )
+        
+        # ===== 9. SELEÇÃO DO MELHOR MERCADO =====
+        mercado = self._selecionar_mercado(
+            estimativa_total,
+            prob_over15,
+            prob_over25,
+            prob_over35,
+            gols_feitos_home,
+            gols_feitos_away,
+            gols_sofridos_home,
+            gols_sofridos_away,
+            over25_rate_home,
+            over25_rate_away
+        )
+        
+        # ===== 10. CONFIANÇA CALCULADA (SEM LIMITE ARTIFICIAL) =====
+        confianca = self._calcular_confianca_over(
+            mercado=mercado,
+            estimativa=estimativa_total,
+            prob=mercado["probabilidade"],
+            over25_rate_home=over25_rate_home,
+            over25_rate_away=over25_rate_away,
+            forma_consistente=abs(gols_recentes_home - gols_feitos_home) < 0.3,
+            jogos_suficientes=played_home >= 5 and played_away >= 5
+        )
+        
+        # Só retorna se confiança >= 55% (abaixo disso é loteria)
+        if confianca < 55:
             return {
                 "tendencia": "NÃO APOSTAR",
                 "estimativa": round(estimativa_total, 2),
-                "probabilidade": round(probabilidade_base * 100, 1),
+                "probabilidade": round(mercado["probabilidade"], 1),
                 "confianca": 0,
                 "tipo_aposta": "avoid",
-                "linha_mercado": linha_mercado,
-                "detalhes": {"motivo": f"UNDER perigoso (estimativa alta: {estimativa_total:.2f})"}
+                "linha_mercado": mercado["linha"],
+                "detalhes": {
+                    "motivo": f"Confiança insuficiente: {confianca:.1f}%",
+                    "mercado_sugerido": mercado["nome"]
+                }
             }
-
-        if tipo_aposta == "over" and linha_mercado == 2.5 and estimativa_total < 2.6:
-            return {
-                "tendencia": "NÃO APOSTAR",
-                "estimativa": round(estimativa_total, 2),
-                "probabilidade": round(probabilidade_base * 100, 1),
-                "confianca": 0,
-                "tipo_aposta": "avoid",
-                "linha_mercado": linha_mercado,
-                "detalhes": {"motivo": f"OVER 2.5 sem força (estimativa: {estimativa_total:.2f})"}
-            }
-
-        distancia_linha = abs(estimativa_total - linha_mercado)
-
-        if tipo_aposta == "over":
-            base_conf = probabilidade_base * 55
-            dist_conf = min(distancia_linha * 28, 32)
-        else:
-            base_conf = probabilidade_base * 45
-            dist_conf = min(distancia_linha * 22, 28)
-
-        consistencia = 0
-        if played_home >= 6 and played_away >= 6:
-            consistencia += 12
-        if abs(media_home_feitos - media_away_feitos) < 1.0:
-            consistencia += 6
-        if fator_ataque > 1.4 or fator_ataque < 0.7:
-            consistencia += 8
-
-        confianca = clamp(base_conf + dist_conf + consistencia, 35, 78)
-
-        if tipo_aposta == "over" and linha_mercado == 1.5:
-            if media_home_feitos < 1.2 and media_away_feitos < 1.2:
-                confianca *= 0.8
-
-        if media_home_sofridos < 0.8 and media_away_sofridos < 0.8:
-            confianca *= 0.9
-
-        if confianca < 48:
-            return {
-                "tendencia": "NÃO APOSTAR",
-                "estimativa": round(estimativa_total, 2),
-                "probabilidade": round(probabilidade_base * 100, 1),
-                "confianca": round(confianca, 1),
-                "tipo_aposta": "avoid",
-                "linha_mercado": linha_mercado,
-                "detalhes": {"motivo": f"Confiança baixa: {confianca:.1f}%"}
-            }
-
+        
+        logging.info(f"OVER V2: {home} vs {away} | Est: {estimativa_total:.2f} | "
+                    f"{mercado['nome']} | Prob: {mercado['probabilidade']:.1f}% | Conf: {confianca:.1f}%")
+        
         return {
-            "tendencia": mercado,
+            "tendencia": mercado["nome"],
             "estimativa": round(estimativa_total, 2),
-            "probabilidade": round(probabilidade_base * 100, 1),
+            "probabilidade": round(mercado["probabilidade"], 1),
             "confianca": round(confianca, 1),
-            "tipo_aposta": tipo_aposta,
-            "linha_mercado": linha_mercado,
+            "tipo_aposta": mercado["tipo"],
+            "linha_mercado": mercado["linha"],
             "detalhes": {
-                "fator_ataque": round(fator_ataque, 2),
-                "distancia_linha": round(distancia_linha, 2),
-                "played_home": played_home,
-                "played_away": played_away,
-                "motivo": "ALERTA CONFIRMADO"
+                "gols_feitos_home": round(gols_feitos_home, 2),
+                "gols_feitos_away": round(gols_feitos_away, 2),
+                "gols_recentes_home": round(gols_recentes_home, 2),
+                "gols_recentes_away": round(gols_recentes_away, 2),
+                "over25_rate_home": round(over25_rate_home * 100, 1),
+                "over25_rate_away": round(over25_rate_away * 100, 1),
+                "fator_liga": round(fator_liga, 3),
+                "fator_casa": round(vantagem_casa, 3),
+                "variabilidade": round(fator_variabilidade, 2),
+                "prob_over15": round(prob_over15, 1),
+                "prob_over25": round(prob_over25, 1),
+                "prob_over35": round(prob_over35, 1),
+                "motivo": "ALERTA CONFIRMADO" if confianca >= 55 else "CONFIANÇA BAIXA"
+            }
+        }
+    
+    # ========== FUNÇÕES AUXILIARES ==========
+    
+    def _extrair_forma_recente(self, time: str, jogos_recentes: list) -> dict:
+        """
+        Extrai estatísticas dos últimos jogos de um time
+        """
+        if not jogos_recentes:
+            return {}
+        
+        gols_feitos = []
+        gols_sofridos = []
+        overs_25 = 0
+        total_jogos = 0
+        
+        for jogo in jogos_recentes:
+            if jogo.get("status") != "FINISHED":
+                continue
+            
+            home_team = jogo.get("homeTeam", {}).get("name", "")
+            away_team = jogo.get("awayTeam", {}).get("name", "")
+            
+            home_gols = jogo.get("score", {}).get("fullTime", {}).get("home", 0) or 0
+            away_gols = jogo.get("score", {}).get("fullTime", {}).get("away", 0) or 0
+            
+            if time == home_team:
+                gols_feitos.append(home_gols)
+                gols_sofridos.append(away_gols)
+            elif time == away_team:
+                gols_feitos.append(away_gols)
+                gols_sofridos.append(home_gols)
+            else:
+                continue
+            
+            total_jogos += 1
+            
+            if home_gols + away_gols > 2.5:
+                overs_25 += 1
+        
+        if total_jogos == 0:
+            return {}
+        
+        media_gols_feitos = sum(gols_feitos) / total_jogos
+        media_gols_sofridos = sum(gols_sofridos) / total_jogos
+        over25_rate = overs_25 / total_jogos
+        
+        # Cálculo de variância
+        variancia = statistics.variance(gols_feitos) if len(gols_feitos) >= 3 else 1.0
+        
+        return {
+            "media_gols_feitos": round(media_gols_feitos, 2),
+            "media_gols_sofridos": round(media_gols_sofridos, 2),
+            "over25_rate": round(over25_rate, 3),
+            "total_jogos": total_jogos,
+            "overs_25": overs_25,
+            "variancia_gols": round(variancia, 2)
+        }
+    
+    def _get_fator_liga(self, liga: str) -> float:
+        """
+        Fatores de ajuste por liga baseados em MÉDIAS REAIS de gols
+        """
+        # Procura no dicionário de configuração
+        for nome, config in LIGAS_OVER_CONFIG.items():
+            if nome in liga:
+                return config.get("fator_gols", 1.0)
+        
+        # Fallback para nomes parciais
+        if "Bundesliga" in liga:
+            return 1.12
+        elif "Eredivisie" in liga:
+            return 1.18
+        elif "Premier League" in liga:
+            return 1.05
+        elif "Championship" in liga:
+            return 1.02
+        elif "Serie A" in liga:
+            return 0.98
+        elif "Ligue 1" in liga:
+            return 0.95
+        elif "Brasileiro" in liga or "Brasileirão" in liga:
+            return 0.93
+        elif "Primeira Liga" in liga:
+            return 0.88
+        elif "Primera Division" in liga or "La Liga" in liga:
+            return 0.92
+        
+        return 1.0
+    
+    def _calcular_prob_over25(self, estimativa: float, over25_home: float, 
+                              over25_away: float, var_home: float, var_away: float) -> float:
+        """
+        Probabilidade de OVER 2.5 usando:
+        - Estimativa do modelo
+        - Taxa real de over 2.5 dos times
+        - Variância (times irregulares = mais overs)
+        """
+        # Prob baseada na estimativa
+        prob_est = sigmoid((estimativa - 2.5) * 1.8) * 100
+        
+        # Prob baseada no histórico real
+        prob_hist = ((over25_home + over25_away) / 2) * 100
+        
+        # Ajuste por variância
+        fator_var = 1 + (var_home + var_away - 2) * 0.1
+        
+        # Combinação ponderada
+        prob_final = (prob_est * 0.55 + prob_hist * 0.35) * fator_var + \
+                     (estimativa - 2.5) * 8
+        
+        return clamp(prob_final, 8, 92)
+    
+    def _calcular_prob_over15(self, estimativa: float, gols_home: float, gols_away: float) -> float:
+        """
+        Probabilidade de OVER 1.5
+        """
+        prob_base = sigmoid((estimativa - 1.5) * 2.5) * 100
+        
+        # Se ambos times marcam pouco, reduz
+        if gols_home < 1.0 and gols_away < 0.8:
+            prob_base *= 0.88
+        
+        return clamp(prob_base, 15, 97)
+    
+    def _calcular_prob_over35(self, estimativa: float, over25_home: float, over25_away: float) -> float:
+        """
+        Probabilidade de OVER 3.5 (para jogos com muitos gols esperados)
+        """
+        prob_base = sigmoid((estimativa - 3.5) * 1.4) * 100
+        
+        # Bônus se times têm alto índice de over 2.5
+        if over25_home > 0.6 and over25_away > 0.6:
+            prob_base *= 1.15
+        
+        return clamp(prob_base, 3, 75)
+    
+    def _selecionar_mercado(self, estimativa: float, prob15: float, prob25: float, 
+                           prob35: float, gols_home: float, gols_away: float,
+                           sofridos_home: float, sofridos_away: float,
+                           over25_home: float, over25_away: float) -> dict:
+        """
+        Seleciona o melhor mercado baseado em valor esperado
+        """
+        # === OVER 3.5 (alta confiança) ===
+        if estimativa >= 3.4 and prob35 >= 62:
+            return {
+                "nome": "OVER 3.5",
+                "linha": 3.5,
+                "probabilidade": prob35,
+                "tipo": "over"
+            }
+        
+        # === OVER 2.5 ===
+        if estimativa >= 2.8 and prob25 >= 65:
+            return {
+                "nome": "OVER 2.5",
+                "linha": 2.5,
+                "probabilidade": prob25,
+                "tipo": "over"
+            }
+        
+        # === OVER 2.5 com valor ===
+        if estimativa >= 2.5 and prob25 >= 58:
+            if over25_home > 0.4 and over25_away > 0.35:
+                return {
+                    "nome": "OVER 2.5",
+                    "linha": 2.5,
+                    "probabilidade": prob25,
+                    "tipo": "over"
+                }
+        
+        # === OVER 1.5 (seguro) ===
+        if estimativa >= 1.8 and prob15 >= 78:
+            return {
+                "nome": "OVER 1.5",
+                "linha": 1.5,
+                "probabilidade": prob15,
+                "tipo": "over"
+            }
+        
+        # === UNDER 2.5 ===
+        if estimativa <= 1.9 and prob25 <= 42:
+            return {
+                "nome": "UNDER 2.5",
+                "linha": 2.5,
+                "probabilidade": 100 - prob25,
+                "tipo": "under"
+            }
+        
+        # === UNDER 1.5 ===
+        if estimativa <= 1.4:
+            return {
+                "nome": "UNDER 1.5",
+                "linha": 1.5,
+                "probabilidade": 100 - prob15,
+                "tipo": "under"
+            }
+        
+        # === FALLBACK: OVER 1.5 ===
+        return {
+            "nome": "OVER 1.5",
+            "linha": 1.5,
+            "probabilidade": prob15,
+            "tipo": "over"
+        }
+    
+    def _calcular_confianca_over(self, mercado: dict, estimativa: float, prob: float,
+                                over25_rate_home: float, over25_rate_away: float,
+                                forma_consistente: bool, jogos_suficientes: bool) -> float:
+        """
+        Calcula confiança REAL sem limites artificiais
+        """
+        confianca = 50.0  # Base
+        
+        # 1. Bônus pela distância da estimativa até a linha
+        distancia = abs(estimativa - mercado["linha"])
+        confianca += distancia * 15  # +7.5 para 0.5 gols de distância
+        
+        # 2. Bônus pela probabilidade
+        confianca += (prob - 55) * 0.6 if prob > 55 else 0
+        
+        # 3. Bônus por histórico consistente
+        if mercado["nome"] == "OVER 2.5":
+            if over25_rate_home > 0.55 and over25_rate_away > 0.55:
+                confianca += 10  # Ambos times têm muitos overs
+            elif over25_rate_home > 0.50 or over25_rate_away > 0.50:
+                confianca += 5
+            else:
+                confianca -= 3  # Times com poucos overs
+        
+        # 4. Bônus por forma consistente
+        if forma_consistente:
+            confianca += 5
+        
+        # 5. Penalidade por poucos dados
+        if not jogos_suficientes:
+            confianca -= 8
+        
+        # 6. Ajuste por tipo de mercado
+        if mercado["nome"] == "OVER 1.5":
+            confianca += 3  # Mercado mais fácil
+        elif mercado["nome"] == "OVER 3.5":
+            confianca -= 5  # Mercado mais difícil
+        elif "UNDER" in mercado["nome"]:
+            confianca -= 2  # Under é mais arriscado
+        
+        return clamp(confianca, 30, 92)  # Permite até 92%
+    
+    def _resultado_insuficiente(self, played_home: int, played_away: int) -> dict:
+        return {
+            "tendencia": "DADOS INSUFICIENTES",
+            "estimativa": 0,
+            "probabilidade": 0,
+            "confianca": 0,
+            "tipo_aposta": "avoid",
+            "linha_mercado": 0,
+            "detalhes": {
+                "motivo": f"Jogos insuficientes: Home={played_home}, Away={played_away}"
             }
         }
 
@@ -2634,7 +3069,6 @@ class AlertaCompleto:
                 self.resultados["ambas_marcam"] = "GREEN"
             else:
                 self.resultados["ambas_marcam"] = "RED"
-
 
 class APIClient:
     def __init__(self, rate_limiter: RateLimiter, api_monitor: APIMonitor):
@@ -4323,8 +4757,7 @@ class PosterGenerator:
             try:
                 badge_bbox = draw.textbbox((0, 0), resultado_jogo, font=FONTE_INFO)
                 badge_w = badge_bbox[2] - badge_bbox[0]
-                badge_x_center = badge_jogo_x + (badge_jogo_width - badge_w) // 2
-                draw.text((badge_x_center, badge_jogo_y + 12), resultado_jogo, font=FONTE_INFO, fill=(255, 255, 255))
+                badge_x_center = badge_jogo_x + (badge_jogo_width - badge_w) // 2                draw.text((badge_x_center, badge_jogo_y + 12), resultado_jogo, font=FONTE_INFO, fill=(255, 255, 255))
             except:
                 draw.text((badge_jogo_x + 45, badge_jogo_y + 12), resultado_jogo, font=FONTE_INFO, fill=(255, 255, 255))
 
@@ -4435,11 +4868,9 @@ class PosterGenerator:
         jogos_count = len(jogos)
         altura_total = ALTURA_TOPO + jogos_count * ALTURA_POR_JOGO + RODAPE_ALTURA + PADDING
 
-        # Fundo escuro (contraste melhor)
         img = Image.new("RGBA", (LARGURA, altura_total), (18, 22, 28, 255))
         draw = ImageDraw.Draw(img)
 
-        # Fontes
         FONTE_LOGO = self.criar_fonte(36)
         FONTE_PROMO = self.criar_fonte(16)
         FONTE_SALDO = self.criar_fonte(20)
@@ -4450,29 +4881,23 @@ class PosterGenerator:
         FONTE_RODAPE = self.criar_fonte(20)
         FONTE_RODAPE_VALOR = self.criar_fonte(26)
 
-        # ========== CABEÇALHO (estilo bet365) ==========
-        # Fundo azul escuro do cabeçalho
         draw.rectangle([(0, 0), (LARGURA, 95)], fill=(0, 50, 90, 255))
 
-        # Logo "bet365"
         try:
             draw.text((PADDING, 15), "bet365", font=FONTE_LOGO, fill=(255, 255, 255))
         except Exception:
             draw.text((PADDING, 15), "bet365", font=FONTE_LOGO, fill=(255, 255, 255))
 
-        # Promoções
         try:
             draw.text((PADDING, 55), "Promoções", font=FONTE_PROMO, fill=(200, 200, 200))
         except Exception:
             draw.text((PADDING, 55), "Promoções", font=FONTE_PROMO, fill=(200, 200, 200))
 
-        # Número 1 (ícone)
         try:
             draw.text((LARGURA - 60, 20), "1", font=FONTE_LOGO, fill=(255, 215, 0))
         except Exception:
             draw.text((LARGURA - 60, 20), "1", font=FONTE_LOGO, fill=(255, 215, 0))
 
-        # Saldo (valor da aposta)
         saldo_text = f"R${valor_aposta:.2f}".replace('.', ',')
         try:
             draw.text((LARGURA - 100, 60), saldo_text, font=FONTE_SALDO, fill=(255, 255, 255))
@@ -4481,26 +4906,21 @@ class PosterGenerator:
 
         y_pos = 110
 
-        # ========== JOGOS ==========
         for idx, jogo in enumerate(jogos):
             x0 = PADDING
             y0 = y_pos
             x1 = LARGURA - PADDING
 
-            # Linha separadora cinza entre jogos
             if idx > 0:
                 draw.line([(x0, y0 - 10), (x1, y0 - 10)], fill=(60, 65, 70), width=1)
 
-            # ===== ESCUDOS (verticalmente alinhados à esquerda) =====
             TAMANHO_ESCUDO = 28
             TAMANHO = 34
             y_escudo_home = y0 + 5
             y_escudo_away = y0 + 40
             
-            # Posição fixa para escudos (bem à esquerda, mas com margem)
             escudo_x_pos = x0 + 5
 
-            # Baixar escudos
             escudo_home_bytes = self.api_client.baixar_escudo_time(jogo.get('home', ''), jogo.get('escudo_home', ''))
             escudo_away_bytes = self.api_client.baixar_escudo_time(jogo.get('away', ''), jogo.get('escudo_away', ''))
             escudo_home_img = None
@@ -4518,28 +4938,22 @@ class PosterGenerator:
                 except Exception:
                     escudo_away_img = None
 
-            # Desenhar escudos (com fundo branco arredondado)
             self._desenhar_escudo_squircle(img, escudo_home_img, escudo_x_pos, y_escudo_home, TAMANHO, TAMANHO_ESCUDO, '', (0, 150, 0))
             self._desenhar_escudo_squircle(img, escudo_away_img, escudo_x_pos, y_escudo_away, TAMANHO, TAMANHO_ESCUDO, '', (0, 150, 0))
 
-            # ===== NOMES DOS TIMES (alinhados verticalmente, ao lado dos escudos) =====
             home_text = jogo.get('home', '')[:20]
             away_text = jogo.get('away', '')[:20]
 
             try:
-                # Nome do time da casa
                 draw.text((escudo_x_pos + TAMANHO + 10, y_escudo_home + 5), home_text, font=FONTE_TIMES, fill=(220, 220, 220))
-                # Nome do time visitante
                 draw.text((escudo_x_pos + TAMANHO + 10, y_escudo_away + 5), away_text, font=FONTE_TIMES, fill=(220, 220, 220))
             except Exception as e:
                 logging.error(f"Erro ao desenhar nomes dos times: {e}")
 
-            # ===== MERCADO, TIPO E ODD (alinhados à direita) =====
             mercado_text = jogo.get('mercado', 'Mais de 1.5')
             tipo_text = "Total de Gols"
             odd_text = f"{jogo.get('odd', 1.0):.2f}".replace('.', ',')
 
-            # Mercado (ex: "Mais de 1.5") - alinhado à direita
             try:
                 mercado_bbox = draw.textbbox((0, 0), mercado_text, font=FONTE_MERCADO)
                 mercado_w = mercado_bbox[2] - mercado_bbox[0]
@@ -4547,7 +4961,6 @@ class PosterGenerator:
             except Exception:
                 draw.text((LARGURA - 150, y0 + 5), mercado_text, font=FONTE_MERCADO, fill=(255, 255, 255))
 
-            # Tipo (ex: "Total de Gols")
             try:
                 tipo_bbox = draw.textbbox((0, 0), tipo_text, font=FONTE_TIPO)
                 tipo_w = tipo_bbox[2] - tipo_bbox[0]
@@ -4555,7 +4968,6 @@ class PosterGenerator:
             except Exception:
                 draw.text((LARGURA - 120, y0 + 32), tipo_text, font=FONTE_TIPO, fill=(150, 150, 150))
 
-            # Odd (verde, à direita)
             try:
                 odd_bbox = draw.textbbox((0, 0), odd_text, font=FONTE_ODD)
                 odd_w = odd_bbox[2] - odd_bbox[0]
@@ -4565,15 +4977,12 @@ class PosterGenerator:
 
             y_pos += ALTURA_POR_JOGO
 
-        # ========== RODAPÉ (estilo bet365) ==========
         rodape_y = altura_total - RODAPE_ALTURA - 10
 
-        # Linha superior do rodapé
         draw.line([(PADDING, rodape_y - 15), (LARGURA - PADDING, rodape_y - 15)], fill=(60, 65, 70), width=2)
 
         retorno = valor_aposta * odd_total
 
-        # "Aposta"
         try:
             draw.text((PADDING, rodape_y), "Aposta", font=FONTE_RODAPE, fill=(150, 150, 150))
             draw.text((PADDING, rodape_y + 30), f"R$ {valor_aposta:.2f}".replace('.', ','), font=FONTE_RODAPE_VALOR, fill=(255, 255, 255))
@@ -4581,7 +4990,6 @@ class PosterGenerator:
             draw.text((PADDING, rodape_y), "Aposta", font=FONTE_RODAPE, fill=(150, 150, 150))
             draw.text((PADDING, rodape_y + 30), f"R$ {valor_aposta:.2f}".replace('.', ','), font=FONTE_RODAPE_VALOR, fill=(255, 255, 255))
 
-        # "Retorno Total"
         try:
             draw.text((LARGURA // 2 - 80, rodape_y), "Retorno Total", font=FONTE_RODAPE, fill=(150, 150, 150))
             draw.text((LARGURA // 2 - 80, rodape_y + 30), f"R$ {retorno:.2f}".replace('.', ','), font=FONTE_RODAPE_VALOR, fill=(0, 180, 0))
@@ -4589,7 +4997,6 @@ class PosterGenerator:
             draw.text((LARGURA // 2 - 80, rodape_y), "Retorno Total", font=FONTE_RODAPE, fill=(150, 150, 150))
             draw.text((LARGURA // 2 - 80, rodape_y + 30), f"R$ {retorno:.2f}".replace('.', ','), font=FONTE_RODAPE_VALOR, fill=(0, 180, 0))
 
-        # "Retorno Obtido" (igual ao Retorno Total pois é GREEN)
         try:
             draw.text((LARGURA - 180, rodape_y), "Retorno Obtido", font=FONTE_RODAPE, fill=(150, 150, 150))
             draw.text((LARGURA - 180, rodape_y + 30), f"R$ {retorno:.2f}".replace('.', ','), font=FONTE_RODAPE_VALOR, fill=(0, 180, 0))
@@ -4597,7 +5004,6 @@ class PosterGenerator:
             draw.text((LARGURA - 180, rodape_y), "Retorno Obtido", font=FONTE_RODAPE, fill=(150, 150, 150))
             draw.text((LARGURA - 180, rodape_y + 30), f"R$ {retorno:.2f}".replace('.', ','), font=FONTE_RODAPE_VALOR, fill=(0, 180, 0))
 
-        # Converter para RGB e salvar
         img_rgb = Image.new("RGB", img.size, (18, 22, 28))
         img_rgb.paste(img, (0, 0), img)
 
@@ -4704,10 +5110,8 @@ class GerenciadorMultiplasIndividuais:
         away_goals = full_time.get("away", 0)
         total_gols = home_goals + away_goals
         
-        # Resultado dos 3 mercados
         resultados_mercados = {}
         
-        # 1. OVER/UNDER
         mercado_ou = multipla.get("mercado_over_under", {})
         if mercado_ou:
             tendencia = mercado_ou.get("tendencia", "")
@@ -4722,7 +5126,6 @@ class GerenciadorMultiplasIndividuais:
             else:
                 resultados_mercados["over_under"] = "RED"
         
-        # 2. FAVORITO
         mercado_fav = multipla.get("mercado_favorito", {})
         if mercado_fav:
             favorito = mercado_fav.get("favorito", "")
@@ -4735,7 +5138,6 @@ class GerenciadorMultiplasIndividuais:
             else:
                 resultados_mercados["favorito"] = "RED"
         
-        # 3. AMBAS MARCAM
         mercado_am = multipla.get("mercado_ambas_marcam", {})
         if mercado_am:
             tendencia_am = mercado_am.get("tendencia", "")
@@ -4746,7 +5148,6 @@ class GerenciadorMultiplasIndividuais:
             else:
                 resultados_mercados["ambas_marcam"] = "RED"
         
-        # Calcula se a múltipla foi acertada (todos os mercados selecionados GREEN)
         mercados_selecionados = []
         if mercado_ou:
             mercados_selecionados.append("over_under")
@@ -4766,7 +5167,6 @@ class GerenciadorMultiplasIndividuais:
         multipla["ht_away_goals"] = half_time.get("away", 0)
         multipla["data_conferencia"] = datetime.now().isoformat()
         
-        # Salvar resultado
         resultados = self.carregar_resultados()
         resultados[multipla_id] = {
             "id": multipla_id,
@@ -4810,7 +5210,6 @@ class GerenciadorMultiplasIndividuais:
         return resultados
 
 
-#def gerar_poster_multipla_individual(jogo: dict, mercados: dict, titulo: str = " MÚLTIPLA INDIVIDUAL") -> io.BytesIO:
 def gerar_poster_multipla_individual(jogo: dict, mercados: dict, titulo: str = " MÚLTIPLA INDIVIDUAL", api_client=None) -> io.BytesIO:
     """Gera pôster profissional para múltipla individual - VERSÃO COMPLETAMENTE REESTRUTURADA"""
     
@@ -4821,7 +5220,6 @@ def gerar_poster_multipla_individual(jogo: dict, mercados: dict, titulo: str = "
     img = Image.new("RGBA", (LARGURA, ALTURA), (10, 20, 30, 255))
     draw = ImageDraw.Draw(img)
     
-    # Fontes
     FONTE_TITULO = PosterGenerator.criar_fonte(85)
     FONTE_DATA = PosterGenerator.criar_fonte(45)
     FONTE_LIGA = PosterGenerator.criar_fonte(50)
@@ -4834,13 +5232,10 @@ def gerar_poster_multipla_individual(jogo: dict, mercados: dict, titulo: str = "
     FONTE_CONFIANCA = PosterGenerator.criar_fonte(40)
     FONTE_RODAPE = PosterGenerator.criar_fonte(38)
     
-    # ===== CABEÇALHO =====
-    # Título
     titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
     titulo_w = titulo_bbox[2] - titulo_bbox[0]
     draw.text(((LARGURA - titulo_w) // 2, 50), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
     
-    # Data
     data_hora = jogo.get("hora", datetime.now())
     if isinstance(data_hora, datetime):
         data_text = data_hora.strftime("%d/%m/%Y %H:%M")
@@ -4851,16 +5246,13 @@ def gerar_poster_multipla_individual(jogo: dict, mercados: dict, titulo: str = "
     data_w = data_bbox[2] - data_bbox[0]
     draw.text(((LARGURA - data_w) // 2, 130), data_text, font=FONTE_DATA, fill=(150, 200, 255))
     
-    # Liga
     liga_text = jogo.get("liga", "LIGA").upper()
     liga_bbox = draw.textbbox((0, 0), liga_text, font=FONTE_LIGA)
     liga_w = liga_bbox[2] - liga_bbox[0]
     draw.text(((LARGURA - liga_w) // 2, 190), liga_text, font=FONTE_LIGA, fill=(200, 200, 200))
     
-    # Linha decorativa
     draw.line([(LARGURA//4, 250), (3*LARGURA//4, 250)], fill=(255, 215, 0), width=4)
     
-    # ===== SEÇÃO DOS TIMES =====
     TAMANHO_ESCUDO = 180
     TAMANHO_QUADRADO = 230
     ESPACO_ENTRE = 500
@@ -4875,7 +5267,6 @@ def gerar_poster_multipla_individual(jogo: dict, mercados: dict, titulo: str = "
     home_nome = jogo.get("home", "TIME CASA")
     away_nome = jogo.get("away", "TIME FORA")
     
-    # Baixar escudos
     escudo_home_img = None
     escudo_away_img = None
     
@@ -4896,16 +5287,13 @@ def gerar_poster_multipla_individual(jogo: dict, mercados: dict, titulo: str = "
         except:
             pass
     
-    # Fallback com iniciais
     def criar_escudo_fallback(nome, cor_fundo=(35, 40, 55)):
         img_esc = Image.new("RGBA", (TAMANHO_ESCUDO, TAMANHO_ESCUDO), cor_fundo + (255,))
         draw_esc = ImageDraw.Draw(img_esc)
         
-        # Fundo arredondado
         draw_esc.rounded_rectangle([0, 0, TAMANHO_ESCUDO, TAMANHO_ESCUDO], radius=35, 
                                    outline=(255, 215, 0), width=4, fill=cor_fundo + (255,))
         
-        # Iniciais
         palavras = nome.split()
         if len(palavras) >= 2:
             iniciais = palavras[0][0].upper() + palavras[1][0].upper()
@@ -4926,34 +5314,28 @@ def gerar_poster_multipla_individual(jogo: dict, mercados: dict, titulo: str = "
     if escudo_away_img is None:
         escudo_away_img = criar_escudo_fallback(away_nome)
     
-    # Desenhar containers dos escudos
     raio_container = 25
     draw.rounded_rectangle([x_home, y_escudos, x_home + TAMANHO_QUADRADO, y_escudos + TAMANHO_QUADRADO], 
                           radius=raio_container, fill=(20, 25, 40), outline=(255, 215, 0), width=3)
     draw.rounded_rectangle([x_away, y_escudos, x_away + TAMANHO_QUADRADO, y_escudos + TAMANHO_QUADRADO], 
                           radius=raio_container, fill=(20, 25, 40), outline=(255, 215, 0), width=3)
     
-    # Colocar escudos
     img.paste(escudo_home_img, (x_home + (TAMANHO_QUADRADO - TAMANHO_ESCUDO)//2, 
                                 y_escudos + (TAMANHO_QUADRADO - TAMANHO_ESCUDO)//2), escudo_home_img)
     img.paste(escudo_away_img, (x_away + (TAMANHO_QUADRADO - TAMANHO_ESCUDO)//2, 
                                 y_escudos + (TAMANHO_QUADRADO - TAMANHO_ESCUDO)//2), escudo_away_img)
     
-    # Nomes dos times (centralizados abaixo dos escudos)
     draw.text((x_home + TAMANHO_QUADRADO//2, y_escudos + TAMANHO_QUADRADO + 50), 
              home_nome[:22], font=FONTE_TIMES, fill=(255, 255, 255), anchor="mm")
     draw.text((x_away + TAMANHO_QUADRADO//2, y_escudos + TAMANHO_QUADRADO + 50), 
              away_nome[:22], font=FONTE_TIMES, fill=(255, 255, 255), anchor="mm")
     
-    # VS centralizado
     vs_x = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE//2
     vs_y = y_escudos + TAMANHO_QUADRADO//2
     draw.text((vs_x, vs_y), "VS", font=FONTE_VS, fill=(255, 215, 0), anchor="mm")
     
-    # ===== SEÇÃO DOS MERCADOS =====
     y_mercados = y_escudos + TAMANHO_QUADRADO + 130
     
-    # Linha separadora
     draw.line([(PADDING + 80, y_mercados - 15), (LARGURA - PADDING - 80, y_mercados - 15)], 
               fill=(100, 130, 160), width=3)
     
@@ -4963,11 +5345,10 @@ def gerar_poster_multipla_individual(jogo: dict, mercados: dict, titulo: str = "
     CARD_ALTURA = 155
     LARGURA_CARD = LARGURA - 2 * PADDING - 160
     
-    # Cores por mercado
     cores_mercados = {
-        "over_under": (255, 215, 0),   # Dourado
-        "favorito": (255, 87, 34),     # Laranja
-        "ambas_marcam": (155, 89, 182) # Roxo
+        "over_under": (255, 215, 0),
+        "favorito": (255, 87, 34),
+        "ambas_marcam": (155, 89, 182)
     }
     
     icones = {
@@ -4982,28 +5363,21 @@ def gerar_poster_multipla_individual(jogo: dict, mercados: dict, titulo: str = "
         "ambas_marcam": "AMBAS MARCAM"
     }
     
-    # Função para desenhar card de mercado
     def desenhar_card_mercado(mercado_key, mercado_data, y_pos):
         cor = cores_mercados.get(mercado_key, (200, 200, 200))
         icone_text = icones.get(mercado_key, "📊")
         titulo_text = titulos.get(mercado_key, mercado_key.upper())
         
-        # Fundo do card
         draw.rounded_rectangle([PADDING + 80, y_pos, LARGURA - PADDING - 80, y_pos + CARD_ALTURA], 
                                radius=20, fill=(25, 35, 45), outline=cor, width=3)
         
-        # Linha vertical separadora (esquerda vs direita)
         linha_x = LARGURA - PADDING - 280
         draw.line([(linha_x, y_pos + 15), (linha_x, y_pos + CARD_ALTURA - 15)], 
                   fill=(60, 70, 85), width=2)
         
-        # ===== LADO ESQUERDO =====
-        # Ícone
         draw.text((PADDING + 120, y_pos + 35), icone_text, font=FONTE_INFO, fill=cor)
-        # Título
         draw.text((PADDING + 180, y_pos + 35), titulo_text, font=FONTE_MERCADO_TITULO, fill=cor)
         
-        # Valor principal (tendência ou favorito)
         if mercado_key == "over_under":
             valor = mercado_data.get("tendencia", "OVER 1.5")
         elif mercado_key == "favorito":
@@ -5011,30 +5385,25 @@ def gerar_poster_multipla_individual(jogo: dict, mercados: dict, titulo: str = "
             valor = home_nome if favorito == "home" else away_nome if favorito == "away" else "EMPATE"
             if len(valor) > 25:
                 valor = valor[:22] + "..."
-        else:  # ambas_marcam
+        else:
             valor = mercado_data.get("tendencia", "SIM")
         
         draw.text((PADDING + 120, y_pos + 85), valor, font=FONTE_MERCADO_VALOR, fill=(255, 255, 255))
         
-        # ===== LADO DIREITO =====
-        # Odd (grande, em verde)
         odd = mercado_data.get("odd", 1.50)
         odd_text = f"{odd:.2f}"
         draw.text((LARGURA - PADDING - 265, y_pos + 35), odd_text, font=FONTE_ODD_GRANDE, fill=(100, 255, 100))
         
-        # Confiança
         confianca = mercado_data.get("confianca", 0)
         conf_text = f"Confiança: {confianca:.0f}%"
         draw.text((LARGURA - PADDING - 780, y_pos + 90), conf_text, font=FONTE_CONFIANCA, fill=(150, 200, 255))
         
-        # Estimativa (apenas para over_under)
         if mercado_key == "over_under":
             estimativa = mercado_data.get("estimativa", 0)
             if estimativa > 0:
                 est_text = f"Estimativa: {estimativa:.2f} gols"
                 draw.text((LARGURA - PADDING - 780, y_pos + 40), est_text, font=FONTE_CONFIANCA, fill=(200, 200, 200))
     
-    # Desenhar cards na ordem correta
     if "over_under" in mercados:
         desenhar_card_mercado("over_under", mercados["over_under"], y_atual)
         y_atual += CARD_ALTURA + 15
@@ -5047,7 +5416,6 @@ def gerar_poster_multipla_individual(jogo: dict, mercados: dict, titulo: str = "
         desenhar_card_mercado("ambas_marcam", mercados["ambas_marcam"], y_atual)
         y_atual += CARD_ALTURA + 15
     
-    # ===== RODAPÉ =====
     rodape_y = ALTURA - 85
     draw.line([(PADDING + 80, rodape_y - 30), (LARGURA - PADDING - 80, rodape_y - 30)], 
               fill=(60, 70, 85), width=2)
@@ -5057,7 +5425,6 @@ def gerar_poster_multipla_individual(jogo: dict, mercados: dict, titulo: str = "
     rodape_w = rodape_bbox[2] - rodape_bbox[0]
     draw.text(((LARGURA - rodape_w) // 2, rodape_y), rodape_text, font=FONTE_RODAPE, fill=(100, 130, 160))
     
-    # ===== SALVAR =====
     img_rgb = Image.new("RGB", img.size, (10, 20, 30))
     img_rgb.paste(img, (0, 0), img)
     
@@ -5068,9 +5435,6 @@ def gerar_poster_multipla_individual(jogo: dict, mercados: dict, titulo: str = "
     return buffer
 
 
-    
-
-#def gerar_poster_resultado_individual(multipla: dict, data_br: str) -> io.BytesIO:
 def gerar_poster_resultado_individual(multipla: dict, data_br: str, api_client=None) -> io.BytesIO:
     """Gera pôster de resultado para múltipla individual - VERSÃO CORRIGIDA E UNIFICADA"""
     
@@ -5081,7 +5445,6 @@ def gerar_poster_resultado_individual(multipla: dict, data_br: str, api_client=N
     img = Image.new("RGBA", (LARGURA, ALTURA), (10, 20, 30, 255))
     draw = ImageDraw.Draw(img)
     
-    # Fontes - Padronizadas com o gerador múltipla
     FONTE_TITULO = PosterGenerator.criar_fonte(85)
     FONTE_DATA = PosterGenerator.criar_fonte(45)
     FONTE_LIGA = PosterGenerator.criar_fonte(50)
@@ -5095,11 +5458,9 @@ def gerar_poster_resultado_individual(multipla: dict, data_br: str, api_client=N
     FONTE_CONFIANCA = PosterGenerator.criar_fonte(40)
     FONTE_RODAPE = PosterGenerator.criar_fonte(38)
     
-    # Extrair dados da múltipla
     jogo = multipla.get("jogo", {})
     resultados = multipla.get("resultados", {})
     
-    # GOLS - buscar de diferentes lugares (MESMO SISTEMA DA MÚLTIPLA INDIVIDUAL)
     home_goals = multipla.get("home_goals", None)
     away_goals = multipla.get("away_goals", None)
     
@@ -5108,7 +5469,6 @@ def gerar_poster_resultado_individual(multipla: dict, data_br: str, api_client=N
     if away_goals is None and "away_goals" in resultados:
         away_goals = resultados.get("away_goals")
     
-    # Se ainda não tem, tentar buscar da API
     if (home_goals is None or away_goals is None) and api_client:
         fixture_id = jogo.get("id")
         if fixture_id:
@@ -5119,7 +5479,6 @@ def gerar_poster_resultado_individual(multipla: dict, data_br: str, api_client=N
                 home_goals = full_time.get("home", "?")
                 away_goals = full_time.get("away", "?")
     
-    # Fallback
     if home_goals is None:
         home_goals = "?"
     if away_goals is None:
@@ -5129,8 +5488,6 @@ def gerar_poster_resultado_individual(multipla: dict, data_br: str, api_client=N
     away_nome = jogo.get("away", "TIME FORA")
     liga_nome = jogo.get("liga", "LIGA")
     
-    # ===== VERIFICAÇÃO CORRETA DE ACERTO =====
-    # Lista de mercados para mostrar
     mercados_para_mostrar = []
     
     if multipla.get("mercado_over_under") or "over_under" in resultados:
@@ -5148,30 +5505,22 @@ def gerar_poster_resultado_individual(multipla: dict, data_br: str, api_client=N
         resultado = resultados.get("ambas_marcam", "N/A")
         mercados_para_mostrar.append(("ambas_marcam", mercado_data, resultado))
     
-    # CORREÇÃO: Só é GREEN se TODOS os mercados forem GREEN
-    # Se não houver mercados, considera erro
     if not mercados_para_mostrar:
         acertada = False
     else:
-        # Verifica se TODOS os resultados são GREEN
         todos_green = all(resultado == "GREEN" for _, _, resultado in mercados_para_mostrar)
-        # Verifica se há algum mercado (mesmo que não tenha resultado ainda)
         tem_mercados = len(mercados_para_mostrar) > 0
-        # Só acertou se tem mercados E todos são GREEN
         acertada = tem_mercados and todos_green
     
-    # ===== CABEÇALHO =====
     titulo = f"RESULTADO - {data_br}"
     titulo_bbox = draw.textbbox((0, 0), titulo, font=FONTE_TITULO)
     titulo_w = titulo_bbox[2] - titulo_bbox[0]
     draw.text(((LARGURA - titulo_w) // 2, 50), titulo, font=FONTE_TITULO, fill=(255, 215, 0))
     
-    # Status (acertou/errou) como subtítulo
     if acertada:
         status_text = "✅ MÚLTIPLA ACERTADA! TODOS OS MERCADOS GREEN"
         status_cor = (46, 204, 113)
     else:
-        # Verifica se tem algum RED
         tem_red = any(resultado == "RED" for _, _, resultado in mercados_para_mostrar)
         if tem_red:
             status_text = "❌ MÚLTIPLA ERRADA! PELO MENOS UM MERCADO RED"
@@ -5183,16 +5532,13 @@ def gerar_poster_resultado_individual(multipla: dict, data_br: str, api_client=N
     status_w = status_bbox[2] - status_bbox[0]
     draw.text(((LARGURA - status_w) // 2, 130), status_text, font=FONTE_DATA, fill=status_cor)
     
-    # Liga
     liga_text = liga_nome.upper()
     liga_bbox = draw.textbbox((0, 0), liga_text, font=FONTE_LIGA)
     liga_w = liga_bbox[2] - liga_bbox[0]
     draw.text(((LARGURA - liga_w) // 2, 190), liga_text, font=FONTE_LIGA, fill=(200, 200, 200))
     
-    # Linha decorativa
     draw.line([(LARGURA//4, 250), (3*LARGURA//4, 250)], fill=(255, 215, 0), width=4)
     
-    # ===== SEÇÃO DOS TIMES =====
     TAMANHO_ESCUDO = 180
     TAMANHO_QUADRADO = 230
     ESPACO_ENTRE = 500
@@ -5204,7 +5550,6 @@ def gerar_poster_resultado_individual(multipla: dict, data_br: str, api_client=N
     x_away = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE
     y_escudos = 300
     
-    # Baixar escudos (MESMO SISTEMA DO gerar_poster_multipla_individual)
     escudo_home_img = None
     escudo_away_img = None
     
@@ -5225,16 +5570,13 @@ def gerar_poster_resultado_individual(multipla: dict, data_br: str, api_client=N
         except:
             pass
     
-    # Fallback com iniciais (MESMO SISTEMA DO gerar_poster_multipla_individual)
     def criar_escudo_fallback(nome, cor_fundo=(35, 40, 55)):
         img_esc = Image.new("RGBA", (TAMANHO_ESCUDO, TAMANHO_ESCUDO), cor_fundo + (255,))
         draw_esc = ImageDraw.Draw(img_esc)
         
-        # Fundo arredondado
         draw_esc.rounded_rectangle([0, 0, TAMANHO_ESCUDO, TAMANHO_ESCUDO], radius=35, 
                                    outline=(255, 215, 0), width=4, fill=cor_fundo + (255,))
         
-        # Iniciais
         palavras = nome.split()
         if len(palavras) >= 2:
             iniciais = palavras[0][0].upper() + palavras[1][0].upper()
@@ -5255,52 +5597,42 @@ def gerar_poster_resultado_individual(multipla: dict, data_br: str, api_client=N
     if escudo_away_img is None:
         escudo_away_img = criar_escudo_fallback(away_nome)
     
-    # Desenhar containers dos escudos
     raio_container = 25
     draw.rounded_rectangle([x_home, y_escudos, x_home + TAMANHO_QUADRADO, y_escudos + TAMANHO_QUADRADO], 
                           radius=raio_container, fill=(20, 25, 40), outline=(255, 215, 0), width=3)
     draw.rounded_rectangle([x_away, y_escudos, x_away + TAMANHO_QUADRADO, y_escudos + TAMANHO_QUADRADO], 
                           radius=raio_container, fill=(20, 25, 40), outline=(255, 215, 0), width=3)
     
-    # Colocar escudos
     img.paste(escudo_home_img, (x_home + (TAMANHO_QUADRADO - TAMANHO_ESCUDO)//2, 
                                 y_escudos + (TAMANHO_QUADRADO - TAMANHO_ESCUDO)//2), escudo_home_img)
     img.paste(escudo_away_img, (x_away + (TAMANHO_QUADRADO - TAMANHO_ESCUDO)//2, 
                                 y_escudos + (TAMANHO_QUADRADO - TAMANHO_ESCUDO)//2), escudo_away_img)
     
-    # Nomes dos times (centralizados abaixo dos escudos)
     draw.text((x_home + TAMANHO_QUADRADO//2, y_escudos + TAMANHO_QUADRADO + 50), 
              home_nome[:22], font=FONTE_TIMES, fill=(255, 255, 255), anchor="mm")
     draw.text((x_away + TAMANHO_QUADRADO//2, y_escudos + TAMANHO_QUADRADO + 50), 
              away_nome[:22], font=FONTE_TIMES, fill=(255, 255, 255), anchor="mm")
     
-    # VS centralizado
     vs_x = x_home + TAMANHO_QUADRADO + ESPACO_ENTRE//2
     vs_y = y_escudos + TAMANHO_QUADRADO//2
     draw.text((vs_x, vs_y), "VS", font=FONTE_VS, fill=(255, 215, 0), anchor="mm")
     
-    # PLACAR AO LADO DOS ESCUDOS (CORRIGIDO)
-    # Placar do time home (à direita do escudo home)
     placar_home_x = x_home + TAMANHO_QUADRADO + 30
     placar_home_y = y_escudos + TAMANHO_QUADRADO//2
     draw.text((placar_home_x, placar_home_y), str(home_goals), font=FONTE_PLACAR, 
              fill=(255, 255, 255), anchor="lm")
     
-    # Placar do time away (à esquerda do escudo away)
     placar_away_x = x_away - 30
     placar_away_y = y_escudos + TAMANHO_QUADRADO//2
     draw.text((placar_away_x, placar_away_y), str(away_goals), font=FONTE_PLACAR, 
              fill=(255, 255, 255), anchor="rm")
     
-    # Hífen entre os placares
     hifen_x = (placar_home_x + placar_away_x) // 2
     hifen_y = y_escudos + TAMANHO_QUADRADO//2
     draw.text((hifen_x, hifen_y), "-", font=FONTE_PLACAR, fill=(255, 215, 0), anchor="mm")
     
-    # ===== SEÇÃO DOS MERCADOS =====
     y_mercados = y_escudos + TAMANHO_QUADRADO + 130
     
-    # Linha separadora
     draw.line([(PADDING + 80, y_mercados - 15), (LARGURA - PADDING - 80, y_mercados - 15)], 
               fill=(100, 130, 160), width=3)
     
@@ -5310,11 +5642,10 @@ def gerar_poster_resultado_individual(multipla: dict, data_br: str, api_client=N
     CARD_ALTURA = 155
     LARGURA_CARD = LARGURA - 2 * PADDING - 160
     
-    # Cores por mercado (MESMO DO gerar_poster_multipla_individual)
     cores_mercados = {
-        "over_under": (255, 215, 0),   # Dourado
-        "favorito": (255, 87, 34),     # Laranja
-        "ambas_marcam": (155, 89, 182) # Roxo
+        "over_under": (255, 215, 0),
+        "favorito": (255, 87, 34),
+        "ambas_marcam": (155, 89, 182)
     }
     
     icones = {
@@ -5329,28 +5660,21 @@ def gerar_poster_resultado_individual(multipla: dict, data_br: str, api_client=N
         "ambas_marcam": "AMBAS MARCAM"
     }
     
-    # Função para desenhar card de resultado (ESTRUTURA IGUAL AO gerar_poster_multipla_individual)
     def desenhar_card_resultado(mercado_key, mercado_data, resultado, y_pos):
         cor = cores_mercados.get(mercado_key, (200, 200, 200))
         icone_text = icones.get(mercado_key, "📊")
         titulo_text = titulos.get(mercado_key, mercado_key.upper())
         
-        # Fundo do card
         draw.rounded_rectangle([PADDING + 80, y_pos, LARGURA - PADDING - 80, y_pos + CARD_ALTURA], 
                                radius=20, fill=(25, 35, 45), outline=cor, width=3)
         
-        # Linha vertical separadora (esquerda vs direita)
         linha_x = LARGURA - PADDING - 280
         draw.line([(linha_x, y_pos + 15), (linha_x, y_pos + CARD_ALTURA - 15)], 
                   fill=(60, 70, 85), width=2)
         
-        # ===== LADO ESQUERDO =====
-        # Ícone
         draw.text((PADDING + 120, y_pos + 35), icone_text, font=FONTE_INFO, fill=cor)
-        # Título
         draw.text((PADDING + 180, y_pos + 35), titulo_text, font=FONTE_MERCADO_TITULO, fill=cor)
         
-        # Valor principal (tendência ou favorito)
         if mercado_key == "over_under":
             valor = mercado_data.get("tendencia", "OVER 1.5")
         elif mercado_key == "favorito":
@@ -5358,42 +5682,35 @@ def gerar_poster_resultado_individual(multipla: dict, data_br: str, api_client=N
             valor = home_nome if favorito == "home" else away_nome if favorito == "away" else "EMPATE"
             if len(valor) > 25:
                 valor = valor[:22] + "..."
-        else:  # ambas_marcam
+        else:
             valor = mercado_data.get("tendencia", "SIM")
         
         draw.text((PADDING + 120, y_pos + 85), valor, font=FONTE_MERCADO_VALOR, fill=(255, 255, 255))
         
-        # ===== LADO DIREITO =====
-        # Odd (grande, em verde)
         odd = mercado_data.get("odd", 1.50)
         odd_text = f"{odd:.2f}"
         draw.text((LARGURA - PADDING - 265, y_pos + 35), odd_text, font=FONTE_ODD_GRANDE, fill=(100, 255, 100))
         
-        # Confiança
         confianca = mercado_data.get("confianca", 0)
         if confianca > 0:
             conf_text = f"Confiança: {confianca:.0f}%"
             draw.text((LARGURA - PADDING - 780, y_pos + 30), conf_text, font=FONTE_CONFIANCA, fill=(150, 200, 255))
         
-        # Resultado do mercado
         resultado_emoji = "✅" if resultado == "GREEN" else "❌" if resultado == "RED" else "⏳"
         cor_resultado = (46, 204, 113) if resultado == "GREEN" else (231, 76, 60) if resultado == "RED" else (149, 165, 166)
         resultado_text = f"{resultado_emoji} {resultado}"
         draw.text((LARGURA - PADDING - 780, y_pos + 80), resultado_text, font=FONTE_CONFIANCA, fill=cor_resultado)
         
-        # Estimativa (apenas para over_under)
         if mercado_key == "over_under":
             estimativa = mercado_data.get("estimativa", 0)
             if estimativa > 0:
                 est_text = f"Estimativa: {estimativa:.2f} gols"
                 draw.text((LARGURA - PADDING - 780, y_pos + 105), est_text, font=FONTE_CONFIANCA, fill=(200, 200, 200))
     
-    # Desenhar cards na ordem correta
     for mercado_key, mercado_data, resultado in mercados_para_mostrar:
         desenhar_card_resultado(mercado_key, mercado_data, resultado, y_atual)
         y_atual += CARD_ALTURA + 15
     
-    # ===== RODAPÉ =====
     rodape_y = ALTURA - 85
     draw.line([(PADDING + 80, rodape_y - 30), (LARGURA - PADDING - 80, rodape_y - 30)], 
               fill=(60, 70, 85), width=2)
@@ -5403,7 +5720,6 @@ def gerar_poster_resultado_individual(multipla: dict, data_br: str, api_client=N
     rodape_w = rodape_bbox[2] - rodape_bbox[0]
     draw.text(((LARGURA - rodape_w) // 2, rodape_y), rodape_text, font=FONTE_RODAPE, fill=(100, 130, 160))
     
-    # ===== SALVAR =====
     img_rgb = Image.new("RGB", img.size, (10, 20, 30))
     img_rgb.paste(img, (0, 0), img)
     
@@ -5411,11 +5727,7 @@ def gerar_poster_resultado_individual(multipla: dict, data_br: str, api_client=N
     img_rgb.save(buffer, format="PNG", optimize=True, quality=95)
     buffer.seek(0)
     
-    return buffer 
-
-
-
-    
+    return buffer
 
 
 def render_tab_multiplas_individuais(sistema):
@@ -5427,11 +5739,9 @@ def render_tab_multiplas_individuais(sistema):
     **Apenas partidas aprovadas pelo Filtro Premium** são exibidas.
     """)
     
-    # Inicializar gerenciador
     if not hasattr(sistema, 'gerenciador_individuais'):
         sistema.gerenciador_individuais = GerenciadorMultiplasIndividuais(sistema)
     
-    # Seleção de data - COM KEY ÚNICA
     data_selecionada = st.date_input(
         "📅 Data da partida",
         value=datetime.today(),
@@ -5439,7 +5749,6 @@ def render_tab_multiplas_individuais(sistema):
         key="data_individuais_unicas"
     )
     
-    # Configurações
     st.markdown("### ⚙️ Configurações")
     col1, col2 = st.columns(2)
     with col1:
@@ -5466,7 +5775,6 @@ def render_tab_multiplas_individuais(sistema):
             key="filtro_premium_ind_unicas"
         )
     
-    # Botão de busca - COM KEY ÚNICA
     if st.button("🔍 BUSCAR PARTIDAS", type="primary", use_container_width=True, key="buscar_partidas_ind_unicas"):
         if not todas_ligas and not ligas_selecionadas:
             st.error("❌ Selecione pelo menos uma liga")
@@ -5476,13 +5784,11 @@ def render_tab_multiplas_individuais(sistema):
             hoje = data_selecionada.strftime("%Y-%m-%d")
             data_br = data_selecionada.strftime("%d/%m/%Y")
             
-            # Buscar ligas
             if todas_ligas:
                 ligas_busca = list(sistema.config.LIGA_DICT.values())
             else:
                 ligas_busca = [sistema.config.LIGA_DICT[liga_nome] for liga_nome in ligas_selecionadas]
             
-            # Buscar jogos
             jogos_encontrados = []
             classificacoes = {}
             
@@ -5506,7 +5812,6 @@ def render_tab_multiplas_individuais(sistema):
                     if not jogo.validar_dados():
                         continue
                     
-                    # Pular jogos já finalizados
                     if jogo.status in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"]:
                         continue
                     
@@ -5530,10 +5835,8 @@ def render_tab_multiplas_individuais(sistema):
                 st.warning(f"⚠️ Nenhuma partida encontrada para {data_br}")
                 return
             
-            # Converter para dicionário para filtro
             jogos_dict = [j.to_dict() for j in jogos_encontrados]
             
-            # Aplicar Filtro Premium se ativado
             if filtro_premium:
                 jogos_filtrados = FiltroPremium.aplicar_filtro_premium(jogos_dict, ativar=True)
                 st.info(f"🎯 Filtro Premium: {len(jogos_filtrados)} partidas aprovadas de {len(jogos_dict)}")
@@ -5544,12 +5847,10 @@ def render_tab_multiplas_individuais(sistema):
                 st.warning("⚠️ Nenhuma partida aprovada pelo Filtro Premium. Tente desativar o filtro ou selecionar outra data.")
                 return
             
-            # Armazenar na sessão
             st.session_state['jogos_individuais'] = jogos_filtrados
             st.session_state['data_individuais'] = data_br
-            st.rerun()  # Adicionado para recarregar e exibir os jogos
+            st.rerun()
     
-    # Exibir jogos encontrados
     if 'jogos_individuais' in st.session_state and st.session_state['jogos_individuais']:
         jogos = st.session_state['jogos_individuais']
         data_br = st.session_state.get('data_individuais', '')
@@ -5557,13 +5858,11 @@ def render_tab_multiplas_individuais(sistema):
         st.markdown(f"### 📋 PARTIDAS DISPONÍVEIS - {data_br}")
         
         for idx, jogo_dict in enumerate(jogos):
-            # Usar ID do jogo como parte da chave para garantir unicidade
             jogo_id = jogo_dict.get('id', idx)
             expander_key = f"exp_ind_{jogo_id}_{idx}"
             
             with st.expander(f"⚽ {jogo_dict.get('home', '')} vs {jogo_dict.get('away', '')} - {jogo_dict.get('liga', '')}", expanded=False):
                 
-                # Extrair dados dos mercados
                 tendencia_ou = jogo_dict.get("tendencia", "OVER 1.5")
                 confianca_ou = jogo_dict.get("confianca", 0)
                 estimativa = jogo_dict.get("estimativa", 0)
@@ -5577,7 +5876,6 @@ def render_tab_multiplas_individuais(sistema):
                 confianca_am = jogo_dict.get("confianca_ambas_marcam", 0)
                 odd_am = round(100 / max(confianca_am, 10), 2) if confianca_am > 0 else 1.80
                 
-                # Cards dos mercados
                 st.markdown("**📊 MERCADOS DISPONÍVEIS:**")
                 
                 col1, col2, col3 = st.columns(3)
@@ -5607,7 +5905,6 @@ def render_tab_multiplas_individuais(sistema):
                     )
                     st.caption(f"Conf: {confianca_am:.0f}% | Odd: {odd_am:.2f}")
                 
-                # Botão para gerar múltipla individual - KEY ÚNICA
                 btn_key = f"btn_ind_{jogo_id}_{idx}"
                 if st.button(f"🎯 GERAR MÚLTIPLA INDIVIDUAL", key=btn_key, use_container_width=True):
                     mercados = {}
@@ -5638,12 +5935,10 @@ def render_tab_multiplas_individuais(sistema):
                         st.warning("⚠️ Selecione pelo menos um mercado!")
                         continue
                     
-                    # Calcular odd total
                     odd_total = 1.0
                     for m in mercados.values():
                         odd_total *= m.get("odd", 1.0)
                     
-                    # Criar estrutura da múltipla
                     multipla = {
                         "id": f"ind_{jogo_dict.get('id')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
                         "tipo": "INDIVIDUAL",
@@ -5663,16 +5958,13 @@ def render_tab_multiplas_individuais(sistema):
                         "data_busca": data_selecionada.strftime("%Y-%m-%d")
                     }
                     
-                    # Salvar
                     multipla_id = sistema.gerenciador_individuais.salvar_multipla(multipla)
                     
-                    # Gerar e enviar pôster
                     poster = gerar_poster_multipla_individual(
                         multipla["jogo"],
                         mercados,
                         titulo=f" MÚLTIPLA INDIVIDUAL - {data_br}",
-                        api_client=sistema.api_client  # <-- ADICIONE ESTE PARÂMETRO
-                        
+                        api_client=sistema.api_client
                     )
                     
                     caption = f"<b>🎯 MÚLTIPLA INDIVIDUAL - {data_br}</b>\n\n"
@@ -5687,12 +5979,10 @@ def render_tab_multiplas_individuais(sistema):
                     else:
                         st.error("❌ Falha ao enviar pôster")
     
-    # ===== CONFERÊNCIA =====
     st.markdown("---")
     st.subheader("📊 CONFERÊNCIA DE MÚLTIPLAS INDIVIDUAIS")
     st.caption("Confere os resultados das múltiplas individuais após as partidas serem encerradas.")
     
-    # Botão de conferência - KEY ÚNICA
     if st.button("🔄 CONFERIR MÚLTIPLAS PENDENTES", use_container_width=True, key="conferir_ind_unicas"):
         with st.spinner("Conferindo múltiplas individuais pendentes..."):
             resultados = sistema.gerenciador_individuais.conferir_multiplas_pendentes(sistema.api_client)
@@ -5714,7 +6004,6 @@ def render_tab_multiplas_individuais(sistema):
                     else:
                         st.error(f"❌ {jogo.get('home')} {home_goals}-{away_goals} {jogo.get('away')} - ERROU!")
                     
-                    # Mostrar resultados por mercado
                     for mercado, res_mercado in resultado.get("resultados", {}).items():
                         emoji = "✅" if res_mercado == "GREEN" else "❌"
                         nome_mercado = {
@@ -5724,11 +6013,8 @@ def render_tab_multiplas_individuais(sistema):
                         }.get(mercado, mercado)
                         st.write(f"   {emoji} {nome_mercado}: {res_mercado}")
                     
-                    # Enviar resultado para Telegram
                     data_br = datetime.now().strftime("%d/%m/%Y")
-                    poster_resultado = gerar_poster_resultado_individual(multipla, data_br,
-                    api_client=sistema.api_client  # ← ADICIONADO
-                )                                                   
+                    poster_resultado = gerar_poster_resultado_individual(multipla, data_br, api_client=sistema.api_client)
                     
                     if acertada:
                         titulo = "✅ MÚLTIPLA INDIVIDUAL - ACERTOU!"
@@ -5746,7 +6032,6 @@ def render_tab_multiplas_individuais(sistema):
             else:
                 st.info("ℹ️ Nenhuma múltipla pendente encontrada ou nenhuma partida foi finalizada ainda.")
     
-    # ===== ESTATÍSTICAS =====
     st.markdown("---")
     st.subheader("📊 ESTATÍSTICAS DAS MÚLTIPLAS INDIVIDUAIS")
     
@@ -5797,7 +6082,6 @@ class GerenciadorMultiplasPro:
         multiplas = self.carregar_multiplas()
         multipla_id = multipla.get("id", f"multipla_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
         
-        # Garantir campos obrigatórios
         if "data_criacao" not in multipla:
             multipla["data_criacao"] = datetime.now().isoformat()
         if "conferida" not in multipla:
@@ -6605,7 +6889,6 @@ class GerenciadorAlertasCompletos:
         alertas_top = DataStorage.carregar_alertas_top()
         
         for jogo_dict in jogos:
-            # CRITÉRIOS MODERADOS - Classificação mais permissiva
             liga = jogo_dict.get("liga", "")
             estimativa = jogo_dict.get("estimativa", 0.0)
             confianca = jogo_dict.get("confianca", 0.0)
@@ -6613,13 +6896,11 @@ class GerenciadorAlertasCompletos:
             ambas_marcam = jogo_dict.get("tendencia_ambas_marcam", "")
             confianca_am = jogo_dict.get("confianca_ambas_marcam", 0.0)
             
-            # NÍVEL A (SEGURO) - Critério moderado
             nivel_a = False
             if "OVER" in tendencia.upper() and "1.5" in tendencia:
                 if estimativa >= 1.8 and confianca >= 60:
                     nivel_a = True
             
-            # NÍVEL B (VALOR) - Critério moderado
             nivel_b = False
             if "OVER" in tendencia.upper() and "2.5" in tendencia:
                 if estimativa >= 2.3:
@@ -6628,16 +6909,13 @@ class GerenciadorAlertasCompletos:
                     elif confianca >= 65:
                         nivel_b = True
             
-            # NÍVEL C (PERIGO) - Só exclui se realmente ruim
             nivel_c = False
             motivo_c = ""
             
-            # Só exclui se estimativa for MUITO baixa
             if estimativa < 1.3 and "OVER" in tendencia.upper():
                 nivel_c = True
                 motivo_c = f"Estimativa muito baixa ({estimativa:.2f})"
             
-            # Liga que evita Over - apenas alerta se estimativa baixa
             liga_base = liga.split("(")[0].strip() if "(" in liga else liga
             ligas_evitar = ["Campeonato Brasileiro Série A", "Primera Division"]
             
@@ -6646,13 +6924,11 @@ class GerenciadorAlertasCompletos:
                     nivel_c = True
                     motivo_c = f"Liga evitar Over com estimativa baixa ({liga_base})"
             
-            # NÍVEL D (POTENCIAL) - NOVO nível para jogos aceitáveis
             nivel_d = False
             if not nivel_a and not nivel_b and not nivel_c:
                 if estimativa >= 1.6 and confianca >= 55:
                     nivel_d = True
             
-            # Criar classificação
             if nivel_c:
                 classificacao = {
                     "nivel": "C",
@@ -6663,7 +6939,6 @@ class GerenciadorAlertasCompletos:
                     "estimativa": estimativa,
                     "confianca": confianca
                 }
-                # Nível C - PULAR (não adicionar aos classificados)
                 continue
                 
             elif nivel_b:
@@ -6700,7 +6975,6 @@ class GerenciadorAlertasCompletos:
                     "confianca": confianca
                 }
             else:
-                # Nível E - descartar
                 continue
             
             jogo_dict["classificacao"] = classificacao
@@ -7446,7 +7720,6 @@ class SistemaAlertasFutebol:
         
         jogos_filtrados = self._filtrar_por_tipo_analise(top_jogos, tipo_analise, config_analise)
         
-        # APLICAR FILTRO PREMIUM SE ATIVADO
         if filtro_premium_ativado:
             jogos_antes_filtro = len(jogos_filtrados)
             jogos_filtrados = FiltroPremium.aplicar_filtro_premium(jogos_filtrados, ativar=True)
@@ -8207,46 +8480,29 @@ class SistemaAlertasFutebol:
                     if tipo_analise == "Over/Under de Gols":
                         over_count = sum(1 for j in lote if j.get('tipo_aposta') == "over")
                         under_count = sum(1 for j in lote if j.get('tipo_aposta') == "under")
-                        min_conf = config_analise.get("min_conf", 70)
-                        max_conf = config_analise.get("max_conf", 95)
-                        
                         caption = (
                             f"<b>🎯 ALERTA OVER/UNDER - {data_br}</b>\n\n"
                             f"<b>📋 LOTE {idx}/{total_lotes}: {len(lote)} JOGOS</b>\n"
                             f"<b>📈 Over: {over_count} jogos</b>\n"
-                            f"<b>📉 Under: {under_count} jogos</b>\n"
-                            f"<b>⚽ INTERVALO DE CONFIANÇA: {min_conf}% - {max_conf}%</b>\n\n"
+                            f"<b>📉 Under: {under_count} jogos</b>\n\n"
                             f"<b>🔥 ELITE MASTER SYSTEM 3.0 - ANÁLISE PREDITIVA</b>"
                         )
                     elif tipo_analise == "Favorito (Vitória)":
-                        min_conf_vitoria = config_analise.get("min_conf_vitoria", 65)
-                        
                         caption = (
                             f"<b>🏆 ALERTA DE FAVORITOS - {data_br}</b>\n\n"
-                            f"<b>📋 LOTE {idx}/{total_lotes}: {len(lote)} JOGOS</b>\n"
-                            f"<b>🎯 CONFIANÇA MÍNIMA: {min_conf_vitoria}%</b>\n\n"
+                            f"<b>📋 LOTE {idx}/{total_lotes}: {len(lote)} JOGOS</b>\n\n"
                             f"<b>🔥 ELITE MASTER SYSTEM 3.0 - ANÁLISE DE VITÓRIA</b>"
                         )
                     elif tipo_analise == "Gols HT (Primeiro Tempo)":
-                        min_conf_ht = config_analise.get("min_conf_ht", 60)
-                        tipo_ht = config_analise.get("tipo_ht", "OVER 0.5 HT")
-                        
                         caption = (
                             f"<b>⏰ ALERTA DE GOLS HT - {data_br}</b>\n\n"
-                            f"<b>📋 LOTE {idx}/{total_lotes}: {len(lote)} JOGOS</b>\n"
-                            f"<b>🎯 TIPO: {tipo_ht}</b>\n"
-                            f"<b>🔍 CONFIANÇA MÍNIMA: {min_conf_ht}%</b>\n\n"
+                            f"<b>📋 LOTE {idx}/{total_lotes}: {len(lote)} JOGOS</b>\n\n"
                             f"<b>🔥 ELITE MASTER SYSTEM 3.0 - ANÁLISE DO PRIMEIRO TEMPO</b>"
                         )
                     elif tipo_analise == "Ambas Marcam (BTTS)":
-                        min_conf_am = config_analise.get("min_conf_am", 60)
-                        filtro_am = config_analise.get("filtro_am", "Todos")
-                        
                         caption = (
                             f"<b>🤝 ALERTA AMBAS MARCAM - {data_br}</b>\n\n"
-                            f"<b>📋 LOTE {idx}/{total_lotes}: {len(lote)} JOGOS</b>\n"
-                            f"<b>🎯 FILTRO: {filtro_am}</b>\n"
-                            f"<b>🔍 CONFIANÇA MÍNIMA: {min_conf_am}%</b>\n\n"
+                            f"<b>📋 LOTE {idx}/{total_lotes}: {len(lote)} JOGOS</b>\n\n"
                             f"<b>🔥 ELITE MASTER SYSTEM 3.0 - ANÁLISE BTTS</b>"
                         )
                     else:
@@ -8268,77 +8524,6 @@ class SistemaAlertasFutebol:
         except Exception as e:
             logging.error(f"Erro crítico ao gerar/enviar poster West Ham: {str(e)}")
             st.error(f"❌ Erro crítico ao gerar/enviar poster: {str(e)}")
-            
-            jogos_fallback = jogos_para_fallback
-            
-            if jogos_fallback and len(jogos_fallback) > 0:
-                primeiro_jogo = jogos_fallback[0]
-                if isinstance(primeiro_jogo.get("hora"), datetime):
-                    data_br_fallback = primeiro_jogo["hora"].strftime("%d/%m/%Y")
-                else:
-                    data_br_fallback = datetime.now().strftime("%d/%m/%Y")
-            else:
-                data_br_fallback = datetime.now().strftime("%d/%m/%Y")
-            
-            st.info(f"📝 Enviando alertas como texto em lotes para {data_br_fallback}...")
-            
-            lotes_texto = [jogos_fallback[i:i+5] for i in range(0, len(jogos_fallback), 5)]
-            
-            for idx, lote in enumerate(lotes_texto, 1):
-                if tipo_analise == "Over/Under de Gols":
-                    msg_lote = f"<b>📊 ALERTA OVER/UNDER - {data_br_fallback} (Lote {idx}/{len(lotes_texto)})</b>\n\n"
-                elif tipo_analise == "Favorito (Vitória)":
-                    msg_lote = f"<b>🏆 ALERTA FAVORITOS - {data_br_fallback} (Lote {idx}/{len(lotes_texto)})</b>\n\n"
-                elif tipo_analise == "Gols HT (Primeiro Tempo)":
-                    msg_lote = f"<b>⏰ ALERTA GOLS HT - {data_br_fallback} (Lote {idx}/{len(lotes_texto)})</b>\n\n"
-                elif tipo_analise == "Ambas Marcam (BTTS)":
-                    msg_lote = f"<b>🤝 ALERTA AMBAS MARCAM - {data_br_fallback} (Lote {idx}/{len(lotes_texto)})</b>\n\n"
-                else:
-                    msg_lote = f"<b>⚽ ALERTA DE JOGOS - {data_br_fallback} (Lote {idx}/{len(lotes_texto)})</b>\n\n"
-                
-                for j in lote:
-                    if tipo_analise == "Over/Under de Gols":
-                        tipo_emoji = "📈" if j.get('tipo_aposta') == "over" else "📉"
-                        prob = j.get('probabilidade', 50)
-                        odd = round(100 / prob, 2) if prob > 0 else 2.0
-                        msg_lote += f"{tipo_emoji} <b>{j['home']} vs {j['away']}</b>\n"
-                        msg_lote += f"   📊 {j['tendencia']} | Conf: {j['confianca']:.0f}% | Odds: {odd:.2f}\n"
-                        hora_formatada = j["hora"].strftime("%H:%M") if isinstance(j["hora"], datetime) else str(j["hora"])
-                        msg_lote += f"   🕒 {hora_formatada} BRT | {j.get('liga', '')}\n\n"
-                    elif tipo_analise == "Favorito (Vitória)":
-                        favorito_emoji = "🏠" if j.get('favorito') == "home" else "✈️" if j.get('favorito') == "away" else "🤝"
-                        prob_fav = j.get('confianca_vitoria', 50)
-                        odd = round(100 / prob_fav, 2) if prob_fav > 0 else 2.0
-                        favorito_text = j['home'] if j.get('favorito') == "home" else j['away'] if j.get('favorito') == "away" else "EMPATE"
-                        msg_lote += f"{favorito_emoji} <b>{j['home']} vs {j['away']}</b>\n"
-                        msg_lote += f"   🏆 Favorito: {favorito_text} | Conf: {j['confianca_vitoria']:.1f}% | Odds: {odd:.2f}\n"
-                        hora_formatada = j["hora"].strftime("%H:%M") if isinstance(j["hora"], datetime) else str(j["hora"])
-                        msg_lote += f"   🕒 {hora_formatada} BRT | {j.get('liga', '')}\n\n"
-                    elif tipo_analise == "Gols HT (Primeiro Tempo)":
-                        tipo_emoji_ht = "⚡" if "OVER" in j.get('tendencia_ht', '') else "🛡️"
-                        prob_ht = j.get('confianca_ht', 50)
-                        odd = round(100 / prob_ht, 2) if prob_ht > 0 else 2.0
-                        msg_lote += f"{tipo_emoji_ht} <b>{j['home']} vs {j['away']}</b>\n"
-                        msg_lote += f"   ⏰ {j['tendencia_ht']} | Conf: {j['confianca_ht']:.0f}% | Odds: {odd:.2f}\n"
-                        hora_formatada = j["hora"].strftime("%H:%M") if isinstance(j["hora"], datetime) else str(j["hora"])
-                        msg_lote += f"   🕒 {hora_formatada} BRT | {j.get('liga', '')}\n\n"
-                    elif tipo_analise == "Ambas Marcam (BTTS)":
-                        tipo_emoji_am = "🤝" if j.get('tendencia_ambas_marcam') == "SIM" else "🚫"
-                        prob_am = j.get('confianca_ambas_marcam', 50)
-                        odd = round(100 / prob_am, 2) if prob_am > 0 else 2.0
-                        msg_lote += f"{tipo_emoji_am} <b>{j['home']} vs {j['away']}</b>\n"
-                        msg_lote += f"   🤝 {j['tendencia_ambas_marcam']} | Conf: {j['confianca_ambas_marcam']:.1f}% | Odds: {odd:.2f}\n"
-                        hora_formatada = j["hora"].strftime("%H:%M") if isinstance(j["hora"], datetime) else str(j["hora"])
-                        msg_lote += f"   🕒 {hora_formatada} BRT | {j.get('liga', '')}\n\n"
-                
-                msg_lote += f"<b>🔥 ELITE MASTER SYSTEM 3.0 - LOTE {idx}/{len(lotes_texto)}</b>"
-                
-                if self.telegram_client.enviar_mensagem(msg_lote, self.config.TELEGRAM_CHAT_ID_ALT2):
-                    st.info(f"📤 Lote {idx}/{len(lotes_texto)} enviado como texto")
-                else:
-                    st.error(f"❌ Falha ao enviar lote {idx}/{len(lotes_texto)} como texto")
-                
-                time.sleep(1)
     
     def _enviar_alerta_poster_original(self, jogos_conf: list, tipo_analise: str, config_analise: dict):
         if not jogos_conf:
@@ -8390,10 +8575,7 @@ class SistemaAlertasFutebol:
                     msg += (
                         f"{favorito_emoji} {j['home']} vs {j['away']}\n"
                         f"🕒 {hora_format} BRT | {j['liga']}\n"
-                        f"🏆 Favorito: {favorito_text} | 💯 {j.get('confianca_vitoria', 0):.1f}% | 💰 {odd:.2f}\n"
-                        f"📊 Casa: {j.get('prob_home_win', 0):.1f}% | "
-                        f"Fora: {j.get('prob_away_win', 0):.1f}% | "
-                        f"Empate: {j.get('prob_draw', 0):.1f}%\n\n"
+                        f"🏆 Favorito: {favorito_text} | 💯 {j.get('confianca_vitoria', 0):.1f}% | 💰 {odd:.2f}\n\n"
                     )
             
             elif tipo_analise == "Gols HT (Primeiro Tempo)":
@@ -8408,10 +8590,7 @@ class SistemaAlertasFutebol:
                     msg += (
                         f"{tipo_emoji_ht} {j['home']} vs {j['away']}\n"
                         f"🕒 {hora_format} BRT | {j['liga']}\n"
-                        f"⏰ {j.get('tendencia_ht', 'N/A')} | ⚽ {j.get('estimativa_total_ht', 0):.2f} gols | "
-                        f"💯 {j.get('confianca_ht', 0):.0f}% | 💰 {odd:.2f}\n"
-                        f"🎯 OVER 0.5: {j.get('detalhes', {}).get('gols_ht', {}).get('over_05_ht', 0):.0f}% | "
-                        f"OVER 1.5: {j.get('detalhes', {}).get('gols_ht', {}).get('over_15_ht', 0):.0f}%\n\n"
+                        f"⏰ {j.get('tendencia_ht', 'N/A')} | 💯 {j.get('confianca_ht', 0):.0f}% | 💰 {odd:.2f}\n\n"
                     )
             
             elif tipo_analise == "Ambas Marcam (BTTS)":
@@ -8426,10 +8605,7 @@ class SistemaAlertasFutebol:
                     msg += (
                         f"{tipo_emoji_am} {j['home']} vs {j['away']}\n"
                         f"🕒 {hora_format} BRT | {j['liga']}\n"
-                        f"🤝 {j.get('tendencia_ambas_marcam', 'N/A')} | "
-                        f"💯 {j.get('confianca_ambas_marcam', 0):.0f}% | 💰 {odd:.2f}\n"
-                        f"📊 SIM: {j.get('prob_ambas_marcam_sim', 0):.1f}% | "
-                        f"NÃO: {j.get('prob_ambas_marcam_nao', 0):.1f}%\n\n"
+                        f"🤝 {j.get('tendencia_ambas_marcam', 'N/A')} | 💯 {j.get('confianca_ambas_marcam', 0):.0f}% | 💰 {odd:.2f}\n\n"
                     )
             
             self.telegram_client.enviar_mensagem(msg, self.config.TELEGRAM_CHAT_ID_ALT2)
@@ -8926,13 +9102,11 @@ def render_tab_multiplas_green(sistema):
     )
     data_str = data_green.strftime("%Y-%m-%d")
 
-    # Carregar todos os resultados já conferidos
     resultados_ou = DataStorage.carregar_resultados()
     resultados_fav = DataStorage.carregar_resultados_favoritos()
     resultados_ht = DataStorage.carregar_resultados_gols_ht()
     resultados_am = DataStorage.carregar_resultados_ambas_marcam()
 
-    # Unificar e filtrar apenas GREEN da data selecionada
     jogos_green = []
     idx_counter = 0
 
@@ -9013,13 +9187,10 @@ def render_tab_multiplas_green(sistema):
 
     st.success(f"✅ {len(jogos_green)} jogos com resultado GREEN disponíveis para {data_green.strftime('%d/%m/%Y')}.")
 
-    # Seleção dos jogos
     st.markdown("### 📋 Selecione os jogos para a múltipla")
     jogos_selecionados = []
     
-    # Criar uma chave única para cada checkbox
     for idx, jogo in enumerate(jogos_green):
-        # Chave única: data + índice + tipo + id
         unique_key = f"green_check_{data_str}_{idx}_{jogo['id']}_{jogo['tipo']}"
         if st.checkbox(f"{jogo['home']} vs {jogo['away']} - {jogo['mercado']} (Odd: {jogo['odd']:.2f})", key=unique_key):
             jogos_selecionados.append(jogo)
@@ -9028,7 +9199,6 @@ def render_tab_multiplas_green(sistema):
         st.info("Selecione pelo menos um jogo para gerar o pôster.")
         return
 
-    # Valor da aposta
     valor_aposta = st.number_input(
         "💰 Valor da Aposta (R$)",
         min_value=0.50,
@@ -9039,7 +9209,6 @@ def render_tab_multiplas_green(sistema):
         key="valor_aposta_green"
     )
 
-    # Cálculo da odd total e retorno
     odd_total = 1.0
     for j in jogos_selecionados:
         odd_total *= j['odd']
@@ -9054,7 +9223,6 @@ def render_tab_multiplas_green(sistema):
     </div>
     """, unsafe_allow_html=True)
 
-    # Botão para gerar e enviar
     if st.button("🎨 GERAR PÔSTER E ENVIAR", type="primary", use_container_width=True, key="btn_gerar_green"):
         with st.spinner("Gerando pôster e enviando para o Telegram..."):
             try:
@@ -9193,12 +9361,11 @@ def render_tab_busca(sistema):
     
     top_n = st.selectbox("📊 Quantidade no Top", [3, 5, 10], index=1, key="top_n")
     
-    # NOVO SELECT BOX PARA FILTRO PREMIUM
     filtro_premium = st.selectbox(
         "🎯 Filtro de Qualidade Premium",
         ["Desativado", "Ativado (Apenas jogos de alta qualidade)"],
         key="filtro_premium",
-        help="Quando ativado, aplica filtros rigorosos baseados na análise de performance real. Remove GOLS HT, Favoritos com baixa confiança, BTTS da Premier League, e limita a 15 jogos por dia."
+        help="Quando ativado, aplica filtros rigorosos baseados na análise de performance real."
     )
     filtro_premium_ativado = filtro_premium == "Ativado (Apenas jogos de alta qualidade)"
     
@@ -9225,7 +9392,7 @@ def render_tab_busca(sistema):
                     config_analise.get("tipo_filtro", "Todos"),
                     tipo_analise,
                     config_analise,
-                    filtro_premium_ativado  # NOVO PARÂMETRO
+                    filtro_premium_ativado
                 )
 
 
@@ -9571,379 +9738,6 @@ def render_tab_completos(sistema):
         if total_multiplas > 0:
             taxa_acerto = (acertadas / total_multiplas) * 100
             st.metric("📊 Taxa de Acerto", f"{taxa_acerto:.1f}%")
-
-
-def render_tab_multiplas_pro(sistema):
-    st.subheader("🧠 MÚLTIPLAS PRO - SISTEMA AUTÔNOMO")
-    st.caption("Gera múltiplas inteligentes com score de qualidade, filtro anti-armadilha e balanceamento de risco. As múltiplas são salvas para conferência futura.")
-
-    data_selecionada = st.date_input(
-        "📅 Data para análise",
-        value=datetime.today(),
-        format="DD/MM/YYYY",
-        key="data_multiplas_pro"
-    )
-
-    todas_ligas = st.checkbox("🌍 Todas as ligas", value=True, key="todas_ligas_multiplas_pro")
-    ligas_selecionadas = []
-    if not todas_ligas:
-        ligas_selecionadas = st.multiselect(
-            "📌 Selecionar ligas",
-            options=list(ConfigManager.LIGA_DICT.keys()),
-            default=["Premier League (Inglaterra)", "Bundesliga", "Eredivisie"],
-            key="ligas_multiplas_pro"
-        )
-
-    st.markdown("### 🎯 Configurações de Qualidade")
-    col1, col2 = st.columns(2)
-    with col1:
-        score_minimo = st.slider(
-            "Score Mínimo por Jogo",
-            min_value=0,
-            max_value=100,
-            value=70,
-            step=5,
-            help="Jogos com score abaixo deste valor serão descartados."
-        )
-    with col2:
-        score_maximo = st.slider(
-            "Score Máximo por Jogo",
-            min_value=score_minimo,
-            max_value=100,
-            value=100,
-            step=5,
-            help="Jogos com score acima deste valor também serão descartados (limite superior)."
-        )
-
-    st.markdown("### 📨 Opções de Envio")
-    col_f1, col_f2 = st.columns(2)
-    with col_f1:
-        enviar_multiplas_tg = st.checkbox("📤 Enviar Múltiplas para Telegram", value=True, key="enviar_multiplas_tg_pro")
-    with col_f2:
-        formato_multipla = st.selectbox(
-            "Formato da Múltipla",
-            ["Pôster West Ham", "Texto", "Ambos"],
-            key="formato_multipla_pro"
-        )
-
-    if st.button("🧠 GERAR MÚLTIPLAS PROFISSIONAIS", type="primary", use_container_width=True):
-        if not todas_ligas and not ligas_selecionadas:
-            st.error("❌ Selecione pelo menos uma liga")
-            return
-
-        with st.spinner("🔍 Analisando jogos e gerando múltiplas..."):
-            hoje = data_selecionada.strftime("%Y-%m-%d")
-            data_br = data_selecionada.strftime("%d/%m/%Y")
-
-            if todas_ligas:
-                ligas_busca = list(sistema.config.LIGA_DICT.values())
-                st.write(f"🌍 Analisando TODAS as {len(ligas_busca)} ligas disponíveis")
-            else:
-                ligas_busca = [sistema.config.LIGA_DICT[liga_nome] for liga_nome in ligas_selecionadas]
-                st.write(f"📌 Analisando {len(ligas_busca)} ligas selecionadas: {', '.join(ligas_selecionadas)}")
-
-            st.write(f"⏳ Buscando jogos para {data_br}...")
-
-            classificacoes = {}
-            for liga_id in ligas_busca:
-                classificacoes[liga_id] = sistema.api_client.obter_classificacao(liga_id)
-
-            jogos_analisados = []
-
-            for liga_id in ligas_busca:
-                classificacao = classificacoes[liga_id]
-                analisador = AnalisadorTendencia(classificacao)
-
-                if liga_id == "BSA":
-                    jogos_data = sistema.api_client.obter_jogos_brasileirao(liga_id, hoje)
-                else:
-                    jogos_data = sistema.api_client.obter_jogos(liga_id, hoje)
-
-                for match_data in jogos_data:
-                    if not sistema.api_client.validar_dados_jogo(match_data):
-                        continue
-
-                    jogo = Jogo(match_data)
-                    if not jogo.validar_dados():
-                        continue
-
-                    analise = analisador.calcular_tendencia_completa(jogo.home_team, jogo.away_team)
-
-                    if classificacao:
-                        vitoria_analise = AnalisadorEstatistico.calcular_probabilidade_vitoria(
-                            jogo.home_team, jogo.away_team, classificacao
-                        )
-                        analise["detalhes"]["vitoria"] = vitoria_analise
-
-                        ht_analise = AnalisadorEstatistico.calcular_probabilidade_gols_ht(
-                            jogo.home_team, jogo.away_team, classificacao
-                        )
-                        analise["detalhes"]["gols_ht"] = ht_analise
-
-                        ambas_marcam_analise = AnalisadorEstatistico.calcular_probabilidade_ambas_marcam(
-                            jogo.home_team, jogo.away_team, classificacao
-                        )
-                        analise["detalhes"]["ambas_marcam"] = ambas_marcam_analise
-
-                    jogo.set_analise(analise)
-                    jogos_analisados.append(jogo)
-
-            jogos_filtrados = [j for j in jogos_analisados if j.status not in ["FINISHED", "IN_PLAY", "POSTPONED", "SUSPENDED"]]
-
-            if not jogos_filtrados:
-                st.warning("⚠️ Nenhum jogo futuro encontrado para a data selecionada.")
-                return
-
-            st.write(f"✅ {len(jogos_filtrados)} jogos elegíveis encontrados.")
-
-            alerts = []
-            for jogo in jogos_filtrados:
-                if jogo.estimativa > 0 and jogo.confianca > 0:
-                    alerts.append({
-                        "jogo": f"{jogo.home_team} vs {jogo.away_team}",
-                        "probabilidade": jogo.probabilidade,
-                        "confianca": jogo.confianca,
-                        "estimativa": jogo.estimativa,
-                        "liga": jogo.competition,
-                        "hora": jogo.get_hora_brasilia_datetime(),
-                        "escudo_home": jogo.home_crest,
-                        "escudo_away": jogo.away_crest,
-                        "tendencia": jogo.tendencia,
-                        "tipo_aposta": jogo.tipo_aposta,
-                        "jogo_obj": jogo
-                    })
-
-            if not alerts:
-                st.warning("⚠️ Nenhum alerta com Over/Under válido encontrado.")
-                return
-
-            sistema_apostas = SistemaApostasPro(alerts)
-
-            jogos_selecionados = sistema_apostas.processar_alertas()
-
-            if not jogos_selecionados:
-                st.warning("⚠️ Nenhum jogo aprovado após filtros de score.")
-                return
-
-            jogos_finais = [j for j in jogos_selecionados if score_minimo <= j['score'] <= score_maximo]
-
-            if not jogos_finais:
-                st.warning(f"⚠️ Nenhum jogo com score entre {score_minimo} e {score_maximo}.")
-                return
-
-            st.success(f"🎯 {len(jogos_finais)} jogos aprovados (Score: {score_minimo}-{score_maximo})!")
-
-            st.markdown("### 📊 Jogos Aprovados por Score")
-            for j in jogos_finais:
-                st.write(f"**{j['jogo']}** → {j['mercado']} (Odd: {j['odd']:.2f}) | **Score: {j['score']}**")
-
-            elite, bons, risco = separar_por_nivel(jogos_finais)
-
-            st.markdown("### 📈 Níveis de Jogos")
-            col1, col2, col3 = st.columns(3)
-            col1.metric("🔥 ELITE (Score ≥ 85)", len(elite))
-            col2.metric("💎 BONS (75 ≤ Score < 85)", len(bons))
-            col3.metric("⚠️ RISCO (Score < 75)", len(risco))
-
-            multiplas = gerar_multiplas(elite, bons, risco)
-
-            if not multiplas:
-                st.warning("⚠️ Não foi possível gerar múltiplas com os jogos disponíveis.")
-                return
-
-            st.markdown("### 💣 MÚLTIPLAS GERADAS")
-            
-            # ============================================================
-            # SALVAR MÚLTIPLAS NO GERENCIADOR
-            # ============================================================
-            multiplas_salvas = []
-            
-            for idx, (tipo, jogos_mult, odd_total) in enumerate(multiplas):
-                with st.expander(f"{tipo} (Odds Total: {odd_total:.2f})"):
-                    for j in jogos_mult:
-                        st.write(f"   {j['jogo']} → {j['mercado']} ({j['odd']:.2f}) | Score: {j['score']}")
-
-                if enviar_multiplas_tg:
-                    data_br_str = data_selecionada.strftime("%d/%m/%Y")
-                    
-                    over_1_5_count = sum(1 for j in jogos_mult if "OVER 1.5" in j.get('mercado', '').upper())
-                    over_2_5_count = sum(1 for j in jogos_mult if "OVER 2.5" in j.get('mercado', '').upper())
-                    score_medio = sum(j.get('score', 0) for j in jogos_mult) / len(jogos_mult) if jogos_mult else 0
-                    
-                    multipla_struct = {
-                        "id": f"pro_{tipo}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-                        "tipo": tipo,
-                        "modelo": tipo,
-                        "odd_total": odd_total,
-                        "jogos": [],
-                        "jogos_conferidos": [],
-                        "over_1.5_count": over_1_5_count,
-                        "over_2.5_count": over_2_5_count,
-                        "risco": "ALTO" if over_2_5_count >= 2 else "MÉDIO" if over_2_5_count == 1 else "BAIXO",
-                        "score_medio": score_medio,
-                        "data_busca": hoje,
-                        "data_criacao": datetime.now().isoformat(),
-                        "conferida": False,
-                        "acertada": False,
-                        "enviada": False,
-                        "resultado": None
-                    }
-                    
-                    for j in jogos_mult:
-                        if ' vs ' in j['jogo']:
-                            home, away = j['jogo'].split(' vs ')
-                        else:
-                            home, away = j['jogo'], ""
-                        
-                        jogo_obj = j.get('jogo_obj', None)
-                        jogo_id = str(jogo_obj.id) if jogo_obj and hasattr(jogo_obj, 'id') else f"jogo_{idx}_{j['jogo'].replace(' ', '_')}"
-                        
-                        jogo_dict = {
-                            "id": jogo_id,
-                            "home": home,
-                            "away": away,
-                            "mercado": j['mercado'],
-                            "odd": j['odd'],
-                            "score": j['score'],
-                            "liga": j.get('liga', 'Desconhecida'),
-                            "hora": j.get('hora', datetime.now()),
-                            "escudo_home": j.get('escudo_home', ''),
-                            "escudo_away": j.get('escudo_away', ''),
-                            "tendencia": j.get('tendencia', ''),
-                            "tipo_aposta": j.get('tipo_aposta', '')
-                        }
-                        multipla_struct["jogos"].append(jogo_dict)
-                    
-                    multipla_id = sistema.gerenciador_multiplas_pro.salvar_multipla(multipla_struct)
-                    multiplas_salvas.append(multipla_id)
-                    
-                    if formato_multipla in ["Texto", "Ambos"]:
-                        msg = f"💣 **{tipo}**\n📅 {data_br_str}\n"
-                        msg += f"🎯 **Odds Total:** {odd_total:.2f}\n"
-                        msg += f"📊 **Score Médio:** {score_medio:.1f}\n\n"
-                        for j in jogos_mult:
-                            msg += f"⚽ {j['jogo']}\n"
-                            msg += f"   📊 {j['mercado']} ({j['odd']:.2f}) | Score: {j['score']}\n\n"
-                        msg += f"🆔 ID: `{multipla_id}`\n\n"
-                        msg += f"🔥 **ELITE MASTER PRO - MÚLTIPLAS AUTÔNOMAS**"
-                        
-                        if sistema.telegram_client.enviar_mensagem(msg, sistema.config.TELEGRAM_CHAT_ID_ALT2):
-                            st.success(f"📤 Múltipla {tipo} enviada como texto!")
-                    
-                    if formato_multipla in ["Pôster West Ham", "Ambos"]:
-                        poster = sistema.poster_generator.gerar_poster_multipla_pro(multipla_struct, titulo=f"📅 {data_br_str}")
-                        caption = f"<b>💣 MÚLTIPLA PRO - {tipo}</b>\n"
-                        caption += f"<b>📅 {data_br_str}</b>\n"
-                        caption += f"<b>🎯 Odds Total: {odd_total:.2f}</b>\n"
-                        caption += f"<b>📊 Score Médio: {score_medio:.1f}</b>\n\n"
-                        caption += f"🆔 ID: <code>{multipla_id}</code>\n\n"
-                        caption += f"<b>🔥 ELITE MASTER PRO</b>"
-                        
-                        if sistema.telegram_client.enviar_foto(poster, caption=caption):
-                            st.success(f"📤 Múltipla {tipo} enviada como pôster!")
-
-            if multiplas_salvas:
-                st.success(f"💾 {len(multiplas_salvas)} múltiplas salvas para conferência futura!")
-                multiplas_verificacao = sistema.gerenciador_multiplas_pro.carregar_multiplas()
-                st.write(f"🔍 Total de múltiplas no arquivo: {len(multiplas_verificacao)}")
-            else:
-                st.warning("⚠️ Nenhuma múltipla foi salva. Verifique se a geração foi bem sucedida.")
-
-            st.success("✅ Processamento concluído!")
-
-    st.markdown("---")
-    st.subheader("📊 CONFERÊNCIA DE MÚLTIPLAS PRO")
-    st.caption("Confere os resultados das múltiplas geradas. O alerta só é enviado quando TODOS os jogos estiverem encerrados.")
-
-    if st.button("🔄 CONFERIR MÚLTIPLAS PENDENTES", use_container_width=True):
-        with st.spinner("Conferindo múltiplas pendentes..."):
-            resultados = sistema.gerenciador_multiplas_pro.conferir_todas_multiplas_pendentes(sistema.api_client)
-            
-            if resultados:
-                st.success(f"✅ {len(resultados)} múltiplas conferidas!")
-                
-                for resultado in resultados:
-                    multipla = resultado["multipla"]
-                    res = resultado["resultado"]
-                    
-                    if res.get("acertada", False):
-                        st.success(f"🎯 Múltipla {multipla.get('tipo', '')} - ACERTOU! (Odds: {multipla.get('odd_total', 0):.2f})")
-                    else:
-                        st.error(f"❌ Múltipla {multipla.get('tipo', '')} - ERROU! (Odds: {multipla.get('odd_total', 0):.2f})")
-                    
-                    for jogo in res.get("jogos_conferidos", []):
-                        emoji = "✅" if jogo.get("resultado") == "GREEN" else "❌"
-                        st.write(f"   {emoji} {jogo.get('home')} {jogo.get('home_goals')}-{jogo.get('away_goals')} {jogo.get('away')} - {jogo.get('mercado')}")
-                    
-                    if enviar_multiplas_tg:
-                        data_br_str = datetime.now().strftime("%d/%m/%Y")
-                        
-                        multipla_resultado = {
-                            "tipo": multipla.get("tipo"),
-                            "odd_total": multipla.get("odd_total"),
-                            "acertada": res.get("acertada", False),
-                            "jogos_conferidos": res.get("jogos_conferidos", [])
-                        }
-                        
-                        if formato_multipla in ["Texto", "Ambos"]:
-                            if res.get("acertada", False):
-                                msg = f"🎯 **MÚLTIPLA {multipla.get('tipo', '').upper()} - ACERTOU!** 🎯\n\n"
-                            else:
-                                msg = f"❌ **MÚLTIPLA {multipla.get('tipo', '').upper()} - ERROU!** ❌\n\n"
-                            
-                            msg += f"📅 {data_br_str}\n"
-                            msg += f"🎯 Odds Total: {multipla.get('odd_total', 0):.2f}\n\n"
-                            
-                            for jogo in res.get("jogos_conferidos", []):
-                                emoji = "✅" if jogo.get("resultado") == "GREEN" else "❌"
-                                msg += f"{emoji} {jogo.get('home')} {jogo.get('home_goals')}-{jogo.get('away_goals')} {jogo.get('away')}\n"
-                                msg += f"   📊 {jogo.get('mercado')}\n\n"
-                            
-                            msg += f"🔥 **ELITE MASTER PRO - RESULTADO CONFIRMADO**"
-                            
-                            if sistema.telegram_client.enviar_mensagem(msg, sistema.config.TELEGRAM_CHAT_ID_ALT2):
-                                st.success(f"📤 Resultado da múltipla enviado como texto!")
-                        
-                        if formato_multipla in ["Pôster West Ham", "Ambos"]:
-                            poster = sistema.poster_generator.gerar_poster_resultado_multipla_pro(multipla_resultado, data_br_str)
-                            caption = f"<b>📊 RESULTADO MÚLTIPLA PRO - {multipla.get('tipo', '')}</b>\n"
-                            caption += f"<b>📅 {data_br_str}</b>\n"
-                            caption += f"<b>🎯 Odds Total: {multipla.get('odd_total', 0):.2f}</b>\n"
-                            caption += f"<b>{'✅ ACERTOU!' if res.get('acertada', False) else '❌ ERROU!'}</b>\n\n"
-                            caption += f"<b>🔥 ELITE MASTER PRO</b>"
-                            
-                            if sistema.telegram_client.enviar_foto(poster, caption=caption):
-                                st.success(f"📤 Resultado da múltipla enviado como pôster!")
-            else:
-                st.info("ℹ️ Nenhuma múltipla pendente encontrada ou nenhuma múltipla foi completamente finalizada ainda.")
-    
-    st.markdown("### 📊 Estatísticas das Múltiplas")
-    
-    multiplas = sistema.gerenciador_multiplas_pro.carregar_multiplas()
-    resultados = sistema.gerenciador_multiplas_pro.carregar_resultados()
-    
-    if multiplas:
-        total = len(multiplas)
-        conferidas = sum(1 for m in multiplas.values() if m.get("conferida", False))
-        acertadas = sum(1 for m in multiplas.values() if m.get("acertada", False))
-        
-        col1, col2, col3 = st.columns(3)
-        col1.metric("📋 Total Múltiplas", total)
-        col2.metric("✅ Conferidas", conferidas)
-        col3.metric("🎯 Acertadas", acertadas)
-        
-        if conferidas > 0:
-            taxa_acerto = (acertadas / conferidas) * 100
-            st.metric("📊 Taxa de Acerto", f"{taxa_acerto:.1f}%")
-        
-        with st.expander("📋 Últimas Múltiplas Geradas"):
-            for multipla_id, multipla in list(multiplas.items())[-5:]:
-                st.write(f"**{multipla.get('tipo', 'N/A')}** - Odds: {multipla.get('odd_total', 0):.2f}")
-                st.write(f"📅 {multipla.get('data_criacao', '')[:16]}")
-                st.write(f"✅ Conferida: {multipla.get('conferida', False)} | 🎯 Acertou: {multipla.get('acertada', False)}")
-                st.write("---")
-    else:
-        st.info("ℹ️ Nenhuma múltipla gerada ainda.")
 
 
 def render_tab_exportar(sistema):
@@ -10342,7 +10136,6 @@ def main():
     
     sistema = SistemaAlertasFutebol()
     
-    # 9 TABS: Adicionada a nova aba "🎯 Múltiplas Individuais"
     tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs(
         ["🔍 Buscar", "📊 Resultados", "🏆 TOP", "⚽ Completos 3.0", "🧠 Múltiplas Pro", "🟢 Múltiplas Green", "🎯 Múltiplas Individuais", "📥 Exportar", "⚙️ Admin"]
     )
