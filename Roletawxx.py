@@ -37,25 +37,25 @@ def salvar_sessao():
             'sistema_contador_sorteios_global': st.session_state.sistema.contador_sorteios_global,
             'sistema_sequencia_erros': st.session_state.sistema.sequencia_erros,
             'sistema_ultima_estrategia_erro': st.session_state.sistema.ultima_estrategia_erro,
-            # NOVO: Dados da estratégia de 3 acertos
             'sistema_sequencia_acertos': st.session_state.sistema.sequencia_acertos,
             'sistema_ultima_combinacao_acerto': st.session_state.sistema.ultima_combinacao_acerto,
             'sistema_historico_combinacoes_acerto': st.session_state.sistema.historico_combinacoes_acerto,
-            # Dados da estratégia Zonas
             'zonas_historico': list(st.session_state.sistema.estrategia_zonas.historico),
             'zonas_stats': st.session_state.sistema.estrategia_zonas.stats_zonas,
-            # Dados da estratégia Midas
             'midas_historico': list(st.session_state.sistema.estrategia_midas.historico),
-            # Dados da estratégia ML
             'ml_historico': list(st.session_state.sistema.estrategia_ml.historico),
             'ml_contador_sorteios': st.session_state.sistema.estrategia_ml.contador_sorteios,
             'ml_sequencias_padroes': st.session_state.sistema.estrategia_ml.sequencias_padroes,
             'ml_metricas_padroes': st.session_state.sistema.estrategia_ml.metricas_padroes,
             'estrategia_selecionada': st.session_state.sistema.estrategia_selecionada,
-            # Dados das combinações dinâmicas
             'sistema_historico_combinacoes': st.session_state.sistema.historico_combinacoes,
             'sistema_combinacoes_quentes': st.session_state.sistema.combinacoes_quentes,
-            'sistema_combinacoes_frias': st.session_state.sistema.combinacoes_frias
+            'sistema_combinacoes_frias': st.session_state.sistema.combinacoes_frias,
+            # NOVO: Dados da estratégia Triângulo
+            'triangulo_historico': list(st.session_state.sistema.estrategia_triangulo.historico),
+            'triangulo_stats': st.session_state.sistema.estrategia_triangulo.stats_triangulos,
+            'triangulo_historico_entradas': st.session_state.sistema.estrategia_triangulo.historico_entradas,
+            'triangulo_ultimo_gatilho': st.session_state.sistema.estrategia_triangulo.ultimo_gatilho
         }
         
         with open(SESSION_DATA_PATH, 'wb') as f:
@@ -100,7 +100,6 @@ def carregar_sessao():
                 st.session_state.sistema.sequencia_erros = session_data.get('sistema_sequencia_erros', 0)
                 st.session_state.sistema.ultima_estrategia_erro = session_data.get('sistema_ultima_estrategia_erro', '')
                 
-                # NOVO: Carregar dados da estratégia de 3 acertos
                 st.session_state.sistema.sequencia_acertos = session_data.get('sistema_sequencia_acertos', 0)
                 st.session_state.sistema.ultima_combinacao_acerto = session_data.get('sistema_ultima_combinacao_acerto', [])
                 st.session_state.sistema.historico_combinacoes_acerto = session_data.get('sistema_historico_combinacoes_acerto', [])
@@ -137,6 +136,13 @@ def carregar_sessao():
                     'eficiencia_por_tipo': {},
                     'historico_validacao': []
                 })
+                
+                # NOVO: Carregar dados da estratégia Triângulo
+                triangulo_historico = session_data.get('triangulo_historico', [])
+                st.session_state.sistema.estrategia_triangulo.historico = deque(triangulo_historico, maxlen=70)
+                st.session_state.sistema.estrategia_triangulo.stats_triangulos = session_data.get('triangulo_stats', {})
+                st.session_state.sistema.estrategia_triangulo.historico_entradas = session_data.get('triangulo_historico_entradas', [])
+                st.session_state.sistema.estrategia_triangulo.ultimo_gatilho = session_data.get('triangulo_ultimo_gatilho', None)
             
             logging.info("✅ Sessão carregada com sucesso")
             return True
@@ -201,6 +207,14 @@ def enviar_previsao_super_simplificada(previsao):
                 nucleo = "7" if zona_ml == 'Vermelha' else "10" if zona_ml == 'Azul' else "2"
                 mensagem = f"🤖 NÚCLEO {nucleo} - CONFIANÇA {confianca.upper()}"
         
+        elif 'Triângulo' in nome_estrategia:
+            triangulo_info = previsao.get('triangulo_info', '')
+            confianca = previsao.get('confianca', 'Média')
+            gatilho = previsao.get('gatilho', '')
+            mensagem = f"🔺 TRIÂNGULO {triangulo_info} - CONFIANÇA {confianca.upper()}"
+            if gatilho:
+                mensagem += f"\n📊 {gatilho}"
+        
         else:
             mensagem = f"💰 {previsao['nome']} - APOSTAR AGORA"
         
@@ -230,6 +244,8 @@ def enviar_alerta_numeros_simplificado(previsao):
             emoji = "🔥"
         elif 'ML' in nome_estrategia:
             emoji = "🤖"
+        elif 'Triângulo' in nome_estrategia:
+            emoji = "🔺"
         else:
             emoji = "💰"
             
@@ -295,6 +311,10 @@ def enviar_resultado_super_simplificado(numero_real, acerto, nome_estrategia, zo
                     else:
                         nucleo = zona_acertada
                     mensagem = f"✅ Acerto Núcleo {nucleo}\n🎲 Número: {numero_real}"
+            elif 'Triângulo' in nome_estrategia:
+                mensagem = f"✅ ACERTO TRIÂNGULO!\n🎲 Número: {numero_real}"
+                if zona_acertada:
+                    mensagem += f"\n🔺 Região: {zona_acertada}"
             else:
                 mensagem = f"✅ Acerto\n🎲 Número: {numero_real}"
         else:
@@ -341,7 +361,6 @@ def enviar_rotacao_automatica(estrategia_anterior, estrategia_nova):
     except Exception as e:
         logging.error(f"Erro ao enviar rotação: {e}")
 
-# NOVA FUNÇÃO: Notificação para rotação por 3 acertos
 def enviar_rotacao_por_acertos_combinacoes(combinacao_anterior, combinacao_nova):
     """Envia notificação de rotação por acertos em combinações"""
     try:
@@ -526,7 +545,7 @@ class SistemaSelecaoInteligente:
         return analise
 
 # =============================
-# CLASSE PRINCIPAL DA ROLETA ATUALIZADA
+# CLASSE PRINCIPAL DA ROLETA
 # =============================
 class RoletaInteligente:
     def __init__(self):
@@ -569,7 +588,441 @@ class RoletaInteligente:
         return vizinhos
 
 # =============================
-# MÓDULO DE MACHINE LEARNING ATUALIZADO COM CATBOOST - OTIMIZADO
+# NOVA: ESTRATÉGIA TRIÂNGULO REATIVO + VIZINHOS
+# =============================
+class EstrategiaTrianguloReativo:
+    def __init__(self):
+        self.roleta = RoletaInteligente()
+        self.historico = deque(maxlen=70)
+        self.nome = "Triângulo Reativo v1"
+        
+        # Mapeamento completo: número -> triângulo (região)
+        self.numero_para_triangulo = self._criar_mapeamento_triangulos()
+        
+        # Mapeamento reverso: triângulo -> números
+        self.triangulo_para_numeros = {}
+        for num, triangulo in self.numero_para_triangulo.items():
+            if triangulo not in self.triangulo_para_numeros:
+                self.triangulo_para_numeros[triangulo] = []
+            self.triangulo_para_numeros[triangulo].append(num)
+        
+        # Ordenar números de cada triângulo
+        for triangulo in self.triangulo_para_numeros:
+            self.triangulo_para_numeros[triangulo] = sorted(self.triangulo_para_numeros[triangulo])
+        
+        # Estatísticas por triângulo
+        self.stats_triangulos = {}
+        for triangulo in self.triangulo_para_numeros.keys():
+            self.stats_triangulos[triangulo] = {
+                'acertos': 0,
+                'tentativas': 0,
+                'sequencia_atual': 0,
+                'sequencia_maxima': 0,
+                'performance_media': 0,
+                'ultimo_sorteio': -1,
+                'atraso_atual': 0,
+                'max_atraso': 0,
+                'vizinhos_quentes': 0
+            }
+        
+        # Controle de entradas
+        self.historico_entradas = []  # Guarda histórico de entradas feitas
+        self.ultimo_gatilho = None
+        self.contador_giros_sem_entrada = 0
+        self.entrada_ativa = False
+        self.entrada_atual = None
+        
+        # Configurações
+        self.janela_atraso = 10  # Giros para considerar atraso
+        self.janela_vizinhos = 8  # Janela para verificar vizinhos quentes
+        self.max_vizinhos_por_numero = 2  # Vizinhos por número do triângulo
+        self.sistema_selecao = SistemaSelecaoInteligente()
+        
+        # Cache de vizinhos
+        self.cache_vizinhos = {}
+    
+    def _criar_mapeamento_triangulos(self):
+        """Cria mapeamento número -> triângulo baseado na disposição do cilindro"""
+        # Definição dos triângulos baseada na sequência do cilindro
+        # Cada triângulo = 3 números consecutivos no cilindro
+        race = self.roleta.race
+        
+        triangulos = {}
+        
+        # Criar triângulos de 3 números consecutivos
+        for i in range(0, len(race), 3):
+            if i + 2 < len(race):
+                triangulo_nome = f"T{i//3 + 1}"
+                for j in range(3):
+                    triangulos[race[i + j]] = triangulo_nome
+        
+        # Garantir que todos os números tenham um triângulo
+        # Para números que não foram mapeados (caso raro)
+        numeros_restantes = set(range(37)) - set(triangulos.keys())
+        ultimo_triangulo = f"T{len(triangulos)//3 + 1}"
+        for num in numeros_restantes:
+            triangulos[num] = ultimo_triangulo
+        
+        return triangulos
+    
+    def get_triangulo_do_numero(self, numero):
+        """Retorna o triângulo de um número"""
+        return self.numero_para_triangulo.get(numero, "Desconhecido")
+    
+    def get_numeros_do_triangulo(self, triangulo):
+        """Retorna todos os números de um triângulo"""
+        return self.triangulo_para_numeros.get(triangulo, [])
+    
+    def get_vizinhos_cilindro(self, numero, raio=2):
+        """Retorna vizinhos de um número no cilindro"""
+        if numero in self.cache_vizinhos:
+            return self.cache_vizinhos[numero]
+        
+        vizinhos = self.roleta.get_vizinhos_fisicos(numero, raio)
+        self.cache_vizinhos[numero] = vizinhos
+        return vizinhos
+    
+    def get_todos_vizinhos_do_triangulo(self, triangulo):
+        """Retorna todos os vizinhos dos números do triângulo"""
+        numeros = self.get_numeros_do_triangulo(triangulo)
+        todos_vizinhos = set()
+        
+        for num in numeros:
+            vizinhos = self.get_vizinhos_cilindro(num, self.max_vizinhos_por_numero)
+            todos_vizinhos.update(vizinhos)
+        
+        # Remover os números do próprio triângulo
+        todos_vizinhos -= set(numeros)
+        
+        return sorted(list(todos_vizinhos))
+    
+    def get_numeros_aposta(self, triangulo):
+        """Retorna números para apostar: triângulo + vizinhos"""
+        numeros_triangulo = self.get_numeros_do_triangulo(triangulo)
+        vizinhos = self.get_todos_vizinhos_do_triangulo(triangulo)
+        
+        numeros_aposta = list(set(numeros_triangulo + vizinhos))
+        
+        # Aplicar seleção inteligente se necessário
+        if len(numeros_aposta) > 15:
+            numeros_aposta = self.sistema_selecao.selecionar_melhores_15_numeros(
+                numeros_aposta, self.historico, "Triangulo"
+            )
+        
+        return sorted(numeros_aposta)
+    
+    def adicionar_numero(self, numero):
+        """Adiciona número ao histórico e atualiza estatísticas"""
+        self.historico.append(numero)
+        self.atualizar_stats_triangulos(numero)
+        
+        # Resetar entrada ativa se houve resultado
+        if self.entrada_ativa and self.entrada_atual:
+            self.entrada_ativa = False
+            self.contador_giros_sem_entrada = 0
+            
+            # Verificar acerto
+            triangulo_sorteado = self.get_triangulo_do_numero(numero)
+            if triangulo_sorteado == self.entrada_atual['triangulo']:
+                self.stats_triangulos[triangulo_sorteado]['acertos'] += 1
+                self.stats_triangulos[triangulo_sorteado]['sequencia_atual'] += 1
+                
+                # Registrar entrada com acerto
+                self.registrar_entrada(acertou=True)
+            else:
+                self.stats_triangulos[self.entrada_atual['triangulo']]['sequencia_atual'] = 0
+                self.registrar_entrada(acertou=False)
+            
+            self.entrada_atual = None
+        
+        if 'sistema' in st.session_state:
+            salvar_sessao()
+    
+    def atualizar_stats_triangulos(self, numero):
+        """Atualiza estatísticas dos triângulos"""
+        triangulo = self.get_triangulo_do_numero(numero)
+        
+        if triangulo in self.stats_triangulos:
+            # Atualizar atraso de outros triângulos
+            for t in self.stats_triangulos:
+                if t != triangulo:
+                    self.stats_triangulos[t]['atraso_atual'] += 1
+                    if self.stats_triangulos[t]['atraso_atual'] > self.stats_triangulos[t]['max_atraso']:
+                        self.stats_triangulos[t]['max_atraso'] = self.stats_triangulos[t]['atraso_atual']
+            
+            # Resetar atraso do triângulo sorteado
+            self.stats_triangulos[triangulo]['atraso_atual'] = 0
+            self.stats_triangulos[triangulo]['ultimo_sorteio'] = len(self.historico)
+            
+            # Atualizar performance
+            tentativas = self.stats_triangulos[triangulo]['tentativas']
+            if tentativas > 0:
+                self.stats_triangulos[triangulo]['performance_media'] = (
+                    self.stats_triangulos[triangulo]['acertos'] / tentativas * 100
+                )
+    
+    def verificar_vizinhos_quentes(self, triangulo):
+        """Verifica se vizinhos do triângulo estão aparecendo recentemente"""
+        vizinhos = self.get_todos_vizinhos_do_triangulo(triangulo)
+        
+        if len(self.historico) < self.janela_vizinhos:
+            return False
+        
+        historico_recente = list(self.historico)[-self.janela_vizinhos:]
+        count_vizinhos = sum(1 for num in historico_recente if num in vizinhos)
+        
+        # Atualizar estatística
+        self.stats_triangulos[triangulo]['vizinhos_quentes'] = count_vizinhos
+        
+        # Retorna True se pelo menos 2 vizinhos apareceram
+        return count_vizinhos >= 2
+    
+    def verificar_atraso(self, triangulo):
+        """Verifica se o triângulo está atrasado"""
+        atraso = self.stats_triangulos[triangulo]['atraso_atual']
+        return atraso >= self.janela_atraso
+    
+    def verificar_sem_acerto_recente(self, triangulo):
+        """Verifica se o triângulo não acertou recentemente"""
+        ultimo_sorteio = self.stats_triangulos[triangulo]['ultimo_sorteio']
+        
+        if ultimo_sorteio == -1:
+            return True  # Nunca saiu
+        
+        distancia = len(self.historico) - ultimo_sorteio
+        return distancia >= 5  # Pelo menos 5 giros sem acertar
+    
+    def calcular_confianca(self, triangulo):
+        """Calcula confiança da entrada"""
+        stats = self.stats_triangulos[triangulo]
+        
+        confianca_score = 0
+        fatores = []
+        
+        # Fator 1: Atraso
+        atraso = stats['atraso_atual']
+        if atraso >= 15:
+            confianca_score += 40
+            fatores.append("Alto atraso")
+        elif atraso >= 10:
+            confianca_score += 30
+            fatores.append("Atraso médio")
+        elif atraso >= 5:
+            confianca_score += 15
+            fatores.append("Pequeno atraso")
+        
+        # Fator 2: Vizinhos quentes
+        if stats['vizinhos_quentes'] >= 3:
+            confianca_score += 35
+            fatores.append("Vizinhos muito quentes")
+        elif stats['vizinhos_quentes'] >= 2:
+            confianca_score += 25
+            fatores.append("Vizinhos quentes")
+        
+        # Fator 3: Performance histórica
+        if stats['performance_media'] > 35:
+            confianca_score += 20
+            fatores.append("Alta performance")
+        elif stats['performance_media'] > 25:
+            confianca_score += 10
+            fatores.append("Boa performance")
+        
+        # Fator 4: Sem acerto recente
+        if self.verificar_sem_acerto_recente(triangulo):
+            confianca_score += 15
+            fatores.append("Sem acerto recente")
+        
+        # Classificar confiança
+        if confianca_score >= 70:
+            return "Excelente", fatores
+        elif confianca_score >= 55:
+            return "Muito Alta", fatores
+        elif confianca_score >= 40:
+            return "Alta", fatores
+        elif confianca_score >= 25:
+            return "Média", fatores
+        else:
+            return "Baixa", fatores
+    
+    def analisar_triangulo(self):
+        """Analisa e retorna previsão baseada no último número"""
+        if len(self.historico) < 5:
+            return None
+        
+        # Último número sorteado
+        ultimo_numero = self.historico[-1] if self.historico else None
+        if ultimo_numero is None:
+            return None
+        
+        # Triângulo do último número
+        triangulo_base = self.get_triangulo_do_numero(ultimo_numero)
+        
+        # Verificar condições para entrada
+        condicoes = []
+        
+        # Condição 1: Atraso
+        if self.verificar_atraso(triangulo_base):
+            condicoes.append(f"Atraso: {self.stats_triangulos[triangulo_base]['atraso_atual']} giros")
+        
+        # Condição 2: Vizinhos quentes
+        if self.verificar_vizinhos_quentes(triangulo_base):
+            condicoes.append(f"Vizinhos quentes: {self.stats_triangulos[triangulo_base]['vizinhos_quentes']}x na última janela")
+        
+        # Condição 3: Sem acerto recente
+        if self.verificar_sem_acerto_recente(triangulo_base):
+            condicoes.append("Sem acerto recente")
+        
+        # Se não houver condições, esperar
+        if not condicoes:
+            self.contador_giros_sem_entrada += 1
+            return None
+        
+        # Resetar contador
+        self.contador_giros_sem_entrada = 0
+        
+        # Calcular confiança
+        confianca, fatores_confianca = self.calcular_confianca(triangulo_base)
+        
+        # Gerar números para apostar
+        numeros_aposta = self.get_numeros_aposta(triangulo_base)
+        
+        # Criar previsão
+        previsao = {
+            'nome': f'Triângulo Reativo - {triangulo_base}',
+            'numeros_apostar': numeros_aposta,
+            'gatilho': f'Triângulo {triangulo_base} | ' + ' | '.join(condicoes),
+            'confianca': confianca,
+            'triangulo_info': triangulo_base,
+            'triangulo_numeros': self.get_numeros_do_triangulo(triangulo_base),
+            'vizinhos': self.get_todos_vizinhos_do_triangulo(triangulo_base),
+            'numero_origem': ultimo_numero,
+            'condicoes': condicoes,
+            'fatores_confianca': fatores_confianca,
+            'selecao_inteligente': len(numeros_aposta) < len(self.get_numeros_do_triangulo(triangulo_base)) + len(self.get_todos_vizinhos_do_triangulo(triangulo_base))
+        }
+        
+        # Registrar entrada
+        self.entrada_ativa = True
+        self.entrada_atual = previsao
+        self.ultimo_gatilho = previsao
+        
+        # Atualizar estatísticas de tentativa
+        self.stats_triangulos[triangulo_base]['tentativas'] += 1
+        
+        return previsao
+    
+    def registrar_entrada(self, acertou=False):
+        """Registra entrada no histórico"""
+        if self.entrada_atual:
+            registro = {
+                'timestamp': len(self.historico),
+                'triangulo': self.entrada_atual['triangulo_info'],
+                'numeros_apostados': self.entrada_atual['numeros_apostar'],
+                'numero_origem': self.entrada_atual['numero_origem'],
+                'acertou': acertou,
+                'confianca': self.entrada_atual['confianca']
+            }
+            self.historico_entradas.append(registro)
+            
+            # Manter apenas últimos 50 registros
+            if len(self.historico_entradas) > 50:
+                self.historico_entradas = self.historico_entradas[-50:]
+    
+    def get_analise_detalhada(self):
+        """Retorna análise detalhada da estratégia"""
+        if len(self.historico) == 0:
+            return "🔺 Estratégia Triângulo - Aguardando dados..."
+        
+        analise = "🔺 ANÁLISE TRIÂNGULO REATIVO\n"
+        analise += "=" * 50 + "\n"
+        analise += f"📊 Histórico: {len(self.historico)} números\n"
+        analise += f"🎯 Último número: {self.historico[-1] if self.historico else 'N/A'}\n"
+        analise += f"🔄 Giro sem entrada: {self.contador_giros_sem_entrada}\n"
+        analise += "=" * 50 + "\n\n"
+        
+        # Estatísticas por triângulo
+        analise += "📊 ESTATÍSTICAS POR TRIÂNGULO:\n"
+        
+        # Ordenar triângulos por atraso (maior primeiro)
+        triangulos_ordenados = sorted(
+            self.stats_triangulos.items(),
+            key=lambda x: x[1]['atraso_atual'],
+            reverse=True
+        )
+        
+        for triangulo, stats in triangulos_ordenados[:10]:  # Mostrar top 10
+            taxa = stats['performance_media']
+            atraso = stats['atraso_atual']
+            vizinhos = stats['vizinhos_quentes']
+            
+            # Indicador visual
+            if atraso >= self.janela_atraso:
+                status = "🔴 ATRASADO"
+            elif vizinhos >= 2:
+                status = "🟢 QUENTE"
+            else:
+                status = "⚪ NORMAL"
+            
+            analise += f"📍 {triangulo}: {status}\n"
+            analise += f"   📈 Acertos: {stats['acertos']}/{stats['tentativas']} ({taxa:.1f}%)\n"
+            analise += f"   ⏰ Atraso: {atraso} giros | Vizinhos: {vizinhos}x\n"
+            analise += f"   🔢 Números: {self.get_numeros_do_triangulo(triangulo)}\n\n"
+        
+        # Últimas entradas
+        if self.historico_entradas:
+            analise += "\n📋 ÚLTIMAS ENTRADAS:\n"
+            for entrada in self.historico_entradas[-5:]:
+                resultado = "✅ ACERTOU" if entrada['acertou'] else "❌ ERROU"
+                analise += f"🎯 {entrada['triangulo']}: {resultado} (Conf: {entrada['confianca']})\n"
+        
+        # Se há entrada ativa
+        if self.entrada_ativa and self.entrada_atual:
+            analise += "\n" + "=" * 50 + "\n"
+            analise += "🎯 ENTRADA ATIVA:\n"
+            analise += f"🔺 Triângulo: {self.entrada_atual['triangulo_info']}\n"
+            analise += f"📊 Confiança: {self.entrada_atual['confianca']}\n"
+            analise += f"📋 Gatilho: {self.entrada_atual['gatilho']}\n"
+            analise += f"🔢 Números: {sorted(self.entrada_atual['numeros_apostar'])}\n"
+            if self.entrada_atual.get('selecao_inteligente', False):
+                analise += "🎯 Seleção inteligente ativa (15 números)\n"
+        
+        return analise
+    
+    def get_info_triangulos(self):
+        """Retorna informações de todos os triângulos"""
+        info = {}
+        for triangulo in self.triangulo_para_numeros.keys():
+            info[triangulo] = {
+                'numeros': self.get_numeros_do_triangulo(triangulo),
+                'quantidade': len(self.get_numeros_do_triangulo(triangulo)),
+                'vizinhos': self.get_todos_vizinhos_do_triangulo(triangulo),
+                'stats': self.stats_triangulos.get(triangulo, {})
+            }
+        return info
+    
+    def zerar_estatisticas(self):
+        """Zera todas as estatísticas"""
+        for triangulo in self.stats_triangulos:
+            self.stats_triangulos[triangulo] = {
+                'acertos': 0,
+                'tentativas': 0,
+                'sequencia_atual': 0,
+                'sequencia_maxima': 0,
+                'performance_media': 0,
+                'ultimo_sorteio': -1,
+                'atraso_atual': 0,
+                'max_atraso': 0,
+                'vizinhos_quentes': 0
+            }
+        self.historico_entradas = []
+        self.ultimo_gatilho = None
+        self.contador_giros_sem_entrada = 0
+        self.entrada_ativa = False
+        self.entrada_atual = None
+        logging.info("📊 Estatísticas do Triângulo zeradas")
+
+# =============================
+# MÓDULO DE MACHINE LEARNING (MANTIDO)
 # =============================
 class MLRoletaOtimizada:
     def __init__(
@@ -996,7 +1449,7 @@ class MLRoletaOtimizada:
         }
 
 # =============================
-# ESTRATÉGIA DAS ZONAS ATUALIZADA - COM APRENDIZADO DINÂMICO DE COMBINAÇÕES
+# ESTRATÉGIA DAS ZONAS (MANTIDA - RESUMIDA)
 # =============================
 class EstrategiaZonasOtimizada:
     def __init__(self):
@@ -1512,7 +1965,7 @@ class EstrategiaMidas:
         return None
 
 # =============================
-# ESTRATÉGIA ML ATUALIZADA
+# ESTRATÉGIA ML (MANTIDA - RESUMIDA)
 # =============================
 class EstrategiaML:
     def __init__(self):
@@ -2135,13 +2588,14 @@ class EstrategiaML:
         logging.info("🔄 Padrões sequenciais e métricas zerados")
 
 # =============================
-# SISTEMA DE GESTÃO ATUALIZADO COM ROTAÇÃO POR 3 ACERTOS EM COMBINAÇÕES
+# SISTEMA DE GESTÃO ATUALIZADO COM TRIÂNGULO
 # =============================
 class SistemaRoletaCompleto:
     def __init__(self):
         self.estrategia_zonas = EstrategiaZonasOtimizada()
         self.estrategia_midas = EstrategiaMidas()
         self.estrategia_ml = EstrategiaML()
+        self.estrategia_triangulo = EstrategiaTrianguloReativo()  # NOVA
         self.previsao_ativa = None
         self.historico_desempenho = []
         self.acertos = 0
@@ -2150,21 +2604,17 @@ class SistemaRoletaCompleto:
         self.estrategia_selecionada = "Zonas"
         self.contador_sorteios_global = 0
         
-        # Sistema de rotação automática
         self.sequencia_erros = 0
         self.ultima_estrategia_erro = ""
         
-        # 🎯 NOVO: Sistema de rotação por 3 acertos em combinações
         self.sequencia_acertos = 0
-        self.ultima_combinacao_acerto = []  # Combinações que acertaram na sequência
-        self.historico_combinacoes_acerto = []  # Histórico das combinações que acertaram
+        self.ultima_combinacao_acerto = []
+        self.historico_combinacoes_acerto = []
         
-        # 🎯 NOVO: Sistema de combinações dinâmicas
-        self.historico_combinacoes = {}  # Combinações dinâmicas
-        self.combinacoes_quentes = []    # Combinações com bom desempenho recente
-        self.combinacoes_frias = []      # Combinações com mau desempenho recente
+        self.historico_combinacoes = {}
+        self.combinacoes_quentes = []
+        self.combinacoes_frias = []
         
-        # 🎯 NOVO: Definir todas as combinações possíveis de zonas
         self.todas_combinacoes_zonas = [
             ['Vermelha', 'Azul'],
             ['Vermelha', 'Amarela'], 
@@ -2179,11 +2629,9 @@ class SistemaRoletaCompleto:
         return self.estrategia_ml.treinar_modelo_ml(historico_completo)
 
     def atualizar_desempenho_combinacao(self, zonas_envolvidas, acerto):
-        """Atualiza desempenho de combinações de forma dinâmica"""
         if len(zonas_envolvidas) > 1:
             combinacao = tuple(sorted(zonas_envolvidas))
             
-            # Inicializar se não existe
             if combinacao not in self.historico_combinacoes:
                 self.historico_combinacoes[combinacao] = {
                     'acertos': 0, 
@@ -2203,14 +2651,11 @@ class SistemaRoletaCompleto:
                 dados['sequencia_acertos'] += 1
                 dados['sequencia_erros'] = 0
                 
-                # 🎯 NOVO: Registrar combinação que acertou para sequência
                 if combinacao not in self.ultima_combinacao_acerto:
                     self.ultima_combinacao_acerto.append(combinacao)
-                    # Manter apenas as últimas 3 combinações únicas
                     if len(self.ultima_combinacao_acerto) > 3:
                         self.ultima_combinacao_acerto.pop(0)
                 
-                # 🎯 NOVO: Adicionar ao histórico geral
                 self.historico_combinacoes_acerto.append(combinacao)
                 if len(self.historico_combinacoes_acerto) > 10:
                     self.historico_combinacoes_acerto.pop(0)
@@ -2219,20 +2664,15 @@ class SistemaRoletaCompleto:
                 dados['sequencia_erros'] += 1
                 dados['sequencia_acertos'] = 0
             
-            # Calcular eficiência
             if dados['total'] > 0:
                 dados['eficiencia'] = (dados['acertos'] / dados['total']) * 100
             
-            # 🎯 ATUALIZAR LISTAS DINÂMICAS
             self.atualizar_combinacoes_quentes_frias()
     
     def atualizar_combinacoes_quentes_frias(self):
-        """Atualiza dinamicamente as combinações quentes e frias"""
-        # Resetar listas
         self.combinacoes_quentes = []
         self.combinacoes_frias = []
         
-        # Analisar apenas combinações com pelo menos 2 tentativas
         combinacoes_ativas = {k: v for k, v in self.historico_combinacoes.items() 
                              if v['total'] >= 2}
         
@@ -2241,33 +2681,27 @@ class SistemaRoletaCompleto:
             total_jogos = dados['total']
             sequencia_acertos = dados['sequencia_acertos']
             
-            # 🎯 CRITÉRIOS PARA COMBINAÇÃO QUENTE
             if (eficiencia >= 50 or 
                 (eficiencia >= 40 and total_jogos >= 3) or
                 sequencia_acertos >= 2):
                 self.combinacoes_quentes.append(combinacao)
             
-            # 🎯 CRITÉRIOS PARA COMBINAÇÃO FRIA
             elif (eficiencia < 25 and total_jogos >= 3) or dados['sequencia_erros'] >= 2:
                 self.combinacoes_frias.append(combinacao)
     
     def get_combinacao_recomendada(self):
-        """Retorna a melhor combinação baseada em desempenho recente"""
         if not self.combinacoes_quentes:
             return None
         
-        # 🎯 PRIORIZAR COMBINAÇÕES COM SEQUÊNCIA DE ACERTOS
         combinacoes_com_sequencia = [
             (combo, dados) for combo, dados in self.historico_combinacoes.items()
             if combo in self.combinacoes_quentes and dados['sequencia_acertos'] >= 1
         ]
         
         if combinacoes_com_sequencia:
-            # Ordenar por sequência de acertos (maior primeiro)
             combinacoes_com_sequencia.sort(key=lambda x: x[1]['sequencia_acertos'], reverse=True)
             return combinacoes_com_sequencia[0][0]
         
-        # 🎯 SE NÃO HÁ SEQUÊNCIA, USAR EFICIÊNCIA
         combinacoes_eficientes = [
             (combo, dados) for combo, dados in self.historico_combinacoes.items()
             if combo in self.combinacoes_quentes
@@ -2280,30 +2714,24 @@ class SistemaRoletaCompleto:
         return None
 
     def get_combinacoes_alternativas(self, combinacao_evitar):
-        """🎯 NOVO: Retorna combinações alternativas excluindo as que acertaram recentemente"""
         combinacoes_disponiveis = []
         
         for combo in self.todas_combinacoes_zonas:
             combo_tuple = tuple(sorted(combo))
             
-            # Evitar combinações que acertaram nos últimos 3 acertos
             if combo_tuple in self.ultima_combinacao_acerto:
                 continue
                 
-            # Evitar combinações frias
             if combo_tuple in self.combinacoes_frias:
                 continue
                 
-            # Verificar eficiência da combinação
             dados_combo = self.historico_combinacoes.get(combo_tuple, {})
             eficiencia = dados_combo.get('eficiencia', 0)
             total = dados_combo.get('total', 0)
             
-            # Priorizar combinações com boa eficiência ou poucos dados
             if total == 0 or eficiencia >= 30:
                 combinacoes_disponiveis.append(combo_tuple)
         
-        # Se não encontrou combinações boas, usar todas exceto as que acertaram
         if not combinacoes_disponiveis:
             for combo in self.todas_combinacoes_zonas:
                 combo_tuple = tuple(sorted(combo))
@@ -2313,11 +2741,9 @@ class SistemaRoletaCompleto:
         return combinacoes_disponiveis
 
     def deve_evitar_combinacao(self, combinacao):
-        """Verifica se deve evitar uma combinação específica"""
         if combinacao in self.combinacoes_frias:
             return True
         
-        # 🎯 EVITAR COMBINAÇÕES COM MAU DESEMPENHO HISTÓRICO
         dados = self.historico_combinacoes.get(combinacao, {})
         if dados and dados.get('total', 0) >= 3 and dados.get('eficiencia', 0) < 20:
             return True
@@ -2325,7 +2751,6 @@ class SistemaRoletaCompleto:
         return False
 
     def calcular_performance_estrategias(self):
-        """Calcula performance recente das estratégias"""
         performance = {}
         historico_recente = self.historico_desempenho[-10:] if len(self.historico_desempenho) >= 10 else self.historico_desempenho
         
@@ -2338,7 +2763,6 @@ class SistemaRoletaCompleto:
             if resultado['acerto']:
                 performance[estrategia]['acertos'] += 1
         
-        # Calcular percentuais
         for estrategia, dados in performance.items():
             if dados['total'] > 0:
                 performance[estrategia] = (dados['acertos'] / dados['total']) * 100
@@ -2348,17 +2772,12 @@ class SistemaRoletaCompleto:
         return performance
 
     def rotacionar_estrategia_automaticamente(self, acerto, nome_estrategia, zonas_envolvidas):
-        """Rotação baseada em desempenho de combinações específicas - COM NOVA REGRA DE 3 ACERTOS"""
-        
-        # Atualizar desempenho da combinação
         self.atualizar_desempenho_combinacao(zonas_envolvidas, acerto)
         
         if acerto:
-            # 🎯 NOVA REGRA: Contar acertos consecutivos
             self.sequencia_acertos += 1
             self.sequencia_erros = 0
             
-            # 🎯 NOVA REGRA: Rotação após 3 acertos seguidos em combinações
             if self.sequencia_acertos >= 3 and len(zonas_envolvidas) > 1:
                 combinacao_atual = tuple(sorted(zonas_envolvidas))
                 logging.info(f"🎯 3 ACERTOS SEGUIDOS detectados na combinação {combinacao_atual} - Rotacionando para combinações alternativas")
@@ -2368,10 +2787,9 @@ class SistemaRoletaCompleto:
         
         else:
             self.sequencia_erros += 1
-            self.sequencia_acertos = 0  # Resetar sequência de acertos
+            self.sequencia_acertos = 0
             self.ultima_estrategia_erro = nome_estrategia
             
-            # 🎯 ROTAÇÃO RÁPIDA PARA COMBINAÇÕES FRIA
             if len(zonas_envolvidas) > 1:
                 combinacao = tuple(sorted(zonas_envolvidas))
                 
@@ -2379,37 +2797,30 @@ class SistemaRoletaCompleto:
                     logging.info(f"🚫 Combinação fria detectada: {combinacao} - Rotacionando")
                     return self.aplicar_rotacao_inteligente()
             
-            # 🎯 ROTAÇÃO PARA MÁ PERFORMANCE GERAL
             if self.sequencia_erros >= 2:
                 return self.aplicar_rotacao_inteligente()
                 
             return False
 
     def aplicar_rotacao_por_acertos_combinacoes(self, combinacao_atual):
-        """🎯 NOVA REGRA: Rotação após 3 acertos seguidos - alterna para outras combinações"""
-        
-        # 🎯 OBTER COMBINAÇÕES ALTERNATIVAS (excluindo as que acertaram recentemente)
         combinacoes_alternativas = self.get_combinacoes_alternativas(combinacao_atual)
         
         if not combinacoes_alternativas:
             logging.info("⚠️ Nenhuma combinação alternativa disponível - mantendo atual")
             return False
         
-        # 🎯 ESCOLHER A MELHOR COMBINAÇÃO ALTERNATIVA
         combinacao_escolhida = self.escolher_melhor_combinacao_alternativa(combinacoes_alternativas)
         
         if not combinacao_escolhida:
             logging.info("⚠️ Não foi possível escolher uma combinação alternativa")
             return False
         
-        # 🎯 APLICAR A NOVA COMBINAÇÃO NA ESTRATÉGIA ZONAS
         success = self.aplicar_combinacao_na_estrategia(combinacao_escolhida)
         
         if success:
-            self.sequencia_acertos = 0  # Resetar contador após rotação
-            self.ultima_combinacao_acerto = []  # Limpar histórico de combinações que acertaram
+            self.sequencia_acertos = 0
+            self.ultima_combinacao_acerto = []
             
-            # Enviar notificação especial
             enviar_rotacao_por_acertos_combinacoes(combinacao_atual, combinacao_escolhida)
             logging.info(f"🔄 ROTAÇÃO POR ACERTOS: {combinacao_atual} → {combinacao_escolhida}")
             return True
@@ -2417,11 +2828,9 @@ class SistemaRoletaCompleto:
         return False
 
     def escolher_melhor_combinacao_alternativa(self, combinacoes):
-        """Escolhe a melhor combinação alternativa baseada em desempenho"""
         if not combinacoes:
             return None
         
-        # Tentar encontrar combinações com boa eficiência
         combinacoes_com_dados = []
         combinacoes_sem_dados = []
         
@@ -2432,31 +2841,23 @@ class SistemaRoletaCompleto:
             else:
                 combinacoes_sem_dados.append(combo)
         
-        # Priorizar combinações com dados e boa eficiência
         if combinacoes_com_dados:
-            # Ordenar por eficiência (melhor primeiro)
             combinacoes_com_dados.sort(key=lambda x: x[1].get('eficiencia', 0), reverse=True)
             melhor_combo = combinacoes_com_dados[0][0]
             
-            # Verificar se a eficiência é aceitável
             eficiencia = combinacoes_com_dados[0][1].get('eficiencia', 0)
             if eficiencia >= 25:
                 return melhor_combo
         
-        # Se não há combinações com boa eficiência, usar uma sem dados
         if combinacoes_sem_dados:
             return combinacoes_sem_dados[0]
         
-        # Último recurso: usar a primeira disponível
         return combinacoes[0] if combinacoes else None
 
     def aplicar_combinacao_na_estrategia(self, combinacao):
-        """Aplica uma combinação específica na estratégia Zonas"""
         try:
-            # 🎯 FORÇAR A ESTRATÉGIA ZONAS A USAR A COMBINAÇÃO ESPECÍFICA
             zonas_list = list(combinacao)
             
-            # Criar previsão forçada com a combinação desejada
             previsao_forcada = self.estrategia_zonas.criar_previsao_dupla(
                 zonas_list[0], 
                 zonas_list[1], 
@@ -2474,16 +2875,13 @@ class SistemaRoletaCompleto:
         return False
 
     def aplicar_rotacao_inteligente(self):
-        """Aplica rotação baseada em aprendizado contínuo"""
         estrategia_atual = self.estrategia_selecionada
         
-        # 🎯 SE HÁ COMBINAÇÕES QUENTES, MANTER NA ESTRATÉGIA
         if self.combinacoes_quentes and estrategia_atual == "Zonas":
             logging.info(f"🎯 MANTENDO ZONAS - {len(self.combinacoes_quentes)} combinações quentes")
             self.sequencia_erros = 0
             return False
         
-        # Rotação normal
         if estrategia_atual == "Zonas":
             nova_estrategia = "ML"
         else:
@@ -2505,47 +2903,48 @@ class SistemaRoletaCompleto:
         self.contador_sorteios_global += 1
             
         if self.previsao_ativa:
-            # VERIFICAÇÃO DE ACERTO PARA MÚLTIPLAS ZONAS
             acerto = False
             zonas_acertadas = []
             nome_estrategia = self.previsao_ativa['nome']
             
-            # Verificar se o número está em qualquer uma das zonas envolvidas
-            zonas_envolvidas = self.previsao_ativa.get('zonas_envolvidas', [])
-            if not zonas_envolvidas:
-                # Fallback para lógica antiga
-                acerto = numero_real in self.previsao_ativa['numeros_apostar']
+            # Verificar acerto baseado no tipo de estratégia
+            if 'Triângulo' in nome_estrategia:
+                triangulo_previsao = self.previsao_ativa.get('triangulo_info')
+                triangulo_sorteado = self.estrategia_triangulo.get_triangulo_do_numero(numero_real)
+                acerto = triangulo_previsao == triangulo_sorteado
                 if acerto:
-                    # Descobrir qual zona acertou
-                    if 'Zonas' in nome_estrategia:
-                        for zona, numeros in self.estrategia_zonas.numeros_zonas.items():
-                            if numero_real in numeros:
-                                zonas_acertadas.append(zona)
-                                break
-                    elif 'ML' in nome_estrategia:
-                        for zona, numeros in self.estrategia_ml.numeros_zonas_ml.items():
-                            if numero_real in numeros:
-                                zonas_acertadas.append(zona)
-                                break
+                    zonas_acertadas = [triangulo_sorteado]
             else:
-                # Nova lógica para múltiplas zonas
-                for zona in zonas_envolvidas:
-                    if 'Zonas' in nome_estrategia:
-                        numeros_zona = self.estrategia_zonas.numeros_zonas[zona]
-                    elif 'ML' in nome_estrategia:
-                        numeros_zona = self.estrategia_ml.numeros_zonas_ml[zona]
-                    else:
-                        continue
-                    
-                    if numero_real in numeros_zona:
-                        acerto = True
-                        zonas_acertadas.append(zona)
+                zonas_envolvidas = self.previsao_ativa.get('zonas_envolvidas', [])
+                if not zonas_envolvidas:
+                    acerto = numero_real in self.previsao_ativa['numeros_apostar']
+                    if acerto:
+                        if 'Zonas' in nome_estrategia:
+                            for zona, numeros in self.estrategia_zonas.numeros_zonas.items():
+                                if numero_real in numeros:
+                                    zonas_acertadas.append(zona)
+                                    break
+                        elif 'ML' in nome_estrategia:
+                            for zona, numeros in self.estrategia_ml.numeros_zonas_ml.items():
+                                if numero_real in numeros:
+                                    zonas_acertadas.append(zona)
+                                    break
+                else:
+                    for zona in zonas_envolvidas:
+                        if 'Zonas' in nome_estrategia:
+                            numeros_zona = self.estrategia_zonas.numeros_zonas[zona]
+                        elif 'ML' in nome_estrategia:
+                            numeros_zona = self.estrategia_ml.numeros_zonas_ml[zona]
+                        else:
+                            continue
+                        
+                        if numero_real in numeros_zona:
+                            acerto = True
+                            zonas_acertadas.append(zona)
             
-            # 🎯 ATUALIZAR DESEMPENHO DA COMBINAÇÃO
-            self.atualizar_desempenho_combinacao(zonas_envolvidas, acerto)
+            self.atualizar_desempenho_combinacao(self.previsao_ativa.get('zonas_envolvidas', []), acerto)
             
-            # Verifica e aplica rotação automática se necessário
-            rotacionou = self.rotacionar_estrategia_automaticamente(acerto, nome_estrategia, zonas_envolvidas)
+            rotacionou = self.rotacionar_estrategia_automaticamente(acerto, nome_estrategia, self.previsao_ativa.get('zonas_envolvidas', []))
             
             if nome_estrategia not in self.estrategias_contador:
                 self.estrategias_contador[nome_estrategia] = {'acertos': 0, 'total': 0}
@@ -2557,7 +2956,6 @@ class SistemaRoletaCompleto:
             else:
                 self.erros += 1
             
-            # Envia resultado super simplificado
             zona_acertada_str = "+".join(zonas_acertadas) if zonas_acertadas else None
             enviar_resultado_super_simplificado(numero_real, acerto, nome_estrategia, zona_acertada_str)
             
@@ -2568,7 +2966,7 @@ class SistemaRoletaCompleto:
                 'previsao': self.previsao_ativa['numeros_apostar'],
                 'rotacionou': rotacionou,
                 'zona_acertada': zona_acertada_str,
-                'zonas_envolvidas': zonas_envolvidas,
+                'zonas_envolvidas': self.previsao_ativa.get('zonas_envolvidas', []),
                 'tipo_aposta': self.previsao_ativa.get('tipo', 'unica'),
                 'sequencia_acertos': self.sequencia_acertos,
                 'sequencia_erros': self.sequencia_erros,
@@ -2580,6 +2978,7 @@ class SistemaRoletaCompleto:
         self.estrategia_zonas.adicionar_numero(numero_real)
         self.estrategia_midas.adicionar_numero(numero_real)
         self.estrategia_ml.adicionar_numero(numero_real)
+        self.estrategia_triangulo.adicionar_numero(numero_real)
         
         nova_estrategia = None
         
@@ -2589,13 +2988,14 @@ class SistemaRoletaCompleto:
             nova_estrategia = self.estrategia_midas.analisar_midas()
         elif self.estrategia_selecionada == "ML":
             nova_estrategia = self.estrategia_ml.analisar_ml()
+        elif self.estrategia_selecionada == "Triângulo":
+            nova_estrategia = self.estrategia_triangulo.analisar_triangulo()
         
         if nova_estrategia:
             self.previsao_ativa = nova_estrategia
             enviar_previsao_super_simplificada(nova_estrategia)
 
     def zerar_estatisticas_desempenho(self):
-        """Zera todas as estatísticas de desempenho"""
         self.acertos = 0
         self.erros = 0
         self.estrategias_contador = {}
@@ -2603,34 +3003,25 @@ class SistemaRoletaCompleto:
         self.contador_sorteios_global = 0
         self.sequencia_erros = 0
         self.ultima_estrategia_erro = ""
-        
-        # 🎯 ZERAR NOVAS VARIÁVEIS DE ACERTOS
         self.sequencia_acertos = 0
         self.ultima_combinacao_acerto = []
         self.historico_combinacoes_acerto = []
-        
-        # 🎯 ZERAR COMBINAÇÕES DINÂMICAS
         self.historico_combinacoes = {}
         self.combinacoes_quentes = []
         self.combinacoes_frias = []
         
-        # Zerar estatísticas das estratégias
         self.estrategia_zonas.zerar_estatisticas()
+        self.estrategia_triangulo.zerar_estatisticas()
         
         logging.info("📊 Todas as estatísticas de desempenho foram zeradas")
         salvar_sessao()
 
     def reset_recente_estatisticas(self):
-        """Faz um reset recente mantendo apenas os últimos 10 resultados"""
         if len(self.historico_desempenho) > 10:
-            # Manter apenas os últimos 10 resultados
             self.historico_desempenho = self.historico_desempenho[-10:]
-            
-            # Recalcular acertos e erros
             self.acertos = sum(1 for resultado in self.historico_desempenho if resultado['acerto'])
             self.erros = len(self.historico_desempenho) - self.acertos
             
-            # Recalcular contadores por estratégia
             self.estrategias_contador = {}
             for resultado in self.historico_desempenho:
                 estrategia = resultado['estrategia']
@@ -2641,7 +3032,6 @@ class SistemaRoletaCompleto:
                 if resultado['acerto']:
                     self.estrategias_contador[estrategia]['acertos'] += 1
             
-            # Recalcular sequências
             ultimos_resultados = self.historico_desempenho[-5:]
             self.sequencia_erros = 0
             self.sequencia_acertos = 0
@@ -2665,7 +3055,6 @@ class SistemaRoletaCompleto:
         salvar_sessao()
 
     def get_status_rotacao(self):
-        """Retorna o status atual do sistema de rotação - ATUALIZADO COM COMBINAÇÕES"""
         return {
             'estrategia_atual': self.estrategia_selecionada,
             'sequencia_erros': self.sequencia_erros,
@@ -2706,11 +3095,7 @@ def fetch_latest_result():
         logging.error(f"Erro ao buscar resultado: {e}")
         return None
 
-# =============================
-# FUNÇÃO PARA MOSTRAR COMBINAÇÕES DINÂMICAS
-# =============================
 def mostrar_combinacoes_dinamicas():
-    """Mostra as combinações quentes e frias atuais"""
     sistema = st.session_state.sistema
     
     if hasattr(sistema, 'combinacoes_quentes') and sistema.combinacoes_quentes:
@@ -2740,7 +3125,6 @@ st.title("🎯 IA Roleta — Sistema Multi-Estratégias")
 if "sistema" not in st.session_state:
     st.session_state.sistema = SistemaRoletaCompleto()
 
-# Tentar carregar sessão salva
 sessao_carregada = carregar_sessao()
 
 if "historico" not in st.session_state:
@@ -2761,7 +3145,6 @@ if "telegram_chat_id" not in st.session_state and not sessao_carregada:
 # Sidebar - Configurações Avançadas
 st.sidebar.title("⚙️ Configurações")
 
-# 🎯 NOVO: Mostrar combinações dinâmicas
 mostrar_combinacoes_dinamicas()
 
 # Gerenciamento de Sessão
@@ -2785,7 +3168,6 @@ with st.sidebar.expander("💾 Gerenciamento de Sessão", expanded=False):
     
     st.write("---")
     
-    # Botões para zerar estatísticas
     st.write("**📊 Gerenciar Estatísticas**")
     
     col3, col4 = st.columns(2)
@@ -2880,10 +3262,10 @@ with st.sidebar.expander("🔔 Alertas Alternativos", expanded=False):
         else:
             st.error("❌ Configure o Telegram primeiro")
 
-# Seleção de Estratégia
+# Seleção de Estratégia (agora com Triângulo)
 estrategia = st.sidebar.selectbox(
     "🎯 Selecione a Estratégia:",
-    ["Zonas", "Midas", "ML"],
+    ["Zonas", "Midas", "ML", "Triângulo"],
     key="estrategia_selecionada"
 )
 
@@ -2892,7 +3274,7 @@ if estrategia != st.session_state.sistema.estrategia_selecionada:
     st.session_state.sistema.set_estrategia(estrategia)
     st.toast(f"🔄 Estratégia alterada para: {estrategia}")
 
-# Status da Rotação Automática - ATUALIZADO
+# Status da Rotação Automática
 with st.sidebar.expander("🔄 Rotação Automática", expanded=True):
     status_rotacao = st.session_state.sistema.get_status_rotacao()
     
@@ -2915,16 +3297,19 @@ with st.sidebar.expander("🔄 Rotação Automática", expanded=True):
             st.write(f"   • {'+'.join(nucleos)}")
     
     st.write("---")
-    st.write("**🎯 NOVAS Regras de Rotação:**")
-    st.write("• ✅ **3 Acertos Seguidos na MESMA combinação:** Rota para OUTRAS combinações (NOVO)")
+    st.write("**🎯 Regras de Rotação:**")
+    st.write("• ✅ **3 Acertos Seguidos na MESMA combinação:** Rota para OUTRAS combinações")
     st.write("• ❌ **2 Erros Seguidos:** Rotação entre Zonas ↔ ML")
-    st.write("• 🔄 **Combinações disponíveis:** Vermelho+Azul, Vermelho+Amarelo, Azul+Amarelo")
+    st.write("• 🔺 **Estratégia Triângulo:** Gatilho baseado em atraso + vizinhos quentes")
     
-    # Botão para forçar rotação manual
     if st.button("🔄 Forçar Rotação", use_container_width=True):
         estrategia_atual = st.session_state.sistema.estrategia_selecionada
         if estrategia_atual == "Zonas":
             nova_estrategia = "ML"
+        elif estrategia_atual == "ML":
+            nova_estrategia = "Triângulo"
+        elif estrategia_atual == "Triângulo":
+            nova_estrategia = "Zonas"
         else:
             nova_estrategia = "Zonas"
         
@@ -3025,16 +3410,8 @@ with st.sidebar.expander("📊 Informações das Estratégias"):
         info_zonas = st.session_state.sistema.estrategia_zonas.get_info_zonas()
         st.write("**🎯 Estratégia Zonas v6:**")
         st.write("**CONFIGURAÇÃO:** 6 antes + 6 depois (13 números/zona)")
-        st.write("**OTIMIZAÇÕES:**")
-        st.write("- 📊 Histórico: 70 números")
-        st.write("- 🎯 Múltiplas janelas: Curto(12) Médio(24) Longo(48)")
-        st.write("- 📈 Threshold dinâmico por performance")
-        st.write("- 🔄 **APRENDIZADO DINÂMICO:** Combinações que funcionam no momento")
-        st.write("- 🎯 **SELEÇÃO INTELIGENTE:** Máximo 15 números selecionados automaticamente")
-        st.write("- 🎯 **NOVA REGRA:** 3 acertos seguidos → Rota para outras combinações")
         for zona, dados in info_zonas.items():
             st.write(f"**Zona {zona}** (Núcleo: {dados['central']})")
-            st.write(f"Descrição: {dados['descricao']}")
             st.write(f"Números: {', '.join(map(str, dados['numeros']))}")
             st.write(f"Total: {dados['quantidade']} números")
             st.write("---")
@@ -3048,26 +3425,37 @@ with st.sidebar.expander("📊 Informações das Estratégias"):
         st.write("---")
     
     elif estrategia == "ML":
-        st.write("**🤖 Estratégia Machine Learning - CATBOOST OTIMIZADO:**")
-        st.write("- **Modelo**: CatBoost (Gradient Boosting)")
-        st.write("- **Ensemble**: 3 modelos")
+        st.write("**🤖 Estratégia Machine Learning:**")
+        st.write("- **Modelo**: CatBoost + Ensemble")
         st.write("- **Amostras mínimas**: 200")
-        st.write("- **Histórico máximo**: 1000 números")
         st.write("- **Treinamento**: A cada 15 sorteios")
-        st.write("- **Janelas**: [3, 8, 15, 30, 60, 120]")
         st.write("- **Zonas**: 6 antes + 6 depois (13 números/zona)")
-        st.write("- **Threshold**: Mínimo 7 números na mesma zona")
-        st.write("- **Saída**: Zona com maior concentração")
-        st.write("- 🔄 **APRENDIZADO DINÂMICO:** Combinações que funcionam no momento")
-        st.write("- 🎯 **SELEÇÃO INTELIGENTE:** Máximo 15 números selecionados automaticamente")
         
         info_zonas_ml = st.session_state.sistema.estrategia_ml.get_info_zonas_ml()
         for zona, dados in info_zonas_ml.items():
             st.write(f"**Zona {zona}** (Núcleo: {dados['central']})")
-            st.write(f"Descrição: {dados['descricao']}")
             st.write(f"Números: {', '.join(map(str, dados['numeros']))}")
-            st.write(f"Total: {dados['quantidade']} números")
             st.write("---")
+    
+    elif estrategia == "Triângulo":
+        st.write("**🔺 Estratégia Triângulo Reativo:**")
+        st.write("**Como funciona:**")
+        st.write("1. Cada número pertence a um triângulo (3 números consecutivos no cilindro)")
+        st.write("2. Último número sorteado define o triângulo base")
+        st.write("3. Gatilho: Atraso do triângulo OU vizinhos quentes")
+        st.write("4. Aposta: Triângulo + 2 vizinhos de cada número (~12-15 números)")
+        st.write("5. Confirmação: Não acertou recentemente")
+        st.write("---")
+        st.write("**Vantagens:**")
+        st.write("- 🔄 Dinâmica (reativa ao momento)")
+        st.write("- 🎯 Filtros inteligentes (evita entradas ruins)")
+        st.write("- 📊 Baseada em estatísticas reais")
+        
+        info_triangulos = st.session_state.sistema.estrategia_triangulo.get_info_triangulos()
+        st.write("---")
+        st.write("**Exemplo de Triângulos (Top 5):**")
+        for i, (triangulo, dados) in enumerate(list(info_triangulos.items())[:5]):
+            st.write(f"**{triangulo}:** {dados['numeros']}")
 
 # Análise detalhada
 with st.sidebar.expander(f"🔍 Análise - {estrategia}", expanded=False):
@@ -3075,6 +3463,8 @@ with st.sidebar.expander(f"🔍 Análise - {estrategia}", expanded=False):
         analise = st.session_state.sistema.estrategia_zonas.get_analise_detalhada()
     elif estrategia == "ML":
         analise = st.session_state.sistema.estrategia_ml.get_analise_ml()
+    elif estrategia == "Triângulo":
+        analise = st.session_state.sistema.estrategia_triangulo.get_analise_detalhada()
     else:
         analise = "🎯 Estratégia Midas ativa\nAnalisando padrões de terminais..."
     
@@ -3124,7 +3514,7 @@ if st.session_state.historico:
 else:
     st.write("Nenhum número registrado")
 
-# Status da Rotação na Interface Principal - ATUALIZADO
+# Status da Rotação na Interface Principal
 status_rotacao = st.session_state.sistema.get_status_rotacao()
 col_status1, col_status2, col_status3, col_status4 = st.columns(4)
 with col_status1:
@@ -3147,7 +3537,19 @@ if sistema.previsao_ativa:
         st.success("🎯 **SELEÇÃO INTELIGENTE ATIVA** - 15 melhores números selecionados")
         st.info("📊 **Critérios:** Frequência + Posição + Vizinhança + Tendência")
     
-    if 'Zonas' in previsao['nome']:
+    if 'Triângulo' in previsao['nome']:
+        st.write(f"**🔺 Triângulo:** {previsao['triangulo_info']}")
+        st.write(f"**📋 Gatilho:** {previsao['gatilho']}")
+        st.write(f"**📊 Confiança:** {previsao['confianca']}")
+        
+        if previsao.get('fatores_confianca'):
+            st.write(f"**📈 Fatores de Confiança:** {', '.join(previsao['fatores_confianca'])}")
+        
+        st.write(f"**🎯 Números do Triângulo:** {previsao['triangulo_numeros']}")
+        st.write(f"**🔍 Vizinhos:** {previsao['vizinhos']}")
+        st.write(f"**🔢 Número de origem:** {previsao['numero_origem']}")
+        
+    elif 'Zonas' in previsao['nome']:
         zonas_envolvidas = previsao.get('zonas_envolvidas', [])
         if len(zonas_envolvidas) > 1:
             zona1 = zonas_envolvidas[0]
@@ -3302,5 +3704,5 @@ if os.path.exists(HISTORICO_PATH):
         conteudo = f.read()
     st.download_button("📥 Baixar histórico", data=conteudo, file_name="historico_roleta.json")
 
-# ✅ CORREÇÃO FINAL: Salvar sessão
+# Salvar sessão
 salvar_sessao()
