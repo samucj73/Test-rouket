@@ -1604,10 +1604,12 @@ def main():
                         st.success(f"✅ Jogos salvos! ID: {jogo_id}")
                         st.session_state.jogos_salvos = carregar_jogos_salvos()
             with col2:
+                # CORREÇÃO: usar st.session_state.scores que é uma lista simples de floats
+                scores_export = st.session_state.scores if st.session_state.scores else [0]*len(jogos)
                 df_export = pd.DataFrame({
                     "Jogo": range(1, len(jogos)+1),
                     "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in jogos],
-                    "Score": [round(s, 2) for s in st.session_state.scores] if st.session_state.scores else [0]*len(jogos),
+                    "Score": [round(s, 2) for s in scores_export],
                     "Pares": [contar_pares(j) for j in jogos],
                     "Soma": [sum(j) for j in jogos],
                     "Repetidas": [len(set(j) & set(st.session_state.gerador_principal.ultimo)) for j in jogos]
