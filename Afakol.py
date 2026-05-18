@@ -47,6 +47,8 @@ input, textarea { border-radius: 12px !important; }
 .ev-highlight { background: linear-gradient(135deg, #00ff8820 0%, #00cc6620 100%); border: 2px solid #00ff88; padding: 15px; border-radius: 12px; margin: 10px 0; }
 .img-analysis-highlight { background: linear-gradient(135deg, #ffd70020 0%, #ff8c0020 100%); border: 2px solid #ffd700; padding: 15px; border-radius: 12px; margin: 10px 0; }
 .elite-master-highlight { background: linear-gradient(135deg, #ff880030 0%, #ff440030 100%); border: 2px solid #ff8800; padding: 15px; border-radius: 12px; margin: 10px 0; }
+.download-section { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); padding: 20px; border-radius: 15px; margin: 20px 0; border: 2px solid #00ffaa; text-align: center; }
+.download-btn { background: linear-gradient(90deg, #00ffaa, #00cc88); color: #000; padding: 12px 30px; border-radius: 25px; font-weight: bold; border: none; cursor: pointer; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -1420,6 +1422,56 @@ def backtest_estrategia(historico, config_filtros, num_testes=30):
     return np.mean(resultados) if resultados else 0
 
 # =====================================================
+# FUNÇÃO DE DOWNLOAD UNIFICADA
+# =====================================================
+def gerar_csv_download(jogos, scores=None, estrategia="Padrão"):
+    """Gera DataFrame para download CSV com informações dos jogos"""
+    dados_export = []
+    for i, jogo in enumerate(jogos):
+        linha = {
+            "Jogo": i + 1,
+            "Dezenas": ", ".join(f"{n:02d}" for n in sorted(jogo)),
+            "Pares": contar_pares(jogo),
+            "Ímpares": 15 - contar_pares(jogo),
+            "Primos": contar_primos(jogo),
+            "Soma": sum(jogo),
+            "Consecutivos": contar_consecutivos(jogo)
+        }
+        if scores and i < len(scores):
+            if isinstance(scores[i], dict):
+                linha["Score"] = scores[i].get("score_ajustado", scores[i].get("score", 0))
+            else:
+                linha["Score"] = scores[i]
+        
+        # Adiciona repetidas se tiver gerador_principal
+        if hasattr(st.session_state, 'gerador_principal') and st.session_state.gerador_principal:
+            linha["Repetidas"] = len(set(jogo) & st.session_state.gerador_principal.ultimo)
+        
+        dados_export.append(linha)
+    
+    return pd.DataFrame(dados_export)
+
+def detectar_estrategia_ativa():
+    """Detecta qual estratégia está ativa baseado nos dados em session_state"""
+    if "elite_scores" in st.session_state and st.session_state.elite_scores:
+        return "Elite Master 8.0"
+    elif "multi_pool_results" in st.session_state and st.session_state.multi_pool_results:
+        return "EMS 5.0 - Multi-Pool"
+    elif "cobertura_stats" in st.session_state and st.session_state.cobertura_stats:
+        return "EMS 5.0 - Fechamento"
+    elif "ev_detalhes" in st.session_state and st.session_state.ev_detalhes:
+        return "Nash (EV)"
+    else:
+        # Verifica padrão dos jogos para identificar estratégia
+        if st.session_state.jogos_gerados:
+            primeiro_jogo = st.session_state.jogos_gerados[0]
+            if primeiro_jogo[0] in [1, 2, 3, 4] and primeiro_jogo[14] in [22, 23, 24, 25]:
+                return "Regras de Ouro"
+            elif all(1 <= n <= 25 for n in primeiro_jogo):
+                return "Padrão"
+    return "Personalizada"
+
+# =====================================================
 # INTERFACE PRINCIPAL
 # =====================================================
 def main():
@@ -1565,6 +1617,7 @@ def main():
                     if jogos:
                         st.session_state.jogos_gerados = jogos
                         st.session_state.scores = []
+                        st.session_state.elite_scores = []
                         st.success(f"✅ {len(jogos)} jogos gerados!")
         with col3:
             if st.button("🔥 EMS 3.0", use_container_width=True):
@@ -1576,6 +1629,7 @@ def main():
                     )
                     st.session_state.jogos_gerados = [r[0] for r in resultados]
                     st.session_state.scores = [r[1] for r in resultados]
+                    st.session_state.elite_scores = []
                     st.success(f"✅ {len(resultados)} jogos gerados com EMS 3.0!")
 
         if "jogos_gerados" in st.session_state and st.session_state.jogos_gerados:
@@ -1604,17 +1658,14 @@ def main():
                         st.success(f"✅ Jogos salvos! ID: {jogo_id}")
                         st.session_state.jogos_salvos = carregar_jogos_salvos()
             with col2:
-                df_export = pd.DataFrame({
-                    "Jogo": range(1, len(jogos)+1),
-                    "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in jogos],
-                    "Score": [round(s, 2) for s in st.session_state.scores] if st.session_state.scores else [0]*len(jogos),
-                    "Pares": [contar_pares(j) for j in jogos],
-                    "Soma": [sum(j) for j in jogos],
-                    "Repetidas": [len(set(j) & set(st.session_state.gerador_principal.ultimo)) for j in jogos]
-                })
-                st.download_button(label="📥 Exportar CSV", data=df_export.to_csv(index=False), 
-                                 file_name=f"jogos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", 
-                                 mime="text/csv", use_container_width=True)
+                df_export = gerar_csv_download(jogos, st.session_state.scores, "Gerador")
+                st.download_button(
+                    label="📥 Exportar CSV",
+                    data=df_export.to_csv(index=False),
+                    file_name=f"jogos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
 
     # ================= TAB 3: EMS 5.0 - COBERTURA =================
     with tab3:
@@ -1656,6 +1707,7 @@ def main():
                         st.session_state.jogos_gerados = jogos
                         st.session_state.cobertura_stats = cobertura
                         st.session_state.scores = []
+                        st.session_state.elite_scores = []
                         st.success(f"✅ {len(jogos)} jogos gerados!")
                         st.markdown("### 📊 Estatísticas de Cobertura")
                         col_a, col_b, col_c = st.columns(3)
@@ -1673,6 +1725,7 @@ def main():
                     st.session_state.jogos_gerados = todos_jogos
                     st.session_state.multi_pool_results = pools_info
                     st.session_state.scores = []
+                    st.session_state.elite_scores = []
                     st.success(f"✅ {len(todos_jogos)} jogos únicos gerados com {num_pools} pools!")
         with col2:
             if st.button("📊 Probabilidade Real", use_container_width=True):
@@ -1742,6 +1795,7 @@ def main():
                     jogo, status = gerar_jogo_ilp_profissional(pesos, ultimo_concurso, config_ilp, timeout)
                     if jogo:
                         st.session_state.jogos_gerados = [jogo]
+                        st.session_state.elite_scores = []
                         mc = monte_carlo_jogo(tuple(jogo), 2000)
                         st.session_state.scores = [mc['P>=13'] * 100]
                         st.success("✅ Jogo ótimo encontrado!")
@@ -1754,6 +1808,7 @@ def main():
                 jogos = gerar_multiplos_jogos_ilp(st.session_state.gerador_principal, ultimo_concurso, config_ilp, qtd_jogos=qtd_ilp, timeout_por_jogo=timeout, usar_diversidade=True)
                 if jogos:
                     st.session_state.jogos_gerados = jogos
+                    st.session_state.elite_scores = []
                     st.session_state.scores = [monte_carlo_jogo(tuple(j), 2000)['P>=13'] * 100 for j in jogos]
                     st.success(f"✅ {len(jogos)} jogos gerados via ILP!")
 
@@ -1771,6 +1826,7 @@ def main():
                 jogos, concurso_info = gerar_jogos_ia_70(qtd_ia, st.session_state.dados_api, qtd_concursos_base)
                 if jogos:
                     st.session_state.jogos_gerados = jogos
+                    st.session_state.elite_scores = []
                     scores_calculados = []
                     for jogo in jogos:
                         pares = contar_pares(jogo)
@@ -1810,6 +1866,7 @@ def main():
                 if top_jogos:
                     st.session_state.jogos_gerados = [item['jogo'] for item in top_jogos]
                     st.session_state.scores = [item['score'] for item in top_jogos]
+                    st.session_state.elite_scores = []
                     st.session_state.ev_detalhes = [analisar_ev_detalhado(item['jogo'], st.session_state.apostas_simuladas) for item in top_jogos]
                     st.success(f"✅ {len(top_jogos)} jogos otimizados por Valor Esperado!")
                     st.markdown(f"### 📋 TOP {len(top_jogos)} Jogos por Valor Esperado")
@@ -2004,6 +2061,7 @@ def main():
                     if jogos_gerados_ouro:
                         st.session_state.jogos_gerados = jogos_gerados_ouro
                         st.session_state.scores = []
+                        st.session_state.elite_scores = []
                         st.success(f"✅ {len(jogos_gerados_ouro)} jogos gerados!")
         if "jogos_gerados" in st.session_state and st.session_state.jogos_gerados:
             is_ouro_style = (st.session_state.jogos_gerados[0][0] in [1,2,3,4] and st.session_state.jogos_gerados[0][14] in [22,23,24,25])
@@ -2066,6 +2124,7 @@ def main():
                             candidatos.append(jogo)
                     if candidatos:
                         st.session_state.jogos_gerados = candidatos
+                        st.session_state.elite_scores = []
                         scores_img = []
                         for jogo in candidatos:
                             score = 0
@@ -2164,15 +2223,82 @@ def main():
                         if arquivo:
                             st.success(f"✅ {len(jogos)} jogos salvos! ID: {jogo_id}")
                 with col2:
-                    df_export = pd.DataFrame({
-                        "Jogo": range(1, len(jogos)+1),
-                        "Dezenas": [", ".join(f"{n:02d}" for n in j) for j in jogos],
-                        "Score": [s["score"] for s in scores_info],
-                        "Score_Ajustado": [round(s["score_ajustado"], 2) for s in scores_info],
-                        "Pares": [s["stats"]["pares"] for s in scores_info],
-                        "Soma": [s["stats"]["soma"] for s in scores_info]
-                    })
-                    st.download_button(label="📥 Exportar CSV", data=df_export.to_csv(index=False), file_name=f"elite_master_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", mime="text/csv", use_container_width=True)
+                    df_export = gerar_csv_download(jogos, scores_info, "Elite Master 8.0")
+                    st.download_button(
+                        label="📥 Exportar CSV",
+                        data=df_export.to_csv(index=False),
+                        file_name=f"elite_master_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        mime="text/csv",
+                        use_container_width=True
+                    )
+
+    # ================= SEÇÃO DE DOWNLOAD UNIFICADA =================
+    st.markdown("---")
+    st.markdown("### 📥 Download dos Jogos Gerados")
+    
+    if "jogos_gerados" in st.session_state and st.session_state.jogos_gerados:
+        estrategia = detectar_estrategia_ativa()
+        jogos_para_download = st.session_state.jogos_gerados
+        
+        # Prepara scores específicos conforme a estratégia
+        scores_download = None
+        if estrategia == "Elite Master 8.0" and "elite_scores" in st.session_state:
+            scores_download = st.session_state.elite_scores
+        elif estrategia == "Nash (EV)" and "ev_detalhes" in st.session_state:
+            scores_download = [{"score_ajustado": d["ev_ajustado"]} for d in st.session_state.ev_detalhes]
+        elif st.session_state.scores:
+            scores_download = st.session_state.scores
+        
+        df_download = gerar_csv_download(jogos_para_download, scores_download, estrategia)
+        
+        col1, col2, col3 = st.columns([2, 1, 1])
+        with col1:
+            st.markdown(f"""
+            <div class="download-section">
+                <strong>🎯 Estratégia Ativa:</strong> {estrategia}<br>
+                <strong>📊 Total de Jogos:</strong> {len(jogos_para_download)}<br>
+                <strong>📅 Data:</strong> {datetime.now().strftime('%d/%m/%Y %H:%M')}
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col2:
+            # Botão de download CSV
+            csv_data = df_download.to_csv(index=False)
+            st.download_button(
+                label="📥 BAIXAR CSV",
+                data=csv_data,
+                file_name=f"lotofacil_{estrategia.lower().replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
+        
+        with col3:
+            # Botão de download JSON
+            json_data = json.dumps({
+                "estrategia": estrategia,
+                "data_geracao": datetime.now().isoformat(),
+                "total_jogos": len(jogos_para_download),
+                "jogos": [sorted(j) for j in jogos_para_download],
+                "scores": scores_download if scores_download else [],
+                "estatisticas": {
+                    "media_pares": np.mean([contar_pares(j) for j in jogos_para_download]),
+                    "media_soma": np.mean([sum(j) for j in jogos_para_download])
+                }
+            }, indent=2, ensure_ascii=False, default=str)
+            
+            st.download_button(
+                label="📦 BAIXAR JSON",
+                data=json_data,
+                file_name=f"lotofacil_{estrategia.lower().replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                mime="application/json",
+                use_container_width=True
+            )
+        
+        # Preview dos dados
+        with st.expander("👁️ Visualizar Dados para Download", expanded=False):
+            st.dataframe(df_download, use_container_width=True, hide_index=True)
+    else:
+        st.info("👆 Gere jogos em qualquer uma das abas acima para habilitar o download.")
 
 if __name__ == "__main__":
     main()
