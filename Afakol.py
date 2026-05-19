@@ -2185,4 +2185,5 @@ st.markdown("""
 .footer-sub{font-size:11px;color:#bfbfbf;margin-top:4px;letter-spacing:1.5px;}
 </style>
 <div class="footer-premium"><div class="footer-title">ELITE MASTER SYSTEM</div><div class="footer-sub">SAMUCJ TECNOLOGIA © 2026</div></div>
-""", unsafe_allow_html=True)
+""", unsafe_allow_html=True) 
+anal#ise o meu código e implemente no final do 
