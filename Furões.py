@@ -3131,19 +3131,51 @@ class APIClient:
     def obter_dados_api(self, url: str, timeout: int = 15) -> dict | None:
         return self.obter_dados_api_com_retry(url, timeout, max_retries=3)
     
-    def obter_classificacao(self, liga_id: str) -> dict:
-        cached = self.classificacao_cache.get(liga_id)
+    # Temporadas suportadas nas análises (football-data.org aceita o parâmetro
+    # `season` com o ano de INÍCIO da temporada)
+    TEMPORADAS_SUPORTADAS = [2025, 2026, 2027]
+
+    # Competições cuja temporada coincide com o ano civil (não vira em jan/jul)
+    LIGAS_TEMPORADA_ANO_CIVIL = {"BSA", "WC"}
+
+    @classmethod
+    def calcular_season(cls, data_str: str, liga_id: str) -> int:
+        """Calcula o ano da temporada (parâmetro `season` da API) a partir
+        da data do jogo, restrito às temporadas 2025, 2026 e 2027."""
+        try:
+            data_ref = datetime.strptime(data_str, "%Y-%m-%d")
+        except (ValueError, TypeError):
+            data_ref = datetime.now()
+
+        if liga_id in cls.LIGAS_TEMPORADA_ANO_CIVIL:
+            season = data_ref.year
+        else:
+            # Temporadas europeias começam em jul/ago e terminam em mai/jun do ano seguinte
+            season = data_ref.year if data_ref.month >= 7 else data_ref.year - 1
+
+        # Restringe ao intervalo de temporadas solicitado (2025 a 2027)
+        return max(cls.TEMPORADAS_SUPORTADAS[0], min(cls.TEMPORADAS_SUPORTADAS[-1], season))
+
+    # Abaixo desta média de jogos disputados na liga, a temporada é considerada
+    # "recém-iniciada" e os dados são complementados com a temporada anterior
+    LIMITE_JOGOS_TEMPORADA_NOVA = 5
+
+    def _buscar_standings_temporada(self, liga_id: str, season: int) -> dict:
+        """Busca (com cache) a classificação de uma temporada específica, sem fallback."""
+        cache_key = f"{liga_id}_{season}"
+
+        cached = self.classificacao_cache.get(cache_key)
         if cached:
-            logging.info(f"📊 Classificação da liga {liga_id} obtida do cache")
+            logging.info(f"📊 Classificação da liga {liga_id} (temporada {season}) obtida do cache")
             return cached
-        
-        url = f"{self.config.BASE_URL_FD}/competitions/{liga_id}/standings"
-        data = self.obter_dados_api(url)
-        if not data:
+
+        url = f"{self.config.BASE_URL_FD}/competitions/{liga_id}/standings?season={season}"
+        data_api = self.obter_dados_api(url)
+        if not data_api:
             return {}
 
         standings = {}
-        for s in data.get("standings", []):
+        for s in data_api.get("standings", []):
             if s["type"] != "TOTAL":
                 continue
             for t in s["table"]:
@@ -3156,18 +3188,42 @@ class APIClient:
                     "draws": t.get("drawn", 0),
                     "losses": t.get("lost", 0)
                 }
-        self.classificacao_cache.set(liga_id, standings)
+        self.classificacao_cache.set(cache_key, standings)
         return standings
+
+    def obter_classificacao(self, liga_id: str, data: str = None) -> dict:
+        season = self.calcular_season(data or datetime.now().strftime("%Y-%m-%d"), liga_id)
+        standings_atual = self._buscar_standings_temporada(liga_id, season)
+
+        jogos_disputados = [t.get("played", 0) for t in standings_atual.values()]
+        media_jogos = sum(jogos_disputados) / len(jogos_disputados) if jogos_disputados else 0
+
+        # Temporada mal começou: complementa times com pouca amostra usando a temporada anterior
+        if media_jogos < self.LIMITE_JOGOS_TEMPORADA_NOVA:
+            standings_anterior = self._buscar_standings_temporada(liga_id, season - 1)
+            if standings_anterior:
+                logging.info(
+                    f"📉 Temporada {season} da liga {liga_id} com poucos jogos (média {media_jogos:.1f}). "
+                    f"Complementando com temporada {season - 1}."
+                )
+                for nome, dados_anterior in standings_anterior.items():
+                    dados_atuais = standings_atual.get(nome)
+                    if dados_atuais is None or dados_atuais.get("played", 0) < self.LIMITE_JOGOS_TEMPORADA_NOVA:
+                        # Time sem jogos suficientes na temporada nova: usa a temporada anterior como base
+                        standings_atual[nome] = dados_anterior
+
+        return standings_atual
     
     def obter_jogos(self, liga_id: str, data: str) -> list:
-        key = f"{liga_id}_{data}"
+        season = self.calcular_season(data, liga_id)
+        key = f"{liga_id}_{data}_{season}"
         
         cached = self.jogos_cache.get(key)
         if cached:
-            logging.info(f"⚽ Jogos {key} obtidos do cache")
+            logging.info(f"⚽ Jogos {key} (temporada {season}) obtidos do cache")
             return cached
         
-        url = f"{self.config.BASE_URL_FD}/competitions/{liga_id}/matches?dateFrom={data}&dateTo={data}"
+        url = f"{self.config.BASE_URL_FD}/competitions/{liga_id}/matches?dateFrom={data}&dateTo={data}&season={season}"
         data_api = self.obter_dados_api(url)
         jogos = data_api.get("matches", []) if data_api else []
         self.jogos_cache.set(key, jogos)
