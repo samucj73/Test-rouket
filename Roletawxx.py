@@ -2174,7 +2174,15 @@ class EstrategiaML:
             return None
 
         if not self.ml.is_trained:
-            return None
+            # Tentar carregar ou treinar
+            if not self.ml.carregar_modelo():
+                historico_numeros = self.extrair_numeros_historico()
+                if len(historico_numeros) >= self.ml.min_training_samples:
+                    success, _ = self.ml.treinar_modelo(historico_numeros, force_retrain=True)
+                    if not success:
+                        return None
+                else:
+                    return None
 
         historico_numeros = self.extrair_numeros_historico()
 
@@ -2184,7 +2192,8 @@ class EstrategiaML:
         previsao_zonas, msg_ml = self.ml.prever_proxima_zona(historico_numeros)
 
         if not previsao_zonas:
-            return None
+            # Fallback: usar análise de zonas
+            return self.analisar_zonas_fallback()
 
         distribuicao_dict = {zona: round(prob * 25) for zona, prob in previsao_zonas}
         distribuicao_ajustada = self.aplicar_padroes_na_previsao(distribuicao_dict)
@@ -2202,45 +2211,48 @@ class EstrategiaML:
         if len(zonas_rankeadas_ajustadas) > 1:
             zona_secundaria, contagem_secundaria = zonas_rankeadas_ajustadas[1]
 
-            numeros_primarios = self.numeros_zonas_ml[zona_primaria]
-            numeros_secundarios = self.numeros_zonas_ml[zona_secundaria]
+            # CORREÇÃO: Garantir que sempre usamos DUAS zonas
+            if contagem_secundaria >= 5:
+                numeros_primarios = self.numeros_zonas_ml[zona_primaria]
+                numeros_secundarios = self.numeros_zonas_ml[zona_secundaria]
 
-            numeros_combinados = list(set(numeros_primarios + numeros_secundarios))
+                numeros_combinados = list(set(numeros_primarios + numeros_secundarios))
 
-            if len(numeros_combinados) > 15:
-                numeros_combinados = self.sistema_selecao.selecionar_melhores_15_numeros(
-                    numeros_combinados, self.historico, "ML"
-                )
+                if len(numeros_combinados) > 15:
+                    numeros_combinados = self.sistema_selecao.selecionar_melhores_15_numeros(
+                        numeros_combinados, self.historico, "ML"
+                    )
 
-            confianca = self.calcular_confianca_com_padroes(distribuicao_ajustada, zona_primaria)
+                confianca = self.calcular_confianca_com_padroes(distribuicao_ajustada, zona_primaria)
 
-            padroes_aplicados = [p for p in self.sequencias_padroes['padroes_detectados']
-                               if p['zona'] in [zona_primaria, zona_secundaria] and
-                               len(self.historico) - p['detectado_em'] <= 15]
+                padroes_aplicados = [p for p in self.sequencias_padroes['padroes_detectados']
+                                   if p['zona'] in [zona_primaria, zona_secundaria] and
+                                   len(self.historico) - p['detectado_em'] <= 15]
 
-            gatilho_extra = ""
-            if padroes_aplicados:
-                gatilho_extra = f" | Padrões: {len(padroes_aplicados)}"
+                gatilho_extra = ""
+                if padroes_aplicados:
+                    gatilho_extra = f" | Padrões: {len(padroes_aplicados)}"
 
-            prob_primaria_pct = dict(previsao_zonas)[zona_primaria] * 100
-            prob_secundaria_pct = dict(previsao_zonas)[zona_secundaria] * 100
+                prob_primaria_pct = dict(previsao_zonas)[zona_primaria] * 100
+                prob_secundaria_pct = dict(previsao_zonas)[zona_secundaria] * 100
 
-            gatilho = f'ML CatBoost (Zonas) - {zona_primaria} ({prob_primaria_pct:.1f}%) + {zona_secundaria} ({prob_secundaria_pct:.1f}%) | SEL: {len(numeros_combinados)} números{gatilho_extra}'
+                gatilho = f'ML CatBoost (Zonas) - {zona_primaria} ({prob_primaria_pct:.1f}%) + {zona_secundaria} ({prob_secundaria_pct:.1f}%) | SEL: {len(numeros_combinados)} números{gatilho_extra}'
 
-            return {
-                'nome': 'Machine Learning - CatBoost (Duplo)',
-                'numeros_apostar': numeros_combinados,
-                'gatilho': gatilho,
-                'confianca': confianca,
-                'previsao_zonas_ml': previsao_zonas,
-                'zona_ml': f'{zona_primaria}+{zona_secundaria}',
-                'distribuicao': distribuicao_ajustada,
-                'padroes_aplicados': len(padroes_aplicados),
-                'zonas_envolvidas': [zona_primaria, zona_secundaria],
-                'tipo': 'dupla',
-                'selecao_inteligente': True
-            }
+                return {
+                    'nome': 'Machine Learning - CatBoost (Duplo)',
+                    'numeros_apostar': numeros_combinados,
+                    'gatilho': gatilho,
+                    'confianca': confianca,
+                    'previsao_zonas_ml': previsao_zonas,
+                    'zona_ml': f'{zona_primaria}+{zona_secundaria}',
+                    'distribuicao': distribuicao_ajustada,
+                    'padroes_aplicados': len(padroes_aplicados),
+                    'zonas_envolvidas': [zona_primaria, zona_secundaria],
+                    'tipo': 'dupla',
+                    'selecao_inteligente': True
+                }
 
+        # Previsão única (fallback)
         numeros_zona = self.numeros_zonas_ml[zona_primaria]
         
         if len(numeros_zona) > 15:
@@ -2272,6 +2284,43 @@ class EstrategiaML:
             'zonas_envolvidas': [zona_primaria],
             'tipo': 'unica',
             'selecao_inteligente': len(numeros_zona) < len(self.numeros_zonas_ml[zona_primaria])
+        }
+
+    def analisar_zonas_fallback(self):
+        """Fallback usando análise de zonas quando ML falha"""
+        if len(self.historico) < 10:
+            return None
+        
+        # Usar a estratégia de zonas para obter as melhores zonas
+        sistema = st.session_state.sistema
+        zonas_rankeadas = sistema.estrategia_zonas.get_zonas_rankeadas()
+        
+        if not zonas_rankeadas or len(zonas_rankeadas) < 2:
+            return None
+        
+        zona_primaria = zonas_rankeadas[0][0]
+        zona_secundaria = zonas_rankeadas[1][0]
+        
+        # Criar previsão dupla com as zonas
+        numeros_primarios = self.numeros_zonas_ml[zona_primaria]
+        numeros_secundarios = self.numeros_zonas_ml[zona_secundaria]
+        
+        numeros_combinados = list(set(numeros_primarios + numeros_secundarios))
+        
+        if len(numeros_combinados) > 15:
+            numeros_combinados = self.sistema_selecao.selecionar_melhores_15_numeros(
+                numeros_combinados, self.historico, "ML"
+            )
+        
+        return {
+            'nome': 'Machine Learning - Fallback (Zonas)',
+            'numeros_apostar': numeros_combinados,
+            'gatilho': f'ML Fallback - {zona_primaria} + {zona_secundaria}',
+            'confianca': 'Média',
+            'zonas_envolvidas': [zona_primaria, zona_secundaria],
+            'zona_ml': f'{zona_primaria}+{zona_secundaria}',
+            'tipo': 'dupla',
+            'selecao_inteligente': True
         }
 
     def analisar_ml(self):
@@ -3390,11 +3439,11 @@ with st.sidebar.expander("🔍 Análise - ML", expanded=False):
     analise = st.session_state.sistema.estrategia_ml.get_analise_ml()
     st.text(analise)
 
-# Entrada manual - CORRIGIDA
+# Entrada manual
 st.subheader("✍️ Inserir Sorteios")
 entrada = st.text_input("Digite números (0-36) separados por espaço:")
 
-# CORREÇÃO: Adicionar entrada de zonas
+# Entrada de zonas
 entrada_zonas = st.text_input("Ou digite zonas (Vermelha, Azul, Amarela) separadas por vírgula:")
 
 if st.button("Adicionar") and (entrada or entrada_zonas):
@@ -3509,7 +3558,7 @@ if sistema.previsao_ativa:
     previsao = sistema.previsao_ativa
     st.success(f"**{previsao['nome']}**")
     
-    # CORREÇÃO: Mostrar zonas da previsão
+    # Mostrar zonas da previsão
     zonas_envolvidas = previsao.get('zonas_envolvidas', [])
     if zonas_envolvidas:
         nucleos = []
