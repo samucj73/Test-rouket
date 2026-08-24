@@ -915,6 +915,10 @@ class MLRoletaOtimizada:
     ):
         self.roleta = roleta_obj
         self.min_training_samples = min_training_samples
+        # Piso de linhas de treino geradas (não confundir com min_training_samples,
+        # que é o mínimo de NÚMEROS no histórico). Antes disso estava fixo em 50,
+        # o que na prática exigia bem mais que 36 números para o botão funcionar.
+        self.min_training_rows = 10
         self.max_history = max_history
         self.retrain_every_n = retrain_every_n
         self.seed = seed
@@ -1237,7 +1241,7 @@ class MLRoletaOtimizada:
                 return False, f"Necessário mínimo de {self.min_training_samples} amostras. Atual: {len(historico_completo)}"
 
             X, y = self.preparar_dados_treinamento(historico_completo)
-            if X.size == 0 or len(X) < 50:
+            if X.size == 0 or len(X) < self.min_training_rows:
                 return False, f"Dados insuficientes para treino: {len(X)} amostras"
 
             X_scaled = self.scaler.fit_transform(X)
