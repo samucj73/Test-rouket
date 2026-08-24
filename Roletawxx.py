@@ -44,8 +44,6 @@ def salvar_sessao():
             # Dados da estratégia Zonas
             'zonas_historico': list(st.session_state.sistema.estrategia_zonas.historico),
             'zonas_stats': st.session_state.sistema.estrategia_zonas.stats_zonas,
-            # Dados da estratégia Midas
-            'midas_historico': list(st.session_state.sistema.estrategia_midas.historico),
             # Dados da estratégia ML
             'ml_historico': list(st.session_state.sistema.estrategia_ml.historico),
             'ml_contador_sorteios': st.session_state.sistema.estrategia_ml.contador_sorteios,
@@ -114,7 +112,7 @@ def carregar_sessao():
                 st.session_state.sistema.ultima_combinacao_acerto = session_data.get('sistema_ultima_combinacao_acerto', [])
                 st.session_state.sistema.historico_combinacoes_acerto = session_data.get('sistema_historico_combinacoes_acerto', [])
                 
-                st.session_state.sistema.estrategia_selecionada = session_data.get('estrategia_selecionada', 'Zonas')
+                st.session_state.sistema.estrategia_selecionada = session_data.get('estrategia_selecionada', 'ML')
                 
                 st.session_state.sistema.historico_combinacoes = session_data.get('sistema_historico_combinacoes', {})
                 st.session_state.sistema.combinacoes_quentes = session_data.get('sistema_combinacoes_quentes', [])
@@ -127,9 +125,6 @@ def carregar_sessao():
                     'Azul': {'acertos': 0, 'tentativas': 0, 'sequencia_atual': 0, 'sequencia_maxima': 0, 'performance_media': 0},
                     'Amarela': {'acertos': 0, 'tentativas': 0, 'sequencia_atual': 0, 'sequencia_maxima': 0, 'performance_media': 0}
                 })
-                
-                midas_historico = session_data.get('midas_historico', [])
-                st.session_state.sistema.estrategia_midas.historico = deque(midas_historico, maxlen=15)
                 
                 ml_historico = session_data.get('ml_historico', [])
                 st.session_state.sistema.estrategia_ml.historico = deque(ml_historico, maxlen=30)
@@ -913,7 +908,7 @@ class MLRoletaOtimizada:
     def __init__(
         self,
         roleta_obj,
-        min_training_samples: int = 200,
+        min_training_samples: int = 36,
         max_history: int = 1000,
         retrain_every_n: int = 15,
         seed: int = 42
@@ -1936,63 +1931,6 @@ class EstrategiaZonasOtimizada:
         logging.info("📊 Estatísticas das Zonas zeradas")
 
 # =============================
-# ESTRATÉGIA MIDAS (MANTIDA)
-# =============================
-class EstrategiaMidas:
-    def __init__(self):
-        self.roleta = RoletaInteligente()
-        self.historico = deque(maxlen=15)
-        self.terminais = {
-            '0': [0, 10, 20, 30], '1': [1, 11, 21, 31], '2': [2, 12, 22, 32],
-            '3': [3, 13, 23, 33], '4': [4, 14, 24, 34], '5': [5, 15, 25, 35],
-            '6': [6, 16, 26, 36], '7': [7, 17, 27], '8': [8, 18, 28], '9': [9, 19, 29]
-        }
-
-    def adicionar_numero(self, numero):
-        self.historico.append(numero)
-        if 'sistema' in st.session_state:
-            salvar_sessao()
-
-    def analisar_midas(self):
-        if len(self.historico) < 5:
-            return None
-            
-        ultimo_numero = self.historico[-1]
-        historico_recente = self.historico[-5:]
-
-        if ultimo_numero in [0, 10, 20, 30]:
-            count_zero = sum(1 for n in historico_recente if n in [0, 10, 20, 30])
-            if count_zero >= 1:
-                return {
-                    'nome': 'Padrão do Zero',
-                    'numeros_apostar': [0, 10, 20, 30],
-                    'gatilho': f'Terminal 0 ativado ({count_zero}x)',
-                    'confianca': 'Média'
-                }
-
-        if ultimo_numero in [7, 17, 27]:
-            count_sete = sum(1 for n in historico_recente if n in [7, 17, 27])
-            if count_sete >= 1:
-                return {
-                    'nome': 'Padrão do Sete',
-                    'numeros_apostar': [7, 17, 27],
-                    'gatilho': f'Terminal 7 ativado ({count_sete}x)',
-                    'confianca': 'Média'
-                }
-
-        if ultimo_numero in [5, 15, 25, 35]:
-            count_cinco = sum(1 for n in historico_recente if n in [5, 15, 25, 35])
-            if count_cinco >= 1:
-                return {
-                    'nome': 'Padrão do Cinco',
-                    'numeros_apostar': [5, 15, 25, 35],
-                    'gatilho': f'Terminal 5 ativado ({count_cinco}x)',
-                    'confianca': 'Média'
-                }
-
-        return None
-
-# =============================
 # ESTRATÉGIA ML ATUALIZADA
 # =============================
 class EstrategiaML:
@@ -2620,15 +2558,19 @@ class EstrategiaML:
 # =============================
 class SistemaRoletaCompleto:
     def __init__(self):
+        # estrategia_zonas é mantida apenas como infraestrutura interna:
+        # alimenta o ranking de zonas usado pelo sistema de tendências e pelas
+        # apostas "dupla" por combinação. Ela não gera mais uma previsão
+        # própria/selecionável — a única estratégia que prevê e é exibida é a ML,
+        # que já incorpora os sinais de zona como features (ver MLRoletaOtimizada).
         self.estrategia_zonas = EstrategiaZonasOtimizada()
-        self.estrategia_midas = EstrategiaMidas()
         self.estrategia_ml = EstrategiaML()
         self.previsao_ativa = None
         self.historico_desempenho = []
         self.acertos = 0
         self.erros = 0
         self.estrategias_contador = {}
-        self.estrategia_selecionada = "Zonas"
+        self.estrategia_selecionada = "ML"
         self.contador_sorteios_global = 0
         
         # Sistema de rotação automática
@@ -2932,8 +2874,10 @@ class SistemaRoletaCompleto:
             
             if previsao_forcada:
                 self.previsao_ativa = previsao_forcada
-                self.estrategia_selecionada = "Zonas"
-                
+                # Continua na estratégia ML — a previsão dupla forçada usa os
+                # números da combinação de zonas escolhida, mas não troca a
+                # estratégia ativa (só existe ML agora).
+
                 # 🎯 FORÇAR O SISTEMA A USAR ESTA PREVISÃO IMEDIATAMENTE
                 logging.info(f"🎯 Nova previsão criada com combinação: {combinacao}")
                 return True
@@ -2978,27 +2922,15 @@ class SistemaRoletaCompleto:
         return combinacoes[0] if combinacoes else None
 
     def aplicar_rotacao_inteligente(self):
-        """Aplica rotação baseada em aprendizado contínuo"""
-        estrategia_atual = self.estrategia_selecionada
-        
-        # 🎯 SE HÁ COMBINAÇÕES QUENTES, MANTER NA ESTRATÉGIA
-        if self.combinacoes_quentes and estrategia_atual == "Zonas":
-            logging.info(f"🎯 MANTENDO ZONAS - {len(self.combinacoes_quentes)} combinações quentes")
-            self.sequencia_erros = 0
-            return False
-        
-        # Rotação normal
-        if estrategia_atual == "Zonas":
-            nova_estrategia = "ML"
-        else:
-            nova_estrategia = "Zonas"
-        
-        self.estrategia_selecionada = nova_estrategia
+        """
+        Só existe a estratégia ML agora, então não há mais rotação entre
+        estratégias. Mantido como reset de sequência de erros para não quebrar
+        quem chama este método (rotacionar_estrategia_automaticamente).
+        """
+        if self.combinacoes_quentes:
+            logging.info(f"🎯 MANTENDO ML - {len(self.combinacoes_quentes)} combinações quentes")
         self.sequencia_erros = 0
-        
-        enviar_rotacao_automatica(estrategia_atual, nova_estrategia)
-        logging.info(f"🔄 ROTAÇÃO: {estrategia_atual} → {nova_estrategia}")
-        return True
+        return False
 
     def processar_novo_numero(self, numero):
         if isinstance(numero, dict) and 'number' in numero:
@@ -3084,19 +3016,15 @@ class SistemaRoletaCompleto:
             
             self.previsao_ativa = None
         
+        # estrategia_zonas continua recebendo os números só para manter as
+        # estatísticas de zona atualizadas (usadas pelas combinações/tendências
+        # e, indiretamente, pelas features de zona do ML). Ela não gera mais
+        # uma previsão própria.
         self.estrategia_zonas.adicionar_numero(numero_real)
-        self.estrategia_midas.adicionar_numero(numero_real)
         self.estrategia_ml.adicionar_numero(numero_real)
-        
-        nova_estrategia = None
-        
-        if self.estrategia_selecionada == "Zonas":
-            nova_estrategia = self.estrategia_zonas.analisar_zonas()
-        elif self.estrategia_selecionada == "Midas":
-            nova_estrategia = self.estrategia_midas.analisar_midas()
-        elif self.estrategia_selecionada == "ML":
-            nova_estrategia = self.estrategia_ml.analisar_ml()
-        
+
+        nova_estrategia = self.estrategia_ml.analisar_ml()
+
         if nova_estrategia:
             self.previsao_ativa = nova_estrategia
             enviar_previsao_super_simplificada(nova_estrategia)
@@ -3514,17 +3442,10 @@ with st.sidebar.expander("🔔 Alertas Alternativos", expanded=False):
         else:
             st.error("❌ Configure o Telegram primeiro")
 
-# Seleção de Estratégia
-estrategia = st.sidebar.selectbox(
-    "🎯 Selecione a Estratégia:",
-    ["Zonas", "Midas", "ML"],
-    key="estrategia_selecionada"
-)
-
-# Aplicar estratégia selecionada
-if estrategia != st.session_state.sistema.estrategia_selecionada:
-    st.session_state.sistema.set_estrategia(estrategia)
-    st.toast(f"🔄 Estratégia alterada para: {estrategia}")
+# Estratégia única: Machine Learning (com sinais de zona embutidos como features)
+estrategia = "ML"
+st.session_state.sistema.estrategia_selecionada = "ML"
+st.sidebar.info("🤖 **Estratégia ativa:** Machine Learning (zonas embutidas como features)")
 
 # Status da Rotação Automática - ATUALIZADO
 with st.sidebar.expander("🔄 Rotação Automática", expanded=True):
@@ -3549,23 +3470,16 @@ with st.sidebar.expander("🔄 Rotação Automática", expanded=True):
             st.write(f"   • {'+'.join(nucleos)}")
     
     st.write("---")
-    st.write("**🎯 NOVAS Regras de Rotação:**")
-    st.write("• ✅ **3 Acertos Seguidos na MESMA combinação:** Rota para OUTRAS combinações (NOVO)")
-    st.write("• ❌ **2 Erros Seguidos:** Rotação entre Zonas ↔ ML")
+    st.write("**🎯 Regras de Rotação (entre combinações de zonas, dentro da própria ML):**")
+    st.write("• ✅ **3 Acertos Seguidos na MESMA combinação:** Rota para OUTRAS combinações")
     st.write("• 🔄 **Combinações disponíveis:** Vermelho+Azul, Vermelho+Amarelo, Azul+Amarelo")
+    st.caption("A estratégia ativa continua sempre ML — a rotação troca apenas a combinação de zonas usada na aposta dupla.")
     
-    # Botão para forçar rotação manual
-    if st.button("🔄 Forçar Rotação", use_container_width=True):
-        estrategia_atual = st.session_state.sistema.estrategia_selecionada
-        if estrategia_atual == "Zonas":
-            nova_estrategia = "ML"
-        else:
-            nova_estrategia = "Zonas"
-        
-        st.session_state.sistema.estrategia_selecionada = nova_estrategia
+    # Botão para zerar manualmente os contadores de sequência
+    if st.button("🔄 Zerar Contadores de Sequência", use_container_width=True):
         st.session_state.sistema.sequencia_erros = 0
         st.session_state.sistema.sequencia_acertos = 0
-        st.success(f"🔄 Rotação forçada: {estrategia_atual} → {nova_estrategia}")
+        st.success("🔄 Contadores de acertos/erros seguidos zerados")
         st.rerun()
 
 # Treinamento ML
@@ -3581,8 +3495,10 @@ with st.sidebar.expander("🧠 Treinamento ML", expanded=False):
             numeros_disponiveis += 1
             numeros_lista.append(int(item))
             
+    minimo_treino = st.session_state.sistema.estrategia_ml.ml.min_training_samples
+
     st.write(f"📊 **Números disponíveis:** {numeros_disponiveis}")
-    st.write(f"🎯 **Mínimo necessário:** 200 números")
+    st.write(f"🎯 **Mínimo necessário:** {minimo_treino} números")
     st.write(f"🔄 **Treinamento automático:** A cada 15 sorteios")
     st.write(f"🤖 **Modelo:** CatBoost (mais preciso)")
     st.write(f"🎯 **Ensemble:** 3 modelos")
@@ -3596,9 +3512,9 @@ with st.sidebar.expander("🧠 Treinamento ML", expanded=False):
         else:
             st.success(f"✅ **Variedade adequada:** {numeros_unicos} números diferentes")
     
-    st.write(f"✅ **Status:** {'Dados suficientes' if numeros_disponiveis >= 200 else 'Coletando dados...'}")
+    st.write(f"✅ **Status:** {'Dados suficientes' if numeros_disponiveis >= minimo_treino else 'Coletando dados...'}")
     
-    if numeros_disponiveis >= 200:
+    if numeros_disponiveis >= minimo_treino:
         st.success("✨ **Pronto para treinar!**")
         
         if st.button("🚀 Treinar Modelo ML", type="primary", use_container_width=True):
@@ -3614,7 +3530,7 @@ with st.sidebar.expander("🧠 Treinamento ML", expanded=False):
                     st.error(f"💥 Erro no treinamento: {str(e)}")
     
     else:
-        st.warning(f"📥 Colete mais {200 - numeros_disponiveis} números para treinar o ML")
+        st.warning(f"📥 Colete mais {minimo_treino - numeros_disponiveis} números para treinar o ML")
         
     st.write("---")
     st.write("**Status do ML:**")
@@ -3636,82 +3552,46 @@ with st.sidebar.expander("🧠 Treinamento ML", expanded=False):
 
 # Estatísticas de Padrões ML
 with st.sidebar.expander("🔍 Estatísticas de Padrões ML", expanded=False):
-    if st.session_state.sistema.estrategia_selecionada == "ML":
-        estatisticas_padroes = st.session_state.sistema.estrategia_ml.get_estatisticas_padroes()
-        st.text(estatisticas_padroes)
-        
-        col_p1, col_p2 = st.columns(2)
-        with col_p1:
-            if st.button("🔄 Zerar Padrões", use_container_width=True):
-                st.session_state.sistema.estrategia_ml.zerar_padroes()
-                st.success("✅ Padrões zerados!")
-                st.rerun()
-                
-        with col_p2:
-            if st.button("📊 Atualizar Métricas", use_container_width=True):
-                st.rerun()
-    else:
-        st.info("🔍 Ative a estratégia ML para ver estatísticas de padrões")
+    estatisticas_padroes = st.session_state.sistema.estrategia_ml.get_estatisticas_padroes()
+    st.text(estatisticas_padroes)
 
-# Informações sobre as Estratégias
-with st.sidebar.expander("📊 Informações das Estratégias"):
-    if estrategia == "Zonas":
-        info_zonas = st.session_state.sistema.estrategia_zonas.get_info_zonas()
-        st.write("**🎯 Estratégia Zonas v6:**")
-        st.write("**CONFIGURAÇÃO:** 6 antes + 6 depois (13 números/zona)")
-        st.write("**OTIMIZAÇÕES:**")
-        st.write("- 📊 Histórico: 70 números")
-        st.write("- 🎯 Múltiplas janelas: Curto(12) Médio(24) Longo(48)")
-        st.write("- 📈 Threshold dinâmico por performance")
-        st.write("- 🔄 **APRENDIZADO DINÂMICO:** Combinações que funcionam no momento")
-        st.write("- 🎯 **SELEÇÃO INTELIGENTE:** Máximo 15 números selecionados automaticamente")
-        st.write("- 🎯 **NOVA REGRA:** 3 acertos seguidos → Rota para outras combinações")
-        for zona, dados in info_zonas.items():
-            st.write(f"**Zona {zona}** (Núcleo: {dados['central']})")
-            st.write(f"Descrição: {dados['descricao']}")
-            st.write(f"Números: {', '.join(map(str, dados['numeros']))}")
-            st.write(f"Total: {dados['quantidade']} números")
-            st.write("---")
-    
-    elif estrategia == "Midas":
-        st.write("**🎯 Estratégia Midas:**")
-        st.write("Padrões baseados em terminais:")
-        st.write("- **Terminal 0**: 0, 10, 20, 30")
-        st.write("- **Terminal 7**: 7, 17, 27") 
-        st.write("- **Terminal 5**: 5, 15, 25, 35")
+    col_p1, col_p2 = st.columns(2)
+    with col_p1:
+        if st.button("🔄 Zerar Padrões", use_container_width=True):
+            st.session_state.sistema.estrategia_ml.zerar_padroes()
+            st.success("✅ Padrões zerados!")
+            st.rerun()
+
+    with col_p2:
+        if st.button("📊 Atualizar Métricas", use_container_width=True):
+            st.rerun()
+
+# Informações sobre a Estratégia
+with st.sidebar.expander("📊 Informações da Estratégia"):
+    st.write("**🤖 Estratégia Machine Learning - CATBOOST OTIMIZADO:**")
+    st.write("- **Modelo**: CatBoost (Gradient Boosting)")
+    st.write("- **Ensemble**: 3 modelos")
+    st.write(f"- **Amostras mínimas**: {st.session_state.sistema.estrategia_ml.ml.min_training_samples}")
+    st.write("- **Histórico máximo**: 1000 números")
+    st.write("- **Treinamento**: A cada 15 sorteios")
+    st.write("- **Janelas**: [3, 8, 15, 30, 60, 120]")
+    st.write("- **Zonas**: 6 antes + 6 depois (13 números/zona), embutidas como features do modelo")
+    st.write("- **Threshold**: Mínimo 7 números na mesma zona")
+    st.write("- **Saída**: Zona com maior concentração")
+    st.write("- 🔄 **APRENDIZADO DINÂMICO:** Combinações que funcionam no momento")
+    st.write("- 🎯 **SELEÇÃO INTELIGENTE:** Máximo 15 números selecionados automaticamente")
+
+    info_zonas_ml = st.session_state.sistema.estrategia_ml.get_info_zonas_ml()
+    for zona, dados in info_zonas_ml.items():
+        st.write(f"**Zona {zona}** (Núcleo: {dados['central']})")
+        st.write(f"Descrição: {dados['descricao']}")
+        st.write(f"Números: {', '.join(map(str, dados['numeros']))}")
+        st.write(f"Total: {dados['quantidade']} números")
         st.write("---")
-    
-    elif estrategia == "ML":
-        st.write("**🤖 Estratégia Machine Learning - CATBOOST OTIMIZADO:**")
-        st.write("- **Modelo**: CatBoost (Gradient Boosting)")
-        st.write("- **Ensemble**: 3 modelos")
-        st.write("- **Amostras mínimas**: 200")
-        st.write("- **Histórico máximo**: 1000 números")
-        st.write("- **Treinamento**: A cada 15 sorteios")
-        st.write("- **Janelas**: [3, 8, 15, 30, 60, 120]")
-        st.write("- **Zonas**: 6 antes + 6 depois (13 números/zona)")
-        st.write("- **Threshold**: Mínimo 7 números na mesma zona")
-        st.write("- **Saída**: Zona com maior concentração")
-        st.write("- 🔄 **APRENDIZADO DINÂMICO:** Combinações que funcionam no momento")
-        st.write("- 🎯 **SELEÇÃO INTELIGENTE:** Máximo 15 números selecionados automaticamente")
-        
-        info_zonas_ml = st.session_state.sistema.estrategia_ml.get_info_zonas_ml()
-        for zona, dados in info_zonas_ml.items():
-            st.write(f"**Zona {zona}** (Núcleo: {dados['central']})")
-            st.write(f"Descrição: {dados['descricao']}")
-            st.write(f"Números: {', '.join(map(str, dados['numeros']))}")
-            st.write(f"Total: {dados['quantidade']} números")
-            st.write("---")
 
 # Análise detalhada
-with st.sidebar.expander(f"🔍 Análise - {estrategia}", expanded=False):
-    if estrategia == "Zonas":
-        analise = st.session_state.sistema.estrategia_zonas.get_analise_detalhada()
-    elif estrategia == "ML":
-        analise = st.session_state.sistema.estrategia_ml.get_analise_ml()
-    else:
-        analise = "🎯 Estratégia Midas ativa\nAnalisando padrões de terminais..."
-    
+with st.sidebar.expander("🔍 Análise - ML", expanded=False):
+    analise = st.session_state.sistema.estrategia_ml.get_analise_ml()
     st.text(analise)
 
 # Entrada manual
