@@ -1171,7 +1171,7 @@ class MLRoletaOtimizada:
         X = []
         y = []
         
-        start_index = max(50, len(historico_completo) // 10)
+        start_index = max(self.min_training_samples, len(historico_completo) // 10)
         
         for i in range(start_index, len(historico_completo)):
             janela = historico_completo[:i]
