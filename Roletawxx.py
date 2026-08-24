@@ -2303,47 +2303,51 @@ class EstrategiaML:
             
             if len(zonas_rankeadas_ajustadas) > 1:
                 zona_secundaria, contagem_secundaria = zonas_rankeadas_ajustadas[1]
-                
-                if contagem_secundaria >= 5:
-                    numeros_primarios = self.numeros_zonas_ml[zona_primaria]
-                    numeros_secundarios = self.numeros_zonas_ml[zona_secundaria]
-                    
-                    numeros_combinados = list(set(numeros_primarios + numeros_secundarios))
-                    
-                    if len(numeros_combinados) > 15:
-                        numeros_combinados = self.sistema_selecao.selecionar_melhores_15_numeros(
-                            numeros_combinados, self.historico, "ML"
-                        )
-                    
-                    confianca = self.calcular_confianca_com_padroes(distribuicao_ajustada, zona_primaria)
-                    
-                    padroes_aplicados = [p for p in self.sequencias_padroes['padroes_detectados'] 
-                                       if p['zona'] in [zona_primaria, zona_secundaria] and 
-                                       len(self.historico) - p['detectado_em'] <= 15]
-                    
-                    gatilho_extra = ""
-                    if padroes_aplicados:
-                        gatilho_extra = f" | Padrões: {len(padroes_aplicados)}"
-                    
-                    contagem_original_primaria = distribuicao_dict[zona_primaria]
-                    contagem_original_secundaria = distribuicao_dict.get(zona_secundaria, 0)
-                    
-                    gatilho = f'ML CatBoost - Zona {zona_primaria} ({contagem_original_primaria}→{contagem_primaria}/25) + Zona {zona_secundaria} ({contagem_original_secundaria}→{contagem_secundaria}/25) | SEL: {len(numeros_combinados)} números{gatilho_extra}'
-                    
-                    return {
-                        'nome': 'Machine Learning - CatBoost (Duplo)',
-                        'numeros_apostar': numeros_combinados,
-                        'gatilho': gatilho,
-                        'confianca': confianca,
-                        'previsao_ml': previsao_ml,
-                        'zona_ml': f'{zona_primaria}+{zona_secundaria}',
-                        'distribuicao': distribuicao_ajustada,
-                        'padroes_aplicados': len(padroes_aplicados),
-                        'zonas_envolvidas': [zona_primaria, zona_secundaria],
-                        'tipo': 'dupla',
-                        'selecao_inteligente': True
-                    }
-            
+
+                # Sempre prevê as DUAS zonas líderes (não fica mais condicionado
+                # a contagem_secundaria >= 5 — a segunda zona do ranking entra
+                # de qualquer forma).
+                numeros_primarios = self.numeros_zonas_ml[zona_primaria]
+                numeros_secundarios = self.numeros_zonas_ml[zona_secundaria]
+
+                numeros_combinados = list(set(numeros_primarios + numeros_secundarios))
+
+                if len(numeros_combinados) > 15:
+                    numeros_combinados = self.sistema_selecao.selecionar_melhores_15_numeros(
+                        numeros_combinados, self.historico, "ML"
+                    )
+
+                confianca = self.calcular_confianca_com_padroes(distribuicao_ajustada, zona_primaria)
+
+                padroes_aplicados = [p for p in self.sequencias_padroes['padroes_detectados']
+                                   if p['zona'] in [zona_primaria, zona_secundaria] and
+                                   len(self.historico) - p['detectado_em'] <= 15]
+
+                gatilho_extra = ""
+                if padroes_aplicados:
+                    gatilho_extra = f" | Padrões: {len(padroes_aplicados)}"
+
+                contagem_original_primaria = distribuicao_dict[zona_primaria]
+                contagem_original_secundaria = distribuicao_dict.get(zona_secundaria, 0)
+
+                gatilho = f'ML CatBoost - Zona {zona_primaria} ({contagem_original_primaria}→{contagem_primaria}/25) + Zona {zona_secundaria} ({contagem_original_secundaria}→{contagem_secundaria}/25) | SEL: {len(numeros_combinados)} números{gatilho_extra}'
+
+                return {
+                    'nome': 'Machine Learning - CatBoost (Duplo)',
+                    'numeros_apostar': numeros_combinados,
+                    'gatilho': gatilho,
+                    'confianca': confianca,
+                    'previsao_ml': previsao_ml,
+                    'zona_ml': f'{zona_primaria}+{zona_secundaria}',
+                    'distribuicao': distribuicao_ajustada,
+                    'padroes_aplicados': len(padroes_aplicados),
+                    'zonas_envolvidas': [zona_primaria, zona_secundaria],
+                    'tipo': 'dupla',
+                    'selecao_inteligente': True
+                }
+
+            # Fallback: só cai aqui se por algum motivo existir apenas 1 zona
+            # no ranking (não deveria acontecer com as 3 zonas padrão).
             numeros_zona = self.numeros_zonas_ml[zona_primaria]
             
             if len(numeros_zona) > 15:
